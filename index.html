@@ -113,16 +113,87 @@ p { font-size: 16px; }
 button { padding: 16px 40px; font-size: 17px; }
 .logo-img { width: 180px; }
 }
+/* ===========================
+   CIKUR AI ROBOT
+=========================== */
+
+.robot-wrapper{
+display:flex;
+justify-content:center;
+align-items:center;
+margin-bottom:30px;
+}
+
+.robot-img{
+width:240px;
+max-width:100%;
+animation:
+float 4s ease-in-out infinite,
+breathe 5s ease-in-out infinite;
+filter:drop-shadow(0 0 25px rgba(255,193,7,.35));
+transition:.2s;
+}
+
+/* Melayang */
+
+@keyframes float{
+
+0%{transform:translateY(0px);}
+
+50%{transform:translateY(-10px);}
+
+100%{transform:translateY(0px);}
+
+}
+
+/* Bernapas */
+
+@keyframes breathe{
+
+0%{scale:1;}
+
+50%{scale:1.02;}
+
+100%{scale:1;}
+
+}
+
+/* Berkedip */
+
+.blink{
+
+animation:blink .18s linear;
+}
+
+@keyframes blink{
+
+0%{transform:scaleY(1);}
+
+50%{transform:scaleY(.05);}
+
+100%{transform:scaleY(1);}
+
+}
+
+/* Saat tombol disentuh */
+
+.robot-wave{
+
+transform:rotate(-4deg) scale(1.03);
+
+}
 </style>
 
 </head>
 
 <body>
-
+    
 <div class="container">
 
 <!-- Menampilkan Logo CGO -->
-<img src="cgo.png" alt="Logo CGO" class="logo-img">
+<div class="robot-wrapper">
+    <img src="robot.png" id="robot" class="robot-img" alt="CIKUR AI">
+</div>
 
 <h1>CGO</h1>
 
@@ -144,6 +215,60 @@ Mulai Chat
 <!-- Skrip Injeksi Botpress -->
 <script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
 <script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
+<script>
 
+const robot=document.getElementById("robot");
+
+/* Berkedip otomatis */
+
+function autoBlink(){
+
+robot.classList.add("blink");
+
+setTimeout(()=>{
+
+robot.classList.remove("blink");
+
+},180);
+
+}
+
+/* Interval acak */
+
+function randomBlink(){
+
+let t=Math.random()*3000+2500;
+
+setTimeout(()=>{
+
+autoBlink();
+
+randomBlink();
+
+},t);
+
+}
+
+randomBlink();
+
+/* Efek saat tombol ditekan */
+
+const btn=document.querySelector("button");
+
+btn.addEventListener("click",()=>{
+
+robot.classList.add("robot-wave");
+
+setTimeout(()=>{
+
+robot.classList.remove("robot-wave");
+
+},400);
+
+window.botpress.open();
+
+});
+
+</script>
 </body>
 </html>
