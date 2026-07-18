@@ -28,13 +28,59 @@
             box-shadow: 0 20px 50px rgba(0,0,0,0.5); 
         }
         .robot-wrapper { display: flex; justify-content: center; margin-bottom: 20px; }
-        .logo-img { width: 180px; height: auto; }
+        .logo-img{
+width:180px;
+height:auto;
+animation:float 4s ease-in-out infinite;
+}
+
+@keyframes float{
+
+0%{
+transform:translateY(0px);
+}
+
+50%{
+transform:translateY(-10px);
+}
+
+100%{
+transform:translateY(0px);
+}
+
+}
         h1 { font-size: 48px; margin: 10px 0; color: #FFC107; text-shadow: 0 0 20px rgba(255, 193, 7, 0.3); }
         p { font-size: 16px; line-height: 1.6; margin-bottom: 30px; color: #ccc; }
         
         /* Menu Grid Style */
         .menu-grid { display: flex; justify-content: space-around; margin-bottom: 30px; }
-        .menu-item { text-decoration: none; color: white; width: 30%; }
+        .menu-item{
+text-decoration:none;
+color:white;
+width:30%;
+transition:.3s;
+}
+
+.menu-item:hover{
+transform:translateY(-6px);
+}
+
+.menu-item img{
+width:60px;
+height:60px;
+border-radius:15px;
+display:block;
+margin:0 auto 10px auto;
+border:2px solid #FFC107;
+background:white;
+padding:8px;
+transition:.3s;
+}
+
+.menu-item:hover img{
+transform:scale(1.08);
+box-shadow:0 0 20px rgba(255,193,7,.6);
+}
         .menu-item img { width: 60px; height: 60px; border-radius: 15px; display: block; margin: 0 auto 10px auto; border: 2px solid #FFC107; background-color: white; padding: 8px; }
         .menu-item span { font-size: 12px; font-weight: 600; }
 
@@ -83,16 +129,38 @@
         </a>
     </div>
 
-    <button id="chatBtn">Mulai Chat</button>
+    <button id="chatBtn">
+💬 Mulai Chat
+    </button>
 </div>
 
-<footer>&copy; 2026 CIKUR GO. All rights reserved.</footer>
+<footer>
+© 2026 CIKUR GO<br>
+Pasti Mudah, Pasti Nyaman.
+</footer>
 
 <script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
 <script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
 <script>
-    const btn = document.getElementById("chatBtn");
-    btn.addEventListener("click", () => { window.botpress.open(); });
+    const btn=document.getElementById("chatBtn");
+
+btn.addEventListener("click",()=>{
+
+btn.disabled=true;
+
+btn.innerHTML="Membuka CIKUR GO...";
+
+setTimeout(()=>{
+
+window.botpress.open();
+
+btn.disabled=false;
+
+btn.innerHTML="💬 Mulai Chat";
+
+},500);
+
+});
 </script>
 </body>
 </html> 
