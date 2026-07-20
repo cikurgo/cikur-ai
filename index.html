@@ -254,7 +254,42 @@ height:66px;
 }
 
 }
+/* ===== CGO WELCOME ROBOT ===== */
 
+.cgo-welcome{
+position:fixed;
+right:-170px;
+bottom:110px;
+z-index:9999;
+opacity:0;
+transition:all .8s ease;
+pointer-events:none;
+}
+
+.cgo-welcome.show{
+right:-25px;
+opacity:1;
+}
+
+.cgo-welcome.hide{
+right:-170px;
+opacity:0;
+}
+
+.cgo-welcome img{
+width:170px;
+animation:waveRobot .6s ease-in-out 5;
+}
+
+@keyframes waveRobot{
+
+0%{transform:rotate(0deg);}
+25%{transform:rotate(-5deg);}
+50%{transform:rotate(5deg);}
+75%{transform:rotate(-5deg);}
+100%{transform:rotate(0deg);}
+
+}
 </style>
 </head>
 
@@ -311,7 +346,9 @@ Layanan Kami
 <button id="chatBtn">
 💬 Mulai Chat
 </button>
-
+<div class="cgo-welcome" id="cgoWelcome">
+    <img src="cgofullbody.png" alt="CGO Robot">
+</div>
 <footer>
 © 2026 CIKUR GO
 <br>
@@ -344,7 +381,23 @@ btn.innerHTML="💬 Mulai Chat";
 },500);
 
 });
+const welcome=document.getElementById("cgoWelcome");
 
+window.addEventListener("load",()=>{
+
+setTimeout(()=>{
+
+welcome.classList.add("show");
+
+},1000);
+
+setTimeout(()=>{
+
+welcome.classList.add("hide");
+
+},5000);
+
+});
 </script>
 
 </body>
