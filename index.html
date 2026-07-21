@@ -508,19 +508,19 @@ Pasti Mudah, Pasti Nyaman.
 
     <script>
 
-const slides = document.querySelector(".slides");
-const images = document.querySelectorAll(".slides img");
-const dots = document.querySelectorAll(".dots span");
+const slides=document.querySelector(".slides");
+const images=document.querySelectorAll(".slides img");
+const dots=document.querySelectorAll(".dots span");
+const slider=document.querySelector(".slider");
 
-let current = 0;
-const total = images.length;
+let current=0;
+const total=images.length;
 
 function showSlide(index){
 
-    slides.style.transform = `translateX(-${index * 100}%)`;
+    slides.style.transform=`translateX(-${index*100}%)`;
 
     dots.forEach(dot=>dot.classList.remove("active"));
-
     dots[index].classList.add("active");
 
 }
@@ -529,8 +529,8 @@ function nextSlide(){
 
     current++;
 
-    if(current >= total){
-        current = 0;
+    if(current>=total){
+        current=0;
     }
 
     showSlide(current);
@@ -539,42 +539,34 @@ function nextSlide(){
 
 setInterval(nextSlide,4000);
 
-</script>
-    
-<script>
+/* ===== Swipe ===== */
 
-let startX = 0;
-let endX = 0;
-
-const slider = document.querySelector(".slider");
+let startX=0;
+let endX=0;
 
 slider.addEventListener("touchstart",(e)=>{
-    startX = e.touches[0].clientX;
+    startX=e.touches[0].clientX;
 });
 
 slider.addEventListener("touchend",(e)=>{
 
-    endX = e.changedTouches[0].clientX;
+    endX=e.changedTouches[0].clientX;
 
-    if(startX - endX > 50){
+    if(startX-endX>50){
 
         current++;
 
-        if(current >= total){
-            current = 0;
-        }
+        if(current>=total) current=0;
 
         showSlide(current);
 
     }
 
-    if(endX - startX > 50){
+    if(endX-startX>50){
 
         current--;
 
-        if(current < 0){
-            current = total - 1;
-        }
+        if(current<0) current=total-1;
 
         showSlide(current);
 
@@ -582,7 +574,26 @@ slider.addEventListener("touchend",(e)=>{
 
 });
 
+/* ===== Klik Banner ===== */
+
+slider.addEventListener("click",()=>{
+
+    if(current===0){
+        window.location.href="assistant.html";
+    }
+
+    else if(current===1){
+        window.location.href="food.html";
+    }
+
+    else{
+        window.location.href="ride.html";
+    }
+
+});
+        
 </script>
+    
 <script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
 
 <script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
