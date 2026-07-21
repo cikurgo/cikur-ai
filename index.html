@@ -295,23 +295,56 @@ footer{
 }
 }
 
-/* ===== Banner ===== */
+/* ==========================
+   BANNER SLIDER CIKUR GO V2
+========================== */
 
 .hero-banner{
     width:100%;
+    max-width:360px;
     margin:14px auto 16px;
 }
 
-.hero-banner img{
-    display:block;
+.slider{
     width:100%;
-    max-width:360px;
-    height:auto;
-    margin:0 auto;
+    overflow:hidden;
+    border-radius:18px;
+    position:relative;
+}
+
+.slides{
+    display:flex;
+    transition:transform .45s ease-in-out;
+}
+
+.slides img{
+    width:100%;
+    min-width:100%;
+    display:block;
     border-radius:18px;
 }
 
+.dots{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    gap:8px;
+    margin-top:10px;
+}
 
+.dots span{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:#777;
+    transition:.3s;
+}
+
+.dots span.active{
+    width:22px;
+    background:#FFC107;
+    border-radius:20px;
+}
 /* ===== Judul Menu ===== */
 
 .menu-title{
@@ -391,21 +424,26 @@ Didukung oleh <strong>CIKUR GO FOOD</strong> dan
     
 <div class="hero-banner">
 
-    <div class="banner-track">
+    <div class="slider">
 
-        <img src="bannercgo1.png" class="banner-slide">
+        <div class="slides">
 
-        <img src="bannercgo2.png" class="banner-slide">
+            <img src="bannercgo1.png" alt="Banner 1">
 
-        <img src="bannercgo3.png" class="banner-slide">
+            <img src="bannercgo2.png" alt="Banner 2">
+
+            <img src="bannercgo3.png" alt="Banner 3">
+
+        </div>
 
     </div>
 
-    <div class="banner-indicator">
+    <div class="dots">
         <span class="active"></span>
         <span></span>
         <span></span>
     </div>
+
 </div>
     
 <div class="menu-title">
@@ -442,26 +480,39 @@ Pasti Mudah, Pasti Nyaman.
 
     <script>
 
-const track=document.querySelector(".banner-track");
-const dots=document.querySelectorAll(".banner-indicator span");
+const slides = document.querySelector(".slides");
+const images = document.querySelectorAll(".slides img");
+const dots = document.querySelectorAll(".dots span");
 
-let index=0;
+let current = 0;
+const total = images.length;
 
-setInterval(()=>{
+function showSlide(index){
 
-index++;
+    slides.style.transform = `translateX(-${index * 100}%)`;
 
-if(index>2) index=0;
+    dots.forEach(dot=>dot.classList.remove("active"));
 
-track.style.transform=`translateX(-${index*33.333}%)`;
+    dots[index].classList.add("active");
 
-dots.forEach(dot=>dot.classList.remove("active"));
+}
 
-dots[index].classList.add("active");
+function nextSlide(){
 
-},4000);
+    current++;
+
+    if(current >= total){
+        current = 0;
+    }
+
+    showSlide(current);
+
+}
+
+setInterval(nextSlide,4000);
 
 </script>
+
 <script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
 
 <script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
