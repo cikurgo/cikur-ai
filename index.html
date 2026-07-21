@@ -220,12 +220,41 @@ h1{
 }
 
 .hero-banner{
-    margin:10px auto 12px;
+    width:100%;
+    overflow:hidden;
+    border-radius:18px;
+    margin:12px auto;
+    position:relative;
 }
 
-.hero-banner img{
+.banner-track{
+    display:flex;
+    width:300%;
+    transition:transform .5s ease;
+}
+
+.banner-slide{
     width:100%;
-    border-radius:16px;
+    flex-shrink:0;
+    display:block;
+}
+
+.banner-indicator{
+    display:flex;
+    justify-content:center;
+    gap:6px;
+    margin-top:8px;
+}
+
+.banner-indicator span{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:#777;
+}
+
+.banner-indicator span.active{
+    background:#FFC107;
 }
 
 .menu-title{
@@ -362,22 +391,21 @@ Didukung oleh <strong>CIKUR GO FOOD</strong> dan
     
 <div class="hero-banner">
 
-    <div class="banner-slider">
+    <div class="banner-track">
 
-        <img src="bannercgo1.png" class="slide active" alt="Banner 1">
+        <img src="bannercgo1.png" class="banner-slide">
 
-        <img src="bannercgo2.png" class="slide" alt="Banner 2">
+        <img src="bannercgo2.png" class="banner-slide">
 
-        <img src="bannercgo3.png" class="slide" alt="Banner 3">
+        <img src="bannercgo3.png" class="banner-slide">
 
     </div>
 
-    <div class="banner-dots">
-        <span class="dot active"></span>
-        <span class="dot"></span>
-        <span class="dot"></span>
+    <div class="banner-indicator">
+        <span class="active"></span>
+        <span></span>
+        <span></span>
     </div>
-
 </div>
     
 <div class="menu-title">
@@ -411,6 +439,29 @@ Layanan Kami
 <br>
 Pasti Mudah, Pasti Nyaman.
 </footer>
+
+    <script>
+
+const track=document.querySelector(".banner-track");
+const dots=document.querySelectorAll(".banner-indicator span");
+
+let index=0;
+
+setInterval(()=>{
+
+index++;
+
+if(index>2) index=0;
+
+track.style.transform=`translateX(-${index*33.333}%)`;
+
+dots.forEach(dot=>dot.classList.remove("active"));
+
+dots[index].classList.add("active");
+
+},4000);
+
+</script>
 <script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
 
 <script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
