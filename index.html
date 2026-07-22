@@ -358,6 +358,76 @@ h1{
     background:#FFC107;
     box-shadow:0 0 12px rgba(255,193,7,.5);
 }
+    /* ===========================
+   MINI BANNER
+=========================== */
+
+.mini-slider{
+
+    width:100%;
+
+    overflow:hidden;
+
+    border-radius:18px;
+
+    margin:18px 0 18px;
+
+    box-shadow:
+    0 10px 25px rgba(0,0,0,.25);
+
+}
+
+.mini-slides{
+
+    display:flex;
+
+    width:300%;
+
+    transition:.6s ease;
+
+}
+
+.mini-slides img{
+
+    width:100%;
+
+    flex-shrink:0;
+
+    display:block;
+
+}
+
+.mini-dots{
+
+    display:flex;
+
+    justify-content:center;
+
+    gap:7px;
+
+    margin-top:-6px;
+
+    margin-bottom:18px;
+
+}
+
+.mini-dots span{
+
+    width:8px;
+
+    height:8px;
+
+    border-radius:50%;
+
+    background:#666;
+
+}
+
+.mini-dots span.active{
+
+    background:#FFC107;
+
+}
 /* ===== Judul Menu ===== */
 
 .menu-title{
@@ -445,6 +515,30 @@ Didukung oleh <strong>CIKUR GO FOOD</strong> dan
         <span></span>
         <span></span>
     </div>
+</div>
+<!-- MINI BANNER -->
+
+<div class="mini-slider">
+
+    <div class="mini-slides">
+
+        <img src="banner-mini-assistant.png">
+
+        <img src="banner-mini-food.png">
+
+        <img src="banner-mini-ride.png">
+
+    </div>
+
+</div>
+
+<div class="mini-dots">
+
+    <span class="active"></span>
+
+    <span></span>
+
+    <span></span>
 
 </div>
 
@@ -593,6 +687,37 @@ btn.innerHTML="💬 Mulai Chat";
 });
 
 </script>
+    
+const miniSlides=document.querySelector(".mini-slides");
 
+const miniDots=document.querySelectorAll(".mini-dots span");
+
+let miniCurrent=0;
+
+function miniShow(index){
+
+miniSlides.style.transform=`translateX(-${index*100}%)`;
+
+miniDots.forEach(dot=>dot.classList.remove("active"));
+
+miniDots[index].classList.add("active");
+
+}
+
+function miniNext(){
+
+miniCurrent++;
+
+if(miniCurrent>=3){
+
+miniCurrent=0;
+
+}
+
+miniShow(miniCurrent);
+
+}
+
+setInterval(miniNext,4500);
 </body>
 </html>
