@@ -28,7 +28,7 @@ body{
 }
 
 /* ===========================
-   LAYOUT UTAMA
+   LAYOUT UTAMA (MASTER RESPONSIVE)
 =========================== */
 .container{
     width:100%;
@@ -130,6 +130,18 @@ footer p{
 /* =========================
    ANIMATION
 =========================== */
+@keyframes breathe{
+    0%{ transform:translateY(0px); }
+    50%{ transform:translateY(-6px); }
+    100%{ transform:translateY(0px); }
+}
+
+@keyframes assistantPulse{
+    0%{ transform:scale(1.05); }
+    50%{ transform:scale(1.12); }
+    100%{ transform:scale(1.05); }
+}
+
 @keyframes robotFloat{
     0%, 100%{ transform:translateY(0); }
     50%{ transform:translateY(-5px); }
@@ -183,7 +195,7 @@ footer p{
 }
 
 /* ===========================
-   HERO FRAME & BANNER BESAR (TERKUNCI PRESISI)
+   HERO FRAME & BANNER BESAR
 =========================== */
 .hero-frame{
     position:relative;
@@ -198,29 +210,26 @@ footer p{
 
 .hero-big{
     width:100%;
-    height:250px;
+    height:220px;
     overflow:hidden;
-    border-radius:28px;
+    border-radius:24px;
     position:relative;
     margin-bottom:10px;
     z-index:1;
     box-shadow:0 12px 30px rgba(0,0,0,.35), 0 0 18px rgba(255,193,7,.08);
 }
 
-/* Menggunakan sistem persentase yang identik dengan mini-slider agar stabil */
 .hero-big-track{
     display:flex;
-    width:300%;
+    transition:transform 1s ease;
     height:100%;
-    transition:transform 0.8s cubic-bezier(.22,.61,.36,1);
 }
 
 .hero-big-track img{
-    width:33.3333%;
+    width:100%;
     height:100%;
+    min-width:100%;
     object-fit:cover;
-    object-position:center center;
-    flex-shrink:0;
     display:block;
 }
 
@@ -229,10 +238,10 @@ footer p{
     position:relative;
     z-index:2;
     width:100%;
-    height:90px;
-    margin:14px auto 6px;
+    height:80px;
+    margin:10px auto 4px;
     overflow:hidden;
-    border-radius:22px;
+    border-radius:18px;
     box-shadow:0 4px 10px rgba(0,0,0,.16);
 }
 
@@ -328,7 +337,7 @@ footer p{
 }
 
 /* ===========================
-   MEDIA QUERY DESKTOP
+   MEDIA QUERY DESKTOP / LAYAR BESAR
 =========================== */
 @media screen and (min-width: 768px) {
     body {
@@ -341,7 +350,10 @@ footer p{
         border-radius: 32px;
     }
     .hero-big {
-        height: 250px;
+        height: 240px;
+    }
+    .hero-big-track img {
+        height: 240px;
     }
     .menu-item img {
         width: 95px;
@@ -532,7 +544,6 @@ setInterval(miniNext, 7000);
 </script>
 
 <script>
-/* SCRIPT UTAMA BANNER BESAR: Menggeser tepat sepertiga bagian per slide (0%, 33.333%, 66.666%) */
 const heroTrack = document.querySelector(".hero-big-track");
 let heroIndex = 0;
 
@@ -541,7 +552,7 @@ function heroSlide(){
     if(heroIndex >= 3){
         heroIndex = 0;
     }
-    heroTrack.style.transform = `translateX(-${heroIndex * 33.3333}%)`;
+    heroTrack.style.transform = `translateX(-${heroIndex * 100}%)`;
 }
 setInterval(heroSlide, 9000);
 </script>
