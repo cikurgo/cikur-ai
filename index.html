@@ -183,7 +183,7 @@ footer p{
 }
 
 /* ===========================
-   HERO FRAME & BANNER BESAR (DIKUNCI)
+   HERO FRAME & BANNER BESAR (TERKUNCI PRESISI)
 =========================== */
 .hero-frame{
     position:relative;
@@ -198,30 +198,30 @@ footer p{
 
 .hero-big{
     width:100%;
-    height:220px;
+    height:250px;
     overflow:hidden;
-    border-radius:24px;
+    border-radius:28px;
     position:relative;
     margin-bottom:10px;
     z-index:1;
     box-shadow:0 12px 30px rgba(0,0,0,.35), 0 0 18px rgba(255,193,7,.08);
 }
 
-/* PERBAIKAN UTAMA: Mengunci ukuran track dan gambar di dalam banner besar */
+/* Menggunakan sistem persentase yang identik dengan mini-slider agar stabil */
 .hero-big-track{
     display:flex;
-    width: 300%; /* Karena ada 3 gambar banner */
+    width:300%;
     height:100%;
-    transition:transform 1s cubic-bezier(.22,.61,.36,1);
+    transition:transform 0.8s cubic-bezier(.22,.61,.36,1);
 }
 
 .hero-big-track img{
-    width: 33.3333%; /* Masing-masing gambar memakan tepat 1/3 dari track */
-    height: 100%;
-    object-fit: cover;
-    object-position: center center;
-    flex-shrink: 0;
-    display: block;
+    width:33.3333%;
+    height:100%;
+    object-fit:cover;
+    object-position:center center;
+    flex-shrink:0;
+    display:block;
 }
 
 /* ================= MINI BANNER ================= */
@@ -229,10 +229,10 @@ footer p{
     position:relative;
     z-index:2;
     width:100%;
-    height:80px;
-    margin:10px auto 4px;
+    height:90px;
+    margin:14px auto 6px;
     overflow:hidden;
-    border-radius:18px;
+    border-radius:22px;
     box-shadow:0 4px 10px rgba(0,0,0,.16);
 }
 
@@ -341,7 +341,7 @@ footer p{
         border-radius: 32px;
     }
     .hero-big {
-        height: 240px;
+        height: 250px;
     }
     .menu-item img {
         width: 95px;
@@ -532,6 +532,7 @@ setInterval(miniNext, 7000);
 </script>
 
 <script>
+/* SCRIPT UTAMA BANNER BESAR: Menggeser tepat sepertiga bagian per slide (0%, 33.333%, 66.666%) */
 const heroTrack = document.querySelector(".hero-big-track");
 let heroIndex = 0;
 
@@ -540,7 +541,7 @@ function heroSlide(){
     if(heroIndex >= 3){
         heroIndex = 0;
     }
-    heroTrack.style.transform = `translateX(-${heroIndex * (100 / 3)}%)`;
+    heroTrack.style.transform = `translateX(-${heroIndex * 33.3333}%)`;
 }
 setInterval(heroSlide, 9000);
 </script>
