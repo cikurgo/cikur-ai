@@ -28,7 +28,7 @@ body{
 }
 
 /* ===========================
-   LAYOUT UTAMA (MASTER RESPONSIVE)
+   LAYOUT UTAMA
 =========================== */
 .container{
     width:100%;
@@ -130,18 +130,6 @@ footer p{
 /* =========================
    ANIMATION
 =========================== */
-@keyframes breathe{
-    0%{ transform:translateY(0px); }
-    50%{ transform:translateY(-6px); }
-    100%{ transform:translateY(0px); }
-}
-
-@keyframes assistantPulse{
-    0%{ transform:scale(1.05); }
-    50%{ transform:scale(1.12); }
-    100%{ transform:scale(1.05); }
-}
-
 @keyframes robotFloat{
     0%, 100%{ transform:translateY(0); }
     50%{ transform:translateY(-5px); }
@@ -195,7 +183,7 @@ footer p{
 }
 
 /* ===========================
-   HERO FRAME & BANNER BESAR
+   HERO FRAME & BANNER BESAR (DIKUNCI)
 =========================== */
 .hero-frame{
     position:relative;
@@ -219,18 +207,21 @@ footer p{
     box-shadow:0 12px 30px rgba(0,0,0,.35), 0 0 18px rgba(255,193,7,.08);
 }
 
+/* PERBAIKAN UTAMA: Mengunci ukuran track dan gambar di dalam banner besar */
 .hero-big-track{
     display:flex;
-    transition:transform 1s ease;
+    width: 300%; /* Karena ada 3 gambar banner */
     height:100%;
+    transition:transform 1s cubic-bezier(.22,.61,.36,1);
 }
 
 .hero-big-track img{
-    width:100%;
-    height:100%;
-    min-width:100%;
-    object-fit:cover;
-    display:block;
+    width: 33.3333%; /* Masing-masing gambar memakan tepat 1/3 dari track */
+    height: 100%;
+    object-fit: cover;
+    object-position: center center;
+    flex-shrink: 0;
+    display: block;
 }
 
 /* ================= MINI BANNER ================= */
@@ -337,7 +328,7 @@ footer p{
 }
 
 /* ===========================
-   MEDIA QUERY DESKTOP / LAYAR BESAR
+   MEDIA QUERY DESKTOP
 =========================== */
 @media screen and (min-width: 768px) {
     body {
@@ -350,9 +341,6 @@ footer p{
         border-radius: 32px;
     }
     .hero-big {
-        height: 240px;
-    }
-    .hero-big-track img {
         height: 240px;
     }
     .menu-item img {
@@ -552,7 +540,7 @@ function heroSlide(){
     if(heroIndex >= 3){
         heroIndex = 0;
     }
-    heroTrack.style.transform = `translateX(-${heroIndex * 100}%)`;
+    heroTrack.style.transform = `translateX(-${heroIndex * (100 / 3)}%)`;
 }
 setInterval(heroSlide, 9000);
 </script>
