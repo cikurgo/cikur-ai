@@ -193,68 +193,89 @@ footer p{
 .menu-item span{
     display:none;
 }
-/* ===========================
-   PANEL CIKUR GO ASSISTANT
-=========================== */
+/* =========================
+   ASSISTANT OVERLAY
+========================= */
 
-.service-panel{
+#assistantOverlay{
     display:none;
-    margin:20px auto;
-    padding:20px;
-    background:#ffffff;
-    border-radius:25px;
-    box-shadow:0 10px 30px rgba(0,0,0,.25);
-    max-width:420px;
-    width:92%;
-    animation:fadeUp .3s ease;
+    position:absolute;
+    left:0;
+    right:0;
+    top:100%;
+    z-index:999;
 }
 
-.service-panel h3{
-    text-align:center;
+.menu-grid{
+    position:relative;
+}
+
+.assistant-sheet{
+    width:92%;
+    margin:18px auto;
+    background:#fff;
+    border-radius:28px;
+    box-shadow:0 12px 35px rgba(0,0,0,.35);
+    overflow:hidden;
+    animation:sheetUp .35s ease;
+}
+
+.sheet-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:18px 22px;
+    border-bottom:2px solid #d4a017;
+}
+
+.sheet-header span{
+    font-size:22px;
+    font-weight:700;
     color:#111;
-    margin-bottom:18px;
-    font-size:20px;
+}
+
+#closeAssistant{
+    border:none;
+    background:none;
+    font-size:26px;
+    cursor:pointer;
 }
 
 .package-menu{
     display:flex;
     justify-content:center;
-    gap:15px;
-    margin-bottom:20px;
+    gap:18px;
+    padding:20px;
 }
 
-.package-btn{
-    background:none;
-    border:none;
-    padding:0;
+.package-menu img{
+    width:95px;
     cursor:pointer;
     transition:.25s;
 }
 
-.package-btn img{
-    width:95px;
-    display:block;
-}
-
-.package-btn:hover{
+.package-menu img:hover{
     transform:scale(1.05);
 }
 
 #assistantForm{
-    min-height:180px;
-    border-top:1px solid #ddd;
-    padding-top:15px;
+    min-height:260px;
+    border-top:2px solid #eee;
+    padding:20px;
 }
 
-@keyframes fadeUp{
+@keyframes sheetUp{
+
     from{
         opacity:0;
-        transform:translateY(20px);
+        transform:translateY(-15px);
     }
+
     to{
         opacity:1;
         transform:translateY(0);
     }
+
 }
 /* ===========================
    HERO FRAME & BANNER BESAR
@@ -454,26 +475,36 @@ footer p{
     </div>  
 
     <div class="menu-grid">
- <div id="assistantPanel" class="service-panel">
+    <a href="#" class="menu-item" id="btnAssistant">
+        <img src="tombol-assistant.png" class="assistant-icon" alt="ASSISTANT">
+    </a>
 
-    <h3>CIKUR GO ASSISTANT</h3>
+    <a href="#" class="menu-item" id="btnFood">
+        <img src="tombol-food.png" alt="FOOD">
+    </a>
 
-    <div class="package-menu">
-
-        <button class="package-btn">
-            <img src="icon-dine-in.png" alt="DINE-IN">
-        </button>
-
-        <button class="package-btn">
-            <img src="icon-vip.png" alt="VIP">
-        </button>
-
-        <button class="package-btn">
-            <img src="icon-private.png" alt="PRIVATE">
-        </button>
-
+    <a href="#" class="menu-item" id="btnRide">
+        <img src="tombol-ride.png" alt="RIDE">
+    </a>
     </div>
 
+<div id="assistantOverlay">
+    <div class="assistant-sheet">
+        <div class="sheet-header">
+            <span>CIKUR GO ASSISTANT</span>
+            <button id="closeAssistant">✕</button>
+        </div>
+        <div class="package-menu">
+            <img src="icon-dine-in.png" id="btnDineIn" alt="DINE-IN">
+            <img src="icon-vip.png" id="btnVip" alt="VIP">
+            <img src="icon-private.png" id="btnPrivate" alt="PRIVATE">
+        </div>
+        <div id="assistantForm">
+            <!-- Formulir nanti muncul di sini -->
+        </div>
+    </div>
+
+</div>
     <div id="assistantForm">
         <!-- Formulir akan muncul di sini -->
     </div>
@@ -642,19 +673,6 @@ function heroSlide(){
     heroTrack.style.transform = `translateX(-${heroIndex * 100}%)`;
 }
 setInterval(heroSlide, 9000);
-</script>
-    
-<script>
-const btnAssistant = document.getElementById("btnAssistant");
-const assistantPanel = document.getElementById("assistantPanel");
-btnAssistant.addEventListener("click", function(e){
-    e.preventDefault();
-    if(assistantPanel.style.display === "block"){
-        assistantPanel.style.display = "none";
-    }else{
-        assistantPanel.style.display = "block";
-    }
-});
 </script>
     
 </body>
