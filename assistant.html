@@ -337,6 +337,70 @@ margin-top:18px;
 }
 
 }
+/* ===========================
+   ANIMASI IKON MENU
+=========================== */
+@keyframes robotFloat{
+    0%, 100%{ transform:translateY(0); }
+    50%{ transform:translateY(-5px); }
+}
+
+/* ===========================
+   LAYOUT MENU GRID
+=========================== */
+.menu-grid{
+    display:flex;
+    justify-content:space-evenly;
+    align-items:center;
+    gap:15px;
+    margin:10px 0 20px;
+}
+
+.menu-item{
+    width:90px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    text-decoration:none;
+    transition:.35s;
+}
+
+.menu-item img{
+    width:85px;
+    height:85px;
+    object-fit:contain;
+    display:block;
+    animation:robotFloat 3.5s ease-in-out infinite;
+    filter:
+        drop-shadow(0 0 10px rgba(255,215,120,.65))
+        drop-shadow(0 0 22px rgba(255,193,7,.28));
+    transition:.35s;
+}
+
+.menu-item:hover img{
+    transform:translateY(-6px) scale(1.06);
+    filter:
+        drop-shadow(0 0 14px rgba(255,215,120,.8))
+        drop-shadow(0 0 28px rgba(255,193,7,.45));
+}
+
+.menu-item:active img{
+    transform:scale(.97);
+}
+
+.menu-item span{
+    display:none;
+}
+
+/* Penyesuaian khusus tampilan Desktop */
+@media screen and (min-width: 768px) {
+    .menu-item img {
+        width: 95px;
+        height: 95px;
+    }
+}
+
+    
 </style>
 </head>
 <body>
@@ -357,8 +421,23 @@ margin-top:18px;
 
     <div class="assistant">
         <img src="tombol-assistant.png" alt="CIKUR GO Assistant">
+ 
     </div>
+<!-- ===== MENU GRID (3 LAYANAN UTAMA) ===== -->
+<div class="menu-grid">
+    <a href="assistant.html" class="menu-item">
+        <img src="tombol-assistant.png" class="assistant-icon" alt="ASSISTANT">
+    </a>
 
+    <a href="food.html" class="menu-item">
+        <img src="tombol-food.png" alt="FOOD">
+    </a>
+
+    <a href="ride.html" class="menu-item">
+        <img src="tombol-ride.png" alt="RIDE">
+    </a>
+</div>
+    
     <div class="features">
 
         <div class="feature">
@@ -393,6 +472,12 @@ margin-top:18px;
     </div>
 
 </div>
-
+/* ===== LOGIKA JAVASCRIPT UNTUK MENU GRID ===== */
+document.querySelectorAll(".menu-item").forEach((item, index) => {
+    item.addEventListener("click", (e) => {
+        // Contoh aksi kustom opsional sebelum berpindah halaman:
+        // console.log(`Menu layanan ke-${index + 1} diklik`);
+    });
+});
 </body>
 </html>
