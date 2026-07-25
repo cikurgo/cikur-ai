@@ -545,7 +545,6 @@ textarea.textarea-besar {
     height: 90px;
 }
 
-/* Kotak Rincian & Total Biaya */
 .rincian-box {
     background: #fff;
     border: 1px dashed #d8a400;
@@ -591,6 +590,53 @@ textarea.textarea-besar {
     font-size: 18px;
     font-weight: 800;
     color: #FFC107;
+}
+
+.payment-method-grid {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.pay-method-btn {
+    flex: 1;
+    padding: 10px;
+    border: 2px solid #ccc;
+    border-radius: 10px;
+    background: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    color: #333;
+    cursor: pointer;
+    text-align: center;
+    transition: 0.3s;
+    height: auto;
+    margin: 0;
+    box-shadow: none;
+}
+
+.pay-method-btn.active-method {
+    border-color: #d8a400;
+    background: #fffdf5;
+    color: #d8a400;
+}
+
+.result-payment-box {
+    background: #fff;
+    border: 2px solid #d8a400;
+    border-radius: 14px;
+    padding: 15px;
+    text-align: center;
+    margin-top: 15px;
+}
+
+.result-payment-box img {
+    width: 170px;
+    height: 170px;
+    object-fit: contain;
+    margin: 8px auto;
+    display: block;
+    border-radius: 8px;
 }
 
 .btn-pesan-form {
@@ -880,7 +926,7 @@ assistantScreen.addEventListener("click", function(e){
     e.target === assistantScreen && (assistantScreen.style.display = "none");
 });
 
-// Interaktif Klik Icon Paket & Form Pemesanan dengan Logika Dinamis Extra Waktu
+// Interaktif Klik Icon Paket & Form Pemesanan
 const paketButtons = document.querySelectorAll(".paket-btn");
 const paketContent = document.getElementById("paketContent");
 
@@ -925,9 +971,9 @@ paketButtons.forEach(btn => {
                     <label>Extra Waktu</label>
                     <div class="extra-row">
                         <input type="number" id="extraWaktu" class="input-number" value="0" min="0">
-                        <div class="input-box harga-text" style="text-align:center; background:#f5f5f5;">Rp 25rb/30m</div>
+                        <div class="input-box harga-text" style="text-align:center; background:#f5f5f5; font-size:13px;">Rp 25rb/30m</div>
                     </div>
-                    <span class="form-hint">*Isi angka (misal: 1, 2) jika tambah waktu</span>
+                    <span class="form-hint">*Isi angka jika tambah waktu</span>
                 </div>
             </div>
 
@@ -947,7 +993,6 @@ paketButtons.forEach(btn => {
                 <textarea class="input-box textarea-besar" placeholder="Tambahkan catatan khusus..."></textarea>
             </div>
 
-            <!-- KOTAK RINCIAN HARGA YANG MUNCUL DINAMIS -->
             <div class="rincian-box">
                 <div class="rincian-item">
                     <span>Harga ${info.nama}:</span>
@@ -959,36 +1004,32 @@ paketButtons.forEach(btn => {
                 </div>
             </div>
 
-            <!-- TOTAL KESELURUHAN -->
             <div class="total-box">
                 <span class="total-label">Total Pembayaran :</span>
                 <span id="totalHarga" class="total-value">${info.hargaStr}</span>
             </div>
 
-            <button class="btn-pesan-form" onclick="alert('Pesanan layanan ${info.nama} berhasil diproses!')">Lanjut Pembayaran ➔</button>
+            <button class="btn-pesan-form" id="btnProsesBayar">Lanjut Pembayaran ➔</button>
         `;
 
-        // Script untuk menghitung dan menampilkan rincian serta total secara real-time
+        // Logika Extra Waktu Realtime
         const extraInput = document.getElementById("extraWaktu");
         const totalHargaEl = document.getElementById("totalHarga");
         const rincianExtraRow = document.getElementById("rincianExtraRow");
         const labelExtraText = document.getElementById("labelExtraText");
         const nilaiExtraText = document.getElementById("nilaiExtraText");
 
+        let currentTotalValue = info.hargaBase;
+
         extraInput.addEventListener("input", function() {
             let qty = parseInt(this.value) || 0;
-            if(qty < 0) {
-                qty = 0;
-                this.value = 0;
-            }
+            if(qty < 0) { qty = 0; this.value = 0; }
 
             let biayaExtra = qty * 25000;
-            let totalKeseluruhan = info.hargaBase + biayaExtra;
+            currentTotalValue = info.hargaBase + biayaExtra;
 
-            // Update Total Tampilan
-            totalHargaEl.innerText = "Rp " + totalKeseluruhan.toLocaleString('id-ID') + ",-";
+            totalHargaEl.innerText = "Rp " + currentTotalValue.toLocaleString('id-ID') + ",-";
 
-            // Munculkan atau Sembunyikan Rincian Extra Waktu
             if(qty > 0) {
                 rincianExtraRow.style.display = "flex";
                 labelExtraText.innerText = `Extra Waktu (${qty}x @Rp 25rb):`;
@@ -996,6 +1037,78 @@ paketButtons.forEach(btn => {
             } else {
                 rincianExtraRow.style.display = "none";
             }
+        });
+
+        // Event Klik Tombol Lanjut Pembayaran (Muncul QRIS / Tunai)
+        document.getElementById("btnProsesBayar").addEventListener("click", function() {
+            const tanggal = paketContent.querySelector("input[type='date']").value;
+            const lokasi = paketContent.querySelector("textarea[placeholder*='Alamat']").value;
+            const totalHargaText = totalHargaEl.innerText;
+
+            if (!tanggal || !lokasi) {
+                alert("Mohon isi Tanggal dan Lokasi terlebih dahulu!");
+                return;
+            }
+
+            // Ganti isi form menjadi pilihan metode pembayaran QRIS CIKUR Rubidotcom
+            paketContent.innerHTML = `
+                <h3 class="paket-title" style="margin-bottom:8px;">Pilih Metode Pembayaran</h3>
+                <p style="font-size:12px; text-align:center; color:#555; margin-bottom:12px;">
+                    Total Tagihan Anda: <strong style="color:#d8a400; font-size:16px;">${totalHargaText}</strong>
+                </p>
+
+                <div class="payment-method-grid">
+                    <button type="button" class="pay-method-btn active-method" id="methodQris">📱 QRIS CIKUR</button>
+                    <button type="button" class="pay-method-btn" id="methodTunai">💵 Bayar Tunai</button>
+                </div>
+
+                <div id="dynamicPaymentArea" class="result-payment-box">
+                    <p style="font-weight:700; font-size:13px; color:#111; margin-bottom:3px;">Scan QRIS CIKUR Rubidotcom</p>
+                    <p style="font-size:11px; color:#d8a400; font-weight:600; margin-bottom:8px;">NMID: ID1020035825931 (A01)</p>
+                    <!-- Menampilkan Gambar QRIS Asli Anda -->
+                    <img src="qr_ID1020035825931_05.07.26_1783225465_1783225465366.jpeg" alt="QRIS CIKUR Rubidotcom">
+                    <p style="font-size:11px; color:#555; margin-top:6px;">Masukkan nominal sesuai total tagihan saat scan.</p>
+                </div>
+
+                <button class="btn-pesan-form" id="btnSelesaikan" style="margin-top:12px; background:#28a745; color:#fff;">Selesaikan Pesanan ✓</button>
+            `;
+
+            // Interaktif Ganti Metode Pembayaran di Dalam Form
+            const methodQris = document.getElementById("methodQris");
+            const methodTunai = document.getElementById("methodTunai");
+            const dynamicPaymentArea = document.getElementById("dynamicPaymentArea");
+
+            methodQris.addEventListener("click", function() {
+                methodQris.classList.add("active-method");
+                methodTunai.classList.remove("active-method");
+                dynamicPaymentArea.innerHTML = `
+                    <p style="font-weight:700; font-size:13px; color:#111; margin-bottom:3px;">Scan QRIS CIKUR Rubidotcom</p>
+                    <p style="font-size:11px; color:#d8a400; font-weight:600; margin-bottom:8px;">NMID: ID1020035825931 (A01)</p>
+                    <img src="qr_ID1020035825931_05.07.26_1783225465_1783225465366.jpeg" alt="QRIS CIKUR Rubidotcom">
+                    <p style="font-size:11px; color:#555; margin-top:6px;">Masukkan nominal sesuai total tagihan saat scan.</p>
+                `;
+            });
+
+            methodTunai.addEventListener("click", function() {
+                methodTunai.classList.add("active-method");
+                methodQris.classList.remove("active-method");
+                dynamicPaymentArea.innerHTML = `
+                    <div style="padding: 25px 5px; text-align:center;">
+                        <h4 style="font-size:15px; color:#111; margin-bottom:8px;">Pembayaran Tunai (COD)</h4>
+                        <p style="font-size:12px; color:#555; line-height:1.5;">
+                            Silakan lakukan pembayaran tunai sebesar <b>${totalHargaText}</b> langsung kepada petugas di lokasi pada tanggal <b>${tanggal}</b>.
+                        </p>
+                        <p style="font-size:11px; font-weight:600; color:#d8a400; margin-top:12px;">Status: Bayar di Lokasi</p>
+                    </div>
+                `;
+            });
+
+            // Tombol Final Selesaikan Pesanan
+            document.getElementById("btnSelesaikan").addEventListener("click", function() {
+                alert("🎉 Pesanan layanan " + info.nama + " berhasil dibuat!\nTerima kasih telah memesan di CIKUR GO.");
+                assistantScreen.style.display = "none";
+                location.reload();
+            });
         });
     });
 });
