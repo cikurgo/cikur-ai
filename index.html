@@ -3,14 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CIKUR GO - Super App Engine v3.6</title>
+<title>CIKUR GO - Super App Engine v3.8</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-
-<!-- Skrip Integrasi Payment Gateway (Midtrans Snap Sandbox) -->
-<script type="text/javascript"
-src="https://app.sandbox.midtrans.com/snap/snap.js"
-data-client-key="GANTI_DENGAN_CLIENT_KEY_ANDA"></script>
 
 <style>
 *{
@@ -116,7 +111,6 @@ body{
     line-height: 1.2;
 }
 
-/* Tambahan Tagline di bawah Nama User */
 .user-tagline {
     font-size: 10px;
     color: #E50914;
@@ -212,7 +206,7 @@ body{
 }
 
 /* ===========================
-   SERVICES SECTION (Core: Assistant, Support: Food & Ride)
+   SERVICES SECTION
 =========================== */
 .services-section {
     background: #ffffff;
@@ -372,7 +366,7 @@ body{
 }
 
 /* ===========================
-   CHAT AI BOX
+   CHAT AI BOX (CGO)
 =========================== */
 .chat-action-box {
     background: linear-gradient(135deg, #0f172a, #1e293b);
@@ -677,9 +671,26 @@ textarea.input-box {
     color: #E50914;
 }
 
-/* ===========================
-   INVOICE STYLING
-=========================== */
+.rincian-bill {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    font-size: 12px;
+}
+.rincian-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    color: #64748b;
+}
+.rincian-row span:last-child {
+    font-weight: 700;
+    color: #0f172a;
+    font-family: 'JetBrains Mono', monospace;
+}
+
 .invoice-card {
     background: #ffffff;
     border: 2px dashed #cbd5e1;
@@ -756,7 +767,7 @@ textarea.input-box {
         </div>
     </div>
 
-    <!-- Grid Layanan Utama (Assistant sebagai Core, Food & Ride sebagai Pendukung) -->
+    <!-- Grid Layanan Utama (Food & Ride mengarah ke food.html dan ride.html) -->
     <div class="services-section">
         <div class="services-title">Core Ecosystem</div>
         <div class="menu-grid">
@@ -766,13 +777,13 @@ textarea.input-box {
                 </div>
                 <span class="menu-label">Assistant</span>
             </a>
-            <a id="btnFood" class="menu-item">
+            <a href="food.html" id="btnFood" class="menu-item">
                 <div class="menu-icon-box">
                     <img src="tombol-food.png" alt="FOOD">
                 </div>
                 <span class="menu-label">Food</span>
             </a>
-            <a id="btnRide" class="menu-item">
+            <a href="ride.html" id="btnRide" class="menu-item">
                 <div class="menu-icon-box">
                     <img src="tombol-ride.png" alt="RIDE">
                 </div>
@@ -807,11 +818,11 @@ textarea.input-box {
         </div>  
     </div>  
 
-    <!-- Quick AI Assistant Banner Button -->
+    <!-- CIKUR AI Assistant (CGO) Banner Button -->
     <div class="chat-action-box">
         <div class="chat-text-info">
-            <h3>Butuh Bantuan Cepat?</h3>
-            <p>Asisten AI CIKUR siap mendampingi 24/7</p>
+            <h3>Asisten AI CGO</h3>
+            <p>Siap mendampingi kebutuhan Anda 24/7</p>
         </div>
         <button id="chatBtn">Tanya CGO</button>
     </div>
@@ -835,7 +846,7 @@ textarea.input-box {
 </div>
     
 <!-- ===========================
-   JAVASCRIPT KODE MASTER v3.6
+   JAVASCRIPT KODE MASTER v3.8
 =========================== -->
 <script>
 let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || {
@@ -915,15 +926,15 @@ setInterval(() => {
     showSlide(current);
 }, 4000);
 
-// --- BOTPRESS CHAT ---
+// --- BOTPRESS CHAT (CGO) ---
 const chatBtn = document.getElementById("chatBtn");
 chatBtn.addEventListener("click", () => {
     chatBtn.disabled = true;
-    chatBtn.innerHTML = "Memuat...";
+    chatBtn.innerHTML = "Memuat CGO...";
     setTimeout(() => {
         if(window.botpress) window.botpress.open();
         chatBtn.disabled = false;
-        chatBtn.innerHTML = "Tanya AI";
+        chatBtn.innerHTML = "Tanya CGO";
     }, 500);
 });
 
@@ -969,7 +980,7 @@ document.getElementById("btnOpenProfile").addEventListener("click", () => {
                 ${avatarPreviewHTML}
             </div>
             <h3 style="font-size:16px; color:#0f172a; font-weight:800;">${userProfile.name}</h3>
-            <p style="font-size:12px; color:#64748b;">Member Aktif • CikurGo Core v3.6</p>
+            <p style="font-size:12px; color:#64748b;">Member Aktif • CikurGo Core v3.8</p>
         </div>
         <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:14px; margin-bottom:14px;">
             <div class="form-group">
@@ -1073,7 +1084,7 @@ document.getElementById("btnOpenWallet").addEventListener("click", () => {
     });
 });
 
-// --- MODUL LAYANAN ASSISTANT (CORE) ---
+// --- MODUL LAYANAN ASSISTANT (HARGA BARU: DINE-IN 25K, VIP 89K, PRIVATE 349K) ---
 const btnAssistant = document.getElementById("btnAssistant");
 btnAssistant.addEventListener("click", function(e){
     e.preventDefault();
@@ -1136,6 +1147,15 @@ btnAssistant.addEventListener("click", function(e){
                     <input type="date" class="input-box" id="inputTanggal">
                 </div>
                 <div class="form-group">
+                    <label>Extra Waktu (Tambahan Durasi)</label>
+                    <select class="input-box" id="selectExtraWaktu" style="background:#ffffff; font-weight:700;">
+                        <option value="0">Tanpa Extra Waktu (0 Jam) - Rp 0</option>
+                        <option value="1">Extra 1 Jam (+Rp 15.000)</option>
+                        <option value="2">Extra 2 Jam (+Rp 30.000)</option>
+                        <option value="3">Extra 3 Jam (+Rp 45.000)</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label>Lokasi / Alamat</label>
                     <textarea class="input-box" id="inputLokasi" placeholder="Alamat lengkap..."></textarea>
                 </div>
@@ -1143,23 +1163,45 @@ btnAssistant.addEventListener("click", function(e){
                     <label>Catatan Khusus</label>
                     <textarea class="input-box" id="inputCatatanRequest" placeholder="Instruksi khusus..."></textarea>
                 </div>
+
+                <!-- Rincian Harga & Kalkulasi Total -->
+                <div class="rincian-bill">
+                    <div class="rincian-row"><span>Harga Dasar Layanan</span><span id="txtBasePrice">${info.hargaStr}</span></div>
+                    <div class="rincian-row"><span>Biaya Extra Waktu</span><span id="txtExtraPrice">Rp 0</span></div>
+                </div>
+
                 <div class="total-box">
                     <span class="total-label">Total Tagihan :</span>
-                    <span class="total-value">${info.hargaStr}</span>
+                    <span class="total-value" id="txtTotalFinal">${info.hargaStr}</span>
                 </div>
                 <button class="btn-pesan-form" id="btnLanjutBayar">Lanjut Pembayaran ➔</button>
             `;
 
+            let currentExtraCost = 0;
+            const selectExtraWaktu = document.getElementById("selectExtraWaktu");
+            const txtExtraPrice = document.getElementById("txtExtraPrice");
+            const txtTotalFinal = document.getElementById("txtTotalFinal");
+
+            selectExtraWaktu.addEventListener("change", function() {
+                let extraHours = parseInt(this.value);
+                currentExtraCost = extraHours * 15000;
+                let grandTotal = info.hargaBase + currentExtraCost;
+
+                txtExtraPrice.innerText = "Rp " + currentExtraCost.toLocaleString('id-ID');
+                txtTotalFinal.innerText = "Rp " + grandTotal.toLocaleString('id-ID');
+            });
+
             document.getElementById("btnLanjutBayar").addEventListener("click", () => {
                 const tanggal = document.getElementById("inputTanggal").value;
                 const lokasi = document.getElementById("inputLokasi").value;
+                let extraHoursSelected = parseInt(selectExtraWaktu.value);
+                let finalCalculatedTotal = info.hargaBase + currentExtraCost;
 
                 if (!tanggal || !lokasi) {
                     alert("[!] Mohon lengkapi Tanggal dan Lokasi.");
                     return;
                 }
 
-                // Tampilan Opsi Pembayaran Lengkap: CikurPay, QRIS, & Tunai
                 dynamicPaketContent.innerHTML = `
                     <h3 class="paket-title" style="margin-bottom:10px;">Metode Pembayaran</h3>
                     <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:12px; margin-bottom:12px;">
@@ -1169,9 +1211,9 @@ btnAssistant.addEventListener("click", function(e){
                             <button class="pay-method-option" data-method="tunai">Tunai</button>
                         </div>
 
-                        <!-- Panel Konten Pembayaran Dinamis -->
                         <div id="paymentDetailsContainer">
                             <div style="font-size:12px; color:#64748b; margin-bottom:8px;">Saldo CikurPay: <strong style="color:#0f172a;">Rp ${userProfile.saldo.toLocaleString('id-ID')}</strong></div>
+                            <div style="font-size:12px; color:#0f172a; font-weight:700; margin-bottom:12px;">Total Tagihan: Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</div>
                             <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:#0f172a;">Bayar dengan CikurPay ⚡</button>
                         </div>
                     </div>
@@ -1190,13 +1232,14 @@ btnAssistant.addEventListener("click", function(e){
                         if(selectedPaymentMethod === "cikurpay") {
                             paymentDetailsContainer.innerHTML = `
                                 <div style="font-size:12px; color:#64748b; margin-bottom:8px;">Saldo CikurPay: <strong style="color:#0f172a;">Rp ${userProfile.saldo.toLocaleString('id-ID')}</strong></div>
+                                <div style="font-size:12px; color:#0f172a; font-weight:700; margin-bottom:12px;">Total Tagihan: Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</div>
                                 <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:#0f172a;">Bayar dengan CikurPay ⚡</button>
                             `;
                             bindBayarAction();
                         } else if(selectedPaymentMethod === "qris") {
                             paymentDetailsContainer.innerHTML = `
                                 <div style="text-align:center; margin-bottom:8px;">
-                                    <p style="font-size:11px; color:#64748b; margin-bottom:8px;">Scan QRIS di bawah untuk membayar ${info.hargaStr}</p>
+                                    <p style="font-size:11px; color:#64748b; margin-bottom:8px;">Scan QRIS CIKUR Rubidotcom (NMID: ID1020035825931) untuk membayar Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</p>
                                     <img src="qris.png" alt="QRIS CikurGo" style="width:160px; height:160px; object-fit:contain; border:1px solid #cbd5e1; border-radius:12px; padding:6px; background:#fff; margin:0 auto; display:block;">
                                 </div>
                                 <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:#E50914; margin-top:8px;">Konfirmasi Bayar QRIS ✓</button>
@@ -1204,7 +1247,7 @@ btnAssistant.addEventListener("click", function(e){
                             bindBayarAction();
                         } else if(selectedPaymentMethod === "tunai") {
                             paymentDetailsContainer.innerHTML = `
-                                <div style="font-size:12px; color:#64748b; margin-bottom:8px; text-align:center;">Pembayaran dilakukan secara <strong>Tunai</strong> langsung kepada petugas/asisten di lokasi.</div>
+                                <div style="font-size:12px; color:#64748b; margin-bottom:8px; text-align:center;">Pembayaran sebesar <strong>Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</strong> dilakukan secara <strong>Tunai</strong> langsung kepada petugas/asisten di lokasi.</div>
                                 <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:#E50914; margin-top:4px;">Pesan dengan Pembayaran Tunai ✓</button>
                             `;
                             bindBayarAction();
@@ -1215,11 +1258,11 @@ btnAssistant.addEventListener("click", function(e){
                 function bindBayarAction() {
                     document.getElementById("btnEksekusiBayar").addEventListener("click", () => {
                         if(selectedPaymentMethod === "cikurpay") {
-                            if (userProfile.saldo < info.hargaBase) {
+                            if (userProfile.saldo < finalCalculatedTotal) {
                                 alert("[!] Saldo CikurPay kurang. Silakan lakukan Top-Up terlebih dahulu.");
                                 return;
                             }
-                            userProfile.saldo -= info.hargaBase;
+                            userProfile.saldo -= finalCalculatedTotal;
                             localStorage.setItem('cikur_user', JSON.stringify(userProfile));
                             updateUIProfile();
                         }
@@ -1236,10 +1279,11 @@ btnAssistant.addEventListener("click", function(e){
                                 <div class="invoice-row"><span>No. Invoice</span><span>${invoiceNo}</span></div>
                                 <div class="invoice-row"><span>Nama</span><span>${userProfile.name}</span></div>
                                 <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
+                                <div class="invoice-row"><span>Extra Waktu</span><span>${extraHoursSelected} Jam</span></div>
                                 <div class="invoice-row"><span>Metode Bayar</span><span>${selectedPaymentMethod.toUpperCase()}</span></div>
                                 <div class="invoice-row" style="border-top:1px dashed #cbd5e1; margin-top:8px; padding-top:6px;">
                                     <span style="font-weight:800; color:#0f172a;">Total Tagihan</span>
-                                    <span style="font-weight:800; color:#E50914; font-size:14px;">${info.hargaStr}</span>
+                                    <span style="font-weight:800; color:#E50914; font-size:14px;">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span>
                                 </div>
                             </div>
                             <button class="btn-pesan-form" id="btnTutupInvoice">Selesai ✓</button>
@@ -1250,44 +1294,10 @@ btnAssistant.addEventListener("click", function(e){
                     });
                 }
 
-                // Initial bind untuk default method (CikurPay)
                 bindBayarAction();
             });
         });
     });
-});
-
-// --- DUMMY HANDLER UNTUK MENU FOOD & RIDE (Universal Payment Preparation) ---
-document.getElementById("btnFood").addEventListener("click", (e) => {
-    e.preventDefault();
-    openModal("CIKUR GO FOOD");
-    modalMainContent.innerHTML = `
-        <div style="text-align:center; padding:20px;">
-            <h3 style="color:#0f172a; font-weight:800; margin-bottom:6px;">Layanan Food</h3>
-            <p style="font-size:12px; color:#64748b; margin-bottom:16px;">Modul kuliner siap terintegrasi dengan opsi pembayaran <strong>CikurPay</strong>, <strong>QRIS (qris.png)</strong>, dan <strong>Tunai</strong>.</p>
-            <div style="display:flex; justify-content:center; gap:8px;">
-                <span class="pay-method-option active" style="pointer-events:none;">CikurPay</span>
-                <span class="pay-method-option active" style="pointer-events:none;">QRIS</span>
-                <span class="pay-method-option active" style="pointer-events:none;">Tunai</span>
-            </div>
-        </div>
-    `;
-});
-
-document.getElementById("btnRide").addEventListener("click", (e) => {
-    e.preventDefault();
-    openModal("CIKUR GO RIDE");
-    modalMainContent.innerHTML = `
-        <div style="text-align:center; padding:20px;">
-            <h3 style="color:#0f172a; font-weight:800; margin-bottom:6px;">Layanan Ride</h3>
-            <p style="font-size:12px; color:#64748b; margin-bottom:16px;">Modul transportasi siap terintegrasi dengan opsi pembayaran <strong>CikurPay</strong>, <strong>QRIS (qris.png)</strong>, dan <strong>Tunai</strong>.</p>
-            <div style="display:flex; justify-content:center; gap:8px;">
-                <span class="pay-method-option active" style="pointer-events:none;">CikurPay</span>
-                <span class="pay-method-option active" style="pointer-events:none;">QRIS</span>
-                <span class="pay-method-option active" style="pointer-events:none;">Tunai</span>
-            </div>
-        </div>
-    `;
 });
 </script>
     
