@@ -3,9 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CIKUR GO - Super App Engine</title>
+<title>CIKUR GO - Super App Engine v3.4</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<!-- Skrip Integrasi Payment Gateway (Midtrans Snap Sandbox) -->
+<script type="text/javascript"
+src="https://app.sandbox.midtrans.com/snap/snap.js"
+data-client-key="GANTI_DENGAN_CLIENT_KEY_ANDA"></script>
 
 <style>
 *{
@@ -88,6 +93,13 @@ body{
     font-weight: 800;
     color: #E50914;
     font-size: 16px;
+    overflow: hidden;
+}
+
+.user-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .user-info h4 {
@@ -500,7 +512,6 @@ footer p { margin:0; }
     display:flex;
     flex-direction:column;
     align-items:center;
-    box-shadow:none;
     height:auto;
     width:auto;
     position:relative;
@@ -592,11 +603,6 @@ footer p { margin:0; }
     border-color: #E50914;
 }
 
-.input-box.harga-text {
-    font-family: 'JetBrains Mono', monospace;
-    font-weight: 700;
-}
-
 textarea.input-box {
     resize: none;
     height: 55px;
@@ -625,27 +631,6 @@ textarea.input-box {
     font-weight: 800;
     color: #FFD700;
     font-family: 'JetBrains Mono', monospace;
-}
-
-.result-payment-box {
-    background: #ffffff;
-    border: 1px solid #cbd5e1;
-    border-radius: 12px;
-    padding: 12px;
-    text-align: center;
-    margin-top: 10px;
-}
-
-.result-payment-box img {
-    width: 130px;
-    height: 130px;
-    object-fit: contain;
-    margin: 6px auto;
-    display: block;
-    border-radius: 8px;
-    background: #fff;
-    border: 1px solid #f1f5f9;
-    padding: 4px;
 }
 
 .btn-pesan-form {
@@ -755,7 +740,7 @@ textarea.input-box {
 
     <!-- Grid Layanan Utama -->
     <div class="services-section">
-        <div class="services-title">Ecosystem Menu</div>
+        <div class="services-title">Menu</div>
         <div class="menu-grid">
             <a id="btnAssistant" class="menu-item">
                 <div class="menu-icon-box">
@@ -838,22 +823,27 @@ textarea.input-box {
 </div>
     
 <!-- ===========================
-   JAVASCRIPT KODE MASTER
+   JAVASCRIPT KODE MASTER v3.4
 =========================== -->
 <script>
-// --- MANAJEMEN STATE PENGGUNA & ONBOARDING ---
 let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || {
     name: "CIKUR USER",
     phone: "08123456789",
-    saldo: 125000
+    saldo: 125000,
+    avatar: ""
 };
 
 function updateUIProfile() {
     document.getElementById("headerNamaUser").innerText = userProfile.name;
     document.getElementById("displaySaldo").innerText = "Rp " + userProfile.saldo.toLocaleString('id-ID');
     
-    let initials = userProfile.name.split(" ").map(n => n[0]).join("").substring(0,2).toUpperCase();
-    document.getElementById("headerAvatar").innerText = initials || "CK";
+    let avatarContainer = document.getElementById("headerAvatar");
+    if(userProfile.avatar && userProfile.avatar.startsWith("data:image")) {
+        avatarContainer.innerHTML = `<img src="${userProfile.avatar}" alt="Foto Profil">`;
+    } else {
+        let initials = userProfile.name.split(" ").map(n => n[0]).join("").substring(0,2).toUpperCase();
+        avatarContainer.innerText = initials || "CK";
+    }
 }
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -873,11 +863,11 @@ function bukaModalRegistrasi() {
         </div>
         <div class="form-group">
             <label>Nama Lengkap / Panggilan</label>
-            <input type="text" id="regName" class="input-box" placeholder="Contoh: Budi Santoso" value="">
+            <input type="text" id="regName" class="input-box" placeholder="Contoh: Budi Santoso">
         </div>
         <div class="form-group">
             <label>Nomor WhatsApp / HP</label>
-            <input type="text" id="regPhone" class="input-box" placeholder="Contoh: 08123456789" value="">
+            <input type="text" id="regPhone" class="input-box" placeholder="Contoh: 08123456789">
         </div>
         <button class="btn-pesan-form" id="btnSimpanReg" style="margin-top:10px;">Mulai Sekarang ✓</button>
     `;
@@ -921,7 +911,7 @@ chatBtn.addEventListener("click", () => {
     setTimeout(() => {
         if(window.botpress) window.botpress.open();
         chatBtn.disabled = false;
-        chatBtn.innerHTML = "Tanya AI";
+        chatBtn.innerHTML = "Tanya CGO";
     }, 500);
 });
 
@@ -956,19 +946,26 @@ function openModal(titleHTML) {
 closeAssistant.addEventListener("click", () => { assistantScreen.style.display = "none"; });
 assistantScreen.addEventListener("click", (e) => { if(e.target === assistantScreen) assistantScreen.style.display = "none"; });
 
-
-// --- KLIK PROFIL ---
+// --- PENGATURAN PROFIL & FOTO ---
 document.getElementById("btnOpenProfile").addEventListener("click", () => {
-    openModal("PROFIL & PENGATURAN AKUN");
+    openModal("PENGATURAN PROFIL & FOTO AKUN");
+    let avatarPreviewHTML = userProfile.avatar ? `<img src="${userProfile.avatar}" style="width:100%; height:100%; object-fit:cover;">` : "CK";
+
     modalMainContent.innerHTML = `
         <div style="text-align:center; margin-bottom:16px;">
-            <div style="width:70px; height:70px; border-radius:50%; background:#fee2e2; border:3px solid #E50914; color:#E50914; font-size:24px; font-weight:800; display:flex; align-items:center; justify-content:center; margin:0 auto 10px;">CK</div>
+            <div style="width:75px; height:75px; border-radius:50%; background:#fee2e2; border:3px solid #E50914; color:#E50914; font-size:24px; font-weight:800; display:flex; align-items:center; justify-content:center; margin:0 auto 10px; overflow:hidden;" id="modalAvatarPreviewBox">
+                ${avatarPreviewHTML}
+            </div>
             <h3 style="font-size:16px; color:#0f172a; font-weight:800;">${userProfile.name}</h3>
-            <p style="font-size:12px; color:#64748b;">Member Aktif • CikurGo Core v3.0</p>
+            <p style="font-size:12px; color:#64748b;">Member Aktif • CikurGo Core v3.4</p>
         </div>
         <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:14px; margin-bottom:14px;">
             <div class="form-group">
-                <label>Nama Akun</label>
+                <label>Ganti Foto Profil</label>
+                <input type="file" id="inputFotoProfil" accept="image/*" class="input-box" style="font-size:11px; padding:6px; background:#fff;">
+            </div>
+            <div class="form-group">
+                <label>Nama Lengkap</label>
                 <input type="text" id="inputNamaUser" class="input-box" value="${userProfile.name}">
             </div>
             <div class="form-group" style="margin-bottom:0;">
@@ -978,58 +975,104 @@ document.getElementById("btnOpenProfile").addEventListener("click", () => {
         </div>
         <button class="btn-pesan-form" id="btnSimpanProfil">Simpan Perubahan ✓</button>
     `;
+
+    let temporaryAvatar = userProfile.avatar;
+    document.getElementById("inputFotoProfil").addEventListener("change", function(e) {
+        let file = e.target.files[0];
+        if(file) {
+            let reader = new FileReader();
+            reader.onload = function(uploadEvent) {
+                temporaryAvatar = uploadEvent.target.result;
+                document.getElementById("modalAvatarPreviewBox").innerHTML = `<img src="${temporaryAvatar}" style="width:100%; height:100%; object-fit:cover;">`;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
     document.getElementById("btnSimpanProfil").addEventListener("click", () => {
-        userProfile.name = document.getElementById("inputNamaUser").value;
-        userProfile.phone = document.getElementById("inputPhoneUser").value;
+        let newName = document.getElementById("inputNamaUser").value.trim();
+        let newPhone = document.getElementById("inputPhoneUser").value.trim();
+        if(!newName || !newPhone) {
+            alert("[!] Nama dan No HP tidak boleh kosong.");
+            return;
+        }
+        userProfile.name = newName;
+        userProfile.phone = newPhone;
+        userProfile.avatar = temporaryAvatar;
         localStorage.setItem('cikur_user', JSON.stringify(userProfile));
         updateUIProfile();
-        alert("[SUKSES] Profil berhasil diperbarui!");
+        alert("[SUKSES] Profil dan foto berhasil diperbarui!");
         assistantScreen.style.display = "none";
     });
 });
 
-
-// --- KLIK DOMPET CIKURPAY ---
+// --- CIKURPAY & INTEGRASI TOP-UP EKSTERNAL ---
 document.getElementById("btnOpenWallet").addEventListener("click", () => {
-    openModal("DOMPET CIKURPAY & POIN");
+    openModal("DOMPET CIKURPAY & TOP-UP");
     modalMainContent.innerHTML = `
         <div style="background:linear-gradient(135deg, #0f172a, #1e293b); border-radius:18px; padding:18px; color:#fff; text-align:center; margin-bottom:16px;">
             <p style="font-size:11px; color:#94a3b8; text-transform:uppercase; font-weight:700;">Saldo Aktif CikurPay</p>
             <h2 style="font-size:26px; font-weight:800; color:#FFD700; font-family:'JetBrains Mono', monospace; margin:6px 0;">Rp ${userProfile.saldo.toLocaleString('id-ID')}</h2>
-            <p style="font-size:11px; color:#34d399; font-weight:600;">[Akun Terverifikasi: ${userProfile.name}]</p>
+            <p style="font-size:11px; color:#34d399; font-weight:600;">[Siap Integrasi DANA, GoPay, QRIS & Bank]</p>
         </div>
-        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:14px; text-align:center;">
-            <p style="font-size:12px; font-weight:700; color:#0f172a; margin-bottom:8px;">Simulasi Top-Up Saldo Cepat</p>
-            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:12px;">
-                <button class="pay-method-btn topup-btn" data-val="50000">Rp 50rb</button>
-                <button class="pay-method-btn topup-btn" data-val="100000">Rp 100rb</button>
-                <button class="pay-method-btn topup-btn" data-val="200000">Rp 200rb</button>
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:14px;">
+            <p style="font-size:12px; font-weight:700; color:#0f172a; margin-bottom:10px;">Pilih Nominal Top-Up</p>
+            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:10px;">
+                <button class="pay-method-btn topup-gateway-btn" data-val="50000" style="border-color:#E50914;">Rp 50rb</button>
+                <button class="pay-method-btn topup-gateway-btn" data-val="100000">Rp 100rb</button>
+                <button class="pay-method-btn topup-gateway-btn" data-val="200000">Rp 200rb</button>
             </div>
+            <div class="form-group" style="margin-top:10px;">
+                <label>Atau Masukkan Nominal Lain (Rp)</label>
+                <input type="number" id="customTopupVal" class="input-box" placeholder="Contoh: 150000">
+            </div>
+            <button class="btn-pesan-form" id="btnProsesGateway" style="background:#E50914; margin-top:4px;">Top-Up via DANA / QRIS / Bank ⚡</button>
         </div>
     `;
-    document.querySelectorAll(".topup-btn").forEach(btn => {
+
+    let selectedTopupAmount = 50000;
+    document.querySelectorAll(".topup-gateway-btn").forEach(btn => {
         btn.addEventListener("click", function() {
-            let addVal = parseInt(this.getAttribute("data-val"));
-            userProfile.saldo += addVal;
+            document.querySelectorAll(".topup-gateway-btn").forEach(b => b.style.borderColor = "#cbd5e1");
+            this.style.borderColor = "#E50914";
+            selectedTopupAmount = parseInt(this.getAttribute("data-val"));
+            document.getElementById("customTopupVal").value = "";
+        });
+    });
+
+    document.getElementById("btnProsesGateway").addEventListener("click", () => {
+        let customVal = document.getElementById("customTopupVal").value;
+        let finalAmount = customVal ? parseInt(customVal) : selectedTopupAmount;
+
+        if(!finalAmount || finalAmount < 10000) {
+            alert("[!] Minimum top-up adalah Rp 10.000");
+            return;
+        }
+
+        // Simulasikan pemanggilan Payment Gateway (Contoh Midtrans Snap)
+        alert(`[SIMULASI GATEWAY API]\nMembuat transaksi top-up Rp ${finalAmount.toLocaleString('id-ID')} untuk ${userProfile.name}.\n\n(Nantinya fungsi ini memanggil window.snap.pay dengan token dari server Anda).`);
+
+        // Simulasi Sukses Otomatis untuk keperluan testing frontend
+        setTimeout(() => {
+            userProfile.saldo += finalAmount;
             localStorage.setItem('cikur_user', JSON.stringify(userProfile));
             updateUIProfile();
-            alert("[SUKSES] Top-up sebesar Rp " + addVal.toLocaleString('id-ID') + " berhasil!");
+            alert(`[SUKSES] Top-up sebesar Rp ${finalAmount.toLocaleString('id-ID')} berhasil masuk ke CikurPay!`);
             assistantScreen.style.display = "none";
-        });
+        }, 800);
     });
 });
 
-
-// --- MODUL LAYANAN, PEMBAYARAN & INVOICE OTOMATIS ---
+// --- MODUL LAYANAN ASSISTANT ---
 const btnAssistant = document.getElementById("btnAssistant");
 btnAssistant.addEventListener("click", function(e){
     e.preventDefault();
-    openModal("CIKUR GO SERVICE ENGINE");
+    openModal("CIKUR GO ASSISTANT");
     modalMainContent.innerHTML = `
-        <h3 class="paket-title">Pilih Modul Layanan</h3>
+        <h3 class="paket-title">Pilih Layanan</h3>
         <div class="paket-grid">
             <button class="paket-btn" data-paket="dine">
-                <img src="icon-dine-in.png" alt="DINE-IN">
+                <img src="icon-dine-in.png" alt="DINE">
                 <span style="font-size:11px; font-weight:700; color:#334155; margin-bottom:4px;">Dine-In</span>
                 <div class="indicator-line"></div>
             </button>
@@ -1053,7 +1096,7 @@ btnAssistant.addEventListener("click", function(e){
     const dynamicPaketContent = document.getElementById("paketContent");
     const dataPaket = {
         dine: { nama: "DINE-IN", hargaBase: 25000, hargaStr: "Rp 25.000" },
-        vip: { nama: "VIP", hargaBase: 120000, hargaStr: "Rp 120.000" },
+        vip: { nama: "VIP", hargaBase: 89000, hargaStr: "Rp 89.000" },
         private: { nama: "PRIVATE", hargaBase: 349000, hargaStr: "Rp 349.000" }
     };
 
@@ -1061,17 +1104,16 @@ btnAssistant.addEventListener("click", function(e){
         btn.addEventListener("click", function() {
             paketButtons.forEach(b => b.classList.remove("selected"));
             this.classList.add("selected");
-            const jenis = this.getAttribute("data-paket");
-            const info = dataPaket[jenis];
+            const info = dataPaket[this.getAttribute("data-paket")];
 
             dynamicPaketContent.innerHTML = `
                 <div class="form-group">
-                    <label>Modul Terpilih</label>
+                    <label>Layanan</label>
                     <div class="input-layanan">${info.nama}</div>
                 </div>
                 <div class="row-grid form-group">
                     <div class="col-half">
-                        <label>Pemesan (Terintegrasi)</label>
+                        <label>Pemesan</label>
                         <input type="text" class="input-box" value="${userProfile.name}" disabled style="background:#f1f5f9; font-weight:700;">
                     </div>
                     <div class="col-half">
@@ -1084,8 +1126,12 @@ btnAssistant.addEventListener("click", function(e){
                     <input type="date" class="input-box" id="inputTanggal">
                 </div>
                 <div class="form-group">
-                    <label>Lokasi Koordinat / Alamat</label>
-                    <textarea class="input-box" id="inputLokasi" placeholder="Alamat lengkap & Link Google Maps"></textarea>
+                    <label>Lokasi / Alamat</label>
+                    <textarea class="input-box" id="inputLokasi" placeholder="Alamat lengkap..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Catatan Khusus (By Request)</label>
+                    <textarea class="input-box" id="inputCatatanRequest" placeholder="Instruksi khusus..."></textarea>
                 </div>
                 <div class="total-box">
                     <span class="total-label">Total Tagihan :</span>
@@ -1094,100 +1140,57 @@ btnAssistant.addEventListener("click", function(e){
                 <button class="btn-pesan-form" id="btnProsesBayar">Lanjut Pembayaran ➔</button>
             `;
 
-            document.getElementById("btnProsesBayar").addEventListener("click", function() {
+            document.getElementById("btnProsesBayar").addEventListener("click", () => {
                 const tanggal = document.getElementById("inputTanggal").value;
                 const lokasi = document.getElementById("inputLokasi").value;
+                const catatanRequest = document.getElementById("inputCatatanRequest").value.trim() || "- Tidak ada -";
+
                 if (!tanggal || !lokasi) {
                     alert("[!] Mohon lengkapi Tanggal dan Lokasi.");
                     return;
                 }
 
-                // --- PILIHAN PEMBAYARAN: CIKURPAY VS QRIS ---
                 dynamicPaketContent.innerHTML = `
-                    <h3 class="paket-title" style="margin-bottom:10px;">Pilih Metode Pembayaran</h3>
-                    
+                    <h3 class="paket-title" style="margin-bottom:10px;">Metode Pembayaran Layanan</h3>
                     <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:12px; margin-bottom:12px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <span style="font-size:12px; font-weight:700; color:#64748b;">Saldo CikurPay Anda:</span>
+                            <span style="font-size:12px; font-weight:700; color:#64748b;">Saldo CikurPay:</span>
                             <span style="font-size:13px; font-weight:800; color:#0f172a; font-family:'JetBrains Mono',monospace;">Rp ${userProfile.saldo.toLocaleString('id-ID')}</span>
                         </div>
-                        <button class="btn-pesan-form" id="btnBayarCikurPay" style="background:#0f172a; margin-top:4px;">Bayar Instan pakai CikurPay ⚡</button>
+                        <button class="btn-pesan-form" id="btnBayarCikurPay" style="background:#0f172a; margin-top:4px;">Bayar Pakai CikurPay ⚡</button>
                     </div>
-
-                    <div style="text-align:center; margin:10px 0; font-size:11px; color:#94a3b8; font-weight:700;">— ATAU MANUAL —</div>
-
-                    <div class="result-payment-box" style="margin-top:0;">
-                        <p style="font-weight:700; font-size:12px; color:#0f172a;">Scan QRIS CIKUR Rubidotcom</p>
-                        <p style="font-size:10px; color:#E50914; font-weight:700; margin-bottom:6px; font-family:'JetBrains Mono',monospace;">NMID: ID1020035825931</p>
-                        <img src="KA_20260725_164929_0000.jpg" alt="QRIS">
-                        <div style="margin-top:10px; text-align:left; border-top:1px dashed #cbd5e1; padding-top:8px;">
-                            <label style="font-size:11px; font-weight:700; color:#334155; display:block; margin-bottom:4px;">Upload Bukti Transfer:</label>
-                            <input type="file" id="fileBuktiQR" accept="image/*" class="input-box" style="font-size:11px; padding:5px; background:#f8fafc;">
-                        </div>
-                    </div>
-                    <button class="btn-pesan-form" id="btnSelesaikanQRIS" style="margin-top:10px; background:#cbd5e1; color:#64748b; cursor:not-allowed;" disabled>Upload Bukti Bayar Dulu ➔</button>
                 `;
 
-                // Logika Pembayaran CikurPay
-                document.getElementById("btnBayarCikurPay").addEventListener("click", function() {
+                document.getElementById("btnBayarCikurPay").addEventListener("click", () => {
                     if (userProfile.saldo < info.hargaBase) {
-                        alert("[!] Saldo CikurPay Anda tidak mencukupi. Silakan lakukan Top-Up melalui menu dompet utama.");
+                        alert("[!] Saldo CikurPay kurang. Silakan lakukan Top-Up terlebih dahulu.");
                         return;
                     }
                     userProfile.saldo -= info.hargaBase;
                     localStorage.setItem('cikur_user', JSON.stringify(userProfile));
                     updateUIProfile();
-                    generateInvoice("CikurPay (Instan)");
-                });
-
-                // Logika Pembayaran QRIS Manual
-                const fileBuktiQR = document.getElementById("fileBuktiQR");
-                const btnSelesaikanQRIS = document.getElementById("btnSelesaikanQRIS");
-
-                fileBuktiQR.addEventListener("change", function() {
-                    if(this.files && this.files.length > 0) {
-                        btnSelesaikanQRIS.disabled = false;
-                        btnSelesaikanQRIS.style.background = "#E50914";
-                        btnSelesaikanQRIS.style.color = "#fff";
-                        btnSelesaikanQRIS.style.cursor = "pointer";
-                        btnSelesaikanQRIS.innerText = "Terbitkan Invoice ✓";
-                    }
-                });
-
-                btnSelesaikanQRIS.addEventListener("click", function() {
-                    generateInvoice("QRIS Manual");
-                });
-
-                // Fungsi Terpusat Pembuatan Invoice
-                function generateInvoice(metodeBayar) {
+                    
                     let invoiceNo = "INV/CGO/" + Math.floor(100000 + Math.random() * 900000);
-                    let waktuTransaksi = new Date().toLocaleString('id-ID');
-
                     modalMainContent.innerHTML = `
                         <div class="invoice-card">
                             <div class="invoice-header">
                                 <h3>CIKUR GO INVOICE</h3>
-                                <p style="font-size:10px; color:#64748b;">Status: LUNAS & TERVERIFIKASI</p>
+                                <p style="font-size:10px; color:#64748b;">Status: LUNAS (CikurPay)</p>
                             </div>
                             <div class="invoice-row"><span>No. Invoice</span><span>${invoiceNo}</span></div>
-                            <div class="invoice-row"><span>Waktu</span><span>${waktuTransaksi}</span></div>
-                            <div class="invoice-row"><span>Metode Bayar</span><span style="color:#0284c7;">${metodeBayar}</span></div>
-                            <div class="invoice-row"><span>Nama Pemesan</span><span>${userProfile.name}</span></div>
-                            <div class="invoice-row"><span>No. WhatsApp</span><span>${userProfile.phone}</span></div>
+                            <div class="invoice-row"><span>Nama</span><span>${userProfile.name}</span></div>
                             <div class="invoice-row"><span>Layanan</span><span>Modul ${info.nama}</span></div>
-                            <div class="invoice-row"><span>Jadwal</span><span>${tanggal}</span></div>
                             <div class="invoice-row" style="border-top:1px dashed #cbd5e1; margin-top:8px; padding-top:6px;">
                                 <span style="font-weight:800; color:#0f172a;">Total Dibayar</span>
                                 <span style="font-weight:800; color:#E50914; font-size:14px;">${info.hargaStr}</span>
                             </div>
                         </div>
-                        <button class="btn-pesan-form" id="btnTutupInvoice">Selesai & Kembali ke Home ✓</button>
+                        <button class="btn-pesan-form" id="btnTutupInvoice">Selesai ✓</button>
                     `;
-
                     document.getElementById("btnTutupInvoice").addEventListener("click", () => {
                         assistantScreen.style.display = "none";
                     });
-                }
+                });
             });
         });
     });
