@@ -520,24 +520,13 @@ footer p{
 }
 
 .input-number {
-    width: 50px;
+    width: 60px;
     padding: 10px 5px;
     text-align: center;
     border: 1px solid #ccc;
     border-radius: 10px;
-    font-size: 14px;
-    font-weight: 600;
-}
-
-.input-extra-harga {
-    flex: 1;
-    padding: 10px;
-    background: #f5f5f5;
-    border: 1px solid #ddd;
-    border-radius: 10px;
-    font-size: 14px;
-    color: #777;
-    text-align: center;
+    font-size: 15px;
+    font-weight: 700;
 }
 
 .form-hint {
@@ -556,7 +545,31 @@ textarea.textarea-besar {
     height: 90px;
 }
 
-/* Bagian Total Harga */
+/* Kotak Rincian & Total Biaya */
+.rincian-box {
+    background: #fff;
+    border: 1px dashed #d8a400;
+    border-radius: 12px;
+    padding: 12px 15px;
+    margin-top: 15px;
+    margin-bottom: 12px;
+}
+
+.rincian-item {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: #555;
+    margin-bottom: 6px;
+}
+
+.rincian-item.extra-detail {
+    color: #d8a400;
+    font-weight: 600;
+    border-top: 1px solid #eee;
+    padding-top: 6px;
+}
+
 .total-box {
     background: #111;
     color: #fff;
@@ -565,7 +578,6 @@ textarea.textarea-besar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 15px;
     margin-bottom: 12px;
 }
 
@@ -868,20 +880,20 @@ assistantScreen.addEventListener("click", function(e){
     e.target === assistantScreen && (assistantScreen.style.display = "none");
 });
 
-// Interaktif Klik Icon Paket & Form Pemesanan dengan Kalkulasi Total Harga
+// Interaktif Klik Icon Paket & Form Pemesanan dengan Logika Dinamis Extra Waktu
 const paketButtons = document.querySelectorAll(".paket-btn");
 const paketContent = document.getElementById("paketContent");
 
 const dataPaket = {
     dine: {
         nama: "DINE-IN",
-        hargaBase: 25000,
-        hargaStr: "Rp 25.000,-"
+        hargaBase: 45000,
+        hargaStr: "Rp 45.000,-"
     },
     vip: {
         nama: "VIP",
-        hargaBase: 89000,
-        hargaStr: "Rp 89.000,-"
+        hargaBase: 120000,
+        hargaStr: "Rp 120.000,-"
     },
     private: {
         nama: "PRIVATE",
@@ -906,16 +918,16 @@ paketButtons.forEach(btn => {
 
             <div class="row-grid form-group">
                 <div class="col-half">
-                    <label>Harga</label>
+                    <label>Harga Utama</label>
                     <div class="input-box harga-text">${info.hargaStr}</div>
                 </div>
                 <div class="col-half">
                     <label>Extra Waktu</label>
                     <div class="extra-row">
                         <input type="number" id="extraWaktu" class="input-number" value="0" min="0">
-                        <div class="input-extra-harga">Rp.25.000,-</div>
+                        <div class="input-box harga-text" style="text-align:center; background:#f5f5f5;">Rp 25rb/30m</div>
                     </div>
-                    <span class="form-hint">^Min. 1 • 30 Menit • Rp. 25.000,-</span>
+                    <span class="form-hint">*Isi angka (misal: 1, 2) jika tambah waktu</span>
                 </div>
             </div>
 
@@ -935,24 +947,55 @@ paketButtons.forEach(btn => {
                 <textarea class="input-box textarea-besar" placeholder="Tambahkan catatan khusus..."></textarea>
             </div>
 
+            <!-- KOTAK RINCIAN HARGA YANG MUNCUL DINAMIS -->
+            <div class="rincian-box">
+                <div class="rincian-item">
+                    <span>Harga ${info.nama}:</span>
+                    <span>${info.hargaStr}</span>
+                </div>
+                <div id="rincianExtraRow" class="rincian-item extra-detail" style="display: none;">
+                    <span id="labelExtraText">Extra Waktu (0x):</span>
+                    <span id="nilaiExtraText">Rp 0,-</span>
+                </div>
+            </div>
+
             <!-- TOTAL KESELURUHAN -->
             <div class="total-box">
-                <span class="total-label">Total Harga :</span>
-                <span id="totalHarga" class="total-value">Rp ${(info.hargaBase + 25000).toLocaleString('id-ID')},-</span>
+                <span class="total-label">Total Pembayaran :</span>
+                <span id="totalHarga" class="total-value">${info.hargaStr}</span>
             </div>
 
             <button class="btn-pesan-form" onclick="alert('Pesanan layanan ${info.nama} berhasil diproses!')">Lanjut Pembayaran ➔</button>
         `;
 
-        // Fungsi Update Total Harga Berdasarkan Extra Waktu
+        // Script untuk menghitung dan menampilkan rincian serta total secara real-time
         const extraInput = document.getElementById("extraWaktu");
         const totalHargaEl = document.getElementById("totalHarga");
+        const rincianExtraRow = document.getElementById("rincianExtraRow");
+        const labelExtraText = document.getElementById("labelExtraText");
+        const nilaiExtraText = document.getElementById("nilaiExtraText");
 
         extraInput.addEventListener("input", function() {
-            let val = parseInt(this.value) || 0;
-            if(val < 1) val = 1;
-            let total = info.hargaBase + (val * 25000);
-            totalHargaEl.innerText = "Rp " + total.toLocaleString('id-ID') + ",-";
+            let qty = parseInt(this.value) || 0;
+            if(qty < 0) {
+                qty = 0;
+                this.value = 0;
+            }
+
+            let biayaExtra = qty * 25000;
+            let totalKeseluruhan = info.hargaBase + biayaExtra;
+
+            // Update Total Tampilan
+            totalHargaEl.innerText = "Rp " + totalKeseluruhan.toLocaleString('id-ID') + ",-";
+
+            // Munculkan atau Sembunyikan Rincian Extra Waktu
+            if(qty > 0) {
+                rincianExtraRow.style.display = "flex";
+                labelExtraText.innerText = `Extra Waktu (${qty}x @Rp 25rb):`;
+                nilaiExtraText.innerText = "Rp " + biayaExtra.toLocaleString('id-ID') + ",-";
+            } else {
+                rincianExtraRow.style.display = "none";
+            }
         });
     });
 });
