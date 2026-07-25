@@ -556,23 +556,48 @@ textarea.textarea-besar {
     height: 90px;
 }
 
+/* Bagian Total Harga */
+.total-box {
+    background: #111;
+    color: #fff;
+    padding: 12px 15px;
+    border-radius: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 15px;
+    margin-bottom: 12px;
+}
+
+.total-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ddd;
+}
+
+.total-value {
+    font-size: 18px;
+    font-weight: 800;
+    color: #FFC107;
+}
+
 .btn-pesan-form {
     width: 100%;
     height: 48px;
     border: none;
     border-radius: 24px;
-    background: #111;
-    color: #fff;
+    background: #FFC107;
+    color: #111;
     font-size: 15px;
     font-weight: 700;
     cursor: pointer;
-    margin-top: 10px;
+    margin-top: 5px;
     transition: 0.3s;
+    box-shadow: 0 4px 12px rgba(255,193,7,0.3);
 }
 
 .btn-pesan-form:hover {
-    background: #d8a400;
-    color: #111;
+    background: #e0a800;
 }
 
 /* ===========================
@@ -843,22 +868,25 @@ assistantScreen.addEventListener("click", function(e){
     e.target === assistantScreen && (assistantScreen.style.display = "none");
 });
 
-// Interaktif Klik Icon Paket & Form Pemesanan
+// Interaktif Klik Icon Paket & Form Pemesanan dengan Kalkulasi Total Harga
 const paketButtons = document.querySelectorAll(".paket-btn");
 const paketContent = document.getElementById("paketContent");
 
 const dataPaket = {
     dine: {
         nama: "DINE-IN",
-        harga: "Rp 45.000,-"
+        hargaBase: 25000,
+        hargaStr: "Rp 25.000,-"
     },
     vip: {
         nama: "VIP",
-        harga: "Rp 120.000,-"
+        hargaBase: 89000,
+        hargaStr: "Rp 89.000,-"
     },
     private: {
         nama: "PRIVATE",
-        harga: "Rp 349.000,-"
+        hargaBase: 349000,
+        hargaStr: "Rp 349.000,-"
     }
 };
 
@@ -879,12 +907,12 @@ paketButtons.forEach(btn => {
             <div class="row-grid form-group">
                 <div class="col-half">
                     <label>Harga</label>
-                    <div class="input-box harga-text">${info.harga}</div>
+                    <div class="input-box harga-text">${info.hargaStr}</div>
                 </div>
                 <div class="col-half">
                     <label>Extra Waktu</label>
                     <div class="extra-row">
-                        <input type="number" class="input-number" value="1" min="1">
+                        <input type="number" id="extraWaktu" class="input-number" value="1" min="1">
                         <div class="input-extra-harga">Rp.25.000,-</div>
                     </div>
                     <span class="form-hint">^Min. 1 • 30 Menit • Rp. 25.000,-</span>
@@ -907,8 +935,25 @@ paketButtons.forEach(btn => {
                 <textarea class="input-box textarea-besar" placeholder="Tambahkan catatan khusus..."></textarea>
             </div>
 
+            <!-- TOTAL KESELURUHAN -->
+            <div class="total-box">
+                <span class="total-label">Total Harga :</span>
+                <span id="totalHarga" class="total-value">Rp ${(info.hargaBase + 25000).toLocaleString('id-ID')},-</span>
+            </div>
+
             <button class="btn-pesan-form" onclick="alert('Pesanan layanan ${info.nama} berhasil diproses!')">Lanjut Pembayaran ➔</button>
         `;
+
+        // Fungsi Update Total Harga Berdasarkan Extra Waktu
+        const extraInput = document.getElementById("extraWaktu");
+        const totalHargaEl = document.getElementById("totalHarga");
+
+        extraInput.addEventListener("input", function() {
+            let val = parseInt(this.value) || 0;
+            if(val < 1) val = 1;
+            let total = info.hargaBase + (val * 25000);
+            totalHargaEl.innerText = "Rp " + total.toLocaleString('id-ID') + ",-";
+        });
     });
 });
 </script>
