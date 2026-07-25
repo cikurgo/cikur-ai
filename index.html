@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CIKUR GO - Super App Engine v3.8</title>
+<title>CIKUR GO - Super App Engine v3.9 (CGO AI)</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 
@@ -556,6 +556,27 @@ footer p { margin:0; }
     text-align:left;
 }
 
+/* Badge Info Paket Berikon */
+.paket-badge-grid {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.paket-badge {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #334155;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
 .form-group {
     margin-bottom: 12px;
 }
@@ -846,7 +867,7 @@ textarea.input-box {
 </div>
     
 <!-- ===========================
-   JAVASCRIPT KODE MASTER v3.8
+   JAVASCRIPT KODE MASTER v3.9
 =========================== -->
 <script>
 let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || {
@@ -980,7 +1001,7 @@ document.getElementById("btnOpenProfile").addEventListener("click", () => {
                 ${avatarPreviewHTML}
             </div>
             <h3 style="font-size:16px; color:#0f172a; font-weight:800;">${userProfile.name}</h3>
-            <p style="font-size:12px; color:#64748b;">Member Aktif • CikurGo Core v3.8</p>
+            <p style="font-size:12px; color:#64748b;">Member Aktif • CikurGo Core v3.9</p>
         </div>
         <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:14px; margin-bottom:14px;">
             <div class="form-group">
@@ -1084,7 +1105,7 @@ document.getElementById("btnOpenWallet").addEventListener("click", () => {
     });
 });
 
-// --- MODUL LAYANAN ASSISTANT (HARGA BARU: DINE-IN 25K, VIP 89K, PRIVATE 349K) ---
+// --- MODUL LAYANAN ASSISTANT (HARGA: DINE-IN 25K, VIP 89K, PRIVATE 349K) ---
 const btnAssistant = document.getElementById("btnAssistant");
 btnAssistant.addEventListener("click", function(e){
     e.preventDefault();
@@ -1116,9 +1137,30 @@ btnAssistant.addEventListener("click", function(e){
     const paketButtons = document.querySelectorAll(".paket-btn");
     const dynamicPaketContent = document.getElementById("paketContent");
     const dataPaket = {
-        dine: { nama: "DINE-IN ASSISTANT", hargaBase: 25000, hargaStr: "Rp 25.000" },
-        vip: { nama: "VIP ASSISTANT", hargaBase: 89000, hargaStr: "Rp 89.000" },
-        private: { nama: "PRIVATE ASSISTANT", hargaBase: 349000, hargaStr: "Rp 349.000" }
+        dine: { 
+            nama: "DINE-IN ASSISTANT", 
+            hargaBase: 25000, 
+            hargaStr: "Rp 25.000",
+            personil: "1 Personil",
+            durasi: "Hingga 30 Menit",
+            prioritas: "Aktivitas Ringan"
+        },
+        vip: { 
+            nama: "VIP ASSISTANT", 
+            hargaBase: 89000, 
+            hargaStr: "Rp 89.000",
+            personil: "1 Personil",
+            durasi: "Hingga 2 Jam",
+            prioritas: "Prioritas Pelayanan"
+        },
+        private: { 
+            nama: "PRIVATE ASSISTANT", 
+            hargaBase: 349000, 
+            hargaStr: "Rp 349.000",
+            personil: "2 Personil",
+            durasi: "Hingga 4 Jam",
+            prioritas: "Eksklusif / Tertinggi"
+        }
     };
 
     paketButtons.forEach(btn => {
@@ -1128,6 +1170,14 @@ btnAssistant.addEventListener("click", function(e){
             const info = dataPaket[this.getAttribute("data-paket")];
 
             dynamicPaketContent.innerHTML = `
+                <!-- Badge Informasi Berikon -->
+                <div class="paket-badge-grid">
+                    <div class="paket-badge">👤 <span>${info.personil}</span></div>
+                    <div class="paket-badge">⏱️ <span>${info.durasi}</span></div>
+                    <div class="paket-badge">⭐ <span>${info.prioritas}</span></div>
+                    <div class="paket-badge">📍 <span>Pandeglang & Sekitarnya</span></div>
+                </div>
+
                 <div class="form-group">
                     <label>Layanan Terpilih</label>
                     <div class="input-layanan">${info.nama}</div>
@@ -1147,12 +1197,12 @@ btnAssistant.addEventListener("click", function(e){
                     <input type="date" class="input-box" id="inputTanggal">
                 </div>
                 <div class="form-group">
-                    <label>Extra Waktu (Tambahan Durasi)</label>
+                    <label>Extra Waktu (1 Tambahan = 30 Menit = Rp 25.000)</label>
                     <select class="input-box" id="selectExtraWaktu" style="background:#ffffff; font-weight:700;">
-                        <option value="0">Tanpa Extra Waktu (0 Jam) - Rp 0</option>
-                        <option value="1">Extra 1 Jam (+Rp 15.000)</option>
-                        <option value="2">Extra 2 Jam (+Rp 30.000)</option>
-                        <option value="3">Extra 3 Jam (+Rp 45.000)</option>
+                        <option value="0">Tanpa Tambahan Waktu (0) - Rp 0</option>
+                        <option value="1">Tambah 1 (30 Menit) - +Rp 25.000</option>
+                        <option value="2">Tambah 2 (60 Menit) - +Rp 50.000</option>
+                        <option value="3">Tambah 3 (90 Menit) - +Rp 75.000</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -1178,13 +1228,14 @@ btnAssistant.addEventListener("click", function(e){
             `;
 
             let currentExtraCost = 0;
+            let extraUnitsCount = 0;
             const selectExtraWaktu = document.getElementById("selectExtraWaktu");
             const txtExtraPrice = document.getElementById("txtExtraPrice");
             const txtTotalFinal = document.getElementById("txtTotalFinal");
 
             selectExtraWaktu.addEventListener("change", function() {
-                let extraHours = parseInt(this.value);
-                currentExtraCost = extraHours * 15000;
+                extraUnitsCount = parseInt(this.value);
+                currentExtraCost = extraUnitsCount * 25000;
                 let grandTotal = info.hargaBase + currentExtraCost;
 
                 txtExtraPrice.innerText = "Rp " + currentExtraCost.toLocaleString('id-ID');
@@ -1194,7 +1245,6 @@ btnAssistant.addEventListener("click", function(e){
             document.getElementById("btnLanjutBayar").addEventListener("click", () => {
                 const tanggal = document.getElementById("inputTanggal").value;
                 const lokasi = document.getElementById("inputLokasi").value;
-                let extraHoursSelected = parseInt(selectExtraWaktu.value);
                 let finalCalculatedTotal = info.hargaBase + currentExtraCost;
 
                 if (!tanggal || !lokasi) {
@@ -1279,7 +1329,7 @@ btnAssistant.addEventListener("click", function(e){
                                 <div class="invoice-row"><span>No. Invoice</span><span>${invoiceNo}</span></div>
                                 <div class="invoice-row"><span>Nama</span><span>${userProfile.name}</span></div>
                                 <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
-                                <div class="invoice-row"><span>Extra Waktu</span><span>${extraHoursSelected} Jam</span></div>
+                                <div class="invoice-row"><span>Extra Waktu</span><span>${extraUnitsCount} Tambahan (30 Menit/Unit)</span></div>
                                 <div class="invoice-row"><span>Metode Bayar</span><span>${selectedPaymentMethod.toUpperCase()}</span></div>
                                 <div class="invoice-row" style="border-top:1px dashed #cbd5e1; margin-top:8px; padding-top:6px;">
                                     <span style="font-weight:800; color:#0f172a;">Total Tagihan</span>
