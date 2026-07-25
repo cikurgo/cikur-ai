@@ -380,7 +380,50 @@ footer p{
     overflow-y:auto;
     padding:15px 18px 20px;
 }
+/* ===== ASSISTANT SCREEN ===== */
 
+.assistant-screen{
+    display:none;
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,.45);
+    z-index:99999;
+}
+.assistant-page{
+    position:absolute;
+    top:230px;
+    left:0;
+    right:0;
+    bottom:0;
+    background:#fff;
+    border-radius:30px 30px 0 0;
+    overflow-y:auto;
+}
+.assistant-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+
+    padding:18px 20px;
+
+    border-bottom:1px solid #eee;
+
+    font-size:20px;
+    font-weight:700;
+}
+.assistant-top button{
+    background:none;
+    border:none;
+    font-size:26px;
+    cursor:pointer;
+}
+
+.assistant-content{
+    padding:25px;
+}
 /* ===========================
    MEDIA QUERY DESKTOP
 =========================== */
@@ -401,6 +444,7 @@ footer p{
 }
 </style>
 </head>
+    
 <body>
 
 <div class="container">
@@ -485,7 +529,24 @@ footer p{
         <p>Pasti Mudah, Pasti Nyaman.</p>
     </footer>
 </div>
+    
+<!-- ===== ASSISTANT SCREEN ===== -->
+<div id="assistantScreen" class="assistant-screen">
+    <div class="assistant-page">
+        <div class="assistant-top">
+            <span>CIKUR GO ASSISTANT</span>
+            <button id="closeAssistant">✕</button>
+        </div>
+        <div class="assistant-content">
+            <h3>Pilih Paket</h3>
+            <p>Isi sementara...</p>
 
+        </div>
+
+    </div>
+
+</div>
+    
 <script>
 const slides = document.querySelector(".slides");
 const images = document.querySelectorAll(".slides img");
@@ -604,7 +665,13 @@ btnAssistant.addEventListener("click", function(e){
 
     e.preventDefault();
 
-    alert("Screen ASSISTANT akan muncul di sini.");
+    document.getElementById("assistantScreen").style.display = "block";
+    
+    document.getElementById("closeAssistant").onclick=function(){
+    document.getElementById("assistantScreen").style.display="none";
+
+};
+    
 });
 </script>
 </body>
