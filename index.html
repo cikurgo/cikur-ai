@@ -314,7 +314,7 @@ footer p{
 }
 
 /* ===========================
-   ASSISTANT SCREEN / MODAL (DIPERBAIKI)
+   ASSISTANT SCREEN / MODAL
 =========================== */
 .assistant-screen{
     display:none;
@@ -342,7 +342,6 @@ footer p{
     overflow-y:auto;
 }
 
-/* Header modal dan Tombol X dirapikan agar pas di dalam garis */
 .assistant-top{
     display:flex;
     justify-content:space-between;
@@ -369,7 +368,7 @@ footer p{
     align-items:center;
     box-shadow:0 4px 10px rgba(0,0,0,0.2);
     transition:transform 0.2s ease, background 0.2s ease;
-    margin: 0;
+    margin:0;
 }
 
 .assistant-top button:hover, #closeAssistant:hover{
@@ -393,7 +392,7 @@ footer p{
     display:flex;
     justify-content:space-between;
     gap:12px;
-    margin-bottom:25px;
+    margin-bottom:20px;
 }
 
 .paket-btn{
@@ -408,14 +407,23 @@ footer p{
     box-shadow:none;
     height:auto;
     width:auto;
-    -webkit-tap-highlight-color: transparent; /* Menghilangkan blok putih/abu bawaan HP saat ditekan */
+    -webkit-tap-highlight-color:transparent;
+    border-radius: 12px;
+    transition: 0.2s;
 }
 
 .paket-btn:focus, 
 .paket-btn:active {
-    outline: none;
-    background: transparent;
-    box-shadow: none;
+    outline:none;
+    background:transparent;
+    box-shadow:none;
+}
+
+/* Efek aktif/pilih pada tombol paket */
+.paket-btn.selected {
+    border: 2px dashed #d8a400;
+    padding: 4px;
+    background: rgba(216, 164, 0, 0.08);
 }
 
 .paket-btn img{
@@ -429,11 +437,62 @@ footer p{
     transform:scale(1.05);
 }
 
+/* Screen baru di bawah untuk harga & pemesanan */
+#paketContent {
+    border: 2px solid #d8a400;
+    border-radius: 20px;
+    padding: 20px;
+    background: #fffdf5;
+    min-height: 180px;
+    margin-top: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+}
+
 .paket-kosong{
     text-align:center;
     color:#777;
     padding:35px 10px;
 }
+
+.detail-pesanan h4 {
+    font-size: 18px;
+    color: #111;
+    margin-bottom: 8px;
+    font-weight: 700;
+}
+
+.detail-pesanan .harga {
+    font-size: 20px;
+    color: #d8a400;
+    font-weight: 800;
+    margin-bottom: 12px;
+}
+
+.detail-pesanan p {
+    font-size: 14px;
+    color: #444;
+    line-height: 1.5;
+    margin-bottom: 15px;
+}
+
+.btn-pesan {
+    width: 100%;
+    height: 45px;
+    border: none;
+    border-radius: 25px;
+    background: #111;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.btn-pesan:hover {
+    background: #d8a400;
+    color: #111;
+}
+
 /* ===========================
    MEDIA QUERY DESKTOP
 =========================== */
@@ -551,17 +610,18 @@ footer p{
             <h3 class="paket-title">Pilih Paket Layanan</h3>
 
             <div class="paket-grid">
-                <button class="paket-btn" id="btnDine">
+                <button class="paket-btn" id="btnDine" data-paket="dine">
                     <img src="icon-dine-in.png" alt="DINE-IN">
                 </button>
-                <button class="paket-btn" id="btnVip">
+                <button class="paket-btn" id="btnVip" data-paket="vip">
                     <img src="icon-vip.png" alt="VIP">
                 </button>
-                <button class="paket-btn" id="btnPrivate">
+                <button class="paket-btn" id="btnPrivate" data-paket="private">
                     <img src="icon-private.png" alt="PRIVATE">
                 </button>
             </div>
             
+            <!-- SCREEN BARU DI BAWAH UNTUK DETAIL HARGA & PEMESANAN -->
             <div id="paketContent">
                 <p class="paket-kosong">
                     Silakan pilih salah satu paket di atas.
@@ -699,6 +759,50 @@ assistantScreen.addEventListener("click", function(e){
     if(e.target === assistantScreen){
         assistantScreen.style.display = "none";
     }
+});
+
+// Interaktif Klik Icon Paket (DINE-IN, VIP, PRIVATE)
+const paketButtons = document.querySelectorAll(".paket-btn");
+const paketContent = document.getElementById("paketContent");
+
+const dataPaket = {
+    dine: {
+        title: "Paket DINE-IN Assistant",
+        harga: "Rp 45.000 / Sesi",
+        desc: "Layanan pendampingan meja, pemesanan makanan prioritas, dan reservasi tempat tanpa antre. Cocok untuk acara santai maupun formal."
+    },
+    vip: {
+        title: "Paket VIP Assistant",
+        harga: "Rp 120.000 / Sesi",
+        desc: "Layanan eksklusif kelas atas dengan asisten pribadi profesional, fasilitas penjemputan kilat, dan akses prioritas penuh."
+    },
+    private: {
+        title: "Paket PRIVATE Assistant",
+        harga: "Rp 250.000 / Hari",
+        desc: "Pendampingan privat penuh sepanjang hari untuk kebutuhan khusus, pengawalan privasi tingkat tinggi, serta layanan all-in-one."
+    }
+};
+
+paketButtons.forEach(btn => {
+    btn.addEventListener("click", function() {
+        // Hapus kelas selected dari semua tombol
+        paketButtons.forEach(b => b.classList.remove("selected"));
+        // Tambahkan ke tombol yang diklik
+        this.classList.add("selected");
+
+        const jenis = this.getAttribute("data-paket");
+        const info = dataPaket[jenis];
+
+        // Tampilkan informasi di kotak screen bawah
+        paketContent.innerHTML = `
+            <div class="detail-pesanan">
+                <h4>${info.title}</h4>
+                <div class="harga">${info.harga}</div>
+                <p>${info.desc}</p>
+                <button class="btn-pesan" onclick="alert('Melanjutkan ke proses pembayaran untuk ${info.title}')">Lanjut Pembayaran ➔</button>
+            </div>
+        `;
+    });
 });
 </script>
     
