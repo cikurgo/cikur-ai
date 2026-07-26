@@ -1,25 +1,347 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CIKUR GO - RIDE</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; }
-        body { background: radial-gradient(circle at center, #2d2d2d 0%, #111 100%); color: white; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
-        .container { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); padding: 40px; border-radius: 30px; text-align: center; max-width: 500px; width: 100%; border: 1px solid rgba(255, 255, 255, 0.1); }
-        h1 { color: #FFC107; margin-bottom: 20px; }
-        p { color: #ccc; margin-bottom: 25px; }
-        .btn-back { display: inline-block; padding: 15px 30px; background: linear-gradient(45deg, #FFC107, #ffdb58); color: #000; text-decoration: none; border-radius: 50px; font-weight: 700; transition: 0.3s; }
-        .btn-back:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(255, 193, 7, 0.3); }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CIKUR Ride - Super App Engine v3.9</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+    --primary-red: #E50914;
+    --primary-red-hover: #b80710;
+    --dark-bg: #0f172a;
+    --dark-card: #1e293b;
+    --body-bg: #f1f5f9;
+    --container-bg: #f8fafc;
+    --border-color: #e2e8f0;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --font-main: 'Plus Jakarta Sans', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+}
+
+*{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: var(--font-main);
+}
+
+body{
+    background: var(--body-bg);
+    color: var(--text-main);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+@media(min-width: 480px){
+    body { padding: 20px; }
+}
+
+.container{
+    width: 100%;
+    max-width: 440px;
+    min-height: 100vh;
+    margin: 0 auto;
+    padding: 16px 16px 60px 16px;
+    display: flex;
+    flex-direction: column;
+    background: var(--container-bg);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    position: relative;
+}
+
+@media(min-width: 480px){
+    .container {
+        min-height: 850px;
+        border-radius: 36px;
+        border: 1px solid var(--border-color);
+    }
+}
+
+/* ===========================
+   HEADER & NAVIGATION
+=========================== */
+.app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.back-btn {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-weight: 800;
+    text-decoration: none;
+    color: var(--text-main);
+    transition: 0.2s;
+}
+
+.back-btn:hover {
+    background: #fee2e2;
+    color: var(--primary-red);
+    border-color: var(--primary-red);
+}
+
+.app-header h2 {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+/* ===========================
+   MAP SIMULATION BOX
+=========================== */
+.map-simulation {
+    width: 100%;
+    height: 160px;
+    background: #cbd5e1;
+    border-radius: 16px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-color);
+}
+
+.map-simulation img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.8;
+}
+
+.map-badge {
+    position: absolute;
+    bottom: 10px;
+    background: rgba(15, 23, 42, 0.85);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* ===========================
+   FORM RIDE SECTION
+=========================== */
+.ride-form-card {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 14px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+}
+
+.form-group {
+    margin-bottom: 10px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+}
+
+.input-box {
+    width: 100%;
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-main);
+    outline: none;
+    transition: 0.2s;
+}
+
+.input-box:focus {
+    border-color: var(--primary-red);
+}
+
+/* ===========================
+   FLEET SELECTION (BIKE/CAR)
+=========================== */
+.fleet-options {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.fleet-card {
+    flex: 1;
+    background: #fff;
+    border: 2px solid var(--border-color);
+    border-radius: 14px;
+    padding: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.fleet-card.selected {
+    border-color: var(--primary-red);
+    background: #fff5f5;
+}
+
+.fleet-card h4 {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--text-main);
+    margin-bottom: 2px;
+}
+
+.fleet-card p {
+    font-size: 11px;
+    color: var(--primary-red);
+    font-weight: 700;
+    font-family: var(--font-mono);
+}
+
+/* ===========================
+   CHECKOUT / BOOKING BOX
+=========================== */
+.checkout-box {
+    background: var(--dark-bg);
+    color: #fff;
+    border-radius: 16px;
+    padding: 16px;
+    margin-top: auto;
+    box-shadow: 0 8px 20px rgba(15,23,42,0.2);
+}
+
+.btn-order {
+    width: 100%;
+    height: 46px;
+    background: var(--primary-red);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-weight: 800;
+    font-size: 13px;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: 0.2s;
+}
+
+.btn-order:hover {
+    background: var(--primary-red-hover);
+}
+</style>
 </head>
 <body>
-    <div class="container">
-        <h1>RIDE</h1>
-        <p>Layanan CIKUR GO RIDE sedang dipersiapkan.</p>
-        <a href="index.html" class="btn-back">Kembali ke Beranda</a>
+
+<div class="container">
+    <!-- Header -->
+    <div class="app-header">
+        <a href="index.html" class="back-btn">←</a>
+        <h2>CIKUR GO RIDE</h2>
+        <div style="width: 38px;"></div>
     </div>
+
+    <!-- Simulasi Peta -->
+    <div class="map-simulation">
+        <img src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=600" alt="Map Simulation">
+        <div class="map-badge">📍 GPS Active - Menunggu Titik Jemput</div>
+    </div>
+
+    <!-- Form Titik Jemput & Tujuan -->
+    <div class="ride-form-card">
+        <div class="form-group">
+            <label>Lokasi Penjemputan</label>
+            <input type="text" id="pickupLocation" class="input-box" value="Lokasi Anda Saat Ini (GPS)">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label>Tujuan Perjalanan</label>
+            <input type="text" id="destLocation" class="input-box" placeholder="Mau ke mana hari ini?">
+        </div>
+    </div>
+
+    <!-- Pilihan Armada -->
+    <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase;">Pilih Jenis Armada</div>
+    <div class="fleet-options">
+        <div class="fleet-card selected" id="fleetBike" onclick="selectFleet('bike', 10000)">
+            <h4>🛵 CIKUR-Bike</h4>
+            <p>Rp 10.000</p>
+        </div>
+        <div class="fleet-card" id="fleetCar" onclick="selectFleet('car', 25000)">
+            <h4>🚗 CIKUR-Car</h4>
+            <p>Rp 25.000</p>
+        </div>
+    </div>
+
+    <!-- Kotak Pembayaran / Pemesanan -->
+    <div class="checkout-box" id="rideCartSection">
+        <div style="font-size: 11px; color: #94a3b8; font-weight: 700;">Layanan Terpilih</div>
+        <h3 id="rideTypeName" style="font-size: 14px; font-weight: 800; margin: 2px 0 6px 0;">CIKUR-Bike (Motor)</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+            <span>Tarif Perjalanan:</span>
+            <span id="rideTotalPrice" style="color: #FFD700; font-weight: 800; font-family: var(--font-mono);">Rp 10.000</span>
+        </div>
+        <button class="btn-order" onclick="prosesPesanRide()">Pesan Driver Sekarang ⚡</button>
+    </div>
+</div>
+
+<script>
+let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { saldo: 125000 };
+let selectedRide = { type: "CIKUR-Bike (Motor)", price: 10000 };
+
+function selectFleet(type, price) {
+    let cardBike = document.getElementById("fleetBike");
+    let cardCar = document.getElementById("fleetCar");
+    
+    if(type === 'bike') {
+        cardBike.classList.add("selected");
+        cardCar.classList.remove("selected");
+        selectedRide = { type: "CIKUR-Bike (Motor)", price: 10000 };
+    } else {
+        cardCar.classList.add("selected");
+        cardBike.classList.remove("selected");
+        selectedRide = { type: "CIKUR-Car (Mobil)", price: 25000 };
+    }
+
+    document.getElementById("rideTypeName").innerText = selectedRide.type;
+    document.getElementById("rideTotalPrice").innerText = "Rp " + selectedRide.price.toLocaleString('id-ID');
+}
+
+function prosesPesanRide() {
+    let destination = document.getElementById("destLocation").value.trim();
+    if(!destination) {
+        alert("[!] Mohon masukkan tujuan perjalanan terlebih dahulu.");
+        return;
+    }
+
+    if (userProfile.saldo < selectedRide.price) {
+        alert("[!] Saldo CikurPay tidak mencukupi untuk memesan perjalanan ini. Silakan lakukan Top-Up.");
+        return;
+    }
+    
+    userProfile.saldo -= selectedRide.price;
+    localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+    
+    alert(`[SUKSES] Pesanan ${selectedRide.type} ke "${destination}" berhasil dibuat! Driver sedang menuju lokasimu.`);
+    window.location.href = "index.html";
+}
+</script>
+
 </body>
 </html>
