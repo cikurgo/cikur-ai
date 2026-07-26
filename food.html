@@ -465,6 +465,21 @@ function prosesPesanFood() {
     alert(`[SUKSES] Pesanan ${selectedFood.name} berhasil dibuat! Saldo CikurPay telah dipotong.`);
     window.location.href = "index.html";
 }
+    function prosesPesanFood() {
+    if (userProfile.saldo < selectedFood.price) {
+        alert("[!] Saldo CikurPay tidak mencukupi.");
+        return;
+    }
+    
+    userProfile.saldo -= selectedFood.price;
+    localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+    
+    // Catat ke riwayat global aplikasi
+    simpanRiwayatTransaksi(selectedFood.name, selectedFood.price, 'CIKUR Food');
+    
+    alert(`[SUKSES] Pesanan ${selectedFood.name} berhasil dibuat!`);
+    window.location.href = "index.html";
+    }
 </script>
 
 </body>
