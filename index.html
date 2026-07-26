@@ -34,21 +34,40 @@ body{
     max-width:440px;
     min-height:100vh;
     margin:0 auto;
-    padding:16px 16px 80px 16px;
+    padding:16px 16px 90px 16px;
     display:flex;
     flex-direction:column;
     background:#f8fafc;
     box-shadow: 0 10px 30px rgba(0,0,0,0.08);
     position:relative;
+    overflow:hidden;
 }
 
 @media(min-width: 480px){
     .container {
-        min-height: auto;
+        min-height: 850px;
         border-radius: 36px;
         border: 1px solid #e2e8f0;
         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
     }
+}
+
+/* ===========================
+   TABS VIEW SECTIONS
+=========================== */
+.tab-content-view {
+    display: none;
+    flex: 1;
+}
+
+.tab-content-view.active {
+    display: block;
+    animation: fadeInView 0.3s ease-in-out;
+}
+
+@keyframes fadeInView {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 /* ===========================
@@ -421,6 +440,106 @@ footer{
 footer p { margin:0; }
 
 /* ===========================
+   BOTTOM NAVIGATION BAR (5 MENUS)
+=========================== */
+.bottom-nav {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 70px;
+    background-color: #ffffff;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0 10px;
+    z-index: 100;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.05);
+}
+
+.nav-item {
+    background: none;
+    border: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    cursor: pointer;
+    color: #64748b;
+    transition: color 0.2s ease;
+    position: relative;
+    height: 100%;
+}
+
+.nav-item svg {
+    width: 22px;
+    height: 22px;
+    margin-bottom: 4px;
+    fill: currentColor;
+    transition: transform 0.2s ease;
+}
+
+.nav-item span {
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.nav-item.active {
+    color: #E50914;
+}
+
+.nav-item.active svg {
+    transform: scale(1.1);
+}
+
+/* Special Styling for Transaksi Button (Prominent Center Button) */
+.nav-item.prominent {
+    position: relative;
+}
+
+.nav-item.prominent .transaksi-btn-wrapper {
+    position: absolute;
+    top: -18px;
+    background: linear-gradient(135deg, #E50914 0%, #b80710 100%);
+    color: #ffffff;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 16px rgba(229, 9, 20, 0.4);
+    border: 3px solid #ffffff;
+    transition: transform 0.2s ease;
+}
+
+.nav-item.prominent .transaksi-btn-wrapper svg {
+    width: 22px;
+    height: 22px;
+    margin-bottom: 0;
+    fill: #ffffff;
+}
+
+.nav-item.prominent span {
+    position: absolute;
+    bottom: 6px;
+    font-size: 10px;
+    font-weight: 800;
+    color: #64748b;
+}
+
+.nav-item.prominent.active span {
+    color: #E50914;
+}
+
+.nav-item.prominent:hover .transaksi-btn-wrapper {
+    transform: translateY(-2px);
+}
+
+/* ===========================
    MODAL & INVOICE SCREEN
 =========================== */
 .assistant-screen{
@@ -556,7 +675,6 @@ footer p { margin:0; }
     text-align:left;
 }
 
-/* Badge Info Paket Berikon */
 .paket-badge-grid {
     display: flex;
     gap: 6px;
@@ -772,81 +890,202 @@ textarea.input-box {
         </div>
     </div>
 
-    <!-- Main Banner Carousel -->
-    <div class="hero-banner">
-        <div class="slider">
-            <div class="slides">
-                <img src="bannercgo1.png" alt="Banner 1">
-                <img src="bannercgo2.png" alt="Banner 2">
-                <img src="bannercgo3.png" alt="Banner 3">
+    <!-- ===========================
+       VIEW 1: BERANDA
+    =========================== -->
+    <div id="view-beranda" class="tab-content-view active">
+        <!-- Main Banner Carousel -->
+        <div class="hero-banner">
+            <div class="slider">
+                <div class="slides">
+                    <img src="bannercgo1.png" alt="Banner 1">
+                    <img src="bannercgo2.png" alt="Banner 2">
+                    <img src="bannercgo3.png" alt="Banner 3">
+                </div>
             </div>
-        </div>
-        <div class="dots">
-            <span class="active"></span>
-            <span></span>
-            <span></span>
-        </div>
-    </div>
-
-    <!-- Grid Layanan Utama (Food & Ride mengarah ke food.html dan ride.html) -->
-    <div class="services-section">
-        <div class="services-title">Core Ecosystem</div>
-        <div class="menu-grid">
-            <a id="btnAssistant" class="menu-item">
-                <div class="menu-icon-box">
-                    <img src="tombol-assistant.png" class="assistant-icon" alt="ASSISTANT">
-                </div>
-                <span class="menu-label">Assistant</span>
-            </a>
-            <a href="food.html" id="btnFood" class="menu-item">
-                <div class="menu-icon-box">
-                    <img src="tombol-food.png" alt="FOOD">
-                </div>
-                <span class="menu-label">Food</span>
-            </a>
-            <a href="ride.html" id="btnRide" class="menu-item">
-                <div class="menu-icon-box">
-                    <img src="tombol-ride.png" alt="RIDE">
-                </div>
-                <span class="menu-label">Ride</span>
-            </a>
-        </div>
-    </div>
-    
-    <!-- Hero Frame -->
-    <div class="hero-frame">
-        <div class="section-label-mini">Featured Highlights</div>
-        <div class="hero-big">
-            <div class="hero-big-track">
-                <img src="hero-banner1.png" alt="Hero 1">
-                <img src="hero-banner2.png" alt="Hero 2">
-                <img src="hero-banner3.png" alt="Hero 3">
+            <div class="dots">
+                <span class="active"></span>
+                <span></span>
+                <span></span>
             </div>
         </div>
 
-        <div class="mini-slider">
-            <div class="mini-slides">
-                <img src="banner-mini-assistant.png" alt="Mini Assistant">
-                <img src="banner-mini-food.png" alt="Mini Food">
-                <img src="banner-mini-ride.png" alt="Mini Ride">
+        <!-- Grid Layanan Utama -->
+        <div class="services-section">
+            <div class="services-title">Core Ecosystem</div>
+            <div class="menu-grid">
+                <a id="btnAssistant" class="menu-item">
+                    <div class="menu-icon-box">
+                        <img src="tombol-assistant.png" class="assistant-icon" alt="ASSISTANT">
+                    </div>
+                    <span class="menu-label">Assistant</span>
+                </a>
+                <a href="food.html" id="btnFood" class="menu-item">
+                    <div class="menu-icon-box">
+                        <img src="tombol-food.png" alt="FOOD">
+                    </div>
+                    <span class="menu-label">Food</span>
+                </a>
+                <a href="ride.html" id="btnRide" class="menu-item">
+                    <div class="menu-icon-box">
+                        <img src="tombol-ride.png" alt="RIDE">
+                    </div>
+                    <span class="menu-label">Ride</span>
+                </a>
             </div>
         </div>
+        
+        <!-- Hero Frame -->
+        <div class="hero-frame">
+            <div class="section-label-mini">Featured Highlights</div>
+            <div class="hero-big">
+                <div class="hero-big-track">
+                    <img src="hero-banner1.png" alt="Hero 1">
+                    <img src="hero-banner2.png" alt="Hero 2">
+                    <img src="hero-banner3.png" alt="Hero 3">
+                </div>
+            </div>
 
-        <div class="mini-dots">
-            <span class="active"></span>
-            <span></span>
-            <span></span>
+            <div class="mini-slider">
+                <div class="mini-slides">
+                    <img src="banner-mini-assistant.png" alt="Mini Assistant">
+                    <img src="banner-mini-food.png" alt="Mini Food">
+                    <img src="banner-mini-ride.png" alt="Mini Ride">
+                </div>
+            </div>
+
+            <div class="mini-dots">
+                <span class="active"></span>
+                <span></span>
+                <span></span>
+            </div>  
         </div>  
-    </div>  
 
-    <!-- CIKUR AI Assistant (CGO) Banner Button -->
-    <div class="chat-action-box">
-        <div class="chat-text-info">
-            <h3>Asisten AI CGO</h3>
-            <p>Siap mendampingi kebutuhan Anda 24/7</p>
+        <!-- CIKUR AI Assistant (CGO) Banner Button -->
+        <div class="chat-action-box">
+            <div class="chat-text-info">
+                <h3>Asisten AI CGO</h3>
+                <p>Siap mendampingi kebutuhan Anda 24/7</p>
+            </div>
+            <button id="chatBtn">Tanya CGO</button>
         </div>
-        <button id="chatBtn">Tanya CGO</button>
     </div>
+
+    <!-- ===========================
+       VIEW 2: PESANAN
+    =========================== -->
+    <div id="view-pesanan" class="tab-content-view">
+        <div class="services-title" style="margin-top: 10px;">Aktivitas Pesanan Anda</div>
+        
+        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h4 style="font-size: 13px; font-weight: 800; color: #0f172a;">CIKUR Ride - Menuju Kantor</h4>
+                <p style="font-size: 11px; color: #64748b; margin-top: 2px;">Driver: Budi Santoso (Honda Beat)</p>
+            </div>
+            <span style="font-size: 10px; font-weight: 800; background: #e0f2fe; color: #0284c7; padding: 4px 8px; border-radius: 6px;">Berjalan</span>
+        </div>
+
+        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h4 style="font-size: 13px; font-weight: 800; color: #0f172a;">CIKUR Food - Seblak Mantap</h4>
+                <p style="font-size: 11px; color: #64748b; margin-top: 2px;">Selesai • 25 Jul 2026</p>
+            </div>
+            <span style="font-size: 10px; font-weight: 800; background: #dcfce7; color: #16a34a; padding: 4px 8px; border-radius: 6px;">Selesai</span>
+        </div>
+    </div>
+
+    <!-- ===========================
+       VIEW 3: TRANSAKSI
+    =========================== -->
+    <div id="view-transaksi" class="tab-content-view">
+        <div class="services-title" style="margin-top: 10px;">Riwayat Transaksi & Saldo</div>
+        
+        <div style="background: linear-gradient(135deg, #0f172a, #1e293b); border-radius: 16px; padding: 16px; color: white; margin-bottom: 16px;">
+            <p style="font-size: 11px; color: #94a3b8; font-weight: 700;">Saldo CikurPay</p>
+            <h2 style="font-size: 22px; font-weight: 800; color: #FFD700; font-family: 'JetBrains Mono', monospace; margin: 4px 0 12px 0;" id="transaksiSaldoNominal">Rp 125.000</h2>
+            <div style="display: flex; gap: 8px;">
+                <button onclick="document.getElementById('btnOpenWallet').click()" style="flex: 1; background: #E50914; color: white; border: none; padding: 8px; border-radius: 8px; font-weight: 800; font-size: 11px; cursor: pointer;">Top Up Saldo</button>
+            </div>
+        </div>
+
+        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h4 style="font-size: 12px; font-weight: 700; color: #0f172a;">Top Up Saldo via Bank</h4>
+                <p style="font-size: 10px; color: #64748b;">26 Jul 2026, 07:30 WIB</p>
+            </div>
+            <span style="font-size: 12px; font-weight: 800; color: #16a34a; font-family: 'JetBrains Mono', monospace;">+Rp 50.000</span>
+        </div>
+
+        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h4 style="font-size: 12px; font-weight: 700; color: #0f172a;">Bayar CIKUR Assistant</h4>
+                <p style="font-size: 10px; color: #64748b;">25 Jul 2026, 14:15 WIB</p>
+            </div>
+            <span style="font-size: 12px; font-weight: 800; color: #0f172a; font-family: 'JetBrains Mono', monospace;">-Rp 25.000</span>
+        </div>
+    </div>
+
+    <!-- ===========================
+       VIEW 4: INBOX
+    =========================== -->
+    <div id="view-inbox" class="tab-content-view">
+        <div class="services-title" style="margin-top: 10px;">Pesan & Notifikasi</div>
+
+        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px; margin-bottom: 10px;">
+            <h4 style="font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 4px;">🎉 Promo Spesial Akhir Pekan!</h4>
+            <p style="font-size: 11px; color: #64748b; line-height: 1.4;">Nikmati diskon s.d 50% untuk semua layanan CIKUR GO hari ini.</p>
+        </div>
+
+        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px; margin-bottom: 10px;">
+            <h4 style="font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 4px;">📢 Pembaruan Sistem CGO v3.9</h4>
+            <p style="font-size: 11px; color: #64748b; line-height: 1.4;">Navigasi bawah baru telah diaktifkan untuk kemudahan akses Anda.</p>
+        </div>
+    </div>
+
+    <!-- ===========================
+       VIEW 5: PROFIL
+    =========================== -->
+    <div id="view-profil" class="tab-content-view">
+        <div style="text-align: center; padding: 16px 0; border-bottom: 1px solid #e2e8f0; margin-bottom: 12px;">
+            <div style="width: 64px; height: 64px; border-radius: 50%; background: #fee2e2; border: 2px solid #E50914; color: #E50914; font-size: 20px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px;" id="profileViewAvatar">CK</div>
+            <h3 style="font-size: 14px; font-weight: 800; color: #0f172a;" id="profileViewName">CIKUR USER</h3>
+            <p style="font-size: 11px; color: #64748b;" id="profileViewPhone">08123456789</p>
+        </div>
+        <button class="btn-pesan-form" onclick="document.getElementById('btnOpenProfile').click()" style="margin-bottom: 8px;">Edit Pengaturan Profil</button>
+    </div>
+
+    <!-- ===========================
+       BOTTOM NAVIGATION BAR (5 BUTTONS)
+    =========================== -->
+    <nav class="bottom-nav">
+        <button class="nav-item active" onclick="switchTab('beranda')" id="nav-beranda">
+            <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            <span>Beranda</span>
+        </button>
+
+        <button class="nav-item" onclick="switchTab('pesanan')" id="nav-pesanan">
+            <svg viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+            <span>Pesanan</span>
+        </button>
+
+        <!-- Prominent Center Transaksi Button -->
+        <button class="nav-item prominent" onclick="switchTab('transaksi')" id="nav-transaksi">
+            <div class="transaksi-btn-wrapper">
+                <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+            </div>
+            <span>Transaksi</span>
+        </button>
+
+        <button class="nav-item" onclick="switchTab('inbox')" id="nav-inbox">
+            <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg>
+            <span>Inbox</span>
+        </button>
+
+        <button class="nav-item" onclick="switchTab('profil')" id="nav-profil">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+            <span>Profil</span>
+        </button>
+    </nav>
 
     <footer>
         <p>© 2026 CIKUR GO • Super-App Architecture</p>
@@ -881,12 +1120,25 @@ function updateUIProfile() {
     document.getElementById("headerNamaUser").innerText = userProfile.name;
     document.getElementById("displaySaldo").innerText = "Rp " + userProfile.saldo.toLocaleString('id-ID');
     
+    // Update profile view elements if present
+    if(document.getElementById("profileViewName")) {
+        document.getElementById("profileViewName").innerText = userProfile.name;
+        document.getElementById("profileViewPhone").innerText = userProfile.phone;
+    }
+    if(document.getElementById("transaksiSaldoNominal")) {
+        document.getElementById("transaksiSaldoNominal").innerText = "Rp " + userProfile.saldo.toLocaleString('id-ID');
+    }
+    
     let avatarContainer = document.getElementById("headerAvatar");
+    let profileViewAvatar = document.getElementById("profileViewAvatar");
+
     if(userProfile.avatar && userProfile.avatar.startsWith("data:image")) {
         avatarContainer.innerHTML = `<img src="${userProfile.avatar}" alt="Foto Profil">`;
+        if(profileViewAvatar) profileViewAvatar.innerHTML = `<img src="${userProfile.avatar}" alt="Foto Profil" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
     } else {
         let initials = userProfile.name.split(" ").map(n => n[0]).join("").substring(0,2).toUpperCase();
         avatarContainer.innerText = initials || "CK";
+        if(profileViewAvatar) profileViewAvatar.innerText = initials || "CK";
     }
 }
 
@@ -896,6 +1148,27 @@ window.addEventListener("DOMContentLoaded", () => {
         setTimeout(bukaModalRegistrasi, 600);
     }
 });
+
+// --- TAB SWITCHING LOGIC ---
+function switchTab(tabName) {
+    const views = document.querySelectorAll('.tab-content-view');
+    views.forEach(v => v.classList.remove('active'));
+
+    const navItems = document.querySelectorAll('.bottom-nav .nav-item');
+    navItems.forEach(n => n.classList.remove('active'));
+
+    const targetView = document.getElementById('view-' + tabName);
+    if(targetView) {
+        targetView.classList.add('active');
+    }
+
+    const targetNav = document.getElementById('nav-' + tabName);
+    if(targetNav) {
+        targetNav.classList.add('active');
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
 function bukaModalRegistrasi() {
     openModal("AKTIVASI AKUN CIKUR GO");
@@ -938,43 +1211,53 @@ const images = document.querySelectorAll(".slides img");
 const dots = document.querySelectorAll(".dots span");
 let current = 0;
 function showSlide(index){
-    slides.style.transform = `translateX(-${index * 100}%)`;
-    dots.forEach(dot => dot.classList.remove("active"));
-    dots[index].classList.add("active");
+    if(slides && dots.length > 0) {
+        slides.style.transform = `translateX(-${index * 100}%)`;
+        dots.forEach(dot => dot.classList.remove("active"));
+        dots[index].classList.add("active");
+    }
 }
 setInterval(() => {
-    current = (current + 1) % images.length;
-    showSlide(current);
+    if(images.length > 0) {
+        current = (current + 1) % images.length;
+        showSlide(current);
+    }
 }, 4000);
 
 // --- BOTPRESS CHAT (CGO) ---
 const chatBtn = document.getElementById("chatBtn");
-chatBtn.addEventListener("click", () => {
-    chatBtn.disabled = true;
-    chatBtn.innerHTML = "Memuat CGO...";
-    setTimeout(() => {
-        if(window.botpress) window.botpress.open();
-        chatBtn.disabled = false;
-        chatBtn.innerHTML = "Tanya CGO";
-    }, 500);
-});
+if(chatBtn) {
+    chatBtn.addEventListener("click", () => {
+        chatBtn.disabled = true;
+        chatBtn.innerHTML = "Memuat CGO...";
+        setTimeout(() => {
+            if(window.botpress) window.botpress.open();
+            chatBtn.disabled = false;
+            chatBtn.innerHTML = "Tanya CGO";
+        }, 500);
+    });
+}
 
 // --- MINI & HERO SLIDER ---
 const miniSlides = document.querySelector(".mini-slides");
 const miniDots = document.querySelectorAll(".mini-dots span");
 let miniCurrent = 0;
 setInterval(() => {
-    miniCurrent = (miniCurrent + 1) % miniDots.length;
-    miniSlides.style.transform = `translateX(-${miniCurrent * 33.333}%)`;
-    miniDots.forEach(d => d.classList.remove("active"));
-    miniDots[miniCurrent].classList.add("active");
+    if(miniSlides && miniDots.length > 0) {
+        miniCurrent = (miniCurrent + 1) % miniDots.length;
+        miniSlides.style.transform = `translateX(-${miniCurrent * 33.333}%)`;
+        miniDots.forEach(d => d.classList.remove("active"));
+        miniDots[miniCurrent].classList.add("active");
+    }
 }, 7000);
 
 const heroTrack = document.querySelector(".hero-big-track");
 let heroIndex = 0;
 setInterval(() => {
-    heroIndex = (heroIndex + 1) % 3;
-    heroTrack.style.transform = `translateX(-${heroIndex * 33.3333}%)`;
+    if(heroTrack) {
+        heroIndex = (heroIndex + 1) % 3;
+        heroTrack.style.transform = `translateX(-${heroIndex * 33.3333}%)`;
+    }
 }, 9000);
 
 // --- MODAL CONTROLS ---
@@ -987,8 +1270,12 @@ function openModal(titleHTML) {
     modalTitle.innerHTML = titleHTML;
     assistantScreen.style.display = "block";
 }
-closeAssistant.addEventListener("click", () => { assistantScreen.style.display = "none"; });
-assistantScreen.addEventListener("click", (e) => { if(e.target === assistantScreen) assistantScreen.style.display = "none"; });
+if(closeAssistant) {
+    closeAssistant.addEventListener("click", () => { assistantScreen.style.display = "none"; });
+}
+if(assistantScreen) {
+    assistantScreen.addEventListener("click", (e) => { if(e.target === assistantScreen) assistantScreen.style.display = "none"; });
+}
 
 // --- PENGATURAN PROFIL & FOTO ---
 document.getElementById("btnOpenProfile").addEventListener("click", () => {
@@ -1105,250 +1392,229 @@ document.getElementById("btnOpenWallet").addEventListener("click", () => {
     });
 });
 
-// --- MODUL LAYANAN ASSISTANT (HARGA: DINE-IN 25K, VIP 89K, PRIVATE 349K) ---
+// --- MODUL LAYANAN ASSISTANT ---
 const btnAssistant = document.getElementById("btnAssistant");
-btnAssistant.addEventListener("click", function(e){
-    e.preventDefault();
-    openModal("CIKUR GO ASSISTANT");
-    modalMainContent.innerHTML = `
-        <h3 class="paket-title">Silahkan pilih layanan</h3>
-        <div class="paket-grid">
-            <button class="paket-btn" data-paket="dine">
-                <img src="icon-dine-in.png" alt="DINE">
-                <span style="font-size:11px; font-weight:700; color:#334155; margin-bottom:4px;">Dine-In</span>
-                <div class="indicator-line"></div>
-            </button>
-            <button class="paket-btn" data-paket="vip">
-                <img src="icon-vip.png" alt="VIP">
-                <span style="font-size:11px; font-weight:700; color:#334155; margin-bottom:4px;">VIP</span>
-                <div class="indicator-line"></div>
-            </button>
-            <button class="paket-btn" data-paket="private">
-                <img src="icon-private.png" alt="PRIVATE">
-                <span style="font-size:11px; font-weight:700; color:#334155; margin-bottom:4px;">Private</span>
-                <div class="indicator-line"></div>
-            </button>
-        </div>
-        <div id="paketContent">
-            <p style="text-align:center; color:#94a3b8; padding:20px; font-size:13px;">Silahkan pilih salah satu layanan di atas.</p>
-        </div>
-    `;
+if(btnAssistant) {
+    btnAssistant.addEventListener("click", function(e){
+        e.preventDefault();
+        openModal("CIKUR GO ASSISTANT");
+        modalMainContent.innerHTML = `
+            <h3 class="paket-title">Silahkan pilih layanan</h3>
+            <div class="paket-grid">
+                <button class="paket-btn" data-paket="dine">
+                    <img src="icon-dine-in.png" alt="DINE">
+                    <span style="font-size:11px; font-weight:700; color:#334155; margin-bottom:4px;">Dine-In</span>
+                    <div class="indicator-line"></div>
+                </button>
+                <button class="paket-btn" data-paket="vip">
+                    <img src="icon-vip.png" alt="VIP">
+                    <span style="font-size:11px; font-weight:700; color:#334155; margin-bottom:4px;">VIP</span>
+                    <div class="indicator-line"></div>
+                </button>
+                <button class="paket-btn" data-paket="private">
+                    <img src="icon-private.png" alt="PRIVATE">
+                    <span style="font-size:11px; font-weight:700; color:#334155; margin-bottom:4px;">Private</span>
+                    <div class="indicator-line"></div>
+                </button>
+            </div>
+            <div id="paketContent">
+                <p style="text-align:center; color:#94a3b8; padding:20px; font-size:13px;">Silahkan pilih salah satu layanan di atas.</p>
+            </div>
+        `;
 
-    const paketButtons = document.querySelectorAll(".paket-btn");
-    const dynamicPaketContent = document.getElementById("paketContent");
-    const dataPaket = {
-        dine: { 
-            nama: "DINE-IN ASSISTANT", 
-            hargaBase: 25000, 
-            hargaStr: "Rp 25.000",
-            personil: "1 Personil",
-            durasi: "Hingga 30 Menit",
-            prioritas: "Aktivitas Ringan"
-        },
-        vip: { 
-            nama: "VIP ASSISTANT", 
-            hargaBase: 89000, 
-            hargaStr: "Rp 89.000",
-            personil: "1 Personil",
-            durasi: "Hingga 2 Jam",
-            prioritas: "Prioritas Pelayanan"
-        },
-        private: { 
-            nama: "PRIVATE ASSISTANT", 
-            hargaBase: 349000, 
-            hargaStr: "Rp 349.000",
-            personil: "2 Personil",
-            durasi: "Hingga 4 Jam",
-            prioritas: "Eksklusif / Tertinggi"
-        }
-    };
+        const paketButtons = document.querySelectorAll(".paket-btn");
+        const dynamicPaketContent = document.getElementById("paketContent");
+        const dataPaket = {
+            dine: { nama: "DINE-IN ASSISTANT", hargaBase: 25000, hargaStr: "Rp 25.000", personil: "1 Personil", durasi: "Hingga 30 Menit", prioritas: "Aktivitas Ringan" },
+            vip: { nama: "VIP ASSISTANT", hargaBase: 89000, hargaStr: "Rp 89.000", personil: "1 Personil", durasi: "Hingga 2 Jam", prioritas: "Prioritas Pelayanan" },
+            private: { nama: "PRIVATE ASSISTANT", hargaBase: 349000, hargaStr: "Rp 349.000", personil: "2 Personil", durasi: "Hingga 4 Jam", prioritas: "Eksklusif / Tertinggi" }
+        };
 
-    paketButtons.forEach(btn => {
-        btn.addEventListener("click", function() {
-            paketButtons.forEach(b => b.classList.remove("selected"));
-            this.classList.add("selected");
-            const info = dataPaket[this.getAttribute("data-paket")];
-
-            dynamicPaketContent.innerHTML = `
-                <!-- Badge Informasi Berikon -->
-                <div class="paket-badge-grid">
-                    <div class="paket-badge">👤 <span>${info.personil}</span></div>
-                    <div class="paket-badge">⏱️ <span>${info.durasi}</span></div>
-                    <div class="paket-badge">⭐ <span>${info.prioritas}</span></div>
-                    <div class="paket-badge">📍 <span>Pandeglang & Sekitarnya</span></div>
-                </div>
-
-                <div class="form-group">
-                    <label>Layanan Terpilih</label>
-                    <div class="input-layanan">${info.nama}</div>
-                </div>
-                <div class="row-grid form-group">
-                    <div class="col-half">
-                        <label>Pemesan</label>
-                        <input type="text" class="input-box" value="${userProfile.name}" disabled style="background:#f1f5f9; font-weight:700;">
-                    </div>
-                    <div class="col-half">
-                        <label>No. WhatsApp</label>
-                        <input type="text" class="input-box" value="${userProfile.phone}" disabled style="background:#f1f5f9; font-weight:700;">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Jadwal Tanggal</label>
-                    <input type="date" class="input-box" id="inputTanggal">
-                </div>
-                <div class="form-group">
-                    <label>Extra Waktu (1 Tambahan = 30 Menit = Rp 25.000)</label>
-                    <select class="input-box" id="selectExtraWaktu" style="background:#ffffff; font-weight:700;">
-                        <option value="0">Tanpa Tambahan Waktu (0) - Rp 0</option>
-                        <option value="1">Tambah 1 (30 Menit) - +Rp 25.000</option>
-                        <option value="2">Tambah 2 (60 Menit) - +Rp 50.000</option>
-                        <option value="3">Tambah 3 (90 Menit) - +Rp 75.000</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Lokasi / Alamat</label>
-                    <textarea class="input-box" id="inputLokasi" placeholder="Alamat lengkap..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Catatan Khusus</label>
-                    <textarea class="input-box" id="inputCatatanRequest" placeholder="Instruksi khusus..."></textarea>
-                </div>
-
-                <!-- Rincian Harga & Kalkulasi Total -->
-                <div class="rincian-bill">
-                    <div class="rincian-row"><span>Harga Dasar Layanan</span><span id="txtBasePrice">${info.hargaStr}</span></div>
-                    <div class="rincian-row"><span>Biaya Extra Waktu</span><span id="txtExtraPrice">Rp 0</span></div>
-                </div>
-
-                <div class="total-box">
-                    <span class="total-label">Total Tagihan :</span>
-                    <span class="total-value" id="txtTotalFinal">${info.hargaStr}</span>
-                </div>
-                <button class="btn-pesan-form" id="btnLanjutBayar">Lanjut Pembayaran ➔</button>
-            `;
-
-            let currentExtraCost = 0;
-            let extraUnitsCount = 0;
-            const selectExtraWaktu = document.getElementById("selectExtraWaktu");
-            const txtExtraPrice = document.getElementById("txtExtraPrice");
-            const txtTotalFinal = document.getElementById("txtTotalFinal");
-
-            selectExtraWaktu.addEventListener("change", function() {
-                extraUnitsCount = parseInt(this.value);
-                currentExtraCost = extraUnitsCount * 25000;
-                let grandTotal = info.hargaBase + currentExtraCost;
-
-                txtExtraPrice.innerText = "Rp " + currentExtraCost.toLocaleString('id-ID');
-                txtTotalFinal.innerText = "Rp " + grandTotal.toLocaleString('id-ID');
-            });
-
-            document.getElementById("btnLanjutBayar").addEventListener("click", () => {
-                const tanggal = document.getElementById("inputTanggal").value;
-                const lokasi = document.getElementById("inputLokasi").value;
-                let finalCalculatedTotal = info.hargaBase + currentExtraCost;
-
-                if (!tanggal || !lokasi) {
-                    alert("[!] Mohon lengkapi Tanggal dan Lokasi.");
-                    return;
-                }
+        paketButtons.forEach(btn => {
+            btn.addEventListener("click", function() {
+                paketButtons.forEach(b => b.classList.remove("selected"));
+                this.classList.add("selected");
+                const info = dataPaket[this.getAttribute("data-paket")];
 
                 dynamicPaketContent.innerHTML = `
-                    <h3 class="paket-title" style="margin-bottom:10px;">Metode Pembayaran</h3>
-                    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:12px; margin-bottom:12px;">
-                        <div style="display:flex; gap:6px; margin-bottom:12px;">
-                            <button class="pay-method-option active" data-method="cikurpay">CikurPay</button>
-                            <button class="pay-method-option" data-method="qris">QRIS</button>
-                            <button class="pay-method-option" data-method="tunai">Tunai</button>
-                        </div>
+                    <div class="paket-badge-grid">
+                        <div class="paket-badge">👤 <span>${info.personil}</span></div>
+                        <div class="paket-badge">⏱️ <span>${info.durasi}</span></div>
+                        <div class="paket-badge">⭐ <span>${info.prioritas}</span></div>
+                        <div class="paket-badge">📍 <span>Pandeglang & Sekitarnya</span></div>
+                    </div>
 
-                        <div id="paymentDetailsContainer">
-                            <div style="font-size:12px; color:#64748b; margin-bottom:8px;">Saldo CikurPay: <strong style="color:#0f172a;">Rp ${userProfile.saldo.toLocaleString('id-ID')}</strong></div>
-                            <div style="font-size:12px; color:#0f172a; font-weight:700; margin-bottom:12px;">Total Tagihan: Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</div>
-                            <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:#0f172a;">Bayar dengan CikurPay ⚡</button>
+                    <div class="form-group">
+                        <label>Layanan Terpilih</label>
+                        <div class="input-layanan">${info.nama}</div>
+                    </div>
+                    <div class="row-grid form-group">
+                        <div class="col-half">
+                            <label>Pemesan</label>
+                            <input type="text" class="input-box" value="${userProfile.name}" disabled style="background:#f1f5f9; font-weight:700;">
+                        </div>
+                        <div class="col-half">
+                            <label>No. WhatsApp</label>
+                            <input type="text" class="input-box" value="${userProfile.phone}" disabled style="background:#f1f5f9; font-weight:700;">
                         </div>
                     </div>
+                    <div class="form-group">
+                        <label>Jadwal Tanggal</label>
+                        <input type="date" class="input-box" id="inputTanggal">
+                    </div>
+                    <div class="form-group">
+                        <label>Extra Waktu (1 Tambahan = 30 Menit = Rp 25.000)</label>
+                        <select class="input-box" id="selectExtraWaktu" style="background:#ffffff; font-weight:700;">
+                            <option value="0">Tanpa Tambahan Waktu (0) - Rp 0</option>
+                            <option value="1">Tambah 1 (30 Menit) - +Rp 25.000</option>
+                            <option value="2">Tambah 2 (60 Menit) - +Rp 50.000</option>
+                            <option value="3">Tambah 3 (90 Menit) - +Rp 75.000</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Lokasi / Alamat</label>
+                        <textarea class="input-box" id="inputLokasi" placeholder="Alamat lengkap..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Catatan Khusus</label>
+                        <textarea class="input-box" id="inputCatatanRequest" placeholder="Instruksi khusus..."></textarea>
+                    </div>
+
+                    <div class="rincian-bill">
+                        <div class="rincian-row"><span>Harga Dasar Layanan</span><span id="txtBasePrice">${info.hargaStr}</span></div>
+                        <div class="rincian-row"><span>Biaya Extra Waktu</span><span id="txtExtraPrice">Rp 0</span></div>
+                    </div>
+
+                    <div class="total-box">
+                        <span class="total-label">Total Tagihan :</span>
+                        <span class="total-value" id="txtTotalFinal">${info.hargaStr}</span>
+                    </div>
+                    <button class="btn-pesan-form" id="btnLanjutBayar">Lanjut Pembayaran ➔</button>
                 `;
 
-                let selectedPaymentMethod = "cikurpay";
-                const methodButtons = document.querySelectorAll(".pay-method-option");
-                const paymentDetailsContainer = document.getElementById("paymentDetailsContainer");
+                let currentExtraCost = 0;
+                let extraUnitsCount = 0;
+                const selectExtraWaktu = document.getElementById("selectExtraWaktu");
+                const txtExtraPrice = document.getElementById("txtExtraPrice");
+                const txtTotalFinal = document.getElementById("txtTotalFinal");
 
-                methodButtons.forEach(mBtn => {
-                    mBtn.addEventListener("click", function() {
-                        methodButtons.forEach(b => b.classList.remove("active"));
-                        this.classList.add("active");
-                        selectedPaymentMethod = this.getAttribute("data-method");
+                selectExtraWaktu.addEventListener("change", function() {
+                    extraUnitsCount = parseInt(this.value);
+                    currentExtraCost = extraUnitsCount * 25000;
+                    let grandTotal = info.hargaBase + currentExtraCost;
 
-                        if(selectedPaymentMethod === "cikurpay") {
-                            paymentDetailsContainer.innerHTML = `
+                    txtExtraPrice.innerText = "Rp " + currentExtraCost.toLocaleString('id-ID');
+                    txtTotalFinal.innerText = "Rp " + grandTotal.toLocaleString('id-ID');
+                });
+
+                document.getElementById("btnLanjutBayar").addEventListener("click", () => {
+                    const tanggal = document.getElementById("inputTanggal").value;
+                    const lokasi = document.getElementById("inputLokasi").value;
+                    let finalCalculatedTotal = info.hargaBase + currentExtraCost;
+
+                    if (!tanggal || !lokasi) {
+                        alert("[!] Mohon lengkapi Tanggal dan Lokasi.");
+                        return;
+                    }
+
+                    dynamicPaketContent.innerHTML = `
+                        <h3 class="paket-title" style="margin-bottom:10px;">Metode Pembayaran</h3>
+                        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:12px; margin-bottom:12px;">
+                            <div style="display:flex; gap:6px; margin-bottom:12px;">
+                                <button class="pay-method-option active" data-method="cikurpay">CikurPay</button>
+                                <button class="pay-method-option" data-method="qris">QRIS</button>
+                                <button class="pay-method-option" data-method="tunai">Tunai</button>
+                            </div>
+
+                            <div id="paymentDetailsContainer">
                                 <div style="font-size:12px; color:#64748b; margin-bottom:8px;">Saldo CikurPay: <strong style="color:#0f172a;">Rp ${userProfile.saldo.toLocaleString('id-ID')}</strong></div>
                                 <div style="font-size:12px; color:#0f172a; font-weight:700; margin-bottom:12px;">Total Tagihan: Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</div>
                                 <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:#0f172a;">Bayar dengan CikurPay ⚡</button>
-                            `;
-                            bindBayarAction();
-                        } else if(selectedPaymentMethod === "qris") {
-                            paymentDetailsContainer.innerHTML = `
-                                <div style="text-align:center; margin-bottom:8px;">
-                                    <p style="font-size:11px; color:#64748b; margin-bottom:8px;">Scan QRIS CIKUR Rubidotcom (NMID: ID1020035825931) untuk membayar Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</p>
-                                    <img src="qris.png" alt="QRIS CikurGo" style="width:160px; height:160px; object-fit:contain; border:1px solid #cbd5e1; border-radius:12px; padding:6px; background:#fff; margin:0 auto; display:block;">
-                                </div>
-                                <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:#E50914; margin-top:8px;">Konfirmasi Bayar QRIS ✓</button>
-                            `;
-                            bindBayarAction();
-                        } else if(selectedPaymentMethod === "tunai") {
-                            paymentDetailsContainer.innerHTML = `
-                                <div style="font-size:12px; color:#64748b; margin-bottom:8px; text-align:center;">Pembayaran sebesar <strong>Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</strong> dilakukan secara <strong>Tunai</strong> langsung kepada petugas/asisten di lokasi.</div>
-                                <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:#E50914; margin-top:4px;">Pesan dengan Pembayaran Tunai ✓</button>
-                            `;
-                            bindBayarAction();
-                        }
-                    });
-                });
-
-                function bindBayarAction() {
-                    document.getElementById("btnEksekusiBayar").addEventListener("click", () => {
-                        if(selectedPaymentMethod === "cikurpay") {
-                            if (userProfile.saldo < finalCalculatedTotal) {
-                                alert("[!] Saldo CikurPay kurang. Silakan lakukan Top-Up terlebih dahulu.");
-                                return;
-                            }
-                            userProfile.saldo -= finalCalculatedTotal;
-                            localStorage.setItem('cikur_user', JSON.stringify(userProfile));
-                            updateUIProfile();
-                        }
-
-                        let invoiceNo = "INV/CGO/" + Math.floor(100000 + Math.random() * 900000);
-                        let statusBayarLabel = selectedPaymentMethod === "tunai" ? "MENUNGGU PEMBAYARAN TUNAI" : "LUNAS (" + selectedPaymentMethod.toUpperCase() + ")";
-
-                        modalMainContent.innerHTML = `
-                            <div class="invoice-card">
-                                <div class="invoice-header">
-                                    <h3>CIKUR GO INVOICE</h3>
-                                    <p style="font-size:10px; color:#64748b;">Status: ${statusBayarLabel}</p>
-                                </div>
-                                <div class="invoice-row"><span>No. Invoice</span><span>${invoiceNo}</span></div>
-                                <div class="invoice-row"><span>Nama</span><span>${userProfile.name}</span></div>
-                                <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
-                                <div class="invoice-row"><span>Extra Waktu</span><span>${extraUnitsCount} Tambahan (30 Menit/Unit)</span></div>
-                                <div class="invoice-row"><span>Metode Bayar</span><span>${selectedPaymentMethod.toUpperCase()}</span></div>
-                                <div class="invoice-row" style="border-top:1px dashed #cbd5e1; margin-top:8px; padding-top:6px;">
-                                    <span style="font-weight:800; color:#0f172a;">Total Tagihan</span>
-                                    <span style="font-weight:800; color:#E50914; font-size:14px;">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span>
-                                </div>
                             </div>
-                            <button class="btn-pesan-form" id="btnTutupInvoice">Selesai ✓</button>
-                        `;
-                        document.getElementById("btnTutupInvoice").addEventListener("click", () => {
-                            assistantScreen.style.display = "none";
+                        </div>
+                    `;
+
+                    let selectedPaymentMethod = "cikurpay";
+                    const methodButtons = document.querySelectorAll(".pay-method-option");
+                    const paymentDetailsContainer = document.getElementById("paymentDetailsContainer");
+
+                    methodButtons.forEach(mBtn => {
+                        mBtn.addEventListener("click", function() {
+                            methodButtons.forEach(b => b.classList.remove("active"));
+                            this.classList.add("active");
+                            selectedPaymentMethod = this.getAttribute("data-method");
+
+                            if(selectedPaymentMethod === "cikurpay") {
+                                paymentDetailsContainer.innerHTML = `
+                                    <div style="font-size:12px; color:#64748b; margin-bottom:8px;">Saldo CikurPay: <strong style="color:#0f172a;">Rp ${userProfile.saldo.toLocaleString('id-ID')}</strong></div>
+                                    <div style="font-size:12px; color:#0f172a; font-weight:700; margin-bottom:12px;">Total Tagihan: Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</div>
+                                    <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:#0f172a;">Bayar dengan CikurPay ⚡</button>
+                                `;
+                                bindBayarAction();
+                            } else if(selectedPaymentMethod === "qris") {
+                                paymentDetailsContainer.innerHTML = `
+                                    <div style="text-align:center; margin-bottom:8px;">
+                                        <p style="font-size:11px; color:#64748b; margin-bottom:8px;">Scan QRIS CIKUR (NMID: ID1020035825931) untuk membayar Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</p>
+                                        <img src="qris.png" alt="QRIS CikurGo" style="width:160px; height:160px; object-fit:contain; border:1px solid #cbd5e1; border-radius:12px; padding:6px; background:#fff; margin:0 auto; display:block;">
+                                    </div>
+                                    <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:#E50914; margin-top:8px;">Konfirmasi Bayar QRIS ✓</button>
+                                `;
+                                bindBayarAction();
+                            } else if(selectedPaymentMethod === "tunai") {
+                                paymentDetailsContainer.innerHTML = `
+                                    <div style="font-size:12px; color:#64748b; margin-bottom:8px; text-align:center;">Pembayaran sebesar <strong>Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</strong> dilakukan secara <strong>Tunai</strong> langsung kepada petugas/asisten di lokasi.</div>
+                                    <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:#E50914; margin-top:4px;">Pesan dengan Pembayaran Tunai ✓</button>
+                                `;
+                                bindBayarAction();
+                            }
                         });
                     });
-                }
 
-                bindBayarAction();
+                    function bindBayarAction() {
+                        document.getElementById("btnEksekusiBayar").addEventListener("click", () => {
+                            if(selectedPaymentMethod === "cikurpay") {
+                                if (userProfile.saldo < finalCalculatedTotal) {
+                                    alert("[!] Saldo CikurPay kurang. Silakan lakukan Top-Up terlebih dahulu.");
+                                    return;
+                                }
+                                userProfile.saldo -= finalCalculatedTotal;
+                                localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+                                updateUIProfile();
+                            }
+
+                            let invoiceNo = "INV/CGO/" + Math.floor(100000 + Math.random() * 900000);
+                            let statusBayarLabel = selectedPaymentMethod === "tunai" ? "MENUNGGU PEMBAYARAN TUNAI" : "LUNAS (" + selectedPaymentMethod.toUpperCase() + ")";
+
+                            modalMainContent.innerHTML = `
+                                <div class="invoice-card">
+                                    <div class="invoice-header">
+                                        <h3>CIKUR GO INVOICE</h3>
+                                        <p style="font-size:10px; color:#64748b;">Status: ${statusBayarLabel}</p>
+                                    </div>
+                                    <div class="invoice-row"><span>No. Invoice</span><span>${invoiceNo}</span></div>
+                                    <div class="invoice-row"><span>Nama</span><span>${userProfile.name}</span></div>
+                                    <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
+                                    <div class="invoice-row"><span>Extra Waktu</span><span>${extraUnitsCount} Tambahan (30 Menit/Unit)</span></div>
+                                    <div class="invoice-row"><span>Metode Bayar</span><span>${selectedPaymentMethod.toUpperCase()}</span></div>
+                                    <div class="invoice-row" style="border-top:1px dashed #cbd5e1; margin-top:8px; padding-top:6px;">
+                                        <span style="font-weight:800; color:#0f172a;">Total Tagihan</span>
+                                        <span style="font-weight:800; color:#E50914; font-size:14px;">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span>
+                                    </div>
+                                </div>
+                                <button class="btn-pesan-form" id="btnTutupInvoice">Selesai ✓</button>
+                            `;
+                            document.getElementById("btnTutupInvoice").addEventListener("click", () => {
+                                assistantScreen.style.display = "none";
+                            });
+                        });
+                    }
+
+                    bindBayarAction();
+                });
             });
         });
     });
-});
+}
 </script>
     
 <script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
