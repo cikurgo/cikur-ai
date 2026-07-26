@@ -330,6 +330,15 @@ body{
     </div>
 
     <!-- Kotak Keranjang & Checkout -->
+    <!-- Pilihan Metode Pembayaran -->
+<div style="margin: 10px 0;">
+    <div style="font-size: 11px; color: #94a3b8; font-weight: 700; margin-bottom: 4px;">Pilih Metode Pembayaran</div>
+    <select id="metodePembayaran" class="input-box" style="background: #1e293b; color: #fff; border-color: #334155;">
+        <option value="CikurPay">Dompet CikurPay (Potong Saldo)</option>
+        <option value="QRIS">QRIS (Scan & Pay)</option>
+        <option value="Tunai">Bayar Tunai / Cash ke Driver</option>
+    </select>
+</div>
     <div class="checkout-box" id="cartSection" style="display:none;">
         <div style="font-size: 11px; color: #94a3b8; font-weight: 700;">Menu Terpilih</div>
         <h3 id="cartItemName" style="font-size: 14px; font-weight: 800; margin: 2px 0 6px 0;">-</h3>
@@ -466,18 +475,26 @@ function prosesPesanFood() {
     window.location.href = "index.html";
 }
     function prosesPesanFood() {
-    if (userProfile.saldo < selectedFood.price) {
-        alert("[!] Saldo CikurPay tidak mencukupi.");
-        return;
+    let metode = document.getElementById("metodePembayaran").value;
+
+    // Jika pakai CikurPay, cek saldo
+    if (metode === "CikurPay") {
+        if (userProfile.saldo < selectedFood.price) {
+            alert("[!] Saldo CikurPay tidak mencukupi untuk memesan menu ini.");
+            return;
+        }
+        userProfile.saldo -= selectedFood.price;
+        localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+    } else if (metode === "QRIS") {
+        alert("[!] Silakan selesaikan pembayaran via QRIS yang akan muncul setelah ini.");
+    } else {
+        alert("[!] Pesanan dicatat. Siapkan uang tunai pas saat pesanan tiba.");
     }
     
-    userProfile.saldo -= selectedFood.price;
-    localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+    // Catat riwayat dengan menyertakan info metode pembayaran
+    simpanRiwayatTransaksi(`${selectedFood.name} (${metode})`, selectedFood.price, 'CIKUR Food');
     
-    // Catat ke riwayat global aplikasi
-    simpanRiwayatTransaksi(selectedFood.name, selectedFood.price, 'CIKUR Food');
-    
-    alert(`[SUKSES] Pesanan ${selectedFood.name} berhasil dibuat!`);
+    alert(`[SUKSES] Pesanan ${selectedFood.name} berhasil dibuat menggunakan ${metode}!`);
     window.location.href = "index.html";
     }
 </script>
