@@ -1218,7 +1218,7 @@ setInterval(() => {
     }
 }, 4000);
 
-// BOTPRESS CHAT & WIDGET VISIBILITY DENGAN FITUR SLIDE OTOMATIS
+// BOTPRESS CHAT & WIDGET VISIBILITY DENGAN FITUR SLIDE OTOMATIS (CSS INJECTION)
 const chatBtn = document.getElementById("chatBtn");
 if(chatBtn) {
     chatBtn.addEventListener("click", () => {
@@ -1232,35 +1232,32 @@ if(chatBtn) {
     });
 }
 
-// Variabel status global untuk melacak apakah modal sedang aktif
 let isModalOpen = false;
 
 function manageBotpressWidgetVisibility(hide) {
     isModalOpen = hide;
-    const robotWrapper = document.getElementById("cgo-robot-wrapper");
-    if(robotWrapper) {
-        robotWrapper.style.transition = "transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease";
+    const bpContainer = document.getElementById("bp-web-widget-container") || document.querySelector("bp-widget") || document.querySelector(".bp-widget-web") || document.querySelector("#bp-web-widget");
+    
+    // Cari elemen iframe atau kontainer utama Botpress
+    let targetEl = bpContainer || document.querySelector("iframe[title*='Botpress']");
+    
+    if(targetEl) {
+        targetEl.style.transition = "all 0.5s cubic-bezier(0.16, 1, 0.3, 1)";
         if(hide) {
-            robotWrapper.style.transform = "translateX(120%)";
-            robotWrapper.style.opacity = "0";
-            robotWrapper.style.pointerEvents = "none";
+            targetEl.style.transform = "translateX(150%)";
+            targetEl.style.opacity = "0";
+            targetEl.style.pointerEvents = "none";
         } else {
-            robotWrapper.style.transform = "translateX(0)";
-            robotWrapper.style.opacity = "1";
-            robotWrapper.style.pointerEvents = "auto";
+            targetEl.style.transform = "translateX(0)";
+            targetEl.style.opacity = "1";
+            targetEl.style.pointerEvents = "auto";
         }
     }
 }
 
 function initRobotAutoSlide() {
-    const SHOW_TIME = 7000;   // Waktu robot tampil penuh (milidetik)
-    const HIDE_TIME = 3000;   // Waktu robot mengintip di samping (milidetik)
-
-    const robotWrapper = document.getElementById("cgo-robot-wrapper");
-    if(!robotWrapper) {
-        setTimeout(initRobotAutoSlide, 1000);
-        return;
-    }
+    const SHOW_TIME = 7000;   
+    const HIDE_TIME = 3000;   
 
     function animateRobot() {
         if(isModalOpen) {
@@ -1268,40 +1265,48 @@ function initRobotAutoSlide() {
             return;
         }
 
-        robotWrapper.style.transition = "transform 0.8s cubic-bezier(.22,.61,.36,1), opacity 0.5s ease";
-        robotWrapper.style.opacity = "1";
-        robotWrapper.style.pointerEvents = "auto";
+        // Deteksi elemen widget Botpress secara agresif
+        let targetEl = document.getElementById("bp-web-widget-container") || 
+                       document.querySelector("bp-widget") || 
+                       document.querySelector(".bp-widget-web") || 
+                       document.querySelector("iframe[title*='Botpress']") ||
+                       document.querySelector("[id^='bp-']");
 
-        // 1. Robot tampil penuh di layar
-        robotWrapper.style.transform = "translateX(0)";
+        if(!targetEl) {
+            setTimeout(animateRobot, 1500);
+            return;
+        }
+
+        targetEl.style.transition = "transform 0.8s cubic-bezier(.22,.61,.36,1)";
+
+        // 1. Tampil penuh
+        targetEl.style.transform = "translateX(0)";
 
         setTimeout(() => {
-            if (isModalOpen) {
+            if(isModalOpen) {
                 setTimeout(animateRobot, 1000);
                 return;
             }
 
-            // 2. Robot bergeser mengintip ke samping kanan (geser 75%)
-            robotWrapper.style.transform = "translateX(75%)";
+            // 2. Mengintip ke kanan (geser keluar 80%)
+            targetEl.style.transform = "translateX(80%)";
 
             setTimeout(() => {
-                if (isModalOpen) {
+                if(isModalOpen) {
                     setTimeout(animateRobot, 1000);
                     return;
                 }
 
-                // 3. Robot kembali muncul ke posisi semula
-                robotWrapper.style.transform = "translateX(0)";
+                // 3. Muncul kembali
+                targetEl.style.transform = "translateX(0)";
 
                 setTimeout(animateRobot, SHOW_TIME);
-
             }, HIDE_TIME);
         }, SHOW_TIME);
     }
 
     setTimeout(animateRobot, 3000);
 }
-
 // MINI & HERO SLIDER
 const miniSlides = document.querySelector(".mini-slides");
 const miniDots = document.querySelectorAll(".mini-dots span");
@@ -1713,11 +1718,8 @@ if(btnAssistant) {
 }
 </script>
     
-<!-- Pembungkus Robot CGO agar animasinya terbaca oleh browser -->
-<div id="cgo-robot-wrapper" style="position: fixed; bottom: 80px; right: 16px; z-index: 999; transition: transform 0.8s cubic-bezier(.22,.61,.36,1);">
-    <script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
-    <script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
-</div>
+<script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
+<script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
 
 </body>
     </html>
