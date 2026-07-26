@@ -1232,67 +1232,81 @@ if(chatBtn) {
     });
 }
 
+// Variabel status global untuk melacak apakah modal sedang aktif
 let isModalOpen = false;
 
 function manageBotpressWidgetVisibility(hide) {
     isModalOpen = hide;
-    const checkInterval = setInterval(() => {
-        const bpContainer = document.getElementById("bp-web-widget-container") || document.querySelector("bp-widget") || document.querySelector(".bp-widget-web");
-        if(bpContainer) {
-            bpContainer.style.transition = "transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease";
-            if(hide) {
-                bpContainer.style.transform = "translateX(120%)";
-                bpContainer.style.opacity = "0";
-                bpContainer.style.pointerEvents = "none";
-            } else {
-                bpContainer.style.transform = "translateX(0)";
-                bpContainer.style.opacity = "1";
-                bpContainer.style.pointerEvents = "auto";
-            }
-            clearInterval(checkInterval);
+    const bpContainer = document.getElementById("bp-web-widget-container") || document.querySelector("bp-widget") || document.querySelector(".bp-widget-web");
+    if(bpContainer) {
+        bpContainer.style.transition = "transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease";
+        if(hide) {
+            bpContainer.style.transform = "translateX(120%)";
+            bpContainer.style.opacity = "0";
+            bpContainer.style.pointerEvents = "none";
+        } else {
+            // Kembalikan ke posisi normal atau intip saat modal ditutup
+            bpContainer.style.transform = "translateX(0)";
+            bpContainer.style.opacity = "1";
+            bpContainer.style.pointerEvents = "auto";
         }
-    }, 300);
+    }
 }
 
 function initRobotAutoSlide() {
-    const SHOW_TIME = 7000;   // tampil
-    const HIDE_TIME = 3000;   // mengintip
-    function animateRobot(){
+    const SHOW_TIME = 7000;   // Waktu robot tampil penuh (milidetik)
+    const HIDE_TIME = 3000;   // Waktu robot mengintip di samping (milidetik)
 
-        if(isModalOpen){
-            setTimeout(animateRobot,1000);
+    function animateRobot() {
+        // Jika modal sedang terbuka, jangan jalankan animasi slide agar tidak bertabrakan
+        if(isModalOpen) {
+            setTimeout(animateRobot, 1000);
             return;
         }
-        const bpContainer =
-            document.getElementById("bp-web-widget-container") ||
-            document.querySelector("bp-widget") ||
-            document.querySelector(".bp-widget-web");
 
-        if(!bpContainer){
-            setTimeout(animateRobot,1000);
+        const bpContainer = document.getElementById("bp-web-widget-container") || document.querySelector("bp-widget") || document.querySelector(".bp-widget-web");
+
+        if(!bpContainer) {
+            // Coba lagi setelah beberapa saat jika elemen Botpress belum selesai dimuat
+            setTimeout(animateRobot, 1500);
             return;
         }
-        bpContainer.style.transition =
-            "transform .8s cubic-bezier(.22,.61,.36,1)";
 
-        // Robot tampil penuh
+        // Terapkan transisi halus
+        bpContainer.style.transition = "transform 0.8s cubic-bezier(.22,.61,.36,1), opacity 0.5s ease";
+        bpContainer.style.opacity = "1";
+        bpContainer.style.pointerEvents = "auto";
+
+        // 1. Robot tampil penuh di layar
         bpContainer.style.transform = "translateX(0)";
-        setTimeout(()=>{
 
-            // Robot mengintip dari samping
+        setTimeout(() => {
+            if (isModalOpen) {
+                setTimeout(animateRobot, 1000);
+                return;
+            }
+
+            // 2. Robot bergeser mengintip ke samping kanan (geser 75%)
             bpContainer.style.transform = "translateX(75%)";
 
-            setTimeout(()=>{
+            setTimeout(() => {
+                if (isModalOpen) {
+                    setTimeout(animateRobot, 1000);
+                    return;
+                }
 
-                // Robot kembali muncul
+                // 3. Robot kembali muncul ke posisi semula
                 bpContainer.style.transform = "translateX(0)";
 
-                setTimeout(animateRobot,SHOW_TIME);
+                // Lakukan perulangan animasi berikutnya
+                setTimeout(animateRobot, SHOW_TIME);
 
-            },HIDE_TIME);
-        },SHOW_TIME);
+            }, HIDE_TIME);
+        }, SHOW_TIME);
     }
-    animateRobot();
+
+    // Beri jeda sedikit saat pertama kali halaman dimuat agar elemen widget Botpress siap
+    setTimeout(animateRobot, 2000);
 }
 
 // MINI & HERO SLIDER
