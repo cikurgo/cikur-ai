@@ -184,7 +184,7 @@ body{
 }
 
 /* ===========================
-   HERO BANNER (DISESUAIKAN RASIO 16:10)
+   HERO BANNER
 =========================== */
 .hero-banner{
     width: 100%;
@@ -912,7 +912,7 @@ textarea.input-box {
 
     <!-- VIEW 1: BERANDA -->
     <div id="view-beranda" class="tab-content-view active">
-        <!-- Main Banner Carousel (Proporsional 16:10) -->
+        <!-- Main Banner Carousel -->
         <div class="hero-banner">
             <div class="slider">
                 <div class="slides">
@@ -1148,7 +1148,6 @@ window.addEventListener("DOMContentLoaded", () => {
     if(userProfile.name === "CIKUR USER") {
         setTimeout(bukaModalRegistrasi, 600);
     }
-    // Mulai animasi slide otomatis muncul-hilang untuk widget robot
     initRobotAutoSlide();
 });
 
@@ -1219,7 +1218,7 @@ setInterval(() => {
     }
 }, 4000);
 
-// BOTPRESS CHAT & WIDGET VISIBILITY DENGAN FITUR SLIDE OTOMATIS (MUNCUL-HILANG)
+// BOTPRESS CHAT & WIDGET VISIBILITY
 const chatBtn = document.getElementById("chatBtn");
 if(chatBtn) {
     chatBtn.addEventListener("click", () => {
@@ -1255,11 +1254,9 @@ function manageBotpressWidgetVisibility(hide) {
     }, 300);
 }
 
-// Fungsi Slide Otomatis Muncul-Hilang untuk Robot Kecil agar tidak menghalangi navigasi
 function initRobotAutoSlide() {
-    let slideState = false; // false = muncul normal, true = tersembunyi (slide ke samping)
+    let slideState = false;
     setInterval(() => {
-        // Jangan jalankan slide otomatis jika modal sedang terbuka
         if (isModalOpen) return;
 
         const bpContainer = document.getElementById("bp-web-widget-container") || document.querySelector("bp-widget") || document.querySelector(".bp-widget-web");
@@ -1267,16 +1264,14 @@ function initRobotAutoSlide() {
             bpContainer.style.transition = "transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.6s ease";
             slideState = !slideState;
             if (slideState) {
-                // Sembunyikan ke samping (slide hilang) agar navigasi bawah leluasa
                 bpContainer.style.transform = "translateX(110%)";
                 bpContainer.style.opacity = "0.2";
             } else {
-                // Munculkan kembali ke posisi semula
                 bpContainer.style.transform = "translateX(0)";
                 bpContainer.style.opacity = "1";
             }
         }
-    }, 7000); // Berganti status setiap 7 detik secara otomatis
+    }, 7000);
 }
 
 // MINI & HERO SLIDER
@@ -1641,6 +1636,7 @@ if(btnAssistant) {
                             let options = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
                             let timestampStr = now.toLocaleDateString('id-ID', options) + " WIB";
 
+                            // FIXED: Mengganti variabel finalCalculatedTopup yang error menjadi finalCalculatedTotal
                             modalMainContent.innerHTML = `
                                 <div id="printableInvoiceArea" class="invoice-card">
                                     <div class="invoice-header">
@@ -1655,7 +1651,7 @@ if(btnAssistant) {
                                     <div class="invoice-row"><span>Metode Bayar</span><span>${selectedPaymentMethod.toUpperCase()}</span></div>
                                     <div class="invoice-row" style="border-top:1px dashed #cbd5e1; margin-top:8px; padding-top:6px;">
                                         <span style="font-weight:800; color:#0f172a;">Total Tagihan</span>
-                                        <span style="font-weight:800; color:#E50914; font-size:14px;">Rp ${finalCalculatedTopup = finalCalculatedTotal.toLocaleString('id-ID')}</span>
+                                        <span style="font-weight:800; color:#E50914; font-size:14px;">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span>
                                     </div>
                                 </div>
                                 <div style="display:flex; gap:8px; margin-top:10px;">
@@ -1693,4 +1689,4 @@ if(btnAssistant) {
 <script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
 
 </body>
-</html>
+    </html>
