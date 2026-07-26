@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CIKUR Food - Super App Engine v3.9</title>
+<title>CIKUR Food Market - Super App Engine v3.9</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -22,18 +22,32 @@
 *{ margin:0; padding:0; box-sizing:border-box; font-family:var(--font-main); }
 body{ background:var(--body-bg); color:var(--text-main); min-height:100vh; display:flex; justify-content:center; align-items:center; }
 @media(min-width: 480px){ body { padding: 20px; } }
-.container{ width:100%; max-width:440px; min-height:100vh; margin:0 auto; padding:16px 16px 40px 16px; display:flex; flex-direction:column; background:var(--container-bg); box-shadow:0 10px 30px rgba(0,0,0,0.08); position:relative; }
+.container{ width:100%; max-width:440px; min-height:100vh; margin:0 auto; padding:16px 16px 60px 16px; display:flex; flex-direction:column; background:var(--container-bg); box-shadow:0 10px 30px rgba(0,0,0,0.08); position:relative; }
 @media(min-width: 480px){ .container { min-height:850px; border-radius:36px; border:1px solid var(--border-color); } }
 
 .app-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); }
 .back-btn { background: #fff; border: 1px solid var(--border-color); width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-weight: 800; text-decoration: none; color: var(--text-main); }
 .app-header h2 { font-size: 15px; font-weight: 800; color: var(--text-main); }
 
+.mitra-toggle-btn { background: #fee2e2; color: var(--primary-red); border: 1px solid var(--primary-red); border-radius: 10px; padding: 6px 12px; font-size: 11px; font-weight: 800; cursor: pointer; margin-bottom: 14px; text-align: center; }
+
+.mitra-panel { background: #fff; border: 1px solid var(--border-color); border-radius: 16px; padding: 14px; margin-bottom: 16px; display: none; }
+.mitra-panel.active { display: block; animation: fadeIn 0.3s ease; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+.form-group { margin-bottom: 10px; }
+.form-group label { display: block; font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; }
+.input-box { width: 100%; padding: 10px 12px; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 12px; font-weight: 600; color: var(--text-main); outline: none; }
+.input-box:focus { border-color: var(--primary-red); }
+
+.btn-mitra-submit { width: 100%; height: 40px; background: var(--dark-bg); color: #fff; border: none; border-radius: 10px; font-weight: 800; font-size: 12px; cursor: pointer; margin-top: 6px; }
+
 .food-card { background: #fff; border: 1px solid var(--border-color); border-radius: 16px; padding: 12px; margin-bottom: 12px; display: flex; gap: 12px; align-items: center; cursor: pointer; transition: 0.2s; }
 .food-card:hover { border-color: var(--primary-red); background: #fff5f5; }
-.food-img { width: 70px; height: 70px; border-radius: 12px; object-fit: cover; background: #e2e8f0; }
+.food-img { width: 70px; height: 70px; border-radius: 12px; object-fit: cover; background: #e2e8f0; flex-shrink: 0; }
 .food-info h4 { font-size: 13px; font-weight: 800; color: var(--text-main); margin-bottom: 2px; }
-.food-info p { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+.food-info p { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; line-height: 1.3; }
 .food-price { font-size: 12px; font-weight: 800; color: var(--primary-red); font-family: var(--font-mono); }
 
 .checkout-box { background: var(--dark-bg); color: #fff; border-radius: 16px; padding: 16px; margin-top: auto; }
@@ -48,37 +62,41 @@ body{ background:var(--body-bg); color:var(--text-main); min-height:100vh; displ
         <div style="width: 38px;"></div>
     </div>
 
-    <div style="margin-bottom: 14px;">
-        <input type="text" id="searchFood" class="input-box" placeholder="Cari makanan favoritmu..." style="width:100%; padding:10px 14px; border:1px solid var(--border-color); border-radius:12px; outline:none; font-size:12px;">
+    <!-- Tombol Panel Mitra -->
+    <button class="mitra-toggle-btn" id="btnToggleMitra">💼 Daftar / Tambah Menu Resto Mitra</button>
+
+    <!-- Panel Input Khusus Mitra -->
+    <div class="mitra-panel" id="mitraPanel">
+        <h3 style="font-size: 13px; font-weight: 800; color: var(--text-main); margin-bottom: 10px;">Form Tambah Menu Resto Mitra</h3>
+        <div class="form-group">
+            <label>Nama Makanan / Menu</label>
+            <input type="text" id="mitraMenuName" class="input-box" placeholder="Contoh: Es Teh Manis Cikur">
+        </div>
+        <div class="form-group">
+            <label>Harga (Rp)</label>
+            <input type="number" id="mitraMenuPrice" class="input-box" placeholder="Contoh: 5000">
+        </div>
+        <div class="form-group">
+            <label>Deskripsi Singkat</label>
+            <input type="text" id="mitraMenuDesc" class="input-box" placeholder="Deskripsi rasa atau bahan...">
+        </div>
+        <div class="form-group">
+            <label>URL Gambar (Opsional)</label>
+            <input type="text" id="mitraMenuImg" class="input-box" placeholder="Kosongkan jika pakai default">
+        </div>
+        <button class="btn-mitra-submit" id="btnAddMitraMenu">Publikasikan Menu Mitra ✓</button>
     </div>
 
+    <div style="margin-bottom: 12px;">
+        <input type="text" id="searchFood" class="input-box" placeholder="Cari makanan favoritmu..." style="padding:10px 14px; font-size:12px;">
+    </div>
+
+    <!-- Daftar Makanan (Default + Dinamis dari Mitra) -->
     <div id="foodListContainer">
-        <div class="food-card" onclick="pilihMenu('Seblak Mantap Cikur', 18000)">
-            <img src="https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=150" class="food-img" alt="Seblak">
-            <div class="food-info">
-                <h4>Seblak Mantap Cikur</h4>
-                <p>Kuah pedas kencur khas Sunda dengan topping lengkap.</p>
-                <div class="food-price">Rp 18.000</div>
-            </div>
-        </div>
-        <div class="food-card" onclick="pilihMenu('Nasi Liwet Sunda Komplit', 25000)">
-            <img src="https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" class="food-img" alt="Nasi Liwet">
-            <div class="food-info">
-                <h4>Nasi Liwet Sunda Komplit</h4>
-                <p>Disajikan dengan ikan asin, tahu, tempe, lalapan & sambal terasi.</p>
-                <div class="food-price">Rp 25.000</div>
-            </div>
-        </div>
-        <div class="food-card" onclick="pilihMenu('Ayam Bakar Madu Cikur', 22000)">
-            <img src="https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150" class="food-img" alt="Ayam Bakar">
-            <div class="food-info">
-                <h4>Ayam Bakar Madu Cikur</h4>
-                <p>Ayam empuk dibalut bumbu rempah bakar madu manis gurih.</p>
-                <div class="food-price">Rp 22.000</div>
-            </div>
-        </div>
+        <!-- List item akan dimuat lewat JavaScript -->
     </div>
 
+    <!-- Kotak Checkout / Keranjang -->
     <div class="checkout-box" id="cartSection" style="display:none;">
         <div style="font-size: 11px; color: #94a3b8; font-weight: 700;">Menu Terpilih</div>
         <h3 id="cartItemName" style="font-size: 14px; font-weight: 800; margin: 2px 0 6px 0;">-</h3>
@@ -93,6 +111,87 @@ body{ background:var(--body-bg); color:var(--text-main); min-height:100vh; displ
 <script>
 let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { saldo: 125000 };
 let selectedFood = { name: "", price: 0 };
+
+// Data awal default + data dari LocalStorage jika ada
+let defaultFoodList = [
+    { name: "Seblak Mantap Cikur", price: 18000, desc: "Kuah pedas kencur khas Sunda dengan topping lengkap.", img: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=150" },
+    { name: "Nasi Liwet Sunda Komplit", price: 25000, desc: "Disajikan dengan ikan asin, tahu, tempe, lalapan & sambal terasi.", img: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" },
+    { name: "Ayam Bakar Madu Cikur", price: 22000, desc: "Ayam empuk dibalut bumbu rempah bakar madu manis gurih.", img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150" }
+];
+
+let mitraFoodList = JSON.parse(localStorage.getItem('cikur_mitra_foods')) || [];
+let allFoodItems = [...defaultFoodList, ...mitraFoodList];
+
+function renderFoodList(items) {
+    let container = document.getElementById("foodListContainer");
+    container.innerHTML = "";
+    
+    if(items.length === 0) {
+        container.innerHTML = `<p style="text-align:center; color:var(--text-muted); font-size:12px; padding:20px;">Belum ada menu tersedia.</p>`;
+        return;
+    }
+
+    items.forEach((item) => {
+        let card = document.createElement("div");
+        card.className = "food-card";
+        card.onclick = () => pilihMenu(item.name, item.price);
+        card.innerHTML = `
+            <img src="${item.img || 'https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150'}" class="food-img" alt="${item.name}">
+            <div class="food-info">
+                <h4>${item.name}</h4>
+                <p>${item.desc}</p>
+                <div class="food-price">Rp ${item.price.toLocaleString('id-ID')}</div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+// Inisialisasi awal tampil menu
+renderFoodList(allFoodItems);
+
+// Toggle Panel Mitra
+document.getElementById("btnToggleMitra").addEventListener("click", () => {
+    let panel = document.getElementById("mitraPanel");
+    panel.classList.toggle("active");
+});
+
+// Aksi Tambah Menu oleh Mitra
+document.getElementById("btnAddMitraMenu").addEventListener("click", () => {
+    let name = document.getElementById("mitraMenuName").value.trim();
+    let price = parseInt(document.getElementById("mitraMenuPrice").value);
+    let desc = document.getElementById("mitraMenuDesc").value.trim() || "Menu spesial buatan Mitra Cikur.";
+    let img = document.getElementById("mitraMenuImg").value.trim();
+
+    if(!name || !price) {
+        alert("[!] Mohon isi nama menu dan harga.");
+        return;
+    }
+
+    let newMenu = { name, price, desc, img };
+    mitraFoodList.push(newMenu);
+    localStorage.setItem('cikur_mitra_foods', JSON.stringify(mitraFoodList));
+
+    // Update list global
+    allFoodItems = [...defaultFoodList, ...mitraFoodList];
+    renderFoodList(allFoodItems);
+
+    // Reset Form
+    document.getElementById("mitraMenuName").value = "";
+    document.getElementById("mitraMenuPrice").value = "";
+    document.getElementById("mitraMenuDesc").value = "";
+    document.getElementById("mitraMenuImg").value = "";
+    document.getElementById("mitraPanel").classList.remove("active");
+
+    alert("[SUKSES] Menu baru berhasil ditambahkan oleh Mitra!");
+});
+
+// Fitur Pencarian Makanan
+document.getElementById("searchFood").addEventListener("input", function(e) {
+    let keyword = e.target.value.toLowerCase();
+    let filtered = allFoodItems.filter(i => i.name.toLowerCase().includes(keyword) || i.desc.toLowerCase().includes(keyword));
+    renderFoodList(filtered);
+});
 
 function pilihMenu(name, price) {
     selectedFood = { name, price };
