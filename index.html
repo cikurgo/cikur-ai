@@ -6,6 +6,8 @@
 <title>CIKUR GO - Super App Engine v3.9 (CGO AI)</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<!-- html2canvas untuk fitur download invoice -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <style>
 *{
@@ -34,13 +36,13 @@ body{
     max-width:440px;
     min-height:100vh;
     margin:0 auto;
-    padding:16px 16px 90px 16px;
+    padding:16px 16px 100px 16px;
     display:flex;
     flex-direction:column;
     background:#f8fafc;
     box-shadow: 0 10px 30px rgba(0,0,0,0.08);
     position:relative;
-    overflow:hidden;
+    overflow-x:hidden;
 }
 
 @media(min-width: 480px){
@@ -225,29 +227,29 @@ body{
 }
 
 /* ===========================
-   SERVICES SECTION
+   SERVICES SECTION (RESIZED & CLEAR)
 =========================== */
 .services-section {
     background: #ffffff;
     border-radius: 24px;
-    padding: 16px 12px;
+    padding: 18px 14px;
     border: 1px solid #e2e8f0;
     margin-bottom: 16px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.03);
 }
 
 .services-title {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 800;
     color: #0f172a;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
     padding-left: 4px;
 }
 
 .menu-grid{
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+    gap: 12px;
     align-items: center;
 }
 
@@ -257,30 +259,37 @@ body{
     align-items:center;
     text-decoration:none;
     cursor:pointer;
-    padding: 6px 2px;
-    border-radius: 16px;
+    padding: 8px 4px;
+    border-radius: 18px;
     transition: 0.2s;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
 }
 
 .menu-icon-box {
-    width: 62px;
-    height: 62px;
-    border-radius: 20px;
-    background: #fff5f5;
-    border: 1px solid rgba(229,9,20,0.15);
+    width: 76px;
+    height: 76px;
+    border-radius: 22px;
+    background: #ffffff;
+    border: 1px solid rgba(229,9,20,0.2);
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     transition: .3s;
-    box-shadow: 0 4px 10px rgba(229,9,20,0.06);
+    box-shadow: 0 6px 15px rgba(229,9,20,0.08);
 }
 
 .menu-item img{
-    width: 44px;
-    height: 44px;
+    width: 58px;
+    height: 58px;
     object-fit:contain;
     display:block;
+}
+
+.menu-item:hover {
+    background: #fff5f5;
+    border-color: #E50914;
 }
 
 .menu-item:hover .menu-icon-box {
@@ -290,9 +299,9 @@ body{
 }
 
 .menu-label {
-    font-size: 11px;
-    font-weight: 700;
-    color: #334155;
+    font-size: 12px;
+    font-weight: 800;
+    color: #1e293b;
     text-align: center;
 }
 
@@ -440,13 +449,15 @@ footer{
 footer p { margin:0; }
 
 /* ===========================
-   BOTTOM NAVIGATION BAR (5 MENUS)
+   FIXED BOTTOM NAVIGATION BAR (5 MENUS)
 =========================== */
 .bottom-nav {
-    position: absolute;
+    position: fixed;
     bottom: 0;
-    left: 0;
+    left: 50%;
+    transform: translateX(-50%);
     width: 100%;
+    max-width: 440px;
     height: 70px;
     background-color: #ffffff;
     border-top: 1px solid #e2e8f0;
@@ -454,8 +465,8 @@ footer p { margin:0; }
     justify-content: space-around;
     align-items: center;
     padding: 0 10px;
-    z-index: 100;
-    box-shadow: 0 -4px 16px rgba(0,0,0,0.05);
+    z-index: 1000;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
 }
 
 .nav-item {
@@ -606,7 +617,7 @@ footer p { margin:0; }
 }
 
 .assistant-content{
-    padding:20px 16px 40px 16px;
+    padding:20px 16px 50px 16px;
 }
 
 .paket-title{
@@ -910,7 +921,7 @@ textarea.input-box {
             </div>
         </div>
 
-        <!-- Grid Layanan Utama -->
+        <!-- Grid Layanan Utama (Diperbesar & Lebih Jelas) -->
         <div class="services-section">
             <div class="services-title">Core Ecosystem</div>
             <div class="menu-grid">
@@ -1038,7 +1049,7 @@ textarea.input-box {
 
         <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px; margin-bottom: 10px;">
             <h4 style="font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 4px;">📢 Pembaruan Sistem CGO v3.9</h4>
-            <p style="font-size: 11px; color: #64748b; line-height: 1.4;">Navigasi bawah baru telah diaktifkan untuk kemudahan akses Anda.</p>
+            <p style="font-size: 11px; color: #64748b; line-height: 1.4;">Navigasi bawah tetap (fixed) dan widget robot CGO otomatis tersembunyi saat dibutuhkan.</p>
         </div>
     </div>
 
@@ -1055,7 +1066,7 @@ textarea.input-box {
     </div>
 
     <!-- ===========================
-       BOTTOM NAVIGATION BAR (5 BUTTONS)
+       FIXED BOTTOM NAVIGATION BAR
     =========================== -->
     <nav class="bottom-nav">
         <button class="nav-item active" onclick="switchTab('beranda')" id="nav-beranda">
@@ -1120,7 +1131,6 @@ function updateUIProfile() {
     document.getElementById("headerNamaUser").innerText = userProfile.name;
     document.getElementById("displaySaldo").innerText = "Rp " + userProfile.saldo.toLocaleString('id-ID');
     
-    // Update profile view elements if present
     if(document.getElementById("profileViewName")) {
         document.getElementById("profileViewName").innerText = userProfile.name;
         document.getElementById("profileViewPhone").innerText = userProfile.phone;
@@ -1224,7 +1234,7 @@ setInterval(() => {
     }
 }, 4000);
 
-// --- BOTPRESS CHAT (CGO) ---
+// --- BOTPRESS CHAT (CGO) & AUTO SLIDE WIDGET VISIBILITY ---
 const chatBtn = document.getElementById("chatBtn");
 if(chatBtn) {
     chatBtn.addEventListener("click", () => {
@@ -1236,6 +1246,26 @@ if(chatBtn) {
             chatBtn.innerHTML = "Tanya CGO";
         }, 500);
     });
+}
+
+// Fungsi otomatis menyembunyikan/memunculkan widget Botpress dengan efek slide dari samping
+function manageBotpressWidgetVisibility(hide) {
+    const checkInterval = setInterval(() => {
+        const bpContainer = document.getElementById("bp-web-widget-container") || document.querySelector("bp-widget") || document.querySelector(".bp-widget-web");
+        if(bpContainer) {
+            bpContainer.style.transition = "transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease";
+            if(hide) {
+                bpContainer.style.transform = "translateX(120%)";
+                bpContainer.style.opacity = "0";
+                bpContainer.style.pointerEvents = "none";
+            } else {
+                bpContainer.style.transform = "translateX(0)";
+                bpContainer.style.opacity = "1";
+                bpContainer.style.pointerEvents = "auto";
+            }
+            clearInterval(checkInterval);
+        }
+    }, 300);
 }
 
 // --- MINI & HERO SLIDER ---
@@ -1269,12 +1299,21 @@ const modalMainContent = document.getElementById("modalMainContent");
 function openModal(titleHTML) {
     modalTitle.innerHTML = titleHTML;
     assistantScreen.style.display = "block";
+    manageBotpressWidgetVisibility(true); // Slide sembunyikan robot CGO agar tidak menutupi modal/navigasi
 }
 if(closeAssistant) {
-    closeAssistant.addEventListener("click", () => { assistantScreen.style.display = "none"; });
+    closeAssistant.addEventListener("click", () => { 
+        assistantScreen.style.display = "none"; 
+        manageBotpressWidgetVisibility(false); // Munculkan kembali robot CGO
+    });
 }
 if(assistantScreen) {
-    assistantScreen.addEventListener("click", (e) => { if(e.target === assistantScreen) assistantScreen.style.display = "none"; });
+    assistantScreen.addEventListener("click", (e) => { 
+        if(e.target === assistantScreen) {
+            assistantScreen.style.display = "none";
+            manageBotpressWidgetVisibility(false);
+        }
+    });
 }
 
 // --- PENGATURAN PROFIL & FOTO ---
@@ -1334,6 +1373,7 @@ document.getElementById("btnOpenProfile").addEventListener("click", () => {
         updateUIProfile();
         alert("[SUKSES] Profil dan foto berhasil diperbarui!");
         assistantScreen.style.display = "none";
+        manageBotpressWidgetVisibility(false);
     });
 });
 
@@ -1388,6 +1428,7 @@ document.getElementById("btnOpenWallet").addEventListener("click", () => {
             updateUIProfile();
             alert(`[SUKSES] Top-up sebesar Rp ${finalAmount.toLocaleString('id-ID')} berhasil masuk ke CikurPay!`);
             assistantScreen.style.display = "none";
+            manageBotpressWidgetVisibility(false);
         }, 800);
     });
 });
@@ -1584,14 +1625,20 @@ if(btnAssistant) {
 
                             let invoiceNo = "INV/CGO/" + Math.floor(100000 + Math.random() * 900000);
                             let statusBayarLabel = selectedPaymentMethod === "tunai" ? "MENUNGGU PEMBAYARAN TUNAI" : "LUNAS (" + selectedPaymentMethod.toUpperCase() + ")";
+                            
+                            // Timestamp Tanggal & Waktu Lengkap
+                            let now = new Date();
+                            let options = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+                            let timestampStr = now.toLocaleDateString('id-ID', options) + " WIB";
 
                             modalMainContent.innerHTML = `
-                                <div class="invoice-card">
+                                <div id="printableInvoiceArea" class="invoice-card">
                                     <div class="invoice-header">
                                         <h3>CIKUR GO INVOICE</h3>
                                         <p style="font-size:10px; color:#64748b;">Status: ${statusBayarLabel}</p>
                                     </div>
                                     <div class="invoice-row"><span>No. Invoice</span><span>${invoiceNo}</span></div>
+                                    <div class="invoice-row"><span>Tanggal & Waktu</span><span>${timestampStr}</span></div>
                                     <div class="invoice-row"><span>Nama</span><span>${userProfile.name}</span></div>
                                     <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
                                     <div class="invoice-row"><span>Extra Waktu</span><span>${extraUnitsCount} Tambahan (30 Menit/Unit)</span></div>
@@ -1601,10 +1648,26 @@ if(btnAssistant) {
                                         <span style="font-weight:800; color:#E50914; font-size:14px;">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span>
                                     </div>
                                 </div>
-                                <button class="btn-pesan-form" id="btnTutupInvoice">Selesai ✓</button>
+                                <div style="display:flex; gap:8px; margin-top:10px;">
+                                    <button class="btn-pesan-form" id="btnDownloadInvoice" style="background:#0f172a; flex:1;">Download Invoice 📥</button>
+                                    <button class="btn-pesan-form" id="btnTutupInvoice" style="background:#E50914; flex:1;">Selesai ✓</button>
+                                </div>
                             `;
+
+                            // Fungsi Download Invoice Menggunakan html2canvas
+                            document.getElementById("btnDownloadInvoice").addEventListener("click", () => {
+                                let invoiceElement = document.getElementById("printableInvoiceArea");
+                                html2canvas(invoiceElement, { scale: 2 }).then(canvas => {
+                                    let link = document.createElement('a');
+                                    link.download = `${invoiceNo.replace(/\//g, '_')}.png`;
+                                    link.href = canvas.toDataURL('image/png');
+                                    link.click();
+                                });
+                            });
+
                             document.getElementById("btnTutupInvoice").addEventListener("click", () => {
                                 assistantScreen.style.display = "none";
+                                manageBotpressWidgetVisibility(false);
                             });
                         });
                     }
