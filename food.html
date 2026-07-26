@@ -1,25 +1,116 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CIKUR GO - FOOD</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; }
-        body { background: radial-gradient(circle at center, #2d2d2d 0%, #111 100%); color: white; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
-        .container { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); padding: 40px; border-radius: 30px; text-align: center; max-width: 500px; width: 100%; border: 1px solid rgba(255, 255, 255, 0.1); }
-        h1 { color: #FFC107; margin-bottom: 20px; }
-        p { color: #ccc; margin-bottom: 25px; }
-        .btn-back { display: inline-block; padding: 15px 30px; background: linear-gradient(45deg, #FFC107, #ffdb58); color: #000; text-decoration: none; border-radius: 50px; font-weight: 700; transition: 0.3s; }
-        .btn-back:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(255, 193, 7, 0.3); }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CIKUR Food - Super App Engine v3.9</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+    --primary-red: #E50914;
+    --primary-red-hover: #b80710;
+    --dark-bg: #0f172a;
+    --dark-card: #1e293b;
+    --body-bg: #f1f5f9;
+    --container-bg: #f8fafc;
+    --border-color: #e2e8f0;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --font-main: 'Plus Jakarta Sans', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+}
+*{ margin:0; padding:0; box-sizing:border-box; font-family:var(--font-main); }
+body{ background:var(--body-bg); color:var(--text-main); min-height:100vh; display:flex; justify-content:center; align-items:center; }
+@media(min-width: 480px){ body { padding: 20px; } }
+.container{ width:100%; max-width:440px; min-height:100vh; margin:0 auto; padding:16px 16px 40px 16px; display:flex; flex-direction:column; background:var(--container-bg); box-shadow:0 10px 30px rgba(0,0,0,0.08); position:relative; }
+@media(min-width: 480px){ .container { min-height:850px; border-radius:36px; border:1px solid var(--border-color); } }
+
+.app-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); }
+.back-btn { background: #fff; border: 1px solid var(--border-color); width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-weight: 800; text-decoration: none; color: var(--text-main); }
+.app-header h2 { font-size: 15px; font-weight: 800; color: var(--text-main); }
+
+.food-card { background: #fff; border: 1px solid var(--border-color); border-radius: 16px; padding: 12px; margin-bottom: 12px; display: flex; gap: 12px; align-items: center; cursor: pointer; transition: 0.2s; }
+.food-card:hover { border-color: var(--primary-red); background: #fff5f5; }
+.food-img { width: 70px; height: 70px; border-radius: 12px; object-fit: cover; background: #e2e8f0; }
+.food-info h4 { font-size: 13px; font-weight: 800; color: var(--text-main); margin-bottom: 2px; }
+.food-info p { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+.food-price { font-size: 12px; font-weight: 800; color: var(--primary-red); font-family: var(--font-mono); }
+
+.checkout-box { background: var(--dark-bg); color: #fff; border-radius: 16px; padding: 16px; margin-top: auto; }
+.btn-order { width: 100%; height: 46px; background: var(--primary-red); color: #fff; border: none; border-radius: 12px; font-weight: 800; font-size: 13px; cursor: pointer; margin-top: 10px; }
+</style>
 </head>
 <body>
-    <div class="container">
-        <h1>FOOD</h1>
-        <p>Layanan CIKUR GO FOOD sedang dipersiapkan.</p>
-        <a href="index.html" class="btn-back">Kembali ke Beranda</a>
+<div class="container">
+    <div class="app-header">
+        <a href="index.html" class="back-btn">←</a>
+        <h2>CIKUR Food Market</h2>
+        <div style="width: 38px;"></div>
     </div>
+
+    <div style="margin-bottom: 14px;">
+        <input type="text" id="searchFood" class="input-box" placeholder="Cari makanan favoritmu..." style="width:100%; padding:10px 14px; border:1px solid var(--border-color); border-radius:12px; outline:none; font-size:12px;">
+    </div>
+
+    <div id="foodListContainer">
+        <div class="food-card" onclick="pilihMenu('Seblak Mantap Cikur', 18000)">
+            <img src="https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=150" class="food-img" alt="Seblak">
+            <div class="food-info">
+                <h4>Seblak Mantap Cikur</h4>
+                <p>Kuah pedas kencur khas Sunda dengan topping lengkap.</p>
+                <div class="food-price">Rp 18.000</div>
+            </div>
+        </div>
+        <div class="food-card" onclick="pilihMenu('Nasi Liwet Sunda Komplit', 25000)">
+            <img src="https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" class="food-img" alt="Nasi Liwet">
+            <div class="food-info">
+                <h4>Nasi Liwet Sunda Komplit</h4>
+                <p>Disajikan dengan ikan asin, tahu, tempe, lalapan & sambal terasi.</p>
+                <div class="food-price">Rp 25.000</div>
+            </div>
+        </div>
+        <div class="food-card" onclick="pilihMenu('Ayam Bakar Madu Cikur', 22000)">
+            <img src="https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150" class="food-img" alt="Ayam Bakar">
+            <div class="food-info">
+                <h4>Ayam Bakar Madu Cikur</h4>
+                <p>Ayam empuk dibalut bumbu rempah bakar madu manis gurih.</p>
+                <div class="food-price">Rp 22.000</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="checkout-box" id="cartSection" style="display:none;">
+        <div style="font-size: 11px; color: #94a3b8; font-weight: 700;">Menu Terpilih</div>
+        <h3 id="cartItemName" style="font-size: 14px; font-weight: 800; margin: 2px 0 6px 0;">-</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+            <span>Total Pembayaran:</span>
+            <span id="cartItemPrice" style="color: #FFD700; font-weight: 800; font-family: var(--font-mono);">-</span>
+        </div>
+        <button class="btn-order" onclick="prosesPesanFood()">Pesan Sekarang via CikurPay ⚡</button>
+    </div>
+</div>
+
+<script>
+let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { saldo: 125000 };
+let selectedFood = { name: "", price: 0 };
+
+function pilihMenu(name, price) {
+    selectedFood = { name, price };
+    document.getElementById("cartSection").style.display = "block";
+    document.getElementById("cartItemName").innerText = name;
+    document.getElementById("cartItemPrice").innerText = "Rp " + price.toLocaleString('id-ID');
+}
+
+function prosesPesanFood() {
+    if (userProfile.saldo < selectedFood.price) {
+        alert("[!] Saldo CikurPay tidak mencukupi untuk memesan menu ini.");
+        return;
+    }
+    userProfile.saldo -= selectedFood.price;
+    localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+    alert(`[SUKSES] Pesanan ${selectedFood.name} berhasil dibuat! Saldo CikurPay telah dipotong.`);
+    window.location.href = "index.html";
+}
+</script>
 </body>
 </html>
