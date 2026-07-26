@@ -1255,23 +1255,44 @@ function manageBotpressWidgetVisibility(hide) {
 }
 
 function initRobotAutoSlide() {
-    let slideState = false; 
-    setInterval(() => {
-        if (isModalOpen) return;
+    const SHOW_TIME = 7000;   // tampil
+    const HIDE_TIME = 3000;   // mengintip
+    function animateRobot(){
 
-        const bpContainer = document.getElementById("bp-web-widget-container") || document.querySelector("bp-widget") || document.querySelector(".bp-widget-web");
-        if (bpContainer) {
-            bpContainer.style.transition = "transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.6s ease";
-            slideState = !slideState;
-            if (slideState) {
-                bpContainer.style.transform = "translateX(110%)";
-                bpContainer.style.opacity = "0.2";
-            } else {
-                bpContainer.style.transform = "translateX(0)";
-                bpContainer.style.opacity = "1";
-            }
+        if(isModalOpen){
+            setTimeout(animateRobot,1000);
+            return;
         }
-    }, 7000);
+        const bpContainer =
+            document.getElementById("bp-web-widget-container") ||
+            document.querySelector("bp-widget") ||
+            document.querySelector(".bp-widget-web");
+
+        if(!bpContainer){
+            setTimeout(animateRobot,1000);
+            return;
+        }
+        bpContainer.style.transition =
+            "transform .8s cubic-bezier(.22,.61,.36,1)";
+
+        // Robot tampil penuh
+        bpContainer.style.transform = "translateX(0)";
+        setTimeout(()=>{
+
+            // Robot mengintip dari samping
+            bpContainer.style.transform = "translateX(75%)";
+
+            setTimeout(()=>{
+
+                // Robot kembali muncul
+                bpContainer.style.transform = "translateX(0)";
+
+                setTimeout(animateRobot,SHOW_TIME);
+
+            },HIDE_TIME);
+        },SHOW_TIME);
+    }
+    animateRobot();
 }
 
 // MINI & HERO SLIDER
