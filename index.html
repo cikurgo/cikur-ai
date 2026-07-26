@@ -193,12 +193,12 @@ body{
 
 .slider{
     width: 100%;
-    aspect-ratio: 16 / 7; /* Disesuaikan agar pas dengan bentuk gambar banner landscape */
+    aspect-ratio: 16 / 7;
     overflow: hidden;
     position: relative;
     border-radius: 20px;
     box-shadow: 0 8px 20px rgba(0,0,0,0.06);
-    background: transparent; /* Menghilangkan background gelap kosong */
+    background: transparent;
     cursor: pointer;
 }
 
@@ -213,7 +213,7 @@ body{
     height: 100%;
     min-width: 100%;
     display: block;
-    object-fit: cover; /* Menyesuaikan gambar agar mengisi penuh area slider tanpa terdistorsi */
+    object-fit: cover;
 }
 .dots{
     display: flex;
@@ -1050,7 +1050,7 @@ textarea.input-box {
 
         <div style="background: #fff; border: 1px solid var(--border-color); border-radius: 16px; padding: 14px; margin-bottom: 10px;">
             <h4 style="font-size: 13px; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">📢 Pembaruan Sistem CGO v3.9</h4>
-            <p style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">Navigasi bawah tetap (fixed) dan widget robot CGO otomatis tersembunyi saat dibutuhkan.</p>
+            <p style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">Navigasi bawah tetap (fixed) dan widget robot CGO kini memiliki fitur slide otomatis muncul-hilang.</p>
         </div>
     </div>
 
@@ -1148,6 +1148,8 @@ window.addEventListener("DOMContentLoaded", () => {
     if(userProfile.name === "CIKUR USER") {
         setTimeout(bukaModalRegistrasi, 600);
     }
+    // Mulai animasi slide otomatis muncul-hilang untuk widget robot
+    initRobotAutoSlide();
 });
 
 function switchTab(tabName) {
@@ -1217,7 +1219,7 @@ setInterval(() => {
     }
 }, 4000);
 
-// BOTPRESS CHAT & WIDGET VISIBILITY
+// BOTPRESS CHAT & WIDGET VISIBILITY DENGAN FITUR SLIDE OTOMATIS (MUNCUL-HILANG)
 const chatBtn = document.getElementById("chatBtn");
 if(chatBtn) {
     chatBtn.addEventListener("click", () => {
@@ -1231,11 +1233,14 @@ if(chatBtn) {
     });
 }
 
+let isModalOpen = false;
+
 function manageBotpressWidgetVisibility(hide) {
+    isModalOpen = hide;
     const checkInterval = setInterval(() => {
         const bpContainer = document.getElementById("bp-web-widget-container") || document.querySelector("bp-widget") || document.querySelector(".bp-widget-web");
         if(bpContainer) {
-            bpContainer.style.transition = "transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease";
+            bpContainer.style.transition = "transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease";
             if(hide) {
                 bpContainer.style.transform = "translateX(120%)";
                 bpContainer.style.opacity = "0";
@@ -1248,6 +1253,30 @@ function manageBotpressWidgetVisibility(hide) {
             clearInterval(checkInterval);
         }
     }, 300);
+}
+
+// Fungsi Slide Otomatis Muncul-Hilang untuk Robot Kecil agar tidak menghalangi navigasi
+function initRobotAutoSlide() {
+    let slideState = false; // false = muncul normal, true = tersembunyi (slide ke samping)
+    setInterval(() => {
+        // Jangan jalankan slide otomatis jika modal sedang terbuka
+        if (isModalOpen) return;
+
+        const bpContainer = document.getElementById("bp-web-widget-container") || document.querySelector("bp-widget") || document.querySelector(".bp-widget-web");
+        if (bpContainer) {
+            bpContainer.style.transition = "transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.6s ease";
+            slideState = !slideState;
+            if (slideState) {
+                // Sembunyikan ke samping (slide hilang) agar navigasi bawah leluasa
+                bpContainer.style.transform = "translateX(110%)";
+                bpContainer.style.opacity = "0.2";
+            } else {
+                // Munculkan kembali ke posisi semula
+                bpContainer.style.transform = "translateX(0)";
+                bpContainer.style.opacity = "1";
+            }
+        }
+    }, 7000); // Berganti status setiap 7 detik secara otomatis
 }
 
 // MINI & HERO SLIDER
@@ -1626,7 +1655,7 @@ if(btnAssistant) {
                                     <div class="invoice-row"><span>Metode Bayar</span><span>${selectedPaymentMethod.toUpperCase()}</span></div>
                                     <div class="invoice-row" style="border-top:1px dashed #cbd5e1; margin-top:8px; padding-top:6px;">
                                         <span style="font-weight:800; color:#0f172a;">Total Tagihan</span>
-                                        <span style="font-weight:800; color:#E50914; font-size:14px;">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span>
+                                        <span style="font-weight:800; color:#E50914; font-size:14px;">Rp ${finalCalculatedTopup = finalCalculatedTotal.toLocaleString('id-ID')}</span>
                                     </div>
                                 </div>
                                 <div style="display:flex; gap:8px; margin-top:10px;">
