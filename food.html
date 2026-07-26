@@ -3,14 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CIKUR Food Market - Super App Engine v3.9</title>
+<title>CIKUR GO FOOD</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root {
     --primary-red: #E50914;
     --primary-red-hover: #b80710;
     --dark-bg: #0f172a;
-    --dark-card: #1e293b;
     --body-bg: #f1f5f9;
     --container-bg: #f8fafc;
     --border-color: #e2e8f0;
@@ -61,9 +60,7 @@ body{
     }
 }
 
-/* ===========================
-   HEADER & NAVIGATION
-=========================== */
+/* Header */
 .app-header {
     display: flex;
     align-items: center;
@@ -99,69 +96,20 @@ body{
     font-size: 15px;
     font-weight: 800;
     color: var(--text-main);
+    letter-spacing: 0.5px;
 }
 
-/* ===========================
-   MITRA PANEL SECTION
-=========================== */
-.mitra-toggle-btn {
-    background: #fee2e2;
-    color: var(--primary-red);
-    border: 1px solid var(--primary-red);
-    border-radius: 12px;
-    padding: 8px 12px;
-    font-size: 11px;
-    font-weight: 800;
-    cursor: pointer;
+/* Search Box */
+.search-box-wrapper {
     margin-bottom: 14px;
-    text-align: center;
-    transition: 0.2s;
-}
-
-.mitra-toggle-btn:hover {
-    background: var(--primary-red);
-    color: #fff;
-}
-
-.mitra-panel {
-    background: #fff;
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
-    padding: 14px;
-    margin-bottom: 16px;
-    display: none;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
-}
-
-.mitra-panel.active {
-    display: block;
-    animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.form-group {
-    margin-bottom: 10px;
-}
-
-.form-group label {
-    display: block;
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--text-muted);
-    margin-bottom: 4px;
-    text-transform: uppercase;
 }
 
 .input-box {
     width: 100%;
-    padding: 10px 12px;
+    padding: 10px 14px;
     background: #fff;
     border: 1px solid #cbd5e1;
-    border-radius: 10px;
+    border-radius: 12px;
     font-size: 12px;
     font-weight: 600;
     color: var(--text-main);
@@ -173,37 +121,28 @@ body{
     border-color: var(--primary-red);
 }
 
-.btn-mitra-submit {
-    width: 100%;
-    height: 40px;
-    background: var(--dark-bg);
-    color: #fff;
-    border: none;
-    border-radius: 10px;
+/* Resto Section / Kolom Mitra */
+.resto-section {
+    margin-bottom: 16px;
+}
+
+.resto-title {
+    font-size: 13px;
     font-weight: 800;
-    font-size: 12px;
-    cursor: pointer;
-    margin-top: 6px;
-    transition: 0.2s;
+    color: var(--text-main);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
-.btn-mitra-submit:hover {
-    background: var(--primary-red);
-}
-
-/* ===========================
-   FOOD CARDS SECTION
-=========================== */
-.search-box-wrapper {
-    margin-bottom: 14px;
-}
-
+/* Food Cards */
 .food-card {
     background: #fff;
     border: 1px solid var(--border-color);
     border-radius: 16px;
     padding: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
     display: flex;
     gap: 12px;
     align-items: center;
@@ -218,7 +157,6 @@ body{
     transform: translateY(-2px);
 }
 
-/* Pengaturan Tampilan Foto Makanan */
 .food-img {
     width: 70px;
     height: 70px;
@@ -253,9 +191,7 @@ body{
     font-family: var(--font-mono);
 }
 
-/* ===========================
-   CHECKOUT / CART SECTION
-=========================== */
+/* Checkout Box */
 .checkout-box {
     background: var(--dark-bg);
     color: #fff;
@@ -294,166 +230,148 @@ body{
         <div style="width: 38px;"></div>
     </div>
 
-    <!-- Tombol Akses Panel Mitra Resto -->
-    <button class="mitra-toggle-btn" id="btnToggleMitra">💼 Daftar / Tambah Menu Resto Mitra</button>
-
-    <!-- Panel Form Input Khusus Mitra -->
-    <div class="mitra-panel" id="mitraPanel">
-        <h3 style="font-size: 13px; font-weight: 800; color: var(--text-main); margin-bottom: 10px;">Form Tambah Menu Resto Mitra</h3>
-        <div class="form-group">
-            <label>Nama Makanan / Menu</label>
-            <input type="text" id="mitraMenuName" class="input-box" placeholder="Contoh: Es Teh Manis Cikur">
-        </div>
-        <div class="form-group">
-            <label>Harga (Rp)</label>
-            <input type="number" id="mitraMenuPrice" class="input-box" placeholder="Contoh: 5000">
-        </div>
-        <div class="form-group">
-            <label>Deskripsi Singkat</label>
-            <input type="text" id="mitraMenuDesc" class="input-box" placeholder="Deskripsi rasa atau bahan...">
-        </div>
-        <div class="form-group">
-            <label>URL Gambar (Opsional)</label>
-            <input type="text" id="mitraMenuImg" class="input-box" placeholder="Kosongkan jika pakai default">
-        </div>
-        <button class="btn-mitra-submit" id="btnAddMitraMenu">Publikasikan Menu Mitra ✓</button>
-    </div>
-
     <!-- Kotak Pencarian Makanan -->
     <div class="search-box-wrapper">
-        <input type="text" id="searchFood" class="input-box" placeholder="Cari makanan favoritmu..." style="padding:10px 14px;">
+        <input type="text" id="searchFood" class="input-box" placeholder="Cari makanan favoritmu...">
     </div>
 
-    <!-- Daftar Makanan (Default + Hasil Input Mitra) -->
+    <!-- Daftar Berdasarkan Kolom Mitra / Resto -->
     <div id="foodListContainer">
-        <!-- Elemen dimuat dinamis melalui JavaScript -->
+        <!-- Render dinamis per Resto -->
     </div>
 
-    <!-- Kotak Keranjang & Checkout -->
-    <!-- Pilihan Metode Pembayaran -->
-<div style="margin: 10px 0;">
-    <div style="font-size: 11px; color: #94a3b8; font-weight: 700; margin-bottom: 4px;">Pilih Metode Pembayaran</div>
-    <select id="metodePembayaran" class="input-box" style="background: #1e293b; color: #fff; border-color: #334155;">
-        <option value="CikurPay">Dompet CikurPay (Potong Saldo)</option>
-        <option value="QRIS">QRIS (Scan & Pay)</option>
-        <option value="Tunai">Bayar Tunai / Cash ke Driver</option>
-    </select>
-</div>
+    <!-- Kotak Keranjang & Checkout Sederhana -->
     <div class="checkout-box" id="cartSection" style="display:none;">
         <div style="font-size: 11px; color: #94a3b8; font-weight: 700;">Menu Terpilih</div>
         <h3 id="cartItemName" style="font-size: 14px; font-weight: 800; margin: 2px 0 6px 0;">-</h3>
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 8px;">
             <span>Total Pembayaran:</span>
             <span id="cartItemPrice" style="color: #FFD700; font-weight: 800; font-family: var(--font-mono);">-</span>
         </div>
-        <button class="btn-order" onclick="prosesPesanFood()">Pesan Sekarang via CikurPay ⚡</button>
+        <button class="btn-order" onclick="prosesPesanFood()">Pesan Sekarang ⚡</button>
     </div>
 </div>
 
 <script>
-// Mengambil data profil dan saldo pengguna dari localStorage
 let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { saldo: 125000 };
 let selectedFood = { name: "", price: 0 };
 
-// Daftar menu default awal (URL foto bisa diganti langsung pada properti 'img' di bawah)
-let defaultFoodList = [
-    { 
-        name: "Seblak Mantap Cikur", 
-        price: 18000, 
-        desc: "Kuah pedas kencur khas Sunda dengan topping lengkap.", 
-        img: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=150" 
+// Data dikelompokkan per Kolom Mitra / Resto
+let restoList = [
+    {
+        restoName: "🍜 Dapur 1",
+        items: [
+            { name: "Seblak Mantap Cikur", price: 18000, desc: "Kuah pedas kencur khas Sunda dengan topping lengkap.", img: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=150" },
+            { name: "Seblak Mercon Tulang", price: 21000, desc: "Seblak kuah kental dengan tambahan tulang rangu gurih pedas.", img: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" }
+        ]
     },
-    { 
-        name: "Nasi Liwet Sunda Komplit", 
-        price: 25000, 
-        desc: "Disajikan dengan ikan asin, tahu, tempe, lalapan & sambal terasi.", 
-        img: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" 
-    },
-    { 
-        name: "Ayam Bakar Madu Cikur", 
-        price: 22000, 
-        desc: "Ayam empuk dibalut bumbu rempah bakar madu manis gurih.", 
-        img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150" 
+    {
+        restoName: "🍛 Dapur 2",
+        items: [
+            { name: "Nasi Liwet Sunda Komplit", price: 25000, desc: "Disajikan dengan ikan asin, tahu, tempe, lalapan & sambal terasi.", img: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" },
+            { name: "Ayam Bakar Madu Cikur", price: 22000, desc: "Ayam empuk dibalut bumbu rempah bakar madu manis gurih.", img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150" }
+        ]
+    }
+];
+    {
+        restoName: "🍛 Dapur 3",
+        items: [
+            { name: "Nasi Liwet Sunda Komplit", price: 25000, desc: "Disajikan dengan ikan asin, tahu, tempe, lalapan & sambal terasi.", img: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" },
+            { name: "Ayam Bakar Madu Cikur", price: 22000, desc: "Ayam empuk dibalut bumbu rempah bakar madu manis gurih.", img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150" }
+        ]
+    }
+];
+    {
+        restoName: "🍛 Dapur 4",
+        items: [
+            { name: "Nasi Liwet Sunda Komplit", price: 25000, desc: "Disajikan dengan ikan asin, tahu, tempe, lalapan & sambal terasi.", img: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" },
+            { name: "Ayam Bakar Madu Cikur", price: 22000, desc: "Ayam empuk dibalut bumbu rempah bakar madu manis gurih.", img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150" }
+        ]
+    }
+];
+    {
+        restoName: "🍛 Dapur 5",
+        items: [
+            { name: "Nasi Liwet Sunda Komplit", price: 25000, desc: "Disajikan dengan ikan asin, tahu, tempe, lalapan & sambal terasi.", img: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" },
+            { name: "Ayam Bakar Madu Cikur", price: 22000, desc: "Ayam empuk dibalut bumbu rempah bakar madu manis gurih.", img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150" }
+        ]
+    }
+];
+    {
+        restoName: "🍛 Dapur 6",
+        items: [
+            { name: "Nasi Liwet Sunda Komplit", price: 25000, desc: "Disajikan dengan ikan asin, tahu, tempe, lalapan & sambal terasi.", img: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" },
+            { name: "Ayam Bakar Madu Cikur", price: 22000, desc: "Ayam empuk dibalut bumbu rempah bakar madu manis gurih.", img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150" }
+        ]
+    }
+];
+    {
+        restoName: "🍛 Dapur 7",
+        items: [
+            { name: "Nasi Liwet Sunda Komplit", price: 25000, desc: "Disajikan dengan ikan asin, tahu, tempe, lalapan & sambal terasi.", img: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" },
+            { name: "Ayam Bakar Madu Cikur", price: 22000, desc: "Ayam empuk dibalut bumbu rempah bakar madu manis gurih.", img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150" }
+        ]
+    }
+];
+    {
+        restoName: "🍛 Dapur 8",
+        items: [
+            { name: "Nasi Liwet Sunda Komplit", price: 25000, desc: "Disajikan dengan ikan asin, tahu, tempe, lalapan & sambal terasi.", img: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" },
+            { name: "Ayam Bakar Madu Cikur", price: 22000, desc: "Ayam empuk dibalut bumbu rempah bakar madu manis gurih.", img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150" }
+        ]
     }
 ];
 
-// Mengambil data menu tambahan dari Mitra yang tersimpan di localStorage
-let mitraFoodList = JSON.parse(localStorage.getItem('cikur_mitra_foods')) || [];
-let allFoodItems = [...defaultFoodList, ...mitraFoodList];
-
-// Fungsi untuk merender daftar makanan ke dalam antarmuka
-function renderFoodList(items) {
+function renderRestoList(data) {
     let container = document.getElementById("foodListContainer");
     container.innerHTML = "";
-    
-    if(items.length === 0) {
-        container.innerHTML = `<p style="text-align:center; color:var(--text-muted); font-size:12px; padding:20px;">Belum ada menu tersedia.</p>`;
+
+    if(data.length === 0) {
+        container.innerHTML = `<p style="text-align:center; color:var(--text-muted); font-size:12px; padding:20px;">Menu tidak ditemukan.</p>`;
         return;
     }
 
-    items.forEach((item) => {
-        let card = document.createElement("div");
-        card.className = "food-card";
-        card.onclick = () => pilihMenu(item.name, item.price);
-        card.innerHTML = `
-            <img src="${item.img || 'https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150'}" class="food-img" alt="${item.name}">
-            <div class="food-info">
-                <h4>${item.name}</h4>
-                <p>${item.desc}</p>
-                <div class="food-price">Rp ${item.price.toLocaleString('id-ID')}</div>
-            </div>
-        `;
-        container.appendChild(card);
+    data.forEach(resto => {
+        let section = document.createElement("div");
+        section.className = "resto-section";
+        
+        let titleHTML = `<div class="resto-title">${resto.restoName}</div>`;
+        let itemsHTML = "";
+
+        resto.items.forEach(item => {
+            itemsHTML += `
+                <div class="food-card" onclick="pilihMenu('${item.name}', ${item.price})">
+                    <img src="${item.img}" class="food-img" alt="${item.name}">
+                    <div class="food-info">
+                        <h4>${item.name}</h4>
+                        <p>${item.desc}</p>
+                        <div class="food-price">Rp ${item.price.toLocaleString('id-ID')}</div>
+                    </div>
+                </div>
+            `;
+        });
+
+        section.innerHTML = titleHTML + itemsHTML;
+        container.appendChild(section);
     });
 }
 
-// Jalankan render awal saat halaman dimuat
-renderFoodList(allFoodItems);
+// Render awal
+renderRestoList(restoList);
 
-// Tombol Toggle untuk Membuka/Menutup Panel Mitra Resto
-document.getElementById("btnToggleMitra").addEventListener("click", () => {
-    let panel = document.getElementById("mitraPanel");
-    panel.classList.toggle("active");
-});
-
-// Proses Menyimpan Menu Baru dari Mitra
-document.getElementById("btnAddMitraMenu").addEventListener("click", () => {
-    let name = document.getElementById("mitraMenuName").value.trim();
-    let price = parseInt(document.getElementById("mitraMenuPrice").value);
-    let desc = document.getElementById("mitraMenuDesc").value.trim() || "Menu spesial buatan Mitra Cikur.";
-    let img = document.getElementById("mitraMenuImg").value.trim();
-
-    if(!name || !price) {
-        alert("[!] Mohon isi nama menu dan harga makanan.");
-        return;
-    }
-
-    let newMenu = { name, price, desc, img };
-    mitraFoodList.push(newMenu);
-    localStorage.setItem('cikur_mitra_foods', JSON.stringify(mitraFoodList));
-
-    // Perbarui daftar global dan tampilkan ulang
-    allFoodItems = [...defaultFoodList, ...mitraFoodList];
-    renderFoodList(allFoodItems);
-
-    // Reset Form Input
-    document.getElementById("mitraMenuName").value = "";
-    document.getElementById("mitraMenuPrice").value = "";
-    document.getElementById("mitraMenuDesc").value = "";
-    document.getElementById("mitraMenuImg").value = "";
-    document.getElementById("mitraPanel").classList.remove("active");
-
-    alert("[SUKSES] Menu baru berhasil ditambahkan oleh Mitra Resto!");
-});
-
-// Fitur Pencarian Makanan Secara Real-time
+// Pencarian Makanan
 document.getElementById("searchFood").addEventListener("input", function(e) {
     let keyword = e.target.value.toLowerCase();
-    let filtered = allFoodItems.filter(i => i.name.toLowerCase().includes(keyword) || i.desc.toLowerCase().includes(keyword));
-    renderFoodList(filtered);
+    let filteredResto = restoList.map(resto => {
+        let filteredItems = resto.items.filter(item => 
+            item.name.toLowerCase().includes(keyword) || item.desc.toLowerCase().includes(keyword)
+        );
+        return { restoName: resto.restoName, items: filteredItems };
+    }).filter(resto => resto.items.length > 0);
+
+    renderRestoList(filteredResto);
 });
 
-// Fungsi Memilih Menu untuk Masuk ke Kotak Pembayaran
 function pilihMenu(name, price) {
     selectedFood = { name, price };
     document.getElementById("cartSection").style.display = "block";
@@ -461,42 +379,44 @@ function pilihMenu(name, price) {
     document.getElementById("cartItemPrice").innerText = "Rp " + price.toLocaleString('id-ID');
 }
 
-// Proses Pemesanan dan Potong Saldo CikurPay
 function prosesPesanFood() {
     if (userProfile.saldo < selectedFood.price) {
-        alert("[!] Saldo CikurPay tidak mencukupi untuk memesan menu ini. Silakan lakukan Top-Up.");
+        alert("[!] Saldo CikurPay tidak mencukupi.");
         return;
     }
     
     userProfile.saldo -= selectedFood.price;
     localStorage.setItem('cikur_user', JSON.stringify(userProfile));
-    
-    alert(`[SUKSES] Pesanan ${selectedFood.name} berhasil dibuat! Saldo CikurPay telah dipotong.`);
+
+    // Catat ke riwayat pesanan & transaksi global
+    let riwayatPesanan = JSON.parse(localStorage.getItem('cikur_orders')) || [];
+    let riwayatTransaksi = JSON.parse(localStorage.getItem('cikur_transactions')) || [];
+    let kodeTrx = 'TRX-' + Math.floor(100000 + Math.random() * 900000);
+    let waktuSekarang = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) + ' • ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+    riwayatPesanan.unshift({
+        kode: kodeTrx,
+        layanan: selectedFood.name,
+        kategori: 'CIKUR Food',
+        harga: selectedFood.price,
+        status: 'Diproses Resto',
+        waktu: waktuSekarang
+    });
+
+    riwayatTransaksi.unshift({
+        kode: kodeTrx,
+        ket: `Pembayaran ${selectedFood.name}`,
+        nominal: -selectedFood.price,
+        waktu: waktuSekarang,
+        status: 'Berhasil'
+    });
+
+    localStorage.setItem('cikur_orders', JSON.stringify(riwayatPesanan));
+    localStorage.setItem('cikur_transactions', JSON.stringify(riwayatTransaksi));
+
+    alert(`[SUKSES] Pesanan ${selectedFood.name} berhasil dibuat!`);
     window.location.href = "index.html";
 }
-    function prosesPesanFood() {
-    let metode = document.getElementById("metodePembayaran").value;
-
-    // Jika pakai CikurPay, cek saldo
-    if (metode === "CikurPay") {
-        if (userProfile.saldo < selectedFood.price) {
-            alert("[!] Saldo CikurPay tidak mencukupi untuk memesan menu ini.");
-            return;
-        }
-        userProfile.saldo -= selectedFood.price;
-        localStorage.setItem('cikur_user', JSON.stringify(userProfile));
-    } else if (metode === "QRIS") {
-        alert("[!] Silakan selesaikan pembayaran via QRIS yang akan muncul setelah ini.");
-    } else {
-        alert("[!] Pesanan dicatat. Siapkan uang tunai pas saat pesanan tiba.");
-    }
-    
-    // Catat riwayat dengan menyertakan info metode pembayaran
-    simpanRiwayatTransaksi(`${selectedFood.name} (${metode})`, selectedFood.price, 'CIKUR Food');
-    
-    alert(`[SUKSES] Pesanan ${selectedFood.name} berhasil dibuat menggunakan ${metode}!`);
-    window.location.href = "index.html";
-    }
 </script>
 
 </body>
