@@ -1218,7 +1218,7 @@ setInterval(() => {
     }
 }, 4000);
 
-// BOTPRESS CHAT & WIDGET VISIBILITY DENGAN FITUR SLIDE OTOMATIS (CSS INJECTION)
+// 1. Tombol Chat Manual
 const chatBtn = document.getElementById("chatBtn");
 if(chatBtn) {
     chatBtn.addEventListener("click", () => {
@@ -1232,14 +1232,16 @@ if(chatBtn) {
     });
 }
 
+// 2. Status Modal
 let isModalOpen = false;
 
 function manageBotpressWidgetVisibility(hide) {
     isModalOpen = hide;
-    const bpContainer = document.getElementById("bp-web-widget-container") || document.querySelector("bp-widget") || document.querySelector(".bp-widget-web") || document.querySelector("#bp-web-widget");
-    
-    // Cari elemen iframe atau kontainer utama Botpress
-    let targetEl = bpContainer || document.querySelector("iframe[title*='Botpress']");
+    const targetEl = document.getElementById("bp-web-widget-container") || 
+                     document.querySelector("bp-widget") || 
+                     document.querySelector(".bp-widget-web") || 
+                     document.querySelector("#bp-web-widget") || 
+                     document.querySelector("iframe[title*='Botpress']");
     
     if(targetEl) {
         targetEl.style.transition = "all 0.5s cubic-bezier(0.16, 1, 0.3, 1)";
@@ -1254,12 +1256,12 @@ function manageBotpressWidgetVisibility(hide) {
         }
     }
 }
-    
-// TAMBAHKAN KODE INI SEBAGAI PENGGANTI:
+
+// 3. FITUR SCROLL HIDE & SHOW (Otomatis mendeteksi scroll layar)
 let lastScrollTop = 0;
 
 window.addEventListener("scroll", function() {
-    if (typeof isModalOpen !== 'undefined' && isModalOpen) return;
+    if (isModalOpen) return;
 
     let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
     
@@ -1273,13 +1275,13 @@ window.addEventListener("scroll", function() {
 
     targetEl.style.transition = "transform 0.4s ease, opacity 0.4s ease";
 
+    // Jika scroll ke bawah lebih dari 50px
     if (currentScroll > lastScrollTop && currentScroll > 50) {
-        // Scroll ke bawah -> Robot menghilang
         targetEl.style.transform = "translateX(120%)";
         targetEl.style.opacity = "0";
         targetEl.style.pointerEvents = "none";
     } else {
-        // Scroll ke atas -> Robot muncul lagi
+        // Jika scroll ke atas
         targetEl.style.transform = "translateX(0)";
         targetEl.style.opacity = "1";
         targetEl.style.pointerEvents = "auto";
