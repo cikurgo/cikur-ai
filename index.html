@@ -1630,6 +1630,41 @@ if(btnAssistant) {
                         });
                     });
 
+
+                    // Tambahkan fungsi ini di dalam script index.html atau gabungkan saat transaksi sukses
+function simpanRiwayatTransaksi(namaLayanan, harga, kategori) {
+    let riwayatPesanan = JSON.parse(localStorage.getItem('cikur_orders')) || [];
+    let riwayatTransaksi = JSON.parse(localStorage.getItem('cikur_transactions')) || [];
+    
+    let kodeTrx = 'TRX-' + Math.floor(100000 + Math.random() * 900000);
+    let waktuSekarang = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) + ' • ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+    // Data untuk Tab Pesanan
+    let pesananBaru = {
+        kode: kodeTrx,
+        layanan: namaLayanan,
+        kategori: kategori, // 'Food' atau 'Ride'
+        harga: harga,
+        status: 'Diproses / Menuju Lokasi',
+        waktu: waktuSekarang
+    };
+
+    // Data untuk Tab Transaksi Dompet
+    let transaksiBaru = {
+        kode: kodeTrx,
+        ket: `Pembayaran ${namaLayanan}`,
+        nominal: -harga,
+        waktu: waktuSekarang,
+        status: 'Berhasil'
+    };
+
+    riwayatPesanan.unshift(pesananBaru);
+    riwayatTransaksi.unshift(transaksiBaru);
+
+    localStorage.setItem('cikur_orders', JSON.stringify(riwayatPesanan));
+    localStorage.setItem('cikur_transactions', JSON.stringify(riwayatTransaksi));
+}
+                    
                     function bindBayarAction() {
                         document.getElementById("btnEksekusiBayar").addEventListener("click", () => {
                             if(selectedPaymentMethod === "cikurpay") {
