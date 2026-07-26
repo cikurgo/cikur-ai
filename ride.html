@@ -341,6 +341,27 @@ function prosesPesanRide() {
     alert(`[SUKSES] Pesanan ${selectedRide.type} ke "${destination}" berhasil dibuat! Driver sedang menuju lokasimu.`);
     window.location.href = "index.html";
 }
+    function prosesPesanRide() {
+    let destination = document.getElementById("destLocation").value.trim();
+    if(!destination) {
+        alert("[!] Mohon masukkan tujuan perjalanan.");
+        return;
+    }
+
+    if (userProfile.saldo < selectedRide.price) {
+        alert("[!] Saldo CikurPay tidak mencukupi.");
+        return;
+    }
+    
+    userProfile.saldo -= selectedRide.price;
+    localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+    
+    // Catat ke riwayat global aplikasi
+    simpanRiwayatTransaksi(`${selectedRide.type} ke ${destination}`, selectedRide.price, 'CIKUR Ride');
+    
+    alert(`[SUKSES] Pesanan ${selectedRide.type} berhasil dibuat!`);
+    window.location.href = "index.html";
+}
 </script>
 
 </body>
