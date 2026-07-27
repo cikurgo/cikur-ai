@@ -283,7 +283,7 @@ body{
     aspect-ratio: 1 / 1;
     max-width: 88px;
     border-radius: 22px;
-    background: #fff0f0; /* Latar belakang pastel lembut agar maskot hidup */
+    background: #fff0f0; 
     display: flex;
     align-items: center;
     justify-content: center;
@@ -935,7 +935,7 @@ textarea.input-box {
             </div>
         </div>
 
-        <!-- Grid Layanan Utama (Core Ecosystem - Diperbarui & Ditingkatkan) -->
+        <!-- Grid Layanan Utama (Core Ecosystem) -->
         <div class="services-section">
             <div class="services-title">Core Ecosystem</div>
             <div class="menu-grid">
@@ -1459,7 +1459,7 @@ document.getElementById("btnOpenWallet").addEventListener("click", () => {
     });
 });
 
-// MODUL LAYANAN ASSISTANT
+// MODUL LAYANAN ASSISTANT (UPDATED DENGAN SISTEM KONFIRMASI DEAL)
 const btnAssistant = document.getElementById("btnAssistant");
 if(btnAssistant) {
     btnAssistant.addEventListener("click", function(e){
@@ -1556,7 +1556,9 @@ if(btnAssistant) {
                         <span class="total-label">Total Tagihan :</span>
                         <span class="total-value" id="txtTotalFinal">${info.hargaStr}</span>
                     </div>
-                    <button class="btn-pesan-form" id="btnLanjutBayar">Lanjut Pembayaran ➔</button>
+                    
+                    <!-- Tombol Awal: Request Deal / Konfirmasi Kesepakatan -->
+                    <button class="btn-pesan-form" id="btnRequestDeal" style="background:#0f172a;">Kirim Detail & Minta DEAL 🤝</button>
                 `;
 
                 let currentExtraCost = 0;
@@ -1574,7 +1576,8 @@ if(btnAssistant) {
                     txtTotalFinal.innerText = "Rp " + grandTotal.toLocaleString('id-ID');
                 });
 
-                document.getElementById("btnLanjutBayar").addEventListener("click", () => {
+                // Handler ketika User mengirim detail untuk DEAL
+                document.getElementById("btnRequestDeal").addEventListener("click", () => {
                     const tanggal = document.getElementById("inputTanggal").value;
                     const lokasi = document.getElementById("inputLokasi").value;
                     let finalCalculatedTotal = info.hargaBase + currentExtraCost;
@@ -1584,7 +1587,33 @@ if(btnAssistant) {
                         return;
                     }
 
+                    // Tampilkan status Menunggu DEAL / Simulasi Kesepakatan
                     dynamicPaketContent.innerHTML = `
+                        <div style="text-align:center; padding: 20px 10px;">
+                            <div style="font-size: 36px; margin-bottom: 8px;">⏳</div>
+                            <h3 style="font-size: 14px; font-weight: 800; color: var(--text-main); margin-bottom: 6px;">Menunggu Kesepakatan (DEAL)</h3>
+                            <p style="font-size: 11px; color: var(--text-muted); line-height: 1.4; margin-bottom: 16px;">
+                                Detail pesanan Anda telah dikirimkan ke tim/asisten CGO. Tombol pembayaran akan aktif setelah status dinyatakan <strong>DEAL</strong> untuk menghindari risiko refund.
+                            </p>
+                            <div style="background: #fff; border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; margin-bottom: 16px; text-align: left;">
+                                <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
+                                <div class="invoice-row"><span>Total Biaya</span><span style="color:var(--primary-red);">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span></div>
+                            </div>
+                            <button class="btn-pesan-form" id="btnSimulasiDeal" style="background: #16a34a;">[Simulasi] Asisten Menyatakan DEAL ✓</button>
+                        </div>
+                    `;
+
+                    // Tombol Simulasi DEAL (bisa diganti otomatis via API/Chatbot jika terintegrasi penuh)
+                    document.getElementById("btnSimulasiDeal").addEventListener("click", () => {
+                        tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount);
+                    });
+                });
+
+                function tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount) {
+                    dynamicPaketContent.innerHTML = `
+                        <div style="background: #dcfce7; border: 1px solid #bbf7d0; border-radius: 12px; padding: 8px 12px; text-align: center; margin-bottom: 12px;">
+                            <span style="font-size: 11px; font-weight: 800; color: #16a34a;">🎉 Status: DEAL! Silakan Lakukan Pembayaran.</span>
+                        </div>
                         <h3 class="paket-title" style="margin-bottom:10px;">Metode Pembayaran</h3>
                         <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:12px; margin-bottom:12px;">
                             <div style="display:flex; gap:6px; margin-bottom:12px;">
@@ -1660,7 +1689,7 @@ if(btnAssistant) {
                                 <div id="printableInvoiceArea" class="invoice-card">
                                     <div class="invoice-header">
                                         <h3>CIKUR GO INVOICE</h3>
-                                        <p style="font-size:10px; color:#64748b;">Status: ${statusBayarLabel}</p>
+                                        <p style="font-size:10px; color:#64748b;">Status: ${statusBayarLabel} (DEAL Confirmed)</p>
                                     </div>
                                     <div class="invoice-row"><span>No. Invoice</span><span>${invoiceNo}</span></div>
                                     <div class="invoice-row"><span>Tanggal & Waktu</span><span>${timestampStr}</span></div>
@@ -1697,7 +1726,7 @@ if(btnAssistant) {
                     }
 
                     bindBayarAction();
-                });
+                }
             });
         });
     });
@@ -1708,4 +1737,4 @@ if(btnAssistant) {
 <script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
 
 </body>
-</html>
+            </html>
