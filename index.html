@@ -49,7 +49,7 @@ body{
     max-width: 440px;
     min-height: 100vh;
     margin: 0 auto;
-    padding: 16px 16px 100px 16px;
+    padding: 80px 16px 100px 16px; /* Padding top ditambah agar konten tidak tertutup sticky header */
     display: flex;
     flex-direction: column;
     background: var(--container-bg);
@@ -86,15 +86,21 @@ body{
 }
 
 /* ===========================
-   HEADER GO-APP
+   HEADER GO-APP (STICKY & PREMIUM)
 =========================== */
 .app-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
-    padding: 4px 2px;
-    position: relative;
+    padding: 12px 16px;
+    background: rgba(248, 250, 252, 0.9);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-color);
+    z-index: 999;
 }
 
 .user-greeting {
@@ -112,8 +118,8 @@ body{
 }
 
 .user-avatar {
-    width: 44px;
-    height: 44px;
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
     background: #fee2e2;
     border: 2px solid var(--primary-red);
@@ -122,7 +128,7 @@ body{
     justify-content: center;
     font-weight: 800;
     color: var(--primary-red);
-    font-size: 16px;
+    font-size: 14px;
     overflow: hidden;
     flex-shrink: 0;
 }
@@ -134,120 +140,123 @@ body{
 }
 
 .user-info h4 {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--text-muted);
     font-weight: 500;
 }
 
 .user-info h2 {
-    font-size: 14px;
+    font-size: 13px;
     color: var(--text-main);
     font-weight: 800;
     line-height: 1.2;
 }
 
-.user-tagline {
-    font-size: 10px;
-    color: var(--primary-red);
-    font-weight: 700;
-    margin-top: 2px;
-    display: flex;
-    align-items: center;
-    gap: 2px;
-}
-
+/* CIKURPAY WALLET CARD (REDESIGNED PREMIUM) */
 .wallet-card {
-    background: #ffffff;
-    border: 1px solid var(--border-color);
+    background: linear-gradient(135deg, #ffffff 0%, #fff5f5 100%);
+    border: 1px solid rgba(229, 9, 20, 0.2);
     border-radius: 14px;
     padding: 6px 12px;
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(229, 9, 20, 0.06);
     cursor: pointer;
-    transition: 0.2s;
+    transition: all 0.2s ease;
 }
 
 .wallet-card:hover {
     border-color: var(--primary-red);
-    background: #fff5f5;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 15px rgba(229, 9, 20, 0.12);
+}
+
+.wallet-icon-box {
+    width: 26px;
+    height: 26px;
+    background: var(--primary-red);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    flex-shrink: 0;
+}
+
+.wallet-icon-box svg {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
+}
+
+.wallet-details {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
 }
 
 .wallet-title {
-    font-size: 10px;
-    color: var(--text-muted);
-    font-weight: 600;
+    font-size: 9px;
+    color: var(--primary-red);
+    font-weight: 800;
+    letter-spacing: 0.5px;
 }
 
 .wallet-amount {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 800;
     color: var(--text-main);
     font-family: var(--font-mono);
 }
 
 /* ===========================
-   DROPDOWN SWITCHER MENU (NEW)
+   QUICK SERVICE CHIPS (REPLACING DROPDOWN)
 =========================== */
-.profile-dropdown-menu {
-    display: none;
-    position: absolute;
-    top: 65px;
-    left: 0;
-    width: 280px;
-    background: #ffffff;
-    border: 1px solid var(--border-color);
-    border-radius: 20px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-    z-index: 1001;
-    overflow: hidden;
-    animation: dropDownAnim 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+.quick-services-bar {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 4px 2px 14px 2px;
+    margin-bottom: 8px;
+    scrollbar-width: none; /* Firefox */
 }
 
-@keyframes dropDownAnim {
-    from { opacity: 0; transform: translateY(-8px); }
-    to { opacity: 1; transform: translateY(0); }
+.quick-services-bar::-webkit-scrollbar {
+    display: none; /* Safari & Chrome */
 }
 
-.dropdown-header {
-    background: #0f172a;
-    padding: 12px 14px;
-    color: #fff;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-}
-
-.dropdown-item {
+.service-chip {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 11px 14px;
-    text-decoration: none;
-    color: var(--text-main);
-    font-size: 12px;
-    font-weight: 700;
-    border-bottom: 1px solid #f1f5f9;
-    transition: 0.2s;
+    gap: 6px;
     background: #ffffff;
+    border: 1px solid var(--border-color);
+    padding: 8px 12px;
+    border-radius: 14px;
     cursor: pointer;
-    border-left: none;
-    border-right: none;
-    border-top: none;
-    width: 100%;
-    text-align: left;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+    text-decoration: none;
 }
 
-.dropdown-item:hover {
+.service-chip svg {
+    width: 16px;
+    height: 16px;
+    fill: var(--primary-red);
+}
+
+.service-chip span {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.service-chip:hover {
     background: #fff5f5;
-    color: var(--primary-red);
-    padding-left: 18px;
-}
-
-.dropdown-item span.icon {
-    font-size: 15px;
+    border-color: rgba(229, 9, 20, 0.3);
+    transform: translateY(-2px);
 }
 
 /* ===========================
@@ -968,45 +977,49 @@ textarea.input-box {
 <body>
 
 <div class="container">
-    <!-- Header -->
+    <!-- STICKY PERMANENT HEADER -->
     <div class="app-header">
         <div class="user-greeting" id="btnOpenProfile">
             <div class="user-avatar" id="headerAvatar">CK</div>
             <div class="user-info">
                 <h4>Selamat Datang,</h4>
                 <h2 id="headerNamaUser">CIKUR USER</h2>
-                <div class="user-tagline">
-                    <span>Menu / Dashboard Switch</span> 
-                    <svg style="width:10px; height:10px;" viewBox="0 0 24 24"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>
-                </div>
             </div>
         </div>
 
-        <!-- DROPDOWN SWITCHER MENU -->
-        <div class="profile-dropdown-menu" id="profileDropdownMenu">
-            <div class="dropdown-header">Pusat Akun & Navigasi CGO</div>
-            <button class="dropdown-item" id="menuOptProfile">
-                <span class="icon">👤</span> <span>Akun & Pengaturan Profil</span>
-            </button>
-            <button class="dropdown-item" onclick="location.href='agent-dashboard.html'">
-                <span class="icon">🤖</span> <span>Dashboard Agent CGO (Assistant)</span>
-            </button>
-            <button class="dropdown-item" onclick="location.href='resto-dashboard.html'">
-                <span class="icon">🍲</span> <span>Dashboard Resto CGO (Food)</span>
-            </button>
-            <button class="dropdown-item" onclick="location.href='driver-dashboard.html'">
-                <span class="icon">🏍️</span> <span>Dashboard Driver CGO (Ride)</span>
-            </button>
-        </div>
-
         <div class="wallet-card" id="btnOpenWallet">
-            <span class="wallet-title">CIKURPAY</span>
-            <span class="wallet-amount" id="displaySaldo">Rp 125.000</span>
+            <div class="wallet-icon-box">
+                <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+            </div>
+            <div class="wallet-details">
+                <span class="wallet-title">CIKURPAY</span>
+                <span class="wallet-amount" id="displaySaldo">Rp 125.000</span>
+            </div>
         </div>
     </div>
 
     <!-- VIEW 1: BERANDA -->
     <div id="view-beranda" class="tab-content-view active">
+        <!-- Quick Service Chips (Replaced Dropdown Menu) -->
+        <div class="quick-services-bar">
+            <a class="service-chip" onclick="bukaModalPengaturanProfil()">
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+                <span>Akun & Profil</span>
+            </a>
+            <a class="service-chip" href="agent-dashboard.html">
+                <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A1.5 1.5 0 0 0 6 14.5A1.5 1.5 0 0 0 7.5 16A1.5 1.5 0 0 0 9 14.5A1.5 1.5 0 0 0 7.5 13m9 0a1.5 1.5 0 0 0-1.5 1.5a1.5 1.5 0 0 0 1.5 1.5a1.5 1.5 0 0 0 1.5-1.5a1.5 1.5 0 0 0-1.5-1.5z"/></svg>
+                <span>Dashboard Agent</span>
+            </a>
+            <a class="service-chip" href="resto-dashboard.html">
+                <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/></svg>
+                <span>Dashboard Resto</span>
+            </a>
+            <a class="service-chip" href="driver-dashboard.html">
+                <svg viewBox="0 0 24 24"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.22.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.04 3H5.81l1.04-3zM19 17H5v-4.66l.12-.34h13.76l.12.34V17z"/></svg>
+                <span>Dashboard Driver</span>
+            </a>
+        </div>
+
         <!-- Main Banner Carousel -->
         <div class="hero-banner">
             <div class="slider">
@@ -1145,7 +1158,7 @@ textarea.input-box {
 
         <div style="background: #fff; border: 1px solid var(--border-color); border-radius: 16px; padding: 14px; margin-bottom: 10px;">
             <h4 style="font-size: 13px; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">📢 Pembaruan Sistem CGO v3.9</h4>
-            <p style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">Navigasi bawah tetap (fixed) dan widget robot CGO kini memiliki fitur slide otomatis muncul-hilang.</p>
+            <p style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">Header navigasi permanen atas dan quick service chips baru telah diimplementasikan.</p>
         </div>
     </div>
 
@@ -1245,26 +1258,8 @@ window.addEventListener("DOMContentLoaded", () => {
     }
 });
 
-// DROPDOWN TOGGLE LOGIC
 const btnOpenProfile = document.getElementById("btnOpenProfile");
-const profileDropdownMenu = document.getElementById("profileDropdownMenu");
-
-btnOpenProfile.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if(profileDropdownMenu.style.display === "block") {
-        profileDropdownMenu.style.display = "none";
-    } else {
-        profileDropdownMenu.style.display = "block";
-    }
-});
-
-window.addEventListener("click", () => {
-    if(profileDropdownMenu) {
-        profileDropdownMenu.style.display = "none";
-    }
-});
-
-document.getElementById("menuOptProfile").addEventListener("click", () => {
+btnOpenProfile.addEventListener("click", () => {
     bukaModalPengaturanProfil();
 });
 
