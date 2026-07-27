@@ -94,6 +94,7 @@ body{
     align-items: center;
     margin-bottom: 16px;
     padding: 4px 2px;
+    position: relative;
 }
 
 .user-greeting {
@@ -150,6 +151,9 @@ body{
     color: var(--primary-red);
     font-weight: 700;
     margin-top: 2px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
 }
 
 .wallet-card {
@@ -181,6 +185,69 @@ body{
     font-weight: 800;
     color: var(--text-main);
     font-family: var(--font-mono);
+}
+
+/* ===========================
+   DROPDOWN SWITCHER MENU (NEW)
+=========================== */
+.profile-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 65px;
+    left: 0;
+    width: 280px;
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    z-index: 1001;
+    overflow: hidden;
+    animation: dropDownAnim 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes dropDownAnim {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.dropdown-header {
+    background: #0f172a;
+    padding: 12px 14px;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    text-decoration: none;
+    color: var(--text-main);
+    font-size: 12px;
+    font-weight: 700;
+    border-bottom: 1px solid #f1f5f9;
+    transition: 0.2s;
+    background: #ffffff;
+    cursor: pointer;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    width: 100%;
+    text-align: left;
+}
+
+.dropdown-item:hover {
+    background: #fff5f5;
+    color: var(--primary-red);
+    padding-left: 18px;
+}
+
+.dropdown-item span.icon {
+    font-size: 15px;
 }
 
 /* ===========================
@@ -908,9 +975,30 @@ textarea.input-box {
             <div class="user-info">
                 <h4>Selamat Datang,</h4>
                 <h2 id="headerNamaUser">CIKUR USER</h2>
-                <div class="user-tagline">Kamu butuh Assistant?</div>
+                <div class="user-tagline">
+                    <span>Menu / Dashboard Switch</span> 
+                    <svg style="width:10px; height:10px;" viewBox="0 0 24 24"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>
+                </div>
             </div>
         </div>
+
+        <!-- DROPDOWN SWITCHER MENU -->
+        <div class="profile-dropdown-menu" id="profileDropdownMenu">
+            <div class="dropdown-header">Pusat Akun & Navigasi CGO</div>
+            <button class="dropdown-item" id="menuOptProfile">
+                <span class="icon">👤</span> <span>Akun & Pengaturan Profil</span>
+            </button>
+            <button class="dropdown-item" onclick="location.href='agent-dashboard.html'">
+                <span class="icon">🤖</span> <span>Dashboard Agent CGO (Assistant)</span>
+            </button>
+            <button class="dropdown-item" onclick="location.href='resto-dashboard.html'">
+                <span class="icon">🍲</span> <span>Dashboard Resto CGO (Food)</span>
+            </button>
+            <button class="dropdown-item" onclick="location.href='driver-dashboard.html'">
+                <span class="icon">🏍️</span> <span>Dashboard Driver CGO (Ride)</span>
+            </button>
+        </div>
+
         <div class="wallet-card" id="btnOpenWallet">
             <span class="wallet-title">CIKURPAY</span>
             <span class="wallet-amount" id="displaySaldo">Rp 125.000</span>
@@ -1068,7 +1156,7 @@ textarea.input-box {
             <h3 style="font-size: 14px; font-weight: 800; color: var(--text-main);" id="profileViewName">CIKUR USER</h3>
             <p style="font-size: 11px; color: var(--text-muted);" id="profileViewPhone">08123456789</p>
         </div>
-        <button class="btn-pesan-form" onclick="document.getElementById('btnOpenProfile').click()" style="margin-bottom: 8px;">Edit Pengaturan Profil</button>
+        <button class="btn-pesan-form" id="btnEditProfilTab" style="margin-bottom: 8px;">Edit Pengaturan Profil</button>
     </div>
 
     <!-- BOTTOM NAVIGATION BAR -->
@@ -1155,6 +1243,33 @@ window.addEventListener("DOMContentLoaded", () => {
     if(userProfile.name === "CIKUR USER") {
         setTimeout(bukaModalRegistrasi, 600);
     }
+});
+
+// DROPDOWN TOGGLE LOGIC
+const btnOpenProfile = document.getElementById("btnOpenProfile");
+const profileDropdownMenu = document.getElementById("profileDropdownMenu");
+
+btnOpenProfile.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if(profileDropdownMenu.style.display === "block") {
+        profileDropdownMenu.style.display = "none";
+    } else {
+        profileDropdownMenu.style.display = "block";
+    }
+});
+
+window.addEventListener("click", () => {
+    if(profileDropdownMenu) {
+        profileDropdownMenu.style.display = "none";
+    }
+});
+
+document.getElementById("menuOptProfile").addEventListener("click", () => {
+    bukaModalPengaturanProfil();
+});
+
+document.getElementById("btnEditProfilTab").addEventListener("click", () => {
+    bukaModalPengaturanProfil();
 });
 
 function switchTab(tabName) {
@@ -1342,8 +1457,8 @@ if(assistantScreen) {
     });
 }
 
-// PROFIL & FOTO
-document.getElementById("btnOpenProfile").addEventListener("click", () => {
+// PROFIL & FOTO MODAL
+function bukaModalPengaturanProfil() {
     openModal("PENGATURAN PROFIL & FOTO AKUN");
     let avatarPreviewHTML = userProfile.avatar ? `<img src="${userProfile.avatar}" style="width:100%; height:100%; object-fit:cover;">` : "CK";
 
@@ -1401,7 +1516,7 @@ document.getElementById("btnOpenProfile").addEventListener("click", () => {
         assistantScreen.style.display = "none";
         manageBotpressWidgetVisibility(false);
     });
-});
+}
 
 // CIKURPAY & TOP-UP
 document.getElementById("btnOpenWallet").addEventListener("click", () => {
@@ -1459,7 +1574,7 @@ document.getElementById("btnOpenWallet").addEventListener("click", () => {
     });
 });
 
-// MODUL LAYANAN ASSISTANT (UPDATED DENGAN SISTEM KONFIRMASI DEAL)
+// MODUL LAYANAN ASSISTANT
 const btnAssistant = document.getElementById("btnAssistant");
 if(btnAssistant) {
     btnAssistant.addEventListener("click", function(e){
@@ -1557,7 +1672,6 @@ if(btnAssistant) {
                         <span class="total-value" id="txtTotalFinal">${info.hargaStr}</span>
                     </div>
                     
-                    <!-- Tombol Awal: Request Deal / Konfirmasi Kesepakatan -->
                     <button class="btn-pesan-form" id="btnRequestDeal" style="background:#0f172a;">Kirim Detail & Minta DEAL 🤝</button>
                 `;
 
@@ -1576,7 +1690,6 @@ if(btnAssistant) {
                     txtTotalFinal.innerText = "Rp " + grandTotal.toLocaleString('id-ID');
                 });
 
-                // Handler ketika User mengirim detail untuk DEAL
                 document.getElementById("btnRequestDeal").addEventListener("click", () => {
                     const tanggal = document.getElementById("inputTanggal").value;
                     const lokasi = document.getElementById("inputLokasi").value;
@@ -1587,13 +1700,12 @@ if(btnAssistant) {
                         return;
                     }
 
-                    // Tampilkan status Menunggu DEAL / Simulasi Kesepakatan
                     dynamicPaketContent.innerHTML = `
                         <div style="text-align:center; padding: 20px 10px;">
                             <div style="font-size: 36px; margin-bottom: 8px;">⏳</div>
                             <h3 style="font-size: 14px; font-weight: 800; color: var(--text-main); margin-bottom: 6px;">Menunggu Kesepakatan (DEAL)</h3>
                             <p style="font-size: 11px; color: var(--text-muted); line-height: 1.4; margin-bottom: 16px;">
-                                Detail pesanan Anda telah dikirimkan ke tim/asisten CGO. Tombol pembayaran akan aktif setelah status dinyatakan <strong>DEAL</strong> untuk menghindari risiko refund.
+                                Detail pesanan Anda telah dikirimkan ke tim/asisten CGO. Tombol pembayaran akan aktif setelah status dinyatakan <strong>DEAL</strong>[cite: 1].
                             </p>
                             <div style="background: #fff; border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; margin-bottom: 16px; text-align: left;">
                                 <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
@@ -1603,7 +1715,6 @@ if(btnAssistant) {
                         </div>
                     `;
 
-                    // Tombol Simulasi DEAL (bisa diganti otomatis via API/Chatbot jika terintegrasi penuh)
                     document.getElementById("btnSimulasiDeal").addEventListener("click", () => {
                         tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount);
                     });
@@ -1737,4 +1848,4 @@ if(btnAssistant) {
 <script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
 
 </body>
-            </html>
+    </html>
