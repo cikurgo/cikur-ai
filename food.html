@@ -93,44 +93,83 @@ body{
 }
 
 .app-header h2 {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 800;
     color: var(--text-main);
 }
 
-/* Mini Banner */
-.mini-banner {
+/* Mini Banner Slider (Gaya Home) */
+.banner-slider-container {
     width: 100%;
-    height: 95px;
-    background: linear-gradient(135deg, #0f172a, #1e293b);
-    border-radius: 14px;
-    padding: 14px;
+    height: 110px;
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+}
+
+.banner-slides {
+    display: flex;
+    width: 300%;
+    height: 100%;
+    transition: transform 0.5s ease-in-out;
+}
+
+.banner-slide {
+    width: 33.333%;
+    height: 100%;
+    padding: 16px;
     color: #fff;
-    margin-bottom: 12px;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 4px 12px rgba(15,23,42,0.15);
 }
 
-.mini-banner h3 {
+.slide-1 { background: linear-gradient(135deg, #0f172a, #1e293b); }
+.slide-2 { background: linear-gradient(135deg, #b91c1c, #ef4444); }
+.slide-3 { background: linear-gradient(135deg, #047857, #10b981); }
+
+.banner-slide h3 {
     font-size: 13px;
     font-weight: 800;
     color: #FFD700;
-    margin-bottom: 3px;
+    margin-bottom: 4px;
 }
 
-.mini-banner p {
+.banner-slide p {
     font-size: 11px;
-    color: #cbd5e1;
+    color: #f8fafc;
     font-weight: 500;
+    line-height: 1.3;
+}
+
+.banner-dots {
+    position: absolute;
+    bottom: 8px;
+    right: 12px;
+    display: flex;
+    gap: 4px;
+}
+
+.dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.4);
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.dot.active {
+    background: #FFD700;
+    width: 16px;
+    border-radius: 4px;
 }
 
 /* Search Box */
 .search-box-wrapper {
-    margin-bottom: 10px;
+    margin-bottom: 12px;
 }
 
 .input-box {
@@ -150,69 +189,46 @@ body{
     border-color: var(--primary-red);
 }
 
-/* Control Panel (Pesan Sekarang & Reservasi) */
-.control-panel-card {
+/* Mode Layanan Tabs (Pesan Sekarang vs Reservasi) */
+.mode-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.mode-tab-btn {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    padding: 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-align: center;
+    transition: 0.2s;
+}
+
+.mode-tab-btn.active {
+    background: var(--primary-red);
+    color: #fff;
+    border-color: var(--primary-red);
+    box-shadow: 0 4px 10px rgba(229,9,20,0.2);
+}
+
+/* Panel Konten Reservasi (Hidden by default, muncul kalau tab reservasi aktif) */
+.reservasi-panel {
     background: #fff;
     border: 1px solid var(--border-color);
     border-radius: 14px;
     padding: 12px;
     margin-bottom: 14px;
+    display: none;
     box-shadow: 0 2px 4px rgba(0,0,0,0.02);
 }
 
-.control-section-title {
-    font-size: 11px;
-    font-weight: 800;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    margin-bottom: 8px;
-    letter-spacing: 0.5px;
-}
-
-/* Pesan Sekarang Checkbox Item */
-.checkbox-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-    padding: 6px 0;
-}
-
-.checkbox-item input {
-    width: 16px;
-    height: 16px;
-    accent-color: var(--primary-red);
-    cursor: pointer;
-}
-
-/* Reservasi Accordion Block */
-.reservasi-block {
-    border-top: 1px solid var(--border-color);
-    margin-top: 8px;
-    padding-top: 8px;
-}
-
-.reservasi-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 12px;
-    font-weight: 800;
-    cursor: pointer;
-    color: var(--text-main);
-    padding: 4px 0;
-}
-
-.reservasi-body {
-    display: none;
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px dashed var(--border-color);
-}
-
-.reservasi-block.active .reservasi-body {
+.reservasi-panel.active {
     display: block;
 }
 
@@ -402,14 +418,31 @@ body{
     <!-- Header -->
     <div class="app-header">
         <a href="index.html" class="back-btn">←</a>
-        <h2>CIKUR GO FOOD (Assistant Ecosystem)</h2>
+        <h2>CIKUR GO FOOD (Assistant)</h2>
         <div style="width: 36px;"></div>
     </div>
 
-    <!-- Mini Banner -->
-    <div class="mini-banner">
-        <h3>⚡ CIKUR GO ASSISTANT PARTNER</h3>
-        <p>Pesan makanan instan atau jadwalkan reservasi meja resto favoritmu dengan mudah dalam satu kendali!</p>
+    <!-- Mini Banner Slider Berjalan -->
+    <div class="banner-slider-container">
+        <div class="banner-slides" id="bannerSlider">
+            <div class="banner-slide slide-1">
+                <h3>⚡ CIKUR GO ASSISTANT PARTNER</h3>
+                <p>Pesan makanan instan langsung diantar atau diatur asisten pribadi dengan mudah!</p>
+            </div>
+            <div class="banner-slide slide-2">
+                <h3>🔥 DISKOON KULINER SPESIAL</h3>
+                <p>Nikmati berbagai menu pilihan mitra resto terbaik dengan harga spesial hari ini.</p>
+            </div>
+            <div class="banner-slide slide-3">
+                <h3>📅 RESERVASI MEJA MUDAH</h3>
+                <p>Atur jadwal makan di tempat atau ambil sendiri, asisten siap standby menunggu!</p>
+            </div>
+        </div>
+        <div class="banner-dots">
+            <span class="dot active" onclick="currentSlide(0)"></span>
+            <span class="dot" onclick="currentSlide(1)"></span>
+            <span class="dot" onclick="currentSlide(2)"></span>
+        </div>
     </div>
 
     <!-- Kotak Pencarian -->
@@ -417,41 +450,30 @@ body{
         <input type="text" id="searchFood" class="input-box" placeholder="Cari nama resto atau menu makanan...">
     </div>
 
-    <!-- Panel Pengaturan Layanan (Pesan Sekarang & Reservasi) -->
-    <div class="control-panel-card">
-        <div class="control-section-title">Mode Layanan Pesanan</div>
-        
-        <!-- Opsi 1: Pesan Sekarang -->
-        <label class="checkbox-item">
-            <input type="checkbox" id="checkPesanSekarang" checked onchange="togglePesanSekarang()">
-            <span>⚡ Pesan Sekarang (Kirim Langsung)</span>
-        </label>
+    <!-- Mode Layanan Tabs (Pesan Sekarang / Reservasi) -->
+    <div class="mode-tabs">
+        <div class="mode-tab-btn active" id="tabPesanSekarang" onclick="switchMode('instant')">⚡ Pesan Sekarang</div>
+        <div class="mode-tab-btn" id="tabReservasi" onclick="switchMode('reservasi')">📅 Atur Reservasi</div>
+    </div>
 
-        <!-- Opsi 2: Reservasi (Accordion) -->
-        <div class="reservasi-block" id="reservasiBlockContainer">
-            <div class="reservasi-header" onclick="toggleReservasiAccordion()">
-                <span>📅 Atur Jadwal Reservasi Meja / Ambil</span>
-                <span id="arrowReservasi" style="font-size: 11px; color: var(--text-muted);">▼ Buka</span>
+    <!-- Panel Reservasi (Hanya muncul jika mode reservasi aktif) -->
+    <div class="reservasi-panel" id="reservasiPanel">
+        <div class="form-row">
+            <div class="form-col">
+                <label>Tanggal Reservasi</label>
+                <input type="date" id="resTanggal" class="input-box" style="padding: 6px 10px; font-size: 11px;">
             </div>
-            <div class="reservasi-body">
-                <div class="form-row">
-                    <div class="form-col">
-                        <label>Tanggal</label>
-                        <input type="date" id="resTanggal" class="input-box" style="padding: 6px 10px; font-size: 11px;">
-                    </div>
-                    <div class="form-col">
-                        <label>Jam</label>
-                        <input type="time" id="resJam" class="input-box" style="padding: 6px 10px; font-size: 11px;">
-                    </div>
-                </div>
-                <div class="form-col" style="margin-top: 6px;">
-                    <label>Metode Layanan Resto</label>
-                    <select id="resMetode" class="input-box" style="padding: 6px 10px; font-size: 11px;">
-                        <option value="Makan di Tempat (Dine-In)">Makan di Tempat (Dine-In)</option>
-                        <option value="Ambil Sendiri (Takeaway)">Ambil Sendiri (Takeaway)</option>
-                    </select>
-                </div>
+            <div class="form-col">
+                <label>Jam Kunjungan</label>
+                <input type="time" id="resJam" class="input-box" style="padding: 6px 10px; font-size: 11px;">
             </div>
+        </div>
+        <div class="form-col" style="margin-top: 6px;">
+            <label>Metode Layanan Resto</label>
+            <select id="resMetode" class="input-box" style="padding: 6px 10px; font-size: 11px;">
+                <option value="Makan di Tempat (Dine-In)">Makan di Tempat (Dine-In)</option>
+                <option value="Ambil Sendiri (Takeaway)">Ambil Sendiri (Takeaway)</option>
+            </select>
         </div>
     </div>
 
@@ -471,7 +493,32 @@ body{
 <script>
 let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { saldo: 125000 };
 
-/* Database 10 Blok Toko / Resto (Minimal 3 Menu per Toko) */
+/* Slider Logic */
+let slideIndex = 0;
+const slides = document.getElementById("bannerSlider");
+const dots = document.querySelectorAll(".dot");
+
+function showSlide(index) {
+    if (index >= 3) slideIndex = 0;
+    else if (index < 0) slideIndex = 2;
+    else slideIndex = index;
+
+    slides.style.transform = `translateX(-${slideIndex * 33.333}%)`;
+    dots.forEach((dot, idx) => {
+        dot.classList.toggle("active", idx === slideIndex);
+    });
+}
+
+function currentSlide(index) {
+    showSlide(index);
+}
+
+// Auto slide setiap 4 detik
+setInterval(() => {
+    showSlide(slideIndex + 1);
+}, 4000);
+
+/* Database 10 Blok Toko / Resto */
 const databaseResto = [
     {
         id: 1,
@@ -566,6 +613,27 @@ const databaseResto = [
 ];
 
 let cartQuantities = {};
+let currentModeSelected = 'instant'; // 'instant' atau 'reservasi'
+
+function switchMode(mode) {
+    currentModeSelected = mode;
+    let btnInstant = document.getElementById("tabPesanSekarang");
+    let btnRes = document.getElementById("tabReservasi");
+    let panelRes = document.getElementById("reservasiPanel");
+    let footerLabel = document.getElementById("footerLabelMode");
+
+    if(mode === 'instant') {
+        btnInstant.classList.add("active");
+        btnRes.classList.remove("active");
+        panelRes.classList.remove("active");
+        footerLabel.innerText = "Total Pesanan (Instant)";
+    } else {
+        btnRes.classList.add("active");
+        btnInstant.classList.remove("active");
+        panelRes.classList.add("active");
+        footerLabel.innerText = "Total Reservasi Meja";
+    }
+}
 
 function renderRestoList(data) {
     const container = document.getElementById("restoContainer");
@@ -619,18 +687,6 @@ function toggleResto(headerEl) {
     block.classList.toggle("active");
     let spanArrow = headerEl.querySelector("span:last-child");
     spanArrow.innerText = block.classList.contains("active") ? "▲ Tutup" : "▼ Buka Menu";
-}
-
-function togglePesanSekarang() {
-    let isChecked = document.getElementById("checkPesanSekarang").checked;
-    document.getElementById("footerLabelMode").innerText = isChecked ? "Total Pesanan (Instant)" : "Total Reservasi";
-}
-
-function toggleReservasiAccordion() {
-    let block = document.getElementById("reservasiBlockContainer");
-    block.classList.toggle("active");
-    let spanArrow = document.getElementById("arrowReservasi");
-    spanArrow.innerText = block.classList.contains("active") ? "▲ Tutup" : "▼ Buka";
 }
 
 renderRestoList(databaseResto);
@@ -700,10 +756,9 @@ function prosesPesanFood() {
         return;
     }
 
-    let isPesanSekarang = document.getElementById("checkPesanSekarang").checked;
     let modeInfo = "Pesan Sekarang (Instant)";
     
-    if (!isPesanSekarang) {
+    if (currentModeSelected === 'reservasi') {
         let tgl = document.getElementById("resTanggal").value;
         let jam = document.getElementById("resJam").value;
         let metodeRes = document.getElementById("resMetode").value;
@@ -729,7 +784,7 @@ function prosesPesanFood() {
         layanan: `${namaMenuRingkas} [${modeInfo}]`,
         kategori: 'CIKUR Food Assistant',
         harga: totalPrice,
-        status: isPesanSekarang ? 'Diproses Resto' : 'Reservasi Dikonfirmasi',
+        status: currentModeSelected === 'instant' ? 'Diproses Resto' : 'Reservasi Dikonfirmasi',
         waktu: waktuSekarang
     });
 
