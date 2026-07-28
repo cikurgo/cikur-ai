@@ -1048,6 +1048,8 @@ textarea.input-box {
                 </button>
             </div>
         </div>
+        <!-- Hidden trigger to maintain compatibility with legacy code if needed -->
+        <button id="btnOpenWallet" style="display:none;"></button>
     </div>
 
     <!-- VIEW 1: BERANDA -->
@@ -1154,7 +1156,7 @@ textarea.input-box {
             <p style="font-size: 11px; color: #94a3b8; font-weight: 700;">Saldo CikurPay</p>
             <h2 style="font-size: 22px; font-weight: 800; color: #FFD700; font-family: var(--font-mono); margin: 4px 0 12px 0;" id="transaksiSaldoNominal">Rp 125.000</h2>
             <div style="display: flex; gap: 8px;">
-                <button onclick="document.getElementById('btnOpenWallet').click()" style="flex: 1; background: var(--primary-red); color: white; border: none; padding: 8px; border-radius: 8px; font-weight: 800; font-size: 11px; cursor: pointer;">Top Up Saldo</button>
+                <button onclick="bukaModalTopUp()" style="flex: 1; background: var(--primary-red); color: white; border: none; padding: 8px; border-radius: 8px; font-weight: 800; font-size: 11px; cursor: pointer;">Top Up Saldo</button>
             </div>
         </div>
 
@@ -1521,7 +1523,7 @@ function bukaModalPengaturanProfil() {
     });
 }
 
-document.getElementById("btnOpenWallet").addEventListener("click", () => {
+function bukaModalTopUp() {
     openModal("DOMPET CIKURPAY & TOP-UP");
     modalMainContent.innerHTML = `
         <div style="background:linear-gradient(135deg, #0f172a, #1e293b); border-radius:18px; padding:18px; color:#fff; text-align:center; margin-bottom:16px;">
@@ -1574,7 +1576,7 @@ document.getElementById("btnOpenWallet").addEventListener("click", () => {
             manageBotpressWidgetVisibility(false);
         }, 800);
     });
-});
+}
 
 const btnAssistant = document.getElementById("btnAssistant");
 if(btnAssistant) {
@@ -1583,7 +1585,6 @@ if(btnAssistant) {
         openModal("CIKUR GO ASSISTANT");
         modalMainContent.innerHTML = `
             <style>
-                /* Styling Modern & Premium untuk Form Assistant & Tiga Menu */
                 .assistant-form-container {
                     background: #ffffff;
                     border: 1px solid var(--border-color);
@@ -1599,23 +1600,19 @@ if(btnAssistant) {
                     margin-bottom: 16px;
                 }
                 .service-card-option{
-    background:#f8fafc;
-    border:2px solid var(--border-color);
-    border-radius:18px;
-
-    height:115px;
-
-    display:flex;
-    flex-direction:column;
-    justify-content:center;
-    align-items:center;
-
-    gap:8px;
-
-    cursor:pointer;
-    transition:.25s;
-    overflow:hidden;
-}
+                    background:#f8fafc;
+                    border:2px solid var(--border-color);
+                    border-radius:18px;
+                    height:115px;
+                    display:flex;
+                    flex-direction:column;
+                    justify-content:center;
+                    align-items:center;
+                    gap:8px;
+                    cursor:pointer;
+                    transition:.25s;
+                    overflow:hidden;
+                }
                 .service-card-option:hover {
                     border-color: var(--primary-red);
                     background: #fff5f5;
@@ -1626,19 +1623,19 @@ if(btnAssistant) {
                     box-shadow: 0 4px 12px rgba(229, 9, 20, 0.15);
                 }
                 .service-card-option img{
-    width:58px;
-    height:58px;
-    object-fit:contain;
-    display:block;
-    margin:0 auto;
-}
+                    width:58px;
+                    height:58px;
+                    object-fit:contain;
+                    display:block;
+                    margin:0 auto;
+                }
                 .service-card-option .title{
-    font-size:12px;
-    font-weight:800;
-    color:var(--text-main);
-    text-transform:uppercase;
-    line-height:1;
-}
+                    font-size:12px;
+                    font-weight:800;
+                    color:var(--text-main);
+                    text-transform:uppercase;
+                    line-height:1;
+                }
                 .form-section-title {
                     font-size: 12px;
                     font-weight: 800;
@@ -1733,27 +1730,6 @@ if(btnAssistant) {
                     font-weight: 800;
                     color: #FFD700;
                     font-family: var(--font-mono);
-                }
-                .modern-btn-submit {
-                    width: 100%;
-                    height: 46px;
-                    border: none;
-                    border-radius: 12px;
-                    background: var(--primary-red);
-                    color: #fff;
-                    font-size: 13px;
-                    font-weight: 800;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                    box-shadow: 0 4px 15px rgba(229, 9, 20, 0.3);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 6px;
-                }
-                .modern-btn-submit:hover {
-                    background: var(--primary-red-hover);
-                    transform: translateY(-1px);
                 }
             </style>
 
@@ -2044,4 +2020,4 @@ if(btnAssistant) {
 <script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
 
 </body>
-</html>
+    </html>
