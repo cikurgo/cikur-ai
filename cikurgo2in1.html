@@ -129,16 +129,29 @@
 
             if (!timeVal) return;
 
-            // Pecah Jam & Menit
+            // 1. Tentukan Tarif Assistant berdasarkan durasi paket
+            let calculatedAssistantFee = 40000; // default 60 menit
+            if (durationVal === 30) {
+                calculatedAssistantFee = 25000;
+            } else if (durationVal === 90) {
+                calculatedAssistantFee = 55000;
+            }
+
+            // Update variabel global atau langsung hitung ke rincian
+            window.currentAssistantFee = calculatedAssistantFee;
+            document.getElementById('assistantFeeText').innerText = "Rp " + calculatedAssistantFee.toLocaleString('id-ID');
+            updateGrandTotal();
+
+            // Pecah Jam & Menit untuk Linimasa
             let [hours, minutes] = timeVal.split(':').map(Number);
             let arrivalDate = new Date();
             arrivalDate.setHours(hours, minutes, 0, 0);
 
-            // 1. Waktu Standby (-15 menit dari kedatangan)
+            // Waktu Standby (-15 menit dari kedatangan)
             let standbyDate = new Date(arrivalDate.getTime() - 15 * 60000);
             let standbyStr = standbyDate.toTimeString().substring(0, 5);
 
-            // 2. Waktu Selesai (+ durasi paket)
+            // Waktu Selesai (+ durasi paket)
             let endDate = new Date(arrivalDate.getTime() + durationVal * 60000);
             let endStr = endDate.toTimeString().substring(0, 5);
 
@@ -153,7 +166,7 @@
 
 // 1. Variabel global & listener ditaruh di paling atas
 let currentFoodTotal = 0;
-const assistantBaseFee = 40000;
+let currentAssistantFee = 40000; // Ubah jadi variabel dinamis
 const serviceFee = 5000;
 
 document.addEventListener("DOMContentLoaded", function() {
@@ -193,8 +206,9 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 
 function updateGrandTotal() {
-    let grandTotal = currentFoodTotal + assistantBaseFee + serviceFee;
+    let grandTotal = currentFoodTotal + currentAssistantFee + serviceFee;
     document.getElementById('subtotalFoodText').innerText = "Rp " + currentFoodTotal.toLocaleString('id-ID');
+    document.getElementById('assistantFeeText').innerText = "Rp " + currentAssistantFee.toLocaleString('id-ID');
     document.getElementById('grandTotalText').innerText = "Rp " + grandTotal.toLocaleString('id-ID');
 }
 
