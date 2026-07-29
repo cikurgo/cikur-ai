@@ -164,104 +164,151 @@
         arrivalTimeInput.addEventListener('input', updateTimeline);
         durationSelect.addEventListener('change', updateTimeline);
 
-// 1. Variabel global & listener ditaruh di paling atas
-let currentFoodTotal = 0;
-let currentAssistantFee = 40000; // Ubah jadi variabel dinamis
-const serviceFee = 5000;
 
-document.addEventListener("DOMContentLoaded", function() {
-    const savedBundle = localStorage.getItem('cikur_bundle_cart');
-    const container = document.getElementById('bundleFoodDetails');
+        // 1. Variabel global
+        let currentFoodTotal = 0;
+        let currentAssistantFee = 40000; 
+        const serviceFee = 5000;
 
-    if (savedBundle) {
-        const bundleData = JSON.parse(savedBundle);
-        currentFoodTotal = bundleData.totalFoodPrice || 0;
+        document.addEventListener("DOMContentLoaded", function() {
+            // Tangkap elemen setelah DOM siap
+            const arrivalTimeInput = document.getElementById('arrivalTime');
+            const durationSelect = document.getElementById('durationPackage');
+            const timelineStandby = document.getElementById('timelineStandby');
+            const timelineArrive = document.getElementById('timelineArrive');
+            const timelineEnd = document.getElementById('timelineEnd');
 
-        let htmlContent = `<ul class="divide-y divide-gray-200">`;
-        bundleData.items.forEach(item => {
-            htmlContent += `
-                <li class="py-1.5 flex justify-between items-center text-xs">
-                    <div>
-                        <span class="font-bold text-gray-900">${item.qty}x ${item.name}</span>
-                        <div class="text-gray-500">${item.restoName}</div>
+            function updateTimeline() {
+                const timeVal = arrivalTimeInput.value; 
+                const durationVal = parseInt(durationSelect.value);
+
+                
+
+                // Tentukan Tarif Assistant berdasarkan durasi paket
+                let calculatedAssistantFee = 40000; // default 60 menit
+                if (durationVal === 30) {
+                    calculatedAssistantFee = 25000;
+                } else if (durationVal === 90) {
+                    calculatedAssistantFee = 55000;
+                }
+
+                currentAssistantFee = calculatedAssistantFee;
+                document.getElementById('assistantFeeText').innerText = "Rp " + currentAssistantFee.toLocaleString('id-ID');
+                updateGrandTotal();
+
+                // Pecah Jam & Menit untuk Linimasa
+                let [hours, minutes] = timeVal.split(':').map(Number);
+                let arrivalDate = new Date();
+                arrivalDate.setHours(hours, minutes, 0, 0);
+
+                let standbyDate = new Date(arrivalDate.getTime() - 15 * 60000);
+                let standbyStr = standbyDate.toTimeString().substring(0, 5);
+
+                let endDate = new Date(arrivalDate.getTime() + durationVal * 60000);
+                let endStr = endDate.toTimeString().substring(0, 5);
+
+                timelineStandby.innerHTML = `• <span class="font-semibold">${standbyStr}</span>: Agent CGO standby & persiapan meja di resto.`;
+                timelineArrive.innerHTML = `• <span class="font-semibold">${timeVal}</span>: Anda tiba, makanan disajikan & timer dimulai.`;
+                timelineEnd.innerHTML = `• <span class="font-semibold">${endStr}</span>: Layanan selesai & agent pamit.`;
+            }
+
+            // Pasang Event Listener
+            arrivalTimeInput.addEventListener('input', updateTimeline);
+            durationSelect.addEventListener('change', updateTimeline);
+
+            // Load LocalStorage untuk Makanan
+            const savedBundle = localStorage.getItem('cikur_bundle_cart');
+            const container = document.getElementById('bundleFoodDetails');
+
+            if (savedBundle) {
+                const bundleData = JSON.parse(savedBundle);
+                currentFoodTotal = bundleData.totalFoodPrice || 0;
+
+                let htmlContent = `<ul class="divide-y divide-gray-200">`;
+                bundleData.items.forEach(item => {
+                    htmlContent += `
+                        <li class="py-1.5 flex justify-between items-center text-xs">
+                            <div>
+                                <span class="font-bold text-gray-900">${item.qty}x ${item.name}</span>
+                                <div class="text-gray-500">${item.restoName}</div>
+                            </div>
+                            <span class="font-mono font-semibold text-gray-800">Rp ${(item.price * item.qty).toLocaleString('id-ID')}</span>
+                        </li>`;
+                });
+                htmlContent += `</ul>`;
+                container.innerHTML = htmlContent;
+            } else {
+                container.innerHTML = `
+                    <div class="text-center py-3 space-y-2">
+                        <p class="text-xs text-amber-800 font-medium">Belum ada menu makanan yang dipilih.</p>
+                        <a href="food.html" class="inline-block bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition shadow-sm">
+                            + Pilih Menu dari Daftar Resto
+                        </a>
                     </div>
-                    <span class="font-mono font-semibold text-gray-800">Rp ${(item.price * item.qty).toLocaleString('id-ID')}</span>
-                </li>`;
+                `;
+                currentFoodTotal = 0;
+            }
+
+            updateGrandTotal();
+            updateTimeline();
         });
-        htmlContent += `</ul>`;
-        container.innerHTML = htmlContent;
-    } else {
-        container.innerHTML = `
-            <div class="text-center py-3 space-y-2">
-                <p class="text-xs text-amber-800 font-medium">Belum ada menu makanan yang dipilih.</p>
-                <a href="food.html" class="inline-block bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition shadow-sm">
-                    + Pilih Menu dari Daftar Resto
-                </a>
-            </div>
-        `;
-        currentFoodTotal = 0;
-    }
 
-    updateGrandTotal();
-updateTimeline(); // Tambahkan baris ini di sini
-});
+        function updateGrandTotal() {
+            let grandTotal = currentFoodTotal + currentAssistantFee + serviceFee;
+            document.getElementById('subtotalFoodText').innerText = "Rp " + currentFoodTotal.toLocaleString('id-ID');
+            document.getElementById('assistantFeeText').innerText = "Rp " + currentAssistantFee.toLocaleString('id-ID');
+            document.getElementById('grandTotalText').innerText = "Rp " + grandTotal.toLocaleString('id-ID');
+        }
 
-function updateGrandTotal() {
-    let grandTotal = currentFoodTotal + currentAssistantFee + serviceFee;
-    document.getElementById('subtotalFoodText').innerText = "Rp " + currentFoodTotal.toLocaleString('id-ID');
-    document.getElementById('assistantFeeText').innerText = "Rp " + currentAssistantFee.toLocaleString('id-ID');
-    document.getElementById('grandTotalText').innerText = "Rp " + grandTotal.toLocaleString('id-ID');
-}
+        // Fungsi Proses Checkout
+        function prosesPesan2In1() {
+            if (currentFoodTotal <= 0) {
+                alert("[!] Silakan pilih menu makanan terlebih dahulu sebelum melanjutkan pesanan 2IN1.");
+                return;
+            }
+            let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { saldo: 125000 };
+            let grandTotal = currentFoodTotal + currentAssistantFee + serviceFee;
 
-// 2. Fungsi proses ditaruh di bawahnya
-function prosesPesan2In1() {
+            if (userProfile.saldo < grandTotal) {
+                alert("[!] Saldo CikurPay tidak mencukupi untuk total transaksi paket 2IN1 ini.");
+                return;
+            }
 
-    if (currentFoodTotal <= 0) {
-        alert("[!] Silakan pilih menu makanan terlebih dahulu sebelum melanjutkan pesanan 2IN1.");
-        return;
-    }
-    let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { saldo: 125000 };
-    let grandTotal = currentFoodTotal + currentAssistantFee + serviceFee;
+            userProfile.saldo -= grandTotal;
+            localStorage.setItem('cikur_user', JSON.stringify(userProfile));
 
-    if (userProfile.saldo < grandTotal) {
-        alert("[!] Saldo CikurPay tidak mencukupi untuk total transaksi paket 2IN1 ini.");
-        return;
-    }
+            let riwayatPesanan = JSON.parse(localStorage.getItem('cikur_orders')) || [];
+            let riwayatTransaksi = JSON.parse(localStorage.getItem('cikur_transactions')) || [];
+            let kodeTrx = 'TRX-2IN1-' + Math.floor(100000 + Math.random() * 900000);
+            let waktuSekarang = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) + ' • ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
-    userProfile.saldo -= grandTotal;
-    localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+            riwayatPesanan.unshift({
+                kode: kodeTrx,
+                layanan: `Paket Bundling 2IN1 (Food & Assistant)`,
+                kategori: 'CIKUR GO 2IN1',
+                harga: grandTotal,
+                status: 'Diproses & Jadwal Disinkronkan',
+                waktu: waktuSekarang
+            });
 
-    let riwayatPesanan = JSON.parse(localStorage.getItem('cikur_orders')) || [];
-    let riwayatTransaksi = JSON.parse(localStorage.getItem('cikur_transactions')) || [];
-    let kodeTrx = 'TRX-2IN1-' + Math.floor(100000 + Math.random() * 900000);
-    let waktuSekarang = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) + ' • ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            riwayatTransaksi.unshift({
+                kode: kodeTrx,
+                ket: `Pembayaran Paket CIKUR GO 2IN1`,
+                nominal: -grandTotal,
+                waktu: waktuSekarang,
+                status: 'Berhasil'
+            });
 
-    riwayatPesanan.unshift({
-        kode: kodeTrx,
-        layanan: `Paket Bundling 2IN1 (Food & Assistant)`,
-        kategori: 'CIKUR GO 2IN1',
-        harga: grandTotal,
-        status: 'Diproses & Jadwal Disinkronkan',
-        waktu: waktuSekarang
-    });
+            localStorage.setItem('cikur_orders', JSON.stringify(riwayatPesanan));
+            localStorage.setItem('cikur_transactions', JSON.stringify(riwayatTransaksi));
+            
+            localStorage.removeItem('cikur_bundle_cart');
 
-    riwayatTransaksi.unshift({
-        kode: kodeTrx,
-        ket: `Pembayaran Paket CIKUR GO 2IN1`,
-        nominal: -grandTotal,
-        waktu: waktuSekarang,
-        status: 'Berhasil'
-    });
+            alert(`[SUKSES] Pesanan CIKUR GO 2IN1 berhasil dibuat! Rp ${grandTotal.toLocaleString('id-ID')} dipotong dari CikurPay.`);
+            window.location.href = "index.html";
+        }
 
-    localStorage.setItem('cikur_orders', JSON.stringify(riwayatPesanan));
-    localStorage.setItem('cikur_transactions', JSON.stringify(riwayatTransaksi));
-    
-    // --- TAMBAHKAN BARIS INI UNTUK MEMBERSIHKAN KERANJANG SETELAH CHECKOUT ---
-    localStorage.removeItem('cikur_bundle_cart');
-
-    alert(`[SUKSES] Pesanan CIKUR GO 2IN1 berhasil dibuat! Rp ${grandTotal.toLocaleString('id-ID')} dipotong dari CikurPay.`);
-    window.location.href = "index.html";
-}
+        // Fungsi Batal
         function batalPesan2In1() {
             if (confirm("Apakah Anda yakin ingin membatalkan pesanan 2IN1 ini? Pilihan menu akan dihapus.")) {
                 localStorage.removeItem('cikur_bundle_cart');
@@ -269,7 +316,6 @@ function prosesPesan2In1() {
                 window.location.href = "index.html";
             }
         }
-    
     </script>
 </body>
 </html>
