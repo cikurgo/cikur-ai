@@ -482,12 +482,15 @@ body{
 </div>
 
 <!-- Floating Checkout Footer -->
-<div class="checkout-footer" id="checkoutFooter">
+<div class="checkout-footer" id="checkoutFooter" style="display: none; gap: 8px;">
     <div>
         <div style="font-size: 10px; color: #94a3b8; font-weight: 700;" id="footerLabelMode">Total Pesanan (Instant)</div>
-        <div id="footerTotalText" style="font-size: 13px; font-weight: 800; color: #FFD700; font-family: var(--font-mono);">Rp 0</div>
+        <div id="footerTotalText" style="font-size: 12px; font-weight: 800; color: #FFD700; font-family: var(--font-mono);">Rp 0</div>
     </div>
-    <button class="btn-order" onclick="prosesPesanFood()">Proses Transaksi ⚡</button>
+    <div style="display: flex; gap: 6px;">
+        <button class="btn-order" onclick="prosesPesanFood()" style="padding: 8px 12px; font-size: 11px;">Proses Reguler</button>
+        <button class="btn-order" onclick="lanjutKe2In1()" style="background: #ffffff; color: var(--primary-red); border: 1px solid var(--primary-red); padding: 8px 12px; font-size: 11px; font-weight: 800;">🚀 Paket 2IN1</button>
+    </div>
 </div>
 
 <script>
@@ -736,7 +739,45 @@ function hitungTotalKeranjang() {
         footer.style.display = "none";
     }
 }
+    
+function lanjutKe2In1() {
+    let selectedItemsData = [];
+    let totalPrice = 0;
 
+    databaseResto.forEach(resto => {
+        resto.items.forEach(item => {
+            let q = cartQuantities[item.id] || 0;
+            if(q > 0) {
+                selectedItemsData.push({
+                    id: item.id,
+                    name: item.name,
+                    price: item.price,
+                    qty: q,
+                    restoName: resto.restoName
+                });
+                totalPrice += (q * item.price);
+            }
+        });
+    });
+
+    if (selectedItemsData.length === 0) {
+        alert("[!] Pilih minimal 1 menu makanan terlebih dahulu.");
+        return;
+    }
+
+    // Bungkus data ke LocalStorage khusus bundling
+    const bundlePayload = {
+        items: selectedItemsData,
+        totalFoodPrice: totalPrice,
+        createdAt: new Date().toISOString()
+    };
+
+    localStorage.setItem('cikur_bundle_cart', JSON.stringify(bundlePayload));
+
+    // Arahkan ke halaman CIKUR GO 2IN1
+    window.location.href = 'cikurgo2in1.html';
+}
+    
 function prosesPesanFood() {
     let totalPrice = 0;
     let ringkasanPesanan = [];
