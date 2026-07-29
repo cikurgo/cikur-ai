@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Resto Partner - CIKUR GO Super App Engine v3.9</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+:root {
+    --primary-red: #E50914;
+    --primary-red-hover: #b80710;
+    --dark-bg: #0f172a;
+    --dark-card: #1e293b;
+    --body-bg: #f1f5f9;
+    --container-bg: #f8fafc;
+    --border-color: #e2e8f0;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --font-main: 'Plus Jakarta Sans', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+}
+*{ margin: 0; padding: 0; box-sizing: border-box; font-family: var(--font-main); }
+body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; display: flex; justify-content: center; align-items: center; }
+@media(min-width: 480px){ body { padding: 20px; } }
+.container{ width: 100%; max-width: 440px; min-height: 100vh; margin: 0 auto; padding: 85px 16px 100px 16px; display: flex; flex-direction: column; background: var(--container-bg); box-shadow: 0 10px 30px rgba(0,0,0,0.08); position: relative; overflow-x: hidden; }
+@media(min-width: 480px){ .container { min-height: 850px; border-radius: 36px; border: 1px solid var(--border-color); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15); } }
+
+/* HEADER & DROPDOWN */
+.app-header { position: fixed; top: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 440px; display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(248, 250, 252, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border-color); z-index: 999; }
+.user-greeting { display: flex; align-items: center; gap: 10px; cursor: pointer; transition: 0.2s; padding: 4px; border-radius: 12px; }
+.user-avatar { width: 38px; height: 38px; border-radius: 50%; background: #fee2e2; border: 2px solid var(--primary-red); display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--primary-red); font-size: 14px; overflow: hidden; flex-shrink: 0; }
+.user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.user-info h4 { font-size: 10px; color: var(--text-muted); font-weight: 500; }
+.user-info h2 { font-size: 13px; color: var(--text-main); font-weight: 800; line-height: 1.2; }
+.assistant-offer-text { font-size: 10px; color: var(--primary-red); font-weight: 700; margin-top: 1px; }
+.header-profile-wrapper { position: relative; }
+.header-dropdown-menu { position: absolute; top: calc(100% + 8px); left: 0; width: 220px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: none; flex-direction: column; padding: 6px; z-index: 1001; }
+.header-dropdown-menu.show { display: flex; }
+.dropdown-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-size: 12px; font-weight: 700; color: var(--text-main); text-decoration: none; border-radius: 10px; transition: background 0.2s; cursor: pointer; background: transparent; border: none; width: 100%; text-align: left; }
+.dropdown-item svg { width: 16px; height: 16px; fill: var(--primary-red); }
+.dropdown-item:hover { background: #fff5f5; color: var(--primary-red); }
+.dropdown-divider { height: 1px; background: var(--border-color); margin: 4px 0; }
+
+/* BOTTOM NAV */
+.bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 440px; height: 70px; background-color: #ffffff; border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; align-items: center; padding: 0 10px; z-index: 1000; box-shadow: 0 -4px 16px rgba(0,0,0,0.06); }
+.nav-item { background: none; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; cursor: pointer; color: var(--text-muted); transition: color 0.2s ease; position: relative; height: 100%; text-decoration: none; }
+.nav-item svg { width: 22px; height: 22px; margin-bottom: 4px; fill: currentColor; }
+.nav-item span { font-size: 11px; font-weight: 600; }
+.nav-item.active { color: var(--primary-red); }
+
+/* CONTENT SECTION */
+.resto-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 20px; padding: 16px; margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+.btn-pesan-form { width: 100%; height: 46px; border: none; border-radius: 12px; background: var(--primary-red); color: #fff; font-size: 14px; font-weight: 800; cursor: pointer; margin-top: 10px; }
+footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(--text-muted); font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <!-- STICKY HEADER -->
+    <div class="app-header">
+        <div class="header-profile-wrapper">
+            <div class="user-greeting" id="btnOpenProfileDropdown">
+                <div class="user-avatar" id="headerAvatar">CK</div>
+                <div class="user-info">
+                    <h4>Selamat Datang,</h4>
+                    <h2 id="headerNamaUser">CIKUR USER</h2>
+                    <div class="assistant-offer-text">Resto Partner Active</div>
+                </div>
+            </div>
+            <!-- DROPDOWN MENU -->
+            <div class="header-dropdown-menu" id="headerDropdownMenu">
+                <button class="dropdown-item" onclick="window.location.href='index.html';">
+                    <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8Z"/></svg>
+                    <span>Beranda Utama</span>
+                </button>
+                <button class="dropdown-item" onclick="window.location.href='agentcgo.html';">
+                    <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2Z"/></svg>
+                    <span>Agent CGO</span>
+                </button>
+                <button class="dropdown-item" onclick="window.location.href='driver.html';">
+                    <svg viewBox="0 0 24 24"><path d="M5 13c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3zm7-8-2 3H7c-.55 0-1 .45-1 1s.45 1 1 1h2.15l1.63-2.45L15.35 12H19c.55 0 1-.45 1-1s-.45-1-1-1h-2.15l-1.92-2.88c-.3-.45-.81-.72-1.35-.72H12z"/></svg>
+                    <span>Driver</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN VIEW RESTO -->
+    <div style="margin-top: 10px;">
+        <div class="resto-card" style="background: linear-gradient(135deg, var(--dark-bg), var(--dark-card)); color: #fff;">
+            <h2 style="font-size: 16px; font-weight: 800; margin-bottom: 6px;">🍜 CIKUR Food & Resto Partner</h2>
+            <p style="font-size: 12px; color: #94a3b8; line-height: 1.4;">Kelola menu makanan, pesanan masuk, dan pantau performa restoran Anda secara real-time.</p>
+        </div>
+
+        <div class="resto-card">
+            <h3 style="font-size: 14px; font-weight: 800; margin-bottom: 8px;">Daftar Pesanan Masuk</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Belum ada pesanan baru untuk saat ini. Restoran Anda aktif dan siap menerima order.</p>
+            <button class="btn-pesan-form" onclick="alert('[INFO] Status Resto diperbarui: Buka & Siap Menerima Order.')">Status: Buka (Online) ✓</button>
+        </div>
+    </div>
+
+    <!-- BOTTOM NAV -->
+    <nav class="bottom-nav">
+        <a href="index.html" class="nav-item">
+            <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8Z"/></svg>
+            <span>Beranda</span>
+        </a>
+        <a href="resto.html" class="nav-item active">
+            <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4Z"/></svg>
+            <span>Resto</span>
+        </a>
+        <a href="agentcgo.html" class="nav-item">
+            <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2Z"/></svg>
+            <span>Agent CGO</span>
+        </a>
+    </nav>
+    <footer><p>© 2026 CIKUR GO • Resto Partner Engine</p></footer>
+</div>
+
+<script>
+let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { name: "CIKUR USER", phone: "08123456789", saldo: 125000, avatar: "" };
+function updateUIProfile() {
+    document.getElementById("headerNamaUser").innerText = userProfile.name;
+    let avatarContainer = document.getElementById("headerAvatar");
+    if(userProfile.avatar && userProfile.avatar.startsWith("data:image")) {
+        avatarContainer.innerHTML = `<img src="${userProfile.avatar}" alt="Foto Profil">`;
+    } else {
+        avatarContainer.innerText = userProfile.name.split(" ").map(n => n[0]).join("").substring(0,2).toUpperCase() || "CK";
+    }
+}
+window.addEventListener("DOMContentLoaded", updateUIProfile);
+
+const btnOpenProfileDropdown = document.getElementById("btnOpenProfileDropdown");
+const headerDropdownMenu = document.getElementById("headerDropdownMenu");
+btnOpenProfileDropdown.addEventListener("click", (e) => {
+    e.stopPropagation();
+    headerDropdownMenu.classList.toggle("show");
+});
+document.addEventListener("click", () => headerDropdownMenu.classList.remove('show'));
+</script>
+</body>
+</html>
