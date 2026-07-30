@@ -990,19 +990,6 @@ textarea.input-box {
     color: var(--text-main);
 }
     
-body.hide-robot #bp-web-widget-container,
-body.hide-robot iframe[title*='Botpress'],
-body.hide-robot div[id*='bp-'] {
-    transform: translateY(120px) scale(0.7) !important;
-    opacity: 0 !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
-    transition: transform 0.3s ease, opacity 0.3s ease !important;
-}
-
-#bp-web-widget-container, iframe[title*='Botpress'] {
-    transition: transform 0.3s ease, opacity 0.3s ease !important;
-}
     
 </style>
 </head>
@@ -1421,21 +1408,21 @@ let lastScrollY = window.pageYOffset || document.documentElement.scrollTop;
 window.addEventListener("scroll", () => {
     let currentScrollY = window.pageYOffset || document.documentElement.scrollTop;
     
-    // Cari elemen widget Botpress secara langsung di halaman
-    const bpWidget = document.getElementById("bp-web-widget-container") || document.querySelector("iframe[title*='Botpress']") || document.querySelector("div[id*='bp-']");
+    // Targetkan langsung kontainer Botpress di halaman
+    const bpWidget = document.getElementById("bp-web-widget-container") || document.querySelector("iframe[title*='Botpress']");
     
     if (bpWidget) {
         bpWidget.style.transition = "transform 0.3s ease, opacity 0.3s ease";
         
-        // Jika scroll ke ATAS -> Sembunyikan widget ke bawah layar
+        // Scroll ke ATAS -> Robot Menghilang
         if (currentScrollY < lastScrollY - 5) {
-            bpWidget.style.transform = "translateY(150px)";
+            bpWidget.style.transform = "translateY(120px) scale(0.7)";
             bpWidget.style.opacity = "0";
             bpWidget.style.pointerEvents = "none";
         } 
-        // Jika scroll ke BAWAH -> Munculkan kembali widget ke posisi normal
+        // Scroll ke BAWAH -> Robot Muncul Kembali
         else if (currentScrollY > lastScrollY + 5) {
-            bpWidget.style.transform = "translateY(0)";
+            bpWidget.style.transform = "translateY(0) scale(1)";
             bpWidget.style.opacity = "1";
             bpWidget.style.pointerEvents = "auto";
         }
