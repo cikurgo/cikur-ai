@@ -1406,41 +1406,50 @@ let isModalOpen = false;
 function manageBotpressWidgetVisibility(hide) {
     isModalOpen = hide;
 
+    // Menjangkau berbagai kemungkinan elemen container/iframe dari Botpress webchat
     const targetEl =
         document.getElementById("bp-web-widget-container") ||
-        document.querySelector("iframe[title*='Botpress']");
+        document.querySelector("iframe[title*='Botpress']") ||
+        document.querySelector(".bp-widget-webchat") ||
+        document.getElementById("botpress-webchat");
 
     if (!targetEl) return;
 
-    targetEl.style.transition = "transform .4s ease, opacity .4s ease";
+    targetEl.style.transition = "transform .4s cubic-bezier(0.16, 1, 0.3, 1), opacity .4s ease";
 
     if (hide) {
+        // Meluncur menghilang ke samping kanan layar
         targetEl.style.transform = "translateX(150%)";
         targetEl.style.opacity = "0";
         targetEl.style.pointerEvents = "none";
     } else {
+        // Muncul kembali ke posisi semula di pojok kanan bawah
         targetEl.style.transform = "translateX(0)";
         targetEl.style.opacity = "1";
         targetEl.style.pointerEvents = "auto";
     }
 }
+
 /* ===== Robot Auto Hide Saat Scroll ===== */
+let lastScrollPosition = window.pageYOffset || document.documentElement.scrollTop;
 
-let lastScrollPosition = window.pageYOffset;
 window.addEventListener("scroll", () => {
-
     if (isModalOpen) return;
-    const currentScroll = window.pageYOffset;
+    
+    let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
 
-    if (currentScroll > lastScrollPosition + 5) {
-        // Scroll ke bawah
+    // Toleransi sensitivitas scroll agar animasi mulus
+    if (currentScroll > lastScrollPosition + 10) {
+        // Scroll ke bawah -> Robot menyembunyikan diri ke samping agar profil terlihat jelas
         manageBotpressWidgetVisibility(true);
-    } else if (currentScroll < lastScrollPosition - 5) {
-        // Scroll ke atas
+    } else if (currentScroll < lastScrollPosition - 10) {
+        // Scroll ke atas -> Robot muncul kembali
         manageBotpressWidgetVisibility(false);
     }
-    lastScrollPosition = currentScroll;
-});
+    
+    lastScrollPosition = currentScroll <= 0 ? 0 : currentScroll;
+}, { passive: true });
+    
 const miniSlides = document.querySelector(".mini-slides");
 const miniDots = document.querySelectorAll(".mini-dots span");
 let miniCurrent = 0;
