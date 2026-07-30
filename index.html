@@ -1405,23 +1405,28 @@ let isModalOpen = false;
 
 function manageBotpressWidgetVisibility(hide) {
     isModalOpen = hide;
-    const targetEl = document.getElementById("bp-web-widget-container") || 
-                     document.querySelector("bp-widget") || 
-                     document.querySelector(".bp-widget-web") || 
-                     document.querySelector("#bp-web-widget") || 
-                     document.querySelector("iframe[title*='Botpress']");
-    
-    if(targetEl) {
-        targetEl.style.transition = "all 0.5s cubic-bezier(0.16, 1, 0.3, 1)";
-        if(hide) {
-            targetEl.style.transform = "translateX(150%)";
-            targetEl.style.opacity = "0";
-            targetEl.style.pointerEvents = "none";
-        } else {
-            targetEl.style.transform = "translateX(0)";
-            targetEl.style.opacity = "1";
-            targetEl.style.pointerEvents = "auto";
-        }
+
+    const targetEl =
+        document.getElementById("bp-web-widget-container") ||
+        document.querySelector("bp-widget") ||
+        document.querySelector(".bp-widget-web") ||
+        document.querySelector("#bp-web-widget") ||
+        document.querySelector("iframe[title*='Botpress']") ||
+        document.querySelector("[class*='bp']") ||
+        document.querySelector("[id*='bp']");
+
+    if (!targetEl) return;
+
+    targetEl.style.transition = "transform .4s ease, opacity .4s ease";
+
+    if (hide) {
+        targetEl.style.transform = "translateX(120px)";
+        targetEl.style.opacity = "0";
+        targetEl.style.pointerEvents = "none";
+    } else {
+        targetEl.style.transform = "translateX(0)";
+        targetEl.style.opacity = "1";
+        targetEl.style.pointerEvents = "auto";
     }
 }
 /* ===== Robot Auto Hide Saat Scroll ===== */
