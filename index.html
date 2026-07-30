@@ -1118,9 +1118,13 @@ footer p { margin: 0; }
             <button id="closeAssistant">✕</button>
         </div>
         <div class="assistant-content" id="modalMainContent"></div>
-    </div>
-</div>
     
+        <div id="reader" style="width: 100%; max-width: 400px; margin: auto;"></div>
+<button id="start-scan-btn" class="btn btn-primary">Buka Scanner</button>
+    </div>
+
+</div>
+
 <script>
 let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || {
     name: "CIKUR USER",
@@ -1309,7 +1313,52 @@ if(assistantScreen) {
         }
     });
 }
+    
+let html5QrCode = null;
 
+function startScanner() {
+    const readerElement = document.getElementById("reader");
+    if (!readerElement) {
+        return;
+    }
+
+    if (!html5QrCode) {
+        html5QrCode = new Html5Qrcode("reader");
+    }
+
+    html5QrCode.start(
+        { facingMode: "environment" },
+        {
+            fps: 10,
+            qrbox: { width: 250, height: 250 }
+        },
+        (decodedText, decodedResult) => {
+            alert(`Barcode terdeteksi: ${decodedText}`);
+            stopScanner();
+        },
+        (errorMessage) => {}
+    ).catch((err) => {
+        console.error("Gagal memulai kamera.", err);
+    });
+}
+
+function stopScanner() {
+    if (html5QrCode) {
+        html5QrCode.stop().then(() => {
+            html5QrCode.clear();
+            html5QrCode = null;
+        }).catch((err) => {
+            console.log("Gagal menghentikan scanner.", err);
+        });
+    }
+}
+
+document.addEventListener("click", function(e) {
+    if (e.target && e.target.id === "start-scan-btn") {
+        startScanner();
+    }
+});
+    
 function bukaModalPengaturanProfil() {
     closeHeaderDropdown();
     openModal("PENGATURAN PROFIL & FOTO AKUN");
@@ -1861,6 +1910,7 @@ if(btnAssistant) {
 
     <script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
     <script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
 </body>
 </html>
