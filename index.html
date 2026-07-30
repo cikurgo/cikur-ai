@@ -1406,48 +1406,65 @@ let isModalOpen = false;
 function manageBotpressWidgetVisibility(hide) {
     isModalOpen = hide;
 
-    // Menjangkau berbagai kemungkinan elemen container/iframe dari Botpress webchat
-    const targetEl =
+    // Menargetkan seluruh kemungkinan elemen injeksi Botpress (baik container, iframe, maupun shadow/webchat root)
+    const targetEl = 
         document.getElementById("bp-web-widget-container") ||
         document.querySelector("iframe[title*='Botpress']") ||
+        document.querySelector("div[id*='bp-']") ||
         document.querySelector(".bp-widget-webchat") ||
-        document.getElementById("botpress-webchat");
+        document.getElementById("botpress-webchat") ||
+        document.querySelector("#webchat"); // Universal fallback
 
-    if (!targetEl) return;
+    // Jika elemen tidak ditemukan langsung di DOM utama, cari di dalam iframe/shadow root jika ada
+    if (!targetEl) {
+        const iframeFallback = document.querySelector("iframe");
+        if (iframeFallback) {
+            iframeFallback.style.transition = "transform .4s ease, opacity .4s ease";
+            iframeFallback.style.transform = hide ? "translateX(150%)" : "translateX(0)";
+            iframeFallback.style.opacity = hide ? "0" : "1";
+        }
+        return;
+    }
 
     targetEl.style.transition = "transform .4s cubic-bezier(0.16, 1, 0.3, 1), opacity .4s ease";
 
     if (hide) {
-        // Meluncur menghilang ke samping kanan layar
         targetEl.style.transform = "translateX(150%)";
         targetEl.style.opacity = "0";
         targetEl.style.pointerEvents = "none";
     } else {
-        // Muncul kembali ke posisi semula di pojok kanan bawah
         targetEl.style.transform = "translateX(0)";
         targetEl.style.opacity = "1";
         targetEl.style.pointerEvents = "auto";
     }
 }
 
-/* ===== Robot Auto Hide Saat Scroll ===== */
+/* ===== Robot Auto Hide Saat Scroll (Diperketat) ===== */
 let lastScrollPosition = window.pageYOffset || document.documentElement.scrollTop;
+let scrollTimeout;
 
 window.addEventListener("scroll", () => {
     if (isModalOpen) return;
     
     let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
 
-    // Toleransi sensitivitas scroll agar animasi mulus
-    if (currentScroll > lastScrollPosition + 10) {
-        // Scroll ke bawah -> Robot menyembunyikan diri ke samping agar profil terlihat jelas
+    // Sembunyikan saat scroll ke bawah
+    if (currentScroll > lastScrollPosition + 5) {
         manageBotpressWidgetVisibility(true);
-    } else if (currentScroll < lastScrollPosition - 10) {
-        // Scroll ke atas -> Robot muncul kembali
+    } 
+    // Munculkan kembali saat scroll ke atas
+    else if (currentScroll < lastScrollPosition - 5) {
         manageBotpressWidgetVisibility(false);
     }
     
     lastScrollPosition = currentScroll <= 0 ? 0 : currentScroll;
+
+    // Pastikan robot otomatis muncul kembali jika user berhenti scroll beberapa detik
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+        manageBotpressWidgetVisibility(false);
+    }, 1200);
+
 }, { passive: true });
     
 const miniSlides = document.querySelector(".mini-slides");
