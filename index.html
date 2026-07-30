@@ -1424,7 +1424,23 @@ function manageBotpressWidgetVisibility(hide) {
         }
     }
 }
+/* ===== Robot Auto Hide Saat Scroll ===== */
 
+let lastScrollPosition = window.pageYOffset;
+window.addEventListener("scroll", () => {
+
+    if (isModalOpen) return;
+    const currentScroll = window.pageYOffset;
+
+    if (currentScroll > lastScrollPosition + 5) {
+        // Scroll ke bawah
+        manageBotpressWidgetVisibility(true);
+    } else if (currentScroll < lastScrollPosition - 5) {
+        // Scroll ke atas
+        manageBotpressWidgetVisibility(false);
+    }
+    lastScrollPosition = currentScroll;
+});
 const miniSlides = document.querySelector(".mini-slides");
 const miniDots = document.querySelectorAll(".mini-dots span");
 let miniCurrent = 0;
