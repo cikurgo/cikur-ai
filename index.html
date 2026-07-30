@@ -991,22 +991,35 @@ textarea.input-box {
 }
 
 /* ===========================
-PERBAIKAN POSISI CHATBOT WIDGET
+   PENGATUR CHATBOT CUSTOM TOGGLE
 =========================== */
-/* Menyesuaikan posisi container utama Botpress agar tidak menutupi bottom nav */
-#bp-web-widget-container, 
-iframe[title*='Botpress'] {
-    bottom: 80px !important; /* Naikkan posisi widget di atas bottom nav (tinggi nav 70px + 10px jarak) */
-    right: 16px !important;
-    max-height: calc(100vh - 100px) !important;
-    z-index: 99999 !important;
+.custom-robot-trigger {
+    position: fixed;
+    bottom: 75px; /* Tepat di atas bottom navigation bar */
+    right: 20px;
+    background: linear-gradient(135deg, #E50914, #b80710);
+    color: white;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 15px rgba(229, 9, 20, 0.4);
+    cursor: pointer;
+    z-index: 100000;
+    transition: transform 0.2s ease;
 }
 
-/* Mengatur ukuran tombol gelembung chat (bubble) agar lebih proporsional di HP */
-.bp-widget-btn, div[class*='bp-widget'] {
-    transform: scale(0.9); /* Sedikit diperkecil agar tidak terlalu memakan tempat */
-    transform-origin: bottom right;
-} 
+.custom-robot-trigger:hover {
+    transform: scale(1.1);
+}
+
+.custom-robot-trigger svg {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
 </style>
 </head>
     
@@ -1419,33 +1432,44 @@ if(chatBtn) {
     });
 }
 
-let lastScrollY = window.pageYOffset || document.documentElement.scrollTop;
+<!-- Tombol Robot Kustom -->
+<div class="custom-robot-trigger" onclick="toggleChatbot()" title="Asisten Cikur Go">
+    <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg>
+</div>
 
-window.addEventListener("scroll", () => {
-    let currentScrollY = window.pageYOffset || document.documentElement.scrollTop;
+<script>
+let isChatOpen = false;
+
+function toggleChatbot() {
+    const bpContainer = document.getElementById('bp-web-widget-container') || document.querySelector('iframe[title*="Botpress"]');
     
-    // Targetkan langsung kontainer Botpress di halaman
-    const bpWidget = document.getElementById("bp-web-widget-container") || document.querySelector("iframe[title*='Botpress']");
-    
-    if (bpWidget) {
-        bpWidget.style.transition = "transform 0.3s ease, opacity 0.3s ease";
-        
-        // Scroll ke ATAS -> Robot Menghilang
-        if (currentScrollY < lastScrollY - 5) {
-            bpWidget.style.transform = "translateY(120px) scale(0.7)";
-            bpWidget.style.opacity = "0";
-            bpWidget.style.pointerEvents = "none";
-        } 
-        // Scroll ke BAWAH -> Robot Muncul Kembali
-        else if (currentScrollY > lastScrollY + 5) {
-            bpWidget.style.transform = "translateY(0) scale(1)";
-            bpWidget.style.opacity = "1";
-            bpWidget.style.pointerEvents = "auto";
+    if (!bpContainer) {
+        if (window.botpressWebChat) {
+            window.botpressWebChat.sendPayload({ type: 'toggle' });
         }
+        return;
     }
 
-    lastScrollY = currentScrollY <= 0 ? 0 : currentScrollY;
-}, { passive: true });
+    isChatOpen = !isChatOpen;
+    
+    if (isChatOpen) {
+        bpContainer.style.display = 'block';
+        if (window.botpressWebChat) window.botpressWebChat.open();
+    } else {
+        bpContainer.style.display = 'none';
+        if (window.botpressWebChat) window.botpressWebChat.close();
+    }
+}
+
+// Sembunyikan widget bawaan secara otomatis saat pertama kali dimuat
+window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        const bpContainer = document.getElementById('bp-web-widget-container') || document.querySelector('iframe[title*="Botpress"]');
+        if (bpContainer) {
+            bpContainer.style.display = 'none';
+        }
+    }, 1200);
+});
     
 const miniSlides = document.querySelector(".mini-slides");
 const miniDots = document.querySelectorAll(".mini-dots span");
