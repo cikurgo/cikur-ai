@@ -1317,27 +1317,37 @@ if(assistantScreen) {
 let html5QrCode = null;
 
 function startScanner() {
-    const readerElement = document.getElementById("reader");
-if (readerElement) {
-    readerElement.style.display = "block";
-}
-    if (!html5QrCode) {
-        html5QrCode = new Html5Qrcode("reader");
+    const modal = document.getElementById('assistantScreen');
+    if (modal) {
+        modal.style.display = 'block';
     }
-    html5QrCode.start(
-        { facingMode: "environment" },
-        {
-            fps: 10,
-            qrbox: { width: 250, height: 250 }
-        },
-        (decodedText, decodedResult) => {
-            alert(`Barcode terdeteksi: ${decodedText}`);
-            stopScanner();
-        },
-        (errorMessage) => {}
-    ).catch((err) => {
-        console.error("Gagal memulai kamera.", err);
-    });
+    
+    const readerElement = document.getElementById("reader");
+    if (readerElement) {
+        readerElement.style.display = "block";
+    }
+
+    setTimeout(() => {
+        if (!html5QrCode) {
+            html5QrCode = new Html5Qrcode("reader");
+        }
+        
+        html5QrCode.start(
+            { facingMode: "environment" },
+            { 
+                fps: 10, 
+                qrbox: { width: 250, height: 250 } 
+            },
+            (decodedText, decodedResult) => {
+                alert(`Barcode terdeteksi: ${decodedText}`);
+                stopScanner();
+            },
+            (errorMessage) => {}
+        ).catch((err) => {
+            console.error("Gagal memulai kamera.", err);
+            alert("Gagal membuka kamera. Pastikan memberikan izin akses kamera.");
+        });
+    }, 300);
 }
 
 function stopScanner() {
