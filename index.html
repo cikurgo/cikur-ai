@@ -1123,6 +1123,8 @@ footer p { margin: 0; }
 <!-- Wadah untuk QR Code Saya (awalnya disembunyikan/hidden) -->
 <div id="my-qrcode-container" style="display: none; text-align: center; padding: 20px;">
     <p style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 10px;">QR CODE CIKURPAY</p>
+    <!-- Tambahan elemen untuk menampilkan nama user secara dinamis -->
+    <p id="qr-username-display" style="font-size: 13px; color: #E50914; font-weight: 800; margin-bottom: 10px;"></p>
     <div id="qrcode" style="display: inline-block; padding: 15px; background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></div>
     <p style="font-size: 12px; color: #64748b; margin-top: 10px;">Tunjukkan QR ini ke teman atau merchant untuk menerima pembayaran.</p>
 </div>
@@ -1163,12 +1165,24 @@ function toggleScannerMode() {
 }
 function generateUserQRCode() {
     const container = document.getElementById("qrcode");
+    const nameDisplay = document.getElementById("qr-username-display");
+    
     if (container) {
         container.innerHTML = "";
-        const userData = (typeof userProfile !== 'undefined' && userProfile.phone) ? userProfile.phone : "CIKURPAY-USER-001";
+        
+        // Ambil data user dari localStorage
+        const name = (typeof userProfile !== 'undefined' && userProfile.name) ? userProfile.name : "CIKUR USER";
+        const phone = (typeof userProfile !== 'undefined' && userProfile.phone) ? userProfile.phone : "CIKURPAY-USER-001";
+        
+        // Tampilkan nama dan nomor HP di atas QR
+        if (nameDisplay) {
+            nameDisplay.innerText = `${name} (${phone})`;
+        }
+
+        // Buat QR code unik berdasarkan data user
         if (typeof QRCode !== 'undefined') {
             new QRCode(container, {
-                text: "CIKURPAY:" + userData,
+                text: "CIKURPAY:" + phone,
                 width: 180,
                 height: 180,
                 colorDark: "#000000",
@@ -1177,7 +1191,7 @@ function generateUserQRCode() {
             });
         }
     }
-}   
+}
 let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || {
     name: "CIKUR USER",
     phone: "08123456789",
