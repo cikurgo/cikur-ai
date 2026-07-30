@@ -1420,14 +1420,25 @@ let lastScrollY = window.pageYOffset || document.documentElement.scrollTop;
 
 window.addEventListener("scroll", () => {
     let currentScrollY = window.pageYOffset || document.documentElement.scrollTop;
-
-    // Scroll ke ATAS -> Robot Menghilang
-    if (currentScrollY < lastScrollY - 5) {
-        document.body.classList.add("hide-robot");
-    } 
-    // Scroll ke BAWAH -> Robot Muncul Kembali
-    else if (currentScrollY > lastScrollY + 5) {
-        document.body.classList.remove("hide-robot");
+    
+    // Cari elemen widget Botpress secara langsung di halaman
+    const bpWidget = document.getElementById("bp-web-widget-container") || document.querySelector("iframe[title*='Botpress']") || document.querySelector("div[id*='bp-']");
+    
+    if (bpWidget) {
+        bpWidget.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+        
+        // Jika scroll ke ATAS -> Sembunyikan widget ke bawah layar
+        if (currentScrollY < lastScrollY - 5) {
+            bpWidget.style.transform = "translateY(150px)";
+            bpWidget.style.opacity = "0";
+            bpWidget.style.pointerEvents = "none";
+        } 
+        // Jika scroll ke BAWAH -> Munculkan kembali widget ke posisi normal
+        else if (currentScrollY > lastScrollY + 5) {
+            bpWidget.style.transform = "translateY(0)";
+            bpWidget.style.opacity = "1";
+            bpWidget.style.pointerEvents = "auto";
+        }
     }
 
     lastScrollY = currentScrollY <= 0 ? 0 : currentScrollY;
