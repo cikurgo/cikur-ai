@@ -989,6 +989,21 @@ textarea.input-box {
     font-weight: 700;
     color: var(--text-main);
 }
+    
+body.hide-robot #bp-web-widget-container,
+body.hide-robot iframe[title*='Botpress'],
+body.hide-robot div[id*='bp-'] {
+    transform: translateY(120px) scale(0.7) !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    transition: transform 0.3s ease, opacity 0.3s ease !important;
+}
+
+#bp-web-widget-container, iframe[title*='Botpress'] {
+    transition: transform 0.3s ease, opacity 0.3s ease !important;
+}
+    
 </style>
 </head>
     
@@ -1401,89 +1416,21 @@ if(chatBtn) {
     });
 }
 
-let isModalOpen = false;
-
-function manageBotpressWidgetVisibility(hide) {
-    isModalOpen = hide;
-
-    // Mencari seluruh kemungkinan elemen root atau iframe webchat Botpress
-    const bpContainer = document.getElementById("bp-web-widget-container") || document.getElementById("botpress-webchat");
-    const bpIframe = document.querySelector("iframe[title*='Botpress']") || document.querySelector("iframe");
-
-    // Terapkan transisi halus
-    const target = bpContainer || bpIframe;
-    if (!target) return;
-
-    target.style.transition = "all 0.35s cubic-bezier(0.4, 0, 0.2, 1)";
-
-    if (hide) {
-        // Sembunyikan (Hilang)
-        target.style.transform = "translateY(120px) scale(0.8)";
-        target.style.opacity = "0";
-        target.style.visibility = "hidden";
-        target.style.pointerEvents = "none";
-    } else {
-        // Munculkan kembali
-        target.style.transform = "translateY(0) scale(1)";
-        target.style.opacity = "1";
-        target.style.visibility = "visible";
-        target.style.pointerEvents = "auto";
-    }
-}
-
-/* ===== Auto Hide Robot Berdasarkan Arah Scroll (Dibalik) ===== */
-let lastScrollTop = window.pageYOffset || document.documentElement.scrollTop;
-let scrollTimer = null;
+let lastScrollY = window.pageYOffset || document.documentElement.scrollTop;
 
 window.addEventListener("scroll", () => {
-    if (isModalOpen) return;
+    let currentScrollY = window.pageYOffset || document.documentElement.scrollTop;
 
-    let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
-
-    // Deteksi arah scroll
-    if (currentScroll < lastScrollTop - 5) {
-        // Scroll ke ATAS -> Robot Menghilang
-        manageBotpressWidgetVisibility(true);
-    } else if (currentScroll > lastScrollTop + 5) {
-        // Scroll ke BAWAH -> Robot Muncul
-        manageBotpressWidgetVisibility(false);
-    }
-
-    lastScrollTop = currentScroll <= 0 ? 0 : currentScroll;
-
-    // Safety: Jika user berhenti scroll selama 1 detik, robot otomatis muncul lagi
-    clearTimeout(scrollTimer);
-    scrollTimer = setTimeout(() => {
-        manageBotpressWidgetVisibility(false);
-    }, 1000);
-
-}, { passive: true });
-/* ===== Robot Auto Hide Saat Scroll (Diperketat) ===== */
-let lastScrollPosition = window.pageYOffset || document.documentElement.scrollTop;
-let scrollTimeout;
-
-window.addEventListener("scroll", () => {
-    if (isModalOpen) return;
-    
-    let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
-
-    // Sembunyikan saat scroll ke bawah
-    if (currentScroll > lastScrollPosition + 5) {
-        manageBotpressWidgetVisibility(true);
+    // Scroll ke ATAS -> Robot Menghilang
+    if (currentScrollY < lastScrollY - 5) {
+        document.body.classList.add("hide-robot");
     } 
-    // Munculkan kembali saat scroll ke atas
-    else if (currentScroll < lastScrollPosition - 5) {
-        manageBotpressWidgetVisibility(false);
+    // Scroll ke BAWAH -> Robot Muncul Kembali
+    else if (currentScrollY > lastScrollY + 5) {
+        document.body.classList.remove("hide-robot");
     }
-    
-    lastScrollPosition = currentScroll <= 0 ? 0 : currentScroll;
 
-    // Pastikan robot otomatis muncul kembali jika user berhenti scroll beberapa detik
-    clearTimeout(scrollTimeout);
-    scrollTimeout = setTimeout(() => {
-        manageBotpressWidgetVisibility(false);
-    }, 1200);
-
+    lastScrollY = currentScrollY <= 0 ? 0 : currentScrollY;
 }, { passive: true });
     
 const miniSlides = document.querySelector(".mini-slides");
