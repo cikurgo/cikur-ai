@@ -1114,7 +1114,7 @@ footer p { margin: 0; }
 <div id="assistantScreen" class="assistant-screen">
     <div class="assistant-page">
         <div class="assistant-top">
-            <span id="modalTitle">CIKUR GO SYSTEM</span>
+            <span id="modalTitle">Scan QR CIKURPAY</span>
             <button id="closeAssistant">✕</button>
         </div>
         <div class="assistant-content" id="modalMainContent"></div>
@@ -1339,8 +1339,19 @@ function startScanner() {
                 qrbox: { width: 250, height: 250 } 
             },
             (decodedText, decodedResult) => {
-                alert(`Barcode terdeteksi: ${decodedText}`);
+                // Hentikan kamera setelah berhasil scan
                 stopScanner();
+                
+                // Cek apakah data QR yang di-scan valid untuk CikurPay
+                // Contoh: Mengirim data hasil scan ke halaman/fungsi pembayaran CikurPay
+                console.log("Data QR:", decodedText);
+                
+                // Contoh integrasi langsung:
+                // 1. Tampilkan konfirmasi pembayaran saldo CikurPay
+                alert(`QR Berhasil Dipindai!\nMemproses pembayaran ke CikurPay untuk: ${decodedText}`);
+                
+                // 2. Atau arahkan ke fungsi modal pembayaran CikurPay Anda
+                // bukaModalCikurPay(decodedText);
             },
             (errorMessage) => {}
         ).catch((err) => {
