@@ -986,18 +986,16 @@ footer p { margin: 0; }
                     <span class="menu-label">Ride</span>
                 </a>
 
-                <!-- Tombol CIKUR GO 2IN1 -->
-                <a href="cikurgo2in1.html" id="btnCikurGo2in1" class="menu-item" style="grid-column: span 3; margin-top: 4px; flex-direction: row; justify-content: center; gap: 12px; background: linear-gradient(135deg, #fff5f5 0%, #fee2e2 100%); border: 1px solid rgba(229,9,20,0.3); padding: 14px; border-radius: 16px; width: 100%;">
-                    <div class="menu-icon-box" style="width: 40px; height: 40px; margin-bottom: 0; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: var(--primary-red); color: #fff;">
-                        <span style="font-size: 18px;">🚀</span>
-                    </div>
-                    <div style="display: flex; flex-direction: column; align-items: flex-start;">
-                        <span class="menu-label" style="font-size: 12px; font-weight: 800; color: var(--primary-red);">CIKUR GO 2IN1 (Bundle Food & Assistant)</span>
-                        <span style="font-size: 10px; color: var(--text-muted); font-weight: 600;">Lebih hemat, praktis, dan serbaguna</span>
-                    </div>
-                </a>
-            </div>
-        </div>
+                <!-- Tombol / Widget Dinamis CIKUR GO 2IN1 -->
+<div id="btnCikurGo2in1" onclick="handleCikur2In1Click()" class="menu-item" style="grid-column: span 3; margin-top: 4px; flex-direction: row; justify-content: center; gap: 12px; background: linear-gradient(135deg, #fff5f5 0%, #fee2e2 100%); border: 1px solid rgba(229,9,20,0.3); padding: 14px; border-radius: 16px; width: 100%; cursor: pointer; transition: all 0.3s ease;">
+    <div class="menu-icon-box" style="width: 40px; height: 40px; margin-bottom: 0; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: var(--primary-red); color: #fff;">
+        <span style="font-size: 18px;">🚀</span>
+    </div>
+    <div id="cikur2in1-content" style="display: flex; flex-direction: column; align-items: flex-start; width: 100%;">
+        <span class="menu-label" style="font-size: 12px; font-weight: 800; color: var(--primary-red);">CIKUR GO 2IN1 (Bundle Food & Assistant)</span>
+        <span style="font-size: 10px; color: var(--text-muted); font-weight: 600;">Lebih hemat, praktis, dan serbaguna</span>
+    </div>
+</div>
     
         <div class="hero-frame">
             <div class="section-label-mini">Featured Highlights</div>
@@ -1148,6 +1146,7 @@ footer p { margin: 0; }
 </div>
 
     <script>
+        
  let isShowingMyQR = false;
 function toggleScannerMode() {
     const readerDiv = document.getElementById("reader");
@@ -1201,6 +1200,87 @@ function generateUserQRCode() {
         }
     }
 }
+// --- LOGIKA TIMER & INTEGRASI CHAT CIKUR GO 2IN1 ---
+let isCikur2In1Active = false; // Ubah jadi true jika customer sudah memesan
+let orderConfig = {
+    waktuMulaiLayanan: new Date("2026-07-31T12:00:00"), 
+    durasiMenit: 45
+};
+
+function updateCikur2In1Widget() {
+    const container = document.getElementById('btnCikurGo2in1');
+    const contentDiv = document.getElementById('cikur2in1-content');
+    if (!container || !contentDiv) return;
+
+    if (!isCikur2In1Active) {
+        contentDiv.innerHTML = `
+            <span class="menu-label" style="font-size: 12px; font-weight: 800; color: var(--primary-red);">CIKUR GO 2IN1 (Bundle Food & Assistant)</span>
+            <span style="font-size: 10px; color: var(--text-muted); font-weight: 600;">Lebih hemat, praktis, dan serbaguna</span>
+        `;
+        return;
+    }
+
+    let sekarang = new Date();
+    let selisihKeMulai = Math.floor((orderConfig.waktuMulaiLayanan - sekarang) / 1000);
+
+    container.style.background = "linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)";
+    container.style.borderColor = "rgba(33, 150, 243, 0.4)";
+
+    if (selisihKeMulai > 900) { 
+        contentDiv.innerHTML = `
+            <span style="font-size: 12px; font-weight: 800; color: #0d47a1;">Pesanan 2IN1 Terjadwal 📅</span>
+            <span style="font-size: 10px; color: #1565c0; font-weight: 600;">Mulai pukul 12:00 • 💬 Klik untuk buka Chat Koordinasi</span>
+        `;
+    } else if (selisihKeMulai > 0 && selisihKeMulai <= 900) {
+        let m = Math.floor(selisihKeMulai / 60);
+        let s = selisihKeMulai % 60;
+        let timeFormatted = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+
+        contentDiv.innerHTML = `
+            <span style="font-size: 12px; font-weight: 800; color: #0d47a1;">Menuju Mulai Layanan ⏳ (${timeFormatted})</span>
+            <span style="font-size: 10px; color: #1565c0; font-weight: 600;">💬 Klik di sini untuk buka Chat Terintegrasi</span>
+        `;
+    } else {
+        let waktuSelesaiTotal = Math.floor((new Date(orderConfig.waktuMulaiLayanan.getTime() + orderConfig.durasiMenit * 60000) - sekarang) / 1000);
+        if (waktuSelesaiTotal > 0) {
+            let m = Math.floor(waktuSelesaiTotal / 60);
+            let s = waktuSelesaiTotal % 60;
+            let timeFormatted = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+
+            contentDiv.innerHTML = `
+                <span style="font-size: 12px; font-weight: 800; color: #0d47a1;">Layanan 2IN1 Berjalan 🚀 (Sisa: ${timeFormatted})</span>
+                <span style="font-size: 10px; color: #1565c0; font-weight: 600;">💬 Klik di sini untuk buka Chat Terintegrasi</span>
+            `;
+        } else {
+            contentDiv.innerHTML = `
+                <span style="font-size: 12px; font-weight: 800; color: #2e7d32;">Pesanan 2IN1 Selesai ✅</span>
+                <span style="font-size: 10px; color: #388e3c; font-weight: 600;">Terima kasih telah menggunakan CIKUR GO</span>
+            `;
+        }
+    }
+}
+
+function handleCikur2In1Click() {
+    if (isCikur2In1Active) {
+        // Jika sudah memesan -> Langsung buka kolom chat terintegrasi
+        bukaKolomChatTerintegrasi();
+    } else {
+        // Jika belum memesan -> Langsung masuk ke file cikurgo2in1.html
+        window.location.href = "cikurgo2in1.html";
+    }
+}
+
+function bukaKolomChatTerintegrasi() {
+    alert("Mengarahkan langsung ke Kolom Chat Terintegrasi!");
+    // Ganti baris di bawah jika fungsi chat master Anda sudah ada:
+    // window.location.href = "halaman-chat.html";
+}
+
+setInterval(updateCikur2In1Widget, 1000);
+window.onload = function() {
+    updateCikur2In1Widget();
+};
+ 
 let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || {
     name: "CIKUR USER",
     phone: "08123456789",
