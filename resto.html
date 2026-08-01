@@ -49,9 +49,20 @@ body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; di
 .nav-item span { font-size: 11px; font-weight: 600; }
 .nav-item.active { color: var(--primary-red); }
 
-/* CONTENT SECTION */
+/* CONTENT STYLES */
 .resto-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 20px; padding: 16px; margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
-.btn-pesan-form { width: 100%; height: 46px; border: none; border-radius: 12px; background: var(--primary-red); color: #fff; font-size: 14px; font-weight: 800; cursor: pointer; margin-top: 10px; }
+.form-group { margin-bottom: 12px; }
+.form-label { display: block; font-size: 11px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; }
+.form-input, .form-select, .form-textarea { width: 100%; padding: 10px 12px; font-size: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: #fff; color: var(--text-main); outline: none; }
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--primary-red); }
+.btn-action { width: 100%; height: 42px; border: none; border-radius: 10px; background: var(--primary-red); color: #fff; font-size: 13px; font-weight: 800; cursor: pointer; transition: 0.2s; margin-top: 6px; }
+.btn-action:hover { background: var(--primary-red-hover); }
+
+.menu-item-card { display: flex; justify-content: space-between; align-items: center; padding: 10px; border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 8px; background: #fafafa; }
+.menu-info h4 { font-size: 12px; font-weight: 700; color: var(--text-main); }
+.menu-info p { font-size: 11px; color: var(--text-muted); }
+.menu-price { font-size: 12px; font-weight: 800; color: var(--primary-red); }
+
 footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(--text-muted); font-size: 11px; }
 </style>
 </head>
@@ -75,13 +86,13 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                     <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8Z"/></svg>
                     <span>Beranda Utama</span>
                 </button>
+                <button class="dropdown-item" onclick="window.location.href='food.html';">
+                    <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4Z"/></svg>
+                    <span>Lihat Menu (Food)</span>
+                </button>
                 <button class="dropdown-item" onclick="window.location.href='agentcgo.html';">
                     <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2Z"/></svg>
                     <span>Agent CGO</span>
-                </button>
-                <button class="dropdown-item" onclick="window.location.href='driver.html';">
-                    <svg viewBox="0 0 24 24"><path d="M5 13c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3zm7-8-2 3H7c-.55 0-1 .45-1 1s.45 1 1 1h2.15l1.63-2.45L15.35 12H19c.55 0 1-.45 1-1s-.45-1-1-1h-2.15l-1.92-2.88c-.3-.45-.81-.72-1.35-.72H12z"/></svg>
-                    <span>Driver</span>
                 </button>
             </div>
         </div>
@@ -89,15 +100,66 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
 
     <!-- MAIN VIEW RESTO -->
     <div style="margin-top: 10px;">
+        <!-- Banner Info -->
         <div class="resto-card" style="background: linear-gradient(135deg, var(--dark-bg), var(--dark-card)); color: #fff;">
-            <h2 style="font-size: 16px; font-weight: 800; margin-bottom: 6px;">🍜 CIKUR Food & Resto Partner</h2>
-            <p style="font-size: 12px; color: #94a3b8; line-height: 1.4;">Kelola menu makanan, pesanan masuk, dan pantau performa restoran Anda secara real-time.</p>
+            <h2 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">🍜 CIKUR Food & Resto Partner</h2>
+            <p style="font-size: 11px; color: #94a3b8; line-height: 1.4;">Kelola profil restoran, jam operasional, dan upload menu makanan Anda agar tampil di <a href="food.html" style="color: #ff6b6b; text-decoration: underline;">food.html</a>.</p>
         </div>
 
+        <!-- 1. REGISTRASI & PROFIL RESTORAN -->
         <div class="resto-card">
-            <h3 style="font-size: 14px; font-weight: 800; margin-bottom: 8px;">Daftar Pesanan Masuk</h3>
-            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Belum ada pesanan baru untuk saat ini. Restoran Anda aktif dan siap menerima order.</p>
-            <button class="btn-pesan-form" onclick="alert('[INFO] Status Resto diperbarui: Buka & Siap Menerima Order.')">Status: Buka (Online) ✓</button>
+            <h3 style="font-size: 13px; font-weight: 800; margin-bottom: 10px; color: var(--text-main);">1. Pengaturan & Akun Resto</h3>
+            <form id="formRestoProfile">
+                <div class="form-group">
+                    <label class="form-label">Nama Restoran</label>
+                    <input type="text" id="restoNameInput" class="form-input" placeholder="Contoh: Kedai Cikur Enak" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Kategori Kuliner</label>
+                    <select id="restoCategoryInput" class="form-select">
+                        <option value="Makanan Berat">Makanan Berat & Nasi</option>
+                        <option value="Snack & Jajanan">Snack & Jajanan Tradisional</option>
+                        <option value="Minuman & Cafe">Minuman & Cafe</option>
+                        <option value="Fast Food">Fast Food & Bakso</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Alamat Lengkap & Patokan</label>
+                    <textarea id="restoAddressInput" class="form-textarea" rows="2" placeholder="Masukkan alamat lengkap resto..."></textarea>
+                </div>
+                <button type="submit" class="btn-action">Simpan Profil Resto</button>
+            </form>
+        </div>
+
+        <!-- 2. UPLOAD & KELOLA MENU MAKANAN -->
+        <div class="resto-card">
+            <h3 style="font-size: 13px; font-weight: 800; margin-bottom: 10px; color: var(--text-main);">2. Upload Menu Makanan</h3>
+            <form id="formAddMenu">
+                <div class="form-group">
+                    <label class="form-label">Nama Menu</label>
+                    <input type="text" id="menuNameInput" class="form-input" placeholder="Contoh: Nasi Bakar Cikur Spesial" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Harga (Rp)</label>
+                    <input type="number" id="menuPriceInput" class="form-input" placeholder="Contoh: 20000" required>
+                </div>
+                <button type="submit" class="btn-action" style="background: #0f172a;">+ Tambah Menu Baru</button>
+            </form>
+
+            <div style="margin-top: 14px;">
+                <h4 style="font-size: 12px; font-weight: 700; margin-bottom: 8px;">Daftar Menu Aktif Anda:</h4>
+                <div id="listMenuContainer">
+                    <!-- List menu yang diinput akan muncul secara dinamis di sini -->
+                    <p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada menu yang di-upload.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- STATUS BUKA/TUTUP -->
+        <div class="resto-card" style="text-align: center;">
+            <h3 style="font-size: 13px; font-weight: 800; margin-bottom: 6px;">Status Operasional Resto</h3>
+            <p id="statusRestoText" style="font-size: 11px; color: green; font-weight: 700; margin-bottom: 10px;">Status: Buka & Siap Menerima Order (Online)</p>
+            <button class="btn-action" id="btnToggleStatus" style="background: #334155; height: 36px; font-size: 12px;">Ubah ke Tutup</button>
         </div>
     </div>
 
@@ -111,16 +173,23 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4Z"/></svg>
             <span>Resto</span>
         </a>
+        <a href="food.html" class="nav-item">
+            <svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1Zm-9 8a6 6 0 1 1 6-6 6 6 0 0 1-6 6Z"/></svg>
+            <span>Food</span>
+        </a>
         <a href="agentcgo.html" class="nav-item">
             <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2Z"/></svg>
             <span>Agent CGO</span>
         </a>
     </nav>
-    <footer><p>© 2026 CIKUR GO • Resto Partner Engine</p></footer>
+    <footer><p>© 2026 CIKUR GO • Resto Partner Engine v3.9</p></footer>
 </div>
 
 <script>
 let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { name: "CIKUR USER", phone: "08123456789", saldo: 125000, avatar: "" };
+let restoData = JSON.parse(localStorage.getItem('cikur_resto')) || { name: "", category: "", address: "", isOpen: true };
+let restoMenuList = JSON.parse(localStorage.getItem('cikur_resto_menu')) || [];
+
 function updateUIProfile() {
     document.getElementById("headerNamaUser").innerText = userProfile.name;
     let avatarContainer = document.getElementById("headerAvatar");
@@ -129,7 +198,84 @@ function updateUIProfile() {
     } else {
         avatarContainer.innerText = userProfile.name.split(" ").map(n => n[0]).join("").substring(0,2).toUpperCase() || "CK";
     }
+
+    // Load saved resto profile if exists
+    if(restoData.name) {
+        document.getElementById("restoNameInput").value = restoData.name;
+        document.getElementById("restoCategoryInput").value = restoData.category;
+        document.getElementById("restoAddressInput").value = restoData.address;
+    }
+    renderMenuList();
 }
+
+// Save Resto Profile
+document.getElementById("formRestoProfile").addEventListener("submit", function(e) {
+    e.preventDefault();
+    restoData.name = document.getElementById("restoNameInput").value;
+    restoData.category = document.getElementById("restoCategoryInput").value;
+    restoData.address = document.getElementById("restoAddressInput").value;
+    localStorage.setItem('cikur_resto', JSON.stringify(restoData));
+    alert("Profil Restoran berhasil disimpan!");
+});
+
+// Add Menu Item
+document.getElementById("formAddMenu").addEventListener("submit", function(e) {
+    e.preventDefault();
+    let name = document.getElementById("menuNameInput").value;
+    let price = document.getElementById("menuPriceInput").value;
+
+    restoMenuList.push({ name: name, price: price });
+    localStorage.setItem('cikur_resto_menu', JSON.stringify(restoMenuList));
+    
+    document.getElementById("menuNameInput").value = "";
+    document.getElementById("menuPriceInput").value = "";
+    renderMenuList();
+    alert("Menu baru berhasil ditambahkan dan disinkronkan ke sistem Food!");
+});
+
+function renderMenuList() {
+    let container = document.getElementById("listMenuContainer");
+    if(restoMenuList.length === 0) {
+        container.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada menu yang di-upload.</p>`;
+        return;
+    }
+    let html = "";
+    restoMenuList.forEach((item, index) => {
+        html += `
+        <div class="menu-item-card">
+            <div class="menu-info">
+                <h4>${item.name}</h4>
+                <p class="menu-price">Rp ${Number(item.price).toLocaleString('id-ID')}</p>
+            </div>
+            <button onclick="deleteMenu(${index})" style="background: none; border: none; color: var(--primary-red); font-size: 11px; font-weight: 700; cursor: pointer;">Hapus</button>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+function deleteMenu(index) {
+    restoMenuList.splice(index, 1);
+    localStorage.setItem('cikur_resto_menu', JSON.stringify(restoMenuList));
+    renderMenuList();
+}
+
+// Toggle Status Resto
+const btnToggleStatus = document.getElementById("btnToggleStatus");
+const statusRestoText = document.getElementById("statusRestoText");
+btnToggleStatus.addEventListener("click", () => {
+    restoData.isOpen = !restoData.isOpen;
+    localStorage.setItem('cikur_resto', JSON.stringify(restoData));
+    if(restoData.isOpen) {
+        statusRestoText.innerText = "Status: Buka & Siap Menerima Order (Online)";
+        statusRestoText.style.color = "green";
+        btnToggleStatus.innerText = "Ubah ke Tutup";
+    } else {
+        statusRestoText.innerText = "Status: Tutup (Offline)";
+        statusRestoText.style.color = "var(--primary-red)";
+        btnToggleStatus.innerText = "Ubah ke Buka";
+    }
+});
+
 window.addEventListener("DOMContentLoaded", updateUIProfile);
 
 const btnOpenProfileDropdown = document.getElementById("btnOpenProfileDropdown");
