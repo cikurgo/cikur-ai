@@ -1,639 +1,162 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CIKUR GO FOOD - Ecosystem Assistant</title>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-<style>
-:root {
-    --primary-red: #E50914;
-    --primary-red-hover: #b80710;
-    --dark-bg: #0f172a;
-    --body-bg: #f1f5f9;
-    --container-bg: #f8fafc;
-    --border-color: #e2e8f0;
-    --text-main: #0f172a;
-    --text-muted: #64748b;
-    --font-main: 'Plus Jakarta Sans', sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
-}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cikur Go Food</title>
+    <style>
+        :root { --primary-red: #ea580c; --text-main: #0f172a; --text-muted: #64748b; --border-color: #e2e8f0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8fafc; color: var(--text-main); margin: 0; padding: 0; }
+        .container { max-width: 480px; margin: 0 auto; padding: 16px; box-sizing: border-box; }
+        .app-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+        .back-btn { text-decoration: none; font-size: 14px; font-weight: bold; color: var(--text-main); background: #fff; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color); }
+        
+        /* Banner Slider */
+        .banner-slider-container { width: 100%; overflow: hidden; border-radius: 14px; margin-bottom: 14px; background: #ea580c; position: relative; }
+        .banner-slides { display: flex; transition: transform 0.4s ease-in-out; width: 300%; }
+        .banner-slide { width: 33.333%; padding: 16px; box-sizing: border-box; color: #fff; }
+        .banner-slide h3 { font-size: 13px; font-weight: 800; margin: 0 0 4px 0; }
+        .banner-slide p { font-size: 11px; margin: 0; opacity: 0.9; line-height: 1.4; }
 
-*{
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: var(--font-main);
-}
+        /* Search & Tabs */
+        .search-box { width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 12px; background: #fff; box-sizing: border-box; margin-bottom: 12px; outline: none; }
+        .mode-buttons { display: flex; gap: 8px; margin-bottom: 16px; }
+        .mode-btn { flex: 1; padding: 10px; border-radius: 12px; font-size: 11px; font-weight: 800; border: 1px solid var(--border-color); background: #fff; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .mode-btn.active { background: var(--primary-red); color: #fff; border-color: var(--primary-red); }
 
-body{
-    background: var(--body-bg);
-    color: var(--text-main);
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
+        /* Resto Card & Menu */
+        .resto-card { background: #fff; border-radius: 14px; border: 1px solid var(--border-color); padding: 12px; margin-bottom: 12px; box-sizing: border-box; }
+        .resto-content-wrapper { max-height: 2000px; overflow: hidden; transition: max-height 0.3s ease; }
+        .resto-content-wrapper.collapsed { max-height: 0; }
+        
+        /* Chat */
+        .chat-box-container { background: #f8fafc; border: 1px solid var(--border-color); border-radius: 12px; padding: 10px; margin-top: 10px; }
+        .chat-messages { max-height: 120px; overflow-y: auto; font-size: 11px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px; }
+        .chat-bubble { padding: 6px 10px; border-radius: 8px; max-width: 80%; font-size: 11px; }
+        .chat-bubble.customer { background: #fee2e2; align-self: flex-end; color: #991b1b; }
+        .chat-bubble.resto { background: #e2e8f0; align-self: flex-start; color: #1e293b; }
 
-@media(min-width: 480px){
-    body { padding: 20px; }
-}
-
-.container{
-    width: 100%;
-    max-width: 440px;
-    min-height: 100vh;
-    margin: 0 auto;
-    padding: 16px 16px 90px 16px;
-    display: flex;
-    flex-direction: column;
-    background: var(--container-bg);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-    position: relative;
-}
-
-@media(min-width: 480px){
-    .container {
-        min-height: 850px;
-        border-radius: 36px;
-        border: 1px solid var(--border-color);
-    }
-}
-
-/* Header */
-.app-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.back-btn {
-    background: #fff;
-    border: 1px solid var(--border-color);
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-weight: 800;
-    text-decoration: none;
-    color: var(--text-main);
-    transition: 0.2s;
-}
-
-.back-btn:hover {
-    background: #fee2e2;
-    color: var(--primary-red);
-    border-color: var(--primary-red);
-}
-
-.app-header h2 {
-    font-size: 13px;
-    font-weight: 800;
-    color: var(--text-main);
-}
-
-/* Mini Banner Slider */
-.banner-slider-container {
-    width: 100%;
-    height: 110px;
-    border-radius: 16px;
-    overflow: hidden;
-    position: relative;
-    margin-bottom: 14px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
-}
-
-.banner-slides {
-    display: flex;
-    width: 300%;
-    height: 100%;
-    transition: transform 0.5s ease-in-out;
-}
-
-.banner-slide {
-    width: 33.333%;
-    height: 100%;
-    padding: 16px;
-    color: #fff;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-
-.slide-1 { background: linear-gradient(135deg, #0f172a, #1e293b); }
-.slide-2 { background: linear-gradient(135deg, #b91c1c, #ef4444); }
-.slide-3 { background: linear-gradient(135deg, #047857, #10b981); }
-
-.banner-slide h3 {
-    font-size: 13px;
-    font-weight: 800;
-    color: #FFD700;
-    margin-bottom: 4px;
-}
-
-.banner-slide p {
-    font-size: 11px;
-    color: #f8fafc;
-    font-weight: 500;
-    line-height: 1.3;
-}
-
-.banner-dots {
-    position: absolute;
-    bottom: 8px;
-    right: 12px;
-    display: flex;
-    gap: 4px;
-}
-
-.dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.4);
-    cursor: pointer;
-    transition: 0.3s;
-}
-
-.dot.active {
-    background: #FFD700;
-    width: 16px;
-    border-radius: 4px;
-}
-
-/* Search Box */
-.search-box-wrapper {
-    margin-bottom: 12px;
-}
-
-.input-box {
-    width: 100%;
-    padding: 10px 14px;
-    background: #fff;
-    border: 1px solid #cbd5e1;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-main);
-    outline: none;
-    transition: 0.2s;
-}
-
-.input-box:focus {
-    border-color: var(--primary-red);
-}
-
-/* Mode Layanan Tabs */
-.mode-tabs {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    margin-bottom: 12px;
-}
-
-.mode-tab-btn {
-    background: #fff;
-    border: 1px solid var(--border-color);
-    padding: 10px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 800;
-    color: var(--text-muted);
-    cursor: pointer;
-    text-align: center;
-    transition: 0.2s;
-}
-
-.mode-tab-btn.active {
-    background: var(--primary-red);
-    color: #fff;
-    border-color: var(--primary-red);
-    box-shadow: 0 4px 10px rgba(229,9,20,0.2);
-}
-
-/* Panel Reservasi */
-.reservasi-panel {
-    background: #fff;
-    border: 1px solid var(--border-color);
-    border-radius: 14px;
-    padding: 12px;
-    margin-bottom: 14px;
-    display: none;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-}
-
-.reservasi-panel.active {
-    display: block;
-}
-
-.form-row {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 8px;
-}
-
-.form-col {
-    flex: 1;
-}
-
-.form-col label {
-    display: block;
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--text-muted);
-    margin-bottom: 3px;
-    text-transform: uppercase;
-}
-
-/* Resto Accordion Block */
-.resto-block {
-    background: #fff;
-    border: 1px solid var(--border-color);
-    border-radius: 14px;
-    margin-bottom: 10px;
-    overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-}
-
-.resto-header {
-    padding: 12px 14px;
-    background: #fff;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: 0.2s;
-}
-
-.resto-header:hover {
-    background: #f8fafc;
-}
-
-.resto-content {
-    display: none;
-    padding: 12px 14px 14px 14px;
-    background: #f8fafc;
-    border-top: 1px solid var(--border-color);
-}
-
-.resto-block.active .resto-content {
-    display: block;
-}
-
-/* Status Resto Badge */
-.status-badge {
-    font-size: 9px;
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-weight: 700;
-}
-.status-badge.buka { background: #dcfce7; color: #15803d; }
-.status-badge.tutup { background: #fee2e2; color: #b91c1c; }
-
-/* Kategori Header dalam Menu */
-.category-title {
-    font-size: 12px;
-    font-weight: 800;
-    color: #0f172a;
-    margin: 12px 0 6px 0;
-    border-bottom: 2px solid #e2e8f0;
-    padding-bottom: 2px;
-}
-
-/* Food Item Card */
-.food-card {
-    background: #fff;
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 10px;
-    margin-top: 8px;
-    display: flex;
-    gap: 10px;
-    align-items: center;
-}
-
-.food-img {
-    width: 50px;
-    height: 50px;
-    border-radius: 8px;
-    object-fit: cover;
-    background: #e2e8f0;
-    flex-shrink: 0;
-}
-
-.food-info {
-    flex: 1;
-}
-
-.food-info h4 {
-    font-size: 11px;
-    font-weight: 800;
-    color: var(--text-main);
-    margin-bottom: 2px;
-}
-
-.price-tag {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-}
-
-.original-price {
-    font-size: 10px;
-    color: var(--text-muted);
-    text-decoration: line-through;
-    font-family: var(--font-mono);
-}
-
-.discount-price {
-    font-size: 11px;
-    font-weight: 800;
-    color: var(--primary-red);
-    font-family: var(--font-mono);
-}
-
-/* Quantity Control (-) 1 (+) */
-.qty-control {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: #f1f5f9;
-    padding: 3px 6px;
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
-}
-
-.qty-btn {
-    background: #fff;
-    border: 1px solid var(--border-color);
-    width: 20px;
-    height: 20px;
-    border-radius: 6px;
-    font-weight: 800;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-}
-
-.qty-btn:hover {
-    background: var(--primary-red);
-    color: #fff;
-    border-color: var(--primary-red);
-}
-
-.qty-number {
-    font-size: 11px;
-    font-weight: 800;
-    font-family: var(--font-mono);
-    min-width: 14px;
-    text-align: center;
-}
-
-/* Floating Checkout Footer */
-.checkout-footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background: var(--dark-bg);
-    color: #fff;
-    padding: 14px 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    box-shadow: 0 -4px 15px rgba(0,0,0,0.1);
-    z-index: 100;
-    display: none;
-}
-
-@media(min-width: 480px){
-    .checkout-footer {
-        max-width: 440px;
-        left: 50%;
-        transform: translateX(-50%);
-        border-bottom-left-radius: 36px;
-        border-bottom-right-radius: 36px;
-    }
-}
-
-.btn-order {
-    background: var(--primary-red);
-    color: #fff;
-    border: none;
-    padding: 10px 18px;
-    border-radius: 10px;
-    font-weight: 800;
-    font-size: 12px;
-    cursor: pointer;
-}
-.resto-content-wrapper { max-height: 2000px; overflow: hidden; transition: max-height 0.3s ease; }
-.resto-content-wrapper.collapsed { max-height: 0; }
-.chat-box-container { background: #f8fafc; border: 1px solid var(--border-color); border-radius: 12px; padding: 10px; margin-top: 10px; }
-.chat-messages { max-height: 120px; overflow-y: auto; font-size: 11px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px; }
-.chat-bubble { padding: 6px 10px; border-radius: 8px; max-width: 80%; font-size: 11px; }
-.chat-bubble.customer { background: #fee2e2; align-self: flex-end; color: #991b1b; }
-.chat-bubble.resto { background: #e2e8f0; align-self: flex-start; color: #1e293b; }
-
-</style>
+        /* Footer */
+        .checkout-footer { position: fixed; bottom: 0; left: 0; width: 100%; background: #fff; padding: 12px 16px; box-shadow: 0 -4px 12px rgba(0,0,0,0.08); display: flex; gap: 8px; z-index: 99; box-sizing: border-box; }
+    </style>
 </head>
 <body>
 
-<div class="container">
+<div class="container" style="padding-bottom: 90px;">
     <!-- Header -->
     <div class="app-header">
         <a href="index.html" class="back-btn">←</a>
-        <h2>CIKUR GO FOOD (Assistant)</h2>
+        <h2 style="font-size: 14px; font-weight: 800; margin: 0;">CIKUR GO FOOD (Assistant)</h2>
         <div style="width: 36px;"></div>
     </div>
 
-    <!-- Mini Banner Slider -->
+    <!-- Banner Slider -->
     <div class="banner-slider-container">
         <div class="banner-slides" id="bannerSlider">
-            <div class="banner-slide slide-1">
+            <div class="banner-slide">
                 <h3>⚡ CIKUR GO ASSISTANT PARTNER</h3>
                 <p>Pesan makanan instan langsung diantar atau diatur asisten pribadi dengan mudah!</p>
             </div>
-            <div class="banner-slide slide-2">
+            <div class="banner-slide">
                 <h3>🔥 DISKON KULINER SPESIAL</h3>
                 <p>Nikmati berbagai menu pilihan mitra resto terbaik dengan harga spesial hari ini.</p>
             </div>
-            <div class="banner-slide slide-3">
+            <div class="banner-slide">
                 <h3>📅 RESERVASI MEJA MUDAH</h3>
-                <p>Atur jadwal makan di tempat atau ambil sendiri, asisten siap standby menunggu!</p>
+                <p>Atur jadwal makan di tempat atau ambil sendiri, asisten siap mengurus semuanya.</p>
             </div>
-        </div>
-        <div class="banner-dots">
-            <span class="dot active" onclick="currentSlide(0)"></span>
-            <span class="dot" onclick="currentSlide(1)"></span>
-            <span class="dot" onclick="currentSlide(2)"></span>
         </div>
     </div>
 
-    <!-- Kotak Pencarian -->
-    <div class="search-box-wrapper">
-        <input type="text" id="searchFood" class="input-box" placeholder="Cari nama resto atau menu makanan...">
+    <!-- Search Input -->
+    <input type="text" class="search-box" id="searchInput" placeholder="Cari nama resto atau menu makanan..." oninput="filterRestoList()">
+
+    <!-- Mode Buttons -->
+    <div class="mode-buttons">
+        <button class="mode-btn active" id="btnInstant" onclick="switchMode('instant')">⚡ Pesan Sekarang</button>
+        <button class="mode-btn" id="btnRes" onclick="switchMode('reservasi')">📅 Atur Reservasi</button>
     </div>
 
-    <!-- Mode Layanan Tabs -->
-    <div class="mode-tabs">
-        <div class="mode-tab-btn active" id="tabPesanSekarang" onclick="switchMode('instant')">⚡ Pesan Sekarang</div>
-        <div class="mode-tab-btn" id="tabReservasi" onclick="switchMode('reservasi')">📅 Atur Reservasi</div>
-    </div>
-
-    <!-- Panel Reservasi -->
-    <div class="reservasi-panel" id="reservasiPanel">
-        <div class="form-row">
-            <div class="form-col">
-                <label>Tanggal Reservasi</label>
-                <input type="date" id="resTanggal" class="input-box" style="padding: 6px 10px; font-size: 11px;">
+    <!-- Panel Reservasi (Hidden by default) -->
+    <div id="panelReservasi" style="display: none; background: #fff; border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; margin-bottom: 12px;">
+        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <div style="flex: 1;">
+                <label style="font-size: 10px; font-weight: 700; display: block; margin-bottom: 2px;">Tanggal:</label>
+                <input type="date" id="resTanggal" style="width: 100%; padding: 6px; font-size: 11px; border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box;">
             </div>
-            <div class="form-col">
-                <label>Jam Kunjungan</label>
-                <input type="time" id="resJam" class="input-box" style="padding: 6px 10px; font-size: 11px;">
+            <div style="flex: 1;">
+                <label style="font-size: 10px; font-weight: 700; display: block; margin-bottom: 2px;">Jam Kunjungan:</label>
+                <input type="time" id="resJam" style="width: 100%; padding: 6px; font-size: 11px; border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box;">
             </div>
         </div>
-        <div class="form-col" style="margin-top: 6px;">
-            <label>Metode Layanan Resto</label>
-            <select id="resMetode" class="input-box" style="padding: 6px 10px; font-size: 11px;">
-                <option value="Makan di Tempat (Dine-In)">Makan di Tempat (Dine-In)</option>
+        <div>
+            <label style="font-size: 10px; font-weight: 700; display: block; margin-bottom: 2px;">Metode Layanan Resto:</label>
+            <select id="resMetode" style="width: 100%; padding: 6px; font-size: 11px; border: 1px solid var(--border-color); border-radius: 6px; background: #fff; box-sizing: border-box;">
+                <option value="Makan di Tempat (Dine-in)">Makan di Tempat (Dine-in)</option>
                 <option value="Ambil Sendiri (Takeaway)">Ambil Sendiri (Takeaway)</option>
             </select>
         </div>
     </div>
 
-    <!-- Container Resto Dinamis (Dropdown + Foto + Status) -->
+    <!-- Container Resto Dinamis -->
     <div id="restoContainer"></div>
 </div>
 
-<!-- Floating Checkout Footer -->
-<div class="checkout-footer" id="checkoutFooter" style="display: none; gap: 8px;">
-    <div>
-        <div style="font-size: 10px; color: #94a3b8; font-weight: 700;" id="footerLabelMode">Total Pesanan (Instant)</div>
-        <div id="footerTotalText" style="font-size: 12px; font-weight: 800; color: #FFD700; font-family: var(--font-mono);">Rp 0</div>
-    </div>
-    <div style="display: flex; gap: 6px; width: 100%;">
-    <button class="btn-order" onclick="proceedToCheckout()" style="flex: 1; padding: 10px; font-size: 11px; font-weight: 800; background: var(--primary-red); color: #fff; border: none; border-radius: 10px; cursor: pointer;">Pesan Sekarang</button>
-    <button class="btn-order" onclick="lanjutKe2In1()" style="flex: 1; padding: 10px; font-size: 11px; font-weight: 800; background: #ffffff; color: var(--primary-red); border: 1px solid var(--primary-red); border-radius: 10px; cursor: pointer;">CIKUR GO 2IN1</button>
-    </div>
+<!-- Footer Tombol Pesan & 2-in-1 -->
+<div class="checkout-footer">
+    <button onclick="proceedToCheckout()" style="flex: 1; padding: 12px; font-size: 11px; font-weight: 800; background: var(--primary-red); color: #fff; border: none; border-radius: 10px; cursor: pointer;">Pesan Sekarang</button>
+    <button onclick="lanjutKe2In1()" style="flex: 1; padding: 12px; font-size: 11px; font-weight: 800; background: #ffffff; color: var(--primary-red); border: 1px solid var(--primary-red); border-radius: 10px; cursor: pointer;">Cikur 2-in-1</button>
 </div>
 
 <script>
-let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { saldo: 125000 };
-
-/* Slider Logic */
-let slideIndex = 0;
-const slides = document.getElementById("bannerSlider");
-const dots = document.querySelectorAll(".dot");
-
-function showSlide(index) {
-    if (index >= 3) slideIndex = 0;
-    else if (index < 0) slideIndex = 2;
-    else slideIndex = index;
-
-    slides.style.transform = `translateX(-${slideIndex * 33.333}%)`;
-    dots.forEach((dot, idx) => {
-        dot.classList.toggle("active", idx === slideIndex);
-    });
-}
-
-function currentSlide(index) {
-    showSlide(index);
-}
-
-setInterval(() => {
-    showSlide(slideIndex + 1);
-}, 4000);
-
-
-/* Ambil Data Multi-Mitra Sempurna dari cikur_all_restos (Sinkron dengan resto.html) */
-function loadRestoDataFromStorage() {
-    // 1. Ambil data kolektif multi-mitra yang disimpan oleh resto.html
-    let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
-
-    // 2. Fallback cadangan jika format lama/tunggal masih ada di memori browser
-    if (allRestos.length === 0) {
-        let singleProfile = JSON.parse(localStorage.getItem('cikur_resto_profile'));
-        let singleMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || [];
-        let legacyResto = JSON.parse(localStorage.getItem('currentResto'));
-
-        if (singleProfile) {
-            allRestos.push({
-                name: singleProfile.name,
-                photoFront: singleProfile.photoFront || singleProfile.photo,
-                category: singleProfile.category || "Kuliner & Minuman",
-                isOpen: true,
-                menuList: singleMenus.length > 0 ? singleMenus : (singleProfile.menuList || [])
-            });
-        } else if (legacyResto) {
-            allRestos.push(legacyResto);
-        }
-    }
-
-    // 3. Jika setelah dicek total masih kosong melompong
-    if (allRestos.length === 0) {
-        return [];
-    }
-
-    // 4. Petakan (mapping) seluruh data resto & menu mitra agar langsung tampil di food.html
-    return allRestos.map((resto, index) => {
-        let rawMenus = resto.menuList || resto.menus || [];
-        let formattedMenus = Array.isArray(rawMenus) ? rawMenus.map((m, idx) => ({
-            id: m.id || `m_${index}_${idx}_${Date.now()}`,
-            name: m.name || m.nama || "Menu Pilihan",
-            category: m.category || m.kategori || "Menu Umum",
-            price: Number(m.price || m.harga) || 0,
-            discountPrice: (m.discountPrice || m.hargaDiskon) ? Number(m.discountPrice || m.hargaDiskon) : null,
-            status: m.status || "Tersedia",
-            img: m.photo || m.gambar || "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150"
-        })) : [];
-
-        let restoName = resto.name || resto.namaResto || `Kedai Resto Mitra ${index + 1}`;
-        let restoPhoto = resto.photoFront || resto.photo || resto.gambarResto || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=150";
-        let restoKategori = resto.category || resto.kategoriResto || "Kuliner & Minuman";
-        let isOpen = resto.isOpen !== false;
-
-        return {
-            id: resto.id || `resto_${index}`,
-            restoName: restoName,
-            restoPhoto: restoPhoto,
-            restoKategori: restoKategori,
-            isOpen: isOpen,
-            statusText: isOpen ? "Buka & Siap Order" : "Resto Tutup",
-            items: formattedMenus
-        };
-    });
-}
-    
-let databaseResto = loadRestoDataFromStorage();
 let cartQuantities = {};
+let databaseResto = [];
 let currentModeSelected = 'instant';
+let slideIndex = 0;
+
+// Slider Autoplay
+setInterval(() => {
+    slideIndex = (slideIndex + 1) % 3;
+    let slider = document.getElementById("bannerSlider");
+    if(slider) slider.style.transform = `translateX(-${slideIndex * 33.333}%)`;
+}, 4000);
 
 function switchMode(mode) {
     currentModeSelected = mode;
-    let btnInstant = document.getElementById("tabPesanSekarang");
-    let btnRes = document.getElementById("tabReservasi");
-    let panelRes = document.getElementById("reservasiPanel");
-    let footerLabel = document.getElementById("footerLabelMode");
+    let btnInstant = document.getElementById("btnInstant");
+    let btnRes = document.getElementById("btnRes");
+    let panelRes = document.getElementById("panelReservasi");
 
-    if(mode === 'instant') {
+    if (mode === 'instant') {
         btnInstant.classList.add("active");
         btnRes.classList.remove("active");
-        panelRes.classList.remove("active");
-        footerLabel.innerText = "Total Pesanan (Instant)";
+        panelRes.style.display = "none";
     } else {
         btnRes.classList.add("active");
         btnInstant.classList.remove("active");
-        panelRes.classList.add("active");
-        footerLabel.innerText = "Total Reservasi Meja";
+        panelRes.style.display = "block";
     }
+}
+
+function loadRestoDataFromStorage() {
+    let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
+    if (allRestos.length === 0) {
+        let singleProfile = JSON.parse(localStorage.getItem('cikur_resto_profile'));
+        let singleMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || [];
+        if (singleProfile) {
+            allRestos.push({
+                id: 'resto_single',
+                restoName: singleProfile.name || 'Resto Partner',
+                restoPhoto: singleProfile.photoFront || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
+                restoKategori: singleProfile.kategori || 'Kuliner & Minuman',
+                isOpen: singleProfile.isOpen !== undefined ? singleProfile.isOpen : true,
+                statusText: singleProfile.isOpen ? 'Buka & Siap Order' : 'Resto Tutup',
+                items: singleMenus
+            });
+        }
+    }
+    databaseResto = allRestos;
+    renderRestoList(databaseResto);
 }
 
 function renderRestoList(data) {
@@ -643,8 +166,8 @@ function renderRestoList(data) {
 
     if (!data || data.length === 0) {
         container.innerHTML = `
-            <div style="text-align: center; padding: 30px 10px; background: #fff; border-radius: 14px; border: 1px solid #e2e8f0; margin-top: 15px;">
-                <p style="font-size: 11px; color: var(--text-muted);">Belum ada restoran terdaftar.</p>
+            <div style="text-align: center; padding: 30px 10px; background: #fff; border-radius: 14px; border: 1px solid var(--border-color); margin-top: 15px;">
+                <p style="font-size: 11px; color: var(--text-muted);">Belum ada restoran terdaftar.<br>Silakan tambahkan menu melalui halaman Resto Partner.</p>
             </div>`;
         return;
     }
@@ -652,11 +175,10 @@ function renderRestoList(data) {
     data.forEach((resto, rIndex) => {
         let block = document.createElement("div");
         block.className = "resto-card";
-        block.style.cssText = "background: #fff; border-radius: 14px; border: 1px solid #e2e8f0; padding: 12px; margin-bottom: 12px;";
 
         let headerHTML = `
             <div onclick="toggleRestoDropdown(${rIndex})" style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                <img src="${resto.restoPhoto || 'https://via.placeholder.com/40'}" style="width: 42px; height: 42px; object-fit: cover; border-radius: 50%; border: 2px solid var(--primary-red);">
+                <img src="${resto.restoPhoto || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150'}" style="width: 42px; height: 42px; object-fit: cover; border-radius: 50%; border: 2px solid var(--primary-red);">
                 <div style="flex: 1;">
                     <h3 style="font-size: 13px; font-weight: 800; margin: 0; color: #0f172a;">${resto.restoName}</h3>
                     <p style="font-size: 10px; color: #64748b; margin: 2px 0 0 0;">${resto.restoKategori || 'Kuliner & Minuman'}</p>
@@ -668,20 +190,22 @@ function renderRestoList(data) {
             </div>
         `;
 
-        let menusHTML = `<div id="restoContent_${rIndex}" class="resto-content-wrapper" style="margin-top: 12px; border-top: 1px solid #e2e8f0; padding-top: 10px;">`;
+        let menusHTML = `<div id="restoContent_${rIndex}" class="resto-content-wrapper" style="margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 10px;">`;
         
         if (resto.items && resto.items.length > 0) {
             resto.items.forEach((item) => {
                 let qtyKey = `${resto.id}_${item.id}`;
                 let currentQty = cartQuantities[qtyKey] || 0;
                 let priceVal = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
+                let originalPriceView = (item.discountPrice && item.discountPrice < item.price) ? 
+                    `<span style="text-decoration: line-through; font-size: 9px; color: #94a3b8; margin-right: 4px;">Rp ${Number(item.price).toLocaleString('id-ID')}</span>` : '';
                 
                 menusHTML += `
                 <div style="display: flex; gap: 8px; align-items: center; padding: 8px; background: #fafafa; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 6px;">
-                    <img src="${item.img || 'https://via.placeholder.com/40'}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 8px;">
+                    <img src="${item.img || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150'}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 8px;">
                     <div style="flex: 1;">
                         <h4 style="font-size: 11px; font-weight: 700; margin: 0; color: #0f172a;">${item.name}</h4>
-                        <span style="font-size: 11px; font-weight: 800; color: var(--primary-red);">Rp ${priceVal.toLocaleString('id-ID')}</span>
+                        <div>${originalPriceView}<span style="font-size: 11px; font-weight: 800; color: var(--primary-red);">Rp ${Number(priceVal).toLocaleString('id-ID')}</span></div>
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <button onclick="updateCartQty('${resto.id}', '${item.id}', -1)" style="width: 24px; height: 24px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-weight: bold; cursor: pointer;">-</button>
@@ -691,7 +215,7 @@ function renderRestoList(data) {
                 </div>`;
             });
         } else {
-            menusHTML += `<p style="font-size: 10px; color: #64748b; text-align: center; margin: 5px 0;">Belum ada menu di resto ini.</p>`;
+            menusHTML += `<p style="font-size: 10px; color: var(--text-muted); text-align: center; margin: 5px 0;">Belum ada menu di resto ini.</p>`;
         }
 
         menusHTML += `</div>`;
@@ -699,10 +223,24 @@ function renderRestoList(data) {
         container.appendChild(block);
     });
 }
-// Fungsi Toggle Dropdown Resto
+
+function filterRestoList() {
+    let keyword = document.getElementById("searchInput").value.toLowerCase();
+    let filtered = databaseResto.map(resto => {
+        let matchedItems = resto.items.filter(item => item.name.toLowerCase().includes(keyword));
+        let matchRestoName = resto.restoName.toLowerCase().includes(keyword);
+        if (matchRestoName || matchedItems.length > 0) {
+            return { ...resto, items: matchRestoName ? resto.items : matchedItems };
+        }
+        return null;
+    }).filter(Boolean);
+    renderRestoList(filtered);
+}
+
 function toggleRestoDropdown(index) {
     let contentWrapper = document.getElementById(`restoContent_${index}`);
     let arrowIcon = document.getElementById(`dropArrow_${index}`);
+    if(!contentWrapper) return;
     contentWrapper.classList.toggle('collapsed');
     if(contentWrapper.classList.contains('collapsed')) {
         arrowIcon.style.transform = "rotate(0deg)";
@@ -710,176 +248,6 @@ function toggleRestoDropdown(index) {
         arrowIcon.style.transform = "rotate(180deg)";
     }
 }
-
-renderRestoList(databaseResto);
-
-document.getElementById("searchFood").addEventListener("input", function(e) {
-    let keyword = e.target.value.toLowerCase();
-    let filtered = databaseResto.map(resto => {
-        let matchedItems = resto.items.filter(item => 
-            item.name.toLowerCase().includes(keyword) || item.category.toLowerCase().includes(keyword)
-        );
-        let restoMatch = resto.restoName.toLowerCase().includes(keyword);
-        if(restoMatch) return resto;
-        return { ...resto, items: matchedItems };
-    }).filter(resto => resto.items.length > 0);
-
-    renderRestoList(filtered);
-});
-
-function ubahQty(itemId, delta) {
-    if(!cartQuantities[itemId]) cartQuantities[itemId] = 0;
-    cartQuantities[itemId] += delta;
-    if(cartQuantities[itemId] < 0) cartQuantities[itemId] = 0;
-
-    document.getElementById(`qty_${itemId}`).innerText = cartQuantities[itemId];
-    hitungTotalKeranjang();
-}
-
-function hitungTotalKeranjang() {
-    let totalItems = 0;
-    let totalPrice = 0;
-
-    databaseResto.forEach(resto => {
-        resto.items.forEach(item => {
-            let q = cartQuantities[item.id] || 0;
-            if(q > 0) {
-                totalItems += q;
-                let activePrice = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
-                totalPrice += (q * activePrice);
-            }
-        });
-    });
-
-    let footer = document.getElementById("checkoutFooter");
-    if(totalItems > 0) {
-        footer.style.display = "flex";
-        document.getElementById("footerTotalText").innerText = "Rp " + totalPrice.toLocaleString('id-ID') + ` (${totalItems} item)`;
-    } else {
-        footer.style.display = "none";
-    }
-}
-    
-function lanjutKe2In1() {
-    let selectedItemsData = [];
-    let totalPrice = 0;
-
-    databaseResto.forEach(resto => {
-        resto.items.forEach(item => {
-            let q = cartQuantities[item.id] || 0;
-            if(q > 0) {
-                let activePrice = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
-                selectedItemsData.push({
-                    id: item.id,
-                    name: item.name,
-                    price: activePrice,
-                    qty: q,
-                    restoName: resto.restoName
-                });
-                totalPrice += (q * activePrice);
-            }
-        });
-    });
-
-    if (selectedItemsData.length === 0) {
-        alert("[!] Pilih minimal 1 menu makanan terlebih dahulu.");
-        return;
-    }
-
-    const bundlePayload = {
-        items: selectedItemsData,
-        totalFoodPrice: totalPrice,
-        createdAt: new Date().toISOString()
-    };
-
-    localStorage.setItem('cikur_bundle_cart', JSON.stringify(bundlePayload));
-    window.location.href = 'cikurgo2in1.html';
-}
-    
-function prosesPesanFood() {
-    let totalPrice = 0;
-    let ringkasanPesanan = [];
-    let restoTargetName = "";
-
-    databaseResto.forEach(resto => {
-        restoTargetName = resto.restoName;
-        resto.items.forEach(item => {
-            let q = cartQuantities[item.id] || 0;
-            if(q > 0) {
-                let activePrice = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
-                totalPrice += (q * activePrice);
-                ringkasanPesanan.push(`${q}x ${item.name}`);
-            }
-        });
-    });
-
-    let driverData = JSON.parse(localStorage.getItem('cikur_active_driver_order')) || { ongkir: 10000 };
-    let biayaOngkir = Number(driverData.ongkir) || 10000;
-    let grandTotal = totalPrice + (currentModeSelected === 'instant' ? biayaOngkir : 0);
-
-    if (userProfile.saldo < grandTotal) {
-        alert("[!] Saldo CikurPay tidak mencukupi untuk total transaksi (Termasuk ongkir driver Rp " + biayaOngkir.toLocaleString('id-ID') + ").");
-        return;
-    }
-
-    let modeInfo = "Pesan Sekarang (Instant)";
-    if (currentModeSelected === 'reservasi') {
-        let tgl = document.getElementById("resTanggal").value;
-        let jam = document.getElementById("resJam").value;
-        let metodeRes = document.getElementById("resMetode").value;
-        if(!tgl || !jam) {
-            alert("[!] Mohon lengkapi tanggal dan jam reservasi terlebih dahulu.");
-            return;
-        }
-        modeInfo = `Reservasi (${metodeRes}) - ${tgl} jam ${jam}`;
-    }
-
-    userProfile.saldo -= grandTotal;
-    localStorage.setItem('cikur_user', JSON.stringify(userProfile));
-
-    let riwayatPesanan = JSON.parse(localStorage.getItem('cikur_orders')) || [];
-    let riwayatTransaksi = JSON.parse(localStorage.getItem('cikur_transactions')) || [];
-    let restoOrders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || [];
-    
-    let kodeTrx = 'TRX-' + Math.floor(100000 + Math.random() * 900000);
-    let waktuSekarang = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) + ' • ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-    let namaMenuRingkas = ringkasanPesanan.join(", ");
-
-    riwayatPesanan.unshift({
-        kode: kodeTrx,
-        layanan: `${namaMenuRingkas} [${modeInfo}]`,
-        kategori: 'CIKUR Food Assistant',
-        harga: grandTotal,
-        status: currentModeSelected === 'instant' ? 'Diproses Resto' : 'Reservasi Dikonfirmasi',
-        waktu: waktuSekarang
-    });
-
-    riwayatTransaksi.unshift({
-        kode: kodeTrx,
-        ket: `Pembayaran Food (${modeInfo}) + Ongkir`,
-        nominal: -grandTotal,
-        waktu: waktuSekarang,
-        status: 'Berhasil'
-    });
-
-    restoOrders.unshift({
-        kode: kodeTrx,
-        menu: namaMenuRingkas,
-        mode: modeInfo,
-        total: grandTotal,
-        status: 'Pending',
-        waktu: waktuSekarang,
-        pembeli: userProfile.nama || 'Pelanggan Cikur'
-    });
-
-    localStorage.setItem('cikur_orders', JSON.stringify(riwayatPesanan));
-    localStorage.setItem('cikur_transactions', JSON.stringify(riwayatTransaksi));
-    localStorage.setItem('cikur_restaurant_orders', JSON.stringify(restoOrders));
-
-    alert(`[SUKSES] Transaksi ${modeInfo} berhasil! Rp ${grandTotal.toLocaleString('id-ID')} dipotong dari CikurPay.`);
-    window.location.href = "index.html";
-}
-let cartQuantities = {};
 
 function updateCartQty(restoId, itemId, change) {
     let key = `${restoId}_${itemId}`;
@@ -892,7 +260,6 @@ function updateCartQty(restoId, itemId, change) {
     if(qtyEl) qtyEl.innerText = updated;
 }
 
-// Fungsi Checkout lengkap dengan Alamat, Ongkir Driver, Chat, dan Pembayaran
 function proceedToCheckout() {
     let totalItems = 0;
     let subtotal = 0;
@@ -906,55 +273,54 @@ function proceedToCheckout() {
                 totalItems += qty;
                 let price = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
                 subtotal += price * qty;
-                selectedItemsList.push(`${qty}x ${item.name} (Rp ${price.toLocaleString('id-ID')})`);
+                selectedItemsList.push(`${qty}x ${item.name} (Rp ${Number(price).toLocaleString('id-ID')})`);
             }
         });
     });
 
     if(totalItems === 0) {
-        alert("Keranjang Anda masih kosong! Silakan pilih menu terlebih dahulu.");
+        alert("Keranjang masih kosong! Pilih menu makanan terlebih dahulu.");
         return;
     }
 
-    let ongkir = 10000; // Tarif dasar ongkir driver
+    let ongkir = 10000;
     let grandTotal = subtotal + ongkir;
 
     let checkoutHTML = `
-    <div id="checkoutModal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; display:flex; justify-content:center; align-items:center; padding:16px;">
-        <div style="background:#fff; width:100%; max-width:400px; border-radius:20px; padding:20px; max-height:90vh; overflow-y:auto;">
-            <h3 style="font-size:15px; font-weight:800; margin-bottom:12px; color:var(--text-main);">Konfirmasi & Pembayaran Order</h3>
+    <div id="checkoutModal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; display:flex; justify-content:center; align-items:center; padding:16px; box-sizing:border-box;">
+        <div style="background:#fff; width:100%; max-width:400px; border-radius:20px; padding:20px; max-height:90vh; overflow-y:auto; box-sizing:border-box;">
+            <h3 style="font-size:14px; font-weight:800; margin-bottom:12px; color:var(--text-main);">Konfirmasi & Pembayaran Order</h3>
             
             <div style="background:#f8fafc; padding:10px; border-radius:10px; margin-bottom:10px; font-size:11px;">
                 <b>Ringkasan Pesanan:</b>
-                <p style="color:var(--text-muted); margin-top:4px;">${selectedItemsList.join('<br>')}</p>
+                <p style="color:var(--text-muted); margin-top:4px; margin-bottom:0;">${selectedItemsList.join('<br>')}</p>
             </div>
 
             <div style="margin-bottom:10px;">
                 <label style="font-size:11px; font-weight:700; display:block; margin-bottom:4px;">Alamat Pengiriman Customer:</label>
-                <textarea id="customerAddress" class="form-textarea" rows="2" placeholder="Masukkan alamat lengkap tujuan pengiriman..."></textarea>
+                <textarea id="customerAddress" rows="2" placeholder="Masukkan alamat lengkap tujuan pengiriman..." style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:8px; font-size:11px; box-sizing:border-box;"></textarea>
             </div>
 
             <div style="background:#fff7ed; border:1px solid #fed7aa; padding:10px; border-radius:10px; margin-bottom:10px; font-size:11px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Subtotal Makanan:</span> <b>Rp ${subtotal.toLocaleString('id-ID')}</b></div>
                 <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Ongkos Kirim Driver:</span> <b>Rp ${ongkir.toLocaleString('id-ID')}</b></div>
-                <div style="display:flex; justify-content:space-between; border-top:1px dashed #cbd5e1; paddingTop:4px; font-weight:800; color:var(--primary-red);"><span>Total Pembayaran:</span> <span>Rp ${grandTotal.toLocaleString('id-ID')}</span></div>
+                <div style="display:flex; justify-content:space-between; border-top:1px dashed #cbd5e1; padding-top:4px; font-weight:800; color:var(--primary-red);"><span>Total Pembayaran:</span> <span>Rp ${grandTotal.toLocaleString('id-ID')}</span></div>
             </div>
 
-            <!-- Kolom Chat Interaktif Resto -->
             <div class="chat-box-container">
                 <label style="font-size:11px; font-weight:700; display:block; margin-bottom:4px;">Chat dengan Resto / Driver:</label>
                 <div class="chat-messages" id="chatMessagesBox">
-                    <div class="chat-bubble resto">Halo, pesanan siap diproses. Ada catatan khusus?</div>
+                    <div class="chat-bubble resto">Halo Kak, pesanan siap diproses. Ada catatan khusus?</div>
                 </div>
                 <div style="display:flex; gap:6px;">
-                    <input type="text" id="chatInputText" class="form-input" placeholder="Tulis pesan..." style="padding:6px; font-size:11px;">
-                    <button onclick="sendChatMessage()" style="background:var(--primary-red); color:#fff; border:none; padding:6px 12px; border-radius:8px; font-size:11px; font-weight:700; cursor:pointer;">Kirim</button>
+                    <input type="text" id="chatInputText" placeholder="Tulis pesan..." style="flex:1; padding:6px; font-size:11px; border:1px solid var(--border-color); border-radius:6px;">
+                    <button onclick="sendChatMessage()" style="background:var(--primary-red); color:#fff; border:none; padding:6px 12px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer;">Kirim</button>
                 </div>
             </div>
 
             <div style="display:flex; gap:8px; margin-top:14px;">
-                <button onclick="closeCheckoutModal()" style="flex:1; height:38px; border:1px solid #cbd5e1; background:#fff; border-radius:10px; font-weight:700; cursor:pointer;">Batal</button>
-                <button onclick="finalizePayment(${grandTotal}, '${selectedItemsList.join(', ')}')" style="flex:1; height:38px; border:none; background:var(--primary-red); color:#fff; border-radius:10px; font-weight:800; cursor:pointer;">Bayar Sekarang</button>
+                <button onclick="closeCheckoutModal()" style="flex:1; height:38px; border:1px solid #cbd5e1; background:#fff; border-radius:10px; font-weight:700; cursor:pointer; font-size:11px;">Batal</button>
+                <button onclick="finalizePayment(${grandTotal}, '${selectedItemsList.join(', ')}')" style="flex:1; height:38px; border:none; background:var(--primary-red); color:#fff; border-radius:10px; font-weight:800; cursor:pointer; font-size:11px;">Bayar Sekarang</button>
             </div>
         </div>
     </div>`;
@@ -970,7 +336,7 @@ function closeCheckoutModal() {
 function sendChatMessage() {
     let input = document.getElementById("chatInputText");
     let box = document.getElementById("chatMessagesBox");
-    if(!input.value.trim()) return;
+    if(!input || !input.value.trim()) return;
 
     box.innerHTML += `<div class="chat-bubble customer">${input.value}</div>`;
     let msg = input.value;
@@ -978,45 +344,92 @@ function sendChatMessage() {
     box.scrollTop = box.scrollHeight;
 
     setTimeout(() => {
-        box.innerHTML += `<div class="chat-bubble resto">Baik Kak, pesanan "${msg}" segera kami koordinasikan dengan driver.</div>`;
+        box.innerHTML += `<div class="chat-bubble resto">Baik Kak, pesan "${msg}" sudah kami catat untuk driver.</div>`;
         box.scrollTop = box.scrollHeight;
     }, 1000);
 }
 
 function finalizePayment(totalAmount, summaryText) {
-    let address = document.getElementById("customerAddress").value;
-    if(!address.trim()) {
+    let addressEl = document.getElementById("customerAddress");
+    if(!addressEl || !addressEl.value.trim()) {
         alert("Mohon isi alamat pengiriman customer terlebih dahulu!");
         return;
     }
+    let address = addressEl.value;
 
     let user = JSON.parse(localStorage.getItem('cikur_user')) || { saldo: 125000 };
     if(user.saldo < totalAmount) {
-        alert("Saldo Cikur Pay Anda tidak mencukupi untuk melakukan pembayaran ini!");
+        alert("Saldo Cikur Pay Anda tidak mencukupi!");
         return;
     }
 
-    // Kurangi saldo user
     user.saldo -= totalAmount;
     localStorage.setItem('cikur_user', JSON.stringify(user));
 
-    // Simpan data pesanan ke localStorage agar masuk ke resto.html dan driver.html
-    let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || [];
-    let newOrder = {
-        id: 'ORD_' + Date.now(),
-        customerName: user.name || "Pelanggan Cikur",
-        customerAddress: address,
-        itemSummary: summaryText,
-        total: totalAmount,
-        status: "Menunggu Konfirmasi Resto"
-    };
-    orders.push(newOrder);
-    localStorage.setItem('cikur_restaurant_orders', JSON.stringify(orders));
+    let modeInfo = "Pesan Sekarang (Instant)";
+    if (currentModeSelected === 'reservasi') {
+        let tgl = document.getElementById("resTanggal").value;
+        let jam = document.getElementById("resJam").value;
+        let metodeRes = document.getElementById("resMetode").value;
+        if (!tgl || !jam) {
+            alert("Mohon lengkapi tanggal dan jam reservasi terlebih dahulu.");
+            return;
+        }
+        modeInfo = `Reservasi (${metodeRes}) - ${tgl} jam ${jam}`;
+    }
 
-    alert("Pembayaran Berhasil! Pesanan Anda telah diteruskan ke Resto Partner & Driver.");
+    let riwayatPesanan = JSON.parse(localStorage.getItem('cikur_orders')) || [];
+    let riwayatTransaksi = JSON.parse(localStorage.getItem('cikur_transactions')) || [];
+    let restoOrders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || [];
+
+    let kodeTrx = 'TRX-' + Math.floor(100000 + Math.random() * 900000);
+    let waktuSekarang = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+
+    riwayatPesanan.unshift({
+        kode: kodeTrx,
+        layanan: `${summaryText} [${modeInfo}]`,
+        kategori: 'CIKUR Food Assistant',
+        harga: totalAmount,
+        status: currentModeSelected === 'instant' ? 'Diproses Resto' : 'Reservasi Dibuat',
+        waktu: waktuSekarang
+    });
+
+    riwayatTransaksi.unshift({
+        kode: kodeTrx,
+        ket: `Pembayaran Food (${modeInfo}) + Ongkir`,
+        nominal: -totalAmount,
+        waktu: waktuSekarang,
+        status: 'Berhasil'
+    });
+
+    restoOrders.unshift({
+        id: 'ORD_' + Date.now(),
+        kode: kodeTrx,
+        menu: summaryText,
+        mode: modeInfo,
+        total: totalAmount,
+        status: 'Pending',
+        waktu: waktuSekarang,
+        pembeli: user.name || "Pelanggan Cikur",
+        customerAddress: address
+    });
+
+    localStorage.setItem('cikur_orders', JSON.stringify(riwayatPesanan));
+    localStorage.setItem('cikur_transactions', JSON.stringify(riwayatTransaksi));
+    localStorage.setItem('cikur_restaurant_orders', JSON.stringify(restoOrders));
+
+    alert(`[SUKSES] Transaksi ${modeInfo} berhasil! Rp ${totalAmount.toLocaleString('id-ID')}`);
     closeCheckoutModal();
-    location.reload();
+    window.location.href = "index.html";
 }
+
+function lanjutKe2In1() {
+    window.location.href = "cikurgo2in1.html";
+}
+
+window.onload = function() {
+    loadRestoDataFromStorage();
+};
 </script>
 
 </body>
