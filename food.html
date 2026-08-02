@@ -545,39 +545,63 @@ setInterval(() => {
 }, 4000);
 
 
-/* Ambil Data Resto & Menu dari localStorage (Sinkron Sempurna dengan resto.html) */
+/* Ambil Data Multi-Mitra Sempurna dari cikur_all_restos (Sinkron dengan resto.html) */
 function loadRestoDataFromStorage() {
-    let currentResto = JSON.parse(localStorage.getItem('currentResto')) || JSON.parse(localStorage.getItem('cikur_resto_profile')) || {};
-    let savedMenus = currentResto.menuList || JSON.parse(localStorage.getItem('cikur_resto_menus')) || [];
-    
-    let restoName = currentResto.name || currentResto.namaResto || "Kedai Resto Partner";
-    let restoPhoto = currentResto.photo || currentResto.gambarResto || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=150";
-    let restoKategori = currentResto.category || "Kuliner & Minuman";
-    let isOpen = currentResto.isOpen !== false;
+    // 1. Ambil data kolektif multi-mitra yang disimpan oleh resto.html
+    let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
 
-    if (!restoName && savedMenus.length === 0) {
+    // 2. Fallback cadangan jika format lama/tunggal masih ada di memori browser
+    if (allRestos.length === 0) {
+        let singleProfile = JSON.parse(localStorage.getItem('cikur_resto_profile'));
+        let singleMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || [];
+        let legacyResto = JSON.parse(localStorage.getItem('currentResto'));
+
+        if (singleProfile) {
+            allRestos.push({
+                name: singleProfile.name,
+                photoFront: singleProfile.photoFront || singleProfile.photo,
+                category: singleProfile.category || "Kuliner & Minuman",
+                isOpen: true,
+                menuList: singleMenus.length > 0 ? singleMenus : (singleProfile.menuList || [])
+            });
+        } else if (legacyResto) {
+            allRestos.push(legacyResto);
+        }
+    }
+
+    // 3. Jika setelah dicek total masih kosong melompong
+    if (allRestos.length === 0) {
         return [];
     }
 
-    let formattedMenus = savedMenus.map((m, idx) => ({
-        id: m.id || `m_${idx}_${Date.now()}`,
-        name: m.name || m.nama || "Menu Pilihan",
-        category: m.category || m.kategori || "Menu Umum",
-        price: Number(m.price || m.harga) || 0,
-        discountPrice: (m.discountPrice || m.hargaDiskon) ? Number(m.discountPrice || m.hargaDiskon) : null,
-        status: m.status || "Tersedia",
-        img: m.photo || m.gambar || "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150"
-    }));
+    // 4. Petakan (mapping) seluruh data resto & menu mitra agar langsung tampil di food.html
+    return allRestos.map((resto, index) => {
+        let rawMenus = resto.menuList || resto.menus || [];
+        let formattedMenus = Array.isArray(rawMenus) ? rawMenus.map((m, idx) => ({
+            id: m.id || `m_${index}_${idx}_${Date.now()}`,
+            name: m.name || m.nama || "Menu Pilihan",
+            category: m.category || m.kategori || "Menu Umum",
+            price: Number(m.price || m.harga) || 0,
+            discountPrice: (m.discountPrice || m.hargaDiskon) ? Number(m.discountPrice || m.hargaDiskon) : null,
+            status: m.status || "Tersedia",
+            img: m.photo || m.gambar || "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150"
+        })) : [];
 
-    return [{
-        id: 1,
-        restoName: restoName,
-        restoPhoto: restoPhoto,
-        restoKategori: restoKategori,
-        isOpen: isOpen,
-        statusText: isOpen ? "Buka & Siap Order" : "Resto Tutup",
-        items: formattedMenus
-    }];
+        let restoName = resto.name || resto.namaResto || `Kedai Resto Mitra ${index + 1}`;
+        let restoPhoto = resto.photoFront || resto.photo || resto.gambarResto || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=150";
+        let restoKategori = resto.category || resto.kategoriResto || "Kuliner & Minuman";
+        let isOpen = resto.isOpen !== false;
+
+        return {
+            id: resto.id || `resto_${index}`,
+            restoName: restoName,
+            restoPhoto: restoPhoto,
+            restoKategori: restoKategori,
+            isOpen: isOpen,
+            statusText: isOpen ? "Buka & Siap Order" : "Resto Tutup",
+            items: formattedMenus
+        };
+    });
 }
     
 let databaseResto = loadRestoDataFromStorage();
