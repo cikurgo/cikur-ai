@@ -7,8 +7,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root {
-    --primary-red: #E50914;
+    --primary-red: #e60000;
     --primary-red-hover: #b80710;
+    --accent-yellow: #ffd700;
     --dark-bg: #0f172a;
     --dark-card: #1e293b;
     --body-bg: #f1f5f9;
@@ -27,7 +28,7 @@ body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; di
 /* HEADER & DROPDOWN */
 .app-header { position: fixed; top: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 440px; display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(248, 250, 252, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border-color); z-index: 999; }
 .user-greeting { display: flex; align-items: center; gap: 10px; cursor: pointer; transition: 0.2s; padding: 4px; border-radius: 12px; }
-.user-avatar { width: 38px; height: 38px; border-radius: 50%; background: #fee2e2; border: 2px solid var(--primary-red); display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--primary-red); font-size: 14px; overflow: hidden; flex-shrink: 0; }
+.user-avatar { width: 38px; height: 38px; border-radius: 50%; background: #fee2e2; border: 2px solid var(--accent-yellow); display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--primary-red); font-size: 14px; overflow: hidden; flex-shrink: 0; }
 .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .user-info h4 { font-size: 10px; color: var(--text-muted); font-weight: 500; }
 .user-info h2 { font-size: 13px; color: var(--text-main); font-weight: 800; line-height: 1.2; }
@@ -84,7 +85,6 @@ body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; di
 .price-tag { display: flex; gap: 6px; align-items: center; margin-top: 2px; }
 .original-price { font-size: 11px; color: #94a3b8; text-decoration: line-through; }
 .discount-price { font-size: 12px; font-weight: 800; color: var(--primary-red); }
-.stock-badge { font-size: 10px; background: #e2e8f0; color: #334155; padding: 2px 6px; border-radius: 6px; font-weight: 700; display: inline-block; margin-top: 4px; }
 
 footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(--text-muted); font-size: 11px; }
 </style>
@@ -126,7 +126,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
         <!-- Banner Info dengan Link Langsung ke food.html -->
         <div class="resto-card" style="background: linear-gradient(135deg, var(--dark-bg), var(--dark-card)); color: #fff;">
             <h2 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">🍜 CIKUR Food & Resto Partner</h2>
-            <p style="font-size: 11px; color: #94a3b8; line-height: 1.4;">Kelola profil restoran, jam operasional, dan upload menu makanan Anda agar tampil di <a href="food.html" style="color: #ff6b6b; text-decoration: underline; font-weight: 700;">Halaman Menu Pembeli</a>.</p>
+            <p style="font-size: 11px; color: #94a3b8; line-height: 1.4;">Kelola profil restoran, jam operasional, dan upload menu makanan Anda agar tampil di <a href="food.html" style="color: var(--accent-yellow); text-decoration: underline; font-weight: 700;">Halaman Menu Pembeli</a>.</p>
         </div>
 
         <!-- STATUS BUKA/TUTUP & JAM OPERASIONAL DINAMIS -->
@@ -149,8 +149,8 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             <button class="btn-status" id="btnToggleStatus">Ubah ke Tutup</button>
         </div>
 
-        <!-- PESANAN MASUK & CHAT TERINTEGRASI (DIBUAT DROPDOWN / AKORDION) -->
-        <div class="resto-card" id="cardSectionOrders">
+        <!-- PESANAN MASUK & CHAT TERINTEGRASI -->
+        <div class="resto-card active" id="cardSectionOrders">
             <div class="accordion-header" onclick="toggleAccordion('cardSectionOrders')">
                 <div class="accordion-title-wrapper">
                     <svg class="section-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
@@ -168,8 +168,8 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             </div>
         </div>
 
-        <!-- DATA & PROFIL RESTORAN (DIBUAT DROPDOWN / AKORDION) -->
-        <div class="resto-card active" id="cardSectionProfile">
+        <!-- DATA & PROFIL RESTORAN -->
+        <div class="resto-card" id="cardSectionProfile">
             <div class="accordion-header" onclick="toggleAccordion('cardSectionProfile')">
                 <div class="accordion-title-wrapper">
                     <svg class="section-icon" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
@@ -221,24 +221,24 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                         <input type="text" id="restoAccountNumberInput" class="form-input" placeholder="Nomor Rekening / No. Akun" required>
                     </div>
                     <div class="form-group">
-    <label class="form-label">Upload Foto Tampilan Resto</label>
-    <div style="margin-bottom: 6px;">
-        <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">1. Foto Tampak Depan Resto</label>
-        <input type="file" id="restoPhotoFrontInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
-        <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">Maksimal ukuran file 2MB.</small>
-    </div>
-    <div>
-        <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">2. Foto Area Indoor Resto</label>
-        <input type="file" id="restoPhotoIndoorInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
-        <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">Maksimal ukuran file 2MB.</small>
-    </div>
-    </div>
+                        <label class="form-label">Upload Foto Tampilan Resto</label>
+                        <div style="margin-bottom: 6px;">
+                            <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">1. Foto Tampak Depan Resto</label>
+                            <input type="file" id="restoPhotoFrontInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
+                            <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">Maksimal ukuran file 2MB.</small>
+                        </div>
+                        <div>
+                            <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">2. Foto Area Indoor Resto</label>
+                            <input type="file" id="restoPhotoIndoorInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
+                            <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">Maksimal ukuran file 2MB.</small>
+                        </div>
+                    </div>
                     <button type="submit" class="btn-action">Simpan Data & Profil Resto</button>
                 </form>
             </div>
         </div>
 
-        <!-- UPLOAD & KELOLA MENU MAKANAN (DIBUAT DROPDOWN / AKORDION) -->
+        <!-- UPLOAD & KELOLA MENU MAKANAN -->
         <div class="resto-card" id="cardSectionMenu">
             <div class="accordion-header" onclick="toggleAccordion('cardSectionMenu')">
                 <div class="accordion-title-wrapper">
@@ -273,17 +273,17 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                             <input type="number" id="menuDiscountPriceInput" class="form-input" placeholder="Potongan harga otomatis (Contoh: 20000)">
                         </div>
                         <div class="form-group">
-    <label class="form-label">Upload Foto Makanan</label>
-    <input type="file" id="menuPhotoInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
-    <small style="font-size: 10px; color: var(--text-muted); margin-top: 4px; display: block;">Format: JPG, PNG. Maksimal ukuran file 2MB.</small>
-</div>
-<div class="form-group">
-    <label class="form-label">Status Ketersediaan Menu</label>
-    <select id="menuStatusInput" class="form-select" required>
-        <option value="Tersedia">Tersedia (Ready)</option>
-        <option value="Habis">Habis (Sold Out)</option>
-    </select>
-</div>
+                            <label class="form-label">Upload Foto Makanan</label>
+                            <input type="file" id="menuPhotoInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
+                            <small style="font-size: 10px; color: var(--text-muted); margin-top: 4px; display: block;">Format: JPG, PNG. Maksimal ukuran file 2MB.</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Status Ketersediaan Menu</label>
+                            <select id="menuStatusInput" class="form-select" required>
+                                <option value="Tersedia">Tersedia (Ready)</option>
+                                <option value="Habis">Habis (Sold Out)</option>
+                            </select>
+                        </div>
                         <button type="submit" id="btnSubmitMenu" class="btn-action" style="background: #0f172a;">Simpan Menu</button>
                     </form>
 
@@ -537,7 +537,6 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
             category: category,
             price: price, 
             discountPrice: discountPrice, 
-       
             status: status,
             photo: photoUrl
         };
@@ -562,7 +561,6 @@ function renderMenuList() {
         container.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada menu yang di-upload.</p>`;
         return;
     }
-    // Kelompokkan menu berdasarkan kategori
     let groupedMenu = {};
     currentResto.menuList.forEach((item, index) => {
         let cat = item.category || 'Umum';
@@ -572,11 +570,9 @@ function renderMenuList() {
         groupedMenu[cat].push({ item, index });
     });
     let html = "";
-    // Loop tiap kategori untuk jadikan judul besar di atas
     for(let cat in groupedMenu) {
         html += `<div style="font-size: 13px; font-weight: 800; color: #0f172a; margin: 12px 0 6px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 2px;">${cat}</div>`;
         
-        // Loop item menu di dalam kategori tersebut
         groupedMenu[cat].forEach(({ item, index }) => {
             let priceDisplay = "";
             if(item.discountPrice && item.discountPrice < item.price) {
@@ -612,6 +608,7 @@ function renderMenuList() {
     }
     container.innerHTML = html;
 }
+
 function editMenu(index) {
     let item = currentResto.menuList[index];
     editingMenuIndex = index;
@@ -625,14 +622,16 @@ function editMenu(index) {
     document.getElementById("btnSubmitMenu").innerText = "Simpan Perubahan";
     document.getElementById("formAddMenu").scrollIntoView({ behavior: 'smooth' });
 }
+
 function deleteMenu(index) {
     currentResto.menuList.splice(index, 1);
     saveRestoToStorage();
     renderMenuList();
 }
+
 function renderIncomingOrders() {
     let container = document.getElementById("incomingOrdersContainer");
-    let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || [];
+    let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || JSON.parse(localStorage.getItem('cikur_orders')) || [];
     let restoOrders = orders.filter(o => o.restoId === currentRestoId || !o.restoId);
 
     if(!restoOrders || restoOrders.length === 0) {
@@ -646,14 +645,21 @@ function renderIncomingOrders() {
         let borderColor = order.status === 'Dibatalkan' ? '#fecaca' : order.status === 'Selesai' ? '#bbf7d0' : '#fed7aa';
         let statusTextColor = order.status === 'Dibatalkan' ? '#dc2626' : order.status === 'Selesai' ? '#16a34a' : '#c2410c';
 
+        let itemsListText = "1x Menu Pilihan";
+        if (order.items && Array.isArray(order.items) && order.items.length > 0) {
+            itemsListText = order.items.map(i => `${i.qty || 1}x ${i.name || 'Menu Pilihan'}`).join(', ');
+        } else if (order.menuSummary) {
+            itemsListText = order.menuSummary;
+        }
+
         html += `
         <div style="background: ${badgeColor}; border: 1px solid ${borderColor}; border-radius: 12px; padding: 12px; margin-bottom: 10px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <span style="font-size: 11px; font-weight: 800; color: var(--text-main);">Order #${order.id || (idx + 1)}</span>
-                <span style="font-size: 10px; font-weight: 700; color: ${statusTextColor}; padding: 2px 6px; background: #fff; border-radius: 6px; border: 1px solid ${borderColor};">${order.status || 'Menunggu Konfirmasi'}</span>
+                <span style="font-size: 11px; font-weight: 800; color: var(--text-main);">Order #${order.id || order.orderId || (idx + 1)}</span>
+                <span style="font-size: 10px; font-weight: 700; color: ${statusTextColor}; padding: 2px 6px; background: #fff; border-radius: 6px; border: 1px solid ${borderColor};">${order.status || 'Pending'}</span>
             </div>
             <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Pemesan: <b>${order.customerName || 'Pelanggan Cikur'}</b></p>
-            <p style="font-size: 11px; color: var(--text-main); font-weight: 600; margin-bottom: 8px;">Menu: ${order.itemSummary || '1x Menu Pilihan'}</p>
+            <p style="font-size: 11px; color: var(--text-main); font-weight: 600; margin-bottom: 8px;">Menu: ${itemsListText}</p>
             
             <div style="display: flex; gap: 6px;">
                 <button onclick="updateOrderStatus(${idx}, 'Diproses')" class="btn-action" style="margin-top:0; font-size: 11px; height: 32px; background: #2563eb;">Terima & Proses</button>
@@ -665,10 +671,11 @@ function renderIncomingOrders() {
 }
 
 function updateOrderStatus(index, newStatus) {
-    let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || [];
+    let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || JSON.parse(localStorage.getItem('cikur_orders')) || [];
     if(orders[index]) {
         orders[index].status = newStatus;
         localStorage.setItem('cikur_restaurant_orders', JSON.stringify(orders));
+        localStorage.setItem('cikur_orders', JSON.stringify(orders));
         renderIncomingOrders();
         alert(`Status pesanan berhasil diperbarui menjadi: ${newStatus}`);
     }
