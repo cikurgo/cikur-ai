@@ -544,24 +544,21 @@ setInterval(() => {
     showSlide(slideIndex + 1);
 }, 4000);
 
+
 /* Ambil Data Resto & Menu dari localStorage (Sinkron Sempurna dengan resto.html) */
 function loadRestoDataFromStorage() {
-    // Coba ambil data dari berbagai kemungkinan key yang tersimpan di localStorage
     let currentResto = JSON.parse(localStorage.getItem('currentResto')) || JSON.parse(localStorage.getItem('cikur_resto_profile')) || {};
     let savedMenus = currentResto.menuList || JSON.parse(localStorage.getItem('cikur_resto_menus')) || [];
     
-    // Jika masih kosong tapi ada data mentah, kita buatkan data default agar langsung tampil
     let restoName = currentResto.name || currentResto.namaResto || "Kedai Resto Partner";
     let restoPhoto = currentResto.photo || currentResto.gambarResto || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=150";
     let restoKategori = currentResto.category || "Kuliner & Minuman";
     let isOpen = currentResto.isOpen !== false;
 
-    // Jika sama sekali tidak ada data menu, kembalikan array kosong
     if (!restoName && savedMenus.length === 0) {
         return [];
     }
 
-    // Format ulang menu agar seragam
     let formattedMenus = savedMenus.map((m, idx) => ({
         id: m.id || `m_${idx}_${Date.now()}`,
         name: m.name || m.nama || "Menu Pilihan",
@@ -582,17 +579,7 @@ function loadRestoDataFromStorage() {
         items: formattedMenus
     }];
 }
-            id: m.id || `m_${idx}_${Date.now()}`,
-            name: m.name,
-            category: m.category || "Menu Umum",
-            price: Number(m.price) || 0,
-            discountPrice: m.discountPrice ? Number(m.discountPrice) : null,
-            status: m.status || "Tersedia",
-            img: m.photo || "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150"
-        }))
-    }];
-}
-
+    
 let databaseResto = loadRestoDataFromStorage();
 let cartQuantities = {};
 let currentModeSelected = 'instant';
