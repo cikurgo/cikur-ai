@@ -274,6 +274,17 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                             <label class="form-label">Jumlah Stok / Ketersediaan Menu</label>
                             <input type="number" id="menuStockInput" class="form-input" placeholder="Contoh: 50" required>
                         </div>
+                        <div class="form-group">
+    <label class="form-label">Upload Foto Makanan</label>
+    <input type="file" id="menuPhotoInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
+</div>
+<div class="form-group">
+    <label class="form-label">Status Ketersediaan Menu</label>
+    <select id="menuStatusInput" class="form-select" required>
+        <option value="Tersedia">Tersedia (Ready)</option>
+        <option value="Habis">Habis (Sold Out)</option>
+    </select>
+</div>
                         <button type="submit" class="btn-action" style="background: #0f172a;">+ Tambah Menu Baru</button>
                     </form>
 
@@ -489,25 +500,41 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
     let discountPriceInput = document.getElementById("menuDiscountPriceInput").value;
     let discountPrice = discountPriceInput ? Number(discountPriceInput) : null;
     let stock = Number(document.getElementById("menuStockInput").value);
+    let status = document.getElementById("menuStatusInput").value;
+    let photoInput = document.getElementById("menuPhotoInput");
 
-    currentResto.menuList.push({ 
-        id: 'm_' + Date.now(),
-        name: name,
-        category: category,
-        price: price, 
-        discountPrice: discountPrice, 
-        stock: stock 
-    });
-    
-    saveRestoToStorage();
-    
-    document.getElementById("menuNameInput").value = "";
-    document.getElementById("menuPriceInput").value = "";
-    document.getElementById("menuDiscountPriceInput").value = "";
-    document.getElementById("menuStockInput").value = "";
-    
-    renderMenuList();
-    alert("Menu baru berhasil ditambahkan!");
+    function saveMenuData(photoUrl = "") {
+        currentResto.menuList.push({ 
+            id: 'm_' + Date.now(),
+            name: name,
+            category: category,
+            price: price, 
+            discountPrice: discountPrice, 
+            stock: stock,
+            status: status,
+            photo: photoUrl
+        });
+        
+        saveRestoToStorage();
+        // Reset form input
+        document.getElementById("menuNameInput").value = "";
+        document.getElementById("menuPriceInput").value = "";
+        document.getElementById("menuDiscountPriceInput").value = "";
+        document.getElementById("menuStockInput").value = "";
+        if(document.getElementById("menuPhotoInput")) document.getElementById("menuPhotoInput").value = "";
+        
+        renderMenuList();
+        alert("Menu baru beserta foto dan status berhasil ditambahkan!");
+    }
+    if(photoInput && photoInput.files && photoInput.files[0]) {
+        let reader = new FileReader();
+        reader.onload = function(e) {
+            saveMenuData(e.target.result);
+        };
+        reader.readAsDataURL(photoInput.files[0]);
+    } else {
+        saveMenuData("");
+    }
 });
 
 function renderMenuList() {
@@ -529,26 +556,32 @@ function renderMenuList() {
         } else {
             priceDisplay = `<div class="discount-price">Rp ${item.price.toLocaleString('id-ID')}</div>`;
         }
+        let statusBadgeColor = item.status === 'Habis' ? '#fee2e2' : '#f0fdf4';
+        let statusBadgeText = item.status === 'Habis' ? '#dc2626' : '#16a34a';
+        let statusText = item.status || 'Tersedia';
+        let photoTag = item.photo ? `<img src="${item.photo}" style="width: 45px; height: 45px; object-fit: cover; border-radius: 8px; flex-shrink: 0;">` : `<div style="width: 45px; height: 45px; background: #e2e8f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #64748b; flex-shrink: 0;">No Foto</div>`;
 
         html += `
-        <div class="menu-item-card">
-            <div class="menu-info">
+        <div class="menu-item-card" style="display: flex; gap: 10px; align-items: center;">
+            ${photoTag}
+            <div class="menu-info" style="flex: 1;">
                 <h4>${item.name} <span style="font-size:10px; color:var(--primary-red); font-weight:600;">[${item.category || 'Umum'}]</span></h4>
                 ${priceDisplay}
-                <span class="stock-badge">Stok: ${item.stock} porsi</span>
+                <div style="display: flex; gap: 6px; margin-top: 4px; align-items: center;">
+                    <span class="stock-badge">Stok: ${item.stock}</span>
+                    <span style="font-size: 9px; font-weight: 700; padding: 2px 6px; background: ${statusBadgeColor}; color: ${statusBadgeText}; border-radius: 4px;">${statusText}</span>
+                </div>
             </div>
             <button onclick="deleteMenu(${index})" style="background: none; border: none; color: var(--primary-red); font-size: 11px; font-weight: 700; cursor: pointer;">Hapus</button>
         </div>`;
     });
     container.innerHTML = html;
 }
-
 function deleteMenu(index) {
     currentResto.menuList.splice(index, 1);
     saveRestoToStorage();
     renderMenuList();
 }
-
 function renderIncomingOrders() {
     let container = document.getElementById("incomingOrdersContainer");
     let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || [];
