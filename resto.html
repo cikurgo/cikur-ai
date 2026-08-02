@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Resto Partner - CIKUR GO Super App Engine v4.5</title>
+<title>Resto Partner - CIKUR GO Super App Engine v4.7</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -49,6 +49,8 @@ body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; di
 /* CONTENT STYLES & ACCORDION */
 .resto-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 20px; padding: 16px; margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
 .accordion-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+.accordion-title-wrapper { display: flex; align-items: center; gap: 8px; }
+.accordion-title-wrapper svg.section-icon { width: 18px; height: 18px; fill: var(--primary-red); }
 .accordion-header h3 { font-size: 13px; font-weight: 800; color: var(--text-main); margin: 0; }
 .accordion-icon { width: 18px; height: 18px; fill: var(--text-muted); transition: transform 0.3s ease; }
 .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -132,7 +134,6 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             <h3 class="status-title">Status Operasional Resto</h3>
             <p id="statusRestoText" class="status-indicator">Status: Buka & Siap Menerima Order (Online)</p>
             
-            <!-- Pilihan Jam Operasional Resto -->
             <div style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-bottom: 10px; background: rgba(255,255,255,0.7); padding: 8px; border-radius: 10px;">
                 <div style="text-align: left; flex: 1;">
                     <label style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block;">Jam Buka</label>
@@ -148,10 +149,32 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             <button class="btn-status" id="btnToggleStatus">Ubah ke Tutup</button>
         </div>
 
-        <!-- 1. DATA RESTO (DROPDOWN) -->
+        <!-- PESANAN MASUK & CHAT TERINTEGRASI -->
+        <div class="resto-card" id="cardSectionOrders">
+            <div class="accordion-header" onclick="toggleAccordion('cardSectionOrders')">
+                <div class="accordion-title-wrapper">
+                    <svg class="section-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+                    <h3>Pesanan Masuk & Chat Terintegrasi</h3>
+                </div>
+                <svg class="accordion-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
+            </div>
+            <div class="accordion-content">
+                <div style="padding-top: 8px;">
+                    <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Kelola pesanan dari pembeli di <code>food.html</code> dan koordinasi dengan driver.</p>
+                    <div id="incomingOrdersContainer">
+                        <p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada pesanan masuk.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DATA & PROFIL RESTORAN -->
         <div class="resto-card active" id="cardSectionProfile">
             <div class="accordion-header" onclick="toggleAccordion('cardSectionProfile')">
-                <h3>1. Data & Profil Restoran</h3>
+                <div class="accordion-title-wrapper">
+                    <svg class="section-icon" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                    <h3>Data & Profil Restoran</h3>
+                </div>
                 <svg class="accordion-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
             </div>
             <div class="accordion-content">
@@ -213,10 +236,13 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             </div>
         </div>
 
-        <!-- 2. KELOLA MENU MAKANAN (DROPDOWN) -->
+        <!-- UPLOAD & KELOLA MENU MAKANAN -->
         <div class="resto-card" id="cardSectionMenu">
             <div class="accordion-header" onclick="toggleAccordion('cardSectionMenu')">
-                <h3>2. Upload & Kelola Menu Makanan</h3>
+                <div class="accordion-title-wrapper">
+                    <svg class="section-icon" viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4Z"/></svg>
+                    <h3>Upload & Kelola Menu Makanan</h3>
+                </div>
                 <svg class="accordion-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
             </div>
             <div class="accordion-content">
@@ -272,16 +298,13 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             <span>Agent CGO</span>
         </a>
     </nav>
-    <footer><p>© 2026 CIKUR GO • Resto Partner Engine v4.5</p></footer>
+    <footer><p>© 2026 CIKUR GO • Resto Partner Engine v4.7</p></footer>
 </div>
 
 <script>
 let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { name: "CIKUR USER", phone: "08123456789", saldo: 125000, avatar: "" };
-
-// Gunakan ID unik restoran berdasarkan nomor HP pemilik agar multi-vendor bisa mendeteksi resto berbeda
 let currentRestoId = userProfile.phone || "default_resto";
 
-// Ambil data dari database banyak resto (Array / List)
 let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
 let currentResto = allRestos.find(r => r.id === currentRestoId) || {
     id: currentRestoId,
@@ -483,6 +506,51 @@ function deleteMenu(index) {
     renderMenuList();
 }
 
+// RENDER & KELOLA PESANAN MASUK (TERMASUK PEMBATALAN & UPDATE STATUS)
+function renderIncomingOrders() {
+    let container = document.getElementById("incomingOrdersContainer");
+    let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || [];
+    let restoOrders = orders.filter(o => o.restoId === currentRestoId || !o.restoId);
+
+    if(!restoOrders || restoOrders.length === 0) {
+        container.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada pesanan masuk saat ini.</p>`;
+        return;
+    }
+
+    let html = "";
+    restoOrders.forEach((order, idx) => {
+        let badgeColor = order.status === 'Dibatalkan' ? '#fee2e2' : order.status === 'Selesai' ? '#f0fdf4' : '#fff7ed';
+        let borderColor = order.status === 'Dibatalkan' ? '#fecaca' : order.status === 'Selesai' ? '#bbf7d0' : '#fed7aa';
+        let statusTextColor = order.status === 'Dibatalkan' ? '#dc2626' : order.status === 'Selesai' ? '#16a34a' : '#c2410c';
+
+        html += `
+        <div style="background: ${badgeColor}; border: 1px solid ${borderColor}; border-radius: 12px; padding: 12px; margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 11px; font-weight: 800; color: var(--text-main);">Order #${order.id || (idx + 1)}</span>
+                <span style="font-size: 10px; font-weight: 700; color: ${statusTextColor}; padding: 2px 6px; background: #fff; border-radius: 6px; border: 1px solid ${borderColor};">${order.status || 'Menunggu Konfirmasi'}</span>
+            </div>
+            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Pemesan: <b>${order.customerName || 'Pelanggan Cikur'}</b></p>
+            <p style="font-size: 11px; color: var(--text-main); font-weight: 600; margin-bottom: 8px;">Menu: ${order.itemSummary || '1x Menu Pilihan'}</p>
+            
+            <div style="display: flex; gap: 6px;">
+                <button onclick="updateOrderStatus(${idx}, 'Diproses')" class="btn-action" style="margin-top:0; font-size: 11px; height: 32px; background: #2563eb;">Terima & Proses</button>
+                <button onclick="updateOrderStatus(${idx}, 'Dibatalkan')" class="btn-action" style="margin-top:0; font-size: 11px; height: 32px; background: var(--primary-red);">Batalkan Pesanan</button>
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+function updateOrderStatus(index, newStatus) {
+    let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || [];
+    if(orders[index]) {
+        orders[index].status = newStatus;
+        localStorage.setItem('cikur_restaurant_orders', JSON.stringify(orders));
+        renderIncomingOrders();
+        alert(`Status pesanan berhasil diperbarui menjadi: ${newStatus}`);
+    }
+}
+
 const btnToggleStatus = document.getElementById("btnToggleStatus");
 btnToggleStatus.addEventListener("click", () => {
     currentResto.isOpen = !currentResto.isOpen;
@@ -490,7 +558,10 @@ btnToggleStatus.addEventListener("click", () => {
     updateStatusUI();
 });
 
-window.addEventListener("DOMContentLoaded", updateUIProfile);
+window.addEventListener("DOMContentLoaded", () => {
+    updateUIProfile();
+    renderIncomingOrders();
+});
 
 const btnOpenProfileDropdown = document.getElementById("btnOpenProfileDropdown");
 const headerDropdownMenu = document.getElementById("headerDropdownMenu");
