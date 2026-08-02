@@ -519,9 +519,9 @@ body{
         <div style="font-size: 10px; color: #94a3b8; font-weight: 700;" id="footerLabelMode">Total Pesanan (Instant)</div>
         <div id="footerTotalText" style="font-size: 12px; font-weight: 800; color: #FFD700; font-family: var(--font-mono);">Rp 0</div>
     </div>
-    <div style="display: flex; gap: 6px;">
-        <button class="btn-order" onclick="prosesPesanFood()" style="padding: 8px 12px; font-size: 11px;">Proses Reguler</button>
-        <button class="btn-order" onclick="lanjutKe2In1()" style="background: #ffffff; color: var(--primary-red); border: 1px solid var(--primary-red); padding: 8px 12px; font-size: 11px; font-weight: 800;">🚀 Paket 2IN1</button>
+    <div style="display: flex; gap: 6px; width: 100%;">
+    <button class="btn-order" onclick="proceedToCheckout()" style="flex: 1; padding: 10px; font-size: 11px; font-weight: 800; background: var(--primary-red); color: #fff; border: none; border-radius: 10px; cursor: pointer;">Pesan Sekarang</button>
+    <button class="btn-order" onclick="lanjutKe2In1()" style="flex: 1; padding: 10px; font-size: 11px; font-weight: 800; background: #ffffff; color: var(--primary-red); border: 1px solid var(--primary-red); border-radius: 10px; cursor: pointer;">CIKUR GO 2IN1</button>
     </div>
 </div>
 
@@ -638,12 +638,13 @@ function switchMode(mode) {
 
 function renderRestoList(data) {
     const container = document.getElementById("restoContainer");
+    if (!container) return;
     container.innerHTML = "";
 
-    if (!data || data.length === 0 || !data[0].items || data[0].items.length === 0) {
+    if (!data || data.length === 0) {
         container.innerHTML = `
-            <div style="text-align: center; padding: 30px 10px; background: #fff; border-radius: 14px; border: 1px solid #e2e8f0;">
-                <p style="font-size: 11px; color: var(--text-muted);">Belum Ada Menu Resto Terdaftar.<br>Silakan tambahkan menu makanan melalui halaman Resto Partner.</p>
+            <div style="text-align: center; padding: 30px 10px; background: #fff; border-radius: 14px; border: 1px solid #e2e8f0; margin-top: 15px;">
+                <p style="font-size: 11px; color: var(--text-muted);">Belum ada restoran terdaftar.</p>
             </div>`;
         return;
     }
@@ -651,48 +652,36 @@ function renderRestoList(data) {
     data.forEach((resto, rIndex) => {
         let block = document.createElement("div");
         block.className = "resto-card";
-        
-        let badgeClass = resto.isOpen ? "buka" : "tutup";
-        
+        block.style.cssText = "background: #fff; border-radius: 14px; border: 1px solid #e2e8f0; padding: 12px; margin-bottom: 12px;";
+
         let headerHTML = `
-            <div class="resto-header" onclick="toggleRestoDropdown(${rIndex})" style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                <img src="${resto.restoPhoto}" style="width: 42px; height: 42px; object-fit: cover; border-radius: 50%; border: 2px solid var(--primary-red);">
+            <div onclick="toggleRestoDropdown(${rIndex})" style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                <img src="${resto.restoPhoto || 'https://via.placeholder.com/40'}" style="width: 42px; height: 42px; object-fit: cover; border-radius: 50%; border: 2px solid var(--primary-red);">
                 <div style="flex: 1;">
-                    <h3 style="font-size: 13px; font-weight: 800; margin: 0;">${resto.restoName}</h3>
-                    <p style="font-size: 10px; color: var(--text-muted); margin: 2px 0 0 0;">${resto.restoKategori}</p>
+                    <h3 style="font-size: 13px; font-weight: 800; margin: 0; color: #0f172a;">${resto.restoName}</h3>
+                    <p style="font-size: 10px; color: #64748b; margin: 2px 0 0 0;">${resto.restoKategori || 'Kuliner & Minuman'}</p>
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="font-size: 10px; font-weight: 700; padding: 3px 8px; background: ${resto.isOpen ? '#f0fdf4' : '#fef2f2'}; color: ${resto.isOpen ? '#16a34a' : '#dc2626'}; border-radius: 6px;">${resto.statusText}</span>
-                    <svg id="dropArrow_${rIndex}" viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: var(--text-muted); transition: transform 0.3s; transform: rotate(180deg);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
+                    <span style="font-size: 10px; font-weight: 700; padding: 3px 8px; background: ${resto.isOpen ? '#f0fdf4' : '#fef2f2'}; color: ${resto.isOpen ? '#16a34a' : '#dc2626'}; border-radius: 6px;">${resto.statusText || (resto.isOpen ? 'Buka' : 'Tutup')}</span>
+                    <svg id="dropArrow_${rIndex}" viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: #64748b; transition: transform 0.3s; transform: rotate(180deg);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
                 </div>
             </div>
         `;
 
-        let menusHTML = `<div id="restoContent_${rIndex}" class="resto-content-wrapper" style="margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 10px;">`;
+        let menusHTML = `<div id="restoContent_${rIndex}" class="resto-content-wrapper" style="margin-top: 12px; border-top: 1px solid #e2e8f0; padding-top: 10px;">`;
         
-        // Kelompokkan menu berdasarkan kategori asli dari resto
-        let grouped = {};
-        resto.items.forEach((item) => {
-            let cat = item.category || 'Menu Umum';
-            if(!grouped[cat]) grouped[cat] = [];
-            grouped[cat].push(item);
-        });
-
-        for(let cat in grouped) {
-            menusHTML += `<div style="font-size: 12px; font-weight: 800; color: #0f172a; margin: 10px 0 6px 0;">${cat}</div>`;
-            grouped[cat].forEach((item) => {
+        if (resto.items && resto.items.length > 0) {
+            resto.items.forEach((item) => {
                 let qtyKey = `${resto.id}_${item.id}`;
                 let currentQty = cartQuantities[qtyKey] || 0;
-                let priceView = item.discountPrice && item.discountPrice < item.price ? 
-                    `<span style="text-decoration: line-through; font-size: 10px; color:#94a3b8;">Rp ${item.price.toLocaleString('id-ID')}</span> <span style="font-size: 11px; font-weight:800; color:var(--primary-red);">Rp ${item.discountPrice.toLocaleString('id-ID')}</span>` :
-                    `<span style="font-size: 11px; font-weight:800; color:var(--primary-red);">Rp ${item.price.toLocaleString('id-ID')}</span>`;
-
+                let priceVal = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
+                
                 menusHTML += `
                 <div style="display: flex; gap: 8px; align-items: center; padding: 8px; background: #fafafa; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 6px;">
-                    <img src="${item.img}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 8px;">
+                    <img src="${item.img || 'https://via.placeholder.com/40'}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 8px;">
                     <div style="flex: 1;">
-                        <h4 style="font-size: 11px; font-weight: 700; margin: 0;">${item.name}</h4>
-                        ${priceView}
+                        <h4 style="font-size: 11px; font-weight: 700; margin: 0; color: #0f172a;">${item.name}</h4>
+                        <span style="font-size: 11px; font-weight: 800; color: var(--primary-red);">Rp ${priceVal.toLocaleString('id-ID')}</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <button onclick="updateCartQty('${resto.id}', '${item.id}', -1)" style="width: 24px; height: 24px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-weight: bold; cursor: pointer;">-</button>
@@ -701,13 +690,15 @@ function renderRestoList(data) {
                     </div>
                 </div>`;
             });
+        } else {
+            menusHTML += `<p style="font-size: 10px; color: #64748b; text-align: center; margin: 5px 0;">Belum ada menu di resto ini.</p>`;
         }
+
         menusHTML += `</div>`;
         block.innerHTML = headerHTML + menusHTML;
         container.appendChild(block);
     });
 }
-
 // Fungsi Toggle Dropdown Resto
 function toggleRestoDropdown(index) {
     let contentWrapper = document.getElementById(`restoContent_${index}`);
