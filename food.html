@@ -365,15 +365,15 @@ function sendChatMessage() {
     let box = document.getElementById("chatMessagesBox");
     if(!input || !input.value.trim()) return;
 
-    box.innerHTML += `<div class="chat-bubble customer">${input.value}</div>`;
-    let msg = input.value;
+    let text = input.value.trim();
+    box.innerHTML += `<div class="chat-bubble customer">${text}</div>`;
     input.value = "";
     box.scrollTop = box.scrollHeight;
 
-    setTimeout(() => {
-        box.innerHTML += `<div class="chat-bubble resto">Baik Kak, pesan "${msg}" sudah kami catat untuk driver.</div>`;
-        box.scrollTop = box.scrollHeight;
-    }, 1000);
+    // Disimpan ke penyimpanan lokal agar terintegrasi
+    let currentHistory = JSON.parse(localStorage.getItem('cikur_chat_history')) || [];
+    currentHistory.push({ sender: 'customer', text: text });
+    localStorage.setItem('cikur_chat_history', JSON.stringify(currentHistory));
 }
 
 function finalizePayment(totalAmount, summaryText) {
@@ -410,10 +410,23 @@ function finalizePayment(totalAmount, summaryText) {
 
     let riwayatPesanan = JSON.parse(localStorage.getItem('cikur_orders')) || [];
     let riwayatTransaksi = JSON.parse(localStorage.getItem('cikur_transactions')) || [];
-    let restoOrders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || [];
+    let restoOrders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || JSON.parse(localStorage.getItem('cikur_orders')) || [];
 
     let kodeTrx = 'TRX-' + Math.floor(100000 + Math.random() * 900000);
     let waktuSekarang = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+
+    // Menyusun struktur items agar terbaca spesifik oleh resto.html
+    let structuredItems = [];
+    databaseResto.forEach(resto => {
+        resto.items.forEach(item => {
+            let key = `${resto.id}_${item.id}`;
+            let qty = cartQuantities[key] || 0;
+            if(qty > 0) {
+                let price = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
+                structuredItems.push({ id: item.id, name: item.name, qty: qty, price: price });
+            }
+        });
+    });
 
     riwayatPesanan.unshift({
         kode: kodeTrx,
@@ -432,15 +445,18 @@ function finalizePayment(totalAmount, summaryText) {
         status: 'Berhasil'
     });
 
-    // Masuk ke resto.html & driver.html lengkap dengan catatan chat
+    // Dikirim ke resto dengan array items yang valid
     restoOrders.unshift({
         id: 'ORD_' + Date.now(),
         kode: kodeTrx,
         menu: summaryText,
+        items: structuredItems,
         mode: modeInfo,
+        totalPrice: totalAmount,
         total: totalAmount,
         status: 'Pending',
         waktu: waktuSekarang,
+        customerName: user.name || "Pelanggan Cikur",
         pembeli: user.name || "Pelanggan Cikur",
         customerAddress: address,
         chatLog: chatHistoryHTML
