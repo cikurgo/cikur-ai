@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Resto Partner - CIKUR GO Super App Engine v4.4</title>
+<title>Resto Partner - CIKUR GO Super App Engine v4.6</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -46,7 +46,7 @@ body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; di
 .nav-item span { font-size: 11px; font-weight: 600; }
 .nav-item.active { color: var(--primary-red); }
 
-/* CONTENT STYLES & ACCORDION / DROPDOWN */
+/* CONTENT STYLES & ACCORDION */
 .resto-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 20px; padding: 16px; margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
 .accordion-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
 .accordion-header h3 { font-size: 13px; font-weight: 800; color: var(--text-main); margin: 0; }
@@ -76,9 +76,18 @@ body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; di
 .status-box.open .btn-status { background: #dc2626; }
 .status-box.closed .btn-status { background: #16a34a; }
 
+/* INCOMING ORDERS & CHAT STYLES */
+.order-card { background: #fff; border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+.order-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px; }
+.badge-order { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: #fff7ed; color: #c2410c; }
+.chat-box-container { margin-top: 8px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 10px; padding: 8px; }
+.chat-messages { max-height: 100px; overflow-y: auto; font-size: 11px; margin-bottom: 6px; display: flex; flex-direction: column; gap: 4px; }
+.chat-bubble { padding: 4px 8px; border-radius: 8px; max-width: 80%; }
+.chat-bubble.buyer { background: #e2e8f0; align-self: flex-start; color: #0f172a; }
+.chat-bubble.resto { background: #fee2e2; align-self: flex-end; color: #991b1b; }
+
 .menu-item-card { display: flex; justify-content: space-between; align-items: center; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 8px; background: #fafafa; }
 .menu-info h4 { font-size: 12px; font-weight: 700; color: var(--text-main); }
-.menu-info p { font-size: 11px; color: var(--text-muted); }
 .price-tag { display: flex; gap: 6px; align-items: center; margin-top: 2px; }
 .original-price { font-size: 11px; color: #94a3b8; text-decoration: line-through; }
 .discount-price { font-size: 12px; font-weight: 800; color: var(--primary-red); }
@@ -111,9 +120,9 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                     <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4Z"/></svg>
                     <span>Halaman Menu Pembeli</span>
                 </button>
-                <button class="dropdown-item" onclick="window.location.href='agentcgo.html';">
-                    <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2Z"/></svg>
-                    <span>Agent CGO</span>
+                <button class="dropdown-item" onclick="window.location.href='driver.html';">
+                    <svg viewBox="0 0 24 24"><path d="M19 7h-3V5a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v2H1a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h22a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1zM6 5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H6V5zm15 13H3v-3h18v3zm0-5H3V9h18v4z"/></svg>
+                    <span>Panel Driver</span>
                 </button>
             </div>
         </div>
@@ -124,15 +133,13 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
         <!-- Banner Info -->
         <div class="resto-card" style="background: linear-gradient(135deg, var(--dark-bg), var(--dark-card)); color: #fff;">
             <h2 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">🍜 CIKUR Food & Resto Partner</h2>
-            <p style="font-size: 11px; color: #94a3b8; line-height: 1.4;">Kelola profil restoran, jam operasional, dan upload menu makanan Anda agar tampil di <a href="food.html" style="color: #ff6b6b; text-decoration: underline; font-weight: 700;">Halaman Menu Pembeli</a>.</p>
+            <p style="font-size: 11px; color: #94a3b8; line-height: 1.4;">Kelola profil, jam operasional, menu, serta pantau pesanan masuk & chat terintegrasi.</p>
         </div>
 
         <!-- STATUS BUKA/TUTUP & JAM OPERASIONAL DINAMIS -->
         <div id="statusBoxContainer" class="status-box open">
             <h3 class="status-title">Status Operasional Resto</h3>
             <p id="statusRestoText" class="status-indicator">Status: Buka & Siap Menerima Order (Online)</p>
-            
-            <!-- Pilihan Jam Operasional Resto -->
             <div style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-bottom: 10px; background: rgba(255,255,255,0.7); padding: 8px; border-radius: 10px;">
                 <div style="text-align: left; flex: 1;">
                     <label style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block;">Jam Buka</label>
@@ -144,114 +151,74 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                     <input type="time" id="closeTimeInput" class="form-input" value="21:00" style="padding: 6px; font-size: 11px;">
                 </div>
             </div>
-
             <button class="btn-status" id="btnToggleStatus">Ubah ke Tutup</button>
         </div>
 
-        <!-- 1. DATA RESTO (DROPDOWN / ACCORDION) -->
-        <div class="resto-card active" id="cardSectionProfile">
+        <!-- 3. PESANAN MASUK & CHAT TERINTEGRASI (DROPDOWN) -->
+        <div class="resto-card active" id="cardSectionOrders">
+            <div class="accordion-header" onclick="toggleAccordion('cardSectionOrders')">
+                <h3>3. Pesanan Masuk & Chat Terintegrasi</h3>
+                <svg class="accordion-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
+            </div>
+            <div class="accordion-content">
+                <div style="padding-top: 8px;">
+                    <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 10px;">Kelola pesanan dari pembeli di `food.html` dan koordinasi dengan driver.</p>
+                    <div id="incomingOrdersContainer">
+                        <p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada pesanan masuk saat ini.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 1. DATA RESTO (DROPDOWN) -->
+        <div class="resto-card" id="cardSectionProfile">
             <div class="accordion-header" onclick="toggleAccordion('cardSectionProfile')">
                 <h3>1. Data & Profil Restoran</h3>
                 <svg class="accordion-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
             </div>
             <div class="accordion-content">
                 <form id="formRestoProfile" style="padding-top: 8px;">
-                    
-                    <!-- Nama Restoran -->
                     <div class="form-group">
-                        <label class="form-label">
-                            <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
-                            Nama Restoran
-                        </label>
+                        <label class="form-label">Nama Restoran</label>
                         <input type="text" id="restoNameInput" class="form-input" placeholder="Contoh: Kedai Cikur Enak" required>
                     </div>
-
-                    <!-- Nama Penanggung Jawab & Status -->
                     <div class="form-group">
-                        <label class="form-label">
-                            <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-                            Nama Penanggung Jawab & Status
-                        </label>
+                        <label class="form-label">Nama Penanggung Jawab & Status</label>
                         <div class="form-row">
-                            <input type="text" id="ownerNameInput" class="form-input" placeholder="Nama Lengkap Pemilik / Pengelola" style="flex: 2;" required>
+                            <input type="text" id="ownerNameInput" class="form-input" placeholder="Nama Lengkap" style="flex: 2;" required>
                             <select id="restoRoleInput" class="form-select" style="flex: 1;">
                                 <option value="Pemilik Resto">Pemilik Resto</option>
                                 <option value="Pengelola Resto">Pengelola Resto</option>
                             </select>
                         </div>
                     </div>
-
-                    <!-- Nomor HP Pemilik -->
                     <div class="form-group">
-                        <label class="form-label">
-                            <svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
-                            Nomor HP Pemilik / Pengelola
-                        </label>
-                        <input type="text" id="ownerPhoneInput" class="form-input" placeholder="Contoh: 081234567891" required>
+                        <label class="form-label">Nomor HP Pemilik</label>
+                        <input type="text" id="ownerPhoneInput" class="form-input" placeholder="081234567891" required>
                     </div>
-
-                    <!-- Nomor Telepon Resto -->
                     <div class="form-group">
-                        <label class="form-label">
-                            <svg viewBox="0 0 24 24"><path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57-.35-.11-.74-.03-1.02.24l-2.2 2.2c-2.83-1.44-5.15-3.75-6.59-6.59l2.2-2.2c.28-.28.36-.67.25-1.02C8.7 6.45 8.5 5.25 8.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1z"/></svg>
-                            Nomor Telepon Resto (Opsional/Landline)
-                        </label>
-                        <input type="text" id="restoPhoneInput" class="form-input" placeholder="Contoh: 021-555888">
+                        <label class="form-label">Alamat Lengkap & Patokan</label>
+                        <textarea id="restoAddressInput" class="form-textarea" rows="2" placeholder="Alamat resto..." required></textarea>
                     </div>
-
-                    <!-- Alamat Lengkap & Patokan -->
                     <div class="form-group">
-                        <label class="form-label">
-                            <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8Z"/></svg>
-                            Alamat Lengkap & Patokan
-                        </label>
-                        <textarea id="restoAddressInput" class="form-textarea" rows="2" placeholder="Masukkan alamat lengkap resto..." required></textarea>
-                    </div>
-
-                    <!-- Data Pencairan Dana -->
-                    <div class="form-group">
-                        <label class="form-label">
-                            <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
-                            Data Pencairan Dana
-                        </label>
+                        <label class="form-label">Data Pencairan Dana</label>
                         <div class="form-row" style="margin-bottom: 6px;">
                             <select id="restoBankNameInput" class="form-select" style="flex: 1;">
                                 <option value="BCA">BCA</option>
                                 <option value="Mandiri">Mandiri</option>
                                 <option value="BNI">BNI</option>
-                                <option value="BRI">BRI</option>
                                 <option value="DANA">DANA</option>
-                                <option value="OVO">OVO</option>
                             </select>
-                            <input type="text" id="restoAccountNameInput" class="form-input" placeholder="Nama Pemilik Rekening" style="flex: 2;" required>
+                            <input type="text" id="restoAccountNameInput" class="form-input" placeholder="Nama Rekening" style="flex: 2;" required>
                         </div>
-                        <input type="text" id="restoAccountNumberInput" class="form-input" placeholder="Nomor Rekening / No. Akun" required>
-                        <p style="font-size: 10px; color: var(--primary-red); margin-top: 4px; font-weight: 700;">* pastikan Nama dan rek tujuan sesuai</p>
+                        <input type="text" id="restoAccountNumberInput" class="form-input" placeholder="Nomor Rekening" required>
                     </div>
-
-                    <!-- Upload Foto Tampilan Resto -->
-                    <div class="form-group">
-                        <label class="form-label">
-                            <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
-                            Upload Foto Tampilan Resto
-                        </label>
-                        <div style="margin-bottom: 6px;">
-                            <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">1. Foto Tampak Depan Resto</label>
-                            <input type="file" id="restoPhotoFrontInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
-                        </div>
-                        <div>
-                            <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">2. Foto Area Indoor Resto</label>
-                            <input type="file" id="restoPhotoIndoorInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
-                        </div>
-                        <p style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Format foto: JPG/PNG (Maks. 2MB)</p>
-                    </div>
-
-                    <button type="submit" class="btn-action">Simpan Data & Profil Resto</button>
+                    <button type="submit" class="btn-action">Simpan Profil Resto</button>
                 </form>
             </div>
         </div>
 
-        <!-- 2. KELOLA MENU MAKANAN (DROPDOWN / ACCORDION) -->
+        <!-- 2. KELOLA MENU MAKANAN (DROPDOWN) -->
         <div class="resto-card" id="cardSectionMenu">
             <div class="accordion-header" onclick="toggleAccordion('cardSectionMenu')">
                 <h3>2. Upload & Kelola Menu Makanan</h3>
@@ -259,33 +226,27 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             </div>
             <div class="accordion-content">
                 <div style="padding-top: 8px;">
-                    <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 12px;">Atur menu, harga spesial/diskon otomatis, dan stok khusus pengelola.</p>
-                    
                     <form id="formAddMenu">
                         <div class="form-group">
                             <label class="form-label">Nama Menu Makanan</label>
-                            <input type="text" id="menuNameInput" class="form-input" placeholder="Contoh: Nasi Bakar Cikur Spesial" required>
+                            <input type="text" id="menuNameInput" class="form-input" placeholder="Nasi Bakar Cikur" required>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Harga Normal (Rp)</label>
-                            <input type="number" id="menuPriceInput" class="form-input" placeholder="Contoh: 25000" required>
+                            <input type="number" id="menuPriceInput" class="form-input" placeholder="25000" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Harga Diskon / Promo (Opsional)</label>
-                            <input type="number" id="menuDiscountPriceInput" class="form-input" placeholder="Potongan harga otomatis ke pembeli (Contoh: 20000)">
+                            <label class="form-label">Harga Diskon (Opsional)</label>
+                            <input type="number" id="menuDiscountPriceInput" class="form-input" placeholder="20000">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Jumlah Stok / Ketersediaan Menu <span style="font-size: 9px; color: var(--primary-red);">(Khusus Resto)</span></label>
-                            <input type="number" id="menuStockInput" class="form-input" placeholder="Contoh: 50 porsi" required>
+                            <label class="form-label">Stok Porsi</label>
+                            <input type="number" id="menuStockInput" class="form-input" placeholder="50" required>
                         </div>
-                        <button type="submit" class="btn-action" style="background: #0f172a;">+ Tambah Menu Baru</button>
+                        <button type="submit" class="btn-action" style="background: #0f172a;">+ Tambah Menu</button>
                     </form>
-
-                    <div style="margin-top: 16px;">
-                        <h4 style="font-size: 12px; font-weight: 700; margin-bottom: 8px;">Daftar Menu Aktif Anda:</h4>
-                        <div id="listMenuContainer">
-                            <p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada menu yang di-upload.</p>
-                        </div>
+                    <div style="margin-top: 14px;" id="listMenuContainer">
+                        <p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada menu.</p>
                     </div>
                 </div>
             </div>
@@ -306,54 +267,62 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             <svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1Zm-9 8a6 6 0 1 1 6-6 6 6 0 0 1-6 6Z"/></svg>
             <span>Food</span>
         </a>
-        <a href="agentcgo.html" class="nav-item">
-            <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2Z"/></svg>
-            <span>Agent CGO</span>
+        <a href="driver.html" class="nav-item">
+            <svg viewBox="0 0 24 24"><path d="M19 7h-3V5a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v2H1a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h22a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1zM6 5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H6V5zm15 13H3v-3h18v3zm0-5H3V9h18v4z"/></svg>
+            <span>Driver</span>
         </a>
     </nav>
-    <footer><p>© 2026 CIKUR GO • Resto Partner Engine v4.4</p></footer>
+    <footer><p>© 2026 CIKUR GO • Resto Partner Engine v4.6</p></footer>
 </div>
 
 <script>
-let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { name: "CIKUR USER", phone: "08123456789", saldo: 125000, avatar: "" };
-let restoData = JSON.parse(localStorage.getItem('cikur_resto')) || { 
-    name: "", ownerName: "", role: "Pemilik Resto", ownerPhone: "", restoPhone: "", address: "", 
+let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { name: "CIKUR USER", phone: "08123456789", avatar: "" };
+let currentRestoId = userProfile.phone || "default_resto";
+let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
+let currentResto = allRestos.find(r => r.id === currentRestoId) || {
+    id: currentRestoId,
+    name: "", ownerName: "", role: "Pemilik Resto", ownerPhone: userProfile.phone || "", restoPhone: "", address: "", 
     bankName: "BCA", accountName: "", accountNumber: "", 
-    photoFront: "", photoIndoor: "", isOpen: true, openTime: "08:00", closeTime: "21:00" 
+    isOpen: true, openTime: "08:00", closeTime: "21:00",
+    menuList: [], orders: []
 };
-let restoMenuList = JSON.parse(localStorage.getItem('cikur_resto_menu')) || [];
 
 function toggleAccordion(cardId) {
-    let card = document.getElementById(cardId);
-    card.classList.toggle('active');
+    document.getElementById(cardId).classList.toggle('active');
 }
 
 function updateUIProfile() {
     document.getElementById("headerNamaUser").innerText = userProfile.name;
     let avatarContainer = document.getElementById("headerAvatar");
     if(userProfile.avatar && userProfile.avatar.startsWith("data:image")) {
-        avatarContainer.innerHTML = `<img src="${userProfile.avatar}" alt="Foto Profil">`;
+        avatarContainer.innerHTML = `<img src="${userProfile.avatar}" alt="Foto">`;
     } else {
-        avatarContainer.innerText = userProfile.name.split(" ").map(n => n[0]).join("").substring(0,2).toUpperCase() || "CK";
+        avatarContainer.innerText = userProfile.name.substring(0,2).toUpperCase();
     }
 
-    if(restoData.name) {
-        document.getElementById("restoNameInput").value = restoData.name || "";
-        document.getElementById("ownerNameInput").value = restoData.ownerName || "";
-        document.getElementById("restoRoleInput").value = restoData.role || "Pemilik Resto";
-        document.getElementById("ownerPhoneInput").value = restoData.ownerPhone || "";
-        document.getElementById("restoPhoneInput").value = restoData.restoPhone || "";
-        document.getElementById("restoAddressInput").value = restoData.address || "";
-        document.getElementById("restoBankNameInput").value = restoData.bankName || "BCA";
-        document.getElementById("restoAccountNameInput").value = restoData.accountName || "";
-        document.getElementById("restoAccountNumberInput").value = restoData.accountNumber || "";
+    if(currentResto.name) {
+        document.getElementById("restoNameInput").value = currentResto.name || "";
+        document.getElementById("ownerNameInput").value = currentResto.ownerName || "";
+        document.getElementById("restoRoleInput").value = currentResto.role || "Pemilik Resto";
+        document.getElementById("ownerPhoneInput").value = currentResto.ownerPhone || "";
+        document.getElementById("restoAddressInput").value = currentResto.address || "";
+        document.getElementById("restoBankNameInput").value = currentResto.bankName || "BCA";
+        document.getElementById("restoAccountNameInput").value = currentResto.accountName || "";
+        document.getElementById("restoAccountNumberInput").value = currentResto.accountNumber || "";
     }
 
-    if(restoData.openTime) document.getElementById("openTimeInput").value = restoData.openTime;
-    if(restoData.closeTime) document.getElementById("closeTimeInput").value = restoData.closeTime;
+    if(currentResto.openTime) document.getElementById("openTimeInput").value = currentResto.openTime;
+    if(currentResto.closeTime) document.getElementById("closeTimeInput").value = currentResto.closeTime;
     
     updateStatusUI();
     renderMenuList();
+    renderIncomingOrders();
+}
+
+function saveRestoToStorage() {
+    let index = allRestos.findIndex(r => r.id === currentRestoId);
+    if(index !== -1) { allRestos[index] = currentResto; } else { allRestos.push(currentResto); }
+    localStorage.setItem('cikur_all_restos', JSON.stringify(allRestos));
 }
 
 function updateStatusUI() {
@@ -361,153 +330,87 @@ function updateStatusUI() {
     let statusText = document.getElementById("statusRestoText");
     let btnToggle = document.getElementById("btnToggleStatus");
 
-    if(restoData.isOpen) {
+    if(currentResto.isOpen) {
         statusBox.className = "status-box open";
-        statusText.innerText = `Status: Buka & Siap Menerima Order (${restoData.openTime || '08:00'} - ${restoData.closeTime || '21:00'})`;
+        statusText.innerText = `Status: Buka & Siap Menerima Order (${currentResto.openTime} - ${currentResto.closeTime})`;
         btnToggle.innerText = "Ubah ke Tutup";
     } else {
         statusBox.className = "status-box closed";
-        statusText.innerText = `Status: Tutup (Jadwal: ${restoData.openTime || '08:00'} - ${restoData.closeTime || '21:00'})`;
+        statusText.innerText = `Status: Tutup`;
         btnToggle.innerText = "Ubah ke Buka";
     }
 }
 
-document.getElementById("openTimeInput").addEventListener("change", (e) => {
-    restoData.openTime = e.target.value;
-    localStorage.setItem('cikur_resto', JSON.stringify(restoData));
-    updateStatusUI();
-});
-
-document.getElementById("closeTimeInput").addEventListener("change", (e) => {
-    restoData.closeTime = e.target.value;
-    localStorage.setItem('cikur_resto', JSON.stringify(restoData));
-    updateStatusUI();
-});
-
 document.getElementById("formRestoProfile").addEventListener("submit", function(e) {
     e.preventDefault();
-    restoData.name = document.getElementById("restoNameInput").value;
-    restoData.ownerName = document.getElementById("ownerNameInput").value;
-    restoData.role = document.getElementById("restoRoleInput").value;
-    restoData.ownerPhone = document.getElementById("ownerPhoneInput").value;
-    restoData.restoPhone = document.getElementById("restoPhoneInput").value;
-    restoData.address = document.getElementById("restoAddressInput").value;
-    restoData.bankName = document.getElementById("restoBankNameInput").value;
-    restoData.accountName = document.getElementById("restoAccountNameInput").value;
-    restoData.accountNumber = document.getElementById("restoAccountNumberInput").value;
-    restoData.openTime = document.getElementById("openTimeInput").value;
-    restoData.closeTime = document.getElementById("closeTimeInput").value;
-
-    let photoFrontInput = document.getElementById("restoPhotoFrontInput");
-    let photoIndoorInput = document.getElementById("restoPhotoIndoorInput");
-
-    let processedCount = 0;
-    let totalPhotosToProcess = 0;
-    if(photoFrontInput.files && photoFrontInput.files[0]) totalPhotosToProcess++;
-    if(photoIndoorInput.files && photoIndoorInput.files[0]) totalPhotosToProcess++;
-
-    function checkFinish() {
-        processedCount++;
-        if(processedCount >= totalPhotosToProcess) {
-            localStorage.setItem('cikur_resto', JSON.stringify(restoData));
-            alert("Data & Profil Restoran berhasil disimpan!");
-        }
-    }
-
-    if(totalPhotosToProcess === 0) {
-        localStorage.setItem('cikur_resto', JSON.stringify(restoData));
-        alert("Data & Profil Restoran berhasil disimpan!");
-        return;
-    }
-
-    if(photoFrontInput.files && photoFrontInput.files[0]) {
-        let reader = new FileReader();
-        reader.onload = function(e) {
-            restoData.photoFront = e.target.result;
-            checkFinish();
-        };
-        reader.readAsDataURL(photoFrontInput.files[0]);
-    }
-
-    if(photoIndoorInput.files && photoIndoorInput.files[0]) {
-        let reader = new FileReader();
-        reader.onload = function(e) {
-            restoData.photoIndoor = e.target.result;
-            checkFinish();
-        };
-        reader.readAsDataURL(photoIndoorInput.files[0]);
-    }
+    currentResto.name = document.getElementById("restoNameInput").value;
+    currentResto.ownerName = document.getElementById("ownerNameInput").value;
+    currentResto.role = document.getElementById("restoRoleInput").value;
+    currentResto.ownerPhone = document.getElementById("ownerPhoneInput").value;
+    currentResto.address = document.getElementById("restoAddressInput").value;
+    currentResto.bankName = document.getElementById("restoBankNameInput").value;
+    currentResto.accountName = document.getElementById("restoAccountNameInput").value;
+    currentResto.accountNumber = document.getElementById("restoAccountNumberInput").value;
+    
+    saveRestoToStorage();
+    alert("Profil Resto berhasil disimpan!");
 });
 
 document.getElementById("formAddMenu").addEventListener("submit", function(e) {
     e.preventDefault();
-    let name = document.getElementById("menuNameInput").value;
-    let price = Number(document.getElementById("menuPriceInput").value);
-    let discountPriceInput = document.getElementById("menuDiscountPriceInput").value;
-    let discountPrice = discountPriceInput ? Number(discountPriceInput) : null;
-    let stock = Number(document.getElementById("menuStockInput").value);
-
-    restoMenuList.push({ 
-        name: name, 
-        price: price, 
-        discountPrice: discountPrice, 
-        stock: stock 
+    currentResto.menuList.push({
+        id: 'm_' + Date.now(),
+        name: document.getElementById("menuNameInput").value,
+        price: Number(document.getElementById("menuPriceInput").value),
+        discountPrice: document.getElementById("menuDiscountPriceInput").value ? Number(document.getElementById("menuDiscountPriceInput").value) : null,
+        stock: Number(document.getElementById("menuStockInput").value)
     });
-    
-    localStorage.setItem('cikur_resto_menu', JSON.stringify(restoMenuList));
-    
-    document.getElementById("menuNameInput").value = "";
-    document.getElementById("menuPriceInput").value = "";
-    document.getElementById("menuDiscountPriceInput").value = "";
-    document.getElementById("menuStockInput").value = "";
-    
+    saveRestoToStorage();
+    document.getElementById("formAddMenu").reset();
     renderMenuList();
     alert("Menu baru berhasil ditambahkan!");
 });
 
 function renderMenuList() {
     let container = document.getElementById("listMenuContainer");
-    if(restoMenuList.length === 0) {
-        container.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada menu yang di-upload.</p>`;
+    if(!currentResto.menuList || currentResto.menuList.length === 0) {
+        container.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada menu.</p>`;
         return;
     }
     let html = "";
-    restoMenuList.forEach((item, index) => {
-        let priceDisplay = "";
-        if(item.discountPrice && item.discountPrice < item.price) {
-            priceDisplay = `
-                <div class="price-tag">
-                    <span class="original-price">Rp ${item.price.toLocaleString('id-ID')}</span>
-                    <span class="discount-price">Rp ${item.discountPrice.toLocaleString('id-ID')}</span>
-                </div>
-            `;
-        } else {
-            priceDisplay = `<div class="discount-price">Rp ${item.price.toLocaleString('id-ID')}</div>`;
-        }
-
-        html += `
-        <div class="menu-item-card">
+    currentResto.menuList.forEach((item, index) => {
+        html += `<div class="menu-item-card">
             <div class="menu-info">
                 <h4>${item.name}</h4>
-                ${priceDisplay}
-                <span class="stock-badge">Stok: ${item.stock} porsi</span>
+                <div class="discount-price">Rp ${item.price.toLocaleString('id-ID')}</div>
+                <span class="stock-badge">Stok: ${item.stock}</span>
             </div>
-            <button onclick="deleteMenu(${index})" style="background: none; border: none; color: var(--primary-red); font-size: 11px; font-weight: 700; cursor: pointer;">Hapus</button>
+            <button onclick="deleteMenu(${index})" style="background:none; border:none; color:var(--primary-red); font-size:11px; font-weight:700; cursor:pointer;">Hapus</button>
         </div>`;
     });
     container.innerHTML = html;
 }
 
 function deleteMenu(index) {
-    restoMenuList.splice(index, 1);
-    localStorage.setItem('cikur_resto_menu', JSON.stringify(restoMenuList));
+    currentResto.menuList.splice(index, 1);
+    saveRestoToStorage();
     renderMenuList();
 }
 
-const btnToggleStatus = document.getElementById("btnToggleStatus");
-btnToggleStatus.addEventListener("click", () => {
-    restoData.isOpen = !restoData.isOpen;
-    localStorage.setItem('cikur_resto', JSON.stringify(restoData));
+function renderIncomingOrders() {
+    let container = document.getElementById("incomingOrdersContainer");
+    // Simulasi atau sinkronisasi pesanan dari localStorage pembeli/driver
+    let orders = currentResto.orders || [];
+    if(orders.length === 0) {
+        container.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada pesanan masuk.</p>`;
+        return;
+    }
+    // Render pesanan & chat box jika ada
+}
+
+document.getElementById("btnToggleStatus").addEventListener("click", () => {
+    currentResto.isOpen = !currentResto.isOpen;
+    saveRestoToStorage();
     updateStatusUI();
 });
 
