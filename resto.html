@@ -440,8 +440,9 @@ document.getElementById("closeTimeInput").addEventListener("change", (e) => {
     updateStatusUI();
 });
 
-document.getElementById("formRestoProfile").addEventListener("submit", function(e) {
+document.getElementById("formRestoProfile")?.addEventListener("submit", function(e) {
     e.preventDefault();
+    
     currentResto.name = document.getElementById("restoNameInput").value;
     currentResto.ownerName = document.getElementById("ownerNameInput").value;
     currentResto.role = document.getElementById("restoRoleInput").value;
@@ -457,50 +458,52 @@ document.getElementById("formRestoProfile").addEventListener("submit", function(
     let photoFrontInput = document.getElementById("restoPhotoFrontInput");
     let photoIndoorInput = document.getElementById("restoPhotoIndoorInput");
 
-    let processedCount = 0;
     let totalPhotosToProcess = 0;
-    if(photoFrontInput.files && photoFrontInput.files[0]) totalPhotosToProcess++;
-    if(photoIndoorInput.files && photoIndoorInput.files[0]) totalPhotosToProcess++;
+    let processedCount = 0;
+
+    if(photoFrontInput && photoFrontInput.files && photoFrontInput.files[0]) totalPhotosToProcess++;
+    if(photoIndoorInput && photoIndoorInput.files && photoIndoorInput.files[0]) totalPhotosToProcess++;
 
     function checkFinish() {
         processedCount++;
         if(processedCount >= totalPhotosToProcess) {
             saveRestoToStorage();
-            alert("Data & Profil Restoran berhasil disimpan!");
+            alert("Data & Profil Resto berhasil disimpan!");
         }
     }
 
     if(totalPhotosToProcess === 0) {
         saveRestoToStorage();
-        alert("Data & Profil Restoran berhasil disimpan!");
+        alert("Data & Profil Resto berhasil disimpan!");
         return;
     }
 
-    if(photoFrontInput.files && photoFrontInput.files[0]) {
+    if(photoFrontInput && photoFrontInput.files && photoFrontInput.files[0]) {
         if(photoFrontInput.files[0].size > 2 * 1024 * 1024) {
             alert("Ukuran Foto Tampak Depan terlalu besar! Maksimal 2MB.");
             return;
         }
         let reader = new FileReader();
-        reader.onload = function(e) {
-            currentResto.photoFront = e.target.result;
+        reader.onload = function(event) {
+            currentResto.photoFront = event.target.result;
             checkFinish();
         };
         reader.readAsDataURL(photoFrontInput.files[0]);
     }
 
-    if(photoIndoorInput.files && photoIndoorInput.files[0]) {
+    if(photoIndoorInput && photoIndoorInput.files && photoIndoorInput.files[0]) {
         if(photoIndoorInput.files[0].size > 2 * 1024 * 1024) {
             alert("Ukuran Foto Area Indoor terlalu besar! Maksimal 2MB.");
             return;
         }
         let reader = new FileReader();
-        reader.onload = function(e) {
-            currentResto.photoIndoor = e.target.result;
+        reader.onload = function(event) {
+            currentResto.photoIndoor = event.target.result;
             checkFinish();
         };
         reader.readAsDataURL(photoIndoorInput.files[0]);
     }
+});
 
 document.getElementById("formAddMenu").addEventListener("submit", function(e) {
     e.preventDefault();
