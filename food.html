@@ -217,12 +217,21 @@ function renderRestoList(data) {
                 let originalPriceView = (item.discountPrice && item.discountPrice < item.price) ? 
                     `<span style="text-decoration: line-through; font-size: 9px; color: #94a3b8; margin-right: 4px;">Rp ${Number(item.price).toLocaleString('id-ID')}</span>` : '';
                 
+                // Ambil status ketersediaan menu (Tersedia / Habis)
+                let itemStatus = item.status || 'Tersedia';
+                let isHabis = itemStatus.toLowerCase().includes('habis');
+                let statusBadgeColor = isHabis ? '#dc2626' : '#16a34a';
+                let statusBgColor = isHabis ? '#fef2f2' : '#f0fdf4';
+
                 menusHTML += `
                 <div style="display: flex; gap: 8px; align-items: center; padding: 8px; background: #fafafa; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 6px;">
                     <img src="${item.img || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150'}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 8px;">
                     <div style="flex: 1;">
                         <h4 style="font-size: 11px; font-weight: 700; margin: 0; color: #0f172a;">${item.name}</h4>
-                        <div>${originalPriceView}<span style="font-size: 11px; font-weight: 800; color: var(--primary-red);">Rp ${Number(priceVal).toLocaleString('id-ID')}</span></div>
+                        <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+                            <div>${originalPriceView}<span style="font-size: 11px; font-weight: 800; color: var(--primary-red);">Rp ${Number(priceVal).toLocaleString('id-ID')}</span></div>
+                            <span style="font-size: 9px; font-weight: 700; padding: 2px 6px; background: ${statusBgColor}; color: ${statusBadgeColor}; border-radius: 4px;">${itemStatus}</span>
+                        </div>
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <button onclick="updateCartQty('${resto.id}', '${item.id}', -1)" style="width: 24px; height: 24px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-weight: bold; cursor: pointer;">-</button>
@@ -231,6 +240,7 @@ function renderRestoList(data) {
                     </div>
                 </div>`;
             });
+        }
         } else {
             menusHTML += `<p style="font-size: 10px; color: var(--text-muted); text-align: center; margin: 5px 0;">Belum ada menu di resto ini.</p>`;
         }
