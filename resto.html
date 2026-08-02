@@ -103,7 +103,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                     <div class="assistant-offer-text">Resto Partner Active</div>
                 </div>
             </div>
-            <!-- DROPDOWN MENU -->
+            <!-- DROPDOWN MENU UTAMA -->
             <div class="header-dropdown-menu" id="headerDropdownMenu">
                 <button class="dropdown-item" onclick="window.location.href='index.html';">
                     <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8Z"/></svg>
@@ -123,7 +123,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
 
     <!-- MAIN VIEW RESTO -->
     <div style="margin-top: 10px;">
-        <!-- Banner Info -->
+        <!-- Banner Info dengan Link Langsung ke food.html -->
         <div class="resto-card" style="background: linear-gradient(135deg, var(--dark-bg), var(--dark-card)); color: #fff;">
             <h2 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">🍜 CIKUR Food & Resto Partner</h2>
             <p style="font-size: 11px; color: #94a3b8; line-height: 1.4;">Kelola profil restoran, jam operasional, dan upload menu makanan Anda agar tampil di <a href="food.html" style="color: #ff6b6b; text-decoration: underline; font-weight: 700;">Halaman Menu Pembeli</a>.</p>
@@ -149,7 +149,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             <button class="btn-status" id="btnToggleStatus">Ubah ke Tutup</button>
         </div>
 
-        <!-- PESANAN MASUK & CHAT TERINTEGRASI -->
+        <!-- PESANAN MASUK & CHAT TERINTEGRASI (DIBUAT DROPDOWN / AKORDION) -->
         <div class="resto-card" id="cardSectionOrders">
             <div class="accordion-header" onclick="toggleAccordion('cardSectionOrders')">
                 <div class="accordion-title-wrapper">
@@ -160,7 +160,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             </div>
             <div class="accordion-content">
                 <div style="padding-top: 8px;">
-                    <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Kelola pesanan dari pembeli di <code>food.html</code> dan koordinasi dengan driver.</p>
+                    <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Kelola pesanan dari pembeli di <a href="food.html" style="color: var(--primary-red); font-weight:700;">food.html</a> dan koordinasi dengan driver.</p>
                     <div id="incomingOrdersContainer">
                         <p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada pesanan masuk.</p>
                     </div>
@@ -168,7 +168,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             </div>
         </div>
 
-        <!-- DATA & PROFIL RESTORAN -->
+        <!-- DATA & PROFIL RESTORAN (DIBUAT DROPDOWN / AKORDION) -->
         <div class="resto-card active" id="cardSectionProfile">
             <div class="accordion-header" onclick="toggleAccordion('cardSectionProfile')">
                 <div class="accordion-title-wrapper">
@@ -236,7 +236,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             </div>
         </div>
 
-        <!-- UPLOAD & KELOLA MENU MAKANAN -->
+        <!-- UPLOAD & KELOLA MENU MAKANAN (DIBUAT DROPDOWN / AKORDION) -->
         <div class="resto-card" id="cardSectionMenu">
             <div class="accordion-header" onclick="toggleAccordion('cardSectionMenu')">
                 <div class="accordion-title-wrapper">
@@ -247,11 +247,20 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             </div>
             <div class="accordion-content">
                 <div style="padding-top: 8px;">
-                    <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 12px;">Atur menu, harga spesial/diskon otomatis, dan stok khusus pengelola.</p>
+                    <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 12px;">Atur menu, kategori, harga spesial/diskon otomatis, dan stok agar tampil otomatis di <a href="food.html" style="color:var(--primary-red); font-weight:700;">food.html</a>.</p>
                     <form id="formAddMenu">
                         <div class="form-group">
                             <label class="form-label">Nama Menu Makanan</label>
                             <input type="text" id="menuNameInput" class="form-input" placeholder="Contoh: Nasi Bakar Cikur Spesial" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Kategori Menu (Dropdown)</label>
+                            <select id="menuCategoryInput" class="form-select" required>
+                                <option value="Makanan Berat">Makanan Berat</option>
+                                <option value="Minuman">Minuman</option>
+                                <option value="Cemilan / Snack">Cemilan / Snack</option>
+                                <option value="Paket Hemat">Paket Hemat</option>
+                            </select>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Harga Normal (Rp)</label>
@@ -306,13 +315,43 @@ let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { name: "CIK
 let currentRestoId = userProfile.phone || "default_resto";
 
 let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
-let currentResto = allRestos.find(r => r.id === currentRestoId) || {
-    id: currentRestoId,
-    name: "", ownerName: "", role: "Pemilik Resto", ownerPhone: userProfile.phone || "", restoPhone: "", address: "", 
-    bankName: "BCA", accountName: "", accountNumber: "", 
-    photoFront: "", photoIndoor: "", isOpen: true, openTime: "08:00", closeTime: "21:00",
-    menuList: []
-};
+let currentResto = allRestos.find(r => r.id === currentRestoId);
+
+if(!currentResto) {
+    let oldProfile = JSON.parse(localStorage.getItem('cikur_resto_profile'));
+    let oldMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || [];
+    
+    if(oldProfile) {
+        currentResto = {
+            id: currentRestoId,
+            name: oldProfile.name || "", 
+            ownerName: oldProfile.ownerName || "", 
+            role: oldProfile.role || "Pemilik Resto", 
+            ownerPhone: oldProfile.ownerPhone || userProfile.phone || "", 
+            restoPhone: oldProfile.restoPhone || "", 
+            address: oldProfile.address || "", 
+            bankName: oldProfile.bankName || "BCA", 
+            accountName: oldProfile.accountName || "", 
+            accountNumber: oldProfile.accountNumber || "", 
+            photoFront: oldProfile.photoFront || "", 
+            photoIndoor: oldProfile.photoIndoor || "", 
+            isOpen: true, 
+            openTime: "08:00", 
+            closeTime: "21:00",
+            menuList: oldMenus
+        };
+        allRestos.push(currentResto);
+        localStorage.setItem('cikur_all_restos', JSON.stringify(allRestos));
+    } else {
+        currentResto = {
+            id: currentRestoId,
+            name: "", ownerName: "", role: "Pemilik Resto", ownerPhone: userProfile.phone || "", restoPhone: "", address: "", 
+            bankName: "BCA", accountName: "", accountNumber: "", 
+            photoFront: "", photoIndoor: "", isOpen: true, openTime: "08:00", closeTime: "21:00",
+            menuList: []
+        };
+    }
+}
 
 function toggleAccordion(cardId) {
     let card = document.getElementById(cardId);
@@ -338,6 +377,8 @@ function updateUIProfile() {
         document.getElementById("restoBankNameInput").value = currentResto.bankName || "BCA";
         document.getElementById("restoAccountNameInput").value = currentResto.accountName || "";
         document.getElementById("restoAccountNumberInput").value = currentResto.accountNumber || "";
+    } else {
+        document.getElementById("ownerPhoneInput").value = userProfile.phone || "";
     }
 
     if(currentResto.openTime) document.getElementById("openTimeInput").value = currentResto.openTime;
@@ -443,6 +484,7 @@ document.getElementById("formRestoProfile").addEventListener("submit", function(
 document.getElementById("formAddMenu").addEventListener("submit", function(e) {
     e.preventDefault();
     let name = document.getElementById("menuNameInput").value;
+    let category = document.getElementById("menuCategoryInput").value;
     let price = Number(document.getElementById("menuPriceInput").value);
     let discountPriceInput = document.getElementById("menuDiscountPriceInput").value;
     let discountPrice = discountPriceInput ? Number(discountPriceInput) : null;
@@ -450,7 +492,8 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
 
     currentResto.menuList.push({ 
         id: 'm_' + Date.now(),
-        name: name, 
+        name: name,
+        category: category,
         price: price, 
         discountPrice: discountPrice, 
         stock: stock 
@@ -490,7 +533,7 @@ function renderMenuList() {
         html += `
         <div class="menu-item-card">
             <div class="menu-info">
-                <h4>${item.name}</h4>
+                <h4>${item.name} <span style="font-size:10px; color:var(--primary-red); font-weight:600;">[${item.category || 'Umum'}]</span></h4>
                 ${priceDisplay}
                 <span class="stock-badge">Stok: ${item.stock} porsi</span>
             </div>
@@ -506,7 +549,6 @@ function deleteMenu(index) {
     renderMenuList();
 }
 
-// RENDER & KELOLA PESANAN MASUK (TERMASUK PEMBATALAN & UPDATE STATUS)
 function renderIncomingOrders() {
     let container = document.getElementById("incomingOrdersContainer");
     let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || [];
