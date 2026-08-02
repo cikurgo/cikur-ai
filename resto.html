@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Resto Partner - CIKUR GO Super App Engine v4.3</title>
+<title>Resto Partner - CIKUR GO Super App Engine v4.4</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -46,8 +46,15 @@ body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; di
 .nav-item span { font-size: 11px; font-weight: 600; }
 .nav-item.active { color: var(--primary-red); }
 
-/* CONTENT STYLES */
+/* CONTENT STYLES & ACCORDION / DROPDOWN */
 .resto-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 20px; padding: 16px; margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+.accordion-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+.accordion-header h3 { font-size: 13px; font-weight: 800; color: var(--text-main); margin: 0; }
+.accordion-icon { width: 18px; height: 18px; fill: var(--text-muted); transition: transform 0.3s ease; }
+.accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
+.resto-card.active .accordion-content { max-height: 2500px; margin-top: 14px; }
+.resto-card.active .accordion-icon { transform: rotate(180deg); fill: var(--primary-red); }
+
 .form-group { margin-bottom: 12px; }
 .form-row { display: flex; gap: 8px; align-items: center; }
 .form-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; }
@@ -141,133 +148,145 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             <button class="btn-status" id="btnToggleStatus">Ubah ke Tutup</button>
         </div>
 
-        <!-- 1. DATA RESTO (PROFIL LENGKAP) -->
-        <div class="resto-card">
-            <h3 style="font-size: 13px; font-weight: 800; margin-bottom: 12px; color: var(--text-main);">1. Data & Profil Restoran</h3>
-            <form id="formRestoProfile">
-                
-                <!-- Nama Restoran -->
-                <div class="form-group">
-                    <label class="form-label">
-                        <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
-                        Nama Restoran
-                    </label>
-                    <input type="text" id="restoNameInput" class="form-input" placeholder="Contoh: Kedai Cikur Enak" required>
-                </div>
-
-                <!-- Nama Penanggung Jawab & Status (Dropdown) -->
-                <div class="form-group">
-                    <label class="form-label">
-                        <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-                        Nama Penanggung Jawab & Status
-                    </label>
-                    <div class="form-row">
-                        <input type="text" id="ownerNameInput" class="form-input" placeholder="Nama Lengkap Pemilik / Pengelola" style="flex: 2;" required>
-                        <select id="restoRoleInput" class="form-select" style="flex: 1;">
-                            <option value="Pemilik Resto">Pemilik Resto</option>
-                            <option value="Pengelola Resto">Pengelola Resto</option>
-                        </select>
+        <!-- 1. DATA RESTO (DROPDOWN / ACCORDION) -->
+        <div class="resto-card active" id="cardSectionProfile">
+            <div class="accordion-header" onclick="toggleAccordion('cardSectionProfile')">
+                <h3>1. Data & Profil Restoran</h3>
+                <svg class="accordion-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
+            </div>
+            <div class="accordion-content">
+                <form id="formRestoProfile" style="padding-top: 8px;">
+                    
+                    <!-- Nama Restoran -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
+                            Nama Restoran
+                        </label>
+                        <input type="text" id="restoNameInput" class="form-input" placeholder="Contoh: Kedai Cikur Enak" required>
                     </div>
-                </div>
 
-                <!-- Nomor HP Pemilik / Penanggung Jawab -->
-                <div class="form-group">
-                    <label class="form-label">
-                        <svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
-                        Nomor HP Pemilik / Pengelola
-                    </label>
-                    <input type="text" id="ownerPhoneInput" class="form-input" placeholder="Contoh: 081234567891" required>
-                </div>
-
-                <!-- Nomor Telepon Resto -->
-                <div class="form-group">
-                    <label class="form-label">
-                        <svg viewBox="0 0 24 24"><path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57-.35-.11-.74-.03-1.02.24l-2.2 2.2c-2.83-1.44-5.15-3.75-6.59-6.59l2.2-2.2c.28-.28.36-.67.25-1.02C8.7 6.45 8.5 5.25 8.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1z"/></svg>
-                        Nomor Telepon Resto (Opsional/Landline)
-                    </label>
-                    <input type="text" id="restoPhoneInput" class="form-input" placeholder="Contoh: 021-555888">
-                </div>
-
-                <!-- Alamat Lengkap & Patokan -->
-                <div class="form-group">
-                    <label class="form-label">
-                        <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8Z"/></svg>
-                        Alamat Lengkap & Patokan
-                    </label>
-                    <textarea id="restoAddressInput" class="form-textarea" rows="2" placeholder="Masukkan alamat lengkap resto..." required></textarea>
-                </div>
-
-                <!-- Data Pencairan Dana (Dropdown) -->
-                <div class="form-group">
-                    <label class="form-label">
-                        <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
-                        Data Pencairan Dana
-                    </label>
-                    <div class="form-row" style="margin-bottom: 6px;">
-                        <select id="restoBankNameInput" class="form-select" style="flex: 1;">
-                            <option value="BCA">BCA</option>
-                            <option value="Mandiri">Mandiri</option>
-                            <option value="BNI">BNI</option>
-                            <option value="BRI">BRI</option>
-                            <option value="DANA">DANA</option>
-                            <option value="OVO">OVO</option>
-                        </select>
-                        <input type="text" id="restoAccountNameInput" class="form-input" placeholder="Nama Pemilik Rekening" style="flex: 2;" required>
+                    <!-- Nama Penanggung Jawab & Status -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                            Nama Penanggung Jawab & Status
+                        </label>
+                        <div class="form-row">
+                            <input type="text" id="ownerNameInput" class="form-input" placeholder="Nama Lengkap Pemilik / Pengelola" style="flex: 2;" required>
+                            <select id="restoRoleInput" class="form-select" style="flex: 1;">
+                                <option value="Pemilik Resto">Pemilik Resto</option>
+                                <option value="Pengelola Resto">Pengelola Resto</option>
+                            </select>
+                        </div>
                     </div>
-                    <input type="text" id="restoAccountNumberInput" class="form-input" placeholder="Nomor Rekening / No. Akun" required>
-                    <p style="font-size: 10px; color: var(--primary-red); margin-top: 4px; font-weight: 700;">* pastikan Nama dan rek tujuan sesuai</p>
-                </div>
 
-                <!-- Upload Foto Tampilan Resto -->
-                <div class="form-group">
-                    <label class="form-label">
-                        <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
-                        Upload Foto Tampilan Resto
-                    </label>
-                    <div style="margin-bottom: 6px;">
-                        <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">1. Foto Tampak Depan Resto</label>
-                        <input type="file" id="restoPhotoFrontInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
+                    <!-- Nomor HP Pemilik -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
+                            Nomor HP Pemilik / Pengelola
+                        </label>
+                        <input type="text" id="ownerPhoneInput" class="form-input" placeholder="Contoh: 081234567891" required>
                     </div>
-                    <div>
-                        <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">2. Foto Area Indoor Resto</label>
-                        <input type="file" id="restoPhotoIndoorInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
-                    </div>
-                    <p style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Format foto: JPG/PNG (Maks. 2MB)</p>
-                </div>
 
-                <button type="submit" class="btn-action">Simpan Data & Profil Resto</button>
-            </form>
+                    <!-- Nomor Telepon Resto -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <svg viewBox="0 0 24 24"><path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57-.35-.11-.74-.03-1.02.24l-2.2 2.2c-2.83-1.44-5.15-3.75-6.59-6.59l2.2-2.2c.28-.28.36-.67.25-1.02C8.7 6.45 8.5 5.25 8.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1z"/></svg>
+                            Nomor Telepon Resto (Opsional/Landline)
+                        </label>
+                        <input type="text" id="restoPhoneInput" class="form-input" placeholder="Contoh: 021-555888">
+                    </div>
+
+                    <!-- Alamat Lengkap & Patokan -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8Z"/></svg>
+                            Alamat Lengkap & Patokan
+                        </label>
+                        <textarea id="restoAddressInput" class="form-textarea" rows="2" placeholder="Masukkan alamat lengkap resto..." required></textarea>
+                    </div>
+
+                    <!-- Data Pencairan Dana -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+                            Data Pencairan Dana
+                        </label>
+                        <div class="form-row" style="margin-bottom: 6px;">
+                            <select id="restoBankNameInput" class="form-select" style="flex: 1;">
+                                <option value="BCA">BCA</option>
+                                <option value="Mandiri">Mandiri</option>
+                                <option value="BNI">BNI</option>
+                                <option value="BRI">BRI</option>
+                                <option value="DANA">DANA</option>
+                                <option value="OVO">OVO</option>
+                            </select>
+                            <input type="text" id="restoAccountNameInput" class="form-input" placeholder="Nama Pemilik Rekening" style="flex: 2;" required>
+                        </div>
+                        <input type="text" id="restoAccountNumberInput" class="form-input" placeholder="Nomor Rekening / No. Akun" required>
+                        <p style="font-size: 10px; color: var(--primary-red); margin-top: 4px; font-weight: 700;">* pastikan Nama dan rek tujuan sesuai</p>
+                    </div>
+
+                    <!-- Upload Foto Tampilan Resto -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                            Upload Foto Tampilan Resto
+                        </label>
+                        <div style="margin-bottom: 6px;">
+                            <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">1. Foto Tampak Depan Resto</label>
+                            <input type="file" id="restoPhotoFrontInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">2. Foto Area Indoor Resto</label>
+                            <input type="file" id="restoPhotoIndoorInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
+                        </div>
+                        <p style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Format foto: JPG/PNG (Maks. 2MB)</p>
+                    </div>
+
+                    <button type="submit" class="btn-action">Simpan Data & Profil Resto</button>
+                </form>
+            </div>
         </div>
 
-        <!-- 2. KELOLA MENU MAKANAN -->
-        <div class="resto-card">
-            <h3 style="font-size: 13px; font-weight: 800; margin-bottom: 4px; color: var(--text-main);">2. Upload & Kelola Menu Makanan</h3>
-            <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 12px;">Atur menu, harga spesial/diskon otomatis, dan stok khusus pengelola.</p>
-            
-            <form id="formAddMenu">
-                <div class="form-group">
-                    <label class="form-label">Nama Menu Makanan</label>
-                    <input type="text" id="menuNameInput" class="form-input" placeholder="Contoh: Nasi Bakar Cikur Spesial" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Harga Normal (Rp)</label>
-                    <input type="number" id="menuPriceInput" class="form-input" placeholder="Contoh: 25000" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Harga Diskon / Promo (Opsional)</label>
-                    <input type="number" id="menuDiscountPriceInput" class="form-input" placeholder="Potongan harga otomatis ke pembeli (Contoh: 20000)">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Jumlah Stok / Ketersediaan Menu <span style="font-size: 9px; color: var(--primary-red);">(Khusus Resto)</span></label>
-                    <input type="number" id="menuStockInput" class="form-input" placeholder="Contoh: 50 porsi" required>
-                </div>
-                <button type="submit" class="btn-action" style="background: #0f172a;">+ Tambah Menu Baru</button>
-            </form>
+        <!-- 2. KELOLA MENU MAKANAN (DROPDOWN / ACCORDION) -->
+        <div class="resto-card" id="cardSectionMenu">
+            <div class="accordion-header" onclick="toggleAccordion('cardSectionMenu')">
+                <h3>2. Upload & Kelola Menu Makanan</h3>
+                <svg class="accordion-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
+            </div>
+            <div class="accordion-content">
+                <div style="padding-top: 8px;">
+                    <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 12px;">Atur menu, harga spesial/diskon otomatis, dan stok khusus pengelola.</p>
+                    
+                    <form id="formAddMenu">
+                        <div class="form-group">
+                            <label class="form-label">Nama Menu Makanan</label>
+                            <input type="text" id="menuNameInput" class="form-input" placeholder="Contoh: Nasi Bakar Cikur Spesial" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Harga Normal (Rp)</label>
+                            <input type="number" id="menuPriceInput" class="form-input" placeholder="Contoh: 25000" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Harga Diskon / Promo (Opsional)</label>
+                            <input type="number" id="menuDiscountPriceInput" class="form-input" placeholder="Potongan harga otomatis ke pembeli (Contoh: 20000)">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Jumlah Stok / Ketersediaan Menu <span style="font-size: 9px; color: var(--primary-red);">(Khusus Resto)</span></label>
+                            <input type="number" id="menuStockInput" class="form-input" placeholder="Contoh: 50 porsi" required>
+                        </div>
+                        <button type="submit" class="btn-action" style="background: #0f172a;">+ Tambah Menu Baru</button>
+                    </form>
 
-            <div style="margin-top: 16px;">
-                <h4 style="font-size: 12px; font-weight: 700; margin-bottom: 8px;">Daftar Menu Aktif Anda:</h4>
-                <div id="listMenuContainer">
-                    <p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada menu yang di-upload.</p>
+                    <div style="margin-top: 16px;">
+                        <h4 style="font-size: 12px; font-weight: 700; margin-bottom: 8px;">Daftar Menu Aktif Anda:</h4>
+                        <div id="listMenuContainer">
+                            <p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada menu yang di-upload.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -292,7 +311,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             <span>Agent CGO</span>
         </a>
     </nav>
-    <footer><p>© 2026 CIKUR GO • Resto Partner Engine v4.3</p></footer>
+    <footer><p>© 2026 CIKUR GO • Resto Partner Engine v4.4</p></footer>
 </div>
 
 <script>
@@ -303,6 +322,11 @@ let restoData = JSON.parse(localStorage.getItem('cikur_resto')) || {
     photoFront: "", photoIndoor: "", isOpen: true, openTime: "08:00", closeTime: "21:00" 
 };
 let restoMenuList = JSON.parse(localStorage.getItem('cikur_resto_menu')) || [];
+
+function toggleAccordion(cardId) {
+    let card = document.getElementById(cardId);
+    card.classList.toggle('active');
+}
 
 function updateUIProfile() {
     document.getElementById("headerNamaUser").innerText = userProfile.name;
