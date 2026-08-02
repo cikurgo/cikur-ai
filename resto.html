@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Resto Partner - CIKUR GO Super App Engine v4.2</title>
+<title>Resto Partner - CIKUR GO Super App Engine v4.3</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -49,7 +49,7 @@ body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; di
 /* CONTENT STYLES */
 .resto-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 20px; padding: 16px; margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
 .form-group { margin-bottom: 12px; }
-.form-row { display: flex; gap: 8px; }
+.form-row { display: flex; gap: 8px; align-items: center; }
 .form-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; }
 .form-label svg { width: 14px; height: 14px; fill: var(--primary-red); flex-shrink: 0; }
 .form-input, .form-select, .form-textarea { width: 100%; padding: 10px 12px; font-size: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: #fff; color: var(--text-main); outline: none; }
@@ -62,12 +62,12 @@ body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; di
 .status-box.open { background: #f0fdf4; border-color: #bbf7d0; }
 .status-box.closed { background: #fef2f2; border-color: #fecaca; }
 .status-title { font-size: 13px; font-weight: 800; margin-bottom: 4px; color: var(--text-main); }
-.status-indicator { font-size: 11px; font-weight: 700; margin-bottom: 10px; }
+.status-indicator { font-size: 11px; font-weight: 700; margin-bottom: 8px; }
 .status-box.open .status-indicator { color: #16a34a; }
 .status-box.closed .status-indicator { color: #dc2626; }
-.btn-status { width: 100%; height: 38px; border: none; border-radius: 10px; font-size: 12px; font-weight: 800; cursor: pointer; color: #fff; transition: 0.2s; }
-.status-box.open .btn-status { background: #dc2626; } /* Tombol jadi merah kalau mau tutup */
-.status-box.closed .btn-status { background: #16a34a; } /* Tombol jadi hijau kalau mau buka */
+.btn-status { width: 100%; height: 38px; border: none; border-radius: 10px; font-size: 12px; font-weight: 800; cursor: pointer; color: #fff; transition: 0.2s; margin-top: 8px; }
+.status-box.open .btn-status { background: #dc2626; }
+.status-box.closed .btn-status { background: #16a34a; }
 
 .menu-item-card { display: flex; justify-content: space-between; align-items: center; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 8px; background: #fafafa; }
 .menu-info h4 { font-size: 12px; font-weight: 700; color: var(--text-main); }
@@ -120,10 +120,24 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             <p style="font-size: 11px; color: #94a3b8; line-height: 1.4;">Kelola profil restoran, jam operasional, dan upload menu makanan Anda agar tampil di <a href="food.html" style="color: #ff6b6b; text-decoration: underline; font-weight: 700;">Halaman Menu Pembeli</a>.</p>
         </div>
 
-        <!-- STATUS BUKA/TUTUP RESTO (DINAMIS HIJAU / MERAH) -->
+        <!-- STATUS BUKA/TUTUP & JAM OPERASIONAL DINAMIS -->
         <div id="statusBoxContainer" class="status-box open">
             <h3 class="status-title">Status Operasional Resto</h3>
             <p id="statusRestoText" class="status-indicator">Status: Buka & Siap Menerima Order (Online)</p>
+            
+            <!-- Pilihan Jam Operasional Resto -->
+            <div style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-bottom: 10px; background: rgba(255,255,255,0.7); padding: 8px; border-radius: 10px;">
+                <div style="text-align: left; flex: 1;">
+                    <label style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block;">Jam Buka</label>
+                    <input type="time" id="openTimeInput" class="form-input" value="08:00" style="padding: 6px; font-size: 11px;">
+                </div>
+                <span style="font-weight: 800; margin-top: 14px; color: var(--text-muted);">s/d</span>
+                <div style="text-align: left; flex: 1;">
+                    <label style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block;">Jam Tutup</label>
+                    <input type="time" id="closeTimeInput" class="form-input" value="21:00" style="padding: 6px; font-size: 11px;">
+                </div>
+            </div>
+
             <button class="btn-status" id="btnToggleStatus">Ubah ke Tutup</button>
         </div>
 
@@ -150,8 +164,8 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                     <div class="form-row">
                         <input type="text" id="ownerNameInput" class="form-input" placeholder="Nama Lengkap Pemilik / Pengelola" style="flex: 2;" required>
                         <select id="restoRoleInput" class="form-select" style="flex: 1;">
-                            <option value="Pemilik">Pemilik Resto</option>
-                            <option value="Pengelola">Pengelola Resto</option>
+                            <option value="Pemilik Resto">Pemilik Resto</option>
+                            <option value="Pengelola Resto">Pengelola Resto</option>
                         </select>
                     </div>
                 </div>
@@ -278,15 +292,15 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             <span>Agent CGO</span>
         </a>
     </nav>
-    <footer><p>© 2026 CIKUR GO • Resto Partner Engine v4.2</p></footer>
+    <footer><p>© 2026 CIKUR GO • Resto Partner Engine v4.3</p></footer>
 </div>
 
 <script>
 let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { name: "CIKUR USER", phone: "08123456789", saldo: 125000, avatar: "" };
 let restoData = JSON.parse(localStorage.getItem('cikur_resto')) || { 
-    name: "", ownerName: "", role: "Pemilik", ownerPhone: "", restoPhone: "", address: "", 
+    name: "", ownerName: "", role: "Pemilik Resto", ownerPhone: "", restoPhone: "", address: "", 
     bankName: "BCA", accountName: "", accountNumber: "", 
-    photoFront: "", photoIndoor: "", isOpen: true 
+    photoFront: "", photoIndoor: "", isOpen: true, openTime: "08:00", closeTime: "21:00" 
 };
 let restoMenuList = JSON.parse(localStorage.getItem('cikur_resto_menu')) || [];
 
@@ -302,7 +316,7 @@ function updateUIProfile() {
     if(restoData.name) {
         document.getElementById("restoNameInput").value = restoData.name || "";
         document.getElementById("ownerNameInput").value = restoData.ownerName || "";
-        document.getElementById("restoRoleInput").value = restoData.role || "Pemilik";
+        document.getElementById("restoRoleInput").value = restoData.role || "Pemilik Resto";
         document.getElementById("ownerPhoneInput").value = restoData.ownerPhone || "";
         document.getElementById("restoPhoneInput").value = restoData.restoPhone || "";
         document.getElementById("restoAddressInput").value = restoData.address || "";
@@ -310,6 +324,9 @@ function updateUIProfile() {
         document.getElementById("restoAccountNameInput").value = restoData.accountName || "";
         document.getElementById("restoAccountNumberInput").value = restoData.accountNumber || "";
     }
+
+    if(restoData.openTime) document.getElementById("openTimeInput").value = restoData.openTime;
+    if(restoData.closeTime) document.getElementById("closeTimeInput").value = restoData.closeTime;
     
     updateStatusUI();
     renderMenuList();
@@ -322,14 +339,26 @@ function updateStatusUI() {
 
     if(restoData.isOpen) {
         statusBox.className = "status-box open";
-        statusText.innerText = "Status: Buka & Siap Menerima Order (Online)";
+        statusText.innerText = `Status: Buka & Siap Menerima Order (${restoData.openTime || '08:00'} - ${restoData.closeTime || '21:00'})`;
         btnToggle.innerText = "Ubah ke Tutup";
     } else {
         statusBox.className = "status-box closed";
-        statusText.innerText = "Status: Tutup (Offline)";
+        statusText.innerText = `Status: Tutup (Jadwal: ${restoData.openTime || '08:00'} - ${restoData.closeTime || '21:00'})`;
         btnToggle.innerText = "Ubah ke Buka";
     }
 }
+
+document.getElementById("openTimeInput").addEventListener("change", (e) => {
+    restoData.openTime = e.target.value;
+    localStorage.setItem('cikur_resto', JSON.stringify(restoData));
+    updateStatusUI();
+});
+
+document.getElementById("closeTimeInput").addEventListener("change", (e) => {
+    restoData.closeTime = e.target.value;
+    localStorage.setItem('cikur_resto', JSON.stringify(restoData));
+    updateStatusUI();
+});
 
 document.getElementById("formRestoProfile").addEventListener("submit", function(e) {
     e.preventDefault();
@@ -342,6 +371,8 @@ document.getElementById("formRestoProfile").addEventListener("submit", function(
     restoData.bankName = document.getElementById("restoBankNameInput").value;
     restoData.accountName = document.getElementById("restoAccountNameInput").value;
     restoData.accountNumber = document.getElementById("restoAccountNumberInput").value;
+    restoData.openTime = document.getElementById("openTimeInput").value;
+    restoData.closeTime = document.getElementById("closeTimeInput").value;
 
     let photoFrontInput = document.getElementById("restoPhotoFrontInput");
     let photoIndoorInput = document.getElementById("restoPhotoIndoorInput");
