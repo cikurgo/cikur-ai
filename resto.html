@@ -645,11 +645,14 @@ function renderIncomingOrders() {
         let borderColor = order.status === 'Dibatalkan' ? '#fecaca' : order.status === 'Selesai' ? '#bbf7d0' : '#fed7aa';
         let statusTextColor = order.status === 'Dibatalkan' ? '#dc2626' : order.status === 'Selesai' ? '#16a34a' : '#c2410c';
 
-        let itemsListText = "1x Menu Pilihan";
+        // Menampilkan detail menu secara spesifik dari data keranjang pembeli
+        let itemsListHtml = "";
         if (order.items && Array.isArray(order.items) && order.items.length > 0) {
-            itemsListText = order.items.map(i => `${i.qty || 1}x ${i.name || 'Menu Pilihan'}`).join(', ');
+            itemsListHtml = order.items.map(i => `<div style="font-size: 11px; color: var(--text-main);">- ${i.qty || 1}x ${i.name || 'Menu'} (Rp ${(i.price || 0).toLocaleString('id-ID')})</div>`).join('');
         } else if (order.menuSummary) {
-            itemsListText = order.menuSummary;
+            itemsListHtml = `<div style="font-size: 11px; color: var(--text-main);">- ${order.menuSummary}</div>`;
+        } else {
+            itemsListHtml = `<div style="font-size: 11px; color: var(--text-main);">- 1x Menu Pilihan</div>`;
         }
 
         html += `
@@ -659,7 +662,11 @@ function renderIncomingOrders() {
                 <span style="font-size: 10px; font-weight: 700; color: ${statusTextColor}; padding: 2px 6px; background: #fff; border-radius: 6px; border: 1px solid ${borderColor};">${order.status || 'Pending'}</span>
             </div>
             <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Pemesan: <b>${order.customerName || 'Pelanggan Cikur'}</b></p>
-            <p style="font-size: 11px; color: var(--text-main); font-weight: 600; margin-bottom: 8px;">Menu: ${itemsListText}</p>
+            <div style="margin-bottom: 8px; background: rgba(255,255,255,0.6); padding: 6px; border-radius: 8px;">
+                <span style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 2px;">Detail Menu Pesanan:</span>
+                ${itemsListHtml}
+            </div>
+            <p style="font-size: 11px; font-weight: 700; color: var(--primary-red); margin-bottom: 8px;">Total: Rp ${(order.totalPrice || order.total || 0).toLocaleString('id-ID')}</p>
             
             <div style="display: flex; gap: 6px;">
                 <button onclick="updateOrderStatus(${idx}, 'Diproses')" class="btn-action" style="margin-top:0; font-size: 11px; height: 32px; background: #2563eb;">Terima & Proses</button>
