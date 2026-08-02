@@ -221,16 +221,18 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                         <input type="text" id="restoAccountNumberInput" class="form-input" placeholder="Nomor Rekening / No. Akun" required>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Upload Foto Tampilan Resto</label>
-                        <div style="margin-bottom: 6px;">
-                            <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">1. Foto Tampak Depan Resto</label>
-                            <input type="file" id="restoPhotoFrontInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
-                        </div>
-                        <div>
-                            <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">2. Foto Area Indoor Resto</label>
-                            <input type="file" id="restoPhotoIndoorInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
-                        </div>
-                    </div>
+    <label class="form-label">Upload Foto Tampilan Resto</label>
+    <div style="margin-bottom: 6px;">
+        <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">1. Foto Tampak Depan Resto</label>
+        <input type="file" id="restoPhotoFrontInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
+        <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">Maksimal ukuran file 2MB.</small>
+    </div>
+    <div>
+        <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">2. Foto Area Indoor Resto</label>
+        <input type="file" id="restoPhotoIndoorInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
+        <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">Maksimal ukuran file 2MB.</small>
+    </div>
+    </div>
                     <button type="submit" class="btn-action">Simpan Data & Profil Resto</button>
                 </form>
             </div>
@@ -277,6 +279,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                         <div class="form-group">
     <label class="form-label">Upload Foto Makanan</label>
     <input type="file" id="menuPhotoInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
+    <small style="font-size: 10px; color: var(--text-muted); margin-top: 4px; display: block;">Format: JPG, PNG. Maksimal ukuran file 2MB.</small>
 </div>
 <div class="form-group">
     <label class="form-label">Status Ketersediaan Menu</label>
@@ -474,6 +477,10 @@ document.getElementById("formRestoProfile").addEventListener("submit", function(
     }
 
     if(photoFrontInput.files && photoFrontInput.files[0]) {
+        if(photoFrontInput.files[0].size > 2 * 1024 * 1024) {
+            alert("Ukuran Foto Tampak Depan terlalu besar! Maksimal 2MB.");
+            return;
+        }
         let reader = new FileReader();
         reader.onload = function(e) {
             currentResto.photoFront = e.target.result;
@@ -483,6 +490,10 @@ document.getElementById("formRestoProfile").addEventListener("submit", function(
     }
 
     if(photoIndoorInput.files && photoIndoorInput.files[0]) {
+        if(photoIndoorInput.files[0].size > 2 * 1024 * 1024) {
+            alert("Ukuran Foto Area Indoor terlalu besar! Maksimal 2MB.");
+            return;
+        }
         let reader = new FileReader();
         reader.onload = function(e) {
             currentResto.photoIndoor = e.target.result;
@@ -490,7 +501,6 @@ document.getElementById("formRestoProfile").addEventListener("submit", function(
         };
         reader.readAsDataURL(photoIndoorInput.files[0]);
     }
-});
 
 document.getElementById("formAddMenu").addEventListener("submit", function(e) {
     e.preventDefault();
@@ -503,7 +513,22 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
     let status = document.getElementById("menuStatusInput").value;
     let photoInput = document.getElementById("menuPhotoInput");
 
-    function saveMenuData(photoUrl = "") {
+    if(photoInput && photoInput.files && photoInput.files[0]) {
+        if(photoInput.files[0].size > 2 * 1024 * 1024) {
+            alert("Ukuran foto terlalu besar! Maksimal ukuran file adalah 2MB.");
+            return;
+        }
+
+        let reader = new FileReader();
+        reader.onload = function(e) {
+            saveMenuData(e.target.result);
+        };
+        reader.readAsDataURL(photoInput.files[0]);
+    } else {
+        saveMenuData("");
+    }
+
+    function saveMenuData(photoUrl) {
         currentResto.menuList.push({ 
             id: 'm_' + Date.now(),
             name: name,
@@ -516,7 +541,7 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
         });
         
         saveRestoToStorage();
-        // Reset form input
+        
         document.getElementById("menuNameInput").value = "";
         document.getElementById("menuPriceInput").value = "";
         document.getElementById("menuDiscountPriceInput").value = "";
@@ -525,15 +550,6 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
         
         renderMenuList();
         alert("Menu baru beserta foto dan status berhasil ditambahkan!");
-    }
-    if(photoInput && photoInput.files && photoInput.files[0]) {
-        let reader = new FileReader();
-        reader.onload = function(e) {
-            saveMenuData(e.target.result);
-        };
-        reader.readAsDataURL(photoInput.files[0]);
-    } else {
-        saveMenuData("");
     }
 });
 
