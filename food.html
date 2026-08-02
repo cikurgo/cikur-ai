@@ -141,23 +141,30 @@ function switchMode(mode) {
 function loadRestoDataFromStorage() {
     let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
     
-    // Fallback jika menggunakan penyimpanan tunggal lama dari resto.html
+    // Ambil data cadangan dari penyimpanan resto tunggal
     let singleProfile = JSON.parse(localStorage.getItem('cikur_resto_profile')) || {};
-    let singleMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || [];
+    let singleMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || JSON.parse(localStorage.getItem('menuList')) || [];
     
-    if (allRestos.length === 0 && (singleProfile.name || singleProfile.nama || singleMenus.length > 0)) {
+    if (allRestos.length === 0) {
         allRestos.push({
             id: 'resto_single',
-            restoName: singleProfile.name || singleProfile.nama || 'Resto Partner',
-            restoPhoto: singleProfile.photoFront || singleProfile.foto || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
-            restoKategori: singleProfile.kategori || 'Kuliner & Minuman',
+            restoName: singleProfile.name || singleProfile.nama || singleProfile.restoName || 'CIKUR Rubidotcom',
+            restoPhoto: singleProfile.photoFront || singleProfile.foto || singleProfile.restoPhoto || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
+            restoKategori: singleProfile.kategori || singleProfile.restoKategori || 'Kuliner & Minuman',
             isOpen: singleProfile.isOpen !== undefined ? singleProfile.isOpen : true,
-            statusText: singleProfile.isOpen !== false ? 'Buka & Siap Order' : 'Resto Tutup',
+            statusText: singleProfile.isOpen !== false ? 'Buka' : 'Tutup',
             items: singleMenus
+        });
+    } else {
+        // Pastikan setiap resto dalam array memiliki properti items yang terbaca
+        allRestos = allRestos.map(resto => {
+            if (!resto.items || resto.items.length === 0) {
+                resto.items = resto.menu || resto.menuList || singleMenus;
+            }
+            return resto;
         });
     }
 
-    // Normalisasi data agar properti namanya aman dari undefined
     databaseResto = allRestos.map((resto, idx) => ({
         id: resto.id || `resto_${idx}`,
         restoName: resto.restoName || resto.name || resto.nama || 'Resto Partner',
@@ -167,10 +174,10 @@ function loadRestoDataFromStorage() {
         statusText: resto.statusText || (resto.isOpen !== false ? 'Buka' : 'Tutup'),
         items: (resto.items || []).map((item, i) => ({
             id: item.id || `item_${i}`,
-            name: item.name || item.nama || 'Menu Tanpa Nama',
-            price: Number(item.price || item.harga || 0),
+            name: item.name || item.nama || item.title || 'Menu Makanan',
+            price: Number(item.price || item.harga || item.modal || 0),
             discountPrice: item.discountPrice ? Number(item.discountPrice) : null,
-            img: item.img || item.gambar || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
+            img: item.img || item.gambar || item.foto || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
             status: item.status || 'Tersedia'
         }))
     }));
