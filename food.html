@@ -140,22 +140,41 @@ function switchMode(mode) {
 
 function loadRestoDataFromStorage() {
     let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
-    if (allRestos.length === 0) {
-        let singleProfile = JSON.parse(localStorage.getItem('cikur_resto_profile'));
-        let singleMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || [];
-        if (singleProfile) {
-            allRestos.push({
-                id: 'resto_single',
-                restoName: singleProfile.name || 'Resto Partner',
-                restoPhoto: singleProfile.photoFront || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
-                restoKategori: singleProfile.kategori || 'Kuliner & Minuman',
-                isOpen: singleProfile.isOpen !== undefined ? singleProfile.isOpen : true,
-                statusText: singleProfile.isOpen ? 'Buka & Siap Order' : 'Resto Tutup',
-                items: singleMenus
-            });
-        }
+    
+    // Fallback jika menggunakan penyimpanan tunggal lama dari resto.html
+    let singleProfile = JSON.parse(localStorage.getItem('cikur_resto_profile')) || {};
+    let singleMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || [];
+    
+    if (allRestos.length === 0 && (singleProfile.name || singleProfile.nama || singleMenus.length > 0)) {
+        allRestos.push({
+            id: 'resto_single',
+            restoName: singleProfile.name || singleProfile.nama || 'Resto Partner',
+            restoPhoto: singleProfile.photoFront || singleProfile.foto || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
+            restoKategori: singleProfile.kategori || 'Kuliner & Minuman',
+            isOpen: singleProfile.isOpen !== undefined ? singleProfile.isOpen : true,
+            statusText: singleProfile.isOpen !== false ? 'Buka & Siap Order' : 'Resto Tutup',
+            items: singleMenus
+        });
     }
-    databaseResto = allRestos;
+
+    // Normalisasi data agar properti namanya aman dari undefined
+    databaseResto = allRestos.map((resto, idx) => ({
+        id: resto.id || `resto_${idx}`,
+        restoName: resto.restoName || resto.name || resto.nama || 'Resto Partner',
+        restoPhoto: resto.restoPhoto || resto.photoFront || resto.foto || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
+        restoKategori: resto.restoKategori || resto.kategori || 'Kuliner & Minuman',
+        isOpen: resto.isOpen !== undefined ? resto.isOpen : true,
+        statusText: resto.statusText || (resto.isOpen !== false ? 'Buka' : 'Tutup'),
+        items: (resto.items || []).map((item, i) => ({
+            id: item.id || `item_${i}`,
+            name: item.name || item.nama || 'Menu Tanpa Nama',
+            price: Number(item.price || item.harga || 0),
+            discountPrice: item.discountPrice ? Number(item.discountPrice) : null,
+            img: item.img || item.gambar || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
+            status: item.status || 'Tersedia'
+        }))
+    }));
+
     renderRestoList(databaseResto);
 }
 
