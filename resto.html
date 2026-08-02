@@ -273,10 +273,6 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                             <input type="number" id="menuDiscountPriceInput" class="form-input" placeholder="Potongan harga otomatis (Contoh: 20000)">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Jumlah Stok / Ketersediaan Menu</label>
-                            <input type="number" id="menuStockInput" class="form-input" placeholder="Contoh: 50" required>
-                        </div>
-                        <div class="form-group">
     <label class="form-label">Upload Foto Makanan</label>
     <input type="file" id="menuPhotoInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
     <small style="font-size: 10px; color: var(--text-muted); margin-top: 4px; display: block;">Format: JPG, PNG. Maksimal ukuran file 2MB.</small>
@@ -513,7 +509,7 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
     let price = Number(document.getElementById("menuPriceInput").value);
     let discountPriceInput = document.getElementById("menuDiscountPriceInput").value;
     let discountPrice = discountPriceInput ? Number(discountPriceInput) : null;
-    let stock = Number(document.getElementById("menuStockInput").value);
+    
     let status = document.getElementById("menuStatusInput").value;
     let photoInput = document.getElementById("menuPhotoInput");
 
@@ -541,7 +537,7 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
             category: category,
             price: price, 
             discountPrice: discountPrice, 
-            stock: stock,
+       
             status: status,
             photo: photoUrl
         };
@@ -578,6 +574,7 @@ function renderMenuList() {
         } else {
             priceDisplay = `<div class="discount-price">Rp ${item.price.toLocaleString('id-ID')}</div>`;
         }
+
         let statusBadgeColor = item.status === 'Habis' ? '#fee2e2' : '#f0fdf4';
         let statusBadgeText = item.status === 'Habis' ? '#dc2626' : '#16a34a';
         let statusText = item.status || 'Tersedia';
@@ -591,7 +588,6 @@ function renderMenuList() {
                 <h4 style="font-size: 12px; margin: 0 0 2px 0;">${item.name} <span style="font-size:10px; color:var(--primary-red); font-weight:600;">[${item.category || 'Umum'}]</span></h4>
                 ${priceDisplay}
                 <div style="display: flex; gap: 6px; margin-top: 4px; align-items: center;">
-                    <span class="stock-badge" style="font-size: 10px;">Stok: ${item.stock}</span>
                     <span style="font-size: 9px; font-weight: 700; padding: 2px 6px; background: ${statusBadgeColor}; color: ${statusBadgeText}; border-radius: 4px;">${statusText}</span>
                 </div>
             </div>
@@ -612,7 +608,6 @@ function editMenu(index) {
     document.getElementById("menuCategoryInput").value = item.category || "Makanan Berat";
     document.getElementById("menuPriceInput").value = item.price;
     document.getElementById("menuDiscountPriceInput").value = item.discountPrice || "";
-    document.getElementById("menuStockInput").value = item.stock;
     document.getElementById("menuStatusInput").value = item.status || "Tersedia";
 
     document.getElementById("btnSubmitMenu").innerText = "Simpan Perubahan";
