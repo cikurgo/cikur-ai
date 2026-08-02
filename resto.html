@@ -555,51 +555,63 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
         renderMenuList();
     }
 });
+    
 function renderMenuList() {
     let container = document.getElementById("listMenuContainer");
     if(!currentResto.menuList || currentResto.menuList.length === 0) {
         container.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada menu yang di-upload.</p>`;
         return;
     }
-    let html = "";
+    // Kelompokkan menu berdasarkan kategori
+    let groupedMenu = {};
     currentResto.menuList.forEach((item, index) => {
-        let priceDisplay = "";
-        if(item.discountPrice && item.discountPrice < item.price) {
-            priceDisplay = `
-                <div class="price-tag">
-                    <span class="original-price">Rp ${item.price.toLocaleString('id-ID')}</span>
-                    <span class="discount-price">Rp ${item.discountPrice.toLocaleString('id-ID')}</span>
-                </div>
-            `;
-        } else {
-            priceDisplay = `<div class="discount-price">Rp ${item.price.toLocaleString('id-ID')}</div>`;
+        let cat = item.category || 'Umum';
+        if(!groupedMenu[cat]) {
+            groupedMenu[cat] = [];
         }
-
-        let statusBadgeColor = item.status === 'Habis' ? '#fee2e2' : '#f0fdf4';
-        let statusBadgeText = item.status === 'Habis' ? '#dc2626' : '#16a34a';
-        let statusText = item.status || 'Tersedia';
-
-        let photoTag = item.photo ? `<img src="${item.photo}" style="width: 45px; height: 45px; object-fit: cover; border-radius: 8px; flex-shrink: 0;">` : `<div style="width: 45px; height: 45px; background: #e2e8f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #64748b; flex-shrink: 0;">No Foto</div>`;
-
-        html += `
-        <div class="menu-item-card" style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px; padding: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;">
-            ${photoTag}
-            <div class="menu-info" style="flex: 1;">
-                <h4 style="font-size: 12px; margin: 0 0 2px 0;">${item.name} <span style="font-size:10px; color:var(--primary-red); font-weight:600;">[${item.category || 'Umum'}]</span></h4>
-                ${priceDisplay}
-                <div style="display: flex; gap: 6px; margin-top: 4px; align-items: center;">
-                    <span style="font-size: 9px; font-weight: 700; padding: 2px 6px; background: ${statusBadgeColor}; color: ${statusBadgeText}; border-radius: 4px;">${statusText}</span>
-                </div>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 4px;">
-                <button type="button" onclick="editMenu(${index})" style="background: none; border: none; color: #2563eb; font-size: 11px; font-weight: 700; cursor: pointer; text-align: right;">Edit</button>
-                <button type="button" onclick="deleteMenu(${index})" style="background: none; border: none; color: var(--primary-red); font-size: 11px; font-weight: 700; cursor: pointer; text-align: right;">Hapus</button>
-            </div>
-        </div>`;
+        groupedMenu[cat].push({ item, index });
     });
+    let html = "";
+    // Loop tiap kategori untuk jadikan judul besar di atas
+    for(let cat in groupedMenu) {
+        html += `<div style="font-size: 13px; font-weight: 800; color: #0f172a; margin: 12px 0 6px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 2px;">${cat}</div>`;
+        
+        // Loop item menu di dalam kategori tersebut
+        groupedMenu[cat].forEach(({ item, index }) => {
+            let priceDisplay = "";
+            if(item.discountPrice && item.discountPrice < item.price) {
+                priceDisplay = `
+                    <div class="price-tag">
+                        <span class="original-price">Rp ${item.price.toLocaleString('id-ID')}</span>
+                        <span class="discount-price">Rp ${item.discountPrice.toLocaleString('id-ID')}</span>
+                    </div>
+                `;
+            } else {
+                priceDisplay = `<div class="discount-price">Rp ${item.price.toLocaleString('id-ID')}</div>`;
+            }
+            let statusBadgeColor = item.status === 'Habis' ? '#fee2e2' : '#f0fdf4';
+            let statusBadgeText = item.status === 'Habis' ? '#dc2626' : '#16a34a';
+            let statusText = item.status || 'Tersedia';
+            let photoTag = item.photo ? `<img src="${item.photo}" style="width: 45px; height: 45px; object-fit: cover; border-radius: 8px; flex-shrink: 0;">` : `<div style="width: 45px; height: 45px; background: #e2e8f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #64748b; flex-shrink: 0;">No Foto</div>`;
+            html += `
+            <div class="menu-item-card" style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px; padding: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;">
+                ${photoTag}
+                <div class="menu-info" style="flex: 1;">
+                    <h4 style="font-size: 12px; margin: 0 0 2px 0;">${item.name}</h4>
+                    ${priceDisplay}
+                    <div style="display: flex; gap: 6px; margin-top: 4px; align-items: center;">
+                        <span style="font-size: 9px; font-weight: 700; padding: 2px 6px; background: ${statusBadgeColor}; color: ${statusBadgeText}; border-radius: 4px;">${statusText}</span>
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <button type="button" onclick="editMenu(${index})" style="background: none; border: none; color: #2563eb; font-size: 11px; font-weight: 700; cursor: pointer; text-align: right;">Edit</button>
+                    <button type="button" onclick="deleteMenu(${index})" style="background: none; border: none; color: var(--primary-red); font-size: 11px; font-weight: 700; cursor: pointer; text-align: right;">Hapus</button>
+                </div>
+            </div>`;
+        });
+    }
     container.innerHTML = html;
 }
-
 function editMenu(index) {
     let item = currentResto.menuList[index];
     editingMenuIndex = index;
