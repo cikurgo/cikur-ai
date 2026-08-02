@@ -288,7 +288,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
         <option value="Habis">Habis (Sold Out)</option>
     </select>
 </div>
-                        <button type="submit" class="btn-action" style="background: #0f172a;">+ Tambah Menu Baru</button>
+                        <button type="submit" id="btnSubmitMenu" class="btn-action" style="background: #0f172a;">Simpan Menu</button>
                     </form>
 
                     <div style="margin-top: 16px;">
@@ -504,7 +504,8 @@ document.getElementById("formRestoProfile")?.addEventListener("submit", function
         reader.readAsDataURL(photoIndoorInput.files[0]);
     }
 });
-
+    
+let editingMenuIndex = null;
 document.getElementById("formAddMenu").addEventListener("submit", function(e) {
     e.preventDefault();
     let name = document.getElementById("menuNameInput").value;
@@ -521,19 +522,21 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
             alert("Ukuran foto terlalu besar! Maksimal ukuran file adalah 2MB.");
             return;
         }
-
         let reader = new FileReader();
-        reader.onload = function(e) {
-            saveMenuData(e.target.result);
+        reader.onload = function(event) {
+            saveOrUpdateMenu(event.target.result);
         };
         reader.readAsDataURL(photoInput.files[0]);
     } else {
-        saveMenuData("");
+        let existingPhoto = "";
+        if(editingMenuIndex !== null && currentResto.menuList[editingMenuIndex]) {
+            existingPhoto = currentResto.menuList[editingMenuIndex].photo;
+        }
+        saveOrUpdateMenu(existingPhoto);
     }
-
-    function saveMenuData(photoUrl) {
-        currentResto.menuList.push({ 
-            id: 'm_' + Date.now(),
+    function saveOrUpdateMenu(photoUrl) {
+        let menuData = { 
+            id: editingMenuIndex !== null ? currentResto.menuList[editingMenuIndex].id : 'm_' + Date.now(),
             name: name,
             category: category,
             price: price, 
@@ -541,21 +544,21 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
             stock: stock,
             status: status,
             photo: photoUrl
-        });
-        
+        };
+        if(editingMenuIndex !== null) {
+            currentResto.menuList[editingMenuIndex] = menuData;
+            editingMenuIndex = null;
+            document.getElementById("btnSubmitMenu").innerText = "Simpan Menu";
+            alert("Perubahan menu berhasil disimpan!");
+        } else {
+            currentResto.menuList.push(menuData);
+            alert("Menu baru berhasil ditambahkan!");
+        }
         saveRestoToStorage();
-        
-        document.getElementById("menuNameInput").value = "";
-        document.getElementById("menuPriceInput").value = "";
-        document.getElementById("menuDiscountPriceInput").value = "";
-        document.getElementById("menuStockInput").value = "";
-        if(document.getElementById("menuPhotoInput")) document.getElementById("menuPhotoInput").value = "";
-        
+        document.getElementById("formAddMenu").reset();
         renderMenuList();
-        alert("Menu baru beserta foto dan status berhasil ditambahkan!");
     }
 });
-
 function renderMenuList() {
     let container = document.getElementById("listMenuContainer");
     if(!currentResto.menuList || currentResto.menuList.length === 0) {
@@ -578,23 +581,42 @@ function renderMenuList() {
         let statusBadgeColor = item.status === 'Habis' ? '#fee2e2' : '#f0fdf4';
         let statusBadgeText = item.status === 'Habis' ? '#dc2626' : '#16a34a';
         let statusText = item.status || 'Tersedia';
+
         let photoTag = item.photo ? `<img src="${item.photo}" style="width: 45px; height: 45px; object-fit: cover; border-radius: 8px; flex-shrink: 0;">` : `<div style="width: 45px; height: 45px; background: #e2e8f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #64748b; flex-shrink: 0;">No Foto</div>`;
 
         html += `
-        <div class="menu-item-card" style="display: flex; gap: 10px; align-items: center;">
+        <div class="menu-item-card" style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px; padding: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;">
             ${photoTag}
             <div class="menu-info" style="flex: 1;">
-                <h4>${item.name} <span style="font-size:10px; color:var(--primary-red); font-weight:600;">[${item.category || 'Umum'}]</span></h4>
+                <h4 style="font-size: 12px; margin: 0 0 2px 0;">${item.name} <span style="font-size:10px; color:var(--primary-red); font-weight:600;">[${item.category || 'Umum'}]</span></h4>
                 ${priceDisplay}
                 <div style="display: flex; gap: 6px; margin-top: 4px; align-items: center;">
-                    <span class="stock-badge">Stok: ${item.stock}</span>
+                    <span class="stock-badge" style="font-size: 10px;">Stok: ${item.stock}</span>
                     <span style="font-size: 9px; font-weight: 700; padding: 2px 6px; background: ${statusBadgeColor}; color: ${statusBadgeText}; border-radius: 4px;">${statusText}</span>
                 </div>
             </div>
-            <button onclick="deleteMenu(${index})" style="background: none; border: none; color: var(--primary-red); font-size: 11px; font-weight: 700; cursor: pointer;">Hapus</button>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                <button type="button" onclick="editMenu(${index})" style="background: none; border: none; color: #2563eb; font-size: 11px; font-weight: 700; cursor: pointer; text-align: right;">Edit</button>
+                <button type="button" onclick="deleteMenu(${index})" style="background: none; border: none; color: var(--primary-red); font-size: 11px; font-weight: 700; cursor: pointer; text-align: right;">Hapus</button>
+            </div>
         </div>`;
     });
     container.innerHTML = html;
+}
+
+function editMenu(index) {
+    let item = currentResto.menuList[index];
+    editingMenuIndex = index;
+    
+    document.getElementById("menuNameInput").value = item.name;
+    document.getElementById("menuCategoryInput").value = item.category || "Makanan Berat";
+    document.getElementById("menuPriceInput").value = item.price;
+    document.getElementById("menuDiscountPriceInput").value = item.discountPrice || "";
+    document.getElementById("menuStockInput").value = item.stock;
+    document.getElementById("menuStatusInput").value = item.status || "Tersedia";
+
+    document.getElementById("btnSubmitMenu").innerText = "Simpan Perubahan";
+    document.getElementById("formAddMenu").scrollIntoView({ behavior: 'smooth' });
 }
 function deleteMenu(index) {
     currentResto.menuList.splice(index, 1);
