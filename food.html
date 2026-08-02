@@ -263,9 +263,6 @@ body{
 
 .resto-header {
     padding: 12px 14px;
-    font-size: 12px;
-    font-weight: 800;
-    color: var(--text-main);
     background: #fff;
     cursor: pointer;
     display: flex;
@@ -280,7 +277,7 @@ body{
 
 .resto-content {
     display: none;
-    padding: 0 14px 14px 14px;
+    padding: 12px 14px 14px 14px;
     background: #f8fafc;
     border-top: 1px solid var(--border-color);
 }
@@ -289,7 +286,7 @@ body{
     display: block;
 }
 
-/* Status Resto Badge dalam Daftar */
+/* Status Resto Badge */
 .status-badge {
     font-size: 9px;
     padding: 3px 8px;
@@ -299,22 +296,32 @@ body{
 .status-badge.buka { background: #dcfce7; color: #15803d; }
 .status-badge.tutup { background: #fee2e2; color: #b91c1c; }
 
+/* Kategori Header dalam Menu */
+.category-title {
+    font-size: 12px;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 12px 0 6px 0;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 2px;
+}
+
 /* Food Item Card */
 .food-card {
     background: #fff;
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 10px;
-    margin-top: 10px;
+    margin-top: 8px;
     display: flex;
     gap: 10px;
     align-items: center;
 }
 
 .food-img {
-    width: 55px;
-    height: 55px;
-    border-radius: 10px;
+    width: 50px;
+    height: 50px;
+    border-radius: 8px;
     object-fit: cover;
     background: #e2e8f0;
     flex-shrink: 0;
@@ -325,19 +332,26 @@ body{
 }
 
 .food-info h4 {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 800;
     color: var(--text-main);
     margin-bottom: 2px;
 }
 
-.food-info p {
-    font-size: 10px;
-    color: var(--text-muted);
-    margin-bottom: 4px;
+.price-tag {
+    display: flex;
+    gap: 6px;
+    align-items: center;
 }
 
-.food-price {
+.original-price {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-decoration: line-through;
+    font-family: var(--font-mono);
+}
+
+.discount-price {
     font-size: 11px;
     font-weight: 800;
     color: var(--primary-red);
@@ -487,7 +501,7 @@ body{
         </div>
     </div>
 
-    <!-- Container Resto Dinamis (Murni dari Resto Partner) -->
+    <!-- Container Resto Dinamis (Dropdown + Foto + Status) -->
     <div id="restoContainer"></div>
 </div>
 
@@ -530,28 +544,31 @@ setInterval(() => {
     showSlide(slideIndex + 1);
 }, 4000);
 
-/* Ambil Data Resto & Menu dari localStorage (Sinkron dengan Resto Partner) */
+/* Ambil Data Resto & Menu dari localStorage (Sinkron Sempurna dengan resto.html) */
 function loadRestoDataFromStorage() {
-    let savedProfile = JSON.parse(localStorage.getItem('cikur_resto_profile')) || {};
-    let savedMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || [];
-    let isOpen = localStorage.getItem('cikur_resto_status') !== 'Tutup'; // Default buka jika belum diatur
+    let currentResto = JSON.parse(localStorage.getItem('currentResto')) || {};
+    let savedMenus = currentResto.menuList || [];
+    let isOpen = currentResto.isOpen !== false; 
 
-    // Jika belum ada data resto sama sekali dari halaman resto.html
-    if (!savedProfile.namaResto && savedMenus.length === 0) {
+    if (!currentResto.name && savedMenus.length === 0) {
         return [];
     }
 
     return [{
         id: 1,
-        restoName: savedProfile.namaResto ? `🍜 ${savedProfile.namaResto}` : "🍜 Kedai Resto Partner",
+        restoName: currentResto.name || "Kedai Resto Partner",
+        restoPhoto: currentResto.photo || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=150",
+        restoKategori: currentResto.category || "Kuliner & Minuman",
         isOpen: isOpen,
-        statusText: isOpen ? "Buka & Siap Menerima Order" : "Resto Sedang Tutup",
+        statusText: isOpen ? "Buka & Siap Order" : "Resto Tutup",
         items: savedMenus.map((m, idx) => ({
-            id: `m_${idx}_${Date.now()}`,
-            name: m.nama,
-            price: Number(m.harga) || 0,
-            desc: m.kategori || "Menu pilihan terbaik partner",
-            img: m.gambar || "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150"
+            id: m.id || `m_${idx}_${Date.now()}`,
+            name: m.name,
+            category: m.category || "Menu Umum",
+            price: Number(m.price) || 0,
+            discountPrice: m.discountPrice ? Number(m.discountPrice) : null,
+            status: m.status || "Tersedia",
+            img: m.photo || "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150"
         }))
     }];
 }
@@ -595,41 +612,77 @@ function renderRestoList(data) {
 
     data.forEach(resto => {
         let block = document.createElement("div");
-        block.className = "resto-block active";
+        block.className = "resto-block active"; // Default terbuka accordionnya
 
         let badgeClass = resto.isOpen ? "buka" : "tutup";
+        
+        // Header Dropdown Resto dengan Foto, Nama, Kategori, dan Status Buka/Tutup
         let headerHTML = `
             <div class="resto-header" onclick="toggleResto(this)">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span>${resto.restoName}</span>
-                    <span class="status-badge ${badgeClass}">${resto.statusText}</span>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <img src="${resto.restoPhoto}" style="width: 42px; height: 42px; border-radius: 10px; object-fit: cover; border: 1px solid var(--border-color);">
+                    <div>
+                        <div style="font-size: 12px; font-weight: 800; color: var(--text-main);">${resto.restoName}</div>
+                        <div style="font-size: 10px; color: var(--text-muted); font-weight: 600;">${resto.restoKategori}</div>
+                    </div>
                 </div>
-                <span style="font-size: 11px; color: var(--text-muted);">▲ Tutup</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="status-badge ${badgeClass}">${resto.statusText}</span>
+                    <span style="font-size: 11px; font-weight: 800; color: var(--text-muted);" class="arrow-icon">▲</span>
+                </div>
             </div>
         `;
 
-        let contentHTML = `<div class="resto-content" style="display: block;">`;
+        // Mengelompokkan menu berdasarkan kategorinya
+        let groupedMenu = {};
         resto.items.forEach(item => {
-            let qty = cartQuantities[item.id] || 0;
-            // Jika resto tutup, disable tombol tambah
-            let disableControl = !resto.isOpen;
-            
-            contentHTML += `
-                <div class="food-card" style="${disableControl ? 'opacity: 0.6;' : ''}">
-                    <img src="${item.img}" class="food-img" alt="${item.name}">
-                    <div class="food-info">
-                        <h4>${item.name}</h4>
-                        <p>${item.desc}</p>
-                        <div class="food-price">Rp ${item.price.toLocaleString('id-ID')}</div>
-                    </div>
-                    <div class="qty-control">
-                        <button class="qty-btn" onclick="${disableControl ? `alert('Resto sedang tutup, tidak dapat memesan.');` : `ubahQty('${item.id}', -1)`}">-</button>
-                        <span class="qty-number" id="qty_${item.id}">${qty}</span>
-                        <button class="qty-btn" onclick="${disableControl ? `alert('Resto sedang tutup, tidak dapat memesan.');` : `ubahQty('${item.id}', 1)`}">+</button>
-                    </div>
-                </div>
-            `;
+            let cat = item.category || 'Menu Umum';
+            if(!groupedMenu[cat]) groupedMenu[cat] = [];
+            groupedMenu[cat].push(item);
         });
+
+        let contentHTML = `<div class="resto-content" style="display: block;">`;
+        
+        for(let cat in groupedMenu) {
+            contentHTML += `<div class="category-title">${cat}</div>`;
+            
+            groupedMenu[cat].forEach(item => {
+                let qty = cartQuantities[item.id] || 0;
+                let isHabis = !resto.isOpen || item.status === 'Habis';
+
+                let priceDisplay = "";
+                if(item.discountPrice && item.discountPrice < item.price) {
+                    priceDisplay = `
+                        <div class="price-tag">
+                            <span class="original-price">Rp ${item.price.toLocaleString('id-ID')}</span>
+                            <span class="discount-price">Rp ${item.discountPrice.toLocaleString('id-ID')}</span>
+                        </div>
+                    `;
+                } else {
+                    priceDisplay = `<div class="discount-price">Rp ${item.price.toLocaleString('id-ID')}</div>`;
+                }
+
+                let badgeStatusHTML = item.status === 'Habis' 
+                    ? `<span style="font-size: 9px; font-weight: 700; padding: 2px 6px; background: #fee2e2; color: #dc2626; border-radius: 4px;">Habis</span>` 
+                    : `<span style="font-size: 9px; font-weight: 700; padding: 2px 6px; background: #f0fdf4; color: #16a34a; border-radius: 4px;">Tersedia</span>`;
+
+                contentHTML += `
+                    <div class="food-card" style="${isHabis ? 'opacity: 0.65;' : ''}">
+                        <img src="${item.img}" class="food-img" alt="${item.name}">
+                        <div class="food-info">
+                            <h4>${item.name}</h4>
+                            ${priceDisplay}
+                            <div style="margin-top: 4px;">${badgeStatusHTML}</div>
+                        </div>
+                        <div class="qty-control">
+                            <button class="qty-btn" onclick="${isHabis ? `alert('Menu sedang habis atau resto tutup.');` : `ubahQty('${item.id}', -1)`}">-</button>
+                            <span class="qty-number" id="qty_${item.id}">${qty}</span>
+                            <button class="qty-btn" onclick="${isHabis ? `alert('Menu sedang habis atau resto tutup.');` : `ubahQty('${item.id}', 1)`}">+</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
         contentHTML += `</div>`;
 
         block.innerHTML = headerHTML + contentHTML;
@@ -640,8 +693,8 @@ function renderRestoList(data) {
 function toggleResto(headerEl) {
     let block = headerEl.parentElement;
     block.classList.toggle("active");
-    let spanArrow = headerEl.querySelector("span:last-child");
-    spanArrow.innerText = block.classList.contains("active") ? "▲ Tutup" : "▼ Buka Menu";
+    let arrow = headerEl.querySelector(".arrow-icon");
+    arrow.innerText = block.classList.contains("active") ? "▲" : "▼";
 }
 
 renderRestoList(databaseResto);
@@ -650,7 +703,7 @@ document.getElementById("searchFood").addEventListener("input", function(e) {
     let keyword = e.target.value.toLowerCase();
     let filtered = databaseResto.map(resto => {
         let matchedItems = resto.items.filter(item => 
-            item.name.toLowerCase().includes(keyword) || item.desc.toLowerCase().includes(keyword)
+            item.name.toLowerCase().includes(keyword) || item.category.toLowerCase().includes(keyword)
         );
         let restoMatch = resto.restoName.toLowerCase().includes(keyword);
         if(restoMatch) return resto;
@@ -678,7 +731,8 @@ function hitungTotalKeranjang() {
             let q = cartQuantities[item.id] || 0;
             if(q > 0) {
                 totalItems += q;
-                totalPrice += (q * item.price);
+                let activePrice = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
+                totalPrice += (q * activePrice);
             }
         });
     });
@@ -700,14 +754,15 @@ function lanjutKe2In1() {
         resto.items.forEach(item => {
             let q = cartQuantities[item.id] || 0;
             if(q > 0) {
+                let activePrice = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
                 selectedItemsData.push({
                     id: item.id,
                     name: item.name,
-                    price: item.price,
+                    price: activePrice,
                     qty: q,
                     restoName: resto.restoName
                 });
-                totalPrice += (q * item.price);
+                totalPrice += (q * activePrice);
             }
         });
     });
@@ -737,13 +792,13 @@ function prosesPesanFood() {
         resto.items.forEach(item => {
             let q = cartQuantities[item.id] || 0;
             if(q > 0) {
-                totalPrice += (q * item.price);
+                let activePrice = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
+                totalPrice += (q * activePrice);
                 ringkasanPesanan.push(`${q}x ${item.name}`);
             }
         });
     });
 
-    // Ambil tarif ongkir driver jika ada yang aktif/tersimpan dari driver.html
     let driverData = JSON.parse(localStorage.getItem('cikur_active_driver_order')) || { ongkir: 10000 };
     let biayaOngkir = Number(driverData.ongkir) || 10000;
     let grandTotal = totalPrice + (currentModeSelected === 'instant' ? biayaOngkir : 0);
@@ -770,13 +825,12 @@ function prosesPesanFood() {
 
     let riwayatPesanan = JSON.parse(localStorage.getItem('cikur_orders')) || [];
     let riwayatTransaksi = JSON.parse(localStorage.getItem('cikur_transactions')) || [];
-    let restoOrders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || []; // Terhubung ke resto.html
+    let restoOrders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || [];
     
     let kodeTrx = 'TRX-' + Math.floor(100000 + Math.random() * 900000);
     let waktuSekarang = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) + ' • ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
     let namaMenuRingkas = ringkasanPesanan.join(", ");
 
-    // 1. Catat ke Riwayat Utama User
     riwayatPesanan.unshift({
         kode: kodeTrx,
         layanan: `${namaMenuRingkas} [${modeInfo}]`,
@@ -786,7 +840,6 @@ function prosesPesanFood() {
         waktu: waktuSekarang
     });
 
-    // 2. Catat ke Mutasi Saldo
     riwayatTransaksi.unshift({
         kode: kodeTrx,
         ket: `Pembayaran Food (${modeInfo}) + Ongkir`,
@@ -795,7 +848,6 @@ function prosesPesanFood() {
         status: 'Berhasil'
     });
 
-    // 3. Sinkronisasi Pesanan Masuk ke Halaman Resto (resto.html)
     restoOrders.unshift({
         kode: kodeTrx,
         menu: namaMenuRingkas,
