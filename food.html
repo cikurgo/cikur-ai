@@ -140,8 +140,6 @@ function switchMode(mode) {
 
 function loadRestoDataFromStorage() {
     let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
-    
-    // Ambil data cadangan dari penyimpanan resto tunggal
     let singleProfile = JSON.parse(localStorage.getItem('cikur_resto_profile')) || {};
     let singleMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || JSON.parse(localStorage.getItem('menuList')) || [];
     
@@ -149,35 +147,28 @@ function loadRestoDataFromStorage() {
         allRestos.push({
             id: 'resto_single',
             restoName: singleProfile.name || singleProfile.nama || singleProfile.restoName || 'CIKUR Rubidotcom',
-            restoPhoto: singleProfile.photoFront || singleProfile.foto || singleProfile.restoPhoto || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
+            restoPhoto: singleProfile.photoFront || singleProfile.foto || singleProfile.restoPhoto || singleProfile.image || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
             restoKategori: singleProfile.kategori || singleProfile.restoKategori || 'Kuliner & Minuman',
             isOpen: singleProfile.isOpen !== undefined ? singleProfile.isOpen : true,
             statusText: singleProfile.isOpen !== false ? 'Buka' : 'Tutup',
             items: singleMenus
-        });
-    } else {
-        // Pastikan setiap resto dalam array memiliki properti items yang terbaca
-        allRestos = allRestos.map(resto => {
-            if (!resto.items || resto.items.length === 0) {
-                resto.items = resto.menu || resto.menuList || singleMenus;
-            }
-            return resto;
         });
     }
 
     databaseResto = allRestos.map((resto, idx) => ({
         id: resto.id || `resto_${idx}`,
         restoName: resto.restoName || resto.name || resto.nama || 'Resto Partner',
-        restoPhoto: resto.restoPhoto || resto.photoFront || resto.foto || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
+        restoPhoto: resto.restoPhoto || resto.photoFront || resto.foto || resto.image || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
         restoKategori: resto.restoKategori || resto.kategori || 'Kuliner & Minuman',
         isOpen: resto.isOpen !== undefined ? resto.isOpen : true,
         statusText: resto.statusText || (resto.isOpen !== false ? 'Buka' : 'Tutup'),
-        items: (resto.items || []).map((item, i) => ({
+        items: (resto.items || resto.menu || resto.menuList || []).map((item, i) => ({
             id: item.id || `item_${i}`,
             name: item.name || item.nama || item.title || 'Menu Makanan',
             price: Number(item.price || item.harga || item.modal || 0),
-            discountPrice: item.discountPrice ? Number(item.discountPrice) : null,
-            img: item.img || item.gambar || item.foto || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
+            discountPrice: (item.discountPrice || item. hargaDiskon) ? Number(item.discountPrice || item.hargaDiskon) : null,
+            // Deteksi semua kemungkinan nama kunci foto dari resto.html
+            img: item.img || item.image || item.foto || item.gambar || item.photo || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
             status: item.status || 'Tersedia'
         }))
     }));
@@ -404,6 +395,9 @@ function finalizePayment(totalAmount, summaryText) {
         modeInfo = `Reservasi (${metodeRes}) - ${tgl} jam ${jam}`;
     }
 
+    let chatBox = document.getElementById("chatMessagesBox");
+    let chatHistoryHTML = chatBox ? chatBox.innerHTML : '';
+
     let riwayatPesanan = JSON.parse(localStorage.getItem('cikur_orders')) || [];
     let riwayatTransaksi = JSON.parse(localStorage.getItem('cikur_transactions')) || [];
     let restoOrders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || [];
@@ -428,6 +422,7 @@ function finalizePayment(totalAmount, summaryText) {
         status: 'Berhasil'
     });
 
+    // Masuk ke resto.html & driver.html lengkap dengan catatan chat
     restoOrders.unshift({
         id: 'ORD_' + Date.now(),
         kode: kodeTrx,
@@ -437,7 +432,8 @@ function finalizePayment(totalAmount, summaryText) {
         status: 'Pending',
         waktu: waktuSekarang,
         pembeli: user.name || "Pelanggan Cikur",
-        customerAddress: address
+        customerAddress: address,
+        chatLog: chatHistoryHTML
     });
 
     localStorage.setItem('cikur_orders', JSON.stringify(riwayatPesanan));
