@@ -98,7 +98,7 @@ body{
     color: var(--text-main);
 }
 
-/* Mini Banner Slider (Gaya Home) */
+/* Mini Banner Slider */
 .banner-slider-container {
     width: 100%;
     height: 110px;
@@ -189,7 +189,7 @@ body{
     border-color: var(--primary-red);
 }
 
-/* Mode Layanan Tabs (Pesan Sekarang vs Reservasi) */
+/* Mode Layanan Tabs */
 .mode-tabs {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -217,7 +217,7 @@ body{
     box-shadow: 0 4px 10px rgba(229,9,20,0.2);
 }
 
-/* Panel Konten Reservasi (Hidden by default, muncul kalau tab reservasi aktif) */
+/* Panel Reservasi */
 .reservasi-panel {
     background: #fff;
     border: 1px solid var(--border-color);
@@ -288,6 +288,16 @@ body{
 .resto-block.active .resto-content {
     display: block;
 }
+
+/* Status Resto Badge dalam Daftar */
+.status-badge {
+    font-size: 9px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-weight: 700;
+}
+.status-badge.buka { background: #dcfce7; color: #15803d; }
+.status-badge.tutup { background: #fee2e2; color: #b91c1c; }
 
 /* Food Item Card */
 .food-card {
@@ -422,7 +432,7 @@ body{
         <div style="width: 36px;"></div>
     </div>
 
-    <!-- Mini Banner Slider Berjalan -->
+    <!-- Mini Banner Slider -->
     <div class="banner-slider-container">
         <div class="banner-slides" id="bannerSlider">
             <div class="banner-slide slide-1">
@@ -430,7 +440,7 @@ body{
                 <p>Pesan makanan instan langsung diantar atau diatur asisten pribadi dengan mudah!</p>
             </div>
             <div class="banner-slide slide-2">
-                <h3>🔥 DISKOON KULINER SPESIAL</h3>
+                <h3>🔥 DISKON KULINER SPESIAL</h3>
                 <p>Nikmati berbagai menu pilihan mitra resto terbaik dengan harga spesial hari ini.</p>
             </div>
             <div class="banner-slide slide-3">
@@ -450,13 +460,13 @@ body{
         <input type="text" id="searchFood" class="input-box" placeholder="Cari nama resto atau menu makanan...">
     </div>
 
-    <!-- Mode Layanan Tabs (Pesan Sekarang / Reservasi) -->
+    <!-- Mode Layanan Tabs -->
     <div class="mode-tabs">
         <div class="mode-tab-btn active" id="tabPesanSekarang" onclick="switchMode('instant')">⚡ Pesan Sekarang</div>
         <div class="mode-tab-btn" id="tabReservasi" onclick="switchMode('reservasi')">📅 Atur Reservasi</div>
     </div>
 
-    <!-- Panel Reservasi (Hanya muncul jika mode reservasi aktif) -->
+    <!-- Panel Reservasi -->
     <div class="reservasi-panel" id="reservasiPanel">
         <div class="form-row">
             <div class="form-col">
@@ -477,7 +487,7 @@ body{
         </div>
     </div>
 
-    <!-- Container 10 Blok Toko / Resto -->
+    <!-- Container Resto Dinamis (Murni dari Resto Partner) -->
     <div id="restoContainer"></div>
 </div>
 
@@ -516,107 +526,39 @@ function currentSlide(index) {
     showSlide(index);
 }
 
-// Auto slide setiap 4 detik
 setInterval(() => {
     showSlide(slideIndex + 1);
 }, 4000);
 
-/* Database 10 Blok Toko / Resto */
-const databaseResto = [
-    {
-        id: 1,
-        restoName: "🍜 Dapur Seblak Teh Nia",
-        items: [
-            { id: "r1_1", name: "Seblak Mantap Cikur", price: 18000, desc: "Kuah pedas kencur khas Sunda lengkap.", img: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=150" },
-            { id: "r1_2", name: "Seblak Mercon Tulang", price: 21000, desc: "Tulang rangu gurih kuah kental pedas.", img: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" },
-            { id: "r1_3", name: "Seblak Seafood Komplit", price: 25000, desc: "Topping bakso, sosis, cumi & udang segar.", img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150" }
-        ]
-    },
-    {
-        id: 2,
-        restoName: "🍛 Rumah Makan Sunda Saluyu",
-        items: [
-            { id: "r2_1", name: "Nasi Liwet Sunda Komplit", price: 25000, desc: "Ikan asin, tahu, tempe, lalapan & sambal terasi.", img: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" },
-            { id: "r2_2", name: "Ayam Bakar Madu Cikur", price: 22000, desc: "Ayam empuk bumbu rempah bakar madu.", img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150" },
-            { id: "r2_3", name: "Pepes Ikan Mas Pedas", price: 19000, desc: "Ikan mas segar rempah daun kemangi.", img: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=150" }
-        ]
-    },
-    {
-        id: 3,
-        restoName: "🍔 Burger & Grill Cikur",
-        items: [
-            { id: "r3_1", name: "Beef Cheese Burger", price: 30000, desc: "Daging sapi juicy dengan keju meleleh.", img: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=150" },
-            { id: "r3_2", name: "Crispy Chicken Burger", price: 26000, desc: "Burger ayam krispi saus mayo special.", img: "https://images.unsplash.com/photo-1550547660-d9450f859349?w=150" },
-            { id: "r3_3", name: "French Fries Jumbo", price: 15000, desc: "Kentang goreng gurih renyah.", img: "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=150" }
-        ]
-    },
-    {
-        id: 4,
-        restoName: "🍢 Sate Madura Cak Malik",
-        items: [
-            { id: "r4_1", name: "Sate Ayam Madura (10 Tusuk)", price: 22000, desc: "Bumbu kacang kental gurih mantap.", img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150" },
-            { id: "r4_2", name: "Sate Kambing Muda (10 Tusuk)", price: 38000, desc: "Daging empuk kecap manis pedas.", img: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" },
-            { id: "r4_3", name: "Lontong Sayur Special", price: 16000, desc: "Lontong dengan kuah santan gurih.", img: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=150" }
-        ]
-    },
-    {
-        id: 5,
-        restoName: "🍜 Bakso & Mie Ayam Urat",
-        items: [
-            { id: "r5_1", name: "Bakso Urat Beranak", price: 20000, desc: "Bakso besar isi daging cincang pedas.", img: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=150" },
-            { id: "r5_2", name: "Mie Ayam Yamin Manis", price: 16000, desc: "Mie kenyal topping ayam melimpah.", img: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" },
-            { id: "r5_3", name: "Bakso Rusuk Sapi", price: 28000, desc: "Bakso urat lengkap dengan tulang rusuk.", img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150" }
-        ]
-    },
-    {
-        id: 6,
-        restoName: "☕ Kedai Kopi & Roti Bakar",
-        items: [
-            { id: "r6_1", name: "Roti Bakar Coklat Keju", price: 15000, desc: "Roti tebal taburan keju melimpah.", img: "https://images.unsplash.com/photo-1550547660-d9450f859349?w=150" },
-            { id: "r6_2", name: "Pisang Bakar Madu Keju", price: 14000, desc: "Pisang manis siram madu dan keju.", img: "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=150" },
-            { id: "r6_3", name: "Kopi Susu Gula Aren", price: 18000, desc: "Kopi espresso dengan aren asli.", img: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=150" }
-        ]
-    },
-    {
-        id: 7,
-        restoName: "🍕 Pizza & Pasta Itali",
-        items: [
-            { id: "r7_1", name: "Pizza Pepperoni Cheese", price: 45000, desc: "Pizza panggang keju mozarella.", img: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=150" },
-            { id: "r7_2", name: "Spaghetti Bolognese", price: 28000, desc: "Pasta saus daging sapi gurih.", img: "https://images.unsplash.com/photo-1550547660-d9450f859349?w=150" },
-            { id: "r7_3", name: "Garlic Bread", price: 12000, desc: "Roti panggang aroma bawang putih.", img: "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=150" }
-        ]
-    },
-    {
-        id: 8,
-        restoName: "🍗 Ayam Geprek Sambal Korek",
-        items: [
-            { id: "r8_1", name: "Paket Ayam Geprek Mozarella", price: 23000, desc: "Ayam krispi lelehan keju mozarella.", img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150" },
-            { id: "r8_2", name: "Ayam Geprek Sambal Matah", price: 20000, desc: "Sambal iris segar khas Bali.", img: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" },
-            { id: "r8_3", name: "Kulit Ayam Crispy", price: 10000, desc: "Gorengan kulit ayam super renyah.", img: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=150" }
-        ]
-    },
-    {
-        id: 9,
-        restoName: "🥤 Es Teller & Juice Bar",
-        items: [
-            { id: "r9_1", name: "Es Teller Durian Special", price: 22000, desc: "Alpukat, nangka, kelapa muda & durian.", img: "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=150" },
-            { id: "r9_2", name: "Jus Alpukat Kerok", price: 16000, desc: "Jus alpukat segar susu coklat.", img: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=150" },
-            { id: "r9_3", name: "Es Campur Cikur", price: 15000, desc: "Segar manis pelepas dahaga.", img: "https://images.unsplash.com/photo-1550547660-d9450f859349?w=150" }
-        ]
-    },
-    {
-        id: 10,
-        restoName: "🥘 Nasi Goreng Mafia Cikur",
-        items: [
-            { id: "r10_1", name: "Nasi Goreng Special Pete", price: 21000, desc: "Nasgor rempah pedas dengan pete.", img: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150" },
-            { id: "r10_2", name: "Nasi Goreng Seafood", price: 25000, desc: "Toping udang dan bakso ikan.", img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=150" },
-            { id: "r10_3", name: "Nasi Goreng Kampung", price: 17000, desc: "Bumbu tradisional teri Medan.", img: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=150" }
-        ]
-    }
-];
+/* Ambil Data Resto & Menu dari localStorage (Sinkron dengan Resto Partner) */
+function loadRestoDataFromStorage() {
+    let savedProfile = JSON.parse(localStorage.getItem('cikur_resto_profile')) || {};
+    let savedMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || [];
+    let isOpen = localStorage.getItem('cikur_resto_status') !== 'Tutup'; // Default buka jika belum diatur
 
+    // Jika belum ada data resto sama sekali dari halaman resto.html
+    if (!savedProfile.namaResto && savedMenus.length === 0) {
+        return [];
+    }
+
+    return [{
+        id: 1,
+        restoName: savedProfile.namaResto ? `🍜 ${savedProfile.namaResto}` : "🍜 Kedai Resto Partner",
+        isOpen: isOpen,
+        statusText: isOpen ? "Buka & Siap Menerima Order" : "Resto Sedang Tutup",
+        items: savedMenus.map((m, idx) => ({
+            id: `m_${idx}_${Date.now()}`,
+            name: m.nama,
+            price: Number(m.harga) || 0,
+            desc: m.kategori || "Menu pilihan terbaik partner",
+            img: m.gambar || "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=150"
+        }))
+    }];
+}
+
+let databaseResto = loadRestoDataFromStorage();
 let cartQuantities = {};
-let currentModeSelected = 'instant'; // 'instant' atau 'reservasi'
+let currentModeSelected = 'instant';
 
 function switchMode(mode) {
     currentModeSelected = mode;
@@ -642,28 +584,38 @@ function renderRestoList(data) {
     const container = document.getElementById("restoContainer");
     container.innerHTML = "";
 
-    if(!data || data.length === 0) {
-        container.innerHTML = `<p style="text-align:center; color:var(--text-muted); font-size:12px; padding:20px;">Resto atau menu tidak ditemukan.</p>`;
+    if(!data || data.length === 0 || data[0].items.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center; padding: 30px 10px; background: #fff; border-radius: 14px; border: 1px solid var(--border-color);">
+                <p style="font-size: 13px; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">Belum Ada Menu Resto Terdaftar</p>
+                <p style="font-size: 11px; color: var(--text-muted);">Silakan tambahkan menu makanan melalui halaman Resto Partner (` + `<a href="resto.html" style="color:var(--primary-red);">Klik Disini</a>` + `).</p>
+            </div>`;
         return;
     }
 
     data.forEach(resto => {
         let block = document.createElement("div");
-        block.className = "resto-block";
-        if(data.length === 1) block.classList.add("active");
+        block.className = "resto-block active";
 
+        let badgeClass = resto.isOpen ? "buka" : "tutup";
         let headerHTML = `
             <div class="resto-header" onclick="toggleResto(this)">
-                <span>${resto.restoName}</span>
-                <span style="font-size: 11px; color: var(--text-muted);">▼ Buka Menu</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span>${resto.restoName}</span>
+                    <span class="status-badge ${badgeClass}">${resto.statusText}</span>
+                </div>
+                <span style="font-size: 11px; color: var(--text-muted);">▲ Tutup</span>
             </div>
         `;
 
-        let contentHTML = `<div class="resto-content">`;
+        let contentHTML = `<div class="resto-content" style="display: block;">`;
         resto.items.forEach(item => {
             let qty = cartQuantities[item.id] || 0;
+            // Jika resto tutup, disable tombol tambah
+            let disableControl = !resto.isOpen;
+            
             contentHTML += `
-                <div class="food-card">
+                <div class="food-card" style="${disableControl ? 'opacity: 0.6;' : ''}">
                     <img src="${item.img}" class="food-img" alt="${item.name}">
                     <div class="food-info">
                         <h4>${item.name}</h4>
@@ -671,9 +623,9 @@ function renderRestoList(data) {
                         <div class="food-price">Rp ${item.price.toLocaleString('id-ID')}</div>
                     </div>
                     <div class="qty-control">
-                        <button class="qty-btn" onclick="ubahQty('${item.id}', -1)">-</button>
+                        <button class="qty-btn" onclick="${disableControl ? `alert('Resto sedang tutup, tidak dapat memesan.');` : `ubahQty('${item.id}', -1)`}">-</button>
                         <span class="qty-number" id="qty_${item.id}">${qty}</span>
-                        <button class="qty-btn" onclick="ubahQty('${item.id}', 1)">+</button>
+                        <button class="qty-btn" onclick="${disableControl ? `alert('Resto sedang tutup, tidak dapat memesan.');` : `ubahQty('${item.id}', 1)`}">+</button>
                     </div>
                 </div>
             `;
@@ -702,7 +654,7 @@ document.getElementById("searchFood").addEventListener("input", function(e) {
         );
         let restoMatch = resto.restoName.toLowerCase().includes(keyword);
         if(restoMatch) return resto;
-        return { restoName: resto.restoName, items: matchedItems };
+        return { ...resto, items: matchedItems };
     }).filter(resto => resto.items.length > 0);
 
     renderRestoList(filtered);
@@ -765,7 +717,6 @@ function lanjutKe2In1() {
         return;
     }
 
-    // Bungkus data ke LocalStorage khusus bundling
     const bundlePayload = {
         items: selectedItemsData,
         totalFoodPrice: totalPrice,
@@ -773,16 +724,16 @@ function lanjutKe2In1() {
     };
 
     localStorage.setItem('cikur_bundle_cart', JSON.stringify(bundlePayload));
-
-    // Arahkan ke halaman CIKUR GO 2IN1
     window.location.href = 'cikurgo2in1.html';
 }
     
 function prosesPesanFood() {
     let totalPrice = 0;
     let ringkasanPesanan = [];
+    let restoTargetName = "";
 
     databaseResto.forEach(resto => {
+        restoTargetName = resto.restoName;
         resto.items.forEach(item => {
             let q = cartQuantities[item.id] || 0;
             if(q > 0) {
@@ -792,13 +743,17 @@ function prosesPesanFood() {
         });
     });
 
-    if (userProfile.saldo < totalPrice) {
-        alert("[!] Saldo CikurPay tidak mencukupi untuk total transaksi ini.");
+    // Ambil tarif ongkir driver jika ada yang aktif/tersimpan dari driver.html
+    let driverData = JSON.parse(localStorage.getItem('cikur_active_driver_order')) || { ongkir: 10000 };
+    let biayaOngkir = Number(driverData.ongkir) || 10000;
+    let grandTotal = totalPrice + (currentModeSelected === 'instant' ? biayaOngkir : 0);
+
+    if (userProfile.saldo < grandTotal) {
+        alert("[!] Saldo CikurPay tidak mencukupi untuk total transaksi (Termasuk ongkir driver Rp " + biayaOngkir.toLocaleString('id-ID') + ").");
         return;
     }
 
     let modeInfo = "Pesan Sekarang (Instant)";
-    
     if (currentModeSelected === 'reservasi') {
         let tgl = document.getElementById("resTanggal").value;
         let jam = document.getElementById("resJam").value;
@@ -810,37 +765,52 @@ function prosesPesanFood() {
         modeInfo = `Reservasi (${metodeRes}) - ${tgl} jam ${jam}`;
     }
 
-    userProfile.saldo -= totalPrice;
+    userProfile.saldo -= grandTotal;
     localStorage.setItem('cikur_user', JSON.stringify(userProfile));
 
     let riwayatPesanan = JSON.parse(localStorage.getItem('cikur_orders')) || [];
     let riwayatTransaksi = JSON.parse(localStorage.getItem('cikur_transactions')) || [];
+    let restoOrders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || []; // Terhubung ke resto.html
+    
     let kodeTrx = 'TRX-' + Math.floor(100000 + Math.random() * 900000);
     let waktuSekarang = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) + ' • ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-
     let namaMenuRingkas = ringkasanPesanan.join(", ");
 
+    // 1. Catat ke Riwayat Utama User
     riwayatPesanan.unshift({
         kode: kodeTrx,
         layanan: `${namaMenuRingkas} [${modeInfo}]`,
         kategori: 'CIKUR Food Assistant',
-        harga: totalPrice,
+        harga: grandTotal,
         status: currentModeSelected === 'instant' ? 'Diproses Resto' : 'Reservasi Dikonfirmasi',
         waktu: waktuSekarang
     });
 
+    // 2. Catat ke Mutasi Saldo
     riwayatTransaksi.unshift({
         kode: kodeTrx,
-        ket: `Pembayaran Food (${modeInfo})`,
-        nominal: -totalPrice,
+        ket: `Pembayaran Food (${modeInfo}) + Ongkir`,
+        nominal: -grandTotal,
         waktu: waktuSekarang,
         status: 'Berhasil'
     });
 
+    // 3. Sinkronisasi Pesanan Masuk ke Halaman Resto (resto.html)
+    restoOrders.unshift({
+        kode: kodeTrx,
+        menu: namaMenuRingkas,
+        mode: modeInfo,
+        total: grandTotal,
+        status: 'Pending',
+        waktu: waktuSekarang,
+        pembeli: userProfile.nama || 'Pelanggan Cikur'
+    });
+
     localStorage.setItem('cikur_orders', JSON.stringify(riwayatPesanan));
     localStorage.setItem('cikur_transactions', JSON.stringify(riwayatTransaksi));
+    localStorage.setItem('cikur_restaurant_orders', JSON.stringify(restoOrders));
 
-    alert(`[SUKSES] Transaksi ${modeInfo} berhasil! Rp ${totalPrice.toLocaleString('id-ID')} dipotong dari CikurPay.`);
+    alert(`[SUKSES] Transaksi ${modeInfo} berhasil! Rp ${grandTotal.toLocaleString('id-ID')} dipotong dari CikurPay.`);
     window.location.href = "index.html";
 }
 </script>
