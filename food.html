@@ -434,6 +434,14 @@ body{
     font-size: 12px;
     cursor: pointer;
 }
+.resto-content-wrapper { max-height: 2000px; overflow: hidden; transition: max-height 0.3s ease; }
+.resto-content-wrapper.collapsed { max-height: 0; }
+.chat-box-container { background: #f8fafc; border: 1px solid var(--border-color); border-radius: 12px; padding: 10px; margin-top: 10px; }
+.chat-messages { max-height: 120px; overflow-y: auto; font-size: 11px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px; }
+.chat-bubble { padding: 6px 10px; border-radius: 8px; max-width: 80%; font-size: 11px; }
+.chat-bubble.customer { background: #fee2e2; align-self: flex-end; color: #991b1b; }
+.chat-bubble.resto { background: #e2e8f0; align-self: flex-start; color: #1e293b; }
+
 </style>
 </head>
 <body>
@@ -632,100 +640,84 @@ function renderRestoList(data) {
     const container = document.getElementById("restoContainer");
     container.innerHTML = "";
 
-    if(!data || data.length === 0 || data[0].items.length === 0) {
+    if (!data || data.length === 0 || !data[0].items || data[0].items.length === 0) {
         container.innerHTML = `
-            <div style="text-align:center; padding: 30px 10px; background: #fff; border-radius: 14px; border: 1px solid var(--border-color);">
-                <p style="font-size: 13px; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">Belum Ada Menu Resto Terdaftar</p>
-                <p style="font-size: 11px; color: var(--text-muted);">Silakan tambahkan menu makanan melalui halaman Resto Partner (` + `<a href="resto.html" style="color:var(--primary-red);">Klik Disini</a>` + `).</p>
+            <div style="text-align: center; padding: 30px 10px; background: #fff; border-radius: 14px; border: 1px solid #e2e8f0;">
+                <p style="font-size: 11px; color: var(--text-muted);">Belum Ada Menu Resto Terdaftar.<br>Silakan tambahkan menu makanan melalui halaman Resto Partner.</p>
             </div>`;
         return;
     }
 
-    data.forEach(resto => {
+    data.forEach((resto, rIndex) => {
         let block = document.createElement("div");
-        block.className = "resto-block active"; // Default terbuka accordionnya
-
+        block.className = "resto-card";
+        
         let badgeClass = resto.isOpen ? "buka" : "tutup";
         
-        // Header Dropdown Resto dengan Foto, Nama, Kategori, dan Status Buka/Tutup
         let headerHTML = `
-            <div class="resto-header" onclick="toggleResto(this)">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <img src="${resto.restoPhoto}" style="width: 42px; height: 42px; border-radius: 10px; object-fit: cover; border: 1px solid var(--border-color);">
-                    <div>
-                        <div style="font-size: 12px; font-weight: 800; color: var(--text-main);">${resto.restoName}</div>
-                        <div style="font-size: 10px; color: var(--text-muted); font-weight: 600;">${resto.restoKategori}</div>
-                    </div>
+            <div class="resto-header" onclick="toggleRestoDropdown(${rIndex})" style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                <img src="${resto.restoPhoto}" style="width: 42px; height: 42px; object-fit: cover; border-radius: 50%; border: 2px solid var(--primary-red);">
+                <div style="flex: 1;">
+                    <h3 style="font-size: 13px; font-weight: 800; margin: 0;">${resto.restoName}</h3>
+                    <p style="font-size: 10px; color: var(--text-muted); margin: 2px 0 0 0;">${resto.restoKategori}</p>
                 </div>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span class="status-badge ${badgeClass}">${resto.statusText}</span>
-                    <span style="font-size: 11px; font-weight: 800; color: var(--text-muted);" class="arrow-icon">▲</span>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 10px; font-weight: 700; padding: 3px 8px; background: ${resto.isOpen ? '#f0fdf4' : '#fef2f2'}; color: ${resto.isOpen ? '#16a34a' : '#dc2626'}; border-radius: 6px;">${resto.statusText}</span>
+                    <svg id="dropArrow_${rIndex}" viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: var(--text-muted); transition: transform 0.3s; transform: rotate(180deg);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
                 </div>
             </div>
         `;
 
-        // Mengelompokkan menu berdasarkan kategorinya
-        let groupedMenu = {};
-        resto.items.forEach(item => {
+        let menusHTML = `<div id="restoContent_${rIndex}" class="resto-content-wrapper" style="margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 10px;">`;
+        
+        // Kelompokkan menu berdasarkan kategori asli dari resto
+        let grouped = {};
+        resto.items.forEach((item) => {
             let cat = item.category || 'Menu Umum';
-            if(!groupedMenu[cat]) groupedMenu[cat] = [];
-            groupedMenu[cat].push(item);
+            if(!grouped[cat]) grouped[cat] = [];
+            grouped[cat].push(item);
         });
 
-        let contentHTML = `<div class="resto-content" style="display: block;">`;
-        
-        for(let cat in groupedMenu) {
-            contentHTML += `<div class="category-title">${cat}</div>`;
-            
-            groupedMenu[cat].forEach(item => {
-                let qty = cartQuantities[item.id] || 0;
-                let isHabis = !resto.isOpen || item.status === 'Habis';
+        for(let cat in grouped) {
+            menusHTML += `<div style="font-size: 12px; font-weight: 800; color: #0f172a; margin: 10px 0 6px 0;">${cat}</div>`;
+            grouped[cat].forEach((item) => {
+                let qtyKey = `${resto.id}_${item.id}`;
+                let currentQty = cartQuantities[qtyKey] || 0;
+                let priceView = item.discountPrice && item.discountPrice < item.price ? 
+                    `<span style="text-decoration: line-through; font-size: 10px; color:#94a3b8;">Rp ${item.price.toLocaleString('id-ID')}</span> <span style="font-size: 11px; font-weight:800; color:var(--primary-red);">Rp ${item.discountPrice.toLocaleString('id-ID')}</span>` :
+                    `<span style="font-size: 11px; font-weight:800; color:var(--primary-red);">Rp ${item.price.toLocaleString('id-ID')}</span>`;
 
-                let priceDisplay = "";
-                if(item.discountPrice && item.discountPrice < item.price) {
-                    priceDisplay = `
-                        <div class="price-tag">
-                            <span class="original-price">Rp ${item.price.toLocaleString('id-ID')}</span>
-                            <span class="discount-price">Rp ${item.discountPrice.toLocaleString('id-ID')}</span>
-                        </div>
-                    `;
-                } else {
-                    priceDisplay = `<div class="discount-price">Rp ${item.price.toLocaleString('id-ID')}</div>`;
-                }
-
-                let badgeStatusHTML = item.status === 'Habis' 
-                    ? `<span style="font-size: 9px; font-weight: 700; padding: 2px 6px; background: #fee2e2; color: #dc2626; border-radius: 4px;">Habis</span>` 
-                    : `<span style="font-size: 9px; font-weight: 700; padding: 2px 6px; background: #f0fdf4; color: #16a34a; border-radius: 4px;">Tersedia</span>`;
-
-                contentHTML += `
-                    <div class="food-card" style="${isHabis ? 'opacity: 0.65;' : ''}">
-                        <img src="${item.img}" class="food-img" alt="${item.name}">
-                        <div class="food-info">
-                            <h4>${item.name}</h4>
-                            ${priceDisplay}
-                            <div style="margin-top: 4px;">${badgeStatusHTML}</div>
-                        </div>
-                        <div class="qty-control">
-                            <button class="qty-btn" onclick="${isHabis ? `alert('Menu sedang habis atau resto tutup.');` : `ubahQty('${item.id}', -1)`}">-</button>
-                            <span class="qty-number" id="qty_${item.id}">${qty}</span>
-                            <button class="qty-btn" onclick="${isHabis ? `alert('Menu sedang habis atau resto tutup.');` : `ubahQty('${item.id}', 1)`}">+</button>
-                        </div>
+                menusHTML += `
+                <div style="display: flex; gap: 8px; align-items: center; padding: 8px; background: #fafafa; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 6px;">
+                    <img src="${item.img}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 8px;">
+                    <div style="flex: 1;">
+                        <h4 style="font-size: 11px; font-weight: 700; margin: 0;">${item.name}</h4>
+                        ${priceView}
                     </div>
-                `;
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <button onclick="updateCartQty('${resto.id}', '${item.id}', -1)" style="width: 24px; height: 24px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-weight: bold; cursor: pointer;">-</button>
+                        <span id="qty_${qtyKey}" style="font-size: 11px; font-weight: 800; min-width: 14px; text-align: center;">${currentQty}</span>
+                        <button onclick="updateCartQty('${resto.id}', '${item.id}', 1)" style="width: 24px; height: 24px; border: 1px solid var(--primary-red); background: var(--primary-red); color: #fff; border-radius: 6px; font-weight: bold; cursor: pointer;">+</button>
+                    </div>
+                </div>`;
             });
         }
-        contentHTML += `</div>`;
-
-        block.innerHTML = headerHTML + contentHTML;
+        menusHTML += `</div>`;
+        block.innerHTML = headerHTML + menusHTML;
         container.appendChild(block);
     });
 }
 
-function toggleResto(headerEl) {
-    let block = headerEl.parentElement;
-    block.classList.toggle("active");
-    let arrow = headerEl.querySelector(".arrow-icon");
-    arrow.innerText = block.classList.contains("active") ? "▲" : "▼";
+// Fungsi Toggle Dropdown Resto
+function toggleRestoDropdown(index) {
+    let contentWrapper = document.getElementById(`restoContent_${index}`);
+    let arrowIcon = document.getElementById(`dropArrow_${index}`);
+    contentWrapper.classList.toggle('collapsed');
+    if(contentWrapper.classList.contains('collapsed')) {
+        arrowIcon.style.transform = "rotate(0deg)";
+    } else {
+        arrowIcon.style.transform = "rotate(180deg)";
+    }
 }
 
 renderRestoList(databaseResto);
@@ -895,6 +887,144 @@ function prosesPesanFood() {
 
     alert(`[SUKSES] Transaksi ${modeInfo} berhasil! Rp ${grandTotal.toLocaleString('id-ID')} dipotong dari CikurPay.`);
     window.location.href = "index.html";
+}
+let cartQuantities = {};
+
+function updateCartQty(restoId, itemId, change) {
+    let key = `${restoId}_${itemId}`;
+    let current = cartQuantities[key] || 0;
+    let updated = current + change;
+    if(updated < 0) updated = 0;
+    cartQuantities[key] = updated;
+    
+    let qtyEl = document.getElementById(`qty_${key}`);
+    if(qtyEl) qtyEl.innerText = updated;
+}
+
+// Fungsi Checkout lengkap dengan Alamat, Ongkir Driver, Chat, dan Pembayaran
+function proceedToCheckout() {
+    let totalItems = 0;
+    let subtotal = 0;
+    let selectedItemsList = [];
+
+    databaseResto.forEach(resto => {
+        resto.items.forEach(item => {
+            let key = `${resto.id}_${item.id}`;
+            let qty = cartQuantities[key] || 0;
+            if(qty > 0) {
+                totalItems += qty;
+                let price = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
+                subtotal += price * qty;
+                selectedItemsList.push(`${qty}x ${item.name} (Rp ${price.toLocaleString('id-ID')})`);
+            }
+        });
+    });
+
+    if(totalItems === 0) {
+        alert("Keranjang Anda masih kosong! Silakan pilih menu terlebih dahulu.");
+        return;
+    }
+
+    let ongkir = 10000; // Tarif dasar ongkir driver
+    let grandTotal = subtotal + ongkir;
+
+    let checkoutHTML = `
+    <div id="checkoutModal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; display:flex; justify-content:center; align-items:center; padding:16px;">
+        <div style="background:#fff; width:100%; max-width:400px; border-radius:20px; padding:20px; max-height:90vh; overflow-y:auto;">
+            <h3 style="font-size:15px; font-weight:800; margin-bottom:12px; color:var(--text-main);">Konfirmasi & Pembayaran Order</h3>
+            
+            <div style="background:#f8fafc; padding:10px; border-radius:10px; margin-bottom:10px; font-size:11px;">
+                <b>Ringkasan Pesanan:</b>
+                <p style="color:var(--text-muted); margin-top:4px;">${selectedItemsList.join('<br>')}</p>
+            </div>
+
+            <div style="margin-bottom:10px;">
+                <label style="font-size:11px; font-weight:700; display:block; margin-bottom:4px;">Alamat Pengiriman Customer:</label>
+                <textarea id="customerAddress" class="form-textarea" rows="2" placeholder="Masukkan alamat lengkap tujuan pengiriman..."></textarea>
+            </div>
+
+            <div style="background:#fff7ed; border:1px solid #fed7aa; padding:10px; border-radius:10px; margin-bottom:10px; font-size:11px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Subtotal Makanan:</span> <b>Rp ${subtotal.toLocaleString('id-ID')}</b></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Ongkos Kirim Driver:</span> <b>Rp ${ongkir.toLocaleString('id-ID')}</b></div>
+                <div style="display:flex; justify-content:space-between; border-top:1px dashed #cbd5e1; paddingTop:4px; font-weight:800; color:var(--primary-red);"><span>Total Pembayaran:</span> <span>Rp ${grandTotal.toLocaleString('id-ID')}</span></div>
+            </div>
+
+            <!-- Kolom Chat Interaktif Resto -->
+            <div class="chat-box-container">
+                <label style="font-size:11px; font-weight:700; display:block; margin-bottom:4px;">Chat dengan Resto / Driver:</label>
+                <div class="chat-messages" id="chatMessagesBox">
+                    <div class="chat-bubble resto">Halo, pesanan siap diproses. Ada catatan khusus?</div>
+                </div>
+                <div style="display:flex; gap:6px;">
+                    <input type="text" id="chatInputText" class="form-input" placeholder="Tulis pesan..." style="padding:6px; font-size:11px;">
+                    <button onclick="sendChatMessage()" style="background:var(--primary-red); color:#fff; border:none; padding:6px 12px; border-radius:8px; font-size:11px; font-weight:700; cursor:pointer;">Kirim</button>
+                </div>
+            </div>
+
+            <div style="display:flex; gap:8px; margin-top:14px;">
+                <button onclick="closeCheckoutModal()" style="flex:1; height:38px; border:1px solid #cbd5e1; background:#fff; border-radius:10px; font-weight:700; cursor:pointer;">Batal</button>
+                <button onclick="finalizePayment(${grandTotal}, '${selectedItemsList.join(', ')}')" style="flex:1; height:38px; border:none; background:var(--primary-red); color:#fff; border-radius:10px; font-weight:800; cursor:pointer;">Bayar Sekarang</button>
+            </div>
+        </div>
+    </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', checkoutHTML);
+}
+
+function closeCheckoutModal() {
+    let modal = document.getElementById("checkoutModal");
+    if(modal) modal.remove();
+}
+
+function sendChatMessage() {
+    let input = document.getElementById("chatInputText");
+    let box = document.getElementById("chatMessagesBox");
+    if(!input.value.trim()) return;
+
+    box.innerHTML += `<div class="chat-bubble customer">${input.value}</div>`;
+    let msg = input.value;
+    input.value = "";
+    box.scrollTop = box.scrollHeight;
+
+    setTimeout(() => {
+        box.innerHTML += `<div class="chat-bubble resto">Baik Kak, pesanan "${msg}" segera kami koordinasikan dengan driver.</div>`;
+        box.scrollTop = box.scrollHeight;
+    }, 1000);
+}
+
+function finalizePayment(totalAmount, summaryText) {
+    let address = document.getElementById("customerAddress").value;
+    if(!address.trim()) {
+        alert("Mohon isi alamat pengiriman customer terlebih dahulu!");
+        return;
+    }
+
+    let user = JSON.parse(localStorage.getItem('cikur_user')) || { saldo: 125000 };
+    if(user.saldo < totalAmount) {
+        alert("Saldo Cikur Pay Anda tidak mencukupi untuk melakukan pembayaran ini!");
+        return;
+    }
+
+    // Kurangi saldo user
+    user.saldo -= totalAmount;
+    localStorage.setItem('cikur_user', JSON.stringify(user));
+
+    // Simpan data pesanan ke localStorage agar masuk ke resto.html dan driver.html
+    let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || [];
+    let newOrder = {
+        id: 'ORD_' + Date.now(),
+        customerName: user.name || "Pelanggan Cikur",
+        customerAddress: address,
+        itemSummary: summaryText,
+        total: totalAmount,
+        status: "Menunggu Konfirmasi Resto"
+    };
+    orders.push(newOrder);
+    localStorage.setItem('cikur_restaurant_orders', JSON.stringify(orders));
+
+    alert("Pembayaran Berhasil! Pesanan Anda telah diteruskan ke Resto Partner & Driver.");
+    closeCheckoutModal();
+    location.reload();
 }
 </script>
 
