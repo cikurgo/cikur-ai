@@ -125,7 +125,7 @@
         </div>
     </div>
 
-   <!-- Alamat Tujuan Pengiriman -->
+   <!-- Alamat Tujuan Pengiriman dengan Tombol GPS -->
     <div class="destination-card">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
             <div style="display: flex; align-items: center; gap: 6px;">
@@ -134,10 +134,18 @@
             </div>
             <span id="lockStatusBadge" style="font-size: 9px; font-weight: 700; padding: 3px 8px; background: #ffedd5; color: #c2410c; border-radius: 6px;">Wajib Diisi</span>
         </div>
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <textarea id="globalCustomerAddress" class="address-textarea" rows="2" placeholder="Masukkan alamat lengkap tujuan pengiriman (contoh: Jl. Merdeka No. 45)..." style="margin-bottom: 0;"></textarea>
+        
+        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+            <textarea id="globalCustomerAddress" class="address-textarea" rows="2" placeholder="Masukkan alamat lengkap atau gunakan GPS..." style="margin-bottom: 0; flex: 1;"></textarea>
+            
+            <!-- Tombol Deteksi GPS Real-Live -->
+            <button type="button" onclick="getLiveLocation()" title="Deteksi Lokasi GPS Saya" style="background: #fff7ed; border: 1px solid #fed7aa; color: #ea580c; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: 0.2s;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2"/></svg>
+            </button>
+
+            <!-- Kotak Ceklis Simpan yang sudah ada -->
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0;">
-                <input type="checkbox" id="checkSimpanAlamat" onclick="handleAddressCheckbox(this)" style="width: 22px; height: 22px; cursor: pointer; accent-color: #ea580c;">
+                <input type="checkbox" id="checkSimpanAlamat" onclick="handleAddressCheckbox(this)" style="width: 20px; height: 20px; cursor: pointer; accent-color: #ea580c;">
                 <span style="font-size: 9px; font-weight: 700; color: #c2410c; margin-top: 2px;">Simpan</span>
             </div>
         </div>
@@ -627,7 +635,55 @@ function finalizePayment(totalAmount, summaryText, address, restoName, restoAddr
     closeCheckoutModal();
     window.location.href = "index.html";
 }
+// Fungsi untuk mendeteksi koordinat & lokasi real-live customer via GPS
+function getLiveLocation() {
+    let addrInput = document.getElementById("globalCustomerAddress");
+    if (!navigator.geolocation) {
+        alert("Browser Anda tidak Mendukung Fitur Geolocation/GPS.");
+        return;
+    }
 
+    addrInput.value = "Mendeteksi lokasi GPS real-live...";
+    
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            let lat = position.coords.latitude;
+            let lon = position.coords.longitude;
+            
+            // Simpan koordinat ke atribut elemen atau localStorage agar bisa dipakai driver nanti
+            addrInput.dataset.lat = lat;
+            addrInput.dataset.lon = lon;
+            
+            // Format teks lokasi berbasis koordinat atau penanda GPS akurat
+            addrInput.value = `[Titik GPS Live] Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)} (Lokasi Terkini)`;
+            
+            let badge = document.getElementById("lockStatusBadge");
+            if(badge) {
+                badge.innerText = "GPS Terdeteksi ✓";
+                badge.style.background = "#dcfce7";
+                badge.style.color = "#16a34a";
+            }
+        },
+        (error) => {
+            addrInput.value = "";
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    alert("Izin akses GPS ditolak oleh pengguna.");
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    alert("Informasi lokasi tidak tersedia.");
+                    break;
+                case error.TIMEOUT:
+                    alert("Waktu permintaan lokasi habis.");
+                    break;
+                default:
+                    alert("Terjadi kesalahan saat mendeteksi lokasi.");
+                    break;
+            }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+}
 function lanjutKe2In1() {
     let activeCartFor2in1 = [];
     databaseResto.forEach(resto => {
