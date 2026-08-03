@@ -656,23 +656,31 @@ function renderIncomingOrders() {
         }
 
         html += `
-        <div style="background: ${badgeColor}; border: 1px solid ${borderColor}; border-radius: 12px; padding: 12px; margin-bottom: 10px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <span style="font-size: 11px; font-weight: 800; color: var(--text-main);">Order #${order.id || order.orderId || (idx + 1)}</span>
-                <span style="font-size: 10px; font-weight: 700; color: ${statusTextColor}; padding: 2px 6px; background: #fff; border-radius: 6px; border: 1px solid ${borderColor};">${order.status || 'Pending'}</span>
+<div style="background: ${badgeColor}; border: 1px solid ${borderColor}; border-radius: 8px; padding: 10px; margin-bottom: 10px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <span style="font-size: 11px; font-weight: 800; color: #0f172a;">Order #${order.kode || order.id}</span>
+        <span style="font-size: 10px; font-weight: 700; color: ${statusTextColor};">${order.status}</span>
+    </div>
+    <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Pemesan: ${order.customerName || order.pembeli}</p>
+    
+    <div style="margin-bottom: 8px; background: rgba(255,255,255,0.6); padding: 6px; border-radius: 6px;">
+        <span style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 2px;">Detail Menu Pesanan:</span>
+        ${itemsListHtml}
+        
+        <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px; margin-top: 6px;">
+            <span style="font-size: 10px; font-weight: 700; color: #64748b; display: block; margin-bottom: 2px;">Riwayat Chat Pembeli:</span>
+            <div style="max-height: 90px; overflow-y: auto; font-size: 11px; display: flex; flex-direction: column; gap: 4px;">
+                ${order.chatLog || '<i style="color: #94a3b8; font-size: 10px;">Belum ada pesan chat.</i>'}
             </div>
-            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Pemesan: <b>${order.customerName || 'Pelanggan Cikur'}</b></p>
-            <div style="margin-bottom: 8px; background: rgba(255,255,255,0.6); padding: 6px; border-radius: 8px;">
-                <span style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 2px;">Detail Menu Pesanan:</span>
-                ${itemsListHtml}
-            </div>
-            <p style="font-size: 11px; font-weight: 700; color: var(--primary-red); margin-bottom: 8px;">Total: Rp ${(order.totalPrice || order.total || 0).toLocaleString('id-ID')}</p>
-            
-            <div style="display: flex; gap: 6px;">
-                <button onclick="updateOrderStatus(${idx}, 'Diproses')" class="btn-action" style="margin-top:0; font-size: 11px; height: 32px; background: #2563eb;">Terima & Proses</button>
-                <button onclick="updateOrderStatus(${idx}, 'Dibatalkan')" class="btn-action" style="margin-top:0; font-size: 11px; height: 32px; background: var(--primary-red);">Batalkan Pesanan</button>
-            </div>
-        </div>`;
+        </div>
+    </div>
+
+    <p style="font-size: 11px; font-weight: 700; color: var(--primary-red); margin-top: 4px;">Total: Rp ${(order.totalPrice || order.total || 0).toLocaleString('id-ID')}</p>
+    <div style="display: flex; gap: 6px; margin-top: 8px;">
+        <button onclick="updateOrderStatus(${idx}, 'Diproses')" class="btn-action">Terima & Proses</button>
+        <button onclick="updateOrderStatus(${idx}, 'Dibatalkan')" class="btn-action">Batalkan Pesanan</button>
+    </div>
+</div>`;
     });
     container.innerHTML = html;
 }
