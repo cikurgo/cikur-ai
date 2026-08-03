@@ -415,43 +415,44 @@ function finalizePayment(totalAmount, summaryText) {
     let kodeTrx = 'TRX-' + Math.floor(100000 + Math.random() * 900000);
     let waktuSekarang = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 
-    // Menyusun struktur items agar terbaca spesifik oleh resto.html
+    // Menyusun struktur items lengkap dengan informasi harga normal dan diskon per menu
     let structuredItems = [];
+    let originalSubtotalAll = 0;
+    
     databaseResto.forEach(resto => {
         resto.items.forEach(item => {
             let key = `${resto.id}_${item.id}`;
             let qty = cartQuantities[key] || 0;
             if(qty > 0) {
-                let price = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
-                structuredItems.push({ id: item.id, name: item.name, qty: qty, price: price });
+                let hargaAsli = item.price;
+                let hargaJual = (item.discountPrice && item.discountPrice < item.price) ? item.discountPrice : item.price;
+                originalSubtotalAll += hargaAsli * qty;
+                
+                structuredItems.push({ 
+                    id: item.id, 
+                    name: item.name, 
+                    quantity: qty, 
+                    qty: qty, 
+                    price: hargaJual, 
+                    originalPrice: hargaAsli 
+                });
             }
         });
     });
 
-    riwayatPesanan.unshift({
-        kode: kodeTrx,
-        layanan: `${summaryText} [${modeInfo}]`,
-        kategori: 'CIKUR Food Assistant',
-        harga: totalAmount,
-        status: currentModeSelected === 'instant' ? 'Diproses Resto' : 'Reservasi Dibuat',
-        waktu: waktuSekarang
-    });
+    let selectedPaymentMethod = document.getElementById("paymentMethodSelect") ? document.getElementById("paymentMethodSelect").value : 'TUNAI';
+    let customerNote = document.getElementById("chatInputText") ? document.getElementById("chatInputText").value : '-';
+    let totalOngkir = 10000;
 
-    riwayatTransaksi.unshift({
-        kode: kodeTrx,
-        ket: `Pembayaran Food (${modeInfo}) + Ongkir`,
-        nominal: -totalAmount,
-        waktu: waktuSekarang,
-        status: 'Berhasil'
-    });
-
-    // Dikirim ke resto dengan array items yang valid
+    // Dikirim ke resto dengan rincian total awal dan total akhir yang jelas
     restoOrders.unshift({
         id: 'ORD_' + Date.now(),
         kode: kodeTrx,
         menu: summaryText,
         items: structuredItems,
         mode: modeInfo,
+        subtotal: originalSubtotalAll,
+        originalTotal: originalSubtotalAll + totalOngkir,
         totalPrice: totalAmount,
         total: totalAmount,
         status: 'Pending',
@@ -459,6 +460,8 @@ function finalizePayment(totalAmount, summaryText) {
         customerName: user.name || "Pelanggan Cikur",
         pembeli: user.name || "Pelanggan Cikur",
         customerAddress: address,
+        paymentMethod: selectedPaymentMethod,
+        note: customerNote,
         chatLog: chatHistoryHTML
     });
 
