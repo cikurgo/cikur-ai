@@ -647,19 +647,51 @@ function renderIncomingOrders() {
         let borderColor = order.status === 'Dibatalkan' ? '#fecaca' : '#bbf7d0';
         let statusTextColor = order.status === 'Dibatalkan' ? '#dc2626' : '#16a34a';
 
+        // 1. Detail Menu, Jumlah, Harga Normal, Harga Diskon, & Keterangan Potongan
         let itemsListHtml = "";
+        let totalDiskonMenu = 0;
+        
         if (order.items && Array.isArray(order.items) && order.items.length > 0) {
             itemsListHtml = order.items.map(i => {
                 let namaMenu = i.name || i.nama || i.title || 'Menu';
                 let jumlahMenu = i.quantity || i.qty || i.jumlah || 1;
-                let hargaMenu = i.price || i.harga || 0;
-                let formatHarga = hargaMenu ? ` (Rp ${Number(hargaMenu).toLocaleString('id-ID')})` : '';
-                return `<div style="font-size: 11px; color: var(--text-main);">- ${namaMenu} (${jumlahMenu}x)${formatHarga}</div>`;
+                
+                let hargaNormal = i.originalPrice || i.hargaAsli || i.price || 15000;
+                let hargaJual = i.price || i.harga || hargaNormal;
+                let subtotalItem = hargaJual * jumlahMenu;
+                
+                let infoDetailHarga = "";
+                if (hargaNormal > hargaJual) {
+                    let potongan = (hargaNormal - hargaJual) * jumlahMenu;
+                    totalDiskonMenu += potongan;
+                    infoDetailHarga = `<br><span style="font-size: 10px; color: #16a34a;">(Diskon dari Rp ${(hargaNormal * jumlahMenu).toLocaleString('id-ID')} menjadi Rp ${subtotalItem.toLocaleString('id-ID')} | Potongan: -Rp ${potongan.toLocaleString('id-ID')})</span>`;
+                } else {
+                    infoDetailHarga = `<span style="font-size: 10px; color: #64748b;"> (Rp ${subtotalItem.toLocaleString('id-ID')})</span>`;
+                }
+
+                return `<div style="font-size: 11px; color: var(--text-main); margin-bottom: 4px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 2px;">
+                    - <b>${namaMenu}</b> (${jumlahMenu}x)${infoDetailHarga}
+                </div>`;
             }).join('');
         } else if (order.menuSummary) {
             itemsListHtml = `<div style="font-size: 11px; color: var(--text-main);">${order.menuSummary}</div>`;
         } else {
             itemsListHtml = `<div style="font-size: 11px; color: var(--text-main);">Pesanan Menu Resto</div>`;
+        }
+
+        // 2. Catatan Khusus & Metode Pembayaran
+        let catatanKhusus = order.note || order.catatan || order.catatanKhusus || '-';
+        let metodeBayar = order.paymentMethod || order.metodePembayaran || order.pembayaran || 'TUNAI';
+
+        // 3. Perhitungan Total Keseluruhan (Dari Berapa Menjadi Berapa)
+        let hargaFinal = order.totalPrice || order.total || 0;
+        let subtotalKotor = order.subtotal || order.originalTotal || (hargaFinal + totalDiskonMenu);
+        
+        let tampilanTotalKeseluruhan = "";
+        if (subtotalKotor > hargaFinal) {
+            tampilanTotalKeseluruhan = `<s style="color: #94a3b8; font-size: 11px;">Rp ${subtotalKotor.toLocaleString('id-ID')}</s> <span style="color: var(--primary-red); font-size: 13px; font-weight: 800;">Rp ${hargaFinal.toLocaleString('id-ID')}</span>`;
+        } else {
+            tampilanTotalKeseluruhan = `<span style="color: var(--primary-red); font-size: 13px; font-weight: 800;">Rp ${hargaFinal.toLocaleString('id-ID')}</span>`;
         }
 
         html += `
@@ -670,11 +702,16 @@ function renderIncomingOrders() {
             </div>
             <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Pemesan: ${order.customerName || order.pembeli || 'Pelanggan'}</p>
             
-            <div style="margin-bottom: 8px; background: rgba(255,255,255,0.6); padding: 6px; border-radius: 6px;">
-                <span style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 2px;">Detail Menu Pesanan:</span>
+            <div style="margin-bottom: 8px; background: rgba(255,255,255,0.8); padding: 8px; border-radius: 6px;">
+                <span style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Detail Menu Pesanan & Diskon:</span>
                 ${itemsListHtml}
                 
-                <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px; margin-top: 6px;">
+                <div style="margin-top: 6px; font-size: 11px; border-top: 1px solid #cbd5e1; padding-top: 6px;">
+                    <div style="margin-bottom: 2px;"><span style="color: #475569;"><b>Catatan Khusus:</b> ${catatanKhusus}</span></div>
+                    <div><span style="color: #475569;"><b>Metode Pembayaran:</b> <span style="color: #2563eb; font-weight: 700; text-transform: uppercase;">${metodeBayar}</span></span></div>
+                </div>
+
+                <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px; margin-top: 8px;">
                     <span style="font-size: 10px; font-weight: 700; color: #64748b; display: block; margin-bottom: 2px;">Riwayat Chat Pembeli:</span>
                     <div style="max-height: 90px; overflow-y: auto; font-size: 11px; display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px;">
                         ${order.chatLog || '<i style="color: #94a3b8; font-size: 10px;">Belum ada pesan chat.</i>'}
@@ -687,7 +724,11 @@ function renderIncomingOrders() {
                 </div>
             </div>
 
-            <p style="font-size: 11px; font-weight: 700; color: var(--primary-red); margin-top: 4px;">Total: Rp ${(order.totalPrice || order.total || 0).toLocaleString('id-ID')}</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; background: #fff; padding: 6px 8px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                <span style="font-size: 11px; font-weight: 700; color: #334155;">Total Pembayaran:</span>
+                <div>${tampilanTotalKeseluruhan}</div>
+            </div>
+
             <div style="display: flex; gap: 6px; margin-top: 8px;">
                 <button type="button" onclick="updateOrderStatus(${idx}, 'Diproses')" class="btn-action">Terima & Proses</button>
                 <button type="button" onclick="updateOrderStatus(${idx}, 'Dibatalkan')" class="btn-action">Batalkan Pesanan</button>
