@@ -669,8 +669,14 @@ function renderIncomingOrders() {
         
         <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px; margin-top: 6px;">
             <span style="font-size: 10px; font-weight: 700; color: #64748b; display: block; margin-bottom: 2px;">Riwayat Chat Pembeli:</span>
-            <div style="max-height: 90px; overflow-y: auto; font-size: 11px; display: flex; flex-direction: column; gap: 4px;">
+            <div style="max-height: 90px; overflow-y: auto; font-size: 11px; display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px;">
                 ${order.chatLog || '<i style="color: #94a3b8; font-size: 10px;">Belum ada pesan chat.</i>'}
+            </div>
+            
+            <!-- Kolom Balasan Chat dari Resto -->
+            <div style="display: flex; gap: 4px;">
+                <input type="text" id="replyInput_${idx}" placeholder="Balas chat pembeli..." style="flex: 1; font-size: 10px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                <button onclick="sendRestoReply('${order.id}', ${idx})" style="font-size: 10px; background: #0f172a; color: #fff; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Kirim</button>
             </div>
         </div>
     </div>
@@ -681,10 +687,25 @@ function renderIncomingOrders() {
         <button onclick="updateOrderStatus(${idx}, 'Dibatalkan')" class="btn-action">Batalkan Pesanan</button>
     </div>
 </div>`;
-    });
     container.innerHTML = html;
 }
+function sendRestoReply(orderId, idx) {
+    let inputEl = document.getElementById(`replyInput_${idx}`);
+    if (!inputEl || !inputEl.value.trim()) return;
 
+    let replyText = inputEl.value.trim();
+    let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || [];
+    
+    if (orders[idx]) {
+        let newBubble = `<div style="text-align: right; background: #e2e8f0; padding: 4px 8px; border-radius: 6px; align-self: flex-end; margin: 2px 0; max-width: 85%;"><b>Resto:</b> ${replyText}</div>`;
+        orders[idx].chatLog = (orders[idx].chatLog || '') + newBubble;
+        
+        localStorage.setItem('cikur_restaurant_orders', JSON.stringify(orders));
+        
+        inputEl.value = "";
+        renderIncomingOrders();
+    }
+}
 function updateOrderStatus(index, newStatus) {
     let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || JSON.parse(localStorage.getItem('cikur_orders')) || [];
     if(orders[index]) {
