@@ -125,7 +125,7 @@
         </div>
     </div>
 
-    <!-- Alamat Tujuan Pengiriman -->
+   <!-- Alamat Tujuan Pengiriman -->
     <div class="destination-card">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
             <div style="display: flex; align-items: center; gap: 6px;">
@@ -134,10 +134,12 @@
             </div>
             <span id="lockStatusBadge" style="font-size: 9px; font-weight: 700; padding: 3px 8px; background: #ffedd5; color: #c2410c; border-radius: 6px;">Wajib Diisi</span>
         </div>
-        <textarea id="globalCustomerAddress" class="address-textarea" rows="2" placeholder="Masukkan alamat lengkap tujuan pengiriman (contoh: Jl. Merdeka No. 45)..."></textarea>
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 11px; color: var(--text-muted);">Est. Ongkir: <b style="color: var(--text-main);">Rp 10.000</b></span>
-            <button type="button" onclick="lockDestinationAddress()" style="background: #ea580c; color: #fff; border: none; padding: 7px 14px; border-radius: 10px; font-size: 11px; font-weight: 700; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 6px rgba(234,88,12,0.2);">Kunci Alamat</button>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <textarea id="globalCustomerAddress" class="address-textarea" rows="2" placeholder="Masukkan alamat lengkap tujuan pengiriman (contoh: Jl. Merdeka No. 45)..." style="margin-bottom: 0;"></textarea>
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0;">
+                <input type="checkbox" id="checkSimpanAlamat" onclick="handleAddressCheckbox(this)" style="width: 22px; height: 22px; cursor: pointer; accent-color: #ea580c;">
+                <span style="font-size: 9px; font-weight: 700; color: #c2410c; margin-top: 2px;">Simpan</span>
+            </div>
         </div>
     </div>
 
@@ -204,23 +206,37 @@ setInterval(() => {
     if(slider) slider.style.transform = `translateX(-${slideIndex * 33.333}%)`;
 }, 4000);
 
-function lockDestinationAddress() {
+function handleAddressCheckbox(checkbox) {
     let addrInput = document.getElementById("globalCustomerAddress");
     if(!addrInput || !addrInput.value.trim()) {
         alert("Mohon masukkan alamat tujuan pengiriman terlebih dahulu!");
+        checkbox.checked = false;
         return;
     }
-    isAddressLocked = true;
-    addrInput.disabled = true;
-    let badge = document.getElementById("lockStatusBadge");
-    if(badge) {
-        badge.innerText = "Terkunci & Terhubung ✓";
-        badge.style.background = "#dcfce7";
-        badge.style.color = "#16a34a";
-    }
-    alert("[SUKSES] Alamat tujuan berhasil dikunci dan ongkir tersinkronisasi ke sistem driver!");
-}
 
+    if(checkbox.checked) {
+        isAddressLocked = true;
+        addrInput.disabled = true;
+        let badge = document.getElementById("lockStatusBadge");
+        if(badge) {
+            badge.innerText = "Terkunci & Tersimpan ✓";
+            badge.style.background = "#dcfce7";
+            badge.style.color = "#16a34a";
+        }
+        
+        // Langsung panggil fungsi proceedToCheckout() secara otomatis setelah dicentang
+        proceedToCheckout();
+    } else {
+        isAddressLocked = false;
+        addrInput.disabled = false;
+        let badge = document.getElementById("lockStatusBadge");
+        if(badge) {
+            badge.innerText = "Wajib Diisi";
+            badge.style.background = "#ffedd5";
+            badge.style.color = "#c2410c";
+        }
+    }
+}
 function switchMode(mode) {
     currentModeSelected = mode;
     let btnInstant = document.getElementById("btnInstant");
