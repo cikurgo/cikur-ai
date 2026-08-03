@@ -649,7 +649,13 @@ function renderIncomingOrders() {
 
         let itemsListHtml = "";
         if (order.items && Array.isArray(order.items) && order.items.length > 0) {
-            itemsListHtml = order.items.map(i => `<div style="font-size: 11px; color: var(--text-main);">- ${i.name} (${i.quantity}x)</div>`).join('');
+            itemsListHtml = order.items.map(i => {
+                let namaMenu = i.name || i.nama || i.title || 'Menu';
+                let jumlahMenu = i.quantity || i.qty || i.jumlah || 1;
+                let hargaMenu = i.price || i.harga || 0;
+                let formatHarga = hargaMenu ? ` (Rp ${Number(hargaMenu).toLocaleString('id-ID')})` : '';
+                return `<div style="font-size: 11px; color: var(--text-main);">- ${namaMenu} (${jumlahMenu}x)${formatHarga}</div>`;
+            }).join('');
         } else if (order.menuSummary) {
             itemsListHtml = `<div style="font-size: 11px; color: var(--text-main);">${order.menuSummary}</div>`;
         } else {
