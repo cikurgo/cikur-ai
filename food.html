@@ -78,6 +78,33 @@
         .chat-bubble { padding: 8px 12px; border-radius: 10px; max-width: 82%; font-size: 11px; line-height: 1.4; }
         .chat-bubble.customer { background: #fee2e2; align-self: flex-end; color: #991b1b; border-bottom-right-radius: 2px; }
         .chat-bubble.resto { background: #e2e8f0; align-self: flex-start; color: #1e293b; border-bottom-left-radius: 2px; }
+    
+    /* Styling Dropdown Autocomplete Alamat */
+#addressSuggestionsList {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    max-height: 150px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: var(--shadow-md);
+    margin-top: 4px;
+}
+.suggestion-item {
+    padding: 8px 12px;
+    font-size: 11px;
+    color: var(--text-main);
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-light);
+}
+.suggestion-item:hover {
+    background: #f1f5f9;
+}
+    
     </style>
 </head>
 <body>
@@ -540,6 +567,10 @@ function sendChatMessage() {
 }
 
 function finalizePayment(totalAmount, summaryText, address, restoName, restoAddress) {
+    let jalanUtama = document.getElementById("globalCustomerAddress").value.trim();
+    let patokanDetail = document.getElementById("customerPatokan") ? document.getElementById("customerPatokan").value.trim() : "";
+    let addressInputVal = patokanDetail ? `${jalanUtama} (Patokan: ${patokanDetail})` : jalanUtama;
+    
     let user = JSON.parse(localStorage.getItem('cikur_user')) || { saldo: 125000 };
     let selectedPaymentMethod = document.getElementById("paymentMethodSelect") ? document.getElementById("paymentMethodSelect").value : 'TUNAI';
 
@@ -621,7 +652,7 @@ function finalizePayment(totalAmount, summaryText, address, restoName, restoAddr
         pembeli: user.name || "Pelanggan Cikur",
         restoName: restoName,
         pickupAddress: restoAddress,
-        customerAddress: address,
+        customerAddress: addressInputVal,
         paymentMethod: selectedPaymentMethod,
         note: customerNote,
         chatLog: chatHistoryHTML
@@ -690,6 +721,54 @@ function getLiveLocation() {
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
 }
+// Fungsi Pencarian Alamat Otomatis (Autocomplete)
+let searchTimeout;
+function searchAddressAutocomplete(keyword) {
+    let listContainer = document.getElementById("addressSuggestionsList");
+    if (!listContainer) return;
+
+    clearTimeout(searchTimeout);
+    if (!keyword || keyword.trim().length < 3) {
+        listContainer.innerHTML = "";
+        return;
+    }
+
+    // Debounce agar tidak terlalu sering melakukan fetch saat diketik cepat
+    searchTimeout = setTimeout(() => {
+        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keyword)}&countrycodes=id&limit=5`;
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                listContainer.innerHTML = "";
+                if (data && data.length > 0) {
+                    data.forEach(place => {
+                        let div = document.createElement("div");
+                        div.className = "suggestion-item";
+                        div.innerText = place.display_name;
+                        div.onclick = function() {
+                            document.getElementById("globalCustomerAddress").value = place.display_name;
+                            // Simpan koordinat lat/lon jika dibutuhkan driver nanti
+                            document.getElementById("globalCustomerAddress").dataset.lat = place.lat;
+                            document.getElementById("globalCustomerAddress").dataset.lon = place.lon;
+                            listContainer.innerHTML = "";
+                        };
+                        listContainer.appendChild(div);
+                    });
+                }
+            })
+            .catch(err => console.log("Gagal memuat data lokasi:", err));
+    }, 400);
+}
+
+// Menutup dropdown jika klik di luar area
+document.addEventListener("click", function(e) {
+    let listContainer = document.getElementById("addressSuggestionsList");
+    let inputEl = document.getElementById("globalCustomerAddress");
+    if (listContainer && !inputEl.contains(e.target) && !listContainer.contains(e.target)) {
+        listContainer.innerHTML = "";
+    }
+});
 function lanjutKe2In1() {
     let activeCartFor2in1 = [];
     databaseResto.forEach(resto => {
