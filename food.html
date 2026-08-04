@@ -51,8 +51,10 @@
         .assistant-banner {
             background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
             border-radius: var(--radius-md); padding: 20px; color: #fff; position: relative; overflow: hidden;
+            cursor: pointer; transition: var(--transition); box-shadow: var(--shadow-soft);
         }
-        .assistant-banner h3 { font-size: 14px; font-weight: 800; margin-bottom: 4px; }
+        .assistant-banner:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+        .assistant-banner h3 { font-size: 14px; font-weight: 800; margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between; }
         .assistant-banner p { font-size: 11px; opacity: 0.8; line-height: 1.4; }
 
         .destination-box {
@@ -104,12 +106,13 @@
         .counter-btn { width: 28px; height: 28px; border-radius: 8px; border: none; background: #fff; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .counter-btn.plus { background: var(--primary-gradient); color: #fff; }
 
-        /* MODAL PEMBAYARAN & MODAL PETA */
-        #paymentModal, #mapModal {
+        /* MODAL PEMBAYARAN, MODAL PETA & MODAL ASSISTANT */
+        #paymentModal, #mapModal, #assistantModal {
             position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
             z-index: 2000; display: none; align-items: flex-end; justify-content: center;
         }
         #mapModal { align-items: center; padding: 16px; }
+        #assistantModal { align-items: center; padding: 16px; }
         
         .modal-content {
             width: 100%; max-width: 480px; background: #fff; border-top-left-radius: var(--radius-lg);
@@ -141,8 +144,11 @@
     </div>
 
     <div class="content-body">
-        <div class="assistant-banner">
-            <h3>CIKUR GO ASSISTANT</h3>
+        <!-- BANNER UTAMA YANG DIFUNGSIKAN -->
+        <div class="assistant-banner" onclick="openAssistantModal()">
+            <h3>CIKUR GO ASSISTANT 
+                <span style="font-size: 10px; background: rgba(255,255,255,0.2); padding: 3px 8px; border-radius: 8px;">Panduan ➔</span>
+            </h3>
             <p>Pencarian alamat otomatis, deteksi GPS presisi, dan rincian lengkap untuk driver.</p>
         </div>
 
@@ -209,6 +215,33 @@
     <div class="footer-action">
         <button class="btn-main btn-checkout" onclick="openPaymentSummary()">Lanjut Pembayaran</button>
         <button class="btn-main btn-secondary" onclick="lanjutKe2In1()">Cikur 2-in-1</button>
+    </div>
+</div>
+
+<!-- MODAL ASSISTANT (Fungsi Banner Atas) -->
+<div id="assistantModal">
+    <div style="width: 100%; max-width: 440px; background: #fff; border-radius: 24px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
+        <div style="padding: 16px; background: #1e293b; color: #fff; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="font-size: 13px; font-weight: 800;">🤖 Panduan Cikur Go Assistant</h3>
+            <button onclick="closeAssistantModal()" style="background: none; border: none; font-size: 16px; font-weight: 800; cursor: pointer; color: #fff;">✕</button>
+        </div>
+        <div style="padding: 20px; font-size: 12px; color: var(--text-main); display: flex; flex-direction: column; gap: 12px; line-height: 1.5;">
+            <div style="display: flex; gap: 10px; align-items: flex-start;">
+                <span style="background: #fee2e2; color: var(--primary); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0;">1</span>
+                <div><b>Isi Alamat Tujuan:</b> Ketik nama jalan di kolom alamat atau gunakan tombol <b>"Pilih Peta"</b> agar titik koordinat GPS terdeteksi otomatis oleh driver.</div>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: flex-start;">
+                <span style="background: #fee2e2; color: var(--primary); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0;">2</span>
+                <div><b>Pilih Menu Favorit:</b> Cari makanan atau minuman pilihan Anda pada daftar mitra resto di bawah, lalu atur jumlah pesanan menggunakan tombol plus/minus (+/-).</div>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: flex-start;">
+                <span style="background: #fee2e2; color: var(--primary); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0;">3</span>
+                <div><b>Checkout & Selesaikan:</b> Klik tombol <b>"Lanjut Pembayaran"</b> di bagian bawah untuk melihat ringkasan total biaya serta memilih metode pembayaran yang diinginkan.</div>
+            </div>
+        </div>
+        <div style="padding: 16px; background: #fff; border-top: 1px solid var(--border);">
+            <button type="button" onclick="closeAssistantModal()" style="width: 100%; padding: 12px; background: var(--primary-gradient); color: #fff; border: none; border-radius: var(--radius-sm); font-weight: 800; font-size: 12px; cursor: pointer; box-shadow: 0 4px 12px rgba(255,71,87,0.3);">Mengerti, Mulai Pesan ✓</button>
+        </div>
     </div>
 </div>
 
@@ -289,6 +322,14 @@ let searchTimeout = null;
 let customerCoords = { lat: -6.3245, lon: 106.1524 }; // Default Pandeglang/Banten
 let leafletMap = null;
 let mapMarker = null;
+
+// Fungsi untuk membuka & menutup Modal Assistant Banner
+function openAssistantModal() {
+    document.getElementById("assistantModal").style.display = "flex";
+}
+function closeAssistantModal() {
+    document.getElementById("assistantModal").style.display = "none";
+}
 
 function loadRestoData() {
     let multiRestos = JSON.parse(localStorage.getItem('cikur_all_restaurants')) || [];
