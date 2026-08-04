@@ -806,51 +806,71 @@ function confirmMapLocation() {
 
 // 5. Autocomplete Pencarian Teks Alamat
 document.addEventListener("DOMContentLoaded", function() {
-    loadRestoDataFromStorage();
-
     let searchInput = document.getElementById("globalCustomerAddress");
+    if (!searchInput) return;
+
+    // Pastikan elemen wadah saran (dropdown) sudah ada di bawah input
+    let wrapper = searchInput.parentElement;
     let suggestionsList = document.getElementById("addressSuggestionsList");
-
-    if (searchInput && suggestionsList) {
-        searchInput.addEventListener("input", function() {
-            let query = this.value.trim();
-            if (query.length < 3) {
-                suggestionsList.innerHTML = "";
-                suggestionsList.style.display = "none";
-                return;
-            }
-
-            let searchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=id&limit=5&accept-language=id`;
-            fetch(searchUrl)
-                .then(res => res.json())
-                .then(data => {
-                    suggestionsList.innerHTML = "";
-                    if (data && data.length > 0) {
-                        suggestionsList.style.display = "block";
-                        data.forEach(item => {
-                            let div = document.createElement("div");
-                            div.className = "suggestion-item";
-                            div.style.cssText = "padding: 10px 14px; font-size: 11px; cursor: pointer; border-bottom: 1px solid #f1f5f9; background: #fff; color: #1e293b;";
-                            div.textContent = item.display_name;
-                            div.onclick = function() {
-                                searchInput.value = item.display_name;
-                                searchInput.dataset.lat = item.lat;
-                                searchInput.dataset.lon = item.lon;
-                                suggestionsList.innerHTML = "";
-                                suggestionsList.style.display = "none";
-                            };
-                            suggestionsList.appendChild(div);
-                        });
-                    } else {
-                        suggestionsList.style.display = "none";
-                    }
-                })
-                .catch(err => {
-                    console.error("Gagal memuat pencarian:", err);
-                    suggestionsList.style.display = "none";
-                });
-        });
+    
+    if (!suggestionsList) {
+        suggestionsList = document.createElement("div");
+        suggestionsList.id = "addressSuggestionsList";
+        suggestionsList.style.cssText = "position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #e2e8f0; border-radius:10px; max-height:180px; overflow-y:auto; z-index:9999; box-shadow:0 4px 12px rgba(0,0,0,0.06); margin-top:4px; display:none;";
+        wrapper.style.position = "relative";
+        wrapper.appendChild(suggestionsList);
     }
+
+    // Event saat mengetik nama tempat/gedung
+    searchInput.addEventListener("input", function() {
+        let query = this.value.trim();
+        if (query.length < 3) {
+            suggestionsList.innerHTML = "";
+            suggestionsList.style.display = "none";
+            return;
+        }
+
+        let searchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=id&limit=5&accept-language=id`;
+        
+        fetch(searchUrl)
+            .then(res => res.json())
+            .then(data => {
+                suggestionsList.innerHTML = "";
+                if (data && data.length > 0) {
+                    suggestionsList.style.display = "block";
+                    data.forEach(item => {
+                        let div = document.createElement("div");
+                        div.style.cssText = "padding:10px 12px; font-size:11px; color:#0f172a; cursor:pointer; border-bottom:1px solid #f1f5f9; background:#fff;";
+                        div.textContent = item.display_name;
+                        
+                        div.onmouseover = () => div.style.background = "#f1f5f9";
+                        div.onmouseout = () => div.style.background = "#fff";
+                        
+                        div.onclick = function() {
+                            searchInput.value = item.display_name;
+                            searchInput.dataset.lat = item.lat;
+                            searchInput.dataset.lon = item.lon;
+                            suggestionsList.innerHTML = "";
+                            suggestionsList.style.display = "none";
+                        };
+                        suggestionsList.appendChild(div);
+                    });
+                } else {
+                    suggestionsList.style.display = "none";
+                }
+            })
+            .catch(err => {
+                console.error("Gagal mengambil data lokasi:", err);
+                suggestionsList.style.display = "none";
+            });
+    });
+
+    // Sembunyikan dropdown jika klik di luar area input
+    document.addEventListener("click", function(e) {
+        if (!searchInput.contains(e.target) && !suggestionsList.contains(e.target)) {
+            suggestionsList.style.display = "none";
+        }
+    });
 });
 
 function lanjutKe2In1() {
