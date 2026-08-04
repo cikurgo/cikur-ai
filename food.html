@@ -104,7 +104,28 @@
 .suggestion-item:hover {
     background: #f1f5f9;
 }
-    
+/* Styling Modern untuk Peta Interaktif */
+#mapModal {
+    backdrop-filter: blur(4px);
+    transition: all 0.3s ease;
+}
+#leafletMapContainer {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    z-index: 1;
+}
+/* Pin penanda di tengah peta ala aplikasi ride-hailing modern */
+.map-center-pin {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -100%);
+    font-size: 32px;
+    z-index: 1000;
+    pointer-events: none;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
+}
     </style>
     
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -824,40 +845,46 @@ function searchAddressAutocomplete(keyword) {
             .catch(err => console.log("Gagal memuat data lokasi:", err));
     }, 300);
 }
-
+    
 let mapInstance = null;
-let markerInstance = null;
 let selectedMapLat = null;
 let selectedMapLon = null;
 let selectedMapAddress = "";
 
-// Fungsi Membuka Peta
+// 1. Membuka Peta Interaktif dengan Pin di Tengah
 function openInteractiveMap() {
     let modal = document.getElementById("mapModal");
     if (!modal) return;
+    
+    // Tambahkan pin tengah secara dinamis jika belum ada
+    let container = document.getElementById("leafletMapContainer");
+    if (container && !document.getElementById("customMapPin")) {
+        let pin = document.createElement("div");
+        pin.id = "customMapPin";
+        pin.className = "map-center-pin";
+        pin.innerHTML = "📍";
+        container.appendChild(pin);
+    }
+
     modal.style.display = "flex";
 
-    // Ambil koordinat terakhir atau default ke Jakarta/Tangerang jika belum ada
     let addrInput = document.getElementById("globalCustomerAddress");
     let defaultLat = addrInput && addrInput.dataset.lat ? parseFloat(addrInput.dataset.lat) : -6.225;
     let defaultLon = addrInput && addrInput.dataset.lon ? parseFloat(addrInput.dataset.lon) : 106.650;
 
-    // Inisialisasi peta Leaflet jika belum ada
     setTimeout(() => {
         if (!mapInstance) {
-            mapInstance = L.map('leafletMapContainer').setView([defaultLat, defaultLon], 16);
+            mapInstance = L.map('leafletMapContainer', { zoomControl: false }).setView([defaultLat, defaultLon], 16);
+            
+            // Tambahkan kontrol zoom di pojok kanan bawah agar modern
+            L.control.zoom({ position: 'bottomright' }).addTo(mapInstance);
+
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '© OpenStreetMap'
             }).addTo(mapInstance);
 
-            // Event saat peta digeser
-            mapInstance.on('move', function() {
-                let center = mapInstance.getCenter();
-                selectedMapLat = center.lat;
-                selectedMapLon = center.lng;
-            });
-
+            // Deteksi saat peta selesai digeser
             mapInstance.on('moveend', function() {
                 let center = mapInstance.getCenter();
                 fetchReverseGeocode(center.lat, center.lng);
@@ -866,22 +893,25 @@ function openInteractiveMap() {
             mapInstance.setView([defaultLat, defaultLon], 16);
         }
         mapInstance.invalidateSize();
-        fetchReverseGeocode(defaultLat, defaultLon);
+        
+        // Ambil alamat awal berdasarkan titik tengah peta
+        let center = mapInstance.getCenter();
+        fetchReverseGeocode(center.lat, center.lng);
     }, 200);
 }
 
-// Fungsi Menutup Peta
+// 2. Menutup Peta
 function closeInteractiveMap() {
     let modal = document.getElementById("mapModal");
     if (modal) modal.style.display = "none";
 }
 
-// Fungsi Mencari Nama Alamat Berdasarkan Titik Geser Peta (Reverse Geocoding)
+// 3. Mengambil Nama Alamat (Reverse Geocoding)
 function fetchReverseGeocode(lat, lon) {
     selectedMapLat = lat;
     selectedMapLon = lon;
     let url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;
-    
+
     fetch(url)
         .then(res => res.json())
         .then(data => {
@@ -896,24 +926,63 @@ function fetchReverseGeocode(lat, lon) {
         });
 }
 
-// Konfirmasi Pilihan Lokasi Peta
+// 4. Konfirmasi Lokasi Peta ke Form Utama & Patokan
 function confirmMapLocation() {
     let addrInput = document.getElementById("globalCustomerAddress");
+    let patokanInput = document.getElementById("customerPatokan");
+
     if (addrInput && selectedMapAddress) {
         addrInput.value = selectedMapAddress;
         addrInput.dataset.lat = selectedMapLat;
         addrInput.dataset.lon = selectedMapLon;
     }
+
+    if (patokanInput) {
+        patokanInput.value = `Titik GPS Peta: (${selectedMapLat ? selectedMapLat.toFixed(5) : ''}, ${selectedMapLon ? selectedMapLon.toFixed(5) : ''})`;
+    }
+
     closeInteractiveMap();
-}     
-// Menutup dropdown jika klik di luar area
-document.addEventListener("click", function(e) {
-    let listContainer = document.getElementById("addressSuggestionsList");
-    let inputEl = document.getElementById("globalCustomerAddress");
-    if (listContainer && !inputEl.contains(e.target) && !listContainer.contains(e.target)) {
-        listContainer.innerHTML = "";
+}
+
+// 5. Pencarian Alamat Teks Otomatis
+document.addEventListener("DOMContentLoaded", function() {
+    let searchInput = document.getElementById("globalCustomerAddress");
+    let suggestionsList = document.getElementById("addressSuggestionsList");
+
+    if (searchInput && suggestionsList) {
+        searchInput.addEventListener("input", function() {
+            let query = this.value.trim();
+            if (query.length < 3) {
+                suggestionsList.innerHTML = "";
+                return;
+            }
+
+            let searchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=id&limit=5`;
+            fetch(searchUrl)
+                .then(res => res.json())
+                .then(data => {
+                    suggestionsList.innerHTML = "";
+                    if (data && data.length > 0) {
+                        data.forEach(item => {
+                            let div = document.createElement("div");
+                            div.className = "suggestion-item";
+                            div.style.cssText = "padding: 10px 14px; font-size: 11px; cursor: pointer; border-bottom: 1px solid #f1f5f9; background: #fff;";
+                            div.textContent = item.display_name;
+                            div.onclick = function() {
+                                searchInput.value = item.display_name;
+                                searchInput.dataset.lat = item.lat;
+                                searchInput.dataset.lon = item.lon;
+                                suggestionsList.innerHTML = "";
+                            };
+                            suggestionsList.appendChild(div);
+                        });
+                    }
+                })
+                .catch(err => console.error("Gagal memuat pencarian:", err));
+        });
     }
 });
+
 function lanjutKe2In1() {
     let activeCartFor2in1 = [];
     databaseResto.forEach(resto => {
