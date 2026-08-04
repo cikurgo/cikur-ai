@@ -117,33 +117,37 @@
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
 }
 
-/* Pin Penanda Modern di Tengah Peta */
+/* Wrapper agar kotak saran alamat muncul tepat di bawah input */
+.address-input-wrapper {
+    position: relative;
+    flex: 1;
+}
+
+#addressSuggestionsList {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    max-height: 180px;
+    overflow-y: auto;
+    z-index: 9999;
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+    margin-top: 4px;
+}
+
+/* Pin Modern Presisi di Tengah Peta */
 .map-center-pin {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -100%);
-    width: 40px;
-    height: 40px;
-    background: #ea580c;
-    border: 3px solid #fff;
-    border-radius: 50% 50% 50% 0;
-    transform: translate(-50%, -100%) rotate(-45deg);
-    box-shadow: 0 10px 15px rgba(0, 0, 0, 0.3);
+    font-size: 36px;
     z-index: 1000;
     pointer-events: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Titik kecil di dalam pin modern */
-.map-center-pin::after {
-    content: '';
-    width: 10px;
-    height: 10px;
-    background: #fff;
-    border-radius: 50%;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
 }
     </style>
     
@@ -208,18 +212,19 @@
 
     <!-- Kolom 1: Alamat Utama & Tombol Peta Sejajar -->
     <div style="margin-bottom: 8px;">
-        <div style="display: flex; gap: 6px; align-items: center;">
-            <input type="text" id="globalCustomerAddress" class="address-textarea" placeholder="Ketik atau pilih lokasi..." style="flex: 1; margin: 0;">
-            <button type="button" onclick="openInteractiveMap()" style="background: #ea580c; color: #fff; border: none; padding: 10px 12px; border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer; white-space: nowrap;">🗺️ Pilih dari Peta</button>
+        <div style="display: flex; gap: 6px; align-items: flex-start;">
+            <div class="address-input-wrapper" style="position: relative; flex: 1;">
+                <input type="text" id="globalCustomerAddress" class="address-textarea" placeholder="Ketik atau pilih lokasi..." style="width: 100%; margin: 0;">
+                <!-- Wadah Dropdown Suggestions -->
+                <div id="addressSuggestionsList"></div>
+            </div>
+            <button type="button" onclick="openInteractiveMap()" style="background: #ea580c; color: #fff; border: none; padding: 10px 12px; border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer; white-space: nowrap; height: 38px;">🗺️ Pilih dari Peta</button>
         </div>
         <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
             <input type="checkbox" id="checkSimpanAlamat" onclick="handleAddressCheckbox(this)">
             <span style="font-size: 10px; font-weight: 700; color: #475569;">Simpan Alamat</span>
         </div>
     </div>
-
-    <!-- Wadah Dropdown Suggestions -->
-    <div id="addressSuggestionsList"></div>
 
     <!-- Kolom 2: Patokan / Detail Lokasi -->
     <div style="margin-top: 8px;">
@@ -912,15 +917,64 @@ function openInteractiveMap() {
         let center = mapInstance.getCenter();
         fetchReverseGeocode(center.lat, center.lng);
     }, 200);
+
+
+let mapInstance = null;
+let selectedMapLat = null;
+let selectedMapLon = null;
+let selectedMapAddress = "";
+
+// 1. Buka Peta Interaktif
+function openInteractiveMap() {
+    let modal = document.getElementById("mapModal");
+    if (!modal) return;
+    
+    let container = document.getElementById("leafletMapContainer");
+    if (container && !document.getElementById("customMapPin")) {
+        let pin = document.createElement("div");
+        pin.id = "customMapPin";
+        pin.className = "map-center-pin";
+        pin.innerHTML = "📍";
+        container.appendChild(pin);
+    }
+
+    modal.style.display = "flex";
+
+    let addrInput = document.getElementById("globalCustomerAddress");
+    let defaultLat = addrInput && addrInput.dataset.lat ? parseFloat(addrInput.dataset.lat) : -6.225;
+    let defaultLon = addrInput && addrInput.dataset.lon ? parseFloat(addrInput.dataset.lon) : 106.650;
+
+    setTimeout(() => {
+        if (!mapInstance) {
+            mapInstance = L.map('leafletMapContainer', { zoomControl: false }).setView([defaultLat, defaultLon], 16);
+            L.control.zoom({ position: 'bottomright' }).addTo(mapInstance);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap'
+            }).addTo(mapInstance);
+
+            mapInstance.on('moveend', function() {
+                let center = mapInstance.getCenter();
+                fetchReverseGeocode(center.lat, center.lng);
+            });
+        } else {
+            mapInstance.setView([defaultLat, defaultLon], 16);
+        }
+        mapInstance.invalidateSize();
+        
+        let center = mapInstance.getCenter();
+        fetchReverseGeocode(center.lat, center.lng);
+    }, 200);
 }
 
-// 2. Menutup Peta
+// 2. Tutup Peta
 function closeInteractiveMap() {
     let modal = document.getElementById("mapModal");
     if (modal) modal.style.display = "none";
 }
 
-// 3. Reverse Geocoding dengan Format Ramah Customer (Tanpa Koordinat Mentah)
+// 3. Ambil Nama Alamat Berdasarkan Titik Tengah Peta
 function fetchReverseGeocode(lat, lon) {
     selectedMapLat = lat;
     selectedMapLon = lon;
@@ -932,26 +986,25 @@ function fetchReverseGeocode(lat, lon) {
             if (data && data.display_name) {
                 selectedMapAddress = data.display_name;
             } else {
-                selectedMapAddress = "Lokasi Dipilih dari Peta (Area Sekitar)";
+                selectedMapAddress = "Lokasi Peta Terpilih";
             }
         })
         .catch(() => {
-            selectedMapAddress = "Lokasi Dipilih dari Peta (Area Sekitar)";
+            selectedMapAddress = "Lokasi Peta Terpilih";
         });
 }
 
-// 4. Konfirmasi Pilihan Lokasi Peta (Otomatis Isi Alamat & Bersihkan Patokan)
+// 4. Konfirmasi Lokasi dari Peta
 function confirmMapLocation() {
     let addrInput = document.getElementById("globalCustomerAddress");
     let patokanInput = document.getElementById("customerPatokan");
 
     if (addrInput) {
-        addrInput.value = selectedMapAddress || "Lokasi Dipilih dari Peta";
+        addrInput.value = selectedMapAddress || "Lokasi Peta Terpilih";
         addrInput.dataset.lat = selectedMapLat;
         addrInput.dataset.lon = selectedMapLon;
     }
 
-    // Kolom patokan dibiarkan kosong agar customer bisa isi manual dengan santai (misal: "Depan pagar hijau")
     if (patokanInput && !patokanInput.value) {
         patokanInput.value = ""; 
     }
@@ -959,7 +1012,7 @@ function confirmMapLocation() {
     closeInteractiveMap();
 }
 
-// 5. Pencarian Alamat Teks Otomatis (Autocomplete) yang Responsif
+// 5. Autocomplete Pencarian Teks Alamat
 document.addEventListener("DOMContentLoaded", function() {
     let searchInput = document.getElementById("globalCustomerAddress");
     let suggestionsList = document.getElementById("addressSuggestionsList");
@@ -969,7 +1022,6 @@ document.addEventListener("DOMContentLoaded", function() {
             let query = this.value.trim();
             if (query.length < 3) {
                 suggestionsList.innerHTML = "";
-                suggestionsList.style.display = "none";
                 return;
             }
 
@@ -979,7 +1031,6 @@ document.addEventListener("DOMContentLoaded", function() {
                 .then(data => {
                     suggestionsList.innerHTML = "";
                     if (data && data.length > 0) {
-                        suggestionsList.style.display = "block";
                         data.forEach(item => {
                             let div = document.createElement("div");
                             div.className = "suggestion-item";
@@ -990,18 +1041,12 @@ document.addEventListener("DOMContentLoaded", function() {
                                 searchInput.dataset.lat = item.lat;
                                 searchInput.dataset.lon = item.lon;
                                 suggestionsList.innerHTML = "";
-                                suggestionsList.style.display = "none";
                             };
                             suggestionsList.appendChild(div);
                         });
-                    } else {
-                        suggestionsList.style.display = "none";
                     }
                 })
-                .catch(err => {
-                    console.error("Gagal memuat pencarian:", err);
-                    suggestionsList.style.display = "none";
-                });
+                .catch(err => console.error("Gagal memuat pencarian:", err));
         });
     }
 });
