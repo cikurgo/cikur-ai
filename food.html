@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cikur Go Food - Sinkronisasi Resto & Chat</title>
+    <title>Cikur Go Food - Alamat Presisi & Sinkronisasi Lengkap</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -66,6 +66,14 @@
         }
         .input-field:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(255,71,87,0.1); }
 
+        .address-row { display: flex; gap: 6px; align-items: center; }
+        .gps-btn {
+            background: var(--primary-gradient); color: #fff; border: none; padding: 12px 14px;
+            border-radius: var(--radius-sm); font-size: 11px; font-weight: 700; cursor: pointer;
+            white-space: nowrap; display: flex; align-items: center; gap: 4px; transition: var(--transition);
+        }
+        .gps-btn:active { transform: scale(0.95); }
+
         .address-wrapper { position: relative; width: 100%; }
         #addressSuggestionsList {
             position: absolute; top: 100%; left: 0; right: 0; background: #fff;
@@ -102,7 +110,7 @@
         .counter-btn { width: 28px; height: 28px; border-radius: 8px; border: none; background: #fff; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .counter-btn.plus { background: var(--primary-gradient); color: #fff; }
 
-        /* MODAL / TAMPILAN PEMBAYARAN & CHECKOUT DETAIL */
+        /* MODAL PEMBAYARAN */
         #paymentModal {
             position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
             z-index: 1000; display: none; align-items: flex-end; justify-content: center;
@@ -139,25 +147,35 @@
     <div class="content-body">
         <div class="assistant-banner">
             <h3>CIKUR GO ASSISTANT</h3>
-            <p>Pencarian alamat otomatis, catatan interaktif, serta ringkasan tampilan pembayaran & rincian pesanan lengkap.</p>
+            <p>Pencarian alamat otomatis, deteksi GPS presisi, dan rincian lengkap untuk driver.</p>
         </div>
 
+        <!-- KOTAK TUJUAN PENGIRIMAN YANG DISEMPURNAKAN -->
         <div class="destination-box">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 10px; font-weight: 800; color: var(--text-muted);">TUJUAN PENGIRIMAN</span>
+                <span style="font-size: 10px; font-weight: 800; color: var(--text-muted);">TUJUAN PENGIRIMAN & GPS</span>
                 <span id="lockBadge" style="font-size: 9px; font-weight: 700; padding: 3px 8px; background: #fee2e2; color: var(--primary); border-radius: 12px;">Wajib Diisi</span>
             </div>
             
-            <div class="address-wrapper">
-                <input type="text" id="globalCustomerAddress" class="input-field" placeholder="Ketik nama jalan, tempat, atau daerah..." autocomplete="off">
-                <div id="addressSuggestionsList"></div>
+            <div class="address-row">
+                <div class="address-wrapper">
+                    <input type="text" id="globalCustomerAddress" class="input-field" placeholder="Ketik nama jalan / daerah..." autocomplete="off">
+                    <div id="addressSuggestionsList"></div>
+                </div>
+                <button type="button" class="gps-btn" onclick="detectUserLocation()" title="Gunakan Lokasi GPS Saat Ini">
+                    📍 GPS
+                </button>
             </div>
 
-            <input type="text" id="customerNoteAddress" class="input-field" placeholder="Patokan / No. Rumah / Catatan untuk Driver">
+            <!-- Detail spesifik untuk driver masuk pemukiman/gang -->
+            <div style="display: flex; gap: 6px;">
+                <input type="text" id="customerHouseNo" class="input-field" placeholder="No. Rumah / Blok / Lantai">
+                <input type="text" id="customerNoteAddress" class="input-field" placeholder="Patokan (Cth: Pagar hitam)">
+            </div>
 
-            <div style="display: flex; align-items: center; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
                 <input type="checkbox" id="checkSimpanAlamat" onclick="handleAddressCheckbox(this)" style="width: 14px; height: 14px; accent-color: var(--primary);">
-                <label for="checkSimpanAlamat" style="font-size: 11px; font-weight: 700; color: var(--text-muted); cursor: pointer;">Kunci Alamat Tujuan Ini</label>
+                <label for="checkSimpanAlamat" style="font-size: 11px; font-weight: 700; color: var(--text-muted); cursor: pointer;">Kunci Alamat & Catatan Tujuan Ini</label>
             </div>
         </div>
 
@@ -192,7 +210,7 @@
     </div>
 </div>
 
-<!-- MODAL TAMPILAN PEMBAYARAN & RINGKASAN PESANAN -->
+<!-- MODAL PEMBAYARAN -->
 <div id="paymentModal">
     <div class="modal-content">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -201,15 +219,13 @@
         </div>
 
         <div style="background: var(--background); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 14px;">
-            <div style="font-size: 10px; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">ALAMAT & CATATAN TUJUAN</div>
+            <div style="font-size: 10px; font-weight: 800; color: var(--text-muted); margin-bottom: 4px;">ALAMAT LENGKAP & PATOKAN</div>
             <div id="summaryAddressText" style="font-size: 12px; font-weight: 700; color: var(--text-main); line-height: 1.4;">-</div>
         </div>
 
         <div style="background: var(--background); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 14px;">
             <div style="font-size: 10px; font-weight: 800; color: var(--text-muted); margin-bottom: 6px;">RINCIAN MENU DIPESAN</div>
-            <div id="summaryItemsList" style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600;">
-                <!-- Diisi via Javascript -->
-            </div>
+            <div id="summaryItemsList" style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600;"></div>
         </div>
 
         <div style="background: var(--background); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 14px;">
@@ -245,6 +261,7 @@ let cartQuantities = {};
 let databaseResto = [];
 let currentModeSelected = 'instant';
 let searchTimeout = null;
+let customerCoords = { lat: null, lon: null };
 
 function loadRestoData() {
     let multiRestos = JSON.parse(localStorage.getItem('cikur_all_restaurants')) || [];
@@ -273,7 +290,7 @@ function renderRestoList(restos) {
     container.innerHTML = "";
     
     if(!restos || restos.length === 0) {
-        container.innerHTML = `<div style="text-align:center; padding: 20px; color: var(--text-muted); font-size: 12px;">Belum ada mitra resto yang terdaftar dari resto.html.</div>`;
+        container.innerHTML = `<div style="text-align:center; padding: 20px; color: var(--text-muted); font-size: 12px;">Belum ada mitra resto yang terdaftar.</div>`;
         return;
     }
 
@@ -289,7 +306,7 @@ function renderRestoList(restos) {
         let itemsList = resto.items || resto.menus || [];
         
         if(itemsList.length === 0) {
-            menusHTML = `<div style="padding: 8px 0; font-size: 11px; color: var(--text-muted); text-align: center;">Belum ada menu yang diinput oleh resto ini.</div>`;
+            menusHTML = `<div style="padding: 8px 0; font-size: 11px; color: var(--text-muted); text-align: center;">Belum ada menu.</div>`;
         } else {
             itemsList.forEach(item => {
                 let itemId = item.id || item.nama || Math.random();
@@ -369,14 +386,54 @@ function switchMode(mode) {
 
 function handleAddressCheckbox(cb) {
     let input = document.getElementById("globalCustomerAddress");
+    let houseInput = document.getElementById("customerHouseNo");
     let noteInput = document.getElementById("customerNoteAddress");
     let badge = document.getElementById("lockBadge");
     if(!input.value.trim()) { alert("Silakan masukkan atau pilih alamat tujuan dahulu!"); cb.checked = false; return; }
     input.disabled = cb.checked;
+    houseInput.disabled = cb.checked;
     noteInput.disabled = cb.checked;
     badge.innerText = cb.checked ? "Terkunci ✓" : "Wajib Diisi";
     badge.style.background = cb.checked ? "#dcfce7" : "#fee2e2";
     badge.style.color = cb.checked ? "#10b981" : "#ff4757";
+}
+
+// FUNGSI DETEKSI GPS PRIBADI
+function detectUserLocation() {
+    if (!navigator.geolocation) {
+        alert("Perangkat Anda tidak mendukung fitur Geolocation GPS.");
+        return;
+    }
+    let addressInput = document.getElementById("globalCustomerAddress");
+    addressInput.value = "Mengambil titik koordinat GPS...";
+    
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            customerCoords.lat = position.coords.latitude;
+            customerCoords.lon = position.coords.longitude;
+            
+            // Reverse geocoding via Nominatim untuk ubah koordinat jadi teks jalan
+            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${customerCoords.lat}&lon=${customerCoords.lon}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.display_name) {
+                        addressInput.value = data.display_name;
+                    } else {
+                        addressInput.value = `Lokasi GPS (${customerCoords.lat.toFixed(5)}, ${customerCoords.lon.toFixed(5)})`;
+                    }
+                    alert("Titik lokasi GPS berhasil dikunci secara presisi!");
+                })
+                .catch(() => {
+                    addressInput.value = `Koordinat: ${customerCoords.lat.toFixed(5)}, ${customerCoords.lon.toFixed(5)}`;
+                    alert("Koordinat GPS berhasil didapatkan!");
+                });
+        },
+        () => {
+            alert("Gagal mendeteksi lokasi. Pastikan izin GPS perangkat aktif.");
+            addressInput.value = "";
+        },
+        { enableHighAccuracy: true }
+    );
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -396,7 +453,7 @@ document.addEventListener("DOMContentLoaded", () => {
         searchTimeout = setTimeout(() => {
             let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=id&limit=8`;
             
-            list.innerHTML = `<div style="padding: 12px; font-size: 11px; color: var(--text-muted); text-align: center;">Mencari lokasi dan daerah sekitar...</div>`;
+            list.innerHTML = `<div style="padding: 12px; font-size: 11px; color: var(--text-muted); text-align: center;">Mencari lokasi...</div>`;
             list.style.display = 'block';
 
             fetch(url)
@@ -404,7 +461,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 .then(data => {
                     if(data && data.length > 0) {
                         list.innerHTML = data.map(item => `
-                            <div class="suggestion-item" onclick="selectAutoAddress('${item.display_name.replace(/'/g, "")}')">
+                            <div class="suggestion-item" onclick="selectAutoAddress('${item.display_name.replace(/'/g, "")}', ${item.lat}, ${item.lon})">
                                 <div>
                                     <div style="font-weight: 700; color: var(--text-main); line-height: 1.3;">${item.display_name}</div>
                                 </div>
@@ -430,18 +487,25 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 
-function selectAutoAddress(displayName) {
+function selectAutoAddress(displayName, lat, lon) {
     document.getElementById("globalCustomerAddress").value = displayName;
+    customerCoords.lat = lat;
+    customerCoords.lon = lon;
     document.getElementById("addressSuggestionsList").style.display = 'none';
 }
 
 function openPaymentSummary() {
     let addressBase = document.getElementById("globalCustomerAddress").value.trim();
+    let houseNo = document.getElementById("customerHouseNo").value.trim();
     let addressNote = document.getElementById("customerNoteAddress").value.trim();
     
     if(!addressBase) { alert("Tentukan alamat tujuan pengiriman terlebih dahulu!"); return; }
 
-    let finalAddress = addressBase + (addressNote ? ` (Patokan / Catatan: ${addressNote})` : '');
+    let detailsPart = [];
+    if(houseNo) detailsPart.push(`No. ${houseNo}`);
+    if(addressNote) detailsPart.push(`Patokan: ${addressNote}`);
+    
+    let finalAddress = addressBase + (detailsPart.length > 0 ? ` (${detailsPart.join(', ')})` : '');
     document.getElementById("summaryAddressText").innerText = finalAddress;
 
     let subtotal = 0, summaryHTML = "";
@@ -479,11 +543,17 @@ function closePaymentModal() {
     document.getElementById("paymentModal").style.display = "none";
 }
 
-// EKSEKUSI PEMBAYARAN DAN SINKRONISASI KE RESTO.HTML
+// EKSEKUSI PEMBAYARAN & KIRIM KE RESTO & DRIVER DENGAN KOORDINAT GPS
 function finalizeAndExecuteOrder() {
     let addressBase = document.getElementById("globalCustomerAddress").value.trim();
+    let houseNo = document.getElementById("customerHouseNo").value.trim();
     let addressNote = document.getElementById("customerNoteAddress").value.trim();
-    let finalAddress = addressBase + (addressNote ? ` (Patokan / Catatan: ${addressNote})` : '');
+    
+    let detailsPart = [];
+    if(houseNo) detailsPart.push(`No. ${houseNo}`);
+    if(addressNote) detailsPart.push(`Patokan: ${addressNote}`);
+    let finalAddress = addressBase + (detailsPart.length > 0 ? ` (${detailsPart.join(', ')})` : '');
+    
     let paymentMethod = document.getElementById("paymentMethodSelect").value;
 
     let subtotal = 0, summaryList = [], structuredItems = [], targetRestoName = 'Test ON';
@@ -507,7 +577,6 @@ function finalizeAndExecuteOrder() {
     let grandTotal = subtotal + 10000;
     let generatedTrxId = 'TRX-' + Math.floor(100000 + Math.random() * 900000);
     
-    // Objek Data Pesanan yang disamakan format kuncinya dengan resto.html
     let orderData = {
         id: 'ORD_' + Date.now(),
         kode: generatedTrxId,
@@ -524,11 +593,11 @@ function finalizeAndExecuteOrder() {
         } : null,
         restoName: targetRestoName,
         customerAddress: finalAddress,
-        chatHistory: [], // Mendukung sinkronisasi chat aktif di resto.html
+        coordinates: customerCoords, // Menyertakan koordinat lat & lon GPS untuk driver.html
+        chatHistory: [],
         waktu: new Date().toLocaleDateString('id-ID') + ' ' + new Date().toLocaleTimeString('id-ID')
     };
 
-    // Sinkronisasi ke berbagai penyimpanan lokal yang dibaca oleh sistem dan resto.html
     let restoOrders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || [];
     let incomingOrders = JSON.parse(localStorage.getItem('cikur_incoming_orders')) || [];
     let driverOrders = JSON.parse(localStorage.getItem('cikur_driver_orders')) || [];
@@ -547,7 +616,7 @@ function finalizeAndExecuteOrder() {
     localStorage.setItem('cikur_orders', JSON.stringify(allOrders));
     localStorage.setItem('cikur_2in1_orders', JSON.stringify(twoInOneOrders));
 
-    alert("Pesanan Berhasil! Data pesanan & chat kini disinkronkan ke halaman Resto.html.");
+    alert("Pesanan Berhasil! Alamat presisi & koordinat GPS diteruskan ke Resto & Driver.");
     window.location.href = "cikurgo2in1.html";
 }
 
