@@ -106,6 +106,10 @@
 }
     
     </style>
+    
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 </head>
 <body>
 
@@ -162,10 +166,16 @@
         <span id="lockStatusBadge" style="font-size: 9px; font-weight: 700; padding: 3px 8px; background: #ffedd5; color: #c2410c; border-radius: 6px;">Wajib Diisi</span>
     </div>
 
-    <!-- Kolom 1: Alamat Utama / GPS -->
-    <div style="position: relative; margin-bottom: 8px;">
-        <div style="display: flex; gap: 8px; align-items: center;">
-            <input type="text" id="globalCustomerAddress" class="address-textarea" placeholder="Ketik nama jalan / gunakan GPS..." style="margin-bottom: 0; flex: 1; height: 38px;" oninput="searchAddressAutocomplete(this.value)" />
+  
+<!-- Kolom 1: Alamat Utama / GPS -->
+<div style="position: relative; margin-bottom: 8px;">
+    <div style="display: flex; gap: 8px; align-items: center;">
+        <input type="text" id="globalCustomerAddress" class="address-textarea" placeholder="Ketik atau pilih lokasi...">
+    </div>
+    <div style="margin-top: 4px; text-align: right;">
+        <button type="button" onclick="openInteractiveMap()" style="background: #ea580c; color: #fff; border: none; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer;">🗺️ Pilih dari Peta</button>
+    </div>
+</div>
             
             <!-- Kotak Ceklis Simpan & Otomatis ke Pesanan -->
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0;">
@@ -177,7 +187,21 @@
         <!-- Wadah Dropdown Suggestions -->
         <div id="addressSuggestionsList"></div>
     </div>
-
+    
+<!-- Modal Peta Interaktif -->
+<div id="mapModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center;">
+    <div style="background:#fff; width:90%; max-width:400px; height:80%; border-radius:16px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 10px 25px rgba(0,0,0,0.2);">
+        <div style="padding: 14px; background:#ea580c; color:#fff; display:flex; justify-content:space-between; align-items:center; font-weight:bold;">
+            <span>Pilih Titik Lokasi Anda</span>
+            <button onclick="closeInteractiveMap()" style="background:none; border:none; color:#fff; font-size:18px; cursor:pointer;">✕</button>
+        </div>
+        <div id="leafletMapContainer" style="flex:1; width:100%;"></div>
+        <div style="padding: 14px; background:#fff; text-align:center;">
+            <button type="button" onclick="confirmMapLocation()" style="background:#16a34a; color:#fff; border:none; width:100%; padding:12px; border-radius:10px; font-weight:bold; font-size:14px; cursor:pointer;">Konfirmasi Lokasi Ini ✅</button>
+        </div>
+    </div>
+</div>
+    
     <!-- Kolom 2: Patokan / Detail Lokasi -->
     <div>
         <input type="text" id="customerPatokan" class="address-textarea" placeholder="Patokan detail (Contoh: Pagar hitam, dekat warung Bu Ani)..." style="margin-bottom: 0; height: 36px;" />
@@ -808,7 +832,88 @@ function searchAddressAutocomplete(keyword) {
             .catch(err => console.log("Gagal memuat data lokasi:", err));
     }, 300);
 }
-        
+
+let mapInstance = null;
+let markerInstance = null;
+let selectedMapLat = null;
+let selectedMapLon = null;
+let selectedMapAddress = "";
+
+// Fungsi Membuka Peta
+function openInteractiveMap() {
+    let modal = document.getElementById("mapModal");
+    if (!modal) return;
+    modal.style.display = "flex";
+
+    // Ambil koordinat terakhir atau default ke Jakarta/Tangerang jika belum ada
+    let addrInput = document.getElementById("globalCustomerAddress");
+    let defaultLat = addrInput && addrInput.dataset.lat ? parseFloat(addrInput.dataset.lat) : -6.225;
+    let defaultLon = addrInput && addrInput.dataset.lon ? parseFloat(addrInput.dataset.lon) : 106.650;
+
+    // Inisialisasi peta Leaflet jika belum ada
+    setTimeout(() => {
+        if (!mapInstance) {
+            mapInstance = L.map('leafletMapContainer').setView([defaultLat, defaultLon], 16);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap'
+            }).addTo(mapInstance);
+
+            // Event saat peta digeser
+            mapInstance.on('move', function() {
+                let center = mapInstance.getCenter();
+                selectedMapLat = center.lat;
+                selectedMapLon = center.lng;
+            });
+
+            mapInstance.on('moveend', function() {
+                let center = mapInstance.getCenter();
+                fetchReverseGeocode(center.lat, center.lng);
+            });
+        } else {
+            mapInstance.setView([defaultLat, defaultLon], 16);
+        }
+        mapInstance.invalidateSize();
+        fetchReverseGeocode(defaultLat, defaultLon);
+    }, 200);
+}
+
+// Fungsi Menutup Peta
+function closeInteractiveMap() {
+    let modal = document.getElementById("mapModal");
+    if (modal) modal.style.display = "none";
+}
+
+// Fungsi Mencari Nama Alamat Berdasarkan Titik Geser Peta (Reverse Geocoding)
+function fetchReverseGeocode(lat, lon) {
+    selectedMapLat = lat;
+    selectedMapLon = lon;
+    let url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;
+    
+    fetch(url)
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.display_name) {
+                selectedMapAddress = data.display_name;
+            } else {
+                selectedMapAddress = `Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)}`;
+            }
+        })
+        .catch(() => {
+            selectedMapAddress = `Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)}`;
+        });
+}
+
+// Konfirmasi Pilihan Lokasi Peta
+function confirmMapLocation() {
+    let addrInput = document.getElementById("globalCustomerAddress");
+    if (addrInput && selectedMapAddress) {
+        addrInput.value = selectedMapAddress;
+        addrInput.dataset.lat = selectedMapLat;
+        addrInput.dataset.lon = selectedMapLon;
+    }
+    closeInteractiveMap();
+}     
 // Menutup dropdown jika klik di luar area
 document.addEventListener("click", function(e) {
     let listContainer = document.getElementById("addressSuggestionsList");
