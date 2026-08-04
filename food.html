@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cikur Go Food - Alamat Presisi & Sinkronisasi Lengkap</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS untuk Peta Interaktif -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
             --primary: #ff4757;
@@ -66,14 +68,6 @@
         }
         .input-field:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(255,71,87,0.1); }
 
-        .address-row { display: flex; gap: 6px; align-items: center; }
-        .gps-btn {
-            background: var(--primary-gradient); color: #fff; border: none; padding: 12px 14px;
-            border-radius: var(--radius-sm); font-size: 11px; font-weight: 700; cursor: pointer;
-            white-space: nowrap; display: flex; align-items: center; gap: 4px; transition: var(--transition);
-        }
-        .gps-btn:active { transform: scale(0.95); }
-
         .address-wrapper { position: relative; width: 100%; }
         #addressSuggestionsList {
             position: absolute; top: 100%; left: 0; right: 0; background: #fff;
@@ -110,11 +104,13 @@
         .counter-btn { width: 28px; height: 28px; border-radius: 8px; border: none; background: #fff; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .counter-btn.plus { background: var(--primary-gradient); color: #fff; }
 
-        /* MODAL PEMBAYARAN */
-        #paymentModal {
+        /* MODAL PEMBAYARAN & MODAL PETA */
+        #paymentModal, #mapModal {
             position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
-            z-index: 1000; display: none; align-items: flex-end; justify-content: center;
+            z-index: 2000; display: none; align-items: flex-end; justify-content: center;
         }
+        #mapModal { align-items: center; padding: 16px; }
+        
         .modal-content {
             width: 100%; max-width: 480px; background: #fff; border-top-left-radius: var(--radius-lg);
             border-top-right-radius: var(--radius-lg); padding: 24px; max-height: 85vh; overflow-y: auto;
@@ -151,39 +147,39 @@
         </div>
 
         <!-- TUJUAN PENGIRIMAN & GPS (Tampilan Rapi & Menarik) -->
-<div class="destination-box" style="background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-md); padding: 16px; box-shadow: var(--shadow-soft); display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-size: 10px; font-weight: 800; color: var(--text-muted); letter-spacing: 0.5px;">TUJUAN PENGIRIMAN & GPS</span>
-        <span id="lockBadge" style="font-size: 9px; font-weight: 700; padding: 3px 8px; background: #fee2e2; color: var(--primary); border-radius: 12px;">Wajib Diisi</span>
-    </div>
-    
-    <!-- Baris Input Teks & Tombol Peta Berikon Menarik -->
-    <div style="display: flex; gap: 8px; align-items: center; position: relative;">
-        <div style="position: relative; flex: 1; min-width: 0;">
-            <input type="text" id="globalCustomerAddress" class="input-field" placeholder="Ketik nama jalan / daerah..." autocomplete="off" style="width: 100%; padding: 12px 14px; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; color: var(--text-main); outline: none;">
-            <!-- Kotak Saran Pencarian Teks (Aman & Tidak Rusak) -->
-            <div id="addressSuggestionsList" style="position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-sm); margin-top: 4px; box-shadow: var(--shadow-hover); max-height: 200px; overflow-y: auto; z-index: 3000; display: none;"></div>
+        <div class="destination-box" style="background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-md); padding: 16px; box-shadow: var(--shadow-soft); display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 10px; font-weight: 800; color: var(--text-muted); letter-spacing: 0.5px;">TUJUAN PENGIRIMAN & GPS</span>
+                <span id="lockBadge" style="font-size: 9px; font-weight: 700; padding: 3px 8px; background: #fee2e2; color: var(--primary); border-radius: 12px;">Wajib Diisi</span>
+            </div>
+            
+            <!-- Baris Input Teks & Tombol Peta Berikon Menarik -->
+            <div style="display: flex; gap: 8px; align-items: center; position: relative;">
+                <div style="position: relative; flex: 1; min-width: 0;">
+                    <input type="text" id="globalCustomerAddress" class="input-field" placeholder="Ketik nama jalan / daerah..." autocomplete="off" style="width: 100%; padding: 12px 14px; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; color: var(--text-main); outline: none;">
+                    <!-- Kotak Saran Pencarian Teks (Aman & Tidak Rusak) -->
+                    <div id="addressSuggestionsList" style="position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-sm); margin-top: 4px; box-shadow: var(--shadow-hover); max-height: 200px; overflow-y: auto; z-index: 3000; display: none;"></div>
+                </div>
+                
+                <!-- Tombol Pilih Peta dengan Ikon Menarik -->
+                <button type="button" onclick="openMapModal()" style="background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%); color: #fff; border: none; padding: 12px 14px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 800; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(255,71,87,0.25); flex-shrink: 0; transition: var(--transition);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                    Pilih Peta
+                </button>
+            </div>
+
+            <!-- Baris Detail Rumah & Patokan -->
+            <div style="display: flex; gap: 8px;">
+                <input type="text" id="customerHouseNo" class="input-field" placeholder="No. Rumah / Blok / Lantai" style="width: 100%; padding: 12px 14px; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; color: var(--text-main); outline: none;">
+                <input type="text" id="customerNoteAddress" class="input-field" placeholder="Patokan (Cth: Pagar hitam)" style="width: 100%; padding: 12px 14px; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; color: var(--text-main); outline: none;">
+            </div>
+
+            <!-- Opsi Kunci Alamat -->
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; color: var(--text-muted); cursor: pointer; margin-top: 2px;">
+                <input type="checkbox" id="lockAddressCheck" onchange="handleAddressCheckbox(this)" style="width: 14px; height: 14px; accent-color: var(--primary);">
+                Kunci Alamat & Catatan Tujuan Ini
+            </label>
         </div>
-        
-        <!-- Tombol Pilih Peta dengan Ikon Menarik (Fungsi GPS/Peta Asli) -->
-        <button type="button" onclick="openCleanMapModal()" style="background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%); color: #fff; border: none; padding: 12px 14px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 800; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(255,71,87,0.25); flex-shrink: 0; transition: var(--transition);">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-            Pilih Peta
-        </button>
-    </div>
-
-    <!-- Baris Detail Rumah & Patokan -->
-    <div style="display: flex; gap: 8px;">
-        <input type="text" id="customerHouseNo" class="input-field" placeholder="No. Rumah / Blok / Lantai" style="width: 100%; padding: 12px 14px; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; color: var(--text-main); outline: none;">
-        <input type="text" id="customerNoteAddress" class="input-field" placeholder="Patokan (Cth: Pagar hitam)" style="width: 100%; padding: 12px 14px; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; color: var(--text-main); outline: none;">
-    </div>
-
-    <!-- Opsi Kunci Alamat -->
-    <label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; color: var(--text-muted); cursor: pointer; margin-top: 2px;">
-        <input type="checkbox" id="lockAddressCheck" style="width: 14px; height: 14px; accent-color: var(--primary);">
-        Kunci Alamat & Catatan Tujuan Ini
-    </label>
-</div>
 
         <div class="search-container">
             <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -213,6 +209,27 @@
     <div class="footer-action">
         <button class="btn-main btn-checkout" onclick="openPaymentSummary()">Lanjut Pembayaran</button>
         <button class="btn-main btn-secondary" onclick="lanjutKe2In1()">Cikur 2-in-1</button>
+    </div>
+</div>
+
+<!-- MODAL PETA INTERAKTIF & GPS -->
+<div id="mapModal">
+    <div style="width: 100%; max-width: 440px; background: #fff; border-radius: 24px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
+        <div style="padding: 16px; background: #fff; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="font-size: 13px; font-weight: 800; color: var(--text-main);">Pilih Titik Lokasi via Peta</h3>
+            <button onclick="closeMapModal()" style="background: none; border: none; font-size: 16px; font-weight: 800; cursor: pointer; color: var(--text-muted);">✕</button>
+        </div>
+        <div style="position: relative; width: 100%; height: 340px;">
+            <div id="leafletMapContainer" style="width: 100%; height: 100%;"></div>
+            <!-- Tombol GPS Langsung di dalam Peta -->
+            <button type="button" onclick="detectUserLocationViaMap()" style="position: absolute; bottom: 20px; right: 20px; z-index: 1000; background: #fff; border: 1.5px solid var(--border); border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); cursor: pointer;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+        </div>
+        <div style="padding: 16px; background: #fff; border-top: 1px solid var(--border); display: flex; gap: 10px;">
+            <button type="button" onclick="closeMapModal()" style="flex: 1; padding: 12px; background: #fff; color: var(--primary); border: 1.5px solid var(--primary); border-radius: var(--radius-sm); font-weight: 800; font-size: 12px; cursor: pointer;">Batal</button>
+            <button type="button" onclick="confirmMapLocation()" style="flex: 1; padding: 12px; background: var(--primary-gradient); color: #fff; border: none; border-radius: var(--radius-sm); font-weight: 800; font-size: 12px; cursor: pointer; box-shadow: 0 4px 12px rgba(255,71,87,0.3);">Gunakan Titik Ini ✓</button>
+        </div>
     </div>
 </div>
 
@@ -262,12 +279,16 @@
     </div>
 </div>
 
+<!-- Leaflet JS untuk Peta -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 let cartQuantities = {};
 let databaseResto = [];
 let currentModeSelected = 'instant';
 let searchTimeout = null;
-let customerCoords = { lat: null, lon: null };
+let customerCoords = { lat: -6.3245, lon: 106.1524 }; // Default Pandeglang/Banten
+let leafletMap = null;
+let mapMarker = null;
 
 function loadRestoData() {
     let multiRestos = JSON.parse(localStorage.getItem('cikur_all_restaurants')) || [];
@@ -330,9 +351,9 @@ function renderRestoList(restos) {
                             <span style="font-size: 12px; font-weight: 800; color: var(--primary);">Rp ${Number(price).toLocaleString('id-ID')}</span>
                         </div>
                         <div class="counter-control">
-                            <button class="counter-btn" onclick="updateQty('${resto.id || restoName}', '${itemId}', -1)">-</button>
+                            <button type="button" class="counter-btn" onclick="updateQty('${resto.id || restoName}', '${itemId}', -1)">-</button>
                             <span style="font-size: 11px; font-weight: 700; min-width: 18px; text-align: center;" id="q_${key}">${qty}</span>
-                            <button class="counter-btn plus" onclick="updateQty('${resto.id || restoName}', '${itemId}', 1)">+</button>
+                            <button type="button" class="counter-btn plus" onclick="updateQty('${resto.id || restoName}', '${itemId}', 1)">+</button>
                         </div>
                     </div>`;
             });
@@ -404,42 +425,81 @@ function handleAddressCheckbox(cb) {
     badge.style.color = cb.checked ? "#10b981" : "#ff4757";
 }
 
-// FUNGSI DETEKSI GPS PRIBADI
-function detectUserLocation() {
+// FUNGSI PETA & MODAL PETA
+function openMapModal() {
+    document.getElementById("mapModal").style.display = "flex";
+    setTimeout(() => {
+        if (!leafletMap) {
+            leafletMap = L.map('leafletMapContainer').setView([customerCoords.lat, customerCoords.lon], 15);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap'
+            }).addTo(leafletMap);
+
+            mapMarker = L.marker([customerCoords.lat, customerCoords.lon], { draggable: true }).addTo(leafletMap);
+
+            mapMarker.on('dragend', function(e) {
+                let pos = mapMarker.getLatLng();
+                customerCoords.lat = pos.lat;
+                customerCoords.lon = pos.lng;
+            });
+
+            leafletMap.on('click', function(e) {
+                mapMarker.setLatLng(e.latlng);
+                customerCoords.lat = e.latlng.lat;
+                customerCoords.lon = e.latlng.lng;
+            });
+        } else {
+            leafletMap.invalidateSize();
+            leafletMap.setView([customerCoords.lat, customerCoords.lon], 15);
+            mapMarker.setLatLng([customerCoords.lat, customerCoords.lon]);
+        }
+    }, 250);
+}
+
+function closeMapModal() {
+    document.getElementById("mapModal").style.display = "none";
+}
+
+function detectUserLocationViaMap() {
     if (!navigator.geolocation) {
-        alert("Perangkat Anda tidak mendukung fitur Geolocation GPS.");
+        alert("Perangkat Anda tidak mendukung GPS.");
         return;
     }
-    let addressInput = document.getElementById("globalCustomerAddress");
-    addressInput.value = "Mengambil titik koordinat GPS...";
-    
     navigator.geolocation.getCurrentPosition(
         (position) => {
             customerCoords.lat = position.coords.latitude;
             customerCoords.lon = position.coords.longitude;
-            
-            // Reverse geocoding via Nominatim untuk ubah koordinat jadi teks jalan
-            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${customerCoords.lat}&lon=${customerCoords.lon}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data && data.display_name) {
-                        addressInput.value = data.display_name;
-                    } else {
-                        addressInput.value = `Lokasi GPS (${customerCoords.lat.toFixed(5)}, ${customerCoords.lon.toFixed(5)})`;
-                    }
-                    alert("Titik lokasi GPS berhasil dikunci secara presisi!");
-                })
-                .catch(() => {
-                    addressInput.value = `Koordinat: ${customerCoords.lat.toFixed(5)}, ${customerCoords.lon.toFixed(5)}`;
-                    alert("Koordinat GPS berhasil didapatkan!");
-                });
+            if (leafletMap && mapMarker) {
+                leafletMap.setView([customerCoords.lat, customerCoords.lon], 16);
+                mapMarker.setLatLng([customerCoords.lat, customerCoords.lon]);
+            }
+            alert("GPS berhasil mendeteksi posisi Anda!");
         },
         () => {
-            alert("Gagal mendeteksi lokasi. Pastikan izin GPS perangkat aktif.");
-            addressInput.value = "";
+            alert("Gagal mendeteksi lokasi GPS.");
         },
         { enableHighAccuracy: true }
     );
+}
+
+function confirmMapLocation() {
+    let addressInput = document.getElementById("globalCustomerAddress");
+    addressInput.value = "Mengambil nama lokasi...";
+    closeMapModal();
+
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${customerCoords.lat}&lon=${customerCoords.lon}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.display_name) {
+                addressInput.value = data.display_name;
+            } else {
+                addressInput.value = `Koordinat: ${customerCoords.lat.toFixed(5)}, ${customerCoords.lon.toFixed(5)}`;
+            }
+        })
+        .catch(() => {
+            addressInput.value = `Koordinat: ${customerCoords.lat.toFixed(5)}, ${customerCoords.lon.toFixed(5)}`;
+        });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -495,8 +555,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function selectAutoAddress(displayName, lat, lon) {
     document.getElementById("globalCustomerAddress").value = displayName;
-    customerCoords.lat = lat;
-    customerCoords.lon = lon;
+    customerCoords.lat = parseFloat(lat);
+    customerCoords.lon = parseFloat(lon);
     document.getElementById("addressSuggestionsList").style.display = 'none';
 }
 
