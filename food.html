@@ -726,7 +726,26 @@ function getLiveLocation() {
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
 }
-// Fungsi Pencarian Alamat Otomatis (Autocomplete)
+
+// Otomatis jalankan GPS di background saat halaman dimuat agar user tidak perlu klik manual
+window.addEventListener('load', function() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                let lat = position.coords.latitude;
+                let lon = position.coords.longitude;
+                let addrInput = document.getElementById("globalCustomerAddress");
+                if(addrInput) {
+                    addrInput.dataset.lat = lat;
+                    addrInput.dataset.lon = lon;
+                }
+            },
+            (error) => { console.log("GPS auto-detect skipped:", error); },
+            { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
+        );
+    }
+});
+
 let searchTimeout;
 function searchAddressAutocomplete(keyword) {
     let listContainer = document.getElementById("addressSuggestionsList");
@@ -738,9 +757,20 @@ function searchAddressAutocomplete(keyword) {
         return;
     }
 
-    // Debounce agar tidak terlalu sering melakukan fetch saat diketik cepat
+    let lat = document.getElementById("globalCustomerAddress").dataset.lat;
+    let lon = document.getElementById("globalCustomerAddress").dataset.lon;
+
+    let viewboxParam = "";
+    if (lat && lon) {
+        let n = parseFloat(lat) + 0.15;
+        let s = parseFloat(lat) - 0.15;
+        let e = parseFloat(lon) + 0.15;
+        let w = parseFloat(lon) - 0.15;
+        viewboxParam = `&viewbox=${w},${n},${e},${s}&bounded=0`;
+    }
+
     searchTimeout = setTimeout(() => {
-        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keyword + ", Banten")}&countrycodes=id&limit=5`;
+        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keyword)}&countrycodes=id${viewboxParam}&limit=6`;
         
         fetch(url)
             .then(response => response.json())
@@ -753,19 +783,20 @@ function searchAddressAutocomplete(keyword) {
                         div.innerText = place.display_name;
                         div.onclick = function() {
                             document.getElementById("globalCustomerAddress").value = place.display_name;
-                            // Simpan koordinat lat/lon jika dibutuhkan driver nanti
                             document.getElementById("globalCustomerAddress").dataset.lat = place.lat;
                             document.getElementById("globalCustomerAddress").dataset.lon = place.lon;
                             listContainer.innerHTML = "";
                         };
                         listContainer.appendChild(div);
                     });
+                } else {
+                    listContainer.innerHTML = `<div class="suggestion-item" style="color:var(--text-muted);">Lokasi tidak ditemukan</div>`;
                 }
             })
             .catch(err => console.log("Gagal memuat data lokasi:", err));
-    }, 400);
+    }, 300);
 }
-
+    
 // Menutup dropdown jika klik di luar area
 document.addEventListener("click", function(e) {
     let listContainer = document.getElementById("addressSuggestionsList");
