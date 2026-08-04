@@ -766,10 +766,9 @@ function searchAddressAutocomplete(keyword) {
     let lat = addrInput ? addrInput.dataset.lat : null;
     let lon = addrInput ? addrInput.dataset.lon : null;
 
-    // Jika kotak diketik kurang dari 2 huruf, kita tampilkan rekomendasi tempat/ruko terdekat di sekitar GPS secara otomatis!
+    // Jika kotak diketik kurang dari 2 huruf, tampilkan rekomendasi tempat/ruko terdekat di sekitar GPS
     if (!keyword || keyword.trim().length < 2) {
         if (lat && lon) {
-            // Menggunakan Overpass API / Nominatim untuk menarik fasilitas/tempat sekitar secara otomatis
             let nearbyUrl = `https://nominatim.openstreetmap.org/search?format=json&q=restaurant OR shop OR ruko OR convenience OR cafe&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1&limit=6`;
             
             fetch(nearbyUrl)
@@ -797,6 +796,7 @@ function searchAddressAutocomplete(keyword) {
                             listContainer.appendChild(div);
                         });
                     }
+                })
                 .catch(err => console.log("Gagal memuat tempat sekitar:", err));
         } else {
             listContainer.innerHTML = "";
@@ -804,10 +804,10 @@ function searchAddressAutocomplete(keyword) {
         return;
     }
 
-    // Jika user mengetik sesuatu (misal "Alfa" atau nama jalan), cari berdasarkan teks dengan batasan radius ketat
+    // Jika user mengetik sesuatu (misal nama jalan atau tempat), cari dengan batasan radius ketat
     let viewboxParam = "";
     if (lat && lon) {
-        let offset = 0.02; // Radius lokal
+        let offset = 0.02;
         let n = parseFloat(lat) + offset;
         let s = parseFloat(lat) - offset;
         let e = parseFloat(lon) + offset;
