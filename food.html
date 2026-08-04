@@ -741,9 +741,19 @@ function triggerLiveLocationSync() {
     }
 }
 
-// Otomatis sinkronisasi GPS begitu halaman dibuka
+// Fungsi untuk mengambil GPS secara otomatis saat halaman dimuat
 window.addEventListener('load', function() {
-    triggerLiveLocationSync();
+    let addrInput = document.getElementById("globalCustomerAddress");
+    if (navigator.geolocation && addrInput) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                addrInput.dataset.lat = position.coords.latitude;
+                addrInput.dataset.lon = position.coords.longitude;
+            },
+            (error) => { console.log("GPS Error:", error); },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    }
 });
 
 let searchTimeout;
@@ -752,29 +762,57 @@ function searchAddressAutocomplete(keyword) {
     if (!listContainer) return;
 
     clearTimeout(searchTimeout);
-    if (!keyword || keyword.trim().length < 3) {
-        listContainer.innerHTML = "";
-        return;
-    }
-
     let addrInput = document.getElementById("globalCustomerAddress");
     let lat = addrInput ? addrInput.dataset.lat : null;
     let lon = addrInput ? addrInput.dataset.lon : null;
 
-    // Jika GPS belum sempat sinkron saat mulai mengetik, panggil ulang secara kilat
-    if (!lat || !lon) {
-        triggerLiveLocationSync();
+    // Jika kotak diketik kurang dari 2 huruf, kita tampilkan rekomendasi tempat/ruko terdekat di sekitar GPS secara otomatis!
+    if (!keyword || keyword.trim().length < 2) {
+        if (lat && lon) {
+            // Menggunakan Overpass API / Nominatim untuk menarik fasilitas/tempat sekitar secara otomatis
+            let nearbyUrl = `https://nominatim.openstreetmap.org/search?format=json&q=restaurant OR shop OR ruko OR convenience OR cafe&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1&limit=6`;
+            
+            fetch(nearbyUrl)
+                .then(res => res.json())
+                .then(data => {
+                    listContainer.innerHTML = "";
+                    if (data && data.length > 0) {
+                        let headerDiv = document.createElement("div");
+                        headerDiv.className = "suggestion-item";
+                        headerDiv.style.fontWeight = "bold";
+                        headerDiv.style.color = "#ea580c";
+                        headerDiv.innerText = "📍 Tempat & Ruko Terdekat di Sekitar Anda:";
+                        listContainer.appendChild(headerDiv);
+
+                        data.forEach(place => {
+                            let div = document.createElement("div");
+                            div.className = "suggestion-item";
+                            div.innerText = place.display_name;
+                            div.onclick = function() {
+                                addrInput.value = place.display_name;
+                                addrInput.dataset.lat = place.lat;
+                                addrInput.dataset.lon = place.lon;
+                                listContainer.innerHTML = "";
+                            };
+                            listContainer.appendChild(div);
+                        });
+                    }
+                .catch(err => console.log("Gagal memuat tempat sekitar:", err));
+        } else {
+            listContainer.innerHTML = "";
+        }
+        return;
     }
 
+    // Jika user mengetik sesuatu (misal "Alfa" atau nama jalan), cari berdasarkan teks dengan batasan radius ketat
     let viewboxParam = "";
     if (lat && lon) {
-        // Offset 0.002 setara dengan radius sekitar 100-200 meter dari titik user
-        let offset = 0.002; 
+        let offset = 0.02; // Radius lokal
         let n = parseFloat(lat) + offset;
         let s = parseFloat(lat) - offset;
         let e = parseFloat(lon) + offset;
         let w = parseFloat(lon) - offset;
-        viewboxParam = `&viewbox=${w},${n},${e},${s}&bounded=1&addressdetails=1`;
+        viewboxParam = `&viewbox=${w},${n},${e},${s}&bounded=1`;
     }
 
     searchTimeout = setTimeout(() => {
@@ -798,7 +836,7 @@ function searchAddressAutocomplete(keyword) {
                         listContainer.appendChild(div);
                     });
                 } else {
-                    listContainer.innerHTML = `<div class="suggestion-item" style="color:var(--text-muted);">Tidak ada tempat dalam radius terdekat ditemukan</div>`;
+                    listContainer.innerHTML = `<div class="suggestion-item" style="color:var(--text-muted);">Tidak ada tempat ditemukan di sekitar sini</div>`;
                 }
             })
             .catch(err => console.log("Gagal memuat data lokasi:", err));
