@@ -762,16 +762,16 @@ function searchAddressAutocomplete(keyword) {
 
     let viewboxParam = "";
     if (lat && lon) {
-        let n = parseFloat(lat) + 0.15;
-        let s = parseFloat(lat) - 0.15;
-        let e = parseFloat(lon) + 0.15;
-        let w = parseFloat(lon) - 0.15;
-        viewboxParam = `&viewbox=${w},${n},${e},${s}&bounded=0`;
+        let offset = 0.05;
+        let n = parseFloat(lat) + offset;
+        let s = parseFloat(lat) - offset;
+        let e = parseFloat(lon) + offset;
+        let w = parseFloat(lon) - offset;
+        viewboxParam = `&viewbox=${w},${n},${e},${s}&bounded=1`;
     }
 
     searchTimeout = setTimeout(() => {
         let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keyword)}&countrycodes=id${viewboxParam}&limit=6`;
-        
         fetch(url)
             .then(response => response.json())
             .then(data => {
