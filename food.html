@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cikur Go Food - Google Maps Original Style</title>
+    <title>Cikur Go Food - Clean Maps Style</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- 1. Load Google Maps JavaScript API (Ganti YOUR_GOOGLE_MAPS_API_KEY dengan API Key Google Maps kamu jika punya, atau biarkan menggunakan default load) -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=API_KEY_ANDA_DI_SINI&libraries=places"></script>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
     <style>
         :root {
             --primary: #ff4757;
@@ -111,7 +112,7 @@
         .counter-btn { width: 28px; height: 28px; border-radius: 8px; border: none; background: #fff; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .counter-btn.plus { background: var(--primary-gradient); color: #fff; }
 
-        /* MODAL GOOGLE MAPS ASLI */
+        /* MODAL MAPS BERSIH */
         #mapModal {
             position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
             z-index: 2000; display: none; align-items: center; justify-content: center; padding: 12px;
@@ -122,9 +123,9 @@
         }
         
         .map-wrapper-relative { position: relative; width: 100%; height: 420px; }
-        #googleMapContainer { width: 100%; height: 100%; background: #e5e3df; }
+        #leafletMapContainer { width: 100%; height: 100%; background: #e5e3df; }
 
-        /* Pin Tengah Khas Google Maps */
+        /* Pin Tengah Khas Maps */
         .center-pin-container {
             position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -100%); z-index: 1000;
@@ -178,8 +179,8 @@
 
     <div class="content-body">
         <div class="assistant-banner">
-            <h3>GOOGLE MAPS OFFICIAL VIEW</h3>
-            <p>Tampilan peta menggunakan standard Google Maps asli yang bersih, rapi, dan familiar.</p>
+            <h3>CLEAN MAPS VIEW</h3>
+            <p>Tampilan peta bersih, cepat, responsif, dan bebas error tanpa memerlukan API Key.</p>
         </div>
 
         <div class="destination-box">
@@ -193,7 +194,7 @@
                     <input type="text" id="globalCustomerAddress" class="input-field" placeholder="Ketik nama jalan atau buka peta..." autocomplete="off">
                     <div id="addressSuggestionsList"></div>
                 </div>
-                <button type="button" class="map-btn" onclick="openGoogleMapModal()">
+                <button type="button" class="map-btn" onclick="openCleanMapModal()">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                     Buka Peta
                 </button>
@@ -224,7 +225,7 @@
     </div>
 </div>
 
-<!-- MODAL GOOGLE MAPS -->
+<!-- MODAL PETA BERSIH -->
 <div id="mapModal">
     <div class="map-modal-container">
         <div style="padding: 14px 16px; background: #fff; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
@@ -232,7 +233,7 @@
                 <h3 style="font-size: 13px; font-weight: 800; color: var(--text-main);">Geser Peta ke Titik Rumah</h3>
                 <p style="font-size: 10px; color: var(--text-muted);">Posisikan pin merah tepat di lokasi tujuan</p>
             </div>
-            <button onclick="closeGoogleMapModal()" style="background: none; border: none; font-size: 16px; font-weight: 800; cursor: pointer; color: var(--text-muted);">✕</button>
+            <button onclick="closeCleanMapModal()" style="background: none; border: none; font-size: 16px; font-weight: 800; cursor: pointer; color: var(--text-muted);">✕</button>
         </div>
         
         <div class="map-wrapper-relative">
@@ -247,12 +248,12 @@
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ea4335" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>
             </button>
 
-            <div id="googleMapContainer"></div>
+            <div id="leafletMapContainer"></div>
         </div>
 
         <div style="padding: 14px 16px; background: #fff; border-top: 1px solid var(--border); display: flex; gap: 10px;">
-            <button class="btn-main btn-secondary" onclick="closeGoogleMapModal()" style="padding: 10px;">Batal</button>
-            <button class="btn-main btn-checkout" onclick="confirmGoogleMapPin()" style="padding: 10px;">Gunakan Titik Ini ✓</button>
+            <button class="btn-main btn-secondary" onclick="closeCleanMapModal()" style="padding: 10px;">Batal</button>
+            <button class="btn-main btn-checkout" onclick="confirmCleanMapPin()" style="padding: 10px;">Gunakan Titik Ini ✓</button>
         </div>
     </div>
 </div>
@@ -303,14 +304,15 @@
     </div>
 </div>
 
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 let cartQuantities = {};
 let databaseResto = [];
 let currentModeSelected = 'instant';
 let searchTimeout = null;
 let customerCoords = { lat: -6.200000, lng: 106.816666 };
-let googleMapInstance = null;
-let geocoderService = null;
+let leafletMapInstance = null;
 let tempSelectedAddress = "";
 
 function loadRestoData() {
@@ -422,43 +424,52 @@ function switchMode(mode) {
     document.getElementById("btnRes").className = mode === 'reservasi' ? "mode-tab active" : "mode-tab";
 }
 
-/* INISIALISASI GOOGLE MAPS ASLI */
-function openGoogleMapModal() {
+/* INISIALISASI PETA BERSIH (LEAFLET + CARTO) */
+function openCleanMapModal() {
     document.getElementById("mapModal").style.display = "flex";
     
     setTimeout(() => {
-        if (!googleMapInstance) {
-            googleMapInstance = new google.maps.Map(document.getElementById("googleMapContainer"), {
-                center: customerCoords,
-                zoom: 17,
-                disableDefaultUI: true,
-                zoomControl: true
+        if (!leafletMapInstance) {
+            leafletMapInstance = L.map('leafletMapContainer', {
+                zoomControl: false
+            }).setView([customerCoords.lat, customerCoords.lng], 16);
+
+            // Menggunakan gaya peta CartoDB Positron (sangat bersih dan mirip Google Maps versi terang)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+            }).addTo(leafletMapInstance);
+
+            leafletMapInstance.on('move', () => {
+                let center = leafletMapInstance.getCenter();
+                customerCoords = { lat: center.lat, lng: center.lng };
             });
 
-            geocoderService = new google.maps.Geocoder();
-
-            googleMapInstance.addListener('dragend', () => {
-                let center = googleMapInstance.getCenter();
-                updateCoordsAndGeocode(center.lat(), center.lng());
+            leafletMapInstance.on('moveend', () => {
+                let center = leafletMapInstance.getCenter();
+                fetchAddressFromCoords(center.lat, center.lng);
             });
         } else {
-            googleMapInstance.setCenter(customerCoords);
-            google.maps.event.trigger(googleMapInstance, 'resize');
+            leafletMapInstance.setView([customerCoords.lat, customerCoords.lng], 16);
+            leafletMapInstance.invalidateSize();
         }
     }, 200);
 }
 
-function updateCoordsAndGeocode(lat, lng) {
-    customerCoords = { lat, lng };
-    let latlng = { lat, lng };
-    
-    geocoderService.geocode({ location: latlng }, (results, status) => {
-        if (status === "OK" && results[0]) {
-            tempSelectedAddress = results[0].formatted_address;
-        } else {
-            tempSelectedAddress = `Titik Google Maps (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
-        }
-    });
+function fetchAddressFromCoords(lat, lng) {
+    let url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`;
+    fetch(url)
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.display_name) {
+                tempSelectedAddress = data.display_name;
+            } else {
+                tempSelectedAddress = `Titik Lokasi (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+            }
+        })
+        .catch(() => {
+            tempSelectedAddress = `Titik Lokasi (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+        });
 }
 
 function goToCurrentGPS() {
@@ -467,7 +478,7 @@ function goToCurrentGPS() {
             (position) => {
                 let pos = { lat: position.coords.latitude, lng: position.coords.longitude };
                 customerCoords = pos;
-                if (googleMapInstance) googleMapInstance.setCenter(pos);
+                if (leafletMapInstance) leafletMapInstance.setView([pos.lat, pos.lng], 17);
             },
             () => { alert("Gagal mengambil GPS Anda."); },
             { enableHighAccuracy: true }
@@ -475,20 +486,20 @@ function goToCurrentGPS() {
     }
 }
 
-function confirmGoogleMapPin() {
+function confirmCleanMapPin() {
     if (tempSelectedAddress) {
         document.getElementById("globalCustomerAddress").value = tempSelectedAddress;
     } else {
         document.getElementById("globalCustomerAddress").value = `Koordinat: ${customerCoords.lat.toFixed(5)}, ${customerCoords.lng.toFixed(5)}`;
     }
-    closeGoogleMapModal();
+    closeCleanMapModal();
 }
 
-function closeGoogleMapModal() {
+function closeCleanMapModal() {
     document.getElementById("mapModal").style.display = "none";
 }
 
-/* SEARCH AUTOCOMPLETE NOMINATIM / TEXT */
+/* SEARCH AUTOCOMPLETE TEKS */
 document.addEventListener("DOMContentLoaded", () => {
     loadRestoData();
     let searchInput = document.getElementById("globalCustomerAddress");
@@ -571,7 +582,7 @@ function closePaymentModal() {
 }
 
 function finalizeAndExecuteOrder() {
-    alert("Pesanan berhasil diproses menggunakan tampilan Google Maps Original!");
+    alert("Pesanan berhasil diproses!");
     window.location.href = "cikurgo2in1.html";
 }
 
