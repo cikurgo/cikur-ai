@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cikur Go Food - Dengan Tampilan Pembayaran & Chat Lengkap</title>
+    <title>Cikur Go Food - Sinkronisasi Resto & Chat</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -435,7 +435,6 @@ function selectAutoAddress(displayName) {
     document.getElementById("addressSuggestionsList").style.display = 'none';
 }
 
-// BUKA TAMPILAN PEMBAYARAN / MODAL CHECKOUT
 function openPaymentSummary() {
     let addressBase = document.getElementById("globalCustomerAddress").value.trim();
     let addressNote = document.getElementById("customerNoteAddress").value.trim();
@@ -480,14 +479,14 @@ function closePaymentModal() {
     document.getElementById("paymentModal").style.display = "none";
 }
 
-// EKSEKUSI PEMBAYARAN DAN KIRIM KE RESTO, DRIVER, & 2-IN-1
+// EKSEKUSI PEMBAYARAN DAN SINKRONISASI KE RESTO.HTML
 function finalizeAndExecuteOrder() {
     let addressBase = document.getElementById("globalCustomerAddress").value.trim();
     let addressNote = document.getElementById("customerNoteAddress").value.trim();
     let finalAddress = addressBase + (addressNote ? ` (Patokan / Catatan: ${addressNote})` : '');
     let paymentMethod = document.getElementById("paymentMethodSelect").value;
 
-    let subtotal = 0, summaryList = [], structuredItems = [], targetRestoName = 'CIKUR Resto';
+    let subtotal = 0, summaryList = [], structuredItems = [], targetRestoName = 'Test ON';
     
     databaseResto.forEach(resto => {
         let itemsList = resto.items || resto.menus || [];
@@ -496,21 +495,23 @@ function finalizeAndExecuteOrder() {
             let key = `${resto.id || resto.restoName}_${itemId}`;
             let qty = cartQuantities[key] || 0;
             if(qty > 0) {
-                targetRestoName = resto.restoName || resto.name || 'Mitra Resto';
+                targetRestoName = resto.restoName || resto.name || 'Test ON';
                 let price = item.discountPrice || item.price || 0;
                 subtotal += price * qty;
-                summaryList.push(`${qty}x ${item.name || item.nama}`);
+                summaryList.push(`- ${item.name || item.nama} (${qty}x) (Rp ${Number(price * qty).toLocaleString('id-ID')})`);
                 structuredItems.push({ id: itemId, name: item.name || item.nama, quantity: qty, price: price });
             }
         });
     });
 
     let grandTotal = subtotal + 10000;
+    let generatedTrxId = 'TRX-' + Math.floor(100000 + Math.random() * 900000);
     
+    // Objek Data Pesanan yang disamakan format kuncinya dengan resto.html
     let orderData = {
         id: 'ORD_' + Date.now(),
-        kode: 'TRX-' + Math.floor(100000 + Math.random() * 900000),
-        menu: summaryList.join(', '),
+        kode: generatedTrxId,
+        menu: summaryList.join('<br>'),
         items: structuredItems,
         total: grandTotal,
         paymentMethod: paymentMethod,
@@ -523,25 +524,30 @@ function finalizeAndExecuteOrder() {
         } : null,
         restoName: targetRestoName,
         customerAddress: finalAddress,
+        chatHistory: [], // Mendukung sinkronisasi chat aktif di resto.html
         waktu: new Date().toLocaleDateString('id-ID') + ' ' + new Date().toLocaleTimeString('id-ID')
     };
 
+    // Sinkronisasi ke berbagai penyimpanan lokal yang dibaca oleh sistem dan resto.html
     let restoOrders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || [];
+    let incomingOrders = JSON.parse(localStorage.getItem('cikur_incoming_orders')) || [];
     let driverOrders = JSON.parse(localStorage.getItem('cikur_driver_orders')) || [];
     let allOrders = JSON.parse(localStorage.getItem('cikur_orders')) || [];
     let twoInOneOrders = JSON.parse(localStorage.getItem('cikur_2in1_orders')) || [];
 
     restoOrders.unshift(orderData);
+    incomingOrders.unshift(orderData);
     driverOrders.unshift(orderData);
     allOrders.unshift(orderData);
     twoInOneOrders.unshift(orderData);
 
     localStorage.setItem('cikur_restaurant_orders', JSON.stringify(restoOrders));
+    localStorage.setItem('cikur_incoming_orders', JSON.stringify(incomingOrders));
     localStorage.setItem('cikur_driver_orders', JSON.stringify(driverOrders));
     localStorage.setItem('cikur_orders', JSON.stringify(allOrders));
     localStorage.setItem('cikur_2in1_orders', JSON.stringify(twoInOneOrders));
 
-    alert("Pembayaran berhasil dikonfirmasi! Pesanan diteruskan ke Resto, Driver, dan Cikur 2-in-1.");
+    alert("Pesanan Berhasil! Data pesanan & chat kini disinkronkan ke halaman Resto.html.");
     window.location.href = "cikurgo2in1.html";
 }
 
