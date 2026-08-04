@@ -79,81 +79,60 @@
         .chat-bubble.customer { background: #fee2e2; align-self: flex-end; color: #991b1b; border-bottom-right-radius: 2px; }
         .chat-bubble.resto { background: #e2e8f0; align-self: flex-start; color: #1e293b; border-bottom-left-radius: 2px; }
     
-    /* Styling Dropdown Autocomplete Alamat */
-#addressSuggestionsList {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background: #fff;
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    max-height: 150px;
-    overflow-y: auto;
-    z-index: 1000;
-    box-shadow: var(--shadow-md);
-    margin-top: 4px;
-}
-.suggestion-item {
-    padding: 8px 12px;
-    font-size: 11px;
-    color: var(--text-main);
-    cursor: pointer;
-    border-bottom: 1px solid var(--border-light);
-}
-.suggestion-item:hover {
-    background: #f1f5f9;
-}
-/* Styling Peta Modern & Elegan */
-#mapModal {
-    backdrop-filter: blur(6px);
-    background: rgba(0, 0, 0, 0.5);
-}
-
-/* Kotak Modal Peta */
-#mapModal > div {
-    border-radius: 20px;
-    overflow: hidden;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
-}
-
-/* Wrapper agar kotak saran alamat muncul tepat di bawah input */
-.address-input-wrapper {
-    position: relative;
-    flex: 1;
-}
-
-#addressSuggestionsList {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background: #fff;
-    border: 1px solid #cbd5e1;
-    border-radius: 10px;
-    max-height: 180px;
-    overflow-y: auto;
-    z-index: 9999;
-    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
-    margin-top: 4px;
-}
-
-/* Pin Modern Presisi di Tengah Peta */
-.map-center-pin {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -100%);
-    font-size: 36px;
-    z-index: 1000;
-    pointer-events: none;
-    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
-}
+        /* Styling Dropdown Autocomplete Alamat */
+        #addressSuggestionsList {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: var(--shadow-md);
+            margin-top: 4px;
+        }
+        .suggestion-item {
+            padding: 8px 12px;
+            font-size: 11px;
+            color: var(--text-main);
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .suggestion-item:hover {
+            background: #f1f5f9;
+        }
+        
+        /* Styling Peta Modern & Elegan */
+        #mapModal {
+            backdrop-filter: blur(6px);
+            background: rgba(0, 0, 0, 0.5);
+        }
+        #mapModal > div {
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+        }
+        .address-input-wrapper {
+            position: relative;
+            flex: 1;
+        }
+        .map-center-pin {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -100%);
+            font-size: 36px;
+            z-index: 1000;
+            pointer-events: none;
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
+        }
     </style>
     
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
@@ -200,51 +179,49 @@
         </div>
     </div>
 
-   <!-- Alamat Tujuan Pengiriman -->
-<div class="destination-card">
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-        <div style="display: flex; align-items: center; gap: 6px;">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-            <span style="font-size: 11px; font-weight: 800; color: #2410c; letter-spacing: -0.2px;">TUJUAN PENGIRIMAN & DRIVER</span>
-        </div>
-        <span id="lockStatusBadge" style="font-size: 9px; font-weight: 700; padding: 3px 8px; background: #ffedd5; color: #c2410c; border-radius: 6px;">Wajib Diisi</span>
-    </div>
-
-    <!-- Kolom 1: Alamat Utama & Tombol Peta Sejajar -->
-    <div style="margin-bottom: 8px;">
-        <div style="display: flex; gap: 6px; align-items: flex-start;">
-            <div class="address-input-wrapper" style="position: relative; flex: 1;">
-                <input type="text" id="globalCustomerAddress" class="address-textarea" placeholder="Ketik atau pilih lokasi..." style="width: 100%; margin: 0; box-sizing: border-box;">
-                <!-- Wadah Dropdown Suggestions (Wajib Ada agar Pencarian Berfungsi) -->
-                <div id="addressSuggestionsList" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; max-height: 180px; overflow-y: auto; z-index: 9999; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); margin-top: 4px;"></div>
+    <!-- Alamat Tujuan Pengiriman -->
+    <div class="destination-card">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                <span style="font-size: 11px; font-weight: 800; color: #2410c; letter-spacing: -0.2px;">TUJUAN PENGIRIMAN & DRIVER</span>
             </div>
-            <button type="button" onclick="openInteractiveMap()" style="background: #ea580c; color: #fff; border: none; padding: 0 12px; border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer; white-space: nowrap; height: 38px; display: flex; align-items: center; justify-content: center;">🗺️ Pilih dari Peta</button>
+            <span id="lockStatusBadge" style="font-size: 9px; font-weight: 700; padding: 3px 8px; background: #ffedd5; color: #c2410c; border-radius: 6px;">Wajib Diisi</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
-            <input type="checkbox" id="checkSimpanAlamat" onclick="handleAddressCheckbox(this)">
-            <span style="font-size: 10px; font-weight: 700; color: #475569;">Simpan Alamat</span>
+
+        <div style="margin-bottom: 8px;">
+            <div style="display: flex; gap: 6px; align-items: flex-start;">
+                <div class="address-input-wrapper" style="position: relative; flex: 1;">
+                    <input type="text" id="globalCustomerAddress" class="address-textarea" placeholder="Ketik atau pilih lokasi..." style="width: 100%; margin: 0; box-sizing: border-box;">
+                    <div id="addressSuggestionsList" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; max-height: 180px; overflow-y: auto; z-index: 9999; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); margin-top: 4px;"></div>
+                </div>
+                <button type="button" onclick="openInteractiveMap()" style="background: #ea580c; color: #fff; border: none; padding: 0 12px; border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer; white-space: nowrap; height: 38px; display: flex; align-items: center; justify-content: center;">🗺️ Pilih dari Peta</button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
+                <input type="checkbox" id="checkSimpanAlamat" onclick="handleAddressCheckbox(this)">
+                <span style="font-size: 10px; font-weight: 700; color: #475569;">Simpan Alamat</span>
+            </div>
+        </div>
+
+        <div style="margin-top: 8px;">
+            <input type="text" id="customerPatokan" class="address-textarea" placeholder="Patokan detail (Contoh: Pagar hitam, dekat warung Bu Ani)..." style="width: 100%; box-sizing: border-box;">
         </div>
     </div>
 
-    <!-- Kolom 2: Patokan / Detail Lokasi -->
-    <div style="margin-top: 8px;">
-        <input type="text" id="customerPatokan" class="address-textarea" placeholder="Patokan detail (Contoh: Pagar hitam, dekat warung Bu Ani)..." style="width: 100%; box-sizing: border-box;">
+    <!-- Modal Peta Interaktif -->
+    <div id="mapModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center;">
+        <div style="background:#fff; width:90%; max-width:400px; height:80%; border-radius:16px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 10px 25px rgba(0,0,0,0.2);">
+            <div style="padding: 14px; background:#ea580c; color:#fff; display:flex; justify-content:space-between; align-items:center; font-weight:bold;">
+                <span>Pilih Titik Lokasi Anda</span>
+                <button type="button" onclick="closeInteractiveMap()" style="background:none; border:none; color:#fff; font-size:18px; cursor:pointer;">✕</button>
+            </div>
+            <div id="leafletMapContainer" style="flex:1; width:100%;"></div>
+            <div style="padding: 14px; background:#fff; text-align:center;">
+                <button type="button" onclick="confirmMapLocation()" style="background:#16a34a; color:#fff; border:none; width:100%; padding:12px; border-radius:10px; font-weight:bold; font-size:14px; cursor:pointer;">Konfirmasi Lokasi Ini ✅</button>
+            </div>
+        </div>
     </div>
-</div>
 
-<!-- Modal Peta Interaktif -->
-<div id="mapModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center;">
-    <div style="background:#fff; width:90%; max-width:400px; height:80%; border-radius:16px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 10px 25px rgba(0,0,0,0.2);">
-        <div style="padding: 14px; background:#ea580c; color:#fff; display:flex; justify-content:space-between; align-items:center; font-weight:bold;">
-            <span>Pilih Titik Lokasi Anda</span>
-            <button type="button" onclick="closeInteractiveMap()" style="background:none; border:none; color:#fff; font-size:18px; cursor:pointer;">✕</button>
-        </div>
-        <div id="leafletMapContainer" style="flex:1; width:100%;"></div>
-        <div style="padding: 14px; background:#fff; text-align:center;">
-            <button type="button" onclick="confirmMapLocation()" style="background:#16a34a; color:#fff; border:none; width:100%; padding:12px; border-radius:10px; font-weight:bold; font-size:14px; cursor:pointer;">Konfirmasi Lokasi Ini ✅</button>
-        </div>
-    </div>
-</div>
     <!-- Search Input -->
     <div class="search-box-wrap">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -325,8 +302,6 @@ function handleAddressCheckbox(checkbox) {
             badge.style.background = "#dcfce7";
             badge.style.color = "#16a34a";
         }
-        
-        // Langsung panggil fungsi proceedToCheckout() secara otomatis setelah dicentang
         proceedToCheckout();
     } else {
         isAddressLocked = false;
@@ -339,6 +314,7 @@ function handleAddressCheckbox(checkbox) {
         }
     }
 }
+
 function switchMode(mode) {
     currentModeSelected = mode;
     let btnInstant = document.getElementById("btnInstant");
@@ -546,21 +522,17 @@ function proceedToCheckout() {
     let restoAddressSelected = targetRestoObj ? targetRestoObj.restoAddress : "Jl. Utama Resto No. 1";
 
     let checkoutHTML = `
-    <div id="checkoutModal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); z-index:9999; display:flex; justify-content:center; align-items:flex-end; sm:align-items:center; padding:0; sm:padding:16px; box-sizing:border-box;">
-        <div style="background:#fff; width:100%; max-width:440px; border-top-left-radius:24px; border-top-right-radius:24px; sm:border-radius:20px; padding:20px; max-height:90vh; overflow-y:auto; box-sizing:border-box; box-shadow:0 -10px 25px rgba(0,0,0,0.1); animation: slideUp 0.3s ease;">
-            
+    <div id="checkoutModal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); z-index:9999; display:flex; justify-content:center; align-items:flex-end; padding:0; box-sizing:border-box;">
+        <div style="background:#fff; width:100%; max-width:440px; border-top-left-radius:24px; border-top-right-radius:24px; padding:20px; max-height:90vh; overflow-y:auto; box-sizing:border-box; box-shadow:0 -10px 25px rgba(0,0,0,0.1);">
             <div style="width:40px; height:4px; background:#cbd5e1; border-radius:2px; margin:0 auto 16px auto;"></div>
-
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                 <h3 style="font-size:15px; font-weight:800; margin:0; color:var(--text-main);">Konfirmasi Pembayaran</h3>
                 <button onclick="closeCheckoutModal()" style="border:none; background:#f1f5f9; width:28px; height:28px; border-radius:50%; font-weight:bold; cursor:pointer; color:var(--text-muted);">✕</button>
             </div>
-            
             <div style="background:#f8fafc; border:1px solid var(--border-color); padding:12px; border-radius:12px; margin-bottom:12px; font-size:11px;">
                 <b style="color:var(--text-main); display:block; margin-bottom:4px;">Resto: ${restoNameSelected}</b>
                 <p style="color:var(--text-muted); margin:0; line-height:1.4;">${selectedItemsList.join('<br>')}</p>
             </div>
-
             <div style="background:#f8fafc; border:1px solid var(--border-color); padding:12px; border-radius:12px; margin-bottom:12px; font-size:11px;">
                 <div style="margin-bottom:6px;">
                     <span style="font-weight:700; color:#334155; display:block;">📍 Titik Jemput Resto:</span>
@@ -571,13 +543,11 @@ function proceedToCheckout() {
                     <span style="color:#64748b;">${addressInputVal}</span>
                 </div>
             </div>
-
             <div style="background:#fff7ed; border:1px solid #fed7aa; padding:12px; border-radius:12px; margin-bottom:14px; font-size:11px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:6px; color:#7c2d12;"><span>Subtotal Makanan:</span> <b>Rp ${subtotal.toLocaleString('id-ID')}</b></div>
                 <div style="display:flex; justify-content:space-between; margin-bottom:6px; color:#7c2d12;"><span>Ongkos Kirim Driver:</span> <b>Rp ${ongkir.toLocaleString('id-ID')}</b></div>
                 <div style="display:flex; justify-content:space-between; border-top:1px dashed #fed7aa; padding-top:6px; font-weight:800; font-size:12px; color:#c2410c;"><span>Total Pembayaran:</span> <span>Rp ${grandTotal.toLocaleString('id-ID')}</span></div>
             </div>
-
             <div style="margin-bottom:14px;">
                 <label style="font-size:11px; font-weight:700; display:block; margin-bottom:6px; color:var(--text-main);">Metode Pembayaran:</label>
                 <select id="paymentMethodSelect" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:10px; font-size:11px; background:#fff; box-sizing:border-box; outline:none; font-family:'Plus Jakarta Sans', sans-serif;">
@@ -585,7 +555,6 @@ function proceedToCheckout() {
                     <option value="Cikur Pay">Cikur Pay (Saldo)</option>
                 </select>
             </div>
-
             <div class="chat-box-container">
                 <label style="font-size:11px; font-weight:700; display:block; margin-bottom:6px; color:var(--text-main);">Catatan & Chat Resto/Driver:</label>
                 <div class="chat-messages" id="chatMessagesBox">
@@ -596,7 +565,6 @@ function proceedToCheckout() {
                     <button onclick="sendChatMessage()" style="background:var(--primary-red); color:#fff; border:none; padding:8px 14px; border-radius:8px; font-size:11px; font-weight:700; cursor:pointer;">Kirim</button>
                 </div>
             </div>
-
             <div style="display:flex; gap:10px; margin-top:16px;">
                 <button onclick="closeCheckoutModal()" style="flex:1; height:42px; border:1px solid var(--border-color); background:#fff; border-radius:12px; font-weight:700; cursor:pointer; font-size:11px; color:var(--text-muted);">Batal</button>
                 <button onclick="finalizePayment(${grandTotal}, '${selectedItemsList.join(', ')}', '${addressInputVal}', '${restoNameSelected}', '${restoAddressSelected}')" style="flex:1; height:42px; border:none; background:var(--primary-red); color:#fff; border-radius:12px; font-weight:800; cursor:pointer; font-size:12px; box-shadow:0 4px 12px rgba(239,68,68,0.25);">Bayar Sekarang</button>
@@ -621,10 +589,6 @@ function sendChatMessage() {
     box.innerHTML += `<div class="chat-bubble customer">${text}</div>`;
     input.value = "";
     box.scrollTop = box.scrollHeight;
-
-    let currentHistory = JSON.parse(localStorage.getItem('cikur_chat_history')) || [];
-    currentHistory.push({ sender: 'customer', text: text });
-    localStorage.setItem('cikur_chat_history', JSON.stringify(currentHistory));
 }
 
 function finalizePayment(totalAmount, summaryText, address, restoName, restoAddress) {
@@ -661,7 +625,6 @@ function finalizePayment(totalAmount, summaryText, address, restoName, restoAddr
     let chatHistoryHTML = chatBox ? chatBox.innerHTML : '';
 
     let riwayatPesanan = JSON.parse(localStorage.getItem('cikur_orders')) || [];
-    let riwayatTransaksi = JSON.parse(localStorage.getItem('cikur_transactions')) || [];
     let restoOrders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || JSON.parse(localStorage.getItem('cikur_orders')) || [];
     let driverOrders = JSON.parse(localStorage.getItem('cikur_driver_orders')) || [];
 
@@ -724,7 +687,6 @@ function finalizePayment(totalAmount, summaryText, address, restoName, restoAddr
     riwayatPesanan.unshift(newOrderData);
 
     localStorage.setItem('cikur_orders', JSON.stringify(riwayatPesanan));
-    localStorage.setItem('cikur_transactions', JSON.stringify(riwayatTransaksi));
     localStorage.setItem('cikur_restaurant_orders', JSON.stringify(restoOrders));
     localStorage.setItem('cikur_driver_orders', JSON.stringify(driverOrders));
     localStorage.setItem('cikur_active_cart_items', JSON.stringify(structuredItems));
@@ -733,76 +695,8 @@ function finalizePayment(totalAmount, summaryText, address, restoName, restoAddr
     closeCheckoutModal();
     window.location.href = "index.html";
 }
-// Fungsi untuk mendeteksi koordinat & lokasi real-live customer via GPS
-function getLiveLocation() {
-    let addrInput = document.getElementById("globalCustomerAddress");
-    if (!navigator.geolocation) {
-        alert("Browser Anda tidak Mendukung Fitur Geolocation/GPS.");
-        return;
-    }
 
-    addrInput.value = "Mendeteksi lokasi GPS real-live...";
-    
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            let lat = position.coords.latitude;
-            let lon = position.coords.longitude;
-            
-            // Simpan koordinat ke atribut elemen atau localStorage agar bisa dipakai driver nanti
-            addrInput.dataset.lat = lat;
-            addrInput.dataset.lon = lon;
-            
-            // Format teks lokasi berbasis koordinat atau penanda GPS akurat
-            addrInput.value = `[Titik GPS Live] Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)} (Lokasi Terkini)`;
-            
-            let badge = document.getElementById("lockStatusBadge");
-            if(badge) {
-                badge.innerText = "GPS Terdeteksi ✓";
-                badge.style.background = "#dcfce7";
-                badge.style.color = "#16a34a";
-            }
-        },
-        (error) => {
-            addrInput.value = "";
-            switch(error.code) {
-                case error.PERMISSION_DENIED:
-                    alert("Izin akses GPS ditolak oleh pengguna.");
-                    break;
-                case error.POSITION_UNAVAILABLE:
-                    alert("Informasi lokasi tidak tersedia.");
-                    break;
-                case error.TIMEOUT:
-                    alert("Waktu permintaan lokasi habis.");
-                    break;
-                default:
-                    alert("Terjadi kesalahan saat mendeteksi lokasi.");
-                    break;
-            }
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-}
-
-// Fungsi untuk mengambil GPS secara paksa dan sinkron
-function triggerLiveLocationSync() {
-    let addrInput = document.getElementById("globalCustomerAddress");
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                let lat = position.coords.latitude;
-                let lon = position.coords.longitude;
-                if(addrInput) {
-                    addrInput.dataset.lat = lat;
-                    addrInput.dataset.lon = lon;
-                }
-            },
-            (error) => { console.log("GPS Error:", error); },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-    }
-}
-
-// Fungsi untuk mengambil GPS secara otomatis saat halaman dimuat
+// GPS Otomatis saat Load
 window.addEventListener('load', function() {
     let addrInput = document.getElementById("globalCustomerAddress");
     if (navigator.geolocation && addrInput) {
@@ -816,108 +710,6 @@ window.addEventListener('load', function() {
         );
     }
 });
-
-let searchTimeout;
-function searchAddressAutocomplete(keyword) {
-    let listContainer = document.getElementById("addressSuggestionsList");
-    if (!listContainer) return;
-
-    clearTimeout(searchTimeout);
-    let addrInput = document.getElementById("globalCustomerAddress");
-    let lat = addrInput ? addrInput.dataset.lat : null;
-    let lon = addrInput ? addrInput.dataset.lon : null;
-
-    if (!keyword || keyword.trim().length < 2) {
-        listContainer.innerHTML = "";
-        return;
-    }
-
-    searchTimeout = setTimeout(() => {
-        let viewboxParam = "";
-        if (lat && lon) {
-            let offset = 0.05; // Radius sekitar 5km untuk memastikan lokasi terdeteksi akurat
-            let n = parseFloat(lat) + offset;
-            let s = parseFloat(lat) - offset;
-            let e = parseFloat(lon) + offset;
-            let w = parseFloat(lon) - offset;
-            viewboxParam = `&viewbox=${w},${n},${e},${s}&bounded=0`;
-        }
-
-        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keyword)}&countrycodes=id${viewboxParam}&limit=8`;
-        
-        fetch(url)
-            .then(response => response.json())
-            .then(data => {
-                listContainer.innerHTML = "";
-                if (data && data.length > 0) {
-                    data.forEach(place => {
-                        let div = document.createElement("div");
-                        div.className = "suggestion-item";
-                        div.innerText = place.display_name;
-                        div.onclick = function() {
-                            addrInput.value = place.display_name;
-                            addrInput.dataset.lat = place.lat;
-                            addrInput.dataset.lon = place.lon;
-                            listContainer.innerHTML = "";
-                        };
-                        listContainer.appendChild(div);
-                    });
-                } else {
-                    listContainer.innerHTML = `<div class="suggestion-item" style="color:var(--text-muted);">Tidak ada lokasi ditemukan</div>`;
-                }
-            })
-            .catch(err => console.log("Gagal memuat data lokasi:", err));
-    }, 300);
-}
-    
-let mapInstance = null;
-let selectedMapLat = null;
-let selectedMapLon = null;
-let selectedMapAddress = "";
-
-// 1. Membuka Peta Interaktif
-function openInteractiveMap() {
-    let modal = document.getElementById("mapModal");
-    if (!modal) return;
-    
-    let container = document.getElementById("leafletMapContainer");
-    if (container && !document.getElementById("customMapPin")) {
-        let pin = document.createElement("div");
-        pin.id = "customMapPin";
-        pin.className = "map-center-pin";
-        pin.innerHTML = "📍";
-        container.appendChild(pin);
-    }
-
-    modal.style.display = "flex";
-
-    let addrInput = document.getElementById("globalCustomerAddress");
-    let defaultLat = addrInput && addrInput.dataset.lat ? parseFloat(addrInput.dataset.lat) : -6.225;
-    let defaultLon = addrInput && addrInput.dataset.lon ? parseFloat(addrInput.dataset.lon) : 106.650;
-
-    setTimeout(() => {
-        if (!mapInstance) {
-            mapInstance = L.map('leafletMapContainer', { zoomControl: false }).setView([defaultLat, defaultLon], 16);
-            L.control.zoom({ position: 'bottomright' }).addTo(mapInstance);
-
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '© OpenStreetMap'
-            }).addTo(mapInstance);
-
-            mapInstance.on('moveend', function() {
-                let center = mapInstance.getCenter();
-                fetchReverseGeocode(center.lat, center.lng);
-            });
-        } else {
-            mapInstance.setView([defaultLat, defaultLon], 16);
-        }
-        mapInstance.invalidateSize();
-        
-        let center = mapInstance.getCenter();
-        fetchReverseGeocode(center.lat, center.lng);
-    }, 200);
-
 
 let mapInstance = null;
 let selectedMapLat = null;
@@ -1014,6 +806,8 @@ function confirmMapLocation() {
 
 // 5. Autocomplete Pencarian Teks Alamat
 document.addEventListener("DOMContentLoaded", function() {
+    loadRestoDataFromStorage();
+
     let searchInput = document.getElementById("globalCustomerAddress");
     let suggestionsList = document.getElementById("addressSuggestionsList");
 
@@ -1081,10 +875,6 @@ function lanjutKe2In1() {
     localStorage.setItem('cikur_active_cart_items', JSON.stringify(activeCartFor2in1));
     window.location.href = "cikurgo2in1.html";
 }
-
-window.onload = function() {
-    loadRestoDataFromStorage();
-};
 </script>
 
 </body>
