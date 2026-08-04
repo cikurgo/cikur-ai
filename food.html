@@ -772,67 +772,40 @@ function searchAddressAutocomplete(keyword) {
     }
 
     searchTimeout = setTimeout(() => {
-        // 1. Cari berdasarkan teks yang diketik user
-        let textSearchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keyword)}&countrycodes=id&limit=3`;
-        
-        // 2. Cari titik-titik jalan / ruko / tempat di sekitar koordinat GPS user secara mutlak
-        let nearbyUrl = "";
+        let viewboxParam = "";
         if (lat && lon) {
-            let offset = 0.015; // Radius mikro sekitar 1-2 km
+            let offset = 0.05; // Radius sekitar 5km untuk memastikan lokasi terdeteksi akurat
             let n = parseFloat(lat) + offset;
             let s = parseFloat(lat) - offset;
             let e = parseFloat(lon) + offset;
             let w = parseFloat(lon) - offset;
-            // Meminta kategori fasilitas/jalan/tempat umum di sekitar lokasi user
-            nearbyUrl = `https://nominatim.openstreetmap.org/search?format=json&q=jalan OR ruko OR cafe OR toko OR perumahan&viewbox=${w},${n},${e},${s}&bounded=1&limit=6`;
+            viewboxParam = `&viewbox=${w},${n},${e},${s}&bounded=0`;
         }
 
-        let promises = [fetch(textSearchUrl).then(res => res.json()).catch(() => [])];
-        if (nearbyUrl) {
-            promises.push(fetch(nearbyUrl).then(res => res.json()).catch(() => []));
-        }
-
-        Promise.all(promises).then(([textResults, nearbyResults = []]) => {
-            // Gabungkan hasil ketikan user dan daftar tempat sekitar area
-            let combinedMap = new Map();
-            
-            // Masukkan hasil tempat sekitar terlebih dahulu agar langsung terlihat di dropdown
-            nearbyResults.forEach(place => {
-                if (place && place.place_id) combinedMap.set(place.place_id, place);
-            });
-            
-            // Masukkan hasil teks yang diketik user
-            textResults.forEach(place => {
-                if (place && place.place_id) combinedMap.set(place.place_id, place);
-            });
-
-            let finalData = Array.from(combinedMap.values());
-
-            listContainer.innerHTML = "";
-            if (finalData.length > 0) {
-                let headerDiv = document.createElement("div");
-                headerDiv.className = "suggestion-item";
-                headerDiv.style.fontWeight = "bold";
-                headerDiv.style.color = "#ea580c";
-                headerDiv.innerText = "📍 Hasil & Daftar Lokasi di Sekitar Anda:";
-                listContainer.appendChild(headerDiv);
-
-                finalData.forEach(place => {
-                    let div = document.createElement("div");
-                    div.className = "suggestion-item";
-                    div.innerText = place.display_name;
-                    div.onclick = function() {
-                        addrInput.value = place.display_name;
-                        addrInput.dataset.lat = place.lat;
-                        addrInput.dataset.lon = place.lon;
-                        listContainer.innerHTML = "";
-                    };
-                    listContainer.appendChild(div);
-                });
-            } else {
-                listContainer.innerHTML = `<div class="suggestion-item" style="color:var(--text-muted);">Tidak ada lokasi ditemukan</div>`;
-            }
-        }).catch(err => console.log("Gagal memuat data lokasi:", err));
+        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keyword)}&countrycodes=id${viewboxParam}&limit=8`;
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                listContainer.innerHTML = "";
+                if (data && data.length > 0) {
+                    data.forEach(place => {
+                        let div = document.createElement("div");
+                        div.className = "suggestion-item";
+                        div.innerText = place.display_name;
+                        div.onclick = function() {
+                            addrInput.value = place.display_name;
+                            addrInput.dataset.lat = place.lat;
+                            addrInput.dataset.lon = place.lon;
+                            listContainer.innerHTML = "";
+                        };
+                        listContainer.appendChild(div);
+                    });
+                } else {
+                    listContainer.innerHTML = `<div class="suggestion-item" style="color:var(--text-muted);">Tidak ada lokasi ditemukan</div>`;
+                }
+            })
+            .catch(err => console.log("Gagal memuat data lokasi:", err));
     }, 300);
 }
         
