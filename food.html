@@ -150,34 +150,40 @@
             <p>Pencarian alamat otomatis, deteksi GPS presisi, dan rincian lengkap untuk driver.</p>
         </div>
 
-        <!-- KOTAK TUJUAN PENGIRIMAN YANG DISEMPURNAKAN -->
-        <div class="destination-box">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 10px; font-weight: 800; color: var(--text-muted);">TUJUAN PENGIRIMAN & GPS</span>
-                <span id="lockBadge" style="font-size: 9px; font-weight: 700; padding: 3px 8px; background: #fee2e2; color: var(--primary); border-radius: 12px;">Wajib Diisi</span>
-            </div>
-            
-            <div class="address-row">
-                <div class="address-wrapper">
-                    <input type="text" id="globalCustomerAddress" class="input-field" placeholder="Ketik nama jalan / daerah..." autocomplete="off">
-                    <div id="addressSuggestionsList"></div>
-                </div>
-                <button type="button" class="gps-btn" onclick="detectUserLocation()" title="Gunakan Lokasi GPS Saat Ini">
-                    📍 GPS
-                </button>
-            </div>
-
-            <!-- Detail spesifik untuk driver masuk pemukiman/gang -->
-            <div style="display: flex; gap: 6px;">
-                <input type="text" id="customerHouseNo" class="input-field" placeholder="No. Rumah / Blok / Lantai">
-                <input type="text" id="customerNoteAddress" class="input-field" placeholder="Patokan (Cth: Pagar hitam)">
-            </div>
-
-            <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
-                <input type="checkbox" id="checkSimpanAlamat" onclick="handleAddressCheckbox(this)" style="width: 14px; height: 14px; accent-color: var(--primary);">
-                <label for="checkSimpanAlamat" style="font-size: 11px; font-weight: 700; color: var(--text-muted); cursor: pointer;">Kunci Alamat & Catatan Tujuan Ini</label>
-            </div>
+        <!-- TUJUAN PENGIRIMAN & GPS (Tampilan Rapi & Menarik) -->
+<div class="destination-box" style="background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-md); padding: 16px; box-shadow: var(--shadow-soft); display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 10px; font-weight: 800; color: var(--text-muted); letter-spacing: 0.5px;">TUJUAN PENGIRIMAN & GPS</span>
+        <span id="lockBadge" style="font-size: 9px; font-weight: 700; padding: 3px 8px; background: #fee2e2; color: var(--primary); border-radius: 12px;">Wajib Diisi</span>
+    </div>
+    
+    <!-- Baris Input Teks & Tombol Peta Berikon Menarik -->
+    <div style="display: flex; gap: 8px; align-items: center; position: relative;">
+        <div style="position: relative; flex: 1; min-width: 0;">
+            <input type="text" id="globalCustomerAddress" class="input-field" placeholder="Ketik nama jalan / daerah..." autocomplete="off" style="width: 100%; padding: 12px 14px; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; color: var(--text-main); outline: none;">
+            <!-- Kotak Saran Pencarian Teks (Aman & Tidak Rusak) -->
+            <div id="addressSuggestionsList" style="position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-sm); margin-top: 4px; box-shadow: var(--shadow-hover); max-height: 200px; overflow-y: auto; z-index: 3000; display: none;"></div>
         </div>
+        
+        <!-- Tombol Pilih Peta dengan Ikon Menarik (Fungsi GPS/Peta Asli) -->
+        <button type="button" onclick="openCleanMapModal()" style="background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%); color: #fff; border: none; padding: 12px 14px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 800; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(255,71,87,0.25); flex-shrink: 0; transition: var(--transition);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+            Pilih Peta
+        </button>
+    </div>
+
+    <!-- Baris Detail Rumah & Patokan -->
+    <div style="display: flex; gap: 8px;">
+        <input type="text" id="customerHouseNo" class="input-field" placeholder="No. Rumah / Blok / Lantai" style="width: 100%; padding: 12px 14px; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; color: var(--text-main); outline: none;">
+        <input type="text" id="customerNoteAddress" class="input-field" placeholder="Patokan (Cth: Pagar hitam)" style="width: 100%; padding: 12px 14px; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; color: var(--text-main); outline: none;">
+    </div>
+
+    <!-- Opsi Kunci Alamat -->
+    <label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; color: var(--text-muted); cursor: pointer; margin-top: 2px;">
+        <input type="checkbox" id="lockAddressCheck" style="width: 14px; height: 14px; accent-color: var(--primary);">
+        Kunci Alamat & Catatan Tujuan Ini
+    </label>
+</div>
 
         <div class="search-container">
             <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
