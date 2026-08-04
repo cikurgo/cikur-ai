@@ -770,36 +770,42 @@ function searchAddressAutocomplete(keyword) {
         listContainer.innerHTML = "";
         return;
     }
+
     searchTimeout = setTimeout(() => {
-        // URL 1: Mencari berdasarkan teks yang diketik user
-        let textSearchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keyword)}&countrycodes=id&limit=4`;
+        // 1. Cari berdasarkan teks yang diketik user
+        let textSearchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keyword)}&countrycodes=id&limit=3`;
         
-        // URL 2: Secara bersamaan mencari ruko/tempat/jalan di sekitar radius GPS user
-        let nearbyPromises = [];
+        // 2. Cari titik-titik jalan / ruko / tempat di sekitar koordinat GPS user secara mutlak
+        let nearbyUrl = "";
         if (lat && lon) {
-            let offset = 0.02;
+            let offset = 0.015; // Radius mikro sekitar 1-2 km
             let n = parseFloat(lat) + offset;
             let s = parseFloat(lat) - offset;
             let e = parseFloat(lon) + offset;
             let w = parseFloat(lon) - offset;
-            let nearbyUrl = `https://nominatim.openstreetmap.org/search?format=json&q=ruko OR cafe OR restaurant OR shop OR jalan&viewbox=${w},${n},${e},${s}&bounded=1&limit=5`;
-            nearbyPromises.push(fetch(nearbyUrl).then(res => res.json()).catch(() => []));
+            // Meminta kategori fasilitas/jalan/tempat umum di sekitar lokasi user
+            nearbyUrl = `https://nominatim.openstreetmap.org/search?format=json&q=jalan OR ruko OR cafe OR toko OR perumahan&viewbox=${w},${n},${e},${s}&bounded=1&limit=6`;
         }
 
-        // Jalankan pencarian teks dan pencarian sekitar secara bersamaan
-        Promise.all([
-            fetch(textSearchUrl).then(res => res.json()).catch(() => []),
-            Promise.all(nearbyPromises)
-        ]).then(([textResults, nearbyArrays]) => {
-            let nearbyResults = nearbyArrays.length > 0 ? nearbyArrays[0] : [];
-            
-            // Gabungkan hasil pencarian teks dan tempat sekitar, hilangkan duplikat
+        let promises = [fetch(textSearchUrl).then(res => res.json()).catch(() => [])];
+        if (nearbyUrl) {
+            promises.push(fetch(nearbyUrl).then(res => res.json()).catch(() => []));
+        }
+
+        Promise.all(promises).then(([textResults, nearbyResults = []]) => {
+            // Gabungkan hasil ketikan user dan daftar tempat sekitar area
             let combinedMap = new Map();
-            [...textResults, ...nearbyResults].forEach(place => {
-                if (place && place.place_id) {
-                    combinedMap.set(place.place_id, place);
-                }
+            
+            // Masukkan hasil tempat sekitar terlebih dahulu agar langsung terlihat di dropdown
+            nearbyResults.forEach(place => {
+                if (place && place.place_id) combinedMap.set(place.place_id, place);
             });
+            
+            // Masukkan hasil teks yang diketik user
+            textResults.forEach(place => {
+                if (place && place.place_id) combinedMap.set(place.place_id, place);
+            });
+
             let finalData = Array.from(combinedMap.values());
 
             listContainer.innerHTML = "";
@@ -808,7 +814,7 @@ function searchAddressAutocomplete(keyword) {
                 headerDiv.className = "suggestion-item";
                 headerDiv.style.fontWeight = "bold";
                 headerDiv.style.color = "#ea580c";
-                headerDiv.innerText = "📍 Hasil & Tempat Terdekat di Area Anda:";
+                headerDiv.innerText = "📍 Hasil & Daftar Lokasi di Sekitar Anda:";
                 listContainer.appendChild(headerDiv);
 
                 finalData.forEach(place => {
@@ -829,7 +835,7 @@ function searchAddressAutocomplete(keyword) {
         }).catch(err => console.log("Gagal memuat data lokasi:", err));
     }, 300);
 }
-    
+        
 // Menutup dropdown jika klik di luar area
 document.addEventListener("click", function(e) {
     let listContainer = document.getElementById("addressSuggestionsList");
