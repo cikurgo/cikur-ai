@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cikur Go Food - Alamat Presisi & Sinkronisasi Lengkap</title>
+    <title>Cikur Go Food - Alamat & Peta Interaktif Modern</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS untuk Peta Modern -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
             --primary: #ff4757;
@@ -67,12 +69,13 @@
         .input-field:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(255,71,87,0.1); }
 
         .address-row { display: flex; gap: 6px; align-items: center; }
-        .gps-btn {
+        .map-btn {
             background: var(--primary-gradient); color: #fff; border: none; padding: 12px 14px;
             border-radius: var(--radius-sm); font-size: 11px; font-weight: 700; cursor: pointer;
             white-space: nowrap; display: flex; align-items: center; gap: 4px; transition: var(--transition);
+            box-shadow: 0 4px 15px rgba(255,71,87,0.3);
         }
-        .gps-btn:active { transform: scale(0.95); }
+        .map-btn:active { transform: scale(0.95); }
 
         .address-wrapper { position: relative; width: 100%; }
         #addressSuggestionsList {
@@ -110,6 +113,19 @@
         .counter-btn { width: 28px; height: 28px; border-radius: 8px; border: none; background: #fff; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .counter-btn.plus { background: var(--primary-gradient); color: #fff; }
 
+        /* MODAL PETA INTERAKTIF MODERN */
+        #mapModal {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            z-index: 2000; display: none; align-items: center; justify-content: center; padding: 16px;
+        }
+        .map-modal-container {
+            width: 100%; max-width: 450px; background: #fff; border-radius: var(--radius-lg);
+            overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.2); display: flex; flex-direction: column;
+            animation: scaleUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        @keyframes scaleUp { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        #leafletMapContainer { width: 100%; height: 320px; background: #eee; }
+
         /* MODAL PEMBAYARAN */
         #paymentModal {
             position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
@@ -132,6 +148,8 @@
         .btn-secondary { background: #fff; color: var(--primary); border: 1.5px solid var(--primary); }
         .btn-main:active { transform: scale(0.97); }
     </style>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
@@ -147,23 +165,23 @@
     <div class="content-body">
         <div class="assistant-banner">
             <h3>CIKUR GO ASSISTANT</h3>
-            <p>Pencarian alamat otomatis, deteksi GPS presisi, dan rincian lengkap untuk driver.</p>
+            <p>Pencarian alamat otomatis, pilih titik rumah di peta interaktif, & rincian lengkap driver.</p>
         </div>
 
-        <!-- KOTAK TUJUAN PENGIRIMAN YANG DISEMPURNAKAN -->
+        <!-- TUJUAN PENGIRIMAN & PETA INTERAKTIF -->
         <div class="destination-box">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 10px; font-weight: 800; color: var(--text-muted);">TUJUAN PENGIRIMAN & GPS</span>
+                <span style="font-size: 10px; font-weight: 800; color: var(--text-muted);">TUJUAN PENGIRIMAN & PETA</span>
                 <span id="lockBadge" style="font-size: 9px; font-weight: 700; padding: 3px 8px; background: #fee2e2; color: var(--primary); border-radius: 12px;">Wajib Diisi</span>
             </div>
             
             <div class="address-row">
                 <div class="address-wrapper">
-                    <input type="text" id="globalCustomerAddress" class="input-field" placeholder="Ketik nama jalan / daerah..." autocomplete="off">
+                    <input type="text" id="globalCustomerAddress" class="input-field" placeholder="Ketik nama jalan atau pilih peta..." autocomplete="off">
                     <div id="addressSuggestionsList"></div>
                 </div>
-                <button type="button" class="gps-btn" onclick="detectUserLocation()" title="Gunakan Lokasi GPS Saat Ini">
-                    📍 GPS
+                <button type="button" class="map-btn" onclick="openInteractiveMap()">
+                    🗺️ Pilih Peta
                 </button>
             </div>
 
@@ -207,6 +225,24 @@
     <div class="footer-action">
         <button class="btn-main btn-checkout" onclick="openPaymentSummary()">Lanjut Pembayaran</button>
         <button class="btn-main btn-secondary" onclick="lanjutKe2In1()">Cikur 2-in-1</button>
+    </div>
+</div>
+
+<!-- MODAL PETA INTERAKTIF MODERN -->
+<div id="mapModal">
+    <div class="map-modal-container">
+        <div style="padding: 16px; background: #fff; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h3 style="font-size: 13px; font-weight: 800; color: var(--text-main);">Geser Peta ke Titik Rumah</h3>
+                <p style="font-size: 10px; color: var(--text-muted);">Posisikan pin merah tepat di depan rumah Anda</p>
+            </div>
+            <button onclick="closeInteractiveMap()" style="background: none; border: none; font-size: 16px; font-weight: 800; cursor: pointer; color: var(--text-muted);">✕</button>
+        </div>
+        <div id="leafletMapContainer"></div>
+        <div style="padding: 16px; background: #fff; border-top: 1px solid var(--border); display: flex; gap: 10px;">
+            <button class="btn-main btn-secondary" onclick="closeInteractiveMap()" style="padding: 10px;">Batal</button>
+            <button class="btn-main btn-checkout" onclick="confirmMapPinLocation()" style="padding: 10px;">Gunakan Titik Ini ✓</button>
+        </div>
     </div>
 </div>
 
@@ -261,7 +297,10 @@ let cartQuantities = {};
 let databaseResto = [];
 let currentModeSelected = 'instant';
 let searchTimeout = null;
-let customerCoords = { lat: null, lon: null };
+let customerCoords = { lat: -6.200000, lon: 106.816666 }; // Default Jakarta
+let mapInstance = null;
+let markerInstance = null;
+let tempSelectedAddress = "";
 
 function loadRestoData() {
     let multiRestos = JSON.parse(localStorage.getItem('cikur_all_restaurants')) || [];
@@ -398,42 +437,68 @@ function handleAddressCheckbox(cb) {
     badge.style.color = cb.checked ? "#10b981" : "#ff4757";
 }
 
-// FUNGSI DETEKSI GPS PRIBADI
-function detectUserLocation() {
-    if (!navigator.geolocation) {
-        alert("Perangkat Anda tidak mendukung fitur Geolocation GPS.");
-        return;
-    }
-    let addressInput = document.getElementById("globalCustomerAddress");
-    addressInput.value = "Mengambil titik koordinat GPS...";
+// LOGIKA PETA INTERAKTIF MODERN (LEAFLET.JS)
+function openInteractiveMap() {
+    document.getElementById("mapModal").style.display = "flex";
     
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            customerCoords.lat = position.coords.latitude;
-            customerCoords.lon = position.coords.longitude;
+    setTimeout(() => {
+        if (!mapInstance) {
+            mapInstance = L.map('leafletMapContainer').setView([customerCoords.lat, customerCoords.lon], 16);
             
-            // Reverse geocoding via Nominatim untuk ubah koordinat jadi teks jalan
-            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${customerCoords.lat}&lon=${customerCoords.lon}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data && data.display_name) {
-                        addressInput.value = data.display_name;
-                    } else {
-                        addressInput.value = `Lokasi GPS (${customerCoords.lat.toFixed(5)}, ${customerCoords.lon.toFixed(5)})`;
-                    }
-                    alert("Titik lokasi GPS berhasil dikunci secara presisi!");
-                })
-                .catch(() => {
-                    addressInput.value = `Koordinat: ${customerCoords.lat.toFixed(5)}, ${customerCoords.lon.toFixed(5)}`;
-                    alert("Koordinat GPS berhasil didapatkan!");
-                });
-        },
-        () => {
-            alert("Gagal mendeteksi lokasi. Pastikan izin GPS perangkat aktif.");
-            addressInput.value = "";
-        },
-        { enableHighAccuracy: true }
-    );
+            // Tile layer bersih modern (CartoDB Positron)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors & CARTO'
+            }).addTo(mapInstance);
+
+            markerInstance = L.marker([customerCoords.lat, customerCoords.lon], { draggable: true }).addTo(mapInstance);
+
+            markerInstance.on('dragend', function(e) {
+                let pos = markerInstance.getLatLng();
+                updateCoordinatesAndReverse(pos.lat, pos.lng);
+            });
+
+            mapInstance.on('click', function(e) {
+                markerInstance.setLatLng(e.latlng);
+                updateCoordinatesAndReverse(e.latlng.lat, e.latlng.lng);
+            });
+        } else {
+            mapInstance.setView([customerCoords.lat, customerCoords.lon], 16);
+            markerInstance.setLatLng([customerCoords.lat, customerCoords.lon]);
+            mapInstance.invalidateSize();
+        }
+    }, 200);
+}
+
+function updateCoordinatesAndReverse(lat, lon) {
+    customerCoords.lat = lat;
+    customerCoords.lon = lon;
+    
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.display_name) {
+                tempSelectedAddress = data.display_name;
+            } else {
+                tempSelectedAddress = `Titik Peta (${lat.toFixed(5)}, ${lon.toFixed(5)})`;
+            }
+        })
+        .catch(() => {
+            tempSelectedAddress = `Titik Peta (${lat.toFixed(5)}, ${lon.toFixed(5)})`;
+        });
+}
+
+function confirmMapPinLocation() {
+    if (tempSelectedAddress) {
+        document.getElementById("globalCustomerAddress").value = tempSelectedAddress;
+    } else {
+        document.getElementById("globalCustomerAddress").value = `Koordinat: ${customerCoords.lat.toFixed(5)}, ${customerCoords.lon.toFixed(5)}`;
+    }
+    closeInteractiveMap();
+}
+
+function closeInteractiveMap() {
+    document.getElementById("mapModal").style.display = "none";
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -489,8 +554,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function selectAutoAddress(displayName, lat, lon) {
     document.getElementById("globalCustomerAddress").value = displayName;
-    customerCoords.lat = lat;
-    customerCoords.lon = lon;
+    customerCoords.lat = Number(lat);
+    customerCoords.lon = Number(lon);
     document.getElementById("addressSuggestionsList").style.display = 'none';
 }
 
@@ -543,7 +608,7 @@ function closePaymentModal() {
     document.getElementById("paymentModal").style.display = "none";
 }
 
-// EKSEKUSI PEMBAYARAN & KIRIM KE RESTO & DRIVER DENGAN KOORDINAT GPS
+// EKSEKUSI PEMBAYARAN & KIRIM KE RESTO & DRIVER DENGAN TITIK PETA
 function finalizeAndExecuteOrder() {
     let addressBase = document.getElementById("globalCustomerAddress").value.trim();
     let houseNo = document.getElementById("customerHouseNo").value.trim();
@@ -593,7 +658,7 @@ function finalizeAndExecuteOrder() {
         } : null,
         restoName: targetRestoName,
         customerAddress: finalAddress,
-        coordinates: customerCoords, // Menyertakan koordinat lat & lon GPS untuk driver.html
+        coordinates: customerCoords, // Koordinat akurat hasil pilih peta interaktif untuk driver.html
         chatHistory: [],
         waktu: new Date().toLocaleDateString('id-ID') + ' ' + new Date().toLocaleTimeString('id-ID')
     };
@@ -616,7 +681,7 @@ function finalizeAndExecuteOrder() {
     localStorage.setItem('cikur_orders', JSON.stringify(allOrders));
     localStorage.setItem('cikur_2in1_orders', JSON.stringify(twoInOneOrders));
 
-    alert("Pesanan Berhasil! Alamat presisi & koordinat GPS diteruskan ke Resto & Driver.");
+    alert("Pesanan Berhasil! Titik Peta & Alamat Presisi diteruskan ke Resto & Driver.");
     window.location.href = "cikurgo2in1.html";
 }
 
