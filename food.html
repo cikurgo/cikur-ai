@@ -129,7 +129,6 @@
             pointer-events: none;
             filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
         }
-        
     </style>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -192,11 +191,11 @@
 
         <div style="margin-bottom: 8px;">
             <div style="display: flex; gap: 6px; align-items: flex-start; position: relative;">
-    <div style="flex: 1; position: relative;">
-        <input type="text" id="globalCustomerAddress" class="address-textarea" placeholder="Ketik nama gedung/tempat (cth: Alfa Tower)..." style="width: 100%; margin: 0; box-sizing: border-box;">
-        <div id="addressSuggestionsList" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; max-height: 180px; overflow-y: auto; z-index: 99999; box-shadow: 0 10px 25px rgba(0,0,0,0.15); margin-top: 4px;"></div>
-    </div>
-    <button type="button" onclick="openInteractiveMap()" style="background: #ea580c; color: #fff; border: none; padding: 0 12px; border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer; white-space: nowrap; height: 38px; display: flex; align-items: center; justify-content: center;">🗺️ Peta</button>
+                <div style="flex: 1; position: relative;" class="address-input-wrapper">
+                    <input type="text" id="globalCustomerAddress" class="address-textarea" placeholder="Ketik nama gedung/tempat (cth: Alfa Tower)..." style="width: 100%; margin: 0; box-sizing: border-box;">
+                    <div id="addressSuggestionsList" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; max-height: 180px; overflow-y: auto; z-index: 99999; box-shadow: 0 10px 25px rgba(0,0,0,0.15); margin-top: 4px;"></div>
+                </div>
+                <button type="button" onclick="openInteractiveMap()" style="background: #ea580c; color: #fff; border: none; padding: 0 12px; border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer; white-space: nowrap; height: 38px; display: flex; align-items: center; justify-content: center;">🗺️ Peta</button>
             </div>
             <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
                 <input type="checkbox" id="checkSimpanAlamat" onclick="handleAddressCheckbox(this)">
@@ -697,8 +696,10 @@ function finalizePayment(totalAmount, summaryText, address, restoName, restoAddr
     window.location.href = "index.html";
 }
 
-// GPS Otomatis saat Load
+// GPS Otomatis saat Load & Muat Data Resto
 window.addEventListener('load', function() {
+    loadRestoDataFromStorage();
+
     let addrInput = document.getElementById("globalCustomerAddress");
     if (navigator.geolocation && addrInput) {
         navigator.geolocation.getCurrentPosition(
@@ -810,7 +811,6 @@ document.addEventListener("DOMContentLoaded", function() {
     let searchInput = document.getElementById("globalCustomerAddress");
     if (!searchInput) return;
 
-    // Pastikan elemen wadah saran (dropdown) sudah ada di bawah input
     let wrapper = searchInput.parentElement;
     let suggestionsList = document.getElementById("addressSuggestionsList");
     
@@ -822,7 +822,6 @@ document.addEventListener("DOMContentLoaded", function() {
         wrapper.appendChild(suggestionsList);
     }
 
-    // Event saat mengetik nama tempat/gedung
     searchInput.addEventListener("input", function() {
         let query = this.value.trim();
         if (query.length < 3) {
@@ -866,7 +865,6 @@ document.addEventListener("DOMContentLoaded", function() {
             });
     });
 
-    // Sembunyikan dropdown jika klik di luar area input
     document.addEventListener("click", function(e) {
         if (!searchInput.contains(e.target) && !suggestionsList.contains(e.target)) {
             suggestionsList.style.display = "none";
@@ -900,3 +898,4 @@ function lanjutKe2In1() {
 
 </body>
 </html>
+```[cite: 2]
