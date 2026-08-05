@@ -333,17 +333,24 @@ function closeAssistantModal() {
 
 function loadRestoData() {
     let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
+    
+    // Pastikan allRestos berbentuk array valid
+    if (!Array.isArray(allRestos)) {
+        allRestos = [];
+    }
 
     databaseResto = allRestos.map(r => ({
-        id: r.id,
-        restoName: r.name,
-        restoAddress: r.address,
-        restoPhoto: r.photoFront,
-        items: r.menuList,
-        isOpen: r.isOpen
+        id: r.id || 'default_id',
+        restoName: r.name || r.restoName || 'Mitra Resto Cikur',
+        restoAddress: r.address || r.restoAddress || 'Alamat Mitra Resto',
+        restoPhoto: r.photoFront || r.restoPhoto || '',
+        items: r.menuList || r.items || [],
+        isOpen: r.isOpen !== undefined ? r.isOpen : true
     }));
 
-    renderRestoList(databaseResto);
+    if (typeof renderRestoList === 'function') {
+        renderRestoList(databaseResto);
+    }
 }
 function renderRestoList(restos) {
     let container = document.getElementById("restoContainer");
