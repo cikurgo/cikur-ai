@@ -390,40 +390,52 @@ function renderRestoList(restos) {
                 let catItemsHTML = "";
 
                 groupedMenu[cat].forEach(item => {
-                    let itemId = item.id || item.name || Math.random();
-                    let key = `${resto.id}_${itemId}`;
-                    let qty = cartQuantities[key] || 0;
-                    
-                    let price = Number(item.price) || 0;
-                    let discountPrice = item.discountPrice ? Number(item.discountPrice) : null;
-                    let itemName = item.name || item.nama || 'Menu Resto';
-                    let itemImg = item.photo || item.img || item.image || '';
+                        let itemId = item.id || item.name || Math.random();
+                        let key = `${resto.id}_${itemId}`;
+                        let qty = cartQuantities[key] || 0;
+                        
+                        let price = Number(item.price) || 0;
+                        let discountPrice = item.discountPrice ? Number(item.discountPrice) : null;
+                        let itemName = item.name || item.nama || 'Menu Resto';
+                        let itemImg = item.photo || item.img || item.image || '';
+                        
+                        // AMBIL STATUS DARI RESTO.HTML (Default true jika tidak diatur)
+                        let isAvailable = item.status !== undefined ? item.status : (item.isAvailable !== undefined ? item.isAvailable : true);
+                        
+                        let priceDisplay = "";
+                        if (discountPrice && discountPrice < price) {
+                            priceDisplay = `
+                                <div style="display: flex; gap: 6px; align-items: center; margin-top: 2px;">
+                                    <span style="font-size: 10px; color: #94a3b8; text-decoration: line-through;">Rp ${price.toLocaleString('id-ID')}</span>
+                                    <span style="font-size: 12px; font-weight: 800; color: var(--primary);">Rp ${discountPrice.toLocaleString('id-ID')}</span>
+                                </div>`;
+                        } else {
+                            priceDisplay = `<span style="font-size: 12px; font-weight: 800; color: var(--primary);">Rp ${price.toLocaleString('id-ID')}</span>`;
+                        }
 
-                    let priceDisplay = "";
-                    if (discountPrice && discountPrice < price) {
-                        priceDisplay = `
-                            <div style="display: flex; gap: 6px; align-items: center; margin-top: 2px;">
-                                <span style="font-size: 10px; color: #94a3b8; text-decoration: line-through;">Rp ${price.toLocaleString('id-ID')}</span>
-                                <span style="font-size: 12px; font-weight: 800; color: var(--primary);">Rp ${discountPrice.toLocaleString('id-ID')}</span>
+                        // JIKA HABIS: Tampilkan tulisan Habis. JIKA TERSEDIA: Tampilkan tombol + -
+                        let actionControlHTML = "";
+                        if (isAvailable) {
+                            actionControlHTML = `
+                                <div class="counter-control">
+                                    <button type="button" class="counter-btn" onclick="updateQty('${resto.id}', '${itemId}', -1)">-</button>
+                                    <span style="font-size: 11px; font-weight: 700; min-width: 18px; text-align: center;" id="q_${key}">${qty}</span>
+                                    <button type="button" class="counter-btn plus" onclick="updateQty('${resto.id}', '${itemId}', 1)">+</button>
+                                </div>`;
+                        } else {
+                            actionControlHTML = `<span style="font-size: 11px; font-weight: 700; color: #dc2626; background: #fee2e2; padding: 4px 8px; border-radius: 6px;">Habis</span>`;
+                        }
+
+                        catItemsHTML += `
+                            <div class="menu-item-row" style="opacity: ${isAvailable ? '1' : '0.6'};">
+                                ${itemImg ? `<img src="${itemImg}" class="menu-thumb">` : `<div style="width: 56px; height: 56px; border-radius: 12px; background: #e2e8f0; display:flex; align-items:center; justify-content:center; font-size:10px; color:#64748b;">No Foto</div>`}
+                                <div style="flex: 1; min-width: 0;">
+                                    <h4 style="font-size: 12px; font-weight: 700; margin: 0 0 2px 0; color: var(--text-main);">${itemName}</h4>
+                                    ${priceDisplay}
+                                </div>
+                                ${actionControlHTML}
                             </div>`;
-                    } else {
-                        priceDisplay = `<span style="font-size: 12px; font-weight: 800; color: var(--primary);">Rp ${price.toLocaleString('id-ID')}</span>`;
-                    }
-
-                    catItemsHTML += `
-                        <div class="menu-item-row">
-                            ${itemImg ? `<img src="${itemImg}" class="menu-thumb">` : `<div style="width: 56px; height: 56px; border-radius: 12px; background: #e2e8f0; display:flex; align-items:center; justify-content:center; font-size:10px; color:#64748b;">No Foto</div>`}
-                            <div style="flex: 1; min-width: 0;">
-                                <h4 style="font-size: 12px; font-weight: 700; margin: 0 0 2px 0; color: var(--text-main);">${itemName}</h4>
-                                ${priceDisplay}
-                            </div>
-                            <div class="counter-control">
-                                <button type="button" class="counter-btn" onclick="updateQty('${resto.id}', '${itemId}', -1)">-</button>
-                                <span style="font-size: 11px; font-weight: 700; min-width: 18px; text-align: center;" id="q_${key}">${qty}</span>
-                                <button type="button" class="counter-btn plus" onclick="updateQty('${resto.id}', '${itemId}', 1)">+</button>
-                            </div>
-                        </div>`;
-                });
+                    });
 
                 menusHTML += `
                     <div class="resto-card" id="${catAccordionId}" style="margin: 8px 0; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
