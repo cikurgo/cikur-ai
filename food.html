@@ -265,24 +265,7 @@
         </div>
     </div>
 </div>
-<!-- PASANG BAGIAN INI DI HTML FOOD.HTML -->
-<div class="resto-card active" id="cardSectionFoodMenu">
-    <div class="accordion-header" onclick="toggleAccordion('cardSectionFoodMenu')">
-        <div class="accordion-title-wrapper">
-            <svg class="section-icon" viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: var(--primary-red);"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4Z"/></svg>
-            <h3 style="font-size: 13px; font-weight: 800; color: var(--text-main); margin: 0;">Daftar Menu Restoran</h3>
-        </div>
-        <svg class="accordion-icon" viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: var(--text-muted); transition: transform 0.3s ease;"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
-    </div>
-    <div class="accordion-content" style="max-height: 2500px; margin-top: 14px;">
-        <div style="padding-top: 8px;">
-            <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 12px;">Pilih menu makanan atau minuman dari restoran yang tersedia.</p>
-            <div id="foodListMenuContainer">
-                <p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Memuat menu dari resto...</p>
-            </div>
-        </div>
-    </div>
-</div>
+
 <!-- MODAL PEMBAYARAN -->
 <div id="paymentModal">
     <div class="modal-content">
@@ -547,88 +530,6 @@ function handleAddressCheckbox(cb) {
     badge.style.color = cb.checked ? "#10b981" : "#ff4757";
 }
     
-// Fungsi Accordion untuk Dropdown Buka-Tutup Tampilan Menu
-function toggleAccordion(cardId) {
-    let card = document.getElementById(cardId);
-    if (card) {
-        card.classList.toggle('active');
-    }
-}
-
-// Fungsi Render Menu agar Sesuai Persis dengan Tampilan Resto
-function renderFoodMenuList() {
-    let container = document.getElementById("foodListMenuContainer");
-    if (!container) return;
-
-    // Menarik data resto yang di-input dari resto.html melalui localStorage
-    let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
-    let activeResto = allRestos.length > 0 ? allRestos[0] : null;
-
-    if (!activeResto || !activeResto.menuList || activeResto.menuList.length === 0) {
-        container.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada menu tersedia dari restoran.</p>`;
-        return;
-    }
-
-    // Kelompokkan menu berdasarkan kategori
-    let groupedMenu = {};
-    activeResto.menuList.forEach((item, index) => {
-        let cat = item.category || 'Umum';
-        if (!groupedMenu[cat]) {
-            groupedMenu[cat] = [];
-        }
-        groupedMenu[cat].push({ item, index });
-    });
-
-    let html = "";
-    for (let cat in groupedMenu) {
-        html += `<div style="font-size: 13px; font-weight: 800; color: #0f172a; margin: 12px 0 6px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 2px;">${cat}</div>`;
-        
-        groupedMenu[cat].forEach(({ item, index }) => {
-            let priceDisplay = "";
-            if (item.discountPrice && item.discountPrice < item.price) {
-                priceDisplay = `
-                    <div class="price-tag" style="display: flex; gap: 6px; align-items: center; margin-top: 2px;">
-                        <span class="original-price" style="font-size: 11px; color: #94a3b8; text-decoration: line-through;">Rp ${item.price.toLocaleString('id-ID')}</span>
-                        <span class="discount-price" style="font-size: 12px; font-weight: 800; color: var(--primary-red);">Rp ${item.discountPrice.toLocaleString('id-ID')}</span>
-                    </div>
-                `;
-            } else {
-                priceDisplay = `<div class="discount-price" style="font-size: 12px; font-weight: 800; color: var(--primary-red); margin-top: 2px;">Rp ${item.price.toLocaleString('id-ID')}</div>`;
-            }
-
-            let statusBadgeColor = item.status === 'Habis' ? '#fee2e2' : '#f0fdf4';
-            let statusBadgeText = item.status === 'Habis' ? '#dc2626' : '#16a34a';
-            let statusText = item.status || 'Tersedia';
-            let isSoldOut = item.status === 'Habis';
-            let isRestoClosed = !activeResto.isOpen;
-
-            let photoTag = item.photo ? `<img src="${item.photo}" style="width: 45px; height: 45px; object-fit: cover; border-radius: 8px; flex-shrink: 0;">` : `<div style="width: 45px; height: 45px; background: #e2e8f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #64748b; flex-shrink: 0;">No Foto</div>`;
-
-            html += `
-            <div class="menu-item-card" style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px; padding: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;">
-                ${photoTag}
-                <div class="menu-info" style="flex: 1;">
-                    <h4 style="font-size: 12px; margin: 0 0 2px 0; color: var(--text-main); font-weight: 700;">${item.name}</h4>
-                    ${priceDisplay}
-                    <div style="display: flex; gap: 6px; margin-top: 4px; align-items: center;">
-                        <span style="font-size: 9px; font-weight: 700; padding: 2px 6px; background: ${statusBadgeColor}; color: ${statusBadgeText}; border-radius: 4px;">${statusText}</span>
-                    </div>
-                </div>
-                <div>
-                    <button type="button" onclick="addToCart(${index})" ${isSoldOut || isRestoClosed ? 'disabled' : ''} style="background: ${isSoldOut || isRestoClosed ? '#94a3b8' : 'var(--primary-red)'}; color: #fff; border: none; padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer;">
-                        ${isRestoClosed ? 'Tutup' : (isSoldOut ? 'Habis' : 'Pilih')}
-                    </button>
-                </div>
-            </div>`;
-        });
-    }
-    container.innerHTML = html;
-}
-
-// Jalankan otomatis ketika halaman dimuat
-window.addEventListener("DOMContentLoaded", () => {
-    renderFoodMenuList();
-});
     
 // FUNGSI PETA & MODAL PETA
 function openMapModal() {
