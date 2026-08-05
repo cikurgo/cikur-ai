@@ -399,12 +399,11 @@ function renderRestoList(restos) {
                         let itemName = item.name || item.nama || 'Menu Resto';
                         let itemImg = item.photo || item.img || item.image || '';
                      
-                    // Cek status ketersediaan dari resto.html
+                    // Deteksi status ketersediaan dari resto.html secara akurat
                     let isAvailable = true;
                     if (item.status !== undefined) {
-                        isAvailable = (item.status === true || item.status === 'Tersedia' || item.status === 'Aktif' || item.status === '1');
-                    } else if (item.stok !== undefined) {
-                        isAvailable = (item.stok !== 'Habis' && item.stok !== 'Kosong' && Number(item.stok) > 0);
+                        let st = String(item.status).toLowerCase();
+                        isAvailable = !(st.includes('habis') || st.includes('kosong') || st === 'false' || st === '0');
                     } else if (item.isAvailable !== undefined) {
                         isAvailable = Boolean(item.isAvailable);
                     }
