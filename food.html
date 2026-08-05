@@ -332,22 +332,26 @@ function closeAssistantModal() {
 }
 
 function loadRestoData() {
-    let multiRestos = JSON.parse(localStorage.getItem('cikur_all_restaurants')) || [];
+    let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
     let singleProfile = JSON.parse(localStorage.getItem('cikur_resto_profile')) || {};
-    
-    // Mengambil data menu asli yang diinput dari resto.html
-    let dynamicMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || 
-                       JSON.parse(localStorage.getItem('menuList')) || [];
+    let singleMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || JSON.parse(localStorage.getItem('menuList')) || [];
 
-    if (multiRestos.length > 0) {
-        databaseResto = multiRestos;
+    if (allRestos.length > 0) {
+        // Memetakan struktur dari resto.html agar sesuai dengan pembacaan di food.html
+        databaseResto = allRestos.map(r => ({
+            id: r.id || 'default_resto',
+            restoName: r.name || 'Mitra Resto Cikur',
+            restoAddress: r.address || 'Alamat Mitra Resto',
+            restoPhoto: r.photoFront || r.photo || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
+            items: r.menuList || []
+        }));
     } else {
         databaseResto = [{
             id: singleProfile.id || 'resto_single',
             restoName: singleProfile.name || singleProfile.restoName || 'CIKUR Rubidotcom',
             restoAddress: singleProfile.address || singleProfile.alamat || 'Jl. KH. Abdul Halim, Majasari',
-            restoPhoto: singleProfile.photo || singleProfile.restoPhoto || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
-            items: dynamicMenus // Sinkron otomatis dengan menu asli resto.html
+            restoPhoto: singleProfile.photoFront || singleProfile.photo || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
+            items: singleMenus
         }];
     }
     renderRestoList(databaseResto);
