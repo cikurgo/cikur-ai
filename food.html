@@ -398,10 +398,16 @@ function renderRestoList(restos) {
                         let discountPrice = item.discountPrice ? Number(item.discountPrice) : null;
                         let itemName = item.name || item.nama || 'Menu Resto';
                         let itemImg = item.photo || item.img || item.image || '';
-                        
-                        // AMBIL STATUS DARI RESTO.HTML (Default true jika tidak diatur)
-                        let isAvailable = item.status !== undefined ? item.status : (item.isAvailable !== undefined ? item.isAvailable : true);
-                        
+                     
+                    // Cek status ketersediaan dari resto.html
+                    let isAvailable = true;
+                    if (item.status !== undefined) {
+                        isAvailable = (item.status === true || item.status === 'Tersedia' || item.status === 'Aktif' || item.status === '1');
+                    } else if (item.stok !== undefined) {
+                        isAvailable = (item.stok !== 'Habis' && item.stok !== 'Kosong' && Number(item.stok) > 0);
+                    } else if (item.isAvailable !== undefined) {
+                        isAvailable = Boolean(item.isAvailable);
+                    }
                         let priceDisplay = "";
                         if (discountPrice && discountPrice < price) {
                             priceDisplay = `
