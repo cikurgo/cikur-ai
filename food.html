@@ -338,14 +338,14 @@ function loadRestoData() {
     let singleMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || JSON.parse(localStorage.getItem('menuList')) || [];
 
     if (allRestos.length > 0) {
-        // Memetakan struktur dari resto.html agar sesuai dengan pembacaan di food.html
         databaseResto = allRestos.map(r => ({
+            ...r, // Mengambil seluruh data asli (termasuk isOpen, items, dll)
             id: r.id || 'default_resto',
-            restoName: r.name || 'Mitra Resto Cikur',
-            restoAddress: r.address || 'Alamat Mitra Resto',
-            restoPhoto: r.photoFront || r.photo || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
-            items: r.menuList || []
-        }));
+            restoName: r.name || r.restoName || 'Mitra Resto Cikur',
+            restoAddress: r.address || r.restoAddress || 'Alamat Mitra Resto',
+            restoPhoto: r.photoFront || r.photo || r.restoPhoto || '',
+            items: r.items || r.menuList || []
+        });
     } else {
         databaseResto = [{
             id: singleProfile.id || 'resto_single',
