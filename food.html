@@ -368,7 +368,7 @@ function renderRestoList(restos) {
         return;
     }
 
-    restos.forEach(resto => {
+    restos.forEach((resto, rIdx) => {
         let card = document.createElement("div");
         card.className = "resto-card";
         
@@ -382,7 +382,7 @@ function renderRestoList(restos) {
         if(itemsList.length === 0) {
             menusHTML = `<div style="padding: 12px 0; font-size: 11px; color: var(--text-muted); text-align: center;">Belum ada menu yang ditambahkan di resto ini.</div>`;
         } else {
-            // Kelompokkan menu berdasarkan kategori seperti di resto.html
+            // Kelompokkan menu berdasarkan kategori
             let groupedMenu = {};
             itemsList.forEach(item => {
                 let cat = item.category || 'Umum';
@@ -390,9 +390,11 @@ function renderRestoList(restos) {
                 groupedMenu[cat].push(item);
             });
 
+            let catIndex = 0;
             for(let cat in groupedMenu) {
-                menusHTML += `<div style="font-size: 12px; font-weight: 800; color: var(--text-main); margin: 10px 0 6px 0; border-bottom: 2px solid var(--border-color); padding-bottom: 2px;">${cat}</div>`;
-                
+                let catAccordionId = `cat_acc_${rIdx}_${catIndex++}`;
+                let catItemsHTML = "";
+
                 groupedMenu[cat].forEach(item => {
                     let itemId = item.id || item.name || Math.random();
                     let key = `${resto.id || restoName}_${itemId}`;
@@ -414,10 +416,9 @@ function renderRestoList(restos) {
                         priceDisplay = `<span style="font-size: 12px; font-weight: 800; color: var(--primary-red, #e60000);">Rp ${Number(price).toLocaleString('id-ID')}</span>`;
                     }
 
-                    // Gunakan harga diskon jika ada untuk perhitungan/transaksi
                     let finalPriceForCart = (discountPrice && discountPrice < price) ? discountPrice : price;
 
-                    menusHTML += `
+                    catItemsHTML += `
                         <div class="menu-item-row" style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px dashed var(--border-color);">
                             <img src="${itemImg}" class="menu-thumb" style="width: 48px; height: 48px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;" onerror="this.src='https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150'">
                             <div style="flex:1; min-width:0;">
@@ -432,6 +433,18 @@ function renderRestoList(restos) {
                             </div>
                         </div>`;
                 });
+
+                // Format Dropdown / Accordion persis seperti style di resto.html
+                menusHTML += `
+                    <div class="resto-card active" id="${catAccordionId}" style="margin: 8px 0; padding: 10px; background: #fafafa; border: 1px solid var(--border-color); border-radius: 12px;">
+                        <div class="accordion-header" onclick="toggleAccordion('${catAccordionId}')" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                            <h3 style="font-size: 12px; font-weight: 800; color: var(--text-main); margin: 0;">📂 ${cat}</h3>
+                            <svg class="accordion-icon" viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: var(--text-muted); transition: transform 0.3s ease;"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
+                        </div>
+                        <div class="accordion-content" style="max-height: 2000px; overflow: hidden; transition: max-height 0.35s ease;">
+                            <div style="padding-top: 6px;">${catItemsHTML}</div>
+                        </div>
+                    </div>`;
             }
         }
 
@@ -448,6 +461,7 @@ function renderRestoList(restos) {
         container.appendChild(card);
     });
 }
+                    
 function updateQty(restoId, itemId, change) {
     let key = `${restoId}_${itemId}`;
     let curr = cartQuantities[key] || 0;
