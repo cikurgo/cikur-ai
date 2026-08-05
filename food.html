@@ -371,26 +371,33 @@ function renderRestoList(restos) {
     restos.forEach((resto, rIdx) => {
         let card = document.createElement("div");
         card.className = "resto-card";
-        
+
+        // 1. Status Buka/Tutup Resto
+        let statusBadgeColor = resto.isOpen ? '#f0fdf4' : '#fee2e2';
+        let statusBadgeText = resto.isOpen ? '#16a34a' : '#dc2626';
+        let statusText = resto.isOpen ? 'Buka' : 'Tutup';
+
+        // 2. Data Informasi Resto
         let restoName = resto.restoName || resto.name || 'Mitra Resto Cikur';
         let restoAddress = resto.restoAddress || resto.address || 'Lokasi Mitra Resto';
-        let restoPhoto = resto.restoPhoto || resto.photoFront || resto.photo || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150';
+        let restoPhoto = resto.restoPhoto || resto.photoFront || resto.photo || '';
 
-        let itemsList = resto.items || resto.menuList || [];
+        // 3. Proses Daftar & Kategori Menu Terlebih Dahulu
+        let itemList = resto.items || resto.menuList || [];
         let menusHTML = "";
-        
-        if(itemsList.length === 0) {
-            menusHTML = `<div style="padding: 12px 0; font-size: 11px; color: var(--text-muted); text-align: center;">Belum ada menu yang ditambahkan di resto ini.</div>`;
+
+        if (itemList.length === 0) {
+            menusHTML = `<div style="padding: 12px 0; font-size: 11px; color: var(--text-muted); text-align: center;">Belum ada menu tersedia</div>`;
         } else {
             let groupedMenu = {};
-            itemsList.forEach(item => {
+            itemList.forEach(item => {
                 let cat = item.category || 'Umum';
-                if(!groupedMenu[cat]) groupedMenu[cat] = [];
+                if (!groupedMenu[cat]) groupedMenu[cat] = [];
                 groupedMenu[cat].push(item);
             });
 
             let catIndex = 0;
-            for(let cat in groupedMenu) {
+            for (let cat in groupedMenu) {
                 let catAccordionId = `cat_acc_${rIdx}_${catIndex++}`;
                 let catItemsHTML = "";
 
@@ -402,64 +409,66 @@ function renderRestoList(restos) {
                     let price = item.price || 0;
                     let discountPrice = item.discountPrice;
                     let itemName = item.name || item.nama || 'Menu Resto';
-                    let itemImg = item.photo || item.img || item.image || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150';
+                    let itemImg = item.photo || item.img || item.image || '';
 
                     let priceDisplay = "";
-                    if(discountPrice && discountPrice < price) {
+                    if (discountPrice && discountPrice < price) {
                         priceDisplay = `
                             <div style="display: flex; gap: 6px; align-items: center; margin-top: 2px;">
-                                <span style="font-size: 10px; color: #94a3b8; text-decoration: line-through;">Rp ${Number(price).toLocaleString('id-ID')}</span>
-                                <span style="font-size: 12px; font-weight: 800; color: var(--primary-red, #e60000);">Rp ${Number(discountPrice).toLocaleString('id-ID')}</span>
+                                <span style="font-size: 10px; color: #94a3b8; text-decoration: line-through;">Rp ${price.toLocaleString()}</span>
+                                <span style="font-size: 12px; font-weight: 800; color: var(--primary-red, #e60000);">Rp ${discountPrice.toLocaleString()}</span>
                             </div>`;
                     } else {
-                        priceDisplay = `<span style="font-size: 12px; font-weight: 800; color: var(--primary-red, #e60000);">Rp ${Number(price).toLocaleString('id-ID')}</span>`;
+                        priceDisplay = `<span style="font-size: 12px; font-weight: 800; color: var(--primary-red, #e60000);">Rp ${price.toLocaleString()}</span>`;
                     }
 
-                    let finalPriceForCart = (discountPrice && discountPrice < price) ? discountPrice : price;
-
                     catItemsHTML += `
-                        <div class="menu-item-row" style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px dashed var(--border-color);">
-                            <img src="${itemImg}" class="menu-thumb" style="width: 48px; height: 48px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;" onerror="this.src='https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150'">
-                            <div style="flex:1; min-width:0;">
-                                <h4 style="font-size: 12px; font-weight: 700; margin-bottom: 2px; color: var(--text-main);">${itemName}</h4>
+                        <div class="menu-item-row" style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f8fafc;">
+                            <img src="${itemImg}" class="menu-thumb" style="width: 48px; height: 48px; border-radius: 8px; object-fit: cover;">
+                            <div style="flex: 1; min-width: 0;">
+                                <h4 style="font-size: 12px; font-weight: 700; margin: 0 0 2px 0; color: var(--text-main);">${itemName}</h4>
                                 ${priceDisplay}
-                                <span style="font-size: 9px; font-weight: 700; padding: 1px 4px; background: ${item.status === 'Habis' ? '#fee2e2' : '#f0fdf4'}; color: ${item.status === 'Habis' ? '#dc2626' : '#16a34a'}; border-radius: 4px; display:inline-block; margin-top:2px;">${item.status || 'Tersedia'}</span>
                             </div>
-                            <div class="counter-control" style="display: flex; align-items: center; background: var(--background, #f8fafc); padding: 2px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <button type="button" class="counter-btn" onclick="updateQty('${resto.id || restoName}', '${itemId}', -1, ${finalPriceForCart})" style="width: 26px; height: 26px; border-radius: 6px; border: none; background: #fff; font-weight: 800; cursor: pointer;">-</button>
+                            <div class="counter-control" style="display: flex; align-items: center; gap: 8px;">
+                                <button type="button" class="counter-btn" onclick="updateQty('${resto.id || restoName}', '${itemId}', -1)" style="width: 24px; height: 24px; border-radius: 4px; border: 1px solid #cbd5e1; background: #fff;">-</button>
                                 <span style="font-size: 11px; font-weight: 700; min-width: 18px; text-align: center;" id="q_${key}">${qty}</span>
-                                <button type="button" class="counter-btn plus" onclick="updateQty('${resto.id || restoName}', '${itemId}', 1, ${finalPriceForCart})" style="width: 26px; height: 26px; border-radius: 6px; border: none; background: var(--primary-red, #e60000); color: #fff; font-weight: 800; cursor: pointer;">+</button>
+                                <button type="button" class="counter-btn plus" onclick="updateQty('${resto.id || restoName}', '${itemId}', 1)" style="width: 24px; height: 24px; border-radius: 4px; border: 1px solid var(--primary-red); background: var(--primary-red); color: #fff;">+</button>
                             </div>
                         </div>`;
                 });
 
-                // Dropdown default tertutup (hapus class active, max-height 0px)
                 menusHTML += `
-                    <div class="resto-card" id="${catAccordionId}" style="margin: 8px 0; padding: 10px; background: #fafafa; border: 1px solid var(--border-color); border-radius: 12px;">
+                    <div class="resto-card" id="${catAccordionId}" style="margin: 8px 0; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
                         <div class="accordion-header" onclick="toggleAccordion('${catAccordionId}')" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                            <h3 style="font-size: 12px; font-weight: 800; color: var(--text-main); margin: 0;">📂 ${cat}</h3>
-                            <svg class="accordion-icon" viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: var(--text-muted); transition: transform 0.3s ease; transform: rotate(-90deg);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
+                            <h3 style="font-size: 12px; font-weight: 800; color: var(--text-main); margin: 0;">${cat}</h3>
+                            <span class="accordion-icon" style="font-size: 12px; font-weight: bold;">▼</span>
                         </div>
-                        <div class="accordion-content" style="max-height: 0px; overflow: hidden; transition: max-height 0.35s ease;">
+                        <div class="accordion-content" style="max-height: 2000px; overflow: hidden; transition: max-height 0.3s ease;">
                             <div style="padding-top: 6px;">${catItemsHTML}</div>
                         </div>
                     </div>`;
             }
         }
 
+        // 4. Masukkan Header (Nama, Alamat, Foto, Badge Status) dan Menu ke dalam Card
         card.innerHTML = `
-            <div class="resto-header-info" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
-                <img src="${restoPhoto}" class="resto-avatar" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 1.5px solid var(--border-color); flex-shrink: 0;" onerror="this.src='https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150'">
-                <div style="flex:1; min-width:0;">
-                    <h3 style="font-size: 13px; font-weight: 800; color: var(--text-main); margin-bottom: 2px;">${restoName}</h3>
-                    <p style="font-size: 10px; color: var(--text-muted); font-weight: 600;">📍 ${restoAddress}</p>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #f1f5f9;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <img src="${restoPhoto}" style="width: 45px; height: 45px; border-radius: 50%; object-fit: cover;">
+                    <div>
+                        <h3 style="font-size: 14px; font-weight: 800; margin: 0; color: #0f172a;">${restoName}</h3>
+                        <p style="font-size: 11px; color: #64748b; margin: 2px 0 0 0;">${restoAddress}</p>
+                    </div>
                 </div>
+                <span id="restoStatusBadge" style="font-size: 11px; font-weight: 700; padding: 4px 10px; background: ${statusBadgeColor}; color: ${statusBadgeText}; border-radius: 6px;">
+                    ${statusText}
+                </span>
             </div>
-            <div>${menusHTML}</div>`;
-        
+            <div>${menusHTML}</div>
+        `;
+
         container.appendChild(card);
     });
-}
     
   function toggleAccordion(id) {
     let element = document.getElementById(id);
