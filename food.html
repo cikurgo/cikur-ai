@@ -333,15 +333,28 @@ function closeAssistantModal() {
 
 function loadRestoData() {
     let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
+    let singleProfile = JSON.parse(localStorage.getItem('cikur_resto_profile')) || {};
+    let singleMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || [];
 
-    databaseResto = allRestos.map(r => ({
-        id: r.id,
-        restoName: r.name,
-        restoAddress: r.address,
-        restoPhoto: r.photoFront,
-        items: r.menuList,
-        isOpen: r.isOpen
-    }));
+    if (allRestos.length > 0) {
+        databaseResto = allRestos.map(r => ({
+            id: r.id || 'default_resto',
+            restoName: r.name || r.restoName || 'Mitra Resto Cikur',
+            restoAddress: r.address || r.restoAddress || 'Alamat Mitra Resto',
+            restoPhoto: r.photoFront || r.photo || r.restoPhoto || '',
+            items: r.items || r.menuList || [],
+            isOpen: r.isOpen !== undefined ? r.isOpen : true
+        }));
+    } else {
+        databaseResto = [{
+            id: singleProfile.id || 'resto_single',
+            restoName: singleProfile.name || singleProfile.restoName || 'CIKUR Rubidotcom',
+            restoAddress: singleProfile.address || singleProfile.alamat || 'Jl. KH. Abdul Halim, Majasari',
+            restoPhoto: singleProfile.photoFront || singleProfile.photo || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
+            items: singleMenus,
+            isOpen: true
+        }];
+    }
 
     renderRestoList(databaseResto);
 }
