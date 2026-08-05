@@ -364,7 +364,7 @@ function renderRestoList(restos) {
     container.innerHTML = "";
     
     if(!restos || restos.length === 0) {
-        container.innerHTML = `<div style="text-align:center; padding: 20px; color: var(--text-muted); font-size: 12px;">Belum ada menu atau mitra resto yang terdaftar dari halaman Resto.</div>`;
+        container.innerHTML = `<div style="text-align:center; padding: 20px; color: var(--text-muted); font-size: 12px;">Belum ada mitra resto yang terdaftar.</div>`;
         return;
     }
 
@@ -374,43 +374,70 @@ function renderRestoList(restos) {
         
         let restoName = resto.restoName || resto.name || 'Mitra Resto Cikur';
         let restoAddress = resto.restoAddress || resto.address || 'Lokasi Mitra Resto';
-        let restoPhoto = resto.restoPhoto || resto.photo || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150';
+        let restoPhoto = resto.restoPhoto || resto.photoFront || resto.photo || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150';
 
+        let itemsList = resto.items || resto.menuList || [];
         let menusHTML = "";
-        let itemsList = resto.items || resto.menus || [];
         
         if(itemsList.length === 0) {
             menusHTML = `<div style="padding: 12px 0; font-size: 11px; color: var(--text-muted); text-align: center;">Belum ada menu yang ditambahkan di resto ini.</div>`;
         } else {
+            // Kelompokkan menu berdasarkan kategori seperti di resto.html
+            let groupedMenu = {};
             itemsList.forEach(item => {
-                let itemId = item.id || item.nama || item.name || Math.random();
-                let key = `${resto.id || restoName}_${itemId}`;
-                let qty = cartQuantities[key] || 0;
-                
-                // Menangkap berbagai kemungkinan penamaan properti dari resto.html
-                let price = item.discountPrice || item.price || item.harga || 0;
-                let itemName = item.name || item.nama || 'Menu Resto';
-                let itemImg = item.img || item.image || item.foto || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150';
-
-                menusHTML += `
-                    <div class="menu-item-row">
-                        <img src="${itemImg}" class="menu-thumb">
-                        <div style="flex:1; min-width:0;">
-                            <h4 style="font-size: 12px; font-weight: 700; margin-bottom: 2px; color: var(--text-main);">${itemName}</h4>
-                            <span style="font-size: 12px; font-weight: 800; color: var(--primary);">Rp ${Number(price).toLocaleString('id-ID')}</span>
-                        </div>
-                        <div class="counter-control">
-                            <button type="button" class="counter-btn" onclick="updateQty('${resto.id || restoName}', '${itemId}', -1)">-</button>
-                            <span style="font-size: 11px; font-weight: 700; min-width: 18px; text-align: center;" id="q_${key}">${qty}</span>
-                            <button type="button" class="counter-btn plus" onclick="updateQty('${resto.id || restoName}', '${itemId}', 1)">+</button>
-                        </div>
-                    </div>`;
+                let cat = item.category || 'Umum';
+                if(!groupedMenu[cat]) groupedMenu[cat] = [];
+                groupedMenu[cat].push(item);
             });
+
+            for(let cat in groupedMenu) {
+                menusHTML += `<div style="font-size: 12px; font-weight: 800; color: var(--text-main); margin: 10px 0 6px 0; border-bottom: 2px solid var(--border-color); padding-bottom: 2px;">${cat}</div>`;
+                
+                groupedMenu[cat].forEach(item => {
+                    let itemId = item.id || item.name || Math.random();
+                    let key = `${resto.id || restoName}_${itemId}`;
+                    let qty = cartQuantities[key] || 0;
+                    
+                    let price = item.price || 0;
+                    let discountPrice = item.discountPrice;
+                    let itemName = item.name || item.nama || 'Menu Resto';
+                    let itemImg = item.photo || item.img || item.image || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150';
+
+                    let priceDisplay = "";
+                    if(discountPrice && discountPrice < price) {
+                        priceDisplay = `
+                            <div style="display: flex; gap: 6px; align-items: center; margin-top: 2px;">
+                                <span style="font-size: 10px; color: #94a3b8; text-decoration: line-through;">Rp ${Number(price).toLocaleString('id-ID')}</span>
+                                <span style="font-size: 12px; font-weight: 800; color: var(--primary-red, #e60000);">Rp ${Number(discountPrice).toLocaleString('id-ID')}</span>
+                            </div>`;
+                    } else {
+                        priceDisplay = `<span style="font-size: 12px; font-weight: 800; color: var(--primary-red, #e60000);">Rp ${Number(price).toLocaleString('id-ID')}</span>`;
+                    }
+
+                    // Gunakan harga diskon jika ada untuk perhitungan/transaksi
+                    let finalPriceForCart = (discountPrice && discountPrice < price) ? discountPrice : price;
+
+                    menusHTML += `
+                        <div class="menu-item-row" style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px dashed var(--border-color);">
+                            <img src="${itemImg}" class="menu-thumb" style="width: 48px; height: 48px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;" onerror="this.src='https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150'">
+                            <div style="flex:1; min-width:0;">
+                                <h4 style="font-size: 12px; font-weight: 700; margin-bottom: 2px; color: var(--text-main);">${itemName}</h4>
+                                ${priceDisplay}
+                                <span style="font-size: 9px; font-weight: 700; padding: 1px 4px; background: ${item.status === 'Habis' ? '#fee2e2' : '#f0fdf4'}; color: ${item.status === 'Habis' ? '#dc2626' : '#16a34a'}; border-radius: 4px; display:inline-block; margin-top:2px;">${item.status || 'Tersedia'}</span>
+                            </div>
+                            <div class="counter-control" style="display: flex; align-items: center; background: var(--background, #f8fafc); padding: 2px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                <button type="button" class="counter-btn" onclick="updateQty('${resto.id || restoName}', '${itemId}', -1, ${finalPriceForCart})" style="width: 26px; height: 26px; border-radius: 6px; border: none; background: #fff; font-weight: 800; cursor: pointer;">-</button>
+                                <span style="font-size: 11px; font-weight: 700; min-width: 18px; text-align: center;" id="q_${key}">${qty}</span>
+                                <button type="button" class="counter-btn plus" onclick="updateQty('${resto.id || restoName}', '${itemId}', 1, ${finalPriceForCart})" style="width: 26px; height: 26px; border-radius: 6px; border: none; background: var(--primary-red, #e60000); color: #fff; font-weight: 800; cursor: pointer;">+</button>
+                            </div>
+                        </div>`;
+                });
+            }
         }
 
         card.innerHTML = `
-            <div class="resto-header-info">
-                <img src="${restoPhoto}" class="resto-avatar">
+            <div class="resto-header-info" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
+                <img src="${restoPhoto}" class="resto-avatar" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 1.5px solid var(--border-color); flex-shrink: 0;" onerror="this.src='https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150'">
                 <div style="flex:1; min-width:0;">
                     <h3 style="font-size: 13px; font-weight: 800; color: var(--text-main); margin-bottom: 2px;">${restoName}</h3>
                     <p style="font-size: 10px; color: var(--text-muted); font-weight: 600;">📍 ${restoAddress}</p>
