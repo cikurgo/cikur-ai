@@ -382,7 +382,6 @@ function renderRestoList(restos) {
         if(itemsList.length === 0) {
             menusHTML = `<div style="padding: 12px 0; font-size: 11px; color: var(--text-muted); text-align: center;">Belum ada menu yang ditambahkan di resto ini.</div>`;
         } else {
-            // Kelompokkan menu berdasarkan kategori
             let groupedMenu = {};
             itemsList.forEach(item => {
                 let cat = item.category || 'Umum';
@@ -434,14 +433,14 @@ function renderRestoList(restos) {
                         </div>`;
                 });
 
-                // Format Dropdown / Accordion persis seperti style di resto.html
+                // Dropdown default tertutup (hapus class active, max-height 0px)
                 menusHTML += `
-                    <div class="resto-card active" id="${catAccordionId}" style="margin: 8px 0; padding: 10px; background: #fafafa; border: 1px solid var(--border-color); border-radius: 12px;">
+                    <div class="resto-card" id="${catAccordionId}" style="margin: 8px 0; padding: 10px; background: #fafafa; border: 1px solid var(--border-color); border-radius: 12px;">
                         <div class="accordion-header" onclick="toggleAccordion('${catAccordionId}')" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
                             <h3 style="font-size: 12px; font-weight: 800; color: var(--text-main); margin: 0;">📂 ${cat}</h3>
-                            <svg class="accordion-icon" viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: var(--text-muted); transition: transform 0.3s ease;"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
+                            <svg class="accordion-icon" viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: var(--text-muted); transition: transform 0.3s ease; transform: rotate(-90deg);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
                         </div>
-                        <div class="accordion-content" style="max-height: 2000px; overflow: hidden; transition: max-height 0.35s ease;">
+                        <div class="accordion-content" style="max-height: 0px; overflow: hidden; transition: max-height 0.35s ease;">
                             <div style="padding-top: 6px;">${catItemsHTML}</div>
                         </div>
                     </div>`;
@@ -461,7 +460,24 @@ function renderRestoList(restos) {
         container.appendChild(card);
     });
 }
-                    
+    
+  function toggleAccordion(id) {
+    let element = document.getElementById(id);
+    if (!element) return;
+    
+    // Toggle class active pada card dropdown kategori
+    element.classList.toggle('active');
+    let content = element.querySelector('.accordion-content');
+    let icon = element.querySelector('.accordion-icon');
+    
+    if (element.classList.contains('active')) {
+        if (content) content.style.maxHeight = "2000px";
+        if (icon) icon.style.transform = "rotate(0deg)";
+    } else {
+        if (content) content.style.maxHeight = "0px";
+        if (icon) icon.style.transform = "rotate(-90deg)";
+    }
+  }                  
 function updateQty(restoId, itemId, change) {
     let key = `${restoId}_${itemId}`;
     let curr = cartQuantities[key] || 0;
