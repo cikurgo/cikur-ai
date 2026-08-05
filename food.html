@@ -332,29 +332,29 @@ function closeAssistantModal() {
 }
 
 function loadRestoData() {
-    let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
-    let singleProfile = JSON.parse(localStorage.getItem('cikur_resto_profile')) || {};
-    let singleMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || [];
+    let rawRestos = localStorage.getItem('cikur_all_restos') || localStorage.getItem('restos');
+    let rawMenus = localStorage.getItem('cikur_resto_menus') || localStorage.getItem('menuList');
+    
+    let allRestos = rawRestos ? JSON.parse(rawRestos) : [];
+    let singleMenus = rawMenus ? JSON.parse(rawMenus) : [];
+
+    console.log("Data Resto Terdeteksi:", allRestos);
+    console.log("Data Menu Terdeteksi:", singleMenus);
 
     if (allRestos.length > 0) {
-        databaseResto = allRestos.map(r => ({
-            id: r.id || 'default_resto',
-            restoName: r.name || r.restoName || 'Mitra Resto Cikur',
-            restoAddress: r.address || r.restoAddress || 'Alamat Mitra Resto',
-            restoPhoto: r.photoFront || r.photo || r.restoPhoto || '',
-            items: r.items || r.menuList || [],
-            isOpen: r.isOpen !== undefined ? r.isOpen : true
-        }));
+        databaseResto = allRestos;
     } else {
         databaseResto = [{
-            id: singleProfile.id || 'resto_single',
-            restoName: singleProfile.name || singleProfile.restoName || 'CIKUR Rubidotcom',
-            restoAddress: singleProfile.address || singleProfile.alamat || 'Jl. KH. Abdul Halim, Majasari',
-            restoPhoto: singleProfile.photoFront || singleProfile.photo || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
+            id: 'resto_single',
+            restoName: 'CIKUR Rubidotcom',
+            restoAddress: 'Jl. KH. Abdul Halim, Majasari',
+            restoPhoto: 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
             items: singleMenus,
             isOpen: true
         }];
     }
+    
+    // Paksa render langsung tanpa filter rumit
     renderRestoList(databaseResto);
 }
 function renderRestoList(restos) {
