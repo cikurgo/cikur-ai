@@ -334,10 +334,10 @@ function closeAssistantModal() {
 function loadRestoData() {
     let multiRestos = JSON.parse(localStorage.getItem('cikur_all_restaurants')) || [];
     let singleProfile = JSON.parse(localStorage.getItem('cikur_resto_profile')) || {};
-    let singleMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || JSON.parse(localStorage.getItem('menuList')) || [
-        { id: 'm1', name: 'Minuman Spesial Cikur', price: 17500, img: 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150' },
-        { id: 'm2', name: 'Kuliner Lezat Nusantara', price: 25000, img: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=150' }
-    ];
+    
+    // Mengambil data menu asli yang diinput dari resto.html
+    let dynamicMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || 
+                       JSON.parse(localStorage.getItem('menuList')) || [];
 
     if (multiRestos.length > 0) {
         databaseResto = multiRestos;
@@ -347,7 +347,7 @@ function loadRestoData() {
             restoName: singleProfile.name || singleProfile.restoName || 'CIKUR Rubidotcom',
             restoAddress: singleProfile.address || singleProfile.alamat || 'Jl. KH. Abdul Halim, Majasari',
             restoPhoto: singleProfile.photo || singleProfile.restoPhoto || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
-            items: singleMenus
+            items: dynamicMenus // Sinkron otomatis dengan menu asli resto.html
         }];
     }
     renderRestoList(databaseResto);
@@ -355,10 +355,11 @@ function loadRestoData() {
 
 function renderRestoList(restos) {
     let container = document.getElementById("restoContainer");
+    if (!container) return;
     container.innerHTML = "";
     
     if(!restos || restos.length === 0) {
-        container.innerHTML = `<div style="text-align:center; padding: 20px; color: var(--text-muted); font-size: 12px;">Belum ada mitra resto yang terdaftar.</div>`;
+        container.innerHTML = `<div style="text-align:center; padding: 20px; color: var(--text-muted); font-size: 12px;">Belum ada menu atau mitra resto yang terdaftar dari halaman Resto.</div>`;
         return;
     }
 
@@ -374,15 +375,17 @@ function renderRestoList(restos) {
         let itemsList = resto.items || resto.menus || [];
         
         if(itemsList.length === 0) {
-            menusHTML = `<div style="padding: 8px 0; font-size: 11px; color: var(--text-muted); text-align: center;">Belum ada menu.</div>`;
+            menusHTML = `<div style="padding: 12px 0; font-size: 11px; color: var(--text-muted); text-align: center;">Belum ada menu yang ditambahkan di resto ini.</div>`;
         } else {
             itemsList.forEach(item => {
-                let itemId = item.id || item.nama || Math.random();
+                let itemId = item.id || item.nama || item.name || Math.random();
                 let key = `${resto.id || restoName}_${itemId}`;
                 let qty = cartQuantities[key] || 0;
-                let price = item.discountPrice || item.price || 0;
+                
+                // Menangkap berbagai kemungkinan penamaan properti dari resto.html
+                let price = item.discountPrice || item.price || item.harga || 0;
                 let itemName = item.name || item.nama || 'Menu Resto';
-                let itemImg = item.img || item.image || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150';
+                let itemImg = item.img || item.image || item.foto || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150';
 
                 menusHTML += `
                     <div class="menu-item-row">
@@ -413,7 +416,6 @@ function renderRestoList(restos) {
         container.appendChild(card);
     });
 }
-
 function updateQty(restoId, itemId, change) {
     let key = `${restoId}_${itemId}`;
     let curr = cartQuantities[key] || 0;
