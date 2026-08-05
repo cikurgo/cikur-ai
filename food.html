@@ -26,43 +26,45 @@
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
-body {
-    background: var(--body-bg, #f1f5f9);
-    color: var(--text-main, #0f172a);
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    margin: 0;
-}
+        
+        body {
+            background: var(--body-bg, #f1f5f9);
+            color: var(--text-main, #0f172a);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            margin: 0;
+        }
 
-.app-container {
-    width: 100vw;
-    min-height: 100vh;
-    position: relative;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    padding-bottom: 130px;
-    background: var(--surface, #f8fafc);
-    margin: 0;
-    border-radius: 0;
-    box-shadow: none;
-}
+        .app-container {
+            width: 100vw;
+            min-height: 100vh;
+            position: relative;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            padding-bottom: 130px;
+            background: var(--surface, #f8fafc);
+            margin: 0;
+            border-radius: 0;
+            box-shadow: none;
+        }
 
-@media (min-width: 480px) {
-    body {
-        align-items: center;
-        padding: 20px;
-    }
-    .app-container {
-        max-width: 440px;
-        min-height: 850px;
-        border-radius: 36px;
-        border: 1px solid var(--border, #e2e8f0);
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
-    }
-}
+        @media (min-width: 480px) {
+            body {
+                align-items: center;
+                padding: 20px;
+            }
+            .app-container {
+                max-width: 440px;
+                min-height: 850px;
+                border-radius: 36px;
+                border: 1px solid var(--border, #e2e8f0);
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+            }
+        }
+
         .header {
             padding: 18px 24px; display: flex; align-items: center; justify-content: space-between;
             background: var(--surface-glass); backdrop-filter: blur(12px);
@@ -181,35 +183,30 @@ body {
             <p>Pencarian alamat otomatis, deteksi GPS presisi, dan rincian lengkap untuk driver.</p>
         </div>
 
-        <!-- TUJUAN PENGIRIMAN & GPS (Tampilan Rapi & Menarik) -->
+        <!-- TUJUAN PENGIRIMAN & GPS -->
         <div class="destination-box" style="background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-md); padding: 16px; box-shadow: var(--shadow-soft); display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <span style="font-size: 10px; font-weight: 800; color: var(--text-muted); letter-spacing: 0.5px;">TUJUAN PENGIRIMAN</span>
                 <span id="lockBadge" style="font-size: 9px; font-weight: 700; padding: 3px 8px; background: #fee2e2; color: var(--primary); border-radius: 12px;">Info Alamat Yaaa</span>
             </div>
             
-            <!-- Baris Input Teks & Tombol Peta Berikon Menarik -->
             <div style="display: flex; gap: 8px; align-items: center; position: relative;">
                 <div style="position: relative; flex: 1; min-width: 0;">
                     <input type="text" id="globalCustomerAddress" class="input-field" placeholder="Ketik nama jalan / daerah..." autocomplete="off" style="width: 100%; padding: 12px 14px; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; color: var(--text-main); outline: none;">
-                    <!-- Kotak Saran Pencarian Teks (Aman & Tidak Rusak) -->
                     <div id="addressSuggestionsList" style="position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-sm); margin-top: 4px; box-shadow: var(--shadow-hover); max-height: 200px; overflow-y: auto; z-index: 3000; display: none;"></div>
                 </div>
                 
-                <!-- Tombol Pilih Peta dengan Ikon Menarik -->
                 <button type="button" onclick="openMapModal()" style="background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%); color: #fff; border: none; padding: 12px 14px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 800; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(255,71,87,0.25); flex-shrink: 0; transition: var(--transition);">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                     Pilih Peta
                 </button>
             </div>
 
-            <!-- Baris Detail Rumah & Patokan -->
             <div style="display: flex; gap: 8px;">
                 <input type="text" id="customerHouseNo" class="input-field" placeholder="No. Rumah / Blok / Lantai" style="width: 100%; padding: 12px 14px; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; color: var(--text-main); outline: none;">
                 <input type="text" id="customerNoteAddress" class="input-field" placeholder="Patokan (Cth: Pagar hitam)" style="width: 100%; padding: 12px 14px; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; color: var(--text-main); outline: none;">
             </div>
 
-            <!-- Opsi Kunci Alamat -->
             <label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; color: var(--text-muted); cursor: pointer; margin-top: 2px;">
                 <input type="checkbox" id="lockAddressCheck" onchange="handleAddressCheckbox(this)" style="width: 14px; height: 14px; accent-color: var(--primary);">
                 Simpan Alamat Tujuan, Lanjut Pilih Menu
@@ -346,11 +343,10 @@ let cartQuantities = {};
 let databaseResto = [];
 let currentModeSelected = 'instant';
 let searchTimeout = null;
-let customerCoords = { lat: -6.3245, lon: 106.1524 }; // Default Pandeglang/Banten
+let customerCoords = { lat: -6.3245, lon: 106.1524 };
 let leafletMap = null;
 let mapMarker = null;
 
-// Fungsi untuk membuka & menutup Modal Assistant Banner
 function openAssistantModal() {
     document.getElementById("assistantModal").style.display = "flex";
 }
@@ -358,13 +354,9 @@ function closeAssistantModal() {
     document.getElementById("assistantModal").style.display = "none";
 }
 
-// SINKRONISASI DATA RESTO & MULTI-MITRA DARI resto.html
 function loadRestoData() {
     let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
-    
-    if (!Array.isArray(allRestos)) {
-        allRestos = [];
-    }
+    if (!Array.isArray(allRestos)) { allRestos = []; }
 
     databaseResto = allRestos.map(r => ({
         id: r.id || 'default_resto_' + Math.random(),
@@ -428,7 +420,6 @@ function renderRestoList(restos) {
                     let itemName = item.name || item.nama || 'Menu Resto';
                     let itemImg = item.photo || item.img || item.image || '';
                     
-                    // Deteksi status ketersediaan dari resto.html secara akurat
                     let isAvailable = true;
                     if (item.status !== undefined) {
                         let st = String(item.status).toLowerCase();
@@ -437,7 +428,6 @@ function renderRestoList(restos) {
                         isAvailable = Boolean(item.isAvailable);
                     }
 
-                    // Badge status kecil di sebelah nama menu
                     let itemStatusLabel = isAvailable ? 
                         `<span style="font-size: 9px; font-weight: 700; padding: 2px 6px; background: #f0fdf4; color: #16a34a; border-radius: 4px;">Tersedia</span>` : 
                         `<span style="font-size: 9px; font-weight: 700; padding: 2px 6px; background: #fee2e2; color: #dc2626; border-radius: 4px;">Habis</span>`;
@@ -453,7 +443,6 @@ function renderRestoList(restos) {
                         priceDisplay = `<span style="font-size: 12px; font-weight: 800; color: var(--primary);">Rp ${price.toLocaleString('id-ID')}</span>`;
                     }
 
-                    // Tombol Kuantitas atau Tanda Habis
                     let actionControlHTML = "";
                     if (isAvailable) {
                         actionControlHTML = `
@@ -579,7 +568,6 @@ function handleAddressCheckbox(cb) {
     badge.style.color = cb.checked ? "#10b981" : "#ff4757";
 }
 
-// FUNGSI PETA & MODAL PETA
 function openMapModal() {
     document.getElementById("mapModal").style.display = "flex";
     setTimeout(() => {
@@ -764,7 +752,6 @@ function closePaymentModal() {
     document.getElementById("paymentModal").style.display = "none";
 }
 
-// EKSEKUSI PEMBAYARAN & KIRIM KE RESTO & DRIVER DENGAN KOORDINAT GPS
 function finalizeAndExecuteOrder() {
     let addressBase = document.getElementById("globalCustomerAddress").value.trim();
     let houseNo = document.getElementById("customerHouseNo").value.trim();
