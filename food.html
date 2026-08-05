@@ -214,11 +214,10 @@
 
     <div class="footer-action">
         <button class="btn-main btn-checkout" onclick="openPaymentSummary()">Lanjut Pembayaran</button>
-        
     </div>
 </div>
 
-<!-- MODAL ASSISTANT (Fungsi Banner Atas) -->
+<!-- MODAL ASSISTANT -->
 <div id="assistantModal">
     <div style="width: 100%; max-width: 440px; background: #fff; border-radius: 24px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
         <div style="padding: 16px; background: #1e293b; color: #fff; display: flex; justify-content: space-between; align-items: center;">
@@ -254,7 +253,6 @@
         </div>
         <div style="position: relative; width: 100%; height: 340px;">
             <div id="leafletMapContainer" style="width: 100%; height: 100%;"></div>
-            <!-- Tombol GPS Langsung di dalam Peta -->
             <button type="button" onclick="detectUserLocationViaMap()" style="position: absolute; bottom: 20px; right: 20px; z-index: 1000; background: #fff; border: 1.5px solid var(--border); border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); cursor: pointer;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
@@ -331,16 +329,16 @@ function closeAssistantModal() {
     document.getElementById("assistantModal").style.display = "none";
 }
 
+// SINKRONISASI DATA RESTO & MULTI-MITRA DARI resto.html
 function loadRestoData() {
     let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
     
-    // Pastikan allRestos berbentuk array valid
     if (!Array.isArray(allRestos)) {
         allRestos = [];
     }
 
     databaseResto = allRestos.map(r => ({
-        id: r.id || 'default_id',
+        id: r.id || 'default_resto_' + Math.random(),
         restoName: r.name || r.restoName || 'Mitra Resto Cikur',
         restoAddress: r.address || r.restoAddress || 'Alamat Mitra Resto',
         restoPhoto: r.photoFront || r.restoPhoto || '',
@@ -348,10 +346,9 @@ function loadRestoData() {
         isOpen: r.isOpen !== undefined ? r.isOpen : true
     }));
 
-    if (typeof renderRestoList === 'function') {
-        renderRestoList(databaseResto);
-    }
+    renderRestoList(databaseResto);
 }
+
 function renderRestoList(restos) {
     let container = document.getElementById("restoContainer");
     if (!container) return;
@@ -366,18 +363,15 @@ function renderRestoList(restos) {
         let card = document.createElement("div");
         card.className = "resto-card";
 
-        // 1. Status Buka/Tutup Resto
         let statusBadgeColor = resto.isOpen ? '#f0fdf4' : '#fee2e2';
         let statusBadgeText = resto.isOpen ? '#16a34a' : '#dc2626';
         let statusText = resto.isOpen ? 'Buka' : 'Tutup';
 
-        // 2. Data Informasi Resto
-        let restoName = resto.restoName || resto.name || 'Mitra Resto Cikur';
-        let restoAddress = resto.restoAddress || resto.address || 'Lokasi Mitra Resto';
-        let restoPhoto = resto.restoPhoto || resto.photoFront || resto.photo || '';
+        let restoName = resto.restoName || 'Mitra Resto Cikur';
+        let restoAddress = resto.restoAddress || 'Lokasi Mitra Resto';
+        let restoPhoto = resto.restoPhoto || '';
 
-        // 3. Proses Daftar & Kategori Menu Terlebih Dahulu
-        let itemList = resto.items || resto.menuList || [];
+        let itemList = resto.items || [];
         let menusHTML = "";
 
         if (itemList.length === 0) {
@@ -397,11 +391,11 @@ function renderRestoList(restos) {
 
                 groupedMenu[cat].forEach(item => {
                     let itemId = item.id || item.name || Math.random();
-                    let key = `${resto.id || restoName}_${itemId}`;
+                    let key = `${resto.id}_${itemId}`;
                     let qty = cartQuantities[key] || 0;
                     
-                    let price = item.price || 0;
-                    let discountPrice = item.discountPrice;
+                    let price = Number(item.price) || 0;
+                    let discountPrice = item.discountPrice ? Number(item.discountPrice) : null;
                     let itemName = item.name || item.nama || 'Menu Resto';
                     let itemImg = item.photo || item.img || item.image || '';
 
@@ -409,24 +403,24 @@ function renderRestoList(restos) {
                     if (discountPrice && discountPrice < price) {
                         priceDisplay = `
                             <div style="display: flex; gap: 6px; align-items: center; margin-top: 2px;">
-                                <span style="font-size: 10px; color: #94a3b8; text-decoration: line-through;">Rp ${price.toLocaleString()}</span>
-                                <span style="font-size: 12px; font-weight: 800; color: var(--primary-red, #e60000);">Rp ${discountPrice.toLocaleString()}</span>
+                                <span style="font-size: 10px; color: #94a3b8; text-decoration: line-through;">Rp ${price.toLocaleString('id-ID')}</span>
+                                <span style="font-size: 12px; font-weight: 800; color: var(--primary);">Rp ${discountPrice.toLocaleString('id-ID')}</span>
                             </div>`;
                     } else {
-                        priceDisplay = `<span style="font-size: 12px; font-weight: 800; color: var(--primary-red, #e60000);">Rp ${price.toLocaleString()}</span>`;
+                        priceDisplay = `<span style="font-size: 12px; font-weight: 800; color: var(--primary);">Rp ${price.toLocaleString('id-ID')}</span>`;
                     }
 
                     catItemsHTML += `
-                        <div class="menu-item-row" style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f8fafc;">
-                            <img src="${itemImg}" class="menu-thumb" style="width: 48px; height: 48px; border-radius: 8px; object-fit: cover;">
+                        <div class="menu-item-row">
+                            ${itemImg ? `<img src="${itemImg}" class="menu-thumb">` : `<div style="width: 56px; height: 56px; border-radius: 12px; background: #e2e8f0; display:flex; align-items:center; justify-content:center; font-size:10px; color:#64748b;">No Foto</div>`}
                             <div style="flex: 1; min-width: 0;">
                                 <h4 style="font-size: 12px; font-weight: 700; margin: 0 0 2px 0; color: var(--text-main);">${itemName}</h4>
                                 ${priceDisplay}
                             </div>
-                            <div class="counter-control" style="display: flex; align-items: center; gap: 8px;">
-                                <button type="button" class="counter-btn" onclick="updateQty('${resto.id || restoName}', '${itemId}', -1)" style="width: 24px; height: 24px; border-radius: 4px; border: 1px solid #cbd5e1; background: #fff;">-</button>
+                            <div class="counter-control">
+                                <button type="button" class="counter-btn" onclick="updateQty('${resto.id}', '${itemId}', -1)">-</button>
                                 <span style="font-size: 11px; font-weight: 700; min-width: 18px; text-align: center;" id="q_${key}">${qty}</span>
-                                <button type="button" class="counter-btn plus" onclick="updateQty('${resto.id || restoName}', '${itemId}', 1)" style="width: 24px; height: 24px; border-radius: 4px; border: 1px solid var(--primary-red); background: var(--primary-red); color: #fff;">+</button>
+                                <button type="button" class="counter-btn plus" onclick="updateQty('${resto.id}', '${itemId}', 1)">+</button>
                             </div>
                         </div>`;
                 });
@@ -444,17 +438,14 @@ function renderRestoList(restos) {
             }
         }
 
-        // 4. Masukkan Header (Nama, Alamat, Foto, Badge Status) dan Menu ke dalam Card
         card.innerHTML = `
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #f1f5f9;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <img src="${restoPhoto}" style="width: 45px; height: 45px; border-radius: 50%; object-fit: cover;">
-                    <div>
-                        <h3 style="font-size: 14px; font-weight: 800; margin: 0; color: #0f172a;">${restoName}</h3>
-                        <p style="font-size: 11px; color: #64748b; margin: 2px 0 0 0;">${restoAddress}</p>
-                    </div>
+            <div class="resto-header-info">
+                ${restoPhoto ? `<img src="${restoPhoto}" class="resto-avatar">` : `<div style="width: 50px; height: 50px; border-radius: 50%; background: #e2e8f0; display:flex; align-items:center; justify-content:center; font-size:10px; color:#64748b;">Resto</div>`}
+                <div style="flex: 1; min-width: 0;">
+                    <h3 style="font-size: 14px; font-weight: 800; margin: 0; color: #0f172a;">${restoName}</h3>
+                    <p style="font-size: 11px; color: #64748b; margin: 2px 0 0 0;">${restoAddress}</p>
                 </div>
-                <span id="restoStatusBadge" style="font-size: 11px; font-weight: 700; padding: 4px 10px; background: ${statusBadgeColor}; color: ${statusBadgeText}; border-radius: 6px;">
+                <span style="font-size: 11px; font-weight: 700; padding: 4px 10px; background: ${statusBadgeColor}; color: ${statusBadgeText}; border-radius: 6px;">
                     ${statusText}
                 </span>
             </div>
@@ -463,24 +454,24 @@ function renderRestoList(restos) {
 
         container.appendChild(card);
     });
-    
-  function toggleAccordion(id) {
+}
+
+function toggleAccordion(id) {
     let element = document.getElementById(id);
     if (!element) return;
-    
-    // Toggle class active pada card dropdown kategori
     element.classList.toggle('active');
     let content = element.querySelector('.accordion-content');
     let icon = element.querySelector('.accordion-icon');
     
     if (element.classList.contains('active')) {
-        if (content) content.style.maxHeight = "2000px";
-        if (icon) icon.style.transform = "rotate(0deg)";
-    } else {
         if (content) content.style.maxHeight = "0px";
         if (icon) icon.style.transform = "rotate(-90deg)";
+    } else {
+        if (content) content.style.maxHeight = "2000px";
+        if (icon) icon.style.transform = "rotate(0deg)";
     }
-  }                  
+}
+
 function updateQty(restoId, itemId, change) {
     let key = `${restoId}_${itemId}`;
     let curr = cartQuantities[key] || 0;
@@ -498,11 +489,11 @@ function filterRestoList() {
         return;
     }
     let filtered = databaseResto.map(resto => {
-        let itemsList = resto.items || resto.menus || [];
+        let itemsList = resto.items || [];
         let matchedItems = itemsList.filter(i => 
             (i.name || i.nama || '').toLowerCase().includes(keyword)
         );
-        let restoNameMatch = (resto.restoName || resto.name || '').toLowerCase().includes(keyword);
+        let restoNameMatch = (resto.restoName || '').toLowerCase().includes(keyword);
         if(restoNameMatch || matchedItems.length > 0) {
             return { ...resto, items: restoNameMatch ? itemsList : matchedItems };
         }
@@ -532,8 +523,7 @@ function handleAddressCheckbox(cb) {
     badge.style.background = cb.checked ? "#dcfce7" : "#fee2e2";
     badge.style.color = cb.checked ? "#10b981" : "#ff4757";
 }
-    
-    
+
 // FUNGSI PETA & MODAL PETA
 function openMapModal() {
     document.getElementById("mapModal").style.display = "flex";
@@ -547,7 +537,7 @@ function openMapModal() {
 
             mapMarker = L.marker([customerCoords.lat, customerCoords.lon], { draggable: true }).addTo(leafletMap);
 
-            mapMarker.on('dragend', function(e) {
+            mapMarker.on('dragend', function() {
                 let pos = mapMarker.getLatLng();
                 customerCoords.lat = pos.lat;
                 customerCoords.lon = pos.lng;
@@ -610,20 +600,9 @@ function confirmMapLocation() {
             addressInput.value = `Koordinat: ${customerCoords.lat.toFixed(5)}, ${customerCoords.lon.toFixed(5)}`;
         });
 }
-    
+
 document.addEventListener("DOMContentLoaded", () => {
     loadRestoData();
-    
-    let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
-    if (allRestos.length > 0) {
-        let activeResto = allRestos[0];
-        let statusElement = document.getElementById("restoStatusBadge");
-        if (statusElement) {
-            statusElement.innerText = activeResto.isOpen ? "Buka" : "Tutup";
-            statusElement.style.background = activeResto.isOpen ? "#f0fdf4" : "#fee2e2";
-            statusElement.style.color = activeResto.isOpen ? "#16a34a" : "#dc2626";
-        }
-    }
     
     let searchInput = document.getElementById("globalCustomerAddress");
     let list = document.getElementById("addressSuggestionsList");
@@ -698,13 +677,13 @@ function openPaymentSummary() {
     let subtotal = 0, summaryHTML = "";
     
     databaseResto.forEach(resto => {
-        let itemsList = resto.items || resto.menus || [];
+        let itemsList = resto.items || [];
         itemsList.forEach(item => {
-            let itemId = item.id || item.nama;
-            let key = `${resto.id || resto.restoName}_${itemId}`;
+            let itemId = item.id || item.name;
+            let key = `${resto.id}_${itemId}`;
             let qty = cartQuantities[key] || 0;
             if(qty > 0) {
-                let price = item.discountPrice || item.price || 0;
+                let price = item.discountPrice ? Number(item.discountPrice) : Number(item.price) || 0;
                 let itemTotal = price * qty;
                 subtotal += itemTotal;
                 summaryHTML += `
@@ -743,17 +722,17 @@ function finalizeAndExecuteOrder() {
     
     let paymentMethod = document.getElementById("paymentMethodSelect").value;
 
-    let subtotal = 0, summaryList = [], structuredItems = [], targetRestoName = 'Test ON';
+    let subtotal = 0, summaryList = [], structuredItems = [], targetRestoName = 'Mitra Resto Cikur';
     
     databaseResto.forEach(resto => {
-        let itemsList = resto.items || resto.menus || [];
+        let itemsList = resto.items || [];
         itemsList.forEach(item => {
-            let itemId = item.id || item.nama;
-            let key = `${resto.id || resto.restoName}_${itemId}`;
+            let itemId = item.id || item.name;
+            let key = `${resto.id}_${itemId}`;
             let qty = cartQuantities[key] || 0;
             if(qty > 0) {
-                targetRestoName = resto.restoName || resto.name || 'Test ON';
-                let price = item.discountPrice || item.price || 0;
+                targetRestoName = resto.restoName || 'Mitra Resto Cikur';
+                let price = item.discountPrice ? Number(item.discountPrice) : Number(item.price) || 0;
                 subtotal += price * qty;
                 summaryList.push(`- ${item.name || item.nama} (${qty}x) (Rp ${Number(price * qty).toLocaleString('id-ID')})`);
                 structuredItems.push({ id: itemId, name: item.name || item.nama, quantity: qty, price: price });
@@ -780,7 +759,7 @@ function finalizeAndExecuteOrder() {
         } : null,
         restoName: targetRestoName,
         customerAddress: finalAddress,
-        coordinates: customerCoords, // Menyertakan koordinat lat & lon GPS untuk driver.html
+        coordinates: customerCoords,
         chatHistory: [],
         waktu: new Date().toLocaleDateString('id-ID') + ' ' + new Date().toLocaleTimeString('id-ID')
     };
@@ -789,25 +768,20 @@ function finalizeAndExecuteOrder() {
     let incomingOrders = JSON.parse(localStorage.getItem('cikur_incoming_orders')) || [];
     let driverOrders = JSON.parse(localStorage.getItem('cikur_driver_orders')) || [];
     let allOrders = JSON.parse(localStorage.getItem('cikur_orders')) || [];
-    
 
     restoOrders.unshift(orderData);
     incomingOrders.unshift(orderData);
     driverOrders.unshift(orderData);
     allOrders.unshift(orderData);
-    
 
     localStorage.setItem('cikur_restaurant_orders', JSON.stringify(restoOrders));
     localStorage.setItem('cikur_incoming_orders', JSON.stringify(incomingOrders));
     localStorage.setItem('cikur_driver_orders', JSON.stringify(driverOrders));
     localStorage.setItem('cikur_orders', JSON.stringify(allOrders));
-    
 
     alert("Pesanan Berhasil! Alamat presisi & koordinat GPS diteruskan ke Resto & Driver.");
     window.location.href = "cikurgo2in1.html";
 }
-
-
 </script>
 
 </body>
