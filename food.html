@@ -607,9 +607,21 @@ function confirmMapLocation() {
             addressInput.value = `Koordinat: ${customerCoords.lat.toFixed(5)}, ${customerCoords.lon.toFixed(5)}`;
         });
 }
-
+    
 document.addEventListener("DOMContentLoaded", () => {
     loadRestoData();
+    
+    let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
+    if (allRestos.length > 0) {
+        let activeResto = allRestos[0];
+        let statusElement = document.getElementById("restoStatusBadge");
+        if (statusElement) {
+            statusElement.innerText = activeResto.isOpen ? "Buka" : "Tutup";
+            statusElement.style.background = activeResto.isOpen ? "#f0fdf4" : "#fee2e2";
+            statusElement.style.color = activeResto.isOpen ? "#16a34a" : "#dc2626";
+        }
+    }
+    
     let searchInput = document.getElementById("globalCustomerAddress");
     let list = document.getElementById("addressSuggestionsList");
 
