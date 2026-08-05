@@ -332,29 +332,17 @@ function closeAssistantModal() {
 }
 
 function loadRestoData() {
-    let rawRestos = localStorage.getItem('cikur_all_restos') || localStorage.getItem('restos');
-    let rawMenus = localStorage.getItem('cikur_resto_menus') || localStorage.getItem('menuList');
-    
-    let allRestos = rawRestos ? JSON.parse(rawRestos) : [];
-    let singleMenus = rawMenus ? JSON.parse(rawMenus) : [];
+    let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
 
-    console.log("Data Resto Terdeteksi:", allRestos);
-    console.log("Data Menu Terdeteksi:", singleMenus);
+    databaseResto = allRestos.map(r => ({
+        id: r.id,
+        restoName: r.name,
+        restoAddress: r.address,
+        restoPhoto: r.photoFront,
+        items: r.menuList,
+        isOpen: r.isOpen
+    }));
 
-    if (allRestos.length > 0) {
-        databaseResto = allRestos;
-    } else {
-        databaseResto = [{
-            id: 'resto_single',
-            restoName: 'CIKUR Rubidotcom',
-            restoAddress: 'Jl. KH. Abdul Halim, Majasari',
-            restoPhoto: 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
-            items: singleMenus,
-            isOpen: true
-        }];
-    }
-    
-    // Paksa render langsung tanpa filter rumit
     renderRestoList(databaseResto);
 }
 function renderRestoList(restos) {
