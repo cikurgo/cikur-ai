@@ -334,7 +334,7 @@ function closeAssistantModal() {
 function loadRestoData() {
     let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
     let singleProfile = JSON.parse(localStorage.getItem('cikur_resto_profile')) || {};
-    let singleMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || JSON.parse(localStorage.getItem('menuList')) || [];
+    let singleMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || [];
 
     let databaseResto = [];
 
@@ -347,23 +347,16 @@ function loadRestoData() {
             restoPhoto: r.photoFront || r.photo || r.restoPhoto || '',
             items: r.items || r.menuList || []
         }));
-    } 
-    
-    // Jika data masih kosong, pastikan ada minimal 1 data cadangan agar resto langsung muncul!
-    if (databaseResto.length === 0) {
+    } else {
         databaseResto = [{
-            id: 'resto_single',
+            id: singleProfile.id || 'resto_single',
             restoName: singleProfile.name || singleProfile.restoName || 'CIKUR Rubidotcom',
             restoAddress: singleProfile.address || singleProfile.alamat || 'Jl. KH. Abdul Halim, Majasari',
-            restoPhoto: singleProfile.photoFront || singleProfile.photo || 'https://images.unsplash.com/photo-154154741938-0af808871cc0?w=150',
-            isOpen: true,
-            items: singleMenus.length > 0 ? singleMenus : [
-                { id: 'm1', name: "Nasi Liwet Cikur Spesial", price: 20000, category: "Makanan Utama", photo: "" },
-                { id: 'm2', name: "Es Teh Manis Segar", price: 5000, category: "Minuman", photo: "" }
-            ]
+            restoPhoto: singleProfile.photoFront || singleProfile.photo || '',
+            items: singleMenus
         }];
     }
-    
+
     renderRestoList(databaseResto);
 }
     
