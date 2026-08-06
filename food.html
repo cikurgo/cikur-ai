@@ -119,18 +119,6 @@
         }
         .input-field:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(255,71,87,0.1); }
 
-        .address-wrapper { position: relative; width: 100%; }
-        #addressSuggestionsList {
-            position: absolute; top: 100%; left: 0; right: 0; background: #fff;
-            border: 1.5px solid var(--border); border-radius: var(--radius-sm); margin-top: 6px;
-            box-shadow: var(--shadow-hover); max-height: 220px; overflow-y: auto; z-index: 1000; display: none;
-        }
-        .suggestion-item {
-            padding: 12px 14px; font-size: 11px; font-weight: 600; border-bottom: 1px solid var(--border);
-            cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: var(--transition);
-        }
-        .suggestion-item:hover { background: #fff5f5; color: var(--primary); padding-left: 18px; }
-
         .search-container { position: relative; }
         .search-input {
             width: 100%; padding: 14px 14px 14px 44px; background: var(--background);
@@ -160,9 +148,6 @@
             width: 76px; height: 76px; border-radius: 14px; object-fit: cover; border: 1px solid var(--border); flex-shrink: 0;
         }
 
-        .menu-item-details {
-            flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: flex-start; gap: 4px; padding-top: 2px;
-        }
         .counter-control {
             display: flex; align-items: center; background: var(--background); padding: 3px; border-radius: 10px; border: 1px solid var(--border);
         }
@@ -193,17 +178,7 @@
         }
         .btn-main { flex: 1; padding: 14px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 800; border: none; cursor: pointer; transition: var(--transition); }
         .btn-checkout { background: var(--primary-gradient); color: #fff; box-shadow: 0 8px 25px rgba(255,71,87,0.3); }
-        .btn-secondary { background: #fff; color: var(--primary); border: 1.5px solid var(--primary); }
         .btn-main:active { transform: scale(0.97); }
-
-        @media (max-width: 479px) {
-            .header { padding: 14px; }
-            .content-body { padding: 14px; gap: 14px; }
-            .footer-action { padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); }
-            .destination-box { padding: 14px !important; }
-            .assistant-banner { padding: 16px; }
-            .btn-main { font-size: 11px; padding: 13px; }
-        }
     </style>
 </head>
 <body>
@@ -235,7 +210,7 @@
             
             <div style="display: flex; gap: 8px; align-items: center; position: relative;">
                 <div style="position: relative; flex: 1; min-width: 0;">
-                    <input type="text" id="globalCustomerAddress" class="input-field" placeholder="Ketik nama jalan / daerah..." autocomplete="off" style="width: 100%; padding: 12px 14px; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; color: var(--text-main); outline: none;">
+                    <input type="text" id="globalCustomerAddress" class="input-field" placeholder="Ketik nama jalan / daerah..." autocomplete="off">
                     <div id="addressSuggestionsList" style="position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-sm); margin-top: 4px; box-shadow: var(--shadow-hover); max-height: 200px; overflow-y: auto; z-index: 3000; display: none;"></div>
                 </div>
                 
@@ -246,8 +221,8 @@
             </div>
 
             <div style="display: flex; gap: 8px;">
-                <input type="text" id="customerHouseNo" class="input-field" placeholder="No. Rumah / Blok / Lantai" style="width: 100%; padding: 12px 14px; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; color: var(--text-main); outline: none;">
-                <input type="text" id="customerNoteAddress" class="input-field" placeholder="Patokan (Cth: Pagar hitam)" style="width: 100%; padding: 12px 14px; background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; color: var(--text-main); outline: none;">
+                <input type="text" id="customerHouseNo" class="input-field" placeholder="No. Rumah / Blok / Lantai">
+                <input type="text" id="customerNoteAddress" class="input-field" placeholder="Patokan (Cth: Pagar hitam)">
             </div>
 
             <label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; color: var(--text-muted); cursor: pointer; margin-top: 2px;">
@@ -294,21 +269,12 @@
             <button onclick="closeAssistantModal()" style="background: none; border: none; font-size: 16px; font-weight: 800; cursor: pointer; color: #fff;">✕</button>
         </div>
         <div style="padding: 20px; font-size: 12px; color: var(--text-main); display: flex; flex-direction: column; gap: 12px; line-height: 1.5;">
-            <div style="display: flex; gap: 10px; align-items: flex-start;">
-                <span style="background: #fee2e2; color: var(--primary); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0;">1</span>
-                <div><b>Isi Alamat Tujuan:</b> Ketik nama jalan di kolom alamat atau gunakan tombol <b>"Pilih Peta"</b> agar titik koordinat GPS terdeteksi otomatis oleh driver.</div>
-            </div>
-            <div style="display: flex; gap: 10px; align-items: flex-start;">
-                <span style="background: #fee2e2; color: var(--primary); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0;">2</span>
-                <div><b>Pilih Menu Favorit:</b> Cari makanan atau minuman pilihan Anda pada daftar mitra resto di bawah, lalu atur jumlah pesanan menggunakan tombol plus/minus (+/-).</div>
-            </div>
-            <div style="display: flex; gap: 10px; align-items: flex-start;">
-                <span style="background: #fee2e2; color: var(--primary); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0;">3</span>
-                <div><b>Checkout & Selesaikan:</b> Klik tombol <b>"Lanjut Pembayaran"</b> di bagian bawah untuk melihat ringkasan total biaya serta memilih metode pembayaran yang diinginkan.</div>
-            </div>
+            <div><b>1. Isi Alamat Tujuan:</b> Ketik nama jalan atau gunakan tombol <b>"Pilih Peta"</b> agar titik koordinat GPS terdeteksi otomatis.</div>
+            <div><b>2. Pilih Menu Favorit:</b> Cari makanan pada daftar mitra resto lalu atur jumlah pesanan menggunakan tombol (+/-).</div>
+            <div><b>3. Checkout & Selesaikan:</b> Klik <b>"Lanjut Pembayaran"</b> di bagian bawah untuk melihat ringkasan total biaya.</div>
         </div>
         <div style="padding: 16px; background: #fff; border-top: 1px solid var(--border);">
-            <button type="button" onclick="closeAssistantModal()" style="width: 100%; padding: 12px; background: var(--primary-gradient); color: #fff; border: none; border-radius: var(--radius-sm); font-weight: 800; font-size: 12px; cursor: pointer; box-shadow: 0 4px 12px rgba(255,71,87,0.3);">Mengerti, Mulai Pesan ✓</button>
+            <button type="button" onclick="closeAssistantModal()" style="width: 100%; padding: 12px; background: var(--primary-gradient); color: #fff; border: none; border-radius: var(--radius-sm); font-weight: 800; font-size: 12px; cursor: pointer;">Mengerti, Mulai Pesan ✓</button>
         </div>
     </div>
 </div>
@@ -328,7 +294,7 @@
         </div>
         <div style="padding: 16px; background: #fff; border-top: 1px solid var(--border); display: flex; gap: 10px;">
             <button type="button" onclick="closeMapModal()" style="flex: 1; padding: 12px; background: #fff; color: var(--primary); border: 1.5px solid var(--primary); border-radius: var(--radius-sm); font-weight: 800; font-size: 12px; cursor: pointer;">Batal</button>
-            <button type="button" onclick="confirmMapLocation()" style="flex: 1; padding: 12px; background: var(--primary-gradient); color: #fff; border: none; border-radius: var(--radius-sm); font-weight: 800; font-size: 12px; cursor: pointer; box-shadow: 0 4px 12px rgba(255,71,87,0.3);">Gunakan Titik Ini ✓</button>
+            <button type="button" onclick="confirmMapLocation()" style="flex: 1; padding: 12px; background: var(--primary-gradient); color: #fff; border: none; border-radius: var(--radius-sm); font-weight: 800; font-size: 12px; cursor: pointer;">Gunakan Titik Ini ✓</button>
         </div>
     </div>
 </div>
@@ -360,11 +326,11 @@
             </select>
         </div>
 
-        <!-- KOLOM CHAT / CATATAN KOORDINASI PADA CHECKOUT -->
+        <!-- KOLOM CHAT / CATATAN KOORDINASI -->
         <div style="background: var(--background); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 14px;">
             <div style="font-size: 10px; font-weight: 800; color: var(--text-muted); margin-bottom: 6px;">💬 CHAT / CATATAN UNTUK RESTO & DRIVER</div>
             <div id="customerChatBox" style="background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 8px; max-height: 90px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; font-size: 11px; margin-bottom: 8px;">
-                <div style="background: #f1f5f9; padding: 6px 10px; border-radius: 8px; color: var(--text-muted);">Sistem: "Tuliskan catatan khusus atau pesan untuk resto/driver di sini sebelum memesan."</div>
+                <div style="background: #f1f5f9; padding: 6px 10px; border-radius: 8px; color: var(--text-muted);">Sistem: "Tuliskan catatan khusus atau pesan untuk resto/driver di sini."</div>
             </div>
             <div style="display: flex; gap: 6px;">
                 <input type="text" id="customerChatInput" class="input-field" placeholder="Ketik pesan..." style="padding: 8px 12px; font-size: 11px;">
@@ -403,12 +369,8 @@ let leafletMap = null;
 let mapMarker = null;
 let activeChatMessages = [];
 
-function openAssistantModal() {
-    document.getElementById("assistantModal").style.display = "flex";
-}
-function closeAssistantModal() {
-    document.getElementById("assistantModal").style.display = "none";
-}
+function openAssistantModal() { document.getElementById("assistantModal").style.display = "flex"; }
+function closeAssistantModal() { document.getElementById("assistantModal").style.display = "none"; }
 
 function loadRestoData() {
     let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
@@ -499,41 +461,29 @@ function renderRestoList(restos) {
                         priceDisplay = `<span style="font-size: 12px; font-weight: 800; color: var(--primary);">Rp ${price.toLocaleString('id-ID')}</span>`;
                     }
 
-                    let actionControlHTML = "";
-                    if (isAvailable) {
-                        actionControlHTML = `
-                            <div class="counter-control">
-                                <button type="button" class="counter-btn" onclick="updateQty('${resto.id}', '${itemId}', -1)">-</button>
-                                <span style="font-size: 11px; font-weight: 700; min-width: 18px; text-align: center;" id="q_${key}">${qty}</span>
-                                <button type="button" class="counter-btn plus" onclick="updateQty('${resto.id}', '${itemId}', 1)">+</button>
-                            </div>`;
-                    } else {
-                        actionControlHTML = `<span style="font-size: 11px; font-weight: 700; color: #dc2626; background: #fee2e2; padding: 4px 8px; border-radius: 6px;">Habis</span>`;
-                    }
+                    let actionControlHTML = isAvailable ? `
+                        <div class="counter-control">
+                            <button type="button" class="counter-btn" onclick="updateQty('${resto.id}', '${itemId}', -1)">-</button>
+                            <span style="font-size: 11px; font-weight: 700; min-width: 18px; text-align: center;" id="q_${key}">${qty}</span>
+                            <button type="button" class="counter-btn plus" onclick="updateQty('${resto.id}', '${itemId}', 1)">+</button>
+                        </div>` : `<span style="font-size: 11px; font-weight: 700; color: #dc2626; background: #fee2e2; padding: 4px 8px; border-radius: 6px;">Habis</span>`;
 
                     catItemsHTML += `
-                        <div class="menu-item-row" style="display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px dashed var(--border);">
+                        <div class="menu-item-row">
                             ${itemImg ? `<img src="${itemImg}" class="menu-thumb">` : `<div style="width: 76px; height: 76px; border-radius: 14px; background: #e2e8f0; display:flex; align-items:center; justify-content:center; font-size:10px; color:#64748b;">No Foto</div>`}
-                            
-                            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px;">
+                            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: flex-start; gap: 4px; padding-top: 2px;">
                                 <h4 style="font-size: 12px; font-weight: 700; margin: 0; color: var(--text-main); line-height: 1.3;">${itemName}</h4>
                                 <div>${priceDisplay}</div>
                                 <div>${itemStatusLabel}</div>
                             </div>
-
                             ${actionControlHTML}
                         </div>`;
                 });
 
                 menusHTML += `
-                    <div class="resto-card" id="${catAccordionId}" style="margin: 8px 0; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-                        <div class="accordion-header" onclick="toggleAccordion('${catAccordionId}')" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                            <h3 style="font-size: 12px; font-weight: 800; color: var(--text-main); margin: 0;">${cat}</h3>
-                            <span class="accordion-icon" style="font-size: 12px; font-weight: bold;">▼</span>
-                        </div>
-                        <div class="accordion-content" style="max-height: 2000px; overflow: hidden; transition: max-height 0.3s ease;">
-                            <div style="padding-top: 6px;">${catItemsHTML}</div>
-                        </div>
+                    <div style="margin: 8px 0; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <h3 style="font-size: 12px; font-weight: 800; color: var(--text-main); margin-bottom: 6px;">${cat}</h3>
+                        <div>${catItemsHTML}</div>
                     </div>`;
             }
         }
@@ -545,31 +495,12 @@ function renderRestoList(restos) {
                     <h3 style="font-size: 14px; font-weight: 800; margin: 0; color: #0f172a;">${restoName}</h3>
                     <p style="font-size: 11px; color: #64748b; margin: 2px 0 0 0;">${restoAddress}</p>
                 </div>
-                <span style="font-size: 11px; font-weight: 700; padding: 4px 10px; background: ${statusBadgeColor}; color: ${statusBadgeText}; border-radius: 6px;">
-                    ${statusText}
-                </span>
+                <span style="font-size: 11px; font-weight: 700; padding: 4px 10px; background: ${statusBadgeColor}; color: ${statusBadgeText}; border-radius: 6px;">${statusText}</span>
             </div>
             <div>${menusHTML}</div>
         `;
-
         container.appendChild(card);
     });
-}
-
-function toggleAccordion(id) {
-    let element = document.getElementById(id);
-    if (!element) return;
-    element.classList.toggle('active');
-    let content = element.querySelector('.accordion-content');
-    let icon = element.querySelector('.accordion-icon');
-    
-    if (element.classList.contains('active')) {
-        if (content) content.style.maxHeight = "0px";
-        if (icon) icon.style.transform = "rotate(-90deg)";
-    } else {
-        if (content) content.style.maxHeight = "2000px";
-        if (icon) icon.style.transform = "rotate(0deg)";
-    }
 }
 
 function updateQty(restoId, itemId, change) {
@@ -584,22 +515,16 @@ function updateQty(restoId, itemId, change) {
 
 function filterRestoList() {
     let keyword = document.getElementById("searchInput").value.toLowerCase();
-    if(!keyword) {
-        renderRestoList(databaseResto);
-        return;
-    }
+    if(!keyword) { renderRestoList(databaseResto); return; }
     let filtered = databaseResto.map(resto => {
         let itemsList = resto.items || [];
-        let matchedItems = itemsList.filter(i => 
-            (i.name || i.nama || '').toLowerCase().includes(keyword)
-        );
+        let matchedItems = itemsList.filter(i => (i.name || i.nama || '').toLowerCase().includes(keyword));
         let restoNameMatch = (resto.restoName || '').toLowerCase().includes(keyword);
         if(restoNameMatch || matchedItems.length > 0) {
             return { ...resto, items: restoNameMatch ? itemsList : matchedItems };
         }
         return null;
     }).filter(Boolean);
-
     renderRestoList(filtered);
 }
 
@@ -620,8 +545,6 @@ function handleAddressCheckbox(cb) {
     houseInput.disabled = cb.checked;
     noteInput.disabled = cb.checked;
     badge.innerText = cb.checked ? "Sip, Mantappp ✓" : "Info Alamat yaaa";
-    badge.style.background = cb.checked ? "#dcfce7" : "#fee2e2";
-    badge.style.color = cb.checked ? "#10b981" : "#ff4757";
 }
 
 function openMapModal() {
@@ -629,24 +552,10 @@ function openMapModal() {
     setTimeout(() => {
         if (!leafletMap) {
             leafletMap = L.map('leafletMapContainer').setView([customerCoords.lat, customerCoords.lon], 15);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '© OpenStreetMap'
-            }).addTo(leafletMap);
-
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(leafletMap);
             mapMarker = L.marker([customerCoords.lat, customerCoords.lon], { draggable: true }).addTo(leafletMap);
-
-            mapMarker.on('dragend', function() {
-                let pos = mapMarker.getLatLng();
-                customerCoords.lat = pos.lat;
-                customerCoords.lon = pos.lng;
-            });
-
-            leafletMap.on('click', function(e) {
-                mapMarker.setLatLng(e.latlng);
-                customerCoords.lat = e.latlng.lat;
-                customerCoords.lon = e.latlng.lng;
-            });
+            mapMarker.on('dragend', () => { let pos = mapMarker.getLatLng(); customerCoords.lat = pos.lat; customerCoords.lon = pos.lng; });
+            leafletMap.on('click', (e) => { mapMarker.setLatLng(e.latlng); customerCoords.lat = e.latlng.lat; customerCoords.lon = e.latlng.lng; });
         } else {
             leafletMap.invalidateSize();
             leafletMap.setView([customerCoords.lat, customerCoords.lon], 15);
@@ -655,100 +564,59 @@ function openMapModal() {
     }, 250);
 }
 
-function closeMapModal() {
-    document.getElementById("mapModal").style.display = "none";
-}
+function closeMapModal() { document.getElementById("mapModal").style.display = "none"; }
 
 function detectUserLocationViaMap() {
-    if (!navigator.geolocation) {
-        alert("Perangkat Anda tidak mendukung GPS.");
-        return;
-    }
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            customerCoords.lat = position.coords.latitude;
-            customerCoords.lon = position.coords.longitude;
-            if (leafletMap && mapMarker) {
-                leafletMap.setView([customerCoords.lat, customerCoords.lon], 16);
-                mapMarker.setLatLng([customerCoords.lat, customerCoords.lon]);
-            }
-            alert("GPS berhasil mendeteksi posisi Anda!");
-        },
-        () => {
-            alert("Gagal mendeteksi lokasi GPS.");
-        },
-        { enableHighAccuracy: true }
-    );
+    if (!navigator.geolocation) { alert("GPS tidak didukung."); return; }
+    navigator.geolocation.getCurrentPosition((pos) => {
+        customerCoords.lat = pos.coords.latitude;
+        customerCoords.lon = pos.coords.longitude;
+        if (leafletMap && mapMarker) {
+            leafletMap.setView([customerCoords.lat, customerCoords.lon], 16);
+            mapMarker.setLatLng([customerCoords.lat, customerCoords.lon]);
+        }
+        alert("GPS berhasil mendeteksi posisi Anda!");
+    }, () => alert("Gagal mendeteksi GPS."));
 }
 
 function confirmMapLocation() {
     let addressInput = document.getElementById("globalCustomerAddress");
     addressInput.value = "Mengambil nama lokasi...";
     closeMapModal();
-
     fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${customerCoords.lat}&lon=${customerCoords.lon}`)
         .then(res => res.json())
         .then(data => {
-            if (data && data.display_name) {
-                addressInput.value = data.display_name;
-            } else {
-                addressInput.value = `Koordinat: ${customerCoords.lat.toFixed(5)}, ${customerCoords.lon.toFixed(5)}`;
-            }
+            addressInput.value = data && data.display_name ? data.display_name : `Koordinat: ${customerCoords.lat.toFixed(5)}, ${customerCoords.lon.toFixed(5)}`;
         })
-        .catch(() => {
-            addressInput.value = `Koordinat: ${customerCoords.lat.toFixed(5)}, ${customerCoords.lon.toFixed(5)}`;
-        });
+        .catch(() => { addressInput.value = `Koordinat: ${customerCoords.lat.toFixed(5)}, ${customerCoords.lon.toFixed(5)}`; });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
     loadRestoData();
-    
     let searchInput = document.getElementById("globalCustomerAddress");
     let list = document.getElementById("addressSuggestionsList");
 
     searchInput.addEventListener("input", function() {
         let query = this.value.trim();
         clearTimeout(searchTimeout);
-
-        if(query.length < 3) {
-            list.style.display = "none";
-            return;
-        }
-
+        if(query.length < 3) { list.style.display = "none"; return; }
         searchTimeout = setTimeout(() => {
-            let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=id&limit=8`;
-            
-            list.innerHTML = `<div style="padding: 12px; font-size: 11px; color: var(--text-muted); text-align: center;">Mencari lokasi...</div>`;
-            list.style.display = 'block';
-
-            fetch(url)
-                .then(response => response.json())
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=id&limit=8`)
+                .then(res => res.json())
                 .then(data => {
                     if(data && data.length > 0) {
                         list.innerHTML = data.map(item => `
-                            <div class="suggestion-item" onclick="selectAutoAddress('${item.display_name.replace(/'/g, "")}', ${item.lat}, ${item.lon})">
-                                <div>
-                                    <div style="font-weight: 700; color: var(--text-main); line-height: 1.3;">${item.display_name}</div>
-                                </div>
-                                <span style="color: var(--primary); font-weight: 800; white-space: nowrap; margin-left: 8px;">Pilih ➔</span>
-                            </div>
-                        `).join('');
+                            <div style="padding: 10px; font-size: 11px; border-bottom: 1px solid var(--border); cursor: pointer;" onclick="selectAutoAddress('${item.display_name.replace(/'/g, "")}', ${item.lat}, ${item.lon})">
+                                <b>${item.display_name}</b>
+                            </div>`).join('');
                         list.style.display = 'block';
-                    } else {
-                        list.innerHTML = `<div style="padding: 12px; font-size: 11px; color: var(--text-muted); text-align: center;">Gunakan alamat mandiri: "${query}"</div>`;
-                        list.style.display = 'block';
-                    }
-                })
-                .catch(() => {
-                    list.style.display = 'none';
-                });
+                    } else { list.style.display = 'none'; }
+                }).catch(() => { list.style.display = 'none'; });
         }, 400);
     });
 
-    document.addEventListener("click", function(e) {
-        if (!searchInput.contains(e.target) && !list.contains(e.target)) {
-            list.style.display = 'none';
-        }
+    document.addEventListener("click", (e) => {
+        if (!searchInput.contains(e.target) && !list.contains(e.target)) list.style.display = 'none';
     });
 });
 
@@ -763,57 +631,40 @@ function openPaymentSummary() {
     let addressBase = document.getElementById("globalCustomerAddress").value.trim();
     let houseNo = document.getElementById("customerHouseNo").value.trim();
     let addressNote = document.getElementById("customerNoteAddress").value.trim();
-    
     if(!addressBase) { alert("Tentukan alamat tujuan pengiriman terlebih dahulu!"); return; }
 
     let detailsPart = [];
     if(houseNo) detailsPart.push(`No. ${houseNo}`);
     if(addressNote) detailsPart.push(`Patokan: ${addressNote}`);
-    
-    let finalAddress = addressBase + (detailsPart.length > 0 ? ` (${detailsPart.join(', ')})` : '');
-    document.getElementById("summaryAddressText").innerText = finalAddress;
+    document.getElementById("summaryAddressText").innerText = addressBase + (detailsPart.length > 0 ? ` (${detailsPart.join(', ')})` : '');
 
     let subtotal = 0, summaryHTML = "";
-    
     databaseResto.forEach(resto => {
-        let itemsList = resto.items || [];
-        itemsList.forEach(item => {
+        (resto.items || []).forEach(item => {
             let itemId = item.id || item.name;
             let key = `${resto.id}_${itemId}`;
             let qty = cartQuantities[key] || 0;
             if(qty > 0) {
                 let price = item.discountPrice ? Number(item.discountPrice) : Number(item.price) || 0;
-                let itemTotal = price * qty;
-                subtotal += itemTotal;
-                summaryHTML += `
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>${qty}x ${item.name || item.nama}</span>
-                        <span style="font-weight: 700;">Rp ${Number(itemTotal).toLocaleString('id-ID')}</span>
-                    </div>`;
+                subtotal += price * qty;
+                summaryHTML += `<div style="display: flex; justify-content: space-between;"><span>${qty}x ${item.name || item.nama}</span><span style="font-weight: 700;">Rp ${(price * qty).toLocaleString('id-ID')}</span></div>`;
             }
         });
     });
 
-    if(subtotal === 0) { alert("Keranjang belanja masih kosong! Pilih minimal 1 menu."); return; }
-
+    if(subtotal === 0) { alert("Keranjang belanja masih kosong!"); return; }
     document.getElementById("summaryItemsList").innerHTML = summaryHTML;
-    document.getElementById("summarySubtotal").innerText = `Rp ${Number(subtotal).toLocaleString('id-ID')}`;
-    let grandTotal = subtotal + 10000;
-    document.getElementById("summaryGrandTotal").innerText = `Rp ${Number(grandTotal).toLocaleString('id-ID')}`;
-
+    document.getElementById("summarySubtotal").innerText = `Rp ${subtotal.toLocaleString('id-ID')}`;
+    document.getElementById("summaryGrandTotal").innerText = `Rp ${(subtotal + 10000).toLocaleString('id-ID')}`;
     document.getElementById("paymentModal").style.display = "flex";
 }
 
-function closePaymentModal() {
-    document.getElementById("paymentModal").style.display = "none";
-}
+function closePaymentModal() { document.getElementById("paymentModal").style.display = "none"; }
 
 function sendCheckoutChat() {
     let input = document.getElementById("customerChatInput");
-    if(!input) return;
+    if(!input || !input.value.trim()) return;
     let text = input.value.trim();
-    if(!text) return;
-    
     let chatBox = document.getElementById("customerChatBox");
     chatBox.innerHTML += `<div style="background: #e0f2fe; color: #0369a1; padding: 6px 10px; border-radius: 8px; max-width: 90%; align-self: flex-end;">Customer: "${text}"</div>`;
     activeChatMessages.push({ sender: 'Customer', text: text, time: new Date().toLocaleTimeString() });
@@ -825,19 +676,14 @@ function finalizeAndExecuteOrder() {
     let addressBase = document.getElementById("globalCustomerAddress").value.trim();
     let houseNo = document.getElementById("customerHouseNo").value.trim();
     let addressNote = document.getElementById("customerNoteAddress").value.trim();
-    
     let detailsPart = [];
     if(houseNo) detailsPart.push(`No. ${houseNo}`);
     if(addressNote) detailsPart.push(`Patokan: ${addressNote}`);
     let finalAddress = addressBase + (detailsPart.length > 0 ? ` (${detailsPart.join(', ')})` : '');
     
-    let paymentMethod = document.getElementById("paymentMethodSelect").value;
-
     let subtotal = 0, summaryList = [], structuredItems = [], targetRestoName = 'Mitra Resto Cikur';
-    
     databaseResto.forEach(resto => {
-        let itemsList = resto.items || [];
-        itemsList.forEach(item => {
+        (resto.items || []).forEach(item => {
             let itemId = item.id || item.name;
             let key = `${resto.id}_${itemId}`;
             let qty = cartQuantities[key] || 0;
@@ -845,52 +691,36 @@ function finalizeAndExecuteOrder() {
                 targetRestoName = resto.restoName || 'Mitra Resto Cikur';
                 let price = item.discountPrice ? Number(item.discountPrice) : Number(item.price) || 0;
                 subtotal += price * qty;
-                summaryList.push(`- ${item.name || item.nama} (${qty}x) (Rp ${Number(price * qty).toLocaleString('id-ID')})`);
+                summaryList.push(`- ${item.name || item.nama} (${qty}x)`);
                 structuredItems.push({ id: itemId, name: item.name || item.nama, quantity: qty, price: price });
             }
         });
     });
 
-    let grandTotal = subtotal + 10000;
-    let generatedTrxId = 'TRX-' + Math.floor(100000 + Math.random() * 900000);
-    
     let orderData = {
         id: 'ORD_' + Date.now(),
-        kode: generatedTrxId,
+        kode: 'TRX-' + Math.floor(100000 + Math.random() * 900000),
         menu: summaryList.join('<br>'),
         items: structuredItems,
-        total: grandTotal,
-        paymentMethod: paymentMethod,
+        total: subtotal + 10000,
+        paymentMethod: document.getElementById("paymentMethodSelect").value,
         status: 'Pending Pembayaran / Diproses',
         mode: currentModeSelected,
-        reservationDetail: currentModeSelected === 'reservasi' ? {
-            tanggal: document.getElementById('resTanggal').value || '-',
-            jam: document.getElementById('resJam').value || '-',
-            metode: document.getElementById('resMetode').value || '-'
-        } : null,
         restoName: targetRestoName,
         customerAddress: finalAddress,
         coordinates: customerCoords,
-        chatHistory: activeChatMessages.length > 0 ? activeChatMessages : [{ sender: 'Sistem', text: 'Pesanan masuk terverifikasi.', time: new Date().toLocaleTimeString() }],
+        chatHistory: activeChatMessages.length > 0 ? activeChatMessages : [{ sender: 'Sistem', text: 'Pesanan masuk.', time: new Date().toLocaleTimeString() }],
         waktu: new Date().toLocaleDateString('id-ID') + ' ' + new Date().toLocaleTimeString('id-ID')
     };
 
-    let restoOrders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || [];
-    let incomingOrders = JSON.parse(localStorage.getItem('cikur_incoming_orders')) || [];
-    let driverOrders = JSON.parse(localStorage.getItem('cikur_driver_orders')) || [];
-    let allOrders = JSON.parse(localStorage.getItem('cikur_orders')) || [];
+    // Sinkronisasi menyeluruh ke SEMUA variasi localStorage Resto & Driver agar pasti masuk ke resto.html & driver.html
+    ['cikur_restaurant_orders', 'cikur_incoming_orders', 'cikur_orders', 'merchant_orders', 'cikur_driver_orders'].forEach(keyName => {
+        let existing = JSON.parse(localStorage.getItem(keyName)) || [];
+        existing.unshift(orderData);
+        localStorage.setItem(keyName, JSON.stringify(existing));
+    });
 
-    restoOrders.unshift(orderData);
-    incomingOrders.unshift(orderData);
-    driverOrders.unshift(orderData);
-    allOrders.unshift(orderData);
-
-    localStorage.setItem('cikur_restaurant_orders', JSON.stringify(restoOrders));
-    localStorage.setItem('cikur_incoming_orders', JSON.stringify(incomingOrders));
-    localStorage.setItem('cikur_driver_orders', JSON.stringify(driverOrders));
-    localStorage.setItem('cikur_orders', JSON.stringify(allOrders));
-
-    alert("Pesanan Berhasil! Alamat presisi, koordinat GPS, dan pesan chat diteruskan ke Resto & Driver.");
+    alert("Pesanan Berhasil! Data disinkronkan ke Resto dan Driver.");
     window.location.href = "cikurgo2in1.html";
 }
 </script>
