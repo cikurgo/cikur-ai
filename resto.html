@@ -123,7 +123,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
 
     <!-- MAIN VIEW RESTO -->
     <div style="margin-top: 10px;">
-        <!-- Banner Info dengan Link Langsung ke food.html -->
+        <!-- Banner Info -->
         <div class="resto-card" style="background: linear-gradient(135deg, var(--dark-bg), var(--dark-card)); color: #fff;">
             <h2 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">🍜 CIKUR Food & Resto Partner</h2>
             <p style="font-size: 11px; color: #94a3b8; line-height: 1.4;">Kelola profil restoran, jam operasional, dan upload menu makanan Anda agar tampil di <a href="food.html" style="color: var(--accent-yellow); text-decoration: underline; font-weight: 700;">Halaman Menu Pembeli</a>.</p>
@@ -406,12 +406,8 @@ function saveRestoToStorage() {
         allRestos.push(currentResto);
     }
     localStorage.setItem('cikur_all_restos', JSON.stringify(allRestos));
-    
-    // Sinkronisasi mundur ke key lama agar kompatibel penuh dengan halaman food.html versi lain
     localStorage.setItem('cikur_resto_profile', JSON.stringify(currentResto));
     localStorage.setItem('cikur_resto_menus', JSON.stringify(currentResto.menuList));
-    
-    // Memicu Event Sinkronisasi Real-Time Lintas Tab / Halaman
     window.dispatchEvent(new Event('storage'));
 }
 
@@ -537,6 +533,7 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
         }
         saveOrUpdateMenu(existingPhoto);
     }
+
     function saveOrUpdateMenu(photoUrl) {
         let menuData = { 
             id: editingMenuIndex !== null ? currentResto.menuList[editingMenuIndex].id : 'm_' + Date.now(),
@@ -631,9 +628,11 @@ function editMenu(index) {
 }
 
 function deleteMenu(index) {
-    currentResto.menuList.splice(index, 1);
-    saveRestoToStorage();
-    renderMenuList();
+    if(confirm("Apakah Anda yakin ingin menghapus menu ini?")) {
+        currentResto.menuList.splice(index, 1);
+        saveRestoToStorage();
+        renderMenuList();
+    }
 }
 
 function renderIncomingOrders() {
@@ -779,7 +778,6 @@ btnToggleStatus.addEventListener("click", () => {
     updateStatusUI();
 });
 
-// Sinkronisasi Real-Time Listener (Agar otomatis memperbarui data jika terjadi perubahan dari halaman lain/tab lain)
 window.addEventListener('storage', () => {
     allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
     let updatedResto = allRestos.find(r => r.id === currentRestoId);
