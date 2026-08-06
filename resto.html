@@ -154,7 +154,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                 </div>
             </div>
 
-            <button class="btn-status" id="btnToggleStatus">Ubah ke Tutup</button>
+            <button class="btn-status" id="btnToggleStatus" type="button">Ubah ke Tutup</button>
         </div>
 
         <!-- PESANAN MASUK & CHAT TERINTEGRASI -->
@@ -233,12 +233,12 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                         <div style="margin-bottom: 6px;">
                             <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">1. Foto Tampak Depan Resto</label>
                             <input type="file" id="restoPhotoFrontInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
-                            <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">Maksimal ukuran file 2MB.</small>
+                            <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">Kompresi otomatis aktif.</small>
                         </div>
                         <div>
                             <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">2. Foto Area Indoor Resto</label>
                             <input type="file" id="restoPhotoIndoorInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
-                            <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">Maksimal ukuran file 2MB.</small>
+                            <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">Kompresi otomatis aktif.</small>
                         </div>
                     </div>
                     <button type="submit" class="btn-action">Simpan Data & Profil Resto</button>
@@ -283,7 +283,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                         <div class="form-group">
                             <label class="form-label">Upload Foto Makanan</label>
                             <input type="file" id="menuPhotoInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
-                            <small style="font-size: 10px; color: var(--text-muted); margin-top: 4px; display: block;">Format: JPG, PNG. Maksimal ukuran file 2MB.</small>
+                            <small style="font-size: 10px; color: var(--text-muted); margin-top: 4px; display: block;">Format: JPG, PNG. Kompresi otomatis aktif.</small>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Status Ketersediaan Menu</label>
@@ -447,6 +447,45 @@ document.getElementById("closeTimeInput").addEventListener("change", (e) => {
     updateStatusUI();
 });
 
+// Fungsi Kompresi Gambar Terintegrasi (Mengatasi Lag / Beban Memori LocalStorage)
+function compressImage(file, callback) {
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+        img.onload = function() {
+            const MAX_WIDTH = 800;
+            const MAX_HEIGHT = 800;
+
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+                if (width > MAX_WIDTH) {
+                    height *= MAX_WIDTH / width;
+                    width = MAX_WIDTH;
+                }
+            } else {
+                if (height > MAX_HEIGHT) {
+                    width *= MAX_HEIGHT / height;
+                    height = MAX_HEIGHT;
+                }
+            }
+
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, width, height);
+
+            callback(canvas.toDataURL("image/jpeg", 0.65));
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
 document.getElementById("formRestoProfile")?.addEventListener("submit", function(e) {
     e.preventDefault();
     
@@ -475,7 +514,7 @@ document.getElementById("formRestoProfile")?.addEventListener("submit", function
         processedCount++;
         if(processedCount >= totalPhotosToProcess) {
             saveRestoToStorage();
-            alert("Data & Profil Resto berhasil disimpan dan disinkronkan!");
+            alert("Data & Profil Resto berhasil disimpan, dikompres, dan disinkronkan!");
         }
     }
 
@@ -486,29 +525,17 @@ document.getElementById("formRestoProfile")?.addEventListener("submit", function
     }
 
     if(photoFrontInput && photoFrontInput.files && photoFrontInput.files[0]) {
-        if(photoFrontInput.files[0].size > 2 * 1024 * 1024) {
-            alert("Ukuran Foto Tampak Depan terlalu besar! Maksimal 2MB.");
-            return;
-        }
-        let reader = new FileReader();
-        reader.onload = function(event) {
-            currentResto.photoFront = event.target.result;
+        compressImage(photoFrontInput.files[0], function(compressedDataUrl) {
+            currentResto.photoFront = compressedDataUrl;
             checkFinish();
-        };
-        reader.readAsDataURL(photoFrontInput.files[0]);
+        });
     }
 
     if(photoIndoorInput && photoIndoorInput.files && photoIndoorInput.files[0]) {
-        if(photoIndoorInput.files[0].size > 2 * 1024 * 1024) {
-            alert("Ukuran Foto Area Indoor terlalu besar! Maksimal 2MB.");
-            return;
-        }
-        let reader = new FileReader();
-        reader.onload = function(event) {
-            currentResto.photoIndoor = event.target.result;
+        compressImage(photoIndoorInput.files[0], function(compressedDataUrl) {
+            currentResto.photoIndoor = compressedDataUrl;
             checkFinish();
-        };
-        reader.readAsDataURL(photoIndoorInput.files[0]);
+        });
     }
 });
     
@@ -525,15 +552,9 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
     let photoInput = document.getElementById("menuPhotoInput");
 
     if(photoInput && photoInput.files && photoInput.files[0]) {
-        if(photoInput.files[0].size > 2 * 1024 * 1024) {
-            alert("Ukuran foto terlalu besar! Maksimal ukuran file adalah 2MB.");
-            return;
-        }
-        let reader = new FileReader();
-        reader.onload = function(event) {
-            saveOrUpdateMenu(event.target.result);
-        };
-        reader.readAsDataURL(photoInput.files[0]);
+        compressImage(photoInput.files[0], function(compressedDataUrl) {
+            saveOrUpdateMenu(compressedDataUrl);
+        });
     } else {
         let existingPhoto = "";
         if(editingMenuIndex !== null && currentResto.menuList[editingMenuIndex]) {
@@ -777,7 +798,6 @@ function updateOrderStatus(index, newStatus) {
         localStorage.setItem('cikur_restaurant_orders', JSON.stringify(orders));
         localStorage.setItem('cikur_orders', JSON.stringify(orders));
 
-        // Jika pesanan diterima/diproses, teruskan otomatis ke driver.html (driver queue)
         if(newStatus === 'Diproses') {
             let driverQueue = JSON.parse(localStorage.getItem('cikur_driver_queue')) || [];
             let orderIdToCheck = targetOrder.id || targetOrder.kode || index;
@@ -792,7 +812,6 @@ function updateOrderStatus(index, newStatus) {
             }
         }
 
-        // Sinkronisasi data mutasi ke cikurgo2in1.html (Hub Transactions)
         let hubData = JSON.parse(localStorage.getItem('cikur_hub_transactions')) || [];
         hubData.push({
             orderId: targetOrder.id || targetOrder.kode || ('TRX-' + index),
@@ -816,47 +835,6 @@ btnToggleStatus.addEventListener("click", () => {
     saveRestoToStorage();
     updateStatusUI();
 });
-
-function compressImage(file, callback) {
-    const img = new Image();
-    const reader = new FileReader();
-
-    reader.onload = function(e) {
-        img.onload = function() {
-
-            const MAX_WIDTH = 900;
-            const MAX_HEIGHT = 900;
-
-            let width = img.width;
-            let height = img.height;
-
-            if (width > height) {
-                if (width > MAX_WIDTH) {
-                    height *= MAX_WIDTH / width;
-                    width = MAX_WIDTH;
-                }
-            } else {
-                if (height > MAX_HEIGHT) {
-                    width *= MAX_HEIGHT / height;
-                    height = MAX_HEIGHT;
-                }
-            }
-
-            const canvas = document.createElement("canvas");
-            canvas.width = width;
-            canvas.height = height;
-
-            const ctx = canvas.getContext("2d");
-            ctx.drawImage(img, 0, 0, width, height);
-
-            callback(canvas.toDataURL("image/jpeg", 0.7));
-        };
-
-        img.src = e.target.result;
-    };
-
-    reader.readAsDataURL(file);
-}
 
 window.addEventListener("DOMContentLoaded", () => {
     updateUIProfile();
