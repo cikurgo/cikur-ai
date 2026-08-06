@@ -326,14 +326,14 @@
             </select>
         </div>
 
-        <!-- KOLOM CHAT / CATATAN KOORDINASI -->
+        <!-- KOLOM CHAT / CATATAN KOORDINASI TERINTEGRASI -->
         <div style="background: var(--background); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 14px;">
             <div style="font-size: 10px; font-weight: 800; color: var(--text-muted); margin-bottom: 6px;">💬 CHAT / CATATAN UNTUK RESTO & DRIVER</div>
-            <div id="customerChatBox" style="background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 8px; max-height: 90px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; font-size: 11px; margin-bottom: 8px;">
+            <div id="customerChatBox" style="background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 8px; max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; font-size: 11px; margin-bottom: 8px;">
                 <div style="background: #f1f5f9; padding: 6px 10px; border-radius: 8px; color: var(--text-muted);">Sistem: "Tuliskan catatan khusus atau pesan untuk resto/driver di sini."</div>
             </div>
             <div style="display: flex; gap: 6px;">
-                <input type="text" id="customerChatInput" class="input-field" placeholder="Ketik pesan..." style="padding: 8px 12px; font-size: 11px;">
+                <input type="text" id="customerChatInput" class="input-field" placeholder="Ketik pesan..." style="padding: 8px 12px; font-size: 11px;" onkeypress="if(event.key === 'Enter') sendCheckoutChat()">
                 <button type="button" onclick="sendCheckoutChat()" style="background: var(--primary-gradient); color: #fff; border: none; padding: 8px 12px; border-radius: 8px; font-weight: 800; font-size: 11px; cursor: pointer; flex-shrink: 0;">Kirim</button>
             </div>
         </div>
@@ -425,7 +425,6 @@ function renderRestoList(restos) {
 
             let catIndex = 0;
             for (let cat in groupedMenu) {
-                let catAccordionId = `cat_acc_${rIdx}_${catIndex++}`;
                 let catItemsHTML = "";
 
                 groupedMenu[cat].forEach(item => {
@@ -681,13 +680,14 @@ function finalizeAndExecuteOrder() {
     if(addressNote) detailsPart.push(`Patokan: ${addressNote}`);
     let finalAddress = addressBase + (detailsPart.length > 0 ? ` (${detailsPart.join(', ')})` : '');
     
-    let subtotal = 0, summaryList = [], structuredItems = [], targetRestoName = 'Mitra Resto Cikur';
+    let subtotal = 0, summaryList = [], structuredItems = [], targetRestoName = 'Mitra Resto Cikur', targetRestoId = '';
     databaseResto.forEach(resto => {
         (resto.items || []).forEach(item => {
             let itemId = item.id || item.name;
             let key = `${resto.id}_${itemId}`;
             let qty = cartQuantities[key] || 0;
             if(qty > 0) {
+                targetRestoId = resto.id;
                 targetRestoName = resto.restoName || 'Mitra Resto Cikur';
                 let price = item.discountPrice ? Number(item.discountPrice) : Number(item.price) || 0;
                 subtotal += price * qty;
@@ -702,10 +702,13 @@ function finalizeAndExecuteOrder() {
         kode: 'TRX-' + Math.floor(100000 + Math.random() * 900000),
         menu: summaryList.join('<br>'),
         items: structuredItems,
+        subtotal: subtotal,
         total: subtotal + 10000,
+        totalPrice: subtotal + 10000,
         paymentMethod: document.getElementById("paymentMethodSelect").value,
         status: 'Pending Pembayaran / Diproses',
         mode: currentModeSelected,
+        restoId: targetRestoId,
         restoName: targetRestoName,
         customerAddress: finalAddress,
         coordinates: customerCoords,
@@ -713,14 +716,14 @@ function finalizeAndExecuteOrder() {
         waktu: new Date().toLocaleDateString('id-ID') + ' ' + new Date().toLocaleTimeString('id-ID')
     };
 
-    // Sinkronisasi menyeluruh ke SEMUA variasi localStorage Resto & Driver agar pasti masuk ke resto.html & driver.html
+    // Sinkronisasi menyeluruh ke seluruh kunci localStorage Resto & Driver agar terhubung ke resto.html dan driver.html
     ['cikur_restaurant_orders', 'cikur_incoming_orders', 'cikur_orders', 'merchant_orders', 'cikur_driver_orders'].forEach(keyName => {
         let existing = JSON.parse(localStorage.getItem(keyName)) || [];
         existing.unshift(orderData);
         localStorage.setItem(keyName, JSON.stringify(existing));
     });
 
-    alert("Pesanan Berhasil! Data disinkronkan ke Resto dan Driver.");
+    alert("Pesanan Berhasil! Data dan chat disinkronkan ke Resto dan Driver.");
     window.location.href = "cikurgo2in1.html";
 }
 </script>
