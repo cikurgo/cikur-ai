@@ -1,466 +1,366 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cikur Go - Panel Driver Profesional</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- Leaflet CSS untuk Peta Real-Time -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-        :root {
-            --primary: #ff4757;
-            --primary-gradient: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%);
-            --surface: #ffffff;
-            --background: #f4f7f6;
-            --text-main: #1e293b;
-            --text-muted: #64748b;
-            --border: #e2e8f0;
-            --radius-sm: 12px;
-            --radius-md: 20px;
-            --shadow-soft: 0 10px 30px -5px rgba(0, 0, 0, 0.05);
-            --transition: all 0.3s ease;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CIKUR Ride - Super App Engine v3.9</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+    --primary-red: #E50914;
+    --primary-red-hover: #b80710;
+    --dark-bg: #0f172a;
+    --dark-card: #1e293b;
+    --body-bg: #f1f5f9;
+    --container-bg: #f8fafc;
+    --border-color: #e2e8f0;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --font-main: 'Plus Jakarta Sans', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+}
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
-        body { background: var(--background); color: var(--text-main); min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; }
+*{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: var(--font-main);
+}
 
-        .app-container {
-            width: 100%; max-width: 440px; min-height: 100vh; background: var(--surface);
-            display: flex; flex-direction: column; position: relative; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15);
-        }
+body{
+    background: var(--body-bg);
+    color: var(--text-main);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
 
-        .header {
-            padding: 16px 18px; display: flex; align-items: center; justify-content: space-between;
-            background: #fff; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100;
-        }
-        .app-title { font-size: 15px; font-weight: 800; background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+@media(min-width: 480px){
+    body { padding: 20px; }
+}
 
-        .content-body { padding: 16px; display: flex; flex-direction: column; gap: 16px; flex: 1; padding-bottom: 40px; }
+.container{
+    width: 100%;
+    max-width: 440px;
+    min-height: 100vh;
+    margin: 0 auto;
+    padding: 16px 16px 60px 16px;
+    display: flex;
+    flex-direction: column;
+    background: var(--container-bg);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    position: relative;
+}
 
-        .card-box { background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-md); padding: 16px; box-shadow: var(--shadow-soft); display: flex; flex-direction: column; gap: 12px; }
-        .form-group { display: flex; flex-direction: column; gap: 6px; }
-        .form-label { font-size: 11px; font-weight: 700; color: var(--text-muted); }
-        .form-input, .form-select {
-            padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
-            font-size: 12px; outline: none; background: #fafafa; transition: var(--transition);
-        }
-        .form-input:focus, .form-select:focus { border-color: var(--primary); background: #fff; }
+@media(min-width: 480px){
+    .container {
+        min-height: 850px;
+        border-radius: 36px;
+        border: 1px solid var(--border-color);
+    }
+}
 
-        .note-text { font-size: 10px; color: #64748b; font-weight: 600; margin-top: -2px; }
+/* ===========================
+   HEADER & NAVIGATION
+=========================== */
+.app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
 
-        .btn-primary {
-            background: var(--primary-gradient); color: #fff; border: none; padding: 12px;
-            border-radius: var(--radius-sm); font-weight: 800; font-size: 12px; cursor: pointer; transition: var(--transition); text-align: center;
-        }
+.back-btn {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-weight: 800;
+    text-decoration: none;
+    color: var(--text-main);
+    transition: 0.2s;
+}
 
-        .driver-status-card {
-            background: #1e293b; color: #fff; border-radius: var(--radius-md); padding: 18px;
-            display: flex; flex-direction: column; gap: 12px; box-shadow: var(--shadow-soft);
-        }
-        .status-toggle-btn {
-            background: #10b981; color: #fff; border: none; padding: 10px; border-radius: var(--radius-sm);
-            font-weight: 800; font-size: 11px; cursor: pointer; transition: var(--transition);
-        }
-        .status-toggle-btn.offline { background: #dc2626; }
+.back-btn:hover {
+    background: #fee2e2;
+    color: var(--primary-red);
+    border-color: var(--primary-red);
+}
 
-        .driver-tabs { display: flex; background: var(--background); padding: 4px; border-radius: var(--radius-md); gap: 4px; border: 1px solid var(--border); }
-        .driver-tab { flex: 1; padding: 10px; border: none; background: transparent; font-size: 11px; font-weight: 700; color: var(--text-muted); border-radius: 10px; cursor: pointer; text-align: center; }
-        .driver-tab.active { background: #fff; color: var(--primary); box-shadow: var(--shadow-soft); }
+.app-header h2 {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--text-main);
+}
 
-        .order-card {
-            background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-md);
-            padding: 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: var(--shadow-soft);
-        }
-        .badge-type { font-size: 9px; font-weight: 800; padding: 3px 8px; border-radius: 6px; width: fit-content; }
-        .badge-food { background: #fee2e2; color: var(--primary); }
-        .badge-ride { background: #e0f2fe; color: #0284c7; }
+/* ===========================
+   MAP SIMULATION BOX
+=========================== */
+.map-simulation {
+    width: 100%;
+    height: 160px;
+    background: #cbd5e1;
+    border-radius: 16px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-color);
+}
 
-        #map { width: 100%; height: 180px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 6px; }
+.map-simulation img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.8;
+}
 
-        .chat-container { background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-        .chat-box { max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
-        .chat-msg { font-size: 11px; padding: 6px 10px; border-radius: 8px; max-width: 85%; }
-        .chat-msg.driver { background: #e0f2fe; color: #0369a1; align-self: flex-end; }
-        .chat-msg.other { background: #e2e8f0; color: var(--text-main); align-self: flex-start; }
-        .chat-input-group { display: flex; gap: 6px; margin-top: 4px; }
-    </style>
+.map-badge {
+    position: absolute;
+    bottom: 10px;
+    background: rgba(15, 23, 42, 0.85);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* ===========================
+   FORM RIDE SECTION
+=========================== */
+.ride-form-card {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 14px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+}
+
+.form-group {
+    margin-bottom: 10px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+}
+
+.input-box {
+    width: 100%;
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-main);
+    outline: none;
+    transition: 0.2s;
+}
+
+.input-box:focus {
+    border-color: var(--primary-red);
+}
+
+/* ===========================
+   FLEET SELECTION (BIKE/CAR)
+=========================== */
+.fleet-options {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.fleet-card {
+    flex: 1;
+    background: #fff;
+    border: 2px solid var(--border-color);
+    border-radius: 14px;
+    padding: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.fleet-card.selected {
+    border-color: var(--primary-red);
+    background: #fff5f5;
+}
+
+.fleet-card h4 {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--text-main);
+    margin-bottom: 2px;
+}
+
+.fleet-card p {
+    font-size: 11px;
+    color: var(--primary-red);
+    font-weight: 700;
+    font-family: var(--font-mono);
+}
+
+/* ===========================
+   CHECKOUT / BOOKING BOX
+=========================== */
+.checkout-box {
+    background: var(--dark-bg);
+    color: #fff;
+    border-radius: 16px;
+    padding: 16px;
+    margin-top: auto;
+    box-shadow: 0 8px 20px rgba(15,23,42,0.2);
+}
+
+.btn-order {
+    width: 100%;
+    height: 46px;
+    background: var(--primary-red);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-weight: 800;
+    font-size: 13px;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: 0.2s;
+}
+
+.btn-order:hover {
+    background: var(--primary-red-hover);
+}
+</style>
 </head>
 <body>
 
-<div class="app-container">
-    <div class="header">
-        <h1 class="app-title">CIKUR GO - DRIVER</h1>
-        <span id="navStatusBadge" style="font-size: 10px; font-weight: 700; color: var(--text-muted);">Panel Driver</span>
+<div class="container">
+    <!-- Header -->
+    <div class="app-header">
+        <a href="index.html" class="back-btn">←</a>
+        <h2>CIKUR GO RIDE</h2>
+        <div style="width: 38px;"></div>
     </div>
 
-    <div class="content-body">
-        
-        <!-- 1. REGISTRASI & REKENING -->
-        <div id="registrationSection" class="card-box" style="display: none;">
-            <h3 style="font-size: 13px; font-weight: 800;">📝 Pendaftaran Driver</h3>
-            
-            <div class="form-group">
-                <label class="form-label">Foto Profil Driver</label>
-                <input type="file" id="regPhoto" class="form-input" accept="image/*">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Nama Lengkap</label>
-                <input type="text" id="regName" class="form-input" placeholder="Nama Lengkap KTP">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Nomor WhatsApp / HP</label>
-                <input type="text" id="regPhone" class="form-input" placeholder="08xxxxxxxxxx">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Plat Nomor Kendaraan</label>
-                <input type="text" id="regVehicle" class="form-input" placeholder="Contoh: A 1234 XX">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Pilih Bank / E-Wallet Pencairan</label>
-                <select id="regBank" class="form-select">
-                    <option value="BCA">Bank BCA</option>
-                    <option value="BRI">Bank BRI</option>
-                    <option value="BNI">Bank BNI</option>
-                    <option value="Mandiri">Bank Mandiri</option>
-                    <option value="DANA">DANA</option>
-                    <option value="OVO">OVO</option>
-                    <option value="GoPay">GoPay</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Atas Nama Pemilik Rekening</label>
-                <input type="text" id="regAccountName" class="form-input" placeholder="Nama Pemilik Rekening">
-                <span class="note-text">ℹ️ Bebas diisi sesuai akun e-wallet / rekening Anda.</span>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Nomor Rekening / Akun Tujuan</label>
-                <input type="text" id="regAccountNo" class="form-input" placeholder="Nomor Rekening / No HP Akun">
-            </div>
-            
-            <button type="button" class="btn-primary" onclick="saveDriverRegistration()">Simpan & Masuk Panel</button>
+    <!-- Simulasi Peta -->
+    <div class="map-simulation">
+        <img src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=600" alt="Map Simulation">
+        <div class="map-badge">📍 GPS Active - Menunggu Titik Jemput</div>
+    </div>
+
+    <!-- Form Titik Jemput & Tujuan -->
+    <div class="ride-form-card">
+        <div class="form-group">
+            <label>Lokasi Penjemputan</label>
+            <input type="text" id="pickupLocation" class="input-box" value="Lokasi Anda Saat Ini (GPS)">
         </div>
-
-        <!-- 2. DASHBOARD UTAMA -->
-        <div id="dashboardSection" style="display: flex; flex-direction: column; gap: 16px;">
-            
-            <div class="driver-status-card">
-                <div style="display: flex; gap: 12px; align-items: center;">
-                    <img id="profilePhotoDisplay" src="https://via.placeholder.com/60" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid #fff;" alt="Foto Driver">
-                    <div style="flex: 1;">
-                        <h3 id="profileNameDisplay" style="font-size: 13px; font-weight: 800;">-</h3>
-                        <p id="profileMetaDisplay" style="font-size: 10px; opacity: 0.8; margin-top: 2px;">-</p>
-                        <p id="profileBankNote" style="font-size: 9px; color: #38bdf8; margin-top: 2px;">Rekening: -</p>
-                    </div>
-                    <button type="button" onclick="toggleDriverStatus()" id="statusBtn" class="status-toggle-btn offline">OFFLINE</button>
-                </div>
-                <button type="button" onclick="openEditProfile()" style="background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer;">⚙️ Ubah Profil / Data Rekening</button>
-            </div>
-
-            <!-- TAB NAVIGASI -->
-            <div class="driver-tabs">
-                <div class="driver-tab active" id="tabFoodBtn" onclick="switchDriverTab('food')">🍲 Cikur Food (Resto)</div>
-                <div class="driver-tab" id="tabRideBtn" onclick="switchDriverTab('ride')">🏍️ Cikur Ride (Reguler)</div>
-            </div>
-
-            <!-- PETA REAL-TIME GPS -->
-            <div class="card-box">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h4 style="font-size: 12px; font-weight: 800;">🛰️ Peta Navigasi Live Driver</h4>
-                    <span id="gpsStatus" style="font-size: 10px; color: #10b981; font-weight: 700;">● GPS Aktif</span>
-                </div>
-                <div id="map"></div>
-            </div>
-
-            <!-- CONTAINER LIST ORDERAN -->
-            <div id="driverOrderContainer" style="display: flex; flex-direction: column; gap: 12px;"></div>
-
+        <div class="form-group" style="margin-bottom: 0;">
+            <label>Tujuan Perjalanan</label>
+            <input type="text" id="destLocation" class="input-box" placeholder="Mau ke mana hari ini?">
         </div>
+    </div>
 
+    <!-- Pilihan Armada -->
+    <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase;">Pilih Jenis Armada</div>
+    <div class="fleet-options">
+        <div class="fleet-card selected" id="fleetBike" onclick="selectFleet('bike', 10000)">
+            <h4>🛵 CIKUR-Bike</h4>
+            <p>Rp 10.000</p>
+        </div>
+        <div class="fleet-card" id="fleetCar" onclick="selectFleet('car', 25000)">
+            <h4>🚗 CIKUR-Car</h4>
+            <p>Rp 25.000</p>
+        </div>
+    </div>
+
+    <!-- Kotak Pembayaran / Pemesanan -->
+    <div class="checkout-box" id="rideCartSection">
+        <div style="font-size: 11px; color: #94a3b8; font-weight: 700;">Layanan Terpilih</div>
+        <h3 id="rideTypeName" style="font-size: 14px; font-weight: 800; margin: 2px 0 6px 0;">CIKUR-Bike (Motor)</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+            <span>Tarif Perjalanan:</span>
+            <span id="rideTotalPrice" style="color: #FFD700; font-weight: 800; font-family: var(--font-mono);">Rp 10.000</span>
+        </div>
+        <button class="btn-order" onclick="prosesPesanRide()">Pesan Driver Sekarang ⚡</button>
     </div>
 </div>
 
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-let isOnline = false;
-let currentTab = 'food';
-let map, driverMarker;
+let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { saldo: 125000 };
+let selectedRide = { type: "CIKUR-Bike (Motor)", price: 10000 };
 
-function initMap(lat = -6.3245, lon = 106.1524) {
-    if(!map) {
-        map = L.map('map').setView([lat, lon], 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-        driverMarker = L.marker([lat, lon]).addTo(map).bindPopup("<b>Posisi Live Anda</b>").openPopup();
+function selectFleet(type, price) {
+    let cardBike = document.getElementById("fleetBike");
+    let cardCar = document.getElementById("fleetCar");
+    
+    if(type === 'bike') {
+        cardBike.classList.add("selected");
+        cardCar.classList.remove("selected");
+        selectedRide = { type: "CIKUR-Bike (Motor)", price: 10000 };
     } else {
-        map.setView([lat, lon], 15);
-        driverMarker.setLatLng([lat, lon]);
+        cardCar.classList.add("selected");
+        cardBike.classList.remove("selected");
+        selectedRide = { type: "CIKUR-Car (Mobil)", price: 25000 };
     }
+
+    document.getElementById("rideTypeName").innerText = selectedRide.type;
+    document.getElementById("rideTotalPrice").innerText = "Rp " + selectedRide.price.toLocaleString('id-ID');
 }
 
-function trackGPS() {
-    if (navigator.geolocation) {
-        navigator.geolocation.watchPosition((pos) => {
-            let lat = pos.coords.latitude;
-            let lon = pos.coords.longitude;
-            if(map && driverMarker) {
-                driverMarker.setLatLng([lat, lon]);
-                map.panTo([lat, lon]);
-            }
-        }, () => {}, { enableHighAccuracy: true });
-    }
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-    checkRegistration();
-    initMap();
-    trackGPS();
-});
-
-function checkRegistration() {
-    let profile = localStorage.getItem('cikur_driver_profile');
-    if(!profile) {
-        document.getElementById("registrationSection").style.display = "flex";
-        document.getElementById("dashboardSection").style.display = "none";
-    } else {
-        document.getElementById("registrationSection").style.display = "none";
-        document.getElementById("dashboardSection").style.display = "flex";
-        let p = JSON.parse(profile);
-        document.getElementById("profileNameDisplay").innerText = p.name || '-';
-        document.getElementById("profileMetaDisplay").innerText = `${p.vehicle || '-'} | WA: ${p.phone || '-'}`;
-        document.getElementById("profileBankNote").innerText = `Rek: ${p.bank || '-'} - ${p.accountNo || '-'} (${p.accountName || '-'})`;
-        if(p.photo) {
-            document.getElementById("profilePhotoDisplay").src = p.photo;
-        }
-        document.getElementById("navStatusBadge").innerText = "Aktif";
-    }
-}
-
-function saveDriverRegistration() {
-    let name = document.getElementById("regName").value.trim();
-    let phone = document.getElementById("regPhone").value.trim();
-    let vehicle = document.getElementById("regVehicle").value.trim();
-    let bank = document.getElementById("regBank").value;
-    let accountName = document.getElementById("regAccountName").value.trim();
-    let accountNo = document.getElementById("regAccountNo").value.trim();
-    let photoInput = document.getElementById("regPhoto");
-
-    if(!name || !phone || !vehicle || !accountName || !accountNo) {
-        alert("Harap isi semua kolom registrasi dan data rekening dengan lengkap!");
+function prosesPesanRide() {
+    let destination = document.getElementById("destLocation").value.trim();
+    if(!destination) {
+        alert("[!] Mohon masukkan tujuan perjalanan terlebih dahulu.");
         return;
     }
 
-    if (photoInput.files && photoInput.files[0]) {
-        let reader = new FileReader();
-        reader.onload = function(e) {
-            let profileData = { name, phone, vehicle, bank, accountName, accountNo, photo: e.target.result };
-            localStorage.setItem('cikur_driver_profile', JSON.stringify(profileData));
-            alert("Registrasi Berhasil! Masuk ke panel driver...");
-            checkRegistration();
-        };
-        reader.onerror = function() {
-            // Fallback jika pembacaan foto gagal
-            let profileData = { name, phone, vehicle, bank, accountName, accountNo, photo: "https://via.placeholder.com/60" };
-            localStorage.setItem('cikur_driver_profile', JSON.stringify(profileData));
-            alert("Registrasi Berhasil! Masuk ke panel driver...");
-            checkRegistration();
-        };
-        reader.readAsDataURL(photoInput.files[0]);
-    } else {
-        let profileData = { name, phone, vehicle, bank, accountName, accountNo, photo: "https://via.placeholder.com/60" };
-        localStorage.setItem('cikur_driver_profile', JSON.stringify(profileData));
-        alert("Registrasi Berhasil! Masuk ke panel driver...");
-        checkRegistration();
+    if (userProfile.saldo < selectedRide.price) {
+        alert("[!] Saldo CikurPay tidak mencukupi untuk memesan perjalanan ini. Silakan lakukan Top-Up.");
+        return;
     }
+    
+    userProfile.saldo -= selectedRide.price;
+    localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+    
+    alert(`[SUKSES] Pesanan ${selectedRide.type} ke "${destination}" berhasil dibuat! Driver sedang menuju lokasimu.`);
+    window.location.href = "index.html";
 }
-
-function openEditProfile() {
-    localStorage.removeItem('cikur_driver_profile');
-    checkRegistration();
-}
-
-function toggleDriverStatus() {
-    isOnline = !isOnline;
-    let btn = document.getElementById("statusBtn");
-    if(isOnline) {
-        btn.innerText = "ONLINE (Siap Order)";
-        btn.className = "status-toggle-btn";
-        loadDriverOrders();
-    } else {
-        btn.innerText = "OFFLINE";
-        btn.className = "status-toggle-btn offline";
-        loadDriverOrders();
-    }
-}
-
-function switchDriverTab(tab) {
-    currentTab = tab;
-    document.getElementById("tabFoodBtn").className = tab === 'food' ? "driver-tab active" : "driver-tab";
-    document.getElementById("tabRideBtn").className = tab === 'ride' ? "driver-tab active" : "driver-tab";
-    loadDriverOrders();
-}
-
-function loadDriverOrders() {
-    let container = document.getElementById("driverOrderContainer");
-    container.innerHTML = "";
-
-    if(!isOnline) {
-        container.innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Status Anda <b>OFFLINE</b>. Aktifkan status untuk memindai orderan asli yang masuk.</div>`;
+    function prosesPesanRide() {
+    let destination = document.getElementById("destLocation").value.trim();
+    if(!destination) {
+        alert("[!] Mohon masukkan tujuan perjalanan.");
         return;
     }
 
-    if(currentTab === 'food') {
-        let rawOrders = localStorage.getItem('cikur_driver_orders');
-        let foodOrders = [];
-        
-        try {
-            foodOrders = rawOrders ? JSON.parse(rawOrders) : [];
-        } catch(e) {
-            foodOrders = [];
-        }
-
-        let validOrders = foodOrders.filter(ord => ord && ord.id && ord.customerAddress && ord.menu);
-
-        if(validOrders.length === 0) {
-            container.innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Belum ada pesanan Cikur Food valid yang masuk dari <b>food.html</b> atau <b>resto.html</b>.</div>`;
-            return;
-        }
-
-        validOrders.forEach((ord) => {
-            let distance = ord.distance || 3.0; 
-            let deliveryFee = distance * 2500;
-            let foodTotal = Number(ord.total || 0);
-            let grandTotal = foodTotal + deliveryFee;
-
-            let card = document.createElement("div");
-            card.className = "order-card";
-            card.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span class="badge-type badge-food">CIKUR FOOD - Resto: ${ord.restoName || 'Mitra Resto'}</span>
-                    <span style="font-size: 10px; color: #10b981; font-weight:700;">✓ Data Terintegrasi Asli</span>
-                </div>
-                <div style="font-size: 11px; font-weight: 700;">📍 Tujuan Customer: ${ord.customerAddress}</div>
-                <div style="font-size: 11px; color: var(--text-muted); background: var(--background); padding: 8px; border-radius: 8px;">
-                    🛒 <b>Menu:</b> ${ord.menu}<br>
-                    📏 <b>Jarak Antar:</b> ${distance} KM (Ongkir: Rp ${deliveryFee.toLocaleString('id-ID')})
-                </div>
-                <div style="font-size: 12px; font-weight: 800; color: var(--primary);">
-                    Total Pembayaran: Rp ${grandTotal.toLocaleString('id-ID')} (${ord.paymentMethod})
-                </div>
-
-                <div style="font-size: 11px; font-weight: 700; margin-top: 4px;">💬 Chat Koordinasi (Resto & Customer):</div>
-                <div class="chat-container">
-                    <div class="chat-box" id="chatFoodBox_${ord.id}">
-                        <div class="chat-msg other">Sistem: "Pesanan masuk terverifikasi dari aplikasi customer."</div>
-                    </div>
-                    <div class="chat-input-group">
-                        <input type="text" id="inputFoodChat_${ord.id}" class="form-input" style="flex:1;" placeholder="Balas chat...">
-                        <button type="button" class="btn-primary" style="padding: 6px 12px; font-size: 10px;" onclick="sendFoodChat('${ord.id}')">Kirim</button>
-                    </div>
-                </div>
-
-                <div style="display: flex; gap: 8px; margin-top: 4px;">
-                    <a href="https://www.google.com/maps/search/?api=1&query=${ord.customerAddress}" target="_blank" class="form-input" style="background:#0284c7; color:#fff; text-align:center; text-decoration:none; font-weight:700; display:flex; align-items:center; justify-content:center;">🗺️ Peta Navigasi</a>
-                    <button type="button" class="btn-primary" style="flex:1;" onclick="completeFoodOrder('${ord.id}')">Selesaikan Antaran ✓</button>
-                </div>
-            `;
-            container.appendChild(card);
-        });
-
-    } else {
-        let rawRide = localStorage.getItem('cikur_driver_ride_orders');
-        let rideOrders = [];
-        
-        try {
-            rideOrders = rawRide ? JSON.parse(rawRide) : [];
-        } catch(e) {
-            rideOrders = [];
-        }
-
-        let validRides = rideOrders.filter(r => r && r.pickup && r.destination);
-
-        if(validRides.length === 0) {
-            container.innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Belum ada pesanan Cikur Ride reguler yang masuk dari <b>ride.html</b>.</div>`;
-            return;
-        }
-
-        validRides.forEach((ride) => {
-            let distance = ride.distance || 4.0;
-            let rideFee = distance * 3000;
-
-            let card = document.createElement("div");
-            card.className = "order-card";
-            card.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span class="badge-type badge-ride">CIKUR RIDE REGULER</span>
-                    <span style="font-size: 10px; color: #10b981; font-weight:700;">✓ Data Terintegrasi Asli</span>
-                </div>
-                <div style="font-size: 11px; font-weight: 700;">🟢 Titik Jemput: ${ride.pickup}</div>
-                <div style="font-size: 11px; font-weight: 700;">🏁 Alamat Tujuan: ${ride.destination}</div>
-                <div style="font-size: 11px; color: var(--text-muted);">Penumpang: <b>${ride.passenger || 'Customer'}</b></div>
-                <div style="font-size: 12px; font-weight: 800; color: #0284c7;">Tarif Ride: Rp ${rideFee.toLocaleString('id-ID')}</div>
-
-                <div style="font-size: 11px; font-weight: 700; margin-top: 4px;">💬 Chat Penumpang Ride:</div>
-                <div class="chat-container">
-                    <div class="chat-box" id="chatRideBox_${ride.id}">
-                        <div class="chat-msg other">Penumpang: "Halo driver, saya menunggu di titik jemput."</div>
-                    </div>
-                    <div class="chat-input-group">
-                        <input type="text" id="inputRideChat_${ride.id}" class="form-input" style="flex:1;" placeholder="Balas chat penumpang...">
-                        <button type="button" class="btn-primary" style="padding: 6px 12px; font-size: 10px; background: #0284c7;" onclick="sendRideChat('${ride.id}')">Kirim</button>
-                    </div>
-                </div>
-
-                <div style="display: flex; gap: 8px; margin-top: 4px;">
-                    <a href="https://www.google.com/maps/search/?api=1&query=${ride.destination}" target="_blank" class="form-input" style="background:#0284c7; color:#fff; text-align:center; text-decoration:none; font-weight:700; display:flex; align-items:center; justify-content:center;">🗺️ Peta Tujuan</a>
-                    <button type="button" class="btn-primary" style="flex:1; background:#0284c7;" onclick="completeRideOrder('${ride.id}')">Selesaikan Ride ✓</button>
-                </div>
-            `;
-            container.appendChild(card);
-        });
+    if (userProfile.saldo < selectedRide.price) {
+        alert("[!] Saldo CikurPay tidak mencukupi.");
+        return;
     }
-}
-
-function sendFoodChat(orderId) {
-    let input = document.getElementById(`inputFoodChat_${orderId}`);
-    if(!input) return;
-    let text = input.value.trim();
-    if(!text) return;
-    let box = document.getElementById(`chatFoodBox_${orderId}`);
-    box.innerHTML += `<div class="chat-msg driver">Driver: "${text}"</div>`;
-    input.value = "";
-    box.scrollTop = box.scrollHeight;
-}
-
-function sendRideChat(orderId) {
-    let input = document.getElementById(`inputRideChat_${orderId}`);
-    if(!input) return;
-    let text = input.value.trim();
-    if(!text) return;
-    let box = document.getElementById(`chatRideBox_${orderId}`);
-    box.innerHTML += `<div class="chat-msg driver" style="background:#dbeafe; color:#1e40af;">Driver: "${text}"</div>`;
-    input.value = "";
-    box.scrollTop = box.scrollHeight;
-}
-
-function completeFoodOrder(orderId) {
-    if(confirm("Selesaikan pesanan Cikur Food ini?")) {
-        let foodOrders = JSON.parse(localStorage.getItem('cikur_driver_orders')) || [];
-        let filtered = foodOrders.filter(o => o.id !== orderId);
-        localStorage.setItem('cikur_driver_orders', JSON.stringify(filtered));
-        loadDriverOrders();
-        alert("Pesanan berhasil diselesaikan!");
-    }
-}
-
-function completeRideOrder(orderId) {
-    if(confirm("Selesaikan perjalanan Cikur Ride ini?")) {
-        let rideOrders = JSON.parse(localStorage.getItem('cikur_driver_ride_orders')) || [];
-        let filtered = rideOrders.filter(r => r.id !== orderId);
-        localStorage.setItem('cikur_driver_ride_orders', JSON.stringify(filtered));
-        loadDriverOrders();
-        alert("Perjalanan reguler selesai!");
-    }
+    
+    userProfile.saldo -= selectedRide.price;
+    localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+    
+    // Catat ke riwayat global aplikasi
+    simpanRiwayatTransaksi(`${selectedRide.type} ke ${destination}`, selectedRide.price, 'CIKUR Ride');
+    
+    alert(`[SUKSES] Pesanan ${selectedRide.type} berhasil dibuat!`);
+    window.location.href = "index.html";
 }
 </script>
 
