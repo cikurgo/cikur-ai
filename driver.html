@@ -243,35 +243,25 @@ function saveDriverRegistration() {
     let bank = document.getElementById("regBank").value;
     let accountName = document.getElementById("regAccountName").value.trim();
     let accountNo = document.getElementById("regAccountNo").value.trim();
-    let photoInput = document.getElementById("regPhoto");
 
     if(!name || !phone || !vehicle || !accountName || !accountNo) {
         alert("Harap isi semua kolom registrasi dan data rekening dengan lengkap!");
         return;
     }
 
-    if (photoInput.files && photoInput.files[0]) {
-        let reader = new FileReader();
-        reader.onload = function(e) {
-            let profileData = { name, phone, vehicle, bank, accountName, accountNo, photo: e.target.result };
-            localStorage.setItem('cikur_driver_profile', JSON.stringify(profileData));
-            alert("Registrasi Berhasil! Masuk ke panel driver...");
-            checkRegistration();
-        };
-        reader.onerror = function() {
-            // Fallback jika pembacaan foto gagal
-            let profileData = { name, phone, vehicle, bank, accountName, accountNo, photo: "https://via.placeholder.com/60" };
-            localStorage.setItem('cikur_driver_profile', JSON.stringify(profileData));
-            alert("Registrasi Berhasil! Masuk ke panel driver...");
-            checkRegistration();
-        };
-        reader.readAsDataURL(photoInput.files[0]);
-    } else {
-        let profileData = { name, phone, vehicle, bank, accountName, accountNo, photo: "https://via.placeholder.com/60" };
-        localStorage.setItem('cikur_driver_profile', JSON.stringify(profileData));
-        alert("Registrasi Berhasil! Masuk ke panel driver...");
-        checkRegistration();
-    }
+    let profileData = { 
+        name: name, 
+        phone: phone, 
+        vehicle: vehicle, 
+        bank: bank, 
+        accountName: accountName, 
+        accountNo: accountNo, 
+        photo: "https://via.placeholder.com/60" 
+    };
+
+    localStorage.setItem('cikur_driver_profile', JSON.stringify(profileData));
+    alert("Registrasi Berhasil! Masuk ke panel driver...");
+    checkRegistration();
 }
 
 function openEditProfile() {
