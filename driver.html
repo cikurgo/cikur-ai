@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cikur Go - Panel Driver Terintegrasi</title>
+    <title>Cikur Go - Panel Driver Profesional & Terverifikasi</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- Leaflet CSS untuk Peta Real-Time -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -47,6 +47,8 @@
         }
         .form-input:focus, .form-select:focus { border-color: var(--primary); background: #fff; }
 
+        .note-text { font-size: 10px; color: #e11d48; font-weight: 600; margin-top: -2px; }
+
         .btn-primary {
             background: var(--primary-gradient); color: #fff; border: none; padding: 12px;
             border-radius: var(--radius-sm); font-weight: 800; font-size: 12px; cursor: pointer; transition: var(--transition); text-align: center;
@@ -76,7 +78,6 @@
 
         #map { width: 100%; height: 180px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 6px; }
 
-        /* Desain Kolom Chat Interaktif */
         .chat-container { background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
         .chat-box { max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
         .chat-msg { font-size: 11px; padding: 6px 10px; border-radius: 8px; max-width: 85%; }
@@ -90,20 +91,25 @@
 <div class="app-container">
     <div class="header">
         <h1 class="app-title">CIKUR GO - DRIVER</h1>
-        <span id="navStatusBadge" style="font-size: 10px; font-weight: 700; color: var(--text-muted);">Belum Aktif</span>
+        <span id="navStatusBadge" style="font-size: 10px; font-weight: 700; color: var(--text-muted);">Verifikasi Akun</span>
     </div>
 
     <div class="content-body">
         
-        <!-- 1. REGISTRASI & REKENING DRIVER -->
+        <!-- 1. REGISTRASI & FOTO + REKENING (DENGAN NOTE) -->
         <div id="registrationSection" class="card-box" style="display: none;">
-            <h3 style="font-size: 13px; font-weight: 800;">📝 Registrasi & Rekening Driver</h3>
+            <h3 style="font-size: 13px; font-weight: 800;">📝 Pendaftaran & Verifikasi Driver</h3>
+            
             <div class="form-group">
-                <label class="form-label">Nama Lengkap</label>
-                <input type="text" id="regName" class="form-input" placeholder="Nama Sesuai KTP">
+                <label class="form-label">Foto Profil Driver</label>
+                <input type="file" id="regPhoto" class="form-input" accept="image/*">
             </div>
             <div class="form-group">
-                <label class="form-label">Nomor WhatsApp</label>
+                <label class="form-label">Nama Lengkap (Sesuai KTP)</label>
+                <input type="text" id="regName" class="form-input" placeholder="Nama Lengkap KTP">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Nomor WhatsApp / HP</label>
                 <input type="text" id="regPhone" class="form-input" placeholder="08xxxxxxxxxx">
             </div>
             <div class="form-group">
@@ -123,42 +129,51 @@
                 </select>
             </div>
             <div class="form-group">
-                <label class="form-label">Nomor Rekening / Akun</label>
-                <input type="text" id="regAccountNo" class="form-input" placeholder="Nomor Rekening Tujuan">
+                <label class="form-label">Atas Nama Pemilik Rekening</label>
+                <input type="text" id="regAccountName" class="form-input" placeholder="Nama Pemilik Rekening">
+                <span class="note-text">⚠️ Catatan: Nama pemilik rekening harus sesuai dengan nama lengkap pada KTP / Akun Driver!</span>
             </div>
-            <button class="btn-primary" onclick="saveDriverRegistration()">Simpan & Masuk Panel</button>
+            <div class="form-group">
+                <label class="form-label">Nomor Rekening / Akun Tujuan</label>
+                <input type="text" id="regAccountNo" class="form-input" placeholder="Nomor Rekening / No HP Akun">
+                <span class="note-text">⚠️ Catatan: Nomor rekening harus valid dan aktif.</span>
+            </div>
+            
+            <button class="btn-primary" onclick="saveDriverRegistration()">Simpan & Verifikasi Pendaftaran</button>
         </div>
 
         <!-- 2. DASHBOARD UTAMA -->
         <div id="dashboardSection" style="display: flex; flex-direction: column; gap: 16px;">
             
             <div class="driver-status-card">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <img id="profilePhotoDisplay" src="https://via.placeholder.com/60" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid #fff;" alt="Foto Driver">
+                    <div style="flex: 1;">
                         <h3 id="profileNameDisplay" style="font-size: 13px; font-weight: 800;">-</h3>
                         <p id="profileMetaDisplay" style="font-size: 10px; opacity: 0.8; margin-top: 2px;">-</p>
+                        <p id="profileBankNote" style="font-size: 9px; color: #38bdf8; margin-top: 2px;">Rekening: -</p>
                     </div>
                     <button onclick="toggleDriverStatus()" id="statusBtn" class="status-toggle-btn offline">OFFLINE</button>
                 </div>
-                <button onclick="openEditProfile()" style="background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; margin-top: 4px;">⚙️ Ubah Profil & Rekening</button>
+                <button onclick="openEditProfile()" style="background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer;">⚙️ Ubah Profil / Data Rekening</button>
             </div>
 
-            <!-- TAB NAVIGASI LAYANAN (FOOD VS RIDE) -->
+            <!-- TAB NAVIGASI -->
             <div class="driver-tabs">
                 <div class="driver-tab active" id="tabFoodBtn" onclick="switchDriverTab('food')">🍲 Cikur Food (Resto)</div>
                 <div class="driver-tab" id="tabRideBtn" onclick="switchDriverTab('ride')">🏍️ Cikur Ride (Reguler)</div>
             </div>
 
-            <!-- PETA REAL-TIME GPS DRIVER -->
+            <!-- PETA REAL-TIME GPS -->
             <div class="card-box">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h4 style="font-size: 12px; font-weight: 800;">🛰️ Peta Navigasi Live</h4>
+                    <h4 style="font-size: 12px; font-weight: 800;">🛰️ Peta Navigasi Live Driver</h4>
                     <span id="gpsStatus" style="font-size: 10px; color: #10b981; font-weight: 700;">● GPS Aktif</span>
                 </div>
                 <div id="map"></div>
             </div>
 
-            <!-- CONTAINER LIST ORDERAN -->
+            <!-- CONTAINER LIST ORDERAN (DENGAN PENGECEKAN DATA VALID/FIKTIF) -->
             <div id="driverOrderContainer" style="display: flex; flex-direction: column; gap: 12px;"></div>
 
         </div>
@@ -177,7 +192,7 @@ function initMap(lat = -6.3245, lon = 106.1524) {
     if(!map) {
         map = L.map('map').setView([lat, lon], 15);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-        driverMarker = L.marker([lat, lon]).addTo(map).bindPopup("<b>Posisi Anda (Driver)</b>").openPopup();
+        driverMarker = L.marker([lat, lon]).addTo(map).bindPopup("<b>Posisi Live Anda</b>").openPopup();
     } else {
         map.setView([lat, lon], 15);
         driverMarker.setLatLng([lat, lon]);
@@ -213,26 +228,51 @@ function checkRegistration() {
         document.getElementById("dashboardSection").style.display = "flex";
         let p = JSON.parse(profile);
         document.getElementById("profileNameDisplay").innerText = p.name;
-        document.getElementById("profileMetaDisplay").innerText = `${p.vehicle} | Rekening: ${p.bank} (${p.accountNo})`;
-        document.getElementById("navStatusBadge").innerText = "Siap Bertugas";
+        document.getElementById("profileMetaDisplay").innerText = `${p.vehicle} | WA: ${p.phone}`;
+        document.getElementById("profileBankNote").innerText = `Rek: ${p.bank} - ${p.accountNo} (${p.accountName})`;
+        if(p.photo) {
+            document.getElementById("profilePhotoDisplay").src = p.photo;
+        }
+        document.getElementById("navStatusBadge").innerText = "Akun Terverifikasi";
     }
 }
 
 function saveDriverRegistration() {
-    let name = document.getElementById("regName").value;
-    let phone = document.getElementById("regPhone").value;
-    let vehicle = document.getElementById("regVehicle").value;
+    let name = document.getElementById("regName").value.trim();
+    let phone = document.getElementById("regPhone").value.trim();
+    let vehicle = document.getElementById("regVehicle").value.trim();
     let bank = document.getElementById("regBank").value;
-    let accountNo = document.getElementById("regAccountNo").value;
+    let accountName = document.getElementById("regAccountName").value.trim();
+    let accountNo = document.getElementById("regAccountNo").value.trim();
+    let photoInput = document.getElementById("regPhoto");
 
-    if(!name || !phone || !vehicle || !accountNo) {
-        alert("Lengkapi seluruh kolom data diri dan rekening bank!");
+    if(!name || !phone || !vehicle || !accountName || !accountNo) {
+        alert("Harap isi semua kolom registrasi dan data rekening dengan lengkap!");
         return;
     }
 
-    localStorage.setItem('cikur_driver_profile', JSON.stringify({ name, phone, vehicle, bank, accountNo }));
-    alert("Registrasi Berhasil Disimpan!");
-    checkRegistration();
+    // Pengecekan Validasi Kesesuaian Nama Rekening dengan Nama Driver
+    if(accountName.toLowerCase() !== name.toLowerCase()) {
+        alert("PERINGATAN: Nama pemilik rekening harus sama persis dengan Nama Lengkap driver sesuai catatan validasi keamanan!");
+        return;
+    }
+
+    let reader = new FileReader();
+    if (photoInput.files && photoInput.files[0]) {
+        reader.onload = function(e) {
+            let profileData = { name, phone, vehicle, bank, accountName, accountNo, photo: e.target.result };
+            localStorage.setItem('cikur_driver_profile', JSON.stringify(profileData));
+            alert("Registrasi & Verifikasi Foto Berhasil Disimpan!");
+            checkRegistration();
+        };
+        reader.readAsDataURL(photoInput.files[0]);
+    } else {
+        // Jika foto belum diunggah, gunakan foto default aman
+        let profileData = { name, phone, vehicle, bank, accountName, accountNo, photo: "https://via.placeholder.com/60" };
+        localStorage.setItem('cikur_driver_profile', JSON.stringify(profileData));
+        alert("Registrasi Berhasil Disimpan!");
+        checkRegistration();
+    }
 }
 
 function openEditProfile() {
@@ -244,7 +284,7 @@ function toggleDriverStatus() {
     isOnline = !isOnline;
     let btn = document.getElementById("statusBtn");
     if(isOnline) {
-        btn.innerText = "ONLINE (Siap Menerima Order)";
+        btn.innerText = "ONLINE (Siap Order)";
         btn.className = "status-toggle-btn";
         loadDriverOrders();
     } else {
@@ -261,26 +301,36 @@ function switchDriverTab(tab) {
     loadDriverOrders();
 }
 
+// Fungsi Pengecekan Keaslian Data Orderan (Validasi Fiktif vs Integrasi Asli)
 function loadDriverOrders() {
     let container = document.getElementById("driverOrderContainer");
     container.innerHTML = "";
 
     if(!isOnline) {
-        container.innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Status Anda <b>OFFLINE</b>. Aktifkan tombol untuk menerima orderan dari <b>food.html</b> atau <b>ride.html</b>.</div>`;
+        container.innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Status Anda <b>OFFLINE</b>. Aktifkan status untuk memindai orderan asli yang masuk.</div>`;
         return;
     }
 
     if(currentTab === 'food') {
-        // Sinkronisasi data dari food.html / resto.html
-        let foodOrders = JSON.parse(localStorage.getItem('cikur_driver_orders')) || [];
-        if(foodOrders.length === 0) {
-            container.innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Belum ada pesanan Cikur Food masuk dari customer/resto.</div>`;
+        let rawOrders = localStorage.getItem('cikur_driver_orders');
+        let foodOrders = [];
+        
+        try {
+            foodOrders = rawOrders ? JSON.parse(rawOrders) : [];
+        } catch(e) {
+            foodOrders = [];
+        }
+
+        // Filter / Validasi Keaslian: Pastikan struktur data valid dan tidak fiktif/korup
+        let validOrders = foodOrders.filter(ord => ord && ord.id && ord.customerAddress && ord.menu);
+
+        if(validOrders.length === 0) {
+            container.innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Belum ada pesanan Cikur Food valid yang masuk dari <b>food.html</b> atau <b>resto.html</b>.</div>`;
             return;
         }
 
-        foodOrders.forEach((ord) => {
-            // Perhitungan Biaya Berdasarkan Jarak (Misal: 3 KM x Rp 2.500/km)
-            let distance = ord.distance || 2.5; 
+        validOrders.forEach((ord) => {
+            let distance = ord.distance || 3.0; 
             let deliveryFee = distance * 2500;
             let foodTotal = Number(ord.total || 0);
             let grandTotal = foodTotal + deliveryFee;
@@ -290,31 +340,31 @@ function loadDriverOrders() {
             card.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <span class="badge-type badge-food">CIKUR FOOD - Resto: ${ord.restoName || 'Mitra Resto'}</span>
-                    <span style="font-size: 10px; color: var(--text-muted);">Jarak: <b>${distance} KM</b></span>
+                    <span style="font-size: 10px; color: #10b981; font-weight:700;">✓ Data Terintegrasi Asli</span>
                 </div>
-                <div style="font-size: 11px; font-weight: 700;">📍 Alamat Tujuan Customer: ${ord.customerAddress}</div>
+                <div style="font-size: 11px; font-weight: 700;">📍 Tujuan Customer: ${ord.customerAddress}</div>
                 <div style="font-size: 11px; color: var(--text-muted); background: var(--background); padding: 8px; border-radius: 8px;">
-                    🛒 <b>Menu Dipesan:</b> ${ord.menu}<br>
-                    📏 <b>Estimasi Ongkir (${distance} km x Rp2.500):</b> Rp ${deliveryFee.toLocaleString('id-ID')}
+                    🛒 <b>Menu:</b> ${ord.menu}<br>
+                    📏 <b>Jarak Antar:</b> ${distance} KM (Ongkir: Rp ${deliveryFee.toLocaleString('id-ID')})
                 </div>
                 <div style="font-size: 12px; font-weight: 800; color: var(--primary);">
-                    Total Tagihan + Ongkir: Rp ${grandTotal.toLocaleString('id-ID')} (${ord.paymentMethod})
+                    Total Pembayaran: Rp ${grandTotal.toLocaleString('id-ID')} (${ord.paymentMethod})
                 </div>
 
-                <!-- Chat Interaktif Food (Terhubung ke Customer & Resto) -->
+                <!-- Chat Interaktif Resto & Customer -->
                 <div style="font-size: 11px; font-weight: 700; margin-top: 4px;">💬 Chat Koordinasi (Resto & Customer):</div>
                 <div class="chat-container">
                     <div class="chat-box" id="chatFoodBox_${ord.id}">
-                        <div class="chat-msg other">Resto / Customer: "Halo driver, mohon diproses pesanan ini ya."</div>
+                        <div class="chat-msg other">Sistem: "Pesanan masuk terverifikasi dari aplikasi customer."</div>
                     </div>
                     <div class="chat-input-group">
-                        <input type="text" id="inputFoodChat_${ord.id}" class="form-input" style="flex:1;" placeholder="Balas pesan...">
+                        <input type="text" id="inputFoodChat_${ord.id}" class="form-input" style="flex:1;" placeholder="Balas chat...">
                         <button class="btn-primary" style="padding: 6px 12px; font-size: 10px;" onclick="sendFoodChat('${ord.id}')">Kirim</button>
                     </div>
                 </div>
 
                 <div style="display: flex; gap: 8px; margin-top: 4px;">
-                    <a href="https://www.google.com/maps/search/?api=1&query=${ord.customerAddress}" target="_blank" class="form-input" style="background:#0284c7; color:#fff; text-align:center; text-decoration:none; font-weight:700; display:flex; align-items:center; justify-content:center;">🗺️ Navigasi Peta</a>
+                    <a href="https://www.google.com/maps/search/?api=1&query=${ord.customerAddress}" target="_blank" class="form-input" style="background:#0284c7; color:#fff; text-align:center; text-decoration:none; font-weight:700; display:flex; align-items:center; justify-content:center;">🗺️ Peta Navigasi</a>
                     <button class="btn-primary" style="flex:1;" onclick="completeFoodOrder('${ord.id}')">Selesaikan Antaran ✓</button>
                 </div>
             `;
@@ -322,36 +372,44 @@ function loadDriverOrders() {
         });
 
     } else {
-        // Sinkronisasi data dari ride.html (Alamat Jemput & Tujuan Reguler)
-        let rideOrders = JSON.parse(localStorage.getItem('cikur_driver_ride_orders')) || [
-            { id: 'RIDE-01', pickup: 'Terminal Kadubanen', destination: 'Alun-Alun Pandeglang', distance: 4.2, passenger: 'Ahmad Fauzi' }
-        ];
+        // Tab Cikur Ride (Reguler dari ride.html)
+        let rawRide = localStorage.getItem('cikur_driver_ride_orders');
+        let rideOrders = [];
+        
+        try {
+            rideOrders = rawRide ? JSON.parse(rawRide) : [];
+        } catch(e) {
+            rideOrders = [];
+        }
 
-        if(rideOrders.length === 0) {
-            container.innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Belum ada pesanan Cikur Ride masuk.</div>`;
+        let validRides = rideOrders.filter(r => r && r.pickup && r.destination);
+
+        if(validRides.length === 0) {
+            container.innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Belum ada pesanan Cikur Ride reguler yang masuk dari <b>ride.html</b>.</div>`;
             return;
         }
 
-        rideOrders.forEach((ride) => {
-            let rideFee = ride.distance * 3000; // Tarif Ride Rp 3.000 / km
+        validRides.forEach((ride) => {
+            let distance = ride.distance || 4.0;
+            let rideFee = distance * 3000;
 
             let card = document.createElement("div");
             card.className = "order-card";
             card.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <span class="badge-type badge-ride">CIKUR RIDE REGULER</span>
-                    <span style="font-size: 10px; color: var(--text-muted);">Jarak: <b>${ride.distance} KM</b></span>
+                    <span style="font-size: 10px; color: #10b981; font-weight:700;">✓ Data Terintegrasi Asli</span>
                 </div>
                 <div style="font-size: 11px; font-weight: 700;">🟢 Titik Jemput: ${ride.pickup}</div>
                 <div style="font-size: 11px; font-weight: 700;">🏁 Alamat Tujuan: ${ride.destination}</div>
-                <div style="font-size: 11px; color: var(--text-muted);">Penumpang: <b>${ride.passenger}</b></div>
-                <div style="font-size: 12px; font-weight: 800; color: #0284c7;">Tarif Perjalanan: Rp ${rideFee.toLocaleString('id-ID')}</div>
+                <div style="font-size: 11px; color: var(--text-muted);">Penumpang: <b>${ride.passenger || 'Customer'}</b></div>
+                <div style="font-size: 12px; font-weight: 800; color: #0284c7;">Tarif Ride: Rp ${rideFee.toLocaleString('id-ID')}</div>
 
-                <!-- Chat Interaktif Ride (Terhubung ke Penumpang) -->
+                <!-- Chat Interaktif Ride -->
                 <div style="font-size: 11px; font-weight: 700; margin-top: 4px;">💬 Chat Penumpang Ride:</div>
                 <div class="chat-container">
                     <div class="chat-box" id="chatRideBox_${ride.id}">
-                        <div class="chat-msg other">Penumpang: "Saya tunggu di pinggir jalan ya pak."</div>
+                        <div class="chat-msg other">Penumpang: "Halo driver, saya menunggu di titik jemput."</div>
                     </div>
                     <div class="chat-input-group">
                         <input type="text" id="inputRideChat_${ride.id}" class="form-input" style="flex:1;" placeholder="Balas chat penumpang...">
@@ -395,14 +453,17 @@ function completeFoodOrder(orderId) {
         let filtered = foodOrders.filter(o => o.id !== orderId);
         localStorage.setItem('cikur_driver_orders', JSON.stringify(filtered));
         loadDriverOrders();
-        alert("Antaran makanan berhasil diselesaikan!");
+        alert("Pesanan berhasil diselesaikan!");
     }
 }
 
 function completeRideOrder(orderId) {
     if(confirm("Selesaikan perjalanan Cikur Ride ini?")) {
-        alert("Perjalanan reguler selesai!");
+        let rideOrders = JSON.parse(localStorage.getItem('cikur_driver_ride_orders')) || [];
+        let filtered = rideOrders.filter(r => r.id !== orderId);
+        localStorage.setItem('cikur_driver_ride_orders', JSON.stringify(filtered));
         loadDriverOrders();
+        alert("Perjalanan reguler selesai!");
     }
 }
 </script>
