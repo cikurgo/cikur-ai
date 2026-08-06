@@ -96,7 +96,7 @@
 
     <div class="content-body">
         
-        <!-- 1. REGISTRASI & REKENING (FLEKSIBEL) -->
+        <!-- 1. REGISTRASI & REKENING -->
         <div id="registrationSection" class="card-box" style="display: none;">
             <h3 style="font-size: 13px; font-weight: 800;">📝 Pendaftaran Driver</h3>
             
@@ -131,14 +131,14 @@
             <div class="form-group">
                 <label class="form-label">Atas Nama Pemilik Rekening</label>
                 <input type="text" id="regAccountName" class="form-input" placeholder="Nama Pemilik Rekening">
-                <span class="note-text">ℹ️ Catatan: Dianjurkan sesuai nama KTP, namun bebas diisi untuk pengujian.</span>
+                <span class="note-text">ℹ️ Bebas diisi sesuai akun e-wallet / rekening Anda.</span>
             </div>
             <div class="form-group">
                 <label class="form-label">Nomor Rekening / Akun Tujuan</label>
                 <input type="text" id="regAccountNo" class="form-input" placeholder="Nomor Rekening / No HP Akun">
             </div>
             
-            <button class="btn-primary" onclick="saveDriverRegistration()">Simpan & Masuk Panel</button>
+            <button type="button" class="btn-primary" onclick="saveDriverRegistration()">Simpan & Masuk Panel</button>
         </div>
 
         <!-- 2. DASHBOARD UTAMA -->
@@ -152,9 +152,9 @@
                         <p id="profileMetaDisplay" style="font-size: 10px; opacity: 0.8; margin-top: 2px;">-</p>
                         <p id="profileBankNote" style="font-size: 9px; color: #38bdf8; margin-top: 2px;">Rekening: -</p>
                     </div>
-                    <button onclick="toggleDriverStatus()" id="statusBtn" class="status-toggle-btn offline">OFFLINE</button>
+                    <button type="button" onclick="toggleDriverStatus()" id="statusBtn" class="status-toggle-btn offline">OFFLINE</button>
                 </div>
-                <button onclick="openEditProfile()" style="background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer;">⚙️ Ubah Profil / Data Rekening</button>
+                <button type="button" onclick="openEditProfile()" style="background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer;">⚙️ Ubah Profil / Data Rekening</button>
             </div>
 
             <!-- TAB NAVIGASI -->
@@ -226,9 +226,9 @@ function checkRegistration() {
         document.getElementById("registrationSection").style.display = "none";
         document.getElementById("dashboardSection").style.display = "flex";
         let p = JSON.parse(profile);
-        document.getElementById("profileNameDisplay").innerText = p.name;
-        document.getElementById("profileMetaDisplay").innerText = `${p.vehicle} | WA: ${p.phone}`;
-        document.getElementById("profileBankNote").innerText = `Rek: ${p.bank} - ${p.accountNo} (${p.accountName})`;
+        document.getElementById("profileNameDisplay").innerText = p.name || '-';
+        document.getElementById("profileMetaDisplay").innerText = `${p.vehicle || '-'} | WA: ${p.phone || '-'}`;
+        document.getElementById("profileBankNote").innerText = `Rek: ${p.bank || '-'} - ${p.accountNo || '-'} (${p.accountName || '-'})`;
         if(p.photo) {
             document.getElementById("profilePhotoDisplay").src = p.photo;
         }
@@ -237,25 +237,13 @@ function checkRegistration() {
 }
 
 function saveDriverRegistration() {
-    let nameInput = document.getElementById("regName");
-    let phoneInput = document.getElementById("regPhone");
-    let vehicleInput = document.getElementById("regVehicle");
-    let bankSelect = document.getElementById("regBank");
-    let accountNameInput = document.getElementById("regAccountName");
-    let accountNoInput = document.getElementById("regAccountNo");
+    let name = document.getElementById("regName").value.trim();
+    let phone = document.getElementById("regPhone").value.trim();
+    let vehicle = document.getElementById("regVehicle").value.trim();
+    let bank = document.getElementById("regBank").value;
+    let accountName = document.getElementById("regAccountName").value.trim();
+    let accountNo = document.getElementById("regAccountNo").value.trim();
     let photoInput = document.getElementById("regPhoto");
-
-    if (!nameInput || !phoneInput || !vehicleInput || !accountNameInput || !accountNoInput) {
-        alert("Terjadi kesalahan pada elemen form.");
-        return;
-    }
-
-    let name = nameInput.value.trim();
-    let phone = phoneInput.value.trim();
-    let vehicle = vehicleInput.value.trim();
-    let bank = bankSelect.value;
-    let accountName = accountNameInput.value.trim();
-    let accountNo = accountNoInput.value.trim();
 
     if(!name || !phone || !vehicle || !accountName || !accountNo) {
         alert("Harap isi semua kolom registrasi dan data rekening dengan lengkap!");
@@ -266,6 +254,13 @@ function saveDriverRegistration() {
         let reader = new FileReader();
         reader.onload = function(e) {
             let profileData = { name, phone, vehicle, bank, accountName, accountNo, photo: e.target.result };
+            localStorage.setItem('cikur_driver_profile', JSON.stringify(profileData));
+            alert("Registrasi Berhasil! Masuk ke panel driver...");
+            checkRegistration();
+        };
+        reader.onerror = function() {
+            // Fallback jika pembacaan foto gagal
+            let profileData = { name, phone, vehicle, bank, accountName, accountNo, photo: "https://via.placeholder.com/60" };
             localStorage.setItem('cikur_driver_profile', JSON.stringify(profileData));
             alert("Registrasi Berhasil! Masuk ke panel driver...");
             checkRegistration();
@@ -360,13 +355,13 @@ function loadDriverOrders() {
                     </div>
                     <div class="chat-input-group">
                         <input type="text" id="inputFoodChat_${ord.id}" class="form-input" style="flex:1;" placeholder="Balas chat...">
-                        <button class="btn-primary" style="padding: 6px 12px; font-size: 10px;" onclick="sendFoodChat('${ord.id}')">Kirim</button>
+                        <button type="button" class="btn-primary" style="padding: 6px 12px; font-size: 10px;" onclick="sendFoodChat('${ord.id}')">Kirim</button>
                     </div>
                 </div>
 
                 <div style="display: flex; gap: 8px; margin-top: 4px;">
                     <a href="https://www.google.com/maps/search/?api=1&query=${ord.customerAddress}" target="_blank" class="form-input" style="background:#0284c7; color:#fff; text-align:center; text-decoration:none; font-weight:700; display:flex; align-items:center; justify-content:center;">🗺️ Peta Navigasi</a>
-                    <button class="btn-primary" style="flex:1;" onclick="completeFoodOrder('${ord.id}')">Selesaikan Antaran ✓</button>
+                    <button type="button" class="btn-primary" style="flex:1;" onclick="completeFoodOrder('${ord.id}')">Selesaikan Antaran ✓</button>
                 </div>
             `;
             container.appendChild(card);
@@ -412,13 +407,13 @@ function loadDriverOrders() {
                     </div>
                     <div class="chat-input-group">
                         <input type="text" id="inputRideChat_${ride.id}" class="form-input" style="flex:1;" placeholder="Balas chat penumpang...">
-                        <button class="btn-primary" style="padding: 6px 12px; font-size: 10px; background: #0284c7;" onclick="sendRideChat('${ride.id}')">Kirim</button>
+                        <button type="button" class="btn-primary" style="padding: 6px 12px; font-size: 10px; background: #0284c7;" onclick="sendRideChat('${ride.id}')">Kirim</button>
                     </div>
                 </div>
 
                 <div style="display: flex; gap: 8px; margin-top: 4px;">
                     <a href="https://www.google.com/maps/search/?api=1&query=${ride.destination}" target="_blank" class="form-input" style="background:#0284c7; color:#fff; text-align:center; text-decoration:none; font-weight:700; display:flex; align-items:center; justify-content:center;">🗺️ Peta Tujuan</a>
-                    <button class="btn-primary" style="flex:1; background:#0284c7;" onclick="completeRideOrder('${ride.id}')">Selesaikan Ride ✓</button>
+                    <button type="button" class="btn-primary" style="flex:1; background:#0284c7;" onclick="completeRideOrder('${ride.id}')">Selesaikan Ride ✓</button>
                 </div>
             `;
             container.appendChild(card);
@@ -428,6 +423,7 @@ function loadDriverOrders() {
 
 function sendFoodChat(orderId) {
     let input = document.getElementById(`inputFoodChat_${orderId}`);
+    if(!input) return;
     let text = input.value.trim();
     if(!text) return;
     let box = document.getElementById(`chatFoodBox_${orderId}`);
@@ -438,6 +434,7 @@ function sendFoodChat(orderId) {
 
 function sendRideChat(orderId) {
     let input = document.getElementById(`inputRideChat_${orderId}`);
+    if(!input) return;
     let text = input.value.trim();
     if(!text) return;
     let box = document.getElementById(`chatRideBox_${orderId}`);
