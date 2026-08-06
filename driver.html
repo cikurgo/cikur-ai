@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cikur Go - Panel Driver Profesional & Terverifikasi</title>
+    <title>Cikur Go - Panel Driver Profesional</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- Leaflet CSS untuk Peta Real-Time -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -47,7 +47,7 @@
         }
         .form-input:focus, .form-select:focus { border-color: var(--primary); background: #fff; }
 
-        .note-text { font-size: 10px; color: #e11d48; font-weight: 600; margin-top: -2px; }
+        .note-text { font-size: 10px; color: #64748b; font-weight: 600; margin-top: -2px; }
 
         .btn-primary {
             background: var(--primary-gradient); color: #fff; border: none; padding: 12px;
@@ -91,21 +91,21 @@
 <div class="app-container">
     <div class="header">
         <h1 class="app-title">CIKUR GO - DRIVER</h1>
-        <span id="navStatusBadge" style="font-size: 10px; font-weight: 700; color: var(--text-muted);">Verifikasi Akun</span>
+        <span id="navStatusBadge" style="font-size: 10px; font-weight: 700; color: var(--text-muted);">Panel Driver</span>
     </div>
 
     <div class="content-body">
         
-        <!-- 1. REGISTRASI & FOTO + REKENING (DENGAN NOTE) -->
+        <!-- 1. REGISTRASI & REKENING (FLEKSIBEL) -->
         <div id="registrationSection" class="card-box" style="display: none;">
-            <h3 style="font-size: 13px; font-weight: 800;">📝 Pendaftaran & Verifikasi Driver</h3>
+            <h3 style="font-size: 13px; font-weight: 800;">📝 Pendaftaran Driver</h3>
             
             <div class="form-group">
                 <label class="form-label">Foto Profil Driver</label>
                 <input type="file" id="regPhoto" class="form-input" accept="image/*">
             </div>
             <div class="form-group">
-                <label class="form-label">Nama Lengkap (Sesuai KTP)</label>
+                <label class="form-label">Nama Lengkap</label>
                 <input type="text" id="regName" class="form-input" placeholder="Nama Lengkap KTP">
             </div>
             <div class="form-group">
@@ -131,15 +131,14 @@
             <div class="form-group">
                 <label class="form-label">Atas Nama Pemilik Rekening</label>
                 <input type="text" id="regAccountName" class="form-input" placeholder="Nama Pemilik Rekening">
-                <span class="note-text">⚠️ Catatan: Nama pemilik rekening harus sesuai dengan nama lengkap pada KTP / Akun Driver!</span>
+                <span class="note-text">ℹ️ Catatan: Dianjurkan sesuai nama KTP, namun bebas diisi untuk pengujian.</span>
             </div>
             <div class="form-group">
                 <label class="form-label">Nomor Rekening / Akun Tujuan</label>
                 <input type="text" id="regAccountNo" class="form-input" placeholder="Nomor Rekening / No HP Akun">
-                <span class="note-text">⚠️ Catatan: Nomor rekening harus valid dan aktif.</span>
             </div>
             
-            <button class="btn-primary" onclick="saveDriverRegistration()">Simpan & Verifikasi Pendaftaran</button>
+            <button class="btn-primary" onclick="saveDriverRegistration()">Simpan & Masuk Panel</button>
         </div>
 
         <!-- 2. DASHBOARD UTAMA -->
@@ -173,7 +172,7 @@
                 <div id="map"></div>
             </div>
 
-            <!-- CONTAINER LIST ORDERAN (DENGAN PENGECEKAN DATA VALID/FIKTIF) -->
+            <!-- CONTAINER LIST ORDERAN -->
             <div id="driverOrderContainer" style="display: flex; flex-direction: column; gap: 12px;"></div>
 
         </div>
@@ -233,44 +232,49 @@ function checkRegistration() {
         if(p.photo) {
             document.getElementById("profilePhotoDisplay").src = p.photo;
         }
-        document.getElementById("navStatusBadge").innerText = "Akun Terverifikasi";
+        document.getElementById("navStatusBadge").innerText = "Aktif";
     }
 }
 
 function saveDriverRegistration() {
-    let name = document.getElementById("regName").value.trim();
-    let phone = document.getElementById("regPhone").value.trim();
-    let vehicle = document.getElementById("regVehicle").value.trim();
-    let bank = document.getElementById("regBank").value;
-    let accountName = document.getElementById("regAccountName").value.trim();
-    let accountNo = document.getElementById("regAccountNo").value.trim();
+    let nameInput = document.getElementById("regName");
+    let phoneInput = document.getElementById("regPhone");
+    let vehicleInput = document.getElementById("regVehicle");
+    let bankSelect = document.getElementById("regBank");
+    let accountNameInput = document.getElementById("regAccountName");
+    let accountNoInput = document.getElementById("regAccountNo");
     let photoInput = document.getElementById("regPhoto");
+
+    if (!nameInput || !phoneInput || !vehicleInput || !accountNameInput || !accountNoInput) {
+        alert("Terjadi kesalahan pada elemen form.");
+        return;
+    }
+
+    let name = nameInput.value.trim();
+    let phone = phoneInput.value.trim();
+    let vehicle = vehicleInput.value.trim();
+    let bank = bankSelect.value;
+    let accountName = accountNameInput.value.trim();
+    let accountNo = accountNoInput.value.trim();
 
     if(!name || !phone || !vehicle || !accountName || !accountNo) {
         alert("Harap isi semua kolom registrasi dan data rekening dengan lengkap!");
         return;
     }
 
-    // Pengecekan Validasi Kesesuaian Nama Rekening dengan Nama Driver
-    if(accountName.toLowerCase() !== name.toLowerCase()) {
-        alert("PERINGATAN: Nama pemilik rekening harus sama persis dengan Nama Lengkap driver sesuai catatan validasi keamanan!");
-        return;
-    }
-
-    let reader = new FileReader();
     if (photoInput.files && photoInput.files[0]) {
+        let reader = new FileReader();
         reader.onload = function(e) {
             let profileData = { name, phone, vehicle, bank, accountName, accountNo, photo: e.target.result };
             localStorage.setItem('cikur_driver_profile', JSON.stringify(profileData));
-            alert("Registrasi & Verifikasi Foto Berhasil Disimpan!");
+            alert("Registrasi Berhasil! Masuk ke panel driver...");
             checkRegistration();
         };
         reader.readAsDataURL(photoInput.files[0]);
     } else {
-        // Jika foto belum diunggah, gunakan foto default aman
         let profileData = { name, phone, vehicle, bank, accountName, accountNo, photo: "https://via.placeholder.com/60" };
         localStorage.setItem('cikur_driver_profile', JSON.stringify(profileData));
-        alert("Registrasi Berhasil Disimpan!");
+        alert("Registrasi Berhasil! Masuk ke panel driver...");
         checkRegistration();
     }
 }
@@ -301,7 +305,6 @@ function switchDriverTab(tab) {
     loadDriverOrders();
 }
 
-// Fungsi Pengecekan Keaslian Data Orderan (Validasi Fiktif vs Integrasi Asli)
 function loadDriverOrders() {
     let container = document.getElementById("driverOrderContainer");
     container.innerHTML = "";
@@ -321,7 +324,6 @@ function loadDriverOrders() {
             foodOrders = [];
         }
 
-        // Filter / Validasi Keaslian: Pastikan struktur data valid dan tidak fiktif/korup
         let validOrders = foodOrders.filter(ord => ord && ord.id && ord.customerAddress && ord.menu);
 
         if(validOrders.length === 0) {
@@ -351,7 +353,6 @@ function loadDriverOrders() {
                     Total Pembayaran: Rp ${grandTotal.toLocaleString('id-ID')} (${ord.paymentMethod})
                 </div>
 
-                <!-- Chat Interaktif Resto & Customer -->
                 <div style="font-size: 11px; font-weight: 700; margin-top: 4px;">💬 Chat Koordinasi (Resto & Customer):</div>
                 <div class="chat-container">
                     <div class="chat-box" id="chatFoodBox_${ord.id}">
@@ -372,7 +373,6 @@ function loadDriverOrders() {
         });
 
     } else {
-        // Tab Cikur Ride (Reguler dari ride.html)
         let rawRide = localStorage.getItem('cikur_driver_ride_orders');
         let rideOrders = [];
         
@@ -405,7 +405,6 @@ function loadDriverOrders() {
                 <div style="font-size: 11px; color: var(--text-muted);">Penumpang: <b>${ride.passenger || 'Customer'}</b></div>
                 <div style="font-size: 12px; font-weight: 800; color: #0284c7;">Tarif Ride: Rp ${rideFee.toLocaleString('id-ID')}</div>
 
-                <!-- Chat Interaktif Ride -->
                 <div style="font-size: 11px; font-weight: 700; margin-top: 4px;">💬 Chat Penumpang Ride:</div>
                 <div class="chat-container">
                     <div class="chat-box" id="chatRideBox_${ride.id}">
