@@ -406,6 +406,13 @@ function saveRestoToStorage() {
         allRestos.push(currentResto);
     }
     localStorage.setItem('cikur_all_restos', JSON.stringify(allRestos));
+    
+    // Sinkronisasi mundur ke key lama agar kompatibel penuh dengan halaman food.html versi lain
+    localStorage.setItem('cikur_resto_profile', JSON.stringify(currentResto));
+    localStorage.setItem('cikur_resto_menus', JSON.stringify(currentResto.menuList));
+    
+    // Memicu Event Sinkronisasi Real-Time Lintas Tab / Halaman
+    window.dispatchEvent(new Event('storage'));
 }
 
 function updateStatusUI() {
@@ -464,13 +471,13 @@ document.getElementById("formRestoProfile")?.addEventListener("submit", function
         processedCount++;
         if(processedCount >= totalPhotosToProcess) {
             saveRestoToStorage();
-            alert("Data & Profil Resto berhasil disimpan!");
+            alert("Data & Profil Resto berhasil disimpan dan disinkronkan!");
         }
     }
 
     if(totalPhotosToProcess === 0) {
         saveRestoToStorage();
-        alert("Data & Profil Resto berhasil disimpan!");
+        alert("Data & Profil Resto berhasil disimpan dan disinkronkan!");
         return;
     }
 
@@ -544,10 +551,10 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
             currentResto.menuList[editingMenuIndex] = menuData;
             editingMenuIndex = null;
             document.getElementById("btnSubmitMenu").innerText = "Simpan Menu";
-            alert("Perubahan menu berhasil disimpan!");
+            alert("Perubahan menu berhasil disimpan dan disinkronkan!");
         } else {
             currentResto.menuList.push(menuData);
-            alert("Menu baru berhasil ditambahkan!");
+            alert("Menu baru berhasil ditambahkan dan disinkronkan!");
         }
         saveRestoToStorage();
         document.getElementById("formAddMenu").reset();
@@ -647,7 +654,6 @@ function renderIncomingOrders() {
         let borderColor = order.status === 'Dibatalkan' ? '#fecaca' : '#bbf7d0';
         let statusTextColor = order.status === 'Dibatalkan' ? '#dc2626' : '#16a34a';
 
-        // 1. Detail Menu, Jumlah, Harga Normal, Harga Diskon, & Keterangan Potongan
         let itemsListHtml = "";
         let totalDiskonMenu = 0;
         
@@ -679,11 +685,9 @@ function renderIncomingOrders() {
             itemsListHtml = `<div style="font-size: 11px; color: var(--text-main);">Pesanan Menu Resto</div>`;
         }
 
-        // 2. Catatan Khusus & Metode Pembayaran
         let catatanKhusus = order.note || order.catatan || order.catatanKhusus || '-';
         let metodeBayar = order.paymentMethod || order.metodePembayaran || order.pembayaran || 'TUNAI';
 
-        // 3. Perhitungan Total Keseluruhan (Dari Berapa Menjadi Berapa)
         let hargaFinal = order.totalPrice || order.total || 0;
         let subtotalKotor = order.subtotal || order.originalTotal || (hargaFinal + totalDiskonMenu);
         
@@ -756,6 +760,7 @@ function sendRestoReply(orderId, idx) {
         renderIncomingOrders();
     }
 }
+
 function updateOrderStatus(index, newStatus) {
     let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || JSON.parse(localStorage.getItem('cikur_orders')) || [];
     if(orders[index]) {
@@ -772,6 +777,17 @@ btnToggleStatus.addEventListener("click", () => {
     currentResto.isOpen = !currentResto.isOpen;
     saveRestoToStorage();
     updateStatusUI();
+});
+
+// Sinkronisasi Real-Time Listener (Agar otomatis memperbarui data jika terjadi perubahan dari halaman lain/tab lain)
+window.addEventListener('storage', () => {
+    allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
+    let updatedResto = allRestos.find(r => r.id === currentRestoId);
+    if(updatedResto) {
+        currentResto = updatedResto;
+        updateUIProfile();
+        renderIncomingOrders();
+    }
 });
 
 window.addEventListener("DOMContentLoaded", () => {
