@@ -22,7 +22,7 @@
 *{ margin: 0; padding: 0; box-sizing: border-box; font-family: var(--font-main); }
 body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; display: flex; justify-content: center; align-items: center; }
 @media(min-width: 480px){ body { padding: 20px; } }
-.container{ width: 100%; max-width: 440px; min-height: 100vh; margin: 0 auto; padding: 85px 16px 100px 16px; display: flex; flex-direction: column; background: var(--container-bg); box-shadow: 0 10px 30px rgba(0,0,0,0.08); position: relative; overflow-x: hidden; }
+.container{ width: 100%; max-width: 440px; min-height: 100vh; margin: 0 auto; padding: 85px 16px 120px 16px; display: flex; flex-direction: column; background: var(--container-bg); box-shadow: 0 10px 30px rgba(0,0,0,0.08); position: relative; overflow-x: hidden; }
 @media(min-width: 480px){ .container { min-height: 850px; border-radius: 36px; border: 1px solid var(--border-color); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15); } }
 
 /* HEADER & DROPDOWN */
@@ -39,6 +39,14 @@ body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; di
 .dropdown-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-size: 12px; font-weight: 700; color: var(--text-main); text-decoration: none; border-radius: 10px; transition: background 0.2s; cursor: pointer; background: transparent; border: none; width: 100%; text-align: left; }
 .dropdown-item svg { width: 16px; height: 16px; fill: var(--primary-red); }
 .dropdown-item:hover { background: #fff5f5; color: var(--primary-red); }
+
+/* DRIVER LIVE FLOATING BAR (Integrasi Khusus untuk Resto & Tracking Menuju Resto/Customer) */
+.driver-live-bar { background: linear-gradient(135deg, #0f172a, #1e293b); color: #fff; border-radius: 14px; padding: 12px; margin-bottom: 14px; border: 1px solid #334155; box-shadow: 0 4px 15px rgba(15, 23, 42, 0.2); }
+.driver-live-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.driver-live-title { font-size: 12px; font-weight: 800; display: flex; align-items: center; gap: 6px; color: var(--accent-yellow); }
+.driver-live-title svg { width: 16px; height: 16px; fill: var(--accent-yellow); }
+.driver-status-badge { font-size: 9px; font-weight: 700; padding: 2px 8px; background: #16a34a; color: #fff; border-radius: 6px; text-transform: uppercase; }
+.driver-info-content { font-size: 11px; color: #cbd5e1; line-height: 1.4; margin-bottom: 8px; }
 
 /* BOTTOM NAV */
 .bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 440px; height: 70px; background-color: #ffffff; border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; align-items: center; padding: 0 10px; z-index: 1000; box-shadow: 0 -4px 16px rgba(0,0,0,0.06); }
@@ -92,7 +100,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
 <body>
 
 <div class="container">
-    <!-- STICKY HEADER -->
+    <!-- STICKY HEADER (Tanpa Bagian Driver) -->
     <div class="app-header">
         <div class="header-profile-wrapper">
             <div class="user-greeting" id="btnOpenProfileDropdown">
@@ -103,7 +111,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                     <div class="assistant-offer-text">Resto Partner Active</div>
                 </div>
             </div>
-            <!-- DROPDOWN MENU UTAMA -->
+            <!-- DROPDOWN MENU UTAMA (Hanya Menu Resto, Food, Agent CGO - Tombol Driver dipindah ke navigasi khusus/kolom chat) -->
             <div class="header-dropdown-menu" id="headerDropdownMenu">
                 <button class="dropdown-item" onclick="window.location.href='index.html';">
                     <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8Z"/></svg>
@@ -112,10 +120,6 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                 <button class="dropdown-item" onclick="window.location.href='food.html';">
                     <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4Z"/></svg>
                     <span>Halaman Menu Pembeli</span>
-                </button>
-                <button class="dropdown-item" onclick="window.location.href='driver.html';">
-                    <svg viewBox="0 0 24 24"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.22.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.04 3H5.81l1.04-3zM19 17H5v-4.66l.12-.34h13.76l.12.34V17z"/></svg>
-                    <span>Halaman Driver</span>
                 </button>
                 <button class="dropdown-item" onclick="window.location.href='agentcgo.html';">
                     <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2Z"/></svg>
@@ -130,7 +134,24 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
         <!-- Banner Info dengan Link Langsung ke food.html -->
         <div class="resto-card" style="background: linear-gradient(135deg, var(--dark-bg), var(--dark-card)); color: #fff;">
             <h2 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">🍜 CIKUR Food & Resto Partner</h2>
-            <p style="font-size: 11px; color: #94a3b8; line-height: 1.4;">Kelola profil restoran, jam operasional, dan upload menu makanan Anda agar tampil di <a href="food.html" style="color: var(--accent-yellow); text-decoration: underline; font-weight: 700;">Halaman Menu Pembeli</a> dan tersinkronisasi dengan <a href="driver.html" style="color: var(--accent-yellow); text-decoration: underline; font-weight: 700;">Halaman Driver</a>.</p>
+            <p style="font-size: 11px; color: #94a3b8; line-height: 1.4;">Kelola profil restoran, jam operasional, dan upload menu makanan Anda agar tampil di <a href="food.html" style="color: var(--accent-yellow); text-decoration: underline; font-weight: 700;">Halaman Menu Pembeli</a>[cite: 3].</p>
+        </div>
+
+        <!-- BAR NAVIGASI KHUSUS DRIVER (Integrasi Tracking Menuju Resto & Alamat Tujuan Customer) -->
+        <div class="driver-live-bar" id="restoDriverNavWidget">
+            <div class="driver-live-header">
+                <div class="driver-live-title">
+                    <svg viewBox="0 0 24 24"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.22.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.04 3H5.81l1.04-3zM19 17H5v-4.66l.12-.34h13.76l.12.34V17z"/></svg>
+                    <span>Navigasi Driver CIKUR GO</span>
+                </div>
+                <div class="driver-status-badge" id="driverNavStatusBadge">Standby</div>
+            </div>
+            <div class="driver-info-content" id="driverNavInfoText">
+                Memantau pergerakan driver untuk pesanan masuk... Driver bersiap menuju resto lalu mengantar ke alamat tujuan customer.
+            </div>
+            <button type="button" onclick="window.location.href='driver.html';" style="background: var(--accent-yellow); color: #0f172a; border: none; width: 100%; padding: 6px; font-size: 11px; font-weight: 800; border-radius: 6px; cursor: pointer;">
+                Buka Panel Kontrol Driver
+            </button>
         </div>
 
         <!-- STATUS BUKA/TUTUP & JAM OPERASIONAL DINAMIS -->
@@ -153,18 +174,18 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             <button class="btn-status" id="btnToggleStatus">Ubah ke Tutup</button>
         </div>
 
-        <!-- PESANAN MASUK & CHAT TERINTEGRASI -->
+        <!-- PESANAN MASUK & KOLOM CHAT TERINTEGRASI DRIVER -->
         <div class="resto-card active" id="cardSectionOrders">
             <div class="accordion-header" onclick="toggleAccordion('cardSectionOrders')">
                 <div class="accordion-title-wrapper">
                     <svg class="section-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
-                    <h3>Pesanan Masuk & Koordinasi Driver</h3>
+                    <h3>Pesanan Masuk & Kolom Chat Driver</h3>
                 </div>
                 <svg class="accordion-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
             </div>
             <div class="accordion-content">
                 <div style="padding-top: 8px;">
-                    <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Kelola pesanan dari pembeli di <a href="food.html" style="color: var(--primary-red); font-weight:700; text-decoration: underline;">Halaman Menu Pembeli</a> yang terhubung langsung ke <a href="driver.html" style="color: var(--primary-red); font-weight:700; text-decoration: underline;">Driver</a>.</p>
+                    <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Kelola pesanan dari pembeli di <a href="food.html" style="color: var(--primary-red); font-weight:700; text-decoration: underline;">Halaman Menu Pembeli</a> dan koordinasikan pengantaran dengan driver[cite: 3].</p>
                     <div id="incomingOrdersContainer">
                         <p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada pesanan masuk.</p>
                     </div>
@@ -229,12 +250,10 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                         <div style="margin-bottom: 6px;">
                             <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">1. Foto Tampak Depan Resto</label>
                             <input type="file" id="restoPhotoFrontInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
-                            <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">Maksimal ukuran file 2MB.</small>
                         </div>
                         <div>
                             <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">2. Foto Area Indoor Resto</label>
                             <input type="file" id="restoPhotoIndoorInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
-                            <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">Maksimal ukuran file 2MB.</small>
                         </div>
                     </div>
                     <button type="submit" class="btn-action">Simpan Data & Profil Resto</button>
@@ -253,7 +272,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             </div>
             <div class="accordion-content">
                 <div style="padding-top: 8px;">
-                    <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 12px;">Atur menu, kategori, harga spesial/diskon otomatis, dan stok agar tampil otomatis di <a href="food.html" style="color:var(--primary-red); font-weight:700; text-decoration: underline;">Halaman Menu Pembeli</a>.</p>
+                    <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 12px;">Atur menu, kategori, harga spesial, dan stok agar tampil otomatis di <a href="food.html" style="color:var(--primary-red); font-weight:700; text-decoration: underline;">Halaman Menu Pembeli</a>[cite: 3].</p>
                     <form id="formAddMenu">
                         <div class="form-group">
                             <label class="form-label">Nama Menu Makanan</label>
@@ -274,12 +293,11 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                         </div>
                         <div class="form-group">
                             <label class="form-label">Harga Diskon / Promo (Opsional)</label>
-                            <input type="number" id="menuDiscountPriceInput" class="form-input" placeholder="Potongan harga otomatis (Contoh: 20000)">
+                            <input type="number" id="menuDiscountPriceInput" class="form-input" placeholder="Potongan harga otomatis">
                         </div>
                         <div class="form-group">
                             <label class="form-label">Upload Foto Makanan</label>
                             <input type="file" id="menuPhotoInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
-                            <small style="font-size: 10px; color: var(--text-muted); margin-top: 4px; display: block;">Format: JPG, PNG. Maksimal ukuran file 2MB.</small>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Status Ketersediaan Menu</label>
@@ -430,7 +448,6 @@ function updateStatusUI() {
     }
 }
 
-// Menggunakan event 'input' alih-alih 'change' agar instan tanpa blocking
 document.getElementById("openTimeInput").addEventListener("input", (e) => {
     currentResto.openTime = e.target.value;
     saveRestoToStorage();
@@ -445,7 +462,6 @@ document.getElementById("closeTimeInput").addEventListener("input", (e) => {
 
 document.getElementById("formRestoProfile")?.addEventListener("submit", function(e) {
     e.preventDefault();
-    
     currentResto.name = document.getElementById("restoNameInput").value;
     currentResto.ownerName = document.getElementById("ownerNameInput").value;
     currentResto.role = document.getElementById("restoRoleInput").value;
@@ -458,54 +474,8 @@ document.getElementById("formRestoProfile")?.addEventListener("submit", function
     currentResto.openTime = document.getElementById("openTimeInput").value;
     currentResto.closeTime = document.getElementById("closeTimeInput").value;
 
-    let photoFrontInput = document.getElementById("restoPhotoFrontInput");
-    let photoIndoorInput = document.getElementById("restoPhotoIndoorInput");
-
-    let totalPhotosToProcess = 0;
-    let processedCount = 0;
-
-    if(photoFrontInput && photoFrontInput.files && photoFrontInput.files[0]) totalPhotosToProcess++;
-    if(photoIndoorInput && photoIndoorInput.files && photoIndoorInput.files[0]) totalPhotosToProcess++;
-
-    function checkFinish() {
-        processedCount++;
-        if(processedCount >= totalPhotosToProcess) {
-            saveRestoToStorage();
-            alert("Data & Profil Resto berhasil disimpan dan disinkronkan ke Food & Driver!");
-        }
-    }
-
-    if(totalPhotosToProcess === 0) {
-        saveRestoToStorage();
-        alert("Data & Profil Resto berhasil disimpan dan disinkronkan ke Food & Driver!");
-        return;
-    }
-
-    if(photoFrontInput && photoFrontInput.files && photoFrontInput.files[0]) {
-        if(photoFrontInput.files[0].size > 2 * 1024 * 1024) {
-            alert("Ukuran Foto Tampak Depan terlalu besar! Maksimal 2MB.");
-            return;
-        }
-        let reader = new FileReader();
-        reader.onload = function(event) {
-            currentResto.photoFront = event.target.result;
-            checkFinish();
-        };
-        reader.readAsDataURL(photoFrontInput.files[0]);
-    }
-
-    if(photoIndoorInput && photoIndoorInput.files && photoIndoorInput.files[0]) {
-        if(photoIndoorInput.files[0].size > 2 * 1024 * 1024) {
-            alert("Ukuran Foto Area Indoor terlalu besar! Maksimal 2MB.");
-            return;
-        }
-        let reader = new FileReader();
-        reader.onload = function(event) {
-            currentResto.photoIndoor = event.target.result;
-            checkFinish();
-        };
-        reader.readAsDataURL(photoIndoorInput.files[0]);
-    }
+    saveRestoToStorage();
+    alert("Data & Profil Resto berhasil disimpan dan disinkronkan!");
 });
     
 let editingMenuIndex = null;
@@ -516,48 +486,22 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
     let price = Number(document.getElementById("menuPriceInput").value);
     let discountPriceInput = document.getElementById("menuDiscountPriceInput").value;
     let discountPrice = discountPriceInput ? Number(discountPriceInput) : null;
-    
     let status = document.getElementById("menuStatusInput").value;
-    let photoInput = document.getElementById("menuPhotoInput");
 
-    if(photoInput && photoInput.files && photoInput.files[0]) {
-        if(photoInput.files[0].size > 2 * 1024 * 1024) {
-            alert("Ukuran foto terlalu besar! Maksimal ukuran file adalah 2MB.");
-            return;
-        }
-        let reader = new FileReader();
-        reader.onload = function(event) {
-            saveOrUpdateMenu(event.target.result);
-        };
-        reader.readAsDataURL(photoInput.files[0]);
+    let menuData = { 
+        id: editingMenuIndex !== null ? currentResto.menuList[editingMenuIndex].id : 'm_' + Date.now(),
+        name: name, category: category, price: price, discountPrice: discountPrice, status: status, photo: ""
+    };
+    if(editingMenuIndex !== null) {
+        currentResto.menuList[editingMenuIndex] = menuData;
+        editingMenuIndex = null;
+        document.getElementById("btnSubmitMenu").innerText = "Simpan Menu";
     } else {
-        let existingPhoto = "";
-        if(editingMenuIndex !== null && currentResto.menuList[editingMenuIndex]) {
-            existingPhoto = currentResto.menuList[editingMenuIndex].photo;
-        }
-        saveOrUpdateMenu(existingPhoto);
+        currentResto.menuList.push(menuData);
     }
-    function saveOrUpdateMenu(photoUrl) {
-        let menuData = { 
-            id: editingMenuIndex !== null ? currentResto.menuList[editingMenuIndex].id : 'm_' + Date.now(),
-            name: name,
-            category: category,
-            price: price, 
-            discountPrice: discountPrice, 
-            status: status,
-            photo: photoUrl
-        };
-        if(editingMenuIndex !== null) {
-            currentResto.menuList[editingMenuIndex] = menuData;
-            editingMenuIndex = null;
-            document.getElementById("btnSubmitMenu").innerText = "Simpan Menu";
-        } else {
-            currentResto.menuList.push(menuData);
-        }
-        saveRestoToStorage();
-        document.getElementById("formAddMenu").reset();
-        renderMenuList();
-    }
+    saveRestoToStorage();
+    document.getElementById("formAddMenu").reset();
+    renderMenuList();
 });
     
 function renderMenuList() {
@@ -566,66 +510,32 @@ function renderMenuList() {
         container.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada menu yang di-upload.</p>`;
         return;
     }
-    let groupedMenu = {};
-    currentResto.menuList.forEach((item, index) => {
-        let cat = item.category || 'Umum';
-        if(!groupedMenu[cat]) {
-            groupedMenu[cat] = [];
-        }
-        groupedMenu[cat].push({ item, index });
-    });
     let html = "";
-    for(let cat in groupedMenu) {
-        html += `<div style="font-size: 13px; font-weight: 800; color: #0f172a; margin: 12px 0 6px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 2px;">${cat}</div>`;
-        
-        groupedMenu[cat].forEach(({ item, index }) => {
-            let priceDisplay = "";
-            if(item.discountPrice && item.discountPrice < item.price) {
-                priceDisplay = `
-                    <div class="price-tag">
-                        <span class="original-price">Rp ${item.price.toLocaleString('id-ID')}</span>
-                        <span class="discount-price">Rp ${item.discountPrice.toLocaleString('id-ID')}</span>
-                    </div>
-                `;
-            } else {
-                priceDisplay = `<div class="discount-price">Rp ${item.price.toLocaleString('id-ID')}</div>`;
-            }
-            let statusBadgeColor = item.status === 'Habis' ? '#fee2e2' : '#f0fdf4';
-            let statusBadgeText = item.status === 'Habis' ? '#dc2626' : '#16a34a';
-            let statusText = item.status || 'Tersedia';
-            let photoTag = item.photo ? `<img src="${item.photo}" style="width: 45px; height: 45px; object-fit: cover; border-radius: 8px; flex-shrink: 0;">` : `<div style="width: 45px; height: 45px; background: #e2e8f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #64748b; flex-shrink: 0;">No Foto</div>`;
-            html += `
-            <div class="menu-item-card" style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px; padding: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;">
-                ${photoTag}
-                <div class="menu-info" style="flex: 1;">
-                    <h4 style="font-size: 12px; margin: 0 0 2px 0;">${item.name}</h4>
-                    ${priceDisplay}
-                    <div style="display: flex; gap: 6px; margin-top: 4px; align-items: center;">
-                        <span style="font-size: 9px; font-weight: 700; padding: 2px 6px; background: ${statusBadgeColor}; color: ${statusBadgeText}; border-radius: 4px;">${statusText}</span>
-                    </div>
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 4px;">
-                    <button type="button" onclick="editMenu(${index})" style="background: none; border: none; color: #2563eb; font-size: 11px; font-weight: 700; cursor: pointer; text-align: right;">Edit</button>
-                    <button type="button" onclick="deleteMenu(${index})" style="background: none; border: none; color: var(--primary-red); font-size: 11px; font-weight: 700; cursor: pointer; text-align: right;">Hapus</button>
-                </div>
-            </div>`;
-        });
-    }
+    currentResto.menuList.forEach((item, index) => {
+        html += `
+        <div class="menu-item-card">
+            <div class="menu-info">
+                <h4>${item.name}</h4>
+                <p>Rp ${item.price.toLocaleString('id-ID')}</p>
+            </div>
+            <div style="display: flex; gap: 6px;">
+                <button type="button" onclick="editMenu(${index})" style="background:none;border:none;color:#2563eb;font-size:11px;font-weight:750;cursor:pointer;">Edit</button>
+                <button type="button" onclick="deleteMenu(${index})" style="background:none;border:none;color:var(--primary-red);font-size:11px;font-weight:750;cursor:pointer;">Hapus</button>
+            </div>
+        </div>`;
+    });
     container.innerHTML = html;
 }
 
 function editMenu(index) {
     let item = currentResto.menuList[index];
     editingMenuIndex = index;
-    
     document.getElementById("menuNameInput").value = item.name;
     document.getElementById("menuCategoryInput").value = item.category || "Makanan Berat";
     document.getElementById("menuPriceInput").value = item.price;
     document.getElementById("menuDiscountPriceInput").value = item.discountPrice || "";
     document.getElementById("menuStatusInput").value = item.status || "Tersedia";
-
     document.getElementById("btnSubmitMenu").innerText = "Simpan Perubahan";
-    document.getElementById("formAddMenu").scrollIntoView({ behavior: 'smooth' });
 }
 
 function deleteMenu(index) {
@@ -641,6 +551,23 @@ function renderIncomingOrders() {
     let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || JSON.parse(localStorage.getItem('cikur_orders')) || [];
     let restoOrders = orders.filter(o => o.restoId === currentRestoId || !o.restoId);
 
+    // Update Widget Navigasi Khusus Driver berdasarkan status order aktif
+    let activeOrder = restoOrders.find(o => o.status === 'Diproses' || o.status === 'Menuju Resto' || o.status === 'Menuju Customer');
+    let driverNavBadge = document.getElementById('driverNavStatusBadge');
+    let driverNavInfo = document.getElementById('driverNavInfoText');
+
+    if (activeOrder) {
+        if (driverNavBadge) driverNavBadge.innerText = activeOrder.driverStatus || activeOrder.status || "Aktif";
+        if (driverNavInfo) {
+            driverNavInfo.innerHTML = `Driver sedang melayani pesanan <b>#${activeOrder.kode || activeOrder.id || 'TRX'}</b>.<br><i>Tracking:</i> Perjalanan menuju Resto $\\rightarrow$ Pengantaran ke Alamat Tujuan Customer[cite: 3].`;
+        }
+    } else {
+        if (driverNavBadge) driverNavBadge.innerText = "Standby";
+        if (driverNavInfo) {
+            driverNavInfo.innerHTML = `Belum ada pesanan aktif. Driver bersiap menjemput pesanan dari resto menuju alamat tujuan customer[cite: 3].`;
+        }
+    }
+
     if (!restoOrders || restoOrders.length === 0) {
         container.innerHTML = '<p style="font-size: 11px; color: var(--text-muted);">Belum ada pesanan masuk.</p>';
         return;
@@ -652,49 +579,7 @@ function renderIncomingOrders() {
         let borderColor = order.status === 'Dibatalkan' ? '#fecaca' : '#bbf7d0';
         let statusTextColor = order.status === 'Dibatalkan' ? '#dc2626' : '#16a34a';
 
-        let itemsListHtml = "";
-        let totalDiskonMenu = 0;
-        
-        if (order.items && Array.isArray(order.items) && order.items.length > 0) {
-            itemsListHtml = order.items.map(i => {
-                let namaMenu = i.name || i.nama || i.title || 'Menu';
-                let jumlahMenu = i.quantity || i.qty || i.jumlah || 1;
-                
-                let hargaNormal = i.originalPrice || i.hargaAsli || i.price || 15000;
-                let hargaJual = i.price || i.harga || hargaNormal;
-                let subtotalItem = hargaJual * jumlahMenu;
-                
-                let infoDetailHarga = "";
-                if (hargaNormal > hargaJual) {
-                    let potongan = (hargaNormal - hargaJual) * jumlahMenu;
-                    totalDiskonMenu += potongan;
-                    infoDetailHarga = `<br><span style="font-size: 10px; color: #16a34a;">(Diskon dari Rp ${(hargaNormal * jumlahMenu).toLocaleString('id-ID')} menjadi Rp ${subtotalItem.toLocaleString('id-ID')} | Potongan: -Rp ${potongan.toLocaleString('id-ID')})</span>`;
-                } else {
-                    infoDetailHarga = `<span style="font-size: 10px; color: #64748b;"> (Rp ${subtotalItem.toLocaleString('id-ID')})</span>`;
-                }
-
-                return `<div style="font-size: 11px; color: var(--text-main); margin-bottom: 4px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 2px;">
-                    - <b>${namaMenu}</b> (${jumlahMenu}x)${infoDetailHarga}
-                </div>`;
-            }).join('');
-        } else if (order.menuSummary) {
-            itemsListHtml = `<div style="font-size: 11px; color: var(--text-main);">${order.menuSummary}</div>`;
-        } else {
-            itemsListHtml = `<div style="font-size: 11px; color: var(--text-main);">Pesanan Menu Resto</div>`;
-        }
-
-        let catatanKhusus = order.note || order.catatan || order.catatanKhusus || '-';
-        let metodeBayar = order.paymentMethod || order.metodePembayaran || order.pembayaran || 'TUNAI';
-
-        let hargaFinal = order.totalPrice || order.total || 0;
-        let subtotalKotor = order.subtotal || order.originalTotal || (hargaFinal + totalDiskonMenu);
-        
-        let tampilanTotalKeseluruhan = "";
-        if (subtotalKotor > hargaFinal) {
-            tampilanTotalKeseluruhan = `<s style="color: #94a3b8; font-size: 11px;">Rp ${subtotalKotor.toLocaleString('id-ID')}</s> <span style="color: var(--primary-red); font-size: 13px; font-weight: 800;">Rp ${hargaFinal.toLocaleString('id-ID')}</span>`;
-        } else {
-            tampilanTotalKeseluruhan = `<span style="color: var(--primary-red); font-size: 13px; font-weight: 800;">Rp ${hargaFinal.toLocaleString('id-ID')}</span>`;
-        }
+        let itemsListHtml = order.items ? order.items.map(i => `- <b>${i.name || 'Menu'}</b> (${i.quantity || 1}x)`).join('<br>') : (order.menuSummary || 'Pesanan Menu');
 
         html += `
         <div style="background: ${badgeColor}; border: 1px solid ${borderColor}; border-radius: 8px; padding: 10px; margin-bottom: 10px;">
@@ -702,38 +587,29 @@ function renderIncomingOrders() {
                 <span style="font-size: 11px; font-weight: 800; color: #0f172a;">Order #${order.kode || order.id || 'TRX'}</span>
                 <span style="font-size: 10px; font-weight: 700; color: ${statusTextColor};">${order.status || 'Pending'}</span>
             </div>
-            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Pemesan: ${order.customerName || order.pembeli || 'Pelanggan'}</p>
+            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Pemesan: ${order.customerName || 'Pelanggan'}</p>
             
             <div style="margin-bottom: 8px; background: rgba(255,255,255,0.8); padding: 8px; border-radius: 6px;">
-                <span style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Detail Menu Pesanan & Diskon:</span>
-                ${itemsListHtml}
-                
-                <div style="margin-top: 6px; font-size: 11px; border-top: 1px solid #cbd5e1; padding-top: 6px;">
-                    <div style="margin-bottom: 2px;"><span style="color: #475569;"><b>Catatan Khusus:</b> ${catatanKhusus}</span></div>
-                    <div><span style="color: #475569;"><b>Metode Pembayaran:</b> <span style="color: #2563eb; font-weight: 700; text-transform: uppercase;">${metodeBayar}</span></span></div>
-                </div>
+                <span style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Detail Pesanan:</span>
+                <div style="font-size: 11px; margin-bottom: 6px;">${itemsListHtml}</div>
 
+                <!-- INTEGRASI KOLOM CHAT KHUSUS DRIVER & RESTO -->
                 <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px; margin-top: 8px;">
-                    <span style="font-size: 10px; font-weight: 700; color: #64748b; display: block; margin-bottom: 2px;">Riwayat Chat Pembeli:</span>
+                    <span style="font-size: 10px; font-weight: 700; color: #64748b; display: block; margin-bottom: 2px;">Kolom Chat Koordinasi Driver & Pembeli:</span>
                     <div style="max-height: 90px; overflow-y: auto; font-size: 11px; display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px;">
                         ${order.chatLog || '<i style="color: #94a3b8; font-size: 10px;">Belum ada pesan chat.</i>'}
                     </div>
                     
                     <div style="display: flex; gap: 4px;">
-                        <input type="text" id="replyInput_${idx}" placeholder="Balas chat..." style="flex: 1; font-size: 10px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                        <input type="text" id="replyInput_${idx}" placeholder="Kirim pesan koordinasi driver/pembeli..." style="flex: 1; font-size: 10px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px;">
                         <button type="button" onclick="sendRestoReply('${order.id || idx}', ${idx})" style="font-size: 10px; background: #0f172a; color: #fff; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Kirim</button>
                     </div>
                 </div>
             </div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; background: #fff; padding: 6px 8px; border-radius: 6px; border: 1px solid #e2e8f0;">
-                <span style="font-size: 11px; font-weight: 700; color: #334155;">Total Pembayaran:</span>
-                <div>${tampilanTotalKeseluruhan}</div>
-            </div>
-
             <div style="display: flex; gap: 6px; margin-top: 8px;">
                 <button type="button" onclick="updateOrderStatus(${idx}, 'Diproses')" class="btn-action">Terima & Proses</button>
-                <button type="button" onclick="updateOrderStatus(${idx}, 'Dibatalkan')" class="btn-action">Batalkan Pesanan</button>
+                <button type="button" onclick="updateOrderStatus(${idx}, 'Dibatalkan')" class="btn-action" style="background:#dc2626;">Batalkan</button>
             </div>
         </div>`;
     });
@@ -748,7 +624,7 @@ function sendRestoReply(orderId, idx) {
     let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || JSON.parse(localStorage.getItem('cikur_orders')) || [];
     
     if (orders[idx]) {
-        let newBubble = `<div style="text-align: right; background: #e2e8f0; padding: 4px 8px; border-radius: 6px; align-self: flex-end; margin: 2px 0; max-width: 85%;"><b>Resto:</b> ${replyText}</div>`;
+        let newBubble = `<div style="text-align: right; background: #e2e8f0; padding: 4px 8px; border-radius: 6px; align-self: flex-end; margin: 2px 0; max-width: 85%;"><b>Resto/Driver:</b> ${replyText}</div>`;
         orders[idx].chatLog = (orders[idx].chatLog || '') + newBubble;
         
         localStorage.setItem('cikur_restaurant_orders', JSON.stringify(orders));
@@ -763,14 +639,14 @@ function updateOrderStatus(index, newStatus) {
     let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || JSON.parse(localStorage.getItem('cikur_orders')) || [];
     if(orders[index]) {
         orders[index].status = newStatus;
+        orders[index].driverStatus = newStatus === 'Diproses' ? 'Menuju Resto' : 'Selesai';
         localStorage.setItem('cikur_restaurant_orders', JSON.stringify(orders));
         localStorage.setItem('cikur_orders', JSON.stringify(orders));
         renderIncomingOrders();
     }
 }
 
-const btnToggleStatus = document.getElementById("btnToggleStatus");
-btnToggleStatus.addEventListener("click", () => {
+document.getElementById("btnToggleStatus").addEventListener("click", () => {
     currentResto.isOpen = !currentResto.isOpen;
     saveRestoToStorage();
     updateStatusUI();
