@@ -150,7 +150,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                 </div>
             </div>
 
-            <button class="btn-status" id="btnToggleStatus" type="button">Ubah ke Tutup</button>
+            <button class="btn-status" id="btnToggleStatus">Ubah ke Tutup</button>
         </div>
 
         <!-- PESANAN MASUK & CHAT TERINTEGRASI -->
@@ -369,7 +369,7 @@ if(!currentResto) {
 
 function toggleAccordion(cardId) {
     let card = document.getElementById(cardId);
-    if(card) card.classList.toggle('active');
+    card.classList.toggle('active');
 }
 
 function updateUIProfile() {
@@ -414,36 +414,30 @@ function saveRestoToStorage() {
     localStorage.setItem('cikur_resto_menus', JSON.stringify(currentResto.menuList));
 }
 
-const btnToggleStatus = document.getElementById("btnToggleStatus");
-
 function updateStatusUI() {
     let statusBox = document.getElementById("statusBoxContainer");
     let statusText = document.getElementById("statusRestoText");
+    let btnToggle = document.getElementById("btnToggleStatus");
 
     if(currentResto.isOpen) {
         statusBox.className = "status-box open";
         statusText.innerText = `Status: Buka & Siap Menerima Order (${currentResto.openTime || '08:00'} - ${currentResto.closeTime || '21:00'})`;
-        btnToggleStatus.innerText = "Ubah ke Tutup";
+        btnToggle.innerText = "Ubah ke Tutup";
     } else {
         statusBox.className = "status-box closed";
         statusText.innerText = `Status: Tutup (Jadwal: ${currentResto.openTime || '08:00'} - ${currentResto.closeTime || '21:00'})`;
-        btnToggleStatus.innerText = "Ubah ke Buka";
+        btnToggle.innerText = "Ubah ke Buka";
     }
 }
 
-btnToggleStatus.onclick = function() {
-    currentResto.isOpen = !currentResto.isOpen;
-    saveRestoToStorage();
-    updateStatusUI();
-};
-
-document.getElementById("openTimeInput").addEventListener("change", (e) => {
+// Menggunakan event 'input' alih-alih 'change' agar instan tanpa blocking
+document.getElementById("openTimeInput").addEventListener("input", (e) => {
     currentResto.openTime = e.target.value;
     saveRestoToStorage();
     updateStatusUI();
 });
 
-document.getElementById("closeTimeInput").addEventListener("change", (e) => {
+document.getElementById("closeTimeInput").addEventListener("input", (e) => {
     currentResto.closeTime = e.target.value;
     saveRestoToStorage();
     updateStatusUI();
@@ -557,10 +551,8 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
             currentResto.menuList[editingMenuIndex] = menuData;
             editingMenuIndex = null;
             document.getElementById("btnSubmitMenu").innerText = "Simpan Menu";
-            alert("Perubahan menu berhasil disimpan dan disinkronkan!");
         } else {
             currentResto.menuList.push(menuData);
-            alert("Menu baru berhasil ditambahkan dan disinkronkan!");
         }
         saveRestoToStorage();
         document.getElementById("formAddMenu").reset();
@@ -570,8 +562,6 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
     
 function renderMenuList() {
     let container = document.getElementById("listMenuContainer");
-    if(!container) return;
-    
     if(!currentResto.menuList || currentResto.menuList.length === 0) {
         container.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada menu yang di-upload.</p>`;
         return;
@@ -603,7 +593,7 @@ function renderMenuList() {
             let statusBadgeColor = item.status === 'Habis' ? '#fee2e2' : '#f0fdf4';
             let statusBadgeText = item.status === 'Habis' ? '#dc2626' : '#16a34a';
             let statusText = item.status || 'Tersedia';
-            let photoTag = item.photo ? `<img src="${item.photo}" style="width: 45px; height: 45px; object-fit: cover; border-radius: 8px; flex-shrink: 0;" loading="lazy">` : `<div style="width: 45px; height: 45px; background: #e2e8f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #64748b; flex-shrink: 0;">No Foto</div>`;
+            let photoTag = item.photo ? `<img src="${item.photo}" style="width: 45px; height: 45px; object-fit: cover; border-radius: 8px; flex-shrink: 0;">` : `<div style="width: 45px; height: 45px; background: #e2e8f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #64748b; flex-shrink: 0;">No Foto</div>`;
             html += `
             <div class="menu-item-card" style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px; padding: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;">
                 ${photoTag}
@@ -626,23 +616,15 @@ function renderMenuList() {
 
 function editMenu(index) {
     let item = currentResto.menuList[index];
-    if(!item) return;
-
     editingMenuIndex = index;
     
-    document.getElementById("menuNameInput").value = item.name || "";
+    document.getElementById("menuNameInput").value = item.name;
     document.getElementById("menuCategoryInput").value = item.category || "Makanan Berat";
-    document.getElementById("menuPriceInput").value = item.price || 0;
+    document.getElementById("menuPriceInput").value = item.price;
     document.getElementById("menuDiscountPriceInput").value = item.discountPrice || "";
     document.getElementById("menuStatusInput").value = item.status || "Tersedia";
 
     document.getElementById("btnSubmitMenu").innerText = "Simpan Perubahan";
-    
-    let menuCard = document.getElementById("cardSectionMenu");
-    if(menuCard && !menuCard.classList.contains('active')) {
-        menuCard.classList.add('active');
-    }
-    
     document.getElementById("formAddMenu").scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -784,9 +766,15 @@ function updateOrderStatus(index, newStatus) {
         localStorage.setItem('cikur_restaurant_orders', JSON.stringify(orders));
         localStorage.setItem('cikur_orders', JSON.stringify(orders));
         renderIncomingOrders();
-        alert(`Status pesanan berhasil diperbarui menjadi: ${newStatus}`);
     }
 }
+
+const btnToggleStatus = document.getElementById("btnToggleStatus");
+btnToggleStatus.addEventListener("click", () => {
+    currentResto.isOpen = !currentResto.isOpen;
+    saveRestoToStorage();
+    updateStatusUI();
+});
 
 window.addEventListener("DOMContentLoaded", () => {
     updateUIProfile();
