@@ -4,177 +4,308 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cikurgo Assistant</title>
-    <!-- Masukkan CSS atau style yang tadinya nyampur di index.html khusus untuk assistant di sini -->
-</head>
+    <style>
+        /* CSS Khusus Assistant */
+        :root {
+            --primary-red: #e50914;
+            --dark-bg: #0b0f19;
+            --dark-card: #1e293b;
+            --border-color: #cbd5e1;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --font-mono: monospace;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background: #f1f5f9;
+            margin: 0;
+            padding: 20px;
+        }
 
-<!-- MODAL ASSISTANT -->
-<div id="assistantScreen" class="assistant-screen" style="display: none;">
-    <div class="assistant-page">
-        <div class="assistant-top">
-            <span id="modalTitle">CIKUR GO ASSISTANT</span>
-            <button id="closeAssistant">×</button>
-        </div>
-        <div class="assistant-content" id="modalMainContent"></div>
-    </div>
-</div>
-    
+        .assistant-screen {
+            max-width: 480px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 24px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+
+        .assistant-top {
+            background: var(--dark-bg);
+            color: #ffffff;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 800;
+            font-size: 13px;
+            letter-spacing: 0.5px;
+        }
+
+        #closeAssistant {
+            background: transparent;
+            border: none;
+            color: #ffffff;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .assistant-content {
+            padding: 16px;
+        }
+
+        .assistant-form-container {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 14px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.03);
+            margin-top: 2px;
+        }
+
+        .service-type-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .service-card-option {
+            background: #f8fafc;
+            border: 2px solid var(--border-color);
+            border-radius: 16px;
+            height: 105px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: .25s;
+            overflow: hidden;
+        }
+
+        .service-card-option:hover {
+            border-color: var(--primary-red);
+            background: #fff5f5;
+        }
+
+        .service-card-option.active {
+            border-color: var(--primary-red);
+            background: #fff5f5;
+            box-shadow: 0 4px 12px rgba(229, 9, 20, 0.12);
+        }
+
+        .service-card-option img {
+            width: 46px;
+            height: 46px;
+            object-fit: contain;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .service-card-option .title {
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--text-main);
+            text-transform: uppercase;
+            line-height: 1;
+        }
+
+        .form-section-title {
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--text-main);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .form-section-title::before {
+            content: '';
+            display: inline-block;
+            width: 3px;
+            height: 11px;
+            background: var(--primary-red);
+            border-radius: 2px;
+        }
+
+        .modern-form-group {
+            margin-bottom: 10px;
+        }
+
+        .modern-form-group label {
+            display: block;
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+
+        .modern-input {
+            width: 100%;
+            padding: 10px 12px;
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-main);
+            outline: none;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+        }
+
+        .modern-input:focus {
+            background: #ffffff;
+            border-color: var(--primary-red);
+            box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.1);
+        }
+
+        .modern-input-layanan {
+            width: 100%;
+            padding: 10px;
+            background: #fff5f5;
+            border: 1px solid rgba(229, 9, 20, 0.3);
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--primary-red);
+            text-align: center;
+            font-family: var(--font-mono);
+            box-sizing: border-box;
+        }
+
+        .modern-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .modern-col {
+            flex: 1;
+        }
+
+        .modern-textarea {
+            resize: none;
+            height: 54px;
+        }
+
+        .modern-total-box {
+            background: linear-gradient(135deg, var(--dark-bg), var(--dark-card));
+            color: #fff;
+            padding: 12px 14px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 14px 0 10px 0;
+            box-shadow: 0 6px 16px rgba(11, 15, 25, 0.2);
+        }
+
+        .modern-total-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: #94a3b8;
+            text-transform: uppercase;
+        }
+
+        .modern-total-value {
+            font-size: 15px;
+            font-weight: 800;
+            color: #FFD700;
+            font-family: var(--font-mono);
+        }
+
+        .paket-badge {
+            background: #f1f5f9;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .rincian-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .btn-pesan-form {
+            width: 100%;
+            padding: 12px;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .invoice-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .pay-method-option {
+            flex: 1;
+            padding: 8px;
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .pay-method-option.active {
+            background: var(--primary-red);
+            color: #fff;
+            border-color: var(--primary-red);
+        }
+    </style>
+</head>
 <body>
-const btnAssistant = document.getElementById("btnAssistant");
-if(btnAssistant) {
-    btnAssistant.addEventListener("click", function(e){
-        e.preventDefault();
-        openModal("CIKUR GO ASSISTANT");
+
+    <!-- MODAL ASSISTANT -->
+    <div id="assistantScreen" class="assistant-screen">
+        <div class="assistant-page">
+            <div class="assistant-top">
+                <span id="modalTitle">CIKUR GO ASSISTANT</span>
+                <button id="closeAssistant">×</button>
+            </div>
+            <div class="assistant-content" id="modalMainContent">
+                <!-- Konten form akan dimuat otomatis oleh JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Script JavaScript Assistant -->
+    <script>
+        // Simulasi data profil user (pastikan terhubung dengan objek user utama jika diimpor)
+        const userProfile = {
+            name: "Pengguna CikurGo",
+            phone: "081234567890",
+            saldo: 150000
+        };
+
+        const modalMainContent = document.getElementById("modalMainContent");
+
         if (modalMainContent) {
             modalMainContent.innerHTML = `
-                <style>
-                    .assistant-form-container {
-                        background: #ffffff;
-                        border: 1px solid var(--border-color);
-                        border-radius: 20px;
-                        padding: 14px;
-                        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.03);
-                        margin-top: 2px;
-                    }
-                    .service-type-grid {
-                        display: grid;
-                        grid-template-columns: repeat(3, 1fr);
-                        gap: 8px;
-                        margin-bottom: 12px;
-                    }
-                    .service-card-option{
-                        background:#f8fafc;
-                        border:2px solid var(--border-color);
-                        border-radius:16px;
-                        height:105px;
-                        display:flex;
-                        flex-direction:column;
-                        justify-content:center;
-                        align-items:center;
-                        gap:6px;
-                        cursor:pointer;
-                        transition:.25s;
-                        overflow:hidden;
-                    }
-                    .service-card-option:hover {
-                        border-color: var(--primary-red);
-                        background: #fff5f5;
-                    }
-                    .service-card-option.active {
-                        border-color: var(--primary-red);
-                        background: #fff5f5;
-                        box-shadow: 0 4px 12px rgba(229, 9, 20, 0.12);
-                    }
-                    .service-card-option img{
-                        width:46px;
-                        height:46px;
-                        object-fit:contain;
-                        display:block;
-                        margin:0 auto;
-                    }
-                    .service-card-option .title{
-                        font-size:10px;
-                        font-weight:800;
-                        color:var(--text-main);
-                        text-transform:uppercase;
-                        line-height:1;
-                    }
-                    .form-section-title {
-                        font-size: 11px;
-                        font-weight: 800;
-                        color: var(--text-main);
-                        text-transform: uppercase;
-                        letter-spacing: 0.5px;
-                        margin-bottom: 8px;
-                        display: flex;
-                        align-items: center;
-                        gap: 5px;
-                    }
-                    .form-section-title::before {
-                        content: '';
-                        display: inline-block;
-                        width: 3px;
-                        height: 11px;
-                        background: var(--primary-red);
-                        border-radius: 2px;
-                    }
-                    .modern-form-group {
-                        margin-bottom: 10px;
-                    }
-                    .modern-form-group label {
-                        display: block;
-                        font-size: 10px;
-                        font-weight: 700;
-                        color: var(--text-muted);
-                        margin-bottom: 4px;
-                        text-transform: uppercase;
-                    }
-                    .modern-input {
-                        width: 100%;
-                        padding: 10px 12px;
-                        background: #f8fafc;
-                        border: 1px solid #cbd5e1;
-                        border-radius: 10px;
-                        font-size: 12px;
-                        font-weight: 600;
-                        color: var(--text-main);
-                        outline: none;
-                        transition: all 0.2s ease;
-                        box-sizing: border-box;
-                    }
-                    .modern-input:focus {
-                        background: #ffffff;
-                        border-color: var(--primary-red);
-                        box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.1);
-                    }
-                    .modern-input-layanan {
-                        width: 100%;
-                        padding: 10px;
-                        background: #fff5f5;
-                        border: 1px solid rgba(229, 9, 20, 0.3);
-                        border-radius: 10px;
-                        font-size: 12px;
-                        font-weight: 800;
-                        color: var(--primary-red);
-                        text-align: center;
-                        font-family: var(--font-mono);
-                        box-sizing: border-box;
-                    }
-                    .modern-row {
-                        display: flex;
-                        gap: 8px;
-                    }
-                    .modern-col {
-                        flex: 1;
-                    }
-                    .modern-textarea {
-                        resize: none;
-                        height: 54px;
-                    }
-                    .modern-total-box {
-                        background: linear-gradient(135deg, var(--dark-bg), var(--dark-card));
-                        color: #fff;
-                        padding: 12px 14px;
-                        border-radius: 12px;
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: center;
-                        margin: 14px 0 10px 0;
-                        box-shadow: 0 6px 16px rgba(11, 15, 25, 0.2);
-                    }
-                    .modern-total-label {
-                        font-size: 10px;
-                        font-weight: 700;
-                        color: #94a3b8;
-                        text-transform: uppercase;
-                    }
-                    .modern-total-value {
-                        font-size: 15px;
-                        font-weight: 800;
-                        color: #FFD700;
-                        font-family: var(--font-mono);
-                    }
-                </style>
-
                 <div class="assistant-form-container">
                     <div class="form-section-title">Pilih Kategori Layanan</div>
                     <div class="service-type-grid">
@@ -333,9 +464,8 @@ if(btnAssistant) {
                     return;
                 }
 
-                const dynamicPaketContent = document.getElementById("modalMainContent");
-                if (dynamicPaketContent) {
-                    dynamicPaketContent.innerHTML = `
+                if (modalMainContent) {
+                    modalMainContent.innerHTML = `
                         <div style="text-align:center; padding: 20px 8px;">
                             <div style="font-size: 36px; margin-bottom: 10px;">⏳</div>
                             <h3 style="font-size: 14px; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">Menunggu Kesepakatan (DEAL)</h3>
@@ -361,13 +491,12 @@ if(btnAssistant) {
         }
 
         function tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount) {
-            const dynamicPaketContent = document.getElementById("modalMainContent");
-            if (dynamicPaketContent) {
-                dynamicPaketContent.innerHTML = `
+            if (modalMainContent) {
+                modalMainContent.innerHTML = `
                     <div style="background: #dcfce7; border: 1px solid #bbf7d0; border-radius: 12px; padding: 8px 12px; text-align: center; margin-bottom: 14px;">
                         <span style="font-size: 10px; font-weight: 800; color: #16a34a;">🎉 Status: DEAL! Silakan Lakukan Pembayaran.</span>
                     </div>
-                    <h3 class="paket-title" style="margin-bottom:10px;">Metode Pembayaran</h3>
+                    <h3 style="font-size: 12px; font-weight: 800; margin-bottom:10px; text-transform:uppercase;">Metode Pembayaran</h3>
                     <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:14px; margin-bottom:12px;">
                         <div style="display:flex; gap:6px; margin-bottom:14px;">
                             <button class="pay-method-option active" data-method="cikurpay">CikurPay</button>
@@ -378,23 +507,16 @@ if(btnAssistant) {
                         <div id="paymentDetailsContainer">
                             <div style="font-size:11px; color:#64748b; margin-bottom:6px;">Saldo CikurPay: <strong style="color:#0f172a;">Rp ${userProfile.saldo.toLocaleString('id-ID')}</strong></div>
                             <div style="font-size:11px; color:#0f172a; font-weight:700; margin-bottom:12px;">Total Tagihan: Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</div>
-                            <div class="form-group" style="margin-bottom:10px;">
+                            <div class="modern-form-group" style="margin-bottom:10px;">
                                 <label>Masukkan PIN CikurPay (6 Digit)</label>
-                                <input type="password" id="paymentPinInput" maxlength="6" class="input-box" placeholder="••••••">
+                                <input type="password" id="paymentPinInput" maxlength="6" class="modern-input" placeholder="••••••">
                             </div>
                             <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:var(--dark-bg);">Bayar dengan CikurPay ⚡</button>
                         </div>
                     </div>
                 `;
             }
-    <!-- SEMUA KODE BESAR ASSISTANT YANG TADINYA DI INDEX.HTML PINDAHKAN KESINI -->
-    <div class="assistant-container">
-        <!-- Elemen fitur assistant Anda -->
-    </div>
-
-    <!-- Script JavaScript Assistant -->
-    <script>
-        // Logika script assistant yang tadinya nyampur di index.html pindahkan ke sini
+        }
     </script>
 </body>
 </html>
