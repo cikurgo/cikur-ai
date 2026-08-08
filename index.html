@@ -1345,26 +1345,82 @@ if (chatBtn) {
     });
 }
 
-// FUNGSI SCANNER QRIS & BARCODE MODAL YANG DISEMPURNAKAN
+// KODE SCANNER QRIS MENGGUNAKAN KAMERA SUNGGUHAN
 function bukaModalScanQris() {
     openModal("SCAN QRIS CIKURPAY 📷");
     if (modalMainContent) {
         modalMainContent.innerHTML = `
-            <div style="text-align:center; margin-bottom:14px;">
-                <div style="width:100%; aspect-ratio:1/1; max-width:240px; background:#0b0f19; border-radius:16px; margin:0 auto 12px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#fff; position:relative; overflow:hidden; border:2px solid var(--primary-red);">
-                    <div style="position:absolute; inset:20px; border:1px dashed rgba(255,255,255,0.4); border-radius:12px; display:flex; align-items:center; justify-content:center;">
-                        <span style="font-size:10px; color:#94a3b8; font-weight:700;">Arahkan Kamera ke QR Code Merchant</span>
+            <div style="text-align:center; margin-bottom:12px;">
+                <div style="width:100%; aspect-ratio:1/1; max-width:280px; background:#000; border-radius:16px; margin:0 auto 10px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#fff; position:relative; overflow:hidden; border:2px solid var(--primary-red);">
+                    <!-- Elemen Video Kamera Asli -->
+                    <video id="qrisCameraStream" autoplay playsinline style="width:100%; height:100%; object-fit:cover; position:absolute; inset:0;"></video>
+                    
+                    <!-- Bingkai Panduan & Garis Scanner -->
+                    <div style="position:absolute; inset:24px; border:2px dashed rgba(255,255,255,0.6); border-radius:12px; pointer-events:none; display:flex; align-items:center; justify-content:center;">
+                        <span style="font-size:10px; color:#fff; background:rgba(0,0,0,0.6); padding:4px 8px; border-radius:6px; font-weight:700;">Arahkan ke QR Code</span>
                     </div>
-                    <div style="width:100%; height:2px; background:var(--primary-red); position:absolute; animation:scanLine 2s infinite linear;"></div>
+                    <div style="width:100%; height:3px; background:var(--primary-red); position:absolute; top:24px; animation:scanLineActive 2s infinite linear; box-shadow: 0 0 10px var(--primary-red);"></div>
                 </div>
-                <p style="font-size:11px; color:#64748b; font-weight:600;">Pastikan posisi QR Code berada di dalam kotak pemindai.</p>
+                <p id="cameraStatusText" style="font-size:11px; color:#64748b; font-weight:600;">Menghubungkan ke kamera perangkat...</p>
             </div>
-            <button class="btn-pesan-form" onclick="simulasikanScanSukses()">Simulasi Scan Berhasil ✓</button>
+            <button class="btn-pesan-form" id="btnCloseCamera" style="background:#334155; margin-bottom:6px;">Tutup Kamera</button>
         `;
+
+        // Memulai Akses Kamera Perangkat Nyata
+        const videoElement = document.getElementById("qrisCameraStream");
+        const statusText = document.getElementById("cameraStatusText");
+        let mediaStreamInstance = null;
+
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then((stream) => {
+                mediaStreamInstance = stream;
+                videoElement.srcObject = stream;
+                if(statusText) statusText.innerText = "Kamera aktif. Silakan pindai QRIS merchant.";
+            })
+            .catch((err) => {
+                console.error("Gagal mengakses kamera:", err);
+                if(statusText) statusText.innerText = "Gagal membuka kamera. Izinkan akses kamera di browser Anda.";
+            });
+
+        // Tombol Tutup / Matikan Kamera saat modal ditutup
+        const closeCamBtn = document.getElementById("btnCloseCamera");
+        if(closeCamBtn) {
+            closeCamBtn.addEventListener("click", () => {
+                if(mediaStreamInstance) {
+                    mediaStreamInstance.getTracks().forEach(track => track.stop());
+                }
+                document.getElementById("assistantScreen").style.display = "none";
+            });
+        }
+        
+        // Menutup kamera otomatis jika tombol silang (X) modal ditekan
+        const globalCloseBtn = document.getElementById("closeAssistant");
+        if(globalCloseBtn) {
+            const originalClickHandler = globalCloseBtn.onclick;
+            globalCloseBtn.onclick = function() {
+                if(mediaStreamInstance) {
+                    mediaStreamInstance.getTracks().forEach(track => track.stop());
+                }
+                document.getElementById("assistantScreen").style.display = "none";
+                if(originalClickHandler) originalClickHandler();
+            };
+        }
     }
 }
 
-function simulasikanScanSukses() {
+// CSS Tambahan untuk Animasi Garis Scanner Kamera Aktif
+if(!document.getElementById("qrisScannerAnimation")) {
+    const styleCam = document.createElement("style");
+    styleCam.id = "qrisScannerAnimation";
+    styleCam.type = "text/css";
+    styleCam.innerText = `
+    @keyframes scanLineActive {
+        0% { top: 24px; }
+        50% { top: calc(100% - 24px); }
+        100% { top: 24px; }
+    }`;
+    document.head.appendChild(styleCam);
+}function simulasikanScanSukses() {
     alert("QRIS Berhasil Dipindai! Pembayaran otomatis diproses melalui CikurPay.");
     if (assistantScreen) assistantScreen.style.display = "none";
     switchTab('transaksi');
