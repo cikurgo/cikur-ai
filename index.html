@@ -1741,22 +1741,23 @@ function bukaModalTopUp() {
         });
     }
 }
-// =====================================================
+// ======================================
 // TOMBOL TANYA CGO
-// =====================================================
+// ======================================
 const chatBtn = document.getElementById("chatBtn");
 if (chatBtn) {
     chatBtn.addEventListener("click", () => {
         chatBtn.disabled = true;
         chatBtn.innerHTML = "Memuat CGO...";
         setTimeout(() => {
-            if (window.botpress) {
+            if (window.botpress && typeof window.botpress.open === 'function') {
                 window.botpress.open();
+            } else {
+                alert("Asisten CGO sedang dipersiapkan, silakan coba beberapa saat lagi.");
             }
             chatBtn.disabled = false;
             chatBtn.innerHTML = "Tanya CGO";
-
-        }, 500);
+        }, 300);
     });
 }
 
@@ -1782,8 +1783,8 @@ function initRobotAutoSlide() {
     // Mulai pertama kali tampil
     setTimeout(showRobot, 1500);
 }
-// Jalankan setelah halaman siap
-document.addEventListener("DOMContentLoaded", () => {
+// Jalankan setelah halaman siap & pastikan aman
+window.addEventListener("DOMContentLoaded", () => {
     initRobotAutoSlide();
 });
 
