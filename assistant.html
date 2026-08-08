@@ -295,16 +295,33 @@
 
     <!-- Script JavaScript Assistant -->
     <script>
-        // Simulasi data profil user (pastikan terhubung dengan objek user utama jika diimpor)
         const userProfile = {
             name: "Pengguna CikurGo",
             phone: "081234567890",
-            saldo: 150000
+            saldo: 150000,
+            pin: "123456"
         };
+
+        function updateUIProfile() {
+            // Fungsi pembaruan UI lokal jika diperlukan
+        }
 
         const modalMainContent = document.getElementById("modalMainContent");
 
-        if (modalMainContent) {
+        const dataPaket = {
+            dine: { nama: "DINE-IN ASSISTANT", hargaBase: 25000, hargaStr: "Rp 25.000", personil: "1 Personil", durasi: "Hingga 30 Menit", prioritas: "Aktivitas Ringan" },
+            vip: { nama: "VIP ASSISTANT", hargaBase: 89000, hargaStr: "Rp 89.000", personil: "1 Personil", durasi: "Hingga 2 Jam", prioritas: "Prioritas Pelayanan" },
+            private: { nama: "PRIVATE ASSISTANT", hargaBase: 349000, hargaStr: "Rp 349.000", personil: "2 Personil", durasi: "Hingga 4 Jam", prioritas: "Eksklusif / Tertinggi" }
+        };
+
+        let currentActivePaketKey = 'dine';
+        let currentExtraCost = 0;
+        let extraUnitsCount = 0;
+        let finalCalculatedTotal = 25000;
+        let selectedPaymentMethod = "cikurpay";
+
+        function renderInitialForm() {
+            if (!modalMainContent) return;
             modalMainContent.innerHTML = `
                 <div class="assistant-form-container">
                     <div class="form-section-title">Pilih Kategori Layanan</div>
@@ -388,17 +405,8 @@
                     <button class="btn-pesan-form" id="btnRequestDeal" style="background: var(--dark-bg); margin-top: 4px;">Kirim Detail & Minta DEAL 🤝</button>
                 </div>
             `;
+            initFormEvents();
         }
-
-        const dataPaket = {
-            dine: { nama: "DINE-IN ASSISTANT", hargaBase: 25000, hargaStr: "Rp 25.000", personil: "1 Personil", durasi: "Hingga 30 Menit", prioritas: "Aktivitas Ringan" },
-            vip: { nama: "VIP ASSISTANT", hargaBase: 89000, hargaStr: "Rp 89.000", personil: "1 Personil", durasi: "Hingga 2 Jam", prioritas: "Prioritas Pelayanan" },
-            private: { nama: "PRIVATE ASSISTANT", hargaBase: 349000, hargaStr: "Rp 349.000", personil: "2 Personil", durasi: "Hingga 4 Jam", prioritas: "Eksklusif / Tertinggi" }
-        };
-
-        let currentActivePaketKey = 'dine';
-        let currentExtraCost = 0;
-        let extraUnitsCount = 0;
 
         window.selectServiceCategory = function(paketKey) {
             currentActivePaketKey = paketKey;
@@ -431,63 +439,66 @@
             recalculateTotalForm();
         };
 
-        const selectExtraWaktuEl = document.getElementById("selectExtraWaktu");
-        if(selectExtraWaktuEl) {
-            selectExtraWaktuEl.addEventListener("change", function() {
-                extraUnitsCount = parseInt(this.value);
-                currentExtraCost = extraUnitsCount * 25000;
-                recalculateTotalForm();
-            });
-        }
-
         function recalculateTotalForm() {
             let info = dataPaket[currentActivePaketKey];
-            let grandTotal = info.hargaBase + currentExtraCost;
+            finalCalculatedTotal = info.hargaBase + currentExtraCost;
             const txtExtraPrice = document.getElementById("txtExtraPrice");
             const txtTotalFinal = document.getElementById("txtTotalFinal");
             if (txtExtraPrice) txtExtraPrice.innerText = "Rp " + currentExtraCost.toLocaleString('id-ID');
-            if (txtTotalFinal) txtTotalFinal.innerText = "Rp " + grandTotal.toLocaleString('id-ID');
+            if (txtTotalFinal) txtTotalFinal.innerText = "Rp " + finalCalculatedTotal.toLocaleString('id-ID');
         }
 
-        const btnRequestDealEl = document.getElementById("btnRequestDeal");
-        if (btnRequestDealEl) {
-            btnRequestDealEl.addEventListener("click", () => {
-                let info = dataPaket[currentActivePaketKey];
-                const tanggalEl = document.getElementById("inputTanggal");
-                const lokasiEl = document.getElementById("inputLokasi");
-                const tanggal = tanggalEl ? tanggalEl.value : "";
-                const lokasi = lokasiEl ? lokasiEl.value : "";
-                let finalCalculatedTotal = info.hargaBase + currentExtraCost;
+        function initFormEvents() {
+            const selectExtraWaktuEl = document.getElementById("selectExtraWaktu");
+            if(selectExtraWaktuEl) {
+                selectExtraWaktuEl.value = extraUnitsCount;
+                selectExtraWaktuEl.addEventListener("change", function() {
+                    extraUnitsCount = parseInt(this.value);
+                    currentExtraCost = extraUnitsCount * 25000;
+                    recalculateTotalForm();
+                });
+            }
 
-                if (!tanggal || !lokasi) {
-                    alert("[!] Mohon lengkapi Tanggal dan Lokasi.");
-                    return;
-                }
+            const btnRequestDealEl = document.getElementById("btnRequestDeal");
+            if (btnRequestDealEl) {
+                btnRequestDealEl.addEventListener("click", () => {
+                    let info = dataPaket[currentActivePaketKey];
+                    const tanggalEl = document.getElementById("inputTanggal");
+                    const lokasiEl = document.getElementById("inputLokasi");
+                    const tanggal = tanggalEl ? tanggalEl.value : "";
+                    const lokasi = lokasiEl ? lokasiEl.value : "";
+                    finalCalculatedTotal = info.hargaBase + currentExtraCost;
 
-                if (modalMainContent) {
-                    modalMainContent.innerHTML = `
-                        <div style="text-align:center; padding: 20px 8px;">
-                            <div style="font-size: 36px; margin-bottom: 10px;">⏳</div>
-                            <h3 style="font-size: 14px; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">Menunggu Kesepakatan (DEAL)</h3>
-                            <p style="font-size: 10px; color: var(--text-muted); line-height: 1.4; margin-bottom: 14px;">
-                                Detail pesanan Anda telah dikirimkan ke tim/asisten CGO. Tombol pembayaran akan aktif setelah status dinyatakan <strong>DEAL</strong>[cite: 1].
-                            </p>
-                            <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: 14px; padding: 14px; margin-bottom: 14px; text-align: left;">
-                                <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
-                                <div class="invoice-row"><span>Total Biaya</span><span style="color:var(--primary-red);">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span></div>
+                    if (!tanggal || !lokasi) {
+                        alert("[!] Mohon lengkapi Tanggal dan Lokasi.");
+                        return;
+                    }
+
+                    if (modalMainContent) {
+                        modalMainContent.innerHTML = `
+                            <div style="text-align:center; padding: 20px 8px;">
+                                <div style="font-size: 36px; margin-bottom: 10px;">⏳</div>
+                                <h3 style="font-size: 14px; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">Menunggu Kesepakatan (DEAL)</h3>
+                                <p style="font-size: 10px; color: var(--text-muted); line-height: 1.4; margin-bottom: 14px;">
+                                    Detail pesanan Anda telah dikirimkan ke tim/asisten CGO. Tombol pembayaran akan aktif setelah status dinyatakan <strong>DEAL</strong>[cite: 1].
+                                </p>
+                                <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: 14px; padding: 14px; margin-bottom: 14px; text-align: left;">
+                                    <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
+                                    <div class="invoice-row"><span>Total Biaya</span><span style="color:var(--primary-red);">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span></div>
+                                </div>
+                                <button class="btn-pesan-form" id="btnSimulasiDeal" style="background: #16a34a;">[Simulasi] Asisten Menyatakan DEAL ✓</button>
                             </div>
-                            <button class="btn-pesan-form" id="btnSimulasiDeal" style="background: #16a34a;">[Simulasi] Asisten Menyatakan DEAL ✓</button>
-                        </div>
-                    `;
-                }
+                        `;
+                    }
 
-                const btnSimulasiDealEl = document.getElementById("btnSimulasiDeal");
-                if (btnSimulasiDealEl) {
-                    btnSimulasiDealEl.addEventListener("click", () => {
-                        tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount);
-                    });
-                }
-            });
+                    const btnSimulasiDealEl = document.getElementById("btnSimulasiDeal");
+                    if (btnSimulasiDealEl) {
+                        btnSimulasiDealEl.addEventListener("click", () => {
+                            tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount);
+                        });
+                    }
+                });
+            }
         }
 
         function tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount) {
@@ -516,8 +527,10 @@
                     </div>
                 `;
             }
+            initPaymentEvents(info, finalCalculatedTotal, extraUnitsCount);
         }
-   let selectedPaymentMethod = "cikurpay";
+
+        function initPaymentEvents(info, finalCalculatedTotal, extraUnitsCount) {
             const methodButtons = document.querySelectorAll(".pay-method-option");
             const paymentDetailsContainer = document.getElementById("paymentDetailsContainer");
 
@@ -533,13 +546,13 @@
                         paymentDetailsContainer.innerHTML = `
                             <div style="font-size:11px; color:#64748b; margin-bottom:6px;">Saldo CikurPay: <strong style="color:#0f172a;">Rp ${userProfile.saldo.toLocaleString('id-ID')}</strong></div>
                             <div style="font-size:11px; color:#0f172a; font-weight:700; margin-bottom:12px;">Total Tagihan: Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</div>
-                            <div class="form-group" style="margin-bottom:10px;">
+                            <div class="modern-form-group" style="margin-bottom:10px;">
                                 <label>Masukkan PIN CikurPay (6 Digit)</label>
-                                <input type="password" id="paymentPinInput" maxlength="6" class="input-box" placeholder="••••••">
+                                <input type="password" id="paymentPinInput" maxlength="6" class="modern-input" placeholder="••••••">
                             </div>
                             <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:var(--dark-bg);">Bayar dengan CikurPay ⚡</button>
                         `;
-                        bindBayarAction();
+                        bindBayarAction(info, finalCalculatedTotal, extraUnitsCount);
                     } else if(selectedPaymentMethod === "qris") {
                         paymentDetailsContainer.innerHTML = `
                             <div style="text-align:center; margin-bottom:8px;">
@@ -548,76 +561,83 @@
                             </div>
                             <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:#E50914; margin-top:8px;">Konfirmasi Bayar QRIS ✓</button>
                         `;
-                        bindBayarAction();
+                        bindBayarAction(info, finalCalculatedTotal, extraUnitsCount);
                     } else if(selectedPaymentMethod === "tunai") {
                         paymentDetailsContainer.innerHTML = `
                             <div style="font-size:11px; color:#64748b; margin-bottom:10px; text-align:center; line-height: 1.4;">Pembayaran sebesar <strong>Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</strong> dilakukan secara <strong>Tunai</strong> langsung kepada petugas/asisten di lokasi.</div>
                             <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:#E50914; margin-top:4px;">Pesan dengan Pembayaran Tunai ✓</button>
                         `;
-                        bindBayarAction();
+                        bindBayarAction(info, finalCalculatedTotal, extraUnitsCount);
                     }
                 });
             });
-            
-            function bindBayarAction() {
-                const btnEksekusiEl = document.getElementById("btnEksekusiBayar");
-                if(!btnEksekusiEl) return;
 
-                btnEksekusiEl.addEventListener("click", () => {
-                    if(selectedPaymentMethod === "cikurpay") {
-                        const pinInputEl = document.getElementById("paymentPinInput");
-                        let enteredPin = pinInputEl ? pinInputEl.value.trim() : "";
+            bindBayarAction(info, finalCalculatedTotal, extraUnitsCount);
+        }
 
-                        if(!userProfile.pin) {
-                            userProfile.pin = "123456"; // Default fallback
-                        }
-                        if(enteredPin !== userProfile.pin) {
-                            alert("[!] PIN CikurPay salah. Mohon masukkan 6 digit PIN yang benar.");
-                            return;
-                        }
-                        if (userProfile.saldo < finalCalculatedTotal) {
-                            alert("[!] Saldo CikurPay kurang. Silakan lakukan Top-Up terlebih dahulu.");
-                            return;
-                        }
-                        userProfile.saldo -= finalCalculatedTotal;
-                        localStorage.setItem('cikur_user', JSON.stringify(userProfile));
-                        updateUIProfile();
+        function bindBayarAction(info, finalCalculatedTotal, extraUnitsCount) {
+            const btnEksekusiEl = document.getElementById("btnEksekusiBayar");
+            if(!btnEksekusiEl) return;
+
+            btnEksekusiEl.addEventListener("click", () => {
+                if(selectedPaymentMethod === "cikurpay") {
+                    const pinInputEl = document.getElementById("paymentPinInput");
+                    let enteredPin = pinInputEl ? pinInputEl.value.trim() : "";
+
+                    if(enteredPin !== userProfile.pin) {
+                        alert("[!] PIN CikurPay salah. Mohon masukkan 6 digit PIN yang benar.");
+                        return;
                     }
+                    if (userProfile.saldo < finalCalculatedTotal) {
+                        alert("[!] Saldo CikurPay kurang. Silakan lakukan Top-Up terlebih dahulu.");
+                        return;
+                    }
+                    userProfile.saldo -= finalCalculatedTotal;
+                    localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+                    updateUIProfile();
+                }
 
-                    let invoiceNo = "INV/CGO/" + Math.floor(100000 + Math.random() * 900000);
-                    let statusBayarLabel = selectedPaymentMethod === "tunai" ? "MENUNGGU PEMBAYARAN TUNAI" : "LUNAS (" + selectedPaymentMethod.toUpperCase() + ")";
-                    let now = new Date();
-                    let options = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
-                    let timestampStr = now.toLocaleDateString('id-ID', options) + " WIB";
+                let invoiceNo = "INV/CGO/" + Math.floor(100000 + Math.random() * 900000);
+                let statusBayarLabel = selectedPaymentMethod === "tunai" ? "MENUNGGU PEMBAYARAN TUNAI" : "LUNAS (" + selectedPaymentMethod.toUpperCase() + ")";
+                let now = new Date();
+                let options = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+                let timestampStr = now.toLocaleDateString('id-ID', options) + " WIB";
 
-                    const mainContentEl = document.getElementById("modalMainContent");
-                    if (mainContentEl) {
-                        mainContentEl.innerHTML = `
-                            <div id="printableInvoiceArea" class="invoice-card">
-                                <div class="invoice-header">
-                                    <h3>CIKUR GO INVOICE</h3>
-                                    <p style="font-size:9px; color:#64748b; margin-top:2px;">Status: ${statusBayarLabel} (DEAL Confirmed)</p>
-                                </div>
-                                <div class="invoice-row"><span>No. Invoice</span><span>${invoiceNo}</span></div>
-                                <div class="invoice-row"><span>Tanggal & Waktu</span><span>${timestampStr}</span></div>
-                                <div class="invoice-row"><span>Nama</span><span>${userProfile.name}</span></div>
-                                <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
-                                <div class="invoice-row"><span>Extra Waktu</span><span>${extraUnitsCount} Tambahan (30 Menit/Unit)</span></div>
-                                <div class="invoice-row"><span>Metode Bayar</span><span>${selectedPaymentMethod.toUpperCase()}</span></div>
-                                <div class="invoice-row" style="border-top:1px dashed #cbd5e1; margin-top:8px; padding-top:6px;">
-                                    <span style="font-weight:800; color:#0f172a;">Total Tagihan</span>
-                                    <span style="font-weight:800; color:#E50914; font-size:13px;">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span>
-                                </div>
+                if (modalMainContent) {
+                    modalMainContent.innerHTML = `
+                        <div id="printableInvoiceArea" class="assistant-form-container">
+                            <div style="text-align: center; margin-bottom: 12px;">
+                                <h3 style="font-size: 13px; font-weight: 800; margin: 0;">CIKUR GO INVOICE</h3>
+                                <p style="font-size:9px; color:#64748b; margin-top:2px;">Status: ${statusBayarLabel} (DEAL Confirmed)</p>
                             </div>
-                            <div style="display:flex; gap:8px; margin-top:12px;">
-                                <button class="btn-pesan-form" id="btnDownloadInvoice" style="background:var(--dark-bg); flex:1; margin-top:0;">Download Invoice 📥</button>
-                                <button class="btn-pesan-form" id="btnTutupInvoice" style="background:#E50914; flex:1; margin-top:0;">Selesai ✓</button>
+                            <div class="invoice-row"><span>No. Invoice</span><span>${invoiceNo}</span></div>
+                            <div class="invoice-row"><span>Tanggal & Waktu</span><span>${timestampStr}</span></div>
+                            <div class="invoice-row"><span>Nama</span><span>${userProfile.name}</span></div>
+                            <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
+                            <div class="invoice-row"><span>Extra Waktu</span><span>${extraUnitsCount} Tambahan (30 Menit/Unit)</span></div>
+                            <div class="invoice-row"><span>Metode Bayar</span><span>${selectedPaymentMethod.toUpperCase()}</span></div>
+                            <div class="invoice-row" style="border-top:1px dashed #cbd5e1; margin-top:8px; padding-top:6px;">
+                                <span style="font-weight:800; color:#0f172a;">Total Tagihan</span>
+                                <span style="font-weight:800; color:#E50914; font-size:13px;">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span>
                             </div>
-                        `;
-  
-             }
+                        </div>
+                        <div style="display:flex; gap:8px; margin-top:12px;">
+                            <button class="btn-pesan-form" id="btnTutupInvoice" style="background:#E50914; flex:1; margin-top:0;">Selesai ✓</button>
+                        </div>
+                    `;
+                }
 
-</script>
+                const btnTutupInvoice = document.getElementById("btnTutupInvoice");
+                if (btnTutupInvoice) {
+                    btnTutupInvoice.addEventListener("click", () => {
+                        window.location.href = "index.html";
+                    });
+                }
+            });
+        }
 
+        // Jalankan render awal saat halaman dimuat
+        renderInitialForm();
+    </script>
 </body>
 </html>
