@@ -8,7 +8,9 @@
 <!-- html2canvas untuk fitur download invoice -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    
+<script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
+<script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
+
 <style>
 :root {
     --primary-red: #E50914;
@@ -682,7 +684,23 @@ footer{
     font-size: 10px;
 }
 footer p { margin: 0; }
+    
+/* =====================================================
+   ROBOT CGO AUTO SLIDE
+   ===================================================== */
+#botpress-webchat {
+    position: fixed !important;
+    right: 16px !important;
+    bottom: 88px !important;
+    z-index: 9998 !important;
+    transition: right 0.8s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
 
+/* Robot digeser ke samping */
+#botpress-webchat.cgo-hidden {
+    right: -72% !important;
+}
+    
 /* ===========================
    FIXED BOTTOM NAVIGATION BAR (PERMANEN & STABIL)
 =========================== */
@@ -1103,14 +1121,13 @@ footer p { margin: 0; }
         </div>  
 
         <!-- Tombol Tanya CGO -->
-        <div class="chat-action-box">
-            <div class="chat-text-info">
-                <h3>Asisten AI CGO</h3>
-                <p>Siap mendampingi kebutuhan Anda 24/7</p>
-            </div>
-            <button id="chatBtn">Tanya CGO</button>
-        </div>
+<div class="chat-action-box">
+    <div class="chat-text-info">
+        <h3>Asisten AI CGO</h3>
+        <p>Siap mendampingi kebutuhan Anda 24/7</p>
     </div>
+    <button id="chatBtn">Tanya CGO</button>
+</div>
 
     <!-- VIEW 2: PESANAN (Status Pesanan) -->
     <div id="view-pesanan" class="tab-content-view">
@@ -1724,6 +1741,52 @@ function bukaModalTopUp() {
         });
     }
 }
+// =====================================================
+// TOMBOL TANYA CGO
+// =====================================================
+const chatBtn = document.getElementById("chatBtn");
+if (chatBtn) {
+    chatBtn.addEventListener("click", () => {
+        chatBtn.disabled = true;
+        chatBtn.innerHTML = "Memuat CGO...";
+        setTimeout(() => {
+            if (window.botpress) {
+                window.botpress.open();
+            }
+            chatBtn.disabled = false;
+            chatBtn.innerHTML = "Tanya CGO";
+
+        }, 500);
+    });
+}
+
+// =====================================================
+// ROBOT CGO AUTO SLIDE
+// MUNCUL 7 DETIK → GESER 3 DETIK → MUNCUL LAGI
+// =====================================================
+
+function initRobotAutoSlide() {
+    const robot = document.getElementById("botpress-webchat");
+    if (!robot) return;
+    let isVisible = true;
+    function showRobot() {
+        robot.classList.remove("cgo-hidden");
+        isVisible = true;
+        setTimeout(hideRobot, 7000);
+    }
+    function hideRobot() {
+        robot.classList.add("cgo-hidden");
+        isVisible = false;
+        setTimeout(showRobot, 3000);
+    }
+    // Mulai pertama kali tampil
+    setTimeout(showRobot, 1500);
+}
+// Jalankan setelah halaman siap
+document.addEventListener("DOMContentLoaded", () => {
+    initRobotAutoSlide();
+});
+
 </script>
 </body>
 </html>
