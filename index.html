@@ -1348,45 +1348,90 @@ if (chatBtn) {
     });
 }
 
+  <!-- KOTAK QRIS UTAMA DI HALAMAN -->
+<div style="background: #ffffff; border-radius: 20px; padding: 20px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.05); margin-bottom: 16px; border: 1px solid var(--border-color);">
+    <h4 style="font-size: 14px; font-weight: 700; color: var(--text-main); margin-bottom: 4px;">Scan & Bayar QRIS CikurPay</h4>
+    <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">Gunakan untuk pembayaran instan di merchant terintegrasi</p>
+    
+    <!-- Barcode Asli yang Muncul Langsung & Bisa Diklik untuk Zoom -->
+    <div onclick="bukaZoomBarcode()" style="width: 100%; max-width: 220px; margin: 0 auto 12px; background: #fff; border: 2px dashed #cbd5e1; border-radius: 16px; padding: 14px; cursor: pointer; display: flex; flex-direction: column; align-items: center; transition: all 0.2s;">
+        <div id="mainQisBarcodeRender" style="display:flex; justify-content:center; align-items:center;"></div>
+        <span style="font-size: 11px; font-weight: 700; color: var(--primary-red); margin-top: 8px; letter-spacing: 0.5px;">CG0-QRIS-98210384</span>
+        <span style="font-size: 9px; color: #64748b; margin-top: 2px;">(Ketuk untuk memperbesar 🔍)</span>
+    </div>
+    
+    <button class="btn-pesan-form" onclick="bukaModalScanQris()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Buka Kamera Scanner QRIS
+    </button>
+</div>
+
+<!-- Script Render Barcode Utama & Fungsi Zoom -->
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const renderBox = document.getElementById("mainQisBarcodeRender");
+        if (renderBox && window.QRCode) {
+            renderBox.innerHTML = "";
+            new QRCode(renderBox, {
+                text: "CG0-QRIS-98210384",
+                width: 150,
+                height: 150,
+                colorDark: "#0f172a",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+    });
+
+    function bukaZoomBarcode() {
+        openModal("QRIS CIKURPAY (ZOOM) 🔍");
+        if (modalMainContent) {
+            modalMainContent.innerHTML = `
+                <div style="text-align:center; padding: 10px;">
+                    <div id="zoomQrcodeBox" style="background:#fff; padding:15px; border-radius:16px; display:inline-block; box-shadow:0 10px 25px rgba(0,0,0,0.1); border:1px solid #e2e8f0; margin-bottom:12px;"></div>
+                    <h3 style="font-size:16px; font-weight:800; color:var(--text-main); margin-bottom:4px;">CikurPay Merchant ID</h3>
+                    <p style="font-size:13px; font-weight:700; color:var(--primary-red); letter-spacing:1px; margin-bottom:16px;">CG0-QRIS-98210384</p>
+                    <p style="font-size:11px; color:#64748b; line-height:1.4;">Tunjukkan QR code ini ke kasir atau merchant partner untuk melakukan penerimaan dana secara instan.</p>
+                </div>
+            `;
+            setTimeout(() => {
+                const zoomBox = document.getElementById("zoomQrcodeBox");
+                if (zoomBox && window.QRCode) {
+                    zoomBox.innerHTML = "";
+                    new QRCode(zoomBox, {
+                        text: "CG0-QRIS-98210384",
+                        width: 220,
+                        height: 220,
+                        colorDark: "#0f172a",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                }
+            }, 100);
+        }
+    }
+</script>  
+   
 function bukaModalScanQris() {
-    openModal("SCAN QRIS CIKURPAY 📷");
+    openModal("SCANNER KAMERA QRIS 📷");
     if (modalMainContent) {
         modalMainContent.innerHTML = `
-            <div style="text-align:center; margin-bottom:12px;">
-                <!-- Barcode Aktif yang Muncul Otomatis -->
-                <div id="qrisActiveBarcodeBox" style="width:160px; height:160px; background:#fff; margin:0 auto 10px; border-radius:12px; display:flex; align-items:center; justify-content:center; padding:8px; border:1px solid #cbd5e1;"></div>
-                <div style="font-size:11px; font-weight:700; color:var(--primary-red); margin-bottom:10px;">CG0-QRIS-98210384</div>
-
-                <div style="width:100%; aspect-ratio:1/1; max-width:240px; background:#000; border-radius:16px; margin:0 auto 10px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#fff; position:relative; overflow:hidden; border:2px solid var(--primary-red);">
+            <div style="text-align:center; width:100%;">
+                <!-- Wadah Kamera Ukuran Besar / Full Lebar -->
+                <div style="width:100%; aspect-ratio:3/4; max-height:400px; background:#000; border-radius:16px; margin:0 auto 12px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#fff; position:relative; overflow:hidden; border:2px solid var(--primary-red);">
                     <!-- Elemen Video Kamera Asli -->
                     <video id="qrisCameraStream" autoplay playsinline style="width:100%; height:100%; object-fit:cover; position:absolute; inset:0;"></video>
                     
-                    <!-- Bingkai Panduan & Garis Scanner -->
-                    <div style="position:absolute; inset:20px; border:2px dashed rgba(255,255,255,0.6); border-radius:12px; pointer-events:none; display:flex; align-items:center; justify-content:center;">
-                        <span style="font-size:9px; color:#fff; background:rgba(0,0,0,0.6); padding:3px 6px; border-radius:4px; font-weight:700;">Arahkan ke QR Code</span>
+                    <!-- Bingkai Panduan Pemindaian Besar -->
+                    <div style="position:absolute; inset:35px; border:2px dashed rgba(255,255,255,0.7); border-radius:16px; pointer-events:none; display:flex; align-items:center; justify-content:center;">
+                        <span style="font-size:11px; color:#fff; background:rgba(0,0,0,0.7); padding:6px 12px; border-radius:8px; font-weight:700;">Arahkan Kamera ke QR Code Merchant</span>
                     </div>
-                    <div style="width:100%; height:3px; background:var(--primary-red); position:absolute; top:20px; animation:scanLineActive 2s infinite linear; box-shadow: 0 0 10px var(--primary-red);"></div>
+                    <div style="width:100%; height:3px; background:var(--primary-red); position:absolute; top:35px; animation:scanLineActive 2s infinite linear; box-shadow: 0 0 12px var(--primary-red);"></div>
                 </div>
-                <p id="cameraStatusText" style="font-size:11px; color:#64748b; font-weight:600;">Menghubungkan ke kamera...</p>
+                <p id="cameraStatusText" style="font-size:12px; color:#64748b; font-weight:600; margin-bottom:14px;">Menghubungkan ke kamera perangkat...</p>
             </div>
-            <button class="btn-pesan-form" id="btnCloseCamera" style="background:#334155; margin-bottom:6px;">Tutup Kamera</button>
+            <button class="btn-pesan-form" id="btnCloseCamera" style="background:#334155; width:100%;">Tutup Kamera</button>
         `;
-
-        // Render Barcode otomatis menggunakan QRCode.js ke dalam modal
-        setTimeout(() => {
-            const box = document.getElementById("qrisActiveBarcodeBox");
-            if(box && window.QRCode) {
-                box.innerHTML = "";
-                new QRCode(box, {
-                    text: "CG0-QRIS-98210384",
-                    width: 140,
-                    height: 140,
-                    colorDark: "#0f172a",
-                    colorLight: "#ffffff",
-                    correctLevel: QRCode.CorrectLevel.H
-                });
-            }
-        }, 100);
 
         // Memulai Akses Kamera Perangkat Nyata
         const videoElement = document.getElementById("qrisCameraStream");
@@ -1397,20 +1442,18 @@ function bukaModalScanQris() {
             .then((stream) => {
                 mediaStreamInstance = stream;
                 videoElement.srcObject = stream;
-                if(statusText) statusText.innerText = "Kamera aktif. Silakan pindai QRIS merchant.";
+                if(statusText) statusText.innerText = "Kamera aktif. Silakan pindai QRIS.";
             })
             .catch((err) => {
                 console.error("Gagal mengakses kamera:", err);
-                if(statusText) statusText.innerText = "Gagal membuka kamera. Izinkan akses kamera di browser Anda.";
+                if(statusText) statusText.innerText = "Gagal membuka kamera. Izinkan akses kamera di browser.";
             });
 
-        // Tombol Tutup / Matikan Kamera saat modal ditutup
+        // Tombol Tutup Kamera
         const closeCamBtn = document.getElementById("btnCloseCamera");
         if(closeCamBtn) {
             closeCamBtn.addEventListener("click", () => {
-                if(mediaStreamInstance) {
-                    mediaStreamInstance.getTracks().forEach(track => track.stop());
-                }
+                if(mediaStreamInstance) mediaStreamInstance.getTracks().forEach(track => track.stop());
                 document.getElementById("assistantScreen").style.display = "none";
             });
         }
@@ -1420,9 +1463,7 @@ function bukaModalScanQris() {
         if(globalCloseBtn) {
             const originalClickHandler = globalCloseBtn.onclick;
             globalCloseBtn.onclick = function() {
-                if(mediaStreamInstance) {
-                    mediaStreamInstance.getTracks().forEach(track => track.stop());
-                }
+                if(mediaStreamInstance) mediaStreamInstance.getTracks().forEach(track => track.stop());
                 document.getElementById("assistantScreen").style.display = "none";
                 if(originalClickHandler) originalClickHandler();
             };
