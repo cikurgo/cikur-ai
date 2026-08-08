@@ -1864,34 +1864,30 @@ function bukaModalTopUp() {
     }
 }
 
-   
-                    const btnDownloadEl = document.getElementById("btnDownloadInvoice");
-                    if (btnDownloadEl) {
-                        btnDownloadEl.addEventListener("click", () => {
-                            let invoiceElement = document.getElementById("printableInvoiceArea");
-                            if(invoiceElement && typeof html2canvas !== 'undefined') {
-                                html2canvas(invoiceElement, { scale: 2 }).then(canvas => {
-                                    let link = document.createElement('a');
-                                    link.download = `${invoiceNo.replace(/\//g, '_')}.png`;
-                                    link.href = canvas.toDataURL('image/png');
-                                    link.click();
-                                });
-                            }
-                        });
-                    }
-
-                    const btnTutupEl = document.getElementById("btnTutupInvoice");
-                    if (btnTutupEl) {
-                        btnTutupEl.addEventListener("click", () => {
-                            if (assistantScreen) assistantScreen.style.display = "none";
-                        });
-                    }
+// Fungsi binding aksi pembayaran tambahan dan invoice handler yang disempurnakan
+function bindBayarAction() {
+    const btnDownloadEl = document.getElementById("btnDownloadInvoice");
+    if (btnDownloadEl) {
+        btnDownloadEl.addEventListener("click", () => {
+            let invoiceElement = document.getElementById("printableInvoiceArea");
+            let invoiceNo = "INV-CIKURGO";
+            if(invoiceElement && typeof html2canvas !== 'undefined') {
+                html2canvas(invoiceElement, { scale: 2 }).then(canvas => {
+                    let link = document.createElement('a');
+                    link.download = `${invoiceNo}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
                 });
             }
+        });
+    }
 
-            bindBayarAction();
-        }
-    });
+    const btnTutupEl = document.getElementById("btnTutupInvoice");
+    if (btnTutupEl) {
+        btnTutupEl.addEventListener("click", () => {
+            if (assistantScreen) assistantScreen.style.display = "none";
+        });
+    }
 }
 </script>
 
@@ -1901,4 +1897,4 @@ function bukaModalTopUp() {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
 </body>
-    </html>
+</html>
