@@ -135,21 +135,61 @@
         .resto-header-info { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
         .resto-avatar { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 1.5px solid var(--border); }
         
+        /* PERBAIKAN TATA LETAK MENU ITEM & TOMBOL -/+ AGAR RAPI */
+        .menu-category-section {
+            margin: 10px 0; 
+            border: 1px solid var(--border); 
+            border-radius: var(--radius-sm); 
+            background: #fff;
+            overflow: hidden;
+        }
+        .menu-category-header {
+            width: 100%;
+            background: #f8fafc;
+            padding: 12px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--text-main);
+            border: none;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .menu-category-header:hover {
+            background: #f1f5f9;
+        }
+        .menu-category-content {
+            padding: 4px 12px;
+            display: flex;
+            flex-direction: column;
+        }
+
         .menu-item-row { 
             display: flex; 
-            align-items: flex-start;
+            align-items: center; 
+            justify-content: space-between;
             gap: 12px; 
-            padding: 10px 0; 
+            padding: 12px 0; 
             border-bottom: 1px dashed var(--border); 
         }
         .menu-item-row:last-child { border-bottom: none; }
 
+        .menu-item-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            min-width: 0;
+        }
+
         .menu-thumb {
-            width: 76px; height: 76px; border-radius: 14px; object-fit: cover; border: 1px solid var(--border); flex-shrink: 0;
+            width: 64px; height: 64px; border-radius: 12px; object-fit: cover; border: 1px solid var(--border); flex-shrink: 0;
         }
 
         .counter-control {
-            display: flex; align-items: center; background: var(--background); padding: 3px; border-radius: 10px; border: 1px solid var(--border);
+            display: flex; align-items: center; background: var(--background); padding: 3px; border-radius: 10px; border: 1px solid var(--border); flex-shrink: 0;
         }
         .counter-btn {
             width: 28px; height: 28px; border-radius: 8px; border: none; background: #fff; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center;
@@ -469,21 +509,30 @@ function renderRestoList(restos) {
 
                     catItemsHTML += `
                         <div class="menu-item-row">
-                            ${itemImg ? `<img src="${itemImg}" class="menu-thumb">` : `<div style="width: 76px; height: 76px; border-radius: 14px; background: #e2e8f0; display:flex; align-items:center; justify-content:center; font-size:10px; color:#64748b;">No Foto</div>`}
-                            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: flex-start; gap: 4px; padding-top: 2px;">
-                                <h4 style="font-size: 12px; font-weight: 700; margin: 0; color: var(--text-main); line-height: 1.3;">${itemName}</h4>
-                                <div>${priceDisplay}</div>
-                                <div>${itemStatusLabel}</div>
+                            <div class="menu-item-info">
+                                ${itemImg ? `<img src="${itemImg}" class="menu-thumb">` : `<div style="width: 64px; height: 64px; border-radius: 12px; background: #e2e8f0; display:flex; align-items:center; justify-content:center; font-size:10px; color:#64748b; flex-shrink:0;">No Foto</div>`}
+                                <div style="display: flex; flex-direction: column; justify-content: center; gap: 3px; min-width: 0;">
+                                    <h4 style="font-size: 12px; font-weight: 700; margin: 0; color: var(--text-main); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${itemName}</h4>
+                                    <div>${priceDisplay}</div>
+                                    <div>${itemStatusLabel}</div>
+                                </div>
                             </div>
                             ${actionControlHTML}
                         </div>`;
                 });
 
+                let dropdownId = `cat_drop_${resto.id}_${catIndex}`;
                 menusHTML += `
-                    <div style="margin: 8px 0; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-                        <h3 style="font-size: 12px; font-weight: 800; color: var(--text-main); margin-bottom: 6px;">${cat}</h3>
-                        <div>${catItemsHTML}</div>
+                    <div class="menu-category-section">
+                        <button type="button" class="menu-category-header" onclick="toggleMenuCategory('${dropdownId}', this)">
+                            <span>${cat}</span>
+                            <span style="font-size: 10px; font-weight: 700; color: var(--text-muted);">▼ Buka/Tutup</span>
+                        </button>
+                        <div id="${dropdownId}" class="menu-category-content">
+                            ${catItemsHTML}
+                        </div>
                     </div>`;
+                catIndex++;
             }
         }
 
@@ -500,6 +549,18 @@ function renderRestoList(restos) {
         `;
         container.appendChild(card);
     });
+}
+
+function toggleMenuCategory(contentId, btnEl) {
+    let contentDiv = document.getElementById(contentId);
+    if (!contentDiv) return;
+    if (contentDiv.style.display === "none") {
+        contentDiv.style.display = "flex";
+        btnEl.querySelector("span:last-child").innerText = "▼ Buka/Tutup";
+    } else {
+        contentDiv.style.display = "none";
+        btnEl.querySelector("span:last-child").innerText = "▶ Buka/Tutup";
+    }
 }
 
 function updateQty(restoId, itemId, change) {
