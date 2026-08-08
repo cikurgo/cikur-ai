@@ -683,7 +683,7 @@ footer{
 footer p { margin: 0; }
 
 /* ===========================
-   FIXED BOTTOM NAVIGATION BAR
+   FIXED BOTTOM NAVIGATION BAR (PERMANEN & STABIL)
 =========================== */
 .bottom-nav {
     position: fixed;
@@ -693,14 +693,15 @@ footer p { margin: 0; }
     width: 100%;
     max-width: 440px;
     height: 68px;
-    background-color: rgba(255, 255, 255, 0.96);
+    background-color: rgba(255, 255, 255, 0.98);
     backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
     border-top: 1px solid var(--border-color);
     display: flex;
     justify-content: space-around;
     align-items: center;
     padding: 0 8px;
-    z-index: 1000;
+    z-index: 10000;
     box-shadow: 0 -10px 25px rgba(0,0,0,0.05);
 }
 
@@ -1030,7 +1031,7 @@ footer p { margin: 0; }
             </div>
         </div>          
                
-        <!-- CORE ECOSYSTEM -->
+        <!-- CORE ECOSYSTEM (Terintegrasi assistant.html, food.html, ride.html) -->
         <div class="services-section" style="margin-bottom: 12px;">
             <div class="services-title" style="margin-bottom: 8px;">Core Ecosystem</div>
             <div class="menu-grid" style="margin-bottom: 0; gap: 8px;">
@@ -1055,14 +1056,14 @@ footer p { margin: 0; }
             </div>
         </div>
         
+        <!-- Integrasi cikurgo2in1.html -->
         <div style="width: 100%; margin-top: 4px; margin-bottom: 12px; box-sizing: border-box;">
             <a href="cikurgo2in1.html" 
                id="btnCikurGo2in1" 
-               onclick="if(typeof handleCikur2In1Click === 'function') { handleCikur2In1Click(); return false; } return true;" 
                style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; background: linear-gradient(135deg, var(--primary-red) 0%, #900008 100%); border: none; padding: 10px 14px; border-radius: 14px; width: 100%; box-sizing: border-box; text-decoration: none; box-shadow: 0 4px 12px rgba(229,9,20,0.2); overflow: hidden; position: relative;">
                 
                 <div style="display: flex; align-items: center; width: 100%; overflow: hidden;" id="cikur2in1-content">
-                    <span style="font-size: 13px; font-weight: 800; color: #ffffff; letter-spacing: 0.5px; white-space: nowrap; display: inline-block; animation: textScroll 8s linear infinite;">
+                    <span style="font-size: 13px; font-weight: 800; color: #ffffff; letter-spacing: 0.5px; white-space: nowrap; display: inline-block;">
                         CIKUR GO 2IN1 &nbsp;&nbsp;&nbsp;&nbsp; Food & Assistant &nbsp;&nbsp;&nbsp;&nbsp; CIKUR GO 2IN1
                     </span>
                 </div>
@@ -1098,6 +1099,7 @@ footer p { margin: 0; }
             </div>  
         </div>  
 
+        <!-- Tombol Tanya CGO diaktifkan kembali -->
         <div class="chat-action-box">
             <div class="chat-text-info">
                 <h3>Asisten AI CGO</h3>
@@ -1107,7 +1109,7 @@ footer p { margin: 0; }
         </div>
     </div>
 
-    <!-- VIEW 2: PESANAN -->
+    <!-- VIEW 2: PESANAN (Status Pesanan) -->
     <div id="view-pesanan" class="tab-content-view">
         <div class="services-title" style="margin-top: 8px;">Aktivitas Pesanan Anda</div>
         <div style="background: #fff; border: 1px solid var(--border-color); border-radius: 16px; padding: 14px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
@@ -1119,7 +1121,7 @@ footer p { margin: 0; }
         </div>
     </div>
 
-    <!-- VIEW 3: TRANSAKSI -->
+    <!-- VIEW 3: TRANSAKSI (Riwayat Saldo & Transaksi) -->
     <div id="view-transaksi" class="tab-content-view">
         <div class="services-title" style="margin-top: 8px;">Riwayat Transaksi & Saldo</div>
         <div style="background: linear-gradient(135deg, var(--dark-bg), var(--dark-card)); border-radius: 20px; padding: 18px; color: white; margin-bottom: 14px; box-shadow: 0 8px 20px rgba(11,15,25,0.2); border: 1px solid rgba(229,9,20,0.3);">
@@ -1153,7 +1155,7 @@ footer p { margin: 0; }
         <button class="btn-pesan-form" onclick="prosesLogout()" style="background: #64748b;">Keluar Akun (Logout)</button>
     </div>
 
-    <!-- BOTTOM NAVIGATION BAR -->
+    <!-- BOTTOM NAVIGATION BAR (Permanen & Tidak Bergeser saat Scroll) -->
     <nav class="bottom-nav">
         <button class="nav-item active" onclick="switchTab('beranda')" id="nav-beranda">
             <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8Z"/></svg>
@@ -1285,6 +1287,39 @@ function switchTab(tabName) {
     if(targetNav) targetNav.classList.add('active');
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Mengaktifkan kembali fungsionalitas Tombol Tanya CGO
+const chatBtn = document.getElementById("chatBtn");
+if (chatBtn) {
+    chatBtn.addEventListener("click", () => {
+        openModal("ASISTEN AI CGO (BANTUAN 24/7)");
+        if (modalMainContent) {
+            modalMainContent.innerHTML = `
+                <div style="text-align:center; margin-bottom:14px;">
+                    <p style="font-size:12px; color:#64748b; font-weight:600;">Halo ${userProfile.name}, ada yang bisa dibantu oleh Asisten AI CikurGo hari ini?</p>
+                </div>
+                <div class="form-group">
+                    <label>Ketik Pertanyaan atau Kendala</label>
+                    <textarea id="chatInputQuery" class="input-box" rows="3" placeholder="Contoh: Bagaimana cara memesan layanan Cikur Ride?"></textarea>
+                </div>
+                <button class="btn-pesan-form" id="btnKirimChatAI">Kirim Pesan ke CGO 🤖</button>
+            `;
+            
+            const btnKirimChatAI = document.getElementById("btnKirimChatAI");
+            if(btnKirimChatAI) {
+                btnKirimChatAI.addEventListener("click", () => {
+                    const query = document.getElementById("chatInputQuery").value.trim();
+                    if(!query) {
+                        alert("Mohon ketikkan pertanyaan Anda.");
+                        return;
+                    }
+                    alert("Pesan terkirim ke CGO AI! Asisten akan segera merespons.");
+                    document.getElementById("assistantScreen").style.display = "none";
+                });
+            }
+        }
+    });
 }
 
 function bukaModalRegistrasi() {
