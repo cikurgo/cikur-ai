@@ -1759,29 +1759,32 @@ if (chatBtn) {
     });
 }
 
-// =====================================================
-// ROBOT CGO AUTO SLIDE
-// MUNCUL 7 DETIK → GESER 3 DETIK → MUNCUL LAGI
-// =====================================================
-
+// ======================================
+// ROBOT CGO AUTO SLIDE (TEROPTIMASI)
+// ======================================
 function initRobotAutoSlide() {
-    const robot = document.getElementById("botpress-webchat");
-    if (!robot) return;
-    let isVisible = true;
-    function showRobot() {
-        robot.classList.remove("cgo-hidden");
-        isVisible = true;
-        setTimeout(hideRobot, 7000);
-    }
-    function hideRobot() {
-        robot.classList.add("cgo-hidden");
-        isVisible = false;
-        setTimeout(showRobot, 3000);
-    }
-    // Mulai pertama kali tampil
-    setTimeout(showRobot, 1500);
+    const checkRobotInterval = setInterval(() => {
+        const robot = document.getElementById("botpress-webchat");
+        if (robot) {
+            clearInterval(checkRobotInterval); // Hentikan pengecekan jika elemen sudah ada
+            
+            let isVisible = true;
+            function showRobot() {
+                robot.classList.remove("cgo-hidden");
+                isVisible = true;
+                setTimeout(hideRobot, 7000);
+            }
+            function hideRobot() {
+                robot.classList.add("cgo-hidden");
+                isVisible = false;
+                setTimeout(showRobot, 3000);
+            }
+            setTimeout(showRobot, 1500);
+        }
+    }, 500); // Cek setiap 0.5 detik sampai elemen botpress siap
 }
-// Jalankan setelah halaman siap & pastikan aman
+
+// Jalankan setelah halaman siap
 window.addEventListener("DOMContentLoaded", () => {
     initRobotAutoSlide();
 });
