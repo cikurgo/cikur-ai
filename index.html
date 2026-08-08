@@ -1355,9 +1355,8 @@ let orderConfig = {
 };
 
 function updateCikur2In1Widget() {
-    const container = document.getElementById('btnCikurGo2in1');
     const contentDiv = document.getElementById('cikur2in1-content');
-    if (!container || !contentDiv) return;
+    if (!contentDiv) return;
 
     if (!isCikur2In1Active) {
         contentDiv.innerHTML = `
@@ -1365,7 +1364,6 @@ function updateCikur2In1Widget() {
                 CIKUR GO 2IN1 &nbsp;&nbsp;&nbsp;&nbsp; Food & Assistant &nbsp;&nbsp;&nbsp;&nbsp; CIKUR GO 2IN1
             </span>
         `;
-        return;
     }
 }
 
@@ -1391,8 +1389,10 @@ let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || {
 };
 
 function updateUIProfile() {
-    document.getElementById("headerNamaUser").innerText = userProfile.name;
-    document.getElementById("displaySaldo").innerText = "Rp " + userProfile.saldo.toLocaleString('id-ID');
+    const headerNamaEl = document.getElementById("headerNamaUser");
+    const displaySaldoEl = document.getElementById("displaySaldo");
+    if (headerNamaEl) headerNamaEl.innerText = userProfile.name;
+    if (displaySaldoEl) displaySaldoEl.innerText = "Rp " + userProfile.saldo.toLocaleString('id-ID');
     
     if(document.getElementById("profileViewName")) {
         document.getElementById("profileViewName").innerText = userProfile.name;
@@ -1406,11 +1406,11 @@ function updateUIProfile() {
     let profileViewAvatar = document.getElementById("profileViewAvatar");
 
     if(userProfile.avatar && userProfile.avatar.startsWith("data:image")) {
-        avatarContainer.innerHTML = `<img src="${userProfile.avatar}" alt="Foto Profil">`;
+        if (avatarContainer) avatarContainer.innerHTML = `<img src="${userProfile.avatar}" alt="Foto Profil">`;
         if(profileViewAvatar) profileViewAvatar.innerHTML = `<img src="${userProfile.avatar}" alt="Foto Profil" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
     } else {
         let initials = userProfile.name.split(" ").map(n => n[0]).join("").substring(0,2).toUpperCase();
-        avatarContainer.innerText = initials || "CK";
+        if (avatarContainer) avatarContainer.innerText = initials || "CK";
         if(profileViewAvatar) profileViewAvatar.innerText = initials || "CK";
     }
 }
@@ -1555,13 +1555,13 @@ const modalTitle = document.getElementById("modalTitle");
 const modalMainContent = document.getElementById("modalMainContent");
 
 function openModal(titleHTML) {
-    modalTitle.innerHTML = titleHTML;
-    assistantScreen.style.display = "block";
+    if (modalTitle) modalTitle.innerHTML = titleHTML;
+    if (assistantScreen) assistantScreen.style.display = "block";
 }
 
 if(closeAssistant) {
     closeAssistant.addEventListener("click", () => { 
-        assistantScreen.style.display = "none"; 
+        if (assistantScreen) assistantScreen.style.display = "none"; 
     });
 }
 
@@ -1594,11 +1594,11 @@ function startScanner() {
         html5QrCode.start(
             { facingMode: "environment" },
             { fps: 10, qrbox: { width: 250, height: 250 } },
-            (decodedText, decodedResult) => {
+            (decodedText) => {
                 stopScanner();
                 alert(`QR Berhasil Dipindai!\nMemproses pembayaran ke CikurPay untuk: ${decodedText}`);
             },
-            (errorMessage) => {}
+            () => {}
         ).catch((err) => {
             console.error("Gagal memulai kamera.", err);
             alert("Gagal membuka kamera. Pastikan memberikan izin akses kamera.");
@@ -1632,83 +1632,94 @@ function bukaModalPengaturanProfil() {
     openModal("PENGATURAN PROFIL & FOTO AKUN");
     let avatarPreviewHTML = userProfile.avatar ? `<img src="${userProfile.avatar}" style="width:100%; height:100%; object-fit:cover;">` : "CK";
 
-    modalMainContent.innerHTML = `
-        <div style="text-align:center; margin-bottom:18px;">
-            <div style="width:80px; height:80px; border-radius:50%; background:#fee2e2; border:3px solid #E50914; color:#E50914; font-size:24px; font-weight:800; display:flex; align-items:center; justify-content:center; margin:0 auto 10px; overflow:hidden; box-shadow: 0 8px 20px rgba(229,9,20,0.2);" id="modalAvatarPreviewBox">
-                ${avatarPreviewHTML}
+    if (modalMainContent) {
+        modalMainContent.innerHTML = `
+            <div style="text-align:center; margin-bottom:18px;">
+                <div style="width:80px; height:80px; border-radius:50%; background:#fee2e2; border:3px solid #E50914; color:#E50914; font-size:24px; font-weight:800; display:flex; align-items:center; justify-content:center; margin:0 auto 10px; overflow:hidden; box-shadow: 0 8px 20px rgba(229,9,20,0.2);" id="modalAvatarPreviewBox">
+                    ${avatarPreviewHTML}
+                </div>
+                <h3 style="font-size:16px; color:#0f172a; font-weight:800;">${userProfile.name}</h3>
+                <p style="font-size:12px; color:#64748b; margin-top:2px;">Member Aktif • CikurGo Core v3.9</p>
             </div>
-            <h3 style="font-size:16px; color:#0f172a; font-weight:800;">${userProfile.name}</h3>
-            <p style="font-size:12px; color:#64748b; margin-top:2px;">Member Aktif • CikurGo Core v3.9</p>
-        </div>
-        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:20px; padding:16px; margin-bottom:16px;">
-            <div class="form-group">
-                <label>Ganti Foto Profil</label>
-                <input type="file" id="inputFotoProfil" accept="image/*" class="input-box" style="font-size:11px; padding:8px; background:#fff;">
+            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:20px; padding:16px; margin-bottom:16px;">
+                <div class="form-group">
+                    <label>Ganti Foto Profil</label>
+                    <input type="file" id="inputFotoProfil" accept="image/*" class="input-box" style="font-size:11px; padding:8px; background:#fff;">
+                </div>
+                <div class="form-group">
+                    <label>Nama Lengkap</label>
+                    <input type="text" id="inputNamaUser" class="input-box" value="${userProfile.name}">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Nomor WhatsApp / HP</label>
+                    <input type="text" id="inputPhoneUser" class="input-box" value="${userProfile.phone}">
+                </div>
             </div>
-            <div class="form-group">
-                <label>Nama Lengkap</label>
-                <input type="text" id="inputNamaUser" class="input-box" value="${userProfile.name}">
-            </div>
-            <div class="form-group" style="margin-bottom:0;">
-                <label>Nomor WhatsApp / HP</label>
-                <input type="text" id="inputPhoneUser" class="input-box" value="${userProfile.phone}">
-            </div>
-        </div>
-        <button class="btn-pesan-form" id="btnSimpanProfil">Simpan Perubahan ✓</button>
-    `;
+            <button class="btn-pesan-form" id="btnSimpanProfil">Simpan Perubahan ✓</button>
+        `;
+    }
 
     let temporaryAvatar = userProfile.avatar;
-    document.getElementById("inputFotoProfil").addEventListener("change", function(e) {
-        let file = e.target.files[0];
-        if(file) {
-            let reader = new FileReader();
-            reader.onload = function(uploadEvent) {
-                temporaryAvatar = uploadEvent.target.result;
-                document.getElementById("modalAvatarPreviewBox").innerHTML = `<img src="${temporaryAvatar}" style="width:100%; height:100%; object-fit:cover;">`;
-            };
-            reader.readAsDataURL(file);
-        }
-    });
+    const inputFotoEl = document.getElementById("inputFotoProfil");
+    if (inputFotoEl) {
+        inputFotoEl.addEventListener("change", function(e) {
+            let file = e.target.files[0];
+            if(file) {
+                let reader = new FileReader();
+                reader.onload = function(uploadEvent) {
+                    temporaryAvatar = uploadEvent.target.result;
+                    const previewBox = document.getElementById("modalAvatarPreviewBox");
+                    if (previewBox) previewBox.innerHTML = `<img src="${temporaryAvatar}" style="width:100%; height:100%; object-fit:cover;">`;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
 
-    document.getElementById("btnSimpanProfil").addEventListener("click", () => {
-        let newName = document.getElementById("inputNamaUser").value.trim();
-        let newPhone = document.getElementById("inputPhoneUser").value.trim();
-        if(!newName || !newPhone) {
-            alert("[!] Nama dan No HP tidak boleh kosong.");
-            return;
-        }
-        userProfile.name = newName;
-        userProfile.phone = newPhone;
-        userProfile.avatar = temporaryAvatar;
-        localStorage.setItem('cikur_user', JSON.stringify(userProfile));
-        updateUIProfile();
-        alert("[SUKSES] Profil dan foto berhasil diperbarui!");
-        assistantScreen.style.display = "none";
-    });
+    const btnSimpanProfilEl = document.getElementById("btnSimpanProfil");
+    if (btnSimpanProfilEl) {
+        btnSimpanProfilEl.addEventListener("click", () => {
+            let newName = document.getElementById("inputNamaUser").value.trim();
+            let newPhone = document.getElementById("inputPhoneUser").value.trim();
+            if(!newName || !newPhone) {
+                alert("[!] Nama dan No HP tidak boleh kosong.");
+                return;
+            }
+            userProfile.name = newName;
+            userProfile.phone = newPhone;
+            userProfile.avatar = temporaryAvatar;
+            localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+            updateUIProfile();
+            alert("[SUKSES] Profil dan foto berhasil diperbarui!");
+            if (assistantScreen) assistantScreen.style.display = "none";
+        });
+    }
 }
 
 function bukaModalTopUp() {
     openModal("DOMPET CIKURPAY & TOP-UP");
-    modalMainContent.innerHTML = `
-        <div style="background:linear-gradient(135deg, #0b0f19, #151c2e); border-radius:20px; padding:20px; color:#fff; text-align:center; margin-bottom:18px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); border:1px solid rgba(229,9,20,0.3);">
-            <p style="font-size:11px; color:#94a3b8; text-transform:uppercase; font-weight:700;">Saldo Aktif CikurPay</p>
-            <h2 style="font-size:28px; font-weight:800; color:#FFD700; font-family:'JetBrains Mono', monospace; margin:6px 0;">Rp ${userProfile.saldo.toLocaleString('id-ID')}</h2>
-            <p style="font-size:11px; color:#34d399; font-weight:600;">[Siap Integrasi DANA, GoPay, QRIS & Bank]</p>
-        </div>
-        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:20px; padding:16px;">
-            <p style="font-size:12px; font-weight:700; color:#0f172a; margin-bottom:10px;">Pilih Nominal Top-Up</p>
-            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-bottom:12px;">
-                <button class="pay-method-option topup-gateway-btn active" data-val="50000">Rp 50rb</button>
-                <button class="pay-method-option topup-gateway-btn" data-val="100000">Rp 100rb</button>
-                <button class="pay-method-option topup-gateway-btn" data-val="200000">Rp 200rb</button>
+    if (modalMainContent) {
+        modalMainContent.innerHTML = `
+            <div style="background:linear-gradient(135deg, #0b0f19, #151c2e); border-radius:20px; padding:20px; color:#fff; text-align:center; margin-bottom:18px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); border:1px solid rgba(229,9,20,0.3);">
+                <p style="font-size:11px; color:#94a3b8; text-transform:uppercase; font-weight:700;">Saldo Aktif CikurPay</p>
+                <h2 style="font-size:28px; font-weight:800; color:#FFD700; font-family:'JetBrains Mono', monospace; margin:6px 0;">Rp ${userProfile.saldo.toLocaleString('id-ID')}</h2>
+                <p style="font-size:11px; color:#34d399; font-weight:600;">[Siap Integrasi DANA, GoPay, QRIS & Bank]</p>
             </div>
-            <div class="form-group" style="margin-top:10px;">
-                <label>Atau Masukkan Nominal Lain (Rp)</label>
-                <input type="number" id="customTopupVal" class="input-box" placeholder="Contoh: 150000">
+            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:20px; padding:16px;">
+                <p style="font-size:12px; font-weight:700; color:#0f172a; margin-bottom:10px;">Pilih Nominal Top-Up</p>
+                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-bottom:12px;">
+                    <button class="pay-method-option topup-gateway-btn active" data-val="50000">Rp 50rb</button>
+                    <button class="pay-method-option topup-gateway-btn" data-val="100000">Rp 100rb</button>
+                    <button class="pay-method-option topup-gateway-btn" data-val="200000">Rp 200rb</button>
+                </div>
+                <div class="form-group" style="margin-top:10px;">
+                    <label>Atau Masukkan Nominal Lain (Rp)</label>
+                    <input type="number" id="customTopupVal" class="input-box" placeholder="Contoh: 150000">
+                </div>
+                <button class="btn-pesan-form" id="btnProsesGateway" style="background:#E50914; margin-top:6px;">Top-Up via DANA / QRIS / Bank ⚡</button>
             </div>
-            <button class="btn-pesan-form" id="btnProsesGateway" style="background:#E50914; margin-top:6px;">Top-Up via DANA / QRIS / Bank ⚡</button>
-        </div>
-    `;
+        `;
+    }
 
     let selectedTopupAmount = 50000;
     document.querySelectorAll(".topup-gateway-btn").forEach(btn => {
@@ -1716,27 +1727,32 @@ function bukaModalTopUp() {
             document.querySelectorAll(".topup-gateway-btn").forEach(b => b.classList.remove("active"));
             this.classList.add("active");
             selectedTopupAmount = parseInt(this.getAttribute("data-val"));
-            document.getElementById("customTopupVal").value = "";
+            const customInput = document.getElementById("customTopupVal");
+            if (customInput) customInput.value = "";
         });
     });
 
-    document.getElementById("btnProsesGateway").addEventListener("click", () => {
-        let customVal = document.getElementById("customTopupVal").value;
-        let finalAmount = customVal ? parseInt(customVal) : selectedTopupAmount;
+    const btnProsesGatewayEl = document.getElementById("btnProsesGateway");
+    if (btnProsesGatewayEl) {
+        btnProsesGatewayEl.addEventListener("click", () => {
+            const customValEl = document.getElementById("customTopupVal");
+            let customVal = customValEl ? customValEl.value : "";
+            let finalAmount = customVal ? parseInt(customVal) : selectedTopupAmount;
 
-        if(!finalAmount || finalAmount < 10000) {
-            alert("[!] Minimum top-up adalah Rp 10.000");
-            return;
-        }
+            if(!finalAmount || finalAmount < 10000) {
+                alert("[!] Minimum top-up adalah Rp 10.000");
+                return;
+            }
 
-        setTimeout(() => {
-            userProfile.saldo += finalAmount;
-            localStorage.setItem('cikur_user', JSON.stringify(userProfile));
-            updateUIProfile();
-            alert(`[SUKSES] Top-up sebesar Rp ${finalAmount.toLocaleString('id-ID')} berhasil masuk ke CikurPay!`);
-            assistantScreen.style.display = "none";
-        }, 800);
-    });
+            setTimeout(() => {
+                userProfile.saldo += finalAmount;
+                localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+                updateUIProfile();
+                alert(`[SUKSES] Top-up sebesar Rp ${finalAmount.toLocaleString('id-ID')} berhasil masuk ke CikurPay!`);
+                if (assistantScreen) assistantScreen.style.display = "none";
+            }, 800);
+        });
+    }
 }
 
 const btnAssistant = document.getElementById("btnAssistant");
@@ -1744,238 +1760,240 @@ if(btnAssistant) {
     btnAssistant.addEventListener("click", function(e){
         e.preventDefault();
         openModal("CIKUR GO ASSISTANT");
-        modalMainContent.innerHTML = `
-            <style>
-                .assistant-form-container {
-                    background: #ffffff;
-                    border: 1px solid var(--border-color);
-                    border-radius: 24px;
-                    padding: 18px;
-                    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.04);
-                    margin-top: 4px;
-                }
-                .service-type-grid {
-                    display: grid;
-                    grid-template-columns: repeat(3, 1fr);
-                    gap: 10px;
-                    margin-bottom: 16px;
-                }
-                .service-card-option{
-                    background:#f8fafc;
-                    border:2px solid var(--border-color);
-                    border-radius:20px;
-                    height:120px;
-                    display:flex;
-                    flex-direction:column;
-                    justify-content:center;
-                    align-items:center;
-                    gap:8px;
-                    cursor:pointer;
-                    transition:.25s;
-                    overflow:hidden;
-                }
-                .service-card-option:hover {
-                    border-color: var(--primary-red);
-                    background: #fff5f5;
-                }
-                .service-card-option.active {
-                    border-color: var(--primary-red);
-                    background: #fff5f5;
-                    box-shadow: 0 6px 15px rgba(229, 9, 20, 0.15);
-                }
-                .service-card-option img{
-                    width:56px;
-                    height:56px;
-                    object-fit:contain;
-                    display:block;
-                    margin:0 auto;
-                }
-                .service-card-option .title{
-                    font-size:11px;
-                    font-weight:800;
-                    color:var(--text-main);
-                    text-transform:uppercase;
-                    line-height:1;
-                }
-                .form-section-title {
-                    font-size: 12px;
-                    font-weight: 800;
-                    color: var(--text-main);
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                    margin-bottom: 10px;
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                }
-                .form-section-title::before {
-                    content: '';
-                    display: inline-block;
-                    width: 4px;
-                    height: 12px;
-                    background: var(--primary-red);
-                    border-radius: 2px;
-                }
-                .modern-form-group {
-                    margin-bottom: 14px;
-                }
-                .modern-form-group label {
-                    display: block;
-                    font-size: 11px;
-                    font-weight: 700;
-                    color: var(--text-muted);
-                    margin-bottom: 6px;
-                    text-transform: uppercase;
-                }
-                .modern-input {
-                    width: 100%;
-                    padding: 12px;
-                    background: #f8fafc;
-                    border: 1px solid #cbd5e1;
-                    border-radius: 12px;
-                    font-size: 13px;
-                    font-weight: 600;
-                    color: var(--text-main);
-                    outline: none;
-                    transition: all 0.2s ease;
-                    box-sizing: border-box;
-                }
-                .modern-input:focus {
-                    background: #ffffff;
-                    border-color: var(--primary-red);
-                    box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.1);
-                }
-                .modern-input-layanan {
-                    width: 100%;
-                    padding: 12px;
-                    background: #fff5f5;
-                    border: 1px solid rgba(229, 9, 20, 0.3);
-                    border-radius: 12px;
-                    font-size: 13px;
-                    font-weight: 800;
-                    color: var(--primary-red);
-                    text-align: center;
-                    font-family: var(--font-mono);
-                    box-sizing: border-box;
-                }
-                .modern-row {
-                    display: flex;
-                    gap: 10px;
-                }
-                .modern-col {
-                    flex: 1;
-                }
-                .modern-textarea {
-                    resize: none;
-                    height: 64px;
-                }
-                .modern-total-box {
-                    background: linear-gradient(135deg, var(--dark-bg), var(--dark-card));
-                    color: #fff;
-                    padding: 14px 16px;
-                    border-radius: 14px;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin: 16px 0 12px 0;
-                    box-shadow: 0 8px 20px rgba(11, 15, 25, 0.2);
-                }
-                .modern-total-label {
-                    font-size: 11px;
-                    font-weight: 700;
-                    color: #94a3b8;
-                    text-transform: uppercase;
-                }
-                .modern-total-value {
-                    font-size: 16px;
-                    font-weight: 800;
-                    color: #FFD700;
-                    font-family: var(--font-mono);
-                }
-            </style>
+        if (modalMainContent) {
+            modalMainContent.innerHTML = `
+                <style>
+                    .assistant-form-container {
+                        background: #ffffff;
+                        border: 1px solid var(--border-color);
+                        border-radius: 24px;
+                        padding: 18px;
+                        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.04);
+                        margin-top: 4px;
+                    }
+                    .service-type-grid {
+                        display: grid;
+                        grid-template-columns: repeat(3, 1fr);
+                        gap: 10px;
+                        margin-bottom: 16px;
+                    }
+                    .service-card-option{
+                        background:#f8fafc;
+                        border:2px solid var(--border-color);
+                        border-radius:20px;
+                        height:120px;
+                        display:flex;
+                        flex-direction:column;
+                        justify-content:center;
+                        align-items:center;
+                        gap:8px;
+                        cursor:pointer;
+                        transition:.25s;
+                        overflow:hidden;
+                    }
+                    .service-card-option:hover {
+                        border-color: var(--primary-red);
+                        background: #fff5f5;
+                    }
+                    .service-card-option.active {
+                        border-color: var(--primary-red);
+                        background: #fff5f5;
+                        box-shadow: 0 6px 15px rgba(229, 9, 20, 0.15);
+                    }
+                    .service-card-option img{
+                        width:56px;
+                        height:56px;
+                        object-fit:contain;
+                        display:block;
+                        margin:0 auto;
+                    }
+                    .service-card-option .title{
+                        font-size:11px;
+                        font-weight:800;
+                        color:var(--text-main);
+                        text-transform:uppercase;
+                        line-height:1;
+                    }
+                    .form-section-title {
+                        font-size: 12px;
+                        font-weight: 800;
+                        color: var(--text-main);
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                        margin-bottom: 10px;
+                        display: flex;
+                        align-items: center;
+                        gap: 6px;
+                    }
+                    .form-section-title::before {
+                        content: '';
+                        display: inline-block;
+                        width: 4px;
+                        height: 12px;
+                        background: var(--primary-red);
+                        border-radius: 2px;
+                    }
+                    .modern-form-group {
+                        margin-bottom: 14px;
+                    }
+                    .modern-form-group label {
+                        display: block;
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: var(--text-muted);
+                        margin-bottom: 6px;
+                        text-transform: uppercase;
+                    }
+                    .modern-input {
+                        width: 100%;
+                        padding: 12px;
+                        background: #f8fafc;
+                        border: 1px solid #cbd5e1;
+                        border-radius: 12px;
+                        font-size: 13px;
+                        font-weight: 600;
+                        color: var(--text-main);
+                        outline: none;
+                        transition: all 0.2s ease;
+                        box-sizing: border-box;
+                    }
+                    .modern-input:focus {
+                        background: #ffffff;
+                        border-color: var(--primary-red);
+                        box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.1);
+                    }
+                    .modern-input-layanan {
+                        width: 100%;
+                        padding: 12px;
+                        background: #fff5f5;
+                        border: 1px solid rgba(229, 9, 20, 0.3);
+                        border-radius: 12px;
+                        font-size: 13px;
+                        font-weight: 800;
+                        color: var(--primary-red);
+                        text-align: center;
+                        font-family: var(--font-mono);
+                        box-sizing: border-box;
+                    }
+                    .modern-row {
+                        display: flex;
+                        gap: 10px;
+                    }
+                    .modern-col {
+                        flex: 1;
+                    }
+                    .modern-textarea {
+                        resize: none;
+                        height: 64px;
+                    }
+                    .modern-total-box {
+                        background: linear-gradient(135deg, var(--dark-bg), var(--dark-card));
+                        color: #fff;
+                        padding: 14px 16px;
+                        border-radius: 14px;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin: 16px 0 12px 0;
+                        box-shadow: 0 8px 20px rgba(11, 15, 25, 0.2);
+                    }
+                    .modern-total-label {
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: #94a3b8;
+                        text-transform: uppercase;
+                    }
+                    .modern-total-value {
+                        font-size: 16px;
+                        font-weight: 800;
+                        color: #FFD700;
+                        font-family: var(--font-mono);
+                    }
+                </style>
 
-            <div class="assistant-form-container">
-                <div class="form-section-title">Pilih Kategori Layanan</div>
-                <div class="service-type-grid">
-                    <div class="service-card-option active" id="btnOptDine" onclick="selectServiceCategory('dine')">
-                        <img src="icon-dine-in.png" alt="Dine-In">
-                        <span class="title">Dine-In</span>
+                <div class="assistant-form-container">
+                    <div class="form-section-title">Pilih Kategori Layanan</div>
+                    <div class="service-type-grid">
+                        <div class="service-card-option active" id="btnOptDine" onclick="selectServiceCategory('dine')">
+                            <img src="icon-dine-in.png" alt="Dine-In">
+                            <span class="title">Dine-In</span>
+                        </div>
+                        <div class="service-card-option" id="btnOptVip" onclick="selectServiceCategory('vip')">
+                            <img src="icon-vip.png" alt="VIP">
+                            <span class="title">VIP</span>
+                        </div>
+                        <div class="service-card-option" id="btnOptPrivate" onclick="selectServiceCategory('private')">
+                            <img src="icon-private.png" alt="Private">
+                            <span class="title">Private</span>
+                        </div>
                     </div>
-                    <div class="service-card-option" id="btnOptVip" onclick="selectServiceCategory('vip')">
-                        <img src="icon-vip.png" alt="VIP">
-                        <span class="title">VIP</span>
+
+                    <div style="display:flex; gap:8px; margin-bottom: 14px; flex-wrap: wrap;">
+                        <div class="paket-badge">👤 <span id="infoPersonil">1 Personil</span></div>
+                        <div class="paket-badge">⏱️ <span id="infoDurasi">Hingga 30 Menit</span></div>
+                        <div class="paket-badge">⭐ <span id="infoPrioritas">Aktivitas Ringan</span></div>
+                        <div class="paket-badge">📍 <span>Pandeglang & Sekitarnya</span></div>
                     </div>
-                    <div class="service-card-option" id="btnOptPrivate" onclick="selectServiceCategory('private')">
-                        <img src="icon-private.png" alt="Private">
-                        <span class="title">Private</span>
+
+                    <div class="form-section-title">Informasi & Jadwal</div>
+
+                    <div class="modern-form-group">
+                        <label>Layanan Terpilih</label>
+                        <div class="modern-input-layanan" id="displayNamaLayanan">DINE-IN ASSISTANT</div>
                     </div>
-                </div>
 
-                <div style="display:flex; gap:8px; margin-bottom: 14px; flex-wrap: wrap;">
-                    <div class="paket-badge">👤 <span id="infoPersonil">1 Personil</span></div>
-                    <div class="paket-badge">⏱️ <span id="infoDurasi">Hingga 30 Menit</span></div>
-                    <div class="paket-badge">⭐ <span id="infoPrioritas">Aktivitas Ringan</span></div>
-                    <div class="paket-badge">📍 <span>Pandeglang & Sekitarnya</span></div>
-                </div>
-
-                <div class="form-section-title">Informasi & Jadwal</div>
-
-                <div class="modern-form-group">
-                    <label>Layanan Terpilih</label>
-                    <div class="modern-input-layanan" id="displayNamaLayanan">DINE-IN ASSISTANT</div>
-                </div>
-
-                <div class="modern-row modern-form-group">
-                    <div class="modern-col">
-                        <label>Pemesan</label>
-                        <input type="text" class="modern-input" value="${userProfile.name}" disabled style="background:#f1f5f9; color:#64748b;">
+                    <div class="modern-row modern-form-group">
+                        <div class="modern-col">
+                            <label>Pemesan</label>
+                            <input type="text" class="modern-input" value="${userProfile.name}" disabled style="background:#f1f5f9; color:#64748b;">
+                        </div>
+                        <div class="modern-col">
+                            <label>No. WhatsApp</label>
+                            <input type="text" class="modern-input" value="${userProfile.phone}" disabled style="background:#f1f5f9; color:#64748b;">
+                        </div>
                     </div>
-                    <div class="modern-col">
-                        <label>No. WhatsApp</label>
-                        <input type="text" class="modern-input" value="${userProfile.phone}" disabled style="background:#f1f5f9; color:#64748b;">
+
+                    <div class="modern-form-group">
+                        <label>Jadwal Tanggal</label>
+                        <input type="date" class="modern-input" id="inputTanggal">
                     </div>
-                </div>
 
-                <div class="modern-form-group">
-                    <label>Jadwal Tanggal</label>
-                    <input type="date" class="modern-input" id="inputTanggal">
-                </div>
+                    <div class="modern-form-group">
+                        <label>Extra Waktu (1 Tambahan = 30 Menit = Rp 25.000)</label>
+                        <select class="modern-input" id="selectExtraWaktu" style="cursor: pointer;">
+                            <option value="0">Tanpa Tambahan Waktu (0) - Rp 0</option>
+                            <option value="1">Tambah 1 (30 Menit) - +Rp 25.000</option>
+                            <option value="2">Tambah 2 (60 Menit) - +Rp 50.000</option>
+                            <option value="3">Tambah 3 (90 Menit) - +Rp 75.000</option>
+                        </select>
+                    </div>
 
-                <div class="modern-form-group">
-                    <label>Extra Waktu (1 Tambahan = 30 Menit = Rp 25.000)</label>
-                    <select class="modern-input" id="selectExtraWaktu" style="cursor: pointer;">
-                        <option value="0">Tanpa Tambahan Waktu (0) - Rp 0</option>
-                        <option value="1">Tambah 1 (30 Menit) - +Rp 25.000</option>
-                        <option value="2">Tambah 2 (60 Menit) - +Rp 50.000</option>
-                        <option value="3">Tambah 3 (90 Menit) - +Rp 75.000</option>
-                    </select>
-                </div>
+                    <div class="form-section-title" style="margin-top: 16px;">Lokasi & Catatan</div>
 
-                <div class="form-section-title" style="margin-top: 16px;">Lokasi & Catatan</div>
+                    <div class="modern-form-group">
+                        <label>Lokasi / Alamat Lengkap</label>
+                        <textarea class="modern-input modern-textarea" id="inputLokasi" placeholder="Masukkan nama tempat, gedung, atau alamat tujuan..."></textarea>
+                    </div>
 
-                <div class="modern-form-group">
-                    <label>Lokasi / Alamat Lengkap</label>
-                    <textarea class="modern-input modern-textarea" id="inputLokasi" placeholder="Masukkan nama tempat, gedung, atau alamat tujuan..."></textarea>
-                </div>
+                    <div class="modern-form-group">
+                        <label>Catatan Khusus (Opsional)</label>
+                        <textarea class="modern-input modern-textarea" id="inputCatatanRequest" placeholder="Instruksi khusus untuk asisten..."></textarea>
+                    </div>
 
-                <div class="modern-form-group">
-                    <label>Catatan Khusus (Opsional)</label>
-                    <textarea class="modern-input modern-textarea" id="inputCatatanRequest" placeholder="Instruksi khusus untuk asisten..."></textarea>
-                </div>
+                    <div class="rincian-bill" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:12px 14px; margin-top:14px;">
+                        <div class="rincian-row"><span>Harga Dasar Layanan</span><span id="txtBasePrice">Rp 25.000</span></div>
+                        <div class="rincian-row"><span>Biaya Extra Waktu</span><span id="txtExtraPrice">Rp 0</span></div>
+                    </div>
 
-                <div class="rincian-bill" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:12px 14px; margin-top:14px;">
-                    <div class="rincian-row"><span>Harga Dasar Layanan</span><span id="txtBasePrice">Rp 25.000</span></div>
-                    <div class="rincian-row"><span>Biaya Extra Waktu</span><span id="txtExtraPrice">Rp 0</span></div>
+                    <div class="modern-total-box">
+                        <span class="modern-total-label">Total Tagihan :</span>
+                        <span class="modern-total-value" id="txtTotalFinal">Rp 25.000</span>
+                    </div>
+                    
+                    <button class="btn-pesan-form" id="btnRequestDeal" style="background: var(--dark-bg); margin-top: 4px;">Kirim Detail & Minta DEAL 🤝</button>
                 </div>
-
-                <div class="modern-total-box">
-                    <span class="modern-total-label">Total Tagihan :</span>
-                    <span class="modern-total-value" id="txtTotalFinal">Rp 25.000</span>
-                </div>
-                
-                <button class="btn-pesan-form" id="btnRequestDeal" style="background: var(--dark-bg); margin-top: 4px;">Kirim Detail & Minta DEAL 🤝</button>
-            </div>
-        `;
+            `;
+        }
 
         const dataPaket = {
             dine: { nama: "DINE-IN ASSISTANT", hargaBase: 25000, hargaStr: "Rp 25.000", personil: "1 Personil", durasi: "Hingga 30 Menit", prioritas: "Aktivitas Ringan" },
@@ -1991,90 +2009,116 @@ if(btnAssistant) {
             currentActivePaketKey = paketKey;
             let info = dataPaket[paketKey];
 
-            document.getElementById('btnOptDine').classList.remove('active');
-            document.getElementById('btnOptVip').classList.remove('active');
-            document.getElementById('btnOptPrivate').classList.remove('active');
+            const btnOptDine = document.getElementById('btnOptDine');
+            const btnOptVip = document.getElementById('btnOptVip');
+            const btnOptPrivate = document.getElementById('btnOptPrivate');
 
-            if(paketKey === 'dine') document.getElementById('btnOptDine').classList.add('active');
-            if(paketKey === 'vip') document.getElementById('btnOptVip').classList.add('active');
-            if(paketKey === 'private') document.getElementById('btnOptPrivate').classList.add('active');
+            if(btnOptDine) btnOptDine.classList.remove('active');
+            if(btnOptVip) btnOptVip.classList.remove('active');
+            if(btnOptPrivate) btnOptPrivate.classList.remove('active');
 
-            document.getElementById('displayNamaLayanan').innerText = info.nama;
-            document.getElementById('infoPersonil').innerText = info.personil;
-            document.getElementById('infoDurasi').innerText = info.durasi;
-            document.getElementById('infoPrioritas').innerText = info.prioritas;
-            document.getElementById('txtBasePrice').innerText = info.hargaStr;
+            if(paketKey === 'dine' && btnOptDine) btnOptDine.classList.add('active');
+            if(paketKey === 'vip' && btnOptVip) btnOptVip.classList.add('active');
+            if(paketKey === 'private' && btnOptPrivate) btnOptPrivate.classList.add('active');
+
+            const dispNamaLayanan = document.getElementById('displayNamaLayanan');
+            const infoPersonil = document.getElementById('infoPersonil');
+            const infoDurasi = document.getElementById('infoDurasi');
+            const infoPrioritas = document.getElementById('infoPrioritas');
+            const txtBasePrice = document.getElementById('txtBasePrice');
+
+            if (dispNamaLayanan) dispNamaLayanan.innerText = info.nama;
+            if (infoPersonil) infoPersonil.innerText = info.personil;
+            if (infoDurasi) infoDurasi.innerText = info.durasi;
+            if (infoPrioritas) infoPrioritas.innerText = info.prioritas;
+            if (txtBasePrice) txtBasePrice.innerText = info.hargaStr;
 
             recalculateTotalForm();
         };
 
         const selectExtraWaktuEl = document.getElementById("selectExtraWaktu");
-        selectExtraWaktuEl.addEventListener("change", function() {
-            extraUnitsCount = parseInt(this.value);
-            currentExtraCost = extraUnitsCount * 25000;
-            recalculateTotalForm();
-        });
+        if(selectExtraWaktuEl) {
+            selectExtraWaktuEl.addEventListener("change", function() {
+                extraUnitsCount = parseInt(this.value);
+                currentExtraCost = extraUnitsCount * 25000;
+                recalculateTotalForm();
+            });
+        }
 
         function recalculateTotalForm() {
             let info = dataPaket[currentActivePaketKey];
             let grandTotal = info.hargaBase + currentExtraCost;
-            document.getElementById("txtExtraPrice").innerText = "Rp " + currentExtraCost.toLocaleString('id-ID');
-            document.getElementById("txtTotalFinal").innerText = "Rp " + grandTotal.toLocaleString('id-ID');
+            const txtExtraPrice = document.getElementById("txtExtraPrice");
+            const txtTotalFinal = document.getElementById("txtTotalFinal");
+            if (txtExtraPrice) txtExtraPrice.innerText = "Rp " + currentExtraCost.toLocaleString('id-ID');
+            if (txtTotalFinal) txtTotalFinal.innerText = "Rp " + grandTotal.toLocaleString('id-ID');
         }
 
-        document.getElementById("btnRequestDeal").addEventListener("click", () => {
-            let info = dataPaket[currentActivePaketKey];
-            const tanggal = document.getElementById("inputTanggal").value;
-            const lokasi = document.getElementById("inputLokasi").value;
-            let finalCalculatedTotal = info.hargaBase + currentExtraCost;
+        const btnRequestDealEl = document.getElementById("btnRequestDeal");
+        if (btnRequestDealEl) {
+            btnRequestDealEl.addEventListener("click", () => {
+                let info = dataPaket[currentActivePaketKey];
+                const tanggalEl = document.getElementById("inputTanggal");
+                const lokasiEl = document.getElementById("inputLokasi");
+                const tanggal = tanggalEl ? tanggalEl.value : "";
+                const lokasi = lokasiEl ? lokasiEl.value : "";
+                let finalCalculatedTotal = info.hargaBase + currentExtraCost;
 
-            if (!tanggal || !lokasi) {
-                alert("[!] Mohon lengkapi Tanggal dan Lokasi.");
-                return;
-            }
+                if (!tanggal || !lokasi) {
+                    alert("[!] Mohon lengkapi Tanggal dan Lokasi.");
+                    return;
+                }
 
-            const dynamicPaketContent = document.getElementById("modalMainContent");
-            dynamicPaketContent.innerHTML = `
-                <div style="text-align:center; padding: 24px 10px;">
-                    <div style="font-size: 40px; margin-bottom: 12px;">⏳</div>
-                    <h3 style="font-size: 15px; font-weight: 800; color: var(--text-main); margin-bottom: 6px;">Menunggu Kesepakatan (DEAL)</h3>
-                    <p style="font-size: 11px; color: var(--text-muted); line-height: 1.5; margin-bottom: 18px;">
-                        Detail pesanan Anda telah dikirimkan ke tim/asisten CGO. Tombol pembayaran akan aktif setelah status dinyatakan <strong>DEAL</strong>[cite: 1].
-                    </p>
-                    <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: 16px; padding: 16px; margin-bottom: 18px; text-align: left;">
-                        <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
-                        <div class="invoice-row"><span>Total Biaya</span><span style="color:var(--primary-red);">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span></div>
-                    </div>
-                    <button class="btn-pesan-form" id="btnSimulasiDeal" style="background: #16a34a;">[Simulasi] Asisten Menyatakan DEAL ✓</button>
-                </div>
-            `;
+                const dynamicPaketContent = document.getElementById("modalMainContent");
+                if (dynamicPaketContent) {
+                    dynamicPaketContent.innerHTML = `
+                        <div style="text-align:center; padding: 24px 10px;">
+                            <div style="font-size: 40px; margin-bottom: 12px;">⏳</div>
+                            <h3 style="font-size: 15px; font-weight: 800; color: var(--text-main); margin-bottom: 6px;">Menunggu Kesepakatan (DEAL)</h3>
+                            <p style="font-size: 11px; color: var(--text-muted); line-height: 1.5; margin-bottom: 18px;">
+                                Detail pesanan Anda telah dikirimkan ke tim/asisten CGO. Tombol pembayaran akan aktif setelah status dinyatakan <strong>DEAL</strong>[cite: 1].
+                            </p>
+                            <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: 16px; padding: 16px; margin-bottom: 18px; text-align: left;">
+                                <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
+                                <div class="invoice-row"><span>Total Biaya</span><span style="color:var(--primary-red);">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span></div>
+                            </div>
+                            <button class="btn-pesan-form" id="btnSimulasiDeal" style="background: #16a34a;">[Simulasi] Asisten Menyatakan DEAL ✓</button>
+                        </div>
+                    `;
+                }
 
-            document.getElementById("btnSimulasiDeal").addEventListener("click", () => {
-                tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount);
+                const btnSimulasiDealEl = document.getElementById("btnSimulasiDeal");
+                if (btnSimulasiDealEl) {
+                    btnSimulasiDealEl.addEventListener("click", () => {
+                        tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount);
+                    });
+                }
             });
-        });
+        }
 
         function tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount) {
             const dynamicPaketContent = document.getElementById("modalMainContent");
-            dynamicPaketContent.innerHTML = `
-                <div style="background: #dcfce7; border: 1px solid #bbf7d0; border-radius: 14px; padding: 10px 14px; text-align: center; margin-bottom: 16px;">
-                    <span style="font-size: 11px; font-weight: 800; color: #16a34a;">🎉 Status: DEAL! Silakan Lakukan Pembayaran.</span>
-                </div>
-                <h3 class="paket-title" style="margin-bottom:12px;">Metode Pembayaran</h3>
-                <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:20px; padding:16px; margin-bottom:14px;">
-                    <div style="display:flex; gap:8px; margin-bottom:16px;">
-                        <button class="pay-method-option active" data-method="cikurpay">CikurPay</button>
-                        <button class="pay-method-option" data-method="qris">QRIS</button>
-                        <button class="pay-method-option" data-method="tunai">Tunai</button>
+            if (dynamicPaketContent) {
+                dynamicPaketContent.innerHTML = `
+                    <div style="background: #dcfce7; border: 1px solid #bbf7d0; border-radius: 14px; padding: 10px 14px; text-align: center; margin-bottom: 16px;">
+                        <span style="font-size: 11px; font-weight: 800; color: #16a34a;">🎉 Status: DEAL! Silakan Lakukan Pembayaran.</span>
                     </div>
+                    <h3 class="paket-title" style="margin-bottom:12px;">Metode Pembayaran</h3>
+                    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:20px; padding:16px; margin-bottom:14px;">
+                        <div style="display:flex; gap:8px; margin-bottom:16px;">
+                            <button class="pay-method-option active" data-method="cikurpay">CikurPay</button>
+                            <button class="pay-method-option" data-method="qris">QRIS</button>
+                            <button class="pay-method-option" data-method="tunai">Tunai</button>
+                        </div>
 
-                    <div id="paymentDetailsContainer">
-                        <div style="font-size:12px; color:#64748b; margin-bottom:8px;">Saldo CikurPay: <strong style="color:#0f172a;">Rp ${userProfile.saldo.toLocaleString('id-ID')}</strong></div>
-                        <div style="font-size:12px; color:#0f172a; font-weight:700; margin-bottom:14px;">Total Tagihan: Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</div>
-                        <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:var(--dark-bg);">Bayar dengan CikurPay ⚡</button>
+                        <div id="paymentDetailsContainer">
+                            <div style="font-size:12px; color:#64748b; margin-bottom:8px;">Saldo CikurPay: <strong style="color:#0f172a;">Rp ${userProfile.saldo.toLocaleString('id-ID')}</strong></div>
+                            <div style="font-size:12px; color:#0f172a; font-weight:700; margin-bottom:14px;">Total Tagihan: Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</div>
+                            <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:var(--dark-bg);">Bayar dengan CikurPay ⚡</button>
+                        </div>
                     </div>
-                </div>
-            `;
+                `;
+            }
 
             let selectedPaymentMethod = "cikurpay";
             const methodButtons = document.querySelectorAll(".pay-method-option");
@@ -2085,6 +2129,8 @@ if(btnAssistant) {
                     methodButtons.forEach(b => b.classList.remove("active"));
                     this.classList.add("active");
                     selectedPaymentMethod = this.getAttribute("data-method");
+
+                    if(!paymentDetailsContainer) return;
 
                     if(selectedPaymentMethod === "cikurpay") {
                         paymentDetailsContainer.innerHTML = `
@@ -2113,7 +2159,10 @@ if(btnAssistant) {
             });
             
             function bindBayarAction() {
-                document.getElementById("btnEksekusiBayar").addEventListener("click", () => {
+                const btnEksekusiEl = document.getElementById("btnEksekusiBayar");
+                if(!btnEksekusiEl) return;
+
+                btnEksekusiEl.addEventListener("click", () => {
                     if(selectedPaymentMethod === "cikurpay") {
                         if (userProfile.saldo < finalCalculatedTotal) {
                             alert("[!] Saldo CikurPay kurang. Silakan lakukan Top-Up terlebih dahulu.");
@@ -2130,42 +2179,53 @@ if(btnAssistant) {
                     let options = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
                     let timestampStr = now.toLocaleDateString('id-ID', options) + " WIB";
 
-                    document.getElementById("modalMainContent").innerHTML = `
-                        <div id="printableInvoiceArea" class="invoice-card">
-                            <div class="invoice-header">
-                                <h3>CIKUR GO INVOICE</h3>
-                                <p style="font-size:10px; color:#64748b; margin-top:2px;">Status: ${statusBayarLabel} (DEAL Confirmed)</p>
+                    const mainContentEl = document.getElementById("modalMainContent");
+                    if (mainContentEl) {
+                        mainContentEl.innerHTML = `
+                            <div id="printableInvoiceArea" class="invoice-card">
+                                <div class="invoice-header">
+                                    <h3>CIKUR GO INVOICE</h3>
+                                    <p style="font-size:10px; color:#64748b; margin-top:2px;">Status: ${statusBayarLabel} (DEAL Confirmed)</p>
+                                </div>
+                                <div class="invoice-row"><span>No. Invoice</span><span>${invoiceNo}</span></div>
+                                <div class="invoice-row"><span>Tanggal & Waktu</span><span>${timestampStr}</span></div>
+                                <div class="invoice-row"><span>Nama</span><span>${userProfile.name}</span></div>
+                                <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
+                                <div class="invoice-row"><span>Extra Waktu</span><span>${extraUnitsCount} Tambahan (30 Menit/Unit)</span></div>
+                                <div class="invoice-row"><span>Metode Bayar</span><span>${selectedPaymentMethod.toUpperCase()}</span></div>
+                                <div class="invoice-row" style="border-top:1px dashed #cbd5e1; margin-top:10px; padding-top:8px;">
+                                    <span style="font-weight:800; color:#0f172a;">Total Tagihan</span>
+                                    <span style="font-weight:800; color:#E50914; font-size:14px;">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span>
+                                </div>
                             </div>
-                            <div class="invoice-row"><span>No. Invoice</span><span>${invoiceNo}</span></div>
-                            <div class="invoice-row"><span>Tanggal & Waktu</span><span>${timestampStr}</span></div>
-                            <div class="invoice-row"><span>Nama</span><span>${userProfile.name}</span></div>
-                            <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
-                            <div class="invoice-row"><span>Extra Waktu</span><span>${extraUnitsCount} Tambahan (30 Menit/Unit)</span></div>
-                            <div class="invoice-row"><span>Metode Bayar</span><span>${selectedPaymentMethod.toUpperCase()}</span></div>
-                            <div class="invoice-row" style="border-top:1px dashed #cbd5e1; margin-top:10px; padding-top:8px;">
-                                <span style="font-weight:800; color:#0f172a;">Total Tagihan</span>
-                                <span style="font-weight:800; color:#E50914; font-size:14px;">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span>
+                            <div style="display:flex; gap:10px; margin-top:14px;">
+                                <button class="btn-pesan-form" id="btnDownloadInvoice" style="background:var(--dark-bg); flex:1; margin-top:0;">Download Invoice 📥</button>
+                                <button class="btn-pesan-form" id="btnTutupInvoice" style="background:#E50914; flex:1; margin-top:0;">Selesai ✓</button>
                             </div>
-                        </div>
-                        <div style="display:flex; gap:10px; margin-top:14px;">
-                            <button class="btn-pesan-form" id="btnDownloadInvoice" style="background:var(--dark-bg); flex:1; margin-top:0;">Download Invoice 📥</button>
-                            <button class="btn-pesan-form" id="btnTutupInvoice" style="background:#E50914; flex:1; margin-top:0;">Selesai ✓</button>
-                        </div>
-                    `;
+                        `;
+                    }
 
-                    document.getElementById("btnDownloadInvoice").addEventListener("click", () => {
-                        let invoiceElement = document.getElementById("printableInvoiceArea");
-                        html2canvas(invoiceElement, { scale: 2 }).then(canvas => {
-                            let link = document.createElement('a');
-                            link.download = `${invoiceNo.replace(/\//g, '_')}.png`;
-                            link.href = canvas.toDataURL('image/png');
-                            link.click();
+                    const btnDownloadEl = document.getElementById("btnDownloadInvoice");
+                    if (btnDownloadEl) {
+                        btnDownloadEl.addEventListener("click", () => {
+                            let invoiceElement = document.getElementById("printableInvoiceArea");
+                            if(invoiceElement && typeof html2canvas !== 'undefined') {
+                                html2canvas(invoiceElement, { scale: 2 }).then(canvas => {
+                                    let link = document.createElement('a');
+                                    link.download = `${invoiceNo.replace(/\//g, '_')}.png`;
+                                    link.href = canvas.toDataURL('image/png');
+                                    link.click();
+                                });
+                            }
                         });
-                    });
+                    }
 
-                    document.getElementById("btnTutupInvoice").addEventListener("click", () => {
-                        assistantScreen.style.display = "none";
-                    });
+                    const btnTutupEl = document.getElementById("btnTutupInvoice");
+                    if (btnTutupEl) {
+                        btnTutupEl.addEventListener("click", () => {
+                            if (assistantScreen) assistantScreen.style.display = "none";
+                        });
+                    }
                 });
             }
 
