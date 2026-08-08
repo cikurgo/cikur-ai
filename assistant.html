@@ -1,412 +1,400 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>CIKUR GO - ASSISTANT</title>
-
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-
-<style>
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-    font-family:'Poppins',sans-serif;
-}
-
-body{
-    background:
-    radial-gradient(circle at top,#3a3a3a 0%,#1d1d1d 35%,#111111 100%);
-    min-height:100vh;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    padding:20px;
-    color:#ffffff;
-    overflow:auto;
-}
-
-.container{
-    position:relative;
-    width:min(100%,420px);
-    min-height:auto;
-    max-height:calc(100vh - 30px);
-    overflow-y:auto;
-    background:rgba(255,255,255,.05);
-    backdrop-filter:blur(14px);
-    border:1px solid rgba(255,255,255,.08);
-    border-radius:28px;
-    padding:24px 20px;
-    text-align:center;
-    box-shadow:0 15px 35px rgba(0,0,0,.4);
-    animation:fadeUp .8s ease;
-}
-
-.glow{
-    position:absolute;
-    width:180px;
-    height:180px;
-    background:#FFC107;
-    border-radius:50%;
-    filter:blur(80px);
-    opacity:.18;
-    left:50%;
-    transform:translateX(-50%);
-    top:120px;
-    z-index:0;
-}
-
-.logo{
-    width:60px;
-    margin:0 auto 12px;
-}
-
-.logo img{
-    width:100%;
-}
-
-h1{
-    font-size:clamp(22px,5vw,28px);
-    font-weight:800;
-    color:#FFC107;
-    margin-bottom:8px;
-}
-
-.subtitle{
-    font-size:14px;
-    line-height:1.5;
-    margin-bottom:18px;
-}
-
-.assistant{
-    position:relative;
-    z-index:2;
-    width:120px;
-    max-width:35vw;
-    margin:18px auto;
-    animation:breathe 3.5s ease-in-out infinite;
-}
-
-.assistant img{
-    width:100%;
-    display:block;
-    filter:
-        drop-shadow(0 0 2px #fff)
-        drop-shadow(0 0 6px rgba(255,255,255,.8))
-        drop-shadow(0 0 10px rgba(255,193,7,.35));
-}
-
-.features{
-    display:flex;
-    flex-direction:column;
-    gap:8px;
-    margin-bottom:18px;
-}
-
-.feature{
-    padding:10px 16px;
-    border-radius:30px;
-    font-size:14px;
-}
-
-.btn{
-    display:block;
-    width:100%;
-    padding:14px;
-    font-size:15px;
-    margin-bottom:10px;
-    border-radius:50px;
-    text-decoration:none;
-    transition:.3s;
-}
-
-.btn-order{
-    background:linear-gradient(45deg,#FFC107,#FFD54F);
-    color:#111;
-    box-shadow:0 8px 20px rgba(255,193,7,.35);
-}
-
-.btn-order:hover{
-    transform:translateY(-3px);
-    box-shadow:0 12px 28px rgba(255,193,7,.45);
-}
-
-.btn-chat{
-    background:rgba(255,255,255,.08);
-    border:1px solid rgba(255,255,255,.15);
-    color:#ffffff;
-}
-
-.btn-chat:hover{
-    background:rgba(255,255,255,.14);
-}
-
-.back{
-    display:inline-block;
-    margin-top:8px;
-    text-decoration:none;
-    color:#9a9a9a;
-    font-size:14px;
-    transition:.3s;
-}
-
-.back:hover{
-    color:#ffffff;
-}
-
-.footer{
-    margin-top:16px;
-    font-size:12px;
-}
-
-.footer span{
-    display:block;
-    color:#FFC107;
-    font-weight:600;
-}
-
-@keyframes breathe{
-    0%{ transform:scale(1) rotate(0deg); }
-    25%{ transform:scale(1.01) rotate(0.8deg); }
-    50%{ transform:scale(1.03) rotate(0deg); }
-    75%{ transform:scale(1.01) rotate(-0.8deg); }
-    100%{ transform:scale(1) rotate(0deg); }
-}
-
-@keyframes fadeUp{
-    from{ opacity:0; transform:translateY(30px); }
-    to{ opacity:1; transform:translateY(0); }
-}
-
-@media(max-width:480px){
-    .container{ padding:30px 22px; }
-    h1{ font-size:26px; }
-    .subtitle{ font-size:14px; }
-    .assistant{ width:130px; }
-    .btn{ font-size:15px; padding:15px; }
-}
-
-@media (max-height:700px){
-    .container{ padding:22px 18px; }
-    .features{ gap:10px; margin-bottom:20px; }
-    .feature{ padding:10px; font-size:14px; }
-    .footer{ margin-top:18px; }
-}
-
-/* ===========================
-   ANIMASI IKON MENU & MINI BANNER
-=========================== */
-@keyframes robotFloat{
-    0%, 100%{ transform:translateY(0); }
-    50%{ transform:translateY(-5px); }
-}
-
-.menu-grid{
-    display:flex;
-    justify-content:space-evenly;
-    align-items:center;
-    gap:15px;
-    margin:10px 0 20px;
-}
-
-.menu-item{
-    width:90px;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    text-decoration:none;
-    transition:.35s;
-}
-
-.menu-item img{
-    width:85px;
-    height:85px;
-    object-fit:contain;
-    display:block;
-    animation:robotFloat 3.5s ease-in-out infinite;
-    filter:
-        drop-shadow(0 0 10px rgba(255,215,120,.65))
-        drop-shadow(0 0 22px rgba(255,193,7,.28));
-    transition:.35s;
-}
-
-.menu-item:hover img{
-    transform:translateY(-6px) scale(1.06);
-    filter:
-        drop-shadow(0 0 14px rgba(255,215,120,.8))
-        drop-shadow(0 0 28px rgba(255,193,7,.45));
-}
-
-.menu-item:active img{
-    transform:scale(.97);
-}
-
-.menu-item span{
-    display:none;
-}
-
-/* ================= MINI BANNER STYLING ================= */
-.mini-slider{
-    position:relative;
-    z-index:2;
-    width:100%;
-    height:90px;
-    margin:14px auto 6px;
-    overflow:hidden;
-    border-radius:22px;
-    box-shadow:0 4px 10px rgba(0,0,0,.16);
-}
-
-.mini-slides{
-    display:flex;
-    width:300%;
-    height:100%;
-    transition:transform .95s cubic-bezier(.22,.61,.36,1);
-}
-
-.mini-slides img{
-    width:33.3333%;
-    height:100%;
-    flex-shrink:0;
-    object-fit:cover;
-    object-position:center center;
-    display:block;
-}
-
-.mini-dots{
-    display:flex;
-    justify-content:center;
-    gap:8px;
-    margin-top:8px;
-    margin-bottom:12px;
-}
-
-.mini-dots span{
-    width:8px;
-    height:8px;
-    border-radius:50%;
-    background:#666;
-    transition:.3s;
-}
-
-.mini-dots span.active{
-    background:#FFC107;
-}
-
-@media screen and (min-width: 768px) {
-    .menu-item img {
-        width: 95px;
-        height: 95px;
-    }
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cikurgo Assistant</title>
+    <!-- Masukkan CSS atau style yang tadinya nyampur di index.html khusus untuk assistant di sini -->
 </head>
-<body>
 
-<div class="container">
-
-    <div class="assistant">
-        <img src="tombol-assistant.png" alt="CIKUR GO Assistant">
-    </div>
-
-    <!-- ===== MINI BANNER ===== -->
-    <div class="mini-slider">
-        <div class="mini-slides">
-            <img src="banner-mini-assistant.png" alt="Mini Assistant">
-            <img src="banner-mini-food.png" alt="Mini Food">
-            <img src="banner-mini-ride.png" alt="Mini Ride">
+<!-- MODAL ASSISTANT -->
+<div id="assistantScreen" class="assistant-screen" style="display: none;">
+    <div class="assistant-page">
+        <div class="assistant-top">
+            <span id="modalTitle">CIKUR GO ASSISTANT</span>
+            <button id="closeAssistant">×</button>
         </div>
+        <div class="assistant-content" id="modalMainContent"></div>
     </div>
-
-    <div class="mini-dots">
-        <span class="active"></span>
-        <span></span>
-        <span></span>
-    </div>
-
-    <!-- ===== MENU GRID (3 LAYANAN ASSISTANT) ===== -->
-    <div class="menu-grid">
-        <a href="LINK_FORM_ANDA" class="menu-item">
-            <img src="icon-dine-in.png" alt="DINE-IN">
-        </a>
-
-        <a href="LINK_FORM_ANDA" class="menu-item">
-            <img src="icon-vip.png" alt="VIP">
-        </a>
-
-        <a href="LINK_FORM_ANDA" class="menu-item">
-            <img src="icon-private.png" alt="PRIVATE">
-        </a>
-    </div>
-
-    <div class="glow"></div>
-
-    <div class="logo">
-        <img src="cikurgoicon.png" alt="CIKUR GO Logo">
-    </div>
-
-    <h1>CIKUR GO ASSISTANT</h1>
-
-    <p class="subtitle">
-        Pendamping profesional untuk berbagai kebutuhan aktivitas Anda dengan mudah, aman, dan nyaman.
-    </p>
-    
-    <div class="features">
-        <div class="feature">
-            ✅ Profesional & Berpengalaman
-        </div>
-        <div class="feature">
-            ✅ Fleksibel Sesuai Kebutuhan
-        </div>
-        <div class="feature">
-            ✅ Aman, Nyaman & Terpercaya
-        </div>
-    </div>
-
-    <a href="LINK_FORM_ANDA" target="_blank" class="btn btn-order">
-          PESAN SEKARANG
-    </a>
-
-    <a href="index.html#chatBtn" class="btn btn-chat">
-        💬 Chat dengan CGO
-    </a>
-
-    <a href="index.html" class="back">
-        ← Kembali ke Beranda
-    </a>
-
-    <div class="footer">
-        <span>Pasti Mudah, Pasti Nyaman.</span>
-        © 2026 CIKUR GO
-    </div>
-
 </div>
+    
+<body>
+const btnAssistant = document.getElementById("btnAssistant");
+if(btnAssistant) {
+    btnAssistant.addEventListener("click", function(e){
+        e.preventDefault();
+        openModal("CIKUR GO ASSISTANT");
+        if (modalMainContent) {
+            modalMainContent.innerHTML = `
+                <style>
+                    .assistant-form-container {
+                        background: #ffffff;
+                        border: 1px solid var(--border-color);
+                        border-radius: 20px;
+                        padding: 14px;
+                        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.03);
+                        margin-top: 2px;
+                    }
+                    .service-type-grid {
+                        display: grid;
+                        grid-template-columns: repeat(3, 1fr);
+                        gap: 8px;
+                        margin-bottom: 12px;
+                    }
+                    .service-card-option{
+                        background:#f8fafc;
+                        border:2px solid var(--border-color);
+                        border-radius:16px;
+                        height:105px;
+                        display:flex;
+                        flex-direction:column;
+                        justify-content:center;
+                        align-items:center;
+                        gap:6px;
+                        cursor:pointer;
+                        transition:.25s;
+                        overflow:hidden;
+                    }
+                    .service-card-option:hover {
+                        border-color: var(--primary-red);
+                        background: #fff5f5;
+                    }
+                    .service-card-option.active {
+                        border-color: var(--primary-red);
+                        background: #fff5f5;
+                        box-shadow: 0 4px 12px rgba(229, 9, 20, 0.12);
+                    }
+                    .service-card-option img{
+                        width:46px;
+                        height:46px;
+                        object-fit:contain;
+                        display:block;
+                        margin:0 auto;
+                    }
+                    .service-card-option .title{
+                        font-size:10px;
+                        font-weight:800;
+                        color:var(--text-main);
+                        text-transform:uppercase;
+                        line-height:1;
+                    }
+                    .form-section-title {
+                        font-size: 11px;
+                        font-weight: 800;
+                        color: var(--text-main);
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                        margin-bottom: 8px;
+                        display: flex;
+                        align-items: center;
+                        gap: 5px;
+                    }
+                    .form-section-title::before {
+                        content: '';
+                        display: inline-block;
+                        width: 3px;
+                        height: 11px;
+                        background: var(--primary-red);
+                        border-radius: 2px;
+                    }
+                    .modern-form-group {
+                        margin-bottom: 10px;
+                    }
+                    .modern-form-group label {
+                        display: block;
+                        font-size: 10px;
+                        font-weight: 700;
+                        color: var(--text-muted);
+                        margin-bottom: 4px;
+                        text-transform: uppercase;
+                    }
+                    .modern-input {
+                        width: 100%;
+                        padding: 10px 12px;
+                        background: #f8fafc;
+                        border: 1px solid #cbd5e1;
+                        border-radius: 10px;
+                        font-size: 12px;
+                        font-weight: 600;
+                        color: var(--text-main);
+                        outline: none;
+                        transition: all 0.2s ease;
+                        box-sizing: border-box;
+                    }
+                    .modern-input:focus {
+                        background: #ffffff;
+                        border-color: var(--primary-red);
+                        box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.1);
+                    }
+                    .modern-input-layanan {
+                        width: 100%;
+                        padding: 10px;
+                        background: #fff5f5;
+                        border: 1px solid rgba(229, 9, 20, 0.3);
+                        border-radius: 10px;
+                        font-size: 12px;
+                        font-weight: 800;
+                        color: var(--primary-red);
+                        text-align: center;
+                        font-family: var(--font-mono);
+                        box-sizing: border-box;
+                    }
+                    .modern-row {
+                        display: flex;
+                        gap: 8px;
+                    }
+                    .modern-col {
+                        flex: 1;
+                    }
+                    .modern-textarea {
+                        resize: none;
+                        height: 54px;
+                    }
+                    .modern-total-box {
+                        background: linear-gradient(135deg, var(--dark-bg), var(--dark-card));
+                        color: #fff;
+                        padding: 12px 14px;
+                        border-radius: 12px;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin: 14px 0 10px 0;
+                        box-shadow: 0 6px 16px rgba(11, 15, 25, 0.2);
+                    }
+                    .modern-total-label {
+                        font-size: 10px;
+                        font-weight: 700;
+                        color: #94a3b8;
+                        text-transform: uppercase;
+                    }
+                    .modern-total-value {
+                        font-size: 15px;
+                        font-weight: 800;
+                        color: #FFD700;
+                        font-family: var(--font-mono);
+                    }
+                </style>
 
-<script>
-/* ===== LOGIKA JAVASCRIPT MINI BANNER ===== */
-const miniSlides = document.querySelector(".mini-slides");
-const miniDots = document.querySelectorAll(".mini-dots span");
-let miniCurrent = 0;
-const miniTotal = miniDots.length;
+                <div class="assistant-form-container">
+                    <div class="form-section-title">Pilih Kategori Layanan</div>
+                    <div class="service-type-grid">
+                        <div class="service-card-option active" id="btnOptDine" onclick="selectServiceCategory('dine')">
+                            <img src="icon-dine-in.png" alt="Dine-In">
+                            <span class="title">Dine-In</span>
+                        </div>
+                        <div class="service-card-option" id="btnOptVip" onclick="selectServiceCategory('vip')">
+                            <img src="icon-vip.png" alt="VIP">
+                            <span class="title">VIP</span>
+                        </div>
+                        <div class="service-card-option" id="btnOptPrivate" onclick="selectServiceCategory('private')">
+                            <img src="icon-private.png" alt="Private">
+                            <span class="title">Private</span>
+                        </div>
+                    </div>
 
-function miniShow(index){
-    miniSlides.style.transform = `translateX(-${index * 33.333}%)`;
-    miniDots.forEach(dot => dot.classList.remove("active"));
-    miniDots[index].classList.add("active");
-}
+                    <div style="display:flex; gap:6px; margin-bottom: 12px; flex-wrap: wrap;">
+                        <div class="paket-badge">👤 <span id="infoPersonil">1 Personil</span></div>
+                        <div class="paket-badge">⏱️ <span id="infoDurasi">Hingga 30 Menit</span></div>
+                        <div class="paket-badge">⭐ <span id="infoPrioritas">Aktivitas Ringan</span></div>
+                        <div class="paket-badge">📍 <span>Pandeglang & Sekitarnya</span></div>
+                    </div>
 
-function miniNext(){
-    miniCurrent++;
-    if(miniCurrent >= miniTotal){
-        miniCurrent = 0;
-    }
-    miniShow(miniCurrent);
-}
-miniShow(0);
-setInterval(miniNext, 7000);
-</script>
+                    <div class="form-section-title">Informasi & Jadwal</div>
 
+                    <div class="modern-form-group">
+                        <label>Layanan Terpilih</label>
+                        <div class="modern-input-layanan" id="displayNamaLayanan">DINE-IN ASSISTANT</div>
+                    </div>
+
+                    <div class="modern-row modern-form-group">
+                        <div class="modern-col">
+                            <label>Pemesan</label>
+                            <input type="text" class="modern-input" value="${userProfile.name}" disabled style="background:#f1f5f9; color:#64748b;">
+                        </div>
+                        <div class="modern-col">
+                            <label>No. WhatsApp</label>
+                            <input type="text" class="modern-input" value="${userProfile.phone}" disabled style="background:#f1f5f9; color:#64748b;">
+                        </div>
+                    </div>
+
+                    <div class="modern-form-group">
+                        <label>Jadwal Tanggal</label>
+                        <input type="date" class="modern-input" id="inputTanggal">
+                    </div>
+
+                    <div class="modern-form-group">
+                        <label>Extra Waktu (1 Tambahan = 30 Menit = Rp 25.000)</label>
+                        <select class="modern-input" id="selectExtraWaktu" style="cursor: pointer;">
+                            <option value="0">Tanpa Tambahan Waktu (0) - Rp 0</option>
+                            <option value="1">Tambah 1 (30 Menit) - +Rp 25.000</option>
+                            <option value="2">Tambah 2 (60 Menit) - +Rp 50.000</option>
+                            <option value="3">Tambah 3 (90 Menit) - +Rp 75.000</option>
+                        </select>
+                    </div>
+
+                    <div class="form-section-title" style="margin-top: 14px;">Lokasi & Catatan</div>
+
+                    <div class="modern-form-group">
+                        <label>Lokasi / Alamat Lengkap</label>
+                        <textarea class="modern-input modern-textarea" id="inputLokasi" placeholder="Masukkan nama tempat, gedung, atau alamat tujuan..."></textarea>
+                    </div>
+
+                    <div class="modern-form-group">
+                        <label>Catatan Khusus (Opsional)</label>
+                        <textarea class="modern-input modern-textarea" id="inputCatatanRequest" placeholder="Instruksi khusus untuk asisten..."></textarea>
+                    </div>
+
+                    <div class="rincian-bill" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:10px 12px; margin-top:12px;">
+                        <div class="rincian-row"><span>Harga Dasar Layanan</span><span id="txtBasePrice">Rp 25.000</span></div>
+                        <div class="rincian-row"><span>Biaya Extra Waktu</span><span id="txtExtraPrice">Rp 0</span></div>
+                    </div>
+
+                    <div class="modern-total-box">
+                        <span class="modern-total-label">Total Tagihan :</span>
+                        <span class="modern-total-value" id="txtTotalFinal">Rp 25.000</span>
+                    </div>
+                    
+                    <button class="btn-pesan-form" id="btnRequestDeal" style="background: var(--dark-bg); margin-top: 4px;">Kirim Detail & Minta DEAL 🤝</button>
+                </div>
+            `;
+        }
+
+        const dataPaket = {
+            dine: { nama: "DINE-IN ASSISTANT", hargaBase: 25000, hargaStr: "Rp 25.000", personil: "1 Personil", durasi: "Hingga 30 Menit", prioritas: "Aktivitas Ringan" },
+            vip: { nama: "VIP ASSISTANT", hargaBase: 89000, hargaStr: "Rp 89.000", personil: "1 Personil", durasi: "Hingga 2 Jam", prioritas: "Prioritas Pelayanan" },
+            private: { nama: "PRIVATE ASSISTANT", hargaBase: 349000, hargaStr: "Rp 349.000", personil: "2 Personil", durasi: "Hingga 4 Jam", prioritas: "Eksklusif / Tertinggi" }
+        };
+
+        let currentActivePaketKey = 'dine';
+        let currentExtraCost = 0;
+        let extraUnitsCount = 0;
+
+        window.selectServiceCategory = function(paketKey) {
+            currentActivePaketKey = paketKey;
+            let info = dataPaket[paketKey];
+
+            const btnOptDine = document.getElementById('btnOptDine');
+            const btnOptVip = document.getElementById('btnOptVip');
+            const btnOptPrivate = document.getElementById('btnOptPrivate');
+
+            if(btnOptDine) btnOptDine.classList.remove('active');
+            if(btnOptVip) btnOptVip.classList.remove('active');
+            if(btnOptPrivate) btnOptPrivate.classList.remove('active');
+
+            if(paketKey === 'dine' && btnOptDine) btnOptDine.classList.add('active');
+            if(paketKey === 'vip' && btnOptVip) btnOptVip.classList.add('active');
+            if(paketKey === 'private' && btnOptPrivate) btnOptPrivate.classList.add('active');
+
+            const dispNamaLayanan = document.getElementById('displayNamaLayanan');
+            const infoPersonil = document.getElementById('infoPersonil');
+            const infoDurasi = document.getElementById('infoDurasi');
+            const infoPrioritas = document.getElementById('infoPrioritas');
+            const txtBasePrice = document.getElementById('txtBasePrice');
+
+            if (dispNamaLayanan) dispNamaLayanan.innerText = info.nama;
+            if (infoPersonil) infoPersonil.innerText = info.personil;
+            if (infoDurasi) infoDurasi.innerText = info.durasi;
+            if (infoPrioritas) infoPrioritas.innerText = info.prioritas;
+            if (txtBasePrice) txtBasePrice.innerText = info.hargaStr;
+
+            recalculateTotalForm();
+        };
+
+        const selectExtraWaktuEl = document.getElementById("selectExtraWaktu");
+        if(selectExtraWaktuEl) {
+            selectExtraWaktuEl.addEventListener("change", function() {
+                extraUnitsCount = parseInt(this.value);
+                currentExtraCost = extraUnitsCount * 25000;
+                recalculateTotalForm();
+            });
+        }
+
+        function recalculateTotalForm() {
+            let info = dataPaket[currentActivePaketKey];
+            let grandTotal = info.hargaBase + currentExtraCost;
+            const txtExtraPrice = document.getElementById("txtExtraPrice");
+            const txtTotalFinal = document.getElementById("txtTotalFinal");
+            if (txtExtraPrice) txtExtraPrice.innerText = "Rp " + currentExtraCost.toLocaleString('id-ID');
+            if (txtTotalFinal) txtTotalFinal.innerText = "Rp " + grandTotal.toLocaleString('id-ID');
+        }
+
+        const btnRequestDealEl = document.getElementById("btnRequestDeal");
+        if (btnRequestDealEl) {
+            btnRequestDealEl.addEventListener("click", () => {
+                let info = dataPaket[currentActivePaketKey];
+                const tanggalEl = document.getElementById("inputTanggal");
+                const lokasiEl = document.getElementById("inputLokasi");
+                const tanggal = tanggalEl ? tanggalEl.value : "";
+                const lokasi = lokasiEl ? lokasiEl.value : "";
+                let finalCalculatedTotal = info.hargaBase + currentExtraCost;
+
+                if (!tanggal || !lokasi) {
+                    alert("[!] Mohon lengkapi Tanggal dan Lokasi.");
+                    return;
+                }
+
+                const dynamicPaketContent = document.getElementById("modalMainContent");
+                if (dynamicPaketContent) {
+                    dynamicPaketContent.innerHTML = `
+                        <div style="text-align:center; padding: 20px 8px;">
+                            <div style="font-size: 36px; margin-bottom: 10px;">⏳</div>
+                            <h3 style="font-size: 14px; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">Menunggu Kesepakatan (DEAL)</h3>
+                            <p style="font-size: 10px; color: var(--text-muted); line-height: 1.4; margin-bottom: 14px;">
+                                Detail pesanan Anda telah dikirimkan ke tim/asisten CGO. Tombol pembayaran akan aktif setelah status dinyatakan <strong>DEAL</strong>[cite: 1].
+                            </p>
+                            <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: 14px; padding: 14px; margin-bottom: 14px; text-align: left;">
+                                <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
+                                <div class="invoice-row"><span>Total Biaya</span><span style="color:var(--primary-red);">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span></div>
+                            </div>
+                            <button class="btn-pesan-form" id="btnSimulasiDeal" style="background: #16a34a;">[Simulasi] Asisten Menyatakan DEAL ✓</button>
+                        </div>
+                    `;
+                }
+
+                const btnSimulasiDealEl = document.getElementById("btnSimulasiDeal");
+                if (btnSimulasiDealEl) {
+                    btnSimulasiDealEl.addEventListener("click", () => {
+                        tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount);
+                    });
+                }
+            });
+        }
+
+        function tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount) {
+            const dynamicPaketContent = document.getElementById("modalMainContent");
+            if (dynamicPaketContent) {
+                dynamicPaketContent.innerHTML = `
+                    <div style="background: #dcfce7; border: 1px solid #bbf7d0; border-radius: 12px; padding: 8px 12px; text-align: center; margin-bottom: 14px;">
+                        <span style="font-size: 10px; font-weight: 800; color: #16a34a;">🎉 Status: DEAL! Silakan Lakukan Pembayaran.</span>
+                    </div>
+                    <h3 class="paket-title" style="margin-bottom:10px;">Metode Pembayaran</h3>
+                    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:14px; margin-bottom:12px;">
+                        <div style="display:flex; gap:6px; margin-bottom:14px;">
+                            <button class="pay-method-option active" data-method="cikurpay">CikurPay</button>
+                            <button class="pay-method-option" data-method="qris">QRIS</button>
+                            <button class="pay-method-option" data-method="tunai">Tunai</button>
+                        </div>
+
+                        <div id="paymentDetailsContainer">
+                            <div style="font-size:11px; color:#64748b; margin-bottom:6px;">Saldo CikurPay: <strong style="color:#0f172a;">Rp ${userProfile.saldo.toLocaleString('id-ID')}</strong></div>
+                            <div style="font-size:11px; color:#0f172a; font-weight:700; margin-bottom:12px;">Total Tagihan: Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</div>
+                            <div class="form-group" style="margin-bottom:10px;">
+                                <label>Masukkan PIN CikurPay (6 Digit)</label>
+                                <input type="password" id="paymentPinInput" maxlength="6" class="input-box" placeholder="••••••">
+                            </div>
+                            <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:var(--dark-bg);">Bayar dengan CikurPay ⚡</button>
+                        </div>
+                    </div>
+                `;
+            }
+    <!-- SEMUA KODE BESAR ASSISTANT YANG TADINYA DI INDEX.HTML PINDAHKAN KESINI -->
+    <div class="assistant-container">
+        <!-- Elemen fitur assistant Anda -->
+    </div>
+
+    <!-- Script JavaScript Assistant -->
+    <script>
+        // Logika script assistant yang tadinya nyampur di index.html pindahkan ke sini
+    </script>
 </body>
 </html>
