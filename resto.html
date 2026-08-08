@@ -62,8 +62,11 @@ body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; di
 .form-row { display: flex; gap: 8px; align-items: center; }
 .form-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; }
 .form-label svg { width: 14px; height: 14px; fill: var(--primary-red); flex-shrink: 0; }
-.form-input, .form-select, .form-textarea { width: 100%; padding: 10px 12px; font-size: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: #fff; color: var(--text-main); outline: none; }
-.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--primary-red); }
+
+/* KETIKA KOTAK/INPUT/TEXTAREA DIKLIK (FOKUS) BERUBAH JADI HIJAU */
+.form-input, .form-select, .form-textarea { width: 100%; padding: 10px 12px; font-size: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: #fff; color: var(--text-main); outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15); }
+
 .btn-action { width: 100%; height: 42px; border: none; border-radius: 10px; background: var(--primary-red); color: #fff; font-size: 13px; font-weight: 800; cursor: pointer; transition: 0.2s; margin-top: 6px; }
 .btn-action:hover { background: var(--primary-red-hover); }
 
@@ -647,7 +650,6 @@ function renderIncomingOrders() {
         let borderColor = order.status === 'Dibatalkan' ? '#fecaca' : '#bbf7d0';
         let statusTextColor = order.status === 'Dibatalkan' ? '#dc2626' : '#16a34a';
 
-        // 1. Detail Menu, Jumlah, Harga Normal, Harga Diskon, & Keterangan Potongan
         let itemsListHtml = "";
         let totalDiskonMenu = 0;
         
@@ -679,11 +681,9 @@ function renderIncomingOrders() {
             itemsListHtml = `<div style="font-size: 11px; color: var(--text-main);">Pesanan Menu Resto</div>`;
         }
 
-        // 2. Catatan Khusus & Metode Pembayaran
         let catatanKhusus = order.note || order.catatan || order.catatanKhusus || '-';
         let metodeBayar = order.paymentMethod || order.metodePembayaran || order.pembayaran || 'TUNAI';
 
-        // 3. Perhitungan Total Keseluruhan (Dari Berapa Menjadi Berapa)
         let hargaFinal = order.totalPrice || order.total || 0;
         let subtotalKotor = order.subtotal || order.originalTotal || (hargaFinal + totalDiskonMenu);
         
