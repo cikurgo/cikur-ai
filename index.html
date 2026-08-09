@@ -1841,102 +1841,103 @@ if(chatBtn) {
 }
     
 /* ==========================================
-   CGO SERVICE GREETING BUBBLE
-   Assistant • Food • Ride
+   CGO SERVICE GREETING
+   TAP 1 = CGO NGOMONG
+   TAP 2 = MASUK HALAMAN LAYANAN
 ========================================== */
-document.addEventListener('DOMContentLoaded', function () {
-    const bubble = document.getElementById('cgoServiceBubble');
-    const bubbleClose = document.getElementById('cgoBubbleClose');
-    const bubbleTitle = document.getElementById('cgoBubbleTitle');
-    const bubbleMessage = document.getElementById('cgoBubbleMessage');
-    const btnAssistant = document.getElementById('btnAssistant');
-    const btnFood = document.getElementById('btnFood');
-    const btnRide = document.getElementById('btnRide');
-    // Pastikan elemen bubble tersedia
-    if (!bubble) return;
-
-    /* ------------------------------------------
-       PESAN SETIAP LAYANAN
-    ------------------------------------------ */
+document.addEventListener("DOMContentLoaded", function () {
+    const cgoBubble = document.getElementById("cgoServiceBubble");
+    const cgoBubbleTitle = document.getElementById("cgoBubbleTitle");
+    const cgoBubbleMessage = document.getElementById("cgoBubbleMessage");
+    const cgoBubbleClose = document.getElementById("cgoBubbleClose");
     const serviceMessages = {
-        assistant: {
-            title: 'CGO',
-            message: 'Hai 👋 Kamu butuh bantuan apa?'
+        btnAssistant: {
+            title: "CGO",
+            message: "Hai 👋 Kamu butuh bantuan apa?"
         },
-
-        food: {
-            title: 'CGO',
-            message: 'Lagi lapar? 😋 Yuk cari makanan yang kamu suka.'
+        btnFood: {
+            title: "CGO",
+            message: "Lagi lapar? 😊 Yuk cari makanan yang kamu suka."
         },
-
-        ride: {
-            title: 'CGO',
-            message: 'Mau pergi ke mana hari ini? 🛵'
+        btnRide: {
+            title: "CGO",
+            message: "Mau pergi ke mana hari ini? 🛵"
         }
     };
     /* ------------------------------------------
-       TAMPILKAN BUBBLE
+       STATUS TAP
     ------------------------------------------ */
-    function showServiceBubble(service) {
-        const data = serviceMessages[service];
-        if (!data) return;
-        if (bubbleTitle) {
-            bubbleTitle.textContent = data.title;
-        }
-        if (bubbleMessage) {
-            bubbleMessage.textContent = data.message;
-        }
-        bubble.classList.remove('show');
-        // Memicu ulang animasi
-        void bubble.offsetWidth;
-        bubble.classList.add('show');
-    }
+    const serviceTapState = {
+        btnAssistant: false,
+        btnFood: false,
+        btnRide: false
+    };
     /* ------------------------------------------
-       TUTUP BUBBLE
+       TOMBOL LAYANAN
     ------------------------------------------ */
-
-    function closeServiceBubble() {
-        bubble.classList.remove('show');
-    }
+    Object.keys(serviceMessages).forEach(function (id) {
+        const button = document.getElementById(id);
+        if (!button) return;
+        button.addEventListener("click", function (event) {
+            const data = serviceMessages[id];
+            /* ==================================
+               TAP PERTAMA
+               CGO MUNCUL + NGOMONG
+            ================================== */
+            if (!serviceTapState[id]) {
+                // Jangan masuk halaman dulu
+                event.preventDefault();
+                // Tandai tombol sudah disentuh
+                serviceTapState[id] = true;
+                // Robot CGO muncul kembali
+                if (typeof manageBotpressWidgetVisibility === "function") {
+                    manageBotpressWidgetVisibility(false);
+                }
+                // Ganti isi bubble
+                if (cgoBubbleTitle) {
+                    cgoBubbleTitle.textContent = data.title;
+                }
+                if (cgoBubbleMessage) {
+                    cgoBubbleMessage.textContent = data.message;
+                }
+                // Tampilkan bubble
+                if (cgoBubble) {
+                    cgoBubble.classList.add("show");
+                }
+                return;
+            }
+            /* ==================================
+               TAP KEDUA
+               MASUK HALAMAN LAYANAN
+            ================================== */
+            // Biarkan href bekerja normal
+            // tetapi reset status terlebih dahulu
+            serviceTapState[id] = false;
+        });
+    });
     /* ------------------------------------------
-       SAAT TOMBOL LAYANAN DIKLIK
+       TOMBOL X
+       BUBBLE + ROBOT HILANG
     ------------------------------------------ */
-    if (btnAssistant) {
-        btnAssistant.addEventListener('click', function () {
-            showServiceBubble('assistant');
-        });
-    }
+    if (cgoBubbleClose) {
+        cgoBubbleClose.addEventListener("click", function (event) {
 
-    if (btnFood) {
-        btnFood.addEventListener('click', function () {
-            showServiceBubble('food');
-        });
-    }
-
-    if (btnRide) {
-        btnRide.addEventListener('click', function () {
-            showServiceBubble('ride');
-        });
-    }
-    /* ------------------------------------------
-       TOMBOL ×
-    ------------------------------------------ */
-    if (bubbleClose) {
-        bubbleClose.addEventListener('click', function (event) {
             event.preventDefault();
             event.stopPropagation();
-
-            closeServiceBubble();
+            // Tutup bubble
+            if (cgoBubble) {
+                cgoBubble.classList.remove("show");
+            }
+            // Semua tombol kembali ke status TAP 1
+            Object.keys(serviceTapState).forEach(function (id) {
+                serviceTapState[id] = false;
+            });
+            // Sembunyikan robot CGO
+            if (typeof manageBotpressWidgetVisibility === "function") {
+                manageBotpressWidgetVisibility(true);
+            }
         });
     }
-    /* ------------------------------------------
-       SAPAAN AWAL
-       Muncul otomatis saat halaman dibuka
-    ------------------------------------------ */
-    setTimeout(function () {
-        showServiceBubble('assistant');
-    }, 1200);
-
 });
 </script>
 
