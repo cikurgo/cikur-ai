@@ -1698,52 +1698,25 @@ function bukaModalTopUp() {
 <script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", function () {
 
-    const chatBtnWidget = document.getElementById("chatBtn");
+    const chatBtn = document.getElementById("chatBtn");
 
-    if (!chatBtnWidget) {
-        console.warn("Tombol #chatBtn tidak ditemukan.");
-        return;
-    }
-    chatBtnWidget.addEventListener("click", (e) => {
+    if (!chatBtn) return;
+
+    chatBtn.addEventListener("click", function (e) {
         e.preventDefault();
 
-        try {
-            if (
-                window.botpress &&
-                typeof window.botpress.open === "function"
-            ) {
-                window.botpress.open();
-                return;
-            }
-
-            if (
-                window.botpressWebChat &&
-                typeof window.botpressWebChat.open === "function"
-            ) {
-                window.botpressWebChat.open();
-                return;
-            }
-
-            console.warn("Botpress belum siap.");
-
-        } catch (err) {
-            console.error("Gagal membuka Chat CGO:", err);
+        if (window.botpress && typeof window.botpress.open === "function") {
+            window.botpress.open();
+        } else {
+            console.log("Botpress belum siap.");
         }
 
     });
 
 });
 </script>
-
-<style>
-/* Sembunyikan robot/FAB bawaan Botpress */
-.bpFab,
-.bpFabWrapper {
-    display: none !important;
-}
-</style>
 
 </body>
 </html>
