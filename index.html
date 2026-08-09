@@ -37,7 +37,12 @@ body{
     min-height: 100vh;
     display: block;
     margin: 0;
-    overflow-x: hidden;
+    overflow-x:
+    hidden;
+    padding-top: 60px !important;    /* Menyesuaikan tinggi header */
+    padding-bottom: 70px !important; /* Menyesuaikan tinggi bottom-nav */
+    box-sizing:
+    border-box;
 }
 
 .container {
@@ -187,32 +192,16 @@ html, body, * {
     position: fixed !important;
     top: 0 !important;
     left: 0 !important;
-    right: 0 !important;
     width: 100% !important;
-    max-width: 100% !important;
-    transform: none !important;
-    -webkit-transform: none !important;
-    backface-visibility: hidden !important;
-    -webkit-backface-visibility: hidden !important;
+    height: 56px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 14px;
-    background: rgba(255,255,255,.92);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-    border-bottom: 1px solid rgba(0,0,0,.05);
-    box-shadow: 0 6px 22px rgba(0,0,0,.06);
-    z-index: 99999 !important;
+    padding: 0 16px;
+    background: #ffffff;
+    border-bottom: 1px solid #eaeaea;
+    z-index: 1000 !important;
 }
-
-@media (min-width: 768px) {
-    .app-header {
-        left: 50% !important;
-        transform: translateX(-50%) !important;
-        -webkit-transform: translateX(-50%) !important;
-        max-width: 440px !important;
-    }
 
 .header-profile-wrapper{
     position:relative;
@@ -709,33 +698,15 @@ footer p { margin: 0; }
     position: fixed !important;
     bottom: 0 !important;
     left: 0 !important;
-    right: 0 !important;
     width: 100% !important;
-    max-width: 100% !important;
-    transform: none !important;
-    -webkit-transform: none !important;
-    backface-visibility: hidden !important;
-    -webkit-backface-visibility: hidden !important;
-    will-change: transform !important;
-    height: 64px !important;
-    z-index: 99999 !important;
-    background-color: rgba(255, 255, 255, 0.98) !important;
-    backdrop-filter: blur(15px) !important;
-    -webkit-backdrop-filter: blur(15px) !important;
-    border-top: 1px solid var(--border-color);
-    display: flex !important;
-    justify-content: space-around !important;
-    align-items: center !important;
-    box-shadow: 0 -10px 25px rgba(0, 0, 0, 0.05);
+    height: 60px;
+    background: #ffffff;
+    border-top: 1px solid #eaeaea;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 1000 !important;
 }
-
-@media (min-width: 768px) {
-    .bottom-nav {
-        left: 50% !important;
-        transform: translateX(-50%) !important;
-        -webkit-transform: translateX(-50%) !important;
-        max-width: 440px !important;
-    }
 .nav-item {
     background: none;
     border: none;
@@ -1722,35 +1693,29 @@ function bukaModalTopUp() {
 
 document.addEventListener("DOMContentLoaded", () => {
     const chatBtnWidget = document.getElementById("chatBtn");
-    if (chatBtnWidget) {
-        chatBtnWidget.addEventListener("click", () => {
-            chatBtnWidget.disabled = true;
-            chatBtnWidget.innerHTML = "Menghubungkan...";
 
-            try {
-                if (window.botpressWebChat && typeof window.botpressWebChat.sendPayload === 'function') {
+    if (chatBtnWidget) {
+        chatBtnWidget.addEventListener("click", (e) => {
+            e.preventDefault();
+
+            // Cek berbagai kemungkinan fungsi open dari versi Botpress
+            if (window.botpressWebChat) {
+                if (typeof window.botpressWebChat.open === 'function') {
+                    window.botpressWebChat.open();
+                } else if (typeof window.botpressWebChat.sendPayload === 'function') {
                     window.botpressWebChat.sendPayload({ type: 'toggle' });
-                } else if (window.botpress && typeof window.botpress.open === 'function') {
-                    window.botpress.open();
-                } else {
-                    window.botpressWebChat.toggle();
                 }
-            } catch (error) {
-                console.error("Gagal membuka botpress:", error);
-            } finally {
-                setTimeout(() => {
-                    chatBtnWidget.disabled = false;
-                    chatBtnWidget.innerHTML = "Tanya CGO";
-                }, 500);
+            } else if (window.botpress && typeof window.botpress.open === 'function') {
+                window.botpress.open();
+            } else {
+                alert("Modul chat sedang dimuat, silakan coba sesaat lagi.");
             }
         });
     }
-
-    const s1 = document.createElement("script");
-    s1.src = "https://cdn.botpress.cloud/webchat/v3.6/inject.js";
-    s1.async = true;
-    document.body.appendChild(s1);
 });
-</script>
+
+<script src="https://cdn.botpress.cloud/webchat/v2.2/inject.js"></script>
+<script src="https://files.bpcontent.cloud/2024/.../webchat/config.js" defer></script>
+
 </body>
 </html>
