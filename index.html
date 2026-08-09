@@ -1747,18 +1747,26 @@ if (chatBtn) {
     chatBtn.addEventListener("click", () => {
         chatBtn.disabled = true;
         chatBtn.innerHTML = "Memuat CGO...";
+        
         setTimeout(() => {
-            if (window.botpress && typeof window.botpress.open === 'function') {
-                window.botpress.open();
-            } else {
-                alert("Asisten CGO sedang dipersiapkan, silakan coba beberapa saat lagi.");
+            try {
+                if (window.botpress && typeof window.botpress.open === 'function') {
+                    window.botpress.open();
+                } else if (window.botpressWebChat && typeof window.botpressWebChat.sendPayload === 'function') {
+                    // Fallback alternatif jika versi botpress menggunakan webchat object
+                    window.botpressWebChat.toggle();
+                } else {
+                    alert("Asisten CGO sedang disiapkan, silakan coba beberapa saat lagi.");
+                }
+            } catch (error) {
+                console.error("Gagal membuka botpress:", error);
+            } finally {
+                chatBtn.disabled = false;
+                chatBtn.innerHTML = "Tanya CGO";
             }
-            chatBtn.disabled = false;
-            chatBtn.innerHTML = "Tanya CGO";
-        }, 300);
+        }, 500);
     });
 }
-
 
 </script>
 
