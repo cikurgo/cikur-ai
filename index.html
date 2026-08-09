@@ -1698,21 +1698,22 @@ document.addEventListener("DOMContentLoaded", () => {
         chatBtnWidget.addEventListener("click", (e) => {
             e.preventDefault();
 
-            // Cek berbagai kemungkinan fungsi open dari versi Botpress
-            if (window.botpressWebChat) {
-                if (typeof window.botpressWebChat.open === 'function') {
-                    window.botpressWebChat.open();
-                } else if (typeof window.botpressWebChat.sendPayload === 'function') {
-                    window.botpressWebChat.sendPayload({ type: 'toggle' });
+            // Eksekusi langsung objek resmi Botpress versi v2+
+            if (window.botpress) {
+                if (typeof window.botpress.open === 'function') {
+                    window.botpress.open();
+                } else if (typeof window.botpress.toggle === 'function') {
+                    window.botpress.toggle();
+                } else {
+                    console.warn("Modul Botpress belum sepenuhnya siap diinisialisasi.");
                 }
-            } else if (window.botpress && typeof window.botpress.open === 'function') {
-                window.botpress.open();
             } else {
-                alert("Modul chat sedang dimuat, silakan coba sesaat lagi.");
+                alert("Asisten CGO sedang memuat, silakan coba sesaat lagi.");
             }
         });
     }
 });
+</script>
 
 <script src="https://cdn.botpress.cloud/webchat/v2.2/inject.js"></script>
 <script src="https://files.bpcontent.cloud/2024/.../webchat/config.js" defer></script>
