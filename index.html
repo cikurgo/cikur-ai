@@ -681,14 +681,6 @@ footer{
     font-size: 10px;
 }
 footer p { margin: 0; }
-    
-/* ==========================================================
-   ROBOT CGO AUTO SLIDE & POSISI AMAN DI ATAS NAVIGASI BAR
-   ========================================================== */
-#botpress-webchat { ... }
-@keyframes floatCustomRobot { ... }
-#botpress-webchat { animation: ... }
-#botpress-webchat.cgo-hidden { ... }
                    
 /* ===========================
    FIXED BOTTOM NAVIGATION BAR
@@ -1698,40 +1690,60 @@ function bukaModalTopUp() {
     }
 }
 
+<!-- =========================================
+     CIKUR GO — BOTPRESS + TANYA CGO
+========================================= -->
+
+<script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
+<script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
+
+<script>
 document.addEventListener("DOMContentLoaded", () => {
+
     const chatBtnWidget = document.getElementById("chatBtn");
 
-    if (chatBtnWidget) {
-        chatBtnWidget.addEventListener("click", (e) => {
-            e.preventDefault();
-
-            // Pemicu universal untuk berbagai versi webchat Botpress
-            try {
-                if (window.botpress && typeof window.botpress.open === 'function') {
-                    window.botpress.open();
-                } else if (window.botpress && typeof window.botpress.toggle === 'function') {
-                    window.botpress.toggle();
-                } else if (window.botpressWebChat && typeof window.botpressWebChat.open === 'function') {
-                    window.botpressWebChat.open();
-                } else {
-                    // Fallback jika elemen tombol chat bawaan botpress disembunyikan, klik paksa elemen aslinya
-                    const bpToggle = document.querySelector('.bpFab, .bp-widget-btn, div[class*="bp-"]');
-                    if (bpToggle) {
-                        bpToggle.click();
-                    } else {
-                        alert("Modul Asisten CGO sedang menyiapkan koneksi. Silakan coba sesaat lagi.");
-                    }
-                }
-            } catch (err) {
-                console.error("Gagal membuka chat CGO:", err);
-            }
-        });
+    if (!chatBtnWidget) {
+        console.warn("Tombol #chatBtn tidak ditemukan.");
+        return;
     }
+    chatBtnWidget.addEventListener("click", (e) => {
+        e.preventDefault();
+
+        try {
+            if (
+                window.botpress &&
+                typeof window.botpress.open === "function"
+            ) {
+                window.botpress.open();
+                return;
+            }
+
+            if (
+                window.botpressWebChat &&
+                typeof window.botpressWebChat.open === "function"
+            ) {
+                window.botpressWebChat.open();
+                return;
+            }
+
+            console.warn("Botpress belum siap.");
+
+        } catch (err) {
+            console.error("Gagal membuka Chat CGO:", err);
+        }
+
+    });
+
 });
 </script>
 
-<script src="https://cdn.botpress.cloud/webchat/v2.2/inject.js"></script>
-<script src="https://files.bpcontent.cloud/2024/.../webchat/config.js" defer></script>
+<style>
+/* Sembunyikan robot/FAB bawaan Botpress */
+.bpFab,
+.bpFabWrapper {
+    display: none !important;
+}
+</style>
 
 </body>
 </html>
