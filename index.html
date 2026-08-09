@@ -189,18 +189,22 @@ html, body, * {
    HEADER GO-APP PREMIUM v2 (PATEN)
 =========================== */
 .app-header {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: 56px;
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 440px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 16px;
-    background: #ffffff;
-    border-bottom: 1px solid #eaeaea;
-    z-index: 1000 !important;
+    padding: 10px 14px;
+    background: rgba(255,255,255,.92);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-bottom: 1px solid rgba(0,0,0,.05);
+    box-shadow: 0 6px 22px rgba(0,0,0,.06);
+    z-index: 999;
 }
 
 .header-profile-wrapper{
@@ -692,20 +696,28 @@ footer p { margin: 0; }
 #botpress-webchat.cgo-hidden { ... }
                    
 /* ===========================
-   FIXED BOTTOM NAVIGATION BAR (PATEN)
+   FIXED BOTTOM NAVIGATION BAR
 =========================== */
 .bottom-nav {
-    position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: 60px;
-    background: #ffffff;
-    border-top: 1px solid #eaeaea;
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%) translateZ(0);
+    width: 100%;
+    max-width: 440px;
+    height: 64px; /* Proporsional */
+    background-color: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border-top: 1px solid var(--border-color);
     display: flex;
     justify-content: space-around;
     align-items: center;
-    z-index: 1000 !important;
+    padding: 0 8px;
+    z-index: 10000;
+    box-shadow: 0 -10px 25px rgba(0,0,0,0.05);
+    backface-visibility: hidden;
+    will-change: transform;
 }
 .nav-item {
     background: none;
@@ -1698,17 +1710,25 @@ document.addEventListener("DOMContentLoaded", () => {
         chatBtnWidget.addEventListener("click", (e) => {
             e.preventDefault();
 
-            // Eksekusi langsung objek resmi Botpress versi v2+
-            if (window.botpress) {
-                if (typeof window.botpress.open === 'function') {
+            // Pemicu universal untuk berbagai versi webchat Botpress
+            try {
+                if (window.botpress && typeof window.botpress.open === 'function') {
                     window.botpress.open();
-                } else if (typeof window.botpress.toggle === 'function') {
+                } else if (window.botpress && typeof window.botpress.toggle === 'function') {
                     window.botpress.toggle();
+                } else if (window.botpressWebChat && typeof window.botpressWebChat.open === 'function') {
+                    window.botpressWebChat.open();
                 } else {
-                    console.warn("Modul Botpress belum sepenuhnya siap diinisialisasi.");
+                    // Fallback jika elemen tombol chat bawaan botpress disembunyikan, klik paksa elemen aslinya
+                    const bpToggle = document.querySelector('.bpFab, .bp-widget-btn, div[class*="bp-"]');
+                    if (bpToggle) {
+                        bpToggle.click();
+                    } else {
+                        alert("Modul Asisten CGO sedang menyiapkan koneksi. Silakan coba sesaat lagi.");
+                    }
                 }
-            } else {
-                alert("Asisten CGO sedang memuat, silakan coba sesaat lagi.");
+            } catch (err) {
+                console.error("Gagal membuka chat CGO:", err);
             }
         });
     }
