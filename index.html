@@ -1693,8 +1693,40 @@ function bukaModalTopUp() {
         });
     }
 }
-
-</script>
+document.addEventListener("DOMContentLoaded", () => {  
+    const chatBtnWidget = document.getElementById("chatBtn");  
+  
+    if (chatBtnWidget) {  
+        chatBtnWidget.addEventListener("click", (e) => {  
+            e.preventDefault();  
+  
+            // Pemicu universal untuk berbagai versi webchat Botpress  
+            try {  
+                if (window.botpress && typeof window.botpress.open === 'function') {  
+                    window.botpress.open();  
+                } else if (window.botpress && typeof window.botpress.toggle === 'function') {  
+                    window.botpress.toggle();  
+                } else if (window.botpressWebChat && typeof window.botpressWebChat.open === 'function') {  
+                    window.botpressWebChat.open();  
+                } else {  
+                    // Fallback jika elemen tombol chat bawaan botpress disembunyikan, klik paksa elemen aslinya  
+                    const bpToggle = document.querySelector('.bpFab, .bp-widget-btn, div[class*="bp-"]');  
+                    if (bpToggle) {  
+                        bpToggle.click();  
+                    } else {  
+                        alert("Modul Asisten CGO sedang menyiapkan koneksi. Silakan coba sesaat lagi.");  
+                    }  
+                }  
+            } catch (err) {  
+                console.error("Gagal membuka chat CGO:", err);  
+            }  
+        });  
+    }  
+});  
+</script>  
+  
+<script src="https://cdn.botpress.cloud/webchat/v2.2/inject.js"></script>  
+<script src="https://files.bpcontent.cloud/2024/.../webchat/config.js" defer></script>
 
 </body>
 </html>
