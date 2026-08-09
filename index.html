@@ -1771,7 +1771,20 @@ document.addEventListener("DOMContentLoaded", () => {
             }, 300);
         });
     }
-    
+    // Efek gerak naik-turun (floating) otomatis untuk Botpress
+    const cekRobot = setInterval(() => {
+        const robotCGO = document.getElementById('botpress-webchat');
+        if (robotCGO) {
+            let naik = true;
+            setInterval(() => {
+                robotCGO.style.transform = naik ? 'translateY(-10px)' : 'translateY(0px)';
+                naik = !naik;
+            }, 1000);
+            
+            clearInterval(cekRobot);
+        }
+    }, 500);
+
     const s1 = document.createElement("script");
     s1.src = "https://cdn.botpress.cloud/webchat/v3.6/inject.js";
     s1.async = true;
