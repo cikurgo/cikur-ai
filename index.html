@@ -1697,16 +1697,44 @@ function bukaModalTopUp() {
 <script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
 
 <script>
-window.addEventListener("error", function (e) {
-    console.error("CGO ERROR:", e.message);
-});
+document.addEventListener("DOMContentLoaded", () => {
+    const chatBtnWidget = document.getElementById("chatBtn");
 
-window.addEventListener("unhandledrejection", function (e) {
-    console.error("CGO PROMISE ERROR:", e.reason);
-});
+    if (!chatBtnWidget) return;
 
-console.log("CGO DIAGNOSTIC: JavaScript sampai bagian Botpress.");
-console.log("CGO BOTPRESS:", window.botpress);
+    chatBtnWidget.addEventListener("click", (e) => {
+        e.preventDefault();
+        console.log("CGO: Tombol Tanya CGO diklik.");
+        try {
+            // Botpress Webchat V3
+            if (window.botpress) {
+                if (typeof window.botpress.open === "function") {
+                    window.botpress.open();
+                    console.log("CGO: Botpress.open() dipanggil.");
+                    return;
+                }
+                if (typeof window.botpress.toggle === "function") {
+                    window.botpress.toggle();
+                    console.log("CGO: Botpress.toggle() dipanggil.");
+                    return;
+                }
+            }
+            // Fallback: cari tombol/floating button Botpress
+            const bpToggle = document.querySelector(
+                '.bpFab, .bp-widget-btn, [class*="bpFab"], [class*="bp-widget"]'
+            );
+            if (bpToggle) {
+                bpToggle.click();
+                console.log("CGO: Tombol Botpress ditemukan dan diklik.");
+                return;
+            }
+            console.warn("CGO: Botpress belum siap.");
+
+        } catch (err) {
+            console.error("CGO: Gagal membuka Botpress:", err);
+        }
+    });
+});
 </script>
 
 </body>
