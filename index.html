@@ -686,27 +686,46 @@ footer p { margin: 0; }
 /* =====================================================
    ROBOT CGO AUTO SLIDE
    ===================================================== */
-@keyframes floatRobot {
-    0% { transform: translateY(0px) !important; }
-    50% { transform: translateY(-12px) !important; }
-    100% { transform: translateY(0px) !important; }
-}
-
+/* --- Jurus Pamungkas Overlay Robot CGO --- */
 #botpress-webchat {
     position: fixed !important;
-    right: 16px !important;
     bottom: 95px !important;
     z-index: 9998 !important;
-    animation: floatRobot 2s ease-in-out infinite !important;
-    -webkit-animation: floatRobot 2s ease-in-out infinite !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
     transition: right 0.8s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
+#botpress-webchat::after {
+    content: '';
+    position: absolute;
+    bottom: 0px;
+    right: 0px;
+    width: 64px;
+    height: 64px;
+    background-image: url('URL_GAMBAR_ROBOT_CGO_ANDA.png'); /* Ganti dengan link gambar Anda */
+    background-size: contain;
+    background-repeat: no-repeat;
+    pointer-events: auto !important;
+    animation: floatCustomRobot 2s infinite ease-in-out !important;
+    opacity: 1 !important;
+}
 
-/* Robot digeser ke samping */
+@keyframes floatCustomRobot {
+    0%, 100% {
+        transform: translateY(0px);
+    }
+    50% {
+        transform: translateY(-12px);
+    }
+}
+/* Robot digeser ke samping tetap aman */
 #botpress-webchat.cgo-hidden {
     right: -72% !important;
 }
-    
+/* Robot digeser ke samping */
+#botpress-webchat.cgo-hidden {
+    right: -72% !important;
+}  
 /* ===========================
    FIXED BOTTOM NAVIGATION BAR (PERMANEN & STABIL)
 =========================== */
