@@ -1693,48 +1693,24 @@ function bukaModalTopUp() {
         });
     }
 }
+    
 <script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
 <script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
-
 <script>
-document.addEventListener("DOMContentLoaded", () => {
-    const chatBtnWidget = document.getElementById("chatBtn");
+const chatBtn = document.getElementById("chatBtn");
+if(chatBtn) {
+    chatBtn.addEventListener("click", () => {
+        chatBtn.disabled = true;
+        chatBtn.innerHTML = "Memuat CGO...";
 
-    if (!chatBtnWidget) return;
+        setTimeout(() => {
+            if(window.botpress) window.botpress.open();
 
-    chatBtnWidget.addEventListener("click", (e) => {
-        e.preventDefault();
-        console.log("CGO: Tombol Tanya CGO diklik.");
-        try {
-            // Botpress Webchat V3
-            if (window.botpress) {
-                if (typeof window.botpress.open === "function") {
-                    window.botpress.open();
-                    console.log("CGO: Botpress.open() dipanggil.");
-                    return;
-                }
-                if (typeof window.botpress.toggle === "function") {
-                    window.botpress.toggle();
-                    console.log("CGO: Botpress.toggle() dipanggil.");
-                    return;
-                }
-            }
-            // Fallback: cari tombol/floating button Botpress
-            const bpToggle = document.querySelector(
-                '.bpFab, .bp-widget-btn, [class*="bpFab"], [class*="bp-widget"]'
-            );
-            if (bpToggle) {
-                bpToggle.click();
-                console.log("CGO: Tombol Botpress ditemukan dan diklik.");
-                return;
-            }
-            console.warn("CGO: Botpress belum siap.");
-
-        } catch (err) {
-            console.error("CGO: Gagal membuka Botpress:", err);
-        }
+            chatBtn.disabled = false;
+            chatBtn.innerHTML = "Tanya CGO";
+        }, 500);
     });
-});
+}
 </script>
 
 </body>
