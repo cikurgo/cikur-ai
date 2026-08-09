@@ -1700,36 +1700,35 @@ function bukaModalTopUp() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-    // 1. Tombol "Tanya CGO" langsung terhubung ke Chat CGO tanpa modal lain
     const chatBtnWidget = document.getElementById("chatBtn");
     if (chatBtnWidget) {
         chatBtnWidget.addEventListener("click", () => {
             chatBtnWidget.disabled = true;
             chatBtnWidget.innerHTML = "Menghubungkan...";
-            
-            setTimeout(() => {
-                try {
-                    if (window.botpress && typeof window.botpress.open === 'function') {
-                        window.botpress.open();
-                    } else {
-                        alert("Asisten CGO sedang disiapkan, silakan coba beberapa saat lagi.");
-                    }
-                } catch (error) {
-                    console.error("Gagal membuka botpress:", error);
-                } finally {
+
+            try {
+                if (window.botpressWebChat && typeof window.botpressWebChat.sendPayload === 'function') {
+                    window.botpressWebChat.sendPayload({ type: 'toggle' });
+                } else if (window.botpress && typeof window.botpress.open === 'function') {
+                    window.botpress.open();
+                } else {
+                    window.botpressWebChat.toggle();
+                }
+            } catch (error) {
+                console.error("Gagal membuka botpress:", error);
+            } finally {
+                setTimeout(() => {
                     chatBtnWidget.disabled = false;
                     chatBtnWidget.innerHTML = "Tanya CGO";
-                }
-            }, 200);
+                }, 500);
+            }
         });
     }
 
-    // Injeksi skrip Botpress asli
     const s1 = document.createElement("script");
     s1.src = "https://cdn.botpress.cloud/webchat/v3.6/inject.js";
     s1.async = true;
     document.body.appendChild(s1);
-
 });
 </script>
 </body>
