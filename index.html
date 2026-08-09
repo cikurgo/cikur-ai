@@ -684,50 +684,35 @@ footer{
 footer p { margin: 0; }
     
 /* =====================================================
-   ROBOT CGO AUTO SLIDE
+   ROBOT CGO AUTO SLIDE & POSISI AMAN DI ATAS NAVIGASI BAR
    ===================================================== */
-/* --- Jurus Pamungkas Overlay Robot CGO --- */
 #botpress-webchat {
     position: fixed !important;
-    bottom: 95px !important;
+    bottom: 80px !important; /* Ditinggikan agar tidak tertutup nav bar */
     z-index: 9998 !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
     transition: right 0.8s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
-#botpress-webchat::after {
-    content: '';
-    position: absolute;
-    bottom: 0px;
-    right: 0px;
-    width: 64px;
-    height: 64px;
-    background-image: url('URL_GAMBAR_ROBOT_CGO_ANDA.png'); /* Ganti dengan link gambar Anda */
-    background-size: contain;
-    background-repeat: no-repeat;
-    pointer-events: auto !important;
-    animation: floatCustomRobot 2s infinite ease-in-out !important;
-    opacity: 1 !important;
-}
 
+/* Animasi naik turun (floating) untuk Botpress */
 @keyframes floatCustomRobot {
     0%, 100% {
         transform: translateY(0px);
     }
     50% {
-        transform: translateY(-12px);
+        transform: translateY(-10px);
     }
 }
-/* Robot digeser ke samping tetap aman */
+
+#botpress-webchat {
+    animation: floatCustomRobot 2s infinite ease-in-out !important;
+}
+
 #botpress-webchat.cgo-hidden {
     right: -72% !important;
 }
-/* Robot digeser ke samping */
-#botpress-webchat.cgo-hidden {
-    right: -72% !important;
-}  
+
 /* ===========================
-   FIXED BOTTOM NAVIGATION BAR (PERMANEN & STABIL)
+   FIXED BOTTOM NAVIGATION BAR (PERMANEN, STABIL & PROPOSIONAL)
 =========================== */
 .bottom-nav {
     position: fixed;
@@ -736,7 +721,7 @@ footer p { margin: 0; }
     transform: translateX(-50%) translateZ(0);
     width: 100%;
     max-width: 440px;
-    height: 68px;
+    height: 64px; /* Proporsional */
     background-color: rgba(255, 255, 255, 0.98);
     backdrop-filter: blur(15px);
     -webkit-backdrop-filter: blur(15px);
@@ -795,8 +780,8 @@ footer p { margin: 0; }
     top: -10px;
     background: linear-gradient(135deg, var(--primary-red) 0%, var(--primary-red-hover) 100%);
     color: #ffffff;
-    width: 48px;
-    height: 48px;
+    width: 46px;
+    height: 46px;
     border-radius: 50%;
     display: flex;
     flex-direction: column;
@@ -808,8 +793,8 @@ footer p { margin: 0; }
 }
 
 .nav-item.prominent .transaksi-btn-wrapper svg {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     margin-bottom: 0;
     fill: #ffffff;
 }
@@ -1144,7 +1129,7 @@ footer p { margin: 0; }
             </div>  
         </div>  
 
-        <!-- Tombol Tanya CGO -->
+        <!-- Tombol Tanya CGO Langsung Terhubung ke Botpress Chat CGO -->
         <div class="chat-action-box">
             <div class="chat-text-info">
                 <h3>Asisten AI CGO</h3>
@@ -1367,39 +1352,6 @@ function switchTab(tabName) {
     if(targetNav) targetNav.classList.add('active');
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-// Fungsionalitas Tombol Tanya CGO
-const chatBtn = document.getElementById("chatBtn");
-if (chatBtn) {
-    chatBtn.addEventListener("click", () => {
-        openModal("ASISTEN AI CGO (BANTUAN 24/7)");
-        if (modalMainContent) {
-            modalMainContent.innerHTML = `
-                <div style="text-align:center; margin-bottom:14px;">
-                    <p style="font-size:12px; color:#64748b; font-weight:600;">Halo ${userProfile.name}, ada yang bisa dibantu oleh Asisten AI CikurGo hari ini?</p>
-                </div>
-                <div class="form-group">
-                    <label>Ketik Pertanyaan atau Kendala</label>
-                    <textarea id="chatInputQuery" class="input-box" rows="3" placeholder="Contoh: Bagaimana cara memesan layanan Cikur Ride?"></textarea>
-                </div>
-                <button class="btn-pesan-form" id="btnKirimChatAI">Kirim Pesan ke CGO 🤖</button>
-            `;
-            
-            const btnKirimChatAI = document.getElementById("btnKirimChatAI");
-            if(btnKirimChatAI) {
-                btnKirimChatAI.addEventListener("click", () => {
-                    const query = document.getElementById("chatInputQuery").value.trim();
-                    if(!query) {
-                        alert("Mohon ketikkan pertanyaan Anda.");
-                        return;
-                    }
-                    alert("Pesan terkirim ke CGO AI! Asisten akan segera merespons.");
-                    document.getElementById("assistantScreen").style.display = "none";
-                });
-            }
-        }
-    });
 }
 
 function bukaZoomBarcode() {
@@ -1768,11 +1720,12 @@ function bukaModalTopUp() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    // 1. Tombol "Tanya CGO" langsung terhubung ke Chat CGO tanpa modal lain
     const chatBtnWidget = document.getElementById("chatBtn");
     if (chatBtnWidget) {
         chatBtnWidget.addEventListener("click", () => {
             chatBtnWidget.disabled = true;
-            chatBtnWidget.innerHTML = "Memuat CGO...";
+            chatBtnWidget.innerHTML = "Menghubungkan...";
             
             setTimeout(() => {
                 try {
@@ -1787,23 +1740,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     chatBtnWidget.disabled = false;
                     chatBtnWidget.innerHTML = "Tanya CGO";
                 }
-            }, 300);
+            }, 200);
         });
     }
-    // Efek gerak naik-turun (floating) otomatis untuk Botpress
-    const cekRobot = setInterval(() => {
-        const robotCGO = document.getElementById('botpress-webchat');
-        if (robotCGO) {
-            let naik = true;
-            setInterval(() => {
-                robotCGO.style.transform = naik ? 'translateY(-10px)' : 'translateY(0px)';
-                naik = !naik;
-            }, 1000);
-            
-            clearInterval(cekRobot);
-        }
-    }, 500);
 
+    // Injeksi skrip Botpress asli
     const s1 = document.createElement("script");
     s1.src = "https://cdn.botpress.cloud/webchat/v3.6/inject.js";
     s1.async = true;
