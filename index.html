@@ -1845,7 +1845,36 @@ if(chatBtn) {
         }, 500);
     });
 }
-    
+ /* ==========================================
+   CGO ROBOT VISIBILITY CONTROLLER
+========================================== */
+let isCgoHidden = false;
+function manageBotpressWidgetVisibility(hide) {
+    isCgoHidden = hide;
+    const findRobot = setInterval(() => {
+        const bpContainer =
+            document.getElementById("bp-web-widget-container") ||
+            document.querySelector("bp-widget") ||
+            document.querySelector(".bp-widget-web") ||
+            document.querySelector("#bp-web-widget") ||
+            document.querySelector("iframe[title*='Botpress']") ||
+            document.querySelector("iframe[title*='Chatbot']");
+        if (!bpContainer) return;
+        bpContainer.style.transition =
+            "transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.45s ease";
+        if (hide) {
+            bpContainer.style.transform = "translateX(120%)";
+            bpContainer.style.opacity = "0";
+            bpContainer.style.pointerEvents = "none";
+
+        } else {
+            bpContainer.style.transform = "translateX(0)";
+            bpContainer.style.opacity = "1";
+            bpContainer.style.pointerEvents = "auto";
+        }
+        clearInterval(findRobot);
+    }, 200);
+}   
 /* ==========================================
    CGO SERVICE GREETING
    TAP 1 = CGO NGOMONG
