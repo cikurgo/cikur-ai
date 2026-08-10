@@ -1845,35 +1845,99 @@ if(chatBtn) {
         }, 500);
     });
 }
- /* ==========================================
-   CGO VISIBILITY CONTROLLER
-   LOGIKA LAMA — TANPA ROBOT TAMBAHAN
+/* ==========================================
+   CGO BUBBLE ↔ ROBOT BOTPRESS
+   TIDAK MENAMBAHKAN ROBOT BARU
 ========================================== */
-function manageBotpressWidgetVisibility(hide) {
-    const applyVisibility = () => {
-        const robot =
-            document.getElementById("botpress-webchat") ||
-            document.getElementById("bp-web-widget-container") ||
-            document.querySelector("bp-widget") ||
-            document.querySelector(".bp-widget-web");
 
-        if (!robot) return false;
+let cgoRobotHidden = false;
+
+function getCGOFAB() {
+    return (
+        document.querySelector(".bpFabContainer") ||
+        document.querySelector(".bpFabWrapper") ||
+        document.querySelector(".bpFab")
+    );
+}
+
+function manageBotpressWidgetVisibility(hide) {
+
+    cgoRobotHidden = hide;
+
+    const apply = () => {
+
+        const fab = getCGOFAB();
+
+        if (!fab) return false;
 
         if (hide) {
-            robot.classList.add("cgo-hidden");
+
+            fab.style.setProperty(
+                "transform",
+                "translateX(120%)",
+                "important"
+            );
+
+            fab.style.setProperty(
+                "opacity",
+                "0",
+                "important"
+            );
+
+            fab.style.setProperty(
+                "visibility",
+                "hidden",
+                "important"
+            );
+
+            fab.style.setProperty(
+                "pointer-events",
+                "none",
+                "important"
+            );
+
         } else {
-            robot.classList.remove("cgo-hidden");
-    }
+
+            fab.style.setProperty(
+                "transform",
+                "translateX(0)",
+                "important"
+            );
+
+            fab.style.setProperty(
+                "opacity",
+                "1",
+                "important"
+            );
+
+            fab.style.setProperty(
+                "visibility",
+                "visible",
+                "important"
+            );
+
+            fab.style.setProperty(
+                "pointer-events",
+                "auto",
+                "important"
+            );
+        }
+
         return true;
     };
-    // Coba langsung
-    if (applyVisibility()) return;
-    // Kalau Botpress belum muncul, tunggu sampai ter-inject
+
+
+    if (apply()) return;
+
+
     let attempts = 0;
-    const waitForBotpress = setInterval(() => {
+
+    const waitForFAB = setInterval(() => {
+
         attempts++;
-        if (applyVisibility() || attempts >= 30) {
-            clearInterval(waitForBotpress);
+
+        if (apply() || attempts >= 30) {
+            clearInterval(waitForFAB);
         }
 
     }, 200);
