@@ -666,36 +666,36 @@ html, body, * {
 }
 
 /* ===========================
-   HERO BIG — LARGE PEEK CAROUSEL
+   HERO BIG — LARGE PEEK
 =========================== */
+
 .hero-big {
     width: 100%;
     overflow: hidden;
-    border-radius: 16px;
     position: relative;
-    margin-bottom: 8px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+    margin: 0 0 14px 0;
+    padding: 0;
+    background: transparent;
 }
 
 .hero-big-track {
     display: flex;
-    gap: 8px;
+    align-items: flex-start;
+    gap: 10px;
     width: max-content;
-    height: auto;
     transition: transform 0.8s cubic-bezier(.22,.61,.36,1);
     will-change: transform;
 }
 
 .hero-big-track img {
-    width: calc(100vw - 100px);
-    max-width: 420px;
+    width: 88vw;
     height: auto;
-    aspect-ratio: 16 / 7;
-    object-fit: cover;
-    flex: 0 0 calc(100vw - 100px);
-    border-radius: 16px;
+    flex: 0 0 88vw;
+    object-fit: contain;
     display: block;
+    border-radius: 16px;
 }
+    
 .mini-slider{
     width: 100%;
     aspect-ratio: 16 / 4;
@@ -1218,30 +1218,40 @@ footer p { margin: 0; }
             </a>
         </div>
 
-        <div class="hero-frame">
-            <div class="section-label-mini">Featured Highlights</div>
-            <div class="hero-big">
-                <div class="hero-big-track">
-                    <img src="hero-banner1.png" alt="Hero 1">
-                    <img src="hero-banner2.png" alt="Hero 2">
-                    <img src="hero-banner3.png" alt="Hero 3">
-                </div>
-            </div>
+        <!-- ===========================
+     HERO BANNER BESAR
+=========================== -->
 
-            <div class="mini-slider">
-                <div class="mini-slides">
-                    <img src="banner-mini-assistant.png" alt="Mini Assistant">
-                    <img src="banner-mini-food.png" alt="Mini Food">
-                    <img src="banner-mini-ride.png" alt="Mini Ride">
-                </div>
-            </div>
+<div class="hero-big">
+    <div class="hero-big-track">
+        <img src="hero-banner1.png" alt="Hero 1">
+        <img src="hero-banner2.png" alt="Hero 2">
+        <img src="hero-banner3.png" alt="Hero 3">
+    </div>
+</div>
 
-            <div class="mini-dots">
-                <span class="active"></span>
-                <span></span>
-                <span></span>
-            </div>  
-        </div>  
+
+<!-- ===========================
+     FEATURED HIGHLIGHTS
+=========================== -->
+
+<div class="hero-frame">
+    <div class="section-label-mini">Featured Highlights</div>
+
+    <div class="mini-slider">
+        <div class="mini-slides">
+            <img src="banner-mini-assistant.png" alt="Mini Assistant">
+            <img src="banner-mini-food.png" alt="Mini Food">
+            <img src="banner-mini-ride.png" alt="Mini Ride">
+        </div>
+    </div>
+
+    <div class="mini-dots">
+        <span class="active"></span>
+        <span></span>
+        <span></span>
+    </div>
+</div>
 
         <!-- Tombol Tanya CGO Langsung Terhubung ke Botpress Chat CGO -->
         <div class="chat-action-box">
@@ -1716,9 +1726,13 @@ function moveHeroSlide() {
     if (!heroTrack || heroSlides.length === 0) return;
     heroIndex = (heroIndex + 1) % heroSlides.length;
     const slideWidth = heroSlides[0].getBoundingClientRect().width;
-    const gap = 8;
+    const gap = 10;
+    const screenWidth =
+        heroTrack.parentElement.getBoundingClientRect().width;
+    const sidePeek =
+        (screenWidth - slideWidth) / 2;
     heroTrack.style.transform =
-        `translateX(-${heroIndex * (slideWidth + gap)}px)`;
+        `translateX(-${heroIndex * (slideWidth + gap) + sidePeek}px)`;
 }
 setInterval(moveHeroSlide, 9000);
     
