@@ -1254,7 +1254,7 @@ footer p { margin: 0; }
     </div>
 </div>
 
-<div class="dots">
+<div class="dots hero-dots">
     <span class="active"></span>
     <span></span>
     <span></span>
@@ -1751,7 +1751,7 @@ setInterval(() => {
 
 const heroTrack = document.querySelector(".hero-big-track");
 const heroSlides = document.querySelectorAll(".hero-big-track img");
-const heroDots = document.querySelectorAll(".dots span");
+const heroDots = document.querySelectorAll(".hero-dots span");
 let heroIndex = 0;
 function moveHeroSlide() {
     if (!heroTrack || heroSlides.length === 0) return;
@@ -1760,16 +1760,15 @@ function moveHeroSlide() {
     const gap = 12;
     const containerWidth =
         heroTrack.parentElement.getBoundingClientRect().width;
-    // Selalu posisikan slide aktif tepat di tengah
+    // Slide aktif selalu berada di tengah
     const centerOffset =
         (containerWidth - slideWidth) / 2;
     const position =
         centerOffset -
         (heroIndex * (slideWidth + gap));
-
     heroTrack.style.transform =
         `translateX(${position}px)`;
-    // Update dots
+    // Update dots banner utama
     heroDots.forEach((dot, index) => {
         dot.classList.toggle(
             "active",
@@ -1777,21 +1776,15 @@ function moveHeroSlide() {
         );
     });
 }
-// ===============================
-// POSISI AWAL
-// ===============================
+// Posisi awal
 moveHeroSlide();
-// ===============================
-// AUTO SLIDE
-// ===============================
+// Auto slide
 setInterval(() => {
     heroIndex =
         (heroIndex + 1) % heroSlides.length;
     moveHeroSlide();
 }, 9000);
-// ===============================
-// TETAP CENTER SAAT RESIZE
-// ===============================
+// Tetap center saat ukuran layar berubah
 window.addEventListener("resize", () => {
     moveHeroSlide();
 });
