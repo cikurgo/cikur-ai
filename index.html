@@ -666,35 +666,31 @@ html, body, * {
 }
 
 /* ==========================================
-   HERO BIG — NATURAL PEEK CAROUSEL
+   HERO BIG — CENTER + NATURAL PEEK
 ========================================== */
 
 .hero-big {
     width: 100%;
+    max-width: 100%;
     overflow: hidden;
     position: relative;
     margin: 0 auto 8px;
     border-radius: 16px;
 }
 
-/* Track carousel */
 .hero-big-track {
     display: flex;
     align-items: center;
     gap: 12px;
-    width: max-content;
-    padding-left: 6%;
-    padding-right: 6%;
+    width: 100%;
     transition: transform 0.8s cubic-bezier(.22,.61,.36,1);
     will-change: transform;
 }
 
-/* Setiap banner */
 .hero-big-track img {
-    width: 88vw;
-    max-width: 88%;
+    width: calc(100% - 40px);
+    flex: 0 0 calc(100% - 40px);
     height: auto;
-    flex: 0 0 88vw;
     object-fit: contain;
     display: block;
     border-radius: 16px;
@@ -1724,24 +1720,24 @@ setInterval(() => {
 }, 7000);
 
 /* ==========================================
-   HERO BIG — NATURAL PEEK CAROUSEL
+   HERO BIG — CENTER + NATURAL PEEK
 ========================================== */
 const heroBig = document.querySelector(".hero-big");
 const heroTrack = document.querySelector(".hero-big-track");
 const heroSlides = document.querySelectorAll(".hero-big-track img");
 let heroIndex = 0;
 function showHeroSlide(index) {
-    if (!heroBig || !heroTrack || heroSlides.length === 0) {
+    if (!heroBig || !heroTrack || !heroSlides.length) {
         return;
     }
     const slide = heroSlides[index];
     const containerWidth = heroBig.clientWidth;
     const slideWidth = slide.getBoundingClientRect().width;
     const gap = 12;
-    /* Posisi agar slide tepat di tengah */
+    /* Hitung agar banner aktif benar-benar CENTER */
     const centerOffset =
         (containerWidth - slideWidth) / 2;
-    /* Jarak perpindahan setiap slide */
+    /* Jarak perpindahan antar banner */
     const step =
         slideWidth + gap;
     const position =
@@ -1749,21 +1745,20 @@ function showHeroSlide(index) {
     heroTrack.style.transform =
         `translateX(${position}px)`;
 }
-/* Slide otomatis */
-setInterval(() => {
-    if (heroSlides.length > 0) {
+/* Posisi pertama */
+window.addEventListener("load", function () {
+    showHeroSlide(heroIndex);
+});
+/* Auto slide */
+setInterval(function () {
+    if (heroSlides.length) {
         heroIndex =
             (heroIndex + 1) % heroSlides.length;
         showHeroSlide(heroIndex);
     }
-
 }, 9000);
-/* Posisi awal */
-window.addEventListener("load", () => {
-    showHeroSlide(0);
-});
-/* Rapikan kembali saat ukuran layar berubah */
-window.addEventListener("resize", () => {
+/* Tetap center saat ukuran HP berubah */
+window.addEventListener("resize", function () {
     showHeroSlide(heroIndex);
 });
     
