@@ -665,38 +665,39 @@ html, body, * {
     border-radius: 3px;
 }
 
-/* ===========================
-   HERO BIG — STANDALONE
-=========================== */
+/* ==========================================
+   HERO BIG — NATURAL PEEK CAROUSEL
+========================================== */
 
 .hero-big {
     width: 100%;
     overflow: hidden;
     position: relative;
-    margin: 4px 0 18px;
-    padding: 6px 0 10px;
-    background: transparent;
+    margin: 0 auto 8px;
+    border-radius: 16px;
 }
 
+/* Track carousel */
 .hero-big-track {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 12px;
     width: max-content;
+    padding-left: 6%;
+    padding-right: 6%;
     transition: transform 0.8s cubic-bezier(.22,.61,.36,1);
     will-change: transform;
 }
 
+/* Setiap banner */
 .hero-big-track img {
-    width: 80vw;
+    width: 88vw;
+    max-width: 88%;
     height: auto;
-    flex: 0 0 80vw;
+    flex: 0 0 88vw;
     object-fit: contain;
     display: block;
-    border-radius: 18px;
-
-    box-shadow:
-        0 5px 16px rgba(0,0,0,0.08);
+    border-radius: 16px;
 }
     
 .mini-slider{
@@ -1225,12 +1226,12 @@ footer p { margin: 0; }
      HERO BANNER BESAR
 =========================== -->
 
-<div class="hero-big">
-    <div class="hero-big-track">
-        <img src="hero-banner1.png" alt="Hero 1">
-        <img src="hero-banner2.png" alt="Hero 2">
-        <img src="hero-banner3.png" alt="Hero 3">
-    </div>
+<div class="hero-big-track">
+    <img src="hero-banner1.png" alt="Hero 1">
+    <img src="hero-banner2.png" alt="Hero 2">
+    <img src="hero-banner3.png" alt="Hero 3">
+    <img src="hero-banner4.png" alt="Hero 4">
+</div>
 </div>
 
 
@@ -1722,33 +1723,49 @@ setInterval(() => {
     }
 }, 7000);
 
+/* ==========================================
+   HERO BIG — NATURAL PEEK CAROUSEL
+========================================== */
+const heroBig = document.querySelector(".hero-big");
 const heroTrack = document.querySelector(".hero-big-track");
 const heroSlides = document.querySelectorAll(".hero-big-track img");
 let heroIndex = 0;
-function moveHeroSlide() {
-    if (!heroTrack || heroSlides.length === 0) return;
-    const slideWidth =
-        heroSlides[0].getBoundingClientRect().width;
+function showHeroSlide(index) {
+    if (!heroBig || !heroTrack || heroSlides.length === 0) {
+        return;
+    }
+    const slide = heroSlides[index];
+    const containerWidth = heroBig.clientWidth;
+    const slideWidth = slide.getBoundingClientRect().width;
     const gap = 12;
-    const containerWidth =
-        heroTrack.parentElement.getBoundingClientRect().width;
-    // Selalu posisikan slide aktif tepat di tengah
+    /* Posisi agar slide tepat di tengah */
     const centerOffset =
         (containerWidth - slideWidth) / 2;
+    /* Jarak perpindahan setiap slide */
+    const step =
+        slideWidth + gap;
     const position =
-        centerOffset -
-        (heroIndex * (slideWidth + gap));
+        centerOffset - (index * step);
     heroTrack.style.transform =
         `translateX(${position}px)`;
 }
-// Posisi awal
-moveHeroSlide();
-// Auto slide
+/* Slide otomatis */
 setInterval(() => {
-    heroIndex =
-        (heroIndex + 1) % heroSlides.length;
-    moveHeroSlide();
+    if (heroSlides.length > 0) {
+        heroIndex =
+            (heroIndex + 1) % heroSlides.length;
+        showHeroSlide(heroIndex);
+    }
+
 }, 9000);
+/* Posisi awal */
+window.addEventListener("load", () => {
+    showHeroSlide(0);
+});
+/* Rapikan kembali saat ukuran layar berubah */
+window.addEventListener("resize", () => {
+    showHeroSlide(heroIndex);
+});
     
 const assistantScreen = document.getElementById("assistantScreen");
 const closeAssistant = document.getElementById("closeAssistant");
