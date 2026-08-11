@@ -666,65 +666,39 @@ html, body, * {
 }
 
 /* ===========================
-   HERO BIG — CENTER + PREMIUM
+   HERO BIG — CLEAN PEEK
 =========================== */
+
 .hero-big {
     width: 100%;
     overflow: hidden;
     position: relative;
     margin: 0 0 16px 0;
-    padding: 14px 0;
-    background:
-        radial-gradient(
-            circle at 15% 50%,
-            rgba(220, 0, 0, 0.08),
-            transparent 32%
-        ),
-        radial-gradient(
-            circle at 85% 50%,
-            rgba(255, 190, 0, 0.07),
-            transparent 32%
-        ),
-        linear-gradient(
-            90deg,
-            #fffafa 0%,
-            #ffffff 50%,
-            #fffafa 100%
-        );
+    padding: 8px 0 12px;
+    background: #ffffff;
 }
-.hero-big::before {
-    content: "";
-    position: absolute;
-    left: 8%;
-    right: 8%;
-    top: 20%;
-    bottom: 20%;
-    background: rgba(220, 0, 0, 0.06);
-    filter: blur(35px);
-    border-radius: 50%;
-    pointer-events: none;
-}
+
 .hero-big-track {
-    position: relative;
-    z-index: 1;
     display: flex;
     align-items: flex-start;
-    gap: 10px;
+    gap: 12px;
     width: max-content;
-    transition:
-        transform 0.8s cubic-bezier(.22,.61,.36,1);
+    transition: transform 0.8s cubic-bezier(.22,.61,.36,1);
     will-change: transform;
 }
+
 .hero-big-track img {
-    width: 88vw;
+    width: 84vw;
     height: auto;
-    flex: 0 0 88vw;
+    flex: 0 0 84vw;
     object-fit: contain;
     display: block;
     border-radius: 18px;
+
+    /* aksen natural */
     box-shadow:
-        0 8px 24px rgba(0,0,0,0.10),
-        0 0 0 1px rgba(0,0,0,0.04);
+        0 6px 18px rgba(0,0,0,0.10),
+        0 1px 3px rgba(0,0,0,0.06);
 }
     
 .mini-slider{
@@ -1757,10 +1731,10 @@ function moveHeroSlide() {
     if (!heroTrack || heroSlides.length === 0) return;
     const slideWidth =
         heroSlides[0].getBoundingClientRect().width;
-    const gap = 10;
+    const gap = 12;
     const containerWidth =
         heroTrack.parentElement.getBoundingClientRect().width;
-    /* Posisi agar slide utama benar-benar CENTER */
+    // Selalu posisikan slide aktif tepat di tengah
     const centerOffset =
         (containerWidth - slideWidth) / 2;
     const position =
@@ -1769,9 +1743,10 @@ function moveHeroSlide() {
     heroTrack.style.transform =
         `translateX(${position}px)`;
 }
+// Posisi awal
 moveHeroSlide();
+// Auto slide
 setInterval(() => {
-    if (!heroSlides.length) return;
     heroIndex =
         (heroIndex + 1) % heroSlides.length;
     moveHeroSlide();
