@@ -698,6 +698,28 @@ html, body, * {
     object-fit: contain;
     border-radius: 22px;
 }
+.dots{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.dots span{
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #cbd5e1;
+    transition: .35s;
+}
+
+.dots span.active{
+    width: 20px;
+    height: 6px;
+    border-radius: 10px;
+    background: var(--primary-red);
+}
 .mini-slider{
     width: 100%;
     aspect-ratio: 16 / 4;
@@ -1232,6 +1254,12 @@ footer p { margin: 0; }
     </div>
 </div>
 
+<div class="dots">
+    <span class="active"></span>
+    <span></span>
+    <span></span>
+</div>
+
 
 <!-- ===========================
      FEATURED HIGHLIGHTS
@@ -1723,6 +1751,7 @@ setInterval(() => {
 
 const heroTrack = document.querySelector(".hero-big-track");
 const heroSlides = document.querySelectorAll(".hero-big-track img");
+const heroDots = document.querySelectorAll(".dots span");
 let heroIndex = 0;
 function moveHeroSlide() {
     if (!heroTrack || heroSlides.length === 0) return;
@@ -1737,17 +1766,35 @@ function moveHeroSlide() {
     const position =
         centerOffset -
         (heroIndex * (slideWidth + gap));
+
     heroTrack.style.transform =
         `translateX(${position}px)`;
+    // Update dots
+    heroDots.forEach((dot, index) => {
+        dot.classList.toggle(
+            "active",
+            index === heroIndex
+        );
+    });
 }
-// Posisi awal
+// ===============================
+// POSISI AWAL
+// ===============================
 moveHeroSlide();
-// Auto slide
+// ===============================
+// AUTO SLIDE
+// ===============================
 setInterval(() => {
     heroIndex =
         (heroIndex + 1) % heroSlides.length;
     moveHeroSlide();
 }, 9000);
+// ===============================
+// TETAP CENTER SAAT RESIZE
+// ===============================
+window.addEventListener("resize", () => {
+    moveHeroSlide();
+});
     
 const assistantScreen = document.getElementById("assistantScreen");
 const closeAssistant = document.getElementById("closeAssistant");
