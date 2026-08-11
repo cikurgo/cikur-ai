@@ -665,37 +665,39 @@ html, body, * {
     border-radius: 3px;
 }
 
-/* ==========================================
-   HERO BIG — CENTER + NATURAL PEEK
-========================================== */
+/* ===========================
+   HERO BIG — STANDALONE
+=========================== */
 
 .hero-big {
     width: 100%;
-    max-width: 100%;
     overflow: hidden;
     position: relative;
-    margin: 0 auto 8px;
-    border-radius: 16px;
+    margin: 4px 0 18px;
+    padding: 6px 0 10px;
+    background: transparent;
 }
 
 .hero-big-track {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 12px;
-    width: 100%;
+    width: max-content;
     transition: transform 0.8s cubic-bezier(.22,.61,.36,1);
     will-change: transform;
 }
 
 .hero-big-track img {
-    width: calc(100% - 40px);
-    flex: 0 0 calc(100% - 40px);
+    width: 80vw;
     height: auto;
+    flex: 0 0 80vw;
     object-fit: contain;
     display: block;
-    border-radius: 16px;
+    border-radius: 18px;
+
+    box-shadow:
+        0 5px 16px rgba(0,0,0,0.08);
 }
-    
 .mini-slider{
     width: 100%;
     aspect-ratio: 16 / 4;
@@ -1222,12 +1224,12 @@ footer p { margin: 0; }
      HERO BANNER BESAR
 =========================== -->
 
-<div class="hero-big-track">
-    <img src="hero-banner1.png" alt="Hero 1">
-    <img src="hero-banner2.png" alt="Hero 2">
-    <img src="hero-banner3.png" alt="Hero 3">
-    <img src="hero-banner4.png" alt="Hero 4">
-</div>
+<div class="hero-big">
+    <div class="hero-big-track">
+        <img src="hero-banner1.png" alt="Hero 1">
+        <img src="hero-banner2.png" alt="Hero 2">
+        <img src="hero-banner3.png" alt="Hero 3">
+    </div>
 </div>
 
 
@@ -1719,48 +1721,33 @@ setInterval(() => {
     }
 }, 7000);
 
-/* ==========================================
-   HERO BIG — CENTER + NATURAL PEEK
-========================================== */
-const heroBig = document.querySelector(".hero-big");
 const heroTrack = document.querySelector(".hero-big-track");
 const heroSlides = document.querySelectorAll(".hero-big-track img");
 let heroIndex = 0;
-function showHeroSlide(index) {
-    if (!heroBig || !heroTrack || !heroSlides.length) {
-        return;
-    }
-    const slide = heroSlides[index];
-    const containerWidth = heroBig.clientWidth;
-    const slideWidth = slide.getBoundingClientRect().width;
+function moveHeroSlide() {
+    if (!heroTrack || heroSlides.length === 0) return;
+    const slideWidth =
+        heroSlides[0].getBoundingClientRect().width;
     const gap = 12;
-    /* Hitung agar banner aktif benar-benar CENTER */
+    const containerWidth =
+        heroTrack.parentElement.getBoundingClientRect().width;
+    // Selalu posisikan slide aktif tepat di tengah
     const centerOffset =
         (containerWidth - slideWidth) / 2;
-    /* Jarak perpindahan antar banner */
-    const step =
-        slideWidth + gap;
     const position =
-        centerOffset - (index * step);
+        centerOffset -
+        (heroIndex * (slideWidth + gap));
     heroTrack.style.transform =
         `translateX(${position}px)`;
 }
-/* Posisi pertama */
-window.addEventListener("load", function () {
-    showHeroSlide(heroIndex);
-});
-/* Auto slide */
-setInterval(function () {
-    if (heroSlides.length) {
-        heroIndex =
-            (heroIndex + 1) % heroSlides.length;
-        showHeroSlide(heroIndex);
-    }
+// Posisi awal
+moveHeroSlide();
+// Auto slide
+setInterval(() => {
+    heroIndex =
+        (heroIndex + 1) % heroSlides.length;
+    moveHeroSlide();
 }, 9000);
-/* Tetap center saat ukuran HP berubah */
-window.addEventListener("resize", function () {
-    showHeroSlide(heroIndex);
-});
     
 const assistantScreen = document.getElementById("assistantScreen");
 const closeAssistant = document.getElementById("closeAssistant");
