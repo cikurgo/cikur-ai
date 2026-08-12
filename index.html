@@ -181,7 +181,7 @@ html, body, * {
    HEADER GO-APP PREMIUM v2 (CLEAN TRANSPARAN TANPA BLUR)
 =========================== */
 .app-header {
-    position: fixed;
+    position: absolute; /* Diubah dari fixed ke absolute agar menempel di atas banner */
     top: 0;
     left: 50%;
     transform: translateX(-50%);
@@ -190,12 +190,8 @@ html, body, * {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 18px;
-    background: transparent; /* Transparan murni tanpa blok warna */
-    backdrop-filter: none; /* Tanpa efek blur */
-    -webkit-backdrop-filter: none;
-    border-bottom: none;
-    box-shadow: none;
+    padding: 14px 18px;
+    background: transparent; 
     z-index: 1000;
 }
 
@@ -280,7 +276,7 @@ html, body, * {
 }
 
 /* ===========================
-   BANNER BESAR FULL BLEED (SEPEREMPAT LAYAR / SISI KE SISI)
+   BANNER BESAR FULL BLEED (DIPERBESAR & MENEMBUS HEADER)
 =========================== */
 .main-banner-section {
     width: 100vw;
@@ -288,15 +284,15 @@ html, body, * {
     transform: translateX(-50%);
     margin-top: 0;
     margin-bottom: 14px;
-    padding-top: 70px; /* Memberikan ruang agar konten di dalam banner tidak tertutup header fixed */
+    padding-top: 0; /* Dibuat 0 agar banner mulai dari titik paling atas layar */
     background: transparent;
 }
 
 .banner-card-content {
     width: 100%;
-    aspect-ratio: 4 / 1; /* Menyesuaikan proporsi seperempat layar */
+    aspect-ratio: 4 / 3; /* Diubah dari 4/1 menjadi lebih tinggi (4/3) agar banner jauh lebih besar */
     background: #ffffff;
-    border-radius: 0; /* Full tanpa lengkungan di ujung agar mentok sisi HP */
+    border-radius: 0; 
     overflow: hidden;
     box-shadow: 0 4px 15px rgba(0,0,0,0.05);
     border: none;
@@ -305,7 +301,7 @@ html, body, * {
 .banner-image {
     width: 100%;
     height: 100%;
-    object-fit: cover; 
+    object-fit: cover; /* Menyesuaikan gambar agar penuh menutupi area banner */
     display: block;
 }
 
@@ -1053,17 +1049,17 @@ footer p { margin: 0; }
     </div>
 </div>
 
-<!-- STICKY PERMANENT HEADER (Fixed di atas - Clean Transparan Tanpa Blur) -->
-<div class="app-header">
-    <div class="header-profile-wrapper">
-        <div class="user-greeting" id="btnOpenProfileDropdown">
-            <div class="user-avatar" id="headerAvatar">CK</div>
-            <div class="user-info">
-                <h4>Selamat Datang,</h4>
-                <h2 id="headerNamaUser">CIKUR USER</h2>
-                <div class="assistant-offer-text">Butuh Assistant hari ini? ✨</div>
+<!-- STICKY / ABSOLUTE PERMANENT HEADER (Mengapung di atas banner besar) -->
+    <div class="app-header">
+        <div class="header-profile-wrapper">
+            <div class="user-greeting" id="btnOpenProfileDropdown">
+                <div class="user-avatar" id="headerAvatar">CK</div>
+                <div class="user-info">
+                    <h4 style="color: #475569;">Selamat Datang,</h4>
+                    <h2 id="headerNamaUser" style="color: #0f172a;">CIKUR USER</h2>
+                    <div class="assistant-offer-text">Butuh Assistant hari ini? ✨</div>
+                </div>
             </div>
-        </div>
         <!-- DROPDOWN MENU AKUN -->
         <div class="header-dropdown-menu" id="headerDropdownMenu">
             <div class="dropdown-item" onclick="switchTab('transaksi'); closeHeaderDropdown();" style="background-color: #fff5f5; border-radius: 10px; margin-bottom: 4px; cursor: pointer; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(229, 9, 20, 0.15);">
@@ -1114,8 +1110,8 @@ footer p { margin: 0; }
     </div>
 </div>
 
-<div class="container">
-    <!-- BANNER BESAR / HERO SECTION (Full-bleed menyatu di bawah header fixed) -->
+<div class="container" style="padding-top: 0;"> <!-- Padding atas container dinolkan -->
+    <!-- BANNER BESAR / HERO SECTION (Full-bleed paling atas menembus header) -->
     <div class="main-banner-section">
         <div class="banner-card-content">
             <img src="URL_GAMBAR_BANNER_ANDA" alt="Cikur Go Banner" class="banner-image">
