@@ -49,7 +49,7 @@ body{
     max-width: 440px;
     min-height: 100vh;
     margin: 0 auto;
-    padding: 12px 18px 100px 18px; /* Padding atas dikembalikan normal karena sticky sudah mengatur ruangnya */
+    padding: 85px 18px 100px 18px; /* Padding atas disesuaikan agar pas di bawah header fixed */
     display: flex;
     flex-direction: column;
     background: var(--container-bg);
@@ -181,21 +181,22 @@ html, body, * {
    HEADER GO-APP PREMIUM v2 (MENYATU & PATEN)
 =========================== */
 .app-header {
-    /* Ubah dari fixed menjadi sticky agar ikut mengalir dalam dokumen tapi tetap menempel di atas */
-    position: sticky;
+    position: fixed;
     top: 0;
-    left: 0;
+    left: 50%;
+    transform: translateX(-50%);
     width: 100%;
+    max-width: 440px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
+    padding: 12px 18px;
     background: rgba(255,255,255,.92);
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);
     border-bottom: 1px solid rgba(0,0,0,.05);
     box-shadow: 0 6px 22px rgba(0,0,0,.06);
-    z-index: 999;
+    z-index: 1000;
 }
 
 .header-profile-wrapper{
@@ -208,9 +209,8 @@ html, body, * {
     align-items: center;
     gap: 14px;
     width: 100%;
-    padding: 8px 12px;
+    padding: 4px 0;
     cursor: pointer;
-    /* Hilangkan background putih kartu dan border luar agar menyatu rata dengan latar banner */
     background: transparent;
     border: none;
     border-radius: 18px;
@@ -219,25 +219,24 @@ html, body, * {
 }
 
 .user-greeting:hover{
-    background: rgba(255, 255, 255, 0.4);
-    transform: translateY(-1px);
+    opacity: 0.85;
 }
 
 .user-avatar{
-    width: 52px;
-    height: 52px;
-    min-width: 52px;
+    width: 46px;
+    height: 46px;
+    min-width: 46px;
     border-radius: 50%;
     background: linear-gradient(135deg,#ff4d4d,#d60000);
-    border: 3px solid #fff;
+    border: 2px solid #fff;
     display: flex;
     align-items: center;
     justify-content: center;
     color: #fff;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 800;
     overflow: hidden;
-    box-shadow: 0 8px 18px rgba(229,9,20,.28);
+    box-shadow: 0 4px 12px rgba(229,9,20,.2);
     transition: .3s;
 }
 
@@ -254,41 +253,41 @@ html, body, * {
 
 .user-info h4{
     margin: 0;
-    font-size: 11px;
+    font-size: 10px;
     color: var(--text-muted);
     font-weight: 600;
 }
 
 .user-info h2{
-    margin: 2px 0;
-    font-size: 16px;
+    margin: 1px 0;
+    font-size: 14px;
     color: var(--text-main);
     font-weight: 800;
-    line-height: 1.25;
+    line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .assistant-offer-text{
-    margin-top: 2px;
-    font-size: 11px;
+    margin-top: 1px;
+    font-size: 10px;
     font-weight: 700;
     color: var(--primary-red);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
 .main-banner-section {
     width: 100%;
-    margin-top: 10px;
-    margin-bottom: 16px;
+    margin-top: 4px;
+    margin-bottom: 14px;
 }
 
 .banner-card-content {
     width: 100%;
-    /* Menggunakan aspect-ratio agar tinggi otomatis menyesuaikan lebar layar HP */
-    aspect-ratio: 2.1 / 1; /* Artinya lebar 2.1 bagian, tinggi 1 bagian */
+    aspect-ratio: 2.1 / 1;
     background: #ffffff;
     border-radius: 20px;
     overflow: hidden;
@@ -299,17 +298,16 @@ html, body, * {
 .banner-image {
     width: 100%;
     height: 100%;
-    /* object-fit cover memastikan gambar memenuhi kotak tanpa merusak bentuk aslinya */
     object-fit: cover; 
     display: block;
 }
+
 /* ===========================
    HEADER DROPDOWN PREMIUM
 =========================== */
-
 .header-dropdown-menu{
     position: absolute;
-    top: calc(100% + 8px);
+    top: calc(100% + 12px);
     left: 0;
     width: 260px;
     display: none;
@@ -530,55 +528,35 @@ html, body, * {
     width: 100%;
     letter-spacing: -0.1px;
 }
+
 /* ==========================================
    CGO SERVICE BUBBLE
 ========================================== */
-
 .cgo-service-bubble {
     position: fixed !important;
-
     right: 14px;
     bottom: 105px;
-
     width: 250px;
     max-width: calc(100vw - 40px);
-
     padding: 10px 14px;
-
     background: rgba(255, 255, 255, 0.98);
-
     border: 1px solid rgba(229, 9, 20, 0.10);
     border-radius: 17px;
-
-    box-shadow:
-        0 8px 22px rgba(0, 0, 0, 0.10);
-
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.10);
     z-index: 10000;
-
     opacity: 0;
     visibility: hidden;
-
     transform: translateY(8px) scale(0.96);
-
     pointer-events: none;
-
-    transition:
-        opacity 0.25s ease,
-        transform 0.25s ease,
-        visibility 0.25s ease;
+    transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s ease;
 }
 
 .cgo-service-bubble.show {
     opacity: 1;
     visibility: visible;
-
     transform: translateY(0) scale(1);
-
     pointer-events: auto;
 }
-
-
-/* ISI */
 
 .cgo-bubble-content {
     padding-right: 20px;
@@ -587,7 +565,6 @@ html, body, * {
 .cgo-bubble-content strong {
     display: block;
     margin-bottom: 2px;
-
     font-size: 12px;
     font-weight: 800;
     color: var(--primary-red);
@@ -595,67 +572,30 @@ html, body, * {
 
 .cgo-bubble-content p {
     margin: 0;
-
     font-size: 13px;
     line-height: 1.35;
     font-weight: 600;
-
     color: var(--text-main);
 }
 
-
-/* X */
-
 .cgo-bubble-close {
     position: absolute;
-
     top: 5px;
     right: 6px;
-
     width: 22px;
     height: 22px;
-
     padding: 0;
     border: none;
     background: transparent;
-
     color: #94a3b8;
-
     font-size: 18px;
     line-height: 18px;
-
     display: flex;
     align-items: center;
     justify-content: center;
-
     cursor: pointer;
 }
 
-
-/* MOBILE */
-
-@media (max-width: 480px) {
-
-    .cgo-service-bubble {
-        right: 14px;
-        bottom: 105px;
-
-        width: 250px;
-        max-width: calc(100vw - 40px);
-
-        padding: 10px 13px;
-
-        border-radius: 16px;
-    }
-
-    .cgo-bubble-content strong {
-        font-size: 11px;
-    }
-
-    .cgo-bubble-content p {
-        font-size: 12.5px;
-    }
-}
 /* ===========================
    HERO FRAME
 =========================== */
@@ -690,7 +630,6 @@ html, body, * {
 /* ==========================================
    HERO BIG — FULL BLEED / SIDE PEEK
 ========================================== */
-
 .hero-big {
     width: 100vw;
     margin-left: 50%;
@@ -700,7 +639,7 @@ html, body, * {
     padding: 0;
     background: transparent;
 }
-/* Track carousel */
+
 .hero-big-track {
     display: flex;
     align-items: center;
@@ -710,7 +649,6 @@ html, body, * {
     will-change: transform;
 }
 
-/* Banner */
 .hero-big-track img {
     display: block;
     width: calc(100vw - 70px);
@@ -720,28 +658,7 @@ html, body, * {
     object-fit: contain;
     border-radius: 22px;
 }
-.dots{
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 6px;
-    margin-top: 8px;
-}
 
-.dots span{
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #cbd5e1;
-    transition: .35s;
-}
-
-.dots span.active{
-    width: 20px;
-    height: 6px;
-    border-radius: 10px;
-    background: var(--primary-red);
-}
 .mini-slider{
     width: 100%;
     aspect-ratio: 16 / 4;
@@ -1129,68 +1046,68 @@ footer p { margin: 0; }
     </div>
 </div>
 
-<div class="container" style="padding-top: 85px;">
-    <!-- STICKY PERMANENT HEADER -->
-    <div class="app-header">
-        <div class="header-profile-wrapper">
-            <div class="user-greeting" id="btnOpenProfileDropdown">
-                <div class="user-avatar" id="headerAvatar">CK</div>
-                <div class="user-info">
-                    <h4>Selamat Datang,</h4>
-                    <h2 id="headerNamaUser">CIKUR USER</h2>
-                    <div class="assistant-offer-text">Butuh Assistant hari ini? ✨</div>
-                </div>
-            </div>
-            <!-- DROPDOWN MENU AKUN -->
-            <div class="header-dropdown-menu" id="headerDropdownMenu">
-                <div class="dropdown-item" onclick="switchTab('transaksi'); closeHeaderDropdown();" style="background-color: #fff5f5; border-radius: 10px; margin-bottom: 4px; cursor: pointer; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(229, 9, 20, 0.15);">
-                    <svg style="width: 20px; height: 20px;" viewBox="0 0 24 24" fill="var(--primary-red)"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5Z"/></svg>
-                    <div style="display: flex; flex-direction: column; align-items: flex-start; text-align: left; line-height: 1.2;">
-                        <span style="font-size: 9px; font-weight: 800; color: var(--primary-red);">CIKURPAY</span>
-                        <span id="displaySaldo" style="font-size: 12px; font-weight: 800; color: #0f172a;">Rp125.000</span>
-                    </div>
-                </div>
-                <div class="dropdown-divider"></div>
-                
-                <button class="dropdown-item" onclick="bukaModalPengaturanProfil(); closeHeaderDropdown();">
-                    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22Z"/></svg>
-                    <span>Akun & Profil</span>
-                </button>
-                <button class="dropdown-item" onclick="bukaModalAturPin(); closeHeaderDropdown();">
-                    <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
-                    <span>Keamanan PIN CikurPay</span>
-                </button>
-                <button class="dropdown-item" onclick="window.location.href='agentcgo.html'; closeHeaderDropdown();">
-                    <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A1.5 1.5 0 0 0 6 14.5A1.5 1.5 0 0 0 7.5 16A1.5 1.5 0 0 0 9 14.5A1.5 1.5 0 0 0 7.5 13m9 0a1.5 1.5 0 0 0-1.5 1.5a1.5 1.5 0 0 0 1.5 1.5a1.5 1.5 0 0 0 1.5-1.5a1.5 1.5 0 0 0-1.5-1.5Z"/></svg>
-                    <span>Agent CGO</span>
-                </button>
-                <button class="dropdown-item" onclick="window.location.href='resto.html'; closeHeaderDropdown();">
-                    <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4Z"/></svg>
-                    <span>Resto</span>
-                </button>
-                <button class="dropdown-item" onclick="window.location.href='driver.html'; closeHeaderDropdown();">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                        <path d="M5 13c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3zm7-8-2 3H7c-.55 0-1 .45-1 1s.45 1 1 1h2.15l1.63-2.45L15.35 12H19c.55 0 1-.45 1-1s-.45-1-1-1h-2.15l-1.92-2.88c-.3-.45-.81-.72-1.35-.72H12zm7 8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3 z"/>
-                    </svg>
-                    <span>Driver</span>
-                </button>
-                <div class="dropdown-divider"></div>
-                <button class="dropdown-item" onclick="switchTab('transaksi'); closeHeaderDropdown();">
-                    <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5Z"/></svg>
-                    <span>Riwayat Saldo</span>
-                </button>
-                <button class="dropdown-item" onclick="prosesLogout(); closeHeaderDropdown();" style="color: var(--primary-red);">
-                    <svg viewBox="0 0 24 24" fill="var(--primary-red)"><path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>
-                    <span>Keluar Akun (Logout)</span>
-                </button>
-                <button class="dropdown-item" onclick="bukaModalRegistrasi(); closeHeaderDropdown();" style="color: #0284c7;">
-                    <svg viewBox="0 0 24 24" fill="#0284c7"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2Z"/></svg>
-                    <span>Ganti Akun / Registrasi</span>
-                </button>
+<!-- STICKY PERMANENT HEADER (Fixed di atas kontainer) -->
+<div class="app-header">
+    <div class="header-profile-wrapper">
+        <div class="user-greeting" id="btnOpenProfileDropdown">
+            <div class="user-avatar" id="headerAvatar">CK</div>
+            <div class="user-info">
+                <h4>Selamat Datang,</h4>
+                <h2 id="headerNamaUser">CIKUR USER</h2>
+                <div class="assistant-offer-text">Butuh Assistant hari ini? ✨</div>
             </div>
         </div>
+        <!-- DROPDOWN MENU AKUN -->
+        <div class="header-dropdown-menu" id="headerDropdownMenu">
+            <div class="dropdown-item" onclick="switchTab('transaksi'); closeHeaderDropdown();" style="background-color: #fff5f5; border-radius: 10px; margin-bottom: 4px; cursor: pointer; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(229, 9, 20, 0.15);">
+                <svg style="width: 20px; height: 20px;" viewBox="0 0 24 24" fill="var(--primary-red)"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5Z"/></svg>
+                <div style="display: flex; flex-direction: column; align-items: flex-start; text-align: left; line-height: 1.2;">
+                    <span style="font-size: 9px; font-weight: 800; color: var(--primary-red);">CIKURPAY</span>
+                    <span id="displaySaldo" style="font-size: 12px; font-weight: 800; color: #0f172a;">Rp125.000</span>
+                </div>
+            </div>
+            <div class="dropdown-divider"></div>
+            
+            <button class="dropdown-item" onclick="bukaModalPengaturanProfil(); closeHeaderDropdown();">
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22Z"/></svg>
+                <span>Akun & Profil</span>
+            </button>
+            <button class="dropdown-item" onclick="bukaModalAturPin(); closeHeaderDropdown();">
+                <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+                <span>Keamanan PIN CikurPay</span>
+            </button>
+            <button class="dropdown-item" onclick="window.location.href='agentcgo.html'; closeHeaderDropdown();">
+                <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A1.5 1.5 0 0 0 6 14.5A1.5 1.5 0 0 0 7.5 16A1.5 1.5 0 0 0 9 14.5A1.5 1.5 0 0 0 7.5 13m9 0a1.5 1.5 0 0 0-1.5 1.5a1.5 1.5 0 0 0 1.5 1.5a1.5 1.5 0 0 0 1.5-1.5a1.5 1.5 0 0 0-1.5-1.5Z"/></svg>
+                <span>Agent CGO</span>
+            </button>
+            <button class="dropdown-item" onclick="window.location.href='resto.html'; closeHeaderDropdown();">
+                <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4Z"/></svg>
+                <span>Resto</span>
+            </button>
+            <button class="dropdown-item" onclick="window.location.href='driver.html'; closeHeaderDropdown();">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                    <path d="M5 13c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3zm7-8-2 3H7c-.55 0-1 .45-1 1s.45 1 1 1h2.15l1.63-2.45L15.35 12H19c.55 0 1-.45 1-1s-.45-1-1-1h-2.15l-1.92-2.88c-.3-.45-.81-.72-1.35-.72H12zm7 8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3 z"/>
+                </svg>
+                <span>Driver</span>
+            </button>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item" onclick="switchTab('transaksi'); closeHeaderDropdown();">
+                <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5Z"/></svg>
+                <span>Riwayat Saldo</span>
+            </button>
+            <button class="dropdown-item" onclick="prosesLogout(); closeHeaderDropdown();" style="color: var(--primary-red);">
+                <svg viewBox="0 0 24 24" fill="var(--primary-red)"><path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>
+                <span>Keluar Akun (Logout)</span>
+            </button>
+            <button class="dropdown-item" onclick="bukaModalRegistrasi(); closeHeaderDropdown();" style="color: #0284c7;">
+                <svg viewBox="0 0 24 24" fill="#0284c7"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2Z"/></svg>
+                <span>Ganti Akun / Registrasi</span>
+            </button>
+        </div>
     </div>
+</div>
 
+<div class="container">
     <!-- BANNER BESAR / HERO SECTION (Tepat di bawah header fixed) -->
     <div class="main-banner-section">
         <div class="banner-card-content">
@@ -1198,7 +1115,6 @@ footer p { margin: 0; }
             <img src="URL_GAMBAR_BANNER_ANDA" alt="Cikur Go Banner" class="banner-image">
         </div>
     </div>
-</div>
 
     <!-- VIEW 1: BERANDA -->
     <div id="view-beranda" class="tab-content-view active">
@@ -1241,20 +1157,16 @@ footer p { margin: 0; }
                 </a>
             </div>
         </div>
+        
         <!-- CGO SERVICE GREETING -->
-<div id="cgoServiceBubble" class="cgo-service-bubble">
-    <button id="cgoBubbleClose"
-            class="cgo-bubble-close"
-            aria-label="Tutup">
-        ×
-    </button>
-    <div class="cgo-bubble-content">
-        <strong id="cgoBubbleTitle">CGO</strong>
-        <p id="cgoBubbleMessage">
-            Hai 👋 Kamu butuh bantuan apa?
-        </p>
-    </div>
-</div>
+        <div id="cgoServiceBubble" class="cgo-service-bubble">
+            <button id="cgoBubbleClose" class="cgo-bubble-close" aria-label="Tutup">×</button>
+            <div class="cgo-bubble-content">
+                <strong id="cgoBubbleTitle">CGO</strong>
+                <p id="cgoBubbleMessage">Hai 👋 Kamu butuh bantuan apa?</p>
+            </div>
+        </div>
+        
         <!-- Integrasi cikurgo2in1.html -->
         <div style="width: 100%; margin-top: 4px; margin-bottom: 12px; box-sizing: border-box;">
             <a href="cikurgo2in1.html" 
@@ -1273,46 +1185,39 @@ footer p { margin: 0; }
             </a>
         </div>
 
-        <!-- ===========================
-     HERO BANNER BESAR
-=========================== -->
-
-<div class="hero-big">
-    <div class="hero-big-track">
-        <img src="hero-banner1.png" alt="Hero 1">
-        <img src="hero-banner2.png" alt="Hero 2">
-        <img src="hero-banner3.png" alt="Hero 3">
-    </div>
-</div>
-
-<div class="dots hero-dots">
-    <span class="active"></span>
-    <span></span>
-    <span></span>
-</div>
-
-
-<!-- ===========================
-     FEATURED HIGHLIGHTS
-=========================== -->
-
-<div class="hero-frame">
-    <div class="section-label-mini">Featured Highlights</div>
-
-    <div class="mini-slider">
-        <div class="mini-slides">
-            <img src="banner-mini-assistant.png" alt="Mini Assistant">
-            <img src="banner-mini-food.png" alt="Mini Food">
-            <img src="banner-mini-ride.png" alt="Mini Ride">
+        <!-- HERO BANNER BESAR -->
+        <div class="hero-big">
+            <div class="hero-big-track">
+                <img src="hero-banner1.png" alt="Hero 1">
+                <img src="hero-banner2.png" alt="Hero 2">
+                <img src="hero-banner3.png" alt="Hero 3">
+            </div>
         </div>
-    </div>
 
-    <div class="mini-dots">
-        <span class="active"></span>
-        <span></span>
-        <span></span>
-    </div>
-</div>
+        <div class="dots hero-dots">
+            <span class="active"></span>
+            <span></span>
+            <span></span>
+        </div>
+
+        <!-- FEATURED HIGHLIGHTS -->
+        <div class="hero-frame">
+            <div class="section-label-mini">Featured Highlights</div>
+
+            <div class="mini-slider">
+                <div class="mini-slides">
+                    <img src="banner-mini-assistant.png" alt="Mini Assistant">
+                    <img src="banner-mini-food.png" alt="Mini Food">
+                    <img src="banner-mini-ride.png" alt="Mini Ride">
+                </div>
+            </div>
+
+            <div class="mini-dots">
+                <span class="active"></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
 
         <!-- Tombol Tanya CGO Langsung Terhubung ke Botpress Chat CGO -->
         <div class="chat-action-box">
@@ -1447,7 +1352,6 @@ window.addEventListener("DOMContentLoaded", function () {
 
         }, 1200);
     }
-
     
     // Render Barcode Utama di Tab Transaksi
     const renderBox = document.getElementById("mainQisBarcodeRender");
@@ -1786,36 +1690,25 @@ const heroDots = document.querySelectorAll(".hero-dots span");
 let heroIndex = 0;
 function moveHeroSlide() {
     if (!heroTrack || heroSlides.length === 0) return;
-    const slideWidth =
-        heroSlides[0].getBoundingClientRect().width;
+    const slideWidth = heroSlides[0].getBoundingClientRect().width;
     const gap = 12;
-    const containerWidth =
-        heroTrack.parentElement.getBoundingClientRect().width;
-    // Slide aktif selalu berada di tengah
-    const centerOffset =
-        (containerWidth - slideWidth) / 2;
-    const position =
-        centerOffset -
-        (heroIndex * (slideWidth + gap));
-    heroTrack.style.transform =
-        `translateX(${position}px)`;
-    // Update dots banner utama
+    const containerWidth = heroTrack.parentElement.getBoundingClientRect().width;
+    const centerOffset = (containerWidth - slideWidth) / 2;
+    const position = centerOffset - (heroIndex * (slideWidth + gap));
+    heroTrack.style.transform = `translateX(${position}px)`;
+    
     heroDots.forEach((dot, index) => {
-        dot.classList.toggle(
-            "active",
-            index === heroIndex
-        );
+        dot.classList.toggle("active", index === heroIndex);
     });
 }
-// Posisi awal
+
 moveHeroSlide();
-// Auto slide
+
 setInterval(() => {
-    heroIndex =
-        (heroIndex + 1) % heroSlides.length;
+    heroIndex = (heroIndex + 1) % heroSlides.length;
     moveHeroSlide();
 }, 9000);
-// Tetap center saat ukuran layar berubah
+
 window.addEventListener("resize", () => {
     moveHeroSlide();
 });
@@ -1974,10 +1867,7 @@ if(chatBtn) {
         }, 500);
     });
 }
-/* ==========================================
-   CGO BUBBLE ↔ ROBOT BOTPRESS
-   TIDAK MENAMBAHKAN ROBOT BARU
-========================================== */
+
 let cgoRobotHidden = false;
 function getCGOFAB() {
     return (
@@ -1993,164 +1883,73 @@ function manageBotpressWidgetVisibility(hide) {
         const fab = getCGOFAB();
         if (!fab) return false;
         if (hide) {
-            fab.style.setProperty(
-                "transform",
-                "translateX(120%)",
-                "important"
-            );
-
-            fab.style.setProperty(
-                "opacity",
-                "0",
-                "important"
-            );
-
-            fab.style.setProperty(
-                "visibility",
-                "hidden",
-                "important"
-            );
-
-            fab.style.setProperty(
-                "pointer-events",
-                "none",
-                "important"
-            );
-
+            fab.style.setProperty("transform", "translateX(120%)", "important");
+            fab.style.setProperty("opacity", "0", "important");
+            fab.style.setProperty("visibility", "hidden", "important");
+            fab.style.setProperty("pointer-events", "none", "important");
         } else {
-
-            fab.style.setProperty(
-                "transform",
-                "translateX(0)",
-                "important"
-            );
-
-            fab.style.setProperty(
-                "opacity",
-                "1",
-                "important"
-            );
-
-            fab.style.setProperty(
-                "visibility",
-                "visible",
-                "important"
-            );
-
-            fab.style.setProperty(
-                "pointer-events",
-                "auto",
-                "important"
-            );
+            fab.style.setProperty("transform", "translateX(0)", "important");
+            fab.style.setProperty("opacity", "1", "important");
+            fab.style.setProperty("visibility", "visible", "important");
+            fab.style.setProperty("pointer-events", "auto", "important");
         }
-
         return true;
     };
     if (apply()) return;
     let attempts = 0;
     const waitForFAB = setInterval(() => {
-
         attempts++;
-
         if (apply() || attempts >= 30) {
             clearInterval(waitForFAB);
         }
-
     }, 200);
 }
-/* ==========================================
-   CGO SERVICE GREETING
-   TAP 1 = CGO NGOMONG
-   TAP 2 = MASUK HALAMAN LAYANAN
-========================================== */
+
 document.addEventListener("DOMContentLoaded", function () {
     const cgoBubble = document.getElementById("cgoServiceBubble");
     const cgoBubbleTitle = document.getElementById("cgoBubbleTitle");
     const cgoBubbleMessage = document.getElementById("cgoBubbleMessage");
     const cgoBubbleClose = document.getElementById("cgoBubbleClose");
     const serviceMessages = {
-        btnAssistant: {
-            title: "CGO",
-            message: "Hai 👋 Kamu butuh bantuan apa?"
-        },
-        btnFood: {
-            title: "CGO",
-            message: "Lagi lapar? 😊 Yuk cari makanan yang kamu suka."
-        },
-        btnRide: {
-            title: "CGO",
-            message: "Mau pergi ke mana hari ini? 🛵"
-        }
+        btnAssistant: { title: "CGO", message: "Hai 👋 Kamu butuh bantuan apa?" },
+        btnFood: { title: "CGO", message: "Lagi lapar? 😊 Yuk cari makanan yang kamu suka." },
+        btnRide: { title: "CGO", message: "Mau pergi ke mana hari ini? 🛵" }
     };
-    /* ------------------------------------------
-       STATUS TAP
-    ------------------------------------------ */
+
     const serviceTapState = {
         btnAssistant: false,
         btnFood: false,
         btnRide: false
     };
-    /* ------------------------------------------
-       TOMBOL LAYANAN
-    ------------------------------------------ */
+
     Object.keys(serviceMessages).forEach(function (id) {
         const button = document.getElementById(id);
         if (!button) return;
         button.addEventListener("click", function (event) {
             const data = serviceMessages[id];
-            /* ==================================
-               TAP PERTAMA
-               CGO MUNCUL + NGOMONG
-            ================================== */
             if (!serviceTapState[id]) {
-                // Jangan masuk halaman dulu
                 event.preventDefault();
-                // Tandai tombol sudah disentuh
                 serviceTapState[id] = true;
-                // Robot CGO muncul kembali
                 if (typeof manageBotpressWidgetVisibility === "function") {
                     manageBotpressWidgetVisibility(false);
                 }
-                // Ganti isi bubble
-                if (cgoBubbleTitle) {
-                    cgoBubbleTitle.textContent = data.title;
-                }
-                if (cgoBubbleMessage) {
-                    cgoBubbleMessage.textContent = data.message;
-                }
-                // Tampilkan bubble
-                if (cgoBubble) {
-                    cgoBubble.classList.add("show");
-                }
+                if (cgoBubbleTitle) cgoBubbleTitle.textContent = data.title;
+                if (cgoBubbleMessage) cgoBubbleMessage.textContent = data.message;
+                if (cgoBubble) cgoBubble.classList.add("show");
                 return;
             }
-            /* ==================================
-               TAP KEDUA
-               MASUK HALAMAN LAYANAN
-            ================================== */
-            // Biarkan href bekerja normal
-            // tetapi reset status terlebih dahulu
             serviceTapState[id] = false;
         });
     });
-    /* ------------------------------------------
-       TOMBOL X
-       BUBBLE + ROBOT HILANG
-    ------------------------------------------ */
+
     if (cgoBubbleClose) {
         cgoBubbleClose.addEventListener("click", function (event) {
-
             event.preventDefault();
             event.stopPropagation();
-            // Tutup bubble
-            if (cgoBubble) {
-                cgoBubble.classList.remove("show");
-            }
-            // Semua tombol kembali ke status TAP 1
+            if (cgoBubble) cgoBubble.classList.remove("show");
             Object.keys(serviceTapState).forEach(function (id) {
                 serviceTapState[id] = false;
             });
-            // Sembunyikan robot CGO
             if (typeof manageBotpressWidgetVisibility === "function") {
                 manageBotpressWidgetVisibility(true);
             }
