@@ -1668,22 +1668,21 @@ if(btnEditProfilTab) {
 function switchTab(tabName) {
     document.querySelectorAll('.tab-content-view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.bottom-nav .nav-item').forEach(n => n.classList.remove('active'));
-
     const targetView = document.getElementById('view-' + tabName);
-    if(targetView) targetView.classList.add('active');
-
+    if (targetView) targetView.classList.add('active');
     const targetNav = document.getElementById('nav-' + tabName);
-    if(targetNav) targetNav.classList.add('active');
-
-    // Footer hanya tampil di Beranda
+    if (targetNav) targetNav.classList.add('active');
+    // HEADER & FOOTER HANYA UNTUK BERANDA
+    const appHeader = document.querySelector('.app-header');
+    if (appHeader) {
+        appHeader.style.display = tabName === 'beranda' ? 'flex' : 'none';
+    }
     const mainFooter = document.getElementById('mainFooter');
-    if(mainFooter) {
+    if (mainFooter) {
         mainFooter.style.display = tabName === 'beranda' ? '' : 'none';
     }
-
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-
 
 function bukaZoomBarcode() {
     openModal("QRIS CIKURPAY (ZOOM) 🔍");
