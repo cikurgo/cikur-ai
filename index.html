@@ -719,7 +719,86 @@ html, body, * {
     width: 100%;
     letter-spacing: -0.1px;
 }
+/* ===========================
+   CGO CHAT PANEL
+=========================== */
 
+.cgo-service-panel {
+    padding-top: 14px;
+}
+
+/* Header CGO */
+.cgo-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    padding: 0 4px;
+}
+
+.cgo-panel-title {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.cgo-panel-title strong {
+    font-size: 14px;
+    font-weight: 900;
+    color: var(--primary-red);
+}
+
+.cgo-panel-title span {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+/* Tombol X */
+.cgo-panel-close {
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 50%;
+    background: #f1f5f9;
+    color: #94a3b8;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+/* Pesan CGO */
+.cgo-panel-message {
+    background: #f8fafc;
+    border: 1px solid #edf0f3;
+    border-radius: 14px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+}
+
+.cgo-panel-message p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.45;
+    font-weight: 650;
+    color: var(--text-main);
+}
+
+/* Animasi ketika ucapan berubah */
+.cgo-panel-message.message-changing {
+    animation: cgoMessageChange 0.3s ease;
+}
+
+@keyframes cgoMessageChange {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
 /* ==========================================
    CGO SERVICE BUBBLE
 ========================================== */
@@ -1306,32 +1385,61 @@ footer p { margin: 0; }
         <div class="banner-card-content">
             <img src="bannerbesarheader.png" alt="Cikur Go Banner" class="banner-image">
         </div>
-    </div>
-               
-    <!-- CORE ECOSYSTEM -->
-    <div class="services-section" style="margin-bottom: 12px;">
-        <div class="services-title" style="margin-bottom: 8px;">Core Ecosystem</div>
-        <div class="menu-grid" style="margin-bottom: 0; gap: 8px;">
-            <a href="assistant.html" id="btnAssistant" class="menu-item">
-                <div class="menu-icon-box">
-                    <img src="tombol-assistant.png" class="assistant-icon" alt="Assistant">
-                </div>
-                <span class="menu-label" style="margin-top: 2px;">Assistant</span>
-            </a>
-            <a href="food.html" id="btnFood" class="menu-item">
-                <div class="menu-icon-box">
-                    <img src="tombol-food.png" alt="Food">
-                </div>
-                <span class="menu-label" style="margin-top: 2px;">Food</span>
-            </a>
-            <a href="ride.html" id="btnRide" class="menu-item">
-                <div class="menu-icon-box">
-                    <img src="tombol-ride.png" alt="Ride">
-                </div>
-                <span class="menu-label" style="margin-top: 2px;">Ride</span>
-            </a>
+    </div>          
+    <!-- CGO CHAT + CORE SERVICES -->
+<div class="services-section cgo-service-panel" style="margin-bottom: 12px;">
+
+    <!-- AREA CHAT CGO -->
+    <div class="cgo-panel-header">
+        <div class="cgo-panel-title">
+            <strong>CGO</strong>
+            <span>Asisten CIKUR GO</span>
         </div>
+        <button id="cgoPanelClose" class="cgo-panel-close" aria-label="Tutup">×</button>
     </div>
+    <div class="cgo-panel-message">
+        <p id="cgoPanelMessage">Hai 👋 Ada yang bisa dibantu?</p>
+    </div>
+    <!-- TIGA LAYANAN -->
+    <div class="menu-grid" style="margin-bottom: 0; gap: 8px;">
+        <a href="assistant.html"
+           id="btnAssistant"
+           class="menu-item">
+
+            <div class="menu-icon-box">
+                <img src="tombol-assistant.png"
+                     class="assistant-icon"
+                     alt="Assistant">
+            </div>
+            <span class="menu-label" style="margin-top: 2px;">
+                Assistant
+            </span>
+        </a>
+        <a href="food.html"
+           id="btnFood"
+           class="menu-item">
+
+            <div class="menu-icon-box">
+                <img src="tombol-food.png"
+                     alt="Food">
+            </div>
+            <span class="menu-label" style="margin-top: 2px;">
+                Food
+            </span>
+        </a>
+        <a href="ride.html"
+           id="btnRide"
+           class="menu-item">
+            <div class="menu-icon-box">
+                <img src="tombol-ride.png"
+                     alt="Ride">
+            </div>
+            <span class="menu-label" style="margin-top: 2px;">
+                Ride
+            </span>
+        </a>
+    </div>
+</div>
 
     <!-- FEATURED HIGHLIGHTS -->
     <div class="hero-frame">
@@ -2193,6 +2301,47 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 });
+
+/* ===========================
+   CGO SERVICE INTERACTION
+   Klik 1 = CGO berbicara
+   Klik 2 = masuk layanan
+=========================== */
+const cgoServiceState = {
+    Assistant: false,
+    Food: false,
+    Ride: false
+};
+const cgoServiceMessages = {
+    Assistant: "Siap 👋 Ada yang bisa saya bantu melalui layanan Assistant?",
+    Food: "Mau pesan makanan? 🍜 Saya siap membantu.",
+    Ride: "Mau bepergian? 🛵 Saya siap membantu."
+};
+function setupCGOServiceButton(buttonId, serviceName) {
+    const button = document.getElementById(buttonId);
+    if (!button) return;
+    button.addEventListener("click", function(event) {
+        // KLIK PERTAMA
+        if (!cgoServiceState[serviceName]) {
+            event.preventDefault();
+            cgoServiceState[serviceName] = true;
+            const message = document.getElementById("cgoPanelMessage");
+            if (message) {
+                message.classList.remove("message-changing");
+                void message.offsetWidth;
+                message.innerText =
+                    cgoServiceMessages[serviceName];
+                message.classList.add("message-changing");
+            }
+            return;
+        }
+        // KLIK KEDUA
+        // Navigasi asli <a href=""> dibiarkan berjalan
+    });
+}
+setupCGOServiceButton("btnAssistant", "Assistant");
+setupCGOServiceButton("btnFood", "Food");
+setupCGOServiceButton("btnRide", "Ride");
 </script>
 
 <script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
