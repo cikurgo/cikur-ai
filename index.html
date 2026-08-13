@@ -1388,7 +1388,6 @@ footer p { margin: 0; }
     </div>          
     <!-- CGO CHAT + CORE SERVICES -->
 <div class="services-section cgo-service-panel" style="margin-bottom: 12px;">
-
     <!-- AREA CHAT CGO -->
     <div class="cgo-panel-header">
         <div class="cgo-panel-title">
@@ -2250,98 +2249,61 @@ function manageBotpressWidgetVisibility(hide) {
     }, 200);
 }
 
+/* ===========================
+   CGO SERVICE PANEL
+   =========================== */
 document.addEventListener("DOMContentLoaded", function () {
-    const cgoBubble = document.getElementById("cgoServiceBubble");
-    const cgoBubbleTitle = document.getElementById("cgoBubbleTitle");
-    const cgoBubbleMessage = document.getElementById("cgoBubbleMessage");
-    const cgoBubbleClose = document.getElementById("cgoBubbleClose");
+    const cgoPanelMessage = document.getElementById("cgoPanelMessage");
+    const cgoPanelClose = document.getElementById("cgoPanelClose");
     const serviceMessages = {
-        btnAssistant: { title: "CGO", message: "Hai 👋 Kamu butuh bantuan apa?" },
-        btnFood: { title: "CGO", message: "Lagi lapar? 😊 Yuk cari makanan yang kamu suka." },
-        btnRide: { title: "CGO", message: "Mau pergi ke mana hari ini? 🛵" }
+        btnAssistant: "Hai 👋 Ada yang bisa dibantu untuk kebutuhan Assistant hari ini? ✨",
+        btnFood: "Lagi lapar? 😊 Yuk cari makanan yang kamu suka.",
+        btnRide: "Mau pergi ke mana hari ini? 🛵"
     };
-
-    const serviceTapState = {
-        btnAssistant: false,
-        btnFood: false,
-        btnRide: false
-    };
-
-    Object.keys(serviceMessages).forEach(function (id) {
+    const serviceButtons = Object.keys(serviceMessages);
+    serviceButtons.forEach(function (id) {
         const button = document.getElementById(id);
         if (!button) return;
         button.addEventListener("click", function (event) {
-            const data = serviceMessages[id];
-            if (!serviceTapState[id]) {
+            /*
+             * Klik pertama:
+             * hanya mengubah ucapan CGO.
+             *
+             * Klik kedua:
+             * baru melanjutkan ke halaman layanan.
+             */
+            if (!button.dataset.cgoTapped) {
                 event.preventDefault();
-                serviceTapState[id] = true;
-                if (typeof manageBotpressWidgetVisibility === "function") {
-                    manageBotpressWidgetVisibility(false);
+                button.dataset.cgoTapped = "true";
+                if (cgoPanelMessage) {
+                    cgoPanelMessage.textContent = serviceMessages[id];
                 }
-                if (cgoBubbleTitle) cgoBubbleTitle.textContent = data.title;
-                if (cgoBubbleMessage) cgoBubbleMessage.textContent = data.message;
-                if (cgoBubble) cgoBubble.classList.add("show");
                 return;
             }
-            serviceTapState[id] = false;
+            /*
+             * Klik kedua → lanjut ke halaman layanan
+             */
+            button.dataset.cgoTapped = "false";
         });
     });
-
-    if (cgoBubbleClose) {
-        cgoBubbleClose.addEventListener("click", function (event) {
-            event.preventDefault();
-            event.stopPropagation();
-            if (cgoBubble) cgoBubble.classList.remove("show");
-            Object.keys(serviceTapState).forEach(function (id) {
-                serviceTapState[id] = false;
-            });
-            if (typeof manageBotpressWidgetVisibility === "function") {
-                manageBotpressWidgetVisibility(true);
+    /* ===========================
+       TOMBOL X PANEL CGO
+    =========================== */
+    if (cgoPanelClose) {
+        cgoPanelClose.addEventListener("click", function () {
+            if (cgoPanelMessage) {
+                cgoPanelMessage.textContent =
+                    "Hai 👋 Ada yang bisa dibantu?";
             }
+           serviceButtons.forEach(function (id) {
+                const button = document.getElementById(id);
+                if (button) {
+                    button.dataset.cgoTapped = "false";
+                }
+            });
         });
     }
 });
-
-/* ===========================
-   CGO SERVICE INTERACTION
-   Klik 1 = CGO berbicara
-   Klik 2 = masuk layanan
-=========================== */
-const cgoServiceState = {
-    Assistant: false,
-    Food: false,
-    Ride: false
-};
-const cgoServiceMessages = {
-    Assistant: "Siap 👋 Ada yang bisa saya bantu melalui layanan Assistant?",
-    Food: "Mau pesan makanan? 🍜 Saya siap membantu.",
-    Ride: "Mau bepergian? 🛵 Saya siap membantu."
-};
-function setupCGOServiceButton(buttonId, serviceName) {
-    const button = document.getElementById(buttonId);
-    if (!button) return;
-    button.addEventListener("click", function(event) {
-        // KLIK PERTAMA
-        if (!cgoServiceState[serviceName]) {
-            event.preventDefault();
-            cgoServiceState[serviceName] = true;
-            const message = document.getElementById("cgoPanelMessage");
-            if (message) {
-                message.classList.remove("message-changing");
-                void message.offsetWidth;
-                message.innerText =
-                    cgoServiceMessages[serviceName];
-                message.classList.add("message-changing");
-            }
-            return;
-        }
-        // KLIK KEDUA
-        // Navigasi asli <a href=""> dibiarkan berjalan
-    });
-}
-setupCGOServiceButton("btnAssistant", "Assistant");
-setupCGOServiceButton("btnFood", "Food");
-setupCGOServiceButton("btnRide", "Ride");
 </script>
 
 <script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
