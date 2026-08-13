@@ -1308,6 +1308,129 @@ footer p { margin: 0; }
     color: var(--primary-red);
     box-shadow: 0 4px 10px rgba(229, 9, 20, 0.1);
 }
+ /* ==========================================
+   CGO GLOBAL NOTIFICATION
+========================================== */
+
+.cgo-notification {
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 24px 16px;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+        opacity 0.25s ease,
+        visibility 0.25s ease;
+}
+
+.cgo-notification.show {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.cgo-notification-card {
+    position: relative;
+    width: 100%;
+    max-width: 360px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 42px 14px 14px;
+
+    background: rgba(255,255,255,0.97);
+    border: 1px solid rgba(229,9,20,0.10);
+    border-radius: 18px;
+
+    box-shadow:
+        0 18px 45px rgba(0,0,0,0.14),
+        0 4px 14px rgba(0,0,0,0.06);
+
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+
+    transform: translateY(-18px) scale(0.96);
+    transition:
+        transform 0.3s cubic-bezier(.16,1,.3,1);
+}
+
+.cgo-notification.show .cgo-notification-card {
+    transform: translateY(0) scale(1);
+}
+
+.cgo-notification-icon {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 13px;
+    background: #dcfce7;
+    color: #16a34a;
+
+    font-size: 18px;
+    font-weight: 900;
+}
+
+.cgo-notification-content {
+    min-width: 0;
+}
+
+.cgo-notification-content strong {
+    display: block;
+    margin-bottom: 3px;
+
+    font-size: 13px;
+    font-weight: 850;
+    color: var(--text-main);
+}
+
+.cgo-notification-content p {
+    margin: 0;
+
+    font-size: 11px;
+    line-height: 1.4;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.cgo-notification-close {
+    position: absolute;
+    top: 8px;
+    right: 9px;
+
+    width: 24px;
+    height: 24px;
+
+    border: none;
+    background: transparent;
+
+    color: #94a3b8;
+    font-size: 18px;
+    line-height: 1;
+
+    cursor: pointer;
+}
+
+/* WARNING */
+.cgo-notification.warning .cgo-notification-icon {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+/* ERROR */
+.cgo-notification.error .cgo-notification-icon {
+    background: #fee2e2;
+    color: var(--primary-red);
+}   
 </style>
 </head>
     
@@ -1685,7 +1808,25 @@ footer p { margin: 0; }
         </div>
     </div>
 </div>
-   
+    
+  <!-- CGO GLOBAL NOTIFICATION -->
+<div id="cgoNotification" class="cgo-notification" aria-hidden="true">
+    <div class="cgo-notification-card">
+        <div class="cgo-notification-icon" id="cgoNotificationIcon">
+            ✓
+        </div>
+        <div class="cgo-notification-content">
+            <strong id="cgoNotificationTitle">Berhasil</strong>
+            <p id="cgoNotificationMessage"></p>
+        </div>
+        <button
+            id="cgoNotificationClose"
+            class="cgo-notification-close"
+            aria-label="Tutup">
+            ×
+        </button>
+    </div>
+</div> 
 <script>
 window.addEventListener("DOMContentLoaded", function () {
     const splash = document.getElementById("splash-screen");
@@ -2261,15 +2402,10 @@ function manageBotpressWidgetVisibility(hide) {
 /* ===========================
    CGO SERVICE PANEL
 =========================== */
-
 document.addEventListener("DOMContentLoaded", function () {
-
     const cgoPanelMessage =
         document.getElementById("cgoPanelMessage");
-
     if (!cgoPanelMessage) return;
-
-
     /* ===========================
        PESAN OTOMATIS CGO
     =========================== */
@@ -2294,13 +2430,10 @@ document.addEventListener("DOMContentLoaded", function () {
        PESAN BERDASARKAN LAYANAN
     =========================== */
     const serviceMessages = {
-
         btnAssistant:
             "Hai 👋 Ada yang bisa dibantu untuk kebutuhan Assistant hari ini? ✨",
-
         btnFood:
             "Lagi lapar? 😊 Yuk cari makanan yang kamu suka.",
-
         btnRide:
             "Mau pergi ke mana hari ini? 🛵"
     };
@@ -2335,35 +2468,26 @@ document.addEventListener("DOMContentLoaded", function () {
 /* ===========================
    CGO VOICE WAVE → OPEN CHAT
 =========================== */
-
 const cgoVoiceWave = document.getElementById("cgoVoiceWave");
-
 if (cgoVoiceWave) {
-
     function bukaChatCGO() {
         if (typeof manageBotpressWidgetVisibility === "function") {
             manageBotpressWidgetVisibility(false);
         }
-
         const chatBtn = document.getElementById("chatBtn");
-
         if (chatBtn) {
             chatBtn.click();
             return;
         }
-
         /* Fallback jika tombol Tanya CGO tidak ditemukan */
         const botpressButton = document.querySelector(
             '[data-bp-widget], [class*="bp-widget"], [id*="botpress"]'
         );
-
         if (botpressButton) {
             botpressButton.click();
         }
     }
-
     cgoVoiceWave.addEventListener("click", bukaChatCGO);
-
     cgoVoiceWave.addEventListener("keydown", function(event) {
         if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
@@ -2371,6 +2495,89 @@ if (cgoVoiceWave) {
         }
     });
 }
+/* ==========================================
+   CGO GLOBAL NOTIFICATION SYSTEM
+========================================== */
+(function () {
+    const notification = document.getElementById("cgoNotification");
+    const icon = document.getElementById("cgoNotificationIcon");
+    const title = document.getElementById("cgoNotificationTitle");
+    const message = document.getElementById("cgoNotificationMessage");
+    const closeBtn = document.getElementById("cgoNotificationClose");
+    if (!notification || !icon || !title || !message) {
+        console.warn("CGO Notification belum ditemukan.");
+        return;
+    }
+    let notificationTimer = null;
+    window.showCGONotification = function (
+        type = "success",
+        notificationTitle = "Berhasil",
+        notificationMessage = ""
+    ) {
+        clearTimeout(notificationTimer);
+        notification.classList.remove(
+            "success",
+            "warning",
+            "error"
+        );
+        notification.classList.add(type);
+        if (type === "success") {
+            icon.textContent = "✓";
+        } else if (type === "warning") {
+            icon.textContent = "!";
+        } else if (type === "error") {
+            icon.textContent = "×";
+        } else {
+            icon.textContent = "i";
+        }
+        title.textContent = notificationTitle;
+        message.textContent = notificationMessage;
+        notification.classList.add("show");
+        notification.setAttribute("aria-hidden", "false");
+        notificationTimer = setTimeout(() => {
+            closeCGONotification();
+        }, 3500);
+    };
+    function closeCGONotification() {
+        notification.classList.remove("show");
+        notification.setAttribute("aria-hidden", "true");
+    }
+    window.closeCGONotification = closeCGONotification;
+    if (closeBtn) {
+        closeBtn.addEventListener("click", closeCGONotification);
+    }
+
+    /* ======================================
+       GANTI ALERT BAWAAN BROWSER
+    ====================================== */
+    window.alert = function (messageText) {
+        const text = String(messageText || "");
+        let type = "success";
+        let notificationTitle = "CIKUR GO";
+        if (
+            /salah|gagal|error|tidak berhasil|ditolak/i.test(text)
+        ) {
+            type = "error";
+            notificationTitle = "Terjadi Kesalahan";
+        } else if (
+            /harus|belum|tidak cocok|perhatian|silakan|wajib/i.test(text)
+        ) {
+            type = "warning";
+            notificationTitle = "Perhatian";
+        } else if (
+            /berhasil|sukses|diperbarui|tersimpan|diproses/i.test(text)
+        ) {
+            type = "success";
+            notificationTitle = "Berhasil";
+        }
+        showCGONotification(
+            type,
+            notificationTitle,
+            text
+        );
+    };
+})();
+    
 </script>
 
 <script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
