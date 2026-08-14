@@ -1116,63 +1116,117 @@ input[type="date"].modern-input {
                         </select>
                     </div>
 
-                    <div class="form-section-title" style="margin-top: 14px;">Lokasi & Catatan</div>
+                    <div class="form-section-title" style="margin-top: 14px;">
+    Lokasi & Catatan
+</div>
 
-                    <div class="modern-form-group assistant-address-section">
+<!-- =========================================
+     ASSISTANT — LOCATION CARD
+========================================= -->
+<div class="assistant-location-card">
+    <div class="assistant-location-header">
+        <div class="assistant-location-icon">
+            📍
+        </div>
+        <div>
+            <div class="assistant-location-title">
+                Lokasi Layanan
+            </div>
+            <div class="assistant-location-subtitle">
+                Tentukan lokasi tempat Assistant akan bertugas
+            </div>
+        </div>
+    </div>
 
-    <label>Lokasi / Alamat Layanan</label>
-
-    <div class="assistant-address-main">
-
-        <div class="assistant-address-search">
+    <!-- SEARCH ADDRESS -->
+    <div class="assistant-address-search-wrap">
+        <span class="assistant-search-icon">⌕</span>
+        <input
+            type="text"
+            id="assistantAddress"
+            class="assistant-address-input"
+            placeholder="Cari alamat, jalan, gedung..."
+            autocomplete="off"
+        >
+        <button
+            type="button"
+            class="assistant-gps-button"
+            onclick="detectAssistantLocation()"
+            aria-label="Gunakan lokasi saya"
+        >
+            ◎
+        </button>
+        <div
+            id="assistantAddressSuggestions"
+            class="assistant-address-suggestions"
+        ></div>
+    </div>
+    <!-- MAP PREVIEW -->
+    <div
+        class="assistant-map-preview"
+        id="assistantMapPreview"
+        onclick="openAssistantMapModal()"
+    >
+        <div class="assistant-map-placeholder">
+            <div class="assistant-map-pin">
+                📍
+            </div>
+            <div class="assistant-map-main-text">
+                Pilih lokasi dari peta
+            </div>
+            <div class="assistant-map-sub-text">
+                Atur titik lokasi agar Assistant tiba di tempat yang tepat
+            </div>
+        </div>
+        <button
+            type="button"
+            class="assistant-map-open-button"
+            onclick="event.stopPropagation(); openAssistantMapModal();"
+        >
+            Buka Peta
+        </button>
+    </div>
+    <!-- ADDRESS DETAILS -->
+    <div class="assistant-address-details">
+        <div class="assistant-detail-field">
+            <span class="assistant-detail-icon">
+                🏠
+            </span>
             <input
                 type="text"
-                id="assistantAddress"
-                class="modern-input"
-                placeholder="Ketik nama jalan / daerah..."
+                id="assistantHouseNo"
+                placeholder="No. rumah / blok / lantai"
                 autocomplete="off"
             >
-
-            <div
-                id="assistantAddressSuggestions"
-                class="assistant-address-suggestions"
-            ></div>
         </div>
-
-        <button
-            type="button"
-            class="assistant-map-button"
-            onclick="openAssistantMapModal()"
-        >
-            📍 Peta
-        </button>
+        <div class="assistant-detail-field">
+            <span class="assistant-detail-icon">
+                ◆
+            </span>
+            <input
+                type="text"
+                id="assistantAddressNote"
+                placeholder="Patokan lokasi"
+                autocomplete="off"
+            >
+        </div>
     </div>
-    <div class="assistant-address-details">
-        <input
-            type="text"
-            id="assistantHouseNo"
-            class="modern-input"
-            placeholder="No. Rumah / Blok / Lantai"
-        >
-        <input
-            type="text"
-            id="assistantAddressNote"
-            class="modern-input"
-            placeholder="Patokan (contoh: pagar hitam)"
-        >
-    </div>
-    <div class="assistant-address-actions">
-        <button
-            type="button"
-            onclick="detectAssistantLocation()"
-            class="assistant-location-button"
-        >
-        ◎ Gunakan lokasi saya
-        </button>
+    <!-- LOCATION STATUS -->
+    <div class="assistant-location-status">
+        <span class="assistant-status-dot"></span>
         <span id="assistantLocationStatus">
-            Lokasi belum dipilih
+            Lokasi belum ditentukan
         </span>
     </div>
+</div>
+<!-- CATATAN KHUSUS -->
+<div class="modern-form-group assistant-note-group">
+    <label>Catatan Khusus (Opsional)</label>
+    <textarea
+        class="modern-input modern-textarea"
+        id="inputCatatanRequest"
+        placeholder="Instruksi khusus untuk Assistant..."
+    ></textarea>
 </div>
 
                     <div class="modern-form-group">
