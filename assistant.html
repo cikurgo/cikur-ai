@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cikurgo Assistant</title>
+    <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    
     <style>
         /* CSS Khusus Assistant */
         :root {
@@ -1312,6 +1316,182 @@ input[type="date"].modern-input {
     height: 6px !important;
 }
 /* =========================================
+   ASSISTANT — MAP MODAL
+========================================= */
+
+#assistantMapModal {
+    position: fixed;
+    inset: 0;
+
+    z-index: 99999;
+
+    display: none;
+    align-items: center;
+    justify-content: center;
+
+    padding: 12px;
+
+    box-sizing: border-box;
+
+    background: rgba(15, 23, 42, .48);
+
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.assistant-map-modal-card {
+    width: 100%;
+    max-width: 440px;
+
+    overflow: hidden;
+
+    background: #ffffff;
+
+    border-radius: 24px;
+
+    box-shadow:
+        0 24px 70px rgba(15, 23, 42, .22);
+}
+
+.assistant-map-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 15px 16px;
+
+    border-bottom: 1px solid #eef2f6;
+}
+
+.assistant-map-modal-title {
+    color: #172033;
+
+    font-size: 14px;
+    font-weight: 850;
+}
+
+.assistant-map-modal-subtitle {
+    margin-top: 3px;
+
+    color: #94a3b8;
+
+    font-size: 9px;
+    font-weight: 600;
+}
+
+.assistant-map-close {
+    width: 34px;
+    height: 34px;
+
+    border: none;
+    border-radius: 11px;
+
+    background: #f8fafc;
+
+    color: #64748b;
+
+    font-size: 22px;
+    line-height: 1;
+
+    cursor: pointer;
+}
+
+.assistant-map-container-wrap {
+    position: relative;
+
+    width: 100%;
+    height: 350px;
+}
+
+#assistantLeafletMap {
+    width: 100%;
+    height: 100%;
+}
+
+.assistant-map-gps {
+    position: absolute;
+
+    right: 14px;
+    bottom: 14px;
+
+    z-index: 1000;
+
+    width: 44px;
+    height: 44px;
+
+    border: none;
+    border-radius: 14px;
+
+    background: #ffffff;
+
+    color: #e50914;
+
+    font-size: 20px;
+
+    box-shadow:
+        0 5px 15px rgba(15, 23, 42, .16);
+
+    cursor: pointer;
+}
+
+.assistant-map-modal-footer {
+    display: flex;
+    gap: 9px;
+
+    padding: 13px 14px;
+
+    border-top: 1px solid #eef2f6;
+}
+
+.assistant-map-cancel,
+.assistant-map-confirm {
+    flex: 1;
+
+    min-height: 48px;
+
+    border-radius: 13px;
+
+    font-size: 11px;
+    font-weight: 800;
+
+    cursor: pointer;
+}
+
+.assistant-map-cancel {
+    background: #ffffff;
+
+    border: 1px solid #e2e8f0;
+
+    color: #64748b;
+}
+
+.assistant-map-confirm {
+    background: #e50914;
+
+    border: none;
+
+    color: #ffffff;
+
+    box-shadow:
+        0 7px 16px rgba(229, 9, 20, .16);
+}
+
+@media (max-width: 600px) {
+
+    #assistantMapModal {
+        padding: 8px;
+    }
+
+    .assistant-map-modal-card {
+        border-radius: 21px;
+    }
+
+    .assistant-map-container-wrap {
+        height: 62vh;
+        max-height: 480px;
+    }
+}
+/* =========================================
    ASSISTANT — DEAL / CHECKOUT AREA
 ========================================= */
 
@@ -1751,7 +1931,367 @@ input[type="date"].modern-input {
             `;
             initFormEvents();
         }
+<!-- =========================================
+     ASSISTANT — MAP MODAL
+========================================= -->
+<div id="assistantMapModal">
+    <div class="assistant-map-modal-card">
+        <div class="assistant-map-modal-header">
+            <div>
+                <div class="assistant-map-modal-title">
+                    Pilih Lokasi Layanan
+                </div>
+                <div class="assistant-map-modal-subtitle">
+                    Geser peta untuk menentukan titik lokasi
+                </div>
+            </div>
+            <button
+                type="button"
+                onclick="closeAssistantMapModal()"
+                class="assistant-map-close"
+            >
+                ×
+            </button>
+        </div>
+        <div class="assistant-map-container-wrap">
+            <div id="assistantLeafletMap"></div>
+            <button
+                type="button"
+                onclick="detectAssistantLocationFromMap()"
+                class="assistant-map-gps"
+            >
+                ◎
+            </button>
+        </div>
+        <div class="assistant-map-modal-footer">
+            <button
+                type="button"
+                onclick="closeAssistantMapModal()"
+                class="assistant-map-cancel"
+            >
+                Batal
+            </button>
 
+            <button
+                type="button"
+                onclick="confirmAssistantMapLocation()"
+                class="assistant-map-confirm"
+            >
+                Gunakan Lokasi Ini ✓
+            </button>
+        </div>
+    </div>
+</div>
+      /* =========================================
+   ASSISTANT — LOCATION ENGINE
+========================================= */
+let assistantMap = null;
+let assistantMapMarker = null;
+let assistantCoords = {
+    lat: -6.3245,
+    lon: 106.1524
+};
+let assistantAddressSearchTimeout = null;
+/* =========================================
+   ASSISTANT — ADDRESS AUTOCOMPLETE
+========================================= */
+function initAssistantAddressSearch() {
+    const input = document.getElementById("assistantAddress");
+    const list = document.getElementById("assistantAddressSuggestions");
+    if (!input || !list) return;
+    input.addEventListener("input", function () {
+        const query = this.value.trim();
+        clearTimeout(assistantAddressSearchTimeout);
+        if (query.length < 3) {
+            list.style.display = "none";
+            return;
+        }
+        assistantAddressSearchTimeout = setTimeout(() => {
+            fetch(
+                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=id&limit=8`
+            )
+            .then(res => res.json())
+            .then(data => {
+                if (!data || !data.length) {
+                    list.style.display = "none";
+                    return;
+                }
+                list.innerHTML = data.map(item => {
+                    const safeName =
+                        item.display_name
+                            .replace(/\\/g, "\\\\")
+                            .replace(/'/g, "\\'");
+
+                    return `
+                        <div onclick="selectAssistantAddress(
+                            '${safeName}',
+                            ${item.lat},
+                            ${item.lon}
+                        )">
+                            ${item.display_name}
+                        </div>
+                    `;
+                }).join("");
+                list.style.display = "block";
+            })
+            .catch(() => {
+                list.style.display = "none";
+            });
+
+        }, 400);
+    });
+    document.addEventListener("click", function (event) {
+        if (
+            !input.contains(event.target) &&
+            !list.contains(event.target)
+        ) {
+            list.style.display = "none";
+        }
+    });
+}
+function selectAssistantAddress(displayName, lat, lon) {
+    const input =
+        document.getElementById("assistantAddress");
+    const list =
+        document.getElementById("assistantAddressSuggestions");
+    if (input) {
+        input.value = displayName;
+    }
+    assistantCoords.lat = parseFloat(lat);
+    assistantCoords.lon = parseFloat(lon);
+    if (list) {
+        list.style.display = "none";
+    }
+    updateAssistantLocationStatus(
+        "Lokasi alamat berhasil dipilih"
+    );
+    if (assistantMap && assistantMapMarker) {
+        assistantMap.setView(
+            [assistantCoords.lat, assistantCoords.lon],
+            16
+        );
+        assistantMapMarker.setLatLng([
+            assistantCoords.lat,
+            assistantCoords.lon
+        ]);
+    }
+}
+function detectAssistantLocation() {
+    if (!navigator.geolocation) {
+        alert("GPS tidak didukung oleh perangkat ini.");
+        return;
+    }
+    updateAssistantLocationStatus(
+        "Mendeteksi lokasi..."
+    );
+    navigator.geolocation.getCurrentPosition(
+        function (position) {
+            assistantCoords.lat =
+                position.coords.latitude;
+            assistantCoords.lon =
+                position.coords.longitude;
+            reverseGeocodeAssistantLocation();
+            if (assistantMap && assistantMapMarker) {
+                assistantMap.setView(
+                    [
+                        assistantCoords.lat,
+                        assistantCoords.lon
+                    ],
+                    16
+                );
+                assistantMapMarker.setLatLng([
+                    assistantCoords.lat,
+                    assistantCoords.lon
+                ]);
+            }
+        },
+        function () {
+            updateAssistantLocationStatus(
+                "GPS gagal mendeteksi lokasi"
+            );
+            alert("Gagal mendapatkan lokasi GPS.");
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+        }
+    );
+}
+function reverseGeocodeAssistantLocation() {
+    const input =
+        document.getElementById("assistantAddress");
+    updateAssistantLocationStatus(
+        "Mengambil nama lokasi..."
+    );
+    fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${assistantCoords.lat}&lon=${assistantCoords.lon}`
+    )
+    .then(res => res.json())
+    .then(data => {
+        if (input) {
+            input.value =
+                data && data.display_name
+                    ? data.display_name
+                    : `Koordinat: ${assistantCoords.lat.toFixed(5)}, ${assistantCoords.lon.toFixed(5)}`;
+        }
+        updateAssistantLocationStatus(
+            "Lokasi berhasil ditemukan"
+        );
+
+    })
+    .catch(() => {
+
+        if (input) {
+
+            input.value =
+                `Koordinat: ${assistantCoords.lat.toFixed(5)}, ${assistantCoords.lon.toFixed(5)}`;
+        }
+        updateAssistantLocationStatus(
+            "Koordinat lokasi tersimpan"
+        );
+    });
+}
+     function openAssistantMapModal() {
+    const modal =
+        document.getElementById("assistantMapModal");
+    if (!modal) return;
+    modal.style.display = "flex";
+    setTimeout(() => {
+        if (!assistantMap) {
+            assistantMap = L.map(
+                "assistantLeafletMap"
+            ).setView(
+                [
+                    assistantCoords.lat,
+                    assistantCoords.lon
+                ],
+                15
+            );
+            L.tileLayer(
+                "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+                    maxZoom: 19,
+                    attribution: "&copy; OpenStreetMap"
+                }
+            ).addTo(assistantMap);
+
+            assistantMapMarker =
+                L.marker([
+                    assistantCoords.lat,
+                    assistantCoords.lon
+                ], {
+                    draggable: true
+                }).addTo(assistantMap);
+
+            assistantMapMarker.on(
+                "dragend",
+                function (event) {
+
+                    const position =
+                        event.target.getLatLng();
+
+                    assistantCoords.lat =
+                        position.lat;
+                    assistantCoords.lon =
+                        position.lng;
+                }
+            );
+        } else {
+            assistantMap.invalidateSize();
+            assistantMap.setView(
+                [
+                    assistantCoords.lat,
+                    assistantCoords.lon
+                ],
+                15
+            );
+            assistantMapMarker.setLatLng([
+                assistantCoords.lat,
+                assistantCoords.lon
+            ]);
+        }
+
+    }, 250);
+     }
+     function detectAssistantLocationFromMap() {
+
+    if (!navigator.geolocation) {
+        alert("GPS tidak didukung.");
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+
+        function (position) {
+
+            assistantCoords.lat =
+                position.coords.latitude;
+
+            assistantCoords.lon =
+                position.coords.longitude;
+
+            if (assistantMap && assistantMapMarker) {
+
+                assistantMap.setView(
+                    [
+                        assistantCoords.lat,
+                        assistantCoords.lon
+                    ],
+                    17
+                );
+
+                assistantMapMarker.setLatLng([
+                    assistantCoords.lat,
+                    assistantCoords.lon
+                ]);
+            }
+
+        },
+
+        function () {
+            alert("Gagal mendapatkan lokasi GPS.");
+        },
+
+        {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+        }
+    );
+ }
+    function confirmAssistantMapLocation() {
+    closeAssistantMapModal();
+    reverseGeocodeAssistantLocation();
+        }
+function closeAssistantMapModal() {
+    const modal =
+        document.getElementById("assistantMapModal");
+    if (modal) {
+        modal.style.display = "none";
+    }
+}
+function updateAssistantLocationStatus(text) {
+    const status =
+        document.getElementById(
+            "assistantLocationStatus"
+        );
+    if (status) {
+        status.innerText = text;
+    }
+}
+ document.addEventListener(
+    "DOMContentLoaded",
+    function () {
+        initAssistantAddressSearch();
+    }
+);       
+    document.addEventListener(
+    "DOMContentLoaded",
+    function () {
+        initAssistantAddressSearch();
+    }
+);    
         window.selectServiceCategory = function(paketKey) {
             currentActivePaketKey = paketKey;
             let info = dataPaket[paketKey];
@@ -1782,7 +2322,6 @@ input[type="date"].modern-input {
 
             recalculateTotalForm();
         };
-
         function recalculateTotalForm() {
             let info = dataPaket[currentActivePaketKey];
             finalCalculatedTotal = info.hargaBase + currentExtraCost;
@@ -1794,21 +2333,16 @@ input[type="date"].modern-input {
 /* =========================================
    ASSISTANT ORDER BRIDGE → AGENT CGO
 ========================================= */
-
 function simpanPesananAssistantKeAgent(info, tanggal, lokasi, catatan) {
-
     const orderId =
         "AST-" +
         Date.now() +
         "-" +
         Math.floor(100 + Math.random() * 900);
-
     const assistantOrder = {
         id: orderId,
-
         source: "assistant.html",
         target: "agentcgo.html",
-
         layanan: {
             key: currentActivePaketKey,
             nama: info.nama,
@@ -1816,29 +2350,23 @@ function simpanPesananAssistantKeAgent(info, tanggal, lokasi, catatan) {
             durasi: info.durasi,
             prioritas: info.prioritas
         },
-
         customer: {
             name: userProfile.name,
             phone: userProfile.phone
         },
-
         jadwal: {
             tanggal: tanggal
         },
-
         lokasi: {
             address: lokasi
         },
-
         catatan: catatan || "",
-
         pricing: {
             hargaDasar: info.hargaBase,
             extraUnits: extraUnitsCount,
             extraCost: currentExtraCost,
             total: finalCalculatedTotal
         },
-
         payment: {
             status: "MENUNGGU_DEAL",
             method: null
@@ -2075,5 +2603,6 @@ console.log(
         // Jalankan render awal saat halaman dimuat
         renderInitialForm();
     </script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </body>
 </html>
