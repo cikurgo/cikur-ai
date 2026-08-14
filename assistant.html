@@ -1176,7 +1176,86 @@ input[type="date"].modern-input {
             if (txtExtraPrice) txtExtraPrice.innerText = "Rp " + currentExtraCost.toLocaleString('id-ID');
             if (txtTotalFinal) txtTotalFinal.innerText = "Rp " + finalCalculatedTotal.toLocaleString('id-ID');
         }
+/* =========================================
+   ASSISTANT ORDER BRIDGE → AGENT CGO
+========================================= */
 
+function simpanPesananAssistantKeAgent(info, tanggal, lokasi, catatan) {
+
+    const orderId =
+        "AST-" +
+        Date.now() +
+        "-" +
+        Math.floor(100 + Math.random() * 900);
+
+    const assistantOrder = {
+        id: orderId,
+
+        source: "assistant.html",
+        target: "agentcgo.html",
+
+        layanan: {
+            key: currentActivePaketKey,
+            nama: info.nama,
+            personil: info.personil,
+            durasi: info.durasi,
+            prioritas: info.prioritas
+        },
+
+        customer: {
+            name: userProfile.name,
+            phone: userProfile.phone
+        },
+
+        jadwal: {
+            tanggal: tanggal
+        },
+
+        lokasi: {
+            address: lokasi
+        },
+
+        catatan: catatan || "",
+
+        pricing: {
+            hargaDasar: info.hargaBase,
+            extraUnits: extraUnitsCount,
+            extraCost: currentExtraCost,
+            total: finalCalculatedTotal
+        },
+
+        payment: {
+            status: "MENUNGGU_DEAL",
+            method: null
+        },
+
+        status: "MENUNGGU_DEAL",
+
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+
+    /* SIMPAN MASTER PESANAN ASSISTANT */
+    localStorage.setItem(
+        "cikur_assistant_current_order",
+        JSON.stringify(assistantOrder)
+    );
+
+    /* SIMPAN RIWAYAT PESANAN ASSISTANT */
+    const existingOrders =
+        JSON.parse(
+            localStorage.getItem("cikur_assistant_orders")
+        ) || [];
+
+    existingOrders.unshift(assistantOrder);
+
+    localStorage.setItem(
+        "cikur_assistant_orders",
+        JSON.stringify(existingOrders)
+    );
+
+    return assistantOrder;
+}
         function initFormEvents() {
             const selectExtraWaktuEl = document.getElementById("selectExtraWaktu");
             if(selectExtraWaktuEl) {
@@ -1192,17 +1271,30 @@ input[type="date"].modern-input {
             if (btnRequestDealEl) {
                 btnRequestDealEl.addEventListener("click", () => {
                     let info = dataPaket[currentActivePaketKey];
-                    const tanggalEl = document.getElementById("inputTanggal");
-                    const lokasiEl = document.getElementById("inputLokasi");
-                    const tanggal = tanggalEl ? tanggalEl.value : "";
-                    const lokasi = lokasiEl ? lokasiEl.value : "";
-                    finalCalculatedTotal = info.hargaBase + currentExtraCost;
-
+const tanggalEl = document.getElementById("inputTanggal");
+const lokasiEl = document.getElementById("inputLokasi");
+const catatanEl = document.getElementById("inputCatatanRequest");
+const tanggal = tanggalEl ? tanggalEl.value : "";
+const lokasi = lokasiEl ? lokasiEl.value.trim() : "";
+const catatan = catatanEl ? catatanEl.value.trim() : "";
+finalCalculatedTotal = info.hargaBase + currentExtraCost;
+                    
                     if (!tanggal || !lokasi) {
                         alert("[!] Mohon lengkapi Tanggal dan Lokasi.");
                         return;
                     }
+const assistantOrder =
+    simpanPesananAssistantKeAgent(
+        info,
+        tanggal,
+        lokasi,
+        catatan
+    );
 
+console.log(
+    "[CIKUR GO] Pesanan Assistant tersimpan:",
+    assistantOrder
+);
                     if (modalMainContent) {
                         modalMainContent.innerHTML = `
                             <div style="text-align:center; padding: 20px 8px;">
