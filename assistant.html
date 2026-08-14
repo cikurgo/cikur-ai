@@ -295,17 +295,82 @@
 
     <!-- Script JavaScript Assistant -->
     <script>
-        const userProfile = {
-            name: "Pengguna CikurGo",
-            phone: "081234567890",
-            saldo: 150000,
-            pin: "123456"
-        };
+        /* ===========================
+   PROFILE CUSTOMER CIKUR GO
+=========================== */
+const savedUser = localStorage.getItem("cikur_user");
 
-        function updateUIProfile() {
-            // Fungsi pembaruan UI lokal jika diperlukan
-        }
+const userProfile = savedUser
+    ? JSON.parse(savedUser)
+    : {
+        name: "Pengguna CikurGo",
+        phone: "",
+        saldo: 0,
+        pin: ""
+    };
 
+function saveUserProfile() {
+    localStorage.setItem("cikur_user", JSON.stringify(userProfile));
+}
+function updateUIProfile() {
+    // Profil akan mengikuti data customer yang tersimpan
+}
+/* ===========================
+   ASSISTANT BOOKING
+=========================== */
+let currentAssistantBooking = null;
+
+function createAssistantBooking(info, tanggal, lokasi, catatan, extraUnitsCount, total) {
+
+    const bookingId =
+        "AST-" +
+        Date.now().toString(36).toUpperCase();
+
+    currentAssistantBooking = {
+        bookingId,
+        customer: {
+            name: userProfile.name || "",
+            phone: userProfile.phone || ""
+        },
+
+        service: {
+            type: currentActivePaketKey,
+            name: info.nama,
+            basePrice: info.hargaBase,
+            extraUnits: extraUnitsCount,
+            extraCost: currentExtraCost,
+            total: total
+        },
+
+        schedule: {
+            date: tanggal
+        },
+
+        location: {
+            address: lokasi
+        },
+
+        note: catatan || "",
+
+        payment: {
+            status: "MENUNGGU_DEAL",
+            method: null,
+            amount: total
+        },
+
+        status: "MENUNGGU_DEAL",
+
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+
+    localStorage.setItem(
+        "cikur_assistant_booking",
+        JSON.stringify(currentAssistantBooking)
+    );
+
+    return currentAssistantBooking;
+}
         const modalMainContent = document.getElementById("modalMainContent");
 
         const dataPaket = {
@@ -492,14 +557,35 @@
                     }
 
                     const btnSimulasiDealEl = document.getElementById("btnSimulasiDeal");
-                    if (btnSimulasiDealEl) {
-                        btnSimulasiDealEl.addEventListener("click", () => {
-                            tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount);
-                        });
-                    }
-                });
-            }
-        }
+
+if (btnSimulasiDealEl) {
+    btnSimulasiDealEl.addEventListener("click", () => {
+
+        const tanggal =
+            document.getElementById("inputTanggal")?.value || "";
+
+        const lokasi =
+            document.getElementById("inputLokasi")?.value || "";
+
+        const catatan =
+            document.getElementById("inputCatatanRequest")?.value || "";
+
+        createAssistantBooking(
+            info,
+            tanggal,
+            lokasi,
+            catatan,
+            extraUnitsCount,
+            finalCalculatedTotal
+        );
+
+        tampilkanMenuPembayaran(
+            info,
+            finalCalculatedTotal,
+            extraUnitsCount
+        );
+    });
+}
 
         function tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount) {
             if (modalMainContent) {
