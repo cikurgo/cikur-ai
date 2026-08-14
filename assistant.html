@@ -298,22 +298,34 @@
         /* ===========================
    PROFILE CUSTOMER CIKUR GO
 =========================== */
-const savedUser = localStorage.getItem("cikur_user");
-
-const userProfile = savedUser
-    ? JSON.parse(savedUser)
-    : {
-        name: "Pengguna CikurGo",
-        phone: "",
-        saldo: 0,
-        pin: ""
-    };
-
+let userProfile = {
+    name: "Pengguna CikurGo",
+    phone: "",
+    saldo: 0,
+    pin: ""
+};
+try {
+    const savedUser = localStorage.getItem("cikur_user");
+    if (savedUser) {
+        const parsedUser = JSON.parse(savedUser);
+        if (parsedUser && typeof parsedUser === "object") {
+            userProfile = {
+                ...userProfile,
+                ...parsedUser
+            };
+        }
+    }
+} catch (error) {
+    console.error("Gagal membaca profil CIKUR GO:", error);
+}
 function saveUserProfile() {
-    localStorage.setItem("cikur_user", JSON.stringify(userProfile));
+    localStorage.setItem(
+        "cikur_user",
+        JSON.stringify(userProfile)
+    );
 }
 function updateUIProfile() {
-    // Profil akan mengikuti data customer yang tersimpan
+    // Update UI profil jika diperlukan
 }
 /* ===========================
    ASSISTANT BOOKING
