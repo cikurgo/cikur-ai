@@ -1925,7 +1925,23 @@ function initFormEvents() {
                 let now = new Date();
                 let options = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
                 let timestampStr = now.toLocaleDateString('id-ID', options) + " WIB";
-
+const currentOrder =
+    JSON.parse(localStorage.getItem("cikur_assistant_current_order")) || {};
+const jadwalLayanan =
+    currentOrder.jadwal || {};
+const lokasiLayanan =
+    currentOrder.lokasi || {};
+const tanggalLayanan =
+    jadwalLayanan.tanggal || "-";
+const jamLayanan =
+    jadwalLayanan.jam || "-";
+const alamatLayanan =
+    lokasiLayanan.address || "-";
+const nomorRumahLayanan =
+    lokasiLayanan.nomorRumah || "";
+const patokanLayanan =
+    lokasiLayanan.patokan || "";
+                
                 // Bersihkan session active order setelah pembayaran selesai agar fresh saat dibuka kembali
                 localStorage.removeItem("cikur_assistant_current_order");
 
@@ -1937,12 +1953,48 @@ function initFormEvents() {
                                 <p style="font-size:9px; color:#64748b; margin-top:2px;">Status: ${statusBayarLabel} (DEAL Confirmed)</p>
                             </div>
                             <div class="invoice-row"><span>No. Invoice</span><span>${invoiceNo}</span></div>
-                            <div class="invoice-row"><span>Tanggal & Waktu</span><span>${timestampStr}</span></div>
-                            <div class="invoice-row"><span>Nama</span><span>${userProfile.name}</span></div>
-                            <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
-                            <div class="invoice-row"><span>Extra Waktu</span><span>${extraUnitsCount} Tambahan (30 Menit/Unit)</span></div>
-                            <div class="invoice-row"><span>Metode Bayar</span><span>${selectedPaymentMethod.toUpperCase()}</span></div>
-                            <div class="invoice-row" style="border-top:1px dashed #cbd5e1; margin-top:8px; padding-top:6px;">
+                            <div class="invoice-row">
+    <span>Waktu Pesanan</span>
+    <span>${timestampStr}</span>
+</div>
+<div class="invoice-row">
+    <span>Jadwal Layanan</span>
+    <span>${tanggalLayanan} • ${jamLayanan} WIB</span>
+</div>
+<div class="invoice-row">
+    <span>Nama</span>
+    <span>${userProfile.name}</span>
+</div>
+<div class="invoice-row">
+    <span>Layanan</span>
+    <span>${info.nama}</span>
+</div>
+<div class="invoice-row">
+    <span>Extra Waktu</span>
+    <span>${extraUnitsCount} Tambahan (30 Menit/Unit)</span>
+</div>
+
+<div class="invoice-row">
+    <span>Metode Bayar</span>
+    <span>${selectedPaymentMethod.toUpperCase()}</span>
+</div>
+<div class="invoice-row">
+    <span>Lokasi</span>
+    <span>${alamatLayanan}</span>
+</div>
+${nomorRumahLayanan ? `
+<div class="invoice-row">
+    <span>No. Rumah</span>
+    <span>${nomorRumahLayanan}</span>
+</div>
+` : ""}
+${patokanLayanan ? `
+<div class="invoice-row">
+    <span>Patokan</span>
+    <span>${patokanLayanan}</span>
+</div>
+` : ""}
+<div class="invoice-row" style="border-top:1px dashed #cbd5e1; margin-top:8px; padding-top:6px;">
                                 <span style="font-weight:800; color:#0f172a;">Total Tagihan</span>
                                 <span style="font-weight:800; color:#E50914; font-size:13px;">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span>
                             </div>
