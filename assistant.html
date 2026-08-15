@@ -4,14 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cikurgo Assistant</title>
-    
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     
     <style>
-        /* =========================================
-           1. VARIABEL & CSS UTAMA
-           ========================================= */
+        /* CSS Khusus Assistant */
         :root {
             --primary-red: #e50914;
             --dark-bg: #0b0f19;
@@ -47,6 +43,11 @@
             flex-direction: column;
         }
 
+        .assistant-content {
+            flex: 1;
+            padding: 18px 16px 40px;
+        }
+
         .assistant-top {
             position: sticky;
             top: 0;
@@ -74,19 +75,21 @@
             cursor: pointer;
         }
 
-        .assistant-content {
-            flex: 1;
-            padding: 18px 16px 40px;
+        .assistant-form-container {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 14px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.03);
+            margin-top: 2px;
         }
 
-        /* =========================================
-           2. SERVICE CARDS (GRID LAYANAN)
-           ========================================= */
         .service-type-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 10px;
-            margin-bottom: 12px;
+            margin: 0;
+            padding: 0;
         }
 
         .service-card-option {
@@ -140,7 +143,7 @@
             height: 58px;
             object-fit: contain;
             display: block;
-            transition: transform .25s ease;
+            transition: transform .25s ease, filter .25s ease;
         }
 
         .service-card-option.active img {
@@ -160,23 +163,14 @@
             color: #d91f26;
         }
 
-        /* =========================================
-           3. FORM & BADGES
-           ========================================= */
-        .assistant-form-container {
-            background: #ffffff;
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            padding: 14px;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.03);
-            margin-top: 2px;
-        }
-
         .form-section-title {
             position: relative;
             display: flex;
             align-items: center;
             margin: 22px 0 13px !important;
+            padding: 0 !important;
+            background: transparent !important;
+            border: none !important;
             color: #172033 !important;
             font-size: 15px !important;
             font-weight: 800 !important;
@@ -190,19 +184,7 @@
             margin-right: 9px;
             background: #e50914;
             border-radius: 999px;
-        }
-
-        .paket-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 7px 10px !important;
-            background: #f7f8fa !important;
-            border: 1px solid #edf0f3;
-            border-radius: 999px !important;
-            color: #475569 !important;
-            font-size: 11px !important;
-            font-weight: 700 !important;
+            display: inline-block;
         }
 
         .modern-form-group {
@@ -230,14 +212,36 @@
             color: #172033 !important;
             font-size: 14px !important;
             font-weight: 600;
-            outline: none;
+            box-shadow: none !important;
             transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
+        }
+
+        .modern-input:hover {
+            border-color: #cbd5e1 !important;
         }
 
         .modern-input:focus {
             background: #ffffff !important;
             border-color: #e50914 !important;
+            outline: none !important;
             box-shadow: 0 0 0 3px rgba(229, 9, 20, .07) !important;
+        }
+
+        .modern-input:disabled {
+            background: #f5f7fa !important;
+            color: #64748b !important;
+            opacity: 1 !important;
+            cursor: default;
+        }
+
+        select.modern-input {
+            appearance: auto;
+            cursor: pointer;
+            min-height: 54px;
+        }
+
+        input[type="date"].modern-input {
+            color: #334155 !important;
         }
 
         .modern-input-layanan {
@@ -253,23 +257,155 @@
             color: #d91f26 !important;
             font-size: 14px !important;
             font-weight: 800 !important;
+            letter-spacing: .2px;
+            font-family: var(--font-mono);
         }
 
         .modern-row {
             display: grid !important;
             grid-template-columns: 1fr 1fr;
-            gap: 12px;
+            gap: 12px !important;
+        }
+
+        .modern-col {
+            flex: 1;
         }
 
         .modern-textarea {
             min-height: 108px !important;
             padding: 14px 15px !important;
+            line-height: 1.5;
             resize: vertical;
         }
 
-        /* =========================================
-           4. LOKASI & PETA CARD
-           ========================================= */
+        .modern-input::placeholder {
+            color: #94a3b8 !important;
+            font-weight: 500;
+        }
+
+        .modern-total-box {
+            background: linear-gradient(135deg, var(--dark-bg), var(--dark-card));
+            color: #fff;
+            padding: 12px 14px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 14px 0 10px 0;
+            box-shadow: 0 6px 16px rgba(11, 15, 25, 0.2);
+        }
+
+        .modern-total-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: #94a3b8;
+            text-transform: uppercase;
+        }
+
+        .modern-total-value {
+            font-size: 15px;
+            font-weight: 800;
+            color: #FFD700;
+            font-family: var(--font-mono);
+        }
+
+        .paket-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 7px 10px !important;
+            background: #f7f8fa !important;
+            border: 1px solid #edf0f3;
+            border-radius: 999px !important;
+            color: #475569 !important;
+            font-size: 11px !important;
+            font-weight: 700 !important;
+            box-shadow: none !important;
+        }
+
+        .rincian-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .btn-pesan-form {
+            width: 100%;
+            padding: 12px;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .invoice-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .pay-method-option {
+            flex: 1;
+            padding: 8px;
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 14px !important;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: .2s ease;
+        }
+
+        .pay-method-option.active {
+            background: var(--primary-red);
+            color: #fff;
+            border-color: var(--primary-red);
+        }
+
+        /* SECTION UTILITY & LOCATION CARD */
+        .assistant-content > div {
+            border-radius: 0;
+        }
+
+        .assistant-content h3,
+        .assistant-content h4 {
+            letter-spacing: -0.2px;
+        }
+
+        .service-card,
+        .paket-card,
+        .package-card {
+            transition: all 0.2s ease;
+        }
+
+        .service-card:hover,
+        .paket-card:hover,
+        .package-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .service-card.active,
+        .paket-card.active,
+        .package-card.active {
+            box-shadow: 0 8px 24px rgba(220, 38, 38, 0.10);
+        }
+
+        .info-section,
+        .form-section,
+        .booking-section {
+            background: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+        }
+
         .assistant-location-card {
             width: 100%;
             box-sizing: border-box;
@@ -312,6 +448,7 @@
             color: #94a3b8;
             font-size: 9.5px !important;
             font-weight: 600;
+            line-height: 1.3;
         }
 
         .assistant-address-search-wrap {
@@ -324,6 +461,13 @@
             background: #f8fafc;
             border: 1px solid #e2e8f0;
             border-radius: 13px !important;
+            transition: .2s ease;
+        }
+
+        .assistant-address-search-wrap:focus-within {
+            background: #ffffff;
+            border-color: #e50914;
+            box-shadow: 0 0 0 3px rgba(229, 9, 20, .06);
         }
 
         .assistant-search-icon {
@@ -347,6 +491,11 @@
             color: #172033;
             font-size: 12px !important;
             font-weight: 600;
+        }
+
+        .assistant-address-input::placeholder {
+            color: #94a3b8;
+            font-weight: 500;
         }
 
         .assistant-gps-button {
@@ -387,6 +536,14 @@
             cursor: pointer;
         }
 
+        .assistant-address-suggestions > div:last-child {
+            border-bottom: none;
+        }
+
+        .assistant-address-suggestions > div:active {
+            background: #fff7f7;
+        }
+
         .assistant-map-preview {
             position: relative;
             height: 132px !important;
@@ -423,6 +580,7 @@
             color: #94a3b8;
             font-size: 8.5px !important;
             font-weight: 600;
+            line-height: 1.4;
         }
 
         .assistant-map-open-button {
@@ -458,14 +616,26 @@
             border-radius: 11px !important;
         }
 
+        .assistant-detail-icon {
+            margin-right: 6px !important;
+            color: #94a3b8;
+            font-size: 12px !important;
+        }
+
         .assistant-detail-field input {
             width: 100%;
+            min-width: 0;
             border: none;
             outline: none;
             background: transparent;
             color: #334155;
             font-size: 9.5px !important;
             font-weight: 600;
+        }
+
+        .assistant-detail-field input::placeholder {
+            color: #94a3b8;
+            font-weight: 500;
         }
 
         .assistant-location-status {
@@ -486,9 +656,11 @@
             background: #cbd5e1;
         }
 
-        /* =========================================
-           5. MAP MODAL (LEAFLET)
-           ========================================= */
+        .assistant-note-group {
+            margin-top: 13px !important;
+        }
+
+        /* MAP MODAL */
         #assistantMapModal {
             position: fixed;
             inset: 0;
@@ -500,6 +672,7 @@
             box-sizing: border-box;
             background: rgba(15, 23, 42, .48);
             backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
         }
 
         .assistant-map-modal-card {
@@ -540,6 +713,7 @@
             background: #f8fafc;
             color: #64748b;
             font-size: 22px;
+            line-height: 1;
             cursor: pointer;
         }
 
@@ -577,7 +751,8 @@
             border-top: 1px solid #eef2f6;
         }
 
-        .assistant-map-cancel, .assistant-map-confirm {
+        .assistant-map-cancel,
+        .assistant-map-confirm {
             flex: 1;
             min-height: 48px;
             border-radius: 13px;
@@ -599,47 +774,7 @@
             box-shadow: 0 7px 16px rgba(229, 9, 20, .16);
         }
 
-        /* =========================================
-           6. TOTAL & CHECKOUT BUTTONS
-           ========================================= */
-        .modern-total-box {
-            background: linear-gradient(135deg, var(--dark-bg), var(--dark-card));
-            color: #fff;
-            padding: 12px 14px;
-            border-radius: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin: 14px 0 10px 0;
-            box-shadow: 0 6px 16px rgba(11, 15, 25, 0.2);
-        }
-
-        .modern-total-label {
-            font-size: 10px;
-            font-weight: 700;
-            color: #94a3b8;
-            text-transform: uppercase;
-        }
-
-        .modern-total-value {
-            font-size: 15px;
-            font-weight: 800;
-            color: #FFD700;
-            font-family: var(--font-mono);
-        }
-
-        .btn-pesan-form {
-            width: 100%;
-            padding: 12px;
-            color: #fff;
-            border: none;
-            border-radius: 10px;
-            font-size: 12px;
-            font-weight: 800;
-            cursor: pointer;
-            text-transform: uppercase;
-        }
-
+        /* DEAL / CHECKOUT & PAYMENT */
         #btnRequestDeal {
             width: 100%;
             min-height: 56px;
@@ -651,46 +786,136 @@
             color: #ffffff !important;
             font-size: 15px !important;
             font-weight: 800 !important;
+            letter-spacing: .1px;
             box-shadow: 0 8px 20px rgba(229, 9, 20, .18) !important;
             cursor: pointer;
+            transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
         }
 
-        .invoice-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            margin-bottom: 6px;
-            font-weight: 600;
-            color: var(--text-main);
+        #btnRequestDeal:hover {
+            box-shadow: 0 10px 25px rgba(229, 9, 20, .24) !important;
+            transform: translateY(-1px);
         }
 
-        .pay-method-option {
-            flex: 1;
-            padding: 8px;
-            background: #fff;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            font-size: 11px;
-            font-weight: 700;
-            cursor: pointer;
+        #btnRequestDeal:active {
+            transform: scale(.98);
         }
 
-        .pay-method-option.active {
-            background: var(--primary-red);
-            color: #fff;
-            border-color: var(--primary-red);
+        .invoice-box,
+        .total-box,
+        .booking-total {
+            margin-top: 18px !important;
+            padding: 16px !important;
+            background: #f8fafc !important;
+            border: 1px solid #e8edf2 !important;
+            border-radius: 16px !important;
+            box-shadow: none !important;
         }
 
+        .invoice-box strong,
+        .total-box strong,
+        .booking-total strong {
+            color: #172033;
+        }
+
+        #paymentModal,
+        .payment-modal,
+        #modalPembayaran {
+            background: rgba(15, 23, 42, .42) !important;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+
+        #paymentModal > div,
+        .payment-modal > div,
+        .payment-panel {
+            width: min(100% - 24px, 440px) !important;
+            max-height: 90vh;
+            margin: auto;
+            background: #ffffff !important;
+            border: 0 !important;
+            border-radius: 24px !important;
+            box-shadow: 0 24px 70px rgba(15, 23, 42, .20) !important;
+            overflow: hidden;
+            animation: paymentPanelIn .25s ease;
+        }
+
+        @keyframes paymentPanelIn {
+            from {
+                opacity: 0;
+                transform: translateY(18px) scale(.98);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* MEDIA QUERIES */
         @media (max-width: 600px) {
-            .modern-row {
+            .assistant-content {
+                padding: 16px 14px 36px;
+            }
+            .assistant-top {
+                padding: 14px 16px;
+            }
+            #btnRequestDeal {
+                min-height: 54px;
+                font-size: 14px !important;
+            }
+            #paymentModal > div,
+            .payment-modal > div,
+            .payment-panel {
+                width: calc(100% - 20px) !important;
+                border-radius: 22px !important;
+            }
+            #assistantMapModal {
+                padding: 8px;
+            }
+            .assistant-map-modal-card {
+                border-radius: 21px;
+            }
+            .assistant-map-container-wrap {
+                height: 62vh;
+                max-height: 480px;
+            }
+        }
+
+        @media (max-width: 420px) {
+            .assistant-location-card {
+                padding: 14px;
+                border-radius: 20px;
+            }
+            .assistant-address-details {
                 grid-template-columns: 1fr;
+            }
+            .assistant-map-preview {
+                height: 140px;
+            }
+        }
+
+        @media (max-width: 380px) {
+            .service-type-grid {
+                gap: 7px;
+            }
+            .service-card-option {
+                height: 126px;
+                border-radius: 18px;
+                padding: 12px 5px;
+            }
+            .service-card-option img {
+                width: 53px;
+                height: 53px;
+            }
+            .service-card-option .title {
+                font-size: 11px;
             }
         }
     </style>
 </head>
 <body>
 
-    <!-- MODAL ASSISTANT SCREEN -->
+    <!-- MODAL ASSISTANT -->
     <div id="assistantScreen" class="assistant-screen">
         <div class="assistant-page">
             <div class="assistant-top">
@@ -698,36 +923,47 @@
                 <button id="closeAssistant">×</button>
             </div>
             <div class="assistant-content" id="modalMainContent">
-                <!-- Konten form dimuat otomatis oleh JavaScript -->
+                <!-- Konten form akan dimuat otomatis oleh JavaScript -->
             </div>
         </div>
     </div>
     
-    <!-- MODAL MAP LEAFLET -->
+    <!-- =========================================
+         ASSISTANT — MAP MODAL
+    ========================================= -->
     <div id="assistantMapModal">
         <div class="assistant-map-modal-card">
             <div class="assistant-map-modal-header">
                 <div>
-                    <div class="assistant-map-modal-title">Pilih Lokasi Layanan</div>
-                    <div class="assistant-map-modal-subtitle">Geser peta untuk menentukan titik lokasi</div>
+                    <div class="assistant-map-modal-title">
+                        Pilih Lokasi Layanan
+                    </div>
+                    <div class="assistant-map-modal-subtitle">
+                        Geser peta untuk menentukan titik lokasi
+                    </div>
                 </div>
-                <button type="button" onclick="closeAssistantMapModal()" class="assistant-map-close">×</button>
+                <button type="button" onclick="closeAssistantMapModal()" class="assistant-map-close">
+                    ×
+                </button>
             </div>
             <div class="assistant-map-container-wrap">
                 <div id="assistantLeafletMap"></div>
-                <button type="button" onclick="detectAssistantLocationFromMap()" class="assistant-map-gps">◎</button>
+                <button type="button" onclick="detectAssistantLocationFromMap()" class="assistant-map-gps">
+                    ◎
+                </button>
             </div>
             <div class="assistant-map-modal-footer">
-                <button type="button" onclick="closeAssistantMapModal()" class="assistant-map-cancel">Batal</button>
-                <button type="button" onclick="confirmAssistantMapLocation()" class="assistant-map-confirm">Gunakan Lokasi Ini ✓</button>
+                <button type="button" onclick="closeAssistantMapModal()" class="assistant-map-cancel">
+                    Batal
+                </button>
+                <button type="button" onclick="confirmAssistantMapLocation()" class="assistant-map-confirm">
+                    Gunakan Lokasi Ini ✓
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-    <!-- JavaScript Aplikasi -->
+    <!-- Script JavaScript Assistant -->
     <script>
         const userProfile = {
             name: "Pengguna CikurGo",
@@ -798,17 +1034,14 @@
                             <input type="text" class="modern-input" value="${userProfile.phone}" disabled style="background:#f1f5f9; color:#64748b;">
                         </div>
                     </div>
-
                     <div class="modern-form-group">
                         <label>Jadwal Tanggal</label>
                         <input type="date" class="modern-input" id="inputTanggal">
                     </div>
-
                     <div class="modern-form-group">
                         <label>Jam Layanan</label>
                         <input type="time" class="modern-input" id="inputJam" required>
                     </div>
-
                     <div class="modern-form-group">
                         <label>Extra Waktu (1 Tambahan = 30 Menit = Rp 25.000)</label>
                         <select class="modern-input" id="selectExtraWaktu" style="cursor: pointer;">
@@ -819,51 +1052,82 @@
                         </select>
                     </div>
 
-                    <div class="form-section-title" style="margin-top: 14px;">Lokasi & Catatan</div>
+                    <div class="form-section-title" style="margin-top: 14px;">
+                        Lokasi & Catatan
+                    </div>
 
-                    <!-- LOCATION CARD -->
+                    <!-- =========================================
+                         ASSISTANT — LOCATION CARD
+                    ========================================= -->
                     <div class="assistant-location-card">
                         <div class="assistant-location-header">
-                            <div class="assistant-location-icon">📍</div>
+                            <div class="assistant-location-icon">
+                                📍
+                            </div>
                             <div>
-                                <div class="assistant-location-title">Lokasi Layanan</div>
-                                <div class="assistant-location-subtitle">Tentukan lokasi tempat Assistant akan bertugas</div>
+                                <div class="assistant-location-title">
+                                    Lokasi Layanan
+                                </div>
+                                <div class="assistant-location-subtitle">
+                                    Tentukan lokasi tempat Assistant akan bertugas
+                                </div>
                             </div>
                         </div>
 
+                        <!-- SEARCH ADDRESS -->
                         <div class="assistant-address-search-wrap">
                             <span class="assistant-search-icon">⌕</span>
                             <input type="text" id="assistantAddress" class="assistant-address-input" placeholder="Cari alamat, jalan, gedung..." autocomplete="off">
-                            <button type="button" class="assistant-gps-button" onclick="detectAssistantLocation()" aria-label="Gunakan lokasi saya">◎</button>
+                            <button type="button" class="assistant-gps-button" onclick="detectAssistantLocation()" aria-label="Gunakan lokasi saya">
+                                ◎
+                            </button>
                             <div id="assistantAddressSuggestions" class="assistant-address-suggestions"></div>
                         </div>
 
+                        <!-- MAP PREVIEW -->
                         <div class="assistant-map-preview" id="assistantMapPreview" onclick="openAssistantMapModal()">
                             <div class="assistant-map-placeholder">
-                                <div class="assistant-map-pin">📍</div>
-                                <div class="assistant-map-main-text">Pilih lokasi dari peta</div>
-                                <div class="assistant-map-sub-text">Atur titik lokasi agar Assistant tiba di tempat yang tepat</div>
+                                <div class="assistant-map-pin">
+                                    📍
+                                </div>
+                                <div class="assistant-map-main-text">
+                                    Pilih lokasi dari peta
+                                </div>
+                                <div class="assistant-map-sub-text">
+                                    Atur titik lokasi agar Assistant tiba di tempat yang tepat
+                                </div>
                             </div>
-                            <button type="button" class="assistant-map-open-button" onclick="event.stopPropagation(); openAssistantMapModal();">Buka Peta</button>
+                            <button type="button" class="assistant-map-open-button" onclick="event.stopPropagation(); openAssistantMapModal();">
+                                Buka Peta
+                            </button>
                         </div>
 
+                        <!-- ADDRESS DETAILS -->
                         <div class="assistant-address-details">
                             <div class="assistant-detail-field">
-                                <span class="assistant-detail-icon">🏠</span>
+                                <span class="assistant-detail-icon">
+                                    🏠
+                                </span>
                                 <input type="text" id="assistantHouseNo" placeholder="No. rumah / blok / lantai" autocomplete="off">
                             </div>
                             <div class="assistant-detail-field">
-                                <span class="assistant-detail-icon">◆</span>
+                                <span class="assistant-detail-icon">
+                                    ◆
+                                </span>
                                 <input type="text" id="assistantAddressNote" placeholder="Patokan lokasi" autocomplete="off">
                             </div>
                         </div>
 
+                        <!-- LOCATION STATUS -->
                         <div class="assistant-location-status">
                             <span class="assistant-status-dot"></span>
-                            <span id="assistantLocationStatus">Lokasi belum ditentukan</span>
+                            <span id="assistantLocationStatus">
+                                Lokasi belum ditentukan
+                            </span>
                         </div>
                     </div>
 
+                    <!-- CATATAN KHUSUS -->
                     <div class="modern-form-group assistant-note-group">
                         <label>Catatan Khusus (Opsional)</label>
                         <textarea class="modern-input modern-textarea" id="inputCatatanRequest" placeholder="Instruksi khusus untuk Assistant..."></textarea>
@@ -885,14 +1149,20 @@
             initFormEvents();
         }
 
-        // =========================================
-        // MAP & GEOLOCATION ENGINE
-        // =========================================
+        /* =========================================
+           ASSISTANT — LOCATION ENGINE
+        ========================================= */
         let assistantMap = null;
         let assistantMapMarker = null;
-        let assistantCoords = { lat: -6.3245, lon: 106.1524 };
+        let assistantCoords = {
+            lat: -6.3245,
+            lon: 106.1524
+        };
         let assistantAddressSearchTimeout = null;
 
+        /* =========================================
+           ASSISTANT — ADDRESS AUTOCOMPLETE
+        ========================================= */
         function initAssistantAddressSearch() {
             const input = document.getElementById("assistantAddress");
             const list = document.getElementById("assistantAddressSuggestions");
@@ -914,11 +1184,17 @@
                         }
                         list.innerHTML = data.map(item => {
                             const safeName = item.display_name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-                            return `<div onclick="selectAssistantAddress('${safeName}', ${item.lat}, ${item.lon})">${item.display_name}</div>`;
+                            return `
+                                <div onclick="selectAssistantAddress('${safeName}', ${item.lat}, ${item.lon})">
+                                    ${item.display_name}
+                                </div>
+                            `;
                         }).join("");
                         list.style.display = "block";
                     })
-                    .catch(() => { list.style.display = "none"; });
+                    .catch(() => {
+                        list.style.display = "none";
+                    });
                 }, 400);
             });
             document.addEventListener("click", function (event) {
@@ -931,10 +1207,14 @@
         function selectAssistantAddress(displayName, lat, lon) {
             const input = document.getElementById("assistantAddress");
             const list = document.getElementById("assistantAddressSuggestions");
-            if (input) input.value = displayName;
+            if (input) {
+                input.value = displayName;
+            }
             assistantCoords.lat = parseFloat(lat);
             assistantCoords.lon = parseFloat(lon);
-            if (list) list.style.display = "none";
+            if (list) {
+                list.style.display = "none";
+            }
             updateAssistantLocationStatus("Lokasi alamat berhasil dipilih");
             if (assistantMap && assistantMapMarker) {
                 assistantMap.setView([assistantCoords.lat, assistantCoords.lon], 16);
@@ -962,7 +1242,11 @@
                     updateAssistantLocationStatus("GPS gagal mendeteksi lokasi");
                     alert("Gagal mendapatkan lokasi GPS.");
                 },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
             );
         }
 
@@ -997,7 +1281,10 @@
                         attribution: "&copy; OpenStreetMap"
                     }).addTo(assistantMap);
 
-                    assistantMapMarker = L.marker([assistantCoords.lat, assistantCoords.lon], { draggable: true }).addTo(assistantMap);
+                    assistantMapMarker = L.marker([assistantCoords.lat, assistantCoords.lon], {
+                        draggable: true
+                    }).addTo(assistantMap);
+
                     assistantMapMarker.on("dragend", function (event) {
                         const position = event.target.getLatLng();
                         assistantCoords.lat = position.lat;
@@ -1025,8 +1312,14 @@
                         assistantMapMarker.setLatLng([assistantCoords.lat, assistantCoords.lon]);
                     }
                 },
-                function () { alert("Gagal mendapatkan lokasi GPS."); },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                function () {
+                    alert("Gagal mendapatkan lokasi GPS.");
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
             );
         }
 
@@ -1037,17 +1330,22 @@
 
         function closeAssistantMapModal() {
             const modal = document.getElementById("assistantMapModal");
-            if (modal) modal.style.display = "none";
+            if (modal) {
+                modal.style.display = "none";
+            }
         }
 
         function updateAssistantLocationStatus(text) {
             const status = document.getElementById("assistantLocationStatus");
-            if (status) status.innerText = text;
+            if (status) {
+                status.innerText = text;
+            }
         }
 
-        // =========================================
-        // ORDER & CALCULATION LOGIC
-        // =========================================
+        document.addEventListener("DOMContentLoaded", function () {
+            initAssistantAddressSearch();
+        });
+
         window.selectServiceCategory = function(paketKey) {
             currentActivePaketKey = paketKey;
             let info = dataPaket[paketKey];
@@ -1088,6 +1386,9 @@
             if (txtTotalFinal) txtTotalFinal.innerText = "Rp " + finalCalculatedTotal.toLocaleString('id-ID');
         }
 
+        /* =========================================
+           ASSISTANT ORDER BRIDGE → AGENT CGO
+        ========================================= */
         function simpanPesananAssistantKeAgent(info, tanggal, lokasi, catatan) {
             const orderId = "AST-" + Date.now() + "-" + Math.floor(100 + Math.random() * 900);
             const assistantOrder = {
@@ -1101,9 +1402,16 @@
                     durasi: info.durasi,
                     prioritas: info.prioritas
                 },
-                customer: { name: userProfile.name, phone: userProfile.phone },
-                jadwal: { tanggal: tanggal },
-                lokasi: { address: lokasi },
+                customer: {
+                    name: userProfile.name,
+                    phone: userProfile.phone
+                },
+                jadwal: {
+                    tanggal: tanggal
+                },
+                lokasi: {
+                    address: lokasi
+                },
                 catatan: catatan || "",
                 pricing: {
                     hargaDasar: info.hargaBase,
@@ -1111,13 +1419,17 @@
                     extraCost: currentExtraCost,
                     total: finalCalculatedTotal
                 },
-                payment: { status: "MENUNGGU_DEAL", method: null },
+                payment: {
+                    status: "MENUNGGU_DEAL",
+                    method: null
+                },
                 status: "MENUNGGU_DEAL",
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             };
 
             localStorage.setItem("cikur_assistant_current_order", JSON.stringify(assistantOrder));
+
             const existingOrders = JSON.parse(localStorage.getItem("cikur_assistant_orders")) || [];
             existingOrders.unshift(assistantOrder);
             localStorage.setItem("cikur_assistant_orders", JSON.stringify(existingOrders));
@@ -1135,60 +1447,44 @@
                     recalculateTotalForm();
                 });
             }
-            
-function initFormEvents() {
-            const selectExtraWaktuEl = document.getElementById("selectExtraWaktu");
-            if(selectExtraWaktuEl) {
-                selectExtraWaktuEl.value = extraUnitsCount;
-                selectExtraWaktuEl.removeEventListener("change", handleExtraWaktuChange); // Mencegah double listener
-                selectExtraWaktuEl.addEventListener("change", handleExtraWaktuChange);
-            }
 
             const btnRequestDealEl = document.getElementById("btnRequestDeal");
             if (btnRequestDealEl) {
-                // Hapus duplikasi event listener agar tidak bentrok
-                const newBtn = btnRequestDealEl.cloneNode(true);
-                btnRequestDealEl.parentNode.replaceChild(newBtn, btnRequestDealEl);
-
-                newBtn.addEventListener("click", () => {
+                btnRequestDealEl.addEventListener("click", () => {
                     let info = dataPaket[currentActivePaketKey];
                     const tanggalEl = document.getElementById("inputTanggal");
                     const lokasiEl = document.getElementById("assistantAddress");
                     const catatanEl = document.getElementById("inputCatatanRequest");
-                    
                     const tanggal = tanggalEl ? tanggalEl.value : "";
                     const lokasi = lokasiEl ? lokasiEl.value.trim() : "";
                     const catatan = catatanEl ? catatanEl.value.trim() : "";
-                    
                     finalCalculatedTotal = info.hargaBase + currentExtraCost;
                     
                     if (!tanggal || !lokasi) {
-                        alert("[!] Mohon lengkapi Tanggal dan Lokasi terlebih dahulu.");
+                        alert("[!] Mohon lengkapi Tanggal dan Lokasi.");
                         return;
                     }
 
-                    // Simpan pesanan ke sistem
-                    simpanPesananAssistantKeAgent(info, tanggal, lokasi, catatan);
+                    const assistantOrder = simpanPesananAssistantKeAgent(info, tanggal, lokasi, catatan);
+                    console.log("[CIKUR GO] Pesanan Assistant tersimpan:", assistantOrder);
 
-                    // Render tampilan menunggu DEAL
                     if (modalMainContent) {
                         modalMainContent.innerHTML = `
                             <div style="text-align:center; padding: 20px 8px;">
                                 <div style="font-size: 36px; margin-bottom: 10px;">⏳</div>
                                 <h3 style="font-size: 14px; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">Menunggu Kesepakatan (DEAL)</h3>
                                 <p style="font-size: 10px; color: var(--text-muted); line-height: 1.4; margin-bottom: 14px;">
-                                    Detail pesanan Anda telah dikirimkan. Tombol pembayaran akan aktif setelah status dinyatakan <strong>DEAL</strong>[cite: 1].
+                                    Detail pesanan Anda telah dikirimkan ke tim/asisten CGO. Tombol pembayaran akan aktif setelah status dinyatakan <strong>DEAL</strong>[cite: 1].
                                 </p>
                                 <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: 14px; padding: 14px; margin-bottom: 14px; text-align: left;">
                                     <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
                                     <div class="invoice-row"><span>Total Biaya</span><span style="color:var(--primary-red);">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span></div>
                                 </div>
-                                <button class="btn-pesan-form" id="btnSimulasiDeal" style="background: #16a34a; cursor:pointer;">[Simulasi] Asisten Menyatakan DEAL ✓</button>
+                                <button class="btn-pesan-form" id="btnSimulasiDeal" style="background: #16a34a;">[Simulasi] Asisten Menyatakan DEAL ✓</button>
                             </div>
                         `;
                     }
 
-                    // Event handler untuk tombol simulasi DEAL setelah konten berubah
                     const btnSimulasiDealEl = document.getElementById("btnSimulasiDeal");
                     if (btnSimulasiDealEl) {
                         btnSimulasiDealEl.addEventListener("click", () => {
@@ -1199,15 +1495,6 @@ function initFormEvents() {
             }
         }
 
-        function handleExtraWaktuChange() {
-            extraUnitsCount = parseInt(this.value);
-            currentExtraCost = extraUnitsCount * 25000;
-            recalculateTotalForm();
-        }
-
-        // =========================================
-        // PAYMENT SYSTEM
-        // =========================================
         function tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount) {
             if (modalMainContent) {
                 modalMainContent.innerHTML = `
@@ -1343,11 +1630,9 @@ function initFormEvents() {
             });
         }
 
-        // Initialize on DOM Load
-        document.addEventListener("DOMContentLoaded", function () {
-            initAssistantAddressSearch();
-            renderInitialForm();
-        });
+        // Jalankan render awal saat halaman dimuat
+        renderInitialForm();
     </script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </body>
 </html>
