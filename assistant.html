@@ -380,20 +380,7 @@ button:focus-visible,
             font-weight: 600;
             color: var(--text-main);
         }
-        .invoice-location {
-    align-items: flex-start;
-}
 
-.invoice-location > span:first-child {
-    flex: 0 0 80px;
-}
-
-.invoice-location > span:last-child {
-    flex: 1;
-    text-align: right;
-    line-height: 1.35;
-    word-break: break-word;
-}
         .pay-method-option {
             flex: 1;
             padding: 8px;
@@ -1008,18 +995,20 @@ button:focus-visible,
     <!-- Script JavaScript Assistant -->
     <script>
         let userProfile = null;
+        const CIKUR_GO_API_BASE = window.CIKUR_GO_API_BASE || "/api";
 
-        function loadUserProfileFromSession() {
-            const saved = localStorage.getItem("cikur_user");
-            if (!saved) return null;
-            try { return JSON.parse(saved); }
-            catch (error) { console.error("[CIKUR GO] Profil sesi tidak valid:", error); return null; }
-        }
-
-        userProfile = loadUserProfileFromSession();
-
-        function updateUIProfile() {
-            localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+        async function loadCurrentUserProfile() {
+            const response = await fetch(`${CIKUR_GO_API_BASE}/me`, {
+                credentials: "include",
+                headers: { "Accept": "application/json" }
+            });
+            if (!response.ok) throw new Error("Profil customer belum tersedia.");
+            const data = await response.json();
+            userProfile = data.user || data.profile || data;
+            if (!userProfile?.name || !userProfile?.phone) {
+                throw new Error("Data profil customer tidak lengkap.");
+            }
+            return userProfile;
         }
 
         const modalMainContent = document.getElementById("modalMainContent");
@@ -1036,18 +1025,9 @@ button:focus-visible,
         let finalCalculatedTotal = 25000;
         let selectedPaymentMethod = "cikurpay";
         let chatSyncInterval = null;
-        let currentAssistantOrder = null;
 
         function renderInitialForm() {
             if (!modalMainContent) return;
-            if (!userProfile) {
-                modalMainContent.innerHTML = `
-                    <div style="text-align:center;padding:28px 16px;">
-                        <h3 style="font-size:14px;font-weight:800;margin-bottom:8px;">Masuk ke CIKUR GO</h3>
-                        <p style="font-size:11px;color:#64748b;line-height:1.5;">Silakan masuk ke akun CIKUR GO untuk membuat pesanan Assistant.</p>
-                    </div>`;
-                return;
-            }
             modalMainContent.innerHTML = `
                 <div class="assistant-form-container">
                     <div class="form-section-title">Pilih Kategori Layanan</div>
@@ -1234,7 +1214,7 @@ button:focus-visible,
                     return;
                 }
                 assistantAddressSearchTimeout = setTimeout(() => {
-                    fetch(`/api/location/search?q=${encodeURIComponent(query)}&country=ID&limit=8`)
+                    fetch(`${CIKUR_GO_API_BASE}/location/search?q=${encodeURIComponent(query)}&country=ID&limit=8`, { credentials: "include", headers: { "Accept": "application/json" } })
                     .then(res => res.json())
                     .then(data => {
                         if (!data || !data.length) {
@@ -1312,7 +1292,7 @@ button:focus-visible,
         function reverseGeocodeAssistantLocation() {
             const input = document.getElementById("assistantAddress");
             updateAssistantLocationStatus("Mengambil nama lokasi...");
-            fetch(`/api/location/reverse?lat=${assistantCoords.lat}&lon=${assistantCoords.lon}&country=ID`)
+            fetch(`${CIKUR_GO_API_BASE}/location/reverse?lat=${assistantCoords.lat}&lon=${assistantCoords.lon}`, { credentials: "include", headers: { "Accept": "application/json" } })
             .then(res => res.json())
             .then(data => {
                 if (input) {
@@ -1448,147 +1428,160 @@ button:focus-visible,
             const urlParams = new URLSearchParams(window.location.search);
             return urlParams.get('source') || 'assistant.html';
         }
-        async function simpanPesananAssistantKeAgent(info, tanggal, jam, lokasiText, nomorRumah, patokan, catatan, latLngObj) {
-            if (!userProfile) throw new Error("USER_NOT_AUTHENTICATED");
-            const lat = Number(latLngObj?.lat);
-            const lng = Number(latLngObj?.lng);
-            if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error("LOCATION_NOT_SELECTED");
+        async function simpanPesananAssistantKeAgent(info, tanggal, lokasiText, catatan, latLngObj) {
+            if (!userProfile) throw new Error("Profil customer belum tersedia.");
+            if (!Number.isFinite(Number(latLngObj?.lat)) || !Number.isFinite(Number(latLngObj?.lng))) {
+                throw new Error("Koordinat lokasi belum valid.");
+            }
 
+            const sourceOrigin = getSourceOrigin();
             const payload = {
-                source: getSourceOrigin().toLowerCase().includes("cikurgo2in1") ? "CIKURGO_2IN1" : "REGULAR",
-                service: "ASSISTANT", packageKey: currentActivePaketKey,
-                schedule: { date: tanggal, time: jam },
-                location: { address: lokasiText, houseNumber: nomorRumah, landmark: patokan, latitude: lat, longitude: lng },
-                notes: catatan,
-                pricing: { basePrice: info.hargaBase || 0, extraUnits: extraUnitsCount || 0, extraCost: currentExtraCost || 0, total: finalCalculatedTotal || 0 }
+                service: "ASSISTANT",
+                packageKey: currentActivePaketKey,
+                packageName: info.nama,
+                source: sourceOrigin.includes("cikurgo2in1") ? "CIKURGO_2IN1" : "REGULAR",
+                customer: { name: userProfile.name, phone: userProfile.phone },
+                schedule: { date: tanggal, time: document.getElementById("inputJam")?.value || null },
+                location: { address: lokasiText, latitude: Number(latLngObj.lat), longitude: Number(latLngObj.lng) },
+                notes: catatan || "",
+                pricing: { basePrice: info.hargaBase, extraUnits: extraUnitsCount, extraCost: currentExtraCost, total: finalCalculatedTotal }
             };
 
-            const response = await fetch("/api/assistant/orders", {
-                method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+            const response = await fetch(`${CIKUR_GO_API_BASE}/assistant/orders`, {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json", "Accept": "application/json" },
                 body: JSON.stringify(payload)
             });
-            const result = await response.json().catch(() => ({}));
-            if (!response.ok || !result.order) throw new Error(result.message || "ORDER_CREATE_FAILED");
-            currentAssistantOrder = result.order;
-            return result.order;
+
+            if (!response.ok) {
+                const message = await response.text();
+                throw new Error(message || "Pesanan gagal dibuat.");
+            }
+
+            const data = await response.json();
+            const order = data.order || data;
+            if (!order?.id) throw new Error("Server tidak mengembalikan ID pesanan.");
+            return order;
         }
 
         function renderCustomerActiveOrder(order) {
-            currentAssistantOrder = order;
-            const chatContainer = document.getElementById("customerChatContainer");
-            if (!chatContainer) return;
+            let chatContainer = document.getElementById("customerChatContainer");
+            if(!chatContainer) return;
+
             let html = '';
             (order.chats || []).forEach(c => {
-                const bubbleStyle = c.sender === 'customer' ? 'background:#eff6ff;color:#1e40af;align-self:flex-end;border:1px solid #bfdbfe;' : (c.sender === 'agent' ? 'background:#fef2f2;color:#991b1b;align-self:flex-start;border:1px solid #fecaca;' : 'background:#e2e8f0;color:#0f172a;align-self:center;text-align:center;width:100%;');
-                html += `<div style="font-size:11px;padding:6px 10px;border-radius:8px;max-width:85%;line-height:1.3;${bubbleStyle}">${escapeHTML(c.text || '')}</div>`;
+                let bubbleStyle = c.sender === 'customer' 
+                    ? 'background:#eff6ff; color:#1e40af; align-self:flex-end; border:1px solid #bfdbfe;' 
+                    : (c.sender === 'agent' 
+                        ? 'background:#fef2f2; color:#991b1b; align-self:flex-start; border:1px solid #fecaca;' 
+                        : 'background:#e2e8f0; color:#0f172a; align-self:center; text-align:center; width:100%;');
+                html += `<div style="font-size:11px; padding:6px 10px; border-radius:8px; max-width:85%; line-height:1.3; ${bubbleStyle}">${c.text}</div>`;
             });
-            chatContainer.innerHTML = html || '<div style="font-size:10px;color:#94a3b8;text-align:center;padding:8px;">Menunggu pesan dari Agent CGO...</div>';
+            chatContainer.innerHTML = html;
             chatContainer.scrollTop = chatContainer.scrollHeight;
+
             setTimeout(() => {
-                const mapEl = document.getElementById("customerLiveMap");
-                const lat = Number(order.lokasi?.lat), lng = Number(order.lokasi?.lng);
-                if (mapEl && !mapEl._leaflet_id && typeof L !== 'undefined' && Number.isFinite(lat) && Number.isFinite(lng)) {
-                    const map = L.map("customerLiveMap", { zoomControl: false }).setView([lat, lng], 15);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
-                    L.marker([lat, lng]).addTo(map).bindPopup(order.lokasi.address || "Lokasi layanan").openPopup();
+                let mapEl = document.getElementById("customerLiveMap");
+                if(mapEl && !mapEl._leaflet_id && typeof L !== 'undefined') {
+                    let lat = order.lokasi.lat || assistantCoords.lat;
+                    let lng = order.lokasi.lng || assistantCoords.lon;
+                    let map = L.map("customerLiveMap", { zoomControl: false }).setView([lat, lng], 15);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+                    L.marker([lat, lng]).addTo(map).bindPopup(order.lokasi.address || "Lokasi Anda").openPopup();
                 }
             }, 200);
         }
-
         async function loadCustomerChatUI(orderId) {
             try {
-                const response = await fetch(`/api/assistant/orders/${encodeURIComponent(orderId)}`, { credentials: "include", cache: "no-store" });
+                const response = await fetch(`${CIKUR_GO_API_BASE}/assistant/orders/${encodeURIComponent(orderId)}`, { credentials: "include", headers: { "Accept": "application/json" } });
                 if (!response.ok) return;
-                const result = await response.json();
-                const order = result.order;
-                if (!order) return;
-                currentAssistantOrder = order;
+                const data = await response.json();
+                const order = data.order || data;
+                if (!order?.id) return;
+
                 if (order.status === "DEAL" || order.status === "DEAL_CONFIRMED" || order.payment?.status === "DEAL") {
                     if (chatSyncInterval) clearInterval(chatSyncInterval);
-                    tampilkanMenuPembayaran(order.layanan, order.pricing.total, order.pricing.extraUnits);
+                    tampilkanMenuPembayaran(order.layanan, order.pricing.total, order.pricing.extraUnits, order);
                     return;
                 }
                 renderCustomerActiveOrder(order);
-            } catch (error) { console.error("[CIKUR GO] Gagal sinkronisasi order:", error); }
+            } catch (error) {
+                console.error("Gagal mengambil status pesanan:", error);
+            }
         }
 
         async function sendCustomerChatFromUI() {
             const inputEl = document.getElementById("customerChatInput");
             if (!inputEl) return;
             const text = inputEl.value.trim();
-            if (!text || !currentAssistantOrder?.id) return;
-            inputEl.disabled = true;
+            if (!text) return;
+            const orderId = window.currentAssistantOrderId;
+            if (!orderId) return;
+
             try {
-                const response = await fetch(`/api/assistant/orders/${encodeURIComponent(currentAssistantOrder.id)}/messages`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ text }) });
-                const result = await response.json().catch(() => ({}));
-                if (!response.ok) throw new Error(result.message || "MESSAGE_SEND_FAILED");
-                inputEl.value = '';
-                await loadCustomerChatUI(currentAssistantOrder.id);
-            } catch (error) { console.error(error); alert("Pesan belum berhasil dikirim. Silakan coba lagi."); }
-            finally { inputEl.disabled = false; }
-        }
-
-        function escapeHTML(value) {
-            return String(value).replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' }[char]));
-        }
-
-function initFormEvents() {          
-    /* =====================================
-       EXTRA WAKTU
-    ===================================== */
-    const selectExtraWaktuEl =
-        document.getElementById("selectExtraWaktu");
-    if (selectExtraWaktuEl) {
-        selectExtraWaktuEl.value =
-            typeof extraUnitsCount !== "undefined"
-                ? extraUnitsCount
-                : 0;
-        selectExtraWaktuEl.addEventListener(
-            "change",
-            function () {
-                extraUnitsCount =
-                    parseInt(this.value, 10) || 0;
-                currentExtraCost =
-                    extraUnitsCount * 25000;
-                recalculateTotalForm();
-            }
-        );
-    }
-
-    const btnRequestDealEl = document.getElementById("btnRequestDeal");
-    if (btnRequestDealEl) {
-        btnRequestDealEl.addEventListener("click", async function () {
-            const info = dataPaket[currentActivePaketKey];
-            if (!info) { alert("Paket layanan tidak ditemukan."); return; }
-            const tanggal = document.getElementById("inputTanggal")?.value || "";
-            const jam = document.getElementById("inputJam")?.value || "";
-            const lokasi = document.getElementById("assistantAddress")?.value.trim() || "";
-            const nomorRumah = document.getElementById("assistantHouseNo")?.value.trim() || "";
-            const patokan = document.getElementById("assistantAddressNote")?.value.trim() || "";
-            const catatan = document.getElementById("inputCatatanRequest")?.value.trim() || "";
-            if (!userProfile) { alert("Silakan masuk ke akun CIKUR GO terlebih dahulu."); return; }
-            if (!tanggal) { alert("Silakan pilih tanggal layanan."); return; }
-            if (!jam) { alert("Silakan pilih jam layanan."); return; }
-            if (!lokasi) { alert("Silakan tentukan lokasi layanan."); return; }
-            const lat = Number(assistantCoords?.lat), lng = Number(assistantCoords?.lon);
-            if (!Number.isFinite(lat) || !Number.isFinite(lng)) { alert("Lokasi belum memiliki koordinat. Pilih hasil lokasi atau gunakan GPS."); return; }
-            finalCalculatedTotal = (info.hargaBase || 0) + (currentExtraCost || 0);
-            btnRequestDealEl.disabled = true;
-            const oldText = btnRequestDealEl.textContent;
-            btnRequestDealEl.textContent = "Mengirim pesanan...";
-            try {
-                const assistantOrder = await simpanPesananAssistantKeAgent(info, tanggal, jam, lokasi, nomorRumah, patokan, catatan, { lat, lng });
-                renderActiveCoordinationView(assistantOrder);
+                const response = await fetch(`${CIKUR_GO_API_BASE}/assistant/orders/${encodeURIComponent(orderId)}/messages`, {
+                    method: "POST", credentials: "include",
+                    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+                    body: JSON.stringify({ text })
+                });
+                if (!response.ok) throw new Error("Pesan gagal dikirim.");
+                inputEl.value = "";
+                await loadCustomerChatUI(orderId);
             } catch (error) {
-                console.error("[CIKUR GO] Order gagal:", error);
-                alert(error.message === "USER_NOT_AUTHENTICATED" ? "Silakan masuk ke akun CIKUR GO terlebih dahulu." : "Pesanan belum berhasil dikirim. Silakan coba lagi.");
-            } finally { btnRequestDealEl.disabled = false; btnRequestDealEl.textContent = oldText; }
-        });
-    }
-}
+                alert("Pesan belum berhasil dikirim.");
+                console.error(error);
+            }
+        }
+
+        function initFormEvents() {
+            const selectExtraWaktuEl = document.getElementById("selectExtraWaktu");
+            if(selectExtraWaktuEl) {
+                selectExtraWaktuEl.value = extraUnitsCount;
+                selectExtraWaktuEl.addEventListener("change", function() {
+                    extraUnitsCount = parseInt(this.value);
+                    currentExtraCost = extraUnitsCount * 25000;
+                    recalculateTotalForm();
+                });
+            }
+
+            const btnRequestDealEl = document.getElementById("btnRequestDeal");
+            if (btnRequestDealEl) {
+                btnRequestDealEl.addEventListener("click", async () => {
+                    let info = dataPaket[currentActivePaketKey];
+                    const tanggalEl = document.getElementById("inputTanggal");
+                    const lokasiEl = document.getElementById("assistantAddress");
+                    const catatanEl = document.getElementById("inputCatatanRequest");
+                    const tanggal = tanggalEl ? tanggalEl.value : "";
+                    const lokasi = lokasiEl ? lokasiEl.value.trim() : "";
+                    const catatan = catatanEl ? catatanEl.value.trim() : "";
+                    finalCalculatedTotal = info.hargaBase + currentExtraCost;
+                    
+                    if (!tanggal || !lokasi) {
+                        alert("[!] Mohon lengkapi Tanggal dan Lokasi.");
+                        return;
+                    }
+
+                    let latLngObj = { lat: assistantCoords.lat, lng: assistantCoords.lon };
+                    btnRequestDealEl.disabled = true;
+                    btnRequestDealEl.textContent = "Mengirim pesanan...";
+                    try {
+                        const assistantOrder = await simpanPesananAssistantKeAgent(info, tanggal, lokasi, catatan, latLngObj);
+                        console.log("[CIKUR GO] Pesanan berhasil dibuat:", assistantOrder);
+                        renderActiveCoordinationView(assistantOrder);
+                    } catch (error) {
+                        console.error(error);
+                        alert(error.message || "Pesanan belum berhasil dikirim.");
+                        btnRequestDealEl.disabled = false;
+                        btnRequestDealEl.textContent = "Kirim Detail & Minta DEAL 🤝";
+                    }
+                });
+            }
+        }
 
         function renderActiveCoordinationView(assistantOrder) {
             if (modalMainContent) {
+                window.currentAssistantOrderId = assistantOrder.id;
                 modalMainContent.innerHTML = `
                     <div style="text-align:center; padding: 10px 4px;">
                         <div style="background: #e0f2fe; border: 1px solid #bae6fd; border-radius: 10px; padding: 6px 10px; margin-bottom: 8px;">
@@ -1606,7 +1599,6 @@ function initFormEvents() {
                             <input type="text" id="customerChatInput" placeholder="Tulis pesan ke Agent..." style="flex: 1; height: 34px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0 10px; font-size: 11px; outline: none;">
                             <button type="button" onclick="sendCustomerChatFromUI()" style="height: 34px; padding: 0 12px; background: #0f172a; color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer;">Kirim</button>
                         </div>
-
                     </div>
                 `;
 
@@ -1619,11 +1611,10 @@ function initFormEvents() {
                 chatSyncInterval = setInterval(() => {
                     loadCustomerChatUI(assistantOrder.id);
                 }, 1500);
-
             }
         }
 
-        function tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount) {
+        function tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount, order = null) {
             if (chatSyncInterval) clearInterval(chatSyncInterval);
             if (modalMainContent) {
                 modalMainContent.innerHTML = `
@@ -1639,21 +1630,17 @@ function initFormEvents() {
                         </div>
 
                         <div id="paymentDetailsContainer">
-                            <div style="font-size:11px; color:#64748b; margin-bottom:6px;">Saldo CikurPay akan diverifikasi oleh server CIKUR GO.</div>
+                            <div style="font-size:11px; color:#64748b; margin-bottom:10px;">Saldo dan autentikasi CikurPay akan diverifikasi oleh server CIKUR GO.</div>
                             <div style="font-size:11px; color:#0f172a; font-weight:700; margin-bottom:12px;">Total Tagihan: Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</div>
-                            <div class="modern-form-group" style="margin-bottom:10px;">
-                                <label>Masukkan PIN CikurPay (6 Digit)</label>
-                                <input type="password" id="paymentPinInput" maxlength="6" class="modern-input" placeholder="••••••">
-                            </div>
                             <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:var(--dark-bg);">Bayar dengan CikurPay ⚡</button>
                         </div>
                     </div>
                 `;
             }
-            initPaymentEvents(info, finalCalculatedTotal, extraUnitsCount);
+            initPaymentEvents(info, finalCalculatedTotal, extraUnitsCount, order);
         }
 
-        function initPaymentEvents(info, finalCalculatedTotal, extraUnitsCount) {
+        function initPaymentEvents(info, finalCalculatedTotal, extraUnitsCount, order) {
             const methodButtons = document.querySelectorAll(".pay-method-option");
             const paymentDetailsContainer = document.getElementById("paymentDetailsContainer");
 
@@ -1667,15 +1654,11 @@ function initFormEvents() {
 
                     if(selectedPaymentMethod === "cikurpay") {
                         paymentDetailsContainer.innerHTML = `
-                            <div style="font-size:11px; color:#64748b; margin-bottom:6px;">Saldo CikurPay akan diverifikasi oleh server CIKUR GO.</div>
+                            <div style="font-size:11px; color:#64748b; margin-bottom:10px;">Saldo dan autentikasi CikurPay akan diverifikasi oleh server CIKUR GO.</div>
                             <div style="font-size:11px; color:#0f172a; font-weight:700; margin-bottom:12px;">Total Tagihan: Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</div>
-                            <div class="modern-form-group" style="margin-bottom:10px;">
-                                <label>Masukkan PIN CikurPay (6 Digit)</label>
-                                <input type="password" id="paymentPinInput" maxlength="6" class="modern-input" placeholder="••••••">
-                            </div>
                             <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:var(--dark-bg);">Bayar dengan CikurPay ⚡</button>
                         `;
-                        bindBayarAction(info, finalCalculatedTotal, extraUnitsCount);
+                        bindBayarAction(info, finalCalculatedTotal, extraUnitsCount, order);
                     } else if(selectedPaymentMethod === "qris") {
                         paymentDetailsContainer.innerHTML = `
                             <div style="text-align:center; margin-bottom:8px;">
@@ -1684,88 +1667,117 @@ function initFormEvents() {
                             </div>
                             <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:#E50914; margin-top:8px;">Konfirmasi Bayar QRIS ✓</button>
                         `;
-                        bindBayarAction(info, finalCalculatedTotal, extraUnitsCount);
+                        bindBayarAction(info, finalCalculatedTotal, extraUnitsCount, order);
                     } else if(selectedPaymentMethod === "tunai") {
                         paymentDetailsContainer.innerHTML = `
                             <div style="font-size:11px; color:#64748b; margin-bottom:10px; text-align:center; line-height: 1.4;">Pembayaran sebesar <strong>Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</strong> dilakukan secara <strong>Tunai</strong> langsung kepada petugas/asisten di lokasi.</div>
                             <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:#E50914; margin-top:4px;">Pesan dengan Pembayaran Tunai ✓</button>
                         `;
-                        bindBayarAction(info, finalCalculatedTotal, extraUnitsCount);
+                        bindBayarAction(info, finalCalculatedTotal, extraUnitsCount, order);
                     }
                 });
             });
 
-            bindBayarAction(info, finalCalculatedTotal, extraUnitsCount);
+            bindBayarAction(info, finalCalculatedTotal, extraUnitsCount, order);
         }
-
-        function bindBayarAction(info, finalCalculatedTotal, extraUnitsCount) {
+        function bindBayarAction(info, finalCalculatedTotal, extraUnitsCount, order = null) {
             const btnEksekusiEl = document.getElementById("btnEksekusiBayar");
-            if (!btnEksekusiEl) return;
+            if (!btnEksekusiEl || !order?.id) return;
+
             btnEksekusiEl.addEventListener("click", async () => {
-                if (!currentAssistantOrder?.id) { alert("Pesanan aktif tidak ditemukan."); return; }
-                const payment = { orderId: currentAssistantOrder.id, method: selectedPaymentMethod };
-                if (selectedPaymentMethod === "cikurpay") {
-                    payment.pin = document.getElementById("paymentPinInput")?.value.trim() || "";
-                    if (!/^\d{6}$/.test(payment.pin)) { alert("PIN CikurPay harus 6 digit."); return; }
-                }
                 btnEksekusiEl.disabled = true;
-                const oldText = btnEksekusiEl.textContent;
                 btnEksekusiEl.textContent = "Memproses pembayaran...";
                 try {
-                    const response = await fetch("/api/payments/assistant", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(payment) });
-                    const result = await response.json().catch(() => ({}));
-                    if (!response.ok || !result.payment || !result.invoice) throw new Error(result.message || "PAYMENT_FAILED");
-                    currentAssistantOrder = result.order || currentAssistantOrder;
-                    const statusBayarLabel = result.payment.statusLabel || (selectedPaymentMethod === "tunai" ? "MENUNGGU PEMBAYARAN TUNAI" : "LUNAS");
-                    const invoiceNo = result.invoice.number;
-                    const timestampStr = result.invoice.createdAt ? new Date(result.invoice.createdAt).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' }) + " WIB" : "-";
-                    const jadwalLayanan = currentAssistantOrder.jadwal || {};
-                    const lokasiLayanan = currentAssistantOrder.lokasi || {};
-                    const tanggalLayanan = jadwalLayanan.tanggal || "-";
-                    const jamLayanan = jadwalLayanan.jam || "-";
-                    const alamatLayanan = lokasiLayanan.address || "-";
-                    const nomorRumahLayanan = lokasiLayanan.nomorRumah || "";
-                    const patokanLayanan = lokasiLayanan.patokan || "";
+                    const response = await fetch(`${CIKUR_GO_API_BASE}/payments`, {
+                        method: "POST", credentials: "include",
+                        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+                        body: JSON.stringify({ orderId: order.id, method: selectedPaymentMethod })
+                    });
+                    if (!response.ok) {
+                        const message = await response.text();
+                        throw new Error(message || "Pembayaran gagal diproses.");
+                    }
+                    const data = await response.json();
+                    const payment = data.payment || data;
+                    const invoiceNo = payment.invoiceNumber || payment.invoiceNo;
+                    if (!invoiceNo) throw new Error("Server tidak mengembalikan nomor invoice.");
+                    const statusBayarLabel = payment.statusLabel || payment.status || "DIPROSES";
+                    const now = new Date();
+                    const timestampStr = now.toLocaleString("id-ID") + " WIB";
+
+                    if (chatSyncInterval) clearInterval(chatSyncInterval);
                     if (modalMainContent) {
                         modalMainContent.innerHTML = `
                             <div id="printableInvoiceArea" class="assistant-form-container">
-                                <div style="text-align:center;margin-bottom:12px;"><h3 style="font-size:13px;font-weight:800;margin:0;">CIKUR GO INVOICE</h3><p style="font-size:9px;color:#64748b;margin-top:2px;">Status: ${escapeHTML(statusBayarLabel)}</p></div>
-                                <div class="invoice-row"><span>No. Invoice</span><span>${escapeHTML(invoiceNo)}</span></div>
-                                <div class="invoice-row"><span>Waktu Pesanan</span><span>${escapeHTML(timestampStr)}</span></div>
-                                <div class="invoice-row"><span>Jadwal Layanan</span><span>${escapeHTML(tanggalLayanan)} • ${escapeHTML(jamLayanan)} WIB</span></div>
-                                <div class="invoice-row"><span>Nama</span><span>${escapeHTML(userProfile?.name || "-")}</span></div>
-                                <div class="invoice-row"><span>Layanan</span><span>${escapeHTML(info.nama)}</span></div>
+                                <div style="text-align:center;margin-bottom:12px;">
+                                    <h3 style="font-size:13px;font-weight:800;margin:0;">CIKUR GO INVOICE</h3>
+                                    <p style="font-size:9px;color:#64748b;margin-top:2px;">Status: ${statusBayarLabel}</p>
+                                </div>
+                                <div class="invoice-row"><span>No. Invoice</span><span>${invoiceNo}</span></div>
+                                <div class="invoice-row"><span>Tanggal & Waktu</span><span>${timestampStr}</span></div>
+                                <div class="invoice-row"><span>Nama</span><span>${userProfile.name}</span></div>
+                                <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
                                 <div class="invoice-row"><span>Extra Waktu</span><span>${extraUnitsCount} Tambahan (30 Menit/Unit)</span></div>
-                                <div class="invoice-row"><span>Metode Bayar</span><span>${escapeHTML(selectedPaymentMethod.toUpperCase())}</span></div>
-                                <div class="invoice-row invoice-location"><span>Lokasi</span><span>${escapeHTML(alamatLayanan)}</span></div>
-                                ${nomorRumahLayanan ? `<div class="invoice-row"><span>No. Rumah</span><span>${escapeHTML(nomorRumahLayanan)}</span></div>` : ""}
-                                ${patokanLayanan ? `<div class="invoice-row"><span>Patokan</span><span>${escapeHTML(patokanLayanan)}</span></div>` : ""}
-                                <div class="invoice-row" style="border-top:1px dashed #cbd5e1;margin-top:8px;padding-top:6px;"><span style="font-weight:800;color:#0f172a;">Total Tagihan</span><span style="font-weight:800;color:#E50914;font-size:13px;">Rp ${Number(finalCalculatedTotal).toLocaleString('id-ID')}</span></div>
+                                <div class="invoice-row"><span>Metode Bayar</span><span>${selectedPaymentMethod.toUpperCase()}</span></div>
+                                <div class="invoice-row" style="border-top:1px dashed #cbd5e1;margin-top:8px;padding-top:6px;">
+                                    <span style="font-weight:800;color:#0f172a;">Total Tagihan</span>
+                                    <span style="font-weight:800;color:#E50914;font-size:13px;">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span>
+                                </div>
                             </div>
-                            <div style="display:flex;gap:8px;margin-top:12px;"><button class="btn-pesan-form" id="btnTutupInvoice" style="background:#E50914;flex:1;margin-top:0;">Selesai ✓</button></div>`;
+                            <div style="display:flex;gap:8px;margin-top:12px;">
+                                <button class="btn-pesan-form" id="btnTutupInvoice" style="background:#E50914;flex:1;margin-top:0;">Selesai ✓</button>
+                            </div>`;
                     }
-                    document.getElementById("btnTutupInvoice")?.addEventListener("click", () => { currentAssistantOrder = null; window.location.href = "index.html"; });
-                } catch (error) { console.error("[CIKUR GO] Pembayaran gagal:", error); alert(error.message || "Pembayaran belum berhasil diproses."); }
-                finally { btnEksekusiEl.disabled = false; btnEksekusiEl.textContent = oldText; }
+                    document.getElementById("btnTutupInvoice")?.addEventListener("click", () => { window.location.href = "index.html"; });
+                } catch (error) {
+                    btnEksekusiEl.disabled = false;
+                    btnEksekusiEl.textContent = "Bayar";
+                    alert(error.message || "Pembayaran belum berhasil.");
+                }
             });
         }
-
-        // INISIALISASI UTAMA
+        // INISIALISASI UTAMA — DATA PESANAN SELALU DARI SERVER
         document.addEventListener("DOMContentLoaded", async function () {
             initAssistantAddressSearch();
-            if (!userProfile) { renderInitialForm(); return; }
+
             try {
-                const response = await fetch("/api/assistant/orders/active", { credentials: "include", cache: "no-store" });
+                await loadCurrentUserProfile();
+            } catch (error) {
+                console.error("[CIKUR GO] Profil belum tersedia:", error);
+                if (modalMainContent) {
+                    modalMainContent.innerHTML = `
+                        <div class="assistant-form-container">
+                            <div class="form-section-title">Akun diperlukan</div>
+                            <p style="font-size:11px;color:#64748b;line-height:1.5;">Silakan masuk ke akun CIKUR GO terlebih dahulu.</p>
+                        </div>`;
+                }
+                return;
+            }
+
+            try {
+                const sourceOrigin = getSourceOrigin();
+                const response = await fetch(`${CIKUR_GO_API_BASE}/assistant/orders/active?source=${encodeURIComponent(sourceOrigin)}`, {
+                    credentials: "include",
+                    headers: { "Accept": "application/json" }
+                });
+
                 if (response.ok) {
-                    const result = await response.json();
-                    if (result.order?.id) {
-                        currentAssistantOrder = result.order;
-                        if (result.order.status === "DEAL" || result.order.payment?.status === "DEAL") tampilkanMenuPembayaran(result.order.layanan, result.order.pricing.total, result.order.pricing.extraUnits);
-                        else renderActiveCoordinationView(result.order);
+                    const data = await response.json();
+                    const order = data.order || null;
+                    if (order?.id) {
+                        window.currentAssistantOrderId = order.id;
+                        if (order.status === "DEAL" || order.status === "DEAL_CONFIRMED" || order.payment?.status === "DEAL") {
+                            tampilkanMenuPembayaran(order.layanan, order.pricing.total, order.pricing.extraUnits, order);
+                        } else {
+                            renderActiveCoordinationView(order);
+                        }
                         return;
                     }
                 }
-            } catch (error) { console.error("[CIKUR GO] Gagal memulihkan order aktif:", error); }
+            } catch (error) {
+                console.error("[CIKUR GO] Gagal memulihkan pesanan:", error);
+            }
+
             renderInitialForm();
         });
     </script>
