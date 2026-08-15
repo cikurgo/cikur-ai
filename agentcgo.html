@@ -42,16 +42,30 @@ body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; di
 .dropdown-item:hover { background: #fff5f5; color: var(--primary-red); }
 .dropdown-divider { height: 1px; background: var(--border-color); margin: 4px 0; }
 
+/* TAB FILTER PESANAN */
+.order-tabs { display: flex; gap: 8px; margin: 12px 0 16px 0; }
+.order-tab-btn { flex: 1; padding: 8px 10px; font-size: 11px; font-weight: 700; border: 1px solid var(--border-color); background: #fff; color: var(--text-muted); border-radius: 10px; cursor: pointer; text-align: center; transition: 0.2s; }
+.order-tab-btn.active { background: var(--primary-red); color: #fff; border-color: var(--primary-red); }
+
+/* CONTENT SECTION */
+.agent-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 20px; padding: 16px; margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+.order-item-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 14px; padding: 12px; margin-bottom: 10px; font-size: 12px; }
+.order-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px; }
+.order-id { font-family: var(--font-mono); font-weight: 700; font-size: 11px; color: var(--primary-red); }
+.order-badge-source { font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 6px; background: #e0f2fe; color: #0369a1; }
+.order-badge-2in1 { background: #fef3c7; color: #d97706; }
+.order-body p { margin-bottom: 4px; color: var(--text-muted); }
+.order-body strong { color: var(--text-main); }
+
+.btn-pesan-form { width: 100%; height: 40px; border: none; border-radius: 10px; background: var(--primary-red); color: #fff; font-size: 12px; font-weight: 800; cursor: pointer; margin-top: 8px; transition: 0.2s; }
+.btn-pesan-form:hover { background: var(--primary-red-hover); }
+
 /* BOTTOM NAV */
 .bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 440px; height: 70px; background-color: #ffffff; border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; align-items: center; padding: 0 10px; z-index: 1000; box-shadow: 0 -4px 16px rgba(0,0,0,0.06); }
 .nav-item { background: none; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; cursor: pointer; color: var(--text-muted); transition: color 0.2s ease; position: relative; height: 100%; text-decoration: none; }
 .nav-item svg { width: 22px; height: 22px; margin-bottom: 4px; fill: currentColor; }
 .nav-item span { font-size: 11px; font-weight: 600; }
 .nav-item.active { color: var(--primary-red); }
-
-/* CONTENT SECTION */
-.agent-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 20px; padding: 16px; margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
-.btn-pesan-form { width: 100%; height: 46px; border: none; border-radius: 12px; background: var(--primary-red); color: #fff; font-size: 14px; font-weight: 800; cursor: pointer; margin-top: 10px; }
 footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(--text-muted); font-size: 11px; }
 </style>
 </head>
@@ -91,13 +105,25 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
     <div style="margin-top: 10px;">
         <div class="agent-card" style="background: linear-gradient(135deg, var(--dark-bg), var(--dark-card)); color: #fff;">
             <h2 style="font-size: 16px; font-weight: 800; margin-bottom: 6px;">🤖 Pusat Kendali Agent CGO</h2>
-            <p style="font-size: 12px; color: #94a3b8; line-height: 1.4;">Sistem AI terpadu untuk mengoptimalkan operasional dan manajemen layanan CikurGo secara cerdas.</p>
+            <p style="font-size: 12px; color: #94a3b8; line-height: 1.4;">Kelola pesanan masuk secara real-time dari jalur Assistant Reguler maupun Integrasi 2in1.</p>
         </div>
 
+        <!-- DAFTAR PESANAN MASUK -->
         <div class="agent-card">
-            <h3 style="font-size: 14px; font-weight: 800; margin-bottom: 8px;">Status AI Engine</h3>
-            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Model V3.9 terhubung penuh dengan database lokal dan gateway pembayaran.</p>
-            <button class="btn-pesan-form" onclick="alert('[INFO] Agent CGO berjalan normal dan siap menerima perintah.')">Uji Koneksi AI ⚡</button>
+            <h3 style="font-size: 14px; font-weight: 800; margin-bottom: 6px;">Daftar Pesanan Masuk</h3>
+            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">Filter pesanan berdasarkan asal layanan:</p>
+            
+            <!-- Tab Filter -->
+            <div class="order-tabs">
+                <button class="order-tab-btn active" onclick="switchOrderTab('all', this)">Semua</button>
+                <button class="order-tab-btn" onclick="switchOrderTab('assistant.html', this)">Reguler</button>
+                <button class="order-tab-btn" onclick="switchOrderTab('cikurgo2in1.html', this)">2in1</button>
+            </div>
+
+            <!-- Kontainer Daftar Order -->
+            <div id="agentOrderListContainer">
+                <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 12px;">Belum ada pesanan masuk.</div>
+            </div>
         </div>
     </div>
 
@@ -130,7 +156,10 @@ function updateUIProfile() {
         avatarContainer.innerText = userProfile.name.split(" ").map(n => n[0]).join("").substring(0,2).toUpperCase() || "CK";
     }
 }
-window.addEventListener("DOMContentLoaded", updateUIProfile);
+window.addEventListener("DOMContentLoaded", () => {
+    updateUIProfile();
+    loadAgentOrders('all');
+});
 
 const btnOpenProfileDropdown = document.getElementById("btnOpenProfileDropdown");
 const headerDropdownMenu = document.getElementById("headerDropdownMenu");
@@ -139,6 +168,67 @@ btnOpenProfileDropdown.addEventListener("click", (e) => {
     headerDropdownMenu.classList.toggle("show");
 });
 document.addEventListener("click", () => headerDropdownMenu.classList.remove('show'));
+
+// Fungsi memuat dan memfilter daftar pesanan masuk
+let currentFilterSource = 'all';
+function switchOrderTab(sourceType, el) {
+    document.querySelectorAll('.order-tab-btn').forEach(btn => btn.classList.remove('active'));
+    el.classList.add('active');
+    currentFilterSource = sourceType;
+    loadAgentOrders(sourceType);
+}
+
+function loadAgentOrders(filter) {
+    const container = document.getElementById("agentOrderListContainer");
+    const allOrders = JSON.parse(localStorage.getItem('cikur_assistant_orders')) || [];
+
+    let filtered = allOrders;
+    if(filter !== 'all') {
+        filtered = allOrders.filter(o => o.source && o.source.includes(filter));
+    }
+
+    if(filtered.length === 0) {
+        container.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 12px;">Tidak ada riwayat pesanan untuk kategori ini.</div>`;
+        return;
+    }
+
+    let html = '';
+    filtered.forEach(order => {
+        let is2in1 = order.source && order.source.includes('cikurgo2in1');
+        let badgeClass = is2in1 ? 'order-badge-source order-badge-2in1' : 'order-badge-source';
+        let badgeText = is2in1 ? 'Jalur 2in1' : 'Reguler Assistant';
+
+        html += `
+            <div class="order-item-card">
+                <div class="order-header-row">
+                    <span class="order-id">${order.id}</span>
+                    <span class="${badgeClass}">${badgeText}</span>
+                </div>
+                <div class="order-body">
+                    <p><strong>Layanan:</strong> ${order.layanan.nama} (${order.layanan.personil})</p>
+                    <p><strong>Pemesan:</strong> ${order.customer.name} (${order.customer.phone})</p>
+                    <p><strong>Jadwal:</strong> ${order.jadwal.tanggal || '-'}</p>
+                    <p><strong>Lokasi:</strong> ${order.lokasi.address || '-'}</p>
+                    <p><strong>Total:</strong> Rp ${order.pricing.total.toLocaleString('id-ID')}</p>
+                    <p><strong>Status:</strong> <span style="color:var(--primary-red); font-weight:700;">${order.status}</span></p>
+                </div>
+                <button class="btn-pesan-form" onclick="prosesDealOrder('${order.id}')">Konfirmasi & Proses DEAL 🤝</button>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+}
+
+function prosesDealOrder(orderId) {
+    let allOrders = JSON.parse(localStorage.getItem('cikur_assistant_orders')) || [];
+    let index = allOrders.findIndex(o => o.id === orderId);
+    if(index !== -1) {
+        allOrders[index].status = "DEAL / DIPROSES";
+        localStorage.setItem('cikur_assistant_orders', JSON.stringify(allOrders));
+        alert(`Pesanan ${orderId} berhasil dikonfirmasi dan berstatus DEAL!`);
+        loadAgentOrders(currentFilterSource);
+    }
+}
 </script>
 </body>
 </html>
