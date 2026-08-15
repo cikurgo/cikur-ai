@@ -996,7 +996,7 @@ button:focus-visible,
 
     <!-- Script JavaScript Assistant -->
     <script>
-        const userProfile = {
+        let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || {
             name: "Pengguna CikurGo",
             phone: "081234567890",
             saldo: 150000,
@@ -1004,7 +1004,7 @@ button:focus-visible,
         };
 
         function updateUIProfile() {
-            // Fungsi pembaruan UI lokal jika diperlukan
+            localStorage.setItem('cikur_user', JSON.stringify(userProfile));
         }
 
         const modalMainContent = document.getElementById("modalMainContent");
@@ -1020,6 +1020,7 @@ button:focus-visible,
         let extraUnitsCount = 0;
         let finalCalculatedTotal = 25000;
         let selectedPaymentMethod = "cikurpay";
+        let chatSyncInterval = null;
 
         function renderInitialForm() {
             if (!modalMainContent) return;
@@ -1377,10 +1378,6 @@ button:focus-visible,
             }
         }
 
-        document.addEventListener("DOMContentLoaded", function () {
-            initAssistantAddressSearch();
-        });
-
         window.selectServiceCategory = function(paketKey) {
             currentActivePaketKey = paketKey;
             let info = dataPaket[paketKey];
@@ -1522,6 +1519,14 @@ button:focus-visible,
             let allOrders = JSON.parse(localStorage.getItem('cikur_assistant_orders')) || [];
             let order = allOrders.find(o => o.id === orderId);
             if(!order) return;
+            
+            // Cek otomatisasi transisi ke menu pembayaran jika status order berubah menjadi DEAL / DEAL_CONFIRMED
+            if (order.status === "DEAL" || order.status === "DEAL_CONFIRMED" || order.payment?.status === "DEAL") {
+                if (chatSyncInterval) clearInterval(chatSyncInterval);
+                tampilkanMenuPembayaran(order.layanan, order.pricing.total, order.pricing.extraUnits);
+                return;
+            }
+
             renderCustomerActiveOrder(order);
         }
 
@@ -1538,6 +1543,7 @@ button:focus-visible,
             if(orderIndex !== -1) {
                 if(!allOrders[orderIndex].chats) allOrders[orderIndex].chats = [];
                 allOrders[orderIndex].chats.push({ sender: 'customer', text: 'Customer: ' + text });
+                allOrders[orderIndex].updatedAt = new Date().toISOString();
                 
                 localStorage.setItem('cikur_assistant_orders', JSON.stringify(allOrders));
                 localStorage.setItem('cikur_assistant_current_order', JSON.stringify(allOrders[orderIndex]));
@@ -1579,46 +1585,70 @@ button:focus-visible,
                     const assistantOrder = simpanPesananAssistantKeAgent(info, tanggal, lokasi, catatan, latLngObj);
                     console.log("[CIKUR GO] Pesanan Assistant tersimpan:", assistantOrder);
 
-                    if (modalMainContent) {
-                        modalMainContent.innerHTML = `
-                            <div style="text-align:center; padding: 10px 4px;">
-                                <h3 style="font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 4px;">Koordinasi Pesanan Aktif</h3>
-                                <p style="font-size: 10px; color: #64748b; margin-bottom: 6px;">ID: <strong style="color:#E50914;">${assistantOrder.id}</strong></p>
-                                
-                                <div id="customerLiveMap" style="width: 100%; height: 130px; border-radius: 12px; margin-bottom: 8px; border: 1px solid #e2e8f0;"></div>
-
-                                <div style="font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 4px; text-align: left;">Chat dengan Agent CGO:</div>
-                                <div id="customerChatContainer" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px; max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; text-align: left;"></div>
-                                
-                                <div style="display: flex; gap: 6px; margin-top: 8px;">
-                                    <input type="text" id="customerChatInput" placeholder="Tulis pesan ke Agent..." style="flex: 1; height: 34px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0 10px; font-size: 11px; outline: none;">
-                                    <button type="button" onclick="sendCustomerChatFromUI()" style="height: 34px; padding: 0 12px; background: #0f172a; color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer;">Kirim</button>
-                                </div>
-
-                                <button class="btn-pesan-form" id="btnSimulasiDeal" style="background: #16a34a; margin-top: 12px;">[Simulasi] Asisten Menyatakan DEAL ✓</button>
-                            </div>
-                        `;
-
-                        setTimeout(() => {
-                            loadCustomerChatUI(assistantOrder.id);
-                        }, 200);
-
-                        const btnSimulasiDealEl = document.getElementById("btnSimulasiDeal");
-                        if (btnSimulasiDealEl) {
-                            btnSimulasiDealEl.addEventListener("click", () => {
-                                tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount);
-                            });
-                        }
-                    }
+                    renderActiveCoordinationView(assistantOrder);
                 });
             }
         }
 
+        function renderActiveCoordinationView(assistantOrder) {
+            if (modalMainContent) {
+                modalMainContent.innerHTML = `
+                    <div style="text-align:center; padding: 10px 4px;">
+                        <div style="background: #e0f2fe; border: 1px solid #bae6fd; border-radius: 10px; padding: 6px 10px; margin-bottom: 8px;">
+                            <span style="font-size: 10px; font-weight: 800; color: #0369a1;">⚡ Sinkronisasi Real-Time Aktif: Menunggu Tindakan DEAL dari Agen CGO...</span>
+                        </div>
+                        <h3 style="font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 4px;">Koordinasi Pesanan Aktif</h3>
+                        <p style="font-size: 10px; color: #64748b; margin-bottom: 6px;">ID: <strong style="color:#E50914;">${assistantOrder.id}</strong></p>
+                        
+                        <div id="customerLiveMap" style="width: 100%; height: 130px; border-radius: 12px; margin-bottom: 8px; border: 1px solid #e2e8f0;"></div>
+
+                        <div style="font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 4px; text-align: left;">Chat dengan Agent CGO:</div>
+                        <div id="customerChatContainer" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px; max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; text-align: left;"></div>
+                        
+                        <div style="display: flex; gap: 6px; margin-top: 8px;">
+                            <input type="text" id="customerChatInput" placeholder="Tulis pesan ke Agent..." style="flex: 1; height: 34px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0 10px; font-size: 11px; outline: none;">
+                            <button type="button" onclick="sendCustomerChatFromUI()" style="height: 34px; padding: 0 12px; background: #0f172a; color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer;">Kirim</button>
+                        </div>
+
+                        <button class="btn-pesan-form" id="btnSimulasiDeal" style="background: #16a34a; margin-top: 12px;">[Simulasi] Asisten Menyatakan DEAL ✓</button>
+                    </div>
+                `;
+
+                setTimeout(() => {
+                    loadCustomerChatUI(assistantOrder.id);
+                }, 200);
+
+                // Jalankan polling sinkronisasi real-time chat & status deal agar tidak hilang saat refresh & otomatis pindah menu pembayaran saat DEAL
+                if (chatSyncInterval) clearInterval(chatSyncInterval);
+                chatSyncInterval = setInterval(() => {
+                    loadCustomerChatUI(assistantOrder.id);
+                }, 1500);
+
+                const btnSimulasiDealEl = document.getElementById("btnSimulasiDeal");
+                if (btnSimulasiDealEl) {
+                    btnSimulasiDealEl.addEventListener("click", () => {
+                        let allOrders = JSON.parse(localStorage.getItem('cikur_assistant_orders')) || [];
+                        let idx = allOrders.findIndex(o => o.id === assistantOrder.id);
+                        if(idx !== -1) {
+                            allOrders[idx].status = "DEAL";
+                            allOrders[idx].payment.status = "DEAL";
+                            allOrders[idx].chats.push({ sender: 'system', text: 'Sistem: Agen menyatakan DEAL! Transisi otomatis ke menu pembayaran.' });
+                            localStorage.setItem('cikur_assistant_orders', JSON.stringify(allOrders));
+                            localStorage.setItem('cikur_assistant_current_order', JSON.stringify(allOrders[idx]));
+                        }
+                        if (chatSyncInterval) clearInterval(chatSyncInterval);
+                        tampilkanMenuPembayaran(assistantOrder.layanan, assistantOrder.pricing.total, assistantOrder.pricing.extraUnits);
+                    });
+                }
+            }
+        }
+
         function tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount) {
+            if (chatSyncInterval) clearInterval(chatSyncInterval);
             if (modalMainContent) {
                 modalMainContent.innerHTML = `
                     <div style="background: #dcfce7; border: 1px solid #bbf7d0; border-radius: 12px; padding: 8px 12px; text-align: center; margin-bottom: 14px;">
-                        <span style="font-size: 10px; font-weight: 800; color: #16a34a;">🎉 Status: DEAL! Silakan Lakukan Pembayaran.</span>
+                        <span style="font-size: 10px; font-weight: 800; color: #16a34a;">🎉 Status: Sinkronisasi Terproses - DEAL! Silakan Lakukan Pembayaran.</span>
                     </div>
                     <h3 style="font-size: 12px; font-weight: 800; margin-bottom:10px; text-transform:uppercase;">Metode Pembayaran</h3>
                     <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:14px; margin-bottom:12px;">
@@ -1706,7 +1736,6 @@ button:focus-visible,
                         return;
                     }
                     userProfile.saldo -= finalCalculatedTotal;
-                    localStorage.setItem('cikur_user', JSON.stringify(userProfile));
                     updateUIProfile();
                 }
 
@@ -1715,6 +1744,9 @@ button:focus-visible,
                 let now = new Date();
                 let options = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
                 let timestampStr = now.toLocaleDateString('id-ID', options) + " WIB";
+
+                // Bersihkan session active order setelah pembayaran selesai agar fresh saat dibuka kembali
+                localStorage.removeItem("cikur_assistant_current_order");
 
                 if (modalMainContent) {
                     modalMainContent.innerHTML = `
@@ -1749,7 +1781,47 @@ button:focus-visible,
             });
         }
 
-        renderInitialForm();
+        // INISIALISASI UTAMA & PEMULIHAN RIWAYAT SAAT REFRESH
+        document.addEventListener("DOMContentLoaded", function () {
+            initAssistantAddressSearch();
+            
+            // Cek apakah ada pesanan aktif sebelumnya agar riwayat tidak hilang saat refresh
+            const savedCurrentOrder = localStorage.getItem("cikur_assistant_current_order");
+            if (savedCurrentOrder) {
+                try {
+                    const parsedOrder = JSON.parse(savedCurrentOrder);
+                    if (parsedOrder && parsedOrder.id) {
+                        if (parsedOrder.status === "DEAL" || parsedOrder.payment?.status === "DEAL") {
+                            tampilkanMenuPembayaran(parsedOrder.layanan, parsedOrder.pricing.total, parsedOrder.pricing.extraUnits);
+                        } else {
+                            renderActiveCoordinationView(parsedOrder);
+                        }
+                        return;
+                    }
+                } catch (e) {
+                    console.error("Gagal memulihkan pesanan aktif:", e);
+                }
+            }
+            
+            renderInitialForm();
+        });
+
+        // Sinkronisasi lintas tab/window via storage event
+        window.addEventListener("storage", function(event) {
+            if (event.key === "cikur_assistant_orders" || event.key === "cikur_assistant_current_order") {
+                const currentOrderStr = localStorage.getItem("cikur_assistant_current_order");
+                if (currentOrderStr) {
+                    try {
+                        const order = JSON.parse(currentOrderStr);
+                        if (order && order.id) {
+                            loadCustomerChatUI(order.id);
+                        }
+                    } catch (err) {
+                        console.error("Sinkronisasi storage error:", err);
+                    }
+                }
+            }
+        });
     </script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </body>
