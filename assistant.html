@@ -1423,14 +1423,16 @@ function renderInitialForm() {
             if (txtTotalFinal) txtTotalFinal.innerText = "Rp " + finalCalculatedTotal.toLocaleString('id-ID');
         }
 
-        /* =========================================
-           ASSISTANT ORDER BRIDGE → AGENT CGO
-        ========================================= */
         function simpanPesananAssistantKeAgent(info, tanggal, lokasi, catatan) {
             const orderId = "AST-" + Date.now() + "-" + Math.floor(100 + Math.random() * 900);
+            
+            // Mendeteksi asal halaman (apakah dari cikurgo2in1 atau assistant standar)
+            const urlParams = new URLSearchParams(window.location.search);
+            const sourceOrigin = urlParams.get('source') || "assistant.html";
+
             const assistantOrder = {
                 id: orderId,
-                source: "assistant.html",
+                source: sourceOrigin, // Bisa bernilai 'cikurgo2in1.html' atau 'assistant.html'
                 target: "agentcgo.html",
                 layanan: {
                     key: currentActivePaketKey,
@@ -1464,15 +1466,21 @@ function renderInitialForm() {
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             };
-
+            // Simpan ke storage utama dan storage khusus 2in1 jika diakses dari sana
             localStorage.setItem("cikur_assistant_current_order", JSON.stringify(assistantOrder));
 
             const existingOrders = JSON.parse(localStorage.getItem("cikur_assistant_orders")) || [];
             existingOrders.unshift(assistantOrder);
             localStorage.setItem("cikur_assistant_orders", JSON.stringify(existingOrders));
 
+            // Jika diakses dari 2in1, simpan juga ke riwayat khusus 2in1
+            if(sourceOrigin.includes("cikurgo2in1")) {
+                const orders2in1 = JSON.parse(localStorage.getItem("cikur_2in1_orders")) || [];
+                orders2in1.unshift(assistantOrder);
+                localStorage.setItem("cikur_2in1_orders", JSON.stringify(orders2in1));
+            }
             return assistantOrder;
-        }
+                }
 
         function initFormEvents() {
             const selectExtraWaktuEl = document.getElementById("selectExtraWaktu");
