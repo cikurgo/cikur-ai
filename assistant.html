@@ -1559,26 +1559,33 @@ const btnRequestDealEl = document.getElementById("btnRequestDeal");
                 const tanggal = tanggalEl ? tanggalEl.value : "";
                 const lokasi = lokasiEl ? lokasiEl.value.trim() : "";
                 const catatan = catatanEl ? catatanEl.value.trim() : "";
-                finalCalculatedTotal = info.hargaBase + currentExtraCost;            
+                finalCalculatedTotal = info.hargaBase + currentExtraCost;
+                
                 if (!tanggal || !lokasi) {
                     alert("[!] Mohon lengkapi Tanggal dan Lokasi.");
                     return;
                 }
+
                 // Ambil objek koordinat map jika ada di halaman Anda, fallback ke default jika kosong
                 let latLngObj = typeof currentLatLng !== 'undefined' ? currentLatLng : null;
+
                 // Simpan pesanan lengkap dengan kordinat dan chat awal
                 const assistantOrder = simpanPesananAssistantKeAgent(info, tanggal, lokasi, catatan, latLngObj);
                 console.log("[CIKUR GO] Pesanan Assistant tersimpan:", assistantOrder);
+
                 if (modalMainContent) {
                     modalMainContent.innerHTML = `
                         <div style="text-align:center; padding: 10px 4px;">
                             <h3 style="font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 4px;">Koordinasi Pesanan Aktif</h3>
-                            <p style="font-size: 10px; color: #64748b; margin-bottom: 10px;">ID: <strong style="color:#E50914;">${assistantOrder.id}</strong></p>                         
+                            <p style="font-size: 10px; color: #64748b; margin-bottom: 10px;">ID: <strong style="color:#E50914;">${assistantOrder.id}</strong></p>
+                            
                             <!-- Wadah Peta Live Sisi Customer -->
                             <div id="customerLiveMap" style="width: 100%; height: 130px; border-radius: 12px; margin-bottom: 8px; border: 1px solid #e2e8f0;"></div>
+
                             <!-- Wadah Chat Interaktif Dua Arah -->
                             <div style="font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 4px; text-align: left;">Chat dengan Agent CGO:</div>
-                            <div id="customerChatContainer" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px; max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; text-align: left;"></div>                      
+                            <div id="customerChatContainer" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px; max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; text-align: left;"></div>
+                            
                             <div style="display: flex; gap: 6px; margin-top: 8px;">
                                 <input type="text" id="customerChatInput" placeholder="Tulis pesan ke Agent..." style="flex: 1; height: 34px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0 10px; font-size: 11px; outline: none;">
                                 <button type="button" onclick="sendCustomerChatFromUI()" style="height: 34px; padding: 0 12px; background: #0f172a; color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer;">Kirim</button>
@@ -1593,7 +1600,6 @@ const btnRequestDealEl = document.getElementById("btnRequestDeal");
                 }
             });
         }
-            
         function tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount) {
             if (modalMainContent) {
                 modalMainContent.innerHTML = `
