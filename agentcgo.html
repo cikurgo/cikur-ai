@@ -3,9 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Agent CGO - CIKUR GO Super App Engine v3.9</title>
+<title>Agent CGO - CIKUR GO Super App Engine</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<!-- Leaflet CSS untuk Peta Navigasi Live -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 :root {
     --primary-red: #E50914;
@@ -40,25 +42,35 @@ body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; di
 .dropdown-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-size: 12px; font-weight: 700; color: var(--text-main); text-decoration: none; border-radius: 10px; transition: background 0.2s; cursor: pointer; background: transparent; border: none; width: 100%; text-align: left; }
 .dropdown-item svg { width: 16px; height: 16px; fill: var(--primary-red); }
 .dropdown-item:hover { background: #fff5f5; color: var(--primary-red); }
-.dropdown-divider { height: 1px; background: var(--border-color); margin: 4px 0; }
 
 /* TAB FILTER PESANAN */
 .order-tabs { display: flex; gap: 8px; margin: 12px 0 16px 0; }
 .order-tab-btn { flex: 1; padding: 8px 10px; font-size: 11px; font-weight: 700; border: 1px solid var(--border-color); background: #fff; color: var(--text-muted); border-radius: 10px; cursor: pointer; text-align: center; transition: 0.2s; }
 .order-tab-btn.active { background: var(--primary-red); color: #fff; border-color: var(--primary-red); }
 
-/* CONTENT SECTION */
+/* AGENT CARDS & DETAILS */
 .agent-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 20px; padding: 16px; margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
-.order-item-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 14px; padding: 12px; margin-bottom: 10px; font-size: 12px; }
-.order-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px; }
-.order-id { font-family: var(--font-mono); font-weight: 700; font-size: 11px; color: var(--primary-red); }
-.order-badge-source { font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 6px; background: #e0f2fe; color: #0369a1; }
+.order-detail-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 16px; padding: 14px; margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
+.order-header-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+.order-badge-source { font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 6px; background: #e0f2fe; color: #0369a1; }
 .order-badge-2in1 { background: #fef3c7; color: #d97706; }
-.order-body p { margin-bottom: 4px; color: var(--text-muted); }
-.order-body strong { color: var(--text-main); }
 
-.btn-pesan-form { width: 100%; height: 40px; border: none; border-radius: 10px; background: var(--primary-red); color: #fff; font-size: 12px; font-weight: 800; cursor: pointer; margin-top: 8px; transition: 0.2s; }
-.btn-pesan-form:hover { background: var(--primary-red-hover); }
+/* MAP BOX */
+.live-map-box { width: 100%; height: 150px; border-radius: 12px; margin: 10px 0; border: 1px solid var(--border-color); z-index: 1; }
+
+/* CHAT BOX */
+.chat-container { background: #f8fafc; border: 1px solid var(--border-color); border-radius: 12px; padding: 10px; margin-top: 10px; max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.chat-bubble { font-size: 11px; padding: 6px 10px; border-radius: 8px; max-width: 85%; line-height: 1.3; }
+.chat-bubble.system { background: #e2e8f0; color: var(--text-main); align-self: center; text-align: center; width: 100%; }
+.chat-bubble.customer { background: #eff6ff; color: #1e40af; align-self: flex-start; border: 1px solid #bfdbfe; }
+.chat-bubble.agent { background: #fef2f2; color: #991b1b; align-self: flex-end; border: 1px solid #fecaca; }
+
+.chat-input-row { display: flex; gap: 6px; margin-top: 8px; }
+.chat-input { flex: 1; height: 34px; border: 1px solid var(--border-color); border-radius: 8px; padding: 0 10px; font-size: 11px; outline: none; }
+.chat-send-btn { height: 34px; padding: 0 12px; background: var(--dark-bg); color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; }
+
+.btn-action-deal { width: 100%; height: 42px; border: none; border-radius: 12px; background: var(--primary-red); color: #fff; font-size: 13px; font-weight: 800; cursor: pointer; margin-top: 12px; transition: 0.2s; }
+.btn-action-deal:hover { background: var(--primary-red-hover); }
 
 /* BOTTOM NAV */
 .bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 440px; height: 70px; background-color: #ffffff; border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; align-items: center; padding: 0 10px; z-index: 1000; box-shadow: 0 -4px 16px rgba(0,0,0,0.06); }
@@ -104,26 +116,20 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
     <!-- MAIN VIEW AGENT CGO -->
     <div style="margin-top: 10px;">
         <div class="agent-card" style="background: linear-gradient(135deg, var(--dark-bg), var(--dark-card)); color: #fff;">
-            <h2 style="font-size: 16px; font-weight: 800; margin-bottom: 6px;">🤖 Pusat Kendali Agent CGO</h2>
-            <p style="font-size: 12px; color: #94a3b8; line-height: 1.4;">Kelola pesanan masuk secara real-time dari jalur Assistant Reguler maupun Integrasi 2in1.</p>
+            <h2 style="font-size: 16px; font-weight: 800; margin-bottom: 6px;">🤖 Pusat Kendali & Live Peta Agent</h2>
+            <p style="font-size: 12px; color: #94a3b8; line-height: 1.4;">Pantau lokasi titik koordinat customer, rincian pesanan, dan koordinasi chat secara langsung.</p>
         </div>
 
-        <!-- DAFTAR PESANAN MASUK -->
-        <div class="agent-card">
-            <h3 style="font-size: 14px; font-weight: 800; margin-bottom: 6px;">Daftar Pesanan Masuk</h3>
-            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">Filter pesanan berdasarkan asal layanan:</p>
-            
-            <!-- Tab Filter -->
-            <div class="order-tabs">
-                <button class="order-tab-btn active" onclick="switchOrderTab('all', this)">Semua</button>
-                <button class="order-tab-btn" onclick="switchOrderTab('assistant.html', this)">Reguler</button>
-                <button class="order-tab-btn" onclick="switchOrderTab('cikurgo2in1.html', this)">2in1</button>
-            </div>
+        <!-- TAB FILTER PESANAN -->
+        <div class="order-tabs">
+            <button class="order-tab-btn active" onclick="switchOrderTab('all', this)">Semua Pesanan</button>
+            <button class="order-tab-btn" onclick="switchOrderTab('assistant.html', this)">Reguler</button>
+            <button class="order-tab-btn" onclick="switchOrderTab('cikurgo2in1.html', this)">Jalur 2in1</button>
+        </div>
 
-            <!-- Kontainer Daftar Order -->
-            <div id="agentOrderListContainer">
-                <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 12px;">Belum ada pesanan masuk.</div>
-            </div>
+        <!-- DAFTAR KARTU DETAIL PESANAN -->
+        <div id="agentDetailedOrderContainer">
+            <div style="text-align: center; padding: 25px; color: var(--text-muted); font-size: 12px;">Memuat data pesanan masuk...</div>
         </div>
     </div>
 
@@ -158,7 +164,7 @@ function updateUIProfile() {
 }
 window.addEventListener("DOMContentLoaded", () => {
     updateUIProfile();
-    loadAgentOrders('all');
+    loadDetailedAgentOrders('all');
 });
 
 const btnOpenProfileDropdown = document.getElementById("btnOpenProfileDropdown");
@@ -169,17 +175,16 @@ btnOpenProfileDropdown.addEventListener("click", (e) => {
 });
 document.addEventListener("click", () => headerDropdownMenu.classList.remove('show'));
 
-// Fungsi memuat dan memfilter daftar pesanan masuk
 let currentFilterSource = 'all';
 function switchOrderTab(sourceType, el) {
     document.querySelectorAll('.order-tab-btn').forEach(btn => btn.classList.remove('active'));
     el.classList.add('active');
     currentFilterSource = sourceType;
-    loadAgentOrders(sourceType);
+    loadDetailedAgentOrders(sourceType);
 }
 
-function loadAgentOrders(filter) {
-    const container = document.getElementById("agentOrderListContainer");
+function loadDetailedAgentOrders(filter) {
+    const container = document.getElementById("agentDetailedOrderContainer");
     const allOrders = JSON.parse(localStorage.getItem('cikur_assistant_orders')) || [];
 
     let filtered = allOrders;
@@ -188,35 +193,102 @@ function loadAgentOrders(filter) {
     }
 
     if(filtered.length === 0) {
-        container.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 12px;">Tidak ada riwayat pesanan untuk kategori ini.</div>`;
+        container.innerHTML = `<div style="text-align: center; padding: 25px; color: var(--text-muted); font-size: 12px;">Belum ada pesanan aktif untuk kategori ini.</div>`;
         return;
     }
 
     let html = '';
-    filtered.forEach(order => {
+    filtered.forEach((order) => {
         let is2in1 = order.source && order.source.includes('cikurgo2in1');
         let badgeClass = is2in1 ? 'order-badge-source order-badge-2in1' : 'order-badge-source';
         let badgeText = is2in1 ? 'Jalur 2in1' : 'Reguler Assistant';
 
+        let chatList = order.chats || [
+            { sender: 'system', text: 'Sistem: Pesanan masuk terverifikasi dari aplikasi customer.' }
+        ];
+
+        let chatsHtml = chatList.map(c => `<div class="chat-bubble ${c.sender}">${c.text}</div>`).join('');
+
         html += `
-            <div class="order-item-card">
-                <div class="order-header-row">
-                    <span class="order-id">${order.id}</span>
+            <div class="order-detail-card">
+                <div class="order-header-info">
+                    <div>
+                        <span style="font-family:var(--font-mono); font-size:11px; font-weight:800; color:var(--primary-red);">${order.id}</span>
+                        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Pemesan: <strong>${order.customer.name} (${order.customer.phone})</strong></div>
+                    </div>
                     <span class="${badgeClass}">${badgeText}</span>
                 </div>
-                <div class="order-body">
-                    <p><strong>Layanan:</strong> ${order.layanan.nama} (${order.layanan.personil})</p>
-                    <p><strong>Pemesan:</strong> ${order.customer.name} (${order.customer.phone})</p>
-                    <p><strong>Jadwal:</strong> ${order.jadwal.tanggal || '-'}</p>
-                    <p><strong>Lokasi:</strong> ${order.lokasi.address || '-'}</p>
-                    <p><strong>Total:</strong> Rp ${order.pricing.total.toLocaleString('id-ID')}</p>
-                    <p><strong>Status:</strong> <span style="color:var(--primary-red); font-weight:700;">${order.status}</span></p>
+
+                <div style="font-size:12px; line-height:1.5; margin-bottom:8px;">
+                    <p>📍 <strong>Lokasi Tujuan:</strong> ${order.lokasi.address || 'Lokasi Peta Kustom'}</p>
+                    <p style="margin-top:4px;">🛒 <strong>Layanan:</strong> ${order.layanan.nama} (${order.layanan.personil}, ${order.layanan.durasi})</p>
+                    <p style="margin-top:4px;">📅 <strong>Jadwal:</strong> ${order.jadwal.tanggal || '-'}</p>
+                    ${order.catatan ? `<p style="margin-top:4px;">📝 <strong>Catatan:</strong> ${order.catatan}</p>` : ''}
                 </div>
-                <button class="btn-pesan-form" onclick="prosesDealOrder('${order.id}')">Konfirmasi & Proses DEAL 🤝</button>
+
+                <div style="font-size:13px; font-weight:800; color:var(--primary-red); margin: 8px 0;">
+                    Total Tagihan: Rp ${order.pricing.total.toLocaleString('id-ID')}
+                </div>
+
+                <!-- PETA NAVIGASI LIVE -->
+                <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-top: 8px;">Peta Navigasi Live Lokasi:</div>
+                <div id="map-container-${order.id}" class="live-map-box"></div>
+
+                <!-- CHAT Koordinasi -->
+                <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-top: 8px;">Chat Koordinasi (Agent & Customer):</div>
+                <div class="chat-container" id="chatBox-${order.id}">
+                    ${chatsHtml}
+                </div>
+                <div class="chat-input-row">
+                    <input type="text" class="chat-input" id="chatInput-${order.id}" placeholder="Tulis balasan koordinasi...">
+                    <button class="chat-send-btn" onclick="sendAgentChat('${order.id}')">Kirim</button>
+                </div>
+
+                <div style="margin-top: 8px; font-size: 11px; color: var(--text-muted);">
+                    Status Saat Ini: <strong style="color:var(--primary-red);">${order.status}</strong>
+                </div>
+
+                <button class="btn-action-deal" onclick="prosesDealOrder('${order.id}')">Konfirmasi & Proses DEAL 🤝</button>
             </div>
         `;
     });
+
     container.innerHTML = html;
+
+    // Render Peta Leaflet untuk setiap pesanan yang tampil
+    filtered.forEach(order => {
+        setTimeout(() => {
+            let mapElId = `map-container-${order.id}`;
+            let mapEl = document.getElementById(mapElId);
+            if(mapEl && !mapEl._leaflet_id) {
+                let lat = order.lokasi.lat || -6.3153;
+                let lng = order.lokasi.lng || 106.1556;
+                let map = L.map(mapElId, { zoomControl: false }).setView([lat, lng], 15);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19
+                }).addTo(map);
+                L.marker([lat, lng]).addTo(map).bindPopup(order.lokasi.address || "Lokasi Customer").openPopup();
+            }
+        }, 300);
+    });
+}
+
+function sendAgentChat(orderId) {
+    let inputEl = document.getElementById(`chatInput-${orderId}`);
+    if(!inputEl) return;
+    let text = inputEl.value.trim();
+    if(!text) return;
+
+    let allOrders = JSON.parse(localStorage.getItem('cikur_assistant_orders')) || [];
+    let orderIndex = allOrders.findIndex(o => o.id === orderId);
+    
+    if(orderIndex !== -1) {
+        if(!allOrders[orderIndex].chats) allOrders[orderIndex].chats = [];
+        allOrders[orderIndex].chats.push({ sender: 'agent', text: 'Agent CGO: ' + text });
+        localStorage.setItem('cikur_assistant_orders', JSON.stringify(allOrders));
+        inputEl.value = '';
+        loadDetailedAgentOrders(currentFilterSource);
+    }
 }
 
 function prosesDealOrder(orderId) {
@@ -224,9 +296,11 @@ function prosesDealOrder(orderId) {
     let index = allOrders.findIndex(o => o.id === orderId);
     if(index !== -1) {
         allOrders[index].status = "DEAL / DIPROSES";
+        if(!allOrders[index].chats) allOrders[index].chats = [];
+        allOrders[index].chats.push({ sender: 'system', text: 'Sistem: Pesanan telah dikonfirmasi DEAL oleh Agent CGO.' });
         localStorage.setItem('cikur_assistant_orders', JSON.stringify(allOrders));
         alert(`Pesanan ${orderId} berhasil dikonfirmasi dan berstatus DEAL!`);
-        loadAgentOrders(currentFilterSource);
+        loadDetailedAgentOrders(currentFilterSource);
     }
 }
 </script>
