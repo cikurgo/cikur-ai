@@ -1613,62 +1613,37 @@ button:focus-visible,
                 renderCustomerActiveOrder(allOrders[orderIndex]);
             }
         }
-
-        function initFormEvents() {
-            const selectExtraWaktuEl = document.getElementById("selectExtraWaktu");
-            if(selectExtraWaktuEl) {
-                selectExtraWaktuEl.value = extraUnitsCount;
-                selectExtraWaktuEl.addEventListener("change", function() {
-                    extraUnitsCount = parseInt(this.value);
-                    currentExtraCost = extraUnitsCount * 25000;
-                    recalculateTotalForm();
-                });
-            }
-
-            function initFormEvents() {
-
+function initFormEvents() {          
     /* =====================================
        EXTRA WAKTU
     ===================================== */
-
     const selectExtraWaktuEl =
         document.getElementById("selectExtraWaktu");
-
     if (selectExtraWaktuEl) {
-
         selectExtraWaktuEl.value =
             typeof extraUnitsCount !== "undefined"
                 ? extraUnitsCount
                 : 0;
-
         selectExtraWaktuEl.addEventListener(
             "change",
             function () {
-
                 extraUnitsCount =
                     parseInt(this.value, 10) || 0;
-
                 currentExtraCost =
                     extraUnitsCount * 25000;
-
                 recalculateTotalForm();
             }
         );
     }
 
-
     /* =====================================
        REQUEST DEAL
     ===================================== */
-
     const btnRequestDealEl =
         document.getElementById("btnRequestDeal");
-
     if (!btnRequestDealEl) {
         return;
     }
-
-
     btnRequestDealEl.addEventListener(
         "click",
         function () {
@@ -1680,91 +1655,62 @@ button:focus-visible,
                 alert("[!] Paket layanan tidak ditemukan.");
                 return;
             }
-
-
             /* ---------- DATA FORM ---------- */
-
             const tanggalEl =
                 document.getElementById("inputTanggal");
-
             const jamEl =
                 document.getElementById("inputJam");
-
             const lokasiEl =
                 document.getElementById("assistantAddress");
-
             const nomorRumahEl =
                 document.getElementById("assistantHouseNo");
-
             const patokanEl =
                 document.getElementById("assistantAddressNote");
-
             const catatanEl =
                 document.getElementById("inputCatatanRequest");
-
-
             const tanggal =
                 tanggalEl
                     ? tanggalEl.value
                     : "";
-
             const jam =
                 jamEl
                     ? jamEl.value
                     : "";
-
             const lokasi =
                 lokasiEl
                     ? lokasiEl.value.trim()
                     : "";
-
             const nomorRumah =
                 nomorRumahEl
                     ? nomorRumahEl.value.trim()
                     : "";
-
             const patokan =
                 patokanEl
                     ? patokanEl.value.trim()
-                    : "";
-
+                   : "";
             const catatan =
                 catatanEl
                     ? catatanEl.value.trim()
                     : "";
-
-
             /* ---------- TOTAL ---------- */
-
             finalCalculatedTotal =
                 (info.hargaBase || 0) +
                 (currentExtraCost || 0);
-
-
             /* =================================
                VALIDASI
             ================================= */
-
             if (!tanggal) {
-
                 alert(
                     "[!] Silakan pilih tanggal layanan."
                 );
-
                 return;
             }
-
-
             if (!jam) {
-
                 alert(
                     "[!] Silakan pilih jam layanan."
                 );
-
                 return;
             }
-
-
             if (!lokasi) {
 
                 alert(
@@ -1773,74 +1719,51 @@ button:focus-visible,
 
                 return;
             }
-
-
             /* =================================
                KOORDINAT
             ================================= */
-
             const lat =
                 Number(
                     assistantCoords &&
                     assistantCoords.lat
                 );
-
             const lng =
                 Number(
                     assistantCoords &&
                     assistantCoords.lon
                 );
-
-
             const latLngObj = {
-
                 lat:
                     Number.isFinite(lat)
                         ? lat
                         : 0,
-
                 lng:
                     Number.isFinite(lng)
                         ? lng
                         : 0
             };
-
-
             /* =================================
                SIMPAN ORDER
             ================================= */
-
             const assistantOrder =
                 simpanPesananAssistantKeAgent(
-
                     info,
-
                     tanggal,
-
                     jam,
-
                     lokasi,
-
                     nomorRumah,
-
                     patokan,
-
                     catatan,
-
                     latLngObj
                 );
-
-
             console.log(
                 "[CIKUR GO] Pesanan Assistant tersimpan:",
                 assistantOrder
             );
 
-
             /* =================================
                LANJUT KE KOORDINASI AGENT CGO
             ================================= */
-
             renderActiveCoordinationView(
                 assistantOrder
             );
