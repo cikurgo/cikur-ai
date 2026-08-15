@@ -1423,64 +1423,123 @@ function renderInitialForm() {
             if (txtTotalFinal) txtTotalFinal.innerText = "Rp " + finalCalculatedTotal.toLocaleString('id-ID');
         }
 
-        function simpanPesananAssistantKeAgent(info, tanggal, lokasi, catatan) {
-            const orderId = "AST-" + Date.now() + "-" + Math.floor(100 + Math.random() * 900);
-            
-            // Mendeteksi asal halaman (apakah dari cikurgo2in1 atau assistant standar)
-            const urlParams = new URLSearchParams(window.location.search);
-            const sourceOrigin = urlParams.get('source') || "assistant.html";
+// ==========================================
+// FUNGSI LENGKAP: PENYIMPANAN & CHAT ASSISTANT
+// ==========================================
 
-            const assistantOrder = {
-                id: orderId,
-                source: sourceOrigin, // Bisa bernilai 'cikurgo2in1.html' atau 'assistant.html'
-                target: "agentcgo.html",
-                layanan: {
-                    key: currentActivePaketKey,
-                    nama: info.nama,
-                    personil: info.personil,
-                    durasi: info.durasi,
-                    prioritas: info.prioritas
-                },
-                customer: {
-                    name: userProfile.name,
-                    phone: userProfile.phone
-                },
-                jadwal: {
-                    tanggal: tanggal
-                },
-                lokasi: {
-                    address: lokasi
-                },
-                catatan: catatan || "",
-                pricing: {
-                    hargaDasar: info.hargaBase,
-                    extraUnits: extraUnitsCount,
-                    extraCost: currentExtraCost,
-                    total: finalCalculatedTotal
-                },
-                payment: {
-                    status: "MENUNGGU_DEAL",
-                    method: null
-                },
-                status: "MENUNGGU_DEAL",
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            };
-            // Simpan ke storage utama dan storage khusus 2in1 jika diakses dari sana
-            localStorage.setItem("cikur_assistant_current_order", JSON.stringify(assistantOrder));
+// 1. Fungsi mendeteksi asal jalur halaman (Reguler atau 2in1)
+function getSourceOrigin() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('source') || 'assistant.html';
+}
 
-            const existingOrders = JSON.parse(localStorage.getItem("cikur_assistant_orders")) || [];
-            existingOrders.unshift(assistantOrder);
-            localStorage.setItem("cikur_assistant_orders", JSON.stringify(existingOrders));
+// 2. Fungsi utama saat customer melakukan pemesanan (membawa kordinat lat, lng, dan chat awal)
+function simpanPesananAssistantKeAgent(info, tanggal, lokasiText, catatan, latLngObj) {
+    const orderId = "AST-" + Date.now() + "-" + Math.floor(100 + Math.random() * 900);
+    const sourceOrigin = getSourceOrigin();
 
-            // Jika diakses dari 2in1, simpan juga ke riwayat khusus 2in1
-            if(sourceOrigin.includes("cikurgo2in1")) {
-                const orders2in1 = JSON.parse(localStorage.getItem("cikur_2in1_orders")) || [];
-                orders2in1.unshift(assistantOrder);
-                localStorage.setItem("cikur_2in1_orders", JSON.stringify(orders2in1));
-            }
-            return assistantOrder;
-                }
+    const assistantOrder = {
+        id: orderId,
+        source: sourceOrigin, // Menandai apakah dari 'cikurgo2in1.html' atau 'assistant.html'
+        target: "agentcgo.html",
+        layanan: {
+            key: typeof currentActivePaketKey !== 'undefined' ? currentActivePaketKey : 'default',
+            nama: info.nama,
+            personil: info.personil,
+            durasi: info.durasi,
+            prioritas: info.prioritas || 'Normal'
+        },
+        customer: {
+            name: userProfile.name,
+            phone: userProfile.phone
+        },
+        jadwal: {
+            tanggal: tanggal
+        },
+        lokasi: {
+            address: lokasiText,
+            lat: latLngObj ? latLngObj.lat : -6.3153, // Koordinat peta aktif customer
+            lng: latLngObj ? latLngObj.lng : 106.1556 // Koordinat peta aktif customer
+        },
+        catatan: catatan || "",
+        pricing: {
+            hargaDasar: info.hargaBase || 0,
+            extraUnits: typeof extraUnitsCount !== 'undefined' ? extraUnitsCount : 0,
+            extraCost: typeof currentExtraCost !== 'undefined' ? currentExtraCost : 0,
+            total: typeof finalCalculatedTotal !== 'undefined' ? finalCalculatedTotal : 0
+        },
+        payment: {
+            status: "MENUNGGU_DEAL",
+            method: null
+        },
+        status: "MENUNGGU_DEAL",
+        // Wadah chat awal agar agentcgo.html bisa langsung merender kolom chat interaktif
+        chats: [
+            { sender: 'system', text: 'Sistem: Pesanan masuk terverifikasi dari aplikasi customer.' }
+        ],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+
+    // Simpan data pesanan saat ini ke penyimpanan lokal khusus customer
+    localStorage.setItem("cikur_assistant_current_order", JSON.stringify(assistantOrder));
+    // Simpan ke storage utama yang dibaca oleh agentcgo.html
+    const existingOrders = JSON.parse(localStorage.getItem("cikur_assistant_orders")) || [];
+    existingOrders.unshift(assistantOrder);
+    localStorage.setItem("cikur_assistant_orders", JSON.stringify(existingOrders));
+    // Sinkronisasi khusus jika diakses dari jalur 2in1
+    if(sourceOrigin.includes("cikurgo2in1")) {
+        const orders2in1 = JSON.parse(localStorage.getItem("cikur_2in1_orders")) || [];
+        orders2in1.unshift(assistantOrder);
+        localStorage.setItem("cikur_2in1_orders", JSON.stringify(orders2in1));
+    }
+
+    return assistantOrder;
+}
+// 3. Fungsi memuat riwayat chat di sisi customer secara interaktif
+function loadCustomerChatUI(orderId) {
+    let allOrders = JSON.parse(localStorage.getItem('cikur_assistant_orders')) || [];
+    let order = allOrders.find(o => o.id === orderId);
+    if(!order || !order.chats) return;
+
+    let chatContainer = document.getElementById("customerChatContainer");
+    if(!chatContainer) return;
+
+    let html = '';
+    order.chats.forEach(c => {
+        let bubbleStyle = c.sender === 'customer' 
+            ? 'background:#eff6ff; color:#1e40af; align-self:flex-end; border:1px solid #bfdbfe;' 
+            : (c.sender === 'agent' 
+                ? 'background:#fef2f2; color:#991b1b; align-self:flex-start; border:1px solid #fecaca;' 
+                : 'background:#e2e8f0; color:#0f172a; align-self:center; text-align:center; width:100%;');
+                
+        html += `<div style="font-size:11px; padding:6px 10px; border-radius:8px; max-width:85%; line-height:1.3; ${bubbleStyle}">${c.text}</div>`;
+    });
+    chatContainer.innerHTML = html;
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+// 4. Fungsi customer mengirim pesan balasan ke Agent CGO
+function sendCustomerChatFromUI() {
+    let inputEl = document.getElementById("customerChatInput");
+    if(!inputEl) return;
+    let text = inputEl.value.trim();
+    if(!text) return;
+    let currentOrder = JSON.parse(localStorage.getItem('cikur_assistant_current_order'));
+    if(!currentOrder) return;
+    let allOrders = JSON.parse(localStorage.getItem('cikur_assistant_orders')) || [];
+    let orderIndex = allOrders.findIndex(o => o.id === currentOrder.id);
+  
+    if(orderIndex !== -1) {
+        if(!allOrders[orderIndex].chats) allOrders[orderIndex].chats = [];
+        allOrders[orderIndex].chats.push({ sender: 'customer', text: 'Customer: ' + text });
+        
+        localStorage.setItem('cikur_assistant_orders', JSON.stringify(allOrders));
+        localStorage.setItem('cikur_assistant_current_order', JSON.stringify(allOrders[orderIndex]));
+        
+        inputEl.value = '';
+        loadCustomerChatUI(currentOrder.id);
+    }
+}
 
         function initFormEvents() {
             const selectExtraWaktuEl = document.getElementById("selectExtraWaktu");
