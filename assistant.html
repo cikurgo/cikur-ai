@@ -4,12 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cikurgo Assistant</title>
-    <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     
     <style>
-        /* CSS Khusus Assistant */
+        /* =========================================
+           1. VARIABEL & CSS UTAMA
+           ========================================= */
         :root {
             --primary-red: #e50914;
             --dark-bg: #0b0f19;
@@ -21,67 +23,146 @@
         }
         
         body {
-    font-family: Arial, sans-serif;
-    background: #f8fafc;
-    margin: 0;
-    padding: 0;
-    min-height: 100vh;
-}
+            font-family: Arial, sans-serif;
+            background: #f8fafc;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
 
-.assistant-screen {
-    width: 100%;
-    min-height: 100vh;
-    margin: 0;
-    background: #ffffff;
-    border-radius: 0;
-    box-shadow: none;
-    overflow: hidden;
-}
+        .assistant-screen {
+            width: 100%;
+            min-height: 100vh;
+            margin: 0;
+            background: #ffffff;
+            border-radius: 0;
+            box-shadow: none;
+            overflow: hidden;
+        }
 
-.assistant-page {
-    width: 100%;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-}
-
-.assistant-content {
-    flex: 1;
-    padding: 16px;
-    padding-bottom: 32px;
-}
+        .assistant-page {
+            width: 100%;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
 
         .assistant-top {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    background: #ffffff;
-    color: var(--text-main);
-    padding: 14px 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-weight: 800;
-    font-size: 13px;
-    letter-spacing: 0.3px;
-    border-bottom: 1px solid #e2e8f0;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: #ffffff;
+            color: var(--text-main);
+            padding: 14px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 800;
+            font-size: 13px;
+            letter-spacing: 0.3px;
+            border-bottom: 1px solid #e2e8f0;
         }
 
         #closeAssistant {
-    background: #f1f5f9;
-    border: none;
-    color: var(--text-main);
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    font-size: 20px;
-    cursor: pointer;
+            background: #f1f5f9;
+            border: none;
+            color: var(--text-main);
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
         }
 
         .assistant-content {
-            padding: 16px;
+            flex: 1;
+            padding: 18px 16px 40px;
         }
 
+        /* =========================================
+           2. SERVICE CARDS (GRID LAYANAN)
+           ========================================= */
+        .service-type-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .service-card-option {
+            position: relative;
+            height: 132px;
+            padding: 14px 8px 12px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            background: #ffffff;
+            border: 1px solid #e7ebf0;
+            border-radius: 20px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+            cursor: pointer;
+            overflow: hidden;
+            transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease, background .22s ease;
+        }
+
+        .service-card-option:active {
+            transform: scale(.97);
+        }
+
+        .service-card-option:hover {
+            border-color: #d7dde5;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+        }
+
+        .service-card-option.active {
+            background: linear-gradient(180deg, #fffafa 0%, #fff3f3 100%);
+            border: 1.5px solid #e50914;
+            box-shadow: 0 8px 22px rgba(229, 9, 20, 0.10);
+        }
+
+        .service-card-option.active::after {
+            content: "";
+            position: absolute;
+            top: 9px;
+            right: 9px;
+            width: 7px;
+            height: 7px;
+            background: #e50914;
+            border-radius: 50%;
+            box-shadow: 0 0 0 4px rgba(229, 9, 20, 0.08);
+        }
+
+        .service-card-option img {
+            width: 58px;
+            height: 58px;
+            object-fit: contain;
+            display: block;
+            transition: transform .25s ease;
+        }
+
+        .service-card-option.active img {
+            transform: scale(1.06);
+        }
+
+        .service-card-option .title {
+            font-size: 12px;
+            font-weight: 800;
+            color: #172033;
+            text-transform: uppercase;
+            letter-spacing: .3px;
+            line-height: 1;
+        }
+
+        .service-card-option.active .title {
+            color: #d91f26;
+        }
+
+        /* =========================================
+           3. FORM & BADGES
+           ========================================= */
         .assistant-form-container {
             background: #ffffff;
             border: 1px solid var(--border-color);
@@ -91,137 +172,436 @@
             margin-top: 2px;
         }
 
-        .service-type-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            margin-bottom: 12px;
-        }
-
-        .service-card-option {
-            background: #f8fafc;
-            border: 2px solid var(--border-color);
-            border-radius: 16px;
-            height: 105px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            gap: 6px;
-            cursor: pointer;
-            transition: .25s;
-            overflow: hidden;
-        }
-
-        .service-card-option:hover {
-            border-color: var(--primary-red);
-            background: #fff5f5;
-        }
-
-        .service-card-option.active {
-            border-color: var(--primary-red);
-            background: #fff5f5;
-            box-shadow: 0 4px 12px rgba(229, 9, 20, 0.12);
-        }
-
-        .service-card-option img {
-            width: 46px;
-            height: 46px;
-            object-fit: contain;
-            display: block;
-            margin: 0 auto;
-        }
-
-        .service-card-option .title {
-            font-size: 10px;
-            font-weight: 800;
-            color: var(--text-main);
-            text-transform: uppercase;
-            line-height: 1;
-        }
-
         .form-section-title {
-            font-size: 11px;
-            font-weight: 800;
-            color: var(--text-main);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
+            position: relative;
             display: flex;
             align-items: center;
-            gap: 5px;
+            margin: 22px 0 13px !important;
+            color: #172033 !important;
+            font-size: 15px !important;
+            font-weight: 800 !important;
+            letter-spacing: -.2px !important;
         }
 
         .form-section-title::before {
-            content: '';
-            display: inline-block;
-            width: 3px;
-            height: 11px;
-            background: var(--primary-red);
-            border-radius: 2px;
+            content: "";
+            width: 4px;
+            height: 18px;
+            margin-right: 9px;
+            background: #e50914;
+            border-radius: 999px;
+        }
+
+        .paket-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 7px 10px !important;
+            background: #f7f8fa !important;
+            border: 1px solid #edf0f3;
+            border-radius: 999px !important;
+            color: #475569 !important;
+            font-size: 11px !important;
+            font-weight: 700 !important;
         }
 
         .modern-form-group {
-            margin-bottom: 10px;
+            margin-bottom: 16px !important;
         }
 
         .modern-form-group label {
             display: block;
-            font-size: 10px;
-            font-weight: 700;
-            color: var(--text-muted);
-            margin-bottom: 4px;
+            margin-bottom: 7px;
+            color: #64748b !important;
+            font-size: 11px !important;
+            font-weight: 800 !important;
+            letter-spacing: .3px;
             text-transform: uppercase;
         }
 
         .modern-input {
             width: 100%;
-            padding: 10px 12px;
-            background: #f8fafc;
-            border: 1px solid #cbd5e1;
-            border-radius: 10px;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-main);
-            outline: none;
-            transition: all 0.2s ease;
+            min-height: 52px;
             box-sizing: border-box;
+            padding: 13px 15px;
+            background: #f8fafc !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 15px !important;
+            color: #172033 !important;
+            font-size: 14px !important;
+            font-weight: 600;
+            outline: none;
+            transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
         }
 
         .modern-input:focus {
-            background: #ffffff;
-            border-color: var(--primary-red);
-            box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.1);
+            background: #ffffff !important;
+            border-color: #e50914 !important;
+            box-shadow: 0 0 0 3px rgba(229, 9, 20, .07) !important;
         }
 
         .modern-input-layanan {
-            width: 100%;
-            padding: 10px;
-            background: #fff5f5;
-            border: 1px solid rgba(229, 9, 20, 0.3);
-            border-radius: 10px;
-            font-size: 12px;
-            font-weight: 800;
-            color: var(--primary-red);
-            text-align: center;
-            font-family: var(--font-mono);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 52px;
             box-sizing: border-box;
+            padding: 12px 16px;
+            background: #fff7f7 !important;
+            border: 1px solid #fecaca !important;
+            border-radius: 15px !important;
+            color: #d91f26 !important;
+            font-size: 14px !important;
+            font-weight: 800 !important;
         }
 
         .modern-row {
-            display: flex;
-            gap: 8px;
-        }
-
-        .modern-col {
-            flex: 1;
+            display: grid !important;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
         }
 
         .modern-textarea {
-            resize: none;
-            height: 54px;
+            min-height: 108px !important;
+            padding: 14px 15px !important;
+            resize: vertical;
         }
 
+        /* =========================================
+           4. LOKASI & PETA CARD
+           ========================================= */
+        .assistant-location-card {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 15px !important;
+            background: #ffffff;
+            border: 1px solid #e8edf2;
+            border-radius: 20px !important;
+            box-shadow: 0 4px 16px rgba(15, 23, 42, .045) !important;
+            margin-bottom: 16px;
+        }
+
+        .assistant-location-header {
+            display: flex;
+            align-items: center;
+            gap: 10px !important;
+            margin-bottom: 12px !important;
+        }
+
+        .assistant-location-icon {
+            width: 37px !important;
+            height: 37px !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            background: #fff1f2;
+            border-radius: 11px !important;
+            font-size: 17px !important;
+        }
+
+        .assistant-location-title {
+            color: #172033;
+            font-size: 13px !important;
+            font-weight: 850;
+            line-height: 1.2;
+        }
+
+        .assistant-location-subtitle {
+            margin-top: 3px;
+            color: #94a3b8;
+            font-size: 9.5px !important;
+            font-weight: 600;
+        }
+
+        .assistant-address-search-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+            width: 100%;
+            min-height: 47px !important;
+            box-sizing: border-box;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 13px !important;
+        }
+
+        .assistant-search-icon {
+            width: 38px !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+            font-size: 19px !important;
+            flex-shrink: 0;
+        }
+
+        .assistant-address-input {
+            flex: 1;
+            min-width: 0;
+            height: 45px !important;
+            padding: 0 6px;
+            border: none;
+            outline: none;
+            background: transparent;
+            color: #172033;
+            font-size: 12px !important;
+            font-weight: 600;
+        }
+
+        .assistant-gps-button {
+            width: 34px !important;
+            height: 34px !important;
+            margin-right: 5px !important;
+            border: none;
+            border-radius: 10px !important;
+            background: #ffffff;
+            color: #e50914;
+            font-size: 19px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 7px rgba(15, 23, 42, .06);
+        }
+
+        .assistant-address-suggestions {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            display: none;
+            overflow: hidden;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 15px;
+            box-shadow: 0 14px 30px rgba(15, 23, 42, .12);
+        }
+
+        .assistant-address-suggestions > div {
+            padding: 12px 14px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #334155;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .assistant-map-preview {
+            position: relative;
+            height: 132px !important;
+            margin-top: 9px !important;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #f1f5f9, #e9eef3);
+            border: 1px solid #e2e8f0;
+            border-radius: 15px !important;
+            cursor: pointer;
+        }
+
+        .assistant-map-placeholder {
+            text-align: center;
+            padding: 15px !important;
+        }
+
+        .assistant-map-pin {
+            font-size: 24px !important;
+            margin-bottom: 3px !important;
+        }
+
+        .assistant-map-main-text {
+            color: #334155;
+            font-size: 11px !important;
+            font-weight: 800;
+        }
+
+        .assistant-map-sub-text {
+            max-width: 230px;
+            margin: 4px auto 0;
+            color: #94a3b8;
+            font-size: 8.5px !important;
+            font-weight: 600;
+        }
+
+        .assistant-map-open-button {
+            position: absolute;
+            right: 8px !important;
+            bottom: 8px !important;
+            padding: 7px 10px !important;
+            border: none;
+            border-radius: 9px !important;
+            background: rgba(255,255,255,.94);
+            color: #e50914;
+            font-size: 9px !important;
+            font-weight: 800;
+            box-shadow: 0 4px 12px rgba(15,23,42,.08);
+        }
+
+        .assistant-address-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px !important;
+            margin-top: 8px !important;
+        }
+
+        .assistant-detail-field {
+            display: flex;
+            align-items: center;
+            min-width: 0;
+            height: 43px !important;
+            box-sizing: border-box;
+            padding: 0 10px !important;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 11px !important;
+        }
+
+        .assistant-detail-field input {
+            width: 100%;
+            border: none;
+            outline: none;
+            background: transparent;
+            color: #334155;
+            font-size: 9.5px !important;
+            font-weight: 600;
+        }
+
+        .assistant-location-status {
+            display: flex;
+            align-items: center;
+            gap: 6px !important;
+            margin-top: 9px !important;
+            color: #94a3b8;
+            font-size: 9px !important;
+            font-weight: 600;
+        }
+
+        .assistant-status-dot {
+            width: 6px !important;
+            height: 6px !important;
+            flex-shrink: 0;
+            border-radius: 50%;
+            background: #cbd5e1;
+        }
+
+        /* =========================================
+           5. MAP MODAL (LEAFLET)
+           ========================================= */
+        #assistantMapModal {
+            position: fixed;
+            inset: 0;
+            z-index: 99999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+            box-sizing: border-box;
+            background: rgba(15, 23, 42, .48);
+            backdrop-filter: blur(8px);
+        }
+
+        .assistant-map-modal-card {
+            width: 100%;
+            max-width: 440px;
+            overflow: hidden;
+            background: #ffffff;
+            border-radius: 24px;
+            box-shadow: 0 24px 70px rgba(15, 23, 42, .22);
+        }
+
+        .assistant-map-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px 16px;
+            border-bottom: 1px solid #eef2f6;
+        }
+
+        .assistant-map-modal-title {
+            color: #172033;
+            font-size: 14px;
+            font-weight: 850;
+        }
+
+        .assistant-map-modal-subtitle {
+            margin-top: 3px;
+            color: #94a3b8;
+            font-size: 9px;
+            font-weight: 600;
+        }
+
+        .assistant-map-close {
+            width: 34px;
+            height: 34px;
+            border: none;
+            border-radius: 11px;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: 22px;
+            cursor: pointer;
+        }
+
+        .assistant-map-container-wrap {
+            position: relative;
+            width: 100%;
+            height: 350px;
+        }
+
+        #assistantLeafletMap {
+            width: 100%;
+            height: 100%;
+        }
+
+        .assistant-map-gps {
+            position: absolute;
+            right: 14px;
+            bottom: 14px;
+            z-index: 1000;
+            width: 44px;
+            height: 44px;
+            border: none;
+            border-radius: 14px;
+            background: #ffffff;
+            color: #e50914;
+            font-size: 20px;
+            box-shadow: 0 5px 15px rgba(15, 23, 42, .16);
+            cursor: pointer;
+        }
+
+        .assistant-map-modal-footer {
+            display: flex;
+            gap: 9px;
+            padding: 13px 14px;
+            border-top: 1px solid #eef2f6;
+        }
+
+        .assistant-map-cancel, .assistant-map-confirm {
+            flex: 1;
+            min-height: 48px;
+            border-radius: 13px;
+            font-size: 11px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .assistant-map-cancel {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            color: #64748b;
+        }
+
+        .assistant-map-confirm {
+            background: #e50914;
+            border: none;
+            color: #ffffff;
+            box-shadow: 0 7px 16px rgba(229, 9, 20, .16);
+        }
+
+        /* =========================================
+           6. TOTAL & CHECKOUT BUTTONS
+           ========================================= */
         .modern-total-box {
             background: linear-gradient(135deg, var(--dark-bg), var(--dark-card));
             color: #fff;
@@ -248,23 +628,6 @@
             font-family: var(--font-mono);
         }
 
-        .paket-badge {
-            background: #f1f5f9;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 10px;
-            font-weight: 700;
-            color: var(--text-main);
-        }
-
-        .rincian-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            color: var(--text-muted);
-            margin-bottom: 4px;
-        }
-
         .btn-pesan-form {
             width: 100%;
             padding: 12px;
@@ -275,6 +638,21 @@
             font-weight: 800;
             cursor: pointer;
             text-transform: uppercase;
+        }
+
+        #btnRequestDeal {
+            width: 100%;
+            min-height: 56px;
+            margin-top: 10px;
+            padding: 14px 18px;
+            border: none !important;
+            border-radius: 16px !important;
+            background: #e50914 !important;
+            color: #ffffff !important;
+            font-size: 15px !important;
+            font-weight: 800 !important;
+            box-shadow: 0 8px 20px rgba(229, 9, 20, .18) !important;
+            cursor: pointer;
         }
 
         .invoice-row {
@@ -302,1401 +680,17 @@
             color: #fff;
             border-color: var(--primary-red);
         }
-/* =========================================
-   ASSISTANT MODERN UI — STEP 1B
-========================================= */
 
-.assistant-screen {
-    background: #ffffff;
-}
-
-.assistant-content {
-    padding: 18px 16px 40px;
-}
-
-/* SECTION */
-.assistant-content > div {
-    border-radius: 0;
-}
-
-/* JUDUL SECTION */
-.assistant-content h3,
-.assistant-content h4 {
-    letter-spacing: -0.2px;
-}
-
-/* SERVICE CARDS */
-.service-card,
-.paket-card,
-.package-card {
-    transition: all 0.2s ease;
-}
-
-.service-card:hover,
-.paket-card:hover,
-.package-card:hover {
-    transform: translateY(-2px);
-}
-
-/* CARD AKTIF */
-.service-card.active,
-.paket-card.active,
-.package-card.active {
-    box-shadow: 0 8px 24px rgba(220, 38, 38, 0.10);
-}
-
-/* INFO BADGES */
-.info-badges,
-.badges,
-.service-info {
-    gap: 8px;
-}
-
-.info-badges span,
-.badges span,
-.service-info span {
-    border: 0 !important;
-    box-shadow: none !important;
-    background: #f4f6f8 !important;
-    border-radius: 999px !important;
-    padding: 8px 12px !important;
-}
-
-/* FORM LABEL */
-label {
-    font-weight: 700;
-    color: #64748b;
-    font-size: 12px;
-    letter-spacing: .2px;
-}
-
-/* INPUT */
-input,
-select,
-textarea {
-    border: 1.5px solid #dbe1e8 !important;
-    border-radius: 14px !important;
-    background: #f8fafc !important;
-    box-shadow: none !important;
-    transition: .2s ease;
-}
-
-input:focus,
-select:focus,
-textarea:focus {
-    outline: none;
-    border-color: #dc2626 !important;
-    background: #ffffff !important;
-    box-shadow: 0 0 0 4px rgba(220,38,38,.08) !important;
-}
-
-/* TEXTAREA */
-textarea {
-    min-height: 110px;
-    resize: vertical;
-}
-
-/* SELECT */
-select {
-    min-height: 54px;
-}
-
-/* SERVICE SELECTED */
-#selectedService {
-    border-radius: 14px !important;
-    background: #fff7f7 !important;
-    border: 1px solid #fecaca !important;
-    color: #dc2626 !important;
-    font-weight: 800;
-}
-
-/* REMOVE HEAVY BOX FEEL */
-.info-section,
-.form-section,
-.booking-section {
-    background: transparent !important;
-    border: 0 !important;
-    box-shadow: none !important;
-}
-
-/* MOBILE */
-@media (max-width: 600px) {
-    .assistant-content {
-        padding: 16px 14px 36px;
-    }
-
-    .assistant-top {
-        padding: 14px 16px;
-    }
-}
-/* =========================================
-   ASSISTANT SERVICE CARDS — MODERN APP UI
-========================================= */
-
-.service-type-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-    margin: 0;
-    padding: 0;
-}
-
-/* CARD DASAR */
-.service-card-option {
-    position: relative;
-    height: 132px;
-    padding: 14px 8px 12px;
-    box-sizing: border-box;
-
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
-
-    background: #ffffff;
-    border: 1px solid #e7ebf0;
-    border-radius: 20px;
-
-    box-shadow:
-        0 2px 8px rgba(15, 23, 42, 0.04);
-
-    cursor: pointer;
-    overflow: hidden;
-
-    transition:
-        transform .22s ease,
-        border-color .22s ease,
-        box-shadow .22s ease,
-        background .22s ease;
-}
-
-/* EFEK SAAT DISENTUH */
-.service-card-option:active {
-    transform: scale(.97);
-}
-
-/* HOVER */
-.service-card-option:hover {
-    border-color: #d7dde5;
-    box-shadow:
-        0 8px 20px rgba(15, 23, 42, 0.08);
-}
-
-/* ACTIVE */
-.service-card-option.active {
-    background: linear-gradient(
-        180deg,
-        #fffafa 0%,
-        #fff3f3 100%
-    );
-
-    border: 1.5px solid #e50914;
-
-    box-shadow:
-        0 8px 22px rgba(229, 9, 20, 0.10);
-}
-
-/* ACTIVE INDICATOR */
-.service-card-option.active::after {
-    content: "";
-    position: absolute;
-    top: 9px;
-    right: 9px;
-
-    width: 7px;
-    height: 7px;
-
-    background: #e50914;
-    border-radius: 50%;
-
-    box-shadow: 0 0 0 4px rgba(229, 9, 20, 0.08);
-}
-
-/* GAMBAR ROBOT */
-.service-card-option img {
-    width: 58px;
-    height: 58px;
-
-    object-fit: contain;
-
-    display: block;
-
-    transition:
-        transform .25s ease,
-        filter .25s ease;
-}
-
-/* ACTIVE ROBOT */
-.service-card-option.active img {
-    transform: scale(1.06);
-}
-
-/* NAMA */
-.service-card-option .title {
-    font-size: 12px;
-    font-weight: 800;
-
-    color: #172033;
-
-    text-transform: uppercase;
-    letter-spacing: .3px;
-
-    line-height: 1;
-}
-
-/* ACTIVE TEXT */
-.service-card-option.active .title {
-    color: #d91f26;
-}
-
-/* MOBILE */
-@media (max-width: 380px) {
-    .service-type-grid {
-        gap: 7px;
-    }
-
-    .service-card-option {
-        height: 126px;
-        border-radius: 18px;
-        padding: 12px 5px;
-    }
-
-    .service-card-option img {
-        width: 53px;
-        height: 53px;
-    }
-
-    .service-card-option .title {
-        font-size: 11px;
-    }
-} 
- /* =========================================
-    ASSISTANT — MODERN INFO & SECTION
- ========================================= */
-
- /* BADGE INFORMASI */
- .paket-badge {
-     display: inline-flex;
-     align-items: center;
-     gap: 5px;
-
-     padding: 7px 10px !important;
-
-     background: #f7f8fa !important;
-     border: 1px solid #edf0f3;
-
-     border-radius: 999px !important;
-
-     color: #475569 !important;
-     font-size: 11px !important;
-     font-weight: 700 !important;
-
-     box-shadow: none !important;
- }
-
- /* BARIS BADGE */
- .assistant-form-container > div[style*="display:flex"] {
-     display: flex !important;
-     gap: 7px !important;
-     margin: 14px 0 24px !important;
-     flex-wrap: wrap;
- }
-
- /* JUDUL SECTION */
- .form-section-title {
-     position: relative;
-
-     display: flex;
-     align-items: center;
-
-     margin: 22px 0 13px !important;
-
-     padding: 0 !important;
-
-     background: transparent !important;
-     border: none !important;
-
-     color: #172033 !important;
-
-     font-size: 15px !important;
-     font-weight: 800 !important;
-     letter-spacing: -.2px !important;
- }
-
- /* GARIS KECIL ACCENT */
- .form-section-title::before {
-     content: "";
-
-     width: 4px;
-     height: 18px;
-
-     margin-right: 9px;
-
-     background: #e50914;
-
-     border-radius: 999px;
- }
-
- /* LAYANAN TERPILIH */
- .modern-input-layanan {
-     display: flex;
-     align-items: center;
-     justify-content: center;
-
-     min-height: 52px;
-
-     box-sizing: border-box;
-
-     padding: 12px 16px;
-
-     background: #fff7f7 !important;
-     border: 1px solid #fecaca !important;
-
-     border-radius: 15px !important;
-
-     color: #d91f26 !important;
-
-     font-size: 14px !important;
-     font-weight: 800 !important;
-     letter-spacing: .2px;
- }
-
- /* LABEL */
- .modern-form-group label {
-     display: block;
-
-     margin-bottom: 7px;
-
-     color: #64748b !important;
-
-     font-size: 11px !important;
-     font-weight: 800 !important;
-
-     letter-spacing: .3px;
-     text-transform: uppercase;
- }
-
- /* JARAK ANTAR FORM */
- .modern-form-group {
-     margin-bottom: 16px !important;
- }
-
- /* DUA KOLOM */
- .modern-row {
-     gap: 12px !important;
- }
-
- /* MOBILE */
- @media (max-width: 600px) {
-
-     .paket-badge {
-         font-size: 10.5px !important;
-         padding: 7px 9px !important;
-     }
-
-     .form-section-title {
-         font-size: 14px !important;
-     }
-
-     .modern-input-layanan {
-         min-height: 50px;
-         font-size: 13px !important;
-     }
- }
-/* =========================================
-   ASSISTANT — MODERN FORM UI
-========================================= */
-
-.modern-input {
-    width: 100%;
-    min-height: 52px;
-
-    box-sizing: border-box;
-
-    padding: 13px 15px;
-
-    background: #f8fafc !important;
-    border: 1px solid #e2e8f0 !important;
-    border-radius: 15px !important;
-
-    color: #172033 !important;
-
-    font-size: 14px !important;
-    font-weight: 600;
-
-    box-shadow: none !important;
-
-    transition:
-        border-color .2s ease,
-        background .2s ease,
-        box-shadow .2s ease;
-}
-
-.modern-input:hover {
-    border-color: #cbd5e1 !important;
-}
-
-.modern-input:focus {
-    background: #ffffff !important;
-    border-color: #e50914 !important;
-
-    outline: none !important;
-
-    box-shadow:
-        0 0 0 3px rgba(229, 9, 20, .07) !important;
-}
-
-/* DATA USER — READ ONLY */
-.modern-input:disabled {
-    background: #f5f7fa !important;
-    color: #64748b !important;
-    opacity: 1 !important;
-    cursor: default;
-}
-
-/* SELECT */
-select.modern-input {
-    appearance: auto;
-    cursor: pointer;
-}
-
-/* DATE */
-input[type="date"].modern-input {
-    color: #334155 !important;
-}
-
-/* TEXTAREA */
-.modern-textarea {
-    min-height: 108px !important;
-
-    padding: 14px 15px !important;
-
-    line-height: 1.5;
-
-    resize: vertical;
-}
-
-/* PLACEHOLDER */
-.modern-input::placeholder {
-    color: #94a3b8 !important;
-    font-weight: 500;
-}
-
-/* FORM ROW */
-.modern-row {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-}
-
-/* MOBILE */
-@media (max-width: 520px) {
-    .modern-row {
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-    }
-
-    .modern-input {
-        min-height: 50px;
-        font-size: 13px !important;
-        border-radius: 14px !important;
-    }
-
-    .modern-textarea {
-        min-height: 105px !important;
-    }
-}
-/* =========================================
-   ASSISTANT — MODERN LOCATION CARD
-========================================= */
-
-.assistant-location-card {
-    width: 100%;
-    box-sizing: border-box;
-
-    padding: 16px;
-
-    background: #ffffff;
-
-    border: 1px solid #e8edf2;
-    border-radius: 22px;
-
-    box-shadow:
-        0 5px 18px rgba(15, 23, 42, 0.05);
-
-    margin-bottom: 16px;
-}
-
-
-/* HEADER */
-
-.assistant-location-header {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-
-    margin-bottom: 14px;
-}
-
-.assistant-location-icon {
-    width: 40px;
-    height: 40px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    flex-shrink: 0;
-
-    background: #fff1f2;
-
-    border-radius: 13px;
-
-    font-size: 19px;
-}
-
-.assistant-location-title {
-    color: #172033;
-
-    font-size: 14px;
-    font-weight: 850;
-
-    line-height: 1.2;
-}
-
-.assistant-location-subtitle {
-    margin-top: 3px;
-
-    color: #94a3b8;
-
-    font-size: 10px;
-    font-weight: 600;
-
-    line-height: 1.3;
-}
-
-
-/* SEARCH */
-
-.assistant-address-search-wrap {
-    position: relative;
-
-    display: flex;
-    align-items: center;
-
-    width: 100%;
-    min-height: 50px;
-
-    box-sizing: border-box;
-
-    background: #f8fafc;
-
-    border: 1px solid #e2e8f0;
-
-    border-radius: 15px;
-
-    transition: .2s ease;
-}
-
-.assistant-address-search-wrap:focus-within {
-    background: #ffffff;
-
-    border-color: #e50914;
-
-    box-shadow:
-        0 0 0 3px rgba(229, 9, 20, .06);
-}
-
-.assistant-search-icon {
-    width: 42px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    color: #94a3b8;
-
-    font-size: 22px;
-
-    flex-shrink: 0;
-}
-
-.assistant-address-input {
-    flex: 1;
-
-    min-width: 0;
-
-    height: 48px;
-
-    padding: 0 6px;
-
-    border: none;
-    outline: none;
-
-    background: transparent;
-
-    color: #172033;
-
-    font-size: 13px;
-    font-weight: 600;
-}
-
-.assistant-address-input::placeholder {
-    color: #94a3b8;
-    font-weight: 500;
-}
-
-.assistant-gps-button {
-    width: 38px;
-    height: 38px;
-
-    margin-right: 6px;
-
-    border: none;
-    border-radius: 11px;
-
-    background: #ffffff;
-
-    color: #e50914;
-
-    font-size: 19px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    cursor: pointer;
-
-    box-shadow:
-        0 2px 7px rgba(15, 23, 42, .06);
-}
-
-
-/* AUTOCOMPLETE */
-
-.assistant-address-suggestions {
-    position: absolute;
-
-    top: calc(100% + 6px);
-    left: 0;
-    right: 0;
-
-    z-index: 1000;
-
-    display: none;
-
-    overflow: hidden;
-
-    background: #ffffff;
-
-    border: 1px solid #e5e7eb;
-
-    border-radius: 15px;
-
-    box-shadow:
-        0 14px 30px rgba(15, 23, 42, .12);
-}
-
-.assistant-address-suggestions > div {
-    padding: 12px 14px;
-
-    border-bottom: 1px solid #f1f5f9;
-
-    color: #334155;
-
-    font-size: 11px;
-
-    cursor: pointer;
-}
-
-.assistant-address-suggestions > div:last-child {
-    border-bottom: none;
-}
-
-.assistant-address-suggestions > div:active {
-    background: #fff7f7;
-}
-
-
-/* MAP */
-
-.assistant-map-preview {
-    position: relative;
-
-    height: 150px;
-
-    margin-top: 11px;
-
-    overflow: hidden;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    background:
-        linear-gradient(
-            135deg,
-            #f1f5f9,
-            #e9eef3
-        );
-
-    border: 1px solid #e2e8f0;
-
-    border-radius: 17px;
-
-    cursor: pointer;
-}
-
-.assistant-map-placeholder {
-    text-align: center;
-
-    padding: 20px;
-}
-
-.assistant-map-pin {
-    font-size: 28px;
-
-    margin-bottom: 5px;
-}
-
-.assistant-map-main-text {
-    color: #334155;
-
-    font-size: 12px;
-    font-weight: 800;
-}
-
-.assistant-map-sub-text {
-    max-width: 230px;
-
-    margin: 4px auto 0;
-
-    color: #94a3b8;
-
-    font-size: 9px;
-    font-weight: 600;
-
-    line-height: 1.4;
-}
-
-.assistant-map-open-button {
-    position: absolute;
-
-    right: 10px;
-    bottom: 10px;
-
-    padding: 8px 11px;
-
-    border: none;
-    border-radius: 10px;
-
-    background: rgba(255,255,255,.94);
-
-    color: #e50914;
-
-    font-size: 10px;
-    font-weight: 800;
-
-    box-shadow:
-        0 4px 12px rgba(15,23,42,.08);
-}
-
-
-/* ADDRESS DETAILS */
-
-.assistant-address-details {
-    display: grid;
-
-    grid-template-columns: 1fr 1fr;
-
-    gap: 9px;
-
-    margin-top: 10px;
-}
-
-.assistant-detail-field {
-    display: flex;
-    align-items: center;
-
-    min-width: 0;
-
-    height: 46px;
-
-    box-sizing: border-box;
-
-    padding: 0 11px;
-
-    background: #f8fafc;
-
-    border: 1px solid #e2e8f0;
-
-    border-radius: 13px;
-}
-
-.assistant-detail-icon {
-    margin-right: 7px;
-
-    color: #94a3b8;
-
-    font-size: 13px;
-}
-
-.assistant-detail-field input {
-    width: 100%;
-    min-width: 0;
-
-    border: none;
-    outline: none;
-
-    background: transparent;
-
-    color: #334155;
-
-    font-size: 10px;
-    font-weight: 600;
-}
-
-.assistant-detail-field input::placeholder {
-    color: #94a3b8;
-    font-weight: 500;
-}
-/* STATUS */
-.assistant-location-status {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    margin-top: 11px;
-    color: #94a3b8;
-    font-size: 10px;
-    font-weight: 600;
-}
-.assistant-status-dot {
-    width: 7px;
-    height: 7px;
-    flex-shrink: 0;
-    border-radius: 50%;
-    background: #cbd5e1;
-}
-/* CATATAN */
-.assistant-note-group {
-    margin-top: 13px !important;
-}
-/* MOBILE */
-@media (max-width: 420px) {
-    .assistant-location-card {
-        padding: 14px;
-        border-radius: 20px;
-    }
-    .assistant-address-details {
-        grid-template-columns: 1fr;
-    }
-    .assistant-map-preview {
-        height: 140px;
-    }
-}
- /* =========================================
-   ASSISTANT — LOCATION CARD POLISH
-========================================= */
-
-.assistant-location-card {
-    padding: 15px !important;
-    border-radius: 20px !important;
-    box-shadow: 0 4px 16px rgba(15, 23, 42, .045) !important;
-}
-
-.assistant-location-header {
-    margin-bottom: 12px !important;
-    gap: 10px !important;
-}
-
-.assistant-location-icon {
-    width: 37px !important;
-    height: 37px !important;
-    border-radius: 11px !important;
-    font-size: 17px !important;
-}
-
-.assistant-location-title {
-    font-size: 13px !important;
-}
-
-.assistant-location-subtitle {
-    font-size: 9.5px !important;
-}
-
-/* SEARCH LEBIH CLEAN */
-.assistant-address-search-wrap {
-    min-height: 47px !important;
-    border-radius: 13px !important;
-}
-
-.assistant-address-input {
-    height: 45px !important;
-    font-size: 12px !important;
-}
-
-.assistant-search-icon {
-    width: 38px !important;
-    font-size: 19px !important;
-}
-
-.assistant-gps-button {
-    width: 34px !important;
-    height: 34px !important;
-    border-radius: 10px !important;
-    margin-right: 5px !important;
-}
-
-/* MAP */
-.assistant-map-preview {
-    height: 132px !important;
-    margin-top: 9px !important;
-    border-radius: 15px !important;
-}
-
-.assistant-map-placeholder {
-    padding: 15px !important;
-}
-
-.assistant-map-pin {
-    font-size: 24px !important;
-    margin-bottom: 3px !important;
-}
-
-.assistant-map-main-text {
-    font-size: 11px !important;
-}
-
-.assistant-map-sub-text {
-    font-size: 8.5px !important;
-}
-
-.assistant-map-open-button {
-    right: 8px !important;
-    bottom: 8px !important;
-
-    padding: 7px 10px !important;
-
-    border-radius: 9px !important;
-
-    font-size: 9px !important;
-}
-
-/* DETAIL INPUT */
-.assistant-address-details {
-    gap: 8px !important;
-    margin-top: 8px !important;
-}
-
-.assistant-detail-field {
-    height: 43px !important;
-    padding: 0 10px !important;
-    border-radius: 11px !important;
-}
-
-.assistant-detail-icon {
-    font-size: 12px !important;
-    margin-right: 6px !important;
-}
-
-.assistant-detail-field input {
-    font-size: 9.5px !important;
-}
-
-/* STATUS */
-.assistant-location-status {
-    margin-top: 9px !important;
-    gap: 6px !important;
-    font-size: 9px !important;
-}
-
-.assistant-status-dot {
-    width: 6px !important;
-    height: 6px !important;
-}
-/* =========================================
-   ASSISTANT — MAP MODAL
-========================================= */
-
-#assistantMapModal {
-    position: fixed;
-    inset: 0;
-
-    z-index: 99999;
-
-    display: none;
-    align-items: center;
-    justify-content: center;
-
-    padding: 12px;
-
-    box-sizing: border-box;
-
-    background: rgba(15, 23, 42, .48);
-
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-}
-
-.assistant-map-modal-card {
-    width: 100%;
-    max-width: 440px;
-
-    overflow: hidden;
-
-    background: #ffffff;
-
-    border-radius: 24px;
-
-    box-shadow:
-        0 24px 70px rgba(15, 23, 42, .22);
-}
-
-.assistant-map-modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-
-    padding: 15px 16px;
-
-    border-bottom: 1px solid #eef2f6;
-}
-
-.assistant-map-modal-title {
-    color: #172033;
-
-    font-size: 14px;
-    font-weight: 850;
-}
-
-.assistant-map-modal-subtitle {
-    margin-top: 3px;
-
-    color: #94a3b8;
-
-    font-size: 9px;
-    font-weight: 600;
-}
-
-.assistant-map-close {
-    width: 34px;
-    height: 34px;
-
-    border: none;
-    border-radius: 11px;
-
-    background: #f8fafc;
-
-    color: #64748b;
-
-    font-size: 22px;
-    line-height: 1;
-
-    cursor: pointer;
-}
-
-.assistant-map-container-wrap {
-    position: relative;
-
-    width: 100%;
-    height: 350px;
-}
-
-#assistantLeafletMap {
-    width: 100%;
-    height: 100%;
-}
-
-.assistant-map-gps {
-    position: absolute;
-
-    right: 14px;
-    bottom: 14px;
-
-    z-index: 1000;
-
-    width: 44px;
-    height: 44px;
-
-    border: none;
-    border-radius: 14px;
-
-    background: #ffffff;
-
-    color: #e50914;
-
-    font-size: 20px;
-
-    box-shadow:
-        0 5px 15px rgba(15, 23, 42, .16);
-
-    cursor: pointer;
-}
-
-.assistant-map-modal-footer {
-    display: flex;
-    gap: 9px;
-
-    padding: 13px 14px;
-
-    border-top: 1px solid #eef2f6;
-}
-
-.assistant-map-cancel,
-.assistant-map-confirm {
-    flex: 1;
-
-    min-height: 48px;
-
-    border-radius: 13px;
-
-    font-size: 11px;
-    font-weight: 800;
-
-    cursor: pointer;
-}
-
-.assistant-map-cancel {
-    background: #ffffff;
-
-    border: 1px solid #e2e8f0;
-
-    color: #64748b;
-}
-
-.assistant-map-confirm {
-    background: #e50914;
-
-    border: none;
-
-    color: #ffffff;
-
-    box-shadow:
-        0 7px 16px rgba(229, 9, 20, .16);
-}
-
-@media (max-width: 600px) {
-
-    #assistantMapModal {
-        padding: 8px;
-    }
-
-    .assistant-map-modal-card {
-        border-radius: 21px;
-    }
-
-    .assistant-map-container-wrap {
-        height: 62vh;
-        max-height: 480px;
-    }
-}
-/* =========================================
-   ASSISTANT — DEAL / CHECKOUT AREA
-========================================= */
-
-#btnRequestDeal {
-    width: 100%;
-    min-height: 56px;
-
-    margin-top: 10px;
-    padding: 14px 18px;
-
-    border: none !important;
-    border-radius: 16px !important;
-
-    background: #e50914 !important;
-    color: #ffffff !important;
-
-    font-size: 15px !important;
-    font-weight: 800 !important;
-
-    letter-spacing: .1px;
-
-    box-shadow:
-        0 8px 20px rgba(229, 9, 20, .18) !important;
-
-    cursor: pointer;
-
-    transition:
-        transform .18s ease,
-        box-shadow .18s ease,
-        opacity .18s ease;
-}
-
-#btnRequestDeal:hover {
-    box-shadow:
-        0 10px 25px rgba(229, 9, 20, .24) !important;
-
-    transform: translateY(-1px);
-}
-
-#btnRequestDeal:active {
-    transform: scale(.98);
-}
-
-/* TOTAL */
-.invoice-box,
-.total-box,
-.booking-total {
-    margin-top: 18px !important;
-    padding: 16px !important;
-
-    background: #f8fafc !important;
-
-    border: 1px solid #e8edf2 !important;
-    border-radius: 16px !important;
-
-    box-shadow: none !important;
-}
-
-/* ANGKA TOTAL */
-.invoice-box strong,
-.total-box strong,
-.booking-total strong {
-    color: #172033;
-}
-
-/* MODAL PAYMENT */
-.pay-method-option {
-    border-radius: 14px !important;
-    border: 1px solid #e2e8f0 !important;
-
-    background: #ffffff !important;
-
-    transition: .2s ease;
-}
-
-.pay-method-option.active {
-    border-color: #e50914 !important;
-    background: #fff7f7 !important;
-    color: #d91f26 !important;
-}
-
-/* MOBILE */
-@media (max-width: 600px) {
-    #btnRequestDeal {
-        min-height: 54px;
-        font-size: 14px !important;
-    }
-}
-/* =========================================
-   ASSISTANT — MODERN PAYMENT PANEL
-========================================= */
-
-#paymentModal,
-.payment-modal,
-#modalPembayaran {
-    background: rgba(15, 23, 42, .42) !important;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-}
-
-/* PANEL PEMBAYARAN */
-#paymentModal > div,
-.payment-modal > div,
-.payment-panel {
-    width: min(100% - 24px, 440px) !important;
-    max-height: 90vh;
-
-    margin: auto;
-
-    background: #ffffff !important;
-
-    border: 0 !important;
-    border-radius: 24px !important;
-
-    box-shadow:
-        0 24px 70px rgba(15, 23, 42, .20) !important;
-
-    overflow: hidden;
-
-    animation: paymentPanelIn .25s ease;
-}
-
-@keyframes paymentPanelIn {
-    from {
-        opacity: 0;
-        transform: translateY(18px) scale(.98);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-/* HEADER PEMBAYARAN */
-#paymentModal h3,
-.payment-modal h3,
-.payment-panel h3 {
-    color: #172033 !important;
-    font-weight: 850 !important;
-    letter-spacing: -.3px;
-}
-
-/* TOTAL PEMBAYARAN */
-#paymentModal .payment-total,
-.payment-modal .payment-total,
-.payment-panel .payment-total {
-    background: #fff7f7 !important;
-    border: 1px solid #fee2e2 !important;
-    border-radius: 16px !important;
-}
-
-/* PILIHAN METODE */
-#paymentModal label,
-.payment-modal label,
-.payment-panel label {
-    border-radius: 15px !important;
-    border: 1px solid #e5e7eb !important;
-    background: #ffffff !important;
-
-    transition:
-        border-color .2s ease,
-        background .2s ease,
-        transform .2s ease;
-}
-
-#paymentModal label:hover,
-.payment-modal label:hover,
-.payment-panel label:hover {
-    border-color: #fca5a5 !important;
-    background: #fffafa !important;
-}
-
-#paymentModal label:has(input:checked),
-.payment-modal label:has(input:checked),
-.payment-panel label:has(input:checked) {
-    border-color: #e50914 !important;
-    background: #fff7f7 !important;
-    box-shadow: 0 4px 14px rgba(229, 9, 20, .08);
-}
-
-/* TOMBOL BAYAR */
-#paymentModal button,
-.payment-modal button,
-.payment-panel button {
-    border-radius: 15px !important;
-    min-height: 52px;
-
-    font-weight: 800 !important;
-}
-/* MOBILE */
-@media (max-width: 600px) {
-    #paymentModal > div,
-    .payment-modal > div,
-    .payment-panel {
-        width: calc(100% - 20px) !important;
-        border-radius: 22px !important;
-    }
-}
-    
+        @media (max-width: 600px) {
+            .modern-row {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
 
-    <!-- MODAL ASSISTANT -->
+    <!-- MODAL ASSISTANT SCREEN -->
     <div id="assistantScreen" class="assistant-screen">
         <div class="assistant-page">
             <div class="assistant-top">
@@ -1704,63 +698,36 @@ input[type="date"].modern-input {
                 <button id="closeAssistant">×</button>
             </div>
             <div class="assistant-content" id="modalMainContent">
-                <!-- Konten form akan dimuat otomatis oleh JavaScript -->
+                <!-- Konten form dimuat otomatis oleh JavaScript -->
             </div>
         </div>
     </div>
     
-<!-- =========================================
-     ASSISTANT — MAP MODAL
-========================================= -->
-<div id="assistantMapModal">
-    <div class="assistant-map-modal-card">
-        <div class="assistant-map-modal-header">
-            <div>
-                <div class="assistant-map-modal-title">
-                    Pilih Lokasi Layanan
+    <!-- MODAL MAP LEAFLET -->
+    <div id="assistantMapModal">
+        <div class="assistant-map-modal-card">
+            <div class="assistant-map-modal-header">
+                <div>
+                    <div class="assistant-map-modal-title">Pilih Lokasi Layanan</div>
+                    <div class="assistant-map-modal-subtitle">Geser peta untuk menentukan titik lokasi</div>
                 </div>
-                <div class="assistant-map-modal-subtitle">
-                    Geser peta untuk menentukan titik lokasi
-                </div>
+                <button type="button" onclick="closeAssistantMapModal()" class="assistant-map-close">×</button>
             </div>
-            <button
-                type="button"
-                onclick="closeAssistantMapModal()"
-                class="assistant-map-close"
-            >
-                ×
-            </button>
-        </div>
-        <div class="assistant-map-container-wrap">
-            <div id="assistantLeafletMap"></div>
-            <button
-                type="button"
-                onclick="detectAssistantLocationFromMap()"
-                class="assistant-map-gps"
-            >
-                ◎
-            </button>
-        </div>
-        <div class="assistant-map-modal-footer">
-            <button
-                type="button"
-                onclick="closeAssistantMapModal()"
-                class="assistant-map-cancel"
-            >
-                Batal
-            </button>
-
-            <button
-                type="button"
-                onclick="confirmAssistantMapLocation()"
-                class="assistant-map-confirm"
-            >
-                Gunakan Lokasi Ini ✓
-            </button>
+            <div class="assistant-map-container-wrap">
+                <div id="assistantLeafletMap"></div>
+                <button type="button" onclick="detectAssistantLocationFromMap()" class="assistant-map-gps">◎</button>
+            </div>
+            <div class="assistant-map-modal-footer">
+                <button type="button" onclick="closeAssistantMapModal()" class="assistant-map-cancel">Batal</button>
+                <button type="button" onclick="confirmAssistantMapLocation()" class="assistant-map-confirm">Gunakan Lokasi Ini ✓</button>
+            </div>
         </div>
     </div>
-</div>
-    <!-- Script JavaScript Assistant -->
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- JavaScript Aplikasi -->
     <script>
         const userProfile = {
             name: "Pengguna CikurGo",
@@ -1831,20 +798,18 @@ input[type="date"].modern-input {
                             <input type="text" class="modern-input" value="${userProfile.phone}" disabled style="background:#f1f5f9; color:#64748b;">
                         </div>
                     </div>
+
                     <div class="modern-form-group">
-    <label>Jadwal Tanggal</label>
-    <input type="date" class="modern-input" id="inputTanggal">
-</div>
-<div class="modern-form-group">
-    <label>Jam Layanan</label>
-    <input
-        type="time"
-        class="modern-input"
-        id="inputJam"
-        required
-    >
-</div>
- <div class="modern-form-group">
+                        <label>Jadwal Tanggal</label>
+                        <input type="date" class="modern-input" id="inputTanggal">
+                    </div>
+
+                    <div class="modern-form-group">
+                        <label>Jam Layanan</label>
+                        <input type="time" class="modern-input" id="inputJam" required>
+                    </div>
+
+                    <div class="modern-form-group">
                         <label>Extra Waktu (1 Tambahan = 30 Menit = Rp 25.000)</label>
                         <select class="modern-input" id="selectExtraWaktu" style="cursor: pointer;">
                             <option value="0">Tanpa Tambahan Waktu (0) - Rp 0</option>
@@ -1854,118 +819,56 @@ input[type="date"].modern-input {
                         </select>
                     </div>
 
-                    <div class="form-section-title" style="margin-top: 14px;">
-    Lokasi & Catatan
-</div>
+                    <div class="form-section-title" style="margin-top: 14px;">Lokasi & Catatan</div>
 
-<!-- =========================================
-     ASSISTANT — LOCATION CARD
-========================================= -->
-<div class="assistant-location-card">
-    <div class="assistant-location-header">
-        <div class="assistant-location-icon">
-            📍
-        </div>
-        <div>
-            <div class="assistant-location-title">
-                Lokasi Layanan
-            </div>
-            <div class="assistant-location-subtitle">
-                Tentukan lokasi tempat Assistant akan bertugas
-            </div>
-        </div>
-    </div>
+                    <!-- LOCATION CARD -->
+                    <div class="assistant-location-card">
+                        <div class="assistant-location-header">
+                            <div class="assistant-location-icon">📍</div>
+                            <div>
+                                <div class="assistant-location-title">Lokasi Layanan</div>
+                                <div class="assistant-location-subtitle">Tentukan lokasi tempat Assistant akan bertugas</div>
+                            </div>
+                        </div>
 
-    <!-- SEARCH ADDRESS -->
-    <div class="assistant-address-search-wrap">
-        <span class="assistant-search-icon">⌕</span>
-        <input
-            type="text"
-            id="assistantAddress"
-            class="assistant-address-input"
-            placeholder="Cari alamat, jalan, gedung..."
-            autocomplete="off"
-        >
-        <button
-            type="button"
-            class="assistant-gps-button"
-            onclick="detectAssistantLocation()"
-            aria-label="Gunakan lokasi saya"
-        >
-            ◎
-        </button>
-        <div
-            id="assistantAddressSuggestions"
-            class="assistant-address-suggestions"
-        ></div>
-    </div>
-    <!-- MAP PREVIEW -->
-    <div
-        class="assistant-map-preview"
-        id="assistantMapPreview"
-        onclick="openAssistantMapModal()"
-    >
-        <div class="assistant-map-placeholder">
-            <div class="assistant-map-pin">
-                📍
-            </div>
-            <div class="assistant-map-main-text">
-                Pilih lokasi dari peta
-            </div>
-            <div class="assistant-map-sub-text">
-                Atur titik lokasi agar Assistant tiba di tempat yang tepat
-            </div>
-        </div>
-        <button
-            type="button"
-            class="assistant-map-open-button"
-            onclick="event.stopPropagation(); openAssistantMapModal();"
-        >
-            Buka Peta
-        </button>
-    </div>
-    <!-- ADDRESS DETAILS -->
-    <div class="assistant-address-details">
-        <div class="assistant-detail-field">
-            <span class="assistant-detail-icon">
-                🏠
-            </span>
-            <input
-                type="text"
-                id="assistantHouseNo"
-                placeholder="No. rumah / blok / lantai"
-                autocomplete="off"
-            >
-        </div>
-        <div class="assistant-detail-field">
-            <span class="assistant-detail-icon">
-                ◆
-            </span>
-            <input
-                type="text"
-                id="assistantAddressNote"
-                placeholder="Patokan lokasi"
-                autocomplete="off"
-            >
-        </div>
-    </div>
-    <!-- LOCATION STATUS -->
-    <div class="assistant-location-status">
-        <span class="assistant-status-dot"></span>
-        <span id="assistantLocationStatus">
-            Lokasi belum ditentukan
-        </span>
-    </div>
-</div>
-<!-- CATATAN KHUSUS -->
-<div class="modern-form-group assistant-note-group">
-    <label>Catatan Khusus (Opsional)</label>
-    <textarea
-        class="modern-input modern-textarea"
-        id="inputCatatanRequest"
-        placeholder="Instruksi khusus untuk Assistant..."
-    ></textarea>
-</div>
+                        <div class="assistant-address-search-wrap">
+                            <span class="assistant-search-icon">⌕</span>
+                            <input type="text" id="assistantAddress" class="assistant-address-input" placeholder="Cari alamat, jalan, gedung..." autocomplete="off">
+                            <button type="button" class="assistant-gps-button" onclick="detectAssistantLocation()" aria-label="Gunakan lokasi saya">◎</button>
+                            <div id="assistantAddressSuggestions" class="assistant-address-suggestions"></div>
+                        </div>
+
+                        <div class="assistant-map-preview" id="assistantMapPreview" onclick="openAssistantMapModal()">
+                            <div class="assistant-map-placeholder">
+                                <div class="assistant-map-pin">📍</div>
+                                <div class="assistant-map-main-text">Pilih lokasi dari peta</div>
+                                <div class="assistant-map-sub-text">Atur titik lokasi agar Assistant tiba di tempat yang tepat</div>
+                            </div>
+                            <button type="button" class="assistant-map-open-button" onclick="event.stopPropagation(); openAssistantMapModal();">Buka Peta</button>
+                        </div>
+
+                        <div class="assistant-address-details">
+                            <div class="assistant-detail-field">
+                                <span class="assistant-detail-icon">🏠</span>
+                                <input type="text" id="assistantHouseNo" placeholder="No. rumah / blok / lantai" autocomplete="off">
+                            </div>
+                            <div class="assistant-detail-field">
+                                <span class="assistant-detail-icon">◆</span>
+                                <input type="text" id="assistantAddressNote" placeholder="Patokan lokasi" autocomplete="off">
+                            </div>
+                        </div>
+
+                        <div class="assistant-location-status">
+                            <span class="assistant-status-dot"></span>
+                            <span id="assistantLocationStatus">Lokasi belum ditentukan</span>
+                        </div>
+                    </div>
+
+                    <div class="modern-form-group assistant-note-group">
+                        <label>Catatan Khusus (Opsional)</label>
+                        <textarea class="modern-input modern-textarea" id="inputCatatanRequest" placeholder="Instruksi khusus untuk Assistant..."></textarea>
+                    </div>
+
                     <div class="rincian-bill" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:10px 12px; margin-top:12px;">
                         <div class="rincian-row"><span>Harga Dasar Layanan</span><span id="txtBasePrice">Rp 25.000</span></div>
                         <div class="rincian-row"><span>Biaya Extra Waktu</span><span id="txtExtraPrice">Rp 0</span></div>
@@ -1982,316 +885,169 @@ input[type="date"].modern-input {
             initFormEvents();
         }
 
-      /* =========================================
-   ASSISTANT — LOCATION ENGINE
-========================================= */
-let assistantMap = null;
-let assistantMapMarker = null;
-let assistantCoords = {
-    lat: -6.3245,
-    lon: 106.1524
-};
-let assistantAddressSearchTimeout = null;
-/* =========================================
-   ASSISTANT — ADDRESS AUTOCOMPLETE
-========================================= */
-function initAssistantAddressSearch() {
-    const input = document.getElementById("assistantAddress");
-    const list = document.getElementById("assistantAddressSuggestions");
-    if (!input || !list) return;
-    input.addEventListener("input", function () {
-        const query = this.value.trim();
-        clearTimeout(assistantAddressSearchTimeout);
-        if (query.length < 3) {
-            list.style.display = "none";
-            return;
-        }
-        assistantAddressSearchTimeout = setTimeout(() => {
-            fetch(
-                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=id&limit=8`
-            )
-            .then(res => res.json())
-            .then(data => {
-                if (!data || !data.length) {
+        // =========================================
+        // MAP & GEOLOCATION ENGINE
+        // =========================================
+        let assistantMap = null;
+        let assistantMapMarker = null;
+        let assistantCoords = { lat: -6.3245, lon: 106.1524 };
+        let assistantAddressSearchTimeout = null;
+
+        function initAssistantAddressSearch() {
+            const input = document.getElementById("assistantAddress");
+            const list = document.getElementById("assistantAddressSuggestions");
+            if (!input || !list) return;
+            input.addEventListener("input", function () {
+                const query = this.value.trim();
+                clearTimeout(assistantAddressSearchTimeout);
+                if (query.length < 3) {
                     list.style.display = "none";
                     return;
                 }
-                list.innerHTML = data.map(item => {
-                    const safeName =
-                        item.display_name
-                            .replace(/\\/g, "\\\\")
-                            .replace(/'/g, "\\'");
+                assistantAddressSearchTimeout = setTimeout(() => {
+                    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=id&limit=8`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (!data || !data.length) {
+                            list.style.display = "none";
+                            return;
+                        }
+                        list.innerHTML = data.map(item => {
+                            const safeName = item.display_name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+                            return `<div onclick="selectAssistantAddress('${safeName}', ${item.lat}, ${item.lon})">${item.display_name}</div>`;
+                        }).join("");
+                        list.style.display = "block";
+                    })
+                    .catch(() => { list.style.display = "none"; });
+                }, 400);
+            });
+            document.addEventListener("click", function (event) {
+                if (!input.contains(event.target) && !list.contains(event.target)) {
+                    list.style.display = "none";
+                }
+            });
+        }
 
-                    return `
-                        <div onclick="selectAssistantAddress(
-                            '${safeName}',
-                            ${item.lat},
-                            ${item.lon}
-                        )">
-                            ${item.display_name}
-                        </div>
-                    `;
-                }).join("");
-                list.style.display = "block";
+        function selectAssistantAddress(displayName, lat, lon) {
+            const input = document.getElementById("assistantAddress");
+            const list = document.getElementById("assistantAddressSuggestions");
+            if (input) input.value = displayName;
+            assistantCoords.lat = parseFloat(lat);
+            assistantCoords.lon = parseFloat(lon);
+            if (list) list.style.display = "none";
+            updateAssistantLocationStatus("Lokasi alamat berhasil dipilih");
+            if (assistantMap && assistantMapMarker) {
+                assistantMap.setView([assistantCoords.lat, assistantCoords.lon], 16);
+                assistantMapMarker.setLatLng([assistantCoords.lat, assistantCoords.lon]);
+            }
+        }
+
+        function detectAssistantLocation() {
+            if (!navigator.geolocation) {
+                alert("GPS tidak didukung oleh perangkat ini.");
+                return;
+            }
+            updateAssistantLocationStatus("Mendeteksi lokasi...");
+            navigator.geolocation.getCurrentPosition(
+                function (position) {
+                    assistantCoords.lat = position.coords.latitude;
+                    assistantCoords.lon = position.coords.longitude;
+                    reverseGeocodeAssistantLocation();
+                    if (assistantMap && assistantMapMarker) {
+                        assistantMap.setView([assistantCoords.lat, assistantCoords.lon], 16);
+                        assistantMapMarker.setLatLng([assistantCoords.lat, assistantCoords.lon]);
+                    }
+                },
+                function () {
+                    updateAssistantLocationStatus("GPS gagal mendeteksi lokasi");
+                    alert("Gagal mendapatkan lokasi GPS.");
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+
+        function reverseGeocodeAssistantLocation() {
+            const input = document.getElementById("assistantAddress");
+            updateAssistantLocationStatus("Mengambil nama lokasi...");
+            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${assistantCoords.lat}&lon=${assistantCoords.lon}`)
+            .then(res => res.json())
+            .then(data => {
+                if (input) {
+                    input.value = data && data.display_name ? data.display_name : `Koordinat: ${assistantCoords.lat.toFixed(5)}, ${assistantCoords.lon.toFixed(5)}`;
+                }
+                updateAssistantLocationStatus("Lokasi berhasil ditemukan");
             })
             .catch(() => {
-                list.style.display = "none";
+                if (input) {
+                    input.value = `Koordinat: ${assistantCoords.lat.toFixed(5)}, ${assistantCoords.lon.toFixed(5)}`;
+                }
+                updateAssistantLocationStatus("Koordinat lokasi tersimpan");
             });
-
-        }, 400);
-    });
-    document.addEventListener("click", function (event) {
-        if (
-            !input.contains(event.target) &&
-            !list.contains(event.target)
-        ) {
-            list.style.display = "none";
         }
-    });
-}
-function selectAssistantAddress(displayName, lat, lon) {
-    const input =
-        document.getElementById("assistantAddress");
-    const list =
-        document.getElementById("assistantAddressSuggestions");
-    if (input) {
-        input.value = displayName;
-    }
-    assistantCoords.lat = parseFloat(lat);
-    assistantCoords.lon = parseFloat(lon);
-    if (list) {
-        list.style.display = "none";
-    }
-    updateAssistantLocationStatus(
-        "Lokasi alamat berhasil dipilih"
-    );
-    if (assistantMap && assistantMapMarker) {
-        assistantMap.setView(
-            [assistantCoords.lat, assistantCoords.lon],
-            16
-        );
-        assistantMapMarker.setLatLng([
-            assistantCoords.lat,
-            assistantCoords.lon
-        ]);
-    }
-}
-function detectAssistantLocation() {
-    if (!navigator.geolocation) {
-        alert("GPS tidak didukung oleh perangkat ini.");
-        return;
-    }
-    updateAssistantLocationStatus(
-        "Mendeteksi lokasi..."
-    );
-    navigator.geolocation.getCurrentPosition(
-        function (position) {
-            assistantCoords.lat =
-                position.coords.latitude;
-            assistantCoords.lon =
-                position.coords.longitude;
+
+        function openAssistantMapModal() {
+            const modal = document.getElementById("assistantMapModal");
+            if (!modal) return;
+            modal.style.display = "flex";
+            setTimeout(() => {
+                if (!assistantMap) {
+                    assistantMap = L.map("assistantLeafletMap").setView([assistantCoords.lat, assistantCoords.lon], 15);
+                    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                        maxZoom: 19,
+                        attribution: "&copy; OpenStreetMap"
+                    }).addTo(assistantMap);
+
+                    assistantMapMarker = L.marker([assistantCoords.lat, assistantCoords.lon], { draggable: true }).addTo(assistantMap);
+                    assistantMapMarker.on("dragend", function (event) {
+                        const position = event.target.getLatLng();
+                        assistantCoords.lat = position.lat;
+                        assistantCoords.lon = position.lng;
+                    });
+                } else {
+                    assistantMap.invalidateSize();
+                    assistantMap.setView([assistantCoords.lat, assistantCoords.lon], 15);
+                    assistantMapMarker.setLatLng([assistantCoords.lat, assistantCoords.lon]);
+                }
+            }, 250);
+        }
+
+        function detectAssistantLocationFromMap() {
+            if (!navigator.geolocation) {
+                alert("GPS tidak didukung.");
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                function (position) {
+                    assistantCoords.lat = position.coords.latitude;
+                    assistantCoords.lon = position.coords.longitude;
+                    if (assistantMap && assistantMapMarker) {
+                        assistantMap.setView([assistantCoords.lat, assistantCoords.lon], 17);
+                        assistantMapMarker.setLatLng([assistantCoords.lat, assistantCoords.lon]);
+                    }
+                },
+                function () { alert("Gagal mendapatkan lokasi GPS."); },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+
+        function confirmAssistantMapLocation() {
+            closeAssistantMapModal();
             reverseGeocodeAssistantLocation();
-            if (assistantMap && assistantMapMarker) {
-                assistantMap.setView(
-                    [
-                        assistantCoords.lat,
-                        assistantCoords.lon
-                    ],
-                    16
-                );
-                assistantMapMarker.setLatLng([
-                    assistantCoords.lat,
-                    assistantCoords.lon
-                ]);
-            }
-        },
-        function () {
-            updateAssistantLocationStatus(
-                "GPS gagal mendeteksi lokasi"
-            );
-            alert("Gagal mendapatkan lokasi GPS.");
-        },
-        {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
-        }
-    );
-}
-function reverseGeocodeAssistantLocation() {
-    const input =
-        document.getElementById("assistantAddress");
-    updateAssistantLocationStatus(
-        "Mengambil nama lokasi..."
-    );
-    fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${assistantCoords.lat}&lon=${assistantCoords.lon}`
-    )
-    .then(res => res.json())
-    .then(data => {
-        if (input) {
-            input.value =
-                data && data.display_name
-                    ? data.display_name
-                    : `Koordinat: ${assistantCoords.lat.toFixed(5)}, ${assistantCoords.lon.toFixed(5)}`;
-        }
-        updateAssistantLocationStatus(
-            "Lokasi berhasil ditemukan"
-        );
-
-    })
-    .catch(() => {
-
-        if (input) {
-
-            input.value =
-                `Koordinat: ${assistantCoords.lat.toFixed(5)}, ${assistantCoords.lon.toFixed(5)}`;
-        }
-        updateAssistantLocationStatus(
-            "Koordinat lokasi tersimpan"
-        );
-    });
-}
-     function openAssistantMapModal() {
-    const modal =
-        document.getElementById("assistantMapModal");
-    if (!modal) return;
-    modal.style.display = "flex";
-    setTimeout(() => {
-        if (!assistantMap) {
-            assistantMap = L.map(
-                "assistantLeafletMap"
-            ).setView(
-                [
-                    assistantCoords.lat,
-                    assistantCoords.lon
-                ],
-                15
-            );
-            L.tileLayer(
-                "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-                {
-                    maxZoom: 19,
-                    attribution: "&copy; OpenStreetMap"
-                }
-            ).addTo(assistantMap);
-
-            assistantMapMarker =
-                L.marker([
-                    assistantCoords.lat,
-                    assistantCoords.lon
-                ], {
-                    draggable: true
-                }).addTo(assistantMap);
-
-            assistantMapMarker.on(
-                "dragend",
-                function (event) {
-
-                    const position =
-                        event.target.getLatLng();
-
-                    assistantCoords.lat =
-                        position.lat;
-                    assistantCoords.lon =
-                        position.lng;
-                }
-            );
-        } else {
-            assistantMap.invalidateSize();
-            assistantMap.setView(
-                [
-                    assistantCoords.lat,
-                    assistantCoords.lon
-                ],
-                15
-            );
-            assistantMapMarker.setLatLng([
-                assistantCoords.lat,
-                assistantCoords.lon
-            ]);
         }
 
-    }, 250);
-     }
-     function detectAssistantLocationFromMap() {
-
-    if (!navigator.geolocation) {
-        alert("GPS tidak didukung.");
-        return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-
-        function (position) {
-
-            assistantCoords.lat =
-                position.coords.latitude;
-
-            assistantCoords.lon =
-                position.coords.longitude;
-
-            if (assistantMap && assistantMapMarker) {
-
-                assistantMap.setView(
-                    [
-                        assistantCoords.lat,
-                        assistantCoords.lon
-                    ],
-                    17
-                );
-
-                assistantMapMarker.setLatLng([
-                    assistantCoords.lat,
-                    assistantCoords.lon
-                ]);
-            }
-
-        },
-
-        function () {
-            alert("Gagal mendapatkan lokasi GPS.");
-        },
-
-        {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
+        function closeAssistantMapModal() {
+            const modal = document.getElementById("assistantMapModal");
+            if (modal) modal.style.display = "none";
         }
-    );
- }
-    function confirmAssistantMapLocation() {
-    closeAssistantMapModal();
-    reverseGeocodeAssistantLocation();
+
+        function updateAssistantLocationStatus(text) {
+            const status = document.getElementById("assistantLocationStatus");
+            if (status) status.innerText = text;
         }
-function closeAssistantMapModal() {
-    const modal =
-        document.getElementById("assistantMapModal");
-    if (modal) {
-        modal.style.display = "none";
-    }
-}
-function updateAssistantLocationStatus(text) {
-    const status =
-        document.getElementById(
-            "assistantLocationStatus"
-        );
-    if (status) {
-        status.innerText = text;
-    }
-}
- document.addEventListener(
-    "DOMContentLoaded",
-    function () {
-        initAssistantAddressSearch();
-    }
-);       
-    document.addEventListener(
-    "DOMContentLoaded",
-    function () {
-        initAssistantAddressSearch();
-    }
-);    
+
+        // =========================================
+        // ORDER & CALCULATION LOGIC
+        // =========================================
         window.selectServiceCategory = function(paketKey) {
             currentActivePaketKey = paketKey;
             let info = dataPaket[paketKey];
@@ -2322,6 +1078,7 @@ function updateAssistantLocationStatus(text) {
 
             recalculateTotalForm();
         };
+
         function recalculateTotalForm() {
             let info = dataPaket[currentActivePaketKey];
             finalCalculatedTotal = info.hargaBase + currentExtraCost;
@@ -2330,74 +1087,44 @@ function updateAssistantLocationStatus(text) {
             if (txtExtraPrice) txtExtraPrice.innerText = "Rp " + currentExtraCost.toLocaleString('id-ID');
             if (txtTotalFinal) txtTotalFinal.innerText = "Rp " + finalCalculatedTotal.toLocaleString('id-ID');
         }
-/* =========================================
-   ASSISTANT ORDER BRIDGE → AGENT CGO
-========================================= */
-function simpanPesananAssistantKeAgent(info, tanggal, lokasi, catatan) {
-    const orderId =
-        "AST-" +
-        Date.now() +
-        "-" +
-        Math.floor(100 + Math.random() * 900);
-    const assistantOrder = {
-        id: orderId,
-        source: "assistant.html",
-        target: "agentcgo.html",
-        layanan: {
-            key: currentActivePaketKey,
-            nama: info.nama,
-            personil: info.personil,
-            durasi: info.durasi,
-            prioritas: info.prioritas
-        },
-        customer: {
-            name: userProfile.name,
-            phone: userProfile.phone
-        },
-        jadwal: {
-            tanggal: tanggal
-        },
-        lokasi: {
-            address: lokasi
-        },
-        catatan: catatan || "",
-        pricing: {
-            hargaDasar: info.hargaBase,
-            extraUnits: extraUnitsCount,
-            extraCost: currentExtraCost,
-            total: finalCalculatedTotal
-        },
-        payment: {
-            status: "MENUNGGU_DEAL",
-            method: null
-        },
 
-        status: "MENUNGGU_DEAL",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-    };
+        function simpanPesananAssistantKeAgent(info, tanggal, lokasi, catatan) {
+            const orderId = "AST-" + Date.now() + "-" + Math.floor(100 + Math.random() * 900);
+            const assistantOrder = {
+                id: orderId,
+                source: "assistant.html",
+                target: "agentcgo.html",
+                layanan: {
+                    key: currentActivePaketKey,
+                    nama: info.nama,
+                    personil: info.personil,
+                    durasi: info.durasi,
+                    prioritas: info.prioritas
+                },
+                customer: { name: userProfile.name, phone: userProfile.phone },
+                jadwal: { tanggal: tanggal },
+                lokasi: { address: lokasi },
+                catatan: catatan || "",
+                pricing: {
+                    hargaDasar: info.hargaBase,
+                    extraUnits: extraUnitsCount,
+                    extraCost: currentExtraCost,
+                    total: finalCalculatedTotal
+                },
+                payment: { status: "MENUNGGU_DEAL", method: null },
+                status: "MENUNGGU_DEAL",
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
 
-    /* SIMPAN MASTER PESANAN ASSISTANT */
-    localStorage.setItem(
-        "cikur_assistant_current_order",
-        JSON.stringify(assistantOrder)
-    );
+            localStorage.setItem("cikur_assistant_current_order", JSON.stringify(assistantOrder));
+            const existingOrders = JSON.parse(localStorage.getItem("cikur_assistant_orders")) || [];
+            existingOrders.unshift(assistantOrder);
+            localStorage.setItem("cikur_assistant_orders", JSON.stringify(existingOrders));
 
-    /* SIMPAN RIWAYAT PESANAN ASSISTANT */
-    const existingOrders =
-        JSON.parse(
-            localStorage.getItem("cikur_assistant_orders")
-        ) || [];
+            return assistantOrder;
+        }
 
-    existingOrders.unshift(assistantOrder);
-
-    localStorage.setItem(
-        "cikur_assistant_orders",
-        JSON.stringify(existingOrders)
-    );
-
-    return assistantOrder;
-}
         function initFormEvents() {
             const selectExtraWaktuEl = document.getElementById("selectExtraWaktu");
             if(selectExtraWaktuEl) {
@@ -2408,52 +1135,60 @@ function simpanPesananAssistantKeAgent(info, tanggal, lokasi, catatan) {
                     recalculateTotalForm();
                 });
             }
+            
+function initFormEvents() {
+            const selectExtraWaktuEl = document.getElementById("selectExtraWaktu");
+            if(selectExtraWaktuEl) {
+                selectExtraWaktuEl.value = extraUnitsCount;
+                selectExtraWaktuEl.removeEventListener("change", handleExtraWaktuChange); // Mencegah double listener
+                selectExtraWaktuEl.addEventListener("change", handleExtraWaktuChange);
+            }
 
             const btnRequestDealEl = document.getElementById("btnRequestDeal");
             if (btnRequestDealEl) {
-                btnRequestDealEl.addEventListener("click", () => {
+                // Hapus duplikasi event listener agar tidak bentrok
+                const newBtn = btnRequestDealEl.cloneNode(true);
+                btnRequestDealEl.parentNode.replaceChild(newBtn, btnRequestDealEl);
+
+                newBtn.addEventListener("click", () => {
                     let info = dataPaket[currentActivePaketKey];
-const tanggalEl = document.getElementById("inputTanggal");
-const lokasiEl = document.getElementById("inputLokasi");
-const catatanEl = document.getElementById("inputCatatanRequest");
-const tanggal = tanggalEl ? tanggalEl.value : "";
-const lokasi = lokasiEl ? lokasiEl.value.trim() : "";
-const catatan = catatanEl ? catatanEl.value.trim() : "";
-finalCalculatedTotal = info.hargaBase + currentExtraCost;
+                    const tanggalEl = document.getElementById("inputTanggal");
+                    const lokasiEl = document.getElementById("assistantAddress");
+                    const catatanEl = document.getElementById("inputCatatanRequest");
+                    
+                    const tanggal = tanggalEl ? tanggalEl.value : "";
+                    const lokasi = lokasiEl ? lokasiEl.value.trim() : "";
+                    const catatan = catatanEl ? catatanEl.value.trim() : "";
+                    
+                    finalCalculatedTotal = info.hargaBase + currentExtraCost;
                     
                     if (!tanggal || !lokasi) {
-                        alert("[!] Mohon lengkapi Tanggal dan Lokasi.");
+                        alert("[!] Mohon lengkapi Tanggal dan Lokasi terlebih dahulu.");
                         return;
                     }
-const assistantOrder =
-    simpanPesananAssistantKeAgent(
-        info,
-        tanggal,
-        lokasi,
-        catatan
-    );
 
-console.log(
-    "[CIKUR GO] Pesanan Assistant tersimpan:",
-    assistantOrder
-);
+                    // Simpan pesanan ke sistem
+                    simpanPesananAssistantKeAgent(info, tanggal, lokasi, catatan);
+
+                    // Render tampilan menunggu DEAL
                     if (modalMainContent) {
                         modalMainContent.innerHTML = `
                             <div style="text-align:center; padding: 20px 8px;">
                                 <div style="font-size: 36px; margin-bottom: 10px;">⏳</div>
                                 <h3 style="font-size: 14px; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">Menunggu Kesepakatan (DEAL)</h3>
                                 <p style="font-size: 10px; color: var(--text-muted); line-height: 1.4; margin-bottom: 14px;">
-                                    Detail pesanan Anda telah dikirimkan ke tim/asisten CGO. Tombol pembayaran akan aktif setelah status dinyatakan <strong>DEAL</strong>[cite: 1].
+                                    Detail pesanan Anda telah dikirimkan. Tombol pembayaran akan aktif setelah status dinyatakan <strong>DEAL</strong>[cite: 1].
                                 </p>
                                 <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: 14px; padding: 14px; margin-bottom: 14px; text-align: left;">
                                     <div class="invoice-row"><span>Layanan</span><span>${info.nama}</span></div>
                                     <div class="invoice-row"><span>Total Biaya</span><span style="color:var(--primary-red);">Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</span></div>
                                 </div>
-                                <button class="btn-pesan-form" id="btnSimulasiDeal" style="background: #16a34a;">[Simulasi] Asisten Menyatakan DEAL ✓</button>
+                                <button class="btn-pesan-form" id="btnSimulasiDeal" style="background: #16a34a; cursor:pointer;">[Simulasi] Asisten Menyatakan DEAL ✓</button>
                             </div>
                         `;
                     }
 
+                    // Event handler untuk tombol simulasi DEAL setelah konten berubah
                     const btnSimulasiDealEl = document.getElementById("btnSimulasiDeal");
                     if (btnSimulasiDealEl) {
                         btnSimulasiDealEl.addEventListener("click", () => {
@@ -2464,6 +1199,15 @@ console.log(
             }
         }
 
+        function handleExtraWaktuChange() {
+            extraUnitsCount = parseInt(this.value);
+            currentExtraCost = extraUnitsCount * 25000;
+            recalculateTotalForm();
+        }
+
+        // =========================================
+        // PAYMENT SYSTEM
+        // =========================================
         function tampilkanMenuPembayaran(info, finalCalculatedTotal, extraUnitsCount) {
             if (modalMainContent) {
                 modalMainContent.innerHTML = `
@@ -2599,9 +1343,11 @@ console.log(
             });
         }
 
-        // Jalankan render awal saat halaman dimuat
-        renderInitialForm();
+        // Initialize on DOM Load
+        document.addEventListener("DOMContentLoaded", function () {
+            initAssistantAddressSearch();
+            renderInitialForm();
+        });
     </script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </body>
 </html>
