@@ -1422,66 +1422,117 @@ button:focus-visible,
             const urlParams = new URLSearchParams(window.location.search);
             return urlParams.get('source') || 'assistant.html';
         }
-        function simpanPesananAssistantKeAgent(info, tanggal, lokasiText, catatan, latLngObj) {
-            const orderId = "AST-" + Date.now() + "-" + Math.floor(100 + Math.random() * 900);
-            const sourceOrigin = getSourceOrigin();
+        function simpanPesananAssistantKeAgent(
+    info,
+    tanggal,
+    jam,
+    lokasiText,
+    nomorRumah,
+    patokan,
+    catatan,
+    latLngObj
+) {
+    const orderId =
+        "AST-" + Date.now() + "-" +
+        Math.floor(100 + Math.random() * 900);
+    const sourceOrigin = getSourceOrigin();
+    const assistantOrder = {
+        id: orderId,
+        source: sourceOrigin,
+        target: "agentcgo.html",
+        layanan: {
+            key: typeof currentActivePaketKey !== 'undefined'
+                ? currentActivePaketKey
+                : 'default',
+            nama: info.nama,
+            personil: info.personil,
+            durasi: info.durasi,
+            prioritas: info.prioritas || 'Normal'
+        },
+        customer: {
+            name: userProfile.name,
+            phone: userProfile.phone
+        },
+        jadwal: {
+            tanggal: tanggal,
+            jam: jam
+        },
 
-            const assistantOrder = {
-                id: orderId,
-                source: sourceOrigin,
-                target: "agentcgo.html",
-                layanan: {
-                    key: typeof currentActivePaketKey !== 'undefined' ? currentActivePaketKey : 'default',
-                    nama: info.nama,
-                    personil: info.personil,
-                    durasi: info.durasi,
-                    prioritas: info.prioritas || 'Normal'
-                },
-                customer: {
-                    name: userProfile.name,
-                    phone: userProfile.phone
-                },
-                jadwal: {
-                    tanggal: tanggal
-                },
-                lokasi: {
-                    address: lokasiText,
-                    lat: latLngObj ? latLngObj.lat : assistantCoords.lat,
-                    lng: latLngObj ? latLngObj.lon : assistantCoords.lon
-                },
-                catatan: catatan || "",
-                pricing: {
-                    hargaDasar: info.hargaBase || 0,
-                    extraUnits: typeof extraUnitsCount !== 'undefined' ? extraUnitsCount : 0,
-                    extraCost: typeof currentExtraCost !== 'undefined' ? currentExtraCost : 0,
-                    total: typeof finalCalculatedTotal !== 'undefined' ? finalCalculatedTotal : 0
-                },
-                payment: {
-                    status: "MENUNGGU_DEAL",
-                    method: null
-                },
-                status: "MENUNGGU_DEAL",
-                chats: [
-                    { sender: 'system', text: 'Sistem: Pesanan masuk terverifikasi dari aplikasi customer.' }
-                ],
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            };
+        lokasi: {
+            address: lokasiText,
+            nomorRumah: nomorRumah || "",
+            patokan: patokan || "",
+            lat: latLngObj
+                ? latLngObj.lat
+                : assistantCoords.lat,
 
-            localStorage.setItem("cikur_assistant_current_order", JSON.stringify(assistantOrder));
-            const existingOrders = JSON.parse(localStorage.getItem("cikur_assistant_orders")) || [];
-            existingOrders.unshift(assistantOrder);
-            localStorage.setItem("cikur_assistant_orders", JSON.stringify(existingOrders));
-            
-            if(sourceOrigin.includes("cikurgo2in1")) {
-                const orders2in1 = JSON.parse(localStorage.getItem("cikur_2in1_orders")) || [];
-                orders2in1.unshift(assistantOrder);
-                localStorage.setItem("cikur_2in1_orders", JSON.stringify(orders2in1));
+            lng: latLngObj
+                ? latLngObj.lng
+                : assistantCoords.lon
+        },
+
+        catatan: catatan || "",
+        pricing: {
+            hargaDasar:
+                info.hargaBase || 0,
+            extraUnits:
+                typeof extraUnitsCount !== 'undefined'
+                    ? extraUnitsCount
+                   : 0,
+            extraCost:
+                typeof currentExtraCost !== 'undefined'
+                    ? currentExtraCost
+                  : 0,
+            total:
+                typeof finalCalculatedTotal !== 'undefined'
+                    ? finalCalculatedTotal
+                    : 0
+        },
+        payment: {
+            status: "MENUNGGU_DEAL",
+            method: null
+        },
+        status: "MENUNGGU_DEAL",
+        chats: [
+            {
+                sender: "system",
+                text:
+                    "Sistem: Pesanan masuk terverifikasi dari aplikasi customer."
             }
+        ],
 
-            return assistantOrder;
+        createdAt:
+            new Date().toISOString(),
+
+        updatedAt:
+            new Date().toISOString()
+    };
+    localStorage.setItem(
+        "cikur_assistant_current_order",
+        JSON.stringify(assistantOrder)
+    );
+    const existingOrders =
+        JSON.parse(
+            localStorage.getItem("cikur_assistant_orders")
+        ) || [];
+    existingOrders.unshift(assistantOrder);
+    localStorage.setItem(
+        "cikur_assistant_orders",
+        JSON.stringify(existingOrders)
+    );
+    if (sourceOrigin.includes("cikurgo2in1")) {
+        const orders2in1 =
+            JSON.parse(
+                localStorage.getItem("cikur_2in1_orders")
+            ) || [];
+        orders2in1.unshift(assistantOrder);
+        localStorage.setItem(
+            "cikur_2in1_orders",
+            JSON.stringify(orders2in1)
+        );
+    }
+    return assistantOrder;
         }
-
         function renderCustomerActiveOrder(order) {
             let chatContainer = document.getElementById("customerChatContainer");
             if(!chatContainer) return;
@@ -1538,8 +1589,7 @@ button:focus-visible,
             if(orderIndex !== -1) {
                 if(!allOrders[orderIndex].chats) allOrders[orderIndex].chats = [];
                 allOrders[orderIndex].chats.push({ sender: 'customer', text: 'Customer: ' + text });
-                allOrders[orderIndex].updatedAt = new Date().toISOString();
-                
+                allOrders[orderIndex].updatedAt = new Date().toISOString();               
                 localStorage.setItem('cikur_assistant_orders', JSON.stringify(allOrders));
                 localStorage.setItem('cikur_assistant_current_order', JSON.stringify(allOrders[orderIndex]));
                 
@@ -1560,30 +1610,120 @@ button:focus-visible,
             }
 
             const btnRequestDealEl = document.getElementById("btnRequestDeal");
-            if (btnRequestDealEl) {
-                btnRequestDealEl.addEventListener("click", () => {
-                    let info = dataPaket[currentActivePaketKey];
-                    const tanggalEl = document.getElementById("inputTanggal");
-                    const lokasiEl = document.getElementById("assistantAddress");
-                    const catatanEl = document.getElementById("inputCatatanRequest");
-                    const tanggal = tanggalEl ? tanggalEl.value : "";
-                    const lokasi = lokasiEl ? lokasiEl.value.trim() : "";
-                    const catatan = catatanEl ? catatanEl.value.trim() : "";
-                    finalCalculatedTotal = info.hargaBase + currentExtraCost;
-                    
-                    if (!tanggal || !lokasi) {
-                        alert("[!] Mohon lengkapi Tanggal dan Lokasi.");
-                        return;
-                    }
-
-                    let latLngObj = { lat: assistantCoords.lat, lng: assistantCoords.lon };
-                    const assistantOrder = simpanPesananAssistantKeAgent(info, tanggal, lokasi, catatan, latLngObj);
-                    console.log("[CIKUR GO] Pesanan Assistant tersimpan:", assistantOrder);
-
-                    renderActiveCoordinationView(assistantOrder);
-                });
+if (btnRequestDealEl) {
+    btnRequestDealEl.addEventListener(
+        "click",
+        () => {
+            const info =
+                dataPaket[currentActivePaketKey];
+            const tanggalEl =
+                document.getElementById("inputTanggal");
+            const jamEl =
+                document.getElementById("inputJam");
+            const lokasiEl =
+                document.getElementById("assistantAddress");
+            const nomorRumahEl =
+                document.getElementById("assistantHouseNo");
+            const patokanEl =
+                document.getElementById("assistantAddressNote");
+            const catatanEl =
+                document.getElementById("inputCatatanRequest");
+            const tanggal =
+                tanggalEl
+                    ? tanggalEl.value
+                    : "";
+            const jam =
+                jamEl
+                    ? jamEl.value
+                    : "";
+            const lokasi =
+                lokasiEl
+                    ? lokasiEl.value.trim()
+                    : "";
+            const nomorRumah =
+                nomorRumahEl
+                    ? nomorRumahEl.value.trim()
+                    : "";
+            const patokan =
+                patokanEl
+                    ? patokanEl.value.trim()
+                    : "";
+            const catatan =
+                catatanEl
+                    ? catatanEl.value.trim()
+                    : "";
+            finalCalculatedTotal =
+                info.hargaBase +
+                currentExtraCost;
+            /* =========================
+               VALIDASI
+            ========================= */
+            if (!tanggal) {
+                alert(
+                    "[!] Silakan pilih tanggal layanan."
+                );
+                return;
             }
+            if (!jam) {
+                alert(
+                    "[!] Silakan pilih jam layanan."
+                );
+                return;
+            }
+            if (!lokasi) {
+                alert(
+                    "[!] Silakan tentukan lokasi layanan."
+                );
+                return;
+            }
+            if (
+                !assistantCoords ||
+                !assistantCoords.lat ||
+                !assistantCoords.lon
+            ) {
+                alert(
+                    "[!] Titik lokasi belum berhasil ditentukan."
+                );
+
+                return;
+            }
+            /* =========================
+               BUILD COORDINATE
+            ========================= */
+            const latLngObj = {
+                lat:
+                    Number(
+                        assistantCoords.lat
+                    ),
+                lng:
+                    Number(
+                        assistantCoords.lon
+                    )
+            };
+            /* =========================
+               CREATE ORDER
+            ========================= */
+            const assistantOrder =
+                simpanPesananAssistantKeAgent(
+                    info,
+                    tanggal,
+                    jam,
+                    lokasi,
+                    nomorRumah,
+                    patokan,
+                    catatan,
+                    latLngObj
+                );
+            console.log(
+                "[CIKUR GO] Pesanan Assistant:",
+                assistantOrder
+            );
+            renderActiveCoordinationView(
+                assistantOrder
+            );
         }
+    );
+}
 
         function renderActiveCoordinationView(assistantOrder) {
             if (modalMainContent) {
