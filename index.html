@@ -1881,156 +1881,71 @@ function bukaModalRegistrasi() {
         </button>
     `;
 
-    const btnSimpanReg =
-        document.getElementById("btnSimpanReg");
-
+    const btnSimpanReg = document.getElementById("btnSimpanReg");
     if (!btnSimpanReg) return;
 
-    btnSimpanReg.addEventListener(
-        "click",
-        async () => {
+    btnSimpanReg.addEventListener("click", async () => {
+        const nameVal = document.getElementById("regName").value.trim();
+        const phoneVal = document.getElementById("regPhone").value.trim();
+        const pinVal = document.getElementById("regPin").value.trim();
 
-            const nameVal =
-                document.getElementById("regName")
-                    .value
-                    .trim();
-
-            const phoneVal =
-                document.getElementById("regPhone")
-                    .value
-                    .trim();
-
-            const pinVal =
-                document.getElementById("regPin")
-                    .value
-                    .trim();
-
-
-            // ==============================
-            // VALIDASI
-            // ==============================
-
-            if (!nameVal || !phoneVal) {
-                alert(
-                    "Mohon isi nama dan nomor HP Anda."
-                );
-                return;
-            }
-
-            if (!/^\d{6}$/.test(pinVal)) {
-                alert(
-                    "PIN Keamanan CikurPay harus tepat 6 digit angka."
-                );
-                return;
-            }
-
-
-            // ==============================
-            // CEK CIKUR CLOUD
-            // ==============================
-
-            if (!window.CikurCloud) {
-                alert(
-                    "CIKUR Cloud belum tersedia. Silakan refresh halaman."
-                );
-                return;
-            }
-
-
-            // ==============================
-            // HUBUNGKAN FIREBASE AUTH
-            // ==============================
-
-            btnSimpanReg.disabled = true;
-            btnSimpanReg.textContent =
-                "Menghubungkan akun...";
-
-            try {
-
-                const firebaseUser =
-                    await window.CikurCloud.ensureAuth();
-
-                if (!firebaseUser) {
-                    throw new Error(
-                        "Firebase User tidak tersedia."
-                    );
-                }
-
-
-                // ==============================
-                // SIMPAN PROFIL KE FIRESTORE
-                // ==============================
-
-                await window.CikurCloud.saveProfile(
-                    firebaseUser.uid,
-                    {
-                        name: nameVal,
-                        phone: phoneVal,
-                        pin: pinVal,
-                        avatar:
-                            userProfile.avatar || "",
-                        saldo:
-                            Number(
-                                userProfile.saldo || 0
-                            )
-                    }
-                );
-
-
-                // ==============================
-                // UPDATE PROFIL LOKAL UNTUK UI
-                // ==============================
-
-                userProfile = {
-                    ...userProfile,
-                    name: nameVal,
-                    phone: phoneVal,
-                    pin: pinVal
-                };
-
-
-                updateUIProfile();
-
-
-                alert(
-                    "Akun CIKUR GO berhasil diaktifkan!"
-                );
-
-
-                if (
-                    typeof closeModal ===
-                    "function"
-                ) {
-                    closeModal();
-                }
-
-
-            } catch (error) {
-
-                console.error(
-                    "[CIKUR GO] Gagal mengaktifkan akun:",
-                    error
-                );
-
-                alert(
-                    "Gagal menghubungkan akun CIKUR GO."
-                );
-
-            } finally {
-
-                btnSimpanReg.disabled = false;
-
-                btnSimpanReg.textContent =
-                    "Mulai Sekarang ✓";
-            }
-
+        if (!nameVal || !phoneVal) {
+            alert("Mohon isi nama dan nomor HP Anda.");
+            return;
         }
-    );
+
+        if (!/^\d{6}$/.test(pinVal)) {
+            alert("PIN Keamanan CikurPay harus tepat 6 digit angka.");
+            return;
+        }
+
+        if (!window.CikurCloud) {
+            alert("CIKUR Cloud belum tersedia. Silakan refresh halaman.");
+            return;
+        }
+
+        btnSimpanReg.disabled = true;
+        btnSimpanReg.textContent = "Menghubungkan akun...";
+
+        try {
+            const firebaseUser = await window.CikurCloud.ensureAuth();
+            if (!firebaseUser) {
+                throw new Error("Firebase User tidak tersedia.");
+            }
+
+            await window.CikurCloud.saveProfile(firebaseUser.uid, {
+                name: nameVal,
+                phone: phoneVal,
+                pin: pinVal,
+                avatar: userProfile.avatar || "",
+                saldo: Number(userProfile.saldo || 0)
+            });
+
+            userProfile = {
+                ...userProfile,
+                name: nameVal,
+                phone: phoneVal,
+                pin: pinVal
+            };
+
+            updateUIProfile();
+            alert("Akun CIKUR GO berhasil diaktifkan!");
+
+            if (typeof closeModal === "function") {
+                closeModal();
+            }
+        } catch (error) {
+            console.error("[CIKUR GO] Gagal mengaktifkan akun:", error);
+            alert("Gagal menghubungkan akun CIKUR GO.");
+        } finally {
+            btnSimpanReg.disabled = false;
+            btnSimpanReg.textContent = "Mulai Sekarang ✓";
+        }
+    });
 }
 
 function bukaModalAturPin() {
     closeHeaderDropdown();
-
     openModal("KEAMANAN PIN CIKUR PAY 🔒");
 
     if (!modalMainContent) return;
@@ -2083,123 +1998,64 @@ function bukaModalAturPin() {
         </button>
     `;
 
-    const btnSimpanPin =
-        document.getElementById("btnSimpanPin");
-
+    const btnSimpanPin = document.getElementById("btnSimpanPin");
     if (!btnSimpanPin) return;
 
-    btnSimpanPin.addEventListener(
-        "click",
-        async () => {
+    btnSimpanPin.addEventListener("click", async () => {
+        const oldPin = document.getElementById("oldPin").value.trim();
+        const newPin = document.getElementById("newPin").value.trim();
+        const confirmPin = document.getElementById("confirmPin").value.trim();
 
-            const oldPin =
-                document.getElementById("oldPin")
-                    .value
-                    .trim();
-
-            const newPin =
-                document.getElementById("newPin")
-                    .value
-                    .trim();
-
-            const confirmPin =
-                document.getElementById("confirmPin")
-                    .value
-                    .trim();
-            // ==============================
-            // VALIDASI
-            // ==============================
-
-            if (
-                userProfile.pin &&
-                oldPin !== userProfile.pin
-            ) {
-                alert(
-                    "PIN Lama yang Anda masukkan salah."
-                );
-                return;
-            }
-
-            if (!/^\d{6}$/.test(newPin)) {
-                alert(
-                    "PIN Baru harus tepat 6 digit angka."
-                );
-                return;
-            }
-
-            if (newPin !== confirmPin) {
-                alert(
-                    "Konfirmasi PIN baru tidak cocok."
-                );
-                return;
-            }
-            // ==============================
-            // CEK CIKUR CLOUD
-            // ==============================
-
-            if (!window.CikurCloud) {
-                alert(
-                    "CIKUR Cloud belum tersedia. Silakan refresh halaman."
-                );
-                return;
-            }
-            btnSimpanPin.disabled = true;
-            btnSimpanPin.textContent =
-                "Menyimpan PIN...";
-            try {
-
-                // ==============================
-                // AMBIL FIREBASE USER
-                // ==============================
-
-                const firebaseUser =
-                    await window.CikurCloud.ensureAuth();
-
-                if (!firebaseUser) {
-                    throw new Error(
-                        "Firebase User tidak tersedia."
-                    );
-                }
-                // ==============================
-                // UPDATE PIN KE FIRESTORE
-                // ==============================
-
-                await window.CikurCloud.saveProfile(
-                    firebaseUser.uid,
-                    {
-                        pin: newPin
-                    }
-                );
-                // ==============================
-                // UPDATE DATA UI
-                // ==============================
-                userProfile.pin = newPin;
-                updateUIProfile();
-                alert(
-                    "PIN CikurPay berhasil diperbarui!"
-                );
-                if (
-                    typeof closeModal ===
-                    "function"
-                ) {
-                    closeModal();
-                }
-            } catch (error) {
-                console.error(
-                    "[CIKUR GO] Gagal memperbarui PIN:",
-                    error
-                );
-                alert(
-                    "Gagal menyimpan PIN ke Cloud."
-                );
-            } finally {
-                btnSimpanPin.disabled = false;
-                btnSimpanPin.textContent =
-                    "Simpan PIN Baru ✓";
-            }
+        if (userProfile.pin && oldPin !== userProfile.pin) {
+            alert("PIN Lama yang Anda masukkan salah.");
+            return;
         }
-    );
+
+        if (!/^\d{6}$/.test(newPin)) {
+            alert("PIN Baru harus tepat 6 digit angka.");
+            return;
+        }
+
+        if (newPin !== confirmPin) {
+            alert("Konfirmasi PIN baru tidak cocok.");
+            return;
+        }
+
+        if (!window.CikurCloud) {
+            alert("CIKUR Cloud belum tersedia. Silakan refresh halaman.");
+            return;
+        }
+
+        btnSimpanPin.disabled = true;
+        btnSimpanPin.textContent = "Menyimpan PIN...";
+
+        try {
+            const firebaseUser = await window.CikurCloud.ensureAuth();
+            if (!firebaseUser) {
+                throw new Error("Firebase User tidak tersedia.");
+            }
+
+            await window.CikurCloud.saveProfile(firebaseUser.uid, {
+                pin: newPin
+            });
+
+            userProfile.pin = newPin;
+            updateUIProfile();
+            alert("PIN CikurPay berhasil diperbarui!");
+
+            if (typeof closeModal === "function") {
+                closeModal();
+            }
+        } catch (error) {
+            console.error("[CIKUR GO] Gagal memperbarui PIN:", error);
+            alert("Gagal menyimpan PIN ke Cloud.");
+        } finally {
+            btnSimpanPin.disabled = false;
+            btnSimpanPin.textContent = "Simpan PIN Baru ✓";
+        }
+    });
 }
+
 async function prosesLogout() {
     if (!confirm("Apakah Anda yakin ingin keluar dari akun?")) {
         return;
@@ -2220,10 +2076,7 @@ async function prosesLogout() {
         updateUIProfile();
         bukaModalRegistrasi();
     } catch (error) {
-        console.error(
-            "[CIKUR GO] Gagal logout:",
-            error
-        );
+        console.error("[CIKUR GO] Gagal logout:", error);
         alert("Gagal keluar dari akun CIKUR GO.");
     }
 }
@@ -2294,6 +2147,10 @@ if(closeAssistant) {
     closeAssistant.addEventListener("click", () => { if (assistantScreen) assistantScreen.style.display = "none"; });
 }
 
+function closeModal() {
+    if (assistantScreen) assistantScreen.style.display = "none";
+}
+
 function bukaModalPengaturanProfil() {
     closeHeaderDropdown();
     openModal("PENGATURAN PROFIL & FOTO AKUN");
@@ -2343,7 +2200,7 @@ function bukaModalPengaturanProfil() {
             localStorage.setItem('cikur_user', JSON.stringify(userProfile));
             updateUIProfile();
             alert("Profil berhasil diperbarui!");
-            if (assistantScreen) assistantScreen.style.display = "none";
+            closeModal();
         });
     }
 }
@@ -2393,7 +2250,7 @@ function bukaModalTopUp() {
             localStorage.setItem('cikur_user', JSON.stringify(userProfile));
             updateUIProfile();
             alert(`Top-up sebesar Rp ${finalAmount.toLocaleString('id-ID')} berhasil!`);
-            if (assistantScreen) assistantScreen.style.display = "none";
+            closeModal();
         });
     }
 }
