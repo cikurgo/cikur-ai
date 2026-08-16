@@ -1675,59 +1675,245 @@ let userProfile = {
 function updateUIProfile() {
     const headerNamaEl = document.getElementById("headerNamaUser");
     const displaySaldoEl = document.getElementById("displaySaldo");
-    if (headerNamaEl) headerNamaEl.innerText = userProfile.name;
-    if (displaySaldoEl) displaySaldoEl.innerText = "Rp " + userProfile.saldo.toLocaleString('id-ID');
-    
-    if(document.getElementById("profileViewName")) {
-        document.getElementById("profileViewName").innerText = userProfile.name;
-        document.getElementById("profileViewPhone").innerText = userProfile.phone;
+
+    if (headerNamaEl) {
+        headerNamaEl.innerText = userProfile.name;
     }
-    if(document.getElementById("transaksiSaldoNominal")) {
-        document.getElementById("transaksiSaldoNominal").innerText = "Rp " + userProfile.saldo.toLocaleString('id-ID');
+
+    if (displaySaldoEl) {
+        displaySaldoEl.innerText =
+            "Rp " + userProfile.saldo.toLocaleString("id-ID");
     }
-    
-    let avatarContainer = document.getElementById("headerAvatar");
-    let profileViewAvatar = document.getElementById("profileViewAvatar");
 
-    if(userProfile.avatar && userProfile.avatar.startsWith("data:image")) {
-        if (avatarContainer) avatarContainer.innerHTML = `<img src="${userProfile.avatar}" alt="Foto Profil">`;
-        if(profileViewAvatar) profileViewAvatar.innerHTML = `<img src="${userProfile.avatar}" alt="Foto Profil" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
-    } else {
-        let initials = userProfile.name.split(" ").map(n => n[0]).join("").substring(0,2).toUpperCase();
-        if (avatarContainer) avatarContainer.innerText = initials || "CK";
-        if(profileViewAvatar) profileViewAvatar.innerText = initials || "CK";
+    if (document.getElementById("profileViewName")) {
+        document.getElementById("profileViewName").innerText =
+            userProfile.name;
+
+        document.getElementById("profileViewPhone").innerText =
+            userProfile.phone;
     }
-}
 
-window.addEventListener("DOMContentLoaded", () => {
-    updateUIProfile();
-});
+    if (document.getElementById("transaksiSaldoNominal")) {
+        document.getElementById("transaksiSaldoNominal").innerText =
+            "Rp " + userProfile.saldo.toLocaleString("id-ID");
+    }
 
-const btnOpenProfileDropdown = document.getElementById("btnOpenProfileDropdown");
-const headerDropdownMenu = document.getElementById("headerDropdownMenu");
+    const avatarContainer =
+        document.getElementById("headerAvatar");
 
-function closeHeaderDropdown() {
-    if(headerDropdownMenu) headerDropdownMenu.classList.remove('show');
-}
+    const profileViewAvatar =
+        document.getElementById("profileViewAvatar");
 
-if(btnOpenProfileDropdown && headerDropdownMenu) {
-    btnOpenProfileDropdown.addEventListener("click", (e) => {
-        e.stopPropagation();
-        headerDropdownMenu.classList.toggle("show");
-    });
-
-    document.addEventListener("click", (e) => {
-        if(!headerDropdownMenu.contains(e.target) && !btnOpenProfileDropdown.contains(e.target)) {
-            closeHeaderDropdown();
+    if (
+        userProfile.avatar &&
+        userProfile.avatar.startsWith("data:image")
+    ) {
+        if (avatarContainer) {
+            avatarContainer.innerHTML = `
+                <img
+                    src="${userProfile.avatar}"
+                    alt="Foto Profil"
+                >
+            `;
         }
-    });
+
+        if (profileViewAvatar) {
+            profileViewAvatar.innerHTML = `
+                <img
+                    src="${userProfile.avatar}"
+                    alt="Foto Profil"
+                    style="width:100%;height:100%;object-fit:cover;border-radius:50%;"
+                >
+            `;
+        }
+
+    } else {
+
+        const initials = userProfile.name
+            .split(" ")
+            .map(n => n[0])
+            .join("")
+            .substring(0, 2)
+            .toUpperCase();
+
+        if (avatarContainer) {
+            avatarContainer.innerText = initials || "CK";
+        }
+
+        if (profileViewAvatar) {
+            profileViewAvatar.innerText = initials || "CK";
+        }
+    }
 }
 
-const btnEditProfilTab = document.getElementById("btnEditProfilTab");
-if(btnEditProfilTab) {
-    btnEditProfilTab.addEventListener("click", () => {
-        bukaModalPengaturanProfil();
-    });
+
+/* =========================================================
+   RESTORE USER PROFILE DARI FIREBASE SETELAH REFRESH
+========================================================= */
+
+async function loadCurrentUserProfileIndex() {
+
+    try {
+
+        // Tunggu CikurCloud tersedia
+        let waitTime = 0;
+
+        while (!window.CikurCloud && waitTime < 5000) {
+
+            await new Promise(resolve =>
+                setTimeout(resolve, 100)
+            );
+
+            waitTime += 100;
+        }
+
+        if (!window.CikurCloud) {
+
+            console.warn(
+                "[CIKUR GO] CikurCloud belum tersedia."
+            );
+
+            updateUIProfile();
+            return;
+        }
+
+
+        // Tunggu Firebase Authentication
+        const firebaseUser =
+            await window.CikurCloud.waitForAuth();
+
+
+        // Tidak ada user Firebase
+        if (!firebaseUser) {
+
+            console.log(
+                "[CIKUR GO] Belum ada Firebase User."
+            );
+            updateUIProfile();
+            return;
+        }
+        console.log(
+            "[CIKUR GO] Firebase User ditemukan:",
+            firebaseUser.uid
+        );
+        // Ambil profile dari Firestore
+        const profile =
+            await window.CikurCloud.getProfile(
+                firebaseUser.uid
+            );
+        // Profile belum ada
+        if (!profile) {
+
+            console.log(
+                "[CIKUR GO] Profile Firestore belum ditemukan."
+            );
+            updateUIProfile();
+            return;
+        }
+        // Pulihkan data Cloud ke userProfile
+        userProfile = {
+            ...userProfile,
+            ...profile
+        };
+        // Update seluruh tampilan
+        updateUIProfile();
+        console.log(
+            "[CIKUR GO] Profile berhasil dipulihkan dari Cloud."
+        );
+
+    } catch (error) {
+        console.error(
+            "[CIKUR GO] Gagal memulihkan profile:",
+            error
+        );
+        updateUIProfile();
+    }
+}
+
+/* =========================================================
+   LOAD PROFILE SAAT index.html DIBUKA / DI-REFRESH
+========================================================= */
+
+window.addEventListener(
+    "DOMContentLoaded",
+    async () => {
+        await loadCurrentUserProfileIndex();
+
+    }
+);
+
+/* =========================================================
+   HEADER PROFILE DROPDOWN
+========================================================= */
+
+const btnOpenProfileDropdown =
+    document.getElementById(
+        "btnOpenProfileDropdown"
+    );
+const headerDropdownMenu =
+    document.getElementById(
+        "headerDropdownMenu"
+    );
+function closeHeaderDropdown() {
+    if (headerDropdownMenu) {
+        headerDropdownMenu.classList.remove(
+            "show"
+        );
+    }
+}
+
+if (
+    btnOpenProfileDropdown &&
+    headerDropdownMenu
+) {
+    btnOpenProfileDropdown.addEventListener(
+        "click",
+        (e) => {
+            e.stopPropagation();
+            headerDropdownMenu.classList.toggle(
+                "show"
+            );
+
+        }
+    );
+
+    document.addEventListener(
+        "click",
+        (e) => {
+
+            if (
+                !headerDropdownMenu.contains(
+                    e.target
+                ) &&
+                !btnOpenProfileDropdown.contains(
+                    e.target
+                )
+            ) {
+
+                closeHeaderDropdown();
+
+            }
+
+        }
+    );
+}
+
+
+/* =========================================================
+   EDIT PROFILE
+========================================================= */
+
+const btnEditProfilTab =
+    document.getElementById(
+        "btnEditProfilTab"
+    );
+if (btnEditProfilTab) {
+    btnEditProfilTab.addEventListener(
+        "click",
+        () => {
+            bukaModalPengaturanProfil();
+        }
+    );
 }
 
 function switchTab(tabName) {
