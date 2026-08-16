@@ -1012,19 +1012,24 @@
         const CIKUR_GO_API_BASE = window.CIKUR_GO_API_BASE || "/api";
         
         async function loadCurrentUserProfile() {
+            // 1. Tunggu beberapa milidetik agar cikur-config.js selesai dimuat
+            let waitTime = 0;
+            while (!window.CikurCloud && waitTime < 5000) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                waitTime += 100;
+            }
             if (!window.CikurCloud) {
-                throw new Error("CIKUR Cloud belum dimuat.");
+                throw new Error("Koneksi sistem Cloud lambat atau gagal dimuat.");
             }
-            const firebaseUser = await window.CikurCloud.ensureAuth();
+            // 2. Panggil waitForAuth() sesuai dengan yang ada di cikur-config.js Anda
+            const firebaseUser = await window.CikurCloud.waitForAuth();
             if (!firebaseUser) {
-                throw new Error("Akun CIKUR GO belum tersedia.");
+                throw new Error("Belum ada akun yang login.");
             }
+            // 3. Ambil data profil
             const profile = await window.CikurCloud.getProfile(firebaseUser.uid);
-            if (!profile) {
-                throw new Error("Profil akun belum ditemukan.");
-            }
-            if (!profile.name || !profile.phone) {
-                throw new Error("Data profil customer belum lengkap.");
+            if (!profile || !profile.name || !profile.phone) {
+                throw new Error("Data profil Anda belum lengkap.");
             }
             userProfile = {
                 ...userProfile,
