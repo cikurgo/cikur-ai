@@ -1746,87 +1746,44 @@ function updateUIProfile() {
     }
 }
 
-
 /* =========================================================
-   RESTORE USER PROFILE DARI FIREBASE SETELAH REFRESH
+   PERBAIKAN: SINKRONISASI REAL-TIME (Copy & Paste bagian ini)
+   Gantikan fungsi loadCurrentUserProfileIndex yang lama dengan ini:
 ========================================================= */
 
 async function loadCurrentUserProfileIndex() {
-
     try {
-
-        // Tunggu CikurCloud tersedia
-        let waitTime = 0;
-
-        while (!window.CikurCloud && waitTime < 5000) {
-
-            await new Promise(resolve =>
-                setTimeout(resolve, 100)
-            );
-
-            waitTime += 100;
+        // 1. Pastikan CikurCloud tersedia
+        let retries = 0;
+        while (!window.CikurCloud && retries < 20) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+            retries++;
         }
 
         if (!window.CikurCloud) {
-
-            console.warn(
-                "[CIKUR GO] CikurCloud belum tersedia."
-            );
-
-            updateUIProfile();
+            console.error("[CIKUR GO] CikurCloud tidak dimuat.");
             return;
         }
 
-
-        // Tunggu Firebase Authentication
-        const firebaseUser =
-            await window.CikurCloud.waitForAuth();
-
-
-        // Tidak ada user Firebase
-        if (!firebaseUser) {
-
-            console.log(
-                "[CIKUR GO] Belum ada Firebase User."
-            );
-            updateUIProfile();
-            return;
+        // 2. Dapatkan user autentikasi dari Firebase
+        const firebaseUser = await window.CikurCloud.waitForAuth();
+        
+        if (firebaseUser) {
+            // 3. Ambil data terbaru dari Firestore
+            const profile = await window.CikurCloud.getProfile(firebaseUser.uid);
+            
+            if (profile) {
+                // Update objek global agar sinkron di semua fungsi
+                userProfile = { ...userProfile, ...profile };
+                console.log("[CIKUR GO] Sinkronisasi data berhasil:", userProfile.name);
+            }
         }
-        console.log(
-            "[CIKUR GO] Firebase User ditemukan:",
-            firebaseUser.uid
-        );
-        // Ambil profile dari Firestore
-        const profile =
-            await window.CikurCloud.getProfile(
-                firebaseUser.uid
-            );
-        // Profile belum ada
-        if (!profile) {
-
-            console.log(
-                "[CIKUR GO] Profile Firestore belum ditemukan."
-            );
-            updateUIProfile();
-            return;
-        }
-        // Pulihkan data Cloud ke userProfile
-        userProfile = {
-            ...userProfile,
-            ...profile
-        };
-        // Update seluruh tampilan
+        
+        // 4. Perbarui UI setelah data diambil
         updateUIProfile();
-        console.log(
-            "[CIKUR GO] Profile berhasil dipulihkan dari Cloud."
-        );
 
     } catch (error) {
-        console.error(
-            "[CIKUR GO] Gagal memulihkan profile:",
-            error
-        );
-        updateUIProfile();
+        console.error("[CIKUR GO] Gagal sinkronisasi:", error);
     }
 }
 
