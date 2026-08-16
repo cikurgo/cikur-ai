@@ -2200,12 +2200,31 @@ function bukaModalAturPin() {
         }
     );
 }
-function prosesLogout() {
-    if(confirm("Apakah Anda yakin ingin keluar dari akun?")) {
-        localStorage.removeItem('cikur_user');
-        userProfile = { name: "CIKUR USER", phone: "08123456789", saldo: 0, avatar: "", pin: "123456" };
+async function prosesLogout() {
+    if (!confirm("Apakah Anda yakin ingin keluar dari akun?")) {
+        return;
+    }
+    try {
+        if (window.CikurCloud && window.CikurCloud.auth) {
+            const { signOut } = await import(
+                "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js"
+            );
+            await signOut(window.CikurCloud.auth);
+        }
+        userProfile = {
+            name: "",
+            phone: "",
+            saldo: 0,
+            avatar: ""
+        };
         updateUIProfile();
         bukaModalRegistrasi();
+    } catch (error) {
+        console.error(
+            "[CIKUR GO] Gagal logout:",
+            error
+        );
+        alert("Gagal keluar dari akun CIKUR GO.");
     }
 }
 
