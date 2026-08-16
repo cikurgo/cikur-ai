@@ -1686,16 +1686,16 @@
             try {
                 await loadCurrentUserProfile();
             } catch (error) {
+                console.error("Gagal masuk Assistant:", error);
                 if (modalMainContent) {
                     modalMainContent.innerHTML = `
                         <div class="assistant-form-container">
                             <div class="form-section-title">Akun diperlukan</div>
-                            <p style="font-size:11px;color:#64748b;line-height:1.5;">Silakan masuk ke akun CIKUR GO terlebih dahulu.</p>
+                            <p style="font-size:11px;color:#64748b;line-height:1.5;">Pesan Sistem: <b>${error.message}</b><br><br>Silakan tutup halaman ini dan pastikan Anda sudah Login dengan benar di halaman utama.</p>
                         </div>`;
                 }
                 return;
             }
-
             try {
                 const sourceOrigin = getSourceOrigin();
                 const response = await fetch(`${CIKUR_GO_API_BASE}/assistant/orders/active?source=${encodeURIComponent(sourceOrigin)}`, {
