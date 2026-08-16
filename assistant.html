@@ -1012,30 +1012,65 @@
         const CIKUR_GO_API_BASE = window.CIKUR_GO_API_BASE || "/api";
         
         async function loadCurrentUserProfile() {
-            // 1. Tunggu beberapa milidetik agar cikur-config.js selesai dimuat
-            let waitTime = 0;
-            while (!window.CikurCloud && waitTime < 5000) {
-                await new Promise(resolve => setTimeout(resolve, 100));
-                waitTime += 100;
-            }
-            if (!window.CikurCloud) {
-                throw new Error("Koneksi sistem Cloud lambat atau gagal dimuat.");
-            }
-            // 2. Pastikan Firebase Auth memiliki user yang sama
-const firebaseUser = await window.CikurCloud.ensureAuth();
-if (!firebaseUser) {
-    throw new Error("Firebase User tidak tersedia.");
-}
-            // 3. Ambil data profil
-            const profile = await window.CikurCloud.getProfile(firebaseUser.uid);
-            if (!profile || !profile.name || !profile.phone) {
-                throw new Error("Data profil Anda belum lengkap.");
-            }
-            userProfile = {
-                ...userProfile,
-                ...profile
-            };
-            return userProfile;
+
+    let waitTime = 0;
+
+    // Tunggu CikurCloud benar-benar tersedia
+    while (!window.CikurCloud && waitTime < 10000) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        waitTime += 100;
+    }
+
+    if (!window.CikurCloud) {
+        throw new Error(
+            "CIKUR Cloud belum tersedia."
+        );
+    }
+
+    // Tunggu Firebase Authentication selesai memulihkan session
+    const firebaseUser =
+        await window.CikurCloud.waitForAuth();
+
+    if (!firebaseUser) {
+        throw new Error(
+            "Sesi akun CIKUR GO belum ditemukan."
+        );
+    }
+
+    console.log(
+        "[CIKUR GO] Assistant Firebase UID:",
+        firebaseUser.uid
+    );
+
+    // Ambil profile dari Firestore menggunakan UID yang sama
+    const profile =
+        await window.CikurCloud.getProfile(
+            firebaseUser.uid
+        );
+
+    if (!profile) {
+        throw new Error(
+            "Profile CIKUR GO belum ditemukan di Cloud."
+        );
+    }
+
+    if (!profile.name || !profile.phone) {
+        throw new Error(
+            "Data profile CIKUR GO belum lengkap."
+        );
+    }
+
+    userProfile = {
+        ...userProfile,
+        ...profile
+    };
+
+    console.log(
+        "[CIKUR GO] Profile Assistant berhasil dimuat:",
+        userProfile.name
+    );
+
+    return userProfile;
         }
 
         const modalMainContent = document.getElementById("modalMainContent");
