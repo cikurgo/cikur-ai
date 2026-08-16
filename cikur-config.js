@@ -38,63 +38,69 @@ const firebaseConfig = {
     measurementId: "G-WCSSXJRS0B"
 };
 
-
 // ==========================================
 // FIREBASE INITIALIZATION
 // ==========================================
 
 const app = initializeApp(firebaseConfig);
-
 const db = getFirestore(app);
-
 const auth = getAuth(app);
-
 
 // ==========================================
 // CIKUR CLOUD GLOBAL ENGINE
 // ==========================================
 
 window.CikurCloud = {
-
-    // ======================================
-    // AUTHENTICATION
-    // ======================================
-
-    auth,
-
-    getCurrentUser() {
-        return auth.currentUser;
-    },
-
     waitForAuth() {
-        return new Promise((resolve) => {
+    return new Promise((resolve) => {
 
-            const unsubscribe = onAuthStateChanged(
-                auth,
-                (user) => {
-                    unsubscribe();
-                    resolve(user);
-                }
-            );
+        const unsubscribe = onAuthStateChanged(
+            auth,
+            (user) => {
+                unsubscribe();
+                console.log(
+                    "[CIKUR GO] Auth state:",
+                    user ? user.uid : "TIDAK ADA USER"
+                );
 
-        });
-    },
+                resolve(user);
+            }
+        );
 
-    async ensureAuth() {
-
-        let user = await this.waitForAuth();
-
-        if (user) {
-            return user;
-        }
-
-        const credential =
-            await signInAnonymously(auth);
-
-        return credential.user;
-    },
-
-
+    });
+},
+async ensureAuth() {
+    // Cek user yang sudah ada terlebih dahulu
+    let user = auth.currentUser;
+    if (user) {
+        console.log(
+            "[CIKUR GO] User aktif:",
+            user.uid
+        );
+        return user;
+    }
+    // Tunggu Firebase menyelesaikan pemulihan session
+    user = await this.waitForAuth();
+    if (user) {
+        console.log(
+            "[CIKUR GO] Session dipulihkan:",
+            user.uid
+        );
+        return user;
+    }
+    // Jika benar-benar belum ada session,
+    // baru buat Anonymous User baru.
+    console.log(
+        "[CIKUR GO] Tidak ada session. Membuat Anonymous User baru..."
+    );
+    const credential =
+        await signInAnonymously(auth);
+    console.log(
+        "[CIKUR GO] Anonymous User baru:",
+        credential.user.uid
+    );
+    return credential.user;
+},
     // ======================================
     // USER PROFILE
     // ======================================
