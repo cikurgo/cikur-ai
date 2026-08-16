@@ -1012,55 +1012,45 @@
         let userProfile = null;
         const CIKUR_GO_API_BASE = window.CIKUR_GO_API_BASE || "/api";
         
-        async function loadCurrentUserProfile() {
-    let waitTime = 0;
-    // Tunggu CikurCloud benar-benar tersedia
-    while (!window.CikurCloud && waitTime < 10000) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        waitTime += 100;
-    }
-    if (!window.CikurCloud) {
-        throw new Error(
-            "CIKUR Cloud belum tersedia."
-        );
-    }
-    // Tunggu Firebase Authentication selesai memulihkan session
-    const firebaseUser =
-        await window.CikurCloud.waitForAuth();
-    if (!firebaseUser) {
-        throw new Error(
-            "Sesi akun CIKUR GO belum ditemukan."
-        );
-    }
-    console.log(
-        "[CIKUR GO] Assistant Firebase UID:",
-        firebaseUser.uid
-    );
-    // Ambil profile dari Firestore menggunakan UID yang sama
-    const profile =
-        await window.CikurCloud.getProfile(
-            firebaseUser.uid
-        );
-    if (!profile) {
-        throw new Error(
-            "Profile CIKUR GO belum ditemukan di Cloud."
-        );
-    }
-    if (!profile.name || !profile.phone) {
-        throw new Error(
-            "Data profile CIKUR GO belum lengkap."
-        );
-    }
-    userProfile = {
-        ...userProfile,
-        ...profile
-    };
-    console.log(
-        "[CIKUR GO] Profile Assistant berhasil dimuat:",
-        userProfile.name
-    );
-    return userProfile;
+/* =========================================================
+   PERBAIKAN: SINKRONISASI REAL-TIME (Copy & Paste bagian ini)
+   Gantikan fungsi loadCurrentUserProfileIndex yang lama dengan ini:
+========================================================= */
+async function loadCurrentUserProfileIndex() {
+    try {
+        // 1. Pastikan CikurCloud tersedia
+        let retries = 0;
+        while (!window.CikurCloud && retries < 20) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+            retries++;
         }
+
+        if (!window.CikurCloud) {
+            console.error("[CIKUR GO] CikurCloud tidak dimuat.");
+            return;
+        }
+
+        // 2. Dapatkan user autentikasi dari Firebase
+        const firebaseUser = await window.CikurCloud.waitForAuth();
+        
+        if (firebaseUser) {
+            // 3. Ambil data terbaru dari Firestore
+            const profile = await window.CikurCloud.getProfile(firebaseUser.uid);
+            
+            if (profile) {
+                // Update objek global agar sinkron di semua fungsi
+                userProfile = { ...userProfile, ...profile };
+                console.log("[CIKUR GO] Sinkronisasi data berhasil:", userProfile.name);
+            }
+        }
+        
+        // 4. Perbarui UI setelah data diambil
+        updateUIProfile();
+
+    } catch (error) {
+        console.error("[CIKUR GO] Gagal sinkronisasi:", error);
+    }
+    }
 
         const modalMainContent = document.getElementById("modalMainContent");
         const dataPaket = {
