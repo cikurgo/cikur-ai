@@ -1749,47 +1749,95 @@ function updateUIProfile() {
     }
 }
 
-/* =========================================================
-   PERBAIKAN: SINKRONISASI REAL-TIME (Copy & Paste bagian ini)
-   Gantikan fungsi loadCurrentUserProfileIndex yang lama dengan ini:
-========================================================= */
+// ==========================================
+// KODE UTAMA: FORM REGISTRASI & LOGIN KE FIREBASE
+// ==========================================
 
-async function loadCurrentUserProfileIndex() {
+document.addEventListener("DOMContentLoaded", async function() {
+    
+    // 1. Cek otomatis sesi saat halaman dibuka
     try {
-        // 1. Pastikan CikurCloud tersedia
         let retries = 0;
         while (!window.CikurCloud && retries < 20) {
             await new Promise(resolve => setTimeout(resolve, 200));
             retries++;
         }
 
-        if (!window.CikurCloud) {
-            console.error("[CIKUR GO] CikurCloud tidak dimuat.");
-            return;
-        }
-
-        // 2. Dapatkan user autentikasi dari Firebase
-        const firebaseUser = await window.CikurCloud.waitForAuth();
-        
-        if (firebaseUser) {
-            // 3. Ambil data terbaru dari Firestore
-            const profile = await window.CikurCloud.getProfile(firebaseUser.uid);
-            
-            if (profile) {
-                // Update objek global agar sinkron di semua fungsi
-                userProfile = { ...userProfile, ...profile };
-                console.log("[CIKUR GO] Sinkronisasi data berhasil:", userProfile.name);
+        if (window.CikurCloud) {
+            const user = await window.CikurCloud.ensureAuth();
+            if (user) {
+                const profile = await window.CikurCloud.getProfile(user.uid);
+                if (profile && profile.isLoggedIn) {
+                    // Update tampilan UI jika sudah login
+                    updateUIAkun(profile);
+                }
             }
         }
-        
-        // 4. Perbarui UI setelah data diambil
-        updateUIProfile();
+    } catch (err) {
+        console.error("Gagal memuat sesi awal:", err);
+    }
 
-    } catch (error) {
-        console.error("[CIKUR GO] Gagal sinkronisasi:", error);
+    // 2. Tangkap tombol submit form registrasi/login
+    const btnMulai = document.querySelector('.modal-aktivasi button, #btnSubmitAktivasi');
+    
+    if (btnMulai) {
+        btnMulai.addEventListener('click', async function(e) {
+            e.preventDefault();
+            
+            // Ambil input dari form
+            const inputs = document.querySelectorAll('.modal-aktivasi input, #formAktivasi input');
+            const nama = inputs[0] ? inputs[0].value.trim() : '';
+            const wa = inputs[1] ? inputs[1].value.trim() : '';
+            const pin = inputs[2] ? inputs[2].value.trim() : '';
+
+            if (!nama || !wa) {
+                alert('Silakan isi Nama dan Nomor WhatsApp terlebih dahulu!');
+                return;
+            }
+
+            try {
+                // Pastikan koneksi auth aktif via CikurCloud
+                const user = await window.CikurCloud.ensureAuth();
+
+                // Data yang akan dikirim ke Firestore
+                const userData = {
+                    name: nama,
+                    phone: wa,
+                    pin: pin,
+                    saldo: 0, // Saldo awal
+                    isLoggedIn: true,
+                    updatedAt: new Date().toISOString()
+                };
+
+                // Simpan langsung ke Cloud Firestore menggunakan fungsi bawaan cikur-config.js
+                await window.CikurCloud.saveProfile(user.uid, userData);
+
+                // Perbarui UI di halaman
+                updateUIAkun(userData);
+
+                alert('Aktivasi Berhasil & Tersimpan di Cloud!');
+
+            } catch (error) {
+                console.error("Gagal menyimpan ke Firebase:", error);
+                alert('Terjadi kesalahan saat menyimpan data.');
+            }
+        });
+    }
+});
+
+// Fungsi bantu untuk memperbarui tampilan UI Header
+function updateUIAkun(userData) {
+    const headerProfileName = document.querySelector('.profile-name, #headerUserName');
+    const modalAuth = document.getElementById('modalAuth') || document.querySelector('.modal-aktivasi');
+
+    if (headerProfileName && userData.name) {
+        headerProfileName.textContent = userData.name;
+    }
+    
+    if (modalAuth) {
+        modalAuth.style.display = 'none';
     }
 }
-
 /* =========================================================
    LOAD PROFILE SAAT index.html DIBUKA / DI-REFRESH
 ========================================================= */
