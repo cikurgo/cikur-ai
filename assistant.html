@@ -412,32 +412,6 @@
             letter-spacing: -0.2px;
         }
 
-        .service-card,
-        .paket-card,
-        .package-card {
-            transition: all 0.2s ease;
-        }
-
-        .service-card:hover,
-        .paket-card:hover,
-        .package-card:hover {
-            transform: translateY(-2px);
-        }
-
-        .service-card.active,
-        .paket-card.active,
-        .package-card.active {
-            box-shadow: 0 8px 24px rgba(220, 38, 38, 0.10);
-        }
-
-        .info-section,
-        .form-section,
-        .booking-section {
-            background: transparent !important;
-            border: 0 !important;
-            box-shadow: none !important;
-        }
-
         .assistant-location-card {
             width: 100%;
             box-sizing: border-box;
@@ -956,6 +930,7 @@
             </div>
             <div class="assistant-content" id="modalMainContent">
                 <!-- Konten form akan dimuat otomatis oleh JavaScript -->
+                <div style="text-align: center; padding: 40px; color: #64748b;">Memuat data akun...</div>
             </div>
         </div>
     </div>
@@ -1012,45 +987,52 @@
         let userProfile = null;
         const CIKUR_GO_API_BASE = window.CIKUR_GO_API_BASE || "/api";
         
-/* =========================================================
-   PERBAIKAN: SINKRONISASI REAL-TIME (Copy & Paste bagian ini)
-   Gantikan fungsi loadCurrentUserProfileIndex yang lama dengan ini:
-========================================================= */
-async function loadCurrentUserProfileIndex() {
-    try {
-        // 1. Pastikan CikurCloud tersedia
-        let retries = 0;
-        while (!window.CikurCloud && retries < 20) {
-            await new Promise(resolve => setTimeout(resolve, 200));
-            retries++;
-        }
+        /* =========================================================
+           SINKRONISASI AKUN DENGAN INDEX.HTML (CikurCloud)
+        ========================================================= */
+        async function loadCurrentUserProfile() {
+            try {
+                let retries = 0;
+                while (!window.CikurCloud && retries < 20) {
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    retries++;
+                }
 
-        if (!window.CikurCloud) {
-            console.error("[CIKUR GO] CikurCloud tidak dimuat.");
-            return;
-        }
+                if (!window.CikurCloud) {
+                    throw new Error("Sistem CikurCloud tidak dimuat.");
+                }
 
-        // 2. Dapatkan user autentikasi dari Firebase
-        const firebaseUser = await window.CikurCloud.waitForAuth();
-        
-        if (firebaseUser) {
-            // 3. Ambil data terbaru dari Firestore
-            const profile = await window.CikurCloud.getProfile(firebaseUser.uid);
-            
-            if (profile) {
-                // Update objek global agar sinkron di semua fungsi
-                userProfile = { ...userProfile, ...profile };
+                const firebaseUser = await window.CikurCloud.waitForAuth();
+                if (!firebaseUser) {
+                    throw new Error("Anda belum login di halaman utama.");
+                }
+
+                const profile = await window.CikurCloud.getProfile(firebaseUser.uid);
+                if (!profile) {
+                    throw new Error("Profil pengguna tidak ditemukan.");
+                }
+
+                userProfile = { ...profile };
                 console.log("[CIKUR GO] Sinkronisasi data berhasil:", userProfile.name);
+
+                // Setelah berhasil mendapatkan profil, cek pesanan aktif atau muat form
+                initAssistantAppLogic();
+
+            } catch (error) {
+                console.error("[CIKUR GO] Gagal sinkronisasi:", error);
+                if (modalMainContent) {
+                    modalMainContent.innerHTML = `
+                        <div class="assistant-form-container">
+                            <div class="form-section-title">Akun Diperlukan</div>
+                            <p style="font-size:11px; color:#64748b; line-height:1.5;">
+                                Pesan Sistem: <b>${error.message}</b><br><br>
+                                Silakan tutup halaman ini dan pastikan Anda sudah Login dengan benar di halaman utama.
+                            </p>
+                            <button onclick="window.location.href='index.html'" class="btn-pesan-form" style="background:#e50914; margin-top:10px;">Kembali ke Halaman Utama</button>
+                        </div>`;
+                }
             }
         }
-        
-        // 4. Perbarui UI setelah data diambil
-        updateUIProfile();
-
-    } catch (error) {
-        console.error("[CIKUR GO] Gagal sinkronisasi:", error);
-    }
-    }
 
         const modalMainContent = document.getElementById("modalMainContent");
         const dataPaket = {
@@ -1068,6 +1050,9 @@ async function loadCurrentUserProfileIndex() {
 
         function renderInitialForm() {
             if (!modalMainContent) return;
+            const userName = userProfile?.name || "Pengguna";
+            const userPhone = userProfile?.phone || "-";
+
             modalMainContent.innerHTML = `
                 <div class="assistant-form-container">
                     <div class="form-section-title">Pilih Kategori Layanan</div>
@@ -1115,11 +1100,11 @@ async function loadCurrentUserProfileIndex() {
                     <div class="modern-row modern-form-group">
                         <div class="modern-col">
                             <label>Pemesan</label>
-                            <input type="text" class="modern-input" value="${userProfile.name}" disabled style="background:#f1f5f9; color:#64748b;">
+                            <input type="text" class="modern-input" value="${userName}" disabled style="background:#f1f5f9; color:#64748b;">
                         </div>
                         <div class="modern-col">
                             <label>No. WhatsApp</label>
-                            <input type="text" class="modern-input" value="${userProfile.phone}" disabled style="background:#f1f5f9; color:#64748b;">
+                            <input type="text" class="modern-input" value="${userPhone}" disabled style="background:#f1f5f9; color:#64748b;">
                         </div>
                     </div>
                     <div class="modern-form-group">
@@ -1695,20 +1680,7 @@ async function loadCurrentUserProfileIndex() {
             });
         }
 
-        document.addEventListener("DOMContentLoaded", async function () {
-            try {
-                await loadCurrentUserProfile();
-            } catch (error) {
-                console.error("Gagal masuk Assistant:", error);
-                if (modalMainContent) {
-                    modalMainContent.innerHTML = `
-                        <div class="assistant-form-container">
-                            <div class="form-section-title">Akun diperlukan</div>
-                            <p style="font-size:11px;color:#64748b;line-height:1.5;">Pesan Sistem: <b>${error.message}</b><br><br>Silakan tutup halaman ini dan pastikan Anda sudah Login dengan benar di halaman utama.</p>
-                        </div>`;
-                }
-                return;
-            }
+        async function initAssistantAppLogic() {
             try {
                 const sourceOrigin = getSourceOrigin();
                 const response = await fetch(`${CIKUR_GO_API_BASE}/assistant/orders/active?source=${encodeURIComponent(sourceOrigin)}`, {
@@ -1734,8 +1706,16 @@ async function loadCurrentUserProfileIndex() {
             }
 
             renderInitialForm();
+        }
+
+        document.getElementById("closeAssistant").addEventListener("click", () => {
+            window.location.href = "index.html";
+        });
+
+        document.addEventListener("DOMContentLoaded", async function () {
+            await loadCurrentUserProfile();
         });
     </script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </body>
 </html>
