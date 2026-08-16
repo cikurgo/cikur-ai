@@ -1665,12 +1665,11 @@ window.addEventListener("DOMContentLoaded", function () {
     }
 });
 
-let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || {
-    name: "CIKUR USER",
-    phone: "08123456789",
-    saldo: 125000,
-    avatar: "",
-    pin: "123456"
+let userProfile = {
+    name: "",
+    phone: "",
+    saldo: 0,
+    avatar: ""
 };
 
 function updateUIProfile() {
@@ -1830,68 +1829,377 @@ if(!document.getElementById("qrisScannerAnimation")) {
 
 function bukaModalRegistrasi() {
     openModal("AKTIVASI & REGISTRASI AKUN CIKUR GO");
+
     modalMainContent.innerHTML = `
         <div style="text-align:center; margin-bottom:14px;">
-            <div style="width:56px; height:56px; border-radius:50%; background:#fee2e2; border:2px solid #E50914; color:#E50914; font-size:18px; font-weight:800; display:flex; align-items:center; justify-content:center; margin:0 auto 8px;">GO</div>
-            <h3 style="font-size:15px; font-weight:800; color:#0f172a;">Selamat Datang di CikurGo!</h3>
-            <p style="font-size:10px; color:#64748b; margin-top:2px;">Masukkan identitas Anda untuk mengaktifkan seluruh layanan.</p>
+            <div style="width:56px; height:56px; border-radius:50%; background:#fee2e2; border:2px solid #E50914; color:#E50914; font-size:18px; font-weight:800; display:flex; align-items:center; justify-content:center; margin:0 auto 8px;">
+                GO
+            </div>
+
+            <h3 style="font-size:15px; font-weight:800; color:#0f172a;">
+                Selamat Datang di CikurGo!
+            </h3>
+
+            <p style="font-size:10px; color:#64748b; margin-top:2px;">
+                Masukkan identitas Anda untuk mengaktifkan seluruh layanan.
+            </p>
         </div>
-        <div class="form-group"><label>Nama Lengkap / Panggilan</label><input type="text" id="regName" class="input-box" value="${userProfile.name !== 'CIKUR USER' ? userProfile.name : ''}"></div>
-        <div class="form-group"><label>Nomor WhatsApp / HP</label><input type="text" id="regPhone" class="input-box" value="${userProfile.phone}"></div>
-        <div class="form-group"><label>Buat 6-Digit PIN CikurPay</label><input type="password" id="regPin" maxlength="6" class="input-box" value="${userProfile.pin || ''}"></div>
-        <button class="btn-pesan-form" id="btnSimpanReg">Mulai Sekarang ✓</button>
+
+        <div class="form-group">
+            <label>Nama Lengkap / Panggilan</label>
+            <input
+                type="text"
+                id="regName"
+                class="input-box"
+                value="${userProfile.name || ""}"
+            >
+        </div>
+
+        <div class="form-group">
+            <label>Nomor WhatsApp / HP</label>
+            <input
+                type="text"
+                id="regPhone"
+                class="input-box"
+                value="${userProfile.phone || ""}"
+            >
+        </div>
+
+        <div class="form-group">
+            <label>Buat 6-Digit PIN CikurPay</label>
+            <input
+                type="password"
+                id="regPin"
+                maxlength="6"
+                class="input-box"
+                value="${userProfile.pin || ""}"
+            >
+        </div>
+
+        <button class="btn-pesan-form" id="btnSimpanReg">
+            Mulai Sekarang ✓
+        </button>
     `;
 
-    document.getElementById("btnSimpanReg").addEventListener("click", () => {
-        let nameVal = document.getElementById("regName").value.trim();
-        let phoneVal = document.getElementById("regPhone").value.trim();
-        let pinVal = document.getElementById("regPin").value.trim();
-        
-        if(!nameVal || !phoneVal) { alert("Mohon isi nama dan nomor HP Anda."); return; }
-        if(pinVal.length !== 6) { alert("PIN Keamanan CikurPay harus tepat 6 digit angka."); return; }
+    const btnSimpanReg =
+        document.getElementById("btnSimpanReg");
 
-        userProfile.name = nameVal;
-        userProfile.phone = phoneVal;
-        userProfile.pin = pinVal;
-        localStorage.setItem('cikur_user', JSON.stringify(userProfile));
-        updateUIProfile();
-        alert("Akun dan PIN CikurPay berhasil diaktifkan!");
-        document.getElementById("assistantScreen").style.display = "none";
-    });
+    if (!btnSimpanReg) return;
+
+    btnSimpanReg.addEventListener(
+        "click",
+        async () => {
+
+            const nameVal =
+                document.getElementById("regName")
+                    .value
+                    .trim();
+
+            const phoneVal =
+                document.getElementById("regPhone")
+                    .value
+                    .trim();
+
+            const pinVal =
+                document.getElementById("regPin")
+                    .value
+                    .trim();
+
+
+            // ==============================
+            // VALIDASI
+            // ==============================
+
+            if (!nameVal || !phoneVal) {
+                alert(
+                    "Mohon isi nama dan nomor HP Anda."
+                );
+                return;
+            }
+
+            if (!/^\d{6}$/.test(pinVal)) {
+                alert(
+                    "PIN Keamanan CikurPay harus tepat 6 digit angka."
+                );
+                return;
+            }
+
+
+            // ==============================
+            // CEK CIKUR CLOUD
+            // ==============================
+
+            if (!window.CikurCloud) {
+                alert(
+                    "CIKUR Cloud belum tersedia. Silakan refresh halaman."
+                );
+                return;
+            }
+
+
+            // ==============================
+            // HUBUNGKAN FIREBASE AUTH
+            // ==============================
+
+            btnSimpanReg.disabled = true;
+            btnSimpanReg.textContent =
+                "Menghubungkan akun...";
+
+            try {
+
+                const firebaseUser =
+                    await window.CikurCloud.ensureAuth();
+
+                if (!firebaseUser) {
+                    throw new Error(
+                        "Firebase User tidak tersedia."
+                    );
+                }
+
+
+                // ==============================
+                // SIMPAN PROFIL KE FIRESTORE
+                // ==============================
+
+                await window.CikurCloud.saveProfile(
+                    firebaseUser.uid,
+                    {
+                        name: nameVal,
+                        phone: phoneVal,
+                        pin: pinVal,
+                        avatar:
+                            userProfile.avatar || "",
+                        saldo:
+                            Number(
+                                userProfile.saldo || 0
+                            )
+                    }
+                );
+
+
+                // ==============================
+                // UPDATE PROFIL LOKAL UNTUK UI
+                // ==============================
+
+                userProfile = {
+                    ...userProfile,
+                    name: nameVal,
+                    phone: phoneVal,
+                    pin: pinVal
+                };
+
+
+                updateUIProfile();
+
+
+                alert(
+                    "Akun CIKUR GO berhasil diaktifkan!"
+                );
+
+
+                if (
+                    typeof closeModal ===
+                    "function"
+                ) {
+                    closeModal();
+                }
+
+
+            } catch (error) {
+
+                console.error(
+                    "[CIKUR GO] Gagal mengaktifkan akun:",
+                    error
+                );
+
+                alert(
+                    "Gagal menghubungkan akun CIKUR GO."
+                );
+
+            } finally {
+
+                btnSimpanReg.disabled = false;
+
+                btnSimpanReg.textContent =
+                    "Mulai Sekarang ✓";
+            }
+
+        }
+    );
 }
 
 function bukaModalAturPin() {
     closeHeaderDropdown();
+
     openModal("KEAMANAN PIN CIKUR PAY 🔒");
-    if (modalMainContent) {
-        modalMainContent.innerHTML = `
-            <div style="text-align:center; margin-bottom:14px;"><p style="font-size:11px; color:#64748b;">PIN CikurPay digunakan untuk mengamankan transaksi.</p></div>
-            <div class="form-group"><label>PIN Lama</label><input type="password" id="oldPin" maxlength="6" class="input-box" placeholder="6 digit PIN lama"></div>
-            <div class="form-group"><label>PIN Baru (6 Digit Angka)</label><input type="password" id="newPin" maxlength="6" class="input-box" placeholder="6 digit PIN baru"></div>
-            <div class="form-group"><label>Konfirmasi PIN Baru</label><input type="password" id="confirmPin" maxlength="6" class="input-box" placeholder="Ulangi PIN baru"></div>
-            <button class="btn-pesan-form" id="btnSimpanPin">Simpan PIN Baru ✓</button>
-        `;
-    }
 
-    const btnSimpanPin = document.getElementById("btnSimpanPin");
-    if(btnSimpanPin) {
-        btnSimpanPin.addEventListener("click", () => {
-            let oldPin = document.getElementById("oldPin").value.trim();
-            let newPin = document.getElementById("newPin").value.trim();
-            let confirmPin = document.getElementById("confirmPin").value.trim();
+    if (!modalMainContent) return;
 
-            if(userProfile.pin && userProfile.pin !== "" && oldPin !== userProfile.pin) { alert("PIN Lama yang Anda masukkan salah."); return; }
-            if(newPin.length !== 6 || isNaN(newPin)) { alert("PIN Baru harus berupa 6 digit angka."); return; }
-            if(newPin !== confirmPin) { alert("Konfirmasi PIN baru tidak cocok."); return; }
+    modalMainContent.innerHTML = `
+        <div style="text-align:center; margin-bottom:14px;">
+            <p style="font-size:11px; color:#64748b;">
+                PIN CikurPay digunakan untuk mengamankan transaksi.
+            </p>
+        </div>
 
-            userProfile.pin = newPin;
-            localStorage.setItem('cikur_user', JSON.stringify(userProfile));
-            alert("PIN CikurPay berhasil diperbarui!");
-            document.getElementById("assistantScreen").style.display = "none";
-        });
-    }
+        <div class="form-group">
+            <label>PIN Lama</label>
+            <input
+                type="password"
+                id="oldPin"
+                maxlength="6"
+                inputmode="numeric"
+                class="input-box"
+                placeholder="6 digit PIN lama"
+            >
+        </div>
+
+        <div class="form-group">
+            <label>PIN Baru (6 Digit Angka)</label>
+            <input
+                type="password"
+                id="newPin"
+                maxlength="6"
+                inputmode="numeric"
+                class="input-box"
+                placeholder="6 digit PIN baru"
+            >
+        </div>
+
+        <div class="form-group">
+            <label>Konfirmasi PIN Baru</label>
+            <input
+                type="password"
+                id="confirmPin"
+                maxlength="6"
+                inputmode="numeric"
+                class="input-box"
+                placeholder="Ulangi PIN baru"
+            >
+        </div>
+
+        <button class="btn-pesan-form" id="btnSimpanPin">
+            Simpan PIN Baru ✓
+        </button>
+    `;
+
+    const btnSimpanPin =
+        document.getElementById("btnSimpanPin");
+
+    if (!btnSimpanPin) return;
+
+    btnSimpanPin.addEventListener(
+        "click",
+        async () => {
+
+            const oldPin =
+                document.getElementById("oldPin")
+                    .value
+                    .trim();
+
+            const newPin =
+                document.getElementById("newPin")
+                    .value
+                    .trim();
+
+            const confirmPin =
+                document.getElementById("confirmPin")
+                    .value
+                    .trim();
+            // ==============================
+            // VALIDASI
+            // ==============================
+
+            if (
+                userProfile.pin &&
+                oldPin !== userProfile.pin
+            ) {
+                alert(
+                    "PIN Lama yang Anda masukkan salah."
+                );
+                return;
+            }
+
+            if (!/^\d{6}$/.test(newPin)) {
+                alert(
+                    "PIN Baru harus tepat 6 digit angka."
+                );
+                return;
+            }
+
+            if (newPin !== confirmPin) {
+                alert(
+                    "Konfirmasi PIN baru tidak cocok."
+                );
+                return;
+            }
+            // ==============================
+            // CEK CIKUR CLOUD
+            // ==============================
+
+            if (!window.CikurCloud) {
+                alert(
+                    "CIKUR Cloud belum tersedia. Silakan refresh halaman."
+                );
+                return;
+            }
+            btnSimpanPin.disabled = true;
+            btnSimpanPin.textContent =
+                "Menyimpan PIN...";
+            try {
+
+                // ==============================
+                // AMBIL FIREBASE USER
+                // ==============================
+
+                const firebaseUser =
+                    await window.CikurCloud.ensureAuth();
+
+                if (!firebaseUser) {
+                    throw new Error(
+                        "Firebase User tidak tersedia."
+                    );
+                }
+                // ==============================
+                // UPDATE PIN KE FIRESTORE
+                // ==============================
+
+                await window.CikurCloud.saveProfile(
+                    firebaseUser.uid,
+                    {
+                        pin: newPin
+                    }
+                );
+                // ==============================
+                // UPDATE DATA UI
+                // ==============================
+                userProfile.pin = newPin;
+                updateUIProfile();
+                alert(
+                    "PIN CikurPay berhasil diperbarui!"
+                );
+                if (
+                    typeof closeModal ===
+                    "function"
+                ) {
+                    closeModal();
+                }
+            } catch (error) {
+                console.error(
+                    "[CIKUR GO] Gagal memperbarui PIN:",
+                    error
+                );
+                alert(
+                    "Gagal menyimpan PIN ke Cloud."
+                );
+            } finally {
+                btnSimpanPin.disabled = false;
+                btnSimpanPin.textContent =
+                    "Simpan PIN Baru ✓";
+            }
+        }
+    );
 }
-
 function prosesLogout() {
     if(confirm("Apakah Anda yakin ingin keluar dari akun?")) {
         localStorage.removeItem('cikur_user');
