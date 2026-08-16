@@ -1021,11 +1021,11 @@
             if (!window.CikurCloud) {
                 throw new Error("Koneksi sistem Cloud lambat atau gagal dimuat.");
             }
-            // 2. Panggil waitForAuth() sesuai dengan yang ada di cikur-config.js Anda
-            const firebaseUser = await window.CikurCloud.waitForAuth();
-            if (!firebaseUser) {
-                throw new Error("Belum ada akun yang login.");
-            }
+            // 2. Pastikan Firebase Auth memiliki user yang sama
+const firebaseUser = await window.CikurCloud.ensureAuth();
+if (!firebaseUser) {
+    throw new Error("Firebase User tidak tersedia.");
+}
             // 3. Ambil data profil
             const profile = await window.CikurCloud.getProfile(firebaseUser.uid);
             if (!profile || !profile.name || !profile.phone) {
@@ -1039,7 +1039,6 @@
         }
 
         const modalMainContent = document.getElementById("modalMainContent");
-
         const dataPaket = {
             dine: { nama: "DINE-IN ASSISTANT", hargaBase: 25000, hargaStr: "Rp 25.000", personil: "1 Personil", durasi: "Hingga 30 Menit", prioritas: "Aktivitas Ringan" },
             vip: { nama: "VIP ASSISTANT", hargaBase: 89000, hargaStr: "Rp 89.000", personil: "1 Personil", durasi: "Hingga 2 Jam", prioritas: "Prioritas Pelayanan" },
