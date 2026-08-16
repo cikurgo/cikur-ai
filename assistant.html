@@ -7,35 +7,37 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     
     <style>
-/* =========================================
-   HILANGKAN EFFECT BAWAAN BROWSER
-   SAAT BUTTON / CARD DI-TAP
-========================================= */
-button,
-.service-card-option,
-.btn-pesan-form,
-.assistant-map-open-button,
-.assistant-gps-button {
-    -webkit-tap-highlight-color: transparent;
-    -webkit-touch-callout: none;
-    user-select: none;
-    -webkit-user-select: none;
-    outline: none;
-}
-/* Hilangkan outline/focus bawaan browser */
-button:focus,
-button:active,
-button:focus-visible,
-.service-card-option:focus,
-.service-card-option:active {
-    outline: none;
-    box-shadow: none;
-}
+        /* =========================================
+           HILANGKAN EFFECT BAWAAN BROWSER
+           SAAT BUTTON / CARD DI-TAP
+        ========================================= */
+        button,
+        .service-card-option,
+        .btn-pesan-form,
+        .assistant-map-open-button,
+        .assistant-gps-button {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            user-select: none;
+            -webkit-user-select: none;
+            outline: none;
+        }
 
-/* Hilangkan highlight Android saat disentuh */
-* {
-    -webkit-tap-highlight-color: transparent;
-}
+        /* Hilangkan outline/focus bawaan browser */
+        button:focus,
+        button:active,
+        button:focus-visible,
+        .service-card-option:focus,
+        .service-card-option:active {
+            outline: none;
+            box-shadow: none;
+        }
+
+        /* Hilangkan highlight Android saat disentuh */
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+
         /* CSS Khusus Assistant */
         :root {
             --primary-red: #e50914;
@@ -619,11 +621,11 @@ button:focus-visible,
             padding: 7px 10px !important;
             border: none;
             border-radius: 9px !important;
-            background: rgba(255,255,255,.94);
+            background: rgba(255, 255, 255, .94);
             color: #e50914;
             font-size: 9px !important;
             font-weight: 800;
-            box-shadow: 0 4px 12px rgba(15,23,42,.08);
+            box-shadow: 0 4px 12px rgba(15, 23, 42, .08);
         }
 
         .assistant-address-details {
@@ -958,95 +960,77 @@ button:focus-visible,
     </div>
     
     <!-- =========================================
-     ASSISTANT — MAP MODAL
-========================================= -->
-<div id="assistantMapModal">
-
-    <div class="assistant-map-modal-card">
-
-        <div class="assistant-map-modal-header">
-            <div>
-                <div class="assistant-map-modal-title">
-                    Pilih Lokasi Layanan
-                </div>
-
-                <div class="assistant-map-modal-subtitle">
-                    Geser peta untuk menentukan titik lokasi
+         ASSISTANT — MAP MODAL
+    ========================================= -->
+    <div id="assistantMapModal">
+        <div class="assistant-map-modal-card">
+            <div class="assistant-map-modal-header">
+                <div>
+                    <div class="assistant-map-modal-title">
+                        Pilih Lokasi Layanan
+                    </div>
+                    <div class="assistant-map-modal-subtitle">
+                        Geser peta untuk menentukan titik lokasi
+                    </div>
                 </div>
             </div>
+
+            <div class="assistant-map-container-wrap">
+                <div id="assistantLeafletMap"></div>
+                <button
+                    type="button"
+                    onclick="detectAssistantLocationFromMap()"
+                    class="assistant-map-gps"
+                    aria-label="Gunakan lokasi saya"
+                >
+                    ◎
+                </button>
+            </div>
+
+            <div class="assistant-map-modal-footer">
+                <button
+                    type="button"
+                    onclick="closeAssistantMapModal()"
+                    class="assistant-map-cancel"
+                >
+                    Batal
+                </button>
+                <button
+                    type="button"
+                    onclick="confirmAssistantMapLocation()"
+                    class="assistant-map-confirm"
+                >
+                    Gunakan Lokasi Ini ✓
+                </button>
+            </div>
         </div>
-
-
-        <div class="assistant-map-container-wrap">
-
-            <div id="assistantLeafletMap"></div>
-
-            <button
-                type="button"
-                onclick="detectAssistantLocationFromMap()"
-                class="assistant-map-gps"
-                aria-label="Gunakan lokasi saya"
-            >
-                ◎
-            </button>
-
-        </div>
-
-
-        <div class="assistant-map-modal-footer">
-
-            <button
-                type="button"
-                onclick="closeAssistantMapModal()"
-                class="assistant-map-cancel"
-            >
-                Batal
-            </button>
-
-            <button
-                type="button"
-                onclick="confirmAssistantMapLocation()"
-                class="assistant-map-confirm"
-            >
-                Gunakan Lokasi Ini ✓
-            </button>
-
-        </div>
-
     </div>
-
-</div>
 
     <!-- Script JavaScript Assistant -->
     <script>
-     let userProfile = null;
+        let userProfile = null;
         const CIKUR_GO_API_BASE = window.CIKUR_GO_API_BASE || "/api";
+        
         async function loadCurrentUserProfile() {
-    if (!window.CikurCloud) {
-        throw new Error("CIKUR Cloud belum dimuat.");
-    }
-    const firebaseUser =
-        await window.CikurCloud.ensureAuth();
-    if (!firebaseUser) {
-        throw new Error("Akun CIKUR GO belum tersedia.");
-    }
-    const profile =
-        await window.CikurCloud.getProfile(
-            firebaseUser.uid
-        );
-    if (!profile) {
-        throw new Error("Profil akun belum ditemukan.");
-    }
-    if (!profile.name || !profile.phone) {
-        throw new Error(
-            "Data profil customer belum lengkap."
-        );
-    }
-    userProfile = {
-        ...userProfile,
-        ...profile
-    };
-    return userProfile;
+            if (!window.CikurCloud) {
+                throw new Error("CIKUR Cloud belum dimuat.");
+            }
+            const firebaseUser = await window.CikurCloud.ensureAuth();
+            if (!firebaseUser) {
+                throw new Error("Akun CIKUR GO belum tersedia.");
+            }
+            const profile = await window.CikurCloud.getProfile(firebaseUser.uid);
+            if (!profile) {
+                throw new Error("Profil akun belum ditemukan.");
+            }
+            if (!profile.name || !profile.phone) {
+                throw new Error("Data profil customer belum lengkap.");
+            }
+            userProfile = {
+                ...userProfile,
+                ...profile
+            };
+            return userProfile;
         }
 
         const modalMainContent = document.getElementById("modalMainContent");
@@ -1320,7 +1304,7 @@ button:focus-visible,
                     });
                 } else {
                     assistantMap.invalidateSize();
-                    if(assistantCoords.lat && assistantCoords.lon) {
+                    if (assistantCoords.lat && assistantCoords.lon) {
                         assistantMap.setView([assistantCoords.lat, assistantCoords.lon], 15);
                         assistantMapMarker.setLatLng([assistantCoords.lat, assistantCoords.lon]);
                     }
@@ -1368,7 +1352,7 @@ button:focus-visible,
 
             ['dine', 'vip', 'private'].forEach(k => {
                 const el = document.getElementById(`btnOpt${k.charAt(0).toUpperCase() + k.slice(1)}`);
-                if(el) el.classList.toggle('active', k === paketKey);
+                if (el) el.classList.toggle('active', k === paketKey);
             });
 
             if (document.getElementById('displayNamaLayanan')) document.getElementById('displayNamaLayanan').innerText = info.nama;
@@ -1431,7 +1415,7 @@ button:focus-visible,
 
         function renderCustomerActiveOrder(order) {
             let chatContainer = document.getElementById("customerChatContainer");
-            if(!chatContainer) return;
+            if (!chatContainer) return;
 
             let html = '';
             (order.chats || []).forEach(c => {
@@ -1447,7 +1431,7 @@ button:focus-visible,
 
             setTimeout(() => {
                 let mapEl = document.getElementById("customerLiveMap");
-                if(mapEl && !mapEl._leaflet_id && typeof L !== 'undefined') {
+                if (mapEl && !mapEl._leaflet_id && typeof L !== 'undefined') {
                     let lat = order.location?.latitude || assistantCoords.lat || -6.32;
                     let lng = order.location?.longitude || assistantCoords.lon || 106.15;
                     let map = L.map("customerLiveMap", { zoomControl: false }).setView([lat, lng], 15);
@@ -1500,7 +1484,7 @@ button:focus-visible,
 
         function initFormEvents() {
             const selectExtraWaktuEl = document.getElementById("selectExtraWaktu");
-            if(selectExtraWaktuEl) {
+            if (selectExtraWaktuEl) {
                 selectExtraWaktuEl.value = extraUnitsCount;
                 selectExtraWaktuEl.addEventListener("change", function() {
                     extraUnitsCount = parseInt(this.value);
@@ -1607,15 +1591,15 @@ button:focus-visible,
                     this.classList.add("active");
                     selectedPaymentMethod = this.getAttribute("data-method");
 
-                    if(!paymentDetailsContainer) return;
+                    if (!paymentDetailsContainer) return;
 
-                    if(selectedPaymentMethod === "cikurpay") {
+                    if (selectedPaymentMethod === "cikurpay") {
                         paymentDetailsContainer.innerHTML = `
                             <div style="font-size:11px; color:#64748b; margin-bottom:10px;">Saldo dan autentikasi CikurPay akan diverifikasi oleh server CIKUR GO.</div>
                             <div style="font-size:11px; color:#0f172a; font-weight:700; margin-bottom:12px;">Total Tagihan: Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</div>
                             <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:var(--dark-bg);">Bayar dengan CikurPay ⚡</button>
                         `;
-                    } else if(selectedPaymentMethod === "qris") {
+                    } else if (selectedPaymentMethod === "qris") {
                         paymentDetailsContainer.innerHTML = `
                             <div style="text-align:center; margin-bottom:8px;">
                                 <p style="font-size:10px; color:#64748b; margin-bottom:8px;">Scan QRIS CIKUR untuk membayar Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</p>
@@ -1623,7 +1607,7 @@ button:focus-visible,
                             </div>
                             <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:#E50914; margin-top:8px;">Konfirmasi Bayar QRIS ✓</button>
                         `;
-                    } else if(selectedPaymentMethod === "tunai") {
+                    } else if (selectedPaymentMethod === "tunai") {
                         paymentDetailsContainer.innerHTML = `
                             <div style="font-size:11px; color:#64748b; margin-bottom:10px; text-align:center; line-height: 1.4;">Pembayaran sebesar <strong>Rp ${finalCalculatedTotal.toLocaleString('id-ID')}</strong> dilakukan secara <strong>Tunai</strong> langsung kepada petugas/asisten di lokasi.</div>
                             <button class="btn-pesan-form" id="btnEksekusiBayar" style="background:#E50914; margin-top:4px;">Pesan dengan Pembayaran Tunai ✓</button>
@@ -1732,8 +1716,7 @@ button:focus-visible,
             }
 
             renderInitialForm();
-        });                                       
-    
+        });
     </script>
     <script type="module" src="cikur-cloud.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
