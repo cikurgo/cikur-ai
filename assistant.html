@@ -988,74 +988,92 @@
         const CIKUR_GO_API_BASE = window.CIKUR_GO_API_BASE || "/api";
         
         /* =========================================================
-           SINKRONISASI AKUN DENGAN INDEX.HTML (CikurCloud)
-        ========================================================= */
-        async function loadCurrentUserProfile() {
-            try {
-                let retries = 0;
-                while (!window.CikurCloud && retries < 20) {
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                    retries++;
-                }
+   SINKRONISASI AKUN CUSTOMER DARI INDEX.HTML
+   ========================================================= */
 
-                if (!window.CikurCloud) {
-                    throw new Error("Sistem CikurCloud tidak dimuat.");
-                }
+async function loadCurrentUserProfile() {
+    try {
+        // Tunggu CikurCloud tersedia
+        let retries = 0;
 
-                const firebaseUser = await window.CikurCloud.waitForAuth();
-                if (!firebaseUser) {
-                    throw new Error("Anda belum login di halaman utama.");
-                }
-
-                const profile = await window.CikurCloud.getProfile(firebaseUser.uid);
-                if (!profile) {
-                    throw new Error("Profil pengguna tidak ditemukan.");
-                }
-
-                userProfile = { ...profile };
-                console.log("[CIKUR GO] Sinkronisasi data berhasil:", userProfile.name);
-
-                // Setelah berhasil mendapatkan profil, cek pesanan aktif atau muat form
-                initAssistantAppLogic();
-
-            } catch (error) {
-                console.error("[CIKUR GO] Gagal sinkronisasi:", error);
-                if (modalMainContent) {
-                    modalMainContent.innerHTML = `
-                        <div class="assistant-form-container">
-                            <div class="form-section-title">Akun Diperlukan</div>
-                            <p style="font-size:11px; color:#64748b; line-height:1.5;">
-                                Pesan Sistem: <b>${error.message}</b><br><br>
-                                Silakan tutup halaman ini dan pastikan Anda sudah Login dengan benar di halaman utama.
-                            </p>
-                            <button onclick="window.location.href='index.html'" class="btn-pesan-form" style="background:#e50914; margin-top:10px;">Kembali ke Halaman Utama</button>
-                        </div>`;
-                }
-            }
+        while (!window.CikurCloud && retries < 30) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+            retries++;
         }
-// ======================================
-    // AUTO LOAD / SYNC PROFILE GLOBAL
-    // ======================================
 
-    async loadGlobalProfile(updateCallback) {
-        try {
-            const user = await this.ensureAuth();
-            if (!user) return null;
-
-            const profile = await this.getProfile(user.uid);
-            if (profile) {
-                console.log("[CIKUR GO] Profil berhasil dimuat dari Cloud:", profile);
-                if (typeof updateCallback === "function") {
-                    updateCallback(profile);
-                }
-                return profile;
-            }
-        } catch (err) {
-            console.error("[CIKUR GO] Gagal memuat profil global:", err);
+        if (!window.CikurCloud) {
+            throw new Error("CikurCloud belum tersedia.");
         }
-        return null;
+
+        // Ambil Firebase Auth user yang sama dengan index.html
+        const firebaseUser = await window.CikurCloud.waitForAuth();
+
+        if (!firebaseUser) {
+            throw new Error("Akun belum terdaftar di halaman utama.");
+        }
+
+        // Ambil profil berdasarkan UID Firebase
+        const profile = await window.CikurCloud.getProfile(firebaseUser.uid);
+
+        if (!profile) {
+            throw new Error("Data profil customer tidak ditemukan.");
+        }
+
+        // Simpan ke state Assistant
+        userProfile = {
+            ...profile,
+            uid: firebaseUser.uid
+        };
+
+        console.log(
+            "[CIKUR GO ASSISTANT] Akun berhasil disinkronkan:",
+            userProfile
+        );
+
+        // Lanjutkan aplikasi Assistant
+        await initAssistantAppLogic();
+
+    } catch (error) {
+
+        console.error(
+            "[CIKUR GO ASSISTANT] Gagal sinkronisasi akun:",
+            error
+        );
+
+        if (modalMainContent) {
+            modalMainContent.innerHTML = `
+                <div class="assistant-form-container">
+
+                    <div class="form-section-title">
+                        Akun Diperlukan
+                    </div>
+
+                    <p style="
+                        font-size:11px;
+                        color:#64748b;
+                        line-height:1.5;
+                    ">
+                        Silakan kembali ke halaman utama dan
+                        lakukan registrasi terlebih dahulu.
+                    </p>
+
+                    <button
+                        onclick="window.location.href='index.html'"
+                        class="btn-pesan-form"
+                        style="
+                            background:#e50914;
+                            margin-top:10px;
+                        "
+                    >
+                        Kembali ke Halaman Utama
+                    </button>
+
+                </div>
+            `;
+        }
     }
-        
+}
+
         const modalMainContent = document.getElementById("modalMainContent");
         const dataPaket = {
             dine: { nama: "DINE-IN ASSISTANT", hargaBase: 25000, hargaStr: "Rp 25.000", personil: "1 Personil", durasi: "Hingga 30 Menit", prioritas: "Aktivitas Ringan" },
