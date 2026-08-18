@@ -1684,33 +1684,22 @@ function updateUIProfile() {
     }
 
     if (displaySaldoEl) {
-        displaySaldoEl.innerText =
-            "Rp " + userProfile.saldo.toLocaleString("id-ID");
+        displaySaldoEl.innerText = "Rp " + userProfile.saldo.toLocaleString("id-ID");
     }
 
     if (document.getElementById("profileViewName")) {
-        document.getElementById("profileViewName").innerText =
-            userProfile.name;
-
-        document.getElementById("profileViewPhone").innerText =
-            userProfile.phone;
+        document.getElementById("profileViewName").innerText = userProfile.name;
+        document.getElementById("profileViewPhone").innerText = userProfile.phone;
     }
 
     if (document.getElementById("transaksiSaldoNominal")) {
-        document.getElementById("transaksiSaldoNominal").innerText =
-            "Rp " + userProfile.saldo.toLocaleString("id-ID");
+        document.getElementById("transaksiSaldoNominal").innerText = "Rp " + userProfile.saldo.toLocaleString("id-ID");
     }
 
-    const avatarContainer =
-        document.getElementById("headerAvatar");
+    const avatarContainer = document.getElementById("headerAvatar");
+    const profileViewAvatar = document.getElementById("profileViewAvatar");
 
-    const profileViewAvatar =
-        document.getElementById("profileViewAvatar");
-
-    if (
-        userProfile.avatar &&
-        userProfile.avatar.startsWith("data:image")
-    ) {
+    if (userProfile.avatar && userProfile.avatar.startsWith("data:image")) {
         if (avatarContainer) {
             avatarContainer.innerHTML = `
                 <img
@@ -1729,9 +1718,7 @@ function updateUIProfile() {
                 >
             `;
         }
-
     } else {
-
         const initials = userProfile.name
             .split(" ")
             .map(n => n[0])
@@ -1754,7 +1741,6 @@ function updateUIProfile() {
 // ==========================================
 
 document.addEventListener("DOMContentLoaded", async function() {
-    
     // 1. Cek otomatis sesi saat halaman dibuka
     try {
         let retries = 0;
@@ -1838,97 +1824,60 @@ function updateUIAkun(userData) {
         modalAuth.style.display = 'none';
     }
 }
+
 /* =========================================================
    LOAD PROFILE SAAT index.html DIBUKA / DI-REFRESH
 ========================================================= */
 
-window.addEventListener(
-    "DOMContentLoaded",
-    async () => {
-        await loadCurrentUserProfileIndex();
-
-    }
-);
+window.addEventListener("DOMContentLoaded", async () => {
+    await loadCurrentUserProfileIndex();
+});
 
 /* =========================================================
    HEADER PROFILE DROPDOWN
 ========================================================= */
 
-const btnOpenProfileDropdown =
-    document.getElementById(
-        "btnOpenProfileDropdown"
-    );
-const headerDropdownMenu =
-    document.getElementById(
-        "headerDropdownMenu"
-    );
+const btnOpenProfileDropdown = document.getElementById("btnOpenProfileDropdown");
+const headerDropdownMenu = document.getElementById("headerDropdownMenu");
+
 function closeHeaderDropdown() {
     if (headerDropdownMenu) {
-        headerDropdownMenu.classList.remove(
-            "show"
-        );
+        headerDropdownMenu.classList.remove("show");
     }
 }
 
-if (
-    btnOpenProfileDropdown &&
-    headerDropdownMenu
-) {
-    btnOpenProfileDropdown.addEventListener(
-        "click",
-        (e) => {
-            e.stopPropagation();
-            headerDropdownMenu.classList.toggle(
-                "show"
-            );
+if (btnOpenProfileDropdown && headerDropdownMenu) {
+    btnOpenProfileDropdown.addEventListener("click", (e) => {
+        e.stopPropagation();
+        headerDropdownMenu.classList.toggle("show");
+    });
 
+    document.addEventListener("click", (e) => {
+        if (!headerDropdownMenu.contains(e.target) && !btnOpenProfileDropdown.contains(e.target)) {
+            closeHeaderDropdown();
         }
-    );
-
-    document.addEventListener(
-        "click",
-        (e) => {
-
-            if (
-                !headerDropdownMenu.contains(
-                    e.target
-                ) &&
-                !btnOpenProfileDropdown.contains(
-                    e.target
-                )
-            ) {
-
-                closeHeaderDropdown();
-
-            }
-
-        }
-    );
+    });
 }
-
 
 /* =========================================================
    EDIT PROFILE
 ========================================================= */
 
-const btnEditProfilTab =
-    document.getElementById(
-        "btnEditProfilTab"
-    );
+const btnEditProfilTab = document.getElementById("btnEditProfilTab");
+
 if (btnEditProfilTab) {
-    btnEditProfilTab.addEventListener(
-        "click",
-        () => {
-            bukaModalPengaturanProfil();
-        }
-    );
+    btnEditProfilTab.addEventListener("click", () => {
+        bukaModalPengaturanProfil();
+    });
 }
 
 function switchTab(tabName) {
     document.querySelectorAll('.tab-content-view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.bottom-nav .nav-item').forEach(n => n.classList.remove('active'));
+    
     const targetView = document.getElementById('view-' + tabName);
     if (targetView) targetView.classList.add('active');
+    
     const targetNav = document.getElementById('nav-' + tabName);
     if (targetNav) targetNav.classList.add('active');
     
@@ -1936,13 +1885,14 @@ function switchTab(tabName) {
     if (appHeader) {
         appHeader.style.display = tabName === 'beranda' ? 'flex' : 'none';
     }
+    
     const mainFooter = document.getElementById('mainFooter');
     if (mainFooter) {
         mainFooter.style.display = tabName === 'beranda' ? '' : 'none';
     }
+    
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-
 function bukaZoomBarcode() {
     openModal("QRIS CIKURPAY (ZOOM) 🔍");
     if (modalMainContent) {
