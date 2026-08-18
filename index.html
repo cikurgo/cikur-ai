@@ -1827,24 +1827,35 @@ function updateUIAkun(userData) {
 // ======================================
     // AUTO LOAD / SYNC PROFILE GLOBAL
     // ======================================
+    async function loadGlobalProfile(updateCallback) {
+    try {
+        if (!window.CikurCloud) return null;
 
-    async loadGlobalProfile(updateCallback) {
-        try {
-            const user = await this.ensureAuth();
-            if (!user) return null;
+        const user = await window.CikurCloud.ensureAuth();
+        if (!user) return null;
 
-            const profile = await this.getProfile(user.uid);
-            if (profile) {
-                console.log("[CIKUR GO] Profil berhasil dimuat dari Cloud:", profile);
-                if (typeof updateCallback === "function") {
-                    updateCallback(profile);
-                }
-                return profile;
+        const profile = await window.CikurCloud.getProfile(user.uid);
+
+        if (profile) {
+            console.log(
+                "[CIKUR GO] Profil berhasil dimuat dari Cloud:",
+                profile
+            );
+
+            if (typeof updateCallback === "function") {
+                updateCallback(profile);
             }
-        } catch (err) {
-            console.error("[CIKUR GO] Gagal memuat profil global:", err);
+
+            return profile;
         }
-        return null;
+    } catch (err) {
+        console.error(
+            "[CIKUR GO] Gagal memuat profil global:",
+            err
+        );
+    }
+
+    return null;
     }
 /* =========================================================
    LOAD PROFILE SAAT index.html DIBUKA / DI-REFRESH
