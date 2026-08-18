@@ -1962,8 +1962,7 @@ function bukaModalScanQris() {
         }
     }
 }
-
-if(!document.getElementById("qrisScannerAnimation")) {
+if (!document.getElementById("qrisScannerAnimation")) {
     const styleCam = document.createElement("style");
     styleCam.id = "qrisScannerAnimation";
     styleCam.type = "text/css";
@@ -2229,15 +2228,17 @@ const slides = document.querySelector(".slides");
 const images = document.querySelectorAll(".slides img");
 const dots = document.querySelectorAll(".dots span");
 let current = 0;
-function showSlide(index){
-    if(slides && dots.length > 0) {
+
+function showSlide(index) {
+    if (slides && dots.length > 0) {
         slides.style.transform = `translateX(-${index * 100}%)`;
         dots.forEach(dot => dot.classList.remove("active"));
         dots[index].classList.add("active");
     }
 }
+
 setInterval(() => {
-    if(images.length > 0) {
+    if (images.length > 0) {
         current = (current + 1) % images.length;
         showSlide(current);
     }
@@ -2246,8 +2247,9 @@ setInterval(() => {
 const miniSlides = document.querySelector(".mini-slides");
 const miniDots = document.querySelectorAll(".mini-dots span");
 let miniCurrent = 0;
+
 setInterval(() => {
-    if(miniSlides && miniDots.length > 0) {
+    if (miniSlides && miniDots.length > 0) {
         miniCurrent = (miniCurrent + 1) % miniDots.length;
         miniSlides.style.transform = `translateX(-${miniCurrent * 33.333}%)`;
         miniDots.forEach(d => d.classList.remove("active"));
@@ -2259,6 +2261,7 @@ const heroTrack = document.querySelector(".hero-big-track");
 const heroSlides = document.querySelectorAll(".hero-big-track img");
 const heroDots = document.querySelectorAll(".hero-dots span");
 let heroIndex = 0;
+
 function moveHeroSlide() {
     if (!heroTrack || heroSlides.length === 0) return;
     const slideWidth = heroSlides[0].getBoundingClientRect().width;
@@ -2267,16 +2270,22 @@ function moveHeroSlide() {
     const centerOffset = (containerWidth - slideWidth) / 2;
     const position = centerOffset - (heroIndex * (slideWidth + gap));
     heroTrack.style.transform = `translateX(${position}px)`;
-    heroDots.forEach((dot, index) => { dot.classList.toggle("active", index === heroIndex); });
+    heroDots.forEach((dot, index) => {
+        dot.classList.toggle("active", index === heroIndex);
+    });
 }
 
 moveHeroSlide();
+
 setInterval(() => {
     heroIndex = (heroIndex + 1) % heroSlides.length;
     moveHeroSlide();
 }, 9000);
-window.addEventListener("resize", () => { moveHeroSlide(); });
-    
+
+window.addEventListener("resize", () => {
+    moveHeroSlide();
+});
+
 const assistantScreen = document.getElementById("assistantScreen");
 const closeAssistant = document.getElementById("closeAssistant");
 const modalTitle = document.getElementById("modalTitle");
