@@ -1033,7 +1033,29 @@
                 }
             }
         }
+// ======================================
+    // AUTO LOAD / SYNC PROFILE GLOBAL
+    // ======================================
 
+    async loadGlobalProfile(updateCallback) {
+        try {
+            const user = await this.ensureAuth();
+            if (!user) return null;
+
+            const profile = await this.getProfile(user.uid);
+            if (profile) {
+                console.log("[CIKUR GO] Profil berhasil dimuat dari Cloud:", profile);
+                if (typeof updateCallback === "function") {
+                    updateCallback(profile);
+                }
+                return profile;
+            }
+        } catch (err) {
+            console.error("[CIKUR GO] Gagal memuat profil global:", err);
+        }
+        return null;
+    }
+        
         const modalMainContent = document.getElementById("modalMainContent");
         const dataPaket = {
             dine: { nama: "DINE-IN ASSISTANT", hargaBase: 25000, hargaStr: "Rp 25.000", personil: "1 Personil", durasi: "Hingga 30 Menit", prioritas: "Aktivitas Ringan" },
