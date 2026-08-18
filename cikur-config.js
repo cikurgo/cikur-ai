@@ -260,3 +260,25 @@ console.log(
 console.log(
     "[CIKUR GO] Firestore aktif."
 );
+// ======================================
+    // AUTO LOAD / SYNC PROFILE GLOBAL
+    // ======================================
+
+    async loadGlobalProfile(updateCallback) {
+        try {
+            const user = await this.ensureAuth();
+            if (!user) return null;
+
+            const profile = await this.getProfile(user.uid);
+            if (profile) {
+                console.log("[CIKUR GO] Profil berhasil dimuat dari Cloud:", profile);
+                if (typeof updateCallback === "function") {
+                    updateCallback(profile);
+                }
+                return profile;
+            }
+        } catch (err) {
+            console.error("[CIKUR GO] Gagal memuat profil global:", err);
+        }
+        return null;
+    }
