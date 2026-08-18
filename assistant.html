@@ -993,84 +993,65 @@
 
 async function loadCurrentUserProfile() {
     try {
-        // Tunggu CikurCloud tersedia
-        let retries = 0;
-
-        while (!window.CikurCloud && retries < 30) {
-            await new Promise(resolve => setTimeout(resolve, 200));
-            retries++;
-        }
-
         if (!window.CikurCloud) {
-            throw new Error("CikurCloud belum tersedia.");
+            console.warn("[CIKUR GO ASSISTANT] CikurCloud belum tersedia.");
+            initAssistantAppLogic();
+            return;
         }
 
-        // Ambil Firebase Auth user yang sama dengan index.html
-        const firebaseUser = await window.CikurCloud.waitForAuth();
+        const firebaseUser = await window.CikurCloud.ensureAuth();
 
+        // BELUM REGISTRASI → TETAP BUKA ASSISTANT
         if (!firebaseUser) {
-            throw new Error("Akun belum terdaftar di halaman utama.");
+            console.log(
+                "[CIKUR GO ASSISTANT] Customer belum terdaftar. Membuka Assistant sebagai guest."
+            );
+
+            userProfile = {
+                name: "",
+                phone: "",
+                pin: "",
+                saldo: 0,
+                avatar: "",
+                uid: null
+            };
+
+            await initAssistantAppLogic();
+            return;
         }
 
-        // Ambil profil berdasarkan UID Firebase
+        // SUDAH REGISTRASI → AMBIL PROFIL DARI FIRESTORE
         const profile = await window.CikurCloud.getProfile(firebaseUser.uid);
 
-        if (!profile) {
-            throw new Error("Data profil customer tidak ditemukan.");
-        }
-
-        // Simpan ke state Assistant
         userProfile = {
-            ...profile,
+            ...(profile || {}),
             uid: firebaseUser.uid
         };
 
         console.log(
-            "[CIKUR GO ASSISTANT] Akun berhasil disinkronkan:",
+            "[CIKUR GO ASSISTANT] Profil customer tersinkron:",
             userProfile
         );
 
-        // Lanjutkan aplikasi Assistant
         await initAssistantAppLogic();
 
     } catch (error) {
-
         console.error(
-            "[CIKUR GO ASSISTANT] Gagal sinkronisasi akun:",
+            "[CIKUR GO ASSISTANT] Sinkronisasi profil gagal:",
             error
         );
 
-        if (modalMainContent) {
-            modalMainContent.innerHTML = `
-                <div class="assistant-form-container">
+        // Error sinkronisasi TIDAK BOLEH MEMATIKAN HALAMAN
+        userProfile = {
+            name: "",
+            phone: "",
+            pin: "",
+            saldo: 0,
+            avatar: "",
+            uid: null
+        };
 
-                    <div class="form-section-title">
-                        Akun Diperlukan
-                    </div>
-
-                    <p style="
-                        font-size:11px;
-                        color:#64748b;
-                        line-height:1.5;
-                    ">
-                        Silakan kembali ke halaman utama dan
-                        lakukan registrasi terlebih dahulu.
-                    </p>
-
-                    <button
-                        onclick="window.location.href='index.html'"
-                        class="btn-pesan-form"
-                        style="
-                            background:#e50914;
-                            margin-top:10px;
-                        "
-                    >
-                        Kembali ke Halaman Utama
-                    </button>
-
-                </div>
-            `;
-        }
+        await initAssistantAppLogic();
     }
 }
 
