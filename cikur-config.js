@@ -99,14 +99,17 @@ window.CikurCloud = {
     },
 
     // ======================================
-    // USER PROFILE
+    // USER PROFILE (PERBAIKAN FINAL)
     // ======================================
 
     async saveProfile(userId, data) {
+        // Jika userId tidak dikirim dari depan, ambil otomatis dari session aktif
         if (!userId) {
-            throw new Error(
-                "User ID tidak tersedia."
-            );
+            const currentUser = await this.ensureAuth();
+            if (!currentUser) {
+                throw new Error("User ID tidak tersedia dan sesi gagal dibuat.");
+            }
+            userId = currentUser.uid;
         }
 
         await setDoc(
