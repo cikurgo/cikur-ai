@@ -51,6 +51,7 @@ const auth = getAuth(app);
 // ==========================================
 
 window.CikurCloud = {
+    auth,
     waitForAuth() {
         return new Promise((resolve) => {
             const unsubscribe = onAuthStateChanged(
