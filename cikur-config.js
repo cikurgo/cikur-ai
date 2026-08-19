@@ -52,61 +52,56 @@ const auth = getAuth(app);
 
 window.CikurCloud = {
     waitForAuth() {
-    return new Promise((resolve) => {
+        return new Promise((resolve) => {
+            const unsubscribe = onAuthStateChanged(
+                auth,
+                (user) => {
+                    unsubscribe();
+                    console.log(
+                        "[CIKUR GO] Auth state:",
+                        user ? user.uid : "TIDAK ADA USER"
+                    );
+                    resolve(user);
+                }
+            );
+        });
+    },
 
-        const unsubscribe = onAuthStateChanged(
-            auth,
-            (user) => {
-                unsubscribe();
-                console.log(
-                    "[CIKUR GO] Auth state:",
-                    user ? user.uid : "TIDAK ADA USER"
-                );
+    async ensureAuth() {
+        let user = auth.currentUser;
+        if (user) {
+            console.log(
+                "[CIKUR GO] User aktif:",
+                user.uid
+            );
+            return user;
+        }
+        
+        user = await this.waitForAuth();
+        if (user) {
+            console.log(
+                "[CIKUR GO] Session dipulihkan:",
+                user.uid
+            );
+            return user;
+        }
 
-                resolve(user);
-            }
-        );
-
-    });
-},
-async ensureAuth() {
-    // Cek user yang sudah ada terlebih dahulu
-    let user = auth.currentUser;
-    if (user) {
         console.log(
-            "[CIKUR GO] User aktif:",
-            user.uid
+            "[CIKUR GO] Tidak ada session. Membuat Anonymous User baru..."
         );
-        return user;
-    }
-    // Tunggu Firebase menyelesaikan pemulihan session
-    user = await this.waitForAuth();
-    if (user) {
+        const credential = await signInAnonymously(auth);
         console.log(
-            "[CIKUR GO] Session dipulihkan:",
-            user.uid
+            "[CIKUR GO] Anonymous User baru:",
+            credential.user.uid
         );
-        return user;
-    }
-    // Jika benar-benar belum ada session,
-    // baru buat Anonymous User baru.
-    console.log(
-        "[CIKUR GO] Tidak ada session. Membuat Anonymous User baru..."
-    );
-    const credential =
-        await signInAnonymously(auth);
-    console.log(
-        "[CIKUR GO] Anonymous User baru:",
-        credential.user.uid
-    );
-    return credential.user;
-},
+        return credential.user;
+    },
+
     // ======================================
     // USER PROFILE
     // ======================================
 
     async saveProfile(userId, data) {
-
         if (!userId) {
             throw new Error(
                 "User ID tidak tersedia."
@@ -125,15 +120,13 @@ async ensureAuth() {
     },
 
     async getProfile(userId) {
-
         if (!userId) {
             return null;
         }
 
-        const profileSnapshot =
-            await getDoc(
-                doc(db, "users", userId)
-            );
+        const profileSnapshot = await getDoc(
+            doc(db, "users", userId)
+        );
 
         if (!profileSnapshot.exists()) {
             return null;
@@ -145,6 +138,28 @@ async ensureAuth() {
         };
     },
 
+    // ======================================
+    // AUTO LOAD / SYNC PROFILE GLOBAL
+    // ======================================
+
+    async loadGlobalProfile(updateCallback) {
+        try {
+            const user = await this.ensureAuth();
+            if (!user) return null;
+
+            const profile = await this.getProfile(user.uid);
+            if (profile) {
+                console.log("[CIKUR GO] Profil berhasil dimuat dari Cloud:", profile);
+                if (typeof updateCallback === "function") {
+                    updateCallback(profile);
+                }
+                return profile;
+            }
+        } catch (err) {
+            console.error("[CIKUR GO] Gagal memuat profil global:", err);
+        }
+        return null;
+    },
 
     // ======================================
     // ORDER
@@ -154,42 +169,32 @@ async ensureAuth() {
         type,
         orderDetails
     ) {
-
         if (!type) {
             throw new Error(
                 "Tipe pesanan tidak tersedia."
             );
         }
 
-        const firebaseUser =
-            await this.ensureAuth();
+        const firebaseUser = await this.ensureAuth();
 
         const orderData = {
-
             type,
-
-            userId:
-                firebaseUser.uid,
-
+            userId: firebaseUser.uid,
             ...orderDetails,
-
             status: "PENDING",
-
             timestamp: new Date()
         };
 
-        const orderReference =
-            await addDoc(
-                collection(db, "orders"),
-                orderData
-            );
+        const orderReference = await addDoc(
+            collection(db, "orders"),
+            orderData
+        );
 
         return {
             id: orderReference.id,
             ...orderData
         };
     },
-
 
     // ======================================
     // REALTIME ORDER LISTENER
@@ -199,35 +204,25 @@ async ensureAuth() {
         type,
         callback
     ) {
-
-        const q =
-            query(
-                collection(db, "orders"),
-                where(
-                    "type",
-                    "==",
-                    type
-                )
-            );
+        const q = query(
+            collection(db, "orders"),
+            where(
+                "type",
+                "==",
+                type
+            )
+        );
 
         return onSnapshot(
             q,
             (snapshot) => {
-
                 const orders = [];
-
                 snapshot.forEach(
                     (orderSnapshot) => {
-
                         orders.push({
-
-                            id:
-                                orderSnapshot.id,
-
+                            id: orderSnapshot.id,
                             ...orderSnapshot.data()
-
                         });
-
                     }
                 );
 
@@ -237,7 +232,6 @@ async ensureAuth() {
                 ) {
                     callback(orders);
                 }
-
             }
         );
     }
@@ -260,25 +254,3 @@ console.log(
 console.log(
     "[CIKUR GO] Firestore aktif."
 );
-// ======================================
-    // AUTO LOAD / SYNC PROFILE GLOBAL
-    // ======================================
-
-    async loadGlobalProfile(updateCallback) {
-        try {
-            const user = await this.ensureAuth();
-            if (!user) return null;
-
-            const profile = await this.getProfile(user.uid);
-            if (profile) {
-                console.log("[CIKUR GO] Profil berhasil dimuat dari Cloud:", profile);
-                if (typeof updateCallback === "function") {
-                    updateCallback(profile);
-                }
-                return profile;
-            }
-        } catch (err) {
-            console.error("[CIKUR GO] Gagal memuat profil global:", err);
-        }
-        return null;
-    }
