@@ -1734,7 +1734,8 @@ function updateUIProfile() {
             profileViewAvatar.innerText = initials || "CK";
         }
     }
-}
+}  
+    
 function bukaModalRegistrasi() {
     openModal("AKTIVASI & REGISTRASI AKUN CIKUR GO");
 
@@ -1753,9 +1754,7 @@ function bukaModalRegistrasi() {
                 align-items:center;
                 justify-content:center;
                 margin:0 auto 8px;
-            ">
-                GO
-            </div>
+            ">GO</div>
 
             <h3 style="
                 font-size:15px;
@@ -1770,7 +1769,7 @@ function bukaModalRegistrasi() {
                 color:#64748b;
                 margin-top:2px;
             ">
-                Daftarkan identitas Anda untuk mengaktifkan seluruh layanan CIKUR GO.
+                Masukkan identitas Anda untuk mengaktifkan seluruh layanan.
             </p>
         </div>
 
@@ -1781,7 +1780,6 @@ function bukaModalRegistrasi() {
                 type="text"
                 id="regName"
                 class="input-box"
-                value="${userProfile.name || ""}"
                 placeholder="Masukkan nama Anda"
                 autocomplete="name"
             >
@@ -1794,7 +1792,6 @@ function bukaModalRegistrasi() {
                 type="email"
                 id="regEmail"
                 class="input-box"
-                value="${userProfile.email || ""}"
                 placeholder="contoh@email.com"
                 autocomplete="email"
                 inputmode="email"
@@ -1808,7 +1805,6 @@ function bukaModalRegistrasi() {
                 type="tel"
                 id="regPhone"
                 class="input-box"
-                value="${userProfile.phone || ""}"
                 placeholder="08xxxxxxxxxx"
                 autocomplete="tel"
                 inputmode="tel"
@@ -1823,7 +1819,6 @@ function bukaModalRegistrasi() {
                 id="regPin"
                 maxlength="6"
                 class="input-box"
-                value="${userProfile.pin || ""}"
                 placeholder="6 digit angka"
                 inputmode="numeric"
                 autocomplete="new-password"
@@ -1836,9 +1831,10 @@ function bukaModalRegistrasi() {
             line-height:1.5;
             margin:8px 2px 12px;
         ">
-            Email digunakan sebagai identitas akun customer.
-            Data akun akan tersinkron ke layanan CIKUR GO lainnya.
+            Email akan menjadi bagian dari identitas akun customer
+            dan ikut tersinkron ke layanan CIKUR GO lainnya.
         </div>
+
         <button
             class="btn-pesan-form"
             id="btnSimpanReg"
@@ -1847,75 +1843,88 @@ function bukaModalRegistrasi() {
         </button>
     `;
 
-    const btnSimpanReg = document.getElementById("btnSimpanReg");
+    const btnSimpanReg =
+        document.getElementById("btnSimpanReg");
+
     if (!btnSimpanReg) return;
+
     btnSimpanReg.addEventListener("click", async () => {
+
         const nameVal =
             document.getElementById("regName")?.value.trim() || "";
+
         const emailVal =
             document.getElementById("regEmail")?.value.trim().toLowerCase() || "";
+
         const phoneVal =
             document.getElementById("regPhone")?.value.trim() || "";
+
         const pinVal =
             document.getElementById("regPin")?.value.trim() || "";
-        /* ==========================
-           VALIDASI NAMA
-        ========================== */
+
+
+        // ==========================
+        // VALIDASI
+        // ==========================
+
         if (!nameVal) {
             alert("Mohon isi nama Anda.");
             return;
         }
-        /* ==========================
-           VALIDASI EMAIL
-        ========================== */
+
         const emailPattern =
             /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
         if (!emailVal) {
             alert("Mohon isi alamat email Anda.");
             return;
         }
+
         if (!emailPattern.test(emailVal)) {
-            alert("Format email tidak valid. Contoh: nama@email.com");
+            alert("Format email tidak valid.");
             return;
         }
-        /* ==========================
-           VALIDASI WHATSAPP
-        ========================== */
+
         if (!phoneVal) {
             alert("Mohon isi nomor WhatsApp / HP Anda.");
             return;
         }
+
         const phoneDigits =
             phoneVal.replace(/\D/g, "");
-        if (phoneDigits.length < 10 || phoneDigits.length > 15) {
+
+        if (
+            phoneDigits.length < 10 ||
+            phoneDigits.length > 15
+        ) {
             alert("Nomor WhatsApp / HP tidak valid.");
             return;
         }
-        /* ==========================
-           VALIDASI PIN
-        ========================== */
+
         if (!/^\d{6}$/.test(pinVal)) {
-            alert(
-                "PIN Keamanan CikurPay harus tepat 6 digit angka."
-            );
+            alert("PIN CikurPay harus tepat 6 digit angka.");
             return;
         }
-        /* ==========================
-           CEK CIKUR CLOUD
-        ========================== */
+
         if (!window.CikurCloud) {
             alert(
                 "CIKUR Cloud belum tersedia. Silakan refresh halaman."
             );
             return;
         }
+
+
         btnSimpanReg.disabled = true;
         btnSimpanReg.textContent =
             "Menyimpan Data Akun...";
+
+
         try {
-            /* ==========================
-               AMBIL FIREBASE USER
-            ========================== */
+
+            // ==========================
+            // FIREBASE AUTH
+            // ==========================
+
             const firebaseUser =
                 await window.CikurCloud.ensureAuth();
 
@@ -1924,76 +1933,96 @@ function bukaModalRegistrasi() {
                     "Firebase User tidak tersedia."
                 );
             }
-            /* ==========================
-               PERTAHANKAN DATA LAMA
-            ========================== */
-            const currentSaldo =
-                Number(userProfile?.saldo || 0);
-            const currentAvatar =
-                userProfile?.avatar || "";
-            /* ==========================
-               DATA CUSTOMER GLOBAL
-            ========================== */
+
+
+            // ==========================
+            // DATA CUSTOMER
+            // ==========================
+
             const customerProfile = {
                 uid: firebaseUser.uid,
+
                 name: nameVal,
+
                 email: emailVal,
+
                 phone: phoneVal,
+
                 pin: pinVal,
-                avatar: currentAvatar,
-                saldo: currentSaldo,
+
+                avatar: userProfile?.avatar || "",
+
+                saldo: Number(
+                    userProfile?.saldo || 0
+                ),
+
                 isLoggedIn: true,
+
                 updatedAt:
                     new Date().toISOString()
             };
-            /* ==========================
-               SIMPAN KE CIKUR CLOUD
-            ========================== */
+
+
+            // ==========================
+            // SIMPAN KE FIRESTORE
+            // ==========================
+
             await window.CikurCloud.saveProfile(
                 firebaseUser.uid,
                 customerProfile
             );
 
-            /* ==========================
-               UPDATE STATE LOCAL
-            ========================== */
+
+            // ==========================
+            // UPDATE STATE
+            // ==========================
+
             userProfile = {
                 ...userProfile,
                 ...customerProfile
             };
 
-            /* ==========================
-               UPDATE UI
-            ========================== */
-            if (typeof updateUIProfile === "function") {
+
+            // ==========================
+            // UPDATE UI
+            // ==========================
+
+            if (
+                typeof updateUIProfile === "function"
+            ) {
                 updateUIProfile();
             }
-            if (typeof updateUIAkun === "function") {
+
+            if (
+                typeof updateUIAkun === "function"
+            ) {
                 updateUIAkun(customerProfile);
             }
 
-            /* ==========================
-               BERHASIL
-            ========================== */
+
             alert(
-                "Registrasi CIKUR GO berhasil!\n\n" +
-                "Akun Anda sudah tersimpan dan dapat digunakan " +
-                "di layanan CIKUR GO lainnya."
+                "Registrasi CIKUR GO berhasil!"
             );
 
-            if (typeof closeModal === "function") {
+            if (
+                typeof closeModal === "function"
+            ) {
                 closeModal();
             }
+
         } catch (error) {
+
             console.error(
                 "[CIKUR GO] Gagal menyimpan registrasi:",
                 error
             );
+
             alert(
-                "Registrasi gagal disimpan.\n\n" +
-                "Silakan coba lagi."
+                "Registrasi gagal disimpan. Silakan coba lagi."
             );
+
         } finally {
+
             btnSimpanReg.disabled = false;
 
             btnSimpanReg.textContent =
@@ -2001,7 +2030,7 @@ function bukaModalRegistrasi() {
         }
     });
 }
-
+    
 // Fungsi bantu untuk memperbarui tampilan UI Header
 function updateUIAkun(userData) {
     const headerProfileName = document.querySelector('.profile-name, #headerUserName');
