@@ -29,7 +29,7 @@ import {
 // ==========================================
 
 const firebaseConfig = {
-    apiKey: "AIzaSyBV2dQa-Mon5zPuNHA6Tda4L4aLoeL_QDw",
+    apiKey: "AIzaSyBV2dQa-MoN5zPuNHA6Tda4L4aLoeL_QDw",
     authDomain: "cikur-go-indonesia.firebaseapp.com",
     projectId: "cikur-go-indonesia",
     storageBucket: "cikur-go-indonesia.firebasestorage.app",
