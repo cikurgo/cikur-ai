@@ -1569,13 +1569,14 @@ footer p { margin: 0; }
     </div>
 
     <!-- VIEW 4: INBOX -->
-    <div id="view-inbox" class="tab-content-view">
+        <div id="view-inbox" class="tab-content-view">
         <div class="services-title" style="margin-top: 8px;">Pesan & Notifikasi</div>
-        <div style="background: #fff; border: 1px solid var(--border-color); border-radius: 16px; padding: 14px; margin-bottom: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-            <h4 style="font-size: 12px; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">🎉 Promo Spesial Akhir Pekan!</h4>
-            <p style="font-size: 10px; color: var(--text-muted); line-height: 1.4;">Nikmati diskon s.d 50% untuk semua layanan CIKUR GO hari ini.</p>
+        <div id="inboxMessagesContainer">
+            <div style="background: #fff; border: 1px solid var(--border-color); border-radius: 16px; padding: 24px 14px; margin-bottom: 10px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+                <p style="font-size: 11px; color: var(--text-muted);">Belum ada pesan atau notifikasi.</p>
+            </div>
         </div>
-    </div>
+        </div>
 
     <!-- VIEW 5: PROFIL -->
     <div id="view-profil" class="tab-content-view">
@@ -2235,7 +2236,7 @@ function bukaModalScanQris() {
             .then((stream) => {
                 mediaStreamInstance = stream;
                 videoElement.srcObject = stream;
-                if(statusText) statusText.innerText = "Kamera aktif. Silakan pindai QRIS.";
+                                if(statusText) statusText.innerText = "Kamera aktif. Fitur pemindaian QRIS sedang dalam pengembangan.";
             })
             .catch((err) => {
                 console.error("Gagal mengakses kamera:", err);
@@ -2601,20 +2602,10 @@ function bukaModalTopUp() {
         });
     });
 
-    const btnProsesGatewayEl = document.getElementById("btnProsesGateway");
+       const btnProsesGatewayEl = document.getElementById("btnProsesGateway");
     if (btnProsesGatewayEl) {
         btnProsesGatewayEl.addEventListener("click", () => {
-            const customValEl = document.getElementById("customTopupVal");
-            let customVal = customValEl ? customValEl.value : "";
-            let finalAmount = customVal ? parseInt(customVal) : selectedTopupAmount;
-
-            if(!finalAmount || finalAmount < 10000) { alert("Minimum top-up adalah Rp 10.000"); return; }
-
-            userProfile.saldo += finalAmount;
-            localStorage.setItem('cikur_user', JSON.stringify(userProfile));
-            updateUIProfile();
-            alert(`Top-up sebesar Rp ${finalAmount.toLocaleString('id-ID')} berhasil!`);
-            closeModal();
+            alert("Fitur Top-Up CikurPay sedang dalam tahap pengembangan. Akan segera hadir!");
         });
     }
 }
