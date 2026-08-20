@@ -1160,7 +1160,7 @@ async function loadCurrentUserProfile() {
         let extraUnitsCount = 0;
         let finalCalculatedTotal = 25000;
         let selectedPaymentMethod = "cikurpay";
-        let chatSyncInterval = null;
+        
 
         function renderInitialForm() {
             if (!modalMainContent) return;
@@ -1168,13 +1168,6 @@ const userName = userProfile?.name || "Pengguna";
 const userEmail = userProfile?.email || "-";
 const userPhone = userProfile?.phone || "-";
 
-console.log(
-    "[TEST EMAIL ASSISTANT]",
-    "userProfile:",
-    userProfile,
-    "email:",
-    userEmail
-);
             modalMainContent.innerHTML = `
                 <div class="assistant-form-container">
                     <div class="form-section-title">Pilih Kategori Layanan</div>
@@ -1633,26 +1626,7 @@ async function sendCustomerChatFromUI() {
         alert("Pesan belum berhasil dikirim.");
     }
 }
-        async function loadCustomerChatUI(orderId) {
-            try {
-                const response = await fetch(`${CIKUR_GO_API_BASE}/assistant/orders/${encodeURIComponent(orderId)}`, { credentials: "include", headers: { "Accept": "application/json" } });
-                if (!response.ok) return;
-                const data = await response.json();
-                const order = data.order || data;
-                if (!order?.id) return;
-
-                if (order.status === "DEAL" || order.status === "DEAL_CONFIRMED" || order.payment?.status === "DEAL") {
-                    if (chatSyncInterval) clearInterval(chatSyncInterval);
-                    tampilkanMenuPembayaran(dataPaket[order.packageKey] || dataPaket['dine'], order.pricing.total, order.pricing.extraUnits, order);
-                    return;
-                }
-                renderCustomerActiveOrder(order);
-            } catch (error) {
-                console.error("Gagal mengambil status pesanan:", error);
-            }
-        }
-
-       
+        
         function initFormEvents() {
             const selectExtraWaktuEl = document.getElementById("selectExtraWaktu");
             if (selectExtraWaktuEl) {
