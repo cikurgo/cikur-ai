@@ -2054,6 +2054,71 @@ function updateUIAkun(userData) {
    LOAD PROFILE SAAT index.html DIBUKA / DI-REFRESH
 ========================================================= */
 
+async function loadCurrentUserProfileIndex() {
+    try {
+        let retries = 0;
+
+        while (!window.CikurCloud && retries < 30) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+            retries++;
+        }
+
+        if (!window.CikurCloud) {
+            console.warn("[CIKUR GO] CikurCloud belum tersedia. Guest Mode.");
+            updateUIProfile();
+            return;
+        }
+
+        let firebaseUser = null;
+
+        try {
+            firebaseUser = await window.CikurCloud.waitForAuth();
+        } catch (authError) {
+            console.warn("[CIKUR GO] Auth belum tersedia:", authError);
+            firebaseUser = null;
+        }
+
+        if (!firebaseUser) {
+            console.log("[CIKUR GO] Belum ada sesi login. Guest Mode.");
+            updateUIProfile();
+            return;
+        }
+
+        let profile = null;
+
+        try {
+            profile = await window.CikurCloud.getProfile(firebaseUser.uid);
+        } catch (profileError) {
+            console.error("[CIKUR GO] Gagal mengambil profil:", profileError);
+            profile = null;
+        }
+
+        if (!profile) {
+            console.log("[CIKUR GO] UID ditemukan, tetapi profil belum tersedia.");
+            updateUIProfile();
+            return;
+        }
+
+        userProfile = {
+            ...userProfile,
+            ...profile,
+            uid: firebaseUser.uid
+        };
+
+        console.log("[CIKUR GO] Profil berhasil dimuat dari Cloud:", userProfile);
+
+        updateUIProfile();
+
+        if (typeof updateUIAkun === "function") {
+            updateUIAkun(userProfile);
+        }
+
+    } catch (error) {
+        console.error("[CIKUR GO] Gagal memuat profil saat startup:", error);
+        updateUIProfile();
+    }
+}
+
 window.addEventListener("DOMContentLoaded", async () => {
     await loadCurrentUserProfileIndex();
 });
