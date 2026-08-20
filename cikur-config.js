@@ -12,9 +12,13 @@ import {
     onSnapshot,
     query,
     where,
+    orderBy,
+    limit,
     setDoc,
+    updateDoc,
     doc,
-    getDoc
+    getDoc,
+    serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 import {
@@ -201,7 +205,7 @@ window.CikurCloud = {
     },
 
     // ======================================
-    // REALTIME ORDER LISTENER
+    // REALTIME ORDER LISTENER (SEMUA ORDER PER TYPE)
     // ======================================
 
     listenOrders(
@@ -238,6 +242,144 @@ window.CikurCloud = {
                 }
             }
         );
+    },
+
+    // ======================================
+    // AMBIL 1 ORDER (SEKALI, TANPA REALTIME)
+    // ======================================
+
+    async getOrder(orderId) {
+        if (!orderId) return null;
+
+        const orderSnapshot = await getDoc(
+            doc(db, "orders", orderId)
+        );
+
+        if (!orderSnapshot.exists()) return null;
+
+        return {
+            id: orderSnapshot.id,
+            ...orderSnapshot.data()
+        };
+    },
+
+    // ======================================
+    // DENGARKAN 1 ORDER SECARA REALTIME
+    // (dipakai Customer & Mitra memantau status/DEAL)
+    // ======================================
+
+    listenOrder(orderId, callback) {
+        if (!orderId) return () => {};
+
+        return onSnapshot(
+            doc(db, "orders", orderId),
+            (orderSnapshot) => {
+                if (!orderSnapshot.exists()) {
+                    if (typeof callback === "function") callback(null);
+                    return;
+                }
+                if (typeof callback === "function") {
+                    callback({
+                        id: orderSnapshot.id,
+                        ...orderSnapshot.data()
+                    });
+                }
+            }
+        );
+    },
+
+    // ======================================
+    // UPDATE STATUS / DATA ORDER
+    // (dipakai Mitra: terima/tolak/DEAL, dan
+    //  Customer: setelah bayar)
+    // ======================================
+
+    async updateOrderStatus(orderId, updateData) {
+        if (!orderId) throw new Error("Order ID tidak tersedia.");
+
+        await updateDoc(
+            doc(db, "orders", orderId),
+            {
+                ...updateData,
+                updatedAt: serverTimestamp()
+            }
+        );
+
+        return true;
+    },
+
+    // ======================================
+    // CARI ORDER AKTIF CUSTOMER (untuk pemulihan
+    // sesi saat halaman dibuka/refresh)
+    // ======================================
+
+    async getActiveOrderForCustomer(userId, type) {
+        if (!userId || !type) return null;
+
+        const q = query(
+            collection(db, "orders"),
+            where("userId", "==", userId),
+            where("type", "==", type),
+            where("status", "in", ["PENDING", "DEAL", "DEAL_CONFIRMED", "PAID"]),
+            orderBy("timestamp", "desc"),
+            limit(1)
+        );
+
+        const snapshot = await new Promise((resolve, reject) => {
+            const unsubscribe = onSnapshot(
+                q,
+                (snap) => { unsubscribe(); resolve(snap); },
+                (err) => { unsubscribe(); reject(err); }
+            );
+        });
+
+        if (snapshot.empty) return null;
+
+        const firstDoc = snapshot.docs[0];
+        return { id: firstDoc.id, ...firstDoc.data() };
+    },
+
+    // ======================================
+    // CHAT PER ORDER (sub-collection orders/{id}/messages)
+    // ======================================
+
+    async sendOrderMessage(orderId, sender, text) {
+        if (!orderId) throw new Error("Order ID tidak tersedia.");
+        if (!text || !text.trim()) throw new Error("Pesan tidak boleh kosong.");
+
+        await addDoc(
+            collection(db, "orders", orderId, "messages"),
+            {
+                sender,
+                text: text.trim(),
+                timestamp: serverTimestamp()
+            }
+        );
+
+        return true;
+    },
+
+    listenOrderMessages(orderId, callback) {
+        if (!orderId) return () => {};
+
+        const q = query(
+            collection(db, "orders", orderId, "messages"),
+            orderBy("timestamp", "asc")
+        );
+
+        return onSnapshot(q, (snapshot) => {
+            const messages = [];
+            snapshot.forEach((msgSnapshot) => {
+                messages.push({
+                    id: msgSnapshot.id,
+                    ...msgSnapshot.data()
+                });
+            });
+
+            if (typeof callback === "function") {
+                callback(messages);
+            }
+        });
     }
 
 };
