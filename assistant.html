@@ -984,44 +984,32 @@
 
     <!-- Script JavaScript Assistant -->
     <script>
-        let userProfile = null;
-        const CIKUR_GO_API_BASE = window.CIKUR_GO_API_BASE || "/api";
-        
+        let userProfile = null;  
    /* =========================================================
    SINKRONISASI CUSTOMER DARI INDEX.HTML
    - Guest tetap bisa membuka Assistant
    - Customer terdaftar otomatis mengambil profil Cloud
    ========================================================= */
-
 async function loadCurrentUserProfile() {
     try {
-
         // ==========================================
         // 1. TUNGGU CIKUR CLOUD SIAP
         // ==========================================
-
         let retries = 0;
-
         while (!window.CikurCloud && retries < 30) {
             await new Promise(resolve =>
                 setTimeout(resolve, 200)
             );
-
             retries++;
         }
-
-
         // ==========================================
         // 2. CIKUR CLOUD TIDAK TERSEDIA
         //    → TETAP BUKA SEBAGAI GUEST
         // ==========================================
-
         if (!window.CikurCloud) {
-
             console.warn(
                 "[CIKUR GO ASSISTANT] CikurCloud belum tersedia. Guest Mode."
             );
-
             userProfile = {
                 uid: null,
                 name: "",
@@ -1032,46 +1020,31 @@ async function loadCurrentUserProfile() {
                 saldo: 0,
                 isLoggedIn: false
             };
-
             initAssistantAppLogic();
-
             return;
         }
-
-
         // ==========================================
         // 3. CEK CUSTOMER YANG SUDAH TERDAFTAR
         // ==========================================
-
         let firebaseUser = null;
-
         try {
-
             firebaseUser =
                 await window.CikurCloud.waitForAuth();
-
         } catch (authError) {
-
             console.warn(
                 "[CIKUR GO ASSISTANT] Auth belum tersedia:",
                 authError
             );
-
             firebaseUser = null;
         }
-
-
         // ==========================================
         // 4. BELUM REGISTRASI / BELUM LOGIN
         //    → GUEST MODE
         // ==========================================
-
         if (!firebaseUser) {
-
             console.log(
                 "[CIKUR GO ASSISTANT] Customer belum terdaftar. Guest Mode."
             );
-
             userProfile = {
                 uid: null,
                 name: "",
@@ -1082,49 +1055,34 @@ async function loadCurrentUserProfile() {
                 saldo: 0,
                 isLoggedIn: false
             };
-
             initAssistantAppLogic();
-
             return;
         }
-
-
         // ==========================================
         // 5. CUSTOMER SUDAH PUNYA FIREBASE UID
         //    → AMBIL PROFIL DARI CLOUD
         // ==========================================
-
         let profile = null;
-
         try {
-
             profile =
                 await window.CikurCloud.getProfile(
                     firebaseUser.uid
                 );
-
         } catch (profileError) {
-
             console.error(
                 "[CIKUR GO ASSISTANT] Gagal mengambil profil:",
                 profileError
             );
-
             profile = null;
         }
-
-
         // ==========================================
         // 6. UID ADA TAPI PROFIL BELUM ADA
         //    → TETAP BUKA SEBAGAI GUEST
         // ==========================================
-
         if (!profile) {
-
             console.log(
                 "[CIKUR GO ASSISTANT] UID ditemukan, tetapi profil belum tersedia."
             );
-
             userProfile = {
                 uid: firebaseUser.uid,
                 name: "",
@@ -1135,18 +1093,13 @@ async function loadCurrentUserProfile() {
                 saldo: 0,
                 isLoggedIn: false
             };
-
             initAssistantAppLogic();
-
             return;
         }
-
-
         // ==========================================
         // 7. CUSTOMER TERDAFTAR
         //    → SINKRONKAN SELURUH PROFIL
         // ==========================================
-
         userProfile = {
             uid: firebaseUser.uid,
             name: profile.name || "",
@@ -1170,19 +1123,16 @@ async function loadCurrentUserProfile() {
         // ==========================================
         // 8. BUKA APLIKASI ASSISTANT
         // ==========================================
-
         initAssistantAppLogic();
     } catch (error) {
         // ==========================================
         // 9. ERROR TAK TERDUGA
         //    → JANGAN MATIKAN ASSISTANT
         // ==========================================
-
         console.error(
             "[CIKUR GO ASSISTANT] Error sinkronisasi:",
             error
         );
-
         userProfile = {
             uid: null,
             name: "",
