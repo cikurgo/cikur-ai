@@ -2012,17 +2012,22 @@ function bukaModalRegistrasi() {
 
         } catch (error) {
 
-            console.error(
-                "[CIKUR GO] Gagal menyimpan registrasi:",
-                error
-            );
+    console.error(
+        "[CIKUR GO] Gagal menyimpan registrasi:",
+        error
+    );
 
-            alert(
-                "Registrasi gagal disimpan. Silakan coba lagi."
-            );
+    // DEBUG: tampilkan kode & pesan error asli dari
+    // Firebase (auth/... atau permission-denied dsb)
+    // supaya penyebab pastinya langsung terlihat.
+    const errorCode = error?.code ? ` (${error.code})` : "";
+    const errorDetail = error?.message || String(error);
 
-        } finally {
+    alert(
+        `Registrasi gagal disimpan${errorCode}: ${errorDetail}`
+    );
 
+} finally {
             btnSimpanReg.disabled = false;
 
             btnSimpanReg.textContent =
