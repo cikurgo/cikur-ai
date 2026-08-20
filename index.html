@@ -2492,6 +2492,7 @@ function bukaModalPengaturanProfil() {
             <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:14px; margin-bottom:14px;">
                 <div class="form-group"><label>Ganti Foto Profil</label><input type="file" id="inputFotoProfil" accept="image/*" class="input-box" style="font-size:11px; padding:7px; background:#fff;"></div>
                 <div class="form-group"><label>Nama Lengkap</label><input type="text" id="inputNamaUser" class="input-box" value="${userProfile.name}"></div>
+                <div class="form-group"><label>Email</label><input type="email" id="inputEmailUser" class="input-box" value="${userProfile.email || ''}" placeholder="contoh@email.com"></div>
                 <div class="form-group" style="margin-bottom:0;"><label>Nomor WhatsApp / HP</label><input type="text" id="inputPhoneUser" class="input-box" value="${userProfile.phone}"></div>
             </div>
             <button class="btn-pesan-form" id="btnSimpanProfil">Simpan Perubahan ✓</button>
@@ -2517,17 +2518,54 @@ function bukaModalPengaturanProfil() {
 
     const btnSimpanProfilEl = document.getElementById("btnSimpanProfil");
     if (btnSimpanProfilEl) {
-        btnSimpanProfilEl.addEventListener("click", () => {
+        btnSimpanProfilEl.addEventListener("click", async () => {
             let newName = document.getElementById("inputNamaUser").value.trim();
+            let newEmail = document.getElementById("inputEmailUser").value.trim().toLowerCase();
             let newPhone = document.getElementById("inputPhoneUser").value.trim();
+
             if(!newName || !newPhone) { alert("Nama dan No HP tidak boleh kosong."); return; }
+
+            const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (newEmail && !emailPattern.test(newEmail)) {
+                alert("Format email tidak valid.");
+                return;
+            }
+
             userProfile.name = newName;
+            userProfile.email = newEmail;
             userProfile.phone = newPhone;
             userProfile.avatar = temporaryAvatar;
-            localStorage.setItem('cikur_user', JSON.stringify(userProfile));
-            updateUIProfile();
-            alert("Profil berhasil diperbarui!");
-            closeModal();
+
+            btnSimpanProfilEl.disabled = true;
+            btnSimpanProfilEl.textContent = "Menyimpan...";
+
+            try {
+                if (window.CikurCloud) {
+                    const firebaseUser = await window.CikurCloud.ensureAuth();
+                    if (firebaseUser) {
+                        await window.CikurCloud.saveProfile(firebaseUser.uid, {
+                            name: newName,
+                            email: newEmail,
+                            phone: newPhone,
+                            avatar: temporaryAvatar
+                        });
+                    }
+                }
+
+                localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+                updateUIProfile();
+                alert("Profil berhasil diperbarui!");
+                closeModal();
+
+            } catch (error) {
+                console.error("[CIKUR GO] Gagal menyimpan profil:", error);
+                const errorCode = error?.code ? ` (${error.code})` : "";
+                alert(`Gagal menyimpan profil ke Cloud${errorCode}: ${error?.message || error}`);
+
+            } finally {
+                btnSimpanProfilEl.disabled = false;
+                btnSimpanProfilEl.textContent = "Simpan Perubahan ✓";
+            }
         });
     }
 }
