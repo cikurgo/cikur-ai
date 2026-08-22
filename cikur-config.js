@@ -171,6 +171,47 @@ window.CikurCloud = {
     },
 
     // ======================================
+    // PENDAFTARAN MITRA (Agent CGO / Resto / Driver)
+    // Status: pending -> approved / rejected
+    // Dokumen id: mitra_applications/{uid}_{jenis}
+    // ======================================
+
+    async submitMitraApplication(userId, jenis, formData) {
+        if (!userId || !jenis) throw new Error("Data pendaftaran tidak lengkap.");
+
+        await setDoc(
+            doc(db, "mitra_applications", `${userId}_${jenis}`),
+            {
+                uid: userId,
+                jenis,
+                status: "pending",
+                ...formData,
+                submittedAt: serverTimestamp()
+            },
+            { merge: true }
+        );
+
+        return true;
+    },
+
+    listenMitraApplication(userId, jenis, callback) {
+        if (!userId || !jenis) return () => {};
+
+        return onSnapshot(
+            doc(db, "mitra_applications", `${userId}_${jenis}`),
+            (snapshot) => {
+                if (!snapshot.exists()) {
+                    if (typeof callback === "function") callback(null);
+                    return;
+                }
+                if (typeof callback === "function") {
+                    callback({ id: snapshot.id, ...snapshot.data() });
+                }
+            }
+        );
+    },
+
+    // ======================================
     // USER PROFILE (PERBAIKAN FINAL)
     // ======================================
 
