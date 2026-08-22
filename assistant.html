@@ -547,7 +547,9 @@
             right: 0;
             z-index: 1000;
             display: none;
-            overflow: hidden;
+            max-height: 260px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
             background: #ffffff;
             border: 1px solid #e5e7eb;
             border-radius: 15px;
@@ -1333,7 +1335,7 @@
                 
                 updateAssistantLocationStatus("Mencari alamat...");
                 assistantAddressSearchTimeout = setTimeout(() => {
-                    fetch(`${CIKUR_GO_API_BASE}/location/search?q=${encodeURIComponent(query)}&country=ID&limit=8`, { credentials: "include", headers: { "Accept": "application/json" } })
+                    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=id&limit=8`, { headers: { "Accept": "application/json" } })
                     .then(res => res.json())
                     .then(data => {
                         if (!data || !data.length) {
@@ -1406,7 +1408,7 @@
         function reverseGeocodeAssistantLocation() {
             const input = document.getElementById("assistantAddressInput");
             updateAssistantLocationStatus("Mengambil nama lokasi...");
-            fetch(`${CIKUR_GO_API_BASE}/location/reverse?lat=${assistantCoords.lat}&lon=${assistantCoords.lon}`, { credentials: "include", headers: { "Accept": "application/json" } })
+            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${assistantCoords.lat}&lon=${assistantCoords.lon}`, { headers: { "Accept": "application/json" } })
             .then(res => res.json())
             .then(data => {
                 if (input) input.value = data && data.display_name ? data.display_name : `Koordinat: ${assistantCoords.lat.toFixed(5)}, ${assistantCoords.lon.toFixed(5)}`;
