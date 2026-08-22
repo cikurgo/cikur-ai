@@ -8,108 +8,109 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     
     <style>
-        /* =========================================
-           HILANGKAN EFFECT BAWAAN BROWSER
-           SAAT BUTTON / CARD DI-TAP
-        ========================================= */
-        button,
-        .service-card-option,
-        .btn-pesan-form,
-        .assistant-map-open-button,
-        .assistant-gps-button {
-            -webkit-tap-highlight-color: transparent;
-            -webkit-touch-callout: none;
-            user-select: none;
-            -webkit-user-select: none;
-            outline: none;
-        }
-
-        /* Hilangkan outline/focus bawaan browser */
-        button:focus,
-        button:active,
-        button:focus-visible,
-        .service-card-option:focus,
-        .service-card-option:active {
-            outline: none;
-            box-shadow: none;
-        }
-
-        /* Hilangkan highlight Android saat disentuh */
-        * {
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        /* CSS Khusus Assistant */
-        :root {
-            --primary-red: #e50914;
-            --dark-bg: #0b0f19;
-            --dark-card: #1e293b;
-            --border-color: #cbd5e1;
-            --text-main: #0f172a;
-            --text-muted: #64748b;
-            --font-mono: monospace;
-        }
         
-        body {
-            font-family: Arial, sans-serif;
-            background: #f8fafc;
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
-        }
+/* ==========================================================================
+   1. RESET & KONFIGURASI UMUM (Global & Reset Tap Highlight)
+========================================================================== */
+button,
+.service-card-option,
+.btn-pesan-form,
+.assistant-map-open-button,
+.assistant-gps-button {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+    -webkit-user-select: none;
+    outline: none;
+}
 
-        .assistant-screen {
-            width: 100%;
-            min-height: 100vh;
-            margin: 0;
-            background: #ffffff;
-            border-radius: 0;
-            box-shadow: none;
-            overflow: hidden;
-        }
+button:focus,
+button:active,
+button:focus-visible,
+.service-card-option:focus,
+.service-card-option:active {
+    outline: none;
+    box-shadow: none;
+}
 
-        .assistant-page {
-            width: 100%;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
+* {
+    -webkit-tap-highlight-color: transparent;
+}
 
-        .assistant-content {
+:root {
+    --primary-red: #e50914;
+    --dark-bg: #0b0f19;
+    --dark-card: #1e293b;
+    --border-color: #cbd5e1;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --font-mono: monospace;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: #f8fafc;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+}
+
+
+/* ==========================================================================
+   2. LAYOUT UTAMA ASSISTANT SCREEN
+   ========================================================================== */
+.assistant-screen {
+    width: 100%;
+    min-height: 100vh;
+    margin: 0;
+    background: #ffffff;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: hidden;
+}
+
+.assistant-page {
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.assistant-content {
     flex: 1;
     width: 100%;
     box-sizing: border-box;
     padding: 18px 10px 40px;
-        }
+}
 
-        .assistant-top {
-            position: sticky;
-            top: 0;
-            z-index: 50;
-            background: #ffffff;
-            color: var(--text-main);
-            padding: 14px 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-weight: 800;
-            font-size: 13px;
-            letter-spacing: 0.3px;
-            border-bottom: 1px solid #e2e8f0;
-        }
+.assistant-top {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: #ffffff;
+    color: var(--text-main);
+    padding: 14px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 800;
+    font-size: 13px;
+    letter-spacing: 0.3px;
+    border-bottom: 1px solid #e2e8f0;
+}
 
-        #closeAssistant {
-            background: #f1f5f9;
-            border: none;
-            color: var(--text-main);
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
-            font-size: 20px;
-            cursor: pointer;
-        }
+#closeAssistant {
+    background: #f1f5f9;
+    border: none;
+    color: var(--text-main);
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    font-size: 20px;
+    cursor: pointer;
+}
 
-        .assistant-form-container {
+.assistant-form-container {
     width: 100%;
     box-sizing: border-box;
     background: #ffffff;
@@ -118,541 +119,562 @@
     padding: 0;
     margin: 0;
     box-shadow: none;
-        }
+}
+
 .assistant-form-container *,
 .assistant-content * {
     box-sizing: border-box;
 }
-        .service-type-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 10px;
-            margin: 0;
-            padding: 0;
-        }
 
-        .service-card-option {
-            position: relative;
-            height: 132px;
-            padding: 14px 8px 12px;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 9px;
-            background: #ffffff;
-            border: 1px solid #e7ebf0;
-            border-radius: 20px;
-            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
-            cursor: pointer;
-            overflow: hidden;
-            transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease, background .22s ease;
-        }
 
-        .service-card-option:active {
-            transform: scale(.97);
-        }
+/* ==========================================================================
+   3. KARTU PILIHAN LAYANAN (Service Cards Grid)
+   ========================================================================== */
+.service-type-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+}
 
-        .service-card-option:hover {
-            border-color: #d7dde5;
-            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
-        }
+.service-card-option {
+    position: relative;
+    height: 132px;
+    padding: 14px 8px 12px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    background: #ffffff;
+    border: 1px solid #e7ebf0;
+    border-radius: 20px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+    cursor: pointer;
+    overflow: hidden;
+    transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease, background .22s ease;
+}
 
-        .service-card-option.active {
-            background: linear-gradient(180deg, #fffafa 0%, #fff3f3 100%);
-            border: 1.5px solid #e50914;
-            box-shadow: 0 8px 22px rgba(229, 9, 20, 0.10);
-        }
+.service-card-option:active {
+    transform: scale(.97);
+}
 
-        .service-card-option.active::after {
-            content: "";
-            position: absolute;
-            top: 9px;
-            right: 9px;
-            width: 7px;
-            height: 7px;
-            background: #e50914;
-            border-radius: 50%;
-            box-shadow: 0 0 0 4px rgba(229, 9, 20, 0.08);
-        }
+.service-card-option:hover {
+    border-color: #d7dde5;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
 
-        .service-card-option img {
-            width: 58px;
-            height: 58px;
-            object-fit: contain;
-            display: block;
-            transition: transform .25s ease, filter .25s ease;
-        }
+.service-card-option.active {
+    background: linear-gradient(180deg, #fffafa 0%, #fff3f3 100%);
+    border: 1.5px solid #e50914;
+    box-shadow: 0 8px 22px rgba(229, 9, 20, 0.10);
+}
 
-        .service-card-option.active img {
-            transform: scale(1.06);
-        }
+.service-card-option.active::after {
+    content: "";
+    position: absolute;
+    top: 9px;
+    right: 9px;
+    width: 7px;
+    height: 7px;
+    background: #e50914;
+    border-radius: 50%;
+    box-shadow: 0 0 0 4px rgba(229, 9, 20, 0.08);
+}
 
-        .service-card-option .title {
-            font-size: 12px;
-            font-weight: 800;
-            color: #172033;
-            text-transform: uppercase;
-            letter-spacing: .3px;
-            line-height: 1;
-        }
+.service-card-option img {
+    width: 58px;
+    height: 58px;
+    object-fit: contain;
+    display: block;
+    transition: transform .25s ease, filter .25s ease;
+}
 
-        .service-card-option.active .title {
-            color: #d91f26;
-        }
+.service-card-option.active img {
+    transform: scale(1.06);
+}
 
-        .form-section-title {
-            position: relative;
-            display: flex;
-            align-items: center;
-            margin: 22px 0 13px !important;
-            padding: 0 !important;
-            background: transparent !important;
-            border: none !important;
-            color: #172033 !important;
-            font-size: 15px !important;
-            font-weight: 800 !important;
-            letter-spacing: -.2px !important;
-        }
+.service-card-option .title {
+    font-size: 12px;
+    font-weight: 800;
+    color: #172033;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+    line-height: 1;
+}
 
-        .form-section-title::before {
-            content: "";
-            width: 4px;
-            height: 18px;
-            margin-right: 9px;
-            background: #e50914;
-            border-radius: 999px;
-            display: inline-block;
-        }
+.service-card-option.active .title {
+    color: #d91f26;
+}
 
-        .modern-form-group {
-            margin-bottom: 12px !important;
-        }
 
-        .modern-form-group label {
-            display: block;
-            margin-bottom: 7px;
-            color: #64748b !important;
-            font-size: 11px !important;
-            font-weight: 800 !important;
-            letter-spacing: .3px;
-            text-transform: uppercase;
-        }
+/* ==========================================================================
+   4. FORM & INPUT ELEMENTS (Modern Inputs & Rows)
+   ========================================================================== */
+.form-section-title {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin: 22px 0 13px !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    color: #172033 !important;
+    font-size: 15px !important;
+    font-weight: 800 !important;
+    letter-spacing: -.2px !important;
+}
 
-        .modern-input {
-            width: 100%;
-            min-height: 50px;
-            box-sizing: border-box;
-            padding: 13px 15px;
-            background: #f8fafc !important;
-            border: 1px solid #e2e8f0 !important;
-            border-radius: 15px !important;
-            color: #172033 !important;
-            font-size: 14px !important;
-            font-weight: 600;
-            box-shadow: none !important;
-            transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
-        }
+.form-section-title::before {
+    content: "";
+    width: 4px;
+    height: 18px;
+    margin-right: 9px;
+    background: #e50914;
+    border-radius: 999px;
+    display: inline-block;
+}
 
-        .modern-input:hover {
-            border-color: #cbd5e1 !important;
-        }
+.modern-form-group {
+    margin-bottom: 12px !important;
+}
 
-        .modern-input:focus {
-            background: #ffffff !important;
-            border-color: #e50914 !important;
-            outline: none !important;
-            box-shadow: 0 0 0 3px rgba(229, 9, 20, .07) !important;
-        }
+.modern-form-group label {
+    display: block;
+    margin-bottom: 7px;
+    color: #64748b !important;
+    font-size: 11px !important;
+    font-weight: 800 !important;
+    letter-spacing: .3px;
+    text-transform: uppercase;
+}
 
-        .modern-input:disabled {
-            background: #f5f7fa !important;
-            color: #64748b !important;
-            opacity: 1 !important;
-            cursor: default;
-        }
+.modern-input {
+    width: 100%;
+    min-height: 50px;
+    box-sizing: border-box;
+    padding: 13px 15px;
+    background: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 15px !important;
+    color: #172033 !important;
+    font-size: 14px !important;
+    font-weight: 600;
+    box-shadow: none !important;
+    transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
 
-        select.modern-input {
+.modern-input:hover {
+    border-color: #cbd5e1 !important;
+}
+
+.modern-input:focus {
+    background: #ffffff !important;
+    border-color: #e50914 !important;
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(229, 9, 20, .07) !important;
+}
+
+.modern-input:disabled {
+    background: #f5f7fa !important;
+    color: #64748b !important;
+    opacity: 1 !important;
+    cursor: default;
+}
+
+select.modern-input {
     appearance: auto;
     cursor: pointer;
     min-height: 50px;
-        }
+}
 
-        input[type="date"].modern-input {
-            color: #334155 !important;
-        }
+input[type="date"].modern-input {
+    color: #334155 !important;
+}
 
-        .modern-input-layanan {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 52px;
-            box-sizing: border-box;
-            padding: 12px 16px;
-            background: #fff7f7 !important;
-            border: 1px solid #fecaca !important;
-            border-radius: 15px !important;
-            color: #d91f26 !important;
-            font-size: 14px !important;
-            font-weight: 800 !important;
-            letter-spacing: .2px;
-            font-family: var(--font-mono);
-        }
+.modern-input-layanan {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 52px;
+    box-sizing: border-box;
+    padding: 12px 16px;
+    background: #fff7f7 !important;
+    border: 1px solid #fecaca !important;
+    border-radius: 15px !important;
+    color: #d91f26 !important;
+    font-size: 14px !important;
+    font-weight: 800 !important;
+    letter-spacing: .2px;
+    font-family: var(--font-mono);
+}
 
-        .modern-row {
-            display: grid !important;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px !important;
-        }
+.modern-row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px !important;
+}
 
-        .modern-col {
-            flex: 1;
-        }
+.modern-col {
+    flex: 1;
+}
 
-        .modern-textarea {
+.modern-textarea {
     min-height: 92px !important;
     height: 92px !important;
     padding: 13px 15px !important;
     line-height: 1.45;
     resize: vertical;
-        }
+}
 
-        .modern-input::placeholder {
-            color: #94a3b8 !important;
-            font-weight: 500;
-        }
+.modern-input::placeholder {
+    color: #94a3b8 !important;
+    font-weight: 500;
+}
 
-        .modern-total-box {
-            background: linear-gradient(135deg, var(--dark-bg), var(--dark-card));
-            color: #fff;
-            padding: 12px 14px;
-            border-radius: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin: 14px 0 10px 0;
-            box-shadow: 0 6px 16px rgba(11, 15, 25, 0.2);
-        }
 
-        .modern-total-label {
-            font-size: 10px;
-            font-weight: 700;
-            color: #94a3b8;
-            text-transform: uppercase;
-        }
+/* ==========================================================================
+   5. TOTAL, INVOICE, & PAYMENT OPTIONS
+   ========================================================================== */
+.modern-total-box {
+    background: linear-gradient(135deg, var(--dark-bg), var(--dark-card));
+    color: #fff;
+    padding: 12px 14px;
+    border-radius: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 14px 0 10px 0;
+    box-shadow: 0 6px 16px rgba(11, 15, 25, 0.2);
+}
 
-        .modern-total-value {
-            font-size: 15px;
-            font-weight: 800;
-            color: #FFD700;
-            font-family: var(--font-mono);
-        }
+.modern-total-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+}
 
-        .paket-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 7px 10px !important;
-            background: #f7f8fa !important;
-            border: 1px solid #edf0f3;
-            border-radius: 999px !important;
-            color: #475569 !important;
-            font-size: 11px !important;
-            font-weight: 700 !important;
-            box-shadow: none !important;
-        }
+.modern-total-value {
+    font-size: 15px;
+    font-weight: 800;
+    color: #FFD700;
+    font-family: var(--font-mono);
+}
 
-        .rincian-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            color: var(--text-muted);
-            margin-bottom: 4px;
-        }
+.paket-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 10px !important;
+    background: #f7f8fa !important;
+    border: 1px solid #edf0f3;
+    border-radius: 999px !important;
+    color: #475569 !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    box-shadow: none !important;
+}
 
-        .btn-pesan-form {
-            width: 100%;
-            padding: 12px;
-            color: #fff;
-            border: none;
-            border-radius: 10px;
-            font-size: 12px;
-            font-weight: 800;
-            cursor: pointer;
-            text-transform: uppercase;
-        }
+.rincian-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
 
-        .invoice-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            margin-bottom: 6px;
-            font-weight: 600;
-            color: var(--text-main);
-        }
+.btn-pesan-form {
+    width: 100%;
+    padding: 12px;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    text-transform: uppercase;
+}
 
-        .pay-method-option {
-            flex: 1;
-            padding: 8px;
-            background: #fff;
-            border: 1px solid var(--border-color);
-            border-radius: 14px !important;
-            font-size: 11px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: .2s ease;
-        }
+.invoice-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    margin-bottom: 6px;
+    font-weight: 600;
+    color: var(--text-main);
+}
 
-        .pay-method-option.active {
-            background: var(--primary-red);
-            color: #fff;
-            border-color: var(--primary-red);
-        }
+.pay-method-option {
+    flex: 1;
+    padding: 8px;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 14px !important;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: .2s ease;
+}
 
-        /* SECTION UTILITY & LOCATION CARD */
-        .assistant-content > div {
-            border-radius: 0;
-        }
+.pay-method-option.active {
+    background: var(--primary-red);
+    color: #fff;
+    border-color: var(--primary-red);
+}
 
-        .assistant-content h3,
-        .assistant-content h4 {
-            letter-spacing: -0.2px;
-        }
 
-        .assistant-location-card {
-            width: 100%;
-            box-sizing: border-box;
-            padding: 15px !important;
-            background: #ffffff;
-            border: 1px solid #e8edf2;
-            border-radius: 20px !important;
-            box-shadow: 0 4px 16px rgba(15, 23, 42, .045) !important;
-            margin-bottom: 16px;
-        }
+/* ==========================================================================
+   6. LOCATION CARD & ADDRESS SEARCH WIDGET
+   ========================================================================== */
+.assistant-content > div {
+    border-radius: 0;
+}
 
-        .assistant-location-header {
-            display: flex;
-            align-items: center;
-            gap: 10px !important;
-            margin-bottom: 12px !important;
-        }
+.assistant-content h3,
+.assistant-content h4 {
+    letter-spacing: -0.2px;
+}
 
-        .assistant-location-icon {
-            width: 37px !important;
-            height: 37px !important;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            background: #fff1f2;
-            border-radius: 11px !important;
-            font-size: 17px !important;
-        }
+.assistant-location-card {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 15px !important;
+    background: #ffffff;
+    border: 1px solid #e8edf2;
+    border-radius: 20px !important;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, .045) !important;
+    margin-bottom: 16px;
+}
 
-        .assistant-location-title {
-            color: #172033;
-            font-size: 13px !important;
-            font-weight: 850;
-            line-height: 1.2;
-        }
+.assistant-location-header {
+    display: flex;
+    align-items: center;
+    gap: 10px !important;
+    margin-bottom: 12px !important;
+}
 
-        .assistant-location-subtitle {
-            margin-top: 3px;
-            color: #94a3b8;
-            font-size: 9.5px !important;
-            font-weight: 600;
-            line-height: 1.3;
-        }
+.assistant-location-icon {
+    width: 37px !important;
+    height: 37px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: #fff1f2;
+    border-radius: 11px !important;
+    font-size: 17px !important;
+}
 
-        .assistant-address-search-wrap {
-            position: relative;
-            display: flex;
-            align-items: center;
-            width: 100%;
-            min-height: 47px !important;
-            box-sizing: border-box;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 13px !important;
-            transition: .2s ease;
-        }
+.assistant-location-title {
+    color: #172033;
+    font-size: 13px !important;
+    font-weight: 850;
+    line-height: 1.2;
+}
 
-        .assistant-address-search-wrap:focus-within {
-            background: #ffffff;
-            border-color: #e50914;
-            box-shadow: 0 0 0 3px rgba(229, 9, 20, .06);
-        }
+.assistant-location-subtitle {
+    margin-top: 3px;
+    color: #94a3b8;
+    font-size: 9.5px !important;
+    font-weight: 600;
+    line-height: 1.3;
+}
 
-        .assistant-search-icon {
-            width: 38px !important;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #94a3b8;
-            font-size: 19px !important;
-            flex-shrink: 0;
-        }
+.assistant-address-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 47px !important;
+    box-sizing: border-box;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 13px !important;
+    transition: .2s ease;
+}
 
-        .assistant-address-input {
-            flex: 1;
-            min-width: 0;
-            height: 45px !important;
-            padding: 0 6px;
-            border: none;
-            outline: none;
-            background: transparent;
-            color: #172033;
-            font-size: 12px !important;
-            font-weight: 600;
-        }
+.assistant-address-search-wrap:focus-within {
+    background: #ffffff;
+    border-color: #e50914;
+    box-shadow: 0 0 0 3px rgba(229, 9, 20, .06);
+}
 
-        .assistant-address-input::placeholder {
-            color: #94a3b8;
-            font-weight: 500;
-        }
+.assistant-search-icon {
+    width: 38px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    font-size: 19px !important;
+    flex-shrink: 0;
+}
 
-        .assistant-gps-button {
-            width: 34px !important;
-            height: 34px !important;
-            margin-right: 5px !important;
-            border: none;
-            border-radius: 10px !important;
-            background: #ffffff;
-            color: #e50914;
-            font-size: 19px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            box-shadow: 0 2px 7px rgba(15, 23, 42, .06);
-        }
+.assistant-address-input {
+    flex: 1;
+    min-width: 0;
+    height: 45px !important;
+    padding: 0 6px;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: #172033;
+    font-size: 12px !important;
+    font-weight: 600;
+}
 
-        .assistant-address-suggestions {
-            position: absolute;
-            top: calc(100% + 6px);
-            left: 0;
-            right: 0;
-            z-index: 1000;
-            display: none;
-            overflow: hidden;
-            background: #ffffff;
-            border: 1px solid #e5e7eb;
-            border-radius: 15px;
-            box-shadow: 0 14px 30px rgba(15, 23, 42, .12);
-        }
+.assistant-address-input::placeholder {
+    color: #94a3b8;
+    font-weight: 500;
+}
 
-        .assistant-address-suggestions > div {
-            padding: 12px 14px;
-            border-bottom: 1px solid #f1f5f9;
-            color: #334155;
-            font-size: 11px;
-            cursor: pointer;
-        }
+.assistant-gps-button {
+    width: 34px !important;
+    height: 34px !important;
+    margin-right: 5px !important;
+    border: none;
+    border-radius: 10px !important;
+    background: #ffffff;
+    color: #e50914;
+    font-size: 19px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 7px rgba(15, 23, 42, .06);
+}
 
-        .assistant-address-suggestions > div:last-child {
-            border-bottom: none;
-        }
+.assistant-address-suggestions {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    display: none;
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 15px;
+    box-shadow: 0 14px 30px rgba(15, 23, 42, .12);
+}
 
-        .assistant-address-suggestions > div:active {
-            background: #fff7f7;
-        }
+.assistant-address-suggestions > div {
+    padding: 12px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+    font-size: 11px;
+    cursor: pointer;
+}
 
-        .assistant-map-preview {
-            position: relative;
-            height: 132px !important;
-            margin-top: 9px !important;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, #f1f5f9, #e9eef3);
-            border: 1px solid #e2e8f0;
-            border-radius: 15px !important;
-            cursor: pointer;
-        }
+.assistant-address-suggestions > div:last-child {
+    border-bottom: none;
+}
 
-        .assistant-map-placeholder {
-            text-align: center;
-            padding: 15px !important;
-        }
+.assistant-address-suggestions > div:active {
+    background: #fff7f7;
+}
 
-        .assistant-map-pin {
-            font-size: 24px !important;
-            margin-bottom: 3px !important;
-        }
+.assistant-map-preview {
+    position: relative;
+    height: 132px !important;
+    margin-top: 9px !important;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #f1f5f9, #e9eef3);
+    border: 1px solid #e2e8f0;
+    border-radius: 15px !important;
+    cursor: pointer;
+}
 
-        .assistant-map-main-text {
-            color: #334155;
-            font-size: 11px !important;
-            font-weight: 800;
-        }
+.assistant-map-placeholder {
+    text-align: center;
+    padding: 15px !important;
+}
 
-        .assistant-map-sub-text {
-            max-width: 230px;
-            margin: 4px auto 0;
-            color: #94a3b8;
-            font-size: 8.5px !important;
-            font-weight: 600;
-            line-height: 1.4;
-        }
+.assistant-map-pin {
+    font-size: 24px !important;
+    margin-bottom: 3px !important;
+}
 
-        .assistant-map-open-button {
-            position: absolute;
-            right: 8px !important;
-            bottom: 8px !important;
-            padding: 7px 10px !important;
-            border: none;
-            border-radius: 9px !important;
-            background: rgba(255, 255, 255, .94);
-            color: #e50914;
-            font-size: 9px !important;
-            font-weight: 800;
-            box-shadow: 0 4px 12px rgba(15, 23, 42, .08);
-        }
+.assistant-map-main-text {
+    color: #334155;
+    font-size: 11px !important;
+    font-weight: 800;
+}
 
-        .assistant-address-details {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px !important;
-            margin-top: 8px !important;
-        }
+.assistant-map-sub-text {
+    max-width: 230px;
+    margin: 4px auto 0;
+    color: #94a3b8;
+    font-size: 8.5px !important;
+    font-weight: 600;
+    line-height: 1.4;
+}
 
-        .assistant-detail-field {
-            display: flex;
-            align-items: center;
-            min-width: 0;
-            height: 43px !important;
-            box-sizing: border-box;
-            padding: 0 10px !important;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 11px !important;
-        }
+.assistant-map-open-button {
+    position: absolute;
+    right: 8px !important;
+    bottom: 8px !important;
+    padding: 7px 10px !important;
+    border: none;
+    border-radius: 9px !important;
+    background: rgba(255, 255, 255, .94);
+    color: #e50914;
+    font-size: 9px !important;
+    font-weight: 800;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, .08);
+}
 
-        .assistant-detail-icon {
-            margin-right: 6px !important;
-            color: #94a3b8;
-            font-size: 12px !important;
-        }
+.assistant-address-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px !important;
+    margin-top: 8px !important;
+}
 
-        .assistant-detail-field input {
-            width: 100%;
-            min-width: 0;
-            border: none;
-            outline: none;
-            background: transparent;
-            color: #334155;
-            font-size: 9.5px !important;
-            font-weight: 600;
-        }
+.assistant-detail-field {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    height: 43px !important;
+    box-sizing: border-box;
+    padding: 0 10px !important;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 11px !important;
+}
 
-        .assistant-detail-field input::placeholder {
-            color: #94a3b8;
-            font-weight: 500;
-        }
+.assistant-detail-icon {
+    margin-right: 6px !important;
+    color: #94a3b8;
+    font-size: 12px !important;
+}
 
-        .assistant-location-status {
+.assistant-detail-field input {
+    width: 100%;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: #334155;
+    font-size: 9.5px !important;
+    font-weight: 600;
+}
+
+.assistant-detail-field input::placeholder {
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+
+/* ==========================================================================
+   7. LOCATION STATUS INDICATORS (Loading, Success, Error)
+   ========================================================================== */
+.assistant-location-status {
     display: flex;
     align-items: center;
     gap: 6px !important;
@@ -672,7 +694,6 @@
     transition: background 0.25s ease;
 }
 
-/* STATUS: SEDANG MENCARI */
 .assistant-location-status.is-loading {
     color: #d97706;
 }
@@ -682,7 +703,6 @@
     animation: assistantStatusPulse 1s infinite;
 }
 
-/* STATUS: BERHASIL */
 .assistant-location-status.is-success {
     color: #16a34a;
 }
@@ -691,7 +711,6 @@
     background: #22c55e;
 }
 
-/* STATUS: GAGAL */
 .assistant-location-status.is-error {
     color: #dc2626;
 }
@@ -700,274 +719,282 @@
     background: #ef4444;
 }
 
-/* Titik berkedip saat proses */
 @keyframes assistantStatusPulse {
     0%, 100% {
         opacity: 1;
         transform: scale(1);
     }
-
     50% {
         opacity: 0.45;
         transform: scale(0.85);
     }
 }
 
-        .assistant-note-group {
-            margin-top: 13px !important;
-        }
+.assistant-note-group {
+    margin-top: 13px !important;
+}
 
-        /* MAP MODAL */
-        #assistantMapModal {
-            position: fixed;
-            inset: 0;
-            z-index: 99999;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            padding: 12px;
-            box-sizing: border-box;
-            background: rgba(15, 23, 42, .48);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-        }
 
-        .assistant-map-modal-card {
-            width: 100%;
-            max-width: 440px;
-            overflow: hidden;
-            background: #ffffff;
-            border-radius: 24px;
-            box-shadow: 0 24px 70px rgba(15, 23, 42, .22);
-        }
+/* ==========================================================================
+   8. MAP MODAL & INTERACTIVE MAP VIEW
+   ========================================================================== */
+#assistantMapModal {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    box-sizing: border-box;
+    background: rgba(15, 23, 42, .48);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
 
-        .assistant-map-modal-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 15px 16px;
-            border-bottom: 1px solid #eef2f6;
-        }
+.assistant-map-modal-card {
+    width: 100%;
+    max-width: 440px;
+    overflow: hidden;
+    background: #ffffff;
+    border-radius: 24px;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, .22);
+}
 
-        .assistant-map-modal-title {
-            color: #172033;
-            font-size: 14px;
-            font-weight: 850;
-        }
+.assistant-map-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 16px;
+    border-bottom: 1px solid #eef2f6;
+}
 
-        .assistant-map-modal-subtitle {
-            margin-top: 3px;
-            color: #94a3b8;
-            font-size: 9px;
-            font-weight: 600;
-        }
+.assistant-map-modal-title {
+    color: #172033;
+    font-size: 14px;
+    font-weight: 850;
+}
 
-        .assistant-map-close {
-            width: 34px;
-            height: 34px;
-            border: none;
-            border-radius: 11px;
-            background: #f8fafc;
-            color: #64748b;
-            font-size: 22px;
-            line-height: 1;
-            cursor: pointer;
-        }
+.assistant-map-modal-subtitle {
+    margin-top: 3px;
+    color: #94a3b8;
+    font-size: 9px;
+    font-weight: 600;
+}
 
-        .assistant-map-container-wrap {
-            position: relative;
-            width: 100%;
-            height: 350px;
-        }
+.assistant-map-close {
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 11px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
 
-        #assistantLeafletMap {
-            width: 100%;
-            height: 100%;
-        }
+.assistant-map-container-wrap {
+    position: relative;
+    width: 100%;
+    height: 350px;
+}
 
-        .assistant-map-gps {
-            position: absolute;
-            right: 14px;
-            bottom: 14px;
-            z-index: 1000;
-            width: 44px;
-            height: 44px;
-            border: none;
-            border-radius: 14px;
-            background: #ffffff;
-            color: #e50914;
-            font-size: 20px;
-            box-shadow: 0 5px 15px rgba(15, 23, 42, .16);
-            cursor: pointer;
-        }
+#assistantLeafletMap {
+    width: 100%;
+    height: 100%;
+}
 
-        .assistant-map-modal-footer {
-            display: flex;
-            gap: 9px;
-            padding: 13px 14px;
-            border-top: 1px solid #eef2f6;
-        }
+.assistant-map-gps {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    z-index: 1000;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 14px;
+    background: #ffffff;
+    color: #e50914;
+    font-size: 20px;
+    box-shadow: 0 5px 15px rgba(15, 23, 42, .16);
+    cursor: pointer;
+}
 
-        .assistant-map-cancel,
-        .assistant-map-confirm {
-            flex: 1;
-            min-height: 48px;
-            border-radius: 13px;
-            font-size: 11px;
-            font-weight: 800;
-            cursor: pointer;
-        }
+.assistant-map-modal-footer {
+    display: flex;
+    gap: 9px;
+    padding: 13px 14px;
+    border-top: 1px solid #eef2f6;
+}
 
-        .assistant-map-cancel {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            color: #64748b;
-        }
+.assistant-map-cancel,
+.assistant-map-confirm {
+    flex: 1;
+    min-height: 48px;
+    border-radius: 13px;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+}
 
-        .assistant-map-confirm {
-            background: #e50914;
-            border: none;
-            color: #ffffff;
-            box-shadow: 0 7px 16px rgba(229, 9, 20, .16);
-        }
+.assistant-map-cancel {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    color: #64748b;
+}
 
-        /* DEAL / CHECKOUT & PAYMENT */
-        #btnRequestDeal {
-            width: 100%;
-            min-height: 56px;
-            margin-top: 10px;
-            padding: 14px 18px;
-            border: none !important;
-            border-radius: 16px !important;
-            background: #e50914 !important;
-            color: #ffffff !important;
-            font-size: 15px !important;
-            font-weight: 800 !important;
-            letter-spacing: .1px;
-            box-shadow: 0 8px 20px rgba(229, 9, 20, .18) !important;
-            cursor: pointer;
-            transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
-        }
+.assistant-map-confirm {
+    background: #e50914;
+    border: none;
+    color: #ffffff;
+    box-shadow: 0 7px 16px rgba(229, 9, 20, .16);
+}
 
-        #btnRequestDeal:hover {
-            box-shadow: 0 10px 25px rgba(229, 9, 20, .24) !important;
-            transform: translateY(-1px);
-        }
 
-        #btnRequestDeal:active {
-            transform: scale(.98);
-        }
+/* ==========================================================================
+   9. DEAL/CHECKOUT BUTTON & PAYMENT MODAL
+   ========================================================================== */
+#btnRequestDeal {
+    width: 100%;
+    min-height: 56px;
+    margin-top: 10px;
+    padding: 14px 18px;
+    border: none !important;
+    border-radius: 16px !important;
+    background: #e50914 !important;
+    color: #ffffff !important;
+    font-size: 15px !important;
+    font-weight: 800 !important;
+    letter-spacing: .1px;
+    box-shadow: 0 8px 20px rgba(229, 9, 20, .18) !important;
+    cursor: pointer;
+    transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
+}
 
-        .invoice-box,
-        .total-box,
-        .booking-total {
-            margin-top: 18px !important;
-            padding: 16px !important;
-            background: #f8fafc !important;
-            border: 1px solid #e8edf2 !important;
-            border-radius: 16px !important;
-            box-shadow: none !important;
-        }
+#btnRequestDeal:hover {
+    box-shadow: 0 10px 25px rgba(229, 9, 20, .24) !important;
+    transform: translateY(-1px);
+}
 
-        .invoice-box strong,
-        .total-box strong,
-        .booking-total strong {
-            color: #172033;
-        }
+#btnRequestDeal:active {
+    transform: scale(.98);
+}
 
-        #paymentModal,
-        .payment-modal,
-        #modalPembayaran {
-            background: rgba(15, 23, 42, .42) !important;
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-        }
+.invoice-box,
+.total-box,
+.booking-total {
+    margin-top: 18px !important;
+    padding: 16px !important;
+    background: #f8fafc !important;
+    border: 1px solid #e8edf2 !important;
+    border-radius: 16px !important;
+    box-shadow: none !important;
+}
 
-        #paymentModal > div,
-        .payment-modal > div,
-        .payment-panel {
-            width: min(100% - 24px, 440px) !important;
-            max-height: 90vh;
-            margin: auto;
-            background: #ffffff !important;
-            border: 0 !important;
-            border-radius: 24px !important;
-            box-shadow: 0 24px 70px rgba(15, 23, 42, .20) !important;
-            overflow: hidden;
-            animation: paymentPanelIn .25s ease;
-        }
+.invoice-box strong,
+.total-box strong,
+.booking-total strong {
+    color: #172033;
+}
 
-        @keyframes paymentPanelIn {
-            from {
-                opacity: 0;
-                transform: translateY(18px) scale(.98);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
-        }
+#paymentModal,
+.payment-modal,
+#modalPembayaran {
+    background: rgba(15, 23, 42, .42) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
 
-        /* MEDIA QUERIES */
-        @media (max-width: 600px) {
-            .assistant-content {
-    padding: 14px 8px 34px;
-            }
-            .assistant-top {
-                padding: 14px 16px;
-            }
-            #btnRequestDeal {
-                min-height: 54px;
-                font-size: 14px !important;
-            }
-            #paymentModal > div,
-            .payment-modal > div,
-            .payment-panel {
-                width: calc(100% - 20px) !important;
-                border-radius: 22px !important;
-            }
-            #assistantMapModal {
-                padding: 8px;
-            }
-            .assistant-map-modal-card {
-                border-radius: 21px;
-            }
-            .assistant-map-container-wrap {
-                height: 62vh;
-                max-height: 480px;
-            }
-        }
+#paymentModal > div,
+.payment-modal > div,
+.payment-panel {
+    width: min(100% - 24px, 440px) !important;
+    max-height: 90vh;
+    margin: auto;
+    background: #ffffff !important;
+    border: 0 !important;
+    border-radius: 24px !important;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, .20) !important;
+    overflow: hidden;
+    animation: paymentPanelIn .25s ease;
+}
 
-        @media (max-width: 420px) {
-            .assistant-location-card {
-    padding: 14px !important;
-    border-radius: 18px !important;
-            }
-            .assistant-address-details {
-                grid-template-columns: 1fr;
-            }
-            .assistant-map-preview {
-                height: 140px;
-            }
-        }
+@keyframes paymentPanelIn {
+    from {
+        opacity: 0;
+        transform: translateY(18px) scale(.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
 
-        @media (max-width: 380px) {
-            .service-type-grid {
-                gap: 7px;
-            }
-            .service-card-option {
-                height: 126px;
-                border-radius: 18px;
-                padding: 12px 5px;
-            }
-            .service-card-option img {
-                width: 53px;
-                height: 53px;
-            }
-            .service-card-option .title {
-                font-size: 11px;
-            }
-        }
+
+/* ==========================================================================
+   10. MEDIA QUERIES (Responsive Design for Mobile Devices)
+   ========================================================================== */
+@media (max-width: 600px) {
+    .assistant-content {
+        padding: 14px 8px 34px;
+    }
+    .assistant-top {
+        padding: 14px 16px;
+    }
+    #btnRequestDeal {
+        min-height: 54px;
+        font-size: 14px !important;
+    }
+    #paymentModal > div,
+    .payment-modal > div,
+    .payment-panel {
+        width: calc(100% - 20px) !important;
+        border-radius: 22px !important;
+    }
+    #assistantMapModal {
+        padding: 8px;
+    }
+    .assistant-map-modal-card {
+        border-radius: 21px;
+    }
+    .assistant-map-container-wrap {
+        height: 62vh;
+        max-height: 480px;
+    }
+}
+
+@media (max-width: 420px) {
+    .assistant-location-card {
+        padding: 14px !important;
+        border-radius: 18px !important;
+    }
+    .assistant-address-details {
+        grid-template-columns: 1fr;
+    }
+    .assistant-map-preview {
+        height: 140px;
+    }
+}
+
+@media (max-width: 380px) {
+    .service-type-grid {
+        gap: 7px;
+    }
+    .service-card-option {
+        height: 126px;
+        border-radius: 18px;
+        padding: 12px 5px;
+    }
+    .service-card-option img {
+        width: 53px;
+        height: 53px;
+    }
+    .service-card-option .title {
+        font-size: 11px;
+    }
+}       
+                
     </style>
 </head>
 <body>
