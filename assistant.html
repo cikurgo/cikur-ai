@@ -1723,18 +1723,25 @@ async function sendCustomerChatFromUI() {
             initPaymentEvents(info, finalCalculatedTotal, extraUnitsCount, order);
         }
 
-        function initPaymentEvents(info, finalCalculatedTotal, extraUnitsCount, order) {
-            const methodButtons = document.querySelectorAll(".pay-method-option");
-            const paymentDetailsContainer = document.getElementById("paymentDetailsContainer");
+    function initPaymentEvents(info, finalCalculatedTotal, extraUnitsCount, order) {
+    const methodButtons = document.querySelectorAll(".pay-method-option");
+    const paymentDetailsContainer = document.getElementById("paymentDetailsContainer");
 
-            methodButtons.forEach(mBtn => {
-                mBtn.addEventListener("click", function() {
-                    methodButtons.forEach(b => b.classList.remove("active"));
-                    this.classList.add("active");
-                    selectedPaymentMethod = this.getAttribute("data-method");
+    methodButtons.forEach(mBtn => {
+        mBtn.addEventListener("click", function() {
+            const method = this.getAttribute("data-method");
 
-                    if (!paymentDetailsContainer) return;
+            if (method === "cikurpay" || method === "qris") {
+                alert("Metode pembayaran ini sedang dalam pengembangan. Silakan gunakan Tunai untuk sementara.");
+                return;
+            }
 
+            methodButtons.forEach(b => b.classList.remove("active"));
+            this.classList.add("active");
+            selectedPaymentMethod = method;
+
+            if (!paymentDetailsContainer) return;
+            
                     if (selectedPaymentMethod === "cikurpay") {
                         paymentDetailsContainer.innerHTML = `
                             <div style="font-size:11px; color:#64748b; margin-bottom:10px;">Saldo dan autentikasi CikurPay akan diverifikasi oleh server CIKUR GO.</div>
