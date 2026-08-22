@@ -24,7 +24,12 @@ import {
 import {
     getAuth,
     onAuthStateChanged,
-    signInAnonymously
+    signInAnonymously,
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    EmailAuthProvider,
+    linkWithCredential,
+    fetchSignInMethodsForEmail
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 
@@ -100,6 +105,69 @@ window.CikurCloud = {
             credential.user.uid
         );
         return credential.user;
+    },
+
+    // ======================================
+    // CEK APAKAH EMAIL SUDAH TERDAFTAR
+    // ======================================
+
+    async checkEmailExists(email) {
+        try {
+            const methods = await fetchSignInMethodsForEmail(auth, email);
+            return methods && methods.length > 0;
+        } catch (error) {
+            console.error("[CIKUR GO] Gagal cek email:", error);
+            return false;
+        }
+    },
+
+    // ======================================
+    // REGISTRASI AKUN PERMANEN (EMAIL + PASSWORD)
+    // Jika user sedang anonymous (punya data sementara),
+    // otomatis di-LINK supaya data lama tidak hilang.
+    // ======================================
+
+    async registerWithEmail(email, password) {
+        const currentUser = auth.currentUser;
+
+        // Kasus 1: sedang anonymous -> upgrade/link ke email+password
+        // supaya UID & data yang sudah ada tetap sama, tidak hilang.
+        if (currentUser && currentUser.isAnonymous) {
+            const credential = EmailAuthProvider.credential(email, password);
+
+            try {
+                const linkedResult = await linkWithCredential(currentUser, credential);
+                console.log(
+                    "[CIKUR GO] Akun anonymous berhasil di-upgrade ke Email:",
+                    linkedResult.user.uid
+                );
+                return linkedResult.user;
+            } catch (linkError) {
+                // Kalau email sudah dipakai akun lain, tidak bisa di-link,
+                // fallback ke pembuatan akun baru biasa.
+                if (linkError.code === "auth/email-already-in-use" || linkError.code === "auth/credential-already-in-use") {
+                    console.warn("[CIKUR GO] Email sudah terdaftar, tidak bisa link. Membuat akun baru biasa.");
+                } else {
+                    throw linkError;
+                }
+            }
+        }
+
+        // Kasus 2: belum ada sesi sama sekali -> daftar akun baru biasa
+        const result = await createUserWithEmailAndPassword(auth, email, password);
+        console.log("[CIKUR GO] Akun Email baru dibuat:", result.user.uid);
+        return result.user;
+    },
+
+    // ======================================
+    // LOGIN AKUN YANG SUDAH ADA (EMAIL + PASSWORD)
+    // Ini yang memulihkan akun yang sama dari device/browser manapun.
+    // ======================================
+
+    async loginWithEmail(email, password) {
+        const result = await signInWithEmailAndPassword(auth, email, password);
+        console.log("[CIKUR GO] Login berhasil:", result.user.uid);
+        return result.user;
     },
 
     // ======================================
