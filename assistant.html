@@ -653,22 +653,65 @@
         }
 
         .assistant-location-status {
-            display: flex;
-            align-items: center;
-            gap: 6px !important;
-            margin-top: 9px !important;
-            color: #94a3b8;
-            font-size: 9px !important;
-            font-weight: 600;
-        }
+    display: flex;
+    align-items: center;
+    gap: 6px !important;
+    margin-top: 9px !important;
+    color: #94a3b8;
+    font-size: 9px !important;
+    font-weight: 600;
+    transition: color 0.25s ease;
+}
 
-        .assistant-status-dot {
-            width: 6px !important;
-            height: 6px !important;
-            flex-shrink: 0;
-            border-radius: 50%;
-            background: #cbd5e1;
-        }
+.assistant-status-dot {
+    width: 6px !important;
+    height: 6px !important;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: #cbd5e1;
+    transition: background 0.25s ease;
+}
+
+/* STATUS: SEDANG MENCARI */
+.assistant-location-status.is-loading {
+    color: #d97706;
+}
+
+.assistant-location-status.is-loading .assistant-status-dot {
+    background: #f59e0b;
+    animation: assistantStatusPulse 1s infinite;
+}
+
+/* STATUS: BERHASIL */
+.assistant-location-status.is-success {
+    color: #16a34a;
+}
+
+.assistant-location-status.is-success .assistant-status-dot {
+    background: #22c55e;
+}
+
+/* STATUS: GAGAL */
+.assistant-location-status.is-error {
+    color: #dc2626;
+}
+
+.assistant-location-status.is-error .assistant-status-dot {
+    background: #ef4444;
+}
+
+/* Titik berkedip saat proses */
+@keyframes assistantStatusPulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.45;
+        transform: scale(0.85);
+    }
+}
 
         .assistant-note-group {
             margin-top: 13px !important;
@@ -1494,8 +1537,37 @@ const userPhone = userProfile?.phone || "-";
         }
 
         function updateAssistantLocationStatus(text) {
-            const status = document.getElementById("assistantLocationStatus");
-            if (status) status.innerText = text;
+    const status = document.getElementById("assistantLocationStatus");
+    if (!status) return;
+
+    status.innerText = text;
+
+    status.classList.remove(
+        "is-loading",
+        "is-success",
+        "is-error"
+    );
+
+    const lowerText = text.toLowerCase();
+
+    if (
+        lowerText.includes("mengambil") ||
+        lowerText.includes("mendeteksi")
+    ) {
+        status.classList.add("is-loading");
+
+    } else if (
+        lowerText.includes("berhasil") ||
+        lowerText.includes("dipilih")
+    ) {
+        status.classList.add("is-success");
+
+    } else if (
+        lowerText.includes("gagal") ||
+        lowerText.includes("error")
+    ) {
+        status.classList.add("is-error");
+    }
         }
 
         window.selectServiceCategory = function(paketKey) {
