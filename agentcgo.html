@@ -80,6 +80,12 @@ body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; di
 .nav-item span { font-size: 11px; font-weight: 600; }
 .nav-item.active { color: var(--primary-red); }
 footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(--text-muted); font-size: 11px; }
+
+/* FORM PENDAFTARAN MITRA */
+.form-group-mitra { margin-bottom: 12px; }
+.form-group-mitra label { display: block; font-size: 10px; font-weight: 700; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.3px; }
+.input-box-mitra { width: 100%; padding: 10px 12px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 12px; font-weight: 600; color: var(--text-main); outline: none; }
+.input-box-mitra:focus { border-color: var(--primary-red); box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.1); }
 </style>
 </head>
 <body>
@@ -114,24 +120,9 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
         </div>
     </div>
 
-    <!-- MAIN VIEW AGENT CGO -->
-    <div style="margin-top: 10px;">
-        <div class="agent-card" style="background: linear-gradient(135deg, var(--dark-bg), var(--dark-card)); color: #fff;">
-            <h2 style="font-size: 16px; font-weight: 800; margin-bottom: 6px;">🤖 Pusat Kendali & Live Peta Agent</h2>
-            <p style="font-size: 12px; color: #94a3b8; line-height: 1.4;">Pantau lokasi titik koordinat customer, rincian pesanan, dan koordinasi chat secara langsung.</p>
-        </div>
-
-        <!-- TAB FILTER PESANAN -->
-        <div class="order-tabs">
-            <button class="order-tab-btn active" onclick="switchOrderTab('all', this)">Semua Pesanan</button>
-            <button class="order-tab-btn" onclick="switchOrderTab('assistant.html', this)">Reguler</button>
-            <button class="order-tab-btn" onclick="switchOrderTab('cikurgo2in1.html', this)">Jalur 2in1</button>
-        </div>
-
-        <!-- DAFTAR KARTU DETAIL PESANAN -->
-        <div id="agentDetailedOrderContainer">
-            <div style="text-align: center; padding: 25px; color: var(--text-muted); font-size: 12px;">Memuat data pesanan masuk...</div>
-        </div>
+    <!-- MAIN VIEW AGENT CGO (diisi dinamis: form daftar / pending / dashboard) -->
+    <div style="margin-top: 10px;" id="agentMainViewContainer">
+        <div style="text-align: center; padding: 40px 16px; color: var(--text-muted); font-size: 12px;">Memuat...</div>
     </div>
 
     <!-- BOTTOM NAV -->
@@ -153,93 +144,333 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
 </div>
 
 <script>
-let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { name: "CIKUR USER", phone: "08123456789", saldo: 125000, avatar: "" };
+let userProfile = { uid: null, name: "", phone: "", avatar: "", isLoggedIn: false };
+
+// Referensi paket layanan Assistant (untuk tampilkan personil/durasi di kartu Agent)
+const dataPaketReferensi = {
+    dine: { personil: "1 Personil", durasi: "Hingga 30 Menit" },
+    vip: { personil: "1 Personil", durasi: "Hingga 2 Jam" },
+    private: { personil: "2 Personil", durasi: "Hingga 4 Jam" }
+};
+
 function updateUIProfile() {
-    document.getElementById("headerNamaUser").innerText = userProfile.name;
-    let avatarContainer = document.getElementById("headerAvatar");
-    if(userProfile.avatar && userProfile.avatar.startsWith("data:image")) {
-        avatarContainer.innerHTML = `<img src="${userProfile.avatar}" alt="Foto Profil">`;
-    } else {
-        avatarContainer.innerText = userProfile.name.split(" ").map(n => n[0]).join("").substring(0,2).toUpperCase() || "CK";
+    const headerNamaEl = document.getElementById("headerNamaUser");
+    const avatarContainer = document.getElementById("headerAvatar");
+
+    if (headerNamaEl) headerNamaEl.innerText = userProfile.name || "Agent CGO";
+
+    if (avatarContainer) {
+        if (userProfile.avatar && userProfile.avatar.startsWith("data:image")) {
+            avatarContainer.innerHTML = `<img src="${userProfile.avatar}" alt="Foto Profil">`;
+        } else {
+            const initials = (userProfile.name || "CK").split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
+            avatarContainer.innerText = initials || "CK";
+        }
     }
 }
-window.addEventListener("DOMContentLoaded", () => {
+
+/* =========================================================
+   AUTH GUARD - pastikan Agent sudah login sebelum akses
+========================================================= */
+let unsubscribeMitraStatus = null;
+
+async function loadCurrentAgentProfile() {
+    let retries = 0;
+    while (!window.CikurCloud && retries < 30) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+        retries++;
+    }
+
+    if (!window.CikurCloud) {
+        alert("CIKUR Cloud belum tersedia. Silakan refresh halaman.");
+        window.location.href = "index.html";
+        return;
+    }
+
+    let firebaseUser = null;
+    try {
+        firebaseUser = await window.CikurCloud.waitForAuth();
+    } catch (e) {
+        firebaseUser = null;
+    }
+
+    if (!firebaseUser) {
+        alert("Silakan login terlebih dahulu untuk mendaftar sebagai Mitra Agent CGO.");
+        window.location.href = "index.html";
+        return;
+    }
+
+    let profile = null;
+    try {
+        profile = await window.CikurCloud.getProfile(firebaseUser.uid);
+    } catch (e) {
+        profile = null;
+    }
+
+    userProfile = {
+        uid: firebaseUser.uid,
+        name: profile?.name || "",
+        phone: profile?.phone || "",
+        avatar: profile?.avatar || "",
+        isLoggedIn: true
+    };
+
     updateUIProfile();
-    loadDetailedAgentOrders('all');
+
+    // Pantau status pendaftaran Mitra secara realtime -
+    // begitu status berubah (mis. di-approve admin), tampilan
+    // otomatis berubah tanpa perlu refresh halaman.
+    unsubscribeMitraStatus = window.CikurCloud.listenMitraApplication(
+        firebaseUser.uid,
+        "agent",
+        (application) => {
+            renderByMitraStatus(application);
+        }
+    );
+}
+
+function renderByMitraStatus(application) {
+    const mainContainer = document.getElementById("agentMainViewContainer");
+    if (!mainContainer) return;
+
+    if (!application) {
+        renderPendaftaranMitraForm(mainContainer);
+        return;
+    }
+
+    if (application.status === "pending") {
+        mainContainer.innerHTML = `
+            <div class="agent-card" style="text-align:center; padding:30px 16px;">
+                <div style="font-size:34px; margin-bottom:10px;">⏳</div>
+                <h3 style="font-size:14px; font-weight:800; margin-bottom:6px;">Menunggu Verifikasi</h3>
+                <p style="font-size:11px; color:var(--text-muted); line-height:1.5;">
+                    Pendaftaran Anda sebagai Mitra Agent CGO sedang diperiksa oleh tim CIKUR GO.
+                    Halaman ini akan otomatis terbuka begitu akun Anda disetujui.
+                </p>
+            </div>
+        `;
+        return;
+    }
+
+    if (application.status === "rejected") {
+        mainContainer.innerHTML = `
+            <div class="agent-card" style="text-align:center; padding:30px 16px;">
+                <div style="font-size:34px; margin-bottom:10px;">✕</div>
+                <h3 style="font-size:14px; font-weight:800; margin-bottom:6px; color:var(--primary-red);">Pendaftaran Ditolak</h3>
+                <p style="font-size:11px; color:var(--text-muted); line-height:1.5; margin-bottom:14px;">
+                    ${application.catatanAdmin || 'Pendaftaran Anda belum bisa disetujui saat ini.'}
+                </p>
+                <button class="btn-action-deal" id="btnDaftarUlangMitra">Daftar Ulang</button>
+            </div>
+        `;
+        const btnUlang = document.getElementById("btnDaftarUlangMitra");
+        if (btnUlang) {
+            btnUlang.addEventListener("click", () => renderPendaftaranMitraForm(mainContainer));
+        }
+        return;
+    }
+
+    // status === "approved" -> tampilkan dashboard sungguhan
+    renderAgentDashboard(mainContainer);
+}
+
+function renderPendaftaranMitraForm(container) {
+    container.innerHTML = `
+        <div class="agent-card">
+            <h2 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">🤝 Daftar Jadi Mitra Agent CGO</h2>
+            <p style="font-size: 11px; color: var(--text-muted); line-height: 1.5; margin-bottom: 14px;">
+                Lengkapi data berikut untuk mengajukan diri sebagai Agent CGO. Tim kami akan memverifikasi
+                data Anda sebelum akun diaktifkan.
+            </p>
+
+            <div class="form-group-mitra">
+                <label>Alamat Domisili</label>
+                <input type="text" id="mitraAlamat" class="input-box-mitra" placeholder="Alamat tempat tinggal saat ini">
+            </div>
+
+            <div class="form-group-mitra">
+                <label>Area Operasional</label>
+                <input type="text" id="mitraArea" class="input-box-mitra" placeholder="Cth: Pandeglang Kota & sekitarnya">
+            </div>
+
+            <div class="form-group-mitra">
+                <label>Nomor KTP</label>
+                <input type="text" id="mitraKtp" class="input-box-mitra" placeholder="16 digit NIK" inputmode="numeric" maxlength="16">
+            </div>
+
+            <div class="form-group-mitra">
+                <label>Foto KTP</label>
+                <input type="file" id="mitraFotoKtp" accept="image/*" class="input-box-mitra">
+            </div>
+
+            <button class="btn-action-deal" id="btnAjukanMitra">Ajukan Pendaftaran ✓</button>
+        </div>
+    `;
+
+    let fotoKtpBase64 = "";
+    const inputFoto = document.getElementById("mitraFotoKtp");
+    if (inputFoto) {
+        inputFoto.addEventListener("change", (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => { fotoKtpBase64 = ev.target.result; };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    const btnAjukan = document.getElementById("btnAjukanMitra");
+    if (btnAjukan) {
+        btnAjukan.addEventListener("click", async () => {
+            const alamat = document.getElementById("mitraAlamat")?.value.trim() || "";
+            const area = document.getElementById("mitraArea")?.value.trim() || "";
+            const ktp = document.getElementById("mitraKtp")?.value.trim() || "";
+
+            if (!alamat || !area) {
+                alert("Mohon lengkapi alamat domisili dan area operasional.");
+                return;
+            }
+            if (!/^\d{16}$/.test(ktp)) {
+                alert("Nomor KTP harus 16 digit angka.");
+                return;
+            }
+            if (!fotoKtpBase64) {
+                alert("Mohon upload foto KTP.");
+                return;
+            }
+
+            btnAjukan.disabled = true;
+            btnAjukan.textContent = "Mengirim Pendaftaran...";
+
+            try {
+                await window.CikurCloud.submitMitraApplication(userProfile.uid, "agent", {
+                    alamat,
+                    area,
+                    ktp,
+                    fotoKtp: fotoKtpBase64,
+                    name: userProfile.name,
+                    phone: userProfile.phone
+                });
+                // renderByMitraStatus akan otomatis dipanggil ulang oleh
+                // listenMitraApplication begitu dokumen tersimpan.
+            } catch (error) {
+                alert("Gagal mengirim pendaftaran: " + (error?.message || error));
+                btnAjukan.disabled = false;
+                btnAjukan.textContent = "Ajukan Pendaftaran ✓";
+            }
+        });
+    }
+}
+
+function renderAgentDashboard(container) {
+    container.innerHTML = `
+        <div class="agent-card" style="background: linear-gradient(135deg, var(--dark-bg), var(--dark-card)); color: #fff;">
+            <h2 style="font-size: 16px; font-weight: 800; margin-bottom: 6px;">🤖 Pusat Kendali & Live Peta Agent</h2>
+            <p style="font-size: 12px; color: #94a3b8; line-height: 1.4;">Pantau lokasi titik koordinat customer, rincian pesanan, dan koordinasi chat secara langsung.</p>
+        </div>
+
+        <div class="order-tabs">
+            <button class="order-tab-btn active" onclick="switchOrderTab('all', this)">Semua Pesanan</button>
+            <button class="order-tab-btn" onclick="switchOrderTab('assistant.html', this)">Reguler</button>
+            <button class="order-tab-btn" onclick="switchOrderTab('cikurgo2in1.html', this)">Jalur 2in1</button>
+        </div>
+
+        <div id="agentDetailedOrderContainer">
+            <div style="text-align: center; padding: 25px; color: var(--text-muted); font-size: 12px;">Memuat data pesanan masuk...</div>
+        </div>
+    `;
+
+    startListeningAgentOrders();
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+    loadCurrentAgentProfile();
 });
 
 const btnOpenProfileDropdown = document.getElementById("btnOpenProfileDropdown");
 const headerDropdownMenu = document.getElementById("headerDropdownMenu");
-btnOpenProfileDropdown.addEventListener("click", (e) => {
-    e.stopPropagation();
-    headerDropdownMenu.classList.toggle("show");
-});
-document.addEventListener("click", () => headerDropdownMenu.classList.remove('show'));
+if (btnOpenProfileDropdown && headerDropdownMenu) {
+    btnOpenProfileDropdown.addEventListener("click", (e) => {
+        e.stopPropagation();
+        headerDropdownMenu.classList.toggle("show");
+    });
+    document.addEventListener("click", () => headerDropdownMenu.classList.remove('show'));
+}
 
+/* =========================================================
+   REALTIME ORDER LISTENER (Firestore, bukan localStorage)
+========================================================= */
+let allAssistantOrders = [];
 let currentFilterSource = 'all';
+let messageUnsubscribers = {};
+
+function startListeningAgentOrders() {
+    window.CikurCloud.listenOrders("ASSISTANT", (orders) => {
+        // Agent hanya perlu lihat order yang masih perlu ditindaklanjuti
+        allAssistantOrders = orders.filter(o =>
+            o.status === "PENDING" || o.status === "DEAL" || o.status === "DEAL_CONFIRMED"
+        );
+        renderFilteredOrders(currentFilterSource);
+    });
+}
+
 function switchOrderTab(sourceType, el) {
     document.querySelectorAll('.order-tab-btn').forEach(btn => btn.classList.remove('active'));
     el.classList.add('active');
     currentFilterSource = sourceType;
-    loadDetailedAgentOrders(sourceType);
+    renderFilteredOrders(sourceType);
 }
 
-function loadDetailedAgentOrders(filter) {
+function renderFilteredOrders(filter) {
     const container = document.getElementById("agentDetailedOrderContainer");
-    const allOrders = JSON.parse(localStorage.getItem('cikur_assistant_orders')) || [];
+    if (!container) return;
 
-    let filtered = allOrders;
-    if(filter !== 'all') {
-        filtered = allOrders.filter(o => o.source && o.source.includes(filter));
+    let filtered = allAssistantOrders;
+    if (filter === 'assistant.html') {
+        filtered = allAssistantOrders.filter(o => o.source !== 'CIKURGO_2IN1');
+    } else if (filter === 'cikurgo2in1.html') {
+        filtered = allAssistantOrders.filter(o => o.source === 'CIKURGO_2IN1');
     }
 
-    if(filtered.length === 0) {
-        container.innerHTML = `<div style="text-align: center; padding: 25px; color: var(--text-muted); font-size: 12px;">Belum ada pesanan aktif untuk kategori ini.</div>`;
+    if (filtered.length === 0) {
+        container.innerHTML = `<div style="text-align: center; padding: 25px; color: var(--text-muted); font-size: 12px;">Belum ada pesanan masuk untuk kategori ini.</div>`;
         return;
     }
 
     let html = '';
     filtered.forEach((order) => {
-        let is2in1 = order.source && order.source.includes('cikurgo2in1');
-        let badgeClass = is2in1 ? 'order-badge-source order-badge-2in1' : 'order-badge-source';
-        let badgeText = is2in1 ? 'Jalur 2in1' : 'Reguler Assistant';
-
-        let chatList = order.chats || [
-            { sender: 'system', text: 'Sistem: Pesanan masuk terverifikasi dari aplikasi customer.' }
-        ];
-
-        let chatsHtml = chatList.map(c => `<div class="chat-bubble ${c.sender}">${c.text}</div>`).join('');
+        const is2in1 = order.source === 'CIKURGO_2IN1';
+        const badgeClass = is2in1 ? 'order-badge-source order-badge-2in1' : 'order-badge-source';
+        const badgeText = is2in1 ? 'Jalur 2in1' : 'Reguler Assistant';
+        const paketInfo = dataPaketReferensi[order.packageKey] || {};
+        const isDeal = order.status === "DEAL" || order.status === "DEAL_CONFIRMED";
 
         html += `
             <div class="order-detail-card">
                 <div class="order-header-info">
                     <div>
                         <span style="font-family:var(--font-mono); font-size:11px; font-weight:800; color:var(--primary-red);">${order.id}</span>
-                        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Pemesan: <strong>${order.customer.name} (${order.customer.phone})</strong></div>
+                        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Pemesan: <strong>${order.customer?.name || '-'} (${order.customer?.phone || '-'})</strong></div>
                     </div>
                     <span class="${badgeClass}">${badgeText}</span>
                 </div>
 
                 <div style="font-size:12px; line-height:1.5; margin-bottom:8px;">
-                    <p>📍 <strong>Lokasi Tujuan:</strong> ${order.lokasi.address || 'Lokasi Peta Kustom'}</p>
-                    <p style="margin-top:4px;">🛒 <strong>Layanan:</strong> ${order.layanan.nama} (${order.layanan.personil}, ${order.layanan.durasi})</p>
-                    <p style="margin-top:4px;">📅 <strong>Jadwal:</strong> ${order.jadwal.tanggal || '-'}</p>
-                    ${order.catatan ? `<p style="margin-top:4px;">📝 <strong>Catatan:</strong> ${order.catatan}</p>` : ''}
+                    <p>📍 <strong>Lokasi Tujuan:</strong> ${order.location?.address || 'Lokasi Peta Kustom'}</p>
+                    <p style="margin-top:4px;">🛒 <strong>Layanan:</strong> ${order.packageName || '-'} ${paketInfo.personil ? `(${paketInfo.personil}, ${paketInfo.durasi})` : ''}</p>
+                    <p style="margin-top:4px;">📅 <strong>Jadwal:</strong> ${order.schedule?.date || '-'} ${order.schedule?.time || ''}</p>
+                    ${order.notes ? `<p style="margin-top:4px;">📝 <strong>Catatan:</strong> ${order.notes}</p>` : ''}
                 </div>
 
                 <div style="font-size:13px; font-weight:800; color:var(--primary-red); margin: 8px 0;">
-                    Total Tagihan: Rp ${order.pricing.total.toLocaleString('id-ID')}
+                    Total Tagihan: Rp ${Number(order.pricing?.total || 0).toLocaleString('id-ID')}
                 </div>
 
-                <!-- PETA NAVIGASI LIVE -->
                 <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-top: 8px;">Peta Navigasi Live Lokasi:</div>
                 <div id="map-container-${order.id}" class="live-map-box"></div>
 
-                <!-- CHAT Koordinasi -->
                 <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-top: 8px;">Chat Koordinasi (Agent & Customer):</div>
-                <div class="chat-container" id="chatBox-${order.id}">
-                    ${chatsHtml}
-                </div>
+                <div class="chat-container" id="chatBox-${order.id}"></div>
                 <div class="chat-input-row">
                     <input type="text" class="chat-input" id="chatInput-${order.id}" placeholder="Tulis balasan koordinasi...">
                     <button class="chat-send-btn" onclick="sendAgentChat('${order.id}')">Kirim</button>
@@ -249,61 +480,71 @@ function loadDetailedAgentOrders(filter) {
                     Status Saat Ini: <strong style="color:var(--primary-red);">${order.status}</strong>
                 </div>
 
-                <button class="btn-action-deal" onclick="prosesDealOrder('${order.id}')">Konfirmasi & Proses DEAL 🤝</button>
+                ${isDeal
+                    ? `<div style="margin-top:12px; text-align:center; font-size:11px; font-weight:800; color:#16a34a; background:#dcfce7; padding:8px; border-radius:10px;">✓ Sudah DEAL - Menunggu Customer Membayar</div>`
+                    : `<button class="btn-action-deal" onclick="prosesDealOrder('${order.id}')">Konfirmasi & Proses DEAL 🤝</button>`
+                }
             </div>
         `;
     });
 
     container.innerHTML = html;
 
-    // Render Peta Leaflet untuk setiap pesanan yang tampil
     filtered.forEach(order => {
         setTimeout(() => {
-            let mapElId = `map-container-${order.id}`;
-            let mapEl = document.getElementById(mapElId);
-            if(mapEl && !mapEl._leaflet_id) {
-                let lat = order.lokasi.lat || -6.3153;
-                let lng = order.lokasi.lng || 106.1556;
-                let map = L.map(mapElId, { zoomControl: false }).setView([lat, lng], 15);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 19
-                }).addTo(map);
-                L.marker([lat, lng]).addTo(map).bindPopup(order.lokasi.address || "Lokasi Customer").openPopup();
+            const mapElId = `map-container-${order.id}`;
+            const mapEl = document.getElementById(mapElId);
+            if (mapEl && !mapEl._leaflet_id) {
+                const lat = order.location?.latitude || -6.3153;
+                const lng = order.location?.longitude || 106.1556;
+                const map = L.map(mapElId, { zoomControl: false }).setView([lat, lng], 15);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+                L.marker([lat, lng]).addTo(map).bindPopup(order.location?.address || "Lokasi Customer").openPopup();
             }
         }, 300);
+
+        // Bersihkan listener chat lama sebelum pasang yang baru (hindari kebocoran/duplikat)
+        if (typeof messageUnsubscribers[order.id] === "function") {
+            messageUnsubscribers[order.id]();
+        }
+        messageUnsubscribers[order.id] = window.CikurCloud.listenOrderMessages(order.id, (messages) => {
+            const chatBox = document.getElementById(`chatBox-${order.id}`);
+            if (!chatBox) return;
+            const senderClassMap = { customer: 'customer', agent: 'agent' };
+            chatBox.innerHTML = messages.map(m =>
+                `<div class="chat-bubble ${senderClassMap[m.sender] || 'system'}">${m.text}</div>`
+            ).join('') || `<div class="chat-bubble system">Belum ada pesan.</div>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+        });
     });
 }
 
-function sendAgentChat(orderId) {
-    let inputEl = document.getElementById(`chatInput-${orderId}`);
-    if(!inputEl) return;
-    let text = inputEl.value.trim();
-    if(!text) return;
+async function sendAgentChat(orderId) {
+    const inputEl = document.getElementById(`chatInput-${orderId}`);
+    if (!inputEl) return;
+    const text = inputEl.value.trim();
+    if (!text) return;
 
-    let allOrders = JSON.parse(localStorage.getItem('cikur_assistant_orders')) || [];
-    let orderIndex = allOrders.findIndex(o => o.id === orderId);
-    
-    if(orderIndex !== -1) {
-        if(!allOrders[orderIndex].chats) allOrders[orderIndex].chats = [];
-        allOrders[orderIndex].chats.push({ sender: 'agent', text: 'Agent CGO: ' + text });
-        localStorage.setItem('cikur_assistant_orders', JSON.stringify(allOrders));
+    try {
+        await window.CikurCloud.sendOrderMessage(orderId, "agent", text);
         inputEl.value = '';
-        loadDetailedAgentOrders(currentFilterSource);
+    } catch (error) {
+        alert("Pesan gagal dikirim: " + (error?.message || error));
     }
 }
 
-function prosesDealOrder(orderId) {
-    let allOrders = JSON.parse(localStorage.getItem('cikur_assistant_orders')) || [];
-    let index = allOrders.findIndex(o => o.id === orderId);
-    if(index !== -1) {
-        allOrders[index].status = "DEAL / DIPROSES";
-        if(!allOrders[index].chats) allOrders[index].chats = [];
-        allOrders[index].chats.push({ sender: 'system', text: 'Sistem: Pesanan telah dikonfirmasi DEAL oleh Agent CGO.' });
-        localStorage.setItem('cikur_assistant_orders', JSON.stringify(allOrders));
+async function prosesDealOrder(orderId) {
+    if (!confirm("Konfirmasi pesanan ini sebagai DEAL?")) return;
+
+    try {
+        await window.CikurCloud.updateOrderStatus(orderId, { status: "DEAL" });
+        await window.CikurCloud.sendOrderMessage(orderId, "system", "Sistem: Pesanan telah dikonfirmasi DEAL oleh Agent CGO.");
         alert(`Pesanan ${orderId} berhasil dikonfirmasi dan berstatus DEAL!`);
-        loadDetailedAgentOrders(currentFilterSource);
+    } catch (error) {
+        alert("Gagal memproses DEAL: " + (error?.message || error));
     }
 }
+
 </script>
 </body>
 </html>
