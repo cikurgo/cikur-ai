@@ -207,6 +207,10 @@ window.CikurCloud = {
                 if (typeof callback === "function") {
                     callback({ id: snapshot.id, ...snapshot.data() });
                 }
+            },
+            (error) => {
+                console.error("[CIKUR GO] Gagal memantau status pendaftaran Mitra:", error);
+                if (typeof callback === "function") callback({ _error: true, code: error.code, message: error.message });
             }
         );
     },
