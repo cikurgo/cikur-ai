@@ -672,7 +672,11 @@
 
         function renderByMitraStatus(application) {
             const mainContainer = document.getElementById("agentMainViewContainer");
+            const regForm = document.getElementById("agentRegistrationForm");
             if (!mainContainer) return;
+
+            // Sembunyikan form registrasi secara default
+            if (regForm) regForm.style.display = "none";
 
             if (application && application._error) {
                 mainContainer.innerHTML = `
@@ -689,7 +693,9 @@
             }
 
             if (!application) {
-                renderPendaftaranMitraForm(mainContainer);
+                // Jika belum daftar, tampilkan form registrasi step-by-step
+                if (regForm) regForm.style.display = "block";
+                mainContainer.innerHTML = "";
                 return;
             }
 
@@ -719,7 +725,10 @@
                 `;
                 const btnUlang = document.getElementById("btnDaftarUlangMitra");
                 if (btnUlang) {
-                    btnUlang.addEventListener("click", () => renderPendaftaranMitraForm(mainContainer));
+                    btnUlang.addEventListener("click", () => {
+                        if (regForm) regForm.style.display = "block";
+                        mainContainer.innerHTML = "";
+                    });
                 }
                 return;
             }
