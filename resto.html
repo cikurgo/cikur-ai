@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Resto Partner - CIKUR GO Super App Engine v4.7</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="bcgo-engine.js"></script>
 <script type="module" src="cikur-config.js"></script>
 <style>
 :root {
@@ -137,6 +138,11 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
             <p style="font-size: 11px; color: #94a3b8; line-height: 1.4;">Kelola profil restoran, jam operasional, dan upload menu makanan Anda agar tampil di <a href="food.html" style="color: var(--accent-yellow); text-decoration: underline; font-weight: 700;">Halaman Menu Pembeli</a>.</p>
         </div>
 
+        <!-- STATUS PENDAFTARAN MITRA -->
+        <div id="mitraStatusBanner" style="background: #f1f5f9; border: 1px solid var(--border-color); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; font-size: 11px; font-weight: 700; color: var(--text-muted);">
+            Memeriksa status pendaftaran Mitra...
+        </div>
+
         <!-- STATUS BUKA/TUTUP & JAM OPERASIONAL DINAMIS -->
         <div id="statusBoxContainer" class="status-box open">
             <h3 class="status-title">Status Operasional Resto</h3>
@@ -212,6 +218,15 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
                     <div class="form-group">
                         <label class="form-label">Alamat Lengkap & Patokan</label>
                         <textarea id="restoAddressInput" class="form-textarea" rows="2" placeholder="Masukkan alamat lengkap resto..." required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Nomor KTP Penanggung Jawab</label>
+                        <input type="text" id="restoKtpInput" class="form-input" placeholder="16 digit NIK" inputmode="numeric" maxlength="16" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Upload Foto KTP</label>
+                        <input type="file" id="restoFotoKtpInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
+                        <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">Wajib diisi untuk verifikasi identitas Mitra.</small>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Data Pencairan Dana</label>
@@ -329,46 +344,125 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
 </div>
 
 <script>
-let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { name: "CIKUR USER", phone: "08123456789", saldo: 125000, avatar: "" };
-let currentRestoId = userProfile.phone || "default_resto";
-
+let userProfile = { uid: null, name: "", phone: "", avatar: "", isLoggedIn: false };
+let currentRestoId = null;
 let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
-let currentResto = allRestos.find(r => r.id === currentRestoId);
+let currentResto = { name: "", ownerName: "", role: "Pemilik Resto", ownerPhone: "", restoPhone: "", address: "", ktp: "", fotoKtp: "", bankName: "BCA", accountName: "", accountNumber: "", photoFront: "", photoIndoor: "", isOpen: true, openTime: "08:00", closeTime: "21:00", menuList: [] };
+let currentMitraApplication = null;
 
-if(!currentResto) {
-    let oldProfile = JSON.parse(localStorage.getItem('cikur_resto_profile'));
-    let oldMenus = JSON.parse(localStorage.getItem('cikur_resto_menus')) || [];
-    
-    if(oldProfile) {
-        currentResto = {
-            id: currentRestoId,
-            name: oldProfile.name || "", 
-            ownerName: oldProfile.ownerName || "", 
-            role: oldProfile.role || "Pemilik Resto", 
-            ownerPhone: oldProfile.ownerPhone || userProfile.phone || "", 
-            restoPhone: oldProfile.restoPhone || "", 
-            address: oldProfile.address || "", 
-            bankName: oldProfile.bankName || "BCA", 
-            accountName: oldProfile.accountName || "", 
-            accountNumber: oldProfile.accountNumber || "", 
-            photoFront: oldProfile.photoFront || "", 
-            photoIndoor: oldProfile.photoIndoor || "", 
-            isOpen: true, 
-            openTime: "08:00", 
-            closeTime: "21:00",
-            menuList: oldMenus
-        };
-        allRestos.push(currentResto);
-        localStorage.setItem('cikur_all_restos', JSON.stringify(allRestos));
-    } else {
-        currentResto = {
-            id: currentRestoId,
-            name: "", ownerName: "", role: "Pemilik Resto", ownerPhone: userProfile.phone || "", restoPhone: "", address: "", 
-            bankName: "BCA", accountName: "", accountNumber: "", 
-            photoFront: "", photoIndoor: "", isOpen: true, openTime: "08:00", closeTime: "21:00",
-            menuList: []
-        };
+/* =========================================================
+   AUTH GUARD + STATUS PENDAFTARAN MITRA RESTO
+========================================================= */
+async function loadCurrentRestoAuthGate() {
+    let retries = 0;
+    while (!window.CikurCloud && retries < 30) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+        retries++;
     }
+
+    if (!window.CikurCloud) {
+        alert("CIKUR Cloud belum tersedia. Silakan refresh halaman.");
+        window.location.href = "index.html";
+        return;
+    }
+
+    let firebaseUser = null;
+    try {
+        firebaseUser = await window.CikurCloud.waitForAuth();
+    } catch (e) {
+        firebaseUser = null;
+    }
+
+    if (!firebaseUser) {
+        alert("Silakan login terlebih dahulu untuk mengakses halaman Resto.");
+        window.location.href = "index.html";
+        return;
+    }
+
+    let profile = null;
+    try {
+        profile = await window.CikurCloud.getProfile(firebaseUser.uid);
+    } catch (e) {
+        profile = null;
+    }
+
+    userProfile = {
+        uid: firebaseUser.uid,
+        name: profile?.name || "",
+        phone: profile?.phone || "",
+        avatar: profile?.avatar || "",
+        isLoggedIn: true
+    };
+
+    currentRestoId = firebaseUser.uid;
+
+    updateUIProfile();
+
+    window.CikurCloud.listenMitraApplication(firebaseUser.uid, "resto", (application) => {
+        currentMitraApplication = application;
+        renderMitraStatusBanner(application);
+    });
+}
+
+function renderMitraStatusBanner(application) {
+    const banner = document.getElementById("mitraStatusBanner");
+    if (!banner) return;
+
+    const ordersContainer = document.getElementById("incomingOrdersContainer");
+
+    if (application && application._error) {
+        banner.style.background = "#fee2e2";
+        banner.style.color = "var(--primary-red)";
+        banner.innerHTML = `⚠️ Gagal memuat status pendaftaran. <a href="#" onclick="window.location.reload(); return false;" style="color:var(--primary-red); text-decoration:underline;">Coba lagi</a>`;
+        return;
+    }
+
+    if (!application) {
+        banner.style.background = "#f1f5f9";
+        banner.style.color = "var(--text-muted)";
+        banner.innerHTML = "📋 Anda belum terdaftar sebagai Mitra Resto. Lengkapi & simpan <strong>Data & Profil Restoran</strong> di bawah untuk mengajukan pendaftaran.";
+        if (ordersContainer) ordersContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Selesaikan pendaftaran Mitra terlebih dahulu untuk menerima pesanan.</p>`;
+        return;
+    }
+
+    // Pre-fill data dari pendaftaran sebelumnya ke currentResto & form
+    currentResto = {
+        ...currentResto,
+        name: application.namaUsaha || currentResto.name,
+        ownerName: application.ownerName || currentResto.ownerName,
+        ownerPhone: application.phone || currentResto.ownerPhone,
+        address: application.alamat || currentResto.address,
+        ktp: application.ktp || currentResto.ktp,
+        fotoKtp: application.fotoKtp || currentResto.fotoKtp,
+        bankName: application.bankName || currentResto.bankName,
+        accountName: application.accountName || currentResto.accountName,
+        accountNumber: application.accountNumber || currentResto.accountNumber,
+        photoFront: application.photoFront || currentResto.photoFront,
+        photoIndoor: application.photoIndoor || currentResto.photoIndoor
+    };
+    updateUIProfile();
+
+    if (application.status === "pending") {
+        banner.style.background = "#fef3c7";
+        banner.style.color = "#92400e";
+        banner.innerHTML = "⏳ Pendaftaran Mitra Resto Anda sedang <strong>menunggu verifikasi</strong> dari tim CIKUR GO.";
+        if (ordersContainer) ordersContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Menunggu verifikasi Admin sebelum dapat menerima pesanan.</p>`;
+        return;
+    }
+
+    if (application.status === "rejected") {
+        banner.style.background = "#fee2e2";
+        banner.style.color = "var(--primary-red)";
+        banner.innerHTML = `✕ Pendaftaran ditolak: ${application.catatanAdmin || 'Silakan lengkapi ulang data dan simpan kembali.'}`;
+        if (ordersContainer) ordersContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Perbaiki data profil dan simpan ulang untuk mengajukan kembali.</p>`;
+        return;
+    }
+
+    // approved
+    banner.style.background = "#dcfce7";
+    banner.style.color = "#16a34a";
+    banner.innerHTML = "✓ Mitra Resto <strong>Aktif</strong> - Siap menerima pesanan.";
+    renderIncomingOrders();
 }
 
 function toggleAccordion(cardId) {
@@ -392,6 +486,7 @@ function updateUIProfile() {
         document.getElementById("ownerPhoneInput").value = currentResto.ownerPhone || "";
         document.getElementById("restoPhoneInput").value = currentResto.restoPhone || "";
         document.getElementById("restoAddressInput").value = currentResto.address || "";
+        document.getElementById("restoKtpInput").value = currentResto.ktp || "";
         document.getElementById("restoBankNameInput").value = currentResto.bankName || "BCA";
         document.getElementById("restoAccountNameInput").value = currentResto.accountName || "";
         document.getElementById("restoAccountNumberInput").value = currentResto.accountNumber || "";
@@ -407,6 +502,7 @@ function updateUIProfile() {
 }
 
 function saveRestoToStorage() {
+    currentResto.id = currentRestoId;
     let index = allRestos.findIndex(r => r.id === currentRestoId);
     if(index !== -1) {
         allRestos[index] = currentResto;
@@ -446,13 +542,25 @@ document.getElementById("closeTimeInput").addEventListener("change", (e) => {
 
 document.getElementById("formRestoProfile")?.addEventListener("submit", function(e) {
     e.preventDefault();
-    
+
+    if (!userProfile.uid) {
+        alert("Sesi Anda belum siap. Silakan refresh halaman.");
+        return;
+    }
+
+    const ktpVal = document.getElementById("restoKtpInput").value.trim();
+    if (!/^\d{16}$/.test(ktpVal)) {
+        alert("Nomor KTP harus tepat 16 digit angka.");
+        return;
+    }
+
     currentResto.name = document.getElementById("restoNameInput").value;
     currentResto.ownerName = document.getElementById("ownerNameInput").value;
     currentResto.role = document.getElementById("restoRoleInput").value;
     currentResto.ownerPhone = document.getElementById("ownerPhoneInput").value;
     currentResto.restoPhone = document.getElementById("restoPhoneInput").value;
     currentResto.address = document.getElementById("restoAddressInput").value;
+    currentResto.ktp = ktpVal;
     currentResto.bankName = document.getElementById("restoBankNameInput").value;
     currentResto.accountName = document.getElementById("restoAccountNameInput").value;
     currentResto.accountNumber = document.getElementById("restoAccountNumberInput").value;
@@ -461,24 +569,91 @@ document.getElementById("formRestoProfile")?.addEventListener("submit", function
 
     let photoFrontInput = document.getElementById("restoPhotoFrontInput");
     let photoIndoorInput = document.getElementById("restoPhotoIndoorInput");
+    let fotoKtpInput = document.getElementById("restoFotoKtpInput");
 
     let totalPhotosToProcess = 0;
     let processedCount = 0;
 
     if(photoFrontInput && photoFrontInput.files && photoFrontInput.files[0]) totalPhotosToProcess++;
     if(photoIndoorInput && photoIndoorInput.files && photoIndoorInput.files[0]) totalPhotosToProcess++;
+    if(fotoKtpInput && fotoKtpInput.files && fotoKtpInput.files[0]) totalPhotosToProcess++;
+
+    async function submitToFirestore() {
+        saveRestoToStorage();
+
+        // Jangan pernah kirim ulang jika sudah pernah approved -
+        // ini cuma sinkron ulang profil, bukan pendaftaran baru.
+        if (currentMitraApplication && currentMitraApplication.status === "approved") {
+            try {
+                await window.CikurCloud.submitMitraApplication(userProfile.uid, "resto", {
+                    namaUsaha: currentResto.name,
+                    ownerName: currentResto.ownerName,
+                    phone: currentResto.ownerPhone,
+                    alamat: currentResto.address,
+                    ktp: currentResto.ktp,
+                    fotoKtp: currentResto.fotoKtp,
+                    bankName: currentResto.bankName,
+                    accountName: currentResto.accountName,
+                    accountNumber: currentResto.accountNumber,
+                    photoFront: currentResto.photoFront,
+                    photoIndoor: currentResto.photoIndoor,
+                    status: "approved"
+                });
+                alert("Data & Profil Resto berhasil diperbarui!");
+            } catch (error) {
+                alert("Gagal menyimpan ke Cloud: " + (error?.message || error));
+            }
+            return;
+        }
+
+        let bcgoResult = null;
+        if (window.BCGO) {
+            try {
+                bcgoResult = window.BCGO.evaluatePartner({
+                    partnerType: "restaurant",
+                    name: currentResto.ownerName,
+                    phone: currentResto.ownerPhone,
+                    address: currentResto.address,
+                    businessName: currentResto.name
+                });
+            } catch (bcgoError) {
+                console.error("[BCGO] Gagal menjalankan evaluasi:", bcgoError);
+            }
+        }
+
+        try {
+            await window.CikurCloud.submitMitraApplication(userProfile.uid, "resto", {
+                namaUsaha: currentResto.name,
+                ownerName: currentResto.ownerName,
+                phone: currentResto.ownerPhone,
+                alamat: currentResto.address,
+                ktp: currentResto.ktp,
+                fotoKtp: currentResto.fotoKtp,
+                bankName: currentResto.bankName,
+                accountName: currentResto.accountName,
+                accountNumber: currentResto.accountNumber,
+                photoFront: currentResto.photoFront,
+                photoIndoor: currentResto.photoIndoor,
+                bcgoScore: bcgoResult?.score ?? null,
+                bcgoRisk: bcgoResult?.risk ?? null,
+                bcgoRecommendation: bcgoResult?.status ?? null,
+                bcgoReasons: bcgoResult?.reasons ?? []
+            });
+            alert("Pendaftaran Mitra Resto berhasil dikirim! Menunggu verifikasi Admin.");
+        } catch (error) {
+            alert("Gagal mengirim pendaftaran ke Cloud: " + (error?.message || error));
+        }
+    }
 
     function checkFinish() {
         processedCount++;
         if(processedCount >= totalPhotosToProcess) {
-            saveRestoToStorage();
-            alert("Data & Profil Resto berhasil disimpan!");
+            submitToFirestore();
         }
     }
 
     if(totalPhotosToProcess === 0) {
-        saveRestoToStorage();
-        alert("Data & Profil Resto berhasil disimpan!");
+        submitToFirestore();
         return;
     }
 
@@ -506,6 +681,19 @@ document.getElementById("formRestoProfile")?.addEventListener("submit", function
             checkFinish();
         };
         reader.readAsDataURL(photoIndoorInput.files[0]);
+    }
+
+    if(fotoKtpInput && fotoKtpInput.files && fotoKtpInput.files[0]) {
+        if(fotoKtpInput.files[0].size > 2 * 1024 * 1024) {
+            alert("Ukuran Foto KTP terlalu besar! Maksimal 2MB.");
+            return;
+        }
+        let reader = new FileReader();
+        reader.onload = function(event) {
+            currentResto.fotoKtp = event.target.result;
+            checkFinish();
+        };
+        reader.readAsDataURL(fotoKtpInput.files[0]);
     }
 });
     
@@ -780,8 +968,7 @@ btnToggleStatus.addEventListener("click", () => {
 });
 
 window.addEventListener("DOMContentLoaded", () => {
-    updateUIProfile();
-    renderIncomingOrders();
+    loadCurrentRestoAuthGate();
 });
 
 const btnOpenProfileDropdown = document.getElementById("btnOpenProfileDropdown");
