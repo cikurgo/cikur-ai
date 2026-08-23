@@ -8,6 +8,7 @@
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="bcgo-engine.js"></script>
 <script type="module" src="cikur-config.js"></script>
     <style>
 :root {
@@ -233,6 +234,20 @@ function renderByMitraStatus(application) {
     const mainContainer = document.getElementById("agentMainViewContainer");
     if (!mainContainer) return;
 
+    if (application && application._error) {
+        mainContainer.innerHTML = `
+            <div class="agent-card" style="text-align:center; padding:30px 16px;">
+                <div style="font-size:34px; margin-bottom:10px;">⚠️</div>
+                <h3 style="font-size:14px; font-weight:800; margin-bottom:6px; color:var(--primary-red);">Gagal Memuat Status</h3>
+                <p style="font-size:11px; color:var(--text-muted); line-height:1.5; margin-bottom:14px;">
+                    ${application.code === 'permission-denied' ? 'Akses ke data pendaftaran ditolak. Hubungi Admin untuk memeriksa pengaturan sistem.' : (application.message || 'Terjadi kesalahan tidak terduga.')}
+                </p>
+                <button class="btn-action-deal" onclick="window.location.reload()">Coba Lagi</button>
+            </div>
+        `;
+        return;
+    }
+
     if (!application) {
         renderPendaftaranMitraForm(mainContainer);
         return;
@@ -342,6 +357,27 @@ function renderPendaftaranMitraForm(container) {
             btnAjukan.disabled = true;
             btnAjukan.textContent = "Mengirim Pendaftaran...";
 
+            // ==========================================
+            // BCGO EVALUATION - penilaian otomatis sebagai
+            // bahan bantu Admin. TIDAK menentukan approve/reject
+            // secara otomatis; status tetap "pending" sampai
+            // Admin memeriksa & menyetujui manual.
+            // ==========================================
+            let bcgoResult = null;
+            if (window.BCGO) {
+                try {
+                    bcgoResult = window.BCGO.evaluatePartner({
+                        partnerType: "assistant",
+                        name: userProfile.name,
+                        phone: userProfile.phone,
+                        address: alamat,
+                        serviceType: "Assistant CGO"
+                    });
+                } catch (bcgoError) {
+                    console.error("[BCGO] Gagal menjalankan evaluasi:", bcgoError);
+                }
+            }
+
             try {
                 await window.CikurCloud.submitMitraApplication(userProfile.uid, "agent", {
                     alamat,
@@ -349,7 +385,11 @@ function renderPendaftaranMitraForm(container) {
                     ktp,
                     fotoKtp: fotoKtpBase64,
                     name: userProfile.name,
-                    phone: userProfile.phone
+                    phone: userProfile.phone,
+                    bcgoScore: bcgoResult?.score ?? null,
+                    bcgoRisk: bcgoResult?.risk ?? null,
+                    bcgoRecommendation: bcgoResult?.status ?? null,
+                    bcgoReasons: bcgoResult?.reasons ?? []
                 });
                 // renderByMitraStatus akan otomatis dipanggil ulang oleh
                 // listenMitraApplication begitu dokumen tersimpan.
