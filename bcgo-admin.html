@@ -251,7 +251,6 @@
             const q = query(collection(db, "mitra_applications"), orderBy("submittedAt", "desc"));
 
             unsubscribeListener = onSnapshot(q, (snapshot) => {
-                // Jika berhasil menarik data, ubah badge jadi Hijau (Aman & Sinkron)
                 badgeEl.className = 'admin-badge badge-green';
                 badgeEl.innerText = 'DATA AKTIF';
 
@@ -327,7 +326,6 @@
                 updateStats(pendingCount, approvedCount, totalCount);
             }, (error) => {
                 console.warn("Kendala koneksi/izin database:", error);
-                // Jika gagal terhubung/izin database bermasalah, ubah badge jadi Merah
                 badgeEl.className = 'admin-badge badge-red';
                 badgeEl.innerText = 'Kendala Koneksi Database';
                 
@@ -353,6 +351,7 @@
                 <div class="detail-row"><span class="detail-label">Nama Lengkap</span><span class="detail-value">${data.fullName || data.nama || '-'}</span></div>
                 <div class="detail-row"><span class="detail-label">Nomor WhatsApp/HP</span><span class="detail-value">${data.phone || data.kontak || '-'}</span></div>
                 <div class="detail-row"><span class="detail-label">Email</span><span class="detail-value">${data.email || '-'}</span></div>
+                <div class="detail-row"><span class="detail-label">Media Sosial</span><span class="detail-value">${data.socialMedia || data.sosmed || '-'}</span></div>
                 <div class="detail-row"><span class="detail-label">Alamat / Wilayah</span><span class="detail-value">${data.address || data.wilayah || '-'}</span></div>
                 <div class="detail-row"><span class="detail-label">Status Saat Ini</span><span class="detail-value">${(data.status || 'pending').toUpperCase()}</span></div>
             `;
