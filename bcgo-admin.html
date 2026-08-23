@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BCGO Admin Center - CIKUR GO</title>
+    
+    <!-- Firebase SDK & Engine Pendukung -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="cikur-config.js"></script>
+    <script src="bcgo-engine.js"></script>
+
     <style>
         :root {
             --primary-red: #dc2626;
@@ -150,10 +157,14 @@
     </div>
 
     <script>
+        let currentCategory = 'agentcgo';
+        let unsubscribeListener = null;
+
         // Fungsi pergantian tab kategori (Agent CGO / Resto / Driver)
         function switchTab(category, btnElement) {
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             btnElement.classList.add('active');
+            currentCategory = category;
 
             const titleMap = {
                 'agentcgo': 'Manajemen Pendaftaran Agent CGO',
@@ -165,18 +176,131 @@
             loadAdminData(category);
         }
 
+        // Fungsi utama menarik dan memantau data dari Firestore secara realtime
         function loadAdminData(category) {
             const tbody = document.getElementById('adminTableBody');
-            
-            // Simulasi tampilan kosong atau menunggu sinkronisasi data riil dari database
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="5" class="empty-state">
-                        Belum ada antrean pendaftaran baru untuk kategori <b>${category.toUpperCase()}</b>. Data otomatis disinkronkan oleh BCGO Engine.
-                    </td>
-                </tr>
-            `;
+            tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Menghubungkan ke database CIKUR Cloud & sistem BCGO...</td></tr>`;
+
+            if (typeof CikurCloud !== 'undefined' && CikurCloud.db) {
+                if (unsubscribeListener) unsubscribeListener();
+
+                const collectionName = `${category}_applications`;
+
+                unsubscribeListener = CikurCloud.db.collection(collectionName)
+                    .orderBy('createdAt', 'desc')
+                    .onSnapshot((snapshot) => {
+                        let pendingCount = 0;
+                        let approvedCount = 0;
+                        let totalCount = snapshot.size;
+
+                        if (totalCount === 0) {
+                            tbody.innerHTML = `
+                                <tr>
+                                    <td colspan="5" class="empty-state">
+                                        Belum ada antrean pendaftaran baru untuk kategori <b>${category.toUpperCase()}</b>.
+                                    </td>
+                                </tr>
+                            `;
+                            updateStats(0, 0, 0);
+                            return;
+                        }
+
+                        let rowsHtml = '';
+                        snapshot.forEach((doc) => {
+                            const data = doc.data();
+                            const docId = doc.id;
+
+                            if (data.status === 'approved') approvedCount++;
+                            else if (!data.status || data.status === 'pending') pendingCount++;
+
+                            let dateStr = '-';
+                            if (data.createdAt && data.createdAt.toDate) {
+                                dateStr = data.createdAt.toDate().toLocaleString('id-ID');
+                            }
+
+                            // Evaluasi skor menggunakan BCGO Engine
+                            let bcgoBadge = '<span class="badge-status status-pending">Pending Review</span>';
+                            if (typeof BCGO !== 'undefined' && BCGO.evaluatePartner) {
+                                const evaluation = BCGO.evaluatePartner(data);
+                                if (data.status === 'approved') {
+                                    bcgoBadge = `<span class="badge-status status-approved">Approved (Skor: ${evaluation.score || '-'})</span>`;
+                                } else if (data.status === 'rejected') {
+                                    bcgoBadge = `<span class="badge-status status-rejected">Rejected</span>`;
+                                } else {
+                                    bcgoBadge = `<span class="badge-status status-pending">BCGO Skor: ${evaluation.score || 'Menunggu'}</span>`;
+                                }
+                            } else {
+                                if (data.status === 'approved') bcgoBadge = '<span class="badge-status status-approved">Approved</span>';
+                                if (data.status === 'rejected') bcgoBadge = '<span class="badge-status status-rejected">Rejected</span>';
+                            }
+
+                            rowsHtml += `
+                                <tr>
+                                    <td>${dateStr}</td>
+                                    <td><b>${data.fullName || data.nama || 'Tanpa Nama'}</b></td>
+                                    <td>${data.phone || data.kontak || '-'}</td>
+                                    <td>${bcgoBadge}</td>
+                                    <td>
+                                        <button class="btn-action btn-approve" onclick="updateStatus('${category}', '${docId}', 'approved')">Setujui</button>
+                                        <button class="btn-action btn-reject" onclick="updateStatus('${category}', '${docId}', 'rejected')">Tolak</button>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+
+                        tbody.innerHTML = rowsHtml;
+                        updateStats(pendingCount, approvedCount, totalCount);
+                    }, (error) => {
+                        console.error("Gagal memuat data admin:", error);
+                        tbody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color:red;">Gagal memuat data dari database. Periksa koneksi/konfigurasi CikurCloud.</td></tr>`;
+                    });
+            } else {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="empty-state">
+                            Modul <b>CikurCloud</b> belum terdeteksi. Pastikan file konfigurasi terhubung dengan benar.
+                        </td>
+                    </tr>
+                `;
+            }
         }
+
+        // Fungsi memperbarui statistik ringkasan di atas
+        function updateStats(pending, approved, total) {
+            document.getElementById('statPending').innerText = pending;
+            document.getElementById('statApproved').innerText = approved;
+            document.getElementById('statTotal').innerText = total;
+        }
+
+        // Fungsi untuk tombol Aksi (Menyetujui atau Menolak pendaftaran mitra)
+        function updateStatus(category, docId, newStatus) {
+            if (!confirm(`Apakah Anda yakin ingin mengubah status mitra ini menjadi ${newStatus.toUpperCase()}?`)) return;
+
+            const collectionName = `${category}_applications`;
+            CikurCloud.db.collection(collectionName).doc(docId).update({
+                status: newStatus,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            })
+            .then(() => {
+                alert(`Status mitra berhasil diperbarui menjadi ${newStatus}.`);
+            })
+            .catch((error) => {
+                console.error("Error updating status: ", error);
+                alert("Gagal memperbarui status: " + error.message);
+            });
+        }
+
+        // Fitur Pencarian Tabel Sederhana
+        document.getElementById('searchTableInput').addEventListener('input', function(e) {
+            const keyword = e.target.value.toLowerCase();
+            const rows = document.querySelectorAll('#adminTableBody tr');
+            
+            rows.forEach(row => {
+                const text = row.innerText.toLowerCase();
+                if (row.classList.contains('empty-state')) return;
+                row.style.display = text.includes(keyword) ? '' : 'none';
+            });
+        });
 
         // Inisialisasi saat halaman pertama kali dibuka
         window.addEventListener('DOMContentLoaded', () => {
