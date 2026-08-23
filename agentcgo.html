@@ -679,24 +679,25 @@
             // Sembunyikan form registrasi secara default
             if (regForm) regForm.style.display = "none";
 
+            // Jika belum daftar ATAU error permission-denied (dianggap belum punya data/baru), langsung tampilkan form registrasi
+            if (!application || application === null || (application && application._error && application.code === 'permission-denied')) {
+                if (regForm) regForm.style.display = "block";
+                mainContainer.innerHTML = "";
+                return;
+            }
+
+            // Jika terjadi error sistem lain yang benar-benar fatal
             if (application && application._error) {
                 mainContainer.innerHTML = `
                     <div class="agent-card" style="text-align:center; padding:30px 16px;">
                         <div style="font-size:34px; margin-bottom:10px;">⚠️</div>
                         <h3 style="font-size:14px; font-weight:800; margin-bottom:6px; color:var(--primary-red);">Gagal Memuat Status</h3>
                         <p style="font-size:11px; color:var(--text-muted); line-height:1.5; margin-bottom:14px;">
-                            ${application.code === 'permission-denied' ? 'Akses ke data pendaftaran ditolak. Hubungi Admin.' : (application.message || 'Terjadi kesalahan tidak terduga.')}
+                            ${application.message || 'Terjadi kesalahan tidak terduga.'}
                         </p>
                         <button class="btn-action-deal" onclick="window.location.reload()">Coba Lagi</button>
                     </div>
                 `;
-                return;
-            }
-
-            if (!application) {
-                // Jika belum daftar, tampilkan form registrasi step-by-step
-                if (regForm) regForm.style.display = "block";
-                mainContainer.innerHTML = "";
                 return;
             }
 
@@ -736,7 +737,6 @@
 
             renderAgentDashboard(mainContainer);
         }
-
         function renderPendaftaranMitraForm(container) {
             container.innerHTML = `
                 <div class="agent-card">
