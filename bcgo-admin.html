@@ -304,9 +304,10 @@
                 tbody.innerHTML = rowsHtml;
                 updateStats(pendingCount, approvedCount, totalCount);
             }, (error) => {
-                console.error("Gagal memuat data admin:", error);
-                tbody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color:red;">Gagal memuat data dari database. Periksa aturan izin Firestore.</td></tr>`;
-            });
+        console.warn("Koleksi database mungkin belum dibuat atau kosong:", error);
+        tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Belum ada data pendaftaran mitra yang masuk ke sistem.</td></tr>`;
+        updateStats(0, 0, 0);
+          });
         }
 
         // Fungsi memperbarui statistik ringkasan
