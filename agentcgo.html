@@ -765,6 +765,10 @@
                         <label>Foto KTP</label>
                         <input type="file" id="mitraFotoKtp" accept="image/*" class="input-box-mitra">
                     </div>
+                    <div class="form-group-mitra">
+                        <label>Link / Username Media Sosial (IG / TikTok / FB)</label>
+                        <input type="text" id="mitraSocialMedia" class="input-box-mitra" placeholder="Cth: @nama_ig atau link profil">
+                    </div>
                     <button class="btn-action-deal" id="btnAjukanMitra">Ajukan Pendaftaran ✓</button>
                 </div>
             `;
@@ -787,6 +791,7 @@
                     const alamat = document.getElementById("mitraAlamat")?.value.trim() || "";
                     const area = document.getElementById("mitraArea")?.value.trim() || "";
                     const ktp = document.getElementById("mitraKtp")?.value.trim() || "";
+                    const socialMedia = document.getElementById("mitraSocialMedia")?.value.trim() || "";
 
                     if (!alamat || !area) {
                         alert("Mohon lengkapi alamat domisili dan area operasional.");
@@ -798,6 +803,10 @@
                     }
                     if (!fotoKtpBase64) {
                         alert("Mohon upload foto KTP.");
+                        return;
+                    }
+                    if (!socialMedia) {
+                        alert("Mohon masukkan link atau username media sosial.");
                         return;
                     }
 
@@ -825,6 +834,7 @@
                             fotoKtp: fotoKtpBase64,
                             name: userProfile.name,
                             phone: userProfile.phone,
+                            socialMedia: socialMedia,
                             bcgoScore: bcgoResult?.score ?? null,
                             bcgoRisk: bcgoResult?.risk ?? null,
                             bcgoRecommendation: bcgoResult?.status ?? null,
@@ -860,7 +870,7 @@
         window.addEventListener("DOMContentLoaded", () => {
             loadCurrentAgentProfile();
         });
-
+        
         const btnOpenProfileDropdown = document.getElementById("btnOpenProfileDropdown");
         const headerDropdownMenu = document.getElementById("headerDropdownMenu");
         if (btnOpenProfileDropdown && headerDropdownMenu) {
