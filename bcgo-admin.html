@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BCGO Admin Center - CIKUR GO</title>
+    <style>
+        :root {
+            --primary-red: #dc2626;
+            --primary-dark: #b91c1c;
+            --bg-main: #f8fafc;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --white: #ffffff;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background: var(--bg-main); color: var(--text-main); padding-bottom: 50px; }
+
+        /* MODERN HEADER WITH LOGO */
+        .admin-header { background: var(--white); border-bottom: 1px solid var(--border-color); padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+        .admin-brand { display: flex; align-items: center; gap: 12px; font-weight: 800; font-size: 16px; letter-spacing: -0.3px; }
+        .admin-brand img { width: 36px; height: 36px; object-fit: contain; border-radius: 8px; }
+        .admin-brand div span { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .admin-header-right { display: flex; align-items: center; gap: 12px; }
+        .admin-badge { background: #fee2e2; color: var(--primary-red); font-size: 11px; padding: 5px 10px; border-radius: 99px; font-weight: 700; display: flex; align-items: center; gap: 5px; }
+        .admin-badge::before { content: ""; width: 6px; height: 6px; background: var(--primary-red); border-radius: 50%; animation: pulse 1.5s infinite; }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.3); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+
+        /* CONTAINER */
+        .admin-container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+
+        /* STATS CARDS OVERVIEW */
+        .admin-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: var(--white); border: 1px solid var(--border-color); border-radius: 12px; padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .stat-card-title { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; }
+        .stat-card-value { font-size: 24px; font-weight: 800; color: var(--text-main); }
+
+        /* TABS KATEGORI (Agent CGO, Resto, Driver) */
+        .admin-tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; overflow-x: auto; }
+        .tab-btn { background: var(--white); border: 1px solid var(--border-color); padding: 10px 18px; font-weight: 700; font-size: 13px; color: var(--text-muted); cursor: pointer; border-radius: 8px; transition: all .2s; white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+        .tab-btn.active { background: var(--primary-red); color: var(--white); border-color: var(--primary-red); box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25); }
+
+        /* CONTENT CARD */
+        .admin-card { background: var(--white); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .card-header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+        .card-title { font-size: 16px; font-weight: 800; letter-spacing: -0.2px; }
+
+        /* SEARCH & FILTER BAR */
+        .search-box { padding: 8px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; width: 260px; outline: none; transition: border-color .2s; }
+        .search-box:focus { border-color: var(--primary-red); }
+
+        /* TABLE / LIST DATA */
+        .table-responsive { width: 100%; overflow-x: auto; border-radius: 8px; border: 1px solid var(--border-color); }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+        th, td { padding: 14px 16px; border-bottom: 1px solid var(--border-color); }
+        th { background: #f8fafc; font-weight: 700; color: var(--text-muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: #fafafa; }
+        
+        /* STATUS BADGES */
+        .badge-status { display: inline-block; padding: 4px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+        .status-pending { background: #fef3c7; color: #d97706; }
+        .status-approved { background: #dcfce7; color: #15803d; }
+        .status-rejected { background: #fee2e2; color: var(--primary-red); }
+
+        /* ACTION BUTTONS */
+        .btn-action { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; border: none; transition: opacity .2s; }
+        .btn-action:hover { opacity: 0.85; }
+        .btn-approve { background: #16a34a; color: white; margin-right: 6px; }
+        .btn-reject { background: #dc2626; color: white; }
+
+        .empty-state { text-align: center; padding: 50px 20px; color: var(--text-muted); font-size: 13px; }
+    </style>
+</head>
+<body>
+
+    <!-- MODERN HEADER WITH LOGO -->
+    <header class="admin-header">
+        <div class="admin-brand">
+            <img src="cikurgoicon.png" alt="CIKUR GO Logo">
+            <div>
+                CIKUR GO
+                <span>BCGO Control Center</span>
+            </div>
+        </div>
+        <div class="admin-header-right">
+            <div class="admin-badge">BCGO Engine Active</div>
+        </div>
+    </header>
+
+    <div class="admin-container">
+        
+        <!-- QUICK STATS OVERVIEW -->
+        <div class="admin-stats-grid">
+            <div class="stat-card">
+                <div class="stat-card-title">Total Antrean Pending</div>
+                <div class="stat-card-value" id="statPending">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-title">Mitra Aktif Disetujui</div>
+                <div class="stat-card-value" id="statApproved">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-title">Total Mitra Terdaftar</div>
+                <div class="stat-card-value" id="statTotal">0</div>
+            </div>
+        </div>
+
+        <!-- TAB NAVIGASI KATEGORI MITRA -->
+        <div class="admin-tabs">
+            <button class="tab-btn active" onclick="switchTab('agentcgo', this)">Agent CGO</button>
+            <button class="tab-btn" onclick="switchTab('resto', this)">Resto Partner</button>
+            <button class="tab-btn" onclick="switchTab('driver', this)">Driver Partner</button>
+        </div>
+
+        <!-- PANEL UTAMA DATA -->
+        <div class="admin-card">
+            <div class="card-header-flex">
+                <div class="card-title" id="sectionTitle">Manajemen Pendaftaran Agent CGO</div>
+                <input type="text" class="search-box" placeholder="Cari nama atau nomor HP..." id="searchTableInput">
+            </div>
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Waktu Daftar</th>
+                            <th>Nama Lengkap</th>
+                            <th>Kontak / HP</th>
+                            <th>Status BCGO</th>
+                            <th>Aksi Verifikasi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminTableBody">
+                        <tr>
+                            <td colspan="5" class="empty-state">Menghubungkan ke database CIKUR Cloud & sistem BCGO...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Fungsi pergantian tab kategori (Agent CGO / Resto / Driver)
+        function switchTab(category, btnElement) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            btnElement.classList.add('active');
+
+            const titleMap = {
+                'agentcgo': 'Manajemen Pendaftaran Agent CGO',
+                'resto': 'Manajemen Pendaftaran Resto Partner',
+                'driver': 'Manajemen Pendaftaran Driver Partner'
+            };
+
+            document.getElementById('sectionTitle').innerText = titleMap[category];
+            loadAdminData(category);
+        }
+
+        function loadAdminData(category) {
+            const tbody = document.getElementById('adminTableBody');
+            
+            // Simulasi tampilan kosong atau menunggu sinkronisasi data riil dari database
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="empty-state">
+                        Belum ada antrean pendaftaran baru untuk kategori <b>${category.toUpperCase()}</b>. Data otomatis disinkronkan oleh BCGO Engine.
+                    </td>
+                </tr>
+            `;
+        }
+
+        // Inisialisasi saat halaman pertama kali dibuka
+        window.addEventListener('DOMContentLoaded', () => {
+            loadAdminData('agentcgo');
+        });
+    </script>
+</body>
+</html>
