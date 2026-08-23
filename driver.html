@@ -7,6 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="bcgo-engine.js"></script>
     <script type="module" src="cikur-config.js"></script>
     <style>
         :root {
@@ -118,6 +119,37 @@
                 <input type="text" id="regVehicle" class="form-input" placeholder="Contoh: A 1234 XX">
             </div>
             <div class="form-group">
+                <label class="form-label">Jenis Kendaraan</label>
+                <select id="regVehicleType" class="form-select">
+                    <option value="Motor">Motor</option>
+                    <option value="Mobil">Mobil</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Alamat Domisili</label>
+                <input type="text" id="regAddress" class="form-input" placeholder="Alamat tempat tinggal saat ini">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Nomor KTP</label>
+                <input type="text" id="regKtp" class="form-input" placeholder="16 digit NIK" inputmode="numeric" maxlength="16">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Nomor SIM</label>
+                <input type="text" id="regSim" class="form-input" placeholder="Nomor SIM sesuai kendaraan">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Foto KTP</label>
+                <input type="file" id="regFotoKtp" class="form-input" accept="image/*">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Foto SIM</label>
+                <input type="file" id="regFotoSim" class="form-input" accept="image/*">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Foto STNK</label>
+                <input type="file" id="regFotoStnk" class="form-input" accept="image/*">
+            </div>
+            <div class="form-group">
                 <label class="form-label">Pilih Bank / E-Wallet Pencairan</label>
                 <select id="regBank" class="form-select">
                     <option value="BCA">Bank BCA</option>
@@ -144,6 +176,10 @@
 
         <!-- 2. DASHBOARD UTAMA -->
         <div id="dashboardSection" style="display: flex; flex-direction: column; gap: 16px;">
+
+            <div id="mitraStatusBanner" style="background: #fef3c7; border: 1px solid #fde68a; border-radius: 12px; padding: 10px 12px; font-size: 11px; font-weight: 700; color: #92400e;">
+                Memeriksa status pendaftaran Mitra...
+            </div>
             
             <div class="driver-status-card">
                 <div style="display: flex; gap: 12px; align-items: center;">
@@ -212,62 +248,256 @@ function trackGPS() {
     }
 }
 
+let userProfile = { uid: null, name: "", phone: "", isLoggedIn: false };
+let currentMitraApplication = null;
+
 document.addEventListener("DOMContentLoaded", () => {
-    checkRegistration();
+    loadCurrentDriverAuthGate();
     initMap();
     trackGPS();
 });
 
-function checkRegistration() {
-    let profile = localStorage.getItem('cikur_driver_profile');
-    if(!profile) {
-        document.getElementById("registrationSection").style.display = "flex";
-        document.getElementById("dashboardSection").style.display = "none";
-    } else {
-        document.getElementById("registrationSection").style.display = "none";
-        document.getElementById("dashboardSection").style.display = "flex";
-        let p = JSON.parse(profile);
-        document.getElementById("profileNameDisplay").innerText = p.name || '-';
-        document.getElementById("profileMetaDisplay").innerText = `${p.vehicle || '-'} | WA: ${p.phone || '-'}`;
-        document.getElementById("profileBankNote").innerText = `Rek: ${p.bank || '-'} - ${p.accountNo || '-'} (${p.accountName || '-'})`;
-        if(p.photo) {
-            document.getElementById("profilePhotoDisplay").src = p.photo;
-        }
-        document.getElementById("navStatusBadge").innerText = "Aktif";
+async function loadCurrentDriverAuthGate() {
+    let retries = 0;
+    while (!window.CikurCloud && retries < 30) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+        retries++;
+    }
+
+    if (!window.CikurCloud) {
+        alert("CIKUR Cloud belum tersedia. Silakan refresh halaman.");
+        window.location.href = "index.html";
+        return;
+    }
+
+    let firebaseUser = null;
+    try {
+        firebaseUser = await window.CikurCloud.waitForAuth();
+    } catch (e) {
+        firebaseUser = null;
+    }
+
+    if (!firebaseUser) {
+        alert("Silakan login terlebih dahulu untuk mengakses Panel Driver.");
+        window.location.href = "index.html";
+        return;
+    }
+
+    let profile = null;
+    try {
+        profile = await window.CikurCloud.getProfile(firebaseUser.uid);
+    } catch (e) {
+        profile = null;
+    }
+
+    userProfile = {
+        uid: firebaseUser.uid,
+        name: profile?.name || "",
+        phone: profile?.phone || "",
+        isLoggedIn: true
+    };
+
+    if (document.getElementById("regPhone") && !document.getElementById("regPhone").value) {
+        document.getElementById("regPhone").value = userProfile.phone || "";
+    }
+    if (document.getElementById("regName") && !document.getElementById("regName").value) {
+        document.getElementById("regName").value = userProfile.name || "";
+    }
+
+    window.CikurCloud.listenMitraApplication(firebaseUser.uid, "driver", (application) => {
+        currentMitraApplication = application;
+        renderByMitraStatus(application);
+    });
+}
+
+function renderByMitraStatus(application) {
+    const registrationSection = document.getElementById("registrationSection");
+    const dashboardSection = document.getElementById("dashboardSection");
+    const banner = document.getElementById("mitraStatusBanner");
+    const navBadge = document.getElementById("navStatusBadge");
+
+    if (application && application._error) {
+        registrationSection.style.display = "none";
+        dashboardSection.style.display = "none";
+        alert("Gagal memuat status pendaftaran: " + (application.message || "Terjadi kesalahan."));
+        return;
+    }
+
+    if (!application) {
+        registrationSection.style.display = "flex";
+        dashboardSection.style.display = "none";
+        navBadge.innerText = "Belum Terdaftar";
+        return;
+    }
+
+    if (application.status === "pending") {
+        registrationSection.style.display = "none";
+        dashboardSection.style.display = "flex";
+        banner.style.background = "#fef3c7";
+        banner.style.color = "#92400e";
+        banner.innerHTML = "⏳ Pendaftaran Anda sedang <strong>menunggu verifikasi</strong> tim CIKUR GO.";
+        navBadge.innerText = "Menunggu Verifikasi";
+        document.getElementById("driverOrderContainer").innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Menunggu verifikasi Admin sebelum dapat menerima pesanan.</div>`;
+        fillDriverProfileDisplay(application);
+        return;
+    }
+
+    if (application.status === "rejected") {
+        registrationSection.style.display = "flex";
+        dashboardSection.style.display = "none";
+        navBadge.innerText = "Ditolak";
+        alert("Pendaftaran ditolak: " + (application.catatanAdmin || "Silakan lengkapi ulang data Anda."));
+        return;
+    }
+
+    // approved
+    registrationSection.style.display = "none";
+    dashboardSection.style.display = "flex";
+    banner.style.background = "#dcfce7";
+    banner.style.color = "#16a34a";
+    banner.innerHTML = "✓ Mitra Driver <strong>Aktif</strong> - Siap menerima pesanan.";
+    navBadge.innerText = "Aktif";
+    fillDriverProfileDisplay(application);
+}
+
+function fillDriverProfileDisplay(application) {
+    document.getElementById("profileNameDisplay").innerText = application.name || userProfile.name || '-';
+    document.getElementById("profileMetaDisplay").innerText = `${application.vehicle || '-'} | WA: ${application.phone || userProfile.phone || '-'}`;
+    document.getElementById("profileBankNote").innerText = `Rek: ${application.bank || '-'} - ${application.accountNo || '-'} (${application.accountName || '-'})`;
+    if (application.photo) {
+        document.getElementById("profilePhotoDisplay").src = application.photo;
     }
 }
 
-function saveDriverRegistration() {
+async function saveDriverRegistration() {
+    if (!userProfile.uid) {
+        alert("Sesi Anda belum siap. Silakan refresh halaman.");
+        return;
+    }
+
     let name = document.getElementById("regName").value.trim();
     let phone = document.getElementById("regPhone").value.trim();
     let vehicle = document.getElementById("regVehicle").value.trim();
+    let vehicleType = document.getElementById("regVehicleType").value;
+    let address = document.getElementById("regAddress").value.trim();
+    let ktp = document.getElementById("regKtp").value.trim();
+    let sim = document.getElementById("regSim").value.trim();
     let bank = document.getElementById("regBank").value;
     let accountName = document.getElementById("regAccountName").value.trim();
     let accountNo = document.getElementById("regAccountNo").value.trim();
 
-    if(!name || !phone || !vehicle || !accountName || !accountNo) {
+    if(!name || !phone || !vehicle || !address || !accountName || !accountNo) {
         alert("Harap isi semua kolom registrasi dan data rekening dengan lengkap!");
         return;
     }
+    if (!/^\d{16}$/.test(ktp)) {
+        alert("Nomor KTP harus tepat 16 digit angka.");
+        return;
+    }
+    if (!sim) {
+        alert("Mohon isi nomor SIM.");
+        return;
+    }
 
-    let profileData = { 
-        name: name, 
-        phone: phone, 
-        vehicle: vehicle, 
-        bank: bank, 
-        accountName: accountName, 
-        accountNo: accountNo, 
-        photo: "https://via.placeholder.com/60" 
-    };
+    const fotoKtpFile = document.getElementById("regFotoKtp").files[0];
+    const fotoSimFile = document.getElementById("regFotoSim").files[0];
+    const fotoStnkFile = document.getElementById("regFotoStnk").files[0];
+    const fotoProfilFile = document.getElementById("regPhoto").files[0];
 
-    localStorage.setItem('cikur_driver_profile', JSON.stringify(profileData));
-    alert("Registrasi Berhasil! Masuk ke panel driver...");
-    checkRegistration();
+    if (!fotoKtpFile || !fotoSimFile || !fotoStnkFile) {
+        alert("Mohon upload foto KTP, SIM, dan STNK.");
+        return;
+    }
+
+    const btnSubmit = document.querySelector('#registrationSection .btn-primary');
+    if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = "Mengirim Pendaftaran...";
+    }
+
+    function readFileAsBase64(file) {
+        return new Promise((resolve, reject) => {
+            if (!file) { resolve(""); return; }
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    try {
+        const [fotoKtpBase64, fotoSimBase64, fotoStnkBase64, fotoProfilBase64] = await Promise.all([
+            readFileAsBase64(fotoKtpFile),
+            readFileAsBase64(fotoSimFile),
+            readFileAsBase64(fotoStnkFile),
+            readFileAsBase64(fotoProfilFile)
+        ]);
+
+        let bcgoResult = null;
+        if (window.BCGO) {
+            try {
+                bcgoResult = window.BCGO.evaluatePartner({
+                    partnerType: "driver",
+                    name,
+                    phone,
+                    address,
+                    vehicleType
+                });
+            } catch (bcgoError) {
+                console.error("[BCGO] Gagal menjalankan evaluasi:", bcgoError);
+            }
+        }
+
+        await window.CikurCloud.submitMitraApplication(userProfile.uid, "driver", {
+            name,
+            phone,
+            vehicle,
+            vehicleType,
+            address,
+            ktp,
+            sim,
+            bank,
+            accountName,
+            accountNo,
+            fotoKtp: fotoKtpBase64,
+            fotoSim: fotoSimBase64,
+            fotoStnk: fotoStnkBase64,
+            photo: fotoProfilBase64 || "",
+            bcgoScore: bcgoResult?.score ?? null,
+            bcgoRisk: bcgoResult?.risk ?? null,
+            bcgoRecommendation: bcgoResult?.status ?? null,
+            bcgoReasons: bcgoResult?.reasons ?? []
+        });
+
+        alert("Pendaftaran Driver berhasil dikirim! Menunggu verifikasi Admin.");
+        // renderByMitraStatus akan otomatis dipanggil ulang oleh listener realtime
+
+    } catch (error) {
+        alert("Gagal mengirim pendaftaran: " + (error?.message || error));
+    } finally {
+        if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.textContent = "Simpan & Masuk Panel";
+        }
+    }
 }
 
 function openEditProfile() {
-    localStorage.removeItem('cikur_driver_profile');
-    checkRegistration();
+    // Tampilkan ulang form registrasi untuk edit data,
+    // data lama tetap tersimpan di Firestore sampai disubmit ulang.
+    document.getElementById("registrationSection").style.display = "flex";
+    document.getElementById("dashboardSection").style.display = "none";
+    if (currentMitraApplication) {
+        document.getElementById("regName").value = currentMitraApplication.name || "";
+        document.getElementById("regPhone").value = currentMitraApplication.phone || "";
+        document.getElementById("regVehicle").value = currentMitraApplication.vehicle || "";
+        document.getElementById("regAddress").value = currentMitraApplication.address || "";
+        document.getElementById("regKtp").value = currentMitraApplication.ktp || "";
+        document.getElementById("regSim").value = currentMitraApplication.sim || "";
+        document.getElementById("regBank").value = currentMitraApplication.bank || "BCA";
+        document.getElementById("regAccountName").value = currentMitraApplication.accountName || "";
+        document.getElementById("regAccountNo").value = currentMitraApplication.accountNo || "";
+    }
 }
 
 function toggleDriverStatus() {
