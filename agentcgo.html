@@ -1,2061 +1,997 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Agent CGO - CIKUR GO Super App Engine</title>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent CGO - CIKUR GO Super App Engine</title>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="bcgo-engine.js"></script>
-<script type="module" src="cikur-config.js"></script>
+    <!-- EXTERNAL FONTS & STYLESHEETS -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <!-- EXTERNAL SCRIPTS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="bcgo-engine.js"></script>
+    <script type="module" src="cikur-config.js"></script>
+
+    <!-- CSS STYLING -->
     <style>
-:root {
-    --primary-red: #E50914;
-    --primary-red-hover: #b80710;
-    --dark-bg: #0f172a;
-    --dark-card: #1e293b;
-    --body-bg: #f1f5f9;
-    --container-bg: #f8fafc;
-    --border-color: #e2e8f0;
-    --text-main: #0f172a;
-    --text-muted: #64748b;
-    --font-main: 'Plus Jakarta Sans', sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
-}
-*{ margin: 0; padding: 0; box-sizing: border-box; font-family: var(--font-main); }
-body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; display: flex; justify-content: center; align-items: center; }
-@media(min-width: 480px){ body { padding: 20px; } }
-.container{ width: 100%; max-width: 440px; min-height: 100vh; margin: 0 auto; padding: 85px 16px 100px 16px; display: flex; flex-direction: column; background: var(--container-bg); box-shadow: 0 10px 30px rgba(0,0,0,0.08); position: relative; overflow-x: hidden; }
-@media(min-width: 480px){ .container { min-height: 850px; border-radius: 36px; border: 1px solid var(--border-color); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15); } }
+        :root {
+            --primary-red: #E50914;
+            --primary-red-hover: #b80710;
+            --dark-bg: #0f172a;
+            --dark-card: #1e293b;
+            --body-bg: #f1f5f9;
+            --container-bg: #f8fafc;
+            --border-color: #e2e8f0;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --font-main: 'Plus Jakarta Sans', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
 
-/* HEADER & DROPDOWN */
-.app-header { position: fixed; top: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 440px; display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(248, 250, 252, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border-color); z-index: 999; }
-.user-greeting { display: flex; align-items: center; gap: 10px; cursor: pointer; transition: 0.2s; padding: 4px; border-radius: 12px; }
-.user-avatar { width: 38px; height: 38px; border-radius: 50%; background: #fee2e2; border: 2px solid var(--primary-red); display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--primary-red); font-size: 14px; overflow: hidden; flex-shrink: 0; }
-.user-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.user-info h4 { font-size: 10px; color: var(--text-muted); font-weight: 500; }
-.user-info h2 { font-size: 13px; color: var(--text-main); font-weight: 800; line-height: 1.2; }
-.assistant-offer-text { font-size: 10px; color: var(--primary-red); font-weight: 700; margin-top: 1px; }
-.header-profile-wrapper { position: relative; }
-.header-dropdown-menu { position: absolute; top: calc(100% + 8px); left: 0; width: 220px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: none; flex-direction: column; padding: 6px; z-index: 1001; }
-.header-dropdown-menu.show { display: flex; }
-.dropdown-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-size: 12px; font-weight: 700; color: var(--text-main); text-decoration: none; border-radius: 10px; transition: background 0.2s; cursor: pointer; background: transparent; border: none; width: 100%; text-align: left; }
-.dropdown-item svg { width: 16px; height: 16px; fill: var(--primary-red); }
-.dropdown-item:hover { background: #fff5f5; color: var(--primary-red); }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: var(--font-main); }
+        body { background: var(--body-bg); color: var(--text-main); min-height: 100vh; display: flex; justify-content: center; align-items: center; }
+        @media(min-width: 480px) { body { padding: 20px; } }
 
-/* TAB FILTER PESANAN */
-.order-tabs { display: flex; gap: 8px; margin: 12px 0 16px 0; }
-.order-tab-btn { flex: 1; padding: 8px 10px; font-size: 11px; font-weight: 700; border: 1px solid var(--border-color); background: #fff; color: var(--text-muted); border-radius: 10px; cursor: pointer; text-align: center; transition: 0.2s; }
-.order-tab-btn.active { background: var(--primary-red); color: #fff; border-color: var(--primary-red); }
+        .container { width: 100%; max-width: 440px; min-height: 100vh; margin: 0 auto; padding: 85px 16px 100px 16px; display: flex; flex-direction: column; background: var(--container-bg); box-shadow: 0 10px 30px rgba(0,0,0,0.08); position: relative; overflow-x: hidden; }
+        @media(min-width: 480px) { .container { min-height: 850px; border-radius: 36px; border: 1px solid var(--border-color); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15); } }
 
-/* AGENT CARDS & DETAILS */
-.agent-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 20px; padding: 16px; margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
-.order-detail-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 16px; padding: 14px; margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
-.order-header-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
-.order-badge-source { font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 6px; background: #e0f2fe; color: #0369a1; }
-.order-badge-2in1 { background: #fef3c7; color: #d97706; }
+        /* HEADER & DROPDOWN */
+        .app-header { position: fixed; top: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 440px; display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(248, 250, 252, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border-color); z-index: 999; }
+        .user-greeting { display: flex; align-items: center; gap: 10px; cursor: pointer; transition: 0.2s; padding: 4px; border-radius: 12px; }
+        .user-avatar { width: 38px; height: 38px; border-radius: 50%; background: #fee2e2; border: 2px solid var(--primary-red); display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--primary-red); font-size: 14px; overflow: hidden; flex-shrink: 0; }
+        .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .user-info h4 { font-size: 10px; color: var(--text-muted); font-weight: 500; }
+        .user-info h2 { font-size: 13px; color: var(--text-main); font-weight: 800; line-height: 1.2; }
+        .assistant-offer-text { font-size: 10px; color: var(--primary-red); font-weight: 700; margin-top: 1px; }
+        .header-profile-wrapper { position: relative; }
+        .header-dropdown-menu { position: absolute; top: calc(100% + 8px); left: 0; width: 220px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: none; flex-direction: column; padding: 6px; z-index: 1001; }
+        .header-dropdown-menu.show { display: flex; }
+        .dropdown-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-size: 12px; font-weight: 700; color: var(--text-main); text-decoration: none; border-radius: 10px; transition: background 0.2s; cursor: pointer; background: transparent; border: none; width: 100%; text-align: left; }
+        .dropdown-item svg { width: 16px; height: 16px; fill: var(--primary-red); }
+        .dropdown-item:hover { background: #fff5f5; color: var(--primary-red); }
 
-/* MAP BOX */
-.live-map-box { width: 100%; height: 150px; border-radius: 12px; margin: 10px 0; border: 1px solid var(--border-color); z-index: 1; }
+        /* TAB FILTER PESANAN */
+        .order-tabs { display: flex; gap: 8px; margin: 12px 0 16px 0; }
+        .order-tab-btn { flex: 1; padding: 8px 10px; font-size: 11px; font-weight: 700; border: 1px solid var(--border-color); background: #fff; color: var(--text-muted); border-radius: 10px; cursor: pointer; text-align: center; transition: 0.2s; }
+        .order-tab-btn.active { background: var(--primary-red); color: #fff; border-color: var(--primary-red); }
 
-/* CHAT BOX */
-.chat-container { background: #f8fafc; border: 1px solid var(--border-color); border-radius: 12px; padding: 10px; margin-top: 10px; max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
-.chat-bubble { font-size: 11px; padding: 6px 10px; border-radius: 8px; max-width: 85%; line-height: 1.3; }
-.chat-bubble.system { background: #e2e8f0; color: var(--text-main); align-self: center; text-align: center; width: 100%; }
-.chat-bubble.customer { background: #eff6ff; color: #1e40af; align-self: flex-start; border: 1px solid #bfdbfe; }
-.chat-bubble.agent { background: #fef2f2; color: #991b1b; align-self: flex-end; border: 1px solid #fecaca; }
+        /* AGENT CARDS & DETAILS */
+        .agent-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 20px; padding: 16px; margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+        .order-detail-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 16px; padding: 14px; margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
+        .order-header-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+        .order-badge-source { font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 6px; background: #e0f2fe; color: #0369a1; }
+        .order-badge-2in1 { background: #fef3c7; color: #d97706; }
 
-.chat-input-row { display: flex; gap: 6px; margin-top: 8px; }
-.chat-input { flex: 1; height: 34px; border: 1px solid var(--border-color); border-radius: 8px; padding: 0 10px; font-size: 11px; outline: none; }
-.chat-send-btn { height: 34px; padding: 0 12px; background: var(--dark-bg); color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; }
+        /* MAP BOX */
+        .live-map-box { width: 100%; height: 150px; border-radius: 12px; margin: 10px 0; border: 1px solid var(--border-color); z-index: 1; }
 
-.btn-action-deal { width: 100%; height: 42px; border: none; border-radius: 12px; background: var(--primary-red); color: #fff; font-size: 13px; font-weight: 800; cursor: pointer; margin-top: 12px; transition: 0.2s; }
-.btn-action-deal:hover { background: var(--primary-red-hover); }
+        /* CHAT BOX */
+        .chat-container { background: #f8fafc; border: 1px solid var(--border-color); border-radius: 12px; padding: 10px; margin-top: 10px; max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+        .chat-bubble { font-size: 11px; padding: 6px 10px; border-radius: 8px; max-width: 85%; line-height: 1.3; }
+        .chat-bubble.system { background: #e2e8f0; color: var(--text-main); align-self: center; text-align: center; width: 100%; }
+        .chat-bubble.customer { background: #eff6ff; color: #1e40af; align-self: flex-start; border: 1px solid #bfdbfe; }
+        .chat-bubble.agent { background: #fef2f2; color: #991b1b; align-self: flex-end; border: 1px solid #fecaca; }
 
-/* BOTTOM NAV */
-.bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 440px; height: 70px; background-color: #ffffff; border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; align-items: center; padding: 0 10px; z-index: 1000; box-shadow: 0 -4px 16px rgba(0,0,0,0.06); }
-.nav-item { background: none; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; cursor: pointer; color: var(--text-muted); transition: color 0.2s ease; position: relative; height: 100%; text-decoration: none; }
-.nav-item svg { width: 22px; height: 22px; margin-bottom: 4px; fill: currentColor; }
-.nav-item span { font-size: 11px; font-weight: 600; }
-.nav-item.active { color: var(--primary-red); }
-footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(--text-muted); font-size: 11px; }
+        .chat-input-row { display: flex; gap: 6px; margin-top: 8px; }
+        .chat-input { flex: 1; height: 34px; border: 1px solid var(--border-color); border-radius: 8px; padding: 0 10px; font-size: 11px; outline: none; }
+        .chat-send-btn { height: 34px; padding: 0 12px; background: var(--dark-bg); color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; }
 
-/* FORM PENDAFTARAN MITRA */
-.form-group-mitra { margin-bottom: 12px; }
-.form-group-mitra label { display: block; font-size: 10px; font-weight: 700; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.3px; }
-.input-box-mitra { width: 100%; padding: 10px 12px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 12px; font-weight: 600; color: var(--text-main); outline: none; }
-.input-box-mitra:focus { border-color: var(--primary-red); box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.1); }
+        .btn-action-deal { width: 100%; height: 42px; border: none; border-radius: 12px; background: var(--primary-red); color: #fff; font-size: 13px; font-weight: 800; cursor: pointer; margin-top: 12px; transition: 0.2s; }
+        .btn-action-deal:hover { background: var(--primary-red-hover); }
 
-/* ============================================================
-   AGENT CGO — REGISTRATION FORM
-============================================================ */
+        /* BOTTOM NAV */
+        .bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 440px; height: 70px; background-color: #ffffff; border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; align-items: center; padding: 0 10px; z-index: 1000; box-shadow: 0 -4px 16px rgba(0,0,0,0.06); }
+        .nav-item { background: none; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; cursor: pointer; color: var(--text-muted); transition: color 0.2s ease; position: relative; height: 100%; text-decoration: none; }
+        .nav-item svg { width: 22px; height: 22px; margin-bottom: 4px; fill: currentColor; }
+        .nav-item span { font-size: 11px; font-weight: 600; }
+        .nav-item.active { color: var(--primary-red); }
+        footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(--text-muted); font-size: 11px; }
 
-.agent-reg-progress {
-    margin-bottom: 22px;
-}
+        /* FORM PENDAFTARAN MITRA */
+        .form-group-mitra { margin-bottom: 12px; }
+        .form-group-mitra label { display: block; font-size: 10px; font-weight: 700; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.3px; }
+        .input-box-mitra { width: 100%; padding: 10px 12px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 12px; font-weight: 600; color: var(--text-main); outline: none; }
+        .input-box-mitra:focus { border-color: var(--primary-red); box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.1); }
 
-.agent-reg-progress-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 10px;
-}
+        /* AGENT CGO — REGISTRATION FORM */
+        .agent-reg-progress { margin-bottom: 22px; }
+        .agent-reg-progress-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+        .agent-reg-progress-top strong { display: block; font-size: 14px; }
+        .agent-reg-progress-top div div { margin-top: 3px; font-size: 12px; opacity: .65; }
+        #agentStepPercent { font-weight: 700; font-size: 13px; }
+        .agent-progress-track { width: 100%; height: 7px; background: #e5e7eb; border-radius: 999px; overflow: hidden; }
+        .agent-progress-bar { height: 100%; background: var(--primary-red, #dc2626); border-radius: inherit; transition: width .3s ease; }
 
-.agent-reg-progress-top strong {
-    display: block;
-    font-size: 14px;
-}
+        .agent-reg-step { display: none; }
+        .agent-reg-step.active { display: block; animation: agentStepIn .25s ease; }
 
-.agent-reg-progress-top div div {
-    margin-top: 3px;
-    font-size: 12px;
-    opacity: .65;
-}
+        @keyframes agentStepIn {
+            from { opacity: 0; transform: translateX(10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
 
-#agentStepPercent {
-    font-weight: 700;
-    font-size: 13px;
-}
+        .agent-reg-heading { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 22px; }
+        .agent-reg-icon { width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: #fef2f2; font-size: 20px; flex-shrink: 0; }
+        .agent-reg-heading h3 { margin: 0 0 4px; font-size: 18px; }
+        .agent-reg-heading p { margin: 0; font-size: 13px; line-height: 1.5; opacity: .65; }
 
-.agent-progress-track {
-    width: 100%;
-    height: 7px;
-    background: #e5e7eb;
-    border-radius: 999px;
-    overflow: hidden;
-}
+        .agent-field { margin-bottom: 17px; }
+        .agent-field label { display: block; margin-bottom: 7px; font-size: 13px; font-weight: 700; }
+        .agent-field input,
+        .agent-field textarea,
+        .agent-field select { width: 100%; border: 1px solid #d1d5db; border-radius: 11px; background: #fff; padding: 12px 13px; font: inherit; color: inherit; outline: none; transition: border-color .2s ease, box-shadow .2s ease; }
+        .agent-field textarea { resize: vertical; min-height: 90px; }
+        .agent-field input:focus,
+        .agent-field textarea:focus,
+        .agent-field select:focus { border-color: var(--primary-red, #dc2626); box-shadow: 0 0 0 3px rgba(220, 38, 38, .08); }
+        .agent-field small { display: block; margin-top: 6px; font-size: 11px; opacity: .6; }
 
-.agent-progress-bar {
-    height: 100%;
-    background: var(--primary-red, #dc2626);
-    border-radius: inherit;
-    transition: width .3s ease;
-}
+        .agent-document-box { padding: 15px; border: 1px dashed #cbd5e1; border-radius: 14px; margin-bottom: 15px; background: #f8fafc; }
+        .agent-document-title { font-weight: 700; margin-bottom: 5px; }
+        .agent-document-box p { margin: 0 0 12px; font-size: 12px; line-height: 1.5; opacity: .65; }
+        .agent-document-box input[type="file"] { width: 100%; }
+        .agent-document-preview { margin-top: 10px; min-height: 42px; padding: 10px; border-radius: 9px; background: #fff; font-size: 12px; color: #64748b; }
 
+        .agent-registration-summary { padding: 15px; border-radius: 13px; background: #f8fafc; border: 1px solid #e5e7eb; margin-bottom: 18px; font-size: 13px; line-height: 1.7; }
+        .agent-check-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 13px; font-size: 13px; line-height: 1.5; cursor: pointer; }
+        .agent-check-row input { margin-top: 3px; flex-shrink: 0; }
 
-.agent-reg-step {
-    display: none;
-}
+        .agent-final-notice { margin-top: 20px; padding: 14px; border-radius: 12px; background: #fff7ed; border: 1px solid #fed7aa; font-size: 12px; line-height: 1.55; }
+        .agent-final-notice strong { display: block; margin-bottom: 5px; }
+        .agent-final-notice p { margin: 0; }
 
-.agent-reg-step.active {
-    display: block;
-    animation: agentStepIn .25s ease;
-}
-
-@keyframes agentStepIn {
-
-    from {
-        opacity: 0;
-        transform: translateX(10px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-
-.agent-reg-heading {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    margin-bottom: 22px;
-}
-
-.agent-reg-icon {
-    width: 42px;
-    height: 42px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 12px;
-    background: #fef2f2;
-    font-size: 20px;
-    flex-shrink: 0;
-}
-
-.agent-reg-heading h3 {
-    margin: 0 0 4px;
-    font-size: 18px;
-}
-
-.agent-reg-heading p {
-    margin: 0;
-    font-size: 13px;
-    line-height: 1.5;
-    opacity: .65;
-}
-
-
-.agent-field {
-    margin-bottom: 17px;
-}
-
-.agent-field label {
-    display: block;
-    margin-bottom: 7px;
-    font-size: 13px;
-    font-weight: 700;
-}
-
-.agent-field input,
-.agent-field textarea,
-.agent-field select {
-    width: 100%;
-    border: 1px solid #d1d5db;
-    border-radius: 11px;
-    background: #fff;
-    padding: 12px 13px;
-    font: inherit;
-    color: inherit;
-    outline: none;
-    transition:
-        border-color .2s ease,
-        box-shadow .2s ease;
-}
-
-.agent-field textarea {
-    resize: vertical;
-    min-height: 90px;
-}
-
-.agent-field input:focus,
-.agent-field textarea:focus,
-.agent-field select:focus {
-    border-color: var(--primary-red, #dc2626);
-    box-shadow: 0 0 0 3px rgba(220, 38, 38, .08);
-}
-
-.agent-field small {
-    display: block;
-    margin-top: 6px;
-    font-size: 11px;
-    opacity: .6;
-}
-
-
-.agent-document-box {
-    padding: 15px;
-    border: 1px dashed #cbd5e1;
-    border-radius: 14px;
-    margin-bottom: 15px;
-    background: #f8fafc;
-}
-
-.agent-document-title {
-    font-weight: 700;
-    margin-bottom: 5px;
-}
-
-.agent-document-box p {
-    margin: 0 0 12px;
-    font-size: 12px;
-    line-height: 1.5;
-    opacity: .65;
-}
-
-.agent-document-box input[type="file"] {
-    width: 100%;
-}
-
-.agent-document-preview {
-    margin-top: 10px;
-    min-height: 42px;
-    padding: 10px;
-    border-radius: 9px;
-    background: #fff;
-    font-size: 12px;
-    color: #64748b;
-}
-
-
-.agent-registration-summary {
-    padding: 15px;
-    border-radius: 13px;
-    background: #f8fafc;
-    border: 1px solid #e5e7eb;
-    margin-bottom: 18px;
-    font-size: 13px;
-    line-height: 1.7;
-}
-
-.agent-check-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    margin-bottom: 13px;
-    font-size: 13px;
-    line-height: 1.5;
-    cursor: pointer;
-}
-
-.agent-check-row input {
-    margin-top: 3px;
-    flex-shrink: 0;
-}
-
-
-.agent-final-notice {
-    margin-top: 20px;
-    padding: 14px;
-    border-radius: 12px;
-    background: #fff7ed;
-    border: 1px solid #fed7aa;
-    font-size: 12px;
-    line-height: 1.55;
-}
-
-.agent-final-notice strong {
-    display: block;
-    margin-bottom: 5px;
-}
-
-.agent-final-notice p {
-    margin: 0;
-}
-
-
-.agent-reg-navigation {
-    display: flex;
-    gap: 10px;
-    margin-top: 25px;
-}
-
-.agent-reg-navigation button {
-    flex: 1;
-    min-height: 46px;
-    border: 0;
-    border-radius: 12px;
-    padding: 11px 15px;
-    font-weight: 700;
-    cursor: pointer;
-}
-
-#agentPrevBtn {
-    background: #f1f5f9;
-    color: #334155;
-}
-
-#agentNextBtn,
-#agentSubmitBtn {
-    background: var(--primary-red, #dc2626);
-    color: #fff;
-}
-
-#agentNextBtn:hover,
-#agentSubmitBtn:hover {
-    filter: brightness(.96);
-}
-        
-</style>
+        .agent-reg-navigation { display: flex; gap: 10px; margin-top: 25px; }
+        .agent-reg-navigation button { flex: 1; min-height: 46px; border: 0; border-radius: 12px; padding: 11px 15px; font-weight: 700; cursor: pointer; }
+        #agentPrevBtn { background: #f1f5f9; color: #334155; }
+        #agentNextBtn, #agentSubmitBtn { background: var(--primary-red, #dc2626); color: #fff; }
+        #agentNextBtn:hover, #agentSubmitBtn:hover { filter: brightness(.96); }
+    </style>
 </head>
 <body>
 
-<div class="container">
-    <!-- STICKY HEADER -->
-    <div class="app-header">
-        <div class="header-profile-wrapper">
-            <div class="user-greeting" id="btnOpenProfileDropdown">
-                <div class="user-avatar" id="headerAvatar">CK</div>
-                <div class="user-info">
-                    <h4>Selamat Datang,</h4>
-                    <h2 id="headerNamaUser">CIKUR USER</h2>
-                    <div class="assistant-offer-text">Agent CGO Active</div>
+    <div class="container">
+        
+        <!-- STICKY HEADER & DROPDOWN -->
+        <div class="app-header">
+            <div class="header-profile-wrapper">
+                <div class="user-greeting" id="btnOpenProfileDropdown">
+                    <div class="user-avatar" id="headerAvatar">CK</div>
+                    <div class="user-info">
+                        <h4>Selamat Datang,</h4>
+                        <h2 id="headerNamaUser">CIKUR USER</h2>
+                        <div class="assistant-offer-text">Agent CGO Active</div>
+                    </div>
+                </div>
+                <!-- DROPDOWN MENU -->
+                <div class="header-dropdown-menu" id="headerDropdownMenu">
+                    <button class="dropdown-item" onclick="window.location.href='index.html';">
+                        <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8Z"/></svg>
+                        <span>Beranda Utama</span>
+                    </button>
+                    <button class="dropdown-item" onclick="window.location.href='resto.html';">
+                        <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4Z"/></svg>
+                        <span>Resto</span>
+                    </button>
+                    <button class="dropdown-item" onclick="window.location.href='driver.html';">
+                        <svg viewBox="0 0 24 24"><path d="M5 13c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3zm7-8-2 3H7c-.55 0-1 .45-1 1s.45 1 1 1h2.15l1.63-2.45L15.35 12H19c.55 0 1-.45 1-1s-.45-1-1-1h-2.15l-1.92-2.88c-.3-.45-.81-.72-1.35-.72H12z"/></svg>
+                        <span>Driver</span>
+                    </button>
                 </div>
             </div>
-            <!-- DROPDOWN MENU -->
-            <div class="header-dropdown-menu" id="headerDropdownMenu">
-                <button class="dropdown-item" onclick="window.location.href='index.html';">
-                    <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8Z"/></svg>
-                    <span>Beranda Utama</span>
-                </button>
-                <button class="dropdown-item" onclick="window.location.href='resto.html';">
-                    <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4Z"/></svg>
-                    <span>Resto</span>
-                </button>
-                <button class="dropdown-item" onclick="window.location.href='driver.html';">
-                    <svg viewBox="0 0 24 24"><path d="M5 13c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3zm7-8-2 3H7c-.55 0-1 .45-1 1s.45 1 1 1h2.15l1.63-2.45L15.35 12H19c.55 0 1-.45 1-1s-.45-1-1-1h-2.15l-1.92-2.88c-.3-.45-.81-.72-1.35-.72H12z"/></svg>
-                    <span>Driver</span>
-                </button>
-            </div>
         </div>
-    </div>
 
-    
-    <!-- MAIN VIEW AGENT CGO (diisi dinamis: form daftar / pending / dashboard) -->
-    <div style="margin-top: 10px;" id="agentMainViewContainer">
-        <div style="text-align: center; padding: 40px 16px; color: var(--text-muted); font-size: 12px;">Memuat...</div>
-    </div>
-<!-- ============================================================
-     AGENT CGO — REGISTRASI MITRA
-============================================================ -->
+        <!-- MAIN VIEW CONTAINER (AGENT CGO) -->
+        <div style="margin-top: 10px;" id="agentMainViewContainer">
+            <div style="text-align: center; padding: 40px 16px; color: var(--text-muted); font-size: 12px;">Memuat...</div>
+        </div>
 
-<div id="agentRegistrationForm">
-
-    <!-- PROGRESS -->
-
-    <div class="agent-reg-progress">
-
-        <div class="agent-reg-progress-top">
-
-            <div>
-                <strong id="agentStepTitle">
-                    Langkah 1 dari 7
-                </strong>
-
-                <div id="agentStepSubtitle">
-                    Akun & Kontak
+        <!-- AGENT CGO — REGISTRASI MITRA FORM (STEPPER) -->
+        <div id="agentRegistrationForm">
+            <!-- PROGRESS BAR -->
+            <div class="agent-reg-progress">
+                <div class="agent-reg-progress-top">
+                    <div>
+                        <strong id="agentStepTitle">Langkah 1 dari 7</strong>
+                        <div id="agentStepSubtitle">Akun & Kontak</div>
+                    </div>
+                    <span id="agentStepPercent">14%</span>
+                </div>
+                <div class="agent-progress-track">
+                    <div id="agentProgressBar" class="agent-progress-bar" style="width:14%;"></div>
                 </div>
             </div>
 
-            <span id="agentStepPercent">
-                14%
-            </span>
+            <!-- STEP 1 — AKUN & KONTAK -->
+            <section class="agent-reg-step active" data-step="1">
+                <div class="agent-reg-heading">
+                    <span class="agent-reg-icon">👤</span>
+                    <div>
+                        <h3>Akun & Kontak</h3>
+                        <p>Pastikan data kontak dapat digunakan.</p>
+                    </div>
+                </div>
+                <div class="agent-field">
+                    <label>Nama Lengkap</label>
+                    <input type="text" id="agentName" placeholder="Nama lengkap sesuai identitas" autocomplete="name">
+                </div>
+                <div class="agent-field">
+                    <label>Nomor HP</label>
+                    <input type="tel" id="agentPhone" placeholder="08xxxxxxxxxx" autocomplete="tel">
+                </div>
+                <div class="agent-field">
+                    <label>Email</label>
+                    <input type="email" id="agentEmail" placeholder="nama@email.com" autocomplete="email">
+                </div>
+            </section>
 
+            <!-- STEP 2 — DATA PRIBADI -->
+            <section class="agent-reg-step" data-step="2">
+                <div class="agent-reg-heading">
+                    <span class="agent-reg-icon">🪪</span>
+                    <div>
+                        <h3>Data Pribadi</h3>
+                        <p>Isi sesuai dengan identitas resmi.</p>
+                    </div>
+                </div>
+                <div class="agent-field">
+                    <label>Tempat Lahir</label>
+                    <input type="text" id="agentBirthPlace" placeholder="Contoh: Pandeglang">
+                </div>
+                <div class="agent-field">
+                    <label>Tanggal Lahir</label>
+                    <input type="date" id="agentBirthDate">
+                </div>
+                <div class="agent-field">
+                    <label>Jenis Kelamin</label>
+                    <select id="agentGender">
+                        <option value="">Pilih jenis kelamin</option>
+                        <option value="male">Laki-laki</option>
+                        <option value="female">Perempuan</option>
+                    </select>
+                </div>
+            </section>
+
+            <!-- STEP 3 — IDENTITAS -->
+            <section class="agent-reg-step" data-step="3">
+                <div class="agent-reg-heading">
+                    <span class="agent-reg-icon">🔐</span>
+                    <div>
+                        <h3>Verifikasi Identitas</h3>
+                        <p>Data identitas digunakan untuk proses verifikasi.</p>
+                    </div>
+                </div>
+                <div class="agent-field">
+                    <label>Nomor KTP / NIK</label>
+                    <input type="text" id="mitraKtp" maxlength="16" inputmode="numeric" placeholder="16 digit NIK">
+                    <small>Masukkan 16 digit NIK sesuai KTP.</small>
+                </div>
+                <div class="agent-document-box">
+                    <div class="agent-document-title">📄 Foto KTP</div>
+                    <p>Gunakan foto KTP asli yang jelas dan terbaca.</p>
+                    <input type="file" id="agentKtpFile" accept="image/*" capture="environment">
+                    <div id="agentKtpPreview" class="agent-document-preview">Belum ada foto KTP.</div>
+                </div>
+                <div class="agent-document-box">
+                    <div class="agent-document-title">🤳 Selfie dengan KTP</div>
+                    <p>Ambil foto diri bersama KTP.</p>
+                    <input type="file" id="agentSelfieFile" accept="image/*" capture="user">
+                    <div id="agentSelfiePreview" class="agent-document-preview">Belum ada selfie.</div>
+                </div>
+            </section>
+
+            <!-- STEP 4 — DOMISILI -->
+            <section class="agent-reg-step" data-step="4">
+                <div class="agent-reg-heading">
+                    <span class="agent-reg-icon">📍</span>
+                    <div>
+                        <h3>Domisili</h3>
+                        <p>Masukkan alamat tempat tinggal saat ini.</p>
+                    </div>
+                </div>
+                <div class="agent-field">
+                    <label>Alamat Domisili</label>
+                    <textarea id="mitraAlamat" rows="4" placeholder="Jalan, nomor rumah, RT/RW, dan keterangan lainnya"></textarea>
+                </div>
+                <div class="agent-field">
+                    <label>Kecamatan</label>
+                    <input type="text" id="agentKecamatan" placeholder="Kecamatan">
+                </div>
+                <div class="agent-field">
+                    <label>Kabupaten / Kota</label>
+                    <input type="text" id="agentKabupaten" placeholder="Kabupaten / Kota">
+                </div>
+                <div class="agent-field">
+                    <label>Provinsi</label>
+                    <input type="text" id="agentProvinsi" placeholder="Provinsi">
+                </div>
+                <div class="agent-field">
+                    <label>Kode Pos</label>
+                    <input type="text" id="agentKodePos" inputmode="numeric" maxlength="5" placeholder="xxxxx">
+                </div>
+            </section>
+
+            <!-- STEP 5 — AREA & KESIAPAN -->
+            <section class="agent-reg-step" data-step="5">
+                <div class="agent-reg-heading">
+                    <span class="agent-reg-icon">🗺️</span>
+                    <div>
+                        <h3>Area & Kesiapan</h3>
+                        <p>Tentukan wilayah dan kesiapan layanan.</p>
+                    </div>
+                </div>
+                <div class="agent-field">
+                    <label>Area Operasional Utama</label>
+                    <input type="text" id="mitraArea" placeholder="Contoh: Pandeglang Kota">
+                </div>
+                <div class="agent-field">
+                    <label>Radius Layanan</label>
+                    <select id="agentRadius">
+                        <option value="">Pilih radius</option>
+                        <option value="3">Hingga 3 km</option>
+                        <option value="5">Hingga 5 km</option>
+                        <option value="10">Hingga 10 km</option>
+                        <option value="15">Hingga 15 km</option>
+                        <option value="custom">Menyesuaikan kebutuhan</option>
+                    </select>
+                </div>
+                <div class="agent-field">
+                    <label>Ketersediaan</label>
+                    <select id="agentAvailability">
+                        <option value="">Pilih ketersediaan</option>
+                        <option value="full_time">Full Time</option>
+                        <option value="part_time">Part Time</option>
+                        <option value="flexible">Fleksibel</option>
+                    </select>
+                </div>
+                <div class="agent-field">
+                    <label>Hari / waktu layanan</label>
+                    <textarea id="agentServiceSchedule" rows="3" placeholder="Contoh: Senin–Sabtu, 09.00–21.00"></textarea>
+                </div>
+            </section>
+
+            <!-- STEP 6 — PROFIL AGENT -->
+            <section class="agent-reg-step" data-step="6">
+                <div class="agent-reg-heading">
+                    <span class="agent-reg-icon">⭐</span>
+                    <div>
+                        <h3>Profil Agent</h3>
+                        <p>Bantu CIKUR GO memahami profil dan kemampuan Anda.</p>
+                    </div>
+                </div>
+                <div class="agent-field">
+                    <label>Pengalaman</label>
+                    <select id="agentExperience">
+                        <option value="">Pilih pengalaman</option>
+                        <option value="none">Belum memiliki pengalaman</option>
+                        <option value="less_than_1">Kurang dari 1 tahun</option>
+                        <option value="1_3">1–3 tahun</option>
+                        <option value="3_5">3–5 tahun</option>
+                        <option value="more_than_5">Lebih dari 5 tahun</option>
+                    </select>
+                </div>
+                <div class="agent-field">
+                    <label>Keahlian / kemampuan</label>
+                    <textarea id="agentSkills" rows="4" placeholder="Contoh: komunikasi, pelayanan pelanggan, pendampingan, bahasa, dll."></textarea>
+                </div>
+                <div class="agent-field">
+                    <label>Bahasa yang dikuasai</label>
+                    <input type="text" id="agentLanguages" placeholder="Contoh: Indonesia, Sunda, Inggris">
+                </div>
+                <div class="agent-field">
+                    <label>Tentang diri Anda</label>
+                    <textarea id="agentBio" rows="4" placeholder="Ceritakan secara singkat mengenai diri Anda."></textarea>
+                </div>
+            </section>
+
+            <!-- STEP 7 — PERSETUJUAN -->
+            <section class="agent-reg-step" data-step="7">
+                <div class="agent-reg-heading">
+                    <span class="agent-reg-icon">✅</span>
+                    <div>
+                        <h3>Persetujuan</h3>
+                        <p>Periksa kembali seluruh data sebelum dikirim.</p>
+                    </div>
+                </div>
+                <div id="agentRegistrationSummary" class="agent-registration-summary">Ringkasan data akan ditampilkan di sini.</div>
+                <label class="agent-check-row">
+                    <input type="checkbox" id="agentAgreeTerms">
+                    <span>Saya menyetujui Syarat & Ketentuan CIKUR GO.</span>
+                </label>
+                <label class="agent-check-row">
+                    <input type="checkbox" id="agentAgreePrivacy">
+                    <span>Saya menyetujui Kebijakan Privasi CIKUR GO.</span>
+                </label>
+                <label class="agent-check-row">
+                    <input type="checkbox" id="agentConfirmData">
+                    <span>Saya menyatakan bahwa data yang saya berikan adalah benar dan dapat dipertanggungjawabkan.</span>
+                </label>
+                <div class="agent-final-notice">
+                    <strong>Setelah dikirim</strong>
+                    <p>Data akan masuk ke proses pemeriksaan CIKUR GO. BCGO dapat membantu melakukan analisis awal, sedangkan keputusan aktivasi tetap mengikuti proses verifikasi CIKUR GO.</p>
+                </div>
+            </section>
+
+            <!-- NAVIGATION BUTTONS -->
+            <div class="agent-reg-navigation">
+                <button type="button" id="agentPrevBtn" onclick="agentRegistrationPrev()" style="display:none;">← Kembali</button>
+                <button type="button" id="agentNextBtn" onclick="agentRegistrationNext()">Lanjut →</button>
+                <button type="button" id="agentSubmitBtn" onclick="agentRegistrationSubmit()" style="display:none;">Kirim Pendaftaran</button>
+            </div>
         </div>
-
-        <div class="agent-progress-track">
-
-            <div
-                id="agentProgressBar"
-                class="agent-progress-bar"
-                style="width:14%;"
-            ></div>
-
-        </div>
-
+        
+        <!-- BOTTOM NAVIGATION & FOOTER -->
+        <nav class="bottom-nav">
+            <a href="index.html" class="nav-item">
+                <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8Z"/></svg>
+                <span>Beranda</span>
+            </a>
+            <a href="resto.html" class="nav-item">
+                <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4Z"/></svg>
+                <span>Resto</span>
+            </a>
+            <a href="agentcgo.html" class="nav-item active">
+                <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2Z"/></svg>
+                <span>Agent CGO</span>
+            </a>
+        </nav>
+        <footer><p>© 2026 CIKUR GO • Agent Engine</p></footer>
     </div>
 
 
-    <!-- ========================================================
-         STEP 1 — AKUN & KONTAK
-    ========================================================= -->
-
-    <section
-        class="agent-reg-step active"
-        data-step="1"
-    >
-
-        <div class="agent-reg-heading">
-
-            <span class="agent-reg-icon">👤</span>
-
-            <div>
-                <h3>Akun & Kontak</h3>
-
-                <p>
-                    Pastikan data kontak dapat digunakan.
-                </p>
-            </div>
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Nama Lengkap
-            </label>
-
-            <input
-                type="text"
-                id="agentName"
-                placeholder="Nama lengkap sesuai identitas"
-                autocomplete="name"
-            >
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Nomor HP
-            </label>
-
-            <input
-                type="tel"
-                id="agentPhone"
-                placeholder="08xxxxxxxxxx"
-                autocomplete="tel"
-            >
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Email
-            </label>
-
-            <input
-                type="email"
-                id="agentEmail"
-                placeholder="nama@email.com"
-                autocomplete="email"
-            >
-
-        </div>
-
-    </section>
-
-
-    <!-- ========================================================
-         STEP 2 — DATA PRIBADI
-    ========================================================= -->
-
-    <section
-        class="agent-reg-step"
-        data-step="2"
-    >
-
-        <div class="agent-reg-heading">
-
-            <span class="agent-reg-icon">🪪</span>
-
-            <div>
-                <h3>Data Pribadi</h3>
-
-                <p>
-                    Isi sesuai dengan identitas resmi.
-                </p>
-            </div>
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Tempat Lahir
-            </label>
-
-            <input
-                type="text"
-                id="agentBirthPlace"
-                placeholder="Contoh: Pandeglang"
-            >
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Tanggal Lahir
-            </label>
-
-            <input
-                type="date"
-                id="agentBirthDate"
-            >
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Jenis Kelamin
-            </label>
-
-            <select id="agentGender">
-
-                <option value="">
-                    Pilih jenis kelamin
-                </option>
-
-                <option value="male">
-                    Laki-laki
-                </option>
-
-                <option value="female">
-                    Perempuan
-                </option>
-
-            </select>
-
-        </div>
-
-    </section>
-
-
-    <!-- ========================================================
-         STEP 3 — IDENTITAS
-    ========================================================= -->
-
-    <section
-        class="agent-reg-step"
-        data-step="3"
-    >
-
-        <div class="agent-reg-heading">
-
-            <span class="agent-reg-icon">🔐</span>
-
-            <div>
-                <h3>Verifikasi Identitas</h3>
-
-                <p>
-                    Data identitas digunakan untuk proses verifikasi.
-                </p>
-            </div>
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Nomor KTP / NIK
-            </label>
-
-            <input
-                type="text"
-                id="mitraKtp"
-                maxlength="16"
-                inputmode="numeric"
-                placeholder="16 digit NIK"
-            >
-
-            <small>
-                Masukkan 16 digit NIK sesuai KTP.
-            </small>
-
-        </div>
-
-
-        <div class="agent-document-box">
-
-            <div class="agent-document-title">
-                📄 Foto KTP
-            </div>
-
-            <p>
-                Gunakan foto KTP asli yang jelas dan terbaca.
-            </p>
-
-            <input
-                type="file"
-                id="agentKtpFile"
-                accept="image/*"
-                capture="environment"
-            >
-
-            <div
-                id="agentKtpPreview"
-                class="agent-document-preview"
-            >
-                Belum ada foto KTP.
-            </div>
-
-        </div>
-
-
-        <div class="agent-document-box">
-
-            <div class="agent-document-title">
-                🤳 Selfie dengan KTP
-            </div>
-
-            <p>
-                Ambil foto diri bersama KTP.
-            </p>
-
-            <input
-                type="file"
-                id="agentSelfieFile"
-                accept="image/*"
-                capture="user"
-            >
-
-            <div
-                id="agentSelfiePreview"
-                class="agent-document-preview"
-            >
-                Belum ada selfie.
-            </div>
-
-        </div>
-
-    </section>
-
-
-    <!-- ========================================================
-         STEP 4 — DOMISILI
-    ========================================================= -->
-
-    <section
-        class="agent-reg-step"
-        data-step="4"
-    >
-
-        <div class="agent-reg-heading">
-
-            <span class="agent-reg-icon">📍</span>
-
-            <div>
-                <h3>Domisili</h3>
-
-                <p>
-                    Masukkan alamat tempat tinggal saat ini.
-                </p>
-            </div>
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Alamat Domisili
-            </label>
-
-            <textarea
-                id="mitraAlamat"
-                rows="4"
-                placeholder="Jalan, nomor rumah, RT/RW, dan keterangan lainnya"
-            ></textarea>
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Kecamatan
-            </label>
-
-            <input
-                type="text"
-                id="agentKecamatan"
-                placeholder="Kecamatan"
-            >
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Kabupaten / Kota
-            </label>
-
-            <input
-                type="text"
-                id="agentKabupaten"
-                placeholder="Kabupaten / Kota"
-            >
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Provinsi
-            </label>
-
-            <input
-                type="text"
-                id="agentProvinsi"
-                placeholder="Provinsi"
-            >
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Kode Pos
-            </label>
-
-            <input
-                type="text"
-                id="agentKodePos"
-                inputmode="numeric"
-                maxlength="5"
-                placeholder="xxxxx"
-            >
-
-        </div>
-
-    </section>
-
-
-    <!-- ========================================================
-         STEP 5 — AREA & KESIAPAN
-    ========================================================= -->
-
-    <section
-        class="agent-reg-step"
-        data-step="5"
-    >
-
-        <div class="agent-reg-heading">
-
-            <span class="agent-reg-icon">🗺️</span>
-
-            <div>
-                <h3>Area & Kesiapan</h3>
-
-                <p>
-                    Tentukan wilayah dan kesiapan layanan.
-                </p>
-            </div>
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Area Operasional Utama
-            </label>
-
-            <input
-                type="text"
-                id="mitraArea"
-                placeholder="Contoh: Pandeglang Kota"
-            >
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Radius Layanan
-            </label>
-
-            <select id="agentRadius">
-
-                <option value="">
-                    Pilih radius
-                </option>
-
-                <option value="3">
-                    Hingga 3 km
-                </option>
-
-                <option value="5">
-                    Hingga 5 km
-                </option>
-
-                <option value="10">
-                    Hingga 10 km
-                </option>
-
-                <option value="15">
-                    Hingga 15 km
-                </option>
-
-                <option value="custom">
-                    Menyesuaikan kebutuhan
-                </option>
-
-            </select>
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Ketersediaan
-            </label>
-
-            <select id="agentAvailability">
-
-                <option value="">
-                    Pilih ketersediaan
-                </option>
-
-                <option value="full_time">
-                    Full Time
-                </option>
-
-                <option value="part_time">
-                    Part Time
-                </option>
-
-                <option value="flexible">
-                    Fleksibel
-                </option>
-
-            </select>
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Hari / waktu layanan
-            </label>
-
-            <textarea
-                id="agentServiceSchedule"
-                rows="3"
-                placeholder="Contoh: Senin–Sabtu, 09.00–21.00"
-            ></textarea>
-
-        </div>
-
-    </section>
-
-
-    <!-- ========================================================
-         STEP 6 — PROFIL AGENT
-    ========================================================= -->
-
-    <section
-        class="agent-reg-step"
-        data-step="6"
-    >
-
-        <div class="agent-reg-heading">
-
-            <span class="agent-reg-icon">⭐</span>
-
-            <div>
-                <h3>Profil Agent</h3>
-
-                <p>
-                    Bantu CIKUR GO memahami profil dan kemampuan Anda.
-                </p>
-            </div>
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Pengalaman
-            </label>
-
-            <select id="agentExperience">
-
-                <option value="">
-                    Pilih pengalaman
-                </option>
-
-                <option value="none">
-                    Belum memiliki pengalaman
-                </option>
-
-                <option value="less_than_1">
-                    Kurang dari 1 tahun
-                </option>
-
-                <option value="1_3">
-                    1–3 tahun
-                </option>
-
-                <option value="3_5">
-                    3–5 tahun
-                </option>
-
-                <option value="more_than_5">
-                    Lebih dari 5 tahun
-                </option>
-
-            </select>
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Keahlian / kemampuan
-            </label>
-
-            <textarea
-                id="agentSkills"
-                rows="4"
-                placeholder="Contoh: komunikasi, pelayanan pelanggan, pendampingan, bahasa, dll."
-            ></textarea>
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Bahasa yang dikuasai
-            </label>
-
-            <input
-                type="text"
-                id="agentLanguages"
-                placeholder="Contoh: Indonesia, Sunda, Inggris"
-            >
-
-        </div>
-
-
-        <div class="agent-field">
-
-            <label>
-                Tentang diri Anda
-            </label>
-
-            <textarea
-                id="agentBio"
-                rows="4"
-                placeholder="Ceritakan secara singkat mengenai diri Anda."
-            ></textarea>
-
-        </div>
-
-    </section>
-
-
-    <!-- ========================================================
-         STEP 7 — PERSETUJUAN
-    ========================================================= -->
-
-    <section
-        class="agent-reg-step"
-        data-step="7"
-    >
-
-        <div class="agent-reg-heading">
-
-            <span class="agent-reg-icon">✅</span>
-
-            <div>
-                <h3>Persetujuan</h3>
-
-                <p>
-                    Periksa kembali seluruh data sebelum dikirim.
-                </p>
-            </div>
-
-        </div>
-
-
-        <div
-            id="agentRegistrationSummary"
-            class="agent-registration-summary"
-        >
-            Ringkasan data akan ditampilkan di sini.
-        </div>
-
-
-        <label class="agent-check-row">
-
-            <input
-                type="checkbox"
-                id="agentAgreeTerms"
-            >
-
-            <span>
-                Saya menyetujui Syarat & Ketentuan CIKUR GO.
-            </span>
-
-        </label>
-
-
-        <label class="agent-check-row">
-
-            <input
-                type="checkbox"
-                id="agentAgreePrivacy"
-            >
-
-            <span>
-                Saya menyetujui Kebijakan Privasi CIKUR GO.
-            </span>
-
-        </label>
-
-
-        <label class="agent-check-row">
-
-            <input
-                type="checkbox"
-                id="agentConfirmData"
-            >
-
-            <span>
-                Saya menyatakan bahwa data yang saya berikan
-                adalah benar dan dapat dipertanggungjawabkan.
-            </span>
-
-        </label>
-
-
-        <div class="agent-final-notice">
-
-            <strong>
-                Setelah dikirim
-            </strong>
-
-            <p>
-                Data akan masuk ke proses pemeriksaan CIKUR GO.
-                BCGO dapat membantu melakukan analisis awal,
-                sedangkan keputusan aktivasi tetap mengikuti
-                proses verifikasi CIKUR GO.
-            </p>
-
-        </div>
-
-    </section>
-    <!-- ========================================================
-         NAVIGATION
-    ========================================================= -->
-    <div class="agent-reg-navigation">
-        <button
-            type="button"
-            id="agentPrevBtn"
-            onclick="agentRegistrationPrev()"
-            style="display:none;"
-        >
-            ← Kembali
-        </button>
-        <button
-            type="button"
-            id="agentNextBtn"
-            onclick="agentRegistrationNext()"
-        >
-            Lanjut →
-        </button>
-        <button
-            type="button"
-            id="agentSubmitBtn"
-            onclick="agentRegistrationSubmit()"
-            style="display:none;"
-        >
-            Kirim Pendaftaran
-        </button>
-    </div>
-</div>
-    
-    <!-- BOTTOM NAV -->
-    <nav class="bottom-nav">
-        <a href="index.html" class="nav-item">
-            <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8Z"/></svg>
-            <span>Beranda</span>
-        </a>
-        <a href="resto.html" class="nav-item">
-            <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4Z"/></svg>
-            <span>Resto</span>
-        </a>
-        <a href="agentcgo.html" class="nav-item active">
-            <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2Z"/></svg>
-            <span>Agent CGO</span>
-        </a>
-    </nav>
-    <footer><p>© 2026 CIKUR GO • Agent Engine</p></footer>
-</div>
-
-<script>
-let userProfile = { uid: null, name: "", phone: "", avatar: "", isLoggedIn: false };
-
-// Referensi paket layanan Assistant (untuk tampilkan personil/durasi di kartu Agent)
-const dataPaketReferensi = {
-    dine: { personil: "1 Personil", durasi: "Hingga 30 Menit" },
-    vip: { personil: "1 Personil", durasi: "Hingga 2 Jam" },
-    private: { personil: "2 Personil", durasi: "Hingga 4 Jam" }
-};
-
-function updateUIProfile() {
-    const headerNamaEl = document.getElementById("headerNamaUser");
-    const avatarContainer = document.getElementById("headerAvatar");
-
-    if (headerNamaEl) headerNamaEl.innerText = userProfile.name || "Agent CGO";
-
-    if (avatarContainer) {
-        if (userProfile.avatar && userProfile.avatar.startsWith("data:image")) {
-            avatarContainer.innerHTML = `<img src="${userProfile.avatar}" alt="Foto Profil">`;
-        } else {
-            const initials = (userProfile.name || "CK").split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
-            avatarContainer.innerText = initials || "CK";
-        }
-    }
-}
-<script>
-
-/* ============================================================
-   AGENT CGO — REGISTRATION STEPPER
-============================================================ */
-
-let agentCurrentStep = 1;
-
-const AGENT_TOTAL_STEPS = 7;
-
-
-function agentGetSteps() {
-
-    return document.querySelectorAll(
-        ".agent-reg-step"
-    );
-
-}
-
-
-function agentUpdateStep() {
-
-    const steps =
-        agentGetSteps();
-
-
-    steps.forEach((step, index) => {
-
-        step.classList.toggle(
-            "active",
-            index + 1 === agentCurrentStep
-        );
-
-    });
-
-
-    const percent =
-        Math.round(
-            (agentCurrentStep /
-                AGENT_TOTAL_STEPS) * 100
-        );
-
-
-    document.getElementById(
-        "agentStepPercent"
-    ).textContent =
-        percent + "%";
-
-
-    document.getElementById(
-        "agentProgressBar"
-    ).style.width =
-        percent + "%";
-
-
-    document.getElementById(
-        "agentStepTitle"
-    ).textContent =
-        `Langkah ${agentCurrentStep} dari ${AGENT_TOTAL_STEPS}`;
-
-
-    const titles = {
-
-        1: "Akun & Kontak",
-        2: "Data Pribadi",
-        3: "Verifikasi Identitas",
-        4: "Domisili",
-        5: "Area & Kesiapan",
-        6: "Profil Agent",
-        7: "Persetujuan"
-
-    };
-
-
-    document.getElementById(
-        "agentStepSubtitle"
-    ).textContent =
-        titles[agentCurrentStep];
-
-
-    document.getElementById(
-        "agentPrevBtn"
-    ).style.display =
-        agentCurrentStep > 1
-            ? "block"
-            : "none";
-
-
-    document.getElementById(
-        "agentNextBtn"
-    ).style.display =
-        agentCurrentStep < AGENT_TOTAL_STEPS
-            ? "block"
-            : "none";
-
-
-    document.getElementById(
-        "agentSubmitBtn"
-    ).style.display =
-        agentCurrentStep === AGENT_TOTAL_STEPS
-            ? "block"
-            : "none";
-
-
-    if (
-        agentCurrentStep === AGENT_TOTAL_STEPS
-    ) {
-
-        agentBuildSummary();
-
-    }
-
-}
-
-
-function agentValidateStep(step) {
-
-    const requiredByStep = {
-
-        1: [
-            "agentName",
-            "agentPhone",
-            "agentEmail"
-        ],
-
-        2: [
-            "agentBirthPlace",
-            "agentBirthDate",
-            "agentGender"
-        ],
-
-        3: [
-            "mitraKtp"
-        ],
-
-        4: [
-            "mitraAlamat",
-            "agentKecamatan",
-            "agentKabupaten",
-            "agentProvinsi",
-            "agentKodePos"
-        ],
-
-        5: [
-            "mitraArea",
-            "agentRadius",
-            "agentAvailability",
-            "agentServiceSchedule"
-        ],
-
-        6: [
-            "agentExperience",
-            "agentSkills",
-            "agentLanguages",
-            "agentBio"
-        ]
-
-    };
-
-
-    const fields =
-        requiredByStep[step] || [];
-
-
-    for (
-        const fieldId of fields
-    ) {
-
-        const element =
-            document.getElementById(
-                fieldId
-            );
-
-
-        if (
-            !element ||
-            !String(
-                element.value || ""
-            ).trim()
-        ) {
-
-            alert(
-                "Mohon lengkapi semua data pada langkah ini."
-            );
-
-            element?.focus();
-
-            return false;
-        }
-
-    }
-
-
-    /* KTP */
-
-    if (step === 3) {
-
-        const ktp =
-            document.getElementById(
-                "mitraKtp"
-            )?.value.trim();
-
-
-        if (
-            !/^\d{16}$/.test(ktp)
-        ) {
-
-            alert(
-                "Nomor KTP harus terdiri dari 16 digit angka."
-            );
-
-            return false;
-        }
-
-
-        if (
-            !window.agentKtpReady
-        ) {
-
-            alert(
-                "Mohon upload foto KTP terlebih dahulu."
-            );
-
-            return false;
-        }
-
-
-        if (
-            !window.agentSelfieReady
-        ) {
-
-            alert(
-                "Mohon upload selfie dengan KTP terlebih dahulu."
-            );
-
-            return false;
-        }
-
-    }
-
-
-    return true;
-
-}
-
-
-function agentRegistrationNext() {
-
-    if (
-        !agentValidateStep(
-            agentCurrentStep
-        )
-    ) {
-
-        return;
-
-    }
-
-
-    if (
-        agentCurrentStep <
-        AGENT_TOTAL_STEPS
-    ) {
-
-        agentCurrentStep++;
-
-        agentUpdateStep();
-
-        window.scrollTo({
-            top: 0,
-            behavior: "smooth"
-        });
-
-    }
-
-}
-
-
-function agentRegistrationPrev() {
-
-    if (
-        agentCurrentStep > 1
-    ) {
-
-        agentCurrentStep--;
-
-        agentUpdateStep();
-
-        window.scrollTo({
-            top: 0,
-            behavior: "smooth"
-        });
-
-    }
-
-}
-
-
-/* ============================================================
-   FILE STATUS
-============================================================ */
-
-window.agentKtpReady = false;
-window.agentSelfieReady = false;
-
-
-document.getElementById(
-    "agentKtpFile"
-)?.addEventListener(
-    "change",
-    function () {
-
-        const file =
-            this.files?.[0];
-
-
-        if (!file) {
-
-            window.agentKtpReady = false;
-
-            return;
-
-        }
-
-
-        window.agentKtpReady = true;
-
-
-        document.getElementById(
-            "agentKtpPreview"
-        ).textContent =
-            "✓ Foto KTP siap digunakan.";
-
-    }
-);
-
-
-document.getElementById(
-    "agentSelfieFile"
-)?.addEventListener(
-    "change",
-    function () {
-
-        const file =
-            this.files?.[0];
-
-
-        if (!file) {
-
-            window.agentSelfieReady = false;
-
-            return;
-
-        }
-
-
-        window.agentSelfieReady = true;
-
-
-        document.getElementById(
-            "agentSelfiePreview"
-        ).textContent =
-            "✓ Selfie siap digunakan.";
-
-    }
-);
-
-
-/* ============================================================
-   SUMMARY
-============================================================ */
-
-function agentValue(id) {
-
-    return (
-        document.getElementById(id)
-            ?.value
-            ?.trim() || "-"
-    );
-
-}
-
-
-function agentBuildSummary() {
-
-    const summary =
-        document.getElementById(
-            "agentRegistrationSummary"
-        );
-
-
-    if (!summary) return;
-
-
-    summary.innerHTML = `
-
-        <strong>Data Pendaftaran Agent CGO</strong>
-
-        <br><br>
-
-        <strong>Kontak</strong><br>
-        ${agentValue("agentName")}<br>
-        ${agentValue("agentPhone")}<br>
-        ${agentValue("agentEmail")}
-
-        <br><br>
-
-        <strong>Identitas</strong><br>
-        NIK: ${agentValue("mitraKtp")}<br>
-        Foto KTP:
-        ${
-            window.agentKtpReady
-                ? "✓ tersedia"
-                : "✕ belum tersedia"
-        }<br>
-        Selfie:
-        ${
-            window.agentSelfieReady
-                ? "✓ tersedia"
-                : "✕ belum tersedia"
-        }
-
-        <br><br>
-
-        <strong>Domisili</strong><br>
-        ${agentValue("mitraAlamat")}<br>
-        ${agentValue("agentKecamatan")},
-        ${agentValue("agentKabupaten")},
-        ${agentValue("agentProvinsi")}
-        ${agentValue("agentKodePos")}
-
-        <br><br>
-
-        <strong>Area</strong><br>
-        ${agentValue("mitraArea")}<br>
-        Radius:
-        ${agentValue("agentRadius")} km<br>
-        Ketersediaan:
-        ${agentValue("agentAvailability")}
-
-        <br><br>
-
-        <strong>Profil</strong><br>
-        Pengalaman:
-        ${agentValue("agentExperience")}<br>
-        Keahlian:
-        ${agentValue("agentSkills")}<br>
-        Bahasa:
-        ${agentValue("agentLanguages")}
-
-    `;
-
-}
-
-
-agentUpdateStep();
-
-</script>
-/* =========================================================
-   AUTH GUARD - pastikan Agent sudah login sebelum akses
-========================================================= */
-let unsubscribeMitraStatus = null;
-
-async function loadCurrentAgentProfile() {
-    let retries = 0;
-    while (!window.CikurCloud && retries < 30) {
-        await new Promise(resolve => setTimeout(resolve, 200));
-        retries++;
-    }
-
-    if (!window.CikurCloud) {
-        alert("CIKUR Cloud belum tersedia. Silakan refresh halaman.");
-        window.location.href = "index.html";
-        return;
-    }
-
-    let firebaseUser = null;
-    try {
-        firebaseUser = await window.CikurCloud.waitForAuth();
-    } catch (e) {
-        firebaseUser = null;
-    }
-
-    if (!firebaseUser) {
-        alert("Silakan login terlebih dahulu untuk mendaftar sebagai Mitra Agent CGO.");
-        window.location.href = "index.html";
-        return;
-    }
-
-    let profile = null;
-    try {
-        profile = await window.CikurCloud.getProfile(firebaseUser.uid);
-    } catch (e) {
-        profile = null;
-    }
-
-    userProfile = {
-        uid: firebaseUser.uid,
-        name: profile?.name || "",
-        phone: profile?.phone || "",
-        avatar: profile?.avatar || "",
-        isLoggedIn: true
-    };
-
-    updateUIProfile();
-
-    // Pantau status pendaftaran Mitra secara realtime -
-    // begitu status berubah (mis. di-approve admin), tampilan
-    // otomatis berubah tanpa perlu refresh halaman.
-    unsubscribeMitraStatus = window.CikurCloud.listenMitraApplication(
-        firebaseUser.uid,
-        "agent",
-        (application) => {
-            renderByMitraStatus(application);
-        }
-    );
-}
-
-function renderByMitraStatus(application) {
-    const mainContainer = document.getElementById("agentMainViewContainer");
-    if (!mainContainer) return;
-
-    if (application && application._error) {
-        mainContainer.innerHTML = `
-            <div class="agent-card" style="text-align:center; padding:30px 16px;">
-                <div style="font-size:34px; margin-bottom:10px;">⚠️</div>
-                <h3 style="font-size:14px; font-weight:800; margin-bottom:6px; color:var(--primary-red);">Gagal Memuat Status</h3>
-                <p style="font-size:11px; color:var(--text-muted); line-height:1.5; margin-bottom:14px;">
-                    ${application.code === 'permission-denied' ? 'Akses ke data pendaftaran ditolak. Hubungi Admin untuk memeriksa pengaturan sistem.' : (application.message || 'Terjadi kesalahan tidak terduga.')}
-                </p>
-                <button class="btn-action-deal" onclick="window.location.reload()">Coba Lagi</button>
-            </div>
-        `;
-        return;
-    }
-
-    if (!application) {
-        renderPendaftaranMitraForm(mainContainer);
-        return;
-    }
-
-    if (application.status === "pending") {
-        mainContainer.innerHTML = `
-            <div class="agent-card" style="text-align:center; padding:30px 16px;">
-                <div style="font-size:34px; margin-bottom:10px;">⏳</div>
-                <h3 style="font-size:14px; font-weight:800; margin-bottom:6px;">Menunggu Verifikasi</h3>
-                <p style="font-size:11px; color:var(--text-muted); line-height:1.5;">
-                    Pendaftaran Anda sebagai Mitra Agent CGO sedang diperiksa oleh tim CIKUR GO.
-                    Halaman ini akan otomatis terbuka begitu akun Anda disetujui.
-                </p>
-            </div>
-        `;
-        return;
-    }
-
-    if (application.status === "rejected") {
-        mainContainer.innerHTML = `
-            <div class="agent-card" style="text-align:center; padding:30px 16px;">
-                <div style="font-size:34px; margin-bottom:10px;">✕</div>
-                <h3 style="font-size:14px; font-weight:800; margin-bottom:6px; color:var(--primary-red);">Pendaftaran Ditolak</h3>
-                <p style="font-size:11px; color:var(--text-muted); line-height:1.5; margin-bottom:14px;">
-                    ${application.catatanAdmin || 'Pendaftaran Anda belum bisa disetujui saat ini.'}
-                </p>
-                <button class="btn-action-deal" id="btnDaftarUlangMitra">Daftar Ulang</button>
-            </div>
-        `;
-        const btnUlang = document.getElementById("btnDaftarUlangMitra");
-        if (btnUlang) {
-            btnUlang.addEventListener("click", () => renderPendaftaranMitraForm(mainContainer));
-        }
-        return;
-    }
-
-    // status === "approved" -> tampilkan dashboard sungguhan
-    renderAgentDashboard(mainContainer);
-}
-
-function renderPendaftaranMitraForm(container) {
-    container.innerHTML = `
-        <div class="agent-card">
-            <h2 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">🤝 Daftar Jadi Mitra Agent CGO</h2>
-            <p style="font-size: 11px; color: var(--text-muted); line-height: 1.5; margin-bottom: 14px;">
-                Lengkapi data berikut untuk mengajukan diri sebagai Agent CGO. Tim kami akan memverifikasi
-                data Anda sebelum akun diaktifkan.
-            </p>
-
-            <div class="form-group-mitra">
-                <label>Alamat Domisili</label>
-                <input type="text" id="mitraAlamat" class="input-box-mitra" placeholder="Alamat tempat tinggal saat ini">
-            </div>
-
-            <div class="form-group-mitra">
-                <label>Area Operasional</label>
-                <input type="text" id="mitraArea" class="input-box-mitra" placeholder="Cth: Pandeglang Kota & sekitarnya">
-            </div>
-
-            <div class="form-group-mitra">
-                <label>Nomor KTP</label>
-                <input type="text" id="mitraKtp" class="input-box-mitra" placeholder="16 digit NIK" inputmode="numeric" maxlength="16">
-            </div>
-
-            <div class="form-group-mitra">
-                <label>Foto KTP</label>
-                <input type="file" id="mitraFotoKtp" accept="image/*" class="input-box-mitra">
-            </div>
-
-            <button class="btn-action-deal" id="btnAjukanMitra">Ajukan Pendaftaran ✓</button>
-        </div>
-    `;
-
-    let fotoKtpBase64 = "";
-    const inputFoto = document.getElementById("mitraFotoKtp");
-    if (inputFoto) {
-        inputFoto.addEventListener("change", (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (ev) => { fotoKtpBase64 = ev.target.result; };
-            reader.readAsDataURL(file);
-        });
-    }
-
-    const btnAjukan = document.getElementById("btnAjukanMitra");
-    if (btnAjukan) {
-        btnAjukan.addEventListener("click", async () => {
-            const alamat = document.getElementById("mitraAlamat")?.value.trim() || "";
-            const area = document.getElementById("mitraArea")?.value.trim() || "";
-            const ktp = document.getElementById("mitraKtp")?.value.trim() || "";
-
-            if (!alamat || !area) {
-                alert("Mohon lengkapi alamat domisili dan area operasional.");
-                return;
-            }
-            if (!/^\d{16}$/.test(ktp)) {
-                alert("Nomor KTP harus 16 digit angka.");
-                return;
-            }
-            if (!fotoKtpBase64) {
-                alert("Mohon upload foto KTP.");
-                return;
-            }
-
-            btnAjukan.disabled = true;
-            btnAjukan.textContent = "Mengirim Pendaftaran...";
-
-            // ==========================================
-            // BCGO EVALUATION - penilaian otomatis sebagai
-            // bahan bantu Admin. TIDAK menentukan approve/reject
-            // secara otomatis; status tetap "pending" sampai
-            // Admin memeriksa & menyetujui manual.
-            // ==========================================
-            let bcgoResult = null;
-            if (window.BCGO) {
-                try {
-                    bcgoResult = window.BCGO.evaluatePartner({
-                        partnerType: "assistant",
-                        name: userProfile.name,
-                        phone: userProfile.phone,
-                        address: alamat,
-                        serviceType: "Assistant CGO"
-                    });
-                } catch (bcgoError) {
-                    console.error("[BCGO] Gagal menjalankan evaluasi:", bcgoError);
+    <!-- JAVASCRIPT LOGIC & HANDLERS -->
+    <script>
+        let userProfile = { uid: null, name: "", phone: "", avatar: "", isLoggedIn: false };
+
+        const dataPaketReferensi = {
+            dine: { personil: "1 Personil", durasi: "Hingga 30 Menit" },
+            vip: { personil: "1 Personil", durasi: "Hingga 2 Jam" },
+            private: { personil: "2 Personil", durasi: "Hingga 4 Jam" }
+        };
+
+        function updateUIProfile() {
+            const headerNamaEl = document.getElementById("headerNamaUser");
+            const avatarContainer = document.getElementById("headerAvatar");
+
+            if (headerNamaEl) headerNamaEl.innerText = userProfile.name || "Agent CGO";
+
+            if (avatarContainer) {
+                if (userProfile.avatar && userProfile.avatar.startsWith("data:image")) {
+                    avatarContainer.innerHTML = `<img src="${userProfile.avatar}" alt="Foto Profil">`;
+                } else {
+                    const initials = (userProfile.name || "CK").split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
+                    avatarContainer.innerText = initials || "CK";
                 }
             }
+        }
+
+        let agentCurrentStep = 1;
+        const AGENT_TOTAL_STEPS = 7;
+
+        function agentGetSteps() {
+            return document.querySelectorAll(".agent-reg-step");
+        }
+
+        function agentUpdateStep() {
+            const steps = agentGetSteps();
+            steps.forEach((step, index) => {
+                step.classList.toggle("active", index + 1 === agentCurrentStep);
+            });
+
+            const percent = Math.round((agentCurrentStep / AGENT_TOTAL_STEPS) * 100);
+            document.getElementById("agentStepPercent").textContent = percent + "%";
+            document.getElementById("agentProgressBar").style.width = percent + "%";
+            document.getElementById("agentStepTitle").textContent = `Langkah ${agentCurrentStep} dari ${AGENT_TOTAL_STEPS}`;
+
+            const titles = {
+                1: "Akun & Kontak",
+                2: "Data Pribadi",
+                3: "Verifikasi Identitas",
+                4: "Domisili",
+                5: "Area & Kesiapan",
+                6: "Profil Agent",
+                7: "Persetujuan"
+            };
+
+            document.getElementById("agentStepSubtitle").textContent = titles[agentCurrentStep];
+            document.getElementById("agentPrevBtn").style.display = agentCurrentStep > 1 ? "block" : "none";
+            document.getElementById("agentNextBtn").style.display = agentCurrentStep < AGENT_TOTAL_STEPS ? "block" : "none";
+            document.getElementById("agentSubmitBtn").style.display = agentCurrentStep === AGENT_TOTAL_STEPS ? "block" : "none";
+
+            if (agentCurrentStep === AGENT_TOTAL_STEPS) {
+                agentBuildSummary();
+            }
+        }
+
+        function agentValidateStep(step) {
+            const requiredByStep = {
+                1: ["agentName", "agentPhone", "agentEmail"],
+                2: ["agentBirthPlace", "agentBirthDate", "agentGender"],
+                3: ["mitraKtp"],
+                4: ["mitraAlamat", "agentKecamatan", "agentKabupaten", "agentProvinsi", "agentKodePos"],
+                5: ["mitraArea", "agentRadius", "agentAvailability", "agentServiceSchedule"],
+                6: ["agentExperience", "agentSkills", "agentLanguages", "agentBio"]
+            };
+
+            const fields = requiredByStep[step] || [];
+            for (const fieldId of fields) {
+                const element = document.getElementById(fieldId);
+                if (!element || !String(element.value || "").trim()) {
+                    alert("Mohon lengkapi semua data pada langkah ini.");
+                    element?.focus();
+                    return false;
+                }
+            }
+
+            if (step === 3) {
+                const ktp = document.getElementById("mitraKtp")?.value.trim();
+                if (!/^\d{16}$/.test(ktp)) {
+                    alert("Nomor KTP harus terdiri dari 16 digit angka.");
+                    return false;
+                }
+                if (!window.agentKtpReady) {
+                    alert("Mohon upload foto KTP terlebih dahulu.");
+                    return false;
+                }
+                if (!window.agentSelfieReady) {
+                    alert("Mohon upload selfie dengan KTP terlebih dahulu.");
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function agentRegistrationNext() {
+            if (!agentValidateStep(agentCurrentStep)) return;
+            if (agentCurrentStep < AGENT_TOTAL_STEPS) {
+                agentCurrentStep++;
+                agentUpdateStep();
+                window.scrollTo({ top: 0, behavior: "smooth" });
+            }
+        }
+
+        function agentRegistrationPrev() {
+            if (agentCurrentStep > 1) {
+                agentCurrentStep--;
+                agentUpdateStep();
+                window.scrollTo({ top: 0, behavior: "smooth" });
+            }
+        }
+
+        window.agentKtpReady = false;
+        window.agentSelfieReady = false;
+
+        document.getElementById("agentKtpFile")?.addEventListener("change", function () {
+            const file = this.files?.[0];
+            if (!file) {
+                window.agentKtpReady = false;
+                return;
+            }
+            window.agentKtpReady = true;
+            document.getElementById("agentKtpPreview").textContent = "✓ Foto KTP siap digunakan.";
+        });
+
+        document.getElementById("agentSelfieFile")?.addEventListener("change", function () {
+            const file = this.files?.[0];
+            if (!file) {
+                window.agentSelfieReady = false;
+                return;
+            }
+            window.agentSelfieReady = true;
+            document.getElementById("agentSelfiePreview").textContent = "✓ Selfie siap digunakan.";
+        });
+
+        function agentValue(id) {
+            return document.getElementById(id)?.value?.trim() || "-";
+        }
+
+        function agentBuildSummary() {
+            const summary = document.getElementById("agentRegistrationSummary");
+            if (!summary) return;
+
+            summary.innerHTML = `
+                <strong>Data Pendaftaran Agent CGO</strong><br><br>
+                <strong>Kontak</strong><br>
+                ${agentValue("agentName")}<br>
+                ${agentValue("agentPhone")}<br>
+                ${agentValue("agentEmail")}<br><br>
+                <strong>Identitas</strong><br>
+                NIK: ${agentValue("mitraKtp")}<br>
+                Foto KTP: ${window.agentKtpReady ? "✓ tersedia" : "✕ belum tersedia"}<br>
+                Selfie: ${window.agentSelfieReady ? "✓ tersedia" : "✕ belum tersedia"}<br><br>
+                <strong>Domisili</strong><br>
+                ${agentValue("mitraAlamat")}<br>
+                ${agentValue("agentKecamatan")}, ${agentValue("agentKabupaten")}, ${agentValue("agentProvinsi")} ${agentValue("agentKodePos")}<br><br>
+                <strong>Area</strong><br>
+                ${agentValue("mitraArea")}<br>
+                Radius: ${agentValue("agentRadius")} km<br>
+                Ketersediaan: ${agentValue("agentAvailability")}<br><br>
+                <strong>Profil</strong><br>
+                Pengalaman: ${agentValue("agentExperience")}<br>
+                Keahlian: ${agentValue("agentSkills")}<br>
+                Bahasa: ${agentValue("agentLanguages")}
+            `;
+        }
+
+        agentUpdateStep();
+
+        let unsubscribeMitraStatus = null;
+
+        async function loadCurrentAgentProfile() {
+            let retries = 0;
+            while (!window.CikurCloud && retries < 30) {
+                await new Promise(resolve => setTimeout(resolve, 200));
+                retries++;
+            }
+
+            if (!window.CikurCloud) {
+                alert("CIKUR Cloud belum tersedia. Silakan refresh halaman.");
+                window.location.href = "index.html";
+                return;
+            }
+
+            let firebaseUser = null;
+            try {
+                firebaseUser = await window.CikurCloud.waitForAuth();
+            } catch (e) {
+                firebaseUser = null;
+            }
+
+            if (!firebaseUser) {
+                alert("Silakan login terlebih dahulu untuk mendaftar sebagai Mitra Agent CGO.");
+                window.location.href = "index.html";
+                return;
+            }
+
+            let profile = null;
+            try {
+                profile = await window.CikurCloud.getProfile(firebaseUser.uid);
+            } catch (e) {
+                profile = null;
+            }
+
+            userProfile = {
+                uid: firebaseUser.uid,
+                name: profile?.name || "",
+                phone: profile?.phone || "",
+                avatar: profile?.avatar || "",
+                isLoggedIn: true
+            };
+
+            updateUIProfile();
+
+            unsubscribeMitraStatus = window.CikurCloud.listenMitraApplication(
+                firebaseUser.uid,
+                "agent",
+                (application) => {
+                    renderByMitraStatus(application);
+                }
+            );
+        }
+
+        function renderByMitraStatus(application) {
+            const mainContainer = document.getElementById("agentMainViewContainer");
+            if (!mainContainer) return;
+
+            if (application && application._error) {
+                mainContainer.innerHTML = `
+                    <div class="agent-card" style="text-align:center; padding:30px 16px;">
+                        <div style="font-size:34px; margin-bottom:10px;">⚠️</div>
+                        <h3 style="font-size:14px; font-weight:800; margin-bottom:6px; color:var(--primary-red);">Gagal Memuat Status</h3>
+                        <p style="font-size:11px; color:var(--text-muted); line-height:1.5; margin-bottom:14px;">
+                            ${application.code === 'permission-denied' ? 'Akses ke data pendaftaran ditolak. Hubungi Admin.' : (application.message || 'Terjadi kesalahan tidak terduga.')}
+                        </p>
+                        <button class="btn-action-deal" onclick="window.location.reload()">Coba Lagi</button>
+                    </div>
+                `;
+                return;
+            }
+
+            if (!application) {
+                renderPendaftaranMitraForm(mainContainer);
+                return;
+            }
+
+            if (application.status === "pending") {
+                mainContainer.innerHTML = `
+                    <div class="agent-card" style="text-align:center; padding:30px 16px;">
+                        <div style="font-size:34px; margin-bottom:10px;">⏳</div>
+                        <h3 style="font-size:14px; font-weight:800; margin-bottom:6px;">Menunggu Verifikasi</h3>
+                        <p style="font-size:11px; color:var(--text-muted); line-height:1.5;">
+                            Pendaftaran Anda sebagai Mitra Agent CGO sedang diperiksa oleh tim CIKUR GO.
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
+            if (application.status === "rejected") {
+                mainContainer.innerHTML = `
+                    <div class="agent-card" style="text-align:center; padding:30px 16px;">
+                        <div style="font-size:34px; margin-bottom:10px;">✕</div>
+                        <h3 style="font-size:14px; font-weight:800; margin-bottom:6px; color:var(--primary-red);">Pendaftaran Ditolak</h3>
+                        <p style="font-size:11px; color:var(--text-muted); line-height:1.5; margin-bottom:14px;">
+                            ${application.catatanAdmin || 'Pendaftaran Anda belum bisa disetujui saat ini.'}
+                        </p>
+                        <button class="btn-action-deal" id="btnDaftarUlangMitra">Daftar Ulang</button>
+                    </div>
+                `;
+                const btnUlang = document.getElementById("btnDaftarUlangMitra");
+                if (btnUlang) {
+                    btnUlang.addEventListener("click", () => renderPendaftaranMitraForm(mainContainer));
+                }
+                return;
+            }
+
+            renderAgentDashboard(mainContainer);
+        }
+
+        function renderPendaftaranMitraForm(container) {
+            container.innerHTML = `
+                <div class="agent-card">
+                    <h2 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">🤝 Daftar Jadi Mitra Agent CGO</h2>
+                    <p style="font-size: 11px; color: var(--text-muted); line-height: 1.5; margin-bottom: 14px;">
+                        Lengkapi data berikut untuk mengajukan diri sebagai Agent CGO.
+                    </p>
+                    <div class="form-group-mitra">
+                        <label>Alamat Domisili</label>
+                        <input type="text" id="mitraAlamat" class="input-box-mitra" placeholder="Alamat tempat tinggal saat ini">
+                    </div>
+                    <div class="form-group-mitra">
+                        <label>Area Operasional</label>
+                        <input type="text" id="mitraArea" class="input-box-mitra" placeholder="Cth: Pandeglang Kota & sekitarnya">
+                    </div>
+                    <div class="form-group-mitra">
+                        <label>Nomor KTP</label>
+                        <input type="text" id="mitraKtp" class="input-box-mitra" placeholder="16 digit NIK" inputmode="numeric" maxlength="16">
+                    </div>
+                    <div class="form-group-mitra">
+                        <label>Foto KTP</label>
+                        <input type="file" id="mitraFotoKtp" accept="image/*" class="input-box-mitra">
+                    </div>
+                    <button class="btn-action-deal" id="btnAjukanMitra">Ajukan Pendaftaran ✓</button>
+                </div>
+            `;
+
+            let fotoKtpBase64 = "";
+            const inputFoto = document.getElementById("mitraFotoKtp");
+            if (inputFoto) {
+                inputFoto.addEventListener("change", (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => { fotoKtpBase64 = ev.target.result; };
+                    reader.readAsDataURL(file);
+                });
+            }
+
+            const btnAjukan = document.getElementById("btnAjukanMitra");
+            if (btnAjukan) {
+                btnAjukan.addEventListener("click", async () => {
+                    const alamat = document.getElementById("mitraAlamat")?.value.trim() || "";
+                    const area = document.getElementById("mitraArea")?.value.trim() || "";
+                    const ktp = document.getElementById("mitraKtp")?.value.trim() || "";
+
+                    if (!alamat || !area) {
+                        alert("Mohon lengkapi alamat domisili dan area operasional.");
+                        return;
+                    }
+                    if (!/^\d{16}$/.test(ktp)) {
+                        alert("Nomor KTP harus 16 digit angka.");
+                        return;
+                    }
+                    if (!fotoKtpBase64) {
+                        alert("Mohon upload foto KTP.");
+                        return;
+                    }
+
+                    btnAjukan.disabled = true;
+                    btnAjukan.textContent = "Mengirim Pendaftaran...";
+
+                    let bcgoResult = null;
+                    if (window.BCGO) {
+                        try {
+                            bcgoResult = window.BCGO.evaluatePartner({
+                                partnerType: "assistant",
+                                name: userProfile.name,
+                                phone: userProfile.phone,
+                                address: alamat,
+                                serviceType: "Assistant CGO"
+                            });
+                        } catch (bcgoError) {
+                            console.error("[BCGO] Gagal menjalankan evaluasi:", bcgoError);
+                        }
+                    }
+
+                    try {
+                        await window.CikurCloud.submitMitraApplication(userProfile.uid, "agent", {
+                            alamat, area, ktp,
+                            fotoKtp: fotoKtpBase64,
+                            name: userProfile.name,
+                            phone: userProfile.phone,
+                            bcgoScore: bcgoResult?.score ?? null,
+                            bcgoRisk: bcgoResult?.risk ?? null,
+                            bcgoRecommendation: bcgoResult?.status ?? null,
+                            bcgoReasons: bcgoResult?.reasons ?? []
+                        });
+                    } catch (error) {
+                        alert("Gagal mengirim pendaftaran: " + (error?.message || error));
+                        btnAjukan.disabled = false;
+                        btnAjukan.textContent = "Ajukan Pendaftaran ✓";
+                    }
+                });
+            }
+        }
+
+        function renderAgentDashboard(container) {
+            container.innerHTML = `
+                <div class="agent-card" style="background: linear-gradient(135deg, var(--dark-bg), var(--dark-card)); color: #fff;">
+                    <h2 style="font-size: 16px; font-weight: 800; margin-bottom: 6px;">🤖 Pusat Kendali & Live Peta Agent</h2>
+                    <p style="font-size: 12px; color: #94a3b8; line-height: 1.4;">Pantau lokasi titik koordinat customer, rincian pesanan, dan koordinasi chat secara langsung.</p>
+                </div>
+                <div class="order-tabs">
+                    <button class="order-tab-btn active" onclick="switchOrderTab('all', this)">Semua Pesanan</button>
+                    <button class="order-tab-btn" onclick="switchOrderTab('assistant.html', this)">Reguler</button>
+                    <button class="order-tab-btn" onclick="switchOrderTab('cikurgo2in1.html', this)">Jalur 2in1</button>
+                </div>
+                <div id="agentDetailedOrderContainer">
+                    <div style="text-align: center; padding: 25px; color: var(--text-muted); font-size: 12px;">Memuat data pesanan masuk...</div>
+                </div>
+            `;
+            startListeningAgentOrders();
+        }
+
+        window.addEventListener("DOMContentLoaded", () => {
+            loadCurrentAgentProfile();
+        });
+
+        const btnOpenProfileDropdown = document.getElementById("btnOpenProfileDropdown");
+        const headerDropdownMenu = document.getElementById("headerDropdownMenu");
+        if (btnOpenProfileDropdown && headerDropdownMenu) {
+            btnOpenProfileDropdown.addEventListener("click", (e) => {
+                e.stopPropagation();
+                headerDropdownMenu.classList.toggle("show");
+            });
+            document.addEventListener("click", () => headerDropdownMenu.classList.remove('show'));
+        }
+
+        let allAssistantOrders = [];
+        let currentFilterSource = 'all';
+        let messageUnsubscribers = {};
+
+        function startListeningAgentOrders() {
+            window.CikurCloud.listenOrders("ASSISTANT", (orders) => {
+                allAssistantOrders = orders.filter(o =>
+                    o.status === "PENDING" || o.status === "DEAL" || o.status === "DEAL_CONFIRMED"
+                );
+                renderFilteredOrders(currentFilterSource);
+            });
+        }
+
+        function switchOrderTab(sourceType, el) {
+            document.querySelectorAll('.order-tab-btn').forEach(btn => btn.classList.remove('active'));
+            el.classList.add('active');
+            currentFilterSource = sourceType;
+            renderFilteredOrders(sourceType);
+        }
+
+        function renderFilteredOrders(filter) {
+            const container = document.getElementById("agentDetailedOrderContainer");
+            if (!container) return;
+
+            let filtered = allAssistantOrders;
+            if (filter === 'assistant.html') {
+                filtered = allAssistantOrders.filter(o => o.source !== 'CIKURGO_2IN1');
+            } else if (filter === 'cikurgo2in1.html') {
+                filtered = allAssistantOrders.filter(o => o.source === 'CIKURGO_2IN1');
+            }
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div style="text-align: center; padding: 25px; color: var(--text-muted); font-size: 12px;">Belum ada pesanan masuk untuk kategori ini.</div>`;
+                return;
+            }
+
+            let html = '';
+            filtered.forEach((order) => {
+                const is2in1 = order.source === 'CIKURGO_2IN1';
+                const badgeClass = is2in1 ? 'order-badge-source order-badge-2in1' : 'order-badge-source';
+                const badgeText = is2in1 ? 'Jalur 2in1' : 'Reguler Assistant';
+                const paketInfo = dataPaketReferensi[order.packageKey] || {};
+                const isDeal = order.status === "DEAL" || order.status === "DEAL_CONFIRMED";
+
+                html += `
+                    <div class="order-detail-card">
+                        <div class="order-header-info">
+                            <div>
+                                <span style="font-family:var(--font-mono); font-size:11px; font-weight:800; color:var(--primary-red);">${order.id}</span>
+                                <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Pemesan: <strong>${order.customer?.name || '-'} (${order.customer?.phone || '-'})</strong></div>
+                            </div>
+                            <span class="${badgeClass}">${badgeText}</span>
+                        </div>
+                        <div style="font-size:12px; line-height:1.5; margin-bottom:8px;">
+                            <p>📍 <strong>Lokasi Tujuan:</strong> ${order.location?.address || 'Lokasi Peta Kustom'}</p>
+                            <p style="margin-top:4px;">🛒 <strong>Layanan:</strong> ${order.packageName || '-'} ${paketInfo.personil ? `(${paketInfo.personil}, ${paketInfo.durasi})` : ''}</p>
+                            <p style="margin-top:4px;">📅 <strong>Jadwal:</strong> ${order.schedule?.date || '-'} ${order.schedule?.time || ''}</p>
+                            ${order.notes ? `<p style="margin-top:4px;">📝 <strong>Catatan:</strong> ${order.notes}</p>` : ''}
+                        </div>
+                        <div style="font-size:13px; font-weight:800; color:var(--primary-red); margin: 8px 0;">
+                            Total Tagihan: Rp ${Number(order.pricing?.total || 0).toLocaleString('id-ID')}
+                        </div>
+                        <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-top: 8px;">Peta Navigasi Live Lokasi:</div>
+                        <div id="map-container-${order.id}" class="live-map-box"></div>
+                        <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-top: 8px;">Chat Koordinasi (Agent & Customer):</div>
+                        <div class="chat-container" id="chatBox-${order.id}"></div>
+                        <div class="chat-input-row">
+                            <input type="text" class="chat-input" id="chatInput-${order.id}" placeholder="Tulis balasan koordinasi...">
+                            <button class="chat-send-btn" onclick="sendAgentChat('${order.id}')">Kirim</button>
+                        </div>
+                        <div style="margin-top: 8px; font-size: 11px; color: var(--text-muted);">
+                            Status Saat Ini: <strong style="color:var(--primary-red);">${order.status}</strong>
+                        </div>
+                        ${isDeal
+                            ? `<div style="margin-top:12px; text-align:center; font-size:11px; font-weight:800; color:#16a34a; background:#dcfce7; padding:8px; border-radius:10px;">✓ Sudah DEAL - Menunggu Customer Membayar</div>`
+                            : `<button class="btn-action-deal" onclick="prosesDealOrder('${order.id}')">Konfirmasi & Proses DEAL 🤝</button>`
+                        }
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+
+            filtered.forEach(order => {
+                setTimeout(() => {
+                    const mapElId = `map-container-${order.id}`;
+                    const mapEl = document.getElementById(mapElId);
+                    if (mapEl && !mapEl._leaflet_id) {
+                        const lat = order.location?.latitude || -6.3153;
+                        const lng = order.location?.longitude || 106.1556;
+                        const map = L.map(mapElId, { zoomControl: false }).setView([lat, lng], 15);
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+                        L.marker([lat, lng]).addTo(map).bindPopup(order.location?.address || "Lokasi Customer").openPopup();
+                    }
+                }, 300);
+
+                if (typeof messageUnsubscribers[order.id] === "function") {
+                    messageUnsubscribers[order.id]();
+                }
+                messageUnsubscribers[order.id] = window.CikurCloud.listenOrderMessages(order.id, (messages) => {
+                    const chatBox = document.getElementById(`chatBox-${order.id}`);
+                    if (!chatBox) return;
+                    const senderClassMap = { customer: 'customer', agent: 'agent' };
+                    chatBox.innerHTML = messages.map(m =>
+                        `<div class="chat-bubble ${senderClassMap[m.sender] || 'system'}">${m.text}</div>`
+                    ).join('') || `<div class="chat-bubble system">Belum ada pesan.</div>`;
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                });
+            });
+        }
+
+        async function sendAgentChat(orderId) {
+            const inputEl = document.getElementById(`chatInput-${orderId}`);
+            if (!inputEl) return;
+            const text = inputEl.value.trim();
+            if (!text) return;
 
             try {
-                await window.CikurCloud.submitMitraApplication(userProfile.uid, "agent", {
-                    alamat,
-                    area,
-                    ktp,
-                    fotoKtp: fotoKtpBase64,
-                    name: userProfile.name,
-                    phone: userProfile.phone,
-                    bcgoScore: bcgoResult?.score ?? null,
-                    bcgoRisk: bcgoResult?.risk ?? null,
-                    bcgoRecommendation: bcgoResult?.status ?? null,
-                    bcgoReasons: bcgoResult?.reasons ?? []
-                });
-                // renderByMitraStatus akan otomatis dipanggil ulang oleh
-                // listenMitraApplication begitu dokumen tersimpan.
+                await window.CikurCloud.sendOrderMessage(orderId, "agent", text);
+                inputEl.value = '';
             } catch (error) {
-                alert("Gagal mengirim pendaftaran: " + (error?.message || error));
-                btnAjukan.disabled = false;
-                btnAjukan.textContent = "Ajukan Pendaftaran ✓";
+                alert("Pesan gagal dikirim: " + (error?.message || error));
             }
-        });
-    }
-}
-
-function renderAgentDashboard(container) {
-    container.innerHTML = `
-        <div class="agent-card" style="background: linear-gradient(135deg, var(--dark-bg), var(--dark-card)); color: #fff;">
-            <h2 style="font-size: 16px; font-weight: 800; margin-bottom: 6px;">🤖 Pusat Kendali & Live Peta Agent</h2>
-            <p style="font-size: 12px; color: #94a3b8; line-height: 1.4;">Pantau lokasi titik koordinat customer, rincian pesanan, dan koordinasi chat secara langsung.</p>
-        </div>
-
-        <div class="order-tabs">
-            <button class="order-tab-btn active" onclick="switchOrderTab('all', this)">Semua Pesanan</button>
-            <button class="order-tab-btn" onclick="switchOrderTab('assistant.html', this)">Reguler</button>
-            <button class="order-tab-btn" onclick="switchOrderTab('cikurgo2in1.html', this)">Jalur 2in1</button>
-        </div>
-
-        <div id="agentDetailedOrderContainer">
-            <div style="text-align: center; padding: 25px; color: var(--text-muted); font-size: 12px;">Memuat data pesanan masuk...</div>
-        </div>
-    `;
-
-    startListeningAgentOrders();
-}
-
-window.addEventListener("DOMContentLoaded", () => {
-    loadCurrentAgentProfile();
-});
-
-const btnOpenProfileDropdown = document.getElementById("btnOpenProfileDropdown");
-const headerDropdownMenu = document.getElementById("headerDropdownMenu");
-if (btnOpenProfileDropdown && headerDropdownMenu) {
-    btnOpenProfileDropdown.addEventListener("click", (e) => {
-        e.stopPropagation();
-        headerDropdownMenu.classList.toggle("show");
-    });
-    document.addEventListener("click", () => headerDropdownMenu.classList.remove('show'));
-}
-
-/* =========================================================
-   REALTIME ORDER LISTENER (Firestore, bukan localStorage)
-========================================================= */
-let allAssistantOrders = [];
-let currentFilterSource = 'all';
-let messageUnsubscribers = {};
-
-function startListeningAgentOrders() {
-    window.CikurCloud.listenOrders("ASSISTANT", (orders) => {
-        // Agent hanya perlu lihat order yang masih perlu ditindaklanjuti
-        allAssistantOrders = orders.filter(o =>
-            o.status === "PENDING" || o.status === "DEAL" || o.status === "DEAL_CONFIRMED"
-        );
-        renderFilteredOrders(currentFilterSource);
-    });
-}
-
-function switchOrderTab(sourceType, el) {
-    document.querySelectorAll('.order-tab-btn').forEach(btn => btn.classList.remove('active'));
-    el.classList.add('active');
-    currentFilterSource = sourceType;
-    renderFilteredOrders(sourceType);
-}
-
-function renderFilteredOrders(filter) {
-    const container = document.getElementById("agentDetailedOrderContainer");
-    if (!container) return;
-
-    let filtered = allAssistantOrders;
-    if (filter === 'assistant.html') {
-        filtered = allAssistantOrders.filter(o => o.source !== 'CIKURGO_2IN1');
-    } else if (filter === 'cikurgo2in1.html') {
-        filtered = allAssistantOrders.filter(o => o.source === 'CIKURGO_2IN1');
-    }
-
-    if (filtered.length === 0) {
-        container.innerHTML = `<div style="text-align: center; padding: 25px; color: var(--text-muted); font-size: 12px;">Belum ada pesanan masuk untuk kategori ini.</div>`;
-        return;
-    }
-
-    let html = '';
-    filtered.forEach((order) => {
-        const is2in1 = order.source === 'CIKURGO_2IN1';
-        const badgeClass = is2in1 ? 'order-badge-source order-badge-2in1' : 'order-badge-source';
-        const badgeText = is2in1 ? 'Jalur 2in1' : 'Reguler Assistant';
-        const paketInfo = dataPaketReferensi[order.packageKey] || {};
-        const isDeal = order.status === "DEAL" || order.status === "DEAL_CONFIRMED";
-
-        html += `
-            <div class="order-detail-card">
-                <div class="order-header-info">
-                    <div>
-                        <span style="font-family:var(--font-mono); font-size:11px; font-weight:800; color:var(--primary-red);">${order.id}</span>
-                        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Pemesan: <strong>${order.customer?.name || '-'} (${order.customer?.phone || '-'})</strong></div>
-                    </div>
-                    <span class="${badgeClass}">${badgeText}</span>
-                </div>
-
-                <div style="font-size:12px; line-height:1.5; margin-bottom:8px;">
-                    <p>📍 <strong>Lokasi Tujuan:</strong> ${order.location?.address || 'Lokasi Peta Kustom'}</p>
-                    <p style="margin-top:4px;">🛒 <strong>Layanan:</strong> ${order.packageName || '-'} ${paketInfo.personil ? `(${paketInfo.personil}, ${paketInfo.durasi})` : ''}</p>
-                    <p style="margin-top:4px;">📅 <strong>Jadwal:</strong> ${order.schedule?.date || '-'} ${order.schedule?.time || ''}</p>
-                    ${order.notes ? `<p style="margin-top:4px;">📝 <strong>Catatan:</strong> ${order.notes}</p>` : ''}
-                </div>
-
-                <div style="font-size:13px; font-weight:800; color:var(--primary-red); margin: 8px 0;">
-                    Total Tagihan: Rp ${Number(order.pricing?.total || 0).toLocaleString('id-ID')}
-                </div>
-
-                <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-top: 8px;">Peta Navigasi Live Lokasi:</div>
-                <div id="map-container-${order.id}" class="live-map-box"></div>
-
-                <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-top: 8px;">Chat Koordinasi (Agent & Customer):</div>
-                <div class="chat-container" id="chatBox-${order.id}"></div>
-                <div class="chat-input-row">
-                    <input type="text" class="chat-input" id="chatInput-${order.id}" placeholder="Tulis balasan koordinasi...">
-                    <button class="chat-send-btn" onclick="sendAgentChat('${order.id}')">Kirim</button>
-                </div>
-
-                <div style="margin-top: 8px; font-size: 11px; color: var(--text-muted);">
-                    Status Saat Ini: <strong style="color:var(--primary-red);">${order.status}</strong>
-                </div>
-
-                ${isDeal
-                    ? `<div style="margin-top:12px; text-align:center; font-size:11px; font-weight:800; color:#16a34a; background:#dcfce7; padding:8px; border-radius:10px;">✓ Sudah DEAL - Menunggu Customer Membayar</div>`
-                    : `<button class="btn-action-deal" onclick="prosesDealOrder('${order.id}')">Konfirmasi & Proses DEAL 🤝</button>`
-                }
-            </div>
-        `;
-    });
-
-    container.innerHTML = html;
-
-    filtered.forEach(order => {
-        setTimeout(() => {
-            const mapElId = `map-container-${order.id}`;
-            const mapEl = document.getElementById(mapElId);
-            if (mapEl && !mapEl._leaflet_id) {
-                const lat = order.location?.latitude || -6.3153;
-                const lng = order.location?.longitude || 106.1556;
-                const map = L.map(mapElId, { zoomControl: false }).setView([lat, lng], 15);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-                L.marker([lat, lng]).addTo(map).bindPopup(order.location?.address || "Lokasi Customer").openPopup();
-            }
-        }, 300);
-
-        // Bersihkan listener chat lama sebelum pasang yang baru (hindari kebocoran/duplikat)
-        if (typeof messageUnsubscribers[order.id] === "function") {
-            messageUnsubscribers[order.id]();
         }
-        messageUnsubscribers[order.id] = window.CikurCloud.listenOrderMessages(order.id, (messages) => {
-            const chatBox = document.getElementById(`chatBox-${order.id}`);
-            if (!chatBox) return;
-            const senderClassMap = { customer: 'customer', agent: 'agent' };
-            chatBox.innerHTML = messages.map(m =>
-                `<div class="chat-bubble ${senderClassMap[m.sender] || 'system'}">${m.text}</div>`
-            ).join('') || `<div class="chat-bubble system">Belum ada pesan.</div>`;
-            chatBox.scrollTop = chatBox.scrollHeight;
-        });
-    });
-}
 
-async function sendAgentChat(orderId) {
-    const inputEl = document.getElementById(`chatInput-${orderId}`);
-    if (!inputEl) return;
-    const text = inputEl.value.trim();
-    if (!text) return;
+        async function prosesDealOrder(orderId) {
+            if (!confirm("Konfirmasi pesanan ini sebagai DEAL?")) return;
 
-    try {
-        await window.CikurCloud.sendOrderMessage(orderId, "agent", text);
-        inputEl.value = '';
-    } catch (error) {
-        alert("Pesan gagal dikirim: " + (error?.message || error));
-    }
-}
-
-async function prosesDealOrder(orderId) {
-    if (!confirm("Konfirmasi pesanan ini sebagai DEAL?")) return;
-
-    try {
-        await window.CikurCloud.updateOrderStatus(orderId, { status: "DEAL" });
-        await window.CikurCloud.sendOrderMessage(orderId, "system", "Sistem: Pesanan telah dikonfirmasi DEAL oleh Agent CGO.");
-        alert(`Pesanan ${orderId} berhasil dikonfirmasi dan berstatus DEAL!`);
-    } catch (error) {
-        alert("Gagal memproses DEAL: " + (error?.message || error));
-    }
-}
-
-</script>
+            try {
+                await window.CikurCloud.updateOrderStatus(orderId, { status: "DEAL" });
+                await window.CikurCloud.sendOrderMessage(orderId, "system", "Sistem: Pesanan telah dikonfirmasi DEAL oleh Agent CGO.");
+                alert(`Pesanan ${orderId} berhasil dikonfirmasi dan berstatus DEAL!`);
+            } catch (error) {
+                alert("Gagal memproses DEAL: " + (error?.message || error));
+            }
+        }
+    </script>
 </body>
 </html>
