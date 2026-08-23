@@ -150,7 +150,7 @@
 
         <!-- TAB NAVIGASI KATEGORI MITRA -->
         <div class="admin-tabs">
-            <button class="tab-btn active" onclick="switchTab('agentcgo', this)">Agent CGO</button>
+            <button class="tab-btn active" onclick="switchTab('agent', this)">Agent CGO</button>
             <button class="tab-btn" onclick="switchTab('resto', this)">Resto Partner</button>
             <button class="tab-btn" onclick="switchTab('driver', this)">Driver Partner</button>
         </div>
@@ -223,7 +223,7 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        let currentCategory = 'agentcgo';
+        let currentCategory = 'agent';
         let unsubscribeListener = null;
         let cachedApplications = {};
 
@@ -233,7 +233,7 @@
             currentCategory = category;
 
             const titleMap = {
-                'agentcgo': 'Manajemen Pendaftaran Agent CGO',
+                'agent': 'Manajemen Pendaftaran Agent CGO',
                 'resto': 'Manajemen Pendaftaran Resto Partner',
                 'driver': 'Manajemen Pendaftaran Driver Partner'
             };
@@ -278,21 +278,15 @@
                     }
 
                     let bcgoBadge = '<span class="badge-status status-pending">Pending Review</span>';
-                    if (typeof BCGO !== 'undefined' && BCGO.evaluatePartner) {
-                        const evaluation = BCGO.evaluatePartner(data);
-                        if (data.status === 'approved') {
-                            bcgoBadge = `<span class="badge-status status-approved">Approved (Skor: ${evaluation.score || '-'})</span>`;
-                        } else if (data.status === 'rejected') {
-                            bcgoBadge = `<span class="badge-status status-rejected">Rejected</span>`;
-                        } else {
-                            bcgoBadge = `<span class="badge-status status-pending">BCGO Skor: ${evaluation.score || 'Menunggu'}</span>`;
-                        }
-                    } else {
-                        if (data.status === 'approved') bcgoBadge = '<span class="badge-status status-approved">Approved</span>';
-                        else if (data.status === 'rejected') bcgoBadge = '<span class="badge-status status-rejected">Rejected</span>';
+                    if (data.status === 'approved') {
+                        bcgoBadge = `<span class="badge-status status-approved">Approved (Skor: ${data.bcgoScore ?? '-'})</span>`;
+                    } else if (data.status === 'rejected') {
+                        bcgoBadge = `<span class="badge-status status-rejected">Rejected</span>`;
+                    } else if (data.bcgoScore !== undefined && data.bcgoScore !== null) {
+                        bcgoBadge = `<span class="badge-status status-pending">BCGO Skor: ${data.bcgoScore} (${data.bcgoRecommendation || '-'})</span>`;
                     }
 
-                    const namaMitra = data.fullName || data.nama || data.namaUsaha || 'Tanpa Nama';
+                    const namaMitra = data.name || data.namaUsaha || data.ownerName || data.fullName || data.nama || 'Tanpa Nama';
                     const kontakMitra = data.phone || data.kontak || '-';
 
                     rowsHtml += `
@@ -348,13 +342,31 @@
             
             let htmlContent = `
                 <div class="detail-row"><span class="detail-label">Jenis Mitra</span><span class="detail-value">${(data.jenis || '-').toUpperCase()}</span></div>
-                <div class="detail-row"><span class="detail-label">Nama Lengkap</span><span class="detail-value">${data.fullName || data.nama || '-'}</span></div>
+                <div class="detail-row"><span class="detail-label">Nama Lengkap</span><span class="detail-value">${data.name || data.namaUsaha || data.ownerName || data.fullName || data.nama || '-'}</span></div>
                 <div class="detail-row"><span class="detail-label">Nomor WhatsApp/HP</span><span class="detail-value">${data.phone || data.kontak || '-'}</span></div>
                 <div class="detail-row"><span class="detail-label">Email</span><span class="detail-value">${data.email || '-'}</span></div>
                 <div class="detail-row"><span class="detail-label">Media Sosial</span><span class="detail-value">${data.socialMedia || data.sosmed || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Alamat / Wilayah</span><span class="detail-value">${data.address || data.wilayah || '-'}</span></div>
+                <div class="detail-row"><span class="detail-label">Alamat / Wilayah</span><span class="detail-value">${data.address || data.alamat || data.wilayah || '-'}</span></div>
                 <div class="detail-row"><span class="detail-label">Status Saat Ini</span><span class="detail-value">${(data.status || 'pending').toUpperCase()}</span></div>
             `;
+
+            if (data.bcgoScore !== undefined && data.bcgoScore !== null) {
+                htmlContent += `
+                    <div class="detail-row"><span class="detail-label">Skor BCGO</span><span class="detail-value">${data.bcgoScore}/100</span></div>
+                    <div class="detail-row"><span class="detail-label">Tingkat Risiko</span><span class="detail-value">${data.bcgoRisk || '-'}</span></div>
+                    <div class="detail-row"><span class="detail-label">Rekomendasi BCGO</span><span class="detail-value">${data.bcgoRecommendation || '-'}</span></div>
+                `;
+                if (Array.isArray(data.bcgoReasons) && data.bcgoReasons.length > 0) {
+                    htmlContent += `
+                        <div style="margin-top:4px;">
+                            <div class="detail-label" style="margin-bottom:4px;">Catatan BCGO:</div>
+                            <ul style="padding-left:18px; font-size:12px; color:var(--text-main);">
+                                ${data.bcgoReasons.map(r => `<li>${r}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+            }
 
             const fotoKtp = data.ktpPhoto || data.fotoKtp || data.photo || null;
             if (fotoKtp) {
@@ -416,7 +428,7 @@
         });
 
         window.addEventListener('DOMContentLoaded', () => {
-            loadAdminData('agentcgo');
+            loadAdminData('agent');
         });
     </script>
 </body>
