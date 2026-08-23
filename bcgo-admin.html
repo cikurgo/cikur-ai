@@ -79,10 +79,11 @@
         .status-rejected { background: #fee2e2; color: var(--primary-red); }
 
         /* ACTION BUTTONS */
-        .btn-action { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; border: none; transition: opacity .2s; }
+        .btn-action { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; border: none; transition: opacity .2s; margin-right: 4px; margin-bottom: 4px; }
         .btn-action:hover { opacity: 0.85; }
-        .btn-approve { background: #16a34a; color: white; margin-right: 6px; }
-        .btn-reject { background: #dc2626; color: white; }
+        .btn-approve { background: #16a34a; color: white; }
+        .btn-reject { background: #d97706; color: white; }
+        .btn-delete { background: #dc2626; color: white; }
 
         .empty-state { text-align: center; padding: 50px 20px; color: var(--text-muted); font-size: 13px; }
     </style>
@@ -243,6 +244,7 @@
                                     <td>
                                         <button class="btn-action btn-approve" onclick="updateStatus('${category}', '${docId}', 'approved')">Setujui</button>
                                         <button class="btn-action btn-reject" onclick="updateStatus('${category}', '${docId}', 'rejected')">Tolak</button>
+                                        <button class="btn-action btn-delete" onclick="deleteApplication('${category}', '${docId}')">Hapus</button>
                                     </td>
                                 </tr>
                             `;
@@ -287,6 +289,21 @@
             .catch((error) => {
                 console.error("Error updating status: ", error);
                 alert("Gagal memperbarui status: " + error.message);
+            });
+        }
+
+        // Fungsi untuk Menghapus / Mengarsipkan data mitra dari database
+        function deleteApplication(category, docId) {
+            if (!confirm("PERINGATAN: Data mitra yang dihapus tidak dapat dikembalikan. Yakin ingin menghapus data ini?")) return;
+
+            const collectionName = `${category}_applications`;
+            CikurCloud.db.collection(collectionName).doc(docId).delete()
+            .then(() => {
+                alert("Data mitra berhasil dihapus dari sistem.");
+            })
+            .catch((error) => {
+                console.error("Error deleting document: ", error);
+                alert("Gagal menghapus data: " + error.message);
             });
         }
 
