@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BCGO Admin Center - CIKUR GO</title>
     
-    <!-- Memuat File Konfigurasi & Engine -->
+    <!-- Memuat file konfigurasi CikurCloud modular kamu -->
     <script type="module" src="cikur-config.js"></script>
     <script src="bcgo-engine.js"></script>
 
@@ -20,340 +20,89 @@
             --white: #ffffff;
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background: var(--bg-main); color: var(--text-main); padding-bottom: 50px; }
 
-        body {
-            background: var(--bg-main);
-            color: var(--text-main);
-            padding-bottom: 50px;
-        }
-
-        /* HEADER */
-        .admin-header {
-            background: var(--white);
-            border-bottom: 1px solid var(--border-color);
-            padding: 14px 24px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-        }
-
-        .admin-brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-weight: 800;
-            font-size: 16px;
-            letter-spacing: -0.3px;
-        }
-
-        .admin-brand img {
-            width: 36px;
-            height: 36px;
-            object-fit: contain;
-            border-radius: 8px;
-        }
-
-        .admin-brand div span {
-            display: block;
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
+        /* MODERN HEADER WITH LOGO */
+        .admin-header { background: var(--white); border-bottom: 1px solid var(--border-color); padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+        .admin-brand { display: flex; align-items: center; gap: 12px; font-weight: 800; font-size: 16px; letter-spacing: -0.3px; }
+        .admin-brand img { width: 36px; height: 36px; object-fit: contain; border-radius: 8px; }
+        .admin-brand div span { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
         
-        .admin-header-right {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
+        .admin-header-right { display: flex; align-items: center; gap: 12px; }
         
-        /* STATUS BADGE */
-        .admin-badge {
-            font-size: 11px;
-            padding: 5px 12px;
-            border-radius: 99px;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.3s ease;
-        }
+        /* DINAMIS BADGE STATUS */
+        .admin-badge { font-size: 11px; padding: 5px 12px; border-radius: 99px; font-weight: 700; display: flex; align-items: center; gap: 6px; transition: all 0.3s ease; }
+        .admin-badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
 
-        .admin-badge::before {
-            content: "";
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            display: inline-block;
-        }
+        /* Status Hijau (Aman / Sinkron) */
+        .badge-green { background: #dcfce7; color: #15803d; }
+        .badge-green::before { background: #16a34a; animation: pulse-green 1.5s infinite; }
+        @keyframes pulse-green { 0% { transform: scale(0.95); opacity: 0.8; } 50% { transform: scale(1.3); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.8; } }
 
-        .badge-green {
-            background: #dcfce7;
-            color: #15803d;
-        }
-        .badge-green::before {
-            background: #16a34a;
-            animation: pulse-green 1.5s infinite;
-        }
+        /* Status Merah (Ada Kendala) */
+        .badge-red { background: #fee2e2; color: var(--primary-red); }
+        .badge-red::before { background: var(--primary-red); animation: pulse-red 1.5s infinite; }
+        @keyframes pulse-red { 0% { transform: scale(0.95); opacity: 0.8; } 50% { transform: scale(1.3); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.8; } }
 
-        .badge-red {
-            background: #fee2e2;
-            color: var(--primary-red);
-        }
-        .badge-red::before {
-            background: var(--primary-red);
-            animation: pulse-red 1.5s infinite;
-        }
+        /* Status Abu-abu (Terputus) */
+        .badge-gray { background: #f1f5f9; color: #475569; }
+        .badge-gray::before { background: #64748b; }
 
-        .badge-gray {
-            background: #f1f5f9;
-            color: #475569;
-        }
-        .badge-gray::before {
-            background: #64748b;
-        }
+        /* CONTAINER */
+        .admin-container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
 
-        @keyframes pulse-green {
-            0% { transform: scale(0.95); opacity: 0.8; }
-            50% { transform: scale(1.3); opacity: 1; }
-            100% { transform: scale(0.95); opacity: 0.8; }
-        }
+        /* STATS CARDS OVERVIEW */
+        .admin-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: var(--white); border: 1px solid var(--border-color); border-radius: 12px; padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .stat-card-title { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; }
+        .stat-card-value { font-size: 24px; font-weight: 800; color: var(--text-main); }
 
-        @keyframes pulse-red {
-            0% { transform: scale(0.95); opacity: 0.8; }
-            50% { transform: scale(1.3); opacity: 1; }
-            100% { transform: scale(0.95); opacity: 0.8; }
-        }
+        /* TABS KATEGORI */
+        .admin-tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; overflow-x: auto; }
+        .tab-btn { background: var(--white); border: 1px solid var(--border-color); padding: 10px 18px; font-weight: 700; font-size: 13px; color: var(--text-muted); cursor: pointer; border-radius: 8px; transition: all .2s; white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+        .tab-btn.active { background: var(--primary-red); color: var(--white); border-color: var(--primary-red); box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25); }
 
-        /* CONTAINER & STATS */
-        .admin-container {
-            max-width: 1200px;
-            margin: 24px auto;
-            padding: 0 16px;
-        }
+        /* CONTENT CARD */
+        .admin-card { background: var(--white); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .card-header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+        .card-title { font-size: 16px; font-weight: 800; letter-spacing: -0.2px; }
 
-        .admin-stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
-        }
+        /* SEARCH & FILTER BAR */
+        .search-box { padding: 8px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; width: 260px; outline: none; transition: border-color .2s; }
+        .search-box:focus { border-color: var(--primary-red); }
 
-        .stat-card {
-            background: var(--white);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 18px 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-        }
-
-        .stat-card-title {
-            font-size: 12px;
-            font-weight: 700;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            margin-bottom: 8px;
-        }
-
-        .stat-card-value {
-            font-size: 24px;
-            font-weight: 800;
-            color: var(--text-main);
-        }
-
-        /* TABS */
-        .admin-tabs {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid var(--border-color);
-            padding-bottom: 8px;
-            overflow-x: auto;
-        }
-
-        .tab-btn {
-            background: var(--white);
-            border: 1px solid var(--border-color);
-            padding: 10px 18px;
-            font-weight: 700;
-            font-size: 13px;
-            color: var(--text-muted);
-            cursor: pointer;
-            border-radius: 8px;
-            transition: all .2s;
-            white-space: nowrap;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
-        }
-
-        .tab-btn.active {
-            background: var(--primary-red);
-            color: var(--white);
-            border-color: var(--primary-red);
-            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
-        }
-
-        /* CARD & TABLE */
-        .admin-card {
-            background: var(--white);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-        }
-
-        .card-header-flex {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-            gap: 12px;
-        }
-
-        .card-title {
-            font-size: 16px;
-            font-weight: 800;
-            letter-spacing: -0.2px;
-        }
-
-        .search-box {
-            padding: 8px 14px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            font-size: 13px;
-            width: 260px;
-            outline: none;
-            transition: border-color .2s;
-        }
-
-        .search-box:focus {
-            border-color: var(--primary-red);
-        }
-
-        .table-responsive {
-            width: 100%;
-            overflow-x: auto;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            text-align: left;
-            font-size: 13px;
-        }
-
-        th, td {
-            padding: 14px 16px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        th {
-            background: #f8fafc;
-            font-weight: 700;
-            color: var(--text-muted);
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
-
+        /* TABLE / LIST DATA */
+        .table-responsive { width: 100%; overflow-x: auto; border-radius: 8px; border: 1px solid var(--border-color); }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+        th, td { padding: 14px 16px; border-bottom: 1px solid var(--border-color); }
+        th { background: #f8fafc; font-weight: 700; color: var(--text-muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
         tr:last-child td { border-bottom: none; }
         tr:hover td { background: #fafafa; }
         
-        .clickable-name {
-            color: var(--primary-red);
-            font-weight: 700;
-            cursor: pointer;
-            text-decoration: underline;
-        }
+        .clickable-name { color: var(--primary-red); font-weight: 700; cursor: pointer; text-decoration: underline; }
         .clickable-name:hover { color: var(--primary-dark); }
 
         /* STATUS BADGES */
-        .badge-status {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 99px;
-            font-size: 11px;
-            font-weight: 700;
-        }
+        .badge-status { display: inline-block; padding: 4px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; }
         .status-pending { background: #fef3c7; color: #d97706; }
         .status-approved { background: #dcfce7; color: #15803d; }
         .status-rejected { background: #fee2e2; color: var(--primary-red); }
 
         /* ACTION BUTTONS */
-        .btn-action {
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 700;
-            cursor: pointer;
-            border: none;
-            transition: opacity .2s;
-            margin-right: 4px;
-            margin-bottom: 4px;
-        }
+        .btn-action { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; border: none; transition: opacity .2s; margin-right: 4px; margin-bottom: 4px; }
         .btn-action:hover { opacity: 0.85; }
         .btn-approve { background: #16a34a; color: white; }
         .btn-reject { background: #d97706; color: white; }
         .btn-delete { background: #dc2626; color: white; }
 
-        .empty-state {
-            text-align: center;
-            padding: 50px 20px;
-            color: var(--text-muted);
-            font-size: 13px;
-        }
+        .empty-state { text-align: center; padding: 50px 20px; color: var(--text-muted); font-size: 13px; }
 
-        /* MODAL */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.6);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-            padding: 16px;
-        }
-
-        .modal-box {
-            background: var(--white);
-            width: 100%;
-            max-width: 600px;
-            border-radius: 12px;
-            max-height: 90vh;
-            overflow-y: auto;
-            padding: 24px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-            animation: scaleUp 0.2s ease-out;
-        }
-
-        @keyframes scaleUp {
-            from { transform: scale(0.95); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 12px;
-            margin-bottom: 16px;
-        }
-
+        /* MODAL POP-UP DETAIL & KTP */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 1000; justify-content: center; align-items: center; padding: 16px; }
+        .modal-box { background: var(--white); width: 100%; max-width: 600px; border-radius: 12px; max-height: 90vh; overflow-y: auto; padding: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); animation: scaleUp 0.2s ease-out; }
+        @keyframes scaleUp { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px; }
         .modal-title { font-size: 16px; font-weight: 800; }
         .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); }
         .modal-body { font-size: 13px; display: grid; gap: 12px; }
@@ -366,7 +115,7 @@
 </head>
 <body>
 
-    <!-- HEADER -->
+    <!-- MODERN HEADER WITH LOGO -->
     <header class="admin-header">
         <div class="admin-brand">
             <img src="cikurgoicon.png" alt="CIKUR GO Logo">
@@ -376,14 +125,14 @@
             </div>
         </div>
         <div class="admin-header-right">
+            <!-- Indikator Dinamis -->
             <div id="engineStatusBadge" class="admin-badge badge-gray">Memeriksa Sistem...</div>
         </div>
     </header>
 
-    <!-- CONTAINER -->
     <div class="admin-container">
         
-        <!-- STATS OVERVIEW -->
+        <!-- QUICK STATS OVERVIEW -->
         <div class="admin-stats-grid">
             <div class="stat-card">
                 <div class="stat-card-title">Total Antrean Pending</div>
@@ -399,14 +148,14 @@
             </div>
         </div>
 
-        <!-- TABS NAVIGASI -->
+        <!-- TAB NAVIGASI KATEGORI MITRA -->
         <div class="admin-tabs">
             <button class="tab-btn active" onclick="switchTab('agent', this)">Agent CGO</button>
             <button class="tab-btn" onclick="switchTab('resto', this)">Resto Partner</button>
             <button class="tab-btn" onclick="switchTab('driver', this)">Driver Partner</button>
         </div>
 
-        <!-- PANEL TABEL DATA -->
+        <!-- PANEL UTAMA DATA -->
         <div class="admin-card">
             <div class="card-header-flex">
                 <div class="card-title" id="sectionTitle">Manajemen Pendaftaran Agent CGO</div>
@@ -426,7 +175,7 @@
                     </thead>
                     <tbody id="adminTableBody">
                         <tr>
-                            <td colspan="5" class="empty-state">Menghubungkan ke database CIKUR Cloud...[cite: 4]</td>
+                            <td colspan="5" class="empty-state">Menghubungkan ke database CIKUR Cloud...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -434,7 +183,7 @@
         </div>
     </div>
 
-    <!-- MODAL POP-UP DETAIL -->
+    <!-- MODAL POP-UP DETAIL & KTP -->
     <div class="modal-overlay" id="detailModal">
         <div class="modal-box">
             <div class="modal-header">
@@ -445,7 +194,7 @@
         </div>
     </div>
 
-    <!-- SCRIPT UTAMA MODULE -->
+    <!-- Script Logika Menggunakan ES Module -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -462,7 +211,7 @@
 
         const badgeEl = document.getElementById('engineStatusBadge');
 
-        // Cek status engine BCGO
+        // Cek status engine pendukung
         if (typeof BCGO !== 'undefined') {
             badgeEl.className = 'admin-badge badge-green';
             badgeEl.innerText = 'BCGO Engine Sinkron & Aktif';
@@ -494,138 +243,510 @@
         };
 
         function loadAdminData(category) {
-            const tbody = document.getElementById('adminTableBody');
+    const tbody = document.getElementById('adminTableBody');
 
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="5" class="empty-state">
-                        Memuat data dari koleksi mitra_applications...[cite: 4]
-                    </td>
-                </tr>
-            `;
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="5" class="empty-state">
+                Memuat data dari koleksi mitra_applications...
+            </td>
+        </tr>
+    `;
 
-            if (unsubscribeListener) {
-                unsubscribeListener();
-            }
+    if (unsubscribeListener) {
+        unsubscribeListener();
+    }
 
-            const q = query(
-                collection(db, "mitra_applications"),
-                orderBy("submittedAt", "desc")
-            );
+    const q = query(
+        collection(db, "mitra_applications"),
+        orderBy("submittedAt", "desc")
+    );
 
-            unsubscribeListener = onSnapshot(q, (snapshot) => {
-                badgeEl.className = 'admin-badge badge-green';
-                badgeEl.innerText = 'DATA AKTIF';
+    unsubscribeListener = onSnapshot(
+        q,
+        (snapshot) => {
 
-                let pendingCount = 0;
-                let approvedCount = 0;
-                let totalCount = 0;
-                cachedApplications = {};
-                let rowsHtml = '';
+            badgeEl.className = 'admin-badge badge-green';
+            badgeEl.innerText = 'DATA AKTIF';
 
-                snapshot.forEach((documentSnap) => {
-                    const data = documentSnap.data();
-                    const docId = documentSnap.id;
+            let pendingCount = 0;
+            let approvedCount = 0;
+            let totalCount = 0;
 
-                    if (data.jenis !== category) return;
+            cachedApplications = {};
 
-                    cachedApplications[docId] = data;
-                    totalCount++;
+            let rowsHtml = '';
 
-                    if (data.status === 'approved') {
-                        approvedCount++;
-                    } else if (!data.status || data.status === 'pending') {
-                        pendingCount++;
-                    }
 
-                    let dateStr = '-';
-                    if (data.submittedAt && typeof data.submittedAt.toDate === 'function') {
-                        dateStr = data.submittedAt.toDate().toLocaleString('id-ID');
-                    }
+            /* =====================================================
+               BACA SETIAP PENDAFTARAN
+            ====================================================== */
 
-                    const namaMitra = data.name || data.namaUsaha || data.businessName || data.ownerName || data.fullName || data.nama || 'Tanpa Nama';
-                    const kontakMitra = data.phone || data.ownerPhone || data.kontak || '-';
+            snapshot.forEach((documentSnap) => {
 
-                    let bcgoResult = null;
-                    try {
-                        if (typeof BCGO !== 'undefined' && typeof BCGO.evaluatePartner === 'function') {
-                            const partnerData = {
-                                ...data,
-                                partnerType: data.jenis === 'resto' ? 'restaurant' : (data.jenis || data.partnerType || category)
-                            };
-                            bcgoResult = BCGO.evaluatePartner(partnerData);
-                        }
-                    } catch (bcgoError) {
-                        console.error('[BCGO] Gagal menganalisis:', docId, bcgoError);
-                    }
+                const data = documentSnap.data();
+                const docId = documentSnap.id;
 
-                    if (bcgoResult) {
-                        cachedApplications[docId] = { ...data, _bcgoLiveResult: bcgoResult };
-                    }
+                /*
+                 * Hanya tampilkan kategori yang sedang dipilih.
+                 * Contoh:
+                 * restaurant / resto / assistant / driver
+                 */
 
-                    let bcgoBadge = `<span class="badge-status status-pending">Pending Review</span>`;
-
-                    if (bcgoResult) {
-                        if (bcgoResult.status === 'APPROVE') {
-                            bcgoBadge = `<span class="badge-status status-approved" title="${(bcgoResult.reasons || []).join(' | ')}">BCGO ${bcgoResult.score}/100 · LOW</span>`;
-                        } else if (bcgoResult.status === 'REJECT') {
-                            bcgoBadge = `<span class="badge-status status-rejected" title="${(bcgoResult.reasons || []).join(' | ')}">BCGO ${bcgoResult.score}/100 · REJECT</span>`;
-                        } else {
-                            bcgoBadge = `<span class="badge-status status-pending" title="${(bcgoResult.reasons || []).join(' | ')}">BCGO ${bcgoResult.score}/100 · REVIEW</span>`;
-                        }
-                    } else if (data.bcgoScore !== undefined && data.bcgoScore !== null) {
-                        bcgoBadge = `<span class="badge-status status-pending">BCGO Skor: ${data.bcgoScore} (${data.bcgoRecommendation || '-'})</span>`;
-                    }
-
-                    if (data.status === 'approved') {
-                        bcgoBadge = `<span class="badge-status status-approved">Approved ${bcgoResult ? `(BCGO ${bcgoResult.score}/100)` : ''}</span>`;
-                    } else if (data.status === 'rejected') {
-                        bcgoBadge = `<span class="badge-status status-rejected">Rejected</span>`;
-                    }
-
-                    rowsHtml += `
-                        <tr>
-                            <td>${dateStr}</td>
-                            <td><span class="clickable-name" onclick="openDetailModal('${docId}')">${namaMitra}</span></td>
-                            <td>${kontakMitra}</td>
-                            <td>${bcgoBadge}</td>
-                            <td>
-                                <button class="btn-action btn-approve" onclick="updateStatus('${docId}', 'approved')">Setujui</button>
-                                <button class="btn-action btn-reject" onclick="updateStatus('${docId}', 'rejected')">Tolak</button>
-                                <button class="btn-action btn-delete" onclick="deleteApplication('${docId}')">Hapus</button>
-                            </td>
-                        </tr>
-                    `;
-                });
-
-                if (totalCount === 0) {
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="5" class="empty-state">
-                                Belum ada data pendaftaran mitra yang masuk untuk kategori <b>${String(category).toUpperCase()}</b>.
-                            </td>
-                        </tr>
-                    `;
-                    updateStats(0, 0, 0);
+                if (data.jenis !== category) {
                     return;
                 }
 
-                tbody.innerHTML = rowsHtml;
-                updateStats(pendingCount, approvedCount, totalCount);
-            }, (error) => {
-                console.warn("Kendala koneksi/izin database:", error);
-                badgeEl.className = 'admin-badge badge-red';
-                badgeEl.innerText = 'Kendala Koneksi Database';
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="5" class="empty-state" style="color:var(--primary-red);">
-                            Belum ada data / periksa aturan izin Firestore.
-                        </td>
-                    </tr>
+
+                /* =================================================
+                   SIMPAN DATA ASLI
+                ================================================== */
+
+                cachedApplications[docId] = data;
+
+                totalCount++;
+
+
+                if (data.status === 'approved') {
+
+                    approvedCount++;
+
+                } else if (
+                    !data.status ||
+                    data.status === 'pending'
+                ) {
+
+                    pendingCount++;
+
+                }
+
+
+                /* =================================================
+                   TANGGAL PENDAFTARAN
+                ================================================== */
+
+                let dateStr = '-';
+
+                if (
+                    data.submittedAt &&
+                    typeof data.submittedAt.toDate === 'function'
+                ) {
+
+                    dateStr =
+                        data.submittedAt
+                            .toDate()
+                            .toLocaleString('id-ID');
+
+                }
+
+
+                /* =================================================
+                   NAMA MITRA
+                ================================================== */
+
+                const namaMitra =
+                    data.name ||
+                    data.namaUsaha ||
+                    data.businessName ||
+                    data.ownerName ||
+                    data.fullName ||
+                    data.nama ||
+                    'Tanpa Nama';
+
+
+                /* =================================================
+                   KONTAK
+                ================================================== */
+
+                const kontakMitra =
+                    data.phone ||
+                    data.ownerPhone ||
+                    data.kontak ||
+                    '-';
+
+
+                /* =================================================
+                   BCGO ANALYSIS
+                ================================================= */
+
+                let bcgoResult = null;
+
+                try {
+
+                    /*
+                     * Pastikan engine BCGO tersedia.
+                     */
+
+                    if (
+                        typeof BCGO !== 'undefined' &&
+                        typeof BCGO.evaluatePartner === 'function'
+                    ) {
+
+                        /*
+                         * Data dari Firestore diteruskan
+                         * langsung ke BCGO.
+                         *
+                         * Untuk resto:
+                         * jenis = resto
+                         * akan dipetakan menjadi restaurant.
+                         */
+
+                        const partnerData = {
+                            ...data,
+
+                            partnerType:
+                                data.jenis === 'resto'
+                                    ? 'restaurant'
+                                    : (
+                                        data.jenis ||
+                                        data.partnerType ||
+                                        category
+                                    )
+                        };
+
+
+                        bcgoResult =
+                            BCGO.evaluatePartner(
+                                partnerData
+                            );
+
+
+                    }
+
+                } catch (bcgoError) {
+
+                    console.error(
+                        '[BCGO] Gagal menganalisis:',
+                        docId,
+                        bcgoError
+                    );
+
+                }
+
+
+                /* =================================================
+                   SIMPAN HASIL BCGO LIVE KE CACHE
+                ================================================== */
+
+                if (bcgoResult) {
+
+                    cachedApplications[docId] = {
+                        ...data,
+                        _bcgoLiveResult: bcgoResult
+                    };
+
+                }
+
+
+                /* =================================================
+                   BCGO BADGE
+                ================================================== */
+
+                let bcgoBadge = `
+                    <span class="badge-status status-pending">
+                        Pending Review
+                    </span>
                 `;
-                updateStats(0, 0, 0);
+
+
+                /*
+                 * Jika BCGO berhasil melakukan analisis
+                 * gunakan hasil analisis terbaru.
+                 */
+
+                if (bcgoResult) {
+
+                    if (
+                        bcgoResult.status === 'APPROVE'
+                    ) {
+
+                        bcgoBadge = `
+                            <span
+                                class="badge-status status-approved"
+                                title="${(
+                                    bcgoResult.reasons || []
+                                ).join(' | ')}"
+                            >
+                                BCGO ${bcgoResult.score}/100
+                                · LOW
+                            </span>
+                        `;
+
+                    } else if (
+                        bcgoResult.status === 'REJECT'
+                    ) {
+
+                        bcgoBadge = `
+                            <span
+                                class="badge-status status-rejected"
+                                title="${(
+                                    bcgoResult.reasons || []
+                                ).join(' | ')}"
+                            >
+                                BCGO ${bcgoResult.score}/100
+                                · REJECT
+                            </span>
+                        `;
+
+                    } else {
+
+                        bcgoBadge = `
+                            <span
+                                class="badge-status status-pending"
+                                title="${(
+                                    bcgoResult.reasons || []
+                                ).join(' | ')}"
+                            >
+                                BCGO ${bcgoResult.score}/100
+                                · REVIEW
+                            </span>
+                        `;
+
+                    }
+
+                }
+
+                /*
+                 * Kalau engine belum tersedia,
+                 * tetap tampilkan hasil BCGO lama
+                 * yang mungkin sudah tersimpan di Firestore.
+                 */
+
+                else if (
+                    data.bcgoScore !== undefined &&
+                    data.bcgoScore !== null
+                ) {
+
+                    bcgoBadge = `
+                        <span
+                            class="badge-status status-pending"
+                        >
+                            BCGO Skor:
+                            ${data.bcgoScore}
+                            (${data.bcgoRecommendation || '-'})
+                        </span>
+                    `;
+
+                }
+
+
+                /* =================================================
+                   STATUS DATABASE
+                ================================================== */
+
+                if (data.status === 'approved') {
+
+                    bcgoBadge = `
+                        <span
+                            class="badge-status status-approved"
+                        >
+                            Approved
+                            ${
+                                bcgoResult
+                                    ? `(BCGO ${bcgoResult.score}/100)`
+                                    : ''
+                            }
+                        </span>
+                    `;
+
+                } else if (data.status === 'rejected') {
+
+                    bcgoBadge = `
+                        <span
+                            class="badge-status status-rejected"
+                        >
+                            Rejected
+                        </span>
+                    `;
+
+                }
+
+
+                /* =================================================
+                   ROW TABLE
+                ================================================== */
+
+                rowsHtml += `
+
+                    <tr>
+
+                        <td>
+                            ${dateStr}
+                        </td>
+
+
+                        <td>
+
+                            <span
+                                class="clickable-name"
+                                onclick="openDetailModal('${docId}')"
+                            >
+                                ${namaMitra}
+                            </span>
+
+                        </td>
+
+
+                        <td>
+                            ${kontakMitra}
+                        </td>
+
+
+                        <td>
+                            ${bcgoBadge}
+                        </td>
+
+
+                        <td>
+
+                            <button
+                                class="btn-action btn-approve"
+                                onclick="
+                                    updateStatus(
+                                        '${docId}',
+                                        'approved'
+                                    )
+                                "
+                            >
+                                Setujui
+                            </button>
+
+
+                            <button
+                                class="btn-action btn-reject"
+                                onclick="
+                                    updateStatus(
+                                        '${docId}',
+                                        'rejected'
+                                    )
+                                "
+                            >
+                                Tolak
+                            </button>
+
+
+                            <button
+                                class="btn-action btn-delete"
+                                onclick="
+                                    deleteApplication(
+                                        '${docId}'
+                                    )
+                                "
+                            >
+                                Hapus
+                            </button>
+
+                        </td>
+
+                    </tr>
+
+                `;
+
             });
+
+
+            /* =====================================================
+               TIDAK ADA DATA
+            ====================================================== */
+
+            if (totalCount === 0) {
+
+                tbody.innerHTML = `
+
+                    <tr>
+
+                        <td
+                            colspan="5"
+                            class="empty-state"
+                        >
+
+                            Belum ada data pendaftaran
+                            mitra yang masuk untuk kategori
+
+                            <b>
+                                ${String(category).toUpperCase()}
+                            </b>.
+
+                        </td>
+
+                    </tr>
+
+                `;
+
+                updateStats(
+                    0,
+                    0,
+                    0
+                );
+
+                return;
+            }
+
+
+            /* =====================================================
+               TAMPILKAN DATA
+            ====================================================== */
+
+            tbody.innerHTML = rowsHtml;
+
+
+            updateStats(
+                pendingCount,
+                approvedCount,
+                totalCount
+            );
+
+        },
+
+
+        /* =========================================================
+           FIRESTORE ERROR
+        ========================================================== */
+
+        (error) => {
+
+            console.warn(
+                "Kendala koneksi/izin database:",
+                error
+            );
+
+
+            badgeEl.className =
+                'admin-badge badge-red';
+
+            badgeEl.innerText =
+                'Kendala Koneksi Database';
+
+
+            tbody.innerHTML = `
+
+                <tr>
+
+                    <td
+                        colspan="5"
+                        class="empty-state"
+                        style="color:var(--primary-red);"
+                    >
+
+                        Belum ada data /
+                        periksa aturan izin Firestore.
+
+                    </td>
+
+                </tr>
+
+            `;
+
+
+            updateStats(
+                0,
+                0,
+                0
+            );
+
         }
+    );
+                }
 
         function updateStats(pending, approved, total) {
             document.getElementById('statPending').innerText = pending;
@@ -634,65 +755,909 @@
         }
 
         window.openDetailModal = function(docId) {
-            const data = cachedApplications[docId];
-            if (!data) return;
+    const data = cachedApplications[docId];
 
-            const namaMitra = data.name || data.namaUsaha || data.businessName || data.ownerName || data.fullName || data.nama || 'Mitra';
-            const jenisMitra = data.jenis || data.partnerType || '-';
-            const kontakMitra = data.phone || data.ownerPhone || data.kontak || '-';
+    if (!data) return;
 
-            document.getElementById('modalTitle').innerText = `Detail Pendaftaran: ${namaMitra}`;
 
-            let htmlContent = `
-                <div class="detail-row"><span class="detail-label">Jenis Mitra</span><span class="detail-value">${String(jenisMitra).toUpperCase()}</span></div>
-                <div class="detail-row"><span class="detail-label">Nama / Nama Usaha</span><span class="detail-value">${namaMitra}</span></div>
-                <div class="detail-row"><span class="detail-label">Penanggung Jawab</span><span class="detail-value">${data.ownerName || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Status Penanggung Jawab</span><span class="detail-value">${data.role || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Nomor WhatsApp / HP</span><span class="detail-value">${kontakMitra}</span></div>
-                <div class="detail-row"><span class="detail-label">Email</span><span class="detail-value">${data.email || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Jenis Usaha</span><span class="detail-value">${data.businessType || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Deskripsi Usaha</span><span class="detail-value">${data.description || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Alamat</span><span class="detail-value">${data.address || data.alamat || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Desa / Kelurahan</span><span class="detail-value">${data.village || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Kecamatan</span><span class="detail-value">${data.district || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Kabupaten / Kota</span><span class="detail-value">${data.city || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Provinsi</span><span class="detail-value">${data.province || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Kode Pos</span><span class="detail-value">${data.postalCode || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Patokan Lokasi</span><span class="detail-value">${data.locationNote || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Status Saat Ini</span><span class="detail-value">${String(data.status || 'pending').toUpperCase()}</span></div>
+    /* =====================================================
+       DATA DASAR MITRA
+    ====================================================== */
+
+    const namaMitra =
+        data.name ||
+        data.namaUsaha ||
+        data.businessName ||
+        data.ownerName ||
+        data.fullName ||
+        data.nama ||
+        'Mitra';
+
+
+    const jenisMitra =
+        data.jenis ||
+        data.partnerType ||
+        '-';
+
+
+    const kontakMitra =
+        data.phone ||
+        data.ownerPhone ||
+        data.kontak ||
+        '-';
+
+
+    document.getElementById('modalTitle').innerText =
+        `Detail Pendaftaran: ${namaMitra}`;
+
+
+    let htmlContent = `
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Jenis Mitra
+            </span>
+
+            <span class="detail-value">
+                ${String(jenisMitra).toUpperCase()}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Nama / Nama Usaha
+            </span>
+
+            <span class="detail-value">
+                ${namaMitra}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Penanggung Jawab
+            </span>
+
+            <span class="detail-value">
+                ${data.ownerName || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Status Penanggung Jawab
+            </span>
+
+            <span class="detail-value">
+                ${data.role || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Nomor WhatsApp / HP
+            </span>
+
+            <span class="detail-value">
+                ${kontakMitra}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Email
+            </span>
+
+            <span class="detail-value">
+                ${data.email || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Jenis Usaha
+            </span>
+
+            <span class="detail-value">
+                ${data.businessType || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Deskripsi Usaha
+            </span>
+
+            <span class="detail-value">
+                ${data.description || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Alamat
+            </span>
+
+            <span class="detail-value">
+                ${data.address ||
+                  data.alamat ||
+                  '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Desa / Kelurahan
+            </span>
+
+            <span class="detail-value">
+                ${data.village || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Kecamatan
+            </span>
+
+            <span class="detail-value">
+                ${data.district || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Kabupaten / Kota
+            </span>
+
+            <span class="detail-value">
+                ${data.city || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Provinsi
+            </span>
+
+            <span class="detail-value">
+                ${data.province || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Kode Pos
+            </span>
+
+            <span class="detail-value">
+                ${data.postalCode || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Patokan Lokasi
+            </span>
+
+            <span class="detail-value">
+                ${data.locationNote || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Status Saat Ini
+            </span>
+
+            <span class="detail-value">
+                ${String(data.status || 'pending').toUpperCase()}
+            </span>
+        </div>
+
+    `;
+
+
+    /* =====================================================
+       OPERASIONAL RESTO
+    ====================================================== */
+
+    if (
+        jenisMitra === 'resto' ||
+        jenisMitra === 'restaurant'
+    ) {
+
+        htmlContent += `
+
+            <div
+                style="
+                    margin-top:12px;
+                    padding-top:10px;
+                    border-top:1px solid var(--border-color);
+                "
+            >
+
+                <div
+                    style="
+                        font-weight:800;
+                        margin-bottom:8px;
+                        font-size:13px;
+                    "
+                >
+                    Data Operasional
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Jam Buka
+                    </span>
+
+                    <span class="detail-value">
+                        ${data.openTime || '-'}
+                    </span>
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Jam Tutup
+                    </span>
+
+                    <span class="detail-value">
+                        ${data.closeTime || '-'}
+                    </span>
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Hari Operasional
+                    </span>
+
+                    <span class="detail-value">
+                        ${data.operationalDays || '-'}
+                    </span>
+                </div>
+
+            </div>
+
+        `;
+
+    }
+
+
+    /* =====================================================
+       LOKASI GPS
+    ====================================================== */
+
+    if (
+        data.latitude ||
+        data.longitude ||
+        data.restoLatitude ||
+        data.restoLongitude
+    ) {
+
+        htmlContent += `
+
+            <div
+                style="
+                    margin-top:12px;
+                    padding-top:10px;
+                    border-top:1px solid var(--border-color);
+                "
+            >
+
+                <div
+                    style="
+                        font-weight:800;
+                        margin-bottom:8px;
+                        font-size:13px;
+                    "
+                >
+                    Lokasi GPS
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Latitude
+                    </span>
+
+                    <span class="detail-value">
+                        ${
+                            data.latitude ||
+                            data.restoLatitude ||
+                            '-'
+                        }
+                    </span>
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Longitude
+                    </span>
+
+                    <span class="detail-value">
+                        ${
+                            data.longitude ||
+                            data.restoLongitude ||
+                            '-'
+                        }
+                    </span>
+                </div>
+
+            </div>
+
+        `;
+
+    }
+
+
+    /* =====================================================
+       LEGALITAS
+    ====================================================== */
+
+    htmlContent += `
+
+        <div
+            style="
+                margin-top:12px;
+                padding-top:10px;
+                border-top:1px solid var(--border-color);
+            "
+        >
+
+            <div
+                style="
+                    font-weight:800;
+                    margin-bottom:8px;
+                    font-size:13px;
+                "
+            >
+                Identitas & Legalitas
+            </div>
+
+
+            <div class="detail-row">
+                <span class="detail-label">
+                    NIK / KTP
+                </span>
+
+                <span class="detail-value">
+                    ${data.ktp || '-'}
+                </span>
+            </div>
+
+
+            <div class="detail-row">
+                <span class="detail-label">
+                    Status Legalitas
+                </span>
+
+                <span class="detail-value">
+                    ${data.legalStatus || '-'}
+                </span>
+            </div>
+
+
+            <div class="detail-row">
+                <span class="detail-label">
+                    NIB
+                </span>
+
+                <span class="detail-value">
+                    ${data.nib || '-'}
+                </span>
+            </div>
+
+        </div>
+
+    `;
+
+
+    /* =====================================================
+       DATA PENCAIRAN
+    ====================================================== */
+
+    htmlContent += `
+
+        <div
+            style="
+                margin-top:12px;
+                padding-top:10px;
+                border-top:1px solid var(--border-color);
+            "
+        >
+
+            <div
+                style="
+                    font-weight:800;
+                    margin-bottom:8px;
+                    font-size:13px;
+                "
+            >
+                Data Pencairan Dana
+            </div>
+
+
+            <div class="detail-row">
+                <span class="detail-label">
+                    Bank / E-Wallet
+                </span>
+
+                <span class="detail-value">
+                    ${data.bankName || '-'}
+                </span>
+            </div>
+
+
+            <div class="detail-row">
+                <span class="detail-label">
+                    Nama Rekening
+                </span>
+
+                <span class="detail-value">
+                    ${data.accountName || '-'}
+                </span>
+            </div>
+
+
+            <div class="detail-row">
+                <span class="detail-label">
+                    Nomor Rekening / Akun
+                </span>
+
+                <span class="detail-value">
+                    ${data.accountNumber || '-'}
+                </span>
+            </div>
+
+        </div>
+
+    `;
+
+
+    /* =====================================================
+       BCGO LIVE ANALYSIS
+    ====================================================== */
+
+    const liveBCGO =
+        data._bcgoLiveResult || null;
+
+
+    if (liveBCGO) {
+
+        const score =
+            liveBCGO.score ?? 0;
+
+        const risk =
+            liveBCGO.risk || '-';
+
+        const decision =
+            liveBCGO.status || '-';
+
+
+        htmlContent += `
+
+            <div
+                style="
+                    margin-top:14px;
+                    padding:14px;
+                    border-radius:10px;
+                    background:#f8fafc;
+                    border:1px solid var(--border-color);
+                "
+            >
+
+                <div
+                    style="
+                        font-size:14px;
+                        font-weight:800;
+                        margin-bottom:10px;
+                    "
+                >
+                    🧠 Analisis BCGO
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Skor BCGO
+                    </span>
+
+                    <span
+                        class="detail-value"
+                        style="font-weight:800;"
+                    >
+                        ${score}/100
+                    </span>
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Tingkat Risiko
+                    </span>
+
+                    <span class="detail-value">
+                        ${risk}
+                    </span>
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Keputusan BCGO
+                    </span>
+
+                    <span class="detail-value">
+                        ${decision}
+                    </span>
+                </div>
+
+
+                ${
+                    liveBCGO.recommendation
+                        ? `
+                            <div
+                                class="detail-row"
+                                style="margin-top:6px;"
+                            >
+                                <span class="detail-label">
+                                    Rekomendasi
+                                </span>
+
+                                <span class="detail-value">
+                                    ${liveBCGO.recommendation}
+                                </span>
+                            </div>
+                        `
+                        : ''
+                }
+
+        `;
+
+
+        /* =================================================
+           HASIL PEMERIKSAAN DETAIL
+        ================================================== */
+
+        const restaurantChecks =
+            liveBCGO?.checks?.partnerSpecific?.checks;
+
+
+        if (
+            restaurantChecks &&
+            typeof restaurantChecks === 'object'
+        ) {
+
+            htmlContent += `
+
+                <div
+                    style="
+                        margin-top:12px;
+                        font-size:12px;
+                        font-weight:800;
+                    "
+                >
+                    Pemeriksaan Data
+                </div>
+
             `;
 
-            if (jenisMitra === 'resto' || jenisMitra === 'restaurant') {
-                htmlContent += `
-                    <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border-color);">
-                        <div style="font-weight:800; margin-bottom:8px; font-size:13px;">Data Operasional</div>
-                        <div class="detail-row"><span class="detail-label">Jam Buka</span><span class="detail-value">${data.openTime || '-'}</span></div>
-                        <div class="detail-row"><span class="detail-label">Jam Tutup</span><span class="detail-value">${data.closeTime || '-'}</span></div>
-                        <div class="detail-row"><span class="detail-label">Hari Operasional</span><span class="detail-value">${data.operationalDays || '-'}</span></div>
-                    </div>
-                `;
-            }
 
-            const fotoKtp = data.ktpPhoto || data.fotoKtp || data.photo || null;
-            if (fotoKtp) {
-                htmlContent += `
-                    <div class="ktp-preview-container">
-                        <div class="detail-label" style="margin-bottom:4px;">Pratinjau Foto / KTP:</div>
-                        <img src="${fotoKtp}" alt="Foto KTP / Dokumen Mitra">
-                    </div>
-                `;
-            } else {
-                htmlContent += `<div style="text-align:center; color:var(--text-muted); margin-top:10px;">Tidak ada lampiran foto/KTP yang diunggah.</div>`;
-            }
+            Object.entries(
+                restaurantChecks
+            ).forEach(
+                ([key, check]) => {
 
-            document.getElementById('modalBodyContent').innerHTML = htmlContent;
-            document.getElementById('detailModal').style.display = 'flex';
-        };
+                    const passed =
+                        check &&
+                        check.passed === true;
 
-        window.closeDetailModal = function() {
-            document.getElementById('detailModal').style.display = 'none';
-        };
 
+                    htmlContent += `
+
+                        <div
+                            style="
+                                display:flex;
+                                justify-content:space-between;
+                                align-items:center;
+                                gap:10px;
+                                padding:6px 0;
+                                border-bottom:1px dashed var(--border-color);
+                                font-size:11px;
+                            "
+                        >
+
+                            <span>
+                                ${key}
+                            </span>
+
+                            <strong>
+                                ${
+                                    passed
+                                        ? '✓ Lengkap'
+                                        : '✕ Belum Lengkap'
+                                }
+                            </strong>
+
+                        </div>
+
+                    `;
+
+                }
+            );
+
+        }
+
+
+        /* =================================================
+           CATATAN BCGO
+        ================================================== */
+
+        if (
+            Array.isArray(
+                liveBCGO.reasons
+            ) &&
+            liveBCGO.reasons.length > 0
+        ) {
+
+            htmlContent += `
+
+                <div
+                    style="
+                        margin-top:12px;
+                        font-size:12px;
+                        font-weight:800;
+                    "
+                >
+                    Catatan BCGO
+                </div>
+
+                <ul
+                    style="
+                        padding-left:18px;
+                        font-size:11px;
+                        color:var(--text-main);
+                    "
+                >
+
+                    ${
+                        liveBCGO.reasons
+                            .map(
+                                reason =>
+                                    `<li>${reason}</li>`
+                            )
+                            .join('')
+                    }
+
+                </ul>
+
+            `;
+
+        }
+
+
+        htmlContent += `
+
+            </div>
+
+        `;
+
+    }
+
+
+    /* =====================================================
+       HASIL BCGO TERSIMPAN DI FIRESTORE
+       FALLBACK JIKA LIVE ENGINE BELUM TERSEDIA
+    ====================================================== */
+
+    else if (
+        data.bcgoScore !== undefined &&
+        data.bcgoScore !== null
+    ) {
+
+        htmlContent += `
+
+            <div
+                style="
+                    margin-top:14px;
+                    padding:14px;
+                    border-radius:10px;
+                    background:#f8fafc;
+                    border:1px solid var(--border-color);
+                "
+            >
+
+                <div
+                    style="
+                        font-size:14px;
+                        font-weight:800;
+                        margin-bottom:10px;
+                    "
+                >
+                    🧠 Hasil BCGO
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Skor BCGO
+                    </span>
+
+                    <span class="detail-value">
+                        ${data.bcgoScore}/100
+                    </span>
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Tingkat Risiko
+                    </span>
+
+                    <span class="detail-value">
+                        ${data.bcgoRisk || '-'}
+                    </span>
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Rekomendasi
+                    </span>
+
+                    <span class="detail-value">
+                        ${data.bcgoRecommendation || '-'}
+                    </span>
+                </div>
+
+        `;
+
+
+        if (
+            Array.isArray(data.bcgoReasons) &&
+            data.bcgoReasons.length > 0
+        ) {
+
+            htmlContent += `
+
+                <div
+                    style="
+                        margin-top:10px;
+                        font-size:12px;
+                        font-weight:800;
+                    "
+                >
+                    Catatan BCGO
+                </div>
+
+                <ul
+                    style="
+                        padding-left:18px;
+                        font-size:11px;
+                    "
+                >
+
+                    ${
+                        data.bcgoReasons
+                            .map(
+                                reason =>
+                                    `<li>${reason}</li>`
+                            )
+                            .join('')
+                    }
+
+                </ul>
+
+            `;
+
+        }
+
+
+        htmlContent += `
+
+            </div>
+
+        `;
+
+    }
+
+
+    /* =====================================================
+       FOTO KTP
+    ====================================================== */
+
+    const fotoKtp =
+        data.ktpPhoto ||
+        data.fotoKtp ||
+        data.photo ||
+        null;
+
+
+    if (fotoKtp) {
+
+        htmlContent += `
+
+            <div class="ktp-preview-container">
+
+                <div
+                    class="detail-label"
+                    style="margin-bottom:4px;"
+                >
+                    Pratinjau Foto / KTP:
+                </div>
+
+                <img
+                    src="${fotoKtp}"
+                    alt="Foto KTP / Dokumen Mitra"
+                >
+
+            </div>
+
+        `;
+
+    } else {
+
+        htmlContent += `
+
+            <div
+                style="
+                    text-align:center;
+                    color:var(--text-muted);
+                    margin-top:10px;
+                "
+            >
+                Tidak ada lampiran foto/KTP
+                yang diunggah.
+            </div>
+
+        `;
+
+    }
+
+
+    /* =====================================================
+       TAMPILKAN MODAL
+    ====================================================== */
+
+    document.getElementById(
+        'modalBodyContent'
+    ).innerHTML = htmlContent;
+
+
+    document.getElementById(
+        'detailModal'
+    ).style.display = 'flex';
+
+};
+
+
+window.closeDetailModal = function() {
+
+    document.getElementById(
+        'detailModal'
+    ).style.display = 'none';
+
+};
         window.updateStatus = async function(docId, newStatus) {
             if (!confirm(`Apakah Anda yakin ingin mengubah status mitra ini menjadi ${newStatus.toUpperCase()}?`)) return;
 
