@@ -61,11 +61,27 @@ const BCGO_REQUIRED_FIELDS = {
     ],
 
     restaurant: [
-        "name",
-        "phone",
-        "address",
-        "businessName"
-    ],
+    "name",
+    "phone",
+    "address",
+    "businessName",
+    "businessType",
+    "ownerName",
+    "role",
+    "village",
+    "district",
+    "city",
+    "province",
+    "openTime",
+    "closeTime",
+    "operationalDays",
+    "ktp",
+    "legalStatus",
+    "bankName",
+    "accountName",
+    "accountNumber",
+    "photoFront"
+],
 
     driver: [
         "name",
@@ -237,16 +253,240 @@ function bcgoCheckAssistant(partner) {
 
 
 /**
- * Pemeriksaan khusus Restaurant.
+ * ============================================================
+ * BCGO — PEMERIKSAAN KHUSUS RESTAURANT
+ * ============================================================
+ *
+ * Pemeriksaan ini menilai kelengkapan profil restoran
+ * berdasarkan data yang dikirim oleh resto.html.
+ *
+ * CATATAN:
+ * Ini adalah pemeriksaan data/konsistensi dasar.
+ * BUKAN verifikasi KTP/NIB secara resmi.
+ * ============================================================
  */
+
 function bcgoCheckRestaurant(partner) {
 
-    return {
+    const checks = {
+
+        /* ================================
+           IDENTITAS USAHA
+        ================================= */
+
         businessName: {
             passed: bcgoHasValue(
-                partner.businessName
+                partner.businessName ||
+                partner.namaUsaha ||
+                partner.name
             )
+        },
+
+        businessType: {
+            passed: bcgoHasValue(
+                partner.businessType
+            )
+        },
+
+        description: {
+            passed: bcgoHasValue(
+                partner.description
+            )
+        },
+
+
+        /* ================================
+           PENANGGUNG JAWAB
+        ================================= */
+
+        ownerName: {
+            passed: bcgoHasValue(
+                partner.ownerName
+            )
+        },
+
+        role: {
+            passed: bcgoHasValue(
+                partner.role
+            )
+        },
+
+
+        /* ================================
+           LOKASI
+        ================================= */
+
+        address: {
+            passed: bcgoHasValue(
+                partner.address ||
+                partner.alamat
+            )
+        },
+
+        village: {
+            passed: bcgoHasValue(
+                partner.village
+            )
+        },
+
+        district: {
+            passed: bcgoHasValue(
+                partner.district
+            )
+        },
+
+        city: {
+            passed: bcgoHasValue(
+                partner.city
+            )
+        },
+
+        province: {
+            passed: bcgoHasValue(
+                partner.province
+            )
+        },
+
+
+        /* ================================
+           OPERASIONAL
+        ================================= */
+
+        openTime: {
+            passed: bcgoHasValue(
+                partner.openTime
+            )
+        },
+
+        closeTime: {
+            passed: bcgoHasValue(
+                partner.closeTime
+            )
+        },
+
+        operationalDays: {
+            passed: bcgoHasValue(
+                partner.operationalDays
+            )
+        },
+
+
+        /* ================================
+           IDENTITAS / LEGALITAS
+        ================================= */
+
+        ktp: {
+            passed: bcgoHasValue(
+                partner.ktp
+            )
+        },
+
+        ktpPhoto: {
+            passed: bcgoHasValue(
+                partner.ktpPhoto ||
+                partner.fotoKtp
+            )
+        },
+
+        legalStatus: {
+            passed: bcgoHasValue(
+                partner.legalStatus
+            )
+        },
+
+        nib: {
+            /*
+             * NIB tidak diwajibkan untuk semua kondisi.
+             * Yang dinilai adalah apakah status legalitas
+             * sudah dijelaskan.
+             */
+            passed:
+                partner.legalStatus === "Belum Memiliki NIB" ||
+                bcgoHasValue(partner.nib)
+        },
+
+
+        /* ================================
+           PENCAIRAN DANA
+        ================================= */
+
+        bankName: {
+            passed: bcgoHasValue(
+                partner.bankName
+            )
+        },
+
+        accountName: {
+            passed: bcgoHasValue(
+                partner.accountName
+            )
+        },
+
+        accountNumber: {
+            passed: bcgoHasValue(
+                partner.accountNumber
+            )
+        },
+
+
+        /* ================================
+           FOTO RESTORAN
+        ================================= */
+
+        photoFront: {
+            passed: bcgoHasValue(
+                partner.photoFront
+            )
+        },
+
+        photoIndoor: {
+            /*
+             * Indoor menjadi data pendukung.
+             * Tidak menjadikan seluruh pendaftaran
+             * gagal hanya karena foto indoor kosong.
+             */
+            passed:
+                partner.photoIndoor === undefined ||
+                partner.photoIndoor === null ||
+                bcgoHasValue(partner.photoIndoor)
         }
+
+    };
+
+
+    /* ==========================================
+       RINGKASAN RESTAURANT
+    ========================================== */
+
+    const checkValues =
+        Object.values(checks);
+
+    const passedCount =
+        checkValues.filter(
+            check => check.passed === true
+        ).length;
+
+    const totalCount =
+        checkValues.length;
+
+    return {
+
+        passed:
+            passedCount === totalCount,
+
+        score:
+            totalCount > 0
+                ? Math.round(
+                    (passedCount / totalCount) * 100
+                )
+                : 0,
+
+        passedCount,
+
+        totalCount,
+
+        checks
+
     };
 }
 
