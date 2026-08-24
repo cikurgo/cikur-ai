@@ -23,7 +23,7 @@
 "use strict";
 
 /* ============================================================
-   BCGO CORE CONFIGURATION
+   1. BCGO CORE CONFIGURATION
 ============================================================ */
 
 const BCGO_VERSION = "0.1.0";
@@ -49,7 +49,7 @@ const BCGO_RISK_LEVELS = {
 
 
 /* ============================================================
-   BCGO — REQUIRED DATA
+   2. BCGO REQUIRED DATA DEFINITIONS
 ============================================================ */
 
 const BCGO_REQUIRED_FIELDS = {
@@ -61,27 +61,27 @@ const BCGO_REQUIRED_FIELDS = {
     ],
 
     restaurant: [
-    "name",
-    "phone",
-    "address",
-    "businessName",
-    "businessType",
-    "ownerName",
-    "role",
-    "village",
-    "district",
-    "city",
-    "province",
-    "openTime",
-    "closeTime",
-    "operationalDays",
-    "ktp",
-    "legalStatus",
-    "bankName",
-    "accountName",
-    "accountNumber",
-    "photoFront"
-],
+        "name",
+        "phone",
+        "address",
+        "businessName",
+        "businessType",
+        "ownerName",
+        "role",
+        "village",
+        "district",
+        "city",
+        "province",
+        "openTime",
+        "closeTime",
+        "operationalDays",
+        "ktp",
+        "legalStatus",
+        "bankName",
+        "accountName",
+        "accountNumber",
+        "photoFront"
+    ],
 
     driver: [
         "name",
@@ -93,7 +93,7 @@ const BCGO_REQUIRED_FIELDS = {
 
 
 /* ============================================================
-   BCGO — BASIC UTILITIES
+   3. BCGO BASIC UTILITIES
 ============================================================ */
 
 /**
@@ -107,23 +107,19 @@ function bcgoHasValue(value) {
     );
 }
 
-
 /**
  * Mengambil field yang belum diisi.
  */
 function bcgoFindMissingFields(data, requiredFields) {
-
     return requiredFields.filter(
         field => !bcgoHasValue(data[field])
     );
 }
 
-
 /**
- * Menentukan jenis mitra.
+ * Menentukan dan menormalisasi jenis mitra.
  */
 function bcgoNormalizePartnerType(type) {
-
     if (!type) {
         return null;
     }
@@ -159,16 +155,14 @@ function bcgoNormalizePartnerType(type) {
 
 
 /* ============================================================
-   BCGO — DATA VALIDATION
+   4. BCGO DATA VALIDATION
 ============================================================ */
 
 /**
  * Memeriksa apakah tipe mitra didukung.
  */
 function bcgoValidatePartnerType(partnerType) {
-
-    const normalizedType =
-        bcgoNormalizePartnerType(partnerType);
+    const normalizedType = bcgoNormalizePartnerType(partnerType);
 
     return {
         passed: normalizedType !== null,
@@ -176,23 +170,12 @@ function bcgoValidatePartnerType(partnerType) {
     };
 }
 
-
 /**
- * Memeriksa kelengkapan data mitra.
+ * Memeriksa kelengkapan data wajib mitra.
  */
-function bcgoValidateRequiredData(
-    partner,
-    partnerType
-) {
-
-    const requiredFields =
-        BCGO_REQUIRED_FIELDS[partnerType] || [];
-
-    const missingFields =
-        bcgoFindMissingFields(
-            partner,
-            requiredFields
-        );
+function bcgoValidateRequiredData(partner, partnerType) {
+    const requiredFields = BCGO_REQUIRED_FIELDS[partnerType] || [];
+    const missingFields = bcgoFindMissingFields(partner, requiredFields);
 
     return {
         passed: missingFields.length === 0,
@@ -203,28 +186,20 @@ function bcgoValidateRequiredData(
 
 
 /* ============================================================
-   BCGO — BASIC IDENTITY CHECK
+   5. BCGO IDENTITY CHECK UTILITIES
 ============================================================ */
 
 /**
  * Pemeriksaan dasar identitas/kontak.
- *
- * CATATAN:
- * Ini BELUM merupakan verifikasi identitas resmi.
- * Untuk saat ini hanya memeriksa keberadaan data.
  */
 function bcgoIdentityCheck(partner) {
-
     const checks = {
         name: bcgoHasValue(partner.name),
         phone: bcgoHasValue(partner.phone),
         address: bcgoHasValue(partner.address)
     };
 
-    const passed =
-        checks.name &&
-        checks.phone &&
-        checks.address;
+    const passed = checks.name && checks.phone && checks.address;
 
     return {
         passed,
@@ -234,298 +209,128 @@ function bcgoIdentityCheck(partner) {
 
 
 /* ============================================================
-   BCGO — PARTNER-SPECIFIC CHECKS
+   6. BCGO PARTNER-SPECIFIC CHECKS
 ============================================================ */
 
 /**
- * Pemeriksaan khusus Assistant.
+ * Pemeriksaan khusus Assistant / Agent CGO.
  */
 function bcgoCheckAssistant(partner) {
-
     return {
         serviceType: {
-            passed: bcgoHasValue(
-                partner.serviceType
-            )
+            passed: bcgoHasValue(partner.serviceType)
         }
     };
 }
 
-
 /**
- * ============================================================
- * BCGO — PEMERIKSAAN KHUSUS RESTAURANT
- * ============================================================
- *
- * Pemeriksaan ini menilai kelengkapan profil restoran
- * berdasarkan data yang dikirim oleh resto.html.
- *
- * CATATAN:
- * Ini adalah pemeriksaan data/konsistensi dasar.
- * BUKAN verifikasi KTP/NIB secara resmi.
- * ============================================================
+ * Pemeriksaan khusus Restaurant Partner.
  */
-
 function bcgoCheckRestaurant(partner) {
-
     const checks = {
-
-        /* ================================
-           IDENTITAS USAHA
-        ================================= */
-
         businessName: {
-            passed: bcgoHasValue(
-                partner.businessName ||
-                partner.namaUsaha ||
-                partner.name
-            )
+            passed: bcgoHasValue(partner.businessName || partner.namaUsaha || partner.name)
         },
-
         businessType: {
-            passed: bcgoHasValue(
-                partner.businessType
-            )
+            passed: bcgoHasValue(partner.businessType)
         },
-
         description: {
-            passed: bcgoHasValue(
-                partner.description
-            )
+            passed: bcgoHasValue(partner.description)
         },
-
-
-        /* ================================
-           PENANGGUNG JAWAB
-        ================================= */
-
         ownerName: {
-            passed: bcgoHasValue(
-                partner.ownerName
-            )
+            passed: bcgoHasValue(partner.ownerName)
         },
-
         role: {
-            passed: bcgoHasValue(
-                partner.role
-            )
+            passed: bcgoHasValue(partner.role)
         },
-
-
-        /* ================================
-           LOKASI
-        ================================= */
-
         address: {
-            passed: bcgoHasValue(
-                partner.address ||
-                partner.alamat
-            )
+            passed: bcgoHasValue(partner.address || partner.alamat)
         },
-
         village: {
-            passed: bcgoHasValue(
-                partner.village
-            )
+            passed: bcgoHasValue(partner.village)
         },
-
         district: {
-            passed: bcgoHasValue(
-                partner.district
-            )
+            passed: bcgoHasValue(partner.district)
         },
-
         city: {
-            passed: bcgoHasValue(
-                partner.city
-            )
+            passed: bcgoHasValue(partner.city)
         },
-
         province: {
-            passed: bcgoHasValue(
-                partner.province
-            )
+            passed: bcgoHasValue(partner.province)
         },
-
-
-        /* ================================
-           OPERASIONAL
-        ================================= */
-
         openTime: {
-            passed: bcgoHasValue(
-                partner.openTime
-            )
+            passed: bcgoHasValue(partner.openTime)
         },
-
         closeTime: {
-            passed: bcgoHasValue(
-                partner.closeTime
-            )
+            passed: bcgoHasValue(partner.closeTime)
         },
-
         operationalDays: {
-            passed: bcgoHasValue(
-                partner.operationalDays
-            )
+            passed: bcgoHasValue(partner.operationalDays)
         },
-
-
-        /* ================================
-           IDENTITAS / LEGALITAS
-        ================================= */
-
         ktp: {
-            passed: bcgoHasValue(
-                partner.ktp
-            )
+            passed: bcgoHasValue(partner.ktp)
         },
-
         ktpPhoto: {
-            passed: bcgoHasValue(
-                partner.ktpPhoto ||
-                partner.fotoKtp
-            )
+            passed: bcgoHasValue(partner.ktpPhoto || partner.fotoKtp)
         },
-
         legalStatus: {
-            passed: bcgoHasValue(
-                partner.legalStatus
-            )
+            passed: bcgoHasValue(partner.legalStatus)
         },
-
         nib: {
-            /*
-             * NIB tidak diwajibkan untuk semua kondisi.
-             * Yang dinilai adalah apakah status legalitas
-             * sudah dijelaskan.
-             */
-            passed:
-                partner.legalStatus === "Belum Memiliki NIB" ||
-                bcgoHasValue(partner.nib)
+            passed: partner.legalStatus === "Belum Memiliki NIB" || bcgoHasValue(partner.nib)
         },
-
-
-        /* ================================
-           PENCAIRAN DANA
-        ================================= */
-
         bankName: {
-            passed: bcgoHasValue(
-                partner.bankName
-            )
+            passed: bcgoHasValue(partner.bankName)
         },
-
         accountName: {
-            passed: bcgoHasValue(
-                partner.accountName
-            )
+            passed: bcgoHasValue(partner.accountName)
         },
-
         accountNumber: {
-            passed: bcgoHasValue(
-                partner.accountNumber
-            )
+            passed: bcgoHasValue(partner.accountNumber)
         },
-
-
-        /* ================================
-           FOTO RESTORAN
-        ================================= */
-
         photoFront: {
-            passed: bcgoHasValue(
-                partner.photoFront
-            )
+            passed: bcgoHasValue(partner.photoFront)
         },
-
         photoIndoor: {
-            /*
-             * Indoor menjadi data pendukung.
-             * Tidak menjadikan seluruh pendaftaran
-             * gagal hanya karena foto indoor kosong.
-             */
-            passed:
-                partner.photoIndoor === undefined ||
-                partner.photoIndoor === null ||
-                bcgoHasValue(partner.photoIndoor)
+            passed: partner.photoIndoor === undefined || partner.photoIndoor === null || bcgoHasValue(partner.photoIndoor)
         }
-
     };
 
-
-    /* ==========================================
-       RINGKASAN RESTAURANT
-    ========================================== */
-
-    const checkValues =
-        Object.values(checks);
-
-    const passedCount =
-        checkValues.filter(
-            check => check.passed === true
-        ).length;
-
-    const totalCount =
-        checkValues.length;
+    const checkValues = Object.values(checks);
+    const passedCount = checkValues.filter(check => check.passed === true).length;
+    const totalCount = checkValues.length;
 
     return {
-
-        passed:
-            passedCount === totalCount,
-
-        score:
-            totalCount > 0
-                ? Math.round(
-                    (passedCount / totalCount) * 100
-                )
-                : 0,
-
+        passed: passedCount === totalCount,
+        score: totalCount > 0 ? Math.round((passedCount / totalCount) * 100) : 0,
         passedCount,
-
         totalCount,
-
         checks
-
     };
 }
 
-
 /**
- * Pemeriksaan khusus Driver.
+ * Pemeriksaan khusus Driver Partner.
  */
 function bcgoCheckDriver(partner) {
-
     return {
         vehicleType: {
-            passed: bcgoHasValue(
-                partner.vehicleType
-            )
+            passed: bcgoHasValue(partner.vehicleType)
         }
     };
 }
 
-
 /**
- * Menjalankan pemeriksaan khusus
- * berdasarkan jenis mitra.
+ * Menjalankan pemeriksaan khusus berdasarkan jenis mitra.
  */
-function bcgoRunPartnerSpecificChecks(
-    partner,
-    partnerType
-) {
-
+function bcgoRunPartnerSpecificChecks(partner, partnerType) {
     switch (partnerType) {
-
         case BCGO_PARTNER_TYPES.ASSISTANT:
             return bcgoCheckAssistant(partner);
-
         case BCGO_PARTNER_TYPES.RESTAURANT:
             return bcgoCheckRestaurant(partner);
-
         case BCGO_PARTNER_TYPES.DRIVER:
             return bcgoCheckDriver(partner);
-
         default:
             return {};
     }
@@ -533,186 +338,77 @@ function bcgoRunPartnerSpecificChecks(
 
 
 /* ============================================================
-   BCGO — SCORING ENGINE
+   7. BCGO SCORING, RISK, DECISION & REASON ENGINES
 ============================================================ */
 
-function bcgoCalculateScore(
-    validation,
-    identity,
-    partnerChecks
-) {
-
+function bcgoCalculateScore(validation, identity, partnerChecks) {
     let score = 0;
 
-    /* Data lengkap */
     if (validation.passed) {
         score += 40;
     }
 
-    /* Identitas dasar */
     if (identity.passed) {
         score += 30;
     }
 
-    /* Pemeriksaan khusus */
-    const specificChecks =
-        Object.values(partnerChecks);
-
-    const passedSpecificChecks =
-        specificChecks.filter(
-            check => check.passed === true
-        ).length;
-
-    const totalSpecificChecks =
-        specificChecks.length;
+    const specificChecks = Object.values(partnerChecks);
+    const passedSpecificChecks = specificChecks.filter(check => check.passed === true).length;
+    const totalSpecificChecks = specificChecks.length;
 
     if (totalSpecificChecks > 0) {
-
-        score += Math.round(
-            (passedSpecificChecks /
-                totalSpecificChecks) * 30
-        );
+        score += Math.round((passedSpecificChecks / totalSpecificChecks) * 30);
     }
 
     return Math.min(score, 100);
 }
 
-
-/* ============================================================
-   BCGO — RISK ENGINE
-============================================================ */
-
 function bcgoDetermineRisk(score) {
-
-    if (score >= 80) {
-        return BCGO_RISK_LEVELS.LOW;
-    }
-
-    if (score >= 50) {
-        return BCGO_RISK_LEVELS.MEDIUM;
-    }
-
-    if (score > 0) {
-        return BCGO_RISK_LEVELS.HIGH;
-    }
-
+    if (score >= 80) return BCGO_RISK_LEVELS.LOW;
+    if (score >= 50) return BCGO_RISK_LEVELS.MEDIUM;
+    if (score > 0) return BCGO_RISK_LEVELS.HIGH;
     return BCGO_RISK_LEVELS.UNKNOWN;
 }
 
-
-/* ============================================================
-   BCGO — DECISION ENGINE
-============================================================ */
-
-function bcgoDetermineDecision(
-    score,
-    validation,
-    identity
-) {
-
-    /*
-     * APPROVE
-     * hanya jika data lengkap + identitas dasar
-     * terpenuhi + score tinggi.
-     */
-
-    if (
-        validation.passed &&
-        identity.passed &&
-        score >= 80
-    ) {
+function bcgoDetermineDecision(score, validation, identity) {
+    if (validation.passed && identity.passed && score >= 80) {
         return BCGO_DECISIONS.APPROVE;
     }
-
-
-    /*
-     * REJECT
-     * untuk kondisi dengan score sangat rendah.
-     *
-     * Ini masih rule dasar.
-     * Nanti akan kita ganti dengan Risk Engine
-     * yang lebih matang.
-     */
 
     if (score < 40) {
         return BCGO_DECISIONS.REJECT;
     }
 
-
-    /*
-     * Sisanya membutuhkan pemeriksaan.
-     */
-
     return BCGO_DECISIONS.REVIEW;
 }
 
-
-/* ============================================================
-   BCGO — REASON ENGINE
-============================================================ */
-
-function bcgoGenerateReasons(
-    validation,
-    identity,
-    partnerChecks,
-    decision
-) {
-
+function bcgoGenerateReasons(validation, identity, partnerChecks, decision) {
     const reasons = [];
 
     if (!validation.passed) {
-
-        reasons.push(
-            "Data wajib belum lengkap."
-        );
+        reasons.push("Data wajib belum lengkap.");
     }
 
     if (!identity.passed) {
-
-        reasons.push(
-            "Data identitas dasar belum lengkap."
-        );
+        reasons.push("Data identitas dasar belum lengkap.");
     }
 
-    Object.entries(partnerChecks)
-        .forEach(([key, check]) => {
+    Object.entries(partnerChecks).forEach(([key, check]) => {
+        if (!check.passed) {
+            reasons.push(`Pemeriksaan ${key} belum terpenuhi.`);
+        }
+    });
 
-            if (!check.passed) {
-
-                reasons.push(
-                    `Pemeriksaan ${key} belum terpenuhi.`
-                );
-            }
-        });
-
-
-    if (
-        decision === BCGO_DECISIONS.APPROVE
-    ) {
-
-        reasons.push(
-            "Data memenuhi kriteria dasar BCGO."
-        );
+    if (decision === BCGO_DECISIONS.APPROVE) {
+        reasons.push("Data memenuhi kriteria dasar BCGO.");
     }
 
-
-    if (
-        decision === BCGO_DECISIONS.REVIEW
-    ) {
-
-        reasons.push(
-            "Data membutuhkan pemeriksaan lebih lanjut."
-        );
+    if (decision === BCGO_DECISIONS.REVIEW) {
+        reasons.push("Data membutuhkan pemeriksaan lebih lanjut.");
     }
 
-
-    if (
-        decision === BCGO_DECISIONS.REJECT
-    ) {
-
-        reasons.push(
-            "Data belum memenuhi kriteria minimum."
-        );
+    if (decision === BCGO_DECISIONS.REJECT) {
+        reasons.push("Data belum memenuhi kriteria minimum.");
     }
 
     return reasons;
@@ -720,273 +416,98 @@ function bcgoGenerateReasons(
 
 
 /* ============================================================
-   BCGO — MAIN ENGINE
+   8. BCGO MAIN EVALUATION ENGINE
 ============================================================ */
 
-/**
- * ============================================================
- * bcgoEvaluatePartner()
- *
- * Fungsi utama BCGO.
- *
- * Input:
- * {
- *     partnerType: "assistant",
- *     name: "...",
- *     phone: "...",
- *     address: "...",
- *     serviceType: "..."
- * }
- *
- * Output:
- * {
- *     status,
- *     score,
- *     risk,
- *     checks,
- *     reasons
- * }
- * ============================================================
- */
-
 function bcgoEvaluatePartner(partner = {}) {
+    const startedAt = new Date().toISOString();
 
-    const startedAt =
-        new Date().toISOString();
-
-
-    /* --------------------------------------------
-       1. NORMALIZE PARTNER TYPE
-    -------------------------------------------- */
-
-    const typeValidation =
-        bcgoValidatePartnerType(
-            partner.partnerType
-        );
-
+    const typeValidation = bcgoValidatePartnerType(partner.partnerType);
 
     if (!typeValidation.passed) {
-
         return {
             bcgoVersion: BCGO_VERSION,
             status: BCGO_DECISIONS.REVIEW,
             score: 0,
             risk: BCGO_RISK_LEVELS.UNKNOWN,
-
             partnerType: null,
-
             checks: {
-                partnerType: {
-                    passed: false
-                }
+                partnerType: { passed: false }
             },
-
-            reasons: [
-                "Jenis mitra tidak dikenali."
-            ],
-
+            reasons: ["Jenis mitra tidak dikenali."],
             meta: {
                 startedAt,
-                completedAt:
-                    new Date().toISOString()
+                completedAt: new Date().toISOString()
             }
         };
     }
 
+    const partnerType = typeValidation.normalizedType;
 
-    const partnerType =
-        typeValidation.normalizedType;
-
-
-    /* --------------------------------------------
-       2. REQUIRED DATA VALIDATION
-    -------------------------------------------- */
-
-    const validation =
-        bcgoValidateRequiredData(
-            partner,
-            partnerType
-        );
-
-
-    /* --------------------------------------------
-       3. IDENTITY CHECK
-    -------------------------------------------- */
-
-    const identity =
-        bcgoIdentityCheck(partner);
-
-
-    /* --------------------------------------------
-       4. PARTNER-SPECIFIC CHECK
-    -------------------------------------------- */
-
-    const partnerChecks =
-        bcgoRunPartnerSpecificChecks(
-            partner,
-            partnerType
-        );
-
-
-    /* --------------------------------------------
-       5. SCORE
-    -------------------------------------------- */
-
-    const score =
-        bcgoCalculateScore(
-            validation,
-            identity,
-            partnerChecks
-        );
-
-
-    /* --------------------------------------------
-       6. RISK
-    -------------------------------------------- */
-
-    const risk =
-        bcgoDetermineRisk(score);
-
-
-    /* --------------------------------------------
-       7. DECISION
-    -------------------------------------------- */
-
-    const decision =
-        bcgoDetermineDecision(
-            score,
-            validation,
-            identity
-        );
-
-
-    /* --------------------------------------------
-       8. REASONS
-    -------------------------------------------- */
-
-    const reasons =
-        bcgoGenerateReasons(
-            validation,
-            identity,
-            partnerChecks,
-            decision
-        );
-
-
-    /* --------------------------------------------
-       9. FINAL RESULT
-    -------------------------------------------- */
+    const validation = bcgoValidateRequiredData(partner, partnerType);
+    const identity = bcgoIdentityCheck(partner);
+    const partnerChecks = bcgoRunPartnerSpecificChecks(partner, partnerType);
+    const score = bcgoCalculateScore(validation, identity, partnerChecks);
+    const risk = bcgoDetermineRisk(score);
+    const decision = bcgoDetermineDecision(score, validation, identity);
+    const reasons = bcgoGenerateReasons(validation, identity, partnerChecks, decision);
 
     return {
-
-        bcgoVersion:
-            BCGO_VERSION,
-
-        status:
-            decision,
-
+        bcgoVersion: BCGO_VERSION,
+        status: decision,
         score,
-
         risk,
-
         partnerType,
-
         checks: {
-
-            requiredData:
-                validation,
-
+            requiredData: validation,
             identity,
-
-            partnerSpecific:
-                partnerChecks
+            partnerSpecific: partnerChecks
         },
-
         reasons,
-
         recommendation:
             decision === BCGO_DECISIONS.APPROVE
                 ? "Lanjutkan proses pendaftaran mitra."
                 : decision === BCGO_DECISIONS.REVIEW
                     ? "Minta pemeriksaan manual."
                     : "Jangan aktifkan mitra sebelum memenuhi persyaratan.",
-
         meta: {
-
             startedAt,
-
-            completedAt:
-                new Date().toISOString()
+            completedAt: new Date().toISOString()
         }
     };
 }
 
 
 /* ============================================================
-   BCGO — EXPORT
+   9. EXPORTS (COMMONJS & BROWSER GLOBAL)
 ============================================================ */
 
-/*
- * Node.js / Firebase Cloud Functions
- */
-
-if (
-    typeof module !== "undefined" &&
-    module.exports
-) {
-
+if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-
         BCGO_VERSION,
-
         BCGO_PARTNER_TYPES,
-
         BCGO_DECISIONS,
-
         BCGO_RISK_LEVELS,
-
         bcgoEvaluatePartner,
-
         bcgoValidatePartnerType,
-
         bcgoValidateRequiredData,
-
         bcgoIdentityCheck,
-
         bcgoDetermineRisk,
-
         bcgoDetermineDecision
     };
 }
 
-
-/*
- * Browser (dipakai langsung dari <script src="bcgo-engine.js">,
- * misalnya oleh agentcgo.html / resto.html / driver.html / bcgo-test.html)
- */
-
 if (typeof window !== "undefined") {
-
     window.BCGO = {
-
         VERSION: BCGO_VERSION,
-
         PARTNER_TYPES: BCGO_PARTNER_TYPES,
-
         DECISIONS: BCGO_DECISIONS,
-
         RISK_LEVELS: BCGO_RISK_LEVELS,
-
         evaluatePartner: bcgoEvaluatePartner,
-
         validatePartnerType: bcgoValidatePartnerType,
-
         validateRequiredData: bcgoValidateRequiredData,
-
         identityCheck: bcgoIdentityCheck,
-
         determineRisk: bcgoDetermineRisk,
-
         determineDecision: bcgoDetermineDecision
     };
 }
