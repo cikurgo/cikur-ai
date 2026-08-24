@@ -1073,209 +1073,605 @@ document.getElementById("closeTimeInput").addEventListener("change", (e) => {
 document.getElementById("formRestoProfile")?.addEventListener("submit", function(e) {
     e.preventDefault();
 
-    if (!userProfile.uid) {
+    if (!userProfile || !userProfile.uid) {
         alert("Sesi Anda belum siap. Silakan refresh halaman.");
         return;
     }
 
-    const ktpVal = document.getElementById("restoKtpInput").value.trim();
+    /* =========================================================
+       HELPER AMBIL NILAI FIELD
+       Aman jika suatu field tidak tersedia.
+    ========================================================= */
+
+    function getFieldValue(id, trim = true) {
+        const el = document.getElementById(id);
+        if (!el) return "";
+        const value = el.value ?? "";
+        return trim ? String(value).trim() : String(value);
+    }
+
+    /* =========================================================
+       VALIDASI NIK / KTP
+    ========================================================= */
+
+    const ktpVal = getFieldValue("restoKtpInput");
+
     if (!/^\d{16}$/.test(ktpVal)) {
         alert("Nomor KTP harus tepat 16 digit angka.");
         return;
     }
 
     /* =========================================================
-   AMBIL DATA PROFIL RESTO
-========================================================= */
+       1. AMBIL SELURUH DATA PROFIL RESTORAN
+    ========================================================= */
 
-currentResto.name =
-    document.getElementById("restoNameInput").value.trim();
+    currentResto.name =
+        getFieldValue("restoNameInput");
 
-currentResto.category =
-    document.getElementById("restoCategoryInput").value;
+    currentResto.category =
+        getFieldValue("restoCategoryInput", false);
 
-currentResto.businessType =
-    document.getElementById("restoBusinessTypeInput").value;
+    currentResto.businessType =
+        getFieldValue("restoBusinessTypeInput", false);
 
+    currentResto.description =
+        getFieldValue("restoDescriptionInput");
 
-currentResto.ownerName =
-    document.getElementById("ownerNameInput").value.trim();
+    /* =========================================================
+       2. DATA PENANGGUNG JAWAB
+    ========================================================= */
 
-currentResto.role =
-    document.getElementById("restoRoleInput").value;
+    currentResto.ownerName =
+        getFieldValue("ownerNameInput");
 
-currentResto.ownerPhone =
-    document.getElementById("ownerPhoneInput").value.trim();
+    currentResto.role =
+        getFieldValue("restoRoleInput", false);
 
-currentResto.restoPhone =
-    document.getElementById("restoPhoneInput").value.trim();
+    currentResto.ownerPhone =
+        getFieldValue("ownerPhoneInput");
 
+    currentResto.restoPhone =
+        getFieldValue("restoPhoneInput");
 
-currentResto.establishedYear =
-    document.getElementById("restoEstablishedYearInput").value.trim();
+    /* =========================================================
+       3. DATA USAHA
+    ========================================================= */
 
-currentResto.employeeCount =
-    document.getElementById("restoEmployeeCountInput").value;
+    currentResto.establishedYear =
+        getFieldValue("restoEstablishedYearInput");
 
+    currentResto.employeeCount =
+        getFieldValue("restoEmployeeCountInput", false);
 
-currentResto.address =
-    document.getElementById("restoAddressInput").value.trim();
+    /* =========================================================
+       4. ALAMAT LENGKAP
+    ========================================================= */
 
-currentResto.area =
-    document.getElementById("restoAreaInput").value.trim();
+    currentResto.address =
+        getFieldValue("restoAddressInput");
 
-currentResto.deliveryRadius =
-    document.getElementById("restoDeliveryRadiusInput").value;
+    currentResto.village =
+        getFieldValue("restoVillageInput");
 
+    currentResto.district =
+        getFieldValue("restoDistrictInput");
 
-currentResto.ktp =
-    ktpVal;
+    currentResto.city =
+        getFieldValue("restoCityInput");
 
+    currentResto.province =
+        getFieldValue("restoProvinceInput");
 
-currentResto.bankName =
-    document.getElementById("restoBankNameInput").value;
+    currentResto.postalCode =
+        getFieldValue("restoPostalCodeInput");
 
-currentResto.accountName =
-    document.getElementById("restoAccountNameInput").value.trim();
+    currentResto.locationNote =
+        getFieldValue("restoLocationNoteInput");
 
-currentResto.accountNumber =
-    document.getElementById("restoAccountNumberInput").value.trim();
+    /* =========================================================
+       5. LOKASI GPS
+    ========================================================= */
 
+    currentResto.latitude =
+        getFieldValue("restoLatitudeInput");
 
-currentResto.openTime =
-    document.getElementById("openTimeInput").value;
+    currentResto.longitude =
+        getFieldValue("restoLongitudeInput");
 
-currentResto.closeTime =
-    document.getElementById("closeTimeInput").value;
+    /* =========================================================
+       6. DATA OPERASIONAL
+    ========================================================= */
 
-    let photoFrontInput = document.getElementById("restoPhotoFrontInput");
-    let photoIndoorInput = document.getElementById("restoPhotoIndoorInput");
-    let fotoKtpInput = document.getElementById("restoFotoKtpInput");
+    currentResto.openTime =
+        getFieldValue("restoOpenTimeInput") ||
+        getFieldValue("openTimeInput");
+
+    currentResto.closeTime =
+        getFieldValue("restoCloseTimeInput") ||
+        getFieldValue("closeTimeInput");
+
+    currentResto.operationalDays =
+        getFieldValue("restoOperationalDaysInput", false);
+
+    currentResto.deliveryRadius =
+        getFieldValue("restoDeliveryRadiusInput", false);
+
+    /* =========================================================
+       7. LEGALITAS USAHA
+    ========================================================= */
+
+    currentResto.legalStatus =
+        getFieldValue("restoLegalStatusInput", false);
+
+    currentResto.nib =
+        getFieldValue("restoNibInput");
+
+    /* =========================================================
+       8. DATA IDENTITAS
+    ========================================================= */
+
+    currentResto.ktp =
+        ktpVal;
+
+    /* =========================================================
+       9. DATA PENCAIRAN DANA
+    ========================================================= */
+
+    currentResto.bankName =
+        getFieldValue("restoBankNameInput", false);
+
+    currentResto.accountName =
+        getFieldValue("restoAccountNameInput");
+
+    currentResto.accountNumber =
+        getFieldValue("restoAccountNumberInput");
+
+    /* =========================================================
+       10. FILE FOTO
+    ========================================================= */
+
+    const photoFrontInput =
+        document.getElementById("restoPhotoFrontInput");
+
+    const photoIndoorInput =
+        document.getElementById("restoPhotoIndoorInput");
+
+    const fotoKtpInput =
+        document.getElementById("restoFotoKtpInput");
 
     let totalPhotosToProcess = 0;
     let processedCount = 0;
 
-    if(photoFrontInput && photoFrontInput.files && photoFrontInput.files[0]) totalPhotosToProcess++;
-    if(photoIndoorInput && photoIndoorInput.files && photoIndoorInput.files[0]) totalPhotosToProcess++;
-    if(fotoKtpInput && fotoKtpInput.files && fotoKtpInput.files[0]) totalPhotosToProcess++;
+    if (
+        photoFrontInput &&
+        photoFrontInput.files &&
+        photoFrontInput.files[0]
+    ) {
+        totalPhotosToProcess++;
+    }
+
+    if (
+        photoIndoorInput &&
+        photoIndoorInput.files &&
+        photoIndoorInput.files[0]
+    ) {
+        totalPhotosToProcess++;
+    }
+
+    if (
+        fotoKtpInput &&
+        fotoKtpInput.files &&
+        fotoKtpInput.files[0]
+    ) {
+        totalPhotosToProcess++;
+    }
+
+    /* =========================================================
+       11. KIRIM KE FIRESTORE
+    ========================================================= */
 
     async function submitToFirestore() {
+
         saveRestoToStorage();
 
-        // Jangan pernah kirim ulang jika sudah pernah approved -
-        // ini cuma sinkron ulang profil, bukan pendaftaran baru.
-        if (currentMitraApplication && currentMitraApplication.status === "approved") {
+        /* =====================================================
+           JIKA MITRA SUDAH APPROVED
+
+           Tetap sinkronkan profil lengkap tanpa membuat
+           proses BCGO baru.
+        ===================================================== */
+
+        if (
+            currentMitraApplication &&
+            currentMitraApplication.status === "approved"
+        ) {
             try {
-                await window.CikurCloud.submitMitraApplication(userProfile.uid, "resto", {
-                    namaUsaha: currentResto.name,
-                    ownerName: currentResto.ownerName,
-                    phone: currentResto.ownerPhone,
-                    alamat: currentResto.address,
-                    ktp: currentResto.ktp,
-                    fotoKtp: currentResto.fotoKtp,
-                    bankName: currentResto.bankName,
-                    accountName: currentResto.accountName,
-                    accountNumber: currentResto.accountNumber,
-                    photoFront: currentResto.photoFront,
-                    photoIndoor: currentResto.photoIndoor,
-                    status: "approved"
-                });
+
+                await window.CikurCloud.submitMitraApplication(
+                    userProfile.uid,
+                    "resto",
+                    {
+
+                        /* IDENTITAS USAHA */
+                        namaUsaha: currentResto.name,
+                        category: currentResto.category,
+                        businessType: currentResto.businessType,
+                        description: currentResto.description,
+
+                        /* PENANGGUNG JAWAB */
+                        ownerName: currentResto.ownerName,
+                        role: currentResto.role,
+                        phone: currentResto.ownerPhone,
+                        restoPhone: currentResto.restoPhone,
+
+                        /* DATA USAHA */
+                        establishedYear: currentResto.establishedYear,
+                        employeeCount: currentResto.employeeCount,
+
+                        /* ALAMAT */
+                        alamat: currentResto.address,
+                        village: currentResto.village,
+                        district: currentResto.district,
+                        city: currentResto.city,
+                        province: currentResto.province,
+                        postalCode: currentResto.postalCode,
+                        locationNote: currentResto.locationNote,
+
+                        /* GPS */
+                        latitude: currentResto.latitude,
+                        longitude: currentResto.longitude,
+
+                        /* OPERASIONAL */
+                        openTime: currentResto.openTime,
+                        closeTime: currentResto.closeTime,
+                        operationalDays: currentResto.operationalDays,
+                        deliveryRadius: currentResto.deliveryRadius,
+
+                        /* LEGALITAS */
+                        legalStatus: currentResto.legalStatus,
+                        nib: currentResto.nib,
+
+                        /* IDENTITAS */
+                        ktp: currentResto.ktp,
+                        fotoKtp: currentResto.fotoKtp,
+
+                        /* PENCAIRAN */
+                        bankName: currentResto.bankName,
+                        accountName: currentResto.accountName,
+                        accountNumber: currentResto.accountNumber,
+
+                        /* FOTO RESTORAN */
+                        photoFront: currentResto.photoFront,
+                        photoIndoor: currentResto.photoIndoor,
+
+                        /* STATUS */
+                        status: "approved"
+                    }
+                );
+
                 alert("Data & Profil Resto berhasil diperbarui!");
+
             } catch (error) {
-                alert("Gagal menyimpan ke Cloud: " + (error?.message || error));
+
+                console.error(
+                    "[RESTO] Gagal sinkronisasi profil:",
+                    error
+                );
+
+                alert(
+                    "Gagal menyimpan ke Cloud: " +
+                    (error?.message || error)
+                );
             }
+
             return;
         }
 
+        /* =====================================================
+           12. JALANKAN BCGO
+        ===================================================== */
+
         let bcgoResult = null;
+
         if (window.BCGO) {
+
             try {
-                bcgoResult = window.BCGO.evaluatePartner({
-                    partnerType: "restaurant",
-                    name: currentResto.ownerName,
-                    phone: currentResto.ownerPhone,
-                    address: currentResto.address,
-                    businessName: currentResto.name
-                });
+
+                bcgoResult =
+                    window.BCGO.evaluatePartner({
+
+                        partnerType: "restaurant",
+
+                        /* FIELD WAJIB BCGO */
+                        name: currentResto.ownerName,
+                        phone: currentResto.ownerPhone,
+                        address: currentResto.address,
+                        businessName: currentResto.name
+
+                    });
+
+                console.log(
+                    "[BCGO] Hasil evaluasi Resto:",
+                    bcgoResult
+                );
+
             } catch (bcgoError) {
-                console.error("[BCGO] Gagal menjalankan evaluasi:", bcgoError);
+
+                console.error(
+                    "[BCGO] Gagal menjalankan evaluasi:",
+                    bcgoError
+                );
             }
+
+        } else {
+
+            console.warn(
+                "[BCGO] Engine BCGO belum tersedia."
+            );
         }
 
+        /* =====================================================
+           13. OBJECT DATA MITRA RESTO
+
+           Semua data form dikumpulkan di sini sebelum
+           diberikan kepada CikurCloud.
+        ===================================================== */
+
+        const formData = {
+
+            /* IDENTITAS USAHA */
+            namaUsaha: currentResto.name,
+            category: currentResto.category,
+            businessType: currentResto.businessType,
+            description: currentResto.description,
+
+            /* PENANGGUNG JAWAB */
+            ownerName: currentResto.ownerName,
+            role: currentResto.role,
+            phone: currentResto.ownerPhone,
+            restoPhone: currentResto.restoPhone,
+
+            /* DATA USAHA */
+            establishedYear: currentResto.establishedYear,
+            employeeCount: currentResto.employeeCount,
+
+            /* ALAMAT */
+            alamat: currentResto.address,
+            village: currentResto.village,
+            district: currentResto.district,
+            city: currentResto.city,
+            province: currentResto.province,
+            postalCode: currentResto.postalCode,
+            locationNote: currentResto.locationNote,
+
+            /* GPS */
+            latitude: currentResto.latitude,
+            longitude: currentResto.longitude,
+
+            /* OPERASIONAL */
+            openTime: currentResto.openTime,
+            closeTime: currentResto.closeTime,
+            operationalDays: currentResto.operationalDays,
+            deliveryRadius: currentResto.deliveryRadius,
+
+            /* LEGALITAS */
+            legalStatus: currentResto.legalStatus,
+            nib: currentResto.nib,
+
+            /* IDENTITAS */
+            ktp: currentResto.ktp,
+            fotoKtp: currentResto.fotoKtp,
+
+            /* PENCAIRAN */
+            bankName: currentResto.bankName,
+            accountName: currentResto.accountName,
+            accountNumber: currentResto.accountNumber,
+
+            /* FOTO */
+            photoFront: currentResto.photoFront,
+            photoIndoor: currentResto.photoIndoor,
+
+            /* =================================================
+               HASIL BCGO
+            ================================================= */
+
+            bcgoVersion:
+                bcgoResult?.bcgoVersion ?? null,
+
+            bcgoScore:
+                bcgoResult?.score ?? null,
+
+            bcgoRisk:
+                bcgoResult?.risk ?? null,
+
+            bcgoRecommendation:
+                bcgoResult?.status ?? null,
+
+            bcgoReasons:
+                Array.isArray(bcgoResult?.reasons)
+                    ? bcgoResult.reasons
+                    : [],
+
+            /* Status awal pendaftaran */
+            status: "pending"
+        };
+
+        /* =====================================================
+           14. KIRIM OBJECT LENGKAP KE CIKUR CLOUD
+        ===================================================== */
+
         try {
-            await window.CikurCloud.submitMitraApplication(userProfile.uid, "resto", {
-                namaUsaha: currentResto.name,
-                ownerName: currentResto.ownerName,
-                phone: currentResto.ownerPhone,
-                alamat: currentResto.address,
-                ktp: currentResto.ktp,
-                fotoKtp: currentResto.fotoKtp,
-                bankName: currentResto.bankName,
-                accountName: currentResto.accountName,
-                accountNumber: currentResto.accountNumber,
-                photoFront: currentResto.photoFront,
-                photoIndoor: currentResto.photoIndoor,
-                bcgoScore: bcgoResult?.score ?? null,
-                bcgoRisk: bcgoResult?.risk ?? null,
-                bcgoRecommendation: bcgoResult?.status ?? null,
-                bcgoReasons: bcgoResult?.reasons ?? []
-            });
-            alert("Pendaftaran Mitra Resto berhasil dikirim! Menunggu verifikasi Admin.");
+
+            console.log(
+                "[RESTO] Data pendaftaran sebelum dikirim:",
+                formData
+            );
+
+            await window.CikurCloud.submitMitraApplication(
+                userProfile.uid,
+                "resto",
+                formData
+            );
+
+            alert(
+                "Pendaftaran Mitra Resto berhasil dikirim! " +
+                "Menunggu verifikasi Admin."
+            );
+
         } catch (error) {
-            alert("Gagal mengirim pendaftaran ke Cloud: " + (error?.message || error));
+
+            console.error(
+                "[RESTO] Gagal mengirim pendaftaran:",
+                error
+            );
+
+            alert(
+                "Gagal mengirim pendaftaran ke Cloud: " +
+                (error?.message || error)
+            );
         }
     }
 
+    /* =========================================================
+       15. MENUNGGU SEMUA FOTO SELESAI DIBACA
+    ========================================================= */
+
     function checkFinish() {
+
         processedCount++;
-        if(processedCount >= totalPhotosToProcess) {
+
+        if (
+            processedCount >=
+            totalPhotosToProcess
+        ) {
             submitToFirestore();
         }
     }
 
-    if(totalPhotosToProcess === 0) {
+    /* =========================================================
+       16. TIDAK ADA FOTO
+    ========================================================= */
+
+    if (totalPhotosToProcess === 0) {
+
         submitToFirestore();
         return;
     }
 
-    if(photoFrontInput && photoFrontInput.files && photoFrontInput.files[0]) {
-        if(photoFrontInput.files[0].size > 2 * 1024 * 1024) {
-            alert("Ukuran Foto Tampak Depan terlalu besar! Maksimal 2MB.");
+    /* =========================================================
+       17. FOTO DEPAN RESTORAN
+    ========================================================= */
+
+    if (
+        photoFrontInput &&
+        photoFrontInput.files &&
+        photoFrontInput.files[0]
+    ) {
+
+        if (
+            photoFrontInput.files[0].size >
+            2 * 1024 * 1024
+        ) {
+
+            alert(
+                "Ukuran Foto Tampak Depan terlalu besar! " +
+                "Maksimal 2MB."
+            );
+
             return;
         }
-        let reader = new FileReader();
+
+        const reader = new FileReader();
+
         reader.onload = function(event) {
-            currentResto.photoFront = event.target.result;
+
+            currentResto.photoFront =
+                event.target.result;
+
             checkFinish();
         };
-        reader.readAsDataURL(photoFrontInput.files[0]);
+
+        reader.readAsDataURL(
+            photoFrontInput.files[0]
+        );
     }
 
-    if(photoIndoorInput && photoIndoorInput.files && photoIndoorInput.files[0]) {
-        if(photoIndoorInput.files[0].size > 2 * 1024 * 1024) {
-            alert("Ukuran Foto Area Indoor terlalu besar! Maksimal 2MB.");
+    /* =========================================================
+       18. FOTO AREA INDOOR
+    ========================================================= */
+
+    if (
+        photoIndoorInput &&
+        photoIndoorInput.files &&
+        photoIndoorInput.files[0]
+    ) {
+
+        if (
+            photoIndoorInput.files[0].size >
+            2 * 1024 * 1024
+        ) {
+
+            alert(
+                "Ukuran Foto Area Indoor terlalu besar! " +
+                "Maksimal 2MB."
+            );
+
             return;
         }
-        let reader = new FileReader();
+
+        const reader = new FileReader();
+
         reader.onload = function(event) {
-            currentResto.photoIndoor = event.target.result;
+
+            currentResto.photoIndoor =
+                event.target.result;
+
             checkFinish();
         };
-        reader.readAsDataURL(photoIndoorInput.files[0]);
+
+        reader.readAsDataURL(
+            photoIndoorInput.files[0]
+        );
     }
 
-    if(fotoKtpInput && fotoKtpInput.files && fotoKtpInput.files[0]) {
-        if(fotoKtpInput.files[0].size > 2 * 1024 * 1024) {
-            alert("Ukuran Foto KTP terlalu besar! Maksimal 2MB.");
+    /* =========================================================
+       19. FOTO KTP
+    ========================================================= */
+
+    if (
+        fotoKtpInput &&
+        fotoKtpInput.files &&
+        fotoKtpInput.files[0]
+    ) {
+
+        if (
+            fotoKtpInput.files[0].size >
+            2 * 1024 * 1024
+        ) {
+
+            alert(
+                "Ukuran Foto KTP terlalu besar! " +
+                "Maksimal 2MB."
+            );
+
             return;
         }
-        let reader = new FileReader();
+
+        const reader = new FileReader();
+
         reader.onload = function(event) {
-            currentResto.fotoKtp = event.target.result;
+
+            currentResto.fotoKtp =
+                event.target.result;
+
             checkFinish();
         };
-        reader.readAsDataURL(fotoKtpInput.files[0]);
+
+        reader.readAsDataURL(
+            fotoKtpInput.files[0]
+        );
     }
+
 });
     
 let editingMenuIndex = null;
