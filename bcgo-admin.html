@@ -755,59 +755,909 @@
         }
 
         window.openDetailModal = function(docId) {
-            const data = cachedApplications[docId];
-            if (!data) return;
+    const data = cachedApplications[docId];
 
-            document.getElementById('modalTitle').innerText = `Detail Pendaftaran: ${data.fullName || data.nama || 'Mitra'}`;
-            
-            let htmlContent = `
-                <div class="detail-row"><span class="detail-label">Jenis Mitra</span><span class="detail-value">${(data.jenis || '-').toUpperCase()}</span></div>
-                <div class="detail-row"><span class="detail-label">Nama Lengkap</span><span class="detail-value">${data.name || data.namaUsaha || data.ownerName || data.fullName || data.nama || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Nomor WhatsApp/HP</span><span class="detail-value">${data.phone || data.kontak || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Email</span><span class="detail-value">${data.email || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Media Sosial</span><span class="detail-value">${data.socialMedia || data.sosmed || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Alamat / Wilayah</span><span class="detail-value">${data.address || data.alamat || data.wilayah || '-'}</span></div>
-                <div class="detail-row"><span class="detail-label">Status Saat Ini</span><span class="detail-value">${(data.status || 'pending').toUpperCase()}</span></div>
+    if (!data) return;
+
+
+    /* =====================================================
+       DATA DASAR MITRA
+    ====================================================== */
+
+    const namaMitra =
+        data.name ||
+        data.namaUsaha ||
+        data.businessName ||
+        data.ownerName ||
+        data.fullName ||
+        data.nama ||
+        'Mitra';
+
+
+    const jenisMitra =
+        data.jenis ||
+        data.partnerType ||
+        '-';
+
+
+    const kontakMitra =
+        data.phone ||
+        data.ownerPhone ||
+        data.kontak ||
+        '-';
+
+
+    document.getElementById('modalTitle').innerText =
+        `Detail Pendaftaran: ${namaMitra}`;
+
+
+    let htmlContent = `
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Jenis Mitra
+            </span>
+
+            <span class="detail-value">
+                ${String(jenisMitra).toUpperCase()}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Nama / Nama Usaha
+            </span>
+
+            <span class="detail-value">
+                ${namaMitra}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Penanggung Jawab
+            </span>
+
+            <span class="detail-value">
+                ${data.ownerName || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Status Penanggung Jawab
+            </span>
+
+            <span class="detail-value">
+                ${data.role || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Nomor WhatsApp / HP
+            </span>
+
+            <span class="detail-value">
+                ${kontakMitra}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Email
+            </span>
+
+            <span class="detail-value">
+                ${data.email || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Jenis Usaha
+            </span>
+
+            <span class="detail-value">
+                ${data.businessType || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Deskripsi Usaha
+            </span>
+
+            <span class="detail-value">
+                ${data.description || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Alamat
+            </span>
+
+            <span class="detail-value">
+                ${data.address ||
+                  data.alamat ||
+                  '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Desa / Kelurahan
+            </span>
+
+            <span class="detail-value">
+                ${data.village || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Kecamatan
+            </span>
+
+            <span class="detail-value">
+                ${data.district || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Kabupaten / Kota
+            </span>
+
+            <span class="detail-value">
+                ${data.city || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Provinsi
+            </span>
+
+            <span class="detail-value">
+                ${data.province || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Kode Pos
+            </span>
+
+            <span class="detail-value">
+                ${data.postalCode || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Patokan Lokasi
+            </span>
+
+            <span class="detail-value">
+                ${data.locationNote || '-'}
+            </span>
+        </div>
+
+
+        <div class="detail-row">
+            <span class="detail-label">
+                Status Saat Ini
+            </span>
+
+            <span class="detail-value">
+                ${String(data.status || 'pending').toUpperCase()}
+            </span>
+        </div>
+
+    `;
+
+
+    /* =====================================================
+       OPERASIONAL RESTO
+    ====================================================== */
+
+    if (
+        jenisMitra === 'resto' ||
+        jenisMitra === 'restaurant'
+    ) {
+
+        htmlContent += `
+
+            <div
+                style="
+                    margin-top:12px;
+                    padding-top:10px;
+                    border-top:1px solid var(--border-color);
+                "
+            >
+
+                <div
+                    style="
+                        font-weight:800;
+                        margin-bottom:8px;
+                        font-size:13px;
+                    "
+                >
+                    Data Operasional
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Jam Buka
+                    </span>
+
+                    <span class="detail-value">
+                        ${data.openTime || '-'}
+                    </span>
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Jam Tutup
+                    </span>
+
+                    <span class="detail-value">
+                        ${data.closeTime || '-'}
+                    </span>
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Hari Operasional
+                    </span>
+
+                    <span class="detail-value">
+                        ${data.operationalDays || '-'}
+                    </span>
+                </div>
+
+            </div>
+
+        `;
+
+    }
+
+
+    /* =====================================================
+       LOKASI GPS
+    ====================================================== */
+
+    if (
+        data.latitude ||
+        data.longitude ||
+        data.restoLatitude ||
+        data.restoLongitude
+    ) {
+
+        htmlContent += `
+
+            <div
+                style="
+                    margin-top:12px;
+                    padding-top:10px;
+                    border-top:1px solid var(--border-color);
+                "
+            >
+
+                <div
+                    style="
+                        font-weight:800;
+                        margin-bottom:8px;
+                        font-size:13px;
+                    "
+                >
+                    Lokasi GPS
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Latitude
+                    </span>
+
+                    <span class="detail-value">
+                        ${
+                            data.latitude ||
+                            data.restoLatitude ||
+                            '-'
+                        }
+                    </span>
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Longitude
+                    </span>
+
+                    <span class="detail-value">
+                        ${
+                            data.longitude ||
+                            data.restoLongitude ||
+                            '-'
+                        }
+                    </span>
+                </div>
+
+            </div>
+
+        `;
+
+    }
+
+
+    /* =====================================================
+       LEGALITAS
+    ====================================================== */
+
+    htmlContent += `
+
+        <div
+            style="
+                margin-top:12px;
+                padding-top:10px;
+                border-top:1px solid var(--border-color);
+            "
+        >
+
+            <div
+                style="
+                    font-weight:800;
+                    margin-bottom:8px;
+                    font-size:13px;
+                "
+            >
+                Identitas & Legalitas
+            </div>
+
+
+            <div class="detail-row">
+                <span class="detail-label">
+                    NIK / KTP
+                </span>
+
+                <span class="detail-value">
+                    ${data.ktp || '-'}
+                </span>
+            </div>
+
+
+            <div class="detail-row">
+                <span class="detail-label">
+                    Status Legalitas
+                </span>
+
+                <span class="detail-value">
+                    ${data.legalStatus || '-'}
+                </span>
+            </div>
+
+
+            <div class="detail-row">
+                <span class="detail-label">
+                    NIB
+                </span>
+
+                <span class="detail-value">
+                    ${data.nib || '-'}
+                </span>
+            </div>
+
+        </div>
+
+    `;
+
+
+    /* =====================================================
+       DATA PENCAIRAN
+    ====================================================== */
+
+    htmlContent += `
+
+        <div
+            style="
+                margin-top:12px;
+                padding-top:10px;
+                border-top:1px solid var(--border-color);
+            "
+        >
+
+            <div
+                style="
+                    font-weight:800;
+                    margin-bottom:8px;
+                    font-size:13px;
+                "
+            >
+                Data Pencairan Dana
+            </div>
+
+
+            <div class="detail-row">
+                <span class="detail-label">
+                    Bank / E-Wallet
+                </span>
+
+                <span class="detail-value">
+                    ${data.bankName || '-'}
+                </span>
+            </div>
+
+
+            <div class="detail-row">
+                <span class="detail-label">
+                    Nama Rekening
+                </span>
+
+                <span class="detail-value">
+                    ${data.accountName || '-'}
+                </span>
+            </div>
+
+
+            <div class="detail-row">
+                <span class="detail-label">
+                    Nomor Rekening / Akun
+                </span>
+
+                <span class="detail-value">
+                    ${data.accountNumber || '-'}
+                </span>
+            </div>
+
+        </div>
+
+    `;
+
+
+    /* =====================================================
+       BCGO LIVE ANALYSIS
+    ====================================================== */
+
+    const liveBCGO =
+        data._bcgoLiveResult || null;
+
+
+    if (liveBCGO) {
+
+        const score =
+            liveBCGO.score ?? 0;
+
+        const risk =
+            liveBCGO.risk || '-';
+
+        const decision =
+            liveBCGO.status || '-';
+
+
+        htmlContent += `
+
+            <div
+                style="
+                    margin-top:14px;
+                    padding:14px;
+                    border-radius:10px;
+                    background:#f8fafc;
+                    border:1px solid var(--border-color);
+                "
+            >
+
+                <div
+                    style="
+                        font-size:14px;
+                        font-weight:800;
+                        margin-bottom:10px;
+                    "
+                >
+                    🧠 Analisis BCGO
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Skor BCGO
+                    </span>
+
+                    <span
+                        class="detail-value"
+                        style="font-weight:800;"
+                    >
+                        ${score}/100
+                    </span>
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Tingkat Risiko
+                    </span>
+
+                    <span class="detail-value">
+                        ${risk}
+                    </span>
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Keputusan BCGO
+                    </span>
+
+                    <span class="detail-value">
+                        ${decision}
+                    </span>
+                </div>
+
+
+                ${
+                    liveBCGO.recommendation
+                        ? `
+                            <div
+                                class="detail-row"
+                                style="margin-top:6px;"
+                            >
+                                <span class="detail-label">
+                                    Rekomendasi
+                                </span>
+
+                                <span class="detail-value">
+                                    ${liveBCGO.recommendation}
+                                </span>
+                            </div>
+                        `
+                        : ''
+                }
+
+        `;
+
+
+        /* =================================================
+           HASIL PEMERIKSAAN DETAIL
+        ================================================== */
+
+        const restaurantChecks =
+            liveBCGO?.checks?.partnerSpecific?.checks;
+
+
+        if (
+            restaurantChecks &&
+            typeof restaurantChecks === 'object'
+        ) {
+
+            htmlContent += `
+
+                <div
+                    style="
+                        margin-top:12px;
+                        font-size:12px;
+                        font-weight:800;
+                    "
+                >
+                    Pemeriksaan Data
+                </div>
+
             `;
 
-            if (data.bcgoScore !== undefined && data.bcgoScore !== null) {
-                htmlContent += `
-                    <div class="detail-row"><span class="detail-label">Skor BCGO</span><span class="detail-value">${data.bcgoScore}/100</span></div>
-                    <div class="detail-row"><span class="detail-label">Tingkat Risiko</span><span class="detail-value">${data.bcgoRisk || '-'}</span></div>
-                    <div class="detail-row"><span class="detail-label">Rekomendasi BCGO</span><span class="detail-value">${data.bcgoRecommendation || '-'}</span></div>
-                `;
-                if (Array.isArray(data.bcgoReasons) && data.bcgoReasons.length > 0) {
+
+            Object.entries(
+                restaurantChecks
+            ).forEach(
+                ([key, check]) => {
+
+                    const passed =
+                        check &&
+                        check.passed === true;
+
+
                     htmlContent += `
-                        <div style="margin-top:4px;">
-                            <div class="detail-label" style="margin-bottom:4px;">Catatan BCGO:</div>
-                            <ul style="padding-left:18px; font-size:12px; color:var(--text-main);">
-                                ${data.bcgoReasons.map(r => `<li>${r}</li>`).join('')}
-                            </ul>
+
+                        <div
+                            style="
+                                display:flex;
+                                justify-content:space-between;
+                                align-items:center;
+                                gap:10px;
+                                padding:6px 0;
+                                border-bottom:1px dashed var(--border-color);
+                                font-size:11px;
+                            "
+                        >
+
+                            <span>
+                                ${key}
+                            </span>
+
+                            <strong>
+                                ${
+                                    passed
+                                        ? '✓ Lengkap'
+                                        : '✕ Belum Lengkap'
+                                }
+                            </strong>
+
                         </div>
+
                     `;
+
                 }
-            }
+            );
 
-            const fotoKtp = data.ktpPhoto || data.fotoKtp || data.photo || null;
-            if (fotoKtp) {
-                htmlContent += `
-                    <div class="ktp-preview-container">
-                        <div class="detail-label" style="margin-bottom:4px;">Pratinjau Foto / KTP:</div>
-                        <img src="${fotoKtp}" alt="Foto KTP / Dokumen Mitra">
-                    </div>
-                `;
-            } else {
-                htmlContent += `<div style="text-align:center; color:var(--text-muted); margin-top:10px;">Tidak ada lampiran foto/KTP yang diunggah.</div>`;
-            }
+        }
 
-            document.getElementById('modalBodyContent').innerHTML = htmlContent;
-            document.getElementById('detailModal').style.display = 'flex';
-        };
 
-        window.closeDetailModal = function() {
-            document.getElementById('detailModal').style.display = 'none';
-        };
+        /* =================================================
+           CATATAN BCGO
+        ================================================== */
 
+        if (
+            Array.isArray(
+                liveBCGO.reasons
+            ) &&
+            liveBCGO.reasons.length > 0
+        ) {
+
+            htmlContent += `
+
+                <div
+                    style="
+                        margin-top:12px;
+                        font-size:12px;
+                        font-weight:800;
+                    "
+                >
+                    Catatan BCGO
+                </div>
+
+                <ul
+                    style="
+                        padding-left:18px;
+                        font-size:11px;
+                        color:var(--text-main);
+                    "
+                >
+
+                    ${
+                        liveBCGO.reasons
+                            .map(
+                                reason =>
+                                    `<li>${reason}</li>`
+                            )
+                            .join('')
+                    }
+
+                </ul>
+
+            `;
+
+        }
+
+
+        htmlContent += `
+
+            </div>
+
+        `;
+
+    }
+
+
+    /* =====================================================
+       HASIL BCGO TERSIMPAN DI FIRESTORE
+       FALLBACK JIKA LIVE ENGINE BELUM TERSEDIA
+    ====================================================== */
+
+    else if (
+        data.bcgoScore !== undefined &&
+        data.bcgoScore !== null
+    ) {
+
+        htmlContent += `
+
+            <div
+                style="
+                    margin-top:14px;
+                    padding:14px;
+                    border-radius:10px;
+                    background:#f8fafc;
+                    border:1px solid var(--border-color);
+                "
+            >
+
+                <div
+                    style="
+                        font-size:14px;
+                        font-weight:800;
+                        margin-bottom:10px;
+                    "
+                >
+                    🧠 Hasil BCGO
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Skor BCGO
+                    </span>
+
+                    <span class="detail-value">
+                        ${data.bcgoScore}/100
+                    </span>
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Tingkat Risiko
+                    </span>
+
+                    <span class="detail-value">
+                        ${data.bcgoRisk || '-'}
+                    </span>
+                </div>
+
+
+                <div class="detail-row">
+                    <span class="detail-label">
+                        Rekomendasi
+                    </span>
+
+                    <span class="detail-value">
+                        ${data.bcgoRecommendation || '-'}
+                    </span>
+                </div>
+
+        `;
+
+
+        if (
+            Array.isArray(data.bcgoReasons) &&
+            data.bcgoReasons.length > 0
+        ) {
+
+            htmlContent += `
+
+                <div
+                    style="
+                        margin-top:10px;
+                        font-size:12px;
+                        font-weight:800;
+                    "
+                >
+                    Catatan BCGO
+                </div>
+
+                <ul
+                    style="
+                        padding-left:18px;
+                        font-size:11px;
+                    "
+                >
+
+                    ${
+                        data.bcgoReasons
+                            .map(
+                                reason =>
+                                    `<li>${reason}</li>`
+                            )
+                            .join('')
+                    }
+
+                </ul>
+
+            `;
+
+        }
+
+
+        htmlContent += `
+
+            </div>
+
+        `;
+
+    }
+
+
+    /* =====================================================
+       FOTO KTP
+    ====================================================== */
+
+    const fotoKtp =
+        data.ktpPhoto ||
+        data.fotoKtp ||
+        data.photo ||
+        null;
+
+
+    if (fotoKtp) {
+
+        htmlContent += `
+
+            <div class="ktp-preview-container">
+
+                <div
+                    class="detail-label"
+                    style="margin-bottom:4px;"
+                >
+                    Pratinjau Foto / KTP:
+                </div>
+
+                <img
+                    src="${fotoKtp}"
+                    alt="Foto KTP / Dokumen Mitra"
+                >
+
+            </div>
+
+        `;
+
+    } else {
+
+        htmlContent += `
+
+            <div
+                style="
+                    text-align:center;
+                    color:var(--text-muted);
+                    margin-top:10px;
+                "
+            >
+                Tidak ada lampiran foto/KTP
+                yang diunggah.
+            </div>
+
+        `;
+
+    }
+
+
+    /* =====================================================
+       TAMPILKAN MODAL
+    ====================================================== */
+
+    document.getElementById(
+        'modalBodyContent'
+    ).innerHTML = htmlContent;
+
+
+    document.getElementById(
+        'detailModal'
+    ).style.display = 'flex';
+
+};
+
+
+window.closeDetailModal = function() {
+
+    document.getElementById(
+        'detailModal'
+    ).style.display = 'none';
+
+};
         window.updateStatus = async function(docId, newStatus) {
             if (!confirm(`Apakah Anda yakin ingin mengubah status mitra ini menjadi ${newStatus.toUpperCase()}?`)) return;
 
