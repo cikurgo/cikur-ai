@@ -243,90 +243,510 @@
         };
 
         function loadAdminData(category) {
-            const tbody = document.getElementById('adminTableBody');
-            tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Memuat data dari koleksi ${category}_applications...</td></tr>`;
+    const tbody = document.getElementById('adminTableBody');
 
-            if (unsubscribeListener) unsubscribeListener();
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="5" class="empty-state">
+                Memuat data dari koleksi mitra_applications...
+            </td>
+        </tr>
+    `;
 
-            const q = query(collection(db, "mitra_applications"), orderBy("submittedAt", "desc"));
+    if (unsubscribeListener) {
+        unsubscribeListener();
+    }
 
-            unsubscribeListener = onSnapshot(q, (snapshot) => {
-                badgeEl.className = 'admin-badge badge-green';
-                badgeEl.innerText = 'DATA AKTIF';
+    const q = query(
+        collection(db, "mitra_applications"),
+        orderBy("submittedAt", "desc")
+    );
 
-                let pendingCount = 0;
-                let approvedCount = 0;
-                let totalCount = 0;
-                cachedApplications = {};
+    unsubscribeListener = onSnapshot(
+        q,
+        (snapshot) => {
 
-                let rowsHtml = '';
-                snapshot.forEach((documentSnap) => {
-                    const data = documentSnap.data();
-                    const docId = documentSnap.id;
+            badgeEl.className = 'admin-badge badge-green';
+            badgeEl.innerText = 'DATA AKTIF';
 
-                    if (data.jenis !== category) return;
+            let pendingCount = 0;
+            let approvedCount = 0;
+            let totalCount = 0;
 
-                    cachedApplications[docId] = data;
+            cachedApplications = {};
 
-                    totalCount++;
-                    if (data.status === 'approved') approvedCount++;
-                    else if (!data.status || data.status === 'pending') pendingCount++;
+            let rowsHtml = '';
 
-                    let dateStr = '-';
-                    if (data.submittedAt && data.submittedAt.toDate) {
-                        dateStr = data.submittedAt.toDate().toLocaleString('id-ID');
-                    }
 
-                    let bcgoBadge = '<span class="badge-status status-pending">Pending Review</span>';
-                    if (data.status === 'approved') {
-                        bcgoBadge = `<span class="badge-status status-approved">Approved (Skor: ${data.bcgoScore ?? '-'})</span>`;
-                    } else if (data.status === 'rejected') {
-                        bcgoBadge = `<span class="badge-status status-rejected">Rejected</span>`;
-                    } else if (data.bcgoScore !== undefined && data.bcgoScore !== null) {
-                        bcgoBadge = `<span class="badge-status status-pending">BCGO Skor: ${data.bcgoScore} (${data.bcgoRecommendation || '-'})</span>`;
-                    }
+            /* =====================================================
+               BACA SETIAP PENDAFTARAN
+            ====================================================== */
 
-                    const namaMitra = data.name || data.namaUsaha || data.ownerName || data.fullName || data.nama || 'Tanpa Nama';
-                    const kontakMitra = data.phone || data.kontak || '-';
+            snapshot.forEach((documentSnap) => {
 
-                    rowsHtml += `
-                        <tr>
-                            <td>${dateStr}</td>
-                            <td><span class="clickable-name" onclick="openDetailModal('${docId}')">${namaMitra}</span></td>
-                            <td>${kontakMitra}</td>
-                            <td>${bcgoBadge}</td>
-                            <td>
-                                <button class="btn-action btn-approve" onclick="updateStatus('${docId}', 'approved')">Setujui</button>
-                                <button class="btn-action btn-reject" onclick="updateStatus('${docId}', 'rejected')">Tolak</button>
-                                <button class="btn-action btn-delete" onclick="deleteApplication('${docId}')">Hapus</button>
-                            </td>
-                        </tr>
-                    `;
-                });
+                const data = documentSnap.data();
+                const docId = documentSnap.id;
 
-                if (totalCount === 0) {
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="5" class="empty-state">
-                                Belum ada data pendaftaran mitra yang masuk untuk kategori <b>${category.toUpperCase()}</b>.
-                            </td>
-                        </tr>
-                    `;
-                    updateStats(0, 0, 0);
+                /*
+                 * Hanya tampilkan kategori yang sedang dipilih.
+                 * Contoh:
+                 * restaurant / resto / assistant / driver
+                 */
+
+                if (data.jenis !== category) {
                     return;
                 }
 
-                tbody.innerHTML = rowsHtml;
-                updateStats(pendingCount, approvedCount, totalCount);
-            }, (error) => {
-                console.warn("Kendala koneksi/izin database:", error);
-                badgeEl.className = 'admin-badge badge-red';
-                badgeEl.innerText = 'Kendala Koneksi Database';
-                
-                tbody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color:var(--primary-red);">Belum ada data / periksa aturan izin Firestore.</td></tr>`;
-                updateStats(0, 0, 0);
+
+                /* =================================================
+                   SIMPAN DATA ASLI
+                ================================================== */
+
+                cachedApplications[docId] = data;
+
+                totalCount++;
+
+
+                if (data.status === 'approved') {
+
+                    approvedCount++;
+
+                } else if (
+                    !data.status ||
+                    data.status === 'pending'
+                ) {
+
+                    pendingCount++;
+
+                }
+
+
+                /* =================================================
+                   TANGGAL PENDAFTARAN
+                ================================================== */
+
+                let dateStr = '-';
+
+                if (
+                    data.submittedAt &&
+                    typeof data.submittedAt.toDate === 'function'
+                ) {
+
+                    dateStr =
+                        data.submittedAt
+                            .toDate()
+                            .toLocaleString('id-ID');
+
+                }
+
+
+                /* =================================================
+                   NAMA MITRA
+                ================================================== */
+
+                const namaMitra =
+                    data.name ||
+                    data.namaUsaha ||
+                    data.businessName ||
+                    data.ownerName ||
+                    data.fullName ||
+                    data.nama ||
+                    'Tanpa Nama';
+
+
+                /* =================================================
+                   KONTAK
+                ================================================== */
+
+                const kontakMitra =
+                    data.phone ||
+                    data.ownerPhone ||
+                    data.kontak ||
+                    '-';
+
+
+                /* =================================================
+                   BCGO ANALYSIS
+                ================================================= */
+
+                let bcgoResult = null;
+
+                try {
+
+                    /*
+                     * Pastikan engine BCGO tersedia.
+                     */
+
+                    if (
+                        typeof BCGO !== 'undefined' &&
+                        typeof BCGO.evaluatePartner === 'function'
+                    ) {
+
+                        /*
+                         * Data dari Firestore diteruskan
+                         * langsung ke BCGO.
+                         *
+                         * Untuk resto:
+                         * jenis = resto
+                         * akan dipetakan menjadi restaurant.
+                         */
+
+                        const partnerData = {
+                            ...data,
+
+                            partnerType:
+                                data.jenis === 'resto'
+                                    ? 'restaurant'
+                                    : (
+                                        data.jenis ||
+                                        data.partnerType ||
+                                        category
+                                    )
+                        };
+
+
+                        bcgoResult =
+                            BCGO.evaluatePartner(
+                                partnerData
+                            );
+
+
+                    }
+
+                } catch (bcgoError) {
+
+                    console.error(
+                        '[BCGO] Gagal menganalisis:',
+                        docId,
+                        bcgoError
+                    );
+
+                }
+
+
+                /* =================================================
+                   SIMPAN HASIL BCGO LIVE KE CACHE
+                ================================================== */
+
+                if (bcgoResult) {
+
+                    cachedApplications[docId] = {
+                        ...data,
+                        _bcgoLiveResult: bcgoResult
+                    };
+
+                }
+
+
+                /* =================================================
+                   BCGO BADGE
+                ================================================== */
+
+                let bcgoBadge = `
+                    <span class="badge-status status-pending">
+                        Pending Review
+                    </span>
+                `;
+
+
+                /*
+                 * Jika BCGO berhasil melakukan analisis
+                 * gunakan hasil analisis terbaru.
+                 */
+
+                if (bcgoResult) {
+
+                    if (
+                        bcgoResult.status === 'APPROVE'
+                    ) {
+
+                        bcgoBadge = `
+                            <span
+                                class="badge-status status-approved"
+                                title="${(
+                                    bcgoResult.reasons || []
+                                ).join(' | ')}"
+                            >
+                                BCGO ${bcgoResult.score}/100
+                                · LOW
+                            </span>
+                        `;
+
+                    } else if (
+                        bcgoResult.status === 'REJECT'
+                    ) {
+
+                        bcgoBadge = `
+                            <span
+                                class="badge-status status-rejected"
+                                title="${(
+                                    bcgoResult.reasons || []
+                                ).join(' | ')}"
+                            >
+                                BCGO ${bcgoResult.score}/100
+                                · REJECT
+                            </span>
+                        `;
+
+                    } else {
+
+                        bcgoBadge = `
+                            <span
+                                class="badge-status status-pending"
+                                title="${(
+                                    bcgoResult.reasons || []
+                                ).join(' | ')}"
+                            >
+                                BCGO ${bcgoResult.score}/100
+                                · REVIEW
+                            </span>
+                        `;
+
+                    }
+
+                }
+
+                /*
+                 * Kalau engine belum tersedia,
+                 * tetap tampilkan hasil BCGO lama
+                 * yang mungkin sudah tersimpan di Firestore.
+                 */
+
+                else if (
+                    data.bcgoScore !== undefined &&
+                    data.bcgoScore !== null
+                ) {
+
+                    bcgoBadge = `
+                        <span
+                            class="badge-status status-pending"
+                        >
+                            BCGO Skor:
+                            ${data.bcgoScore}
+                            (${data.bcgoRecommendation || '-'})
+                        </span>
+                    `;
+
+                }
+
+
+                /* =================================================
+                   STATUS DATABASE
+                ================================================== */
+
+                if (data.status === 'approved') {
+
+                    bcgoBadge = `
+                        <span
+                            class="badge-status status-approved"
+                        >
+                            Approved
+                            ${
+                                bcgoResult
+                                    ? `(BCGO ${bcgoResult.score}/100)`
+                                    : ''
+                            }
+                        </span>
+                    `;
+
+                } else if (data.status === 'rejected') {
+
+                    bcgoBadge = `
+                        <span
+                            class="badge-status status-rejected"
+                        >
+                            Rejected
+                        </span>
+                    `;
+
+                }
+
+
+                /* =================================================
+                   ROW TABLE
+                ================================================== */
+
+                rowsHtml += `
+
+                    <tr>
+
+                        <td>
+                            ${dateStr}
+                        </td>
+
+
+                        <td>
+
+                            <span
+                                class="clickable-name"
+                                onclick="openDetailModal('${docId}')"
+                            >
+                                ${namaMitra}
+                            </span>
+
+                        </td>
+
+
+                        <td>
+                            ${kontakMitra}
+                        </td>
+
+
+                        <td>
+                            ${bcgoBadge}
+                        </td>
+
+
+                        <td>
+
+                            <button
+                                class="btn-action btn-approve"
+                                onclick="
+                                    updateStatus(
+                                        '${docId}',
+                                        'approved'
+                                    )
+                                "
+                            >
+                                Setujui
+                            </button>
+
+
+                            <button
+                                class="btn-action btn-reject"
+                                onclick="
+                                    updateStatus(
+                                        '${docId}',
+                                        'rejected'
+                                    )
+                                "
+                            >
+                                Tolak
+                            </button>
+
+
+                            <button
+                                class="btn-action btn-delete"
+                                onclick="
+                                    deleteApplication(
+                                        '${docId}'
+                                    )
+                                "
+                            >
+                                Hapus
+                            </button>
+
+                        </td>
+
+                    </tr>
+
+                `;
+
             });
+
+
+            /* =====================================================
+               TIDAK ADA DATA
+            ====================================================== */
+
+            if (totalCount === 0) {
+
+                tbody.innerHTML = `
+
+                    <tr>
+
+                        <td
+                            colspan="5"
+                            class="empty-state"
+                        >
+
+                            Belum ada data pendaftaran
+                            mitra yang masuk untuk kategori
+
+                            <b>
+                                ${String(category).toUpperCase()}
+                            </b>.
+
+                        </td>
+
+                    </tr>
+
+                `;
+
+                updateStats(
+                    0,
+                    0,
+                    0
+                );
+
+                return;
+            }
+
+
+            /* =====================================================
+               TAMPILKAN DATA
+            ====================================================== */
+
+            tbody.innerHTML = rowsHtml;
+
+
+            updateStats(
+                pendingCount,
+                approvedCount,
+                totalCount
+            );
+
+        },
+
+
+        /* =========================================================
+           FIRESTORE ERROR
+        ========================================================== */
+
+        (error) => {
+
+            console.warn(
+                "Kendala koneksi/izin database:",
+                error
+            );
+
+
+            badgeEl.className =
+                'admin-badge badge-red';
+
+            badgeEl.innerText =
+                'Kendala Koneksi Database';
+
+
+            tbody.innerHTML = `
+
+                <tr>
+
+                    <td
+                        colspan="5"
+                        class="empty-state"
+                        style="color:var(--primary-red);"
+                    >
+
+                        Belum ada data /
+                        periksa aturan izin Firestore.
+
+                    </td>
+
+                </tr>
+
+            `;
+
+
+            updateStats(
+                0,
+                0,
+                0
+            );
+
         }
+    );
+                }
 
         function updateStats(pending, approved, total) {
             document.getElementById('statPending').innerText = pending;
