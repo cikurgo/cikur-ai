@@ -183,83 +183,582 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
         </div>
 
         <!-- DATA & PROFIL RESTORAN -->
-        <div class="resto-card" id="cardSectionProfile">
-            <div class="accordion-header" onclick="toggleAccordion('cardSectionProfile')">
-                <div class="accordion-title-wrapper">
-                    <svg class="section-icon" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-                    <h3>Data & Profil Restoran</h3>
-                </div>
-                <svg class="accordion-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
-            </div>
-            <div class="accordion-content">
-                <form id="formRestoProfile" style="padding-top: 8px;">
-                    <div class="form-group">
-                        <label class="form-label">Nama Restoran</label>
-                        <input type="text" id="restoNameInput" class="form-input" placeholder="Contoh: Kedai Cikur Enak" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Nama Penanggung Jawab & Status</label>
-                        <div class="form-row">
-                            <input type="text" id="ownerNameInput" class="form-input" placeholder="Nama Lengkap Pemilik / Pengelola" style="flex: 2;" required>
-                            <select id="restoRoleInput" class="form-select" style="flex: 1;">
-                                <option value="Pemilik Resto">Pemilik Resto</option>
-                                <option value="Pengelola Resto">Pengelola Resto</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Nomor HP Pemilik / Pengelola</label>
-                        <input type="text" id="ownerPhoneInput" class="form-input" placeholder="Contoh: 081234567891" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Nomor Telepon Resto (Opsional/Landline)</label>
-                        <input type="text" id="restoPhoneInput" class="form-input" placeholder="Contoh: 021-555888">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Alamat Lengkap & Patokan</label>
-                        <textarea id="restoAddressInput" class="form-textarea" rows="2" placeholder="Masukkan alamat lengkap resto..." required></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Nomor KTP Penanggung Jawab</label>
-                        <input type="text" id="restoKtpInput" class="form-input" placeholder="16 digit NIK" inputmode="numeric" maxlength="16" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Upload Foto KTP</label>
-                        <input type="file" id="restoFotoKtpInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
-                        <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">Wajib diisi untuk verifikasi identitas Mitra.</small>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Data Pencairan Dana</label>
-                        <div class="form-row" style="margin-bottom: 6px;">
-                            <select id="restoBankNameInput" class="form-select" style="flex: 1;">
-                                <option value="BCA">BCA</option>
-                                <option value="Mandiri">Mandiri</option>
-                                <option value="BNI">BNI</option>
-                                <option value="BRI">BRI</option>
-                                <option value="DANA">DANA</option>
-                                <option value="OVO">OVO</option>
-                            </select>
-                            <input type="text" id="restoAccountNameInput" class="form-input" placeholder="Nama Pemilik Rekening" style="flex: 2;" required>
-                        </div>
-                        <input type="text" id="restoAccountNumberInput" class="form-input" placeholder="Nomor Rekening / No. Akun" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Upload Foto Tampilan Resto</label>
-                        <div style="margin-bottom: 6px;">
-                            <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">1. Foto Tampak Depan Resto</label>
-                            <input type="file" id="restoPhotoFrontInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
-                            <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">Maksimal ukuran file 2MB.</small>
-                        </div>
-                        <div>
-                            <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 2px;">2. Foto Area Indoor Resto</label>
-                            <input type="file" id="restoPhotoIndoorInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
-                            <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px;">Maksimal ukuran file 2MB.</small>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn-action">Simpan Data & Profil Resto</button>
-                </form>
-            </div>
+<div class="resto-card" id="cardSectionProfile">
+
+    <div class="accordion-header" onclick="toggleAccordion('cardSectionProfile')">
+        <div class="accordion-title-wrapper">
+            <svg class="section-icon" viewBox="0 0 24 24">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+            <h3>Data & Profil Restoran</h3>
         </div>
+
+        <svg class="accordion-icon" viewBox="0 0 24 24">
+            <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/>
+        </svg>
+    </div>
+
+    <div class="accordion-content">
+
+        <form id="formRestoProfile" style="padding-top: 8px;">
+
+            <!-- =========================================
+                 1. IDENTITAS RESTORAN
+            ========================================== -->
+
+            <div class="form-group">
+                <label class="form-label">Nama Restoran</label>
+
+                <input
+                    type="text"
+                    id="restoNameInput"
+                    class="form-input"
+                    placeholder="Contoh: Kedai Cikur Enak"
+                    autocomplete="organization"
+                    required
+                >
+            </div>
+
+
+            <div class="form-group">
+                <label class="form-label">Jenis Usaha</label>
+
+                <select
+                    id="restoBusinessTypeInput"
+                    class="form-select"
+                    required
+                >
+                    <option value="">Pilih jenis usaha</option>
+                    <option value="Restoran">Restoran</option>
+                    <option value="Rumah Makan">Rumah Makan</option>
+                    <option value="Warung">Warung</option>
+                    <option value="Kedai">Kedai</option>
+                    <option value="Cafe">Cafe</option>
+                    <option value="Coffee Shop">Coffee Shop</option>
+                    <option value="Food Stall">Food Stall</option>
+                    <option value="Usaha Rumahan">Usaha Rumahan</option>
+                    <option value="Lainnya">Lainnya</option>
+                </select>
+            </div>
+
+
+            <div class="form-group">
+                <label class="form-label">Deskripsi Singkat Restoran</label>
+
+                <textarea
+                    id="restoDescriptionInput"
+                    class="form-textarea"
+                    rows="3"
+                    placeholder="Ceritakan singkat tentang restoran atau usaha makanan Anda..."
+                ></textarea>
+            </div>
+
+
+            <!-- =========================================
+                 2. PENANGGUNG JAWAB
+            ========================================== -->
+
+            <div class="form-group">
+                <label class="form-label">Nama Penanggung Jawab</label>
+
+                <div class="form-row">
+
+                    <input
+                        type="text"
+                        id="ownerNameInput"
+                        class="form-input"
+                        placeholder="Nama lengkap pemilik / pengelola"
+                        autocomplete="name"
+                        style="flex: 2;"
+                        required
+                    >
+
+                    <select
+                        id="restoRoleInput"
+                        class="form-select"
+                        style="flex: 1;"
+                        required
+                    >
+                        <option value="Pemilik Resto">Pemilik Resto</option>
+                        <option value="Pengelola Resto">Pengelola Resto</option>
+                    </select>
+
+                </div>
+            </div>
+
+
+            <div class="form-group">
+                <label class="form-label">Nomor HP Penanggung Jawab</label>
+
+                <input
+                    type="tel"
+                    id="ownerPhoneInput"
+                    class="form-input"
+                    placeholder="Contoh: 081234567891"
+                    inputmode="tel"
+                    autocomplete="tel"
+                    required
+                >
+            </div>
+
+
+            <div class="form-group">
+                <label class="form-label">Nomor Telepon Restoran</label>
+
+                <input
+                    type="tel"
+                    id="restoPhoneInput"
+                    class="form-input"
+                    placeholder="Opsional / telepon restoran"
+                    inputmode="tel"
+                >
+            </div>
+
+
+            <!-- =========================================
+                 3. LOKASI RESTORAN
+            ========================================== -->
+
+            <div class="form-group">
+
+                <label class="form-label">Alamat Lengkap Restoran</label>
+
+                <textarea
+                    id="restoAddressInput"
+                    class="form-textarea"
+                    rows="3"
+                    placeholder="Masukkan alamat lengkap restoran..."
+                    required
+                ></textarea>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Kelurahan / Desa</label>
+
+                <input
+                    type="text"
+                    id="restoVillageInput"
+                    class="form-input"
+                    placeholder="Contoh: Desa Sukaratu"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Kecamatan</label>
+
+                <input
+                    type="text"
+                    id="restoDistrictInput"
+                    class="form-input"
+                    placeholder="Contoh: Kecamatan Pandeglang"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Kabupaten / Kota</label>
+
+                <input
+                    type="text"
+                    id="restoCityInput"
+                    class="form-input"
+                    placeholder="Contoh: Pandeglang"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Provinsi</label>
+
+                <input
+                    type="text"
+                    id="restoProvinceInput"
+                    class="form-input"
+                    placeholder="Contoh: Banten"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Kode Pos</label>
+
+                <input
+                    type="text"
+                    id="restoPostalCodeInput"
+                    class="form-input"
+                    placeholder="Contoh: 42211"
+                    inputmode="numeric"
+                    maxlength="5"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Patokan Lokasi</label>
+
+                <input
+                    type="text"
+                    id="restoLocationNoteInput"
+                    class="form-input"
+                    placeholder="Contoh: Sebelah minimarket / dekat masjid..."
+                >
+
+            </div>
+
+
+            <!-- =========================================
+                 4. LOKASI GPS
+                 Nanti dihubungkan ke sistem lokasi / maps
+            ========================================== -->
+
+            <div class="form-group">
+
+                <label class="form-label">Lokasi GPS Restoran</label>
+
+                <div class="form-row">
+
+                    <input
+                        type="text"
+                        id="restoLatitudeInput"
+                        class="form-input"
+                        placeholder="Latitude"
+                        readonly
+                        style="flex: 1;"
+                    >
+
+                    <input
+                        type="text"
+                        id="restoLongitudeInput"
+                        class="form-input"
+                        placeholder="Longitude"
+                        readonly
+                        style="flex: 1;"
+                    >
+
+                </div>
+
+                <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 4px;">
+                    Lokasi GPS akan digunakan untuk membantu menentukan posisi restoran.
+                </small>
+
+            </div>
+
+
+            <!-- =========================================
+                 5. DATA OPERASIONAL
+            ========================================== -->
+
+            <div class="form-group">
+
+                <label class="form-label">Jam Operasional</label>
+
+                <div class="form-row">
+
+                    <input
+                        type="time"
+                        id="restoOpenTimeInput"
+                        class="form-input"
+                        style="flex: 1;"
+                    >
+
+                    <input
+                        type="time"
+                        id="restoCloseTimeInput"
+                        class="form-input"
+                        style="flex: 1;"
+                    >
+
+                </div>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Hari Operasional</label>
+
+                <div class="form-row">
+
+                    <select
+                        id="restoOperationalDaysInput"
+                        class="form-select"
+                        required
+                    >
+                        <option value="Setiap Hari">Setiap Hari</option>
+                        <option value="Senin-Sabtu">Senin - Sabtu</option>
+                        <option value="Senin-Jumat">Senin - Jumat</option>
+                        <option value="Hari Tertentu">Hari Tertentu</option>
+                    </select>
+
+                </div>
+
+            </div>
+
+
+            <!-- =========================================
+                 6. LEGALITAS & IDENTITAS
+            ========================================== -->
+
+            <div class="form-group">
+
+                <label class="form-label">Nomor KTP Penanggung Jawab</label>
+
+                <input
+                    type="text"
+                    id="restoKtpInput"
+                    class="form-input"
+                    placeholder="16 digit NIK"
+                    inputmode="numeric"
+                    maxlength="16"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Upload Foto KTP</label>
+
+                <input
+                    type="file"
+                    id="restoFotoKtpInput"
+                    class="form-input"
+                    accept="image/*"
+                    style="padding: 6px; font-size: 11px;"
+                    required
+                >
+
+                <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 3px;">
+                    Dokumen digunakan untuk proses verifikasi identitas Mitra.
+                </small>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Status Legalitas Usaha</label>
+
+                <select
+                    id="restoLegalStatusInput"
+                    class="form-select"
+                    required
+                >
+                    <option value="">Pilih status legalitas</option>
+                    <option value="Sudah Memiliki NIB">Sudah Memiliki NIB</option>
+                    <option value="Belum Memiliki NIB">Belum Memiliki NIB</option>
+                    <option value="Dalam Proses">Dalam Proses</option>
+                </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Nomor NIB</label>
+
+                <input
+                    type="text"
+                    id="restoNibInput"
+                    class="form-input"
+                    placeholder="Masukkan NIB jika sudah memiliki"
+                    inputmode="numeric"
+                >
+
+            </div>
+
+
+            <!-- =========================================
+                 7. DATA PENCAIRAN
+            ========================================== -->
+
+            <div class="form-group">
+
+                <label class="form-label">Data Pencairan Dana</label>
+
+                <div class="form-row" style="margin-bottom: 6px;">
+
+                    <select
+                        id="restoBankNameInput"
+                        class="form-select"
+                        style="flex: 1;"
+                        required
+                    >
+                        <option value="">Pilih metode</option>
+                        <option value="BCA">BCA</option>
+                        <option value="Mandiri">Mandiri</option>
+                        <option value="BNI">BNI</option>
+                        <option value="BRI">BRI</option>
+                        <option value="BSI">BSI</option>
+                        <option value="DANA">DANA</option>
+                        <option value="OVO">OVO</option>
+                        <option value="GoPay">GoPay</option>
+                        <option value="ShopeePay">ShopeePay</option>
+                    </select>
+
+                    <input
+                        type="text"
+                        id="restoAccountNameInput"
+                        class="form-input"
+                        placeholder="Nama pemilik rekening"
+                        style="flex: 2;"
+                        required
+                    >
+
+                </div>
+
+                <input
+                    type="text"
+                    id="restoAccountNumberInput"
+                    class="form-input"
+                    placeholder="Nomor rekening / nomor akun"
+                    inputmode="numeric"
+                    required
+                >
+
+            </div>
+
+
+            <!-- =========================================
+                 8. FOTO RESTORAN
+            ========================================== -->
+
+            <div class="form-group">
+
+                <label class="form-label">Foto Tampilan Restoran</label>
+
+                <div style="margin-bottom: 8px;">
+
+                    <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 3px;">
+                        1. Foto Tampak Depan Restoran
+                    </label>
+
+                    <input
+                        type="file"
+                        id="restoPhotoFrontInput"
+                        class="form-input"
+                        accept="image/*"
+                        style="padding: 6px; font-size: 11px;"
+                        required
+                    >
+
+                </div>
+
+
+                <div>
+
+                    <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 3px;">
+                        2. Foto Area Indoor Restoran
+                    </label>
+
+                    <input
+                        type="file"
+                        id="restoPhotoIndoorInput"
+                        class="form-input"
+                        accept="image/*"
+                        style="padding: 6px; font-size: 11px;"
+                    >
+
+                </div>
+
+
+                <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 4px;">
+                    Gunakan foto asli dan jelas. Ukuran file maksimal mengikuti kebijakan sistem.
+                </small>
+
+            </div>
+
+
+            <!-- =========================================
+                 9. PERSETUJUAN
+            ========================================== -->
+
+            <div class="form-group">
+
+                <label
+                    style="
+                        display: flex;
+                        align-items: flex-start;
+                        gap: 8px;
+                        font-size: 11px;
+                        line-height: 1.5;
+                        color: var(--text-muted);
+                    "
+                >
+
+                    <input
+                        type="checkbox"
+                        id="restoAgreementInput"
+                        required
+                        style="margin-top: 2px;"
+                    >
+
+                    <span>
+                        Saya menyatakan bahwa data dan dokumen yang saya berikan
+                        adalah benar dan dapat digunakan oleh CIKUR GO untuk
+                        proses verifikasi pendaftaran Mitra.
+                    </span>
+
+                </label>
+
+            </div>
+
+
+            <!-- =========================================
+                 10. STATUS PENDAFTARAN
+            ========================================== -->
+
+            <div
+                id="restoRegistrationStatus"
+                class="assistant-location-status"
+                style="margin-bottom: 12px;"
+            >
+                <span
+                    class="assistant-status-dot"
+                    style="background: #cbd5e1;"
+                ></span>
+
+                <span>
+                    Data belum dikirim
+                </span>
+            </div>
+
+
+            <!-- =========================================
+                 11. SUBMIT
+            ========================================== -->
+
+            <button
+                type="submit"
+                class="btn-action"
+                id="btnSubmitRestoProfile"
+            >
+                Ajukan Pendaftaran Mitra Resto
+            </button>
+
+        </form>
+
+    </div>
+</div>
 
         <!-- UPLOAD & KELOLA MENU MAKANAN -->
         <div class="resto-card" id="cardSectionMenu">
@@ -347,8 +846,39 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
 let userProfile = { uid: null, name: "", phone: "", avatar: "", isLoggedIn: false };
 let currentRestoId = null;
 let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
-let currentResto = { name: "", ownerName: "", role: "Pemilik Resto", ownerPhone: "", restoPhone: "", address: "", ktp: "", fotoKtp: "", bankName: "BCA", accountName: "", accountNumber: "", photoFront: "", photoIndoor: "", isOpen: true, openTime: "08:00", closeTime: "21:00", menuList: [] };
-let currentMitraApplication = null;
+let currentResto = {
+    name: "",
+    category: "",
+    businessType: "",
+
+    ownerName: "",
+    role: "Pemilik Resto",
+    ownerPhone: "",
+    restoPhone: "",
+
+    establishedYear: "",
+    employeeCount: "",
+
+    address: "",
+    area: "",
+    deliveryRadius: "",
+
+    ktp: "",
+    fotoKtp: "",
+
+    bankName: "BCA",
+    accountName: "",
+    accountNumber: "",
+
+    photoFront: "",
+    photoIndoor: "",
+
+    isOpen: true,
+    openTime: "08:00",
+    closeTime: "21:00",
+
+    menuList: []
+};let currentMitraApplication = null;
 
 /* =========================================================
    AUTH GUARD + STATUS PENDAFTARAN MITRA RESTO
@@ -554,18 +1084,69 @@ document.getElementById("formRestoProfile")?.addEventListener("submit", function
         return;
     }
 
-    currentResto.name = document.getElementById("restoNameInput").value;
-    currentResto.ownerName = document.getElementById("ownerNameInput").value;
-    currentResto.role = document.getElementById("restoRoleInput").value;
-    currentResto.ownerPhone = document.getElementById("ownerPhoneInput").value;
-    currentResto.restoPhone = document.getElementById("restoPhoneInput").value;
-    currentResto.address = document.getElementById("restoAddressInput").value;
-    currentResto.ktp = ktpVal;
-    currentResto.bankName = document.getElementById("restoBankNameInput").value;
-    currentResto.accountName = document.getElementById("restoAccountNameInput").value;
-    currentResto.accountNumber = document.getElementById("restoAccountNumberInput").value;
-    currentResto.openTime = document.getElementById("openTimeInput").value;
-    currentResto.closeTime = document.getElementById("closeTimeInput").value;
+    /* =========================================================
+   AMBIL DATA PROFIL RESTO
+========================================================= */
+
+currentResto.name =
+    document.getElementById("restoNameInput").value.trim();
+
+currentResto.category =
+    document.getElementById("restoCategoryInput").value;
+
+currentResto.businessType =
+    document.getElementById("restoBusinessTypeInput").value;
+
+
+currentResto.ownerName =
+    document.getElementById("ownerNameInput").value.trim();
+
+currentResto.role =
+    document.getElementById("restoRoleInput").value;
+
+currentResto.ownerPhone =
+    document.getElementById("ownerPhoneInput").value.trim();
+
+currentResto.restoPhone =
+    document.getElementById("restoPhoneInput").value.trim();
+
+
+currentResto.establishedYear =
+    document.getElementById("restoEstablishedYearInput").value.trim();
+
+currentResto.employeeCount =
+    document.getElementById("restoEmployeeCountInput").value;
+
+
+currentResto.address =
+    document.getElementById("restoAddressInput").value.trim();
+
+currentResto.area =
+    document.getElementById("restoAreaInput").value.trim();
+
+currentResto.deliveryRadius =
+    document.getElementById("restoDeliveryRadiusInput").value;
+
+
+currentResto.ktp =
+    ktpVal;
+
+
+currentResto.bankName =
+    document.getElementById("restoBankNameInput").value;
+
+currentResto.accountName =
+    document.getElementById("restoAccountNameInput").value.trim();
+
+currentResto.accountNumber =
+    document.getElementById("restoAccountNumberInput").value.trim();
+
+
+currentResto.openTime =
+    document.getElementById("openTimeInput").value;
+
+currentResto.closeTime =
+    document.getElementById("closeTimeInput").value;
 
     let photoFrontInput = document.getElementById("restoPhotoFrontInput");
     let photoIndoorInput = document.getElementById("restoPhotoIndoorInput");
