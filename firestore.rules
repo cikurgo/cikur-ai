@@ -1,0 +1,44 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Hanya akun yang secara eksplisit tercatat sebagai admin aktif
+    // yang boleh membaca / mengubah data operasional CIKUR GO.
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admin_users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/admin_users/$(request.auth.uid)).data.active == true;
+    }
+
+    // Profil akses admin: client hanya boleh membaca profil miliknya sendiri.
+    // Penambahan/penghapusan admin dilakukan dari Firebase Console / server,
+    // bukan dari browser publik.
+    match /admin_users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Registrasi akses. User login boleh membuat request atas UID-nya sendiri.
+    // Request tidak dapat diubah/dihapus oleh browser.
+    match /admin_requests/{uid} {
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.status == 'pending';
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow update, delete: if false;
+    }
+
+    // DATA SENSITIF MITRA: wajib admin aktif.
+    match /mitra_applications/{docId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if false;
+    }
+
+    // Default deny untuk collection lain.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
