@@ -521,100 +521,183 @@ function switchDriverTab(tab) {
     loadDriverOrders();
 }
 
+let unsubscribeAvailableFood = null;
+let unsubscribeMyActiveFood = null;
+let availableFoodOrdersCache = [];
+let myActiveFoodOrdersCache = [];
+let driverFoodMessageUnsubscribers = {};
+let driverFoodMessagesCache = {};
+
 function loadDriverOrders() {
     let container = document.getElementById("driverOrderContainer");
     container.innerHTML = "";
 
     if(!isOnline) {
         container.innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Status Anda <b>OFFLINE</b>. Aktifkan status untuk memindai orderan asli yang masuk.</div>`;
+        stopFoodOrderListeners();
         return;
     }
 
     if(currentTab === 'food') {
-        let rawOrders = localStorage.getItem('cikur_driver_orders');
-        let foodOrders = [];
-        
-        try {
-            foodOrders = rawOrders ? JSON.parse(rawOrders) : [];
-        } catch(e) {
-            foodOrders = [];
-        }
-
-        let validOrders = foodOrders.filter(ord => ord && ord.id && ord.customerAddress && ord.menu);
-
-        if(validOrders.length === 0) {
-            container.innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Belum ada pesanan Cikur Food valid yang masuk dari <b>food.html</b> atau <b>resto.html</b>.</div>`;
-            return;
-        }
-
-        validOrders.forEach((ord) => {
-            let distance = ord.distance || 3.0; 
-            let deliveryFee = distance * 2500;
-            let foodTotal = Number(ord.total || 0);
-            let grandTotal = foodTotal + deliveryFee;
-
-            let card = document.createElement("div");
-            card.className = "order-card";
-            card.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span class="badge-type badge-food">CIKUR FOOD - Resto: ${ord.restoName || 'Mitra Resto'}</span>
-                    <span style="font-size: 10px; color: #10b981; font-weight:700;">✓ Data Terintegrasi Asli</span>
-                </div>
-                <div style="font-size: 11px; font-weight: 700;">📍 Tujuan Customer: ${ord.customerAddress}</div>
-                <div style="font-size: 11px; color: var(--text-muted); background: var(--background); padding: 8px; border-radius: 8px;">
-                    🛒 <b>Menu:</b> ${ord.menu}<br>
-                    📏 <b>Jarak Antar:</b> ${distance} KM (Ongkir: Rp ${deliveryFee.toLocaleString('id-ID')})
-                </div>
-                <div style="font-size: 12px; font-weight: 800; color: var(--primary);">
-                    Total Pembayaran: Rp ${grandTotal.toLocaleString('id-ID')} (${ord.paymentMethod})
-                </div>
-
-                <div style="font-size: 11px; font-weight: 700; margin-top: 4px;">💬 Chat Koordinasi (Resto & Customer):</div>
-                <div class="chat-container">
-                    <div class="chat-box" id="chatFoodBox_${ord.id}">
-                        <div class="chat-msg other">Sistem: "Pesanan masuk terverifikasi dari aplikasi customer."</div>
-                    </div>
-                    <div class="chat-input-group">
-                        <input type="text" id="inputFoodChat_${ord.id}" class="form-input" style="flex:1;" placeholder="Balas chat...">
-                        <button type="button" class="btn-primary" style="padding: 6px 12px; font-size: 10px;" onclick="sendFoodChat('${ord.id}')">Kirim</button>
-                    </div>
-                </div>
-
-                <div style="display: flex; gap: 8px; margin-top: 4px;">
-                    <a href="https://www.google.com/maps/search/?api=1&query=${ord.customerAddress}" target="_blank" class="form-input" style="background:#0284c7; color:#fff; text-align:center; text-decoration:none; font-weight:700; display:flex; align-items:center; justify-content:center;">🗺️ Peta Navigasi</a>
-                    <button type="button" class="btn-primary" style="flex:1;" onclick="completeFoodOrder('${ord.id}')">Selesaikan Antaran ✓</button>
-                </div>
-            `;
-            container.appendChild(card);
-        });
-
+        startFoodOrderListeners();
+        renderFoodOrderList();
     } else {
-        let rawRide = localStorage.getItem('cikur_driver_ride_orders');
-        let rideOrders = [];
-        
-        try {
-            rideOrders = rawRide ? JSON.parse(rawRide) : [];
-        } catch(e) {
-            rideOrders = [];
+        stopFoodOrderListeners();
+        renderRideOrderListLegacy();
+    }
+}
+
+function stopFoodOrderListeners() {
+    if (typeof unsubscribeAvailableFood === "function") unsubscribeAvailableFood();
+    if (typeof unsubscribeMyActiveFood === "function") unsubscribeMyActiveFood();
+    unsubscribeAvailableFood = null;
+    unsubscribeMyActiveFood = null;
+}
+
+function startFoodOrderListeners() {
+    if (!window.CikurCloud || !userProfile.uid) return;
+
+    if (!unsubscribeAvailableFood) {
+        unsubscribeAvailableFood = window.CikurCloud.listenAvailableFoodOrders((orders) => {
+            availableFoodOrdersCache = orders;
+            renderFoodOrderList();
+        });
+    }
+
+    if (!unsubscribeMyActiveFood) {
+        unsubscribeMyActiveFood = window.CikurCloud.listenDriverActiveFoodOrders(userProfile.uid, (orders) => {
+            myActiveFoodOrdersCache = orders;
+            renderFoodOrderList();
+        });
+    }
+}
+
+function renderFoodOrderList() {
+    let container = document.getElementById("driverOrderContainer");
+    if (!container || currentTab !== 'food') return;
+
+    if (availableFoodOrdersCache.length === 0 && myActiveFoodOrdersCache.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Belum ada pesanan Cikur Food yang tersedia saat ini.</div>`;
+        return;
+    }
+
+    let html = "";
+
+    myActiveFoodOrdersCache.forEach((ord) => {
+        html += renderMyActiveFoodOrderCard(ord);
+        if (!driverFoodMessageUnsubscribers[ord.id]) {
+            driverFoodMessageUnsubscribers[ord.id] = window.CikurCloud.listenOrderMessages(ord.id, (messages) => {
+                driverFoodMessagesCache[ord.id] = messages;
+                renderFoodOrderList();
+            });
         }
+    });
 
-        let validRides = rideOrders.filter(r => r && r.pickup && r.destination);
+    availableFoodOrdersCache.forEach((ord) => {
+        html += renderAvailableFoodOrderCard(ord);
+    });
 
-        if(validRides.length === 0) {
-            container.innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Belum ada pesanan Cikur Ride reguler yang masuk dari <b>ride.html</b>.</div>`;
-            return;
-        }
+    container.innerHTML = html;
+}
 
-        validRides.forEach((ride) => {
-            let distance = ride.distance || 4.0;
-            let rideFee = distance * 3000;
+function renderAvailableFoodOrderCard(ord) {
+    let itemsText = (ord.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ') || 'Menu tidak tersedia';
+    return `
+        <div class="order-card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="badge-type badge-food">CIKUR FOOD - Resto: ${ord.restoName || 'Mitra Resto'}</span>
+                <span style="font-size: 10px; color: #d97706; font-weight:700;">Menunggu Diambil</span>
+            </div>
+            <div style="font-size: 11px; font-weight: 700;">📍 Tujuan Customer: ${ord.address?.text || '-'}</div>
+            <div style="font-size: 11px; color: var(--text-muted); background: var(--background); padding: 8px; border-radius: 8px;">
+                🛒 <b>Menu:</b> ${itemsText}
+            </div>
+            <div style="font-size: 12px; font-weight: 800; color: var(--primary);">
+                Total Pesanan: Rp ${Number(ord.total || 0).toLocaleString('id-ID')} (${ord.paymentMethod || '-'})
+            </div>
+            <button type="button" class="btn-primary" onclick="claimThisFoodOrder('${ord.id}')">Ambil Pesanan Ini ✓</button>
+        </div>
+    `;
+}
 
-            let card = document.createElement("div");
-            card.className = "order-card";
-            card.innerHTML = `
+function renderMyActiveFoodOrderCard(ord) {
+    let itemsText = (ord.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ') || 'Menu tidak tersedia';
+    let messages = driverFoodMessagesCache[ord.id] || [];
+    let chatHtml = messages.map(m =>
+        `<div class="chat-msg ${m.sender === 'driver' ? 'driver' : 'other'}">${m.sender === 'driver' ? 'Anda' : (m.sender === 'customer' ? 'Customer' : (m.sender === 'resto' ? 'Resto' : 'Sistem'))}: "${m.text}"</div>`
+    ).join('') || '<div class="chat-msg other">Belum ada pesan.</div>';
+
+    let statusLabel = ord.status === "DIAMBIL_DRIVER" ? "Menuju Resto/Customer" : "Sedang Diantar";
+
+    return `
+        <div class="order-card" style="border-color: #16a34a;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="badge-type badge-food">CIKUR FOOD - Resto: ${ord.restoName || 'Mitra Resto'}</span>
+                <span style="font-size: 10px; color: #16a34a; font-weight:700;">✓ ${statusLabel}</span>
+            </div>
+            <div style="font-size: 11px; font-weight: 700;">📍 Tujuan Customer: ${ord.address?.text || '-'}</div>
+            <div style="font-size: 11px; color: var(--text-muted); background: var(--background); padding: 8px; border-radius: 8px;">
+                🛒 <b>Menu:</b> ${itemsText}
+            </div>
+            <div style="font-size: 12px; font-weight: 800; color: var(--primary);">
+                Total Pembayaran: Rp ${Number(ord.total || 0).toLocaleString('id-ID')} (${ord.paymentMethod || '-'})
+            </div>
+
+            <div style="font-size: 11px; font-weight: 700; margin-top: 4px;">💬 Chat Koordinasi:</div>
+            <div class="chat-container">
+                <div class="chat-box" id="chatFoodBox_${ord.id}">${chatHtml}</div>
+                <div class="chat-input-group">
+                    <input type="text" id="inputFoodChat_${ord.id}" class="form-input" style="flex:1;" placeholder="Balas chat...">
+                    <button type="button" class="btn-primary" style="padding: 6px 12px; font-size: 10px;" onclick="sendFoodChat('${ord.id}')">Kirim</button>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-top: 4px;">
+                <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ord.address?.text || '')}" target="_blank" class="form-input" style="background:#0284c7; color:#fff; text-align:center; text-decoration:none; font-weight:700; display:flex; align-items:center; justify-content:center;">🗺️ Peta Navigasi</a>
+                <button type="button" class="btn-primary" style="flex:1;" onclick="completeFoodOrder('${ord.id}')">Selesaikan Antaran ✓</button>
+            </div>
+        </div>
+    `;
+}
+
+async function claimThisFoodOrder(orderId) {
+    try {
+        await window.CikurCloud.claimFoodOrder(orderId, userProfile.uid, userProfile.name);
+        await window.CikurCloud.sendOrderMessage(orderId, "system", "Driver telah mengambil pesanan Anda dan sedang menuju lokasi.");
+    } catch (error) {
+        alert("Gagal mengambil pesanan (mungkin sudah diambil driver lain): " + (error?.message || error));
+    }
+}
+
+// CATATAN: Ride masih localStorage untuk sementara -
+// akan disinkronkan ke Firestore begitu ride.html dibangun.
+function renderRideOrderListLegacy() {
+    let container = document.getElementById("driverOrderContainer");
+    let rawRide = localStorage.getItem('cikur_driver_ride_orders');
+    let rideOrders = [];
+
+    try {
+        rideOrders = rawRide ? JSON.parse(rawRide) : [];
+    } catch(e) {
+        rideOrders = [];
+    }
+
+    let validRides = rideOrders.filter(r => r && r.pickup && r.destination);
+
+    if(validRides.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Belum ada pesanan Cikur Ride reguler yang masuk dari <b>ride.html</b>.</div>`;
+        return;
+    }
+
+    let html = "";
+    validRides.forEach((ride) => {
+        let distance = ride.distance || 4.0;
+        let rideFee = distance * 3000;
+
+        html += `
+            <div class="order-card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <span class="badge-type badge-ride">CIKUR RIDE REGULER</span>
-                    <span style="font-size: 10px; color: #10b981; font-weight:700;">✓ Data Terintegrasi Asli</span>
                 </div>
                 <div style="font-size: 11px; font-weight: 700;">🟢 Titik Jemput: ${ride.pickup}</div>
                 <div style="font-size: 11px; font-weight: 700;">🏁 Alamat Tujuan: ${ride.destination}</div>
@@ -633,13 +716,12 @@ function loadDriverOrders() {
                 </div>
 
                 <div style="display: flex; gap: 8px; margin-top: 4px;">
-                    <a href="https://www.google.com/maps/search/?api=1&query=${ride.destination}" target="_blank" class="form-input" style="background:#0284c7; color:#fff; text-align:center; text-decoration:none; font-weight:700; display:flex; align-items:center; justify-content:center;">🗺️ Peta Tujuan</a>
+                    <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ride.destination)}" target="_blank" class="form-input" style="background:#0284c7; color:#fff; text-align:center; text-decoration:none; font-weight:700; display:flex; align-items:center; justify-content:center;">🗺️ Peta Tujuan</a>
                     <button type="button" class="btn-primary" style="flex:1; background:#0284c7;" onclick="completeRideOrder('${ride.id}')">Selesaikan Ride ✓</button>
                 </div>
-            `;
-            container.appendChild(card);
-        });
-    }
+            </div>`;
+    });
+    container.innerHTML = html;
 }
 
 function sendFoodChat(orderId) {
@@ -664,13 +746,14 @@ function sendRideChat(orderId) {
     box.scrollTop = box.scrollHeight;
 }
 
-function completeFoodOrder(orderId) {
-    if(confirm("Selesaikan pesanan Cikur Food ini?")) {
-        let foodOrders = JSON.parse(localStorage.getItem('cikur_driver_orders')) || [];
-        let filtered = foodOrders.filter(o => o.id !== orderId);
-        localStorage.setItem('cikur_driver_orders', JSON.stringify(filtered));
-        loadDriverOrders();
+async function completeFoodOrder(orderId) {
+    if(!confirm("Selesaikan pesanan Cikur Food ini?")) return;
+    try {
+        await window.CikurCloud.updateOrderStatus(orderId, { status: "SELESAI" });
+        await window.CikurCloud.sendOrderMessage(orderId, "system", "Pesanan telah selesai diantar. Terima kasih!");
         alert("Pesanan berhasil diselesaikan!");
+    } catch (error) {
+        alert("Gagal menyelesaikan pesanan: " + (error?.message || error));
     }
 }
 
