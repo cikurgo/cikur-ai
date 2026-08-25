@@ -40,6 +40,9 @@
         *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
         html{scroll-behavior:smooth}
         body{background:var(--bg);color:var(--ink);min-height:100vh}
+        body.auth-pending .auth-gate{visibility:hidden;opacity:0;pointer-events:none}
+        body.auth-pending .app-shell{visibility:hidden;opacity:0}
+        body.auth-ready .auth-gate,body.auth-ready .app-shell{visibility:visible;opacity:1;transition:opacity .12s ease}
         button,input{font:inherit}
         button{cursor:pointer}
 
@@ -348,7 +351,7 @@
     </style>
 </head>
 
-<body>
+<body class="auth-pending">
 <div class="auth-gate" id="authGate">
     <div class="auth-card">
         <div class="auth-brand">
@@ -443,7 +446,7 @@
             <section class="hero">
                 <div>
                     <div class="eyebrow">Intelligent Operations</div>
-                    <h1>Good morning, CIKUR GO 👋</h1>
+                    <h1 id="greetingTitle">Good morning 👋</h1>
                     <p>Pantau jaringan mitra, verifikasi pendaftaran, dan insight BCGO dari satu pusat kendali.</p>
                 </div>
                 <div class="sync-box">
@@ -710,6 +713,24 @@
     let categoryCounts = { agent: 0, resto: 0, driver: 0 };
     let lastAnalysis = { low: 0, review: 0, high: 0 };
 
+    function updateGreeting(){
+        const hour = new Date().getHours();
+        const greeting = hour >= 5 && hour < 11 ? "Good morning 👋"
+            : hour >= 11 && hour < 15 ? "Good afternoon 👋"
+            : hour >= 15 && hour < 18 ? "Good evening 👋"
+            : "Good night 👋";
+        const el = document.getElementById("greetingTitle");
+        if(el) el.textContent = greeting;
+    }
+
+    updateGreeting();
+    setInterval(updateGreeting, 60000);
+
+    function setAuthReady(){
+        document.body.classList.remove("auth-pending");
+        document.body.classList.add("auth-ready");
+    }
+
     window.showAuthMode = function(mode){
         authMode = mode;
         const isRegister = mode === "register";
@@ -839,11 +860,13 @@
             if(unsubscribeListener) unsubscribeListener();
             unsubscribeListener = null;
             document.getElementById("authGate").classList.remove("hidden");
+            setAuthReady();
             return;
         }
         const approved = await verifyAdmin(user);
         if(approved) enterDashboard(user);
         else lockPending(user);
+        setAuthReady();
     });
 
     function showToast(message){
