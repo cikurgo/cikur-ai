@@ -114,6 +114,25 @@
         .sync-time{font-size:10px;color:var(--ink);font-weight:700;margin-top:4px}
         .sync-status{font-size:8px;color:var(--muted);margin-top:3px}
 
+        /* SECTION DIVIDER HEADINGS */
+        .section-header-banner {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 36px 0 16px 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--border);
+        }
+        .section-header-banner h2 {
+            font-size: 16px;
+            font-weight: 900;
+            letter-spacing: -0.3px;
+            color: var(--ink);
+        }
+        .section-header-banner span {
+            font-size: 14px;
+        }
+
         /* COMMAND CENTER */
         .command{
             position:relative;overflow:hidden;border-radius:20px;background:linear-gradient(120deg,#121a2a,#202a3d);
@@ -246,6 +265,9 @@
         .status.rejected{background:#fef2f2;color:#b91c1c}.status.rejected:before{background:#ef4444}
         .status.active{background:#ecfdf3;color:#15803d}.status.active:before{background:#22c55e}
         .status.inactive{background:#fef2f2;color:#b91c1c}.status.inactive:before{background:#ef4444}
+        .status.online{background:#ecfdf3;color:#15803d}.status.online:before{background:#22c55e}
+        .status.offline{background:#f1f5f9;color:#64748b}.status.offline:before{background:#94a3b8}
+
         .bcgo-score{font-weight:900}
         .score-low{color:var(--green)}
         .score-review{color:var(--amber)}
@@ -381,7 +403,7 @@
 
 <div class="pending-lock" id="pendingLock">
     <div class="pending-card">
-        <div class="pending-icon">◷</div>
+        <div class="pending-icon">⏳</div>
         <h3>Registrasi menunggu persetujuan</h3>
         <p id="pendingText">Akun berhasil dibuat, tetapi belum diberi hak administrator. Hubungi pemilik/super admin CIKUR GO untuk mengaktifkan akses.</p>
         <button onclick="secureLogout()">Keluar</button>
@@ -402,23 +424,19 @@
         <div class="nav-label">Workspace</div>
         <nav class="nav">
             <button class="nav-btn active" id="navOverview" onclick="scrollToSection('overview')">
-                <span class="nav-icon">▦</span><span>Overview</span>
+                <span class="nav-icon">📊</span><span>Overview</span>
             </button>
-            <button class="nav-btn" onclick="scrollToSection('partnerNetwork')">
-                <span class="nav-icon">♙</span><span>Partner Network</span>
+            <button class="nav-btn" onclick="scrollToSection('partnerSectionAnchor')">
+                <span class="nav-icon">🤝</span><span>Manajemen Mitra</span>
             </button>
-            <button class="nav-btn" onclick="scrollToSection('verification')">
-                <span class="nav-icon">✓</span><span>Verification</span>
-                <span id="navPendingCount" class="nav-count">0</span>
-            </button>
-            <button class="nav-btn" onclick="scrollToSection('customerManagement')">
-                <span class="nav-icon">👤</span><span>Customer Management</span>
+            <button class="nav-btn" onclick="scrollToSection('customerSectionAnchor')">
+                <span class="nav-icon">👥</span><span>Manajemen Customer</span>
             </button>
             <button class="nav-btn" onclick="scrollToSection('analytics')">
-                <span class="nav-icon">⌁</span><span>Analytics</span>
+                <span class="nav-icon">📈</span><span>Analytics & Risk</span>
             </button>
             <button class="nav-btn" onclick="scrollToSection('intelligence')">
-                <span class="nav-icon">✦</span><span>BCGO Intelligence</span>
+                <span class="nav-icon">🛡️</span><span>BCGO Intelligence</span>
                 <span id="navAttentionCount" class="nav-count">0</span>
             </button>
         </nav>
@@ -452,7 +470,7 @@
                 <div>
                     <div class="eyebrow">Intelligent Operations</div>
                     <h1 id="greetingTitle">Good morning 👋</h1>
-                    <p>Pantau jaringan mitra, verifikasi pendaftaran, manajemen customer, dan insight BCGO dari satu pusat kendali.</p>
+                    <p>Pantau jaringan mitra, verifikasi pendaftaran, manajemen customer online/offline, dan insight BCGO dari satu pusat kendali.</p>
                 </div>
                 <div class="sync-box">
                     <div class="sync-label">Live Data</div>
@@ -477,21 +495,27 @@
                 </div>
             </section>
 
+            <!-- ================= SUB-BAGIAN 1: KONTROL & STATISTIK MITRA ================= -->
+            <div id="partnerSectionAnchor" class="section-header-banner">
+                <span>🤝</span>
+                <h2>Panel Kontrol & Manajemen Mitra</h2>
+            </div>
+
             <section class="kpi-grid">
                 <div class="kpi">
                     <div class="kpi-top">
-                        <div class="kpi-label">Pending Verification</div>
-                        <div class="kpi-icon amber">◷</div>
+                        <div class="kpi-label">Pending Mitra</div>
+                        <div class="kpi-icon amber">⏳</div>
                     </div>
                     <div class="kpi-value" id="statPending">0</div>
-                    <div class="kpi-meta">Pendaftaran yang membutuhkan tindakan</div>
+                    <div class="kpi-meta">Pendaftaran mitra menunggu tindakan</div>
                     <div class="kpi-trend trend-neutral" id="pendingMeta">Belum ada antrean</div>
                 </div>
 
                 <div class="kpi">
                     <div class="kpi-top">
                         <div class="kpi-label">Active Partners</div>
-                        <div class="kpi-icon green">✓</div>
+                        <div class="kpi-icon green">✅</div>
                     </div>
                     <div class="kpi-value" id="statApproved">0</div>
                     <div class="kpi-meta">Mitra yang telah disetujui</div>
@@ -500,22 +524,60 @@
 
                 <div class="kpi">
                     <div class="kpi-top">
-                        <div class="kpi-label">Total Customers</div>
-                        <div class="kpi-icon blue">👤</div>
+                        <div class="kpi-label">BCGO Attention</div>
+                        <div class="kpi-icon red">⚠️</div>
                     </div>
-                    <div class="kpi-value" id="statCustomers">0</div>
-                    <div class="kpi-meta">Pengguna/pelanggan terdaftar</div>
-                    <div class="kpi-trend trend-neutral" id="customersMeta">Data real-time</div>
+                    <div class="kpi-value" id="statAttention">0</div>
+                    <div class="kpi-meta">Item mitra yang perlu pemeriksaan</div>
+                    <div class="kpi-trend trend-neutral" id="attentionMeta">Menunggu analisis</div>
                 </div>
 
                 <div class="kpi">
                     <div class="kpi-top">
-                        <div class="kpi-label">BCGO Attention</div>
-                        <div class="kpi-icon red">!</div>
+                        <div class="kpi-label">Total Pendaftar</div>
+                        <div class="kpi-icon blue">📋</div>
                     </div>
-                    <div class="kpi-value" id="statAttention">0</div>
-                    <div class="kpi-meta">Item yang perlu pemeriksaan</div>
-                    <div class="kpi-trend trend-neutral" id="attentionMeta">Menunggu analisis</div>
+                    <div class="kpi-value" id="statTotalPartner">0</div>
+                    <div class="kpi-meta">Akumulasi seluruh pendaftar</div>
+                    <div class="kpi-trend trend-up">Database aktif</div>
+                </div>
+            </section>
+
+            <!-- ================= SUB-BAGIAN 2: KONTROL & STATISTIK CUSTOMER ================= -->
+            <div id="customerSectionAnchor" class="section-header-banner">
+                <span>👥</span>
+                <h2>Panel Kontrol & Manajemen Customer</h2>
+            </div>
+
+            <section class="kpi-grid">
+                <div class="kpi">
+                    <div class="kpi-top">
+                        <div class="kpi-label">Customer Online</div>
+                        <div class="kpi-icon green">🟢</div>
+                    </div>
+                    <div class="kpi-value" id="statCustomerOnline">0</div>
+                    <div class="kpi-meta">Aktif / membuka aplikasi saat ini</div>
+                    <div class="kpi-trend trend-up">Real-time status</div>
+                </div>
+
+                <div class="kpi">
+                    <div class="kpi-top">
+                        <div class="kpi-label">Customer Offline</div>
+                        <div class="kpi-icon amber">⚪</div>
+                    </div>
+                    <div class="kpi-value" id="statCustomerOffline">0</div>
+                    <div class="kpi-meta">Tidak aktif / di luar aplikasi</div>
+                    <div class="kpi-trend trend-neutral">Standby</div>
+                </div>
+
+                <div class="kpi" style="grid-column: span 2;">
+                    <div class="kpi-top">
+                        <div class="kpi-label">Total Seluruh Customer Terdaftar</div>
+                        <div class="kpi-icon blue">🗂️</div>
+                    </div>
+                    <div class="kpi-value" id="statCustomers">0</div>
+                    <div class="kpi-meta">Akumulasi total database pengguna CIKUR GO</div>
+                    <div class="kpi-trend trend-neutral" id="customersMeta">Sinkronisasi langsung</div>
                 </div>
             </section>
 
@@ -613,7 +675,7 @@
 
                 <div class="attention-list" id="attentionList">
                     <div class="attention-item">
-                        <div class="attention-icon blue">i</div>
+                        <div class="attention-icon blue">ℹ️</div>
                         <div>
                             <div class="attention-title">Belum ada insight</div>
                             <div class="attention-copy">Data akan muncul otomatis setelah CIKUR Cloud mengirimkan pendaftaran.</div>
@@ -622,27 +684,28 @@
                 </div>
             </section>
 
-            <!-- BAGIAN KHUSUS CUSTOMER MANAGEMENT -->
-            <section class="card partner-card" id="customerManagement" style="margin-bottom:18px;">
+            <!-- ================= TABEL 1: MANAJEMEN CUSTOMER (ONLINE / OFFLINE) ================= -->
+            <section class="card partner-card" id="customerManagementSection" style="margin-bottom:18px;">
                 <div class="partner-head">
                     <div>
-                        <div class="card-kicker">Customer Intelligence</div>
-                        <div class="card-title" id="customerSectionTitle">Manajemen Pengguna & Customer CIKUR GO</div>
-                        <div class="card-sub">Daftar customer aktif secara real-time • klik nama untuk melihat detail akun pelanggan.</div>
+                        <div class="card-kicker">Customer Management & Presence</div>
+                        <div class="card-title" id="customerSectionTitle">Daftar Pengguna & Status Online/Offline</div>
+                        <div class="card-sub">Pemantauan interaksi customer secara real-time berdasarkan aktivitas terakhir (lastSeen).</div>
                     </div>
                     <div class="search-wrap">
-                        <span class="search-icon">⌕</span>
+                        <span class="search-icon">🔍</span>
                         <input type="text" class="search-box" placeholder="Cari nama atau email customer..." id="searchCustomerInput">
                     </div>
                 </div>
 
-                <div class="table-note" id="customerTableNote">Menampilkan seluruh data customer terdaftar • urutan terbaru → terlama</div>
+                <div class="table-note" id="customerTableNote">Menampilkan status Online (aktif dalam 5 menit terakhir) vs Offline • klik nama untuk melihat detail akun</div>
 
                 <div class="table-wrap">
                     <table>
                         <thead>
                             <tr>
-                                <th>Waktu Daftar / Bergabung</th>
+                                <th>Status Koneksi</th>
+                                <th>Waktu Bergabung / Terakhir Aktif</th>
                                 <th>Customer</th>
                                 <th>Kontak / Email</th>
                                 <th>Status Akun</th>
@@ -650,8 +713,8 @@
                             </tr>
                         </thead>
                         <tbody id="adminCustomerTableBody">
-                            <tr><td colspan="5" class="empty-state">
-                                <div class="empty-icon">◌</div>
+                            <tr><td colspan="6" class="empty-state">
+                                <div class="empty-icon">⏳</div>
                                 Menghubungkan ke Database Customer...
                             </td></tr>
                         </tbody>
@@ -659,15 +722,16 @@
                 </div>
             </section>
 
+            <!-- ================= TABEL 2: MANAJEMEN MITRA (AGENT, RESTO, DRIVER) ================= -->
             <section class="card partner-card" id="partnerNetwork">
                 <div class="partner-head">
                     <div>
-                        <div class="card-kicker">Partner Network</div>
+                        <div class="card-kicker">Partner Network Control</div>
                         <div class="card-title" id="sectionTitle">Manajemen Pendaftaran Agent CGO</div>
                         <div class="card-sub">Daftar pendaftaran real-time • klik nama untuk membuka profil lengkap & analisis BCGO.</div>
                     </div>
                     <div class="search-wrap">
-                        <span class="search-icon">⌕</span>
+                        <span class="search-icon">🔍</span>
                         <input type="text" class="search-box" placeholder="Cari nama atau nomor HP..." id="searchTableInput">
                     </div>
                 </div>
@@ -694,7 +758,7 @@
                         </thead>
                         <tbody id="adminTableBody">
                             <tr><td colspan="6" class="empty-state">
-                                <div class="empty-icon">◌</div>
+                                <div class="empty-icon">⏳</div>
                                 Menghubungkan ke CIKUR Cloud...
                             </td></tr>
                         </tbody>
@@ -709,7 +773,7 @@
 <div class="modal-overlay" id="detailModal" onclick="if(event.target===this) closeDetailModal()">
     <div class="modal-box">
         <div class="modal-header">
-            <div class="modal-title" id="modalTitle">Detail Calon Mitra</div>
+            <div class="modal-title" id="modalTitle">Detail Data</div>
             <button class="modal-close" onclick="closeDetailModal()">&times;</button>
         </div>
         <div class="modal-body" id="modalBodyContent"></div>
@@ -760,7 +824,6 @@
 
     function updateGreeting(){
         const hour = new Date().getHours();
-
         const greeting =
             hour >= 5 && hour < 11 ? "Selamat pagi 👋"
             : hour >= 11 && hour < 15 ? "Selamat siang 👋"
@@ -768,7 +831,6 @@
             : "Selamat malam 👋";
 
         const el = document.getElementById("greetingTitle");
-
         if (el) {
             el.textContent = greeting;
         }
@@ -1022,13 +1084,17 @@
     function loadCustomerData(){
         if(unsubscribeCustomerListener) unsubscribeCustomerListener();
 
-        // Mengambil data dari koleksi 'customers' atau 'users' di Firestore secara real-time
         const q = query(collection(db, "customers"), orderBy("createdAt", "desc"));
 
         unsubscribeCustomerListener = onSnapshot(q, snapshot => {
             cachedCustomers = {};
             let totalCustomers = 0;
+            let onlineCount = 0;
+            let offlineCount = 0;
             let rowsHtml = "";
+
+            const FIVE_MINUTES = 5 * 60 * 1000;
+            const now = new Date().getTime();
 
             snapshot.forEach(documentSnap => {
                 const data = documentSnap.data();
@@ -1037,6 +1103,21 @@
                 cachedCustomers[docId] = data;
                 totalCustomers++;
 
+                // Menghitung status Online/Offline berdasarkan field lastSeen
+                let lastSeenTime = 0;
+                if(data.lastSeen && typeof data.lastSeen.toDate === "function"){
+                    lastSeenTime = data.lastSeen.toDate().getTime();
+                } else if(data.updatedAt && typeof data.updatedAt.toDate === "function"){
+                    lastSeenTime = data.updatedAt.toDate().getTime();
+                }
+
+                const isOnline = lastSeenTime > 0 && (now - lastSeenTime) <= FIVE_MINUTES;
+                if(isOnline){
+                    onlineCount++;
+                } else {
+                    offlineCount++;
+                }
+
                 const nama = getCustomerName(data);
                 const email = data.email || "-";
                 const phone = data.phone || data.kontak || "-";
@@ -1044,11 +1125,15 @@
                 const initial = esc(nama.charAt(0).toUpperCase());
 
                 let status = data.status || "active";
-                let statusClass = status === "inactive" ? "inactive" : "active";
-                let statusText = status === "inactive" ? "Inactive" : "Active";
+                let accountStatusClass = status === "inactive" ? "inactive" : "active";
+                let accountStatusText = status === "inactive" ? "Inactive" : "Active";
+
+                let presenceClass = isOnline ? "online" : "offline";
+                let presenceText = isOnline ? "Online" : "Offline";
 
                 rowsHtml += `
                     <tr>
+                        <td><span class="status ${presenceClass}">${presenceText}</span></td>
                         <td>${esc(date)}</td>
                         <td>
                             <div class="name-cell clickable-name" onclick="openCustomerDetailModal('${esc(docId)}')">
@@ -1060,7 +1145,7 @@
                             </div>
                         </td>
                         <td>${esc(email)} / ${esc(phone)}</td>
-                        <td><span class="status ${statusClass}">${statusText}</span></td>
+                        <td><span class="status ${accountStatusClass}">${accountStatusText}</span></td>
                         <td>
                             <div class="action-group">
                                 <button class="btn-action btn-review" onclick="openCustomerDetailModal('${esc(docId)}')">Detail</button>
@@ -1073,8 +1158,8 @@
 
             if(totalCustomers === 0){
                 customerTbody.innerHTML = `
-                    <tr><td colspan="5" class="empty-state">
-                        <div class="empty-icon">👤</div>
+                    <tr><td colspan="6" class="empty-state">
+                        <div class="empty-icon">👥</div>
                         Belum ada data customer terdaftar di koleksi <b>customers</b>.
                     </td></tr>
                 `;
@@ -1082,25 +1167,30 @@
                 customerTbody.innerHTML = rowsHtml;
             }
 
+            // Update Statistik Customer
             document.getElementById("statCustomers").textContent = totalCustomers;
-            document.getElementById("customersMeta").textContent = totalCustomers > 0 ? "Pengguna aktif terdaftar" : "Belum ada customer";
+            document.getElementById("statCustomerOnline").textContent = onlineCount;
+            document.getElementById("statCustomerOffline").textContent = offlineCount;
+            document.getElementById("customersMeta").textContent = totalCustomers > 0 ? `${onlineCount} Online, ${offlineCount} Offline` : "Belum ada customer";
 
         }, error => {
             console.warn("Kendala koneksi koleksi customers:", error);
             customerTbody.innerHTML = `
-                <tr><td colspan="5" class="empty-state" style="color:var(--muted)">
-                    <div class="empty-icon" style="background:#f1f5f9">i</div>
+                <tr><td colspan="6" class="empty-state" style="color:var(--muted)">
+                    <div class="empty-icon" style="background:#f1f5f9">ℹ️</div>
                     Koleksi customer belum tersedia atau menunggu sinkronisasi database.
                 </td></tr>
             `;
             document.getElementById("statCustomers").textContent = "0";
+            document.getElementById("statCustomerOnline").textContent = "0";
+            document.getElementById("statCustomerOffline").textContent = "0";
         });
     }
 
     function loadAdminData(category){
         tbody.innerHTML = `
             <tr><td colspan="6" class="empty-state">
-                <div class="empty-icon">◌</div>
+                <div class="empty-icon">⏳</div>
                 Memuat data dari koleksi mitra_applications...
             </td></tr>
         `;
@@ -1117,7 +1207,8 @@
 
             let pendingCount = 0;
             let approvedCount = 0;
-            let totalCount = 0;
+            let totalCountAllCategories = 0;
+            let totalCountCurrent = 0;
             let low = 0, review = 0, high = 0;
             let rowsHtml = "";
 
@@ -1134,6 +1225,8 @@
                 if(["agent","resto","driver"].includes(normalizedType)){
                     categoryCounts[normalizedType]++;
                 }
+
+                totalCountAllCategories++;
 
                 if(normalizedType !== category) return;
 
@@ -1157,7 +1250,7 @@
                     _bcgoLiveResult: bcgoResult
                 };
 
-                totalCount++;
+                totalCountCurrent++;
 
                 if(data.status === "approved") approvedCount++;
                 else if(!data.status || data.status === "pending") pendingCount++;
@@ -1220,10 +1313,10 @@
                 `;
             });
 
-            if(totalCount === 0){
+            if(totalCountCurrent === 0){
                 tbody.innerHTML = `
                     <tr><td colspan="6" class="empty-state">
-                        <div class="empty-icon">◌</div>
+                        <div class="empty-icon">📂</div>
                         Belum ada data pendaftaran mitra yang masuk untuk kategori <b>${esc(category.toUpperCase())}</b>.
                     </td></tr>
                 `;
@@ -1232,8 +1325,8 @@
             }
 
             lastAnalysis = { low, review, high };
-            updateStats(pendingCount, approvedCount, totalCount);
-            updateIntelligence(pendingCount, approvedCount, totalCount, low, review, high);
+            updateStats(pendingCount, approvedCount, totalCountAllCategories);
+            updateIntelligence(pendingCount, approvedCount, totalCountAllCategories, low, review, high);
             renderNetwork();
 
             const now = new Date();
@@ -1248,7 +1341,7 @@
 
             tbody.innerHTML = `
                 <tr><td colspan="6" class="empty-state" style="color:var(--red)">
-                    <div class="empty-icon" style="color:var(--red);background:#fee2e2">!</div>
+                    <div class="empty-icon" style="color:var(--red);background:#fee2e2">⚠️</div>
                     Belum ada data / periksa aturan izin Firestore.
                 </td></tr>
             `;
@@ -1261,6 +1354,7 @@
     function updateStats(pending, approved, total){
         document.getElementById("statPending").textContent = pending;
         document.getElementById("statApproved").textContent = approved;
+        document.getElementById("statTotalPartner").textContent = total;
 
         const attention = lastAnalysis.high + lastAnalysis.review;
         document.getElementById("statAttention").textContent = attention;
@@ -1325,7 +1419,7 @@
         if(high > 0){
             items.push(`
                 <div class="attention-item">
-                    <div class="attention-icon red">!</div>
+                    <div class="attention-icon red">⚠️</div>
                     <div>
                         <div class="attention-title">${high} High Risk Partner</div>
                         <div class="attention-copy">BCGO memberikan keputusan REJECT/HIGH RISK pada beberapa pendaftaran kategori aktif.</div>
@@ -1338,7 +1432,7 @@
         if(review > 0){
             items.push(`
                 <div class="attention-item">
-                    <div class="attention-icon amber">◷</div>
+                    <div class="attention-icon amber">⏳</div>
                     <div>
                         <div class="attention-title">${review} Partner Need Review</div>
                         <div class="attention-copy">Hasil BCGO belum cukup kuat untuk diproses otomatis dan membutuhkan pemeriksaan manual.</div>
@@ -1351,7 +1445,7 @@
         if(pending > 0){
             items.push(`
                 <div class="attention-item">
-                    <div class="attention-icon blue">✓</div>
+                    <div class="attention-icon blue">📋</div>
                     <div>
                         <div class="attention-title">${pending} Pending Verification</div>
                         <div class="attention-copy">Ada pendaftaran yang belum memperoleh keputusan status dari admin.</div>
@@ -1364,7 +1458,7 @@
         if(items.length === 0){
             items.push(`
                 <div class="attention-item">
-                    <div class="attention-icon green" style="background:var(--green-soft);color:var(--green)">✓</div>
+                    <div class="attention-icon green" style="background:var(--green-soft);color:var(--green)">✅</div>
                     <div>
                         <div class="attention-title">Tidak ada item yang membutuhkan perhatian</div>
                         <div class="attention-copy">BCGO dan status pendaftaran kategori aktif terlihat aman saat ini.</div>
