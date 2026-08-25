@@ -16,8 +16,8 @@
  *
  *   agentcgo.html ─┐
  *   resto.html ────┼──> BCGO ENGINE
- *   driver.html ──┘
- *   bcgo-admin.html┘
+ *   driver.html ───┤
+ *   index.html ────┘
  *
  * ============================================================
  */
@@ -28,7 +28,7 @@
    BCGO CORE CONFIGURATION
 ============================================================ */
 
-const BCGO_VERSION = "0.1.1";
+const BCGO_VERSION = "0.1.0";
 
 const BCGO_PARTNER_TYPES = {
     ASSISTANT: "assistant",
@@ -96,8 +96,7 @@ const BCGO_REQUIRED_FIELDS = {
     customer: [
         "name",
         "phone",
-        "email",
-        "registrationStatus"
+        "email"
     ]
 };
 
@@ -129,7 +128,7 @@ function bcgoFindMissingFields(data, requiredFields) {
 
 
 /**
- * Menentukan jenis mitra atau pengguna.
+ * Menentukan jenis mitra.
  */
 function bcgoNormalizePartnerType(type) {
 
@@ -182,6 +181,7 @@ function bcgoNormalizePartnerType(type) {
  * Memeriksa apakah tipe mitra didukung.
  */
 function bcgoValidatePartnerType(partnerType) {
+
     const normalizedType =
         bcgoNormalizePartnerType(partnerType);
 
@@ -199,6 +199,7 @@ function bcgoValidateRequiredData(
     partner,
     partnerType
 ) {
+
     const requiredFields =
         BCGO_REQUIRED_FIELDS[partnerType] || [];
 
@@ -222,8 +223,31 @@ function bcgoValidateRequiredData(
 
 /**
  * Pemeriksaan dasar identitas/kontak.
+ *
+ * CATATAN:
+ * Ini BELUM merupakan verifikasi identitas resmi.
+ * Untuk saat ini hanya memeriksa keberadaan data.
  */
-function bcgoIdentityCheck(partner) {
+function bcgoIdentityCheck(partner, partnerType) {
+
+    if (partnerType === BCGO_PARTNER_TYPES.CUSTOMER) {
+        const checks = {
+            name: bcgoHasValue(partner.name),
+            phone: bcgoHasValue(partner.phone),
+            email: bcgoHasValue(partner.email)
+        };
+
+        const passed =
+            checks.name &&
+            checks.phone &&
+            checks.email;
+
+        return {
+            passed,
+            checks
+        };
+    }
+
     const checks = {
         name: bcgoHasValue(partner.name),
         phone: bcgoHasValue(partner.phone),
@@ -268,11 +292,6 @@ function bcgoCheckAssistant(partner) {
 function bcgoCheckRestaurant(partner) {
 
     const checks = {
-
-        /* ================================
-           IDENTITAS USAHA
-        ================================= */
-
         businessName: {
             passed: bcgoHasValue(
                 partner.businessName ||
@@ -280,197 +299,126 @@ function bcgoCheckRestaurant(partner) {
                 partner.name
             )
         },
-
         businessType: {
             passed: bcgoHasValue(
                 partner.businessType
             )
         },
-
         description: {
             passed: bcgoHasValue(
                 partner.description
             )
         },
-
-
-        /* ================================
-           PENANGGUNG JAWAB
-        ================================= */
-
         ownerName: {
             passed: bcgoHasValue(
                 partner.ownerName
             )
         },
-
         role: {
             passed: bcgoHasValue(
                 partner.role
             )
         },
-
-
-        /* ================================
-           LOKASI
-        ================================= */
-
         address: {
             passed: bcgoHasValue(
                 partner.address ||
                 partner.alamat
             )
         },
-
         village: {
             passed: bcgoHasValue(
                 partner.village
             )
         },
-
         district: {
             passed: bcgoHasValue(
                 partner.district
             )
         },
-
         city: {
             passed: bcgoHasValue(
                 partner.city
             )
         },
-
         province: {
             passed: bcgoHasValue(
                 partner.province
             )
         },
-
-
-        /* ================================
-           OPERASIONAL
-        ================================= */
-
         openTime: {
             passed: bcgoHasValue(
                 partner.openTime
             )
         },
-
         closeTime: {
             passed: bcgoHasValue(
                 partner.closeTime
             )
         },
-
         operationalDays: {
             passed: bcgoHasValue(
                 partner.operationalDays
             )
         },
-
-
-        /* ================================
-           IDENTITAS / LEGALITAS
-        ================================= */
-
         ktp: {
             passed: bcgoHasValue(
                 partner.ktp
             )
         },
-
         ktpPhoto: {
             passed: bcgoHasValue(
                 partner.ktpPhoto ||
                 partner.fotoKtp
             )
         },
-
         legalStatus: {
             passed: bcgoHasValue(
                 partner.legalStatus
             )
         },
-
         nib: {
             passed:
                 partner.legalStatus === "Belum Memiliki NIB" ||
                 bcgoHasValue(partner.nib)
         },
-
-
-        /* ================================
-           PENCAIRAN DANA
-        ================================= */
-
         bankName: {
             passed: bcgoHasValue(
                 partner.bankName
             )
         },
-
         accountName: {
             passed: bcgoHasValue(
                 partner.accountName
             )
         },
-
         accountNumber: {
             passed: bcgoHasValue(
                 partner.accountNumber
             )
         },
-
-
-        /* ================================
-           FOTO RESTORAN
-        ================================= */
-
         photoFront: {
             passed: bcgoHasValue(
                 partner.photoFront
             )
         },
-
         photoIndoor: {
             passed:
                 partner.photoIndoor === undefined ||
                 partner.photoIndoor === null ||
                 bcgoHasValue(partner.photoIndoor)
         }
-
     };
 
-    const checkValues =
-        Object.values(checks);
-
-    const passedCount =
-        checkValues.filter(
-            check => check.passed === true
-        ).length;
-
-    const totalCount =
-        checkValues.length;
+    const checkValues = Object.values(checks);
+    const passedCount = checkValues.filter(check => check.passed === true).length;
+    const totalCount = checkValues.length;
 
     return {
-
-        passed:
-            passedCount === totalCount,
-
-        score:
-            totalCount > 0
-                ? Math.round(
-                    (passedCount / totalCount) * 100
-                )
-                : 0,
-
+        passed: passedCount === totalCount,
+        score: totalCount > 0 ? Math.round((passedCount / totalCount) * 100) : 0,
         passedCount,
-
         totalCount,
-
         checks
-
     };
 }
 
@@ -490,50 +438,33 @@ function bcgoCheckDriver(partner) {
 
 
 /**
- * Pemeriksaan khusus Customer (Sinkronisasi dari bcgo-admin.html).
+ * Pemeriksaan khusus Customer.
  */
 function bcgoCheckCustomer(partner) {
-    const checks = {
-        name: {
-            passed: bcgoHasValue(partner.name)
-        },
-        phone: {
-            passed: bcgoHasValue(partner.phone)
-        },
-        email: {
-            passed: bcgoHasValue(partner.email)
-        },
-        registrationStatus: {
-            passed: bcgoHasValue(partner.registrationStatus)
-        },
-        registeredAt: {
-            passed: bcgoHasValue(partner.registeredAt || partner.createdAt)
-        }
-    };
-
-    const checkValues = Object.values(checks);
-    const passedCount = checkValues.filter(check => check.passed === true).length;
-    const totalCount = checkValues.length;
-
+    const hasEmailValid = bcgoHasValue(partner.email) && String(partner.email).includes('@');
     return {
-        passed: passedCount === totalCount,
-        score: totalCount > 0 ? Math.round((passedCount / totalCount) * 100) : 0,
-        passedCount,
-        totalCount,
-        checks
+        emailValidity: {
+            passed: hasEmailValid
+        },
+        membershipStatus: {
+            passed: true,
+            status: partner.registrationStatus || "ACTIVE"
+        }
     };
 }
 
 
 /**
  * Menjalankan pemeriksaan khusus
- * berdasarkan jenis mitra/pengguna.
+ * berdasarkan jenis mitra.
  */
 function bcgoRunPartnerSpecificChecks(
     partner,
     partnerType
 ) {
+
     switch (partnerType) {
+
         case BCGO_PARTNER_TYPES.ASSISTANT:
             return bcgoCheckAssistant(partner);
 
@@ -562,16 +493,13 @@ function bcgoCalculateScore(
     partnerChecks,
     partnerType
 ) {
-    let score = 0;
 
     if (partnerType === BCGO_PARTNER_TYPES.CUSTOMER) {
-        if (validation.passed) {
-            return 100;
-        }
-        const checksArr = Object.values(partnerChecks.checks || partnerChecks);
-        const passedCount = checksArr.filter(c => c.passed).length;
-        return checksArr.length > 0 ? Math.round((passedCount / checksArr.length) * 100) : 0;
+        const isCustomerValid = validation.passed && identity.passed;
+        return isCustomerValid ? 100 : 50;
     }
+
+    let score = 0;
 
     /* Data lengkap */
     if (validation.passed) {
@@ -596,6 +524,7 @@ function bcgoCalculateScore(
         specificChecks.length;
 
     if (totalSpecificChecks > 0) {
+
         score += Math.round(
             (passedSpecificChecks /
                 totalSpecificChecks) * 30
@@ -611,6 +540,7 @@ function bcgoCalculateScore(
 ============================================================ */
 
 function bcgoDetermineRisk(score) {
+
     if (score >= 80) {
         return BCGO_RISK_LEVELS.LOW;
     }
@@ -637,8 +567,9 @@ function bcgoDetermineDecision(
     identity,
     partnerType
 ) {
+
     if (partnerType === BCGO_PARTNER_TYPES.CUSTOMER) {
-        return validation.passed ? BCGO_DECISIONS.APPROVE : BCGO_DECISIONS.REVIEW;
+        return score >= 100 ? BCGO_DECISIONS.APPROVE : BCGO_DECISIONS.REVIEW;
     }
 
     if (
@@ -668,13 +599,20 @@ function bcgoGenerateReasons(
     decision,
     partnerType
 ) {
+
     const reasons = [];
 
     if (partnerType === BCGO_PARTNER_TYPES.CUSTOMER) {
-        if (validation.passed) {
-            reasons.push("Data pendaftaran customer lengkap dan sinkron.");
+        if (!validation.passed) {
+            reasons.push("Data wajib customer belum lengkap (nama, telepon, email).");
+        }
+        if (!identity.passed) {
+            reasons.push("Identitas dasar customer belum lengkap.");
+        }
+        if (decision === BCGO_DECISIONS.APPROVE) {
+            reasons.push("Data customer memenuhi kriteria dasar BCGO.");
         } else {
-            reasons.push("Ada kolom data customer yang belum lengkap.");
+            reasons.push("Data customer membutuhkan peninjauan manual.");
         }
         return reasons;
     }
@@ -726,7 +664,7 @@ function bcgoEvaluatePartner(partner = {}) {
 
     const typeValidation =
         bcgoValidatePartnerType(
-            partner.partnerType
+            partner.partnerType || partner.type
         );
 
 
@@ -747,7 +685,7 @@ function bcgoEvaluatePartner(partner = {}) {
             },
 
             reasons: [
-                "Jenis mitra atau pengguna tidak dikenali."
+                "Jenis mitra tidak dikenali."
             ],
 
             meta: {
@@ -779,7 +717,7 @@ function bcgoEvaluatePartner(partner = {}) {
     -------------------------------------------- */
 
     const identity =
-        bcgoIdentityCheck(partner);
+        bcgoIdentityCheck(partner, partnerType);
 
 
     /* --------------------------------------------
@@ -874,10 +812,10 @@ function bcgoEvaluatePartner(partner = {}) {
 
         recommendation:
             decision === BCGO_DECISIONS.APPROVE
-                ? "Lanjutkan proses pendaftaran atau sinkronisasi data."
+                ? "Lanjutkan proses pendaftaran mitra."
                 : decision === BCGO_DECISIONS.REVIEW
                     ? "Minta pemeriksaan manual."
-                    : "Jangan aktifkan akun sebelum memenuhi persyaratan.",
+                    : "Jangan aktifkan mitra sebelum memenuhi persyaratan.",
 
         meta: {
 
