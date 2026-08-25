@@ -296,7 +296,7 @@
         .auth-form{display:flex;flex-direction:column;gap:10px}.auth-field label{display:block;font-size:8px;color:var(--muted);font-weight:850;margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px}.auth-field input{width:100%;border:1px solid var(--border);border-radius:10px;padding:11px 12px;font-size:10px;outline:none;background:#fff}.auth-field input:focus{border-color:#cbd5e1;box-shadow:0 0 0 3px rgba(220,38,38,.07)}
         .auth-submit{border:0;border-radius:10px;padding:11px;background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;font-size:10px;font-weight:900;margin-top:3px}.auth-submit:disabled{opacity:.6;cursor:wait}.auth-note{font-size:8px;line-height:1.45;color:var(--muted);margin-top:12px}.auth-message{display:none;border-radius:10px;padding:9px 10px;font-size:8px;line-height:1.4;margin-bottom:10px}.auth-message.show{display:block}.auth-message.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}.auth-message.ok{background:#ecfdf3;color:#15803d;border:1px solid #bbf7d0}.auth-message.info{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
         .auth-footer{font-size:7px;color:#94a3b8;text-align:center;margin-top:16px}
-        .user-chip{display:flex;align-items:center;gap:8px}.user-avatar{width:27px;height:27px;border-radius:50%;background:#111827;color:#fff;display:grid;place-items:center;font-size:9px;font-weight:900}.user-email{font-size:8px;color:var(--muted);max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.logout-btn{border:1px solid var(--border);background:#fff;color:#475569;border-radius:8px;padding:7px 9px;font-size:8px;font-weight:850}.logout-btn:hover{background:#f8fafc}
+        .user-chip{display:flex;align-items:center;gap:8px}.user-avatar{width:27px;height:27px;border-radius:50%;background:#111827;color:#fff;display:grid;place-items:center;font-size:9px;font-weight:900}.user-meta{display:flex;flex-direction:column;min-width:0;line-height:1.15}.user-name{font-size:8px;color:var(--ink);font-weight:850;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.user-email{font-size:7px;color:var(--muted);max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}.logout-btn{border:1px solid var(--border);background:#fff;color:#475569;border-radius:8px;padding:7px 9px;font-size:8px;font-weight:850}.logout-btn:hover{background:#f8fafc}
         .pending-lock{position:fixed;inset:0;z-index:5100;background:rgba(7,16,31,.82);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:20px}.pending-lock.show{display:flex}.pending-card{width:min(410px,100%);background:#fff;border-radius:20px;padding:25px;text-align:center;box-shadow:0 25px 70px rgba(0,0,0,.3)}.pending-icon{width:48px;height:48px;border-radius:14px;background:#fff7ed;color:#c2410c;display:grid;place-items:center;margin:0 auto 12px;font-size:20px}.pending-card h3{font-size:16px;font-weight:900}.pending-card p{font-size:9px;color:var(--muted);line-height:1.55;margin-top:7px}.pending-card button{margin-top:14px;border:0;background:#111827;color:#fff;border-radius:9px;padding:9px 13px;font-size:9px;font-weight:850}
         /* MOBILE */
         .mobile-top{display:none}
@@ -434,7 +434,10 @@
                 </div>
                 <div class="user-chip" id="userChip">
                     <div class="user-avatar" id="userAvatar">A</div>
-                    <div class="user-email" id="userEmail">Admin</div>
+                    <div class="user-meta">
+                        <div class="user-name" id="userName">Admin CIKUR GO</div>
+                        <div class="user-email" id="userEmail">Admin</div>
+                    </div>
                     <button class="logout-btn" type="button" onclick="secureLogout()">Logout</button>
                 </div>
             </div>
@@ -445,7 +448,7 @@
             <section class="hero">
                 <div>
                     <div class="eyebrow">Intelligent Operations</div>
-                    <h1>Good morning, CIKUR GO 👋</h1>
+                    <h1 id="heroGreeting">Selamat datang, CIKUR GO 👋</h1>
                     <p>Pantau jaringan mitra, verifikasi pendaftaran, dan insight BCGO dari satu pusat kendali.</p>
                 </div>
                 <div class="sync-box">
@@ -762,13 +765,56 @@
         }
     }
 
-    function enterDashboard(user){
+    function getGreetingByHour(){
+        const hour = new Date().getHours();
+        if(hour >= 4 && hour < 11) return "Selamat pagi";
+        if(hour >= 11 && hour < 15) return "Selamat siang";
+        if(hour >= 15 && hour < 18) return "Selamat sore";
+        return "Selamat malam";
+    }
+
+    async function loadAdminIdentity(user){
+        const fallbackName = "Admin CIKUR GO";
+        let name = "";
+
+        try{
+            const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
+            if(adminSnap.exists()){
+                const data = adminSnap.data() || {};
+                name = data.name || data.fullName || data.displayName || data.nama || "";
+            }
+        }catch(error){
+            console.warn("Profil admin tidak dapat dibaca dari admin_users:", error);
+        }
+
+        if(!name){
+            try{
+                const profileSnap = await getDoc(doc(db, "users", user.uid));
+                if(profileSnap.exists()){
+                    const data = profileSnap.data() || {};
+                    name = data.name || data.fullName || data.displayName || data.nama || data.namaLengkap || "";
+                }
+            }catch(error){
+                console.warn("Profil admin tidak dapat dibaca dari users:", error);
+            }
+        }
+
+        name = String(name || fallbackName).trim();
+        const email = user.email || "Admin";
+        const displayName = name || fallbackName;
+
+        document.getElementById("userName").textContent = displayName;
+        document.getElementById("userEmail").textContent = email;
+        document.getElementById("userAvatar").textContent = displayName.charAt(0).toUpperCase();
+        document.getElementById("heroGreeting").textContent = `${getGreetingByHour()}, ${displayName} 👋`;
+    }
+
+    async function enterDashboard(user){
         currentUser = user;
         adminVerified = true;
         document.getElementById("authGate").classList.add("hidden");
         document.getElementById("pendingLock").classList.remove("show");
-        document.getElementById("userEmail").textContent = user.email || "Admin";
-        document.getElementById("userAvatar").textContent = (user.email || "A").charAt(0).toUpperCase();
+        await loadAdminIdentity(user);
         loadAdminData("agent");
     }
 
@@ -824,7 +870,7 @@
                     await signOut(auth);
                     lockPending(cred.user);
                 }else{
-                    enterDashboard(cred.user);
+                    await enterDashboard(cred.user);
                 }
             }
         }catch(error){
@@ -852,7 +898,7 @@
         const approved = await verifyAdmin(user);
         authLoading.classList.add("hidden");
         authGate.classList.remove("preload");
-        if(approved) enterDashboard(user);
+        if(approved) await enterDashboard(user);
         else lockPending(user);
     });
 
