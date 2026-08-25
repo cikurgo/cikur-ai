@@ -358,7 +358,40 @@ function renderByMitraStatus(application) {
     banner.innerHTML = "✓ Mitra Driver <strong>Aktif</strong> - Siap menerima pesanan.";
     navBadge.innerText = "Aktif";
     fillDriverProfileDisplay(application);
+
+    // Sinkronkan status operasional dari Firestore agar tidak kembali OFFLINE
+    // setiap kali halaman di-refresh. Field ini hanya tambahan; data lama tetap utuh.
+    isOnline = application.isOnline === true;
+    updateDriverStatusButton();
 }
+
+function updateDriverStatusButton() {
+    const btn = document.getElementById("statusBtn");
+    if (!btn) return;
+    if (isOnline) {
+        btn.innerText = "ONLINE (Siap Order)";
+        btn.className = "status-toggle-btn";
+    } else {
+        btn.innerText = "OFFLINE";
+        btn.className = "status-toggle-btn offline";
+    }
+}
+
+async function saveDriverOperationalStatus(nextStatus) {
+    if (!window.CikurCloud || !userProfile?.uid) {
+        throw new Error("Koneksi CIKUR Cloud belum siap.");
+    }
+    if (typeof window.CikurCloud.updateMitraProfile !== "function") {
+        throw new Error("Fungsi pembaruan profil mitra belum tersedia.");
+    }
+
+    await window.CikurCloud.updateMitraProfile(userProfile.uid, {
+        isOnline: nextStatus,
+        operationalStatus: nextStatus ? "online" : "offline",
+        operationalStatusUpdatedAt: new Date().toISOString()
+    });
+}
+
 
 function fillDriverProfileDisplay(application) {
     document.getElementById("profileNameDisplay").innerText = application.name || userProfile.name || '-';
@@ -500,17 +533,27 @@ function openEditProfile() {
     }
 }
 
-function toggleDriverStatus() {
-    isOnline = !isOnline;
-    let btn = document.getElementById("statusBtn");
-    if(isOnline) {
-        btn.innerText = "ONLINE (Siap Order)";
-        btn.className = "status-toggle-btn";
+async function toggleDriverStatus() {
+    const previousStatus = isOnline;
+    const nextStatus = !previousStatus;
+    const btn = document.getElementById("statusBtn");
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = nextStatus ? "MENYALAKAN..." : "MEMATIKAN...";
+    }
+
+    try {
+        await saveDriverOperationalStatus(nextStatus);
+        isOnline = nextStatus;
+        updateDriverStatusButton();
         loadDriverOrders();
-    } else {
-        btn.innerText = "OFFLINE";
-        btn.className = "status-toggle-btn offline";
-        loadDriverOrders();
+    } catch (error) {
+        isOnline = previousStatus;
+        updateDriverStatusButton();
+        alert("Gagal memperbarui status operasional: " + (error?.message || error));
+    } finally {
+        if (btn) btn.disabled = false;
     }
 }
 
