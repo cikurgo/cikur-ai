@@ -7,7 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-   <script type="module" src="cikur-config.js"></script>
+    <script type="module" src="cikur-config.js"></script>
     <style>
         :root {
             --primary: #ff4757;
@@ -387,6 +387,42 @@
     <div class="footer-action">
         <button class="btn-main btn-checkout" onclick="openPaymentSummary()">Lanjut Pembayaran</button>
     </div>
+
+    <!-- VIEW TRACKING PESANAN AKTIF (muncul setelah checkout) -->
+    <div id="orderTrackingView" style="display: none; padding: 16px;">
+        <div style="background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-md); padding: 16px; box-shadow: var(--shadow-soft); margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 style="font-size: 14px; font-weight: 800; color: var(--text-main);">Pesanan Aktif</h3>
+                <span id="trackingOrderId" style="font-family: monospace; font-size: 11px; font-weight: 800; color: var(--primary);">-</span>
+            </div>
+            <div style="background: var(--background); padding: 10px; border-radius: var(--radius-sm); margin-bottom: 10px;">
+                <div style="font-size: 10px; color: var(--text-muted); font-weight: 700;">STATUS PESANAN</div>
+                <div id="trackingStatusText" style="font-size: 13px; font-weight: 800; color: var(--primary); margin-top: 2px;">Memuat...</div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                <span style="color: var(--text-muted);">Resto:</span>
+                <span id="trackingRestoName" style="font-weight: 700;">-</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px;">
+                <span style="color: var(--text-muted);">Total Pembayaran:</span>
+                <span id="trackingTotal" style="font-weight: 800; color: var(--primary);">-</span>
+            </div>
+            <div id="trackingFinishNote" style="display: none; margin-top: 10px; padding: 8px; background: #f0fdf4; border-radius: 8px; font-size: 11px; color: #16a34a; font-weight: 700; text-align: center;">
+                Pesanan ini sudah selesai/berakhir.
+            </div>
+        </div>
+
+        <div style="background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-md); padding: 16px; box-shadow: var(--shadow-soft);">
+            <div style="font-size: 12px; font-weight: 800; color: var(--text-main); margin-bottom: 8px;">💬 Chat dengan Resto/Driver</div>
+            <div id="trackingChatBox" style="background: var(--background); border-radius: 8px; padding: 8px; max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; font-size: 11px; margin-bottom: 8px;">
+                <div style="color: var(--text-muted);">Belum ada pesan.</div>
+            </div>
+            <div style="display: flex; gap: 6px;">
+                <input type="text" id="trackingChatInput" class="input-field" placeholder="Ketik pesan..." style="padding: 8px 12px; font-size: 11px;" onkeypress="if(event.key === 'Enter') sendTrackingChat()">
+                <button type="button" onclick="sendTrackingChat()" style="background: var(--primary-gradient); color: #fff; border: none; padding: 8px 12px; border-radius: 8px; font-weight: 800; font-size: 11px; cursor: pointer; flex-shrink: 0;">Kirim</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- MODAL ASSISTANT -->
@@ -495,25 +531,74 @@ let searchTimeout = null;
 let customerCoords = { lat: -6.3245, lon: 106.1524 };
 let leafletMap = null;
 let mapMarker = null;
-let activeChatMessages = [];
+let userProfile = { uid: null, name: "", phone: "", isLoggedIn: false };
+let unsubscribeApprovedRestos = null;
+let currentActiveOrderId = null;
+let unsubscribeActiveOrder = null;
+let unsubscribeActiveOrderMessages = null;
+
+async function loadCurrentCustomerAuthGate() {
+    let retries = 0;
+    while (!window.CikurCloud && retries < 30) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+        retries++;
+    }
+
+    if (!window.CikurCloud) {
+        alert("CIKUR Cloud belum tersedia. Silakan refresh halaman.");
+        window.location.href = "index.html";
+        return;
+    }
+
+    let firebaseUser = null;
+    try {
+        firebaseUser = await window.CikurCloud.waitForAuth();
+    } catch (e) {
+        firebaseUser = null;
+    }
+
+    if (!firebaseUser) {
+        alert("Silakan login/registrasi terlebih dahulu di halaman utama untuk memesan Food.");
+        window.location.href = "index.html";
+        return;
+    }
+
+    let profile = null;
+    try {
+        profile = await window.CikurCloud.getProfile(firebaseUser.uid);
+    } catch (e) {
+        profile = null;
+    }
+
+    userProfile = {
+        uid: firebaseUser.uid,
+        name: profile?.name || "",
+        phone: profile?.phone || "",
+        isLoggedIn: true
+    };
+
+    loadRestoData();
+    checkExistingActiveOrder();
+}
 
 function openAssistantModal() { document.getElementById("assistantModal").style.display = "flex"; }
 function closeAssistantModal() { document.getElementById("assistantModal").style.display = "none"; }
 
 function loadRestoData() {
-    let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
-    if (!Array.isArray(allRestos)) { allRestos = []; }
+    if (typeof unsubscribeApprovedRestos === "function") unsubscribeApprovedRestos();
 
-    databaseResto = allRestos.map(r => ({
-        id: r.id || 'default_resto_' + Math.random(),
-        restoName: r.name || r.restoName || 'Mitra Resto Cikur',
-        restoAddress: r.address || r.restoAddress || 'Alamat Mitra Resto',
-        restoPhoto: r.photoFront || r.restoPhoto || '',
-        items: r.menuList || r.items || [],
-        isOpen: r.isOpen !== undefined ? r.isOpen : true
-    }));
+    unsubscribeApprovedRestos = window.CikurCloud.listenApprovedRestos((restos) => {
+        databaseResto = restos.map(r => ({
+            id: r.id,
+            restoName: r.name || 'Mitra Resto Cikur',
+            restoAddress: r.address || 'Alamat Mitra Resto',
+            restoPhoto: r.photoFront || '',
+            items: r.menuList || [],
+            isOpen: r.isOpen !== undefined ? r.isOpen : true
+        }));
 
-    renderRestoList(databaseResto);
+        renderRestoList(databaseResto);
+    });
 }
 
 function renderRestoList(restos) {
@@ -755,7 +840,7 @@ function confirmMapLocation() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-    loadRestoData();
+    loadCurrentCustomerAuthGate();
     let searchInput = document.getElementById("globalCustomerAddress");
     let list = document.getElementById("addressSuggestionsList");
 
@@ -835,7 +920,12 @@ function sendCheckoutChat() {
     chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-function finalizeAndExecuteOrder() {
+async function finalizeAndExecuteOrder() {
+    if (!userProfile.uid) {
+        alert("Sesi Anda belum siap. Silakan refresh halaman.");
+        return;
+    }
+
     let addressBase = document.getElementById("globalCustomerAddress").value.trim();
     let houseNo = document.getElementById("customerHouseNo").value.trim();
     let addressNote = document.getElementById("customerNoteAddress").value.trim();
@@ -843,8 +933,8 @@ function finalizeAndExecuteOrder() {
     if(houseNo) detailsPart.push(`No. ${houseNo}`);
     if(addressNote) detailsPart.push(`Patokan: ${addressNote}`);
     let finalAddress = addressBase + (detailsPart.length > 0 ? ` (${detailsPart.join(', ')})` : '');
-    
-    let subtotal = 0, summaryList = [], structuredItems = [], targetRestoName = 'Mitra Resto Cikur', targetRestoId = '';
+
+    let subtotal = 0, structuredItems = [], targetRestoName = 'Mitra Resto Cikur', targetRestoId = '';
     databaseResto.forEach(resto => {
         (resto.items || []).forEach(item => {
             let itemId = item.id || item.name;
@@ -855,39 +945,118 @@ function finalizeAndExecuteOrder() {
                 targetRestoName = resto.restoName || 'Mitra Resto Cikur';
                 let price = item.discountPrice ? Number(item.discountPrice) : Number(item.price) || 0;
                 subtotal += price * qty;
-                summaryList.push(`- ${item.name || item.nama} (${qty}x)`);
                 structuredItems.push({ id: itemId, name: item.name || item.nama, quantity: qty, price: price });
             }
         });
     });
 
-    let orderData = {
-        id: 'ORD_' + Date.now(),
-        kode: 'TRX-' + Math.floor(100000 + Math.random() * 900000),
-        menu: summaryList.join('<br>'),
-        items: structuredItems,
-        subtotal: subtotal,
-        total: subtotal + 10000,
-        totalPrice: subtotal + 10000,
-        paymentMethod: document.getElementById("paymentMethodSelect").value,
-        status: 'Pending Pembayaran / Diproses',
-        mode: currentModeSelected,
+    if (!targetRestoId || structuredItems.length === 0) {
+        alert("Keranjang belanja masih kosong!");
+        return;
+    }
+
+    let deliveryFee = 10000;
+    let notesText = activeChatMessages.map(m => m.text).join(' | ') || '';
+
+    let orderPayload = {
         restoId: targetRestoId,
         restoName: targetRestoName,
-        customerAddress: finalAddress,
-        coordinates: customerCoords,
-        chatHistory: activeChatMessages.length > 0 ? activeChatMessages : [{ sender: 'Sistem', text: 'Pesanan masuk.', time: new Date().toLocaleTimeString() }],
-        waktu: new Date().toLocaleDateString('id-ID') + ' ' + new Date().toLocaleTimeString('id-ID')
+        customerName: userProfile.name,
+        customerPhone: userProfile.phone,
+        items: structuredItems,
+        subtotal: subtotal,
+        deliveryFee: deliveryFee,
+        total: subtotal + deliveryFee,
+        paymentMethod: document.getElementById("paymentMethodSelect").value,
+        notes: notesText,
+        address: {
+            text: finalAddress,
+            latitude: customerCoords.lat,
+            longitude: customerCoords.lon
+        },
+        mode: currentModeSelected
     };
 
-    ['cikur_restaurant_orders', 'cikur_incoming_orders', 'cikur_orders', 'merchant_orders', 'cikur_driver_orders'].forEach(keyName => {
-        let existing = JSON.parse(localStorage.getItem(keyName)) || [];
-        existing.unshift(orderData);
-        localStorage.setItem(keyName, JSON.stringify(existing));
+    let btnFinalize = document.querySelector('#paymentModal button[onclick="finalizeAndExecuteOrder()"]');
+
+    try {
+        const order = await window.CikurCloud.createOrder("FOOD", orderPayload);
+        if (!order?.id) throw new Error("Pesanan gagal dibuat.");
+        closePaymentModal();
+        showOrderTrackingView(order.id);
+    } catch (error) {
+        alert("Pesanan gagal dikirim: " + (error?.message || error));
+    }
+}
+
+/* =========================================================
+   TRACKING PESANAN AKTIF (realtime status + chat)
+========================================================= */
+async function checkExistingActiveOrder() {
+    if (!window.CikurCloud || !userProfile.uid) return;
+    try {
+        const order = await window.CikurCloud.getActiveOrderForCustomer(userProfile.uid, "FOOD");
+        if (order?.id) {
+            showOrderTrackingView(order.id);
+        }
+    } catch (error) {
+        console.error("[CIKUR GO] Gagal memulihkan pesanan aktif:", error);
+    }
+}
+
+function showOrderTrackingView(orderId) {
+    currentActiveOrderId = orderId;
+    document.querySelector('.content-body').style.display = 'none';
+    document.querySelector('.footer-action').style.display = 'none';
+    document.getElementById('orderTrackingView').style.display = 'block';
+
+    if (typeof unsubscribeActiveOrder === "function") unsubscribeActiveOrder();
+    if (typeof unsubscribeActiveOrderMessages === "function") unsubscribeActiveOrderMessages();
+
+    let statusLabelMap = {
+        PENDING: "Menunggu Konfirmasi Resto",
+        DIMASAK: "Resto Sedang Memasak Pesanan",
+        SIAP_DIAMBIL: "Menunggu Driver Mengambil",
+        DIAMBIL_DRIVER: "Driver Menuju Lokasi Anda",
+        DIANTAR: "Pesanan Sedang Diantar",
+        SELESAI: "Pesanan Selesai",
+        DITOLAK_RESTO: "Pesanan Ditolak Resto"
+    };
+
+    unsubscribeActiveOrder = window.CikurCloud.listenOrder(orderId, (order) => {
+        if (!order) return;
+
+        document.getElementById('trackingOrderId').innerText = '#' + orderId.slice(-6).toUpperCase();
+        document.getElementById('trackingStatusText').innerText = statusLabelMap[order.status] || order.status;
+        document.getElementById('trackingRestoName').innerText = order.restoName || '-';
+        document.getElementById('trackingTotal').innerText = 'Rp ' + Number(order.total || 0).toLocaleString('id-ID');
+
+        if (order.status === "SELESAI" || order.status === "DITOLAK_RESTO") {
+            document.getElementById('trackingFinishNote').style.display = 'block';
+        }
     });
 
-    alert("Pesanan Berhasil! Data dan chat disinkronkan ke Resto dan Driver.");
-    window.location.href = "cikurgo2in1.html";
+    unsubscribeActiveOrderMessages = window.CikurCloud.listenOrderMessages(orderId, (messages) => {
+        let chatBox = document.getElementById('trackingChatBox');
+        if (!chatBox) return;
+        chatBox.innerHTML = messages.map(m => {
+            let isMe = m.sender === 'customer';
+            let label = isMe ? 'Anda' : (m.sender === 'resto' ? 'Resto' : (m.sender === 'driver' ? 'Driver' : 'Sistem'));
+            return `<div style="background: ${isMe ? '#e0f2fe' : '#f1f5f9'}; color: ${isMe ? '#0369a1' : 'var(--text-main)'}; padding: 6px 10px; border-radius: 8px; max-width: 90%; ${isMe ? 'align-self: flex-end;' : ''}"><b>${label}:</b> ${m.text}</div>`;
+        }).join('') || '<div style="color: var(--text-muted); font-size: 11px;">Belum ada pesan.</div>';
+        chatBox.scrollTop = chatBox.scrollHeight;
+    });
+}
+
+async function sendTrackingChat() {
+    let input = document.getElementById("trackingChatInput");
+    if (!input || !input.value.trim() || !currentActiveOrderId) return;
+    try {
+        await window.CikurCloud.sendOrderMessage(currentActiveOrderId, "customer", input.value.trim());
+        input.value = "";
+    } catch (error) {
+        alert("Pesan gagal dikirim: " + (error?.message || error));
+    }
 }
 </script>
 
