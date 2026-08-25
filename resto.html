@@ -977,6 +977,7 @@ function renderMitraStatusBanner(application) {
         banner.style.color = "#92400e";
         banner.innerHTML = "⏳ Pendaftaran Mitra Resto Anda sedang <strong>menunggu verifikasi</strong> dari tim CIKUR GO.";
         if (ordersContainer) ordersContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Menunggu verifikasi Admin sebelum dapat menerima pesanan.</p>`;
+        publishRestoProfileToCloud();
         return;
     }
 
@@ -985,6 +986,7 @@ function renderMitraStatusBanner(application) {
         banner.style.color = "var(--primary-red)";
         banner.innerHTML = `✕ Pendaftaran ditolak: ${application.catatanAdmin || 'Silakan lengkapi ulang data dan simpan kembali.'}`;
         if (ordersContainer) ordersContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Perbaiki data profil dan simpan ulang untuk mengajukan kembali.</p>`;
+        publishRestoProfileToCloud();
         return;
     }
 
@@ -992,7 +994,8 @@ function renderMitraStatusBanner(application) {
     banner.style.background = "#dcfce7";
     banner.style.color = "#16a34a";
     banner.innerHTML = "✓ Mitra Resto <strong>Aktif</strong> - Siap menerima pesanan.";
-    renderIncomingOrders();
+    publishRestoProfileToCloud();
+    startListeningFoodOrders();
 }
 
 function toggleAccordion(cardId) {
@@ -1040,6 +1043,25 @@ function saveRestoToStorage() {
         allRestos.push(currentResto);
     }
     localStorage.setItem('cikur_all_restos', JSON.stringify(allRestos));
+    publishRestoProfileToCloud();
+}
+
+async function publishRestoProfileToCloud() {
+    if (!window.CikurCloud || !currentRestoId) return;
+    try {
+        await window.CikurCloud.saveRestoProfile(currentRestoId, {
+            name: currentResto.name,
+            address: currentResto.address,
+            photoFront: currentResto.photoFront,
+            isOpen: currentResto.isOpen,
+            openTime: currentResto.openTime,
+            closeTime: currentResto.closeTime,
+            menuList: currentResto.menuList || [],
+            approved: !!(currentMitraApplication && currentMitraApplication.status === "approved")
+        });
+    } catch (error) {
+        console.error("[CIKUR GO] Gagal mempublikasikan profil resto:", error);
+    }
 }
 
 function updateStatusUI() {
@@ -1802,138 +1824,133 @@ function deleteMenu(index) {
     renderMenuList();
 }
 
-function renderIncomingOrders() {
+let unsubscribeFoodOrders = null;
+let foodOrderMessageUnsubscribers = {};
+let latestFoodOrderMessages = {};
+let latestFoodOrdersCache = [];
+
+function startListeningFoodOrders() {
+    if (typeof unsubscribeFoodOrders === "function") unsubscribeFoodOrders();
+
+    unsubscribeFoodOrders = window.CikurCloud.listenOrders("FOOD", (orders) => {
+        latestFoodOrdersCache = orders.filter(o =>
+            o.restoId === currentRestoId &&
+            ["PENDING", "DIMASAK", "SIAP_DIAMBIL", "DIAMBIL_DRIVER", "DIANTAR"].includes(o.status)
+        );
+        renderIncomingOrders(latestFoodOrdersCache);
+    });
+}
+
+function renderIncomingOrders(orders) {
     let container = document.getElementById("incomingOrdersContainer");
     if (!container) return;
-    
-    let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || JSON.parse(localStorage.getItem('cikur_orders')) || [];
-    let restoOrders = orders.filter(o => o.restoId === currentRestoId || !o.restoId);
 
-    if (!restoOrders || restoOrders.length === 0) {
+    if (!orders || orders.length === 0) {
         container.innerHTML = '<p style="font-size: 11px; color: var(--text-muted);">Belum ada pesanan masuk.</p>';
         return;
     }
 
+    let statusLabelMap = {
+        PENDING: "Menunggu Konfirmasi",
+        DIMASAK: "Sedang Dimasak",
+        SIAP_DIAMBIL: "Menunggu Driver",
+        DIAMBIL_DRIVER: "Diambil Driver",
+        DIANTAR: "Dalam Pengantaran"
+    };
+
     let html = "";
-    restoOrders.forEach((order, idx) => {
-        let badgeColor = order.status === 'Dibatalkan' ? '#fee2e2' : '#f0fdf4';
-        let borderColor = order.status === 'Dibatalkan' ? '#fecaca' : '#bbf7d0';
-        let statusTextColor = order.status === 'Dibatalkan' ? '#dc2626' : '#16a34a';
+    orders.forEach((order) => {
+        let itemsListHtml = (order.items || []).map(i =>
+            `<div style="font-size: 11px; color: var(--text-main); margin-bottom: 4px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 2px;">- <b>${i.name}</b> (${i.quantity}x) <span style="color:#64748b;">(Rp ${(i.price * i.quantity).toLocaleString('id-ID')})</span></div>`
+        ).join('') || '<div style="font-size: 11px; color: var(--text-muted);">Detail menu tidak tersedia.</div>';
 
-        let itemsListHtml = "";
-        let totalDiskonMenu = 0;
-        
-        if (order.items && Array.isArray(order.items) && order.items.length > 0) {
-            itemsListHtml = order.items.map(i => {
-                let namaMenu = i.name || i.nama || i.title || 'Menu';
-                let jumlahMenu = i.quantity || i.qty || i.jumlah || 1;
-                
-                let hargaNormal = i.originalPrice || i.hargaAsli || i.price || 15000;
-                let hargaJual = i.price || i.harga || hargaNormal;
-                let subtotalItem = hargaJual * jumlahMenu;
-                
-                let infoDetailHarga = "";
-                if (hargaNormal > hargaJual) {
-                    let potongan = (hargaNormal - hargaJual) * jumlahMenu;
-                    totalDiskonMenu += potongan;
-                    infoDetailHarga = `<br><span style="font-size: 10px; color: #16a34a;">(Diskon dari Rp ${(hargaNormal * jumlahMenu).toLocaleString('id-ID')} menjadi Rp ${subtotalItem.toLocaleString('id-ID')} | Potongan: -Rp ${potongan.toLocaleString('id-ID')})</span>`;
-                } else {
-                    infoDetailHarga = `<span style="font-size: 10px; color: #64748b;"> (Rp ${subtotalItem.toLocaleString('id-ID')})</span>`;
-                }
+        let messages = latestFoodOrderMessages[order.id] || [];
+        let chatHtml = messages.map(m => {
+            let align = m.sender === 'resto' ? 'text-align:right;' : '';
+            let bg = m.sender === 'resto' ? 'background:#e2e8f0;' : 'background:#fff; border:1px solid #e2e8f0;';
+            return `<div style="${bg} ${align} padding: 4px 8px; border-radius: 6px; margin: 2px 0; max-width: 90%; ${m.sender === 'resto' ? 'align-self:flex-end;' : ''}"><b>${m.sender === 'resto' ? 'Anda' : (m.sender === 'customer' ? 'Customer' : 'Driver')}:</b> ${m.text}</div>`;
+        }).join('') || '<i style="color: #94a3b8; font-size: 10px;">Belum ada pesan chat.</i>';
 
-                return `<div style="font-size: 11px; color: var(--text-main); margin-bottom: 4px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 2px;">
-                    - <b>${namaMenu}</b> (${jumlahMenu}x)${infoDetailHarga}
-                </div>`;
-            }).join('');
-        } else if (order.menuSummary) {
-            itemsListHtml = `<div style="font-size: 11px; color: var(--text-main);">${order.menuSummary}</div>`;
+        let actionButtons = "";
+        if (order.status === "PENDING") {
+            actionButtons = `
+                <button type="button" onclick="updateFoodOrderStatus('${order.id}', 'DIMASAK')" class="btn-action">Terima & Masak</button>
+                <button type="button" onclick="updateFoodOrderStatus('${order.id}', 'DITOLAK_RESTO')" class="btn-action">Tolak Pesanan</button>
+            `;
+        } else if (order.status === "DIMASAK") {
+            actionButtons = `<button type="button" onclick="updateFoodOrderStatus('${order.id}', 'SIAP_DIAMBIL')" class="btn-action">Menu Siap, Panggil Driver</button>`;
         } else {
-            itemsListHtml = `<div style="font-size: 11px; color: var(--text-main);">Pesanan Menu Resto</div>`;
-        }
-
-        let catatanKhusus = order.note || order.catatan || order.catatanKhusus || '-';
-        let metodeBayar = order.paymentMethod || order.metodePembayaran || order.pembayaran || 'TUNAI';
-
-        let hargaFinal = order.totalPrice || order.total || 0;
-        let subtotalKotor = order.subtotal || order.originalTotal || (hargaFinal + totalDiskonMenu);
-        
-        let tampilanTotalKeseluruhan = "";
-        if (subtotalKotor > hargaFinal) {
-            tampilanTotalKeseluruhan = `<s style="color: #94a3b8; font-size: 11px;">Rp ${subtotalKotor.toLocaleString('id-ID')}</s> <span style="color: var(--primary-red); font-size: 13px; font-weight: 800;">Rp ${hargaFinal.toLocaleString('id-ID')}</span>`;
-        } else {
-            tampilanTotalKeseluruhan = `<span style="color: var(--primary-red); font-size: 13px; font-weight: 800;">Rp ${hargaFinal.toLocaleString('id-ID')}</span>`;
+            actionButtons = `<span style="font-size: 10px; color: var(--text-muted); font-style: italic;">Menunggu driver mengambil/mengantar.</span>`;
         }
 
         html += `
-        <div style="background: ${badgeColor}; border: 1px solid ${borderColor}; border-radius: 8px; padding: 10px; margin-bottom: 10px;">
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px; margin-bottom: 10px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <span style="font-size: 11px; font-weight: 800; color: #0f172a;">Order #${order.kode || order.id || 'TRX'}</span>
-                <span style="font-size: 10px; font-weight: 700; color: ${statusTextColor};">${order.status || 'Pending'}</span>
+                <span style="font-size: 11px; font-weight: 800; color: #0f172a;">Order #${order.id.slice(-6).toUpperCase()}</span>
+                <span style="font-size: 10px; font-weight: 700; color: #16a34a;">${statusLabelMap[order.status] || order.status}</span>
             </div>
-            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Pemesan: ${order.customerName || order.pembeli || 'Pelanggan'}</p>
-            
+            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Pemesan: ${order.customerName || 'Pelanggan'} (${order.customerPhone || '-'})</p>
+
             <div style="margin-bottom: 8px; background: rgba(255,255,255,0.8); padding: 8px; border-radius: 6px;">
-                <span style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Detail Menu Pesanan & Diskon:</span>
+                <span style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Detail Menu Pesanan:</span>
                 ${itemsListHtml}
-                
                 <div style="margin-top: 6px; font-size: 11px; border-top: 1px solid #cbd5e1; padding-top: 6px;">
-                    <div style="margin-bottom: 2px;"><span style="color: #475569;"><b>Catatan Khusus:</b> ${catatanKhusus}</span></div>
-                    <div><span style="color: #475569;"><b>Metode Pembayaran:</b> <span style="color: #2563eb; font-weight: 700; text-transform: uppercase;">${metodeBayar}</span></span></div>
+                    <div style="margin-bottom: 2px;"><span style="color: #475569;"><b>Catatan:</b> ${order.notes || '-'}</span></div>
+                    <div><span style="color: #475569;"><b>Pembayaran:</b> <span style="color: #2563eb; font-weight: 700; text-transform: uppercase;">${order.paymentMethod || '-'}</span></span></div>
                 </div>
 
                 <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px; margin-top: 8px;">
-                    <span style="font-size: 10px; font-weight: 700; color: #64748b; display: block; margin-bottom: 2px;">Riwayat Chat Pembeli:</span>
-                    <div style="max-height: 90px; overflow-y: auto; font-size: 11px; display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px;">
-                        ${order.chatLog || '<i style="color: #94a3b8; font-size: 10px;">Belum ada pesan chat.</i>'}
-                    </div>
-                    
+                    <span style="font-size: 10px; font-weight: 700; color: #64748b; display: block; margin-bottom: 2px;">Chat dengan Customer:</span>
+                    <div style="max-height: 90px; overflow-y: auto; font-size: 11px; display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px;">${chatHtml}</div>
                     <div style="display: flex; gap: 4px;">
-                        <input type="text" id="replyInput_${idx}" placeholder="Balas chat..." style="flex: 1; font-size: 10px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px;">
-                        <button type="button" onclick="sendRestoReply('${order.id || idx}', ${idx})" style="font-size: 10px; background: #0f172a; color: #fff; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Kirim</button>
+                        <input type="text" id="replyInput_${order.id}" placeholder="Balas chat..." style="flex: 1; font-size: 10px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                        <button type="button" onclick="sendRestoReply('${order.id}')" style="font-size: 10px; background: #0f172a; color: #fff; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Kirim</button>
                     </div>
                 </div>
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; background: #fff; padding: 6px 8px; border-radius: 6px; border: 1px solid #e2e8f0;">
                 <span style="font-size: 11px; font-weight: 700; color: #334155;">Total Pembayaran:</span>
-                <div>${tampilanTotalKeseluruhan}</div>
+                <span style="color: var(--primary-red); font-size: 13px; font-weight: 800;">Rp ${Number(order.total || 0).toLocaleString('id-ID')}</span>
             </div>
 
-            <div style="display: flex; gap: 6px; margin-top: 8px;">
-                <button type="button" onclick="updateOrderStatus(${idx}, 'Diproses')" class="btn-action">Terima & Proses</button>
-                <button type="button" onclick="updateOrderStatus(${idx}, 'Dibatalkan')" class="btn-action">Batalkan Pesanan</button>
-            </div>
+            <div style="display: flex; gap: 6px; margin-top: 8px;">${actionButtons}</div>
         </div>`;
+
+        if (!foodOrderMessageUnsubscribers[order.id]) {
+            foodOrderMessageUnsubscribers[order.id] = window.CikurCloud.listenOrderMessages(order.id, (messages) => {
+                latestFoodOrderMessages[order.id] = messages;
+                renderIncomingOrders(latestFoodOrdersCache);
+            });
+        }
     });
     container.innerHTML = html;
 }
-    
-function sendRestoReply(orderId, idx) {
-    let inputEl = document.getElementById(`replyInput_${idx}`);
+
+async function sendRestoReply(orderId) {
+    let inputEl = document.getElementById(`replyInput_${orderId}`);
     if (!inputEl || !inputEl.value.trim()) return;
 
-    let replyText = inputEl.value.trim();
-    let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || JSON.parse(localStorage.getItem('cikur_orders')) || [];
-    
-    if (orders[idx]) {
-        let newBubble = `<div style="text-align: right; background: #e2e8f0; padding: 4px 8px; border-radius: 6px; align-self: flex-end; margin: 2px 0; max-width: 85%;"><b>Resto:</b> ${replyText}</div>`;
-        orders[idx].chatLog = (orders[idx].chatLog || '') + newBubble;
-        
-        localStorage.setItem('cikur_restaurant_orders', JSON.stringify(orders));
-        localStorage.setItem('cikur_orders', JSON.stringify(orders));
-        
+    try {
+        await window.CikurCloud.sendOrderMessage(orderId, "resto", inputEl.value.trim());
         inputEl.value = "";
-        renderIncomingOrders();
+    } catch (error) {
+        alert("Pesan gagal dikirim: " + (error?.message || error));
     }
 }
-function updateOrderStatus(index, newStatus) {
-    let orders = JSON.parse(localStorage.getItem('cikur_restaurant_orders')) || JSON.parse(localStorage.getItem('cikur_orders')) || [];
-    if(orders[index]) {
-        orders[index].status = newStatus;
-        localStorage.setItem('cikur_restaurant_orders', JSON.stringify(orders));
-        localStorage.setItem('cikur_orders', JSON.stringify(orders));
-        renderIncomingOrders();
-        alert(`Status pesanan berhasil diperbarui menjadi: ${newStatus}`);
+
+async function updateFoodOrderStatus(orderId, newStatus) {
+    try {
+        await window.CikurCloud.updateOrderStatus(orderId, { status: newStatus });
+        if (newStatus === "DITOLAK_RESTO") {
+            await window.CikurCloud.sendOrderMessage(orderId, "system", "Mohon maaf, pesanan Anda ditolak oleh Resto.");
+        } else if (newStatus === "DIMASAK") {
+            await window.CikurCloud.sendOrderMessage(orderId, "system", "Pesanan Anda diterima dan sedang dimasak.");
+        } else if (newStatus === "SIAP_DIAMBIL") {
+            await window.CikurCloud.sendOrderMessage(orderId, "system", "Pesanan sudah siap, menunggu driver mengambil.");
+        }
+    } catch (error) {
+        alert("Gagal memperbarui status pesanan: " + (error?.message || error));
     }
 }
 
