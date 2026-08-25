@@ -3,2024 +3,1439 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BCGO Admin Center - CIKUR GO</title>
-    
-    <!-- Memuat file konfigurasi CikurCloud modular kamu -->
+    <meta name="theme-color" content="#0b1220">
+    <title>BCGO Intelligent Control Center - CIKUR GO</title>
+
     <script type="module" src="cikur-config.js"></script>
     <script src="bcgo-engine.js"></script>
 
-    
     <style>
         :root{
-            --primary:#dc2626;
-            --primary-dark:#b91c1c;
-            --primary-soft:#fff1f2;
-            --bg:#f4f6f8;
-            --surface:#ffffff;
-            --surface-2:#f8fafc;
-            --text:#111827;
+            --red:#dc2626;
+            --red-dark:#b91c1c;
+            --red-soft:#fff1f2;
+            --ink:#111827;
+            --ink-2:#1f2937;
             --muted:#64748b;
             --muted-2:#94a3b8;
-            --border:#e5e7eb;
-            --success:#16a34a;
-            --success-soft:#ecfdf3;
-            --warning:#d97706;
-            --warning-soft:#fff7ed;
+            --bg:#f4f7fb;
+            --surface:#ffffff;
+            --surface-2:#f8fafc;
+            --border:#e5eaf0;
+            --nav:#0b1220;
+            --nav-2:#121c2f;
+            --green:#16a34a;
+            --green-soft:#ecfdf3;
+            --amber:#d97706;
+            --amber-soft:#fff7ed;
+            --blue:#2563eb;
+            --blue-soft:#eff6ff;
             --danger:#dc2626;
             --danger-soft:#fef2f2;
-            --info:#2563eb;
-            --info-soft:#eff6ff;
-            --shadow:0 8px 30px rgba(15,23,42,.06);
+            --shadow:0 10px 30px rgba(15,23,42,.06);
             --shadow-sm:0 2px 10px rgba(15,23,42,.05);
-            --radius:16px;
-            --sidebar:242px;
+            --radius:18px;
         }
 
-        *{box-sizing:border-box;margin:0;padding:0}
+        *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
         html{scroll-behavior:smooth}
-        body{
-            background:var(--bg);
-            color:var(--text);
-            font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
-            min-height:100vh;
-            -webkit-font-smoothing:antialiased;
-        }
+        body{background:var(--bg);color:var(--ink);min-height:100vh}
         button,input{font:inherit}
-        button{border:0}
-        ::selection{background:#fee2e2;color:#991b1b}
+        button{cursor:pointer}
 
-        /* ===== APP SHELL ===== */
-        .app-shell{min-height:100vh;display:flex}
+        .app-shell{display:flex;min-height:100vh}
+
+        /* SIDEBAR */
         .sidebar{
-            width:var(--sidebar);
-            background:#111827;
-            color:#fff;
-            position:fixed;
-            inset:0 auto 0 0;
-            z-index:200;
-            display:flex;
-            flex-direction:column;
-            padding:20px 14px;
+            width:248px;flex:0 0 248px;background:linear-gradient(180deg,#0b1220 0%,#0d1628 100%);
+            color:#fff;display:flex;flex-direction:column;position:fixed;inset:0 auto 0 0;z-index:100;
+            padding:18px 14px;border-right:1px solid rgba(255,255,255,.05)
         }
         .brand{
-            display:flex;align-items:center;gap:11px;
-            padding:4px 9px 25px;
+            display:flex;align-items:center;gap:11px;padding:8px 9px 22px
         }
         .brand img{
-            width:40px;height:40px;object-fit:contain;
-            background:#fff;border-radius:11px;padding:3px;
+            width:38px;height:38px;object-fit:contain;border-radius:10px;background:#fff;padding:3px
         }
-        .brand-name{font-weight:900;font-size:15px;letter-spacing:-.35px}
-        .brand-sub{display:block;font-size:9px;color:#9ca3af;letter-spacing:1px;text-transform:uppercase;margin-top:2px;font-weight:700}
-        .side-label{
-            color:#6b7280;font-size:9px;font-weight:800;text-transform:uppercase;
-            letter-spacing:1.3px;padding:10px 11px 8px;
+        .brand-name{font-size:15px;font-weight:850;letter-spacing:-.2px}
+        .brand-sub{font-size:9px;color:#9aa8bd;text-transform:uppercase;letter-spacing:.8px;margin-top:2px;font-weight:700}
+        .nav-label{
+            color:#65748b;font-size:8px;text-transform:uppercase;letter-spacing:1.4px;font-weight:800;
+            padding:0 10px;margin:4px 0 8px
         }
-        .side-nav{display:grid;gap:5px}
-        .side-item{
-            display:flex;align-items:center;gap:11px;
-            color:#cbd5e1;text-decoration:none;padding:11px 12px;
-            border-radius:11px;font-size:12px;font-weight:700;
-            transition:.18s ease;
+        .nav{display:flex;flex-direction:column;gap:4px}
+        .nav-btn{
+            width:100%;border:0;background:transparent;color:#aab7c9;padding:10px 11px;border-radius:10px;
+            display:flex;align-items:center;gap:10px;text-align:left;font-size:12px;font-weight:650;transition:.18s
         }
-        .side-item svg{width:17px;height:17px;flex:none;opacity:.85}
-        .side-item:hover{background:#1f2937;color:#fff}
-        .side-item.active{background:#fff;color:#111827;box-shadow:0 5px 18px rgba(0,0,0,.18)}
-        .side-item.active svg{color:var(--primary);opacity:1}
+        .nav-btn:hover{background:rgba(255,255,255,.06);color:#fff}
+        .nav-btn.active{background:#fff;color:#182235;box-shadow:0 5px 16px rgba(0,0,0,.12)}
+        .nav-icon{width:18px;text-align:center;font-size:14px}
+        .nav-count{margin-left:auto;min-width:20px;height:19px;padding:0 6px;border-radius:99px;background:#ef4444;color:#fff;font-size:9px;font-weight:800;display:none;align-items:center;justify-content:center}
+        .nav-count.show{display:flex}
         .sidebar-spacer{flex:1}
         .system-mini{
-            background:#1b2535;border:1px solid #273449;border-radius:13px;padding:12px;
+            background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px 11px
         }
-        .system-mini-title{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;font-weight:800}
-        .system-mini-row{display:flex;align-items:center;gap:7px;margin-top:8px;font-size:11px;font-weight:700}
-        .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.12)}
-        .version{color:#64748b;font-size:9px;margin-top:10px}
+        .system-mini-title{font-size:8px;color:#718096;text-transform:uppercase;letter-spacing:1px;font-weight:800}
+        .system-mini-status{font-size:10px;font-weight:700;margin-top:7px;display:flex;align-items:center;gap:6px}
+        .dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+        .dot.green{background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.09)}
+        .system-mini-foot{font-size:8px;color:#68768b;margin-top:8px}
 
-        .main{
-            margin-left:var(--sidebar);
-            width:calc(100% - var(--sidebar));
-            min-width:0;
-        }
+        /* MAIN */
+        .main{margin-left:248px;min-width:0;flex:1}
         .topbar{
-            height:66px;background:rgba(255,255,255,.94);
-            backdrop-filter:blur(12px);
-            border-bottom:1px solid var(--border);
-            display:flex;align-items:center;justify-content:space-between;
-            padding:0 30px;position:sticky;top:0;z-index:100;
+            height:62px;background:rgba(255,255,255,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);
+            display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:80
         }
-        .breadcrumb{font-size:11px;color:var(--muted);font-weight:700}
-        .breadcrumb strong{color:var(--text)}
-        .top-actions{display:flex;align-items:center;gap:10px}
-        .live-badge,.admin-badge{
-            font-size:10px;padding:7px 11px;border-radius:999px;font-weight:800;
-            display:flex;align-items:center;gap:7px;white-space:nowrap;
+        .crumb{font-size:10px;color:var(--muted);font-weight:600}
+        .crumb strong{color:var(--ink)}
+        .top-right{display:flex;align-items:center;gap:10px}
+        .live-badge{
+            display:flex;align-items:center;gap:7px;padding:6px 10px;border-radius:99px;background:var(--green-soft);
+            color:#15803d;font-size:9px;font-weight:800;border:1px solid #bbf7d0
         }
-        .live-badge::before,.admin-badge::before{content:"";width:7px;height:7px;border-radius:50%}
-        .badge-green{background:#ecfdf3;color:#15803d}
-        .badge-green::before{background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.12);animation:pulse-green 1.5s infinite}
-        .badge-red{background:#fef2f2;color:#b91c1c}
-        .badge-red::before{background:#ef4444;animation:pulse-red 1.5s infinite}
-        .badge-gray{background:#f1f5f9;color:#475569}
-        .badge-gray::before{background:#94a3b8}
-        @keyframes pulse-green{0%,100%{transform:scale(.9);opacity:.75}50%{transform:scale(1.25);opacity:1}}
-        @keyframes pulse-red{0%,100%{transform:scale(.9);opacity:.75}50%{transform:scale(1.25);opacity:1}}
+        .live-dot{width:6px;height:6px;border-radius:50%;background:#22c55e;animation:pulse 1.6s infinite}
+        @keyframes pulse{50%{transform:scale(1.45);opacity:.65}}
 
-        .admin-container{max-width:1440px;margin:0 auto;padding:28px 30px 50px}
+        .page{max-width:1400px;margin:0 auto;padding:25px 28px 42px}
         .hero{
-            display:flex;justify-content:space-between;align-items:flex-end;gap:20px;
-            margin-bottom:22px;
+            display:flex;justify-content:space-between;gap:25px;align-items:flex-end;margin-bottom:20px
         }
-        .eyebrow{
-            color:var(--primary);font-size:10px;font-weight:900;text-transform:uppercase;
-            letter-spacing:1.5px;margin-bottom:7px;
-        }
-        .hero h1{font-size:27px;line-height:1.1;letter-spacing:-1px;font-weight:900}
-        .hero p{color:var(--muted);font-size:12px;margin-top:7px}
-        .hero-meta{text-align:right;color:var(--muted);font-size:10px;font-weight:700}
-        .hero-meta strong{display:block;color:var(--text);font-size:12px;margin-bottom:3px}
+        .eyebrow{font-size:9px;color:var(--red);font-weight:900;letter-spacing:1.6px;text-transform:uppercase;margin-bottom:7px}
+        .hero h1{font-size:28px;line-height:1.08;letter-spacing:-1.1px;font-weight:900}
+        .hero p{font-size:11px;color:var(--muted);margin-top:8px;max-width:700px}
+        .sync-box{text-align:right;min-width:210px}
+        .sync-label{font-size:8px;color:var(--muted);font-weight:800;text-transform:uppercase}
+        .sync-time{font-size:10px;color:var(--ink);font-weight:700;margin-top:4px}
+        .sync-status{font-size:8px;color:var(--muted);margin-top:3px}
 
-        /* ===== INTELLIGENCE ===== */
-        .intel-panel{
-            background:linear-gradient(135deg,#171923 0%,#242733 100%);
-            color:#fff;border-radius:18px;padding:20px 22px;
-            display:grid;grid-template-columns:auto 1fr auto;align-items:center;
-            gap:16px;box-shadow:0 14px 35px rgba(15,23,42,.12);margin-bottom:20px;
-            position:relative;overflow:hidden;
+        /* COMMAND CENTER */
+        .command{
+            position:relative;overflow:hidden;border-radius:20px;background:linear-gradient(120deg,#121a2a,#202a3d);
+            color:#fff;padding:19px 20px;margin-bottom:18px;box-shadow:0 12px 30px rgba(15,23,42,.13)
         }
-        .intel-panel::after{
-            content:"";position:absolute;width:180px;height:180px;border-radius:50%;
-            right:-60px;top:-85px;border:35px solid rgba(255,255,255,.035);
+        .command:after{
+            content:"";position:absolute;width:250px;height:250px;border-radius:50%;right:-80px;top:-140px;
+            background:radial-gradient(circle,rgba(220,38,38,.28),transparent 65%)
         }
-        .intel-icon{
-            width:42px;height:42px;border-radius:13px;background:rgba(220,38,38,.18);
-            color:#fca5a5;display:grid;place-items:center;
+        .command-grid{display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;position:relative;z-index:1}
+        .command-kicker{font-size:8px;letter-spacing:1.2px;text-transform:uppercase;color:#94a3b8;font-weight:800}
+        .command-title{font-size:15px;font-weight:850;margin-top:4px}
+        .command-copy{font-size:10px;color:#c3ccda;line-height:1.5;margin-top:5px;max-width:700px}
+        .command-stats{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+        .command-pill{font-size:9px;font-weight:800;padding:6px 9px;border-radius:99px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08)}
+        .command-pill.red{color:#fecaca;background:rgba(220,38,38,.13)}
+        .command-pill.amber{color:#fed7aa;background:rgba(217,119,6,.13)}
+        .command-pill.green{color:#bbf7d0;background:rgba(22,163,74,.13)}
+        .command-action{
+            border:1px solid rgba(255,255,255,.16);background:#fff;color:#172033;border-radius:10px;padding:9px 13px;
+            font-size:10px;font-weight:850;white-space:nowrap;box-shadow:0 5px 18px rgba(0,0,0,.12)
         }
-        .intel-icon svg{width:21px;height:21px}
-        .intel-kicker{font-size:9px;letter-spacing:1.4px;text-transform:uppercase;color:#9ca3af;font-weight:900}
-        .intel-title{font-size:13px;font-weight:800;margin-top:3px}
-        .intel-text{font-size:11px;color:#cbd5e1;margin-top:4px;line-height:1.5}
-        .intel-action{
-            background:#fff;color:#111827;border-radius:10px;padding:9px 12px;
-            font-size:10px;font-weight:900;cursor:pointer;z-index:1;
-        }
+        .command-action:hover{transform:translateY(-1px)}
 
-        /* ===== KPI ===== */
-        .admin-stats-grid{
-            display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
-            gap:14px;margin-bottom:20px;
+        /* KPI */
+        .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:18px}
+        .kpi{
+            background:var(--surface);border:1px solid var(--border);border-radius:17px;padding:16px;box-shadow:var(--shadow-sm);
+            min-width:0
         }
-        .stat-card{
-            background:var(--surface);border:1px solid var(--border);border-radius:16px;
-            padding:17px 18px;box-shadow:var(--shadow-sm);position:relative;overflow:hidden;
-            transition:.2s ease;
-        }
-        .stat-card:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
-        .stat-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
-        .stat-card-title{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.45px}
-        .stat-icon{width:32px;height:32px;border-radius:10px;display:grid;place-items:center}
-        .stat-icon svg{width:16px;height:16px}
-        .stat-icon.pending{background:var(--warning-soft);color:var(--warning)}
-        .stat-icon.approved{background:var(--success-soft);color:var(--success)}
-        .stat-icon.total{background:var(--info-soft);color:var(--info)}
-        .stat-card-value{font-size:28px;font-weight:900;letter-spacing:-1px;margin-top:9px}
-        .stat-card-note{font-size:10px;color:var(--muted);margin-top:4px}
-        .stat-card-note b{color:var(--text)}
+        .kpi-top{display:flex;justify-content:space-between;align-items:flex-start}
+        .kpi-label{font-size:8px;color:var(--muted);font-weight:850;letter-spacing:.7px;text-transform:uppercase}
+        .kpi-icon{width:27px;height:27px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px}
+        .kpi-icon.red{background:var(--red-soft);color:var(--red)}
+        .kpi-icon.green{background:var(--green-soft);color:var(--green)}
+        .kpi-icon.blue{background:var(--blue-soft);color:var(--blue)}
+        .kpi-icon.amber{background:var(--amber-soft);color:var(--amber)}
+        .kpi-value{font-size:25px;font-weight:900;letter-spacing:-.8px;margin-top:10px}
+        .kpi-meta{font-size:8px;color:var(--muted);margin-top:4px;line-height:1.35}
+        .kpi-trend{font-size:8px;font-weight:800;margin-top:8px}
+        .trend-up{color:var(--green)}
+        .trend-neutral{color:var(--muted)}
 
-        /* ===== WORKSPACE ===== */
-        .workspace{
-            background:var(--surface);border:1px solid var(--border);border-radius:18px;
-            box-shadow:var(--shadow-sm);overflow:hidden;
+        /* ANALYTICS GRID */
+        .analytics-grid{display:grid;grid-template-columns:1.35fr .9fr;gap:14px;margin-bottom:18px}
+        .card{background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow-sm);padding:17px}
+        .card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:15px}
+        .card-kicker{font-size:8px;color:var(--muted-2);text-transform:uppercase;letter-spacing:1px;font-weight:850}
+        .card-title{font-size:14px;font-weight:850;margin-top:3px;letter-spacing:-.2px}
+        .card-sub{font-size:9px;color:var(--muted);margin-top:4px}
+        .mini-select{border:1px solid var(--border);background:#fff;border-radius:8px;padding:6px 8px;color:var(--muted);font-size:8px}
+
+        .network-list{display:flex;flex-direction:column;gap:11px}
+        .network-row{display:grid;grid-template-columns:92px 1fr 58px;align-items:center;gap:10px}
+        .network-name{font-size:9px;font-weight:800;color:var(--ink-2)}
+        .bar{height:8px;background:#eef2f7;border-radius:99px;overflow:hidden}
+        .bar span{height:100%;display:block;border-radius:99px;background:linear-gradient(90deg,#dc2626,#f87171);min-width:2px}
+        .network-num{text-align:right;font-size:10px;font-weight:900}
+        .network-foot{display:flex;justify-content:space-between;margin-top:15px;padding-top:12px;border-top:1px dashed var(--border)}
+        .network-total-label{font-size:8px;color:var(--muted)}
+        .network-total{font-size:18px;font-weight:900}
+
+        .risk-layout{display:grid;grid-template-columns:1fr 1fr;gap:15px;align-items:center}
+        .risk-ring{
+            width:132px;height:132px;border-radius:50%;margin:auto;display:grid;place-items:center;
+            background:conic-gradient(var(--green) 0 70%,#f59e0b 70% 92%,var(--red) 92% 100%);
+            position:relative
         }
-        .workspace-head{padding:19px 20px 0}
-        .workspace-title-row{display:flex;justify-content:space-between;align-items:flex-start;gap:15px}
-        .workspace-kicker{font-size:9px;color:var(--muted-2);font-weight:900;text-transform:uppercase;letter-spacing:1px}
-        .card-title{font-size:16px;font-weight:900;letter-spacing:-.35px;margin-top:4px}
-        .search-wrap{position:relative;width:285px}
-        .search-wrap svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;color:#94a3b8}
+        .risk-ring:after{content:"";position:absolute;inset:15px;background:#fff;border-radius:50%}
+        .risk-center{position:relative;z-index:1;text-align:center}
+        .risk-center strong{display:block;font-size:25px;font-weight:900}
+        .risk-center span{font-size:8px;color:var(--muted);font-weight:800;text-transform:uppercase}
+        .risk-legend{display:flex;flex-direction:column;gap:9px}
+        .legend-row{display:flex;align-items:center;justify-content:space-between;font-size:9px}
+        .legend-left{display:flex;align-items:center;gap:6px;color:var(--muted);font-weight:650}
+        .legend-num{font-weight:900}
+        .legend-dot{width:7px;height:7px;border-radius:50%}
+        .legend-dot.green{background:var(--green)}
+        .legend-dot.amber{background:#f59e0b}
+        .legend-dot.red{background:var(--red)}
+
+        /* ATTENTION */
+        .attention{margin-bottom:18px}
+        .attention-list{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+        .attention-item{
+            border:1px solid var(--border);border-radius:13px;padding:12px;display:flex;gap:10px;align-items:flex-start;
+            background:#fff
+        }
+        .attention-icon{width:28px;height:28px;flex:0 0 28px;border-radius:9px;display:grid;place-items:center;font-size:12px}
+        .attention-icon.red{background:var(--danger-soft);color:var(--danger)}
+        .attention-icon.amber{background:var(--amber-soft);color:var(--amber)}
+        .attention-icon.blue{background:var(--blue-soft);color:var(--blue)}
+        .attention-title{font-size:9px;font-weight:850}
+        .attention-copy{font-size:8px;color:var(--muted);line-height:1.4;margin-top:3px}
+        .attention-btn{margin-top:7px;border:0;background:transparent;color:var(--red);font-size:8px;font-weight:850;padding:0}
+
+        /* PARTNER TABLE */
+        .partner-card{overflow:hidden}
+        .partner-head{display:flex;justify-content:space-between;align-items:flex-end;gap:15px;flex-wrap:wrap;margin-bottom:12px}
+        .search-wrap{position:relative}
+        .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:11px}
         .search-box{
-            width:100%;height:38px;padding:0 12px 0 35px;border:1px solid var(--border);
-            border-radius:10px;background:#fff;font-size:11px;outline:none;color:var(--text);
-            transition:.2s;
+            width:250px;padding:9px 12px 9px 29px;border:1px solid var(--border);border-radius:9px;outline:none;
+            font-size:9px;background:#fff;color:var(--ink)
         }
-        .search-box:focus{border-color:#fca5a5;box-shadow:0 0 0 3px rgba(220,38,38,.08)}
-        .admin-tabs{
-            display:flex;gap:6px;margin-top:17px;border-bottom:1px solid var(--border);
-            overflow-x:auto;padding-bottom:0;
-        }
+        .search-box:focus{border-color:#cbd5e1;box-shadow:0 0 0 3px rgba(220,38,38,.06)}
+        .tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:10px}
         .tab-btn{
-            background:transparent;color:var(--muted);padding:10px 13px 12px;
-            font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;
-            border-bottom:2px solid transparent;transition:.18s;
+            border:0;background:transparent;color:var(--muted);font-size:9px;font-weight:800;padding:9px 12px;
+            border-bottom:2px solid transparent
         }
-        .tab-btn:hover{color:var(--text)}
-        .tab-btn.active{color:var(--primary);border-bottom-color:var(--primary)}
+        .tab-btn.active{color:var(--red);border-bottom-color:var(--red)}
+        .table-note{font-size:8px;color:var(--muted);margin:0 0 10px}
+        .table-wrap{width:100%;overflow:auto;border:1px solid var(--border);border-radius:11px}
+        table{width:100%;min-width:760px;border-collapse:collapse;text-align:left;font-size:9px}
+        th,td{padding:11px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+        th{background:#f8fafc;color:#7a8799;font-size:7px;text-transform:uppercase;letter-spacing:.8px;font-weight:900}
+        tr:last-child td{border-bottom:0}
+        tbody tr:hover td{background:#fcfcfd}
+        .name-cell{display:flex;align-items:center;gap:8px}
+        .avatar{width:27px;height:27px;border-radius:9px;background:#f1f5f9;display:grid;place-items:center;color:#64748b;font-size:10px;font-weight:900}
+        .name-main{font-size:9px;font-weight:850;color:var(--ink)}
+        .name-sub{font-size:7px;color:var(--muted);margin-top:2px}
+        .clickable-name{cursor:pointer}
+        .clickable-name:hover .name-main{color:var(--red)}
+        .status{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:99px;font-size:7px;font-weight:850}
+        .status:before{content:"";width:5px;height:5px;border-radius:50%}
+        .status.pending{background:#fff7ed;color:#c2410c}.status.pending:before{background:#f59e0b}
+        .status.approved{background:#ecfdf3;color:#15803d}.status.approved:before{background:#22c55e}
+        .status.rejected{background:#fef2f2;color:#b91c1c}.status.rejected:before{background:#ef4444}
+        .bcgo-score{font-weight:900}
+        .score-low{color:var(--green)}
+        .score-review{color:var(--amber)}
+        .score-high{color:var(--red)}
+        .action-group{display:flex;gap:5px}
+        .btn-action{border:0;border-radius:7px;padding:6px 8px;font-size:7px;font-weight:850}
+        .btn-review{background:#f1f5f9;color:#334155}
+        .btn-approve{background:#dcfce7;color:#15803d}
+        .btn-reject{background:#fff7ed;color:#c2410c}
+        .btn-delete{background:#fee2e2;color:#b91c1c}
+        .btn-action:hover{filter:brightness(.97);transform:translateY(-1px)}
+        .empty-state{text-align:center;padding:42px 20px;color:var(--muted);font-size:9px}
+        .empty-icon{width:34px;height:34px;border-radius:10px;background:#f1f5f9;margin:0 auto 9px;display:grid;place-items:center;color:#94a3b8}
 
-        .table-area{padding:15px 20px 20px}
-        .table-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px}
-        .table-hint{font-size:10px;color:var(--muted)}
-        .table-hint strong{color:var(--text)}
-        .table-responsive{width:100%;overflow:auto;border:1px solid var(--border);border-radius:12px}
-        table{width:100%;min-width:760px;border-collapse:separate;border-spacing:0;text-align:left;font-size:11px}
-        th,td{padding:13px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
-        th{background:#f8fafc;font-weight:900;color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:.55px;white-space:nowrap}
-        tbody tr:last-child td{border-bottom:none}
-        tbody tr{transition:.15s}
-        tbody tr:hover td{background:#fafafa}
-        td:first-child{color:#64748b;font-size:10px}
-        .clickable-name{color:var(--text);font-weight:800;cursor:pointer;text-decoration:none}
-        .clickable-name:hover{color:var(--primary)}
-        .contact-cell{font-weight:700;color:#475569}
-        .badge-status{
-            display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;
-            font-size:9px;font-weight:900;white-space:nowrap
-        }
-        .status-pending{background:#fff7ed;color:#c2410c}
-        .status-approved{background:#ecfdf3;color:#15803d}
-        .status-rejected{background:#fef2f2;color:#b91c1c}
-        .btn-action{
-            padding:6px 9px;border-radius:7px;font-size:9px;font-weight:900;cursor:pointer;
-            transition:.15s;margin-right:3px;margin-bottom:3px
-        }
-        .btn-action:hover{transform:translateY(-1px);filter:brightness(.97)}
-        .btn-approve{background:#ecfdf3;color:#15803d;border:1px solid #bbf7d0}
-        .btn-reject{background:#fff7ed;color:#c2410c;border:1px solid #fed7aa}
-        .btn-delete{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
-        .empty-state{padding:54px 20px!important;text-align:center;color:var(--muted);font-size:11px}
-        .empty-state::before{content:"";display:block;width:38px;height:38px;border-radius:12px;background:#f1f5f9;margin:0 auto 10px}
+        /* MODAL */
+        .modal-overlay{display:none;position:fixed;inset:0;background:rgba(2,6,23,.62);backdrop-filter:blur(5px);z-index:1000;justify-content:center;align-items:center;padding:18px}
+        .modal-box{width:100%;max-width:760px;max-height:91vh;overflow:auto;background:#fff;border-radius:20px;box-shadow:0 25px 70px rgba(0,0,0,.25);animation:modalIn .18s ease-out}
+        @keyframes modalIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+        .modal-header{padding:17px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);z-index:2}
+        .modal-title{font-size:15px;font-weight:900}
+        .modal-close{width:30px;height:30px;border:0;border-radius:9px;background:#f1f5f9;color:#64748b;font-size:18px}
+        .modal-body{padding:20px}
+        .detail-section{margin-bottom:18px}
+        .detail-section-title{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;font-weight:900;margin-bottom:9px}
+        .detail-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+        .detail-row{border:1px solid var(--border);border-radius:10px;padding:9px 10px;background:#fbfcfe}
+        .detail-label{display:block;font-size:7px;color:var(--muted);font-weight:750;margin-bottom:3px}
+        .detail-value{font-size:9px;font-weight:800;word-break:break-word}
+        .bcgo-panel{border:1px solid #e2e8f0;background:linear-gradient(135deg,#f8fafc,#fff);border-radius:14px;padding:14px}
+        .bcgo-top{display:flex;justify-content:space-between;gap:12px;align-items:center}
+        .bcgo-score-big{font-size:29px;font-weight:950;letter-spacing:-1px}
+        .bcgo-decision{font-size:8px;font-weight:900;padding:6px 9px;border-radius:99px}
+        .bcgo-reasons{margin-top:10px;padding-left:17px;font-size:8px;color:#475569;line-height:1.6}
+        .ktp-preview-container{text-align:center;margin-top:12px}
+        .ktp-preview-container img{max-width:100%;max-height:260px;border-radius:11px;border:1px solid var(--border);object-fit:contain}
 
-        /* ===== MODAL ===== */
-        .modal-overlay{
-            display:none;position:fixed;inset:0;background:rgba(15,23,42,.58);
-            backdrop-filter:blur(5px);z-index:1000;justify-content:center;align-items:center;padding:16px;
+        /* TOAST */
+        .toast{
+            position:fixed;right:20px;bottom:20px;z-index:1500;background:#111827;color:#fff;border-radius:12px;padding:11px 14px;
+            font-size:9px;font-weight:700;box-shadow:0 12px 30px rgba(0,0,0,.2);transform:translateY(20px);opacity:0;pointer-events:none;transition:.22s
         }
-        .modal-box{
-            background:#fff;width:100%;max-width:720px;border-radius:18px;max-height:90vh;
-            overflow-y:auto;padding:22px;box-shadow:0 25px 70px rgba(0,0,0,.22);
-            animation:scaleUp .2s ease-out
-        }
-        @keyframes scaleUp{from{transform:scale(.97);opacity:0}to{transform:scale(1);opacity:1}}
-        .modal-header{
-            display:flex;justify-content:space-between;align-items:center;
-            border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:16px
-        }
-        .modal-title{font-size:16px;font-weight:900;letter-spacing:-.3px}
-        .modal-close{
-            width:32px;height:32px;border-radius:9px;background:#f1f5f9;
-            color:#64748b;font-size:20px;cursor:pointer;line-height:1
-        }
-        .modal-close:hover{background:#fee2e2;color:var(--primary)}
-        .modal-body{font-size:11px;display:grid;gap:11px}
-        .detail-row{
-            display:flex;justify-content:space-between;gap:18px;border-bottom:1px dashed var(--border);
-            padding-bottom:7px
-        }
-        .detail-label{color:var(--muted);font-weight:700}
-        .detail-value{font-weight:800;text-align:right;max-width:65%;overflow-wrap:anywhere}
-        .ktp-preview-container{margin-top:10px;text-align:center}
-        .ktp-preview-container img{
-            max-width:100%;max-height:260px;border-radius:10px;border:1px solid var(--border);
-            object-fit:contain;margin-top:6px
-        }
+        .toast.show{transform:none;opacity:1}
 
-        /* ===== RESPONSIVE ===== */
-        @media(max-width:900px){
-            :root{--sidebar:70px}
-            .sidebar{padding:16px 10px}
-            .brand{justify-content:center;padding:4px 0 25px}
+        /* AUTHENTICATION */
+        .auth-gate{position:fixed;inset:0;z-index:5000;background:radial-gradient(circle at 20% 10%,rgba(220,38,38,.13),transparent 28%),linear-gradient(135deg,#07101f,#0d1628 55%,#101a2d);display:flex;align-items:center;justify-content:center;padding:20px;color:#fff}
+        .auth-gate.hidden{display:none}
+        .auth-card{width:min(430px,100%);background:rgba(255,255,255,.97);color:var(--ink);border:1px solid rgba(255,255,255,.18);border-radius:24px;box-shadow:0 30px 90px rgba(0,0,0,.35);padding:26px}
+        .auth-brand{display:flex;align-items:center;gap:11px;margin-bottom:22px}
+        .auth-brand img{width:42px;height:42px;object-fit:contain;border-radius:11px;background:#fff;padding:3px;border:1px solid var(--border)}
+        .auth-brand-name{font-size:16px;font-weight:900}.auth-brand-sub{font-size:8px;color:var(--muted);letter-spacing:1px;font-weight:800;text-transform:uppercase;margin-top:2px}
+        .auth-kicker{font-size:9px;color:var(--red);font-weight:900;letter-spacing:1.4px;text-transform:uppercase}.auth-title{font-size:24px;font-weight:950;letter-spacing:-.8px;margin-top:6px}.auth-copy{font-size:10px;line-height:1.55;color:var(--muted);margin-top:7px}
+        .auth-tabs{display:grid;grid-template-columns:1fr 1fr;background:#f1f5f9;border-radius:11px;padding:3px;margin:18px 0 15px}.auth-tab{border:0;background:transparent;padding:9px;border-radius:8px;font-size:9px;font-weight:850;color:var(--muted)}.auth-tab.active{background:#fff;color:var(--ink);box-shadow:var(--shadow-sm)}
+        .auth-form{display:flex;flex-direction:column;gap:10px}.auth-field label{display:block;font-size:8px;color:var(--muted);font-weight:850;margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px}.auth-field input{width:100%;border:1px solid var(--border);border-radius:10px;padding:11px 12px;font-size:10px;outline:none;background:#fff}.auth-field input:focus{border-color:#cbd5e1;box-shadow:0 0 0 3px rgba(220,38,38,.07)}
+        .auth-submit{border:0;border-radius:10px;padding:11px;background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;font-size:10px;font-weight:900;margin-top:3px}.auth-submit:disabled{opacity:.6;cursor:wait}.auth-note{font-size:8px;line-height:1.45;color:var(--muted);margin-top:12px}.auth-message{display:none;border-radius:10px;padding:9px 10px;font-size:8px;line-height:1.4;margin-bottom:10px}.auth-message.show{display:block}.auth-message.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}.auth-message.ok{background:#ecfdf3;color:#15803d;border:1px solid #bbf7d0}.auth-message.info{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+        .auth-footer{font-size:7px;color:#94a3b8;text-align:center;margin-top:16px}
+        .user-chip{display:flex;align-items:center;gap:8px}.user-avatar{width:27px;height:27px;border-radius:50%;background:#111827;color:#fff;display:grid;place-items:center;font-size:9px;font-weight:900}.user-email{font-size:8px;color:var(--muted);max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.logout-btn{border:1px solid var(--border);background:#fff;color:#475569;border-radius:8px;padding:7px 9px;font-size:8px;font-weight:850}.logout-btn:hover{background:#f8fafc}
+        .pending-lock{position:fixed;inset:0;z-index:5100;background:rgba(7,16,31,.82);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:20px}.pending-lock.show{display:flex}.pending-card{width:min(410px,100%);background:#fff;border-radius:20px;padding:25px;text-align:center;box-shadow:0 25px 70px rgba(0,0,0,.3)}.pending-icon{width:48px;height:48px;border-radius:14px;background:#fff7ed;color:#c2410c;display:grid;place-items:center;margin:0 auto 12px;font-size:20px}.pending-card h3{font-size:16px;font-weight:900}.pending-card p{font-size:9px;color:var(--muted);line-height:1.55;margin-top:7px}.pending-card button{margin-top:14px;border:0;background:#111827;color:#fff;border-radius:9px;padding:9px 13px;font-size:9px;font-weight:850}
+        /* MOBILE */
+        .mobile-top{display:none}
+        @media(max-width:1050px){
+            .kpi-grid{grid-template-columns:repeat(2,1fr)}
+            .analytics-grid{grid-template-columns:1fr}
+            .attention-list{grid-template-columns:1fr 1fr}
+        }
+        @media(max-width:760px){
+            .sidebar{width:76px;flex-basis:76px;padding:14px 9px}
+            .brand{justify-content:center;padding:4px 0 18px}
             .brand img{width:38px;height:38px}
-            .brand>div,.side-label,.side-item span,.system-mini{display:none}
-            .side-item{justify-content:center;padding:12px}
-            .side-item svg{width:19px;height:19px}
-            .admin-container{padding:22px 20px 40px}
-            .topbar{padding:0 20px}
-        }
-        @media(max-width:700px){
-            :root{--sidebar:0px}
-            .sidebar{position:static;width:100%;height:auto;display:none}
-            .main{margin-left:0;width:100%}
-            .topbar{height:auto;min-height:62px;padding:12px 15px}
-            .breadcrumb{font-size:10px}
-            .admin-container{padding:17px 13px 35px}
+            .brand-copy,.nav-label,.nav-btn span:not(.nav-icon),.system-mini-title,.system-mini-foot{display:none}
+            .nav-btn{justify-content:center;padding:11px 8px}
+            .nav-count{position:absolute;margin:0;transform:translate(12px,-10px)}
+            .system-mini{padding:10px;text-align:center}
+            .system-mini-status{justify-content:center;font-size:0}
+            .system-mini-status .dot{width:8px;height:8px}
+            .main{margin-left:76px}
+            .topbar{padding:0 14px;height:56px}
+            .crumb{font-size:8px}
+            .page{padding:18px 13px 35px}
             .hero{align-items:flex-start;flex-direction:column;gap:10px}
             .hero h1{font-size:23px}
-            .hero-meta{text-align:left}
-            .intel-panel{grid-template-columns:auto 1fr;padding:16px}
-            .intel-action{display:none}
-            .admin-stats-grid{grid-template-columns:1fr;gap:9px}
-            .workspace-head{padding:15px 14px 0}
-            .workspace-title-row{flex-direction:column}
+            .sync-box{text-align:left}
+            .command-grid{grid-template-columns:1fr}
+            .command-action{width:max-content}
+            .kpi-grid{grid-template-columns:1fr 1fr;gap:9px}
+            .kpi{padding:13px}
+            .kpi-value{font-size:21px}
+            .attention-list{grid-template-columns:1fr}
+            .risk-layout{grid-template-columns:1fr}
+            .risk-ring{width:115px;height:115px}
+            .search-box{width:100%}
+            .partner-head{align-items:stretch}
             .search-wrap{width:100%}
-            .table-area{padding:12px 14px 15px}
-            .table-toolbar{align-items:flex-start;flex-direction:column}
-            .admin-tabs{margin-top:12px}
-            .top-actions .live-badge,.admin-badge{font-size:9px;padding:6px 8px}
+            .modal-overlay{padding:8px}
+            .modal-body{padding:14px}
+            .detail-grid{grid-template-columns:1fr}
+        }
+        @media(max-width:460px){
+            .kpi-grid{grid-template-columns:1fr}
+            .hero h1{font-size:21px}
+            .command{padding:15px}
+            .card{padding:13px}
+            .top-right .live-badge{font-size:0;padding:8px}
+            .top-right .live-badge .live-dot{margin:0}
         }
     </style>
-
+</head>
 
 <body>
-    <div class="app-shell">
-
-        <!-- SIDEBAR -->
-        <aside class="sidebar">
-            <div class="brand">
-                <img src="cikurgoicon.png" alt="CIKUR GO Logo">
-                <div>
-                    <div class="brand-name">CIKUR GO</div>
-                    <span class="brand-sub">BCGO Control Center</span>
-                </div>
-            </div>
-
-            <div class="side-label">Workspace</div>
-            <nav class="side-nav">
-                <a class="side-item active" href="#overview">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-                    <span>Overview</span>
-                </a>
-                <a class="side-item" href="#partners">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    <span>Partner Network</span>
-                </a>
-                <a class="side-item" href="#verification">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7l8-4z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg>
-                    <span>Verification</span>
-                </a>
-                <a class="side-item" href="#analytics">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m7 15 4-5 3 3 5-7"/></svg>
-                    <span>Analytics</span>
-                </a>
-            </nav>
-
-            <div class="sidebar-spacer"></div>
-
-            <div class="system-mini">
-                <div class="system-mini-title">System Health</div>
-                <div class="system-mini-row"><i class="dot"></i><span>All systems operational</span></div>
-                <div class="version">BCGO Intelligence • Live</div>
-            </div>
-        </aside>
-
-        <main class="main">
-            <!-- TOPBAR -->
-            <header class="topbar">
-                <div class="breadcrumb">CIKUR GO / <strong>BCGO Control Center</strong></div>
-                <div class="top-actions">
-                    <div id="engineStatusBadge" class="live-badge badge-gray">Memeriksa Sistem...</div>
-                </div>
-            </header>
-
-            <div class="admin-container" id="overview">
-
-                <!-- HERO -->
-                <section class="hero">
-                    <div>
-                        <div class="eyebrow">Intelligent Operations</div>
-                        <h1>Good morning, CIKUR GO 👋</h1>
-                        <p>Pantau jaringan mitra, verifikasi pendaftaran, dan insight BCGO dari satu pusat kendali.</p>
-                    </div>
-                    <div class="hero-meta">
-                        <strong>LIVE DATA</strong>
-                        Sinkronisasi real-time dengan CIKUR Cloud
-                        <div id="lastSyncTime" style="margin-top:4px;">Menunggu data...</div>
-                    </div>
-                </section>
-
-                <!-- INTELLIGENCE -->
-                <section class="intel-panel" id="analytics">
-                    <div class="intel-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 0-7 7c0 2.7 1.4 4.6 3.2 6.1.8.7 1.3 1.7 1.3 2.7V19h5v-1.2c0-1 .5-2 1.3-2.7C17.6 13.6 19 11.7 19 9a7 7 0 0 0-7-7Z"/><path d="M9 22h6"/><path d="M9.5 10.5 11 12l3.5-4"/></svg>
-                    </div>
-                    <div>
-                        <div class="intel-kicker">BCGO Intelligence</div>
-                        <div class="intel-title" id="intelTitle">Menyiapkan ringkasan operasional...</div>
-                        <div class="intel-text" id="intelText">Sistem sedang membaca status jaringan mitra dan antrean verifikasi.</div>
-                    </div>
-                    <button class="intel-action" onclick="document.getElementById('verification').scrollIntoView({behavior:'smooth'})">Buka Verification</button>
-                </section>
-
-                <!-- KPI -->
-                <section class="admin-stats-grid" aria-label="KPI Overview">
-                    <div class="stat-card">
-                        <div class="stat-top">
-                            <div class="stat-card-title">Pending Verification</div>
-                            <div class="stat-icon pending">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-                            </div>
-                        </div>
-                        <div class="stat-card-value" id="statPending">0</div>
-                        <div class="stat-card-note">Pendaftaran yang membutuhkan tindakan</div>
-                    </div>
-
-                    <div class="stat-card">
-                        <div class="stat-top">
-                            <div class="stat-card-title">Active Partners</div>
-                            <div class="stat-icon approved">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
-                            </div>
-                        </div>
-                        <div class="stat-card-value" id="statApproved">0</div>
-                        <div class="stat-card-note">Mitra yang telah disetujui</div>
-                    </div>
-
-                    <div class="stat-card">
-                        <div class="stat-top">
-                            <div class="stat-card-title">Total Registered</div>
-                            <div class="stat-icon total">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M16 11h6M19 8v6"/></svg>
-                            </div>
-                        </div>
-                        <div class="stat-card-value" id="statTotal">0</div>
-                        <div class="stat-card-note">Mitra pada kategori aktif</div>
-                    </div>
-                </section>
-
-                <!-- PARTNER WORKSPACE -->
-                <section class="workspace" id="partners">
-                    <div class="workspace-head" id="verification">
-                        <div class="workspace-title-row">
-                            <div>
-                                <div class="workspace-kicker">Partner Network</div>
-                                <div class="card-title" id="sectionTitle">Manajemen Pendaftaran Agent CGO</div>
-                            </div>
-                            <div class="search-wrap">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-                                <input type="text" class="search-box" placeholder="Cari nama atau nomor HP..." id="searchTableInput">
-                            </div>
-                        </div>
-
-                        <div class="admin-tabs">
-                            <button class="tab-btn active" onclick="switchTab('agent', this)">Agent CGO</button>
-                            <button class="tab-btn" onclick="switchTab('resto', this)">Resto Partner</button>
-                            <button class="tab-btn" onclick="switchTab('driver', this)">Driver Partner</button>
-                        </div>
-                    </div>
-
-                    <div class="table-area">
-                        <div class="table-toolbar">
-                            <div class="table-hint">Daftar pendaftaran <strong>real-time</strong> • klik nama untuk membuka profil lengkap & analisis BCGO</div>
-                            <div class="table-hint">Sortir terbaru → terlama</div>
-                        </div>
-
-                        <div class="table-responsive">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Waktu Daftar</th>
-                                        <th>Nama Lengkap</th>
-                                        <th>Kontak / HP</th>
-                                        <th>Status BCGO</th>
-                                        <th>Aksi Verifikasi</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="adminTableBody">
-                                    <tr><td colspan="5" class="empty-state">Menghubungkan ke database CIKUR Cloud...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
-            </div>
-        </main>
-    </div>
-
-    <!-- DETAIL MODAL -->
-    <div class="modal-overlay" id="detailModal">
-        <div class="modal-box">
-            <div class="modal-header">
-                <div class="modal-title" id="modalTitle">Detail Calon Mitra</div>
-                <button class="modal-close" onclick="closeDetailModal()" aria-label="Tutup">&times;</button>
-            </div>
-            <div class="modal-body" id="modalBodyContent"></div>
+<div class="auth-gate" id="authGate">
+    <div class="auth-card">
+        <div class="auth-brand">
+            <img src="cikurgoicon.png" alt="CIKUR GO">
+            <div><div class="auth-brand-name">CIKUR GO</div><div class="auth-brand-sub">BCGO Secure Control Center</div></div>
         </div>
+        <div class="auth-kicker">SECURE ACCESS</div>
+        <div class="auth-title" id="authTitle">Masuk ke BCGO</div>
+        <div class="auth-copy">Dashboard operasional CIKUR GO hanya dapat diakses oleh akun yang terdaftar dan telah disetujui sebagai administrator.</div>
+        <div class="auth-tabs">
+            <button class="auth-tab active" id="loginTab" type="button" onclick="showAuthMode('login')">Masuk</button>
+            <button class="auth-tab" id="registerTab" type="button" onclick="showAuthMode('register')">Registrasi</button>
+        </div>
+        <div class="auth-message" id="authMessage"></div>
+        <form class="auth-form" id="authForm">
+            <div class="auth-field"><label>Email</label><input id="authEmail" type="email" autocomplete="email" placeholder="admin@cikurgo.id" required></div>
+            <div class="auth-field"><label>Password</label><input id="authPassword" type="password" autocomplete="current-password" placeholder="Minimal 6 karakter" minlength="6" required></div>
+            <div class="auth-field" id="confirmField" style="display:none"><label>Konfirmasi Password</label><input id="authConfirm" type="password" autocomplete="new-password" placeholder="Ulangi password" minlength="6"></div>
+            <button class="auth-submit" id="authSubmit" type="submit">Masuk ke Dashboard</button>
+        </form>
+        <div class="auth-note" id="authNote">Akses admin diverifikasi melalui Firebase Authentication dan status administrator.</div>
+        <div class="auth-footer">CIKUR GO • BCGO Intelligence • Secure Operations</div>
     </div>
+</div>
 
-    <!-- Script Logika Menggunakan ES Module -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+<div class="pending-lock" id="pendingLock">
+    <div class="pending-card">
+        <div class="pending-icon">◷</div>
+        <h3>Registrasi menunggu persetujuan</h3>
+        <p id="pendingText">Akun berhasil dibuat, tetapi belum diberi hak administrator. Hubungi pemilik/super admin CIKUR GO untuk mengaktifkan akses.</p>
+        <button onclick="secureLogout()">Keluar</button>
+    </div>
+</div>
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBV2dQa-MoN5zPuNHA6Tda4L4aLoeL_QDw",
-            authDomain: "cikur-go-indonesia.firebaseapp.com",
-            projectId: "cikur-go-indonesia",
-            storageBucket: "cikur-go-indonesia.firebasestorage.app",
-            messagingSenderId: "1058616161176",
-            appId: "1:1058616161176:web:3b3983d79cc722ab4e71ed",
-            measurementId: "G-WCSSXJRS0B"
+<div class="app-shell">
+
+    <aside class="sidebar">
+        <div class="brand">
+            <img src="cikurgoicon.png" alt="CIKUR GO Logo">
+            <div class="brand-copy">
+                <div class="brand-name">CIKUR GO</div>
+                <div class="brand-sub">BCGO Control Center</div>
+            </div>
+        </div>
+
+        <div class="nav-label">Workspace</div>
+        <nav class="nav">
+            <button class="nav-btn active" id="navOverview" onclick="scrollToSection('overview')">
+                <span class="nav-icon">▦</span><span>Overview</span>
+            </button>
+            <button class="nav-btn" onclick="scrollToSection('partnerNetwork')">
+                <span class="nav-icon">♙</span><span>Partner Network</span>
+            </button>
+            <button class="nav-btn" onclick="scrollToSection('verification')">
+                <span class="nav-icon">✓</span><span>Verification</span>
+                <span id="navPendingCount" class="nav-count">0</span>
+            </button>
+            <button class="nav-btn" onclick="scrollToSection('analytics')">
+                <span class="nav-icon">⌁</span><span>Analytics</span>
+            </button>
+            <button class="nav-btn" onclick="scrollToSection('intelligence')">
+                <span class="nav-icon">✦</span><span>BCGO Intelligence</span>
+                <span id="navAttentionCount" class="nav-count">0</span>
+            </button>
+        </nav>
+
+        <div class="sidebar-spacer"></div>
+
+        <div class="system-mini">
+            <div class="system-mini-title">System Health</div>
+            <div class="system-mini-status"><span class="dot green"></span><span>All systems operational</span></div>
+            <div class="system-mini-foot">BCGO Intelligence • Live</div>
+        </div>
+    </aside>
+
+    <main class="main">
+        <header class="topbar">
+            <div class="crumb">CIKUR GO / <strong>BCGO Intelligent Control Center</strong></div>
+            <div class="top-right">
+                <div id="engineStatusBadge" class="live-badge">
+                    <span class="live-dot"></span> DATA AKTIF
+                </div>
+            </div>
+        </header>
+
+        <div class="page" id="overview">
+
+            <section class="hero">
+                <div>
+                    <div class="eyebrow">Intelligent Operations</div>
+                    <h1>Good morning, CIKUR GO 👋</h1>
+                    <p>Pantau jaringan mitra, verifikasi pendaftaran, dan insight BCGO dari satu pusat kendali.</p>
+                </div>
+                <div class="sync-box">
+                    <div class="sync-label">Live Data</div>
+                    <div class="sync-time" id="lastSyncTime">Sinkronisasi real-time dengan CIKUR Cloud</div>
+                    <div class="sync-status" id="syncStatus">Menunggu koneksi database...</div>
+                </div>
+            </section>
+
+            <section class="command" id="intelligence">
+                <div class="command-grid">
+                    <div>
+                        <div class="command-kicker">BCGO Command Center</div>
+                        <div class="command-title" id="commandTitle">Menganalisis kondisi jaringan...</div>
+                        <div class="command-copy" id="commandCopy">BCGO akan merangkum hal yang paling membutuhkan perhatian dari data kategori aktif.</div>
+                        <div class="command-stats">
+                            <span class="command-pill red" id="commandHigh">0 High Risk</span>
+                            <span class="command-pill amber" id="commandReview">0 Need Review</span>
+                            <span class="command-pill green" id="commandLow">0 Low Risk</span>
+                        </div>
+                    </div>
+                    <button class="command-action" id="commandAction" onclick="focusAttention()">Review Attention →</button>
+                </div>
+            </section>
+
+            <section class="kpi-grid">
+                <div class="kpi">
+                    <div class="kpi-top">
+                        <div class="kpi-label">Pending Verification</div>
+                        <div class="kpi-icon amber">◷</div>
+                    </div>
+                    <div class="kpi-value" id="statPending">0</div>
+                    <div class="kpi-meta">Pendaftaran yang membutuhkan tindakan</div>
+                    <div class="kpi-trend trend-neutral" id="pendingMeta">Belum ada antrean</div>
+                </div>
+
+                <div class="kpi">
+                    <div class="kpi-top">
+                        <div class="kpi-label">Active Partners</div>
+                        <div class="kpi-icon green">✓</div>
+                    </div>
+                    <div class="kpi-value" id="statApproved">0</div>
+                    <div class="kpi-meta">Mitra yang telah disetujui</div>
+                    <div class="kpi-trend trend-up" id="approvedMeta">Network aktif</div>
+                </div>
+
+                <div class="kpi">
+                    <div class="kpi-top">
+                        <div class="kpi-label">Total Registered</div>
+                        <div class="kpi-icon blue">♧</div>
+                    </div>
+                    <div class="kpi-value" id="statTotal">0</div>
+                    <div class="kpi-meta">Mitra pada kategori aktif</div>
+                    <div class="kpi-trend trend-neutral" id="totalMeta">Data real-time</div>
+                </div>
+
+                <div class="kpi">
+                    <div class="kpi-top">
+                        <div class="kpi-label">BCGO Attention</div>
+                        <div class="kpi-icon red">!</div>
+                    </div>
+                    <div class="kpi-value" id="statAttention">0</div>
+                    <div class="kpi-meta">Item yang perlu pemeriksaan</div>
+                    <div class="kpi-trend trend-neutral" id="attentionMeta">Menunggu analisis</div>
+                </div>
+            </section>
+
+            <section class="analytics-grid" id="analytics">
+
+                <div class="card">
+                    <div class="card-head">
+                        <div>
+                            <div class="card-kicker">Network Pulse</div>
+                            <div class="card-title">Partner Network</div>
+                            <div class="card-sub">Distribusi pendaftar pada seluruh kategori.</div>
+                        </div>
+                        <select class="mini-select" id="networkScope" onchange="refreshNetworkView()">
+                            <option value="all">Semua kategori</option>
+                            <option value="active">Kategori aktif</option>
+                        </select>
+                    </div>
+
+                    <div class="network-list">
+                        <div class="network-row">
+                            <div class="network-name">Agent CGO</div>
+                            <div class="bar"><span id="barAgent" style="width:0%"></span></div>
+                            <div class="network-num" id="networkAgent">0</div>
+                        </div>
+                        <div class="network-row">
+                            <div class="network-name">Resto Partner</div>
+                            <div class="bar"><span id="barResto" style="width:0%"></span></div>
+                            <div class="network-num" id="networkResto">0</div>
+                        </div>
+                        <div class="network-row">
+                            <div class="network-name">Driver Partner</div>
+                            <div class="bar"><span id="barDriver" style="width:0%"></span></div>
+                            <div class="network-num" id="networkDriver">0</div>
+                        </div>
+                    </div>
+
+                    <div class="network-foot">
+                        <div>
+                            <div class="network-total-label">Total network</div>
+                            <div class="network-total" id="networkTotal">0</div>
+                        </div>
+                        <div style="text-align:right">
+                            <div class="network-total-label">Kategori aktif</div>
+                            <div class="network-total" id="networkCategory">AGENT</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-head">
+                        <div>
+                            <div class="card-kicker">Risk Radar</div>
+                            <div class="card-title">BCGO Risk Distribution</div>
+                            <div class="card-sub">Ringkasan keputusan engine pada kategori aktif.</div>
+                        </div>
+                    </div>
+
+                    <div class="risk-layout">
+                        <div class="risk-ring" id="riskRing">
+                            <div class="risk-center">
+                                <strong id="riskScore">0%</strong>
+                                <span>Low Risk</span>
+                            </div>
+                        </div>
+                        <div class="risk-legend">
+                            <div class="legend-row">
+                                <div class="legend-left"><span class="legend-dot green"></span>Low Risk</div>
+                                <div class="legend-num" id="riskLow">0</div>
+                            </div>
+                            <div class="legend-row">
+                                <div class="legend-left"><span class="legend-dot amber"></span>Need Review</div>
+                                <div class="legend-num" id="riskReview">0</div>
+                            </div>
+                            <div class="legend-row">
+                                <div class="legend-left"><span class="legend-dot red"></span>High Risk</div>
+                                <div class="legend-num" id="riskHigh">0</div>
+                            </div>
+                            <div style="font-size:8px;color:var(--muted);line-height:1.45;margin-top:2px">
+                                Skor dirangkum dari hasil live BCGO ketika engine tersedia.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+
+            <section class="card attention" id="verification">
+                <div class="card-head">
+                    <div>
+                        <div class="card-kicker">Attention Center</div>
+                        <div class="card-title">Yang Perlu Perhatian</div>
+                        <div class="card-sub">Sistem memprioritaskan hal yang paling relevan untuk tindakan admin.</div>
+                    </div>
+                </div>
+
+                <div class="attention-list" id="attentionList">
+                    <div class="attention-item">
+                        <div class="attention-icon blue">i</div>
+                        <div>
+                            <div class="attention-title">Belum ada insight</div>
+                            <div class="attention-copy">Data akan muncul otomatis setelah CIKUR Cloud mengirimkan pendaftaran.</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card partner-card" id="partnerNetwork">
+                <div class="partner-head">
+                    <div>
+                        <div class="card-kicker">Partner Network</div>
+                        <div class="card-title" id="sectionTitle">Manajemen Pendaftaran Agent CGO</div>
+                        <div class="card-sub">Daftar pendaftaran real-time • klik nama untuk membuka profil lengkap & analisis BCGO.</div>
+                    </div>
+                    <div class="search-wrap">
+                        <span class="search-icon">⌕</span>
+                        <input type="text" class="search-box" placeholder="Cari nama atau nomor HP..." id="searchTableInput">
+                    </div>
+                </div>
+
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="switchTab('agent', this)">Agent CGO</button>
+                    <button class="tab-btn" onclick="switchTab('resto', this)">Resto Partner</button>
+                    <button class="tab-btn" onclick="switchTab('driver', this)">Driver Partner</button>
+                </div>
+
+                <div class="table-note" id="tableNote">Menampilkan kategori AGENT • urutan terbaru → terlama</div>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Waktu Daftar</th>
+                                <th>Partner</th>
+                                <th>Kontak / HP</th>
+                                <th>BCGO Score</th>
+                                <th>Status</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminTableBody">
+                            <tr><td colspan="6" class="empty-state">
+                                <div class="empty-icon">◌</div>
+                                Menghubungkan ke CIKUR Cloud...
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+        </div>
+    </main>
+</div>
+
+<div class="modal-overlay" id="detailModal" onclick="if(event.target===this) closeDetailModal()">
+    <div class="modal-box">
+        <div class="modal-header">
+            <div class="modal-title" id="modalTitle">Detail Calon Mitra</div>
+            <button class="modal-close" onclick="closeDetailModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBodyContent"></div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import {
+        getFirestore, collection, onSnapshot, query, orderBy,
+        doc, updateDoc, deleteDoc, serverTimestamp, getDoc, setDoc
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import {
+        getAuth, onAuthStateChanged, signInWithEmailAndPassword,
+        createUserWithEmailAndPassword, signOut
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyBV2dQa-MoN5zPuNHA6Tda4L4aLoeL_QDw",
+        authDomain: "cikur-go-indonesia.firebaseapp.com",
+        projectId: "cikur-go-indonesia",
+        storageBucket: "cikur-go-indonesia.firebasestorage.app",
+        messagingSenderId: "1058616161176",
+        appId: "1:1058616161176:web:3b3983d79cc722ab4e71ed",
+        measurementId: "G-WCSSXJRS0B"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+    let currentUser = null;
+    let authMode = "login";
+    let adminVerified = false;
+
+    const badgeEl = document.getElementById("engineStatusBadge");
+    const tbody = document.getElementById("adminTableBody");
+
+    let currentCategory = "agent";
+    let unsubscribeListener = null;
+    let cachedApplications = {};
+    let categoryCounts = { agent: 0, resto: 0, driver: 0 };
+    let lastAnalysis = { low: 0, review: 0, high: 0 };
+
+    window.showAuthMode = function(mode){
+        authMode = mode;
+        const isRegister = mode === "register";
+        document.getElementById("loginTab").classList.toggle("active", !isRegister);
+        document.getElementById("registerTab").classList.toggle("active", isRegister);
+        document.getElementById("authTitle").textContent = isRegister ? "Daftarkan Akun Admin" : "Masuk ke BCGO";
+        document.getElementById("authSubmit").textContent = isRegister ? "Daftar & Ajukan Akses" : "Masuk ke Dashboard";
+        document.getElementById("confirmField").style.display = isRegister ? "block" : "none";
+        document.getElementById("authConfirm").required = isRegister;
+        document.getElementById("authNote").textContent = isRegister
+            ? "Setelah registrasi, akun tetap terkunci sampai disetujui oleh super admin CIKUR GO."
+            : "Akses admin diverifikasi melalui Firebase Authentication dan status administrator.";
+        hideAuthMessage();
+    };
+
+    function authMessage(text, type="error"){
+        const el = document.getElementById("authMessage");
+        el.textContent = text;
+        el.className = `auth-message show ${type}`;
+    }
+    function hideAuthMessage(){
+        const el = document.getElementById("authMessage");
+        el.className = "auth-message";
+        el.textContent = "";
+    }
+    function friendlyAuthError(error){
+        const code = error?.code || "";
+        const map = {
+            "auth/invalid-credential":"Email atau password salah.",
+            "auth/invalid-login-credentials":"Email atau password salah.",
+            "auth/email-already-in-use":"Email sudah terdaftar. Silakan masuk.",
+            "auth/weak-password":"Password terlalu lemah. Gunakan minimal 6 karakter.",
+            "auth/invalid-email":"Format email tidak valid.",
+            "auth/too-many-requests":"Terlalu banyak percobaan. Coba lagi beberapa saat.",
+            "auth/network-request-failed":"Koneksi internet bermasalah. Coba lagi.",
+            "auth/user-disabled":"Akun ini dinonaktifkan. Hubungi super admin."
         };
-
-        const badgeEl = document.getElementById('engineStatusBadge');
-
-        // Cek status engine pendukung
-        if (typeof BCGO !== 'undefined') {
-            badgeEl.className = 'admin-badge badge-green';
-            badgeEl.innerText = 'BCGO Engine Sinkron & Aktif';
-        } else {
-            badgeEl.className = 'admin-badge badge-red';
-            badgeEl.innerText = 'BCGO Engine Bermasalah';
-        }
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-
-        let currentCategory = 'agent';
-        let unsubscribeListener = null;
-        let cachedApplications = {};
-
-        window.switchTab = function(category, btnElement) {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            btnElement.classList.add('active');
-            currentCategory = category;
-
-            const titleMap = {
-                'agent': 'Manajemen Pendaftaran Agent CGO',
-                'resto': 'Manajemen Pendaftaran Resto Partner',
-                'driver': 'Manajemen Pendaftaran Driver Partner'
-            };
-
-            document.getElementById('sectionTitle').innerText = titleMap[category];
-            loadAdminData(category);
-        };
-
-        function loadAdminData(category) {
-    const tbody = document.getElementById('adminTableBody');
-
-    tbody.innerHTML = `
-        <tr>
-            <td colspan="5" class="empty-state">
-                Memuat data dari koleksi mitra_applications...
-            </td>
-        </tr>
-    `;
-
-    if (unsubscribeListener) {
-        unsubscribeListener();
+        return map[code] || error?.message || "Terjadi kesalahan autentikasi.";
     }
 
-    const q = query(
-        collection(db, "mitra_applications"),
-        orderBy("submittedAt", "desc")
-    );
+    async function verifyAdmin(user){
+        try{
+            const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
+            return adminSnap.exists() && adminSnap.data()?.active === true;
+        }catch(error){
+            console.error("Admin verification failed:", error);
+            return false;
+        }
+    }
 
-    unsubscribeListener = onSnapshot(
-        q,
-        (snapshot) => {
+    function enterDashboard(user){
+        currentUser = user;
+        adminVerified = true;
+        document.getElementById("authGate").classList.add("hidden");
+        document.getElementById("pendingLock").classList.remove("show");
+        document.getElementById("userEmail").textContent = user.email || "Admin";
+        document.getElementById("userAvatar").textContent = (user.email || "A").charAt(0).toUpperCase();
+        loadAdminData("agent");
+    }
 
-            badgeEl.className = 'admin-badge badge-green';
-            badgeEl.innerText = 'DATA AKTIF';
+    function lockPending(user){
+        currentUser = user;
+        adminVerified = false;
+        document.getElementById("authGate").classList.add("hidden");
+        document.getElementById("pendingText").textContent = `Akun ${user.email || "ini"} sudah terdaftar, tetapi belum memiliki status administrator aktif. Minta super admin CIKUR GO mengaktifkan akun Anda.`;
+        document.getElementById("pendingLock").classList.add("show");
+    }
+
+    window.secureLogout = async function(){
+        if(unsubscribeListener) unsubscribeListener();
+        unsubscribeListener = null;
+        cachedApplications = {};
+        adminVerified = false;
+        await signOut(auth);
+        document.getElementById("pendingLock").classList.remove("show");
+        document.getElementById("authGate").classList.remove("hidden");
+        document.getElementById("authForm").reset();
+        window.showAuthMode("login");
+    };
+
+    document.getElementById("authForm").addEventListener("submit", async function(e){
+        e.preventDefault();
+        const email = document.getElementById("authEmail").value.trim();
+        const password = document.getElementById("authPassword").value;
+        const confirm = document.getElementById("authConfirm").value;
+        const submit = document.getElementById("authSubmit");
+        if(authMode === "register" && password !== confirm){
+            authMessage("Konfirmasi password tidak sama.");
+            return;
+        }
+        submit.disabled = true;
+        hideAuthMessage();
+        try{
+            if(authMode === "register"){
+                const cred = await createUserWithEmailAndPassword(auth, email, password);
+                await setDoc(doc(db, "admin_requests", cred.user.uid), {
+                    uid: cred.user.uid,
+                    email: cred.user.email,
+                    status: "pending",
+                    requestedAt: serverTimestamp()
+                });
+                await signOut(auth);
+                authMessage("Registrasi berhasil. Akun masih terkunci sampai disetujui super admin.", "ok");
+                document.getElementById("authForm").reset();
+                window.showAuthMode("login");
+            }else{
+                const cred = await signInWithEmailAndPassword(auth, email, password);
+                const approved = await verifyAdmin(cred.user);
+                if(!approved){
+                    await signOut(auth);
+                    lockPending(cred.user);
+                }else{
+                    enterDashboard(cred.user);
+                }
+            }
+        }catch(error){
+            console.error("Authentication error:", error);
+            authMessage(friendlyAuthError(error));
+        }finally{
+            submit.disabled = false;
+        }
+    });
+
+    onAuthStateChanged(auth, async user => {
+        if(!user){
+            currentUser = null;
+            adminVerified = false;
+            if(unsubscribeListener) unsubscribeListener();
+            unsubscribeListener = null;
+            document.getElementById("authGate").classList.remove("hidden");
+            return;
+        }
+        const approved = await verifyAdmin(user);
+        if(approved) enterDashboard(user);
+        else lockPending(user);
+    });
+
+    function showToast(message){
+        const toast = document.getElementById("toast");
+        toast.textContent = message;
+        toast.classList.add("show");
+        clearTimeout(window.__toastTimer);
+        window.__toastTimer = setTimeout(() => toast.classList.remove("show"), 2600);
+    }
+
+    function esc(value){
+        return String(value ?? "-")
+            .replaceAll("&","&amp;")
+            .replaceAll("<","&lt;")
+            .replaceAll(">","&gt;")
+            .replaceAll('"',"&quot;")
+            .replaceAll("'","&#039;");
+    }
+
+    function getPartnerName(data){
+        return data.name || data.namaUsaha || data.businessName || data.ownerName ||
+               data.fullName || data.nama || "Tanpa Nama";
+    }
+
+    function getPhone(data){
+        return data.phone || data.ownerPhone || data.kontak || "-";
+    }
+
+    function getBCGO(data){
+        return data._bcgoLiveResult || null;
+    }
+
+    function getRiskClass(result){
+        if(!result) return "score-review";
+        const status = String(result.status || "").toUpperCase();
+        if(status === "APPROVE") return "score-low";
+        if(status === "REJECT") return "score-high";
+        return "score-review";
+    }
+
+    function getRiskLabel(result){
+        if(!result) return "REVIEW";
+        const status = String(result.status || "").toUpperCase();
+        if(status === "APPROVE") return "LOW RISK";
+        if(status === "REJECT") return "HIGH RISK";
+        return "NEED REVIEW";
+    }
+
+    function getDate(data){
+        if(data.submittedAt && typeof data.submittedAt.toDate === "function"){
+            return data.submittedAt.toDate().toLocaleString("id-ID", {
+                day:"2-digit", month:"short", year:"numeric",
+                hour:"2-digit", minute:"2-digit"
+            });
+        }
+        return "-";
+    }
+
+    function setEngineStatus(ok, text){
+        badgeEl.innerHTML = `<span class="live-dot"></span>${esc(text)}`;
+        badgeEl.style.background = ok ? "var(--green-soft)" : "var(--danger-soft)";
+        badgeEl.style.color = ok ? "#15803d" : "#b91c1c";
+        badgeEl.style.borderColor = ok ? "#bbf7d0" : "#fecaca";
+    }
+
+    if(typeof BCGO !== "undefined" && typeof BCGO.evaluatePartner === "function"){
+        setEngineStatus(true, "DATA AKTIF");
+    }else{
+        setEngineStatus(false, "BCGO ENGINE CHECK");
+    }
+
+    window.scrollToSection = function(id){
+        document.getElementById(id)?.scrollIntoView({ behavior:"smooth", block:"start" });
+    };
+
+    window.focusAttention = function(){
+        if(lastAnalysis.high + lastAnalysis.review > 0){
+            const row = document.querySelector(".needs-attention-row");
+            if(row){
+                row.scrollIntoView({ behavior:"smooth", block:"center" });
+                row.style.outline = "2px solid rgba(220,38,38,.25)";
+                setTimeout(() => row.style.outline = "", 1200);
+                return;
+            }
+        }
+        scrollToSection("verification");
+    };
+
+    window.refreshNetworkView = function(){
+        renderNetwork();
+    };
+
+    window.switchTab = function(category, btnElement){
+        document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
+        btnElement.classList.add("active");
+        currentCategory = category;
+
+        const titleMap = {
+            agent:"Manajemen Pendaftaran Agent CGO",
+            resto:"Manajemen Pendaftaran Resto Partner",
+            driver:"Manajemen Pendaftaran Driver Partner"
+        };
+
+        document.getElementById("sectionTitle").textContent = titleMap[category];
+        document.getElementById("tableNote").textContent =
+            `Menampilkan kategori ${category.toUpperCase()} • urutan terbaru → terlama`;
+
+        loadAdminData(category);
+    };
+
+    function loadAdminData(category){
+        tbody.innerHTML = `
+            <tr><td colspan="6" class="empty-state">
+                <div class="empty-icon">◌</div>
+                Memuat data dari koleksi mitra_applications...
+            </td></tr>
+        `;
+
+        if(unsubscribeListener) unsubscribeListener();
+
+        const q = query(collection(db, "mitra_applications"), orderBy("submittedAt", "desc"));
+
+        unsubscribeListener = onSnapshot(q, snapshot => {
+            setEngineStatus(true, "DATA AKTIF");
+
+            cachedApplications = {};
+            categoryCounts = { agent:0, resto:0, driver:0 };
 
             let pendingCount = 0;
             let approvedCount = 0;
             let totalCount = 0;
+            let low = 0, review = 0, high = 0;
+            let rowsHtml = "";
 
-            cachedApplications = {};
-
-            let rowsHtml = '';
-
-
-            /* =====================================================
-               BACA SETIAP PENDAFTARAN
-            ====================================================== */
-
-            snapshot.forEach((documentSnap) => {
-
+            snapshot.forEach(documentSnap => {
                 const data = documentSnap.data();
                 const docId = documentSnap.id;
 
-                /*
-                 * Hanya tampilkan kategori yang sedang dipilih.
-                 * Contoh:
-                 * restaurant / resto / assistant / driver
-                 */
+                const rawType = String(data.jenis || data.partnerType || "").toLowerCase();
+                const normalizedType =
+                    rawType === "restaurant" ? "resto" :
+                    rawType === "assistant" ? "agent" :
+                    rawType;
 
-                if (data.jenis !== category) {
-                    return;
+                if(["agent","resto","driver"].includes(normalizedType)){
+                    categoryCounts[normalizedType]++;
                 }
 
-
-                /* =================================================
-                   SIMPAN DATA ASLI
-                ================================================== */
-
-                cachedApplications[docId] = data;
-
-                totalCount++;
-
-
-                if (data.status === 'approved') {
-
-                    approvedCount++;
-
-                } else if (
-                    !data.status ||
-                    data.status === 'pending'
-                ) {
-
-                    pendingCount++;
-
-                }
-
-
-                /* =================================================
-                   TANGGAL PENDAFTARAN
-                ================================================== */
-
-                let dateStr = '-';
-
-                if (
-                    data.submittedAt &&
-                    typeof data.submittedAt.toDate === 'function'
-                ) {
-
-                    dateStr =
-                        data.submittedAt
-                            .toDate()
-                            .toLocaleString('id-ID');
-
-                }
-
-
-                /* =================================================
-                   NAMA MITRA
-                ================================================== */
-
-                const namaMitra =
-                    data.name ||
-                    data.namaUsaha ||
-                    data.businessName ||
-                    data.ownerName ||
-                    data.fullName ||
-                    data.nama ||
-                    'Tanpa Nama';
-
-
-                /* =================================================
-                   KONTAK
-                ================================================== */
-
-                const kontakMitra =
-                    data.phone ||
-                    data.ownerPhone ||
-                    data.kontak ||
-                    '-';
-
-
-                /* =================================================
-                   BCGO ANALYSIS
-                ================================================= */
+                if(normalizedType !== category) return;
 
                 let bcgoResult = null;
 
-                try {
-
-                    /*
-                     * Pastikan engine BCGO tersedia.
-                     */
-
-                    if (
-                        typeof BCGO !== 'undefined' &&
-                        typeof BCGO.evaluatePartner === 'function'
-                    ) {
-
-                        /*
-                         * Data dari Firestore diteruskan
-                         * langsung ke BCGO.
-                         *
-                         * Untuk resto:
-                         * jenis = resto
-                         * akan dipetakan menjadi restaurant.
-                         */
-
-                        const partnerData = {
+                try{
+                    if(typeof BCGO !== "undefined" && typeof BCGO.evaluatePartner === "function"){
+                        bcgoResult = BCGO.evaluatePartner({
                             ...data,
-
-                            partnerType:
-                                data.jenis === 'resto'
-                                    ? 'restaurant'
-                                    : (
-                                        data.jenis ||
-                                        data.partnerType ||
-                                        category
-                                    )
-                        };
-
-
-                        bcgoResult =
-                            BCGO.evaluatePartner(
-                                partnerData
-                            );
-
-
+                            partnerType: normalizedType === "resto"
+                                ? "restaurant"
+                                : (data.jenis || data.partnerType || category)
+                        });
                     }
-
-                } catch (bcgoError) {
-
-                    console.error(
-                        '[BCGO] Gagal menganalisis:',
-                        docId,
-                        bcgoError
-                    );
-
+                }catch(error){
+                    console.error("[BCGO] Gagal menganalisis:", docId, error);
                 }
 
+                cachedApplications[docId] = {
+                    ...data,
+                    _bcgoLiveResult: bcgoResult
+                };
 
-                /* =================================================
-                   SIMPAN HASIL BCGO LIVE KE CACHE
-                ================================================== */
+                totalCount++;
 
-                if (bcgoResult) {
+                if(data.status === "approved") approvedCount++;
+                else if(!data.status || data.status === "pending") pendingCount++;
 
-                    cachedApplications[docId] = {
-                        ...data,
-                        _bcgoLiveResult: bcgoResult
-                    };
-
+                if(bcgoResult){
+                    const status = String(bcgoResult.status || "").toUpperCase();
+                    if(status === "APPROVE") low++;
+                    else if(status === "REJECT") high++;
+                    else review++;
+                }else if(data.bcgoScore !== undefined && data.bcgoScore !== null){
+                    const score = Number(data.bcgoScore);
+                    if(score >= 80) low++;
+                    else if(score < 50) high++;
+                    else review++;
                 }
 
+                const nama = getPartnerName(data);
+                const phone = getPhone(data);
+                const date = getDate(data);
+                const result = bcgoResult;
+                const score = result?.score ?? data.bcgoScore ?? "-";
+                const riskClass = getRiskClass(result);
+                const riskLabel = getRiskLabel(result);
+                const initial = esc(nama.charAt(0).toUpperCase());
 
-                /* =================================================
-                   BCGO BADGE
-                ================================================== */
+                let dbStatus = data.status || "pending";
+                let statusClass = dbStatus === "approved" ? "approved" : dbStatus === "rejected" ? "rejected" : "pending";
+                let statusText = dbStatus === "approved" ? "Approved" : dbStatus === "rejected" ? "Rejected" : "Pending";
 
-                let bcgoBadge = `
-                    <span class="badge-status status-pending">
-                        Pending Review
-                    </span>
-                `;
-
-
-                /*
-                 * Jika BCGO berhasil melakukan analisis
-                 * gunakan hasil analisis terbaru.
-                 */
-
-                if (bcgoResult) {
-
-                    if (
-                        bcgoResult.status === 'APPROVE'
-                    ) {
-
-                        bcgoBadge = `
-                            <span
-                                class="badge-status status-approved"
-                                title="${(
-                                    bcgoResult.reasons || []
-                                ).join(' | ')}"
-                            >
-                                BCGO ${bcgoResult.score}/100
-                                · LOW
-                            </span>
-                        `;
-
-                    } else if (
-                        bcgoResult.status === 'REJECT'
-                    ) {
-
-                        bcgoBadge = `
-                            <span
-                                class="badge-status status-rejected"
-                                title="${(
-                                    bcgoResult.reasons || []
-                                ).join(' | ')}"
-                            >
-                                BCGO ${bcgoResult.score}/100
-                                · REJECT
-                            </span>
-                        `;
-
-                    } else {
-
-                        bcgoBadge = `
-                            <span
-                                class="badge-status status-pending"
-                                title="${(
-                                    bcgoResult.reasons || []
-                                ).join(' | ')}"
-                            >
-                                BCGO ${bcgoResult.score}/100
-                                · REVIEW
-                            </span>
-                        `;
-
-                    }
-
-                }
-
-                /*
-                 * Kalau engine belum tersedia,
-                 * tetap tampilkan hasil BCGO lama
-                 * yang mungkin sudah tersimpan di Firestore.
-                 */
-
-                else if (
-                    data.bcgoScore !== undefined &&
-                    data.bcgoScore !== null
-                ) {
-
-                    bcgoBadge = `
-                        <span
-                            class="badge-status status-pending"
-                        >
-                            BCGO Skor:
-                            ${data.bcgoScore}
-                            (${data.bcgoRecommendation || '-'})
-                        </span>
-                    `;
-
-                }
-
-
-                /* =================================================
-                   STATUS DATABASE
-                ================================================== */
-
-                if (data.status === 'approved') {
-
-                    bcgoBadge = `
-                        <span
-                            class="badge-status status-approved"
-                        >
-                            Approved
-                            ${
-                                bcgoResult
-                                    ? `(BCGO ${bcgoResult.score}/100)`
-                                    : ''
-                            }
-                        </span>
-                    `;
-
-                } else if (data.status === 'rejected') {
-
-                    bcgoBadge = `
-                        <span
-                            class="badge-status status-rejected"
-                        >
-                            Rejected
-                        </span>
-                    `;
-
-                }
-
-
-                /* =================================================
-                   ROW TABLE
-                ================================================== */
+                const attention = (riskClass !== "score-low" || dbStatus === "pending") ? " needs-attention-row" : "";
 
                 rowsHtml += `
-
-                    <tr>
-
+                    <tr class="${attention}">
+                        <td>${esc(date)}</td>
                         <td>
-                            ${dateStr}
+                            <div class="name-cell clickable-name" onclick="openDetailModal('${esc(docId)}')">
+                                <div class="avatar">${initial}</div>
+                                <div>
+                                    <div class="name-main">${esc(nama)}</div>
+                                    <div class="name-sub">${esc(String(data.jenis || category).toUpperCase())}</div>
+                                </div>
+                            </div>
                         </td>
-
-
+                        <td>${esc(phone)}</td>
                         <td>
-
-                            <span
-                                class="clickable-name"
-                                onclick="openDetailModal('${docId}')"
-                            >
-                                ${namaMitra}
+                            <span class="bcgo-score ${riskClass}">
+                                ${esc(score === "-" ? "-" : `${score}/100`)}
                             </span>
-
+                            <div style="font-size:7px;color:var(--muted);margin-top:2px">${esc(riskLabel)}</div>
                         </td>
-
-
+                        <td><span class="status ${statusClass}">${statusText}</span></td>
                         <td>
-                            ${kontakMitra}
+                            <div class="action-group">
+                                <button class="btn-action btn-review" onclick="openDetailModal('${esc(docId)}')">Review</button>
+                                <button class="btn-action btn-approve" onclick="updateStatus('${esc(docId)}','approved')">Setujui</button>
+                                <button class="btn-action btn-reject" onclick="updateStatus('${esc(docId)}','rejected')">Tolak</button>
+                            </div>
                         </td>
-
-
-                        <td>
-                            ${bcgoBadge}
-                        </td>
-
-
-                        <td>
-
-                            <button
-                                class="btn-action btn-approve"
-                                onclick="
-                                    updateStatus(
-                                        '${docId}',
-                                        'approved'
-                                    )
-                                "
-                            >
-                                Setujui
-                            </button>
-
-
-                            <button
-                                class="btn-action btn-reject"
-                                onclick="
-                                    updateStatus(
-                                        '${docId}',
-                                        'rejected'
-                                    )
-                                "
-                            >
-                                Tolak
-                            </button>
-
-
-                            <button
-                                class="btn-action btn-delete"
-                                onclick="
-                                    deleteApplication(
-                                        '${docId}'
-                                    )
-                                "
-                            >
-                                Hapus
-                            </button>
-
-                        </td>
-
                     </tr>
-
                 `;
-
             });
 
-
-            /* =====================================================
-               TIDAK ADA DATA
-            ====================================================== */
-
-            if (totalCount === 0) {
-
+            if(totalCount === 0){
                 tbody.innerHTML = `
-
-                    <tr>
-
-                        <td
-                            colspan="5"
-                            class="empty-state"
-                        >
-
-                            Belum ada data pendaftaran
-                            mitra yang masuk untuk kategori
-
-                            <b>
-                                ${String(category).toUpperCase()}
-                            </b>.
-
-                        </td>
-
-                    </tr>
-
+                    <tr><td colspan="6" class="empty-state">
+                        <div class="empty-icon">◌</div>
+                        Belum ada data pendaftaran mitra yang masuk untuk kategori <b>${esc(category.toUpperCase())}</b>.
+                    </td></tr>
                 `;
-
-                updateStats(
-                    0,
-                    0,
-                    0
-                );
-
-                return;
+            }else{
+                tbody.innerHTML = rowsHtml;
             }
 
-
-            /* =====================================================
-               TAMPILKAN DATA
-            ====================================================== */
-
-            tbody.innerHTML = rowsHtml;
-
-
-            updateStats(
-                pendingCount,
-                approvedCount,
-                totalCount
-            );
-
-        },
-
-
-        /* =========================================================
-           FIRESTORE ERROR
-        ========================================================== */
-
-        (error) => {
-
-            console.warn(
-                "Kendala koneksi/izin database:",
-                error
-            );
-
-
-            badgeEl.className =
-                'admin-badge badge-red';
-
-            badgeEl.innerText =
-                'Kendala Koneksi Database';
-
-
-            tbody.innerHTML = `
-
-                <tr>
-
-                    <td
-                        colspan="5"
-                        class="empty-state"
-                        style="color:var(--primary-red);"
-                    >
-
-                        Belum ada data /
-                        periksa aturan izin Firestore.
-
-                    </td>
-
-                </tr>
-
-            `;
-
-
-            updateStats(
-                0,
-                0,
-                0
-            );
-
-        }
-    );
-                }
-
-        function updateStats(pending, approved, total) {
-            document.getElementById('statPending').innerText = pending;
-            document.getElementById('statApproved').innerText = approved;
-            document.getElementById('statTotal').innerText = total;
+            lastAnalysis = { low, review, high };
+            updateStats(pendingCount, approvedCount, totalCount);
+            updateIntelligence(pendingCount, approvedCount, totalCount, low, review, high);
+            renderNetwork();
 
             const now = new Date();
-            document.getElementById('lastSyncTime').innerText =
-                'Update terakhir ' + now.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+            document.getElementById("lastSyncTime").textContent =
+                `Update terakhir ${now.toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}`;
+            document.getElementById("syncStatus").textContent =
+                "Terhubung real-time ke CIKUR Cloud";
+        }, error => {
+            console.warn("Kendala koneksi/izin database:", error);
+            setEngineStatus(false, "DATABASE ISSUE");
+            document.getElementById("syncStatus").textContent = "Periksa koneksi atau aturan izin Firestore.";
 
-            const intelTitle = document.getElementById('intelTitle');
-            const intelText = document.getElementById('intelText');
+            tbody.innerHTML = `
+                <tr><td colspan="6" class="empty-state" style="color:var(--red)">
+                    <div class="empty-icon" style="color:var(--red);background:#fee2e2">!</div>
+                    Belum ada data / periksa aturan izin Firestore.
+                </td></tr>
+            `;
 
-            if (pending > 0) {
-                intelTitle.innerText = `${pending} pendaftaran membutuhkan perhatian`;
-                intelText.innerText =
-                    `Ada ${pending} mitra pada antrean kategori aktif. Buka data pendaftaran untuk meninjau skor, risiko, dan rekomendasi BCGO sebelum mengambil keputusan.`;
-            } else if (total > 0) {
-                intelTitle.innerText = 'Operasional kategori ini terlihat stabil';
-                intelText.innerText =
-                    `${approved} dari ${total} mitra telah disetujui. Tidak ada antrean pending pada kategori yang sedang dipantau.`;
-            } else {
-                intelTitle.innerText = 'Belum ada aktivitas pada kategori ini';
-                intelText.innerText =
-                    'Belum ada pendaftaran yang masuk untuk kategori aktif. Sistem siap menerima data mitra baru secara real-time.';
-            }
+            updateStats(0,0,0);
+            updateIntelligence(0,0,0,0,0,0);
+        });
+    }
+
+    function updateStats(pending, approved, total){
+        document.getElementById("statPending").textContent = pending;
+        document.getElementById("statApproved").textContent = approved;
+        document.getElementById("statTotal").textContent = total;
+
+        const attention = lastAnalysis.high + lastAnalysis.review;
+        document.getElementById("statAttention").textContent = attention;
+
+        document.getElementById("pendingMeta").textContent =
+            pending > 0 ? `${pending} item menunggu tindakan` : "Tidak ada antrean";
+        document.getElementById("approvedMeta").textContent =
+            approved > 0 ? `${approved} mitra sudah aktif` : "Belum ada mitra aktif";
+        document.getElementById("totalMeta").textContent =
+            total > 0 ? "Data real-time" : "Belum ada data";
+        document.getElementById("attentionMeta").textContent =
+            attention > 0 ? `${attention} item perlu perhatian` : "Tidak ada red flag";
+    }
+
+    function updateIntelligence(pending, approved, total, low, review, high){
+        const attention = review + high;
+        document.getElementById("commandHigh").textContent = `${high} High Risk`;
+        document.getElementById("commandReview").textContent = `${review} Need Review`;
+        document.getElementById("commandLow").textContent = `${low} Low Risk`;
+
+        document.getElementById("navPendingCount").textContent = pending;
+        document.getElementById("navPendingCount").classList.toggle("show", pending > 0);
+        document.getElementById("navAttentionCount").textContent = attention;
+        document.getElementById("navAttentionCount").classList.toggle("show", attention > 0);
+
+        if(total === 0){
+            document.getElementById("commandTitle").textContent = "Belum ada aktivitas pada kategori ini";
+            document.getElementById("commandCopy").textContent =
+                "Belum ada pendaftaran yang masuk untuk kategori aktif. Sistem siap menerima data baru secara real-time.";
+        }else if(high > 0){
+            document.getElementById("commandTitle").textContent = `${high} partner berisiko tinggi membutuhkan review`;
+            document.getElementById("commandCopy").textContent =
+                `BCGO menemukan ${high} item dengan keputusan berisiko tinggi. Prioritaskan pemeriksaan sebelum persetujuan.`;
+        }else if(review > 0 || pending > 0){
+            document.getElementById("commandTitle").textContent = `${attention + pending} item membutuhkan perhatian`;
+            document.getElementById("commandCopy").textContent =
+                `${low} partner berada pada kategori low risk, sementara ${review} membutuhkan review BCGO dan ${pending} masih menunggu keputusan admin.`;
+        }else{
+            document.getElementById("commandTitle").textContent = "Network terlihat sehat";
+            document.getElementById("commandCopy").textContent =
+                `${approved} partner telah disetujui dan hasil BCGO menunjukkan tidak ada item yang membutuhkan perhatian khusus pada kategori ini.`;
         }
 
-        window.openDetailModal = function(docId) {
-    const data = cachedApplications[docId];
-
-    if (!data) return;
-
-
-    /* =====================================================
-       DATA DASAR MITRA
-    ====================================================== */
-
-    const namaMitra =
-        data.name ||
-        data.namaUsaha ||
-        data.businessName ||
-        data.ownerName ||
-        data.fullName ||
-        data.nama ||
-        'Mitra';
-
-
-    const jenisMitra =
-        data.jenis ||
-        data.partnerType ||
-        '-';
-
-
-    const kontakMitra =
-        data.phone ||
-        data.ownerPhone ||
-        data.kontak ||
-        '-';
-
-
-    document.getElementById('modalTitle').innerText =
-        `Detail Pendaftaran: ${namaMitra}`;
-
-
-    let htmlContent = `
-
-        <div class="detail-row">
-            <span class="detail-label">
-                Jenis Mitra
-            </span>
-
-            <span class="detail-value">
-                ${String(jenisMitra).toUpperCase()}
-            </span>
-        </div>
-
-
-        <div class="detail-row">
-            <span class="detail-label">
-                Nama / Nama Usaha
-            </span>
-
-            <span class="detail-value">
-                ${namaMitra}
-            </span>
-        </div>
-
-
-        <div class="detail-row">
-            <span class="detail-label">
-                Penanggung Jawab
-            </span>
-
-            <span class="detail-value">
-                ${data.ownerName || '-'}
-            </span>
-        </div>
-
-
-        <div class="detail-row">
-            <span class="detail-label">
-                Status Penanggung Jawab
-            </span>
-
-            <span class="detail-value">
-                ${data.role || '-'}
-            </span>
-        </div>
-
-
-        <div class="detail-row">
-            <span class="detail-label">
-                Nomor WhatsApp / HP
-            </span>
-
-            <span class="detail-value">
-                ${kontakMitra}
-            </span>
-        </div>
-
-
-        <div class="detail-row">
-            <span class="detail-label">
-                Email
-            </span>
-
-            <span class="detail-value">
-                ${data.email || '-'}
-            </span>
-        </div>
-
-
-        <div class="detail-row">
-            <span class="detail-label">
-                Jenis Usaha
-            </span>
-
-            <span class="detail-value">
-                ${data.businessType || '-'}
-            </span>
-        </div>
-
-
-        <div class="detail-row">
-            <span class="detail-label">
-                Deskripsi Usaha
-            </span>
-
-            <span class="detail-value">
-                ${data.description || '-'}
-            </span>
-        </div>
-
-
-        <div class="detail-row">
-            <span class="detail-label">
-                Alamat
-            </span>
-
-            <span class="detail-value">
-                ${data.address ||
-                  data.alamat ||
-                  '-'}
-            </span>
-        </div>
-
-
-        <div class="detail-row">
-            <span class="detail-label">
-                Desa / Kelurahan
-            </span>
-
-            <span class="detail-value">
-                ${data.village || '-'}
-            </span>
-        </div>
-
-
-        <div class="detail-row">
-            <span class="detail-label">
-                Kecamatan
-            </span>
-
-            <span class="detail-value">
-                ${data.district || '-'}
-            </span>
-        </div>
-
-
-        <div class="detail-row">
-            <span class="detail-label">
-                Kabupaten / Kota
-            </span>
-
-            <span class="detail-value">
-                ${data.city || '-'}
-            </span>
-        </div>
-
-
-        <div class="detail-row">
-            <span class="detail-label">
-                Provinsi
-            </span>
-
-            <span class="detail-value">
-                ${data.province || '-'}
-            </span>
-        </div>
-
-
-        <div class="detail-row">
-            <span class="detail-label">
-                Kode Pos
-            </span>
-
-            <span class="detail-value">
-                ${data.postalCode || '-'}
-            </span>
-        </div>
-
-
-        <div class="detail-row">
-            <span class="detail-label">
-                Patokan Lokasi
-            </span>
-
-            <span class="detail-value">
-                ${data.locationNote || '-'}
-            </span>
-        </div>
-
-
-        <div class="detail-row">
-            <span class="detail-label">
-                Status Saat Ini
-            </span>
-
-            <span class="detail-value">
-                ${String(data.status || 'pending').toUpperCase()}
-            </span>
-        </div>
-
-    `;
-
-
-    /* =====================================================
-       OPERASIONAL RESTO
-    ====================================================== */
-
-    if (
-        jenisMitra === 'resto' ||
-        jenisMitra === 'restaurant'
-    ) {
-
-        htmlContent += `
-
-            <div
-                style="
-                    margin-top:12px;
-                    padding-top:10px;
-                    border-top:1px solid var(--border-color);
-                "
-            >
-
-                <div
-                    style="
-                        font-weight:800;
-                        margin-bottom:8px;
-                        font-size:13px;
-                    "
-                >
-                    Data Operasional
-                </div>
-
-
-                <div class="detail-row">
-                    <span class="detail-label">
-                        Jam Buka
-                    </span>
-
-                    <span class="detail-value">
-                        ${data.openTime || '-'}
-                    </span>
-                </div>
-
-
-                <div class="detail-row">
-                    <span class="detail-label">
-                        Jam Tutup
-                    </span>
-
-                    <span class="detail-value">
-                        ${data.closeTime || '-'}
-                    </span>
-                </div>
-
-
-                <div class="detail-row">
-                    <span class="detail-label">
-                        Hari Operasional
-                    </span>
-
-                    <span class="detail-value">
-                        ${data.operationalDays || '-'}
-                    </span>
-                </div>
-
-            </div>
-
-        `;
-
+        document.getElementById("riskLow").textContent = low;
+        document.getElementById("riskReview").textContent = review;
+        document.getElementById("riskHigh").textContent = high;
+
+        const denominator = low + review + high;
+        const lowPct = denominator ? Math.round((low / denominator) * 100) : 0;
+        document.getElementById("riskScore").textContent = `${lowPct}%`;
+
+        const reviewStart = denominator ? (low / denominator) * 100 : 0;
+        const highStart = denominator ? ((low + review) / denominator) * 100 : 100;
+        document.getElementById("riskRing").style.background =
+            `conic-gradient(var(--green) 0 ${reviewStart}%, #f59e0b ${reviewStart}% ${highStart}%, var(--red) ${highStart}% 100%)`;
+
+        renderAttention(pending, low, review, high);
     }
 
+    function renderAttention(pending, low, review, high){
+        const list = document.getElementById("attentionList");
+        const items = [];
 
-    /* =====================================================
-       LOKASI GPS
-    ====================================================== */
-
-    if (
-        data.latitude ||
-        data.longitude ||
-        data.restoLatitude ||
-        data.restoLongitude
-    ) {
-
-        htmlContent += `
-
-            <div
-                style="
-                    margin-top:12px;
-                    padding-top:10px;
-                    border-top:1px solid var(--border-color);
-                "
-            >
-
-                <div
-                    style="
-                        font-weight:800;
-                        margin-bottom:8px;
-                        font-size:13px;
-                    "
-                >
-                    Lokasi GPS
+        if(high > 0){
+            items.push(`
+                <div class="attention-item">
+                    <div class="attention-icon red">!</div>
+                    <div>
+                        <div class="attention-title">${high} High Risk Partner</div>
+                        <div class="attention-copy">BCGO memberikan keputusan REJECT/HIGH RISK pada beberapa pendaftaran kategori aktif.</div>
+                        <button class="attention-btn" onclick="focusAttention()">Review sekarang →</button>
+                    </div>
                 </div>
+            `);
+        }
 
-
-                <div class="detail-row">
-                    <span class="detail-label">
-                        Latitude
-                    </span>
-
-                    <span class="detail-value">
-                        ${
-                            data.latitude ||
-                            data.restoLatitude ||
-                            '-'
-                        }
-                    </span>
+        if(review > 0){
+            items.push(`
+                <div class="attention-item">
+                    <div class="attention-icon amber">◷</div>
+                    <div>
+                        <div class="attention-title">${review} Partner Need Review</div>
+                        <div class="attention-copy">Hasil BCGO belum cukup kuat untuk diproses otomatis dan membutuhkan pemeriksaan manual.</div>
+                        <button class="attention-btn" onclick="focusAttention()">Buka daftar →</button>
+                    </div>
                 </div>
+            `);
+        }
 
-
-                <div class="detail-row">
-                    <span class="detail-label">
-                        Longitude
-                    </span>
-
-                    <span class="detail-value">
-                        ${
-                            data.longitude ||
-                            data.restoLongitude ||
-                            '-'
-                        }
-                    </span>
+        if(pending > 0){
+            items.push(`
+                <div class="attention-item">
+                    <div class="attention-icon blue">✓</div>
+                    <div>
+                        <div class="attention-title">${pending} Pending Verification</div>
+                        <div class="attention-copy">Ada pendaftaran yang belum memperoleh keputusan status dari admin.</div>
+                        <button class="attention-btn" onclick="focusAttention()">Verifikasi →</button>
+                    </div>
                 </div>
+            `);
+        }
 
-            </div>
+        if(items.length === 0){
+            items.push(`
+                <div class="attention-item">
+                    <div class="attention-icon green" style="background:var(--green-soft);color:var(--green)">✓</div>
+                    <div>
+                        <div class="attention-title">Tidak ada item yang membutuhkan perhatian</div>
+                        <div class="attention-copy">BCGO dan status pendaftaran kategori aktif terlihat aman saat ini.</div>
+                    </div>
+                </div>
+            `);
+        }
 
-        `;
-
+        list.innerHTML = items.join("");
     }
 
+    function renderNetwork(){
+        const total = categoryCounts.agent + categoryCounts.resto + categoryCounts.driver;
+        const activeTotal = categoryCounts[currentCategory] || 0;
 
-    /* =====================================================
-       LEGALITAS
-    ====================================================== */
+        document.getElementById("networkAgent").textContent = categoryCounts.agent;
+        document.getElementById("networkResto").textContent = categoryCounts.resto;
+        document.getElementById("networkDriver").textContent = categoryCounts.driver;
+        document.getElementById("networkTotal").textContent = total;
+        document.getElementById("networkCategory").textContent = currentCategory.toUpperCase();
 
-    htmlContent += `
+        const max = Math.max(categoryCounts.agent, categoryCounts.resto, categoryCounts.driver, 1);
+        document.getElementById("barAgent").style.width = `${(categoryCounts.agent/max)*100}%`;
+        document.getElementById("barResto").style.width = `${(categoryCounts.resto/max)*100}%`;
+        document.getElementById("barDriver").style.width = `${(categoryCounts.driver/max)*100}%`;
 
-        <div
-            style="
-                margin-top:12px;
-                padding-top:10px;
-                border-top:1px solid var(--border-color);
-            "
-        >
+        if(document.getElementById("networkScope").value === "active"){
+            document.getElementById("networkTotal").textContent = activeTotal;
+        }
+    }
 
-            <div
-                style="
-                    font-weight:800;
-                    margin-bottom:8px;
-                    font-size:13px;
-                "
-            >
-                Identitas & Legalitas
-            </div>
+    window.openDetailModal = function(docId){
+        const data = cachedApplications[docId];
+        if(!data) return;
 
+        const nama = getPartnerName(data);
+        const jenis = data.jenis || data.partnerType || "-";
+        const phone = getPhone(data);
+        const live = data._bcgoLiveResult || null;
 
-            <div class="detail-row">
-                <span class="detail-label">
-                    NIK / KTP
-                </span>
-
-                <span class="detail-value">
-                    ${data.ktp || '-'}
-                </span>
-            </div>
-
-
-            <div class="detail-row">
-                <span class="detail-label">
-                    Status Legalitas
-                </span>
-
-                <span class="detail-value">
-                    ${data.legalStatus || '-'}
-                </span>
-            </div>
-
-
-            <div class="detail-row">
-                <span class="detail-label">
-                    NIB
-                </span>
-
-                <span class="detail-value">
-                    ${data.nib || '-'}
-                </span>
-            </div>
-
-        </div>
-
-    `;
-
-
-    /* =====================================================
-       DATA PENCAIRAN
-    ====================================================== */
-
-    htmlContent += `
-
-        <div
-            style="
-                margin-top:12px;
-                padding-top:10px;
-                border-top:1px solid var(--border-color);
-            "
-        >
-
-            <div
-                style="
-                    font-weight:800;
-                    margin-bottom:8px;
-                    font-size:13px;
-                "
-            >
-                Data Pencairan Dana
-            </div>
-
-
-            <div class="detail-row">
-                <span class="detail-label">
-                    Bank / E-Wallet
-                </span>
-
-                <span class="detail-value">
-                    ${data.bankName || '-'}
-                </span>
-            </div>
-
-
-            <div class="detail-row">
-                <span class="detail-label">
-                    Nama Rekening
-                </span>
-
-                <span class="detail-value">
-                    ${data.accountName || '-'}
-                </span>
-            </div>
-
-
-            <div class="detail-row">
-                <span class="detail-label">
-                    Nomor Rekening / Akun
-                </span>
-
-                <span class="detail-value">
-                    ${data.accountNumber || '-'}
-                </span>
-            </div>
-
-        </div>
-
-    `;
-
-
-    /* =====================================================
-       BCGO LIVE ANALYSIS
-    ====================================================== */
-
-    const liveBCGO =
-        data._bcgoLiveResult || null;
-
-
-    if (liveBCGO) {
-
-        const score =
-            liveBCGO.score ?? 0;
-
-        const risk =
-            liveBCGO.risk || '-';
-
-        const decision =
-            liveBCGO.status || '-';
-
-
-        htmlContent += `
-
-            <div
-                style="
-                    margin-top:14px;
-                    padding:14px;
-                    border-radius:10px;
-                    background:#f8fafc;
-                    border:1px solid var(--border-color);
-                "
-            >
-
-                <div
-                    style="
-                        font-size:14px;
-                        font-weight:800;
-                        margin-bottom:10px;
-                    "
-                >
-                    🧠 Analisis BCGO
+        let html = `
+            <div class="detail-section">
+                <div class="detail-section-title">Profil Partner</div>
+                <div class="detail-grid">
+                    <div class="detail-row"><span class="detail-label">Jenis Mitra</span><span class="detail-value">${esc(String(jenis).toUpperCase())}</span></div>
+                    <div class="detail-row"><span class="detail-label">Nama / Nama Usaha</span><span class="detail-value">${esc(nama)}</span></div>
+                    <div class="detail-row"><span class="detail-label">Penanggung Jawab</span><span class="detail-value">${esc(data.ownerName || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Status Penanggung Jawab</span><span class="detail-value">${esc(data.role || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">WhatsApp / HP</span><span class="detail-value">${esc(phone)}</span></div>
+                    <div class="detail-row"><span class="detail-label">Email</span><span class="detail-value">${esc(data.email || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Jenis Usaha</span><span class="detail-value">${esc(data.businessType || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Status Database</span><span class="detail-value">${esc(String(data.status || "pending").toUpperCase())}</span></div>
                 </div>
+            </div>
 
-
-                <div class="detail-row">
-                    <span class="detail-label">
-                        Skor BCGO
-                    </span>
-
-                    <span
-                        class="detail-value"
-                        style="font-weight:800;"
-                    >
-                        ${score}/100
-                    </span>
+            <div class="detail-section">
+                <div class="detail-section-title">Lokasi & Operasional</div>
+                <div class="detail-grid">
+                    <div class="detail-row"><span class="detail-label">Alamat</span><span class="detail-value">${esc(data.address || data.alamat || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Desa / Kelurahan</span><span class="detail-value">${esc(data.village || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Kecamatan</span><span class="detail-value">${esc(data.district || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Kabupaten / Kota</span><span class="detail-value">${esc(data.city || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Provinsi</span><span class="detail-value">${esc(data.province || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Kode Pos</span><span class="detail-value">${esc(data.postalCode || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Latitude</span><span class="detail-value">${esc(data.latitude || data.restoLatitude || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Longitude</span><span class="detail-value">${esc(data.longitude || data.restoLongitude || "-")}</span></div>
                 </div>
+            </div>
+        `;
 
-
-                <div class="detail-row">
-                    <span class="detail-label">
-                        Tingkat Risiko
-                    </span>
-
-                    <span class="detail-value">
-                        ${risk}
-                    </span>
+        if(String(jenis).toLowerCase() === "resto" || String(jenis).toLowerCase() === "restaurant"){
+            html += `
+                <div class="detail-section">
+                    <div class="detail-section-title">Data Operasional Resto</div>
+                    <div class="detail-grid">
+                        <div class="detail-row"><span class="detail-label">Jam Buka</span><span class="detail-value">${esc(data.openTime || "-")}</span></div>
+                        <div class="detail-row"><span class="detail-label">Jam Tutup</span><span class="detail-value">${esc(data.closeTime || "-")}</span></div>
+                        <div class="detail-row"><span class="detail-label">Hari Operasional</span><span class="detail-value">${esc(data.operationalDays || "-")}</span></div>
+                        <div class="detail-row"><span class="detail-label">Deskripsi Usaha</span><span class="detail-value">${esc(data.description || "-")}</span></div>
+                    </div>
                 </div>
+            `;
+        }
 
-
-                <div class="detail-row">
-                    <span class="detail-label">
-                        Keputusan BCGO
-                    </span>
-
-                    <span class="detail-value">
-                        ${decision}
-                    </span>
+        html += `
+            <div class="detail-section">
+                <div class="detail-section-title">Identitas & Legalitas</div>
+                <div class="detail-grid">
+                    <div class="detail-row"><span class="detail-label">NIK / KTP</span><span class="detail-value">${esc(data.ktp || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Status Legalitas</span><span class="detail-value">${esc(data.legalStatus || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">NIB</span><span class="detail-value">${esc(data.nib || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Bank / E-Wallet</span><span class="detail-value">${esc(data.bankName || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Nama Rekening</span><span class="detail-value">${esc(data.accountName || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Nomor Rekening / Akun</span><span class="detail-value">${esc(data.accountNumber || "-")}</span></div>
                 </div>
+            </div>
+        `;
 
+        if(live){
+            const score = live.score ?? 0;
+            const status = String(live.status || "-").toUpperCase();
+            const risk = live.risk || getRiskLabel(live);
+            const decisionClass = status === "APPROVE" ? "background:var(--green-soft);color:#15803d" :
+                                  status === "REJECT" ? "background:var(--danger-soft);color:#b91c1c" :
+                                  "background:var(--amber-soft);color:#c2410c";
 
-                ${
-                    liveBCGO.recommendation
-                        ? `
-                            <div
-                                class="detail-row"
-                                style="margin-top:6px;"
-                            >
-                                <span class="detail-label">
-                                    Rekomendasi
-                                </span>
-
-                                <span class="detail-value">
-                                    ${liveBCGO.recommendation}
-                                </span>
+            html += `
+                <div class="detail-section">
+                    <div class="detail-section-title">BCGO Intelligence</div>
+                    <div class="bcgo-panel">
+                        <div class="bcgo-top">
+                            <div>
+                                <div style="font-size:8px;color:var(--muted);font-weight:800">LIVE BCGO SCORE</div>
+                                <div class="bcgo-score-big">${esc(score)}/100</div>
                             </div>
-                        `
-                        : ''
-                }
-
-        `;
-
-
-        /* =================================================
-           HASIL PEMERIKSAAN DETAIL
-        ================================================== */
-
-        const restaurantChecks =
-            liveBCGO?.checks?.partnerSpecific?.checks;
-
-
-        if (
-            restaurantChecks &&
-            typeof restaurantChecks === 'object'
-        ) {
-
-            htmlContent += `
-
-                <div
-                    style="
-                        margin-top:12px;
-                        font-size:12px;
-                        font-weight:800;
-                    "
-                >
-                    Pemeriksaan Data
-                </div>
-
-            `;
-
-
-            Object.entries(
-                restaurantChecks
-            ).forEach(
-                ([key, check]) => {
-
-                    const passed =
-                        check &&
-                        check.passed === true;
-
-
-                    htmlContent += `
-
-                        <div
-                            style="
-                                display:flex;
-                                justify-content:space-between;
-                                align-items:center;
-                                gap:10px;
-                                padding:6px 0;
-                                border-bottom:1px dashed var(--border-color);
-                                font-size:11px;
-                            "
-                        >
-
-                            <span>
-                                ${key}
-                            </span>
-
-                            <strong>
-                                ${
-                                    passed
-                                        ? '✓ Lengkap'
-                                        : '✕ Belum Lengkap'
-                                }
-                            </strong>
-
+                            <div class="bcgo-decision" style="${decisionClass}">${esc(status)}</div>
                         </div>
-
-                    `;
-
-                }
-            );
-
-        }
-
-
-        /* =================================================
-           CATATAN BCGO
-        ================================================== */
-
-        if (
-            Array.isArray(
-                liveBCGO.reasons
-            ) &&
-            liveBCGO.reasons.length > 0
-        ) {
-
-            htmlContent += `
-
-                <div
-                    style="
-                        margin-top:12px;
-                        font-size:12px;
-                        font-weight:800;
-                    "
-                >
-                    Catatan BCGO
+                        <div class="detail-grid" style="margin-top:12px">
+                            <div class="detail-row"><span class="detail-label">Tingkat Risiko</span><span class="detail-value">${esc(risk)}</span></div>
+                            <div class="detail-row"><span class="detail-label">Rekomendasi</span><span class="detail-value">${esc(live.recommendation || "-")}</span></div>
+                        </div>
+                        ${
+                            Array.isArray(live.reasons) && live.reasons.length
+                            ? `<ul class="bcgo-reasons">${live.reasons.map(r => `<li>${esc(r)}</li>`).join("")}</ul>`
+                            : ""
+                        }
+                    </div>
                 </div>
-
-                <ul
-                    style="
-                        padding-left:18px;
-                        font-size:11px;
-                        color:var(--text-main);
-                    "
-                >
-
-                    ${
-                        liveBCGO.reasons
-                            .map(
-                                reason =>
-                                    `<li>${reason}</li>`
-                            )
-                            .join('')
-                    }
-
-                </ul>
-
             `;
-
-        }
-
-
-        htmlContent += `
-
-            </div>
-
-        `;
-
-    }
-
-
-    /* =====================================================
-       HASIL BCGO TERSIMPAN DI FIRESTORE
-       FALLBACK JIKA LIVE ENGINE BELUM TERSEDIA
-    ====================================================== */
-
-    else if (
-        data.bcgoScore !== undefined &&
-        data.bcgoScore !== null
-    ) {
-
-        htmlContent += `
-
-            <div
-                style="
-                    margin-top:14px;
-                    padding:14px;
-                    border-radius:10px;
-                    background:#f8fafc;
-                    border:1px solid var(--border-color);
-                "
-            >
-
-                <div
-                    style="
-                        font-size:14px;
-                        font-weight:800;
-                        margin-bottom:10px;
-                    "
-                >
-                    🧠 Hasil BCGO
+        }else if(data.bcgoScore !== undefined && data.bcgoScore !== null){
+            html += `
+                <div class="detail-section">
+                    <div class="detail-section-title">BCGO Intelligence</div>
+                    <div class="bcgo-panel">
+                        <div class="bcgo-top">
+                            <div><div style="font-size:8px;color:var(--muted);font-weight:800">STORED SCORE</div><div class="bcgo-score-big">${esc(data.bcgoScore)}/100</div></div>
+                            <div class="bcgo-decision" style="background:var(--amber-soft);color:#c2410c">${esc(data.bcgoRecommendation || "REVIEW")}</div>
+                        </div>
+                        ${
+                            Array.isArray(data.bcgoReasons) && data.bcgoReasons.length
+                            ? `<ul class="bcgo-reasons">${data.bcgoReasons.map(r => `<li>${esc(r)}</li>`).join("")}</ul>`
+                            : ""
+                        }
+                    </div>
                 </div>
-
-
-                <div class="detail-row">
-                    <span class="detail-label">
-                        Skor BCGO
-                    </span>
-
-                    <span class="detail-value">
-                        ${data.bcgoScore}/100
-                    </span>
-                </div>
-
-
-                <div class="detail-row">
-                    <span class="detail-label">
-                        Tingkat Risiko
-                    </span>
-
-                    <span class="detail-value">
-                        ${data.bcgoRisk || '-'}
-                    </span>
-                </div>
-
-
-                <div class="detail-row">
-                    <span class="detail-label">
-                        Rekomendasi
-                    </span>
-
-                    <span class="detail-value">
-                        ${data.bcgoRecommendation || '-'}
-                    </span>
-                </div>
-
-        `;
-
-
-        if (
-            Array.isArray(data.bcgoReasons) &&
-            data.bcgoReasons.length > 0
-        ) {
-
-            htmlContent += `
-
-                <div
-                    style="
-                        margin-top:10px;
-                        font-size:12px;
-                        font-weight:800;
-                    "
-                >
-                    Catatan BCGO
-                </div>
-
-                <ul
-                    style="
-                        padding-left:18px;
-                        font-size:11px;
-                    "
-                >
-
-                    ${
-                        data.bcgoReasons
-                            .map(
-                                reason =>
-                                    `<li>${reason}</li>`
-                            )
-                            .join('')
-                    }
-
-                </ul>
-
             `;
-
         }
 
-
-        htmlContent += `
-
-            </div>
-
-        `;
-
-    }
-
-
-    /* =====================================================
-       FOTO KTP
-    ====================================================== */
-
-    const fotoKtp =
-        data.ktpPhoto ||
-        data.fotoKtp ||
-        data.photo ||
-        null;
-
-
-    if (fotoKtp) {
-
-        htmlContent += `
-
-            <div class="ktp-preview-container">
-
-                <div
-                    class="detail-label"
-                    style="margin-bottom:4px;"
-                >
-                    Pratinjau Foto / KTP:
+        const fotoKtp = data.ktpPhoto || data.fotoKtp || data.photo || null;
+        if(fotoKtp){
+            html += `
+                <div class="detail-section">
+                    <div class="detail-section-title">Dokumen</div>
+                    <div class="ktp-preview-container">
+                        <img src="${esc(fotoKtp)}" alt="Foto KTP / Dokumen Mitra">
+                    </div>
                 </div>
+            `;
+        }
 
-                <img
-                    src="${fotoKtp}"
-                    alt="Foto KTP / Dokumen Mitra"
-                >
+        document.getElementById("modalTitle").textContent = `Detail Pendaftaran: ${nama}`;
+        document.getElementById("modalBodyContent").innerHTML = html;
+        document.getElementById("detailModal").style.display = "flex";
+    };
 
-            </div>
+    window.closeDetailModal = function(){
+        document.getElementById("detailModal").style.display = "none";
+    };
 
-        `;
+    window.updateStatus = async function(docId, newStatus){
+        const data = cachedApplications[docId];
+        const nama = data ? getPartnerName(data) : "mitra ini";
 
-    } else {
+        if(!confirm(`Ubah status ${nama} menjadi ${newStatus.toUpperCase()}?`)) return;
 
-        htmlContent += `
-
-            <div
-                style="
-                    text-align:center;
-                    color:var(--text-muted);
-                    margin-top:10px;
-                "
-            >
-                Tidak ada lampiran foto/KTP
-                yang diunggah.
-            </div>
-
-        `;
-
-    }
-
-
-    /* =====================================================
-       TAMPILKAN MODAL
-    ====================================================== */
-
-    document.getElementById(
-        'modalBodyContent'
-    ).innerHTML = htmlContent;
-
-
-    document.getElementById(
-        'detailModal'
-    ).style.display = 'flex';
-
-};
-
-
-window.closeDetailModal = function() {
-
-    document.getElementById(
-        'detailModal'
-    ).style.display = 'none';
-
-};
-        window.updateStatus = async function(docId, newStatus) {
-            if (!confirm(`Apakah Anda yakin ingin mengubah status mitra ini menjadi ${newStatus.toUpperCase()}?`)) return;
-
-            try {
-                await updateDoc(doc(db, "mitra_applications", docId), {
-                    status: newStatus,
-                    updatedAt: serverTimestamp()
-                });
-                alert(`Status mitra berhasil diperbarui menjadi ${newStatus}.`);
-            } catch (error) {
-                console.error("Error updating status: ", error);
-                alert("Gagal memperbarui status: " + error.message);
-            }
-        };
-
-        window.deleteApplication = async function(docId) {
-            if (!confirm("PERINGATAN: Data mitra yang dihapus tidak dapat dikembalikan. Yakin ingin menghapus data ini?")) return;
-
-            try {
-                await deleteDoc(doc(db, "mitra_applications", docId));
-                alert("Data mitra berhasil dihapus dari sistem.");
-                closeDetailModal();
-            } catch (error) {
-                console.error("Error deleting document: ", error);
-                alert("Gagal menghapus data: " + error.message);
-            }
-        };
-
-        document.getElementById('searchTableInput').addEventListener('input', function(e) {
-            const keyword = e.target.value.toLowerCase();
-            const rows = document.querySelectorAll('#adminTableBody tr');
-            
-            rows.forEach(row => {
-                const text = row.innerText.toLowerCase();
-                if (row.classList.contains('empty-state')) return;
-                row.style.display = text.includes(keyword) ? '' : 'none';
+        try{
+            await updateDoc(doc(db, "mitra_applications", docId), {
+                status:newStatus,
+                updatedAt:serverTimestamp()
             });
-        });
+            showToast(`Status ${nama} berhasil diperbarui.`);
+        }catch(error){
+            console.error("Error updating status:", error);
+            showToast("Gagal memperbarui status: " + error.message);
+        }
+    };
 
-        window.addEventListener('DOMContentLoaded', () => {
-            loadAdminData('agent');
+    window.deleteApplication = async function(docId){
+        if(!confirm("PERINGATAN: Data mitra yang dihapus tidak dapat dikembalikan. Yakin ingin menghapus data ini?")) return;
+
+        try{
+            await deleteDoc(doc(db, "mitra_applications", docId));
+            showToast("Data mitra berhasil dihapus.");
+            closeDetailModal();
+        }catch(error){
+            console.error("Error deleting document:", error);
+            showToast("Gagal menghapus data: " + error.message);
+        }
+    };
+
+    document.getElementById("searchTableInput").addEventListener("input", function(e){
+        const keyword = e.target.value.toLowerCase().trim();
+        document.querySelectorAll("#adminTableBody tr").forEach(row => {
+            if(row.querySelector(".empty-state")) return;
+            row.style.display = row.innerText.toLowerCase().includes(keyword) ? "" : "none";
         });
-    </script>
+    });
+
+    document.addEventListener("keydown", e => {
+        if(e.key === "Escape") closeDetailModal();
+    });
+
+    // Dashboard boot dikendalikan oleh Firebase Authentication di atas.
+    // Tanpa akun + approval admin, listener Firestore tidak pernah dijalankan.
+</script>
 </body>
 </html>
