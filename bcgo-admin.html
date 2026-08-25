@@ -773,41 +773,28 @@
         return "Selamat malam";
     }
 
-    async function loadAdminIdentity(user){
-        const fallbackName = "Admin CIKUR GO";
-        let name = "";
+    function updateRealtimeGreeting(){
+        const hour = new Date().getHours();
+        let greeting = "Selamat malam";
+        if(hour >= 4 && hour < 11) greeting = "Selamat pagi";
+        else if(hour >= 11 && hour < 15) greeting = "Selamat siang";
+        else if(hour >= 15 && hour < 18) greeting = "Selamat sore";
 
-        try{
-            const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
-            if(adminSnap.exists()){
-                const data = adminSnap.data() || {};
-                name = data.name || data.fullName || data.displayName || data.nama || "";
-            }
-        }catch(error){
-            console.warn("Profil admin tidak dapat dibaca dari admin_users:", error);
-        }
-
-        if(!name){
-            try{
-                const profileSnap = await getDoc(doc(db, "users", user.uid));
-                if(profileSnap.exists()){
-                    const data = profileSnap.data() || {};
-                    name = data.name || data.fullName || data.displayName || data.nama || data.namaLengkap || "";
-                }
-            }catch(error){
-                console.warn("Profil admin tidak dapat dibaca dari users:", error);
-            }
-        }
-
-        name = String(name || fallbackName).trim();
-        const email = user.email || "Admin";
-        const displayName = name || fallbackName;
-
-        document.getElementById("userName").textContent = displayName;
-        document.getElementById("userEmail").textContent = email;
-        document.getElementById("userAvatar").textContent = displayName.charAt(0).toUpperCase();
-        document.getElementById("heroGreeting").textContent = `${getGreetingByHour()}, ${displayName} 👋`;
+        const greetingEl = document.getElementById("heroGreeting");
+        if(greetingEl) greetingEl.textContent = `${greeting} 👋`;
     }
+
+    function loadAdminIdentity(user){
+        const email = user.email || "Admin";
+        document.getElementById("userName").textContent = "Admin CIKUR GO";
+        document.getElementById("userEmail").textContent = email;
+        document.getElementById("userAvatar").textContent = "A";
+        updateRealtimeGreeting();
+    }
+
+
+    updateRealtimeGreeting();
+    setInterval(updateRealtimeGreeting, 60000);
 
     async function enterDashboard(user){
         currentUser = user;
