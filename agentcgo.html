@@ -740,7 +740,7 @@
                 return;
             }
 
-            renderAgentDashboard(mainContainer);
+            renderAgentDashboard(mainContainer, application);
         }
         function renderPendaftaranMitraForm(container) {
             container.innerHTML = `
@@ -849,11 +849,68 @@
             }
         }
 
-        function renderAgentDashboard(container) {
+        let agentOperationalOnline = false;
+        let agentOperationalSaving = false;
+
+        function renderAgentOperationalStatus(application) {
+            const el = document.getElementById("agentOperationalStatusCard");
+            if (!el) return;
+
+            agentOperationalOnline = application?.isOnline === true;
+
+            el.innerHTML = `
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                    <div style="min-width:0;">
+                        <div style="font-size:10px; color:var(--text-muted); font-weight:800; letter-spacing:.04em; text-transform:uppercase;">Status Operasional</div>
+                        <div style="display:flex; align-items:center; gap:8px; margin-top:5px;">
+                            <span style="width:10px; height:10px; border-radius:50%; background:${agentOperationalOnline ? '#16a34a' : '#94a3b8'}; box-shadow:${agentOperationalOnline ? '0 0 0 4px rgba(22,163,74,.12)' : 'none'};"></span>
+                            <strong style="font-size:16px; color:${agentOperationalOnline ? '#15803d' : 'var(--text-main)'};">${agentOperationalOnline ? 'ONLINE' : 'OFFLINE'}</strong>
+                        </div>
+                        <div style="font-size:10px; color:var(--text-muted); margin-top:3px;">${agentOperationalOnline ? 'Siap menerima pesanan.' : 'Tidak sedang menerima pesanan.'}</div>
+                    </div>
+                    <button id="btnToggleAgentOnline" type="button" style="border:none; border-radius:12px; padding:10px 14px; font-size:11px; font-weight:800; cursor:pointer; color:#fff; background:${agentOperationalOnline ? '#64748b' : 'var(--primary-red)'}; min-width:92px;">
+                        ${agentOperationalSaving ? 'Menyimpan...' : (agentOperationalOnline ? 'MATIKAN' : 'AKTIFKAN')}
+                    </button>
+                </div>
+            `;
+
+            const btn = document.getElementById("btnToggleAgentOnline");
+            if (btn && !agentOperationalSaving) {
+                btn.addEventListener("click", toggleAgentOperationalStatus);
+            }
+        }
+
+        async function toggleAgentOperationalStatus() {
+            if (agentOperationalSaving || !userProfile?.uid) return;
+
+            agentOperationalSaving = true;
+            renderAgentOperationalStatus({ isOnline: agentOperationalOnline });
+
+            const nextStatus = !agentOperationalOnline;
+            try {
+                await window.CikurCloud.updateMitraProfile(userProfile.uid, "agent", {
+                    isOnline: nextStatus,
+                    operationalStatus: nextStatus ? "online" : "offline",
+                    lastStatusChangeAt: new Date()
+                });
+                agentOperationalOnline = nextStatus;
+            } catch (error) {
+                console.error("[AGENT CGO] Gagal mengubah status operasional:", error);
+                alert("Status Agent gagal diperbarui. Silakan coba lagi.");
+            } finally {
+                agentOperationalSaving = false;
+                renderAgentOperationalStatus({ isOnline: agentOperationalOnline });
+            }
+        }
+
+        function renderAgentDashboard(container, application = null) {
             container.innerHTML = `
                 <div class="agent-card" style="background: linear-gradient(135deg, var(--dark-bg), var(--dark-card)); color: #fff;">
                     <h2 style="font-size: 16px; font-weight: 800; margin-bottom: 6px;">🤖 Pusat Kendali & Live Peta Agent</h2>
                     <p style="font-size: 12px; color: #94a3b8; line-height: 1.4;">Pantau lokasi titik koordinat customer, rincian pesanan, dan koordinasi chat secara langsung.</p>
+                </div>
+                <div class="agent-card" id="agentOperationalStatusCard" style="padding:14px 16px;">
+                    <div style="font-size:11px; color:var(--text-muted);">Memuat status operasional...</div>
                 </div>
                 <div class="order-tabs">
                     <button class="order-tab-btn active" onclick="switchOrderTab('all', this)">Semua Pesanan</button>
@@ -864,6 +921,7 @@
                     <div style="text-align: center; padding: 25px; color: var(--text-muted); font-size: 12px;">Memuat data pesanan masuk...</div>
                 </div>
             `;
+            renderAgentOperationalStatus(application);
             startListeningAgentOrders();
         }
 
