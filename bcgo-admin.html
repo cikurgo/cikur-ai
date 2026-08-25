@@ -244,6 +244,8 @@
         .status.pending{background:#fff7ed;color:#c2410c}.status.pending:before{background:#f59e0b}
         .status.approved{background:#ecfdf3;color:#15803d}.status.approved:before{background:#22c55e}
         .status.rejected{background:#fef2f2;color:#b91c1c}.status.rejected:before{background:#ef4444}
+        .status.active{background:#ecfdf3;color:#15803d}.status.active:before{background:#22c55e}
+        .status.inactive{background:#fef2f2;color:#b91c1c}.status.inactive:before{background:#ef4444}
         .bcgo-score{font-weight:900}
         .score-low{color:var(--green)}
         .score-review{color:var(--amber)}
@@ -409,6 +411,9 @@
                 <span class="nav-icon">✓</span><span>Verification</span>
                 <span id="navPendingCount" class="nav-count">0</span>
             </button>
+            <button class="nav-btn" onclick="scrollToSection('customerManagement')">
+                <span class="nav-icon">👤</span><span>Customer Management</span>
+            </button>
             <button class="nav-btn" onclick="scrollToSection('analytics')">
                 <span class="nav-icon">⌁</span><span>Analytics</span>
             </button>
@@ -447,7 +452,7 @@
                 <div>
                     <div class="eyebrow">Intelligent Operations</div>
                     <h1 id="greetingTitle">Good morning 👋</h1>
-                    <p>Pantau jaringan mitra, verifikasi pendaftaran, dan insight BCGO dari satu pusat kendali.</p>
+                    <p>Pantau jaringan mitra, verifikasi pendaftaran, manajemen customer, dan insight BCGO dari satu pusat kendali.</p>
                 </div>
                 <div class="sync-box">
                     <div class="sync-label">Live Data</div>
@@ -495,12 +500,12 @@
 
                 <div class="kpi">
                     <div class="kpi-top">
-                        <div class="kpi-label">Total Registered</div>
-                        <div class="kpi-icon blue">♧</div>
+                        <div class="kpi-label">Total Customers</div>
+                        <div class="kpi-icon blue">👤</div>
                     </div>
-                    <div class="kpi-value" id="statTotal">0</div>
-                    <div class="kpi-meta">Mitra pada kategori aktif</div>
-                    <div class="kpi-trend trend-neutral" id="totalMeta">Data real-time</div>
+                    <div class="kpi-value" id="statCustomers">0</div>
+                    <div class="kpi-meta">Pengguna/pelanggan terdaftar</div>
+                    <div class="kpi-trend trend-neutral" id="customersMeta">Data real-time</div>
                 </div>
 
                 <div class="kpi">
@@ -617,6 +622,43 @@
                 </div>
             </section>
 
+            <!-- BAGIAN KHUSUS CUSTOMER MANAGEMENT -->
+            <section class="card partner-card" id="customerManagement" style="margin-bottom:18px;">
+                <div class="partner-head">
+                    <div>
+                        <div class="card-kicker">Customer Intelligence</div>
+                        <div class="card-title" id="customerSectionTitle">Manajemen Pengguna & Customer CIKUR GO</div>
+                        <div class="card-sub">Daftar customer aktif secara real-time • klik nama untuk melihat detail akun pelanggan.</div>
+                    </div>
+                    <div class="search-wrap">
+                        <span class="search-icon">⌕</span>
+                        <input type="text" class="search-box" placeholder="Cari nama atau email customer..." id="searchCustomerInput">
+                    </div>
+                </div>
+
+                <div class="table-note" id="customerTableNote">Menampilkan seluruh data customer terdaftar • urutan terbaru → terlama</div>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Waktu Daftar / Bergabung</th>
+                                <th>Customer</th>
+                                <th>Kontak / Email</th>
+                                <th>Status Akun</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminCustomerTableBody">
+                            <tr><td colspan="5" class="empty-state">
+                                <div class="empty-icon">◌</div>
+                                Menghubungkan ke Database Customer...
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
             <section class="card partner-card" id="partnerNetwork">
                 <div class="partner-head">
                     <div>
@@ -706,31 +748,34 @@
 
     const badgeEl = document.getElementById("engineStatusBadge");
     const tbody = document.getElementById("adminTableBody");
+    const customerTbody = document.getElementById("adminCustomerTableBody");
 
     let currentCategory = "agent";
     let unsubscribeListener = null;
+    let unsubscribeCustomerListener = null;
     let cachedApplications = {};
+    let cachedCustomers = {};
     let categoryCounts = { agent: 0, resto: 0, driver: 0 };
     let lastAnalysis = { low: 0, review: 0, high: 0 };
 
     function updateGreeting(){
-    const hour = new Date().getHours();
+        const hour = new Date().getHours();
 
-    const greeting =
-        hour >= 5 && hour < 11 ? "Selamat pagi 👋"
-        : hour >= 11 && hour < 15 ? "Selamat siang 👋"
-        : hour >= 15 && hour < 18 ? "Selamat sore 👋"
-        : "Selamat malam 👋";
+        const greeting =
+            hour >= 5 && hour < 11 ? "Selamat pagi 👋"
+            : hour >= 11 && hour < 15 ? "Selamat siang 👋"
+            : hour >= 15 && hour < 18 ? "Selamat sore 👋"
+            : "Selamat malam 👋";
 
-    const el = document.getElementById("greetingTitle");
+        const el = document.getElementById("greetingTitle");
 
-    if (el) {
-        el.textContent = greeting;
+        if (el) {
+            el.textContent = greeting;
+        }
     }
-}
 
-updateGreeting();
-setInterval(updateGreeting, 60000);
+    updateGreeting();
+    setInterval(updateGreeting, 60000);
 
     function setAuthReady(){
         document.body.classList.remove("auth-pending");
@@ -794,6 +839,7 @@ setInterval(updateGreeting, 60000);
         document.getElementById("pendingLock").classList.remove("show");
         document.getElementById("userEmail").textContent = user.email || "Admin";
         loadAdminData("agent");
+        loadCustomerData();
     }
 
     function lockPending(user){
@@ -806,8 +852,11 @@ setInterval(updateGreeting, 60000);
 
     window.secureLogout = async function(){
         if(unsubscribeListener) unsubscribeListener();
+        if(unsubscribeCustomerListener) unsubscribeCustomerListener();
         unsubscribeListener = null;
+        unsubscribeCustomerListener = null;
         cachedApplications = {};
+        cachedCustomers = {};
         adminVerified = false;
         await signOut(auth);
         document.getElementById("pendingLock").classList.remove("show");
@@ -864,7 +913,9 @@ setInterval(updateGreeting, 60000);
             currentUser = null;
             adminVerified = false;
             if(unsubscribeListener) unsubscribeListener();
+            if(unsubscribeCustomerListener) unsubscribeCustomerListener();
             unsubscribeListener = null;
+            unsubscribeCustomerListener = null;
             document.getElementById("authGate").classList.remove("hidden");
             setAuthReady();
             return;
@@ -897,33 +948,18 @@ setInterval(updateGreeting, 60000);
                data.fullName || data.nama || "Tanpa Nama";
     }
 
+    function getCustomerName(data){
+        return data.name || data.fullName || data.nama || data.username || "Customer CIKUR";
+    }
+
     function getPhone(data){
         return data.phone || data.ownerPhone || data.kontak || "-";
     }
 
-    function getBCGO(data){
-        return data._bcgoLiveResult || null;
-    }
-
-    function getRiskClass(result){
-        if(!result) return "score-review";
-        const status = String(result.status || "").toUpperCase();
-        if(status === "APPROVE") return "score-low";
-        if(status === "REJECT") return "score-high";
-        return "score-review";
-    }
-
-    function getRiskLabel(result){
-        if(!result) return "REVIEW";
-        const status = String(result.status || "").toUpperCase();
-        if(status === "APPROVE") return "LOW RISK";
-        if(status === "REJECT") return "HIGH RISK";
-        return "NEED REVIEW";
-    }
-
     function getDate(data){
-        if(data.submittedAt && typeof data.submittedAt.toDate === "function"){
-            return data.submittedAt.toDate().toLocaleString("id-ID", {
+        const timestamp = data.submittedAt || data.createdAt || data.joinedAt;
+        if(timestamp && typeof timestamp.toDate === "function"){
+            return timestamp.toDate().toLocaleString("id-ID", {
                 day:"2-digit", month:"short", year:"numeric",
                 hour:"2-digit", minute:"2-digit"
             });
@@ -982,6 +1018,84 @@ setInterval(updateGreeting, 60000);
 
         loadAdminData(category);
     };
+
+    function loadCustomerData(){
+        if(unsubscribeCustomerListener) unsubscribeCustomerListener();
+
+        // Mengambil data dari koleksi 'customers' atau 'users' di Firestore secara real-time
+        const q = query(collection(db, "customers"), orderBy("createdAt", "desc"));
+
+        unsubscribeCustomerListener = onSnapshot(q, snapshot => {
+            cachedCustomers = {};
+            let totalCustomers = 0;
+            let rowsHtml = "";
+
+            snapshot.forEach(documentSnap => {
+                const data = documentSnap.data();
+                const docId = documentSnap.id;
+
+                cachedCustomers[docId] = data;
+                totalCustomers++;
+
+                const nama = getCustomerName(data);
+                const email = data.email || "-";
+                const phone = data.phone || data.kontak || "-";
+                const date = getDate(data);
+                const initial = esc(nama.charAt(0).toUpperCase());
+
+                let status = data.status || "active";
+                let statusClass = status === "inactive" ? "inactive" : "active";
+                let statusText = status === "inactive" ? "Inactive" : "Active";
+
+                rowsHtml += `
+                    <tr>
+                        <td>${esc(date)}</td>
+                        <td>
+                            <div class="name-cell clickable-name" onclick="openCustomerDetailModal('${esc(docId)}')">
+                                <div class="avatar">${initial}</div>
+                                <div>
+                                    <div class="name-main">${esc(nama)}</div>
+                                    <div class="name-sub">ID: ${esc(docId.substring(0,8))}...</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>${esc(email)} / ${esc(phone)}</td>
+                        <td><span class="status ${statusClass}">${statusText}</span></td>
+                        <td>
+                            <div class="action-group">
+                                <button class="btn-action btn-review" onclick="openCustomerDetailModal('${esc(docId)}')">Detail</button>
+                                <button class="btn-action btn-reject" onclick="toggleCustomerStatus('${esc(docId)}', '${status}')">${status === 'inactive' ? 'Aktifkan' : 'Nonaktifkan'}</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            if(totalCustomers === 0){
+                customerTbody.innerHTML = `
+                    <tr><td colspan="5" class="empty-state">
+                        <div class="empty-icon">👤</div>
+                        Belum ada data customer terdaftar di koleksi <b>customers</b>.
+                    </td></tr>
+                `;
+            }else{
+                customerTbody.innerHTML = rowsHtml;
+            }
+
+            document.getElementById("statCustomers").textContent = totalCustomers;
+            document.getElementById("customersMeta").textContent = totalCustomers > 0 ? "Pengguna aktif terdaftar" : "Belum ada customer";
+
+        }, error => {
+            console.warn("Kendala koneksi koleksi customers:", error);
+            customerTbody.innerHTML = `
+                <tr><td colspan="5" class="empty-state" style="color:var(--muted)">
+                    <div class="empty-icon" style="background:#f1f5f9">i</div>
+                    Koleksi customer belum tersedia atau menunggu sinkronisasi database.
+                </td></tr>
+            `;
+            document.getElementById("statCustomers").textContent = "0";
+        });
+    }
 
     function loadAdminData(category){
         tbody.innerHTML = `
@@ -1147,7 +1261,6 @@ setInterval(updateGreeting, 60000);
     function updateStats(pending, approved, total){
         document.getElementById("statPending").textContent = pending;
         document.getElementById("statApproved").textContent = approved;
-        document.getElementById("statTotal").textContent = total;
 
         const attention = lastAnalysis.high + lastAnalysis.review;
         document.getElementById("statAttention").textContent = attention;
@@ -1156,8 +1269,6 @@ setInterval(updateGreeting, 60000);
             pending > 0 ? `${pending} item menunggu tindakan` : "Tidak ada antrean";
         document.getElementById("approvedMeta").textContent =
             approved > 0 ? `${approved} mitra sudah aktif` : "Belum ada mitra aktif";
-        document.getElementById("totalMeta").textContent =
-            total > 0 ? "Data real-time" : "Belum ada data";
         document.getElementById("attentionMeta").textContent =
             attention > 0 ? `${attention} item perlu perhatian` : "Tidak ada red flag";
     }
@@ -1283,6 +1394,22 @@ setInterval(updateGreeting, 60000);
         if(document.getElementById("networkScope").value === "active"){
             document.getElementById("networkTotal").textContent = activeTotal;
         }
+    }
+
+    function getRiskClass(result){
+        if(!result) return "score-review";
+        const status = String(result.status || "").toUpperCase();
+        if(status === "APPROVE") return "score-low";
+        if(status === "REJECT") return "score-high";
+        return "score-review";
+    }
+
+    function getRiskLabel(result){
+        if(!result) return "REVIEW";
+        const status = String(result.status || "").toUpperCase();
+        if(status === "APPROVE") return "LOW RISK";
+        if(status === "REJECT") return "HIGH RISK";
+        return "NEED REVIEW";
     }
 
     window.openDetailModal = function(docId){
@@ -1419,6 +1546,42 @@ setInterval(updateGreeting, 60000);
         document.getElementById("detailModal").style.display = "flex";
     };
 
+    window.openCustomerDetailModal = function(docId){
+        const data = cachedCustomers[docId];
+        if(!data) return;
+
+        const nama = getCustomerName(data);
+        const email = data.email || "-";
+        const phone = data.phone || data.kontak || "-";
+        const date = getDate(data);
+        const status = data.status || "active";
+
+        let html = `
+            <div class="detail-section">
+                <div class="detail-section-title">Informasi Akun Customer</div>
+                <div class="detail-grid">
+                    <div class="detail-row"><span class="detail-label">ID Pelanggan</span><span class="detail-value">${esc(docId)}</span></div>
+                    <div class="detail-row"><span class="detail-label">Nama Lengkap</span><span class="detail-value">${esc(nama)}</span></div>
+                    <div class="detail-row"><span class="detail-label">Email Akun</span><span class="detail-value">${esc(email)}</span></div>
+                    <div class="detail-row"><span class="detail-label">Nomor Telepon / WhatsApp</span><span class="detail-value">${esc(phone)}</span></div>
+                    <div class="detail-row"><span class="detail-label">Tanggal Bergabung</span><span class="detail-value">${esc(date)}</span></div>
+                    <div class="detail-row"><span class="detail-label">Status Akun</span><span class="detail-value">${esc(status.toUpperCase())}</span></div>
+                </div>
+            </div>
+            <div class="detail-section">
+                <div class="detail-section-title">Aktivitas & Alamat Terakhir</div>
+                <div class="detail-grid">
+                    <div class="detail-row"><span class="detail-label">Alamat Utama</span><span class="detail-value">${esc(data.address || data.alamat || "Belum diatur")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Total Pesanan</span><span class="detail-value">${esc(data.totalOrders || data.orderCount || "0")} Pesanan</span></div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById("modalTitle").textContent = `Detail Customer: ${nama}`;
+        document.getElementById("modalBodyContent").innerHTML = html;
+        document.getElementById("detailModal").style.display = "flex";
+    };
+
     window.closeDetailModal = function(){
         document.getElementById("detailModal").style.display = "none";
     };
@@ -1441,16 +1604,22 @@ setInterval(updateGreeting, 60000);
         }
     };
 
-    window.deleteApplication = async function(docId){
-        if(!confirm("PERINGATAN: Data mitra yang dihapus tidak dapat dikembalikan. Yakin ingin menghapus data ini?")) return;
+    window.toggleCustomerStatus = async function(docId, currentStatus){
+        const newStatus = currentStatus === "inactive" ? "active" : "inactive";
+        const data = cachedCustomers[docId];
+        const nama = data ? getCustomerName(data) : "customer ini";
+
+        if(!confirm(`Ubah status akun ${nama} menjadi ${newStatus.toUpperCase()}?`)) return;
 
         try{
-            await deleteDoc(doc(db, "mitra_applications", docId));
-            showToast("Data mitra berhasil dihapus.");
-            closeDetailModal();
+            await updateDoc(doc(db, "customers", docId), {
+                status: newStatus,
+                updatedAt: serverTimestamp()
+            });
+            showToast(`Status customer ${nama} berhasil diubah ke ${newStatus}.`);
         }catch(error){
-            console.error("Error deleting document:", error);
-            showToast("Gagal menghapus data: " + error.message);
+            console.error("Error updating customer status:", error);
+            showToast("Gagal memperbarui status customer: " + error.message);
         }
     };
 
@@ -1462,12 +1631,17 @@ setInterval(updateGreeting, 60000);
         });
     });
 
+    document.getElementById("searchCustomerInput").addEventListener("input", function(e){
+        const keyword = e.target.value.toLowerCase().trim();
+        document.querySelectorAll("#adminCustomerTableBody tr").forEach(row => {
+            if(row.querySelector(".empty-state")) return;
+            row.style.display = row.innerText.toLowerCase().includes(keyword) ? "" : "none";
+        });
+    });
+
     document.addEventListener("keydown", e => {
         if(e.key === "Escape") closeDetailModal();
     });
-
-    // Dashboard boot dikendalikan oleh Firebase Authentication di atas.
-    // Tanpa akun + approval admin, listener Firestore tidak pernah dijalankan.
 </script>
 </body>
 </html>
