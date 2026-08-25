@@ -176,6 +176,51 @@ window.CikurCloud = {
     // Dokumen id: mitra_applications/{uid}_{jenis}
     // ======================================
 
+    // ======================================
+    // DAFTAR RESTO YANG SUDAH DISETUJUI
+    // (dipakai food.html untuk menampilkan resto & menu asli)
+    // ======================================
+
+    listenApprovedRestos(callback) {
+        const q = query(
+            collection(db, "mitra_applications"),
+            where("jenis", "==", "resto"),
+            where("status", "==", "approved")
+        );
+
+        return onSnapshot(q, (snapshot) => {
+            const restos = [];
+            snapshot.forEach((docSnap) => {
+                restos.push({ id: docSnap.id, uid: docSnap.data().uid, ...docSnap.data() });
+            });
+            if (typeof callback === "function") callback(restos);
+        }, (error) => {
+            console.error("[CIKUR GO] Gagal memuat daftar resto:", error);
+            if (typeof callback === "function") callback([]);
+        });
+    },
+
+    // ======================================
+    // UPDATE PROFIL MITRA SETELAH APPROVED
+    // (edit menu, jam buka, dsb - TIDAK mereset
+    //  status/submittedAt seperti submitMitraApplication)
+    // ======================================
+
+    async updateMitraProfile(userId, jenis, data) {
+        if (!userId || !jenis) throw new Error("Data tidak lengkap.");
+
+        await setDoc(
+            doc(db, "mitra_applications", `${userId}_${jenis}`),
+            {
+                ...data,
+                updatedAt: serverTimestamp()
+            },
+            { merge: true }
+        );
+
+        return true;
+    },
+
     async submitMitraApplication(userId, jenis, formData) {
         if (!userId || !jenis) throw new Error("Data pendaftaran tidak lengkap.");
 
@@ -493,6 +538,119 @@ window.CikurCloud = {
                 callback(messages);
             }
         });
+    },
+
+    // ======================================
+    // PROFIL PUBLIK RESTO (nama, alamat, menu,
+    // status buka/tutup) - terpisah dari
+    // mitra_applications (yang cuma untuk verifikasi).
+    // Ini yang dibaca food.html.
+    // ======================================
+
+    async saveRestoProfile(userId, data) {
+        if (!userId) throw new Error("User ID tidak tersedia.");
+
+        await setDoc(
+            doc(db, "resto_profiles", userId),
+            {
+                ...data,
+                updatedAt: serverTimestamp()
+            },
+            { merge: true }
+        );
+
+        return true;
+    },
+
+    listenApprovedRestos(callback) {
+        const q = query(
+            collection(db, "resto_profiles"),
+            where("approved", "==", true)
+        );
+
+        return onSnapshot(q, (snapshot) => {
+            const restos = [];
+            snapshot.forEach((docSnap) => {
+                restos.push({ id: docSnap.id, ...docSnap.data() });
+            });
+
+            if (typeof callback === "function") {
+                callback(restos);
+            }
+        });
+    },
+
+    // ======================================
+    // ORDER FOOD YANG SIAP DIAMBIL DRIVER
+    // (status SIAP_DIAMBIL, belum ada driverId)
+    // ======================================
+
+    listenAvailableFoodOrders(callback) {
+        const q = query(
+            collection(db, "orders"),
+            where("type", "==", "FOOD"),
+            where("status", "==", "SIAP_DIAMBIL")
+        );
+
+        return onSnapshot(q, (snapshot) => {
+            const orders = [];
+            snapshot.forEach((docSnap) => {
+                const data = docSnap.data();
+                if (!data.driverId) {
+                    orders.push({ id: docSnap.id, ...data });
+                }
+            });
+
+            if (typeof callback === "function") {
+                callback(orders);
+            }
+        });
+    },
+
+    // ======================================
+    // ORDER FOOD YANG SEDANG DIANTAR DRIVER TERTENTU
+    // ======================================
+
+    listenDriverActiveFoodOrders(driverId, callback) {
+        if (!driverId) return () => {};
+
+        const q = query(
+            collection(db, "orders"),
+            where("type", "==", "FOOD"),
+            where("driverId", "==", driverId),
+            where("status", "in", ["DIAMBIL_DRIVER", "DIANTAR"])
+        );
+
+        return onSnapshot(q, (snapshot) => {
+            const orders = [];
+            snapshot.forEach((docSnap) => {
+                orders.push({ id: docSnap.id, ...docSnap.data() });
+            });
+
+            if (typeof callback === "function") {
+                callback(orders);
+            }
+        });
+    },
+
+    // ======================================
+    // DRIVER KLAIM ORDER (ambil pesanan siap diantar)
+    // ======================================
+
+    async claimFoodOrder(orderId, driverId, driverName) {
+        if (!orderId || !driverId) throw new Error("Data klaim tidak lengkap.");
+
+        await updateDoc(
+            doc(db, "orders", orderId),
+            {
+                driverId,
+                driverName: driverName || "",
+                status: "DIAMBIL_DRIVER",
+                updatedAt: serverTimestamp()
+            }
+        );
+
+        return true;
     }
 
 };
