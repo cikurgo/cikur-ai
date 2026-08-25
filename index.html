@@ -2039,6 +2039,12 @@ function bukaModalRegistrasi() {
                 updateUIAkun(customerProfile);
             }
 
+            if (
+                typeof startCustomerPresenceHeartbeat === "function"
+            ) {
+                startCustomerPresenceHeartbeat();
+            }
+
 
             alert(
                 "Registrasi CIKUR GO berhasil!"
@@ -2193,6 +2199,7 @@ function bukaModalLogin() {
 
                 if (typeof updateUIProfile === "function") updateUIProfile();
                 if (typeof updateUIAkun === "function") updateUIAkun(userProfile);
+                if (typeof startCustomerPresenceHeartbeat === "function") startCustomerPresenceHeartbeat();
 
                 alert("Login berhasil! Selamat datang kembali.");
 
@@ -2301,10 +2308,32 @@ async function loadCurrentUserProfileIndex() {
             updateUIAkun(userProfile);
         }
 
+        startCustomerPresenceHeartbeat();
+
     } catch (error) {
         console.error("[CIKUR GO] Gagal memuat profil saat startup:", error);
         updateUIProfile();
     }
+}
+
+let presenceHeartbeatInterval = null;
+
+function startCustomerPresenceHeartbeat() {
+    if (!userProfile.uid || !window.CikurCloud) return;
+
+    const sendPresence = () => {
+        window.CikurCloud.updateCustomerPresence(userProfile.uid, {
+            name: userProfile.name || "",
+            email: userProfile.email || "",
+            phone: userProfile.phone || "",
+            status: "active"
+        });
+    };
+
+    sendPresence();
+
+    if (presenceHeartbeatInterval) clearInterval(presenceHeartbeatInterval);
+    presenceHeartbeatInterval = setInterval(sendPresence, 90000);
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
