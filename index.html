@@ -431,17 +431,6 @@ html, body, * {
     object-fit: cover;
 }
 
-.avatar-placeholder{
-    position:relative;
-    background:linear-gradient(145deg,#f8fafc,#e2e8f0);
-    color:#64748b;
-    border:2px solid #fff;
-}
-.avatar-placeholder > svg{width:25px;height:25px;fill:currentColor;}
-.avatar-camera-badge{position:absolute;right:-1px;bottom:-1px;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#E50914;border:2px solid #fff;color:#fff;}
-.avatar-camera-badge svg{width:10px;height:10px;fill:currentColor;}
-.profile-view-avatar{position:relative;}
-
 .user-info{
     flex: 1;
     min-width: 0;
@@ -1009,35 +998,34 @@ footer p { margin: 0; }
 }
 
 /* =========================================================
-   CGO / BOTPRESS — ROBOT DI ATAS BOTTOM NAV
+   CGO / BOTPRESS — JANGAN MENUTUPI BOTTOM NAVIGATION
+   FAB robot berada di belakang nav, sedangkan chat window
+   tetap boleh tampil di atas ketika dibuka.
 ========================================================= */
 .bottom-nav {
     z-index: 2147483000 !important;
     background-color: #ffffff !important;
 }
 
+/* Botpress v3.x floating action button */
 .bpFabWrapper {
-    position: fixed !important;
-    right: max(18px, calc((100vw - 440px) / 2 + 18px)) !important;
-    bottom: calc(74px + env(safe-area-inset-bottom, 0px) + 10px) !important;
-    z-index: 2147483646 !important;
-    transform: none !important;
+    z-index: 100 !important;
 }
 
-.bpFabContainer,
-.bpFab,
-.bpFabIcon,
-.bpFabImage {
-    position: relative !important;
-    z-index: 2147483646 !important;
+/* Fallback untuk container FAB pada versi Botpress berbeda */
+.bpFabContainer {
+    z-index: 100 !important;
 }
 
+/* Chat window tetap di atas halaman ketika benar-benar dibuka */
 .bpWebchat {
-    z-index: 2147483647 !important;
+    z-index: 2147483001 !important;
 }
 
-@media (max-width: 440px){
-    .bpFabWrapper{right:16px !important;}
+/* Area bawah FAB tidak boleh mengalahkan navigasi */
+.bpFabWrapper,
+.bpFabContainer {
+    bottom: 86px !important;
 }
 
 .nav-item {
@@ -1263,40 +1251,99 @@ footer p { margin: 0; }
     box-shadow: 0 4px 10px rgba(229, 9, 20, 0.1);
 }
 
-/* CGO GLOBAL NOTIFICATION — APP TOAST */
+/* CGO GLOBAL NOTIFICATION */
 .cgo-notification {
     position: fixed;
-    left: 50%;
-    bottom: calc(74px + env(safe-area-inset-bottom, 0px) + 14px);
-    width: min(390px, calc(100% - 28px));
-    z-index: 2147483640;
+    inset: 0;
+    z-index: 999999;
     display: flex;
+    align-items: flex-start;
     justify-content: center;
+    padding: 24px 16px;
     pointer-events: none;
     opacity: 0;
     visibility: hidden;
-    transform: translate(-50%, 18px);
-    transition: opacity .22s ease, visibility .22s ease, transform .32s cubic-bezier(.16,1,.3,1);
+    transition: opacity 0.25s ease, visibility 0.25s ease;
 }
-.cgo-notification.show {opacity:1;visibility:visible;transform:translate(-50%,0);}
+
+.cgo-notification.show {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
 .cgo-notification-card {
-    position:relative;width:100%;display:flex;align-items:center;gap:11px;padding:11px 38px 11px 11px;
-    background:rgba(255,255,255,.98);border:1px solid rgba(15,23,42,.07);border-radius:17px;
-    box-shadow:0 16px 36px rgba(15,23,42,.16),0 4px 12px rgba(15,23,42,.08);
-    backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);overflow:hidden;
+    position: relative;
+    width: 100%;
+    max-width: 360px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 42px 14px 14px;
+    background: rgba(255,255,255,0.97);
+    border: 1px solid rgba(229,9,20,0.10);
+    border-radius: 18px;
+    box-shadow: 0 18px 45px rgba(0,0,0,0.14), 0 4px 14px rgba(0,0,0,0.06);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    transform: translateY(-18px) scale(0.96);
+    transition: transform 0.3s cubic-bezier(.16,1,.3,1);
 }
-.cgo-notification-card::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,#16a34a,#22c55e);transform-origin:left;animation:cgoToastTimer 3.5s linear forwards;}
-.cgo-notification-icon{width:39px;height:39px;flex:0 0 39px;display:flex;align-items:center;justify-content:center;border-radius:13px;background:#dcfce7;color:#16a34a;font-size:18px;font-weight:900;}
-.cgo-notification-content{min-width:0;padding-top:1px;}
-.cgo-notification-content strong{display:block;margin-bottom:2px;font-size:12px;font-weight:850;color:var(--text-main);}
-.cgo-notification-content p{margin:0;font-size:10.5px;line-height:1.35;font-weight:600;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-.cgo-notification-close{position:absolute;top:8px;right:8px;width:24px;height:24px;border:none;border-radius:50%;background:#f1f5f9;color:#64748b;font-size:16px;line-height:1;cursor:pointer;}
-.cgo-notification.warning .cgo-notification-icon{background:#fef3c7;color:#d97706;}
-.cgo-notification.warning .cgo-notification-card::after{background:linear-gradient(90deg,#d97706,#f59e0b);}
-.cgo-notification.error .cgo-notification-icon{background:#fee2e2;color:var(--primary-red);}
-.cgo-notification.error .cgo-notification-card::after{background:linear-gradient(90deg,#E50914,#ff4040);}
-@keyframes cgoToastTimer{from{transform:scaleX(1)}to{transform:scaleX(0)}}
-@media (max-width:440px){.cgo-notification{width:calc(100% - 22px);bottom:calc(74px + env(safe-area-inset-bottom, 0px) + 10px);}}
+
+.cgo-notification.show .cgo-notification-card {
+    transform: translateY(0) scale(1);
+}
+
+.cgo-notification-icon {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 13px;
+    background: #dcfce7;
+    color: #16a34a;
+    font-size: 18px;
+    font-weight: 900;
+}
+
+.cgo-notification-content {
+    min-width: 0;
+}
+
+.cgo-notification-content strong {
+    display: block;
+    margin-bottom: 3px;
+    font-size: 13px;
+    font-weight: 850;
+    color: var(--text-main);
+}
+
+.cgo-notification-content p {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.4;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.cgo-notification-close {
+    position: absolute;
+    top: 8px;
+    right: 9px;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.cgo-notification.warning .cgo-notification-icon { background: #fef3c7; color: #d97706; }
+.cgo-notification.error .cgo-notification-icon { background: #fee2e2; color: var(--primary-red); }   
 </style>
 </head>
     
@@ -1318,10 +1365,7 @@ footer p { margin: 0; }
 <div class="app-header">
     <div class="header-profile-wrapper">
         <div class="user-greeting" id="btnOpenProfileDropdown">
-            <div class="user-avatar avatar-placeholder" id="headerAvatar" aria-label="Foto profil">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.25 4.25 0 1 0 0-8.5A4.25 4.25 0 0 0 12 12Zm0 2c-4.14 0-7.5 2.12-7.5 4.75V20h15v-1.25C19.5 16.12 16.14 14 12 14Z"/></svg>
-    <span class="avatar-camera-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 4.5 10.2 3h3.6L15 4.5H18A2 2 0 0 1 20 6.5v10A2 2 0 0 1 18 18.5H6a2 2 0 0 1-2-2v-10a2 2 0 0 1 2-2h3ZM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0-1.7a2.3 2.3 0 1 1 0-4.6 2.3 2.3 0 0 1 0 4.6Z"/></svg></span>
-</div>
+            <div class="user-avatar" id="headerAvatar">CK</div>
             <div class="user-info">
                 <h4>Selamat Datang,</h4>
                 <h2 id="headerNamaUser">CIKUR USER</h2>
@@ -1539,9 +1583,7 @@ footer p { margin: 0; }
     <!-- VIEW 5: PROFIL -->
     <div id="view-profil" class="tab-content-view">
         <div style="text-align: center; padding: 14px 0; border-bottom: 1px solid var(--border-color); margin-bottom: 14px;">
-            <div class="profile-view-avatar avatar-placeholder" id="profileViewAvatar" aria-label="Foto profil" style="width:70px;height:70px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;box-shadow:0 6px 16px rgba(15,23,42,.12);overflow:hidden;">
-    <svg viewBox="0 0 24 24" aria-hidden="true" style="width:34px;height:34px;fill:currentColor;"><path d="M12 12a4.25 4.25 0 1 0 0-8.5A4.25 4.25 0 0 0 12 12Zm0 2c-4.14 0-7.5 2.12-7.5 4.75V20h15v-1.25C19.5 16.12 16.14 14 12 14Z"/></svg>
-</div>
+            <div style="width: 70px; height: 70px; border-radius: 50%; background: #fee2e2; border: 2px solid var(--primary-red); color: var(--primary-red); font-size: 20px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px; box-shadow: 0 6px 16px rgba(229, 9, 20, 0.2); overflow: hidden;" id="profileViewAvatar">CK</div>
             <h3 style="font-size: 14px; font-weight: 800; color: var(--text-main);" id="profileViewName">CIKUR USER</h3>
             <p style="font-size: 10px; color: var(--text-muted); margin-top: 2px;" id="profileViewPhone">08123456789</p>
             <p style="font-size: 10px; color: var(--text-muted); margin-top: 2px;" id="profileViewEmail">-</p>
@@ -1674,7 +1716,6 @@ function updateUIProfile() {
 
     if (userProfile.avatar && userProfile.avatar.startsWith("data:image")) {
         if (avatarContainer) {
-            avatarContainer.classList.remove("avatar-placeholder");
             avatarContainer.innerHTML = `
                 <img
                     src="${userProfile.avatar}"
@@ -1684,7 +1725,6 @@ function updateUIProfile() {
         }
 
         if (profileViewAvatar) {
-            profileViewAvatar.classList.remove("avatar-placeholder");
             profileViewAvatar.innerHTML = `
                 <img
                     src="${userProfile.avatar}"
@@ -1694,11 +1734,20 @@ function updateUIProfile() {
             `;
         }
     } else {
-        const placeholder = `
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.25 4.25 0 1 0 0-8.5A4.25 4.25 0 0 0 12 12Zm0 2c-4.14 0-7.5 2.12-7.5 4.75V20h15v-1.25C19.5 16.12 16.14 14 12 14Z"/></svg>
-            <span class="avatar-camera-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 4.5 10.2 3h3.6L15 4.5H18A2 2 0 0 1 20 6.5v10A2 2 0 0 1 18 18.5H6a2 2 0 0 1-2-2v-10a2 2 0 0 1 2-2h3ZM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0-1.7a2.3 2.3 0 1 1 0-4.6 2.3 2.3 0 0 1 0 4.6Z"/></svg></span>`;
-        if (avatarContainer) { avatarContainer.classList.add("avatar-placeholder"); avatarContainer.innerHTML = placeholder; }
-        if (profileViewAvatar) { profileViewAvatar.classList.add("avatar-placeholder"); profileViewAvatar.innerHTML = placeholder.replace(/<span class="avatar-camera-badge"[\s\S]*?<\/span>/, ""); }
+        const initials = userProfile.name
+            .split(" ")
+            .map(n => n[0])
+            .join("")
+            .substring(0, 2)
+            .toUpperCase();
+
+        if (avatarContainer) {
+            avatarContainer.innerText = initials || "CK";
+        }
+
+        if (profileViewAvatar) {
+            profileViewAvatar.innerText = initials || "CK";
+        }
     }
 }  
     
@@ -2868,12 +2917,6 @@ if (cgoVoiceWave) {
         icon.textContent = type === "success" ? "✓" : (type === "warning" ? "!" : "×");
         title.textContent = notificationTitle;
         message.textContent = notificationMessage;
-        const toastCard = notification.querySelector(".cgo-notification-card");
-        if (toastCard) {
-            toastCard.style.animation = "none";
-            void toastCard.offsetWidth;
-            toastCard.style.animation = "";
-        }
         notification.classList.add("show");
         notification.setAttribute("aria-hidden", "false");
         notificationTimer = setTimeout(() => { closeCGONotification(); }, 3500);
