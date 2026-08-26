@@ -38,9 +38,11 @@ body{
     background: #e2e8f0;
     color: var(--text-main);
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     justify-content: center;
     align-items: center;
+    overflow: hidden;
 }
 
 @media(min-width: 480px){
@@ -50,15 +52,19 @@ body{
 .container{
     width: 100%;
     max-width: 440px;
+    height: 100vh;
+    height: 100dvh;
     min-height: 100vh;
+    min-height: 100dvh;
+    max-height: 100dvh;
     margin: 0 auto;
-    padding: 0 18px 100px 18px;
+    padding: 0 18px;
     display: flex;
     flex-direction: column;
     background: var(--container-bg);
     box-shadow: 0 20px 40px rgba(0,0,0,0.06);
     position: relative;
-    overflow-x: hidden;
+    overflow: hidden;
 }
 
 @media(min-width: 480px){
@@ -76,6 +82,20 @@ body{
 .tab-content-view {
     display: none;
     flex: 1;
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-top: 82px;
+    padding-bottom: 112px;
+    scrollbar-width: none;
+}
+
+.tab-content-view::-webkit-scrollbar{
+    width: 0;
+    height: 0;
 }
 
 .tab-content-view.active {
@@ -369,19 +389,21 @@ html, body, * {
     position: fixed;
     top: 0;
     left: 50%;
-    transform: translateX(-50%);
-    width: 100%;
-    max-width: 440px;
+    width: min(100%, 440px);
+    height: 72px;
+    transform: translate3d(-50%, 0, 0);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 18px;
-    background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    border-bottom: none;
-    box-shadow: none;
-    z-index: 1000;
+    padding: 10px 18px;
+    background: rgba(255,255,255,.98);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-bottom: 1px solid rgba(15,23,42,.06);
+    box-shadow: 0 5px 18px rgba(15,23,42,.06);
+    z-index: 9000;
+    isolation: isolate;
+    will-change: transform;
 }
 
 .header-profile-wrapper{
@@ -997,7 +1019,7 @@ footer p { margin: 0; }
     width: 100%;
     max-width: 440px;
     height: 74px;
-    background-color: rgba(255, 255, 255, 0.95);
+    background-color: rgba(255, 255, 255, 0.98);
     backdrop-filter: blur(15px);
     border-top: 1px solid var(--border-color);
     display: flex;
@@ -1009,37 +1031,64 @@ footer p { margin: 0; }
 }
 
 /* =========================================================
-   CGO / BOTPRESS — ROBOT DI ATAS BOTTOM NAV
+   CGO — CONTROLLED APP LAUNCHER
+   Botpress native FAB disembunyikan agar tidak nyangkut di
+   layer browser/iframe. Tombol CGO milik aplikasi sendiri
+   berada tepat di atas bottom navigation.
 ========================================================= */
-.bottom-nav {
-    z-index: 2147483000 !important;
-    background-color: #ffffff !important;
-}
-
-.bpFabWrapper {
-    position: fixed !important;
-    right: max(18px, calc((100vw - 440px) / 2 + 18px)) !important;
-    bottom: calc(74px + env(safe-area-inset-bottom, 0px) + 10px) !important;
-    z-index: 2147483646 !important;
-    transform: none !important;
-}
-
+.bpFabWrapper,
 .bpFabContainer,
 .bpFab,
 .bpFabIcon,
 .bpFabImage {
-    position: relative !important;
-    z-index: 2147483646 !important;
+    display: none !important;
 }
 
 .bpWebchat {
     z-index: 2147483647 !important;
 }
 
-@media (max-width: 440px){
-    .bpFabWrapper{right:16px !important;}
+.cgo-floating-launcher{
+    position: fixed;
+    right: max(16px, calc((100vw - 440px) / 2 + 16px));
+    bottom: calc(74px + env(safe-area-inset-bottom, 0px) + 12px);
+    width: 58px;
+    height: 58px;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    background: linear-gradient(145deg,#ffffff,#f1f5f9);
+    box-shadow: 0 10px 28px rgba(15,23,42,.22), 0 3px 10px rgba(229,9,20,.18);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10001;
+    transition: transform .2s ease, box-shadow .2s ease;
 }
-
+.cgo-floating-launcher:active{transform:scale(.94);}
+.cgo-floating-launcher svg{width:39px;height:39px;}
+.cgo-floating-launcher::after{
+    content:"CGO";
+    position:absolute;
+    right:-2px;
+    bottom:-3px;
+    min-width:22px;
+    height:16px;
+    padding:0 4px;
+    border-radius:8px;
+    background:#E50914;
+    border:2px solid #fff;
+    color:#fff;
+    font-size:7px;
+    font-weight:900;
+    line-height:12px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+@media(max-width:440px){
+    .cgo-floating-launcher{right:14px;}
+}
 .nav-item {
     background: none;
     border: none;
@@ -1116,6 +1165,34 @@ footer p { margin: 0; }
     color: var(--primary-red);
 }
 
+/* ===========================
+   APP CONFIRM DIALOG — menggantikan confirm() browser
+=========================== */
+.app-confirm-overlay{
+    position:fixed;inset:0;display:flex;align-items:flex-end;justify-content:center;
+    padding:18px;
+    background:rgba(15,23,42,.58);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    opacity:0;visibility:hidden;pointer-events:none;
+    transition:.22s ease;
+    z-index:20000;
+}
+.app-confirm-overlay.show{opacity:1;visibility:visible;pointer-events:auto;}
+.app-confirm-card{
+    width:min(100%,420px);background:#fff;border-radius:26px;padding:20px 18px 14px;
+    box-shadow:0 24px 60px rgba(15,23,42,.28);
+    transform:translateY(24px) scale(.98);
+    transition:.28s cubic-bezier(.16,1,.3,1);
+}
+.app-confirm-overlay.show .app-confirm-card{transform:translateY(0) scale(1);}
+.app-confirm-icon{width:48px;height:48px;border-radius:16px;background:#fee2e2;color:#E50914;display:flex;align-items:center;justify-content:center;margin-bottom:12px;}
+.app-confirm-icon svg{width:25px;height:25px;fill:currentColor;}
+.app-confirm-title{font-size:17px;font-weight:850;color:#0f172a;margin-bottom:5px;}
+.app-confirm-message{font-size:12px;line-height:1.5;color:#64748b;margin-bottom:16px;}
+.app-confirm-actions{display:flex;gap:8px;}
+.app-confirm-actions button{flex:1;border:0;border-radius:13px;padding:12px;font-size:12px;font-weight:800;cursor:pointer;}
+.app-confirm-cancel{background:#f1f5f9;color:#334155;}
+.app-confirm-ok{background:#E50914;color:#fff;box-shadow:0 6px 15px rgba(229,9,20,.22);}
 /* ===========================
    MODAL & INVOICE SCREEN
 =========================== */
@@ -1267,9 +1344,9 @@ footer p { margin: 0; }
 .cgo-notification {
     position: fixed;
     left: 50%;
-    bottom: calc(74px + env(safe-area-inset-bottom, 0px) + 14px);
+    bottom: calc(74px + env(safe-area-inset-bottom, 0px) + 84px);
     width: min(390px, calc(100% - 28px));
-    z-index: 2147483640;
+    z-index: 15000;
     display: flex;
     justify-content: center;
     pointer-events: none;
@@ -1379,7 +1456,7 @@ footer p { margin: 0; }
     </div>
 </div>
 
-<div class="container" style="padding-top: 0;">
+<div class="container">
     <div id="view-beranda" class="tab-content-view active">
     <!-- BANNER UTAMA -->
     <div class="main-banner-section">
@@ -1556,6 +1633,20 @@ footer p { margin: 0; }
     </footer>
 </div>
 
+<!-- CGO FLOATING LAUNCHER — selalu di atas bottom navigation -->
+<button id="cgoFloatingLauncher" class="cgo-floating-launcher" type="button" aria-label="Buka CGO">
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+        <rect x="12" y="15" width="40" height="34" rx="13" fill="#111827"/>
+        <rect x="16" y="19" width="32" height="25" rx="10" fill="#1f2937" stroke="#FFD43B" stroke-width="2"/>
+        <circle cx="26" cy="31" r="3.2" fill="#FFD43B"/>
+        <circle cx="38" cy="31" r="3.2" fill="#FFD43B"/>
+        <path d="M25 37c4 3 10 3 14 0" fill="none" stroke="#FFD43B" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M32 15V9" stroke="#111827" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="32" cy="7" r="3" fill="#FFD43B"/>
+        <path d="M8 25h4M52 25h4" stroke="#E50914" stroke-width="3" stroke-linecap="round"/>
+    </svg>
+</button>
+
 <!-- BOTTOM NAVIGATION BAR -->
 <nav class="bottom-nav">
     <button class="nav-item active" onclick="switchTab('beranda')" id="nav-beranda">
@@ -1581,6 +1672,21 @@ footer p { margin: 0; }
         <span>Profil</span>
     </button>
 </nav>
+
+<!-- APP CONFIRM DIALOG -->
+<div id="appConfirmOverlay" class="app-confirm-overlay" aria-hidden="true">
+    <div class="app-confirm-card" role="dialog" aria-modal="true" aria-labelledby="appConfirmTitle">
+        <div class="app-confirm-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2Zm1 15h-2v-2h2Zm0-4h-2V7h2Z"/></svg>
+        </div>
+        <div id="appConfirmTitle" class="app-confirm-title">Konfirmasi</div>
+        <div id="appConfirmMessage" class="app-confirm-message"></div>
+        <div class="app-confirm-actions">
+            <button id="appConfirmCancel" class="app-confirm-cancel" type="button">Batal</button>
+            <button id="appConfirmOk" class="app-confirm-ok" type="button">Oke</button>
+        </div>
+    </div>
+</div>
 
 <!-- MODAL UMUM -->
 <div id="assistantScreen" class="assistant-screen">
@@ -2544,7 +2650,8 @@ function bukaModalAturPin() {
 }
 
 async function prosesLogout() {
-    if (!confirm("Apakah Anda yakin ingin keluar dari akun?")) {
+    const lanjutLogout = await appConfirm("Apakah Anda yakin ingin keluar dari akun?", "Keluar dari Akun");
+    if (!lanjutLogout) {
         return;
     }
     try {
@@ -2832,15 +2939,6 @@ function bukaModalTopUp() {
 const cgoVoiceWave = document.getElementById("cgoVoiceWave");
 if (cgoVoiceWave) {
     function bukaChatCGO() {
-        if (window.botpress && typeof window.botpress.open === "function") {
-            window.botpress.open();
-        } else {
-            setTimeout(() => {
-                if (window.botpress && typeof window.botpress.open === "function") {
-                    window.botpress.open();
-                }
-            }, 300);
-        }
     }
 
     cgoVoiceWave.addEventListener("click", bukaChatCGO);
@@ -2848,6 +2946,61 @@ if (cgoVoiceWave) {
         if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             bukaChatCGO();
+        }
+    });
+}
+
+// =========================================================
+// APP UI CONFIRM — tidak lagi memakai dialog browser bawaan
+// =========================================================
+function appConfirm(message, title = "Konfirmasi") {
+    return new Promise((resolve) => {
+        const overlay = document.getElementById("appConfirmOverlay");
+        const titleEl = document.getElementById("appConfirmTitle");
+        const messageEl = document.getElementById("appConfirmMessage");
+        const cancelBtn = document.getElementById("appConfirmCancel");
+        const okBtn = document.getElementById("appConfirmOk");
+        if (!overlay || !titleEl || !messageEl || !cancelBtn || !okBtn) {
+            resolve(false);
+            return;
+        }
+
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        overlay.classList.add("show");
+        overlay.setAttribute("aria-hidden", "false");
+
+        let done = false;
+        const finish = (value) => {
+            if (done) return;
+            done = true;
+            overlay.classList.remove("show");
+            overlay.setAttribute("aria-hidden", "true");
+            cancelBtn.removeEventListener("click", onCancel);
+            okBtn.removeEventListener("click", onOk);
+            overlay.removeEventListener("click", onBackdrop);
+            document.removeEventListener("keydown", onKey);
+            resolve(value);
+        };
+        const onCancel = () => finish(false);
+        const onOk = () => finish(true);
+        const onBackdrop = (e) => { if (e.target === overlay) finish(false); };
+        const onKey = (e) => { if (e.key === "Escape") finish(false); };
+
+        cancelBtn.addEventListener("click", onCancel);
+        okBtn.addEventListener("click", onOk);
+        overlay.addEventListener("click", onBackdrop);
+        document.addEventListener("keydown", onKey);
+        setTimeout(() => okBtn.focus(), 50);
+    });
+}
+
+// Launcher CGO milik aplikasi sendiri — stabil terhadap scroll/browser.
+const cgoFloatingLauncher = document.getElementById("cgoFloatingLauncher");
+if (cgoFloatingLauncher) {
+    cgoFloatingLauncher.addEventListener("click", () => {
+        if (window.botpress && typeof window.botpress.open === "function") {
+            window.botpress.open();
         }
     });
 }
