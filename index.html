@@ -1297,6 +1297,41 @@ footer p { margin: 0; }
 .cgo-notification.error .cgo-notification-card::after{background:linear-gradient(90deg,#E50914,#ff4040);}
 @keyframes cgoToastTimer{from{transform:scaleX(1)}to{transform:scaleX(0)}}
 @media (max-width:440px){.cgo-notification{width:calc(100% - 22px);bottom:calc(74px + env(safe-area-inset-bottom, 0px) + 10px);}}
+
+/* CIKUR GO — FIXED APP CHROME ONLY. VISUAL DESIGN UNTOUCHED. */
+.app-header{position:fixed !important;top:0 !important;left:50% !important;right:auto !important;bottom:auto !important;transform:translateX(-50%) !important;z-index:2147483000 !important;}
+.bottom-nav{position:fixed !important;left:50% !important;right:auto !important;top:auto !important;bottom:0 !important;transform:translateX(-50%) !important;z-index:2147483000 !important;}
+html,body{height:100%;overflow:hidden !important;}
+.container{height:100dvh;min-height:100dvh;overflow:hidden !important;}
+.tab-content-view{height:100%;min-height:0;overflow-y:auto !important;overflow-x:hidden !important;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;scrollbar-width:none;}
+.tab-content-view::-webkit-scrollbar{display:none;}
+
+/* CIKUR GO — BOTTOM CLEANUP ONLY */
+.bottom-nav{
+    position:fixed !important;
+    left:50% !important;
+    right:auto !important;
+    top:auto !important;
+    bottom:0 !important;
+    transform:translateX(-50%) !important;
+    z-index:2147483000 !important;
+}
+#mainFooter,
+footer#mainFooter{
+    display:none !important;
+}
+
+/* Hilangkan robot CGO/FAB bawah secara permanen.
+   Chat Botpress tetap tersedia bila dipanggil dari fungsi aplikasi. */
+.bpFabWrapper,
+.bpFabContainer,
+.bpFab{
+    display:none !important;
+    visibility:hidden !important;
+    opacity:0 !important;
+    pointer-events:none !important;
+}
+
 </style>
 </head>
     
@@ -1550,10 +1585,6 @@ footer p { margin: 0; }
         <button class="btn-pesan-form" onclick="bukaModalAturPin()" style="background: #334155; margin-bottom: 8px;">Atur PIN Keamanan CikurPay 🔒</button>
         <button class="btn-pesan-form" onclick="prosesLogout()" style="background: #64748b;">Keluar Akun (Logout)</button>
     </div>
-
-    <footer id="mainFooter">
-        <p>© 2026 CIKUR GO • Super-App Architecture</p>
-    </footer>
 </div>
 
 <!-- BOTTOM NAVIGATION BAR -->
@@ -2903,5 +2934,30 @@ if (cgoVoiceWave) {
 <script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
 <script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
     
+
+<script>
+(function(){
+    function hideCgoFab(root){
+        try{
+            const scope = root && root.querySelectorAll ? root : document;
+            scope.querySelectorAll('.bpFabWrapper,.bpFabContainer,.bpFab').forEach(function(el){
+                el.style.setProperty('display','none','important');
+                el.style.setProperty('visibility','hidden','important');
+                el.style.setProperty('opacity','0','important');
+                el.style.setProperty('pointer-events','none','important');
+            });
+        }catch(e){}
+    }
+    hideCgoFab(document);
+    new MutationObserver(function(mutations){
+        mutations.forEach(function(m){
+            m.addedNodes.forEach(function(node){
+                if(node.nodeType === 1) hideCgoFab(node);
+            });
+        });
+    }).observe(document.documentElement,{childList:true,subtree:true});
+})();
+</script>
+
 </body>
 </html>
