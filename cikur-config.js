@@ -59,7 +59,7 @@ const auth = getAuth(app);
 // CIKUR CLOUD GLOBAL ENGINE
 // ==========================================
 
-window.CikurCloud = {
+window.CikurCloud = {  {{{{{
     auth,
     waitForAuth() {
         return new Promise((resolve) => {
