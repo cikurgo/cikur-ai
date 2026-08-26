@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BCGO Intelligent Control Center - Cikur Go</title>
+    <!-- Google Fonts & Tailwind CSS CDN -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+
+    <div class="flex h-screen overflow-hidden">
+        
+        <!-- SIDEBAR -->
+        <aside class="w-64 bg-slate-900 text-slate-300 hidden md:flex flex-col justify-between border-r border-slate-800">
+            <div class="p-5">
+                <div class="flex items-center gap-3 mb-8">
+                    <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-white shadow-md">C</div>
+                    <span class="text-lg font-bold text-white tracking-wide">CIKUR GO</span>
+                </div>
+                <nav class="space-y-1">
+                    <a href="#" class="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-indigo-600 text-white font-medium text-sm">Overview</a>
+                    <a href="#" class="flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition text-sm">Manajemen Mitra</a>
+                    <a href="#" class="flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition text-sm">Manajemen Customer</a>
+                    <a href="#" class="flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition text-sm">Risk Radar</a>
+                </nav>
+            </div>
+            <div class="p-4 border-t border-slate-800 text-xs text-slate-500 flex justify-between items-center">
+                <span>BCGO Engine</span>
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" id="engine-status-dot"></span>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT AREA -->
+        <div class="flex-1 flex flex-col overflow-y-auto">
+            
+            <!-- TOPBAR -->
+            <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-10">
+                <h1 class="text-base font-semibold text-slate-800">Intelligent Control Center</h1>
+                <div class="flex items-center gap-3">
+                    <span id="user-status-badge" class="text-xs px-3 py-1 rounded-full bg-amber-50 text-amber-700 font-medium border border-amber-200">Menghubungkan Database...</span>
+                </div>
+            </header>
+
+            <!-- DASHBOARD CONTENT -->
+            <main class="p-6 space-y-6">
+                <!-- KPI GRID -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <p class="text-xs font-medium text-slate-500">Pending Mitra</p>
+                        <h3 id="kpi-pending" class="text-2xl font-bold text-slate-900 mt-1">0</h3>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <p class="text-xs font-medium text-slate-500">Active Partners</p>
+                        <h3 id="kpi-active" class="text-2xl font-bold text-slate-900 mt-1">0</h3>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <p class="text-xs font-medium text-slate-500">BCGO Attention</p>
+                        <h3 id="kpi-attention" class="text-2xl font-bold text-slate-900 mt-1">0</h3>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <p class="text-xs font-medium text-slate-500">Customer Online</p>
+                        <h3 id="kpi-online" class="text-2xl font-bold text-slate-900 mt-1">0</h3>
+                    </div>
+                </div>
+
+                <!-- DATA TABLE SECTION -->
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="p-5 border-b border-slate-100 font-semibold text-slate-800 text-sm">Aktivitas & Pendaftaran Terbaru</div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs">
+                                    <th class="p-4 font-medium">Nama / Entitas</th>
+                                    <th class="p-4 font-medium">Kategori</th>
+                                    <th class="p-4 font-medium">Status</th>
+                                    <th class="p-4 font-medium">Waktu</th>
+                                </tr>
+                            </thead>
+                            <tbody id="data-table-body" class="divide-y divide-slate-100 text-slate-600">
+                                <tr>
+                                    <td colspan="4" class="p-6 text-center text-slate-400">Memuat data dari Firestore...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- FIREBASE & MODULE SCRIPT INTEGRATION -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // Konfigurasi Firebase Project: cikur-go-indonesia
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV2dQa-MoN5zPuNHA6Tda4L4aLoeL_QDw",
+            authDomain: "cikur-go-indonesia.firebaseapp.com",
+            projectId: "cikur-go-indonesia",
+            storageBucket: "cikur-go-indonesia.firebasestorage.app",
+            messagingSenderId: "1058616161176",
+            appId: "1:1058616161176:web:3b3983d79cc722ab4e71ed",
+            measurementId: "G-WCSSXJRS0B"
+        };
+
+        // Inisialisasi Firebase & Firestore
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const statusBadge = document.getElementById('user-status-badge');
+        const tableBody = document.getElementById('data-table-body');
+
+        // Indikator koneksi berhasil dimuat
+        statusBadge.textContent = "Sistem Online";
+        statusBadge.className = "text-xs px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 font-medium border border-emerald-200";
+
+        // Contoh fungsi untuk mengambil data real-time dari Firestore (misal: koleksi 'mitra_applications')
+        try {
+            const q = query(collection(db, "mitra_applications"), orderBy("submittedAt", "desc"), limit(5));
+            
+            onSnapshot(q, (snapshot) => {
+                if (snapshot.empty) {
+                    tableBody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-slate-400">Belum ada data pendaftaran mitra.</td></tr>`;
+                    return;
+                }
+
+                let html = '';
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    html += `
+                        <tr class="hover:bg-slate-50 transition">
+                            <td class="p-4 font-medium text-slate-900">${data.nama || 'Tanpa Nama'}</td>
+                            <td class="p-4">${data.kategori || 'Mitra'}</td>
+                            <td class="p-4"><span class="px-2 py-1 text-xs rounded-full bg-amber-50 text-amber-700 font-medium">${data.status || 'Pending'}</span></td>
+                            <td class="p-4 text-slate-400 text-xs">${data.submittedAt ? new Date(data.submittedAt.seconds * 1000).toLocaleString('id-ID') : 'Baru saja'}</td>
+                        </tr>
+                    `;
+                });
+                tableBody.innerHTML = html;
+            }, (error) => {
+                console.error("Gagal memuat data:", error);
+                tableBody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-rose-500">Gagal menyinkronkan data database. Periksa aturan keamanan Firestore Anda.</td></tr>`;
+            });
+
+        } catch (e) {
+            console.error("Error init listener:", e);
+        }
+    </script>
+</body>
+</html>
