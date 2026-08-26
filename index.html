@@ -478,6 +478,9 @@ html, body, * {
 /* ===========================
    BANNER BESAR FULL BLEED
 =========================== */
+/* ===========================
+   BANNER UTAMA — KEMBALI KE TAMPILAN ASLI
+=========================== */
 .main-banner-section {
     width: 100vw;
     margin-left: 50%;
@@ -490,18 +493,21 @@ html, body, * {
 
 .banner-card-content {
     width: 100%;
-    aspect-ratio: 4 / 3;
-    background: #ffffff;
-    border-radius: 0; 
+    height: auto;
+    aspect-ratio: auto;
+    background: transparent;
+    border-radius: 0;
     overflow: hidden;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    box-shadow: none;
     border: none;
 }
 
 .banner-image {
     width: 100%;
-    height: 100%;
-    object-fit: cover;
+    height: auto;
+    aspect-ratio: auto;
+    object-fit: contain;
+    object-position: center top;
     display: block;
 }
 
@@ -977,14 +983,7 @@ html, body, * {
     color: #94a3b8;
 }
 
-footer{
-    text-align: center;
-    margin-top: auto;
-    padding: 10px 0 4px;
-    color: var(--text-muted);
-    font-size: 10px;
-}
-footer p { margin: 0; }
+footer, #mainFooter { display: none !important; }
                    
 /* ===========================
    FIXED BOTTOM NAVIGATION BAR
@@ -1350,7 +1349,7 @@ body {
     transform: translate3d(-50%, 0, 0) !important;
     z-index: 2147483001 !important;
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    height: calc(74px + env(safe-area-inset-bottom, 0px));
+    height: 74px;
 }
 
 /* CGO launcher bawaan tetap hidup sebagai fungsi Botpress,
@@ -1389,6 +1388,44 @@ body {
         height: 100dvh;
         min-height: 100dvh;
     }
+}
+
+/* =========================================================
+   CGO FAB — PRAKTIS TIDAK TERLIHAT
+   Panel CGO di atas tetap menjadi launcher utama.
+========================================================= */
+.bpFabWrapper {
+    position: fixed !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 1px !important;
+    height: 1px !important;
+    min-width: 1px !important;
+    min-height: 1px !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    transform: scale(0.001) !important;
+    transform-origin: bottom right !important;
+    pointer-events: none !important;
+    z-index: 0 !important;
+}
+
+.bpFabContainer,
+.bpFab,
+.bpFabIcon,
+.bpFabImage {
+    width: 1px !important;
+    height: 1px !important;
+    min-width: 1px !important;
+    min-height: 1px !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+.bottom-nav {
+    box-sizing: border-box !important;
+    z-index: 2147483001 !important;
 }
 
 </style>
@@ -1644,10 +1681,6 @@ body {
         <button class="btn-pesan-form" onclick="bukaModalAturPin()" style="background: #334155; margin-bottom: 8px;">Atur PIN Keamanan CikurPay 🔒</button>
         <button class="btn-pesan-form" onclick="prosesLogout()" style="background: #64748b;">Keluar Akun (Logout)</button>
     </div>
-
-    <footer id="mainFooter">
-        <p>© 2026 CIKUR GO • Super-App Architecture</p>
-    </footer>
 </div>
 
 <!-- BOTTOM NAVIGATION BAR -->
@@ -2438,11 +2471,6 @@ function switchTab(tabName) {
     const appHeader = document.querySelector('.app-header');
     if (appHeader) {
         appHeader.style.display = tabName === 'beranda' ? 'flex' : 'none';
-    }
-    
-    const mainFooter = document.getElementById('mainFooter');
-    if (mainFooter) {
-        mainFooter.style.display = tabName === 'beranda' ? '' : 'none';
     }
     
     window.scrollTo({ top: 0, behavior: 'smooth' });
