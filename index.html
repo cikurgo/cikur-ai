@@ -966,27 +966,6 @@ html, body, * {
     color: #94a3b8;
 }
 
-button#chatBtn {
-    background: var(--primary-red);
-    color: #fff;
-    border: none;
-    border-radius: 12px;
-    padding: 10px 16px;
-    font-size: 11px;
-    font-weight: 800;
-    cursor: pointer;
-    transition: 0.3s;
-    width: auto;
-    margin: 0;
-    box-shadow: 0 4px 15px rgba(229, 9, 20, 0.4);
-    flex-shrink: 0;
-}
-
-button#chatBtn:hover {
-    background: var(--primary-red-hover);
-    transform: translateY(-2px);
-}
-
 footer{
     text-align: center;
     margin-top: auto;
@@ -1541,14 +1520,6 @@ footer p { margin: 0; }
 
     <div class="dots hero-dots">
         <span class="active"></span><span></span><span></span>
-    </div>
-
-    <div class="chat-action-box">
-        <div class="chat-text-info">
-            <h3>Asisten AI CGO</h3>
-            <p>Siap mendampingi kebutuhan Anda 24/7</p>
-        </div>
-        <button id="chatBtn">Tanya CGO</button>
     </div>
 </div>
 
@@ -2858,21 +2829,7 @@ function bukaModalTopUp() {
         });
     }
 }
-    
-const chatBtn = document.getElementById("chatBtn");
-if(chatBtn) {
-    chatBtn.addEventListener("click", () => {
-        chatBtn.disabled = true;
-        chatBtn.innerHTML = "Memuat CGO...";
-        setTimeout(() => {
-            if(window.botpress) window.botpress.open();
-            chatBtn.disabled = false;
-            chatBtn.innerHTML = "Tanya CGO";
-        }, 500);
-    });
-}
-
-document.addEventListener("DOMContentLoaded", function () {
+    document.addEventListener("DOMContentLoaded", function () {
     const cgoPanelMessage = document.getElementById("cgoPanelMessage");
     if (!cgoPanelMessage) return;
     
@@ -2924,10 +2881,24 @@ document.addEventListener("DOMContentLoaded", function () {
 const cgoVoiceWave = document.getElementById("cgoVoiceWave");
 if (cgoVoiceWave) {
     function bukaChatCGO() {
-        const chatBtn = document.getElementById("chatBtn");
-        if (chatBtn) { chatBtn.click(); return; }
+        if (window.botpress && typeof window.botpress.open === "function") {
+            window.botpress.open();
+        } else {
+            setTimeout(() => {
+                if (window.botpress && typeof window.botpress.open === "function") {
+                    window.botpress.open();
+                }
+            }, 300);
+        }
     }
+
     cgoVoiceWave.addEventListener("click", bukaChatCGO);
+    cgoVoiceWave.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            bukaChatCGO();
+        }
+    });
 }
 
 (function () {
