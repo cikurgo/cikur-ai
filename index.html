@@ -1299,137 +1299,95 @@ footer p { margin: 0; }
 @media (max-width:440px){.cgo-notification{width:calc(100% - 22px);bottom:calc(74px + env(safe-area-inset-bottom, 0px) + 10px);}}
 
 /* =========================================================
-   CIKUR GO APP SHELL — FIXED HEADER + FIXED HERO + NAV
-   Visual banner tetap memakai asset/aspect-ratio asli.
+   FINAL MOBILE APP SHELL — HEADER/NAV TETAP, KONTEN YANG SCROLL
+   Tidak mengubah bentuk banner/header asli.
 ========================================================= */
-.app-header{
-    position:fixed !important;
-    top:0 !important;
-    left:50% !important;
-    transform:translate3d(-50%,0,0) !important;
-    width:100% !important;
-    max-width:440px !important;
-    z-index:12000 !important;
-    pointer-events:auto;
+html, body {
+    height: 100%;
+    overflow: hidden !important;
 }
 
-/* Banner besar tetap persis menggunakan bannerbesarheader.png,
-   hanya layer/posisinya yang dibuat paten. */
-.main-banner-section{
-    position:fixed !important;
-    top:0 !important;
-    left:50% !important;
-    transform:translate3d(-50%,0,0) !important;
-    width:100vw !important;
-    max-width:440px !important;
-    margin:0 !important;
-    z-index:900 !important;
-    pointer-events:none;
+body {
+    min-height: 100dvh;
+    align-items: stretch;
 }
 
-/* Beri ruang sebesar tinggi banner asli agar konten tidak tertutup. */
-#view-beranda.active{
-    padding-top:min(75vw,330px) !important;
+.container {
+    height: 100dvh;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden !important;
+    padding-bottom: 74px;
 }
 
-/* Navigasi bawah benar-benar menjadi dock aplikasi. */
-.bottom-nav{
-    position:fixed !important;
-    left:50% !important;
-    bottom:0 !important;
-    transform:translate3d(-50%,0,0) !important;
-    width:100% !important;
-    max-width:440px !important;
-    z-index:12001 !important;
-    padding-bottom:env(safe-area-inset-bottom,0px) !important;
-    height:calc(74px + env(safe-area-inset-bottom,0px)) !important;
+.tab-content-view {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    scrollbar-width: none;
 }
 
-/* FAB/robot bawaan Botpress dihapus. CGO tetap dapat dibuka dari
-   wave pada panel CGO di atas. */
-.bpFabWrapper,
+.tab-content-view::-webkit-scrollbar {
+    display: none;
+}
+
+.app-header {
+    position: fixed !important;
+    top: 0 !important;
+    left: 50% !important;
+    transform: translate3d(-50%, 0, 0) !important;
+    z-index: 2147483000 !important;
+    will-change: transform;
+}
+
+.bottom-nav {
+    position: fixed !important;
+    left: 50% !important;
+    bottom: 0 !important;
+    transform: translate3d(-50%, 0, 0) !important;
+    z-index: 2147483001 !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    height: calc(74px + env(safe-area-inset-bottom, 0px));
+}
+
+/* CGO launcher bawaan tetap hidup sebagai fungsi Botpress,
+   tetapi dibuat praktis tidak terlihat agar tidak mengganggu UI.
+   Tombol CGO di panel atas tetap menjadi pintu utama. */
+.bpFabWrapper {
+    position: fixed !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 2px !important;
+    height: 2px !important;
+    min-width: 2px !important;
+    min-height: 2px !important;
+    opacity: 0 !important;
+    transform: scale(0.01) !important;
+    transform-origin: bottom right !important;
+    pointer-events: none !important;
+    z-index: 1 !important;
+}
+
 .bpFabContainer,
 .bpFab,
 .bpFabIcon,
-.bpFabImage{
-    display:none !important;
-    visibility:hidden !important;
-    pointer-events:none !important;
-}
-.bpWebchat{
-    z-index:2147483647 !important;
-}
-
-/* Konten tetap punya ruang aman di bawah dock. */
-#view-beranda.active,
-#view-pesanan.active,
-#view-transaksi.active,
-#view-inbox.active,
-#view-profil.active{
-    padding-bottom:calc(92px + env(safe-area-inset-bottom,0px));
+.bpFabImage {
+    width: 2px !important;
+    height: 2px !important;
+    min-width: 2px !important;
+    min-height: 2px !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
 }
 
-/* =========================================================
-   APP CONFIRM DIALOG — menggantikan confirm() browser
-========================================================= */
-.cgo-confirm{
-    position:fixed;
-    inset:0;
-    z-index:2147483640;
-    display:flex;
-    align-items:flex-end;
-    justify-content:center;
-    padding:16px;
-    background:rgba(15,23,42,.48);
-    backdrop-filter:blur(5px);
-    -webkit-backdrop-filter:blur(5px);
-    opacity:0;
-    visibility:hidden;
-    pointer-events:none;
-    transition:opacity .2s ease, visibility .2s ease;
-}
-.cgo-confirm.show{
-    opacity:1;
-    visibility:visible;
-    pointer-events:auto;
-}
-.cgo-confirm-card{
-    width:min(420px,100%);
-    background:#fff;
-    border-radius:24px;
-    padding:18px;
-    box-shadow:0 24px 60px rgba(15,23,42,.25);
-    transform:translateY(24px) scale(.98);
-    transition:transform .28s cubic-bezier(.16,1,.3,1);
-}
-.cgo-confirm.show .cgo-confirm-card{transform:translateY(0) scale(1);}
-.cgo-confirm-icon{
-    width:46px;height:46px;border-radius:15px;
-    display:flex;align-items:center;justify-content:center;
-    background:#fff1f2;color:#e50914;font-size:22px;font-weight:900;
-    margin-bottom:12px;
-}
-.cgo-confirm-title{font-size:17px;font-weight:850;color:#0f172a;margin:0 0 5px;}
-.cgo-confirm-message{font-size:12px;line-height:1.5;color:#64748b;margin:0 0 18px;}
-.cgo-confirm-actions{display:flex;gap:9px;}
-.cgo-confirm-actions button{
-    flex:1;border:0;border-radius:13px;padding:12px 14px;
-    font:800 12px var(--font-main);cursor:pointer;
-}
-.cgo-confirm-cancel{background:#f1f5f9;color:#475569;}
-.cgo-confirm-ok{background:#e50914;color:#fff;box-shadow:0 7px 16px rgba(229,9,20,.22);}
-
-
-@media (max-width: 479px){
-    body{overflow:hidden;align-items:stretch;}
-    .container{
-        height:100dvh;
-        min-height:100dvh;
-        max-height:100dvh;
-        overflow-x:hidden;
-        overflow-y:auto;
-        -webkit-overflow-scrolling:touch;
-        overscroll-behavior-y:contain;
+@media (max-width: 440px) {
+    .container {
+        width: 100%;
+        height: 100dvh;
+        min-height: 100dvh;
     }
 }
 
@@ -1729,19 +1687,6 @@ footer p { margin: 0; }
     </div>
 </div>
     
-<!-- CIKUR GO APP CONFIRM -->
-<div id="cgoConfirm" class="cgo-confirm" aria-hidden="true">
-    <div class="cgo-confirm-card" role="dialog" aria-modal="true" aria-labelledby="cgoConfirmTitle">
-        <div class="cgo-confirm-icon">↪</div>
-        <h3 id="cgoConfirmTitle" class="cgo-confirm-title">Keluar dari Akun?</h3>
-        <p id="cgoConfirmMessage" class="cgo-confirm-message">Apakah Anda yakin ingin keluar dari akun?</p>
-        <div class="cgo-confirm-actions">
-            <button type="button" id="cgoConfirmCancel" class="cgo-confirm-cancel">Batal</button>
-            <button type="button" id="cgoConfirmOk" class="cgo-confirm-ok">Oke, Keluar</button>
-        </div>
-    </div>
-</div>
-
 <!-- CGO GLOBAL NOTIFICATION -->
 <div id="cgoNotification" class="cgo-notification" aria-hidden="true">
     <div class="cgo-notification-card">
@@ -2500,9 +2445,7 @@ function switchTab(tabName) {
         mainFooter.style.display = tabName === 'beranda' ? '' : 'none';
     }
     
-    const appContainer = document.querySelector('.container');
-    if (appContainer) appContainer.scrollTo({ top: 0, behavior: 'smooth' });
-    else window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function bukaZoomBarcode() {
     openModal("QRIS CIKURPAY (ZOOM) 🔍");
@@ -2694,44 +2637,8 @@ function bukaModalAturPin() {
     });
 }
 
-function showCGOConfirm(message = "Apakah Anda yakin ingin keluar dari akun?", title = "Keluar dari Akun?") {
-    return new Promise((resolve) => {
-        const modal = document.getElementById("cgoConfirm");
-        const titleEl = document.getElementById("cgoConfirmTitle");
-        const messageEl = document.getElementById("cgoConfirmMessage");
-        const cancelBtn = document.getElementById("cgoConfirmCancel");
-        const okBtn = document.getElementById("cgoConfirmOk");
-        if (!modal || !cancelBtn || !okBtn) { resolve(true); return; }
-
-        titleEl.textContent = title;
-        messageEl.textContent = message;
-        modal.classList.add("show");
-        modal.setAttribute("aria-hidden", "false");
-
-        const finish = (value) => {
-            modal.classList.remove("show");
-            modal.setAttribute("aria-hidden", "true");
-            cancelBtn.removeEventListener("click", onCancel);
-            okBtn.removeEventListener("click", onOk);
-            modal.removeEventListener("click", onBackdrop);
-            document.removeEventListener("keydown", onKeydown);
-            resolve(value);
-        };
-        const onCancel = () => finish(false);
-        const onOk = () => finish(true);
-        const onBackdrop = (event) => { if (event.target === modal) finish(false); };
-        const onKeydown = (event) => { if (event.key === "Escape") finish(false); };
-
-        cancelBtn.addEventListener("click", onCancel);
-        okBtn.addEventListener("click", onOk);
-        modal.addEventListener("click", onBackdrop);
-        document.addEventListener("keydown", onKeydown);
-    });
-}
-
 async function prosesLogout() {
-    const confirmed = await showCGOConfirm();
-    if (!confirmed) {
+    if (!confirm("Apakah Anda yakin ingin keluar dari akun?")) {
         return;
     }
     try {
