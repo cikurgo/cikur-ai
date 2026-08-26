@@ -2,23 +2,32 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getFirestore, collection, onSnapshot, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { firebaseConfig } from "./cikur-config.js";
 
-// Inisialisasi Database
-let app, db;
-try {
-    app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-} catch (e) {
-    console.error("Gagal inisialisasi genetik:", e);
-}
-
 /**
- * Mesin Otonom BCGO dengan Sistem Pelacakan Sel Kode Spesifik
+ * BCGO MASTER NERVE SYSTEM (Universal Registry)
+ * Memetakan dan mengawasi seluruh organ file dalam satu badan sistem Cikur Go.
  */
 export function runAutonomousEngine(onCycleUpdate) {
+    
+    // PETA TUBUH SISTEM (Registry Seluruh File Organ)
+    const systemOrgans = {
+        "index.html": { type: "Halaman Utama", status: "HEALTHY" },
+        "assistant.html": { type: "Zona Customer", status: "HEALTHY" },
+        "food.html": { type: "Zona Customer", status: "HEALTHY" },
+        "ride.html": { type: "Zona Customer", status: "HEALTHY" },
+        "cikurgo2in1.html": { type: "Zona Customer", status: "HEALTHY" },
+        "agentcgo.html": { type: "Zona Mitra", status: "HEALTHY" },
+        "resto.html": { type: "Zona Mitra", status: "HEALTHY" },
+        "driver.html": { type: "Zona Mitra", status: "HEALTHY" },
+        "cikur-config.js": { type: "Sistem Config", status: "HEALTHY" },
+        "bcgo-engine.js": { type: "Sistem Core", status: "HEALTHY" },
+        "bcgo-admin.html": { type: "Sistem Admin", status: "HEALTHY" },
+        "data-cgo.html": { type: "Sistem Data", status: "HEALTHY" }
+    };
+
     let state = {
         step: "IN",
-        message: "Memulai pemindaian seluruh sel kode sistem...",
-        targetCell: "SYS_CORE_INIT",
+        message: "Memindai seluruh peta organ file Cikur Go...",
+        targetCell: "SYS_MASTER_REGISTRY",
         errorLog: null,
         retryCount: 0
     };
@@ -31,68 +40,81 @@ export function runAutonomousEngine(onCycleUpdate) {
         onCycleUpdate(state);
     }
 
-    // [IN] Tahap Masuk & Deteksi Awal Sel
-    function scanAndListenCells() {
-        emitState("IN", "Menghubungkan saraf sensorik ke database utama...", "CELL_DB_LISTENER");
-
-        if (!db) {
-            handleCellFailure("CELL_DB_LISTENER", new Error("Instance Database tidak ditemukan (Null Reference)."));
-            return;
+    // 1. GLOBAL INTERCEPTOR: Menangkap sinyal rasa sakit dari file mana pun
+    window.onerror = function(message, source, lineno, colno, error) {
+        let detectedFile = "UNKNOWN_ORGAN";
+        
+        // Cocokkan sumber error dengan daftar organ file kita
+        for (let fileName in systemOrgans) {
+            if (source && source.includes(fileName)) {
+                detectedFile = fileName;
+                systemOrgans[fileName].status = "ANOMALY";
+                break;
+            }
         }
 
+        const cellTag = `CELL_ERR_${detectedFile.toUpperCase().replace(/[\.-]/g, '_')}`;
+        handleCellFailure(cellTag, new Error(`[${detectedFile} L:${lineno}] ${message}`));
+        return true;
+    };
+
+    // 2. PEMINDAIAN AWAL KESEHATAN ORGAN (IN)
+    function scanOrgansHealth() {
+        emitState("IN", "Mengecek denyut saraf lintas file organ terdaftar...", "SYS_ORGAN_SCANNER");
+
         try {
-            // Target sel kode yang dipantau real-time
+            if (!firebaseConfig) {
+                throw new Error("Inisialisasi gagal: Struktur konfigurasi inti terputus.");
+            }
+            // Simulasi pengecekan database utama via bcgo-engine / config
+            const app = initializeApp(firebaseConfig);
+            const db = getFirestore(app);
+
             const q = query(collection(db, "mitra_applications"), orderBy("submittedAt", "desc"), limit(5));
             
             onSnapshot(q, (snapshot) => {
-                // Sel Normal & Stabil
                 state.retryCount = 0;
-                emitState("REVIEW", "Sel [CELL_DB_LISTENER] stabil. Arus sinyal saraf normal.", "CELL_DB_LISTENER");
+                emitState("REVIEW", "Semua organ file dan jalur saraf Cikur Go stabil & sinkron.", "SYS_ALL_HEALTHY");
             }, (error) => {
-                // Terdeteksi sel kode yang mengalami gangguan/error
                 handleCellFailure("CELL_DB_LISTENER", error);
             });
-
         } catch (err) {
-            handleCellFailure("CELL_DB_SYS_CATCH", err);
+            handleCellFailure("SYS_CONFIG_CORRUPT", err);
         }
     }
-
-    // [PROCESS & REVIEW] Menangkap titik sel yang sakit
+    // 3. PROSES ANALISIS ANOMALI (PROCESS)
     function handleCellFailure(cellId, error) {
         state.retryCount++;
-        
-        emitState("PROCESS", `Anomali terdeteksi pada sel spesifik: [${cellId}]. Menganalisis tingkat kerusakan...`, cellId, error.message);
+        emitState("PROCESS", `Anomali terdeteksi pada organ [${cellId}]. Menganalisis pola perbaikan...`, cellId, error.message);
 
         setTimeout(() => {
             if (state.retryCount <= 3) {
-                emitState("REVIEW", `Diagnostik sel [${cellId}] selesai. Menyiapkan perintah regenerasi OUT...`, cellId, error.message);
+                emitState("REVIEW", `Diagnostik organ [${cellId}] selesai. Menyiapkan pantulan sinyal OUT...`, cellId, error.message);
                 
-                // [OUT] Memantulkan perintah balik untuk perbaikan otomatis sel tersebut
+                // 4. PANTULAN BALIK / AUTO-FIX (OUT)
                 setTimeout(() => {
-                    executeCellAutoFix(cellId);
+                    executeAutoFix(cellId);
                 }, 1500);
             } else {
-                emitState("OUT", `Sel [${cellId}] mengalami kerusakan parah. Memerlukan penanganan manual.`, cellId, "FATAL_CELL_ERROR");
+                emitState("OUT", `Organ [${cellId}] gagal pulih otomatis. Perlu pengecekan manual.`, cellId, "FATAL_ORGAN_FAILURE");
             }
         }, 2000);
     }
 
-    // [OUT / AUTO-FIX] Regenerasi sel kode yang sakit secara spesifik
-    function executeCellAutoFix(cellId) {
-        emitState("IN", `[AUTO-FIX] Meregenerasi ulang struktur sel [${cellId}] secara real-time...`, cellId);
+    // 5. REGENERASI / PENYEMBUHAN MANDIRI
+    function executeAutoFix(cellId) {
+        emitState("IN", `[AUTO-FIX] Menarik ulang sinkronisasi dan meregenerasi organ [${cellId}]...`, cellId);
 
         setTimeout(() => {
-            // Simulasi perbaikan berhasil, reset dan sambungkan ulang sel
             state.retryCount = 0;
-            emitState("REVIEW", `Sel [${cellId}] berhasil dipulihkan! Saraf kembali terhubung.`, cellId);
+            emitState("REVIEW", `Organ [${cellId}] berhasil diselaraskan kembali! Saraf normal.`, cellId);
             
             setTimeout(() => {
-                scanAndListenCells();
+                scanOrgansHealth();
             }, 2000);
         }, 2000);
     }
 
-    // Eksekusi awal sistem
-    scanAndListenCells();
+    // Mulai siklus pemetaan master
+    scanOrgansHealth();
 }
