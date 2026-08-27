@@ -1,25 +1,24 @@
 import { collection, onSnapshot, query, orderBy, limit, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
+// window.CikurCloud sudah tersedia dari cikur-config.js (di-import di atas,
+// yang otomatis menjalankan top-level code-nya termasuk window.CikurCloud = {...})
 
 /**
  * BCGO MASTER NERVE SYSTEM (Universal Registry)
- * Memantau kesehatan koneksi Firestore, dan menangkap error JavaScript
- * yang terjadi SELAMA halaman monitor ini (bcgo.html) sedang dibuka.
+ * Memantau kesehatan koneksi Firestore, DAN memantau error lintas file
+ * secara real-time lewat laporan yang dikirim tiap file ke Firestore
+ * (collection "system_logs") via CikurCloud.reportSystemError().
  *
- * CATATAN PENTING soal cakupan:
- * window.onerror hanya bisa menangkap error dari halaman yang SEDANG
- * TERBUKA di tab ini. index.html/assistant.html/food.html/dll berjalan
- * di tab browser masing-masing yang terpisah, sehingga error di sana
- * TIDAK bisa terdeteksi otomatis dari sini. Daftar "organ" di bawah ini
- * berfungsi sebagai referensi/peta sistem, bukan pemantauan real-time
- * lintas-tab. Untuk pemantauan lintas file yang sungguhan, setiap file
- * perlu melaporkan errornya sendiri ke Firestore (lihat catatan di
- * akhir file ini untuk cara membangunnya).
+ * Cakupan: file yang BELUM disisipi pemanggilan reportSystemError()
+ * tidak akan pernah muncul sebagai ANOMALY di sini walau errornya
+ * sungguhan terjadi - status "HEALTHY"-nya di peta ini cuma berarti
+ * "belum ada laporan masuk", bukan jaminan file itu benar-benar sehat.
  */
 export function runAutonomousEngine(onCycleUpdate) {
 
-    // PETA REFERENSI SISTEM (bukan status real-time per file)
+    // PETA REFERENSI SISTEM - status akan berubah otomatis begitu ada
+    // laporan error masuk dari file terkait via reportSystemError().
     const systemOrgans = {
         "index.html": { type: "Halaman Utama", status: "HEALTHY" },
         "assistant.html": { type: "Zona Customer", status: "HEALTHY" },
@@ -48,7 +47,7 @@ export function runAutonomousEngine(onCycleUpdate) {
         state.message = msg;
         state.targetCell = cell;
         state.errorLog = err;
-        onCycleUpdate(state);
+        onCycleUpdate({ ...state, systemOrgans, systemLogs: latestSystemLogs });
     }
 
     // 0. VERIFIKASI ADMIN SEBELUM MULAI MEMANTAU
@@ -73,6 +72,7 @@ export function runAutonomousEngine(onCycleUpdate) {
         // Admin terverifikasi -> mulai pemantauan sungguhan
         scanOrgansHealth();
         startPeriodicPulse();
+        startListeningSystemLogs();
     });
 
     // 1. TANGKAP ERROR JAVASCRIPT DI HALAMAN INI SENDIRI
@@ -84,7 +84,35 @@ export function runAutonomousEngine(onCycleUpdate) {
     };
 
     let unsubscribeFirestore = null;
+    let unsubscribeSystemLogs = null;
     let periodicPulseInterval = null;
+    let latestSystemLogs = [];
+
+    // PEMANTAUAN LINTAS FILE SUNGGUHAN - dengarkan laporan error
+    // yang dikirim tiap file via CikurCloud.reportSystemError()
+    function startListeningSystemLogs() {
+        if (typeof unsubscribeSystemLogs === "function") unsubscribeSystemLogs();
+
+        unsubscribeSystemLogs = window.CikurCloud.listenSystemLogs((logs) => {
+            latestSystemLogs = logs;
+
+            // Reset semua ke HEALTHY dulu, lalu tandai ANOMALY
+            // untuk file yang punya laporan error dalam 10 menit terakhir
+            Object.keys(systemOrgans).forEach(f => systemOrgans[f].status = "HEALTHY");
+
+            const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
+            logs.forEach(log => {
+                const reportedTime = log.reportedAt?.toMillis ? log.reportedAt.toMillis() : Date.now();
+                if (systemOrgans[log.fileName] && reportedTime > tenMinutesAgo) {
+                    systemOrgans[log.fileName].status = "ANOMALY";
+                }
+            });
+
+            if (typeof onCycleUpdate === "function") {
+                onCycleUpdate({ ...state, systemLogs: latestSystemLogs, systemOrgans });
+            }
+        });
+    }
 
     // DETAK JANTUNG BERKALA - supaya terlihat terus aktif memantau,
     // bukan cuma diam menunggu perubahan data (walau onSnapshot sendiri
