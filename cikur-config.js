@@ -55,6 +55,11 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+// Export supaya modul lain (mis. bcgo.js) bisa memakai
+// KONEKSI YANG SAMA, bukan membuat Firebase App baru
+// (initializeApp kedua kali akan error "already exists").
+export { db, firebaseConfig };
+
 // ==========================================
 // CIKUR CLOUD GLOBAL ENGINE
 // ==========================================
@@ -302,6 +307,29 @@ window.CikurCloud = {
             id: profileSnapshot.id,
             ...profileSnapshot.data()
         };
+    },
+
+    // ======================================
+    // PRESENCE CUSTOMER (online/offline untuk admin)
+    // Ditulis berkala selama customer membuka index.html.
+    // Collection ini yang dibaca bcgo-admin.html.
+    // ======================================
+
+    async updateCustomerPresence(userId, data) {
+        if (!userId) return;
+
+        try {
+            await setDoc(
+                doc(db, "customers", userId),
+                {
+                    ...data,
+                    lastSeen: serverTimestamp()
+                },
+                { merge: true }
+            );
+        } catch (error) {
+            console.error("[CIKUR GO] Gagal memperbarui presence:", error);
+        }
     },
 
     // ======================================
