@@ -58,7 +58,7 @@ const auth = getAuth(app);
 // Export supaya modul lain (mis. bcgo.js) bisa memakai
 // KONEKSI YANG SAMA, bukan membuat Firebase App baru
 // (initializeApp kedua kali akan error "already exists").
-export { db, firebaseConfig };
+export { db, auth, firebaseConfig };
 
 // ==========================================
 // CIKUR CLOUD GLOBAL ENGINE
