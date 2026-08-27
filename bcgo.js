@@ -1,5 +1,6 @@
-import { collection, onSnapshot, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { db } from "./cikur-config.js";
+import { collection, onSnapshot, query, orderBy, limit, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { db, auth } from "./cikur-config.js";
 
 /**
  * BCGO MASTER NERVE SYSTEM (Universal Registry)
@@ -50,6 +51,29 @@ export function runAutonomousEngine(onCycleUpdate) {
         onCycleUpdate(state);
     }
 
+    // 0. VERIFIKASI ADMIN SEBELUM MULAI MEMANTAU
+    // (mencegah error izin, dan mencegah orang tak berwenang membuka monitor ini)
+    onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+            emitState("OUT", "Diperlukan login Admin. Silakan login melalui bcgo-admin.html terlebih dahulu, lalu buka halaman ini lagi.", "SYS_AUTH_REQUIRED");
+            return;
+        }
+
+        try {
+            const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
+            if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
+                emitState("OUT", "Akun ini bukan Admin terverifikasi. Akses monitor ditolak.", "SYS_AUTH_NOT_ADMIN");
+                return;
+            }
+        } catch (error) {
+            emitState("OUT", "Gagal memverifikasi status Admin.", "SYS_AUTH_CHECK_FAILED", error.message);
+            return;
+        }
+
+        // Admin terverifikasi -> mulai pemantauan sungguhan
+        scanOrgansHealth();
+    });
+
     // 1. TANGKAP ERROR JAVASCRIPT DI HALAMAN INI SENDIRI
     // (hanya mencakup bcgo.html/bcgo.js, bukan file lain - lihat catatan di atas)
     window.onerror = function(message, source, lineno, colno, error) {
@@ -58,14 +82,20 @@ export function runAutonomousEngine(onCycleUpdate) {
         return true;
     };
 
+    let unsubscribeFirestore = null;
+
     // 2. PEMANTAUAN KESEHATAN KONEKSI FIRESTORE (INI YANG SUNGGUHAN REAL-TIME)
     function scanOrgansHealth() {
         emitState("IN", "Menghubungkan ke Firestore (mitra_applications)...", "SYS_FIRESTORE_CONNECTION");
 
+        if (typeof unsubscribeFirestore === "function") {
+            unsubscribeFirestore();
+        }
+
         try {
             const q = query(collection(db, "mitra_applications"), orderBy("submittedAt", "desc"), limit(5));
 
-            onSnapshot(q, (snapshot) => {
+            unsubscribeFirestore = onSnapshot(q, (snapshot) => {
                 state.retryCount = 0;
                 emitState("REVIEW", `Koneksi Firestore stabil. ${snapshot.size} data pendaftaran Mitra terpantau.`, "SYS_FIRESTORE_HEALTHY");
             }, (error) => {
@@ -100,9 +130,6 @@ export function runAutonomousEngine(onCycleUpdate) {
         emitState("IN", `Menyambungkan ulang listener Firestore [${cellId}]...`, cellId);
         scanOrgansHealth();
     }
-
-    // Mulai siklus pemantauan
-    scanOrgansHealth();
 
     return { systemOrgans };
 }
