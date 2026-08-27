@@ -1,5 +1,5 @@
 import {
-  collection, onSnapshot, query, orderBy, limit, addDoc, serverTimestamp
+  collection, onSnapshot, query, orderBy, limit, addDoc, serverTimestamp, doc, getDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
@@ -989,13 +989,25 @@ async function startConversation() {
   } catch (e) { emit("conversation_error", { message: e.message }); }
 }
 
-onAuthStateChanged(auth, user => {
+onAuthStateChanged(auth, async user => {
   S.human.uid = user?.uid || null;
   emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
-  if (user) {
-    startTelemetry();
-    startConversation();
+  if (!user) return;
+
+  try {
+    const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
+    if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
+      emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
+      emit("local_message", { message: { role: "medicine", text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.", clientMessageId: "auth-denied" } });
+      return;
+    }
+  } catch (e) {
+    emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED" });
+    return;
   }
+
+  startTelemetry();
+  startConversation();
 });
 
 const API = {
