@@ -5,7 +5,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/fi
 import { db, auth } from "./cikur-config.js";
 
 /*
- * BCGO MEDICINE v1.5 — REAL REPAIR / HEALING ENGINE
+ * BCGO MEDICINE v1.7 — PRECISION REPAIR / VERIFIED HEALING ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -58,7 +58,7 @@ const CONTRACT_FIELDS = new Set([
 ]);
 
 const S = {
-  version: "1.6.0",
+  version: "1.7.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -249,42 +249,71 @@ function domAssignmentCandidates(fileName, source) {
   return out;
 }
 
+function htmlHasElement(source, id) {
+  if (!source || !id) return false;
+  const q = escRegExp(id);
+  return new RegExp(`(?:id|name)\\s*=\\s*["']${q}["']`, "i").test(source);
+}
+
+function exactDomEvidence(fileName, source, signature) {
+  const out = [];
+  for (const c of domAssignmentCandidates(fileName, source)) {
+    const selector = c.selector;
+    if (!selector) continue;
+    const existsInSameDocument = /\.html$/i.test(fileName) ? htmlHasElement(source, selector) : null;
+    out.push({
+      ...c,
+      existsInSameDocument,
+      evidenceStrength: existsInSameDocument === false ? "HIGH" : existsInSameDocument === true ? "MEDIUM" : "LOW",
+      evidenceReason: existsInSameDocument === false
+        ? `Referensi DOM '${selector}' tidak ditemukan pada dokumen ${fileName}.`
+        : existsInSameDocument === true
+          ? `Referensi DOM '${selector}' ditemukan pada dokumen ${fileName}; penyebab runtime belum terbukti.`
+          : `Referensi DOM '${selector}' ditemukan pada source script; hubungan runtime belum terbukti tanpa stack/selector evidence.`
+    });
+  }
+  return out;
+}
+
 async function buildSourceEvidence(targetFile, signature) {
   const names = Object.keys(REGISTRY);
   const evidence = [];
-  const sig = safeLower(signature);
   const priority = [targetFile, "bcgo-admin.html", "bcgo-engine.js", ...names].filter((v,i,a)=>v && a.indexOf(v)===i);
   for (const name of priority) {
     const x = await fetchFile(name);
     if (!x.ok || !x.text) continue;
-    const candidates = domAssignmentCandidates(name, x.text);
-    if (!candidates.length) continue;
-    for (const c of candidates) {
-      const selectorHit = c.selector && sig.includes(safeLower(c.selector));
-      const likely = /textcontent|innerhtml/.test(sig) || selectorHit;
-      if (likely) evidence.push({ ...c, selectorHit });
+    for (const c of exactDomEvidence(name, x.text, signature)) {
+      const selectorHit = c.selector && safeLower(signature).includes(safeLower(c.selector));
+      if (c.evidenceStrength === "HIGH" || selectorHit) evidence.push({ ...c, selectorHit: !!selectorHit });
     }
   }
-  evidence.sort((a,b) => (b.selectorHit-a.selectorHit) || (a.file===targetFile ? -1 : 1) || (a.line-b.line));
+  evidence.sort((a,b) => ({HIGH:3,MEDIUM:2,LOW:1}[b.evidenceStrength] - {HIGH:3,MEDIUM:2,LOW:1}[a.evidenceStrength]) || (b.selectorHit-a.selectorHit) || (a.line-b.line));
   return evidence.slice(0, 12);
 }
 
 async function resolveRootCause(c) {
   const originalTarget = c.source;
   const direct = await fetchFile(originalTarget);
-  const directOps = findLikelyDomBinding(originalTarget, direct.text, c.signature);
-  if (directOps.length) {
-    return { rootCauseFile: originalTarget, sourceEvidence: directOps.map(op => ({ file: op.file, before: op.before, after: op.after, reason: op.reason })) };
+  const directEvidence = exactDomEvidence(originalTarget, direct.text, c.signature)
+    .filter(x => x.evidenceStrength === "HIGH");
+  if (directEvidence.length) {
+    const ops = findLikelyDomBinding(originalTarget, direct.text, c.signature)
+      .filter(op => directEvidence.some(e => e.file === op.file && e.line === op.line));
+    return {
+      rootCauseFile: originalTarget,
+      sourceEvidence: directEvidence.map(e => ({ file:e.file, selector:e.selector, property:e.property, line:e.line, before:e.before, evidenceStrength:e.evidenceStrength, reason:e.evidenceReason })),
+      resolvedOperation: ops[0] || null
+    };
   }
   if (c.diagnosis.code !== "DOM_NULL_REFERENCE") return { rootCauseFile: originalTarget, sourceEvidence: [] };
   const candidates = await buildSourceEvidence(originalTarget, c.signature);
-  const best = candidates.find(x => x.property === "textContent") || candidates[0];
-  if (!best) return { rootCauseFile: originalTarget, sourceEvidence: [] };
+  const best = candidates.find(x => x.evidenceStrength === "HIGH");
+  if (!best) return { rootCauseFile: originalTarget, sourceEvidence: candidates.slice(0, 8), resolvedOperation: null };
   const src = await fetchFile(best.file);
-  const ops = findLikelyDomBinding(best.file, src.text, c.signature);
+  const ops = findLikelyDomBinding(best.file, src.text, c.signature).filter(op => op.line === best.line);
   return {
     rootCauseFile: best.file,
-    sourceEvidence: candidates.map(x => ({ file: x.file, selector: x.selector, property: x.property, line: x.line, before: x.before })).slice(0, 8),
+    sourceEvidence: candidates.slice(0, 8),
     resolvedOperation: ops[0] || null
   };
 }
@@ -326,21 +355,9 @@ function findLikelyDomBinding(fileName, source, signature) {
 }
 
 function buildAdminGapOperations(targetFile, missingFields, adminSource) {
-  // We do not invent an unknown admin layout. Instead we create a deterministic,
-  // reviewable compatibility hook. The executor may reject this operation if the
-  // target does not expose a safe marker. This prevents Medicine from damaging UI.
-  const marker = "<!-- BCGO_MEDICINE_CONTRACT_BRIDGE -->";
-  if (!adminSource || adminSource.includes(marker)) return [];
-  const safeFields = missingFields.filter(f => CONTRACT_FIELDS.has(f));
-  if (!safeFields.length) return [];
-  const bridge = `\n${marker}\n<script>\nwindow.BCGOMedicineContractBridge = window.BCGOMedicineContractBridge || ${JSON.stringify(safeFields)};\n</script>\n`;
-  return [{
-    type: "INSERT_BEFORE",
-    file: "bcgo-admin.html",
-    marker: "</body>",
-    content: bridge,
-    reason: `Expose missing source-contract fields for a controlled admin renderer: ${safeFields.join(", ")}`
-  }];
+  // A contract gap is a finding, not permission to invent UI. Medicine must locate
+  // an existing renderer/field mapping before it can propose a source edit.
+  return [];
 }
 
 async function scanConsistency(targets = null) {
@@ -375,7 +392,10 @@ async function scanConsistency(targets = null) {
   for (const name of names) {
     const source = result[name]?.text || "";
     const directNullRisk = /\$\(\s*["'][^"']+["']\s*\)\.textContent\s*=|document\.getElementById\(\s*["'][^"']+["']\s*\)\.textContent\s*=/.test(source);
-    if (directNullRisk) findings.push({ kind: "DOM_ASSIGNMENT_RISK", sourceFile: name, detail: "Direct textContent assignment detected; guard is recommended when element is optional or rendered conditionally." });
+    if (directNullRisk) {
+      const evs = exactDomEvidence(name, source, "");
+      for (const ev of evs) findings.push({ kind: "DOM_ASSIGNMENT_RISK", sourceFile: name, targetFile: name, selector: ev.selector, line: ev.line, evidenceStrength: ev.evidenceStrength, detail: ev.evidenceReason });
+    }
   }
 
   S.findings = findings;
@@ -399,9 +419,11 @@ function buildRepairPlan(c, verification) {
     postconditions: [
       "Original runtime signature must no longer recur for the target.",
       "Target must remain loadable.",
-      "Cross-file contract check must pass for the repaired path."
+      "Cross-file contract check must pass for the repaired path.",
+      "The exact BEFORE text must be absent and the exact AFTER text must be present after execution."
     ],
     sourceWrite: false,
+    precision: { exactTargetRequired: true, exactEvidenceRequired: true, noGuessing: true },
     status: "PROPOSED",
     requiresHumanApproval: true,
     requiresPostValidation: true,
@@ -409,11 +431,13 @@ function buildRepairPlan(c, verification) {
   };
 
   if (d.code === "DOM_NULL_REFERENCE") {
-    plan.preconditions.push("Target source must contain an exact DOM assignment matching the detected error family.");
+    plan.preconditions.push("An exact source location must be proven by high-confidence evidence; a generic runtime message alone is insufficient.");
+    plan.preconditions.push("The referenced DOM target must be proven missing/mismatched before a DOM guard is proposed.");
     plan.preconditions.push("Executor must apply exact replacements only; no broad search-and-replace.");
   } else if (d.code === "DATA_CONSISTENCY") {
-    plan.preconditions.push("Source and target contract evidence must identify the missing or mismatched field.");
-    plan.preconditions.push("Admin layout must expose a safe insertion marker before any presentation bridge is added.");
+    plan.preconditions.push("Source and target contract evidence must identify the exact missing or mismatched field.");
+    plan.preconditions.push("A real existing renderer/mapping location must be identified before any UI patch is proposed.");
+    plan.preconditions.push("Medicine must not invent a presentation bridge as a substitute for the missing implementation.");
   } else if (d.code === "REALTIME_CONNECTIVITY") {
     plan.preconditions.push("Authentication and Firestore rules must remain authoritative; Medicine will not bypass permissions.");
   } else {
@@ -431,10 +455,8 @@ async function enrichRepairPlan(c, verification) {
   plan.sourceEvidence = resolution.sourceEvidence || [];
 
   if (c.diagnosis.code === "DOM_NULL_REFERENCE") {
-    if (resolution.resolvedOperation) plan.operations.push(resolution.resolvedOperation);
-    else if (resolution.rootCauseFile === c.source) {
-      const targetSource = await fetchFile(c.source);
-      plan.operations.push(...findLikelyDomBinding(c.source, targetSource.text, c.signature));
+    if (resolution.resolvedOperation && (resolution.sourceEvidence || []).some(e => e.evidenceStrength === "HIGH" && e.line === resolution.resolvedOperation.line)) {
+      plan.operations.push(resolution.resolvedOperation);
     }
   }
 
@@ -453,15 +475,23 @@ async function enrichRepairPlan(c, verification) {
   if (plan.operations.length) {
     plan.status = "PROPOSED";
     plan.blockReason = null;
+    plan.precisionGate = true;
   } else {
     plan.status = "PATCH_REQUIRES_REVIEW";
-    plan.blockReason = "Medicine belum menemukan operasi source deterministik yang cukup kuat. Source tidak akan diubah berdasarkan tebakan.";
+    plan.blockReason = "PRECISION GATE: Medicine belum menemukan lokasi source dan operasi exact yang terbukti. Source tidak akan diubah berdasarkan tebakan.";
+    plan.precisionGate = false;
   }
   return plan;
 }
 
 function canApprove(c) {
-  return !!(c?.verification && c.verification.verdict !== "INSUFFICIENT_EVIDENCE");
+  const v = c?.verification;
+  const plan = c?.repairPlan;
+  if (!c || !v || !plan?.operations?.length) return false;
+  if (c.status !== "VERIFIED_DIAGNOSIS") return false;
+  if (v.verdict !== "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE" || plan.precisionGate !== true) return false;
+  if (plan.rootCauseFile !== plan.operations[0].file) return false;
+  return plan.operations.every(op => op.type === "REPLACE_EXACT" && op.before && op.after && op.file === plan.rootCauseFile);
 }
 
 function canApplyPatch(c) {
@@ -469,7 +499,8 @@ function canApplyPatch(c) {
     c && c.status === "READY_FOR_PATCH" &&
     c.repairPlan?.operations?.length &&
     c.verification &&
-    ["SUPPORTED_BY_SOURCE_CONTRACT", "RUNTIME_EVIDENCE_PRESENT"].includes(c.verification.verdict)
+    c.verification.verdict === "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE" &&
+    c.repairPlan.rootCauseFile === c.repairPlan.operations[0]?.file
   );
 }
 
@@ -489,57 +520,67 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
   const targetFindings = result.findings.filter(f => f.sourceFile === target || f.targetFile === target);
   const logs = latestRelevantLogs(target);
   const runtimeEvidence = logs.slice(0, 5);
-  const verdict = targetFindings.some(f => ["SOURCE_CONTRACT_GAP", "ADMIN_PRESENTATION_GAP"].includes(f.kind))
-    ? "SUPPORTED_BY_SOURCE_CONTRACT"
-    : runtimeEvidence.length ? "RUNTIME_EVIDENCE_PRESENT" : "INSUFFICIENT_EVIDENCE";
 
-  const v = {
-    target,
-    verdict,
-    targetFindings,
-    runtimeEvidence,
-    checkedFiles: targets,
-    checkedAt: now(),
-    question: context.question || null
-  };
-  S.verification = v;
-  emit("verification_complete", { verification: v });
+  let contractEvidence = targetFindings.some(f => f.kind === "SOURCE_CONTRACT_GAP" && Array.isArray(f.missing) && f.missing.length);
+  let verdict = contractEvidence ? "SUPPORTED_BY_SOURCE_CONTRACT" : runtimeEvidence.length ? "RUNTIME_EVIDENCE_PRESENT" : "INSUFFICIENT_EVIDENCE";
+  const v = { target, verdict, targetFindings, runtimeEvidence, checkedFiles: targets, checkedAt: now(), question: context.question || null };
 
   if (S.activeCase && (!targetFile || S.activeCase.source === target)) {
     S.activeCase.verification = v;
-    S.activeCase.status = verdict === "INSUFFICIENT_EVIDENCE" ? "NEEDS_EVIDENCE" : "VERIFIED_DIAGNOSIS";
     S.activeCase.repairPlan = await enrichRepairPlan(S.activeCase, v);
     S.activeCase.rootCauseFile = S.activeCase.repairPlan.rootCauseFile || S.activeCase.source;
     S.activeCase.sourceEvidence = S.activeCase.repairPlan.sourceEvidence || [];
+
+    const exactProof = !!(
+      S.activeCase.repairPlan.operations?.length &&
+      S.activeCase.repairPlan.rootCauseFile === S.activeCase.repairPlan.operations[0]?.file &&
+      S.activeCase.sourceEvidence.some(e => e.evidenceStrength === "HIGH") &&
+      S.activeCase.repairPlan.operations.every(op => op.type === "REPLACE_EXACT" && op.before && op.after)
+    );
+    if (exactProof) {
+      verdict = "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE";
+      v.verdict = verdict;
+    }
+
+    S.verification = v;
+    S.activeCase.verification = v;
+    S.activeCase.status = (verdict === "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE") ? "VERIFIED_DIAGNOSIS" : "NEEDS_EVIDENCE";
     S.activeCase.prescription = prescription(S.activeCase.diagnosis);
     emit("case_updated", { case: S.activeCase });
 
     const proposal = {
       proposalId: `PATCH-${uid().toUpperCase()}`,
       caseId: S.activeCase.id,
-      target,
+      telemetryTarget: S.activeCase.source,
+      repairTarget: S.activeCase.repairPlan.rootCauseFile,
       diagnosis: S.activeCase.diagnosis,
       verification: v,
       repairPlan: S.activeCase.repairPlan,
       operations: S.activeCase.repairPlan.operations,
       beforeAfter: S.activeCase.repairPlan.beforeAfter,
-      status: S.activeCase.repairPlan.operations.length ? "PROPOSED" : "PATCH_REQUIRES_REVIEW",
+      status: (exactProof ? "PROPOSED" : "PATCH_REQUIRES_REVIEW"),
       sourceWrite: false,
       requiresHumanApproval: true,
       requiresPostValidation: true,
+      precisionGate: exactProof,
       createdAt: now()
     };
     S.patchProposals.unshift(proposal);
     S.patchProposals = S.patchProposals.slice(0, 40);
     S.activeCase.patchProposal = proposal;
     emit("patch_proposed", { proposal, case: S.activeCase });
+  } else {
+    S.verification = v;
   }
 
-  const message = verdict === "SUPPORTED_BY_SOURCE_CONTRACT"
-    ? `Verifikasi ${target} selesai. Evidence kontrak mendukung dugaan. Saya sudah menyusun repair plan konkret; source tetap terkunci sampai tangan manusia menyetujui.`
-    : verdict === "RUNTIME_EVIDENCE_PRESENT"
-      ? `Verifikasi ${target} selesai. Evidence runtime ada, tetapi saya belum mengklaim akar masalah secara berlebihan. Repair plan hanya akan dijalankan bila operasi aman dan disetujui manusia.`
-      : `Verifikasi ${target} selesai. Evidence belum cukup. Saya tidak akan mengarang patch.`;
+  emit("verification_complete", { verification: v });
+  const message = verdict === "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE"
+    ? `Verifikasi ${target} LULUS PRECISION GATE. Akar masalah dan lokasi repair didukung evidence source yang spesifik. Source tetap terkunci sampai persetujuan manusia.`
+    : verdict === "SUPPORTED_BY_SOURCE_CONTRACT"
+      ? `Verifikasi ${target} menemukan gap kontrak yang nyata, tetapi lokasi repair belum terbukti cukup presisi. Saya menahan patch.`
+      : verdict === "RUNTIME_EVIDENCE_PRESENT"
+        ? `Verifikasi ${target} menemukan evidence runtime, tetapi belum cukup untuk membuktikan akar masalah dan lokasi patch. Saya tidak akan menebak.`
+        : `Verifikasi ${target} selesai. Evidence belum cukup. Saya tidak akan mengarang patch.`;
   await postSystemMessage("medicine", message, { kind: "MEDICINE_VERIFICATION", target, verdict, checkedFiles: targets });
   return v;
 }
@@ -672,7 +713,8 @@ async function applyPatch(caseId) {
     caseId,
     proposalId: proposal.proposalId,
     planId: c.repairPlan.planId,
-    target: c.source,
+    telemetryTarget: c.source,
+    target: c.repairPlan.rootCauseFile,
     operations: c.repairPlan.operations,
     beforeAfter: c.repairPlan.beforeAfter,
     status: "PENDING_EXECUTION",
@@ -719,32 +761,41 @@ async function applyPatch(caseId) {
 async function validateAfterPatch(caseId) {
   const c = S.cases.find(x => x.id === caseId);
   if (!c) throw new Error("Case tidak ditemukan");
-  const target = c.source;
-  emit("validation_started", { caseId, target });
+  const telemetryTarget = c.source;
+  const repairTarget = c.repairPlan?.rootCauseFile || c.source;
+  emit("validation_started", { caseId, target: repairTarget, telemetryTarget });
 
   const beforeSig = c.signature;
-  // Refresh source cache so validation never uses the pre-patch copy.
-  S.sourceCache.delete(target);
-  S.sourceCache.delete("bcgo-admin.html");
-  S.sourceCache.delete("bcgo-engine.js");
+  for (const f of new Set([telemetryTarget, repairTarget, "bcgo-admin.html", "bcgo-engine.js"])) S.sourceCache.delete(f);
 
-  const logs = latestRelevantLogs(target);
-  const currentError = logs.find(l => safeLower(l.message || l.error).includes(safeLower(beforeSig)));
-  const scan = await scanConsistency([target, "bcgo-engine.js", "bcgo-admin.html"]);
-  const related = scan.findings.filter(f => f.sourceFile === target || f.targetFile === target);
+  const telemetryLogs = latestRelevantLogs(telemetryTarget);
+  const currentError = telemetryLogs.find(l => safeLower(l.message || l.error).includes(safeLower(beforeSig)));
+  const scan = await scanConsistency([telemetryTarget, repairTarget, "bcgo-engine.js", "bcgo-admin.html"].filter((v,i,a)=>REGISTRY[v]&&a.indexOf(v)===i));
+  const sourceReadable = !!scan.results[repairTarget]?.ok;
+  const related = scan.findings.filter(f => f.sourceFile === repairTarget || f.targetFile === repairTarget);
+  const operations = c.repairPlan?.operations || [];
 
-  const sourceReadable = !!scan.results[target]?.ok;
-  const passed = sourceReadable && !currentError && related.filter(f => f.kind !== "DOM_ASSIGNMENT_RISK").length === 0;
+  let operationVerified = operations.length > 0;
+  const repairSource = scan.results[repairTarget]?.text || "";
+  for (const op of operations) {
+    if (op.type === "REPLACE_EXACT") {
+      if (repairSource.includes(op.before) || !repairSource.includes(op.after)) operationVerified = false;
+    }
+  }
+
+  const passed = sourceReadable && !currentError && operationVerified && related.filter(f => f.kind !== "DOM_ASSIGNMENT_RISK").length === 0;
   const v = {
     caseId,
-    target,
+    target: repairTarget,
+    telemetryTarget,
     passed,
     status: passed ? "FIXED_VERIFIED" : "STILL_FAILING",
     checkedAt: now(),
     remainingFindings: related,
-    runtimeEvidence: logs.slice(0, 5),
+    runtimeEvidence: telemetryLogs.slice(0, 5),
     previousSignature: beforeSig,
-    sourceReadable
+    sourceReadable,
+    operationVerified
   };
   S.validation = v;
   c.validation = v;
@@ -758,9 +809,9 @@ async function validateAfterPatch(caseId) {
   } catch (e) { emit("storage_warning", { message: e.message }); }
 
   await postSystemMessage("medicine", passed
-    ? `Validasi pasca-repair ${target} LULUS. Error sebelumnya tidak terlihat dan pemeriksaan kontrak terarah tidak menemukan gap yang tersisa.`
-    : `Validasi pasca-repair ${target} BELUM LULUS. Saya menemukan evidence/gap yang masih tersisa; saya tidak menyatakan file sembuh.`, {
-      kind: "POST_PATCH_VALIDATION", caseId, target, passed
+    ? `Validasi pasca-repair LULUS. Telemetry ${telemetryTarget} tidak lagi menunjukkan signature lama dan perubahan exact pada ${repairTarget} terverifikasi.`
+    : `Validasi pasca-repair BELUM LULUS. Saya menemukan evidence/gap yang masih tersisa; saya tidak menyatakan file sembuh.`, {
+      kind: "POST_PATCH_VALIDATION", caseId, target: repairTarget, telemetryTarget, passed
     });
   emit("validation_complete", { validation: v, case: c });
   emit("case_updated", { case: c });
