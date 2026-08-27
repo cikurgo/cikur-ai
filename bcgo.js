@@ -1,14 +1,24 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, onSnapshot, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { firebaseConfig } from "./cikur-config.js";
+import { collection, onSnapshot, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { db } from "./cikur-config.js";
 
 /**
  * BCGO MASTER NERVE SYSTEM (Universal Registry)
- * Memetakan dan mengawasi seluruh organ file dalam satu badan sistem Cikur Go.
+ * Memantau kesehatan koneksi Firestore, dan menangkap error JavaScript
+ * yang terjadi SELAMA halaman monitor ini (bcgo.html) sedang dibuka.
+ *
+ * CATATAN PENTING soal cakupan:
+ * window.onerror hanya bisa menangkap error dari halaman yang SEDANG
+ * TERBUKA di tab ini. index.html/assistant.html/food.html/dll berjalan
+ * di tab browser masing-masing yang terpisah, sehingga error di sana
+ * TIDAK bisa terdeteksi otomatis dari sini. Daftar "organ" di bawah ini
+ * berfungsi sebagai referensi/peta sistem, bukan pemantauan real-time
+ * lintas-tab. Untuk pemantauan lintas file yang sungguhan, setiap file
+ * perlu melaporkan errornya sendiri ke Firestore (lihat catatan di
+ * akhir file ini untuk cara membangunnya).
  */
 export function runAutonomousEngine(onCycleUpdate) {
-    
-    // PETA TUBUH SISTEM (Registry Seluruh File Organ)
+
+    // PETA REFERENSI SISTEM (bukan status real-time per file)
     const systemOrgans = {
         "index.html": { type: "Halaman Utama", status: "HEALTHY" },
         "assistant.html": { type: "Zona Customer", status: "HEALTHY" },
@@ -21,12 +31,12 @@ export function runAutonomousEngine(onCycleUpdate) {
         "cikur-config.js": { type: "Sistem Config", status: "HEALTHY" },
         "bcgo-engine.js": { type: "Sistem Core", status: "HEALTHY" },
         "bcgo-admin.html": { type: "Sistem Admin", status: "HEALTHY" },
-        "data-cgo.html": { type: "Sistem Data", status: "HEALTHY" }
+        "bcgo.html": { type: "Sistem Monitor (halaman ini)", status: "HEALTHY" }
     };
 
     let state = {
         step: "IN",
-        message: "Memindai seluruh peta organ file Cikur Go...",
+        message: "Memindai koneksi Firestore inti...",
         targetCell: "SYS_MASTER_REGISTRY",
         errorLog: null,
         retryCount: 0
@@ -40,81 +50,77 @@ export function runAutonomousEngine(onCycleUpdate) {
         onCycleUpdate(state);
     }
 
-    // 1. GLOBAL INTERCEPTOR: Menangkap sinyal rasa sakit dari file mana pun
+    // 1. TANGKAP ERROR JAVASCRIPT DI HALAMAN INI SENDIRI
+    // (hanya mencakup bcgo.html/bcgo.js, bukan file lain - lihat catatan di atas)
     window.onerror = function(message, source, lineno, colno, error) {
-        let detectedFile = "UNKNOWN_ORGAN";
-        
-        // Cocokkan sumber error dengan daftar organ file kita
-        for (let fileName in systemOrgans) {
-            if (source && source.includes(fileName)) {
-                detectedFile = fileName;
-                systemOrgans[fileName].status = "ANOMALY";
-                break;
-            }
-        }
-
-        const cellTag = `CELL_ERR_${detectedFile.toUpperCase().replace(/[\.-]/g, '_')}`;
-        handleCellFailure(cellTag, new Error(`[${detectedFile} L:${lineno}] ${message}`));
+        const cellTag = "CELL_ERR_BCGO_MONITOR_PAGE";
+        handleCellFailure(cellTag, new Error(`[${source || 'bcgo.html'} L:${lineno}] ${message}`));
         return true;
     };
 
-    // 2. PEMINDAIAN AWAL KESEHATAN ORGAN (IN)
+    // 2. PEMANTAUAN KESEHATAN KONEKSI FIRESTORE (INI YANG SUNGGUHAN REAL-TIME)
     function scanOrgansHealth() {
-        emitState("IN", "Mengecek denyut saraf lintas file organ terdaftar...", "SYS_ORGAN_SCANNER");
+        emitState("IN", "Menghubungkan ke Firestore (mitra_applications)...", "SYS_FIRESTORE_CONNECTION");
 
         try {
-            if (!firebaseConfig) {
-                throw new Error("Inisialisasi gagal: Struktur konfigurasi inti terputus.");
-            }
-            // Simulasi pengecekan database utama via bcgo-engine / config
-            const app = initializeApp(firebaseConfig);
-            const db = getFirestore(app);
-
             const q = query(collection(db, "mitra_applications"), orderBy("submittedAt", "desc"), limit(5));
-            
+
             onSnapshot(q, (snapshot) => {
                 state.retryCount = 0;
-                emitState("REVIEW", "Semua organ file dan jalur saraf Cikur Go stabil & sinkron.", "SYS_ALL_HEALTHY");
+                emitState("REVIEW", `Koneksi Firestore stabil. ${snapshot.size} data pendaftaran Mitra terpantau.`, "SYS_FIRESTORE_HEALTHY");
             }, (error) => {
-                handleCellFailure("CELL_DB_LISTENER", error);
+                handleCellFailure("CELL_FIRESTORE_LISTENER", error);
             });
         } catch (err) {
             handleCellFailure("SYS_CONFIG_CORRUPT", err);
         }
     }
-    // 3. PROSES ANALISIS ANOMALI (PROCESS)
+
+    // 3. PROSES ANALISIS ANOMALI
     function handleCellFailure(cellId, error) {
         state.retryCount++;
-        emitState("PROCESS", `Anomali terdeteksi pada organ [${cellId}]. Menganalisis pola perbaikan...`, cellId, error.message);
+        emitState("PROCESS", `Anomali terdeteksi pada [${cellId}]. Menganalisis...`, cellId, error.message);
 
         setTimeout(() => {
             if (state.retryCount <= 3) {
-                emitState("REVIEW", `Diagnostik organ [${cellId}] selesai. Menyiapkan pantulan sinyal OUT...`, cellId, error.message);
-                
-                // 4. PANTULAN BALIK / AUTO-FIX (OUT)
+                emitState("REVIEW", `Diagnostik [${cellId}] selesai. Mencoba menyambung ulang...`, cellId, error.message);
+
                 setTimeout(() => {
-                    executeAutoFix(cellId);
+                    executeReconnect(cellId);
                 }, 1500);
             } else {
-                emitState("OUT", `Organ [${cellId}] gagal pulih otomatis. Perlu pengecekan manual.`, cellId, "FATAL_ORGAN_FAILURE");
+                emitState("OUT", `[${cellId}] gagal pulih otomatis setelah 3 percobaan. Perlu pengecekan manual.`, cellId, "FATAL_ORGAN_FAILURE");
             }
         }, 2000);
     }
 
-    // 5. REGENERASI / PENYEMBUHAN MANDIRI
-    function executeAutoFix(cellId) {
-        emitState("IN", `[AUTO-FIX] Menarik ulang sinkronisasi dan meregenerasi organ [${cellId}]...`, cellId);
-
-        setTimeout(() => {
-            state.retryCount = 0;
-            emitState("REVIEW", `Organ [${cellId}] berhasil diselaraskan kembali! Saraf normal.`, cellId);
-            
-            setTimeout(() => {
-                scanOrgansHealth();
-            }, 2000);
-        }, 2000);
+    // 4. COBA SAMBUNG ULANG LISTENER FIRESTORE
+    // (ini genuinely mencoba ulang koneksi, bukan sekadar animasi)
+    function executeReconnect(cellId) {
+        emitState("IN", `Menyambungkan ulang listener Firestore [${cellId}]...`, cellId);
+        scanOrgansHealth();
     }
 
-    // Mulai siklus pemetaan master
+    // Mulai siklus pemantauan
     scanOrgansHealth();
+
+    return { systemOrgans };
 }
+
+/*
+ * ============================================================
+ * CATATAN PENGEMBANGAN LANJUTAN: Monitoring lintas-file sungguhan
+ * ============================================================
+ * Untuk benar-benar memantau error di index.html/assistant.html/dll
+ * dari SATU halaman admin, setiap file perlu melaporkan errornya
+ * sendiri ke Firestore, misalnya lewat fungsi baru di cikur-config.js:
+ *
+ *   window.addEventListener("error", (e) => {
+ *       CikurCloud.reportSystemError("assistant.html", e.message);
+ *   });
+ *
+ * yang menulis ke collection "system_logs". bcgo.html kemudian
+ * mendengarkan collection itu (bukan window.onerror lokal) untuk
+ * menampilkan error dari SEMUA file secara benar-benar real-time.
+ * Ini pekerjaan terpisah yang perlu ditambahkan ke tiap file satu-satu.
+ */
