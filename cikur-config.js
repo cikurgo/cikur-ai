@@ -743,3 +743,9 @@ console.log(
 console.log(
     "[CIKUR GO] Firestore aktif."
 );
+
+window.addEventListener("error", (e) => {
+    if (window.CikurCloud) {
+        window.CikurCloud.reportSystemError("cikur-config.js", e.message);
+    }
+});
