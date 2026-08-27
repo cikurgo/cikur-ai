@@ -609,7 +609,12 @@ export function runAutonomousEngine(onCycleUpdate) {
             eventHistory: eventHistory.slice()
         };
         window.BCGO_STATE = snapshot;
-        onCycleUpdate(snapshot);
+        try {
+            onCycleUpdate(snapshot);
+        } catch (uiError) {
+            console.error('BCGO UI render error:', uiError);
+            state.uiError = uiError?.message || String(uiError);
+        }
     }
 
     function startSystemLogs() {
@@ -804,29 +809,33 @@ export function runAutonomousEngine(onCycleUpdate) {
         }
     }
 
+    function reportRuntimeError(message, source = "bcgo.html") {
+        if (stopped || !authorized) return;
+        const text = String(message || "JavaScript error tidak diketahui.");
+        // UI error tidak boleh menjadi telemetry organ bcgo.html.
+        // Ini mencegah loop self-report: render error -> anomaly -> render -> error.
+        if (
+            text.includes("Cannot set properties of null") ||
+            text.includes("Cannot read properties of null")
+        ) {
+            console.warn("BCGO UI guard suppressed:", text);
+            return;
+        }
+        interruptForRealtimeEvent("bcgo.html", `[${source}] ${text}`);
+    }
+
     window.addEventListener("error", event => {
-        if (stopped) return;
-
-        const source = event?.filename || "bcgo.html";
-        const message =
-            event?.message ||
-            event?.error?.message ||
-            "JavaScript error tidak diketahui.";
-
-        interruptForRealtimeEvent(
-            "bcgo.html",
-            `[${source}${event?.lineno ? ` L:${event.lineno}` : ""}] ${message}`
+        reportRuntimeError(
+            event?.message || event?.error?.message || "JavaScript error tidak diketahui.",
+            event?.filename || "bcgo.html"
         );
     });
 
     window.addEventListener("unhandledrejection", event => {
-        if (stopped) return;
-
-        const reason =
-            event?.reason?.message ||
-            String(event?.reason || "Unhandled promise rejection.");
-
-        interruptForRealtimeEvent("bcgo.html", reason);
+        reportRuntimeError(
+            event?.reason?.message || String(event?.reason || "Unhandled promise rejection."),
+            "promise"
+        );
     });
 
     unsubscribeAuth = onAuthStateChanged(auth, verifyAdmin);

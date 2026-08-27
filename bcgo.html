@@ -239,7 +239,7 @@ function formatTime(value) {
 
 function dimAll() {
     Object.values(bagans).forEach(el => {
-        el.className = 'neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40';
+        if (el) el.className = 'neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40';
     });
 }
 
@@ -264,7 +264,9 @@ function activatePhase(step, state) {
         OUT: 'synchronizing'
     };
 
-    Object.keys(subtitles).forEach(k => subtitles[k].textContent = subText[k]);
+    Object.keys(subtitles).forEach(k => {
+        if (subtitles[k]) subtitles[k].textContent = subText[k];
+    });
 }
 
 function setHeader(step, state) {
@@ -276,8 +278,10 @@ function setHeader(step, state) {
     };
 
     const [bg,text,border,label] = styles[step] || styles.OUT;
-    badge.className = `px-3 py-1 rounded-md text-xs font-semibold ${bg} ${text} border ${border}`;
-    badge.textContent = state.cycleMode === 'INTERRUPTED' ? '⚡ Impuls Terdeteksi' : label;
+    if (badge) {
+        badge.className = `px-3 py-1 rounded-md text-xs font-semibold ${bg} ${text} border ${border}`;
+        badge.textContent = state.cycleMode === 'INTERRUPTED' ? '⚡ Impuls Terdeteksi' : label;
+    }
 
     const dotColor = {
         IN: 'bg-blue-500',
@@ -286,10 +290,11 @@ function setHeader(step, state) {
         OUT: 'bg-emerald-500'
     }[step] || 'bg-emerald-500';
 
-    pulse.className = `w-3 h-3 rounded-full ${dotColor} animate-ping`;
+    if (pulse) pulse.className = `w-3 h-3 rounded-full ${dotColor} animate-ping`;
 }
 
 function renderOrgans(organs) {
+    if (!organGrid) return;
     const entries = Object.entries(organs || {});
     organGrid.innerHTML = entries.map(([file, info]) => {
         const active = info.state === 'ACTIVE';
@@ -314,7 +319,8 @@ function renderOrgans(organs) {
 }
 
 function renderLogs(logs) {
-    logCounter.textContent = `${logs?.length || 0} laporan`;
+    if (!errorFeed) return;
+    if (logCounter) logCounter.textContent = `${logs?.length || 0} laporan`;
 
     if (!logs?.length) {
         errorFeed.innerHTML = '<div class="text-xs text-slate-500">Belum ada laporan error masuk.</div>';
@@ -335,8 +341,9 @@ function renderLogs(logs) {
 }
 
 function renderEventHistory(events) {
+    if (!eventHistoryFeed) return;
     const list = Array.isArray(events) ? events : [];
-    eventHistoryCount.textContent = `${list.length} event`;
+    if (eventHistoryCount) eventHistoryCount.textContent = `${list.length} event`;
     if (!list.length) {
         eventHistoryFeed.innerHTML = '<div class="text-xs text-slate-500">Belum ada event.</div>';
         return;
