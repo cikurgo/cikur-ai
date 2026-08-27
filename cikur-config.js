@@ -57,8 +57,42 @@ const auth = getAuth(app);
 
 // Export supaya modul lain (mis. bcgo.js) bisa memakai
 // KONEKSI YANG SAMA, bukan membuat Firebase App baru
-// (initializeApp kedua kali akan error "already exists").
 export { db, auth, firebaseConfig };
+
+
+// ==========================================
+// GLOBAL ERROR REPORTER (SISTEM SARAF OTOMATIS)
+// ==========================================
+
+/**
+ * Melaporkan error dari halaman manapun secara otomatis ke Firestore
+ * agar bisa dipantau secara real-time oleh bcgo.html (Neural Monitor).
+ */
+export async function reportSystemError(sourceFile, errorMessage) {
+    try {
+        await addDoc(collection(db, "system_logs"), {
+            source: sourceFile,
+            error: errorMessage,
+            timestamp: serverTimestamp(),
+            status: "UNRESOLVED"
+        });
+    } catch (err) {
+        console.error("[CIKUR GO] Gagal mengirim log error sistem:", err);
+    }
+}
+
+// Tangkap error JavaScript global di halaman manapun yang memuat config ini
+window.addEventListener("error", (event) => {
+    const currentFileName = window.location.pathname.split("/").pop() || "index.html";
+    reportSystemError(currentFileName, event.message);
+});
+
+// Tangkap error Async / Promise yang tidak tertangani
+window.addEventListener("unhandledrejection", (event) => {
+    const currentFileName = window.location.pathname.split("/").pop() || "index.html";
+    reportSystemError(currentFileName, event.reason?.message || "Unhandled Promise Rejection");
+});
+
 
 // ==========================================
 // CIKUR CLOUD GLOBAL ENGINE
@@ -66,6 +100,8 @@ export { db, auth, firebaseConfig };
 
 window.CikurCloud = {
     auth,
+    reportSystemError, // Diexport juga ke objek global jika butuh dipanggil manual
+
     waitForAuth() {
         return new Promise((resolve) => {
             const unsubscribe = onAuthStateChanged(
@@ -128,15 +164,11 @@ window.CikurCloud = {
 
     // ======================================
     // REGISTRASI AKUN PERMANEN (EMAIL + PASSWORD)
-    // Jika user sedang anonymous (punya data sementara),
-    // otomatis di-LINK supaya data lama tidak hilang.
     // ======================================
 
     async registerWithEmail(email, password) {
         const currentUser = auth.currentUser;
 
-        // Kasus 1: sedang anonymous -> upgrade/link ke email+password
-        // supaya UID & data yang sudah ada tetap sama, tidak hilang.
         if (currentUser && currentUser.isAnonymous) {
             const credential = EmailAuthProvider.credential(email, password);
 
@@ -148,8 +180,6 @@ window.CikurCloud = {
                 );
                 return linkedResult.user;
             } catch (linkError) {
-                // Kalau email sudah dipakai akun lain, tidak bisa di-link,
-                // fallback ke pembuatan akun baru biasa.
                 if (linkError.code === "auth/email-already-in-use" || linkError.code === "auth/credential-already-in-use") {
                     console.warn("[CIKUR GO] Email sudah terdaftar, tidak bisa link. Membuat akun baru biasa.");
                 } else {
@@ -158,7 +188,6 @@ window.CikurCloud = {
             }
         }
 
-        // Kasus 2: belum ada sesi sama sekali -> daftar akun baru biasa
         const result = await createUserWithEmailAndPassword(auth, email, password);
         console.log("[CIKUR GO] Akun Email baru dibuat:", result.user.uid);
         return result.user;
@@ -166,7 +195,6 @@ window.CikurCloud = {
 
     // ======================================
     // LOGIN AKUN YANG SUDAH ADA (EMAIL + PASSWORD)
-    // Ini yang memulihkan akun yang sama dari device/browser manapun.
     // ======================================
 
     async loginWithEmail(email, password) {
@@ -176,39 +204,7 @@ window.CikurCloud = {
     },
 
     // ======================================
-    // PENDAFTARAN MITRA (Agent CGO / Resto / Driver)
-    // Status: pending -> approved / rejected
-    // Dokumen id: mitra_applications/{uid}_{jenis}
-    // ======================================
-
-    // ======================================
-    // DAFTAR RESTO YANG SUDAH DISETUJUI
-    // (dipakai food.html untuk menampilkan resto & menu asli)
-    // ======================================
-
-    listenApprovedRestos(callback) {
-        const q = query(
-            collection(db, "mitra_applications"),
-            where("jenis", "==", "resto"),
-            where("status", "==", "approved")
-        );
-
-        return onSnapshot(q, (snapshot) => {
-            const restos = [];
-            snapshot.forEach((docSnap) => {
-                restos.push({ id: docSnap.id, uid: docSnap.data().uid, ...docSnap.data() });
-            });
-            if (typeof callback === "function") callback(restos);
-        }, (error) => {
-            console.error("[CIKUR GO] Gagal memuat daftar resto:", error);
-            if (typeof callback === "function") callback([]);
-        });
-    },
-
-    // ======================================
     // UPDATE PROFIL MITRA SETELAH APPROVED
-    // (edit menu, jam buka, dsb - TIDAK mereset
-    //  status/submittedAt seperti submitMitraApplication)
     // ======================================
 
     async updateMitraProfile(userId, jenis, data) {
@@ -266,11 +262,10 @@ window.CikurCloud = {
     },
 
     // ======================================
-    // USER PROFILE (PERBAIKAN FINAL)
+    // USER PROFILE
     // ======================================
 
     async saveProfile(userId, data) {
-        // Jika userId tidak dikirim dari depan, ambil otomatis dari session aktif
         if (!userId) {
             const currentUser = await this.ensureAuth();
             if (!currentUser) {
@@ -310,9 +305,7 @@ window.CikurCloud = {
     },
 
     // ======================================
-    // PRESENCE CUSTOMER (online/offline untuk admin)
-    // Ditulis berkala selama customer membuka index.html.
-    // Collection ini yang dibaca bcgo-admin.html.
+    // PRESENCE CUSTOMER
     // ======================================
 
     async updateCustomerPresence(userId, data) {
@@ -390,10 +383,6 @@ window.CikurCloud = {
         };
     },
 
-    // ======================================
-    // REALTIME ORDER LISTENER (SEMUA ORDER PER TYPE)
-    // ======================================
-
     listenOrders(
         type,
         callback
@@ -430,10 +419,6 @@ window.CikurCloud = {
         );
     },
 
-    // ======================================
-    // AMBIL 1 ORDER (SEKALI, TANPA REALTIME)
-    // ======================================
-
     async getOrder(orderId) {
         if (!orderId) return null;
 
@@ -448,11 +433,6 @@ window.CikurCloud = {
             ...orderSnapshot.data()
         };
     },
-
-    // ======================================
-    // DENGARKAN 1 ORDER SECARA REALTIME
-    // (dipakai Customer & Mitra memantau status/DEAL)
-    // ======================================
 
     listenOrder(orderId, callback) {
         if (!orderId) return () => {};
@@ -474,12 +454,6 @@ window.CikurCloud = {
         );
     },
 
-    // ======================================
-    // UPDATE STATUS / DATA ORDER
-    // (dipakai Mitra: terima/tolak/DEAL, dan
-    //  Customer: setelah bayar)
-    // ======================================
-
     async updateOrderStatus(orderId, updateData) {
         if (!orderId) throw new Error("Order ID tidak tersedia.");
 
@@ -493,11 +467,6 @@ window.CikurCloud = {
 
         return true;
     },
-
-    // ======================================
-    // CARI ORDER AKTIF CUSTOMER (untuk pemulihan
-    // sesi saat halaman dibuka/refresh)
-    // ======================================
 
     async getActiveOrderForCustomer(userId, type) {
         if (!userId || !type) return null;
@@ -526,7 +495,7 @@ window.CikurCloud = {
     },
 
     // ======================================
-    // CHAT PER ORDER (sub-collection orders/{id}/messages)
+    // CHAT PER ORDER
     // ======================================
 
     async sendOrderMessage(orderId, sender, text) {
@@ -569,10 +538,7 @@ window.CikurCloud = {
     },
 
     // ======================================
-    // PROFIL PUBLIK RESTO (nama, alamat, menu,
-    // status buka/tutup) - terpisah dari
-    // mitra_applications (yang cuma untuk verifikasi).
-    // Ini yang dibaca food.html.
+    // PROFIL PUBLIK RESTO
     // ======================================
 
     async saveRestoProfile(userId, data) {
@@ -609,8 +575,7 @@ window.CikurCloud = {
     },
 
     // ======================================
-    // ORDER FOOD YANG SIAP DIAMBIL DRIVER
-    // (status SIAP_DIAMBIL, belum ada driverId)
+    // ORDER FOOD
     // ======================================
 
     listenAvailableFoodOrders(callback) {
@@ -635,10 +600,6 @@ window.CikurCloud = {
         });
     },
 
-    // ======================================
-    // ORDER FOOD YANG SEDANG DIANTAR DRIVER TERTENTU
-    // ======================================
-
     listenDriverActiveFoodOrders(driverId, callback) {
         if (!driverId) return () => {};
 
@@ -660,10 +621,6 @@ window.CikurCloud = {
             }
         });
     },
-
-    // ======================================
-    // DRIVER KLAIM ORDER (ambil pesanan siap diantar)
-    // ======================================
 
     async claimFoodOrder(orderId, driverId, driverName) {
         if (!orderId || !driverId) throw new Error("Data klaim tidak lengkap.");
@@ -688,14 +645,7 @@ window.CikurCloud = {
 // ENGINE STATUS
 // ==========================================
 
-console.log(
-    "[CIKUR GO] Cloud Realtime Engine aktif."
-);
-
-console.log(
-    "[CIKUR GO] Firebase Authentication aktif."
-);
-
-console.log(
-    "[CIKUR GO] Firestore aktif."
-);
+console.log("[CIKUR GO] Cloud Realtime Engine aktif.");
+console.log("[CIKUR GO] Firebase Authentication aktif.");
+console.log("[CIKUR GO] Firestore aktif.");
+console.log("[CIKUR GO] Global Error Reporter siap terhubung ke Neural Monitor.");
