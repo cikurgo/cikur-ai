@@ -72,6 +72,20 @@
                 <span id="error-log-desc" class="code-font text-rose-400 font-semibold">Tidak ada error</span>
             </div>
         </div>
+
+        <!-- STATUS SETIAP FILE - berubah otomatis begitu ada laporan error masuk -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Status Tiap File (real-time via laporan error)</div>
+            <div id="organ-grid" class="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs"></div>
+        </div>
+
+        <!-- FEED ERROR TERBARU DARI SEMUA FILE -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Laporan Error Terbaru (lintas file)</div>
+            <div id="error-feed" class="space-y-2 max-h-64 overflow-y-auto">
+                <div class="text-xs text-slate-500">Belum ada laporan error masuk.</div>
+            </div>
+        </div>
     </div>
 
     <!-- PENGHUBUNG KE OTAK MASTER BCGO.JS -->
@@ -95,11 +109,45 @@
             });
         }
 
+        function renderOrganGrid(systemOrgans) {
+            if (!systemOrgans) return;
+            const grid = document.getElementById('organ-grid');
+            grid.innerHTML = Object.entries(systemOrgans).map(([fileName, info]) => {
+                const isHealthy = info.status === "HEALTHY";
+                const colorClass = isHealthy ? "border-emerald-800 bg-emerald-950/40 text-emerald-400" : "border-rose-800 bg-rose-950/40 text-rose-400 animate-pulse";
+                return `<div class="border rounded-lg px-3 py-2 ${colorClass}">
+                    <div class="font-semibold code-font">${fileName}</div>
+                    <div class="text-[10px] opacity-80">${info.type} — ${info.status}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderErrorFeed(logs) {
+            const feed = document.getElementById('error-feed');
+            if (!logs || logs.length === 0) {
+                feed.innerHTML = '<div class="text-xs text-slate-500">Belum ada laporan error masuk.</div>';
+                return;
+            }
+            feed.innerHTML = logs.map(log => {
+                const time = log.reportedAt?.toDate ? log.reportedAt.toDate().toLocaleString('id-ID') : '-';
+                return `<div class="border border-rose-900 bg-rose-950/30 rounded-lg px-3 py-2">
+                    <div class="flex justify-between text-[11px]">
+                        <span class="font-bold text-rose-400 code-font">${log.fileName || 'UNKNOWN'}</span>
+                        <span class="text-slate-500">${time}</span>
+                    </div>
+                    <div class="text-xs text-slate-300 mt-1 code-font">${log.message || '-'}</div>
+                </div>`;
+            }).join('');
+        }
+
         // Tangkap denyut nadi state dari master bcgo.js
         runAutonomousEngine((state) => {
             liveSpeech.textContent = `> [${state.step}] ${state.message}`;
             targetCellId.textContent = state.targetCell;
             errorLogDesc.textContent = state.errorLog || "Normal (Seluruh Organ Stabil)";
+
+            renderOrganGrid(state.systemOrgans);
+            renderErrorFeed(state.systemLogs);
 
             dimAllBagan();
 
