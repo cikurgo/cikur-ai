@@ -3,7 +3,7 @@
 // Firebase Authentication + Firestore
 // ==========================================
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 
 import {
     getFirestore,
@@ -51,7 +51,12 @@ const firebaseConfig = {
 // FIREBASE INITIALIZATION
 // ==========================================
 
-const app = initializeApp(firebaseConfig);
+// Gunakan Firebase App DEFAULT yang sudah ada bila halaman lain sudah menginisialisasikannya.
+// Ini mencegah error app/duplicate-app saat beberapa modul memakai konfigurasi yang sama.
+const app = getApps().some(existingApp => existingApp.name === "[DEFAULT]")
+    ? getApp()
+    : initializeApp(firebaseConfig);
+
 const db = getFirestore(app);
 const auth = getAuth(app);
 
@@ -744,8 +749,54 @@ console.log(
     "[CIKUR GO] Firestore aktif."
 );
 
-window.addEventListener("error", (e) => {
-    if (window.CikurCloud) {
-        window.CikurCloud.reportSystemError("cikur-config.js", e.message);
+// Satu global error reporter untuk seluruh aplikasi.
+// Nama file diambil dari sumber error agar satu error tidak dicatat 3x sebagai
+// bcgo-admin.html + bcgo-engine.js + cikur-config.js.
+(() => {
+    if (window.__CIKUR_GLOBAL_ERROR_REPORTER__) return;
+    window.__CIKUR_GLOBAL_ERROR_REPORTER__ = true;
+
+    const recentErrors = new Map();
+
+    function getSourceName(errorEvent) {
+        try {
+            const source = errorEvent?.filename || "";
+            if (source) {
+                const clean = source.split("?")[0].split("#")[0];
+                const name = clean.substring(clean.lastIndexOf("/") + 1);
+                if (name) return name;
+            }
+        } catch (_) {}
+        return location.pathname.split("/").pop() || "unknown";
     }
-});
+
+    function report(source, message, extra = {}) {
+        const text = String(message || "Unknown error").slice(0, 500);
+        const key = `${source}|${text}`;
+        const now = Date.now();
+        const previous = recentErrors.get(key) || 0;
+
+        // Hindari spam akibat error yang dipicu berulang-ulang dalam 3 detik.
+        if (now - previous < 3000) return;
+        recentErrors.set(key, now);
+
+        if (window.CikurCloud && typeof window.CikurCloud.reportSystemError === "function") {
+            window.CikurCloud.reportSystemError(source, text, extra);
+        }
+    }
+
+    window.addEventListener("error", (e) => {
+        report(getSourceName(e), e?.message || "JavaScript error", {
+            line: e?.lineno || null,
+            column: e?.colno || null
+        });
+    });
+
+    window.addEventListener("unhandledrejection", (e) => {
+        const reason = e?.reason;
+        report(
+            "unhandledrejection",
+            reason?.message || String(reason || "Unhandled Promise rejection")
+        );
+    });
+})();

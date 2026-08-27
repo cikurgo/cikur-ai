@@ -450,6 +450,7 @@
             </button>
             <button class="nav-btn" onclick="scrollToSection('partnerSectionAnchor')">
                 <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span><span>Manajemen Mitra</span>
+                <span id="navPendingCount" class="nav-count">0</span>
             </button>
             <button class="nav-btn" onclick="scrollToSection('customerSectionAnchor')">
                 <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></span><span>Manajemen Customer</span>
@@ -821,29 +822,18 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    // Firebase App/Authentication/Firestore dipusatkan di cikur-config.js.
+    // Modul ini hanya memakai koneksi yang sama, sehingga tidak membuat
+    // Firebase App kedua dan tidak memicu app/duplicate-app.
+    import { db, auth } from "./cikur-config.js";
     import {
-        getFirestore, collection, onSnapshot, query, orderBy,
-        doc, updateDoc, deleteDoc, serverTimestamp, getDoc, setDoc
+        collection, onSnapshot, query,
+        doc, updateDoc, serverTimestamp, getDoc, setDoc
     } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
     import {
-        getAuth, onAuthStateChanged, signInWithEmailAndPassword,
+        onAuthStateChanged, signInWithEmailAndPassword,
         createUserWithEmailAndPassword, signOut
     } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-
-    const firebaseConfig = {
-        apiKey: "AIzaSyBV2dQa-MoN5zPuNHA6Tda4L4aLoeL_QDw",
-        authDomain: "cikur-go-indonesia.firebaseapp.com",
-        projectId: "cikur-go-indonesia",
-        storageBucket: "cikur-go-indonesia.firebasestorage.app",
-        messagingSenderId: "1058616161176",
-        appId: "1:1058616161176:web:3b3983d79cc722ab4e71ed",
-        measurementId: "G-WCSSXJRS0B"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const auth = getAuth(app);
     let currentUser = null;
     let authMode = "login";
     let adminVerified = false;
@@ -859,6 +849,7 @@
     let cachedCustomers = {};
     let categoryCounts = { agent: 0, resto: 0, driver: 0 };
     let lastAnalysis = { low: 0, review: 0, high: 0 };
+    let customerPresenceTimer = null;
 
     function updateGreeting(){
         const hour = new Date().getHours();
@@ -1068,13 +1059,14 @@
     }
 
     function setEngineStatus(ok, text){
+        if(!badgeEl) return;
         badgeEl.innerHTML = `<span class="live-dot"></span>${esc(text)}`;
         badgeEl.style.background = ok ? "var(--green-soft)" : "var(--danger-soft)";
         badgeEl.style.color = ok ? "#15803d" : "#b91c1c";
         badgeEl.style.borderColor = ok ? "#bbf7d0" : "#fecaca";
     }
 
-    if(typeof BCGO !== "undefined" && typeof BCGO.evaluatePartner === "function"){
+    if(window.BCGO && typeof window.BCGO.evaluatePartner === "function"){
         setEngineStatus(true, "DATA AKTIF");
     }else{
         setEngineStatus(false, "BCGO ENGINE CHECK");
@@ -1102,8 +1094,10 @@
     };
 
     window.switchTab = function(category, btnElement){
+        if(!["agent","resto","driver"].includes(category)) return;
+
         document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
-        btnElement.classList.add("active");
+        if(btnElement) btnElement.classList.add("active");
         currentCategory = category;
 
         const titleMap = {
@@ -1116,99 +1110,113 @@
         document.getElementById("tableNote").textContent =
             `Menampilkan kategori ${category.toUpperCase()} • urutan terbaru → terlama`;
 
-        loadAdminData(category);
+        renderPartnerData();
     };
 
-    function loadCustomerData(){
-        if(unsubscribeCustomerListener) unsubscribeCustomerListener();
+    function timestampMillis(value){
+        if(!value) return 0;
+        if(typeof value.toMillis === "function") return value.toMillis();
+        if(typeof value.toDate === "function") return value.toDate().getTime();
+        if(value instanceof Date) return value.getTime();
+        const parsed = Date.parse(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
 
-        const q = query(collection(db, "customers"), orderBy("createdAt", "desc"));
+    function renderCustomerData(){
+        const entries = Object.entries(cachedCustomers);
+        const FIVE_MINUTES = 5 * 60 * 1000;
+        const now = Date.now();
+        let onlineCount = 0;
+        let offlineCount = 0;
+
+        entries.sort((a,b) => {
+            const av = timestampMillis(a[1]?.createdAt || a[1]?.lastSeen || a[1]?.updatedAt);
+            const bv = timestampMillis(b[1]?.createdAt || b[1]?.lastSeen || b[1]?.updatedAt);
+            return bv - av;
+        });
+
+        let rowsHtml = "";
+
+        entries.forEach(([docId, data]) => {
+            let lastSeenTime = timestampMillis(data.lastSeen || data.updatedAt);
+            const isOnline = lastSeenTime > 0 && (now - lastSeenTime) <= FIVE_MINUTES;
+
+            if(isOnline) onlineCount++;
+            else offlineCount++;
+
+            const nama = getCustomerName(data);
+            const email = data.email || "-";
+            const phone = data.phone || data.kontak || "-";
+            const date = getDate(data);
+            const initial = esc(nama.charAt(0).toUpperCase());
+            const status = data.status || "active";
+            const accountStatusClass = status === "inactive" ? "inactive" : "active";
+            const accountStatusText = status === "inactive" ? "Inactive" : "Active";
+            const presenceClass = isOnline ? "online" : "offline";
+            const presenceText = isOnline ? "Online" : "Offline";
+
+            rowsHtml += `
+                <tr>
+                    <td><span class="status ${presenceClass}">${presenceText}</span></td>
+                    <td>${esc(date)}</td>
+                    <td>
+                        <div class="name-cell clickable-name" onclick="openCustomerDetailModal('${esc(docId)}')">
+                            <div class="avatar">${initial}</div>
+                            <div>
+                                <div class="name-main">${esc(nama)}</div>
+                                <div class="name-sub">ID: ${esc(docId.substring(0,8))}...</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>${esc(email)} / ${esc(phone)}</td>
+                    <td><span class="status ${accountStatusClass}">${accountStatusText}</span></td>
+                    <td>
+                        <div class="action-group">
+                            <button class="btn-action btn-review" onclick="openCustomerDetailModal('${esc(docId)}')">Detail</button>
+                            <button class="btn-action btn-reject" onclick="toggleCustomerStatus('${esc(docId)}', '${esc(status)}')">${status === 'inactive' ? 'Aktifkan' : 'Nonaktifkan'}</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+
+        if(entries.length === 0){
+            customerTbody.innerHTML = `
+                <tr><td colspan="6" class="empty-state">
+                    <div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></div>
+                    Belum ada data customer terdaftar di koleksi <b>customers</b>.
+                </td></tr>
+            `;
+        }else{
+            customerTbody.innerHTML = rowsHtml;
+        }
+
+        document.getElementById("statCustomers").textContent = entries.length;
+        document.getElementById("statCustomerOnline").textContent = onlineCount;
+        document.getElementById("statCustomerOffline").textContent = offlineCount;
+        document.getElementById("customersMeta").textContent = entries.length > 0
+            ? `${onlineCount} Online, ${offlineCount} Offline`
+            : "Belum ada customer";
+    }
+
+    function loadCustomerData(){
+        if(unsubscribeCustomerListener) return;
+
+        customerTbody.innerHTML = `
+            <tr><td colspan="6" class="empty-state">
+                <div class="empty-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></div>
+                Menghubungkan ke Database Customer...
+            </td></tr>
+        `;
+
+        const q = query(collection(db, "customers"));
 
         unsubscribeCustomerListener = onSnapshot(q, snapshot => {
             cachedCustomers = {};
-            let totalCustomers = 0;
-            let onlineCount = 0;
-            let offlineCount = 0;
-            let rowsHtml = "";
-
-            const FIVE_MINUTES = 5 * 60 * 1000;
-            const now = new Date().getTime();
-
             snapshot.forEach(documentSnap => {
-                const data = documentSnap.data();
-                const docId = documentSnap.id;
-
-                cachedCustomers[docId] = data;
-                totalCustomers++;
-
-                let lastSeenTime = 0;
-                if(data.lastSeen && typeof data.lastSeen.toDate === "function"){
-                    lastSeenTime = data.lastSeen.toDate().getTime();
-                } else if(data.updatedAt && typeof data.updatedAt.toDate === "function"){
-                    lastSeenTime = data.updatedAt.toDate().getTime();
-                }
-
-                const isOnline = lastSeenTime > 0 && (now - lastSeenTime) <= FIVE_MINUTES;
-                if(isOnline){
-                    onlineCount++;
-                } else {
-                    offlineCount++;
-                }
-
-                const nama = getCustomerName(data);
-                const email = data.email || "-";
-                const phone = data.phone || data.kontak || "-";
-                const date = getDate(data);
-                const initial = esc(nama.charAt(0).toUpperCase());
-
-                let status = data.status || "active";
-                let accountStatusClass = status === "inactive" ? "inactive" : "active";
-                let accountStatusText = status === "inactive" ? "Inactive" : "Active";
-
-                let presenceClass = isOnline ? "online" : "offline";
-                let presenceText = isOnline ? "Online" : "Offline";
-
-                rowsHtml += `
-                    <tr>
-                        <td><span class="status ${presenceClass}">${presenceText}</span></td>
-                        <td>${esc(date)}</td>
-                        <td>
-                            <div class="name-cell clickable-name" onclick="openCustomerDetailModal('${esc(docId)}')">
-                                <div class="avatar">${initial}</div>
-                                <div>
-                                    <div class="name-main">${esc(nama)}</div>
-                                    <div class="name-sub">ID: ${esc(docId.substring(0,8))}...</div>
-                                </div>
-                            </div>
-                        </td>
-                        <td>${esc(email)} / ${esc(phone)}</td>
-                        <td><span class="status ${accountStatusClass}">${accountStatusText}</span></td>
-                        <td>
-                            <div class="action-group">
-                                <button class="btn-action btn-review" onclick="openCustomerDetailModal('${esc(docId)}')">Detail</button>
-                                <button class="btn-action btn-reject" onclick="toggleCustomerStatus('${esc(docId)}', '${status}')">${status === 'inactive' ? 'Aktifkan' : 'Nonaktifkan'}</button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
+                cachedCustomers[documentSnap.id] = documentSnap.data();
             });
-
-            if(totalCustomers === 0){
-                customerTbody.innerHTML = `
-                    <tr><td colspan="6" class="empty-state">
-                        <div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></div>
-                        Belum ada data customer terdaftar di koleksi <b>customers</b>.
-                    </td></tr>
-                `;
-            }else{
-                customerTbody.innerHTML = rowsHtml;
-            }
-
-            document.getElementById("statCustomers").textContent = totalCustomers;
-            document.getElementById("statCustomerOnline").textContent = onlineCount;
-            document.getElementById("statCustomerOffline").textContent = offlineCount;
-            document.getElementById("customersMeta").textContent = totalCustomers > 0 ? `${onlineCount} Online, ${offlineCount} Offline` : "Belum ada customer";
-
+            renderCustomerData();
         }, error => {
             console.warn("Kendala koneksi koleksi customers:", error);
             customerTbody.innerHTML = `
@@ -1217,13 +1225,130 @@
                     Koleksi customer belum tersedia atau menunggu sinkronisasi database.
                 </td></tr>
             `;
-            document.getElementById("statCustomers").textContent = "0";
-            document.getElementById("statCustomerOnline").textContent = "0";
-            document.getElementById("statCustomerOffline").textContent = "0";
+            cachedCustomers = {};
+            renderCustomerData();
         });
     }
 
-    function loadAdminData(category){
+    if(!customerPresenceTimer){
+        customerPresenceTimer = setInterval(() => {
+            if(adminVerified && Object.keys(cachedCustomers).length) {
+                renderCustomerData();
+            }
+        }, 30000);
+    }
+
+    function renderPartnerData(){
+        const entries = Object.entries(cachedApplications)
+            .filter(([,data]) => normalizePartnerCategory(data) === currentCategory)
+            .sort((a,b) => timestampMillis(b[1]?.submittedAt || b[1]?.createdAt || b[1]?.updatedAt) - timestampMillis(a[1]?.submittedAt || a[1]?.createdAt || a[1]?.updatedAt));
+
+        let pendingCount = 0;
+        let approvedCount = 0;
+        let low = 0, review = 0, high = 0;
+        let rowsHtml = "";
+
+        entries.forEach(([docId, data]) => {
+            const bcgoResult = data._bcgoLiveResult || null;
+            const dbStatus = data.status || "pending";
+
+            if(dbStatus === "approved") approvedCount++;
+            else if(dbStatus === "pending") pendingCount++;
+
+            if(bcgoResult){
+                const resultStatus = String(bcgoResult.status || "").toUpperCase();
+                if(resultStatus === "APPROVE") low++;
+                else if(resultStatus === "REJECT") high++;
+                else review++;
+            }else if(data.bcgoScore !== undefined && data.bcgoScore !== null){
+                const scoreValue = Number(data.bcgoScore);
+                if(scoreValue >= 80) low++;
+                else if(scoreValue < 50) high++;
+                else review++;
+            }
+
+            const nama = getPartnerName(data);
+            const phone = getPhone(data);
+            const date = getDate(data);
+            const score = bcgoResult?.score ?? data.bcgoScore ?? "-";
+            const riskClass = getRiskClass(bcgoResult);
+            const riskLabel = getRiskLabel(bcgoResult);
+            const initial = esc(nama.charAt(0).toUpperCase());
+            const statusClass = dbStatus === "approved" ? "approved" : dbStatus === "rejected" ? "rejected" : "pending";
+            const statusText = dbStatus === "approved" ? "Approved" : dbStatus === "rejected" ? "Rejected" : "Pending";
+            const attention = (riskClass !== "score-low" || dbStatus === "pending") ? " needs-attention-row" : "";
+
+            rowsHtml += `
+                <tr class="${attention}">
+                    <td>${esc(date)}</td>
+                    <td>
+                        <div class="name-cell clickable-name" onclick="openDetailModal('${esc(docId)}')">
+                            <div class="avatar">${initial}</div>
+                            <div>
+                                <div class="name-main">${esc(nama)}</div>
+                                <div class="name-sub">${esc(String(data.jenis || currentCategory).toUpperCase())}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>${esc(phone)}</td>
+                    <td>
+                        <span class="bcgo-score ${riskClass}">${esc(score === "-" ? "-" : `${score}/100`)}</span>
+                        <div style="font-size:7px;color:var(--muted);margin-top:2px">${esc(riskLabel)}</div>
+                    </td>
+                    <td><span class="status ${statusClass}">${statusText}</span></td>
+                    <td>
+                        <div class="action-group">
+                            <button class="btn-action btn-review" onclick="openDetailModal('${esc(docId)}')">Review</button>
+                            <button class="btn-action btn-approve" onclick="updateStatus('${esc(docId)}','approved')">Setujui</button>
+                            <button class="btn-action btn-reject" onclick="updateStatus('${esc(docId)}','rejected')">Tolak</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+
+        if(entries.length === 0){
+            tbody.innerHTML = `
+                <tr><td colspan="6" class="empty-state">
+                    <div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div>
+                    Belum ada data pendaftaran mitra yang masuk untuk kategori <b>${esc(currentCategory.toUpperCase())}</b>.
+                </td></tr>
+            `;
+        }else{
+            tbody.innerHTML = rowsHtml;
+        }
+
+        lastAnalysis = { low, review, high };
+        updateStats(pendingCount, approvedCount, categoryCounts.agent + categoryCounts.resto + categoryCounts.driver);
+        updateIntelligence(pendingCount, approvedCount, categoryCounts.agent + categoryCounts.resto + categoryCounts.driver, low, review, high);
+        renderNetwork();
+    }
+
+    function normalizePartnerCategory(data){
+        const rawType = String(data?.jenis || data?.partnerType || "").trim().toLowerCase();
+        if(rawType === "restaurant" || rawType === "restoran" || rawType === "resto") return "resto";
+        if(rawType === "assistant" || rawType === "agentcgo" || rawType === "agent") return "agent";
+        if(rawType === "driver" || rawType === "pengemudi") return "driver";
+        return rawType;
+    }
+
+    function loadAdminData(category = currentCategory){
+        if(["agent","resto","driver"].includes(category)){
+            currentCategory = category;
+            document.getElementById("sectionTitle").textContent = {
+                agent:"Manajemen Pendaftaran Agent CGO",
+                resto:"Manajemen Pendaftaran Resto Partner",
+                driver:"Manajemen Pendaftaran Driver Partner"
+            }[category];
+            document.getElementById("tableNote").textContent =
+                `Menampilkan kategori ${category.toUpperCase()} • urutan terbaru → terlama`;
+        }
+
+        if(unsubscribeListener) {
+            renderPartnerData();
+            return;
+        }
+
         tbody.innerHTML = `
             <tr><td colspan="6" class="empty-state">
                 <div class="empty-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></div>
@@ -1231,50 +1356,30 @@
             </td></tr>
         `;
 
-        if(unsubscribeListener) unsubscribeListener();
-
-        const q = query(collection(db, "mitra_applications"), orderBy("submittedAt", "desc"));
+        const q = query(collection(db, "mitra_applications"));
 
         unsubscribeListener = onSnapshot(q, snapshot => {
             setEngineStatus(true, "DATA AKTIF");
-
             cachedApplications = {};
             categoryCounts = { agent:0, resto:0, driver:0 };
-
-            let pendingCount = 0;
-            let approvedCount = 0;
-            let totalCountAllCategories = 0;
-            let totalCountCurrent = 0;
-            let low = 0, review = 0, high = 0;
-            let rowsHtml = "";
 
             snapshot.forEach(documentSnap => {
                 const data = documentSnap.data();
                 const docId = documentSnap.id;
+                const normalizedType = normalizePartnerCategory(data);
 
-                const rawType = String(data.jenis || data.partnerType || "").toLowerCase();
-                const normalizedType =
-                    rawType === "restaurant" ? "resto" :
-                    rawType === "assistant" ? "agent" :
-                    rawType;
-
-                if(["agent","resto","driver"].includes(normalizedType)){
+                if(categoryCounts[normalizedType] !== undefined){
                     categoryCounts[normalizedType]++;
                 }
 
-                totalCountAllCategories++;
-
-                if(normalizedType !== category) return;
-
                 let bcgoResult = null;
-
                 try{
-                    if(typeof BCGO !== "undefined" && typeof BCGO.evaluatePartner === "function"){
-                        bcgoResult = BCGO.evaluatePartner({
+                    if(window.BCGO && typeof window.BCGO.evaluatePartner === "function"){
+                        bcgoResult = window.BCGO.evaluatePartner({
                             ...data,
                             partnerType: normalizedType === "resto"
                                 ? "restaurant"
-                                : (data.jenis || data.partnerType || category)
+                                : (data.jenis || data.partnerType || normalizedType)
                         });
                     }
                 }catch(error){
@@ -1283,87 +1388,12 @@
 
                 cachedApplications[docId] = {
                     ...data,
-                    _bcgoLiveResult: bcgoResult
+                    _bcgoLiveResult: bcgoResult,
+                    _normalizedType: normalizedType
                 };
-
-                totalCountCurrent++;
-
-                if(data.status === "approved") approvedCount++;
-                else if(!data.status || data.status === "pending") pendingCount++;
-
-                if(bcgoResult){
-                    const status = String(bcgoResult.status || "").toUpperCase();
-                    if(status === "APPROVE") low++;
-                    else if(status === "REJECT") high++;
-                    else review++;
-                }else if(data.bcgoScore !== undefined && data.bcgoScore !== null){
-                    const score = Number(data.bcgoScore);
-                    if(score >= 80) low++;
-                    else if(score < 50) high++;
-                    else review++;
-                }
-
-                const nama = getPartnerName(data);
-                const phone = getPhone(data);
-                const date = getDate(data);
-                const result = bcgoResult;
-                const score = result?.score ?? data.bcgoScore ?? "-";
-                const riskClass = getRiskClass(result);
-                const riskLabel = getRiskLabel(result);
-                const initial = esc(nama.charAt(0).toUpperCase());
-
-                let dbStatus = data.status || "pending";
-                let statusClass = dbStatus === "approved" ? "approved" : dbStatus === "rejected" ? "rejected" : "pending";
-                let statusText = dbStatus === "approved" ? "Approved" : dbStatus === "rejected" ? "Rejected" : "Pending";
-
-                const attention = (riskClass !== "score-low" || dbStatus === "pending") ? " needs-attention-row" : "";
-
-                rowsHtml += `
-                    <tr class="${attention}">
-                        <td>${esc(date)}</td>
-                        <td>
-                            <div class="name-cell clickable-name" onclick="openDetailModal('${esc(docId)}')">
-                                <div class="avatar">${initial}</div>
-                                <div>
-                                    <div class="name-main">${esc(nama)}</div>
-                                    <div class="name-sub">${esc(String(data.jenis || category).toUpperCase())}</div>
-                                </div>
-                            </div>
-                        </td>
-                        <td>${esc(phone)}</td>
-                        <td>
-                            <span class="bcgo-score ${riskClass}">
-                                ${esc(score === "-" ? "-" : `${score}/100`)}
-                            </span>
-                            <div style="font-size:7px;color:var(--muted);margin-top:2px">${esc(riskLabel)}</div>
-                        </td>
-                        <td><span class="status ${statusClass}">${statusText}</span></td>
-                        <td>
-                            <div class="action-group">
-                                <button class="btn-action btn-review" onclick="openDetailModal('${esc(docId)}')">Review</button>
-                                <button class="btn-action btn-approve" onclick="updateStatus('${esc(docId)}','approved')">Setujui</button>
-                                <button class="btn-action btn-reject" onclick="updateStatus('${esc(docId)}','rejected')">Tolak</button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
             });
 
-            if(totalCountCurrent === 0){
-                tbody.innerHTML = `
-                    <tr><td colspan="6" class="empty-state">
-                        <div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div>
-                        Belum ada data pendaftaran mitra yang masuk untuk kategori <b>${esc(category.toUpperCase())}</b>.
-                    </td></tr>
-                `;
-            }else{
-                tbody.innerHTML = rowsHtml;
-            }
-
-            lastAnalysis = { low, review, high };
-            updateStats(pendingCount, approvedCount, totalCountAllCategories);
-            updateIntelligence(pendingCount, approvedCount, totalCountAllCategories, low, review, high);
-            renderNetwork();
+            renderPartnerData();
 
             const now = new Date();
             document.getElementById("lastSyncTime").textContent =
@@ -1374,14 +1404,16 @@
             console.warn("Kendala koneksi/izin database:", error);
             setEngineStatus(false, "DATABASE ISSUE");
             document.getElementById("syncStatus").textContent = "Periksa koneksi atau aturan izin Firestore.";
+            cachedApplications = {};
+            categoryCounts = { agent:0, resto:0, driver:0 };
+            lastAnalysis = { low:0, review:0, high:0 };
 
             tbody.innerHTML = `
                 <tr><td colspan="6" class="empty-state" style="color:var(--red)">
-                    <div class="empty-icon" style="color:var(--red);background:#fee2e2"><svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>
+                    <div class="empty-icon" style="color:var(--red);background:#fee2e2"><svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 1 1.71 3h16.94a2 2 0 0 1 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>
                     Belum ada data / periksa aturan izin Firestore.
                 </td></tr>
             `;
-
             updateStats(0,0,0);
             updateIntelligence(0,0,0,0,0,0);
         });
@@ -1773,11 +1805,7 @@
         if(e.key === "Escape") closeDetailModal();
     });
     
-    window.addEventListener("error", (e) => {
-    if (window.CikurCloud) {
-        window.CikurCloud.reportSystemError("bcgo-admin.html", e.message);
-    }
-});
+    // Error reporting global ditangani satu kali oleh cikur-config.js.
 </script>
 </body>
 </html>
