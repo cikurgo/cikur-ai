@@ -58,7 +58,7 @@ const CONTRACT_FIELDS = new Set([
 ]);
 
 const S = {
-  version: "1.5.0",
+  version: "1.6.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -157,6 +157,8 @@ function makeCase(log) {
     createdAt: now(),
     evidence: log,
     repairPlan: null,
+    rootCauseFile: source,
+    sourceEvidence: [],
     validation: null
   };
   S.cases.unshift(c);
@@ -214,6 +216,79 @@ function fields(name, source) {
   return [...new Set(out)];
 }
 
+
+function sourceLines(source) {
+  return String(source || "").split(/\r?\n/);
+}
+
+function lineOf(source, offset) {
+  return String(source || "").slice(0, Math.max(0, offset)).split(/\r?\n/).length;
+}
+
+function domAssignmentCandidates(fileName, source) {
+  if (!source) return [];
+  const out = [];
+  const patterns = [
+    /(?:document\.getElementById\(\s*["']([^"']+)["']\s*\)|\$\(\s*["']([^"']+)["']\s*\))\s*\.textContent\s*=\s*([^;\n]+);?/g,
+    /(?:document\.querySelector\(\s*["']([^"']+)["']\s*\)|\$\(\s*["']([^"']+)["']\s*\))\s*\.innerHTML\s*=\s*([^;\n]+);?/g
+  ];
+  for (const re of patterns) {
+    let m;
+    while ((m = re.exec(source)) && out.length < 40) {
+      const before = m[0];
+      out.push({
+        file: fileName,
+        selector: m[1] || m[2] || "",
+        property: /innerHTML/.test(before) ? "innerHTML" : "textContent",
+        before,
+        line: lineOf(source, m.index),
+        index: m.index
+      });
+    }
+  }
+  return out;
+}
+
+async function buildSourceEvidence(targetFile, signature) {
+  const names = Object.keys(REGISTRY);
+  const evidence = [];
+  const sig = safeLower(signature);
+  const priority = [targetFile, "bcgo-admin.html", "bcgo-engine.js", ...names].filter((v,i,a)=>v && a.indexOf(v)===i);
+  for (const name of priority) {
+    const x = await fetchFile(name);
+    if (!x.ok || !x.text) continue;
+    const candidates = domAssignmentCandidates(name, x.text);
+    if (!candidates.length) continue;
+    for (const c of candidates) {
+      const selectorHit = c.selector && sig.includes(safeLower(c.selector));
+      const likely = /textcontent|innerhtml/.test(sig) || selectorHit;
+      if (likely) evidence.push({ ...c, selectorHit });
+    }
+  }
+  evidence.sort((a,b) => (b.selectorHit-a.selectorHit) || (a.file===targetFile ? -1 : 1) || (a.line-b.line));
+  return evidence.slice(0, 12);
+}
+
+async function resolveRootCause(c) {
+  const originalTarget = c.source;
+  const direct = await fetchFile(originalTarget);
+  const directOps = findLikelyDomBinding(originalTarget, direct.text, c.signature);
+  if (directOps.length) {
+    return { rootCauseFile: originalTarget, sourceEvidence: directOps.map(op => ({ file: op.file, before: op.before, after: op.after, reason: op.reason })) };
+  }
+  if (c.diagnosis.code !== "DOM_NULL_REFERENCE") return { rootCauseFile: originalTarget, sourceEvidence: [] };
+  const candidates = await buildSourceEvidence(originalTarget, c.signature);
+  const best = candidates.find(x => x.property === "textContent") || candidates[0];
+  if (!best) return { rootCauseFile: originalTarget, sourceEvidence: [] };
+  const src = await fetchFile(best.file);
+  const ops = findLikelyDomBinding(best.file, src.text, c.signature);
+  return {
+    rootCauseFile: best.file,
+    sourceEvidence: candidates.map(x => ({ file: x.file, selector: x.selector, property: x.property, line: x.line, before: x.before })).slice(0, 8),
+    resolvedOperation: ops[0] || null
+  };
+}
+
 function findDomNullOperations(fileName, source, signature) {
   if (!source) return [];
   const ops = [];
@@ -227,7 +302,7 @@ function findDomNullOperations(fileName, source, signature) {
     const indent = m[1];
     const accessor = m[2] === "$" ? `$(${m[3]}${m[4]}${m[3]})` : `document.getElementById(${m[3]}${m[4]}${m[3]})`;
     const after = `${indent}{ const __medicineEl = ${accessor}; if (__medicineEl) __medicineEl.textContent = ${m[5]}; }`;
-    ops.push({ type: "REPLACE_EXACT", file: fileName, before, after, reason: "Guard DOM reference before assigning textContent" });
+    ops.push({ type: "REPLACE_EXACT", file: fileName, line: lineOf(source, m.index), before, after, reason: "Guard DOM reference before assigning textContent" });
   }
   return ops;
 }
@@ -245,7 +320,7 @@ function findLikelyDomBinding(fileName, source, signature) {
     const id = m[2];
     const rhs = before.split("=").slice(1).join("=").trim().replace(/;$/, "");
     const after = `{ const __medicineEl = document.getElementById("${id}"); if (__medicineEl) __medicineEl.textContent = ${rhs}; }`;
-    operations.push({ type: "REPLACE_EXACT", file: fileName, before, after, reason: "Guard DOM reference before assigning textContent" });
+    operations.push({ type: "REPLACE_EXACT", file: fileName, line: lineOf(source, m.index), before, after, reason: "Guard DOM reference before assigning textContent" });
   }
   return operations;
 }
@@ -350,27 +425,37 @@ function buildRepairPlan(c, verification) {
 
 async function enrichRepairPlan(c, verification) {
   const plan = buildRepairPlan(c, verification);
-  const targetSource = await fetchFile(c.source);
-  const adminSource = await fetchFile("bcgo-admin.html");
+  const resolution = await resolveRootCause(c);
+  plan.originalTarget = c.source;
+  plan.rootCauseFile = resolution.rootCauseFile || c.source;
+  plan.sourceEvidence = resolution.sourceEvidence || [];
 
   if (c.diagnosis.code === "DOM_NULL_REFERENCE") {
-    plan.operations.push(...findLikelyDomBinding(c.source, targetSource.text, c.signature));
+    if (resolution.resolvedOperation) plan.operations.push(resolution.resolvedOperation);
+    else if (resolution.rootCauseFile === c.source) {
+      const targetSource = await fetchFile(c.source);
+      plan.operations.push(...findLikelyDomBinding(c.source, targetSource.text, c.signature));
+    }
   }
 
   if (c.diagnosis.code === "DATA_CONSISTENCY") {
+    const adminSource = await fetchFile("bcgo-admin.html");
     const targetFindings = verification?.targetFindings || [];
     const gap = targetFindings.find(f => f.kind === "ADMIN_PRESENTATION_GAP");
     if (gap) plan.operations.push(...buildAdminGapOperations("bcgo-admin.html", gap.missing || [], adminSource.text));
   }
 
   for (const op of plan.operations) {
-    if (op.type === "REPLACE_EXACT") plan.beforeAfter.push({ file: op.file, before: op.before, after: op.after });
-    if (op.type === "INSERT_BEFORE") plan.beforeAfter.push({ file: op.file, before: op.marker, after: `${op.marker}\n${op.content}` });
+    if (op.type === "REPLACE_EXACT") plan.beforeAfter.push({ file: op.file, line: op.line || null, before: op.before, after: op.after });
+    if (op.type === "INSERT_BEFORE") plan.beforeAfter.push({ file: op.file, line: null, before: op.marker, after: `${op.marker}\n${op.content}` });
   }
 
-  if (!plan.operations.length) {
+  if (plan.operations.length) {
+    plan.status = "PROPOSED";
+    plan.blockReason = null;
+  } else {
     plan.status = "PATCH_REQUIRES_REVIEW";
-    plan.blockReason = "Medicine could not produce a sufficiently safe deterministic source operation from the available evidence.";
+    plan.blockReason = "Medicine belum menemukan operasi source deterministik yang cukup kuat. Source tidak akan diubah berdasarkan tebakan.";
   }
   return plan;
 }
@@ -424,6 +509,8 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     S.activeCase.verification = v;
     S.activeCase.status = verdict === "INSUFFICIENT_EVIDENCE" ? "NEEDS_EVIDENCE" : "VERIFIED_DIAGNOSIS";
     S.activeCase.repairPlan = await enrichRepairPlan(S.activeCase, v);
+    S.activeCase.rootCauseFile = S.activeCase.repairPlan.rootCauseFile || S.activeCase.source;
+    S.activeCase.sourceEvidence = S.activeCase.repairPlan.sourceEvidence || [];
     S.activeCase.prescription = prescription(S.activeCase.diagnosis);
     emit("case_updated", { case: S.activeCase });
 
