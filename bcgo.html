@@ -51,7 +51,10 @@ body{font-family:'Inter',sans-serif}
     </div>
     <div class="signal-line text-emerald-500 bg-slate-800"></div>
     <div class="flex justify-between text-[10px] text-slate-500">
-        <span id="event-state">Menunggu impuls...</span>
+        <div class="flex items-center gap-3 min-w-0">
+            <span id="event-state">Menunggu impuls...</span>
+            <span id="data-freshness" class="code-font text-amber-400">WAITING</span>
+        </div>
         <span id="cycle-mode">BOOT</span>
     </div>
 </section>
@@ -389,23 +392,30 @@ document.querySelectorAll('.quick-q').forEach(button => {
 });
 
 runAutonomousEngine(state => {
-    liveSpeech.textContent = `> [${state.step}] ${state.message}`;
-    targetCellId.textContent = state.targetCell || '-';
-    errorLogDesc.textContent = state.errorLog || 'Normal (tidak ada anomali aktif)';
+    // Render layer dibuat toleran terhadap DOM yang belum lengkap.
+    // Mesin BCGO tidak boleh mati hanya karena satu elemen UI hilang.
+    if (liveSpeech) liveSpeech.textContent = `> [${state.step}] ${state.message}`;
+    if (targetCellId) targetCellId.textContent = state.targetCell || '-';
+    if (errorLogDesc) errorLogDesc.textContent = state.errorLog || 'Normal (tidak ada anomali aktif)';
 
-    cycleNumber.textContent = state.cycle ?? 0;
-    cycleMode.textContent = state.cycleMode || 'NORMAL';
-    dataFreshness.textContent = state.dataFreshness || (state.firestore?.connected ? 'LIVE' : 'WAITING');
-    dataFreshness.className = `text-[10px] code-font ${state.dataFreshness === 'LIVE' ? 'text-emerald-400' : state.dataFreshness === 'OFFLINE' ? 'text-rose-400' : 'text-amber-400'}`;
-    eventState.textContent = state.lastEventAt
+    if (cycleNumber) cycleNumber.textContent = state.cycle ?? 0;
+    if (cycleMode) cycleMode.textContent = state.cycleMode || 'NORMAL';
+
+    const freshness = state.dataFreshness || (state.firestore?.connected ? 'LIVE' : 'WAITING');
+    if (dataFreshness) {
+        dataFreshness.textContent = freshness;
+        dataFreshness.className = `text-[10px] code-font ${freshness === 'LIVE' ? 'text-emerald-400' : freshness === 'OFFLINE' ? 'text-rose-400' : 'text-amber-400'}`;
+    }
+
+    if (eventState) eventState.textContent = state.lastEventAt
         ? `Impuls terakhir: ${formatTime(state.lastEventAt)}`
         : 'Belum ada impuls baru';
 
-    metrics.total.textContent = state.metrics?.total ?? 12;
-    metrics.active.textContent = state.metrics?.active ?? 0;
-    metrics.healthy.textContent = state.metrics?.healthy ?? 12;
-    metrics.recovered.textContent = state.metrics?.recovered ?? 0;
-    metrics.firestore.textContent = state.metrics?.firestoreCount ?? 0;
+    if (metrics.total) metrics.total.textContent = state.metrics?.total ?? 12;
+    if (metrics.active) metrics.active.textContent = state.metrics?.active ?? 0;
+    if (metrics.healthy) metrics.healthy.textContent = state.metrics?.healthy ?? 12;
+    if (metrics.recovered) metrics.recovered.textContent = state.metrics?.recovered ?? 0;
+    if (metrics.firestore) metrics.firestore.textContent = state.metrics?.firestoreCount ?? 0;
 
     activatePhase(state.step, state);
     setHeader(state.step, state);
@@ -413,7 +423,7 @@ runAutonomousEngine(state => {
     renderLogs(state.systemLogs);
     renderEventHistory(state.eventHistory);
 
-    if (!chatFeed.dataset.ready) {
+    if (chatFeed && !chatFeed.dataset.ready) {
         chatFeed.dataset.ready = '1';
         chatFeed.innerHTML = '';
         addChat('bcgo', `Kanal komunikasi aktif. Saya sedang berada di tahap ${state.step}. Silakan tanya apa yang sedang saya kerjakan.`);

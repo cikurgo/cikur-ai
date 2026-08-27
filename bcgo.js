@@ -72,6 +72,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     let cycleNo = 0;
     let phaseIndex = -1;
     let authorized = false;
+    let authGeneration = 0;
     let lastEventAt = 0;
     let lastEventText = "Belum ada impuls baru.";
     let lastTarget = "SYS_MASTER_REGISTRY";
@@ -229,7 +230,16 @@ export function runAutonomousEngine(onCycleUpdate) {
 
         // Satu state yang sama untuk monitor, chat, dan integrasi lain.
         window.BCGO_STATE = snapshot;
-        onCycleUpdate(snapshot);
+
+        // UI adalah konsumen state, bukan bagian dari mesin autentikasi/telemetry.
+        // Jika DOM rusak atau ada elemen yang hilang, engine tetap hidup dan
+        // kesalahan tersebut tidak boleh dilaporkan sebagai kegagalan Admin.
+        try {
+            onCycleUpdate(snapshot);
+        } catch (uiError) {
+            console.error("BCGO UI render error:", uiError);
+            state.uiError = uiError?.message || String(uiError);
+        }
     }
 
     function activeAnomalies() {
@@ -727,17 +737,12 @@ export function runAutonomousEngine(onCycleUpdate) {
     function refreshExpiredStatuses() {
         if (stopped || !authorized) return;
 
-        const organs = buildOrgans();
-        onCycleUpdate({
-            ...state,
-            systemOrgans: clone(organs),
-            systemLogs: latestSystemLogs.slice(),
-            metrics: makeMetrics(organs),
-            firestore: { ...firestore }
-        });
+        publishCurrentState();
     }
 
     async function verifyAdmin(user) {
+        const generation = ++authGeneration;
+
         if (!user) {
             authorized = false;
             clearTimeout(cycleTimer);
@@ -753,6 +758,9 @@ export function runAutonomousEngine(onCycleUpdate) {
 
         try {
             const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
+
+            // Jangan biarkan hasil verifikasi lama menimpa sesi Auth terbaru.
+            if (generation !== authGeneration) return;
 
             if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
                 authorized = false;
