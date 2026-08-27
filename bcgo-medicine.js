@@ -12,7 +12,7 @@ const REGISTRY={
  "bcgo-engine.js":{type:"Sistem Core"},"bcgo-admin.html":{type:"Sistem Admin"},"bcgo.html":{type:"Sistem Monitor"}
 };
 const REQUIRED={driver:["name","phone","address","vehicleType"],assistant:["name","phone","address","serviceType"],customer:["name","phone","email"],restaurant:["name","phone","address","businessName","businessType","ownerName","role","village","district","city","province","openTime","closeTime","operationalDays","ktp","legalStatus","bankName","accountName","accountNumber","photoFront"]};
-const S={version:"1.0.0",registry:REGISTRY,logs:[],cases:[],activeCase:null,findings:[],listeners:[]};
+const S={version:"1.1.0",registry:REGISTRY,logs:[],cases:[],activeCase:null,findings:[],listeners:[],human:{mode:"ASSISTED",paused:false,uid:null}};
 const emit=(event,p={})=>window.dispatchEvent(new CustomEvent("bcgo:medicine",{detail:{event,at:new Date().toISOString(),...p}}));
 const text=(v,n=600)=>String(v??"").replace(/\s+/g," ").trim().slice(0,n);
 const has=v=>v!==undefined&&v!==null&&String(v).trim()!=="";
@@ -23,7 +23,18 @@ function diagnosis(message){const m=String(message).toLowerCase();
  if(/undefined|is not a function|not defined/.test(m))return{code:"JAVASCRIPT_CONTRACT",title:"Kontrak JavaScript tidak terpenuhi",severity:"MEDIUM",confidence:.82,treatment:"RUNTIME_CONTRACT_REVIEW"};
  return{code:"UNCLASSIFIED_RUNTIME",title:"Runtime anomaly belum terklasifikasi",severity:"UNKNOWN",confidence:.45,treatment:"MANUAL_DIAGNOSIS"};}
 function prescription(d){const safe=["DOM_NULL_GUARD","FIRESTORE_RECONNECT"].includes(d.treatment);return{treatment:d.treatment,risk:safe?"LOW":"HIGH",mode:safe?"SAFE_PROPOSAL":"APPROVAL_REQUIRED"};}
-function makeCase(log){const source=text(log.fileName||"UNKNOWN",120),sig=text(log.message||"Unknown error",500);if(S.cases.some(c=>c.source===source&&c.signature===sig))return null;const d=diagnosis(sig);const c={id:`CASE-${Date.now()}-${Math.random().toString(36).slice(2,7).toUpperCase()}`,source,signature:sig,diagnosis:d,prescription:prescription(d),status:"DIAGNOSED",createdAt:new Date().toISOString(),evidence:log};S.cases.unshift(c);S.cases=S.cases.slice(0,50);S.activeCase=c;emit("case_created",{case:c});return c;}
+function makeCase(log){
+ const source=text(log.fileName||"UNKNOWN",120),sig=text(log.message||"Unknown error",500);
+ if(S.cases.some(c=>c.source===source&&c.signature===sig))return null;
+ const d=diagnosis(sig);
+ const c={id:`CASE-${Date.now()}-${Math.random().toString(36).slice(2,7).toUpperCase()}`,source,signature:sig,diagnosis:d,prescription:prescription(d),status:"DIAGNOSED",createdAt:new Date().toISOString(),evidence:log};
+ S.cases.unshift(c);S.cases=S.cases.slice(0,50);S.activeCase=c;
+ emit("case_created",{case:c});
+ // BCGO/Medicine hand-off is persisted as a real conversation event, not a fake UI-only bubble.
+ postSystemMessage("bcgo",`Saya menemukan evidence pada ${source}: ${d.title}. Saya serahkan case ${c.id} ke Medicine untuk diagnosis dan validasi.`);
+ postSystemMessage("medicine",`Case ${c.id} saya terima. Saya akan memeriksa evidence dan kontrak lintas-file sebelum mengusulkan treatment.`);
+ return c;
+}
 function startTelemetry(){if(!window.CikurCloud?.listenSystemLogs)return emit("telemetry_unavailable");const u=window.CikurCloud.listenSystemLogs(logs=>{S.logs=Array.isArray(logs)?logs:[];emit("telemetry",{logs:S.logs});for(const l of S.logs.slice(0,50))makeCase(l);});S.listeners.push(u);}
 async function fetchFile(name){try{const r=await fetch(`./${encodeURIComponent(name)}`,{cache:"no-store"});const t=r.ok?await r.text():"";return{ok:r.ok,status:r.status,text:t};}catch(e){return{ok:false,status:0,text:"",error:e.message};}}
 function fields(name,t){if(!t)return[];const out=[];let m;const re=/(?:id|name|data-field)\s*=\s*["']([^"']+)["']/gi;while((m=re.exec(t)))out.push(m[1]);if(/\.js$/i.test(name)){const kr=/\b(name|phone|address|email|vehicleType|photo|fotoKtp|fotoSim|fotoStnk|ktp|sim|stnk|bankName|accountName|accountNumber|serviceType|businessName|businessType|ownerName|role|village|district|city|province|openTime|closeTime|operationalDays|legalStatus|photoFront|photoIndoor)\b/g;while((m=kr.exec(t)))out.push(m[1]);}return[...new Set(out)];}
@@ -31,11 +42,40 @@ async function scanConsistency(){emit("scan_started",{total:Object.keys(REGISTRY
  for(const [type,req] of Object.entries(REQUIRED)){const source=type==="driver"?"driver.html":type==="restaurant"?"resto.html":type==="assistant"?"agentcgo.html":"index.html";const sf=new Set((r[source]?.fields||[]).map(x=>x.toLowerCase()));const miss=req.filter(x=>!sf.has(x.toLowerCase()));if(miss.length)findings.push({kind:"SOURCE_CONTRACT_GAP",sourceFile:source,missing:miss});}
  for(const source of ["driver.html","resto.html","agentcgo.html","index.html","food.html","ride.html"]){const sf=[...new Set((r[source]?.fields||[]).map(x=>x.toLowerCase()))].filter(x=>/^(photo|fotoktp|fotosim|fotostnk|ktp|sim|stnk|name|phone|address|email|vehicletype|businessname|businesstype|ownername|bankname|accountname|accountnumber|servicetype)$/.test(x));const miss=sf.filter(x=>!admin.has(x));if(miss.length)findings.push({kind:"ADMIN_PRESENTATION_GAP",sourceFile:source,targetFile:"bcgo-admin.html",missing:miss});}
  S.findings=findings;emit("scan_complete",{results:r,findings});return{results:r,findings};}
+async function postSystemMessage(role,msg){
+ const payload={role,text:text(msg,1200),actorUid:null,system:true,createdAt:serverTimestamp()};
+ try{await addDoc(collection(db,"medicine_messages"),payload);}catch(e){emit("local_message",{message:{...payload,createdAt:new Date().toISOString()},storageError:e.message});}
+}
 async function sendMessage(msg,role="human"){const t=text(msg,1200);if(!t)return;const payload={role,text:t,actorUid:auth.currentUser?.uid||null,createdAt:serverTimestamp()};try{await addDoc(collection(db,"medicine_messages"),payload);}catch(e){emit("local_message",{message:{...payload,createdAt:new Date().toISOString()},storageError:e.message});}
  if(role==="human"){const answer=answerQuestion(t);try{await addDoc(collection(db,"medicine_messages"),{role:"medicine",text:answer,actorUid:auth.currentUser?.uid||null,createdAt:serverTimestamp()});}catch(_){emit("local_message",{message:{role:"medicine",text:answer,createdAt:new Date().toISOString()}});}}}
 function answerQuestion(q){const x=q.toLowerCase(),active=S.cases.filter(c=>c.status!=="RECOVERED");if(/ada.*(masalah|error)|kendala|rusak|sakit/.test(x))return active.length?`Saya menemukan ${active.length} case aktif. Target pertama ${active[0].source}; diagnosis ${active[0].diagnosis.title}, confidence ${Math.round(active[0].diagnosis.confidence*100)}%.`:`Saat ini tidak ada case aktif. Saya tetap mendengarkan system_logs realtime.`;if(/obat|perbaiki|sembuhkan|treatment/.test(x))return S.activeCase?`Prescription saya untuk ${S.activeCase.source}: ${S.activeCase.prescription.treatment}. Saya tidak mengedit source-code bebas; perubahan berisiko memerlukan approval dan validation.`:`Belum ada case aktif untuk diobati.`;if(/driver|foto|photo/.test(x))return"Saya dapat membandingkan driver.html dengan alur engine/database/Admin. Jika field foto tersedia di sumber tetapi tidak dirender di Admin, saya akan membuat ADMIN_PRESENTATION_GAP.";return`Saya sedang mengobservasi ${Object.keys(REGISTRY).length} organ/file dan ${S.logs.length} telemetry log. Saya hanya akan menyatakan sesuatu jika evidence mendukung.`;}
-async function approveTreatment(caseId){const c=S.cases.find(x=>x.id===caseId);if(!c)throw new Error("Case tidak ditemukan");c.status="READY_FOR_PATCH";c.approvedAt=new Date().toISOString();try{await addDoc(collection(db,"medicine_treatments"),{caseId:c.id,source:c.source,diagnosis:c.diagnosis,prescription:c.prescription,action:"APPROVED_READY_FOR_PATCH",actorUid:auth.currentUser?.uid||null,createdAt:serverTimestamp()});}catch(e){emit("storage_warning",{message:e.message});}emit("case_updated",{case:c});return c;}
+async function approveTreatment(caseId){
+ const c=S.cases.find(x=>x.id===caseId);if(!c)throw new Error("Case tidak ditemukan");
+ c.status="READY_FOR_PATCH";c.approvedAt=new Date().toISOString();c.approvedBy=auth.currentUser?.uid||null;
+ try{await addDoc(collection(db,"medicine_treatments"),{caseId:c.id,source:c.source,diagnosis:c.diagnosis,prescription:c.prescription,action:"APPROVED_READY_FOR_PATCH",actorUid:auth.currentUser?.uid||null,createdAt:serverTimestamp()});}
+ catch(e){emit("storage_warning",{message:e.message});}
+ await postSystemMessage("human",`Saya menyetujui treatment untuk ${c.source}: ${c.prescription.treatment}. Medicine boleh menyiapkan patch, tetapi tidak boleh menulis source-code tanpa artefak dan validasi.`);
+ await postSystemMessage("medicine",`Approval manusia diterima untuk ${c.id}. Status menjadi READY_FOR_PATCH. Saya belum mengubah source-code.`);
+ emit("case_updated",{case:c});return c;
+}
+async function rejectTreatment(caseId,reason="Treatment ditolak oleh manusia."){
+ const c=S.cases.find(x=>x.id===caseId);if(!c)throw new Error("Case tidak ditemukan");
+ c.status="REJECTED";c.rejectedAt=new Date().toISOString();c.rejectionReason=text(reason,500);
+ try{await addDoc(collection(db,"medicine_treatments"),{caseId:c.id,source:c.source,action:"REJECTED",reason:c.rejectionReason,actorUid:auth.currentUser?.uid||null,createdAt:serverTimestamp()});}catch(e){emit("storage_warning",{message:e.message});}
+ await postSystemMessage("medicine",`Saya menerima penolakan untuk ${c.id}. Treatment dibatalkan; source-code tetap tidak disentuh.`);
+ emit("case_updated",{case:c});return c;
+}
+async function setHumanMode(paused){
+ S.human.paused=!!paused;S.human.mode=paused?"HUMAN_PAUSED":"ASSISTED";
+ emit("human_control",{human:{...S.human}});
+ await postSystemMessage("medicine",paused?"Mode Medicine dijeda oleh manusia. Saya hanya mengamati telemetry dan menunggu instruksi.":"Mode Medicine aktif kembali. Saya melanjutkan observasi, diagnosis, dan usulan treatment dengan approval manusia.");
+}
+async function requestReview(caseId){
+ const c=S.cases.find(x=>x.id===caseId);if(!c)throw new Error("Case tidak ditemukan");
+ await postSystemMessage("bcgo",`Saya meminta review manusia untuk ${c.id}. Evidence: ${c.source} — ${c.diagnosis.title}.`);
+ emit("human_review_requested",{case:c});return c;
+}
 function startConversation(){try{const q=query(collection(db,"medicine_messages"),orderBy("createdAt","desc"),limit(80));const u=onSnapshot(q,s=>emit("conversation",{messages:s.docs.map(d=>({id:d.id,...d.data()})).reverse()}),e=>emit("conversation_error",{message:e.message}));S.listeners.push(u);}catch(e){emit("conversation_error",{message:e.message});}}
 onAuthStateChanged(auth,u=>{S.auth=u?"AUTHENTICATED":"UNAUTHENTICATED";emit("auth",{user:u?{uid:u.uid,email:u.email||null}:null});if(u){startTelemetry();startConversation();}});
-window.BCGOMedicine={...S,scanConsistency,sendMessage,approveTreatment,getRegistry:()=>({...REGISTRY}),getState:()=>JSON.parse(JSON.stringify(S))};
+window.BCGOMedicine={...S,scanConsistency,sendMessage,approveTreatment,rejectTreatment,setHumanMode,requestReview,getRegistry:()=>({...REGISTRY}),getState:()=>JSON.parse(JSON.stringify(S))};
 setTimeout(()=>scanConsistency().catch(e=>emit("scan_error",{message:e.message})),500);emit("ready",{version:S.version,registryCount:Object.keys(REGISTRY).length});
