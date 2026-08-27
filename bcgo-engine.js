@@ -895,3 +895,9 @@ if (typeof window !== "undefined") {
         determineDecision: bcgoDetermineDecision
     };
 }
+
+window.addEventListener("error", (e) => {
+    if (window.CikurCloud) {
+        window.CikurCloud.reportSystemError("bcgo-engine.js", e.message);
+    }
+});
