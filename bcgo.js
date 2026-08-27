@@ -41,6 +41,8 @@ const ORGAN_REGISTRY = {
 const ACTIVE_WINDOW = 10 * 60 * 1000;
 const LOG_LIMIT = 50;
 const PROBE_LIMIT = 5;
+const EVENT_HISTORY_LIMIT = 30;
+const HEARTBEAT_STALE_MS = 12000;
 const CYCLE = {
     IN: 1800,
     PROCESS: 1800,
@@ -75,6 +77,8 @@ export function runAutonomousEngine(onCycleUpdate) {
     let lastTarget = "SYS_MASTER_REGISTRY";
     let lastError = null;
     let interrupted = false;
+    let lastStatePublishedAt = 0;
+    const eventHistory = [];
 
     const state = {
         step: "IN",
@@ -88,7 +92,11 @@ export function runAutonomousEngine(onCycleUpdate) {
         systemOrgans: {},
         systemLogs: [],
         firestore: { ...firestore },
-        lastEventAt: null
+        lastEventAt: null,
+        lastEventText: lastEventText,
+        statePublishedAt: null,
+        dataFreshness: "WAITING",
+        eventHistory: []
     };
 
     function timestamp(value) {
@@ -201,17 +209,27 @@ export function runAutonomousEngine(onCycleUpdate) {
         state.firestore = { ...firestore };
         state.metrics = metrics;
         state.lastEventAt = lastEventAt || null;
+        state.lastEventText = lastEventText;
+        state.statePublishedAt = Date.now();
+        lastStatePublishedAt = state.statePublishedAt;
+        state.dataFreshness = firestore.connected ? "LIVE" : (firestore.error ? "OFFLINE" : "WAITING");
+        state.eventHistory = eventHistory.slice();
 
         lastTarget = state.targetCell;
         lastError = state.errorLog;
 
-        onCycleUpdate({
+        const snapshot = {
             ...state,
             systemOrgans: clone(organs),
             systemLogs: latestSystemLogs.slice(),
             metrics: { ...metrics },
-            firestore: { ...firestore }
-        });
+            firestore: { ...firestore },
+            eventHistory: eventHistory.slice()
+        };
+
+        // Satu state yang sama untuk monitor, chat, dan integrasi lain.
+        window.BCGO_STATE = snapshot;
+        onCycleUpdate(snapshot);
     }
 
     function activeAnomalies() {
@@ -259,7 +277,7 @@ export function runAutonomousEngine(onCycleUpdate) {
             q.includes("hello") ||
             q.includes("siapa kamu")
         ) {
-            return `Hai. Saya BCGO, Pusat Saraf Master. Saat ini saya berada di tahap ${state.step} pada neural cycle #${cycleNo}. ${describeSituation()}`;
+            return `Hai. Saya BCGO, Pusat Saraf Master. Saat ini saya berada di tahap ${state.step} pada neural cycle #${state.cycle}. ${describeSituation()}`;
         }
 
         if (
@@ -325,17 +343,36 @@ export function runAutonomousEngine(onCycleUpdate) {
             q.includes("tahap") ||
             q.includes("posisi")
         ) {
-            return `Neural cycle saya sekarang #${cycleNo}, tahap ${state.step}. Target saraf: ${state.targetCell}.`;
+            return `Neural cycle saya sekarang #${state.cycle}, tahap ${state.step}. Target saraf: ${state.targetCell}.`;
         }
 
-        return `Saya memahami pertanyaan itu, tetapi data telemetry saya belum cukup untuk menjawabnya dengan pasti. Yang bisa saya pastikan sekarang: ${describeSituation()}`;
+        if (q.includes("kenapa") || q.includes("mengapa") || q.includes("alasan")) {
+            return `Saya berada di tahap ${state.step} karena state saraf terakhir saya menunjukkan: ${state.message} Target saat ini ${state.targetCell}. ${lastEventText}`;
+        }
+
+        if (q.includes("live") || q.includes("real time") || q.includes("realtime") || q.includes("terhubung")) {
+            if (firestore.connected) {
+                return `Kanal Firestore saya LIVE. Saya menerima snapshot real-time dan state terakhir dipublikasikan pada ${new Date(state.statePublishedAt || Date.now()).toLocaleTimeString("id-ID")}.`;
+            }
+            return `Kanal Firestore belum LIVE. Status sensor: ${state.dataFreshness}. ${firestore.error || "Saya masih menunggu koneksi server."}`;
+        }
+
+        return `Saya belum memiliki data yang cukup untuk memastikan jawaban itu. Saya tidak mau mengarang. Yang bisa saya pastikan sekarang: ${describeSituation()}`;
     }
 
     function markEvent(text, target, error = null) {
         lastEventAt = Date.now();
-        lastEventText = text;
+        lastEventText = String(text || "Impuls baru diterima.");
         lastTarget = target || lastTarget;
         lastError = error;
+
+        eventHistory.unshift({
+            at: lastEventAt,
+            text: lastEventText,
+            target: lastTarget,
+            error: error ? String(error).slice(0, 700) : null
+        });
+        if (eventHistory.length > EVENT_HISTORY_LIMIT) eventHistory.length = EVENT_HISTORY_LIMIT;
     }
 
     function nextPhase() {
@@ -346,6 +383,7 @@ export function runAutonomousEngine(onCycleUpdate) {
         if (phaseIndex === 0) {
             cycleNo += 1;
             interrupted = false;
+            markEvent(`Neural cycle #${cycleNo} dimulai.`, "SYS_NEURAL_SCAN");
 
             emit(
                 "IN",
@@ -539,6 +577,31 @@ export function runAutonomousEngine(onCycleUpdate) {
         }, CYCLE.PROCESS);
     }
 
+    function publishCurrentState() {
+        if (stopped) return;
+        const organs = buildOrgans();
+        const metrics = makeMetrics(organs);
+        state.systemOrgans = organs;
+        state.systemLogs = latestSystemLogs.slice();
+        state.metrics = metrics;
+        state.firestore = { ...firestore };
+        state.lastEventAt = lastEventAt || null;
+        state.lastEventText = lastEventText;
+        state.statePublishedAt = Date.now();
+        state.dataFreshness = firestore.connected ? "LIVE" : (firestore.error ? "OFFLINE" : "WAITING");
+        state.eventHistory = eventHistory.slice();
+        const snapshot = {
+            ...state,
+            systemOrgans: clone(organs),
+            systemLogs: latestSystemLogs.slice(),
+            metrics: { ...metrics },
+            firestore: { ...firestore },
+            eventHistory: eventHistory.slice()
+        };
+        window.BCGO_STATE = snapshot;
+        onCycleUpdate(snapshot);
+    }
+
     function startSystemLogs() {
         if (!window.CikurCloud?.listenSystemLogs) {
             emit(
@@ -575,13 +638,7 @@ export function runAutonomousEngine(onCycleUpdate) {
                             currentTop.message
                         );
                     } else {
-                        onCycleUpdate({
-                            ...state,
-                            systemOrgans: clone(buildOrgans()),
-                            systemLogs: latestSystemLogs.slice(),
-                            metrics: makeMetrics(buildOrgans()),
-                            firestore: { ...firestore }
-                        });
+                        publishCurrentState();
                     }
                 },
                 LOG_LIMIT
@@ -629,17 +686,11 @@ export function runAutonomousEngine(onCycleUpdate) {
                         );
                     }
 
-                    onCycleUpdate({
-                        ...state,
-                        message: wasDisconnected
-                            ? "Sensor Firestore kembali online. Saya melanjutkan pemantauan."
-                            : state.message,
-                        targetCell: "SYS_FIRESTORE_HEALTHY",
-                        systemOrgans: clone(buildOrgans()),
-                        systemLogs: latestSystemLogs.slice(),
-                        metrics: makeMetrics(buildOrgans()),
-                        firestore: { ...firestore }
-                    });
+                    if (wasDisconnected) {
+                        state.message = "Sensor Firestore kembali online. Saya melanjutkan pemantauan.";
+                        state.targetCell = "SYS_FIRESTORE_HEALTHY";
+                    }
+                    publishCurrentState();
                 },
                 error => {
                     firestore = {
@@ -727,7 +778,7 @@ export function runAutonomousEngine(onCycleUpdate) {
             startFirestoreProbe();
 
             clearInterval(expiryTimer);
-            expiryTimer = setInterval(refreshExpiredStatuses, 15000);
+            expiryTimer = setInterval(refreshExpiredStatuses, 5000);
 
             phaseIndex = -1;
             cycleNo = 0;
@@ -787,7 +838,9 @@ export function runAutonomousEngine(onCycleUpdate) {
             systemOrgans: clone(buildOrgans()),
             systemLogs: latestSystemLogs.slice(),
             metrics: makeMetrics(buildOrgans()),
-            firestore: { ...firestore }
+            firestore: { ...firestore },
+            dataFreshness: state.dataFreshness,
+            eventHistory: eventHistory.slice()
         }),
         getSituation: describeSituation,
         stop() {

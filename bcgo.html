@@ -126,6 +126,19 @@ body{font-family:'Inter',sans-serif}
         </div>
     </div>
 
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+        <div class="flex justify-between items-center">
+            <div>
+                <div class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Neural Event Stream</div>
+                <div class="text-[10px] text-slate-500 mt-1">Urutan impuls yang benar-benar diterima BCGO.</div>
+            </div>
+            <span id="event-history-count" class="text-[10px] code-font text-slate-500">0 event</span>
+        </div>
+        <div id="event-history" class="space-y-2 max-h-48 overflow-y-auto">
+            <div class="text-xs text-slate-500">Menunggu event...</div>
+        </div>
+    </div>
+
     <div class="bg-slate-900 border border-indigo-900 rounded-xl p-5 space-y-3">
         <div class="flex justify-between items-center">
             <div>
@@ -169,6 +182,9 @@ const pulse = $('pulse-dot');
 const cycleNumber = $('cycle-number');
 const eventState = $('event-state');
 const cycleMode = $('cycle-mode');
+const dataFreshness = $('data-freshness');
+const eventHistoryFeed = $('event-history');
+const eventHistoryCount = $('event-history-count');
 
 const bagans = {
     IN: $('bagan-in'),
@@ -315,6 +331,24 @@ function renderLogs(logs) {
     errorFeed.scrollTop = 0;
 }
 
+function renderEventHistory(events) {
+    const list = Array.isArray(events) ? events : [];
+    eventHistoryCount.textContent = `${list.length} event`;
+    if (!list.length) {
+        eventHistoryFeed.innerHTML = '<div class="text-xs text-slate-500">Belum ada event.</div>';
+        return;
+    }
+    eventHistoryFeed.innerHTML = list.slice(0, 15).map(event => `
+        <div class="border border-slate-800 bg-slate-950/60 rounded-lg px-3 py-2">
+            <div class="flex justify-between gap-2 text-[9px] text-slate-500">
+                <span class="code-font">${esc(event.target || 'SYSTEM')}</span>
+                <span>${esc(formatTime(event.at))}</span>
+            </div>
+            <div class="text-xs text-slate-300 mt-1">${esc(event.text || '-')}</div>
+        </div>
+    `).join('');
+}
+
 function addChat(role, text) {
     const row = document.createElement('div');
     row.className = role === 'user'
@@ -361,6 +395,8 @@ runAutonomousEngine(state => {
 
     cycleNumber.textContent = state.cycle ?? 0;
     cycleMode.textContent = state.cycleMode || 'NORMAL';
+    dataFreshness.textContent = state.dataFreshness || (state.firestore?.connected ? 'LIVE' : 'WAITING');
+    dataFreshness.className = `text-[10px] code-font ${state.dataFreshness === 'LIVE' ? 'text-emerald-400' : state.dataFreshness === 'OFFLINE' ? 'text-rose-400' : 'text-amber-400'}`;
     eventState.textContent = state.lastEventAt
         ? `Impuls terakhir: ${formatTime(state.lastEventAt)}`
         : 'Belum ada impuls baru';
@@ -375,6 +411,7 @@ runAutonomousEngine(state => {
     setHeader(state.step, state);
     renderOrgans(state.systemOrgans);
     renderLogs(state.systemLogs);
+    renderEventHistory(state.eventHistory);
 
     if (!chatFeed.dataset.ready) {
         chatFeed.dataset.ready = '1';
