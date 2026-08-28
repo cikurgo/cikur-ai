@@ -17,53 +17,11 @@ body{font-family:'Inter',sans-serif}
 @keyframes signal{from{left:-30%}to{left:100%}}
 @keyframes breathe{0%,100%{opacity:.45}50%{opacity:1}}
 .breathe{animation:breathe 2s ease-in-out infinite}
-.connection-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
-.neural-event{border-left:2px solid #334155;padding-left:10px}
-.neural-event-live{border-left-color:#22c55e}
-.chat-thinking{animation:breathe 1s ease-in-out infinite}
 </style>
-/* ============================================================
-   BCGO SUPER ADMIN ACCESS GATE
-   Shared Firebase session via cikur-config.js
-   ============================================================ */
-body.auth-pending > #protectedApp{visibility:hidden;pointer-events:none}
-.auth-gate{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(2,6,23,.96);backdrop-filter:blur(10px)}
-.auth-gate.hidden{display:none}
-.auth-card{width:min(430px,100%);background:#0f172a;border:1px solid #334155;border-radius:22px;padding:24px;box-shadow:0 25px 80px rgba(0,0,0,.55)}
-.auth-brand{display:flex;align-items:center;gap:12px;margin-bottom:18px}.auth-brand img{width:42px;height:42px;border-radius:12px;object-fit:cover}.auth-brand-name{font-weight:800;color:#fff}.auth-brand-sub{font-size:10px;color:#64748b;margin-top:2px}.auth-kicker{font-size:9px;letter-spacing:.18em;color:#38bdf8;font-weight:800}.auth-title{font-size:22px;font-weight:800;color:#fff;margin-top:5px}.auth-copy{font-size:11px;line-height:1.7;color:#94a3b8;margin-top:8px}.auth-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:18px 0 12px}.auth-tab{border:1px solid #334155;background:#111827;color:#94a3b8;border-radius:10px;padding:9px;font-size:11px;font-weight:700}.auth-tab.active{border-color:#4f46e5;background:#312e81;color:#fff}.auth-message{display:none;border-radius:10px;padding:9px 10px;font-size:10px;line-height:1.5;margin-bottom:10px}.auth-message.show{display:block}.auth-message.error{background:#450a0a;border:1px solid #7f1d1d;color:#fecaca}.auth-message.ok{background:#052e16;border:1px solid #166534;color:#bbf7d0}.auth-field{margin:9px 0}.auth-field label{display:block;font-size:9px;color:#94a3b8;margin-bottom:5px}.auth-field input{width:100%;box-sizing:border-box;background:#020617;border:1px solid #334155;color:#e2e8f0;border-radius:10px;padding:11px 12px;font-size:12px;outline:none}.auth-field input:focus{border-color:#6366f1}.auth-submit,.pending-card button{width:100%;border:0;border-radius:10px;background:#4f46e5;color:#fff;padding:11px 12px;font-size:11px;font-weight:800;margin-top:8px}.auth-submit:disabled{opacity:.55}.auth-note{font-size:9px;color:#64748b;line-height:1.6;margin-top:12px}.auth-footer{font-size:8px;color:#475569;text-align:center;margin-top:16px}.pending-lock{position:fixed;inset:0;z-index:100000;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(2,6,23,.78);backdrop-filter:blur(8px)}.pending-lock.show{display:flex}.pending-card{width:min(430px,100%);background:#fff;color:#0f172a;border-radius:20px;padding:25px;text-align:center;box-shadow:0 25px 80px rgba(0,0,0,.55)}.pending-icon{width:42px;height:42px;margin:0 auto 10px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff7ed;color:#c2410c;font-size:20px}.pending-card h3{font-size:16px;margin:0 0 8px;font-weight:800}.pending-card p{font-size:10px;line-height:1.7;color:#64748b;margin:0}.pending-card button{width:auto;min-width:90px;background:#0f172a;margin-top:14px}.auth-status{position:fixed;right:12px;top:12px;z-index:99998;font:700 9px ui-monospace,monospace;background:#022c22;color:#6ee7b7;border:1px solid #065f46;border-radius:999px;padding:7px 9px;display:none}.auth-status.show{display:block}
-
 </head>
 
-<body class="bg-slate-950 text-slate-100 antialiased p-4 md:p-6 min-h-screen auth-pending">
-
-<div class="auth-gate" id="authGate">
-  <div class="auth-card">
-    <div class="auth-brand"><img src="cikurgoicon.png" alt="CIKUR GO"><div><div class="auth-brand-name">CIKUR GO</div><div class="auth-brand-sub">BCGO Secure Control Center</div></div></div>
-    <div class="auth-kicker">SUPER ADMIN ACCESS</div>
-    <div class="auth-title" id="authTitle">Masuk ke BCGO</div>
-    <div class="auth-copy">Halaman ini hanya dapat digunakan oleh akun administrator aktif dengan peran <b>super_admin</b>. Sesi Firebase yang sama digunakan di bcgo-admin.html, BCGO Monitor, dan BCGO Medicine.</div>
-    <div class="auth-tabs"><button class="auth-tab active" id="loginTab" type="button">Masuk</button><button class="auth-tab" id="registerTab" type="button">Registrasi</button></div>
-    <div class="auth-message" id="authMessage"></div>
-    <form class="auth-form" id="authForm">
-      <div class="auth-field"><label>Email</label><input id="authEmail" type="email" autocomplete="email" placeholder="admin@cikurgo.id" required></div>
-      <div class="auth-field"><label>Password</label><input id="authPassword" type="password" autocomplete="current-password" placeholder="Minimal 6 karakter" minlength="6" required></div>
-      <div class="auth-field" id="confirmField" style="display:none"><label>Konfirmasi Password</label><input id="authConfirm" type="password" autocomplete="new-password" placeholder="Ulangi password" minlength="6"></div>
-      <button class="auth-submit" id="authSubmit" type="submit">Masuk ke Dashboard</button>
-    </form>
-    <div class="auth-note" id="authNote">Login di sini tidak membuat Firebase App baru. Sesi memakai koneksi dari cikur-config.js.</div>
-    <div class="auth-footer">CIKUR GO • BCGO Intelligence • Secure Operations</div>
-  </div>
-</div>
-<div class="pending-lock" id="pendingLock">
-  <div class="pending-card">
-    <div class="pending-icon">◷</div>
-    <h3>Akses menunggu persetujuan</h3>
-    <p id="pendingText">Akun terdeteksi, tetapi belum memiliki status super_admin aktif. Hubungi Super Admin CIKUR GO untuk mengaktifkan akses.</p>
-    <button id="pendingLogout" type="button">Keluar</button>
-  </div>
-</div>
-<div class="auth-status" id="authStatus">SUPER ADMIN • VERIFIED</div>
-<div id="protectedApp" class="max-w-5xl mx-auto w-full space-y-5">
+<body class="bg-slate-950 text-slate-100 antialiased p-4 md:p-6 min-h-screen">
+<div class="max-w-5xl mx-auto w-full space-y-5">
 
 <header class="flex justify-between items-center border-b border-slate-800 pb-4">
     <div>
@@ -79,20 +37,8 @@ body.auth-pending > #protectedApp{visibility:hidden;pointer-events:none}
 </header>
 
 <div class="bg-blue-950/40 border border-blue-800 rounded-xl px-4 py-3 text-xs text-blue-300 leading-relaxed">
-    🧠 <b>Neural Heartbeat aktif.</b> BCGO melakukan siklus IN → PROCESS → REVIEW → OUT secara terus-menerus.
-    Semua panel membaca <span class="code-font">BCGO_STATE</span> yang sama sehingga cycle, stage, telemetry, dan chat tidak boleh berbeda.
-</div>
-
-<div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-xs">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="text-slate-400">SUMBER KEBENARAN SARAF: <span class="code-font text-indigo-300">BCGO_STATE</span></div>
-        <div id="connection-state" class="font-semibold text-slate-400"><span class="connection-dot bg-slate-500"></span>CONNECTING</div>
-    </div>
-    <div class="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2 text-[10px] text-slate-500">
-        <div>Server signal: <span id="connection-age" class="text-slate-300">menunggu...</span></div>
-        <div>Telemetry: <span id="telemetry-source" class="text-slate-300">menunggu...</span></div>
-        <div>Integrity: <span id="state-integrity" class="text-emerald-400">SYNC</span></div>
-    </div>
+    🧠 <b>Neural Heartbeat aktif.</b> BCGO melakukan siklus IN → PROCESS → REVIEW → OUT secara terus-menerus,
+    sementara <span class="code-font">system_logs</span> tetap didengarkan secara real-time. Impuls baru dapat menginterupsi siklus kapan saja.
 </div>
 
 <section class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-2xl space-y-3">
@@ -105,7 +51,10 @@ body.auth-pending > #protectedApp{visibility:hidden;pointer-events:none}
     </div>
     <div class="signal-line text-emerald-500 bg-slate-800"></div>
     <div class="flex justify-between text-[10px] text-slate-500">
-        <span id="event-state">Menunggu impuls...</span>
+        <div class="flex items-center gap-3 min-w-0">
+            <span id="event-state">Menunggu impuls...</span>
+            <span id="data-freshness" class="code-font text-amber-400">WAITING</span>
+        </div>
         <span id="cycle-mode">BOOT</span>
     </div>
 </section>
@@ -168,19 +117,6 @@ body.auth-pending > #protectedApp{visibility:hidden;pointer-events:none}
     <div id="organ-grid" class="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs"></div>
 </section>
 
-<section class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
-    <div class="flex justify-between items-center">
-        <div>
-            <div class="text-xs font-semibold text-cyan-300 uppercase tracking-wider">Neural Event Stream</div>
-            <div class="text-[10px] text-slate-500 mt-1">Urutan kejadian yang baru dilihat BCGO — bukan animasi palsu.</div>
-        </div>
-        <span id="event-counter" class="text-[10px] text-slate-500">0 event</span>
-    </div>
-    <div id="neural-events" class="space-y-2 max-h-64 overflow-y-auto">
-        <div class="text-xs text-slate-500">Menunggu event saraf...</div>
-    </div>
-</section>
-
 <section class="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
@@ -190,6 +126,19 @@ body.auth-pending > #protectedApp{visibility:hidden;pointer-events:none}
         </div>
         <div id="error-feed" class="space-y-2 max-h-80 overflow-y-auto">
             <div class="text-xs text-slate-500">Menunggu telemetry system_logs...</div>
+        </div>
+    </div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+        <div class="flex justify-between items-center">
+            <div>
+                <div class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Neural Event Stream</div>
+                <div class="text-[10px] text-slate-500 mt-1">Urutan impuls yang benar-benar diterima BCGO.</div>
+            </div>
+            <span id="event-history-count" class="text-[10px] code-font text-slate-500">0 event</span>
+        </div>
+        <div id="event-history" class="space-y-2 max-h-48 overflow-y-auto">
+            <div class="text-xs text-slate-500">Menunggu event...</div>
         </div>
     </div>
 
@@ -223,33 +172,6 @@ body.auth-pending > #protectedApp{visibility:hidden;pointer-events:none}
 </section>
 </div>
 
-
-<script type="module">
-import { db, auth } from "./cikur-config.js";
-import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { doc, getDoc, onSnapshot, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-const gate=document.getElementById("authGate"), pending=document.getElementById("pendingLock"), form=document.getElementById("authForm");
-const msg=document.getElementById("authMessage"), submit=document.getElementById("authSubmit"), status=document.getElementById("authStatus");
-const confirmField=document.getElementById("confirmField"), loginTab=document.getElementById("loginTab"), registerTab=document.getElementById("registerTab"), note=document.getElementById("authNote");
-let mode="login", adminUnsub=null, verified=false, authReady=false;
-
-function showMessage(text,type="error"){msg.textContent=text;msg.className=`auth-message show ${type}`;}
-function clearMessage(){msg.textContent="";msg.className="auth-message";}
-function setMode(next){mode=next;const reg=mode==="register";loginTab.classList.toggle("active",!reg);registerTab.classList.toggle("active",reg);confirmField.style.display=reg?"block":"none";document.getElementById("authConfirm").required=reg;document.getElementById("authTitle").textContent=reg?"Daftarkan Akun Admin":"Masuk ke BCGO";submit.textContent=reg?"Daftar & Ajukan Akses":"Masuk ke Dashboard";note.textContent=reg?"Akun baru tetap terkunci sampai disetujui dan diberi role super_admin.":"Sesi memakai Firebase Auth yang sama dengan bcgo-admin.html.";clearMessage();}
-function friendly(e){const c=e?.code||"";return ({"auth/invalid-credential":"Email atau password salah.","auth/invalid-login-credentials":"Email atau password salah.","auth/email-already-in-use":"Email sudah terdaftar. Silakan masuk.","auth/weak-password":"Password terlalu lemah. Minimal 6 karakter.","auth/invalid-email":"Format email tidak valid.","auth/too-many-requests":"Terlalu banyak percobaan. Coba lagi.","auth/network-request-failed":"Koneksi internet bermasalah. Coba lagi."})[c]||e?.message||"Autentikasi gagal.";}
-async function checkSuperAdmin(user){if(!user)return {ok:false,reason:"NO_SESSION"};try{const snap=await getDoc(doc(db,"admin_users",user.uid));const d=snap.exists()?snap.data():null;if(d?.active===true&&d?.role==="super_admin")return {ok:true,data:d};if(!snap.exists())return {ok:false,reason:"NOT_REGISTERED"};if(d?.active!==true)return {ok:false,reason:"INACTIVE",data:d};return {ok:false,reason:"NOT_SUPER_ADMIN",data:d};}catch(e){return {ok:false,reason:"CHECK_FAILED",error:e};}}
-function openLogin(message=""){gate.classList.remove("hidden");pending.classList.remove("show");status.classList.remove("show");document.body.classList.add("auth-pending");if(message)showMessage(message);}
-function enter(user){verified=true;gate.classList.add("hidden");pending.classList.remove("show");status.classList.add("show");document.body.classList.remove("auth-pending");window.BCGO_SUPER_ADMIN={uid:user.uid,email:user.email||null,verified:true};}
-function lock(user,result){verified=false;gate.classList.add("hidden");status.classList.remove("show");document.body.classList.add("auth-pending");const reason=result?.reason;document.getElementById("pendingText").textContent=reason==="NOT_REGISTERED"?`Akun ${user.email||"ini"} belum terdaftar sebagai administrator CIKUR GO.`:reason==="NOT_SUPER_ADMIN"?`Akun ${user.email||"ini"} aktif, tetapi role-nya bukan super_admin. Halaman ini khusus Super Admin.`:reason==="CHECK_FAILED"?"Status administrator gagal diverifikasi. Periksa koneksi dan Rules Firestore.":`Akun ${user.email||"ini"} belum aktif sebagai Super Admin. Minta Super Admin CIKUR GO mengaktifkan akses.`;pending.classList.add("show");}
-function watchAdmin(user){if(adminUnsub)adminUnsub();adminUnsub=onSnapshot(doc(db,"admin_users",user.uid),snap=>{const d=snap.exists()?snap.data():null;const r=d?.active===true&&d?.role==="super_admin";if(r){enter(user);}else{lock(user,{reason:!snap.exists()?"NOT_REGISTERED":d?.active!==true?"INACTIVE":"NOT_SUPER_ADMIN"});}},()=>lock(user,{reason:"CHECK_FAILED"}));}
-loginTab.onclick=()=>setMode("login");registerTab.onclick=()=>setMode("register");
-document.getElementById("pendingLogout").onclick=async()=>{try{await signOut(auth);}catch(e){console.error(e);}openLogin();setMode("login");};
-form.addEventListener("submit",async e=>{e.preventDefault();submit.disabled=true;clearMessage();const email=document.getElementById("authEmail").value.trim();const password=document.getElementById("authPassword").value;const confirm=document.getElementById("authConfirm").value;try{if(mode==="register"){if(password!==confirm){showMessage("Konfirmasi password tidak sama.");return;}const cred=await createUserWithEmailAndPassword(auth,email,password);try{await setDoc(doc(db,"admin_requests",cred.user.uid),{uid:cred.user.uid,email:cred.user.email,status:"pending",requestedAt:serverTimestamp()});}catch(regErr){console.warn("admin_requests tidak dapat ditulis:",regErr);}showMessage("Registrasi berhasil. Akun menunggu persetujuan Super Admin.","ok");await signOut(auth);form.reset();setMode("login");}else{await signInWithEmailAndPassword(auth,email,password);}}catch(e){console.error(e);showMessage(friendly(e));}finally{submit.disabled=false;}});
-
-onAuthStateChanged(auth,async user=>{authReady=true;if(adminUnsub){adminUnsub();adminUnsub=null;}if(!user){verified=false;window.BCGO_SUPER_ADMIN=null;openLogin();return;}const result=await checkSuperAdmin(user);if(result.ok){enter(user);watchAdmin(user);}else{lock(user,result);watchAdmin(user);}});
-</script>
-
 <script type="module">
 import { runAutonomousEngine } from './bcgo.js';
 
@@ -263,6 +185,9 @@ const pulse = $('pulse-dot');
 const cycleNumber = $('cycle-number');
 const eventState = $('event-state');
 const cycleMode = $('cycle-mode');
+const dataFreshness = $('data-freshness');
+const eventHistoryFeed = $('event-history');
+const eventHistoryCount = $('event-history-count');
 
 const bagans = {
     IN: $('bagan-in'),
@@ -292,15 +217,6 @@ const logCounter = $('log-counter');
 const chatFeed = $('chat-feed');
 const chatForm = $('chat-form');
 const chatInput = $('chat-input');
-const connectionStateEl = $('connection-state');
-const connectionAgeEl = $('connection-age');
-const telemetrySourceEl = $('telemetry-source');
-const stateIntegrityEl = $('state-integrity');
-const neuralEventsEl = $('neural-events');
-const eventCounterEl = $('event-counter');
-
-let liveState = null;
-let conversation = [];
 
 function esc(value) {
     return String(value ?? '-')
@@ -323,7 +239,7 @@ function formatTime(value) {
 
 function dimAll() {
     Object.values(bagans).forEach(el => {
-        el.className = 'neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40';
+        if (el) el.className = 'neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40';
     });
 }
 
@@ -348,7 +264,9 @@ function activatePhase(step, state) {
         OUT: 'synchronizing'
     };
 
-    Object.keys(subtitles).forEach(k => subtitles[k].textContent = subText[k]);
+    Object.keys(subtitles).forEach(k => {
+        if (subtitles[k]) subtitles[k].textContent = subText[k];
+    });
 }
 
 function setHeader(step, state) {
@@ -360,8 +278,10 @@ function setHeader(step, state) {
     };
 
     const [bg,text,border,label] = styles[step] || styles.OUT;
-    badge.className = `px-3 py-1 rounded-md text-xs font-semibold ${bg} ${text} border ${border}`;
-    badge.textContent = state.cycleMode === 'INTERRUPTED' ? '⚡ Impuls Terdeteksi' : label;
+    if (badge) {
+        badge.className = `px-3 py-1 rounded-md text-xs font-semibold ${bg} ${text} border ${border}`;
+        badge.textContent = state.cycleMode === 'INTERRUPTED' ? '⚡ Impuls Terdeteksi' : label;
+    }
 
     const dotColor = {
         IN: 'bg-blue-500',
@@ -370,10 +290,11 @@ function setHeader(step, state) {
         OUT: 'bg-emerald-500'
     }[step] || 'bg-emerald-500';
 
-    pulse.className = `w-3 h-3 rounded-full ${dotColor} animate-ping`;
+    if (pulse) pulse.className = `w-3 h-3 rounded-full ${dotColor} animate-ping`;
 }
 
 function renderOrgans(organs) {
+    if (!organGrid) return;
     const entries = Object.entries(organs || {});
     organGrid.innerHTML = entries.map(([file, info]) => {
         const active = info.state === 'ACTIVE';
@@ -398,7 +319,8 @@ function renderOrgans(organs) {
 }
 
 function renderLogs(logs) {
-    logCounter.textContent = `${logs?.length || 0} laporan`;
+    if (!errorFeed) return;
+    if (logCounter) logCounter.textContent = `${logs?.length || 0} laporan`;
 
     if (!logs?.length) {
         errorFeed.innerHTML = '<div class="text-xs text-slate-500">Belum ada laporan error masuk.</div>';
@@ -418,6 +340,25 @@ function renderLogs(logs) {
     errorFeed.scrollTop = 0;
 }
 
+function renderEventHistory(events) {
+    if (!eventHistoryFeed) return;
+    const list = Array.isArray(events) ? events : [];
+    if (eventHistoryCount) eventHistoryCount.textContent = `${list.length} event`;
+    if (!list.length) {
+        eventHistoryFeed.innerHTML = '<div class="text-xs text-slate-500">Belum ada event.</div>';
+        return;
+    }
+    eventHistoryFeed.innerHTML = list.slice(0, 15).map(event => `
+        <div class="border border-slate-800 bg-slate-950/60 rounded-lg px-3 py-2">
+            <div class="flex justify-between gap-2 text-[9px] text-slate-500">
+                <span class="code-font">${esc(event.target || 'SYSTEM')}</span>
+                <span>${esc(formatTime(event.at))}</span>
+            </div>
+            <div class="text-xs text-slate-300 mt-1">${esc(event.text || '-')}</div>
+        </div>
+    `).join('');
+}
+
 function addChat(role, text) {
     const row = document.createElement('div');
     row.className = role === 'user'
@@ -435,94 +376,13 @@ function addChat(role, text) {
     chatFeed.scrollTop = chatFeed.scrollHeight;
 }
 
-function getStateAgeText(state) {
-    const t = state?.connection?.lastServerAt ? new Date(state.connection.lastServerAt).getTime() : 0;
-    if (!t) return 'belum ada sinyal server';
-    const sec = Math.max(0, Math.round((Date.now() - t) / 1000));
-    return sec < 2 ? 'baru saja' : `${sec} detik lalu`;
-}
-
-function activeOrgans(state) {
-    return Object.entries(state?.systemOrgans || {}).filter(([,v]) => v?.state === 'ACTIVE');
-}
-
-function recoveredOrgans(state) {
-    return Object.entries(state?.systemOrgans || {}).filter(([,v]) => v?.state === 'RECOVERED');
-}
-
-function brainAnswer(question) {
-    const q = String(question || '').toLowerCase().trim();
-    const st = liveState || window.BCGO_STATE;
-    if (!st) return 'Saya belum menerima state saraf. Tunggu sebentar sampai neural monitor tersinkron.';
-
-    const active = activeOrgans(st);
-    const recovered = recoveredOrgans(st);
-    const files = Object.keys(st.systemOrgans || {});
-    const last = st.lastTelemetryFile || st.targetCell || '-';
-    const conn = st.connection?.status || 'UNKNOWN';
-
-    const says = (...words) => words.some(w => q.includes(w));
-
-    if (says('halo','hai','hello','pagi','siang','sore','malam')) {
-        return `Halo. Saya BCGO. Saat ini saya berada di tahap ${st.step}, neural cycle #${st.cycle}. Saya terus memantau ${st.metrics?.total ?? files.length} organ dan mendengarkan telemetry real-time.`;
-    }
-
-    if (says('sedang mengerjakan','sedang apa','kerjakan','ngapain','lagi apa')) {
-        return `Saat ini saya berada di tahap ${st.step}, neural cycle #${st.cycle}. ${st.message} Status saya: ${st.metrics?.active ?? active.length} anomaly aktif, ${st.metrics?.recovered ?? recovered.length} recovered, dan ${st.metrics?.healthy ?? 0} stabil.`;
-    }
-
-    if (says('cycle','siklus')) {
-        return `Neural cycle saya sekarang #${st.cycle}, tahap ${st.step}. Semua informasi cycle yang saya jawab berasal dari BCGO_STATE yang juga dipakai layar monitor ini.`;
-    }
-
-    if (says('aman','status sistem','status sekarang','kondisi sistem','semua aman')) {
-        if (conn === 'OFFLINE') return `Belum bisa saya nyatakan aman. Listener Firestore sedang bermasalah. Saya mempertahankan state terakhir dan menunggu koneksi pulih.`;
-        if (active.length) return `Belum sepenuhnya aman. Saya menemukan ${active.length} anomaly aktif: ${active.map(([f]) => f).join(', ')}. Saya sedang meninjau ${active[0][0]}.`;
-        return `Saat ini tidak ada anomaly aktif. ${st.metrics?.total ?? files.length} organ terpantau; ${st.metrics?.healthy ?? 0} stabil dan ${st.metrics?.recovered ?? 0} recovered. Koneksi: ${conn}.`;
-    }
-
-    if (says('masalah','error','anomaly','gangguan')) {
-        if (!active.length && !st.errorLog) return `Saat ini saya tidak melihat anomaly aktif. Saya tetap mendengarkan system_logs untuk impuls baru.`;
-        const detail = active.map(([f,v]) => `${f}: ${v.message}`).join(' | ');
-        return `Saya melihat ${active.length} anomaly aktif. ${detail || st.errorLog || 'Saya sedang mengevaluasi sumber gangguan.'}`;
-    }
-
-    if (says('recovered','pulih','dipulihkan')) {
-        return recovered.length ? `Saya memiliki ${recovered.length} organ dengan riwayat error yang sudah melewati window aktif: ${recovered.map(([f]) => f).join(', ')}.` : 'Saat ini belum ada organ yang berstatus RECOVERED dari telemetry yang saya terima.';
-    }
-
-    if (says('file terakhir','terakhir','telemetry terakhir','impuls terakhir')) {
-        return st.lastTelemetryAt ? `Impuls telemetry terakhir yang saya catat berasal dari ${last}. Saya menerimanya ${getStateAgeText(st)}.` : 'Belum ada impuls telemetry yang bisa saya pastikan dari state saat ini.';
-    }
-
-    if (says('kenapa','mengapa')) {
-        return `Saya sedang di ${st.step} karena state terbaru meminta saya menjalankan: ${st.message} Target saraf saya saat ini adalah ${st.targetCell || '-'}.`;
-    }
-
-    if (says('apa yang kamu lihat','lihat apa','pantau apa','memantau apa')) {
-        return `Saya sedang memantau ${st.metrics?.total ?? files.length} organ. Target saat ini ${st.targetCell || '-'}, dengan ${st.metrics?.active ?? active.length} anomaly aktif, ${st.metrics?.recovered ?? recovered.length} recovered, dan ${st.metrics?.healthy ?? 0} stabil.`;
-    }
-
-    return `Saya memahami pertanyaanmu, tetapi saya ingin tetap akurat. State saya sekarang: cycle #${st.cycle}, tahap ${st.step}, ${st.metrics?.active ?? active.length} anomaly aktif, koneksi ${conn}. Coba tanyakan “kamu sedang mengerjakan apa?”, “ada masalah?”, atau “telemetry terakhir apa?”.`;
-}
-
-window.BCGOBrain = {
-    ask(question) {
-        const answer = brainAnswer(question);
-        conversation.push({role:'user', text:String(question), at:Date.now()});
-        conversation.push({role:'bcgo', text:answer, at:Date.now(), cycle:liveState?.cycle ?? null});
-        conversation = conversation.slice(-20);
-        return answer;
-    },
-    getConversation() { return conversation.slice(); },
-    getState() { return liveState || window.BCGO_STATE || null; }
-};
-
 function sendQuestion(question) {
     const text = String(question || '').trim();
-    if (!text) return;
+    if (!text || !window.BCGOBrain) return;
+
     addChat('user', text);
     const answer = window.BCGOBrain.ask(text);
+
     setTimeout(() => addChat('bcgo', answer), 120);
 }
 
@@ -538,71 +398,42 @@ document.querySelectorAll('.quick-q').forEach(button => {
     button.addEventListener('click', () => sendQuestion(button.dataset.q));
 });
 
-function renderNeuralEvents(events) {
-    const list = Array.isArray(events) ? events.slice(0, 8) : [];
-    eventCounterEl.textContent = `${Array.isArray(events) ? events.length : 0} event`;
-    if (!list.length) {
-        neuralEventsEl.innerHTML = '<div class="text-xs text-slate-500">Belum ada event.</div>';
-        return;
-    }
-    neuralEventsEl.innerHTML = list.map((ev, i) => `
-        <div class="neural-event ${i === 0 ? 'neural-event-live' : ''} text-xs py-1">
-            <div class="flex justify-between gap-3">
-                <span class="text-cyan-300 code-font">${esc(ev.type || 'EVENT')}</span>
-                <span class="text-[9px] text-slate-600">${esc(formatTime(ev.at))}</span>
-            </div>
-            <div class="text-slate-300 mt-1">${esc(ev.message || '-')}</div>
-            <div class="text-[9px] text-slate-600 code-font">→ ${esc(ev.target || '-')}</div>
-        </div>`).join('');
-}
-
-function renderConnection(state) {
-    const conn = state.connection || {};
-    const status = conn.status || 'CONNECTING';
-    const map = {
-        LIVE: ['bg-emerald-500','text-emerald-400','LIVE — SERVER'],
-        CACHE: ['bg-amber-500','text-amber-400','CACHE — DATA LOKAL'],
-        OFFLINE: ['bg-rose-500','text-rose-400','OFFLINE — STATE TERAKHIR'],
-        CONNECTING: ['bg-slate-500','text-slate-400','CONNECTING']
-    };
-    const [dot, text, label] = map[status] || map.CONNECTING;
-    connectionStateEl.className = `font-semibold ${text}`;
-    connectionStateEl.innerHTML = `<span class="connection-dot ${dot}"></span>${label}`;
-    connectionAgeEl.textContent = getStateAgeText(state);
-    telemetrySourceEl.textContent = state.lastTelemetryFile || 'system_logs aktif';
-    stateIntegrityEl.textContent = state.cycle === liveState?.cycle ? 'SYNC' : 'UPDATING';
-}
-
 runAutonomousEngine(state => {
-    liveState = state;
-    window.BCGO_STATE = state;
-    renderConnection(state);
-    renderNeuralEvents(state.recentEvents);
-    liveSpeech.textContent = `> [${state.step}] ${state.message}`;
-    targetCellId.textContent = state.targetCell || '-';
-    errorLogDesc.textContent = state.errorLog || 'Normal (tidak ada anomali aktif)';
+    // Render layer dibuat toleran terhadap DOM yang belum lengkap.
+    // Mesin BCGO tidak boleh mati hanya karena satu elemen UI hilang.
+    if (liveSpeech) liveSpeech.textContent = `> [${state.step}] ${state.message}`;
+    if (targetCellId) targetCellId.textContent = state.targetCell || '-';
+    if (errorLogDesc) errorLogDesc.textContent = state.errorLog || 'Normal (tidak ada anomali aktif)';
 
-    cycleNumber.textContent = state.cycle ?? 0;
-    cycleMode.textContent = state.cycleMode || 'NORMAL';
-    eventState.textContent = state.lastEventAt
+    if (cycleNumber) cycleNumber.textContent = state.cycle ?? 0;
+    if (cycleMode) cycleMode.textContent = state.cycleMode || 'NORMAL';
+
+    const freshness = state.dataFreshness || (state.firestore?.connected ? 'LIVE' : 'WAITING');
+    if (dataFreshness) {
+        dataFreshness.textContent = freshness;
+        dataFreshness.className = `text-[10px] code-font ${freshness === 'LIVE' ? 'text-emerald-400' : freshness === 'OFFLINE' ? 'text-rose-400' : 'text-amber-400'}`;
+    }
+
+    if (eventState) eventState.textContent = state.lastEventAt
         ? `Impuls terakhir: ${formatTime(state.lastEventAt)}`
         : 'Belum ada impuls baru';
 
-    metrics.total.textContent = state.metrics?.total ?? 12;
-    metrics.active.textContent = state.metrics?.active ?? 0;
-    metrics.healthy.textContent = state.metrics?.healthy ?? 12;
-    metrics.recovered.textContent = state.metrics?.recovered ?? 0;
-    metrics.firestore.textContent = state.metrics?.firestoreCount ?? 0;
+    if (metrics.total) metrics.total.textContent = state.metrics?.total ?? 12;
+    if (metrics.active) metrics.active.textContent = state.metrics?.active ?? 0;
+    if (metrics.healthy) metrics.healthy.textContent = state.metrics?.healthy ?? 12;
+    if (metrics.recovered) metrics.recovered.textContent = state.metrics?.recovered ?? 0;
+    if (metrics.firestore) metrics.firestore.textContent = state.metrics?.firestoreCount ?? 0;
 
     activatePhase(state.step, state);
     setHeader(state.step, state);
     renderOrgans(state.systemOrgans);
     renderLogs(state.systemLogs);
+    renderEventHistory(state.eventHistory);
 
-    if (!chatFeed.dataset.ready) {
+    if (chatFeed && !chatFeed.dataset.ready) {
         chatFeed.dataset.ready = '1';
         chatFeed.innerHTML = '';
-        addChat('bcgo', `Kanal komunikasi aktif. Saya membaca BCGO_STATE yang sama dengan monitor. Saat ini saya berada di tahap ${state.step}, cycle #${state.cycle}. Silakan tanya apa yang sedang saya kerjakan.`);
+        addChat('bcgo', `Kanal komunikasi aktif. Saya sedang berada di tahap ${state.step}. Silakan tanya apa yang sedang saya kerjakan.`);
     }
 });
 </script>
