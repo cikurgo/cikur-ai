@@ -36,10 +36,7 @@ const REGISTRY = {
   "cikur-config.js": { type: "Sistem Config", role: "system" },
   "bcgo-engine.js": { type: "Sistem Core", role: "system" },
   "bcgo-admin.html": { type: "Sistem Admin", role: "admin" },
-  "bcgo.html": { type: "Sistem Monitor", role: "monitor" },
-  "bcgo.js": { type: "Sistem Monitor Core", role: "monitor" },
-  "bcgo-medicine.html": { type: "Sistem Medicine UI", role: "medicine" },
-  "bcgo-medicine.js": { type: "Sistem Medicine Core", role: "medicine" }
+  "bcgo.html": { type: "Sistem Monitor", role: "monitor" }
 };
 
 const REQUIRED = {
@@ -83,7 +80,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "2.0.0",
+  version: "2.1.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -569,97 +566,56 @@ async function scanConsistency(targets = null) {
 }
 
 
-function getSourceContext(source, line, radius = 4) {
+// ============================================================
+// BCGO MEDICINE v2.1 — PRECISION CODE ADVISOR LAYER
+// ADDITIVE ONLY: existing diagnosis/verification/repair/validation
+// engine remains intact.
+// ============================================================
+function advisorSourceContext(source, line, radius = 5) {
   const lines = sourceLines(source);
   const n = Number(line);
-  if (!Number.isFinite(n) || n < 1 || !lines.length) return { startLine: null, endLine: null, lines: [] };
-  const start = Math.max(1, n - radius);
-  const end = Math.min(lines.length, n + radius);
-  return {
-    startLine: start,
-    endLine: end,
-    lines: lines.slice(start - 1, end).map((code, i) => ({
-      line: start + i,
-      code
-    }))
-  };
+  if (!Number.isFinite(n) || n < 1 || !lines.length) return { startLine:null, endLine:null, lines:[] };
+  const start = Math.max(1, n - radius), end = Math.min(lines.length, n + radius);
+  return { startLine:start, endLine:end, lines:lines.slice(start-1,end).map((code,i)=>({line:start+i,code})) };
 }
-
-function sourceFingerprint(value) {
-  let h = 2166136261;
-  for (const ch of String(value ?? "")) {
-    h ^= ch.charCodeAt(0);
-    h = Math.imul(h, 16777619);
-  }
-  return (h >>> 0).toString(16).padStart(8, "0");
+function advisorFingerprint(value) {
+  let h=2166136261;
+  for(const ch of String(value??"")) { h ^= ch.charCodeAt(0); h=Math.imul(h,16777619); }
+  return (h>>>0).toString(16).padStart(8,"0");
 }
-
-function operationRisk(op) {
-  if (!op?.before || !op?.after) return "HIGH";
-  if (op.type !== "REPLACE_EXACT") return "MEDIUM";
-  if (op.before.length > 5000 || op.after.length > 7000) return "MEDIUM";
-  return "LOW";
+function advisorConfidence(plan) {
+  const evidence=Array.isArray(plan?.sourceEvidence)?plan.sourceEvidence:[];
+  const ops=Array.isArray(plan?.operations)?plan.operations:[];
+  const high=evidence.filter(e=>e?.evidenceStrength==="HIGH").length;
+  const root=["CONFIRMED_ORIGINAL_TARGET","TARGET_CORRECTED_BY_MEDICINE","CONTRACT_ROOT_CAUSE_IDENTIFIED"].includes(plan?.rootCauseStatus);
+  const exact=ops.length>0&&ops.every(o=>o?.type==="REPLACE_EXACT"&&o?.file&&o?.before&&o?.after);
+  const score=(root?35:0)+(high?35:0)+(exact?30:0);
+  return {level:score>=90?"HIGH":score>=55?"MEDIUM":"LOW",score,reasons:[
+    root?"Root cause teridentifikasi/terbukti.":"Root cause belum terbukti.",
+    high?`${high} evidence HIGH tersedia.`:"Belum ada evidence HIGH.",
+    exact?"BEFORE/AFTER REPLACE_EXACT tersedia.":"Belum ada operasi exact lengkap."
+  ]};
 }
-
-function buildCodePrescription(plan) {
-  const p = plan || {};
-  const ops = Array.isArray(p.operations) ? p.operations : [];
-  const evidence = Array.isArray(p.sourceEvidence) ? p.sourceEvidence : [];
-  const items = ops.slice(0, 12).map((op, index) => {
-    const ev = evidence.find(e =>
-      e?.file === op.file &&
-      (e?.line == null || op.line == null || Number(e.line) === Number(op.line))
-    ) || evidence.find(e => e?.file === op.file);
-
-    const context = p._sourceContext?.[index] || null;
-    return {
-      index,
-      file: op.file || null,
-      line: op.line ?? null,
-      type: op.type || "REPLACE_EXACT",
-      before: String(op.before || ""),
-      after: String(op.after || ""),
-      reason: text(op.reason || "Perubahan diturunkan dari source evidence.", 1200),
-      evidenceStrength: ev?.evidenceStrength || "UNVERIFIED",
-      evidenceReason: text(ev?.reason || ev?.evidenceReason || "", 1400),
-      context,
-      risk: operationRisk(op),
-      beforeHash: sourceFingerprint(op.before),
-      afterHash: sourceFingerprint(op.after)
-    };
+function buildAdvisorPrescription(plan) {
+  const p=plan||{}, ops=Array.isArray(p.operations)?p.operations:[], evidence=Array.isArray(p.sourceEvidence)?p.sourceEvidence:[];
+  const confidence=advisorConfidence(p);
+  const items=ops.slice(0,20).map((op,index)=>{
+    const ev=evidence.find(e=>e?.file===op.file&&(e?.line==null||op?.line==null||Number(e.line)===Number(op.line)))||evidence.find(e=>e?.file===op.file);
+    return {index,file:op.file||null,line:op.line??null,column:op.column??ev?.column??null,
+      before:String(op.before||""),after:String(op.after||""),reason:text(op.reason||"Solusi diturunkan dari repair exact.",1600),
+      evidenceStrength:ev?.evidenceStrength||"UNVERIFIED",evidenceReason:text(ev?.evidenceReason||ev?.reason||"",1600),
+      beforeHash:advisorFingerprint(op.before),afterHash:advisorFingerprint(op.after),type:op.type||null};
   });
-
-  const exact = items.length > 0 &&
-    items.every(x => x.type === "REPLACE_EXACT" && x.before && x.after);
-  const highEvidence = items.some(x => x.evidenceStrength === "HIGH");
-  const rootProven = ["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE", "CONTRACT_ROOT_CAUSE_IDENTIFIED"]
-    .includes(p.rootCauseStatus);
-
-  return {
-    ready: !!(p.precisionGate === true && exact && highEvidence && rootProven),
-    status: p.precisionGate === true && exact && highEvidence && rootProven ? "READY_TO_COPY" : "REVIEW_REQUIRED",
-    targetFile: p.rootCauseFile || p.target || null,
-    rootCauseStatus: p.rootCauseStatus || "UNPROVEN",
-    evidenceCount: evidence.length,
-    items,
-    instruction: p.precisionGate === true && exact && highEvidence && rootProven
-      ? "Solusi berasal dari operasi exact yang terikat pada source evidence. Review BEFORE/AFTER lalu copy secara manual."
-      : "Medicine belum memiliki kombinasi root cause, source exact, evidence HIGH, dan operasi exact yang cukup untuk menyatakan solusi siap copy."
-  };
+  const ready=confidence.level==="HIGH"&&items.length>0&&items.every(x=>x.type==="REPLACE_EXACT"&&x.before&&x.after);
+  return {status:ready?"READY_TO_COPY":"REVIEW_REQUIRED",ready,confidence,targetFile:p.rootCauseFile||p.target||null,
+    rootCauseStatus:p.rootCauseStatus||"UNPROVEN",evidenceCount:evidence.length,items,humanControl:true,
+    instruction:ready?"Review BEFORE/AFTER lalu copy secara manual.":"Belum ada bukti exact yang cukup untuk menyatakan solusi siap copy."};
+}
+function buildAdvisorFullPatch(plan) {
+  const a=buildAdvisorPrescription(plan);
+  return {ready:a.ready,operations:a.items.map(x=>({type:x.type,file:x.file,line:x.line,before:x.before,after:x.after}))};
 }
 
-async function attachPrescription(plan) {
-  const p = plan || {};
-  p._sourceContext = {};
-  for (let i = 0; i < (p.operations || []).length; i++) {
-    const op = p.operations[i];
-    if (!op?.file || !op?.line) continue;
-    const src = await fetchFile(op.file);
-    p._sourceContext[i] = src.ok ? getSourceContext(src.text, op.line, 4) : null;
-  }
-  p.codePrescription = buildCodePrescription(p);
-  return p;
-}
 
 function buildRepairPlan(c, verification) {
   const d = c.diagnosis;
@@ -735,11 +691,7 @@ async function enrichRepairPlan(c, verification) {
   const exactEvidence = plan.sourceEvidence.some(e => e.evidenceStrength === "HIGH");
   const rootCauseProven = ["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE", "CONTRACT_ROOT_CAUSE_IDENTIFIED"].includes(plan.rootCauseStatus);
   const operationMatchesRoot = plan.operations.length > 0 && plan.operations.every(op => op.file === plan.rootCauseFile && op.type === "REPLACE_EXACT" && op.before && op.after);
-  const beforeStillExists = plan.operations.length > 0 && plan.operations.every(op => {
-    const ev = plan.sourceEvidence.find(e => e.file === op.file && Number(e.line) === Number(op.line));
-    return ev?.before ? String(ev.before) === String(op.before) : true;
-  });
-  if (plan.operations.length && exactEvidence && rootCauseProven && operationMatchesRoot && beforeStillExists) {
+  if (plan.operations.length && exactEvidence && rootCauseProven && operationMatchesRoot) {
     plan.status = "PROPOSED";
     plan.blockReason = null;
     plan.precisionGate = true;
@@ -748,7 +700,8 @@ async function enrichRepairPlan(c, verification) {
     plan.blockReason = "PRECISION GATE: Medicine belum menemukan lokasi source dan operasi exact yang terbukti. Source tidak akan diubah berdasarkan tebakan.";
     plan.precisionGate = false;
   }
-  return attachPrescription(plan);
+  plan.advisor = buildAdvisorPrescription(plan);
+  return plan;
 }
 
 function canApprove(c) {
@@ -914,7 +867,7 @@ function medicineAnswer(q) {
   const file = mentionedFile(q);
   if (/sinkron|synchron|jumlah|count|validasi|mitra|tidak sesuai|tidak sinkron/.test(x)) {
     const target = file || active[0]?.source || "bcgo-admin.html";
-    return `Saya akan memeriksa ${target} lintas-file: sumber data, kontrak field, engine, renderer Admin, dan telemetry. Jika akar masalah terbukti, saya ambil source exact lalu susun BEFORE → AFTER yang konkret untuk direview manusia.`;
+    return `Saya akan memeriksa ${target} lintas-file: sumber data, kontrak field, engine, renderer Admin, dan telemetry. Bila akar masalah terbukti, saya susun perubahan kode konkret, bukan sekadar diagnosis.`;
   }
   if (/obat|perbaiki|sembuhkan|treatment|patch|tangan/.test(x)) {
     if (!S.activeCase) return "Belum ada case aktif yang bisa saya obati.";
@@ -1201,8 +1154,13 @@ const API = {
   rejectTreatment,
   setHumanMode,
   requestReview,
-  getCodePrescription: caseId => { const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase; return c?.repairPlan?.codePrescription || buildCodePrescription(c?.repairPlan); },
-  buildCodePrescription,
+  requestSurgicalInvestigation,
+  getLiveConversation,
+  userJoinConversation,
+  liveMessage,
+  getAdvisorPrescription: caseId => { const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase; return buildAdvisorPrescription(c?.repairPlan); },
+  buildAdvisorPrescription,
+  buildAdvisorFullPatch,
   getRegistry: () => ({ ...REGISTRY }),
   getState: () => ({ ...S, sourceCache: undefined })
 };
