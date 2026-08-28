@@ -36,12 +36,15 @@ const REGISTRY = {
   "cikur-config.js": { type: "Sistem Config", role: "system" },
   "bcgo-engine.js": { type: "Sistem Core", role: "system" },
   "bcgo-admin.html": { type: "Sistem Admin", role: "admin" },
-  "bcgo.html": { type: "Sistem Monitor", role: "monitor" }
+  "bcgo.html": { type: "Sistem Monitor", role: "monitor" },
+  "bcgo.js": { type: "Sistem Monitor Core", role: "monitor" },
+  "bcgo-medicine.html": { type: "Sistem Medicine UI", role: "medicine" },
+  "bcgo-medicine.js": { type: "Sistem Medicine Core", role: "medicine" }
 };
 
 const REQUIRED = {
-  driver: ["name", "phone", "address", "vehicleType"],
-  assistant: ["name", "phone", "address", "serviceType"],
+  driver: ["name", "phone", "address", "vehicleType", "photo", "ktp", "sim", "bank", "accountName", "accountNo"],
+  assistant: ["name", "phone", "address", "serviceType", "ktp", "fotoKtp", "socialMedia"],
   customer: ["name", "phone", "email"],
   restaurant: [
     "name", "phone", "address", "businessName", "businessType", "ownerName", "role",
@@ -50,15 +53,37 @@ const REQUIRED = {
   ]
 };
 
+const FIELD_ALIASES = {
+  photo: ["photo", "profilePhoto", "fotoProfil", "regPhoto"],
+  photoFront: ["photoFront", "fotoFront", "frontPhoto"],
+  accountNo: ["accountNo", "accountNumber", "rekening", "nomorRekening"],
+  accountNumber: ["accountNumber", "accountNo", "rekening", "nomorRekening"],
+  vehicleType: ["vehicleType", "vehicle", "jenisKendaraan"],
+  serviceType: ["serviceType", "service", "jenisLayanan"],
+  bank: ["bank", "bankName"],
+  bankName: ["bankName", "bank"],
+  fotoKtp: ["fotoKtp", "ktpPhoto", "photo"],
+  socialMedia: ["socialMedia", "instagram", "tiktok", "facebook"]
+};
+
 const CONTRACT_FIELDS = new Set([
-  "name", "phone", "address", "email", "vehicleType", "serviceType", "photo", "photoFront",
-  "photoIndoor", "fotoKtp", "fotoSim", "fotoStnk", "ktp", "sim", "stnk", "businessName",
-  "businessType", "ownerName", "role", "village", "district", "city", "province", "openTime",
-  "closeTime", "operationalDays", "legalStatus", "bankName", "accountName", "accountNumber"
+  "name", "phone", "address", "email", "vehicleType", "vehicle", "serviceType", "photo", "profilePhoto", "fotoProfil",
+  "photoFront", "photoIndoor", "fotoKtp", "fotoSim", "fotoStnk", "ktp", "sim", "stnk", "bank", "bankName",
+  "accountName", "accountNumber", "accountNo", "businessName", "businessType", "ownerName", "role", "village",
+  "district", "city", "province", "openTime", "closeTime", "operationalDays", "legalStatus", "socialMedia"
 ]);
 
+function canonicalFieldSet(values) {
+  const raw = new Set((values || []).map(String));
+  const out = new Set(raw);
+  for (const [canonical, aliases] of Object.entries(FIELD_ALIASES)) {
+    if (aliases.some(a => raw.has(a))) out.add(canonical);
+  }
+  return out;
+}
+
 const S = {
-  version: "1.8.0",
+  version: "2.2.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -74,12 +99,7 @@ const S = {
   sourceCache: new Map(),
   lastClientMessageId: null,
   eventSeq: 0,
-  conversation: {
-    autonomousEnabled: true,
-    lastAutonomousAt: 0,
-    lastAutonomousKey: "",
-    cycle: 0
-  }
+  autonomous: { enabled: true, turn: 0, timer: null, lastAt: 0 }
 };
 
 const emit = (event, p = {}) => window.dispatchEvent(new CustomEvent("bcgo:medicine", {
@@ -214,14 +234,33 @@ function fields(name, source) {
   const out = [];
   let m;
   const htmlAttr = /(?:id|name|data-field|data-key)\s*=\s*["']([^"']+)["']/gi;
-  while ((m = htmlAttr.exec(source))) {
-    if (CONTRACT_FIELDS.has(m[1]) || /^[a-z][A-Za-z0-9_-]{1,40}$/.test(m[1])) out.push(m[1]);
+  while ((m = htmlAttr.exec(source))) out.push(m[1]);
+
+  // Normalize common registration IDs to their persisted contract fields.
+  const idAliases = {
+    regName:"name", regPhone:"phone", regAddress:"address", regVehicleType:"vehicleType", regVehicle:"vehicle",
+    regPhoto:"photo", regFotoKtp:"fotoKtp", regFotoSim:"fotoSim", regFotoStnk:"fotoStnk", regKtp:"ktp", regSim:"sim",
+    regBank:"bank", regAccountName:"accountName", regAccountNo:"accountNo", mitraAlamat:"address", mitraArea:"area",
+    mitraKtp:"ktp", mitraFotoKtp:"fotoKtp", mitraSocialMedia:"socialMedia"
+  };
+  for (const [id, canonical] of Object.entries(idAliases)) if (source.includes(`id="${id}"`) || source.includes(`id='${id}'`)) out.push(canonical);
+
+  // Read actual data contract usage in renderers/handlers, not only HTML attributes.
+  // This is critical for Admin pages that render fields as ${data.photo}, data.photo,
+  // optional chains, destructuring, or object spreads.
+  const dataAccess = /\bdata\s*\??\.\s*([A-Za-z_$][\w$]*)/g;
+  while ((m = dataAccess.exec(source))) out.push(m[1]);
+  const dataBracket = /\bdata\s*\[\s*["']([A-Za-z_$][\w$]*)["']\s*\]/g;
+  while ((m = dataBracket.exec(source))) out.push(m[1]);
+  const interpolation = /\$\{\s*(?:data|application|partner|payload)\s*\??\.\s*([A-Za-z_$][\w$]*)/g;
+  while ((m = interpolation.exec(source))) out.push(m[1]);
+
+  if (/\.js$/i.test(name)) {
+    const jsFields = /\b(name|phone|address|email|vehicleType|vehicle|photo|profilePhoto|fotoProfil|photoFront|photoIndoor|fotoKtp|fotoSim|fotoStnk|ktp|sim|stnk|bank|bankName|accountName|accountNumber|accountNo|serviceType|businessName|businessType|ownerName|role|village|district|city|province|openTime|closeTime|operationalDays|legalStatus|socialMedia)\b/g;
+    while ((m = jsFields.exec(source))) out.push(m[1]);
   }
-  const jsFields = /\b(name|phone|address|email|vehicleType|photo|photoFront|photoIndoor|fotoKtp|fotoSim|fotoStnk|ktp|sim|stnk|bankName|accountName|accountNumber|serviceType|businessName|businessType|ownerName|role|village|district|city|province|openTime|closeTime|operationalDays|legalStatus)\b/g;
-  if (/\.js$/i.test(name)) while ((m = jsFields.exec(source))) out.push(m[1]);
   return [...new Set(out)];
 }
-
 
 function sourceLines(source) {
   return String(source || "").split(/\r?\n/);
@@ -391,10 +430,11 @@ async function resolveRootCause(c) {
   if (c.diagnosis.code === "DATA_CONSISTENCY") {
     const scan = await scanConsistency();
     const relevant = scan.findings.filter(f => f.kind === "ADMIN_PRESENTATION_GAP" || f.kind === "SOURCE_CONTRACT_GAP");
-    const gap = relevant.find(f => f.sourceFile === originalTarget) || relevant[0];
+    const gap = relevant.find(f => f.sourceFile === originalTarget) ||
+      relevant.find(f => f.targetFile === originalTarget) || null;
     if (gap) {
       return {
-        rootCauseFile: gap.targetFile || gap.sourceFile || originalTarget,
+        rootCauseFile: gap.kind === "ADMIN_PRESENTATION_GAP" ? (gap.targetFile || "bcgo-admin.html") : (gap.sourceFile || originalTarget),
         rootCauseStatus: "CONTRACT_ROOT_CAUSE_IDENTIFIED",
         sourceEvidence: [{ file: gap.sourceFile, targetFile: gap.targetFile, missing: gap.missing || [], evidenceStrength: "HIGH", reason: `Kontrak sumber ${gap.sourceFile} memiliki field yang belum dipetakan secara konsisten ke ${gap.targetFile || 'target'}.` }],
         resolvedOperation: null,
@@ -443,9 +483,40 @@ function findLikelyDomBinding(fileName, source, signature) {
 }
 
 function buildAdminGapOperations(targetFile, missingFields, adminSource) {
-  // A contract gap is a finding, not permission to invent UI. Medicine must locate
-  // an existing renderer/field mapping before it can propose a source edit.
-  return [];
+  if (targetFile !== "bcgo-admin.html" || !adminSource || !missingFields?.length) return [];
+  const source = String(adminSource);
+  const operations = [];
+  const labels = {
+    photo:"Foto Profil", photoFront:"Foto Depan", vehicleType:"Jenis Kendaraan", serviceType:"Jenis Layanan",
+    ktp:"Nomor KTP", sim:"Nomor SIM", stnk:"Nomor STNK", bank:"Bank / E-Wallet", bankName:"Bank / E-Wallet",
+    accountName:"Nama Rekening", accountNo:"Nomor Rekening / Akun", accountNumber:"Nomor Rekening / Akun",
+    socialMedia:"Media Sosial", name:"Nama", phone:"Telepon", address:"Alamat", email:"Email"
+  };
+  const valueExpr = f => {
+    const alias = FIELD_ALIASES[f]?.[0] || f;
+    return `data.${alias} || '-'`;
+  };
+
+  // Find an existing detail-row in the Admin renderer. The patch is allowed only as
+  // an exact insertion next to an existing renderer block; Medicine never fabricates
+  // a new renderer/function or rewrites unrelated code.
+  const rowRe = /<div\s+class=["']detail-row["'][\s\S]*?<\/div>\s*\n?/gi;
+  const rows = [...source.matchAll(rowRe)];
+  if (!rows.length) return [];
+  const anchor = rows.find(m => /Kontak|Nama|Alamat|Kendaraan|Rekening/i.test(m[0])) || rows[0];
+  const marker = anchor[0];
+  const line = lineOf(source, anchor.index);
+
+  const blocks = missingFields.slice(0, 6).map(rawField => {
+    const field = FIELD_ALIASES[rawField] ? rawField : rawField;
+    const label = labels[field] || field.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
+    return `\n\n            <div class="detail-row">\n                <span class="detail-label">\n                    ${label}\n                </span>\n                <span class="detail-value">\n                    \${${valueExpr(field)}}\n                </span>\n            </div>`;
+  });
+  if (blocks.length) operations.push({
+    type:"REPLACE_EXACT", file:targetFile, line, before:marker, after:marker + blocks.join(''),
+    reason:`Tambahkan ${blocks.length} field kontrak yang benar-benar hilang pada renderer Admin melalui satu replacement exact.`
+  });
+  return operations;
 }
 
 async function scanConsistency(targets = null) {
@@ -463,16 +534,17 @@ async function scanConsistency(targets = null) {
   for (const [type, req] of Object.entries(REQUIRED)) {
     const source = type === "driver" ? "driver.html" : type === "restaurant" ? "resto.html" : type === "assistant" ? "agentcgo.html" : "index.html";
     if (!result[source]?.ok) continue;
-    const sf = new Set((result[source].fields || []).map(safeLower));
-    const missing = req.filter(x => !sf.has(safeLower(x)));
+    const sf = canonicalFieldSet(result[source].fields || []);
+    const missing = req.filter(x => !sf.has(x) && !(FIELD_ALIASES[x] || []).some(a => sf.has(a)));
     if (missing.length) findings.push({ kind: "SOURCE_CONTRACT_GAP", sourceFile: source, missing });
   }
 
   const sources = ["driver.html", "resto.html", "agentcgo.html", "index.html", "food.html", "ride.html"];
   for (const source of sources) {
     if (!result[source]?.ok || !result["bcgo-admin.html"]?.ok) continue;
-    const sf = [...new Set((result[source].fields || []).map(safeLower))].filter(x => CONTRACT_FIELDS.has(x));
-    const missing = sf.filter(x => !admin.has(x));
+    const sf = [...canonicalFieldSet(result[source].fields || [])].filter(x => CONTRACT_FIELDS.has(x) || Object.values(FIELD_ALIASES).flat().includes(x));
+    const adminCanonical = canonicalFieldSet(result["bcgo-admin.html"].fields || []);
+    const missing = sf.filter(x => !adminCanonical.has(x) && !(FIELD_ALIASES[x] || []).some(a => adminCanonical.has(a)));
     if (missing.length) findings.push({ kind: "ADMIN_PRESENTATION_GAP", sourceFile: source, targetFile: "bcgo-admin.html", missing });
   }
 
@@ -482,13 +554,112 @@ async function scanConsistency(targets = null) {
     const directNullRisk = /\$\(\s*["'][^"']+["']\s*\)\.textContent\s*=|document\.getElementById\(\s*["'][^"']+["']\s*\)\.textContent\s*=/.test(source);
     if (directNullRisk) {
       const evs = exactDomEvidence(name, source, "");
-      for (const ev of evs) findings.push({ kind: "DOM_ASSIGNMENT_RISK", sourceFile: name, targetFile: name, selector: ev.selector, line: ev.line, evidenceStrength: ev.evidenceStrength, detail: ev.evidenceReason });
+      for (const ev of evs) {
+        // Existing DOM targets are not findings by themselves. Only missing targets
+        // are promoted; correlated runtime evidence remains visible as MEDIUM/HIGH.
+        if (ev.evidenceStrength === "HIGH" || ev.stackHit || ev.signatureHit) {
+          findings.push({ kind: "DOM_ASSIGNMENT_RISK", sourceFile: name, targetFile: name, selector: ev.selector, line: ev.line, evidenceStrength: ev.evidenceStrength, detail: ev.evidenceReason });
+        }
+      }
     }
   }
 
   S.findings = findings;
   emit("scan_complete", { results: result, findings });
   return { results: result, findings };
+}
+
+
+function getSourceContext(source, line, radius = 4) {
+  const lines = sourceLines(source);
+  const n = Number(line);
+  if (!Number.isFinite(n) || n < 1 || !lines.length) return { startLine: null, endLine: null, lines: [] };
+  const start = Math.max(1, n - radius);
+  const end = Math.min(lines.length, n + radius);
+  return {
+    startLine: start,
+    endLine: end,
+    lines: lines.slice(start - 1, end).map((code, i) => ({
+      line: start + i,
+      code
+    }))
+  };
+}
+
+function sourceFingerprint(value) {
+  let h = 2166136261;
+  for (const ch of String(value ?? "")) {
+    h ^= ch.charCodeAt(0);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+function operationRisk(op) {
+  if (!op?.before || !op?.after) return "HIGH";
+  if (op.type !== "REPLACE_EXACT") return "MEDIUM";
+  if (op.before.length > 5000 || op.after.length > 7000) return "MEDIUM";
+  return "LOW";
+}
+
+function buildCodePrescription(plan) {
+  const p = plan || {};
+  const ops = Array.isArray(p.operations) ? p.operations : [];
+  const evidence = Array.isArray(p.sourceEvidence) ? p.sourceEvidence : [];
+  const items = ops.slice(0, 12).map((op, index) => {
+    const ev = evidence.find(e =>
+      e?.file === op.file &&
+      (e?.line == null || op.line == null || Number(e.line) === Number(op.line))
+    ) || evidence.find(e => e?.file === op.file);
+
+    const context = p._sourceContext?.[index] || null;
+    return {
+      index,
+      file: op.file || null,
+      line: op.line ?? null,
+      type: op.type || "REPLACE_EXACT",
+      before: String(op.before || ""),
+      after: String(op.after || ""),
+      reason: text(op.reason || "Perubahan diturunkan dari source evidence.", 1200),
+      evidenceStrength: ev?.evidenceStrength || "UNVERIFIED",
+      evidenceReason: text(ev?.reason || ev?.evidenceReason || "", 1400),
+      context,
+      risk: operationRisk(op),
+      beforeHash: sourceFingerprint(op.before),
+      afterHash: sourceFingerprint(op.after)
+    };
+  });
+
+  const exact = items.length > 0 &&
+    items.every(x => x.type === "REPLACE_EXACT" && x.before && x.after);
+  const highEvidence = items.some(x => x.evidenceStrength === "HIGH");
+  const rootProven = ["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE", "CONTRACT_ROOT_CAUSE_IDENTIFIED"]
+    .includes(p.rootCauseStatus);
+
+  return {
+    ready: !!(p.precisionGate === true && exact && highEvidence && rootProven),
+    status: p.precisionGate === true && exact && highEvidence && rootProven ? "READY_TO_COPY" : "REVIEW_REQUIRED",
+    targetFile: p.rootCauseFile || p.target || null,
+    rootCauseStatus: p.rootCauseStatus || "UNPROVEN",
+    evidenceCount: evidence.length,
+    items,
+    instruction: p.precisionGate === true && exact && highEvidence && rootProven
+      ? "Solusi berasal dari operasi exact yang terikat pada source evidence. Review BEFORE/AFTER lalu copy secara manual."
+      : "Medicine belum memiliki kombinasi root cause, source exact, evidence HIGH, dan operasi exact yang cukup untuk menyatakan solusi siap copy."
+  };
+}
+
+async function attachPrescription(plan) {
+  const p = plan || {};
+  p._sourceContext = {};
+  for (let i = 0; i < (p.operations || []).length; i++) {
+    const op = p.operations[i];
+    if (!op?.file || !op?.line) continue;
+    const src = await fetchFile(op.file);
+    p._sourceContext[i] = src.ok ? getSourceContext(src.text, op.line, 4) : null;
+  }
+  p.codePrescription = buildCodePrescription(p);
+  return p;
 }
 
 function buildRepairPlan(c, verification) {
@@ -511,7 +682,7 @@ function buildRepairPlan(c, verification) {
       "The exact BEFORE text must be absent and the exact AFTER text must be present after execution."
     ],
     sourceWrite: false,
-    precision: { exactTargetRequired: true, exactEvidenceRequired: true, noGuessing: true },
+    precision: { exactTargetRequired: true, exactEvidenceRequired: true, exactOperationRequired: true, noGuessing: true, crossFileProofRequired: true },
     status: "PROPOSED",
     requiresHumanApproval: true,
     requiresPostValidation: true,
@@ -563,9 +734,13 @@ async function enrichRepairPlan(c, verification) {
   }
 
   const exactEvidence = plan.sourceEvidence.some(e => e.evidenceStrength === "HIGH");
-  const rootCauseProven = ["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE"].includes(plan.rootCauseStatus);
+  const rootCauseProven = ["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE", "CONTRACT_ROOT_CAUSE_IDENTIFIED"].includes(plan.rootCauseStatus);
   const operationMatchesRoot = plan.operations.length > 0 && plan.operations.every(op => op.file === plan.rootCauseFile && op.type === "REPLACE_EXACT" && op.before && op.after);
-  if (plan.operations.length && exactEvidence && rootCauseProven && operationMatchesRoot) {
+  const beforeStillExists = plan.operations.length > 0 && plan.operations.every(op => {
+    const ev = plan.sourceEvidence.find(e => e.file === op.file && Number(e.line) === Number(op.line));
+    return ev?.before ? String(ev.before) === String(op.before) : true;
+  });
+  if (plan.operations.length && exactEvidence && rootCauseProven && operationMatchesRoot && beforeStillExists) {
     plan.status = "PROPOSED";
     plan.blockReason = null;
     plan.precisionGate = true;
@@ -574,7 +749,7 @@ async function enrichRepairPlan(c, verification) {
     plan.blockReason = "PRECISION GATE: Medicine belum menemukan lokasi source dan operasi exact yang terbukti. Source tidak akan diubah berdasarkan tebakan.";
     plan.precisionGate = false;
   }
-  return plan;
+  return attachPrescription(plan);
 }
 
 function canApprove(c) {
@@ -648,6 +823,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
       plan.operations?.length &&
       plan.precisionGate === true &&
       plan.rootCauseFile === plan.operations[0]?.file &&
+      ["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE", "CONTRACT_ROOT_CAUSE_IDENTIFIED"].includes(plan.rootCauseStatus) &&
       plan.sourceEvidence.some(e => e.evidenceStrength === "HIGH") &&
       plan.operations.every(op => op.type === "REPLACE_EXACT" && op.before && op.after && op.file === plan.rootCauseFile)
     );
@@ -717,87 +893,41 @@ function bcgoAnswer(q) {
   const active = activeCases();
   const x = safeLower(q);
   const file = mentionedFile(q);
-
-  if (isGreeting(q)) return `Halo 👋 Saya BCGO. Saya tetap di sini dan terus memantau telemetry. ${active.length ? `Saat ini ada ${active.length} case yang sedang kita awasi.` : "Belum ada case aktif yang perlu saya serahkan."}`;
-
-  if (isRootCauseCommand(q)) {
-    const target = file || active[0]?.source || null;
-    return target
-      ? `Siap. Saya tidak akan berhenti di gejalanya. Saya kirim ${target} ke Medicine untuk ditelusuri sampai akar masalah, dependency, dan source exact. Setelah bukti cukup, hasilnya akan dibawa ke ruang operasi untuk review manusia.`
-      : `Siap. Saya bisa mulai, tetapi saat ini belum ada case aktif. Begitu telemetry menemukan kendala, saya akan serahkan case itu ke Medicine untuk pelacakan akar masalah.`;
-  }
-
-  if (isStatusQuestion(q)) return conversationalStatus();
-
   if (/sinkron|synchron|jumlah|count|validasi|mitra|tidak sesuai|tidak sinkron/.test(x)) {
     const target = file || active[0]?.source || "bcgo-admin.html";
     const logs = latestRelevantLogs(target);
     const evidence = logs[0] ? `Evidence telemetry pada ${target}: ${text(logs[0].message || logs[0].error || "event", 420)}.` : `Belum ada telemetry spesifik untuk ${target}.`;
-    return `Saya cek dulu ya. Target awalnya ${target}. ${evidence} Tapi saya belum menganggap target itu sebagai akar masalah; Medicine akan membuktikan jalurnya.`;
+    return `Saya cek pertanyaan Anda. Target awal ${target}. ${evidence} Target itu belum saya anggap sebagai akar masalah. Saya minta Medicine memverifikasi seluruh jalur dan mengoreksi target bila evidence menunjuk file lain.`;
   }
-
   if (/apa yang.*kerja|sedang|ngerjain|mengerjakan/.test(x)) {
     return active.length
-      ? `Saya sedang mengawasi ${Object.keys(REGISTRY).length} organ. Ada ${active.length} case aktif; fokus ${active[0].source}. Saya dan Medicine sedang menelusuri evidence-nya.`
+      ? `Saya sedang mengawasi ${Object.keys(REGISTRY).length} organ. Ada ${active.length} case aktif; fokus ${active[0].source} (${active[0].status}). Medicine sedang saya minta menyiapkan repair plan.`
       : `Saya sedang memantau ${Object.keys(REGISTRY).length} organ dan telemetry realtime. Belum ada case aktif.`;
   }
-
-  if (/aman|sehat|normal/.test(x)) {
-    return `Saya masih online. Saat ini telemetry ${S.logs.length}, case aktif ${active.length}, findings ${S.findings.length}. Saya tidak akan menyebut semuanya aman tanpa evidence.`;
-  }
-
-  if (/masalah|error|kendala|rusak|anomal/.test(x)) {
-    return active.length
-      ? `Iya, ada ${active.length} case aktif. Yang paling menonjol ${active[0].source}: ${active[0].diagnosis.title}. Kalau kamu mau, perintahkan saya untuk cari akar penyebabnya.`
-      : `Saya belum menerima case aktif dari telemetry. Kalau ada gejala tertentu, sebutkan supaya saya bisa mengarahkannya ke Medicine.`;
-  }
-
-  return `Saya dengar. Ceritakan saja apa yang ingin kamu cek. Kalau kamu bilang “cari penyebab utamanya”, saya akan meneruskan permintaan itu ke Medicine dan mulai investigasi berdasarkan evidence yang tersedia.`;
+  if (/aman|status|sehat|normal/.test(x)) return `Status saya: ${S.logs.length} telemetry log, ${active.length} case aktif, ${S.findings.length} finding. Saya tidak menyatakan aman tanpa evidence.`;
+  if (/masalah|error|kendala|rusak|anomal/.test(x)) return active.length ? `Ya. Ada ${active.length} case aktif. Prioritas ${active[0].source}: ${active[0].diagnosis.title}. Saya dapat menyerahkannya ke Medicine untuk pemeriksaan dan penyembuhan terkontrol.` : `Saat ini belum ada case aktif dari telemetry yang saya terima.`;
+  return `BCGO menerima pesan Anda dari state aktual. Sebutkan file atau gejalanya jika ingin saya arahkan ke Medicine.`;
 }
 
 function medicineAnswer(q) {
   const x = safeLower(q);
   const active = activeCases();
   const file = mentionedFile(q);
-
-  if (isGreeting(q)) return conversationalGreeting();
-
-  if (isRootCauseCommand(q)) {
-    if (!S.activeCase) {
-      return `Siap, saya mau bedah. Tapi saya belum punya case aktif yang bisa saya telusuri. Saya tetap memantau telemetry; begitu ada case, saya akan mulai dari titik evidence yang nyata.`;
-    }
-    const target = file || S.activeCase.source;
-    return `Siap. Saya mulai dari ${target}, tetapi saya tidak akan menganggap itu otomatis sebagai akar masalah. Saya telusuri dependency → root cause → source exact. Kalau bukti cukup, saya bawa hasilnya ke ruang operasi dengan BEFORE → AFTER dan solusi yang bisa kamu copy.`;
-  }
-
-  if (isStatusQuestion(q)) return conversationalStatus();
-
   if (/sinkron|synchron|jumlah|count|validasi|mitra|tidak sesuai|tidak sinkron/.test(x)) {
     const target = file || active[0]?.source || "bcgo-admin.html";
-    return `Oke, saya cek pelan-pelan. Saya akan membandingkan ${target} dengan sumber, dependency, engine, renderer, dan telemetry. Kalau titik masalahnya terbukti, saya akan tunjukkan source exact dan solusi konkretnya.`;
+    return `Saya akan memeriksa ${target} lintas-file: sumber data, kontrak field, engine, renderer Admin, dan telemetry. Jika akar masalah terbukti, saya ambil source exact lalu susun BEFORE → AFTER yang konkret untuk direview manusia.`;
   }
-
-  if (/obat|perbaiki|sembuhkan|treatment|patch|tangan|copy|solusi|before|after/.test(x)) {
-    if (!S.activeCase) return `Saya siap menyiapkan solusi, tetapi belum ada case aktif yang bisa dijadikan dasar. Saya tidak mau mengarang kode.`;
+  if (/obat|perbaiki|sembuhkan|treatment|patch|tangan/.test(x)) {
+    if (!S.activeCase) return "Belum ada case aktif yang bisa saya obati.";
     const plan = S.activeCase.repairPlan;
     return plan?.operations?.length
-      ? `Sudah ada bahan repair untuk ${S.activeCase.repairPlan.rootCauseFile || S.activeCase.source}. Saya bisa tampilkan BEFORE → AFTER dan kode solusi untuk kamu review/copy. Source tetap tidak saya ubah otomatis.`
-      : `Saya masih mencari bukti exact untuk case ini. Begitu operasi REPLACE_EXACT terbukti, saya akan tampilkan BEFORE → AFTER yang bisa langsung kamu copy.`;
+      ? `Repair plan ${plan.planId} sudah memiliki ${plan.operations.length} operasi source yang terukur. Saya menunggu persetujuan manusia sebelum executor menerapkannya.`
+      : `Saya belum memiliki operasi patch yang cukup aman. Saya tidak akan memaksakan perubahan source.`;
   }
-
-  if (/driver|foto|photo/.test(x)) {
-    return `Saya bisa telusuri driver.html → dependency yang memakainya → bcgo-engine.js → bcgo-admin.html. Saya akan membedakan mana symptom dan mana akar masalah sebelum membuat resep.`;
-  }
-
-  if (/ada.*(masalah|error)|kendala|rusak|sakit/.test(x)) {
-    return active.length
-      ? `Saya melihat ${active.length} case aktif. Fokus ${active[0].source}. Saya siap menelusuri akar masalahnya kalau kamu beri perintah.`
-      : `Belum ada case aktif yang cukup kuat. Saya tetap memantau dan tidak akan membuat diagnosis palsu.`;
-  }
-
-  return `Saya dengar. Kamu bisa ngobrol biasa dengan saya, atau beri perintah seperti “cari penyebab utamanya”, “telusuri sarafnya”, atau “bawa ke ruang operasi”. Saya akan mengubah perintah itu menjadi langkah investigasi nyata, tetap berdasarkan evidence.`;
+  if (/driver|foto|photo/.test(x)) return `Saya dapat membandingkan driver.html → bcgo-engine.js → bcgo-admin.html. Jika field foto ada di sumber tetapi hilang di Admin, saya akan tandai sebagai ADMIN_PRESENTATION_GAP dan membuat repair plan yang dapat diaudit.`;
+  if (/ada.*(masalah|error)|kendala|rusak|sakit/.test(x)) return active.length ? `Saya menemukan ${active.length} case aktif. Target ${active[0].source}; diagnosis ${active[0].diagnosis.title}. Saya siap mencari akar masalah dan menyiapkan patch.` : `Belum ada case aktif yang cukup kuat untuk dinyatakan bermasalah.`;
+  return `Saya bekerja berdasarkan evidence. Sebutkan target file/gejala agar saya dapat memverifikasi dan menyiapkan perbaikan konkret.`;
 }
-
 
 function recipient(q) {
   const x = q.trim().toLowerCase();
@@ -805,6 +935,66 @@ function recipient(q) {
   if (/^(hai\s+)?medicine\b/.test(x) || /\bmedicine[,:]/.test(x)) return "medicine";
   if (/\b(bcgo|medicine)\b/.test(x)) return x.indexOf("bcgo") < x.indexOf("medicine") ? "bcgo" : "medicine";
   return "medicine";
+}
+
+function currentConversationContext() {
+  const active = activeCases();
+  const c = S.activeCase || active[0] || null;
+  const plan = c?.repairPlan || null;
+  return { active, c, plan, logs: S.logs.slice(0, 5), findings: S.findings.slice(0, 8) };
+}
+
+function autonomousThought(role) {
+  const { active, c, plan, logs, findings } = currentConversationContext();
+  const target = c?.repairPlan?.rootCauseFile || c?.rootCauseFile || c?.source || logs[0]?.fileName || "seluruh organ";
+  const last = logs[0]?.message || c?.signature || "belum ada impuls baru";
+  if (role === "bcgo") {
+    if (active.length) return `Saya sedang menjaga ${active.length} saraf aktif. Fokus saya ${target}. Saya kirim bukti terbaru ke Medicine dan tidak mau menyimpulkan akar masalah hanya dari gejalanya.`;
+    if (findings.length) return `Tidak ada anomali aktif saat ini, tetapi saya masih melihat ${findings.length} finding kontrak. Saya terus membandingkan lintas-file supaya organ tidak dinyatakan sehat terlalu cepat.`;
+    return `Siklus saya sedang tenang. Saya tetap mendengarkan telemetry real-time; impuls terakhir yang saya pegang: ${text(last, 260)}.`;
+  }
+  if (plan?.codePrescription?.ready) return `Saya menemukan jalur source yang cukup kuat pada ${target}. BEFORE dan AFTER sudah terbentuk dari operasi exact. Saya tahan di meja review sampai manusia memeriksa dan menyalin solusi.`;
+  if (c) return `Saya sedang membedah ${target}. Saat ini saya punya status ${c.status} dan ${c.sourceEvidence?.length || plan?.sourceEvidence?.length || 0} bukti source. Kalau bukti belum exact, saya lanjut menelusuri dependency daripada mengarang kode.`;
+  return `Saya tetap belajar dari telemetry yang masuk. Belum ada case aktif yang cukup kuat untuk dibawa ke ruang operasi; saya terus mencari korelasi source dan runtime.`;
+}
+
+async function autonomousConversationTick() {
+  if (!S.autonomous.enabled || S.human.paused || !auth.currentUser) return;
+  const turn = S.autonomous.turn++;
+  const active = activeCases();
+  // Every few turns the pair performs real work, not just small-talk: re-check
+  // the active case or refresh the cross-file evidence surface.
+  if (turn > 0 && turn % 4 === 0) {
+    if (active[0]) {
+      await postSystemMessage("medicine", `Saya lanjut bedah ${active[0].source}. Saya ulangi trace terhadap evidence terbaru agar jalur source → root cause tidak berhenti pada diagnosis lama.`, { kind: "AUTONOMOUS_INVESTIGATION", caseId: active[0].id, autonomous: true });
+      await verifyWithMedicine(active[0].source, { question: "Autonomous re-trace: terus pelajari saraf aktif.", requestedBy: "autonomous_medicine" });
+      emit("autonomous_investigation", { case: active[0] });
+    } else {
+      await scanConsistency();
+      await postSystemMessage("bcgo", `Saya melakukan scan lintas-file lagi. Tidak ada case aktif, jadi saya gunakan waktu ini untuk mencari kontrak yang belum konsisten sebelum menjadi kendala runtime.`, { kind: "AUTONOMOUS_SCAN", autonomous: true });
+      emit("autonomous_scan", { findings: S.findings });
+    }
+  }
+  const role = turn % 2 === 0 ? "bcgo" : "medicine";
+  const message = autonomousThought(role);
+  S.autonomous.lastAt = Date.now();
+  await postSystemMessage(role, message, { kind: "AUTONOMOUS_DISCUSSION", autonomous: true });
+  emit("autonomous_chat", { role, message });
+}
+
+function startAutonomousConversation() {
+  if (S.autonomous.timer) clearInterval(S.autonomous.timer);
+  S.autonomous.timer = setInterval(() => autonomousConversationTick().catch(e => emit("conversation_error", { message: e.message })), 18000);
+  setTimeout(() => autonomousConversationTick().catch(() => {}), 5000);
+}
+
+function stopAutonomousConversation() {
+  if (S.autonomous.timer) clearInterval(S.autonomous.timer);
+  S.autonomous.timer = null;
+}
+
+function isInvestigationCommand(q) {
+  return /cari (penyebab|akar)|penyebab utama|akar masalah|telusuri.*(akar|saraf)|bedah|ruang operasi|operasi|before.*after|kode (rusak|bermasalah|perbaikan)|solusi kode/.test(safeLower(q));
 }
 
 async function sendMessage(msg, role = "human") {
@@ -829,19 +1019,19 @@ async function sendMessage(msg, role = "human") {
   const answer = target === "bcgo" ? bcgoAnswer(t) : medicineAnswer(t);
   await postSystemMessage(target, answer, { replyTo: clientMessageId, kind: "DIRECT_REPLY" });
 
-  const commandRoot = isRootCauseCommand(t);
   const asksMedicine = /medicine|periksa|verifikasi|pastikan|cek|sumber masalah|perbaiki|sembuhkan|patch/.test(safeLower(t));
-
-  if (commandRoot || (target === "bcgo" && asksMedicine)) {
+  if (isInvestigationCommand(t)) {
+    const file = mentionedFile(t) || S.activeCase?.source || activeCases()[0]?.source || null;
+    await postSystemMessage("bcgo", `Baik, saya buka jalur investigasi. Saya tidak akan berhenti di target awal${file ? ` ${file}` : ""}. Medicine saya minta mencari akar masalah, source exact, lalu menyiapkan BEFORE → AFTER bila bukti memungkinkan.`, { kind: "INVESTIGATION_REQUEST", target: file, replyTo: clientMessageId });
+    await verifyWithMedicine(file, { question: t, requestedBy: "human_command" });
+    return;
+  }
+  if (target === "bcgo" && asksMedicine) {
     const file = mentionedFile(t) || activeCases()[0]?.source || null;
-    await postSystemMessage("bcgo", `Saya terima perintahnya. Saya teruskan ke Medicine${file ? ` dengan target awal ${file}` : ""}. Sekarang kita telusuri dari symptom sampai akar masalah, bukan sekadar menebak.`, {
+    await postSystemMessage("bcgo", `Saya meneruskan permintaan Anda ke Medicine${file ? ` untuk ${file}` : ""}. Medicine akan mencari akar masalah dan menyiapkan repair plan.`, {
       kind: "BCGO_TO_MEDICINE", target: file, replyTo: clientMessageId
     });
-    await postSystemMessage("medicine", `Perintah kamu saya terima. Saya mulai investigasi${file ? ` dari ${file}` : ""}: trace dependency → buktikan root cause → cari source exact → siapkan solusi bila evidence cukup.`, {
-      kind: "MEDICINE_COMMAND_ACCEPTED", target: file, replyTo: clientMessageId
-    });
-    await verifyWithMedicine(file, { question: t, requestedBy: "human_command" });
-    await autonomousConversationTick(true);
+    await verifyWithMedicine(file, { question: t, requestedBy: "human_via_bcgo" });
   }
 }
 
@@ -1050,7 +1240,7 @@ async function startConversation() {
 onAuthStateChanged(auth, async user => {
   S.human.uid = user?.uid || null;
   emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
-  if (!user) return;
+  if (!user) { stopAutonomousConversation(); return; }
 
   try {
     const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
@@ -1066,12 +1256,7 @@ onAuthStateChanged(auth, async user => {
 
   startTelemetry();
   startConversation();
-  emit("realtime_status", { runtime: { auth: "LIVE", chat: "LIVE", autonomous: "LIVE", lastRealtimeAt: now() } });
-  autonomousConversationTick(true).catch(e => emit("autonomous_error", { message: e.message }));
-  if (!S.conversation.timerStarted) {
-    S.conversation.timerStarted = true;
-    setInterval(() => autonomousConversationTick(false).catch(e => emit("autonomous_error", { message: e.message })), 30000);
-  }
+  startAutonomousConversation();
 });
 
 const API = {
@@ -1084,6 +1269,10 @@ const API = {
   rejectTreatment,
   setHumanMode,
   requestReview,
+  startAutonomousConversation,
+  stopAutonomousConversation,
+  getCodePrescription: caseId => { const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase; return c?.repairPlan?.codePrescription || buildCodePrescription(c?.repairPlan); },
+  buildCodePrescription,
   getRegistry: () => ({ ...REGISTRY }),
   getState: () => ({ ...S, sourceCache: undefined })
 };
