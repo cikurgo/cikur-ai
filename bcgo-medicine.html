@@ -30,14 +30,8 @@ body{background:radial-gradient(circle at 15% 0%,#102743 0,#07111f 38%,#050b14 1
 <main class="max-w-7xl mx-auto space-y-4"><section class="hero rounded-2xl p-4 md:p-5 stickybar"><div class="flex flex-wrap items-center justify-between gap-3"><div><div class="section-title text-cyan-300">Precision Code Advisor</div><div class="text-xs text-slate-300 mt-1">Diagnose → Prove → Show Source → Build Solution → Copy → Validate</div></div><div class="flex gap-2 flex-wrap"><span class="badge text-emerald-300">NO AUTO-WRITE</span><span class="badge text-cyan-300">HUMAN CONTROL</span><span class="badge text-amber-300">EXACT EVIDENCE</span></div></div></section>
 <header class="panel p-4 md:p-5 flex flex-wrap justify-between items-center gap-3">
   <div><h1 class="text-xl font-bold">💊 BCGO Medicine v2.1 <span class="text-xs text-cyan-300 code">PRECISION ROOT-CAUSE REPAIR</span></h1><p class="text-xs text-slate-400 mt-1">Detect • Re-trace Root Cause • Verify • Repair Plan • Human Approval • Execute • Validate</p></div>
-  <div class="flex gap-2 text-[10px] code"><span id="auth" class="border border-slate-700 px-2 py-1 rounded">AUTH WAITING</span><span id="sys" class="border border-slate-700 px-2 py-1 rounded">BOOT</span><span id="executor" class="border border-slate-700 px-2 py-1 rounded">EXECUTOR WAITING</span></div>
-<div id="runtimeStrip" class="mt-3 grid grid-cols-2 md:grid-cols-5 gap-2 text-[9px]">
-<span id="rtAuth" class="badge text-slate-300">AUTH: WAITING</span>
-<span id="rtFs" class="badge text-slate-300">FIRESTORE: WAITING</span>
-<span id="rtTel" class="badge text-slate-300">TELEMETRY: WAITING</span>
-<span id="rtChat" class="badge text-slate-300">CHAT: WAITING</span>
-<span id="rtAuto" class="badge text-slate-300">AUTONOMOUS: WAITING</span>
-</div></header>
+  <div class="flex gap-2 text-[10px] code flex-wrap"><span id="auth" class="border border-slate-700 px-2 py-1 rounded">AUTH WAITING</span><span id="sys" class="border border-slate-700 px-2 py-1 rounded">BOOT</span><span id="executor" class="border border-slate-700 px-2 py-1 rounded">EXECUTOR WAITING</span></div>
+</header>
 
 <section class="grid grid-cols-2 md:grid-cols-6 gap-3">
   <div class="panel metric p-3"><small class="text-[9px] text-slate-400">ORGAN</small><b id="org" class="block text-2xl">0</b></div>
@@ -51,8 +45,8 @@ body{background:radial-gradient(circle at 15% 0%,#102743 0,#07111f 38%,#050b14 1
 <section class="grid lg:grid-cols-3 gap-4">
   <div class="panel p-4 lg:col-span-2">
     <div class="flex justify-between items-center"><div><h2 class="text-xs uppercase text-slate-400">🧠 BCGO ↔ 💊 Medicine ↔ 👤 Anda</h2><p class="text-[10px] text-slate-500">Satu kanal realtime • pesan dideduplikasi berdasarkan clientMessageId • target dapat dikoreksi Medicine</p></div><span id="chatLive" class="text-[10px] text-emerald-400">LIVE</span></div>
-    <div id="chat" class="mt-3 bg-slate-950 border border-slate-800 rounded-xl p-3 h-80 overflow-y-auto space-y-3"><div class="text-xs text-slate-500">Membuka kanal...</div></div>
-    <form id="form" class="flex gap-2 mt-3"><input id="input" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm outline-none" placeholder="Tanya BCGO / Medicine..."><button id="send" class="bg-indigo-600 rounded-lg px-4 text-sm">Kirim</button></form>
+    <div id="chat" class="mt-3 bg-slate-950 border border-slate-800 rounded-xl p-3 h-80 overflow-y-auto space-y-3"><div class="text-xs text-slate-500">Membuka kanal realtime… BCGO dan Medicine akan tetap berdiskusi berdasarkan kondisi sistem.</div></div>
+    <form id="form" class="flex gap-2 mt-3"><input id="input" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm outline-none" placeholder="Ngobrol atau beri perintah: cari penyebab utama…"><button id="send" class="bg-indigo-600 rounded-lg px-4 text-sm">Kirim</button></form><div class="mt-2 text-[9px] text-slate-600">Contoh: “Halo”, “sedang ngapain?”, “cari penyebab utamanya”, “telusuri saraf ini”, “bawa ke ruang operasi”.</div>
   </div>
   <div class="panel p-4">
     <div class="flex justify-between items-center"><h2 class="text-xs uppercase text-slate-400">🔬 Active Diagnosis</h2><span id="caseState" class="text-[9px] text-slate-500">WAITING</span></div>
@@ -91,7 +85,7 @@ body{background:radial-gradient(circle at 15% 0%,#102743 0,#07111f 38%,#050b14 1
 </main>
 
 <script type="module">
-
+import './bcgo-medicine.js';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'-').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
 const pretty=v=>{if(v==null)return '';if(typeof v==='string')return v;try{return JSON.stringify(v)}catch{return String(v)}};
@@ -163,30 +157,12 @@ function render(c){
  const cs=window.BCGOMedicine?.cases||[];$('casesN').textContent=cs.length;$('active').textContent=cs.filter(x=>!['RECOVERED','REJECTED','FIXED_VERIFIED'].includes(x.status)).length;$('repairs').textContent=cs.filter(x=>['PATCH_APPLIED','FIXED_VERIFIED'].includes(x.status)).length;$('history').innerHTML=cs.map(x=>`<div class="border border-slate-800 rounded-xl p-3"><span class="code text-[10px]">${esc(x.source)}</span><div class="text-[10px] mt-1">${esc(x.diagnosis?.title||'-')}</div><div class="text-[9px] text-amber-400">${esc(x.status)}</div></div>`).join('')||'<div class="text-xs text-slate-500">Belum ada case.</div>';
 }
 
-const setStatus=(id,label,live=false)=>{const el=$(id);if(!el)return;el.textContent=label;el.className=`badge ${live?'text-emerald-300':'text-amber-300'}`;};
-function handleEvent(e){
- const t=e.event,d=e;
- if(t==='ready'){ $('org').textContent=d.registryCount??0;$('sys').textContent='MEDICINE READY';$('executor').textContent=d.executorAvailable?'EXECUTOR READY':'EXECUTOR NOT CONNECTED';}
- if(t==='auth'){setStatus('rtAuth',`AUTH: ${d.status||'REQUIRED'}`,!!d.user);$('auth').textContent=d.user?'AUTH OK':'AUTH REQUIRED';}
- if(t==='runtime_status'){setStatus('rtFs',`RUNTIME: ${d.status}`,d.status==='LIVE');}
- if(t==='telemetry_status'){setStatus('rtTel',`TELEMETRY: ${d.status}`,d.status==='LIVE'||d.status==='CONNECTING');}
- if(t==='telemetry'){$('logs').textContent=d.logs?.length||0;setStatus('rtTel','TELEMETRY: LIVE',true);}
- if(t==='conversation'){$('chat').innerHTML='';seenChat.clear();(d.messages||[]).forEach(m=>chat(m.role==='human'?'human':m.role==='bcgo'?'bcgo':'medicine',m.text,m.clientMessageId||m.id));setStatus('rtChat','CHAT: LIVE',true);}
- if(t==='conversation_error')setStatus('rtChat','CHAT: ERROR');
- if(t==='autonomous'){setStatus('rtAuto',`AUTONOMOUS: ${d.status}`,d.status==='LIVE');if(d.message)event('AUTONOMOUS',{message:d.message});}
- if(t==='case_created'||t==='case_updated'){render(d.case);$('verifyBtn').classList.remove('hidden');}
- if(t==='scan_complete'){const f=d.findings||[];$('findN').textContent=f.length;$('findings').innerHTML=f.length?f.map(x=>`<div class="border border-purple-900 rounded-xl p-3 text-[10px]"><b class="text-purple-300">${esc(x.kind)}</b><div>${esc(x.sourceFile||'')} ${x.targetFile?'→ '+esc(x.targetFile):''}</div><div class="text-slate-400">${x.missing?.length?'Missing: '+esc(x.missing.join(', ')):esc(x.detail||'')}</div></div>`).join(''):'<div class="text-xs text-emerald-400">Tidak ada gap heuristik.</div>';}
- if(t==='local_message'&&d.message?.role)chat(d.message.role==='human'?'human':d.message.role==='bcgo'?'bcgo':'medicine',d.message.text,d.message.clientMessageId||'local');
- if(t==='verification_complete'){renderVerification(d.verification);const c=window.BCGOMedicine?.activeCase;if(c)render(c);}
-}
-window.addEventListener('bcgo:medicine',e=>handleEvent(e.detail));
-
-import('./bcgo-medicine.js').then(()=>{(window.BCGOMedicineEvents||[]).forEach(handleEvent);}).catch(e=>{event('BOOT_ERROR',{message:e.message});$('sys').textContent='BOOT ERROR';});
+window.addEventListener('bcgo:medicine',e=>{const{event:t,...d}=e.detail;event(t,d);if(t==='ready'){$('org').textContent=d.registryCount;$('sys').textContent='MEDICINE READY';$('executor').textContent=d.executorAvailable?'EXECUTOR READY':'EXECUTOR NOT CONNECTED';$('executor').className=`border px-2 py-1 rounded ${d.executorAvailable?'border-emerald-800 text-emerald-300':'border-amber-800 text-amber-300'}`;}if(t==='auth'){$('auth').textContent=d.user?'AUTH OK':'AUTH REQUIRED';}if(t==='realtime_status'){const r=d.runtime||{};const parts=[['auth',r.auth],['telemetry',r.telemetry],['chat',r.chat],['autonomous',r.autonomous]].filter(x=>x[1]);if(parts.length){$('chatLive').textContent=parts.map(x=>x[0].toUpperCase()+':'+x[1]).join(' • ');}}if(t==='autonomous_error')chat('medicine','Saya sedang menjaga kanal diskusi, tetapi satu siklus diskusi gagal dijalankan. Saya tetap lanjut memantau.','autoerr-'+Date.now());if(t==='telemetry')$('logs').textContent=d.logs?.length||0;if(t==='case_created'||t==='case_updated'){render(d.case);$('verifyBtn').classList.remove('hidden');}if(t==='scan_complete'){const f=d.findings||[];$('findN').textContent=f.length;$('findings').innerHTML=f.length?f.map(x=>`<div class="border border-purple-900 rounded-xl p-3 text-[10px]"><b class="text-purple-300">${esc(x.kind)}</b><div>${esc(x.sourceFile||'')} ${x.targetFile?'→ '+esc(x.targetFile):''}</div><div class="text-slate-400">${x.missing?.length?'Missing: '+esc(x.missing.join(', ')):esc(x.detail||'')}</div></div>`).join(''):'<div class="text-xs text-emerald-400">Tidak ada gap heuristik.</div>';}if(t==='conversation'){ $('chat').innerHTML='';seenChat.clear();(d.messages||[]).forEach(m=>chat(m.role==='human'?'human':m.role==='bcgo'?'bcgo':'medicine',m.text,m.clientMessageId||m.id));}if(t==='local_message'&&d.message?.role)chat(d.message.role==='human'?'human':d.message.role==='bcgo'?'bcgo':'medicine',d.message.text,d.message.clientMessageId||'local');if(t==='patch_proposed'||t==='patch_apply_requested'){renderPatch(d.proposal||d.case?.patchProposal||d.case?.repairPlan);if(d.case)render(d.case);}if(t==='patch_apply_complete'){renderPatch(d.proposal);if(d.case)render(d.case);if(d.result?.ok)chat('medicine','Repair berhasil diterapkan oleh executor. Saya lanjutkan validasi pasca-repair.','local-'+(d.request?.requestId||Date.now()));}if(t==='validation_started')$('validation').innerHTML='<div class="text-cyan-300 pulse">Medicine sedang menjalankan validasi pasca-repair...</div>';if(t==='validation_complete'){renderValidation(d.validation);render(d.case);}if(t==='verification_started'){$('verifyState').textContent='MEMERIKSA...';$('verification').innerHTML='<div class="text-cyan-300">Medicine sedang membandingkan evidence dan kontrak lintas-file...</div>';}if(t==='verification_complete'){renderVerification(d.verification);const c=window.BCGOMedicine.activeCase;if(c)render(c);}if(t==='human_control'){const paused=!!d.human?.paused;$('humanMode').textContent=paused?'HUMAN PAUSED':'ASSISTED';$('humanStatus').textContent=paused?'Medicine dijeda oleh manusia. Telemetry tetap boleh dipantau.':'Medicine berjalan dengan pengawasan manusia. Source-code tetap terkunci sampai approval dan executor tepercaya.';$('pause').textContent=paused?'LANJUTKAN MEDICINE':'JEDA MEDICINE';}});
 $('verifyBtn').onclick=async()=>{const c=window.BCGOMedicine.activeCase;const target=c?.source||window.BCGOMedicine.getState().verification?.target||'bcgo-admin.html';try{await window.BCGOMedicine.verifyWithMedicine(target,{question:'Verifikasi target oleh manusia.',requestedBy:'human'});}catch(e){$('verification').innerHTML='<div class="text-rose-300">Verifikasi gagal: '+esc(e.message)+'</div>';}};
 $('form').addEventListener('submit',async e=>{e.preventDefault();const t=$('input').value.trim();if(!t)return;const b=$('send');b.disabled=true;$('input').value='';try{await window.BCGOMedicine.sendMessage(t)}finally{b.disabled=false;$('input').focus()}});
 $('scan').onclick=async()=>{const b=$('scan');b.disabled=true;try{await window.BCGOMedicine.scanConsistency()}finally{b.disabled=false}};
 $('approve').onclick=async()=>{const c=window.BCGOMedicine.activeCase;if(!c)return;const b=$('approve');b.disabled=true;try{render(await window.BCGOMedicine.approveTreatment(c.id))}catch(e){chat('medicine','Approval gagal: '+e.message,'err-'+Date.now())}finally{b.disabled=false}};
-$('apply').onclick=async()=>{const c=window.BCGOMedicine.activeCase;if(!c)return;const b=$('apply');b.disabled=true;try{const x=await window.BCGOMedicine.applyPatch(c.id);render(x.case);if(!x.request.executorAvailable)chat('medicine','Repair sudah dicatat, tetapi executor tepercaya belum terhubung. Source belum berubah.','executor-'+x.request.requestId)}catch(e){chat('medicine','Penerapan repair gagal: '+e.message,'applyerr-'+Date.now())}finally{b.disabled=false}};
+const applyBtn=$('apply');if(applyBtn)applyBtn.onclick=async()=>{const c=window.BCGOMedicine.activeCase;if(!c)return;const b=applyBtn;b.disabled=true;try{const x=await window.BCGOMedicine.applyPatch(c.id);render(x.case);if(!x.request.executorAvailable)chat('medicine','Repair sudah dicatat, tetapi executor tepercaya belum terhubung. Source belum berubah.','executor-'+x.request.requestId)}catch(e){chat('medicine','Penerapan repair gagal: '+e.message,'applyerr-'+Date.now())}finally{b.disabled=false}};
 $('validate').onclick=async()=>{const c=window.BCGOMedicine.activeCase;if(!c)return;const b=$('validate');b.disabled=true;try{renderValidation(await window.BCGOMedicine.validateAfterPatch(c.id));render(c)}catch(e){chat('medicine','Validasi gagal: '+e.message,'valerr-'+Date.now())}finally{b.disabled=false}};
 $('pause').onclick=async()=>{await window.BCGOMedicine.setHumanMode(!window.BCGOMedicine.human?.paused)};
 $('review').onclick=async()=>{const c=window.BCGOMedicine.activeCase;if(!c){chat('medicine','Belum ada case aktif untuk review.','review-none');return;}await window.BCGOMedicine.requestReview(c.id)};
