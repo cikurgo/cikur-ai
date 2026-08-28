@@ -194,7 +194,7 @@ function makeCase(log) {
   postSystemMessage("bcgo", `Saya menemukan evidence pada ${source}: ${d.title}. Saya serahkan ${c.id} ke Medicine untuk verifikasi independen.`, {
     kind: "BCGO_HANDOFF", caseId: c.id, target: source
   });
-  postSystemMessage("medicine", `Case ${c.id} saya terima. Saya akan mencari akar masalah, memeriksa kontrak lintas-file, mengambil kode source yang terbukti bermasalah, lalu menyiapkan solusi BEFORE → AFTER yang bisa direview dan dicopy manusia.`, {
+  postSystemMessage("medicine", `Case ${c.id} saya terima. Saya akan mencari akar masalah, memeriksa kontrak lintas-file, lalu menyiapkan repair plan yang konkret.`, {
     kind: "MEDICINE_ACK", caseId: c.id, target: source
   });
   return c;
@@ -568,6 +568,99 @@ async function scanConsistency(targets = null) {
   return { results: result, findings };
 }
 
+
+function getSourceContext(source, line, radius = 4) {
+  const lines = sourceLines(source);
+  const n = Number(line);
+  if (!Number.isFinite(n) || n < 1 || !lines.length) return { startLine: null, endLine: null, lines: [] };
+  const start = Math.max(1, n - radius);
+  const end = Math.min(lines.length, n + radius);
+  return {
+    startLine: start,
+    endLine: end,
+    lines: lines.slice(start - 1, end).map((code, i) => ({
+      line: start + i,
+      code
+    }))
+  };
+}
+
+function sourceFingerprint(value) {
+  let h = 2166136261;
+  for (const ch of String(value ?? "")) {
+    h ^= ch.charCodeAt(0);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+function operationRisk(op) {
+  if (!op?.before || !op?.after) return "HIGH";
+  if (op.type !== "REPLACE_EXACT") return "MEDIUM";
+  if (op.before.length > 5000 || op.after.length > 7000) return "MEDIUM";
+  return "LOW";
+}
+
+function buildCodePrescription(plan) {
+  const p = plan || {};
+  const ops = Array.isArray(p.operations) ? p.operations : [];
+  const evidence = Array.isArray(p.sourceEvidence) ? p.sourceEvidence : [];
+  const items = ops.slice(0, 12).map((op, index) => {
+    const ev = evidence.find(e =>
+      e?.file === op.file &&
+      (e?.line == null || op.line == null || Number(e.line) === Number(op.line))
+    ) || evidence.find(e => e?.file === op.file);
+
+    const context = p._sourceContext?.[index] || null;
+    return {
+      index,
+      file: op.file || null,
+      line: op.line ?? null,
+      type: op.type || "REPLACE_EXACT",
+      before: String(op.before || ""),
+      after: String(op.after || ""),
+      reason: text(op.reason || "Perubahan diturunkan dari source evidence.", 1200),
+      evidenceStrength: ev?.evidenceStrength || "UNVERIFIED",
+      evidenceReason: text(ev?.reason || ev?.evidenceReason || "", 1400),
+      context,
+      risk: operationRisk(op),
+      beforeHash: sourceFingerprint(op.before),
+      afterHash: sourceFingerprint(op.after)
+    };
+  });
+
+  const exact = items.length > 0 &&
+    items.every(x => x.type === "REPLACE_EXACT" && x.before && x.after);
+  const highEvidence = items.some(x => x.evidenceStrength === "HIGH");
+  const rootProven = ["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE", "CONTRACT_ROOT_CAUSE_IDENTIFIED"]
+    .includes(p.rootCauseStatus);
+
+  return {
+    ready: !!(p.precisionGate === true && exact && highEvidence && rootProven),
+    status: p.precisionGate === true && exact && highEvidence && rootProven ? "READY_TO_COPY" : "REVIEW_REQUIRED",
+    targetFile: p.rootCauseFile || p.target || null,
+    rootCauseStatus: p.rootCauseStatus || "UNPROVEN",
+    evidenceCount: evidence.length,
+    items,
+    instruction: p.precisionGate === true && exact && highEvidence && rootProven
+      ? "Solusi berasal dari operasi exact yang terikat pada source evidence. Review BEFORE/AFTER lalu copy secara manual."
+      : "Medicine belum memiliki kombinasi root cause, source exact, evidence HIGH, dan operasi exact yang cukup untuk menyatakan solusi siap copy."
+  };
+}
+
+async function attachPrescription(plan) {
+  const p = plan || {};
+  p._sourceContext = {};
+  for (let i = 0; i < (p.operations || []).length; i++) {
+    const op = p.operations[i];
+    if (!op?.file || !op?.line) continue;
+    const src = await fetchFile(op.file);
+    p._sourceContext[i] = src.ok ? getSourceContext(src.text, op.line, 4) : null;
+  }
+  p.codePrescription = buildCodePrescription(p);
+  return p;
+}
+
 function buildRepairPlan(c, verification) {
   const d = c.diagnosis;
   const target = c.source;
@@ -642,7 +735,11 @@ async function enrichRepairPlan(c, verification) {
   const exactEvidence = plan.sourceEvidence.some(e => e.evidenceStrength === "HIGH");
   const rootCauseProven = ["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE", "CONTRACT_ROOT_CAUSE_IDENTIFIED"].includes(plan.rootCauseStatus);
   const operationMatchesRoot = plan.operations.length > 0 && plan.operations.every(op => op.file === plan.rootCauseFile && op.type === "REPLACE_EXACT" && op.before && op.after);
-  if (plan.operations.length && exactEvidence && rootCauseProven && operationMatchesRoot) {
+  const beforeStillExists = plan.operations.length > 0 && plan.operations.every(op => {
+    const ev = plan.sourceEvidence.find(e => e.file === op.file && Number(e.line) === Number(op.line));
+    return ev?.before ? String(ev.before) === String(op.before) : true;
+  });
+  if (plan.operations.length && exactEvidence && rootCauseProven && operationMatchesRoot && beforeStillExists) {
     plan.status = "PROPOSED";
     plan.blockReason = null;
     plan.precisionGate = true;
@@ -651,57 +748,7 @@ async function enrichRepairPlan(c, verification) {
     plan.blockReason = "PRECISION GATE: Medicine belum menemukan lokasi source dan operasi exact yang terbukti. Source tidak akan diubah berdasarkan tebakan.";
     plan.precisionGate = false;
   }
-  return plan;
-}
-
-
-function buildCodePrescription(proposalOrPlan) {
-  const p = proposalOrPlan?.repairPlan || proposalOrPlan || {};
-  const ops = Array.isArray(p.operations) ? p.operations : [];
-  const evidence = Array.isArray(p.sourceEvidence) ? p.sourceEvidence : [];
-  const items = [];
-
-  for (const op of ops.slice(0, 12)) {
-    if (!op || !op.file || !op.before || !op.after) continue;
-    const matchingEvidence = evidence.filter(e =>
-      e?.file === op.file &&
-      (e?.line == null || op.line == null || Number(e.line) === Number(op.line))
-    );
-    items.push({
-      file: op.file,
-      line: op.line ?? null,
-      type: op.type || "REPLACE_EXACT",
-      before: String(op.before),
-      after: String(op.after),
-      reason: text(op.reason || "Perubahan exact yang diturunkan dari source evidence.", 900),
-      evidenceStrength: matchingEvidence.some(e => e?.evidenceStrength === "HIGH") ? "HIGH" :
-        (matchingEvidence.length ? (matchingEvidence[0].evidenceStrength || "MEDIUM") : "UNVERIFIED"),
-      evidenceReason: text(matchingEvidence[0]?.reason || "", 1200)
-    });
-  }
-
-  const exact = items.length > 0 &&
-    items.every(x => x.type === "REPLACE_EXACT" && x.before && x.after) &&
-    items.some(x => x.evidenceStrength === "HIGH");
-
-  return {
-    ready: exact && p.precisionGate === true,
-    status: exact && p.precisionGate === true ? "READY_TO_COPY" : "REVIEW_REQUIRED",
-    targetFile: p.rootCauseFile || p.target || null,
-    rootCauseStatus: p.rootCauseStatus || "UNPROVEN",
-    diagnosis: p.diagnosis || null,
-    evidenceCount: evidence.length,
-    items,
-    instruction: exact
-      ? "Kode solusi dibuat dari BEFORE/AFTER exact yang terikat pada source evidence. Review lalu salin hanya setelah manusia menyetujuinya."
-      : "Medicine belum memiliki BEFORE/AFTER exact + evidence HIGH yang cukup untuk menyatakan solusi siap copy."
-  };
-}
-
-function getCodePrescription(caseId = null) {
-  const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase;
-  if (!c) return null;
-  return buildCodePrescription(c.patchProposal || c.repairPlan || null);
+  return attachPrescription(plan);
 }
 
 function canApprove(c) {
@@ -810,8 +857,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     S.patchProposals.unshift(proposal);
     S.patchProposals = S.patchProposals.slice(0, 40);
     S.activeCase.patchProposal = proposal;
-    proposal.codePrescription = buildCodePrescription(proposal);
-    emit("patch_proposed", { proposal, case: S.activeCase, codePrescription: proposal.codePrescription });
+    emit("patch_proposed", { proposal, case: S.activeCase });
   } else {
     // No active case: perform an independent scan and report only evidence,
     // never promote a target to a repairable diagnosis from a guess.
@@ -868,7 +914,7 @@ function medicineAnswer(q) {
   const file = mentionedFile(q);
   if (/sinkron|synchron|jumlah|count|validasi|mitra|tidak sesuai|tidak sinkron/.test(x)) {
     const target = file || active[0]?.source || "bcgo-admin.html";
-    return `Saya akan memeriksa ${target} lintas-file: sumber data, kontrak field, engine, renderer Admin, dan telemetry. Bila akar masalah terbukti, saya susun perubahan kode konkret, bukan sekadar diagnosis.`;
+    return `Saya akan memeriksa ${target} lintas-file: sumber data, kontrak field, engine, renderer Admin, dan telemetry. Jika akar masalah terbukti, saya ambil source exact lalu susun BEFORE → AFTER yang konkret untuk direview manusia.`;
   }
   if (/obat|perbaiki|sembuhkan|treatment|patch|tangan/.test(x)) {
     if (!S.activeCase) return "Belum ada case aktif yang bisa saya obati.";
@@ -1155,7 +1201,7 @@ const API = {
   rejectTreatment,
   setHumanMode,
   requestReview,
-  getCodePrescription,
+  getCodePrescription: caseId => { const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase; return c?.repairPlan?.codePrescription || buildCodePrescription(c?.repairPlan); },
   buildCodePrescription,
   getRegistry: () => ({ ...REGISTRY }),
   getState: () => ({ ...S, sourceCache: undefined })
