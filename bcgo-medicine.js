@@ -98,19 +98,7 @@ const S = {
   validation: null,
   sourceCache: new Map(),
   lastClientMessageId: null,
-  eventSeq: 0,
-  runtime: {
-    auth: "WAITING",
-    firestore: "WAITING",
-    telemetry: "WAITING",
-    chat: "WAITING",
-    autonomous: "STOPPED",
-    bootedAt: null,
-    lastRealtimeAt: null,
-    error: null
-  },
-  runtimeStarted: false,
-  autonomousTimer: null
+  eventSeq: 0
 };
 
 const emit = (event, p = {}) => window.dispatchEvent(new CustomEvent("bcgo:medicine", {
@@ -212,49 +200,17 @@ function makeCase(log) {
   return c;
 }
 
-function setRuntime(key, value, extra = {}) {
-  S.runtime[key] = value;
-  S.runtime.lastRealtimeAt = now();
-  emit("realtime_status", { runtime: { ...S.runtime }, ...extra });
-}
-
 function startTelemetry() {
-  if (S.listeners.some(x => x && x.__medicineTelemetry)) return;
-  setRuntime("telemetry", "CONNECTING");
-
-  const handleLogs = logs => {
+  if (!window.CikurCloud?.listenSystemLogs) {
+    emit("telemetry_unavailable");
+    return;
+  }
+  const unsub = window.CikurCloud.listenSystemLogs(logs => {
     S.logs = Array.isArray(logs) ? logs : [];
-    setRuntime("telemetry", "LIVE", { count: S.logs.length });
     emit("telemetry", { logs: S.logs });
     for (const l of S.logs.slice(0, 60)) makeCase(l);
-  };
-
-  try {
-    let unsub = null;
-    if (window.CikurCloud?.listenSystemLogs) {
-      unsub = window.CikurCloud.listenSystemLogs(handleLogs);
-    } else {
-      // Fallback: do not depend on a global CikurCloud bridge.
-      // Firestore Rules remain authoritative; this listener still requires the verified Admin session.
-      const q = query(collection(db, "system_logs"), limit(120));
-      unsub = onSnapshot(q, snapshot => {
-        const logs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        logs.sort((a, b) => String(b.createdAt || b.timestamp || "").localeCompare(String(a.createdAt || a.timestamp || "")));
-        handleLogs(logs);
-      }, e => {
-        setRuntime("telemetry", "ERROR", { error: e.message });
-        emit("telemetry_error", { message: e.message });
-      });
-    }
-    if (typeof unsub === "function") {
-      const wrapped = () => unsub();
-      wrapped.__medicineTelemetry = true;
-      S.listeners.push(wrapped);
-    }
-  } catch (e) {
-    setRuntime("telemetry", "ERROR", { error: e.message });
-    emit("telemetry_error", { message: e.message });
-  }
+  });
+  if (typeof unsub === "function") S.listeners.push(unsub);
 }
 
 async function fetchFile(name) {
@@ -1198,8 +1154,6 @@ async function requestReview(caseId) {
 }
 
 async function startConversation() {
-  if (S.listeners.some(x => x && x.__medicineConversation)) return;
-  setRuntime("chat", "CONNECTING");
   try {
     const q = query(collection(db, "medicine_messages"), orderBy("createdAt", "desc"), limit(200));
     const unsub = onSnapshot(q, snapshot => {
@@ -1210,100 +1164,31 @@ async function startConversation() {
         seen.add(key);
         return true;
       });
-      setRuntime("chat", "LIVE", { count: S.messages.length });
       emit("conversation", { messages: S.messages });
-    }, e => {
-      setRuntime("chat", "ERROR", { error: e.message });
-      emit("conversation_error", { message: e.message });
-    });
-    if (typeof unsub === "function") {
-      const wrapped = () => unsub();
-      wrapped.__medicineConversation = true;
-      S.listeners.push(wrapped);
-    }
-  } catch (e) {
-    setRuntime("chat", "ERROR", { error: e.message });
-    emit("conversation_error", { message: e.message });
-  }
-}
-
-async function autonomousTick() {
-  if (!S.runtimeStarted || S.human.paused) return;
-  try {
-    emit("autonomous_tick", { runtime: { ...S.runtime }, activeCases: activeCases().length });
-    const active = activeCases();
-    if (active[0] && !active[0].verification) {
-      await verifyWithMedicine(active[0].source, { question: "Autonomous nerve observation", requestedBy: "medicine_autonomous" });
-      return;
-    }
-    if (active.length) {
-      const c = active[0];
-      await postSystemMessage("bcgo", `Saya masih mengawasi ${c.source}. Medicine sedang menelusuri evidence sebelum kita menyatakan akar masalah.`, { kind: "AUTONOMOUS_OBSERVATION", caseId: c.id });
-      await postSystemMessage("medicine", `Saya lanjutkan pemeriksaan ${c.source}. Saya belum akan membuka ruang operasi sebelum source evidence dan operasi exact benar-benar terverifikasi.`, { kind: "AUTONOMOUS_INVESTIGATION", caseId: c.id });
-    } else {
-      await postSystemMessage("bcgo", `Telemetry saat ini stabil. Saya tetap memantau ${Object.keys(REGISTRY).length} organ dan menunggu perubahan nyata.`, { kind: "AUTONOMOUS_PATROL" });
-      await postSystemMessage("medicine", `Patroli saraf berlanjut. Tidak ada case aktif; saya tidak akan mengarang masalah yang tidak didukung evidence.`, { kind: "AUTONOMOUS_PATROL" });
-    }
-  } catch (e) {
-    S.runtime.error = e.message;
-    emit("autonomous_error", { message: e.message });
-  }
-}
-
-function startAutonomousEngine() {
-  if (S.autonomousTimer) return;
-  S.runtime.autonomous = "LIVE";
-  emit("autonomous_status", { runtime: { ...S.runtime } });
-  autonomousTick();
-  S.autonomousTimer = setInterval(autonomousTick, 30000);
-}
-
-function stopRuntime() {
-  for (const unsub of S.listeners.splice(0)) { try { unsub(); } catch (_) {} }
-  if (S.autonomousTimer) { clearInterval(S.autonomousTimer); S.autonomousTimer = null; }
-  S.runtimeStarted = false;
-  S.runtime.autonomous = "STOPPED";
+    }, e => emit("conversation_error", { message: e.message }));
+    if (typeof unsub === "function") S.listeners.push(unsub);
+  } catch (e) { emit("conversation_error", { message: e.message }); }
 }
 
 onAuthStateChanged(auth, async user => {
-  stopRuntime();
   S.human.uid = user?.uid || null;
-  S.runtime.auth = user ? "SIGNED_IN" : "SIGNED_OUT";
-  emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null, runtime: { ...S.runtime } });
-  if (!user) {
-    S.runtime.firestore = "AUTH_REQUIRED";
-    S.runtime.telemetry = "AUTH_REQUIRED";
-    S.runtime.chat = "AUTH_REQUIRED";
-    emit("realtime_status", { runtime: { ...S.runtime } });
-    return;
-  }
+  emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
+  if (!user) return;
 
-  S.runtime.firestore = "CHECKING";
-  emit("realtime_status", { runtime: { ...S.runtime } });
   try {
     const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
     if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
-      S.runtime.auth = "NOT_ADMIN";
-      S.runtime.firestore = "DENIED";
-      emit("auth", { user: null, deniedReason: "NOT_ADMIN", runtime: { ...S.runtime } });
+      emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
       emit("local_message", { message: { role: "medicine", text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.", clientMessageId: "auth-denied" } });
       return;
     }
-    S.runtime.auth = "ADMIN_VERIFIED";
-    S.runtime.firestore = "CONNECTED";
-    S.runtime.bootedAt = now();
-    S.runtimeStarted = true;
-    emit("realtime_status", { runtime: { ...S.runtime } });
-    startTelemetry();
-    await startConversation();
-    startAutonomousEngine();
-    emit("runtime_ready", { runtime: { ...S.runtime } });
   } catch (e) {
-    S.runtime.firestore = "ERROR";
-    S.runtime.error = e.message;
-    emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED", error: e.message, runtime: { ...S.runtime } });
-    emit("realtime_status", { runtime: { ...S.runtime } });
+    emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED" });
+    return;
   }
+
+  startTelemetry();
+  startConversation();
 });
 
 const API = {
