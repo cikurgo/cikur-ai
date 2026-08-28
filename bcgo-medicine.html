@@ -8,27 +8,26 @@
 <style>
 body{font-family:Inter,Arial,sans-serif}.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.panel{background:#0f172a;border:1px solid #1e293b;border-radius:16px}.pre{white-space:pre-wrap;word-break:break-word}.pulse{animation:pulse 1.8s infinite}@keyframes pulse{50%{opacity:.45}}
 </style>
-<style>
-/* BCGO ADMIN SUPER AUTH GATE — shared with bcgo-admin.html */
-.auth-gate{position:fixed;inset:0;z-index:5000;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(135deg,rgba(7,16,31,.97),rgba(15,23,42,.98));backdrop-filter:blur(10px)}
-.auth-card{width:min(430px,100%);background:rgba(255,255,255,.98);color:#111827;border:1px solid rgba(255,255,255,.18);border-radius:24px;box-shadow:0 30px 90px rgba(0,0,0,.45);padding:26px}
-.auth-brand{display:flex;align-items:center;gap:11px;margin-bottom:22px}.auth-brand img{width:42px;height:42px;object-fit:contain;border-radius:11px;background:#fff;padding:3px;border:1px solid #e5eaf0}.auth-brand-name{font-size:16px;font-weight:900}.auth-brand-sub{font-size:8px;color:#64748b;letter-spacing:1px;font-weight:800;text-transform:uppercase;margin-top:2px}
-.auth-kicker{font-size:9px;color:#dc2626;font-weight:900;letter-spacing:1.4px;text-transform:uppercase}.auth-title{font-size:24px;font-weight:950;letter-spacing:-.8px;margin-top:6px}.auth-copy{font-size:10px;line-height:1.55;color:#64748b;margin-top:7px}
-.auth-tabs{display:grid;grid-template-columns:1fr 1fr;background:#f1f5f9;border-radius:11px;padding:3px;margin:18px 0 15px}.auth-tab{border:0;background:transparent;padding:9px;border-radius:8px;font-size:9px;font-weight:850;color:#64748b}.auth-tab.active{background:#fff;color:#111827;box-shadow:0 2px 10px rgba(15,23,42,.05)}
-.auth-form{display:flex;flex-direction:column;gap:10px}.auth-field label{display:block;font-size:8px;color:#64748b;font-weight:850;margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px}.auth-field input{width:100%;border:1px solid #e5eaf0;border-radius:10px;padding:11px 12px;font-size:10px;outline:none;background:#fff}.auth-field input:focus{border-color:#cbd5e1;box-shadow:0 0 0 3px rgba(220,38,38,.07)}
-.auth-submit{border:0;border-radius:10px;padding:11px;background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;font-size:10px;font-weight:900;margin-top:3px}.auth-submit:disabled{opacity:.6;cursor:wait}.auth-note{font-size:8px;line-height:1.45;color:#64748b;margin-top:12px}.auth-message{display:none;border-radius:10px;padding:9px 10px;font-size:8px;line-height:1.4;margin-bottom:10px}.auth-message.show{display:block}.auth-message.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}.auth-message.ok{background:#ecfdf3;color:#15803d;border:1px solid #bbf7d0}.auth-message.info{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}.auth-footer{font-size:7px;color:#94a3b8;text-align:center;margin-top:16px}
-.pending-lock{position:fixed;inset:0;z-index:5100;background:rgba(7,16,31,.82);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:20px}.pending-lock.show{display:flex}.pending-card{width:min(410px,100%);background:#fff;color:#111827;border-radius:20px;padding:25px;text-align:center;box-shadow:0 25px 70px rgba(0,0,0,.3)}.pending-icon{width:48px;height:48px;border-radius:14px;background:#fff7ed;color:#c2410c;display:flex;align-items:center;justify-content:center;margin:0 auto 12px}.pending-icon svg{width:22px;height:22px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}.pending-card h3{font-size:16px;font-weight:900}.pending-card p{font-size:9px;color:#64748b;line-height:1.55;margin-top:7px}.pending-card button{margin-top:14px;border:0;background:#111827;color:#fff;border-radius:9px;padding:9px 13px;font-size:9px;font-weight:850}
-body.auth-locked #protectedApp{display:none!important} body.auth-ready .auth-gate{display:none} body.auth-ready #protectedApp{display:block}
-</style>
+/* ============================================================
+   BCGO SUPER ADMIN ACCESS GATE
+   Shared Firebase session via cikur-config.js
+   ============================================================ */
+body.auth-pending > #protectedApp{visibility:hidden;pointer-events:none}
+.auth-gate{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(2,6,23,.96);backdrop-filter:blur(10px)}
+.auth-gate.hidden{display:none}
+.auth-card{width:min(430px,100%);background:#0f172a;border:1px solid #334155;border-radius:22px;padding:24px;box-shadow:0 25px 80px rgba(0,0,0,.55)}
+.auth-brand{display:flex;align-items:center;gap:12px;margin-bottom:18px}.auth-brand img{width:42px;height:42px;border-radius:12px;object-fit:cover}.auth-brand-name{font-weight:800;color:#fff}.auth-brand-sub{font-size:10px;color:#64748b;margin-top:2px}.auth-kicker{font-size:9px;letter-spacing:.18em;color:#38bdf8;font-weight:800}.auth-title{font-size:22px;font-weight:800;color:#fff;margin-top:5px}.auth-copy{font-size:11px;line-height:1.7;color:#94a3b8;margin-top:8px}.auth-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:18px 0 12px}.auth-tab{border:1px solid #334155;background:#111827;color:#94a3b8;border-radius:10px;padding:9px;font-size:11px;font-weight:700}.auth-tab.active{border-color:#4f46e5;background:#312e81;color:#fff}.auth-message{display:none;border-radius:10px;padding:9px 10px;font-size:10px;line-height:1.5;margin-bottom:10px}.auth-message.show{display:block}.auth-message.error{background:#450a0a;border:1px solid #7f1d1d;color:#fecaca}.auth-message.ok{background:#052e16;border:1px solid #166534;color:#bbf7d0}.auth-field{margin:9px 0}.auth-field label{display:block;font-size:9px;color:#94a3b8;margin-bottom:5px}.auth-field input{width:100%;box-sizing:border-box;background:#020617;border:1px solid #334155;color:#e2e8f0;border-radius:10px;padding:11px 12px;font-size:12px;outline:none}.auth-field input:focus{border-color:#6366f1}.auth-submit,.pending-card button{width:100%;border:0;border-radius:10px;background:#4f46e5;color:#fff;padding:11px 12px;font-size:11px;font-weight:800;margin-top:8px}.auth-submit:disabled{opacity:.55}.auth-note{font-size:9px;color:#64748b;line-height:1.6;margin-top:12px}.auth-footer{font-size:8px;color:#475569;text-align:center;margin-top:16px}.pending-lock{position:fixed;inset:0;z-index:100000;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(2,6,23,.78);backdrop-filter:blur(8px)}.pending-lock.show{display:flex}.pending-card{width:min(430px,100%);background:#fff;color:#0f172a;border-radius:20px;padding:25px;text-align:center;box-shadow:0 25px 80px rgba(0,0,0,.55)}.pending-icon{width:42px;height:42px;margin:0 auto 10px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff7ed;color:#c2410c;font-size:20px}.pending-card h3{font-size:16px;margin:0 0 8px;font-weight:800}.pending-card p{font-size:10px;line-height:1.7;color:#64748b;margin:0}.pending-card button{width:auto;min-width:90px;background:#0f172a;margin-top:14px}.auth-status{position:fixed;right:12px;top:12px;z-index:99998;font:700 9px ui-monospace,monospace;background:#022c22;color:#6ee7b7;border:1px solid #065f46;border-radius:999px;padding:7px 9px;display:none}.auth-status.show{display:block}
+
 </head>
-<body class="auth-locked bg-slate-950 text-slate-100 min-h-screen p-3 md:p-5">
+<body class="bg-slate-950 text-slate-100 min-h-screen p-3 md:p-5 auth-pending">
+
 <div class="auth-gate" id="authGate">
   <div class="auth-card">
     <div class="auth-brand"><img src="cikurgoicon.png" alt="CIKUR GO"><div><div class="auth-brand-name">CIKUR GO</div><div class="auth-brand-sub">BCGO Secure Control Center</div></div></div>
-    <div class="auth-kicker">SECURE ACCESS</div>
+    <div class="auth-kicker">SUPER ADMIN ACCESS</div>
     <div class="auth-title" id="authTitle">Masuk ke BCGO</div>
-    <div class="auth-copy">Halaman ini hanya dapat diakses oleh akun yang terdaftar dan telah disetujui sebagai administrator.</div>
-    <div class="auth-tabs"><button class="auth-tab active" id="loginTab" type="button" onclick="showAuthMode('login')">Masuk</button><button class="auth-tab" id="registerTab" type="button" onclick="showAuthMode('register')">Registrasi</button></div>
+    <div class="auth-copy">Halaman ini hanya dapat digunakan oleh akun administrator aktif dengan peran <b>super_admin</b>. Sesi Firebase yang sama digunakan di bcgo-admin.html, BCGO Monitor, dan BCGO Medicine.</div>
+    <div class="auth-tabs"><button class="auth-tab active" id="loginTab" type="button">Masuk</button><button class="auth-tab" id="registerTab" type="button">Registrasi</button></div>
     <div class="auth-message" id="authMessage"></div>
     <form class="auth-form" id="authForm">
       <div class="auth-field"><label>Email</label><input id="authEmail" type="email" autocomplete="email" placeholder="admin@cikurgo.id" required></div>
@@ -36,13 +35,19 @@ body.auth-locked #protectedApp{display:none!important} body.auth-ready .auth-gat
       <div class="auth-field" id="confirmField" style="display:none"><label>Konfirmasi Password</label><input id="authConfirm" type="password" autocomplete="new-password" placeholder="Ulangi password" minlength="6"></div>
       <button class="auth-submit" id="authSubmit" type="submit">Masuk ke Dashboard</button>
     </form>
-    <div class="auth-note" id="authNote">Akses admin diverifikasi melalui Firebase Authentication dan status administrator.</div>
+    <div class="auth-note" id="authNote">Login di sini tidak membuat Firebase App baru. Sesi memakai koneksi dari cikur-config.js.</div>
     <div class="auth-footer">CIKUR GO • BCGO Intelligence • Secure Operations</div>
   </div>
 </div>
-<div class="pending-lock" id="pendingLock"><div class="pending-card"><div class="pending-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></div><h3>Registrasi menunggu persetujuan</h3><p id="pendingText">Akun berhasil dibuat, tetapi belum diberi hak administrator. Hubungi super admin CIKUR GO untuk mengaktifkan akses.</p><button type="button" onclick="secureLogout()">Keluar</button></div></div>
-
-
+<div class="pending-lock" id="pendingLock">
+  <div class="pending-card">
+    <div class="pending-icon">◷</div>
+    <h3>Akses menunggu persetujuan</h3>
+    <p id="pendingText">Akun terdeteksi, tetapi belum memiliki status super_admin aktif. Hubungi Super Admin CIKUR GO untuk mengaktifkan akses.</p>
+    <button id="pendingLogout" type="button">Keluar</button>
+  </div>
+</div>
+<div class="auth-status" id="authStatus">SUPER ADMIN • VERIFIED</div>
 <main id="protectedApp" class="max-w-7xl mx-auto space-y-4">
 <header class="panel p-4 md:p-5 flex flex-wrap justify-between items-center gap-3">
   <div><h1 class="text-xl font-bold">💊 BCGO Medicine v1.9 <span class="text-xs text-cyan-300 code">PRECISION ROOT-CAUSE REPAIR</span></h1><p class="text-xs text-slate-400 mt-1">Detect • Re-trace Root Cause • Verify • Repair Plan • Human Approval • Execute • Validate</p></div>
@@ -98,34 +103,35 @@ body.auth-locked #protectedApp{display:none!important} body.auth-ready .auth-gat
 <section class="panel p-4"><h2 class="text-xs uppercase text-slate-400">🧾 Medical Case History</h2><div id="history" class="mt-3 grid md:grid-cols-2 xl:grid-cols-3 gap-2"></div></section>
 </main>
 
+
 <script type="module">
-import { auth, db } from './cikur-config.js';
-import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { db, auth } from "./cikur-config.js";
+import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { doc, getDoc, onSnapshot, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-let authMode='login';
-let currentUser=null;
-let authReady=false;
-let appStarted=false;
+const gate=document.getElementById("authGate"), pending=document.getElementById("pendingLock"), form=document.getElementById("authForm");
+const msg=document.getElementById("authMessage"), submit=document.getElementById("authSubmit"), status=document.getElementById("authStatus");
+const confirmField=document.getElementById("confirmField"), loginTab=document.getElementById("loginTab"), registerTab=document.getElementById("registerTab"), note=document.getElementById("authNote");
+let mode="login", adminUnsub=null, verified=false, authReady=false;
 
-function authMessage(text,type='error'){const el=document.getElementById('authMessage');el.textContent=text;el.className=`auth-message show ${type}`;}
-function hideAuthMessage(){const el=document.getElementById('authMessage');el.textContent='';el.className='auth-message';}
-function friendlyAuthError(error){const code=error?.code||'';const map={'auth/invalid-credential':'Email atau password salah.','auth/invalid-login-credentials':'Email atau password salah.','auth/email-already-in-use':'Email sudah terdaftar. Silakan masuk.','auth/weak-password':'Password terlalu lemah. Gunakan minimal 6 karakter.','auth/invalid-email':'Format email tidak valid.','auth/too-many-requests':'Terlalu banyak percobaan. Coba lagi beberapa saat.','auth/network-request-failed':'Koneksi internet bermasalah. Coba lagi.','auth/user-disabled':'Akun ini dinonaktifkan. Hubungi super admin.'};return map[code]||error?.message||'Terjadi kesalahan autentikasi.';}
-async function verifyAdmin(user){try{const snap=await getDoc(doc(db,'admin_users',user.uid));return snap.exists()&&snap.data()?.active===true;}catch(e){console.error('Admin verification failed:',e);return false;}}
-function setLocked(){document.body.classList.remove('auth-ready');document.body.classList.add('auth-locked');document.getElementById('authGate').style.display='flex';}
-function setReady(){document.body.classList.remove('auth-locked');document.body.classList.add('auth-ready');}
-window.showAuthMode=function(mode){authMode=mode;const reg=mode==='register';document.getElementById('loginTab').classList.toggle('active',!reg);document.getElementById('registerTab').classList.toggle('active',reg);document.getElementById('authTitle').textContent=reg?'Daftarkan Akun Admin':'Masuk ke BCGO';document.getElementById('authSubmit').textContent=reg?'Daftar & Ajukan Akses':'Masuk ke Dashboard';document.getElementById('confirmField').style.display=reg?'block':'none';document.getElementById('authConfirm').required=reg;document.getElementById('authNote').textContent=reg?'Setelah registrasi, akun tetap terkunci sampai disetujui oleh super admin CIKUR GO.':'Akses admin diverifikasi melalui Firebase Authentication dan status administrator.';hideAuthMessage();};
-window.secureLogout=async function(){await signOut(auth);currentUser=null;setLocked();document.getElementById('pendingLock').classList.remove('show');document.getElementById('authForm').reset();window.showAuthMode('login');};
+function showMessage(text,type="error"){msg.textContent=text;msg.className=`auth-message show ${type}`;}
+function clearMessage(){msg.textContent="";msg.className="auth-message";}
+function setMode(next){mode=next;const reg=mode==="register";loginTab.classList.toggle("active",!reg);registerTab.classList.toggle("active",reg);confirmField.style.display=reg?"block":"none";document.getElementById("authConfirm").required=reg;document.getElementById("authTitle").textContent=reg?"Daftarkan Akun Admin":"Masuk ke BCGO";submit.textContent=reg?"Daftar & Ajukan Akses":"Masuk ke Dashboard";note.textContent=reg?"Akun baru tetap terkunci sampai disetujui dan diberi role super_admin.":"Sesi memakai Firebase Auth yang sama dengan bcgo-admin.html.";clearMessage();}
+function friendly(e){const c=e?.code||"";return ({"auth/invalid-credential":"Email atau password salah.","auth/invalid-login-credentials":"Email atau password salah.","auth/email-already-in-use":"Email sudah terdaftar. Silakan masuk.","auth/weak-password":"Password terlalu lemah. Minimal 6 karakter.","auth/invalid-email":"Format email tidak valid.","auth/too-many-requests":"Terlalu banyak percobaan. Coba lagi.","auth/network-request-failed":"Koneksi internet bermasalah. Coba lagi."})[c]||e?.message||"Autentikasi gagal.";}
+async function checkSuperAdmin(user){if(!user)return {ok:false,reason:"NO_SESSION"};try{const snap=await getDoc(doc(db,"admin_users",user.uid));const d=snap.exists()?snap.data():null;if(d?.active===true&&d?.role==="super_admin")return {ok:true,data:d};if(!snap.exists())return {ok:false,reason:"NOT_REGISTERED"};if(d?.active!==true)return {ok:false,reason:"INACTIVE",data:d};return {ok:false,reason:"NOT_SUPER_ADMIN",data:d};}catch(e){return {ok:false,reason:"CHECK_FAILED",error:e};}}
+function openLogin(message=""){gate.classList.remove("hidden");pending.classList.remove("show");status.classList.remove("show");document.body.classList.add("auth-pending");if(message)showMessage(message);}
+function enter(user){verified=true;gate.classList.add("hidden");pending.classList.remove("show");status.classList.add("show");document.body.classList.remove("auth-pending");window.BCGO_SUPER_ADMIN={uid:user.uid,email:user.email||null,verified:true};}
+function lock(user,result){verified=false;gate.classList.add("hidden");status.classList.remove("show");document.body.classList.add("auth-pending");const reason=result?.reason;document.getElementById("pendingText").textContent=reason==="NOT_REGISTERED"?`Akun ${user.email||"ini"} belum terdaftar sebagai administrator CIKUR GO.`:reason==="NOT_SUPER_ADMIN"?`Akun ${user.email||"ini"} aktif, tetapi role-nya bukan super_admin. Halaman ini khusus Super Admin.`:reason==="CHECK_FAILED"?"Status administrator gagal diverifikasi. Periksa koneksi dan Rules Firestore.":`Akun ${user.email||"ini"} belum aktif sebagai Super Admin. Minta Super Admin CIKUR GO mengaktifkan akses.`;pending.classList.add("show");}
+function watchAdmin(user){if(adminUnsub)adminUnsub();adminUnsub=onSnapshot(doc(db,"admin_users",user.uid),snap=>{const d=snap.exists()?snap.data():null;const r=d?.active===true&&d?.role==="super_admin";if(r){enter(user);}else{lock(user,{reason:!snap.exists()?"NOT_REGISTERED":d?.active!==true?"INACTIVE":"NOT_SUPER_ADMIN"});}},()=>lock(user,{reason:"CHECK_FAILED"}));}
+loginTab.onclick=()=>setMode("login");registerTab.onclick=()=>setMode("register");
+document.getElementById("pendingLogout").onclick=async()=>{try{await signOut(auth);}catch(e){console.error(e);}openLogin();setMode("login");};
+form.addEventListener("submit",async e=>{e.preventDefault();submit.disabled=true;clearMessage();const email=document.getElementById("authEmail").value.trim();const password=document.getElementById("authPassword").value;const confirm=document.getElementById("authConfirm").value;try{if(mode==="register"){if(password!==confirm){showMessage("Konfirmasi password tidak sama.");return;}const cred=await createUserWithEmailAndPassword(auth,email,password);try{await setDoc(doc(db,"admin_requests",cred.user.uid),{uid:cred.user.uid,email:cred.user.email,status:"pending",requestedAt:serverTimestamp()});}catch(regErr){console.warn("admin_requests tidak dapat ditulis:",regErr);}showMessage("Registrasi berhasil. Akun menunggu persetujuan Super Admin.","ok");await signOut(auth);form.reset();setMode("login");}else{await signInWithEmailAndPassword(auth,email,password);}}catch(e){console.error(e);showMessage(friendly(e));}finally{submit.disabled=false;}});
 
-document.getElementById('authForm').addEventListener('submit',async e=>{e.preventDefault();const email=document.getElementById('authEmail').value.trim();const password=document.getElementById('authPassword').value;const confirm=document.getElementById('authConfirm').value;const submit=document.getElementById('authSubmit');if(authMode==='register'&&password!==confirm){authMessage('Konfirmasi password tidak sama.');return;}submit.disabled=true;hideAuthMessage();try{if(authMode==='register'){const cred=await createUserWithEmailAndPassword(auth,email,password);await setDoc(doc(db,'admin_requests',cred.user.uid),{uid:cred.user.uid,email:cred.user.email,status:'pending',requestedAt:serverTimestamp()});await signOut(auth);authMessage('Registrasi berhasil. Akun masih terkunci sampai disetujui super admin.','ok');document.getElementById('authForm').reset();window.showAuthMode('login');}else{const cred=await signInWithEmailAndPassword(auth,email,password);const approved=await verifyAdmin(cred.user);if(!approved){currentUser=cred.user;await signOut(auth);document.getElementById('authGate').style.display='none';document.getElementById('pendingText').textContent=`Akun ${cred.user.email||'ini'} sudah terdaftar, tetapi belum memiliki status administrator aktif. Minta super admin CIKUR GO mengaktifkan akun Anda.`;document.getElementById('pendingLock').classList.add('show');}else{currentUser=cred.user;setReady();await startProtectedApp();}}}catch(error){console.error('Authentication error:',error);authMessage(friendlyAuthError(error));}finally{submit.disabled=false;}});
+onAuthStateChanged(auth,async user=>{authReady=true;if(adminUnsub){adminUnsub();adminUnsub=null;}if(!user){verified=false;window.BCGO_SUPER_ADMIN=null;openLogin();return;}const result=await checkSuperAdmin(user);if(result.ok){enter(user);watchAdmin(user);}else{lock(user,result);watchAdmin(user);}});
+</script>
 
-async function startProtectedApp(){if(appStarted)return;appStarted=true;try{await initProtectedApp(currentUser);}catch(error){console.error('Protected app failed to start:',error);appStarted=false;setLocked();authMessage('Aplikasi gagal dimulai setelah autentikasi: '+(error?.message||error));}}
-
-onAuthStateChanged(auth,async user=>{if(!user){currentUser=null;appStarted=false;setLocked();return;}const approved=await verifyAdmin(user);if(!approved){await signOut(auth);document.getElementById('authGate').style.display='flex';document.getElementById('pendingLock').classList.add('show');setLocked();return;}currentUser=user;setReady();await startProtectedApp();});
-
-async function initProtectedApp(currentUser){
-  await import('./bcgo-medicine.js');
-
+<script type="module">
+import './bcgo-medicine.js';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'-').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
 const pretty=v=>{if(v==null)return '';if(typeof v==='string')return v;try{return JSON.stringify(v)}catch{return String(v)}};
@@ -169,8 +175,6 @@ $('validate').onclick=async()=>{const c=window.BCGOMedicine.activeCase;if(!c)ret
 $('pause').onclick=async()=>{await window.BCGOMedicine.setHumanMode(!window.BCGOMedicine.human?.paused)};
 $('review').onclick=async()=>{const c=window.BCGOMedicine.activeCase;if(!c){chat('medicine','Belum ada case aktif untuk review.','review-none');return;}await window.BCGOMedicine.requestReview(c.id)};
 $('reject').onclick=async()=>{const c=window.BCGOMedicine.activeCase;if(!c){chat('medicine','Belum ada case aktif untuk ditolak.','reject-none');return;}const reason=prompt('Alasan penolakan treatment (opsional):','Saya ingin Medicine melakukan review ulang.');if(reason===null)return;try{render(await window.BCGOMedicine.rejectTreatment(c.id,reason||'Treatment ditolak oleh manusia.'))}catch(e){chat('medicine','Penolakan gagal: '+e.message,'rejecterr-'+Date.now())}};
-
-}
 </script>
 </body>
 </html>
