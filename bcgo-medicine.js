@@ -36,7 +36,10 @@ const REGISTRY = {
   "cikur-config.js": { type: "Sistem Config", role: "system" },
   "bcgo-engine.js": { type: "Sistem Core", role: "system" },
   "bcgo-admin.html": { type: "Sistem Admin", role: "admin" },
-  "bcgo.html": { type: "Sistem Monitor", role: "monitor" }
+  "bcgo.html": { type: "Sistem Monitor", role: "monitor" },
+  "bcgo.js": { type: "Sistem Monitor Core", role: "monitor" },
+  "bcgo-medicine.html": { type: "Sistem Medicine UI", role: "medicine" },
+  "bcgo-medicine.js": { type: "Sistem Medicine Core", role: "medicine" }
 };
 
 const REQUIRED = {
@@ -80,7 +83,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "1.9.0",
+  version: "2.0.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -191,7 +194,7 @@ function makeCase(log) {
   postSystemMessage("bcgo", `Saya menemukan evidence pada ${source}: ${d.title}. Saya serahkan ${c.id} ke Medicine untuk verifikasi independen.`, {
     kind: "BCGO_HANDOFF", caseId: c.id, target: source
   });
-  postSystemMessage("medicine", `Case ${c.id} saya terima. Saya akan mencari akar masalah, memeriksa kontrak lintas-file, lalu menyiapkan repair plan yang konkret.`, {
+  postSystemMessage("medicine", `Case ${c.id} saya terima. Saya akan mencari akar masalah, memeriksa kontrak lintas-file, mengambil kode source yang terbukti bermasalah, lalu menyiapkan solusi BEFORE → AFTER yang bisa direview dan dicopy manusia.`, {
     kind: "MEDICINE_ACK", caseId: c.id, target: source
   });
   return c;
@@ -651,6 +654,56 @@ async function enrichRepairPlan(c, verification) {
   return plan;
 }
 
+
+function buildCodePrescription(proposalOrPlan) {
+  const p = proposalOrPlan?.repairPlan || proposalOrPlan || {};
+  const ops = Array.isArray(p.operations) ? p.operations : [];
+  const evidence = Array.isArray(p.sourceEvidence) ? p.sourceEvidence : [];
+  const items = [];
+
+  for (const op of ops.slice(0, 12)) {
+    if (!op || !op.file || !op.before || !op.after) continue;
+    const matchingEvidence = evidence.filter(e =>
+      e?.file === op.file &&
+      (e?.line == null || op.line == null || Number(e.line) === Number(op.line))
+    );
+    items.push({
+      file: op.file,
+      line: op.line ?? null,
+      type: op.type || "REPLACE_EXACT",
+      before: String(op.before),
+      after: String(op.after),
+      reason: text(op.reason || "Perubahan exact yang diturunkan dari source evidence.", 900),
+      evidenceStrength: matchingEvidence.some(e => e?.evidenceStrength === "HIGH") ? "HIGH" :
+        (matchingEvidence.length ? (matchingEvidence[0].evidenceStrength || "MEDIUM") : "UNVERIFIED"),
+      evidenceReason: text(matchingEvidence[0]?.reason || "", 1200)
+    });
+  }
+
+  const exact = items.length > 0 &&
+    items.every(x => x.type === "REPLACE_EXACT" && x.before && x.after) &&
+    items.some(x => x.evidenceStrength === "HIGH");
+
+  return {
+    ready: exact && p.precisionGate === true,
+    status: exact && p.precisionGate === true ? "READY_TO_COPY" : "REVIEW_REQUIRED",
+    targetFile: p.rootCauseFile || p.target || null,
+    rootCauseStatus: p.rootCauseStatus || "UNPROVEN",
+    diagnosis: p.diagnosis || null,
+    evidenceCount: evidence.length,
+    items,
+    instruction: exact
+      ? "Kode solusi dibuat dari BEFORE/AFTER exact yang terikat pada source evidence. Review lalu salin hanya setelah manusia menyetujuinya."
+      : "Medicine belum memiliki BEFORE/AFTER exact + evidence HIGH yang cukup untuk menyatakan solusi siap copy."
+  };
+}
+
+function getCodePrescription(caseId = null) {
+  const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase;
+  if (!c) return null;
+  return buildCodePrescription(c.patchProposal || c.repairPlan || null);
+}
+
 function canApprove(c) {
   const v = c?.verification;
   const plan = c?.repairPlan;
@@ -757,7 +810,8 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     S.patchProposals.unshift(proposal);
     S.patchProposals = S.patchProposals.slice(0, 40);
     S.activeCase.patchProposal = proposal;
-    emit("patch_proposed", { proposal, case: S.activeCase });
+    proposal.codePrescription = buildCodePrescription(proposal);
+    emit("patch_proposed", { proposal, case: S.activeCase, codePrescription: proposal.codePrescription });
   } else {
     // No active case: perform an independent scan and report only evidence,
     // never promote a target to a repairable diagnosis from a guess.
@@ -1101,6 +1155,8 @@ const API = {
   rejectTreatment,
   setHumanMode,
   requestReview,
+  getCodePrescription,
+  buildCodePrescription,
   getRegistry: () => ({ ...REGISTRY }),
   getState: () => ({ ...S, sourceCache: undefined })
 };

@@ -47,6 +47,8 @@ body{font-family:Inter,Arial,sans-serif}.code{font-family:ui-monospace,SFMono-Re
   <div class="flex flex-wrap justify-between gap-2 items-center"><div><h2 class="text-xs uppercase text-slate-400">🩺 REAL REPAIR / TANGAN MEDICINE</h2><p class="text-[10px] text-slate-500 mt-1">Medicine wajib membuktikan akar masalah sebenarnya, lokasi source, evidence exact, dan operasi exact. Target BCGO boleh dikoreksi bila ternyata bukan sumber masalah. Jika bukti belum cukup, treatment tetap terkunci — tidak ada tebakan dan tidak ada patch otomatis.</p></div><span id="patchState" class="text-[9px] text-slate-500">NO PLAN</span></div>
   <div id="patch" class="mt-3 text-xs text-slate-500">Belum ada repair plan.</div>
   <div id="beforeAfter" class="mt-3 grid lg:grid-cols-2 gap-3"></div>
+<div id="codePrescription" class="mt-4 space-y-3"></div>
+
   <div id="validation" class="mt-3 text-xs text-slate-500"></div>
 </section>
 
@@ -75,7 +77,88 @@ const seenChat=new Set();
 function event(t,d){ev.unshift({t,d,at:new Date().toLocaleTimeString('id-ID')});ev=ev.slice(0,100);$('eventN').textContent=ev.length+' event';$('events').innerHTML=ev.map(x=>`<div class="border-b border-slate-800 pb-1"><span class="code text-[9px] text-indigo-300">${esc(x.t)}</span> <span class="text-[9px] text-slate-600">${esc(x.at)}</span><div class="text-[10px] text-slate-400">${esc(x.d?.message||x.d?.text||x.d?.case?.diagnosis?.title||x.d?.case?.id||pretty(x.d)||'event')}</div></div>`).join('');}
 function chat(role,t,key=''){if(key&&seenChat.has(key))return;if(key)seenChat.add(key);const d=document.createElement('div');d.className=role==='human'?'text-right':'text-left';const tone=role==='human'?'bg-indigo-950':role==='bcgo'?'bg-cyan-950/40':'bg-emerald-950/40';d.innerHTML=`<div class="inline-block max-w-[92%] rounded-xl px-3 py-2 text-xs ${tone}"><div class="text-[9px] opacity-60">${role==='human'?'ANDA':role==='bcgo'?'BCGO':'MEDICINE'}</div><div class="pre">${esc(t)}</div></div>`;$('chat').appendChild(d);$('chat').scrollTop=$('chat').scrollHeight;}
 function renderValidation(v){if(!v){$('validation').innerHTML='';return;}const ok=v.passed===true||v.status==='FIXED_VERIFIED';$('validation').innerHTML=`<div class="border ${ok?'border-emerald-900':'border-amber-900'} rounded-xl p-3 space-y-1"><b class="${ok?'text-emerald-300':'text-amber-300'}">🧪 ${esc(v.status||'VALIDATION')}</b><div>Target: <span class="code">${esc(v.target||'-')}</span></div><div>${ok?'Repair terverifikasi.':'Belum boleh dinyatakan sembuh; masih ada evidence/finding yang perlu ditangani.'}</div><div class="text-[9px] text-slate-500">${esc(v.checkedAt||'')}</div></div>`;}
-function renderPatch(p){if(!p){$('patchState').textContent='NO PLAN';$('patch').innerHTML='<div>Belum ada repair plan.</div>';$('beforeAfter').innerHTML='';return;}$('patchState').textContent=p.status||'PROPOSED';const plan=p.repairPlan||p;const ops=plan.operations||p.operations||[];$('patch').innerHTML=`<div class="border border-cyan-900 rounded-xl p-3 space-y-2"><div class="flex flex-wrap justify-between gap-2"><b class="code text-cyan-300">${esc(plan.planId||p.proposalId)}</b><span class="code text-[9px]">${esc(p.target||plan.target||'-')}</span></div><div class="text-[10px] text-slate-400">${esc(plan.diagnosis?.title||p.diagnosis?.title||'-')} • ${esc(plan.diagnosis?.code||p.diagnosis?.code||'-')}</div><div class="text-[10px]">Operasi source: <b class="text-emerald-300">${ops.length}</b></div><div class="text-[10px]">Target telemetry: <span class="code text-slate-300">${esc(plan.originalTarget||plan.target||'-')}</span></div><div class="text-[10px]">Akar masalah: <span class="code text-amber-300">${esc(plan.rootCauseFile||'-')}</span></div><div class="text-[10px]">Target repair: <span class="code text-emerald-300">${esc(plan.operations?.[0]?.file||'-')}</span></div><div class="text-[10px]">Precision gate: <b class="${plan.precisionGate?'text-emerald-300':'text-rose-300'}">${plan.precisionGate?'LULUS':'TERKUNCI'}</b></div><div class="text-[10px]">Evidence source: <b class="text-cyan-300">${(plan.sourceEvidence||[]).length}</b></div><ol class="list-decimal ml-4 space-y-1 text-[10px] text-slate-300">${(plan.preconditions||[]).map(x=>`<li>${esc(x)}</li>`).join('')}</ol><div class="text-[9px] text-amber-300">🔒 Source write: hanya executor tepercaya + approval manusia.</div>${plan.blockReason?`<div class="text-[9px] text-rose-300">BLOCK: ${esc(plan.blockReason)}</div>`:''}</div>`;$('beforeAfter').innerHTML=(plan.beforeAfter||p.beforeAfter||[]).slice(0,8).map(x=>`<div class="border border-slate-800 rounded-xl overflow-hidden"><div class="px-3 py-2 text-[9px] text-slate-400 bg-slate-900">${esc(x.file||'-')}${x.line?` • line ${esc(x.line)}`:''}</div><div class="grid md:grid-cols-2"><div class="p-3 bg-rose-950/20"><div class="text-[9px] text-rose-300 mb-1">BEFORE</div><pre class="pre code text-[9px] text-slate-300">${esc(x.before)}</pre></div><div class="p-3 bg-emerald-950/20"><div class="text-[9px] text-emerald-300 mb-1">AFTER</div><pre class="pre code text-[9px] text-slate-300">${esc(x.after)}</pre></div></div></div>`).join('')||'<div class="text-xs text-slate-500">Belum ada BEFORE → AFTER yang cukup aman untuk ditampilkan.</div>';}
+
+function copyMedicineCode(value, button){
+  const s = String(value ?? "");
+  if(!s) return;
+  navigator.clipboard?.writeText(s).then(()=>{
+    if(button){
+      const old = button.textContent;
+      button.textContent = "✓ COPIED";
+      setTimeout(()=>button.textContent = old, 1400);
+    }
+  }).catch(()=>{
+    const ta=document.createElement("textarea");
+    ta.value=s; document.body.appendChild(ta); ta.select();
+    try{document.execCommand("copy");}catch(e){}
+    ta.remove();
+    if(button){
+      const old=button.textContent;
+      button.textContent="✓ COPIED";
+      setTimeout(()=>button.textContent=old,1400);
+    }
+  });
+}
+function renderCodePrescription(p){
+  const el=$('codePrescription');
+  if(!el) return;
+  const plan=p?.repairPlan||p;
+  const cp=p?.codePrescription || window.BCGOMedicine?.buildCodePrescription?.(p);
+  if(!cp){
+    el.innerHTML='<div class="text-xs text-slate-500">Belum ada resep kode.</div>';
+    return;
+  }
+  const items=cp.items||[];
+  const gate=cp.ready===true;
+  el.innerHTML=`
+    <div class="border ${gate?'border-emerald-900':'border-amber-900'} rounded-xl overflow-hidden">
+      <div class="px-3 py-3 bg-slate-950/70 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div class="text-[10px] uppercase text-slate-400">💊 CODE PRESCRIPTION</div>
+          <div class="text-xs ${gate?'text-emerald-300':'text-amber-300'}">${gate?'READY TO COPY':'REVIEW REQUIRED'}</div>
+        </div>
+        <span class="code text-[9px] text-slate-500">${esc(cp.targetFile||plan?.rootCauseFile||'-')}</span>
+      </div>
+      <div class="p-3 text-[10px] text-slate-400">
+        ${esc(cp.instruction||'')}
+      </div>
+      ${items.length ? items.map((x,i)=>`
+        <div class="border-t border-slate-800">
+          <div class="px-3 py-2 flex flex-wrap justify-between gap-2 text-[9px] bg-slate-900">
+            <span class="code text-cyan-300">${esc(x.file||'-')}${x.line!=null?' • line '+esc(x.line):''}</span>
+            <span class="${x.evidenceStrength==='HIGH'?'text-emerald-300':'text-amber-300'}">EVIDENCE ${esc(x.evidenceStrength||'-')}</span>
+          </div>
+          <div class="grid lg:grid-cols-2">
+            <div class="p-3 bg-rose-950/20">
+              <div class="flex items-center justify-between mb-2">
+                <div class="text-[9px] text-rose-300">🔴 KODE ASLI / BERMASALAH</div>
+                <button class="copy-btn text-[9px] border border-rose-800 text-rose-300 rounded px-2 py-1" data-copy-index="${i}" data-copy-kind="before">COPY</button>
+              </div>
+              <pre class="pre code text-[9px] text-slate-300">${esc(x.before)}</pre>
+            </div>
+            <div class="p-3 bg-emerald-950/20">
+              <div class="flex items-center justify-between mb-2">
+                <div class="text-[9px] text-emerald-300">🟢 SOLUSI / KODE PENGGANTI</div>
+                <button class="copy-btn text-[9px] border border-emerald-800 text-emerald-300 rounded px-2 py-1" data-copy-index="${i}" data-copy-kind="after">📋 COPY SOLUSI</button>
+              </div>
+              <pre class="pre code text-[9px] text-slate-200">${esc(x.after)}</pre>
+            </div>
+          </div>
+          <div class="px-3 py-3 text-[10px] text-slate-400">
+            <b class="text-cyan-300">Mengapa:</b> ${esc(x.reason||'-')}
+            ${x.evidenceReason?`<div class="mt-1"><b class="text-purple-300">Evidence:</b> ${esc(x.evidenceReason)}</div>`:''}
+          </div>
+        </div>`).join('') :
+        '<div class="p-3 text-xs text-amber-300">Medicine belum memiliki operasi exact yang dapat dijadikan solusi copy.</div>'}
+    </div>`;
+  el.querySelectorAll('.copy-btn').forEach(btn=>{
+    const i=Number(btn.dataset.copyIndex), kind=btn.dataset.copyKind;
+    const x=items[i];
+    if(x) btn.onclick=()=>copyMedicineCode(kind==='after'?x.after:x.before,btn);
+  });
+}
+
+function renderPatch(p){if(!p){$('patchState').textContent='NO PLAN';$('patch').innerHTML='<div>Belum ada repair plan.</div>';$('beforeAfter').innerHTML='';return;}$('patchState').textContent=p.status||'PROPOSED';const plan=p.repairPlan||p;const ops=plan.operations||p.operations||[];$('patch').innerHTML=`<div class="border border-cyan-900 rounded-xl p-3 space-y-2"><div class="flex flex-wrap justify-between gap-2"><b class="code text-cyan-300">${esc(plan.planId||p.proposalId)}</b><span class="code text-[9px]">${esc(p.target||plan.target||'-')}</span></div><div class="text-[10px] text-slate-400">${esc(plan.diagnosis?.title||p.diagnosis?.title||'-')} • ${esc(plan.diagnosis?.code||p.diagnosis?.code||'-')}</div><div class="text-[10px]">Operasi source: <b class="text-emerald-300">${ops.length}</b></div><div class="text-[10px]">Target telemetry: <span class="code text-slate-300">${esc(plan.originalTarget||plan.target||'-')}</span></div><div class="text-[10px]">Akar masalah: <span class="code text-amber-300">${esc(plan.rootCauseFile||'-')}</span></div><div class="text-[10px]">Target repair: <span class="code text-emerald-300">${esc(plan.operations?.[0]?.file||'-')}</span></div><div class="text-[10px]">Precision gate: <b class="${plan.precisionGate?'text-emerald-300':'text-rose-300'}">${plan.precisionGate?'LULUS':'TERKUNCI'}</b></div><div class="text-[10px]">Evidence source: <b class="text-cyan-300">${(plan.sourceEvidence||[]).length}</b></div><ol class="list-decimal ml-4 space-y-1 text-[10px] text-slate-300">${(plan.preconditions||[]).map(x=>`<li>${esc(x)}</li>`).join('')}</ol><div class="text-[9px] text-amber-300">🔒 Source write: hanya executor tepercaya + approval manusia. Medicine menampilkan source asli dan solusi exact agar manusia dapat review/copy.</div>${plan.blockReason?`<div class="text-[9px] text-rose-300">BLOCK: ${esc(plan.blockReason)}</div>`:''}</div>`;$('beforeAfter').innerHTML=(plan.beforeAfter||p.beforeAfter||[]).slice(0,8).map(x=>`<div class="border border-slate-800 rounded-xl overflow-hidden"><div class="px-3 py-2 text-[9px] text-slate-400 bg-slate-900">${esc(x.file||'-')}${x.line?` • line ${esc(x.line)}`:''}</div><div class="grid md:grid-cols-2"><div class="p-3 bg-rose-950/20"><div class="text-[9px] text-rose-300 mb-1">BEFORE</div><pre class="pre code text-[9px] text-slate-300">${esc(x.before)}</pre></div><div class="p-3 bg-emerald-950/20"><div class="text-[9px] text-emerald-300 mb-1">AFTER</div><pre class="pre code text-[9px] text-slate-300">${esc(x.after)}</pre></div></div></div>`).join('')||'<div class="text-xs text-slate-500">Belum ada BEFORE → AFTER yang cukup aman untuk ditampilkan.</div>';renderCodePrescription(p);}
 function renderVerification(v){
  if(!v){$('verifyState').textContent='BELUM DIVERIFIKASI';$('verification').innerHTML='<div>Belum ada verifikasi terarah.</div>';return;}
  const exact=v.verdict==='SUPPORTED_BY_EXACT_SOURCE_EVIDENCE';
@@ -100,7 +183,7 @@ function render(c){
  const cs=window.BCGOMedicine?.cases||[];$('casesN').textContent=cs.length;$('active').textContent=cs.filter(x=>!['RECOVERED','REJECTED','FIXED_VERIFIED'].includes(x.status)).length;$('repairs').textContent=cs.filter(x=>['PATCH_APPLIED','FIXED_VERIFIED'].includes(x.status)).length;$('history').innerHTML=cs.map(x=>`<div class="border border-slate-800 rounded-xl p-3"><span class="code text-[10px]">${esc(x.source)}</span><div class="text-[10px] mt-1">${esc(x.diagnosis?.title||'-')}</div><div class="text-[9px] text-amber-400">${esc(x.status)}</div></div>`).join('')||'<div class="text-xs text-slate-500">Belum ada case.</div>';
 }
 
-window.addEventListener('bcgo:medicine',e=>{const{event:t,...d}=e.detail;event(t,d);if(t==='ready'){$('org').textContent=d.registryCount;$('sys').textContent='MEDICINE READY';$('executor').textContent=d.executorAvailable?'EXECUTOR READY':'EXECUTOR NOT CONNECTED';$('executor').className=`border px-2 py-1 rounded ${d.executorAvailable?'border-emerald-800 text-emerald-300':'border-amber-800 text-amber-300'}`;}if(t==='auth'){$('auth').textContent=d.user?'AUTH OK':'AUTH REQUIRED';}if(t==='telemetry')$('logs').textContent=d.logs?.length||0;if(t==='case_created'||t==='case_updated'){render(d.case);$('verifyBtn').classList.remove('hidden');}if(t==='scan_complete'){const f=d.findings||[];$('findN').textContent=f.length;$('findings').innerHTML=f.length?f.map(x=>`<div class="border border-purple-900 rounded-xl p-3 text-[10px]"><b class="text-purple-300">${esc(x.kind)}</b><div>${esc(x.sourceFile||'')} ${x.targetFile?'→ '+esc(x.targetFile):''}</div><div class="text-slate-400">${x.missing?.length?'Missing: '+esc(x.missing.join(', ')):esc(x.detail||'')}</div></div>`).join(''):'<div class="text-xs text-emerald-400">Tidak ada gap heuristik.</div>';}if(t==='conversation'){ $('chat').innerHTML='';seenChat.clear();(d.messages||[]).forEach(m=>chat(m.role==='human'?'human':m.role==='bcgo'?'bcgo':'medicine',m.text,m.clientMessageId||m.id));}if(t==='local_message'&&d.message?.role)chat(d.message.role==='human'?'human':d.message.role==='bcgo'?'bcgo':'medicine',d.message.text,d.message.clientMessageId||'local');if(t==='patch_proposed'||t==='patch_apply_requested'){renderPatch(d.proposal||d.case?.patchProposal||d.case?.repairPlan);if(d.case)render(d.case);}if(t==='patch_apply_complete'){renderPatch(d.proposal);if(d.case)render(d.case);if(d.result?.ok)chat('medicine','Repair berhasil diterapkan oleh executor. Saya lanjutkan validasi pasca-repair.','local-'+(d.request?.requestId||Date.now()));}if(t==='validation_started')$('validation').innerHTML='<div class="text-cyan-300 pulse">Medicine sedang menjalankan validasi pasca-repair...</div>';if(t==='validation_complete'){renderValidation(d.validation);render(d.case);}if(t==='verification_started'){$('verifyState').textContent='MEMERIKSA...';$('verification').innerHTML='<div class="text-cyan-300">Medicine sedang membandingkan evidence dan kontrak lintas-file...</div>';}if(t==='verification_complete'){renderVerification(d.verification);const c=window.BCGOMedicine.activeCase;if(c)render(c);}if(t==='human_control'){const paused=!!d.human?.paused;$('humanMode').textContent=paused?'HUMAN PAUSED':'ASSISTED';$('humanStatus').textContent=paused?'Medicine dijeda oleh manusia. Telemetry tetap boleh dipantau.':'Medicine berjalan dengan pengawasan manusia. Source-code tetap terkunci sampai approval dan executor tepercaya.';$('pause').textContent=paused?'LANJUTKAN MEDICINE':'JEDA MEDICINE';}});
+window.addEventListener('bcgo:medicine',e=>{const{event:t,...d}=e.detail;event(t,d);if(t==='ready'){$('org').textContent=d.registryCount;$('sys').textContent='MEDICINE READY';$('executor').textContent=d.executorAvailable?'EXECUTOR READY':'EXECUTOR NOT CONNECTED';$('executor').className=`border px-2 py-1 rounded ${d.executorAvailable?'border-emerald-800 text-emerald-300':'border-amber-800 text-amber-300'}`;}if(t==='auth'){$('auth').textContent=d.user?'AUTH OK':'AUTH REQUIRED';}if(t==='telemetry')$('logs').textContent=d.logs?.length||0;if(t==='case_created'||t==='case_updated'){render(d.case);$('verifyBtn').classList.remove('hidden');}if(t==='scan_complete'){const f=d.findings||[];$('findN').textContent=f.length;$('findings').innerHTML=f.length?f.map(x=>`<div class="border border-purple-900 rounded-xl p-3 text-[10px]"><b class="text-purple-300">${esc(x.kind)}</b><div>${esc(x.sourceFile||'')} ${x.targetFile?'→ '+esc(x.targetFile):''}</div><div class="text-slate-400">${x.missing?.length?'Missing: '+esc(x.missing.join(', ')):esc(x.detail||'')}</div></div>`).join(''):'<div class="text-xs text-emerald-400">Tidak ada gap heuristik.</div>';}if(t==='conversation'){ $('chat').innerHTML='';seenChat.clear();(d.messages||[]).forEach(m=>chat(m.role==='human'?'human':m.role==='bcgo'?'bcgo':'medicine',m.text,m.clientMessageId||m.id));}if(t==='local_message'&&d.message?.role)chat(d.message.role==='human'?'human':d.message.role==='bcgo'?'bcgo':'medicine',d.message.text,d.message.clientMessageId||'local');if(t==='patch_proposed'||t==='patch_apply_requested'){renderPatch(d.proposal||d.case?.patchProposal||d.case?.repairPlan);renderCodePrescription(d.proposal||d.case?.patchProposal||d.case?.repairPlan);if(d.case)render(d.case);}if(t==='patch_apply_complete'){renderPatch(d.proposal);if(d.case)render(d.case);if(d.result?.ok)chat('medicine','Repair berhasil diterapkan oleh executor. Saya lanjutkan validasi pasca-repair.','local-'+(d.request?.requestId||Date.now()));}if(t==='validation_started')$('validation').innerHTML='<div class="text-cyan-300 pulse">Medicine sedang menjalankan validasi pasca-repair...</div>';if(t==='validation_complete'){renderValidation(d.validation);render(d.case);}if(t==='verification_started'){$('verifyState').textContent='MEMERIKSA...';$('verification').innerHTML='<div class="text-cyan-300">Medicine sedang membandingkan evidence dan kontrak lintas-file...</div>';}if(t==='verification_complete'){renderVerification(d.verification);const c=window.BCGOMedicine.activeCase;if(c)render(c);}if(t==='human_control'){const paused=!!d.human?.paused;$('humanMode').textContent=paused?'HUMAN PAUSED':'ASSISTED';$('humanStatus').textContent=paused?'Medicine dijeda oleh manusia. Telemetry tetap boleh dipantau.':'Medicine berjalan dengan pengawasan manusia. Source-code tetap terkunci sampai approval dan executor tepercaya.';$('pause').textContent=paused?'LANJUTKAN MEDICINE':'JEDA MEDICINE';}});
 $('verifyBtn').onclick=async()=>{const c=window.BCGOMedicine.activeCase;const target=c?.source||window.BCGOMedicine.getState().verification?.target||'bcgo-admin.html';try{await window.BCGOMedicine.verifyWithMedicine(target,{question:'Verifikasi target oleh manusia.',requestedBy:'human'});}catch(e){$('verification').innerHTML='<div class="text-rose-300">Verifikasi gagal: '+esc(e.message)+'</div>';}};
 $('form').addEventListener('submit',async e=>{e.preventDefault();const t=$('input').value.trim();if(!t)return;const b=$('send');b.disabled=true;$('input').value='';try{await window.BCGOMedicine.sendMessage(t)}finally{b.disabled=false;$('input').focus()}});
 $('scan').onclick=async()=>{const b=$('scan');b.disabled=true;try{await window.BCGOMedicine.scanConsistency()}finally{b.disabled=false}};
