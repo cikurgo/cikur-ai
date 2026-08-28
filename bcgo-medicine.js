@@ -101,9 +101,15 @@ const S = {
   eventSeq: 0
 };
 
-const emit = (event, p = {}) => window.dispatchEvent(new CustomEvent("bcgo:medicine", {
-  detail: { event, at: new Date().toISOString(), ...p }
-}));
+const MEDICINE_EVENT_BUFFER = [];
+const MEDICINE_EVENT_BUFFER_MAX = 120;
+const emit = (event, p = {}) => {
+  const detail = { event, at: new Date().toISOString(), ...p };
+  MEDICINE_EVENT_BUFFER.push(detail);
+  if (MEDICINE_EVENT_BUFFER.length > MEDICINE_EVENT_BUFFER_MAX) MEDICINE_EVENT_BUFFER.shift();
+  window.dispatchEvent(new CustomEvent("bcgo:medicine", { detail }));
+};
+
 const now = () => new Date().toISOString();
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 const text = (v, n = 1800) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
@@ -201,16 +207,32 @@ function makeCase(log) {
 }
 
 function startTelemetry() {
-  if (!window.CikurCloud?.listenSystemLogs) {
-    emit("telemetry_unavailable");
-    return;
+  if (window.CikurCloud?.listenSystemLogs) {
+    try {
+      const unsub = window.CikurCloud.listenSystemLogs(logs => {
+        S.logs = Array.isArray(logs) ? logs : [];
+        emit("telemetry", { logs: S.logs, source: "CikurCloud" });
+        for (const l of S.logs.slice(0, 60)) makeCase(l);
+      });
+      if (typeof unsub === "function") S.listeners.push(unsub);
+      emit("telemetry_status", { status: "LIVE", source: "CikurCloud" });
+      return;
+    } catch (e) {
+      emit("telemetry_status", { status: "FALLBACK", error: e.message });
+    }
   }
-  const unsub = window.CikurCloud.listenSystemLogs(logs => {
-    S.logs = Array.isArray(logs) ? logs : [];
-    emit("telemetry", { logs: S.logs });
-    for (const l of S.logs.slice(0, 60)) makeCase(l);
-  });
-  if (typeof unsub === "function") S.listeners.push(unsub);
+  try {
+    const q = query(collection(db, "system_logs"), orderBy("createdAt", "desc"), limit(100));
+    const unsub = onSnapshot(q, snapshot => {
+      S.logs = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).reverse();
+      emit("telemetry", { logs: S.logs, source: "Firestore" });
+      for (const l of S.logs.slice(0, 60)) makeCase(l);
+    }, e => emit("telemetry_status", { status: "ERROR", error: e.message }));
+    if (typeof unsub === "function") S.listeners.push(unsub);
+    emit("telemetry_status", { status: "CONNECTING", source: "Firestore" });
+  } catch (e) {
+    emit("telemetry_status", { status: "ERROR", error: e.message });
+  }
 }
 
 async function fetchFile(name) {
@@ -1172,24 +1194,59 @@ async function startConversation() {
 
 onAuthStateChanged(auth, async user => {
   S.human.uid = user?.uid || null;
-  emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
-  if (!user) return;
-
+  if (!user) {
+    emit("auth", { user: null, status: "AUTH_REQUIRED" });
+    emit("runtime_status", { status: "WAITING_FOR_ADMIN_SESSION" });
+    return;
+  }
+  emit("auth", { user: { uid: user.uid, email: user.email || null }, status: "CHECKING_ADMIN" });
   try {
     const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
     if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
-      emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
-      emit("local_message", { message: { role: "medicine", text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.", clientMessageId: "auth-denied" } });
+      emit("auth", { user: null, deniedReason: "NOT_ADMIN", status: "AUTH_REQUIRED" });
+      emit("runtime_status", { status: "ADMIN_REQUIRED" });
       return;
     }
   } catch (e) {
-    emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED" });
+    emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED", status: "AUTH_ERROR", error: e.message });
+    emit("runtime_status", { status: "AUTH_ERROR", error: e.message });
     return;
   }
-
+  emit("auth", { user: { uid: user.uid, email: user.email || null }, status: "ADMIN_VERIFIED" });
+  emit("runtime_status", { status: "STARTING" });
   startTelemetry();
-  startConversation();
+  await startConversation();
+  startAutonomousMonitor();
+  emit("runtime_status", { status: "LIVE" });
 });
+
+let autonomousTimer = null;
+async function autonomousPulse() {
+  if (S.human.paused) return;
+  const active = activeCases();
+  emit("autonomous", {
+    status: "LIVE",
+    activeCases: active.length,
+    message: active.length
+      ? `Medicine sedang mengawasi ${active.length} case aktif dan melanjutkan investigasi.`
+      : "Medicine sedang patroli saraf; belum ada case aktif yang cukup terbukti."
+  });
+  if (active[0] && !active[0].verification) {
+    try {
+      await verifyWithMedicine(active[0].source, {
+        question: "Patroli otomatis: verifikasi ulang akar masalah.",
+        requestedBy: "autonomous"
+      });
+    } catch (e) {
+      emit("autonomous", { status: "ERROR", error: e.message });
+    }
+  }
+}
+function startAutonomousMonitor() {
+  if (autonomousTimer) clearInterval(autonomousTimer);
+  autonomousPulse();
+  autonomousTimer = setInterval(autonomousPulse, 30000);
+}
 
 const API = {
   scanConsistency,
@@ -1220,6 +1277,7 @@ Object.defineProperties(API, {
   executorAvailable: { get: executorAvailable }
 });
 window.BCGOMedicine = API;
+window.BCGOMedicineEvents = MEDICINE_EVENT_BUFFER;
 
 setTimeout(() => scanConsistency().catch(e => emit("scan_error", { message: e.message })), 600);
 emit("ready", { version: S.version, registryCount: Object.keys(REGISTRY).length, executorAvailable: executorAvailable() });
