@@ -31,7 +31,6 @@ const db = getFirestore();
 const REGION =
   process.env.FUNCTIONS_REGION || 'asia-southeast2';
 
-
 /**
  * ============================================================
  * BCGO PATCH EXECUTOR
@@ -46,7 +45,6 @@ const REGION =
  * Credential GitHub TIDAK pernah dikirim ke browser.
  * ============================================================
  */
-
 
 /**
  * ------------------------------------------------------------
@@ -138,7 +136,6 @@ exports.getSourceSnapshot = onCall(
     };
   }
 );
-
 
 /**
  * ------------------------------------------------------------
