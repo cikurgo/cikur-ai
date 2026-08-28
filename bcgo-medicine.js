@@ -1,5 +1,5 @@
 import {
-  collection, onSnapshot, query, orderBy, limit, addDoc, serverTimestamp, doc, getDoc
+  collection, onSnapshot, query, orderBy, limit, addDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
@@ -80,7 +80,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "2.1.0",
+  version: "3.0.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -95,12 +95,17 @@ const S = {
   validation: null,
   sourceCache: new Map(),
   lastClientMessageId: null,
-  eventSeq: 0
+  eventSeq: 0,
+  realtime: { firestore: "WAITING", telemetry: "WAITING", chat: "WAITING", lastEventAt: null },
+  autonomous: { enabled: true, turn: "bcgo", timer: null, lastSignature: "", lastAt: 0, lastHumanAt: 0, busy: false, scanTick: 0 }
 };
 
-const emit = (event, p = {}) => window.dispatchEvent(new CustomEvent("bcgo:medicine", {
-  detail: { event, at: new Date().toISOString(), ...p }
-}));
+const emit = (event, p = {}) => {
+  S.realtime.lastEventAt = new Date().toISOString();
+  window.dispatchEvent(new CustomEvent("bcgo:medicine", {
+    detail: { event, at: S.realtime.lastEventAt, ...p }
+  }));
+};
 const now = () => new Date().toISOString();
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 const text = (v, n = 1800) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
@@ -156,10 +161,16 @@ async function postSystemMessage(role, msg, meta = {}) {
     clientMessageId,
     ...meta
   };
+  // UI always receives the message immediately. Firestore is the shared realtime bus
+  // when an authenticated session is available; failure must never freeze the page.
+  emit("local_message", { message: { ...payload, createdAt: now() } });
   try {
+    if (!auth.currentUser) throw new Error("AUTH_NOT_READY");
     await addDoc(collection(db, "medicine_messages"), payload);
+    S.realtime.firestore = "CONNECTED";
+    S.realtime.chat = "CONNECTED";
   } catch (e) {
-    emit("local_message", { message: { ...payload, createdAt: now() }, storageError: e.message });
+    if (e?.message !== "AUTH_NOT_READY") emit("storage_warning", { message: e.message });
   }
 }
 
@@ -198,16 +209,30 @@ function makeCase(log) {
 }
 
 function startTelemetry() {
+  if (S.listeners.some(x => x && x.__medicineTelemetry)) return;
   if (!window.CikurCloud?.listenSystemLogs) {
+    S.realtime.telemetry = "UNAVAILABLE";
     emit("telemetry_unavailable");
     return;
   }
-  const unsub = window.CikurCloud.listenSystemLogs(logs => {
-    S.logs = Array.isArray(logs) ? logs : [];
-    emit("telemetry", { logs: S.logs });
-    for (const l of S.logs.slice(0, 60)) makeCase(l);
-  });
-  if (typeof unsub === "function") S.listeners.push(unsub);
+  try {
+    const unsub = window.CikurCloud.listenSystemLogs(logs => {
+      S.realtime.telemetry = "CONNECTED";
+      S.logs = Array.isArray(logs) ? logs : [];
+      emit("telemetry", { logs: S.logs });
+      for (const l of S.logs.slice(0, 60)) makeCase(l);
+    });
+    if (typeof unsub === "function") {
+      unsub.__medicineTelemetry = true;
+      S.listeners.push(unsub);
+      S.realtime.telemetry = "LISTENING";
+    } else {
+      S.realtime.telemetry = "UNAVAILABLE";
+    }
+  } catch (e) {
+    S.realtime.telemetry = "ERROR";
+    emit("telemetry_error", { message: e.message });
+  }
 }
 
 async function fetchFile(name) {
@@ -894,7 +919,9 @@ async function sendMessage(msg, role = "human") {
   if (!t) return;
   const clientMessageId = uid();
   S.lastClientMessageId = clientMessageId;
+  S.autonomous.lastHumanAt = Date.now();
   const payload = { role, text: t, actorUid: auth.currentUser?.uid || null, createdAt: serverTimestamp(), clientMessageId };
+  emit("local_message", { message: { ...payload, createdAt: now() } });
 
   try {
     await addDoc(collection(db, "medicine_messages"), payload);
@@ -1107,6 +1134,13 @@ async function requestReview(caseId) {
 }
 
 async function startConversation() {
+  if (S.listeners.some(x => x && x.__medicineChat)) return;
+  if (!auth.currentUser) {
+    S.realtime.firestore = "AUTH_WAITING";
+    S.realtime.chat = "LOCAL_ONLY";
+    emit("conversation_waiting_auth");
+    return;
+  }
   try {
     const q = query(collection(db, "medicine_messages"), orderBy("createdAt", "desc"), limit(200));
     const unsub = onSnapshot(q, snapshot => {
@@ -1117,32 +1151,101 @@ async function startConversation() {
         seen.add(key);
         return true;
       });
+      S.realtime.firestore = "CONNECTED";
+      S.realtime.chat = "CONNECTED";
       emit("conversation", { messages: S.messages });
-    }, e => emit("conversation_error", { message: e.message }));
-    if (typeof unsub === "function") S.listeners.push(unsub);
-  } catch (e) { emit("conversation_error", { message: e.message }); }
-}
-
-onAuthStateChanged(auth, async user => {
-  S.human.uid = user?.uid || null;
-  emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
-  if (!user) return;
-
-  try {
-    const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
-    if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
-      emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
-      emit("local_message", { message: { role: "medicine", text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.", clientMessageId: "auth-denied" } });
-      return;
+    }, e => {
+      S.realtime.firestore = "ERROR";
+      S.realtime.chat = "LOCAL_ONLY";
+      emit("conversation_error", { message: e.message });
+    });
+    if (typeof unsub === "function") {
+      unsub.__medicineChat = true;
+      S.listeners.push(unsub);
+      S.realtime.firestore = "LISTENING";
+      S.realtime.chat = "LISTENING";
     }
   } catch (e) {
-    emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED" });
-    return;
+    S.realtime.firestore = "ERROR";
+    S.realtime.chat = "LOCAL_ONLY";
+    emit("conversation_error", { message: e.message });
   }
+}
 
+onAuthStateChanged(auth, user => {
+  S.human.uid = user?.uid || null;
+  emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
+  // Auth is observed, not used as a page gate. This prevents the Medicine page from
+  // freezing while still allowing Firestore realtime listeners to attach when a
+  // Firebase session already exists (for example after signing in from Admin).
   startTelemetry();
-  startConversation();
+  if (user) startConversation();
+  else {
+    S.realtime.firestore = "AUTH_WAITING";
+    S.realtime.chat = "LOCAL_ONLY";
+  }
 });
+
+function realtimeSnapshot() { return { ...S.realtime }; }
+function latestCase() { return S.activeCase || activeCases()[0] || null; }
+function discussionSignature(c) {
+  const p = c?.repairPlan;
+  return [c?.id||"none", c?.status||"none", p?.rootCauseFile||c?.source||"none", p?.precisionGate?"gate":"blocked", (p?.sourceEvidence||[]).length, (p?.operations||[]).length, S.logs.length, S.findings.length].join("|");
+}
+
+async function autonomousDiscussion() {
+  if (!S.autonomous.enabled || S.human.paused || S.autonomous.busy) return;
+  const nowMs = Date.now();
+  if (nowMs - S.autonomous.lastAt < 15000) return;
+  if (nowMs - S.autonomous.lastHumanAt < 12000) return;
+  S.autonomous.busy = true;
+  try {
+    S.autonomous.scanTick++;
+    // Every few turns, do real work rather than only conversation: refresh the
+    // cross-file nerve map and, when evidence is still incomplete, re-run the
+    // precision investigation. This is the autonomous learning loop.
+    if (S.autonomous.scanTick % 3 === 0) {
+      await scanConsistency();
+      const current = latestCase();
+      if (current && current.status === "NEEDS_EVIDENCE") {
+        await verifyWithMedicine(current.source, { question: "Autonomous nerve patrol", requestedBy: "medicine_autonomous" });
+      }
+    }
+    const c = latestCase();
+    const sig = discussionSignature(c);
+    const active = activeCases();
+    let msg = "", role = S.autonomous.turn;
+    if (!c) {
+      if (role === "bcgo") {
+        msg = `Patroli saraf berjalan. Saya memantau ${Object.keys(REGISTRY).length} organ, ${S.logs.length} telemetry, dan ${S.findings.length} finding. Belum ada case aktif; saya belum akan mengarang masalah.`;
+      } else {
+        msg = `Saya tetap menyisir saraf yang tersedia berdasarkan evidence nyata. Belum ada akar masalah yang terbukti, jadi saya menjaga Precision Gate tetap terkunci sambil menunggu telemetry baru.`;
+      }
+    } else if (c.status === "NEEDS_EVIDENCE") {
+      if (role === "bcgo") msg = `Saya masih melihat ${c.id} pada ${c.source}. Saya tidak memaksa diagnosis; Medicine, apakah evidence source sudah cukup untuk menemukan titik persisnya?`;
+      else msg = `Belum cukup untuk masuk ruang operasi. Saya lanjutkan trace dependency untuk ${c.source}; target awal tidak saya anggap sebagai akar sebelum terbukti.`;
+    } else if (c.repairPlan?.precisionGate === true) {
+      if (role === "bcgo") msg = `Case ${c.id} sudah memiliki source evidence exact dan Precision Gate LULUS. Saya menahan perubahan source; silakan review resep BEFORE → AFTER yang sudah disiapkan Medicine.`;
+      else msg = `Saya sudah mengunci akar pada ${c.repairPlan.rootCauseFile}. Source BEFORE berasal dari evidence exact dan operasi ${c.repairPlan.operations?.length||0} dapat direview manusia sebelum diterapkan.`;
+    } else {
+      if (role === "bcgo") msg = `Saya menemukan ${active.length} case aktif. Saya serahkan fokus investigasi ke Medicine dan tetap mengirim telemetry baru bila saraf berubah.`;
+      else msg = `Saya sedang membedah ${c.source}: diagnosis ${c.diagnosis?.title||"anomaly"}. Saya cek dependency, source evidence, dan operasi exact sebelum menyebutnya siap bedah.`;
+    }
+    if (msg) {
+      S.autonomous.lastAt = nowMs;
+      S.autonomous.lastSignature = sig;
+      S.autonomous.turn = role === "bcgo" ? "medicine" : "bcgo";
+      await postSystemMessage(role, msg, { kind: "AUTONOMOUS_DISCUSSION", autonomous: true, caseId: c?.id || null });
+    }
+  } finally {
+    S.autonomous.busy = false;
+  }
+}
+function startAutonomousDiscussion() {
+  if (S.autonomous.timer) return;
+  S.autonomous.timer = setInterval(() => autonomousDiscussion().catch(e => emit("autonomous_error", { message:e.message })), 18000);
+  setTimeout(() => autonomousDiscussion().catch(()=>{}), 3500);
+}
 
 const API = {
   scanConsistency,
@@ -1154,14 +1257,13 @@ const API = {
   rejectTreatment,
   setHumanMode,
   requestReview,
-  requestSurgicalInvestigation,
-  getLiveConversation,
-  userJoinConversation,
-  liveMessage,
   getAdvisorPrescription: caseId => { const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase; return buildAdvisorPrescription(c?.repairPlan); },
   buildAdvisorPrescription,
   buildAdvisorFullPatch,
   getRegistry: () => ({ ...REGISTRY }),
+  getRealtimeStatus: realtimeSnapshot,
+  autonomousDiscussion,
+  setAutonomous: enabled => { S.autonomous.enabled = !!enabled; return S.autonomous.enabled; },
   getState: () => ({ ...S, sourceCache: undefined })
 };
 Object.defineProperties(API, {
@@ -1179,5 +1281,10 @@ Object.defineProperties(API, {
 });
 window.BCGOMedicine = API;
 
-setTimeout(() => scanConsistency().catch(e => emit("scan_error", { message: e.message })), 600);
-emit("ready", { version: S.version, registryCount: Object.keys(REGISTRY).length, executorAvailable: executorAvailable() });
+setTimeout(() => {
+  startTelemetry();
+  startConversation();
+  startAutonomousDiscussion();
+  scanConsistency().catch(e => emit("scan_error", { message: e.message }));
+}, 150);
+emit("ready", { version: S.version, registryCount: Object.keys(REGISTRY).length, executorAvailable: executorAvailable(), realtime: realtimeSnapshot() });
