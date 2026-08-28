@@ -40,8 +40,8 @@ const REGISTRY = {
 };
 
 const REQUIRED = {
-  driver: ["name", "phone", "address", "vehicleType"],
-  assistant: ["name", "phone", "address", "serviceType"],
+  driver: ["name", "phone", "address", "vehicleType", "photo", "ktp", "sim", "bank", "accountName", "accountNo"],
+  assistant: ["name", "phone", "address", "serviceType", "ktp", "fotoKtp", "socialMedia"],
   customer: ["name", "phone", "email"],
   restaurant: [
     "name", "phone", "address", "businessName", "businessType", "ownerName", "role",
@@ -50,15 +50,37 @@ const REQUIRED = {
   ]
 };
 
+const FIELD_ALIASES = {
+  photo: ["photo", "profilePhoto", "fotoProfil", "regPhoto"],
+  photoFront: ["photoFront", "fotoFront", "frontPhoto"],
+  accountNo: ["accountNo", "accountNumber", "rekening", "nomorRekening"],
+  accountNumber: ["accountNumber", "accountNo", "rekening", "nomorRekening"],
+  vehicleType: ["vehicleType", "vehicle", "jenisKendaraan"],
+  serviceType: ["serviceType", "service", "jenisLayanan"],
+  bank: ["bank", "bankName"],
+  bankName: ["bankName", "bank"],
+  fotoKtp: ["fotoKtp", "ktpPhoto", "photo"],
+  socialMedia: ["socialMedia", "instagram", "tiktok", "facebook"]
+};
+
 const CONTRACT_FIELDS = new Set([
-  "name", "phone", "address", "email", "vehicleType", "serviceType", "photo", "photoFront",
-  "photoIndoor", "fotoKtp", "fotoSim", "fotoStnk", "ktp", "sim", "stnk", "businessName",
-  "businessType", "ownerName", "role", "village", "district", "city", "province", "openTime",
-  "closeTime", "operationalDays", "legalStatus", "bankName", "accountName", "accountNumber"
+  "name", "phone", "address", "email", "vehicleType", "vehicle", "serviceType", "photo", "profilePhoto", "fotoProfil",
+  "photoFront", "photoIndoor", "fotoKtp", "fotoSim", "fotoStnk", "ktp", "sim", "stnk", "bank", "bankName",
+  "accountName", "accountNumber", "accountNo", "businessName", "businessType", "ownerName", "role", "village",
+  "district", "city", "province", "openTime", "closeTime", "operationalDays", "legalStatus", "socialMedia"
 ]);
 
+function canonicalFieldSet(values) {
+  const raw = new Set((values || []).map(String));
+  const out = new Set(raw);
+  for (const [canonical, aliases] of Object.entries(FIELD_ALIASES)) {
+    if (aliases.some(a => raw.has(a))) out.add(canonical);
+  }
+  return out;
+}
+
 const S = {
-  version: "1.8.0",
+  version: "1.9.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -208,14 +230,33 @@ function fields(name, source) {
   const out = [];
   let m;
   const htmlAttr = /(?:id|name|data-field|data-key)\s*=\s*["']([^"']+)["']/gi;
-  while ((m = htmlAttr.exec(source))) {
-    if (CONTRACT_FIELDS.has(m[1]) || /^[a-z][A-Za-z0-9_-]{1,40}$/.test(m[1])) out.push(m[1]);
+  while ((m = htmlAttr.exec(source))) out.push(m[1]);
+
+  // Normalize common registration IDs to their persisted contract fields.
+  const idAliases = {
+    regName:"name", regPhone:"phone", regAddress:"address", regVehicleType:"vehicleType", regVehicle:"vehicle",
+    regPhoto:"photo", regFotoKtp:"fotoKtp", regFotoSim:"fotoSim", regFotoStnk:"fotoStnk", regKtp:"ktp", regSim:"sim",
+    regBank:"bank", regAccountName:"accountName", regAccountNo:"accountNo", mitraAlamat:"address", mitraArea:"area",
+    mitraKtp:"ktp", mitraFotoKtp:"fotoKtp", mitraSocialMedia:"socialMedia"
+  };
+  for (const [id, canonical] of Object.entries(idAliases)) if (source.includes(`id="${id}"`) || source.includes(`id='${id}'`)) out.push(canonical);
+
+  // Read actual data contract usage in renderers/handlers, not only HTML attributes.
+  // This is critical for Admin pages that render fields as ${data.photo}, data.photo,
+  // optional chains, destructuring, or object spreads.
+  const dataAccess = /\bdata\s*\??\.\s*([A-Za-z_$][\w$]*)/g;
+  while ((m = dataAccess.exec(source))) out.push(m[1]);
+  const dataBracket = /\bdata\s*\[\s*["']([A-Za-z_$][\w$]*)["']\s*\]/g;
+  while ((m = dataBracket.exec(source))) out.push(m[1]);
+  const interpolation = /\$\{\s*(?:data|application|partner|payload)\s*\??\.\s*([A-Za-z_$][\w$]*)/g;
+  while ((m = interpolation.exec(source))) out.push(m[1]);
+
+  if (/\.js$/i.test(name)) {
+    const jsFields = /\b(name|phone|address|email|vehicleType|vehicle|photo|profilePhoto|fotoProfil|photoFront|photoIndoor|fotoKtp|fotoSim|fotoStnk|ktp|sim|stnk|bank|bankName|accountName|accountNumber|accountNo|serviceType|businessName|businessType|ownerName|role|village|district|city|province|openTime|closeTime|operationalDays|legalStatus|socialMedia)\b/g;
+    while ((m = jsFields.exec(source))) out.push(m[1]);
   }
-  const jsFields = /\b(name|phone|address|email|vehicleType|photo|photoFront|photoIndoor|fotoKtp|fotoSim|fotoStnk|ktp|sim|stnk|bankName|accountName|accountNumber|serviceType|businessName|businessType|ownerName|role|village|district|city|province|openTime|closeTime|operationalDays|legalStatus)\b/g;
-  if (/\.js$/i.test(name)) while ((m = jsFields.exec(source))) out.push(m[1]);
   return [...new Set(out)];
 }
-
 
 function sourceLines(source) {
   return String(source || "").split(/\r?\n/);
@@ -385,10 +426,11 @@ async function resolveRootCause(c) {
   if (c.diagnosis.code === "DATA_CONSISTENCY") {
     const scan = await scanConsistency();
     const relevant = scan.findings.filter(f => f.kind === "ADMIN_PRESENTATION_GAP" || f.kind === "SOURCE_CONTRACT_GAP");
-    const gap = relevant.find(f => f.sourceFile === originalTarget) || relevant[0];
+    const gap = relevant.find(f => f.sourceFile === originalTarget) ||
+      relevant.find(f => f.targetFile === originalTarget) || null;
     if (gap) {
       return {
-        rootCauseFile: gap.targetFile || gap.sourceFile || originalTarget,
+        rootCauseFile: gap.kind === "ADMIN_PRESENTATION_GAP" ? (gap.targetFile || "bcgo-admin.html") : (gap.sourceFile || originalTarget),
         rootCauseStatus: "CONTRACT_ROOT_CAUSE_IDENTIFIED",
         sourceEvidence: [{ file: gap.sourceFile, targetFile: gap.targetFile, missing: gap.missing || [], evidenceStrength: "HIGH", reason: `Kontrak sumber ${gap.sourceFile} memiliki field yang belum dipetakan secara konsisten ke ${gap.targetFile || 'target'}.` }],
         resolvedOperation: null,
@@ -437,9 +479,40 @@ function findLikelyDomBinding(fileName, source, signature) {
 }
 
 function buildAdminGapOperations(targetFile, missingFields, adminSource) {
-  // A contract gap is a finding, not permission to invent UI. Medicine must locate
-  // an existing renderer/field mapping before it can propose a source edit.
-  return [];
+  if (targetFile !== "bcgo-admin.html" || !adminSource || !missingFields?.length) return [];
+  const source = String(adminSource);
+  const operations = [];
+  const labels = {
+    photo:"Foto Profil", photoFront:"Foto Depan", vehicleType:"Jenis Kendaraan", serviceType:"Jenis Layanan",
+    ktp:"Nomor KTP", sim:"Nomor SIM", stnk:"Nomor STNK", bank:"Bank / E-Wallet", bankName:"Bank / E-Wallet",
+    accountName:"Nama Rekening", accountNo:"Nomor Rekening / Akun", accountNumber:"Nomor Rekening / Akun",
+    socialMedia:"Media Sosial", name:"Nama", phone:"Telepon", address:"Alamat", email:"Email"
+  };
+  const valueExpr = f => {
+    const alias = FIELD_ALIASES[f]?.[0] || f;
+    return `data.${alias} || '-'`;
+  };
+
+  // Find an existing detail-row in the Admin renderer. The patch is allowed only as
+  // an exact insertion next to an existing renderer block; Medicine never fabricates
+  // a new renderer/function or rewrites unrelated code.
+  const rowRe = /<div\s+class=["']detail-row["'][\s\S]*?<\/div>\s*\n?/gi;
+  const rows = [...source.matchAll(rowRe)];
+  if (!rows.length) return [];
+  const anchor = rows.find(m => /Kontak|Nama|Alamat|Kendaraan|Rekening/i.test(m[0])) || rows[0];
+  const marker = anchor[0];
+  const line = lineOf(source, anchor.index);
+
+  const blocks = missingFields.slice(0, 6).map(rawField => {
+    const field = FIELD_ALIASES[rawField] ? rawField : rawField;
+    const label = labels[field] || field.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
+    return `\n\n            <div class="detail-row">\n                <span class="detail-label">\n                    ${label}\n                </span>\n                <span class="detail-value">\n                    \${${valueExpr(field)}}\n                </span>\n            </div>`;
+  });
+  if (blocks.length) operations.push({
+    type:"REPLACE_EXACT", file:targetFile, line, before:marker, after:marker + blocks.join(''),
+    reason:`Tambahkan ${blocks.length} field kontrak yang benar-benar hilang pada renderer Admin melalui satu replacement exact.`
+  });
+  return operations;
 }
 
 async function scanConsistency(targets = null) {
@@ -457,16 +530,17 @@ async function scanConsistency(targets = null) {
   for (const [type, req] of Object.entries(REQUIRED)) {
     const source = type === "driver" ? "driver.html" : type === "restaurant" ? "resto.html" : type === "assistant" ? "agentcgo.html" : "index.html";
     if (!result[source]?.ok) continue;
-    const sf = new Set((result[source].fields || []).map(safeLower));
-    const missing = req.filter(x => !sf.has(safeLower(x)));
+    const sf = canonicalFieldSet(result[source].fields || []);
+    const missing = req.filter(x => !sf.has(x) && !(FIELD_ALIASES[x] || []).some(a => sf.has(a)));
     if (missing.length) findings.push({ kind: "SOURCE_CONTRACT_GAP", sourceFile: source, missing });
   }
 
   const sources = ["driver.html", "resto.html", "agentcgo.html", "index.html", "food.html", "ride.html"];
   for (const source of sources) {
     if (!result[source]?.ok || !result["bcgo-admin.html"]?.ok) continue;
-    const sf = [...new Set((result[source].fields || []).map(safeLower))].filter(x => CONTRACT_FIELDS.has(x));
-    const missing = sf.filter(x => !admin.has(x));
+    const sf = [...canonicalFieldSet(result[source].fields || [])].filter(x => CONTRACT_FIELDS.has(x) || Object.values(FIELD_ALIASES).flat().includes(x));
+    const adminCanonical = canonicalFieldSet(result["bcgo-admin.html"].fields || []);
+    const missing = sf.filter(x => !adminCanonical.has(x) && !(FIELD_ALIASES[x] || []).some(a => adminCanonical.has(a)));
     if (missing.length) findings.push({ kind: "ADMIN_PRESENTATION_GAP", sourceFile: source, targetFile: "bcgo-admin.html", missing });
   }
 
@@ -476,7 +550,13 @@ async function scanConsistency(targets = null) {
     const directNullRisk = /\$\(\s*["'][^"']+["']\s*\)\.textContent\s*=|document\.getElementById\(\s*["'][^"']+["']\s*\)\.textContent\s*=/.test(source);
     if (directNullRisk) {
       const evs = exactDomEvidence(name, source, "");
-      for (const ev of evs) findings.push({ kind: "DOM_ASSIGNMENT_RISK", sourceFile: name, targetFile: name, selector: ev.selector, line: ev.line, evidenceStrength: ev.evidenceStrength, detail: ev.evidenceReason });
+      for (const ev of evs) {
+        // Existing DOM targets are not findings by themselves. Only missing targets
+        // are promoted; correlated runtime evidence remains visible as MEDIUM/HIGH.
+        if (ev.evidenceStrength === "HIGH" || ev.stackHit || ev.signatureHit) {
+          findings.push({ kind: "DOM_ASSIGNMENT_RISK", sourceFile: name, targetFile: name, selector: ev.selector, line: ev.line, evidenceStrength: ev.evidenceStrength, detail: ev.evidenceReason });
+        }
+      }
     }
   }
 
@@ -505,7 +585,7 @@ function buildRepairPlan(c, verification) {
       "The exact BEFORE text must be absent and the exact AFTER text must be present after execution."
     ],
     sourceWrite: false,
-    precision: { exactTargetRequired: true, exactEvidenceRequired: true, noGuessing: true },
+    precision: { exactTargetRequired: true, exactEvidenceRequired: true, exactOperationRequired: true, noGuessing: true, crossFileProofRequired: true },
     status: "PROPOSED",
     requiresHumanApproval: true,
     requiresPostValidation: true,
@@ -557,7 +637,7 @@ async function enrichRepairPlan(c, verification) {
   }
 
   const exactEvidence = plan.sourceEvidence.some(e => e.evidenceStrength === "HIGH");
-  const rootCauseProven = ["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE"].includes(plan.rootCauseStatus);
+  const rootCauseProven = ["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE", "CONTRACT_ROOT_CAUSE_IDENTIFIED"].includes(plan.rootCauseStatus);
   const operationMatchesRoot = plan.operations.length > 0 && plan.operations.every(op => op.file === plan.rootCauseFile && op.type === "REPLACE_EXACT" && op.before && op.after);
   if (plan.operations.length && exactEvidence && rootCauseProven && operationMatchesRoot) {
     plan.status = "PROPOSED";
@@ -642,6 +722,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
       plan.operations?.length &&
       plan.precisionGate === true &&
       plan.rootCauseFile === plan.operations[0]?.file &&
+      ["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE", "CONTRACT_ROOT_CAUSE_IDENTIFIED"].includes(plan.rootCauseStatus) &&
       plan.sourceEvidence.some(e => e.evidenceStrength === "HIGH") &&
       plan.operations.every(op => op.type === "REPLACE_EXACT" && op.before && op.after && op.file === plan.rootCauseFile)
     );
