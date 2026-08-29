@@ -82,8 +82,12 @@ function canonicalFieldSet(values) {
   return out;
 }
 
+const LOCAL_CHANNEL_NAME = "BCGO_MEDICINE_REALTIME_V2";
+let localChannel = null;
+let localRealtimeStarted = false;
+
 const S = {
-  version: "2.2.0",
+  version: "2.3.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -149,6 +153,44 @@ function latestRelevantLogs(file) {
   return S.logs.filter(l => !file || safeLower(l.fileName || l.source) === safeLower(file)).slice(0, 12);
 }
 
+function publishLocalMessage(payload) {
+  const message = { ...payload, createdAt: payload.createdAt || now(), localOnly: true };
+  emit("local_message", { message });
+  try {
+    localChannel?.postMessage({ type: "MEDICINE_MESSAGE", message });
+  } catch (e) {
+    emit("realtime_warning", { channel: LOCAL_CHANNEL_NAME, message: e.message });
+  }
+}
+
+function startLocalRealtime() {
+  if (localRealtimeStarted) return;
+  localRealtimeStarted = true;
+  try {
+    if (typeof BroadcastChannel === "function") {
+      localChannel = new BroadcastChannel(LOCAL_CHANNEL_NAME);
+      localChannel.onmessage = event => {
+        const message = event?.data?.message;
+        if (!message?.text) return;
+        const key = message.clientMessageId || `${message.role}:${message.text}:${message.createdAt}`;
+        if (S.messages.some(m => (m.clientMessageId || m.id) === key)) return;
+        S.messages.push({ ...message, id: `local-${key}` });
+        S.messages = S.messages.slice(-200);
+        emit("local_message", { message });
+        emit("conversation", { messages: S.messages });
+      };
+      S.listeners.push(() => localChannel?.close());
+    }
+  } catch (e) {
+    localChannel = null;
+    emit("realtime_warning", { channel: LOCAL_CHANNEL_NAME, message: e.message });
+  }
+}
+
+function authAvailable() {
+  return !!auth.currentUser;
+}
+
 async function postSystemMessage(role, msg, meta = {}) {
   const clientMessageId = meta.clientMessageId || uid();
   const payload = {
@@ -160,11 +202,14 @@ async function postSystemMessage(role, msg, meta = {}) {
     clientMessageId,
     ...meta
   };
+  publishLocalMessage(payload);
+  if (!authAvailable()) return payload;
   try {
     await addDoc(collection(db, "medicine_messages"), payload);
   } catch (e) {
-    emit("local_message", { message: { ...payload, createdAt: now() }, storageError: e.message });
+    emit("storage_warning", { message: e.message, collection: "medicine_messages" });
   }
+  return payload;
 }
 
 function makeCase(log) {
@@ -411,7 +456,7 @@ async function resolveRootCause(c) {
   // important v1.8 behavior: an incorrect BCGO target is allowed to move.
   if (c.diagnosis.code === "DOM_NULL_REFERENCE") {
     const candidates = await buildSourceEvidence(originalTarget, c.signature);
-    const best = candidates.find(x => x.evidenceStrength === "HIGH");
+    const best = candidates.find(x => x.evidenceStrength === "HIGH") || candidates.find(x => x.evidenceStrength === "MEDIUM");
     if (!best) return { rootCauseFile: originalTarget, rootCauseStatus: "UNPROVEN", sourceEvidence: candidates.slice(0, 12), resolvedOperation: null, candidates: candidates.slice(0, 12) };
     const src = await fetchFile(best.file);
     const ops = findLikelyDomBinding(best.file, src.text, c.signature).filter(op => op.line === best.line || safeLower(op.before).includes(safeLower(best.selector)));
@@ -464,9 +509,38 @@ function findDomNullOperations(fileName, source, signature) {
   return ops;
 }
 
+function findVariableDomOperations(fileName, source, signature) {
+  if (!source || !safeLower(signature).includes("textcontent")) return [];
+  const out = [];
+  const bindings = [];
+  const bindRe = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:document\.getElementById|document\.querySelector)\(\s*["']([^"']+)["']\s*\)\s*;?/g;
+  let b;
+  while ((b = bindRe.exec(source)) && bindings.length < 80) bindings.push({ variable:b[1], selector:b[2], index:b.index });
+  for (const binding of bindings) {
+    const re = new RegExp(`(^|\n)([ \t]*)${escRegExp(binding.variable)}\.textContent\s*=\s*([^;\n]+);?`, "g");
+    let m;
+    while ((m = re.exec(source)) && out.length < 20) {
+      const before = m[0].replace(/^\n/, "");
+      const indent = m[2] || "";
+      const rhs = m[3];
+      const line = lineOf(source, m.index + (m[1] ? m[1].length : 0));
+      const after = `${indent}if (${binding.variable}) ${binding.variable}.textContent = ${rhs};`;
+      out.push({
+        type:"REPLACE_EXACT", file:fileName, line, selector:binding.selector, before, after,
+        reason:`Menambahkan guard pada assignment textContent yang memakai DOM reference '${binding.selector}'.`,
+        evidenceReason:`Binding '${binding.variable}' berasal dari document lookup yang ditemukan langsung pada source.`,
+        evidenceStrength: safeLower(signature).includes(safeLower(binding.selector)) ? "MEDIUM" : "LOW"
+      });
+    }
+  }
+  return out;
+}
+
 function findLikelyDomBinding(fileName, source, signature) {
   const operations = findDomNullOperations(fileName, source, signature);
   if (operations.length) return operations;
+  const variableOperations = findVariableDomOperations(fileName, source, signature);
+  if (variableOperations.length) return variableOperations;
 
   // Also identify direct getElementById(...).textContent assignments even when the
   // line was formatted differently. These remain reviewable exact replacements.
@@ -621,8 +695,8 @@ function buildCodePrescription(plan) {
       before: String(op.before || ""),
       after: String(op.after || ""),
       reason: text(op.reason || "Perubahan diturunkan dari source evidence.", 1200),
-      evidenceStrength: ev?.evidenceStrength || "UNVERIFIED",
-      evidenceReason: text(ev?.reason || ev?.evidenceReason || "", 1400),
+      evidenceStrength: op.evidenceStrength || ev?.evidenceStrength || "UNVERIFIED",
+      evidenceReason: text(op.evidenceReason || ev?.reason || ev?.evidenceReason || "", 1400),
       context,
       risk: operationRisk(op),
       beforeHash: sourceFingerprint(op.before),
@@ -716,8 +790,12 @@ async function enrichRepairPlan(c, verification) {
   plan.sourceEvidence = resolution.sourceEvidence || [];
 
   if (c.diagnosis.code === "DOM_NULL_REFERENCE") {
-    if (resolution.resolvedOperation && (resolution.sourceEvidence || []).some(e => e.evidenceStrength === "HIGH" && e.line === resolution.resolvedOperation.line)) {
-      plan.operations.push(resolution.resolvedOperation);
+    if (resolution.resolvedOperation) {
+      const op = { ...resolution.resolvedOperation };
+      const exactAtLine = (resolution.sourceEvidence || []).some(e => e.evidenceStrength === "HIGH" && Number(e.line) === Number(op.line));
+      op.evidenceStrength = exactAtLine ? "HIGH" : (op.evidenceStrength || "MEDIUM");
+      if (!exactAtLine) op.reviewOnly = true;
+      plan.operations.push(op);
     }
   }
 
@@ -893,6 +971,9 @@ function bcgoAnswer(q) {
   const active = activeCases();
   const x = safeLower(q);
   const file = mentionedFile(q);
+  if (/^(hai|halo|hello|pagi|siang|sore|malam)\b/.test(x)) {
+    return `Halo 👋 Saya BCGO. Saya tetap terjaga dan membaca state terbaru. ${active.length ? `Saat ini ada ${active.length} saraf aktif dan saya sedang mengawal ${active[0].source}.` : "Belum ada saraf aktif yang perlu dibedah, jadi saya tetap memantau telemetry."} Kalau Anda ingin, perintahkan saja: “cari penyebab utama”, “bedah ${file || "case ini"}”, atau “tampilkan kode perbaikannya”.`;
+  }
   if (/sinkron|synchron|jumlah|count|validasi|mitra|tidak sesuai|tidak sinkron/.test(x)) {
     const target = file || active[0]?.source || "bcgo-admin.html";
     const logs = latestRelevantLogs(target);
@@ -913,6 +994,15 @@ function medicineAnswer(q) {
   const x = safeLower(q);
   const active = activeCases();
   const file = mentionedFile(q);
+  if (/^(hai|halo|hello|pagi|siang|sore|malam)\b/.test(x)) {
+    return `Halo 👋 Saya Medicine. Saya sedang membuka jalur evidence, bukan sekadar menebak dari pesan error. ${active.length ? `Case aktif saya: ${active[0].source} (${active[0].status}).` : "Belum ada case aktif yang cukup kuat."} Kalau Anda bilang “cari penyebab utama”, saya akan trace dependency → source exact → root cause → BEFORE/AFTER bila bukti memungkinkan.`;
+  }
+  if (/tampilkan|lihat|mana.*kode|kode.*perbaikan|solusi.*kode/.test(x)) {
+    const plan = active[0]?.repairPlan;
+    const cp = plan?.codePrescription || buildCodePrescription(plan);
+    if (cp?.items?.length) return `Saya sudah punya ${cp.items.length} kandidat operasi source. Saya tampilkan BEFORE → AFTER di ruang operasi; status copy tetap mengikuti Precision Gate. ${cp.ready ? "Solusi siap direview." : "Sebagian evidence masih perlu review manusia."}`;
+    return `Saya belum mau menampilkan kode seolah-olah pasti benar. Saya lanjut mencari source exact dulu; begitu operasi exact ditemukan, BEFORE → AFTER akan muncul di ruang operasi.`;
+  }
   if (/sinkron|synchron|jumlah|count|validasi|mitra|tidak sesuai|tidak sinkron/.test(x)) {
     const target = file || active[0]?.source || "bcgo-admin.html";
     return `Saya akan memeriksa ${target} lintas-file: sumber data, kontrak field, engine, renderer Admin, dan telemetry. Jika akar masalah terbukti, saya ambil source exact lalu susun BEFORE → AFTER yang konkret untuk direview manusia.`;
@@ -959,7 +1049,7 @@ function autonomousThought(role) {
 }
 
 async function autonomousConversationTick() {
-  if (!S.autonomous.enabled || S.human.paused || !auth.currentUser) return;
+  if (!S.autonomous.enabled || S.human.paused) return;
   const turn = S.autonomous.turn++;
   const active = activeCases();
   // Every few turns the pair performs real work, not just small-talk: re-check
@@ -1002,13 +1092,7 @@ async function sendMessage(msg, role = "human") {
   if (!t) return;
   const clientMessageId = uid();
   S.lastClientMessageId = clientMessageId;
-  const payload = { role, text: t, actorUid: auth.currentUser?.uid || null, createdAt: serverTimestamp(), clientMessageId };
-
-  try {
-    await addDoc(collection(db, "medicine_messages"), payload);
-  } catch (e) {
-    emit("local_message", { message: { ...payload, createdAt: now() }, storageError: e.message });
-  }
+  await postSystemMessage(role, t, { clientMessageId });
   if (role !== "human") return;
   if (S.human.paused) {
     await postSystemMessage("medicine", "Medicine sedang dijeda oleh manusia. Pesan diterima, tetapi diagnosis/treatment baru ditahan.", { replyTo: clientMessageId });
@@ -1221,6 +1305,11 @@ async function requestReview(caseId) {
 }
 
 async function startConversation() {
+  startLocalRealtime();
+  if (!authAvailable()) {
+    emit("conversation", { messages: S.messages, transport: "LOCAL" });
+    return;
+  }
   try {
     const q = query(collection(db, "medicine_messages"), orderBy("createdAt", "desc"), limit(200));
     const unsub = onSnapshot(q, snapshot => {
@@ -1231,31 +1320,31 @@ async function startConversation() {
         seen.add(key);
         return true;
       });
-      emit("conversation", { messages: S.messages });
-    }, e => emit("conversation_error", { message: e.message }));
+      emit("conversation", { messages: S.messages, transport: "FIRESTORE" });
+    }, e => {
+      emit("conversation_error", { message: e.message });
+      emit("conversation", { messages: S.messages, transport: "LOCAL_FALLBACK", error: e.message });
+    });
     if (typeof unsub === "function") S.listeners.push(unsub);
-  } catch (e) { emit("conversation_error", { message: e.message }); }
+  } catch (e) {
+    emit("conversation_error", { message: e.message });
+    emit("conversation", { messages: S.messages, transport: "LOCAL_FALLBACK", error: e.message });
+  }
 }
+
 
 onAuthStateChanged(auth, async user => {
   S.human.uid = user?.uid || null;
-  emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
-  if (!user) { stopAutonomousConversation(); return; }
-
-  try {
-    const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
-    if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
-      emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
-      emit("local_message", { message: { role: "medicine", text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.", clientMessageId: "auth-denied" } });
-      return;
-    }
-  } catch (e) {
-    emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED" });
-    return;
+  emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null, optional: true });
+  startLocalRealtime();
+  if (user) {
+    startTelemetry();
+    startConversation();
+  } else {
+    // Medicine tetap hidup tanpa login: chat lokal + autonomous advisor tetap berjalan.
+    emit("auth_optional", { message: "Medicine berjalan dalam LOCAL MODE; Firestore akan dipakai otomatis saat sesi tersedia." });
+    startConversation();
   }
-
-  startTelemetry();
-  startConversation();
   startAutonomousConversation();
 });
 
@@ -1273,6 +1362,7 @@ const API = {
   stopAutonomousConversation,
   getCodePrescription: caseId => { const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase; return c?.repairPlan?.codePrescription || buildCodePrescription(c?.repairPlan); },
   buildCodePrescription,
+  resolveRootCause,
   getRegistry: () => ({ ...REGISTRY }),
   getState: () => ({ ...S, sourceCache: undefined })
 };
