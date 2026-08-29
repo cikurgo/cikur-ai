@@ -35,7 +35,10 @@ const ORGAN_REGISTRY = {
     "cikur-config.js": { type: "Sistem Config" },
     "bcgo-engine.js": { type: "Sistem Core" },
     "bcgo-admin.html": { type: "Sistem Admin" },
-    "bcgo.html": { type: "Sistem Monitor" }
+    "bcgo.html": { type: "Sistem Monitor" },
+    "data-cgo.html": { type: "Data Sistem" },
+    "bcgo-medicine.js": { type: "Otak Medicine" },
+    "bcgo-medicine.html": { type: "Antarmuka Medicine" }
 };
 
 const ACTIVE_WINDOW = 10 * 60 * 1000;
