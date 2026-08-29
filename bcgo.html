@@ -2,101 +2,544 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BCGO Universal Neural Monitor</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#050817;--panel:#0c1226;--panel2:#080d1c;--line:#202b49;--text:#e8eefc;--muted:#8490ad;--cyan:#22d3ee;--green:#34d399;--amber:#fbbf24;--red:#fb7185;--purple:#a78bfa;--blue:#60a5fa}
-*{box-sizing:border-box}html{background:var(--bg)}body{margin:0;background:radial-gradient(circle at 50% -10%,#162347 0,#050817 42%);color:var(--text);font:14px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}button,input{font:inherit}.app{width:min(1100px,100%);margin:auto;padding:16px;display:grid;gap:14px}.top{position:sticky;top:0;z-index:20;background:rgba(5,8,23,.9);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);padding:10px 0}.topin{display:flex;align-items:center;justify-content:space-between;gap:12px}.brand{display:flex;gap:10px;align-items:center}.dot{width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 16px var(--green);animation:pulse 1.8s infinite}.brand h1{font-size:17px;margin:0}.brand small{display:block;color:var(--muted);font-size:9px}.badge{font-size:9px;font-weight:800;padding:6px 9px;border:1px solid var(--line);border-radius:999px;color:var(--muted);white-space:nowrap}.panel{background:linear-gradient(180deg,rgba(13,19,40,.96),rgba(8,13,29,.96));border:1px solid var(--line);border-radius:16px;padding:15px;box-shadow:0 12px 40px rgba(0,0,0,.16)}.eyebrow{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:800}.sub{font-size:10px;color:var(--muted)}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.card{border:1px solid var(--line);border-radius:12px;background:var(--panel2);padding:11px;min-width:0}.metric b{display:block;font-size:22px;margin-top:3px}.metric.active b{color:var(--red)}.metric.ok b{color:var(--green)}.metric.recover b{color:var(--amber)}.metric.fire b{color:var(--blue)}.phase{min-height:72px;opacity:.42;transition:.25s}.phase.on{opacity:1;transform:translateY(-1px);box-shadow:0 0 24px rgba(96,165,250,.12)}.phase.in.on{border-color:#3b82f6}.phase.process.on{border-color:var(--amber)}.phase.review.on{border-color:var(--purple)}.phase.out.on{border-color:var(--green)}.phase strong{display:block;font-size:12px;margin-top:4px}.speech{min-height:82px;background:#020617;border:1px solid #263455;border-radius:12px;padding:13px;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;color:#9af6d1;white-space:pre-wrap}.bar{height:2px;background:#18213a;overflow:hidden;margin:8px 0}.bar:after{content:"";display:block;height:100%;width:30%;background:var(--cyan);animation:scan 1.2s linear infinite}.row{display:flex;justify-content:space-between;gap:10px;align-items:center}.tiny{font-size:9px;color:var(--muted)}.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.organs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.organ{min-height:82px;border:1px solid #173c3a;background:rgba(6,78,59,.13);border-radius:11px;padding:10px}.organ.active{border-color:#7f1d3d;background:rgba(127,29,61,.15);color:#fecdd3}.organ.recovered{border-color:#713f12;background:rgba(120,53,15,.12);color:#fde68a}.organ .file{font:11px ui-monospace,monospace;font-weight:800}.organ .msg{font-size:9px;color:var(--muted);margin-top:4px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.feed{display:grid;gap:7px;max-height:330px;overflow:auto}.feeditem{background:#030711;border:1px solid #17203a;border-radius:10px;padding:9px}.feeditem .head{display:flex;justify-content:space-between;gap:8px;font-size:9px;color:var(--muted)}.feeditem .body{font:10px/1.55 ui-monospace,monospace;margin-top:4px;word-break:break-word}.chat{display:grid;gap:9px}.chatfeed{height:330px;overflow:auto;background:#020617;border:1px solid #1b2642;border-radius:12px;padding:10px;display:grid;gap:8px;align-content:start}.bubble{max-width:90%;padding:9px 11px;border-radius:12px;font-size:11px}.bubble.me{justify-self:end;background:#17145b;border:1px solid #3730a3}.bubble.bcgo{justify-self:start;background:#06332c;border:1px solid #115e59}.bubble .who{font-size:8px;text-transform:uppercase;opacity:.55;margin-bottom:3px;font-weight:800}.compose{display:flex;gap:7px}.compose input{flex:1;background:#020617;border:1px solid #293657;color:var(--text);border-radius:10px;padding:10px;outline:0}.compose input:focus{border-color:#6366f1}.btn{border:1px solid #38476d;background:#111a35;color:var(--text);border-radius:10px;padding:9px 12px;cursor:pointer}.btn.primary{background:#4f46e5;border-color:#6366f1}.quick{display:flex;flex-wrap:wrap;gap:6px}.quick button{font-size:9px;padding:6px 8px}.case{border:1px solid #28405e;background:#07101e;border-radius:12px;padding:11px}.case strong{font:11px ui-monospace,monospace;color:#67e8f9}.case .tag{display:inline-block;font-size:8px;border:1px solid #475569;border-radius:999px;padding:2px 5px;color:#a5b4fc;margin-left:5px}.handoff{border-color:#155e75;background:rgba(8,47,73,.18)}.authGate{position:fixed;inset:0;z-index:100;background:rgba(2,6,23,.98);display:grid;place-items:center;padding:18px}.authCard{width:min(420px,100%);background:#0b1226;border:1px solid #263455;border-radius:18px;padding:20px}.authCard h2{margin:5px 0;font-size:21px}.authCard p{color:var(--muted);font-size:10px}.field{display:grid;gap:5px;margin:9px 0}.field label{font-size:9px;color:var(--muted)}.field input{width:100%;background:#020617;border:1px solid #293657;color:var(--text);border-radius:10px;padding:10px;outline:0}.authTabs{display:grid;grid-template-columns:1fr 1fr;gap:6px}.authTabs button.active{border-color:#6366f1;background:#27206f}.authMsg{font-size:10px;padding:8px;border-radius:9px;display:none;margin:8px 0}.authMsg.show{display:block}.authMsg.error{color:#fecdd3;background:#450a0a;border:1px solid #7f1d1d}.authMsg.ok{color:#bbf7d0;background:#052e16;border:1px solid #166534}.hidden{display:none!important}.muted{color:var(--muted)}@keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}@keyframes scan{from{transform:translateX(-140%)}to{transform:translateX(340%)}}@media(max-width:760px){.app{padding:10px}.grid4,.grid5,.grid3,.organs{grid-template-columns:repeat(2,1fr)}.phase{min-height:78px}.top{position:relative}.chatfeed{height:300px}}@media(max-width:430px){.grid4,.grid5,.grid3{grid-template-columns:repeat(2,1fr)}.organs{grid-template-columns:1fr}.brand h1{font-size:14px}.panel{padding:11px}}
+body{font-family:'Inter',sans-serif}
+.code-font{font-family:'Fira Code',monospace}
+.neural-card{transition:all .35s ease}
+.neural-active{transform:translateY(-2px);box-shadow:0 0 28px rgba(99,102,241,.18)}
+.chat-scroll{scroll-behavior:smooth}
+.signal-line{height:2px;position:relative;overflow:hidden}
+.signal-line:after{content:"";position:absolute;left:-30%;top:0;width:30%;height:100%;background:currentColor;animation:signal 1.2s linear infinite}
+@keyframes signal{from{left:-30%}to{left:100%}}
+@keyframes breathe{0%,100%{opacity:.45}50%{opacity:1}}
+.breathe{animation:breathe 2s ease-in-out infinite}
+.connection-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+.neural-event{border-left:2px solid #334155;padding-left:10px}
+.neural-event-live{border-left-color:#22c55e}
+.chat-thinking{animation:breathe 1s ease-in-out infinite}
 </style>
 </head>
-<body>
-<div id="authGate" class="authGate">
-  <div class="authCard">
-    <div class="eyebrow">CIKUR GO • BCGO SECURE CONTROL</div>
-    <h2>Masuk ke Pusat Saraf</h2>
-    <p>Akses membutuhkan akun <b>super_admin</b> aktif. Tidak ada AI/API eksternal di halaman ini; chat bekerja dari state telemetry lokal.</p>
-    <div class="authTabs"><button id="loginTab" class="btn active" type="button">Masuk</button><button id="registerTab" class="btn" type="button">Registrasi</button></div>
-    <div id="authMsg" class="authMsg"></div>
-    <form id="authForm">
-      <div class="field"><label>Email</label><input id="authEmail" type="email" autocomplete="email" required></div>
-      <div class="field"><label>Password</label><input id="authPassword" type="password" minlength="6" autocomplete="current-password" required></div>
-      <div class="field hidden" id="confirmWrap"><label>Konfirmasi Password</label><input id="authConfirm" type="password" minlength="6"></div>
-      <button id="authSubmit" class="btn primary" style="width:100%" type="submit">Masuk ke Dashboard</button>
-    </form>
-    <div class="tiny" style="margin-top:10px">Sesi Firebase memakai koneksi yang sama dari <span class="code">cikur-config.js</span>.</div>
-  </div>
+
+<body class="bg-slate-950 text-slate-100 antialiased p-4 md:p-6 min-h-screen">
+<div class="max-w-5xl mx-auto w-full space-y-5">
+
+<header class="flex justify-between items-center border-b border-slate-800 pb-4">
+    <div>
+        <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+            <span id="pulse-dot" class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></span>
+            BCGO Universal Neural Monitor
+        </h1>
+        <p class="text-xs text-slate-400 mt-1">Pusat Saraf Master & Pemantau Organ Lintas File Cikur Go</p>
+    </div>
+    <div id="system-status-badge" class="px-3 py-1 rounded-md text-xs font-semibold bg-slate-900 text-slate-400 border border-slate-700">
+        Membangunkan Saraf
+    </div>
+</header>
+
+<div class="bg-blue-950/40 border border-blue-800 rounded-xl px-4 py-3 text-xs text-blue-300 leading-relaxed">
+    🧠 <b>Neural Heartbeat aktif.</b> BCGO melakukan siklus IN → PROCESS → REVIEW → OUT secara terus-menerus.
+    Semua panel membaca <span class="code-font">BCGO_STATE</span> yang sama sehingga cycle, stage, telemetry, dan chat tidak boleh berbeda.
 </div>
 
-<div class="top"><div class="app topin">
-  <div class="brand"><span id="pulseDot" class="dot"></span><div><h1>🧠 BCGO Universal Neural Monitor</h1><small>Pusat Saraf Master • Telemetry • Diagnosis • Handoff Medicine</small></div></div>
-  <div id="systemBadge" class="badge">BOOT</div>
-</div></div>
+<div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-xs">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="text-slate-400">SUMBER KEBENARAN SARAF: <span class="code-font text-indigo-300">BCGO_STATE</span></div>
+        <div id="connection-state" class="font-semibold text-slate-400"><span class="connection-dot bg-slate-500"></span>CONNECTING</div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2 text-[10px] text-slate-500">
+        <div>Server signal: <span id="connection-age" class="text-slate-300">menunggu...</span></div>
+        <div>Telemetry: <span id="telemetry-source" class="text-slate-300">menunggu...</span></div>
+        <div>Integrity: <span id="state-integrity" class="text-emerald-400">SYNC</span></div>
+    </div>
+</div>
 
-<main class="app">
-  <section class="panel"><div class="row"><div><div class="eyebrow">Realtime health</div><div class="sub">Satu state hidup untuk monitor, telemetry, kasus, dan chat.</div></div><div id="connectionState" class="tiny">CONNECTING</div></div>
-    <div class="grid5" style="margin-top:10px"><div class="card metric"><span class="eyebrow">TOTAL ORGAN</span><b id="mTotal">15</b></div><div class="card metric active"><span class="eyebrow">ANOMALY AKTIF</span><b id="mActive">0</b></div><div class="card metric ok"><span class="eyebrow">STABIL</span><b id="mHealthy">15</b></div><div class="card metric recover"><span class="eyebrow">RECOVERED</span><b id="mRecovered">0</b></div><div class="card metric fire"><span class="eyebrow">FIRESTORE</span><b id="mFirestore">0</b></div></div>
-  </section>
+<section class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-2xl space-y-3">
+    <div class="flex justify-between items-center gap-3">
+        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Layar Dialog Saraf</div>
+        <div class="text-[10px] text-slate-500 code-font">NEURAL CYCLE #<span id="cycle-number">0</span></div>
+    </div>
+    <div id="live-speech" class="code-font text-sm bg-slate-950 p-4 rounded-lg border border-slate-800 text-emerald-400 min-h-[78px] flex items-center">
+        Membangunkan Pusat Saraf Master...
+    </div>
+    <div class="signal-line text-emerald-500 bg-slate-800"></div>
+    <div class="flex justify-between text-[10px] text-slate-500">
+        <span id="event-state">Menunggu impuls...</span>
+        <span id="cycle-mode">BOOT</span>
+    </div>
+</section>
 
-  <section class="panel"><div class="row"><div><div class="eyebrow">Neural dialog</div><div class="sub">BCGO berbicara berdasarkan bukti yang sedang hidup.</div></div><div class="code tiny">CYCLE #<span id="cycle">0</span></div></div>
-    <div id="speech" class="speech" style="margin-top:9px">Membangunkan Pusat Saraf Master...</div><div class="bar"></div><div class="row tiny"><span id="eventState">Menunggu impuls...</span><span id="cycleMode">BOOT</span></div>
-  </section>
+<section class="grid grid-cols-1 md:grid-cols-4 gap-3">
+    <div id="bagan-in" class="neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40">
+        <div class="text-xs font-bold text-slate-500 mb-1">TAHAP 01</div>
+        <div class="text-sm font-bold text-slate-200">IN (Pindai Organ)</div>
+        <div id="sub-in" class="text-[9px] text-slate-500 mt-2">Menunggu...</div>
+    </div>
+    <div id="bagan-process" class="neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40">
+        <div class="text-xs font-bold text-slate-500 mb-1">TAHAP 02</div>
+        <div class="text-sm font-bold text-slate-200">PROCESS (Deteksi Anomali)</div>
+        <div id="sub-process" class="text-[9px] text-slate-500 mt-2">Menunggu...</div>
+    </div>
+    <div id="bagan-review" class="neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40">
+        <div class="text-xs font-bold text-slate-500 mb-1">TAHAP 03</div>
+        <div class="text-sm font-bold text-slate-200">REVIEW (Diagnostik)</div>
+        <div id="sub-review" class="text-[9px] text-slate-500 mt-2">Menunggu...</div>
+    </div>
+    <div id="bagan-out" class="neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40">
+        <div class="text-xs font-bold text-slate-500 mb-1">TAHAP 04</div>
+        <div class="text-sm font-bold text-slate-200">OUT (Sinkronisasi)</div>
+        <div id="sub-out" class="text-[9px] text-slate-500 mt-2">Menunggu...</div>
+    </div>
+</section>
 
-  <section class="grid4"><div id="phaseIN" class="card phase in"><div class="eyebrow">01 • IN</div><strong>Pindai Organ</strong><div id="subIN" class="tiny">Menunggu</div></div><div id="phasePROCESS" class="card phase process"><div class="eyebrow">02 • PROCESS</div><strong>Deteksi Anomali</strong><div id="subPROCESS" class="tiny">Menunggu</div></div><div id="phaseREVIEW" class="card phase review"><div class="eyebrow">03 • REVIEW</div><strong>Diagnostik</strong><div id="subREVIEW" class="tiny">Menunggu</div></div><div id="phaseOUT" class="card phase out"><div class="eyebrow">04 • OUT</div><strong>Sinkronisasi</strong><div id="subOUT" class="tiny">Menunggu</div></div></section>
+<section class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pemetaan Organ File Target</div>
+    <div class="flex justify-between items-center text-sm gap-3">
+        <span class="text-slate-400">ID Organ / File Saraf:</span>
+        <span id="target-cell-id" class="code-font text-amber-400 font-semibold text-right">-</span>
+    </div>
+    <div class="flex justify-between items-start text-sm gap-3">
+        <span class="text-slate-400">Pesan Diagnostik:</span>
+        <span id="error-log-desc" class="code-font text-rose-400 font-semibold text-right break-all max-w-[70%]">Normal</span>
+    </div>
 
-  <section class="panel"><div class="eyebrow">Pemetaan Organ • Real-time</div><div class="row" style="margin-top:8px"><span class="muted">Target saraf</span><b id="target" class="code" style="color:#fbbf24">SYS_MASTER_REGISTRY</b></div><div class="row" style="align-items:flex-start;margin-top:5px"><span class="muted">Bukti terbaru</span><span id="errorDesc" class="code" style="color:#fb7185;text-align:right;max-width:72%">Belum ada anomaly aktif</span></div><div id="organGrid" class="organs" style="margin-top:10px"></div></section>
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-2 pt-2">
+        <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">
+            <div class="text-[9px] text-slate-500">TOTAL ORGAN</div><div id="metric-total" class="font-bold text-white">12</div>
+        </div>
+        <div class="rounded-lg border border-rose-900 bg-rose-950/20 px-3 py-2">
+            <div class="text-[9px] text-slate-500">ANOMALY AKTIF</div><div id="metric-active" class="font-bold text-rose-400">0</div>
+        </div>
+        <div class="rounded-lg border border-emerald-900 bg-emerald-950/20 px-3 py-2">
+            <div class="text-[9px] text-slate-500">STABIL</div><div id="metric-healthy" class="font-bold text-emerald-400">12</div>
+        </div>
+        <div class="rounded-lg border border-amber-900 bg-amber-950/20 px-3 py-2">
+            <div class="text-[9px] text-slate-500">RECOVERED</div><div id="metric-recovered" class="font-bold text-amber-400">0</div>
+        </div>
+        <div class="rounded-lg border border-blue-900 bg-blue-950/20 px-3 py-2">
+            <div class="text-[9px] text-slate-500">MITRA TERBACA</div><div id="metric-firestore" class="font-bold text-blue-400">0</div>
+        </div>
+    </div>
+</section>
 
-  <section class="grid3">
-    <div class="panel" style="grid-column:span 2"><div class="row"><div><div class="eyebrow">Laporan Error Terbaru</div><div class="sub">Sumber bukti yang masuk melalui <span class="code">system_logs</span>.</div></div><span id="logCounter" class="tiny">0 laporan</span></div><div id="errorFeed" class="feed" style="margin-top:9px"><div class="tiny">Menunggu telemetry...</div></div></div>
-    <div class="panel"><div class="eyebrow">Kasus → Medicine</div><div class="sub">Kandidat yang boleh ditelusuri Medicine.</div><div id="caseFeed" class="feed" style="margin-top:9px;max-height:330px"><div class="tiny">Belum ada kasus aktif.</div></div></div>
-  </section>
+<section class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Status Tiap File — Real-Time via Telemetry</div>
+    <div id="organ-grid" class="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs"></div>
+</section>
 
-  <section class="panel"><div class="row"><div><div class="eyebrow">Neural Event Stream</div><div class="sub">Event nyata yang baru diterima BCGO.</div></div><span id="eventCounter" class="tiny">0 event</span></div><div id="eventFeed" class="feed" style="margin-top:9px;max-height:240px"><div class="tiny">Menunggu event saraf...</div></div></section>
+<section class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+    <div class="flex justify-between items-center">
+        <div>
+            <div class="text-xs font-semibold text-cyan-300 uppercase tracking-wider">Neural Event Stream</div>
+            <div class="text-[10px] text-slate-500 mt-1">Urutan kejadian yang baru dilihat BCGO — bukan animasi palsu.</div>
+        </div>
+        <span id="event-counter" class="text-[10px] text-slate-500">0 event</span>
+    </div>
+    <div id="neural-events" class="space-y-2 max-h-64 overflow-y-auto">
+        <div class="text-xs text-slate-500">Menunggu event saraf...</div>
+    </div>
+</section>
 
-  <section class="panel"><div class="row"><div><div class="eyebrow" style="color:#67e8f9">Komunikasi Live dengan BCGO</div><div class="sub">Bukan chatbot eksternal. Jawaban dibentuk dari telemetry + konteks percakapan + perintah lokal.</div></div><span class="code tiny">BCGO::LOCAL_BRAIN</span></div>
-    <div id="chatFeed" class="chatfeed" style="margin-top:9px"></div><form id="chatForm" class="compose" style="margin-top:8px"><input id="chatInput" autocomplete="off" placeholder="Tanya atau beri perintah: cek index.html, status, error terakhir, scan ulang..."/><button class="btn primary" type="submit">Kirim</button></form>
-    <div class="quick" style="margin-top:7px"><button class="btn" data-q="Halo BCGO, apa yang sedang kamu kerjakan?">Apa yang kamu kerjakan?</button><button class="btn" data-q="Ada masalah sekarang?">Ada masalah?</button><button class="btn" data-q="Cek index.html">Cek index.html</button><button class="btn" data-q="Scan ulang sekarang">Scan ulang</button><button class="btn" data-q="Apa yang harus saya kirim ke Medicine?">Ke Medicine</button></div>
-  </section>
+<section class="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-  <section class="panel handoff"><div class="eyebrow">Batas kendali manusia</div><div class="sub" style="margin-top:4px">BCGO mendeteksi dan menyiapkan bukti. Ia tidak mengubah source code. Medicine wajib memverifikasi root cause + source exact sebelum treatment.</div></section>
-</main>
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+        <div class="flex justify-between items-center">
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Laporan Error Terbaru</div>
+            <span id="log-counter" class="text-[10px] text-slate-500">0 laporan</span>
+        </div>
+        <div id="error-feed" class="space-y-2 max-h-80 overflow-y-auto">
+            <div class="text-xs text-slate-500">Menunggu telemetry system_logs...</div>
+        </div>
+    </div>
+
+    <div class="bg-slate-900 border border-indigo-900 rounded-xl p-5 space-y-3">
+        <div class="flex justify-between items-center">
+            <div>
+                <div class="text-xs font-semibold text-indigo-300 uppercase tracking-wider">Komunikasi dengan BCGO</div>
+                <div class="text-[10px] text-slate-500 mt-1">Jawaban dibangun dari kondisi saraf aktual.</div>
+            </div>
+            <span class="text-[10px] code-font text-indigo-400">BCGO::CHAT</span>
+        </div>
+
+        <div id="chat-feed" class="chat-scroll bg-slate-950 border border-slate-800 rounded-lg p-3 h-72 overflow-y-auto space-y-3">
+            <div class="text-xs text-slate-500">BCGO sedang menyiapkan kanal komunikasi...</div>
+        </div>
+
+        <form id="chat-form" class="flex gap-2">
+            <input id="chat-input" autocomplete="off"
+                class="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                placeholder="Tanya BCGO: apa yang sedang kamu kerjakan?">
+            <button class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold">Kirim</button>
+        </form>
+
+        <div class="flex flex-wrap gap-2">
+            <button class="quick-q text-[10px] px-2 py-1 rounded-md border border-slate-700 text-slate-400" data-q="Hai BCGO, apa yang sedang kamu kerjakan?">Apa yang kamu kerjakan?</button>
+            <button class="quick-q text-[10px] px-2 py-1 rounded-md border border-slate-700 text-slate-400" data-q="Bagaimana status sistem sekarang?">Status sistem?</button>
+            <button class="quick-q text-[10px] px-2 py-1 rounded-md border border-slate-700 text-slate-400" data-q="Ada masalah atau error?">Ada masalah?</button>
+        </div>
+    </div>
+
+</section>
+</div>
 
 <script type="module">
-import { db, auth } from "./cikur-config.js";
-import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { doc, getDoc, onSnapshot, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { runAutonomousEngine } from "./bcgo.js";
+import { runAutonomousEngine } from './bcgo.js';
 
-const $=id=>document.getElementById(id);
-const esc=v=>String(v??"-").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
-const fmt=v=>{try{const d=v?.toDate?v.toDate():new Date(v);return Number.isNaN(d.getTime())?"-":d.toLocaleString("id-ID")}catch{return "-"}};
+const $ = id => document.getElementById(id);
 
-const gate=$("authGate"), form=$("authForm"), msg=$("authMsg"), loginTab=$("loginTab"), registerTab=$("registerTab"), confirmWrap=$("confirmWrap"), confirm=$("authConfirm"), submit=$("authSubmit");
-let mode="login", adminWatch=null;
-function message(text,type="error"){msg.textContent=text;msg.className=`authMsg show ${type}`}
-function clearMsg(){msg.textContent="";msg.className="authMsg"}
-function setMode(m){mode=m;const reg=m==="register";loginTab.classList.toggle("active",!reg);registerTab.classList.toggle("active",reg);confirmWrap.classList.toggle("hidden",!reg);confirm.required=reg;submit.textContent=reg?"Daftar & Ajukan Akses":"Masuk ke Dashboard";clearMsg()}
-loginTab.onclick=()=>setMode("login");registerTab.onclick=()=>setMode("register");
-function showGate(){gate.classList.remove("hidden")}; function hideGate(){gate.classList.add("hidden")}
-function friendly(e){const m={"auth/invalid-credential":"Email atau password salah.","auth/invalid-login-credentials":"Email atau password salah.","auth/email-already-in-use":"Email sudah terdaftar.","auth/weak-password":"Password terlalu lemah.","auth/invalid-email":"Format email tidak valid.","auth/too-many-requests":"Terlalu banyak percobaan.","auth/network-request-failed":"Koneksi internet bermasalah."};return m[e?.code]||e?.message||"Autentikasi gagal."}
-async function check(user){if(!user)return false;const s=await getDoc(doc(db,"admin_users",user.uid));const d=s.exists()?s.data():null;return d?.active===true&&d?.role==="super_admin"}
-form.addEventListener("submit",async e=>{e.preventDefault();submit.disabled=true;clearMsg();try{const email=$("authEmail").value.trim(),password=$("authPassword").value;if(mode==="register"){if(password!==confirm.value)throw new Error("Konfirmasi password tidak sama.");const c=await createUserWithEmailAndPassword(auth,email,password);try{await setDoc(doc(db,"admin_requests",c.user.uid),{uid:c.user.uid,email,status:"pending",requestedAt:serverTimestamp()})}catch{}await signOut(auth);form.reset();setMode("login");message("Registrasi berhasil. Menunggu persetujuan Super Admin.","ok")}else await signInWithEmailAndPassword(auth,email,password)}catch(e){message(friendly(e))}finally{submit.disabled=false}});
+const liveSpeech = $('live-speech');
+const targetCellId = $('target-cell-id');
+const errorLogDesc = $('error-log-desc');
+const badge = $('system-status-badge');
+const pulse = $('pulse-dot');
+const cycleNumber = $('cycle-number');
+const eventState = $('event-state');
+const cycleMode = $('cycle-mode');
 
-onAuthStateChanged(auth,async user=>{if(adminWatch){adminWatch();adminWatch=null}if(!user){showGate();return}try{if(!(await check(user))){showGate();message("Akun harus super_admin aktif untuk membuka monitor.");return}hideGate();adminWatch=onSnapshot(doc(db,"admin_users",user.uid),async s=>{const d=s.exists()?s.data():null;if(!(d?.active===true&&d?.role==="super_admin")){await signOut(auth);showGate();message("Akses Super Admin tidak lagi aktif.")}})}catch(e){showGate();message("Status Admin gagal diverifikasi: "+e.message)}});
+const bagans = {
+    IN: $('bagan-in'),
+    PROCESS: $('bagan-process'),
+    REVIEW: $('bagan-review'),
+    OUT: $('bagan-out')
+};
 
-const phases={IN:$('phaseIN'),PROCESS:$('phasePROCESS'),REVIEW:$('phaseREVIEW'),OUT:$('phaseOUT')};
-const subs={IN:$('subIN'),PROCESS:$('subPROCESS'),REVIEW:$('subREVIEW'),OUT:$('subOUT')};
-const chatFeed=$('chatFeed'); let chatReady=false;
-function addChat(role,text){const row=document.createElement('div');row.className=`bubble ${role==='user'?'me':'bcgo'}`;row.innerHTML=`<div class="who">${role==='user'?'Anda':'BCGO'}</div>${esc(text)}`;chatFeed.appendChild(row);chatFeed.scrollTop=chatFeed.scrollHeight}
-function renderOrgans(organs){const entries=Object.entries(organs||{});$('organGrid').innerHTML=entries.map(([file,v])=>{const cls=v.state==='ACTIVE'?'active':v.state==='RECOVERED'?'recovered':'';const label=v.state==='ACTIVE'?'ANOMALY':v.state==='RECOVERED'?'RECOVERED':'HEALTHY';return `<div class="organ ${cls}"><div class="file">${esc(file)}</div><div class="tiny">${esc(v.type)} • ${label}</div><div class="msg">${esc(v.message||'')}</div></div>`}).join('')}
-function renderLogs(logs){$('logCounter').textContent=`${logs?.length||0} laporan`;$('errorFeed').innerHTML=logs?.length?logs.map(l=>`<div class="feeditem"><div class="head"><b>${esc(l.fileName||'UNKNOWN')}</b><span>${esc(fmt(l.reportedAt))}</span></div><div class="body">${esc(l.message||'-')}</div></div>`).join(''):'<div class="tiny">Belum ada laporan error.</div>'}
-function renderEvents(events){const list=Array.isArray(events)?events.slice(0,12):[];$('eventCounter').textContent=`${events?.length||0} event`;$('eventFeed').innerHTML=list.length?list.map((e,i)=>`<div class="feeditem"><div class="head"><b style="color:${i===0?'#67e8f9':'#94a3b8'}">${esc(e.type||'EVENT')}</b><span>${esc(fmt(e.at))}</span></div><div class="body">${esc(e.message||'-')} → ${esc(e.target||'-')}</div></div>`).join(''):'<div class="tiny">Belum ada event saraf.</div>'}
-function renderCases(cases){$('caseFeed').innerHTML=cases?.length?cases.map(c=>`<div class="case"><strong>${esc(c.id)}</strong><span class="tag">${esc(c.severity)}</span><div class="tiny" style="margin-top:4px">Target: <span class="code">${esc(c.target)}</span> • ${esc(c.status)}</div><div class="tiny" style="margin-top:3px">Evidence: ${esc(c.evidence?.message||'-')}</div><div class="tiny" style="margin-top:4px;color:#67e8f9">READY_FOR_MEDICINE</div></div>`).join(''):'<div class="tiny">Belum ada kasus aktif yang cukup kuat untuk Medicine.</div>'}
-function activate(step,state){Object.entries(phases).forEach(([k,e])=>e?.classList.toggle('on',k===step));subs.IN.textContent=`Cycle #${state.cycle} • scanning`;subs.PROCESS.textContent=state.cycleMode==='INTERRUPTED'?'⚡ impuls real-time':'analisis telemetry';subs.REVIEW.textContent='memverifikasi bukti';subs.OUT.textContent='sinkronisasi'}
-function setBadge(step,state){$('systemBadge').textContent=state.cycleMode==='INTERRUPTED'?'⚡ IMPULS TERDETEKSI':step;const c={IN:'#60a5fa',PROCESS:'#fbbf24',REVIEW:'#a78bfa',OUT:'#34d399'}[step]||'#8490ad';$('systemBadge').style.color=c;$('systemBadge').style.borderColor=c;$('pulseDot').style.background=c;$('pulseDot').style.boxShadow=`0 0 16px ${c}`}
-function answer(text){if(!window.BCGOBrain)return "Pusat Saraf belum siap.";addChat('user',text);const a=window.BCGOBrain.ask(text);setTimeout(()=>addChat('bcgo',a),80)}
-$('chatForm').addEventListener('submit',e=>{e.preventDefault();const t=$('chatInput').value.trim();if(!t)return;$('chatInput').value='';answer(t)});document.querySelectorAll('.quick').forEach(b=>b.addEventListener('click',()=>answer(b.dataset.q)));
+const subtitles = {
+    IN: $('sub-in'),
+    PROCESS: $('sub-process'),
+    REVIEW: $('sub-review'),
+    OUT: $('sub-out')
+};
 
-runAutonomousEngine(state=>{if(!chatReady){chatReady=true;addChat('bcgo','Kanal komunikasi aktif. Saya membaca state saraf yang sama dengan monitor. Silakan bertanya biasa atau beri perintah.')} $('speech').textContent=`> [${state.step}] ${state.message}`;$('target').textContent=state.targetCell||'-';$('errorDesc').textContent=state.errorLog||'Belum ada anomaly aktif';$('cycle').textContent=state.cycle??0;$('cycleMode').textContent=state.cycleMode||'NORMAL';$('eventState').textContent=state.lastEventAt?`Impuls terakhir: ${fmt(state.lastEventAt)}`:'Menunggu impuls...';$('mTotal').textContent=state.metrics?.total??15;$('mActive').textContent=state.metrics?.active??0;$('mHealthy').textContent=state.metrics?.healthy??15;$('mRecovered').textContent=state.metrics?.recovered??0;$('mFirestore').textContent=state.metrics?.firestoreCount??0;$('connectionState').textContent=state.connection?.status||'CONNECTING';activate(state.step,state);setBadge(state.step,state);renderOrgans(state.systemOrgans);renderLogs(state.systemLogs);renderEvents(state.recentEvents);renderCases(state.activeCases)});
+const metrics = {
+    total: $('metric-total'),
+    active: $('metric-active'),
+    healthy: $('metric-healthy'),
+    recovered: $('metric-recovered'),
+    firestore: $('metric-firestore')
+};
+
+const organGrid = $('organ-grid');
+const errorFeed = $('error-feed');
+const logCounter = $('log-counter');
+const chatFeed = $('chat-feed');
+const chatForm = $('chat-form');
+const chatInput = $('chat-input');
+const connectionStateEl = $('connection-state');
+const connectionAgeEl = $('connection-age');
+const telemetrySourceEl = $('telemetry-source');
+const stateIntegrityEl = $('state-integrity');
+const neuralEventsEl = $('neural-events');
+const eventCounterEl = $('event-counter');
+
+let liveState = null;
+let conversation = [];
+
+function esc(value) {
+    return String(value ?? '-')
+        .replaceAll('&','&amp;')
+        .replaceAll('<','&lt;')
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;')
+        .replaceAll("'","&#039;");
+}
+
+function formatTime(value) {
+    try {
+        const date = value?.toDate ? value.toDate() : new Date(value);
+        if (Number.isNaN(date.getTime())) return '-';
+        return date.toLocaleString('id-ID');
+    } catch {
+        return '-';
+    }
+}
+
+function dimAll() {
+    Object.values(bagans).forEach(el => {
+        el.className = 'neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40';
+    });
+}
+
+function activatePhase(step, state) {
+    dimAll();
+
+    const classes = {
+        IN: 'bg-blue-950/90 border border-blue-500 shadow-lg shadow-blue-900/20',
+        PROCESS: 'bg-amber-950/90 border border-amber-500 shadow-lg shadow-amber-900/20',
+        REVIEW: 'bg-purple-950/90 border border-purple-500 shadow-lg shadow-purple-900/20',
+        OUT: 'bg-emerald-950/90 border border-emerald-500 shadow-lg shadow-emerald-900/20'
+    };
+
+    if (bagans[step]) {
+        bagans[step].className = `neural-card ${classes[step]} rounded-xl p-4 opacity-100 neural-active`;
+    }
+
+    const subText = {
+        IN: `Cycle #${state.cycle} • scanning`,
+        PROCESS: state.cycleMode === 'INTERRUPTED' ? '⚡ impuls real-time' : 'analysing telemetry',
+        REVIEW: 'diagnosing signal',
+        OUT: 'synchronizing'
+    };
+
+    Object.keys(subtitles).forEach(k => subtitles[k].textContent = subText[k]);
+}
+
+function setHeader(step, state) {
+    const styles = {
+        IN: ['bg-blue-950','text-blue-400','border-blue-800','Memindai Organ'],
+        PROCESS: ['bg-amber-950','text-amber-400','border-amber-800','Memproses Sinyal'],
+        REVIEW: ['bg-purple-950','text-purple-400','border-purple-800','Evaluasi Saraf'],
+        OUT: ['bg-emerald-950','text-emerald-400','border-emerald-800','Sistem Sinkron']
+    };
+
+    const [bg,text,border,label] = styles[step] || styles.OUT;
+    badge.className = `px-3 py-1 rounded-md text-xs font-semibold ${bg} ${text} border ${border}`;
+    badge.textContent = state.cycleMode === 'INTERRUPTED' ? '⚡ Impuls Terdeteksi' : label;
+
+    const dotColor = {
+        IN: 'bg-blue-500',
+        PROCESS: 'bg-amber-500',
+        REVIEW: 'bg-purple-500',
+        OUT: 'bg-emerald-500'
+    }[step] || 'bg-emerald-500';
+
+    pulse.className = `w-3 h-3 rounded-full ${dotColor} animate-ping`;
+}
+
+function renderOrgans(organs) {
+    const entries = Object.entries(organs || {});
+    organGrid.innerHTML = entries.map(([file, info]) => {
+        const active = info.state === 'ACTIVE';
+        const recovered = info.state === 'RECOVERED';
+
+        const classes = active
+            ? 'border-rose-800 bg-rose-950/50 text-rose-400 animate-pulse'
+            : recovered
+                ? 'border-amber-800 bg-amber-950/30 text-amber-400'
+                : 'border-emerald-800 bg-emerald-950/30 text-emerald-400';
+
+        const label = active ? 'ANOMALY' : recovered ? 'RECOVERED' : 'HEALTHY';
+
+        return `
+            <div class="border rounded-lg px-3 py-2 min-h-[72px] ${classes}">
+                <div class="font-semibold code-font">${esc(file)}</div>
+                <div class="text-[10px] opacity-80">${esc(info.type)} — ${label}</div>
+                <div class="text-[9px] opacity-60 mt-1">${esc(info.message || '')}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderLogs(logs) {
+    logCounter.textContent = `${logs?.length || 0} laporan`;
+
+    if (!logs?.length) {
+        errorFeed.innerHTML = '<div class="text-xs text-slate-500">Belum ada laporan error masuk.</div>';
+        return;
+    }
+
+    errorFeed.innerHTML = logs.map(log => `
+        <div class="border border-slate-800 bg-slate-950/70 rounded-lg px-3 py-2">
+            <div class="flex justify-between gap-3 text-[10px]">
+                <span class="font-bold text-slate-300 code-font">${esc(log.fileName || 'UNKNOWN')}</span>
+                <span class="text-slate-500">${esc(formatTime(log.reportedAt))}</span>
+            </div>
+            <div class="text-[9px] text-slate-500 uppercase mt-1">TELEMETRY</div>
+            <div class="text-xs text-slate-300 mt-1 code-font break-all">${esc(log.message || '-')}</div>
+        </div>
+    `).join('');
+    errorFeed.scrollTop = 0;
+}
+
+function addChat(role, text) {
+    const row = document.createElement('div');
+    row.className = role === 'user'
+        ? 'flex justify-end'
+        : 'flex justify-start';
+
+    const bubble = document.createElement('div');
+    bubble.className = role === 'user'
+        ? 'max-w-[90%] rounded-lg bg-indigo-950 border border-indigo-800 px-3 py-2 text-xs text-indigo-100'
+        : 'max-w-[90%] rounded-lg bg-emerald-950/40 border border-emerald-900 px-3 py-2 text-xs text-emerald-100';
+
+    bubble.innerHTML = `<div class="text-[9px] uppercase opacity-60 mb-1">${role === 'user' ? 'Anda' : 'BCGO'}</div>${esc(text)}`;
+    row.appendChild(bubble);
+    chatFeed.appendChild(row);
+    chatFeed.scrollTop = chatFeed.scrollHeight;
+}
+
+function getStateAgeText(state) {
+    const t = state?.connection?.lastServerAt ? new Date(state.connection.lastServerAt).getTime() : 0;
+    if (!t) return 'belum ada sinyal server';
+    const sec = Math.max(0, Math.round((Date.now() - t) / 1000));
+    return sec < 2 ? 'baru saja' : `${sec} detik lalu`;
+}
+
+function activeOrgans(state) {
+    return Object.entries(state?.systemOrgans || {}).filter(([,v]) => v?.state === 'ACTIVE');
+}
+
+function recoveredOrgans(state) {
+    return Object.entries(state?.systemOrgans || {}).filter(([,v]) => v?.state === 'RECOVERED');
+}
+
+function brainAnswer(question) {
+    const q = String(question || '').toLowerCase().trim();
+    const st = liveState || window.BCGO_STATE;
+    if (!st) return 'Saya belum menerima state saraf. Tunggu sebentar sampai neural monitor tersinkron.';
+
+    const active = activeOrgans(st);
+    const recovered = recoveredOrgans(st);
+    const files = Object.keys(st.systemOrgans || {});
+    const last = st.lastTelemetryFile || st.targetCell || '-';
+    const conn = st.connection?.status || 'UNKNOWN';
+
+    const says = (...words) => words.some(w => q.includes(w));
+
+    if (says('halo','hai','hello','pagi','siang','sore','malam')) {
+        return `Halo. Saya BCGO. Saat ini saya berada di tahap ${st.step}, neural cycle #${st.cycle}. Saya terus memantau ${st.metrics?.total ?? files.length} organ dan mendengarkan telemetry real-time.`;
+    }
+
+    if (says('sedang mengerjakan','sedang apa','kerjakan','ngapain','lagi apa')) {
+        return `Saat ini saya berada di tahap ${st.step}, neural cycle #${st.cycle}. ${st.message} Status saya: ${st.metrics?.active ?? active.length} anomaly aktif, ${st.metrics?.recovered ?? recovered.length} recovered, dan ${st.metrics?.healthy ?? 0} stabil.`;
+    }
+
+    if (says('cycle','siklus')) {
+        return `Neural cycle saya sekarang #${st.cycle}, tahap ${st.step}. Semua informasi cycle yang saya jawab berasal dari BCGO_STATE yang juga dipakai layar monitor ini.`;
+    }
+
+    if (says('aman','status sistem','status sekarang','kondisi sistem','semua aman')) {
+        if (conn === 'OFFLINE') return `Belum bisa saya nyatakan aman. Listener Firestore sedang bermasalah. Saya mempertahankan state terakhir dan menunggu koneksi pulih.`;
+        if (active.length) return `Belum sepenuhnya aman. Saya menemukan ${active.length} anomaly aktif: ${active.map(([f]) => f).join(', ')}. Saya sedang meninjau ${active[0][0]}.`;
+        return `Saat ini tidak ada anomaly aktif. ${st.metrics?.total ?? files.length} organ terpantau; ${st.metrics?.healthy ?? 0} stabil dan ${st.metrics?.recovered ?? 0} recovered. Koneksi: ${conn}.`;
+    }
+
+    if (says('masalah','error','anomaly','gangguan')) {
+        if (!active.length && !st.errorLog) return `Saat ini saya tidak melihat anomaly aktif. Saya tetap mendengarkan system_logs untuk impuls baru.`;
+        const detail = active.map(([f,v]) => `${f}: ${v.message}`).join(' | ');
+        return `Saya melihat ${active.length} anomaly aktif. ${detail || st.errorLog || 'Saya sedang mengevaluasi sumber gangguan.'}`;
+    }
+
+    if (says('recovered','pulih','dipulihkan')) {
+        return recovered.length ? `Saya memiliki ${recovered.length} organ dengan riwayat error yang sudah melewati window aktif: ${recovered.map(([f]) => f).join(', ')}.` : 'Saat ini belum ada organ yang berstatus RECOVERED dari telemetry yang saya terima.';
+    }
+
+    if (says('file terakhir','terakhir','telemetry terakhir','impuls terakhir')) {
+        return st.lastTelemetryAt ? `Impuls telemetry terakhir yang saya catat berasal dari ${last}. Saya menerimanya ${getStateAgeText(st)}.` : 'Belum ada impuls telemetry yang bisa saya pastikan dari state saat ini.';
+    }
+
+    if (says('kenapa','mengapa')) {
+        return `Saya sedang di ${st.step} karena state terbaru meminta saya menjalankan: ${st.message} Target saraf saya saat ini adalah ${st.targetCell || '-'}.`;
+    }
+
+    if (says('apa yang kamu lihat','lihat apa','pantau apa','memantau apa')) {
+        return `Saya sedang memantau ${st.metrics?.total ?? files.length} organ. Target saat ini ${st.targetCell || '-'}, dengan ${st.metrics?.active ?? active.length} anomaly aktif, ${st.metrics?.recovered ?? recovered.length} recovered, dan ${st.metrics?.healthy ?? 0} stabil.`;
+    }
+
+    return `Saya memahami pertanyaanmu, tetapi saya ingin tetap akurat. State saya sekarang: cycle #${st.cycle}, tahap ${st.step}, ${st.metrics?.active ?? active.length} anomaly aktif, koneksi ${conn}. Coba tanyakan “kamu sedang mengerjakan apa?”, “ada masalah?”, atau “telemetry terakhir apa?”.`;
+}
+
+window.BCGOBrain = {
+    ask(question) {
+        const answer = brainAnswer(question);
+        conversation.push({role:'user', text:String(question), at:Date.now()});
+        conversation.push({role:'bcgo', text:answer, at:Date.now(), cycle:liveState?.cycle ?? null});
+        conversation = conversation.slice(-20);
+        return answer;
+    },
+    getConversation() { return conversation.slice(); },
+    getState() { return liveState || window.BCGO_STATE || null; }
+};
+
+function sendQuestion(question) {
+    const text = String(question || '').trim();
+    if (!text) return;
+    addChat('user', text);
+    const answer = window.BCGOBrain.ask(text);
+    setTimeout(() => addChat('bcgo', answer), 120);
+}
+
+chatForm.addEventListener('submit', event => {
+    event.preventDefault();
+    const text = chatInput.value.trim();
+    if (!text) return;
+    chatInput.value = '';
+    sendQuestion(text);
+});
+
+document.querySelectorAll('.quick-q').forEach(button => {
+    button.addEventListener('click', () => sendQuestion(button.dataset.q));
+});
+
+function renderNeuralEvents(events) {
+    const list = Array.isArray(events) ? events.slice(0, 8) : [];
+    eventCounterEl.textContent = `${Array.isArray(events) ? events.length : 0} event`;
+    if (!list.length) {
+        neuralEventsEl.innerHTML = '<div class="text-xs text-slate-500">Belum ada event.</div>';
+        return;
+    }
+    neuralEventsEl.innerHTML = list.map((ev, i) => `
+        <div class="neural-event ${i === 0 ? 'neural-event-live' : ''} text-xs py-1">
+            <div class="flex justify-between gap-3">
+                <span class="text-cyan-300 code-font">${esc(ev.type || 'EVENT')}</span>
+                <span class="text-[9px] text-slate-600">${esc(formatTime(ev.at))}</span>
+            </div>
+            <div class="text-slate-300 mt-1">${esc(ev.message || '-')}</div>
+            <div class="text-[9px] text-slate-600 code-font">→ ${esc(ev.target || '-')}</div>
+        </div>`).join('');
+}
+
+function renderConnection(state) {
+    const conn = state.connection || {};
+    const status = conn.status || 'CONNECTING';
+    const map = {
+        LIVE: ['bg-emerald-500','text-emerald-400','LIVE — SERVER'],
+        CACHE: ['bg-amber-500','text-amber-400','CACHE — DATA LOKAL'],
+        OFFLINE: ['bg-rose-500','text-rose-400','OFFLINE — STATE TERAKHIR'],
+        CONNECTING: ['bg-slate-500','text-slate-400','CONNECTING']
+    };
+    const [dot, text, label] = map[status] || map.CONNECTING;
+    connectionStateEl.className = `font-semibold ${text}`;
+    connectionStateEl.innerHTML = `<span class="connection-dot ${dot}"></span>${label}`;
+    connectionAgeEl.textContent = getStateAgeText(state);
+    telemetrySourceEl.textContent = state.lastTelemetryFile || 'system_logs aktif';
+    stateIntegrityEl.textContent = state.cycle === liveState?.cycle ? 'SYNC' : 'UPDATING';
+}
+
+runAutonomousEngine(state => {
+    liveState = state;
+    window.BCGO_STATE = state;
+    renderConnection(state);
+    renderNeuralEvents(state.recentEvents);
+    liveSpeech.textContent = `> [${state.step}] ${state.message}`;
+    targetCellId.textContent = state.targetCell || '-';
+    errorLogDesc.textContent = state.errorLog || 'Normal (tidak ada anomali aktif)';
+
+    cycleNumber.textContent = state.cycle ?? 0;
+    cycleMode.textContent = state.cycleMode || 'NORMAL';
+    eventState.textContent = state.lastEventAt
+        ? `Impuls terakhir: ${formatTime(state.lastEventAt)}`
+        : 'Belum ada impuls baru';
+
+    metrics.total.textContent = state.metrics?.total ?? 12;
+    metrics.active.textContent = state.metrics?.active ?? 0;
+    metrics.healthy.textContent = state.metrics?.healthy ?? 12;
+    metrics.recovered.textContent = state.metrics?.recovered ?? 0;
+    metrics.firestore.textContent = state.metrics?.firestoreCount ?? 0;
+
+    activatePhase(state.step, state);
+    setHeader(state.step, state);
+    renderOrgans(state.systemOrgans);
+    renderLogs(state.systemLogs);
+
+    if (!chatFeed.dataset.ready) {
+        chatFeed.dataset.ready = '1';
+        chatFeed.innerHTML = '';
+        addChat('bcgo', `Kanal komunikasi aktif. Saya membaca BCGO_STATE yang sama dengan monitor. Saat ini saya berada di tahap ${state.step}, cycle #${state.cycle}. Silakan tanya apa yang sedang saya kerjakan.`);
+    }
+});
 </script>
 </body>
 </html>
