@@ -82,12 +82,8 @@ function canonicalFieldSet(values) {
   return out;
 }
 
-const LOCAL_CHANNEL_NAME = "BCGO_MEDICINE_REALTIME_V2";
-let localChannel = null;
-let localRealtimeStarted = false;
-
 const S = {
-  version: "2.4.0",
+  version: "2.3.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -153,72 +149,22 @@ function latestRelevantLogs(file) {
   return S.logs.filter(l => !file || safeLower(l.fileName || l.source) === safeLower(file)).slice(0, 12);
 }
 
-function publishLocalMessage(payload) {
-  const message = { ...payload, createdAt: payload.createdAt || now(), localOnly: true };
-  const key = message.clientMessageId || message.id || `${message.role}:${message.text}:${message.createdAt}`;
-  if (!S.messages.some(m => (m.clientMessageId || m.id) === key)) {
-    S.messages.push({ ...message, id: message.id || `local-${key}` });
-    S.messages = S.messages.slice(-200);
-  }
-  emit("local_message", { message });
-  emit("conversation", { messages: S.messages, transport: "LOCAL_OPTIMISTIC" });
-  try {
-    localChannel?.postMessage({ type: "MEDICINE_MESSAGE", message });
-  } catch (e) {
-    emit("realtime_warning", { channel: LOCAL_CHANNEL_NAME, message: e.message });
-  }
-  return message;
-}
-
-function startLocalRealtime() {
-  if (localRealtimeStarted) return;
-  localRealtimeStarted = true;
-  try {
-    if (typeof BroadcastChannel === "function") {
-      localChannel = new BroadcastChannel(LOCAL_CHANNEL_NAME);
-      localChannel.onmessage = event => {
-        const message = event?.data?.message;
-        if (!message?.text) return;
-        const key = message.clientMessageId || `${message.role}:${message.text}:${message.createdAt}`;
-        if (S.messages.some(m => (m.clientMessageId || m.id) === key)) return;
-        S.messages.push({ ...message, id: `local-${key}` });
-        S.messages = S.messages.slice(-200);
-        emit("local_message", { message });
-        emit("conversation", { messages: S.messages });
-      };
-      S.listeners.push(() => localChannel?.close());
-    }
-  } catch (e) {
-    localChannel = null;
-    emit("realtime_warning", { channel: LOCAL_CHANNEL_NAME, message: e.message });
-  }
-}
-
-function authAvailable() {
-  return !!auth.currentUser;
-}
-
 async function postSystemMessage(role, msg, meta = {}) {
   const clientMessageId = meta.clientMessageId || uid();
-  const localPayload = {
+  const payload = {
     role,
     text: text(msg, 1800),
     actorUid: role === "human" ? (auth.currentUser?.uid || null) : null,
     system: role !== "human",
-    createdAt: now(),
+    createdAt: serverTimestamp(),
     clientMessageId,
     ...meta
   };
-  publishLocalMessage(localPayload);
-
-  // IMPORTANT: never make the visible conversation wait for Firestore.
-  // Persistence is best-effort and runs in the background.
-  if (!authAvailable()) return localPayload;
-  const firestorePayload = { ...localPayload, createdAt: serverTimestamp() };
-  addDoc(collection(db, "medicine_messages"), firestorePayload)
-    .then(() => emit("message_persisted", { clientMessageId, role }))
-    .catch(e => emit("storage_warning", { message: e.message, collection: "medicine_messages", clientMessageId }));
-  return localPayload;
+  try {
+    await addDoc(collection(db, "medicine_messages"), payload);
+  } catch (e) {
+    emit("local_message", { message: { ...payload, createdAt: now() }, storageError: e.message });
+  }
 }
 
 function makeCase(log) {
@@ -231,6 +177,12 @@ function makeCase(log) {
     id: `CASE-${uid().toUpperCase()}`,
     source,
     signature: sig,
+    runtimeLocation: {
+      file: text(log.fileName || log.source || "", 160),
+      line: Number(log.lineNumber ?? log.line ?? log.lineno) || null,
+      col: Number(log.columnNumber ?? log.column ?? log.col) || null,
+      stack: text(log.stack || log.stackTrace || "", 1200)
+    },
     diagnosis: d,
     prescription: prescription(d),
     status: "DIAGNOSED",
@@ -324,6 +276,104 @@ function lineOf(source, offset) {
   return String(source || "").slice(0, Math.max(0, offset)).split(/\r?\n/).length;
 }
 
+
+function normalizeLocalRef(ref, fromFile = "") {
+  let value = String(ref || "").trim();
+  if (!value || /^(https?:|data:|blob:|javascript:|#)/i.test(value)) return null;
+  value = value.split(/[?#]/)[0];
+  if (!value) return null;
+  try {
+    const base = new URL(`https://medicine.local/${fromFile || "index.html"}`);
+    const url = new URL(value, base);
+    value = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
+  } catch {}
+  value = value.replace(/^\.\//, "");
+  return REGISTRY[value] ? value : null;
+}
+
+function extractDependencies(fileName, source) {
+  const out = new Set();
+  if (!source) return [];
+  let m;
+  const patterns = [
+    /<script[^>]+(?:src|data-src)=["']([^"']+)["']/gi,
+    /(?:import|export)\s+(?:[^"']+?\s+from\s+)?["']([^"']+)["']/g,
+    /import\s*\(\s*["']([^"']+)["']\s*\)/g,
+    /(?:fetch|navigator\.serviceWorker\.register)\s*\(\s*["']([^"']+)["']/g
+  ];
+  for (const re of patterns) {
+    while ((m = re.exec(source))) {
+      const normalized = normalizeLocalRef(m[1], fileName);
+      if (normalized && normalized !== fileName) out.add(normalized);
+    }
+  }
+  return [...out];
+}
+
+function dependencyGraph(results) {
+  const graph = {};
+  for (const [name, data] of Object.entries(results || {})) graph[name] = extractDependencies(name, data?.text || "");
+  return graph;
+}
+
+function dependencyClosure(root, graph, maxDepth = 5) {
+  const out = [];
+  const seen = new Set([root]);
+  const queue = [{ file: root, depth: 0 }];
+  while (queue.length) {
+    const { file, depth } = queue.shift();
+    if (depth >= maxDepth) continue;
+    for (const dep of graph[file] || []) {
+      if (seen.has(dep)) continue;
+      seen.add(dep);
+      out.push({ file: dep, depth: depth + 1, via: file });
+      queue.push({ file: dep, depth: depth + 1 });
+    }
+  }
+  return out;
+}
+
+function findAssignmentOperations(fileName, source, signature = "") {
+  if (!source) return [];
+  const ops = [];
+  const wantsText = /textcontent|innerhtml|value|classlist|style/i.test(signature) || /cannot set properties of null|cannot read properties of null/i.test(signature);
+  if (!wantsText) return ops;
+
+  const direct = [
+    /(?:document\.getElementById|document\.querySelector|\$)\(\s*["']([^"']+)["']\s*\)\s*\.textContent\s*=\s*([^;\n]+);?/g,
+    /(?:document\.getElementById|document\.querySelector|\$)\(\s*["']([^"']+)["']\s*\)\s*\.innerHTML\s*=\s*([^;\n]+);?/g,
+    /(?:document\.getElementById|document\.querySelector|\$)\(\s*["']([^"']+)["']\s*\)\s*\.value\s*=\s*([^;\n]+);?/g
+  ];
+  for (const re of direct) {
+    let m;
+    while ((m = re.exec(source)) && ops.length < 30) {
+      const property = /innerHTML/.test(m[0]) ? "innerHTML" : /\.value\s*=/.test(m[0]) ? "value" : "textContent";
+      const before = m[0];
+      const accessor = before.match(/(?:document\.getElementById|document\.querySelector|\$)\([^)]*\)/)?.[0];
+      if (!accessor) continue;
+      const rhs = m[2];
+      const after = `{ const __medicineEl = ${accessor}; if (__medicineEl) __medicineEl.${property} = ${rhs}; }`;
+      ops.push({ type: "REPLACE_EXACT", file: fileName, selector: m[1], property, line: lineOf(source, m.index), before, after, reason: `Guard DOM reference '${m[1]}' before assigning ${property}.` });
+    }
+  }
+
+  // Pre-bound element pattern: const el = document.getElementById('x'); ... el.textContent = ...
+  const bindRe = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(document\.getElementById|document\.querySelector|\$)\(\s*(["'])([^"']+)\3\s*\)\s*;?([\s\S]{0,900}?)(?:\1\s*\.textContent\s*=\s*([^;\n]+);?)/g;
+  let b;
+  while ((b = bindRe.exec(source)) && ops.length < 40) {
+    const whole = b[0];
+    const varName = b[1];
+    const rhs = b[6];
+    const assignIndex = whole.lastIndexOf(`${varName}.textContent`);
+    if (assignIndex < 0 || !rhs || whole.includes(`if (${varName})`)) continue;
+    const assignmentLine = lineOf(source, b.index + assignIndex);
+    const assignment = `${varName}.textContent = ${rhs};`;
+    const after = `${whole.slice(0, assignIndex)}if (${varName}) ${assignment}`;
+    ops.push({ type: "REPLACE_EXACT", file: fileName, selector: b[4], property: "textContent", line: assignmentLine, before: assignment, after, reason: `Guard bound DOM reference '${b[4]}' before assigning textContent.` });
+  }
+  return ops;
+}
+
 function domAssignmentCandidates(fileName, source) {
   if (!source) return [];
   const out = [];
@@ -350,8 +400,13 @@ function domAssignmentCandidates(fileName, source) {
 
 function htmlHasElement(source, id) {
   if (!source || !id) return false;
-  const q = escRegExp(id);
-  return new RegExp(`(?:id|name)\\s*=\\s*["']${q}["']`, "i").test(source);
+  const raw = String(id).trim();
+  const candidates = [raw, raw.replace(/^#/, "")];
+  return candidates.some(value => {
+    if (!value || /[.\s\[\]>:+~]/.test(value)) return false;
+    const q = escRegExp(value);
+    return new RegExp(`(?:id|name)\s*=\s*["']${q}["']`, "i").test(source);
+  });
 }
 
 function extractRuntimeLocation(signature) {
@@ -367,8 +422,7 @@ function loadedByPages(scriptFile, htmlResults) {
   const out = [];
   for (const [name, data] of Object.entries(htmlResults || {})) {
     if (!/\.html$/i.test(name) || !data?.text) continue;
-    const re = new RegExp(`<script[^>]+src=["'][^"']*${escRegExp(scriptFile)}(?:[?#][^"']*)?["']`, "i");
-    if (re.test(data.text)) out.push(name);
+    if (extractDependencies(name, data.text).includes(scriptFile)) out.push(name);
   }
   return out;
 }
@@ -385,25 +439,39 @@ function selectorFromSignature(signature, source) {
 
 function exactDomEvidence(fileName, source, signature, context = {}) {
   const out = [];
-  for (const c of domAssignmentCandidates(fileName, source)) {
+  const runtimeLocations = context.runtimeLocations || [];
+  const htmlResults = context.htmlResults || {};
+  const loadedBy = context.loadedBy || [];
+  const assignments = findAssignmentOperations(fileName, source, signature);
+  const accesses = assignments.length ? assignments : domAssignmentCandidates(fileName, source);
+
+  for (const c of accesses) {
     const selector = c.selector;
     if (!selector) continue;
-    const existsInSameDocument = /\.html$/i.test(fileName) ? htmlHasElement(source, selector) : null;
-    const stackHit = (context.runtimeLocations || []).some(x => x.file && safeLower(x.file) === safeLower(fileName) && (!x.line || x.line === c.line));
+    const sameDoc = /\.html$/i.test(fileName) ? htmlHasElement(source, selector) : null;
+    const runtimeHit = runtimeLocations.some(x => x.file && safeLower(x.file) === safeLower(fileName) && (!x.line || Number(x.line) === Number(c.line)));
     const signatureHit = safeLower(signature).includes(safeLower(selector));
     let strength = "LOW";
-    let reason = `Referensi DOM '${selector}' ditemukan pada source script; hubungan runtime belum terbukti.`;
-    if (existsInSameDocument === false) {
+    let reason = `Reference DOM '${selector}' ditemukan pada ${fileName}, tetapi hubungan dengan runtime belum terbukti.`;
+
+    if (sameDoc === false) {
       strength = "HIGH";
-      reason = `Referensi DOM '${selector}' tidak ditemukan pada dokumen ${fileName}.`;
-    } else if (existsInSameDocument === true && (stackHit || signatureHit)) {
-      strength = "MEDIUM";
-      reason = `Referensi DOM '${selector}' ada, tetapi bukti runtime menunjuk lokasi ini; penyebab perlu korelasi lintas-file.`;
-    } else if (stackHit || signatureHit) {
+      reason = `Reference DOM '${selector}' digunakan di ${fileName}, tetapi element tersebut tidak ditemukan di dokumen yang sama.`;
+    } else if (loadedBy.length) {
+      const missingPages = loadedBy.filter(page => htmlHasElement(htmlResults[page]?.text || "", selector) === false);
+      if (missingPages.length) {
+        strength = "HIGH";
+        reason = `Script ${fileName} dipakai oleh ${missingPages.join(', ')} tetapi target DOM '${selector}' tidak ditemukan pada halaman pemakainya.`;
+      } else if (runtimeHit || signatureHit) {
+        strength = "MEDIUM";
+        reason = `Script ${fileName} dipakai oleh ${loadedBy.join(', ')} dan runtime berkorelasi dengan reference '${selector}', tetapi target DOM masih perlu pembuktian.`;
+      }
+    } else if (runtimeHit || signatureHit) {
       strength = "MEDIUM";
       reason = `Lokasi source ${fileName}:${c.line} berkorelasi dengan evidence runtime.`;
     }
-    out.push({ ...c, existsInSameDocument, stackHit, signatureHit, evidenceStrength: strength, evidenceReason: reason });
+
+    out.push({ ...c, existsInSameDocument: sameDoc, stackHit: runtimeHit, signatureHit, evidenceStrength: strength, evidenceReason: reason, loadedBy });
   }
   return out;
 }
@@ -412,80 +480,77 @@ async function buildSourceEvidence(targetFile, signature) {
   const names = Object.keys(REGISTRY);
   const evidence = [];
   const runtimeLocations = extractRuntimeLocation(signature);
-  const loaded = {};
-  const htmlResults = {};
-  for (const name of names) {
-    if (!/\.html$/i.test(name)) continue;
-    const x = await fetchFile(name);
-    htmlResults[name] = x;
+  const results = {};
+  for (const name of names) results[name] = await fetchFile(name);
+  const graph = dependencyGraph(results);
+
+  const htmlPages = names.filter(n => /\.html$/i.test(n));
+  const priority = [];
+  const pushPriority = (file, reason = "direct") => {
+    if (!REGISTRY[file] || priority.some(x => x.file === file)) return;
+    priority.push({ file, reason });
+  };
+  pushPriority(targetFile, "target");
+  if (/\.html$/i.test(targetFile)) {
+    for (const dep of dependencyClosure(targetFile, graph, 6)) pushPriority(dep.file, `dependency:${dep.via}`);
   }
-  for (const name of names) {
-    const x = await fetchFile(name);
-    if (!x.ok || !x.text) continue;
-    const pages = /\.js$/i.test(name) ? loadedByPages(name, htmlResults) : [];
-    loaded[name] = pages;
-    for (const c of exactDomEvidence(name, x.text, signature, { runtimeLocations })) {
-      let strength = c.evidenceStrength;
-      let reason = c.evidenceReason;
-      if (/\.js$/i.test(name) && pages.length && c.selector) {
-        const missingPages = pages.filter(page => htmlHasElement(htmlResults[page]?.text || "", c.selector) === false);
-        if (missingPages.length) {
-          strength = "HIGH";
-          reason = `Script ${name} dipakai oleh ${missingPages.join(', ')} tetapi target DOM '${c.selector}' tidak ditemukan di halaman tersebut.`;
-        }
-      }
-      if (strength !== "LOW" || c.signatureHit || c.stackHit) evidence.push({ ...c, evidenceStrength: strength, evidenceReason: reason, loadedBy: pages });
+  for (const loc of runtimeLocations) pushPriority(normalizeLocalRef(loc.file) || loc.file, "runtime");
+  for (const page of htmlPages) {
+    for (const dep of dependencyClosure(page, graph, 4)) pushPriority(dep.file, `page-dependency:${page}`);
+  }
+  for (const name of names) pushPriority(name, "surface");
+
+  for (const item of priority) {
+    const name = item.file;
+    const x = results[name];
+    if (!x?.ok || !x.text) continue;
+    const loadedBy = /\.js$/i.test(name) ? loadedByPages(name, results) : [];
+    const local = exactDomEvidence(name, x.text, signature, { runtimeLocations, htmlResults: results, loadedBy });
+    for (const ev of local) {
+      const dependencyHit = item.reason.startsWith("dependency") || item.reason.startsWith("page-dependency");
+      const score = { HIGH: 3, MEDIUM: 2, LOW: 1 }[ev.evidenceStrength] + (dependencyHit ? 1 : 0) + (ev.stackHit ? 1 : 0) + (ev.signatureHit ? 1 : 0);
+      evidence.push({ ...ev, dependencyReason: item.reason, _score: score });
     }
   }
-  evidence.sort((a,b) => ({HIGH:3,MEDIUM:2,LOW:1}[b.evidenceStrength] - {HIGH:3,MEDIUM:2,LOW:1}[a.evidenceStrength]) || ((b.stackHit?1:0)-(a.stackHit?1:0)) || ((b.signatureHit?1:0)-(a.signatureHit?1:0)) || (a.line-b.line));
-  return evidence.slice(0, 20);
+
+  evidence.sort((a, b) => (b._score - a._score) || ({HIGH:3,MEDIUM:2,LOW:1}[b.evidenceStrength] - {HIGH:3,MEDIUM:2,LOW:1}[a.evidenceStrength]) || (a.line - b.line));
+  return evidence.slice(0, 30).map(({ _score, ...e }) => e);
 }
 
 async function resolveRootCause(c) {
   const originalTarget = c.source;
-  const runtimeLocations = extractRuntimeLocation(c.signature);
+  const runtimeLocations = [
+    ...extractRuntimeLocation(c.signature),
+    ...(c.runtimeLocation?.file ? [{ file: c.runtimeLocation.file, line: c.runtimeLocation.line, col: c.runtimeLocation.col }] : []),
+    ...extractRuntimeLocation(c.runtimeLocation?.stack || "")
+  ];
+  const candidates = await buildSourceEvidence(originalTarget, c.signature);
+  const high = candidates.filter(x => x.evidenceStrength === "HIGH");
 
-  // First prove the original target. Do not keep it merely because BCGO named it.
-  const direct = await fetchFile(originalTarget);
-  const directEvidence = exactDomEvidence(originalTarget, direct.text, c.signature, { runtimeLocations })
-    .filter(x => x.evidenceStrength === "HIGH");
-  if (directEvidence.length) {
-    const ops = findLikelyDomBinding(originalTarget, direct.text, c.signature)
-      .filter(op => directEvidence.some(e => e.file === op.file && e.line === op.line));
-    return {
-      rootCauseFile: originalTarget,
-      rootCauseStatus: "CONFIRMED_ORIGINAL_TARGET",
-      sourceEvidence: directEvidence.map(e => ({ file:e.file, selector:e.selector, property:e.property, line:e.line, before:e.before, evidenceStrength:e.evidenceStrength, reason:e.evidenceReason, loadedBy:e.loadedBy || [] })),
-      resolvedOperation: ops[0] || null,
-      candidates: directEvidence.slice(0, 8)
-    };
-  }
-
-  // For DOM/runtime errors, search the entire dependency surface. This is the
-  // important v1.8 behavior: an incorrect BCGO target is allowed to move.
+  // For a DOM-null error, prefer a source assignment whose script is actually loaded
+  // by the reported page and whose selector is absent there. This is stronger than
+  // simply blaming the file named by telemetry.
   if (c.diagnosis.code === "DOM_NULL_REFERENCE") {
-    const candidates = await buildSourceEvidence(originalTarget, c.signature);
-    const best = candidates.find(x => x.evidenceStrength === "HIGH") || candidates.find(x => x.evidenceStrength === "MEDIUM");
-    if (!best) return { rootCauseFile: originalTarget, rootCauseStatus: "UNPROVEN", sourceEvidence: candidates.slice(0, 12), resolvedOperation: null, candidates: candidates.slice(0, 12) };
-    const src = await fetchFile(best.file);
-    const ops = findLikelyDomBinding(best.file, src.text, c.signature).filter(op => op.line === best.line || safeLower(op.before).includes(safeLower(best.selector)));
-    return {
-      rootCauseFile: best.file,
-      rootCauseStatus: best.file === originalTarget ? "CONFIRMED_ORIGINAL_TARGET" : "TARGET_CORRECTED_BY_MEDICINE",
-      sourceEvidence: candidates.slice(0, 12).map(e => ({ file:e.file, selector:e.selector, property:e.property, line:e.line, before:e.before, evidenceStrength:e.evidenceStrength, reason:e.evidenceReason, loadedBy:e.loadedBy || [] })),
-      resolvedOperation: ops[0] || null,
-      candidates: candidates.slice(0, 12)
-    };
+    const best = high.find(x => x.file === originalTarget) || high.find(x => x.loadedBy?.some(p => p === originalTarget)) || high[0];
+    if (best) {
+      const src = await fetchFile(best.file);
+      const ops = findLikelyDomBinding(best.file, src.text, c.signature)
+        .filter(op => op.selector === best.selector || Number(op.line) === Number(best.line));
+      return {
+        rootCauseFile: best.file,
+        rootCauseStatus: best.file === originalTarget ? "CONFIRMED_ORIGINAL_TARGET" : "TARGET_CORRECTED_BY_MEDICINE",
+        sourceEvidence: candidates.slice(0, 18).map(e => ({ file:e.file, selector:e.selector, property:e.property, line:e.line, before:e.before, evidenceStrength:e.evidenceStrength, reason:e.evidenceReason, loadedBy:e.loadedBy || [], dependencyReason:e.dependencyReason })),
+        resolvedOperation: ops[0] || null,
+        candidates: candidates.slice(0, 18)
+      };
+    }
+    return { rootCauseFile: originalTarget, rootCauseStatus: "UNPROVEN", sourceEvidence: candidates.slice(0, 18), resolvedOperation: null, candidates: candidates.slice(0, 18) };
   }
 
-  // For consistency cases, explicitly prove which side of the contract is
-  // incomplete. This can identify a better root-cause file even when no patch
-  // can yet be generated safely.
   if (c.diagnosis.code === "DATA_CONSISTENCY") {
     const scan = await scanConsistency();
     const relevant = scan.findings.filter(f => f.kind === "ADMIN_PRESENTATION_GAP" || f.kind === "SOURCE_CONTRACT_GAP");
-    const gap = relevant.find(f => f.sourceFile === originalTarget) ||
-      relevant.find(f => f.targetFile === originalTarget) || null;
+    const gap = relevant.find(f => f.sourceFile === originalTarget) || relevant.find(f => f.targetFile === originalTarget) || null;
     if (gap) {
       return {
         rootCauseFile: gap.kind === "ADMIN_PRESENTATION_GAP" ? (gap.targetFile || "bcgo-admin.html") : (gap.sourceFile || originalTarget),
@@ -497,72 +562,29 @@ async function resolveRootCause(c) {
     }
   }
 
-  return { rootCauseFile: originalTarget, rootCauseStatus: "UNPROVEN", sourceEvidence: [], resolvedOperation: null, candidates: [] };
+  // For non-DOM cases, a strong runtime-correlated source may still identify the root.
+  const correlated = candidates.find(x => x.evidenceStrength === "HIGH" && (x.stackHit || x.signatureHit));
+  if (correlated) {
+    const src = await fetchFile(correlated.file);
+    const ops = findLikelyDomBinding(correlated.file, src.text, c.signature).filter(op => Number(op.line) === Number(correlated.line));
+    return {
+      rootCauseFile: correlated.file,
+      rootCauseStatus: "TARGET_CORRECTED_BY_MEDICINE",
+      sourceEvidence: candidates.slice(0, 18),
+      resolvedOperation: ops[0] || null,
+      candidates: candidates.slice(0, 18)
+    };
+  }
+
+  return { rootCauseFile: originalTarget, rootCauseStatus: "UNPROVEN", sourceEvidence: candidates.slice(0, 18), resolvedOperation: null, candidates: candidates.slice(0, 18) };
 }
 
 function findDomNullOperations(fileName, source, signature) {
-  if (!source) return [];
-  const ops = [];
-  const wanted = safeLower(signature).includes("textcontent");
-  if (!wanted) return ops;
-
-  const re = /^(\s*)(\$|document\.getElementById)\(\s*(["'])([^"']+)\3\s*\)\.textContent\s*=\s*([^;\n]+);?\s*$/gm;
-  let m;
-  while ((m = re.exec(source)) && ops.length < 12) {
-    const before = m[0];
-    const indent = m[1];
-    const accessor = m[2] === "$" ? `$(${m[3]}${m[4]}${m[3]})` : `document.getElementById(${m[3]}${m[4]}${m[3]})`;
-    const after = `${indent}{ const __medicineEl = ${accessor}; if (__medicineEl) __medicineEl.textContent = ${m[5]}; }`;
-    ops.push({ type: "REPLACE_EXACT", file: fileName, line: lineOf(source, m.index), before, after, reason: "Guard DOM reference before assigning textContent" });
-  }
-  return ops;
-}
-
-function findVariableDomOperations(fileName, source, signature) {
-  if (!source || !safeLower(signature).includes("textcontent")) return [];
-  const out = [];
-  const bindings = [];
-  const bindRe = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:document\.getElementById|document\.querySelector)\(\s*["']([^"']+)["']\s*\)\s*;?/g;
-  let b;
-  while ((b = bindRe.exec(source)) && bindings.length < 80) bindings.push({ variable:b[1], selector:b[2], index:b.index });
-  for (const binding of bindings) {
-    const re = new RegExp(`(^|\n)([ \t]*)${escRegExp(binding.variable)}\.textContent\s*=\s*([^;\n]+);?`, "g");
-    let m;
-    while ((m = re.exec(source)) && out.length < 20) {
-      const before = m[0].replace(/^\n/, "");
-      const indent = m[2] || "";
-      const rhs = m[3];
-      const line = lineOf(source, m.index + (m[1] ? m[1].length : 0));
-      const after = `${indent}if (${binding.variable}) ${binding.variable}.textContent = ${rhs};`;
-      out.push({
-        type:"REPLACE_EXACT", file:fileName, line, selector:binding.selector, before, after,
-        reason:`Menambahkan guard pada assignment textContent yang memakai DOM reference '${binding.selector}'.`,
-        evidenceReason:`Binding '${binding.variable}' berasal dari document lookup yang ditemukan langsung pada source.`,
-        evidenceStrength: safeLower(signature).includes(safeLower(binding.selector)) ? "MEDIUM" : "LOW"
-      });
-    }
-  }
-  return out;
+  return findAssignmentOperations(fileName, source, signature).filter(op => /textContent/i.test(op.property || ""));
 }
 
 function findLikelyDomBinding(fileName, source, signature) {
-  const operations = findDomNullOperations(fileName, source, signature);
-  if (operations.length) return operations;
-  const variableOperations = findVariableDomOperations(fileName, source, signature);
-  if (variableOperations.length) return variableOperations;
-
-  // Also identify direct getElementById(...).textContent assignments even when the
-  // line was formatted differently. These remain reviewable exact replacements.
-  const re = /(document\.getElementById\(\s*["']([^"']+)["']\s*\)\.textContent\s*=\s*[^;\n]+;)/g;
-  let m;
-  while ((m = re.exec(source)) && operations.length < 8) {
-    const before = m[1];
-    const id = m[2];
-    const rhs = before.split("=").slice(1).join("=").trim().replace(/;$/, "");
-    const after = `{ const __medicineEl = document.getElementById("${id}"); if (__medicineEl) __medicineEl.textContent = ${rhs}; }`;
-    operations.push({ type: "REPLACE_EXACT", file: fileName, line: lineOf(source, m.index), before, after, reason: "Guard DOM reference before assigning textContent" });
-  }
-  return operations;
+  return findAssignmentOperations(fileName, source, signature);
 }
 
 function buildAdminGapOperations(targetFile, missingFields, adminSource) {
@@ -704,8 +726,8 @@ function buildCodePrescription(plan) {
       before: String(op.before || ""),
       after: String(op.after || ""),
       reason: text(op.reason || "Perubahan diturunkan dari source evidence.", 1200),
-      evidenceStrength: op.evidenceStrength || ev?.evidenceStrength || "UNVERIFIED",
-      evidenceReason: text(op.evidenceReason || ev?.reason || ev?.evidenceReason || "", 1400),
+      evidenceStrength: ev?.evidenceStrength || "UNVERIFIED",
+      evidenceReason: text(ev?.reason || ev?.evidenceReason || "", 1400),
       context,
       risk: operationRisk(op),
       beforeHash: sourceFingerprint(op.before),
@@ -799,12 +821,8 @@ async function enrichRepairPlan(c, verification) {
   plan.sourceEvidence = resolution.sourceEvidence || [];
 
   if (c.diagnosis.code === "DOM_NULL_REFERENCE") {
-    if (resolution.resolvedOperation) {
-      const op = { ...resolution.resolvedOperation };
-      const exactAtLine = (resolution.sourceEvidence || []).some(e => e.evidenceStrength === "HIGH" && Number(e.line) === Number(op.line));
-      op.evidenceStrength = exactAtLine ? "HIGH" : (op.evidenceStrength || "MEDIUM");
-      if (!exactAtLine) op.reviewOnly = true;
-      plan.operations.push(op);
+    if (resolution.resolvedOperation && (resolution.sourceEvidence || []).some(e => e.evidenceStrength === "HIGH" && e.line === resolution.resolvedOperation.line)) {
+      plan.operations.push(resolution.resolvedOperation);
     }
   }
 
@@ -980,9 +998,6 @@ function bcgoAnswer(q) {
   const active = activeCases();
   const x = safeLower(q);
   const file = mentionedFile(q);
-  if (/^(hai|halo|hello|pagi|siang|sore|malam)\b/.test(x)) {
-    return `Halo 👋 Saya BCGO. Saya tetap terjaga dan membaca state terbaru. ${active.length ? `Saat ini ada ${active.length} saraf aktif dan saya sedang mengawal ${active[0].source}.` : "Belum ada saraf aktif yang perlu dibedah, jadi saya tetap memantau telemetry."} Kalau Anda ingin, perintahkan saja: “cari penyebab utama”, “bedah ${file || "case ini"}”, atau “tampilkan kode perbaikannya”.`;
-  }
   if (/sinkron|synchron|jumlah|count|validasi|mitra|tidak sesuai|tidak sinkron/.test(x)) {
     const target = file || active[0]?.source || "bcgo-admin.html";
     const logs = latestRelevantLogs(target);
@@ -996,22 +1011,13 @@ function bcgoAnswer(q) {
   }
   if (/aman|status|sehat|normal/.test(x)) return `Status saya: ${S.logs.length} telemetry log, ${active.length} case aktif, ${S.findings.length} finding. Saya tidak menyatakan aman tanpa evidence.`;
   if (/masalah|error|kendala|rusak|anomal/.test(x)) return active.length ? `Ya. Ada ${active.length} case aktif. Prioritas ${active[0].source}: ${active[0].diagnosis.title}. Saya dapat menyerahkannya ke Medicine untuk pemeriksaan dan penyembuhan terkontrol.` : `Saat ini belum ada case aktif dari telemetry yang saya terima.`;
-  return `BCGO menerima pesan Anda dari state aktual. Sebutkan file atau gejalanya jika ingin saya arahkan ke Medicine.`;
+  return `Halo 👋 Saya BCGO. Saya tidak akan menjawab kaku saja—saya akan melihat keadaan saraf saat ini, menjelaskan apa yang sedang kami telusuri, dan kalau Anda memberi perintah seperti “cari akar masalah”, saya langsung membuka jalur investigasi bersama Medicine.`;
 }
 
 function medicineAnswer(q) {
   const x = safeLower(q);
   const active = activeCases();
   const file = mentionedFile(q);
-  if (/^(hai|halo|hello|pagi|siang|sore|malam)\b/.test(x)) {
-    return `Halo 👋 Saya Medicine. Saya sedang membuka jalur evidence, bukan sekadar menebak dari pesan error. ${active.length ? `Case aktif saya: ${active[0].source} (${active[0].status}).` : "Belum ada case aktif yang cukup kuat."} Kalau Anda bilang “cari penyebab utama”, saya akan trace dependency → source exact → root cause → BEFORE/AFTER bila bukti memungkinkan.`;
-  }
-  if (/tampilkan|lihat|mana.*kode|kode.*perbaikan|solusi.*kode/.test(x)) {
-    const plan = active[0]?.repairPlan;
-    const cp = plan?.codePrescription || buildCodePrescription(plan);
-    if (cp?.items?.length) return `Saya sudah punya ${cp.items.length} kandidat operasi source. Saya tampilkan BEFORE → AFTER di ruang operasi; status copy tetap mengikuti Precision Gate. ${cp.ready ? "Solusi siap direview." : "Sebagian evidence masih perlu review manusia."}`;
-    return `Saya belum mau menampilkan kode seolah-olah pasti benar. Saya lanjut mencari source exact dulu; begitu operasi exact ditemukan, BEFORE → AFTER akan muncul di ruang operasi.`;
-  }
   if (/sinkron|synchron|jumlah|count|validasi|mitra|tidak sesuai|tidak sinkron/.test(x)) {
     const target = file || active[0]?.source || "bcgo-admin.html";
     return `Saya akan memeriksa ${target} lintas-file: sumber data, kontrak field, engine, renderer Admin, dan telemetry. Jika akar masalah terbukti, saya ambil source exact lalu susun BEFORE → AFTER yang konkret untuk direview manusia.`;
@@ -1025,7 +1031,7 @@ function medicineAnswer(q) {
   }
   if (/driver|foto|photo/.test(x)) return `Saya dapat membandingkan driver.html → bcgo-engine.js → bcgo-admin.html. Jika field foto ada di sumber tetapi hilang di Admin, saya akan tandai sebagai ADMIN_PRESENTATION_GAP dan membuat repair plan yang dapat diaudit.`;
   if (/ada.*(masalah|error)|kendala|rusak|sakit/.test(x)) return active.length ? `Saya menemukan ${active.length} case aktif. Target ${active[0].source}; diagnosis ${active[0].diagnosis.title}. Saya siap mencari akar masalah dan menyiapkan patch.` : `Belum ada case aktif yang cukup kuat untuk dinyatakan bermasalah.`;
-  return `Saya bekerja berdasarkan evidence. Sebutkan target file/gejala agar saya dapat memverifikasi dan menyiapkan perbaikan konkret.`;
+  return `Halo 👋 Saya Medicine. Saya siap membedah kasus sampai source exact. Anda bisa bilang “cari penyebab utama”, “tunjukkan kode yang rusak”, atau “bawa ke ruang operasi”; saya akan menjalankan tahapnya berdasarkan evidence, bukan tebakan.`;
 }
 
 function recipient(q) {
@@ -1046,24 +1052,31 @@ function currentConversationContext() {
 function autonomousThought(role) {
   const { active, c, plan, logs, findings } = currentConversationContext();
   const target = c?.repairPlan?.rootCauseFile || c?.rootCauseFile || c?.source || logs[0]?.fileName || "seluruh organ";
+  const evidenceCount = c?.sourceEvidence?.length || plan?.sourceEvidence?.length || 0;
+  const operations = plan?.operations?.length || 0;
   const last = logs[0]?.message || c?.signature || "belum ada impuls baru";
+
   if (role === "bcgo") {
-    if (active.length) return `Saya sedang menjaga ${active.length} saraf aktif. Fokus saya ${target}. Saya kirim bukti terbaru ke Medicine dan tidak mau menyimpulkan akar masalah hanya dari gejalanya.`;
-    if (findings.length) return `Tidak ada anomali aktif saat ini, tetapi saya masih melihat ${findings.length} finding kontrak. Saya terus membandingkan lintas-file supaya organ tidak dinyatakan sehat terlalu cepat.`;
-    return `Siklus saya sedang tenang. Saya tetap mendengarkan telemetry real-time; impuls terakhir yang saya pegang: ${text(last, 260)}.`;
+    if (active.length) return `Medicine, saya menjaga ${active.length} saraf aktif. Fokus saat ini ${target}. Saya kirim impuls terbaru: ${text(last, 240)}. Jangan berhenti di nama file laporan; telusuri dependency sampai sumber yang benar terbukti.`;
+    if (findings.length) return `Saya belum melihat anomali aktif, tetapi masih ada ${findings.length} finding kontrak. Saya ingin kita pelajari satu per satu supaya status HEALTHY benar-benar didukung evidence.`;
+    return `Siklus tenang, tetapi saya tetap mendengarkan telemetry. Impuls terakhir: ${text(last, 240)}. Kalau ada perubahan, saya ingin Medicine langsung memeriksa jalurnya.`;
   }
-  if (plan?.codePrescription?.ready) return `Saya menemukan jalur source yang cukup kuat pada ${target}. BEFORE dan AFTER sudah terbentuk dari operasi exact. Saya tahan di meja review sampai manusia memeriksa dan menyalin solusi.`;
-  if (c) return `Saya sedang membedah ${target}. Saat ini saya punya status ${c.status} dan ${c.sourceEvidence?.length || plan?.sourceEvidence?.length || 0} bukti source. Kalau bukti belum exact, saya lanjut menelusuri dependency daripada mengarang kode.`;
-  return `Saya tetap belajar dari telemetry yang masuk. Belum ada case aktif yang cukup kuat untuk dibawa ke ruang operasi; saya terus mencari korelasi source dan runtime.`;
+
+  if (plan?.codePrescription?.ready) return `BCGO, saya sudah menemukan source exact pada ${target}. Ada ${operations} operasi exact dan ${evidenceCount} evidence. BEFORE → AFTER sudah terbentuk; saya tahan source tetap terkunci sampai Human Review.`;
+  if (c) {
+    if (evidenceCount) return `Saya sedang membedah ${target}. Saat ini saya punya ${evidenceCount} bukti source dan ${operations} operasi kandidat. Saya sedang menguji apakah selector, halaman pemakai, dan source script benar-benar saling cocok.`;
+    return `Saya sedang membedah ${target}, tetapi bukti source belum cukup. Saya lanjut menelusuri dependency dan tidak akan mengarang BEFORE → AFTER.`;
+  }
+  return `Saya tetap belajar dari telemetry yang masuk. Belum ada case yang cukup kuat untuk ruang operasi. Saya terus mencari hubungan runtime → source → root cause.`;
 }
 
 async function autonomousConversationTick() {
-  if (!S.autonomous.enabled || S.human.paused) return;
+  if (!S.autonomous.enabled || S.human.paused || !auth.currentUser) return;
   const turn = S.autonomous.turn++;
   const active = activeCases();
   // Every few turns the pair performs real work, not just small-talk: re-check
   // the active case or refresh the cross-file evidence surface.
-  if (turn > 0 && turn % 4 === 0) {
+  if (turn > 0 && turn % 3 === 0) {
     if (active[0]) {
       await postSystemMessage("medicine", `Saya lanjut bedah ${active[0].source}. Saya ulangi trace terhadap evidence terbaru agar jalur source → root cause tidak berhenti pada diagnosis lama.`, { kind: "AUTONOMOUS_INVESTIGATION", caseId: active[0].id, autonomous: true });
       await verifyWithMedicine(active[0].source, { question: "Autonomous re-trace: terus pelajari saraf aktif.", requestedBy: "autonomous_medicine" });
@@ -1084,7 +1097,7 @@ async function autonomousConversationTick() {
 function startAutonomousConversation() {
   if (S.autonomous.timer) clearInterval(S.autonomous.timer);
   S.autonomous.timer = setInterval(() => autonomousConversationTick().catch(e => emit("conversation_error", { message: e.message })), 18000);
-  setTimeout(() => autonomousConversationTick().catch(() => {}), 5000);
+  setTimeout(() => autonomousConversationTick().catch(() => {}), 3500);
 }
 
 function stopAutonomousConversation() {
@@ -1101,97 +1114,35 @@ async function sendMessage(msg, role = "human") {
   if (!t) return;
   const clientMessageId = uid();
   S.lastClientMessageId = clientMessageId;
-  await postSystemMessage(role, t, { clientMessageId });
+  const payload = { role, text: t, actorUid: auth.currentUser?.uid || null, createdAt: serverTimestamp(), clientMessageId };
+
+  try {
+    await addDoc(collection(db, "medicine_messages"), payload);
+  } catch (e) {
+    emit("local_message", { message: { ...payload, createdAt: now() }, storageError: e.message });
+  }
   if (role !== "human") return;
-
   if (S.human.paused) {
-    await postSystemMessage("medicine", "Saya menerima pesan Anda. Mode Medicine sedang dijeda, jadi saya belum menjalankan diagnosis atau treatment baru.", { replyTo: clientMessageId });
+    await postSystemMessage("medicine", "Medicine sedang dijeda oleh manusia. Pesan diterima, tetapi diagnosis/treatment baru ditahan.", { replyTo: clientMessageId });
     return;
   }
 
-  const x = safeLower(t);
   const target = recipient(t);
-  const active = activeCases();
-  const file = mentionedFile(t) || S.activeCase?.source || active[0]?.source || null;
-
-  // Conversational commands: answer first, then perform the requested real action.
-  if (/^(hai|halo|hello|pagi|siang|sore|malam)\b/.test(x)) {
-    await postSystemMessage(target === "bcgo" ? "bcgo" : "medicine", target === "bcgo" ? bcgoAnswer(t) : medicineAnswer(t), { replyTo: clientMessageId, kind: "DIRECT_REPLY" });
-    return;
-  }
-
-  if (/\b(jeda|pause)\b/.test(x)) {
-    await postSystemMessage("medicine", "Baik. Saya jeda treatment baru; telemetry tetap saya pantau.", { replyTo: clientMessageId });
-    await setHumanMode(true);
-    return;
-  }
-  if (/\b(lanjut|resume|aktifkan lagi)\b/.test(x)) {
-    await setHumanMode(false);
-    return;
-  }
-
-  if (/minta review|review manusia|human review/.test(x)) {
-    if (S.activeCase) await requestReview(S.activeCase.id);
-    else await postSystemMessage("medicine", "Belum ada case aktif yang bisa saya kirim untuk human review.", { replyTo: clientMessageId });
-    return;
-  }
-
-  if (/tolak treatment|tolak repair|batalkan treatment|jangan (perbaiki|patch)/.test(x)) {
-    if (S.activeCase) await rejectTreatment(S.activeCase.id, t);
-    else await postSystemMessage("medicine", "Belum ada treatment aktif yang bisa ditolak.", { replyTo: clientMessageId });
-    return;
-  }
-
-  if (/setujui treatment|approve treatment|setuju treatment/.test(x)) {
-    if (S.activeCase) {
-      try { await approveTreatment(S.activeCase.id); }
-      catch (e) { await postSystemMessage("medicine", `Belum bisa disetujui: ${e.message}`, { replyTo: clientMessageId }); }
-    } else await postSystemMessage("medicine", "Belum ada case aktif untuk disetujui.", { replyTo: clientMessageId });
-    return;
-  }
-
-  if (/jalankan repair|terapkan repair|apply patch|jalankan patch|terapkan patch/.test(x)) {
-    if (S.activeCase) {
-      try { await applyPatch(S.activeCase.id); }
-      catch (e) { await postSystemMessage("medicine", `Repair belum dapat dijalankan: ${e.message}`, { replyTo: clientMessageId }); }
-    } else await postSystemMessage("medicine", "Belum ada case aktif untuk dijalankan repair-nya.", { replyTo: clientMessageId });
-    return;
-  }
-
-  if (/validasi ulang|verifikasi lagi|verifikasi ulang|validasi/.test(x)) {
-    await verifyWithMedicine(file, { question: t, requestedBy: "human_command" });
-    return;
-  }
-
-  if (/scan ulang|scan lintas|cek semua file|periksa semua file/.test(x)) {
-    await scanConsistency();
-    await postSystemMessage("medicine", `Scan lintas-file selesai. Saya menemukan ${S.findings.length} finding yang dapat ditinjau.`, { replyTo: clientMessageId, kind: "SCAN_COMMAND_RESULT" });
-    return;
-  }
-
-  if (/tampilkan|lihat|mana.*kode|kode.*perbaikan|solusi.*kode|before.*after|copy solusi/.test(x)) {
-    if (S.activeCase?.repairPlan?.operations?.length) {
-      await postSystemMessage("medicine", medicineAnswer(t), { replyTo: clientMessageId, kind: "CODE_REQUEST" });
-      emit("code_requested", { case: S.activeCase, plan: S.activeCase.repairPlan });
-    } else {
-      await postSystemMessage("medicine", `Baik, saya cari source exact untuk ${file || "case aktif"} dulu. Saya tidak akan mengarang BEFORE → AFTER.`, { replyTo: clientMessageId, kind: "CODE_REQUEST" });
-      await verifyWithMedicine(file, { question: t, requestedBy: "human_command" });
-    }
-    return;
-  }
-
-  if (isInvestigationCommand(t) || /cari|temukan|cek penyebab|analisa|analisis|bedah/.test(x)) {
-    await postSystemMessage("bcgo", `Baik. Saya buka jalur investigasi${file ? ` untuk ${file}` : ""}. Kita ikuti evidence → source exact → root cause → BEFORE → AFTER → review manusia.`, { kind: "INVESTIGATION_REQUEST", target: file, replyTo: clientMessageId });
-    await verifyWithMedicine(file, { question: t, requestedBy: "human_command" });
-    return;
-  }
-
   const answer = target === "bcgo" ? bcgoAnswer(t) : medicineAnswer(t);
   await postSystemMessage(target, answer, { replyTo: clientMessageId, kind: "DIRECT_REPLY" });
 
-  const asksMedicine = /medicine|periksa|pastikan|cek|sumber masalah|perbaiki|sembuhkan|patch/.test(x);
+  const asksMedicine = /medicine|periksa|verifikasi|pastikan|cek|sumber masalah|perbaiki|sembuhkan|patch/.test(safeLower(t));
+  if (isInvestigationCommand(t)) {
+    const file = mentionedFile(t) || S.activeCase?.source || activeCases()[0]?.source || null;
+    await postSystemMessage("bcgo", `Baik, saya buka jalur investigasi. Saya tidak akan berhenti di target awal${file ? ` ${file}` : ""}. Medicine saya minta mencari akar masalah, source exact, lalu menyiapkan BEFORE → AFTER bila bukti memungkinkan.`, { kind: "INVESTIGATION_REQUEST", target: file, replyTo: clientMessageId });
+    await verifyWithMedicine(file, { question: t, requestedBy: "human_command" });
+    return;
+  }
   if (target === "bcgo" && asksMedicine) {
-    await postSystemMessage("bcgo", `Saya teruskan ke Medicine${file ? ` untuk ${file}` : ""}.`, { kind: "BCGO_TO_MEDICINE", target: file, replyTo: clientMessageId });
+    const file = mentionedFile(t) || activeCases()[0]?.source || null;
+    await postSystemMessage("bcgo", `Saya meneruskan permintaan Anda ke Medicine${file ? ` untuk ${file}` : ""}. Medicine akan mencari akar masalah dan menyiapkan repair plan.`, {
+      kind: "BCGO_TO_MEDICINE", target: file, replyTo: clientMessageId
+    });
     await verifyWithMedicine(file, { question: t, requestedBy: "human_via_bcgo" });
   }
 }
@@ -1382,11 +1333,6 @@ async function requestReview(caseId) {
 }
 
 async function startConversation() {
-  startLocalRealtime();
-  if (!authAvailable()) {
-    emit("conversation", { messages: S.messages, transport: "LOCAL" });
-    return;
-  }
   try {
     const q = query(collection(db, "medicine_messages"), orderBy("createdAt", "desc"), limit(200));
     const unsub = onSnapshot(q, snapshot => {
@@ -1397,28 +1343,32 @@ async function startConversation() {
         seen.add(key);
         return true;
       });
-      emit("conversation", { messages: S.messages, transport: "FIRESTORE" });
-    }, e => {
-      emit("conversation_error", { message: e.message });
-      emit("conversation", { messages: S.messages, transport: "LOCAL_FALLBACK", error: e.message });
-    });
+      emit("conversation", { messages: S.messages });
+    }, e => emit("conversation_error", { message: e.message }));
     if (typeof unsub === "function") S.listeners.push(unsub);
-  } catch (e) {
-    emit("conversation_error", { message: e.message });
-    emit("conversation", { messages: S.messages, transport: "LOCAL_FALLBACK", error: e.message });
-  }
+  } catch (e) { emit("conversation_error", { message: e.message }); }
 }
-
 
 onAuthStateChanged(auth, async user => {
   S.human.uid = user?.uid || null;
-  emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null, optional: true });
-  emit("realtime_health", { firestore: user ? "AUTHENTICATED" : "LOCAL_MODE", chat: "LOCAL_READY", telemetry: "STARTING" });
-  startLocalRealtime();
+  emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
+  if (!user) { stopAutonomousConversation(); return; }
+
+  try {
+    const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
+    if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
+      emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
+      emit("local_message", { message: { role: "medicine", text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.", clientMessageId: "auth-denied" } });
+      return;
+    }
+  } catch (e) {
+    emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED" });
+    return;
+  }
+
   startTelemetry();
-  await startConversation();
+  startConversation();
   startAutonomousConversation();
-  emit("realtime_health", { firestore: user ? "LIVE" : "LOCAL_ONLY", chat: user ? "LIVE • FIRESTORE" : "LIVE • LOCAL", telemetry: window.CikurCloud?.listenSystemLogs ? "LIVE" : "UNAVAILABLE" });
 });
 
 const API = {
@@ -1435,7 +1385,6 @@ const API = {
   stopAutonomousConversation,
   getCodePrescription: caseId => { const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase; return c?.repairPlan?.codePrescription || buildCodePrescription(c?.repairPlan); },
   buildCodePrescription,
-  resolveRootCause,
   getRegistry: () => ({ ...REGISTRY }),
   getState: () => ({ ...S, sourceCache: undefined })
 };
