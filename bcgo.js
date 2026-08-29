@@ -1,879 +1,596 @@
 import {
-    collection,
-    onSnapshot,
-    query,
-    orderBy,
-    limit,
-    doc,
-    getDoc
+  collection,
+  onSnapshot,
+  query,
+  orderBy,
+  limit,
+  doc,
+  getDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
 
 /*
- * ============================================================
- * BCGO MASTER NERVE SYSTEM — CONTINUOUS NEURAL CYCLE
- * ============================================================
+ * BCGO MASTER NERVE SYSTEM v2.6
+ *
  * Prinsip:
- * 1. Firestore tetap menjadi sumber fakta real-time.
- * 2. Neural cycle berjalan terus: IN -> PROCESS -> REVIEW -> OUT.
- * 3. Event Firestore dapat menginterupsi cycle kapan saja.
- * 4. Komunikasi BCGO menjawab berdasarkan state aktual, bukan
- *    mengarang kondisi sistem.
+ * - Firestore = sumber fakta real-time.
+ * - Tidak memakai AI/API eksternal.
+ * - Chat adalah reasoning lokal berbasis state telemetry yang sedang hidup.
+ * - Error lintas-file hanya dianggap ACTIVE bila ada bukti telemetry yang valid.
+ * - Tidak pernah menulis source code secara otomatis.
+ * - Medicine hanya menerima konteks kasus; keputusan/perbaikan tetap terpisah.
  */
 
 const ORGAN_REGISTRY = {
-    "index.html": { type: "Halaman Utama" },
-    "assistant.html": { type: "Zona Customer" },
-    "food.html": { type: "Zona Customer" },
-    "ride.html": { type: "Zona Customer" },
-    "cikurgo2in1.html": { type: "Zona Customer" },
-    "agentcgo.html": { type: "Zona Mitra" },
-    "resto.html": { type: "Zona Mitra" },
-    "driver.html": { type: "Zona Mitra" },
-    "cikur-config.js": { type: "Sistem Config" },
-    "bcgo-engine.js": { type: "Sistem Core" },
-    "bcgo-admin.html": { type: "Sistem Admin" },
-    "bcgo.html": { type: "Sistem Monitor" },
-    "data-cgo.html": { type: "Data Sistem" },
-    "bcgo-medicine.js": { type: "Otak Medicine" },
-    "bcgo-medicine.html": { type: "Antarmuka Medicine" }
+  "index.html": { type: "Halaman Utama", role: "customer" },
+  "assistant.html": { type: "Zona Customer", role: "customer" },
+  "food.html": { type: "Zona Customer", role: "customer" },
+  "ride.html": { type: "Zona Customer", role: "customer" },
+  "cikurgo2in1.html": { type: "Zona Customer", role: "customer" },
+  "agentcgo.html": { type: "Zona Mitra", role: "mitra" },
+  "resto.html": { type: "Zona Mitra", role: "restaurant" },
+  "driver.html": { type: "Zona Mitra", role: "driver" },
+  "cikur-config.js": { type: "Sistem Config", role: "system" },
+  "bcgo-engine.js": { type: "Sistem Core", role: "system" },
+  "bcgo-admin.html": { type: "Sistem Admin", role: "admin" },
+  "bcgo.html": { type: "Sistem Monitor", role: "monitor" },
+  "data-cgo.html": { type: "Data Sistem", role: "data" },
+  "bcgo-medicine.js": { type: "Otak Medicine", role: "medicine" },
+  "bcgo-medicine.html": { type: "UI Medicine", role: "medicine" }
 };
 
-const ACTIVE_WINDOW = 10 * 60 * 1000;
+const ACTIVE_WINDOW = 15 * 60 * 1000;
+const CLOCK_SKEW = 5 * 60 * 1000;
 const LOG_LIMIT = 50;
 const PROBE_LIMIT = 5;
-const EVENT_HISTORY_LIMIT = 30;
-const HEARTBEAT_STALE_MS = 12000;
-const CYCLE = {
-    IN: 1800,
-    PROCESS: 1800,
-    REVIEW: 1800,
-    OUT: 1800
+const EVENT_LIMIT = 24;
+const CYCLE = { IN: 2200, PROCESS: 2200, REVIEW: 2200, OUT: 1800 };
+
+const normalizeFile = value => {
+  const raw = String(value || "").trim();
+  if (!raw) return "UNKNOWN";
+  const clean = raw.split("?")[0].split("#")[0];
+  return clean.substring(clean.lastIndexOf("/") + 1) || raw;
 };
 
 export function runAutonomousEngine(onCycleUpdate) {
-    if (typeof onCycleUpdate !== "function") {
-        throw new TypeError("BCGO membutuhkan callback UI.");
+  if (typeof onCycleUpdate !== "function") {
+    throw new TypeError("BCGO membutuhkan callback UI.");
+  }
+
+  let stopped = false;
+  let authorized = false;
+  let cycleNo = 0;
+  let phaseIndex = -1;
+  let cycleTimer = null;
+  let refreshTimer = null;
+  let unsubscribeAuth = null;
+  let unsubscribeFirestore = null;
+  let unsubscribeSystemLogs = null;
+  let latestSystemLogs = [];
+  let previousTopSignature = "";
+  let realtimeBusy = false;
+
+  const firestore = { connected: false, count: 0, error: null, lastServerAt: 0 };
+  const state = {
+    step: "IN",
+    message: "Membangunkan Pusat Saraf Master...",
+    targetCell: "SYS_MASTER_REGISTRY",
+    errorLog: null,
+    retryCount: 0,
+    cycle: 0,
+    cycleMode: "BOOT",
+    metrics: { total: Object.keys(ORGAN_REGISTRY).length, active: 0, recovered: 0, healthy: Object.keys(ORGAN_REGISTRY).length, firestoreCount: 0 },
+    systemOrgans: {},
+    systemLogs: [],
+    recentEvents: [],
+    firestore: { ...firestore },
+    lastEventAt: null,
+    lastTelemetryFile: null,
+    lastTelemetryAt: null,
+    lastTelemetryMessage: null,
+    activeCases: [],
+    medicineQueue: [],
+    connection: { status: "CONNECTING", lastServerAt: 0 }
+  };
+
+  function timestamp(value) {
+    try {
+      if (!value) return 0;
+      if (typeof value.toMillis === "function") return value.toMillis();
+      if (typeof value.toDate === "function") return value.toDate().getTime();
+      if (value instanceof Date) return value.getTime();
+      if (typeof value === "number") return value;
+      const parsed = Date.parse(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    } catch {
+      return 0;
     }
+  }
 
-    let stopped = false;
-    let unsubscribeFirestore = null;
-    let unsubscribeSystemLogs = null;
-    let unsubscribeAuth = null;
-    let cycleTimer = null;
-    let expiryTimer = null;
+  function safeClone(value) {
+    try { return JSON.parse(JSON.stringify(value)); } catch { return value; }
+  }
 
-    let latestSystemLogs = [];
-    let firestore = {
-        connected: false,
-        count: 0,
-        error: null
-    };
+  function recordEvent(type, message, target = "SYSTEM") {
+    state.recentEvents.unshift({ type, message, target, at: Date.now() });
+    state.recentEvents = state.recentEvents.slice(0, EVENT_LIMIT);
+    state.lastEventAt = Date.now();
+  }
 
-    let cycleNo = 0;
-    let phaseIndex = -1;
-    let authorized = false;
-    let authGeneration = 0;
-    let lastEventAt = 0;
-    let lastEventText = "Belum ada impuls baru.";
-    let lastTarget = "SYS_MASTER_REGISTRY";
-    let lastError = null;
-    let interrupted = false;
-    let lastStatePublishedAt = 0;
-    const eventHistory = [];
+  function effectiveAge(t) {
+    if (!t) return Infinity;
+    return Math.max(0, Date.now() - t);
+  }
 
-    const state = {
-        step: "IN",
-        message: "Membangunkan Pusat Saraf Master...",
-        targetCell: "SYS_MASTER_REGISTRY",
-        errorLog: null,
-        retryCount: 0,
-        cycle: 0,
-        cycleMode: "NORMAL",
-        metrics: {},
-        systemOrgans: {},
-        systemLogs: [],
-        firestore: { ...firestore },
-        lastEventAt: null,
-        lastEventText: lastEventText,
-        statePublishedAt: null,
-        dataFreshness: "WAITING",
-        eventHistory: []
-    };
+  function isRecent(t) {
+    // Timestamps sedikit di masa depan masih diterima agar perbedaan jam perangkat/server
+    // tidak membuat error nyata berubah menjadi HEALTHY.
+    return t > 0 && (t >= Date.now() - ACTIVE_WINDOW || t <= Date.now() + CLOCK_SKEW);
+  }
 
-    function timestamp(value) {
-        try {
-            if (!value) return 0;
-            if (typeof value.toMillis === "function") return value.toMillis();
-            if (typeof value.toDate === "function") return value.toDate().getTime();
-            if (value instanceof Date) return value.getTime();
-            if (typeof value === "number") return value;
-            const n = Date.parse(value);
-            return Number.isFinite(n) ? n : 0;
-        } catch {
-            return 0;
-        }
+  function newestLogByFile() {
+    const map = new Map();
+    for (const log of latestSystemLogs) {
+      const file = normalizeFile(log?.fileName);
+      if (!ORGAN_REGISTRY[file]) continue;
+      const t = timestamp(log?.reportedAt);
+      const candidate = { log, time: t };
+      const previous = map.get(file);
+      if (!previous || candidate.time >= previous.time) map.set(file, candidate);
     }
+    return map;
+  }
 
-    function clone(value) {
-        return JSON.parse(JSON.stringify(value));
+  function buildOrgans() {
+    const recent = newestLogByFile();
+    const organs = {};
+
+    for (const [file, meta] of Object.entries(ORGAN_REGISTRY)) {
+      const item = recent.get(file);
+      const historical = latestSystemLogs.some(log => normalizeFile(log?.fileName) === file);
+
+      if (item && isRecent(item.time)) {
+        organs[file] = {
+          ...meta,
+          status: "ANOMALY",
+          state: "ACTIVE",
+          message: String(item.log?.message || "Sinyal error diterima.").slice(0, 700),
+          reportedAt: item.log?.reportedAt || null,
+          line: item.log?.line ?? item.log?.lineno ?? null,
+          column: item.log?.column ?? item.log?.colno ?? null
+        };
+      } else if (historical) {
+        organs[file] = {
+          ...meta,
+          status: "RECOVERED",
+          state: "RECOVERED",
+          message: "Tidak ada error aktif dalam window pemantauan; laporan sebelumnya masih tersimpan sebagai bukti historis."
+        };
+      } else {
+        organs[file] = {
+          ...meta,
+          status: "HEALTHY",
+          state: "HEALTHY",
+          message: "Belum ada laporan error aktif dari file ini."
+        };
+      }
     }
+    return organs;
+  }
 
-    function getActiveLogs() {
-        const cutoff = Date.now() - ACTIVE_WINDOW;
-        return latestSystemLogs.filter(log => {
-            const t = timestamp(log?.reportedAt);
-            return t > cutoff;
-        });
-    }
-
-    function buildOrgans() {
-        const now = Date.now();
-        const recent = new Map();
-
-        for (const log of latestSystemLogs) {
-            const file = String(log?.fileName || "").trim();
-            const t = timestamp(log?.reportedAt);
-
-            if (
-                ORGAN_REGISTRY[file] &&
-                t &&
-                now - t <= ACTIVE_WINDOW &&
-                (!recent.has(file) || t > recent.get(file).time)
-            ) {
-                recent.set(file, { log, time: t });
-            }
-        }
-
-        const organs = {};
-
-        for (const [file, meta] of Object.entries(ORGAN_REGISTRY)) {
-            const current = recent.get(file);
-            const hasHistorical = latestSystemLogs.some(
-                log => String(log?.fileName || "").trim() === file
-            );
-
-            if (current) {
-                organs[file] = {
-                    ...meta,
-                    status: "ANOMALY",
-                    state: "ACTIVE",
-                    message: String(
-                        current.log?.message || "Sinyal error diterima."
-                    ).slice(0, 500),
-                    reportedAt: current.log?.reportedAt || null
-                };
-            } else {
-                organs[file] = {
-                    ...meta,
-                    status: hasHistorical ? "RECOVERED" : "HEALTHY",
-                    state: hasHistorical ? "RECOVERED" : "HEALTHY",
-                    message: hasHistorical
-                        ? "Tidak ada error aktif; laporan sebelumnya sudah melewati window aktif."
-                        : "Belum ada laporan error aktif."
-                };
-            }
-        }
-
-        return organs;
-    }
-
-    function makeMetrics(organs) {
-        const values = Object.values(organs);
-        const active = values.filter(x => x.state === "ACTIVE").length;
-        const recovered = values.filter(x => x.state === "RECOVERED").length;
-        const healthy = values.filter(x => x.state === "HEALTHY").length;
-
+  function makeCases(organs) {
+    return Object.entries(organs)
+      .filter(([, info]) => info.state === "ACTIVE")
+      .map(([file, info]) => {
+        const t = timestamp(info.reportedAt) || Date.now();
+        const fingerprint = `${file}|${info.message}|${t}`.replace(/\s+/g, " ");
+        let hash = 0;
+        for (let i = 0; i < fingerprint.length; i++) hash = ((hash << 5) - hash + fingerprint.charCodeAt(i)) | 0;
+        const id = `CASE-${Math.abs(hash).toString(36).toUpperCase()}`;
         return {
-            total: values.length,
-            active,
-            recovered,
-            healthy,
-            logCount: latestSystemLogs.length,
-            firestoreCount: firestore.count
+          id,
+          target: file,
+          rootCandidate: file,
+          severity: /security|permission|denied|failed|undefined|null/i.test(info.message) ? "HIGH" : "MEDIUM",
+          confidence: 92,
+          status: "TELEMETRY_CONFIRMED",
+          evidence: {
+            message: info.message,
+            reportedAt: info.reportedAt,
+            line: info.line,
+            column: info.column
+          }
         };
-    }
-
-    function emit(step, message, target, error = null, options = {}) {
-        if (stopped) return;
-
-        const organs = buildOrgans();
-        const metrics = makeMetrics(organs);
-
-        state.step = step;
-        state.message = message;
-        state.targetCell = target || lastTarget;
-        state.errorLog = error ? String(error).slice(0, 700) : null;
-        state.cycle = cycleNo;
-        state.cycleMode = options.cycleMode || state.cycleMode || "NORMAL";
-        state.systemOrgans = organs;
-        state.systemLogs = latestSystemLogs;
-        state.firestore = { ...firestore };
-        state.metrics = metrics;
-        state.lastEventAt = lastEventAt || null;
-        state.lastEventText = lastEventText;
-        state.statePublishedAt = Date.now();
-        lastStatePublishedAt = state.statePublishedAt;
-        state.dataFreshness = firestore.connected ? "LIVE" : (firestore.error ? "OFFLINE" : "WAITING");
-        state.eventHistory = eventHistory.slice();
-
-        lastTarget = state.targetCell;
-        lastError = state.errorLog;
-
-        const snapshot = {
-            ...state,
-            systemOrgans: clone(organs),
-            systemLogs: latestSystemLogs.slice(),
-            metrics: { ...metrics },
-            firestore: { ...firestore },
-            eventHistory: eventHistory.slice()
-        };
-
-        // Satu state yang sama untuk monitor, chat, dan integrasi lain.
-        window.BCGO_STATE = snapshot;
-
-        // UI adalah konsumen state, bukan bagian dari mesin autentikasi/telemetry.
-        // Jika DOM rusak atau ada elemen yang hilang, engine tetap hidup dan
-        // kesalahan tersebut tidak boleh dilaporkan sebagai kegagalan Admin.
-        try {
-            onCycleUpdate(snapshot);
-        } catch (uiError) {
-            console.error("BCGO UI render error:", uiError);
-            state.uiError = uiError?.message || String(uiError);
-        }
-    }
-
-    function activeAnomalies() {
-        return Object.entries(buildOrgans()).filter(
-            ([, info]) => info.state === "ACTIVE"
-        );
-    }
-
-    function describeSituation() {
-        const organs = buildOrgans();
-        const active = activeAnomalies();
-        const recovered = Object.entries(organs).filter(
-            ([, info]) => info.state === "RECOVERED"
-        ).length;
-
-        if (firestore.error) {
-            return `Saya sedang menangani gangguan koneksi Firestore. Saya tidak akan menyatakan sistem sehat sebelum koneksi kembali.`;
-        }
-
-        if (active.length) {
-            const [file, info] = active[0];
-            return `Saya sedang memeriksa ${active.length} anomali aktif. Fokus saya sekarang ${file}: ${info.message}`;
-        }
-
-        if (recovered) {
-            return `Saya sedang melakukan verifikasi rutin. Saat ini tidak ada anomali aktif; ${recovered} organ memiliki laporan historis yang sudah pulih.`;
-        }
-
-        return `Saya sedang melakukan pemindaian rutin ${Object.keys(organs).length} organ. Firestore terhubung dan belum ada anomali aktif.`;
-    }
-
-    function answerQuestion(question) {
-        const q = String(question || "").trim().toLowerCase();
-        const organs = buildOrgans();
-        const active = activeAnomalies();
-        const metrics = makeMetrics(organs);
-
-        if (!q) {
-            return "Saya di sini. Tanyakan apa yang sedang saya kerjakan, kondisi sistem, error, Firestore, atau organ tertentu.";
-        }
-
-        if (
-            q.includes("hai") ||
-            q.includes("halo") ||
-            q.includes("hello") ||
-            q.includes("siapa kamu")
-        ) {
-            return `Hai. Saya BCGO, Pusat Saraf Master. Saat ini saya berada di tahap ${state.step} pada neural cycle #${state.cycle}. ${describeSituation()}`;
-        }
-
-        if (
-            q.includes("sedang") ||
-            q.includes("kerja") ||
-            q.includes("kerjakan") ||
-            q.includes("ngapain") ||
-            q.includes("apa yang kamu lakukan")
-        ) {
-            return `Saat ini saya berada di tahap ${state.step}. ${state.message} ${describeSituation()}`;
-        }
-
-        if (
-            q.includes("status") ||
-            q.includes("sehat") ||
-            q.includes("kondisi")
-        ) {
-            if (firestore.error) {
-                return `Status saya belum bisa dinyatakan sehat karena Firestore sedang bermasalah: ${firestore.error}`;
-            }
-
-            return `Status saat ini: ${metrics.active} anomali aktif, ${metrics.recovered} recovered, dan ${metrics.healthy} organ tanpa laporan error aktif. Firestore terhubung dan membaca ${metrics.firestoreCount} data pendaftaran Mitra pada probe.`;
-        }
-
-        if (
-            q.includes("error") ||
-            q.includes("masalah") ||
-            q.includes("anomali")
-        ) {
-            if (!active.length) {
-                return `Saat ini saya tidak menemukan anomali aktif. Saya tetap mendengarkan system_logs secara real-time. Laporan historis tetap saya tampilkan sebagai RECOVERED.`;
-            }
-
-            const [file, info] = active[0];
-            return `Ya. Saya menemukan ${active.length} anomali aktif. Fokus pertama saya ${file}. Pesannya: ${info.message}`;
-        }
-
-        if (q.includes("firestore") || q.includes("database")) {
-            if (firestore.error) {
-                return `Sensor Firestore sedang melaporkan gangguan: ${firestore.error}`;
-            }
-            return `Sensor Firestore aktif. Listener mitra_applications terhubung dan saat ini membaca ${firestore.count} dokumen pada probe.`;
-        }
-
-        const requestedFile = Object.keys(ORGAN_REGISTRY).find(file =>
-            q.includes(file.toLowerCase())
-        );
-
-        if (requestedFile) {
-            const info = organs[requestedFile];
-            if (info.state === "ACTIVE") {
-                return `${requestedFile} sedang ANOMALY. ${info.message}`;
-            }
-            if (info.state === "RECOVERED") {
-                return `${requestedFile} berstatus RECOVERED. Saya tidak menemukan error aktif pada window pemantauan saat ini.`;
-            }
-            return `${requestedFile} saat ini HEALTHY menurut telemetry yang saya terima. Artinya belum ada laporan error aktif dari file tersebut.`;
-        }
-
-        if (
-            q.includes("cycle") ||
-            q.includes("siklus") ||
-            q.includes("tahap") ||
-            q.includes("posisi")
-        ) {
-            return `Neural cycle saya sekarang #${state.cycle}, tahap ${state.step}. Target saraf: ${state.targetCell}.`;
-        }
-
-        if (q.includes("kenapa") || q.includes("mengapa") || q.includes("alasan")) {
-            return `Saya berada di tahap ${state.step} karena state saraf terakhir saya menunjukkan: ${state.message} Target saat ini ${state.targetCell}. ${lastEventText}`;
-        }
-
-        if (q.includes("live") || q.includes("real time") || q.includes("realtime") || q.includes("terhubung")) {
-            if (firestore.connected) {
-                return `Kanal Firestore saya LIVE. Saya menerima snapshot real-time dan state terakhir dipublikasikan pada ${new Date(state.statePublishedAt || Date.now()).toLocaleTimeString("id-ID")}.`;
-            }
-            return `Kanal Firestore belum LIVE. Status sensor: ${state.dataFreshness}. ${firestore.error || "Saya masih menunggu koneksi server."}`;
-        }
-
-        return `Saya belum memiliki data yang cukup untuk memastikan jawaban itu. Saya tidak mau mengarang. Yang bisa saya pastikan sekarang: ${describeSituation()}`;
-    }
-
-    function markEvent(text, target, error = null) {
-        lastEventAt = Date.now();
-        lastEventText = String(text || "Impuls baru diterima.");
-        lastTarget = target || lastTarget;
-        lastError = error;
-
-        eventHistory.unshift({
-            at: lastEventAt,
-            text: lastEventText,
-            target: lastTarget,
-            error: error ? String(error).slice(0, 700) : null
-        });
-        if (eventHistory.length > EVENT_HISTORY_LIMIT) eventHistory.length = EVENT_HISTORY_LIMIT;
-    }
-
-    function nextPhase() {
-        if (stopped || !authorized) return;
-
-        phaseIndex = (phaseIndex + 1) % 4;
-
-        if (phaseIndex === 0) {
-            cycleNo += 1;
-            interrupted = false;
-            markEvent(`Neural cycle #${cycleNo} dimulai.`, "SYS_NEURAL_SCAN");
-
-            emit(
-                "IN",
-                `Neural cycle #${cycleNo} dimulai. Saya memindai ${Object.keys(ORGAN_REGISTRY).length} organ dan membaca sinyal terbaru.`,
-                "SYS_NEURAL_SCAN",
-                null,
-                { cycleMode: "NORMAL" }
-            );
-
-            scheduleNext(CYCLE.IN);
-            return;
-        }
-
-        if (phaseIndex === 1) {
-            const active = activeAnomalies();
-
-            if (firestore.error) {
-                emit(
-                    "PROCESS",
-                    `Saya menerima sinyal gangguan Firestore. Saya sedang menganalisis koneksi sebelum menyimpulkan kondisi sistem.`,
-                    "SYS_FIRESTORE_CONNECTION",
-                    firestore.error,
-                    { cycleMode: "NORMAL" }
-                );
-            } else if (active.length) {
-                const [file, info] = active[0];
-                emit(
-                    "PROCESS",
-                    `Saya menemukan ${active.length} anomali aktif. Saya sedang memproses sinyal dari ${file}.`,
-                    file,
-                    info.message,
-                    { cycleMode: "NORMAL" }
-                );
-            } else {
-                emit(
-                    "PROCESS",
-                    `Tidak ada anomali aktif. Saya sedang membandingkan telemetry ${latestSystemLogs.length} laporan dengan window pemantauan.`,
-                    "SYS_TELEMETRY_ANALYSIS",
-                    null,
-                    { cycleMode: "NORMAL" }
-                );
-            }
-
-            scheduleNext(CYCLE.PROCESS);
-            return;
-        }
-
-        if (phaseIndex === 2) {
-            const active = activeAnomalies();
-
-            if (firestore.error) {
-                emit(
-                    "REVIEW",
-                    `Saya sedang REVIEW karena sensor Firestore belum stabil. Saya mempertahankan status waspada.`,
-                    "SYS_FIRESTORE_REVIEW",
-                    firestore.error,
-                    { cycleMode: "NORMAL" }
-                );
-            } else if (active.length) {
-                const [file, info] = active[0];
-                emit(
-                    "REVIEW",
-                    `Saya sedang REVIEW ${active.length} anomali. Fokus diagnostik: ${file}.`,
-                    file,
-                    info.message,
-                    { cycleMode: "NORMAL" }
-                );
-            } else {
-                emit(
-                    "REVIEW",
-                    `Review selesai: tidak ada anomali aktif. Saya memeriksa kembali konsistensi status ${Object.keys(ORGAN_REGISTRY).length} organ.`,
-                    "SYS_NEURAL_REVIEW",
-                    null,
-                    { cycleMode: "NORMAL" }
-                );
-            }
-
-            scheduleNext(CYCLE.REVIEW);
-            return;
-        }
-
-        const active = activeAnomalies();
-
-        if (firestore.error) {
-            emit(
-                "OUT",
-                `Saya belum menutup siklus sebagai stabil karena Firestore masih bermasalah. Saya akan kembali memeriksa.`,
-                "SYS_FIRESTORE_WAIT",
-                firestore.error,
-                { cycleMode: "NORMAL" }
-            );
-        } else if (active.length) {
-            emit(
-                "OUT",
-                `Siklus #${cycleNo} selesai. Saya menemukan ${active.length} anomali aktif dan akan terus mengawasinya pada siklus berikutnya.`,
-                active[0][0],
-                active[0][1].message,
-                { cycleMode: "ALERT" }
-            );
-        } else {
-            emit(
-                "OUT",
-                `Siklus #${cycleNo} selesai. Tidak ada anomali aktif. Saya tetap mendengarkan impuls real-time.`,
-                "SYS_NEURAL_SYNC",
-                null,
-                { cycleMode: "NORMAL" }
-            );
-        }
-
-        scheduleNext(CYCLE.OUT);
-    }
-
-    function scheduleNext(delay) {
-        clearTimeout(cycleTimer);
-        cycleTimer = setTimeout(nextPhase, delay);
-    }
-
-    function interruptForRealtimeEvent(fileName, message) {
-        if (stopped || !authorized) return;
-
-        const file = String(fileName || "UNKNOWN").trim();
-        const text = String(message || "Sinyal baru diterima.").slice(0, 700);
-
-        markEvent(
-            `Impuls baru diterima dari ${file}.`,
-            file,
-            text
-        );
-
-        interrupted = true;
-
-        emit(
-            "PROCESS",
-            `⚡ Impuls real-time diterima dari ${file}. Saya menghentikan sementara pola normal untuk memeriksa sinyal ini.`,
-            file,
-            text,
-            { cycleMode: "INTERRUPTED" }
-        );
-
-        clearTimeout(cycleTimer);
-
-        setTimeout(() => {
-            if (stopped || !authorized) return;
-
-            const active = activeAnomalies();
-            const targetInfo = buildOrgans()[file];
-
-            if (targetInfo?.state === "ACTIVE") {
-                emit(
-                    "REVIEW",
-                    `Saya sedang REVIEW sinyal ${file}. Anomali masih aktif, jadi saya mempertahankan perhatian pada organ tersebut.`,
-                    file,
-                    targetInfo.message,
-                    { cycleMode: "INTERRUPTED" }
-                );
-            } else if (active.length) {
-                emit(
-                    "REVIEW",
-                    `Impuls ${file} sudah tidak aktif, tetapi saya masih menemukan anomali pada organ lain. Saya melanjutkan REVIEW.`,
-                    active[0][0],
-                    active[0][1].message,
-                    { cycleMode: "INTERRUPTED" }
-                );
-            } else {
-                emit(
-                    "REVIEW",
-                    `Saya sudah memeriksa impuls ${file}. Saat ini tidak ada anomali aktif.`,
-                    file,
-                    null,
-                    { cycleMode: "INTERRUPTED" }
-                );
-            }
-
-            setTimeout(() => {
-                if (stopped || !authorized) return;
-
-                emit(
-                    "OUT",
-                    activeAnomalies().length
-                        ? "Saya selesai menilai impuls tersebut dan kembali mengawasi sistem."
-                        : "Impuls sudah saya evaluasi. Sistem kembali ke pemantauan normal.",
-                    file,
-                    activeAnomalies()[0]?.[1]?.message || null,
-                    { cycleMode: "NORMAL" }
-                );
-
-                interrupted = false;
-                phaseIndex = 3;
-                scheduleNext(CYCLE.OUT);
-            }, CYCLE.REVIEW);
-        }, CYCLE.PROCESS);
-    }
-
-    function publishCurrentState() {
-        if (stopped) return;
-        const organs = buildOrgans();
-        const metrics = makeMetrics(organs);
-        state.systemOrgans = organs;
-        state.systemLogs = latestSystemLogs.slice();
-        state.metrics = metrics;
-        state.firestore = { ...firestore };
-        state.lastEventAt = lastEventAt || null;
-        state.lastEventText = lastEventText;
-        state.statePublishedAt = Date.now();
-        state.dataFreshness = firestore.connected ? "LIVE" : (firestore.error ? "OFFLINE" : "WAITING");
-        state.eventHistory = eventHistory.slice();
-        const snapshot = {
-            ...state,
-            systemOrgans: clone(organs),
-            systemLogs: latestSystemLogs.slice(),
-            metrics: { ...metrics },
-            firestore: { ...firestore },
-            eventHistory: eventHistory.slice()
-        };
-        window.BCGO_STATE = snapshot;
-        try {
-            onCycleUpdate(snapshot);
-        } catch (uiError) {
-            console.error('BCGO UI render error:', uiError);
-            state.uiError = uiError?.message || String(uiError);
-        }
-    }
-
-    function startSystemLogs() {
-        if (!window.CikurCloud?.listenSystemLogs) {
-            emit(
-                "OUT",
-                "Telemetry system_logs tidak tersedia. Saya tidak dapat menerima impuls lintas-file.",
-                "SYS_TELEMETRY_UNAVAILABLE"
-            );
-            return;
-        }
-
-        if (typeof unsubscribeSystemLogs === "function") {
-            unsubscribeSystemLogs();
-        }
-
-        try {
-            unsubscribeSystemLogs = window.CikurCloud.listenSystemLogs(
-                logs => {
-                    const previous = latestSystemLogs;
-                    latestSystemLogs = Array.isArray(logs)
-                        ? logs.slice(0, LOG_LIMIT)
-                        : [];
-
-                    const previousTop = previous[0];
-                    const currentTop = latestSystemLogs[0];
-
-                    if (
-                        currentTop &&
-                        (!previousTop ||
-                            timestamp(currentTop.reportedAt) >
-                                timestamp(previousTop.reportedAt))
-                    ) {
-                        interruptForRealtimeEvent(
-                            currentTop.fileName,
-                            currentTop.message
-                        );
-                    } else {
-                        publishCurrentState();
-                    }
-                },
-                LOG_LIMIT
-            );
-        } catch (error) {
-            emit(
-                "PROCESS",
-                "Saya gagal membuka kanal telemetry lintas-file.",
-                "SYS_SYSTEM_LOGS_LISTENER",
-                error.message,
-                { cycleMode: "ERROR" }
-            );
-        }
-    }
-
-    function startFirestoreProbe() {
-        if (typeof unsubscribeFirestore === "function") {
-            unsubscribeFirestore();
-        }
-
-        try {
-            const q = query(
-                collection(db, "mitra_applications"),
-                orderBy("submittedAt", "desc"),
-                limit(PROBE_LIMIT)
-            );
-
-            unsubscribeFirestore = onSnapshot(
-                q,
-                snapshot => {
-                    const wasDisconnected = !firestore.connected;
-
-                    firestore = {
-                        connected: true,
-                        count: snapshot.size,
-                        error: null
-                    };
-
-                    state.retryCount = 0;
-
-                    if (wasDisconnected) {
-                        markEvent(
-                            "Sensor Firestore kembali terhubung.",
-                            "SYS_FIRESTORE_HEALTHY"
-                        );
-                    }
-
-                    if (wasDisconnected) {
-                        state.message = "Sensor Firestore kembali online. Saya melanjutkan pemantauan.";
-                        state.targetCell = "SYS_FIRESTORE_HEALTHY";
-                    }
-                    publishCurrentState();
-                },
-                error => {
-                    firestore = {
-                        connected: false,
-                        count: 0,
-                        error: error?.message || "Firestore listener error"
-                    };
-
-                    state.retryCount += 1;
-
-                    interruptForRealtimeEvent(
-                        "cikur-config.js",
-                        `Sensor Firestore melaporkan: ${firestore.error}`
-                    );
-                }
-            );
-        } catch (error) {
-            firestore = {
-                connected: false,
-                count: 0,
-                error: error.message
-            };
-
-            emit(
-                "PROCESS",
-                "Saya gagal menyiapkan sensor Firestore.",
-                "SYS_FIRESTORE_CONNECTION",
-                error.message,
-                { cycleMode: "ERROR" }
-            );
-        }
-    }
-
-    function refreshExpiredStatuses() {
-        if (stopped || !authorized) return;
-
-        publishCurrentState();
-    }
-
-    async function verifyAdmin(user) {
-        const generation = ++authGeneration;
-
-        if (!user) {
-            authorized = false;
-            clearTimeout(cycleTimer);
-            clearInterval(expiryTimer);
-
-            emit(
-                "OUT",
-                "Sesi Admin belum tersedia. Silakan login sebagai Admin.",
-                "SYS_AUTH_REQUIRED"
-            );
-            return;
-        }
-
-        try {
-            const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
-
-            // Jangan biarkan hasil verifikasi lama menimpa sesi Auth terbaru.
-            if (generation !== authGeneration) return;
-
-            if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
-                authorized = false;
-                emit(
-                    "OUT",
-                    "Akun ini bukan Admin aktif. Akses Pusat Saraf ditolak.",
-                    "SYS_AUTH_NOT_ADMIN"
-                );
-                return;
-            }
-
-            if (authorized) return;
-
-            authorized = true;
-
-            emit(
-                "IN",
-                `Admin terverifikasi. Saya membangunkan neural cycle dan membuka sensor real-time.`,
-                "SYS_AUTH_VERIFIED"
-            );
-
-            startSystemLogs();
-            startFirestoreProbe();
-
-            clearInterval(expiryTimer);
-            expiryTimer = setInterval(refreshExpiredStatuses, 5000);
-
-            phaseIndex = -1;
-            cycleNo = 0;
-            nextPhase();
-        } catch (error) {
-            authorized = false;
-
-            emit(
-                "OUT",
-                "Saya gagal memverifikasi status Admin.",
-                "SYS_AUTH_CHECK_FAILED",
-                error.message,
-                { cycleMode: "ERROR" }
-            );
-        }
-    }
-
-    function reportRuntimeError(message, source = "bcgo.html") {
-        if (stopped || !authorized) return;
-        const text = String(message || "JavaScript error tidak diketahui.");
-        // UI error tidak boleh menjadi telemetry organ bcgo.html.
-        // Ini mencegah loop self-report: render error -> anomaly -> render -> error.
-        if (
-            text.includes("Cannot set properties of null") ||
-            text.includes("Cannot read properties of null")
-        ) {
-            console.warn("BCGO UI guard suppressed:", text);
-            return;
-        }
-        interruptForRealtimeEvent("bcgo.html", `[${source}] ${text}`);
-    }
-
-    window.addEventListener("error", event => {
-        reportRuntimeError(
-            event?.message || event?.error?.message || "JavaScript error tidak diketahui.",
-            event?.filename || "bcgo.html"
-        );
-    });
-
-    window.addEventListener("unhandledrejection", event => {
-        reportRuntimeError(
-            event?.reason?.message || String(event?.reason || "Unhandled promise rejection."),
-            "promise"
-        );
-    });
-
-    unsubscribeAuth = onAuthStateChanged(auth, verifyAdmin);
-
-    emit(
-        "IN",
-        "Pusat Saraf Master siap. Menunggu verifikasi Admin...",
-        "SYS_MASTER_REGISTRY",
-        null,
-        { cycleMode: "BOOT" }
-    );
-
-    const brain = {
-        ask: answerQuestion,
-        getState: () => ({
-            ...state,
-            systemOrgans: clone(buildOrgans()),
-            systemLogs: latestSystemLogs.slice(),
-            metrics: makeMetrics(buildOrgans()),
-            firestore: { ...firestore },
-            dataFreshness: state.dataFreshness,
-            eventHistory: eventHistory.slice()
-        }),
-        getSituation: describeSituation,
-        stop() {
-            stopped = true;
-            clearTimeout(cycleTimer);
-            clearInterval(expiryTimer);
-
-            if (typeof unsubscribeAuth === "function") unsubscribeAuth();
-            if (typeof unsubscribeFirestore === "function") unsubscribeFirestore();
-            if (typeof unsubscribeSystemLogs === "function") unsubscribeSystemLogs();
-        }
+      });
+  }
+
+  function makeMetrics(organs) {
+    const values = Object.values(organs);
+    return {
+      total: values.length,
+      active: values.filter(v => v.state === "ACTIVE").length,
+      recovered: values.filter(v => v.state === "RECOVERED").length,
+      healthy: values.filter(v => v.state === "HEALTHY").length,
+      logCount: latestSystemLogs.length,
+      firestoreCount: firestore.count
     };
+  }
 
-    window.BCGOBrain = brain;
-    return brain;
+  function deriveConnection() {
+    if (firestore.error) return { status: "OFFLINE", lastServerAt: firestore.lastServerAt || 0 };
+    if (firestore.connected) return { status: "LIVE", lastServerAt: firestore.lastServerAt || 0 };
+    return { status: "CONNECTING", lastServerAt: firestore.lastServerAt || 0 };
+  }
+
+  function emit(step, message, target, error = null, options = {}) {
+    if (stopped) return;
+    const organs = buildOrgans();
+    const metrics = makeMetrics(organs);
+    const cases = makeCases(organs);
+
+    state.step = step;
+    state.message = String(message || "");
+    state.targetCell = target || state.targetCell;
+    state.errorLog = error ? String(error).slice(0, 900) : null;
+    state.cycle = cycleNo;
+    state.cycleMode = options.cycleMode || state.cycleMode || "NORMAL";
+    state.systemOrgans = organs;
+    state.systemLogs = latestSystemLogs.slice();
+    state.metrics = metrics;
+    state.firestore = { ...firestore };
+    state.connection = deriveConnection();
+    state.activeCases = cases;
+    state.medicineQueue = cases.map(c => ({ ...c, handoff: "READY_FOR_MEDICINE" }));
+
+    if (options.telemetry) {
+      state.lastTelemetryFile = options.telemetry.file;
+      state.lastTelemetryAt = options.telemetry.at || null;
+      state.lastTelemetryMessage = options.telemetry.message || null;
+    }
+
+    window.BCGO_STATE = safeClone(state);
+    onCycleUpdate(safeClone(state));
+  }
+
+  function situation() {
+    const organs = buildOrgans();
+    const active = Object.entries(organs).filter(([, v]) => v.state === "ACTIVE");
+    if (firestore.error) return `Saya sedang menjaga koneksi Firestore. Sensor melaporkan: ${firestore.error}`;
+    if (active.length) {
+      const [file, info] = active[0];
+      return `Saya menemukan ${active.length} anomali aktif. Fokus pertama saya ${file}: ${info.message}`;
+    }
+    const recovered = Object.values(organs).filter(v => v.state === "RECOVERED").length;
+    return recovered
+      ? `Tidak ada anomali aktif saat ini. ${recovered} organ masih memiliki bukti error historis yang saya tandai RECOVERED.`
+      : `Semua ${Object.keys(ORGAN_REGISTRY).length} organ belum memiliki laporan error aktif dalam telemetry yang saya terima.`;
+  }
+
+  function findFile(question) {
+    const q = String(question || "").toLowerCase();
+    return Object.keys(ORGAN_REGISTRY).find(file => q.includes(file.toLowerCase())) || null;
+  }
+
+  function answerQuestion(question) {
+    const raw = String(question || "").trim();
+    const q = raw.toLowerCase();
+    const organs = buildOrgans();
+    const active = Object.entries(organs).filter(([, v]) => v.state === "ACTIVE");
+    const recovered = Object.entries(organs).filter(([, v]) => v.state === "RECOVERED");
+    const metrics = makeMetrics(organs);
+    const file = findFile(raw);
+
+    if (!q) return "Saya siap. Tanyakan kondisi sistem, error, file tertentu, telemetry terakhir, siklus saya, atau apa yang perlu saya teruskan ke Medicine.";
+
+    if (/^(halo|hai|hello|pagi|siang|sore|malam)\b/.test(q) || /siapa kamu/.test(q)) {
+      return `Halo. Saya BCGO. Saya bekerja dari telemetry dan state sistem yang sedang hidup, bukan dari tebakan. Sekarang cycle #${cycleNo}, tahap ${state.step}. ${situation()}`;
+    }
+
+    if (/scan ulang|rescan|pindai ulang|periksa ulang/.test(q)) {
+      recordEvent("CHAT_COMMAND", "Anda meminta pemeriksaan ulang telemetry.", "SYS_CHAT_RESCAN");
+      emit("IN", "Saya menerima perintah pemeriksaan ulang. Saya membaca ulang telemetry yang tersedia sekarang.", "SYS_CHAT_RESCAN", null, { cycleMode: "CHAT_COMMAND" });
+      return `Baik. Saya mulai pemeriksaan ulang. Saat ini ${metrics.active} anomali aktif dari ${metrics.total} organ.`;
+    }
+
+    if (/medicine|obat|pengobatan|perbaiki|perbaikan|repair|sembuhkan/.test(q)) {
+      if (!active.length) return "Belum ada kasus aktif yang cukup kuat untuk saya teruskan ke Medicine. Saya tidak akan membuat source code perbaikan tanpa bukti.";
+      const [target, info] = active[0];
+      return `Saya bisa meneruskan konteks ke Medicine. Kasus aktif pertama: ${target}. Bukti: ${info.message}. Medicine harus memverifikasi root cause dan source exact sebelum menyusun BEFORE → AFTER.`;
+    }
+
+    if (/sedang apa|sedang mengerjakan|lagi apa|ngapain|kerja apa/.test(q)) {
+      return `Saya sedang berada di tahap ${state.step}, cycle #${cycleNo}. ${state.message} ${situation()}`;
+    }
+
+    if (/status|kondisi|sehat|aman/.test(q)) {
+      if (firestore.error) return `Belum bisa saya sebut aman. Firestore sedang bermasalah: ${firestore.error}`;
+      return `Status sekarang: ${metrics.active} anomali aktif, ${metrics.recovered} recovered, ${metrics.healthy} stabil dari ${metrics.total} organ. Firestore ${firestore.connected ? "LIVE" : "belum terhubung penuh"} dan probe membaca ${metrics.firestoreCount} data.`;
+    }
+
+    if (/error|masalah|anomali|gangguan|rusak/.test(q)) {
+      if (!active.length) return "Saya belum melihat anomali aktif dari telemetry. Laporan lama tetap saya simpan sebagai RECOVERED; saya menunggu bukti baru secara real-time.";
+      const detail = active.slice(0, 4).map(([f, v]) => `${f}: ${v.message}`).join(" | ");
+      return `Ya, ada ${active.length} anomali aktif. ${detail}`;
+    }
+
+    if (/telemetry terakhir|impuls terakhir|error terakhir|terakhir/.test(q)) {
+      if (!state.lastTelemetryFile) return "Belum ada telemetry terakhir yang bisa saya pastikan.";
+      const age = effectiveAge(timestamp(state.lastTelemetryAt));
+      return `Telemetry terakhir berasal dari ${state.lastTelemetryFile}, sekitar ${age < 1000 ? "baru saja" : `${Math.round(age / 1000)} detik lalu`}. Pesannya: ${state.lastTelemetryMessage || "-"}`;
+    }
+
+    if (/cycle|siklus|tahap|posisi/.test(q)) {
+      return `Saya berada di cycle #${cycleNo}, tahap ${state.step}, mode ${state.cycleMode}. Target saraf saat ini: ${state.targetCell}.`;
+    }
+
+    if (/berapa.*file|berapa.*organ|organ.*apa|pantau apa|memantau apa/.test(q)) {
+      return `Saya mengenali ${metrics.total} organ: ${Object.keys(ORGAN_REGISTRY).join(", ")}. ${metrics.active} sedang aktif bermasalah, ${metrics.recovered} recovered, ${metrics.healthy} stabil.`;
+    }
+
+    if (file) {
+      const info = organs[file];
+      if (!info) return `Saya mengenali ${file}, tetapi belum menerima state-nya.`;
+      if (info.state === "ACTIVE") return `${file} sedang ANOMALY. Bukti telemetry: ${info.message}`;
+      if (info.state === "RECOVERED") return `${file} berstatus RECOVERED. Ada bukti historis, tetapi tidak ada error aktif dalam window pemantauan.`;
+      return `${file} saat ini HEALTHY menurut telemetry yang saya terima. Ini berarti belum ada laporan error aktif, bukan bukti bahwa source code pasti sempurna.`;
+    }
+
+    if (/kenapa|mengapa/.test(q)) {
+      return `Saya berada di ${state.step} karena mesin sedang menjalankan: ${state.message} Target: ${state.targetCell}. Jika yang Anda tanyakan adalah penyebab error tertentu, sebutkan file atau error-nya agar saya tidak menebak.`;
+    }
+
+    if (/jelaskan|detail|rincian/.test(q)) {
+      return `Saya bisa menjelaskan berdasarkan bukti. Saat ini: ${metrics.active} anomali aktif, ${metrics.recovered} recovered, Firestore ${firestore.connected ? "LIVE" : "belum LIVE"}, target ${state.targetCell}. Untuk detail akar masalah, saya perlu kasus/file yang spesifik.`;
+    }
+
+    return `Saya menangkap pertanyaanmu: “${raw}”. Saya belum punya bukti telemetry yang cukup untuk menjawab secara spesifik. Saya tidak akan mengarang. Kamu bisa bertanya tentang status, error, file tertentu, telemetry terakhir, cycle, atau meminta saya meneruskan kasus ke Medicine.`;
+  }
+
+  function interruptForTelemetry(fileName, message, log) {
+    if (stopped || !authorized) return;
+    const file = normalizeFile(fileName);
+    const text = String(message || "Sinyal telemetry baru diterima.").slice(0, 900);
+    const at = timestamp(log?.reportedAt) || Date.now();
+    const signature = `${file}|${text}|${at}`;
+
+    if (signature === previousTopSignature) return;
+    previousTopSignature = signature;
+    realtimeBusy = true;
+
+    recordEvent("TELEMETRY", `Impuls baru dari ${file}.`, file);
+    emit("PROCESS", `⚡ Saya menerima bukti baru dari ${file}. Saya hentikan sejenak siklus normal untuk memeriksanya.`, file, text, {
+      cycleMode: "INTERRUPTED",
+      telemetry: { file, at, message: text }
+    });
+
+    clearTimeout(cycleTimer);
+    setTimeout(() => {
+      if (stopped || !authorized) return;
+      const organs = buildOrgans();
+      const info = organs[file];
+      const active = Object.entries(organs).filter(([, v]) => v.state === "ACTIVE");
+      if (info?.state === "ACTIVE") {
+        emit("REVIEW", `Bukti ${file} masih aktif. Saya mempertahankan kasus ini sebagai kandidat diagnosis dan menyiapkan konteks untuk Medicine.`, file, info.message, {
+          cycleMode: "INTERRUPTED",
+          telemetry: { file, at, message: text }
+        });
+      } else if (active.length) {
+        emit("REVIEW", `Impuls ${file} sudah tidak aktif, tetapi ${active.length} anomali lain masih aktif. Saya lanjutkan REVIEW.`, active[0][0], active[0][1].message, { cycleMode: "INTERRUPTED" });
+      } else {
+        emit("REVIEW", `Saya sudah memeriksa impuls ${file}. Saat ini tidak ada anomali aktif yang bisa saya pastikan.`, file, null, { cycleMode: "INTERRUPTED" });
+      }
+
+      setTimeout(() => {
+        if (stopped || !authorized) return;
+        const activeNow = Object.entries(buildOrgans()).filter(([, v]) => v.state === "ACTIVE");
+        emit("OUT", activeNow.length
+          ? `Saya selesai menilai impuls ${file}. ${activeNow.length} kasus tetap berada dalam pengawasan.`
+          : `Saya selesai menilai impuls ${file}. Pemantauan normal dilanjutkan.`, activeNow[0]?.[0] || file, activeNow[0]?.[1]?.message || null, { cycleMode: "NORMAL" });
+        realtimeBusy = false;
+        phaseIndex = 3;
+        scheduleNext(CYCLE.OUT);
+      }, CYCLE.REVIEW);
+    }, CYCLE.PROCESS);
+  }
+
+  function startSystemLogs() {
+    if (!window.CikurCloud?.listenSystemLogs) {
+      emit("OUT", "Kanal telemetry system_logs belum tersedia dari CikurCloud. Saya tidak akan mengklaim pemantauan lintas-file aktif.", "SYS_TELEMETRY_UNAVAILABLE");
+      return;
+    }
+
+    if (typeof unsubscribeSystemLogs === "function") unsubscribeSystemLogs();
+    try {
+      unsubscribeSystemLogs = window.CikurCloud.listenSystemLogs(logs => {
+        latestSystemLogs = Array.isArray(logs) ? logs.slice(0, LOG_LIMIT) : [];
+        const top = latestSystemLogs[0];
+        const topAt = timestamp(top?.reportedAt);
+        const previousTop = previousTopSignature;
+
+        const organs = buildOrgans();
+        state.systemOrgans = organs;
+        state.metrics = makeMetrics(organs);
+        state.activeCases = makeCases(organs);
+        state.medicineQueue = state.activeCases.map(c => ({ ...c, handoff: "READY_FOR_MEDICINE" }));
+        state.systemLogs = latestSystemLogs.slice();
+        state.lastTelemetryFile = top ? normalizeFile(top.fileName) : state.lastTelemetryFile;
+        state.lastTelemetryAt = topAt || state.lastTelemetryAt;
+        state.lastTelemetryMessage = top?.message || state.lastTelemetryMessage;
+        window.BCGO_STATE = safeClone(state);
+
+        if (top && `${normalizeFile(top.fileName)}|${String(top.message || "")}|${topAt}` !== previousTop) {
+          interruptForTelemetry(top.fileName, top.message, top);
+        } else {
+          onCycleUpdate(safeClone(state));
+        }
+      }, LOG_LIMIT);
+    } catch (error) {
+      emit("PROCESS", "Kanal telemetry lintas-file gagal dibuka.", "SYS_SYSTEM_LOGS_LISTENER", error?.message, { cycleMode: "ERROR" });
+    }
+  }
+
+  function startFirestoreProbe() {
+    if (typeof unsubscribeFirestore === "function") unsubscribeFirestore();
+    try {
+      const q = query(collection(db, "mitra_applications"), orderBy("submittedAt", "desc"), limit(PROBE_LIMIT));
+      unsubscribeFirestore = onSnapshot(q, snapshot => {
+        firestore.connected = true;
+        firestore.count = snapshot.size;
+        firestore.error = null;
+        firestore.lastServerAt = Date.now();
+        state.retryCount = 0;
+        if (!realtimeBusy) {
+          recordEvent("FIRESTORE", "Sensor Firestore aktif dan menerima snapshot baru.", "SYS_FIRESTORE_HEALTHY");
+        }
+        emit(state.step, state.message, "SYS_FIRESTORE_HEALTHY", null, { cycleMode: state.cycleMode });
+      }, error => {
+        firestore.connected = false;
+        firestore.count = 0;
+        firestore.error = error?.message || "Firestore listener error";
+        recordEvent("FIRESTORE_ERROR", firestore.error, "SYS_FIRESTORE_CONNECTION");
+        emit("PROCESS", "Sensor Firestore melaporkan gangguan. Saya mempertahankan status waspada dan tidak menyebut sistem sehat.", "SYS_FIRESTORE_CONNECTION", firestore.error, { cycleMode: "ERROR" });
+      });
+    } catch (error) {
+      firestore.connected = false;
+      firestore.error = error?.message || "Gagal membuat query Firestore";
+      emit("PROCESS", "Saya gagal menyiapkan sensor Firestore.", "SYS_FIRESTORE_CONNECTION", firestore.error, { cycleMode: "ERROR" });
+    }
+  }
+
+  function refreshState() {
+    if (stopped || !authorized) return;
+    const organs = buildOrgans();
+    state.systemOrgans = organs;
+    state.metrics = makeMetrics(organs);
+    state.activeCases = makeCases(organs);
+    state.medicineQueue = state.activeCases.map(c => ({ ...c, handoff: "READY_FOR_MEDICINE" }));
+    state.systemLogs = latestSystemLogs.slice();
+    state.firestore = { ...firestore };
+    state.connection = deriveConnection();
+    window.BCGO_STATE = safeClone(state);
+    onCycleUpdate(safeClone(state));
+  }
+
+  function scheduleNext(delay) {
+    clearTimeout(cycleTimer);
+    cycleTimer = setTimeout(nextPhase, delay);
+  }
+
+  function nextPhase() {
+    if (stopped || !authorized || realtimeBusy) return;
+    phaseIndex = (phaseIndex + 1) % 4;
+
+    if (phaseIndex === 0) {
+      cycleNo += 1;
+      recordEvent("CYCLE", `Neural cycle #${cycleNo} dimulai.`, "SYS_NEURAL_SCAN");
+      emit("IN", `Neural cycle #${cycleNo} dimulai. Saya memindai ${Object.keys(ORGAN_REGISTRY).length} organ dan membaca bukti telemetry terbaru.`, "SYS_NEURAL_SCAN", null, { cycleMode: "NORMAL" });
+      scheduleNext(CYCLE.IN);
+      return;
+    }
+
+    if (phaseIndex === 1) {
+      const active = Object.entries(buildOrgans()).filter(([, v]) => v.state === "ACTIVE");
+      emit("PROCESS", active.length
+        ? `Saya menemukan ${active.length} anomali aktif. Saya memproses bukti sebelum menyimpulkan akar masalah.`
+        : `Tidak ada anomali aktif. Saya membandingkan ${latestSystemLogs.length} laporan telemetry dengan window pemantauan.`, active[0]?.[0] || "SYS_TELEMETRY_ANALYSIS", active[0]?.[1]?.message || null, { cycleMode: "NORMAL" });
+      scheduleNext(CYCLE.PROCESS);
+      return;
+    }
+
+    if (phaseIndex === 2) {
+      const active = Object.entries(buildOrgans()).filter(([, v]) => v.state === "ACTIVE");
+      emit("REVIEW", active.length
+        ? `REVIEW: ${active.length} kasus aktif. Saya mempertahankan bukti dan menyiapkan konteks yang dapat diverifikasi Medicine.`
+        : "REVIEW selesai. Tidak ada anomali aktif yang dapat saya pastikan dari telemetry saat ini.", active[0]?.[0] || "SYS_NEURAL_REVIEW", active[0]?.[1]?.message || null, { cycleMode: "NORMAL" });
+      scheduleNext(CYCLE.REVIEW);
+      return;
+    }
+
+    const active = Object.entries(buildOrgans()).filter(([, v]) => v.state === "ACTIVE");
+    emit("OUT", active.length
+      ? `Cycle #${cycleNo} selesai. ${active.length} anomali tetap aktif dan terus diawasi.`
+      : `Cycle #${cycleNo} selesai. Pemantauan kembali normal dan telemetry tetap didengarkan.`, active[0]?.[0] || "SYS_NEURAL_SYNC", active[0]?.[1]?.message || null, { cycleMode: active.length ? "ALERT" : "NORMAL" });
+    scheduleNext(CYCLE.OUT);
+  }
+
+  async function verifyAdmin(user) {
+    if (!user) {
+      authorized = false;
+      clearTimeout(cycleTimer);
+      clearInterval(refreshTimer);
+      emit("OUT", "Sesi Admin belum tersedia. Silakan login sebagai Admin.", "SYS_AUTH_REQUIRED");
+      return;
+    }
+
+    try {
+      const snap = await getDoc(doc(db, "admin_users", user.uid));
+      const data = snap.exists() ? snap.data() : null;
+      if (data?.active !== true) {
+        authorized = false;
+        emit("OUT", "Akun ini bukan Admin aktif. Akses Pusat Saraf ditolak.", "SYS_AUTH_NOT_ADMIN");
+        return;
+      }
+      if (authorized) return;
+
+      authorized = true;
+      recordEvent("AUTH", "Admin terverifikasi. Sensor real-time dibuka.", "SYS_AUTH_VERIFIED");
+      emit("IN", "Admin terverifikasi. Saya membuka sensor telemetry dan Firestore real-time.", "SYS_AUTH_VERIFIED", null, { cycleMode: "BOOT" });
+      startSystemLogs();
+      startFirestoreProbe();
+      refreshTimer = setInterval(refreshState, 15000);
+      phaseIndex = -1;
+      cycleNo = 0;
+      nextPhase();
+    } catch (error) {
+      authorized = false;
+      emit("OUT", "Saya gagal memverifikasi status Admin.", "SYS_AUTH_CHECK_FAILED", error?.message, { cycleMode: "ERROR" });
+    }
+  }
+
+  // Error di halaman monitor sendiri: jangan mengklaim file lain rusak.
+  window.addEventListener("error", event => {
+    if (stopped) return;
+    const source = normalizeFile(event?.filename || "bcgo.html");
+    const message = event?.message || event?.error?.message || "JavaScript error tidak diketahui.";
+    if (source === "bcgo.html" || source === "bcgo.js") {
+      recordEvent("LOCAL_ERROR", `Error monitor: ${message}`, source);
+      emit("PROCESS", `Saya menerima error lokal dari ${source}. Saya tandai sebagai bukti monitor, bukan sebagai error lintas-file.`, source, `[L:${event?.lineno || "?"} C:${event?.colno || "?"}] ${message}`, { cycleMode: "ERROR" });
+    }
+  });
+
+  window.addEventListener("unhandledrejection", event => {
+    if (stopped) return;
+    const reason = event?.reason?.message || String(event?.reason || "Unhandled Promise rejection.");
+    recordEvent("LOCAL_REJECTION", reason, "bcgo.html");
+    emit("PROCESS", "Saya menerima Promise rejection lokal pada monitor.", "bcgo.html", reason, { cycleMode: "ERROR" });
+  });
+
+  const brain = {
+    ask: answerQuestion,
+    getState: () => {
+      const organs = buildOrgans();
+      state.systemOrgans = organs;
+      state.metrics = makeMetrics(organs);
+      state.activeCases = makeCases(organs);
+      state.medicineQueue = state.activeCases.map(c => ({ ...c, handoff: "READY_FOR_MEDICINE" }));
+      return safeClone(state);
+    },
+    getSituation: situation,
+    getRegistry: () => ({ ...ORGAN_REGISTRY }),
+    stop() {
+      stopped = true;
+      clearTimeout(cycleTimer);
+      clearInterval(refreshTimer);
+      if (typeof unsubscribeAuth === "function") unsubscribeAuth();
+      if (typeof unsubscribeFirestore === "function") unsubscribeFirestore();
+      if (typeof unsubscribeSystemLogs === "function") unsubscribeSystemLogs();
+    }
+  };
+
+  window.BCGOBrain = brain;
+  window.BCGO_STATE = safeClone(state);
+  unsubscribeAuth = onAuthStateChanged(auth, verifyAdmin);
+  return brain;
 }
