@@ -1008,6 +1008,38 @@ footer p { margin: 0; }
     box-shadow: 0 -10px 30px rgba(0,0,0,0.06);
 }
 
+/* =========================================================
+   CGO / BOTPRESS — ROBOT DI ATAS BOTTOM NAV
+========================================================= */
+.bottom-nav {
+    z-index: 2147483000 !important;
+    background-color: #ffffff !important;
+}
+
+.bpFabWrapper {
+    position: fixed !important;
+    right: max(18px, calc((100vw - 440px) / 2 + 18px)) !important;
+    bottom: calc(74px + env(safe-area-inset-bottom, 0px) + 10px) !important;
+    z-index: 2147483646 !important;
+    transform: none !important;
+}
+
+.bpFabContainer,
+.bpFab,
+.bpFabIcon,
+.bpFabImage {
+    position: relative !important;
+    z-index: 2147483646 !important;
+}
+
+.bpWebchat {
+    z-index: 2147483647 !important;
+}
+
+@media (max-width: 440px){
+    .bpFabWrapper{right:16px !important;}
+}
+
 .nav-item {
     background: none;
     border: none;
@@ -1989,6 +2021,9 @@ function bukaModalRegistrasi() {
         return;
     }
 
+    // DEBUG: tampilkan kode & pesan error asli dari
+    // Firebase (auth/... atau permission-denied dsb)
+    // supaya penyebab pastinya langsung terlihat.
     const errorCode = error?.code ? ` (${error.code})` : "";
     const errorDetail = error?.message || String(error);
 
@@ -2014,7 +2049,8 @@ function bukaModalRegistrasi() {
 }
 
 // ======================================
-// MODAL LOGIN
+// MODAL LOGIN (untuk akun yang sudah ada,
+// bisa dipulihkan dari device/browser manapun)
 // ======================================
 
 function bukaModalLogin() {
@@ -2144,6 +2180,7 @@ function bukaModalLogin() {
     }
 }
     
+// Fungsi bantu untuk memperbarui tampilan UI Header
 function updateUIAkun(userData) {
     const headerProfileName = document.querySelector('.profile-name, #headerUserName');
     const modalAuth = document.getElementById('modalAuth') || document.querySelector('.modal-aktivasi');
@@ -2156,6 +2193,10 @@ function updateUIAkun(userData) {
         modalAuth.style.display = 'none';
     }
 }
+
+/* =========================================================
+   LOAD PROFILE SAAT index.html DIBUKA / DI-REFRESH
+========================================================= */
 
 async function loadCurrentUserProfileIndex() {
     try {
@@ -2248,6 +2289,10 @@ window.addEventListener("DOMContentLoaded", async () => {
     await loadCurrentUserProfileIndex();
 });
 
+/* =========================================================
+   HEADER PROFILE DROPDOWN
+========================================================= */
+
 const btnOpenProfileDropdown = document.getElementById("btnOpenProfileDropdown");
 const headerDropdownMenu = document.getElementById("headerDropdownMenu");
 
@@ -2269,6 +2314,10 @@ if (btnOpenProfileDropdown && headerDropdownMenu) {
         }
     });
 }
+
+/* =========================================================
+   EDIT PROFILE
+========================================================= */
 
 const btnEditProfilTab = document.getElementById("btnEditProfilTab");
 
@@ -2300,7 +2349,6 @@ function switchTab(tabName) {
     
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-
 function bukaZoomBarcode() {
     openModal("QRIS CIKURPAY (ZOOM) 🔍");
     if (modalMainContent) {
@@ -2354,7 +2402,7 @@ function bukaModalScanQris() {
             .then((stream) => {
                 mediaStreamInstance = stream;
                 videoElement.srcObject = stream;
-                if(statusText) statusText.innerText = "Kamera aktif. Fitur pemindaian QRIS sedang dalam pengembangan.";
+                                if(statusText) statusText.innerText = "Kamera aktif. Fitur pemindaian QRIS sedang dalam pengembangan.";
             })
             .catch((err) => {
                 console.error("Gagal mengakses kamera:", err);
@@ -2377,6 +2425,7 @@ if (!document.getElementById("qrisScannerAnimation")) {
     styleCam.innerText = `@keyframes scanLineActive { 0% { top: 24px; } 50% { top: calc(100% - 24px); } 100% { top: 24px; } }`;
     document.head.appendChild(styleCam);
 }
+
 
 function bukaModalAturPin() {
     closeHeaderDropdown();
@@ -2446,7 +2495,7 @@ function bukaModalAturPin() {
         }
 
         if (!/^\d{6}$/.test(newPin)) {
-            alert("PIN Baru harus 6 digit angka.");
+            alert("PIN Baru harus tepat 6 digit angka.");
             return;
         }
 
@@ -2455,41 +2504,407 @@ function bukaModalAturPin() {
             return;
         }
 
-        userProfile.pin = newPin;
-
-        if (window.CikurCloud && userProfile.uid) {
-            try {
-                await window.CikurCloud.saveProfile(userProfile.uid, { pin: newPin });
-            } catch (err) {
-                console.error("Gagal menyimpan PIN ke cloud:", err);
-            }
+        if (!window.CikurCloud) {
+            alert("CIKUR Cloud belum tersedia. Silakan refresh halaman.");
+            return;
         }
 
-        alert("PIN CikurPay berhasil diperbarui!");
-        closeModal();
+        btnSimpanPin.disabled = true;
+        btnSimpanPin.textContent = "Menyimpan PIN...";
+
+        try {
+            const firebaseUser = await window.CikurCloud.ensureAuth();
+            if (!firebaseUser) {
+                throw new Error("Firebase User tidak tersedia.");
+            }
+
+            await window.CikurCloud.saveProfile(firebaseUser.uid, {
+                pin: newPin
+            });
+
+            userProfile.pin = newPin;
+            updateUIProfile();
+            alert("PIN CikurPay berhasil diperbarui!");
+
+            if (typeof closeModal === "function") {
+                closeModal();
+            }
+        } catch (error) {
+            console.error("[CIKUR GO] Gagal memperbarui PIN:", error);
+            alert("Gagal menyimpan PIN ke Cloud.");
+        } finally {
+            btnSimpanPin.disabled = false;
+            btnSimpanPin.textContent = "Simpan PIN Baru ✓";
+        }
     });
 }
 
-function openModal(titleText) {
-    const screen = document.getElementById("assistantScreen");
-    const titleEl = document.getElementById("modalTitle");
-    if (screen && titleEl) {
-        titleEl.innerText = titleText;
-        screen.style.display = "block";
+async function prosesLogout() {
+    if (!confirm("Apakah Anda yakin ingin keluar dari akun?")) {
+        return;
     }
+    try {
+        if (window.CikurCloud && window.CikurCloud.auth) {
+            const { signOut } = await import(
+                "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js"
+            );
+            await signOut(window.CikurCloud.auth);
+        }
+        userProfile = {
+            name: "",
+            email: "",
+            phone: "",
+            saldo: 0,
+            avatar: ""
+        };
+        updateUIProfile();
+        bukaModalRegistrasi();
+    } catch (error) {
+        console.error("[CIKUR GO] Gagal logout:", error);
+        alert("Gagal keluar dari akun CIKUR GO.");
+    }
+}
+
+const slides = document.querySelector(".slides");
+const images = document.querySelectorAll(".slides img");
+const dots = document.querySelectorAll(".dots span");
+let current = 0;
+
+function showSlide(index) {
+    if (slides && dots.length > 0) {
+        slides.style.transform = `translateX(-${index * 100}%)`;
+        dots.forEach(dot => dot.classList.remove("active"));
+        dots[index].classList.add("active");
+    }
+}
+
+setInterval(() => {
+    if (images.length > 0) {
+        current = (current + 1) % images.length;
+        showSlide(current);
+    }
+}, 4000);
+    
+const miniSlides = document.querySelector(".mini-slides");
+const miniDots = document.querySelectorAll(".mini-dots span");
+let miniCurrent = 0;
+
+setInterval(() => {
+    if (miniSlides && miniDots.length > 0) {
+        miniCurrent = (miniCurrent + 1) % miniDots.length;
+        miniSlides.style.transform = `translateX(-${miniCurrent * 33.333}%)`;
+        miniDots.forEach(d => d.classList.remove("active"));
+        miniDots[miniCurrent].classList.add("active");
+    }
+}, 7000);
+
+const heroTrack = document.querySelector(".hero-big-track");
+const heroSlides = document.querySelectorAll(".hero-big-track img");
+const heroDots = document.querySelectorAll(".hero-dots span");
+let heroIndex = 0;
+
+function moveHeroSlide() {
+    if (!heroTrack || heroSlides.length === 0) return;
+    const slideWidth = heroSlides[0].getBoundingClientRect().width;
+    const gap = 12;
+    const containerWidth = heroTrack.parentElement.getBoundingClientRect().width;
+    const centerOffset = (containerWidth - slideWidth) / 2;
+    const position = centerOffset - (heroIndex * (slideWidth + gap));
+    heroTrack.style.transform = `translateX(${position}px)`;
+    heroDots.forEach((dot, index) => {
+        dot.classList.toggle("active", index === heroIndex);
+    });
+}
+
+moveHeroSlide();
+
+setInterval(() => {
+    heroIndex = (heroIndex + 1) % heroSlides.length;
+    moveHeroSlide();
+}, 9000);
+
+window.addEventListener("resize", () => {
+    moveHeroSlide();
+});
+
+const assistantScreen = document.getElementById("assistantScreen");
+const closeAssistant = document.getElementById("closeAssistant");
+const modalTitle = document.getElementById("modalTitle");
+const modalMainContent = document.getElementById("modalMainContent");
+
+function openModal(titleHTML) {
+    if (modalTitle) modalTitle.innerHTML = titleHTML;
+    if (assistantScreen) assistantScreen.style.display = "block";
+}
+
+if(closeAssistant) {
+    closeAssistant.addEventListener("click", () => { if (assistantScreen) assistantScreen.style.display = "none"; });
 }
 
 function closeModal() {
-    const screen = document.getElementById("assistantScreen");
-    if (screen) {
-        screen.style.display = "none";
+    if (assistantScreen) assistantScreen.style.display = "none";
+}
+
+function bukaModalPengaturanProfil() {
+    closeHeaderDropdown();
+    openModal("PENGATURAN PROFIL & FOTO AKUN");
+    let avatarPreviewHTML = userProfile.avatar ? `<img src="${userProfile.avatar}" style="width:100%; height:100%; object-fit:cover;">` : "CK";
+
+    if (modalMainContent) {
+        modalMainContent.innerHTML = `
+            <div style="text-align:center; margin-bottom:14px;">
+                <div style="width:70px; height:70px; border-radius:50%; background:#fee2e2; border:2px solid #E50914; color:#E50914; font-size:22px; font-weight:800; display:flex; align-items:center; justify-content:center; margin:0 auto 8px; overflow:hidden;" id="modalAvatarPreviewBox">${avatarPreviewHTML}</div>
+                <h3 style="font-size:15px; color:#0f172a; font-weight:800;">${userProfile.name}</h3>
+            </div>
+            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:14px; margin-bottom:14px;">
+                <div class="form-group"><label>Ganti Foto Profil</label><input type="file" id="inputFotoProfil" accept="image/*" class="input-box" style="font-size:11px; padding:7px; background:#fff;"></div>
+                <div class="form-group"><label>Nama Lengkap</label><input type="text" id="inputNamaUser" class="input-box" value="${userProfile.name}"></div>
+                <div class="form-group"><label>Email</label><input type="email" id="inputEmailUser" class="input-box" value="${userProfile.email || ''}" placeholder="contoh@email.com"></div>
+                <div class="form-group" style="margin-bottom:0;"><label>Nomor WhatsApp / HP</label><input type="text" id="inputPhoneUser" class="input-box" value="${userProfile.phone}"></div>
+            </div>
+            <button class="btn-pesan-form" id="btnSimpanProfil">Simpan Perubahan ✓</button>
+        `;
+    }
+
+    let temporaryAvatar = userProfile.avatar;
+    const inputFotoEl = document.getElementById("inputFotoProfil");
+    if (inputFotoEl) {
+        inputFotoEl.addEventListener("change", function(e) {
+            let file = e.target.files[0];
+            if(file) {
+                let reader = new FileReader();
+                reader.onload = function(uploadEvent) {
+                    temporaryAvatar = uploadEvent.target.result;
+                    const previewBox = document.getElementById("modalAvatarPreviewBox");
+                    if (previewBox) previewBox.innerHTML = `<img src="${temporaryAvatar}" style="width:100%; height:100%; object-fit:cover;">`;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    const btnSimpanProfilEl = document.getElementById("btnSimpanProfil");
+    if (btnSimpanProfilEl) {
+        btnSimpanProfilEl.addEventListener("click", async () => {
+            let newName = document.getElementById("inputNamaUser").value.trim();
+            let newEmail = document.getElementById("inputEmailUser").value.trim().toLowerCase();
+            let newPhone = document.getElementById("inputPhoneUser").value.trim();
+
+            if(!newName || !newPhone) { alert("Nama dan No HP tidak boleh kosong."); return; }
+
+            const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (newEmail && !emailPattern.test(newEmail)) {
+                alert("Format email tidak valid.");
+                return;
+            }
+
+            userProfile.name = newName;
+            userProfile.email = newEmail;
+            userProfile.phone = newPhone;
+            userProfile.avatar = temporaryAvatar;
+
+            btnSimpanProfilEl.disabled = true;
+            btnSimpanProfilEl.textContent = "Menyimpan...";
+
+            try {
+                if (window.CikurCloud) {
+                    const firebaseUser = await window.CikurCloud.ensureAuth();
+                    if (firebaseUser) {
+                        await window.CikurCloud.saveProfile(firebaseUser.uid, {
+                            name: newName,
+                            email: newEmail,
+                            phone: newPhone,
+                            avatar: temporaryAvatar
+                        });
+                    }
+                }
+
+                localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+                updateUIProfile();
+                alert("Profil berhasil diperbarui!");
+                closeModal();
+
+            } catch (error) {
+                console.error("[CIKUR GO] Gagal menyimpan profil:", error);
+                const errorCode = error?.code ? ` (${error.code})` : "";
+                alert(`Gagal menyimpan profil ke Cloud${errorCode}: ${error?.message || error}`);
+
+            } finally {
+                btnSimpanProfilEl.disabled = false;
+                btnSimpanProfilEl.textContent = "Simpan Perubahan ✓";
+            }
+        });
     }
 }
 
-const closeBtn = document.getElementById("closeAssistant");
-if (closeBtn) {
-    closeBtn.addEventListener("click", closeModal);
+function bukaModalTopUp() {
+    openModal("DOMPET CIKURPAY & TOP-UP");
+    if (modalMainContent) {
+        modalMainContent.innerHTML = `
+            <div style="background:linear-gradient(135deg, #0b0f19, #151c2e); border-radius:18px; padding:16px; color:#fff; text-align:center; margin-bottom:14px;">
+                <p style="font-size:10px; color:#94a3b8; text-transform:uppercase; font-weight:700;">Saldo Aktif CikurPay</p>
+                <h2 style="font-size:26px; font-weight:800; color:#FFD700; font-family:'JetBrains Mono', monospace; margin:4px 0;">Rp ${userProfile.saldo.toLocaleString('id-ID')}</h2>
+            </div>
+            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:18px; padding:14px;">
+                <p style="font-size:11px; font-weight:700; color:#0f172a; margin-bottom:8px;">Pilih Nominal Top-Up</p>
+                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:10px;">
+                    <button class="pay-method-option topup-gateway-btn active" data-val="50000">Rp 50rb</button>
+                    <button class="pay-method-option topup-gateway-btn" data-val="100000">Rp 100rb</button>
+                    <button class="pay-method-option topup-gateway-btn" data-val="200000">Rp 200rb</button>
+                </div>
+                <div class="form-group" style="margin-top:8px;"><label>Atau Masukkan Nominal Lain (Rp)</label><input type="number" id="customTopupVal" class="input-box" placeholder="Contoh: 150000"></div>
+                <button class="btn-pesan-form" id="btnProsesGateway">Top-Up Sekarang ⚡</button>
+            </div>
+        `;
+    }
+
+    let selectedTopupAmount = 50000;
+    document.querySelectorAll(".topup-gateway-btn").forEach(btn => {
+        btn.addEventListener("click", function() {
+            document.querySelectorAll(".topup-gateway-btn").forEach(b => b.classList.remove("active"));
+            this.classList.add("active");
+            selectedTopupAmount = parseInt(this.getAttribute("data-val"));
+            const customInput = document.getElementById("customTopupVal");
+            if (customInput) customInput.value = "";
+        });
+    });
+
+       const btnProsesGatewayEl = document.getElementById("btnProsesGateway");
+    if (btnProsesGatewayEl) {
+        btnProsesGatewayEl.addEventListener("click", () => {
+            alert("Fitur Top-Up CikurPay sedang dalam tahap pengembangan. Akan segera hadir!");
+        });
+    }
 }
+    document.addEventListener("DOMContentLoaded", function () {
+    const cgoPanelMessage = document.getElementById("cgoPanelMessage");
+    if (!cgoPanelMessage) return;
+    
+    const autoMessages = [
+        "Hai 👋 Ada yang bisa dibantu?",
+        "Mau pesan makanan? 🍜 CGO siap membantu.",
+        "Mau pergi hari ini? 🛵 CGO siap mencarikan perjalanan.",
+        "Butuh bantuan lainnya? ✨ Tinggal pilih layanan."
+    ];
+    let autoMessageIndex = 0;
+    setInterval(function () {
+        autoMessageIndex = (autoMessageIndex + 1) % autoMessages.length;
+        cgoPanelMessage.style.opacity = "0";
+        setTimeout(function () {
+            cgoPanelMessage.textContent = autoMessages[autoMessageIndex];
+            cgoPanelMessage.style.opacity = "1";
+        }, 180);
+    }, 4500);
+    
+    const serviceMessages = {
+        btnAssistant: "Hai 👋 Ada yang bisa dibantu untuk kebutuhan Assistant hari ini? ✨",
+        btnFood: "Lagi lapar? 😊 Yuk cari makanan yang kamu suka.",
+        btnRide: "Mau pergi ke mana hari ini? 🛵"
+    };
+    
+    Object.keys(serviceMessages).forEach(function (id) {
+        const button = document.getElementById(id);
+        if (!button) return;
+        
+        // Jangan intercept khusus tombol assistant karena diarahkan langsung ke assistant.html[cite: 2]
+        if(id === 'btnAssistant') return;
+
+        button.addEventListener("click", function (event) {
+            if (!button.dataset.cgoTapped) {
+                event.preventDefault();
+                button.dataset.cgoTapped = "true";
+                cgoPanelMessage.style.opacity = "0";
+                setTimeout(function () {
+                    cgoPanelMessage.textContent = serviceMessages[id];
+                    cgoPanelMessage.style.opacity = "1";
+                }, 180);
+                return;
+            }
+            button.dataset.cgoTapped = "false";
+        });
+    });
+});
+
+const cgoVoiceWave = document.getElementById("cgoVoiceWave");
+if (cgoVoiceWave) {
+    function bukaChatCGO() {
+        if (window.botpress && typeof window.botpress.open === "function") {
+            window.botpress.open();
+        } else {
+            setTimeout(() => {
+                if (window.botpress && typeof window.botpress.open === "function") {
+                    window.botpress.open();
+                }
+            }, 300);
+        }
+    }
+
+    cgoVoiceWave.addEventListener("click", bukaChatCGO);
+    cgoVoiceWave.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            bukaChatCGO();
+        }
+    });
+}
+
+(function () {
+    const notification = document.getElementById("cgoNotification");
+    const icon = document.getElementById("cgoNotificationIcon");
+    const title = document.getElementById("cgoNotificationTitle");
+    const message = document.getElementById("cgoNotificationMessage");
+    const closeBtn = document.getElementById("cgoNotificationClose");
+    if (!notification || !icon || !title || !message) return;
+    
+    let notificationTimer = null;
+    window.showCGONotification = function (type = "success", notificationTitle = "Berhasil", notificationMessage = "") {
+        clearTimeout(notificationTimer);
+        notification.classList.remove("success", "warning", "error");
+        notification.classList.add(type);
+        icon.textContent = type === "success" ? "✓" : (type === "warning" ? "!" : "×");
+        title.textContent = notificationTitle;
+        message.textContent = notificationMessage;
+        const toastCard = notification.querySelector(".cgo-notification-card");
+        if (toastCard) {
+            toastCard.style.animation = "none";
+            void toastCard.offsetWidth;
+            toastCard.style.animation = "";
+        }
+        notification.classList.add("show");
+        notification.setAttribute("aria-hidden", "false");
+        notificationTimer = setTimeout(() => { closeCGONotification(); }, 3500);
+    };
+    function closeCGONotification() {
+        notification.classList.remove("show");
+        notification.setAttribute("aria-hidden", "true");
+    }
+    window.closeCGONotification = closeCGONotification;
+    if (closeBtn) closeBtn.addEventListener("click", closeCGONotification);
+
+    window.alert = function (messageText) {
+        const text = String(messageText || "");
+        let type = "success", notificationTitle = "CIKUR GO";
+        if (/salah|gagal|error|tidak berhasil|ditolak/i.test(text)) {
+            type = "error"; notificationTitle = "Terjadi Kesalahan";
+        } else if (/harus|belum|tidak cocok|perhatian|silakan|wajib/i.test(text)) {
+            type = "warning"; notificationTitle = "Perhatian";
+        } else {
+            type = "success"; notificationTitle = "Berhasil";
+        }
+        showCGONotification(type, notificationTitle, text);
+    };
+})();
+
+    window.addEventListener("error", (e) => {
+    if (window.CikurCloud) {
+        window.CikurCloud.reportSystemError("index.html", e.message);
+    }
+});
+    
 </script>
+
+<script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
+<script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
+    
 </body>
 </html>
