@@ -162,11 +162,16 @@ export function runAutonomousEngine(onCycleUpdate) {
           column: item.log?.column ?? item.log?.colno ?? null
         };
       } else if (historical) {
+        // Historical telemetry is NOT proof of recovery.
+        // RECOVERED requires explicit resolution/validation evidence.
         organs[file] = {
           ...meta,
-          status: "RECOVERED",
-          state: "RECOVERED",
-          message: "Tidak ada error aktif dalam window pemantauan; laporan sebelumnya masih tersimpan sebagai bukti historis."
+          status: "ANOMALY",
+          state: "ACTIVE",
+          message: "Bukti error historis masih tersimpan. Belum ada bukti resolusi/validasi, jadi kasus tidak boleh dianggap RECOVERED.",
+          reportedAt: item?.log?.reportedAt || null,
+          line: item?.log?.line ?? item?.log?.lineno ?? null,
+          column: item?.log?.column ?? item?.log?.colno ?? null
         };
       } else {
         organs[file] = {
@@ -263,9 +268,10 @@ export function runAutonomousEngine(onCycleUpdate) {
       return `Saya menemukan ${active.length} anomali aktif. Fokus pertama saya ${file}: ${info.message}`;
     }
     const recovered = Object.values(organs).filter(v => v.state === "RECOVERED").length;
-    return recovered
-      ? `Tidak ada anomali aktif saat ini. ${recovered} organ masih memiliki bukti error historis yang saya tandai RECOVERED.`
-      : `Semua ${Object.keys(ORGAN_REGISTRY).length} organ belum memiliki laporan error aktif dalam telemetry yang saya terima.`;
+    const historical = Object.values(organs).filter(v => v.state === "ACTIVE" && /Bukti error historis/i.test(String(v.message || ""))).length;
+    if (recovered) return `Tidak ada anomali aktif saat ini. ${recovered} organ memiliki bukti resolusi/validasi yang membuatnya RECOVERED.`;
+    if (historical) return `Saya masih mempertahankan ${historical} kasus berbasis bukti historis sebagai ANOMALY karena belum ada bukti resolusi/validasi.`;
+    return `Semua ${Object.keys(ORGAN_REGISTRY).length} organ belum memiliki laporan error aktif dalam telemetry yang saya terima.`;
   }
 
   function findFile(question) {
@@ -310,7 +316,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     }
 
     if (/error|masalah|anomali|gangguan|rusak/.test(q)) {
-      if (!active.length) return "Saya belum melihat anomali aktif dari telemetry. Laporan lama tetap saya simpan sebagai RECOVERED; saya menunggu bukti baru secara real-time.";
+      if (!active.length) return "Saya belum melihat anomali aktif dari telemetry saat ini. Jika ada laporan lama, saya tidak menganggapnya RECOVERED tanpa bukti resolusi/validasi.";
       const detail = active.slice(0, 4).map(([f, v]) => `${f}: ${v.message}`).join(" | ");
       return `Ya, ada ${active.length} anomali aktif. ${detail}`;
     }
