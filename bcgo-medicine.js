@@ -33,7 +33,6 @@ const REGISTRY = {
   "agentcgo.html": { type: "Zona Mitra", role: "mitra" },
   "resto.html": { type: "Zona Mitra", role: "restaurant" },
   "driver.html": { type: "Zona Mitra", role: "driver" },
-  "data-cgo.html": { type: "Data Sistem", role: "system" },
   "cikur-config.js": { type: "Sistem Config", role: "system" },
   "bcgo-engine.js": { type: "Sistem Core", role: "system" },
   "bcgo-admin.html": { type: "Sistem Admin", role: "admin" },
@@ -83,8 +82,12 @@ function canonicalFieldSet(values) {
   return out;
 }
 
+const LOCAL_CHANNEL_NAME = "BCGO_MEDICINE_REALTIME_V2";
+let localChannel = null;
+let localRealtimeStarted = false;
+
 const S = {
-  version: "2.5.1",
+  version: "2.3.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -100,10 +103,7 @@ const S = {
   sourceCache: new Map(),
   lastClientMessageId: null,
   eventSeq: 0,
-  rules: { status: "WAITING", checkedAt: null, collections: {}, permissionErrors: [] },
-  telemetry: { started: false, initialized: false, transport: "NONE", lastId: null },
-  surface: null,
-  investigatedCases: new Set()
+  autonomous: { enabled: true, turn: 0, timer: null, lastAt: 0 }
 };
 
 const emit = (event, p = {}) => window.dispatchEvent(new CustomEvent("bcgo:medicine", {
@@ -120,14 +120,14 @@ function diagnosis(message) {
   if (/cannot set properties of null|cannot read properties of null/.test(m)) {
     return { code: "DOM_NULL_REFERENCE", title: "Referensi DOM tidak ditemukan", severity: "MEDIUM", confidence: .96, treatment: "DOM_NULL_GUARD" };
   }
-  if (/permission-denied|permission denied|missing or insufficient permissions|unauthenticated/.test(m)) {
-    return { code: "FIRESTORE_RULE_PERMISSION", title: "Firestore menolak permission / rules tidak terpenuhi", severity: "HIGH", confidence: .97, treatment: "FIRESTORE_RULE_REVIEW" };
+  if (/permission-denied|permission denied|unauthenticated/.test(m)) {
+    return { code: "AUTH_PERMISSION", title: "Masalah otorisasi", severity: "HIGH", confidence: .94, treatment: "AUTH_REVIEW" };
   }
   if (/firestore|listener|network|offline|unavailable|onSnapshot/.test(m)) {
     return { code: "REALTIME_CONNECTIVITY", title: "Gangguan koneksi/listener realtime", severity: "MEDIUM", confidence: .84, treatment: "FIRESTORE_RECONNECT" };
   }
-  if (/referenceerror|is not defined|undefined|is not a function|not a function|cannot access .* before initialization/.test(m)) {
-    return { code: "JAVASCRIPT_CONTRACT", title: "Kontrak JavaScript tidak terpenuhi", severity: "MEDIUM", confidence: .86, treatment: "RUNTIME_CONTRACT_REVIEW" };
+  if (/undefined|is not a function|not defined/.test(m)) {
+    return { code: "JAVASCRIPT_CONTRACT", title: "Kontrak JavaScript tidak terpenuhi", severity: "MEDIUM", confidence: .82, treatment: "RUNTIME_CONTRACT_REVIEW" };
   }
   if (/sinkron|synchron|count|jumlah|validasi|mitra|tidak sesuai|tidak sinkron/.test(m)) {
     return { code: "DATA_CONSISTENCY", title: "Potensi ketidaksinkronan data/validasi", severity: "MEDIUM", confidence: .70, treatment: "CROSS_FILE_CONSISTENCY_REVIEW" };
@@ -153,95 +153,42 @@ function latestRelevantLogs(file) {
   return S.logs.filter(l => !file || safeLower(l.fileName || l.source) === safeLower(file)).slice(0, 12);
 }
 
-function classifyFirestoreError(error) {
-  const code = String(error?.code || "").toLowerCase();
-  const message = String(error?.message || error || "").slice(0, 700);
-  const permission = code.includes("permission-denied") || /permission[- ]denied|missing or insufficient permissions|unauthenticated/i.test(message);
-  return { code: code || "unknown", message, permission };
+function publishLocalMessage(payload) {
+  const message = { ...payload, createdAt: payload.createdAt || now(), localOnly: true };
+  emit("local_message", { message });
+  try {
+    localChannel?.postMessage({ type: "MEDICINE_MESSAGE", message });
+  } catch (e) {
+    emit("realtime_warning", { channel: LOCAL_CHANNEL_NAME, message: e.message });
+  }
 }
 
-const RULE_PROBE_COLLECTIONS = [
-  "system_logs",
-  "medicine_messages",
-  "medicine_treatments",
-  "medicine_patch_requests",
-  "medicine_validations",
-  "mitra_applications"
-];
-
-async function discoverSystemSurface() {
-  const roots = ["bcgo.html", "bcgo.js", "bcgo-engine.js", "cikur-config.js"];
-  const discovered = new Set(Object.keys(REGISTRY));
-
-  for (const root of roots) {
-    const r = await fetchFile(root);
-    if (!r.ok || !r.text) continue;
-    const source = r.text;
-    let m;
-    const literal = /["'`]([A-Za-z0-9_.-]+\\.(?:html|js))["'`]/gi;
-    while ((m = literal.exec(source))) discovered.add(m[1]);
-  }
-
-  for (const name of discovered) {
-    if (!REGISTRY[name]) REGISTRY[name] = { type: "Discovered Dependency", role: "dependency" };
-  }
-
-  S.surface = { roots, files: [...discovered], discoveredAt: now() };
-  emit("dependency_surface", { surface: S.surface });
-  return [...discovered];
-}
-
-function startRuleHealthMonitor() {
-  if (!auth.currentUser) return;
-  if (S._ruleUnsubs) for (const u of S._ruleUnsubs) { try { u?.(); } catch (_) {} }
-  S._ruleUnsubs = [];
-  S.rules = { status: "CHECKING", checkedAt: now(), collections: {}, permissionErrors: [] };
-  emit("rules_health", { rules: S.rules });
-
-  for (const name of RULE_PROBE_COLLECTIONS) {
-    try {
-      const q = query(collection(db, name), limit(1));
-      const unsub = onSnapshot(
-        q,
-        snap => {
-          S.rules.collections[name] = { status: "READ_OK", count: snap.size, checkedAt: now() };
-          S.rules.permissionErrors = Object.entries(S.rules.collections)
-            .filter(([, x]) => x.status === "PERMISSION_DENIED")
-            .map(([collection, x]) => ({ collection, ...x }));
-          S.rules.status = S.rules.permissionErrors.length ? "PERMISSION_DENIED" :
-            (Object.keys(S.rules.collections).length === RULE_PROBE_COLLECTIONS.length ? "READ_OK" : "CHECKING");
-          S.rules.checkedAt = now();
-          emit("rules_health", { rules: { ...S.rules } });
-        },
-        error => {
-          const info = classifyFirestoreError(error);
-          S.rules.collections[name] = {
-            status: info.permission ? "PERMISSION_DENIED" : "ERROR",
-            code: info.code, error: info.message, checkedAt: now()
-          };
-          S.rules.permissionErrors = Object.entries(S.rules.collections)
-            .filter(([, x]) => x.status === "PERMISSION_DENIED")
-            .map(([collection, x]) => ({ collection, ...x }));
-          S.rules.status = S.rules.permissionErrors.length ? "PERMISSION_DENIED" : "ERROR";
-          S.rules.checkedAt = now();
-          emit("rules_health", { rules: { ...S.rules } });
-
-          makeCase({
-            id: `LOCAL-RULE-${uid()}`,
-            fileName: name === "mitra_applications" ? "cikur-config.js" : "bcgo-medicine.js",
-            message: `Firestore rules probe ${name}: ${info.message}`,
-            permissionDenied: info.permission,
-            errorCode: info.code,
-            reportedAt: now()
-          });
-        }
-      );
-      if (typeof unsub === "function") S._ruleUnsubs.push(unsub);
-    } catch (e) {
-      const info = classifyFirestoreError(e);
-      S.rules.collections[name] = { status: info.permission ? "PERMISSION_DENIED" : "ERROR", code: info.code, error: info.message, checkedAt: now() };
+function startLocalRealtime() {
+  if (localRealtimeStarted) return;
+  localRealtimeStarted = true;
+  try {
+    if (typeof BroadcastChannel === "function") {
+      localChannel = new BroadcastChannel(LOCAL_CHANNEL_NAME);
+      localChannel.onmessage = event => {
+        const message = event?.data?.message;
+        if (!message?.text) return;
+        const key = message.clientMessageId || `${message.role}:${message.text}:${message.createdAt}`;
+        if (S.messages.some(m => (m.clientMessageId || m.id) === key)) return;
+        S.messages.push({ ...message, id: `local-${key}` });
+        S.messages = S.messages.slice(-200);
+        emit("local_message", { message });
+        emit("conversation", { messages: S.messages });
+      };
+      S.listeners.push(() => localChannel?.close());
     }
+  } catch (e) {
+    localChannel = null;
+    emit("realtime_warning", { channel: LOCAL_CHANNEL_NAME, message: e.message });
   }
+}
+
+function authAvailable() {
+  return !!auth.currentUser;
 }
 
 async function postSystemMessage(role, msg, meta = {}) {
@@ -255,135 +202,61 @@ async function postSystemMessage(role, msg, meta = {}) {
     clientMessageId,
     ...meta
   };
+  publishLocalMessage(payload);
+  if (!authAvailable()) return payload;
   try {
     await addDoc(collection(db, "medicine_messages"), payload);
   } catch (e) {
-    emit("local_message", { message: { ...payload, createdAt: now() }, storageError: e.message });
+    emit("storage_warning", { message: e.message, collection: "medicine_messages" });
   }
+  return payload;
 }
 
-function makeCase(log, options = {}) {
+function makeCase(log) {
   const source = text(log.fileName || log.source || "UNKNOWN", 120);
   const sig = text(log.message || log.error || "Unknown error", 700);
-  const logId = String(log.id || log.eventId || "").trim();
-
-  if (logId && S.cases.some(c => c.evidence?.id === logId)) return null;
-
-  const existing = S.cases.find(c =>
-    c.source === source &&
-    c.signature === sig &&
-    !["RECOVERED", "REJECTED", "FIXED_VERIFIED"].includes(c.status)
-  );
-
-  if (existing) {
-    existing.lastEvidence = log;
-    existing.evidenceCount = (existing.evidenceCount || 1) + 1;
-    existing.lastSeenAt = now();
-    S.activeCase = existing;
-    emit("case_updated", { case: existing, mergedEvidence: true });
-    return existing;
-  }
+  if (S.cases.some(c => c.source === source && c.signature === sig)) return null;
 
   const d = diagnosis(sig);
   const c = {
     id: `CASE-${uid().toUpperCase()}`,
-    source, signature: sig, diagnosis: d, prescription: prescription(d),
-    status: "DIAGNOSED", createdAt: now(), evidence: log,
-    evidenceCount: 1, lastSeenAt: now(), repairPlan: null,
-    rootCauseFile: source, sourceEvidence: [], validation: null
+    source,
+    signature: sig,
+    diagnosis: d,
+    prescription: prescription(d),
+    status: "DIAGNOSED",
+    createdAt: now(),
+    evidence: log,
+    repairPlan: null,
+    rootCauseFile: source,
+    sourceEvidence: [],
+    validation: null
   };
-
   S.cases.unshift(c);
   S.cases = S.cases.slice(0, 80);
   S.activeCase = c;
   emit("case_created", { case: c });
 
-  postSystemMessage("bcgo",
-    `Saya menemukan impuls nyata dari ${source}: ${d.title}. Saya serahkan ${c.id} ke Medicine. Target ini masih dugaan awal.`,
-    { kind: "BCGO_HANDOFF", caseId: c.id, target: source }
-  );
-  postSystemMessage("medicine",
-    `Saya terima ${c.id}. Saya tidak berhenti di file yang ditunjuk. Saya telusuri dependency, kontrak, source exact, dan evidence runtime.`,
-    { kind: "MEDICINE_ACK", caseId: c.id, target: source }
-  );
-
-  if (options.autoInvestigate !== false && !S.human.paused && !S.investigatedCases.has(c.id)) {
-    S.investigatedCases.add(c.id);
-    setTimeout(() => {
-      verifyWithMedicine(source, {
-        question: `Auto-investigasi telemetry: ${sig}`,
-        requestedBy: "telemetry_auto"
-      }).catch(error => emit("investigation_error", {
-        caseId: c.id, message: error?.message || String(error)
-      }));
-    }, 250);
-  }
+  postSystemMessage("bcgo", `Saya menemukan evidence pada ${source}: ${d.title}. Saya serahkan ${c.id} ke Medicine untuk verifikasi independen.`, {
+    kind: "BCGO_HANDOFF", caseId: c.id, target: source
+  });
+  postSystemMessage("medicine", `Case ${c.id} saya terima. Saya akan mencari akar masalah, memeriksa kontrak lintas-file, lalu menyiapkan repair plan yang konkret.`, {
+    kind: "MEDICINE_ACK", caseId: c.id, target: source
+  });
   return c;
 }
 
 function startTelemetry() {
-  if (!auth.currentUser) {
-    emit("telemetry_unavailable", { reason: "AUTH_REQUIRED" });
+  if (!window.CikurCloud?.listenSystemLogs) {
+    emit("telemetry_unavailable");
     return;
   }
-  if (S.telemetry.started) return;
-  S.telemetry.started = true;
-  S.telemetry.transport = "FIRESTORE_DIRECT";
-  emit("telemetry_transport", { transport: S.telemetry.transport });
-
-  try {
-    const q = query(collection(db, "system_logs"), orderBy("reportedAt", "desc"), limit(80));
-    const unsub = onSnapshot(
-      q,
-      snapshot => {
-        const firstSnapshot = !S.telemetry.initialized;
-        S.telemetry.initialized = true;
-        S.logs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        const top = S.logs[0];
-        const isNew = top?.id && top.id !== S.telemetry.lastId;
-        S.telemetry.lastId = top?.id || S.telemetry.lastId;
-        emit("telemetry", { logs: S.logs, transport: S.telemetry.transport, newEvent: isNew ? top : null });
-        for (const log of S.logs.slice(0, 80)) makeCase(log, { autoInvestigate: !firstSnapshot });
-        // Unresolved cases are re-opened when fresh telemetry arrives. This prevents
-        // Medicine from freezing forever on the first failed evidence attempt.
-        if (!firstSnapshot && !S.human.paused) {
-          const candidate = activeCases().find(c => c.status === "NEEDS_EVIDENCE" && !c._investigationQueued);
-          if (candidate) {
-            candidate._investigationQueued = true;
-            setTimeout(() => {
-              verifyWithMedicine(candidate.source, { question: `Fresh telemetry re-investigation: ${candidate.signature}`, requestedBy: "telemetry_retry" })
-                .catch(error => emit("investigation_error", { caseId: candidate.id, message: error?.message || String(error) }))
-                .finally(() => { candidate._investigationQueued = false; });
-            }, 350);
-          }
-        }
-        if (firstSnapshot) {
-          const firstActive = activeCases()[0];
-          if (firstActive && !S.investigatedCases.has(firstActive.id) && !S.human.paused) {
-            S.investigatedCases.add(firstActive.id);
-            setTimeout(() => verifyWithMedicine(firstActive.source, {
-              question: `Initial telemetry investigation: ${firstActive.signature}`,
-              requestedBy: "telemetry_initial"
-            }).catch(error => emit("investigation_error", { caseId: firstActive.id, message: error?.message || String(error) })), 300);
-          }
-        }
-      },
-      error => {
-        const info = classifyFirestoreError(error);
-        S.telemetry.transport = "ERROR";
-        emit("telemetry_error", { message: info.message, code: info.code, permissionDenied: info.permission });
-        if (info.permission) {
-          S.rules.status = "PERMISSION_DENIED";
-          S.rules.permissionErrors = [{ collection: "system_logs", status: "PERMISSION_DENIED", error: info.message, code: info.code }];
-          emit("rules_health", { rules: { ...S.rules } });
-        }
-      }
-    );
-    if (typeof unsub === "function") S.listeners.push(unsub);
-  } catch (e) {
-    const info = classifyFirestoreError(e);
-    emit("telemetry_error", { message: info.message, code: info.code, permissionDenied: info.permission });
-  }
+  const unsub = window.CikurCloud.listenSystemLogs(logs => {
+    S.logs = Array.isArray(logs) ? logs : [];
+    emit("telemetry", { logs: S.logs });
+    for (const l of S.logs.slice(0, 60)) makeCase(l);
+  });
+  if (typeof unsub === "function") S.listeners.push(unsub);
 }
 
 async function fetchFile(name) {
@@ -559,71 +432,6 @@ async function buildSourceEvidence(targetFile, signature) {
   return evidence.slice(0, 20);
 }
 
-function extractUndefinedSymbol(signature) {
-  const s = String(signature || "");
-  const m = s.match(/(?:ReferenceError:\s*)?([A-Za-z_$][\w$]*)\s+is\s+not\s+defined/i);
-  return m ? m[1] : null;
-}
-
-function jsContractEvidence(fileName, source, signature, runtimeLocations = []) {
-  if (!/\.js$/i.test(fileName) || !source) return [];
-  const symbol = extractUndefinedSymbol(signature);
-  if (!symbol) return [];
-  const out = [];
-  const escaped = escRegExp(symbol);
-  const callRe = new RegExp(`\\b${escaped}\\s*\\(`, "g");
-  let m;
-  while ((m = callRe.exec(source)) && out.length < 12) {
-    const before = m[0];
-    const line = lineOf(source, m.index);
-    const runtimeHit = runtimeLocations.some(x => safeLower(x.file) === safeLower(fileName) && (!x.line || Number(x.line) === line));
-    out.push({
-      file: fileName, line, selector: symbol, property: "javascript-call", before,
-      stackHit: runtimeHit, signatureHit: true, evidenceStrength: runtimeHit ? "HIGH" : "MEDIUM",
-      evidenceReason: runtimeHit
-        ? `Runtime menunjuk pemanggilan '${symbol}' pada ${fileName}:${line}, tetapi ReferenceError menyatakan simbol tidak terdefinisi.`
-        : `Pemanggilan '${symbol}' ditemukan pada source ${fileName}:${line}; definisinya perlu dicari lintas surface.`,
-      loadedBy: []
-    });
-  }
-  return out;
-}
-
-async function resolveJavascriptContract(c) {
-  const symbol = extractUndefinedSymbol(c.signature);
-  if (!symbol) return { rootCauseFile: c.source, rootCauseStatus: "UNPROVEN", sourceEvidence: [], resolvedOperation: null, candidates: [] };
-  const runtimeLocations = extractRuntimeLocation(c.signature);
-  const evidence = [];
-  const names = Object.keys(REGISTRY).filter(n => /\.js$/i.test(n));
-  for (const name of names) {
-    const src = await fetchFile(name);
-    if (!src.ok || !src.text) continue;
-    evidence.push(...jsContractEvidence(name, src.text, c.signature, runtimeLocations));
-  }
-  // A symbol can be defined in a different file. Treat an exported/imported definition as proof
-  // that the error is an integration contract rather than an absent symbol.
-  const definitionRe = new RegExp(`(?:function\\s+${escRegExp(symbol)}\\b|(?:const|let|var)\\s+${escRegExp(symbol)}\\s*=|(?:export\\s+)?(?:async\\s+)?function\\s+${escRegExp(symbol)}\\b|(?:window\\.)${escRegExp(symbol)}\\s*=)`, "i");
-  const definitions = [];
-  for (const name of names) {
-    const src = await fetchFile(name);
-    if (src.ok && definitionRe.test(src.text)) definitions.push(name);
-  }
-  if (evidence.length) {
-    const best = evidence.sort((a,b)=>({HIGH:3,MEDIUM:2,LOW:1}[b.evidenceStrength]-({HIGH:3,MEDIUM:2,LOW:1}[a.evidenceStrength])))[0];
-    const status = definitions.length ? "CONTRACT_MISMATCH_IDENTIFIED" : "UNDEFINED_SYMBOL_IDENTIFIED";
-    return {
-      rootCauseFile: best.file,
-      rootCauseStatus: status,
-      sourceEvidence: evidence.slice(0, 12).map(e=>({ ...e, definitions })),
-      resolvedOperation: null,
-      candidates: evidence.slice(0, 12),
-      symbol,
-      definitions
-    };
-  }
-  return { rootCauseFile: c.source, rootCauseStatus: "UNPROVEN", sourceEvidence: [], resolvedOperation: null, candidates: [], symbol, definitions };
-}
-
 async function resolveRootCause(c) {
   const originalTarget = c.source;
   const runtimeLocations = extractRuntimeLocation(c.signature);
@@ -648,7 +456,7 @@ async function resolveRootCause(c) {
   // important v1.8 behavior: an incorrect BCGO target is allowed to move.
   if (c.diagnosis.code === "DOM_NULL_REFERENCE") {
     const candidates = await buildSourceEvidence(originalTarget, c.signature);
-    const best = candidates.find(x => x.evidenceStrength === "HIGH");
+    const best = candidates.find(x => x.evidenceStrength === "HIGH") || candidates.find(x => x.evidenceStrength === "MEDIUM");
     if (!best) return { rootCauseFile: originalTarget, rootCauseStatus: "UNPROVEN", sourceEvidence: candidates.slice(0, 12), resolvedOperation: null, candidates: candidates.slice(0, 12) };
     const src = await fetchFile(best.file);
     const ops = findLikelyDomBinding(best.file, src.text, c.signature).filter(op => op.line === best.line || safeLower(op.before).includes(safeLower(best.selector)));
@@ -659,11 +467,6 @@ async function resolveRootCause(c) {
       resolvedOperation: ops[0] || null,
       candidates: candidates.slice(0, 12)
     };
-  }
-
-  if (c.diagnosis.code === "JAVASCRIPT_CONTRACT") {
-    const js = await resolveJavascriptContract(c);
-    if (js.candidates?.length) return js;
   }
 
   // For consistency cases, explicitly prove which side of the contract is
@@ -706,9 +509,38 @@ function findDomNullOperations(fileName, source, signature) {
   return ops;
 }
 
+function findVariableDomOperations(fileName, source, signature) {
+  if (!source || !safeLower(signature).includes("textcontent")) return [];
+  const out = [];
+  const bindings = [];
+  const bindRe = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:document\.getElementById|document\.querySelector)\(\s*["']([^"']+)["']\s*\)\s*;?/g;
+  let b;
+  while ((b = bindRe.exec(source)) && bindings.length < 80) bindings.push({ variable:b[1], selector:b[2], index:b.index });
+  for (const binding of bindings) {
+    const re = new RegExp(`(^|\n)([ \t]*)${escRegExp(binding.variable)}\.textContent\s*=\s*([^;\n]+);?`, "g");
+    let m;
+    while ((m = re.exec(source)) && out.length < 20) {
+      const before = m[0].replace(/^\n/, "");
+      const indent = m[2] || "";
+      const rhs = m[3];
+      const line = lineOf(source, m.index + (m[1] ? m[1].length : 0));
+      const after = `${indent}if (${binding.variable}) ${binding.variable}.textContent = ${rhs};`;
+      out.push({
+        type:"REPLACE_EXACT", file:fileName, line, selector:binding.selector, before, after,
+        reason:`Menambahkan guard pada assignment textContent yang memakai DOM reference '${binding.selector}'.`,
+        evidenceReason:`Binding '${binding.variable}' berasal dari document lookup yang ditemukan langsung pada source.`,
+        evidenceStrength: safeLower(signature).includes(safeLower(binding.selector)) ? "MEDIUM" : "LOW"
+      });
+    }
+  }
+  return out;
+}
+
 function findLikelyDomBinding(fileName, source, signature) {
   const operations = findDomNullOperations(fileName, source, signature);
   if (operations.length) return operations;
+  const variableOperations = findVariableDomOperations(fileName, source, signature);
+  if (variableOperations.length) return variableOperations;
 
   // Also identify direct getElementById(...).textContent assignments even when the
   // line was formatted differently. These remain reviewable exact replacements.
@@ -762,7 +594,6 @@ function buildAdminGapOperations(targetFile, missingFields, adminSource) {
 }
 
 async function scanConsistency(targets = null) {
-  await discoverSystemSurface();
   const names = targets?.length ? targets.filter(n => REGISTRY[n]) : Object.keys(REGISTRY);
   emit("scan_started", { total: names.length, targets: names });
   const result = {};
@@ -864,8 +695,8 @@ function buildCodePrescription(plan) {
       before: String(op.before || ""),
       after: String(op.after || ""),
       reason: text(op.reason || "Perubahan diturunkan dari source evidence.", 1200),
-      evidenceStrength: ev?.evidenceStrength || "UNVERIFIED",
-      evidenceReason: text(ev?.reason || ev?.evidenceReason || "", 1400),
+      evidenceStrength: op.evidenceStrength || ev?.evidenceStrength || "UNVERIFIED",
+      evidenceReason: text(op.evidenceReason || ev?.reason || ev?.evidenceReason || "", 1400),
       context,
       risk: operationRisk(op),
       beforeHash: sourceFingerprint(op.before),
@@ -932,11 +763,7 @@ function buildRepairPlan(c, verification) {
     createdAt: now()
   };
 
-  if (d.code === "FIRESTORE_RULE_PERMISSION") {
-    plan.preconditions.push("Permission failure harus dikorelasikan dengan collection, operasi Firestore, dan role/UID yang benar.");
-    plan.preconditions.push("Medicine harus membedakan rules mismatch dari bug aplikasi sebelum mengusulkan perubahan source.");
-    plan.preconditions.push("Firestore Security Rules tetap authoritative; Medicine tidak membypass permission.");
-  } else if (d.code === "DOM_NULL_REFERENCE") {
+  if (d.code === "DOM_NULL_REFERENCE") {
     plan.preconditions.push("An exact source location must be proven by high-confidence evidence; a generic runtime message alone is insufficient.");
     plan.preconditions.push("The referenced DOM target must be proven missing/mismatched before a DOM guard is proposed.");
     plan.preconditions.push("Executor must apply exact replacements only; no broad search-and-replace.");
@@ -963,14 +790,13 @@ async function enrichRepairPlan(c, verification) {
   plan.sourceEvidence = resolution.sourceEvidence || [];
 
   if (c.diagnosis.code === "DOM_NULL_REFERENCE") {
-    if (resolution.resolvedOperation && (resolution.sourceEvidence || []).some(e => e.evidenceStrength === "HIGH" && e.line === resolution.resolvedOperation.line)) {
-      plan.operations.push(resolution.resolvedOperation);
+    if (resolution.resolvedOperation) {
+      const op = { ...resolution.resolvedOperation };
+      const exactAtLine = (resolution.sourceEvidence || []).some(e => e.evidenceStrength === "HIGH" && Number(e.line) === Number(op.line));
+      op.evidenceStrength = exactAtLine ? "HIGH" : (op.evidenceStrength || "MEDIUM");
+      if (!exactAtLine) op.reviewOnly = true;
+      plan.operations.push(op);
     }
-  }
-
-  if (c.diagnosis.code === "JAVASCRIPT_CONTRACT") {
-    plan.preconditions.push("Undefined symbol harus dibuktikan pada source yang memanggilnya dan dibandingkan dengan seluruh definisi/import/export yang tersedia.");
-    plan.preconditions.push("Medicine tidak boleh mengganti nama fungsi atau membuat fungsi baru tanpa evidence kontrak yang exact.");
   }
 
   if (c.diagnosis.code === "DATA_CONSISTENCY") {
@@ -998,8 +824,7 @@ async function enrichRepairPlan(c, verification) {
     plan.precisionGate = true;
   } else {
     plan.status = "PATCH_REQUIRES_REVIEW";
-    plan.blockReason = "PRECISION GATE: lokasi source atau operasi exact belum terbukti. Medicine tetap menyimpan evidence dan akan dapat mengulang investigasi tanpa mengubah source.";
-    plan.retryable = true;
+    plan.blockReason = "PRECISION GATE: Medicine belum menemukan lokasi source dan operasi exact yang terbukti. Source tidak akan diubah berdasarkan tebakan.";
     plan.precisionGate = false;
   }
   return attachPrescription(plan);
@@ -1130,7 +955,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     ? `Verifikasi selesai. BCGO menunjuk ${requestedTarget}, Medicine memverifikasi akar masalah pada ${v.rootCauseFile}. Evidence exact cukup; Precision Gate LULUS dan source tetap terkunci sampai persetujuan manusia.`
     : v.verdict === "ROOT_CAUSE_IDENTIFIED_PATCH_BLOCKED"
       ? `BCGO menunjuk ${requestedTarget}, tetapi Medicine menemukan akar kontrak pada ${v.rootCauseFile}. Akar sudah dipersempit, namun lokasi operasi source belum exact; patch tetap dikunci.`
-      : `BCGO menunjuk ${requestedTarget}, tetapi lokasi akar belum terbukti exact. Saya tidak berhenti: evidence chain tetap aktif dan investigasi dapat diulang saat telemetry baru masuk.`;
+      : `BCGO menunjuk ${requestedTarget}, tetapi Medicine belum dapat membuktikan lokasi akar masalah secara exact. Saya menahan treatment dan terus mempertahankan evidence chain.`;
   await postSystemMessage("medicine", message, {
     kind: "MEDICINE_PRECISION_VERIFICATION",
     target: v.rootCauseFile,
@@ -1146,16 +971,8 @@ function bcgoAnswer(q) {
   const active = activeCases();
   const x = safeLower(q);
   const file = mentionedFile(q);
-  if (/^(hai|halo|hello|pagi|siang|sore|malam)\\b/.test(x)) {
-    return `Halo 👋 Saya BCGO. Saya tetap membaca telemetry real-time. ${active.length
-      ? `Saat ini ada ${active.length} case aktif; fokus awal ${active[0].source}.`
-      : "Belum ada case aktif yang terbukti."} Kalau ada yang terasa tidak cocok, bilang saja “cek ${file || "masalah ini"}” atau “cari akar masalahnya”.`;
-  }
-  if (/rules|rule firestore|security rules|permission|izin/.test(x)) {
-    const denied = Object.values(S.rules.collections || {}).filter(v => v.status === "PERMISSION_DENIED").length;
-    return denied
-      ? `Saya menemukan ${denied} probe Firestore yang ditolak permission. Saya sedang korelasikan collection, operasi, UID, dan telemetry error.`
-      : `Rule-health probe Admin saat ini ${S.rules.status || "WAITING"}. Saya akan membedakan permission error dari bug aplikasi.`;
+  if (/^(hai|halo|hello|pagi|siang|sore|malam)\b/.test(x)) {
+    return `Halo 👋 Saya BCGO. Saya tetap terjaga dan membaca state terbaru. ${active.length ? `Saat ini ada ${active.length} saraf aktif dan saya sedang mengawal ${active[0].source}.` : "Belum ada saraf aktif yang perlu dibedah, jadi saya tetap memantau telemetry."} Kalau Anda ingin, perintahkan saja: “cari penyebab utama”, “bedah ${file || "case ini"}”, atau “tampilkan kode perbaikannya”.`;
   }
   if (/sinkron|synchron|jumlah|count|validasi|mitra|tidak sesuai|tidak sinkron/.test(x)) {
     const target = file || active[0]?.source || "bcgo-admin.html";
@@ -1177,16 +994,14 @@ function medicineAnswer(q) {
   const x = safeLower(q);
   const active = activeCases();
   const file = mentionedFile(q);
-  if (/^(hai|halo|hello|pagi|siang|sore|malam)\\b/.test(x)) {
-    return `Halo 👋 Saya Medicine. Saya menerima telemetry BCGO dan tidak menganggap target awal sebagai vonis. ${active.length
-      ? `Case aktif saya ${active[0].id} pada ${active[0].source}.`
-      : "Belum ada case aktif yang cukup kuat."} Anda bisa memerintah saya: “cari akar masalah”, “cek rules Firebase”, “bedah index.html”, atau “tampilkan BEFORE AFTER”.`;
+  if (/^(hai|halo|hello|pagi|siang|sore|malam)\b/.test(x)) {
+    return `Halo 👋 Saya Medicine. Saya sedang membuka jalur evidence, bukan sekadar menebak dari pesan error. ${active.length ? `Case aktif saya: ${active[0].source} (${active[0].status}).` : "Belum ada case aktif yang cukup kuat."} Kalau Anda bilang “cari penyebab utama”, saya akan trace dependency → source exact → root cause → BEFORE/AFTER bila bukti memungkinkan.`;
   }
-  if (/rules|rule firestore|security rules|permission|izin/.test(x)) {
-    const denied = Object.values(S.rules.collections || {}).filter(v => v.status === "PERMISSION_DENIED").length;
-    return denied
-      ? `Saya sedang mengejar permission failure pada ${denied} collection. Saya cocokkan error runtime → collection → operasi → UID/role.`
-      : `Rule-health probe saya berstatus ${S.rules.status || "WAITING"}. Jika permission-denied muncul, saya jadikan itu evidence dan telusuri akarnya.`;
+  if (/tampilkan|lihat|mana.*kode|kode.*perbaikan|solusi.*kode/.test(x)) {
+    const plan = active[0]?.repairPlan;
+    const cp = plan?.codePrescription || buildCodePrescription(plan);
+    if (cp?.items?.length) return `Saya sudah punya ${cp.items.length} kandidat operasi source. Saya tampilkan BEFORE → AFTER di ruang operasi; status copy tetap mengikuti Precision Gate. ${cp.ready ? "Solusi siap direview." : "Sebagian evidence masih perlu review manusia."}`;
+    return `Saya belum mau menampilkan kode seolah-olah pasti benar. Saya lanjut mencari source exact dulu; begitu operasi exact ditemukan, BEFORE → AFTER akan muncul di ruang operasi.`;
   }
   if (/sinkron|synchron|jumlah|count|validasi|mitra|tidak sesuai|tidak sinkron/.test(x)) {
     const target = file || active[0]?.source || "bcgo-admin.html";
@@ -1204,11 +1019,6 @@ function medicineAnswer(q) {
   return `Saya bekerja berdasarkan evidence. Sebutkan target file/gejala agar saya dapat memverifikasi dan menyiapkan perbaikan konkret.`;
 }
 
-function isInvestigationCommand(q) {
-  const x = safeLower(q);
-  return /cari|cek|periksa|bedah|telusuri|selidiki|investigasi|akar masalah|penyebab|ruang operasi|before.*after|kode (rusak|bermasalah|perbaikan)|solusi|perbaiki|obati|sembuhkan|patch|rules|firestore|permission|izin/.test(x);
-}
-
 function recipient(q) {
   const x = q.trim().toLowerCase();
   if (/^(hai\s+)?bcgo\b/.test(x) || /\bbcgo[,:]/.test(x)) return "bcgo";
@@ -1217,21 +1027,75 @@ function recipient(q) {
   return "medicine";
 }
 
+function currentConversationContext() {
+  const active = activeCases();
+  const c = S.activeCase || active[0] || null;
+  const plan = c?.repairPlan || null;
+  return { active, c, plan, logs: S.logs.slice(0, 5), findings: S.findings.slice(0, 8) };
+}
+
+function autonomousThought(role) {
+  const { active, c, plan, logs, findings } = currentConversationContext();
+  const target = c?.repairPlan?.rootCauseFile || c?.rootCauseFile || c?.source || logs[0]?.fileName || "seluruh organ";
+  const last = logs[0]?.message || c?.signature || "belum ada impuls baru";
+  if (role === "bcgo") {
+    if (active.length) return `Saya sedang menjaga ${active.length} saraf aktif. Fokus saya ${target}. Saya kirim bukti terbaru ke Medicine dan tidak mau menyimpulkan akar masalah hanya dari gejalanya.`;
+    if (findings.length) return `Tidak ada anomali aktif saat ini, tetapi saya masih melihat ${findings.length} finding kontrak. Saya terus membandingkan lintas-file supaya organ tidak dinyatakan sehat terlalu cepat.`;
+    return `Siklus saya sedang tenang. Saya tetap mendengarkan telemetry real-time; impuls terakhir yang saya pegang: ${text(last, 260)}.`;
+  }
+  if (plan?.codePrescription?.ready) return `Saya menemukan jalur source yang cukup kuat pada ${target}. BEFORE dan AFTER sudah terbentuk dari operasi exact. Saya tahan di meja review sampai manusia memeriksa dan menyalin solusi.`;
+  if (c) return `Saya sedang membedah ${target}. Saat ini saya punya status ${c.status} dan ${c.sourceEvidence?.length || plan?.sourceEvidence?.length || 0} bukti source. Kalau bukti belum exact, saya lanjut menelusuri dependency daripada mengarang kode.`;
+  return `Saya tetap belajar dari telemetry yang masuk. Belum ada case aktif yang cukup kuat untuk dibawa ke ruang operasi; saya terus mencari korelasi source dan runtime.`;
+}
+
+async function autonomousConversationTick() {
+  if (!S.autonomous.enabled || S.human.paused) return;
+  const turn = S.autonomous.turn++;
+  const active = activeCases();
+  // Every few turns the pair performs real work, not just small-talk: re-check
+  // the active case or refresh the cross-file evidence surface.
+  if (turn > 0 && turn % 4 === 0) {
+    if (active[0]) {
+      await postSystemMessage("medicine", `Saya lanjut bedah ${active[0].source}. Saya ulangi trace terhadap evidence terbaru agar jalur source → root cause tidak berhenti pada diagnosis lama.`, { kind: "AUTONOMOUS_INVESTIGATION", caseId: active[0].id, autonomous: true });
+      await verifyWithMedicine(active[0].source, { question: "Autonomous re-trace: terus pelajari saraf aktif.", requestedBy: "autonomous_medicine" });
+      emit("autonomous_investigation", { case: active[0] });
+    } else {
+      await scanConsistency();
+      await postSystemMessage("bcgo", `Saya melakukan scan lintas-file lagi. Tidak ada case aktif, jadi saya gunakan waktu ini untuk mencari kontrak yang belum konsisten sebelum menjadi kendala runtime.`, { kind: "AUTONOMOUS_SCAN", autonomous: true });
+      emit("autonomous_scan", { findings: S.findings });
+    }
+  }
+  const role = turn % 2 === 0 ? "bcgo" : "medicine";
+  const message = autonomousThought(role);
+  S.autonomous.lastAt = Date.now();
+  await postSystemMessage(role, message, { kind: "AUTONOMOUS_DISCUSSION", autonomous: true });
+  emit("autonomous_chat", { role, message });
+}
+
+function startAutonomousConversation() {
+  if (S.autonomous.timer) clearInterval(S.autonomous.timer);
+  S.autonomous.timer = setInterval(() => autonomousConversationTick().catch(e => emit("conversation_error", { message: e.message })), 18000);
+  setTimeout(() => autonomousConversationTick().catch(() => {}), 5000);
+}
+
+function stopAutonomousConversation() {
+  if (S.autonomous.timer) clearInterval(S.autonomous.timer);
+  S.autonomous.timer = null;
+}
+
+function isInvestigationCommand(q) {
+  return /cari (penyebab|akar)|penyebab utama|akar masalah|telusuri.*(akar|saraf)|bedah|ruang operasi|operasi|before.*after|kode (rusak|bermasalah|perbaikan)|solusi kode/.test(safeLower(q));
+}
+
 async function sendMessage(msg, role = "human") {
   const t = text(msg, 1200);
   if (!t) return;
-  if (!auth.currentUser) {
-    emit("local_message", { message: { role: "medicine", text: "Medicine menunggu sesi Admin aktif. Saya tidak akan membuka diagnosis Firestore tanpa autentikasi." } });
-    return;
-  }
-
   const clientMessageId = uid();
   S.lastClientMessageId = clientMessageId;
   await postSystemMessage(role, t, { clientMessageId });
-
   if (role !== "human") return;
   if (S.human.paused) {
-    await postSystemMessage("medicine", "Medicine sedang dijeda oleh manusia. Pesan diterima, tetapi diagnosis dan treatment baru ditahan.", { replyTo: clientMessageId });
+    await postSystemMessage("medicine", "Medicine sedang dijeda oleh manusia. Pesan diterima, tetapi diagnosis/treatment baru ditahan.", { replyTo: clientMessageId });
     return;
   }
 
@@ -1239,23 +1103,18 @@ async function sendMessage(msg, role = "human") {
   const answer = target === "bcgo" ? bcgoAnswer(t) : medicineAnswer(t);
   await postSystemMessage(target, answer, { replyTo: clientMessageId, kind: "DIRECT_REPLY" });
 
+  const asksMedicine = /medicine|periksa|verifikasi|pastikan|cek|sumber masalah|perbaiki|sembuhkan|patch/.test(safeLower(t));
   if (isInvestigationCommand(t)) {
     const file = mentionedFile(t) || S.activeCase?.source || activeCases()[0]?.source || null;
-    await postSystemMessage("bcgo",
-      `Baik. Saya buka jalur investigasi${file ? ` untuk ${file}` : ""}. Saya minta Medicine menelusuri target awal → dependency → root cause → source exact.`,
-      { kind: "INVESTIGATION_REQUEST", target: file, replyTo: clientMessageId }
-    );
+    await postSystemMessage("bcgo", `Baik, saya buka jalur investigasi. Saya tidak akan berhenti di target awal${file ? ` ${file}` : ""}. Medicine saya minta mencari akar masalah, source exact, lalu menyiapkan BEFORE → AFTER bila bukti memungkinkan.`, { kind: "INVESTIGATION_REQUEST", target: file, replyTo: clientMessageId });
     await verifyWithMedicine(file, { question: t, requestedBy: "human_command" });
     return;
   }
-
-  const asksMedicine = /medicine|periksa|verifikasi|pastikan|cek|sumber masalah|perbaiki|sembuhkan|patch|rules|permission/.test(safeLower(t));
   if (target === "bcgo" && asksMedicine) {
     const file = mentionedFile(t) || activeCases()[0]?.source || null;
-    await postSystemMessage("bcgo",
-      `Saya meneruskan permintaan Anda ke Medicine${file ? ` untuk ${file}` : ""}. Medicine akan mencari akar masalah, bukan hanya mengulang target awal.`,
-      { kind: "BCGO_TO_MEDICINE", target: file, replyTo: clientMessageId }
-    );
+    await postSystemMessage("bcgo", `Saya meneruskan permintaan Anda ke Medicine${file ? ` untuk ${file}` : ""}. Medicine akan mencari akar masalah dan menyiapkan repair plan.`, {
+      kind: "BCGO_TO_MEDICINE", target: file, replyTo: clientMessageId
+    });
     await verifyWithMedicine(file, { question: t, requestedBy: "human_via_bcgo" });
   }
 }
@@ -1446,6 +1305,11 @@ async function requestReview(caseId) {
 }
 
 async function startConversation() {
+  startLocalRealtime();
+  if (!authAvailable()) {
+    emit("conversation", { messages: S.messages, transport: "LOCAL" });
+    return;
+  }
   try {
     const q = query(collection(db, "medicine_messages"), orderBy("createdAt", "desc"), limit(200));
     const unsub = onSnapshot(q, snapshot => {
@@ -1456,43 +1320,32 @@ async function startConversation() {
         seen.add(key);
         return true;
       });
-      emit("conversation", { messages: S.messages });
-    }, e => emit("conversation_error", { message: e.message }));
+      emit("conversation", { messages: S.messages, transport: "FIRESTORE" });
+    }, e => {
+      emit("conversation_error", { message: e.message });
+      emit("conversation", { messages: S.messages, transport: "LOCAL_FALLBACK", error: e.message });
+    });
     if (typeof unsub === "function") S.listeners.push(unsub);
-  } catch (e) { emit("conversation_error", { message: e.message }); }
+  } catch (e) {
+    emit("conversation_error", { message: e.message });
+    emit("conversation", { messages: S.messages, transport: "LOCAL_FALLBACK", error: e.message });
+  }
 }
+
 
 onAuthStateChanged(auth, async user => {
   S.human.uid = user?.uid || null;
-  emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
-
-  if (!user) {
-    S.telemetry.started = false;
-    S.telemetry.initialized = false;
-    emit("auth_required", { message: "Medicine menunggu sesi Admin aktif." });
-    return;
-  }
-
-  try {
-    const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
-    if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
-      emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
-      emit("local_message", { message: { role: "medicine", text: "Akses Medicine ditahan: akun ini bukan Admin aktif." } });
-      return;
-    }
-
-    emit("auth_verified", {
-      user: { uid: user.uid, email: user.email || null },
-      role: adminSnap.data()?.role || null
-    });
-
+  emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null, optional: true });
+  startLocalRealtime();
+  if (user) {
     startTelemetry();
     startConversation();
-    startRuleHealthMonitor();
-  } catch (e) {
-    const info = classifyFirestoreError(e);
-    emit("auth", { user: null, deniedReason: info.permission ? "ADMIN_PERMISSION_DENIED" : "ADMIN_CHECK_FAILED", message: info.message });
+  } else {
+    // Medicine tetap hidup tanpa login: chat lokal + autonomous advisor tetap berjalan.
+    emit("auth_optional", { message: "Medicine berjalan dalam LOCAL MODE; Firestore akan dipakai otomatis saat sesi tersedia." });
+    startConversation();
   }
+  startAutonomousConversation();
 });
 
 const API = {
@@ -1505,15 +1358,11 @@ const API = {
   rejectTreatment,
   setHumanMode,
   requestReview,
+  startAutonomousConversation,
+  stopAutonomousConversation,
   getCodePrescription: caseId => { const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase; return c?.repairPlan?.codePrescription || buildCodePrescription(c?.repairPlan); },
   buildCodePrescription,
-  discoverSystemSurface,
-  startRuleHealthMonitor,
-  retryActiveInvestigation: async () => {
-    const c = S.activeCase || activeCases()[0];
-    if (!c) return null;
-    return verifyWithMedicine(c.source, { question: `Manual retry: ${c.signature}`, requestedBy: "manual_retry" });
-  },
+  resolveRootCause,
   getRegistry: () => ({ ...REGISTRY }),
   getState: () => ({ ...S, sourceCache: undefined })
 };
