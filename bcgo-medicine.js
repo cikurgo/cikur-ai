@@ -33,6 +33,7 @@ const REGISTRY = {
   "agentcgo.html": { type: "Zona Mitra", role: "mitra" },
   "resto.html": { type: "Zona Mitra", role: "restaurant" },
   "driver.html": { type: "Zona Mitra", role: "driver" },
+  "data-cgo.html": { type: "Data Sistem", role: "system" },
   "cikur-config.js": { type: "Sistem Config", role: "system" },
   "bcgo-engine.js": { type: "Sistem Core", role: "system" },
   "bcgo-admin.html": { type: "Sistem Admin", role: "admin" },
@@ -83,7 +84,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "2.5.0",
+  version: "2.5.1",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -125,8 +126,8 @@ function diagnosis(message) {
   if (/firestore|listener|network|offline|unavailable|onSnapshot/.test(m)) {
     return { code: "REALTIME_CONNECTIVITY", title: "Gangguan koneksi/listener realtime", severity: "MEDIUM", confidence: .84, treatment: "FIRESTORE_RECONNECT" };
   }
-  if (/undefined|is not a function|not defined/.test(m)) {
-    return { code: "JAVASCRIPT_CONTRACT", title: "Kontrak JavaScript tidak terpenuhi", severity: "MEDIUM", confidence: .82, treatment: "RUNTIME_CONTRACT_REVIEW" };
+  if (/referenceerror|is not defined|undefined|is not a function|not a function|cannot access .* before initialization/.test(m)) {
+    return { code: "JAVASCRIPT_CONTRACT", title: "Kontrak JavaScript tidak terpenuhi", severity: "MEDIUM", confidence: .86, treatment: "RUNTIME_CONTRACT_REVIEW" };
   }
   if (/sinkron|synchron|count|jumlah|validasi|mitra|tidak sesuai|tidak sinkron/.test(m)) {
     return { code: "DATA_CONSISTENCY", title: "Potensi ketidaksinkronan data/validasi", severity: "MEDIUM", confidence: .70, treatment: "CROSS_FILE_CONSISTENCY_REVIEW" };
@@ -343,6 +344,19 @@ function startTelemetry() {
         S.telemetry.lastId = top?.id || S.telemetry.lastId;
         emit("telemetry", { logs: S.logs, transport: S.telemetry.transport, newEvent: isNew ? top : null });
         for (const log of S.logs.slice(0, 80)) makeCase(log, { autoInvestigate: !firstSnapshot });
+        // Unresolved cases are re-opened when fresh telemetry arrives. This prevents
+        // Medicine from freezing forever on the first failed evidence attempt.
+        if (!firstSnapshot && !S.human.paused) {
+          const candidate = activeCases().find(c => c.status === "NEEDS_EVIDENCE" && !c._investigationQueued);
+          if (candidate) {
+            candidate._investigationQueued = true;
+            setTimeout(() => {
+              verifyWithMedicine(candidate.source, { question: `Fresh telemetry re-investigation: ${candidate.signature}`, requestedBy: "telemetry_retry" })
+                .catch(error => emit("investigation_error", { caseId: candidate.id, message: error?.message || String(error) }))
+                .finally(() => { candidate._investigationQueued = false; });
+            }, 350);
+          }
+        }
         if (firstSnapshot) {
           const firstActive = activeCases()[0];
           if (firstActive && !S.investigatedCases.has(firstActive.id) && !S.human.paused) {
@@ -545,6 +559,71 @@ async function buildSourceEvidence(targetFile, signature) {
   return evidence.slice(0, 20);
 }
 
+function extractUndefinedSymbol(signature) {
+  const s = String(signature || "");
+  const m = s.match(/(?:ReferenceError:\s*)?([A-Za-z_$][\w$]*)\s+is\s+not\s+defined/i);
+  return m ? m[1] : null;
+}
+
+function jsContractEvidence(fileName, source, signature, runtimeLocations = []) {
+  if (!/\.js$/i.test(fileName) || !source) return [];
+  const symbol = extractUndefinedSymbol(signature);
+  if (!symbol) return [];
+  const out = [];
+  const escaped = escRegExp(symbol);
+  const callRe = new RegExp(`\\b${escaped}\\s*\\(`, "g");
+  let m;
+  while ((m = callRe.exec(source)) && out.length < 12) {
+    const before = m[0];
+    const line = lineOf(source, m.index);
+    const runtimeHit = runtimeLocations.some(x => safeLower(x.file) === safeLower(fileName) && (!x.line || Number(x.line) === line));
+    out.push({
+      file: fileName, line, selector: symbol, property: "javascript-call", before,
+      stackHit: runtimeHit, signatureHit: true, evidenceStrength: runtimeHit ? "HIGH" : "MEDIUM",
+      evidenceReason: runtimeHit
+        ? `Runtime menunjuk pemanggilan '${symbol}' pada ${fileName}:${line}, tetapi ReferenceError menyatakan simbol tidak terdefinisi.`
+        : `Pemanggilan '${symbol}' ditemukan pada source ${fileName}:${line}; definisinya perlu dicari lintas surface.`,
+      loadedBy: []
+    });
+  }
+  return out;
+}
+
+async function resolveJavascriptContract(c) {
+  const symbol = extractUndefinedSymbol(c.signature);
+  if (!symbol) return { rootCauseFile: c.source, rootCauseStatus: "UNPROVEN", sourceEvidence: [], resolvedOperation: null, candidates: [] };
+  const runtimeLocations = extractRuntimeLocation(c.signature);
+  const evidence = [];
+  const names = Object.keys(REGISTRY).filter(n => /\.js$/i.test(n));
+  for (const name of names) {
+    const src = await fetchFile(name);
+    if (!src.ok || !src.text) continue;
+    evidence.push(...jsContractEvidence(name, src.text, c.signature, runtimeLocations));
+  }
+  // A symbol can be defined in a different file. Treat an exported/imported definition as proof
+  // that the error is an integration contract rather than an absent symbol.
+  const definitionRe = new RegExp(`(?:function\\s+${escRegExp(symbol)}\\b|(?:const|let|var)\\s+${escRegExp(symbol)}\\s*=|(?:export\\s+)?(?:async\\s+)?function\\s+${escRegExp(symbol)}\\b|(?:window\\.)${escRegExp(symbol)}\\s*=)`, "i");
+  const definitions = [];
+  for (const name of names) {
+    const src = await fetchFile(name);
+    if (src.ok && definitionRe.test(src.text)) definitions.push(name);
+  }
+  if (evidence.length) {
+    const best = evidence.sort((a,b)=>({HIGH:3,MEDIUM:2,LOW:1}[b.evidenceStrength]-({HIGH:3,MEDIUM:2,LOW:1}[a.evidenceStrength])))[0];
+    const status = definitions.length ? "CONTRACT_MISMATCH_IDENTIFIED" : "UNDEFINED_SYMBOL_IDENTIFIED";
+    return {
+      rootCauseFile: best.file,
+      rootCauseStatus: status,
+      sourceEvidence: evidence.slice(0, 12).map(e=>({ ...e, definitions })),
+      resolvedOperation: null,
+      candidates: evidence.slice(0, 12),
+      symbol,
+      definitions
+    };
+  }
+  return { rootCauseFile: c.source, rootCauseStatus: "UNPROVEN", sourceEvidence: [], resolvedOperation: null, candidates: [], symbol, definitions };
+}
+
 async function resolveRootCause(c) {
   const originalTarget = c.source;
   const runtimeLocations = extractRuntimeLocation(c.signature);
@@ -580,6 +659,11 @@ async function resolveRootCause(c) {
       resolvedOperation: ops[0] || null,
       candidates: candidates.slice(0, 12)
     };
+  }
+
+  if (c.diagnosis.code === "JAVASCRIPT_CONTRACT") {
+    const js = await resolveJavascriptContract(c);
+    if (js.candidates?.length) return js;
   }
 
   // For consistency cases, explicitly prove which side of the contract is
@@ -884,6 +968,11 @@ async function enrichRepairPlan(c, verification) {
     }
   }
 
+  if (c.diagnosis.code === "JAVASCRIPT_CONTRACT") {
+    plan.preconditions.push("Undefined symbol harus dibuktikan pada source yang memanggilnya dan dibandingkan dengan seluruh definisi/import/export yang tersedia.");
+    plan.preconditions.push("Medicine tidak boleh mengganti nama fungsi atau membuat fungsi baru tanpa evidence kontrak yang exact.");
+  }
+
   if (c.diagnosis.code === "DATA_CONSISTENCY") {
     const adminSource = await fetchFile("bcgo-admin.html");
     const targetFindings = verification?.targetFindings || [];
@@ -909,7 +998,8 @@ async function enrichRepairPlan(c, verification) {
     plan.precisionGate = true;
   } else {
     plan.status = "PATCH_REQUIRES_REVIEW";
-    plan.blockReason = "PRECISION GATE: Medicine belum menemukan lokasi source dan operasi exact yang terbukti. Source tidak akan diubah berdasarkan tebakan.";
+    plan.blockReason = "PRECISION GATE: lokasi source atau operasi exact belum terbukti. Medicine tetap menyimpan evidence dan akan dapat mengulang investigasi tanpa mengubah source.";
+    plan.retryable = true;
     plan.precisionGate = false;
   }
   return attachPrescription(plan);
@@ -1040,7 +1130,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     ? `Verifikasi selesai. BCGO menunjuk ${requestedTarget}, Medicine memverifikasi akar masalah pada ${v.rootCauseFile}. Evidence exact cukup; Precision Gate LULUS dan source tetap terkunci sampai persetujuan manusia.`
     : v.verdict === "ROOT_CAUSE_IDENTIFIED_PATCH_BLOCKED"
       ? `BCGO menunjuk ${requestedTarget}, tetapi Medicine menemukan akar kontrak pada ${v.rootCauseFile}. Akar sudah dipersempit, namun lokasi operasi source belum exact; patch tetap dikunci.`
-      : `BCGO menunjuk ${requestedTarget}, tetapi Medicine belum dapat membuktikan lokasi akar masalah secara exact. Saya menahan treatment dan terus mempertahankan evidence chain.`;
+      : `BCGO menunjuk ${requestedTarget}, tetapi lokasi akar belum terbukti exact. Saya tidak berhenti: evidence chain tetap aktif dan investigasi dapat diulang saat telemetry baru masuk.`;
   await postSystemMessage("medicine", message, {
     kind: "MEDICINE_PRECISION_VERIFICATION",
     target: v.rootCauseFile,
@@ -1116,7 +1206,7 @@ function medicineAnswer(q) {
 
 function isInvestigationCommand(q) {
   const x = safeLower(q);
-  return /cari (penyebab|akar)|penyebab utama|akar masalah|telusuri.*(akar|saraf)|bedah|ruang operasi|before.*after|kode (rusak|bermasalah|perbaikan)|solusi kode|cek.*(rules|firestore)|rule.*firestore|permission|izin/.test(x);
+  return /cari|cek|periksa|bedah|telusuri|selidiki|investigasi|akar masalah|penyebab|ruang operasi|before.*after|kode (rusak|bermasalah|perbaikan)|solusi|perbaiki|obati|sembuhkan|patch|rules|firestore|permission|izin/.test(x);
 }
 
 function recipient(q) {
@@ -1419,6 +1509,11 @@ const API = {
   buildCodePrescription,
   discoverSystemSurface,
   startRuleHealthMonitor,
+  retryActiveInvestigation: async () => {
+    const c = S.activeCase || activeCases()[0];
+    if (!c) return null;
+    return verifyWithMedicine(c.source, { question: `Manual retry: ${c.signature}`, requestedBy: "manual_retry" });
+  },
   getRegistry: () => ({ ...REGISTRY }),
   getState: () => ({ ...S, sourceCache: undefined })
 };
