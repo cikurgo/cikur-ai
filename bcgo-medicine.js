@@ -5,7 +5,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/fi
 import { db, auth } from "./cikur-config.js";
 
 /*
- * BCGO MEDICINE v4.0.0 — LIVE CROSS-FILE MEDICAL ENGINE
+ * BCGO MEDICINE v4.1.2 — SOURCE-FIRST LIVE CROSS-FILE MEDICAL ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -93,7 +93,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "4.0.0",
+  version: "4.1.2",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -877,8 +877,13 @@ async function scanLiveSurface(){
   emit("live_surface_started",{cycle:S.liveSurface.cycle,total:names.length,files:names});
   const result={};
   for(const name of names){
-    const x=await fetchFile(name); result[name]={...x,fields:fields(name,x.text)};
-    emit("live_file",{cycle:S.liveSurface.cycle,file:name,result:result[name]});
+    const x=await fetchFile(name);
+    result[name]={...x,fields:fields(name,x.text)};
+    // Keep the shared live state updated after every file so the UI accumulates
+    // blocks during the scan instead of showing only the last file received.
+    S.liveSurface.results={...result};
+    S.liveSurface.updatedAt=now();
+    emit("live_file",{cycle:S.liveSurface.cycle,file:name,result:result[name],results:{...result}});
   }
   const relations=buildCrossFileRelations(result);
   const fileStates=Object.fromEntries(names.map(name=>[name,buildFileIssue(result,name,relations)]));
@@ -891,7 +896,7 @@ async function scanLiveSurface(){
 function startLiveSurface(){
   if(S.liveSurface.timer) return;
   scanLiveSurface().catch(e=>emit("live_surface_error",{message:e.message}));
-  S.liveSurface.timer=setInterval(()=>scanLiveSurface().catch(e=>emit("live_surface_error",{message:e.message})),15000);
+  S.liveSurface.timer=setInterval(()=>scanLiveSurface().catch(e=>emit("live_surface_error",{message:e.message})),10000);
 }
 function stopLiveSurface(){ if(S.liveSurface.timer){clearInterval(S.liveSurface.timer);S.liveSurface.timer=null;} }
 
@@ -999,6 +1004,7 @@ function buildCodePrescription(plan) {
       type: op.type || "REPLACE_EXACT",
       before: String(op.before || ""),
       after: String(op.after || ""),
+      fullCode: typeof op.fullCode === "string" ? op.fullCode : "",
       reason: text(op.reason || "Perubahan diturunkan dari source evidence.", 1200),
       evidenceStrength: ev?.evidenceStrength || "UNVERIFIED",
       evidenceReason: text(ev?.reason || ev?.evidenceReason || "", 1400),
@@ -1011,6 +1017,7 @@ function buildCodePrescription(plan) {
 
   const exact = items.length > 0 &&
     items.every(x => x.type === "REPLACE_EXACT" && x.before && x.after);
+  const fullCodeAvailable = items.length > 0 && items.every(x => typeof x.fullCode === "string" && x.fullCode.length > 0);
   const proof = exactProofForPlan(p);
   const ready = !!(p.precisionGate === true && exact && proof.ok);
 
@@ -1021,6 +1028,7 @@ function buildCodePrescription(plan) {
     rootCauseStatus: p.rootCauseStatus || "UNPROVEN",
     evidenceCount: evidence.length,
     items,
+    fullCodeAvailable,
     instruction: ready
       ? "Solusi berasal dari operasi exact yang terikat pada HIGH source evidence dan current deployed source. Review BEFORE/AFTER lalu copy secara manual."
       : `Medicine belum dapat membuka copy gate: ${proof.reason || "exact proof belum lengkap"}.`
@@ -1035,6 +1043,7 @@ async function attachPrescription(plan) {
     if (!op?.file || !op?.line) continue;
     const src = await fetchFile(op.file);
     p._sourceContext[i] = src.ok ? getSourceContext(src.text, op.line, 4) : null;
+    if (src.ok) op.fullCode = src.text;
   }
   p.codePrescription = buildCodePrescription(p);
   return p;
@@ -1655,6 +1664,10 @@ async function startConversation() {
   } catch (e) { emit("conversation_error", { message: e.message }); }
 }
 
+// SOURCE-FIRST BOOT: cross-file source inspection is independent from Admin auth.
+// Auth gates only Firestore telemetry/chat/autonomous treatment paths.
+startLiveSurface();
+
 onAuthStateChanged(auth, async user => {
   const epoch = ++S.authEpoch;
   S.human.uid = user?.uid || null;
@@ -1685,7 +1698,6 @@ onAuthStateChanged(auth, async user => {
   if (epoch !== S.authEpoch || auth.currentUser?.uid !== user.uid) return;
   startTelemetry();
   startConversation();
-  startLiveSurface();
   startAutonomousConversation();
 });
 
