@@ -5,29 +5,33 @@ let auth = null;
 let firebaseFns = null;
 let firebaseBoot = null;
 
-async function ensureRealtimeInfrastructure() {
+async function ensureRealtimeInfrastructure(timeoutMs = 5000) {
   if (firebaseBoot) return firebaseBoot;
   firebaseBoot = (async () => {
-    try {
-      const config = await import("./cikur-config.js");
-      db = config.db;
-      auth = config.auth;
-      const [firestore, authMod] = await Promise.all([
-        import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"),
-        import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js")
-      ]);
-      firebaseFns = { ...firestore, ...authMod };
-      return true;
-    } catch (error) {
-      emit("realtime_boot_unavailable", { message: error?.message || String(error) });
-      return false;
-    }
+    const timeout = new Promise(resolve => setTimeout(() => resolve(false), timeoutMs));
+    const boot = (async () => {
+      try {
+        const config = await import("./cikur-config.js");
+        db = config.db;
+        auth = config.auth;
+        const [firestore, authMod] = await Promise.all([
+          import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"),
+          import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js")
+        ]);
+        firebaseFns = { ...firestore, ...authMod };
+        return true;
+      } catch (error) {
+        emit("realtime_boot_unavailable", { message: error?.message || String(error) });
+        return false;
+      }
+    })();
+    return Promise.race([boot, timeout]);
   })();
   return firebaseBoot;
 }
 
 /*
- * BCGO MEDICINE v4.1.4 — SOURCE-FIRST LIVE CROSS-FILE MEDICAL ENGINE
+ * BCGO MEDICINE v4.1.6 — SOURCE-FIRST LIVE CROSS-FILE MEDICAL ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -117,7 +121,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "4.1.5",
+  version: "4.1.6",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -902,7 +906,7 @@ function buildFileIssue(result,name,relations){
   return {status:"HEALTHY",severity:"OK",title:"Terbaca dan sinkron pada pemeriksaan saat ini",detail:"Tidak ada mismatch kontrak yang terbukti pada siklus ini.",relations:rel.map(x=>x.id)};
 }
 
-async function fetchFileWithTimeout(name, timeoutMs=7000){
+async function fetchFileWithTimeout(name, timeoutMs=5000){
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -924,21 +928,26 @@ async function scanLiveSurface(){
   const cycle=S.liveSurface.cycle;
   emit("live_surface_started",{cycle,total:names.length,files:names});
   const result={};
-  // Read files concurrently so one slow/unavailable file can never freeze the
-  // entire medical map. Each result is emitted as soon as its request settles.
-  await Promise.all(names.map(async name=>{
-    const x=await fetchFileWithTimeout(name);
-    result[name]={...x,fields:fields(name,x.text)};
-    S.liveSurface.results={...result};
-    S.liveSurface.updatedAt=now();
-    emit("live_file",{cycle,file:name,result:result[name],results:{...result}});
-  }));
-  const relations=buildCrossFileRelations(result);
-  const fileStates=Object.fromEntries(names.map(name=>[name,buildFileIssue(result,name,relations)]));
-  const mismatches=relations.filter(x=>x.status==="MISMATCH").map(x=>({rule:x.rule,sourceFile:x.sourceFile,targetFile:x.targetFile,missing:x.missingFromTarget||[],sourceLines:x.sourceLines||[],targetLines:x.targetLines||[]}));
-  S.liveSurface.results=result; S.liveSurface.relations=relations; S.liveSurface.updatedAt=now(); S.liveSurface.scanning=false;
-  emit("live_surface_complete",{cycle,total:names.length,results:result,relations,fileStates,mismatches,updatedAt:S.liveSurface.updatedAt});
-  return S.liveSurface;
+  try {
+    // Bounded concurrent reads: a bad/slow file becomes UNREADABLE instead of blocking the map.
+    await Promise.all(names.map(async name=>{
+      let x;
+      try { x=await fetchFileWithTimeout(name,5000); }
+      catch(error){ x={ok:false,status:0,text:"",error:error?.message||String(error),fetchedAt:now()}; }
+      result[name]={...x,fields:fields(name,x.text)};
+      S.liveSurface.results={...result};
+      S.liveSurface.updatedAt=now();
+      emit("live_file",{cycle,file:name,result:result[name],results:{...result}});
+    }));
+    const relations=buildCrossFileRelations(result);
+    const fileStates=Object.fromEntries(names.map(name=>[name,buildFileIssue(result,name,relations)]));
+    const mismatches=relations.filter(x=>x.status==="MISMATCH").map(x=>({rule:x.rule,sourceFile:x.sourceFile,targetFile:x.targetFile,missing:x.missingFromTarget||[],sourceLines:x.sourceLines||[],targetLines:x.targetLines||[]}));
+    S.liveSurface.results=result; S.liveSurface.relations=relations; S.liveSurface.updatedAt=now();
+    emit("live_surface_complete",{cycle,total:names.length,results:result,relations,fileStates,mismatches,updatedAt:S.liveSurface.updatedAt});
+    return S.liveSurface;
+  } finally {
+    S.liveSurface.scanning=false;
+  }
 }
 
 function startLiveSurface(){
@@ -953,7 +962,9 @@ async function scanConsistency(targets = null) {
   emit("scan_started", { total: names.length, targets: names });
   const result = {};
   await Promise.all(names.map(async name => {
-    const x = await fetchFileWithTimeout(name);
+    let x;
+    try { x = await fetchFileWithTimeout(name, 5000); }
+    catch (error) { x = { ok:false, status:0, text:"", error:error?.message||String(error), fetchedAt:now() }; }
     result[name] = { ...x, fields: fields(name, x.text) };
   }));
 
