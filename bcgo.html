@@ -17,6 +17,10 @@ body{font-family:'Inter',sans-serif}
 @keyframes signal{from{left:-30%}to{left:100%}}
 @keyframes breathe{0%,100%{opacity:.45}50%{opacity:1}}
 .breathe{animation:breathe 2s ease-in-out infinite}
+.connection-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+.neural-event{border-left:2px solid #334155;padding-left:10px}
+.neural-event-live{border-left-color:#22c55e}
+.chat-thinking{animation:breathe 1s ease-in-out infinite}
 </style>
 </head>
 
@@ -37,8 +41,20 @@ body{font-family:'Inter',sans-serif}
 </header>
 
 <div class="bg-blue-950/40 border border-blue-800 rounded-xl px-4 py-3 text-xs text-blue-300 leading-relaxed">
-    🧠 <b>Neural Heartbeat aktif.</b> BCGO melakukan siklus IN → PROCESS → REVIEW → OUT secara terus-menerus,
-    sementara <span class="code-font">system_logs</span> tetap didengarkan secara real-time. Impuls baru dapat menginterupsi siklus kapan saja.
+    🧠 <b>Neural Heartbeat aktif.</b> BCGO melakukan siklus IN → PROCESS → REVIEW → OUT secara terus-menerus.
+    Semua panel membaca <span class="code-font">BCGO_STATE</span> yang sama sehingga cycle, stage, telemetry, dan chat tidak boleh berbeda.
+</div>
+
+<div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-xs">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="text-slate-400">SUMBER KEBENARAN SARAF: <span class="code-font text-indigo-300">BCGO_STATE</span></div>
+        <div id="connection-state" class="font-semibold text-slate-400"><span class="connection-dot bg-slate-500"></span>CONNECTING</div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2 text-[10px] text-slate-500">
+        <div>Server signal: <span id="connection-age" class="text-slate-300">menunggu...</span></div>
+        <div>Telemetry: <span id="telemetry-source" class="text-slate-300">menunggu...</span></div>
+        <div>Integrity: <span id="state-integrity" class="text-emerald-400">SYNC</span></div>
+    </div>
 </div>
 
 <section class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-2xl space-y-3">
@@ -51,10 +67,7 @@ body{font-family:'Inter',sans-serif}
     </div>
     <div class="signal-line text-emerald-500 bg-slate-800"></div>
     <div class="flex justify-between text-[10px] text-slate-500">
-        <div class="flex items-center gap-3 min-w-0">
-            <span id="event-state">Menunggu impuls...</span>
-            <span id="data-freshness" class="code-font text-amber-400">WAITING</span>
-        </div>
+        <span id="event-state">Menunggu impuls...</span>
         <span id="cycle-mode">BOOT</span>
     </div>
 </section>
@@ -117,6 +130,19 @@ body{font-family:'Inter',sans-serif}
     <div id="organ-grid" class="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs"></div>
 </section>
 
+<section class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+    <div class="flex justify-between items-center">
+        <div>
+            <div class="text-xs font-semibold text-cyan-300 uppercase tracking-wider">Neural Event Stream</div>
+            <div class="text-[10px] text-slate-500 mt-1">Urutan kejadian yang baru dilihat BCGO — bukan animasi palsu.</div>
+        </div>
+        <span id="event-counter" class="text-[10px] text-slate-500">0 event</span>
+    </div>
+    <div id="neural-events" class="space-y-2 max-h-64 overflow-y-auto">
+        <div class="text-xs text-slate-500">Menunggu event saraf...</div>
+    </div>
+</section>
+
 <section class="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
@@ -126,19 +152,6 @@ body{font-family:'Inter',sans-serif}
         </div>
         <div id="error-feed" class="space-y-2 max-h-80 overflow-y-auto">
             <div class="text-xs text-slate-500">Menunggu telemetry system_logs...</div>
-        </div>
-    </div>
-
-    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
-        <div class="flex justify-between items-center">
-            <div>
-                <div class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Neural Event Stream</div>
-                <div class="text-[10px] text-slate-500 mt-1">Urutan impuls yang benar-benar diterima BCGO.</div>
-            </div>
-            <span id="event-history-count" class="text-[10px] code-font text-slate-500">0 event</span>
-        </div>
-        <div id="event-history" class="space-y-2 max-h-48 overflow-y-auto">
-            <div class="text-xs text-slate-500">Menunggu event...</div>
         </div>
     </div>
 
@@ -185,9 +198,6 @@ const pulse = $('pulse-dot');
 const cycleNumber = $('cycle-number');
 const eventState = $('event-state');
 const cycleMode = $('cycle-mode');
-const dataFreshness = $('data-freshness');
-const eventHistoryFeed = $('event-history');
-const eventHistoryCount = $('event-history-count');
 
 const bagans = {
     IN: $('bagan-in'),
@@ -217,10 +227,15 @@ const logCounter = $('log-counter');
 const chatFeed = $('chat-feed');
 const chatForm = $('chat-form');
 const chatInput = $('chat-input');
+const connectionStateEl = $('connection-state');
+const connectionAgeEl = $('connection-age');
+const telemetrySourceEl = $('telemetry-source');
+const stateIntegrityEl = $('state-integrity');
+const neuralEventsEl = $('neural-events');
+const eventCounterEl = $('event-counter');
 
-// DOM compatibility guard: satu node UI yang hilang tidak boleh menghentikan seluruh monitor.
-const setText = (el, value) => { if (el) el.textContent = String(value ?? ''); };
-const setHTML = (el, value) => { if (el) el.innerHTML = String(value ?? ''); };
+let liveState = null;
+let conversation = [];
 
 function esc(value) {
     return String(value ?? '-')
@@ -243,7 +258,7 @@ function formatTime(value) {
 
 function dimAll() {
     Object.values(bagans).forEach(el => {
-        if (el) el.className = 'neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40';
+        el.className = 'neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40';
     });
 }
 
@@ -268,9 +283,7 @@ function activatePhase(step, state) {
         OUT: 'synchronizing'
     };
 
-    Object.keys(subtitles).forEach(k => {
-        if (subtitles[k]) subtitles[k].textContent = subText[k];
-    });
+    Object.keys(subtitles).forEach(k => subtitles[k].textContent = subText[k]);
 }
 
 function setHeader(step, state) {
@@ -282,10 +295,8 @@ function setHeader(step, state) {
     };
 
     const [bg,text,border,label] = styles[step] || styles.OUT;
-    if (badge) {
-        badge.className = `px-3 py-1 rounded-md text-xs font-semibold ${bg} ${text} border ${border}`;
-        badge.textContent = state.cycleMode === 'INTERRUPTED' ? '⚡ Impuls Terdeteksi' : label;
-    }
+    badge.className = `px-3 py-1 rounded-md text-xs font-semibold ${bg} ${text} border ${border}`;
+    badge.textContent = state.cycleMode === 'INTERRUPTED' ? '⚡ Impuls Terdeteksi' : label;
 
     const dotColor = {
         IN: 'bg-blue-500',
@@ -294,11 +305,10 @@ function setHeader(step, state) {
         OUT: 'bg-emerald-500'
     }[step] || 'bg-emerald-500';
 
-    if (pulse) pulse.className = `w-3 h-3 rounded-full ${dotColor} animate-ping`;
+    pulse.className = `w-3 h-3 rounded-full ${dotColor} animate-ping`;
 }
 
 function renderOrgans(organs) {
-    if (!organGrid) return;
     const entries = Object.entries(organs || {});
     organGrid.innerHTML = entries.map(([file, info]) => {
         const active = info.state === 'ACTIVE';
@@ -323,8 +333,7 @@ function renderOrgans(organs) {
 }
 
 function renderLogs(logs) {
-    if (!errorFeed) return;
-    if (logCounter) logCounter.textContent = `${logs?.length || 0} laporan`;
+    logCounter.textContent = `${logs?.length || 0} laporan`;
 
     if (!logs?.length) {
         errorFeed.innerHTML = '<div class="text-xs text-slate-500">Belum ada laporan error masuk.</div>';
@@ -344,26 +353,8 @@ function renderLogs(logs) {
     errorFeed.scrollTop = 0;
 }
 
-function renderEventHistory(events) {
-    if (!eventHistoryFeed) return;
-    const list = Array.isArray(events) ? events : [];
-    if (eventHistoryCount) eventHistoryCount.textContent = `${list.length} event`;
-    if (!list.length) {
-        eventHistoryFeed.innerHTML = '<div class="text-xs text-slate-500">Belum ada event.</div>';
-        return;
-    }
-    eventHistoryFeed.innerHTML = list.slice(0, 15).map(event => `
-        <div class="border border-slate-800 bg-slate-950/60 rounded-lg px-3 py-2">
-            <div class="flex justify-between gap-2 text-[9px] text-slate-500">
-                <span class="code-font">${esc(event.target || 'SYSTEM')}</span>
-                <span>${esc(formatTime(event.at))}</span>
-            </div>
-            <div class="text-xs text-slate-300 mt-1">${esc(event.text || '-')}</div>
-        </div>
-    `).join('');
-}
-
 function addChat(role, text) {
+    if (!chatFeed) return;
     const row = document.createElement('div');
     row.className = role === 'user'
         ? 'flex justify-end'
@@ -376,75 +367,189 @@ function addChat(role, text) {
 
     bubble.innerHTML = `<div class="text-[9px] uppercase opacity-60 mb-1">${role === 'user' ? 'Anda' : 'BCGO'}</div>${esc(text)}`;
     row.appendChild(bubble);
-    if (!chatFeed) return;
     chatFeed.appendChild(row);
     chatFeed.scrollTop = chatFeed.scrollHeight;
 }
 
+function getStateAgeText(state) {
+    const t = state?.connection?.lastServerAt ? new Date(state.connection.lastServerAt).getTime() : 0;
+    if (!t) return 'belum ada sinyal server';
+    const sec = Math.max(0, Math.round((Date.now() - t) / 1000));
+    return sec < 2 ? 'baru saja' : `${sec} detik lalu`;
+}
+
+function activeOrgans(state) {
+    return Object.entries(state?.systemOrgans || {}).filter(([,v]) => v?.state === 'ACTIVE');
+}
+
+function recoveredOrgans(state) {
+    return Object.entries(state?.systemOrgans || {}).filter(([,v]) => v?.state === 'RECOVERED');
+}
+
+function brainAnswer(question) {
+    const q = String(question || '').toLowerCase().trim();
+    const st = liveState || window.BCGO_STATE;
+    if (!st) return 'Saya belum menerima state saraf. Tunggu sebentar sampai neural monitor tersinkron.';
+
+    const active = activeOrgans(st);
+    const recovered = recoveredOrgans(st);
+    const files = Object.keys(st.systemOrgans || {});
+    const last = st.lastTelemetryFile || st.targetCell || '-';
+    const conn = st.connection?.status || 'UNKNOWN';
+
+    const says = (...words) => words.some(w => q.includes(w));
+
+    if (says('halo','hai','hello','pagi','siang','sore','malam')) {
+        return `Halo. Saya BCGO. Saat ini saya berada di tahap ${st.step}, neural cycle #${st.cycle}. Saya terus memantau ${st.metrics?.total ?? files.length} organ dan mendengarkan telemetry real-time.`;
+    }
+
+    if (says('sedang mengerjakan','sedang apa','kerjakan','ngapain','lagi apa')) {
+        return `Saat ini saya berada di tahap ${st.step}, neural cycle #${st.cycle}. ${st.message} Status saya: ${st.metrics?.active ?? active.length} anomaly aktif, ${st.metrics?.recovered ?? recovered.length} recovered, dan ${st.metrics?.healthy ?? 0} stabil.`;
+    }
+
+    if (says('cycle','siklus')) {
+        return `Neural cycle saya sekarang #${st.cycle}, tahap ${st.step}. Semua informasi cycle yang saya jawab berasal dari BCGO_STATE yang juga dipakai layar monitor ini.`;
+    }
+
+    if (says('aman','status sistem','status sekarang','kondisi sistem','semua aman')) {
+        if (conn === 'OFFLINE') return `Belum bisa saya nyatakan aman. Listener Firestore sedang bermasalah. Saya mempertahankan state terakhir dan menunggu koneksi pulih.`;
+        if (active.length) return `Belum sepenuhnya aman. Saya menemukan ${active.length} anomaly aktif: ${active.map(([f]) => f).join(', ')}. Saya sedang meninjau ${active[0][0]}.`;
+        return `Saat ini tidak ada anomaly aktif. ${st.metrics?.total ?? files.length} organ terpantau; ${st.metrics?.healthy ?? 0} stabil dan ${st.metrics?.recovered ?? 0} recovered. Koneksi: ${conn}.`;
+    }
+
+    if (says('masalah','error','anomaly','gangguan')) {
+        if (!active.length && !st.errorLog) return `Saat ini saya tidak melihat anomaly aktif. Saya tetap mendengarkan system_logs untuk impuls baru.`;
+        const detail = active.map(([f,v]) => `${f}: ${v.message}`).join(' | ');
+        return `Saya melihat ${active.length} anomaly aktif. ${detail || st.errorLog || 'Saya sedang mengevaluasi sumber gangguan.'}`;
+    }
+
+    if (says('recovered','pulih','dipulihkan')) {
+        return recovered.length ? `Saya memiliki ${recovered.length} organ dengan riwayat error yang sudah melewati window aktif: ${recovered.map(([f]) => f).join(', ')}.` : 'Saat ini belum ada organ yang berstatus RECOVERED dari telemetry yang saya terima.';
+    }
+
+    if (says('file terakhir','terakhir','telemetry terakhir','impuls terakhir')) {
+        return st.lastTelemetryAt ? `Impuls telemetry terakhir yang saya catat berasal dari ${last}. Saya menerimanya ${getStateAgeText(st)}.` : 'Belum ada impuls telemetry yang bisa saya pastikan dari state saat ini.';
+    }
+
+    if (says('kenapa','mengapa')) {
+        return `Saya sedang di ${st.step} karena state terbaru meminta saya menjalankan: ${st.message} Target saraf saya saat ini adalah ${st.targetCell || '-'}.`;
+    }
+
+    if (says('apa yang kamu lihat','lihat apa','pantau apa','memantau apa')) {
+        return `Saya sedang memantau ${st.metrics?.total ?? files.length} organ. Target saat ini ${st.targetCell || '-'}, dengan ${st.metrics?.active ?? active.length} anomaly aktif, ${st.metrics?.recovered ?? recovered.length} recovered, dan ${st.metrics?.healthy ?? 0} stabil.`;
+    }
+
+    return `Saya memahami pertanyaanmu, tetapi saya ingin tetap akurat. State saya sekarang: cycle #${st.cycle}, tahap ${st.step}, ${st.metrics?.active ?? active.length} anomaly aktif, koneksi ${conn}. Coba tanyakan “kamu sedang mengerjakan apa?”, “ada masalah?”, atau “telemetry terakhir apa?”.`;
+}
+
+window.BCGOBrain = {
+    ask(question) {
+        const answer = brainAnswer(question);
+        conversation.push({role:'user', text:String(question), at:Date.now()});
+        conversation.push({role:'bcgo', text:answer, at:Date.now(), cycle:liveState?.cycle ?? null});
+        conversation = conversation.slice(-20);
+        return answer;
+    },
+    getConversation() { return conversation.slice(); },
+    getState() { return liveState || window.BCGO_STATE || null; }
+};
+
 function sendQuestion(question) {
     const text = String(question || '').trim();
-    if (!text || !window.BCGOBrain) return;
-
+    if (!text) return;
     addChat('user', text);
     const answer = window.BCGOBrain.ask(text);
-
     setTimeout(() => addChat('bcgo', answer), 120);
 }
 
-if (chatForm && chatInput) {
-    chatForm.addEventListener('submit', event => {
-        event.preventDefault();
-        const text = chatInput.value.trim();
-        if (!text) return;
-        chatInput.value = '';
-        sendQuestion(text);
-    });
-}
+chatForm.addEventListener('submit', event => {
+    event.preventDefault();
+    const text = chatInput.value.trim();
+    if (!text) return;
+    chatInput.value = '';
+    sendQuestion(text);
+});
 
 document.querySelectorAll('.quick-q').forEach(button => {
     button.addEventListener('click', () => sendQuestion(button.dataset.q));
 });
 
+function renderNeuralEvents(events) {
+    const list = Array.isArray(events) ? events.slice(0, 8) : [];
+    setText(eventCounterEl, `${Array.isArray(events) ? events.length : 0} event`);
+    if (!neuralEventsEl) return;
+    if (!list.length) {
+        neuralEventsEl.innerHTML = '<div class="text-xs text-slate-500">Belum ada event.</div>';
+        return;
+    }
+    neuralEventsEl.innerHTML = list.map((ev, i) => `
+        <div class="neural-event ${i === 0 ? 'neural-event-live' : ''} text-xs py-1">
+            <div class="flex justify-between gap-3">
+                <span class="text-cyan-300 code-font">${esc(ev.type || 'EVENT')}</span>
+                <span class="text-[9px] text-slate-600">${esc(formatTime(ev.at))}</span>
+            </div>
+            <div class="text-slate-300 mt-1">${esc(ev.message || '-')}</div>
+            <div class="text-[9px] text-slate-600 code-font">→ ${esc(ev.target || '-')}</div>
+        </div>`).join('');
+}
+
+function renderConnection(state) {
+    const conn = state?.connection || {};
+    const status = conn.status || 'CONNECTING';
+    const map = {
+        LIVE: ['bg-emerald-500','text-emerald-400','LIVE — SERVER'],
+        CACHE: ['bg-amber-500','text-amber-400','CACHE — DATA LOKAL'],
+        OFFLINE: ['bg-rose-500','text-rose-400','OFFLINE — STATE TERAKHIR'],
+        CONNECTING: ['bg-slate-500','text-slate-400','CONNECTING']
+    };
+    const [dot, text, label] = map[status] || map.CONNECTING;
+    if (connectionStateEl) {
+        connectionStateEl.className = `font-semibold ${text}`;
+        connectionStateEl.innerHTML = `<span class="connection-dot ${dot}"></span>${label}`;
+    }
+    setText(connectionAgeEl, getStateAgeText(state));
+    setText(telemetrySourceEl, state?.lastTelemetryFile || 'system_logs aktif');
+    setText(stateIntegrityEl, state?.cycle === liveState?.cycle ? 'SYNC' : 'UPDATING');
+}
+
+function setText(el, value) {
+    if (el) el.textContent = String(value ?? '');
+}
+
+
 runAutonomousEngine(state => {
-    // HARD UI GUARD: render tidak boleh pernah mematikan neural engine.
     try {
-        setText(liveSpeech, `> [${state.step}] ${state.message}`);
-        setText(targetCellId, state.targetCell || '-');
-        setText(errorLogDesc, state.errorLog || 'Normal (tidak ada anomali aktif)');
-
-        setText(cycleNumber, state.cycle ?? 0);
-        setText(cycleMode, state.cycleMode || 'NORMAL');
-
-        const freshness = state.dataFreshness || (state.firestore?.connected ? 'LIVE' : 'WAITING');
-        if (dataFreshness) {
-            setText(dataFreshness, freshness);
-            dataFreshness.className = `text-[10px] code-font ${freshness === 'LIVE' ? 'text-emerald-400' : freshness === 'OFFLINE' ? 'text-rose-400' : 'text-amber-400'}`;
-        }
-
-        setText(eventState, state.lastEventAt
+        liveState = state;
+        window.BCGO_STATE = state;
+        renderConnection(state);
+        renderNeuralEvents(state?.recentEvents);
+        setText(liveSpeech, `> [${state?.step}] ${state?.message || ''}`);
+        setText(targetCellId, state?.targetCell || '-');
+        setText(errorLogDesc, state?.errorLog || 'Normal (tidak ada anomali aktif)');
+        setText(cycleNumber, state?.cycle ?? 0);
+        setText(cycleMode, state?.cycleMode || 'NORMAL');
+        setText(eventState, state?.lastEventAt
             ? `Impuls terakhir: ${formatTime(state.lastEventAt)}`
             : 'Belum ada impuls baru');
 
-        setText(metrics.total, state.metrics?.total ?? 12);
-        setText(metrics.active, state.metrics?.active ?? 0);
-        setText(metrics.healthy, state.metrics?.healthy ?? 12);
-        setText(metrics.recovered, state.metrics?.recovered ?? 0);
-        setText(metrics.firestore, state.metrics?.firestoreCount ?? 0);
+        setText(metrics.total, state?.metrics?.total ?? 0);
+        setText(metrics.active, state?.metrics?.active ?? 0);
+        setText(metrics.healthy, state?.metrics?.healthy ?? 0);
+        setText(metrics.recovered, state?.metrics?.recovered ?? 0);
+        setText(metrics.firestore, state?.metrics?.firestoreCount ?? 0);
 
-        activatePhase(state.step, state);
-        setHeader(state.step, state);
-        renderOrgans(state.systemOrgans);
-        renderLogs(state.systemLogs);
-        renderEventHistory(state.eventHistory);
+        activatePhase(state?.step, state || {});
+        setHeader(state?.step, state || {});
+        renderOrgans(state?.systemOrgans);
+        renderLogs(state?.systemLogs);
 
         if (chatFeed && !chatFeed.dataset.ready) {
             chatFeed.dataset.ready = '1';
-            setHTML(chatFeed, '');
-            addChat('bcgo', `Kanal komunikasi aktif. Saya sedang berada di tahap ${state.step}. Silakan tanya apa yang sedang saya kerjakan.`);
+            chatFeed.innerHTML = '';
+            addChat('bcgo', `Kanal komunikasi aktif. Saya membaca BCGO_STATE yang sama dengan monitor. Saat ini saya berada di tahap ${state?.step}, cycle #${state?.cycle}. Silakan tanya apa yang sedang saya kerjakan.`);
         }
     } catch (uiError) {
-        // Jangan lempar ulang. BCGO_STATE tetap hidup walaupun ada mismatch DOM.
-        console.warn('BCGO render guard:', uiError?.message || uiError);
+        console.warn('BCGO render guard:', uiError);
     }
 });
 </script>
