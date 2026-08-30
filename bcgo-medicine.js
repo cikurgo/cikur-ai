@@ -408,6 +408,36 @@ async function discoverSystemSurface() {
   }
 }
 
+function stripDiagnosticComments(source) {
+  const s = String(source || "");
+  let out = "";
+  let state = "code";
+  let quote = "";
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i], n = s[i + 1];
+    if (state === "line") {
+      if (c === "\n") { out += "\n"; state = "code"; } else out += " ";
+      continue;
+    }
+    if (state === "block") {
+      if (c === "*" && n === "/") { out += "  "; i++; state = "code"; }
+      else out += c === "\n" ? "\n" : " ";
+      continue;
+    }
+    if (state === "string") {
+      out += c;
+      if (c === "\\" && i + 1 < s.length) { out += s[++i]; continue; }
+      if (c === quote) state = "code";
+      continue;
+    }
+    if (c === "/" && n === "/") { out += "  "; i++; state = "line"; continue; }
+    if (c === "/" && n === "*") { out += "  "; i++; state = "block"; continue; }
+    if (c === "'" || c === '"' || c === "`") { quote = c; state = "string"; out += c; continue; }
+    out += c;
+  }
+  return out;
+}
+
 function sourceLines(source) {
   return String(source || "").split(/\r?\n/);
 }
@@ -459,6 +489,7 @@ function domAssignments(file, source) {
   if (!source) return [];
   const out = [];
   let m;
+  const diagnosticSource = stripDiagnosticComments(source);
 
   const direct = [
     /(?:document\.getElementById\(\s*["']([^"']+)["']\s*\)|document\.querySelector\(\s*["']([^"']+)["']\s*\)|\$\(\s*["']([^"']+)["']\s*\))\s*\.(textContent|innerHTML|value|className)\s*=\s*([^;\n]+);?/g,
@@ -466,7 +497,7 @@ function domAssignments(file, source) {
   ];
 
   for (const re of direct) {
-    while ((m = re.exec(source)) && out.length < 120) {
+    while ((m = re.exec(diagnosticSource)) && out.length < 120) {
       if (re === direct[0]) {
         out.push({
           file,
