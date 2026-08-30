@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BCGO Intelligent Control Center - Cikur Go</title>
-    <!-- Google Fonts & Tailwind CSS CDN -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -15,24 +14,22 @@
 
     <div class="flex h-screen overflow-hidden">
         
-        <!-- SIDEBAR DENGAN LOGO ASLI -->
+        <!-- SIDEBAR -->
         <aside class="w-64 bg-slate-900 text-slate-300 hidden md:flex flex-col justify-between border-r border-slate-800">
             <div class="p-5">
                 <div class="flex items-center gap-3 mb-8">
-                    <!-- Memanggil logo asli cikurgoicon.png -->
-                    <img src="cikurgoicon.png" alt="Logo Cikur Go" class="w-9 h-9 object-contain rounded-lg bg-white/10 p-1" onerror="this.style.display='none'; document.getElementById('fallback-logo').style.display='flex';">
-                    <div id="fallback-logo" class="w-9 h-9 bg-indigo-600 rounded-lg hidden items-center justify-center font-bold text-white shadow-md">C</div>
+                    <!-- Logo asli tanpa background gelap agar transparan dan terang -->
+                    <img src="cikurgoicon.png" alt="Logo Cikur Go" class="w-10 h-10 object-contain" onerror="this.style.display='none'; document.getElementById('fallback-logo').style.display='flex';">
+                    <div id="fallback-logo" class="w-10 h-10 bg-indigo-600 rounded-lg hidden items-center justify-center font-bold text-white shadow-md">C</div>
                     <span class="text-lg font-bold text-white tracking-wide">CIKUR GO</span>
                 </div>
                 <nav class="space-y-1">
-                    <button onclick="switchTab('all')" id="nav-all" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg bg-indigo-600 text-white font-medium text-sm transition">Semua Aktivitas</button>
-                    <button onclick="switchTab('mitra')" id="nav-mitra" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition text-sm">Data Mitra (Agent/Resto/Driver)</button>
-                    <button onclick="switchTab('customer')" id="nav-customer" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition text-sm">Data Customer (Layanan)</button>
+                    <a href="#section-mitra" class="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-indigo-600 text-white font-medium text-sm transition">Control Center Utama</a>
                 </nav>
             </div>
             <div class="p-4 border-t border-slate-800 text-xs text-slate-500 flex justify-between items-center">
                 <span>BCGO Engine v2.5</span>
-                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" id="engine-status-dot"></span>
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             </div>
         </aside>
 
@@ -41,14 +38,14 @@
             
             <!-- TOPBAR -->
             <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-10">
-                <h1 class="text-base font-semibold text-slate-800">Intelligent Control Center (Multi-Source Sync)</h1>
+                <h1 class="text-base font-semibold text-slate-800">Intelligent Control Center (Dual-Zone Live Sync)</h1>
                 <div class="flex items-center gap-3">
                     <span id="user-status-badge" class="text-xs px-3 py-1 rounded-full bg-amber-50 text-amber-700 font-medium border border-amber-200">Menghubungkan Database...</span>
                 </div>
             </header>
 
             <!-- DASHBOARD CONTENT -->
-            <main class="p-6 space-y-6">
+            <main class="p-6 space-y-8">
                 <!-- KPI GRID -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
@@ -69,33 +66,63 @@
                     </div>
                 </div>
 
-                <!-- DATA TABLE SECTION -->
-                <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <!-- ZONA 1: TABEL KHUSUS MITRA -->
+                <div id="section-mitra" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
                         <div>
-                            <span id="table-title" class="font-semibold text-slate-800 text-sm">Semua Aktivitas & Pendaftaran</span>
-                            <p class="text-xs text-slate-400 mt-0.5">Sinkronisasi otomatis dari file agentcgo, resto, driver, index, food, ride, & assistant.</p>
+                            <span class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-indigo-600"></span> Zona 1: Data Mitra (agentcgo.html, resto.html, driver.html)
+                            </span>
+                            <p class="text-xs text-slate-400 mt-0.5">Pendaftaran khusus mitra operasional Cikur Go.</p>
                         </div>
-                        <button id="downloadBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-4 py-2 rounded-lg transition shadow-sm flex items-center gap-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                            Download Report (CSV)
+                        <button id="downloadMitraBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-3.5 py-2 rounded-lg transition shadow-sm">
+                            Download Report Mitra (CSV)
                         </button>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse text-sm">
                             <thead>
-                                <tr class="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs">
-                                    <th class="p-4 font-medium">Nama / Entitas</th>
-                                    <th class="p-4 font-medium">Sumber File / Layanan</th>
-                                    <th class="p-4 font-medium">Tipe Kategori</th>
-                                    <th class="p-4 font-medium">Status</th>
-                                    <th class="p-4 font-medium">Waktu Masuk</th>
+                                <tr class="bg-slate-100/70 border-b border-slate-200 text-slate-600 text-xs">
+                                    <th class="p-4 font-semibold">Nama / Entitas</th>
+                                    <th class="p-4 font-semibold">Sumber File</th>
+                                    <th class="p-4 font-semibold">Kategori</th>
+                                    <th class="p-4 font-semibold">Status</th>
+                                    <th class="p-4 font-semibold">Waktu Masuk</th>
                                 </tr>
                             </thead>
-                            <tbody id="data-table-body" class="divide-y divide-slate-100 text-slate-600">
-                                <tr>
-                                    <td colspan="5" class="p-6 text-center text-slate-400">Memuat data dari Firestore...</td>
+                            <tbody id="table-mitra-body" class="divide-y divide-slate-100 text-slate-600">
+                                <tr><td colspan="5" class="p-6 text-center text-slate-400">Memuat data mitra...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ZONA 2: TABEL KHUSUS CUSTOMER -->
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
+                        <div>
+                            <span class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span> Zona 2: Data Customer & Layanan (index, assistant, food, ride, cikurgo2in1)
+                            </span>
+                            <p class="text-xs text-slate-400 mt-0.5">Aktivitas pendaftaran dan penggunaan layanan oleh customer.</p>
+                        </div>
+                        <button id="downloadCustomerBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3.5 py-2 rounded-lg transition shadow-sm">
+                            Download Report Customer (CSV)
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr class="bg-slate-100/70 border-b border-slate-200 text-slate-600 text-xs">
+                                    <th class="p-4 font-semibold">Nama / Customer</th>
+                                    <th class="p-4 font-semibold">Sumber File / Layanan</th>
+                                    <th class="p-4 font-semibold">Kategori</th>
+                                    <th class="p-4 font-semibold">Status</th>
+                                    <th class="p-4 font-semibold">Waktu Masuk</th>
                                 </tr>
+                            </thead>
+                            <tbody id="table-customer-body" class="divide-y divide-slate-100 text-slate-600">
+                                <tr><td colspan="5" class="p-6 text-center text-slate-400">Memuat data customer...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -104,7 +131,7 @@
         </div>
     </div>
 
-    <!-- FIREBASE & MODULE SCRIPT INTEGRATION -->
+    <!-- FIREBASE & MODULE SCRIPT -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, collection, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -123,158 +150,116 @@
         const db = getFirestore(app);
 
         const statusBadge = document.getElementById('user-status-badge');
-        const tableBody = document.getElementById('data-table-body');
+        const tableMitraBody = document.getElementById('table-mitra-body');
+        const tableCustomerBody = document.getElementById('table-customer-body');
         const kpiMitra = document.getElementById('kpi-mitra');
         const kpiCustomer = document.getElementById('kpi-customer');
         const kpiPending = document.getElementById('kpi-pending');
         const kpiTotal = document.getElementById('kpi-total');
-        const downloadBtn = document.getElementById('downloadBtn');
-        const tableTitle = document.getElementById('table-title');
 
-        let globalDataList = [];
-        let currentFilter = 'all';
+        let cacheMitra = [];
+        let cacheCustomer = [];
 
         statusBadge.textContent = "Sistem Online (Live Sync)";
         statusBadge.className = "text-xs px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 font-medium border border-emerald-200";
 
-        // Mengambil data dari dua koleksi utama: 'mitra_applications' dan 'customer_activities'
-        // Agar error handling aman jika salah satu koleksi kosong di Firestore
-        function loadAllData() {
-            try {
-                // Listener untuk Mitra (agentcgo, resto, driver)
-                const qMitra = query(collection(db, "mitra_applications"), orderBy("submittedAt", "desc"));
-                // Listener untuk Customer (index, assistant, food, ride, cikurgo2in1)
-                const qCustomer = query(collection(db, "customer_activities"), orderBy("submittedAt", "desc"));
-
-                let mitraData = [];
-                let customerData = [];
-
-                let unSubMitra = onSnapshot(qMitra, (snapshot) => {
-                    mitraData = [];
-                    snapshot.forEach((doc) => {
-                        const d = doc.data();
-                        mitraData.push({
-                            id: doc.id,
-                            nama: d.nama || 'Mitra Tanpa Nama',
-                            sumber: d.sumber || 'agentcgo/resto/driver',
-                            tipe: 'Mitra',
-                            kategori: d.kategori || 'Mitra Umum',
-                            status: d.status || 'Pending',
-                            submittedAt: d.submittedAt
-                        });
-                    });
-                    processAndRender(mitraData, customerData);
-                }, (err) => { console.log("Info koleksi mitra:", err.message); });
-
-                let unSubCustomer = onSnapshot(qCustomer, (snapshot) => {
-                    customerData = [];
-                    snapshot.forEach((doc) => {
-                        const d = doc.data();
-                        customerData.push({
-                            id: doc.id,
-                            nama: d.nama || 'Customer Tanpa Nama',
-                            sumber: d.sumber || 'index/food/ride/dll',
-                            tipe: 'Customer',
-                            kategori: d.kategori || 'Layanan Utama',
-                            status: d.status || 'Aktif',
-                            submittedAt: d.submittedAt
-                        });
-                    });
-                    processAndRender(mitraData, customerData);
-                }, (err) => { console.log("Info koleksi customer:", err.message); });
-
-            } catch (e) {
-                console.error("Error init listeners:", e);
-                tableBody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-rose-500">Gagal menghubungkan database Firestore.</td></tr>`;
+        // Real-time Listener Koleksi Mitra
+        const qMitra = query(collection(db, "mitra_applications"), orderBy("submittedAt", "desc"));
+        onSnapshot(qMitra, (snapshot) => {
+            cacheMitra = [];
+            if (snapshot.empty) {
+                tableMitraBody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">Belum ada data mitra masuk.</td></tr>`;
+            } else {
+                let html = '';
+                snapshot.forEach((doc) => {
+                    let d = doc.data();
+                    cacheMitra.push(d);
+                    let waktu = d.submittedAt?.seconds ? new Date(d.submittedAt.seconds * 1000).toLocaleString('id-ID') : 'Baru saja';
+                    html += `
+                        <tr class="hover:bg-slate-50 transition">
+                            <td class="p-4 font-medium text-slate-900">${d.nama || 'Tanpa Nama'}</td>
+                            <td class="p-4 text-xs font-mono text-indigo-600 bg-indigo-50/50 rounded">${d.sumber || 'agentcgo/resto/driver'}</td>
+                            <td class="p-4"><span class="px-2.5 py-1 text-xs rounded-full bg-slate-100 text-slate-700 font-medium">${d.kategori || 'Mitra'}</span></td>
+                            <td class="p-4"><span class="px-2.5 py-1 text-xs rounded-full border bg-amber-50 text-amber-700 border-amber-200 font-medium">${d.status || 'Pending'}</span></td>
+                            <td class="p-4 text-slate-400 text-xs">${waktu}</td>
+                        </tr>
+                    `;
+                });
+                tableMitraBody.innerHTML = html;
             }
-        }
+            updateKPI();
+        }, (err) => {
+            tableMitraBody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-rose-500">Gagal memuat data mitra. Periksa koneksi/koleksi Firestore.</td></tr>`;
+        });
 
-        function processAndRender(mitra, customer) {
-            // Gabungkan kedua data
-            globalDataList = [...mitra, ...customer].sort((a, b) => {
-                let timeA = a.submittedAt && a.submittedAt.seconds ? a.submittedAt.seconds : 0;
-                let timeB = b.submittedAt && b.submittedAt.seconds ? b.submittedAt.seconds : 0;
-                return timeB - timeA;
-            });
+        // Real-time Listener Koleksi Customer
+        const qCustomer = query(collection(db, "customer_activities"), orderBy("submittedAt", "desc"));
+        onSnapshot(qCustomer, (snapshot) => {
+            cacheCustomer = [];
+            if (snapshot.empty) {
+                tableCustomerBody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">Belum ada data customer masuk.</td></tr>`;
+            } else {
+                let html = '';
+                snapshot.forEach((doc) => {
+                    let d = doc.data();
+                    cacheCustomer.push(d);
+                    let waktu = d.submittedAt?.seconds ? new Date(d.submittedAt.seconds * 1000).toLocaleString('id-ID') : 'Baru saja';
+                    html += `
+                        <tr class="hover:bg-slate-50 transition">
+                            <td class="p-4 font-medium text-slate-900">${d.nama || 'Tanpa Nama'}</td>
+                            <td class="p-4 text-xs font-mono text-emerald-600 bg-emerald-50/50 rounded">${d.sumber || 'index/food/ride/dll'}</td>
+                            <td class="p-4"><span class="px-2.5 py-1 text-xs rounded-full bg-slate-100 text-slate-700 font-medium">${d.kategori || 'Layanan'}</span></td>
+                            <td class="p-4"><span class="px-2.5 py-1 text-xs rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200 font-medium">${d.status || 'Aktif'}</span></td>
+                            <td class="p-4 text-slate-400 text-xs">${waktu}</td>
+                        </tr>
+                    `;
+                });
+                tableCustomerBody.innerHTML = html;
+            }
+            updateKPI();
+        }, (err) => {
+            tableCustomerBody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-rose-500">Gagal memuat data customer. Periksa koneksi/koleksi Firestore.</td></tr>`;
+        });
 
-            // Hitung KPI
-            kpiMitra.textContent = mitra.length;
-            kpiCustomer.textContent = customer.length;
-            kpiTotal.textContent = globalDataList.length;
-            
-            let pending = globalDataList.filter(item => item.status === 'Pending' || item.status === 'Perlu Review').length;
+        function updateKPI() {
+            kpiMitra.textContent = cacheMitra.length;
+            kpiCustomer.textContent = cacheCustomer.length;
+            kpiTotal.textContent = cacheMitra.length + cacheCustomer.length;
+            let pending = cacheMitra.filter(i => i.status === 'Pending' || !i.status).length;
             kpiPending.textContent = pending;
-
-            renderTable();
         }
 
-        window.switchTab = function(type) {
-            currentFilter = type;
-            document.getElementById('nav-all').className = "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg " + (type === 'all' ? "bg-indigo-600 text-white" : "hover:bg-slate-800 text-slate-400 hover:text-white") + " font-medium text-sm transition";
-            document.getElementById('nav-mitra').className = "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg " + (type === 'mitra' ? "bg-indigo-600 text-white" : "hover:bg-slate-800 text-slate-400 hover:text-white") + " font-medium text-sm transition";
-            document.getElementById('nav-customer').className = "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg " + (type === 'customer' ? "bg-indigo-600 text-white" : "hover:bg-slate-800 text-slate-400 hover:text-white") + " font-medium text-sm transition";
-
-            if(type === 'all') tableTitle.textContent = "Semua Aktivitas & Pendaftaran";
-            if(type === 'mitra') tableTitle.textContent = "Data Khusus Mitra (Agent, Resto, Driver)";
-            if(type === 'customer') tableTitle.textContent = "Data Customer & Layanan (Index, Food, Ride, dll)";
-
-            renderTable();
-        }
-
-        function renderTable() {
-            let filtered = globalDataList;
-            if(currentFilter === 'mitra') filtered = globalDataList.filter(i => i.tipe === 'Mitra');
-            if(currentFilter === 'customer') filtered = globalDataList.filter(i => i.tipe === 'Customer');
-
-            if (filtered.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">Belum ada data pada kategori ini.</td></tr>`;
-                return;
-            }
-
-            let html = '';
-            filtered.forEach(row => {
-                let badgeClass = "bg-amber-50 text-amber-700 border-amber-200";
-                if (row.status === 'Active' || row.status === 'Disetujui' || row.status === 'Aktif') {
-                    badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
-                }
-
-                let waktu = row.submittedAt && row.submittedAt.seconds ? new Date(row.submittedAt.seconds * 1000).toLocaleString('id-ID') : 'Baru saja';
-
-                html += `
-                    <tr class="hover:bg-slate-50 transition">
-                        <td class="p-4 font-medium text-slate-900">${row.nama}</td>
-                        <td class="p-4 text-xs font-mono text-slate-500">${row.sumber}</td>
-                        <td class="p-4"><span class="px-2.5 py-1 text-xs rounded-full bg-slate-100 text-slate-700 font-medium">${row.kategori}</span></td>
-                        <td class="p-4"><span class="px-2.5 py-1 text-xs rounded-full border ${badgeClass} font-medium">${row.status}</span></td>
-                        <td class="p-4 text-slate-400 text-xs">${waktu}</td>
-                    </tr>
-                `;
+        // Tombol Download CSV Mitra
+        document.getElementById('downloadMitraBtn').addEventListener('click', () => {
+            if (cacheMitra.length === 0) { alert("Tidak ada data mitra."); return; }
+            let csv = "data:text/csv;charset=utf-8,Nama,Sumber File,Kategori,Status,Waktu\r\n";
+            cacheMitra.forEach(r => {
+                let w = r.submittedAt?.seconds ? new Date(r.submittedAt.seconds * 1000).toLocaleString('id-ID') : 'Baru saja';
+                csv += `"${r.nama}","${r.sumber || ''}","${r.kategori || ''}","${r.status || ''}","${w}"\r\n`;
             });
-            tableBody.innerHTML = html;
-        }
+            downloadCSV(csv, "Report_Mitra_CikurGo.csv");
+        });
 
-        // Jalankan pemuatan data
-        loadAllData();
-
-        // Download CSV
-        downloadBtn.addEventListener('click', () => {
-            if (globalDataList.length === 0) {
-                alert("Tidak ada data untuk di-download.");
-                return;
-            }
-            let csv = "data:text/csv;charset=utf-8,Nama,Sumber File,Tipe,Kategori,Status,Waktu\r\n";
-            globalDataList.forEach(r => {
-                let w = r.submittedAt && r.submittedAt.seconds ? new Date(r.submittedAt.seconds * 1000).toLocaleString('id-ID') : 'Baru saja';
-                csv += `"${r.nama}","${r.sumber}","${r.tipe}","${r.kategori}","${r.status}","${w}"\r\n`;
+        // Tombol Download CSV Customer
+        document.getElementById('downloadCustomerBtn').addEventListener('click', () => {
+            if (cacheCustomer.length === 0) { alert("Tidak ada data customer."); return; }
+            let csv = "data:text/csv;charset=utf-8,Nama,Sumber File,Kategori,Status,Waktu\r\n";
+            cacheCustomer.forEach(r => {
+                let w = r.submittedAt?.seconds ? new Date(r.submittedAt.seconds * 1000).toLocaleString('id-ID') : 'Baru saja';
+                csv += `"${r.nama}","${r.sumber || ''}","${r.kategori || ''}","${r.status || ''}","${w}"\r\n`;
             });
-            let encoded = encodeURI(csv);
+            downloadCSV(csv, "Report_Customer_CikurGo.csv");
+        });
+
+        function downloadCSV(csvContent, filename) {
+            let encoded = encodeURI(csvContent);
             let link = document.createElement("a");
             link.setAttribute("href", encoded);
-            link.setAttribute("download", `Report_CikurGo_${currentFilter}_${new Date().toISOString().slice(0,10)}.csv`);
+            link.setAttribute("download", filename);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-        });
+        }
     </script>
 </body>
 </html>
