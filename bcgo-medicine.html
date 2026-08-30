@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BCGO Medicine v4.1.3 — Live Cross-File Medical Engine</title>
+<title>BCGO Medicine v4.1.4 — Live Cross-File Medical Engine</title>
 <link rel="icon" type="image/png" href="./cikurgoicon.png">
 <link rel="apple-touch-icon" href="./cikurgoicon.png">
 
@@ -16,7 +16,7 @@
 <header class="panel p-4 md:p-5 flex flex-wrap justify-between items-center gap-3">
   <div class="flex items-center gap-3 min-w-0">
     <img src="./cikurgoicon.png" alt="CIKUR GO" class="w-12 h-12 md:w-14 md:h-14 rounded-xl object-contain bg-white border border-slate-300 p-1 shrink-0 shadow-lg" loading="eager" decoding="async">
-    <div class="min-w-0"><h1 class="text-xl font-bold">💊 BCGO Medicine v4.1.3 <span class="text-xs text-cyan-300 code">PRECISION ROOT-CAUSE REPAIR</span></h1><p class="text-xs text-slate-400 mt-1">CIKUR GO • System Logs → Cross-File Investigation • Root Cause • Verify • Repair Plan • Human Approval • Execute • Validate</p></div>
+    <div class="min-w-0"><h1 class="text-xl font-bold">💊 BCGO Medicine v4.1.4 <span class="text-xs text-cyan-300 code">PRECISION ROOT-CAUSE REPAIR</span></h1><p class="text-xs text-slate-400 mt-1">CIKUR GO • System Logs → Cross-File Investigation • Root Cause • Verify • Repair Plan • Human Approval • Execute • Validate</p></div>
   </div>
   <div class="flex gap-2 text-[10px] code"><span id="auth" class="border border-slate-700 px-2 py-1 rounded">AUTH WAITING</span><span id="sys" class="border border-slate-700 px-2 py-1 rounded">BOOT</span><span id="executor" class="border border-slate-700 px-2 py-1 rounded">EXECUTOR WAITING</span></div>
 </header>
@@ -125,6 +125,11 @@ if(window.BCGOMedicine){
     setText('sys','MEDICINE READY');
     setText('executor',api.executorAvailable?'EXECUTOR READY':'EXECUTOR NOT CONNECTED');
     api.startLiveSurface?.();
+    // Rehydrate the live map after the Medicine module has finished evaluating.
+    // The first scan can begin before this HTML listener is attached; never leave
+    // the UI at 'MENUNGGU SCAN' when state already exists.
+    const liveNow=api.getLiveSurface?.();
+    if(liveNow) renderLiveSurface({...liveNow,results:liveNow.results||{},relations:liveNow.relations||[],scanning:!!liveNow.scanning});
   },0);
 }
 const REQUIRED_UI_IDS=['auth','sys','executor','rtFirestore','rtTelemetry','rtChat','rtAuto','rtRegistry','livePulse','pipelineState','org','logs','casesN','active','findN','repairs','chat','form','input','send','diag','caseState','approve','apply','validate','findings','scan','rx','humanMode','patchState','patch','beforeAfter','codePrescription','validation','surgeryState','surgerySummary','verifyState','verification','verifyBtn','humanStatus','pause','review','reject','eventN','events','history'];
