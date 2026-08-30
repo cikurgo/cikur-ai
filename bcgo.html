@@ -25,6 +25,13 @@ body{font-family:'Inter',sans-serif}
 </head>
 
 <body class="bg-slate-950 text-slate-100 antialiased p-4 md:p-6 min-h-screen">
+<div id="boot-veil" class="fixed inset-0 z-[9999] bg-slate-950 flex items-center justify-center p-6">
+  <div class="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900/95 p-5 text-center shadow-2xl">
+    <div class="mx-auto mb-3 w-3 h-3 rounded-full bg-blue-500 animate-pulse"></div>
+    <div class="text-sm font-semibold">BCGO sedang menyelaraskan saraf</div>
+    <div class="text-[11px] text-slate-500 mt-2">Menunggu state, autentikasi, dan telemetry aktual. Tidak ada data dummy yang ditampilkan.</div>
+  </div>
+</div>
 <div class="max-w-5xl mx-auto w-full space-y-5">
 
 <header class="flex justify-between items-center border-b border-slate-800 pb-4">
@@ -161,7 +168,7 @@ body{font-family:'Inter',sans-serif}
                 <div class="text-xs font-semibold text-indigo-300 uppercase tracking-wider">Komunikasi dengan BCGO</div>
                 <div class="text-[10px] text-slate-500 mt-1">Jawaban dibangun dari kondisi saraf aktual.</div>
             </div>
-            <span class="text-[10px] code-font text-indigo-400">BCGO::CHAT</span>
+            <span id="chat-status" class="text-[10px] code-font text-indigo-400">BCGO::LOCAL-BRAIN</span>
         </div>
 
         <div id="chat-feed" class="chat-scroll bg-slate-950 border border-slate-800 rounded-lg p-3 h-72 overflow-y-auto space-y-3">
@@ -235,7 +242,6 @@ const neuralEventsEl = $('neural-events');
 const eventCounterEl = $('event-counter');
 
 let liveState = null;
-let conversation = [];
 
 function esc(value) {
     return String(value ?? '-')
@@ -377,88 +383,42 @@ function getStateAgeText(state) {
     return sec < 2 ? 'baru saja' : `${sec} detik lalu`;
 }
 
-function activeOrgans(state) {
-    return Object.entries(state?.systemOrgans || {}).filter(([,v]) => v?.state === 'ACTIVE');
+function showTyping() {
+    if (document.getElementById('chat-typing')) return;
+    const row = document.createElement('div');
+    row.id = 'chat-typing';
+    row.className = 'flex justify-start';
+    row.innerHTML = '<div class="max-w-[90%] rounded-lg bg-emerald-950/30 border border-emerald-900 px-3 py-2 text-xs text-emerald-200"><div class="text-[9px] uppercase opacity-60 mb-1">BCGO · MEMPROSES</div><span class="chat-thinking">Membaca state dan telemetry aktual…</span></div>';
+    chatFeed.appendChild(row);
+    chatFeed.scrollTop = chatFeed.scrollHeight;
 }
 
-function recoveredOrgans(state) {
-    return Object.entries(state?.systemOrgans || {}).filter(([,v]) => v?.state === 'RECOVERED');
+function hideTyping() {
+    document.getElementById('chat-typing')?.remove();
 }
-
-function brainAnswer(question) {
-    const q = String(question || '').toLowerCase().trim();
-    const st = liveState || window.BCGO_STATE;
-    if (!st) return 'Saya belum menerima state saraf. Tunggu sebentar sampai neural monitor tersinkron.';
-
-    const active = activeOrgans(st);
-    const recovered = recoveredOrgans(st);
-    const files = Object.keys(st.systemOrgans || {});
-    const last = st.lastTelemetryFile || st.targetCell || '-';
-    const conn = st.connection?.status || 'UNKNOWN';
-
-    const says = (...words) => words.some(w => q.includes(w));
-
-    if (says('halo','hai','hello','pagi','siang','sore','malam')) {
-        return `Halo. Saya BCGO. Saat ini saya berada di tahap ${st.step}, neural cycle #${st.cycle}. Saya terus memantau ${st.metrics?.total ?? files.length} organ dan mendengarkan telemetry real-time.`;
-    }
-
-    if (says('sedang mengerjakan','sedang apa','kerjakan','ngapain','lagi apa')) {
-        return `Saat ini saya berada di tahap ${st.step}, neural cycle #${st.cycle}. ${st.message} Status saya: ${st.metrics?.active ?? active.length} anomaly aktif, ${st.metrics?.recovered ?? recovered.length} recovered, dan ${st.metrics?.healthy ?? 0} stabil.`;
-    }
-
-    if (says('cycle','siklus')) {
-        return `Neural cycle saya sekarang #${st.cycle}, tahap ${st.step}. Semua informasi cycle yang saya jawab berasal dari BCGO_STATE yang juga dipakai layar monitor ini.`;
-    }
-
-    if (says('aman','status sistem','status sekarang','kondisi sistem','semua aman')) {
-        if (conn === 'OFFLINE') return `Belum bisa saya nyatakan aman. Listener Firestore sedang bermasalah. Saya mempertahankan state terakhir dan menunggu koneksi pulih.`;
-        if (active.length) return `Belum sepenuhnya aman. Saya menemukan ${active.length} anomaly aktif: ${active.map(([f]) => f).join(', ')}. Saya sedang meninjau ${active[0][0]}.`;
-        return `Saat ini tidak ada anomaly aktif. ${st.metrics?.total ?? files.length} organ terpantau; ${st.metrics?.healthy ?? 0} stabil dan ${st.metrics?.recovered ?? 0} recovered. Koneksi: ${conn}.`;
-    }
-
-    if (says('masalah','error','anomaly','gangguan')) {
-        if (!active.length && !st.errorLog) return `Saat ini saya tidak melihat anomaly aktif. Saya tetap mendengarkan system_logs untuk impuls baru.`;
-        const detail = active.map(([f,v]) => `${f}: ${v.message}`).join(' | ');
-        return `Saya melihat ${active.length} anomaly aktif. ${detail || st.errorLog || 'Saya sedang mengevaluasi sumber gangguan.'}`;
-    }
-
-    if (says('recovered','pulih','dipulihkan')) {
-        return recovered.length ? `Saya memiliki ${recovered.length} organ dengan riwayat error yang sudah melewati window aktif: ${recovered.map(([f]) => f).join(', ')}.` : 'Saat ini belum ada organ yang berstatus RECOVERED dari telemetry yang saya terima.';
-    }
-
-    if (says('file terakhir','terakhir','telemetry terakhir','impuls terakhir')) {
-        return st.lastTelemetryAt ? `Impuls telemetry terakhir yang saya catat berasal dari ${last}. Saya menerimanya ${getStateAgeText(st)}.` : 'Belum ada impuls telemetry yang bisa saya pastikan dari state saat ini.';
-    }
-
-    if (says('kenapa','mengapa')) {
-        return `Saya sedang di ${st.step} karena state terbaru meminta saya menjalankan: ${st.message} Target saraf saya saat ini adalah ${st.targetCell || '-'}.`;
-    }
-
-    if (says('apa yang kamu lihat','lihat apa','pantau apa','memantau apa')) {
-        return `Saya sedang memantau ${st.metrics?.total ?? files.length} organ. Target saat ini ${st.targetCell || '-'}, dengan ${st.metrics?.active ?? active.length} anomaly aktif, ${st.metrics?.recovered ?? recovered.length} recovered, dan ${st.metrics?.healthy ?? 0} stabil.`;
-    }
-
-    return `Saya memahami pertanyaanmu, tetapi saya ingin tetap akurat. State saya sekarang: cycle #${st.cycle}, tahap ${st.step}, ${st.metrics?.active ?? active.length} anomaly aktif, koneksi ${conn}. Coba tanyakan “kamu sedang mengerjakan apa?”, “ada masalah?”, atau “telemetry terakhir apa?”.`;
-}
-
-window.BCGOBrain = {
-    ask(question) {
-        const answer = brainAnswer(question);
-        conversation.push({role:'user', text:String(question), at:Date.now()});
-        conversation.push({role:'bcgo', text:answer, at:Date.now(), cycle:liveState?.cycle ?? null});
-        conversation = conversation.slice(-20);
-        return answer;
-    },
-    getConversation() { return conversation.slice(); },
-    getState() { return liveState || window.BCGO_STATE || null; }
-};
 
 function sendQuestion(question) {
     const text = String(question || '').trim();
     if (!text) return;
     addChat('user', text);
-    const answer = window.BCGOBrain.ask(text);
-    setTimeout(() => addChat('bcgo', answer), 120);
+    showTyping();
+
+    // Gunakan SATU otak: BCGOBrain dari bcgo.js.
+    // Tidak ada brainAnswer kedua di HTML yang menimpa reasoning engine.
+    const brain = window.BCGOBrain;
+    let answer;
+    try {
+        answer = brain?.ask
+            ? brain.ask(text)
+            : 'Kanal otak BCGO belum siap. Saya menunggu state saraf tersinkron.';
+    } catch (error) {
+        answer = `Kanal otak mengalami error lokal: ${error?.message || error}`;
+    }
+
+    window.setTimeout(() => {
+        hideTyping();
+        addChat('bcgo', answer);
+    }, 180);
 }
 
 chatForm.addEventListener('submit', event => {
@@ -511,6 +471,7 @@ function renderConnection(state) {
 runAutonomousEngine(state => {
     liveState = state;
     window.BCGO_STATE = state;
+    $('boot-veil')?.remove();
     renderConnection(state);
     renderNeuralEvents(state.recentEvents);
     liveSpeech.textContent = `> [${state.step}] ${state.message}`;

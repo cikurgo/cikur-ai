@@ -11,7 +11,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/fi
 import { db, auth } from "./cikur-config.js";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.6
+ * BCGO MASTER NERVE SYSTEM v2.7 — LOCAL CONTEXT BRAIN
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -273,79 +273,207 @@ export function runAutonomousEngine(onCycleUpdate) {
     return Object.keys(ORGAN_REGISTRY).find(file => q.includes(file.toLowerCase())) || null;
   }
 
+  // Memori percakapan lokal: hanya konteks singkat untuk membuat dialog natural.
+  // Tidak dikirim ke layanan AI/API eksternal.
+  const chatMemory = {
+    history: [],
+    lastIntent: null,
+    lastFile: null,
+    lastTarget: null,
+    lastQuestion: null,
+    lastAnswer: null
+  };
+
+  function rememberChat(role, text, meta = {}) {
+    chatMemory.history.push({ role, text: String(text || ''), at: Date.now(), ...meta });
+    chatMemory.history = chatMemory.history.slice(-12);
+    if (meta.intent) chatMemory.lastIntent = meta.intent;
+    if (meta.file) chatMemory.lastFile = meta.file;
+    if (meta.target) chatMemory.lastTarget = meta.target;
+    if (role === 'user') chatMemory.lastQuestion = String(text || '');
+    if (role === 'bcgo') chatMemory.lastAnswer = String(text || '');
+  }
+
+  function resolveContextFile(raw, explicitFile) {
+    if (explicitFile) return explicitFile;
+    const q = String(raw || '').toLowerCase();
+    const contextWords = /\b(ini|itu|dia|yang tadi|yang pertama|yang terakhir|masalah tadi|error tadi|file tadi|file itu|kasus tadi|kasus itu)\b/i;
+    if (!contextWords.test(q)) return null;
+    if (chatMemory.lastFile && ORGAN_REGISTRY[chatMemory.lastFile]) return chatMemory.lastFile;
+    const previousUser = [...chatMemory.history].reverse().find(x => x.role === 'user');
+    if (previousUser) return Object.keys(ORGAN_REGISTRY).find(f => previousUser.text.toLowerCase().includes(f.toLowerCase())) || null;
+    return null;
+  }
+
+  function topActiveFile(active, raw) {
+    const explicit = findFile(raw);
+    const contextual = resolveContextFile(raw, explicit);
+    if (contextual && active.some(([f]) => f === contextual)) return contextual;
+    return active[0]?.[0] || null;
+  }
+
+  function formatActive(active, max = 4) {
+    return active.slice(0, max).map(([file, info]) => `${file}: ${info.message}`).join(' | ');
+  }
+
+  function classifyIntent(raw) {
+    const q = String(raw || '').toLowerCase().trim();
+    if (!q) return 'EMPTY';
+    if (/\b(scan|rescan|pindai|periksa)\b.*\b(ulang|lagi|kembali)?\b/.test(q) && /ulang|lagi|pindai|scan/.test(q)) return 'RESCAN';
+    if (/\b(halo|hai|hello|selamat pagi|selamat siang|selamat sore|selamat malam)\b/.test(q) || /siapa kamu|kamu siapa/.test(q)) return 'GREETING';
+    if (/sedang apa|lagi apa|sedang mengerjakan|ngapain|kerja apa/.test(q)) return 'ACTIVITY';
+    if (/status|kondisi|sehat|aman|hidup|aktif/.test(q)) return 'STATUS';
+    if (/ada (masalah|error|gangguan)|masalah|error|anomali|gangguan|rusak|bermasalah/.test(q)) return 'ANOMALY';
+    if (/telemetry|impuls|laporan terakhir|error terakhir|terakhir/.test(q)) return 'TELEMETRY';
+    if (/cycle|siklus|tahap|fase|posisi/.test(q)) return 'CYCLE';
+    if (/berapa.*(file|organ)|organ apa|pantau apa|memantau apa|cakupan/.test(q)) return 'REGISTRY';
+    if (/medicine|obat|pengobatan|perbaiki|perbaikan|repair|sembuhkan|healing|treatment/.test(q)) return 'MEDICINE';
+    if (/kenapa|mengapa|penyebab|akar masalah|root cause/.test(q)) return 'WHY';
+    if (/jelaskan|detail|rincian|bukti|evidence/.test(q)) return 'DETAIL';
+    if (findFile(raw)) return 'FILE';
+    return 'GENERAL';
+  }
+
   function answerQuestion(question) {
-    const raw = String(question || "").trim();
+    const raw = String(question || '').trim();
     const q = raw.toLowerCase();
     const organs = buildOrgans();
-    const active = Object.entries(organs).filter(([, v]) => v.state === "ACTIVE");
-    const recovered = Object.entries(organs).filter(([, v]) => v.state === "RECOVERED");
+    const active = Object.entries(organs).filter(([, v]) => v.state === 'ACTIVE');
+    const recovered = Object.entries(organs).filter(([, v]) => v.state === 'RECOVERED');
     const metrics = makeMetrics(organs);
     const file = findFile(raw);
+    const intent = classifyIntent(raw);
 
-    if (!q) return "Saya siap. Tanyakan kondisi sistem, error, file tertentu, telemetry terakhir, siklus saya, atau apa yang perlu saya teruskan ke Medicine.";
+    if (!q) return 'Saya siap. Tanyakan kondisi sistem, error, file tertentu, telemetry terakhir, siklus saya, atau perintah pemeriksaan.';
 
-    if (/^(halo|hai|hello|pagi|siang|sore|malam)\b/.test(q) || /siapa kamu/.test(q)) {
-      return `Halo. Saya BCGO. Saya bekerja dari telemetry dan state sistem yang sedang hidup, bukan dari tebakan. Sekarang cycle #${cycleNo}, tahap ${state.step}. ${situation()}`;
+    rememberChat('user', raw, { intent, file: resolveContextFile(raw, file) || undefined });
+
+    if (intent === 'RESCAN') {
+      recordEvent('CHAT_COMMAND', 'Anda meminta pemeriksaan ulang telemetry.', 'SYS_CHAT_RESCAN');
+      emit('IN', 'Saya menerima perintah pemeriksaan ulang. Saya membaca ulang bukti telemetry yang tersedia sekarang.', 'SYS_CHAT_RESCAN', null, { cycleMode: 'CHAT_COMMAND' });
+      const answer = `Baik. Saya mulai pemeriksaan ulang berdasarkan telemetry yang benar-benar tersedia. Saat ini ${metrics.active} anomaly aktif dari ${metrics.total} organ.`;
+      rememberChat('bcgo', answer);
+      return answer;
     }
 
-    if (/scan ulang|rescan|pindai ulang|periksa ulang/.test(q)) {
-      recordEvent("CHAT_COMMAND", "Anda meminta pemeriksaan ulang telemetry.", "SYS_CHAT_RESCAN");
-      emit("IN", "Saya menerima perintah pemeriksaan ulang. Saya membaca ulang telemetry yang tersedia sekarang.", "SYS_CHAT_RESCAN", null, { cycleMode: "CHAT_COMMAND" });
-      return `Baik. Saya mulai pemeriksaan ulang. Saat ini ${metrics.active} anomali aktif dari ${metrics.total} organ.`;
+    if (intent === 'GREETING') {
+      const answer = `Halo. Saya BCGO. Saya bekerja dari state dan telemetry yang sedang hidup, bukan tebakan. Sekarang cycle #${cycleNo}, tahap ${state.step}. ${situation()}`;
+      rememberChat('bcgo', answer);
+      return answer;
     }
 
-    if (/medicine|obat|pengobatan|perbaiki|perbaikan|repair|sembuhkan/.test(q)) {
-      if (!active.length) return "Belum ada kasus aktif yang cukup kuat untuk saya teruskan ke Medicine. Saya tidak akan membuat source code perbaikan tanpa bukti.";
-      const [target, info] = active[0];
-      return `Saya bisa meneruskan konteks ke Medicine. Kasus aktif pertama: ${target}. Bukti: ${info.message}. Medicine harus memverifikasi root cause dan source exact sebelum menyusun BEFORE → AFTER.`;
+    if (intent === 'ACTIVITY') {
+      const focus = topActiveFile(active, raw);
+      const answer = focus
+        ? `Saat ini saya berada di tahap ${state.step}, cycle #${cycleNo}. ${state.message} Fokus yang sedang saya awasi adalah ${focus}. Bukti aktif: ${organs[focus].message}`
+        : `Saat ini saya berada di tahap ${state.step}, cycle #${cycleNo}. ${state.message} Belum ada anomaly aktif yang bisa saya jadikan fokus.`;
+      rememberChat('bcgo', answer, { file: focus || undefined });
+      return answer;
     }
 
-    if (/sedang apa|sedang mengerjakan|lagi apa|ngapain|kerja apa/.test(q)) {
-      return `Saya sedang berada di tahap ${state.step}, cycle #${cycleNo}. ${state.message} ${situation()}`;
+    if (intent === 'STATUS') {
+      const answer = firestore.error
+        ? `Saya belum bisa menyebut sistem aman. Sensor Firestore sedang melaporkan: ${firestore.error}`
+        : `Status aktual: ${metrics.active} anomaly aktif, ${metrics.recovered} recovered, ${metrics.healthy} stabil dari ${metrics.total} organ. Firestore ${firestore.connected ? 'LIVE' : 'belum LIVE'} dengan ${metrics.firestoreCount} snapshot probe. ${active.length ? `Fokus pertama: ${active[0][0]}.` : 'Belum ada anomaly aktif.'}`;
+      rememberChat('bcgo', answer);
+      return answer;
     }
 
-    if (/status|kondisi|sehat|aman/.test(q)) {
-      if (firestore.error) return `Belum bisa saya sebut aman. Firestore sedang bermasalah: ${firestore.error}`;
-      return `Status sekarang: ${metrics.active} anomali aktif, ${metrics.recovered} recovered, ${metrics.healthy} stabil dari ${metrics.total} organ. Firestore ${firestore.connected ? "LIVE" : "belum terhubung penuh"} dan probe membaca ${metrics.firestoreCount} data.`;
+    if (intent === 'ANOMALY') {
+      if (!active.length) {
+        const answer = 'Saat ini saya tidak melihat anomaly aktif dari telemetry. Laporan lama tetap saya pertahankan sebagai RECOVERED bila memang punya riwayat bukti.';
+        rememberChat('bcgo', answer);
+        return answer;
+      }
+      const answer = `Ya, saya melihat ${active.length} anomaly aktif. ${formatActive(active)}. Saya belum menyebut semuanya sebagai root cause karena telemetry baru membuktikan gejala/error, bukan source penyebabnya.`;
+      rememberChat('bcgo', answer, { file: active[0][0] });
+      return answer;
     }
 
-    if (/error|masalah|anomali|gangguan|rusak/.test(q)) {
-      if (!active.length) return "Saya belum melihat anomali aktif dari telemetry. Laporan lama tetap saya simpan sebagai RECOVERED; saya menunggu bukti baru secara real-time.";
-      const detail = active.slice(0, 4).map(([f, v]) => `${f}: ${v.message}`).join(" | ");
-      return `Ya, ada ${active.length} anomali aktif. ${detail}`;
-    }
-
-    if (/telemetry terakhir|impuls terakhir|error terakhir|terakhir/.test(q)) {
-      if (!state.lastTelemetryFile) return "Belum ada telemetry terakhir yang bisa saya pastikan.";
+    if (intent === 'TELEMETRY') {
+      if (!state.lastTelemetryFile || !state.lastTelemetryAt) {
+        const answer = 'Belum ada telemetry terakhir yang bisa saya pastikan dari state saat ini.';
+        rememberChat('bcgo', answer);
+        return answer;
+      }
       const age = effectiveAge(timestamp(state.lastTelemetryAt));
-      return `Telemetry terakhir berasal dari ${state.lastTelemetryFile}, sekitar ${age < 1000 ? "baru saja" : `${Math.round(age / 1000)} detik lalu`}. Pesannya: ${state.lastTelemetryMessage || "-"}`;
+      const ageText = age < 1000 ? 'baru saja' : `${Math.round(age / 1000)} detik lalu`;
+      const answer = `Telemetry terakhir yang saya catat berasal dari ${state.lastTelemetryFile}, ${ageText}. Pesannya: ${state.lastTelemetryMessage || '-'}`;
+      rememberChat('bcgo', answer, { file: state.lastTelemetryFile });
+      return answer;
     }
 
-    if (/cycle|siklus|tahap|posisi/.test(q)) {
-      return `Saya berada di cycle #${cycleNo}, tahap ${state.step}, mode ${state.cycleMode}. Target saraf saat ini: ${state.targetCell}.`;
+    if (intent === 'CYCLE') {
+      const answer = `Saya sekarang berada di cycle #${cycleNo}, tahap ${state.step}, mode ${state.cycleMode}. Target saraf: ${state.targetCell}. ${state.message}`;
+      rememberChat('bcgo', answer);
+      return answer;
     }
 
-    if (/berapa.*file|berapa.*organ|organ.*apa|pantau apa|memantau apa/.test(q)) {
-      return `Saya mengenali ${metrics.total} organ: ${Object.keys(ORGAN_REGISTRY).join(", ")}. ${metrics.active} sedang aktif bermasalah, ${metrics.recovered} recovered, ${metrics.healthy} stabil.`;
+    if (intent === 'REGISTRY') {
+      const answer = `Saya mengenali ${metrics.total} organ dalam registry: ${Object.keys(ORGAN_REGISTRY).join(', ')}. Saat ini ${metrics.active} anomaly aktif, ${metrics.recovered} recovered, dan ${metrics.healthy} stabil.`;
+      rememberChat('bcgo', answer);
+      return answer;
     }
 
-    if (file) {
+    if (intent === 'MEDICINE') {
+      const focus = topActiveFile(active, raw);
+      if (!focus) {
+        const answer = 'Belum ada kasus aktif dengan bukti telemetry yang cukup untuk saya jadikan kandidat Medicine. Saya tidak akan membuat source perbaikan tanpa evidence.';
+        rememberChat('bcgo', answer);
+        return answer;
+      }
+      const info = organs[focus];
+      const answer = `Saya menangkap permintaan terkait Medicine. Kandidat saat ini ${focus}, dengan bukti: ${info.message}. Ini baru TELEMETRY_CONFIRMED; root cause dan source exact tetap harus diverifikasi sebelum solusi BEFORE → AFTER dibuat.`;
+      rememberChat('bcgo', answer, { file: focus, target: focus });
+      return answer;
+    }
+
+    if (intent === 'WHY') {
+      const focus = topActiveFile(active, raw);
+      const answer = focus
+        ? `Untuk ${focus}, telemetry yang saya miliki saat ini membuktikan ${organs[focus].message}. Itu belum cukup untuk menyatakan akar masalah. Saya perlu menelusuri dependency dan source exact sebelum menyebut root cause.`
+        : `Saya belum punya file/kasus yang jelas dari pertanyaan ini. State saya sekarang: tahap ${state.step}, target ${state.targetCell}. Saya tidak akan menebak akar masalah.`;
+      rememberChat('bcgo', answer, { file: focus || undefined });
+      return answer;
+    }
+
+    if (intent === 'DETAIL') {
+      const focus = topActiveFile(active, raw);
+      const answer = focus
+        ? `Bukti untuk ${focus}: ${organs[focus].message}. Status ${organs[focus].state}, reported ${formatTimeValue(organs[focus].reportedAt)}${organs[focus].line ? `, line ${organs[focus].line}` : ''}${organs[focus].column ? `, column ${organs[focus].column}` : ''}. Saya sengaja memisahkan bukti telemetry dari kesimpulan root cause.`
+        : `Bukti saraf saat ini: ${metrics.active} anomaly aktif, ${metrics.recovered} recovered, Firestore ${firestore.connected ? 'LIVE' : 'belum LIVE'}, target ${state.targetCell}. Sebutkan file atau kasus bila ingin detail spesifik.`;
+      rememberChat('bcgo', answer, { file: focus || undefined });
+      return answer;
+    }
+
+    if (intent === 'FILE' && file) {
       const info = organs[file];
-      if (!info) return `Saya mengenali ${file}, tetapi belum menerima state-nya.`;
-      if (info.state === "ACTIVE") return `${file} sedang ANOMALY. Bukti telemetry: ${info.message}`;
-      if (info.state === "RECOVERED") return `${file} berstatus RECOVERED. Ada bukti historis, tetapi tidak ada error aktif dalam window pemantauan.`;
-      return `${file} saat ini HEALTHY menurut telemetry yang saya terima. Ini berarti belum ada laporan error aktif, bukan bukti bahwa source code pasti sempurna.`;
+      const answer = info?.state === 'ACTIVE'
+        ? `${file} sedang ANOMALY. Bukti telemetry: ${info.message}. Saya belum menyebut source penyebabnya tanpa verifikasi.`
+        : info?.state === 'RECOVERED'
+          ? `${file} berstatus RECOVERED. Ada bukti historis, tetapi tidak ada error aktif dalam window pemantauan.`
+          : `${file} saat ini HEALTHY menurut telemetry yang saya terima. Artinya belum ada laporan error aktif; bukan jaminan source code sempurna.`;
+      rememberChat('bcgo', answer, { file });
+      return answer;
     }
 
-    if (/kenapa|mengapa/.test(q)) {
-      return `Saya berada di ${state.step} karena mesin sedang menjalankan: ${state.message} Target: ${state.targetCell}. Jika yang Anda tanyakan adalah penyebab error tertentu, sebutkan file atau error-nya agar saya tidak menebak.`;
+    // Pertanyaan lanjutan yang menyebut "itu/yang tadi" tetapi tanpa nama file.
+    const contextualFile = resolveContextFile(raw, file);
+    if (contextualFile && organs[contextualFile]) {
+      const info = organs[contextualFile];
+      const answer = `Saya mengaitkan “itu” dengan ${contextualFile} dari konteks percakapan terakhir. Statusnya ${info.state}. Bukti yang saya pegang: ${info.message}`;
+      rememberChat('bcgo', answer, { file: contextualFile });
+      return answer;
     }
 
-    if (/jelaskan|detail|rincian/.test(q)) {
-      return `Saya bisa menjelaskan berdasarkan bukti. Saat ini: ${metrics.active} anomali aktif, ${metrics.recovered} recovered, Firestore ${firestore.connected ? "LIVE" : "belum LIVE"}, target ${state.targetCell}. Untuk detail akar masalah, saya perlu kasus/file yang spesifik.`;
-    }
+    const answer = `Saya menangkap pertanyaanmu: “${raw}”. Saya belum punya bukti yang cukup untuk menjawab lebih spesifik. Saya akan tetap menggunakan state, telemetry, dan konteks percakapan yang nyata; saya tidak akan mengarang jawaban.`;
+    rememberChat('bcgo', answer);
+    return answer;
+  }
 
-    return `Saya menangkap pertanyaanmu: “${raw}”. Saya belum punya bukti telemetry yang cukup untuk menjawab secara spesifik. Saya tidak akan mengarang. Kamu bisa bertanya tentang status, error, file tertentu, telemetry terakhir, cycle, atau meminta saya meneruskan kasus ke Medicine.`;
+  function formatTimeValue(value) {
+    const t = timestamp(value);
+    return t ? new Date(t).toLocaleString('id-ID') : '-';
   }
 
   function interruptForTelemetry(fileName, message, log) {
@@ -579,6 +707,13 @@ export function runAutonomousEngine(onCycleUpdate) {
     },
     getSituation: situation,
     getRegistry: () => ({ ...ORGAN_REGISTRY }),
+    getConversation: () => safeClone(chatMemory.history),
+    getChatContext: () => safeClone({
+      lastIntent: chatMemory.lastIntent,
+      lastFile: chatMemory.lastFile,
+      lastTarget: chatMemory.lastTarget,
+      lastQuestion: chatMemory.lastQuestion
+    }),
     stop() {
       stopped = true;
       clearTimeout(cycleTimer);
