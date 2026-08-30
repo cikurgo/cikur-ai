@@ -25,6 +25,8 @@ import { runAutonomousEngine } from "./bcgo.js?v=3.0";
  * executor/backend can apply the repair and return the result to Medicine.
  */
 
+// CONTRACT: this registry is an exact mirror of ORGAN_REGISTRY in bcgo.js.
+// Do not add/remove/rename an entry here independently.
 const REGISTRY = {
   "index.html": { type: "Halaman Utama", role: "customer" },
   "assistant.html": { type: "Zona Customer", role: "customer" },
@@ -38,10 +40,14 @@ const REGISTRY = {
   "bcgo-engine.js": { type: "Sistem Core", role: "system" },
   "bcgo-admin.html": { type: "Sistem Admin", role: "admin" },
   "bcgo.html": { type: "Sistem Monitor", role: "monitor" },
-  "bcgo.js": { type: "Sistem Monitor Core", role: "monitor" },
-  "bcgo-medicine.html": { type: "Sistem Medicine UI", role: "medicine" },
-  "bcgo-medicine.js": { type: "Sistem Medicine Core", role: "medicine" }
+  "data-cgo.html": { type: "Data Sistem", role: "data" },
+  "bcgo-medicine.js": { type: "Otak Medicine", role: "medicine" },
+  "bcgo-medicine.html": { type: "UI Medicine", role: "medicine" }
 };
+
+// bcgo.js is the producer engine itself, not an organ in BCGO's 15-organ registry.
+// Medicine may inspect its source as a dependency, but it must not count it as an organ.
+const SOURCE_SURFACE = ["bcgo.js"];
 
 const REQUIRED = {
   driver: ["name", "phone", "address", "vehicleType", "photo", "ktp", "sim", "bank", "accountName", "accountNo"],
@@ -102,6 +108,20 @@ const S = {
   eventSeq: 0,
   autonomous: { enabled: true, turn: 0, timer: null, lastAt: 0 },
   bcgoState: null,
+  registryParity: { ok: false, status: "WAITING", bcgoCount: 0, medicineCount: Object.keys(REGISTRY).length, missing: [], extra: [], mismatched: [] },
+  bcgoContract: {
+    step: "IN",
+    message: "",
+    targetCell: "",
+    cycle: 0,
+    cycleMode: "BOOT",
+    metrics: {},
+    systemOrgans: {},
+    systemLogs: [],
+    activeCases: [],
+    medicineQueue: [],
+    connection: {}
+  },
   bcgoEngine: null,
   bcgoSynced: false
 };
@@ -182,11 +202,26 @@ async function postSystemMessage(role, msg, meta = {}) {
 
 function syncFromBCGOState(state) {
   if (!state || typeof state !== "object") return;
+  // BCGO_STATE is authoritative. Keep an explicit 1:1 contract snapshot
+  // instead of rebuilding BCGO metrics/organs/cases inside Medicine.
   S.bcgoState = state;
+  S.bcgoContract = {
+    step: state.step,
+    message: state.message,
+    targetCell: state.targetCell,
+    cycle: state.cycle,
+    cycleMode: state.cycleMode,
+    metrics: state.metrics || {},
+    systemOrgans: state.systemOrgans || {},
+    systemLogs: Array.isArray(state.systemLogs) ? state.systemLogs.slice() : [],
+    activeCases: Array.isArray(state.activeCases) ? state.activeCases.slice() : [],
+    medicineQueue: Array.isArray(state.medicineQueue) ? state.medicineQueue.slice() : [],
+    connection: state.connection || {}
+  };
   S.bcgoSynced = true;
-  S.logs = Array.isArray(state.systemLogs) ? state.systemLogs.slice() : [];
+  S.logs = S.bcgoContract.systemLogs.slice();
 
-  const queue = Array.isArray(state.medicineQueue) ? state.medicineQueue : [];
+  const queue = S.bcgoContract.medicineQueue;
   const queueIds = new Set(queue.map(x => x.id));
 
   for (const handoff of queue) {
@@ -268,12 +303,43 @@ function syncFromBCGOState(state) {
   });
 }
 
+function verifyRegistryParity() {
+  const producer = window.BCGOBrain?.getRegistry?.();
+  if (!producer || typeof producer !== "object") {
+    S.registryParity = {
+      ok: false, status: "WAITING_FOR_BCGO_REGISTRY",
+      bcgoCount: 0, medicineCount: Object.keys(REGISTRY).length,
+      missing: [], extra: [], mismatched: []
+    };
+    emit("registry_parity", S.registryParity);
+    return S.registryParity;
+  }
+
+  const pNames = Object.keys(producer);
+  const mNames = Object.keys(REGISTRY);
+  const missing = pNames.filter(name => !REGISTRY[name]);
+  const extra = mNames.filter(name => !producer[name]);
+  const mismatched = mNames.filter(name => {
+    if (!producer[name]) return false;
+    return producer[name].type !== REGISTRY[name].type || producer[name].role !== REGISTRY[name].role;
+  });
+
+  S.registryParity = {
+    ok: missing.length === 0 && extra.length === 0 && mismatched.length === 0 && pNames.length === mNames.length,
+    status: missing.length || extra.length || mismatched.length ? "MISMATCH" : "EXACT_1_TO_1",
+    bcgoCount: pNames.length, medicineCount: mNames.length, missing, extra, mismatched
+  };
+  emit("registry_parity", S.registryParity);
+  return S.registryParity;
+}
+
 function startTelemetry() {
   if (S.bcgoEngine) return;
   try {
     // Use the exact BCGO engine as the state producer. Medicine does not reimplement
     // buildOrgans(), makeCases(), timestamp rules, or the ACTIVE window.
     S.bcgoEngine = runAutonomousEngine(state => syncFromBCGOState(state));
+    verifyRegistryParity();
     S.listeners.push(() => {
       try { S.bcgoEngine?.stop?.(); } catch {}
       S.bcgoEngine = null;
@@ -541,7 +607,7 @@ function exactDomEvidence(fileName, source, signature, context = {}) {
 }
 
 async function buildSourceEvidence(targetFile, signature) {
-  const names = Object.keys(REGISTRY);
+  const names = [...new Set([...Object.keys(REGISTRY), ...SOURCE_SURFACE])];
   const evidence = [];
   const runtimeLocations = extractRuntimeLocation(signature);
   const results = {};
@@ -1456,6 +1522,7 @@ const API = {
   getCodePrescription: caseId => { const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase; return c?.repairPlan?.codePrescription || buildCodePrescription(c?.repairPlan); },
   buildCodePrescription,
   getRegistry: () => ({ ...REGISTRY }),
+  getRegistryParity: () => ({ ...S.registryParity, missing: [...S.registryParity.missing], extra: [...S.registryParity.extra], mismatched: [...S.registryParity.mismatched] }),
   getState: () => ({ ...S, sourceCache: undefined })
 };
 Object.defineProperties(API, {
