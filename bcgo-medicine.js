@@ -5,7 +5,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/fi
 import { db, auth } from "./cikur-config.js";
 
 /*
- * BCGO MEDICINE v3.3.1 — PRECISION REPAIR / VERIFIED HEALING ENGINE
+ * BCGO MEDICINE v4.0.0 — LIVE CROSS-FILE MEDICAL ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -93,7 +93,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "3.3.1",
+  version: "4.0.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -115,7 +115,8 @@ const S = {
   conversationUnsub: null,
   telemetryUnsub: null,
   telemetryLive: false,
-  authEpoch: 0
+  authEpoch: 0,
+  liveSurface: { results: {}, relations: [], updatedAt: null, scanning: false, cycle: 0, timer: null }
 };
 
 const emit = (event, p = {}) => window.dispatchEvent(new CustomEvent("bcgo:medicine", {
@@ -325,7 +326,6 @@ async function fetchFile(name) {
     return value;
   } catch (e) {
     const value = { ok: false, status: 0, text: "", error: e.message, fetchedAt: now() };
-    S.sourceCache.set(name, { at: Date.now(), value });
     return value;
   }
 }
@@ -814,6 +814,86 @@ function buildAdminGapOperations(targetFile, missingFields, adminSource) {
   });
   return operations;
 }
+
+
+const CROSS_FILE_RULES = [
+  { id:"registration-engine", label:"Registrasi → Engine", pairs:[["index.html","bcgo-engine.js"],["agentcgo.html","bcgo-engine.js"],["driver.html","bcgo-engine.js"],["resto.html","bcgo-engine.js"]], fields:"REGISTRATION" },
+  { id:"registration-admin", label:"Registrasi → Admin", pairs:[["index.html","bcgo-admin.html"],["agentcgo.html","bcgo-admin.html"],["driver.html","bcgo-admin.html"],["resto.html","bcgo-admin.html"]], fields:"PRESENTATION" },
+  { id:"runtime-config", label:"Core → Config", pairs:[["bcgo.js","cikur-config.js"],["bcgo-engine.js","cikur-config.js"]], fields:"RUNTIME" },
+  { id:"monitor-core", label:"Monitor → Core", pairs:[["bcgo.html","bcgo.js"]], fields:"RUNTIME" },
+  { id:"data-contract", label:"Data → Admin", pairs:[["data-cgo.html","bcgo-admin.html"]], fields:"DATA" }
+];
+
+function isMedicineSelfFile(name){ return !!MEDICINE_INTERNAL[name]; }
+function sourceFieldSet(result, file){ return canonicalFieldSet(result?.[file]?.fields || []); }
+function fieldOccurrences(source, field){
+  const out=[]; const re = new RegExp(`(?:\\b${escRegExp(field)}\\b|["']${escRegExp(field)}["'])`, 'gi'); let m;
+  while((m=re.exec(String(source||""))) && out.length<4) out.push({line:lineOf(source,m.index), text:sourceLines(source)[lineOf(source,m.index)-1]||""});
+  return out;
+}
+function buildCrossFileRelations(result){
+  const relations=[];
+  for(const rule of CROSS_FILE_RULES){
+    for(const [a,b] of rule.pairs){
+      const A=result[a], B=result[b];
+      if(!A?.ok || !B?.ok){
+        relations.push({id:`${rule.id}:${a}:${b}`,rule:rule.label,sourceFile:a,targetFile:b,status:"UNREADABLE",severity:"UNKNOWN",shared:[],missingFromTarget:[],detail:`Tidak dapat membandingkan penuh karena ${!A?.ok?a:b} belum terbaca live.`,sourceLines:[],targetLines:[]});
+        continue;
+      }
+      const af=sourceFieldSet(result,a), bf=sourceFieldSet(result,b);
+      let shared=[], missing=[], detail="Kontrak terbaca dan dapat dibandingkan.";
+      if(rule.fields==="REGISTRATION" || rule.fields==="PRESENTATION" || rule.fields==="DATA"){
+        const candidates=[...af].filter(f=>CONTRACT_FIELDS.has(f));
+        shared=candidates.filter(f=>bf.has(f));
+        missing=candidates.filter(f=>!bf.has(f));
+        if(missing.length) detail=`${b} belum menunjukkan ${missing.slice(0,8).join(", ")}${missing.length>8?" …":""} yang dipakai/diterbitkan oleh ${a}.`;
+      } else if(rule.fields==="RUNTIME"){
+        const aRefs=[...new Set((String(A.text||"").match(/(?:collection|doc)\\([^)]*\\)|\\b(db|auth|onSnapshot|firebaseApp)\\b/g)||[]))];
+        shared=aRefs.filter(x=>String(B.text||"").includes(x.replace(/.*?([A-Za-z_$][\\w$]*)[^A-Za-z_$]*$/,'$1'))).slice(0,8);
+        const refs=["db","auth","onSnapshot","initializeApp"].filter(x=>String(A.text||"").includes(x));
+        missing=refs.filter(x=>!String(B.text||"").includes(x));
+        if(missing.length) detail=`Kontrak runtime ${a} menggunakan ${missing.join(", ")} tetapi referensinya tidak terlihat pada ${b}.`;
+      }
+      const severity=missing.length?"HIGH":"HEALTHY";
+      relations.push({id:`${rule.id}:${a}:${b}`,rule:rule.label,sourceFile:a,targetFile:b,status:missing.length?"MISMATCH":"SYNCED",severity,shared,missingFromTarget:missing,detail,sourceLines:missing.slice(0,4).flatMap(f=>fieldOccurrences(A.text,f).map(x=>({...x,field:f}))),targetLines:missing.slice(0,4).flatMap(f=>fieldOccurrences(B.text,f).map(x=>({...x,field:f}))) });
+    }
+  }
+  return relations;
+}
+
+function buildFileIssue(result,name,relations){
+  const r=result[name];
+  if(!r?.ok) return {status:"UNREADABLE",severity:"UNKNOWN",title:"File tidak dapat dibaca live",detail:r?.error||`HTTP ${r?.status||0}`,relations:[]};
+  const rel=relations.filter(x=>x.sourceFile===name||x.targetFile===name);
+  const bad=rel.filter(x=>x.status==="MISMATCH");
+  if(bad.length) return {status:"MISMATCH",severity:"HIGH",title:`${bad.length} kontrak lintas-file perlu disinkronkan`,detail:bad.slice(0,2).map(x=>x.detail).join(" "),relations:bad.map(x=>x.id)};
+  return {status:"HEALTHY",severity:"OK",title:"Terbaca dan sinkron pada pemeriksaan saat ini",detail:"Tidak ada mismatch kontrak yang terbukti pada siklus ini.",relations:rel.map(x=>x.id)};
+}
+
+async function scanLiveSurface(){
+  if(S.liveSurface.scanning) return S.liveSurface;
+  S.liveSurface.scanning=true; S.liveSurface.cycle++;
+  const names=[...new Set([...Object.keys(REGISTRY), ...SOURCE_SURFACE, ...Object.keys(MEDICINE_INTERNAL)])];
+  emit("live_surface_started",{cycle:S.liveSurface.cycle,total:names.length,files:names});
+  const result={};
+  for(const name of names){
+    const x=await fetchFile(name); result[name]={...x,fields:fields(name,x.text)};
+    emit("live_file",{cycle:S.liveSurface.cycle,file:name,result:result[name]});
+  }
+  const relations=buildCrossFileRelations(result);
+  const fileStates=Object.fromEntries(names.map(name=>[name,buildFileIssue(result,name,relations)]));
+  const mismatches=relations.filter(x=>x.status==="MISMATCH").map(x=>({rule:x.rule,sourceFile:x.sourceFile,targetFile:x.targetFile,missing:x.missingFromTarget||[],sourceLines:x.sourceLines||[],targetLines:x.targetLines||[]}));
+  S.liveSurface.results=result; S.liveSurface.relations=relations; S.liveSurface.updatedAt=now(); S.liveSurface.scanning=false;
+  emit("live_surface_complete",{cycle:S.liveSurface.cycle,total:names.length,results:result,relations,fileStates,mismatches,updatedAt:S.liveSurface.updatedAt});
+  return S.liveSurface;
+}
+
+function startLiveSurface(){
+  if(S.liveSurface.timer) return;
+  scanLiveSurface().catch(e=>emit("live_surface_error",{message:e.message}));
+  S.liveSurface.timer=setInterval(()=>scanLiveSurface().catch(e=>emit("live_surface_error",{message:e.message})),15000);
+}
+function stopLiveSurface(){ if(S.liveSurface.timer){clearInterval(S.liveSurface.timer);S.liveSurface.timer=null;} }
 
 async function scanConsistency(targets = null) {
   const names = targets?.length ? targets.filter(n => DIAGNOSTIC_SCOPE[n]) : Object.keys(DIAGNOSTIC_SCOPE);
@@ -1551,6 +1631,7 @@ function cleanupRealtime() {
   S.conversationUnsub = null;
   S.sourceCache.clear();
   stopAutonomousConversation();
+  stopLiveSurface();
 }
 
 async function startConversation() {
@@ -1604,6 +1685,7 @@ onAuthStateChanged(auth, async user => {
   if (epoch !== S.authEpoch || auth.currentUser?.uid !== user.uid) return;
   startTelemetry();
   startConversation();
+  startLiveSurface();
   startAutonomousConversation();
 });
 
@@ -1623,6 +1705,10 @@ const API = {
   buildCodePrescription,
   getRegistry: () => ({ ...REGISTRY }),
   getDiagnosticScope: () => ({ ...DIAGNOSTIC_SCOPE }),
+  scanLiveSurface,
+  startLiveSurface,
+  stopLiveSurface,
+  getLiveSurface: () => ({ ...S.liveSurface, timer: undefined, results: { ...S.liveSurface.results }, relations: [...S.liveSurface.relations] }),
   getRegistryParity: () => ({ ...S.registryParity, missing: [...S.registryParity.missing], extra: [...S.registryParity.extra], mismatched: [...S.registryParity.mismatched] }),
   getState: () => ({ ...S, sourceCache: undefined })
 };
