@@ -6,7 +6,7 @@ import { db, auth } from "./cikur-config.js";
 import { runAutonomousEngine } from "./bcgo.js?v=3.0";
 
 /*
- * BCGO MEDICINE v3.9 — PRECISION REPAIR / VERIFIED HEALING ENGINE
+ * BCGO MEDICINE v3.4 — PRECISION REPAIR / VERIFIED HEALING ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -91,7 +91,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "3.9.0",
+  version: "3.3.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -403,12 +403,6 @@ function sourceLines(source) {
   return String(source || "").split(/\r?\n/);
 }
 
-function stripCodeComments(source) {
-  return String(source || "")
-    .replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, " "))
-    .replace(/(^|[^:])\/\/[^\n]*/g, (m, prefix) => prefix + " ".repeat(Math.max(0, m.length - prefix.length)));
-}
-
 function lineOf(source, offset) {
   return String(source || "").slice(0, Math.max(0, offset)).split(/\r?\n/).length;
 }
@@ -472,7 +466,6 @@ function dependencyClosure(root, graph, maxDepth = 5) {
 
 function findAssignmentOperations(fileName, source, signature = "") {
   if (!source) return [];
-  const scanSource = stripCodeComments(source);
   const ops = [];
   const wantsText = /textcontent|innerhtml|value|classlist|style/i.test(signature) || /cannot set properties of null|cannot read properties of null/i.test(signature);
   if (!wantsText) return ops;
@@ -484,7 +477,7 @@ function findAssignmentOperations(fileName, source, signature = "") {
   ];
   for (const re of direct) {
     let m;
-    while ((m = re.exec(scanSource)) && ops.length < 30) {
+    while ((m = re.exec(source)) && ops.length < 30) {
       const property = /innerHTML/.test(m[0]) ? "innerHTML" : /\.value\s*=/.test(m[0]) ? "value" : "textContent";
       const before = m[0];
       const accessor = before.match(/(?:document\.getElementById|document\.querySelector|\$)\([^)]*\)/)?.[0];
@@ -498,7 +491,7 @@ function findAssignmentOperations(fileName, source, signature = "") {
   // Pre-bound element pattern: const el = document.getElementById('x'); ... el.textContent = ...
   const bindRe = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(document\.getElementById|document\.querySelector|\$)\(\s*(["'])([^"']+)\3\s*\)\s*;?([\s\S]{0,900}?)(?:\1\s*\.textContent\s*=\s*([^;\n]+);?)/g;
   let b;
-  while ((b = bindRe.exec(scanSource)) && ops.length < 40) {
+  while ((b = bindRe.exec(source)) && ops.length < 40) {
     const whole = b[0];
     const varName = b[1];
     const rhs = b[6];
@@ -514,7 +507,6 @@ function findAssignmentOperations(fileName, source, signature = "") {
 
 function domAssignmentCandidates(fileName, source) {
   if (!source) return [];
-  const scanSource = stripCodeComments(source);
   const out = [];
   const patterns = [
     /(?:document\.getElementById\(\s*["']([^"']+)["']\s*\)|\$\(\s*["']([^"']+)["']\s*\))\s*\.textContent\s*=\s*([^;\n]+);?/g,
@@ -522,7 +514,7 @@ function domAssignmentCandidates(fileName, source) {
   ];
   for (const re of patterns) {
     let m;
-    while ((m = re.exec(scanSource)) && out.length < 40) {
+    while ((m = re.exec(source)) && out.length < 40) {
       const before = m[0];
       out.push({
         file: fileName,
@@ -587,7 +579,6 @@ function exactDomEvidence(fileName, source, signature, context = {}) {
   for (const c of accesses) {
     const selector = c.selector;
     if (!selector) continue;
-    const selfInspectionFile = /^(bcgo-medicine\.(?:js|html))$/i.test(normalizeFile(fileName));
     const sameDoc = /\.html$/i.test(fileName) ? htmlHasElement(source, selector) : null;
     const runtimeHit = runtimeLocations.some(x => x.file && safeLower(x.file) === safeLower(fileName) && (!x.line || Number(x.line) === Number(c.line)));
     const signatureHit = safeLower(signature).includes(safeLower(selector));
@@ -600,9 +591,6 @@ function exactDomEvidence(fileName, source, signature, context = {}) {
     // (or an explicit selector in the runtime signature) must correlate with the
     // exact source operation before evidence can become HIGH.
     const runtimeCorrelated = runtimeHit || signatureHit;
-    const explicitRuntimeSource = runtimeLocations.some(x =>
-      x?.file && safeLower(normalizeFile(x.file)) === safeLower(normalizeFile(fileName)) && Number.isFinite(Number(x.line))
-    );
     const missingOnLoadedPage = loadedBy.some(page => htmlHasElement(htmlResults[page]?.text || "", selector) === false);
     if (sameDoc === false && runtimeCorrelated) {
       strength = "HIGH";
@@ -624,7 +612,7 @@ function exactDomEvidence(fileName, source, signature, context = {}) {
       reason = `Lokasi source ${fileName}:${c.line} berkorelasi dengan evidence runtime, tetapi bukti DOM belum lengkap.`;
     }
 
-    out.push({ ...c, existsInSameDocument: sameDoc, missingOnLoadedPage, stackHit: runtimeHit, signatureHit, explicitRuntimeSource, selfInspectionFile, evidenceStrength: strength, evidenceReason: reason, loadedBy });
+    out.push({ ...c, existsInSameDocument: sameDoc, missingOnLoadedPage, stackHit: runtimeHit, signatureHit, evidenceStrength: strength, evidenceReason: reason, loadedBy });
   }
   return out;
 }
@@ -693,10 +681,7 @@ function exactProofForPlan(plan) {
     // and prove that the referenced DOM is absent. This prevents a generic missing
     // selector on another page from becoming a false root cause.
     if (p.diagnosis?.code === "DOM_NULL_REFERENCE") {
-      // Structural candidates may move the investigation target, but they can never
-      // open the treatment gate by themselves. A patch still needs runtime/signature
-      // correlation at the exact operation.
-      const domProof = matches.find(e => e.evidenceStrength === "HIGH" && (e.stackHit === true || e.signatureHit === true) && (e.existsInSameDocument === false || e.missingOnLoadedPage === true));
+      const domProof = matches.find(e => e.evidenceStrength === "HIGH" && e.stackHit === true && (e.existsInSameDocument === false || e.missingOnLoadedPage === true));
       if (!domProof) return { ok: false, reason: "DOM_CAUSALITY_NOT_PROVEN" };
     }
   }
@@ -737,30 +722,28 @@ async function resolveRootCause(c) {
     // A DOM-null root cause is proven only when the runtime points to the exact
     // assignment (file + line) and the consuming HTML page demonstrably lacks the
     // referenced target. Missing DOM elsewhere is not causal proof.
-    const causalHigh = high.filter(x => x.stackHit === true && x.evidenceStrength === "HIGH" && (x.loadedBy?.length || x.explicitRuntimeSource === true) && (!x.selfInspectionFile || x.explicitRuntimeSource === true));
-    // When telemetry contains an exact file/line, use it first. When telemetry only
-    // contains the generic TypeError text, do NOT fall back to the reported HTML
-    // target. Instead use the strongest structural dependency evidence: a JS file
-    // loaded by the reported page whose exact DOM selector is absent on that page.
-    // This is a root-cause CANDIDATE, not automatic permission to patch.
-    const structural = candidates.filter(x =>
-      x.file !== originalTarget && /\.js$/i.test(x.file || "") &&
-      x.loadedBy?.some(p => safeLower(p) === safeLower(originalTarget)) &&
-      x.missingOnLoadedPage === true &&
-      !x.selfInspectionFile
-    );
+    const causalHigh = high.filter(x => x.stackHit === true && x.loadedBy?.length && x.evidenceStrength === "HIGH");
+    // Exact runtime file/line is the strongest root-cause signal. Never prefer the
+    // requested HTML target merely because it was the page named by telemetry.
     const exactRuntime = runtimeLocations.find(loc => loc.file && loc.line);
-    const runtimeFile = exactRuntime ? (normalizeLocalRef(exactRuntime.file) || exactRuntime.file) : null;
-    const best = (exactRuntime && causalHigh.find(x =>
-        x.file !== originalTarget && safeLower(x.file) === safeLower(runtimeFile)
-        && Number(x.line) === Number(exactRuntime.line)
+    const exactRuntimeNonTarget = runtimeLocations.find(loc =>
+      loc.file && loc.line &&
+      safeLower(normalizeLocalRef(loc.file) || loc.file) !== safeLower(originalTarget)
+    );
+    // Root cause selection is deliberately asymmetric: the telemetry target is
+    // the symptom surface, not the root by default. A different file must win
+    // when its exact runtime/source evidence is causal. The target itself may
+    // only be selected when the exact runtime location points to that target
+    // and an exact operation can actually be proven there.
+    const best = (exactRuntimeNonTarget && causalHigh.find(x =>
+        safeLower(x.file) === safeLower(normalizeLocalRef(exactRuntimeNonTarget.file) || exactRuntimeNonTarget.file)
+        && Number(x.line) === Number(exactRuntimeNonTarget.line)
       ))
-      || causalHigh.find(x => x.file !== originalTarget && x.loadedBy?.some(p => safeLower(p) === safeLower(originalTarget)))
-      || structural[0]
+      || causalHigh.find(x => x.loadedBy?.some(p => safeLower(p) === safeLower(originalTarget)) && x.file !== originalTarget)
       || (exactRuntime && causalHigh.find(x =>
-        safeLower(x.file) === safeLower(runtimeFile) && Number(x.line) === Number(exactRuntime.line)
-      ))
-      || causalHigh.find(x => x.file !== originalTarget);
+        safeLower(x.file) === safeLower(normalizeLocalRef(exactRuntime.file) || exactRuntime.file)
+        && Number(x.line) === Number(exactRuntime.line)
+      ));
     if (best) {
       const src = await fetchFile(best.file);
       const ops = findLikelyDomBinding(best.file, src.text, c.signature)
@@ -770,7 +753,7 @@ async function resolveRootCause(c) {
         return {
           rootCauseFile: best.file,
           rootCauseStatus: best.file === originalTarget ? "CONFIRMED_ORIGINAL_TARGET" : "TARGET_CORRECTED_BY_MEDICINE",
-          sourceEvidence: candidates.slice(0, 18).map(e => ({ file:e.file, selector:e.selector, property:e.property, line:e.line, before:e.before, evidenceStrength:e === best && e.evidenceStrength === "LOW" ? "STRUCTURAL" : e.evidenceStrength, reason:e.evidenceReason, loadedBy:e.loadedBy || [], dependencyReason:e.dependencyReason, stackHit:e.stackHit === true, existsInSameDocument:e.existsInSameDocument, missingOnLoadedPage:e.missingOnLoadedPage === true })),
+          sourceEvidence: candidates.slice(0, 18).map(e => ({ file:e.file, selector:e.selector, property:e.property, line:e.line, before:e.before, evidenceStrength:e.evidenceStrength, reason:e.evidenceReason, loadedBy:e.loadedBy || [], dependencyReason:e.dependencyReason, stackHit:e.stackHit === true, existsInSameDocument:e.existsInSameDocument })),
           resolvedOperation: exactOperation,
           candidates: candidates.slice(0, 18)
         };
@@ -795,7 +778,7 @@ async function resolveRootCause(c) {
   }
 
   // For non-DOM cases, a strong runtime-correlated source may still identify the root.
-  const correlated = candidates.find(x => x.evidenceStrength === "HIGH" && (x.stackHit || x.signatureHit) && (!x.selfInspectionFile || x.explicitRuntimeSource === true));
+  const correlated = candidates.find(x => x.evidenceStrength === "HIGH" && (x.stackHit || x.signatureHit));
   if (correlated) {
     const src = await fetchFile(correlated.file);
     const ops = findLikelyDomBinding(correlated.file, src.text, c.signature).filter(op => Number(op.line) === Number(correlated.line));
