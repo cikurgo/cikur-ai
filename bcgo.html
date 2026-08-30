@@ -108,13 +108,13 @@ body{font-family:'Inter',sans-serif}
 
     <div class="grid grid-cols-2 md:grid-cols-5 gap-2 pt-2">
         <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">
-            <div class="text-[9px] text-slate-500">TOTAL ORGAN</div><div id="metric-total" class="font-bold text-white">12</div>
+            <div class="text-[9px] text-slate-500">TOTAL ORGAN</div><div id="metric-total" class="font-bold text-white">13</div>
         </div>
         <div class="rounded-lg border border-rose-900 bg-rose-950/20 px-3 py-2">
             <div class="text-[9px] text-slate-500">ANOMALY AKTIF</div><div id="metric-active" class="font-bold text-rose-400">0</div>
         </div>
         <div class="rounded-lg border border-emerald-900 bg-emerald-950/20 px-3 py-2">
-            <div class="text-[9px] text-slate-500">STABIL</div><div id="metric-healthy" class="font-bold text-emerald-400">12</div>
+            <div class="text-[9px] text-slate-500">STABIL</div><div id="metric-healthy" class="font-bold text-emerald-400">13</div>
         </div>
         <div class="rounded-lg border border-amber-900 bg-amber-950/20 px-3 py-2">
             <div class="text-[9px] text-slate-500">RECOVERED</div><div id="metric-recovered" class="font-bold text-amber-400">0</div>
@@ -354,7 +354,6 @@ function renderLogs(logs) {
 }
 
 function addChat(role, text) {
-    if (!chatFeed) return;
     const row = document.createElement('div');
     row.className = role === 'user'
         ? 'flex justify-end'
@@ -476,8 +475,7 @@ document.querySelectorAll('.quick-q').forEach(button => {
 
 function renderNeuralEvents(events) {
     const list = Array.isArray(events) ? events.slice(0, 8) : [];
-    setText(eventCounterEl, `${Array.isArray(events) ? events.length : 0} event`);
-    if (!neuralEventsEl) return;
+    eventCounterEl.textContent = `${Array.isArray(events) ? events.length : 0} event`;
     if (!list.length) {
         neuralEventsEl.innerHTML = '<div class="text-xs text-slate-500">Belum ada event.</div>';
         return;
@@ -494,7 +492,7 @@ function renderNeuralEvents(events) {
 }
 
 function renderConnection(state) {
-    const conn = state?.connection || {};
+    const conn = state.connection || {};
     const status = conn.status || 'CONNECTING';
     const map = {
         LIVE: ['bg-emerald-500','text-emerald-400','LIVE — SERVER'],
@@ -503,53 +501,43 @@ function renderConnection(state) {
         CONNECTING: ['bg-slate-500','text-slate-400','CONNECTING']
     };
     const [dot, text, label] = map[status] || map.CONNECTING;
-    if (connectionStateEl) {
-        connectionStateEl.className = `font-semibold ${text}`;
-        connectionStateEl.innerHTML = `<span class="connection-dot ${dot}"></span>${label}`;
-    }
-    setText(connectionAgeEl, getStateAgeText(state));
-    setText(telemetrySourceEl, state?.lastTelemetryFile || 'system_logs aktif');
-    setText(stateIntegrityEl, state?.cycle === liveState?.cycle ? 'SYNC' : 'UPDATING');
+    connectionStateEl.className = `font-semibold ${text}`;
+    connectionStateEl.innerHTML = `<span class="connection-dot ${dot}"></span>${label}`;
+    connectionAgeEl.textContent = getStateAgeText(state);
+    telemetrySourceEl.textContent = state.lastTelemetryFile || 'system_logs aktif';
+    stateIntegrityEl.textContent = state.cycle === liveState?.cycle ? 'SYNC' : 'UPDATING';
 }
-
-function setText(el, value) {
-    if (el) el.textContent = String(value ?? '');
-}
-
 
 runAutonomousEngine(state => {
-    try {
-        liveState = state;
-        window.BCGO_STATE = state;
-        renderConnection(state);
-        renderNeuralEvents(state?.recentEvents);
-        setText(liveSpeech, `> [${state?.step}] ${state?.message || ''}`);
-        setText(targetCellId, state?.targetCell || '-');
-        setText(errorLogDesc, state?.errorLog || 'Normal (tidak ada anomali aktif)');
-        setText(cycleNumber, state?.cycle ?? 0);
-        setText(cycleMode, state?.cycleMode || 'NORMAL');
-        setText(eventState, state?.lastEventAt
-            ? `Impuls terakhir: ${formatTime(state.lastEventAt)}`
-            : 'Belum ada impuls baru');
+    liveState = state;
+    window.BCGO_STATE = state;
+    renderConnection(state);
+    renderNeuralEvents(state.recentEvents);
+    liveSpeech.textContent = `> [${state.step}] ${state.message}`;
+    targetCellId.textContent = state.targetCell || '-';
+    errorLogDesc.textContent = state.errorLog || 'Normal (tidak ada anomali aktif)';
 
-        setText(metrics.total, state?.metrics?.total ?? 0);
-        setText(metrics.active, state?.metrics?.active ?? 0);
-        setText(metrics.healthy, state?.metrics?.healthy ?? 0);
-        setText(metrics.recovered, state?.metrics?.recovered ?? 0);
-        setText(metrics.firestore, state?.metrics?.firestoreCount ?? 0);
+    cycleNumber.textContent = state.cycle ?? 0;
+    cycleMode.textContent = state.cycleMode || 'NORMAL';
+    eventState.textContent = state.lastEventAt
+        ? `Impuls terakhir: ${formatTime(state.lastEventAt)}`
+        : 'Belum ada impuls baru';
 
-        activatePhase(state?.step, state || {});
-        setHeader(state?.step, state || {});
-        renderOrgans(state?.systemOrgans);
-        renderLogs(state?.systemLogs);
+    metrics.total.textContent = state.metrics?.total ?? 13;
+    metrics.active.textContent = state.metrics?.active ?? 0;
+    metrics.healthy.textContent = state.metrics?.healthy ?? 13;
+    metrics.recovered.textContent = state.metrics?.recovered ?? 0;
+    metrics.firestore.textContent = state.metrics?.firestoreCount ?? 0;
 
-        if (chatFeed && !chatFeed.dataset.ready) {
-            chatFeed.dataset.ready = '1';
-            chatFeed.innerHTML = '';
-            addChat('bcgo', `Kanal komunikasi aktif. Saya membaca BCGO_STATE yang sama dengan monitor. Saat ini saya berada di tahap ${state?.step}, cycle #${state?.cycle}. Silakan tanya apa yang sedang saya kerjakan.`);
-        }
-    } catch (uiError) {
-        console.warn('BCGO render guard:', uiError);
+    activatePhase(state.step, state);
+    setHeader(state.step, state);
+    renderOrgans(state.systemOrgans);
+    renderLogs(state.systemLogs);
+
+    if (!chatFeed.dataset.ready) {
+        chatFeed.dataset.ready = '1';
+        chatFeed.innerHTML = '';
+        addChat('bcgo', `Kanal komunikasi aktif. Saya membaca BCGO_STATE yang sama dengan monitor. Saat ini saya berada di tahap ${state.step}, cycle #${state.cycle}. Silakan tanya apa yang sedang saya kerjakan.`);
     }
 });
 </script>

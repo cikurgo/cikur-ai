@@ -19,7 +19,8 @@ import { db, auth } from "./cikur-config.js";
  * - Chat adalah reasoning lokal berbasis state telemetry yang sedang hidup.
  * - Error lintas-file hanya dianggap ACTIVE bila ada bukti telemetry yang valid.
  * - Tidak pernah menulis source code secara otomatis.
- * - Medicine hanya menerima konteks kasus; keputusan/perbaikan tetap terpisah.
+ * - Medicine hanya menerima konteks kasus melalui telemetry; keputusan/perbaikan tetap terpisah.
+ * - Medicine bukan organ BCGO; dua file Medicine berada di diagnostic layer terpisah.
  */
 
 const ORGAN_REGISTRY = {
@@ -35,10 +36,10 @@ const ORGAN_REGISTRY = {
   "bcgo-engine.js": { type: "Sistem Core", role: "system" },
   "bcgo-admin.html": { type: "Sistem Admin", role: "admin" },
   "bcgo.html": { type: "Sistem Monitor", role: "monitor" },
-  "data-cgo.html": { type: "Data Sistem", role: "data" },
-  "bcgo-medicine.js": { type: "Otak Medicine", role: "medicine" },
-  "bcgo-medicine.html": { type: "UI Medicine", role: "medicine" }
+  "data-cgo.html": { type: "Data Sistem", role: "data" }
 };
+
+const ORGAN_COUNT = Object.keys(ORGAN_REGISTRY).length;
 
 const ACTIVE_WINDOW = 15 * 60 * 1000;
 const CLOCK_SKEW = 5 * 60 * 1000;
@@ -81,7 +82,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     retryCount: 0,
     cycle: 0,
     cycleMode: "BOOT",
-    metrics: { total: Object.keys(ORGAN_REGISTRY).length, active: 0, recovered: 0, healthy: Object.keys(ORGAN_REGISTRY).length, firestoreCount: 0 },
+    metrics: { total: ORGAN_COUNT, active: 0, recovered: 0, healthy: ORGAN_COUNT, firestoreCount: 0 },
     systemOrgans: {},
     systemLogs: [],
     recentEvents: [],
@@ -276,7 +277,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     const recovered = Object.values(organs).filter(v => v.state === "RECOVERED").length;
     return recovered
       ? `Tidak ada anomali aktif saat ini. ${recovered} organ masih memiliki bukti error historis yang saya tandai RECOVERED.`
-      : `Semua ${Object.keys(ORGAN_REGISTRY).length} organ belum memiliki laporan error aktif dalam telemetry yang saya terima.`;
+      : `Semua ${ORGAN_COUNT} organ belum memiliki laporan error aktif dalam telemetry yang saya terima.`;
   }
 
   function findFile(question) {
@@ -496,7 +497,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     if (phaseIndex === 0) {
       cycleNo += 1;
       recordEvent("CYCLE", `Neural cycle #${cycleNo} dimulai.`, "SYS_NEURAL_SCAN");
-      emit("IN", `Neural cycle #${cycleNo} dimulai. Saya memindai ${Object.keys(ORGAN_REGISTRY).length} organ dan membaca bukti telemetry terbaru.`, "SYS_NEURAL_SCAN", null, { cycleMode: "NORMAL" });
+      emit("IN", `Neural cycle #${cycleNo} dimulai. Saya memindai ${ORGAN_COUNT} organ dan membaca bukti telemetry terbaru.`, "SYS_NEURAL_SCAN", null, { cycleMode: "NORMAL" });
       scheduleNext(CYCLE.IN);
       return;
     }

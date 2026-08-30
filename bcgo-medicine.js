@@ -3,7 +3,6 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
-import { runAutonomousEngine } from "./bcgo.js?v=2.6.0";
 
 /*
  * BCGO MEDICINE v3.3.1 — PRECISION REPAIR / VERIFIED HEALING ENGINE
@@ -25,9 +24,8 @@ import { runAutonomousEngine } from "./bcgo.js?v=2.6.0";
  * executor/backend can apply the repair and return the result to Medicine.
  */
 
-// CONTRACT: this registry is an exact mirror of ORGAN_REGISTRY in bcgo.js.
-// Do not add/remove/rename an entry here independently.
-// v3.3.1: parity is verified against window.BCGOBrain.getRegistry() at runtime.
+// CONTRACT: this is Medicine's diagnostic view of the BCGO organ surface.
+// It is intentionally independent from bcgo.js runtime imports.
 const REGISTRY = {
   "index.html": { type: "Halaman Utama", role: "customer" },
   "assistant.html": { type: "Zona Customer", role: "customer" },
@@ -41,13 +39,17 @@ const REGISTRY = {
   "bcgo-engine.js": { type: "Sistem Core", role: "system" },
   "bcgo-admin.html": { type: "Sistem Admin", role: "admin" },
   "bcgo.html": { type: "Sistem Monitor", role: "monitor" },
-  "data-cgo.html": { type: "Data Sistem", role: "data" },
+  "data-cgo.html": { type: "Data Sistem", role: "data" }
+};
+
+// Diagnostic scope includes the application organ surface plus Medicine's own source/UI.
+// Medicine internals are inspectable source, but never normal root-cause candidates.
+const MEDICINE_INTERNAL = {
   "bcgo-medicine.js": { type: "Otak Medicine", role: "medicine" },
   "bcgo-medicine.html": { type: "UI Medicine", role: "medicine" }
 };
-
-// bcgo.js is the producer engine itself, not an organ in BCGO's 15-organ registry.
-// Medicine may inspect its source as a dependency, but it must not count it as an organ.
+const DIAGNOSTIC_SCOPE = { ...REGISTRY, ...MEDICINE_INTERNAL };
+const DIAGNOSTIC_ORGAN_COUNT = Object.keys(REGISTRY).length;
 const SOURCE_SURFACE = ["bcgo.js"];
 
 const REQUIRED = {
@@ -108,24 +110,11 @@ const S = {
   lastClientMessageId: null,
   eventSeq: 0,
   autonomous: { enabled: true, turn: 0, timer: null, lastAt: 0, lastInvestigationKey: "" },
-  bcgoState: null,
-  registryParity: { ok: false, status: "WAITING", bcgoCount: 0, medicineCount: Object.keys(REGISTRY).length, missing: [], extra: [], mismatched: [] },
-  bcgoContract: {
-    step: "IN",
-    message: "",
-    targetCell: "",
-    cycle: 0,
-    cycleMode: "BOOT",
-    metrics: {},
-    systemOrgans: {},
-    systemLogs: [],
-    activeCases: [],
-    medicineQueue: [],
-    connection: {}
-  },
-  bcgoEngine: null,
-  bcgoSynced: false,
+  registryParity: { ok: true, status: "SEPARATED", bcgoCount: DIAGNOSTIC_ORGAN_COUNT, medicineCount: Object.keys(MEDICINE_INTERNAL).length, missing: [], extra: [], mismatched: [] },
+
   conversationUnsub: null,
+  telemetryUnsub: null,
+  telemetryLive: false,
   authEpoch: 0
 };
 
@@ -203,151 +192,124 @@ async function postSystemMessage(role, msg, meta = {}) {
   }
 }
 
-function syncFromBCGOState(state) {
-  if (!state || typeof state !== "object") return;
-  // BCGO_STATE is authoritative. Keep an explicit 1:1 contract snapshot
-  // instead of rebuilding BCGO metrics/organs/cases inside Medicine.
-  S.bcgoState = state;
-  S.bcgoContract = {
-    step: state.step,
-    message: state.message,
-    targetCell: state.targetCell,
-    cycle: state.cycle,
-    cycleMode: state.cycleMode,
-    metrics: state.metrics || {},
-    systemOrgans: state.systemOrgans || {},
-    systemLogs: Array.isArray(state.systemLogs) ? state.systemLogs.slice() : [],
-    activeCases: Array.isArray(state.activeCases) ? state.activeCases.slice() : [],
-    medicineQueue: Array.isArray(state.medicineQueue) ? state.medicineQueue.slice() : [],
-    connection: state.connection || {}
-  };
-  S.bcgoSynced = true;
-  S.logs = S.bcgoContract.systemLogs.slice();
-
-  const queue = S.bcgoContract.medicineQueue;
-  const queueIds = new Set(queue.map(x => x.id));
-
-  for (const handoff of queue) {
-    const target = normalizeFile(handoff.target || handoff.file);
-    const evidence = S.logs.find(log =>
-      normalizeFile(log?.fileName || log?.source || log?.file) === target &&
-      String(log?.reportedAt ?? "") === String(handoff?.evidence?.reportedAt ?? handoff?.reportedAt ?? "")
-    ) || S.logs.find(log => normalizeFile(log?.fileName || log?.source || log?.file) === target);
-
-    let c = S.cases.find(x => x.bcgoCaseId === handoff.id || x.id === handoff.id);
-    if (!c) {
-      const sig = text(evidence?.message || handoff?.evidence?.message || handoff.message || "Sinyal telemetry BCGO diterima.", 700);
-      const d = diagnosis(sig);
-      c = {
-        id: handoff.id,
-        bcgoCaseId: handoff.id,
-        source: target,
-        signature: sig,
-        runtimeLocation: {
-          file: target,
-          line: Number(evidence?.lineNumber ?? evidence?.line ?? handoff?.evidence?.line) || null,
-          col: Number(evidence?.columnNumber ?? evidence?.column ?? handoff?.evidence?.column) || null,
-          stack: text(evidence?.stack || evidence?.stackTrace || "", 1200)
-        },
-        diagnosis: d,
-        prescription: prescription(d),
-        status: "DIAGNOSED",
-        createdAt: now(),
-        evidence: evidence || handoff.evidence || handoff,
-        repairPlan: null,
-        rootCauseFile: target,
-        sourceEvidence: [],
-        validation: null,
-        bcgoHandoff: { ...handoff, handoff: "READY_FOR_MEDICINE" }
-      };
-      S.cases.unshift(c);
-      S.cases = S.cases.slice(0, 80);
-      emit("case_created", { case: c, source: "BCGO_STATE.medicineQueue" });
-      void postSystemMessage("medicine", `Saya menerima ${c.id} langsung dari BCGO_STATE.medicineQueue. Target: ${target}. Saya hanya akan membuka treatment setelah root cause dan source exact terbukti.`, {
-        kind: "MEDICINE_BCGO_HANDOFF", caseId: c.id, target
-      });
-    } else {
-      c.bcgoHandoff = { ...handoff, handoff: "READY_FOR_MEDICINE" };
-      c.evidence = evidence || c.evidence;
-      c.lastBCGOStateAt = now();
-      if (!c.repairPlan && !["REJECTED", "FIXED_VERIFIED"].includes(c.status)) {
-        c.status = c.status === "PATCH_APPLIED" ? c.status : "DIAGNOSED";
-      }
-      emit("case_updated", { case: c, source: "BCGO_STATE.medicineQueue" });
-    }
+function buildTelemetryCases(logs) {
+  const recentByFile = new Map();
+  for (const log of Array.isArray(logs) ? logs : []) {
+    const file = normalizeFile(log?.fileName || log?.source || log?.file);
+    if (!REGISTRY[file]) continue;
+    const at = timestampValue(log?.reportedAt || log?.createdAt);
+    const prev = recentByFile.get(file);
+    if (!prev || at >= prev.at) recentByFile.set(file, { log, at });
   }
 
-  // BCGO is authoritative for whether a telemetry case is currently active.
-  // Only cases that originated from BCGO are auto-recovered here. Treatment/validation
-  // lifecycle is left intact.
+  const cases = [];
+  for (const [file, item] of recentByFile) {
+    if (!isRecentTelemetry(item.at)) continue;
+    const signature = text(item.log?.message || item.log?.error || "Sinyal telemetry diterima.", 700);
+    const d = diagnosis(signature);
+    const line = Number(item.log?.lineNumber ?? item.log?.line ?? item.log?.lineno) || null;
+    const col = Number(item.log?.columnNumber ?? item.log?.column ?? item.log?.colno) || null;
+    const fingerprint = `${file}|${signature}|${item.at}|${line || 0}|${col || 0}`;
+    let hash = 0;
+    for (let i = 0; i < fingerprint.length; i++) hash = ((hash << 5) - hash + fingerprint.charCodeAt(i)) | 0;
+    cases.push({
+      id: `CASE-${Math.abs(hash).toString(36).toUpperCase()}`,
+      source: file,
+      target: file,
+      signature,
+      runtimeLocation: { file, line, col, stack: text(item.log?.stack || item.log?.stackTrace || "", 1400) },
+      diagnosis: d,
+      prescription: prescription(d),
+      status: "DIAGNOSED",
+      createdAt: now(),
+      evidence: item.log,
+      repairPlan: null,
+      rootCauseFile: file,
+      sourceEvidence: [],
+      validation: null
+    });
+  }
+  return cases.sort((a, b) => timestampValue(b.evidence?.reportedAt || b.evidence?.createdAt) - timestampValue(a.evidence?.reportedAt || a.evidence?.createdAt));
+}
+
+function timestampValue(value) {
+  try {
+    if (!value) return 0;
+    if (typeof value?.toMillis === "function") return value.toMillis();
+    if (typeof value?.toDate === "function") return value.toDate().getTime();
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === "number") return value;
+    const n = Date.parse(value);
+    return Number.isFinite(n) ? n : 0;
+  } catch { return 0; }
+}
+
+const TELEMETRY_WINDOW = 15 * 60 * 1000;
+function isRecentTelemetry(t) {
+  return Number.isFinite(t) && t > 0 && t >= Date.now() - TELEMETRY_WINDOW;
+}
+
+function syncFromTelemetry(logs, transport = "FIRESTORE_SYSTEM_LOGS") {
+  S.logs = Array.isArray(logs) ? logs.slice(0, 120) : [];
+  const cases = buildTelemetryCases(S.logs);
+  for (const c of cases) {
+    const existing = S.cases.find(x => x.id === c.id);
+    if (existing) {
+      existing.evidence = c.evidence;
+      existing.signature = c.signature;
+      existing.runtimeLocation = c.runtimeLocation;
+      existing.lastTelemetryAt = now();
+    } else {
+      S.cases.unshift(c);
+      emit("case_created", { case: c, source: transport });
+      void postSystemMessage("medicine", `Saya menerima ${c.id} langsung dari telemetry ${transport}. Target awal: ${c.source}. Saya akan menelusuri lintas-file sebelum membuka treatment.`, { kind: "MEDICINE_TELEMETRY_HANDOFF", caseId: c.id, target: c.source });
+    }
+  }
+  S.cases = S.cases.slice(0, 80);
+  const activeIds = new Set(cases.map(c => c.id));
   for (const c of S.cases) {
-    if (!c.bcgoCaseId || queueIds.has(c.bcgoCaseId)) continue;
-    if (["DIAGNOSED", "INVESTIGATING", "NEEDS_EVIDENCE"].includes(c.status)) {
+    if (!activeIds.has(c.id) && c.status === "DIAGNOSED") {
       c.status = "RECOVERED";
       c.recoveredAt = now();
-      emit("case_updated", { case: c, recovered: true, source: "BCGO_STATE" });
+      emit("case_updated", { case: c, recovered: true, source: transport });
     }
   }
-
-  S.activeCase = queueIds.size
-    ? (S.cases.find(c => queueIds.has(c.bcgoCaseId)) || null)
-    : null;
-
-  emit("telemetry", { logs: S.logs, transport: "BCGO_STATE" });
+  S.activeCase = cases.length ? (S.cases.find(c => c.id === cases[0].id) || cases[0]) : (S.activeCase && activeCases().includes(S.activeCase) ? S.activeCase : null);
+  emit("telemetry", { logs: S.logs, transport });
   emit("bcgo_sync", {
-    state,
     contract: {
-      metrics: state.metrics || {},
-      activeCases: state.activeCases || [],
-      medicineQueue: queue,
-      systemOrgans: state.systemOrgans || {},
-      connection: state.connection || {}
+      metrics: { total: Object.keys(REGISTRY).length, active: cases.length, logCount: S.logs.length },
+      activeCases: cases,
+      medicineQueue: cases.map(c => ({ ...c, handoff: "READY_FOR_MEDICINE" })),
+      systemOrgans: Object.fromEntries(Object.entries(REGISTRY).map(([file, meta]) => [file, { ...meta, state: cases.some(c => c.source === file) ? "ACTIVE" : "HEALTHY" }])),
+      connection: { status: transport === "FIRESTORE_SYSTEM_LOGS" ? "LIVE" : "LOCAL" }
     }
   });
 }
 
-function verifyRegistryParity() {
-  const producer = window.BCGOBrain?.getRegistry?.();
-  if (!producer || typeof producer !== "object") {
-    S.registryParity = {
-      ok: false, status: "WAITING_FOR_BCGO_REGISTRY",
-      bcgoCount: 0, medicineCount: Object.keys(REGISTRY).length,
-      missing: [], extra: [], mismatched: []
-    };
-    emit("registry_parity", S.registryParity);
-    return S.registryParity;
-  }
-
-  const pNames = Object.keys(producer);
-  const mNames = Object.keys(REGISTRY);
-  const missing = pNames.filter(name => !REGISTRY[name]);
-  const extra = mNames.filter(name => !producer[name]);
-  const mismatched = mNames.filter(name => {
-    if (!producer[name]) return false;
-    return producer[name].type !== REGISTRY[name].type || producer[name].role !== REGISTRY[name].role;
-  });
-
-  S.registryParity = {
-    ok: missing.length === 0 && extra.length === 0 && mismatched.length === 0 && pNames.length === mNames.length,
-    status: missing.length || extra.length || mismatched.length ? "MISMATCH" : "EXACT_1_TO_1",
-    bcgoCount: pNames.length, medicineCount: mNames.length, missing, extra, mismatched
-  };
+function verifyDiagnosticScope() {
+  const orgCount = Object.keys(REGISTRY).length;
+  const internalCount = Object.keys(MEDICINE_INTERNAL).length;
+  S.registryParity = { ok: true, status: "SEPARATED", bcgoCount: orgCount, medicineCount: internalCount, missing: [], extra: [], mismatched: [] };
   emit("registry_parity", S.registryParity);
   return S.registryParity;
 }
 
 function startTelemetry() {
-  if (S.bcgoEngine) return;
+  if (S.telemetryUnsub) return;
   try {
-    // Use the exact BCGO engine as the state producer. Medicine does not reimplement
-    // buildOrgans(), makeCases(), timestamp rules, or the ACTIVE window.
-    S.bcgoEngine = runAutonomousEngine(state => syncFromBCGOState(state));
-    verifyRegistryParity();
-    S.listeners.push(() => {
-      try { S.bcgoEngine?.stop?.(); } catch {}
-      S.bcgoEngine = null;
+    const q = query(collection(db, "system_logs"), orderBy("reportedAt", "desc"), limit(120));
+    S.telemetryUnsub = onSnapshot(q, snapshot => {
+      const logs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      syncFromTelemetry(logs);
+      S.telemetryLive = true;
+      emit("telemetry_transport", { transport: "FIRESTORE_SYSTEM_LOGS" });
+    }, error => {
+      S.telemetryLive = false;
+      emit("telemetry_unavailable", { message: error?.message || "system_logs listener error" });
     });
-    emit("telemetry_transport", { transport: "BCGO_ENGINE_STATE" });
+    S.listeners.push(() => { try { S.telemetryUnsub?.(); } catch {} S.telemetryUnsub = null; });
+    verifyDiagnosticScope();
   } catch (e) {
     emit("telemetry_unavailable", { message: e?.message || String(e) });
   }
@@ -421,7 +383,7 @@ function normalizeLocalRef(ref, fromFile = "") {
     value = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
   } catch {}
   value = value.replace(/^\.\//, "");
-  return REGISTRY[value] ? value : null;
+  return DIAGNOSTIC_SCOPE[value] ? value : null;
 }
 
 function extractDependencies(fileName, source) {
@@ -658,7 +620,7 @@ async function buildSourceEvidence(targetFile, signature, caseContext = null, ru
   const htmlPages = names.filter(n => /\.html$/i.test(n));
   const priority = [];
   const pushPriority = (file, reason = "direct") => {
-    if (!(REGISTRY[file] || SOURCE_SURFACE.includes(file)) || priority.some(x => x.file === file)) return;
+    if (!(DIAGNOSTIC_SCOPE[file] || SOURCE_SURFACE.includes(file)) || priority.some(x => x.file === file)) return;
     priority.push({ file, reason });
   };
   pushPriority(targetFile, "target");
@@ -854,7 +816,7 @@ function buildAdminGapOperations(targetFile, missingFields, adminSource) {
 }
 
 async function scanConsistency(targets = null) {
-  const names = targets?.length ? targets.filter(n => REGISTRY[n]) : Object.keys(REGISTRY);
+  const names = targets?.length ? targets.filter(n => DIAGNOSTIC_SCOPE[n]) : Object.keys(DIAGNOSTIC_SCOPE);
   emit("scan_started", { total: names.length, targets: names });
   const result = {};
   for (const name of names) {
@@ -1237,9 +1199,6 @@ function bcgoAnswer(q) {
   // BCGO is authoritative for system status. When the exact BCGO engine is
   // running on this page, ask it directly instead of maintaining a second
   // interpretation inside Medicine.
-  if (window.BCGOBrain?.ask) {
-    try { return window.BCGOBrain.ask(q); } catch {}
-  }
   const active = activeCases();
   const x = safeLower(q);
   const file = mentionedFile(q);
@@ -1302,9 +1261,9 @@ function autonomousThought(role) {
   const last = logs[0]?.message || c?.signature || "belum ada impuls baru";
 
   if (role === "bcgo") {
-    if (active.length) return `Medicine, saya menjaga ${active.length} saraf aktif. Fokus saat ini ${target}. Saya kirim impuls terbaru: ${text(last, 240)}. Jangan berhenti di nama file laporan; telusuri dependency sampai sumber yang benar terbukti.`;
-    if (findings.length) return `Saya belum melihat anomali aktif, tetapi masih ada ${findings.length} finding kontrak. Saya ingin kita pelajari satu per satu supaya status HEALTHY benar-benar didukung evidence.`;
-    return `Siklus tenang, tetapi saya tetap mendengarkan telemetry. Impuls terakhir: ${text(last, 240)}. Kalau ada perubahan, saya ingin Medicine langsung memeriksa jalurnya.`;
+    if (active.length) return `Telemetry memberi saya ${active.length} kasus aktif. Fokus investigasi saat ini ${target}. Saya tidak mengubah sinyal BCGO; saya menelusuri source lintas-file sampai akar masalah terbukti.`;
+    if (findings.length) return `Belum ada anomaly aktif yang terbukti. Saya masih memiliki ${findings.length} finding kontrak untuk diperiksa tanpa mengubah source.`;
+    return `Belum ada impuls aktif. Saya tetap mendengarkan system_logs dan siap membuka investigasi ketika telemetry memberikan bukti baru.`;
   }
 
   if (plan?.codePrescription?.ready) return `BCGO, saya sudah menemukan source exact pada ${target}. Ada ${operations} operasi exact dan ${evidenceCount} evidence. BEFORE → AFTER sudah terbentuk; saya tahan source tetap terkunci sampai Human Review.`;
@@ -1337,7 +1296,7 @@ async function autonomousConversationTick() {
       emit("autonomous_scan", { findings: S.findings });
     }
   }
-  const role = turn % 2 === 0 ? "bcgo" : "medicine";
+  const role = "medicine";
   const message = autonomousThought(role);
   S.autonomous.lastAt = Date.now();
   await postSystemMessage(role, message, { kind: "AUTONOMOUS_DISCUSSION", autonomous: true });
@@ -1590,7 +1549,6 @@ function cleanupRealtime() {
     try { S.conversationUnsub(); } catch {}
   }
   S.conversationUnsub = null;
-  S.bcgoEngine = null;
   S.sourceCache.clear();
   stopAutonomousConversation();
 }
@@ -1664,6 +1622,7 @@ const API = {
   getCodePrescription: caseId => { const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase; return c?.repairPlan?.codePrescription || buildCodePrescription(c?.repairPlan); },
   buildCodePrescription,
   getRegistry: () => ({ ...REGISTRY }),
+  getDiagnosticScope: () => ({ ...DIAGNOSTIC_SCOPE }),
   getRegistryParity: () => ({ ...S.registryParity, missing: [...S.registryParity.missing], extra: [...S.registryParity.extra], mismatched: [...S.registryParity.mismatched] }),
   getState: () => ({ ...S, sourceCache: undefined })
 };
