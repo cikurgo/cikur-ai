@@ -1,8 +1,30 @@
-import {
-  collection, onSnapshot, query, orderBy, limit, addDoc, serverTimestamp, doc, getDoc
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { db, auth } from "./cikur-config.js";
+// BOOT BOUNDARY: source inspection must never depend on Auth/Firestore/CDN availability.
+// Firebase is loaded lazily only after the local cross-file scanner has started.
+let db = null;
+let auth = null;
+let firebaseFns = null;
+let firebaseBoot = null;
+
+async function ensureRealtimeInfrastructure() {
+  if (firebaseBoot) return firebaseBoot;
+  firebaseBoot = (async () => {
+    try {
+      const config = await import("./cikur-config.js");
+      db = config.db;
+      auth = config.auth;
+      const [firestore, authMod] = await Promise.all([
+        import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"),
+        import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js")
+      ]);
+      firebaseFns = { ...firestore, ...authMod };
+      return true;
+    } catch (error) {
+      emit("realtime_boot_unavailable", { message: error?.message || String(error) });
+      return false;
+    }
+  })();
+  return firebaseBoot;
+}
 
 /*
  * BCGO MEDICINE v4.1.2 — SOURCE-FIRST LIVE CROSS-FILE MEDICAL ENGINE
@@ -180,14 +202,16 @@ async function postSystemMessage(role, msg, meta = {}) {
   const payload = {
     role,
     text: text(msg, 1800),
-    actorUid: role === "human" ? (auth.currentUser?.uid || null) : null,
+    actorUid: role === "human" ? (auth?.currentUser?.uid || null) : null,
     system: role !== "human",
-    createdAt: serverTimestamp(),
+    createdAt: firebaseFns?.serverTimestamp ? firebaseFns.serverTimestamp() : now(),
     clientMessageId,
     ...meta
   };
   try {
-    await addDoc(collection(db, "medicine_messages"), payload);
+    const ready = await ensureRealtimeInfrastructure();
+    if (!ready || !db || !firebaseFns?.addDoc) throw new Error("Realtime infrastructure unavailable");
+    await firebaseFns.addDoc(firebaseFns.collection(db, "medicine_messages"), payload);
   } catch (e) {
     emit("local_message", { message: { ...payload, createdAt: now() }, storageError: e.message });
   }
@@ -296,9 +320,15 @@ function verifyDiagnosticScope() {
   return S.registryParity;
 }
 
-function startTelemetry() {
+async function startTelemetry() {
   if (S.telemetryUnsub) return;
+  const ready = await ensureRealtimeInfrastructure();
+  if (!ready || !db || !firebaseFns) {
+    emit("telemetry_unavailable", { message: "Realtime infrastructure belum tersedia; source scanner tetap berjalan." });
+    return;
+  }
   try {
+    const { collection, onSnapshot, query, orderBy, limit } = firebaseFns;
     const q = query(collection(db, "system_logs"), orderBy("reportedAt", "desc"), limit(120));
     S.telemetryUnsub = onSnapshot(q, snapshot => {
       const logs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -873,7 +903,7 @@ function buildFileIssue(result,name,relations){
 async function scanLiveSurface(){
   if(S.liveSurface.scanning) return S.liveSurface;
   S.liveSurface.scanning=true; S.liveSurface.cycle++;
-  const names=[...new Set([...Object.keys(REGISTRY), ...SOURCE_SURFACE, ...Object.keys(MEDICINE_INTERNAL)])];
+  const names=[...new Set([...Object.keys(REGISTRY), ...SOURCE_SURFACE])];
   emit("live_surface_started",{cycle:S.liveSurface.cycle,total:names.length,files:names});
   const result={};
   for(const name of names){
@@ -1364,7 +1394,7 @@ function autonomousThought(role) {
 }
 
 async function autonomousConversationTick() {
-  if (!S.autonomous.enabled || S.human.paused || !auth.currentUser) return;
+  if (!S.autonomous.enabled || S.human.paused || !auth?.currentUser) return;
   const turn = S.autonomous.turn++;
   const active = activeCases();
   // Every few turns the pair performs real work, not just small-talk: re-check
@@ -1412,10 +1442,12 @@ async function sendMessage(msg, role = "human") {
   if (!t) return;
   const clientMessageId = uid();
   S.lastClientMessageId = clientMessageId;
-  const payload = { role, text: t, actorUid: auth.currentUser?.uid || null, createdAt: serverTimestamp(), clientMessageId };
+  const payload = { role, text: t, actorUid: auth?.currentUser?.uid || null, createdAt: firebaseFns?.serverTimestamp ? firebaseFns.serverTimestamp() : now(), clientMessageId };
 
   try {
-    await addDoc(collection(db, "medicine_messages"), payload);
+    const ready = await ensureRealtimeInfrastructure();
+    if (!ready || !db || !firebaseFns?.addDoc) throw new Error("Realtime infrastructure unavailable");
+    await firebaseFns.addDoc(firebaseFns.collection(db, "medicine_messages"), payload);
   } catch (e) {
     emit("local_message", { message: { ...payload, createdAt: now() }, storageError: e.message });
   }
@@ -1455,7 +1487,7 @@ async function approveTreatment(caseId) {
 
   c.status = "READY_FOR_PATCH";
   c.approvedAt = now();
-  c.approvedBy = auth.currentUser?.uid || null;
+  c.approvedBy = auth?.currentUser?.uid || null;
   c.repairPlan.status = "READY_FOR_PATCH";
 
   const proposal = c.patchProposal || findProposal(c.id);
@@ -1466,10 +1498,10 @@ async function approveTreatment(caseId) {
   }
 
   try {
-    await addDoc(collection(db, "medicine_treatments"), {
+    await firebaseFns.addDoc(firebaseFns.collection(db, "medicine_treatments"), {
       caseId: c.id, source: c.source, diagnosis: c.diagnosis, prescription: c.prescription,
       verification: c.verification, repairPlan: c.repairPlan, action: "APPROVED_READY_FOR_PATCH",
-      actorUid: c.approvedBy, createdAt: serverTimestamp()
+      actorUid: c.approvedBy, createdAt: firebaseFns?.serverTimestamp ? firebaseFns.serverTimestamp() : now()
     });
   } catch (e) { emit("storage_warning", { message: e.message }); }
 
@@ -1498,8 +1530,8 @@ async function applyPatch(caseId) {
     operations: c.repairPlan.operations,
     beforeAfter: c.repairPlan.beforeAfter,
     status: "PENDING_EXECUTION",
-    actorUid: auth.currentUser?.uid || null,
-    createdAt: serverTimestamp(),
+    actorUid: auth?.currentUser?.uid || null,
+    createdAt: firebaseFns?.serverTimestamp ? firebaseFns.serverTimestamp() : now(),
     requestedAt: now(),
     executorAvailable: executorAvailable()
   };
@@ -1510,7 +1542,7 @@ async function applyPatch(caseId) {
   S.patchRequests = S.patchRequests.slice(0, 40);
 
   try {
-    await addDoc(collection(db, "medicine_patch_requests"), request);
+    await firebaseFns.addDoc(firebaseFns.collection(db, "medicine_patch_requests"), request);
   } catch (e) { emit("storage_warning", { message: e.message }); }
 
   await postSystemMessage("medicine", executorAvailable()
@@ -1585,7 +1617,7 @@ async function validateAfterPatch(caseId) {
   if (proposal) proposal.status = passed ? "VERIFIED_FIXED" : "VALIDATION_FAILED";
 
   try {
-    await addDoc(collection(db, "medicine_validations"), { ...v, createdAt: serverTimestamp(), actorUid: auth.currentUser?.uid || null });
+    await firebaseFns.addDoc(firebaseFns.collection(db, "medicine_validations"), { ...v, createdAt: firebaseFns?.serverTimestamp ? firebaseFns.serverTimestamp() : now(), actorUid: auth?.currentUser?.uid || null });
   } catch (e) { emit("storage_warning", { message: e.message }); }
 
   await postSystemMessage("medicine", passed
@@ -1605,7 +1637,7 @@ async function rejectTreatment(caseId, reason = "Treatment ditolak oleh manusia.
   c.rejectedAt = now();
   c.rejectionReason = text(reason, 500);
   try {
-    await addDoc(collection(db, "medicine_treatments"), { caseId: c.id, source: c.source, action: "REJECTED", reason: c.rejectionReason, actorUid: auth.currentUser?.uid || null, createdAt: serverTimestamp() });
+    await firebaseFns.addDoc(firebaseFns.collection(db, "medicine_treatments"), { caseId: c.id, source: c.source, action: "REJECTED", reason: c.rejectionReason, actorUid: auth?.currentUser?.uid || null, createdAt: firebaseFns?.serverTimestamp ? firebaseFns.serverTimestamp() : now() });
   } catch (e) { emit("storage_warning", { message: e.message }); }
   await postSystemMessage("medicine", `Saya menerima penolakan untuk ${c.id}. Repair dibatalkan; source-code tetap tidak disentuh.`);
   emit("case_updated", { case: c });
@@ -1615,7 +1647,7 @@ async function rejectTreatment(caseId, reason = "Treatment ditolak oleh manusia.
 async function setHumanMode(paused) {
   S.human.paused = !!paused;
   S.human.mode = paused ? "HUMAN_PAUSED" : "ASSISTED";
-  S.human.uid = auth.currentUser?.uid || null;
+  S.human.uid = auth?.currentUser?.uid || null;
   emit("human_control", { human: { ...S.human } });
   await postSystemMessage("medicine", paused
     ? "Mode Medicine dijeda oleh manusia. Saya hanya mengamati telemetry dan menunggu instruksi."
@@ -1640,12 +1672,16 @@ function cleanupRealtime() {
   S.conversationUnsub = null;
   S.sourceCache.clear();
   stopAutonomousConversation();
-  stopLiveSurface();
+  // Source-first scanner is independent from Auth and must keep running.
+  // Do not stopLiveSurface() on logout or an auth error.
+
 }
 
 async function startConversation() {
   if (S.conversationUnsub) return;
   try {
+    if (!db || !firebaseFns) return;
+    const { collection, onSnapshot, query, orderBy, limit } = firebaseFns;
     const q = query(collection(db, "medicine_messages"), orderBy("createdAt", "desc"), limit(200));
     const unsub = onSnapshot(q, snapshot => {
       const seen = new Set();
@@ -1668,38 +1704,45 @@ async function startConversation() {
 // Auth gates only Firestore telemetry/chat/autonomous treatment paths.
 startLiveSurface();
 
-onAuthStateChanged(auth, async user => {
-  const epoch = ++S.authEpoch;
-  S.human.uid = user?.uid || null;
-  emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
-
-  if (!user) {
-    cleanupRealtime();
-    S.human.uid = null;
-    S.autonomous.lastInvestigationKey = "";
+(async function bootRealtimeAuth() {
+  const ready = await ensureRealtimeInfrastructure();
+  if (!ready || !auth || !firebaseFns?.onAuthStateChanged) {
+    emit("auth", { user: null, deferred: true, reason: "REALTIME_INFRA_UNAVAILABLE" });
     return;
   }
+  firebaseFns.onAuthStateChanged(auth, async user => {
+    const epoch = ++S.authEpoch;
+    S.human.uid = user?.uid || null;
+    emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
 
-  try {
-    const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
-    if (epoch !== S.authEpoch || auth.currentUser?.uid !== user.uid) return;
-    if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
+    if (!user) {
       cleanupRealtime();
-      emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
-      emit("local_message", { message: { role: "medicine", text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.", clientMessageId: "auth-denied" } });
+      S.human.uid = null;
+      S.autonomous.lastInvestigationKey = "";
       return;
     }
-  } catch (e) {
-    cleanupRealtime();
-    emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED" });
-    return;
-  }
 
-  if (epoch !== S.authEpoch || auth.currentUser?.uid !== user.uid) return;
-  startTelemetry();
-  startConversation();
-  startAutonomousConversation();
-});
+    try {
+      const adminSnap = await firebaseFns.getDoc(firebaseFns.doc(db, "admin_users", user.uid));
+      if (epoch !== S.authEpoch || auth?.currentUser?.uid !== user.uid) return;
+      if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
+        cleanupRealtime();
+        emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
+        emit("local_message", { message: { role: "medicine", text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.", clientMessageId: "auth-denied" } });
+        return;
+      }
+    } catch (e) {
+      cleanupRealtime();
+      emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED", message: e?.message || String(e) });
+      return;
+    }
+
+    if (epoch !== S.authEpoch || auth?.currentUser?.uid !== user.uid) return;
+    await startTelemetry();
+    startConversation();
+    startAutonomousConversation();
+  });
+})();
 
 const API = {
   scanConsistency,
