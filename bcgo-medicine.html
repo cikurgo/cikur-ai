@@ -114,11 +114,17 @@ function copyMedicineCode(value, button){
   const s=String(value??'');
   if(!s)return;
   const done=()=>{if(button){const old=button.textContent;button.textContent='✓ COPIED';setTimeout(()=>button.textContent=old,1400);}};
-  if(navigator.clipboard?.writeText) navigator.clipboard.writeText(s).then(done).catch(()=>{
-    const ta=document.createElement('textarea');ta.value=s;document.body.appendChild(ta);ta.select();
-    try{document.execCommand('copy');}catch(e){}ta.remove();done();
-  });
+  if(navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(s).then(done).catch(()=>{fallbackCopy(s, done);});
+  } else {
+    fallbackCopy(s, done);
+  }
 }
+function fallbackCopy(s, cb){
+  const ta=document.createElement('textarea');ta.value=s;document.body.appendChild(ta);ta.select();
+  try{document.execCommand('copy');}catch(e){}ta.remove();if(cb)cb();
+}
+
 function renderCodePrescription(plan){
   const el=$('codePrescription'); if(!el)return;
   const cp=plan?.codePrescription || window.BCGOMedicine?.buildCodePrescription?.(plan);
@@ -153,7 +159,7 @@ function renderCodePrescription(plan){
               <pre class="pre code text-[9px] text-slate-200">${esc(x.after)}</pre>
             </div>
           </div>
-          ${x.context?.lines?.length?`<div class="px-3 py-2 border-t border-slate-800 bg-slate-950"><div class="text-[9px] text-cyan-300 mb-1">📍 CONTEXT SOURCE (${esc(x.context.startLine)}–${esc(x.context.endLine)})</div><pre class="pre code text-[8px] text-slate-500">${esc(x.context.lines.map(q=>String(q.line).padStart(4,' ')+' | '+q.code).join('\\n'))}</pre></div>`:''}
+          ${x.context?.lines?.length?`<div class="px-3 py-2 border-t border-slate-800 bg-slate-950"><div class="text-[9px] text-cyan-300 mb-1">📍 CONTEXT SOURCE (${esc(x.context.startLine)}–${esc(x.context.endLine)})</div><pre class="pre code text-[8px] text-slate-500">${esc(x.context.lines.map(q=>String(q.line).padStart(4,' ')+' | '+q.code).join('\n'))}</pre></div>`:''}
           <div class="px-3 py-3 text-[10px] text-slate-400"><b class="text-cyan-300">WHY:</b> ${esc(x.reason||'-')}${x.evidenceReason?`<div class="mt-1"><b class="text-purple-300">Evidence:</b> ${esc(x.evidenceReason)}</div>`:''}</div>
         </div>`).join(''):'<div class="p-3 text-xs text-amber-300">Belum ada operasi exact yang aman untuk dijadikan solusi.</div>'}
     </div>`;
