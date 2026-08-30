@@ -6,7 +6,7 @@ import { db, auth } from "./cikur-config.js";
 import { runAutonomousEngine } from "./bcgo.js?v=3.0";
 
 /*
- * BCGO MEDICINE v3.7 — PRECISION REPAIR / VERIFIED HEALING ENGINE
+ * BCGO MEDICINE v3.3 — PRECISION REPAIR / VERIFIED HEALING ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -91,7 +91,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "3.8.0",
+  version: "3.3.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -403,12 +403,6 @@ function sourceLines(source) {
   return String(source || "").split(/\r?\n/);
 }
 
-function stripCodeComments(source) {
-  return String(source || "")
-    .replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, " "))
-    .replace(/(^|[^:])\/\/[^\n]*/g, (m, prefix) => prefix + " ".repeat(Math.max(0, m.length - prefix.length)));
-}
-
 function lineOf(source, offset) {
   return String(source || "").slice(0, Math.max(0, offset)).split(/\r?\n/).length;
 }
@@ -470,10 +464,16 @@ function dependencyClosure(root, graph, maxDepth = 5) {
   return out;
 }
 
+function maskCommentsPreserveLayout(source) {
+  return String(source || "")
+    .replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\r\n]/g, " "))
+    .replace(/(^|[^:])\/\/[^\r\n]*/g, (m, prefix) => prefix + m.slice(prefix.length).replace(/[^\r\n]/g, " "));
+}
+
 function findAssignmentOperations(fileName, source, signature = "") {
   if (!source) return [];
-  const scanSource = stripCodeComments(source);
   const ops = [];
+  const code = maskCommentsPreserveLayout(source);
   const wantsText = /textcontent|innerhtml|value|classlist|style/i.test(signature) || /cannot set properties of null|cannot read properties of null/i.test(signature);
   if (!wantsText) return ops;
 
@@ -484,7 +484,7 @@ function findAssignmentOperations(fileName, source, signature = "") {
   ];
   for (const re of direct) {
     let m;
-    while ((m = re.exec(scanSource)) && ops.length < 30) {
+    while ((m = re.exec(code)) && ops.length < 30) {
       const property = /innerHTML/.test(m[0]) ? "innerHTML" : /\.value\s*=/.test(m[0]) ? "value" : "textContent";
       const before = m[0];
       const accessor = before.match(/(?:document\.getElementById|document\.querySelector|\$)\([^)]*\)/)?.[0];
@@ -498,7 +498,7 @@ function findAssignmentOperations(fileName, source, signature = "") {
   // Pre-bound element pattern: const el = document.getElementById('x'); ... el.textContent = ...
   const bindRe = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(document\.getElementById|document\.querySelector|\$)\(\s*(["'])([^"']+)\3\s*\)\s*;?([\s\S]{0,900}?)(?:\1\s*\.textContent\s*=\s*([^;\n]+);?)/g;
   let b;
-  while ((b = bindRe.exec(scanSource)) && ops.length < 40) {
+  while ((b = bindRe.exec(code)) && ops.length < 40) {
     const whole = b[0];
     const varName = b[1];
     const rhs = b[6];
@@ -514,15 +514,15 @@ function findAssignmentOperations(fileName, source, signature = "") {
 
 function domAssignmentCandidates(fileName, source) {
   if (!source) return [];
-  const scanSource = stripCodeComments(source);
   const out = [];
+  const code = maskCommentsPreserveLayout(source);
   const patterns = [
     /(?:document\.getElementById\(\s*["']([^"']+)["']\s*\)|\$\(\s*["']([^"']+)["']\s*\))\s*\.textContent\s*=\s*([^;\n]+);?/g,
     /(?:document\.querySelector\(\s*["']([^"']+)["']\s*\)|\$\(\s*["']([^"']+)["']\s*\))\s*\.innerHTML\s*=\s*([^;\n]+);?/g
   ];
   for (const re of patterns) {
     let m;
-    while ((m = re.exec(scanSource)) && out.length < 40) {
+    while ((m = re.exec(code)) && out.length < 40) {
       const before = m[0];
       out.push({
         file: fileName,
@@ -625,11 +625,10 @@ function exactDomEvidence(fileName, source, signature, context = {}) {
   return out;
 }
 
-async function buildSourceEvidence(targetFile, signature, runtimeLocations = []) {
+async function buildSourceEvidence(targetFile, signature) {
   const names = [...new Set([...Object.keys(REGISTRY), ...SOURCE_SURFACE])];
   const evidence = [];
-  const signatureLocations = extractRuntimeLocation(signature);
-  const locations = [...signatureLocations, ...(Array.isArray(runtimeLocations) ? runtimeLocations : [])];
+  const runtimeLocations = extractRuntimeLocation(signature);
   const results = {};
   for (const name of names) results[name] = await fetchFile(name);
   const graph = dependencyGraph(results);
@@ -644,7 +643,7 @@ async function buildSourceEvidence(targetFile, signature, runtimeLocations = [])
   if (/\.html$/i.test(targetFile)) {
     for (const dep of dependencyClosure(targetFile, graph, 6)) pushPriority(dep.file, `dependency:${dep.via}`);
   }
-  for (const loc of locations) pushPriority(normalizeLocalRef(loc.file) || loc.file, "runtime");
+  for (const loc of runtimeLocations) pushPriority(normalizeLocalRef(loc.file) || loc.file, "runtime");
   for (const page of htmlPages) {
     for (const dep of dependencyClosure(page, graph, 4)) pushPriority(dep.file, `page-dependency:${page}`);
   }
@@ -655,7 +654,7 @@ async function buildSourceEvidence(targetFile, signature, runtimeLocations = [])
     const x = results[name];
     if (!x?.ok || !x.text) continue;
     const loadedBy = /\.js$/i.test(name) ? loadedByPages(name, results) : [];
-    const local = exactDomEvidence(name, x.text, signature, { runtimeLocations: locations, htmlResults: results, loadedBy });
+    const local = exactDomEvidence(name, x.text, signature, { runtimeLocations, htmlResults: results, loadedBy });
     for (const ev of local) {
       const dependencyHit = item.reason.startsWith("dependency") || item.reason.startsWith("page-dependency");
       const score = { HIGH: 3, MEDIUM: 2, LOW: 1 }[ev.evidenceStrength] + (dependencyHit ? 1 : 0) + (ev.stackHit ? 1 : 0) + (ev.signatureHit ? 1 : 0);
@@ -689,10 +688,7 @@ function exactProofForPlan(plan) {
     // and prove that the referenced DOM is absent. This prevents a generic missing
     // selector on another page from becoming a false root cause.
     if (p.diagnosis?.code === "DOM_NULL_REFERENCE") {
-      // Structural candidates may move the investigation target, but they can never
-      // open the treatment gate by themselves. A patch still needs runtime/signature
-      // correlation at the exact operation.
-      const domProof = matches.find(e => e.evidenceStrength === "HIGH" && (e.stackHit === true || e.signatureHit === true) && (e.existsInSameDocument === false || e.missingOnLoadedPage === true));
+      const domProof = matches.find(e => e.evidenceStrength === "HIGH" && e.stackHit === true && (e.existsInSameDocument === false || e.missingOnLoadedPage === true));
       if (!domProof) return { ok: false, reason: "DOM_CAUSALITY_NOT_PROVEN" };
     }
   }
@@ -723,7 +719,7 @@ async function resolveRootCause(c) {
     ...(c.runtimeLocation?.file ? [{ file: c.runtimeLocation.file, line: c.runtimeLocation.line, col: c.runtimeLocation.col }] : []),
     ...extractRuntimeLocation(c.runtimeLocation?.stack || "")
   ];
-  const candidates = await buildSourceEvidence(originalTarget, c.signature, runtimeLocations);
+  const candidates = await buildSourceEvidence(originalTarget, c.signature);
   const high = candidates.filter(x => x.evidenceStrength === "HIGH");
 
   // For a DOM-null error, prefer a source assignment whose script is actually loaded
@@ -733,29 +729,14 @@ async function resolveRootCause(c) {
     // A DOM-null root cause is proven only when the runtime points to the exact
     // assignment (file + line) and the consuming HTML page demonstrably lacks the
     // referenced target. Missing DOM elsewhere is not causal proof.
-    const causalHigh = high.filter(x => x.stackHit === true && x.loadedBy?.length && x.evidenceStrength === "HIGH");
-    // When telemetry contains an exact file/line, use it first. When telemetry only
-    // contains the generic TypeError text, do NOT fall back to the reported HTML
-    // target. Instead use the strongest structural dependency evidence: a JS file
-    // loaded by the reported page whose exact DOM selector is absent on that page.
-    // This is a root-cause CANDIDATE, not automatic permission to patch.
-    const structural = candidates.filter(x =>
-      x.file !== originalTarget && /\.js$/i.test(x.file || "") &&
-      x.loadedBy?.some(p => safeLower(p) === safeLower(originalTarget)) &&
-      x.missingOnLoadedPage === true
-    );
-    const exactRuntime = runtimeLocations.find(loc => loc.file && loc.line);
-    const runtimeFile = exactRuntime ? (normalizeLocalRef(exactRuntime.file) || exactRuntime.file) : null;
-    const best = (exactRuntime && causalHigh.find(x =>
-        x.file !== originalTarget && safeLower(x.file) === safeLower(runtimeFile)
-        && Number(x.line) === Number(exactRuntime.line)
-      ))
-      || causalHigh.find(x => x.file !== originalTarget && x.loadedBy?.some(p => safeLower(p) === safeLower(originalTarget)))
-      || structural[0]
-      || (exactRuntime && causalHigh.find(x =>
-        safeLower(x.file) === safeLower(runtimeFile) && Number(x.line) === Number(exactRuntime.line)
-      ))
-      || causalHigh.find(x => x.file !== originalTarget);
+    const causalHigh = high
+      .filter(x => x.stackHit === true && (x.existsInSameDocument === false || x.missingOnLoadedPage === true))
+      .sort((a, b) => {
+        const aNonTarget = a.file !== originalTarget ? 1 : 0;
+        const bNonTarget = b.file !== originalTarget ? 1 : 0;
+        return (bNonTarget - aNonTarget) || ((b.loadedBy?.includes(originalTarget) ? 1 : 0) - (a.loadedBy?.includes(originalTarget) ? 1 : 0));
+      });
+    const best = causalHigh[0] || null;
     if (best) {
       const src = await fetchFile(best.file);
       const ops = findLikelyDomBinding(best.file, src.text, c.signature)
@@ -765,13 +746,13 @@ async function resolveRootCause(c) {
         return {
           rootCauseFile: best.file,
           rootCauseStatus: best.file === originalTarget ? "CONFIRMED_ORIGINAL_TARGET" : "TARGET_CORRECTED_BY_MEDICINE",
-          sourceEvidence: candidates.slice(0, 18).map(e => ({ file:e.file, selector:e.selector, property:e.property, line:e.line, before:e.before, evidenceStrength:e === best && e.evidenceStrength === "LOW" ? "STRUCTURAL" : e.evidenceStrength, reason:e.evidenceReason, loadedBy:e.loadedBy || [], dependencyReason:e.dependencyReason, stackHit:e.stackHit === true, existsInSameDocument:e.existsInSameDocument, missingOnLoadedPage:e.missingOnLoadedPage === true })),
+          sourceEvidence: candidates.slice(0, 18).map(e => ({ file:e.file, selector:e.selector, property:e.property, line:e.line, before:e.before, evidenceStrength:e.evidenceStrength, reason:e.evidenceReason, loadedBy:e.loadedBy || [], dependencyReason:e.dependencyReason, stackHit:e.stackHit === true, existsInSameDocument:e.existsInSameDocument })),
           resolvedOperation: exactOperation,
           candidates: candidates.slice(0, 18)
         };
       }
     }
-    return { rootCauseFile: null, rootCauseStatus: "UNPROVEN", sourceEvidence: candidates.slice(0, 18), resolvedOperation: null, candidates: candidates.slice(0, 18) };
+    return { rootCauseFile: originalTarget, rootCauseStatus: "UNPROVEN", sourceEvidence: candidates.slice(0, 18), resolvedOperation: null, candidates: candidates.slice(0, 18) };
   }
 
   if (c.diagnosis.code === "DATA_CONSISTENCY") {
@@ -1041,7 +1022,7 @@ async function enrichRepairPlan(c, verification) {
   const plan = buildRepairPlan(c, verification);
   const resolution = await resolveRootCause(c);
   plan.originalTarget = c.source;
-  plan.rootCauseFile = resolution.rootCauseFile || null;
+  plan.rootCauseFile = resolution.rootCauseFile || c.source;
   plan.rootCauseStatus = resolution.rootCauseStatus || "UNPROVEN";
   plan.candidates = resolution.candidates || [];
   plan.sourceEvidence = resolution.sourceEvidence || [];
@@ -1152,12 +1133,12 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
   if (S.activeCase && (!targetFile || S.activeCase.source === requestedTarget)) {
     S.activeCase.verification = v;
     const resolution = await resolveRootCause(S.activeCase);
-    v.rootCauseFile = resolution.rootCauseFile || null;
+    v.rootCauseFile = resolution.rootCauseFile || requestedTarget;
     v.rootCauseStatus = resolution.rootCauseStatus || "UNPROVEN";
     v.rootCauseCandidates = resolution.candidates || [];
     v.sourceEvidence = resolution.sourceEvidence || [];
     S.activeCase.repairPlan = await enrichRepairPlan(S.activeCase, v);
-    S.activeCase.rootCauseFile = S.activeCase.repairPlan.rootCauseFile || null;
+    S.activeCase.rootCauseFile = S.activeCase.repairPlan.rootCauseFile || requestedTarget;
     S.activeCase.sourceEvidence = S.activeCase.repairPlan.sourceEvidence || [];
 
     const plan = S.activeCase.repairPlan;
@@ -1203,7 +1184,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     // never promote a target to a repairable diagnosis from a guess.
     const synthetic = { source: requestedTarget, signature: runtimeEvidence[0]?.message || "", diagnosis: diagnosis(runtimeEvidence[0]?.message || "") };
     const resolution = await resolveRootCause(synthetic);
-    v.rootCauseFile = resolution.rootCauseFile || null;
+    v.rootCauseFile = resolution.rootCauseFile || requestedTarget;
     v.rootCauseStatus = resolution.rootCauseStatus || "UNPROVEN";
     v.sourceEvidence = resolution.sourceEvidence || [];
     v.rootCauseCandidates = resolution.candidates || [];
