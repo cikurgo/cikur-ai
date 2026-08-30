@@ -15,18 +15,19 @@
 
     <div class="flex h-screen overflow-hidden">
         
-        <!-- SIDEBAR -->
+        <!-- SIDEBAR DENGAN LOGO ASLI -->
         <aside class="w-64 bg-slate-900 text-slate-300 hidden md:flex flex-col justify-between border-r border-slate-800">
             <div class="p-5">
                 <div class="flex items-center gap-3 mb-8">
-                    <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-white shadow-md">C</div>
+                    <!-- Memanggil logo asli cikurgoicon.png -->
+                    <img src="cikurgoicon.png" alt="Logo Cikur Go" class="w-9 h-9 object-contain rounded-lg bg-white/10 p-1" onerror="this.style.display='none'; document.getElementById('fallback-logo').style.display='flex';">
+                    <div id="fallback-logo" class="w-9 h-9 bg-indigo-600 rounded-lg hidden items-center justify-center font-bold text-white shadow-md">C</div>
                     <span class="text-lg font-bold text-white tracking-wide">CIKUR GO</span>
                 </div>
                 <nav class="space-y-1">
-                    <a href="#" class="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-indigo-600 text-white font-medium text-sm">Overview Control</a>
-                    <a href="#" class="flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition text-sm">Manajemen Mitra</a>
-                    <a href="#" class="flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition text-sm">Manajemen Customer</a>
-                    <a href="#" class="flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition text-sm">Risk Radar</a>
+                    <button onclick="switchTab('all')" id="nav-all" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg bg-indigo-600 text-white font-medium text-sm transition">Semua Aktivitas</button>
+                    <button onclick="switchTab('mitra')" id="nav-mitra" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition text-sm">Data Mitra (Agent/Resto/Driver)</button>
+                    <button onclick="switchTab('customer')" id="nav-customer" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition text-sm">Data Customer (Layanan)</button>
                 </nav>
             </div>
             <div class="p-4 border-t border-slate-800 text-xs text-slate-500 flex justify-between items-center">
@@ -40,7 +41,7 @@
             
             <!-- TOPBAR -->
             <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-10">
-                <h1 class="text-base font-semibold text-slate-800">Intelligent Control Center (Live Sync & Export)</h1>
+                <h1 class="text-base font-semibold text-slate-800">Intelligent Control Center (Multi-Source Sync)</h1>
                 <div class="flex items-center gap-3">
                     <span id="user-status-badge" class="text-xs px-3 py-1 rounded-full bg-amber-50 text-amber-700 font-medium border border-amber-200">Menghubungkan Database...</span>
                 </div>
@@ -51,20 +52,20 @@
                 <!-- KPI GRID -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                        <p class="text-xs font-medium text-slate-500">Pending Pendaftar / Mitra</p>
+                        <p class="text-xs font-medium text-slate-500">Total Mitra Masuk</p>
+                        <h3 id="kpi-mitra" class="text-2xl font-bold text-slate-900 mt-1">0</h3>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <p class="text-xs font-medium text-slate-500">Total Customer / Layanan</p>
+                        <h3 id="kpi-customer" class="text-2xl font-bold text-slate-900 mt-1">0</h3>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <p class="text-xs font-medium text-slate-500">Pending Review</p>
                         <h3 id="kpi-pending" class="text-2xl font-bold text-slate-900 mt-1">0</h3>
                     </div>
                     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                        <p class="text-xs font-medium text-slate-500">Active Partners / Disetujui</p>
-                        <h3 id="kpi-active" class="text-2xl font-bold text-slate-900 mt-1">0</h3>
-                    </div>
-                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                        <p class="text-xs font-medium text-slate-500">BCGO Attention</p>
-                        <h3 id="kpi-attention" class="text-2xl font-bold text-slate-900 mt-1">0</h3>
-                    </div>
-                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                        <p class="text-xs font-medium text-slate-500">Total Aktivitas Masuk</p>
-                        <h3 id="kpi-online" class="text-2xl font-bold text-slate-900 mt-1">0</h3>
+                        <p class="text-xs font-medium text-slate-500">Total Seluruh Data</p>
+                        <h3 id="kpi-total" class="text-2xl font-bold text-slate-900 mt-1">0</h3>
                     </div>
                 </div>
 
@@ -72,10 +73,9 @@
                 <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
-                            <span class="font-semibold text-slate-800 text-sm">Aktivitas & Pendaftaran Terbaru</span>
-                            <p class="text-xs text-slate-400 mt-0.5">Sinkronisasi otomatis aktif dari seluruh file layanan Cikur Go.</p>
+                            <span id="table-title" class="font-semibold text-slate-800 text-sm">Semua Aktivitas & Pendaftaran</span>
+                            <p class="text-xs text-slate-400 mt-0.5">Sinkronisasi otomatis dari file agentcgo, resto, driver, index, food, ride, & assistant.</p>
                         </div>
-                        <!-- Tombol Download Report untuk Review -->
                         <button id="downloadBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-4 py-2 rounded-lg transition shadow-sm flex items-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                             Download Report (CSV)
@@ -86,14 +86,15 @@
                             <thead>
                                 <tr class="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs">
                                     <th class="p-4 font-medium">Nama / Entitas</th>
-                                    <th class="p-4 font-medium">Kategori Layanan / Mitra</th>
+                                    <th class="p-4 font-medium">Sumber File / Layanan</th>
+                                    <th class="p-4 font-medium">Tipe Kategori</th>
                                     <th class="p-4 font-medium">Status</th>
                                     <th class="p-4 font-medium">Waktu Masuk</th>
                                 </tr>
                             </thead>
                             <tbody id="data-table-body" class="divide-y divide-slate-100 text-slate-600">
                                 <tr>
-                                    <td colspan="4" class="p-6 text-center text-slate-400">Memuat data dari Firestore...</td>
+                                    <td colspan="5" class="p-6 text-center text-slate-400">Memuat data dari Firestore...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -106,7 +107,7 @@
     <!-- FIREBASE & MODULE SCRIPT INTEGRATION -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBV2dQa-MoN5zPuNHA6Tda4L4aLoeL_QDw",
@@ -123,109 +124,153 @@
 
         const statusBadge = document.getElementById('user-status-badge');
         const tableBody = document.getElementById('data-table-body');
+        const kpiMitra = document.getElementById('kpi-mitra');
+        const kpiCustomer = document.getElementById('kpi-customer');
         const kpiPending = document.getElementById('kpi-pending');
-        const kpiActive = document.getElementById('kpi-active');
-        const kpiOnline = document.getElementById('kpi-online');
-        const kpiAttention = document.getElementById('kpi-attention');
+        const kpiTotal = document.getElementById('kpi-total');
         const downloadBtn = document.getElementById('downloadBtn');
+        const tableTitle = document.getElementById('table-title');
 
-        let latestDataCache = []; // Menyimpan data sementara untuk keperluan download CSV
+        let globalDataList = [];
+        let currentFilter = 'all';
 
         statusBadge.textContent = "Sistem Online (Live Sync)";
         statusBadge.className = "text-xs px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 font-medium border border-emerald-200";
 
-        // Real-time listener dari Firestore
-        try {
-            const q = query(collection(db, "mitra_applications"), orderBy("submittedAt", "desc"), limit(50));
-            
-            onSnapshot(q, (snapshot) => {
-                latestDataCache = []; // Reset cache
+        // Mengambil data dari dua koleksi utama: 'mitra_applications' dan 'customer_activities'
+        // Agar error handling aman jika salah satu koleksi kosong di Firestore
+        function loadAllData() {
+            try {
+                // Listener untuk Mitra (agentcgo, resto, driver)
+                const qMitra = query(collection(db, "mitra_applications"), orderBy("submittedAt", "desc"));
+                // Listener untuk Customer (index, assistant, food, ride, cikurgo2in1)
+                const qCustomer = query(collection(db, "customer_activities"), orderBy("submittedAt", "desc"));
 
-                if (snapshot.empty) {
-                    tableBody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-slate-400">Belum ada data pendaftaran masuk.</td></tr>`;
-                    kpiPending.textContent = "0";
-                    kpiActive.textContent = "0";
-                    kpiOnline.textContent = "0";
-                    kpiAttention.textContent = "0";
-                    return;
-                }
+                let mitraData = [];
+                let customerData = [];
 
-                let html = '';
-                let pendingCount = 0;
-                let activeCount = 0;
-                let attentionCount = 0;
-                let totalCount = snapshot.size;
-
-                snapshot.forEach((doc) => {
-                    const data = doc.data();
-                    
-                    // Masukkan ke cache untuk download
-                    latestDataCache.push({
-                        nama: data.nama || 'Tanpa Nama',
-                        kategori: data.kategori || 'Umum',
-                        status: data.status || 'Pending',
-                        waktu: data.submittedAt ? new Date(data.submittedAt.seconds * 1000).toLocaleString('id-ID') : 'Baru saja'
+                let unSubMitra = onSnapshot(qMitra, (snapshot) => {
+                    mitraData = [];
+                    snapshot.forEach((doc) => {
+                        const d = doc.data();
+                        mitraData.push({
+                            id: doc.id,
+                            nama: d.nama || 'Mitra Tanpa Nama',
+                            sumber: d.sumber || 'agentcgo/resto/driver',
+                            tipe: 'Mitra',
+                            kategori: d.kategori || 'Mitra Umum',
+                            status: d.status || 'Pending',
+                            submittedAt: d.submittedAt
+                        });
                     });
-                    
-                    if (data.status === 'Pending' || !data.status) pendingCount++;
-                    if (data.status === 'Active' || data.status === 'Disetujui') activeCount++;
-                    if (data.status === 'Attention' || data.status === 'Perlu Review') attentionCount++;
+                    processAndRender(mitraData, customerData);
+                }, (err) => { console.log("Info koleksi mitra:", err.message); });
 
-                    let statusBadgeClass = "bg-amber-50 text-amber-700 border-amber-200";
-                    if (data.status === 'Active' || data.status === 'Disetujui') {
-                        statusBadgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
-                    } else if (data.status === 'Attention' || data.status === 'Perlu Review') {
-                        statusBadgeClass = "bg-rose-50 text-rose-700 border-rose-200";
-                    }
+                let unSubCustomer = onSnapshot(qCustomer, (snapshot) => {
+                    customerData = [];
+                    snapshot.forEach((doc) => {
+                        const d = doc.data();
+                        customerData.push({
+                            id: doc.id,
+                            nama: d.nama || 'Customer Tanpa Nama',
+                            sumber: d.sumber || 'index/food/ride/dll',
+                            tipe: 'Customer',
+                            kategori: d.kategori || 'Layanan Utama',
+                            status: d.status || 'Aktif',
+                            submittedAt: d.submittedAt
+                        });
+                    });
+                    processAndRender(mitraData, customerData);
+                }, (err) => { console.log("Info koleksi customer:", err.message); });
 
-                    let waktuFormat = 'Baru saja';
-                    if (data.submittedAt && data.submittedAt.seconds) {
-                        waktuFormat = new Date(data.submittedAt.seconds * 1000).toLocaleString('id-ID');
-                    }
-
-                    html += `
-                        <tr class="hover:bg-slate-50 transition">
-                            <td class="p-4 font-medium text-slate-900">${data.nama || 'Tanpa Nama'}</td>
-                            <td class="p-4"><span class="px-2.5 py-1 text-xs rounded-full bg-slate-100 text-slate-700 font-medium">${data.kategori || 'Umum'}</span></td>
-                            <td class="p-4"><span class="px-2.5 py-1 text-xs rounded-full border ${statusBadgeClass} font-medium">${data.status || 'Pending'}</span></td>
-                            <td class="p-4 text-slate-400 text-xs">${waktuFormat}</td>
-                        </tr>
-                    `;
-                });
-
-                tableBody.innerHTML = html;
-                kpiPending.textContent = pendingCount;
-                kpiActive.textContent = activeCount;
-                kpiOnline.textContent = totalCount;
-                kpiAttention.textContent = attentionCount;
-
-            }, (error) => {
-                console.error("Gagal memuat data:", error);
-                tableBody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-rose-500">Gagal menyinkronkan data database.</td></tr>`;
-            });
-
-        } catch (e) {
-            console.error("Error init listener:", e);
+            } catch (e) {
+                console.error("Error init listeners:", e);
+                tableBody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-rose-500">Gagal menghubungkan database Firestore.</td></tr>`;
+            }
         }
 
-        // Fungsi untuk mendownload data cache ke format file CSV (bisa dibuka langsung di Excel/Spreadsheet)
-        downloadBtn.addEventListener('click', () => {
-            if (latestDataCache.length === 0) {
-                alert("Belum ada data yang bisa di-download!");
+        function processAndRender(mitra, customer) {
+            // Gabungkan kedua data
+            globalDataList = [...mitra, ...customer].sort((a, b) => {
+                let timeA = a.submittedAt && a.submittedAt.seconds ? a.submittedAt.seconds : 0;
+                let timeB = b.submittedAt && b.submittedAt.seconds ? b.submittedAt.seconds : 0;
+                return timeB - timeA;
+            });
+
+            // Hitung KPI
+            kpiMitra.textContent = mitra.length;
+            kpiCustomer.textContent = customer.length;
+            kpiTotal.textContent = globalDataList.length;
+            
+            let pending = globalDataList.filter(item => item.status === 'Pending' || item.status === 'Perlu Review').length;
+            kpiPending.textContent = pending;
+
+            renderTable();
+        }
+
+        window.switchTab = function(type) {
+            currentFilter = type;
+            document.getElementById('nav-all').className = "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg " + (type === 'all' ? "bg-indigo-600 text-white" : "hover:bg-slate-800 text-slate-400 hover:text-white") + " font-medium text-sm transition";
+            document.getElementById('nav-mitra').className = "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg " + (type === 'mitra' ? "bg-indigo-600 text-white" : "hover:bg-slate-800 text-slate-400 hover:text-white") + " font-medium text-sm transition";
+            document.getElementById('nav-customer').className = "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg " + (type === 'customer' ? "bg-indigo-600 text-white" : "hover:bg-slate-800 text-slate-400 hover:text-white") + " font-medium text-sm transition";
+
+            if(type === 'all') tableTitle.textContent = "Semua Aktivitas & Pendaftaran";
+            if(type === 'mitra') tableTitle.textContent = "Data Khusus Mitra (Agent, Resto, Driver)";
+            if(type === 'customer') tableTitle.textContent = "Data Customer & Layanan (Index, Food, Ride, dll)";
+
+            renderTable();
+        }
+
+        function renderTable() {
+            let filtered = globalDataList;
+            if(currentFilter === 'mitra') filtered = globalDataList.filter(i => i.tipe === 'Mitra');
+            if(currentFilter === 'customer') filtered = globalDataList.filter(i => i.tipe === 'Customer');
+
+            if (filtered.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">Belum ada data pada kategori ini.</td></tr>`;
                 return;
             }
 
-            let csvContent = "data:text/csv;charset=utf-8,Nama / Entitas,Kategori Layanan,Status,Waktu Masuk\r\n";
-            
-            latestDataCache.forEach(row => {
-                let rowData = `"${row.nama}","${row.kategori}","${row.status}","${row.waktu}"`;
-                csvContent += rowData + "\r\n";
-            });
+            let html = '';
+            filtered.forEach(row => {
+                let badgeClass = "bg-amber-50 text-amber-700 border-amber-200";
+                if (row.status === 'Active' || row.status === 'Disetujui' || row.status === 'Aktif') {
+                    badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                }
 
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `Report_CikurGo_${new Date().toISOString().slice(0,10)}.csv`);
+                let waktu = row.submittedAt && row.submittedAt.seconds ? new Date(row.submittedAt.seconds * 1000).toLocaleString('id-ID') : 'Baru saja';
+
+                html += `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="p-4 font-medium text-slate-900">${row.nama}</td>
+                        <td class="p-4 text-xs font-mono text-slate-500">${row.sumber}</td>
+                        <td class="p-4"><span class="px-2.5 py-1 text-xs rounded-full bg-slate-100 text-slate-700 font-medium">${row.kategori}</span></td>
+                        <td class="p-4"><span class="px-2.5 py-1 text-xs rounded-full border ${badgeClass} font-medium">${row.status}</span></td>
+                        <td class="p-4 text-slate-400 text-xs">${waktu}</td>
+                    </tr>
+                `;
+            });
+            tableBody.innerHTML = html;
+        }
+
+        // Jalankan pemuatan data
+        loadAllData();
+
+        // Download CSV
+        downloadBtn.addEventListener('click', () => {
+            if (globalDataList.length === 0) {
+                alert("Tidak ada data untuk di-download.");
+                return;
+            }
+            let csv = "data:text/csv;charset=utf-8,Nama,Sumber File,Tipe,Kategori,Status,Waktu\r\n";
+            globalDataList.forEach(r => {
+                let w = r.submittedAt && r.submittedAt.seconds ? new Date(r.submittedAt.seconds * 1000).toLocaleString('id-ID') : 'Baru saja';
+                csv += `"${r.nama}","${r.sumber}","${r.tipe}","${r.kategori}","${r.status}","${w}"\r\n`;
+            });
+            let encoded = encodeURI(csv);
+            let link = document.createElement("a");
+            link.setAttribute("href", encoded);
+            link.setAttribute("download", `Report_CikurGo_${currentFilter}_${new Date().toISOString().slice(0,10)}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
