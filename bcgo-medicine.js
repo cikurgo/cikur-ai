@@ -6,7 +6,7 @@ import { db, auth } from "./cikur-config.js";
 import { runAutonomousEngine } from "./bcgo.js?v=3.0";
 
 /*
- * BCGO MEDICINE v3.2 — PRECISION REPAIR / VERIFIED HEALING ENGINE
+ * BCGO MEDICINE v3.3 — PRECISION REPAIR / VERIFIED HEALING ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -91,7 +91,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "3.2.0",
+  version: "3.3.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -585,24 +585,34 @@ function exactDomEvidence(fileName, source, signature, context = {}) {
     let strength = "LOW";
     let reason = `Reference DOM '${selector}' ditemukan pada ${fileName}, tetapi hubungan dengan runtime belum terbukti.`;
 
-    if (sameDoc === false) {
+    // HIGH is reserved for a causally correlated failure. A missing DOM target
+    // somewhere in the loaded surface is not enough: it can be an intentional
+    // page-specific renderer or an unrelated assignment. The runtime location
+    // (or an explicit selector in the runtime signature) must correlate with the
+    // exact source operation before evidence can become HIGH.
+    const runtimeCorrelated = runtimeHit || signatureHit;
+    const missingOnLoadedPage = loadedBy.some(page => htmlHasElement(htmlResults[page]?.text || "", selector) === false);
+    if (sameDoc === false && runtimeCorrelated) {
       strength = "HIGH";
-      reason = `Reference DOM '${selector}' digunakan di ${fileName}, tetapi element tersebut tidak ditemukan di dokumen yang sama.`;
+      reason = `Reference DOM '${selector}' digunakan di ${fileName}, target DOM tidak ditemukan, dan lokasi/signature runtime berkorelasi dengan operasi exact.`;
     } else if (loadedBy.length) {
       const missingPages = loadedBy.filter(page => htmlHasElement(htmlResults[page]?.text || "", selector) === false);
-      if (missingPages.length) {
+      if (missingPages.length && runtimeCorrelated) {
         strength = "HIGH";
-        reason = `Script ${fileName} dipakai oleh ${missingPages.join(', ')} tetapi target DOM '${selector}' tidak ditemukan pada halaman pemakainya.`;
-      } else if (runtimeHit || signatureHit) {
+        reason = `Script ${fileName} dipakai oleh ${missingPages.join(', ')}; target DOM '${selector}' hilang pada halaman pemakai dan runtime berkorelasi dengan operasi exact.`;
+      } else if (runtimeCorrelated) {
         strength = "MEDIUM";
-        reason = `Script ${fileName} dipakai oleh ${loadedBy.join(', ')} dan runtime berkorelasi dengan reference '${selector}', tetapi target DOM masih perlu pembuktian.`;
+        reason = `Script ${fileName} dipakai oleh ${loadedBy.join(', ')} dan runtime berkorelasi dengan reference '${selector}', tetapi bukti target DOM belum cukup untuk HIGH.`;
+      } else if (missingPages.length) {
+        strength = "LOW";
+        reason = `Target DOM '${selector}' hilang pada ${missingPages.join(', ')}, tetapi belum ada korelasi runtime yang membuktikan assignment ini sebagai penyebab.`;
       }
-    } else if (runtimeHit || signatureHit) {
+    } else if (runtimeCorrelated) {
       strength = "MEDIUM";
-      reason = `Lokasi source ${fileName}:${c.line} berkorelasi dengan evidence runtime.`;
+      reason = `Lokasi source ${fileName}:${c.line} berkorelasi dengan evidence runtime, tetapi bukti DOM belum lengkap.`;
     }
 
-    out.push({ ...c, existsInSameDocument: sameDoc, stackHit: runtimeHit, signatureHit, evidenceStrength: strength, evidenceReason: reason, loadedBy });
+    out.push({ ...c, existsInSameDocument: sameDoc, missingOnLoadedPage, stackHit: runtimeHit, signatureHit, evidenceStrength: strength, evidenceReason: reason, loadedBy });
   }
   return out;
 }
@@ -648,6 +658,52 @@ async function buildSourceEvidence(targetFile, signature) {
   return evidence.slice(0, 30).map(({ _score, ...e }) => e);
 }
 
+function exactProofForPlan(plan) {
+  const p = plan || {};
+  const ops = Array.isArray(p.operations) ? p.operations : [];
+  const evidence = Array.isArray(p.sourceEvidence) ? p.sourceEvidence : [];
+  if (!ops.length || p.precisionGate !== true) return { ok: false, reason: "NO_EXACT_OPERATION_OR_GATE" };
+  if (!p.rootCauseFile || !p.rootCauseStatus) return { ok: false, reason: "ROOT_CAUSE_UNPROVEN" };
+  if (!["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE", "CONTRACT_ROOT_CAUSE_IDENTIFIED"].includes(p.rootCauseStatus)) {
+    return { ok: false, reason: "ROOT_CAUSE_STATUS_NOT_PROVEN" };
+  }
+
+  for (const op of ops) {
+    if (op.type !== "REPLACE_EXACT" || !op.file || op.file !== p.rootCauseFile || !op.before || !op.after || !Number.isFinite(Number(op.line))) {
+      return { ok: false, reason: "OPERATION_NOT_EXACT" };
+    }
+    const matches = evidence.filter(e => e.file === op.file && Number(e.line) === Number(op.line));
+    if (!matches.some(e => e.evidenceStrength === "HIGH" && String(e.before || "") === String(op.before))) {
+      return { ok: false, reason: "HIGH_EVIDENCE_NOT_BOUND_TO_OPERATION" };
+    }
+    // For DOM-null cases, HIGH evidence must carry the actual runtime correlation
+    // and prove that the referenced DOM is absent. This prevents a generic missing
+    // selector on another page from becoming a false root cause.
+    if (p.diagnosis?.code === "DOM_NULL_REFERENCE") {
+      const domProof = matches.find(e => e.evidenceStrength === "HIGH" && e.stackHit === true && (e.existsInSameDocument === false || e.missingOnLoadedPage === true));
+      if (!domProof) return { ok: false, reason: "DOM_CAUSALITY_NOT_PROVEN" };
+    }
+  }
+  return { ok: true, reason: null };
+}
+
+async function validateExactOperationsAgainstSource(plan) {
+  const p = plan || {};
+  const ops = Array.isArray(p.operations) ? p.operations : [];
+  if (!ops.length) return false;
+  for (const op of ops) {
+    if (op.type !== "REPLACE_EXACT" || !op.file || !Number.isFinite(Number(op.line))) return false;
+    const src = await fetchFile(op.file);
+    if (!src.ok || !src.text) return false;
+    const lines = sourceLines(src.text);
+    const actualLine = lines[Number(op.line) - 1] ?? "";
+    if (!actualLine.includes(String(op.before))) return false;
+    const occurrence = src.text.indexOf(String(op.before));
+    if (occurrence < 0 || lineOf(src.text, occurrence) !== Number(op.line)) return false;
+  }
+  return true;
+}
+
 async function resolveRootCause(c) {
   const originalTarget = c.source;
   const runtimeLocations = [
@@ -662,18 +718,27 @@ async function resolveRootCause(c) {
   // by the reported page and whose selector is absent there. This is stronger than
   // simply blaming the file named by telemetry.
   if (c.diagnosis.code === "DOM_NULL_REFERENCE") {
-    const best = high.find(x => x.file === originalTarget) || high.find(x => x.loadedBy?.some(p => p === originalTarget)) || high[0];
+    // A DOM-null root cause is proven only when the runtime points to the exact
+    // assignment (file + line) and the consuming HTML page demonstrably lacks the
+    // referenced target. Missing DOM elsewhere is not causal proof.
+    const causalHigh = high.filter(x => x.stackHit === true && x.loadedBy?.length && x.evidenceStrength === "HIGH");
+    const best = causalHigh.find(x => x.file === originalTarget)
+      || causalHigh.find(x => x.loadedBy?.some(p => p === originalTarget))
+      || causalHigh[0];
     if (best) {
       const src = await fetchFile(best.file);
       const ops = findLikelyDomBinding(best.file, src.text, c.signature)
-        .filter(op => op.selector === best.selector || Number(op.line) === Number(best.line));
-      return {
-        rootCauseFile: best.file,
-        rootCauseStatus: best.file === originalTarget ? "CONFIRMED_ORIGINAL_TARGET" : "TARGET_CORRECTED_BY_MEDICINE",
-        sourceEvidence: candidates.slice(0, 18).map(e => ({ file:e.file, selector:e.selector, property:e.property, line:e.line, before:e.before, evidenceStrength:e.evidenceStrength, reason:e.evidenceReason, loadedBy:e.loadedBy || [], dependencyReason:e.dependencyReason })),
-        resolvedOperation: ops[0] || null,
-        candidates: candidates.slice(0, 18)
-      };
+        .filter(op => Number(op.line) === Number(best.line) && op.selector === best.selector);
+      const exactOperation = ops[0] || null;
+      if (exactOperation) {
+        return {
+          rootCauseFile: best.file,
+          rootCauseStatus: best.file === originalTarget ? "CONFIRMED_ORIGINAL_TARGET" : "TARGET_CORRECTED_BY_MEDICINE",
+          sourceEvidence: candidates.slice(0, 18).map(e => ({ file:e.file, selector:e.selector, property:e.property, line:e.line, before:e.before, evidenceStrength:e.evidenceStrength, reason:e.evidenceReason, loadedBy:e.loadedBy || [], dependencyReason:e.dependencyReason, stackHit:e.stackHit === true, existsInSameDocument:e.existsInSameDocument })),
+          resolvedOperation: exactOperation,
+          candidates: candidates.slice(0, 18)
+        };
+      }
     }
     return { rootCauseFile: originalTarget, rootCauseStatus: "UNPROVEN", sourceEvidence: candidates.slice(0, 18), resolvedOperation: null, candidates: candidates.slice(0, 18) };
   }
@@ -868,20 +933,19 @@ function buildCodePrescription(plan) {
 
   const exact = items.length > 0 &&
     items.every(x => x.type === "REPLACE_EXACT" && x.before && x.after);
-  const highEvidence = items.some(x => x.evidenceStrength === "HIGH");
-  const rootProven = ["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE", "CONTRACT_ROOT_CAUSE_IDENTIFIED"]
-    .includes(p.rootCauseStatus);
+  const proof = exactProofForPlan(p);
+  const ready = !!(p.precisionGate === true && exact && proof.ok);
 
   return {
-    ready: !!(p.precisionGate === true && exact && highEvidence && rootProven),
-    status: p.precisionGate === true && exact && highEvidence && rootProven ? "READY_TO_COPY" : "REVIEW_REQUIRED",
+    ready,
+    status: ready ? "READY_TO_COPY" : "REVIEW_REQUIRED",
     targetFile: p.rootCauseFile || p.target || null,
     rootCauseStatus: p.rootCauseStatus || "UNPROVEN",
     evidenceCount: evidence.length,
     items,
-    instruction: p.precisionGate === true && exact && highEvidence && rootProven
-      ? "Solusi berasal dari operasi exact yang terikat pada source evidence. Review BEFORE/AFTER lalu copy secara manual."
-      : "Medicine belum memiliki kombinasi root cause, source exact, evidence HIGH, dan operasi exact yang cukup untuk menyatakan solusi siap copy."
+    instruction: ready
+      ? "Solusi berasal dari operasi exact yang terikat pada HIGH source evidence dan current deployed source. Review BEFORE/AFTER lalu copy secara manual."
+      : `Medicine belum dapat membuka copy gate: ${proof.reason || "exact proof belum lengkap"}.`
   };
 }
 
@@ -961,7 +1025,22 @@ async function enrichRepairPlan(c, verification) {
     const adminSource = await fetchFile("bcgo-admin.html");
     const targetFindings = verification?.targetFindings || [];
     const gap = targetFindings.find(f => f.kind === "ADMIN_PRESENTATION_GAP");
-    if (gap) plan.operations.push(...buildAdminGapOperations("bcgo-admin.html", gap.missing || [], adminSource.text));
+    if (gap) {
+      const ops = buildAdminGapOperations("bcgo-admin.html", gap.missing || [], adminSource.text);
+      plan.operations.push(...ops);
+      for (const op of ops) {
+        plan.sourceEvidence.push({
+          file: op.file,
+          line: op.line,
+          before: op.before,
+          evidenceStrength: "HIGH",
+          reason: `Operation exact diikat ke renderer ${op.file}:${op.line}; kontrak ${gap.sourceFile || "source"} -> ${gap.targetFile || "target"} menunjukkan field ${Array.isArray(gap.missing) ? gap.missing.join(", ") : "yang hilang"}.`,
+          contractSourceFile: gap.sourceFile || null,
+          contractTargetFile: gap.targetFile || null,
+          missing: gap.missing || []
+        });
+      }
+    }
   }
 
   for (const op of plan.operations) {
@@ -969,21 +1048,21 @@ async function enrichRepairPlan(c, verification) {
     if (op.type === "INSERT_BEFORE") plan.beforeAfter.push({ file: op.file, line: null, before: op.marker, after: `${op.marker}\n${op.content}` });
   }
 
-  const exactEvidence = plan.sourceEvidence.some(e => e.evidenceStrength === "HIGH");
-  const rootCauseProven = ["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE", "CONTRACT_ROOT_CAUSE_IDENTIFIED"].includes(plan.rootCauseStatus);
-  const operationMatchesRoot = plan.operations.length > 0 && plan.operations.every(op => op.file === plan.rootCauseFile && op.type === "REPLACE_EXACT" && op.before && op.after);
-  const beforeStillExists = plan.operations.length > 0 && plan.operations.every(op => {
-    const ev = plan.sourceEvidence.find(e => e.file === op.file && Number(e.line) === Number(op.line));
-    return ev?.before ? String(ev.before) === String(op.before) : true;
-  });
-  if (plan.operations.length && exactEvidence && rootCauseProven && operationMatchesRoot && beforeStillExists) {
+  // The gate is evaluated in two stages: evidence causality and current deployed
+  // source. A HIGH score by itself is never enough. The exact BEFORE must still be
+  // present at the exact line in the fetched source, and every operation must bind
+  // to its own HIGH evidence.
+  plan.precisionGate = false;
+  const sourceExact = await validateExactOperationsAgainstSource(plan);
+  plan.precisionGate = sourceExact;
+  const proof = exactProofForPlan(plan);
+  if (sourceExact && proof.ok) {
     plan.status = "PROPOSED";
     plan.blockReason = null;
-    plan.precisionGate = true;
   } else {
     plan.status = "PATCH_REQUIRES_REVIEW";
-    plan.blockReason = "PRECISION GATE: Medicine belum menemukan lokasi source dan operasi exact yang terbukti. Source tidak akan diubah berdasarkan tebakan.";
     plan.precisionGate = false;
+    plan.blockReason = `PRECISION GATE: ${proof.reason || "EXACT_SOURCE_NOT_CONFIRMED"}. Source tidak akan diubah berdasarkan tebakan.`;
   }
   return attachPrescription(plan);
 }
@@ -991,20 +1070,16 @@ async function enrichRepairPlan(c, verification) {
 function canApprove(c) {
   const v = c?.verification;
   const plan = c?.repairPlan;
-  if (!c || !v || !plan?.operations?.length) return false;
-  if (c.status !== "VERIFIED_DIAGNOSIS") return false;
-  if (v.verdict !== "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE" || plan.precisionGate !== true) return false;
-  if (plan.rootCauseFile !== plan.operations[0].file) return false;
-  return plan.operations.every(op => op.type === "REPLACE_EXACT" && op.before && op.after && op.file === plan.rootCauseFile);
+  if (!c || !v || c.status !== "VERIFIED_DIAGNOSIS") return false;
+  if (v.verdict !== "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE") return false;
+  return exactProofForPlan(plan).ok;
 }
 
 function canApplyPatch(c) {
   return !!(
     c && c.status === "READY_FOR_PATCH" &&
-    c.repairPlan?.operations?.length &&
-    c.verification &&
-    c.verification.verdict === "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE" &&
-    c.repairPlan.rootCauseFile === c.repairPlan.operations[0]?.file
+    c.verification?.verdict === "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE" &&
+    exactProofForPlan(c.repairPlan).ok
   );
 }
 
@@ -1055,14 +1130,11 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     S.activeCase.sourceEvidence = S.activeCase.repairPlan.sourceEvidence || [];
 
     const plan = S.activeCase.repairPlan;
-    const exactProof = !!(
-      plan.operations?.length &&
-      plan.precisionGate === true &&
-      plan.rootCauseFile === plan.operations[0]?.file &&
-      ["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE", "CONTRACT_ROOT_CAUSE_IDENTIFIED"].includes(plan.rootCauseStatus) &&
-      plan.sourceEvidence.some(e => e.evidenceStrength === "HIGH") &&
-      plan.operations.every(op => op.type === "REPLACE_EXACT" && op.before && op.after && op.file === plan.rootCauseFile)
-    );
+    const proof = exactProofForPlan(plan);
+    const exactProof = plan.precisionGate === true && proof.ok;
+    if (!exactProof && plan.blockReason == null) {
+      plan.blockReason = `PRECISION GATE: ${proof.reason || "EXACT_SOURCE_NOT_CONFIRMED"}.`;
+    }
     v.verdict = exactProof ? "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE"
       : (v.rootCauseStatus === "CONTRACT_ROOT_CAUSE_IDENTIFIED" ? "ROOT_CAUSE_IDENTIFIED_PATCH_BLOCKED" : "INSUFFICIENT_EVIDENCE");
     v.target = v.rootCauseFile || requestedTarget;
