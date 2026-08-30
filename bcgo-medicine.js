@@ -42,12 +42,6 @@ const REGISTRY = {
   "bcgo-medicine.js": { type: "Sistem Medicine Core", role: "medicine" }
 };
 
-// Runtime-discovered local files are added to the analysis surface when they are
-// referenced by bcgo.html / bcgo.js / other registered files. This prevents Medicine
-// from stopping at a hand-maintained whitelist when the system grows.
-const DISCOVERED = new Map();
-const analysisRegistry = () => ({ ...REGISTRY, ...Object.fromEntries(DISCOVERED) });
-
 const REQUIRED = {
   driver: ["name", "phone", "address", "vehicleType", "photo", "ktp", "sim", "bank", "accountName", "accountNo"],
   assistant: ["name", "phone", "address", "serviceType", "ktp", "fotoKtp", "socialMedia"],
@@ -89,7 +83,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "2.4.0",
+  version: "2.5.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -142,8 +136,29 @@ function prescription(d) {
   return { treatment: d.treatment, risk: safe ? "LOW" : "HIGH", mode: safe ? "SAFE_PROPOSAL" : "APPROVAL_REQUIRED" };
 }
 
+const TELEMETRY_ACTIVE_WINDOW = 15 * 60 * 1000;
+const TELEMETRY_FUTURE_SKEW = 2 * 60 * 1000;
+
+function telemetryTime(log) {
+  const value = log?.reportedAt ?? log?.createdAt ?? log?.timestamp ?? log?.at ?? log?.time ?? null;
+  if (value == null) return NaN;
+  if (typeof value === "number") return value < 1e12 ? value * 1000 : value;
+  if (typeof value === "object" && typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value === "object" && typeof value.seconds === "number") return value.seconds * 1000 + Math.floor((value.nanoseconds || 0) / 1e6);
+  const n = Number(value);
+  if (Number.isFinite(n)) return n < 1e12 ? n * 1000 : n;
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function isFreshTelemetry(log, nowMs = Date.now()) {
+  const t = telemetryTime(log);
+  if (!Number.isFinite(t)) return true;
+  return t <= nowMs + TELEMETRY_FUTURE_SKEW && nowMs - t <= TELEMETRY_ACTIVE_WINDOW;
+}
+
 function activeCases() {
-  return S.cases.filter(c => !["RECOVERED", "REJECTED", "FIXED_VERIFIED"].includes(c.status));
+  return S.cases.filter(c => !["RECOVERED", "REJECTED", "FIXED_VERIFIED", "HISTORICAL"].includes(c.status) && isFreshTelemetry(c.evidence));
 }
 
 function mentionedFile(q) {
@@ -153,13 +168,7 @@ function mentionedFile(q) {
 
 function latestRelevantLogs(file) {
   return S.logs
-    .filter(l => !file || safeLower(l.fileName || l.source) === safeLower(file))
-    .slice()
-    .sort((a, b) => {
-      const ta = Date.parse(a.createdAt || a.timestamp || a.at || 0) || 0;
-      const tb = Date.parse(b.createdAt || b.timestamp || b.at || 0) || 0;
-      return tb - ta;
-    })
+    .filter(l => (!file || safeLower(l.fileName || l.source) === safeLower(file)) && isFreshTelemetry(l))
     .slice(0, 12);
 }
 
@@ -182,6 +191,7 @@ async function postSystemMessage(role, msg, meta = {}) {
 }
 
 function makeCase(log) {
+  if (!isFreshTelemetry(log)) return null;
   const source = text(log.fileName || log.source || "UNKNOWN", 120);
   const sig = text(log.message || log.error || "Unknown error", 700);
   if (S.cases.some(c => c.source === source && c.signature === sig)) return null;
@@ -221,19 +231,11 @@ function makeCase(log) {
   return c;
 }
 
-function stopRealtimeListeners() {
-  for (const unsub of S.listeners.splice(0)) {
-    try { if (typeof unsub === "function") unsub(); } catch {}
-  }
-}
-
 function startTelemetry() {
   if (!window.CikurCloud?.listenSystemLogs) {
     emit("telemetry_unavailable");
     return;
   }
-  // Prevent duplicate telemetry subscriptions after auth transitions.
-  for (const unsub of S.listeners.splice(0)) { try { if (typeof unsub === "function") unsub(); } catch {} }
   const unsub = window.CikurCloud.listenSystemLogs(logs => {
     S.logs = Array.isArray(logs) ? logs : [];
     emit("telemetry", { logs: S.logs });
@@ -310,7 +312,7 @@ function normalizeLocalRef(ref, fromFile = "") {
     value = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
   } catch {}
   value = value.replace(/^\.\//, "");
-  return analysisRegistry()[value] ? value : null;
+  return REGISTRY[value] ? value : null;
 }
 
 function extractDependencies(fileName, source) {
@@ -499,32 +501,17 @@ function exactDomEvidence(fileName, source, signature, context = {}) {
 }
 
 async function buildSourceEvidence(targetFile, signature) {
+  const names = Object.keys(REGISTRY);
   const evidence = [];
   const runtimeLocations = extractRuntimeLocation(signature);
   const results = {};
-
-  // First load the known system surface, then expand it from actual local references.
-  const queue = [...Object.keys(REGISTRY)];
-  const seen = new Set();
-  while (queue.length) {
-    const name = queue.shift();
-    if (!name || seen.has(name)) continue;
-    seen.add(name);
-    const x = await fetchFile(name);
-    results[name] = x;
-    if (!x?.ok || !x.text) continue;
-    for (const dep of extractDependencies(name, x.text)) {
-      if (!analysisRegistry()[dep]) DISCOVERED.set(dep, { type: "Discovered Dependency", role: "dependency" });
-      if (!seen.has(dep)) queue.push(dep);
-    }
-  }
-  const names = Object.keys(results);
+  for (const name of names) results[name] = await fetchFile(name);
   const graph = dependencyGraph(results);
 
   const htmlPages = names.filter(n => /\.html$/i.test(n));
   const priority = [];
   const pushPriority = (file, reason = "direct") => {
-    if (!analysisRegistry()[file] || priority.some(x => x.file === file)) return;
+    if (!REGISTRY[file] || priority.some(x => x.file === file)) return;
     priority.push({ file, reason });
   };
   pushPriority(targetFile, "target");
@@ -662,28 +649,13 @@ function buildAdminGapOperations(targetFile, missingFields, adminSource) {
 }
 
 async function scanConsistency(targets = null) {
-  const seed = targets?.length ? targets.filter(n => analysisRegistry()[n]) : Object.keys(REGISTRY);
-  const names = [];
+  const names = targets?.length ? targets.filter(n => REGISTRY[n]) : Object.keys(REGISTRY);
+  emit("scan_started", { total: names.length, targets: names });
   const result = {};
-  const queue = [...seed];
-  const seen = new Set();
-
-  // Expand the scan from real script/import/fetch references. In particular,
-  // bcgo.html and bcgo.js become the system entry points rather than a fixed list.
-  while (queue.length) {
-    const name = queue.shift();
-    if (!name || seen.has(name) || names.length >= 120) continue;
-    seen.add(name);
-    names.push(name);
+  for (const name of names) {
     const x = await fetchFile(name);
     result[name] = { ...x, fields: fields(name, x.text) };
-    if (!x?.ok || !x.text) continue;
-    for (const dep of extractDependencies(name, x.text)) {
-      if (!analysisRegistry()[dep]) DISCOVERED.set(dep, { type: "Discovered Dependency", role: "dependency" });
-      if (!seen.has(dep)) queue.push(dep);
-    }
   }
-  emit("scan_started", { total: names.length, targets: names, discovered: [...DISCOVERED.keys()] });
 
   const findings = [];
   const admin = new Set((result["bcgo-admin.html"]?.fields || []).map(safeLower));
@@ -1404,20 +1376,16 @@ async function startConversation() {
 onAuthStateChanged(auth, async user => {
   S.human.uid = user?.uid || null;
   emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
-  if (!user) { stopAutonomousConversation(); stopRealtimeListeners(); return; }
+  if (!user) { stopAutonomousConversation(); return; }
 
   try {
     const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
     if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
-      stopAutonomousConversation();
-      stopRealtimeListeners();
       emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
       emit("local_message", { message: { role: "medicine", text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.", clientMessageId: "auth-denied" } });
       return;
     }
   } catch (e) {
-    stopAutonomousConversation();
-    stopRealtimeListeners();
     emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED" });
     return;
   }
@@ -1441,7 +1409,7 @@ const API = {
   stopAutonomousConversation,
   getCodePrescription: caseId => { const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase; return c?.repairPlan?.codePrescription || buildCodePrescription(c?.repairPlan); },
   buildCodePrescription,
-  getRegistry: () => ({ ...analysisRegistry() }),
+  getRegistry: () => ({ ...REGISTRY }),
   getState: () => ({ ...S, sourceCache: undefined })
 };
 Object.defineProperties(API, {
@@ -1460,4 +1428,4 @@ Object.defineProperties(API, {
 window.BCGOMedicine = API;
 
 setTimeout(() => scanConsistency().catch(e => emit("scan_error", { message: e.message })), 600);
-emit("ready", { version: S.version, registryCount: Object.keys(analysisRegistry()).length, executorAvailable: executorAvailable() });
+emit("ready", { version: S.version, registryCount: Object.keys(REGISTRY).length, executorAvailable: executorAvailable() });
