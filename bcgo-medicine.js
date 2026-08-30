@@ -3,7 +3,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
-import { runAutonomousEngine } from "./bcgo.js?v=3.0";
+import { runAutonomousEngine } from "./bcgo.js?v=2.6";
 
 // Prevent duplicate initialization when the page/module is re-evaluated.
 if (window.__BCGO_MEDICINE_MODULE_ACTIVE__) {
@@ -52,9 +52,11 @@ const REGISTRY = {
   "bcgo-medicine.html": { type: "UI Medicine", role: "medicine" }
 };
 
-// bcgo.js is the producer engine itself, not an organ in BCGO's 15-organ registry.
+// bcgo.js is the producer engine itself, not an organ in BCGO's 14-organ registry.
 // Medicine may inspect its source as a dependency, but it must not count it as an organ.
 const SOURCE_SURFACE = ["bcgo.js"];
+// Source dependency surface is inspectable but does not inflate the organ count.
+const KNOWN_FILES = [...new Set([...Object.keys(REGISTRY), ...SOURCE_SURFACE])];
 
 const REQUIRED = {
   driver: ["name", "phone", "address", "vehicleType", "photo", "ktp", "sim", "bank", "accountName", "accountNo"],
@@ -174,7 +176,7 @@ function activeCases() {
 
 function mentionedFile(q) {
   const x = safeLower(q);
-  return Object.keys(REGISTRY).find(f => x.includes(f.toLowerCase())) || null;
+  return KNOWN_FILES.find(f => x.toLowerCase().includes(f.toLowerCase())) || null;
 }
 
 function normalizeFile(value) {
@@ -348,10 +350,6 @@ function startTelemetry() {
     // buildOrgans(), makeCases(), timestamp rules, or the ACTIVE window.
     S.bcgoEngine = runAutonomousEngine(state => syncFromBCGOState(state));
     verifyRegistryParity();
-    S.listeners.push(() => {
-      try { S.bcgoEngine?.stop?.(); } catch {}
-      S.bcgoEngine = null;
-    });
     emit("telemetry_transport", { transport: "BCGO_ENGINE_STATE" });
   } catch (e) {
     emit("telemetry_unavailable", { message: e?.message || String(e) });
@@ -360,7 +358,7 @@ function startTelemetry() {
 
 async function fetchFile(name) {
   const cached = S.sourceCache.get(name);
-  if (cached && Date.now() - cached.at < 4000) return cached.value;
+  if (cached && cached.value?.ok && Date.now() - cached.at < 4000) return cached.value;
   try {
     const r = await fetch(`./${encodeURIComponent(name)}`, { cache: "no-store" });
     const value = { ok: r.ok, status: r.status, text: r.ok ? await r.text() : "", fetchedAt: now() };
@@ -368,7 +366,6 @@ async function fetchFile(name) {
     return value;
   } catch (e) {
     const value = { ok: false, status: 0, text: "", error: e.message, fetchedAt: now() };
-    S.sourceCache.set(name, { at: Date.now(), value });
     return value;
   }
 }
@@ -426,7 +423,7 @@ function normalizeLocalRef(ref, fromFile = "") {
     value = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
   } catch {}
   value = value.replace(/^\.\//, "");
-  return REGISTRY[value] ? value : null;
+  return KNOWN_FILES.includes(value) ? value : null;
 }
 
 function extractDependencies(fileName, source) {
@@ -625,7 +622,7 @@ function exactDomEvidence(fileName, source, signature, context = {}) {
 }
 
 async function buildSourceEvidence(targetFile, signature) {
-  const names = [...new Set([...Object.keys(REGISTRY), ...SOURCE_SURFACE])];
+  const names = KNOWN_FILES.slice();
   const evidence = [];
   const runtimeLocations = extractRuntimeLocation(signature);
   const results = {};
@@ -635,7 +632,7 @@ async function buildSourceEvidence(targetFile, signature) {
   const htmlPages = names.filter(n => /\.html$/i.test(n));
   const priority = [];
   const pushPriority = (file, reason = "direct") => {
-    if (!REGISTRY[file] || priority.some(x => x.file === file)) return;
+    if (!KNOWN_FILES.includes(file) || priority.some(x => x.file === file)) return;
     priority.push({ file, reason });
   };
   pushPriority(targetFile, "target");
@@ -828,7 +825,7 @@ function buildAdminGapOperations(targetFile, missingFields, adminSource) {
 }
 
 async function scanConsistency(targets = null) {
-  const names = targets?.length ? targets.filter(n => REGISTRY[n]) : Object.keys(REGISTRY);
+  const names = targets?.length ? targets.filter(n => KNOWN_FILES.includes(n)) : KNOWN_FILES.slice();
   emit("scan_started", { total: names.length, targets: names });
   const result = {};
   for (const name of names) {
@@ -1104,7 +1101,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
 
   // Verify the named target plus the whole dependency surface. Medicine is not
   // allowed to stop at the first accusation; it must be able to move the target.
-  const targets = Object.keys(REGISTRY);
+  const targets = KNOWN_FILES.slice();
   const result = await scanConsistency(targets);
   const logs = latestRelevantLogs(requestedTarget);
   const runtimeEvidence = logs.slice(0, 8);
@@ -1548,10 +1545,22 @@ async function requestReview(caseId) {
   return c;
 }
 
+function stopConversation() {
+  for (const unsub of S.listeners.splice(0)) {
+    try { if (typeof unsub === "function") unsub(); } catch {}
+  }
+  S.conversationStarted = false;
+}
+
+function stopTelemetryEngine() {
+  try { S.bcgoEngine?.stop?.(); } catch {}
+  S.bcgoEngine = null;
+  S.bcgoSynced = false;
+}
+
 async function startConversation() {
-  // Never create a second Firestore listener for the same channel.
+  // A login/logout cycle must reuse exactly one listener.
   if (S.conversationStarted) return;
-  S.conversationStarted = true;
   try {
     const q = query(collection(db, "medicine_messages"), orderBy("createdAt", "desc"), limit(200));
     const unsub = onSnapshot(q, snapshot => {
@@ -1564,8 +1573,13 @@ async function startConversation() {
       });
       emit("conversation", { messages: S.messages });
     }, e => emit("conversation_error", { message: e.message }));
-    if (typeof unsub === "function") S.listeners.push(unsub);
-  } catch (e) { emit("conversation_error", { message: e.message }); }
+    if (typeof unsub !== "function") throw new Error("Firestore conversation listener tidak mengembalikan unsubscribe.");
+    S.listeners.push(unsub);
+    S.conversationStarted = true;
+  } catch (e) {
+    S.conversationStarted = false;
+    emit("conversation_error", { message: e.message });
+  }
 }
 
 onAuthStateChanged(auth, async user => {
@@ -1573,10 +1587,9 @@ onAuthStateChanged(auth, async user => {
   emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
   if (!user) {
     stopAutonomousConversation();
+    stopConversation();
+    stopTelemetryEngine();
     S.human.paused = false;
-    S.conversationStarted = false;
-    try { S.bcgoEngine?.stop?.(); } catch {}
-    S.bcgoEngine = null;
     return;
   }
 
@@ -1584,18 +1597,16 @@ onAuthStateChanged(auth, async user => {
     const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
     if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
       stopAutonomousConversation();
-      try { S.bcgoEngine?.stop?.(); } catch {}
-      S.bcgoEngine = null;
-      S.conversationStarted = false;
+      stopConversation();
+      stopTelemetryEngine();
       emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
       emit("local_message", { message: { role: "medicine", text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.", clientMessageId: "auth-denied" } });
       return;
     }
   } catch (e) {
     stopAutonomousConversation();
-    try { S.bcgoEngine?.stop?.(); } catch {}
-    S.bcgoEngine = null;
-    S.conversationStarted = false;
+    stopConversation();
+    stopTelemetryEngine();
     emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED" });
     return;
   }
