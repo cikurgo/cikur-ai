@@ -42,6 +42,12 @@ const REGISTRY = {
   "bcgo-medicine.js": { type: "Sistem Medicine Core", role: "medicine" }
 };
 
+// Runtime-discovered local files are added to the analysis surface when they are
+// referenced by bcgo.html / bcgo.js / other registered files. This prevents Medicine
+// from stopping at a hand-maintained whitelist when the system grows.
+const DISCOVERED = new Map();
+const analysisRegistry = () => ({ ...REGISTRY, ...Object.fromEntries(DISCOVERED) });
+
 const REQUIRED = {
   driver: ["name", "phone", "address", "vehicleType", "photo", "ktp", "sim", "bank", "accountName", "accountNo"],
   assistant: ["name", "phone", "address", "serviceType", "ktp", "fotoKtp", "socialMedia"],
@@ -83,7 +89,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "3.0.0",
+  version: "2.4.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -123,8 +129,7 @@ function diagnosis(message) {
     return { code: "REALTIME_CONNECTIVITY", title: "Gangguan koneksi/listener realtime", severity: "MEDIUM", confidence: .84, treatment: "FIRESTORE_RECONNECT" };
   }
   if (/undefined|is not a function|not defined/.test(m)) {
-    const fn = (String(message).match(/([A-Za-z_$][\w$]*)\s*(?:is not defined|is not a function)/i)||[])[1] || null;
-    return { code: "JAVASCRIPT_CONTRACT", title: fn ? `Kontrak JavaScript tidak terpenuhi: ${fn}` : "Kontrak JavaScript tidak terpenuhi", severity: "MEDIUM", confidence: .82, treatment: "RUNTIME_CONTRACT_REVIEW", symbol: fn };
+    return { code: "JAVASCRIPT_CONTRACT", title: "Kontrak JavaScript tidak terpenuhi", severity: "MEDIUM", confidence: .82, treatment: "RUNTIME_CONTRACT_REVIEW" };
   }
   if (/sinkron|synchron|count|jumlah|validasi|mitra|tidak sesuai|tidak sinkron/.test(m)) {
     return { code: "DATA_CONSISTENCY", title: "Potensi ketidaksinkronan data/validasi", severity: "MEDIUM", confidence: .70, treatment: "CROSS_FILE_CONSISTENCY_REVIEW" };
@@ -147,7 +152,15 @@ function mentionedFile(q) {
 }
 
 function latestRelevantLogs(file) {
-  return S.logs.filter(l => !file || safeLower(l.fileName || l.source) === safeLower(file)).slice(0, 12);
+  return S.logs
+    .filter(l => !file || safeLower(l.fileName || l.source) === safeLower(file))
+    .slice()
+    .sort((a, b) => {
+      const ta = Date.parse(a.createdAt || a.timestamp || a.at || 0) || 0;
+      const tb = Date.parse(b.createdAt || b.timestamp || b.at || 0) || 0;
+      return tb - ta;
+    })
+    .slice(0, 12);
 }
 
 async function postSystemMessage(role, msg, meta = {}) {
@@ -171,8 +184,7 @@ async function postSystemMessage(role, msg, meta = {}) {
 function makeCase(log) {
   const source = text(log.fileName || log.source || "UNKNOWN", 120);
   const sig = text(log.message || log.error || "Unknown error", 700);
-  const duplicateKey = `${source}|${sig}|${Number(log.lineNumber ?? log.line ?? log.lineno) || ""}|${Number(log.columnNumber ?? log.column ?? log.col) || ""}`;
-  if (S.cases.some(c => c._duplicateKey === duplicateKey)) return null;
+  if (S.cases.some(c => c.source === source && c.signature === sig)) return null;
 
   const d = diagnosis(sig);
   const c = {
@@ -189,7 +201,6 @@ function makeCase(log) {
     prescription: prescription(d),
     status: "DIAGNOSED",
     createdAt: now(),
-    _duplicateKey: duplicateKey,
     evidence: log,
     repairPlan: null,
     rootCauseFile: source,
@@ -204,11 +215,16 @@ function makeCase(log) {
   postSystemMessage("bcgo", `Saya menemukan evidence pada ${source}: ${d.title}. Saya serahkan ${c.id} ke Medicine untuk verifikasi independen.`, {
     kind: "BCGO_HANDOFF", caseId: c.id, target: source
   });
-  postSystemMessage("medicine", `Case ${c.id} saya terima. Saya langsung mulai investigasi evidence → source → root cause agar kasus tidak berhenti hanya pada NEEDS_EVIDENCE.`, {
+  postSystemMessage("medicine", `Case ${c.id} saya terima. Saya akan mencari akar masalah, memeriksa kontrak lintas-file, lalu menyiapkan repair plan yang konkret.`, {
     kind: "MEDICINE_ACK", caseId: c.id, target: source
   });
-  setTimeout(() => investigateLatestCase("new_case").catch(e => emit("verification_error", {message:e.message})), 120);
   return c;
+}
+
+function stopRealtimeListeners() {
+  for (const unsub of S.listeners.splice(0)) {
+    try { if (typeof unsub === "function") unsub(); } catch {}
+  }
 }
 
 function startTelemetry() {
@@ -216,11 +232,12 @@ function startTelemetry() {
     emit("telemetry_unavailable");
     return;
   }
+  // Prevent duplicate telemetry subscriptions after auth transitions.
+  for (const unsub of S.listeners.splice(0)) { try { if (typeof unsub === "function") unsub(); } catch {} }
   const unsub = window.CikurCloud.listenSystemLogs(logs => {
     S.logs = Array.isArray(logs) ? logs : [];
     emit("telemetry", { logs: S.logs });
     for (const l of S.logs.slice(0, 60)) makeCase(l);
-    if (S.logs.length) setTimeout(() => investigateLatestCase("telemetry"), 250);
   });
   if (typeof unsub === "function") S.listeners.push(unsub);
 }
@@ -293,7 +310,7 @@ function normalizeLocalRef(ref, fromFile = "") {
     value = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
   } catch {}
   value = value.replace(/^\.\//, "");
-  return REGISTRY[value] ? value : null;
+  return analysisRegistry()[value] ? value : null;
 }
 
 function extractDependencies(fileName, source) {
@@ -482,17 +499,32 @@ function exactDomEvidence(fileName, source, signature, context = {}) {
 }
 
 async function buildSourceEvidence(targetFile, signature) {
-  const names = Object.keys(REGISTRY);
   const evidence = [];
   const runtimeLocations = extractRuntimeLocation(signature);
   const results = {};
-  for (const name of names) results[name] = await fetchFile(name);
+
+  // First load the known system surface, then expand it from actual local references.
+  const queue = [...Object.keys(REGISTRY)];
+  const seen = new Set();
+  while (queue.length) {
+    const name = queue.shift();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    const x = await fetchFile(name);
+    results[name] = x;
+    if (!x?.ok || !x.text) continue;
+    for (const dep of extractDependencies(name, x.text)) {
+      if (!analysisRegistry()[dep]) DISCOVERED.set(dep, { type: "Discovered Dependency", role: "dependency" });
+      if (!seen.has(dep)) queue.push(dep);
+    }
+  }
+  const names = Object.keys(results);
   const graph = dependencyGraph(results);
 
   const htmlPages = names.filter(n => /\.html$/i.test(n));
   const priority = [];
   const pushPriority = (file, reason = "direct") => {
-    if (!REGISTRY[file] || priority.some(x => x.file === file)) return;
+    if (!analysisRegistry()[file] || priority.some(x => x.file === file)) return;
     priority.push({ file, reason });
   };
   pushPriority(targetFile, "target");
@@ -567,31 +599,6 @@ async function resolveRootCause(c) {
     }
   }
 
-  if (c.diagnosis.code === "JAVASCRIPT_CONTRACT") {
-    const symbolEvidence = [];
-    const runtimeLocations = [
-      ...extractRuntimeLocation(c.signature),
-      ...(c.runtimeLocation?.file ? [{ file:c.runtimeLocation.file, line:c.runtimeLocation.line, col:c.runtimeLocation.col }] : [])
-    ];
-    const results = {};
-    for (const name of Object.keys(REGISTRY)) results[name] = await fetchFile(name);
-    const preferred = runtimeLocations.map(x => normalizeLocalRef(x.file) || x.file).filter(Boolean);
-    const order = [...new Set([...preferred, originalTarget, ...Object.keys(REGISTRY)])].filter(n => REGISTRY[n]);
-    for (const name of order) {
-      const src=results[name];
-      if(!src?.ok || !src.text) continue;
-      symbolEvidence.push(...findJavaScriptContractEvidence(name,src.text,c.signature));
-    }
-    const exact = symbolEvidence.find(x => x.evidenceStrength === "HIGH" && (runtimeLocations.some(r=>safeLower(r.file)===safeLower(x.file)) || x.file===originalTarget));
-    return {
-      rootCauseFile: exact?.file || originalTarget,
-      rootCauseStatus: exact ? "TARGET_CORRECTED_BY_MEDICINE" : "UNPROVEN",
-      sourceEvidence: symbolEvidence.slice(0,18),
-      resolvedOperation: null,
-      candidates: symbolEvidence.slice(0,18)
-    };
-  }
-
   // For non-DOM cases, a strong runtime-correlated source may still identify the root.
   const correlated = candidates.find(x => x.evidenceStrength === "HIGH" && (x.stackHit || x.signatureHit));
   if (correlated) {
@@ -607,31 +614,6 @@ async function resolveRootCause(c) {
   }
 
   return { rootCauseFile: originalTarget, rootCauseStatus: "UNPROVEN", sourceEvidence: candidates.slice(0, 18), resolvedOperation: null, candidates: candidates.slice(0, 18) };
-}
-
-
-function findJavaScriptContractEvidence(fileName, source, signature) {
-  const symbol = (String(signature || "").match(/([A-Za-z_$][\w$]*)\s*(?:is not defined|is not a function)/i)||[])[1];
-  if (!symbol || !source) return [];
-  const declaration = new RegExp(`(?:function\\s+${escRegExp(symbol)}\\s*\\(|(?:const|let|var)\\s+${escRegExp(symbol)}\\s*=|(?:async\\s+)?function\\s+${escRegExp(symbol)}\\s*\\()`, "m");
-  const importRe = new RegExp(`(?:import[^;\\n]*|export[^;\\n]*)\\b${escRegExp(symbol)}\\b`, "m");
-  const callRe = new RegExp(`\\b${escRegExp(symbol)}\\s*\\(`, "g");
-  const out=[]; let m;
-  while((m=callRe.exec(source)) && out.length<10){
-    const before=source.slice(Math.max(0,m.index-120), Math.min(source.length,m.index+220));
-    const line=lineOf(source,m.index);
-    out.push({file:fileName,symbol,line,before:text(before,500),declared:declaration.test(source),imported:importRe.test(source),evidenceStrength: declaration.test(source)||importRe.test(source)?"MEDIUM":"HIGH", reason: declaration.test(source)||importRe.test(source)?`Symbol ${symbol} ada deklarasi/import di source; telemetry tetap membutuhkan stack exact untuk memastikan lokasi.`:`Telemetry menyebut ${symbol}, dan pemanggilan ${symbol} ditemukan di source tanpa deklarasi/import yang ditemukan.`});
-  }
-  return out;
-}
-
-function findJavaScriptContractOperations(fileName, source, signature) {
-  const ev = findJavaScriptContractEvidence(fileName, source, signature);
-  const symbol = (String(signature || "").match(/([A-Za-z_$][\w$]*)\s*(?:is not defined|is not a function)/i)||[])[1];
-  if (!symbol || !ev.length) return [];
-  // Only generate a concrete operation when the missing symbol is called directly and no declaration/import exists.
-  if (ev.some(x => x.declared || x.imported)) return [];
-  return [];
 }
 
 function findDomNullOperations(fileName, source, signature) {
@@ -680,13 +662,28 @@ function buildAdminGapOperations(targetFile, missingFields, adminSource) {
 }
 
 async function scanConsistency(targets = null) {
-  const names = targets?.length ? targets.filter(n => REGISTRY[n]) : Object.keys(REGISTRY);
-  emit("scan_started", { total: names.length, targets: names });
+  const seed = targets?.length ? targets.filter(n => analysisRegistry()[n]) : Object.keys(REGISTRY);
+  const names = [];
   const result = {};
-  for (const name of names) {
+  const queue = [...seed];
+  const seen = new Set();
+
+  // Expand the scan from real script/import/fetch references. In particular,
+  // bcgo.html and bcgo.js become the system entry points rather than a fixed list.
+  while (queue.length) {
+    const name = queue.shift();
+    if (!name || seen.has(name) || names.length >= 120) continue;
+    seen.add(name);
+    names.push(name);
     const x = await fetchFile(name);
     result[name] = { ...x, fields: fields(name, x.text) };
+    if (!x?.ok || !x.text) continue;
+    for (const dep of extractDependencies(name, x.text)) {
+      if (!analysisRegistry()[dep]) DISCOVERED.set(dep, { type: "Discovered Dependency", role: "dependency" });
+      if (!seen.has(dep)) queue.push(dep);
+    }
   }
+  emit("scan_started", { total: names.length, targets: names, discovered: [...DISCOVERED.keys()] });
 
   const findings = [];
   const admin = new Set((result["bcgo-admin.html"]?.fields || []).map(safeLower));
@@ -1407,16 +1404,20 @@ async function startConversation() {
 onAuthStateChanged(auth, async user => {
   S.human.uid = user?.uid || null;
   emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
-  if (!user) { stopAutonomousConversation(); return; }
+  if (!user) { stopAutonomousConversation(); stopRealtimeListeners(); return; }
 
   try {
     const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
     if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
+      stopAutonomousConversation();
+      stopRealtimeListeners();
       emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
       emit("local_message", { message: { role: "medicine", text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.", clientMessageId: "auth-denied" } });
       return;
     }
   } catch (e) {
+    stopAutonomousConversation();
+    stopRealtimeListeners();
     emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED" });
     return;
   }
@@ -1425,35 +1426,6 @@ onAuthStateChanged(auth, async user => {
   startConversation();
   startAutonomousConversation();
 });
-
-// Compatibility bridge for older deployed UI/telemetry that still calls the historical
-// surgical entry point. The current Medicine core owns the implementation now, so the
-// old name simply routes into the verified investigation pipeline instead of throwing
-// ReferenceError. This is intentionally local and contains no external dependency.
-window.requestSurgicalInvestigation = async function requestSurgicalInvestigation(target, context = {}) {
-  const requested = REGISTRY[target] ? target : (mentionedFile(target) || S.activeCase?.source || activeCases()[0]?.source || null);
-  if (!requested) return { ok:false, status:"NO_TARGET", message:"Tidak ada target file yang dapat diverifikasi." };
-  const verification = await verifyWithMedicine(requested, {
-    ...context,
-    requestedBy: context.requestedBy || "compatibility_bridge"
-  });
-  return { ok:true, verification };
-};
-
-let investigationRunning = false;
-async function investigateLatestCase(reason = "auto") {
-  if (investigationRunning || S.human.paused || !auth.currentUser) return;
-  const c = activeCases()[0];
-  if (!c) return;
-  investigationRunning = true;
-  try {
-    await verifyWithMedicine(c.source, { question:`Investigasi otomatis (${reason})`, requestedBy:"medicine_auto" });
-  } catch (e) {
-    emit("verification_error", { message:e.message, case:c });
-  } finally {
-    investigationRunning = false;
-  }
-}
 
 const API = {
   scanConsistency,
@@ -1469,7 +1441,7 @@ const API = {
   stopAutonomousConversation,
   getCodePrescription: caseId => { const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase; return c?.repairPlan?.codePrescription || buildCodePrescription(c?.repairPlan); },
   buildCodePrescription,
-  getRegistry: () => ({ ...REGISTRY }),
+  getRegistry: () => ({ ...analysisRegistry() }),
   getState: () => ({ ...S, sourceCache: undefined })
 };
 Object.defineProperties(API, {
@@ -1488,4 +1460,4 @@ Object.defineProperties(API, {
 window.BCGOMedicine = API;
 
 setTimeout(() => scanConsistency().catch(e => emit("scan_error", { message: e.message })), 600);
-emit("ready", { version: S.version, registryCount: Object.keys(REGISTRY).length, executorAvailable: executorAvailable() });
+emit("ready", { version: S.version, registryCount: Object.keys(analysisRegistry()).length, executorAvailable: executorAvailable() });
