@@ -6,7 +6,7 @@ import { db, auth } from "./cikur-config.js";
 import { runAutonomousEngine } from "./bcgo.js?v=3.0";
 
 /*
- * BCGO MEDICINE v3.4 — PRECISION REPAIR / VERIFIED HEALING ENGINE
+ * BCGO MEDICINE v3.7 — PRECISION REPAIR / VERIFIED HEALING ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -91,7 +91,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "3.3.0",
+  version: "3.7.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -403,6 +403,12 @@ function sourceLines(source) {
   return String(source || "").split(/\r?\n/);
 }
 
+function stripCodeComments(source) {
+  return String(source || "")
+    .replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, " "))
+    .replace(/(^|[^:])\/\/[^\n]*/g, (m, prefix) => prefix + " ".repeat(Math.max(0, m.length - prefix.length)));
+}
+
 function lineOf(source, offset) {
   return String(source || "").slice(0, Math.max(0, offset)).split(/\r?\n/).length;
 }
@@ -466,6 +472,7 @@ function dependencyClosure(root, graph, maxDepth = 5) {
 
 function findAssignmentOperations(fileName, source, signature = "") {
   if (!source) return [];
+  const scanSource = stripCodeComments(source);
   const ops = [];
   const wantsText = /textcontent|innerhtml|value|classlist|style/i.test(signature) || /cannot set properties of null|cannot read properties of null/i.test(signature);
   if (!wantsText) return ops;
@@ -477,7 +484,7 @@ function findAssignmentOperations(fileName, source, signature = "") {
   ];
   for (const re of direct) {
     let m;
-    while ((m = re.exec(source)) && ops.length < 30) {
+    while ((m = re.exec(scanSource)) && ops.length < 30) {
       const property = /innerHTML/.test(m[0]) ? "innerHTML" : /\.value\s*=/.test(m[0]) ? "value" : "textContent";
       const before = m[0];
       const accessor = before.match(/(?:document\.getElementById|document\.querySelector|\$)\([^)]*\)/)?.[0];
@@ -491,7 +498,7 @@ function findAssignmentOperations(fileName, source, signature = "") {
   // Pre-bound element pattern: const el = document.getElementById('x'); ... el.textContent = ...
   const bindRe = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(document\.getElementById|document\.querySelector|\$)\(\s*(["'])([^"']+)\3\s*\)\s*;?([\s\S]{0,900}?)(?:\1\s*\.textContent\s*=\s*([^;\n]+);?)/g;
   let b;
-  while ((b = bindRe.exec(source)) && ops.length < 40) {
+  while ((b = bindRe.exec(scanSource)) && ops.length < 40) {
     const whole = b[0];
     const varName = b[1];
     const rhs = b[6];
@@ -507,6 +514,7 @@ function findAssignmentOperations(fileName, source, signature = "") {
 
 function domAssignmentCandidates(fileName, source) {
   if (!source) return [];
+  const scanSource = stripCodeComments(source);
   const out = [];
   const patterns = [
     /(?:document\.getElementById\(\s*["']([^"']+)["']\s*\)|\$\(\s*["']([^"']+)["']\s*\))\s*\.textContent\s*=\s*([^;\n]+);?/g,
@@ -514,7 +522,7 @@ function domAssignmentCandidates(fileName, source) {
   ];
   for (const re of patterns) {
     let m;
-    while ((m = re.exec(source)) && out.length < 40) {
+    while ((m = re.exec(scanSource)) && out.length < 40) {
       const before = m[0];
       out.push({
         file: fileName,
@@ -726,24 +734,16 @@ async function resolveRootCause(c) {
     // Exact runtime file/line is the strongest root-cause signal. Never prefer the
     // requested HTML target merely because it was the page named by telemetry.
     const exactRuntime = runtimeLocations.find(loc => loc.file && loc.line);
-    const exactRuntimeNonTarget = runtimeLocations.find(loc =>
-      loc.file && loc.line &&
-      safeLower(normalizeLocalRef(loc.file) || loc.file) !== safeLower(originalTarget)
-    );
-    // Root cause selection is deliberately asymmetric: the telemetry target is
-    // the symptom surface, not the root by default. A different file must win
-    // when its exact runtime/source evidence is causal. The target itself may
-    // only be selected when the exact runtime location points to that target
-    // and an exact operation can actually be proven there.
-    const best = (exactRuntimeNonTarget && causalHigh.find(x =>
-        safeLower(x.file) === safeLower(normalizeLocalRef(exactRuntimeNonTarget.file) || exactRuntimeNonTarget.file)
-        && Number(x.line) === Number(exactRuntimeNonTarget.line)
-      ))
-      || causalHigh.find(x => x.loadedBy?.some(p => safeLower(p) === safeLower(originalTarget)) && x.file !== originalTarget)
-      || (exactRuntime && causalHigh.find(x =>
-        safeLower(x.file) === safeLower(normalizeLocalRef(exactRuntime.file) || exactRuntime.file)
+    const runtimeFile = exactRuntime ? (normalizeLocalRef(exactRuntime.file) || exactRuntime.file) : null;
+    const best = (exactRuntime && causalHigh.find(x =>
+        x.file !== originalTarget && safeLower(x.file) === safeLower(runtimeFile)
         && Number(x.line) === Number(exactRuntime.line)
-      ));
+      ))
+      || causalHigh.find(x => x.file !== originalTarget && x.loadedBy?.some(p => safeLower(p) === safeLower(originalTarget)))
+      || (exactRuntime && causalHigh.find(x =>
+        safeLower(x.file) === safeLower(runtimeFile) && Number(x.line) === Number(exactRuntime.line)
+      ))
+      || causalHigh.find(x => x.file !== originalTarget);
     if (best) {
       const src = await fetchFile(best.file);
       const ops = findLikelyDomBinding(best.file, src.text, c.signature)
@@ -791,7 +791,7 @@ async function resolveRootCause(c) {
     };
   }
 
-  return { rootCauseFile: null, rootCauseStatus: "UNPROVEN", sourceEvidence: candidates.slice(0, 18), resolvedOperation: null, candidates: candidates.slice(0, 18) };
+  return { rootCauseFile: originalTarget, rootCauseStatus: "UNPROVEN", sourceEvidence: candidates.slice(0, 18), resolvedOperation: null, candidates: candidates.slice(0, 18) };
 }
 
 function findDomNullOperations(fileName, source, signature) {
@@ -1132,7 +1132,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     checkedCount: targets.length,
     checkedAt: now(),
     question: context.question || null,
-    rootCauseFile: null,
+    rootCauseFile: requestedTarget,
     rootCauseStatus: "UNPROVEN",
     rootCauseCandidates: []
   };
