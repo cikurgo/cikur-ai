@@ -27,7 +27,7 @@ async function ensureRealtimeInfrastructure() {
 }
 
 /*
- * BCGO MEDICINE v4.1.4 — SOURCE-FIRST LIVE CROSS-FILE MEDICAL ENGINE
+ * BCGO MEDICINE v4.1.5 — SOURCE-FIRST LIVE CROSS-FILE MEDICAL ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -115,7 +115,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "4.1.2",
+  version: "4.1.5",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -907,7 +907,9 @@ async function scanLiveSurface(){
   emit("live_surface_started",{cycle:S.liveSurface.cycle,total:names.length,files:names});
   const result={};
   for(const name of names){
-    const x=await fetchFile(name);
+    let x;
+    try { x=await fetchFile(name); }
+    catch (error) { x={ok:false,status:0,text:"",error:error?.message||String(error),fetchedAt:now()}; }
     result[name]={...x,fields:fields(name,x.text)};
     // Keep the shared live state updated after every file so the UI accumulates
     // blocks during the scan instead of showing only the last file received.
@@ -926,7 +928,7 @@ async function scanLiveSurface(){
 function startLiveSurface(){
   if(S.liveSurface.timer) return;
   scanLiveSurface().catch(e=>emit("live_surface_error",{message:e.message}));
-  S.liveSurface.timer=setInterval(()=>scanLiveSurface().catch(e=>emit("live_surface_error",{message:e.message})),10000);
+  S.liveSurface.timer=setInterval(()=>scanLiveSurface().catch(e=>emit("live_surface_error",{message:e.message})),15000);
 }
 function stopLiveSurface(){ if(S.liveSurface.timer){clearInterval(S.liveSurface.timer);S.liveSurface.timer=null;} }
 
