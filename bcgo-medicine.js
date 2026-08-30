@@ -27,7 +27,7 @@ async function ensureRealtimeInfrastructure() {
 }
 
 /*
- * BCGO MEDICINE v4.1.5 — SOURCE-FIRST LIVE CROSS-FILE MEDICAL ENGINE
+ * BCGO MEDICINE v4.1.4 — SOURCE-FIRST LIVE CROSS-FILE MEDICAL ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -70,7 +70,9 @@ const MEDICINE_INTERNAL = {
   "bcgo-medicine.js": { type: "Otak Medicine", role: "medicine" },
   "bcgo-medicine.html": { type: "UI Medicine", role: "medicine" }
 };
-const DIAGNOSTIC_SCOPE = { ...REGISTRY, ...MEDICINE_INTERNAL };
+// Medicine is the examiner, not an organ under examination.
+// Its own JS/HTML are intentionally excluded from the default live diagnostic scope.
+const DIAGNOSTIC_SCOPE = { ...REGISTRY };
 const DIAGNOSTIC_ORGAN_COUNT = Object.keys(REGISTRY).length;
 const SOURCE_SURFACE = ["bcgo.js"];
 
@@ -900,35 +902,49 @@ function buildFileIssue(result,name,relations){
   return {status:"HEALTHY",severity:"OK",title:"Terbaca dan sinkron pada pemeriksaan saat ini",detail:"Tidak ada mismatch kontrak yang terbukti pada siklus ini.",relations:rel.map(x=>x.id)};
 }
 
+async function fetchFileWithTimeout(name, timeoutMs=7000){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const cached = S.sourceCache.get(name);
+    if (cached && Date.now() - cached.at < 4000) return cached.value;
+    const r = await fetch(`./${encodeURIComponent(name)}`, { cache: "no-store", signal: controller.signal });
+    const value = { ok:r.ok, status:r.status, text:r.ok ? await r.text() : "", fetchedAt:now(), error:r.ok ? "" : `HTTP ${r.status}` };
+    S.sourceCache.set(name,{at:Date.now(),value});
+    return value;
+  } catch(e) {
+    return {ok:false,status:0,text:"",error:e?.name === "AbortError" ? `Timeout membaca ${name}` : (e?.message || String(e)),fetchedAt:now()};
+  } finally { clearTimeout(timer); }
+}
+
 async function scanLiveSurface(){
   if(S.liveSurface.scanning) return S.liveSurface;
   S.liveSurface.scanning=true; S.liveSurface.cycle++;
   const names=[...new Set([...Object.keys(REGISTRY), ...SOURCE_SURFACE])];
-  emit("live_surface_started",{cycle:S.liveSurface.cycle,total:names.length,files:names});
+  const cycle=S.liveSurface.cycle;
+  emit("live_surface_started",{cycle,total:names.length,files:names});
   const result={};
-  for(const name of names){
-    let x;
-    try { x=await fetchFile(name); }
-    catch (error) { x={ok:false,status:0,text:"",error:error?.message||String(error),fetchedAt:now()}; }
+  // Read files concurrently so one slow/unavailable file can never freeze the
+  // entire medical map. Each result is emitted as soon as its request settles.
+  await Promise.all(names.map(async name=>{
+    const x=await fetchFileWithTimeout(name);
     result[name]={...x,fields:fields(name,x.text)};
-    // Keep the shared live state updated after every file so the UI accumulates
-    // blocks during the scan instead of showing only the last file received.
     S.liveSurface.results={...result};
     S.liveSurface.updatedAt=now();
-    emit("live_file",{cycle:S.liveSurface.cycle,file:name,result:result[name],results:{...result}});
-  }
+    emit("live_file",{cycle,file:name,result:result[name],results:{...result}});
+  }));
   const relations=buildCrossFileRelations(result);
   const fileStates=Object.fromEntries(names.map(name=>[name,buildFileIssue(result,name,relations)]));
   const mismatches=relations.filter(x=>x.status==="MISMATCH").map(x=>({rule:x.rule,sourceFile:x.sourceFile,targetFile:x.targetFile,missing:x.missingFromTarget||[],sourceLines:x.sourceLines||[],targetLines:x.targetLines||[]}));
   S.liveSurface.results=result; S.liveSurface.relations=relations; S.liveSurface.updatedAt=now(); S.liveSurface.scanning=false;
-  emit("live_surface_complete",{cycle:S.liveSurface.cycle,total:names.length,results:result,relations,fileStates,mismatches,updatedAt:S.liveSurface.updatedAt});
+  emit("live_surface_complete",{cycle,total:names.length,results:result,relations,fileStates,mismatches,updatedAt:S.liveSurface.updatedAt});
   return S.liveSurface;
 }
 
 function startLiveSurface(){
   if(S.liveSurface.timer) return;
   scanLiveSurface().catch(e=>emit("live_surface_error",{message:e.message}));
-  S.liveSurface.timer=setInterval(()=>scanLiveSurface().catch(e=>emit("live_surface_error",{message:e.message})),15000);
+  S.liveSurface.timer=setInterval(()=>scanLiveSurface().catch(e=>emit("live_surface_error",{message:e.message})),10000);
 }
 function stopLiveSurface(){ if(S.liveSurface.timer){clearInterval(S.liveSurface.timer);S.liveSurface.timer=null;} }
 
@@ -936,10 +952,10 @@ async function scanConsistency(targets = null) {
   const names = targets?.length ? targets.filter(n => DIAGNOSTIC_SCOPE[n]) : Object.keys(DIAGNOSTIC_SCOPE);
   emit("scan_started", { total: names.length, targets: names });
   const result = {};
-  for (const name of names) {
-    const x = await fetchFile(name);
+  await Promise.all(names.map(async name => {
+    const x = await fetchFileWithTimeout(name);
     result[name] = { ...x, fields: fields(name, x.text) };
-  }
+  }));
 
   const findings = [];
   const admin = new Set((result["bcgo-admin.html"]?.fields || []).map(safeLower));
@@ -1784,5 +1800,6 @@ Object.defineProperties(API, {
 });
 window.BCGOMedicine = API;
 
-setTimeout(() => scanConsistency().catch(e => emit("scan_error", { message: e.message })), 600);
+// Initial source scan is started by startLiveSurface(); no second overlapping scan.
+// A manual SCAN ULANG may invoke scanConsistency explicitly.
 emit("ready", { version: S.version, registryCount: Object.keys(REGISTRY).length, executorAvailable: executorAvailable() });
