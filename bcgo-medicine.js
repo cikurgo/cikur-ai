@@ -464,9 +464,16 @@ function dependencyClosure(root, graph, maxDepth = 5) {
   return out;
 }
 
+function maskCommentsPreserveLayout(source) {
+  return String(source || "")
+    .replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\r\n]/g, " "))
+    .replace(/(^|[^:])\/\/[^\r\n]*/g, (m, prefix) => prefix + m.slice(prefix.length).replace(/[^\r\n]/g, " "));
+}
+
 function findAssignmentOperations(fileName, source, signature = "") {
   if (!source) return [];
   const ops = [];
+  const code = maskCommentsPreserveLayout(source);
   const wantsText = /textcontent|innerhtml|value|classlist|style/i.test(signature) || /cannot set properties of null|cannot read properties of null/i.test(signature);
   if (!wantsText) return ops;
 
@@ -477,7 +484,7 @@ function findAssignmentOperations(fileName, source, signature = "") {
   ];
   for (const re of direct) {
     let m;
-    while ((m = re.exec(source)) && ops.length < 30) {
+    while ((m = re.exec(code)) && ops.length < 30) {
       const property = /innerHTML/.test(m[0]) ? "innerHTML" : /\.value\s*=/.test(m[0]) ? "value" : "textContent";
       const before = m[0];
       const accessor = before.match(/(?:document\.getElementById|document\.querySelector|\$)\([^)]*\)/)?.[0];
@@ -491,7 +498,7 @@ function findAssignmentOperations(fileName, source, signature = "") {
   // Pre-bound element pattern: const el = document.getElementById('x'); ... el.textContent = ...
   const bindRe = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(document\.getElementById|document\.querySelector|\$)\(\s*(["'])([^"']+)\3\s*\)\s*;?([\s\S]{0,900}?)(?:\1\s*\.textContent\s*=\s*([^;\n]+);?)/g;
   let b;
-  while ((b = bindRe.exec(source)) && ops.length < 40) {
+  while ((b = bindRe.exec(code)) && ops.length < 40) {
     const whole = b[0];
     const varName = b[1];
     const rhs = b[6];
@@ -508,13 +515,14 @@ function findAssignmentOperations(fileName, source, signature = "") {
 function domAssignmentCandidates(fileName, source) {
   if (!source) return [];
   const out = [];
+  const code = maskCommentsPreserveLayout(source);
   const patterns = [
     /(?:document\.getElementById\(\s*["']([^"']+)["']\s*\)|\$\(\s*["']([^"']+)["']\s*\))\s*\.textContent\s*=\s*([^;\n]+);?/g,
     /(?:document\.querySelector\(\s*["']([^"']+)["']\s*\)|\$\(\s*["']([^"']+)["']\s*\))\s*\.innerHTML\s*=\s*([^;\n]+);?/g
   ];
   for (const re of patterns) {
     let m;
-    while ((m = re.exec(source)) && out.length < 40) {
+    while ((m = re.exec(code)) && out.length < 40) {
       const before = m[0];
       out.push({
         file: fileName,
@@ -721,10 +729,14 @@ async function resolveRootCause(c) {
     // A DOM-null root cause is proven only when the runtime points to the exact
     // assignment (file + line) and the consuming HTML page demonstrably lacks the
     // referenced target. Missing DOM elsewhere is not causal proof.
-    const causalHigh = high.filter(x => x.stackHit === true && x.loadedBy?.length && x.evidenceStrength === "HIGH");
-    const best = causalHigh.find(x => x.file === originalTarget)
-      || causalHigh.find(x => x.loadedBy?.some(p => p === originalTarget))
-      || causalHigh[0];
+    const causalHigh = high
+      .filter(x => x.stackHit === true && (x.existsInSameDocument === false || x.missingOnLoadedPage === true))
+      .sort((a, b) => {
+        const aNonTarget = a.file !== originalTarget ? 1 : 0;
+        const bNonTarget = b.file !== originalTarget ? 1 : 0;
+        return (bNonTarget - aNonTarget) || ((b.loadedBy?.includes(originalTarget) ? 1 : 0) - (a.loadedBy?.includes(originalTarget) ? 1 : 0));
+      });
+    const best = causalHigh[0] || null;
     if (best) {
       const src = await fetchFile(best.file);
       const ops = findLikelyDomBinding(best.file, src.text, c.signature)
