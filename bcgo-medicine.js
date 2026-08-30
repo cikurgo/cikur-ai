@@ -3,7 +3,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
-import { runAutonomousEngine } from "./bcgo.js?v=2.6";
+import { runAutonomousEngine } from "./bcgo.js?v=2.6.0";
 
 /*
  * BCGO MEDICINE v3.3.1 — PRECISION REPAIR / VERIFIED HEALING ENGINE
@@ -99,7 +99,6 @@ const S = {
   findings: [],
   listeners: [],
   messages: [],
-  conversationUnsub: null,
   human: { mode: "ASSISTED", paused: false, uid: null },
   patchProposals: [],
   patchRequests: [],
@@ -108,7 +107,7 @@ const S = {
   sourceCache: new Map(),
   lastClientMessageId: null,
   eventSeq: 0,
-  autonomous: { enabled: true, turn: 0, timer: null, lastAt: 0 },
+  autonomous: { enabled: true, turn: 0, timer: null, lastAt: 0, lastInvestigationKey: "" },
   bcgoState: null,
   registryParity: { ok: false, status: "WAITING", bcgoCount: 0, medicineCount: Object.keys(REGISTRY).length, missing: [], extra: [], mismatched: [] },
   bcgoContract: {
@@ -125,7 +124,9 @@ const S = {
     connection: {}
   },
   bcgoEngine: null,
-  bcgoSynced: false
+  bcgoSynced: false,
+  conversationUnsub: null,
+  authEpoch: 0
 };
 
 const emit = (event, p = {}) => window.dispatchEvent(new CustomEvent("bcgo:medicine", {
@@ -335,17 +336,6 @@ function verifyRegistryParity() {
   return S.registryParity;
 }
 
-function cleanupRealtimeResources() {
-  stopAutonomousConversation();
-  for (const unsubscribe of S.listeners.splice(0)) {
-    try { unsubscribe?.(); } catch {}
-  }
-  S.bcgoEngine = null;
-  S.messages = [];
-  S.sourceCache.clear();
-  emit("realtime_cleanup", { ok: true });
-}
-
 function startTelemetry() {
   if (S.bcgoEngine) return;
   try {
@@ -369,12 +359,11 @@ async function fetchFile(name) {
   try {
     const r = await fetch(`./${encodeURIComponent(name)}`, { cache: "no-store" });
     const value = { ok: r.ok, status: r.status, text: r.ok ? await r.text() : "", fetchedAt: now() };
-    if (r.ok) S.sourceCache.set(name, { at: Date.now(), value });
-    else S.sourceCache.delete(name);
+    S.sourceCache.set(name, { at: Date.now(), value });
     return value;
   } catch (e) {
     const value = { ok: false, status: 0, text: "", error: e.message, fetchedAt: now() };
-    S.sourceCache.delete(name);
+    S.sourceCache.set(name, { at: Date.now(), value });
     return value;
   }
 }
@@ -477,18 +466,8 @@ function dependencyClosure(root, graph, maxDepth = 5) {
   return out;
 }
 
-function isCommentOnlyLine(source, index) {
-  const start = String(source || "").lastIndexOf("\n", Math.max(0, index - 1)) + 1;
-  const line = String(source || "").slice(start, index).trim();
-  return line.startsWith("//") || line.startsWith("*") || line.startsWith("/*");
-}
-
 function findAssignmentOperations(fileName, source, signature = "") {
   if (!source) return [];
-  // Medicine's own diagnostic regexes/comments intentionally contain DOM-assignment
-  // examples. Never treat those examples as repair candidates unless runtime evidence
-  // explicitly points back to bcgo-medicine.js itself.
-  if (fileName === "bcgo-medicine.js" && !/(?:bcgo-medicine\.js)(?::\d+)?/i.test(String(signature || ""))) return [];
   const ops = [];
   const wantsText = /textcontent|innerhtml|value|classlist|style/i.test(signature) || /cannot set properties of null|cannot read properties of null/i.test(signature);
   if (!wantsText) return ops;
@@ -501,7 +480,6 @@ function findAssignmentOperations(fileName, source, signature = "") {
   for (const re of direct) {
     let m;
     while ((m = re.exec(source)) && ops.length < 30) {
-      if (isCommentOnlyLine(source, m.index)) continue;
       const property = /innerHTML/.test(m[0]) ? "innerHTML" : /\.value\s*=/.test(m[0]) ? "value" : "textContent";
       const before = m[0];
       const accessor = before.match(/(?:document\.getElementById|document\.querySelector|\$)\([^)]*\)/)?.[0];
@@ -516,7 +494,6 @@ function findAssignmentOperations(fileName, source, signature = "") {
   const bindRe = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(document\.getElementById|document\.querySelector|\$)\(\s*(["'])([^"']+)\3\s*\)\s*;?([\s\S]{0,900}?)(?:\1\s*\.textContent\s*=\s*([^;\n]+);?)/g;
   let b;
   while ((b = bindRe.exec(source)) && ops.length < 40) {
-    if (isCommentOnlyLine(source, b.index)) continue;
     const whole = b[0];
     const varName = b[1];
     const rhs = b[6];
@@ -540,7 +517,6 @@ function domAssignmentCandidates(fileName, source) {
   for (const re of patterns) {
     let m;
     while ((m = re.exec(source)) && out.length < 40) {
-      if (isCommentOnlyLine(source, m.index)) continue;
       const before = m[0];
       out.push({
         file: fileName,
@@ -594,6 +570,34 @@ function selectorFromSignature(signature, source) {
   return [...new Set(ids.filter(Boolean))].find(id => s.includes(safeLower(id))) || ids[0] || null;
 }
 
+function isMedicineSelfFile(fileName) {
+  const f = normalizeFile(fileName);
+  return f === "bcgo-medicine.js" || f === "bcgo-medicine.html";
+}
+
+function hasExplicitExactSelfReference(c, runtimeLocations = []) {
+  const targets = [
+    ...runtimeLocations,
+    ...extractRuntimeLocation(c?.signature || "")
+  ];
+  const requested = normalizeFile(c?.source || "");
+  if (!isMedicineSelfFile(requested)) return false;
+  return targets.some(x => normalizeFile(x?.file) === requested && Number.isFinite(Number(x?.line)));
+}
+
+function filterRootCauseCandidates(candidates, c, runtimeLocations = []) {
+  const allowSelf = hasExplicitExactSelfReference(c, runtimeLocations);
+  return (candidates || []).filter(x => {
+    if (!isMedicineSelfFile(x.file)) return true;
+    if (!allowSelf) return false;
+    const exactFile = normalizeFile(x.file) === normalizeFile(c?.source);
+    const exactLine = Number.isFinite(Number(x.line)) && runtimeLocations.some(r =>
+      normalizeFile(r?.file) === normalizeFile(x.file) && Number(r?.line) === Number(x.line)
+    );
+    return exactFile && exactLine;
+  });
+}
+
 function exactDomEvidence(fileName, source, signature, context = {}) {
   const out = [];
   const runtimeLocations = context.runtimeLocations || [];
@@ -603,13 +607,10 @@ function exactDomEvidence(fileName, source, signature, context = {}) {
   const accesses = assignments.length ? assignments : domAssignmentCandidates(fileName, source);
 
   for (const c of accesses) {
-    if (fileName === "bcgo-medicine.js" && !runtimeLocations.some(x => x.file && safeLower(x.file) === safeLower(fileName))) continue;
     const selector = c.selector;
     if (!selector) continue;
     const sameDoc = /\.html$/i.test(fileName) ? htmlHasElement(source, selector) : null;
-    const runtimeHit = runtimeLocations.some(x =>
-      x.file && safeLower(x.file) === safeLower(fileName) && Number.isFinite(Number(x.line)) && Number(x.line) === Number(c.line)
-    );
+    const runtimeHit = runtimeLocations.some(x => x.file && safeLower(x.file) === safeLower(fileName) && (!x.line || Number(x.line) === Number(c.line)));
     const signatureHit = safeLower(signature).includes(safeLower(selector));
     let strength = "LOW";
     let reason = `Reference DOM '${selector}' ditemukan pada ${fileName}, tetapi hubungan dengan runtime belum terbukti.`;
@@ -646,10 +647,10 @@ function exactDomEvidence(fileName, source, signature, context = {}) {
   return out;
 }
 
-async function buildSourceEvidence(targetFile, signature) {
+async function buildSourceEvidence(targetFile, signature, caseContext = null, runtimeLocationsOverride = null) {
   const names = [...new Set([...Object.keys(REGISTRY), ...SOURCE_SURFACE])];
   const evidence = [];
-  const runtimeLocations = extractRuntimeLocation(signature);
+  const runtimeLocations = runtimeLocationsOverride || extractRuntimeLocation(signature);
   const results = {};
   for (const name of names) results[name] = await fetchFile(name);
   const graph = dependencyGraph(results);
@@ -657,7 +658,7 @@ async function buildSourceEvidence(targetFile, signature) {
   const htmlPages = names.filter(n => /\.html$/i.test(n));
   const priority = [];
   const pushPriority = (file, reason = "direct") => {
-    if (!REGISTRY[file] || priority.some(x => x.file === file)) return;
+    if (!(REGISTRY[file] || SOURCE_SURFACE.includes(file)) || priority.some(x => x.file === file)) return;
     priority.push({ file, reason });
   };
   pushPriority(targetFile, "target");
@@ -683,6 +684,9 @@ async function buildSourceEvidence(targetFile, signature) {
     }
   }
 
+  const filteredEvidence = filterRootCauseCandidates(evidence, caseContext || { source: targetFile, signature }, runtimeLocations);
+  evidence.length = 0;
+  evidence.push(...filteredEvidence);
   evidence.sort((a, b) => (b._score - a._score) || ({HIGH:3,MEDIUM:2,LOW:1}[b.evidenceStrength] - {HIGH:3,MEDIUM:2,LOW:1}[a.evidenceStrength]) || (a.line - b.line));
   return evidence.slice(0, 30).map(({ _score, ...e }) => e);
 }
@@ -740,7 +744,7 @@ async function resolveRootCause(c) {
     ...(c.runtimeLocation?.file ? [{ file: c.runtimeLocation.file, line: c.runtimeLocation.line, col: c.runtimeLocation.col }] : []),
     ...extractRuntimeLocation(c.runtimeLocation?.stack || "")
   ];
-  const candidates = await buildSourceEvidence(originalTarget, c.signature);
+  const candidates = await buildSourceEvidence(originalTarget, c.signature, c, runtimeLocations);
   const high = candidates.filter(x => x.evidenceStrength === "HIGH");
 
   // For a DOM-null error, prefer a source assignment whose script is actually loaded
@@ -750,7 +754,7 @@ async function resolveRootCause(c) {
     // A DOM-null root cause is proven only when the runtime points to the exact
     // assignment (file + line) and the consuming HTML page demonstrably lacks the
     // referenced target. Missing DOM elsewhere is not causal proof.
-    const causalHigh = high.filter(x => x.stackHit === true && x.loadedBy?.length && x.evidenceStrength === "HIGH");
+    const causalHigh = high.filter(x => x.stackHit === true && x.loadedBy?.length && x.evidenceStrength === "HIGH" && runtimeLocations.some(r => normalizeFile(r.file) === normalizeFile(x.file) && Number(r.line) === Number(x.line)));
     const best = causalHigh.find(x => x.file === originalTarget)
       || causalHigh.find(x => x.loadedBy?.some(p => p === originalTarget))
       || causalHigh[0];
@@ -881,6 +885,9 @@ async function scanConsistency(targets = null) {
   // Detect known DOM-null patterns directly from deployed source, not only telemetry.
   for (const name of names) {
     const source = result[name]?.text || "";
+    // Medicine can inspect its own source for self-integrity, but self-references are
+    // never promoted to normal root-cause findings without explicit runtime evidence.
+    if (isMedicineSelfFile(name)) continue;
     const directNullRisk = /\$\(\s*["'][^"']+["']\s*\)\.textContent\s*=|document\.getElementById\(\s*["'][^"']+["']\s*\)\.textContent\s*=/.test(source);
     if (directNullRisk) {
       const evs = exactDomEvidence(name, source, "");
@@ -1316,9 +1323,14 @@ async function autonomousConversationTick() {
   // the active case or refresh the cross-file evidence surface.
   if (turn > 0 && turn % 3 === 0) {
     if (active[0]) {
-      await postSystemMessage("medicine", `Saya lanjut bedah ${active[0].source}. Saya ulangi trace terhadap evidence terbaru agar jalur source → root cause tidak berhenti pada diagnosis lama.`, { kind: "AUTONOMOUS_INVESTIGATION", caseId: active[0].id, autonomous: true });
-      await verifyWithMedicine(active[0].source, { question: "Autonomous re-trace: terus pelajari saraf aktif.", requestedBy: "autonomous_medicine" });
-      emit("autonomous_investigation", { case: active[0] });
+      const latest = latestRelevantLogs(active[0].source)[0];
+      const investigationKey = [active[0].id, active[0].signature, latest?.createdAt?.seconds || latest?.createdAt || latest?.message || ""].join("|");
+      if (investigationKey !== S.autonomous.lastInvestigationKey) {
+        S.autonomous.lastInvestigationKey = investigationKey;
+        await postSystemMessage("medicine", `Saya lanjut bedah ${active[0].source}. Saya ulangi trace terhadap evidence terbaru agar jalur source → root cause tidak berhenti pada diagnosis lama.`, { kind: "AUTONOMOUS_INVESTIGATION", caseId: active[0].id, autonomous: true });
+        await verifyWithMedicine(active[0].source, { question: "Autonomous re-trace: terus pelajari saraf aktif.", requestedBy: "autonomous_medicine" });
+        emit("autonomous_investigation", { case: active[0] });
+      }
     } else {
       await scanConsistency();
       await postSystemMessage("bcgo", `Saya melakukan scan lintas-file lagi. Tidak ada case aktif, jadi saya gunakan waktu ini untuk mencari kontrak yang belum konsisten sebelum menjadi kendala runtime.`, { kind: "AUTONOMOUS_SCAN", autonomous: true });
@@ -1570,6 +1582,19 @@ async function requestReview(caseId) {
   return c;
 }
 
+function cleanupRealtime() {
+  for (const stop of S.listeners.splice(0)) {
+    try { stop?.(); } catch {}
+  }
+  if (typeof S.conversationUnsub === "function") {
+    try { S.conversationUnsub(); } catch {}
+  }
+  S.conversationUnsub = null;
+  S.bcgoEngine = null;
+  S.sourceCache.clear();
+  stopAutonomousConversation();
+}
+
 async function startConversation() {
   if (S.conversationUnsub) return;
   try {
@@ -1586,33 +1611,39 @@ async function startConversation() {
     }, e => emit("conversation_error", { message: e.message }));
     if (typeof unsub === "function") {
       S.conversationUnsub = unsub;
-      S.listeners.push(() => {
-        try { unsub(); } catch {}
-        if (S.conversationUnsub === unsub) S.conversationUnsub = null;
-      });
+      S.listeners.push(unsub);
     }
   } catch (e) { emit("conversation_error", { message: e.message }); }
 }
 
 onAuthStateChanged(auth, async user => {
+  const epoch = ++S.authEpoch;
   S.human.uid = user?.uid || null;
   emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
-  if (!user) { cleanupRealtimeResources(); return; }
+
+  if (!user) {
+    cleanupRealtime();
+    S.human.uid = null;
+    S.autonomous.lastInvestigationKey = "";
+    return;
+  }
 
   try {
     const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
+    if (epoch !== S.authEpoch || auth.currentUser?.uid !== user.uid) return;
     if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
-      cleanupRealtimeResources();
+      cleanupRealtime();
       emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
       emit("local_message", { message: { role: "medicine", text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.", clientMessageId: "auth-denied" } });
       return;
     }
   } catch (e) {
-    cleanupRealtimeResources();
+    cleanupRealtime();
     emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED" });
     return;
   }
 
+  if (epoch !== S.authEpoch || auth.currentUser?.uid !== user.uid) return;
   startTelemetry();
   startConversation();
   startAutonomousConversation();
