@@ -3,6 +3,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
+import { runAutonomousEngine } from "./bcgo.js?v=3.0";
 
 /*
  * BCGO MEDICINE v1.7 — PRECISION REPAIR / VERIFIED HEALING ENGINE
@@ -37,16 +38,10 @@ const REGISTRY = {
   "bcgo-engine.js": { type: "Sistem Core", role: "system" },
   "bcgo-admin.html": { type: "Sistem Admin", role: "admin" },
   "bcgo.html": { type: "Sistem Monitor", role: "monitor" },
-  "data-cgo.html": { type: "Data Sistem", role: "data" },
-  "bcgo-medicine.js": { type: "Otak Medicine", role: "medicine" },
-  "bcgo-medicine.html": { type: "UI Medicine", role: "medicine" }
+  "bcgo.js": { type: "Sistem Monitor Core", role: "monitor" },
+  "bcgo-medicine.html": { type: "Sistem Medicine UI", role: "medicine" },
+  "bcgo-medicine.js": { type: "Sistem Medicine Core", role: "medicine" }
 };
-
-// Kontrak telemetry BCGO v2.6: Medicine tidak membuat aturan ACTIVE sendiri.
-// Adapter di bawah mengikuti registry, timestamp, window, dan fingerprint BCGO.
-const ACTIVE_WINDOW = 15 * 60 * 1000;
-const CLOCK_SKEW = 5 * 60 * 1000;
-const LOG_LIMIT = 50;
 
 const REQUIRED = {
   driver: ["name", "phone", "address", "vehicleType", "photo", "ktp", "sim", "bank", "accountName", "accountNo"],
@@ -89,7 +84,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "2.8.0",
+  version: "3.0.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -97,7 +92,6 @@ const S = {
   findings: [],
   listeners: [],
   messages: [],
-  bcgo: { organs: {}, activeCases: [], medicineQueue: [], metrics: { total: Object.keys(REGISTRY).length, active: 0, recovered: 0, healthy: Object.keys(REGISTRY).length, logCount: 0 } },
   human: { mode: "ASSISTED", paused: false, uid: null },
   patchProposals: [],
   patchRequests: [],
@@ -106,7 +100,10 @@ const S = {
   sourceCache: new Map(),
   lastClientMessageId: null,
   eventSeq: 0,
-  autonomous: { enabled: true, turn: 0, timer: null, lastAt: 0 }
+  autonomous: { enabled: true, turn: 0, timer: null, lastAt: 0 },
+  bcgoState: null,
+  bcgoEngine: null,
+  bcgoSynced: false
 };
 
 const emit = (event, p = {}) => window.dispatchEvent(new CustomEvent("bcgo:medicine", {
@@ -152,15 +149,18 @@ function mentionedFile(q) {
   return Object.keys(REGISTRY).find(f => x.includes(f.toLowerCase())) || null;
 }
 
-function normalizeFileName(value) {
-  const raw = String(value || "").trim().split("?")[0].split("#")[0];
-  return raw.substring(raw.lastIndexOf("/") + 1) || raw;
+function normalizeFile(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "UNKNOWN";
+  const clean = raw.split("?")[0].split("#")[0];
+  return clean.substring(clean.lastIndexOf("/") + 1) || raw;
 }
 
 function latestRelevantLogs(file) {
-  const wanted = file ? normalizeFileName(file).toLowerCase() : null;
-  return S.logs.filter(l => !wanted || normalizeFileName(l.fileName || l.source).toLowerCase() === wanted).slice(0, 12);
+  const wanted = normalizeFile(file);
+  return S.logs.filter(l => normalizeFile(l.fileName || l.source || l.file) === wanted).slice(0, 12);
 }
+
 
 async function postSystemMessage(role, msg, meta = {}) {
   const clientMessageId = meta.clientMessageId || uid();
@@ -180,132 +180,108 @@ async function postSystemMessage(role, msg, meta = {}) {
   }
 }
 
-function timestamp(value) {
-  try {
-    if (!value) return 0;
-    if (typeof value.toMillis === "function") return value.toMillis();
-    if (typeof value.toDate === "function") return value.toDate().getTime();
-    if (value instanceof Date) return value.getTime();
-    if (typeof value === "number") return value;
-    const parsed = Date.parse(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  } catch { return 0; }
-}
+function syncFromBCGOState(state) {
+  if (!state || typeof state !== "object") return;
+  S.bcgoState = state;
+  S.bcgoSynced = true;
+  S.logs = Array.isArray(state.systemLogs) ? state.systemLogs.slice() : [];
 
-function isRecentBCGO(t) {
-  return t > 0 && (t >= Date.now() - ACTIVE_WINDOW || t <= Date.now() + CLOCK_SKEW);
-}
+  const queue = Array.isArray(state.medicineQueue) ? state.medicineQueue : [];
+  const queueIds = new Set(queue.map(x => x.id));
 
-function newestBCGOLogByFile(logs) {
-  const map = new Map();
-  for (const log of logs) {
-    const file = String(log?.fileName || "").trim().split("?")[0].split("#")[0].split("/").pop();
-    if (!REGISTRY[file]) continue;
-    const t = timestamp(log?.reportedAt);
-    const prev = map.get(file);
-    if (!prev || t >= prev.time) map.set(file, { log, time: t });
-  }
-  return map;
-}
+  for (const handoff of queue) {
+    const target = normalizeFile(handoff.target || handoff.file);
+    const evidence = S.logs.find(log =>
+      normalizeFile(log?.fileName || log?.source || log?.file) === target &&
+      String(log?.reportedAt ?? "") === String(handoff?.evidence?.reportedAt ?? handoff?.reportedAt ?? "")
+    ) || S.logs.find(log => normalizeFile(log?.fileName || log?.source || log?.file) === target);
 
-function buildBCGOContract(logs) {
-  const recent = newestBCGOLogByFile(logs);
-  const organs = {};
-  for (const [file, meta] of Object.entries(REGISTRY)) {
-    const item = recent.get(file);
-    const historical = logs.some(log => String(log?.fileName || "").trim().split("?")[0].split("#")[0].split("/").pop() === file);
-    if (item && isRecentBCGO(item.time)) {
-      organs[file] = {
-        ...meta, status: "ANOMALY", state: "ACTIVE",
-        message: String(item.log?.message || "Sinyal error diterima.").slice(0, 700),
-        reportedAt: item.log?.reportedAt || null,
-        line: item.log?.line ?? item.log?.lineno ?? null,
-        column: item.log?.column ?? item.log?.colno ?? null
+    let c = S.cases.find(x => x.bcgoCaseId === handoff.id || x.id === handoff.id);
+    if (!c) {
+      const sig = text(evidence?.message || handoff?.evidence?.message || handoff.message || "Sinyal telemetry BCGO diterima.", 700);
+      const d = diagnosis(sig);
+      c = {
+        id: handoff.id,
+        bcgoCaseId: handoff.id,
+        source: target,
+        signature: sig,
+        runtimeLocation: {
+          file: target,
+          line: Number(evidence?.lineNumber ?? evidence?.line ?? handoff?.evidence?.line) || null,
+          col: Number(evidence?.columnNumber ?? evidence?.column ?? handoff?.evidence?.column) || null,
+          stack: text(evidence?.stack || evidence?.stackTrace || "", 1200)
+        },
+        diagnosis: d,
+        prescription: prescription(d),
+        status: "DIAGNOSED",
+        createdAt: now(),
+        evidence: evidence || handoff.evidence || handoff,
+        repairPlan: null,
+        rootCauseFile: target,
+        sourceEvidence: [],
+        validation: null,
+        bcgoHandoff: { ...handoff, handoff: "READY_FOR_MEDICINE" }
       };
-    } else if (historical) {
-      organs[file] = { ...meta, status: "RECOVERED", state: "RECOVERED",
-        message: "Tidak ada error aktif dalam window pemantauan; laporan sebelumnya masih tersimpan sebagai bukti historis." };
+      S.cases.unshift(c);
+      S.cases = S.cases.slice(0, 80);
+      emit("case_created", { case: c, source: "BCGO_STATE.medicineQueue" });
+      void postSystemMessage("medicine", `Saya menerima ${c.id} langsung dari BCGO_STATE.medicineQueue. Target: ${target}. Saya hanya akan membuka treatment setelah root cause dan source exact terbukti.`, {
+        kind: "MEDICINE_BCGO_HANDOFF", caseId: c.id, target
+      });
     } else {
-      organs[file] = { ...meta, status: "HEALTHY", state: "HEALTHY",
-        message: "Belum ada laporan error aktif dari file ini." };
-    }
-  }
-  const active = Object.entries(organs).filter(([, info]) => info.state === "ACTIVE").map(([file, info]) => {
-    const t = timestamp(info.reportedAt) || Date.now();
-    const fingerprint = `${file}|${info.message}|${t}`.replace(/\s+/g, " ");
-    let hash = 0;
-    for (let i = 0; i < fingerprint.length; i++) hash = ((hash << 5) - hash + fingerprint.charCodeAt(i)) | 0;
-    return {
-      id: `CASE-${Math.abs(hash).toString(36).toUpperCase()}`,
-      target: file, rootCandidate: file,
-      severity: /security|permission|denied|failed|undefined|null/i.test(info.message) ? "HIGH" : "MEDIUM",
-      confidence: 92, status: "TELEMETRY_CONFIRMED",
-      evidence: { message: info.message, reportedAt: info.reportedAt, line: info.line, column: info.column }
-    };
-  });
-  const values = Object.values(organs);
-  return { organs, activeCases: active, medicineQueue: active.map(c => ({ ...c, handoff: "READY_FOR_MEDICINE" })), metrics: {
-    total: values.length, active: values.filter(v => v.state === "ACTIVE").length,
-    recovered: values.filter(v => v.state === "RECOVERED").length,
-    healthy: values.filter(v => v.state === "HEALTHY").length, logCount: logs.length
-  }};
-}
-
-function upsertBCGOCase(contractCase) {
-  const source = contractCase.target;
-  const sig = text(contractCase.evidence?.message || "Unknown error", 700);
-  let c = S.cases.find(x => x.id === contractCase.id);
-  const d = diagnosis(sig);
-  if (!c) {
-    c = { id: contractCase.id, source, signature: sig, runtimeLocation: { file: source, line: Number(contractCase.evidence?.line) || null, col: Number(contractCase.evidence?.column) || null, stack: "" }, diagnosis: d, prescription: prescription(d), status: "TELEMETRY_CONFIRMED", createdAt: now(), evidence: contractCase.evidence, repairPlan: null, rootCauseFile: source, sourceEvidence: [], validation: null, bcgoHandoff: contractCase };
-    S.cases.unshift(c);
-    emit("case_created", { case: c, bcgoHandoff: contractCase });
-    postSystemMessage("medicine", `BCGO menyerahkan ${c.id} (${source}) melalui kontrak telemetry yang sama. Medicine mulai investigasi tanpa mengubah status BCGO.`, { kind: "MEDICINE_ACK", caseId: c.id, target: source });
-  } else {
-    c.source = source; c.signature = sig; c.evidence = contractCase.evidence; c.bcgoHandoff = contractCase;
-    if (!["READY_FOR_PATCH","PATCH_PENDING_EXECUTION","PATCH_APPLIED","PATCH_FAILED","PATCH_REQUIRES_REVIEW","FIXED_VERIFIED","REJECTED"].includes(c.status)) c.status = "TELEMETRY_CONFIRMED";
-    emit("case_updated", { case: c, bcgoHandoff: contractCase });
-  }
-  return c;
-}
-
-function syncFromBCGOContract() {
-  const contract = buildBCGOContract(S.logs);
-  S.bcgo = contract;
-  const activeIds = new Set(contract.activeCases.map(x => x.id));
-  for (const bc of contract.activeCases) upsertBCGOCase(bc);
-  for (const c of S.cases) {
-    if (!activeIds.has(c.id) && !["READY_FOR_PATCH","PATCH_PENDING_EXECUTION","PATCH_APPLIED","PATCH_FAILED","PATCH_REQUIRES_REVIEW","FIXED_VERIFIED","REJECTED"].includes(c.status)) {
-      const organState = contract.organs[c.source]?.state;
-      if (organState === "ACTIVE" || organState === "RECOVERED") {
-        c.status = "RECOVERED";
-        c.recoveredAt = now();
-        c.recoveryReason = organState === "ACTIVE" ? "Superseded by a newer BCGO telemetry fingerprint." : "No longer active in BCGO telemetry window.";
-        emit("case_updated", { case: c, recovered: true, superseded: organState === "ACTIVE" });
+      c.bcgoHandoff = { ...handoff, handoff: "READY_FOR_MEDICINE" };
+      c.evidence = evidence || c.evidence;
+      c.lastBCGOStateAt = now();
+      if (!c.repairPlan && !["REJECTED", "FIXED_VERIFIED"].includes(c.status)) {
+        c.status = c.status === "PATCH_APPLIED" ? c.status : "DIAGNOSED";
       }
+      emit("case_updated", { case: c, source: "BCGO_STATE.medicineQueue" });
     }
   }
-  S.activeCase = S.cases.find(c => activeIds.has(c.id)) || null;
-  emit("bcgo_sync", { contract });
+
+  // BCGO is authoritative for whether a telemetry case is currently active.
+  // Only cases that originated from BCGO are auto-recovered here. Treatment/validation
+  // lifecycle is left intact.
+  for (const c of S.cases) {
+    if (!c.bcgoCaseId || queueIds.has(c.bcgoCaseId)) continue;
+    if (["DIAGNOSED", "INVESTIGATING", "NEEDS_EVIDENCE"].includes(c.status)) {
+      c.status = "RECOVERED";
+      c.recoveredAt = now();
+      emit("case_updated", { case: c, recovered: true, source: "BCGO_STATE" });
+    }
+  }
+
+  S.activeCase = queueIds.size
+    ? (S.cases.find(c => queueIds.has(c.bcgoCaseId)) || null)
+    : null;
+
+  emit("telemetry", { logs: S.logs, transport: "BCGO_STATE" });
+  emit("bcgo_sync", {
+    state,
+    contract: {
+      metrics: state.metrics || {},
+      activeCases: state.activeCases || [],
+      medicineQueue: queue,
+      systemOrgans: state.systemOrgans || {},
+      connection: state.connection || {}
+    }
+  });
 }
 
 function startTelemetry() {
-  if (!window.CikurCloud?.listenSystemLogs) { emit("telemetry_unavailable"); return; }
-  if (S._telemetryUnsub) S._telemetryUnsub();
-  S._telemetryUnsub = window.CikurCloud.listenSystemLogs(logs => {
-    S.logs = Array.isArray(logs) ? logs.slice(0, LOG_LIMIT) : [];
-    syncFromBCGOContract();
-    emit("telemetry", { logs: S.logs, bcgo: S.bcgo });
-  });
-  if (typeof S._telemetryUnsub === "function") S.listeners.push(S._telemetryUnsub);
-}
-
-function startBCGOStateRefresh() {
-  clearInterval(S._bcgoRefreshTimer);
-  S._bcgoRefreshTimer = setInterval(() => {
-    if (!S.logs.length) return;
-    syncFromBCGOContract();
-  }, 15000);
+  if (S.bcgoEngine) return;
+  try {
+    // Use the exact BCGO engine as the state producer. Medicine does not reimplement
+    // buildOrgans(), makeCases(), timestamp rules, or the ACTIVE window.
+    S.bcgoEngine = runAutonomousEngine(state => syncFromBCGOState(state));
+    S.listeners.push(() => {
+      try { S.bcgoEngine?.stop?.(); } catch {}
+      S.bcgoEngine = null;
+    });
+    emit("telemetry_transport", { transport: "BCGO_ENGINE_STATE" });
+  } catch (e) {
+    emit("telemetry_unavailable", { message: e?.message || String(e) });
+  }
 }
 
 async function fetchFile(name) {
@@ -1083,6 +1059,12 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
 }
 
 function bcgoAnswer(q) {
+  // BCGO is authoritative for system status. When the exact BCGO engine is
+  // running on this page, ask it directly instead of maintaining a second
+  // interpretation inside Medicine.
+  if (window.BCGOBrain?.ask) {
+    try { return window.BCGOBrain.ask(q); } catch {}
+  }
   const active = activeCases();
   const x = safeLower(q);
   const file = mentionedFile(q);
@@ -1440,7 +1422,7 @@ async function startConversation() {
 onAuthStateChanged(auth, async user => {
   S.human.uid = user?.uid || null;
   emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
-  if (!user) { stopAutonomousConversation(); if (S._bcgoRefreshTimer) clearInterval(S._bcgoRefreshTimer); return; }
+  if (!user) { stopAutonomousConversation(); return; }
 
   try {
     const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
@@ -1455,7 +1437,6 @@ onAuthStateChanged(auth, async user => {
   }
 
   startTelemetry();
-  startBCGOStateRefresh();
   startConversation();
   startAutonomousConversation();
 });
@@ -1475,7 +1456,7 @@ const API = {
   getCodePrescription: caseId => { const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase; return c?.repairPlan?.codePrescription || buildCodePrescription(c?.repairPlan); },
   buildCodePrescription,
   getRegistry: () => ({ ...REGISTRY }),
-  getState: () => ({ ...S, sourceCache: undefined, _telemetryUnsub: undefined, _bcgoRefreshTimer: undefined })
+  getState: () => ({ ...S, sourceCache: undefined })
 };
 Object.defineProperties(API, {
   cases: { get: () => S.cases },
@@ -1487,7 +1468,6 @@ Object.defineProperties(API, {
   verification: { get: () => S.verification },
   validation: { get: () => S.validation },
   logs: { get: () => S.logs },
-  bcgo: { get: () => S.bcgo },
   messages: { get: () => S.messages },
   executorAvailable: { get: executorAvailable }
 });

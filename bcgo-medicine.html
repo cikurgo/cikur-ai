@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BCGO Medicine v2.8 — BCGO Contract Sync</title>
+<title>BCGO Medicine v3.0 — BCGO Contract Sync</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
 body{font-family:Inter,Arial,sans-serif}.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.panel{background:#0f172a;border:1px solid #1e293b;border-radius:16px}.pre{white-space:pre-wrap;word-break:break-word}.pulse{animation:pulse 1.8s infinite}@keyframes pulse{50%{opacity:.45}}
@@ -12,7 +12,7 @@ body{font-family:Inter,Arial,sans-serif}.code{font-family:ui-monospace,SFMono-Re
 <body class="bg-slate-950 text-slate-100 min-h-screen p-3 md:p-5">
 <main class="max-w-7xl mx-auto space-y-4">
 <header class="panel p-4 md:p-5 flex flex-wrap justify-between items-center gap-3">
-  <div><h1 class="text-xl font-bold">💊 BCGO Medicine v2.8 <span class="text-xs text-cyan-300 code">PRECISION ROOT-CAUSE REPAIR</span></h1><p class="text-xs text-slate-400 mt-1">Detect • Re-trace Root Cause • Verify • Repair Plan • Human Approval • Execute • Validate</p></div>
+  <div><h1 class="text-xl font-bold">💊 BCGO Medicine v3.0 <span class="text-xs text-cyan-300 code">PRECISION ROOT-CAUSE REPAIR</span></h1><p class="text-xs text-slate-400 mt-1">BCGO_STATE → Medicine Queue • Re-trace Root Cause • Verify • Repair Plan • Human Approval • Execute • Validate</p></div>
   <div class="flex gap-2 text-[10px] code"><span id="auth" class="border border-slate-700 px-2 py-1 rounded">AUTH WAITING</span><span id="sys" class="border border-slate-700 px-2 py-1 rounded">BOOT</span><span id="executor" class="border border-slate-700 px-2 py-1 rounded">EXECUTOR WAITING</span></div>
 </header>
 
@@ -89,7 +89,7 @@ body{font-family:Inter,Arial,sans-serif}.code{font-family:ui-monospace,SFMono-Re
 </main>
 
 <script type="module">
-import './bcgo-medicine.js';
+import './bcgo-medicine.js?v=3.0';
 const $=id=>document.getElementById(id);
 const setText=(id,v)=>{const e=$(id);if(e)e.textContent=v??'';};
 const toggleClass=(id,c,force)=>{const e=$(id);if(e)e.classList.toggle(c,!!force);};
@@ -196,6 +196,16 @@ $('validate').onclick=async()=>{const c=window.BCGOMedicine.activeCase;if(!c)ret
 $('pause').onclick=async()=>{await window.BCGOMedicine.setHumanMode(!window.BCGOMedicine.human?.paused)};
 $('review').onclick=async()=>{const c=window.BCGOMedicine.activeCase;if(!c){chat('medicine','Belum ada case aktif untuk review.','review-none');return;}await window.BCGOMedicine.requestReview(c.id)};
 $('reject').onclick=async()=>{const c=window.BCGOMedicine.activeCase;if(!c){chat('medicine','Belum ada case aktif untuk ditolak.','reject-none');return;}const reason=prompt('Alasan penolakan treatment (opsional):','Saya ingin Medicine melakukan review ulang.');if(reason===null)return;try{render(await window.BCGOMedicine.rejectTreatment(c.id,reason||'Treatment ditolak oleh manusia.'))}catch(e){chat('medicine','Penolakan gagal: '+e.message,'rejecterr-'+Date.now())}};
+</script>
+<script>
+window.addEventListener('bcgo:medicine',e=>{
+  const d=e.detail||{};
+  if(d.event==='bcgo_sync'){
+    const m=d.contract?.metrics||{};
+    const el=document.getElementById('pipelineState');
+    if(el) el.textContent=m.active?`BCGO SYNC • ${m.active} ACTIVE`:'BCGO SYNC • MENUNGGU TELEMETRY';
+  }
+});
 </script>
 </body>
 </html>
