@@ -6,7 +6,7 @@ import { db, auth } from "./cikur-config.js";
 import { runAutonomousEngine } from "./bcgo.js?v=3.0";
 
 /*
- * BCGO MEDICINE v1.7 — PRECISION REPAIR / VERIFIED HEALING ENGINE
+ * BCGO MEDICINE v3.2 — PRECISION REPAIR / VERIFIED HEALING ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -27,6 +27,7 @@ import { runAutonomousEngine } from "./bcgo.js?v=3.0";
 
 // CONTRACT: this registry is an exact mirror of ORGAN_REGISTRY in bcgo.js.
 // Do not add/remove/rename an entry here independently.
+// v3.2: parity is verified against window.BCGOBrain.getRegistry() at runtime.
 const REGISTRY = {
   "index.html": { type: "Halaman Utama", role: "customer" },
   "assistant.html": { type: "Zona Customer", role: "customer" },
@@ -90,7 +91,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "3.0.0",
+  version: "3.2.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
