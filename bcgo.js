@@ -11,7 +11,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/fi
 import { db, auth } from "./cikur-config.js";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.7.3
+ * BCGO MASTER NERVE SYSTEM v2.7.4
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -47,6 +47,25 @@ const CLOCK_SKEW = 5 * 60 * 1000;
 const LOG_LIMIT = 50;
 const PROBE_LIMIT = 5;
 const EVENT_LIMIT = 24;
+
+const INTERNAL_TELEMETRY_SOURCES = new Set([
+  "bcgo.html", "bcgo.js", "bcgo-medicine.html", "bcgo-medicine.js",
+  "unhandledrejection", "error", "window.error", "runtime", "unknown"
+]);
+
+function telemetrySourceCandidates(log) {
+  const values = [
+    log?.fileName, log?.sourceFile, log?.filename, log?.file, log?.source,
+    log?.target, log?.url, log?.script
+  ].filter(Boolean);
+  const stack = String(log?.stack || log?.errorStack || "");
+  const matches = stack.match(/(?:https?:\/\/[^\s)]+\/)?[^\s/()]+\.(?:html|js)(?::\d+(?::\d+)?)?/gi) || [];
+  return [...values, ...matches].map(normalizeFile).filter(Boolean);
+}
+
+function isInternalTelemetry(log) {
+  return telemetrySourceCandidates(log).some(file => INTERNAL_TELEMETRY_SOURCES.has(String(file).toLowerCase()));
+}
 const CYCLE = { IN: 2200, PROCESS: 2200, REVIEW: 2200, OUT: 1800 };
 
 const normalizeFile = value => {
@@ -236,9 +255,10 @@ export function runAutonomousEngine(onCycleUpdate) {
   }
 
   function isRecent(t) {
-    // Timestamps sedikit di masa depan masih diterima agar perbedaan jam perangkat/server
-    // tidak membuat error nyata berubah menjadi HEALTHY.
-    return t > 0 && (t >= Date.now() - ACTIVE_WINDOW || t <= Date.now() + CLOCK_SKEW);
+    // Hanya sinyal dalam window aktif yang boleh menjadi ANOMALY.
+    // BUG FIX: kondisi lama memakai OR sehingga SEMUA timestamp lama ikut dianggap aktif.
+    const nowMs = Date.now();
+    return t > 0 && t >= nowMs - ACTIVE_WINDOW && t <= nowMs + CLOCK_SKEW;
   }
 
   function newestLogByFile() {
@@ -545,7 +565,10 @@ export function runAutonomousEngine(onCycleUpdate) {
     try {
       unsubscribeSystemLogs = window.CikurCloud.listenSystemLogs(logs => {
         if (stopped || !authorized || listenerEpoch !== authEpoch) return;
-        latestSystemLogs = Array.isArray(logs) ? logs.slice(0, LOG_LIMIT) : [];
+        const rawLogs = Array.isArray(logs) ? logs : [];
+        // Filter first, then apply the display limit. Otherwise a burst of internal
+        // self-errors at the top of the listener payload could hide real organ telemetry.
+        latestSystemLogs = rawLogs.filter(log => !isInternalTelemetry(log)).slice(0, LOG_LIMIT);
         const top = latestSystemLogs[0];
         const topAt = timestamp(top?.reportedAt);
         const previousTop = previousTopSignature;
@@ -712,7 +735,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   // dapat membuat loop: render error -> telemetry -> render -> error.
   window.addEventListener("error", event => {
     if (stopped) return;
-    const source = normalizeFile(event?.filename || "bcgo.html");
+    const source = normalizeFile(event?.filename || "__BCGO_UI__");
     const message = event?.message || event?.error?.message || "JavaScript error tidak diketahui.";
     if (source === "bcgo.html" || source === "bcgo.js") {
       state.uiError = `[${source}] ${String(message).slice(0, 450)}`;
@@ -726,6 +749,8 @@ export function runAutonomousEngine(onCycleUpdate) {
     const reason = event?.reason?.message || String(event?.reason || "Unhandled Promise rejection.");
     state.uiError = String(reason).slice(0, 450);
     recordEvent("UI_REJECTION", state.uiError, "SYS_UI_RENDER");
+    // This is a local diagnostic only. Never promote it into system_logs/anomaly.
+    try { event.preventDefault(); } catch {}
     console.warn("BCGO UI rejection diagnostic:", state.uiError);
   });
 

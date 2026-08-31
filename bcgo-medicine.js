@@ -5,7 +5,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/fi
 import { db, auth } from "./cikur-config.js";
 
 /*
- * BCGO MEDICINE v3.2 — PRECISION REPAIR / VERIFIED HEALING ENGINE
+ * BCGO MEDICINE v3.2.2 — PRECISION REPAIR / VERIFIED HEALING ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -46,6 +46,58 @@ const MEDICINE_INTERNAL = {
   "bcgo-medicine.html": { type: "Sistem Medicine UI", role: "medicine" },
   "bcgo-medicine.js": { type: "Sistem Medicine Core", role: "medicine" }
 };
+
+// Medicine may inspect BCGO itself as a dependency surface, but its own files
+// are never automatic anomaly targets or part of the live scan surface.
+const DIAGNOSTIC_SURFACE = Object.keys(REGISTRY).filter(name => !MEDICINE_INTERNAL[name]);
+const INTERNAL_TELEMETRY_SOURCES = new Set([
+  "bcgo.html", "bcgo.js", "bcgo-medicine.html", "bcgo-medicine.js",
+  "unhandledrejection", "error", "window.error", "runtime", "unknown"
+]);
+
+function normalizeFile(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const clean = raw.split("?")[0].split("#")[0];
+  return clean.substring(clean.lastIndexOf("/") + 1).toLowerCase();
+}
+
+function telemetrySourceCandidates(log) {
+  const values = [
+    log?.fileName, log?.sourceFile, log?.filename, log?.file, log?.source,
+    log?.target, log?.url, log?.script
+  ].filter(Boolean);
+  const stack = String(log?.stack || log?.errorStack || "");
+  const matches = stack.match(/(?:https?:\/\/[^\s)]+\/)?[^\s/()]+\.(?:html|js)(?::\d+(?::\d+)?)?/gi) || [];
+  return [...values, ...matches].map(normalizeFile).filter(Boolean);
+}
+
+function isInternalTelemetry(log) {
+  return telemetrySourceCandidates(log).some(file => INTERNAL_TELEMETRY_SOURCES.has(file));
+}
+
+const TELEMETRY_ACTIVE_WINDOW = 15 * 60 * 1000;
+const TELEMETRY_CLOCK_SKEW = 5 * 60 * 1000;
+
+function timestamp(value) {
+  try {
+    if (!value) return 0;
+    if (typeof value.toMillis === "function") return value.toMillis();
+    if (typeof value.toDate === "function") return value.toDate().getTime();
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === "number") return value;
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  } catch { return 0; }
+}
+
+function isRecentTelemetry(log) {
+  const t = timestamp(log?.reportedAt || log?.createdAt || log?.timestamp || log?.at);
+  if (!t) return false;
+  const nowMs = Date.now();
+  return t >= nowMs - TELEMETRY_ACTIVE_WINDOW && t <= nowMs + TELEMETRY_CLOCK_SKEW;
+}
+
 
 const REQUIRED = {
   driver: ["name", "phone", "address", "vehicleType", "photo", "ktp", "sim", "bank", "accountName", "accountNo"],
@@ -119,7 +171,7 @@ function cleanupRealtimeListeners() {
 }
 
 const S = {
-  version: "3.2.0",
+  version: "3.2.2",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -214,9 +266,24 @@ async function postSystemMessage(role, msg, meta = {}) {
   }
 }
 
+function resolveTelemetrySource(log) {
+  const direct = [log?.fileName, log?.sourceFile, log?.filename, log?.file, log?.source]
+    .map(v => text(v, 180)).find(v => v && !/^(unknown|unhandledrejection|error|window\.error|runtime)$/i.test(v));
+  if (direct) return direct;
+  const stack = text(log?.stack || log?.errorStack || "", 2500);
+  const hit = stack.match(/(?:https?:\/\/[^\s)]+\/)?([^\s/()]+\.(?:html|js))(?:[:#](\d+))?/i);
+  return hit?.[1] || null;
+}
+
 function makeCase(log) {
-  const source = text(log.fileName || log.source || "UNKNOWN", 120);
+  const rawSource = text(log.fileName || log.source || log.sourceFile || log.filename || "UNKNOWN", 120);
+  const source = resolveTelemetrySource(log);
+  // Generic runtime events are evidence, but they are not file identities.
+  // Do not create a fake organ/case named "unhandledrejection" or "error".
+  if (!source || /^(unknown|unhandledrejection|error|window\.error|runtime)$/i.test(source)) return null;
   if (MEDICINE_INTERNAL[source]) return null;
+  // Persisted historical telemetry must not become a fresh diagnosis.
+  if (!isRecentTelemetry(log)) return null;
   const sig = text(log.message || log.error || "Unknown error", 700);
   if (S.cases.some(c => c.source === source && c.signature === sig)) return null;
 
@@ -266,7 +333,11 @@ function startTelemetry() {
   const listenerEpoch = sessionEpoch;
   const unsub = window.CikurCloud.listenSystemLogs(logs => {
     if (!isSessionCurrent(listenerEpoch)) return;
-    S.logs = Array.isArray(logs) ? logs : [];
+    const raw = Array.isArray(logs) ? logs : [];
+    // Medicine observes operational telemetry only. Its own UI/engine, BCGO monitor
+    // UI/engine, and generic runtime buckets are diagnostic internals, not cases.
+    // Filter internal records first so they cannot crowd out real organ evidence.
+    S.logs = raw.filter(log => !isInternalTelemetry(log)).slice(0, 50);
     emit("telemetry", { logs: S.logs });
     for (const l of S.logs.slice(0, 60)) makeCase(l);
   });
@@ -419,7 +490,7 @@ function exactDomEvidence(fileName, source, signature, context = {}) {
 }
 
 async function buildSourceEvidence(targetFile, signature) {
-  const names = Object.keys(REGISTRY);
+  const names = DIAGNOSTIC_SURFACE;
   const evidence = [];
   const runtimeLocations = extractRuntimeLocation(signature);
   const loaded = {};
@@ -586,7 +657,9 @@ function buildAdminGapOperations(targetFile, missingFields, adminSource) {
 async function _scanConsistency(targets = null) {
   requireAdminSession();
   const runEpoch = sessionEpoch;
-  const names = targets?.length ? targets.filter(n => REGISTRY[n]) : Object.keys(REGISTRY);
+  const names = targets?.length
+    ? targets.filter(n => DIAGNOSTIC_SURFACE.includes(n))
+    : DIAGNOSTIC_SURFACE;
   emit("scan_started", { total: names.length, targets: names });
   const result = {};
   for (const name of names) {
@@ -742,7 +815,7 @@ async function attachPrescription(plan) {
 
 function buildRepairPlan(c, verification) {
   const d = c.diagnosis;
-  const target = c.source;
+  const target = DIAGNOSTIC_SURFACE.includes(c.source) ? c.source : "bcgo-admin.html";
   const plan = {
     planId: `REPAIR-${uid().toUpperCase()}`,
     caseId: c.id,
@@ -867,12 +940,14 @@ function findProposal(caseId) {
 async function _verifyWithMedicine(targetFile = null, context = {}) {
   requireAdminSession();
   const runEpoch = sessionEpoch;
-  const requestedTarget = targetFile && REGISTRY[targetFile] ? targetFile : (S.activeCase?.source || "bcgo-admin.html");
+  const requestedTarget = targetFile && DIAGNOSTIC_SURFACE.includes(targetFile)
+    ? targetFile
+    : (S.activeCase?.source && DIAGNOSTIC_SURFACE.includes(S.activeCase.source) ? S.activeCase.source : "bcgo-admin.html");
   emit("verification_started", { target: requestedTarget, context });
 
   // Verify the named target plus the whole dependency surface. Medicine is not
   // allowed to stop at the first accusation; it must be able to move the target.
-  const targets = Object.keys(REGISTRY);
+  const targets = DIAGNOSTIC_SURFACE;
   const result = await scanConsistency(targets);
   assertSessionCurrent(runEpoch);
   const logs = latestRelevantLogs(requestedTarget);
@@ -1001,8 +1076,8 @@ function bcgoAnswer(q) {
   }
   if (/apa yang.*kerja|sedang|ngerjain|mengerjakan/.test(x)) {
     return active.length
-      ? `Saya sedang mengawasi ${Object.keys(REGISTRY).length} organ. Ada ${active.length} case aktif; fokus ${active[0].source} (${active[0].status}). Medicine sedang saya minta menyiapkan repair plan.`
-      : `Saya sedang memantau ${Object.keys(REGISTRY).length} organ dan telemetry realtime. Belum ada case aktif.`;
+      ? `Saya sedang mengawasi ${DIAGNOSTIC_SURFACE.length} file. Ada ${active.length} case aktif; fokus ${active[0].source} (${active[0].status}). Medicine sedang saya minta menyiapkan repair plan.`
+      : `Saya sedang memantau ${DIAGNOSTIC_SURFACE.length} file dan telemetry realtime. Belum ada case aktif.`;
   }
   if (/aman|status|sehat|normal/.test(x)) return `Status saya: ${S.logs.length} telemetry log, ${active.length} case aktif, ${S.findings.length} finding. Saya tidak menyatakan aman tanpa evidence.`;
   if (/masalah|error|kendala|rusak|anomal/.test(x)) return active.length ? `Ya. Ada ${active.length} case aktif. Prioritas ${active[0].source}: ${active[0].diagnosis.title}. Saya dapat menyerahkannya ke Medicine untuk pemeriksaan dan penyembuhan terkontrol.` : `Saat ini belum ada case aktif dari telemetry yang saya terima.`;
@@ -1472,4 +1547,4 @@ Object.defineProperties(API, {
 });
 window.BCGOMedicine = API;
 
-emit("ready", { version: S.version, registryCount: Object.keys(REGISTRY).length, executorAvailable: executorAvailable() });
+emit("ready", { version: S.version, registryCount: DIAGNOSTIC_SURFACE.length, executorAvailable: executorAvailable() });
