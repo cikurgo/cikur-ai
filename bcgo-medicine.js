@@ -66,7 +66,7 @@ async function ensureRealtimeInfrastructure(timeoutMs = 5000) {
 }
 
 /*
- * BCGO MEDICINE v4.1.6 — SOURCE-FIRST LIVE CROSS-FILE MEDICAL ENGINE
+ * BCGO MEDICINE v4.2.0 — SOURCE-FIRST LIVE CROSS-FILE MEDICAL ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -179,12 +179,212 @@ const S = {
   telemetryUnsub: null,
   telemetryLive: false,
   authEpoch: 0,
-  liveSurface: { results: {}, relations: [], updatedAt: null, scanning: false, cycle: 0, timer: null }
+  liveSurface: { results: {}, relations: [], updatedAt: null, scanning: false, cycle: 0, timer: null },
+  bcgoBridge: {
+    status: "DISCONNECTED",
+    lastAt: 0,
+    cycle: 0,
+    activeCases: 0,
+    state: null
+  }
 };
 
-const emit = (event, p = {}) => window.dispatchEvent(new CustomEvent("bcgo:medicine", {
-  detail: { event, at: new Date().toISOString(), ...p }
-}));
+const emit = (event, p = {}) => {
+  const detail = { event, at: new Date().toISOString(), ...p };
+  window.dispatchEvent(new CustomEvent("bcgo:medicine", { detail }));
+
+  const bridgeEvents = new Set([
+    "case_created", "case_updated", "verification_complete",
+    "patch_proposed", "patch_apply_requested", "patch_apply_complete",
+    "validation_complete", "human_control", "bcgo_state_sync"
+  ]);
+
+  if (bridgeEvents.has(event)) {
+    sendMedicineToBCGO("MEDICINE_STATUS", {
+      medicineEvent: event,
+      caseId: p?.case?.id || p?.caseId || p?.proposal?.caseId || null,
+      target: p?.target || p?.case?.source || p?.verification?.rootCauseFile || null,
+      message: p?.message || event
+    });
+  }
+};
+const MEDICINE_BRIDGE_KEY = "CIKUR_GO_BCGO_MEDICINE_V1";
+const medicineBridgeChannel =
+  typeof BroadcastChannel !== "undefined"
+    ? new BroadcastChannel(MEDICINE_BRIDGE_KEY)
+    : null;
+
+let lastBCGOBridgeAt = 0;
+
+function bridgeClone(value) {
+  try { return JSON.parse(JSON.stringify(value)); } catch { return value; }
+}
+
+function sendMedicineToBCGO(type, payload = {}) {
+  const packet = {
+    bridge: MEDICINE_BRIDGE_KEY,
+    from: "MEDICINE",
+    type,
+    at: Date.now(),
+    ...payload
+  };
+
+  try { medicineBridgeChannel?.postMessage(packet); } catch {}
+  try { localStorage.setItem(MEDICINE_BRIDGE_KEY, JSON.stringify(packet)); } catch {}
+}
+
+function upsertBCGOCase(incoming, bcgoState) {
+  if (!incoming?.id) return null;
+
+  const existing = S.cases.find(c => c.id === incoming.id);
+  if (existing) {
+    existing.bcgoHandoff = incoming.handoff || existing.bcgoHandoff || "READY_FOR_MEDICINE";
+    existing.bcgoState = bcgoState?.step || existing.bcgoState || null;
+    existing.lastBCGOSyncAt = now();
+    existing.target = incoming.target || existing.target || incoming.source;
+    existing.source = incoming.source || existing.source || incoming.target;
+    existing.evidence = incoming.evidence || existing.evidence;
+    return existing;
+  }
+
+  const source = normalizeFile(incoming.source || incoming.target);
+  const message = text(
+    incoming.evidence?.message ||
+    incoming.signature ||
+    incoming.message ||
+    bcgoState?.lastTelemetryMessage ||
+    "BCGO telemetry handoff.",
+    900
+  );
+  const d = incoming.diagnosis || diagnosis(message);
+
+  const c = {
+    id: incoming.id,
+    source,
+    target: incoming.target || source,
+    signature: message,
+    runtimeLocation: incoming.runtimeLocation || {
+      file: source,
+      line: incoming.evidence?.line || null,
+      col: incoming.evidence?.column || null,
+      stack: text(incoming.evidence?.stack || "", 1400)
+    },
+    diagnosis: d,
+    prescription: incoming.prescription || prescription(d),
+    status: incoming.status || "TELEMETRY_CONFIRMED",
+    createdAt: incoming.createdAt || now(),
+    evidence: incoming.evidence || {
+      source: "BCGO_STATE",
+      message,
+      reportedAt: bcgoState?.lastTelemetryAt || now()
+    },
+    repairPlan: incoming.repairPlan || null,
+    rootCauseFile: incoming.rootCauseFile || source,
+    sourceEvidence: incoming.sourceEvidence || [],
+    validation: incoming.validation || null,
+    bcgoHandoff: incoming.handoff || "READY_FOR_MEDICINE",
+    lastBCGOSyncAt: now()
+  };
+
+  S.cases.unshift(c);
+  S.cases = S.cases.slice(0, 80);
+  return c;
+}
+
+function consumeBCGOState(bcgoState, transport = "BROADCAST") {
+  if (!bcgoState || typeof bcgoState !== "object") return;
+
+  const cases = Array.isArray(bcgoState.medicineQueue)
+    ? bcgoState.medicineQueue
+    : [];
+
+  S.bcgoBridge = {
+    status: "LIVE",
+    lastAt: Date.now(),
+    cycle: Number(bcgoState.cycle) || 0,
+    activeCases: cases.length,
+    state: bridgeClone(bcgoState)
+  };
+
+  let firstCase = null;
+  for (const incoming of cases) {
+    const c = upsertBCGOCase(incoming, bcgoState);
+    if (c && !firstCase) firstCase = c;
+  }
+
+  if (firstCase) {
+    S.activeCase = firstCase;
+  }
+
+  emit("bcgo_state_sync", {
+    transport,
+    cycle: S.bcgoBridge.cycle,
+    activeCases: S.bcgoBridge.activeCases,
+    target: bcgoState.targetCell || null,
+    step: bcgoState.step || null
+  });
+
+  // Medicine acknowledges receipt, but BCGO does NOT publish another state
+  // because of this acknowledgement. No feedback loop.
+  sendMedicineToBCGO("MEDICINE_STATUS", {
+    medicineEvent: "BCGO_STATE_RECEIVED",
+    caseId: firstCase?.id || null,
+    message: `Medicine menerima BCGO_STATE cycle #${S.bcgoBridge.cycle}.`
+  });
+}
+
+if (medicineBridgeChannel) {
+  medicineBridgeChannel.addEventListener("message", event => {
+    const packet = event.data;
+    if (
+      packet?.bridge === MEDICINE_BRIDGE_KEY &&
+      packet?.from === "BCGO" &&
+      packet?.type === "BCGO_STATE"
+    ) {
+      const at = Number(packet.at) || Date.now();
+      if (at <= lastBCGOBridgeAt) return;
+      lastBCGOBridgeAt = at;
+      consumeBCGOState(packet.state, "BROADCAST");
+    }
+  });
+}
+
+window.addEventListener("storage", event => {
+  if (event.key !== MEDICINE_BRIDGE_KEY || !event.newValue) return;
+
+  try {
+    const packet = JSON.parse(event.newValue);
+    if (
+      packet?.bridge === MEDICINE_BRIDGE_KEY &&
+      packet?.from === "BCGO" &&
+      packet?.type === "BCGO_STATE"
+    ) {
+      const at = Number(packet.at) || Date.now();
+      if (at <= lastBCGOBridgeAt) return;
+      lastBCGOBridgeAt = at;
+      consumeBCGOState(packet.state, "STORAGE_FALLBACK");
+    }
+  } catch {}
+});
+
+// If Medicine opens after BCGO, recover the most recent BCGO state.
+try {
+  const packet = JSON.parse(localStorage.getItem(MEDICINE_BRIDGE_KEY) || "null");
+  if (
+    packet?.bridge === MEDICINE_BRIDGE_KEY &&
+    packet?.from === "BCGO" &&
+    packet?.type === "BCGO_STATE"
+  ) {
+    setTimeout(() => {
+      const at = Number(packet.at) || Date.now();
+      if (at <= lastBCGOBridgeAt) return;
+      lastBCGOBridgeAt = at;
+      consumeBCGOState(packet.state, "STORAGE_BOOTSTRAP");
+    }, 0);
+  }
+} catch {}
+
+
 const now = () => new Date().toISOString();
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 const text = (v, n = 1800) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
@@ -356,7 +556,25 @@ function syncFromTelemetry(logs, transport = "FIRESTORE_SYSTEM_LOGS") {
 function verifyDiagnosticScope() {
   const orgCount = Object.keys(REGISTRY).length;
   const internalCount = Object.keys(MEDICINE_INTERNAL).length;
-  S.registryParity = { ok: true, status: "SEPARATED", bcgoCount: orgCount, medicineCount: internalCount, missing: [], extra: [], mismatched: [] };
+  const bcgoOrgNames = S.bcgoBridge.state?.systemOrgans
+    ? Object.keys(S.bcgoBridge.state.systemOrgans)
+    : [];
+  const missing = bcgoOrgNames.filter(file => !REGISTRY[file]);
+  const extra = bcgoOrgNames.length
+    ? Object.keys(REGISTRY).filter(file => !bcgoOrgNames.includes(file))
+    : [];
+
+  S.registryParity = {
+    ok: bcgoOrgNames.length ? missing.length === 0 && extra.length === 0 : true,
+    status: bcgoOrgNames.length
+      ? (missing.length === 0 && extra.length === 0 ? "BCGO_LINKED" : "BCGO_MISMATCH")
+      : "WAITING_BCGO",
+    bcgoCount: bcgoOrgNames.length || orgCount,
+    medicineCount: internalCount,
+    missing,
+    extra,
+    mismatched: []
+  };
   emit("registry_parity", S.registryParity);
   return S.registryParity;
 }
@@ -1765,9 +1983,9 @@ async function startConversation() {
   } catch (e) { emit("conversation_error", { message: e.message }); }
 }
 
-// SOURCE-FIRST BOOT: cross-file source inspection is independent from Admin auth.
-// Auth gates only Firestore telemetry/chat/autonomous treatment paths.
-startLiveSurface();
+// SOURCE-FIRST BOOT: source inspection is independent from Auth/Firestore.
+// The HTML surface controls the scanner start; Medicine itself does not start
+// a second hidden scanner during module evaluation.
 
 let realtimeAuthListenerStarted = false;
 let realtimeAuthRetryTimer = null;

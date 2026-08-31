@@ -93,8 +93,90 @@ export function runAutonomousEngine(onCycleUpdate) {
     lastTelemetryMessage: null,
     activeCases: [],
     medicineQueue: [],
-    connection: { status: "CONNECTING", lastServerAt: 0 }
+    connection: { status: "CONNECTING", lastServerAt: 0 },
+    medicineBridge: {
+      status: "DISCONNECTED",
+      lastAt: 0,
+      lastEvent: null,
+      lastCaseId: null,
+      message: null
+    }
   };
+
+
+  // ============================================================
+  // BCGO ↔ MEDICINE NERVE
+  // BCGO is the master state producer.
+  // Medicine is a separate diagnostic consumer/producer.
+  // There is deliberately NO import between the two engines.
+  // ============================================================
+  const medicineBridgeChannel =
+    typeof BroadcastChannel !== "undefined"
+      ? new BroadcastChannel("CIKUR_GO_BCGO_MEDICINE_V1")
+      : null;
+
+  let lastMedicineBridgeAt = 0;
+
+  function bridgeClone(value) {
+    try { return JSON.parse(JSON.stringify(value)); } catch { return value; }
+  }
+
+  function publishBCGOStateToMedicine(snapshot) {
+    const packet = {
+      bridge: "CIKUR_GO_BCGO_MEDICINE_V1",
+      from: "BCGO",
+      type: "BCGO_STATE",
+      at: Date.now(),
+      state: bridgeClone(snapshot)
+    };
+
+    try { medicineBridgeChannel?.postMessage(packet); } catch {}
+    try {
+      localStorage.setItem("CIKUR_GO_BCGO_MEDICINE_V1", JSON.stringify(packet));
+    } catch {}
+  }
+
+  function receiveMedicineBridge(packet) {
+    if (!packet ||
+        packet.bridge !== "CIKUR_GO_BCGO_MEDICINE_V1" ||
+        packet.from !== "MEDICINE") return;
+
+    const at = Number(packet.at) || Date.now();
+
+    // Ignore an exact duplicate packet. This is important when both
+    // BroadcastChannel and localStorage fallback are available.
+    if (at <= lastMedicineBridgeAt) return;
+    lastMedicineBridgeAt = at;
+
+    state.medicineBridge = {
+      status: "LIVE",
+      lastAt: at,
+      lastEvent: packet.medicineEvent || packet.type || "MEDICINE",
+      lastCaseId: packet.caseId || packet.case?.id || null,
+      message: String(packet.message || "").slice(0, 500) || null
+    };
+
+    recordEvent(
+      "MEDICINE",
+      state.medicineBridge.message || `Medicine event: ${state.medicineBridge.lastEvent}`,
+      state.medicineBridge.lastCaseId || "MEDICINE"
+    );
+
+    // IMPORTANT: update local UI only. Do NOT call publishBCGOStateToMedicine()
+    // here. This keeps the bridge from becoming a feedback loop.
+    publishToUI(safeClone(state));
+  }
+
+  if (medicineBridgeChannel) {
+    medicineBridgeChannel.addEventListener("message", event => {
+      receiveMedicineBridge(event.data);
+    });
+  }
+
+  window.addEventListener("storage", event => {
+    if (event.key !== "CIKUR_GO_BCGO_MEDICINE_V1" || !event.newValue) return;
+    try { receiveMedicineBridge(JSON.parse(event.newValue)); } catch {}
+  });
 
   function timestamp(value) {
     try {
@@ -262,8 +344,10 @@ export function runAutonomousEngine(onCycleUpdate) {
       state.lastTelemetryMessage = options.telemetry.message || null;
     }
 
-    window.BCGO_STATE = safeClone(state);
-    publishToUI(safeClone(state));
+    const snapshot = safeClone(state);
+    window.BCGO_STATE = snapshot;
+    publishToUI(snapshot);
+    publishBCGOStateToMedicine(snapshot);
   }
 
   function situation() {
@@ -602,11 +686,13 @@ export function runAutonomousEngine(onCycleUpdate) {
       if (typeof unsubscribeAuth === "function") unsubscribeAuth();
       if (typeof unsubscribeFirestore === "function") unsubscribeFirestore();
       if (typeof unsubscribeSystemLogs === "function") unsubscribeSystemLogs();
+      try { medicineBridgeChannel?.close(); } catch {}
     }
   };
 
   window.BCGOBrain = brain;
   window.BCGO_STATE = safeClone(state);
+  publishBCGOStateToMedicine(safeClone(state));
   unsubscribeAuth = onAuthStateChanged(auth, verifyAdmin);
   return brain;
 }

@@ -541,5 +541,32 @@ runAutonomousEngine(state => {
     }
 });
 </script>
+
+<script>
+/* BCGO ↔ MEDICINE bridge surface.
+   This page does not import Medicine; it only observes bridge status. */
+(() => {
+  const key = "CIKUR_GO_BCGO_MEDICINE_V1";
+  const channel = typeof BroadcastChannel !== "undefined"
+    ? new BroadcastChannel(key)
+    : null;
+
+  function handle(packet) {
+    if (!packet || packet.bridge !== key || packet.from !== "MEDICINE") return;
+    const text = packet.message || packet.medicineEvent || "Medicine aktif.";
+    const target = document.getElementById("liveSpeech");
+    if (target && packet.medicineEvent === "MEDICINE_READY") {
+      target.textContent = `> [MEDICINE] ${text}`;
+    }
+  }
+
+  channel?.addEventListener("message", e => handle(e.data));
+  window.addEventListener("storage", e => {
+    if (e.key !== key || !e.newValue) return;
+    try { handle(JSON.parse(e.newValue)); } catch {}
+  });
+})();
+</script>
+
 </body>
 </html>
