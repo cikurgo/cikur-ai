@@ -113,7 +113,7 @@ const MEDICINE_INTERNAL = {
 // Its own JS/HTML are intentionally excluded from the default live diagnostic scope.
 const DIAGNOSTIC_SCOPE = { ...REGISTRY };
 const DIAGNOSTIC_ORGAN_COUNT = Object.keys(REGISTRY).length;
-const SOURCE_SURFACE = ["bcgo.js"];
+const SOURCE_SURFACE = ["bcgo.js", "bcgo.html"];
 
 const REQUIRED = {
   driver: ["name", "phone", "address", "vehicleType", "photo", "ktp", "sim", "bank", "accountName", "accountNo"],
@@ -156,7 +156,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "4.1.6",
+  version: "4.2.1",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -173,7 +173,7 @@ const S = {
   lastClientMessageId: null,
   eventSeq: 0,
   autonomous: { enabled: true, turn: 0, timer: null, lastAt: 0, lastInvestigationKey: "" },
-  registryParity: { ok: true, status: "SEPARATED", bcgoCount: DIAGNOSTIC_ORGAN_COUNT, medicineCount: Object.keys(MEDICINE_INTERNAL).length, missing: [], extra: [], mismatched: [] },
+  registryParity: { ok: true, status: "WAITING_BCGO", bcgoCount: 0, medicineCount: Object.keys(MEDICINE_INTERNAL).length, missing: [], extra: [], mismatched: [] },
 
   conversationUnsub: null,
   telemetryUnsub: null,
@@ -305,6 +305,21 @@ function consumeBCGOState(bcgoState, transport = "BROADCAST") {
     activeCases: cases.length,
     state: bridgeClone(bcgoState)
   };
+
+  // BCGO_STATE is authoritative for the live organ surface. Medicine keeps
+  // its diagnostic metadata, but does not invent a second BCGO organ list.
+  const authoritativeOrgans = bcgoState.systemOrgans && typeof bcgoState.systemOrgans === "object"
+    ? Object.keys(bcgoState.systemOrgans)
+    : [];
+  if (authoritativeOrgans.length) {
+    for (const file of authoritativeOrgans) {
+      if (!REGISTRY[file]) {
+        // Unknown BCGO organs remain visible to Medicine as evidence, but are
+        // not silently promoted into a repair target without source metadata.
+        continue;
+      }
+    }
+  }
 
   let firstCase = null;
   for (const incoming of cases) {
