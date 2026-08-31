@@ -1,72 +1,18 @@
-// BOOT BOUNDARY: source inspection must never depend on Auth/Firestore/CDN availability.
-// Firebase is loaded lazily only after the local cross-file scanner has started.
-let db = null;
-let auth = null;
-let firebaseFns = null;
-let firebaseBoot = null;
+import {
+  collection, onSnapshot, query, orderBy, limit, addDoc, serverTimestamp, doc, getDoc
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { db, auth } from "./cikur-config.js";
+import { runAutonomousEngine } from "./bcgo.js?v=3.0";
 
-async function ensureRealtimeInfrastructure(timeoutMs = 5000) {
-  // Timeout hanya berarti "belum siap sekarang". Jangan mengunci Medicine
-  // ke LOCAL MODE selamanya; realtime harus dapat pulih tanpa refresh.
-  if (firebaseFns && db && auth) return true;
-
-  if (firebaseBoot) {
-    const result = await Promise.race([
-      firebaseBoot,
-      new Promise(resolve => setTimeout(() => resolve(false), timeoutMs))
-    ]);
-    if (result === true && firebaseFns && db && auth) return true;
-    // Jika promise lama sudah selesai gagal, izinkan percobaan baru.
-    if (firebaseBoot && result === false) {
-      try {
-        const settled = await Promise.race([
-          firebaseBoot,
-          new Promise(resolve => setTimeout(() => resolve("__pending__"), 0))
-        ]);
-        if (settled !== "__pending__" && settled !== true) firebaseBoot = null;
-      } catch {
-        firebaseBoot = null;
-      }
-    }
-    return false;
-  }
-
-  const boot = (async () => {
-    try {
-      const config = await import("./cikur-config.js");
-      db = config.db;
-      auth = config.auth;
-      const [firestore, authMod] = await Promise.all([
-        import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"),
-        import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js")
-      ]);
-      firebaseFns = { ...firestore, ...authMod };
-      return !!(db && auth && firebaseFns);
-    } catch (error) {
-      emit("realtime_boot_unavailable", { message: error?.message || String(error) });
-      return false;
-    }
-  })();
-
-  firebaseBoot = boot;
-  const result = await Promise.race([
-    boot,
-    new Promise(resolve => setTimeout(() => resolve(false), timeoutMs))
-  ]);
-
-  // Jika boot masih berjalan, biarkan promise tetap hidup. Retry berikutnya
-  // akan dapat memakai hasil boot yang sama tanpa memulai import ganda.
-  if (result === false) {
-    void boot.then(ok => {
-      if (ok) emit("realtime_boot_recovered");
-      else if (firebaseBoot === boot) firebaseBoot = null;
-    });
-  }
-  return result;
+// Prevent duplicate initialization when the page/module is re-evaluated.
+if (window.__BCGO_MEDICINE_MODULE_ACTIVE__) {
+  throw new Error("BCGO Medicine module sudah aktif pada halaman ini.");
 }
+window.__BCGO_MEDICINE_MODULE_ACTIVE__ = true;
 
 /*
- * BCGO MEDICINE v4.1.6 — SOURCE-FIRST LIVE CROSS-FILE MEDICAL ENGINE
+ * BCGO MEDICINE v3.3 — PRECISION REPAIR / VERIFIED HEALING ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -85,8 +31,9 @@ async function ensureRealtimeInfrastructure(timeoutMs = 5000) {
  * executor/backend can apply the repair and return the result to Medicine.
  */
 
-// CONTRACT: this is Medicine's diagnostic view of the BCGO organ surface.
-// It is intentionally independent from bcgo.js runtime imports.
+// CONTRACT: this registry is an exact mirror of ORGAN_REGISTRY in bcgo.js.
+// Do not add/remove/rename an entry here independently.
+// v3.3.1: parity is verified against window.BCGOBrain.getRegistry() at runtime.
 const REGISTRY = {
   "index.html": { type: "Halaman Utama", role: "customer" },
   "assistant.html": { type: "Zona Customer", role: "customer" },
@@ -100,19 +47,13 @@ const REGISTRY = {
   "bcgo-engine.js": { type: "Sistem Core", role: "system" },
   "bcgo-admin.html": { type: "Sistem Admin", role: "admin" },
   "bcgo.html": { type: "Sistem Monitor", role: "monitor" },
-  "data-cgo.html": { type: "Data Sistem", role: "data" }
-};
-
-// Diagnostic scope includes the application organ surface plus Medicine's own source/UI.
-// Medicine internals are inspectable source, but never normal root-cause candidates.
-const MEDICINE_INTERNAL = {
+  "data-cgo.html": { type: "Data Sistem", role: "data" },
   "bcgo-medicine.js": { type: "Otak Medicine", role: "medicine" },
   "bcgo-medicine.html": { type: "UI Medicine", role: "medicine" }
 };
-// Medicine is the examiner, not an organ under examination.
-// Its own JS/HTML are intentionally excluded from the default live diagnostic scope.
-const DIAGNOSTIC_SCOPE = { ...REGISTRY };
-const DIAGNOSTIC_ORGAN_COUNT = Object.keys(REGISTRY).length;
+
+// bcgo.js is the producer engine itself, not an organ in BCGO's 15-organ registry.
+// Medicine may inspect its source as a dependency, but it must not count it as an organ.
 const SOURCE_SURFACE = ["bcgo.js"];
 
 const REQUIRED = {
@@ -156,7 +97,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "4.1.6",
+  version: "3.3.1",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -172,14 +113,25 @@ const S = {
   sourceCache: new Map(),
   lastClientMessageId: null,
   eventSeq: 0,
-  autonomous: { enabled: true, turn: 0, timer: null, lastAt: 0, lastInvestigationKey: "" },
-  registryParity: { ok: true, status: "SEPARATED", bcgoCount: DIAGNOSTIC_ORGAN_COUNT, medicineCount: Object.keys(MEDICINE_INTERNAL).length, missing: [], extra: [], mismatched: [] },
-
-  conversationUnsub: null,
-  telemetryUnsub: null,
-  telemetryLive: false,
-  authEpoch: 0,
-  liveSurface: { results: {}, relations: [], updatedAt: null, scanning: false, cycle: 0, timer: null }
+  autonomous: { enabled: true, turn: 0, timer: null, lastAt: 0 },
+  bcgoState: null,
+  registryParity: { ok: false, status: "WAITING", bcgoCount: 0, medicineCount: Object.keys(REGISTRY).length, missing: [], extra: [], mismatched: [] },
+  bcgoContract: {
+    step: "IN",
+    message: "",
+    targetCell: "",
+    cycle: 0,
+    cycleMode: "BOOT",
+    metrics: {},
+    systemOrgans: {},
+    systemLogs: [],
+    activeCases: [],
+    medicineQueue: [],
+    connection: {}
+  },
+  bcgoEngine: null,
+  bcgoSynced: false,
+  conversationStarted: false
 };
 
 const emit = (event, p = {}) => window.dispatchEvent(new CustomEvent("bcgo:medicine", {
@@ -243,145 +195,164 @@ async function postSystemMessage(role, msg, meta = {}) {
   const payload = {
     role,
     text: text(msg, 1800),
-    actorUid: role === "human" ? (auth?.currentUser?.uid || null) : null,
+    actorUid: role === "human" ? (auth.currentUser?.uid || null) : null,
     system: role !== "human",
-    createdAt: firebaseFns?.serverTimestamp ? firebaseFns.serverTimestamp() : now(),
+    createdAt: serverTimestamp(),
     clientMessageId,
     ...meta
   };
   try {
-    const ready = await ensureRealtimeInfrastructure();
-    if (!ready || !db || !firebaseFns?.addDoc) throw new Error("Realtime infrastructure unavailable");
-    await firebaseFns.addDoc(firebaseFns.collection(db, "medicine_messages"), payload);
+    await addDoc(collection(db, "medicine_messages"), payload);
   } catch (e) {
     emit("local_message", { message: { ...payload, createdAt: now() }, storageError: e.message });
   }
 }
 
-function buildTelemetryCases(logs) {
-  const recentByFile = new Map();
-  for (const log of Array.isArray(logs) ? logs : []) {
-    const file = normalizeFile(log?.fileName || log?.source || log?.file);
-    if (!REGISTRY[file]) continue;
-    const at = timestampValue(log?.reportedAt || log?.createdAt);
-    const prev = recentByFile.get(file);
-    if (!prev || at >= prev.at) recentByFile.set(file, { log, at });
-  }
+function syncFromBCGOState(state) {
+  if (!state || typeof state !== "object") return;
+  // BCGO_STATE is authoritative. Keep an explicit 1:1 contract snapshot
+  // instead of rebuilding BCGO metrics/organs/cases inside Medicine.
+  S.bcgoState = state;
+  S.bcgoContract = {
+    step: state.step,
+    message: state.message,
+    targetCell: state.targetCell,
+    cycle: state.cycle,
+    cycleMode: state.cycleMode,
+    metrics: state.metrics || {},
+    systemOrgans: state.systemOrgans || {},
+    systemLogs: Array.isArray(state.systemLogs) ? state.systemLogs.slice() : [],
+    activeCases: Array.isArray(state.activeCases) ? state.activeCases.slice() : [],
+    medicineQueue: Array.isArray(state.medicineQueue) ? state.medicineQueue.slice() : [],
+    connection: state.connection || {}
+  };
+  S.bcgoSynced = true;
+  S.logs = S.bcgoContract.systemLogs.slice();
 
-  const cases = [];
-  for (const [file, item] of recentByFile) {
-    if (!isRecentTelemetry(item.at)) continue;
-    const signature = text(item.log?.message || item.log?.error || "Sinyal telemetry diterima.", 700);
-    const d = diagnosis(signature);
-    const line = Number(item.log?.lineNumber ?? item.log?.line ?? item.log?.lineno) || null;
-    const col = Number(item.log?.columnNumber ?? item.log?.column ?? item.log?.colno) || null;
-    const fingerprint = `${file}|${signature}|${item.at}|${line || 0}|${col || 0}`;
-    let hash = 0;
-    for (let i = 0; i < fingerprint.length; i++) hash = ((hash << 5) - hash + fingerprint.charCodeAt(i)) | 0;
-    cases.push({
-      id: `CASE-${Math.abs(hash).toString(36).toUpperCase()}`,
-      source: file,
-      target: file,
-      signature,
-      runtimeLocation: { file, line, col, stack: text(item.log?.stack || item.log?.stackTrace || "", 1400) },
-      diagnosis: d,
-      prescription: prescription(d),
-      status: "DIAGNOSED",
-      createdAt: now(),
-      evidence: item.log,
-      repairPlan: null,
-      rootCauseFile: file,
-      sourceEvidence: [],
-      validation: null
-    });
-  }
-  return cases.sort((a, b) => timestampValue(b.evidence?.reportedAt || b.evidence?.createdAt) - timestampValue(a.evidence?.reportedAt || a.evidence?.createdAt));
-}
+  const queue = S.bcgoContract.medicineQueue;
+  const queueIds = new Set(queue.map(x => x.id));
 
-function timestampValue(value) {
-  try {
-    if (!value) return 0;
-    if (typeof value?.toMillis === "function") return value.toMillis();
-    if (typeof value?.toDate === "function") return value.toDate().getTime();
-    if (value instanceof Date) return value.getTime();
-    if (typeof value === "number") return value;
-    const n = Date.parse(value);
-    return Number.isFinite(n) ? n : 0;
-  } catch { return 0; }
-}
+  for (const handoff of queue) {
+    const target = normalizeFile(handoff.target || handoff.file);
+    const evidence = S.logs.find(log =>
+      normalizeFile(log?.fileName || log?.source || log?.file) === target &&
+      String(log?.reportedAt ?? "") === String(handoff?.evidence?.reportedAt ?? handoff?.reportedAt ?? "")
+    ) || S.logs.find(log => normalizeFile(log?.fileName || log?.source || log?.file) === target);
 
-const TELEMETRY_WINDOW = 15 * 60 * 1000;
-function isRecentTelemetry(t) {
-  return Number.isFinite(t) && t > 0 && t >= Date.now() - TELEMETRY_WINDOW;
-}
-
-function syncFromTelemetry(logs, transport = "FIRESTORE_SYSTEM_LOGS") {
-  S.logs = Array.isArray(logs) ? logs.slice(0, 120) : [];
-  const cases = buildTelemetryCases(S.logs);
-  for (const c of cases) {
-    const existing = S.cases.find(x => x.id === c.id);
-    if (existing) {
-      existing.evidence = c.evidence;
-      existing.signature = c.signature;
-      existing.runtimeLocation = c.runtimeLocation;
-      existing.lastTelemetryAt = now();
-    } else {
+    let c = S.cases.find(x => x.bcgoCaseId === handoff.id || x.id === handoff.id);
+    if (!c) {
+      const sig = text(evidence?.message || handoff?.evidence?.message || handoff.message || "Sinyal telemetry BCGO diterima.", 700);
+      const d = diagnosis(sig);
+      c = {
+        id: handoff.id,
+        bcgoCaseId: handoff.id,
+        source: target,
+        signature: sig,
+        runtimeLocation: {
+          file: target,
+          line: Number(evidence?.lineNumber ?? evidence?.line ?? handoff?.evidence?.line) || null,
+          col: Number(evidence?.columnNumber ?? evidence?.column ?? handoff?.evidence?.column) || null,
+          stack: text(evidence?.stack || evidence?.stackTrace || "", 1200)
+        },
+        diagnosis: d,
+        prescription: prescription(d),
+        status: "DIAGNOSED",
+        createdAt: now(),
+        evidence: evidence || handoff.evidence || handoff,
+        repairPlan: null,
+        rootCauseFile: target,
+        sourceEvidence: [],
+        validation: null,
+        bcgoHandoff: { ...handoff, handoff: "READY_FOR_MEDICINE" }
+      };
       S.cases.unshift(c);
-      emit("case_created", { case: c, source: transport });
-      void postSystemMessage("medicine", `Saya menerima ${c.id} langsung dari telemetry ${transport}. Target awal: ${c.source}. Saya akan menelusuri lintas-file sebelum membuka treatment.`, { kind: "MEDICINE_TELEMETRY_HANDOFF", caseId: c.id, target: c.source });
+      S.cases = S.cases.slice(0, 80);
+      emit("case_created", { case: c, source: "BCGO_STATE.medicineQueue" });
+      void postSystemMessage("medicine", `Saya menerima ${c.id} langsung dari BCGO_STATE.medicineQueue. Target: ${target}. Saya hanya akan membuka treatment setelah root cause dan source exact terbukti.`, {
+        kind: "MEDICINE_BCGO_HANDOFF", caseId: c.id, target
+      });
+    } else {
+      c.bcgoHandoff = { ...handoff, handoff: "READY_FOR_MEDICINE" };
+      c.evidence = evidence || c.evidence;
+      c.lastBCGOStateAt = now();
+      if (!c.repairPlan && !["REJECTED", "FIXED_VERIFIED"].includes(c.status)) {
+        c.status = c.status === "PATCH_APPLIED" ? c.status : "DIAGNOSED";
+      }
+      emit("case_updated", { case: c, source: "BCGO_STATE.medicineQueue" });
     }
   }
-  S.cases = S.cases.slice(0, 80);
-  const activeIds = new Set(cases.map(c => c.id));
+
+  // BCGO is authoritative for whether a telemetry case is currently active.
+  // Only cases that originated from BCGO are auto-recovered here. Treatment/validation
+  // lifecycle is left intact.
   for (const c of S.cases) {
-    if (!activeIds.has(c.id) && c.status === "DIAGNOSED") {
+    if (!c.bcgoCaseId || queueIds.has(c.bcgoCaseId)) continue;
+    if (["DIAGNOSED", "INVESTIGATING", "NEEDS_EVIDENCE"].includes(c.status)) {
       c.status = "RECOVERED";
       c.recoveredAt = now();
-      emit("case_updated", { case: c, recovered: true, source: transport });
+      emit("case_updated", { case: c, recovered: true, source: "BCGO_STATE" });
     }
   }
-  S.activeCase = cases.length ? (S.cases.find(c => c.id === cases[0].id) || cases[0]) : (S.activeCase && activeCases().includes(S.activeCase) ? S.activeCase : null);
-  emit("telemetry", { logs: S.logs, transport });
+
+  S.activeCase = queueIds.size
+    ? (S.cases.find(c => queueIds.has(c.bcgoCaseId)) || null)
+    : null;
+
+  emit("telemetry", { logs: S.logs, transport: "BCGO_STATE" });
   emit("bcgo_sync", {
+    state,
     contract: {
-      metrics: { total: Object.keys(REGISTRY).length, active: cases.length, logCount: S.logs.length },
-      activeCases: cases,
-      medicineQueue: cases.map(c => ({ ...c, handoff: "READY_FOR_MEDICINE" })),
-      systemOrgans: Object.fromEntries(Object.entries(REGISTRY).map(([file, meta]) => [file, { ...meta, state: cases.some(c => c.source === file) ? "ACTIVE" : "HEALTHY" }])),
-      connection: { status: transport === "FIRESTORE_SYSTEM_LOGS" ? "LIVE" : "LOCAL" }
+      metrics: state.metrics || {},
+      activeCases: state.activeCases || [],
+      medicineQueue: queue,
+      systemOrgans: state.systemOrgans || {},
+      connection: state.connection || {}
     }
   });
 }
 
-function verifyDiagnosticScope() {
-  const orgCount = Object.keys(REGISTRY).length;
-  const internalCount = Object.keys(MEDICINE_INTERNAL).length;
-  S.registryParity = { ok: true, status: "SEPARATED", bcgoCount: orgCount, medicineCount: internalCount, missing: [], extra: [], mismatched: [] };
+function verifyRegistryParity() {
+  const producer = window.BCGOBrain?.getRegistry?.();
+  if (!producer || typeof producer !== "object") {
+    S.registryParity = {
+      ok: false, status: "WAITING_FOR_BCGO_REGISTRY",
+      bcgoCount: 0, medicineCount: Object.keys(REGISTRY).length,
+      missing: [], extra: [], mismatched: []
+    };
+    emit("registry_parity", S.registryParity);
+    return S.registryParity;
+  }
+
+  const pNames = Object.keys(producer);
+  const mNames = Object.keys(REGISTRY);
+  const missing = pNames.filter(name => !REGISTRY[name]);
+  const extra = mNames.filter(name => !producer[name]);
+  const mismatched = mNames.filter(name => {
+    if (!producer[name]) return false;
+    return producer[name].type !== REGISTRY[name].type || producer[name].role !== REGISTRY[name].role;
+  });
+
+  S.registryParity = {
+    ok: missing.length === 0 && extra.length === 0 && mismatched.length === 0 && pNames.length === mNames.length,
+    status: missing.length || extra.length || mismatched.length ? "MISMATCH" : "EXACT_1_TO_1",
+    bcgoCount: pNames.length, medicineCount: mNames.length, missing, extra, mismatched
+  };
   emit("registry_parity", S.registryParity);
   return S.registryParity;
 }
 
-async function startTelemetry() {
-  if (S.telemetryUnsub) return;
-  const ready = await ensureRealtimeInfrastructure();
-  if (!ready || !db || !firebaseFns) {
-    emit("telemetry_unavailable", { message: "Realtime infrastructure belum tersedia; source scanner tetap berjalan." });
-    return;
-  }
+function startTelemetry() {
+  if (S.bcgoEngine) return;
   try {
-    const { collection, onSnapshot, query, orderBy, limit } = firebaseFns;
-    const q = query(collection(db, "system_logs"), orderBy("reportedAt", "desc"), limit(120));
-    S.telemetryUnsub = onSnapshot(q, snapshot => {
-      const logs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      syncFromTelemetry(logs);
-      S.telemetryLive = true;
-      emit("telemetry_transport", { transport: "FIRESTORE_SYSTEM_LOGS" });
-    }, error => {
-      S.telemetryLive = false;
-      emit("telemetry_unavailable", { message: error?.message || "system_logs listener error" });
+    // Use the exact BCGO engine as the state producer. Medicine does not reimplement
+    // buildOrgans(), makeCases(), timestamp rules, or the ACTIVE window.
+    S.bcgoEngine = runAutonomousEngine(state => syncFromBCGOState(state));
+    verifyRegistryParity();
+    S.listeners.push(() => {
+      try { S.bcgoEngine?.stop?.(); } catch {}
+      S.bcgoEngine = null;
     });
-    S.listeners.push(() => { try { S.telemetryUnsub?.(); } catch {} S.telemetryUnsub = null; });
-    verifyDiagnosticScope();
+    emit("telemetry_transport", { transport: "BCGO_ENGINE_STATE" });
   } catch (e) {
     emit("telemetry_unavailable", { message: e?.message || String(e) });
   }
@@ -393,10 +364,11 @@ async function fetchFile(name) {
   try {
     const r = await fetch(`./${encodeURIComponent(name)}`, { cache: "no-store" });
     const value = { ok: r.ok, status: r.status, text: r.ok ? await r.text() : "", fetchedAt: now() };
-    S.sourceCache.set(name, { at: Date.now(), value });
+    if (r.ok) S.sourceCache.set(name, { at: Date.now(), value });
     return value;
   } catch (e) {
     const value = { ok: false, status: 0, text: "", error: e.message, fetchedAt: now() };
+    S.sourceCache.set(name, { at: Date.now(), value });
     return value;
   }
 }
@@ -454,7 +426,7 @@ function normalizeLocalRef(ref, fromFile = "") {
     value = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
   } catch {}
   value = value.replace(/^\.\//, "");
-  return DIAGNOSTIC_SCOPE[value] ? value : null;
+  return REGISTRY[value] ? value : null;
 }
 
 function extractDependencies(fileName, source) {
@@ -571,7 +543,7 @@ function htmlHasElement(source, id) {
   return candidates.some(value => {
     if (!value || /[.\s\[\]>:+~]/.test(value)) return false;
     const q = escRegExp(value);
-    return new RegExp(`(?:id|name)\\s*=\\s*["']${q}["']`, "i").test(source);
+    return new RegExp(`(?:id|name)\s*=\s*["']${q}["']`, "i").test(source);
   });
 }
 
@@ -601,34 +573,6 @@ function selectorFromSignature(signature, source) {
   while ((m = re.exec(signature || ""))) ids.push(m[1]);
   for (const c of domAssignmentCandidates("runtime", source || "")) if (c.selector) ids.push(c.selector);
   return [...new Set(ids.filter(Boolean))].find(id => s.includes(safeLower(id))) || ids[0] || null;
-}
-
-function isMedicineSelfFile(fileName) {
-  const f = normalizeFile(fileName);
-  return f === "bcgo-medicine.js" || f === "bcgo-medicine.html";
-}
-
-function hasExplicitExactSelfReference(c, runtimeLocations = []) {
-  const targets = [
-    ...runtimeLocations,
-    ...extractRuntimeLocation(c?.signature || "")
-  ];
-  const requested = normalizeFile(c?.source || "");
-  if (!isMedicineSelfFile(requested)) return false;
-  return targets.some(x => normalizeFile(x?.file) === requested && Number.isFinite(Number(x?.line)));
-}
-
-function filterRootCauseCandidates(candidates, c, runtimeLocations = []) {
-  const allowSelf = hasExplicitExactSelfReference(c, runtimeLocations);
-  return (candidates || []).filter(x => {
-    if (!isMedicineSelfFile(x.file)) return true;
-    if (!allowSelf) return false;
-    const exactFile = normalizeFile(x.file) === normalizeFile(c?.source);
-    const exactLine = Number.isFinite(Number(x.line)) && runtimeLocations.some(r =>
-      normalizeFile(r?.file) === normalizeFile(x.file) && Number(r?.line) === Number(x.line)
-    );
-    return exactFile && exactLine;
-  });
 }
 
 function exactDomEvidence(fileName, source, signature, context = {}) {
@@ -680,10 +624,10 @@ function exactDomEvidence(fileName, source, signature, context = {}) {
   return out;
 }
 
-async function buildSourceEvidence(targetFile, signature, caseContext = null, runtimeLocationsOverride = null) {
+async function buildSourceEvidence(targetFile, signature) {
   const names = [...new Set([...Object.keys(REGISTRY), ...SOURCE_SURFACE])];
   const evidence = [];
-  const runtimeLocations = runtimeLocationsOverride || extractRuntimeLocation(signature);
+  const runtimeLocations = extractRuntimeLocation(signature);
   const results = {};
   for (const name of names) results[name] = await fetchFile(name);
   const graph = dependencyGraph(results);
@@ -691,7 +635,7 @@ async function buildSourceEvidence(targetFile, signature, caseContext = null, ru
   const htmlPages = names.filter(n => /\.html$/i.test(n));
   const priority = [];
   const pushPriority = (file, reason = "direct") => {
-    if (!(DIAGNOSTIC_SCOPE[file] || SOURCE_SURFACE.includes(file)) || priority.some(x => x.file === file)) return;
+    if (!REGISTRY[file] || priority.some(x => x.file === file)) return;
     priority.push({ file, reason });
   };
   pushPriority(targetFile, "target");
@@ -717,9 +661,6 @@ async function buildSourceEvidence(targetFile, signature, caseContext = null, ru
     }
   }
 
-  const filteredEvidence = filterRootCauseCandidates(evidence, caseContext || { source: targetFile, signature }, runtimeLocations);
-  evidence.length = 0;
-  evidence.push(...filteredEvidence);
   evidence.sort((a, b) => (b._score - a._score) || ({HIGH:3,MEDIUM:2,LOW:1}[b.evidenceStrength] - {HIGH:3,MEDIUM:2,LOW:1}[a.evidenceStrength]) || (a.line - b.line));
   return evidence.slice(0, 30).map(({ _score, ...e }) => e);
 }
@@ -777,7 +718,7 @@ async function resolveRootCause(c) {
     ...(c.runtimeLocation?.file ? [{ file: c.runtimeLocation.file, line: c.runtimeLocation.line, col: c.runtimeLocation.col }] : []),
     ...extractRuntimeLocation(c.runtimeLocation?.stack || "")
   ];
-  const candidates = await buildSourceEvidence(originalTarget, c.signature, c, runtimeLocations);
+  const candidates = await buildSourceEvidence(originalTarget, c.signature);
   const high = candidates.filter(x => x.evidenceStrength === "HIGH");
 
   // For a DOM-null error, prefer a source assignment whose script is actually loaded
@@ -787,7 +728,7 @@ async function resolveRootCause(c) {
     // A DOM-null root cause is proven only when the runtime points to the exact
     // assignment (file + line) and the consuming HTML page demonstrably lacks the
     // referenced target. Missing DOM elsewhere is not causal proof.
-    const causalHigh = high.filter(x => x.stackHit === true && x.loadedBy?.length && x.evidenceStrength === "HIGH" && runtimeLocations.some(r => normalizeFile(r.file) === normalizeFile(x.file) && Number(r.line) === Number(x.line)));
+    const causalHigh = high.filter(x => x.stackHit === true && x.loadedBy?.length && x.evidenceStrength === "HIGH");
     const best = causalHigh.find(x => x.file === originalTarget)
       || causalHigh.find(x => x.loadedBy?.some(p => p === originalTarget))
       || causalHigh[0];
@@ -886,122 +827,14 @@ function buildAdminGapOperations(targetFile, missingFields, adminSource) {
   return operations;
 }
 
-
-const CROSS_FILE_RULES = [
-  { id:"registration-engine", label:"Registrasi → Engine", pairs:[["index.html","bcgo-engine.js"],["agentcgo.html","bcgo-engine.js"],["driver.html","bcgo-engine.js"],["resto.html","bcgo-engine.js"]], fields:"REGISTRATION" },
-  { id:"registration-admin", label:"Registrasi → Admin", pairs:[["index.html","bcgo-admin.html"],["agentcgo.html","bcgo-admin.html"],["driver.html","bcgo-admin.html"],["resto.html","bcgo-admin.html"]], fields:"PRESENTATION" },
-  { id:"runtime-config", label:"Core → Config", pairs:[["bcgo.js","cikur-config.js"],["bcgo-engine.js","cikur-config.js"]], fields:"RUNTIME" },
-  { id:"monitor-core", label:"Monitor → Core", pairs:[["bcgo.html","bcgo.js"]], fields:"RUNTIME" },
-  { id:"data-contract", label:"Data → Admin", pairs:[["data-cgo.html","bcgo-admin.html"]], fields:"DATA" }
-];
-
-function isMedicineSelfFile(name){ return !!MEDICINE_INTERNAL[name]; }
-function sourceFieldSet(result, file){ return canonicalFieldSet(result?.[file]?.fields || []); }
-function fieldOccurrences(source, field){
-  const out=[]; const re = new RegExp(`(?:\\b${escRegExp(field)}\\b|["']${escRegExp(field)}["'])`, 'gi'); let m;
-  while((m=re.exec(String(source||""))) && out.length<4) out.push({line:lineOf(source,m.index), text:sourceLines(source)[lineOf(source,m.index)-1]||""});
-  return out;
-}
-function buildCrossFileRelations(result){
-  const relations=[];
-  for(const rule of CROSS_FILE_RULES){
-    for(const [a,b] of rule.pairs){
-      const A=result[a], B=result[b];
-      if(!A?.ok || !B?.ok){
-        relations.push({id:`${rule.id}:${a}:${b}`,rule:rule.label,sourceFile:a,targetFile:b,status:"UNREADABLE",severity:"UNKNOWN",shared:[],missingFromTarget:[],detail:`Tidak dapat membandingkan penuh karena ${!A?.ok?a:b} belum terbaca live.`,sourceLines:[],targetLines:[]});
-        continue;
-      }
-      const af=sourceFieldSet(result,a), bf=sourceFieldSet(result,b);
-      let shared=[], missing=[], detail="Kontrak terbaca dan dapat dibandingkan.";
-      if(rule.fields==="REGISTRATION" || rule.fields==="PRESENTATION" || rule.fields==="DATA"){
-        const candidates=[...af].filter(f=>CONTRACT_FIELDS.has(f));
-        shared=candidates.filter(f=>bf.has(f));
-        missing=candidates.filter(f=>!bf.has(f));
-        if(missing.length) detail=`${b} belum menunjukkan ${missing.slice(0,8).join(", ")}${missing.length>8?" …":""} yang dipakai/diterbitkan oleh ${a}.`;
-      } else if(rule.fields==="RUNTIME"){
-        const aRefs=[...new Set((String(A.text||"").match(/(?:collection|doc)\\([^)]*\\)|\\b(db|auth|onSnapshot|firebaseApp)\\b/g)||[]))];
-        shared=aRefs.filter(x=>String(B.text||"").includes(x.replace(/.*?([A-Za-z_$][\\w$]*)[^A-Za-z_$]*$/,'$1'))).slice(0,8);
-        const refs=["db","auth","onSnapshot","initializeApp"].filter(x=>String(A.text||"").includes(x));
-        missing=refs.filter(x=>!String(B.text||"").includes(x));
-        if(missing.length) detail=`Kontrak runtime ${a} menggunakan ${missing.join(", ")} tetapi referensinya tidak terlihat pada ${b}.`;
-      }
-      const severity=missing.length?"HIGH":"HEALTHY";
-      relations.push({id:`${rule.id}:${a}:${b}`,rule:rule.label,sourceFile:a,targetFile:b,status:missing.length?"MISMATCH":"SYNCED",severity,shared,missingFromTarget:missing,detail,sourceLines:missing.slice(0,4).flatMap(f=>fieldOccurrences(A.text,f).map(x=>({...x,field:f}))),targetLines:missing.slice(0,4).flatMap(f=>fieldOccurrences(B.text,f).map(x=>({...x,field:f}))) });
-    }
-  }
-  return relations;
-}
-
-function buildFileIssue(result,name,relations){
-  const r=result[name];
-  if(!r?.ok) return {status:"UNREADABLE",severity:"UNKNOWN",title:"File tidak dapat dibaca live",detail:r?.error||`HTTP ${r?.status||0}`,relations:[]};
-  const rel=relations.filter(x=>x.sourceFile===name||x.targetFile===name);
-  const bad=rel.filter(x=>x.status==="MISMATCH");
-  if(bad.length) return {status:"MISMATCH",severity:"HIGH",title:`${bad.length} kontrak lintas-file perlu disinkronkan`,detail:bad.slice(0,2).map(x=>x.detail).join(" "),relations:bad.map(x=>x.id)};
-  return {status:"HEALTHY",severity:"OK",title:"Terbaca dan sinkron pada pemeriksaan saat ini",detail:"Tidak ada mismatch kontrak yang terbukti pada siklus ini.",relations:rel.map(x=>x.id)};
-}
-
-async function fetchFileWithTimeout(name, timeoutMs=5000){
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const cached = S.sourceCache.get(name);
-    if (cached && Date.now() - cached.at < 4000) return cached.value;
-    const r = await fetch(`./${encodeURIComponent(name)}`, { cache: "no-store", signal: controller.signal });
-    const value = { ok:r.ok, status:r.status, text:r.ok ? await r.text() : "", fetchedAt:now(), error:r.ok ? "" : `HTTP ${r.status}` };
-    S.sourceCache.set(name,{at:Date.now(),value});
-    return value;
-  } catch(e) {
-    return {ok:false,status:0,text:"",error:e?.name === "AbortError" ? `Timeout membaca ${name}` : (e?.message || String(e)),fetchedAt:now()};
-  } finally { clearTimeout(timer); }
-}
-
-async function scanLiveSurface(){
-  if(S.liveSurface.scanning) return S.liveSurface;
-  S.liveSurface.scanning=true; S.liveSurface.cycle++;
-  const names=[...new Set([...Object.keys(REGISTRY), ...SOURCE_SURFACE])];
-  const cycle=S.liveSurface.cycle;
-  emit("live_surface_started",{cycle,total:names.length,files:names});
-  const result={};
-  try {
-    // Bounded concurrent reads: a bad/slow file becomes UNREADABLE instead of blocking the map.
-    await Promise.all(names.map(async name=>{
-      let x;
-      try { x=await fetchFileWithTimeout(name,5000); }
-      catch(error){ x={ok:false,status:0,text:"",error:error?.message||String(error),fetchedAt:now()}; }
-      result[name]={...x,fields:fields(name,x.text)};
-      S.liveSurface.results={...result};
-      S.liveSurface.updatedAt=now();
-      emit("live_file",{cycle,file:name,result:result[name],results:{...result}});
-    }));
-    const relations=buildCrossFileRelations(result);
-    const fileStates=Object.fromEntries(names.map(name=>[name,buildFileIssue(result,name,relations)]));
-    const mismatches=relations.filter(x=>x.status==="MISMATCH").map(x=>({rule:x.rule,sourceFile:x.sourceFile,targetFile:x.targetFile,missing:x.missingFromTarget||[],sourceLines:x.sourceLines||[],targetLines:x.targetLines||[]}));
-    S.liveSurface.results=result; S.liveSurface.relations=relations; S.liveSurface.updatedAt=now();
-    emit("live_surface_complete",{cycle,total:names.length,results:result,relations,fileStates,mismatches,updatedAt:S.liveSurface.updatedAt});
-    return S.liveSurface;
-  } finally {
-    S.liveSurface.scanning=false;
-  }
-}
-
-function startLiveSurface(){
-  if(S.liveSurface.timer) return;
-  scanLiveSurface().catch(e=>emit("live_surface_error",{message:e.message}));
-  S.liveSurface.timer=setInterval(()=>scanLiveSurface().catch(e=>emit("live_surface_error",{message:e.message})),10000);
-}
-function stopLiveSurface(){ if(S.liveSurface.timer){clearInterval(S.liveSurface.timer);S.liveSurface.timer=null;} }
-
 async function scanConsistency(targets = null) {
-  const names = targets?.length ? targets.filter(n => DIAGNOSTIC_SCOPE[n]) : Object.keys(DIAGNOSTIC_SCOPE);
+  const names = targets?.length ? targets.filter(n => REGISTRY[n]) : Object.keys(REGISTRY);
   emit("scan_started", { total: names.length, targets: names });
   const result = {};
-  await Promise.all(names.map(async name => {
-    let x;
-    try { x = await fetchFileWithTimeout(name, 5000); }
-    catch (error) { x = { ok:false, status:0, text:"", error:error?.message||String(error), fetchedAt:now() }; }
+  for (const name of names) {
+    const x = await fetchFile(name);
     result[name] = { ...x, fields: fields(name, x.text) };
-  }));
+  }
 
   const findings = [];
   const admin = new Set((result["bcgo-admin.html"]?.fields || []).map(safeLower));
@@ -1026,9 +859,6 @@ async function scanConsistency(targets = null) {
   // Detect known DOM-null patterns directly from deployed source, not only telemetry.
   for (const name of names) {
     const source = result[name]?.text || "";
-    // Medicine can inspect its own source for self-integrity, but self-references are
-    // never promoted to normal root-cause findings without explicit runtime evidence.
-    if (isMedicineSelfFile(name)) continue;
     const directNullRisk = /\$\(\s*["'][^"']+["']\s*\)\.textContent\s*=|document\.getElementById\(\s*["'][^"']+["']\s*\)\.textContent\s*=/.test(source);
     if (directNullRisk) {
       const evs = exactDomEvidence(name, source, "");
@@ -1098,7 +928,6 @@ function buildCodePrescription(plan) {
       type: op.type || "REPLACE_EXACT",
       before: String(op.before || ""),
       after: String(op.after || ""),
-      fullCode: typeof op.fullCode === "string" ? op.fullCode : "",
       reason: text(op.reason || "Perubahan diturunkan dari source evidence.", 1200),
       evidenceStrength: ev?.evidenceStrength || "UNVERIFIED",
       evidenceReason: text(ev?.reason || ev?.evidenceReason || "", 1400),
@@ -1111,7 +940,6 @@ function buildCodePrescription(plan) {
 
   const exact = items.length > 0 &&
     items.every(x => x.type === "REPLACE_EXACT" && x.before && x.after);
-  const fullCodeAvailable = items.length > 0 && items.every(x => typeof x.fullCode === "string" && x.fullCode.length > 0);
   const proof = exactProofForPlan(p);
   const ready = !!(p.precisionGate === true && exact && proof.ok);
 
@@ -1122,7 +950,6 @@ function buildCodePrescription(plan) {
     rootCauseStatus: p.rootCauseStatus || "UNPROVEN",
     evidenceCount: evidence.length,
     items,
-    fullCodeAvailable,
     instruction: ready
       ? "Solusi berasal dari operasi exact yang terikat pada HIGH source evidence dan current deployed source. Review BEFORE/AFTER lalu copy secara manual."
       : `Medicine belum dapat membuka copy gate: ${proof.reason || "exact proof belum lengkap"}.`
@@ -1137,7 +964,6 @@ async function attachPrescription(plan) {
     if (!op?.file || !op?.line) continue;
     const src = await fetchFile(op.file);
     p._sourceContext[i] = src.ok ? getSourceContext(src.text, op.line, 4) : null;
-    if (src.ok) op.fullCode = src.text;
   }
   p.codePrescription = buildCodePrescription(p);
   return p;
@@ -1382,6 +1208,9 @@ function bcgoAnswer(q) {
   // BCGO is authoritative for system status. When the exact BCGO engine is
   // running on this page, ask it directly instead of maintaining a second
   // interpretation inside Medicine.
+  if (window.BCGOBrain?.ask) {
+    try { return window.BCGOBrain.ask(q); } catch {}
+  }
   const active = activeCases();
   const x = safeLower(q);
   const file = mentionedFile(q);
@@ -1444,9 +1273,9 @@ function autonomousThought(role) {
   const last = logs[0]?.message || c?.signature || "belum ada impuls baru";
 
   if (role === "bcgo") {
-    if (active.length) return `Telemetry memberi saya ${active.length} kasus aktif. Fokus investigasi saat ini ${target}. Saya tidak mengubah sinyal BCGO; saya menelusuri source lintas-file sampai akar masalah terbukti.`;
-    if (findings.length) return `Belum ada anomaly aktif yang terbukti. Saya masih memiliki ${findings.length} finding kontrak untuk diperiksa tanpa mengubah source.`;
-    return `Belum ada impuls aktif. Saya tetap mendengarkan system_logs dan siap membuka investigasi ketika telemetry memberikan bukti baru.`;
+    if (active.length) return `Medicine, saya menjaga ${active.length} saraf aktif. Fokus saat ini ${target}. Saya kirim impuls terbaru: ${text(last, 240)}. Jangan berhenti di nama file laporan; telusuri dependency sampai sumber yang benar terbukti.`;
+    if (findings.length) return `Saya belum melihat anomali aktif, tetapi masih ada ${findings.length} finding kontrak. Saya ingin kita pelajari satu per satu supaya status HEALTHY benar-benar didukung evidence.`;
+    return `Siklus tenang, tetapi saya tetap mendengarkan telemetry. Impuls terakhir: ${text(last, 240)}. Kalau ada perubahan, saya ingin Medicine langsung memeriksa jalurnya.`;
   }
 
   if (plan?.codePrescription?.ready) return `BCGO, saya sudah menemukan source exact pada ${target}. Ada ${operations} operasi exact dan ${evidenceCount} evidence. BEFORE → AFTER sudah terbentuk; saya tahan source tetap terkunci sampai Human Review.`;
@@ -1458,28 +1287,23 @@ function autonomousThought(role) {
 }
 
 async function autonomousConversationTick() {
-  if (!S.autonomous.enabled || S.human.paused || !auth?.currentUser) return;
+  if (!S.autonomous.enabled || S.human.paused || !auth.currentUser) return;
   const turn = S.autonomous.turn++;
   const active = activeCases();
   // Every few turns the pair performs real work, not just small-talk: re-check
   // the active case or refresh the cross-file evidence surface.
   if (turn > 0 && turn % 3 === 0) {
     if (active[0]) {
-      const latest = latestRelevantLogs(active[0].source)[0];
-      const investigationKey = [active[0].id, active[0].signature, latest?.createdAt?.seconds || latest?.createdAt || latest?.message || ""].join("|");
-      if (investigationKey !== S.autonomous.lastInvestigationKey) {
-        S.autonomous.lastInvestigationKey = investigationKey;
-        await postSystemMessage("medicine", `Saya lanjut bedah ${active[0].source}. Saya ulangi trace terhadap evidence terbaru agar jalur source → root cause tidak berhenti pada diagnosis lama.`, { kind: "AUTONOMOUS_INVESTIGATION", caseId: active[0].id, autonomous: true });
-        await verifyWithMedicine(active[0].source, { question: "Autonomous re-trace: terus pelajari saraf aktif.", requestedBy: "autonomous_medicine" });
-        emit("autonomous_investigation", { case: active[0] });
-      }
+      await postSystemMessage("medicine", `Saya lanjut bedah ${active[0].source}. Saya ulangi trace terhadap evidence terbaru agar jalur source → root cause tidak berhenti pada diagnosis lama.`, { kind: "AUTONOMOUS_INVESTIGATION", caseId: active[0].id, autonomous: true });
+      await verifyWithMedicine(active[0].source, { question: "Autonomous re-trace: terus pelajari saraf aktif.", requestedBy: "autonomous_medicine" });
+      emit("autonomous_investigation", { case: active[0] });
     } else {
       await scanConsistency();
       await postSystemMessage("bcgo", `Saya melakukan scan lintas-file lagi. Tidak ada case aktif, jadi saya gunakan waktu ini untuk mencari kontrak yang belum konsisten sebelum menjadi kendala runtime.`, { kind: "AUTONOMOUS_SCAN", autonomous: true });
       emit("autonomous_scan", { findings: S.findings });
     }
   }
-  const role = "medicine";
+  const role = turn % 2 === 0 ? "bcgo" : "medicine";
   const message = autonomousThought(role);
   S.autonomous.lastAt = Date.now();
   await postSystemMessage(role, message, { kind: "AUTONOMOUS_DISCUSSION", autonomous: true });
@@ -1506,12 +1330,10 @@ async function sendMessage(msg, role = "human") {
   if (!t) return;
   const clientMessageId = uid();
   S.lastClientMessageId = clientMessageId;
-  const payload = { role, text: t, actorUid: auth?.currentUser?.uid || null, createdAt: firebaseFns?.serverTimestamp ? firebaseFns.serverTimestamp() : now(), clientMessageId };
+  const payload = { role, text: t, actorUid: auth.currentUser?.uid || null, createdAt: serverTimestamp(), clientMessageId };
 
   try {
-    const ready = await ensureRealtimeInfrastructure();
-    if (!ready || !db || !firebaseFns?.addDoc) throw new Error("Realtime infrastructure unavailable");
-    await firebaseFns.addDoc(firebaseFns.collection(db, "medicine_messages"), payload);
+    await addDoc(collection(db, "medicine_messages"), payload);
   } catch (e) {
     emit("local_message", { message: { ...payload, createdAt: now() }, storageError: e.message });
   }
@@ -1551,7 +1373,7 @@ async function approveTreatment(caseId) {
 
   c.status = "READY_FOR_PATCH";
   c.approvedAt = now();
-  c.approvedBy = auth?.currentUser?.uid || null;
+  c.approvedBy = auth.currentUser?.uid || null;
   c.repairPlan.status = "READY_FOR_PATCH";
 
   const proposal = c.patchProposal || findProposal(c.id);
@@ -1562,10 +1384,10 @@ async function approveTreatment(caseId) {
   }
 
   try {
-    await firebaseFns.addDoc(firebaseFns.collection(db, "medicine_treatments"), {
+    await addDoc(collection(db, "medicine_treatments"), {
       caseId: c.id, source: c.source, diagnosis: c.diagnosis, prescription: c.prescription,
       verification: c.verification, repairPlan: c.repairPlan, action: "APPROVED_READY_FOR_PATCH",
-      actorUid: c.approvedBy, createdAt: firebaseFns?.serverTimestamp ? firebaseFns.serverTimestamp() : now()
+      actorUid: c.approvedBy, createdAt: serverTimestamp()
     });
   } catch (e) { emit("storage_warning", { message: e.message }); }
 
@@ -1594,8 +1416,8 @@ async function applyPatch(caseId) {
     operations: c.repairPlan.operations,
     beforeAfter: c.repairPlan.beforeAfter,
     status: "PENDING_EXECUTION",
-    actorUid: auth?.currentUser?.uid || null,
-    createdAt: firebaseFns?.serverTimestamp ? firebaseFns.serverTimestamp() : now(),
+    actorUid: auth.currentUser?.uid || null,
+    createdAt: serverTimestamp(),
     requestedAt: now(),
     executorAvailable: executorAvailable()
   };
@@ -1606,7 +1428,7 @@ async function applyPatch(caseId) {
   S.patchRequests = S.patchRequests.slice(0, 40);
 
   try {
-    await firebaseFns.addDoc(firebaseFns.collection(db, "medicine_patch_requests"), request);
+    await addDoc(collection(db, "medicine_patch_requests"), request);
   } catch (e) { emit("storage_warning", { message: e.message }); }
 
   await postSystemMessage("medicine", executorAvailable()
@@ -1681,7 +1503,7 @@ async function validateAfterPatch(caseId) {
   if (proposal) proposal.status = passed ? "VERIFIED_FIXED" : "VALIDATION_FAILED";
 
   try {
-    await firebaseFns.addDoc(firebaseFns.collection(db, "medicine_validations"), { ...v, createdAt: firebaseFns?.serverTimestamp ? firebaseFns.serverTimestamp() : now(), actorUid: auth?.currentUser?.uid || null });
+    await addDoc(collection(db, "medicine_validations"), { ...v, createdAt: serverTimestamp(), actorUid: auth.currentUser?.uid || null });
   } catch (e) { emit("storage_warning", { message: e.message }); }
 
   await postSystemMessage("medicine", passed
@@ -1701,7 +1523,7 @@ async function rejectTreatment(caseId, reason = "Treatment ditolak oleh manusia.
   c.rejectedAt = now();
   c.rejectionReason = text(reason, 500);
   try {
-    await firebaseFns.addDoc(firebaseFns.collection(db, "medicine_treatments"), { caseId: c.id, source: c.source, action: "REJECTED", reason: c.rejectionReason, actorUid: auth?.currentUser?.uid || null, createdAt: firebaseFns?.serverTimestamp ? firebaseFns.serverTimestamp() : now() });
+    await addDoc(collection(db, "medicine_treatments"), { caseId: c.id, source: c.source, action: "REJECTED", reason: c.rejectionReason, actorUid: auth.currentUser?.uid || null, createdAt: serverTimestamp() });
   } catch (e) { emit("storage_warning", { message: e.message }); }
   await postSystemMessage("medicine", `Saya menerima penolakan untuk ${c.id}. Repair dibatalkan; source-code tetap tidak disentuh.`);
   emit("case_updated", { case: c });
@@ -1711,7 +1533,7 @@ async function rejectTreatment(caseId, reason = "Treatment ditolak oleh manusia.
 async function setHumanMode(paused) {
   S.human.paused = !!paused;
   S.human.mode = paused ? "HUMAN_PAUSED" : "ASSISTED";
-  S.human.uid = auth?.currentUser?.uid || null;
+  S.human.uid = auth.currentUser?.uid || null;
   emit("human_control", { human: { ...S.human } });
   await postSystemMessage("medicine", paused
     ? "Mode Medicine dijeda oleh manusia. Saya hanya mengamati telemetry dan menunggu instruksi."
@@ -1726,27 +1548,11 @@ async function requestReview(caseId) {
   return c;
 }
 
-function cleanupRealtime() {
-  for (const stop of S.listeners.splice(0)) {
-    try { stop?.(); } catch {}
-  }
-  if (typeof S.conversationUnsub === "function") {
-    try { S.conversationUnsub(); } catch {}
-  }
-  S.conversationUnsub = null;
-  S.telemetryLive = false;
-  S.sourceCache.clear();
-  stopAutonomousConversation();
-  // Source-first scanner is independent from Auth and must keep running.
-  // Do not stopLiveSurface() on logout or an auth error.
-
-}
-
 async function startConversation() {
-  if (S.conversationUnsub) return;
+  // Never create a second Firestore listener for the same channel.
+  if (S.conversationStarted) return;
+  S.conversationStarted = true;
   try {
-    if (!db || !firebaseFns) return;
-    const { collection, onSnapshot, query, orderBy, limit } = firebaseFns;
     const q = query(collection(db, "medicine_messages"), orderBy("createdAt", "desc"), limit(200));
     const unsub = onSnapshot(q, snapshot => {
       const seen = new Set();
@@ -1756,105 +1562,48 @@ async function startConversation() {
         seen.add(key);
         return true;
       });
-      emit("conversation", { messages: S.messages, transport: "FIRESTORE" });
+      emit("conversation", { messages: S.messages });
     }, e => emit("conversation_error", { message: e.message }));
-    if (typeof unsub === "function") {
-      S.conversationUnsub = unsub;
-      S.listeners.push(unsub);
-    }
+    if (typeof unsub === "function") S.listeners.push(unsub);
   } catch (e) { emit("conversation_error", { message: e.message }); }
 }
 
-// SOURCE-FIRST BOOT: cross-file source inspection is independent from Admin auth.
-// Auth gates only Firestore telemetry/chat/autonomous treatment paths.
-//
-// IMPORTANT:
-// startLiveSurface() is intentionally NOT called here.
-// The Medicine HTML surface is responsible for starting the live scanner once.
-// This prevents bcgo-medicine.js from starting its own boot cycle.
-let realtimeAuthListenerStarted = false;
-let realtimeAuthRetryTimer = null;
+onAuthStateChanged(auth, async user => {
+  S.human.uid = user?.uid || null;
+  emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
+  if (!user) {
+    stopAutonomousConversation();
+    S.human.paused = false;
+    S.conversationStarted = false;
+    try { S.bcgoEngine?.stop?.(); } catch {}
+    S.bcgoEngine = null;
+    return;
+  }
 
-function startRealtimeAuthListener() {
-  if (realtimeAuthListenerStarted || !auth || !firebaseFns?.onAuthStateChanged) return false;
-  realtimeAuthListenerStarted = true;
-
-  firebaseFns.onAuthStateChanged(auth, async user => {
-    const epoch = ++S.authEpoch;
-    S.human.uid = user?.uid || null;
-    emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
-
-    if (!user) {
-      cleanupRealtime();
-      S.human.uid = null;
-      S.autonomous.lastInvestigationKey = "";
+  try {
+    const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
+    if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
+      stopAutonomousConversation();
+      try { S.bcgoEngine?.stop?.(); } catch {}
+      S.bcgoEngine = null;
+      S.conversationStarted = false;
+      emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
+      emit("local_message", { message: { role: "medicine", text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.", clientMessageId: "auth-denied" } });
       return;
     }
+  } catch (e) {
+    stopAutonomousConversation();
+    try { S.bcgoEngine?.stop?.(); } catch {}
+    S.bcgoEngine = null;
+    S.conversationStarted = false;
+    emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED" });
+    return;
+  }
 
-    try {
-      const adminSnap = await firebaseFns.getDoc(firebaseFns.doc(db, "admin_users", user.uid));
-      if (epoch !== S.authEpoch || auth?.currentUser?.uid !== user.uid) return;
-
-      if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
-        cleanupRealtime();
-        emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
-        emit("local_message", {
-          message: {
-            role: "medicine",
-            text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.",
-            clientMessageId: "auth-denied"
-          }
-        });
-        return;
-      }
-    } catch (e) {
-      cleanupRealtime();
-      emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED", message: e?.message || String(e) });
-      return;
-    }
-
-    if (epoch !== S.authEpoch || auth?.currentUser?.uid !== user.uid) return;
-    await startTelemetry();
-    startConversation();
-    startAutonomousConversation();
-  });
-
-  return true;
-}
-
-(async function bootRealtimeAuth() {
-  const ready = await ensureRealtimeInfrastructure();
-
-  if (ready && startRealtimeAuthListener()) return;
-
-  emit("auth", { user: null, deferred: true, reason: "REALTIME_INFRA_UNAVAILABLE" });
-
-  // Retry quietly in the background. Source-first live scanning remains active
-  // regardless of Auth/Firestore availability.
-  if (realtimeAuthRetryTimer) clearInterval(realtimeAuthRetryTimer);
-  let attempts = 0;
-  realtimeAuthRetryTimer = setInterval(async () => {
-    if (realtimeAuthListenerStarted) {
-      clearInterval(realtimeAuthRetryTimer);
-      realtimeAuthRetryTimer = null;
-      return;
-    }
-
-    if (++attempts > 24) {
-      clearInterval(realtimeAuthRetryTimer);
-      realtimeAuthRetryTimer = null;
-      emit("realtime_boot_giveup", { attempts });
-      return;
-    }
-
-    const ok = await ensureRealtimeInfrastructure(4000);
-    if (ok && startRealtimeAuthListener()) {
-      clearInterval(realtimeAuthRetryTimer);
-      realtimeAuthRetryTimer = null;
-      emit("realtime_boot_recovered");
-    }
-  }, 5000);
-})();
+  startTelemetry();
+  startConversation();
+  startAutonomousConversation();
+});
 
 const API = {
   scanConsistency,
@@ -1871,11 +1620,6 @@ const API = {
   getCodePrescription: caseId => { const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase; return c?.repairPlan?.codePrescription || buildCodePrescription(c?.repairPlan); },
   buildCodePrescription,
   getRegistry: () => ({ ...REGISTRY }),
-  getDiagnosticScope: () => ({ ...DIAGNOSTIC_SCOPE }),
-  scanLiveSurface,
-  startLiveSurface,
-  stopLiveSurface,
-  getLiveSurface: () => ({ ...S.liveSurface, timer: undefined, results: { ...S.liveSurface.results }, relations: [...S.liveSurface.relations] }),
   getRegistryParity: () => ({ ...S.registryParity, missing: [...S.registryParity.missing], extra: [...S.registryParity.extra], mismatched: [...S.registryParity.mismatched] }),
   getState: () => ({ ...S, sourceCache: undefined })
 };
@@ -1894,6 +1638,5 @@ Object.defineProperties(API, {
 });
 window.BCGOMedicine = API;
 
-// Initial source scan is started by startLiveSurface(); no second overlapping scan.
-// A manual SCAN ULANG may invoke scanConsistency explicitly.
+setTimeout(() => scanConsistency().catch(e => emit("scan_error", { message: e.message })), 600);
 emit("ready", { version: S.version, registryCount: Object.keys(REGISTRY).length, executorAvailable: executorAvailable() });
