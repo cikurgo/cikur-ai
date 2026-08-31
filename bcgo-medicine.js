@@ -555,11 +555,21 @@ function buildAdminGapOperations(targetFile, missingFields, adminSource) {
 }
 
 let scanPromise = null;
+let verificationPromise = null;
+const validationPromises = new Map();
+
 async function scanConsistency(targets = null) {
-  if (scanPromise) return scanPromise;
-  scanPromise = performScanConsistency(targets);
-  try { return await scanPromise; }
-  finally { scanPromise = null; }
+  // Serialize scans without returning a different caller's target set.
+  while (scanPromise) {
+    const running = scanPromise;
+    try { await running; } catch {}
+    if (scanPromise === running) scanPromise = null;
+  }
+  requireAdminSession();
+  const mine = performScanConsistency(targets);
+  scanPromise = mine;
+  try { return await mine; }
+  finally { if (scanPromise === mine) scanPromise = null; }
 }
 
 async function performScanConsistency(targets = null) {
@@ -830,7 +840,7 @@ function findProposal(caseId) {
   return S.patchProposals.find(p => p.caseId === caseId && ["PROPOSED", "READY_FOR_PATCH", "APPLY_REQUESTED", "APPLIED"].includes(p.status)) || null;
 }
 
-async function verifyWithMedicine(targetFile = null, context = {}) {
+async function performVerifyWithMedicine(targetFile = null, context = {}) {
   requireAdminSession();
   const investigationCaseId = S.activeCase?.id || null;
   const requestedTarget = targetFile && REGISTRY[targetFile] ? targetFile : (S.activeCase?.source || "bcgo-admin.html");
@@ -840,6 +850,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
   // allowed to stop at the first accusation; it must be able to move the target.
   const targets = Object.keys(REGISTRY);
   const result = await scanConsistency(targets);
+  if (!auth.currentUser || auth.currentUser.uid !== sessionUid) throw new Error("Sesi Admin berubah saat verifikasi berlangsung.");
   const logs = latestRelevantLogs(requestedTarget);
   const runtimeEvidence = logs.slice(0, 8);
   const targetFindings = result.findings.filter(f => f.sourceFile === requestedTarget || f.targetFile === requestedTarget);
@@ -864,11 +875,17 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     const c = investigationCase;
     c.verification = v;
     const resolution = await resolveRootCause(investigationCase);
+    if (!auth.currentUser || auth.currentUser.uid !== sessionUid || S.activeCase?.id !== investigationCaseId) {
+      throw new Error("Case berubah saat trace root cause berlangsung; hasil lama dibuang.");
+    }
     v.rootCauseFile = resolution.rootCauseFile || requestedTarget;
     v.rootCauseStatus = resolution.rootCauseStatus || "UNPROVEN";
     v.rootCauseCandidates = resolution.candidates || [];
     v.sourceEvidence = resolution.sourceEvidence || [];
     c.repairPlan = await enrichRepairPlan(c, v);
+    if (!auth.currentUser || auth.currentUser.uid !== sessionUid || S.activeCase?.id !== investigationCaseId) {
+      throw new Error("Case berubah saat repair plan dibentuk; hasil lama dibuang.");
+    }
     c.rootCauseFile = c.repairPlan.rootCauseFile || requestedTarget;
     c.sourceEvidence = c.repairPlan.sourceEvidence || [];
 
@@ -890,8 +907,13 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     c.prescription = prescription(c.diagnosis);
     emit("case_updated", { case: c });
 
-    const proposal = {
+    const existingProposal = c.patchProposal || S.patchProposals.find(p => p.caseId === c.id && !["APPLIED", "APPLY_FAILED"].includes(p.status));
+    const proposal = existingProposal || {
       proposalId: `PATCH-${uid().toUpperCase()}`,
+      caseId: c.id,
+      createdAt: now()
+    };
+    Object.assign(proposal, {
       caseId: c.id,
       telemetryTarget: c.source,
       originalTarget: requestedTarget,
@@ -902,14 +924,13 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
       repairPlan: plan,
       operations: plan.operations,
       beforeAfter: plan.beforeAfter,
-      status: exactProof ? "PROPOSED" : "PATCH_REQUIRES_REVIEW",
+      status: existingProposal?.status === "READY_FOR_PATCH" ? "READY_FOR_PATCH" : (exactProof ? "PROPOSED" : "PATCH_REQUIRES_REVIEW"),
       sourceWrite: false,
       requiresHumanApproval: true,
       requiresPostValidation: true,
-      precisionGate: exactProof,
-      createdAt: now()
-    };
-    S.patchProposals.unshift(proposal);
+      precisionGate: exactProof
+    });
+    if (!existingProposal) S.patchProposals.unshift(proposal);
     S.patchProposals = S.patchProposals.slice(0, 40);
     c.patchProposal = proposal;
     emit("patch_proposed", { proposal, case: c });
@@ -918,6 +939,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     // never promote a target to a repairable diagnosis from a guess.
     const synthetic = { source: requestedTarget, signature: runtimeEvidence[0]?.message || "", diagnosis: diagnosis(runtimeEvidence[0]?.message || "") };
     const resolution = await resolveRootCause(synthetic);
+    if (!auth.currentUser || auth.currentUser.uid !== sessionUid) throw new Error("Sesi Admin berubah saat verifikasi berlangsung.");
     v.rootCauseFile = resolution.rootCauseFile || requestedTarget;
     v.rootCauseStatus = resolution.rootCauseStatus || "UNPROVEN";
     v.sourceEvidence = resolution.sourceEvidence || [];
@@ -941,6 +963,19 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     checkedFiles: targets
   });
   return v;
+}
+
+async function verifyWithMedicine(targetFile = null, context = {}) {
+  requireAdminSession();
+  while (verificationPromise) {
+    const running = verificationPromise;
+    try { await running; } catch {}
+    if (verificationPromise === running) verificationPromise = null;
+  }
+  const mine = performVerifyWithMedicine(targetFile, context);
+  verificationPromise = mine;
+  try { return await mine; }
+  finally { if (verificationPromise === mine) verificationPromise = null; }
 }
 
 function bcgoAnswer(q) {
@@ -1215,7 +1250,7 @@ async function applyPatch(caseId) {
   return { case: c, proposal, request, queued: true, executorAvailable: true };
 }
 
-async function validateAfterPatch(caseId) {
+async function performValidateAfterPatch(caseId) {
   requireAdminSession();
   const c = S.cases.find(x => x.id === caseId);
   if (!c) throw new Error("Case tidak ditemukan");
@@ -1274,6 +1309,16 @@ async function validateAfterPatch(caseId) {
   emit("validation_complete", { validation: v, case: c });
   emit("case_updated", { case: c });
   return v;
+}
+
+async function validateAfterPatch(caseId) {
+  requireAdminSession();
+  const running = validationPromises.get(caseId);
+  if (running) return running;
+  const mine = performValidateAfterPatch(caseId);
+  validationPromises.set(caseId, mine);
+  try { return await mine; }
+  finally { if (validationPromises.get(caseId) === mine) validationPromises.delete(caseId); }
 }
 
 async function rejectTreatment(caseId, reason = "Treatment ditolak oleh manusia.") {
@@ -1338,6 +1383,8 @@ function startPatchRequestListener() {
           emit("patch_apply_complete", { proposal, request: remote, result: result || { ok: true }, case: c, remote: true });
           setTimeout(() => {
             if (!auth.currentUser || !sessionUid || auth.currentUser.uid !== sessionUid) return;
+            const current = S.cases.find(x => x.id === c.id);
+            if (!current || current.status !== "PATCH_APPLIED") return;
             validateAfterPatch(c.id).catch(e => emit("validation_error", { caseId: c.id, message: e.message }));
           }, 1200);
         } else if (result?.ok === false || ["FAILED","ERROR","REJECTED"].includes(status)) {
@@ -1396,6 +1443,7 @@ onAuthStateChanged(auth, async user => {
     S.patchUnsub = null;
   }
 
+  const sameVerifiedSession = !!(user && sessionUid === user.uid && S.telemetryUnsub && S.conversationUnsub);
   sessionUid = user?.uid || null;
   S.human.uid = user?.uid || null;
   emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
@@ -1423,6 +1471,9 @@ onAuthStateChanged(auth, async user => {
   }
 
   if (generation !== authGeneration || auth.currentUser?.uid !== checkedUid || sessionUid !== checkedUid) return;
+  if (sameVerifiedSession && S.patchUnsub) {
+    return;
+  }
   startTelemetry();
   await startConversation();
   if (generation !== authGeneration || auth.currentUser?.uid !== checkedUid || sessionUid !== checkedUid) return;

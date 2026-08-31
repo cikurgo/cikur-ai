@@ -82,8 +82,17 @@ body{font-family:Inter,Arial,sans-serif}.code{font-family:ui-monospace,SFMono-Re
 </main>
 
 <script type="module">
-import './bcgo-medicine.js';
-const $=id=>document.getElementById(id);
+import './bcgo-medicine.js?v=2.3.1';
+const MISSING_EL = new Proxy({}, { get(_t, prop) {
+  if (prop === 'classList') return { toggle(){}, add(){}, remove(){}, contains(){ return false; } };
+  if (prop === 'style') return {};
+  if (prop === 'querySelectorAll') return () => [];
+  if (prop === 'querySelector') return () => null;
+  if (prop === 'addEventListener' || prop === 'removeEventListener' || prop === 'appendChild' || prop === 'focus' || prop === 'select' || prop === 'remove') return () => {};
+  if (prop === 'scrollHeight') return 0;
+  return undefined;
+}, set(){ return true; } });
+const $=id=>document.getElementById(id) || MISSING_EL;
 const rt={fs:$('rtFirestore'),tel:$('rtTelemetry'),chat:$('rtChat'),auto:$('rtAuto'),pulse:$('livePulse'),surgery:$('surgeryState'),summary:$('surgerySummary')};
 if(rt.fs)rt.fs.textContent='WAITING'; if(rt.tel)rt.tel.textContent='WAITING'; if(rt.chat)rt.chat.textContent='WAITING'; if(rt.auto)rt.auto.textContent='ON';
 const esc=v=>String(v??'-').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
