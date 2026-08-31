@@ -1,5 +1,5 @@
 import {
-  collection, onSnapshot, query, orderBy, limit, addDoc, serverTimestamp, doc, getDoc
+  collection, onSnapshot, query, orderBy, limit, addDoc, serverTimestamp, doc, getDoc, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
@@ -16,12 +16,15 @@ import { db, auth } from "./cikur-config.js";
  *   exposed as window.BCGOPatchExecutor. A browser page must never contain a GitHub
  *   token or silently write repository source.
  *
- * Executor contract:
- *   window.BCGOPatchExecutor.apply({ case, proposal, request })
- *     -> { ok:boolean, changedFiles?:string[], commitUrl?:string, error?:string }
+ * Execution contract:
+ *   Medicine creates exactly one idempotent Firestore request in
+ *   medicine_patch_requests. A trusted Patch Executor consumes that request.
+ *   Medicine does NOT call a browser executor directly, because doing both would
+ *   create a double-execution race. Executor results are observed through the
+ *   same Firestore request document and then validated.
  *
- * The proposal contains deterministic operations with BEFORE/AFTER material so an
- * executor/backend can apply the repair and return the result to Medicine.
+ * The proposal contains deterministic operations with BEFORE/AFTER material so the
+ * trusted backend executor can apply the repair and return the result to Medicine.
  */
 
 const REGISTRY = {
@@ -38,6 +41,7 @@ const REGISTRY = {
   "bcgo-admin.html": { type: "Sistem Admin", role: "admin" },
   "bcgo.html": { type: "Sistem Monitor", role: "monitor" },
   "bcgo.js": { type: "Sistem Monitor Core", role: "monitor" },
+  "data-cgo.html": { type: "Data Sistem", role: "data" },
   "bcgo-medicine.html": { type: "Sistem Medicine UI", role: "medicine" },
   "bcgo-medicine.js": { type: "Sistem Medicine Core", role: "medicine" }
 };
@@ -82,6 +86,24 @@ function canonicalFieldSet(values) {
   return out;
 }
 
+let sessionUid = null;
+let authGeneration = 0;
+const medicineBridgeKey = "CIKUR_GO_BCGO_MEDICINE_V1";
+const medicineBridgeChannel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(medicineBridgeKey) : null;
+let latestBCGOState = null;
+
+function publishMedicineBridge(medicineEvent, payload = {}) {
+  const packet = { bridge: medicineBridgeKey, from: "MEDICINE", type: "MEDICINE_EVENT", medicineEvent, at: Date.now(), ...payload };
+  try { medicineBridgeChannel?.postMessage(packet); } catch {}
+  try { localStorage.setItem(medicineBridgeKey, JSON.stringify(packet)); } catch {}
+}
+
+function cleanupRealtimeListeners() {
+  for (const unsub of S.listeners.splice(0)) {
+    try { if (typeof unsub === "function") unsub(); } catch {}
+  }
+}
+
 const S = {
   version: "2.2.0",
   registry: REGISTRY,
@@ -90,6 +112,9 @@ const S = {
   activeCase: null,
   findings: [],
   listeners: [],
+  telemetryUnsub: null,
+  conversationUnsub: null,
+  patchUnsub: null,
   messages: [],
   human: { mode: "ASSISTED", paused: false, uid: null },
   patchProposals: [],
@@ -98,13 +123,22 @@ const S = {
   validation: null,
   sourceCache: new Map(),
   lastClientMessageId: null,
+  handledPatchResults: new Set(),
   eventSeq: 0,
-  autonomous: { enabled: true, turn: 0, timer: null, lastAt: 0 }
+  autonomous: { enabled: true, turn: 0, timer: null, lastAt: 0, busy: false, generation: 0 }
 };
 
-const emit = (event, p = {}) => window.dispatchEvent(new CustomEvent("bcgo:medicine", {
-  detail: { event, at: new Date().toISOString(), ...p }
-}));
+const emit = (event, p = {}) => {
+  const detail = { event, at: new Date().toISOString(), ...p };
+  window.dispatchEvent(new CustomEvent("bcgo:medicine", { detail }));
+  if (["ready", "case_created", "verification_complete", "patch_proposed", "patch_apply_complete", "validation_complete", "human_control"].includes(event)) {
+    publishMedicineBridge(event, {
+      message: p?.message || p?.verification?.verdict || p?.case?.diagnosis?.title || event,
+      caseId: p?.case?.id || p?.caseId || null,
+      case: p?.case || null
+    });
+  }
+};
 const now = () => new Date().toISOString();
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 const text = (v, n = 1800) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
@@ -206,12 +240,13 @@ function startTelemetry() {
     emit("telemetry_unavailable");
     return;
   }
+  if (typeof S.telemetryUnsub === "function") { try { S.telemetryUnsub(); } catch {} S.telemetryUnsub = null; }
   const unsub = window.CikurCloud.listenSystemLogs(logs => {
     S.logs = Array.isArray(logs) ? logs : [];
     emit("telemetry", { logs: S.logs });
     for (const l of S.logs.slice(0, 60)) makeCase(l);
   });
-  if (typeof unsub === "function") S.listeners.push(unsub);
+  if (typeof unsub === "function") { S.telemetryUnsub = unsub; S.listeners.push(unsub); }
 }
 
 async function fetchFile(name) {
@@ -519,7 +554,16 @@ function buildAdminGapOperations(targetFile, missingFields, adminSource) {
   return operations;
 }
 
+let scanPromise = null;
 async function scanConsistency(targets = null) {
+  if (scanPromise) return scanPromise;
+  scanPromise = performScanConsistency(targets);
+  try { return await scanPromise; }
+  finally { scanPromise = null; }
+}
+
+async function performScanConsistency(targets = null) {
+  requireAdminSession();
   const names = targets?.length ? targets.filter(n => REGISTRY[n]) : Object.keys(REGISTRY);
   emit("scan_started", { total: names.length, targets: names });
   const result = {};
@@ -772,6 +816,12 @@ function canApplyPatch(c) {
   );
 }
 
+function requireAdminSession() {
+  if (!auth.currentUser || !sessionUid || auth.currentUser.uid !== sessionUid) {
+    throw new Error("Sesi Admin Medicine belum terverifikasi.");
+  }
+}
+
 function executorAvailable() {
   return typeof window.BCGOPatchExecutor?.apply === "function";
 }
@@ -781,6 +831,8 @@ function findProposal(caseId) {
 }
 
 async function verifyWithMedicine(targetFile = null, context = {}) {
+  requireAdminSession();
+  const investigationCaseId = S.activeCase?.id || null;
   const requestedTarget = targetFile && REGISTRY[targetFile] ? targetFile : (S.activeCase?.source || "bcgo-admin.html");
   emit("verification_started", { target: requestedTarget, context });
 
@@ -807,18 +859,20 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     rootCauseCandidates: []
   };
 
-  if (S.activeCase && (!targetFile || S.activeCase.source === requestedTarget)) {
-    S.activeCase.verification = v;
-    const resolution = await resolveRootCause(S.activeCase);
+  const investigationCase = investigationCaseId ? S.cases.find(x => x.id === investigationCaseId) : null;
+  if (investigationCase && investigationCase.source === requestedTarget && S.activeCase?.id === investigationCaseId) {
+    const c = investigationCase;
+    c.verification = v;
+    const resolution = await resolveRootCause(investigationCase);
     v.rootCauseFile = resolution.rootCauseFile || requestedTarget;
     v.rootCauseStatus = resolution.rootCauseStatus || "UNPROVEN";
     v.rootCauseCandidates = resolution.candidates || [];
     v.sourceEvidence = resolution.sourceEvidence || [];
-    S.activeCase.repairPlan = await enrichRepairPlan(S.activeCase, v);
-    S.activeCase.rootCauseFile = S.activeCase.repairPlan.rootCauseFile || requestedTarget;
-    S.activeCase.sourceEvidence = S.activeCase.repairPlan.sourceEvidence || [];
+    c.repairPlan = await enrichRepairPlan(c, v);
+    c.rootCauseFile = c.repairPlan.rootCauseFile || requestedTarget;
+    c.sourceEvidence = c.repairPlan.sourceEvidence || [];
 
-    const plan = S.activeCase.repairPlan;
+    const plan = c.repairPlan;
     const exactProof = !!(
       plan.operations?.length &&
       plan.precisionGate === true &&
@@ -831,19 +885,19 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
       : (v.rootCauseStatus === "CONTRACT_ROOT_CAUSE_IDENTIFIED" ? "ROOT_CAUSE_IDENTIFIED_PATCH_BLOCKED" : "INSUFFICIENT_EVIDENCE");
     v.target = v.rootCauseFile || requestedTarget;
     S.verification = v;
-    S.activeCase.verification = v;
-    S.activeCase.status = exactProof ? "VERIFIED_DIAGNOSIS" : "NEEDS_EVIDENCE";
-    S.activeCase.prescription = prescription(S.activeCase.diagnosis);
-    emit("case_updated", { case: S.activeCase });
+    c.verification = v;
+    c.status = exactProof ? "VERIFIED_DIAGNOSIS" : "NEEDS_EVIDENCE";
+    c.prescription = prescription(c.diagnosis);
+    emit("case_updated", { case: c });
 
     const proposal = {
       proposalId: `PATCH-${uid().toUpperCase()}`,
-      caseId: S.activeCase.id,
-      telemetryTarget: S.activeCase.source,
+      caseId: c.id,
+      telemetryTarget: c.source,
       originalTarget: requestedTarget,
       repairTarget: plan.rootCauseFile,
       rootCauseStatus: plan.rootCauseStatus,
-      diagnosis: S.activeCase.diagnosis,
+      diagnosis: c.diagnosis,
       verification: v,
       repairPlan: plan,
       operations: plan.operations,
@@ -857,8 +911,8 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     };
     S.patchProposals.unshift(proposal);
     S.patchProposals = S.patchProposals.slice(0, 40);
-    S.activeCase.patchProposal = proposal;
-    emit("patch_proposed", { proposal, case: S.activeCase });
+    c.patchProposal = proposal;
+    emit("patch_proposed", { proposal, case: c });
   } else {
     // No active case: perform an independent scan and report only evidence,
     // never promote a target to a repairable diagnosis from a guess.
@@ -958,9 +1012,13 @@ function autonomousThought(role) {
   return `Saya tetap belajar dari telemetry yang masuk. Belum ada case aktif yang cukup kuat untuk dibawa ke ruang operasi; saya terus mencari korelasi source dan runtime.`;
 }
 
-async function autonomousConversationTick() {
+async function autonomousConversationTick(generation = authGeneration) {
   if (!S.autonomous.enabled || S.human.paused || !auth.currentUser) return;
-  const turn = S.autonomous.turn++;
+  if (generation !== authGeneration || !sessionUid || auth.currentUser.uid !== sessionUid) return;
+  if (S.autonomous.busy) return;
+  S.autonomous.busy = true;
+  try {
+    const turn = S.autonomous.turn++;
   const active = activeCases();
   // Every few turns the pair performs real work, not just small-talk: re-check
   // the active case or refresh the cross-file evidence surface.
@@ -980,17 +1038,25 @@ async function autonomousConversationTick() {
   S.autonomous.lastAt = Date.now();
   await postSystemMessage(role, message, { kind: "AUTONOMOUS_DISCUSSION", autonomous: true });
   emit("autonomous_chat", { role, message });
+  } finally {
+    S.autonomous.busy = false;
+  }
 }
 
-function startAutonomousConversation() {
-  if (S.autonomous.timer) clearInterval(S.autonomous.timer);
-  S.autonomous.timer = setInterval(() => autonomousConversationTick().catch(e => emit("conversation_error", { message: e.message })), 18000);
-  setTimeout(() => autonomousConversationTick().catch(() => {}), 5000);
+function startAutonomousConversation(generation = authGeneration) {
+  stopAutonomousConversation();
+  S.autonomous.generation = generation;
+  S.autonomous.timer = setInterval(() => autonomousConversationTick(generation).catch(e => emit("conversation_error", { message: e.message })), 18000);
+  S.autonomous.bootstrapTimer = setTimeout(() => autonomousConversationTick(generation).catch(() => {}), 5000);
 }
+
 
 function stopAutonomousConversation() {
   if (S.autonomous.timer) clearInterval(S.autonomous.timer);
+  if (S.autonomous.bootstrapTimer) clearTimeout(S.autonomous.bootstrapTimer);
   S.autonomous.timer = null;
+  S.autonomous.bootstrapTimer = null;
+  S.autonomous.busy = false;
 }
 
 function isInvestigationCommand(q) {
@@ -998,6 +1064,7 @@ function isInvestigationCommand(q) {
 }
 
 async function sendMessage(msg, role = "human") {
+  requireAdminSession();
   const t = text(msg, 1200);
   if (!t) return;
   const clientMessageId = uid();
@@ -1036,6 +1103,7 @@ async function sendMessage(msg, role = "human") {
 }
 
 async function approveTreatment(caseId) {
+  requireAdminSession();
   const c = S.cases.find(x => x.id === caseId);
   if (!c) throw new Error("Case tidak ditemukan");
   if (S.human.paused) throw new Error("Medicine sedang dijeda");
@@ -1071,15 +1139,20 @@ async function approveTreatment(caseId) {
 }
 
 async function applyPatch(caseId) {
+  requireAdminSession();
   const c = S.cases.find(x => x.id === caseId);
   if (!c) throw new Error("Case tidak ditemukan");
   if (!canApplyPatch(c)) throw new Error("Patch belum siap atau belum memiliki operasi source yang aman.");
 
   const proposal = c.patchProposal || findProposal(caseId);
   if (!proposal) throw new Error("Patch proposal tidak ditemukan");
+  if (proposal.status === "APPLY_REQUESTED" || c.status === "PATCH_PENDING_EXECUTION") {
+    throw new Error("Repair untuk case ini sudah menunggu executor. Tidak boleh dikirim dua kali.");
+  }
 
+  const requestId = `REQ-${caseId}-${proposal.proposalId}`.replace(/[^A-Za-z0-9_-]/g, "_");
   const request = {
-    requestId: `REQ-${uid().toUpperCase()}`,
+    requestId,
     caseId,
     proposalId: proposal.proposalId,
     planId: c.repairPlan.planId,
@@ -1091,7 +1164,8 @@ async function applyPatch(caseId) {
     actorUid: auth.currentUser?.uid || null,
     createdAt: serverTimestamp(),
     requestedAt: now(),
-    executorAvailable: executorAvailable()
+    executorAvailable: executorAvailable(),
+    executionMode: "FIRESTORE_TRUSTED_EXECUTOR"
   };
 
   proposal.status = "APPLY_REQUESTED";
@@ -1099,36 +1173,50 @@ async function applyPatch(caseId) {
   S.patchRequests.unshift(request);
   S.patchRequests = S.patchRequests.slice(0, 40);
 
+  // IMPORTANT: exactly one execution path. The trusted executor consumes the
+  // Firestore request. We never call window.BCGOPatchExecutor.apply() here,
+  // because doing both would create a double-execution race.
   try {
-    await addDoc(collection(db, "medicine_patch_requests"), request);
-  } catch (e) { emit("storage_warning", { message: e.message }); }
+    const requestRef = doc(db, "medicine_patch_requests", request.requestId);
+    const tx = await runTransaction(db, async transaction => {
+      const existing = await transaction.get(requestRef);
+      if (existing.exists()) return { created: false, data: existing.data() || {} };
+      transaction.set(requestRef, request);
+      return { created: true, data: request };
+    });
+    if (!tx.created) {
+      const existingStatus = String(tx.data?.status || "").toUpperCase();
+      if (["APPLIED","COMPLETED","SUCCESS","SUCCEEDED"].includes(existingStatus) || tx.data?.result?.ok === true) {
+        proposal.status = "APPLIED";
+        c.status = "PATCH_APPLIED";
+        return { case: c, proposal, request: tx.data, queued: false, duplicate: true, executorAvailable: true };
+      }
+      if (["FAILED","ERROR","REJECTED"].includes(existingStatus) || tx.data?.result?.ok === false) {
+        throw new Error("Request patch dengan ID yang sama sudah berakhir gagal; buat proposal baru setelah review.");
+      }
+      // A PENDING/RUNNING request already exists. Do not overwrite it.
+      proposal.status = "APPLY_REQUESTED";
+      c.status = "PATCH_PENDING_EXECUTION";
+      return { case: c, proposal, request: tx.data, queued: true, duplicate: true, executorAvailable: true };
+    }
+  } catch (e) {
+    proposal.status = "READY_FOR_PATCH";
+    c.status = "READY_FOR_PATCH";
+    S.patchRequests = S.patchRequests.filter(x => x.requestId !== request.requestId);
+    emit("storage_warning", { message: e.message, request });
+    throw new Error(`Request patch gagal dicatat ke Firestore: ${e.message}`);
+  }
 
-  await postSystemMessage("medicine", executorAvailable()
-    ? `Repair request ${request.requestId} dikirim ke Patch Executor. Saya akan memeriksa hasil perubahan dan menjalankan validasi.`
-    : `Repair request ${request.requestId} sudah tercatat. Executor tepercaya belum tersedia di halaman ini, jadi source belum ditulis.`, {
+  await postSystemMessage("medicine",
+    `Repair request ${request.requestId} sudah masuk ke antrian Patch Executor tepercaya. Source belum dianggap berubah sampai hasil executor diterima dan divalidasi.`, {
       kind: "PATCH_APPLY_REQUESTED", caseId, proposalId: proposal.proposalId, requestId: request.requestId
     });
-  emit("patch_apply_requested", { proposal, request, case: c, executorAvailable: executorAvailable() });
-
-  if (!executorAvailable()) return { case: c, proposal, request };
-
-  try {
-    const result = await window.BCGOPatchExecutor.apply({ case: c, proposal, request });
-    proposal.status = result?.ok ? "APPLIED" : "APPLY_FAILED";
-    proposal.executorResult = result || null;
-    c.status = result?.ok ? "PATCH_APPLIED" : "PATCH_FAILED";
-    emit("patch_apply_complete", { proposal, request, result, case: c });
-    if (result?.ok) await validateAfterPatch(caseId);
-    return { case: c, proposal, request, result };
-  } catch (e) {
-    proposal.status = "APPLY_FAILED";
-    c.status = "PATCH_FAILED";
-    emit("patch_apply_complete", { proposal, request, result: { ok: false, error: e.message }, case: c });
-    throw e;
-  }
+  emit("patch_apply_requested", { proposal, request, case: c, executorAvailable: true });
+  return { case: c, proposal, request, queued: true, executorAvailable: true };
 }
 
 async function validateAfterPatch(caseId) {
+  requireAdminSession();
   const c = S.cases.find(x => x.id === caseId);
   if (!c) throw new Error("Case tidak ditemukan");
   const telemetryTarget = c.source;
@@ -1189,6 +1277,7 @@ async function validateAfterPatch(caseId) {
 }
 
 async function rejectTreatment(caseId, reason = "Treatment ditolak oleh manusia.") {
+  requireAdminSession();
   const c = S.cases.find(x => x.id === caseId);
   if (!c) throw new Error("Case tidak ditemukan");
   c.status = "REJECTED";
@@ -1203,6 +1292,7 @@ async function rejectTreatment(caseId, reason = "Treatment ditolak oleh manusia.
 }
 
 async function setHumanMode(paused) {
+  requireAdminSession();
   S.human.paused = !!paused;
   S.human.mode = paused ? "HUMAN_PAUSED" : "ASSISTED";
   S.human.uid = auth.currentUser?.uid || null;
@@ -1213,6 +1303,7 @@ async function setHumanMode(paused) {
 }
 
 async function requestReview(caseId) {
+  requireAdminSession();
   const c = S.cases.find(x => x.id === caseId);
   if (!c) throw new Error("Case tidak ditemukan");
   await postSystemMessage("bcgo", `Saya meminta review manusia untuk ${c.id}. Evidence: ${c.source} — ${c.diagnosis.title}.`, { kind: "HUMAN_REVIEW_REQUEST", caseId: c.id });
@@ -1220,8 +1311,52 @@ async function requestReview(caseId) {
   return c;
 }
 
+function startPatchRequestListener() {
+  if (typeof S.patchUnsub === "function") { try { S.patchUnsub(); } catch {} }
+  S.patchUnsub = null;
+  try {
+    const q = query(collection(db, "medicine_patch_requests"), orderBy("createdAt", "desc"), limit(80));
+    const unsub = onSnapshot(q, snapshot => {
+      for (const d of snapshot.docs) {
+        const remote = { id: d.id, ...d.data() };
+        const requestId = remote.requestId;
+        if (!requestId) continue;
+        const local = S.patchRequests.find(x => x.requestId === requestId);
+        if (local) Object.assign(local, remote);
+
+        const c = S.cases.find(x => x.id === remote.caseId);
+        if (!c) continue;
+        const result = remote.result || remote.executorResult || remote.executionResult || null;
+        const status = String(remote.status || "").toUpperCase();
+        const resultKey = `${requestId}|${status}|${result?.ok === true ? "OK" : result?.ok === false ? "FAIL" : ""}`;
+        if (result?.ok === true || ["APPLIED","COMPLETED","SUCCESS","SUCCEEDED"].includes(status)) {
+          if (S.handledPatchResults.has(resultKey)) continue;
+          S.handledPatchResults.add(resultKey);
+          c.status = "PATCH_APPLIED";
+          const proposal = c.patchProposal || findProposal(c.id);
+          if (proposal) { proposal.status = "APPLIED"; proposal.executorResult = result || remote; }
+          emit("patch_apply_complete", { proposal, request: remote, result: result || { ok: true }, case: c, remote: true });
+          setTimeout(() => {
+            if (!auth.currentUser || !sessionUid || auth.currentUser.uid !== sessionUid) return;
+            validateAfterPatch(c.id).catch(e => emit("validation_error", { caseId: c.id, message: e.message }));
+          }, 1200);
+        } else if (result?.ok === false || ["FAILED","ERROR","REJECTED"].includes(status)) {
+          if (S.handledPatchResults.has(resultKey)) continue;
+          S.handledPatchResults.add(resultKey);
+          c.status = "PATCH_FAILED";
+          const proposal = c.patchProposal || findProposal(c.id);
+          if (proposal) { proposal.status = "APPLY_FAILED"; proposal.executorResult = result || remote; }
+          emit("patch_apply_complete", { proposal, request: remote, result: result || { ok: false, error: remote.error || remote.message }, case: c, remote: true });
+        }
+      }
+    }, e => emit("patch_request_error", { message: e.message }));
+    if (typeof unsub === "function") { S.patchUnsub = unsub; S.listeners.push(unsub); }
+  } catch (e) { emit("patch_request_error", { message: e.message }); }
+}
+
 async function startConversation() {
   try {
+    if (typeof S.conversationUnsub === "function") { try { S.conversationUnsub(); } catch {} S.conversationUnsub = null; }
     const q = query(collection(db, "medicine_messages"), orderBy("createdAt", "desc"), limit(200));
     const unsub = onSnapshot(q, snapshot => {
       const seen = new Set();
@@ -1233,30 +1368,66 @@ async function startConversation() {
       });
       emit("conversation", { messages: S.messages });
     }, e => emit("conversation_error", { message: e.message }));
-    if (typeof unsub === "function") S.listeners.push(unsub);
+    if (typeof unsub === "function") { S.conversationUnsub = unsub; S.listeners.push(unsub); }
   } catch (e) { emit("conversation_error", { message: e.message }); }
 }
 
+function receiveBCGOBridge(packet) {
+  if (!packet || packet.bridge !== medicineBridgeKey || packet.from !== "BCGO" || packet.type !== "BCGO_STATE") return;
+  if (!latestBCGOState || Number(packet.at) > Number(latestBCGOState._bridgeAt || 0)) {
+    latestBCGOState = { ...(packet.state || {}), _bridgeAt: Number(packet.at) || Date.now() };
+    emit("bcgo_state", { state: latestBCGOState });
+  }
+}
+medicineBridgeChannel?.addEventListener("message", e => receiveBCGOBridge(e.data));
+window.addEventListener("storage", e => {
+  if (e.key !== medicineBridgeKey || !e.newValue) return;
+  try { receiveBCGOBridge(JSON.parse(e.newValue)); } catch {}
+});
+
 onAuthStateChanged(auth, async user => {
+  const generation = ++authGeneration;
+  // Tear down the previous session before evaluating the new auth state.
+  if (!user || sessionUid !== user.uid) {
+    stopAutonomousConversation();
+    cleanupRealtimeListeners();
+    S.telemetryUnsub = null;
+    S.conversationUnsub = null;
+    S.patchUnsub = null;
+  }
+
+  sessionUid = user?.uid || null;
   S.human.uid = user?.uid || null;
   emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
-  if (!user) { stopAutonomousConversation(); return; }
+  if (!user) return;
 
+  const checkedUid = user.uid;
   try {
-    const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
+    const adminSnap = await getDoc(doc(db, "admin_users", checkedUid));
+    // Ignore a stale async auth check if the user changed meanwhile.
+    if (auth.currentUser?.uid !== checkedUid || sessionUid !== checkedUid) return;
     if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
+      sessionUid = null;
+      cleanupRealtimeListeners();
+      stopAutonomousConversation();
       emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
       emit("local_message", { message: { role: "medicine", text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.", clientMessageId: "auth-denied" } });
       return;
     }
   } catch (e) {
+    if (auth.currentUser?.uid !== checkedUid) return;
+    cleanupRealtimeListeners();
+    stopAutonomousConversation();
     emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED" });
     return;
   }
 
+  if (generation !== authGeneration || auth.currentUser?.uid !== checkedUid || sessionUid !== checkedUid) return;
   startTelemetry();
-  startConversation();
-  startAutonomousConversation();
+  await startConversation();
+  if (generation !== authGeneration || auth.currentUser?.uid !== checkedUid || sessionUid !== checkedUid) return;
+  startPatchRequestListener();
+  startAutonomousConversation(generation);
 });
 
 const API = {
@@ -1274,7 +1445,7 @@ const API = {
   getCodePrescription: caseId => { const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase; return c?.repairPlan?.codePrescription || buildCodePrescription(c?.repairPlan); },
   buildCodePrescription,
   getRegistry: () => ({ ...REGISTRY }),
-  getState: () => ({ ...S, sourceCache: undefined })
+  getState: () => ({ ...S, sourceCache: undefined, latestBCGOState })
 };
 Object.defineProperties(API, {
   cases: { get: () => S.cases },
@@ -1291,5 +1462,5 @@ Object.defineProperties(API, {
 });
 window.BCGOMedicine = API;
 
-setTimeout(() => scanConsistency().catch(e => emit("scan_error", { message: e.message })), 600);
+setTimeout(() => { if (sessionUid && auth.currentUser?.uid === sessionUid) scanConsistency().catch(e => emit("scan_error", { message: e.message })); }, 600);
 emit("ready", { version: S.version, registryCount: Object.keys(REGISTRY).length, executorAvailable: executorAvailable() });

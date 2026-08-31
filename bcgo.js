@@ -62,6 +62,7 @@ export function runAutonomousEngine(onCycleUpdate) {
 
   let stopped = false;
   let authorized = false;
+  let authorizedUid = null;
   let cycleNo = 0;
   let phaseIndex = -1;
   let cycleTimer = null;
@@ -72,6 +73,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   let latestSystemLogs = [];
   let previousTopSignature = "";
   let realtimeBusy = false;
+  let authEpoch = 0;
 
   const firestore = { connected: false, count: 0, error: null, lastServerAt: 0 };
   const state = {
@@ -137,7 +139,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   }
 
   function receiveMedicineBridge(packet) {
-    if (!packet ||
+    if (stopped || !packet ||
         packet.bridge !== "CIKUR_GO_BCGO_MEDICINE_V1" ||
         packet.from !== "MEDICINE") return;
 
@@ -454,6 +456,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     if (signature === previousTopSignature) return;
     previousTopSignature = signature;
     realtimeBusy = true;
+    const interruptEpoch = authEpoch;
 
     recordEvent("TELEMETRY", `Impuls baru dari ${file}.`, file);
     emit("PROCESS", `⚡ Saya menerima bukti baru dari ${file}. Saya hentikan sejenak siklus normal untuk memeriksanya.`, file, text, {
@@ -463,7 +466,7 @@ export function runAutonomousEngine(onCycleUpdate) {
 
     clearTimeout(cycleTimer);
     setTimeout(() => {
-      if (stopped || !authorized) return;
+      if (stopped || !authorized || interruptEpoch !== authEpoch) return;
       const organs = buildOrgans();
       const info = organs[file];
       const active = Object.entries(organs).filter(([, v]) => v.state === "ACTIVE");
@@ -479,7 +482,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       }
 
       setTimeout(() => {
-        if (stopped || !authorized) return;
+        if (stopped || !authorized || interruptEpoch !== authEpoch) return;
         const activeNow = Object.entries(buildOrgans()).filter(([, v]) => v.state === "ACTIVE");
         emit("OUT", activeNow.length
           ? `Saya selesai menilai impuls ${file}. ${activeNow.length} kasus tetap berada dalam pengawasan.`
@@ -489,6 +492,18 @@ export function runAutonomousEngine(onCycleUpdate) {
         scheduleNext(CYCLE.OUT);
       }, CYCLE.REVIEW);
     }, CYCLE.PROCESS);
+  }
+
+  function cleanupRealtime() {
+    clearTimeout(cycleTimer);
+    clearInterval(refreshTimer);
+    cycleTimer = null;
+    refreshTimer = null;
+    if (typeof unsubscribeFirestore === "function") unsubscribeFirestore();
+    if (typeof unsubscribeSystemLogs === "function") unsubscribeSystemLogs();
+    unsubscribeFirestore = null;
+    unsubscribeSystemLogs = null;
+    realtimeBusy = false;
   }
 
   function startSystemLogs() {
@@ -612,25 +627,38 @@ export function runAutonomousEngine(onCycleUpdate) {
   }
 
   async function verifyAdmin(user) {
+    const epoch = ++authEpoch;
     if (!user) {
+      authEpoch += 1;
       authorized = false;
-      clearTimeout(cycleTimer);
-      clearInterval(refreshTimer);
+      authorizedUid = null;
+      cleanupRealtime();
       emit("OUT", "Sesi Admin belum tersedia. Silakan login sebagai Admin.", "SYS_AUTH_REQUIRED");
       return;
     }
 
     try {
       const snap = await getDoc(doc(db, "admin_users", user.uid));
+      if (stopped || epoch !== authEpoch || auth.currentUser?.uid !== user.uid) return;
       const data = snap.exists() ? snap.data() : null;
       if (data?.active !== true) {
         authorized = false;
+        authorizedUid = null;
+        cleanupRealtime();
         emit("OUT", "Akun ini bukan Admin aktif. Akses Pusat Saraf ditolak.", "SYS_AUTH_NOT_ADMIN");
         return;
       }
-      if (authorized) return;
+      // Auth state can change without reloading the page. Never keep an old
+      // listener/session alive for a different UID.
+      if (authorized && authorizedUid === user.uid) return;
+      if (authorized && authorizedUid !== user.uid) {
+        cleanupRealtime();
+        authorized = false;
+        authorizedUid = null;
+      }
 
       authorized = true;
+      authorizedUid = user.uid;
       recordEvent("AUTH", "Admin terverifikasi. Sensor real-time dibuka.", "SYS_AUTH_VERIFIED");
       emit("IN", "Admin terverifikasi. Saya membuka sensor telemetry dan Firestore real-time.", "SYS_AUTH_VERIFIED", null, { cycleMode: "BOOT" });
       startSystemLogs();
@@ -641,6 +669,8 @@ export function runAutonomousEngine(onCycleUpdate) {
       nextPhase();
     } catch (error) {
       authorized = false;
+      authorizedUid = null;
+      cleanupRealtime();
       emit("OUT", "Saya gagal memverifikasi status Admin.", "SYS_AUTH_CHECK_FAILED", error?.message, { cycleMode: "ERROR" });
     }
   }
@@ -684,8 +714,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       clearTimeout(cycleTimer);
       clearInterval(refreshTimer);
       if (typeof unsubscribeAuth === "function") unsubscribeAuth();
-      if (typeof unsubscribeFirestore === "function") unsubscribeFirestore();
-      if (typeof unsubscribeSystemLogs === "function") unsubscribeSystemLogs();
+      cleanupRealtime();
       try { medicineBridgeChannel?.close(); } catch {}
     }
   };
