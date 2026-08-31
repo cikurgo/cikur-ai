@@ -6,28 +6,63 @@ let firebaseFns = null;
 let firebaseBoot = null;
 
 async function ensureRealtimeInfrastructure(timeoutMs = 5000) {
-  if (firebaseBoot) return firebaseBoot;
-  firebaseBoot = (async () => {
-    const timeout = new Promise(resolve => setTimeout(() => resolve(false), timeoutMs));
-    const boot = (async () => {
+  // Timeout hanya berarti "belum siap sekarang". Jangan mengunci Medicine
+  // ke LOCAL MODE selamanya; realtime harus dapat pulih tanpa refresh.
+  if (firebaseFns && db && auth) return true;
+
+  if (firebaseBoot) {
+    const result = await Promise.race([
+      firebaseBoot,
+      new Promise(resolve => setTimeout(() => resolve(false), timeoutMs))
+    ]);
+    if (result === true && firebaseFns && db && auth) return true;
+    // Jika promise lama sudah selesai gagal, izinkan percobaan baru.
+    if (firebaseBoot && result === false) {
       try {
-        const config = await import("./cikur-config.js");
-        db = config.db;
-        auth = config.auth;
-        const [firestore, authMod] = await Promise.all([
-          import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"),
-          import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js")
+        const settled = await Promise.race([
+          firebaseBoot,
+          new Promise(resolve => setTimeout(() => resolve("__pending__"), 0))
         ]);
-        firebaseFns = { ...firestore, ...authMod };
-        return true;
-      } catch (error) {
-        emit("realtime_boot_unavailable", { message: error?.message || String(error) });
-        return false;
+        if (settled !== "__pending__" && settled !== true) firebaseBoot = null;
+      } catch {
+        firebaseBoot = null;
       }
-    })();
-    return Promise.race([boot, timeout]);
+    }
+    return false;
+  }
+
+  const boot = (async () => {
+    try {
+      const config = await import("./cikur-config.js");
+      db = config.db;
+      auth = config.auth;
+      const [firestore, authMod] = await Promise.all([
+        import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"),
+        import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js")
+      ]);
+      firebaseFns = { ...firestore, ...authMod };
+      return !!(db && auth && firebaseFns);
+    } catch (error) {
+      emit("realtime_boot_unavailable", { message: error?.message || String(error) });
+      return false;
+    }
   })();
-  return firebaseBoot;
+
+  firebaseBoot = boot;
+  const result = await Promise.race([
+    boot,
+    new Promise(resolve => setTimeout(() => resolve(false), timeoutMs))
+  ]);
+
+  // Jika boot masih berjalan, biarkan promise tetap hidup. Retry berikutnya
+  // akan dapat memakai hasil boot yang sama tanpa memulai import ganda.
+  if (result === false) {
+    void boot.then(ok => {
+      if (ok) emit("realtime_boot_recovered");
+      else if (firebaseBoot === boot) firebaseBoot = null;
+    });
+  }
+  return result;
 }
 
 /*
@@ -1699,6 +1734,7 @@ function cleanupRealtime() {
     try { S.conversationUnsub(); } catch {}
   }
   S.conversationUnsub = null;
+  S.telemetryLive = false;
   S.sourceCache.clear();
   stopAutonomousConversation();
   // Source-first scanner is independent from Auth and must keep running.
@@ -1733,12 +1769,13 @@ async function startConversation() {
 // Auth gates only Firestore telemetry/chat/autonomous treatment paths.
 startLiveSurface();
 
-(async function bootRealtimeAuth() {
-  const ready = await ensureRealtimeInfrastructure();
-  if (!ready || !auth || !firebaseFns?.onAuthStateChanged) {
-    emit("auth", { user: null, deferred: true, reason: "REALTIME_INFRA_UNAVAILABLE" });
-    return;
-  }
+let realtimeAuthListenerStarted = false;
+let realtimeAuthRetryTimer = null;
+
+function startRealtimeAuthListener() {
+  if (realtimeAuthListenerStarted || !auth || !firebaseFns?.onAuthStateChanged) return false;
+  realtimeAuthListenerStarted = true;
+
   firebaseFns.onAuthStateChanged(auth, async user => {
     const epoch = ++S.authEpoch;
     S.human.uid = user?.uid || null;
@@ -1754,10 +1791,17 @@ startLiveSurface();
     try {
       const adminSnap = await firebaseFns.getDoc(firebaseFns.doc(db, "admin_users", user.uid));
       if (epoch !== S.authEpoch || auth?.currentUser?.uid !== user.uid) return;
+
       if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
         cleanupRealtime();
         emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
-        emit("local_message", { message: { role: "medicine", text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.", clientMessageId: "auth-denied" } });
+        emit("local_message", {
+          message: {
+            role: "medicine",
+            text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.",
+            clientMessageId: "auth-denied"
+          }
+        });
         return;
       }
     } catch (e) {
@@ -1771,6 +1815,42 @@ startLiveSurface();
     startConversation();
     startAutonomousConversation();
   });
+
+  return true;
+}
+
+(async function bootRealtimeAuth() {
+  const ready = await ensureRealtimeInfrastructure();
+
+  if (ready && startRealtimeAuthListener()) return;
+
+  emit("auth", { user: null, deferred: true, reason: "REALTIME_INFRA_UNAVAILABLE" });
+
+  // Retry quietly in the background. Source-first live scanning remains active
+  // regardless of Auth/Firestore availability.
+  if (realtimeAuthRetryTimer) clearInterval(realtimeAuthRetryTimer);
+  let attempts = 0;
+  realtimeAuthRetryTimer = setInterval(async () => {
+    if (realtimeAuthListenerStarted) {
+      clearInterval(realtimeAuthRetryTimer);
+      realtimeAuthRetryTimer = null;
+      return;
+    }
+
+    if (++attempts > 24) {
+      clearInterval(realtimeAuthRetryTimer);
+      realtimeAuthRetryTimer = null;
+      emit("realtime_boot_giveup", { attempts });
+      return;
+    }
+
+    const ok = await ensureRealtimeInfrastructure(4000);
+    if (ok && startRealtimeAuthListener()) {
+      clearInterval(realtimeAuthRetryTimer);
+      realtimeAuthRetryTimer = null;
+      emit("realtime_boot_recovered");
+    }
+  }, 5000);
 })();
 
 const API = {
