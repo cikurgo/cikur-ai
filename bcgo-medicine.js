@@ -3,16 +3,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
-import { runAutonomousEngine } from "./bcgo.js?v=3.0";
-
-// Prevent duplicate initialization when the page/module is re-evaluated.
-if (window.__BCGO_MEDICINE_MODULE_ACTIVE__) {
-  throw new Error("BCGO Medicine module sudah aktif pada halaman ini.");
-}
-window.__BCGO_MEDICINE_MODULE_ACTIVE__ = true;
 
 /*
- * BCGO MEDICINE v3.3 — PRECISION REPAIR / VERIFIED HEALING ENGINE
+ * BCGO MEDICINE v1.7 — PRECISION REPAIR / VERIFIED HEALING ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -31,9 +24,6 @@ window.__BCGO_MEDICINE_MODULE_ACTIVE__ = true;
  * executor/backend can apply the repair and return the result to Medicine.
  */
 
-// CONTRACT: this registry is an exact mirror of ORGAN_REGISTRY in bcgo.js.
-// Do not add/remove/rename an entry here independently.
-// v3.3.1: parity is verified against window.BCGOBrain.getRegistry() at runtime.
 const REGISTRY = {
   "index.html": { type: "Halaman Utama", role: "customer" },
   "assistant.html": { type: "Zona Customer", role: "customer" },
@@ -47,14 +37,10 @@ const REGISTRY = {
   "bcgo-engine.js": { type: "Sistem Core", role: "system" },
   "bcgo-admin.html": { type: "Sistem Admin", role: "admin" },
   "bcgo.html": { type: "Sistem Monitor", role: "monitor" },
-  "data-cgo.html": { type: "Data Sistem", role: "data" },
-  "bcgo-medicine.js": { type: "Otak Medicine", role: "medicine" },
-  "bcgo-medicine.html": { type: "UI Medicine", role: "medicine" }
+  "bcgo.js": { type: "Sistem Monitor Core", role: "monitor" },
+  "bcgo-medicine.html": { type: "Sistem Medicine UI", role: "medicine" },
+  "bcgo-medicine.js": { type: "Sistem Medicine Core", role: "medicine" }
 };
-
-// bcgo.js is the producer engine itself, not an organ in BCGO's 15-organ registry.
-// Medicine may inspect its source as a dependency, but it must not count it as an organ.
-const SOURCE_SURFACE = ["bcgo.js"];
 
 const REQUIRED = {
   driver: ["name", "phone", "address", "vehicleType", "photo", "ktp", "sim", "bank", "accountName", "accountNo"],
@@ -97,7 +83,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "3.3.1",
+  version: "2.2.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -113,25 +99,7 @@ const S = {
   sourceCache: new Map(),
   lastClientMessageId: null,
   eventSeq: 0,
-  autonomous: { enabled: true, turn: 0, timer: null, lastAt: 0 },
-  bcgoState: null,
-  registryParity: { ok: false, status: "WAITING", bcgoCount: 0, medicineCount: Object.keys(REGISTRY).length, missing: [], extra: [], mismatched: [] },
-  bcgoContract: {
-    step: "IN",
-    message: "",
-    targetCell: "",
-    cycle: 0,
-    cycleMode: "BOOT",
-    metrics: {},
-    systemOrgans: {},
-    systemLogs: [],
-    activeCases: [],
-    medicineQueue: [],
-    connection: {}
-  },
-  bcgoEngine: null,
-  bcgoSynced: false,
-  conversationStarted: false
+  autonomous: { enabled: true, turn: 0, timer: null, lastAt: 0 }
 };
 
 const emit = (event, p = {}) => window.dispatchEvent(new CustomEvent("bcgo:medicine", {
@@ -177,18 +145,9 @@ function mentionedFile(q) {
   return Object.keys(REGISTRY).find(f => x.includes(f.toLowerCase())) || null;
 }
 
-function normalizeFile(value) {
-  const raw = String(value || "").trim();
-  if (!raw) return "UNKNOWN";
-  const clean = raw.split("?")[0].split("#")[0];
-  return clean.substring(clean.lastIndexOf("/") + 1) || raw;
-}
-
 function latestRelevantLogs(file) {
-  const wanted = normalizeFile(file);
-  return S.logs.filter(l => normalizeFile(l.fileName || l.source || l.file) === wanted).slice(0, 12);
+  return S.logs.filter(l => !file || safeLower(l.fileName || l.source) === safeLower(file)).slice(0, 12);
 }
-
 
 async function postSystemMessage(role, msg, meta = {}) {
   const clientMessageId = meta.clientMessageId || uid();
@@ -208,154 +167,51 @@ async function postSystemMessage(role, msg, meta = {}) {
   }
 }
 
-function syncFromBCGOState(state) {
-  if (!state || typeof state !== "object") return;
-  // BCGO_STATE is authoritative. Keep an explicit 1:1 contract snapshot
-  // instead of rebuilding BCGO metrics/organs/cases inside Medicine.
-  S.bcgoState = state;
-  S.bcgoContract = {
-    step: state.step,
-    message: state.message,
-    targetCell: state.targetCell,
-    cycle: state.cycle,
-    cycleMode: state.cycleMode,
-    metrics: state.metrics || {},
-    systemOrgans: state.systemOrgans || {},
-    systemLogs: Array.isArray(state.systemLogs) ? state.systemLogs.slice() : [],
-    activeCases: Array.isArray(state.activeCases) ? state.activeCases.slice() : [],
-    medicineQueue: Array.isArray(state.medicineQueue) ? state.medicineQueue.slice() : [],
-    connection: state.connection || {}
+function makeCase(log) {
+  const source = text(log.fileName || log.source || "UNKNOWN", 120);
+  const sig = text(log.message || log.error || "Unknown error", 700);
+  if (S.cases.some(c => c.source === source && c.signature === sig)) return null;
+
+  const d = diagnosis(sig);
+  const c = {
+    id: `CASE-${uid().toUpperCase()}`,
+    source,
+    signature: sig,
+    diagnosis: d,
+    prescription: prescription(d),
+    status: "DIAGNOSED",
+    createdAt: now(),
+    evidence: log,
+    repairPlan: null,
+    rootCauseFile: source,
+    sourceEvidence: [],
+    validation: null
   };
-  S.bcgoSynced = true;
-  S.logs = S.bcgoContract.systemLogs.slice();
+  S.cases.unshift(c);
+  S.cases = S.cases.slice(0, 80);
+  S.activeCase = c;
+  emit("case_created", { case: c });
 
-  const queue = S.bcgoContract.medicineQueue;
-  const queueIds = new Set(queue.map(x => x.id));
-
-  for (const handoff of queue) {
-    const target = normalizeFile(handoff.target || handoff.file);
-    const evidence = S.logs.find(log =>
-      normalizeFile(log?.fileName || log?.source || log?.file) === target &&
-      String(log?.reportedAt ?? "") === String(handoff?.evidence?.reportedAt ?? handoff?.reportedAt ?? "")
-    ) || S.logs.find(log => normalizeFile(log?.fileName || log?.source || log?.file) === target);
-
-    let c = S.cases.find(x => x.bcgoCaseId === handoff.id || x.id === handoff.id);
-    if (!c) {
-      const sig = text(evidence?.message || handoff?.evidence?.message || handoff.message || "Sinyal telemetry BCGO diterima.", 700);
-      const d = diagnosis(sig);
-      c = {
-        id: handoff.id,
-        bcgoCaseId: handoff.id,
-        source: target,
-        signature: sig,
-        runtimeLocation: {
-          file: target,
-          line: Number(evidence?.lineNumber ?? evidence?.line ?? handoff?.evidence?.line) || null,
-          col: Number(evidence?.columnNumber ?? evidence?.column ?? handoff?.evidence?.column) || null,
-          stack: text(evidence?.stack || evidence?.stackTrace || "", 1200)
-        },
-        diagnosis: d,
-        prescription: prescription(d),
-        status: "DIAGNOSED",
-        createdAt: now(),
-        evidence: evidence || handoff.evidence || handoff,
-        repairPlan: null,
-        rootCauseFile: target,
-        sourceEvidence: [],
-        validation: null,
-        bcgoHandoff: { ...handoff, handoff: "READY_FOR_MEDICINE" }
-      };
-      S.cases.unshift(c);
-      S.cases = S.cases.slice(0, 80);
-      emit("case_created", { case: c, source: "BCGO_STATE.medicineQueue" });
-      void postSystemMessage("medicine", `Saya menerima ${c.id} langsung dari BCGO_STATE.medicineQueue. Target: ${target}. Saya hanya akan membuka treatment setelah root cause dan source exact terbukti.`, {
-        kind: "MEDICINE_BCGO_HANDOFF", caseId: c.id, target
-      });
-    } else {
-      c.bcgoHandoff = { ...handoff, handoff: "READY_FOR_MEDICINE" };
-      c.evidence = evidence || c.evidence;
-      c.lastBCGOStateAt = now();
-      if (!c.repairPlan && !["REJECTED", "FIXED_VERIFIED"].includes(c.status)) {
-        c.status = c.status === "PATCH_APPLIED" ? c.status : "DIAGNOSED";
-      }
-      emit("case_updated", { case: c, source: "BCGO_STATE.medicineQueue" });
-    }
-  }
-
-  // BCGO is authoritative for whether a telemetry case is currently active.
-  // Only cases that originated from BCGO are auto-recovered here. Treatment/validation
-  // lifecycle is left intact.
-  for (const c of S.cases) {
-    if (!c.bcgoCaseId || queueIds.has(c.bcgoCaseId)) continue;
-    if (["DIAGNOSED", "INVESTIGATING", "NEEDS_EVIDENCE"].includes(c.status)) {
-      c.status = "RECOVERED";
-      c.recoveredAt = now();
-      emit("case_updated", { case: c, recovered: true, source: "BCGO_STATE" });
-    }
-  }
-
-  S.activeCase = queueIds.size
-    ? (S.cases.find(c => queueIds.has(c.bcgoCaseId)) || null)
-    : null;
-
-  emit("telemetry", { logs: S.logs, transport: "BCGO_STATE" });
-  emit("bcgo_sync", {
-    state,
-    contract: {
-      metrics: state.metrics || {},
-      activeCases: state.activeCases || [],
-      medicineQueue: queue,
-      systemOrgans: state.systemOrgans || {},
-      connection: state.connection || {}
-    }
+  postSystemMessage("bcgo", `Saya menemukan evidence pada ${source}: ${d.title}. Saya serahkan ${c.id} ke Medicine untuk verifikasi independen.`, {
+    kind: "BCGO_HANDOFF", caseId: c.id, target: source
   });
-}
-
-function verifyRegistryParity() {
-  const producer = window.BCGOBrain?.getRegistry?.();
-  if (!producer || typeof producer !== "object") {
-    S.registryParity = {
-      ok: false, status: "WAITING_FOR_BCGO_REGISTRY",
-      bcgoCount: 0, medicineCount: Object.keys(REGISTRY).length,
-      missing: [], extra: [], mismatched: []
-    };
-    emit("registry_parity", S.registryParity);
-    return S.registryParity;
-  }
-
-  const pNames = Object.keys(producer);
-  const mNames = Object.keys(REGISTRY);
-  const missing = pNames.filter(name => !REGISTRY[name]);
-  const extra = mNames.filter(name => !producer[name]);
-  const mismatched = mNames.filter(name => {
-    if (!producer[name]) return false;
-    return producer[name].type !== REGISTRY[name].type || producer[name].role !== REGISTRY[name].role;
+  postSystemMessage("medicine", `Case ${c.id} saya terima. Saya akan mencari akar masalah, memeriksa kontrak lintas-file, lalu menyiapkan repair plan yang konkret.`, {
+    kind: "MEDICINE_ACK", caseId: c.id, target: source
   });
-
-  S.registryParity = {
-    ok: missing.length === 0 && extra.length === 0 && mismatched.length === 0 && pNames.length === mNames.length,
-    status: missing.length || extra.length || mismatched.length ? "MISMATCH" : "EXACT_1_TO_1",
-    bcgoCount: pNames.length, medicineCount: mNames.length, missing, extra, mismatched
-  };
-  emit("registry_parity", S.registryParity);
-  return S.registryParity;
+  return c;
 }
 
 function startTelemetry() {
-  if (S.bcgoEngine) return;
-  try {
-    // Use the exact BCGO engine as the state producer. Medicine does not reimplement
-    // buildOrgans(), makeCases(), timestamp rules, or the ACTIVE window.
-    S.bcgoEngine = runAutonomousEngine(state => syncFromBCGOState(state));
-    verifyRegistryParity();
-    S.listeners.push(() => {
-      try { S.bcgoEngine?.stop?.(); } catch {}
-      S.bcgoEngine = null;
-    });
-    emit("telemetry_transport", { transport: "BCGO_ENGINE_STATE" });
-  } catch (e) {
-    emit("telemetry_unavailable", { message: e?.message || String(e) });
+  if (!window.CikurCloud?.listenSystemLogs) {
+    emit("telemetry_unavailable");
+    return;
   }
+  const unsub = window.CikurCloud.listenSystemLogs(logs => {
+    S.logs = Array.isArray(logs) ? logs : [];
+    emit("telemetry", { logs: S.logs });
+    for (const l of S.logs.slice(0, 60)) makeCase(l);
+  });
+  if (typeof unsub === "function") S.listeners.push(unsub);
 }
 
 async function fetchFile(name) {
@@ -364,7 +220,7 @@ async function fetchFile(name) {
   try {
     const r = await fetch(`./${encodeURIComponent(name)}`, { cache: "no-store" });
     const value = { ok: r.ok, status: r.status, text: r.ok ? await r.text() : "", fetchedAt: now() };
-    if (r.ok) S.sourceCache.set(name, { at: Date.now(), value });
+    S.sourceCache.set(name, { at: Date.now(), value });
     return value;
   } catch (e) {
     const value = { ok: false, status: 0, text: "", error: e.message, fetchedAt: now() };
@@ -414,104 +270,6 @@ function lineOf(source, offset) {
   return String(source || "").slice(0, Math.max(0, offset)).split(/\r?\n/).length;
 }
 
-
-function normalizeLocalRef(ref, fromFile = "") {
-  let value = String(ref || "").trim();
-  if (!value || /^(https?:|data:|blob:|javascript:|#)/i.test(value)) return null;
-  value = value.split(/[?#]/)[0];
-  if (!value) return null;
-  try {
-    const base = new URL(`https://medicine.local/${fromFile || "index.html"}`);
-    const url = new URL(value, base);
-    value = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
-  } catch {}
-  value = value.replace(/^\.\//, "");
-  return REGISTRY[value] ? value : null;
-}
-
-function extractDependencies(fileName, source) {
-  const out = new Set();
-  if (!source) return [];
-  let m;
-  const patterns = [
-    /<script[^>]+(?:src|data-src)=["']([^"']+)["']/gi,
-    /(?:import|export)\s+(?:[^"']+?\s+from\s+)?["']([^"']+)["']/g,
-    /import\s*\(\s*["']([^"']+)["']\s*\)/g,
-    /(?:fetch|navigator\.serviceWorker\.register)\s*\(\s*["']([^"']+)["']/g
-  ];
-  for (const re of patterns) {
-    while ((m = re.exec(source))) {
-      const normalized = normalizeLocalRef(m[1], fileName);
-      if (normalized && normalized !== fileName) out.add(normalized);
-    }
-  }
-  return [...out];
-}
-
-function dependencyGraph(results) {
-  const graph = {};
-  for (const [name, data] of Object.entries(results || {})) graph[name] = extractDependencies(name, data?.text || "");
-  return graph;
-}
-
-function dependencyClosure(root, graph, maxDepth = 5) {
-  const out = [];
-  const seen = new Set([root]);
-  const queue = [{ file: root, depth: 0 }];
-  while (queue.length) {
-    const { file, depth } = queue.shift();
-    if (depth >= maxDepth) continue;
-    for (const dep of graph[file] || []) {
-      if (seen.has(dep)) continue;
-      seen.add(dep);
-      out.push({ file: dep, depth: depth + 1, via: file });
-      queue.push({ file: dep, depth: depth + 1 });
-    }
-  }
-  return out;
-}
-
-function findAssignmentOperations(fileName, source, signature = "") {
-  if (!source) return [];
-  const ops = [];
-  const wantsText = /textcontent|innerhtml|value|classlist|style/i.test(signature) || /cannot set properties of null|cannot read properties of null/i.test(signature);
-  if (!wantsText) return ops;
-
-  const direct = [
-    /(?:document\.getElementById|document\.querySelector|\$)\(\s*["']([^"']+)["']\s*\)\s*\.textContent\s*=\s*([^;\n]+);?/g,
-    /(?:document\.getElementById|document\.querySelector|\$)\(\s*["']([^"']+)["']\s*\)\s*\.innerHTML\s*=\s*([^;\n]+);?/g,
-    /(?:document\.getElementById|document\.querySelector|\$)\(\s*["']([^"']+)["']\s*\)\s*\.value\s*=\s*([^;\n]+);?/g
-  ];
-  for (const re of direct) {
-    let m;
-    while ((m = re.exec(source)) && ops.length < 30) {
-      const property = /innerHTML/.test(m[0]) ? "innerHTML" : /\.value\s*=/.test(m[0]) ? "value" : "textContent";
-      const before = m[0];
-      const accessor = before.match(/(?:document\.getElementById|document\.querySelector|\$)\([^)]*\)/)?.[0];
-      if (!accessor) continue;
-      const rhs = m[2];
-      const after = `{ const __medicineEl = ${accessor}; if (__medicineEl) __medicineEl.${property} = ${rhs}; }`;
-      ops.push({ type: "REPLACE_EXACT", file: fileName, selector: m[1], property, line: lineOf(source, m.index), before, after, reason: `Guard DOM reference '${m[1]}' before assigning ${property}.` });
-    }
-  }
-
-  // Pre-bound element pattern: const el = document.getElementById('x'); ... el.textContent = ...
-  const bindRe = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(document\.getElementById|document\.querySelector|\$)\(\s*(["'])([^"']+)\3\s*\)\s*;?([\s\S]{0,900}?)(?:\1\s*\.textContent\s*=\s*([^;\n]+);?)/g;
-  let b;
-  while ((b = bindRe.exec(source)) && ops.length < 40) {
-    const whole = b[0];
-    const varName = b[1];
-    const rhs = b[6];
-    const assignIndex = whole.lastIndexOf(`${varName}.textContent`);
-    if (assignIndex < 0 || !rhs || whole.includes(`if (${varName})`)) continue;
-    const assignmentLine = lineOf(source, b.index + assignIndex);
-    const assignment = `${varName}.textContent = ${rhs};`;
-    const after = `${whole.slice(0, assignIndex)}if (${varName}) ${assignment}`;
-    ops.push({ type: "REPLACE_EXACT", file: fileName, selector: b[4], property: "textContent", line: assignmentLine, before: assignment, after, reason: `Guard bound DOM reference '${b[4]}' before assigning textContent.` });
-  }
-  return ops;
-}
-
 function domAssignmentCandidates(fileName, source) {
   if (!source) return [];
   const out = [];
@@ -538,13 +296,8 @@ function domAssignmentCandidates(fileName, source) {
 
 function htmlHasElement(source, id) {
   if (!source || !id) return false;
-  const raw = String(id).trim();
-  const candidates = [raw, raw.replace(/^#/, "")];
-  return candidates.some(value => {
-    if (!value || /[.\s\[\]>:+~]/.test(value)) return false;
-    const q = escRegExp(value);
-    return new RegExp(`(?:id|name)\s*=\s*["']${q}["']`, "i").test(source);
-  });
+  const q = escRegExp(id);
+  return new RegExp(`(?:id|name)\\s*=\\s*["']${q}["']`, "i").test(source);
 }
 
 function extractRuntimeLocation(signature) {
@@ -560,7 +313,8 @@ function loadedByPages(scriptFile, htmlResults) {
   const out = [];
   for (const [name, data] of Object.entries(htmlResults || {})) {
     if (!/\.html$/i.test(name) || !data?.text) continue;
-    if (extractDependencies(name, data.text).includes(scriptFile)) out.push(name);
+    const re = new RegExp(`<script[^>]+src=["'][^"']*${escRegExp(scriptFile)}(?:[?#][^"']*)?["']`, "i");
+    if (re.test(data.text)) out.push(name);
   }
   return out;
 }
@@ -577,183 +331,107 @@ function selectorFromSignature(signature, source) {
 
 function exactDomEvidence(fileName, source, signature, context = {}) {
   const out = [];
-  const runtimeLocations = context.runtimeLocations || [];
-  const htmlResults = context.htmlResults || {};
-  const loadedBy = context.loadedBy || [];
-  const assignments = findAssignmentOperations(fileName, source, signature);
-  const accesses = assignments.length ? assignments : domAssignmentCandidates(fileName, source);
-
-  for (const c of accesses) {
+  for (const c of domAssignmentCandidates(fileName, source)) {
     const selector = c.selector;
     if (!selector) continue;
-    const sameDoc = /\.html$/i.test(fileName) ? htmlHasElement(source, selector) : null;
-    const runtimeHit = runtimeLocations.some(x => x.file && safeLower(x.file) === safeLower(fileName) && (!x.line || Number(x.line) === Number(c.line)));
+    const existsInSameDocument = /\.html$/i.test(fileName) ? htmlHasElement(source, selector) : null;
+    const stackHit = (context.runtimeLocations || []).some(x => x.file && safeLower(x.file) === safeLower(fileName) && (!x.line || x.line === c.line));
     const signatureHit = safeLower(signature).includes(safeLower(selector));
     let strength = "LOW";
-    let reason = `Reference DOM '${selector}' ditemukan pada ${fileName}, tetapi hubungan dengan runtime belum terbukti.`;
-
-    // HIGH is reserved for a causally correlated failure. A missing DOM target
-    // somewhere in the loaded surface is not enough: it can be an intentional
-    // page-specific renderer or an unrelated assignment. The runtime location
-    // (or an explicit selector in the runtime signature) must correlate with the
-    // exact source operation before evidence can become HIGH.
-    const runtimeCorrelated = runtimeHit || signatureHit;
-    const missingOnLoadedPage = loadedBy.some(page => htmlHasElement(htmlResults[page]?.text || "", selector) === false);
-    if (sameDoc === false && runtimeCorrelated) {
+    let reason = `Referensi DOM '${selector}' ditemukan pada source script; hubungan runtime belum terbukti.`;
+    if (existsInSameDocument === false) {
       strength = "HIGH";
-      reason = `Reference DOM '${selector}' digunakan di ${fileName}, target DOM tidak ditemukan, dan lokasi/signature runtime berkorelasi dengan operasi exact.`;
-    } else if (loadedBy.length) {
-      const missingPages = loadedBy.filter(page => htmlHasElement(htmlResults[page]?.text || "", selector) === false);
-      if (missingPages.length && runtimeCorrelated) {
-        strength = "HIGH";
-        reason = `Script ${fileName} dipakai oleh ${missingPages.join(', ')}; target DOM '${selector}' hilang pada halaman pemakai dan runtime berkorelasi dengan operasi exact.`;
-      } else if (runtimeCorrelated) {
-        strength = "MEDIUM";
-        reason = `Script ${fileName} dipakai oleh ${loadedBy.join(', ')} dan runtime berkorelasi dengan reference '${selector}', tetapi bukti target DOM belum cukup untuk HIGH.`;
-      } else if (missingPages.length) {
-        strength = "LOW";
-        reason = `Target DOM '${selector}' hilang pada ${missingPages.join(', ')}, tetapi belum ada korelasi runtime yang membuktikan assignment ini sebagai penyebab.`;
-      }
-    } else if (runtimeCorrelated) {
+      reason = `Referensi DOM '${selector}' tidak ditemukan pada dokumen ${fileName}.`;
+    } else if (existsInSameDocument === true && (stackHit || signatureHit)) {
       strength = "MEDIUM";
-      reason = `Lokasi source ${fileName}:${c.line} berkorelasi dengan evidence runtime, tetapi bukti DOM belum lengkap.`;
+      reason = `Referensi DOM '${selector}' ada, tetapi bukti runtime menunjuk lokasi ini; penyebab perlu korelasi lintas-file.`;
+    } else if (stackHit || signatureHit) {
+      strength = "MEDIUM";
+      reason = `Lokasi source ${fileName}:${c.line} berkorelasi dengan evidence runtime.`;
     }
-
-    out.push({ ...c, existsInSameDocument: sameDoc, missingOnLoadedPage, stackHit: runtimeHit, signatureHit, evidenceStrength: strength, evidenceReason: reason, loadedBy });
+    out.push({ ...c, existsInSameDocument, stackHit, signatureHit, evidenceStrength: strength, evidenceReason: reason });
   }
   return out;
 }
 
 async function buildSourceEvidence(targetFile, signature) {
-  const names = [...new Set([...Object.keys(REGISTRY), ...SOURCE_SURFACE])];
+  const names = Object.keys(REGISTRY);
   const evidence = [];
   const runtimeLocations = extractRuntimeLocation(signature);
-  const results = {};
-  for (const name of names) results[name] = await fetchFile(name);
-  const graph = dependencyGraph(results);
-
-  const htmlPages = names.filter(n => /\.html$/i.test(n));
-  const priority = [];
-  const pushPriority = (file, reason = "direct") => {
-    if (!REGISTRY[file] || priority.some(x => x.file === file)) return;
-    priority.push({ file, reason });
-  };
-  pushPriority(targetFile, "target");
-  if (/\.html$/i.test(targetFile)) {
-    for (const dep of dependencyClosure(targetFile, graph, 6)) pushPriority(dep.file, `dependency:${dep.via}`);
+  const loaded = {};
+  const htmlResults = {};
+  for (const name of names) {
+    if (!/\.html$/i.test(name)) continue;
+    const x = await fetchFile(name);
+    htmlResults[name] = x;
   }
-  for (const loc of runtimeLocations) pushPriority(normalizeLocalRef(loc.file) || loc.file, "runtime");
-  for (const page of htmlPages) {
-    for (const dep of dependencyClosure(page, graph, 4)) pushPriority(dep.file, `page-dependency:${page}`);
-  }
-  for (const name of names) pushPriority(name, "surface");
-
-  for (const item of priority) {
-    const name = item.file;
-    const x = results[name];
-    if (!x?.ok || !x.text) continue;
-    const loadedBy = /\.js$/i.test(name) ? loadedByPages(name, results) : [];
-    const local = exactDomEvidence(name, x.text, signature, { runtimeLocations, htmlResults: results, loadedBy });
-    for (const ev of local) {
-      const dependencyHit = item.reason.startsWith("dependency") || item.reason.startsWith("page-dependency");
-      const score = { HIGH: 3, MEDIUM: 2, LOW: 1 }[ev.evidenceStrength] + (dependencyHit ? 1 : 0) + (ev.stackHit ? 1 : 0) + (ev.signatureHit ? 1 : 0);
-      evidence.push({ ...ev, dependencyReason: item.reason, _score: score });
+  for (const name of names) {
+    const x = await fetchFile(name);
+    if (!x.ok || !x.text) continue;
+    const pages = /\.js$/i.test(name) ? loadedByPages(name, htmlResults) : [];
+    loaded[name] = pages;
+    for (const c of exactDomEvidence(name, x.text, signature, { runtimeLocations })) {
+      let strength = c.evidenceStrength;
+      let reason = c.evidenceReason;
+      if (/\.js$/i.test(name) && pages.length && c.selector) {
+        const missingPages = pages.filter(page => htmlHasElement(htmlResults[page]?.text || "", c.selector) === false);
+        if (missingPages.length) {
+          strength = "HIGH";
+          reason = `Script ${name} dipakai oleh ${missingPages.join(', ')} tetapi target DOM '${c.selector}' tidak ditemukan di halaman tersebut.`;
+        }
+      }
+      if (strength !== "LOW" || c.signatureHit || c.stackHit) evidence.push({ ...c, evidenceStrength: strength, evidenceReason: reason, loadedBy: pages });
     }
   }
-
-  evidence.sort((a, b) => (b._score - a._score) || ({HIGH:3,MEDIUM:2,LOW:1}[b.evidenceStrength] - {HIGH:3,MEDIUM:2,LOW:1}[a.evidenceStrength]) || (a.line - b.line));
-  return evidence.slice(0, 30).map(({ _score, ...e }) => e);
-}
-
-function exactProofForPlan(plan) {
-  const p = plan || {};
-  const ops = Array.isArray(p.operations) ? p.operations : [];
-  const evidence = Array.isArray(p.sourceEvidence) ? p.sourceEvidence : [];
-  if (!ops.length || p.precisionGate !== true) return { ok: false, reason: "NO_EXACT_OPERATION_OR_GATE" };
-  if (!p.rootCauseFile || !p.rootCauseStatus) return { ok: false, reason: "ROOT_CAUSE_UNPROVEN" };
-  if (!["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE", "CONTRACT_ROOT_CAUSE_IDENTIFIED"].includes(p.rootCauseStatus)) {
-    return { ok: false, reason: "ROOT_CAUSE_STATUS_NOT_PROVEN" };
-  }
-
-  for (const op of ops) {
-    if (op.type !== "REPLACE_EXACT" || !op.file || op.file !== p.rootCauseFile || !op.before || !op.after || !Number.isFinite(Number(op.line))) {
-      return { ok: false, reason: "OPERATION_NOT_EXACT" };
-    }
-    const matches = evidence.filter(e => e.file === op.file && Number(e.line) === Number(op.line));
-    if (!matches.some(e => e.evidenceStrength === "HIGH" && String(e.before || "") === String(op.before))) {
-      return { ok: false, reason: "HIGH_EVIDENCE_NOT_BOUND_TO_OPERATION" };
-    }
-    // For DOM-null cases, HIGH evidence must carry the actual runtime correlation
-    // and prove that the referenced DOM is absent. This prevents a generic missing
-    // selector on another page from becoming a false root cause.
-    if (p.diagnosis?.code === "DOM_NULL_REFERENCE") {
-      const domProof = matches.find(e => e.evidenceStrength === "HIGH" && e.stackHit === true && (e.existsInSameDocument === false || e.missingOnLoadedPage === true));
-      if (!domProof) return { ok: false, reason: "DOM_CAUSALITY_NOT_PROVEN" };
-    }
-  }
-  return { ok: true, reason: null };
-}
-
-async function validateExactOperationsAgainstSource(plan) {
-  const p = plan || {};
-  const ops = Array.isArray(p.operations) ? p.operations : [];
-  if (!ops.length) return false;
-  for (const op of ops) {
-    if (op.type !== "REPLACE_EXACT" || !op.file || !Number.isFinite(Number(op.line))) return false;
-    const src = await fetchFile(op.file);
-    if (!src.ok || !src.text) return false;
-    const lines = sourceLines(src.text);
-    const actualLine = lines[Number(op.line) - 1] ?? "";
-    if (!actualLine.includes(String(op.before))) return false;
-    const occurrence = src.text.indexOf(String(op.before));
-    if (occurrence < 0 || lineOf(src.text, occurrence) !== Number(op.line)) return false;
-  }
-  return true;
+  evidence.sort((a,b) => ({HIGH:3,MEDIUM:2,LOW:1}[b.evidenceStrength] - {HIGH:3,MEDIUM:2,LOW:1}[a.evidenceStrength]) || ((b.stackHit?1:0)-(a.stackHit?1:0)) || ((b.signatureHit?1:0)-(a.signatureHit?1:0)) || (a.line-b.line));
+  return evidence.slice(0, 20);
 }
 
 async function resolveRootCause(c) {
   const originalTarget = c.source;
-  const runtimeLocations = [
-    ...extractRuntimeLocation(c.signature),
-    ...(c.runtimeLocation?.file ? [{ file: c.runtimeLocation.file, line: c.runtimeLocation.line, col: c.runtimeLocation.col }] : []),
-    ...extractRuntimeLocation(c.runtimeLocation?.stack || "")
-  ];
-  const candidates = await buildSourceEvidence(originalTarget, c.signature);
-  const high = candidates.filter(x => x.evidenceStrength === "HIGH");
+  const runtimeLocations = extractRuntimeLocation(c.signature);
 
-  // For a DOM-null error, prefer a source assignment whose script is actually loaded
-  // by the reported page and whose selector is absent there. This is stronger than
-  // simply blaming the file named by telemetry.
-  if (c.diagnosis.code === "DOM_NULL_REFERENCE") {
-    // A DOM-null root cause is proven only when the runtime points to the exact
-    // assignment (file + line) and the consuming HTML page demonstrably lacks the
-    // referenced target. Missing DOM elsewhere is not causal proof.
-    const causalHigh = high.filter(x => x.stackHit === true && x.loadedBy?.length && x.evidenceStrength === "HIGH");
-    const best = causalHigh.find(x => x.file === originalTarget)
-      || causalHigh.find(x => x.loadedBy?.some(p => p === originalTarget))
-      || causalHigh[0];
-    if (best) {
-      const src = await fetchFile(best.file);
-      const ops = findLikelyDomBinding(best.file, src.text, c.signature)
-        .filter(op => Number(op.line) === Number(best.line) && op.selector === best.selector);
-      const exactOperation = ops[0] || null;
-      if (exactOperation) {
-        return {
-          rootCauseFile: best.file,
-          rootCauseStatus: best.file === originalTarget ? "CONFIRMED_ORIGINAL_TARGET" : "TARGET_CORRECTED_BY_MEDICINE",
-          sourceEvidence: candidates.slice(0, 18).map(e => ({ file:e.file, selector:e.selector, property:e.property, line:e.line, before:e.before, evidenceStrength:e.evidenceStrength, reason:e.evidenceReason, loadedBy:e.loadedBy || [], dependencyReason:e.dependencyReason, stackHit:e.stackHit === true, existsInSameDocument:e.existsInSameDocument })),
-          resolvedOperation: exactOperation,
-          candidates: candidates.slice(0, 18)
-        };
-      }
-    }
-    return { rootCauseFile: originalTarget, rootCauseStatus: "UNPROVEN", sourceEvidence: candidates.slice(0, 18), resolvedOperation: null, candidates: candidates.slice(0, 18) };
+  // First prove the original target. Do not keep it merely because BCGO named it.
+  const direct = await fetchFile(originalTarget);
+  const directEvidence = exactDomEvidence(originalTarget, direct.text, c.signature, { runtimeLocations })
+    .filter(x => x.evidenceStrength === "HIGH");
+  if (directEvidence.length) {
+    const ops = findLikelyDomBinding(originalTarget, direct.text, c.signature)
+      .filter(op => directEvidence.some(e => e.file === op.file && e.line === op.line));
+    return {
+      rootCauseFile: originalTarget,
+      rootCauseStatus: "CONFIRMED_ORIGINAL_TARGET",
+      sourceEvidence: directEvidence.map(e => ({ file:e.file, selector:e.selector, property:e.property, line:e.line, before:e.before, evidenceStrength:e.evidenceStrength, reason:e.evidenceReason, loadedBy:e.loadedBy || [] })),
+      resolvedOperation: ops[0] || null,
+      candidates: directEvidence.slice(0, 8)
+    };
   }
 
+  // For DOM/runtime errors, search the entire dependency surface. This is the
+  // important v1.8 behavior: an incorrect BCGO target is allowed to move.
+  if (c.diagnosis.code === "DOM_NULL_REFERENCE") {
+    const candidates = await buildSourceEvidence(originalTarget, c.signature);
+    const best = candidates.find(x => x.evidenceStrength === "HIGH");
+    if (!best) return { rootCauseFile: originalTarget, rootCauseStatus: "UNPROVEN", sourceEvidence: candidates.slice(0, 12), resolvedOperation: null, candidates: candidates.slice(0, 12) };
+    const src = await fetchFile(best.file);
+    const ops = findLikelyDomBinding(best.file, src.text, c.signature).filter(op => op.line === best.line || safeLower(op.before).includes(safeLower(best.selector)));
+    return {
+      rootCauseFile: best.file,
+      rootCauseStatus: best.file === originalTarget ? "CONFIRMED_ORIGINAL_TARGET" : "TARGET_CORRECTED_BY_MEDICINE",
+      sourceEvidence: candidates.slice(0, 12).map(e => ({ file:e.file, selector:e.selector, property:e.property, line:e.line, before:e.before, evidenceStrength:e.evidenceStrength, reason:e.evidenceReason, loadedBy:e.loadedBy || [] })),
+      resolvedOperation: ops[0] || null,
+      candidates: candidates.slice(0, 12)
+    };
+  }
+
+  // For consistency cases, explicitly prove which side of the contract is
+  // incomplete. This can identify a better root-cause file even when no patch
+  // can yet be generated safely.
   if (c.diagnosis.code === "DATA_CONSISTENCY") {
     const scan = await scanConsistency();
     const relevant = scan.findings.filter(f => f.kind === "ADMIN_PRESENTATION_GAP" || f.kind === "SOURCE_CONTRACT_GAP");
-    const gap = relevant.find(f => f.sourceFile === originalTarget) || relevant.find(f => f.targetFile === originalTarget) || null;
+    const gap = relevant.find(f => f.sourceFile === originalTarget) ||
+      relevant.find(f => f.targetFile === originalTarget) || null;
     if (gap) {
       return {
         rootCauseFile: gap.kind === "ADMIN_PRESENTATION_GAP" ? (gap.targetFile || "bcgo-admin.html") : (gap.sourceFile || originalTarget),
@@ -765,29 +443,43 @@ async function resolveRootCause(c) {
     }
   }
 
-  // For non-DOM cases, a strong runtime-correlated source may still identify the root.
-  const correlated = candidates.find(x => x.evidenceStrength === "HIGH" && (x.stackHit || x.signatureHit));
-  if (correlated) {
-    const src = await fetchFile(correlated.file);
-    const ops = findLikelyDomBinding(correlated.file, src.text, c.signature).filter(op => Number(op.line) === Number(correlated.line));
-    return {
-      rootCauseFile: correlated.file,
-      rootCauseStatus: "TARGET_CORRECTED_BY_MEDICINE",
-      sourceEvidence: candidates.slice(0, 18),
-      resolvedOperation: ops[0] || null,
-      candidates: candidates.slice(0, 18)
-    };
-  }
-
-  return { rootCauseFile: originalTarget, rootCauseStatus: "UNPROVEN", sourceEvidence: candidates.slice(0, 18), resolvedOperation: null, candidates: candidates.slice(0, 18) };
+  return { rootCauseFile: originalTarget, rootCauseStatus: "UNPROVEN", sourceEvidence: [], resolvedOperation: null, candidates: [] };
 }
 
 function findDomNullOperations(fileName, source, signature) {
-  return findAssignmentOperations(fileName, source, signature).filter(op => /textContent/i.test(op.property || ""));
+  if (!source) return [];
+  const ops = [];
+  const wanted = safeLower(signature).includes("textcontent");
+  if (!wanted) return ops;
+
+  const re = /^(\s*)(\$|document\.getElementById)\(\s*(["'])([^"']+)\3\s*\)\.textContent\s*=\s*([^;\n]+);?\s*$/gm;
+  let m;
+  while ((m = re.exec(source)) && ops.length < 12) {
+    const before = m[0];
+    const indent = m[1];
+    const accessor = m[2] === "$" ? `$(${m[3]}${m[4]}${m[3]})` : `document.getElementById(${m[3]}${m[4]}${m[3]})`;
+    const after = `${indent}{ const __medicineEl = ${accessor}; if (__medicineEl) __medicineEl.textContent = ${m[5]}; }`;
+    ops.push({ type: "REPLACE_EXACT", file: fileName, line: lineOf(source, m.index), before, after, reason: "Guard DOM reference before assigning textContent" });
+  }
+  return ops;
 }
 
 function findLikelyDomBinding(fileName, source, signature) {
-  return findAssignmentOperations(fileName, source, signature);
+  const operations = findDomNullOperations(fileName, source, signature);
+  if (operations.length) return operations;
+
+  // Also identify direct getElementById(...).textContent assignments even when the
+  // line was formatted differently. These remain reviewable exact replacements.
+  const re = /(document\.getElementById\(\s*["']([^"']+)["']\s*\)\.textContent\s*=\s*[^;\n]+;)/g;
+  let m;
+  while ((m = re.exec(source)) && operations.length < 8) {
+    const before = m[1];
+    const id = m[2];
+    const rhs = before.split("=").slice(1).join("=").trim().replace(/;$/, "");
+    const after = `{ const __medicineEl = document.getElementById("${id}"); if (__medicineEl) __medicineEl.textContent = ${rhs}; }`;
+    operations.push({ type: "REPLACE_EXACT", file: fileName, line: lineOf(source, m.index), before, after, reason: "Guard DOM reference before assigning textContent" });
+  }
+  return operations;
 }
 
 function buildAdminGapOperations(targetFile, missingFields, adminSource) {
@@ -940,19 +632,20 @@ function buildCodePrescription(plan) {
 
   const exact = items.length > 0 &&
     items.every(x => x.type === "REPLACE_EXACT" && x.before && x.after);
-  const proof = exactProofForPlan(p);
-  const ready = !!(p.precisionGate === true && exact && proof.ok);
+  const highEvidence = items.some(x => x.evidenceStrength === "HIGH");
+  const rootProven = ["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE", "CONTRACT_ROOT_CAUSE_IDENTIFIED"]
+    .includes(p.rootCauseStatus);
 
   return {
-    ready,
-    status: ready ? "READY_TO_COPY" : "REVIEW_REQUIRED",
+    ready: !!(p.precisionGate === true && exact && highEvidence && rootProven),
+    status: p.precisionGate === true && exact && highEvidence && rootProven ? "READY_TO_COPY" : "REVIEW_REQUIRED",
     targetFile: p.rootCauseFile || p.target || null,
     rootCauseStatus: p.rootCauseStatus || "UNPROVEN",
     evidenceCount: evidence.length,
     items,
-    instruction: ready
-      ? "Solusi berasal dari operasi exact yang terikat pada HIGH source evidence dan current deployed source. Review BEFORE/AFTER lalu copy secara manual."
-      : `Medicine belum dapat membuka copy gate: ${proof.reason || "exact proof belum lengkap"}.`
+    instruction: p.precisionGate === true && exact && highEvidence && rootProven
+      ? "Solusi berasal dari operasi exact yang terikat pada source evidence. Review BEFORE/AFTER lalu copy secara manual."
+      : "Medicine belum memiliki kombinasi root cause, source exact, evidence HIGH, dan operasi exact yang cukup untuk menyatakan solusi siap copy."
   };
 }
 
@@ -1032,22 +725,7 @@ async function enrichRepairPlan(c, verification) {
     const adminSource = await fetchFile("bcgo-admin.html");
     const targetFindings = verification?.targetFindings || [];
     const gap = targetFindings.find(f => f.kind === "ADMIN_PRESENTATION_GAP");
-    if (gap) {
-      const ops = buildAdminGapOperations("bcgo-admin.html", gap.missing || [], adminSource.text);
-      plan.operations.push(...ops);
-      for (const op of ops) {
-        plan.sourceEvidence.push({
-          file: op.file,
-          line: op.line,
-          before: op.before,
-          evidenceStrength: "HIGH",
-          reason: `Operation exact diikat ke renderer ${op.file}:${op.line}; kontrak ${gap.sourceFile || "source"} -> ${gap.targetFile || "target"} menunjukkan field ${Array.isArray(gap.missing) ? gap.missing.join(", ") : "yang hilang"}.`,
-          contractSourceFile: gap.sourceFile || null,
-          contractTargetFile: gap.targetFile || null,
-          missing: gap.missing || []
-        });
-      }
-    }
+    if (gap) plan.operations.push(...buildAdminGapOperations("bcgo-admin.html", gap.missing || [], adminSource.text));
   }
 
   for (const op of plan.operations) {
@@ -1055,21 +733,21 @@ async function enrichRepairPlan(c, verification) {
     if (op.type === "INSERT_BEFORE") plan.beforeAfter.push({ file: op.file, line: null, before: op.marker, after: `${op.marker}\n${op.content}` });
   }
 
-  // The gate is evaluated in two stages: evidence causality and current deployed
-  // source. A HIGH score by itself is never enough. The exact BEFORE must still be
-  // present at the exact line in the fetched source, and every operation must bind
-  // to its own HIGH evidence.
-  plan.precisionGate = false;
-  const sourceExact = await validateExactOperationsAgainstSource(plan);
-  plan.precisionGate = sourceExact;
-  const proof = exactProofForPlan(plan);
-  if (sourceExact && proof.ok) {
+  const exactEvidence = plan.sourceEvidence.some(e => e.evidenceStrength === "HIGH");
+  const rootCauseProven = ["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE", "CONTRACT_ROOT_CAUSE_IDENTIFIED"].includes(plan.rootCauseStatus);
+  const operationMatchesRoot = plan.operations.length > 0 && plan.operations.every(op => op.file === plan.rootCauseFile && op.type === "REPLACE_EXACT" && op.before && op.after);
+  const beforeStillExists = plan.operations.length > 0 && plan.operations.every(op => {
+    const ev = plan.sourceEvidence.find(e => e.file === op.file && Number(e.line) === Number(op.line));
+    return ev?.before ? String(ev.before) === String(op.before) : true;
+  });
+  if (plan.operations.length && exactEvidence && rootCauseProven && operationMatchesRoot && beforeStillExists) {
     plan.status = "PROPOSED";
     plan.blockReason = null;
+    plan.precisionGate = true;
   } else {
     plan.status = "PATCH_REQUIRES_REVIEW";
+    plan.blockReason = "PRECISION GATE: Medicine belum menemukan lokasi source dan operasi exact yang terbukti. Source tidak akan diubah berdasarkan tebakan.";
     plan.precisionGate = false;
-    plan.blockReason = `PRECISION GATE: ${proof.reason || "EXACT_SOURCE_NOT_CONFIRMED"}. Source tidak akan diubah berdasarkan tebakan.`;
   }
   return attachPrescription(plan);
 }
@@ -1077,16 +755,20 @@ async function enrichRepairPlan(c, verification) {
 function canApprove(c) {
   const v = c?.verification;
   const plan = c?.repairPlan;
-  if (!c || !v || c.status !== "VERIFIED_DIAGNOSIS") return false;
-  if (v.verdict !== "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE") return false;
-  return exactProofForPlan(plan).ok;
+  if (!c || !v || !plan?.operations?.length) return false;
+  if (c.status !== "VERIFIED_DIAGNOSIS") return false;
+  if (v.verdict !== "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE" || plan.precisionGate !== true) return false;
+  if (plan.rootCauseFile !== plan.operations[0].file) return false;
+  return plan.operations.every(op => op.type === "REPLACE_EXACT" && op.before && op.after && op.file === plan.rootCauseFile);
 }
 
 function canApplyPatch(c) {
   return !!(
     c && c.status === "READY_FOR_PATCH" &&
-    c.verification?.verdict === "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE" &&
-    exactProofForPlan(c.repairPlan).ok
+    c.repairPlan?.operations?.length &&
+    c.verification &&
+    c.verification.verdict === "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE" &&
+    c.repairPlan.rootCauseFile === c.repairPlan.operations[0]?.file
   );
 }
 
@@ -1137,11 +819,14 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     S.activeCase.sourceEvidence = S.activeCase.repairPlan.sourceEvidence || [];
 
     const plan = S.activeCase.repairPlan;
-    const proof = exactProofForPlan(plan);
-    const exactProof = plan.precisionGate === true && proof.ok;
-    if (!exactProof && plan.blockReason == null) {
-      plan.blockReason = `PRECISION GATE: ${proof.reason || "EXACT_SOURCE_NOT_CONFIRMED"}.`;
-    }
+    const exactProof = !!(
+      plan.operations?.length &&
+      plan.precisionGate === true &&
+      plan.rootCauseFile === plan.operations[0]?.file &&
+      ["CONFIRMED_ORIGINAL_TARGET", "TARGET_CORRECTED_BY_MEDICINE", "CONTRACT_ROOT_CAUSE_IDENTIFIED"].includes(plan.rootCauseStatus) &&
+      plan.sourceEvidence.some(e => e.evidenceStrength === "HIGH") &&
+      plan.operations.every(op => op.type === "REPLACE_EXACT" && op.before && op.after && op.file === plan.rootCauseFile)
+    );
     v.verdict = exactProof ? "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE"
       : (v.rootCauseStatus === "CONTRACT_ROOT_CAUSE_IDENTIFIED" ? "ROOT_CAUSE_IDENTIFIED_PATCH_BLOCKED" : "INSUFFICIENT_EVIDENCE");
     v.target = v.rootCauseFile || requestedTarget;
@@ -1205,12 +890,6 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
 }
 
 function bcgoAnswer(q) {
-  // BCGO is authoritative for system status. When the exact BCGO engine is
-  // running on this page, ask it directly instead of maintaining a second
-  // interpretation inside Medicine.
-  if (window.BCGOBrain?.ask) {
-    try { return window.BCGOBrain.ask(q); } catch {}
-  }
   const active = activeCases();
   const x = safeLower(q);
   const file = mentionedFile(q);
@@ -1227,7 +906,7 @@ function bcgoAnswer(q) {
   }
   if (/aman|status|sehat|normal/.test(x)) return `Status saya: ${S.logs.length} telemetry log, ${active.length} case aktif, ${S.findings.length} finding. Saya tidak menyatakan aman tanpa evidence.`;
   if (/masalah|error|kendala|rusak|anomal/.test(x)) return active.length ? `Ya. Ada ${active.length} case aktif. Prioritas ${active[0].source}: ${active[0].diagnosis.title}. Saya dapat menyerahkannya ke Medicine untuk pemeriksaan dan penyembuhan terkontrol.` : `Saat ini belum ada case aktif dari telemetry yang saya terima.`;
-  return `Halo 👋 Saya BCGO. Saya tidak akan menjawab kaku saja—saya akan melihat keadaan saraf saat ini, menjelaskan apa yang sedang kami telusuri, dan kalau Anda memberi perintah seperti “cari akar masalah”, saya langsung membuka jalur investigasi bersama Medicine.`;
+  return `BCGO menerima pesan Anda dari state aktual. Sebutkan file atau gejalanya jika ingin saya arahkan ke Medicine.`;
 }
 
 function medicineAnswer(q) {
@@ -1247,7 +926,7 @@ function medicineAnswer(q) {
   }
   if (/driver|foto|photo/.test(x)) return `Saya dapat membandingkan driver.html → bcgo-engine.js → bcgo-admin.html. Jika field foto ada di sumber tetapi hilang di Admin, saya akan tandai sebagai ADMIN_PRESENTATION_GAP dan membuat repair plan yang dapat diaudit.`;
   if (/ada.*(masalah|error)|kendala|rusak|sakit/.test(x)) return active.length ? `Saya menemukan ${active.length} case aktif. Target ${active[0].source}; diagnosis ${active[0].diagnosis.title}. Saya siap mencari akar masalah dan menyiapkan patch.` : `Belum ada case aktif yang cukup kuat untuk dinyatakan bermasalah.`;
-  return `Halo 👋 Saya Medicine. Saya siap membedah kasus sampai source exact. Anda bisa bilang “cari penyebab utama”, “tunjukkan kode yang rusak”, atau “bawa ke ruang operasi”; saya akan menjalankan tahapnya berdasarkan evidence, bukan tebakan.`;
+  return `Saya bekerja berdasarkan evidence. Sebutkan target file/gejala agar saya dapat memverifikasi dan menyiapkan perbaikan konkret.`;
 }
 
 function recipient(q) {
@@ -1268,22 +947,15 @@ function currentConversationContext() {
 function autonomousThought(role) {
   const { active, c, plan, logs, findings } = currentConversationContext();
   const target = c?.repairPlan?.rootCauseFile || c?.rootCauseFile || c?.source || logs[0]?.fileName || "seluruh organ";
-  const evidenceCount = c?.sourceEvidence?.length || plan?.sourceEvidence?.length || 0;
-  const operations = plan?.operations?.length || 0;
   const last = logs[0]?.message || c?.signature || "belum ada impuls baru";
-
   if (role === "bcgo") {
-    if (active.length) return `Medicine, saya menjaga ${active.length} saraf aktif. Fokus saat ini ${target}. Saya kirim impuls terbaru: ${text(last, 240)}. Jangan berhenti di nama file laporan; telusuri dependency sampai sumber yang benar terbukti.`;
-    if (findings.length) return `Saya belum melihat anomali aktif, tetapi masih ada ${findings.length} finding kontrak. Saya ingin kita pelajari satu per satu supaya status HEALTHY benar-benar didukung evidence.`;
-    return `Siklus tenang, tetapi saya tetap mendengarkan telemetry. Impuls terakhir: ${text(last, 240)}. Kalau ada perubahan, saya ingin Medicine langsung memeriksa jalurnya.`;
+    if (active.length) return `Saya sedang menjaga ${active.length} saraf aktif. Fokus saya ${target}. Saya kirim bukti terbaru ke Medicine dan tidak mau menyimpulkan akar masalah hanya dari gejalanya.`;
+    if (findings.length) return `Tidak ada anomali aktif saat ini, tetapi saya masih melihat ${findings.length} finding kontrak. Saya terus membandingkan lintas-file supaya organ tidak dinyatakan sehat terlalu cepat.`;
+    return `Siklus saya sedang tenang. Saya tetap mendengarkan telemetry real-time; impuls terakhir yang saya pegang: ${text(last, 260)}.`;
   }
-
-  if (plan?.codePrescription?.ready) return `BCGO, saya sudah menemukan source exact pada ${target}. Ada ${operations} operasi exact dan ${evidenceCount} evidence. BEFORE → AFTER sudah terbentuk; saya tahan source tetap terkunci sampai Human Review.`;
-  if (c) {
-    if (evidenceCount) return `Saya sedang membedah ${target}. Saat ini saya punya ${evidenceCount} bukti source dan ${operations} operasi kandidat. Saya sedang menguji apakah selector, halaman pemakai, dan source script benar-benar saling cocok.`;
-    return `Saya sedang membedah ${target}, tetapi bukti source belum cukup. Saya lanjut menelusuri dependency dan tidak akan mengarang BEFORE → AFTER.`;
-  }
-  return `Saya tetap belajar dari telemetry yang masuk. Belum ada case yang cukup kuat untuk ruang operasi. Saya terus mencari hubungan runtime → source → root cause.`;
+  if (plan?.codePrescription?.ready) return `Saya menemukan jalur source yang cukup kuat pada ${target}. BEFORE dan AFTER sudah terbentuk dari operasi exact. Saya tahan di meja review sampai manusia memeriksa dan menyalin solusi.`;
+  if (c) return `Saya sedang membedah ${target}. Saat ini saya punya status ${c.status} dan ${c.sourceEvidence?.length || plan?.sourceEvidence?.length || 0} bukti source. Kalau bukti belum exact, saya lanjut menelusuri dependency daripada mengarang kode.`;
+  return `Saya tetap belajar dari telemetry yang masuk. Belum ada case aktif yang cukup kuat untuk dibawa ke ruang operasi; saya terus mencari korelasi source dan runtime.`;
 }
 
 async function autonomousConversationTick() {
@@ -1292,7 +964,7 @@ async function autonomousConversationTick() {
   const active = activeCases();
   // Every few turns the pair performs real work, not just small-talk: re-check
   // the active case or refresh the cross-file evidence surface.
-  if (turn > 0 && turn % 3 === 0) {
+  if (turn > 0 && turn % 4 === 0) {
     if (active[0]) {
       await postSystemMessage("medicine", `Saya lanjut bedah ${active[0].source}. Saya ulangi trace terhadap evidence terbaru agar jalur source → root cause tidak berhenti pada diagnosis lama.`, { kind: "AUTONOMOUS_INVESTIGATION", caseId: active[0].id, autonomous: true });
       await verifyWithMedicine(active[0].source, { question: "Autonomous re-trace: terus pelajari saraf aktif.", requestedBy: "autonomous_medicine" });
@@ -1313,7 +985,7 @@ async function autonomousConversationTick() {
 function startAutonomousConversation() {
   if (S.autonomous.timer) clearInterval(S.autonomous.timer);
   S.autonomous.timer = setInterval(() => autonomousConversationTick().catch(e => emit("conversation_error", { message: e.message })), 18000);
-  setTimeout(() => autonomousConversationTick().catch(() => {}), 3500);
+  setTimeout(() => autonomousConversationTick().catch(() => {}), 5000);
 }
 
 function stopAutonomousConversation() {
@@ -1549,9 +1221,6 @@ async function requestReview(caseId) {
 }
 
 async function startConversation() {
-  // Never create a second Firestore listener for the same channel.
-  if (S.conversationStarted) return;
-  S.conversationStarted = true;
   try {
     const q = query(collection(db, "medicine_messages"), orderBy("createdAt", "desc"), limit(200));
     const unsub = onSnapshot(q, snapshot => {
@@ -1571,31 +1240,16 @@ async function startConversation() {
 onAuthStateChanged(auth, async user => {
   S.human.uid = user?.uid || null;
   emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
-  if (!user) {
-    stopAutonomousConversation();
-    S.human.paused = false;
-    S.conversationStarted = false;
-    try { S.bcgoEngine?.stop?.(); } catch {}
-    S.bcgoEngine = null;
-    return;
-  }
+  if (!user) { stopAutonomousConversation(); return; }
 
   try {
     const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
     if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
-      stopAutonomousConversation();
-      try { S.bcgoEngine?.stop?.(); } catch {}
-      S.bcgoEngine = null;
-      S.conversationStarted = false;
       emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
       emit("local_message", { message: { role: "medicine", text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.", clientMessageId: "auth-denied" } });
       return;
     }
   } catch (e) {
-    stopAutonomousConversation();
-    try { S.bcgoEngine?.stop?.(); } catch {}
-    S.bcgoEngine = null;
-    S.conversationStarted = false;
     emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED" });
     return;
   }
@@ -1620,7 +1274,6 @@ const API = {
   getCodePrescription: caseId => { const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase; return c?.repairPlan?.codePrescription || buildCodePrescription(c?.repairPlan); },
   buildCodePrescription,
   getRegistry: () => ({ ...REGISTRY }),
-  getRegistryParity: () => ({ ...S.registryParity, missing: [...S.registryParity.missing], extra: [...S.registryParity.extra], mismatched: [...S.registryParity.mismatched] }),
   getState: () => ({ ...S, sourceCache: undefined })
 };
 Object.defineProperties(API, {
