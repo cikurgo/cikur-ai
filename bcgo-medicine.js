@@ -5,7 +5,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/fi
 import { db, auth } from "./cikur-config.js";
 
 /*
- * BCGO MEDICINE v1.7 — PRECISION REPAIR / VERIFIED HEALING ENGINE
+ * BCGO MEDICINE v3.2 — PRECISION REPAIR / VERIFIED HEALING ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -37,7 +37,14 @@ const REGISTRY = {
   "bcgo-engine.js": { type: "Sistem Core", role: "system" },
   "bcgo-admin.html": { type: "Sistem Admin", role: "admin" },
   "bcgo.html": { type: "Sistem Monitor", role: "monitor" },
-  "bcgo.js": { type: "Sistem Monitor Core", role: "monitor" }
+  "bcgo.js": { type: "Sistem Monitor Core", role: "monitor" },
+  "data-cgo.html": { type: "Data Sistem", role: "data" }
+};
+
+// Medicine's own source/UI are diagnostic internals, never live anomaly organs.
+const MEDICINE_INTERNAL = {
+  "bcgo-medicine.html": { type: "Sistem Medicine UI", role: "medicine" },
+  "bcgo-medicine.js": { type: "Sistem Medicine Core", role: "medicine" }
 };
 
 const REQUIRED = {
@@ -80,14 +87,47 @@ function canonicalFieldSet(values) {
   return out;
 }
 
+let sessionUid = null;
+let sessionEpoch = 0;
+let initialScanTimer = null;
+const medicineBridgeKey = "CIKUR_GO_BCGO_MEDICINE_V1";
+const medicineBridgeStateKey = `${medicineBridgeKey}_STATE`;
+const medicineBridgeEventKey = `${medicineBridgeKey}_EVENT`;
+const medicineBridgeChannel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(medicineBridgeKey) : null;
+let latestBCGOState = null;
+let medicineBridgeSeq = 0;
+const seenBCGOBridgeIds = new Set();
+
+function publishMedicineBridge(medicineEvent, payload = {}) {
+  const packet = {
+    id: `MEDICINE-${Date.now()}-${++medicineBridgeSeq}-${Math.random().toString(36).slice(2,8)}`,
+    bridge: medicineBridgeKey,
+    from: "MEDICINE",
+    type: "MEDICINE_EVENT",
+    medicineEvent,
+    at: Date.now(),
+    ...payload
+  };
+  try { medicineBridgeChannel?.postMessage(packet); } catch {}
+  try { localStorage.setItem(medicineBridgeEventKey, JSON.stringify(packet)); } catch {}
+}
+
+function cleanupRealtimeListeners() {
+  for (const unsub of S.listeners.splice(0)) {
+    try { if (typeof unsub === "function") unsub(); } catch {}
+  }
+}
+
 const S = {
-  version: "2.2.0",
+  version: "3.2.0",
   registry: REGISTRY,
   logs: [],
   cases: [],
   activeCase: null,
   findings: [],
   listeners: [],
+  telemetryUnsub: null,
+  conversationUnsub: null,
   messages: [],
   human: { mode: "ASSISTED", paused: false, uid: null },
   patchProposals: [],
@@ -97,94 +137,21 @@ const S = {
   sourceCache: new Map(),
   lastClientMessageId: null,
   eventSeq: 0,
-  autonomous: { enabled: true, turn: 0, timer: null, lastAt: 0 },
-  lastBCGOState: null,
-  lastBCGOAt: 0,
-  locks: { scan: null, verify: null, apply: null, validate: null },
-  authEpoch: 0
+  autonomous: { enabled: true, turn: 0, timer: null, lastAt: 0, busy: false },
+  locks: { scan: null, verify: null }
 };
 
 const emit = (event, p = {}) => {
   const detail = { event, at: new Date().toISOString(), ...p };
   window.dispatchEvent(new CustomEvent("bcgo:medicine", { detail }));
-  if (["ready","auth","case_created","case_updated","verification_complete","patch_apply_requested","patch_apply_complete","validation_complete","autonomous_chat"].includes(event)) {
-    publishMedicineBridgeEvent(event, {
-      caseId: p?.caseId || p?.case?.id || null,
-      message: p?.message || p?.result?.error || null,
-      case: p?.case ? { id: p.case.id, source: p.case.source, status: p.case.status } : undefined
+  if (["ready", "case_created", "verification_complete", "patch_proposed", "patch_apply_complete", "validation_complete", "human_control"].includes(event)) {
+    publishMedicineBridge(event, {
+      message: p?.message || p?.verification?.verdict || p?.case?.diagnosis?.title || event,
+      caseId: p?.case?.id || p?.caseId || null,
+      case: p?.case || null
     });
   }
 };
-
-// ============================================================
-// BCGO ↔ MEDICINE INDEPENDENT BRIDGE
-// No circular import. No HTML nesting. Each engine owns its own lifecycle.
-// BCGO is the state producer; Medicine consumes BCGO_STATE and can publish
-// diagnostic events back without ever importing/running BCGO.
-// ============================================================
-const MEDICINE_BRIDGE_KEY = "CIKUR_GO_BCGO_MEDICINE_V1";
-const MEDICINE_BRIDGE_STATE_KEY = `${MEDICINE_BRIDGE_KEY}_STATE`;
-const MEDICINE_BRIDGE_EVENT_KEY = `${MEDICINE_BRIDGE_KEY}_EVENT`;
-const medicineBridgeChannel = typeof BroadcastChannel !== "undefined"
-  ? new BroadcastChannel(MEDICINE_BRIDGE_KEY)
-  : null;
-let lastBCGOBridgeAt = 0;
-let medicineBridgeSeq = 0;
-const seenBCGOBridgeIds = new Set();
-let latestBCGOState = null;
-
-function bridgePacketId(prefix = "MEDICINE") {
-  medicineBridgeSeq += 1;
-  return `${prefix}-${Date.now()}-${medicineBridgeSeq}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function publishMedicineBridgeEvent(medicineEvent, payload = {}) {
-  const packet = {
-    id: bridgePacketId("EVENT"),
-    bridge: MEDICINE_BRIDGE_KEY,
-    from: "MEDICINE",
-    type: "MEDICINE_EVENT",
-    medicineEvent,
-    at: Date.now(),
-    ...payload
-  };
-  try { medicineBridgeChannel?.postMessage(packet); } catch {}
-  try { localStorage.setItem(MEDICINE_BRIDGE_EVENT_KEY, JSON.stringify(packet)); } catch {}
-}
-
-function receiveBCGOBridge(packet) {
-  if (!packet || packet.bridge !== MEDICINE_BRIDGE_KEY || packet.from !== "BCGO") return;
-  const at = Number(packet.at) || Date.now();
-  const packetId = String(packet.id || `${packet.type || "BCGO"}-${at}`);
-  if (seenBCGOBridgeIds.has(packetId)) return;
-  seenBCGOBridgeIds.add(packetId);
-  if (seenBCGOBridgeIds.size > 200) {
-    const first = seenBCGOBridgeIds.values().next().value;
-    seenBCGOBridgeIds.delete(first);
-  }
-  lastBCGOBridgeAt = Math.max(lastBCGOBridgeAt, at);
-  if (packet.type === "BCGO_STATE" && packet.state) {
-    latestBCGOState = packet.state;
-    S.lastBCGOState = packet.state;
-    S.lastBCGOAt = at;
-    emit("bcgo_bridge", { state: packet.state, bridgeAt: at });
-  } else {
-    emit("bcgo_bridge_event", { type: packet.type, message: packet.message || "BCGO bridge aktif." });
-  }
-}
-
-medicineBridgeChannel?.addEventListener("message", e => receiveBCGOBridge(e.data));
-window.addEventListener("storage", e => {
-  if (!e.newValue) return;
-  if (e.key === MEDICINE_BRIDGE_STATE_KEY || e.key === MEDICINE_BRIDGE_EVENT_KEY) {
-    try { receiveBCGOBridge(JSON.parse(e.newValue)); } catch {}
-  }
-});
-try {
-  const cachedState = localStorage.getItem(MEDICINE_BRIDGE_STATE_KEY);
-  if (cachedState) receiveBCGOBridge(JSON.parse(cachedState));
-} catch {}
-
 const now = () => new Date().toISOString();
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 const text = (v, n = 1800) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
@@ -249,9 +216,7 @@ async function postSystemMessage(role, msg, meta = {}) {
 
 function makeCase(log) {
   const source = text(log.fileName || log.source || "UNKNOWN", 120);
-  // Diagnostic UI/core are intentionally outside Medicine's monitored organ registry.
-  // This prevents Medicine from creating cases for its own HTML/JS telemetry.
-  if (!REGISTRY[source]) return null;
+  if (MEDICINE_INTERNAL[source]) return null;
   const sig = text(log.message || log.error || "Unknown error", 700);
   if (S.cases.some(c => c.source === source && c.signature === sig)) return null;
 
@@ -284,32 +249,28 @@ function makeCase(log) {
   return c;
 }
 
-let telemetryUnsub = null;
-let conversationUnsub = null;
+function isSessionCurrent(epoch) {
+  return !!auth.currentUser && !!sessionUid && auth.currentUser.uid === sessionUid && epoch === sessionEpoch;
+}
 
-function stopRealtimeListeners() {
-  try { if (typeof telemetryUnsub === "function") telemetryUnsub(); } catch {}
-  try { if (typeof conversationUnsub === "function") conversationUnsub(); } catch {}
-  telemetryUnsub = null;
-  conversationUnsub = null;
-  S.listeners = [];
+function assertSessionCurrent(epoch) {
+  if (!isSessionCurrent(epoch)) throw new Error("Sesi Medicine berubah; operasi lama dibatalkan.");
 }
 
 function startTelemetry() {
-  if (typeof telemetryUnsub === "function") { try { telemetryUnsub(); } catch {} telemetryUnsub = null; }
   if (!window.CikurCloud?.listenSystemLogs) {
     emit("telemetry_unavailable");
     return;
   }
+  if (typeof S.telemetryUnsub === "function") { try { S.telemetryUnsub(); } catch {} S.telemetryUnsub = null; }
+  const listenerEpoch = sessionEpoch;
   const unsub = window.CikurCloud.listenSystemLogs(logs => {
+    if (!isSessionCurrent(listenerEpoch)) return;
     S.logs = Array.isArray(logs) ? logs : [];
     emit("telemetry", { logs: S.logs });
-    for (const l of S.logs.slice(0, 60)) {
-      const source = text(l?.fileName || l?.source || "UNKNOWN", 120);
-      if (REGISTRY[source]) makeCase(l);
-    }
+    for (const l of S.logs.slice(0, 60)) makeCase(l);
   });
-  if (typeof unsub === "function") { telemetryUnsub = unsub; S.listeners.push(unsub); }
+  if (typeof unsub === "function") { S.telemetryUnsub = unsub; S.listeners.push(unsub); }
 }
 
 async function fetchFile(name) {
@@ -409,10 +370,15 @@ function extractRuntimeLocation(signature) {
 
 function loadedByPages(scriptFile, htmlResults) {
   const out = [];
+  const file = escRegExp(scriptFile);
   for (const [name, data] of Object.entries(htmlResults || {})) {
     if (!/\.html$/i.test(name) || !data?.text) continue;
-    const re = new RegExp(`<script[^>]+src=["'][^"']*${escRegExp(scriptFile)}(?:[?#][^"']*)?["']`, "i");
-    if (re.test(data.text)) out.push(name);
+    const source = String(data.text);
+    // Classic script tags.
+    const classic = new RegExp(`<script[^>]+src=["'][^"']*${file}(?:[?#][^"']*)?["']`, "i");
+    // ES-module imports used by the current BCGO/Medicine pages.
+    const moduleImport = new RegExp(`(?:import\\s+(?:[^;\\n]*?\\s+from\\s+)?|export\\s+[^;\\n]*?\\s+from\\s+)["'][^"']*${file}(?:[?#][^"']*)?["']`, "i");
+    if (classic.test(source) || moduleImport.test(source)) out.push(name);
   }
   return out;
 }
@@ -617,14 +583,16 @@ function buildAdminGapOperations(targetFile, missingFields, adminSource) {
   return operations;
 }
 
-async function scanConsistency(targets = null) {
-  if (S.locks.scan) return S.locks.scan;
-  const run = (async () => {
+async function _scanConsistency(targets = null) {
+  requireAdminSession();
+  const runEpoch = sessionEpoch;
   const names = targets?.length ? targets.filter(n => REGISTRY[n]) : Object.keys(REGISTRY);
   emit("scan_started", { total: names.length, targets: names });
   const result = {};
   for (const name of names) {
+    assertSessionCurrent(runEpoch);
     const x = await fetchFile(name);
+    assertSessionCurrent(runEpoch);
     result[name] = { ...x, fields: fields(name, x.text) };
   }
 
@@ -664,14 +632,21 @@ async function scanConsistency(targets = null) {
     }
   }
 
+  assertSessionCurrent(runEpoch);
   S.findings = findings;
   emit("scan_complete", { results: result, findings });
   return { results: result, findings };
-  })();
+}
+
+
+function scanConsistency(targets = null) {
+  if (S.locks.scan) return S.locks.scan;
+  const run = _scanConsistency(targets);
   const locked = run.finally(() => { if (S.locks.scan === locked) S.locks.scan = null; });
   S.locks.scan = locked;
   return locked;
 }
+
 
 function getSourceContext(source, line, radius = 4) {
   const lines = sourceLines(source);
@@ -875,6 +850,12 @@ function canApplyPatch(c) {
   );
 }
 
+function requireAdminSession() {
+  if (!auth.currentUser || !sessionUid || auth.currentUser.uid !== sessionUid) {
+    throw new Error("Sesi Admin Medicine belum terverifikasi.");
+  }
+}
+
 function executorAvailable() {
   return typeof window.BCGOPatchExecutor?.apply === "function";
 }
@@ -883,11 +864,9 @@ function findProposal(caseId) {
   return S.patchProposals.find(p => p.caseId === caseId && ["PROPOSED", "READY_FOR_PATCH", "APPLY_REQUESTED", "APPLIED"].includes(p.status)) || null;
 }
 
-async function verifyWithMedicine(targetFile = null, context = {}) {
-  if (S.locks.verify) return S.locks.verify;
-  const run = (async () => {
-  const caseAtStart = S.activeCase;
-  const caseIdAtStart = caseAtStart?.id || null;
+async function _verifyWithMedicine(targetFile = null, context = {}) {
+  requireAdminSession();
+  const runEpoch = sessionEpoch;
   const requestedTarget = targetFile && REGISTRY[targetFile] ? targetFile : (S.activeCase?.source || "bcgo-admin.html");
   emit("verification_started", { target: requestedTarget, context });
 
@@ -895,6 +874,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
   // allowed to stop at the first accusation; it must be able to move the target.
   const targets = Object.keys(REGISTRY);
   const result = await scanConsistency(targets);
+  assertSessionCurrent(runEpoch);
   const logs = latestRelevantLogs(requestedTarget);
   const runtimeEvidence = logs.slice(0, 8);
   const targetFindings = result.findings.filter(f => f.sourceFile === requestedTarget || f.targetFile === requestedTarget);
@@ -914,24 +894,20 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     rootCauseCandidates: []
   };
 
-  if (caseAtStart && caseAtStart.id === caseIdAtStart && (!targetFile || caseAtStart.source === requestedTarget)) {
-    const resolution = await resolveRootCause(caseAtStart);
-    // Telemetry may create/select another case while the async source trace runs.
-    // Never write a completed verification into the newly active case.
-    if (S.activeCase?.id !== caseIdAtStart) {
-      emit("verification_stale", { caseId: caseIdAtStart, target: requestedTarget, reason: "Active case berubah selama verifikasi." });
-      return { ...v, verdict: "STALE_RESULT", stale: true, rootCauseStatus: "UNPROVEN" };
-    }
-    S.activeCase = caseAtStart;
+  if (S.activeCase && (!targetFile || S.activeCase.source === requestedTarget)) {
+    S.activeCase.verification = v;
+    const resolution = await resolveRootCause(S.activeCase);
+    assertSessionCurrent(runEpoch);
     v.rootCauseFile = resolution.rootCauseFile || requestedTarget;
     v.rootCauseStatus = resolution.rootCauseStatus || "UNPROVEN";
     v.rootCauseCandidates = resolution.candidates || [];
     v.sourceEvidence = resolution.sourceEvidence || [];
-    caseAtStart.repairPlan = await enrichRepairPlan(caseAtStart, v);
-    caseAtStart.rootCauseFile = caseAtStart.repairPlan.rootCauseFile || requestedTarget;
-    caseAtStart.sourceEvidence = caseAtStart.repairPlan.sourceEvidence || [];
+    S.activeCase.repairPlan = await enrichRepairPlan(S.activeCase, v);
+    assertSessionCurrent(runEpoch);
+    S.activeCase.rootCauseFile = S.activeCase.repairPlan.rootCauseFile || requestedTarget;
+    S.activeCase.sourceEvidence = S.activeCase.repairPlan.sourceEvidence || [];
 
-    const plan = caseAtStart.repairPlan;
+    const plan = S.activeCase.repairPlan;
     const exactProof = !!(
       plan.operations?.length &&
       plan.precisionGate === true &&
@@ -944,19 +920,19 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
       : (v.rootCauseStatus === "CONTRACT_ROOT_CAUSE_IDENTIFIED" ? "ROOT_CAUSE_IDENTIFIED_PATCH_BLOCKED" : "INSUFFICIENT_EVIDENCE");
     v.target = v.rootCauseFile || requestedTarget;
     S.verification = v;
-    caseAtStart.verification = v;
-    caseAtStart.status = exactProof ? "VERIFIED_DIAGNOSIS" : "NEEDS_EVIDENCE";
-    caseAtStart.prescription = prescription(caseAtStart.diagnosis);
-    emit("case_updated", { case: caseAtStart });
+    S.activeCase.verification = v;
+    S.activeCase.status = exactProof ? "VERIFIED_DIAGNOSIS" : "NEEDS_EVIDENCE";
+    S.activeCase.prescription = prescription(S.activeCase.diagnosis);
+    emit("case_updated", { case: S.activeCase });
 
     const proposal = {
       proposalId: `PATCH-${uid().toUpperCase()}`,
-      caseId: caseAtStart.id,
-      telemetryTarget: caseAtStart.source,
+      caseId: S.activeCase.id,
+      telemetryTarget: S.activeCase.source,
       originalTarget: requestedTarget,
       repairTarget: plan.rootCauseFile,
       rootCauseStatus: plan.rootCauseStatus,
-      diagnosis: caseAtStart.diagnosis,
+      diagnosis: S.activeCase.diagnosis,
       verification: v,
       repairPlan: plan,
       operations: plan.operations,
@@ -970,13 +946,14 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     };
     S.patchProposals.unshift(proposal);
     S.patchProposals = S.patchProposals.slice(0, 40);
-    caseAtStart.patchProposal = proposal;
-    emit("patch_proposed", { proposal, case: caseAtStart });
+    S.activeCase.patchProposal = proposal;
+    emit("patch_proposed", { proposal, case: S.activeCase });
   } else {
     // No active case: perform an independent scan and report only evidence,
     // never promote a target to a repairable diagnosis from a guess.
     const synthetic = { source: requestedTarget, signature: runtimeEvidence[0]?.message || "", diagnosis: diagnosis(runtimeEvidence[0]?.message || "") };
     const resolution = await resolveRootCause(synthetic);
+    assertSessionCurrent(runEpoch);
     v.rootCauseFile = resolution.rootCauseFile || requestedTarget;
     v.rootCauseStatus = resolution.rootCauseStatus || "UNPROVEN";
     v.sourceEvidence = resolution.sourceEvidence || [];
@@ -991,6 +968,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     : v.verdict === "ROOT_CAUSE_IDENTIFIED_PATCH_BLOCKED"
       ? `BCGO menunjuk ${requestedTarget}, tetapi Medicine menemukan akar kontrak pada ${v.rootCauseFile}. Akar sudah dipersempit, namun lokasi operasi source belum exact; patch tetap dikunci.`
       : `BCGO menunjuk ${requestedTarget}, tetapi Medicine belum dapat membuktikan lokasi akar masalah secara exact. Saya menahan treatment dan terus mempertahankan evidence chain.`;
+  assertSessionCurrent(runEpoch);
   await postSystemMessage("medicine", message, {
     kind: "MEDICINE_PRECISION_VERIFICATION",
     target: v.rootCauseFile,
@@ -1000,11 +978,16 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     checkedFiles: targets
   });
   return v;
-  })();
+}
+
+function verifyWithMedicine(targetFile = null, context = {}) {
+  if (S.locks.verify) return S.locks.verify;
+  const run = _verifyWithMedicine(targetFile, context);
   const locked = run.finally(() => { if (S.locks.verify === locked) S.locks.verify = null; });
   S.locks.verify = locked;
   return locked;
 }
+
 
 function bcgoAnswer(q) {
   const active = activeCases();
@@ -1076,34 +1059,30 @@ function autonomousThought(role) {
 }
 
 async function autonomousConversationTick() {
-  if (!S.autonomous.enabled || S.human.paused || !auth.currentUser) return;
-  const turn = S.autonomous.turn++;
-  const active = activeCases();
-  // BCGO state is advisory context only; Medicine remains independently runnable.
-  const bcgoState = latestBCGOState || S.lastBCGOState;
-  // Every few turns the pair performs real work, not just small-talk: re-check
-  // the active case or refresh the cross-file evidence surface.
-  if (turn > 0 && turn % 4 === 0) {
-    if (active[0]) {
-      await postSystemMessage("medicine", `Saya lanjut bedah ${active[0].source}. Saya ulangi trace terhadap evidence terbaru agar jalur source → root cause tidak berhenti pada diagnosis lama.`, { kind: "AUTONOMOUS_INVESTIGATION", caseId: active[0].id, autonomous: true });
-      await verifyWithMedicine(active[0].source, {
-        question: "Autonomous re-trace: terus pelajari saraf aktif.",
-        requestedBy: "autonomous_medicine",
-        bcgoCycle: bcgoState?.cycle ?? null,
-        bcgoTarget: bcgoState?.targetCell ?? null
-      });
-      emit("autonomous_investigation", { case: active[0] });
-    } else {
-      await scanConsistency();
-      await postSystemMessage("bcgo", `Saya melakukan scan lintas-file lagi. Tidak ada case aktif, jadi saya gunakan waktu ini untuk mencari kontrak yang belum konsisten sebelum menjadi kendala runtime.`, { kind: "AUTONOMOUS_SCAN", autonomous: true });
-      emit("autonomous_scan", { findings: S.findings });
+  if (!S.autonomous.enabled || S.human.paused || !auth.currentUser || S.autonomous.busy) return;
+  S.autonomous.busy = true;
+  try {
+    const turn = S.autonomous.turn++;
+    const active = activeCases();
+    if (turn > 0 && turn % 4 === 0) {
+      if (active[0]) {
+        await postSystemMessage("medicine", `Saya lanjut bedah ${active[0].source}. Saya ulangi trace terhadap evidence terbaru agar jalur source → root cause tidak berhenti pada diagnosis lama.`, { kind: "AUTONOMOUS_INVESTIGATION", caseId: active[0].id, autonomous: true });
+        await verifyWithMedicine(active[0].source, { question: "Autonomous re-trace: terus pelajari saraf aktif.", requestedBy: "autonomous_medicine" });
+        emit("autonomous_investigation", { case: active[0] });
+      } else {
+        await scanConsistency();
+        await postSystemMessage("bcgo", `Saya melakukan scan lintas-file lagi. Tidak ada case aktif, jadi saya gunakan waktu ini untuk mencari kontrak yang belum konsisten sebelum menjadi kendala runtime.`, { kind: "AUTONOMOUS_SCAN", autonomous: true });
+        emit("autonomous_scan", { findings: S.findings });
+      }
     }
+    const role = turn % 2 === 0 ? "bcgo" : "medicine";
+    const message = autonomousThought(role);
+    S.autonomous.lastAt = Date.now();
+    await postSystemMessage(role, message, { kind: "AUTONOMOUS_DISCUSSION", autonomous: true });
+    emit("autonomous_chat", { role, message });
+  } finally {
+    S.autonomous.busy = false;
   }
-  const role = turn % 2 === 0 ? "bcgo" : "medicine";
-  const message = autonomousThought(role);
-  S.autonomous.lastAt = Date.now();
-  await postSystemMessage(role, message, { kind: "AUTONOMOUS_DISCUSSION", autonomous: true });
-  emit("autonomous_chat", { role, message });
 }
 
 function startAutonomousConversation() {
@@ -1122,6 +1101,7 @@ function isInvestigationCommand(q) {
 }
 
 async function sendMessage(msg, role = "human") {
+  requireAdminSession();
   const t = text(msg, 1200);
   if (!t) return;
   const clientMessageId = uid();
@@ -1160,6 +1140,7 @@ async function sendMessage(msg, role = "human") {
 }
 
 async function approveTreatment(caseId) {
+  requireAdminSession();
   const c = S.cases.find(x => x.id === caseId);
   if (!c) throw new Error("Case tidak ditemukan");
   if (S.human.paused) throw new Error("Medicine sedang dijeda");
@@ -1195,8 +1176,7 @@ async function approveTreatment(caseId) {
 }
 
 async function applyPatch(caseId) {
-  if (S.locks.apply) return S.locks.apply;
-  const run = (async () => {
+  requireAdminSession();
   const c = S.cases.find(x => x.id === caseId);
   if (!c) throw new Error("Case tidak ditemukan");
   if (!canApplyPatch(c)) throw new Error("Patch belum siap atau belum memiliki operasi source yang aman.");
@@ -1252,15 +1232,10 @@ async function applyPatch(caseId) {
     emit("patch_apply_complete", { proposal, request, result: { ok: false, error: e.message }, case: c });
     throw e;
   }
-  })();
-  const locked = run.finally(() => { if (S.locks.apply === locked) S.locks.apply = null; });
-  S.locks.apply = locked;
-  return locked;
 }
 
 async function validateAfterPatch(caseId) {
-  if (S.locks.validate) return S.locks.validate;
-  const run = (async () => {
+  requireAdminSession();
   const c = S.cases.find(x => x.id === caseId);
   if (!c) throw new Error("Case tidak ditemukan");
   const telemetryTarget = c.source;
@@ -1318,13 +1293,10 @@ async function validateAfterPatch(caseId) {
   emit("validation_complete", { validation: v, case: c });
   emit("case_updated", { case: c });
   return v;
-  })();
-  const locked = run.finally(() => { if (S.locks.validate === locked) S.locks.validate = null; });
-  S.locks.validate = locked;
-  return locked;
 }
 
 async function rejectTreatment(caseId, reason = "Treatment ditolak oleh manusia.") {
+  requireAdminSession();
   const c = S.cases.find(x => x.id === caseId);
   if (!c) throw new Error("Case tidak ditemukan");
   c.status = "REJECTED";
@@ -1339,6 +1311,7 @@ async function rejectTreatment(caseId, reason = "Treatment ditolak oleh manusia.
 }
 
 async function setHumanMode(paused) {
+  requireAdminSession();
   S.human.paused = !!paused;
   S.human.mode = paused ? "HUMAN_PAUSED" : "ASSISTED";
   S.human.uid = auth.currentUser?.uid || null;
@@ -1349,6 +1322,7 @@ async function setHumanMode(paused) {
 }
 
 async function requestReview(caseId) {
+  requireAdminSession();
   const c = S.cases.find(x => x.id === caseId);
   if (!c) throw new Error("Case tidak ditemukan");
   await postSystemMessage("bcgo", `Saya meminta review manusia untuk ${c.id}. Evidence: ${c.source} — ${c.diagnosis.title}.`, { kind: "HUMAN_REVIEW_REQUEST", caseId: c.id });
@@ -1357,8 +1331,8 @@ async function requestReview(caseId) {
 }
 
 async function startConversation() {
-  if (typeof conversationUnsub === "function") { try { conversationUnsub(); } catch {} conversationUnsub = null; }
   try {
+    if (typeof S.conversationUnsub === "function") { try { S.conversationUnsub(); } catch {} S.conversationUnsub = null; }
     const q = query(collection(db, "medicine_messages"), orderBy("createdAt", "desc"), limit(200));
     const unsub = onSnapshot(q, snapshot => {
       const seen = new Set();
@@ -1370,37 +1344,100 @@ async function startConversation() {
       });
       emit("conversation", { messages: S.messages });
     }, e => emit("conversation_error", { message: e.message }));
-    if (typeof unsub === "function") { conversationUnsub = unsub; S.listeners.push(unsub); }
+    if (typeof unsub === "function") { S.conversationUnsub = unsub; S.listeners.push(unsub); }
   } catch (e) { emit("conversation_error", { message: e.message }); }
 }
 
+function receiveBCGOBridge(packet) {
+  if (!packet || packet.bridge !== medicineBridgeKey || packet.from !== "BCGO" || packet.type !== "BCGO_STATE") return;
+  const at = Number(packet.at) || Date.now();
+  const packetId = String(packet.id || `${packet.type}-${at}`);
+  if (seenBCGOBridgeIds.has(packetId)) return;
+  seenBCGOBridgeIds.add(packetId);
+  if (seenBCGOBridgeIds.size > 200) {
+    const first = seenBCGOBridgeIds.values().next().value;
+    seenBCGOBridgeIds.delete(first);
+  }
+  if (!latestBCGOState || at >= Number(latestBCGOState._bridgeAt || 0)) {
+    latestBCGOState = { ...(packet.state || {}), _bridgeAt: at };
+    emit("bcgo_state", { state: latestBCGOState });
+  }
+}
+medicineBridgeChannel?.addEventListener("message", e => receiveBCGOBridge(e.data));
+window.addEventListener("storage", e => {
+  if (e.key !== medicineBridgeStateKey || !e.newValue) return;
+  try { receiveBCGOBridge(JSON.parse(e.newValue)); } catch {}
+});
+try {
+  const cached = localStorage.getItem(medicineBridgeStateKey);
+  if (cached) {
+    const packet = JSON.parse(cached);
+    if (Number(packet.at) >= Date.now() - 120000) receiveBCGOBridge(packet);
+  }
+} catch {}
+
+
 onAuthStateChanged(auth, async user => {
-  const epoch = ++S.authEpoch;
-  stopRealtimeListeners();
-  stopAutonomousConversation();
+  const nextUid = user?.uid || null;
+  const changed = nextUid !== sessionUid;
+  ++sessionEpoch;
+  if (initialScanTimer) { clearTimeout(initialScanTimer); initialScanTimer = null; }
+
+  // Tear down the previous session before evaluating the new auth state.
+  if (changed || !user) {
+    stopAutonomousConversation();
+    cleanupRealtimeListeners();
+    S.telemetryUnsub = null;
+    S.conversationUnsub = null;
+    if (changed) {
+      S.cases = [];
+      S.activeCase = null;
+      S.findings = [];
+      S.patchProposals = [];
+      S.patchRequests = [];
+      S.verification = null;
+      S.validation = null;
+      S.sourceCache.clear();
+      S.autonomous.turn = 0;
+      S.autonomous.busy = false;
+    }
+  }
+
+  sessionUid = nextUid;
   S.human.uid = user?.uid || null;
   emit("auth", { user: user ? { uid: user.uid, email: user.email || null } : null });
   if (!user) return;
 
+  const checkedUid = user.uid;
   try {
-    const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
-    if (epoch !== S.authEpoch || auth.currentUser?.uid !== user.uid) return;
+    const adminSnap = await getDoc(doc(db, "admin_users", checkedUid));
+    // Ignore a stale async auth check if the user changed meanwhile.
+    if (auth.currentUser?.uid !== checkedUid || sessionUid !== checkedUid) return;
     if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
-      stopRealtimeListeners();
+      sessionUid = null;
+      cleanupRealtimeListeners();
+      stopAutonomousConversation();
       emit("auth", { user: null, deniedReason: "NOT_ADMIN" });
       emit("local_message", { message: { role: "medicine", text: "Akses ditolak: akun ini bukan Admin terverifikasi. Silakan login sebagai Admin melalui bcgo-admin.html.", clientMessageId: "auth-denied" } });
       return;
     }
   } catch (e) {
-    if (epoch !== S.authEpoch) return;
-    stopRealtimeListeners();
+    if (auth.currentUser?.uid !== checkedUid) return;
+    cleanupRealtimeListeners();
+    stopAutonomousConversation();
     emit("auth", { user: null, deniedReason: "ADMIN_CHECK_FAILED" });
     return;
   }
 
+  const verifiedEpoch = sessionEpoch;
   startTelemetry();
-  startConversation();
+  await startConversation();
+  if (!isSessionCurrent(verifiedEpoch)) return;
   startAutonomousConversation();
+  initialScanTimer = setTimeout(() => {
+    initialScanTimer = null;
+    if (isSessionCurrent(verifiedEpoch)) scanConsistency().catch(e => emit("scan_error", { message: e.message }));
+  }, 600);
 });
 
 const API = {
@@ -1418,7 +1455,7 @@ const API = {
   getCodePrescription: caseId => { const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase; return c?.repairPlan?.codePrescription || buildCodePrescription(c?.repairPlan); },
   buildCodePrescription,
   getRegistry: () => ({ ...REGISTRY }),
-  getState: () => ({ ...S, sourceCache: undefined })
+  getState: () => ({ ...S, sourceCache: undefined, latestBCGOState })
 };
 Object.defineProperties(API, {
   cases: { get: () => S.cases },
@@ -1435,5 +1472,4 @@ Object.defineProperties(API, {
 });
 window.BCGOMedicine = API;
 
-setTimeout(() => scanConsistency().catch(e => emit("scan_error", { message: e.message })), 600);
 emit("ready", { version: S.version, registryCount: Object.keys(REGISTRY).length, executorAvailable: executorAvailable() });
