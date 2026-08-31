@@ -186,7 +186,7 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=2.7.1';
+import { runAutonomousEngine } from './bcgo.js?v=5';
 
 const $ = id => document.getElementById(id);
 
@@ -258,7 +258,6 @@ function formatTime(value) {
 
 function dimAll() {
     Object.values(bagans).forEach(el => {
-        if (!el) return;
         el.className = 'neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40';
     });
 }
@@ -284,7 +283,7 @@ function activatePhase(step, state) {
         OUT: 'synchronizing'
     };
 
-    Object.keys(subtitles).forEach(k => { if (subtitles[k]) subtitles[k].textContent = subText[k]; });
+    Object.keys(subtitles).forEach(k => subtitles[k].textContent = subText[k]);
 }
 
 function setHeader(step, state) {
@@ -296,10 +295,8 @@ function setHeader(step, state) {
     };
 
     const [bg,text,border,label] = styles[step] || styles.OUT;
-    if (badge) {
-        badge.className = `px-3 py-1 rounded-md text-xs font-semibold ${bg} ${text} border ${border}`;
-        badge.textContent = state.cycleMode === 'INTERRUPTED' ? '⚡ Impuls Terdeteksi' : label;
-    }
+    badge.className = `px-3 py-1 rounded-md text-xs font-semibold ${bg} ${text} border ${border}`;
+    badge.textContent = state.cycleMode === 'INTERRUPTED' ? '⚡ Impuls Terdeteksi' : label;
 
     const dotColor = {
         IN: 'bg-blue-500',
@@ -308,11 +305,10 @@ function setHeader(step, state) {
         OUT: 'bg-emerald-500'
     }[step] || 'bg-emerald-500';
 
-    if (pulse) pulse.className = `w-3 h-3 rounded-full ${dotColor} animate-ping`;
+    pulse.className = `w-3 h-3 rounded-full ${dotColor} animate-ping`;
 }
 
 function renderOrgans(organs) {
-    if (!organGrid) return;
     const entries = Object.entries(organs || {});
     organGrid.innerHTML = entries.map(([file, info]) => {
         const active = info.state === 'ACTIVE';
@@ -337,7 +333,6 @@ function renderOrgans(organs) {
 }
 
 function renderLogs(logs) {
-    if (!logCounter || !errorFeed) return;
     logCounter.textContent = `${logs?.length || 0} laporan`;
 
     if (!logs?.length) {
@@ -359,7 +354,6 @@ function renderLogs(logs) {
 }
 
 function addChat(role, text) {
-    if (!chatFeed) return;
     const row = document.createElement('div');
     row.className = role === 'user'
         ? 'flex justify-end'
@@ -467,7 +461,7 @@ function sendQuestion(question) {
     setTimeout(() => addChat('bcgo', answer), 120);
 }
 
-chatForm?.addEventListener('submit', event => {
+chatForm.addEventListener('submit', event => {
     event.preventDefault();
     const text = chatInput.value.trim();
     if (!text) return;
@@ -480,7 +474,6 @@ document.querySelectorAll('.quick-q').forEach(button => {
 });
 
 function renderNeuralEvents(events) {
-    if (!eventCounterEl || !neuralEventsEl) return;
     const list = Array.isArray(events) ? events.slice(0, 8) : [];
     eventCounterEl.textContent = `${Array.isArray(events) ? events.length : 0} event`;
     if (!list.length) {
@@ -499,7 +492,6 @@ function renderNeuralEvents(events) {
 }
 
 function renderConnection(state) {
-    if (!connectionStateEl || !connectionAgeEl || !telemetrySourceEl || !stateIntegrityEl) return;
     const conn = state.connection || {};
     const status = conn.status || 'CONNECTING';
     const map = {
@@ -521,21 +513,21 @@ runAutonomousEngine(state => {
     window.BCGO_STATE = state;
     renderConnection(state);
     renderNeuralEvents(state.recentEvents);
-    if (liveSpeech) liveSpeech.textContent = `> [${state.step}] ${state.message}`;
-    if (targetCellId) targetCellId.textContent = state.targetCell || '-';
-    if (errorLogDesc) errorLogDesc.textContent = state.errorLog || 'Normal (tidak ada anomali aktif)';
+    liveSpeech.textContent = `> [${state.step}] ${state.message}`;
+    targetCellId.textContent = state.targetCell || '-';
+    errorLogDesc.textContent = state.errorLog || 'Normal (tidak ada anomali aktif)';
 
-    if (cycleNumber) cycleNumber.textContent = state.cycle ?? 0;
-    if (cycleMode) cycleMode.textContent = state.cycleMode || 'NORMAL';
-    if (eventState) eventState.textContent = state.lastEventAt
+    cycleNumber.textContent = state.cycle ?? 0;
+    cycleMode.textContent = state.cycleMode || 'NORMAL';
+    eventState.textContent = state.lastEventAt
         ? `Impuls terakhir: ${formatTime(state.lastEventAt)}`
         : 'Belum ada impuls baru';
 
-    if (metrics.total) metrics.total.textContent = state.metrics?.total ?? 13;
-    if (metrics.active) metrics.active.textContent = state.metrics?.active ?? 0;
-    if (metrics.healthy) metrics.healthy.textContent = state.metrics?.healthy ?? 13;
-    if (metrics.recovered) metrics.recovered.textContent = state.metrics?.recovered ?? 0;
-    if (metrics.firestore) metrics.firestore.textContent = state.metrics?.firestoreCount ?? 0;
+    metrics.total.textContent = state.metrics?.total ?? 13;
+    metrics.active.textContent = state.metrics?.active ?? 0;
+    metrics.healthy.textContent = state.metrics?.healthy ?? 13;
+    metrics.recovered.textContent = state.metrics?.recovered ?? 0;
+    metrics.firestore.textContent = state.metrics?.firestoreCount ?? 0;
 
     activatePhase(state.step, state);
     setHeader(state.step, state);
@@ -563,14 +555,15 @@ runAutonomousEngine(state => {
     if (!packet || packet.bridge !== key || packet.from !== "MEDICINE") return;
     const text = packet.message || packet.medicineEvent || "Medicine aktif.";
     const target = document.getElementById("live-speech");
-    if (target && packet.medicineEvent === "MEDICINE_READY") {
+    const eventName = String(packet.medicineEvent || packet.type || "").toUpperCase();
+    if (target && (eventName === "READY" || eventName === "MEDICINE_READY" || eventName === "BCGO_BRIDGE")) {
       target.textContent = `> [MEDICINE] ${text}`;
     }
   }
 
   channel?.addEventListener("message", e => handle(e.data));
   window.addEventListener("storage", e => {
-    if (e.key !== key || !e.newValue) return;
+    if (e.key !== `${key}_EVENT` || !e.newValue) return;
     try { handle(JSON.parse(e.newValue)); } catch {}
   });
 })();

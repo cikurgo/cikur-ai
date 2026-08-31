@@ -35,7 +35,6 @@ const ORGAN_REGISTRY = {
   "cikur-config.js": { type: "Sistem Config", role: "system" },
   "bcgo-engine.js": { type: "Sistem Core", role: "system" },
   "bcgo-admin.html": { type: "Sistem Admin", role: "admin" },
-  "bcgo.html": { type: "Sistem Monitor", role: "monitor" },
   "data-cgo.html": { type: "Data Sistem", role: "data" }
 };
 
@@ -62,7 +61,6 @@ export function runAutonomousEngine(onCycleUpdate) {
 
   let stopped = false;
   let authorized = false;
-  let authorizedUid = null;
   let cycleNo = 0;
   let phaseIndex = -1;
   let cycleTimer = null;
@@ -73,7 +71,6 @@ export function runAutonomousEngine(onCycleUpdate) {
   let latestSystemLogs = [];
   let previousTopSignature = "";
   let realtimeBusy = false;
-  let authEpoch = 0;
 
   const firestore = { connected: false, count: 0, error: null, lastServerAt: 0 };
   const state = {
@@ -118,14 +115,26 @@ export function runAutonomousEngine(onCycleUpdate) {
       : null;
 
   let lastMedicineBridgeAt = 0;
+  let medicineBridgeSeq = 0;
+  const seenMedicineBridgeIds = new Set();
+
+  function bridgePacketId(prefix = "BCGO") {
+    medicineBridgeSeq += 1;
+    return `${prefix}-${Date.now()}-${medicineBridgeSeq}-${Math.random().toString(36).slice(2, 8)}`;
+  }
 
   function bridgeClone(value) {
     try { return JSON.parse(JSON.stringify(value)); } catch { return value; }
   }
 
+  const MEDICINE_BRIDGE_KEY = "CIKUR_GO_BCGO_MEDICINE_V1";
+  const MEDICINE_BRIDGE_STATE_KEY = `${MEDICINE_BRIDGE_KEY}_STATE`;
+  const MEDICINE_BRIDGE_EVENT_KEY = `${MEDICINE_BRIDGE_KEY}_EVENT`;
+
   function publishBCGOStateToMedicine(snapshot) {
     const packet = {
-      bridge: "CIKUR_GO_BCGO_MEDICINE_V1",
+      id: bridgePacketId("STATE"),
+      bridge: MEDICINE_BRIDGE_KEY,
       from: "BCGO",
       type: "BCGO_STATE",
       at: Date.now(),
@@ -133,22 +142,38 @@ export function runAutonomousEngine(onCycleUpdate) {
     };
 
     try { medicineBridgeChannel?.postMessage(packet); } catch {}
-    try {
-      localStorage.setItem("CIKUR_GO_BCGO_MEDICINE_V1", JSON.stringify(packet));
-    } catch {}
+    try { localStorage.setItem(MEDICINE_BRIDGE_STATE_KEY, JSON.stringify(packet)); } catch {}
+  }
+
+  function publishBCGOBridgeEvent(type, payload = {}) {
+    const packet = {
+      id: bridgePacketId("EVENT"),
+      bridge: MEDICINE_BRIDGE_KEY,
+      from: "BCGO",
+      type,
+      at: Date.now(),
+      ...bridgeClone(payload)
+    };
+    try { medicineBridgeChannel?.postMessage(packet); } catch {}
+    try { localStorage.setItem(MEDICINE_BRIDGE_EVENT_KEY, JSON.stringify(packet)); } catch {}
   }
 
   function receiveMedicineBridge(packet) {
-    if (stopped || !packet ||
+    if (!packet ||
         packet.bridge !== "CIKUR_GO_BCGO_MEDICINE_V1" ||
         packet.from !== "MEDICINE") return;
 
     const at = Number(packet.at) || Date.now();
+    const packetId = String(packet.id || `${packet.type || "MEDICINE"}-${at}-${packet.caseId || ""}`);
 
-    // Ignore an exact duplicate packet. This is important when both
-    // BroadcastChannel and localStorage fallback are available.
-    if (at <= lastMedicineBridgeAt) return;
-    lastMedicineBridgeAt = at;
+    // BroadcastChannel + localStorage fallback can deliver the same packet twice.
+    if (seenMedicineBridgeIds.has(packetId)) return;
+    seenMedicineBridgeIds.add(packetId);
+    if (seenMedicineBridgeIds.size > 200) {
+      const first = seenMedicineBridgeIds.values().next().value;
+      seenMedicineBridgeIds.delete(first);
+    }
+    lastMedicineBridgeAt = Math.max(lastMedicineBridgeAt, at);
 
     state.medicineBridge = {
       status: "LIVE",
@@ -176,7 +201,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   }
 
   window.addEventListener("storage", event => {
-    if (event.key !== "CIKUR_GO_BCGO_MEDICINE_V1" || !event.newValue) return;
+    if (event.key !== MEDICINE_BRIDGE_EVENT_KEY || !event.newValue) return;
     try { receiveMedicineBridge(JSON.parse(event.newValue)); } catch {}
   });
 
@@ -456,7 +481,6 @@ export function runAutonomousEngine(onCycleUpdate) {
     if (signature === previousTopSignature) return;
     previousTopSignature = signature;
     realtimeBusy = true;
-    const interruptEpoch = authEpoch;
 
     recordEvent("TELEMETRY", `Impuls baru dari ${file}.`, file);
     emit("PROCESS", `⚡ Saya menerima bukti baru dari ${file}. Saya hentikan sejenak siklus normal untuk memeriksanya.`, file, text, {
@@ -466,7 +490,7 @@ export function runAutonomousEngine(onCycleUpdate) {
 
     clearTimeout(cycleTimer);
     setTimeout(() => {
-      if (stopped || !authorized || interruptEpoch !== authEpoch) return;
+      if (stopped || !authorized) return;
       const organs = buildOrgans();
       const info = organs[file];
       const active = Object.entries(organs).filter(([, v]) => v.state === "ACTIVE");
@@ -482,7 +506,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       }
 
       setTimeout(() => {
-        if (stopped || !authorized || interruptEpoch !== authEpoch) return;
+        if (stopped || !authorized) return;
         const activeNow = Object.entries(buildOrgans()).filter(([, v]) => v.state === "ACTIVE");
         emit("OUT", activeNow.length
           ? `Saya selesai menilai impuls ${file}. ${activeNow.length} kasus tetap berada dalam pengawasan.`
@@ -492,18 +516,6 @@ export function runAutonomousEngine(onCycleUpdate) {
         scheduleNext(CYCLE.OUT);
       }, CYCLE.REVIEW);
     }, CYCLE.PROCESS);
-  }
-
-  function cleanupRealtime() {
-    clearTimeout(cycleTimer);
-    clearInterval(refreshTimer);
-    cycleTimer = null;
-    refreshTimer = null;
-    if (typeof unsubscribeFirestore === "function") unsubscribeFirestore();
-    if (typeof unsubscribeSystemLogs === "function") unsubscribeSystemLogs();
-    unsubscribeFirestore = null;
-    unsubscribeSystemLogs = null;
-    realtimeBusy = false;
   }
 
   function startSystemLogs() {
@@ -627,38 +639,25 @@ export function runAutonomousEngine(onCycleUpdate) {
   }
 
   async function verifyAdmin(user) {
-    const epoch = ++authEpoch;
     if (!user) {
-      authEpoch += 1;
       authorized = false;
-      authorizedUid = null;
-      cleanupRealtime();
+      clearTimeout(cycleTimer);
+      clearInterval(refreshTimer);
       emit("OUT", "Sesi Admin belum tersedia. Silakan login sebagai Admin.", "SYS_AUTH_REQUIRED");
       return;
     }
 
     try {
       const snap = await getDoc(doc(db, "admin_users", user.uid));
-      if (stopped || epoch !== authEpoch || auth.currentUser?.uid !== user.uid) return;
       const data = snap.exists() ? snap.data() : null;
       if (data?.active !== true) {
         authorized = false;
-        authorizedUid = null;
-        cleanupRealtime();
         emit("OUT", "Akun ini bukan Admin aktif. Akses Pusat Saraf ditolak.", "SYS_AUTH_NOT_ADMIN");
         return;
       }
-      // Auth state can change without reloading the page. Never keep an old
-      // listener/session alive for a different UID.
-      if (authorized && authorizedUid === user.uid) return;
-      if (authorized && authorizedUid !== user.uid) {
-        cleanupRealtime();
-        authorized = false;
-        authorizedUid = null;
-      }
+      if (authorized) return;
 
       authorized = true;
-      authorizedUid = user.uid;
       recordEvent("AUTH", "Admin terverifikasi. Sensor real-time dibuka.", "SYS_AUTH_VERIFIED");
       emit("IN", "Admin terverifikasi. Saya membuka sensor telemetry dan Firestore real-time.", "SYS_AUTH_VERIFIED", null, { cycleMode: "BOOT" });
       startSystemLogs();
@@ -669,8 +668,6 @@ export function runAutonomousEngine(onCycleUpdate) {
       nextPhase();
     } catch (error) {
       authorized = false;
-      authorizedUid = null;
-      cleanupRealtime();
       emit("OUT", "Saya gagal memverifikasi status Admin.", "SYS_AUTH_CHECK_FAILED", error?.message, { cycleMode: "ERROR" });
     }
   }
@@ -714,13 +711,15 @@ export function runAutonomousEngine(onCycleUpdate) {
       clearTimeout(cycleTimer);
       clearInterval(refreshTimer);
       if (typeof unsubscribeAuth === "function") unsubscribeAuth();
-      cleanupRealtime();
+      if (typeof unsubscribeFirestore === "function") unsubscribeFirestore();
+      if (typeof unsubscribeSystemLogs === "function") unsubscribeSystemLogs();
       try { medicineBridgeChannel?.close(); } catch {}
     }
   };
 
   window.BCGOBrain = brain;
   window.BCGO_STATE = safeClone(state);
+  publishBCGOBridgeEvent("BCGO_READY", { message: "BCGO core aktif; diagnostic layer tetap independen." });
   publishBCGOStateToMedicine(safeClone(state));
   unsubscribeAuth = onAuthStateChanged(auth, verifyAdmin);
   return brain;
