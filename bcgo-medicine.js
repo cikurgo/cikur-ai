@@ -1210,11 +1210,13 @@ function currentConversationContext() {
 function autonomousThought(role) {
   const { active, c, plan, logs, findings } = currentConversationContext();
   const target = c?.repairPlan?.rootCauseFile || c?.rootCauseFile || c?.source || resolveTelemetrySource(logs[0]) || "seluruh organ";
-  const last = logs[0]?.message || c?.signature || "belum ada impuls baru";
+  const recentActionable = logs.find(log => isActionableTelemetry(log) && isRecentTelemetry(log));
+  const recentMessage = recentActionable?.message || recentActionable?.error || null;
   if (role === "bcgo") {
     if (active.length) return `Saya sedang menjaga ${active.length} saraf aktif. Fokus saya ${target}. Saya kirim bukti terbaru ke Medicine dan tidak mau menyimpulkan akar masalah hanya dari gejalanya.`;
     if (findings.length) return `Tidak ada anomali aktif saat ini, tetapi saya masih melihat ${findings.length} finding kontrak. Saya terus membandingkan lintas-file supaya organ tidak dinyatakan sehat terlalu cepat.`;
-    return `Siklus saya sedang tenang. Saya tetap mendengarkan telemetry real-time; impuls terakhir yang saya pegang: ${text(last, 260)}.`;
+    if (recentMessage) return `Siklus saya tenang, tetapi ada telemetry actionable yang baru masuk: ${text(recentMessage, 260)}. Saya tidak akan menyebutnya case aktif sebelum window waktu dan evidence-nya terbukti.`;
+    return `Siklus saya sedang tenang. Saya tetap mendengarkan telemetry real-time; telemetry historis tidak saya tampilkan sebagai anomali aktif.`;
   }
   if (plan?.codePrescription?.ready) return `Saya menemukan jalur source yang cukup kuat pada ${target}. BEFORE dan AFTER sudah terbentuk dari operasi exact. Saya tahan di meja review sampai manusia memeriksa dan menyalin solusi.`;
   if (c) return `Saya sedang membedah ${target}. Saat ini saya punya status ${c.status} dan ${c.sourceEvidence?.length || plan?.sourceEvidence?.length || 0} bukti source. Kalau bukti belum exact, saya lanjut menelusuri dependency daripada mengarang kode.`;
