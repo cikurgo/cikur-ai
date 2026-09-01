@@ -1,6 +1,6 @@
 /* ============================================================
    BCGO INTERNAL EXECUTOR
-   Version 3.1.0 (Production Enhanced)
+   Version 3.2.0 (Production Enhanced)
    ------------------------------------------------------------
    Orchestration + Request + Approval + Source + Persistence +
    Audit management.
@@ -9,7 +9,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "3.1.0";
+  const VERSION = "3.2.0";
   const ENGINE = "BCGO_INTERNAL_EXECUTOR";
 
   const STATUS = Object.freeze({
@@ -684,4 +684,5 @@
 
   if (core()) boot();
   else window.addEventListener("bcgo-executor-core-ready", boot, { once: true });
+  window.dispatchEvent(new CustomEvent("bcgo-executor-ready", {detail:{name:ENGINE,version:VERSION}}));
 })();

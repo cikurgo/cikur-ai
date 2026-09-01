@@ -14,7 +14,7 @@ import { db, auth } from "./cikur-config.js";
 
 /*
  * ================================================================
- * BCGO MEDICINE v2.8 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
+ * BCGO MEDICINE v2.8.1 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
  * ================================================================
  * Boundary:
  *   Medicine observes, investigates, proves, proposes and validates.
@@ -107,7 +107,7 @@ const ACTIVE_STATUSES = new Set([
 const TERMINAL_STATUSES = new Set(["REJECTED","FIXED_VERIFIED","RECOVERED"]);
 
 const S = {
-  version: "2.8.0",
+  version: "2.8.1",
   registry: REGISTRY,
   surface: null,
   logs: [],
@@ -126,6 +126,15 @@ const S = {
     checkedAt: null,
     collections: {},
     permissionErrors: []
+  },
+  bcgoSync: {
+    status: "WAITING",
+    lastAt: 0,
+    cycle: 0,
+    step: "-",
+    active: 0,
+    total: 0,
+    source: "NONE"
   },
   telemetry: {
     started: false,
@@ -162,10 +171,42 @@ const text = (v, n = 1800) => String(v ?? "").replace(/\s+/g, " ").trim().slice(
 const lower = v => String(v ?? "").toLowerCase();
 const escRe = v => String(v).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const MEDICINE_BRIDGE_KEY = "CIKUR_GO_BCGO_MEDICINE_V1";
+const MEDICINE_BRIDGE_EVENT_KEY = `${MEDICINE_BRIDGE_KEY}_EVENT`;
+const MEDICINE_BRIDGE_LIVE_WINDOW = 15000;
+let medicineBridgeChannel = typeof BroadcastChannel !== "undefined"
+  ? new BroadcastChannel(MEDICINE_BRIDGE_KEY) : null;
+let medicineSequence = 0;
+
+function publishMedicineState(event, data = {}) {
+  const packet = {
+    id: `MEDICINE-${Date.now()}-${++medicineSequence}-${Math.random().toString(36).slice(2,7)}`,
+    bridge: MEDICINE_BRIDGE_KEY,
+    from: "MEDICINE",
+    type: "MEDICINE_STATE",
+    medicineEvent: event,
+    at: Date.now(),
+    sequence: medicineSequence,
+    caseId: data.case?.id || data.caseId || S.activeCase?.id || null,
+    message: String(data.message || data.case?.status || event || "").slice(0,500),
+    state: {
+      status: S.activeCase?.status || "IDLE",
+      caseId: S.activeCase?.id || null,
+      cycle: S.bcgoSync.cycle,
+      step: S.bcgoSync.step,
+      active: S.bcgoSync.active,
+      total: S.bcgoSync.total
+    }
+  };
+  try { medicineBridgeChannel?.postMessage(packet); } catch {}
+  try { localStorage.setItem(MEDICINE_BRIDGE_EVENT_KEY, JSON.stringify(packet)); } catch {}
+}
+
 function emit(event, data = {}) {
   window.dispatchEvent(new CustomEvent("bcgo:medicine", {
     detail: { event, at: now(), ...data }
   }));
+  if (!String(event).startsWith("bcgo_bridge_")) publishMedicineState(event, data);
 }
 
 function normalizeFile(value) {
@@ -1817,6 +1858,43 @@ async function sendMessage(message, role = "human") {
   }
 }
 
+function receiveBCGOState(packet) {
+  if (!packet || packet.bridge !== MEDICINE_BRIDGE_KEY || packet.from !== "BCGO") return;
+  if (!["BCGO_STATE","BCGO_SYNC_REQUEST"].includes(packet.type)) return;
+  const at = Number(packet.at) || 0;
+  if (!at) return;
+  const age = Date.now() - at;
+  const st = packet.state || {};
+  S.bcgoSync = {
+    ...S.bcgoSync,
+    status: age <= MEDICINE_BRIDGE_LIVE_WINDOW ? "LIVE" : "STALE",
+    lastAt: at,
+    cycle: Number(st.cycle) || 0,
+    step: st.step || "-",
+    active: Number(st.metrics?.active) || 0,
+    total: Number(st.metrics?.total) || 0,
+    source: "BROADCAST_CHANNEL"
+  };
+  window.dispatchEvent(new CustomEvent("bcgo:medicine", {
+    detail:{event:"bcgo_sync",at:now(),contract:{...S.bcgoSync}}
+  }));
+  // A sync request receives a real acknowledgement. No diagnosis is triggered.
+  if (packet.type === "BCGO_SYNC_REQUEST") publishMedicineState("BCGO_SYNC_ACK", {message:`ACK cycle #${S.bcgoSync.cycle} / ${S.bcgoSync.step}`});
+}
+
+medicineBridgeChannel?.addEventListener("message", event => receiveBCGOState(event.data));
+window.addEventListener("storage", event => {
+  if (event.key !== MEDICINE_BRIDGE_KEY + "_STATE" || !event.newValue) return;
+  try { receiveBCGOState(JSON.parse(event.newValue)); } catch {}
+});
+setInterval(() => {
+  if (!S.bcgoSync.lastAt) return;
+  if (Date.now() - S.bcgoSync.lastAt > MEDICINE_BRIDGE_LIVE_WINDOW && S.bcgoSync.status === "LIVE") {
+    S.bcgoSync.status = "STALE";
+    window.dispatchEvent(new CustomEvent("bcgo:medicine", {detail:{event:"bcgo_sync",at:now(),contract:{...S.bcgoSync}}}));
+  }
+}, 3000);
+
 onAuthStateChanged(auth, async user => {
   S.human.uid = user?.uid || null;
   emit("auth",{user:user ? {uid:user.uid,email:user.email || null} : null});
@@ -1829,7 +1907,10 @@ onAuthStateChanged(auth, async user => {
   try {
     const adminSnap = await getDoc(doc(db,"admin_users",user.uid));
 
-    if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
+    const adminData = adminSnap.exists() ? adminSnap.data() : null;
+    const role = String(adminData?.role || "").toLowerCase();
+    const roleAllowed = !role || role === "admin" || role === "super_admin";
+    if (!adminSnap.exists() || adminData?.active !== true || !roleAllowed) {
       emit("auth",{user:null,deniedReason:"NOT_ADMIN"});
       emit("local_message",{
         message:{

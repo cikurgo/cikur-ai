@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BCGO Internal Executor — Control & Monitoring v3.1.0</title>
+<title>BCGO Internal Executor — Control & Monitoring v3.2.0</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#f4f7fb;color:#17212b;font-family:system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.5}
@@ -50,6 +50,7 @@ button{border:0;border-radius:10px;padding:9px 13px;font-weight:800;cursor:point
 <div class="item"><div class="label">Telemetry</div><div id="nerveTelemetry" class="value">-</div></div>
 <div class="item"><div class="label">Active / Total</div><div id="nerveMetrics" class="value">-</div></div>
 <div class="item"><div class="label">Bridge Source</div><div id="nerveSource" class="value">NONE</div></div>
+<div class="item"><div class="label">Medicine ACK</div><div id="medicineAck" class="value">WAITING</div></div>
 </div>
 <div id="nerveBanner" class="banner">Menunggu pulsa BCGO nyata...</div>
 </section>
@@ -103,8 +104,8 @@ const ROUTE_VERSION = "v3.0.0";
 <section class="card"><h2>Audit / Runtime History</h2><pre id="history">Belum ada audit.</pre></section>
 </main>
 
-<script src="./bcgo-executor-core.js"></script>
-<script src="./bcgo-executor.js"></script>
+<script src="./bcgo-executor-core.js?v=3.2.0"></script>
+<script src="./bcgo-executor.js?v=3.2.0"></script>
 <script>
 (() => {
   const $ = id => document.getElementById(id);
@@ -140,6 +141,9 @@ const ROUTE_VERSION = "v3.0.0";
     const age=n.lastAt?Date.now()-Number(n.lastAt):NaN;
     set("nerveAge",n.lastAt?ageText(age):"- "); set("nerveCycle",(n.cycle??"-")+" / "+(n.step||"-"));
     set("nerveTelemetry",n.telemetryFile||"-"); set("nerveMetrics",(n.active??0)+" / "+(n.total??0)); set("nerveSource",n.source||"NONE");
+    const ack = (()=>{try{return JSON.parse(localStorage.getItem("CIKUR_GO_BCGO_MEDICINE_V1_EVENT")||"null")}catch{return null}})();
+    const ackAge = ack?.at ? Date.now()-Number(ack.at) : Infinity;
+    set("medicineAck", ack && ackAge <= 15000 ? `LIVE • ${ack.medicineEvent||"ACK"}` : "WAITING");
     $("nerveBanner").className="banner "+(live?"live":stale?"warn":"fail");
     $("nerveBanner").textContent=live?"SARAF BCGO TERHUBUNG — pulsa state nyata diterima real-time.":stale?"Pulsa BCGO terakhir sudah kedaluwarsa. Lampu ditahan AMBER sampai pulsa baru diterima.":"Belum ada pulsa BCGO. Lampu MERAH; tidak ada klaim koneksi.";
   }

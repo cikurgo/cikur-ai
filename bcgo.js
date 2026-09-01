@@ -11,7 +11,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/fi
 import { db, auth } from "./cikur-config.js";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.7.4
+ * BCGO MASTER NERVE SYSTEM v2.7.5
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -137,6 +137,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   // ============================================================
   const MEDICINE_BRIDGE_KEY = "CIKUR_GO_BCGO_MEDICINE_V1";
   const MEDICINE_BRIDGE_STATE_KEY = `${MEDICINE_BRIDGE_KEY}_STATE`;
+  const MEDICINE_BRIDGE_HEARTBEAT_KEY = `${MEDICINE_BRIDGE_KEY}_HEARTBEAT`;
   const MEDICINE_BRIDGE_EVENT_KEY = `${MEDICINE_BRIDGE_KEY}_EVENT`;
   const medicineBridgeChannel =
     typeof BroadcastChannel !== "undefined"
@@ -145,6 +146,7 @@ export function runAutonomousEngine(onCycleUpdate) {
 
   let lastMedicineBridgeAt = 0;
   const seenMedicineBridgeIds = new Set();
+  let medicineBridgeTimer = null;
 
   function bridgeClone(value) {
     try { return JSON.parse(JSON.stringify(value)); } catch { return value; }
@@ -187,6 +189,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     state.medicineBridge = {
       status: "LIVE",
       lastAt: at,
+      sequence: Number(packet.sequence) || state.medicineBridge.sequence || 0,
       lastEvent: packet.medicineEvent || packet.type || "MEDICINE",
       lastCaseId: packet.caseId || packet.case?.id || null,
       message: String(packet.message || "").slice(0, 500) || null
@@ -210,9 +213,38 @@ export function runAutonomousEngine(onCycleUpdate) {
   }
 
   window.addEventListener("storage", event => {
-    if (event.key !== "CIKUR_GO_BCGO_MEDICINE_V1_EVENT" || !event.newValue) return;
-    try { receiveMedicineBridge(JSON.parse(event.newValue)); } catch {}
+    if (event.key === MEDICINE_BRIDGE_EVENT_KEY && event.newValue) {
+      try { receiveMedicineBridge(JSON.parse(event.newValue)); } catch {}
+      return;
+    }
+    if (event.key === MEDICINE_BRIDGE_STATE_KEY && event.newValue) {
+      // A state packet from BCGO is intentionally ignored here: BCGO is the producer.
+    }
   });
+
+  // Explicit request/ack handshake. This makes BCGO able to distinguish
+  // "Medicine page exists" from "Medicine actually received this cycle".
+  function requestMedicineSync() {
+    const packet = {
+      id: `BCGO-SYNC-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
+      bridge: MEDICINE_BRIDGE_KEY,
+      from: "BCGO",
+      type: "BCGO_SYNC_REQUEST",
+      at: Date.now(),
+      state: bridgeClone(state)
+    };
+    try { medicineBridgeChannel?.postMessage(packet); } catch {}
+    try { localStorage.setItem(MEDICINE_BRIDGE_STATE_KEY, JSON.stringify(packet)); } catch {}
+  }
+
+  function refreshMedicineBridgeStatus() {
+    if (!state.medicineBridge.lastAt) return;
+    if (Date.now() - state.medicineBridge.lastAt > 15000 && state.medicineBridge.status === "LIVE") {
+      state.medicineBridge.status = "STALE";
+      publishToUI(safeClone(state));
+    }
+  }
+  medicineBridgeTimer = setInterval(refreshMedicineBridgeStatus, 3000);
 
   function timestamp(value) {
     try {
@@ -385,6 +417,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     window.BCGO_STATE = snapshot;
     publishToUI(snapshot);
     publishBCGOStateToMedicine(snapshot);
+    requestMedicineSync();
   }
 
   function situation() {
@@ -696,7 +729,9 @@ export function runAutonomousEngine(onCycleUpdate) {
       const snap = await getDoc(doc(db, "admin_users", user.uid));
       if (stopped || epoch !== authEpoch || auth.currentUser?.uid !== user.uid) return;
       const data = snap.exists() ? snap.data() : null;
-      if (data?.active !== true) {
+      const role = String(data?.role || "").toLowerCase();
+      const roleAllowed = !role || role === "admin" || role === "super_admin";
+      if (data?.active !== true || !roleAllowed) {
         authorized = false;
         authorizedUid = null;
         cleanupRealtime();
@@ -771,6 +806,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       ++authEpoch;
       clearTimeout(cycleTimer);
       clearInterval(refreshTimer);
+      clearInterval(medicineBridgeTimer);
       if (typeof unsubscribeAuth === "function") unsubscribeAuth();
       cleanupRealtime();
       try { medicineBridgeChannel?.close(); } catch {}
@@ -780,7 +816,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   window.BCGOBrain = brain;
   window.BCGO_STATE = safeClone(state);
   publishBCGOStateToMedicine(safeClone(state));
-  unsubscribeAuth = onAuthStateChanged(auth, user => {
+  const handleAuth = user => {
     const epoch = ++authEpoch;
     verifyAdmin(user, epoch).catch(error => {
       if (stopped || epoch !== authEpoch) return;
@@ -789,6 +825,10 @@ export function runAutonomousEngine(onCycleUpdate) {
       cleanupRealtime();
       emit("OUT", "Saya gagal memverifikasi status Admin.", "SYS_AUTH_CHECK_FAILED", error?.message, { cycleMode: "ERROR" });
     });
-  });
+  };
+  unsubscribeAuth = onAuthStateChanged(auth, handleAuth);
+  // Firebase can already have a restored session when this module evaluates.
+  // Do not wait for a later browser event; verify the current user immediately.
+  if (auth.currentUser) handleAuth(auth.currentUser);
   return brain;
 }
