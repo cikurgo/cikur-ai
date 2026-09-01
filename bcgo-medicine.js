@@ -5,7 +5,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/fi
 import { db, auth } from "./cikur-config.js";
 
 /*
- * BCGO MEDICINE v3.2.3 — PRECISION REPAIR / VERIFIED HEALING ENGINE
+ * BCGO MEDICINE v3.2.4 — PRECISION REPAIR / VERIFIED HEALING ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -50,6 +50,13 @@ const MEDICINE_INTERNAL = {
 // Medicine may inspect BCGO itself as a dependency surface, but its own files
 // are never automatic anomaly targets or part of the live scan surface.
 const DIAGNOSTIC_SURFACE = Object.keys(REGISTRY).filter(name => !MEDICINE_INTERNAL[name]);
+
+// BCGO's ORGAN counter represents the 12 operational application surfaces.
+// bcgo.html and bcgo.js remain part of Medicine's dependency/diagnostic surface,
+// but they are monitor infrastructure, not additional operational organs.
+const OPERATIONAL_ORGAN_SURFACE = DIAGNOSTIC_SURFACE.filter(name =>
+  name !== "bcgo.html" && name !== "bcgo.js"
+);
 const INTERNAL_TELEMETRY_SOURCES = new Set([
   "bcgo.html", "bcgo.js", "bcgo-medicine.html", "bcgo-medicine.js",
   "unhandledrejection", "error", "window.error", "runtime", "unknown"
@@ -171,7 +178,7 @@ function cleanupRealtimeListeners() {
 }
 
 const S = {
-  version: "3.2.3",
+  version: "3.2.4",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -1076,8 +1083,8 @@ function bcgoAnswer(q) {
   }
   if (/apa yang.*kerja|sedang|ngerjain|mengerjakan/.test(x)) {
     return active.length
-      ? `Saya sedang mengawasi ${DIAGNOSTIC_SURFACE.length} file. Ada ${active.length} case aktif; fokus ${active[0].source} (${active[0].status}). Medicine sedang saya minta menyiapkan repair plan.`
-      : `Saya sedang memantau ${DIAGNOSTIC_SURFACE.length} file dan telemetry realtime. Belum ada case aktif.`;
+      ? `Saya sedang mengawasi ${OPERATIONAL_ORGAN_SURFACE.length} organ operasional dan ${DIAGNOSTIC_SURFACE.length - OPERATIONAL_ORGAN_SURFACE.length} dependency monitor. Ada ${active.length} case aktif; fokus ${active[0].source} (${active[0].status}). Medicine sedang saya minta menyiapkan repair plan.`
+      : `Saya sedang memantau ${OPERATIONAL_ORGAN_SURFACE.length} organ operasional + ${DIAGNOSTIC_SURFACE.length - OPERATIONAL_ORGAN_SURFACE.length} dependency monitor serta telemetry realtime. Belum ada case aktif.`;
   }
   if (/aman|status|sehat|normal/.test(x)) return `Status saya: ${S.logs.length} telemetry log, ${active.length} case aktif, ${S.findings.length} finding. Saya tidak menyatakan aman tanpa evidence.`;
   if (/masalah|error|kendala|rusak|anomal/.test(x)) return active.length ? `Ya. Ada ${active.length} case aktif. Prioritas ${active[0].source}: ${active[0].diagnosis.title}. Saya dapat menyerahkannya ke Medicine untuk pemeriksaan dan penyembuhan terkontrol.` : `Saat ini belum ada case aktif dari telemetry yang saya terima.`;
@@ -1547,4 +1554,4 @@ Object.defineProperties(API, {
 });
 window.BCGOMedicine = API;
 
-emit("ready", { version: S.version, registryCount: DIAGNOSTIC_SURFACE.length, executorAvailable: executorAvailable() });
+emit("ready", { version: S.version, registryCount: OPERATIONAL_ORGAN_SURFACE.length, executorAvailable: executorAvailable() });
