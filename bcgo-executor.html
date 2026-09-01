@@ -3,94 +3,169 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BCGO Internal Executor — v3.1.0</title>
+<title>BCGO Internal Executor — Control & Monitoring v3.1.0</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:#17212b;font-family:system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.5}main{max-width:1050px;margin:auto;padding:16px}.card{background:#fff;border:1px solid #dce3ea;border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 2px 6px rgba(0,0,0,.02)}h1,h2{margin-top:0;color:#0f172a}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.item{background:#f7f9fb;border:1px solid #e4e9ef;border-radius:12px;padding:14px}.label{font-size:11px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:#64748b}.value{font-weight:800;margin-top:6px;font-size:15px;color:#0f172a}.ready{color:#059669}.offline{color:#dc2626}.waiting{color:#d97706}.muted{color:#64748b;font-size:13px}pre{background:#0f172a;color:#eef3f7;border-radius:12px;padding:16px;white-space:pre-wrap;word-break:break-word;min-height:120px;font-size:12px;font-family:ui-monospace,monospace;overflow:auto}table{width:100%;border-collapse:collapse}td,th{padding:10px;border-bottom:1px solid #e7ebef;text-align:left;font-size:13px}th{color:#475569}button{border:0;border-radius:10px;padding:10px 16px;font-weight:750;cursor:pointer;background:#0f172a;color:#fff}button.secondary{background:#e2e8f0;color:#0f172a}button.success{background:#059669}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.form-group{margin-bottom:12px}label{display:block;font-size:12px;font-weight:700;color:#475569;margin-bottom:4px}input,textarea{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;font-size:13px;font-family:inherit}textarea{min-height:90px;resize:vertical}.notice{padding:12px;border-radius:10px;background:#eef2ff;font-size:13px}.ok{background:#ecfdf5}.warn{background:#fffbeb}.bad{background:#fef2f2}@media(max-width:760px){.grid{grid-template-columns:1fr 1fr}}@media(max-width:500px){.grid{grid-template-columns:1fr}}
+*{box-sizing:border-box}
+body{margin:0;background:#f4f7fb;color:#17212b;font-family:system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.5}
+main{max-width:1100px;margin:auto;padding:16px}
+.card{background:#fff;border:1px solid #dce3ea;border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 2px 6px rgba(0,0,0,.03)}
+h1,h2{margin:0 0 10px;color:#0f172a}.sub{font-size:12px;color:#64748b;margin:0 0 14px}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.item{background:#f7f9fb;border:1px solid #e4e9ef;border-radius:12px;padding:12px}.label{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#64748b}.value{font-weight:850;margin-top:5px;font-size:14px}
+.ok{color:#059669}.warn{color:#b45309}.fail{color:#dc2626}.muted{color:#64748b}
+.lamp{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px;background:#94a3b8;box-shadow:0 0 0 3px rgba(148,163,184,.15);vertical-align:middle}.lamp.live{background:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.18),0 0 12px rgba(16,185,129,.55)}.lamp.stale{background:#f59e0b}.lamp.off{background:#ef4444}
+.banner{padding:10px 12px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0;font-size:12px;margin-top:12px}.banner.live{background:#ecfdf5;border-color:#bbf7d0}.banner.warn{background:#fffbeb;border-color:#fde68a}.banner.fail{background:#fef2f2;border-color:#fecaca}
+pre{background:#101722;color:#eef3f7;border-radius:12px;padding:14px;white-space:pre-wrap;word-break:break-word;min-height:120px;font-size:12px;overflow:auto;margin:0}
+table{width:100%;border-collapse:collapse}td,th{padding:9px;border-bottom:1px solid #e7ebef;text-align:left;font-size:12px}th{color:#475569;font-weight:800}
+button{border:0;border-radius:10px;padding:9px 13px;font-weight:800;cursor:pointer;background:#17212b;color:#fff}button.secondary{background:#e9eef3;color:#17212b}button.success{background:#059669}button.warn{background:#d97706}button:disabled{opacity:.5;cursor:not-allowed}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.form{display:grid;gap:10px}.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}label{display:block;font-size:11px;font-weight:800;color:#475569;margin-bottom:4px}input,textarea{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;font-size:12px;font-family:inherit}textarea{min-height:100px;resize:vertical}.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.codebox{border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}.codehead{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 10px;background:#f8fafc;font-size:11px;font-weight:800}.codebox textarea{border:0;border-radius:0;min-height:120px;margin:0;display:block}.copy{padding:6px 9px;font-size:10px;background:#e2e8f0;color:#17212b}.copy.solution{background:#059669;color:#fff}
+.small{font-size:10px;color:#64748b}.check{font-weight:900;color:#059669}.nowrap{white-space:nowrap}
+@media(max-width:760px){.grid{grid-template-columns:1fr 1fr}.two{grid-template-columns:1fr}}@media(max-width:500px){main{padding:10px}.grid{grid-template-columns:1fr}.card{padding:14px}}
 </style>
 </head>
 <body>
 <main>
 <section class="card">
 <h1>BCGO Internal Executor</h1>
-<p class="muted">Mesin eksekusi source deterministik internal CIKUR GO. Tidak menggunakan API eksternal sebagai otak eksekusi.</p>
-<div id="bootNotice" class="notice warn">Memeriksa engine...</div>
+<p class="sub">Mesin eksekusi source deterministik internal CIKUR GO. Tidak menggunakan API eksternal sebagai otak eksekusi.</p>
+<div id="systemBanner" class="banner">Memulai pemeriksaan executor...</div>
 <div class="grid" style="margin-top:12px">
 <div class="item"><div class="label">Engine</div><div id="engine" class="value">BOOTING</div></div>
 <div class="item"><div class="label">Version</div><div id="version" class="value">-</div></div>
 <div class="item"><div class="label">Status</div><div id="status" class="value">-</div></div>
 <div class="item"><div class="label">Core</div><div id="core" class="value">-</div></div>
 <div class="item"><div class="label">Persistence</div><div id="persistence" class="value">-</div></div>
-<div class="item"><div class="label">External Service</div><div id="external" class="value ready">NONE</div></div>
+<div class="item"><div class="label">External Service</div><div id="external" class="value ok">NONE</div></div>
 </div>
 <div class="actions"><button id="refresh" class="secondary">Perbarui Status</button><button id="reset" class="secondary">Reset Runtime</button></div>
 </section>
 
-<section class="card"><h2>Health / Capability</h2><pre id="health">Memeriksa...</pre></section>
+<section class="card">
+<h2><span id="nerveLamp" class="lamp off"></span>Saraf BCGO → Executor</h2>
+<p class="sub">Lampu ini <b>tidak pernah dibuat hijau secara dummy</b>. Hijau hanya setelah executor menerima state BCGO nyata melalui bridge browser internal yang sudah dipakai BCGO.</p>
+<div class="grid">
+<div class="item"><div class="label">Connection</div><div id="nerveStatus" class="value">DISCONNECTED</div></div>
+<div class="item"><div class="label">Last Pulse</div><div id="nerveAge" class="value">-</div></div>
+<div class="item"><div class="label">Cycle / Step</div><div id="nerveCycle" class="value">-</div></div>
+<div class="item"><div class="label">Telemetry</div><div id="nerveTelemetry" class="value">-</div></div>
+<div class="item"><div class="label">Active / Total</div><div id="nerveMetrics" class="value">-</div></div>
+<div class="item"><div class="label">Bridge Source</div><div id="nerveSource" class="value">NONE</div></div>
+</div>
+<div id="nerveBanner" class="banner">Menunggu pulsa BCGO nyata...</div>
+</section>
+
+<section class="card">
+<h2>Executor Checklist</h2>
+<p class="sub">Ceklis mengikuti pondasi yang kita sepakati; setiap komponen berada di dalam tiga file internal ini.</p>
+<table><thead><tr><th>File</th><th>Komponen</th><th>Status</th></tr></thead><tbody>
+<tr><td>bcgo-executor-core.js</td><td>Patch Engine</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor-core.js</td><td>Fingerprint Engine</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor-core.js</td><td>Diff Engine</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor-core.js</td><td>Validation Engine</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor-core.js</td><td>Rollback Engine</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor.js</td><td>Request Manager</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor.js</td><td>Approval Gate</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor.js</td><td>Execution Manager</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor.js</td><td>Source Manager</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor.js</td><td>Persistence Manager</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor.js</td><td>Audit Manager</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor.html</td><td>Control / Monitoring</td><td class="check">☑ AKTIF</td></tr>
+</tbody></table>
+</section>
 
 <section class="card">
 <h2>Source Manager</h2>
-<p class="muted">Source harus tersedia di runtime sebelum patch. Pada browser mobile, gunakan import source; pada browser yang mendukung File System Access, file lokal dapat di-bind.</p>
-<div class="form-group"><label>Source ID</label><input id="sourceId" value="demo-config.js"></div>
-<div class="form-group"><label>Isi Source</label><textarea id="sourceText">// CIKUR GO Internal Demo Config
+<p class="sub">Source yang terdaftar disimpan di IndexedDB internal. Import file membaca source; koneksi File System Access, bila tersedia browser, dapat memberi executor handle untuk menulis kembali file lokal dan melakukan read-back verification.</p>
+<div class="two">
+<div><label>Source ID / File</label><input id="sourceId" value="demo-config.js"></div>
+<div><label>Fingerprint saat ini</label><input id="sourceFingerprint" readonly value="-"></div>
+</div>
+<div class="codebox" style="margin-top:10px"><div class="codehead"><span>ISI SOURCE INTERNAL</span><button class="copy" data-copy="sourceText">📋 COPY CODE</button></div><textarea id="sourceText" class="code" spellcheck="false">// CIKUR GO Internal Demo Config
 const STATUS_MODE = "STABLE_OFFLINE";
-const ROUTE_VERSION = "v3.1.0";
+const ROUTE_VERSION = "v3.0.0";
 </textarea></div>
-<div class="actions"><button id="registerSource" class="success">Simpan Source Internal</button><button id="loadSource" class="secondary">Muat Source</button><input id="sourceFile" type="file" style="display:none"><button id="importSource" class="secondary">Import File</button></div>
+<div class="actions"><button id="saveSource" class="success">Simpan Source Internal</button><button id="loadSource" class="secondary">Muat Source</button><button id="importFile" class="secondary">Import File</button><button id="bindFile" class="secondary">Hubungkan File Lokal</button><input id="fileInput" type="file" hidden></div>
+<div id="sourceInfo" class="small" style="margin-top:8px">Belum membaca source.</div>
 </section>
 
 <section class="card">
 <h2>Deterministic Patch Test</h2>
-<p class="muted">Simulasi ini benar-benar melewati Approval Gate → Fingerprint → Patch → Validation → Persistence → Read-back Verification.</p>
-<div class="form-group"><label>Exact Target</label><textarea id="targetBefore">const STATUS_MODE = "STABLE_OFFLINE";</textarea></div>
-<div class="form-group"><label>Replacement</label><textarea id="targetAfter">const STATUS_MODE = "SECURE_ACTIVE";</textarea></div>
-<div class="actions"><button id="runTest" class="success">Jalankan Test APPROVED</button></div>
+<p class="sub">Alur nyata: Request → Approval Gate → Fingerprint → Exact Patch → Diff → Validation → Persistence → Read-back Verification.</p>
+<div class="codebox"><div class="codehead"><span>EXACT TARGET / BEFORE</span><button class="copy" data-copy="targetBefore">📋 COPY CODE</button></div><textarea id="targetBefore" class="code" spellcheck="false">const STATUS_MODE = "STABLE_OFFLINE";</textarea></div>
+<div class="codebox" style="margin-top:10px"><div class="codehead"><span>SOLUTION / AFTER</span><button class="copy solution" data-copy="targetAfter">📋 COPY SOLUSI</button></div><textarea id="targetAfter" class="code" spellcheck="false">const STATUS_MODE = "SECURE_ACTIVE";</textarea></div>
+<div class="actions"><button id="runTest" class="success">Jalankan Test APPROVED</button><button id="resetDemo" class="secondary">Reset Demo Source</button></div>
 </section>
 
-<section class="card"><h2>Hasil Eksekusi</h2><pre id="result">Belum ada execution.</pre></section>
+<section class="card">
+<h2>Hasil Eksekusi</h2><pre id="result">Belum ada execution.</pre>
+</section>
 <section class="card"><h2>Internal Sources</h2><pre id="sources">Memuat...</pre></section>
 <section class="card"><h2>Audit / Runtime History</h2><pre id="history">Belum ada audit.</pre></section>
-
-<section class="card"><h2>Executor Checklist</h2>
-<table><thead><tr><th>File</th><th>Komponen</th><th>Status</th></tr></thead><tbody>
-<tr><td>bcgo-executor-core.js</td><td>Patch Engine</td><td>☑</td></tr>
-<tr><td>bcgo-executor-core.js</td><td>Fingerprint Engine</td><td>☑</td></tr>
-<tr><td>bcgo-executor-core.js</td><td>Diff Engine</td><td>☑</td></tr>
-<tr><td>bcgo-executor-core.js</td><td>Validation Engine</td><td>☑</td></tr>
-<tr><td>bcgo-executor-core.js</td><td>Rollback Engine</td><td>☑</td></tr>
-<tr><td>bcgo-executor.js</td><td>Request Manager</td><td>☑</td></tr>
-<tr><td>bcgo-executor.js</td><td>Approval Gate</td><td>☑</td></tr>
-<tr><td>bcgo-executor.js</td><td>Execution Manager</td><td>☑</td></tr>
-<tr><td>bcgo-executor.js</td><td>Source Manager</td><td>☑</td></tr>
-<tr><td>bcgo-executor.js</td><td>Persistence Manager</td><td>☑</td></tr>
-<tr><td>bcgo-executor.js</td><td>Audit Manager</td><td>☑</td></tr>
-<tr><td>bcgo-executor.html</td><td>Control / Monitoring</td><td>☑</td></tr>
-</tbody></table></section>
 </main>
+
 <script src="./bcgo-executor-core.js"></script>
 <script src="./bcgo-executor.js"></script>
 <script>
 (() => {
-  const $=id=>document.getElementById(id);
-  const e=()=>window.BCGOInternalExecutor;
-  function render(){
-    const x=e();
-    if(!x){ $('bootNotice').textContent='EXECUTOR TIDAK TERMUAT: periksa nama/path bcgo-executor-core.js dan bcgo-executor.js.'; $('bootNotice').className='notice bad'; return; }
-    const s=x.getStatus();
-    $('engine').textContent=s.engine;$('version').textContent=s.version;$('status').textContent=s.status;$('core').textContent=s.coreReady?'READY':'OFFLINE';
-    $('persistence').textContent=s.persistence?(s.persistence.mode+' / VERIFIED'):(s.health.indexedDB?'INTERNAL READY':'UNAVAILABLE');
-    const ready=s.status==='READY'||s.status==='SUCCESS';$('status').className='value '+(ready?'ready':(s.status==='WAITING_APPROVAL'?'waiting':'offline'));
-    $('bootNotice').textContent=ready?'Executor internal aktif dan self-test lulus.':'Runtime '+s.status+'. Lihat Health untuk detail.';$('bootNotice').className='notice '+(ready?'ok':(s.status==='DEGRADED'?'warn':'bad'));
-    $('health').textContent=JSON.stringify(s.health,null,2);$('result').textContent=s.lastResult?JSON.stringify(s.lastResult,null,2):'Belum ada execution.';$('history').textContent=JSON.stringify(s.history.slice(0,20),null,2);
-    x.listSources().then(list=>$('sources').textContent=list.length?JSON.stringify(list.map(v=>({sourceId:v.sourceId,file:v.file,fingerprint:v.fingerprint,updatedAt:v.updatedAt,origin:v.origin})),null,2):'Belum ada source tersimpan.');
+  const $ = id => document.getElementById(id);
+  const pretty = v => { try { return JSON.stringify(v,null,2); } catch { return String(v); } };
+  const set = (id,v) => { const el=$(id); if(el) el.textContent = v ?? "-"; };
+  const ageText = ms => { if(!Number.isFinite(ms)||ms<0) return "-"; if(ms<1000)return "<1 dtk"; return Math.round(ms/1000)+" dtk lalu"; };
+
+  function render() {
+    const e = window.BCGOInternalExecutor;
+    if(!e) {
+      set("engine","OFFLINE"); set("status","DEPENDENCY ERROR"); set("core","NOT LOADED"); set("external","NONE");
+      $("systemBanner").className="banner fail"; $("systemBanner").textContent="Executor tidak termuat. Pastikan bcgo-executor-core.js dan bcgo-executor.js berada satu folder dengan HTML.";
+      return;
+    }
+    const s=e.getStatus();
+    set("engine",s.engine); set("version",s.version); set("status",s.status); set("core",s.coreReady?"READY":"OFFLINE");
+    set("persistence",s.persistence ? s.persistence.mode+" / VERIFIED" : (s.persistenceReady?"INTERNAL READY":"UNAVAILABLE")); set("external","NONE");
+    const ready=s.coreReady && s.persistenceReady;
+    $("systemBanner").className="banner "+(ready?"live":"warn");
+    $("systemBanner").textContent=ready?"Executor internal aktif. Self-test dan persistence internal tersedia.":"Executor belum lengkap; persistence browser tidak tersedia.";
+    $("result").textContent=s.lastResult?pretty(s.lastResult):"Belum ada execution.";
+    $("history").textContent=s.history?.length?pretty(s.history):"Belum ada audit.";
+    if(s.source){ set("sourceFingerprint",s.source.fingerprint); set("sourceInfo",`${s.source.sourceId||s.source.file} • ${s.source.origin||"INTERNAL"} • ${s.source.updatedAt||"-"}`); }
+    renderNerve(s.nerve);
+    refreshSources();
   }
-  $('refresh').onclick=()=>{e()?.healthCheck().then(render)};
-  $('reset').onclick=()=>{e()?.reset();render()};
-  $('registerSource').onclick=async()=>{try{await e().registerSource($('sourceId').value.trim(),$('sourceText').value,{file:$('sourceId').value.trim()});render();alert('Source tersimpan di Internal Repository.')}catch(err){alert('Gagal: '+err.message)}};
-  $('loadSource').onclick=async()=>{try{const s=await e().getSource($('sourceId').value.trim());if(!s)throw Error('SOURCE_NOT_FOUND');$('sourceText').value=s.content;render()}catch(err){alert('Gagal: '+err.message)}};
-  $('importSource').onclick=()=> $('sourceFile').click();
-  $('sourceFile').onchange=async ev=>{try{const f=ev.target.files[0];if(f){const s=await e().importSource(f);$('sourceId').value=s.sourceId;$('sourceText').value=s.content;render();alert('Source diimport ke Internal Repository.')}}catch(err){alert('Import gagal: '+err.message)}ev.target.value=''};
-  $('runTest').onclick=async()=>{try{const id=$('sourceId').value.trim();const s=await e().getSource(id);if(!s)throw Error('SOURCE_NOT_FOUND — simpan source dahulu');const req={requestId:'REQ_'+Date.now(),caseId:'CASE_INTERNAL_TEST_'+Date.now(),file:id,sourceId:id,operation:'REPLACE_EXACT',before:$('targetBefore').value,after:$('targetAfter').value,expectedFingerprint:s.fingerprint,approval:'APPROVED'};$('result').textContent='Menjalankan pipeline internal...';const r=await e().execute(req);render();alert('Execution: '+r.status)}catch(err){$('result').textContent='Error: '+err.message;render();alert('Gagal: '+err.message)}};
-  window.addEventListener('bcgo-executor-state',render);window.addEventListener('bcgo-executor-core-ready',render);setTimeout(render,100);
+
+  function renderNerve(n) {
+    n=n||{status:"DISCONNECTED"};
+    const status=n.status||"DISCONNECTED"; const live=status==="LIVE"; const stale=status==="STALE";
+    $("nerveLamp").className="lamp "+(live?"live":stale?"stale":"off");
+    set("nerveStatus",live?"LIVE":status); $("nerveStatus").className="value "+(live?"ok":stale?"warn":"fail");
+    const age=n.lastAt?Date.now()-Number(n.lastAt):NaN;
+    set("nerveAge",n.lastAt?ageText(age):"- "); set("nerveCycle",(n.cycle??"-")+" / "+(n.step||"-"));
+    set("nerveTelemetry",n.telemetryFile||"-"); set("nerveMetrics",(n.active??0)+" / "+(n.total??0)); set("nerveSource",n.source||"NONE");
+    $("nerveBanner").className="banner "+(live?"live":stale?"warn":"fail");
+    $("nerveBanner").textContent=live?"SARAF BCGO TERHUBUNG — pulsa state nyata diterima real-time.":stale?"Pulsa BCGO terakhir sudah kedaluwarsa. Lampu ditahan AMBER sampai pulsa baru diterima.":"Belum ada pulsa BCGO. Lampu MERAH; tidak ada klaim koneksi.";
+  }
+
+  async function refreshSources(){
+    const e=window.BCGOInternalExecutor;if(!e)return;
+    try{const list=await e.listSources(); $("sources").textContent=list.length?pretty(list.map(x=>({sourceId:x.sourceId,file:x.file,fingerprint:x.fingerprint,updatedAt:x.updatedAt,origin:x.origin}))):"Belum ada source tersimpan.";}catch(err){$("sources").textContent="Gagal membaca IndexedDB: "+err.message;}
+  }
+
+  async function copyFrom(id,btn){
+    const el=$(id);if(!el)return;
+    try{await navigator.clipboard.writeText(el.value??el.textContent??"");const old=btn.textContent;btn.textContent="✓ TERSALIN";setTimeout(()=>btn.textContent=old,1200);}catch{alert("Clipboard ditolak browser. Silakan salin manual.");}
+  }
+  document.querySelectorAll("[data-copy]").forEach(btn=>btn.addEventListener("click",()=>copyFrom(btn.dataset.copy,btn)));
+
+  $("saveSource").addEventListener("click",async()=>{const e=window.BCGOInternalExecutor;if(!e)return;try{const r=await e.registerSource($("sourceId").value.trim(),$("sourceText").value,{file:$("sourceId").value.trim(),origin:"CONTROL_PANEL"});set("sourceFingerprint",r.fingerprint);set("sourceInfo",`${r.sourceId} • ${r.origin} • ${r.updatedAt}`);render();}catch(err){alert("Gagal menyimpan source: "+err.message);}});
+  $("loadSource").addEventListener("click",async()=>{const e=window.BCGOInternalExecutor;if(!e)return;const id=$("sourceId").value.trim();try{const r=await e.getSource(id);if(!r){alert("Source belum tersimpan: "+id);return;}$("sourceText").value=r.content;set("sourceFingerprint",r.fingerprint);set("sourceInfo",`${r.sourceId} • ${r.origin||"INTERNAL"}`);}catch(err){alert("Gagal memuat source: "+err.message);}});
+  $("importFile").addEventListener("click",()=>$("fileInput").click());
+  $("fileInput").addEventListener("change",async ev=>{const file=ev.target.files?.[0];if(!file)return;const text=await file.text();$("sourceId").value=file.name;$("sourceText").value=text;const e=window.BCGOInternalExecutor;try{const r=await e.registerSource(file.name,text,{file:file.name,origin:"IMPORTED_FILE"});set("sourceFingerprint",r.fingerprint);set("sourceInfo",`${file.name} • IMPORTED_FILE • ${r.updatedAt}`);render();}catch(err){alert("Import gagal: "+err.message);}});
+  $("bindFile").addEventListener("click",async()=>{const e=window.BCGOInternalExecutor;if(!e)return;if(typeof window.showOpenFilePicker!=="function"){alert("Browser ini tidak menyediakan File System Access API. Gunakan Import File; source tetap dapat diproses dan disimpan di IndexedDB internal.");return;}try{const [handle]=await window.showOpenFilePicker({multiple:false});const file=await handle.getFile();await e.bindLocalFile(file.name,handle);const r=await e.getSource(file.name);$("sourceId").value=file.name;$("sourceText").value=r?.content||await file.text();set("sourceFingerprint",r?.fingerprint||"-");set("sourceInfo",`${file.name} • LOCAL_FILE_HANDLE`);render();}catch(err){if(err?.name!=="AbortError")alert("Gagal menghubungkan file lokal: "+err.message);}});
+
+  $("runTest").addEventListener("click",async()=>{const e=window.BCGOInternalExecutor;if(!e){alert("Executor belum siap.");return;}const request={requestId:"REQ_"+Date.now(),caseId:"CASE_DEMO_001",proposalId:"PROP_DEMO_001",planId:"PLAN_DEMO_001",sourceId:$("sourceId").value.trim()||"demo-config.js",file:$("sourceId").value.trim()||"demo-config.js",operation:"REPLACE_EXACT",before:$("targetBefore").value,after:$("targetAfter").value,approval:"APPROVED"};$("result").textContent="Menjalankan pipeline internal...";try{const r=await e.execute(request);render();}catch(err){$("result").textContent="Execution error: "+err.message;}});
+  $("resetDemo").addEventListener("click",async()=>{const e=window.BCGOInternalExecutor;if(!e)return;const id="demo-config.js";const text='// CIKUR GO Internal Demo Config\nconst STATUS_MODE = "STABLE_OFFLINE";\nconst ROUTE_VERSION = "v3.0.0";\n';try{const r=await e.registerSource(id,text,{file:id,origin:"DEMO_RESET"});$("sourceId").value=id;$("sourceText").value=text;$("targetBefore").value='const STATUS_MODE = "STABLE_OFFLINE";';set("sourceFingerprint",r.fingerprint);render();}catch(err){alert("Reset demo gagal: "+err.message);}});
+  $("refresh").addEventListener("click",render); $("reset").addEventListener("click",()=>{window.BCGOInternalExecutor?.reset();render();});
+  window.addEventListener("bcgo-executor-state",render); window.addEventListener("bcgo-executor-core-ready",render); window.addEventListener("bcgo-executor-ready",render); window.addEventListener("bcgo-executor-nerve",render);
+  setInterval(render,3000); render();
 })();
 </script>
 </body>
