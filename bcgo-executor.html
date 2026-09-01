@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BCGO Internal Executor — v3.1.0</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:#17212b;font-family:system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.5}main{max-width:1050px;margin:auto;padding:16px}.card{background:#fff;border:1px solid #dce3ea;border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 2px 6px rgba(0,0,0,.02)}h1,h2{margin-top:0;color:#0f172a}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.item{background:#f7f9fb;border:1px solid #e4e9ef;border-radius:12px;padding:14px}.label{font-size:11px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:#64748b}.value{font-weight:800;margin-top:6px;font-size:15px;color:#0f172a}.ready{color:#059669}.offline{color:#dc2626}.waiting{color:#d97706}.muted{color:#64748b;font-size:13px}pre{background:#0f172a;color:#eef3f7;border-radius:12px;padding:16px;white-space:pre-wrap;word-break:break-word;min-height:120px;font-size:12px;font-family:ui-monospace,monospace;overflow:auto}table{width:100%;border-collapse:collapse}td,th{padding:10px;border-bottom:1px solid #e7ebef;text-align:left;font-size:13px}th{color:#475569}button{border:0;border-radius:10px;padding:10px 16px;font-weight:750;cursor:pointer;background:#0f172a;color:#fff}button.secondary{background:#e2e8f0;color:#0f172a}button.success{background:#059669}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.form-group{margin-bottom:12px}label{display:block;font-size:12px;font-weight:700;color:#475569;margin-bottom:4px}input,textarea{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;font-size:13px;font-family:inherit}textarea{min-height:90px;resize:vertical}.notice{padding:12px;border-radius:10px;background:#eef2ff;font-size:13px}.ok{background:#ecfdf5}.warn{background:#fffbeb}.bad{background:#fef2f2}@media(max-width:760px){.grid{grid-template-columns:1fr 1fr}}@media(max-width:500px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+<section class="card">
+<h1>BCGO Internal Executor</h1>
+<p class="muted">Mesin eksekusi source deterministik internal CIKUR GO. Tidak menggunakan API eksternal sebagai otak eksekusi.</p>
+<div id="bootNotice" class="notice warn">Memeriksa engine...</div>
+<div class="grid" style="margin-top:12px">
+<div class="item"><div class="label">Engine</div><div id="engine" class="value">BOOTING</div></div>
+<div class="item"><div class="label">Version</div><div id="version" class="value">-</div></div>
+<div class="item"><div class="label">Status</div><div id="status" class="value">-</div></div>
+<div class="item"><div class="label">Core</div><div id="core" class="value">-</div></div>
+<div class="item"><div class="label">Persistence</div><div id="persistence" class="value">-</div></div>
+<div class="item"><div class="label">External Service</div><div id="external" class="value ready">NONE</div></div>
+</div>
+<div class="actions"><button id="refresh" class="secondary">Perbarui Status</button><button id="reset" class="secondary">Reset Runtime</button></div>
+</section>
+
+<section class="card"><h2>Health / Capability</h2><pre id="health">Memeriksa...</pre></section>
+
+<section class="card">
+<h2>Source Manager</h2>
+<p class="muted">Source harus tersedia di runtime sebelum patch. Pada browser mobile, gunakan import source; pada browser yang mendukung File System Access, file lokal dapat di-bind.</p>
+<div class="form-group"><label>Source ID</label><input id="sourceId" value="demo-config.js"></div>
+<div class="form-group"><label>Isi Source</label><textarea id="sourceText">// CIKUR GO Internal Demo Config
+const STATUS_MODE = "STABLE_OFFLINE";
+const ROUTE_VERSION = "v3.1.0";
+</textarea></div>
+<div class="actions"><button id="registerSource" class="success">Simpan Source Internal</button><button id="loadSource" class="secondary">Muat Source</button><input id="sourceFile" type="file" style="display:none"><button id="importSource" class="secondary">Import File</button></div>
+</section>
+
+<section class="card">
+<h2>Deterministic Patch Test</h2>
+<p class="muted">Simulasi ini benar-benar melewati Approval Gate → Fingerprint → Patch → Validation → Persistence → Read-back Verification.</p>
+<div class="form-group"><label>Exact Target</label><textarea id="targetBefore">const STATUS_MODE = "STABLE_OFFLINE";</textarea></div>
+<div class="form-group"><label>Replacement</label><textarea id="targetAfter">const STATUS_MODE = "SECURE_ACTIVE";</textarea></div>
+<div class="actions"><button id="runTest" class="success">Jalankan Test APPROVED</button></div>
+</section>
+
+<section class="card"><h2>Hasil Eksekusi</h2><pre id="result">Belum ada execution.</pre></section>
+<section class="card"><h2>Internal Sources</h2><pre id="sources">Memuat...</pre></section>
+<section class="card"><h2>Audit / Runtime History</h2><pre id="history">Belum ada audit.</pre></section>
+
+<section class="card"><h2>Executor Checklist</h2>
+<table><thead><tr><th>File</th><th>Komponen</th><th>Status</th></tr></thead><tbody>
+<tr><td>bcgo-executor-core.js</td><td>Patch Engine</td><td>☑</td></tr>
+<tr><td>bcgo-executor-core.js</td><td>Fingerprint Engine</td><td>☑</td></tr>
+<tr><td>bcgo-executor-core.js</td><td>Diff Engine</td><td>☑</td></tr>
+<tr><td>bcgo-executor-core.js</td><td>Validation Engine</td><td>☑</td></tr>
+<tr><td>bcgo-executor-core.js</td><td>Rollback Engine</td><td>☑</td></tr>
+<tr><td>bcgo-executor.js</td><td>Request Manager</td><td>☑</td></tr>
+<tr><td>bcgo-executor.js</td><td>Approval Gate</td><td>☑</td></tr>
+<tr><td>bcgo-executor.js</td><td>Execution Manager</td><td>☑</td></tr>
+<tr><td>bcgo-executor.js</td><td>Source Manager</td><td>☑</td></tr>
+<tr><td>bcgo-executor.js</td><td>Persistence Manager</td><td>☑</td></tr>
+<tr><td>bcgo-executor.js</td><td>Audit Manager</td><td>☑</td></tr>
+<tr><td>bcgo-executor.html</td><td>Control / Monitoring</td><td>☑</td></tr>
+</tbody></table></section>
+</main>
+<script src="./bcgo-executor-core.js"></script>
+<script src="./bcgo-executor.js"></script>
+<script>
+(() => {
+  const $=id=>document.getElementById(id);
+  const e=()=>window.BCGOInternalExecutor;
+  function render(){
+    const x=e();
+    if(!x){ $('bootNotice').textContent='EXECUTOR TIDAK TERMUAT: periksa nama/path bcgo-executor-core.js dan bcgo-executor.js.'; $('bootNotice').className='notice bad'; return; }
+    const s=x.getStatus();
+    $('engine').textContent=s.engine;$('version').textContent=s.version;$('status').textContent=s.status;$('core').textContent=s.coreReady?'READY':'OFFLINE';
+    $('persistence').textContent=s.persistence?(s.persistence.mode+' / VERIFIED'):(s.health.indexedDB?'INTERNAL READY':'UNAVAILABLE');
+    const ready=s.status==='READY'||s.status==='SUCCESS';$('status').className='value '+(ready?'ready':(s.status==='WAITING_APPROVAL'?'waiting':'offline'));
+    $('bootNotice').textContent=ready?'Executor internal aktif dan self-test lulus.':'Runtime '+s.status+'. Lihat Health untuk detail.';$('bootNotice').className='notice '+(ready?'ok':(s.status==='DEGRADED'?'warn':'bad'));
+    $('health').textContent=JSON.stringify(s.health,null,2);$('result').textContent=s.lastResult?JSON.stringify(s.lastResult,null,2):'Belum ada execution.';$('history').textContent=JSON.stringify(s.history.slice(0,20),null,2);
+    x.listSources().then(list=>$('sources').textContent=list.length?JSON.stringify(list.map(v=>({sourceId:v.sourceId,file:v.file,fingerprint:v.fingerprint,updatedAt:v.updatedAt,origin:v.origin})),null,2):'Belum ada source tersimpan.');
+  }
+  $('refresh').onclick=()=>{e()?.healthCheck().then(render)};
+  $('reset').onclick=()=>{e()?.reset();render()};
+  $('registerSource').onclick=async()=>{try{await e().registerSource($('sourceId').value.trim(),$('sourceText').value,{file:$('sourceId').value.trim()});render();alert('Source tersimpan di Internal Repository.')}catch(err){alert('Gagal: '+err.message)}};
+  $('loadSource').onclick=async()=>{try{const s=await e().getSource($('sourceId').value.trim());if(!s)throw Error('SOURCE_NOT_FOUND');$('sourceText').value=s.content;render()}catch(err){alert('Gagal: '+err.message)}};
+  $('importSource').onclick=()=> $('sourceFile').click();
+  $('sourceFile').onchange=async ev=>{try{const f=ev.target.files[0];if(f){const s=await e().importSource(f);$('sourceId').value=s.sourceId;$('sourceText').value=s.content;render();alert('Source diimport ke Internal Repository.')}}catch(err){alert('Import gagal: '+err.message)}ev.target.value=''};
+  $('runTest').onclick=async()=>{try{const id=$('sourceId').value.trim();const s=await e().getSource(id);if(!s)throw Error('SOURCE_NOT_FOUND — simpan source dahulu');const req={requestId:'REQ_'+Date.now(),caseId:'CASE_INTERNAL_TEST_'+Date.now(),file:id,sourceId:id,operation:'REPLACE_EXACT',before:$('targetBefore').value,after:$('targetAfter').value,expectedFingerprint:s.fingerprint,approval:'APPROVED'};$('result').textContent='Menjalankan pipeline internal...';const r=await e().execute(req);render();alert('Execution: '+r.status)}catch(err){$('result').textContent='Error: '+err.message;render();alert('Gagal: '+err.message)}};
+  window.addEventListener('bcgo-executor-state',render);window.addEventListener('bcgo-executor-core-ready',render);setTimeout(render,100);
+})();
+</script>
+</body>
+</html>
