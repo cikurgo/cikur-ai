@@ -274,6 +274,15 @@
     const handle = sourceHandles.get(sourceId);
 
     if (handle && typeof handle.createWritable === "function") {
+      // Concurrency gate: verify the CURRENT local file before opening a writer.
+      // Never mutate a file when the source has changed since Medicine prepared it.
+      const currentFile = await handle.getFile();
+      const currentText = await currentFile.text();
+      const currentFingerprint = core().fingerprint(currentText);
+      if (expected && !core().fingerprintsEqual(expected, currentFingerprint)) {
+        throw new Error("SOURCE_CHANGED_BEFORE_PERSISTENCE");
+      }
+
       const writable = await handle.createWritable();
       try {
         await writable.write(content);
@@ -289,10 +298,6 @@
 
       if (readBackFingerprint !== actual) {
         throw new Error("PERSISTENCE_READBACK_MISMATCH");
-      }
-
-      if (expected && !core().fingerprintsEqual(expected, actual)) {
-        throw new Error("PERSISTENCE_EXPECTED_FINGERPRINT_MISMATCH");
       }
 
       const record = {
@@ -312,6 +317,12 @@
         persistedAt: now()
       };
       return state.persistence;
+    }
+
+    const currentRecord = await getRecord(STORAGE_STORE, sourceId);
+    if (expected && currentRecord &&
+        !core().fingerprintsEqual(expected, currentRecord.fingerprint)) {
+      throw new Error("SOURCE_CHANGED_BEFORE_PERSISTENCE");
     }
 
     const record = {

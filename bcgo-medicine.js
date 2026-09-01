@@ -14,7 +14,7 @@ import { db, auth } from "./cikur-config.js";
 
 /*
  * ================================================================
- * BCGO MEDICINE v2.7 — STABLE PRECISION DIAGNOSTIC CORE
+ * BCGO MEDICINE v2.8 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
  * ================================================================
  * Boundary:
  *   Medicine observes, investigates, proves, proposes and validates.
@@ -107,7 +107,7 @@ const ACTIVE_STATUSES = new Set([
 const TERMINAL_STATUSES = new Set(["REJECTED","FIXED_VERIFIED","RECOVERED"]);
 
 const S = {
-  version: "2.7.0",
+  version: "2.8.0",
   registry: REGISTRY,
   surface: null,
   logs: [],
@@ -141,7 +141,17 @@ const S = {
   busy: {
     surface: false,
     scan: false,
-    verification: false
+    verification: false,
+    execution: false
+  },
+  executor: {
+    available: false,
+    name: null,
+    version: null,
+    status: "OFFLINE",
+    lastEventAt: null,
+    persistence: null,
+    lastResult: null
   },
   investigated: new Set()
 };
@@ -1395,7 +1405,256 @@ function canApprove(c) {
   );
 }
 
-function executorAvailable() { return false; }
+function internalExecutor() {
+  const e = window.BCGOInternalExecutor;
+  return e && typeof e.execute === "function" ? e : null;
+}
+
+function canApplyPatch(c) {
+  const p = c?.repairPlan;
+  const v = c?.verification;
+  return !!(
+    c &&
+    c.status === "READY_FOR_PATCH" &&
+    v?.verdict === "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE" &&
+    p?.precisionGate === true &&
+    Array.isArray(p.operations) &&
+    p.operations.length === 1 &&
+    p.operations[0]?.type === "REPLACE_EXACT" &&
+    p.operations[0]?.file === p.rootCauseFile &&
+    typeof p.operations[0]?.before === "string" &&
+    p.operations[0].before.length > 0 &&
+    typeof p.operations[0]?.after === "string"
+  );
+}
+
+function executorAvailable() {
+  return !!internalExecutor();
+}
+
+function syncExecutorState() {
+  const e = internalExecutor();
+  if (!e) {
+    S.executor = {
+      ...S.executor,
+      available: false,
+      name: null,
+      version: null,
+      status: "OFFLINE"
+    };
+    emit("executor_state", { executor: { ...S.executor } });
+    return S.executor;
+  }
+
+  let status = null;
+  try { status = e.getStatus?.() || null; } catch {}
+  S.executor = {
+    ...S.executor,
+    available: true,
+    name: e.name || status?.engine || "BCGO_INTERNAL_EXECUTOR",
+    version: e.version || status?.version || null,
+    status: status?.status || "READY",
+    persistence: status?.persistence || null,
+    lastResult: status?.lastResult || S.executor.lastResult || null,
+    lastEventAt: now()
+  };
+  emit("executor_state", { executor: { ...S.executor } });
+  return S.executor;
+}
+
+function buildExecutorRequest(c, proposal, op, sourceRecord) {
+  if (!c || !proposal || !op) throw new Error("EXECUTOR_REQUEST_INPUT_MISSING");
+  if (op.type !== "REPLACE_EXACT" && op.type !== "INSERT_EXACT" && op.type !== "REMOVE_EXACT") {
+    throw new Error("EXECUTOR_OPERATION_UNSUPPORTED");
+  }
+  if (!op.file || !op.before || typeof op.after !== "string") {
+    throw new Error("EXECUTOR_EXACT_OPERATION_INCOMPLETE");
+  }
+
+  return {
+    requestId: `REQ-${uid().toUpperCase()}`,
+    caseId: c.id,
+    proposalId: proposal.proposalId,
+    planId: c.repairPlan?.planId || "",
+    file: op.file,
+    sourceId: op.file,
+    operation: op.type,
+    before: op.before,
+    after: op.after,
+    expectedFingerprint: sourceRecord?.fingerprint || fingerprint(sourceRecord?.text || ""),
+    approval: "APPROVED",
+    actorUid: auth.currentUser?.uid || null,
+    target: c.repairPlan?.rootCauseFile || op.file,
+    createdAt: now()
+  };
+}
+
+async function applyApprovedTreatment(caseId) {
+  const c = S.cases.find(x => x.id === caseId);
+  if (!c) throw new Error("Case tidak ditemukan");
+  if (S.human.paused) throw new Error("Medicine sedang dijeda");
+  if (!canApplyPatch(c)) throw new Error("Patch belum memenuhi Precision Gate");
+
+  const e = internalExecutor();
+  if (!e) throw new Error("INTERNAL_EXECUTOR_NOT_LOADED");
+
+  const proposal = c.patchProposal || findProposal(c.id);
+  if (!proposal) throw new Error("Patch proposal tidak ditemukan");
+  const ops = Array.isArray(c.repairPlan?.operations) ? c.repairPlan.operations : [];
+  if (ops.length !== 1) {
+    throw new Error("INTERNAL_EXECUTOR_BATCH_NOT_SUPPORTED: gunakan satu operasi exact per eksekusi");
+  }
+
+  const op = ops[0];
+  const source = await fetchFile(op.file, { force: true });
+  if (!source.ok || typeof source.text !== "string") {
+    throw new Error(`SOURCE_UNAVAILABLE:${op.file}`);
+  }
+
+  const currentFingerprint = fingerprint(source.text);
+  if (op.before && !source.text.includes(op.before)) {
+    throw new Error("EXACT_BEFORE_NOT_PRESENT_IN_CURRENT_SOURCE");
+  }
+
+  const request = buildExecutorRequest(c, proposal, op, {
+    text: source.text,
+    fingerprint: currentFingerprint
+  });
+
+  S.busy.execution = true;
+  proposal.status = "APPLY_REQUESTED";
+  c.status = "PATCH_PENDING_EXECUTION";
+  S.patchRequests.unshift(request);
+  S.patchRequests = S.patchRequests.slice(0, 40);
+  emit("patch_apply_requested", { proposal, request, case: c, executorAvailable: true, executor: syncExecutorState() });
+
+  try {
+    const result = await e.execute(request, source.text);
+    proposal.executorResult = result || null;
+    proposal.status = result?.status === "SUCCESS" ? "APPLIED" : "APPLY_FAILED";
+    c.status = result?.status === "SUCCESS" ? "PATCH_APPLIED" : "PATCH_FAILED";
+    S.executor = {
+      ...S.executor,
+      available: true,
+      name: e.name || "BCGO_INTERNAL_EXECUTOR",
+      version: e.version || null,
+      status: result?.status || "FAILED",
+      persistence: result?.persistence || null,
+      lastResult: result || null,
+      lastEventAt: now()
+    };
+    emit("executor_state", { executor: { ...S.executor } });
+    emit("patch_apply_complete", { proposal, request, result, case: c });
+
+    if (result?.status === "SUCCESS") {
+      await validateAfterPatch(caseId);
+    }
+
+    return { case: c, proposal, request, result };
+  } finally {
+    S.busy.execution = false;
+  }
+}
+
+async function validateAfterPatch(caseId) {
+  const c = S.cases.find(x => x.id === caseId);
+  if (!c) throw new Error("Case tidak ditemukan");
+
+  const repairTarget = c.repairPlan?.rootCauseFile || c.source;
+  const operations = c.repairPlan?.operations || [];
+  emit("validation_started", { caseId, target: repairTarget, telemetryTarget: c.source });
+
+  const e = internalExecutor();
+  let internalSource = null;
+  if (e?.getSource) {
+    try { internalSource = await e.getSource(repairTarget); } catch {}
+  }
+
+  const deployed = await fetchFile(repairTarget, { force: true });
+  const telemetryLogs = latestRelevantLogs(c.source);
+  const beforeSig = c.signature;
+  const currentError = telemetryLogs.find(l => safeLower(l.message || l.error).includes(safeLower(beforeSig)));
+
+  let operationVerified = operations.length > 0;
+  for (const op of operations) {
+    if (op.type === "REPLACE_EXACT") {
+      const textToCheck = internalSource?.content || deployed.text || "";
+      if (textToCheck.includes(op.before) || !textToCheck.includes(op.after)) operationVerified = false;
+    }
+  }
+
+  const persistenceVerified = !!internalSource && operations.every(op => {
+    const content = internalSource.content || "";
+    return !content.includes(op.before) && content.includes(op.after);
+  });
+  const localFilePersisted = internalSource?.origin === "LOCAL_FILE_HANDLE";
+  const deployedChanged = !!deployed.ok && operations.every(op => {
+    const content = deployed.text || "";
+    return !content.includes(op.before) && content.includes(op.after);
+  });
+
+  const fullyFixed = persistenceVerified && (localFilePersisted || deployedChanged) && !currentError;
+  const pendingDeployment = persistenceVerified && !localFilePersisted && !deployedChanged;
+
+  const v = {
+    caseId,
+    target: repairTarget,
+    telemetryTarget: c.source,
+    passed: fullyFixed,
+    status: fullyFixed
+      ? "FIXED_VERIFIED"
+      : pendingDeployment
+        ? "INTERNAL_VERIFIED_PENDING_DEPLOYMENT"
+        : "STILL_FAILING",
+    checkedAt: now(),
+    runtimeEvidence: telemetryLogs.slice(0, 5),
+    previousSignature: beforeSig,
+    sourceReadable: !!deployed.ok,
+    internalSourceAvailable: !!internalSource,
+    internalPersistenceVerified: persistenceVerified,
+    localFilePersisted,
+    deployedChanged,
+    operationVerified,
+    remainingFindings: [],
+    note: pendingDeployment
+      ? "Perubahan sudah tersimpan dan terbaca kembali oleh Internal Repository, tetapi source deployed belum berubah. Sistem tidak mengklaim FIXED_VERIFIED."
+      : null
+  };
+
+  S.validation = v;
+  c.validation = v;
+  c.status = v.status;
+  const proposal = c.patchProposal || findProposal(caseId);
+  if (proposal) proposal.status = fullyFixed ? "VERIFIED_FIXED" : pendingDeployment ? "INTERNAL_VERIFIED" : "VALIDATION_FAILED";
+
+  emit("validation_complete", { validation: v, case: c });
+  emit("case_updated", { case: c });
+  return v;
+}
+
+async function rejectTreatment(caseId, reason = "Treatment ditolak oleh manusia.") {
+  const c = S.cases.find(x => x.id === caseId);
+  if (!c) throw new Error("Case tidak ditemukan");
+  c.status = "REJECTED";
+  c.rejectedAt = now();
+  c.rejectionReason = text(reason, 500);
+  emit("case_updated", { case: c });
+  return c;
+}
+
+async function setHumanMode(paused) {
+  S.human.paused = !!paused;
+  S.human.mode = paused ? "HUMAN_PAUSED" : "ASSISTED";
+  S.human.uid = auth.currentUser?.uid || null;
+  emit("human_control", { human: { ...S.human } });
+}
+
+async function requestReview(caseId) {
+  const c = S.cases.find(x => x.id === caseId);
+  if (!c) throw new Error("Case tidak ditemukan");
+  emit("human_review_requested", { case: c });
+  return c;
+}
 
 async function approveTreatment(caseId) {
   const c = S.cases.find(x => x.id === caseId);
@@ -1597,7 +1856,8 @@ onAuthStateChanged(auth, async user => {
       registryCount:Object.keys(REGISTRY).length,
       surfaceCount:S.surface?.files?.length || Object.keys(REGISTRY).length,
       findings:scan.findings?.length || 0,
-      executorAvailable:executorAvailable()
+      executorAvailable:executorAvailable(),
+      executor:{...S.executor}
     });
   } catch (error) {
     const info = classifyFirestoreError(error);
@@ -1615,6 +1875,7 @@ const API = {
   verifyWithMedicine,
   sendMessage,
   approveTreatment,
+  applyApprovedTreatment,
   validateAfterPatch,
   rejectTreatment,
   requestReview,
@@ -1641,7 +1902,14 @@ Object.defineProperties(API,{
   verification:{get:() => S.verification},
   validation:{get:() => S.validation},
   rules:{get:() => S.rules},
+  executor:{get:() => ({...S.executor})},
 });
 
 window.BCGOMedicine = API;
-emit("boot",{version:S.version});
+
+// Internal Executor bridge: local same-origin engine only. No GitHub/API/Function brain.
+window.addEventListener("bcgo-executor-state", () => syncExecutorState());
+window.addEventListener("bcgo-executor-core-ready", () => syncExecutorState());
+setTimeout(() => syncExecutorState(), 0);
+
+emit("boot",{version:S.version,executorAvailable:executorAvailable()});
