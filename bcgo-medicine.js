@@ -5,7 +5,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/fi
 import { db, auth } from "./cikur-config.js";
 
 /*
- * BCGO MEDICINE v3.2.4 — PRECISION REPAIR / VERIFIED HEALING ENGINE
+ * BCGO MEDICINE v3.2.6 — PRECISION REPAIR / VERIFIED HEALING ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
@@ -70,9 +70,13 @@ function normalizeFile(value) {
 }
 
 function telemetrySourceCandidates(log) {
+  // BCGO often records the monitor (bcgo.html/bcgo.js) as the emitter while
+  // placing the real affected application file in target/targetFile/affectedFile.
+  // The affected operational file MUST win over the monitor emitter.
   const values = [
+    log?.target, log?.targetFile, log?.affectedFile, log?.affectedTarget,
     log?.fileName, log?.sourceFile, log?.filename, log?.file, log?.source,
-    log?.target, log?.url, log?.script
+    log?.url, log?.script
   ].filter(Boolean);
   const stack = String(log?.stack || log?.errorStack || "");
   const matches = stack.match(/(?:https?:\/\/[^\s)]+\/)?[^\s/()]+\.(?:html|js)(?::\d+(?::\d+)?)?/gi) || [];
@@ -80,7 +84,11 @@ function telemetrySourceCandidates(log) {
 }
 
 function isInternalTelemetry(log) {
-  return telemetrySourceCandidates(log).some(file => INTERNAL_TELEMETRY_SOURCES.has(file));
+  const candidates = telemetrySourceCandidates(log);
+  // A monitor-emitted event is NOT internal when it explicitly identifies an
+  // operational target such as index.html, driver.html, resto.html, etc.
+  if (candidates.some(file => OPERATIONAL_ORGAN_SURFACE.includes(file))) return false;
+  return candidates.some(file => INTERNAL_TELEMETRY_SOURCES.has(file));
 }
 
 const TELEMETRY_ACTIVE_WINDOW = 15 * 60 * 1000;
@@ -156,6 +164,8 @@ const medicineBridgeChannel = typeof BroadcastChannel !== "undefined" ? new Broa
 let latestBCGOState = null;
 let medicineBridgeSeq = 0;
 const seenBCGOBridgeIds = new Set();
+const queuedInvestigations = new Set();
+let investigationChain = Promise.resolve();
 
 function publishMedicineBridge(medicineEvent, payload = {}) {
   const packet = {
@@ -178,7 +188,7 @@ function cleanupRealtimeListeners() {
 }
 
 const S = {
-  version: "3.2.4",
+  version: "3.2.6",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -251,8 +261,25 @@ function mentionedFile(q) {
   return Object.keys(REGISTRY).find(f => x.includes(f.toLowerCase())) || null;
 }
 
+function isActionableTelemetry(log) {
+  const message = safeLower(log?.message || log?.error || log?.text || log?.detail || "");
+  const severity = safeLower(log?.severity || log?.level || log?.status || "");
+  const type = safeLower(log?.type || log?.kind || "");
+  // A benign severity label must not erase a concrete runtime error. Some
+  // BCGO emitters label exceptions as "info" while putting the real failure
+  // in message/error. Only suppress benign severity when the payload itself
+  // contains no actionable signal.
+  const payloadActionable = /(error|exception|critical|fatal|failed|failure|anomaly|warning|warn|denied|rejected|invalid|timeout|offline|unavailable|not found|not defined|is not a function|cannot |uncaught|mismatch|inconsistent|missing|permission-denied)/i.test(`${message} ${type}`);
+  if (/^(healthy|ready|ok|normal|sync|synced|live|recovered|info)$/i.test(severity) && !payloadActionable) return false;
+  if (/(error|exception|critical|fatal|failed|failure|anomaly|warning|warn|denied|rejected|invalid|timeout|offline|unavailable|not found|not defined|is not a function|cannot |uncaught|mismatch|inconsistent|missing|permission-denied)/i.test(message)) return true;
+  if (/(error|exception|critical|fatal|failed|failure|anomaly|warning|warn|denied|rejected|invalid|timeout|offline|unavailable)/i.test(severity)) return true;
+  if (/(error|exception|critical|fatal|failed|failure|anomaly|warning|warn)/i.test(type)) return true;
+  return false;
+}
+
 function latestRelevantLogs(file) {
-  return S.logs.filter(l => !file || safeLower(l.fileName || l.source) === safeLower(file)).slice(0, 12);
+  const target = normalizeFile(file);
+  return S.logs.filter(l => !target || normalizeFile(resolveTelemetrySource(l)) === target).slice(0, 12);
 }
 
 async function postSystemMessage(role, msg, meta = {}) {
@@ -274,25 +301,60 @@ async function postSystemMessage(role, msg, meta = {}) {
 }
 
 function resolveTelemetrySource(log) {
+  const candidates = telemetrySourceCandidates(log);
+  const operational = candidates.find(file => OPERATIONAL_ORGAN_SURFACE.includes(file));
+  if (operational) return operational;
+  const diagnostic = candidates.find(file => DIAGNOSTIC_SURFACE.includes(file));
+  if (diagnostic) return diagnostic;
   const direct = [log?.fileName, log?.sourceFile, log?.filename, log?.file, log?.source]
     .map(v => text(v, 180)).find(v => v && !/^(unknown|unhandledrejection|error|window\.error|runtime)$/i.test(v));
   if (direct) return direct;
-  const stack = text(log?.stack || log?.errorStack || "", 2500);
-  const hit = stack.match(/(?:https?:\/\/[^\s)]+\/)?([^\s/()]+\.(?:html|js))(?:[:#](\d+))?/i);
-  return hit?.[1] || null;
+  return candidates[0] || null;
+}
+
+function queueCaseInvestigation(c) {
+  if (!c?.id || queuedInvestigations.has(c.id) || S.human.paused) return;
+  queuedInvestigations.add(c.id);
+  investigationChain = investigationChain.then(async () => {
+    try {
+      if (!auth.currentUser || !sessionUid || S.human.paused) return;
+      const queuedCase = S.cases.find(x => x.id === c.id);
+      if (!queuedCase) return;
+      // Serialize investigations so two telemetry events cannot race and cause
+      // one verification to mutate another active case.
+      S.activeCase = queuedCase;
+      await verifyWithMedicine(queuedCase.source, {
+        question: `Automatic telemetry handoff: ${queuedCase.signature}`,
+        requestedBy: "bcgo_telemetry"
+      });
+    } catch (e) {
+      emit("investigation_error", { caseId: c.id, message: e.message });
+      try {
+        await postSystemMessage("medicine", `Investigasi otomatis untuk ${c.id} belum selesai: ${e.message}. Evidence tetap dipertahankan dan source tidak diubah.`, { kind: "INVESTIGATION_ERROR", caseId: c.id });
+      } catch {}
+    } finally {
+      queuedInvestigations.delete(c.id);
+    }
+  });
 }
 
 function makeCase(log) {
-  const rawSource = text(log.fileName || log.source || log.sourceFile || log.filename || "UNKNOWN", 120);
   const source = resolveTelemetrySource(log);
+  const rawSource = text(source || log.fileName || log.source || log.sourceFile || log.filename || "UNKNOWN", 120);
   // Generic runtime events are evidence, but they are not file identities.
   // Do not create a fake organ/case named "unhandledrejection" or "error".
   if (!source || /^(unknown|unhandledrejection|error|window\.error|runtime)$/i.test(source)) return null;
   if (MEDICINE_INTERNAL[source]) return null;
+  // Normal/healthy telemetry is observation, not a diagnosis. Only an
+  // actionable anomaly/error may enter the CASE pipeline.
+  if (!isActionableTelemetry(log)) return null;
   // Persisted historical telemetry must not become a fresh diagnosis.
   if (!isRecentTelemetry(log)) return null;
   const sig = text(log.message || log.error || "Unknown error", 700);
-  if (S.cases.some(c => c.source === source && c.signature === sig)) return null;
+  // Deduplicate only against a still-open case. A previously fixed/rejected
+  // case must be allowed to re-open when the same runtime signature returns.
+  const terminalStatuses = new Set(["RECOVERED", "REJECTED", "FIXED_VERIFIED"]);
+  if (S.cases.some(c => c.source === source && c.signature === sig && !terminalStatuses.has(c.status))) return null;
 
   const d = diagnosis(sig);
   const c = {
@@ -320,6 +382,7 @@ function makeCase(log) {
   postSystemMessage("medicine", `Case ${c.id} saya terima. Saya akan mencari akar masalah, memeriksa kontrak lintas-file, lalu menyiapkan repair plan yang konkret.`, {
     kind: "MEDICINE_ACK", caseId: c.id, target: source
   });
+  queueCaseInvestigation(c);
   return c;
 }
 
@@ -332,23 +395,41 @@ function assertSessionCurrent(epoch) {
 }
 
 function startTelemetry() {
-  if (!window.CikurCloud?.listenSystemLogs) {
-    emit("telemetry_unavailable");
-    return;
-  }
   if (typeof S.telemetryUnsub === "function") { try { S.telemetryUnsub(); } catch {} S.telemetryUnsub = null; }
   const listenerEpoch = sessionEpoch;
-  const unsub = window.CikurCloud.listenSystemLogs(logs => {
+
+  const handleLogs = logs => {
     if (!isSessionCurrent(listenerEpoch)) return;
     const raw = Array.isArray(logs) ? logs : [];
-    // Medicine observes operational telemetry only. Its own UI/engine, BCGO monitor
-    // UI/engine, and generic runtime buckets are diagnostic internals, not cases.
-    // Filter internal records first so they cannot crowd out real organ evidence.
+    // Keep real operational evidence even when BCGO itself is the emitter.
+    // Only discard events whose entire source chain is internal to Medicine/BCGO.
     S.logs = raw.filter(log => !isInternalTelemetry(log)).slice(0, 50);
     emit("telemetry", { logs: S.logs });
     for (const l of S.logs.slice(0, 60)) makeCase(l);
-  });
-  if (typeof unsub === "function") { S.telemetryUnsub = unsub; S.listeners.push(unsub); }
+  };
+
+  if (window.CikurCloud?.listenSystemLogs) {
+    try {
+      const unsub = window.CikurCloud.listenSystemLogs(handleLogs);
+      if (typeof unsub === "function") { S.telemetryUnsub = unsub; S.listeners.push(unsub); }
+      else emit("telemetry_warning", { message: "listenSystemLogs tidak mengembalikan unsubscribe; listener tetap dipantau." });
+      return;
+    } catch (e) {
+      emit("telemetry_warning", { message: `Listener CikurCloud gagal: ${e.message}. Beralih ke listener Firestore langsung.` });
+    }
+  }
+
+  // Fallback langsung ke collection yang memang diizinkan firestore.rules.
+  // Ini membuat Medicine tetap realtime walaupun helper CikurCloud tidak tersedia.
+  try {
+    const q = query(collection(db, "system_logs"), orderBy("createdAt", "desc"), limit(100));
+    const unsub = onSnapshot(q, snap => {
+      handleLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, e => emit("telemetry_error", { message: e.message }));
+    if (typeof unsub === "function") { S.telemetryUnsub = unsub; S.listeners.push(unsub); }
+  } catch (e) {
+    emit("telemetry_unavailable", { message: e.message });
+  }
 }
 
 async function fetchFile(name) {
@@ -1128,7 +1209,7 @@ function currentConversationContext() {
 
 function autonomousThought(role) {
   const { active, c, plan, logs, findings } = currentConversationContext();
-  const target = c?.repairPlan?.rootCauseFile || c?.rootCauseFile || c?.source || logs[0]?.fileName || "seluruh organ";
+  const target = c?.repairPlan?.rootCauseFile || c?.rootCauseFile || c?.source || resolveTelemetrySource(logs[0]) || "seluruh organ";
   const last = logs[0]?.message || c?.signature || "belum ada impuls baru";
   if (role === "bcgo") {
     if (active.length) return `Saya sedang menjaga ${active.length} saraf aktif. Fokus saya ${target}. Saya kirim bukti terbaru ke Medicine dan tidak mau menyimpulkan akar masalah hanya dari gejalanya.`;
@@ -1477,6 +1558,7 @@ onAuthStateChanged(auth, async user => {
       S.findings = [];
       S.patchProposals = [];
       S.patchRequests = [];
+      queuedInvestigations.clear();
       S.verification = null;
       S.validation = null;
       S.sourceCache.clear();
