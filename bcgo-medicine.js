@@ -14,7 +14,7 @@ import { db, auth } from "./cikur-config.js";
 
 /*
  * ================================================================
- * BCGO MEDICINE v2.8.1 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
+ * BCGO MEDICINE v2.8.2 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
  * ================================================================
  * Boundary:
  *   Medicine observes, investigates, proves, proposes and validates.
@@ -50,6 +50,19 @@ const BASE_REGISTRY = {
 };
 
 const REGISTRY = { ...BASE_REGISTRY };
+
+// Medicine is the examiner, not the patient. Its own UI/engine files are
+// excluded from the diagnostic source surface so live scans cannot recursively
+// diagnose Medicine itself. They remain known in REGISTRY for metadata/API use.
+const MEDICINE_INTERNAL_FILES = new Set([
+  "bcgo-medicine.js",
+  "bcgo-medicine.html"
+]);
+
+const isDiagnosticFile = file => {
+  const name = normalizeFile(file);
+  return !!name && !MEDICINE_INTERNAL_FILES.has(name);
+};
 
 const FIELD_ALIASES = {
   photo: ["photo", "profilePhoto", "fotoProfil", "regPhoto"],
@@ -107,7 +120,7 @@ const ACTIVE_STATUSES = new Set([
 const TERMINAL_STATUSES = new Set(["REJECTED","FIXED_VERIFIED","RECOVERED"]);
 
 const S = {
-  version: "2.8.1",
+  version: "2.8.2",
   registry: REGISTRY,
   surface: null,
   logs: [],
@@ -418,29 +431,42 @@ function extractDependencies(file, source) {
 }
 
 async function discoverSystemSurface() {
-  if (S.busy.surface) return S.surface?.files || Object.keys(REGISTRY);
+  if (S.busy.surface) return S.surface?.files || [];
   S.busy.surface = true;
 
   try {
-    const roots = ["bcgo-engine.js","bcgo-admin.html","bcgo.js","bcgo.html"];
-    const discovered = new Set(Object.keys(REGISTRY));
+    // Only BCGO/system roots are entry points. Medicine files are deliberately
+    // outside the diagnostic surface to prevent self-analysis/recursive scans.
+    const roots = ["bcgo-engine.js","bcgo-admin.html","bcgo.js","bcgo.html"]
+      .filter(isDiagnosticFile);
+    const discovered = new Set();
+    const queue = [...roots];
+    const queued = new Set(queue);
     const edges = [];
 
-    for (const root of roots) {
+    while (queue.length) {
+      const root = queue.shift();
+      if (!isDiagnosticFile(root) || discovered.has(root)) continue;
+      discovered.add(root);
+
       const source = await fetchFile(root);
       if (!source.ok) continue;
 
-      const refs = [
+      const refs = new Set([
         ...extractDependencies(root, source.text),
         ...[...source.text.matchAll(/["'`]([A-Za-z0-9_.-]+\.(?:html|js))["'`]/gi)]
           .map(m => normalizeFile(m[1]))
           .filter(Boolean)
-      ];
+      ]);
 
       for (const ref of refs) {
-        discovered.add(ref);
+        if (!isDiagnosticFile(ref)) continue;
         if (!REGISTRY[ref]) REGISTRY[ref] = { type:"Discovered Dependency", role:"dependency" };
         edges.push({ from:root, to:ref });
+        if (!discovered.has(ref) && !queued.has(ref)) {
+          queued.add(ref);
+          queue.push(ref);
+        }
       }
     }
 
@@ -818,7 +844,8 @@ function buildRepairPlan(c, verification) {
 async function resolveRootCause(c) {
   const log = c.evidence || {};
   const original = normalizeFile(c.source) || c.source;
-  const locations = parseRuntimeLocations(log);
+  const locations = parseRuntimeLocations(log)
+    .filter(loc => isDiagnosticFile(loc.file));
 
   // 1. Exact runtime file + line.
   for (const loc of locations.filter(x => x.file && x.line && REGISTRY[x.file])) {
@@ -912,6 +939,7 @@ async function resolveRootCause(c) {
 
 function makeCase(log, options = {}) {
   const source = normalizeFile(log?.fileName || log?.source || log?.file) || "UNKNOWN";
+  if (!isDiagnosticFile(source)) return null;
   const signature = text(log?.message || log?.error || "Unknown error",700);
   const evidenceId = String(log?.id || log?.eventId || "").trim();
 
@@ -1153,7 +1181,7 @@ async function scanConsistency(targets = null) {
 
   try {
     const names = targets?.length
-      ? targets.filter(n => REGISTRY[n])
+      ? targets.filter(n => REGISTRY[n] && isDiagnosticFile(n))
       : await discoverSystemSurface();
 
     const results = {};
