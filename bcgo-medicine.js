@@ -1,24 +1,26 @@
 import {
   collection, onSnapshot, query, orderBy, limit, addDoc, serverTimestamp, doc, getDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
 
 /*
- * BCGO MEDICINE v3.2.6 — PRECISION REPAIR / VERIFIED HEALING ENGINE
+ * BCGO MEDICINE v3.2.2 — PRECISION REPAIR / VERIFIED HEALING ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
  *
  * Important boundary:
  *   Medicine can inspect deployed source and create an exact repair plan.
- *   Persistent source-code writing is ONLY delegated to a trusted Patch Executor
- *   exposed as window.BCGOPatchExecutor. A browser page must never contain a GitHub
- *   token or silently write repository source.
+ *   Persistent source-code writing is ONLY delegated to the trusted server-side
+ *   Patch Executor through medicine_patch_requests. A browser page never receives
+ *   a GitHub token and never writes repository source directly.
  *
  * Executor contract:
- *   window.BCGOPatchExecutor.apply({ case, proposal, request })
- *     -> { ok:boolean, changedFiles?:string[], commitUrl?:string, error?:string }
+ *   Medicine creates medicine_patch_requests/{requestId}; the Cloud Function
+ *   processMedicinePatchRequest performs the server-side execution and writes
+ *   executorStatus/executorResult back to that request.
  *
  * The proposal contains deterministic operations with BEFORE/AFTER material so an
  * executor/backend can apply the repair and return the result to Medicine.
@@ -50,13 +52,6 @@ const MEDICINE_INTERNAL = {
 // Medicine may inspect BCGO itself as a dependency surface, but its own files
 // are never automatic anomaly targets or part of the live scan surface.
 const DIAGNOSTIC_SURFACE = Object.keys(REGISTRY).filter(name => !MEDICINE_INTERNAL[name]);
-
-// BCGO's ORGAN counter represents the 12 operational application surfaces.
-// bcgo.html and bcgo.js remain part of Medicine's dependency/diagnostic surface,
-// but they are monitor infrastructure, not additional operational organs.
-const OPERATIONAL_ORGAN_SURFACE = DIAGNOSTIC_SURFACE.filter(name =>
-  name !== "bcgo.html" && name !== "bcgo.js"
-);
 const INTERNAL_TELEMETRY_SOURCES = new Set([
   "bcgo.html", "bcgo.js", "bcgo-medicine.html", "bcgo-medicine.js",
   "unhandledrejection", "error", "window.error", "runtime", "unknown"
@@ -70,13 +65,9 @@ function normalizeFile(value) {
 }
 
 function telemetrySourceCandidates(log) {
-  // BCGO often records the monitor (bcgo.html/bcgo.js) as the emitter while
-  // placing the real affected application file in target/targetFile/affectedFile.
-  // The affected operational file MUST win over the monitor emitter.
   const values = [
-    log?.target, log?.targetFile, log?.affectedFile, log?.affectedTarget,
     log?.fileName, log?.sourceFile, log?.filename, log?.file, log?.source,
-    log?.url, log?.script
+    log?.target, log?.url, log?.script
   ].filter(Boolean);
   const stack = String(log?.stack || log?.errorStack || "");
   const matches = stack.match(/(?:https?:\/\/[^\s)]+\/)?[^\s/()]+\.(?:html|js)(?::\d+(?::\d+)?)?/gi) || [];
@@ -84,11 +75,16 @@ function telemetrySourceCandidates(log) {
 }
 
 function isInternalTelemetry(log) {
-  const candidates = telemetrySourceCandidates(log);
-  // A monitor-emitted event is NOT internal when it explicitly identifies an
-  // operational target such as index.html, driver.html, resto.html, etc.
-  if (candidates.some(file => OPERATIONAL_ORGAN_SURFACE.includes(file))) return false;
-  return candidates.some(file => INTERNAL_TELEMETRY_SOURCES.has(file));
+  const explicit = [log?.targetFile, log?.affectedFile, log?.fileName, log?.sourceFile, log?.filename, log?.file]
+    .map(normalizeFile).filter(Boolean);
+  if (explicit.some(file => DIAGNOSTIC_SURFACE.includes(file))) return false;
+  if (explicit.some(file => MEDICINE_INTERNAL[file])) return true;
+  const source = normalizeFile(log?.source);
+  if (INTERNAL_TELEMETRY_SOURCES.has(source)) {
+    const message = safeLower(log?.message || log?.error || log?.stack || "");
+    return !/(uncaught|referenceerror|typeerror|syntaxerror|not defined|cannot read|cannot set|failed|error|exception)/.test(message);
+  }
+  return false;
 }
 
 const TELEMETRY_ACTIVE_WINDOW = 15 * 60 * 1000;
@@ -164,8 +160,6 @@ const medicineBridgeChannel = typeof BroadcastChannel !== "undefined" ? new Broa
 let latestBCGOState = null;
 let medicineBridgeSeq = 0;
 const seenBCGOBridgeIds = new Set();
-const queuedInvestigations = new Set();
-let investigationChain = Promise.resolve();
 
 function publishMedicineBridge(medicineEvent, payload = {}) {
   const packet = {
@@ -188,7 +182,7 @@ function cleanupRealtimeListeners() {
 }
 
 const S = {
-  version: "3.2.6",
+  version: "3.2.8",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -197,6 +191,8 @@ const S = {
   listeners: [],
   telemetryUnsub: null,
   conversationUnsub: null,
+  patchRequestUnsub: null,
+  executorServerReady: false,
   messages: [],
   human: { mode: "ASSISTED", paused: false, uid: null },
   patchProposals: [],
@@ -261,25 +257,8 @@ function mentionedFile(q) {
   return Object.keys(REGISTRY).find(f => x.includes(f.toLowerCase())) || null;
 }
 
-function isActionableTelemetry(log) {
-  const message = safeLower(log?.message || log?.error || log?.text || log?.detail || "");
-  const severity = safeLower(log?.severity || log?.level || log?.status || "");
-  const type = safeLower(log?.type || log?.kind || "");
-  // A benign severity label must not erase a concrete runtime error. Some
-  // BCGO emitters label exceptions as "info" while putting the real failure
-  // in message/error. Only suppress benign severity when the payload itself
-  // contains no actionable signal.
-  const payloadActionable = /(error|exception|critical|fatal|failed|failure|anomaly|warning|warn|denied|rejected|invalid|timeout|offline|unavailable|not found|not defined|is not a function|cannot |uncaught|mismatch|inconsistent|missing|permission-denied)/i.test(`${message} ${type}`);
-  if (/^(healthy|ready|ok|normal|sync|synced|live|recovered|info)$/i.test(severity) && !payloadActionable) return false;
-  if (/(error|exception|critical|fatal|failed|failure|anomaly|warning|warn|denied|rejected|invalid|timeout|offline|unavailable|not found|not defined|is not a function|cannot |uncaught|mismatch|inconsistent|missing|permission-denied)/i.test(message)) return true;
-  if (/(error|exception|critical|fatal|failed|failure|anomaly|warning|warn|denied|rejected|invalid|timeout|offline|unavailable)/i.test(severity)) return true;
-  if (/(error|exception|critical|fatal|failed|failure|anomaly|warning|warn)/i.test(type)) return true;
-  return false;
-}
-
 function latestRelevantLogs(file) {
-  const target = normalizeFile(file);
-  return S.logs.filter(l => !target || normalizeFile(resolveTelemetrySource(l)) === target).slice(0, 12);
+  return S.logs.filter(l => !file || safeLower(l.fileName || l.source) === safeLower(file)).slice(0, 12);
 }
 
 async function postSystemMessage(role, msg, meta = {}) {
@@ -301,60 +280,25 @@ async function postSystemMessage(role, msg, meta = {}) {
 }
 
 function resolveTelemetrySource(log) {
-  const candidates = telemetrySourceCandidates(log);
-  const operational = candidates.find(file => OPERATIONAL_ORGAN_SURFACE.includes(file));
-  if (operational) return operational;
-  const diagnostic = candidates.find(file => DIAGNOSTIC_SURFACE.includes(file));
-  if (diagnostic) return diagnostic;
   const direct = [log?.fileName, log?.sourceFile, log?.filename, log?.file, log?.source]
     .map(v => text(v, 180)).find(v => v && !/^(unknown|unhandledrejection|error|window\.error|runtime)$/i.test(v));
   if (direct) return direct;
-  return candidates[0] || null;
-}
-
-function queueCaseInvestigation(c) {
-  if (!c?.id || queuedInvestigations.has(c.id) || S.human.paused) return;
-  queuedInvestigations.add(c.id);
-  investigationChain = investigationChain.then(async () => {
-    try {
-      if (!auth.currentUser || !sessionUid || S.human.paused) return;
-      const queuedCase = S.cases.find(x => x.id === c.id);
-      if (!queuedCase) return;
-      // Serialize investigations so two telemetry events cannot race and cause
-      // one verification to mutate another active case.
-      S.activeCase = queuedCase;
-      await verifyWithMedicine(queuedCase.source, {
-        question: `Automatic telemetry handoff: ${queuedCase.signature}`,
-        requestedBy: "bcgo_telemetry"
-      });
-    } catch (e) {
-      emit("investigation_error", { caseId: c.id, message: e.message });
-      try {
-        await postSystemMessage("medicine", `Investigasi otomatis untuk ${c.id} belum selesai: ${e.message}. Evidence tetap dipertahankan dan source tidak diubah.`, { kind: "INVESTIGATION_ERROR", caseId: c.id });
-      } catch {}
-    } finally {
-      queuedInvestigations.delete(c.id);
-    }
-  });
+  const stack = text(log?.stack || log?.errorStack || "", 2500);
+  const hit = stack.match(/(?:https?:\/\/[^\s)]+\/)?([^\s/()]+\.(?:html|js))(?:[:#](\d+))?/i);
+  return hit?.[1] || null;
 }
 
 function makeCase(log) {
+  const rawSource = text(log.fileName || log.source || log.sourceFile || log.filename || "UNKNOWN", 120);
   const source = resolveTelemetrySource(log);
-  const rawSource = text(source || log.fileName || log.source || log.sourceFile || log.filename || "UNKNOWN", 120);
   // Generic runtime events are evidence, but they are not file identities.
   // Do not create a fake organ/case named "unhandledrejection" or "error".
   if (!source || /^(unknown|unhandledrejection|error|window\.error|runtime)$/i.test(source)) return null;
   if (MEDICINE_INTERNAL[source]) return null;
-  // Normal/healthy telemetry is observation, not a diagnosis. Only an
-  // actionable anomaly/error may enter the CASE pipeline.
-  if (!isActionableTelemetry(log)) return null;
   // Persisted historical telemetry must not become a fresh diagnosis.
   if (!isRecentTelemetry(log)) return null;
   const sig = text(log.message || log.error || "Unknown error", 700);
-  // Deduplicate only against a still-open case. A previously fixed/rejected
-  // case must be allowed to re-open when the same runtime signature returns.
-  const terminalStatuses = new Set(["RECOVERED", "REJECTED", "FIXED_VERIFIED"]);
-  if (S.cases.some(c => c.source === source && c.signature === sig && !terminalStatuses.has(c.status))) return null;
+  if (S.cases.some(c => c.source === source && c.signature === sig)) return null;
 
   const d = diagnosis(sig);
   const c = {
@@ -382,7 +326,6 @@ function makeCase(log) {
   postSystemMessage("medicine", `Case ${c.id} saya terima. Saya akan mencari akar masalah, memeriksa kontrak lintas-file, lalu menyiapkan repair plan yang konkret.`, {
     kind: "MEDICINE_ACK", caseId: c.id, target: source
   });
-  queueCaseInvestigation(c);
   return c;
 }
 
@@ -395,41 +338,23 @@ function assertSessionCurrent(epoch) {
 }
 
 function startTelemetry() {
+  if (!window.CikurCloud?.listenSystemLogs) {
+    emit("telemetry_unavailable");
+    return;
+  }
   if (typeof S.telemetryUnsub === "function") { try { S.telemetryUnsub(); } catch {} S.telemetryUnsub = null; }
   const listenerEpoch = sessionEpoch;
-
-  const handleLogs = logs => {
+  const unsub = window.CikurCloud.listenSystemLogs(logs => {
     if (!isSessionCurrent(listenerEpoch)) return;
     const raw = Array.isArray(logs) ? logs : [];
-    // Keep real operational evidence even when BCGO itself is the emitter.
-    // Only discard events whose entire source chain is internal to Medicine/BCGO.
+    // Medicine observes operational telemetry only. Its own UI/engine, BCGO monitor
+    // UI/engine, and generic runtime buckets are diagnostic internals, not cases.
+    // Filter internal records first so they cannot crowd out real organ evidence.
     S.logs = raw.filter(log => !isInternalTelemetry(log)).slice(0, 50);
     emit("telemetry", { logs: S.logs });
     for (const l of S.logs.slice(0, 60)) makeCase(l);
-  };
-
-  if (window.CikurCloud?.listenSystemLogs) {
-    try {
-      const unsub = window.CikurCloud.listenSystemLogs(handleLogs);
-      if (typeof unsub === "function") { S.telemetryUnsub = unsub; S.listeners.push(unsub); }
-      else emit("telemetry_warning", { message: "listenSystemLogs tidak mengembalikan unsubscribe; listener tetap dipantau." });
-      return;
-    } catch (e) {
-      emit("telemetry_warning", { message: `Listener CikurCloud gagal: ${e.message}. Beralih ke listener Firestore langsung.` });
-    }
-  }
-
-  // Fallback langsung ke collection yang memang diizinkan firestore.rules.
-  // Ini membuat Medicine tetap realtime walaupun helper CikurCloud tidak tersedia.
-  try {
-    const q = query(collection(db, "system_logs"), orderBy("createdAt", "desc"), limit(100));
-    const unsub = onSnapshot(q, snap => {
-      handleLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, e => emit("telemetry_error", { message: e.message }));
-    if (typeof unsub === "function") { S.telemetryUnsub = unsub; S.listeners.push(unsub); }
-  } catch (e) {
-    emit("telemetry_unavailable", { message: e.message });
-  }
+  });
+  if (typeof unsub === "function") { S.telemetryUnsub = unsub; S.listeners.push(unsub); }
 }
 
 async function fetchFile(name) {
@@ -1018,7 +943,26 @@ function requireAdminSession() {
 }
 
 function executorAvailable() {
-  return typeof window.BCGOPatchExecutor?.apply === "function";
+  return S.executorServerReady === true;
+}
+
+async function checkExecutorHealth() {
+  try {
+    const functions = getFunctions(auth.app, "asia-southeast2");
+    const call = httpsCallable(functions, "getExecutorStatus");
+    const result = await call({});
+    S.executorServerReady = result?.data?.ready === true;
+    emit("executor_status", {
+      available: S.executorServerReady,
+      region: result?.data?.region || "asia-southeast2",
+      configured: result?.data?.configured === true
+    });
+    return S.executorServerReady;
+  } catch (e) {
+    S.executorServerReady = false;
+    emit("executor_status", { available:false, message:e?.message || String(e) });
+    return false;
+  }
 }
 
 function findProposal(caseId) {
@@ -1164,8 +1108,8 @@ function bcgoAnswer(q) {
   }
   if (/apa yang.*kerja|sedang|ngerjain|mengerjakan/.test(x)) {
     return active.length
-      ? `Saya sedang mengawasi ${OPERATIONAL_ORGAN_SURFACE.length} organ operasional dan ${DIAGNOSTIC_SURFACE.length - OPERATIONAL_ORGAN_SURFACE.length} dependency monitor. Ada ${active.length} case aktif; fokus ${active[0].source} (${active[0].status}). Medicine sedang saya minta menyiapkan repair plan.`
-      : `Saya sedang memantau ${OPERATIONAL_ORGAN_SURFACE.length} organ operasional + ${DIAGNOSTIC_SURFACE.length - OPERATIONAL_ORGAN_SURFACE.length} dependency monitor serta telemetry realtime. Belum ada case aktif.`;
+      ? `Saya sedang mengawasi ${DIAGNOSTIC_SURFACE.length} file. Ada ${active.length} case aktif; fokus ${active[0].source} (${active[0].status}). Medicine sedang saya minta menyiapkan repair plan.`
+      : `Saya sedang memantau ${DIAGNOSTIC_SURFACE.length} file dan telemetry realtime. Belum ada case aktif.`;
   }
   if (/aman|status|sehat|normal/.test(x)) return `Status saya: ${S.logs.length} telemetry log, ${active.length} case aktif, ${S.findings.length} finding. Saya tidak menyatakan aman tanpa evidence.`;
   if (/masalah|error|kendala|rusak|anomal/.test(x)) return active.length ? `Ya. Ada ${active.length} case aktif. Prioritas ${active[0].source}: ${active[0].diagnosis.title}. Saya dapat menyerahkannya ke Medicine untuk pemeriksaan dan penyembuhan terkontrol.` : `Saat ini belum ada case aktif dari telemetry yang saya terima.`;
@@ -1209,14 +1153,12 @@ function currentConversationContext() {
 
 function autonomousThought(role) {
   const { active, c, plan, logs, findings } = currentConversationContext();
-  const target = c?.repairPlan?.rootCauseFile || c?.rootCauseFile || c?.source || resolveTelemetrySource(logs[0]) || "seluruh organ";
-  const recentActionable = logs.find(log => isActionableTelemetry(log) && isRecentTelemetry(log));
-  const recentMessage = recentActionable?.message || recentActionable?.error || null;
+  const target = c?.repairPlan?.rootCauseFile || c?.rootCauseFile || c?.source || logs[0]?.fileName || "seluruh organ";
+  const last = logs[0]?.message || c?.signature || "belum ada impuls baru";
   if (role === "bcgo") {
     if (active.length) return `Saya sedang menjaga ${active.length} saraf aktif. Fokus saya ${target}. Saya kirim bukti terbaru ke Medicine dan tidak mau menyimpulkan akar masalah hanya dari gejalanya.`;
     if (findings.length) return `Tidak ada anomali aktif saat ini, tetapi saya masih melihat ${findings.length} finding kontrak. Saya terus membandingkan lintas-file supaya organ tidak dinyatakan sehat terlalu cepat.`;
-    if (recentMessage) return `Siklus saya tenang, tetapi ada telemetry actionable yang baru masuk: ${text(recentMessage, 260)}. Saya tidak akan menyebutnya case aktif sebelum window waktu dan evidence-nya terbukti.`;
-    return `Siklus saya sedang tenang. Saya tetap mendengarkan telemetry real-time; telemetry historis tidak saya tampilkan sebagai anomali aktif.`;
+    return `Siklus saya sedang tenang. Saya tetap mendengarkan telemetry real-time; impuls terakhir yang saya pegang: ${text(last, 260)}.`;
   }
   if (plan?.codePrescription?.ready) return `Saya menemukan jalur source yang cukup kuat pada ${target}. BEFORE dan AFTER sudah terbentuk dari operasi exact. Saya tahan di meja review sampai manusia memeriksa dan menyalin solusi.`;
   if (c) return `Saya sedang membedah ${target}. Saat ini saya punya status ${c.status} dan ${c.sourceEvidence?.length || plan?.sourceEvidence?.length || 0} bukti source. Kalau bukti belum exact, saya lanjut menelusuri dependency daripada mengarang kode.`;
@@ -1345,9 +1287,30 @@ async function applyPatch(caseId) {
   const c = S.cases.find(x => x.id === caseId);
   if (!c) throw new Error("Case tidak ditemukan");
   if (!canApplyPatch(c)) throw new Error("Patch belum siap atau belum memiliki operasi source yang aman.");
-
   const proposal = c.patchProposal || findProposal(caseId);
   if (!proposal) throw new Error("Patch proposal tidak ditemukan");
+
+  const files = [...new Set((c.repairPlan.operations || []).map(op => op.file).filter(Boolean))];
+  if (!files.length) throw new Error("Tidak ada target file patch.");
+  const functions = getFunctions(auth.app, "asia-southeast2");
+  const snapshotCall = httpsCallable(functions, "getSourceSnapshot");
+  const snapshot = await snapshotCall({ files });
+  if (snapshot?.data?.ok !== true) throw new Error("Source snapshot executor gagal.");
+  const shaByFile = {};
+  for (const file of files) {
+    const row = snapshot.data.files?.[file];
+    if (!row?.ok || !row.sha) throw new Error(`SHA source ${file} tidak tersedia.`);
+    shaByFile[file] = row.sha;
+  }
+
+  const operations = (c.repairPlan.operations || []).map(op => ({
+    operation: "REPLACE_EXACT",
+    filePath: op.file,
+    expectedSha: shaByFile[op.file],
+    oldText: String(op.before || ""),
+    newText: String(op.after || ""),
+    line: op.line ?? null
+  }));
 
   const request = {
     requestId: `REQ-${uid().toUpperCase()}`,
@@ -1356,47 +1319,26 @@ async function applyPatch(caseId) {
     planId: c.repairPlan.planId,
     telemetryTarget: c.source,
     target: c.repairPlan.rootCauseFile,
-    operations: c.repairPlan.operations,
+    operations,
     beforeAfter: c.repairPlan.beforeAfter,
     status: "PENDING_EXECUTION",
     actorUid: auth.currentUser?.uid || null,
     createdAt: serverTimestamp(),
     requestedAt: now(),
-    executorAvailable: executorAvailable()
+    executorAvailable: true
   };
 
   proposal.status = "APPLY_REQUESTED";
   c.status = "PATCH_PENDING_EXECUTION";
   S.patchRequests.unshift(request);
-  S.patchRequests = S.patchRequests.slice(0, 40);
+  S.patchRequests = S.patchRequests.slice(0, 50);
 
-  try {
-    await addDoc(collection(db, "medicine_patch_requests"), request);
-  } catch (e) { emit("storage_warning", { message: e.message }); }
-
-  await postSystemMessage("medicine", executorAvailable()
-    ? `Repair request ${request.requestId} dikirim ke Patch Executor. Saya akan memeriksa hasil perubahan dan menjalankan validasi.`
-    : `Repair request ${request.requestId} sudah tercatat. Executor tepercaya belum tersedia di halaman ini, jadi source belum ditulis.`, {
-      kind: "PATCH_APPLY_REQUESTED", caseId, proposalId: proposal.proposalId, requestId: request.requestId
-    });
-  emit("patch_apply_requested", { proposal, request, case: c, executorAvailable: executorAvailable() });
-
-  if (!executorAvailable()) return { case: c, proposal, request };
-
-  try {
-    const result = await window.BCGOPatchExecutor.apply({ case: c, proposal, request });
-    proposal.status = result?.ok ? "APPLIED" : "APPLY_FAILED";
-    proposal.executorResult = result || null;
-    c.status = result?.ok ? "PATCH_APPLIED" : "PATCH_FAILED";
-    emit("patch_apply_complete", { proposal, request, result, case: c });
-    if (result?.ok) await validateAfterPatch(caseId);
-    return { case: c, proposal, request, result };
-  } catch (e) {
-    proposal.status = "APPLY_FAILED";
-    c.status = "PATCH_FAILED";
-    emit("patch_apply_complete", { proposal, request, result: { ok: false, error: e.message }, case: c });
-    throw e;
-  }
+  await addDoc(collection(db, "medicine_patch_requests"), request);
+  await postSystemMessage("medicine", `Repair request ${request.requestId} dikirim ke Patch Executor server-side. Source belum ditulis di browser; hasil akan dipantau realtime.`, {
+    kind:"PATCH_APPLY_REQUESTED", caseId, proposalId:proposal.proposalId, requestId:request.requestId
+  });
+  emit("patch_apply_requested", { proposal, request, case:c, executorAvailable:true });
+  return { case:c, proposal, request };
 }
 
 async function validateAfterPatch(caseId) {
@@ -1495,6 +1437,38 @@ async function requestReview(caseId) {
   return c;
 }
 
+function startPatchRequestMonitor() {
+  if (typeof S.patchRequestUnsub === "function") { try { S.patchRequestUnsub(); } catch {} }
+  S.patchRequestUnsub = null;
+  try {
+    const q = query(collection(db, "medicine_patch_requests"), orderBy("createdAt", "desc"), limit(50));
+    const unsub = onSnapshot(q, snapshot => {
+      for (const snap of snapshot.docs) {
+        const req = { id: snap.id, ...snap.data() };
+        const idx = S.patchRequests.findIndex(x => x.id === snap.id || x.requestId === req.requestId);
+        if (idx >= 0) S.patchRequests[idx] = { ...S.patchRequests[idx], ...req };
+        else S.patchRequests.push(req);
+        const c = S.cases.find(x => x.id === req.caseId);
+        if (!c) continue;
+        if (["PATCH_APPLIED","FAILED","PATCH_REJECTED","PATCH_BLOCKED","CANCELLED"].includes(String(req.executorStatus || "").toUpperCase())) {
+          const ok = req.executorStatus === "PATCH_APPLIED";
+          c.status = ok ? "PATCH_APPLIED" : "PATCH_FAILED";
+          const proposal = c.patchProposal || findProposal(c.id);
+          if (proposal) {
+            proposal.status = ok ? "APPLIED" : "APPLY_FAILED";
+            proposal.executorResult = req.executorResult || null;
+          }
+          emit("patch_apply_complete", { case:c, proposal, request:req, result:req.executorResult || {ok} });
+          if (ok && !c.validation) validateAfterPatch(c.id).catch(e => emit("validation_error", { caseId:c.id, message:e.message }));
+        }
+      }
+      S.patchRequests = S.patchRequests.slice(0, 50);
+      emit("patch_requests", { requests:S.patchRequests });
+    }, e => emit("patch_request_error", { message:e.message }));
+    if (typeof unsub === "function") { S.patchRequestUnsub = unsub; S.listeners.push(unsub); }
+  } catch (e) { emit("patch_request_error", { message:e.message }); }
+}
+
 async function startConversation() {
   try {
     if (typeof S.conversationUnsub === "function") { try { S.conversationUnsub(); } catch {} S.conversationUnsub = null; }
@@ -1560,7 +1534,6 @@ onAuthStateChanged(auth, async user => {
       S.findings = [];
       S.patchProposals = [];
       S.patchRequests = [];
-      queuedInvestigations.clear();
       S.verification = null;
       S.validation = null;
       S.sourceCache.clear();
@@ -1598,6 +1571,8 @@ onAuthStateChanged(auth, async user => {
   const verifiedEpoch = sessionEpoch;
   startTelemetry();
   await startConversation();
+  startPatchRequestMonitor();
+  await checkExecutorHealth();
   if (!isSessionCurrent(verifiedEpoch)) return;
   startAutonomousConversation();
   initialScanTimer = setTimeout(() => {
@@ -1638,4 +1613,4 @@ Object.defineProperties(API, {
 });
 window.BCGOMedicine = API;
 
-emit("ready", { version: S.version, registryCount: OPERATIONAL_ORGAN_SURFACE.length, executorAvailable: executorAvailable() });
+emit("ready", { version: S.version, registryCount: DIAGNOSTIC_SURFACE.length, executorAvailable: executorAvailable() });
