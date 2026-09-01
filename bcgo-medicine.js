@@ -66,19 +66,20 @@ async function ensureRealtimeInfrastructure(timeoutMs = 5000) {
 }
 
 /*
- * BCGO MEDICINE v4.1.8 — SOURCE-FIRST LIVE CROSS-FILE MEDICAL ENGINE
+ * BCGO MEDICINE v4.1.7 — SOURCE-FIRST LIVE CROSS-FILE MEDICAL ENGINE
  *
  * Purpose:
  *   DIAGNOSE -> VERIFY -> BUILD REPAIR PLAN -> HUMAN APPROVAL -> EXECUTE -> VALIDATE
  *
  * Important boundary:
- *   Medicine can inspect source, create an exact repair plan, and record an approved
- *   execution request. Medicine itself never writes source code and never calls a
- *   third-party API for diagnosis, repair, or execution.
+ *   Medicine can inspect deployed source and create an exact repair plan.
+ *   Persistent source-code writing is ONLY delegated to a trusted Patch Executor
+ *   exposed as window.BCGOPatchExecutor. A browser page must never contain a GitHub
+ *   token or silently write repository source.
  *
- * Execution contract:
- *   Medicine -> Firestore medicine_patch_requests -> trusted server trigger.
- *   The browser has no executor object and no repository credential.
+ * Executor contract:
+ *   window.BCGOPatchExecutor.apply({ case, proposal, request })
+ *     -> { ok:boolean, changedFiles?:string[], commitUrl?:string, error?:string }
  *
  * The proposal contains deterministic operations with BEFORE/AFTER material so an
  * executor/backend can apply the repair and return the result to Medicine.
@@ -155,7 +156,7 @@ function canonicalFieldSet(values) {
 }
 
 const S = {
-  version: "4.1.8",
+  version: "4.1.6",
   registry: REGISTRY,
   logs: [],
   cases: [],
@@ -1264,9 +1265,7 @@ function canApplyPatch(c) {
 }
 
 function executorAvailable() {
-  // Kept as a compatibility getter only. Real execution is server-side through
-  // the Firestore trigger; Medicine never depends on a browser executor object.
-  return null;
+  return typeof window.BCGOPatchExecutor?.apply === "function";
 }
 
 function findProposal(caseId) {
@@ -1599,6 +1598,7 @@ async function applyPatch(caseId) {
     createdAt: firebaseFns?.serverTimestamp ? firebaseFns.serverTimestamp() : now(),
     requestedAt: now(),
     // Execution is server-side: Firestore trigger -> Cloud Function -> PatchExecutor.
+    // Never require a browser-side window.BCGOPatchExecutor for the real execution path.
     executorAvailable: null,
     executorMode: "SERVER_FIRESTORE_TRIGGER"
   };
@@ -1609,34 +1609,18 @@ async function applyPatch(caseId) {
   S.patchRequests = S.patchRequests.slice(0, 40);
 
   try {
-    const ready = await ensureRealtimeInfrastructure();
-    if (!ready || !db || !firebaseFns?.addDoc) {
-      throw new Error("Realtime infrastructure unavailable");
-    }
-    if (!auth?.currentUser) {
-      throw new Error("Authentication required");
-    }
-    const adminSnap = await firebaseFns.getDoc(firebaseFns.doc(db, "admin_users", auth.currentUser.uid));
-    if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
-      throw new Error("Active admin authentication required");
-    }
     await firebaseFns.addDoc(firebaseFns.collection(db, "medicine_patch_requests"), request);
-  } catch (e) {
-    S.patchRequests = S.patchRequests.filter(x => x.requestId !== request.requestId);
-    proposal.status = "READY_FOR_PATCH";
-    c.status = "READY_FOR_PATCH";
-    emit("patch_request_error", { message: e?.message || String(e), request });
-    throw e;
-  }
+  } catch (e) { emit("storage_warning", { message: e.message }); }
 
   await postSystemMessage("medicine",
-    `Repair request ${request.requestId} tercatat di Firestore dan menunggu trusted server trigger. Medicine tidak menjalankan patch dari browser; hasil eksekusi akan diterima kembali melalui listener realtime.`, {
+    `Repair request ${request.requestId} dikirim ke SERVER Patch Executor melalui Firestore. Saya akan menunggu hasil eksekusi dan menjalankan validasi setelah server mengembalikan status.`, {
       kind: "PATCH_APPLY_REQUESTED", caseId, proposalId: proposal.proposalId, requestId: request.requestId,
       executorMode: "SERVER_FIRESTORE_TRIGGER"
     });
   emit("patch_apply_requested", { proposal, request, case: c, executorAvailable: null, executorMode: "SERVER_FIRESTORE_TRIGGER" });
 
   // The Cloud Function trigger is the executor. The browser must not attempt
+  // a second execution path through window.BCGOPatchExecutor.
   return { case: c, proposal, request, serverExecution: true };
 }
 
@@ -1741,7 +1725,6 @@ async function startPatchRequestListener() {
     const unsub = onSnapshot(q, snapshot => {
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       S.patchRequests = docs;
-      emit("executor_listener_live", { count: docs.length, transport: "FIRESTORE" });
       for (const r of docs) {
         const c = S.cases.find(x => x.id === r.caseId);
         if (!c) continue;
@@ -1754,8 +1737,6 @@ async function startPatchRequestListener() {
         } else if (r.executorStatus === "RECEIVED" || r.status === "PENDING_EXECUTION") {
           c.status = "PATCH_PENDING_EXECUTION";
           emit("executor_server_received", { case: c, request: r, executorStatus: r.executorStatus });
-        } else if (r.executorStatus) {
-          emit("executor_status", { case: c, request: r, executorStatus: r.executorStatus });
         }
       }
     }, e => emit("patch_request_error", { message: e.message }));
@@ -1852,7 +1833,6 @@ function startRealtimeAuthListener() {
     if (epoch !== S.authEpoch || auth?.currentUser?.uid !== user.uid) return;
     await startTelemetry();
     startConversation();
-    startPatchRequestListener();
     startAutonomousConversation();
   });
 
@@ -1931,10 +1911,8 @@ Object.defineProperties(API, {
 });
 window.BCGOMedicine = API;
 
-// Initial source scan is started by startLiveSurface().
-// Patch-request listener is started after authenticated realtime infrastructure
-// is ready; starting it here would race db/firebase initialization and silently
-// leave execution status disconnected until a full page refresh.
+// Initial source scan is started by startLiveSurface();
+startPatchRequestListener();
 // no second overlapping scan.
 // A manual SCAN ULANG may invoke scanConsistency explicitly.
 emit("ready", { version: S.version, registryCount: Object.keys(REGISTRY).length, executorAvailable: executorAvailable() });
