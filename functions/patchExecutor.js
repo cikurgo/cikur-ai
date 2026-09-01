@@ -398,7 +398,7 @@ async function updateFile({
  * ------------------------------------------------------------
  */
 
-async function executePatchRequest(request) {
+async function executeSinglePatchRequest(request) {
   const startedAt = new Date().toISOString();
 
   const config = validatePatchRequest(request);
@@ -507,6 +507,127 @@ async function executePatchRequest(request) {
       branch: commit.branch
     },
 
+    startedAt,
+    finishedAt
+  };
+}
+
+
+/**
+ * ------------------------------------------------------------
+ * PUBLIC EXECUTOR — request adapter
+ * ------------------------------------------------------------
+ *
+ * Medicine sends a repair plan containing one or more exact
+ * operations. The browser never writes source. This adapter
+ * validates every operation, reads the target once, checks the
+ * diagnosis SHA, applies all exact replacements in memory, and
+ * commits only after the complete preflight succeeds.
+ */
+async function executePatchRequest(request) {
+  if (!request || typeof request !== 'object') {
+    throw createExecutorError('INVALID_PATCH_REQUEST', 'Patch request tidak valid.');
+  }
+
+  const operations = Array.isArray(request.operations) && request.operations.length
+    ? request.operations
+    : [request];
+
+  if (operations.length > 20) {
+    throw createExecutorError('TOO_MANY_OPERATIONS', 'Maksimal 20 operasi per request.');
+  }
+
+  const configs = operations.map((operation, index) => {
+    try {
+      return validatePatchRequest({
+        ...request,
+        ...operation,
+        operation: operation.operation || 'REPLACE_EXACT'
+      });
+    } catch (error) {
+      error.message = `Operation ${index + 1}: ${error.message}`;
+      throw error;
+    }
+  });
+
+  const targetFiles = [...new Set(configs.map(x => x.filePath))];
+  if (targetFiles.length !== 1) {
+    throw createExecutorError(
+      'MULTI_FILE_NOT_SUPPORTED',
+      'Satu patch request harus menargetkan satu file agar eksekusi tetap atomik.'
+    );
+  }
+
+  const first = configs[0];
+  const startedAt = new Date().toISOString();
+  const source = await readFile(first.owner, first.repo, first.filePath, first.branch);
+
+  // Every operation must refer to the same diagnosis snapshot.
+  for (const config of configs) {
+    assertSha(config.expectedSha, source.sha);
+  }
+
+  let updatedSource = source.content;
+  const replacements = [];
+
+  // Full preflight: every exact target must be valid before GitHub is touched.
+  for (const config of configs) {
+    const replacement = exactReplace(updatedSource, config.oldText, config.newText);
+    if (replacement.updatedSource === updatedSource) {
+      throw createExecutorError('NO_SOURCE_CHANGE', `Patch tidak menghasilkan perubahan source pada ${config.filePath}.`);
+    }
+    updatedSource = replacement.updatedSource;
+    replacements.push({
+      mode: 'REPLACE_EXACT',
+      count: replacement.replacementCount,
+      sourceIndex: replacement.index,
+      filePath: config.filePath
+    });
+  }
+
+  if (updatedSource === source.content) {
+    throw createExecutorError('NO_SOURCE_CHANGE', 'Patch tidak menghasilkan perubahan source.');
+  }
+
+  const commitMessage = normalizeString(request.commitMessage).trim() ||
+    `BCGO Medicine exact repair: ${first.filePath}`;
+
+  const commit = await updateFile({
+    owner: first.owner,
+    repo: first.repo,
+    filePath: first.filePath,
+    branch: first.branch,
+    sha: source.sha,
+    content: updatedSource,
+    commitMessage
+  });
+
+  const finishedAt = new Date().toISOString();
+
+  return {
+    ok: true,
+    status: 'PATCH_APPLIED',
+    requestId: request.requestId || null,
+    operation: 'REPLACE_EXACT',
+    target: {
+      owner: first.owner,
+      repo: first.repo,
+      filePath: first.filePath,
+      branch: first.branch
+    },
+    source: {
+      expectedSha: first.expectedSha,
+      actualSha: source.sha,
+      verified: true
+    },
+    replacement: replacements,
+    changedFiles: [first.filePath],
+    commit: {
+      sha: commit.commitSha,
+      fileSha: commit.fileSha,
+      path: commit.path,
+      branch: commit.branch
+    },
     startedAt,
     finishedAt
   };

@@ -31,6 +31,15 @@ const db = getFirestore();
 const REGION =
   process.env.FUNCTIONS_REGION || 'asia-southeast2';
 
+async function assertActiveAdmin(uid) {
+  if (!uid) throw new HttpsError('unauthenticated', 'Authentication required.');
+  const snap = await db.collection('admin_users').doc(uid).get();
+  if (!snap.exists || snap.data()?.active !== true) {
+    throw new HttpsError('permission-denied', 'Active Admin access required.');
+  }
+}
+
+
 /**
  * ============================================================
  * BCGO PATCH EXECUTOR
@@ -69,12 +78,7 @@ exports.getSourceSnapshot = onCall(
 
   async (request) => {
 
-    if (!request.auth) {
-      throw new HttpsError(
-        'unauthenticated',
-        'Authentication required.'
-      );
-    }
+    await assertActiveAdmin(request.auth?.uid);
 
     const files = Array.isArray(request.data?.files)
       ? request.data.files
@@ -133,6 +137,25 @@ exports.getSourceSnapshot = onCall(
       branch,
       files: result,
       capturedAt: new Date().toISOString()
+    };
+  }
+);
+
+
+
+// ============================================================
+// EXECUTOR HEALTH
+// ============================================================
+exports.getExecutorStatus = onCall(
+  { region: REGION },
+  async (request) => {
+    await assertActiveAdmin(request.auth?.uid);
+    const configured = !!process.env.GITHUB_OWNER && !!process.env.GITHUB_REPOSITORY && !!process.env.GITHUB_TOKEN;
+    return {
+      ok: true,
+      ready: configured,
+      configured,
+      region: REGION
     };
   }
 );
@@ -231,8 +254,11 @@ exports.processMedicinePatchRequest =
          */
         const result =
           await executePatchRequest({
+            ...request,
             requestId,
-            request
+            owner: request.owner || process.env.GITHUB_OWNER,
+            repo: request.repo || process.env.GITHUB_REPOSITORY,
+            branch: request.branch || process.env.GITHUB_BASE_BRANCH || 'main'
           });
 
 
