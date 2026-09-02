@@ -142,6 +142,12 @@ body{font-family:'Inter',sans-serif}
         <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">TEMUAN <span id="source-scan-findings" class="font-bold text-amber-400">0</span></div>
         <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">RELASI <span id="source-scan-relations" class="font-bold text-cyan-400">0</span></div>
     </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-[9px]">
+        <div class="rounded-lg border border-emerald-900/70 bg-emerald-950/10 px-3 py-2">SYNCHRONIZED <span id="source-scan-sync" class="font-bold text-emerald-300">0</span></div>
+        <div class="rounded-lg border border-rose-900/70 bg-rose-950/10 px-3 py-2">MISMATCH <span id="source-scan-mismatch" class="font-bold text-rose-300">0</span></div>
+        <div class="rounded-lg border border-amber-900/70 bg-amber-950/10 px-3 py-2">VARIANT <span id="source-scan-variant" class="font-bold text-amber-300">0</span></div>
+        <div class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2">UNKNOWN <span id="source-scan-unknown" class="font-bold text-slate-300">0</span></div>
+    </div>
     <div class="space-y-1">
         <div class="flex justify-between gap-3 text-[9px] code-font text-slate-500">
             <span id="source-scan-current">Menunggu scanner...</span>
@@ -218,7 +224,7 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=2.10.0';
+import { runAutonomousEngine } from './bcgo.js?v=2.11.0';
 
 const $ = id => document.getElementById(id);
 
@@ -271,6 +277,10 @@ const sourceScanReadableEl = $('source-scan-readable');
 const sourceScanFailedEl = $('source-scan-failed');
 const sourceScanFindingsEl = $('source-scan-findings');
 const sourceScanRelationsEl = $('source-scan-relations');
+const sourceScanSyncEl = $('source-scan-sync');
+const sourceScanMismatchEl = $('source-scan-mismatch');
+const sourceScanVariantEl = $('source-scan-variant');
+const sourceScanUnknownEl = $('source-scan-unknown');
 const sourceScanMessageEl = $('source-scan-message');
 const sourceScanCurrentEl = $('source-scan-current');
 const sourceScanProgressLabelEl = $('source-scan-progress-label');
@@ -374,6 +384,11 @@ function renderSourceScan(scan) {
     const actionable = [...(Array.isArray(scan.findings) ? scan.findings : []), ...(Array.isArray(scan.crossFileFindings) ? scan.crossFileFindings : [])].filter(f => f && f.severity !== 'INFO');
     if (sourceScanFindingsEl) sourceScanFindingsEl.textContent = actionable.length;
     if (sourceScanRelationsEl) sourceScanRelationsEl.textContent = Array.isArray(scan.relations) ? scan.relations.length : 0;
+    const summary = scan.relationSummary || {};
+    if (sourceScanSyncEl) sourceScanSyncEl.textContent = Number(summary.synchronized || 0);
+    if (sourceScanMismatchEl) sourceScanMismatchEl.textContent = Number(summary.mismatch || 0);
+    if (sourceScanVariantEl) sourceScanVariantEl.textContent = Number(summary.variant || 0);
+    if (sourceScanUnknownEl) sourceScanUnknownEl.textContent = Number(summary.unknown || 0);
     if (sourceScanMessageEl) sourceScanMessageEl.textContent = scan.message || 'Belum ada hasil scanner.';
     if (sourceScanCurrentEl) {
         sourceScanCurrentEl.textContent = scan.currentFile

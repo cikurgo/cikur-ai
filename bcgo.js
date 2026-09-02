@@ -11,7 +11,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/fi
 import { db, auth } from "./cikur-config.js";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.7.4
+ * BCGO MASTER NERVE SYSTEM v2.11.0
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -44,7 +44,7 @@ const ORGAN_COUNT = Object.keys(ORGAN_REGISTRY).length;
 
 const SOURCE_SCAN_INTERVAL = 20000;
 const SOURCE_SCAN_FETCH_TIMEOUT = 10000;
-const SOURCE_SCAN_VERSION = "1.5.0";
+const SOURCE_SCAN_VERSION = "1.6.0";
 
 const ACTIVE_WINDOW = 15 * 60 * 1000;
 const CLOCK_SKEW = 5 * 60 * 1000;
@@ -129,7 +129,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     sourceScan: {
       version: SOURCE_SCAN_VERSION, status: "WAITING", startedAt: 0, completedAt: 0,
       filesScanned: 0, filesReadable: 0, filesFailed: 0, currentFile: null, currentIndex: 0,
-      totalFiles: ORGAN_COUNT, phase: "WAITING", fileStates: {}, findings: [], crossFileFindings: [], relations: [],
+      totalFiles: ORGAN_COUNT, phase: "WAITING", fileStates: {}, findings: [], crossFileFindings: [], relations: [], relationSummary: { synchronized:0, mismatch:0, variant:0, unknown:0 },
       sources: {}, message: "Pemindaian source code belum dimulai."
     },
     medicineBridge: {
@@ -678,6 +678,48 @@ export function runAutonomousEngine(onCycleUpdate) {
     return {missingFields, extraFields, missingLabels, extraLabels, missingHandlers, extraHandlers, missingSemantic, extraSemantic, missingComponents, sourceComponentCount, targetComponentCount};
   }
 
+  function codeTokenSet(value) {
+    const text = String(value || '')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/\/\/[^\n]*/g, ' ')
+      .replace(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g, ' ')
+      .toLowerCase();
+    return new Set((text.match(/[a-z_$][a-z0-9_$]*/gi) || [])
+      .filter(token => token.length >= 3)
+      .filter(token => !['const','let','var','function','return','async','await','true','false','null','undefined','this','new','if','else','for','while','try','catch','throw','typeof','instanceof','class','switch','case','break','continue'].includes(token)));
+  }
+
+  function functionContract(fn) {
+    const bodyTokens = codeTokenSet(fn?.normalizedBody || '');
+    const paramTokens = codeTokenSet(fn?.params || '');
+    const all = new Set([...bodyTokens, ...paramTokens]);
+    return {
+      tokens: [...all],
+      bodyTokens: [...bodyTokens],
+      paramTokens: [...paramTokens],
+      size: all.size
+    };
+  }
+
+  function compareFunctionContract(reference, target) {
+    const a = functionContract(reference), b = functionContract(target);
+    const missing = a.tokens.filter(token => !b.tokens.includes(token));
+    const extra = b.tokens.filter(token => !a.tokens.includes(token));
+    const shared = a.tokens.filter(token => b.tokens.includes(token));
+    const targetCoverage = a.tokens.length ? shared.length / a.tokens.length : 0;
+    const referenceCoverage = b.tokens.length ? shared.length / b.tokens.length : 0;
+    const distinctive = shared.filter(token => token.length >= 6 && !['render','update','handle','submit','button','status','profile','system','data','element'].includes(token));
+    return {
+      missing, extra, shared, targetCoverage, referenceCoverage,
+      distinctive, sourceSize:a.size, targetSize:b.size,
+      sizeGap:Math.max(0, a.size - b.size)
+    };
+  }
+
+  function functionNameIsGeneric(name) {
+    return new Set(['init','setup','start','stop','load','render','update','refresh','handle','submit','click','open','close','toggle','reset','save','send','getdata','setdata']).has(String(name || '').toLowerCase());
+  }
+
   function compareCrossFileSources(scanned) {
     const findings = [], relations = [];
     const items = Object.values(scanned);
@@ -792,14 +834,65 @@ export function runAutonomousEngine(onCycleUpdate) {
       addRelation({sourceFile:item.file,targetFile:ref,type:'EXPLICIT_FILE_REFERENCE',status:'LINKED',confidence:'HIGH',evidence:{reason:'Referensi file ditemukan langsung di source; belum berarti kedua surface harus identik.'}});
     }
 
-    // 4) Same function name is informational only. Never escalate to mismatch.
+    // 4) Same function name is not enough by itself. However, when the two
+    // implementations share a substantial semantic body and one implementation
+    // is demonstrably a subset of the other, BCGO can raise a deterministic
+    // synchronization candidate. Generic lifecycle names stay informational.
     for (const [name, entries] of functionMap) {
       const unique=[...new Map(entries.map(x=>[x.file,x])).values()];
       if (unique.length<2) continue;
       for(let i=0;i<unique.length;i++) for(let j=i+1;j<unique.length;j++) {
         const a=unique[i], b=unique[j];
         const linked=explicitRef(a.file,b.file);
-        addRelation({sourceFile:a.file,targetFile:b.file,type:'SHARED_FUNCTION_VARIANT',status:'VARIANT',confidence:'LOW',sourceLine:a.line,targetLine:b.line,key:name,evidence:{explicitReference:linked,reason:'Nama fungsi yang sama hanya dicatat sebagai variant; tidak digunakan sebagai bukti sinkronisasi.'}});
+        const comparison = compareFunctionContract(a,b);
+        const identityStrong = !functionNameIsGeneric(name) && (
+          comparison.distinctive.length >= 2 || linked
+        ) && comparison.shared.length >= 5;
+        const aRef = comparison.targetCoverage >= comparison.referenceCoverage ? a : b;
+        const bTarget = aRef === a ? b : a;
+        const c = aRef === a ? comparison : {
+          ...compareFunctionContract(b,a)
+        };
+        const subsetLike = c.targetCoverage >= 0.68 && c.sizeGap >= 5 && c.missing.length >= 3;
+        const mismatch = identityStrong && subsetLike;
+        const status = mismatch ? 'MISMATCH_CANDIDATE' : 'VARIANT';
+        const confidence = mismatch && (linked || c.targetCoverage >= 0.80) ? 'HIGH' : mismatch ? 'MEDIUM' : 'LOW';
+        addRelation({
+          sourceFile:aRef.file,targetFile:bTarget.file,
+          type:mismatch ? 'CROSS_FILE_FUNCTION_CONTRACT' : 'SHARED_FUNCTION_VARIANT',
+          status,confidence,sourceLine:aRef.line,targetLine:bTarget.line,key:name,
+          evidence:{
+            explicitReference:linked,
+            sharedTokens:comparison.shared,
+            missingTokens:c.missing.slice(0,80),
+            extraTokens:c.extra.slice(0,80),
+            targetCoverage:Number((c.targetCoverage*100).toFixed(1)),
+            referenceCoverage:Number((c.referenceCoverage*100).toFixed(1)),
+            sourceTokenCount:c.sourceSize,targetTokenCount:c.targetSize,sizeGap:c.sizeGap,
+            distinctiveTokens:comparison.distinctive,
+            reason:mismatch
+              ? 'Implementasi fungsi memiliki identity semantik yang kuat dan target terbukti sebagai subset implementasi reference berdasarkan token kontrak; ini kandidat ketidaksinkronan, bukan keputusan canonical otomatis.'
+              : 'Nama fungsi yang sama tidak cukup untuk menyatakan sinkronisasi; relasi dipertahankan sebagai variant kecuali bukti kontrak subset memenuhi gate.'
+          }
+        });
+        if (mismatch) {
+          findings.push({
+            severity:confidence === 'HIGH' ? 'HIGH' : 'MEDIUM',
+            type:'CROSS_FILE_FUNCTION_CONTRACT_MISMATCH',
+            sourceFile:aRef.file,sourceLine:aRef.line,targetFile:bTarget.file,targetLine:bTarget.line,
+            area:`FUNCTION:${name}`,confidence,
+            message:`Implementasi ${name} pada ${bTarget.file} tampak tidak lengkap dibanding reference candidate ${aRef.file}: coverage target ${Math.round(c.targetCoverage*100)}%, ${c.missing.length} token kontrak tidak terbukti pada target.`,
+            evidence:{
+              referenceFunction:name,targetFunction:name,
+              missingTokens:c.missing.slice(0,80),sharedTokens:c.shared.slice(0,80),
+              targetCoverage:Number((c.targetCoverage*100).toFixed(1)),
+              referenceCoverage:Number((c.referenceCoverage*100).toFixed(1)),
+              sourceTokenCount:c.sourceSize,targetTokenCount:c.targetSize,
+              explicitReference:linked,
+              sourceCandidateReason:'Reference candidate ditentukan oleh cakupan kontrak/token yang lebih tinggi, bukan sekadar panjang file.'
+            }
+          });
+        }
       }
     }
 
@@ -865,8 +958,14 @@ export function runAutonomousEngine(onCycleUpdate) {
       const crossFileFindings = crossComparison.findings;
       const relations = crossComparison.relations;
       const actionable = [...failures,...allFindings,...crossFileFindings].filter(f => f.severity !== 'INFO').slice(0,100);
+      const relationSummary = {
+        synchronized: relations.filter(r => ['MATCHED_SURFACE','LINKED'].includes(r.status)).length,
+        mismatch: relations.filter(r => /MISMATCH/.test(String(r.status))).length,
+        variant: relations.filter(r => r.status === 'VARIANT' || r.status === 'VARIANT_SURFACE').length,
+        unknown: relations.filter(r => r.status === 'UNKNOWN').length
+      };
       const status = failures.length ? 'DEGRADED' : actionable.length ? 'FINDINGS' : 'CLEAN';
-      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:crossFileFindings.slice(0,100),relations:relations.slice(0,200),sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),message:failures.length ? `Scanner selesai: ${files.length} source diproses, ${failures.length} source tidak terbaca.` : actionable.length ? `Scanner selesai: ${files.length} source dibaca; ${actionable.length} temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} source dibaca dan dianalisis tanpa temuan struktural/cross-file.` };
+      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:crossFileFindings.slice(0,100),relations:relations.slice(0,200),relationSummary,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),message:failures.length ? `Scanner selesai: ${files.length} source diproses, ${failures.length} source tidak terbaca.` : actionable.length ? `Scanner selesai: ${files.length} source dibaca; ${actionable.length} temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} source dibaca dan dianalisis tanpa temuan struktural/cross-file.` };
       recordEvent('SOURCE_SCAN_RESULT', state.sourceScan.message, actionable.length ? 'SYS_SOURCE_FINDINGS' : 'SYS_SOURCE_CLEAN');
       publishToUI(safeClone(state));
       publishBCGOStateToMedicine(safeClone(state));
