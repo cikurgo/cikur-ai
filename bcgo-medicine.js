@@ -14,7 +14,7 @@ import { db, auth } from "./cikur-config.js";
 
 /*
  * ================================================================
- * BCGO MEDICINE v2.9.2 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
+ * BCGO MEDICINE v2.9.0 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
  * ================================================================
  * Boundary:
  *   Medicine observes, investigates, proves, proposes and validates.
@@ -203,6 +203,8 @@ const S = {
     findings: []
   },
   lastBCGOPacketId: null,
+  lastBCGOScanToken: null,
+  bcgoIngestingToken: null,
   processedCrossFileEvidence: new Set()
 };
 
@@ -413,8 +415,8 @@ function makeFullSourceRecord(file, source, meta = {}) {
 function bestCrossFileFinding(scan) {
   const all = [
     ...(Array.isArray(scan?.crossFileFindings) ? scan.crossFileFindings : []),
-    ...(Array.isArray(scan?.findings) ? scan.findings.filter(f => String(f?.type || '').startsWith('CROSS_FILE_')) : [])
-  ];
+    ...(Array.isArray(scan?.findings) ? scan.findings.filter(f => String(f?.type || f?.kind || '').startsWith('CROSS_FILE_')) : [])
+  ].map(f => ({ ...f, type: f?.type || f?.kind || "CROSS_FILE_FINDING" }));
   const severityRank = {HIGH:3,MEDIUM:2,LOW:1,INFO:0};
   return [...new Map(all.map(f => [JSON.stringify([f.type,f.sourceFile,f.targetFile,f.sourceLine,f.targetLine,f.area]),f])).values()]
     .sort((a,b)=>(severityRank[b.severity]||0)-(severityRank[a.severity]||0));
@@ -527,22 +529,47 @@ async function ingestBCGOScan(scan, packet = {}) {
   };
   window.dispatchEvent(new CustomEvent("bcgo:medicine",{detail:{event:"bcgo_source_scan_complete",surface:getLiveSurface()}}));
 
-  // Process every actionable cross-file finding, not only the first one.
-  // The source records used for evidence are the freshly read `results`; never
-  // reference an out-of-scope `sources` variable here. A previous typo caused
-  // the handoff to Medicine to stop with ReferenceError after the full scan.
-  const crossFindings = bestCrossFileFinding(scan)
-    .filter(f => ['HIGH','MEDIUM'].includes(String(f?.severity || 'MEDIUM').toUpperCase()))
-    .slice(0, 20);
-  for (const candidateFinding of crossFindings) {
+  // BCGO is the detector; Medicine must consume the complete actionable
+  // cross-file result set, not silently reduce it to the first finding.
+  // Every finding gets its own deterministic evidence key so a later BCGO
+  // scan can re-open only the finding whose source/target evidence changed.
+  const actionable = bestCrossFileFinding(scan);
+  emit("bcgo_cross_file_queue_ready", {
+    count: actionable.length,
+    cycle,
+    findings: actionable
+  });
+
+  for (const candidateFinding of actionable) {
     const sf=normalizeFile(candidateFinding.sourceFile)||"";
     const tf=normalizeFile(candidateFinding.targetFile)||"";
-    const evidenceKey=`${candidateFinding.type}|${sf}|${tf}|${candidateFinding.sourceLine||''}|${candidateFinding.targetLine||''}|${candidateFinding.area||''}|${results[sf]?.hash||sourcesMeta[sf]?.hash||''}|${results[tf]?.hash||sourcesMeta[tf]?.hash||''}`;
+    const evidenceKey=`${candidateFinding.type}|${sf}|${tf}|${candidateFinding.sourceLine||''}|${candidateFinding.targetLine||''}|${candidateFinding.area||''}|${results[sf]?.hash||''}|${results[tf]?.hash||''}`;
     if (S.processedCrossFileEvidence.has(evidenceKey)) continue;
+
     S.processedCrossFileEvidence.add(evidenceKey);
-    if (S.processedCrossFileEvidence.size>200) S.processedCrossFileEvidence.delete(S.processedCrossFileEvidence.values().next().value);
-    await createCrossFileCase(candidateFinding, results, scan);
+    if (S.processedCrossFileEvidence.size>200) {
+      S.processedCrossFileEvidence.delete(S.processedCrossFileEvidence.values().next().value);
+    }
+
+    emit("bcgo_cross_file_investigation_started", {
+      finding:candidateFinding,
+      sourceFile:sf,
+      targetFile:tf,
+      evidenceKey
+    });
+
+    try {
+      await createCrossFileCase(candidateFinding, results, scan);
+    } catch (error) {
+      emit("bcgo_cross_file_investigation_error", {
+        finding:candidateFinding,
+        sourceFile:sf,
+        targetFile:tf,
+        message:error?.message || String(error)
+      });
+    }
   }
+
   return S.liveSurface;
 }
 
@@ -625,6 +652,14 @@ async function createCrossFileCase(finding, sources, scan) {
   c.patchProposal=proposal;S.patchProposals.unshift(proposal);S.patchProposals=S.patchProposals.slice(0,50);
   emit("cross_file_investigation_complete",{case:c,finding,candidate,sourceFile,targetFile});
   emit("patch_proposed",{proposal,case:c});emit("case_updated",{case:c});
+
+  // If the cross-file evidence is not yet enough for an exact operation, do
+  // not stop at a red card. Put the case into Medicine's existing autonomous
+  // investigation queue so the dependency/root-cause pass continues without
+  // a Verify click or page refresh.
+  if (!candidate.ready) {
+    queueAutoInvestigation(c, "bcgo_cross_file_requires_deeper_evidence");
+  }
   await safeAddMessage("medicine",candidate.ready
     ? `BCGO menunjukkan ${sourceFile} ↔ ${targetFile}. Saya membaca ulang kedua source dan menemukan implementasi ${finding.area || 'terkait'} yang dapat dibandingkan exact. Candidate dikirim ke Execution untuk review deterministic; tidak ada eksekusi otomatis.`
     : `BCGO menunjukkan ${sourceFile} ↔ ${targetFile}. Saya sudah membaca ulang source yang tersedia, tetapi exact replacement belum terbukti aman. Saya menahan treatment dan meminta evidence lanjutan.`,
@@ -641,14 +676,57 @@ function getLiveSurface() {
   };
 }
 
+function bcgoScanToken(scan) {
+  if (!scan || typeof scan !== "object") return "";
+  const sourceHashes = Object.entries(scan.sources || {})
+    .filter(([file]) => isDiagnosticFile(file))
+    .map(([file,meta]) => `${file}:${meta?.hash || ""}:${meta?.lines || 0}`)
+    .sort()
+    .join("|");
+  const findings = [...(scan.findings || []), ...(scan.crossFileFindings || [])]
+    .map(f => `${f?.type || ""}:${f?.sourceFile || ""}:${f?.targetFile || ""}:${f?.sourceLine || ""}:${f?.targetLine || ""}:${f?.area || ""}`)
+    .sort()
+    .join("|");
+  return `${scan.status || ""}|${scan.completedAt || ""}|${scan.filesScanned || 0}|${scan.filesReadable || 0}|${scan.filesFailed || 0}|${sourceHashes}|${findings}`;
+}
+
+async function syncBCGOStateFromCache(source = "LOCAL_STORAGE_CACHE") {
+  try {
+    const cached = localStorage.getItem(`${MEDICINE_BRIDGE_KEY}_STATE`);
+    if (!cached) return false;
+    const packet = JSON.parse(cached);
+    return receiveBCGOState(packet, source);
+  } catch {
+    return false;
+  }
+}
+
 function startLiveSurface() {
   if (window.__BCGO_MEDICINE_LIVE_SURFACE_TIMER) return;
   const run = () => {
     const scan = S.bcgoSourceScan;
-    if (scan?.status && scan.status !== "WAITING") void ingestBCGOScan(scan,{state:{cycle:scan.cycle}});
+    if (!scan?.status || scan.status === "WAITING") return;
+    const token = bcgoScanToken(scan);
+    if (!token || token === S.lastBCGOScanToken || token === S.bcgoIngestingToken) return;
+    S.bcgoIngestingToken = token;
+    void ingestBCGOScan(scan,{state:{cycle:scan.cycle}})
+      .then(() => { S.lastBCGOScanToken = token; })
+      .catch(error => emit("bcgo_source_scan_error",{message:error?.message||String(error)}))
+      .finally(() => { if (S.bcgoIngestingToken === token) S.bcgoIngestingToken = null; });
   };
-  window.__BCGO_MEDICINE_LIVE_SURFACE_TIMER = setInterval(run, 20000);
+  window.__BCGO_MEDICINE_LIVE_SURFACE_TIMER = setInterval(run, 3000);
   run();
+}
+
+function startBCGOBridgeRecovery() {
+  if (window.__BCGO_MEDICINE_BRIDGE_RECOVERY_TIMER) return;
+  const recover = () => { void syncBCGOStateFromCache("LOCAL_STORAGE_RECOVERY"); };
+  window.__BCGO_MEDICINE_BRIDGE_RECOVERY_TIMER = setInterval(recover, 3000);
+  window.addEventListener("pageshow", recover);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") recover();
+  });
+  recover();
 }
 
 function normalizeFile(value) {
@@ -2508,23 +2586,33 @@ async function sendMessage(message, role = "human") {
   }
 }
 
-function receiveBCGOState(packet) {
-  if (!packet || packet.bridge !== MEDICINE_BRIDGE_KEY || packet.from !== "BCGO") return;
-  if (packet.type !== "BCGO_STATE") return;
+function receiveBCGOState(packet, source = "BROADCAST_CHANNEL") {
+  if (!packet || packet.bridge !== MEDICINE_BRIDGE_KEY || packet.from !== "BCGO") return false;
+  if (packet.type !== "BCGO_STATE") return false;
   const packetId=String(packet.id||"");
-  if (packetId && packetId===S.lastBCGOPacketId) return;
+  if (packetId && packetId===S.lastBCGOPacketId) return false;
   if (packetId) S.lastBCGOPacketId=packetId;
   const at=Number(packet.at)||0;
-  if(!at)return;
+  if(!at)return false;
   const age=Date.now()-at;
   const st=packet.state||{};
   S.bcgoSync={...S.bcgoSync,status:age<=MEDICINE_BRIDGE_LIVE_WINDOW?"LIVE":"STALE",lastAt:at,cycle:Number(st.cycle)||0,step:st.step||"-",active:Number(st.metrics?.active)||0,total:Number(st.metrics?.total)||0,source:"BROADCAST_CHANNEL"};
   const scan=st.sourceScan;
   if(scan&&typeof scan==='object'){
     S.bcgoSourceScan={...S.bcgoSourceScan,...scan,cycle:Number(st.cycle)||Number(S.bcgoSourceScan.cycle)||0,receivedAt:Date.now()};
-    void ingestBCGOScan(scan,packet).catch(error=>emit("bcgo_source_scan_error",{message:error?.message||String(error)}));
+    const token = bcgoScanToken(S.bcgoSourceScan);
+    const scanStatus = String(scan.status || "").toUpperCase();
+    const scanCompleted = !!scan.completedAt || ["COMPLETE", "CLEAN", "FINDINGS", "DEGRADED"].includes(scanStatus);
+    if (token && token !== S.lastBCGOScanToken && token !== S.bcgoIngestingToken && scanCompleted) {
+      S.bcgoIngestingToken = token;
+      void ingestBCGOScan(S.bcgoSourceScan,packet)
+        .then(() => { S.lastBCGOScanToken = token; })
+        .catch(error=>emit("bcgo_source_scan_error",{message:error?.message||String(error)}))
+        .finally(() => { if (S.bcgoIngestingToken === token) S.bcgoIngestingToken = null; });
+    }
   }
   window.dispatchEvent(new CustomEvent("bcgo:medicine",{detail:{event:"bcgo_sync",at:now(),contract:{...S.bcgoSync},sourceScan:S.bcgoSourceScan}}));
+  return true;
 }
 
 medicineBridgeChannel?.addEventListener("message", event => receiveBCGOState(event.data));
@@ -2532,30 +2620,6 @@ window.addEventListener("storage", event => {
   if (event.key !== MEDICINE_BRIDGE_KEY + "_STATE" || !event.newValue) return;
   try { receiveBCGOState(JSON.parse(event.newValue)); } catch {}
 });
-
-// BOOTSTRAP: BroadcastChannel hanya menerima paket baru. Jika Medicine dibuka
-// setelah BCGO selesai scan, ambil snapshot BCGO terakhir dari localStorage
-// agar source scan tidak kembali terlihat WAITING sampai BCGO mengirim ulang.
-function bootstrapBCGOState() {
-  try {
-    const cached = localStorage.getItem(MEDICINE_BRIDGE_KEY + "_STATE");
-    if (cached) receiveBCGOState(JSON.parse(cached));
-  } catch {}
-  try {
-    if (window.BCGO_STATE && typeof window.BCGO_STATE === "object") {
-      receiveBCGOState({
-        bridge: MEDICINE_BRIDGE_KEY,
-        from: "BCGO",
-        type: "BCGO_STATE",
-        at: Date.now(),
-        id: "BCGO_STATE_SAME_PAGE_BOOTSTRAP",
-        state: window.BCGO_STATE
-      });
-    }
-  } catch {}
-}
-
-bootstrapBCGOState();
 setInterval(() => {
   if (!S.bcgoSync.lastAt) return;
   if (Date.now() - S.bcgoSync.lastAt > MEDICINE_BRIDGE_LIVE_WINDOW && S.bcgoSync.status === "LIVE") {
@@ -2596,6 +2660,8 @@ onAuthStateChanged(auth, async user => {
     });
 
     await discoverSystemSurface();
+    startBCGOBridgeRecovery();
+    await syncBCGOStateFromCache("LOCAL_STORAGE_BOOTSTRAP");
     startLiveSurface();
     startTelemetry();
     startRecoveryMonitor();
