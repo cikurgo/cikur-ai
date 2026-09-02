@@ -1,12 +1,12 @@
-<!doctype html>
+<!DOCTYPE html>
+
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BCGO Medicine v2.8.2 — Live Cross-File Medical Engine</title>
-<link rel="icon" type="image/png" href="./cikurgoicon.png">
-<link rel="apple-touch-icon" href="./cikurgoicon.png">
-
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<title>BCGO Medicine — Precision Control Room</title>
+<link href="./cikurgoicon.png" rel="icon" type="image/png"/>
+<link href="./cikurgoicon.png" rel="apple-touch-icon"/>
 <style>
 /* Local UI foundation: no Tailwind/CDN dependency. */
 :root{--bg:#020617;--panel:#0f172a;--panel2:#111827;--line:#243047;--muted:#8190a8;--text:#e5e7eb;--cyan:#67e8f9;--green:#6ee7b7;--amber:#fcd34d;--rose:#fda4af;--purple:#c4b5fd;--indigo:#818cf8}
@@ -15,107 +15,117 @@ main{width:min(1280px,100%);margin:0 auto}.panel{padding:16px}.grid{display:grid
 @keyframes pulse{50%{opacity:.45}}
 @media (min-width:768px){.md\:p-5{padding:20px}.md\:w-14{width:56px}.md\:h-14{height:56px}.md\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.md\:flex-wrap{flex-wrap:wrap}}@media (min-width:1024px){.lg\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (min-width:1280px){.xl\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}}
 </style>
-</head>
+<style>
+/* v6 layout only: DOM contracts/IDs are preserved for the existing Medicine engine. */
+.layout-kicker{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#64748b}
+.workflow-title{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.workflow-note{font-size:10px;color:#64748b;line-height:1.5}
+.priority{border-color:#155e75!important;box-shadow:0 0 0 1px rgba(34,211,238,.05),0 12px 30px rgba(0,0,0,.16)}
+.human-card{border-color:#78350f!important;box-shadow:0 0 0 1px rgba(245,158,11,.05),0 12px 30px rgba(0,0,0,.16)}
+.action-zone{position:relative}
+.action-zone .action-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;font-weight:800}
+.action-zone button{min-height:44px;font-weight:800}
+.action-zone #approve{font-size:13px;box-shadow:0 8px 24px rgba(4,120,87,.22)}
+.action-zone #apply{font-size:12px}
+.action-zone #validate{font-size:12px}
+.code-focus{border-color:#064e3b!important}
+.compact-scroll{max-height:340px;overflow:auto}
+.muted-tools{opacity:.92}
+@media (max-width:767px){
+  .mobile-stack{grid-template-columns:1fr!important}
+  .action-zone{position:sticky;bottom:8px;z-index:20;background:rgba(2,6,23,.94);backdrop-filter:blur(10px);border-radius:16px}
+}
+</style></head>
 <body class="bg-slate-950 text-slate-100 min-h-screen p-3 md:p-5">
-<main class="max-w-7xl mx-auto space-y-4">
-<header class="panel p-4 md:p-5 flex flex-wrap justify-between items-center gap-3">
-  <div class="flex items-center gap-3 min-w-0">
-    <img src="./cikurgoicon.png" alt="CIKUR GO" class="brand-logo" loading="eager" decoding="async">
-    <div class="min-w-0"><h1 class="text-xl font-bold">💊 BCGO Medicine v2.8.2 <span class="text-xs text-cyan-300 code">PRECISION ROOT-CAUSE REPAIR</span></h1><p class="text-xs text-slate-400 mt-1">CIKUR GO • System Logs → Cross-File Investigation • Root Cause • Verify • Repair Plan • Human Approval • Execute • Validate</p></div>
-  </div>
-  <div class="flex gap-2 text-[10px] code"><span id="auth" class="border border-slate-700 px-2 py-1 rounded">AUTH WAITING</span><span id="sys" class="border border-slate-700 px-2 py-1 rounded">BOOT</span></div>
-</header>
+<main class="max-w-7xl mx-auto space-y-4"><header class="panel p-4 md:p-5 flex flex-wrap justify-between items-center gap-3">
+<div class="flex items-center gap-3 min-w-0">
+<img alt="CIKUR GO" class="brand-logo" decoding="async" loading="eager" src="./cikurgoicon.png"/>
+<div class="min-w-0"><h1 class="text-xl font-bold">💊 BCGO Medicine v2.8.2 <span class="text-xs text-cyan-300 code">PRECISION ROOT-CAUSE REPAIR</span></h1><p class="text-xs text-slate-400 mt-1">CIKUR GO • System Logs → Cross-File Investigation • Root Cause • Verify • Repair Plan • Human Approval • Execute • Validate</p></div>
+</div>
+<div class="flex gap-2 text-[10px] code"><span class="border border-slate-700 px-2 py-1 rounded" id="auth">AUTH WAITING</span><span class="border border-slate-700 px-2 py-1 rounded" id="sys">BOOT</span></div>
+</header><div class="grid lg:grid-cols-3 gap-4"><section class="panel p-3">
+<div class="flex items-center justify-between gap-2 mb-2"><h2 class="text-xs uppercase text-slate-400">📡 Realtime Health</h2><span class="text-[9px] text-emerald-300" id="livePulse">LIVE MONITOR</span></div>
+<div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-[9px]">
+<div class="bg-slate-950 border border-slate-800 rounded-lg p-2"><span class="text-slate-500">FIRESTORE</span><b class="block text-amber-300" id="rtFirestore">WAITING</b></div>
+<div class="bg-slate-950 border border-slate-800 rounded-lg p-2"><span class="text-slate-500">TELEMETRY</span><b class="block text-amber-300" id="rtTelemetry">WAITING</b></div>
+<div class="bg-slate-950 border border-slate-800 rounded-lg p-2"><span class="text-slate-500">CHAT</span><b class="block text-amber-300" id="rtChat">WAITING</b></div>
+<div class="bg-slate-950 border border-slate-800 rounded-lg p-2"><span class="text-slate-500">AUTONOMOUS</span><b class="block text-emerald-300" id="rtAuto">ON</b></div>
+<div class="bg-slate-950 border border-slate-800 rounded-lg p-2"><span class="text-slate-500">REGISTRY</span><b class="block text-amber-300" id="rtRegistry">WAITING</b></div>
+<div class="bg-slate-950 border border-emerald-900 rounded-lg p-2"><span class="text-slate-500">EXECUTOR INTERNAL</span><b class="block text-amber-300" id="rtExecutor">BOOTING</b></div>
+</div>
+</section><section class="grid grid-cols-2 md:grid-cols-6 gap-3">
+<div class="panel p-3"><small class="text-[9px] text-slate-400">ORGAN</small><b class="block text-2xl" id="org">0</b></div>
+<div class="panel p-3"><small class="text-[9px] text-slate-400">TELEMETRY</small><b class="block text-2xl text-blue-400" id="logs">0</b></div>
+<div class="panel p-3"><small class="text-[9px] text-slate-400">CASES</small><b class="block text-2xl text-amber-400" id="casesN">0</b></div>
+<div class="panel p-3"><small class="text-[9px] text-slate-400">ACTIVE</small><b class="block text-2xl text-rose-400" id="active">0</b></div>
+<div class="panel p-3"><small class="text-[9px] text-slate-400">FINDINGS</small><b class="block text-2xl text-purple-400" id="findN">0</b></div>
+<div class="panel p-3"><small class="text-[9px] text-slate-400">REPAIRS</small><b class="block text-2xl text-emerald-400" id="repairs">0</b></div>
+</section></div><section class="panel p-3 border border-cyan-900/60 priority">
+<div class="flex flex-wrap items-center justify-between gap-2">
+<div><h2 class="text-xs uppercase text-cyan-300">🧭 WORKFLOW — MEDICINE</h2><p class="text-[10px] text-slate-500 mt-1">Evidence → Source exact → Root cause → BEFORE → AFTER → Copy Solution → Human Review</p></div>
+<span class="text-[9px] text-amber-300" id="pipelineState">MENUNGGU CASE</span>
+</div>
+</section><section class="panel p-4 priority">
+<div class="panel p-4 lg:col-span-2">
+<div class="flex justify-between items-center"><div><h2 class="text-xs uppercase text-slate-400">🧠 📡 Telemetry ↔ 💊 Medicine ↔ 👤 Anda</h2><p class="text-[10px] text-slate-500">Kanal komunikasi realtime terpisah • Medicine menerima telemetry tanpa memuat engine BCGO • target dapat dikoreksi setelah evidence</p></div><span class="text-[10px] text-emerald-400" id="chatLive">LIVE</span></div>
+<div class="mt-3 bg-slate-950 border border-slate-800 rounded-xl p-3 h-80 overflow-y-auto space-y-3" id="chat"><div class="text-xs text-slate-500">Medicine aktif dalam LOCAL MODE. Menunggu kanal Firestore tanpa menghentikan pemeriksaan source.</div></div>
+<form class="flex gap-2 mt-3" id="form"><input class="flex-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm outline-none" id="input" placeholder="Tanya BCGO / Medicine..."/><button class="bg-indigo-600 rounded-lg px-4 text-sm" id="send">Kirim</button></form>
+</div>
+<div class="panel p-4">
+<div class="flex justify-between items-center"><h2 class="text-xs uppercase text-slate-400">🔬 Active Diagnosis</h2><span class="text-[9px] text-slate-500" id="caseState">WAITING</span></div>
+<div class="mt-3 text-xs text-slate-400" id="diag">Belum ada case.</div>
 
-<section class="panel p-3">
-  <div class="flex items-center justify-between gap-2 mb-2"><h2 class="text-xs uppercase text-slate-400">📡 Realtime Health</h2><span id="livePulse" class="text-[9px] text-emerald-300">LIVE MONITOR</span></div>
-  <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-[9px]">
-    <div class="bg-slate-950 border border-slate-800 rounded-lg p-2"><span class="text-slate-500">FIRESTORE</span><b id="rtFirestore" class="block text-amber-300">WAITING</b></div>
-    <div class="bg-slate-950 border border-slate-800 rounded-lg p-2"><span class="text-slate-500">TELEMETRY</span><b id="rtTelemetry" class="block text-amber-300">WAITING</b></div>
-    <div class="bg-slate-950 border border-slate-800 rounded-lg p-2"><span class="text-slate-500">CHAT</span><b id="rtChat" class="block text-amber-300">WAITING</b></div>
-    <div class="bg-slate-950 border border-slate-800 rounded-lg p-2"><span class="text-slate-500">AUTONOMOUS</span><b id="rtAuto" class="block text-emerald-300">ON</b></div>
-    <div class="bg-slate-950 border border-slate-800 rounded-lg p-2"><span class="text-slate-500">REGISTRY</span><b id="rtRegistry" class="block text-amber-300">WAITING</b></div>
-    <div class="bg-slate-950 border border-emerald-900 rounded-lg p-2"><span class="text-slate-500">EXECUTOR INTERNAL</span><b id="rtExecutor" class="block text-amber-300">BOOTING</b></div>
-  </div>
-</section>
-
-<section class="panel p-3 border border-emerald-900/60">
-  <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-    <div><h2 class="text-xs uppercase text-emerald-300">🧬 LIVE CROSS-FILE MEDICAL MAP</h2><p class="text-[10px] text-slate-500 mt-1">Medicine melintasi seluruh surface secara live & real-time. Setiap file memiliki blok sendiri; blok diperbarui satu per satu selama scan, hubungan antar-file dibandingkan berdasarkan source yang benar-benar terbaca, lalu mismatch dijelaskan sebelum repair dibuka.</p></div>
-    <div class="flex items-center gap-2"><span id="surfaceState" class="text-[9px] text-amber-300">MENUNGGU SCAN</span><span id="surfaceUpdated" class="text-[9px] text-slate-500 code">—</span></div>
-  </div>
-  <div id="fileMap" class="grid md:grid-cols-2 xl:grid-cols-3 gap-3"></div>
-  <div class="mt-4 border-t border-slate-800 pt-3">
-    <div class="flex justify-between items-center"><h3 class="text-[10px] uppercase text-cyan-300">🔗 CROSS-FILE CONTRACT LINKS</h3><span id="relationN" class="text-[9px] text-slate-500">0 relasi</span></div>
-    <div id="relations" class="mt-2 space-y-2"></div>
-  </div>
-</section>
-
-<section class="panel p-3 border border-cyan-900/60">
-  <div class="flex flex-wrap items-center justify-between gap-2">
-    <div><h2 class="text-xs uppercase text-cyan-300">🧭 Precision Repair Pipeline</h2><p class="text-[10px] text-slate-500 mt-1">Evidence → Source exact → Root cause → BEFORE → AFTER → Copy Solution → Human Review</p></div>
-    <span id="pipelineState" class="text-[9px] text-amber-300">MENUNGGU CASE</span>
-  </div>
-</section>
-
-<section class="grid grid-cols-2 md:grid-cols-6 gap-3">
-  <div class="panel p-3"><small class="text-[9px] text-slate-400">ORGAN</small><b id="org" class="block text-2xl">0</b></div>
-  <div class="panel p-3"><small class="text-[9px] text-slate-400">TELEMETRY</small><b id="logs" class="block text-2xl text-blue-400">0</b></div>
-  <div class="panel p-3"><small class="text-[9px] text-slate-400">CASES</small><b id="casesN" class="block text-2xl text-amber-400">0</b></div>
-  <div class="panel p-3"><small class="text-[9px] text-slate-400">ACTIVE</small><b id="active" class="block text-2xl text-rose-400">0</b></div>
-  <div class="panel p-3"><small class="text-[9px] text-slate-400">FINDINGS</small><b id="findN" class="block text-2xl text-purple-400">0</b></div>
-  <div class="panel p-3"><small class="text-[9px] text-slate-400">REPAIRS</small><b id="repairs" class="block text-2xl text-emerald-400">0</b></div>
-</section>
-
-<section class="grid lg:grid-cols-3 gap-4">
-  <div class="panel p-4 lg:col-span-2">
-    <div class="flex justify-between items-center"><div><h2 class="text-xs uppercase text-slate-400">🧠 📡 Telemetry ↔ 💊 Medicine ↔ 👤 Anda</h2><p class="text-[10px] text-slate-500">Kanal komunikasi realtime terpisah • Medicine menerima telemetry tanpa memuat engine BCGO • target dapat dikoreksi setelah evidence</p></div><span id="chatLive" class="text-[10px] text-emerald-400">LIVE</span></div>
-    <div id="chat" class="mt-3 bg-slate-950 border border-slate-800 rounded-xl p-3 h-80 overflow-y-auto space-y-3"><div class="text-xs text-slate-500">Medicine aktif dalam LOCAL MODE. Menunggu kanal Firestore tanpa menghentikan pemeriksaan source.</div></div>
-    <form id="form" class="flex gap-2 mt-3"><input id="input" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm outline-none" placeholder="Tanya BCGO / Medicine..."><button id="send" class="bg-indigo-600 rounded-lg px-4 text-sm">Kirim</button></form>
-  </div>
-  <div class="panel p-4">
-    <div class="flex justify-between items-center"><h2 class="text-xs uppercase text-slate-400">🔬 Active Diagnosis</h2><span id="caseState" class="text-[9px] text-slate-500">WAITING</span></div>
-    <div id="diag" class="mt-3 text-xs text-slate-400">Belum ada case.</div>
-    <div class="grid grid-cols-1 gap-2 mt-3"><button id="approve" class="hidden w-full bg-emerald-700 rounded-lg py-2 text-xs">👤 SETUJUI REPAIR VALID</button><button id="apply" class="hidden w-full bg-indigo-700 rounded-lg py-2 text-xs">⚙️ LANJUTKAN EKSEKUSI</button><button id="validate" class="hidden w-full border border-cyan-800 text-cyan-300 rounded-lg py-2 text-xs">🧪 VALIDASI HASIL</button></div>
-  </div>
-</section>
-
-<section class="grid lg:grid-cols-2 gap-4">
-  <div class="panel p-4"><div class="flex justify-between items-center"><h2 class="text-xs uppercase text-slate-400">🧬 Cross-File Consistency</h2><button id="scan" class="text-[10px] border border-slate-700 rounded px-2 py-1">SCAN ULANG</button></div><div id="findings" class="mt-3 space-y-2 max-h-80 overflow-y-auto"></div></div>
-  <div class="panel p-4"><div class="flex justify-between items-center"><h2 class="text-xs uppercase text-slate-400">💊 Prescription</h2><span id="humanMode" class="text-[9px] text-amber-400">ASSISTED</span></div><div id="rx" class="mt-3 text-xs text-slate-400">Belum ada prescription.</div></div>
-</section>
-
-<section class="panel p-4">
-  <div class="flex flex-wrap justify-between gap-2 items-center"><div><h2 class="text-xs uppercase text-slate-400">🩺 REAL REPAIR / MEDICINE + EXECUTION</h2><p class="text-[10px] text-slate-500 mt-1">Medicine wajib membuktikan akar masalah sebenarnya, lokasi source, evidence exact, dan operasi exact. Diagnosis tetap engine internal CIKUR GO; kandidat diperiksa oleh BCGO Internal Executor melalui kanal browser realtime internal, tanpa GitHub API, AI API, Cloud Function, atau service eksekusi pihak ketiga. Setelah terbukti, Medicine menampilkan kode asli + solusi BEFORE → AFTER untuk direview dan dicopy manusia. Target telemetry boleh dikoreksi bila evidence menunjukkan sumber masalah yang berbeda.</p></div><span id="patchState" class="text-[9px] text-slate-500">NO PLAN</span></div>
-  <div id="patch" class="mt-3 text-xs text-slate-500">Belum ada repair plan.</div>
-  <div id="beforeAfter" class="mt-3 grid lg:grid-cols-2 gap-3"></div>
-  <div id="codePrescription" class="mt-4"></div>
-  <div id="validation" class="mt-3 text-xs text-slate-500"></div>
-</section>
-
-<section class="panel p-4 border border-amber-900/70">
-  <div class="flex flex-wrap justify-between gap-2 items-center"><div><h2 class="text-xs uppercase text-amber-300">🛠️ RUANG OPERASI — EXECUTION REVIEW</h2><p class="text-[10px] text-slate-500 mt-1">Kasus masuk setelah Medicine menemukan root cause dan evidence exact. Medicine dan Execution memeriksa kandidat secara realtime. Manusia hanya menerima kandidat yang sudah VALID untuk disetujui.</p></div><span id="surgeryState" class="text-[9px] text-amber-300">MENUNGGU EVIDENCE</span></div>
-  <div id="surgerySummary" class="mt-3 text-xs text-slate-500">Belum ada resep operasi.</div>
-</section>
-
-<section class="panel p-4">
-  <div class="flex justify-between items-center gap-2"><div><h2 class="text-xs uppercase text-slate-400">🧠 INVESTIGASI REALTIME — BCGO ↔ MEDICINE ↔ EXECUTION</h2><p class="text-[10px] text-slate-500 mt-1">Telemetry menjadi sinyal awal. Medicine membuka sesi investigasi dan Execution ikut menerima setiap tahap secara realtime. Execution tidak menentukan root cause dan tidak mengeksekusi; ia baru melakukan deterministic preflight ketika candidate exact tersedia. Persetujuan manusia hanya muncul setelah kandidat VALID.</p></div><span id="verifyState" class="text-[9px] text-slate-500">BELUM DIVERIFIKASI</span></div>
-  <div class="mt-3 border border-cyan-900/60 rounded-xl p-3 text-xs">
-    <div class="uppercase text-[9px] text-cyan-300">PARTISIPASI EXECUTION</div>
-    <div id="executionParticipation" class="mt-1 text-slate-300">Menunggu ACK dari Executor standalone...</div>
-  </div>
-  <div id="verification" class="mt-3 text-xs text-slate-500">Belum ada verifikasi terarah.</div>
-  <div id="verifyBtn" class="hidden mt-3 w-full border border-cyan-900 text-cyan-300 rounded-lg py-2 text-xs text-center">🔄 Investigasi berjalan otomatis secara realtime</div>
-</section>
-
-<section class="panel p-4">
-  <div class="flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-xs uppercase text-slate-400">🖐️ Human Control / Tangan Manusia</h2><p class="text-[10px] text-slate-500 mt-1">Tidak ada patch permanen tanpa persetujuan manusia. Jeda menghentikan treatment baru, telemetry tetap boleh dipantau. Review Execution berjalan otomatis melalui saraf realtime.</p></div><div class="flex flex-wrap gap-2"><button id="pause" class="text-[10px] border border-amber-700 text-amber-300 rounded px-3 py-2">JEDA MEDICINE</button><button id="reject" class="text-[10px] border border-rose-800 text-rose-300 rounded px-3 py-2">TOLAK TREATMENT</button></div></div>
-  <div class="mt-3 text-[10px] text-slate-500">Status kontrol: <span id="humanStatus" class="text-emerald-400">Medicine berjalan dengan pengawasan manusia. Source-code tetap terkunci. Internal Executor dimuat lokal sebagai komponen eksekusi tepercaya. Medicine hanya menyerahkan request setelah Human Approval dan Precision Gate lulus.</span></div>
-</section>
-
-<section class="panel p-4"><div class="flex justify-between"><h2 class="text-xs uppercase text-slate-400">📡 Live Medical Event Stream</h2><span id="eventN" class="text-[10px] text-slate-500">0 event</span></div><div id="events" class="mt-3 h-48 overflow-y-auto bg-slate-950 rounded-xl p-3 space-y-2"></div></section>
-<section class="panel p-4"><h2 class="text-xs uppercase text-slate-400">🧾 Medical Case History</h2><div id="history" class="mt-3 grid md:grid-cols-2 xl:grid-cols-3 gap-2"></div></section>
-</main>
-
+</div>
+</section><section class="panel p-4 priority">
+<div class="flex justify-between items-center gap-2"><div><h2 class="text-xs uppercase text-slate-400">🧠 INVESTIGASI REALTIME — BCGO ↔ MEDICINE ↔ EXECUTION</h2><p class="text-[10px] text-slate-500 mt-1">Telemetry menjadi sinyal awal. Medicine membuka sesi investigasi dan Execution ikut menerima setiap tahap secara realtime. Execution tidak menentukan root cause dan tidak mengeksekusi; ia baru melakukan deterministic preflight ketika candidate exact tersedia. Persetujuan manusia hanya muncul setelah kandidat VALID.</p></div><span class="text-[9px] text-slate-500" id="verifyState">BELUM DIVERIFIKASI</span></div>
+<div class="mt-3 border border-cyan-900/60 rounded-xl p-3 text-xs">
+<div class="uppercase text-[9px] text-cyan-300">PARTISIPASI EXECUTION</div>
+<div class="mt-1 text-slate-300" id="executionParticipation">Menunggu ACK dari Executor standalone...</div>
+</div>
+<div class="mt-3 text-xs text-slate-500" id="verification">Belum ada verifikasi terarah.</div>
+<div class="hidden mt-3 w-full border border-cyan-900 text-cyan-300 rounded-lg py-2 text-xs text-center" id="verifyBtn">🔄 Investigasi berjalan otomatis secara realtime</div>
+</section><section class="panel p-4 border border-amber-900/70">
+<div class="flex flex-wrap justify-between gap-2 items-center"><div><h2 class="text-xs uppercase text-amber-300">🛠️ RUANG OPERASI — EXECUTION REVIEW</h2><p class="text-[10px] text-slate-500 mt-1">Kasus masuk setelah Medicine menemukan root cause dan evidence exact. Medicine dan Execution memeriksa kandidat secara realtime. Manusia hanya menerima kandidat yang sudah VALID untuk disetujui.</p></div><span class="text-[9px] text-amber-300" id="surgeryState">MENUNGGU EVIDENCE</span></div>
+<div class="mt-3 text-xs text-slate-500" id="surgerySummary">Belum ada resep operasi.</div>
+</section><section class="panel p-4 priority code-focus">
+<div class="flex flex-wrap justify-between gap-2 items-center"><div><h2 class="text-xs uppercase text-slate-400">🩺 REAL REPAIR / MEDICINE + EXECUTION</h2><p class="text-[10px] text-slate-500 mt-1">Medicine wajib membuktikan akar masalah sebenarnya, lokasi source, evidence exact, dan operasi exact. Diagnosis tetap engine internal CIKUR GO; kandidat diperiksa oleh BCGO Internal Executor melalui kanal browser realtime internal, tanpa GitHub API, AI API, Cloud Function, atau service eksekusi pihak ketiga. Setelah terbukti, Medicine menampilkan kode asli + solusi BEFORE → AFTER untuk direview dan dicopy manusia. Target telemetry boleh dikoreksi bila evidence menunjukkan sumber masalah yang berbeda.</p></div><span class="text-[9px] text-slate-500" id="patchState">NO PLAN</span></div>
+<div class="mt-3 text-xs text-slate-500" id="patch">Belum ada repair plan.</div>
+<div class="mt-3 grid lg:grid-cols-2 gap-3" id="beforeAfter"></div>
+<div class="mt-4" id="codePrescription"></div>
+<div class="mt-3 text-xs text-slate-500" id="validation"></div>
+</section><section class="panel p-4 human-card action-zone">
+<div class="flex flex-wrap justify-between items-start gap-3">
+<div>
+<div class="layout-kicker">👤 TANGAN MANUSIA — ACTION CENTER</div>
+<h2 class="text-sm font-bold mt-1">Hanya lakukan tindakan ketika status sudah jelas</h2>
+<p class="workflow-note mt-1">Medicine tetap menginvestigasi otomatis. Tombol di bawah muncul hanya pada fase yang memang membutuhkan tindakan manusia.</p>
+</div>
+<span class="text-[9px] text-amber-400" id="humanMode">ASSISTED</span>
+</div>
+<div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2">
+<div class="rounded-xl border border-emerald-900/60 bg-emerald-950/10 p-3"><div class="action-label">1 · Review &amp; Approval</div><div class="text-[10px] text-slate-500 mt-1">Aktif hanya setelah evidence exact + root cause + candidate dinyatakan VALID.</div><div class="mt-2" id="approveSlot"><button class="hidden w-full bg-emerald-700 rounded-lg py-2 text-xs w-full" id="approve">👤 SETUJUI REPAIR VALID</button></div></div>
+<div class="rounded-xl border border-indigo-900/60 bg-indigo-950 p-3"><div class="action-label">2 · Execution</div><div class="text-[10px] text-slate-500 mt-1">Setelah approval, barulah request repair diteruskan ke Executor.</div><div class="mt-2" id="applySlot"><button class="hidden w-full bg-indigo-700 rounded-lg py-2 text-xs w-full" id="apply">⚙️ LANJUTKAN EKSEKUSI</button></div></div>
+<div class="rounded-xl border border-cyan-900/60 bg-cyan-950/40 p-3"><div class="action-label">3 · Validation</div><div class="text-[10px] text-slate-500 mt-1">Periksa hasil setelah executor selesai; monitoring kemudian tetap berjalan.</div><div class="mt-2" id="validateSlot"><button class="hidden w-full border border-cyan-800 text-cyan-300 rounded-lg py-2 text-xs w-full" id="validate">🧪 VALIDASI HASIL</button></div></div>
+</div>
+<div class="mt-3 border-t border-slate-800 pt-3 flex flex-wrap items-center gap-2">
+<button class="text-[10px] border border-amber-700 text-amber-300 rounded px-3 py-2" id="pause">JEDA MEDICINE</button>
+<button class="text-[10px] border border-rose-800 text-rose-300 rounded px-3 py-2" id="reject">TOLAK TREATMENT</button>
+<span class="text-[10px] text-slate-500 flex-1 min-w-[220px]" id="humanStatus">Medicine berjalan dengan pengawasan manusia.</span>
+</div>
+</section><div class="grid lg:grid-cols-2 gap-4"><section class="panel p-4">
+<div class="panel p-4"><div class="flex justify-between items-center"><h2 class="text-xs uppercase text-slate-400">🧬 Cross-File Consistency</h2><button class="text-[10px] border border-slate-700 rounded px-2 py-1" id="scan">SCAN ULANG</button></div><div class="mt-3 space-y-2 max-h-80 overflow-y-auto" id="findings"></div></div>
+<div class="panel p-4"><div class="flex justify-between items-center"><h2 class="text-xs uppercase text-slate-400">💊 Prescription</h2></div><div class="mt-3 text-xs text-slate-400" id="rx">Belum ada prescription.</div></div>
+</section><section class="panel p-4 muted-tools">
+<div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+<div><h2 class="text-xs uppercase text-emerald-300">🧬 LIVE CROSS-FILE MEDICAL MAP</h2><p class="text-[10px] text-slate-500 mt-1">Medicine melintasi seluruh surface secara live &amp; real-time. Setiap file memiliki blok sendiri; blok diperbarui satu per satu selama scan, hubungan antar-file dibandingkan berdasarkan source yang benar-benar terbaca, lalu mismatch dijelaskan sebelum repair dibuka.</p></div>
+<div class="flex items-center gap-2"><span class="text-[9px] text-amber-300" id="surfaceState">MENUNGGU SCAN</span><span class="text-[9px] text-slate-500 code" id="surfaceUpdated">—</span></div>
+</div>
+<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-3" id="fileMap"></div>
+<div class="mt-4 border-t border-slate-800 pt-3">
+<div class="flex justify-between items-center"><h3 class="text-[10px] uppercase text-cyan-300">🔗 CROSS-FILE CONTRACT LINKS</h3><span class="text-[9px] text-slate-500" id="relationN">0 relasi</span></div>
+<div class="mt-2 space-y-2" id="relations"></div>
+</div>
+</section></div><section class="panel p-4 muted-tools"><div class="flex justify-between"><h2 class="text-xs uppercase text-slate-400">📡 Live Medical Event Stream</h2><span class="text-[10px] text-slate-500" id="eventN">0 event</span></div><div class="mt-3 h-48 overflow-y-auto bg-slate-950 rounded-xl p-3 space-y-2" id="events"></div></section><section class="panel p-4 muted-tools"><h2 class="text-xs uppercase text-slate-400">🧾 Medical Case History</h2><div class="mt-3 grid md:grid-cols-2 xl:grid-cols-3 gap-2" id="history"></div></section><div class="panel p-3 border border-emerald-900/60"><div class="flex items-center justify-between gap-2"><div><div class="layout-kicker">👁 CONTINUOUS MONITORING</div><div class="text-xs text-slate-300 mt-1">Case selesai bukan berarti Medicine berhenti. Telemetry tetap dipantau dan saraf dapat membuka investigasi baru kapan saja.</div></div><span class="text-[9px] text-emerald-300">REALTIME</span></div></div></main>
 <script>window.__BCGO_EXECUTOR_ROLE = "MEDICINE_EMBEDDED";</script>
 <script src="./bcgo-executor-core.js"></script>
 <script src="./bcgo-executor.js"></script>

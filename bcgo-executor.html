@@ -1,9 +1,10 @@
-<!doctype html>
+<!DOCTYPE html>
+
 <html lang="id">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BCGO Internal Executor — Control & Monitoring v3.2.0</title>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<title>BCGO Executor — Precision Execution Control Room</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#f4f7fb;color:#17212b;font-family:system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.5}
@@ -22,70 +23,80 @@ button{border:0;border-radius:10px;padding:9px 13px;font-weight:800;cursor:point
 .small{font-size:10px;color:#64748b}.check{font-weight:900;color:#059669}.nowrap{white-space:nowrap}
 @media(max-width:760px){.grid{grid-template-columns:1fr 1fr}.two{grid-template-columns:1fr}}@media(max-width:500px){main{padding:10px}.grid{grid-template-columns:1fr}.card{padding:14px}}
 </style>
-</head>
+<style>
+/* v6 layout only: existing Executor IDs and JS contracts are preserved. */
+body{background:#020617;color:#e5e7eb}
+main{max-width:1180px;padding:14px}
+.card{background:linear-gradient(180deg,#111a32,#0d1529);border:1px solid #243047;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 8px 28px rgba(0,0,0,.18)}
+h1,h2{color:#f1f5f9}.sub{color:#8190a8}
+.grid{gap:10px}.item{background:#020617;border:1px solid #26344f;border-radius:12px;padding:11px}.label{color:#8190a8}.value{color:#e5e7eb}
+.codebox{border-color:#26344f}.codehead{background:#0b1220;color:#cbd5e1}.codebox textarea{background:#020617;color:#e5e7eb;border-color:#26344f}
+pre{background:#020617;color:#e5e7eb;border:1px solid #26344f}
+.banner{background:#0b1220;border-color:#26344f;color:#cbd5e1}.banner.live{background:rgba(6,78,59,.22);border-color:#065f46}.banner.warn{background:rgba(69,26,3,.22);border-color:#78350f}.banner.fail{background:rgba(127,29,29,.22);border-color:#881337}
+button{background:#172554;color:#f8fafc;border:1px solid #334155}.secondary{background:#172033!important;color:#cbd5e1!important}.success{background:#047857!important}.warn{background:#92400e!important}
+.ok{color:#6ee7b7}.warn{color:#fcd34d}.fail{color:#fda4af}.muted{color:#8190a8}
+.section-label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#8190a8;font-weight:800}
+.priority-card{border-color:#155e75;box-shadow:0 0 0 1px rgba(34,211,238,.05),0 12px 30px rgba(0,0,0,.16)}
+.gate-card{border-color:#78350f;box-shadow:0 0 0 1px rgba(245,158,11,.05),0 12px 30px rgba(0,0,0,.16)}
+.advanced{border-color:#26344f}
+@media(max-width:760px){main{padding:10px}.grid{grid-template-columns:1fr}.two{grid-template-columns:1fr}.card{padding:14px}}
+</style></head>
 <body>
-<main>
-<section class="card">
-<h1>BCGO Internal Executor</h1>
+<main><section class="card">
+<h1>⚙️ EXECUTOR — CONTROL ROOM</h1>
 <p class="sub">Mesin eksekusi source deterministik internal CIKUR GO. Tidak menggunakan API eksternal sebagai otak eksekusi.</p>
-<div id="systemBanner" class="banner">Memulai pemeriksaan executor...</div>
+<div class="banner" id="systemBanner">Memulai pemeriksaan executor...</div>
 <div class="grid" style="margin-top:12px">
-<div class="item"><div class="label">Engine</div><div id="engine" class="value">BOOTING</div></div>
-<div class="item"><div class="label">Version</div><div id="version" class="value">-</div></div>
-<div class="item"><div class="label">Status</div><div id="status" class="value">-</div></div>
-<div class="item"><div class="label">Core</div><div id="core" class="value">-</div></div>
-<div class="item"><div class="label">Persistence</div><div id="persistence" class="value">-</div></div>
-<div class="item"><div class="label">External Service</div><div id="external" class="value ok">NONE</div></div>
+<div class="item"><div class="label">Engine</div><div class="value" id="engine">BOOTING</div></div>
+<div class="item"><div class="label">Version</div><div class="value" id="version">-</div></div>
+<div class="item"><div class="label">Status</div><div class="value" id="status">-</div></div>
+<div class="item"><div class="label">Core</div><div class="value" id="core">-</div></div>
+<div class="item"><div class="label">Persistence</div><div class="value" id="persistence">-</div></div>
+<div class="item"><div class="label">External Service</div><div class="value ok" id="external">NONE</div></div>
 </div>
-<div class="actions"><button id="refresh" class="secondary">Perbarui Status</button><button id="reset" class="secondary">Reset Runtime</button></div>
-</section>
-
-<section class="card">
-<h2><span id="nerveLamp" class="lamp off"></span>Saraf BCGO → Executor</h2>
+<div class="actions"><button class="secondary" id="refresh">Perbarui Status</button><button class="secondary" id="reset">Reset Runtime</button></div>
+</section><section class="card priority-card">
+<h2><span class="lamp off" id="nerveLamp"></span>🫀 LIVE NERVE — BCGO → EXECUTOR</h2>
 <p class="sub">Lampu ini <b>tidak pernah dibuat hijau secara dummy</b>. Hijau hanya setelah executor menerima state BCGO nyata melalui bridge browser internal yang sudah dipakai BCGO.</p>
 <div class="grid">
-<div class="item"><div class="label">Connection</div><div id="nerveStatus" class="value">DISCONNECTED</div></div>
-<div class="item"><div class="label">Last Pulse</div><div id="nerveAge" class="value">-</div></div>
-<div class="item"><div class="label">Cycle / Step</div><div id="nerveCycle" class="value">-</div></div>
-<div class="item"><div class="label">Telemetry</div><div id="nerveTelemetry" class="value">-</div></div>
-<div class="item"><div class="label">Active / Total</div><div id="nerveMetrics" class="value">-</div></div>
-<div class="item"><div class="label">Bridge Source</div><div id="nerveSource" class="value">NONE</div></div>
-<div class="item"><div class="label">Medicine ACK</div><div id="medicineAck" class="value">WAITING</div></div>
+<div class="item"><div class="label">Connection</div><div class="value" id="nerveStatus">DISCONNECTED</div></div>
+<div class="item"><div class="label">Last Pulse</div><div class="value" id="nerveAge">-</div></div>
+<div class="item"><div class="label">Cycle / Step</div><div class="value" id="nerveCycle">-</div></div>
+<div class="item"><div class="label">Telemetry</div><div class="value" id="nerveTelemetry">-</div></div>
+<div class="item"><div class="label">Active / Total</div><div class="value" id="nerveMetrics">-</div></div>
+<div class="item"><div class="label">Bridge Source</div><div class="value" id="nerveSource">NONE</div></div>
+<div class="item"><div class="label">Medicine ACK</div><div class="value" id="medicineAck">WAITING</div></div>
 </div>
-<div id="nerveBanner" class="banner">Menunggu pulsa BCGO nyata...</div>
-</section>
-
-<section class="card" id="reviewPanel">
-<h2>🧠 Incoming Repair Candidate — Medicine ↔ Execution</h2>
-<p class="sub">Panel ini menerima kandidat perbaikan dari Medicine melalui BroadcastChannel + localStorage internal. Executor hanya melakukan deterministic review; <b>tidak menulis source dan tidak mengeksekusi kandidat yang masuk.</b></p>
-<div class="grid" style="margin-top:12px">
-<div class="item"><div class="label">Channel</div><div id="reviewChannel" class="value ok">CROSS-PAGE</div></div>
-<div class="item"><div class="label">Review Status</div><div id="incomingReviewStatus" class="value">WAITING</div></div>
-<div class="item"><div class="label">Case / Proposal</div><div id="incomingCase" class="value">-</div></div>
-<div class="item"><div class="label">Target File</div><div id="incomingFile" class="value">-</div></div>
-<div class="item"><div class="label">Fingerprint</div><div id="incomingFingerprint" class="value code">-</div></div>
-<div class="item"><div class="label">Transport</div><div id="incomingTransport" class="value">-</div></div>
-</div>
-<div id="incomingReviewBanner" class="banner">Menunggu candidate dari Medicine...</div>
-<pre id="incomingCandidate" style="margin-top:10px;min-height:160px">Belum ada candidate.</pre>
-</section>
-
-<section class="card">
-<h2>🧠 Investigation Channel — Medicine ↔ Execution</h2>
+<div class="banner" id="nerveBanner">Menunggu pulsa BCGO nyata...</div>
+</section><section class="card priority-card">
+<h2>🤝 INVESTIGATION — MEDICINE ↔ EXECUTOR</h2>
 <p class="sub">Partisipasi investigasi lintas halaman. Executor menerima setiap tahap investigasi Medicine secara realtime sebelum kandidat repair dikirim. Executor tidak menentukan root cause dan tidak menulis source pada tahap ini.</p>
 <div class="grid">
-<div class="item"><div class="label">Channel</div><div id="investigationChannel" class="value ok">CROSS-PAGE</div></div>
-<div class="item"><div class="label">Participation</div><div id="investigationStatus" class="value">WAITING</div></div>
-<div class="item"><div class="label">Case / Session</div><div id="investigationCase" class="value">-</div></div>
-<div class="item"><div class="label">Phase</div><div id="investigationPhase" class="value">-</div></div>
-<div class="item"><div class="label">Target</div><div id="investigationTarget" class="value">-</div></div>
-<div class="item"><div class="label">Evidence</div><div id="investigationEvidence" class="value">0 / 0</div></div>
+<div class="item"><div class="label">Channel</div><div class="value ok" id="investigationChannel">CROSS-PAGE</div></div>
+<div class="item"><div class="label">Participation</div><div class="value" id="investigationStatus">WAITING</div></div>
+<div class="item"><div class="label">Case / Session</div><div class="value" id="investigationCase">-</div></div>
+<div class="item"><div class="label">Phase</div><div class="value" id="investigationPhase">-</div></div>
+<div class="item"><div class="label">Target</div><div class="value" id="investigationTarget">-</div></div>
+<div class="item"><div class="label">Evidence</div><div class="value" id="investigationEvidence">0 / 0</div></div>
 </div>
-<div id="investigationBanner" class="banner">Menunggu Medicine membuka sesi investigasi...</div>
+<div class="banner" id="investigationBanner">Menunggu Medicine membuka sesi investigasi...</div>
 <pre id="investigationDetail" style="margin-top:10px;min-height:80px">Belum ada sesi investigasi.</pre>
-</section>
-
-<section class="card">
+</section><section class="card priority-card" id="reviewPanel">
+<h2>📥 CANDIDATE MASUK — MEDICINE → EXECUTOR</h2>
+<p class="sub">Panel ini menerima kandidat perbaikan dari Medicine melalui BroadcastChannel + localStorage internal. Executor hanya melakukan deterministic review; <b>tidak menulis source dan tidak mengeksekusi kandidat yang masuk.</b></p>
+<div class="grid" style="margin-top:12px">
+<div class="item"><div class="label">Channel</div><div class="value ok" id="reviewChannel">CROSS-PAGE</div></div>
+<div class="item"><div class="label">Review Status</div><div class="value" id="incomingReviewStatus">WAITING</div></div>
+<div class="item"><div class="label">Case / Proposal</div><div class="value" id="incomingCase">-</div></div>
+<div class="item"><div class="label">Target File</div><div class="value" id="incomingFile">-</div></div>
+<div class="item"><div class="label">Fingerprint</div><div class="value code" id="incomingFingerprint">-</div></div>
+<div class="item"><div class="label">Transport</div><div class="value" id="incomingTransport">-</div></div>
+</div>
+<div class="banner" id="incomingReviewBanner">Menunggu candidate dari Medicine...</div>
+<pre id="incomingCandidate" style="margin-top:10px;min-height:160px">Belum ada candidate.</pre>
+<div class="banner warn">Gate manusia: Executor hanya menilai secara deterministic. Tidak ada source write dari candidate cross-page tanpa persetujuan manusia.</div></section><section class="card gate-card">
+<h2>🛡️ REVIEW / EXECUTION RESULT</h2><p class="sub">VALID berarti candidate lolos deterministic review. Write/execute tetap menunggu approval manusia.</p><pre id="result">Belum ada execution.</pre>
+</section><section class="card advanced">
 <h2>Executor Checklist</h2>
 <p class="sub">Ceklis mengikuti pondasi yang kita sepakati; setiap komponen berada di dalam tiga file internal ini.</p>
 <table><thead><tr><th>File</th><th>Komponen</th><th>Status</th></tr></thead><tbody>
@@ -102,38 +113,26 @@ button{border:0;border-radius:10px;padding:9px 13px;font-weight:800;cursor:point
 <tr><td>bcgo-executor.js</td><td>Audit Manager</td><td class="check">☑ AKTIF</td></tr>
 <tr><td>bcgo-executor.html</td><td>Control / Monitoring</td><td class="check">☑ AKTIF</td></tr>
 </tbody></table>
-</section>
-
-<section class="card">
+</section><section class="card advanced">
 <h2>Source Manager</h2>
 <p class="sub">Source yang terdaftar disimpan di IndexedDB internal. Import file membaca source; koneksi File System Access, bila tersedia browser, dapat memberi executor handle untuk menulis kembali file lokal dan melakukan read-back verification.</p>
 <div class="two">
-<div><label>Source ID / File</label><input id="sourceId" value="demo-config.js"></div>
-<div><label>Fingerprint saat ini</label><input id="sourceFingerprint" readonly value="-"></div>
+<div><label>Source ID / File</label><input id="sourceId" value="demo-config.js"/></div>
+<div><label>Fingerprint saat ini</label><input id="sourceFingerprint" readonly="" value="-"/></div>
 </div>
-<div class="codebox" style="margin-top:10px"><div class="codehead"><span>ISI SOURCE INTERNAL</span><button class="copy" data-copy="sourceText">📋 COPY CODE</button></div><textarea id="sourceText" class="code" spellcheck="false">// CIKUR GO Internal Demo Config
+<div class="codebox" style="margin-top:10px"><div class="codehead"><span>ISI SOURCE INTERNAL</span><button class="copy" data-copy="sourceText">📋 COPY CODE</button></div><textarea class="code" id="sourceText" spellcheck="false">// CIKUR GO Internal Demo Config
 const STATUS_MODE = "STABLE_OFFLINE";
 const ROUTE_VERSION = "v3.0.0";
 </textarea></div>
-<div class="actions"><button id="saveSource" class="success">Simpan Source Internal</button><button id="loadSource" class="secondary">Muat Source</button><button id="importFile" class="secondary">Import File</button><button id="bindFile" class="secondary">Hubungkan File Lokal</button><input id="fileInput" type="file" hidden></div>
-<div id="sourceInfo" class="small" style="margin-top:8px">Belum membaca source.</div>
-</section>
-
-<section class="card">
+<div class="actions"><button class="success" id="saveSource">Simpan Source Internal</button><button class="secondary" id="loadSource">Muat Source</button><button class="secondary" id="importFile">Import File</button><button class="secondary" id="bindFile">Hubungkan File Lokal</button><input hidden="" id="fileInput" type="file"/></div>
+<div class="small" id="sourceInfo" style="margin-top:8px">Belum membaca source.</div>
+</section><section class="card advanced">
 <h2>Deterministic Patch Test</h2>
 <p class="sub">Alur nyata: Request → Approval Gate → Fingerprint → Exact Patch → Diff → Validation → Persistence → Read-back Verification.</p>
-<div class="codebox"><div class="codehead"><span>EXACT TARGET / BEFORE</span><button class="copy" data-copy="targetBefore">📋 COPY CODE</button></div><textarea id="targetBefore" class="code" spellcheck="false">const STATUS_MODE = "STABLE_OFFLINE";</textarea></div>
-<div class="codebox" style="margin-top:10px"><div class="codehead"><span>SOLUTION / AFTER</span><button class="copy solution" data-copy="targetAfter">📋 COPY SOLUSI</button></div><textarea id="targetAfter" class="code" spellcheck="false">const STATUS_MODE = "SECURE_ACTIVE";</textarea></div>
-<div class="actions"><button id="runTest" class="success">Jalankan Test APPROVED</button><button id="resetDemo" class="secondary">Reset Demo Source</button></div>
-</section>
-
-<section class="card">
-<h2>Hasil Eksekusi</h2><pre id="result">Belum ada execution.</pre>
-</section>
-<section class="card"><h2>Internal Sources</h2><pre id="sources">Memuat...</pre></section>
-<section class="card"><h2>Audit / Runtime History</h2><pre id="history">Belum ada audit.</pre></section>
-</main>
-
+<div class="codebox"><div class="codehead"><span>EXACT TARGET / BEFORE</span><button class="copy" data-copy="targetBefore">📋 COPY CODE</button></div><textarea class="code" id="targetBefore" spellcheck="false">const STATUS_MODE = "STABLE_OFFLINE";</textarea></div>
+<div class="codebox" style="margin-top:10px"><div class="codehead"><span>SOLUTION / AFTER</span><button class="copy solution" data-copy="targetAfter">📋 COPY SOLUSI</button></div><textarea class="code" id="targetAfter" spellcheck="false">const STATUS_MODE = "SECURE_ACTIVE";</textarea></div>
+<div class="actions"><button class="success" id="runTest">Jalankan Test APPROVED</button><button class="secondary" id="resetDemo">Reset Demo Source</button></div>
+</section><section class="card advanced"><h2>Internal Sources</h2><pre id="sources">Memuat...</pre></section><section class="card advanced"><h2>Audit / Runtime History</h2><pre id="history">Belum ada audit.</pre></section></main>
 <script src="./bcgo-executor-core.js?v=3.2.0"></script>
 <script src="./bcgo-executor.js?v=3.2.0"></script>
 <script>
