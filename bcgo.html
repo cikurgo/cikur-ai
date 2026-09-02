@@ -414,9 +414,16 @@ function renderSourceScan(scan) {
     const relations = (Array.isArray(scan.relations) ? scan.relations : []).filter(r => r.status && r.status !== 'LINKED').slice(0, 16);
     const items = [...findings, ...failures];
     const relationHtml = relations.map(r => {
-        const bad = /MISMATCH|DRIFT/.test(String(r.status));
-        const title = r.type === 'SHARED_FORM_SURFACE' ? `FORM:${r.key}` : r.type === 'SHARED_FUNCTION_SURFACE' ? `FUNCTION:${r.key}` : r.type;
-        return `<div class="border ${bad ? 'border-rose-900 bg-rose-950/20' : 'border-cyan-900 bg-cyan-950/10'} rounded-lg px-3 py-2"><div class="flex justify-between gap-3 text-[10px]"><span class="font-bold ${bad ? 'text-rose-400' : 'text-cyan-300'}">${esc(r.status)} · ${esc(title)}</span><span class="text-slate-500 code-font">${esc(r.sourceFile || '-')} → ${esc(r.targetFile || '-')}</span></div><div class="text-[9px] text-slate-400 mt-1 code-font">${r.sourceLine ? `source:${esc(r.sourceLine)} ` : ''}${r.targetLine ? `target:${esc(r.targetLine)}` : ''}${r.evidence?.missing?.length ? ` · missing:${esc(r.evidence.missing.join(', '))}` : ''}</div></div>`;
+        const bad = /MISMATCH/.test(String(r.status));
+        const informative = /VARIANT|LINKED/.test(String(r.status));
+        const title = r.type === 'CROSS_FILE_CONTRACT' ? `CONTRACT:${r.key}` : r.type === 'CROSS_FILE_SURFACE' ? `SURFACE:${r.key}` : r.type === 'SHARED_FUNCTION_VARIANT' ? `FUNCTION:${r.key}` : r.type;
+        const ev = r.evidence || {};
+        const missing = [...(ev.missingFields || []), ...(ev.missingHandlers || []), ...(ev.missingSemantic || [])].slice(0,8);
+        const coverage = Number.isFinite(ev.targetCoverageOfReference) ? ` · coverage:${ev.targetCoverageOfReference}%` : '';
+        const confidence = ev.identityScore ? ` · identity:${ev.identityScore}` : '';
+        const border = bad ? 'border-rose-900 bg-rose-950/20' : informative ? 'border-slate-800 bg-slate-950/40' : 'border-cyan-900 bg-cyan-950/10';
+        const text = bad ? 'text-rose-400' : informative ? 'text-slate-400' : 'text-cyan-300';
+        return `<div class="border ${border} rounded-lg px-3 py-2"><div class="flex justify-between gap-3 text-[10px]"><span class="font-bold ${text}">${esc(r.status)} · ${esc(title)} · ${esc(r.confidence || 'UNKNOWN')}</span><span class="text-slate-500 code-font">${esc(r.sourceFile || '-')} → ${esc(r.targetFile || '-')}</span></div><div class="text-[9px] text-slate-400 mt-1 code-font">${r.sourceLine ? `source:${esc(r.sourceLine)} ` : ''}${r.targetLine ? `target:${esc(r.targetLine)}` : ''}${coverage}${confidence}</div>${missing.length ? `<div class="text-[9px] mt-1 ${bad ? 'text-rose-300' : 'text-slate-500'} code-font">MISSING: ${esc(missing.join(', '))}</div>` : ''}</div>`;
     }).join('');
     if (!items.length && !relations.length) { crossFileFindingsEl.innerHTML = running ? '<div class="text-xs text-slate-600 code-font">Cross-file comparison menunggu seluruh source yang dibutuhkan selesai dibaca.</div>' : '<div class="text-xs text-slate-500">Belum ada relasi atau temuan cross-file yang membutuhkan pemeriksaan.</div>'; return; }
     const findingHtml = items.map(f => `<div class="border ${f.severity === 'HIGH' ? 'border-rose-900 bg-rose-950/20' : 'border-amber-900 bg-amber-950/20'} rounded-lg px-3 py-2"><div class="flex justify-between gap-3 text-[10px]"><span class="font-bold ${f.severity === 'HIGH' ? 'text-rose-400' : 'text-amber-400'}">${esc(f.type || 'SOURCE_FINDING')}</span><span class="text-slate-500">${esc(f.sourceFile || f.file || '-')} ${f.sourceLine ? `:${esc(f.sourceLine)}` : ''}</span></div><div class="text-xs text-slate-200 mt-1">${esc(f.message || '-')}</div>${f.targetFile ? `<div class="text-[9px] text-slate-500 mt-1 code-font">REFERENCE CANDIDATE: ${esc(f.sourceFile)}:${esc(f.sourceLine)} → TARGET CANDIDATE: ${esc(f.targetFile)}:${esc(f.targetLine)}</div>` : ''}</div>`).join('');

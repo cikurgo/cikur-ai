@@ -44,7 +44,7 @@ const ORGAN_COUNT = Object.keys(ORGAN_REGISTRY).length;
 
 const SOURCE_SCAN_INTERVAL = 20000;
 const SOURCE_SCAN_FETCH_TIMEOUT = 10000;
-const SOURCE_SCAN_VERSION = "1.4.0";
+const SOURCE_SCAN_VERSION = "1.5.0";
 
 const ACTIVE_WINDOW = 15 * 60 * 1000;
 const CLOCK_SKEW = 5 * 60 * 1000;
@@ -620,142 +620,190 @@ export function runAutonomousEngine(onCycleUpdate) {
     return values.filter(Boolean).map(v => String(v).replace(/[^a-zA-Z0-9_$:-]/g, '').toLowerCase()).filter(Boolean);
   }
 
+  function normalizeContractValue(value) {
+    return normalizeSurfaceToken(value).replace(/\b(the|dan|atau|untuk|dengan|silakan|klik|submit)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function formContract(form) {
+    const fields = (form?.fieldEntries || []).map(x => normalizeContractValue(x?.normalized || x?.value)).filter(Boolean);
+    const semantic = (form?.semanticSurface || []).map(normalizeContractValue).filter(Boolean);
+    const labels = (form?.surfaceLabel || []).map(normalizeContractValue).filter(Boolean);
+    const handlers = (form?.handlerRefs || []).map(x => normalizeContractValue(x?.name)).filter(Boolean);
+    const submit = form?.submitHandler ? [normalizeContractValue(form.submitHandler)] : [];
+    const action = form?.action ? [normalizeContractValue(form.action)] : [];
+    const all = new Set([...fields, ...semantic, ...labels, ...handlers, ...submit, ...action].filter(Boolean));
+    return { fields:[...new Set(fields)], semantic:[...new Set(semantic)], labels:[...new Set(labels)], handlers:[...new Set([...handlers,...submit])], action:[...new Set(action)], tokens:[...all] };
+  }
+
+  function intersection(a, b) {
+    const bs = new Set(b || []);
+    return [...new Set(a || [])].filter(x => bs.has(x));
+  }
+
+  function subsetRatio(a, b) {
+    const aa = new Set(a || []);
+    if (!aa.size) return 0;
+    return intersection([...aa], b).length / aa.size;
+  }
+
+  function businessIdentityScore(reference, target) {
+    const a = formContract(reference), b = formContract(target);
+    const fieldShared = intersection(a.fields, b.fields);
+    const semanticShared = intersection(a.semantic, b.semantic);
+    const labelShared = intersection(a.labels, b.labels);
+    const tokenShared = intersection(a.tokens, b.tokens);
+    const fieldUnion = new Set([...a.fields, ...b.fields]).size || 1;
+    const semanticUnion = new Set([...a.semantic, ...b.semantic]).size || 1;
+    const fieldJaccard = fieldShared.length / fieldUnion;
+    const semanticJaccard = semanticShared.length / semanticUnion;
+    const keyExact = Boolean(reference.key && target.key && reference.key.toLowerCase() === target.key.toLowerCase());
+    const distinctive = tokenShared.filter(x => x.length >= 5 && !['email','password','username','alamat','address','phone','nomor','number','submit','button'].includes(x));
+    const score = keyExact ? 1 : Math.min(1, fieldJaccard * 0.55 + semanticJaccard * 0.25 + Math.min(1, distinctive.length / 3) * 0.20);
+    return {score, fieldShared, semanticShared, labelShared, tokenShared, distinctive, fieldJaccard, semanticJaccard, keyExact};
+  }
+
+  function compareContract(reference, target) {
+    const a = formContract(reference), b = formContract(target);
+    const missingFields = a.fields.filter(x => !b.fields.includes(x));
+    const extraFields = b.fields.filter(x => !a.fields.includes(x));
+    const missingLabels = a.labels.filter(x => !b.labels.includes(x));
+    const extraLabels = b.labels.filter(x => !a.labels.includes(x));
+    const missingHandlers = a.handlers.filter(x => !b.handlers.includes(x));
+    const extraHandlers = b.handlers.filter(x => !a.handlers.includes(x));
+    const missingSemantic = a.semantic.filter(x => !b.semantic.includes(x));
+    const extraSemantic = b.semantic.filter(x => !a.semantic.includes(x));
+    const sourceComponentCount = new Set([...a.fields, ...a.labels, ...a.handlers, ...a.semantic]).size;
+    const targetComponentCount = new Set([...b.fields, ...b.labels, ...b.handlers, ...b.semantic]).size;
+    const missingComponents = [...new Set([...missingFields, ...missingLabels, ...missingHandlers, ...missingSemantic])];
+    return {missingFields, extraFields, missingLabels, extraLabels, missingHandlers, extraHandlers, missingSemantic, extraSemantic, missingComponents, sourceComponentCount, targetComponentCount};
+  }
+
   function compareCrossFileSources(scanned) {
     const findings = [], relations = [];
     const items = Object.values(scanned);
-    const byFormKey = new Map();
     const allForms = [];
     const functionMap = new Map();
-    const refPairs = new Set();
 
     for (const item of items) {
-      for (const form of item.forms || []) {
-        const entry = { file:item.file, role:item.role, ...form };
-        allForms.push(entry);
-        if (entry.key) {
-          if (!byFormKey.has(entry.key)) byFormKey.set(entry.key, []);
-          byFormKey.get(entry.key).push(entry);
-        }
-      }
+      for (const form of item.forms || []) allForms.push({file:item.file, role:item.role, ...form});
       for (const fn of item.functions || []) {
         if (!functionMap.has(fn.name)) functionMap.set(fn.name, []);
-        functionMap.get(fn.name).push({ file:item.file, role:item.role, ...fn });
-      }
-      for (const ref of item.refs || []) {
-        if (scanned[ref]) {
-          refPairs.add(`${item.file}|${ref}`);
-          relations.push({ sourceFile:item.file, targetFile:ref, type:'EXPLICIT_FILE_REFERENCE', status:'LINKED', confidence:'HIGH', evidence:{reason:'Referensi file ditemukan langsung di source.'} });
-        }
+        functionMap.get(fn.name).push({file:item.file, role:item.role, ...fn});
       }
     }
 
-    const pairRelations = new Set();
+    const explicitRef = (a, b) => (scanned[a]?.refs || []).includes(b) || (scanned[b]?.refs || []).includes(a);
+    const relationKeys = new Set();
     const addRelation = relation => {
       const key = [relation.sourceFile, relation.targetFile, relation.type, relation.sourceLine || '', relation.targetLine || '', relation.key || ''].join('|');
-      if (pairRelations.has(key)) return;
-      pairRelations.add(key); relations.push(relation);
+      if (relationKeys.has(key)) return;
+      relationKeys.add(key);
+      relations.push(relation);
     };
 
-    const compareFields = (reference, target) => {
-      const a = new Map((reference.fieldEntries || []).map(x => [x.normalized, x]));
-      const b = new Map((target.fieldEntries || []).map(x => [x.normalized, x]));
-      const missing = [...a.keys()].filter(x => !b.has(x));
-      const extra = [...b.keys()].filter(x => !a.has(x));
-      return {
-        missing:missing.map(x=>({name:x, sourceLine:a.get(x)?.line || null})),
-        extra:extra.map(x=>({name:x, targetLine:b.get(x)?.line || null})),
-        sourceFields:[...a.keys()], targetFields:[...b.keys()]
+    const emit = (reference, target, identity, mode) => {
+      const comparison = compareContract(reference, target);
+      const source = formContract(reference), targetContract = formContract(target);
+      const sourceSubset = subsetRatio(targetContract.tokens, source.tokens);
+      const targetSubset = subsetRatio(source.tokens, targetContract.tokens);
+      const gap = Math.max(0, comparison.sourceComponentCount - comparison.targetComponentCount);
+      const handlerGap = comparison.missingHandlers.length;
+      const fieldGap = comparison.missingFields.length;
+      const strongIdentity = identity.keyExact || (
+        identity.score >= 0.60 && identity.fieldShared.length >= 2 &&
+        (identity.distinctive.length >= 1 || identity.fieldShared.length >= 3)
+      );
+      const targetLooksIncomplete = strongIdentity && (
+        fieldGap >= 1 && (sourceSubset >= 0.65 || fieldGap >= 2) ||
+        handlerGap >= 1 ||
+        (gap >= 2 && targetSubset >= 0.45)
+      );
+      const bothComparable = strongIdentity && !targetLooksIncomplete;
+      const confidence = identity.keyExact ? 'HIGH' : targetLooksIncomplete ? (identity.score >= 0.72 ? 'HIGH' : 'MEDIUM') : identity.score >= 0.72 ? 'MEDIUM' : 'LOW';
+      const status = targetLooksIncomplete ? 'MISMATCH_CANDIDATE' : bothComparable ? 'MATCHED_SURFACE' : 'VARIANT_SURFACE';
+      const type = identity.keyExact ? 'CROSS_FILE_CONTRACT' : 'CROSS_FILE_SURFACE';
+      const sourceCandidateReason = targetLooksIncomplete
+        ? 'Reference candidate dipilih karena target tampak sebagai subset surface dan memiliki komponen kontrak yang hilang; ini bukan klaim bahwa file yang lebih panjang otomatis benar.'
+        : 'Tidak ada bukti cukup bahwa salah satu implementasi adalah canonical; relasi dipertahankan sebagai surface/variant.';
+      const evidence = {
+        identityMode:mode, identityScore:Number(identity.score.toFixed(3)), keyExact:identity.keyExact,
+        sharedFields:identity.fieldShared, sharedSemantic:identity.semanticShared, sharedLabels:identity.labelShared,
+        distinctiveTokens:identity.distinctive,
+        sourceFields:source.fields, targetFields:targetContract.fields,
+        missingFields:comparison.missingFields, extraFields:comparison.extraFields,
+        missingLabels:comparison.missingLabels, extraLabels:comparison.extraLabels,
+        missingHandlers:comparison.missingHandlers, extraHandlers:comparison.extraHandlers,
+        missingSemantic:comparison.missingSemantic, extraSemantic:comparison.extraSemantic,
+        sourceComponentCount:comparison.sourceComponentCount, targetComponentCount:comparison.targetComponentCount,
+        componentGap:gap, targetCoverageOfReference:Number((sourceSubset * 100).toFixed(1)),
+        referenceCoverageOfTarget:Number((targetSubset * 100).toFixed(1)),
+        sourceCompleteness:reference.completenessScore, targetCompleteness:target.completenessScore,
+        sourceCandidateReason
       };
-    };
 
-    const functionNames = set => new Set((set || []).map(x => String(x || '').toLowerCase()).filter(Boolean));
-    const functionsByFile = file => functionNames((scanned[file]?.functions || []).map(x => x.name));
+      addRelation({sourceFile:reference.file,targetFile:target.file,type,status,confidence,sourceLine:reference.line,targetLine:target.line,key:reference.key || target.key || 'SURFACE',evidence});
 
-    const emitFormComparison = (reference, target, mode, similarity) => {
-      const evidence = compareFields(reference, target);
-      const sourceHandlers = functionNames(reference.handlerRefs?.map(x=>x.name).concat(reference.submitHandler ? [reference.submitHandler] : []));
-      const targetHandlers = functionNames(target.handlerRefs?.map(x=>x.name).concat(target.submitHandler ? [target.submitHandler] : []));
-      const targetFns = functionsByFile(target.file);
-      const sourceFns = functionsByFile(reference.file);
-      const missingHandlers = [...sourceHandlers].filter(fn => targetHandlers.has(fn) ? false : !targetFns.has(fn));
-      const handlerEvidence = missingHandlers.map(name => ({name, sourceLine:(reference.handlerRefs || []).find(x=>x.name.toLowerCase()===name)?.line || reference.line}));
-      const sourceSurface = new Set([...(reference.semanticSurface || []), ...(reference.surfaceLabel || [])]);
-      const targetSurface = new Set([...(target.semanticSurface || []), ...(target.surfaceLabel || [])]);
-      const sharedSemantic = [...sourceSurface].filter(x=>targetSurface.has(x));
-      const missing = evidence.missing;
-      const extra = evidence.extra;
-      const sourceCount = reference.fields.length;
-      const targetCount = target.fields.length;
-      const materiallyIncomplete = missing.length >= 1 && (missing.length >= Math.max(1, Math.ceil(sourceCount * 0.2)) || handlerEvidence.length > 0 || targetCount < sourceCount);
-      const strongIdentity = mode === 'KEYED' || (similarity >= 0.72 && sharedSemantic.length >= 3 && Math.min(sourceCount,targetCount) >= 2);
-      const confidence = mode === 'KEYED' ? 'HIGH' : strongIdentity ? 'MEDIUM' : 'LOW';
-      const mismatch = strongIdentity && materiallyIncomplete;
-      const status = mismatch ? 'MISMATCH_CANDIDATE' : 'MATCHED';
-      const type = mode === 'KEYED' ? 'SHARED_FORM_CONTRACT' : 'SIMILAR_FORM_CONTRACT';
-
-      addRelation({
-        sourceFile:reference.file, targetFile:target.file, type, status, confidence,
-        sourceLine:reference.line, targetLine:target.line,
-        key:reference.key || target.key || 'SURFACE',
-        evidence:{mode, similarity, sharedSemantic, sourceFields:evidence.sourceFields, targetFields:evidence.targetFields,
-          missing, extra, sourceScore:reference.completenessScore, targetScore:target.completenessScore,
-          sourceControlCount:reference.controlCount, targetControlCount:target.controlCount,
-          sourceHandlers:[...sourceHandlers], targetHandlers:[...targetHandlers], missingHandlers:handlerEvidence}
-      });
-
-      if (mismatch) {
+      if (targetLooksIncomplete) {
         findings.push({
-          severity: mode === 'KEYED' ? 'HIGH' : 'MEDIUM',
-          type:'CROSS_FILE_SURFACE_MISMATCH', sourceFile:reference.file, sourceLine:reference.line,
+          severity:identity.keyExact || identity.score >= 0.72 ? 'HIGH' : 'MEDIUM',
+          type:'CROSS_FILE_CONTRACT_MISMATCH', sourceFile:reference.file, sourceLine:reference.line,
           targetFile:target.file, targetLine:target.line,
           area:`FORM:${reference.key || target.key || 'SURFACE'}`,
-          message:`Surface form teridentifikasi sebagai kandidat yang sama, tetapi target tidak lengkap: ${missing.length} field/komponen hilang${handlerEvidence.length ? ` dan ${handlerEvidence.length} handler tidak terbukti tersedia` : ''}.`,
+          message:`Surface lintas-file teridentifikasi sebagai kandidat yang sama. Target tampak tidak lengkap: ${comparison.missingFields.length} field, ${comparison.missingHandlers.length} handler, ${comparison.missingSemantic.length} semantic component tidak terbukti ada pada target.`,
           confidence,
-          evidence:{...evidence, similarity, sharedSemantic, missingHandlers:handlerEvidence, sourceSurface:[...sourceSurface], targetSurface:[...targetSurface]}
+          evidence
         });
       }
     };
 
-    // A) Same explicit key = strongest contract identity. Never infer canonical truth from length.
-    for (const [key, entries] of byFormKey) {
+    // 1) Explicitly keyed contracts: strongest evidence. Compare every pair but never declare canonical truth from size alone.
+    const byKey = new Map();
+    for (const form of allForms) if (form.key) {
+      const key = form.key.toLowerCase();
+      if (!byKey.has(key)) byKey.set(key, []);
+      byKey.get(key).push(form);
+    }
+    for (const entries of byKey.values()) {
       if (entries.length < 2) continue;
       for (let i=0;i<entries.length;i++) for (let j=i+1;j<entries.length;j++) {
         const a=entries[i], b=entries[j];
-        const reference = a.completenessScore >= b.completenessScore ? a : b;
-        const target = reference === a ? b : a;
-        emitFormComparison(reference,target,'KEYED',1);
+        const identity=businessIdentityScore(a,b);
+        const reference=a.completenessScore >= b.completenessScore ? a : b;
+        const target=reference===a ? b : a;
+        emit(reference,target,{...identity,keyExact:true,score:1},'KEYED_CONTRACT');
       }
     }
 
-    // B) Unkeyed/renamed copies: only compare when semantic identity is strong enough.
+    // 2) Renamed/copied surfaces: infer identity from multiple independent signals, not function name or source length.
     for (let i=0;i<allForms.length;i++) for (let j=i+1;j<allForms.length;j++) {
       const a=allForms[i], b=allForms[j];
       if (a.file===b.file) continue;
-      const sa=new Set(formSurfaceTokens(a,false));
-      const sb=new Set(formSurfaceTokens(b,false));
-      const similarity=jaccardSimilarity([...sa],[...sb]);
-      const common=[...sa].filter(x=>sb.has(x));
-      if (common.length < 4 || similarity < 0.72) continue;
-      if (a.key && b.key && a.key===b.key) continue;
-      const reference=a.completenessScore>=b.completenessScore?a:b;
-      const target=reference===a?b:a;
-      emitFormComparison(reference,target,'SURFACE',similarity);
+      if (a.key && b.key && a.key.toLowerCase()===b.key.toLowerCase()) continue;
+      const identity=businessIdentityScore(a,b);
+      if (identity.score < 0.60 || identity.fieldShared.length < 2) continue;
+      if (identity.distinctive.length < 1 && identity.fieldShared.length < 3) continue;
+      const reference=a.completenessScore >= b.completenessScore ? a : b;
+      const target=reference===a ? b : a;
+      emit(reference,target,identity,'SEMANTIC_SURFACE');
     }
 
-    // C) Function names alone are NOT synchronization evidence. Only record variants.
-    // A function becomes a dependency candidate only when one file explicitly references the other
-    // AND the target/source surface contains a concrete call/handler relation. No length-based drift.
+    // 3) Direct file references become dependency relations, but they are not automatically synchronization contracts.
+    for (const item of items) for (const ref of item.refs || []) if (scanned[ref]) {
+      addRelation({sourceFile:item.file,targetFile:ref,type:'EXPLICIT_FILE_REFERENCE',status:'LINKED',confidence:'HIGH',evidence:{reason:'Referensi file ditemukan langsung di source; belum berarti kedua surface harus identik.'}});
+    }
+
+    // 4) Same function name is informational only. Never escalate to mismatch.
     for (const [name, entries] of functionMap) {
       const unique=[...new Map(entries.map(x=>[x.file,x])).values()];
       if (unique.length<2) continue;
       for(let i=0;i<unique.length;i++) for(let j=i+1;j<unique.length;j++) {
         const a=unique[i], b=unique[j];
-        const explicit = refPairs.has(`${a.file}|${b.file}`) || refPairs.has(`${b.file}|${a.file}`);
-        addRelation({sourceFile:a.file,targetFile:b.file,type:'SHARED_FUNCTION_VARIANT',status:'VARIANT',confidence:explicit?'LOW':'LOW',sourceLine:a.line,targetLine:b.line,key:name,evidence:{explicitReference:explicit,reason:'Nama fungsi yang sama bukan bukti bahwa implementasi harus identik.'}});
+        const linked=explicitRef(a.file,b.file);
+        addRelation({sourceFile:a.file,targetFile:b.file,type:'SHARED_FUNCTION_VARIANT',status:'VARIANT',confidence:'LOW',sourceLine:a.line,targetLine:b.line,key:name,evidence:{explicitReference:linked,reason:'Nama fungsi yang sama hanya dicatat sebagai variant; tidak digunakan sebagai bukti sinkronisasi.'}});
       }
     }
 
-    return { findings, relations };
+    return {findings, relations};
   }
 
   async function fetchSourceForScan(file, generation) {
