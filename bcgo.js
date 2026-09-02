@@ -44,7 +44,7 @@ const ORGAN_COUNT = Object.keys(ORGAN_REGISTRY).length;
 
 const SOURCE_SCAN_INTERVAL = 20000;
 const SOURCE_SCAN_FETCH_TIMEOUT = 10000;
-const SOURCE_SCAN_VERSION = "1.1.0";
+const SOURCE_SCAN_VERSION = "1.2.0";
 
 const ACTIVE_WINDOW = 15 * 60 * 1000;
 const CLOCK_SKEW = 5 * 60 * 1000;
@@ -129,7 +129,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     sourceScan: {
       version: SOURCE_SCAN_VERSION, status: "WAITING", startedAt: 0, completedAt: 0,
       filesScanned: 0, filesReadable: 0, filesFailed: 0, currentFile: null, currentIndex: 0,
-      totalFiles: ORGAN_COUNT, phase: "WAITING", fileStates: {}, findings: [], crossFileFindings: [],
+      totalFiles: ORGAN_COUNT, phase: "WAITING", fileStates: {}, findings: [], crossFileFindings: [], relations: [],
       sources: {}, message: "Pemindaian source code belum dimulai."
     },
     medicineBridge: {
@@ -384,9 +384,62 @@ export function runAutonomousEngine(onCycleUpdate) {
     let match;
     while ((match = re.exec(text))) {
       const normalized = normalizeFile(match[1]);
-      if (ORGAN_REGISTRY[normalized]) refs.add(normalized);
+      if (ORGAN_REGISTRY[normalized] && normalized !== file) refs.add(normalized);
     }
     return [...refs];
+  }
+
+  function extractFunctionSurface(text) {
+    const functions = new Map();
+    const re = /(?:^|[;{}\n])\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*\{/g;
+    let match;
+    while ((match = re.exec(text))) {
+      const name = match[1];
+      const start = match.index + match[0].lastIndexOf('{');
+      let depth = 0, quote = null, escaped = false, end = start;
+      for (let i = start; i < text.length; i++) {
+        const ch = text[i];
+        if (quote) {
+          if (escaped) { escaped = false; continue; }
+          if (ch === '\\') { escaped = true; continue; }
+          if (ch === quote) quote = null;
+          continue;
+        }
+        if (ch === '"' || ch === "'" || ch === '`') { quote = ch; continue; }
+        if (ch === '{') depth++;
+        else if (ch === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+      }
+      const body = text.slice(start, end);
+      functions.set(name, {
+        name,
+        line: sourceLineNumber(text, match.index),
+        params: match[2].trim(),
+        bodyLength: body.length,
+        bodyHash: sourceHash(body),
+        normalizedBody: body.replace(/\s+/g, ' ').trim()
+      });
+    }
+    return [...functions.values()];
+  }
+
+  function extractDomSurface(file, source) {
+    const text = String(source || '');
+    const ids = new Map();
+    const onclicks = [];
+    const idRe = /\bid\s*=\s*["']([^"']+)["']/gi;
+    let match;
+    while ((match = idRe.exec(text))) {
+      const id = match[1].trim();
+      if (!id) continue;
+      if (!ids.has(id)) ids.set(id, sourceLineNumber(text, match.index));
+    }
+    const eventRe = /\bon(?:click|submit|change|input)\s*=\s*["']([^"']+)["']/gi;
+    while ((match = eventRe.exec(text))) {
+      const expr = match[1].trim();
+      const fn = /^([A-Za-z_$][\w$]*)\s*\(/.exec(expr);
+      if (fn) onclicks.push({ name: fn[1], line: sourceLineNumber(text, match.index), expression: expr });
+    }
+    return { ids:[...ids.entries()].map(([id,line]) => ({id,line})), onclicks };
   }
 
   function scanHtmlSource(file, source) {
@@ -429,9 +482,19 @@ export function runAutonomousEngine(onCycleUpdate) {
       const key = attr('id') || attr('name') || attr('data-form') || attr('data-form-id');
       if (!key) continue;
       const fields = [...body.matchAll(/\b(?:name|id)\s*=\s*["']([^"']+)["']/gi)].map(x => x[1].trim()).filter(Boolean);
-      forms.push({ key:key.toLowerCase(), line:sourceLineNumber(text, match.index), fields:[...new Set(fields)].sort() });
+      const controls = [...body.matchAll(/<(?:input|select|textarea|button)\b([^>]*)>/gi)].map(x => x[0]);
+      const fieldKeys = [...new Set(fields)].sort();
+      const submitMatch = /\bonsubmit\s*=\s*["']([^"']+)["']/i.exec(attrs);
+      const submitHandler = submitMatch ? submitMatch[1].trim() : '';
+      const action = attr('action');
+      forms.push({
+        key:key.toLowerCase(), line:sourceLineNumber(text, match.index),
+        fields:fieldKeys, controlCount:controls.length, submitHandler, action,
+        completenessScore:fieldKeys.length * 4 + controls.length * 2 + (submitHandler ? 5 : 0) + (action ? 2 : 0)
+      });
     }
-    return { findings, forms };
+    const dom = extractDomSurface(file, text);
+    return { findings, forms, ids:[...ids.entries()].map(([id,line]) => ({id,line})), onclicks:dom.onclicks, functions:extractFunctionSurface(text) };
   }
 
   function scanJsSource(file, source) {
@@ -454,30 +517,82 @@ export function runAutonomousEngine(onCycleUpdate) {
     }
     if (quote) findings.push({ severity:'HIGH', type:'UNTERMINATED_STRING', file, line, message:'String/template literal tampak tidak tertutup.' });
     if (depth !== 0) findings.push({ severity:'HIGH', type:'UNBALANCED_JS', file, line, message:`Keseimbangan kurung kurawal gagal (depth=${depth}).` });
-    return { findings, forms:[] };
+    return { findings, forms:[], ids:[], onclicks:[], functions:extractFunctionSurface(text) };
   }
 
   function scanSourceFile(file, source) {
     const parsed = /\.html?$/i.test(file) ? scanHtmlSource(file, source) : scanJsSource(file, source);
-    return { file, type:ORGAN_REGISTRY[file]?.type || 'UNKNOWN', role:ORGAN_REGISTRY[file]?.role || 'unknown', bytes:new Blob([source]).size, lines:String(source).split('\n').length, hash:sourceHash(source), refs:extractLocalRefs(file, source), ...parsed };
+    return {
+      file, type:ORGAN_REGISTRY[file]?.type || 'UNKNOWN', role:ORGAN_REGISTRY[file]?.role || 'unknown',
+      bytes:new Blob([source]).size, lines:String(source).split('\n').length, hash:sourceHash(source),
+      refs:extractLocalRefs(file, source), ...parsed
+    };
   }
 
   function compareCrossFileSources(scanned) {
-    const findings = [], byForm = new Map();
-    for (const item of Object.values(scanned)) for (const form of item.forms || []) {
-      if (!byForm.has(form.key)) byForm.set(form.key, []);
-      byForm.get(form.key).push({ file:item.file, ...form });
-    }
-    for (const [key, entries] of byForm) {
-      if (entries.length < 2) continue;
-      const reference = entries[0];
-      for (const target of entries.slice(1)) {
-        const a = new Set(reference.fields), b = new Set(target.fields);
-        const missing = [...a].filter(x => !b.has(x)), extra = [...b].filter(x => !a.has(x));
-        if (missing.length || extra.length) findings.push({ severity:'HIGH', type:'CROSS_FILE_FORM_MISMATCH', sourceFile:reference.file, sourceLine:reference.line, targetFile:target.file, targetLine:target.line, area:`FORM:${key}`, message:`Form "${key}" berbeda antar file. ${reference.file}: ${reference.fields.length} field; ${target.file}: ${target.fields.length} field.`, evidence:{ sourceFields:reference.fields, targetFields:target.fields, missing, extra } });
+    const findings = [], relations = [];
+    const items = Object.values(scanned);
+    const byForm = new Map();
+    const byFunction = new Map();
+
+    for (const item of items) {
+      for (const form of item.forms || []) {
+        if (!byForm.has(form.key)) byForm.set(form.key, []);
+        byForm.get(form.key).push({ file:item.file, ...form });
+      }
+      for (const fn of item.functions || []) {
+        if (!byFunction.has(fn.name)) byFunction.set(fn.name, []);
+        byFunction.get(fn.name).push({ file:item.file, ...fn });
+      }
+      for (const ref of item.refs || []) {
+        if (scanned[ref]) relations.push({ sourceFile:item.file, targetFile:ref, type:'EXPLICIT_FILE_REFERENCE', status:'LINKED' });
       }
     }
-    return findings;
+
+    // A shared keyed form is a real synchronization surface. The richer implementation
+    // becomes the reference candidate only when the evidence is materially stronger;
+    // BCGO never declares a canonical file merely because it appears first in a registry.
+    for (const [key, entries] of byForm) {
+      if (entries.length < 2) continue;
+      const sorted = [...entries].sort((a,b) => b.completenessScore - a.completenessScore || b.fields.length - a.fields.length);
+      const reference = sorted[0];
+      for (const target of entries) {
+        if (target.file === reference.file) continue;
+        const a = new Set(reference.fields), b = new Set(target.fields);
+        const missing = [...a].filter(x => !b.has(x));
+        const extra = [...b].filter(x => !a.has(x));
+        const scoreGap = reference.completenessScore - target.completenessScore;
+        const severity = missing.length && scoreGap >= 4 ? 'HIGH' : (missing.length || extra.length ? 'MEDIUM' : 'INFO');
+        if (severity !== 'INFO') {
+          findings.push({
+            severity, type:'CROSS_FILE_FORM_MISMATCH', sourceFile:reference.file, sourceLine:reference.line,
+            targetFile:target.file, targetLine:target.line, area:`FORM:${key}`,
+            message:`Form "${key}" tidak sepenuhnya sinkron. Kandidat referensi memiliki ${reference.fields.length} field/${reference.controlCount} control; target memiliki ${target.fields.length} field/${target.controlCount} control.`,
+            evidence:{ sourceFields:reference.fields, targetFields:target.fields, missing, extra, sourceScore:reference.completenessScore, targetScore:target.completenessScore, scoreGap }
+          });
+        }
+        relations.push({ sourceFile:reference.file, targetFile:target.file, type:'SHARED_FORM_SURFACE', key, status:severity === 'INFO' ? 'MATCHED' : 'MISMATCH_CANDIDATE', sourceLine:reference.line, targetLine:target.line, evidence:{missing,extra,sourceScore:reference.completenessScore,targetScore:target.completenessScore} });
+      }
+    }
+
+    // Shared function names are weaker evidence than keyed forms. We expose drift as a
+    // review candidate, not an automatic defect, because legitimate variants can exist.
+    for (const [name, entries] of byFunction) {
+      if (entries.length < 2) continue;
+      const unique = [...new Map(entries.map(x => [x.file, x])).values()];
+      if (unique.length < 2) continue;
+      const max = [...unique].sort((a,b) => b.bodyLength - a.bodyLength)[0];
+      for (const candidate of unique) {
+        if (candidate.file === max.file || candidate.bodyHash === max.bodyHash) continue;
+        const ratio = max.bodyLength ? candidate.bodyLength / max.bodyLength : 1;
+        if (ratio < 0.75) {
+          findings.push({ severity:'MEDIUM', type:'CROSS_FILE_FUNCTION_DRIFT', sourceFile:max.file, sourceLine:max.line, targetFile:candidate.file, targetLine:candidate.line, area:`FUNCTION:${name}`, message:`Function "${name}" berbeda cukup jauh antar file; target memiliki implementasi ${Math.round(ratio*100)}% dari kandidat referensi berdasarkan panjang source.`, evidence:{sourceLength:max.bodyLength,targetLength:candidate.bodyLength,sourceHash:max.bodyHash,targetHash:candidate.bodyHash,ratio} });
+        }
+        relations.push({ sourceFile:max.file, targetFile:candidate.file, type:'SHARED_FUNCTION_SURFACE', key:name, status:ratio < 0.75 ? 'DRIFT_CANDIDATE' : 'VARIANT', sourceLine:max.line, targetLine:candidate.line });
+      }
+    }
+
+    return { findings, relations };
   }
 
   async function fetchSourceForScan(file, generation) {
@@ -503,7 +618,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     for (const file of files) fileStates[file] = { status:'QUEUED', line:null, message:'Menunggu giliran scan...' };
 
     const publishProgress = patch => {
-      state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, totalFiles:files.length, fileStates:{...fileStates}, findings:[...failures, ...Object.values(scanned).flatMap(item => item.findings || [])].slice(0,100), crossFileFindings:[], sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])), ...patch };
+      state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, totalFiles:files.length, fileStates:{...fileStates}, findings:[...failures, ...Object.values(scanned).flatMap(item => item.findings || [])].slice(0,100), crossFileFindings:[], relations:[], sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])), ...patch };
       publishToUI(safeClone(state));
     };
 
@@ -535,10 +650,12 @@ export function runAutonomousEngine(onCycleUpdate) {
         }
       }
       const allFindings = Object.values(scanned).flatMap(item => item.findings || []);
-      const crossFileFindings = compareCrossFileSources(scanned);
+      const crossComparison = compareCrossFileSources(scanned);
+      const crossFileFindings = crossComparison.findings;
+      const relations = crossComparison.relations;
       const actionable = [...failures,...allFindings,...crossFileFindings].filter(f => f.severity !== 'INFO').slice(0,100);
       const status = failures.length ? 'DEGRADED' : actionable.length ? 'FINDINGS' : 'CLEAN';
-      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:crossFileFindings.slice(0,100),sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),message:failures.length ? `Scanner selesai: ${files.length} source diproses, ${failures.length} source tidak terbaca.` : actionable.length ? `Scanner selesai: ${files.length} source dibaca; ${actionable.length} temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} source dibaca dan dianalisis tanpa temuan struktural/cross-file.` };
+      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:crossFileFindings.slice(0,100),relations:relations.slice(0,200),sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),message:failures.length ? `Scanner selesai: ${files.length} source diproses, ${failures.length} source tidak terbaca.` : actionable.length ? `Scanner selesai: ${files.length} source dibaca; ${actionable.length} temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} source dibaca dan dianalisis tanpa temuan struktural/cross-file.` };
       recordEvent('SOURCE_SCAN_RESULT', state.sourceScan.message, actionable.length ? 'SYS_SOURCE_FINDINGS' : 'SYS_SOURCE_CLEAN');
       publishToUI(safeClone(state));
       publishBCGOStateToMedicine(safeClone(state));
