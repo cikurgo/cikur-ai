@@ -14,7 +14,7 @@ import { db, auth } from "./cikur-config.js";
 
 /*
  * ================================================================
- * BCGO MEDICINE v2.9.2 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
+ * BCGO MEDICINE v2.9.0 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
  * ================================================================
  * Boundary:
  *   Medicine observes, investigates, proves, proposes and validates.
@@ -527,21 +527,16 @@ async function ingestBCGOScan(scan, packet = {}) {
   };
   window.dispatchEvent(new CustomEvent("bcgo:medicine",{detail:{event:"bcgo_source_scan_complete",surface:getLiveSurface()}}));
 
-  // Process every actionable cross-file finding, not only the first one.
-  // The source records used for evidence are the freshly read `results`; never
-  // reference an out-of-scope `sources` variable here. A previous typo caused
-  // the handoff to Medicine to stop with ReferenceError after the full scan.
-  const crossFindings = bestCrossFileFinding(scan)
-    .filter(f => ['HIGH','MEDIUM'].includes(String(f?.severity || 'MEDIUM').toUpperCase()))
-    .slice(0, 20);
-  for (const candidateFinding of crossFindings) {
+  const candidateFinding = bestCrossFileFinding(scan)[0];
+  if (candidateFinding) {
     const sf=normalizeFile(candidateFinding.sourceFile)||"";
     const tf=normalizeFile(candidateFinding.targetFile)||"";
-    const evidenceKey=`${candidateFinding.type}|${sf}|${tf}|${candidateFinding.sourceLine||''}|${candidateFinding.targetLine||''}|${candidateFinding.area||''}|${results[sf]?.hash||sourcesMeta[sf]?.hash||''}|${results[tf]?.hash||sourcesMeta[tf]?.hash||''}`;
-    if (S.processedCrossFileEvidence.has(evidenceKey)) continue;
-    S.processedCrossFileEvidence.add(evidenceKey);
-    if (S.processedCrossFileEvidence.size>200) S.processedCrossFileEvidence.delete(S.processedCrossFileEvidence.values().next().value);
-    await createCrossFileCase(candidateFinding, results, scan);
+    const evidenceKey=`${candidateFinding.type}|${sf}|${tf}|${candidateFinding.sourceLine||''}|${candidateFinding.targetLine||''}|${candidateFinding.area||''}|${sources[sf]?.hash||''}|${sources[tf]?.hash||''}`;
+    if (!S.processedCrossFileEvidence.has(evidenceKey)) {
+      S.processedCrossFileEvidence.add(evidenceKey);
+      if (S.processedCrossFileEvidence.size>100) S.processedCrossFileEvidence.delete(S.processedCrossFileEvidence.values().next().value);
+      await createCrossFileCase(candidateFinding, results, scan);
+    }
   }
   return S.liveSurface;
 }
