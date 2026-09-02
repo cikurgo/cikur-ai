@@ -121,7 +121,7 @@ const ACTIVE_STATUSES = new Set([
 const TERMINAL_STATUSES = new Set(["REJECTED","FIXED_VERIFIED","RECOVERED"]);
 
 const S = {
-  version: "2.8.2",
+  version: "2.8.3",
   registry: REGISTRY,
   surface: null,
   logs: [],
@@ -177,7 +177,8 @@ const S = {
     lastResult: null,
     investigation: null
   },
-  investigated: new Set()
+  investigated: new Set(),
+  investigationQueue: new Map()
 };
 
 const now = () => new Date().toISOString();
@@ -1026,26 +1027,227 @@ async function resolveRootCause(c) {
   };
 }
 
+function investigationEvidenceToken(log) {
+  if (!log) return "NO_EVIDENCE";
+  return [
+    log.id || log.eventId || "",
+    log.reportedAt || log.createdAt || log.timestamp || "",
+    log.fileName || log.source || log.file || "",
+    log.lineNumber ?? log.line ?? log.lineno ?? "",
+    log.columnNumber ?? log.column ?? log.col ?? "",
+    log.message || log.error || "",
+    log.stack || log.stackTrace || log.errorStack || ""
+  ].map(v => String(v ?? "")).join("|").slice(0,5000);
+}
+
+const AUTO_REINVESTIGATE_STATUSES = new Set([
+  "NEEDS_EVIDENCE",
+  "INVESTIGATING",
+  "PATCH_REQUIRES_REVIEW",
+  "PATCH_FAILED"
+]);
+
+let investigationDrainScheduled = false;
+
+function investigationRevisionToken(caseItem, sourceFingerprint = null) {
+  const evidenceToken = investigationEvidenceToken(caseItem?.lastEvidence || caseItem?.evidence);
+  const sourceToken = sourceFingerprint || caseItem?.lastObservedSourceFingerprint || "NO_SOURCE_FINGERPRINT";
+  return `${evidenceToken}||SOURCE:${sourceToken}`;
+}
+
+function queueAutoInvestigation(caseItem, reason = "telemetry") {
+  if (!caseItem?.id || S.human.paused || isTerminal(caseItem)) return false;
+  if (!AUTO_REINVESTIGATE_STATUSES.has(caseItem.status)) return false;
+
+  const evidenceToken = investigationEvidenceToken(caseItem.lastEvidence || caseItem.evidence);
+  const revisionToken = investigationRevisionToken(caseItem);
+  if (caseItem.lastInvestigatedRevisionToken === revisionToken) return false;
+
+  S.investigationQueue.set(caseItem.id, {
+    caseId:caseItem.id,
+    evidenceToken,
+    sourceFingerprint:caseItem.lastObservedSourceFingerprint || null,
+    revisionToken,
+    reason,
+    queuedAt:Date.now()
+  });
+
+  emit("investigation_queued", {
+    case:caseItem,
+    reason,
+    evidenceToken,
+    revisionToken
+  });
+
+  scheduleInvestigationDrain();
+  return true;
+}
+
+function scheduleInvestigationDrain() {
+  if (investigationDrainScheduled) return;
+  investigationDrainScheduled = true;
+  setTimeout(() => {
+    investigationDrainScheduled = false;
+    void drainInvestigationQueue();
+  }, 0);
+}
+
+async function drainInvestigationQueue() {
+  if (S.human.paused || S.busy.verification) return;
+
+  const queued = [...S.investigationQueue.values()]
+    .map(item => ({
+      ...item,
+      caseItem:S.cases.find(c => c.id === item.caseId)
+    }))
+    .filter(item => item.caseItem && !isTerminal(item.caseItem) && !S.human.paused);
+
+  if (!queued.length) {
+    S.investigationQueue.clear();
+    return;
+  }
+
+  queued.sort((a,b) => {
+    const at = Date.parse(a.caseItem?.lastSeenAt || a.caseItem?.createdAt || "") || 0;
+    const bt = Date.parse(b.caseItem?.lastSeenAt || b.caseItem?.createdAt || "") || 0;
+    return bt - at;
+  });
+
+  const next = queued[0];
+  S.investigationQueue.delete(next.caseId);
+  const c = next.caseItem;
+
+  // Establish the baseline source fingerprint before locking this investigation
+  // revision. This prevents a first-watch false reopen while still allowing a
+  // genuine source change to reopen the case without refresh.
+  if (!c.lastObservedSourceFingerprint) {
+    const baselineTarget = c.rootCauseFile || c.source;
+    const baseline = await fetchFile(baselineTarget, { force:true });
+    if (baseline.ok && typeof baseline.text === "string") {
+      c.lastObservedSourceFingerprint = fingerprint(baseline.text);
+    }
+  }
+
+  const currentEvidenceToken = investigationEvidenceToken(c.lastEvidence || c.evidence);
+  const currentRevisionToken = investigationRevisionToken(c);
+
+  if (c.lastInvestigatedRevisionToken === currentRevisionToken) {
+    scheduleInvestigationDrain();
+    return;
+  }
+
+  S.activeCase = c;
+  c.lastInvestigatedEvidenceToken = currentEvidenceToken;
+  c.lastInvestigatedRevisionToken = currentRevisionToken;
+  c.lastInvestigationStartedAt = now();
+  c.lastInvestigationReason = next.reason;
+
+  emit("investigation_auto_reopened", {
+    case:c,
+    reason:next.reason,
+    evidenceToken:currentEvidenceToken,
+    revisionToken:currentRevisionToken
+  });
+
+  try {
+    await verifyWithMedicine(c.source, {
+      requestedBy:"telemetry_auto_recovery",
+      question:`Re-investigasi realtime: ${c.signature}`,
+      noRetry:true,
+      autoRecovery:true,
+      reason:next.reason
+    });
+  } catch (error) {
+    delete c.lastInvestigatedEvidenceToken;
+    delete c.lastInvestigatedRevisionToken;
+    emit("investigation_error", {
+      caseId:c.id,
+      message:error?.message || String(error),
+      autoRecovery:true
+    });
+  } finally {
+    scheduleInvestigationDrain();
+  }
+}
+
+let recoveryMonitorRunning = false;
+
+async function monitorBlockedCaseSource() {
+  if (recoveryMonitorRunning || !auth.currentUser || S.human.paused || S.busy.verification) return;
+
+  const candidates = activeCases()
+    .filter(c => AUTO_REINVESTIGATE_STATUSES.has(c.status))
+    .slice(0,3);
+  if (!candidates.length) return;
+
+  recoveryMonitorRunning = true;
+  try {
+    for (const c of candidates) {
+      if (S.human.paused || S.busy.verification) break;
+      const target = c.rootCauseFile || c.source;
+      const source = await fetchFile(target, { force:true });
+      if (!source.ok || typeof source.text !== "string") continue;
+
+      const sourceFingerprint = fingerprint(source.text);
+      const previousFingerprint = c.lastObservedSourceFingerprint || null;
+      c.lastObservedSourceFingerprint = sourceFingerprint;
+
+      // This is the missing recovery path: if the source changes while a case
+      // is blocked, Medicine automatically reopens investigation. No refresh
+      // and no human Verify click are required.
+      if (previousFingerprint && previousFingerprint !== sourceFingerprint) {
+        queueAutoInvestigation(c, "source_changed_while_monitoring");
+      }
+    }
+  } finally {
+    recoveryMonitorRunning = false;
+  }
+}
+
+function startRecoveryMonitor() {
+  if (window.__BCGO_MEDICINE_RECOVERY_MONITOR) return;
+  window.__BCGO_MEDICINE_RECOVERY_MONITOR = setInterval(() => {
+    void monitorBlockedCaseSource();
+  }, 10000);
+}
+
 function makeCase(log, options = {}) {
   const source = normalizeFile(log?.fileName || log?.source || log?.file) || "UNKNOWN";
   if (!isDiagnosticFile(source)) return null;
   const signature = text(log?.message || log?.error || "Unknown error",700);
   const evidenceId = String(log?.id || log?.eventId || "").trim();
 
-  if (evidenceId && S.cases.some(c => c.evidenceId === evidenceId)) return null;
+  const sameEvidenceCase = evidenceId
+    ? S.cases.find(c => c.evidenceId === evidenceId)
+    : null;
 
-  let existing = S.cases.find(c =>
+  if (sameEvidenceCase) {
+    // Firestore can update the same telemetry document in place. Do not treat
+    // that as a duplicate forever: if its evidence revision changed, feed the
+    // changed evidence back into the realtime investigation queue.
+    const previousToken = investigationEvidenceToken(sameEvidenceCase.lastEvidence || sameEvidenceCase.evidence);
+    const nextToken = investigationEvidenceToken(log);
+    if (previousToken === nextToken) return sameEvidenceCase;
+  }
+
+  let existing = sameEvidenceCase || S.cases.find(c =>
     c.source === source &&
     c.signature === signature &&
     ACTIVE_STATUSES.has(c.status)
   );
 
   if (existing) {
+    const previousEvidenceToken = investigationEvidenceToken(existing.lastEvidence || existing.evidence);
     existing.evidenceCount = (existing.evidenceCount || 1) + 1;
     existing.lastSeenAt = now();
     existing.lastEvidence = log;
     S.activeCase = existing;
     emit("case_updated",{case:existing,mergedEvidence:true});
+
+    const nextEvidenceToken = investigationEvidenceToken(log);
+    if (nextEvidenceToken !== previousEvidenceToken) {
+      queueAutoInvestigation(existing, "new_telemetry_evidence");
+    }
     return existing;
   }
 
@@ -1103,18 +1305,8 @@ function makeCase(log, options = {}) {
     {kind:"MEDICINE_ACK",caseId:c.id,target:source}
   );
 
-  if (options.autoInvestigate !== false && !S.human.paused && !S.investigated.has(c.id)) {
-    S.investigated.add(c.id);
-    setTimeout(() => {
-      verifyWithMedicine(c.source,{
-        requestedBy:"telemetry_auto",
-        question:`Auto-investigasi telemetry: ${c.signature}`,
-        noRetry:true
-      }).catch(error => emit("investigation_error",{
-        caseId:c.id,
-        message:error?.message || String(error)
-      }));
-    },250);
+  if (options.autoInvestigate !== false && !S.human.paused) {
+    queueAutoInvestigation(c, "new_case");
   }
 
   return c;
@@ -1154,19 +1346,14 @@ function startTelemetry() {
 
       if (first) {
         const c = activeCases()[0];
-        if (c && !S.investigated.has(c.id) && !S.human.paused) {
-          S.investigated.add(c.id);
-          setTimeout(() => {
-            verifyWithMedicine(c.source,{
-              requestedBy:"telemetry_initial",
-              question:`Initial investigation: ${c.signature}`,
-              noRetry:true
-            }).catch(error => emit("investigation_error",{
-              caseId:c.id,
-              message:error?.message || String(error)
-            }));
-          },350);
-        }
+        if (c && !S.human.paused) queueAutoInvestigation(c, "initial_telemetry");
+      }
+
+      // A NEEDS_EVIDENCE case must not become a dead end. Every realtime
+      // snapshot gets a chance to resume it, but only when its evidence
+      // revision changed, so this remains event-driven rather than a scan loop.
+      for (const c of activeCases()) {
+        queueAutoInvestigation(c, "telemetry_recovery");
       }
     },error => {
       const info = classifyFirestoreError(error);
@@ -2135,6 +2322,7 @@ onAuthStateChanged(auth, async user => {
 
     await discoverSystemSurface();
     startTelemetry();
+    startRecoveryMonitor();
     startConversation();
     startRuleHealthMonitor();
 
