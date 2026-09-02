@@ -71,6 +71,21 @@ button{border:0;border-radius:10px;padding:9px 13px;font-weight:800;cursor:point
 </section>
 
 <section class="card">
+<h2>🧠 Investigation Channel — Medicine ↔ Execution</h2>
+<p class="sub">Partisipasi investigasi lintas halaman. Executor menerima setiap tahap investigasi Medicine secara realtime sebelum kandidat repair dikirim. Executor tidak menentukan root cause dan tidak menulis source pada tahap ini.</p>
+<div class="grid">
+<div class="item"><div class="label">Channel</div><div id="investigationChannel" class="value ok">CROSS-PAGE</div></div>
+<div class="item"><div class="label">Participation</div><div id="investigationStatus" class="value">WAITING</div></div>
+<div class="item"><div class="label">Case / Session</div><div id="investigationCase" class="value">-</div></div>
+<div class="item"><div class="label">Phase</div><div id="investigationPhase" class="value">-</div></div>
+<div class="item"><div class="label">Target</div><div id="investigationTarget" class="value">-</div></div>
+<div class="item"><div class="label">Evidence</div><div id="investigationEvidence" class="value">0 / 0</div></div>
+</div>
+<div id="investigationBanner" class="banner">Menunggu Medicine membuka sesi investigasi...</div>
+<pre id="investigationDetail" style="margin-top:10px;min-height:80px">Belum ada sesi investigasi.</pre>
+</section>
+
+<section class="card">
 <h2>Executor Checklist</h2>
 <p class="sub">Ceklis mengikuti pondasi yang kita sepakati; setiap komponen berada di dalam tiga file internal ini.</p>
 <table><thead><tr><th>File</th><th>Komponen</th><th>Status</th></tr></thead><tbody>
@@ -145,8 +160,27 @@ const ROUTE_VERSION = "v3.0.0";
     $("history").textContent=s.history?.length?pretty(s.history):"Belum ada audit.";
     if(s.source){ set("sourceFingerprint",s.source.fingerprint); set("sourceInfo",`${s.source.sourceId||s.source.file} • ${s.source.origin||"INTERNAL"} • ${s.source.updatedAt||"-"}`); }
     renderNerve(s.nerve);
+    renderInvestigation(s.investigation);
     renderIncomingReview(s);
     refreshSources();
+  }
+
+  function renderInvestigation(i) {
+    i=i||null;
+    if(!i){
+      set("investigationStatus","WAITING"); set("investigationCase","-"); set("investigationPhase","-"); set("investigationTarget","-"); set("investigationEvidence","0 / 0");
+      $("investigationBanner").className="banner"; $("investigationBanner").textContent="Menunggu Medicine membuka sesi investigasi...";
+      $("investigationDetail").textContent="Belum ada sesi investigasi.";
+      return;
+    }
+    const status=String(i.status||"RECEIVED");
+    const good=["REVIEWING","EVIDENCE_RECEIVED","ROOT_CAUSE_RECEIVED","CANDIDATE_EXPECTED"].includes(status);
+    const bad=status==="EVIDENCE_INSUFFICIENT";
+    set("investigationStatus",status); set("investigationCase",`${i.caseId||"-"} / ${i.investigationId||"-"}`); set("investigationPhase",i.phase||"-"); set("investigationTarget",i.target||"-"); set("investigationEvidence",`${i.sourceEvidenceCount??0} source / ${i.evidenceCount??0} runtime`);
+    $("investigationStatus").className="value "+(bad?"fail":good?"ok":"warn");
+    $("investigationBanner").className="banner "+(bad?"warn":good?"live":"");
+    $("investigationBanner").textContent=bad?"EXECUTION TERLIBAT — evidence/source exact belum cukup; review patch ditahan.":status==="ROOT_CAUSE_RECEIVED"?"ROOT CAUSE RECEIVED — hasil pembuktian diterima; Execution menunggu candidate exact, tanpa eksekusi.":status==="CANDIDATE_EXPECTED"?"EXECUTION SIAP — candidate repair akan diperiksa deterministic, tanpa eksekusi.":"EXECUTION TERLIBAT — Medicine masih investigasi; Executor menunggu candidate exact.";
+    $("investigationDetail").textContent=pretty({phase:i.phase,status:i.status,target:i.target,symptom:i.symptom,runtimeLocation:i.runtimeLocation,rootCauseFile:i.rootCauseFile,rootCauseStatus:i.rootCauseStatus,precisionGate:i.precisionGate,message:i.message,receivedAt:i.receivedAt});
   }
 
   function renderIncomingReview(s) {

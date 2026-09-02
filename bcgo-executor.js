@@ -38,6 +38,7 @@
     persistence: null,
     executionReview: null,
     incomingCandidate: null,
+    investigation: null,
     nerve: {
       status: "DISCONNECTED",
       lastAt: 0,
@@ -147,11 +148,115 @@
   const BRIDGE_CHANNEL = "CIKUR_GO_BCGO_MEDICINE_V1";
   const REPAIR_CANDIDATE_KEY = `${BRIDGE_CHANNEL}_REPAIR_CANDIDATE`;
   const REVIEW_RESULT_KEY = `${BRIDGE_CHANNEL}_EXECUTION_REVIEW`;
+  const INVESTIGATION_KEY = `${BRIDGE_CHANNEL}_INVESTIGATION`;
+  const INVESTIGATION_ACK_KEY = `${BRIDGE_CHANNEL}_INVESTIGATION_ACK`;
   const REPAIR_CANDIDATE_MAX_AGE = 30000;
+  const INVESTIGATION_MAX_AGE = 30000;
   const EXECUTOR_ROLE = String(window.__BCGO_EXECUTOR_ROLE || "STANDALONE").toUpperCase();
   const bridgeChannel = typeof BroadcastChannel !== "undefined"
     ? new BroadcastChannel(BRIDGE_CHANNEL) : null;
   const seenRepairCandidates = new Set();
+  const seenInvestigations = new Set();
+  const lastInvestigationPhase = new Map();
+
+  function publishInvestigationAck(packet) {
+    const message = {
+      bridge: BRIDGE_CHANNEL,
+      from: "EXECUTION",
+      type: "EXECUTION_INVESTIGATION_ACK",
+      role: EXECUTOR_ROLE,
+      at: Date.now(),
+      ...packet
+    };
+    try { bridgeChannel?.postMessage(message); } catch {}
+    try { localStorage.setItem(INVESTIGATION_ACK_KEY, JSON.stringify(message)); } catch {}
+    return message;
+  }
+
+  function handleInvestigationRequest(packet, source = "BROADCAST_CHANNEL") {
+    if (EXECUTOR_ROLE !== "STANDALONE") return false;
+    if (!packet || packet.bridge !== BRIDGE_CHANNEL || packet.from !== "MEDICINE" || packet.type !== "MEDICINE_INVESTIGATION_REQUEST") return false;
+    const at = Number(packet.at) || 0;
+    if (!at || Date.now() - at > INVESTIGATION_MAX_AGE) return false;
+    const investigationId = String(packet.investigationId || "").trim();
+    if (!investigationId) return false;
+
+    const phase = String(packet.phase || "INVESTIGATING").toUpperCase();
+    // One investigation session legitimately emits multiple phases.
+    // Dedupe by session + phase, not by session alone, otherwise the Executor
+    // would ACK STARTED and silently ignore EVIDENCE_FOUND/CANDIDATE_READY.
+    const phaseKey = `${investigationId}:${phase}`;
+    if (seenInvestigations.has(phaseKey)) return false;
+    seenInvestigations.add(phaseKey);
+    lastInvestigationPhase.set(investigationId, phase);
+    if (seenInvestigations.size > 300) {
+      const first = seenInvestigations.values().next().value;
+      seenInvestigations.delete(first);
+    }
+    if (lastInvestigationPhase.size > 150) {
+      const first = lastInvestigationPhase.keys().next().value;
+      lastInvestigationPhase.delete(first);
+    }
+
+    const hasExactEvidence = Number(packet.sourceEvidenceCount || 0) > 0 && String(packet.rootCauseStatus || "UNPROVEN") !== "UNPROVEN";
+    let participation = "RECEIVED";
+    let message = "Execution menerima sesi investigasi. Menunggu candidate exact dari Medicine.";
+    if (phase === "STARTED" || phase === "INVESTIGATING") {
+      participation = "REVIEWING";
+      message = "Execution ikut memantau investigasi. Belum ada source/operation yang boleh direview.";
+    } else if (phase === "NEEDS_EVIDENCE") {
+      participation = "EVIDENCE_INSUFFICIENT";
+      message = "Evidence/source exact belum cukup. Execution belum membuka review patch.";
+    } else if (phase === "EVIDENCE_FOUND") {
+      participation = hasExactEvidence ? "EVIDENCE_RECEIVED" : "EVIDENCE_INSUFFICIENT";
+      message = hasExactEvidence ? "Evidence diterima. Menunggu candidate exact untuk deterministic preflight." : "Evidence masih belum cukup untuk preflight deterministic.";
+    } else if (phase === "ROOT_CAUSE_VERIFIED") {
+      participation = "ROOT_CAUSE_RECEIVED";
+      message = "Root cause diterima dari Medicine. Execution menunggu candidate exact untuk deterministic preflight; tidak ada eksekusi.";
+    } else if (phase === "CANDIDATE_READY" || phase === "CANDIDATE_SENT") {
+      participation = "CANDIDATE_EXPECTED";
+      message = "Candidate repair sedang/akan diterima. Execution hanya melakukan deterministic review, bukan eksekusi.";
+    }
+
+    state.investigation = {
+      investigationId,
+      caseId:packet.caseId || null,
+      phase,
+      target:packet.target || null,
+      symptom:packet.symptom || null,
+      diagnosis:packet.diagnosis || null,
+      runtimeLocation:packet.runtimeLocation || null,
+      evidenceCount:Number(packet.evidenceCount || 0),
+      sourceEvidenceCount:Number(packet.sourceEvidenceCount || 0),
+      rootCauseFile:packet.rootCauseFile || null,
+      rootCauseStatus:packet.rootCauseStatus || "UNPROVEN",
+      precisionGate:!!packet.precisionGate,
+      status:participation,
+      message,
+      source,
+      receivedAt:now()
+    };
+    audit("INVESTIGATION_REQUEST_RECEIVED", { investigationId, caseId:packet.caseId || null, phase, target:packet.target || null, status:participation });
+    emit();
+    publishInvestigationAck({ investigationId, caseId:packet.caseId || null, phase, status:participation, message, source, receivedAt:state.investigation.receivedAt });
+    return true;
+  }
+
+  function startInvestigationBridge() {
+    if (EXECUTOR_ROLE !== "STANDALONE") return;
+    try { bridgeChannel?.addEventListener("message", event => { handleInvestigationRequest(event.data, "BROADCAST_CHANNEL"); }); } catch {}
+    try {
+      window.addEventListener("storage", event => {
+        if (event.key === INVESTIGATION_KEY && event.newValue) {
+          try { handleInvestigationRequest(JSON.parse(event.newValue), "LOCAL_STORAGE"); } catch {}
+        }
+      });
+    } catch {}
+    try {
+      const cached = localStorage.getItem(INVESTIGATION_KEY);
+      if (cached) handleInvestigationRequest(JSON.parse(cached), "LOCAL_STORAGE_CACHE");
+    } catch {}
+  }
 
   function publishReviewResult(packet) {
     const message = {
@@ -755,6 +860,7 @@
       nerve: refreshNerveStatus(),
       executionReview: state.executionReview,
       incomingCandidate: state.incomingCandidate,
+      investigation: state.investigation,
       executorRole: EXECUTOR_ROLE,
       lastResult: state.result,
       history: state.history.slice()
@@ -800,6 +906,7 @@
 
   function boot() {
     startNerveMonitor();
+    startInvestigationBridge();
     startRepairCandidateBridge();
     setStatus(core() ? STATUS.READY : STATUS.OFFLINE);
     // Inisialisasi demo source otomatis agar langsung siap uji coba

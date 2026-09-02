@@ -174,7 +174,8 @@ const S = {
     status: "OFFLINE",
     lastEventAt: null,
     persistence: null,
-    lastResult: null
+    lastResult: null,
+    investigation: null
   },
   investigated: new Set()
 };
@@ -195,6 +196,8 @@ const pendingExecutionReviews = new Map();
 const EXECUTION_REVIEW_TIMEOUT = 5000;
 const EXECUTION_REVIEW_EVENT_KEY = `${MEDICINE_BRIDGE_KEY}_REPAIR_CANDIDATE`;
 const EXECUTION_REVIEW_RESULT_KEY = `${MEDICINE_BRIDGE_KEY}_EXECUTION_REVIEW`;
+const INVESTIGATION_EVENT_KEY = `${MEDICINE_BRIDGE_KEY}_INVESTIGATION`;
+const INVESTIGATION_ACK_KEY = `${MEDICINE_BRIDGE_KEY}_INVESTIGATION_ACK`;
 
 function publishMedicineState(event, data = {}) {
   const packet = {
@@ -240,6 +243,49 @@ function publishExecutionCandidate(packet) {
   return message;
 }
 
+function publishInvestigationRequest(c, phase = "INVESTIGATING", extra = {}) {
+  if (!c?.id) return null;
+  if (!c.investigationSessionId) c.investigationSessionId = `INV-${uid().toUpperCase()}`;
+  const message = {
+    bridge: MEDICINE_BRIDGE_KEY,
+    from: "MEDICINE",
+    type: "MEDICINE_INVESTIGATION_REQUEST",
+    at: Date.now(),
+    investigationId: c.investigationSessionId,
+    caseId: c.id,
+    phase,
+    target: c.source || null,
+    symptom: c.signature || null,
+    diagnosis: c.diagnosis?.title || null,
+    runtimeLocation: c.runtimeLocation || null,
+    evidenceCount: Number(c.evidenceCount || 0),
+    evidence: c.lastEvidence || c.evidence || null,
+    rootCauseFile: c.rootCauseFile || c.repairPlan?.rootCauseFile || null,
+    rootCauseStatus: c.rootCauseStatus || c.repairPlan?.rootCauseStatus || "UNPROVEN",
+    precisionGate: !!c.repairPlan?.precisionGate,
+    sourceEvidenceCount: Array.isArray(c.sourceEvidence) ? c.sourceEvidence.length : 0,
+    checkedFiles: Array.isArray(c.verification?.checkedFiles) ? c.verification.checkedFiles.length : 0,
+    message: String(extra.message || "").slice(0,500),
+    sequence: Date.now()
+  };
+  try { medicineBridgeChannel?.postMessage(message); } catch {}
+  try { localStorage.setItem(INVESTIGATION_EVENT_KEY, JSON.stringify(message)); } catch {}
+  emit("investigation_channel_sent", { investigation: message });
+  return message;
+}
+
+function receiveInvestigationAck(packet) {
+  if (!packet || packet.bridge !== MEDICINE_BRIDGE_KEY || packet.from !== "EXECUTION" || packet.type !== "EXECUTION_INVESTIGATION_ACK") return false;
+  const investigationId = String(packet.investigationId || "").trim();
+  if (!investigationId) return false;
+  const active = S.activeCase;
+  if (active?.investigationSessionId && active.investigationSessionId !== investigationId) return false;
+  if (active?.id && packet.caseId && active.id !== packet.caseId) return false;
+  S.executor.investigation = packet;
+  emit("investigation_ack_received", { investigation: packet });
+  return true;
+}
+
 function receiveExecutionReview(packet) {
   if (!packet || packet.bridge !== MEDICINE_BRIDGE_KEY || packet.from !== "EXECUTION" || packet.type !== "EXECUTION_REVIEW_RESULT") return false;
   const requestId = String(packet.requestId || packet.review?.requestId || "").trim();
@@ -254,10 +300,15 @@ function receiveExecutionReview(packet) {
 
 medicineBridgeChannel?.addEventListener("message", event => {
   receiveExecutionReview(event.data);
+  receiveInvestigationAck(event.data);
 });
 window.addEventListener("storage", event => {
-  if (event.key !== EXECUTION_REVIEW_RESULT_KEY || !event.newValue) return;
-  try { receiveExecutionReview(JSON.parse(event.newValue)); } catch {}
+  if (!event.newValue) return;
+  try {
+    const packet = JSON.parse(event.newValue);
+    if (event.key === EXECUTION_REVIEW_RESULT_KEY) receiveExecutionReview(packet);
+    if (event.key === INVESTIGATION_ACK_KEY) receiveInvestigationAck(packet);
+  } catch {}
 });
 
 function normalizeFile(value) {
@@ -1027,7 +1078,8 @@ function makeCase(log, options = {}) {
     sourceEvidence:[],
     repairPlan:null,
     patchProposal:null,
-    validation:null
+    validation:null,
+    investigationSessionId:`INV-${uid().toUpperCase()}`
   };
 
   S.cases.unshift(c);
@@ -1035,6 +1087,9 @@ function makeCase(log, options = {}) {
   S.activeCase = c;
 
   emit("case_created",{case:c});
+  publishInvestigationRequest(c, "STARTED", {
+    message:"Case telemetry diterima. Execution diminta ikut memantau investigasi sebelum kandidat repair dibuka."
+  });
 
   void safeAddMessage(
     "bcgo",
@@ -1360,6 +1415,9 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
     if (c) {
       S.activeCase = c;
       c.status = "INVESTIGATING";
+      publishInvestigationRequest(c, "INVESTIGATING", {
+        message:"Medicine sedang menelusuri target → dependency → source exact. Execution ikut menerima status investigasi, tetapi belum diberi perintah eksekusi."
+      });
 
       const resolution = await resolveRootCause(c);
       v.rootCauseFile = resolution.rootCauseFile || requestedTarget;
@@ -1416,6 +1474,20 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
       c.rootCauseFile = plan.rootCauseFile;
       c.rootCauseStatus = plan.rootCauseStatus;
       c.sourceEvidence = plan.sourceEvidence;
+
+      if (plan.precisionGate) {
+        publishInvestigationRequest(c, "ROOT_CAUSE_VERIFIED", {
+          message:`Root cause terbukti pada ${plan.rootCauseFile}. Execution menerima hasil pembuktian ini dan menunggu candidate exact untuk deterministic preflight; belum ada perintah eksekusi.`
+        });
+      }
+
+      publishInvestigationRequest(c, plan.precisionGate ? "CANDIDATE_READY" : (plan.sourceEvidence.length ? "EVIDENCE_FOUND" : "NEEDS_EVIDENCE"), {
+        message: plan.precisionGate
+          ? "Medicine menemukan kandidat exact. Execution akan menerima candidate untuk deterministic preflight."
+          : plan.sourceEvidence.length
+            ? "Evidence ditemukan, tetapi candidate belum aman dibuka; Execution diberi status untuk cross-check berikutnya."
+            : "Evidence/source exact belum cukup; Execution tetap ikut memantau tetapi belum melakukan review patch."
+      });
 
       v.verdict = plan.precisionGate
         ? "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE"
@@ -1637,15 +1709,19 @@ async function reviewProposalWithExecutor(c, proposal) {
     },
     requestId:request.requestId, caseId:c.id, proposalId:proposal.proposalId
   };
+  publishInvestigationRequest(c, "CANDIDATE_SENT", {
+    message:`Candidate repair ${proposal.proposalId} dikirim ke Execution untuk deterministic review. Ini bukan perintah eksekusi.`
+  });
   emit("execution_review_started", { case:c, proposal, request, channel:"CROSS_PAGE_REALTIME" });
-  publishExecutionCandidate(candidate);
 
+  // Register the waiter BEFORE publishing the candidate to close the cross-page race.
   const review = await new Promise(resolve => {
     const timer = setTimeout(() => {
       pendingExecutionReviews.delete(request.requestId);
       resolve(null);
     }, EXECUTION_REVIEW_TIMEOUT);
     pendingExecutionReviews.set(request.requestId, { resolve, timer });
+    publishExecutionCandidate(candidate);
   });
 
   let finalReview = review;
