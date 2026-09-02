@@ -413,7 +413,10 @@
     try { r = normalize(request); }
     catch (e) { return { ok: false, reason: e.message }; }
 
-    const errors = validateRequest(r, sourceText);
+    // Review validates the same request contract as execution, but uses a
+    // temporary approval flag only for structural validation. It NEVER executes.
+    const reviewRequest = { ...r, approval: "APPROVED" };
+    const errors = validateRequest(reviewRequest, sourceText);
     if (errors.length) {
       return { ok: false, reason: "REQUEST_REJECTED", errors };
     }
@@ -429,6 +432,63 @@
       sourceBefore: sourceText,
       sourceFingerprint: gate.actual
     };
+  }
+
+  function reviewCandidate(request, sourceText = null) {
+    let r;
+    try { r = normalize(request); }
+    catch (e) {
+      const result = { executor: ENGINE, version: VERSION, status: "REJECTED", review: "REJECTED", reason: e.message, reviewedAt: now() };
+      audit("REPAIR_REVIEW_REJECTED", { reason: e.message });
+      return result;
+    }
+
+    // Review is a non-writing preflight. Reuse the same structural validator,
+    // but do not require human approval at this stage; approval belongs only
+    // to execute(). The request itself remains marked REVIEW and can never
+    // reach the write path through this function.
+    const validationRequest = { ...r, approval: "APPROVED" };
+    const errors = validateRequest(validationRequest, sourceText);
+    if (errors.length) {
+      const result = { executor: ENGINE, version: VERSION, status: "REJECTED", review: "REJECTED", reason: "REPAIR_CANDIDATE_INVALID", errors, caseId:r.caseId || null, proposalId:r.proposalId || null, file:r.file || null, reviewedAt:now() };
+      audit("REPAIR_REVIEW_REJECTED", { caseId:r.caseId, proposalId:r.proposalId, file:r.file, errors });
+      setStatus(STATUS.REJECTED);
+      emit();
+      return result;
+    }
+
+    if (typeof sourceText !== "string") {
+      const result = { executor: ENGINE, version: VERSION, status: "REJECTED", review: "REJECTED", reason: "SOURCE_REQUIRED_FOR_REVIEW", caseId:r.caseId || null, proposalId:r.proposalId || null, reviewedAt:now() };
+      audit("REPAIR_REVIEW_REJECTED", { reason: result.reason, caseId:r.caseId, proposalId:r.proposalId });
+      setStatus(STATUS.REJECTED);
+      emit();
+      return result;
+    }
+
+    const gate = core().validateBefore(sourceText, r.expectedFingerprint);
+    if (!gate.ok) {
+      const result = { executor: ENGINE, version: VERSION, status: "REJECTED", review: "REJECTED", reason: "SOURCE_FINGERPRINT_MISMATCH", gate, caseId:r.caseId || null, proposalId:r.proposalId || null, file:r.file || null, reviewedAt:now() };
+      audit("REPAIR_REVIEW_REJECTED", { reason: result.reason, caseId:r.caseId, proposalId:r.proposalId, file:r.file });
+      setStatus(STATUS.REJECTED);
+      emit();
+      return result;
+    }
+
+    const simulated = core().processPatch({
+      source: sourceText,
+      before: r.before,
+      after: r.after,
+      operation: r.operation,
+      expectedFingerprint: r.expectedFingerprint
+    });
+
+    const result = simulated.ok
+      ? { executor:ENGINE, version:VERSION, status:"VALID", review:"VALID", caseId:r.caseId || null, proposalId:r.proposalId || null, file:r.file || null, operation:r.operation, beforeFingerprint:simulated.beforeFingerprint, afterFingerprint:simulated.afterFingerprint, diff:simulated.diff, validation:simulated.validation, reviewedAt:now() }
+      : { executor:ENGINE, version:VERSION, status:"REJECTED", review:"REJECTED", reason:"SIMULATION_FAILED", caseId:r.caseId || null, proposalId:r.proposalId || null, file:r.file || null, detail:simulated, reviewedAt:now() };
+
+    audit(result.status === "VALID" ? "REPAIR_REVIEW_VALID" : "REPAIR_REVIEW_REJECTED", { caseId:r.caseId, proposalId:r.proposalId, file:r.file, status:result.status, reason:result.reason || null });
+    emit();
+    return result;
   }
 
   async function execute(request, sourceText = null) {
@@ -654,6 +714,7 @@
     bindLocalFile,
     persistSource,
     prepare,
+    reviewCandidate,
     execute,
     attachRequest,
     reset,

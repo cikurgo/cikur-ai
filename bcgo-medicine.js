@@ -22,11 +22,12 @@ import { db, auth } from "./cikur-config.js";
  *
  * Flow:
  *   TELEMETRY -> CASE -> DEPENDENCY SURFACE -> ROOT CAUSE
- *   -> EXACT SOURCE -> BEFORE/AFTER -> HUMAN APPROVAL
- *   -> HUMAN REVIEW -> VALIDATION
+ *   -> EXACT SOURCE -> BEFORE/AFTER -> EXECUTION REVIEW
+ *   -> HUMAN APPROVAL -> EXECUTION -> VALIDATION
  *
- * Medicine does not execute source changes. Executor integration is intentionally
- * absent from this clean baseline and will be added later as a separate internal system.
+ * Medicine never writes repository source by itself. Execution Review is a
+ * deterministic, non-writing preflight performed by the trusted internal Executor.
+ * Actual execution remains locked behind explicit human approval.
  * ================================================================
  */
 
@@ -1314,6 +1315,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
       targetFindings:(scan.findings || []).filter(f =>
         f.sourceFile === requestedTarget || f.targetFile === requestedTarget
       ),
+      executionReview:null,
       checkedAt:now(),
       question:context.question || null
     };
@@ -1407,6 +1409,23 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
         createdAt:now()
       };
 
+      if (proposal.precisionGate) {
+        const executionReview = await reviewProposalWithExecutor(c, proposal);
+        proposal.executionReview = executionReview;
+        v.executionReview = executionReview;
+        c.verification = v;
+        if (executionReview?.status === "VALID") {
+          proposal.status = "READY_FOR_HUMAN_APPROVAL";
+          c.status = "READY_FOR_HUMAN_APPROVAL";
+        } else {
+          proposal.status = "EXECUTION_REVIEW_REJECTED";
+          c.status = "INVESTIGATING";
+          plan.precisionGate = false;
+          plan.status = "PATCH_REQUIRES_REVIEW";
+          plan.blockReason = `Execution review belum valid: ${executionReview?.reason || "UNKNOWN"}`;
+        }
+      }
+
       c.patchProposal = proposal;
       S.patchProposals.unshift(proposal);
       S.patchProposals = S.patchProposals.slice(0,50);
@@ -1461,8 +1480,9 @@ function canApprove(c) {
   const v = c?.verification;
   return !!(
     c &&
-    c.status === "VERIFIED_DIAGNOSIS" &&
+    (c.status === "VERIFIED_DIAGNOSIS" || c.status === "READY_FOR_HUMAN_APPROVAL") &&
     p?.precisionGate === true &&
+    c.patchProposal?.executionReview?.status === "VALID" &&
     v?.verdict === "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE" &&
     p.operations?.length &&
     p.operations.every(op =>
@@ -1556,6 +1576,30 @@ function buildExecutorRequest(c, proposal, op, sourceRecord) {
     target: c.repairPlan?.rootCauseFile || op.file,
     createdAt: now()
   };
+}
+
+async function reviewProposalWithExecutor(c, proposal) {
+  const e = internalExecutor();
+  if (!e || typeof e.reviewCandidate !== "function") {
+    return { status:"REVIEW_UNAVAILABLE", reason:"EXECUTION_REVIEW_CHANNEL_UNAVAILABLE" };
+  }
+  const op = proposal?.operations?.[0];
+  if (!op?.file || typeof op.before !== "string" || typeof op.after !== "string") {
+    return { status:"REJECTED", reason:"REPAIR_CANDIDATE_INCOMPLETE" };
+  }
+  const source = await fetchFile(op.file, { force:true });
+  if (!source.ok || typeof source.text !== "string") {
+    return { status:"REJECTED", reason:`SOURCE_UNAVAILABLE:${op.file}` };
+  }
+  const request = buildExecutorRequest(c, proposal, op, { text:source.text, fingerprint:fingerprint(source.text) });
+  // Review is deliberately NOT execution. Human approval is still required later.
+  request.approval = "REVIEW";
+  emit("execution_review_started", { case:c, proposal, request });
+  const review = await Promise.resolve(e.reviewCandidate(request, source.text));
+  proposal.executionReview = review;
+  proposal.executionReviewedAt = now();
+  emit("execution_review_complete", { case:c, proposal, review });
+  return review;
 }
 
 async function applyApprovedTreatment(caseId) {
@@ -1982,6 +2026,7 @@ const API = {
   scanConsistency,
   discoverSystemSurface,
   verifyWithMedicine,
+  reviewProposalWithExecutor,
   sendMessage,
   approveTreatment,
   applyApprovedTreatment,
