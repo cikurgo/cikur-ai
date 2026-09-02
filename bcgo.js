@@ -97,6 +97,9 @@ export function runAutonomousEngine(onCycleUpdate) {
   let interruptTimerProcess = null;
   let interruptTimerReview = null;
   let interruptGeneration = 0;
+  let sourceScanTimer = null;
+  let sourceScanBusy = false;
+  let sourceScanGeneration = 0;
 
   const firestore = { connected: false, count: 0, error: null, lastServerAt: 0 };
   const state = {
@@ -343,6 +346,179 @@ export function runAutonomousEngine(onCycleUpdate) {
     return map;
   }
 
+  // ============================================================
+  // BCGO SOURCE CODE SCANNER
+  // Membaca source aktual dari file registry melalui same-origin fetch.
+  // Tidak menulis file, tidak memakai AI/API eksternal, dan tidak mengubah
+  // status organ hanya karena source belum terbukti dapat dibaca.
+  // ============================================================
+  function sourceLineNumber(source, index) {
+    return String(source || "").slice(0, Math.max(0, index)).split("\n").length;
+  }
+
+  function sourceHash(source) {
+    const text = String(source || "");
+    let hash = 2166136261;
+    for (let i = 0; i < text.length; i++) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(16).padStart(8, "0");
+  }
+
+  function sourceUrl(file) {
+    return `./${encodeURIComponent(file)}?bcgoSourceScan=${Date.now()}`;
+  }
+
+  function extractLocalRefs(file, source) {
+    const refs = new Set();
+    const text = String(source || "");
+    const patterns = [
+      /(?:src|href)\s*=\s*["']([^"'#?]+)(?:[?#][^"']*)?["']/gi,
+      /(?:from|import)\s*["']([^"']+)["']/gi,
+      /(?:location(?:\.href)?|window\.location(?:\.href)?)\s*=\s*["']([^"']+)["']/gi
+    ];
+    for (const re of patterns) {
+      let match;
+      while ((match = re.exec(text))) {
+        const ref = String(match[1] || "").trim();
+        if (!ref || /^(?:https?:|data:|mailto:|tel:|javascript:|#|\/)/i.test(ref)) continue;
+        const clean = ref.split("?")[0].split("#")[0].split("/").pop();
+        if (clean && /\.(?:html?|js|css)$/i.test(clean)) refs.add(clean);
+      }
+    }
+    return [...refs];
+  }
+
+  function scanHtmlSource(file, source) {
+    const findings = [];
+    const text = String(source || "");
+    const idCounts = new Map();
+    const idRe = /\bid\s*=\s*["']([^"']+)["']/gi;
+    let m;
+    while ((m = idRe.exec(text))) {
+      const id = String(m[1] || "").trim();
+      if (!id) continue;
+      idCounts.set(id, (idCounts.get(id) || 0) + 1);
+    }
+    for (const [id, count] of idCounts) {
+      if (count > 1) {
+        const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const idx = text.search(new RegExp(`\\bid\\s*=\\s*["']${escapedId}`, "i"));
+        findings.push({ severity: "HIGH", type: "DUPLICATE_ID", file, line: sourceLineNumber(text, idx), message: `ID "${id}" muncul ${count} kali; referensi DOM menjadi ambigu.` });
+      }
+    }
+    const openTags = ["div","section","form","main","header","footer","script","style"];
+    for (const tag of openTags) {
+      const opens = (text.match(new RegExp(`<${tag}\\b`, "gi")) || []).length;
+      const closes = (text.match(new RegExp(`</${tag}>`, "gi")) || []).length;
+      if (opens !== closes) findings.push({ severity: "HIGH", type: "UNBALANCED_HTML", file, line: 1, message: `<${tag}> buka=${opens}, tutup=${closes}. Struktur HTML tidak seimbang.` });
+    }
+    const forms = [];
+    const formRe = /<form\b([^>]*)>([\s\S]*?)<\/form>/gi;
+    while ((m = formRe.exec(text))) {
+      const attrs = m[1] || "", body = m[2] || "";
+      const attr = key => { const r = new RegExp(`\\b${key}\\s*=\\s*["']([^"']+)["']`, "i").exec(attrs); return r ? r[1].trim() : ""; };
+      const key = attr("id") || attr("name") || attr("data-form") || attr("data-form-id");
+      if (!key) continue;
+      const fields = [...body.matchAll(/\b(?:name|id)\s*=\s*["']([^"']+)["']/gi)].map(x => x[1].trim()).filter(Boolean);
+      forms.push({ key: key.toLowerCase(), line: sourceLineNumber(text, m.index), fields: [...new Set(fields)].sort() });
+    }
+    return { findings, forms };
+  }
+
+  function scanJsSource(file, source) {
+    const findings = [];
+    const text = String(source || "");
+    let depth = 0, quote = null, escaped = false, line = 1;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === "\n") line++;
+      if (quote) {
+        if (escaped) { escaped = false; continue; }
+        if (ch === "\\") { escaped = true; continue; }
+        if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === "`") { quote = ch; continue; }
+      if (ch === "{") depth++;
+      else if (ch === "}") depth--;
+      if (depth < 0) { findings.push({ severity: "HIGH", type: "UNBALANCED_JS", file, line, message: "Kurung kurawal penutup lebih banyak daripada pembuka." }); break; }
+    }
+    if (quote) findings.push({ severity: "HIGH", type: "UNTERMINATED_STRING", file, line, message: "String/template literal tampak tidak tertutup." });
+    if (depth !== 0) findings.push({ severity: "HIGH", type: "UNBALANCED_JS", file, line, message: `Keseimbangan kurung kurawal gagal (depth=${depth}).` });
+    return { findings, forms: [] };
+  }
+
+  function scanSourceFile(file, source) {
+    const parsed = /\.html?$/i.test(file) ? scanHtmlSource(file, source) : scanJsSource(file, source);
+    return { file, type: ORGAN_REGISTRY[file]?.type || "UNKNOWN", role: ORGAN_REGISTRY[file]?.role || "unknown", bytes: new Blob([source]).size, lines: String(source).split("\n").length, hash: sourceHash(source), refs: extractLocalRefs(file, source), ...parsed };
+  }
+
+  function compareCrossFileSources(scanned) {
+    const findings = [], byForm = new Map();
+    for (const item of Object.values(scanned)) for (const form of item.forms || []) {
+      if (!byForm.has(form.key)) byForm.set(form.key, []);
+      byForm.get(form.key).push({ file: item.file, ...form });
+    }
+    for (const [key, entries] of byForm) {
+      if (entries.length < 2) continue;
+      const reference = entries[0];
+      for (const target of entries.slice(1)) {
+        const a = new Set(reference.fields), b = new Set(target.fields);
+        const missing = [...a].filter(x => !b.has(x)), extra = [...b].filter(x => !a.has(x));
+        if (missing.length || extra.length) findings.push({ severity: "HIGH", type: "CROSS_FILE_FORM_MISMATCH", sourceFile: reference.file, sourceLine: reference.line, targetFile: target.file, targetLine: target.line, area: `FORM:${key}`, message: `Form "${key}" berbeda antar file. ${reference.file}: ${reference.fields.length} field; ${target.file}: ${target.fields.length} field.`, evidence: { sourceFields: reference.fields, targetFields: target.fields, missing, extra } });
+      }
+    }
+    return findings;
+  }
+
+  async function fetchSourceForScan(file, generation) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), SOURCE_SCAN_FETCH_TIMEOUT);
+    try {
+      const response = await fetch(sourceUrl(file), { method: "GET", cache: "no-store", credentials: "same-origin", signal: controller.signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const source = await response.text();
+      if (generation !== sourceScanGeneration) return null;
+      if (!source.trim()) throw new Error("Source kosong.");
+      return source;
+    } finally { clearTimeout(timeout); }
+  }
+
+  async function runSourceScan(reason = "REALTIME") {
+    if (stopped || !authorized || sourceScanBusy) return;
+    sourceScanBusy = true;
+    const generation = ++sourceScanGeneration;
+    const startedAt = Date.now(), scanned = {}, failures = [];
+    state.sourceScan = { ...state.sourceScan, status: "SCANNING", startedAt, message: `Membaca source aktual ${ORGAN_COUNT} organ...` };
+    recordEvent("SOURCE_SCAN", `Pemindaian source code dimulai (${reason}).`, "SYS_SOURCE_SCANNER");
+    publishToUI(safeClone(state));
+    try {
+      for (const file of Object.keys(ORGAN_REGISTRY)) {
+        try {
+          const source = await fetchSourceForScan(file, generation);
+          if (source == null) return;
+          scanned[file] = scanSourceFile(file, source);
+        } catch (error) {
+          failures.push({ severity: "HIGH", type: "SOURCE_UNREADABLE", file, line: null, message: `Source ${file} tidak dapat dibaca: ${String(error?.message || error)}` });
+        }
+      }
+      const allFindings = Object.values(scanned).flatMap(item => item.findings || []);
+      const crossFileFindings = compareCrossFileSources(scanned);
+      const actionable = [...allFindings, ...crossFileFindings].filter(f => f.severity !== "INFO").slice(0, 100);
+      state.sourceScan = { version: SOURCE_SCAN_VERSION, status: failures.length ? "DEGRADED" : (actionable.length ? "FINDINGS" : "CLEAN"), startedAt, completedAt: Date.now(), filesScanned: ORGAN_COUNT, filesReadable: Object.keys(scanned).length, filesFailed: failures.length, findings: [...failures, ...allFindings].slice(0, 100), crossFileFindings: crossFileFindings.slice(0, 100), sources: Object.fromEntries(Object.entries(scanned).map(([file, item]) => [file, { file, lines: item.lines, bytes: item.bytes, hash: item.hash, refs: item.refs }])), message: failures.length ? `Scanner selesai dengan ${failures.length} source yang tidak terbaca.` : actionable.length ? `Scanner menemukan ${actionable.length} temuan yang membutuhkan pemeriksaan.` : "Scanner selesai; tidak ada temuan struktural/cross-file yang terdeteksi." };
+      recordEvent("SOURCE_SCAN_RESULT", state.sourceScan.message, actionable.length ? "SYS_SOURCE_FINDINGS" : "SYS_SOURCE_CLEAN");
+      publishToUI(safeClone(state));
+      publishBCGOStateToMedicine(safeClone(state));
+    } finally { sourceScanBusy = false; }
+  }
+
+  function scheduleSourceScan(delay = SOURCE_SCAN_INTERVAL) {
+    clearTimeout(sourceScanTimer);
+    sourceScanTimer = setTimeout(() => { runSourceScan("REALTIME_TIMER").finally(() => { if (!stopped && authorized) scheduleSourceScan(SOURCE_SCAN_INTERVAL); }); }, delay);
+  }
+
   function buildOrgans() {
     const recent = newestLogByFile();
     const organs = {};
@@ -373,7 +549,9 @@ export function runAutonomousEngine(onCycleUpdate) {
           ...meta,
           status: "HEALTHY",
           state: "HEALTHY",
-          message: "Belum ada laporan error aktif dari file ini."
+          message: state.sourceScan?.sources?.[file]
+            ? `Source terbaca (${state.sourceScan.sources[file].lines} baris, hash ${state.sourceScan.sources[file].hash}); tidak ada temuan aktif dari scanner.`
+            : "Belum ada bukti source scan untuk file ini."
         };
       }
     }
@@ -395,12 +573,15 @@ export function runAutonomousEngine(onCycleUpdate) {
           rootCandidate: file,
           severity: /security|permission|denied|failed|undefined|null/i.test(info.message) ? "HIGH" : "MEDIUM",
           confidence: 92,
-          status: "TELEMETRY_CONFIRMED",
+          status: info.evidenceType === "SOURCE_SCAN" ? "SOURCE_SCAN_CONFIRMED" : "TELEMETRY_CONFIRMED",
+          evidenceType: info.evidenceType || "TELEMETRY",
+          sourceFinding: info.sourceFinding || null,
           evidence: {
             message: info.message,
             reportedAt: info.reportedAt,
             line: info.line,
-            column: info.column
+            column: info.column,
+            sourceFinding: info.sourceFinding || null
           }
         };
       });
@@ -414,7 +595,10 @@ export function runAutonomousEngine(onCycleUpdate) {
       recovered: values.filter(v => v.state === "RECOVERED").length,
       healthy: values.filter(v => v.state === "HEALTHY").length,
       logCount: latestSystemLogs.length,
-      firestoreCount: firestore.count
+      firestoreCount: firestore.count,
+      sourceScanStatus: state.sourceScan?.status || "WAITING",
+      sourceFindings: Array.isArray(state.sourceScan?.findings) ? state.sourceScan.findings.length : 0,
+      crossFileFindings: Array.isArray(state.sourceScan?.crossFileFindings) ? state.sourceScan.crossFileFindings.filter(f => f.severity !== "INFO").length : 0
     };
   }
 
@@ -725,7 +909,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     if (phaseIndex === 0) {
       cycleNo += 1;
       recordEvent("CYCLE", `Neural cycle #${cycleNo} dimulai.`, "SYS_NEURAL_SCAN");
-      emit("IN", `Neural cycle #${cycleNo} dimulai. Saya memindai ${ORGAN_COUNT} organ dan membaca bukti telemetry terbaru.`, "SYS_NEURAL_SCAN", null, { cycleMode: "NORMAL" });
+      emit("IN", `Neural cycle #${cycleNo} dimulai. Saya memindai ${ORGAN_COUNT} organ, membaca source aktual, dan mencocokkan bukti telemetry terbaru.`, "SYS_NEURAL_SCAN", null, { cycleMode: "NORMAL" });
       scheduleNext(CYCLE.IN);
       return;
     }
@@ -734,7 +918,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       const active = Object.entries(buildOrgans()).filter(([, v]) => v.state === "ACTIVE");
       emit("PROCESS", active.length
         ? `Saya menemukan ${active.length} anomali aktif. Saya memproses bukti sebelum menyimpulkan akar masalah.`
-        : `Tidak ada anomali aktif. Saya membandingkan ${latestSystemLogs.length} laporan telemetry dengan window pemantauan.`, active[0]?.[0] || "SYS_TELEMETRY_ANALYSIS", active[0]?.[1]?.message || null, { cycleMode: "NORMAL" });
+        : `Tidak ada anomaly telemetry aktif. Saya memeriksa hasil source scan dan ${latestSystemLogs.length} laporan telemetry.`, active[0]?.[0] || "SYS_TELEMETRY_ANALYSIS", active[0]?.[1]?.message || null, { cycleMode: "NORMAL" });
       scheduleNext(CYCLE.PROCESS);
       return;
     }
@@ -743,7 +927,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       const active = Object.entries(buildOrgans()).filter(([, v]) => v.state === "ACTIVE");
       emit("REVIEW", active.length
         ? `REVIEW: ${active.length} kasus aktif. Saya mempertahankan bukti dan menyiapkan konteks yang dapat diverifikasi Medicine.`
-        : "REVIEW selesai. Tidak ada anomali aktif yang dapat saya pastikan dari telemetry saat ini.", active[0]?.[0] || "SYS_NEURAL_REVIEW", active[0]?.[1]?.message || null, { cycleMode: "NORMAL" });
+        : "REVIEW selesai. Saya belum memiliki temuan source/telemetry aktif yang dapat saya pastikan saat ini.", active[0]?.[0] || "SYS_NEURAL_REVIEW", active[0]?.[1]?.message || null, { cycleMode: "NORMAL" });
       scheduleNext(CYCLE.REVIEW);
       return;
     }
@@ -791,6 +975,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       emit("IN", "Admin terverifikasi. Saya membuka sensor telemetry dan Firestore real-time.", "SYS_AUTH_VERIFIED", null, { cycleMode: "BOOT" });
       startSystemLogs();
       startFirestoreProbe();
+      runSourceScan("BOOT").finally(() => scheduleSourceScan(SOURCE_SCAN_INTERVAL));
       refreshTimer = setInterval(refreshState, 15000);
       phaseIndex = -1;
       cycleNo = 0;
