@@ -137,6 +137,16 @@ body{font-family:'Inter',sans-serif}
         <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">GAGAL <span id="source-scan-failed" class="font-bold text-rose-400">0</span></div>
         <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">TEMUAN <span id="source-scan-findings" class="font-bold text-amber-400">0</span></div>
     </div>
+    <div class="space-y-1">
+        <div class="flex justify-between gap-3 text-[9px] code-font text-slate-500">
+            <span id="source-scan-current">Menunggu scanner...</span>
+            <span id="source-scan-progress-label">0/0</span>
+        </div>
+        <div class="h-1.5 rounded-full bg-slate-950 overflow-hidden border border-slate-800">
+            <div id="source-scan-progress" class="h-full rounded-full bg-cyan-500 transition-all duration-300" style="width:0%"></div>
+        </div>
+    </div>
+    <div id="source-scan-files" class="grid grid-cols-2 md:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto"></div>
     <div id="cross-file-findings" class="space-y-2 max-h-72 overflow-y-auto"><div class="text-xs text-slate-500">Belum ada hasil cross-file.</div></div>
     <div id="source-scan-message" class="text-[10px] text-slate-400 code-font">Pemindaian source belum dimulai.</div>
 </section>
@@ -255,6 +265,10 @@ const sourceScanReadableEl = $('source-scan-readable');
 const sourceScanFailedEl = $('source-scan-failed');
 const sourceScanFindingsEl = $('source-scan-findings');
 const sourceScanMessageEl = $('source-scan-message');
+const sourceScanCurrentEl = $('source-scan-current');
+const sourceScanProgressLabelEl = $('source-scan-progress-label');
+const sourceScanProgressEl = $('source-scan-progress');
+const sourceScanFilesEl = $('source-scan-files');
 const crossFileFindingsEl = $('cross-file-findings');
 
 let liveState = null;
@@ -336,21 +350,45 @@ function setHeader(step, state) {
 
 function renderSourceScan(scan) {
     if (!scan) return;
+    const total = Number(scan.totalFiles || 0);
+    const scanned = Number(scan.filesScanned || 0);
+    const readable = Number(scan.filesReadable || 0);
+    const failed = Number(scan.filesFailed || 0);
+    const progress = total ? Math.min(100, Math.round((scanned / total) * 100)) : 0;
+    const running = scan.status === 'SCANNING';
     if (sourceScanStatusEl) {
-        sourceScanStatusEl.textContent = scan.status || 'WAITING';
+        sourceScanStatusEl.textContent = running ? `SCANNING ${progress}%` : (scan.status || 'WAITING');
         sourceScanStatusEl.className = `text-[10px] code-font ${scan.status === 'FINDINGS' || scan.status === 'DEGRADED' ? 'text-rose-400' : scan.status === 'CLEAN' ? 'text-emerald-400' : 'text-amber-400'}`;
     }
-    if (sourceScanCountEl) sourceScanCountEl.textContent = scan.filesScanned ?? 0;
-    if (sourceScanReadableEl) sourceScanReadableEl.textContent = scan.filesReadable ?? 0;
-    if (sourceScanFailedEl) sourceScanFailedEl.textContent = scan.filesFailed ?? 0;
+    if (sourceScanCountEl) sourceScanCountEl.textContent = scanned;
+    if (sourceScanReadableEl) sourceScanReadableEl.textContent = readable;
+    if (sourceScanFailedEl) sourceScanFailedEl.textContent = failed;
     const actionable = [...(Array.isArray(scan.findings) ? scan.findings : []), ...(Array.isArray(scan.crossFileFindings) ? scan.crossFileFindings : [])].filter(f => f && f.severity !== 'INFO');
     if (sourceScanFindingsEl) sourceScanFindingsEl.textContent = actionable.length;
     if (sourceScanMessageEl) sourceScanMessageEl.textContent = scan.message || 'Belum ada hasil scanner.';
+    if (sourceScanCurrentEl) {
+        sourceScanCurrentEl.textContent = scan.currentFile ? `${scan.phase || 'SCAN'} · ${scan.currentFile}` : (scan.phase === 'COMPLETE' ? 'SCAN COMPLETE · seluruh source sudah diproses' : 'Menunggu scanner...');
+        sourceScanCurrentEl.className = `text-[9px] code-font ${running ? 'text-cyan-300' : scan.status === 'FINDINGS' || scan.status === 'DEGRADED' ? 'text-rose-300' : 'text-slate-500'}`;
+    }
+    if (sourceScanProgressLabelEl) sourceScanProgressLabelEl.textContent = `${scanned}/${total}`;
+    if (sourceScanProgressEl) {
+        sourceScanProgressEl.style.width = `${progress}%`;
+        sourceScanProgressEl.className = `h-full rounded-full transition-all duration-300 ${running ? 'bg-cyan-500' : scan.status === 'FINDINGS' || scan.status === 'DEGRADED' ? 'bg-rose-500' : scan.status === 'CLEAN' ? 'bg-emerald-500' : 'bg-slate-700'}`;
+    }
+    if (sourceScanFilesEl) {
+        const states = scan.fileStates || {};
+        const stateMeta = { QUEUED:['text-slate-500','border-slate-800','○'], READING:['text-cyan-300','border-cyan-800','◉'], ANALYZING:['text-amber-300','border-amber-800','◌'], CLEAN:['text-emerald-300','border-emerald-800','✓'], FINDING:['text-rose-300','border-rose-800','!'], FAILED:['text-rose-300','border-rose-800','×'] };
+        sourceScanFilesEl.innerHTML = Object.entries(states).map(([file, info]) => {
+            const meta = stateMeta[info?.status] || stateMeta.QUEUED;
+            const active = ['READING','ANALYZING'].includes(info?.status);
+            return `<div class="rounded-md border ${meta[1]} bg-slate-950/80 px-2 py-1.5 ${active ? 'ring-1 ring-cyan-900/60' : ''}"><div class="flex items-center gap-1.5 text-[9px] code-font ${meta[0]}"><span class="${active ? 'animate-pulse' : ''}">${meta[2]}</span><span class="truncate">${esc(file)}</span></div><div class="text-[8px] text-slate-600 mt-0.5 truncate">${esc(info?.message || '')}</div></div>`;
+        }).join('');
+    }
     if (!crossFileFindingsEl) return;
     const findings = (Array.isArray(scan.crossFileFindings) ? scan.crossFileFindings : []).filter(f => f.severity !== 'INFO').slice(0, 12);
     const failures = (Array.isArray(scan.findings) ? scan.findings : []).filter(f => f.type === 'SOURCE_UNREADABLE').slice(0, 12);
     const items = [...findings, ...failures];
-    if (!items.length) { crossFileFindingsEl.innerHTML = '<div class="text-xs text-slate-500">Belum ada temuan cross-file/akses source yang membutuhkan pemeriksaan.</div>'; return; }
+    if (!items.length) { crossFileFindingsEl.innerHTML = running ? '<div class="text-xs text-slate-600 code-font">Cross-file comparison menunggu seluruh source yang dibutuhkan selesai dibaca.</div>' : '<div class="text-xs text-slate-500">Belum ada temuan cross-file/akses source yang membutuhkan pemeriksaan.</div>'; return; }
     crossFileFindingsEl.innerHTML = items.map(f => `<div class="border ${f.severity === 'HIGH' ? 'border-rose-900 bg-rose-950/20' : 'border-amber-900 bg-amber-950/20'} rounded-lg px-3 py-2"><div class="flex justify-between gap-3 text-[10px]"><span class="font-bold ${f.severity === 'HIGH' ? 'text-rose-400' : 'text-amber-400'}">${esc(f.type || 'SOURCE_FINDING')}</span><span class="text-slate-500">${esc(f.sourceFile || f.file || '-')} ${f.sourceLine ? `:${esc(f.sourceLine)}` : ''}</span></div><div class="text-xs text-slate-200 mt-1">${esc(f.message || '-')}</div>${f.type === 'CROSS_FILE_FORM_MISMATCH' ? `<div class="text-[9px] text-slate-500 mt-1 code-font">SOURCE CANDIDATE: ${esc(f.sourceFile)}:${esc(f.sourceLine)} → TARGET CANDIDATE: ${esc(f.targetFile)}:${esc(f.targetLine)}</div>` : ''}</div>`).join('');
 }
 
