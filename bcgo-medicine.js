@@ -14,7 +14,7 @@ import { db, auth } from "./cikur-config.js";
 
 /*
  * ================================================================
- * BCGO MEDICINE v2.8.2 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
+ * BCGO MEDICINE v2.9.0 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
  * ================================================================
  * Boundary:
  *   Medicine observes, investigates, proves, proposes and validates.
@@ -112,6 +112,8 @@ const ACTIVE_STATUSES = new Set([
   "NEEDS_EVIDENCE",
   "VERIFIED_DIAGNOSIS",
   "READY_FOR_PATCH",
+  "READY_FOR_HUMAN_APPROVAL",
+  "HUMAN_COPY_CONFIRMED",
   "PATCH_PENDING_EXECUTION",
   "PATCH_APPLIED",
   "PATCH_REQUIRES_REVIEW",
@@ -121,7 +123,7 @@ const ACTIVE_STATUSES = new Set([
 const TERMINAL_STATUSES = new Set(["REJECTED","FIXED_VERIFIED","RECOVERED"]);
 
 const S = {
-  version: "2.8.3",
+  version: "2.9.0",
   registry: REGISTRY,
   surface: null,
   logs: [],
@@ -178,7 +180,30 @@ const S = {
     investigation: null
   },
   investigated: new Set(),
-  investigationQueue: new Map()
+  investigationQueue: new Map(),
+  bcgoSourceScan: {
+    status: "WAITING",
+    receivedAt: 0,
+    cycle: 0,
+    filesScanned: 0,
+    filesReadable: 0,
+    filesFailed: 0,
+    findings: [],
+    crossFileFindings: [],
+    relations: [],
+    sources: {}
+  },
+  liveSurface: {
+    status: "WAITING",
+    cycle: 0,
+    scanning: false,
+    updatedAt: 0,
+    results: {},
+    relations: [],
+    findings: []
+  },
+  lastBCGOPacketId: null,
+  processedCrossFileEvidence: new Set()
 };
 
 const now = () => new Date().toISOString();
@@ -311,6 +336,315 @@ window.addEventListener("storage", event => {
     if (event.key === INVESTIGATION_ACK_KEY) receiveInvestigationAck(packet);
   } catch {}
 });
+
+
+function sourceLineNumber(source, offset) {
+  return String(source || "").slice(0, Math.max(0, offset)).split(/\r?\n/).length;
+}
+
+function extractBalancedBlock(source, startIndex) {
+  const text = String(source || "");
+  const start = Math.max(0, Number(startIndex) || 0);
+  const open = text.indexOf("{", start);
+  if (open < 0) return null;
+  let depth = 0, quote = null, escaped = false;
+  for (let i = open; i < text.length; i++) {
+    const ch = text[i];
+    if (quote) {
+      if (escaped) { escaped = false; continue; }
+      if (ch === "\\") { escaped = true; continue; }
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') { quote = ch; continue; }
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return { start: open, end: i + 1, text: text.slice(start, i + 1) };
+    }
+  }
+  return null;
+}
+
+function extractNamedFunction(source, name, approxLine = null) {
+  const text = String(source || "");
+  const safe = escRe(name);
+  const patterns = [
+    new RegExp(`(?:^|\\n)\\s*(?:async\\s+)?function\\s+${safe}\\s*\\([^)]*\\)\\s*\\{`, "m"),
+    new RegExp(`(?:^|\\n)\\s*(?:const|let|var)\\s+${safe}\\s*=\\s*(?:async\\s*)?\\([^)]*\\)\\s*=>\\s*\\{`, "m"),
+    new RegExp(`(?:^|\\n)\\s*${safe}\\s*\\([^)]*\\)\\s*\\{`, "m")
+  ];
+  let best = null;
+  for (const re of patterns) {
+    const m = re.exec(text);
+    if (!m) continue;
+    const line = sourceLineNumber(text, m.index);
+    const block = extractBalancedBlock(text, m.index + m[0].lastIndexOf("{"));
+    if (!block) continue;
+    const candidate = { name, line, start:m.index, end:block.end, code:block.text };
+    if (!best || (approxLine && Math.abs(line - Number(approxLine)) < Math.abs(best.line - Number(approxLine)))) best = candidate;
+  }
+  return best;
+}
+
+function lineContextFromSource(source, line, radius = 5) {
+  const lines = String(source || "").split(/\r?\n/);
+  const n = Number(line);
+  if (!Number.isFinite(n) || n < 1) return null;
+  const start = Math.max(1, n - radius), end = Math.min(lines.length, n + radius);
+  return { startLine:start, endLine:end, lines:lines.slice(start - 1, end).map((code,i)=>({line:start+i,code})) };
+}
+
+function makeFullSourceRecord(file, source, meta = {}) {
+  const lines = String(source || "").split(/\r?\n/);
+  return {
+    file,
+    ok:true,
+    lines:lines.length,
+    bytes:meta.bytes || new Blob([source]).size,
+    hash:meta.hash || fingerprint(source),
+    refs:extractDependencies(file, source),
+    fields:extractFields(file, source),
+    text:String(source),
+    lineIndex:lines.map((code,i)=>({line:i+1,code}))
+  };
+}
+
+function bestCrossFileFinding(scan) {
+  const all = [
+    ...(Array.isArray(scan?.crossFileFindings) ? scan.crossFileFindings : []),
+    ...(Array.isArray(scan?.findings) ? scan.findings.filter(f => String(f?.type || '').startsWith('CROSS_FILE_')) : [])
+  ];
+  const severityRank = {HIGH:3,MEDIUM:2,LOW:1,INFO:0};
+  return [...new Map(all.map(f => [JSON.stringify([f.type,f.sourceFile,f.targetFile,f.sourceLine,f.targetLine,f.area]),f])).values()]
+    .sort((a,b)=>(severityRank[b.severity]||0)-(severityRank[a.severity]||0));
+}
+
+function buildCrossFileCandidate(finding, sources) {
+  const sourceFile = normalizeFile(finding?.sourceFile);
+  const targetFile = normalizeFile(finding?.targetFile);
+  const evidence = finding?.evidence || {};
+  if (!sourceFile || !targetFile || sourceFile === targetFile) return {ready:false,reason:"CROSS_FILE_ENDPOINT_INVALID"};
+  const source = sources[sourceFile]?.text || "";
+  const target = sources[targetFile]?.text || "";
+  if (!source || !target) return {ready:false,reason:"SOURCE_OR_TARGET_NOT_READABLE"};
+
+  const fnName = evidence.referenceFunction || (String(finding.area || '').startsWith('FUNCTION:') ? String(finding.area).slice(9) : null);
+  if (fnName) {
+    const srcFn = extractNamedFunction(source, fnName, finding.sourceLine);
+    const tgtFn = extractNamedFunction(target, fnName, finding.targetLine);
+    if (srcFn && tgtFn && srcFn.code !== tgtFn.code) {
+      return {
+        ready:true,
+        operation:{
+          type:"REPLACE_EXACT",
+          file:targetFile,
+          line:tgtFn.line,
+          before:tgtFn.code,
+          after:srcFn.code,
+          fullCode:source,
+          sourceFile,
+          sourceLine:srcFn.line,
+          reason:`Implementasi ${fnName} pada ${targetFile} divergen dari kandidat reference ${sourceFile}; blok fungsi exact dapat dibandingkan tanpa menebak kode.`,
+          evidenceReason:"Medicine membaca ulang source reference dan target lalu menemukan fungsi bernama sama dengan body berbeda."
+        },
+        sourceBlock:{file:sourceFile,line:srcFn.line,code:srcFn.code},
+        targetBlock:{file:targetFile,line:tgtFn.line,code:tgtFn.code}
+      };
+    }
+  }
+
+  const missingFunctions = Array.isArray(evidence.missingFunctions) ? evidence.missingFunctions : [];
+  for (const missing of missingFunctions.slice(0,10)) {
+    const srcFn = extractNamedFunction(source, missing, null);
+    if (srcFn) return {
+      ready:false,
+      reason:"TARGET_FUNCTION_MISSING",
+      sourceBlock:{file:sourceFile,line:srcFn.line,code:srcFn.code},
+      targetBlock:{file:targetFile,line:finding.targetLine || null,code:""},
+      missingFunction:missing
+    };
+  }
+
+  return {ready:false,reason:"EXACT_REPLACEMENT_NOT_PROVEN",sourceBlock:null,targetBlock:null};
+}
+
+async function ingestBCGOScan(scan, packet = {}) {
+  if (!scan || typeof scan !== "object") return null;
+  const cycle = Number(packet?.state?.cycle || 0);
+  const sourcesMeta = scan.sources && typeof scan.sources === "object" ? scan.sources : {};
+  const names = Object.keys(sourcesMeta).filter(isDiagnosticFile);
+  const findings = Array.isArray(scan.findings) ? scan.findings : [];
+  const cross = Array.isArray(scan.crossFileFindings) ? scan.crossFileFindings : [];
+
+  S.bcgoSourceScan = {
+    status:scan.status || "COMPLETE",
+    receivedAt:Date.now(),
+    cycle,
+    filesScanned:Number(scan.filesScanned || names.length),
+    filesReadable:Number(scan.filesReadable || names.length),
+    filesFailed:Number(scan.filesFailed || 0),
+    findings,
+    crossFileFindings:cross,
+    relations:Array.isArray(scan.relations) ? scan.relations : [],
+    sources:sourcesMeta
+  };
+
+  S.liveSurface = {
+    ...S.liveSurface,
+    status:"READING",
+    cycle,
+    scanning:true,
+    updatedAt:Date.now(),
+    findings:[...findings,...cross],
+    relations:Array.isArray(scan.relations) ? scan.relations : [],
+    results:{}
+  };
+  window.dispatchEvent(new CustomEvent("bcgo:medicine",{detail:{event:"bcgo_source_scan_received",scan:S.bcgoSourceScan}}));
+
+  const results = {};
+  for (const file of names) {
+    const meta = sourcesMeta[file] || {};
+    const data = await fetchFile(file,{force:true});
+    if (data.ok && typeof data.text === "string") {
+      results[file] = makeFullSourceRecord(file,data.text,meta);
+    } else {
+      results[file] = {file,ok:false,lines:0,bytes:0,hash:null,refs:[],fields:[],text:"",lineIndex:[]};
+    }
+    S.liveSurface.results = {...results};
+    S.liveSurface.updatedAt = Date.now();
+    window.dispatchEvent(new CustomEvent("bcgo:medicine",{detail:{event:"bcgo_source_file_read",file,record:results[file],progress:{done:Object.keys(results).length,total:names.length}}}));
+  }
+
+  S.liveSurface = {
+    ...S.liveSurface,
+    status:"COMPLETE",
+    scanning:false,
+    updatedAt:Date.now(),
+    results,
+    relations:Array.isArray(scan.relations) ? scan.relations : [],
+    findings:[...findings,...cross]
+  };
+  window.dispatchEvent(new CustomEvent("bcgo:medicine",{detail:{event:"bcgo_source_scan_complete",surface:getLiveSurface()}}));
+
+  const candidateFinding = bestCrossFileFinding(scan)[0];
+  if (candidateFinding) {
+    const sf=normalizeFile(candidateFinding.sourceFile)||"";
+    const tf=normalizeFile(candidateFinding.targetFile)||"";
+    const evidenceKey=`${candidateFinding.type}|${sf}|${tf}|${candidateFinding.sourceLine||''}|${candidateFinding.targetLine||''}|${candidateFinding.area||''}|${sources[sf]?.hash||''}|${sources[tf]?.hash||''}`;
+    if (!S.processedCrossFileEvidence.has(evidenceKey)) {
+      S.processedCrossFileEvidence.add(evidenceKey);
+      if (S.processedCrossFileEvidence.size>100) S.processedCrossFileEvidence.delete(S.processedCrossFileEvidence.values().next().value);
+      await createCrossFileCase(candidateFinding, results, scan);
+    }
+  }
+  return S.liveSurface;
+}
+
+async function createCrossFileCase(finding, sources, scan) {
+  const sourceFile = normalizeFile(finding.sourceFile), targetFile = normalizeFile(finding.targetFile);
+  if (!sourceFile || !targetFile) return null;
+  const key = `${finding.type}|${sourceFile}|${targetFile}|${finding.sourceLine || ''}|${finding.targetLine || ''}|${finding.area || ''}`;
+  let c = S.cases.find(x => x.crossFileKey === key && !isTerminal(x));
+  if (!c) {
+    const diagnosis = {
+      code:"CROSS_FILE_SOURCE_MISMATCH",
+      title:"Ketidaksinkronan source lintas-file",
+      severity:finding.severity || "MEDIUM",
+      confidence:finding.confidence === "HIGH" ? 0.95 : 0.78,
+      treatment:"CROSS_FILE_REVIEW"
+    };
+    c = {
+      id:`CASE-${uid().toUpperCase()}`,
+      evidenceId:null,
+      source:targetFile,
+      signature:text(finding.message || `${sourceFile} tidak sinkron dengan ${targetFile}`,700),
+      diagnosis,
+      prescription:{treatment:"CROSS_FILE_REVIEW",risk:"LOW",mode:"SOURCE_CONSENSUS"},
+      status:"INVESTIGATING",
+      createdAt:now(),lastSeenAt:now(),evidenceCount:1,
+      evidence:{kind:"BCGO_SOURCE_SCAN",finding},lastEvidence:{kind:"BCGO_SOURCE_SCAN",finding},
+      runtimeLocation:{file:targetFile,line:Number(finding.targetLine)||null,col:null,stack:""},
+      rootCauseFile:targetFile,rootCauseStatus:"UNPROVEN",sourceEvidence:[],repairPlan:null,patchProposal:null,validation:null,
+      crossFileKey:key,bcgoFinding:finding,sourceFile,targetFile
+    };
+    S.cases.unshift(c); S.cases=S.cases.slice(0,100); S.activeCase=c;
+    emit("case_created",{case:c,source:"BCGO_CROSS_FILE_SCAN"});
+  } else S.activeCase=c;
+
+  const candidate=buildCrossFileCandidate(finding,sources);
+  const sourceRecord=sources[sourceFile], targetRecord=sources[targetFile];
+  const checkedFiles=Object.keys(sources);
+  const verification={
+    requestedTarget:targetFile,target:targetFile,rootCauseFile:targetFile,rootCauseStatus:candidate.ready?"TARGET_CORRECTED_BY_MEDICINE":"UNPROVEN",
+    verdict:candidate.ready?"SUPPORTED_BY_EXACT_SOURCE_EVIDENCE":"CROSS_FILE_EVIDENCE_REQUIRES_DEEPER_REVIEW",
+    rootCauseCandidates:[{sourceFile,targetFile,area:finding.area,reason:finding.message,evidence:finding.evidence||{},line:finding.targetLine||null}],
+    sourceEvidence:[{...finding,evidenceStrength:finding.confidence === "HIGH" ? "HIGH":"MEDIUM",sourceFile,targetFile}],
+    runtimeEvidence:[],checkedFiles,checkedCount:checkedFiles.length,checkedAt:now(),question:"BCGO cross-file source scan"
+  };
+
+  const plan={
+    planId:`REPAIR-${uid().toUpperCase()}`,caseId:c.id,target:targetFile,originalTarget:targetFile,
+    rootCauseFile:targetFile,rootCauseStatus:verification.rootCauseStatus,diagnosis:c.diagnosis,verification,
+    strategy:"CROSS_FILE_REFERENCE_CONSENSUS",operations:[],beforeAfter:[],candidates:verification.rootCauseCandidates,
+    sourceEvidence:verification.sourceEvidence,preconditions:[
+      "Reference candidate berasal dari BCGO source scan dan diverifikasi ulang oleh Medicine.",
+      "Target harus diverifikasi sebagai implementasi yang tidak lengkap/divergen sebelum solusi dibuka.",
+      "Tidak ada source write otomatis; manusia melakukan copy pada target.",
+      "Executor hanya melakukan deterministic review terhadap candidate."
+    ],postconditions:["Target kembali memenuhi bukti kontrak lintas-file.","Medicine melakukan validation setelah perubahan terlihat pada deployment."],
+    precision:{exactTargetRequired:true,exactEvidenceRequired:true,exactOperationRequired:true,noGuessing:true,humanApprovalRequired:true,crossFileProofRequired:true},
+    precisionGate:false,status:"PATCH_REQUIRES_REVIEW",blockReason:"Menunggu pembuktian source/target exact.",sourceWrite:false,requiresHumanApproval:true,requiresPostValidation:true,createdAt:now()
+  };
+
+  if (candidate.ready) {
+    plan.operations.push(candidate.operation);
+    plan.beforeAfter.push({file:targetFile,line:candidate.operation.line,before:candidate.operation.before,after:candidate.operation.after,sourceFile,sourceLine:candidate.operation.sourceLine,fullCode:sourceRecord?.text || ""});
+    plan.precisionGate=true; plan.status="PROPOSED"; plan.blockReason=null;
+    c.rootCauseStatus="TARGET_CORRECTED_BY_MEDICINE";
+    c.status="VERIFIED_DIAGNOSIS";
+  } else {
+    c.status="NEEDS_EVIDENCE";
+  }
+
+  c.verification=verification;c.repairPlan=plan;c.rootCauseFile=targetFile;c.sourceEvidence=verification.sourceEvidence;
+  const proposal={proposalId:`PATCH-${uid().toUpperCase()}`,caseId:c.id,telemetryTarget:c.source,originalTarget:targetFile,repairTarget:targetFile,rootCauseStatus:plan.rootCauseStatus,diagnosis:c.diagnosis,verification,repairPlan:plan,operations:plan.operations,beforeAfter:plan.beforeAfter,precisionGate:plan.precisionGate,sourceWrite:false,requiresHumanApproval:true,requiresPostValidation:true,status:plan.precisionGate?"PROPOSED":"PATCH_REQUIRES_REVIEW",createdAt:now(),crossFileFinding:finding,referenceFile:sourceFile,targetFile};
+
+  if (plan.precisionGate) {
+    const executionReview=await reviewProposalWithExecutor(c,proposal);
+    proposal.executionReview=executionReview;verification.executionReview=executionReview;c.verification=verification;
+    if (executionReview?.status === "VALID") { proposal.status="READY_FOR_HUMAN_APPROVAL";c.status="READY_FOR_HUMAN_APPROVAL";plan.status="READY_FOR_HUMAN_APPROVAL"; }
+    else { proposal.status="EXECUTION_REVIEW_REJECTED";c.status="INVESTIGATING";plan.precisionGate=false;plan.status="PATCH_REQUIRES_REVIEW";plan.blockReason=`Execution review belum valid: ${executionReview?.reason || "UNKNOWN"}`; }
+  }
+
+  c.patchProposal=proposal;S.patchProposals.unshift(proposal);S.patchProposals=S.patchProposals.slice(0,50);
+  emit("cross_file_investigation_complete",{case:c,finding,candidate,sourceFile,targetFile});
+  emit("patch_proposed",{proposal,case:c});emit("case_updated",{case:c});
+  await safeAddMessage("medicine",candidate.ready
+    ? `BCGO menunjukkan ${sourceFile} ↔ ${targetFile}. Saya membaca ulang kedua source dan menemukan implementasi ${finding.area || 'terkait'} yang dapat dibandingkan exact. Candidate dikirim ke Execution untuk review deterministic; tidak ada eksekusi otomatis.`
+    : `BCGO menunjukkan ${sourceFile} ↔ ${targetFile}. Saya sudah membaca ulang source yang tersedia, tetapi exact replacement belum terbukti aman. Saya menahan treatment dan meminta evidence lanjutan.`,
+    {kind:"BCGO_CROSS_FILE_INVESTIGATION",caseId:c.id,sourceFile,targetFile,findingType:finding.type});
+  return c;
+}
+
+function getLiveSurface() {
+  return {
+    ...S.liveSurface,
+    results:{...S.liveSurface.results},
+    relations:[...(S.liveSurface.relations || [])],
+    findings:[...(S.liveSurface.findings || [])]
+  };
+}
+
+function startLiveSurface() {
+  if (window.__BCGO_MEDICINE_LIVE_SURFACE_TIMER) return;
+  const run = () => {
+    const scan = S.bcgoSourceScan;
+    if (scan?.status && scan.status !== "WAITING") void ingestBCGOScan(scan,{state:{cycle:scan.cycle}});
+  };
+  window.__BCGO_MEDICINE_LIVE_SURFACE_TIMER = setInterval(run, 20000);
+  run();
+}
 
 function normalizeFile(value) {
   const raw = String(value || "").trim();
@@ -838,6 +1172,7 @@ function buildCodePrescription(plan) {
       type:op.type,
       before:String(op.before || ""),
       after:String(op.after || ""),
+      fullCode:typeof op.fullCode === "string" ? op.fullCode : "",
       reason:text(op.reason,1200),
       evidenceStrength:ev?.evidenceStrength || "UNVERIFIED",
       evidenceReason:text(ev?.evidenceReason || "",1400),
@@ -1049,25 +1384,16 @@ const AUTO_REINVESTIGATE_STATUSES = new Set([
 
 let investigationDrainScheduled = false;
 
-function investigationRevisionToken(caseItem, sourceFingerprint = null) {
-  const evidenceToken = investigationEvidenceToken(caseItem?.lastEvidence || caseItem?.evidence);
-  const sourceToken = sourceFingerprint || caseItem?.lastObservedSourceFingerprint || "NO_SOURCE_FINGERPRINT";
-  return `${evidenceToken}||SOURCE:${sourceToken}`;
-}
-
 function queueAutoInvestigation(caseItem, reason = "telemetry") {
   if (!caseItem?.id || S.human.paused || isTerminal(caseItem)) return false;
   if (!AUTO_REINVESTIGATE_STATUSES.has(caseItem.status)) return false;
 
   const evidenceToken = investigationEvidenceToken(caseItem.lastEvidence || caseItem.evidence);
-  const revisionToken = investigationRevisionToken(caseItem);
-  if (caseItem.lastInvestigatedRevisionToken === revisionToken) return false;
+  if (caseItem.lastInvestigatedEvidenceToken === evidenceToken) return false;
 
   S.investigationQueue.set(caseItem.id, {
     caseId:caseItem.id,
     evidenceToken,
-    sourceFingerprint:caseItem.lastObservedSourceFingerprint || null,
-    revisionToken,
     reason,
     queuedAt:Date.now()
   });
@@ -1075,8 +1401,7 @@ function queueAutoInvestigation(caseItem, reason = "telemetry") {
   emit("investigation_queued", {
     case:caseItem,
     reason,
-    evidenceToken,
-    revisionToken
+    evidenceToken
   });
 
   scheduleInvestigationDrain();
@@ -1116,37 +1441,22 @@ async function drainInvestigationQueue() {
   const next = queued[0];
   S.investigationQueue.delete(next.caseId);
   const c = next.caseItem;
+  const currentToken = investigationEvidenceToken(c.lastEvidence || c.evidence);
 
-  // Establish the baseline source fingerprint before locking this investigation
-  // revision. This prevents a first-watch false reopen while still allowing a
-  // genuine source change to reopen the case without refresh.
-  if (!c.lastObservedSourceFingerprint) {
-    const baselineTarget = c.rootCauseFile || c.source;
-    const baseline = await fetchFile(baselineTarget, { force:true });
-    if (baseline.ok && typeof baseline.text === "string") {
-      c.lastObservedSourceFingerprint = fingerprint(baseline.text);
-    }
-  }
-
-  const currentEvidenceToken = investigationEvidenceToken(c.lastEvidence || c.evidence);
-  const currentRevisionToken = investigationRevisionToken(c);
-
-  if (c.lastInvestigatedRevisionToken === currentRevisionToken) {
+  if (c.lastInvestigatedEvidenceToken === currentToken) {
     scheduleInvestigationDrain();
     return;
   }
 
   S.activeCase = c;
-  c.lastInvestigatedEvidenceToken = currentEvidenceToken;
-  c.lastInvestigatedRevisionToken = currentRevisionToken;
+  c.lastInvestigatedEvidenceToken = currentToken;
   c.lastInvestigationStartedAt = now();
   c.lastInvestigationReason = next.reason;
 
   emit("investigation_auto_reopened", {
     case:c,
     reason:next.reason,
-    evidenceToken:currentEvidenceToken,
-    revisionToken:currentRevisionToken
+    evidenceToken:currentToken
   });
 
   try {
@@ -1159,7 +1469,6 @@ async function drainInvestigationQueue() {
     });
   } catch (error) {
     delete c.lastInvestigatedEvidenceToken;
-    delete c.lastInvestigatedRevisionToken;
     emit("investigation_error", {
       caseId:c.id,
       message:error?.message || String(error),
@@ -1796,6 +2105,8 @@ function internalExecutor() {
 }
 
 function canApplyPatch(c) {
+  return false;
+  /* legacy executor path intentionally disabled; human copies source manually. */
   const p = c?.repairPlan;
   const v = c?.verification;
   return !!(
@@ -1925,70 +2236,10 @@ async function reviewProposalWithExecutor(c, proposal) {
 }
 
 async function applyApprovedTreatment(caseId) {
-  const c = S.cases.find(x => x.id === caseId);
-  if (!c) throw new Error("Case tidak ditemukan");
-  if (S.human.paused) throw new Error("Medicine sedang dijeda");
-  if (!canApplyPatch(c)) throw new Error("Patch belum memenuhi Precision Gate");
-
-  const e = internalExecutor();
-  if (!e) throw new Error("INTERNAL_EXECUTOR_NOT_LOADED");
-
-  const proposal = c.patchProposal || findProposal(c.id);
-  if (!proposal) throw new Error("Patch proposal tidak ditemukan");
-  const ops = Array.isArray(c.repairPlan?.operations) ? c.repairPlan.operations : [];
-  if (ops.length !== 1) {
-    throw new Error("INTERNAL_EXECUTOR_BATCH_NOT_SUPPORTED: gunakan satu operasi exact per eksekusi");
-  }
-
-  const op = ops[0];
-  const source = await fetchFile(op.file, { force: true });
-  if (!source.ok || typeof source.text !== "string") {
-    throw new Error(`SOURCE_UNAVAILABLE:${op.file}`);
-  }
-
-  const currentFingerprint = fingerprint(source.text);
-  if (op.before && !source.text.includes(op.before)) {
-    throw new Error("EXACT_BEFORE_NOT_PRESENT_IN_CURRENT_SOURCE");
-  }
-
-  const request = buildExecutorRequest(c, proposal, op, {
-    text: source.text,
-    fingerprint: currentFingerprint
-  });
-
-  S.busy.execution = true;
-  proposal.status = "APPLY_REQUESTED";
-  c.status = "PATCH_PENDING_EXECUTION";
-  S.patchRequests.unshift(request);
-  S.patchRequests = S.patchRequests.slice(0, 40);
-  emit("patch_apply_requested", { proposal, request, case: c, executorAvailable: true, executor: syncExecutorState() });
-
-  try {
-    const result = await e.execute(request, source.text);
-    proposal.executorResult = result || null;
-    proposal.status = result?.status === "SUCCESS" ? "APPLIED" : "APPLY_FAILED";
-    c.status = result?.status === "SUCCESS" ? "PATCH_APPLIED" : "PATCH_FAILED";
-    S.executor = {
-      ...S.executor,
-      available: true,
-      name: e.name || "BCGO_INTERNAL_EXECUTOR",
-      version: e.version || null,
-      status: result?.status || "FAILED",
-      persistence: result?.persistence || null,
-      lastResult: result || null,
-      lastEventAt: now()
-    };
-    emit("executor_state", { executor: { ...S.executor } });
-    emit("patch_apply_complete", { proposal, request, result, case: c });
-
-    if (result?.status === "SUCCESS") {
-      await validateAfterPatch(caseId);
-    }
-
-    return { case: c, proposal, request, result };
-  } finally {
-    S.busy.execution = false;
-  }
+  const c=S.cases.find(x=>x.id===caseId);
+  if(!c) throw new Error("Case tidak ditemukan");
+  emit("manual_copy_required",{case:c,message:"Medicine tidak menulis source. Salin solusi exact ke target secara manual, lalu Medicine akan memvalidasi deployment."});
+  throw new Error("MANUAL_COPY_REQUIRED: Medicine tidak melakukan eksekusi source otomatis");
 }
 
 async function validateAfterPatch(caseId) {
@@ -2097,13 +2348,13 @@ async function approveTreatment(caseId) {
   if (S.human.paused) throw new Error("Medicine sedang dijeda.");
   if (!canApprove(c)) throw new Error("Treatment belum memenuhi Precision Gate.");
 
-  c.status = "READY_FOR_PATCH";
+  c.status = "HUMAN_COPY_CONFIRMED";
   c.approvedAt = now();
   c.approvedBy = auth.currentUser?.uid || null;
 
-  if (c.repairPlan) c.repairPlan.status = "READY_FOR_PATCH";
+  if (c.repairPlan) c.repairPlan.status = "HUMAN_COPY_CONFIRMED";
   if (c.patchProposal) {
-    c.patchProposal.status = "READY_FOR_PATCH";
+    c.patchProposal.status = "HUMAN_COPY_CONFIRMED";
     c.patchProposal.approvedAt = c.approvedAt;
     c.patchProposal.approvedBy = c.approvedBy;
   }
@@ -2115,7 +2366,7 @@ async function approveTreatment(caseId) {
       diagnosis:c.diagnosis,
       verification:c.verification,
       repairPlan:c.repairPlan,
-      action:"APPROVED_READY_FOR_PATCH",
+      action:"HUMAN_COPY_CONFIRMED",
       actorUid:c.approvedBy,
       createdAt:serverTimestamp()
     });
@@ -2125,7 +2376,7 @@ async function approveTreatment(caseId) {
 
   await safeAddMessage(
     "medicine",
-    `Approval manusia diterima untuk ${c.id}. Repair plan ${c.repairPlan?.planId} siap masuk ke executor tepercaya.`,
+    `Konfirmasi manusia diterima untuk ${c.id}. Medicine menganggap kode sudah dicopy ke target dan sekarang menunggu validasi deployment; tidak ada eksekusi source otomatis.`,
     {kind:"HUMAN_APPROVAL",caseId:c.id}
   );
 
@@ -2254,26 +2505,21 @@ async function sendMessage(message, role = "human") {
 
 function receiveBCGOState(packet) {
   if (!packet || packet.bridge !== MEDICINE_BRIDGE_KEY || packet.from !== "BCGO") return;
-  if (!["BCGO_STATE","BCGO_SYNC_REQUEST"].includes(packet.type)) return;
-  const at = Number(packet.at) || 0;
-  if (!at) return;
-  const age = Date.now() - at;
-  const st = packet.state || {};
-  S.bcgoSync = {
-    ...S.bcgoSync,
-    status: age <= MEDICINE_BRIDGE_LIVE_WINDOW ? "LIVE" : "STALE",
-    lastAt: at,
-    cycle: Number(st.cycle) || 0,
-    step: st.step || "-",
-    active: Number(st.metrics?.active) || 0,
-    total: Number(st.metrics?.total) || 0,
-    source: "BROADCAST_CHANNEL"
-  };
-  window.dispatchEvent(new CustomEvent("bcgo:medicine", {
-    detail:{event:"bcgo_sync",at:now(),contract:{...S.bcgoSync}}
-  }));
-  // A sync request receives a real acknowledgement. No diagnosis is triggered.
-  if (packet.type === "BCGO_SYNC_REQUEST") publishMedicineState("BCGO_SYNC_ACK", {message:`ACK cycle #${S.bcgoSync.cycle} / ${S.bcgoSync.step}`});
+  if (packet.type !== "BCGO_STATE") return;
+  const packetId=String(packet.id||"");
+  if (packetId && packetId===S.lastBCGOPacketId) return;
+  if (packetId) S.lastBCGOPacketId=packetId;
+  const at=Number(packet.at)||0;
+  if(!at)return;
+  const age=Date.now()-at;
+  const st=packet.state||{};
+  S.bcgoSync={...S.bcgoSync,status:age<=MEDICINE_BRIDGE_LIVE_WINDOW?"LIVE":"STALE",lastAt:at,cycle:Number(st.cycle)||0,step:st.step||"-",active:Number(st.metrics?.active)||0,total:Number(st.metrics?.total)||0,source:"BROADCAST_CHANNEL"};
+  const scan=st.sourceScan;
+  if(scan&&typeof scan==='object'){
+    S.bcgoSourceScan={...S.bcgoSourceScan,...scan,cycle:Number(st.cycle)||Number(S.bcgoSourceScan.cycle)||0,receivedAt:Date.now()};
+    void ingestBCGOScan(scan,packet).catch(error=>emit("bcgo_source_scan_error",{message:error?.message||String(error)}));
+  }
+  window.dispatchEvent(new CustomEvent("bcgo:medicine",{detail:{event:"bcgo_sync",at:now(),contract:{...S.bcgoSync},sourceScan:S.bcgoSourceScan}}));
 }
 
 medicineBridgeChannel?.addEventListener("message", event => receiveBCGOState(event.data));
@@ -2321,6 +2567,7 @@ onAuthStateChanged(auth, async user => {
     });
 
     await discoverSystemSurface();
+    startLiveSurface();
     startTelemetry();
     startRecoveryMonitor();
     startConversation();
@@ -2348,6 +2595,9 @@ onAuthStateChanged(auth, async user => {
 const API = {
   scanConsistency,
   discoverSystemSurface,
+  getLiveSurface,
+  startLiveSurface,
+  scanLiveSurface:() => ingestBCGOScan(S.bcgoSourceScan,{state:{cycle:S.bcgoSourceScan.cycle}}),
   verifyWithMedicine,
   reviewProposalWithExecutor,
   sendMessage,
