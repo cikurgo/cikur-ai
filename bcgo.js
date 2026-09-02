@@ -44,7 +44,7 @@ const ORGAN_COUNT = Object.keys(ORGAN_REGISTRY).length;
 
 const SOURCE_SCAN_INTERVAL = 20000;
 const SOURCE_SCAN_FETCH_TIMEOUT = 10000;
-const SOURCE_SCAN_VERSION = "1.6.0";
+const SOURCE_SCAN_VERSION = "1.7.0";
 
 const ACTIVE_WINDOW = 15 * 60 * 1000;
 const CLOCK_SKEW = 5 * 60 * 1000;
@@ -848,11 +848,16 @@ export function runAutonomousEngine(onCycleUpdate) {
         const identityStrong = !functionNameIsGeneric(name) && (
           comparison.distinctive.length >= 2 || linked
         ) && comparison.shared.length >= 5;
-        const aRef = comparison.targetCoverage >= comparison.referenceCoverage ? a : b;
+        // Orient the comparison by observed contract breadth, not by the
+        // directional coverage ratio. The previous ratio-based orientation
+        // could select the smaller implementation as the reference, making
+        // sizeGap zero and effectively disabling the mismatch gate.
+        // Orient by observed implementation breadth. This is only an
+        // evidence orientation; it is NOT a claim that the longer function
+        // is canonical. Medicine must still verify the actual source of truth.
+        const aRef = a.bodyLength >= b.bodyLength ? a : b;
         const bTarget = aRef === a ? b : a;
-        const c = aRef === a ? comparison : {
-          ...compareFunctionContract(b,a)
-        };
+        const c = aRef === a ? comparison : compareFunctionContract(b,a);
         const subsetLike = c.targetCoverage >= 0.68 && c.sizeGap >= 5 && c.missing.length >= 3;
         const mismatch = identityStrong && subsetLike;
         const status = mismatch ? 'MISMATCH_CANDIDATE' : 'VARIANT';
@@ -1025,6 +1030,7 @@ export function runAutonomousEngine(onCycleUpdate) {
         state: "ACTIVE",
         evidenceType: "SOURCE_SCAN",
         line: finding.targetLine ?? finding.line ?? organs[target].line ?? null,
+        sourceFinding: finding,
         message: finding.type === "CROSS_FILE_FORM_MISMATCH"
           ? `Cross-file mismatch: ${finding.sourceFile} → ${target}. ${finding.message}`
           : finding.message
@@ -1055,12 +1061,14 @@ export function runAutonomousEngine(onCycleUpdate) {
           rootCandidate: file,
           severity: /security|permission|denied|failed|undefined|null/i.test(info.message) ? "HIGH" : "MEDIUM",
           confidence: 92,
-          status: "TELEMETRY_CONFIRMED",
+          status: info.evidenceType === "SOURCE_SCAN" ? "SOURCE_SCAN_CONFIRMED" : "TELEMETRY_CONFIRMED",
           evidence: {
+            type: info.evidenceType || "TELEMETRY",
             message: info.message,
             reportedAt: info.reportedAt,
             line: info.line,
-            column: info.column
+            column: info.column,
+            sourceFinding: info.sourceFinding || null
           }
         };
       });
