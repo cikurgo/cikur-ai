@@ -36,6 +36,8 @@
     history: [],
     source: null,
     persistence: null,
+    executionReview: null,
+    incomingCandidate: null,
     nerve: {
       status: "DISCONNECTED",
       lastAt: 0,
@@ -142,6 +144,75 @@
      The indicator is GREEN only after a real BCGO_STATE packet
      is received within the live window.
      ============================================================ */
+  const BRIDGE_CHANNEL = "CIKUR_GO_BCGO_MEDICINE_V1";
+  const REPAIR_CANDIDATE_KEY = `${BRIDGE_CHANNEL}_REPAIR_CANDIDATE`;
+  const REVIEW_RESULT_KEY = `${BRIDGE_CHANNEL}_EXECUTION_REVIEW`;
+  const REPAIR_CANDIDATE_MAX_AGE = 30000;
+  const EXECUTOR_ROLE = String(window.__BCGO_EXECUTOR_ROLE || "STANDALONE").toUpperCase();
+  const bridgeChannel = typeof BroadcastChannel !== "undefined"
+    ? new BroadcastChannel(BRIDGE_CHANNEL) : null;
+  const seenRepairCandidates = new Set();
+
+  function publishReviewResult(packet) {
+    const message = {
+      bridge: BRIDGE_CHANNEL,
+      from: "EXECUTION",
+      type: "EXECUTION_REVIEW_RESULT",
+      role: EXECUTOR_ROLE,
+      at: Date.now(),
+      ...packet
+    };
+    try { bridgeChannel?.postMessage(message); } catch {}
+    try { localStorage.setItem(REVIEW_RESULT_KEY, JSON.stringify(message)); } catch {}
+    return message;
+  }
+
+  async function handleRepairCandidate(packet, source = "BROADCAST_CHANNEL") {
+    if (EXECUTOR_ROLE !== "STANDALONE") return false;
+    if (!packet || packet.bridge !== BRIDGE_CHANNEL || packet.from !== "MEDICINE" || packet.type !== "MEDICINE_REPAIR_CANDIDATE") return false;
+    const at = Number(packet.at) || 0;
+    if (!at || Date.now() - at > REPAIR_CANDIDATE_MAX_AGE) return false;
+    const requestId = String(packet.requestId || packet.request?.requestId || "").trim();
+    if (!requestId || seenRepairCandidates.has(requestId)) return false;
+    seenRepairCandidates.add(requestId);
+    if (seenRepairCandidates.size > 100) seenRepairCandidates.delete(seenRepairCandidates.values().next().value);
+
+    state.incomingCandidate = packet.candidate || packet.request || null;
+    state.executionReview = { status:"REVIEWING", requestId, caseId:packet.caseId || null, proposalId:packet.proposalId || null, file:packet.request?.file || packet.candidate?.file || null, receivedAt:now(), source };
+    state.request = packet.request || null;
+    audit("REPAIR_CANDIDATE_RECEIVED", { requestId, caseId:packet.caseId, proposalId:packet.proposalId, file:packet.request?.file || null });
+    emit();
+
+    let review;
+    try {
+      review = reviewCandidate(packet.request, packet.sourceText);
+    } catch (error) {
+      review = { executor:ENGINE, version:VERSION, status:"REJECTED", review:"REJECTED", reason:error?.message || "REVIEW_FAILED", requestId, caseId:packet.caseId || null, proposalId:packet.proposalId || null, reviewedAt:now() };
+    }
+
+    state.executionReview = { ...review, requestId, caseId:packet.caseId || null, proposalId:packet.proposalId || null, file:packet.request?.file || packet.candidate?.file || null, receivedAt:state.executionReview.receivedAt, completedAt:now(), role:EXECUTOR_ROLE };
+    audit(review.status === "VALID" ? "REPAIR_REVIEW_VALID" : "REPAIR_REVIEW_REJECTED", { requestId, caseId:packet.caseId, proposalId:packet.proposalId, file:packet.request?.file || null, reason:review.reason || null, role:EXECUTOR_ROLE });
+    emit();
+    publishReviewResult({ requestId, caseId:packet.caseId || null, proposalId:packet.proposalId || null, review:state.executionReview });
+    return true;
+  }
+
+  function startRepairCandidateBridge() {
+    if (EXECUTOR_ROLE !== "STANDALONE") return;
+    try { bridgeChannel?.addEventListener("message", event => { handleRepairCandidate(event.data, "BROADCAST_CHANNEL").catch(() => {}); }); } catch {}
+    try {
+      window.addEventListener("storage", event => {
+        if (event.key === REPAIR_CANDIDATE_KEY && event.newValue) {
+          try { handleRepairCandidate(JSON.parse(event.newValue), "LOCAL_STORAGE").catch(() => {}); } catch {}
+        }
+      });
+    } catch {}
+    try {
+      const cached = localStorage.getItem(REPAIR_CANDIDATE_KEY);
+      if (cached) handleRepairCandidate(JSON.parse(cached), "LOCAL_STORAGE_CACHE").catch(() => {});
+    } catch {}
+  }
+
   const NERVE_CHANNEL = "CIKUR_GO_BCGO_MEDICINE_V1";
   const NERVE_STATE_KEY = `${NERVE_CHANNEL}_STATE`;
   const NERVE_LIVE_WINDOW = 15000;
@@ -682,6 +753,9 @@
       persistence: state.persistence,
       persistenceReady: !!(window.indexedDB),
       nerve: refreshNerveStatus(),
+      executionReview: state.executionReview,
+      incomingCandidate: state.incomingCandidate,
+      executorRole: EXECUTOR_ROLE,
       lastResult: state.result,
       history: state.history.slice()
     };
@@ -726,6 +800,7 @@
 
   function boot() {
     startNerveMonitor();
+    startRepairCandidateBridge();
     setStatus(core() ? STATUS.READY : STATUS.OFFLINE);
     // Inisialisasi demo source otomatis agar langsung siap uji coba
     setTimeout(async () => {

@@ -191,6 +191,10 @@ const MEDICINE_BRIDGE_LIVE_WINDOW = 15000;
 let medicineBridgeChannel = typeof BroadcastChannel !== "undefined"
   ? new BroadcastChannel(MEDICINE_BRIDGE_KEY) : null;
 let medicineSequence = 0;
+const pendingExecutionReviews = new Map();
+const EXECUTION_REVIEW_TIMEOUT = 5000;
+const EXECUTION_REVIEW_EVENT_KEY = `${MEDICINE_BRIDGE_KEY}_REPAIR_CANDIDATE`;
+const EXECUTION_REVIEW_RESULT_KEY = `${MEDICINE_BRIDGE_KEY}_EXECUTION_REVIEW`;
 
 function publishMedicineState(event, data = {}) {
   const packet = {
@@ -222,6 +226,39 @@ function emit(event, data = {}) {
   }));
   if (!String(event).startsWith("bcgo_bridge_")) publishMedicineState(event, data);
 }
+
+function publishExecutionCandidate(packet) {
+  const message = {
+    bridge: MEDICINE_BRIDGE_KEY,
+    from: "MEDICINE",
+    type: "MEDICINE_REPAIR_CANDIDATE",
+    at: Date.now(),
+    ...packet
+  };
+  try { medicineBridgeChannel?.postMessage(message); } catch {}
+  try { localStorage.setItem(EXECUTION_REVIEW_EVENT_KEY, JSON.stringify(message)); } catch {}
+  return message;
+}
+
+function receiveExecutionReview(packet) {
+  if (!packet || packet.bridge !== MEDICINE_BRIDGE_KEY || packet.from !== "EXECUTION" || packet.type !== "EXECUTION_REVIEW_RESULT") return false;
+  const requestId = String(packet.requestId || packet.review?.requestId || "").trim();
+  const pending = requestId ? pendingExecutionReviews.get(requestId) : null;
+  if (!pending) return false;
+  pendingExecutionReviews.delete(requestId);
+  clearTimeout(pending.timer);
+  pending.resolve(packet.review || packet);
+  emit("execution_review_received", { review:packet.review || packet, requestId, caseId:packet.caseId || null, role:packet.role || "STANDALONE" });
+  return true;
+}
+
+medicineBridgeChannel?.addEventListener("message", event => {
+  receiveExecutionReview(event.data);
+});
+window.addEventListener("storage", event => {
+  if (event.key !== EXECUTION_REVIEW_RESULT_KEY || !event.newValue) return;
+  try { receiveExecutionReview(JSON.parse(event.newValue)); } catch {}
+});
 
 function normalizeFile(value) {
   const raw = String(value || "").trim();
@@ -1580,9 +1617,6 @@ function buildExecutorRequest(c, proposal, op, sourceRecord) {
 
 async function reviewProposalWithExecutor(c, proposal) {
   const e = internalExecutor();
-  if (!e || typeof e.reviewCandidate !== "function") {
-    return { status:"REVIEW_UNAVAILABLE", reason:"EXECUTION_REVIEW_CHANNEL_UNAVAILABLE" };
-  }
   const op = proposal?.operations?.[0];
   if (!op?.file || typeof op.before !== "string" || typeof op.after !== "string") {
     return { status:"REJECTED", reason:"REPAIR_CANDIDATE_INCOMPLETE" };
@@ -1592,14 +1626,39 @@ async function reviewProposalWithExecutor(c, proposal) {
     return { status:"REJECTED", reason:`SOURCE_UNAVAILABLE:${op.file}` };
   }
   const request = buildExecutorRequest(c, proposal, op, { text:source.text, fingerprint:fingerprint(source.text) });
-  // Review is deliberately NOT execution. Human approval is still required later.
   request.approval = "REVIEW";
-  emit("execution_review_started", { case:c, proposal, request });
-  const review = await Promise.resolve(e.reviewCandidate(request, source.text));
-  proposal.executionReview = review;
+  const candidate = {
+    request,
+    sourceText:source.text,
+    candidate:{
+      file:op.file, location:op.location || op.line || null, before:op.before, after:op.after,
+      fingerprint:request.expectedFingerprint, evidence:proposal.verification?.evidence || proposal.verification || null,
+      operation:op.type, caseId:c.id, proposalId:proposal.proposalId
+    },
+    requestId:request.requestId, caseId:c.id, proposalId:proposal.proposalId
+  };
+  emit("execution_review_started", { case:c, proposal, request, channel:"CROSS_PAGE_REALTIME" });
+  publishExecutionCandidate(candidate);
+
+  const review = await new Promise(resolve => {
+    const timer = setTimeout(() => {
+      pendingExecutionReviews.delete(request.requestId);
+      resolve(null);
+    }, EXECUTION_REVIEW_TIMEOUT);
+    pendingExecutionReviews.set(request.requestId, { resolve, timer });
+  });
+
+  let finalReview = review;
+  if (!finalReview && e && typeof e.reviewCandidate === "function") {
+    // No standalone Executor answered. The embedded internal Executor is a deterministic fallback only.
+    finalReview = await Promise.resolve(e.reviewCandidate(request, source.text));
+    finalReview = { ...finalReview, role:"MEDICINE_EMBEDDED_FALLBACK", transport:"LOCAL_FALLBACK" };
+  }
+  if (!finalReview) finalReview = { status:"REVIEW_UNAVAILABLE", reason:"EXECUTION_REVIEW_TIMEOUT" };
+  proposal.executionReview = finalReview;
   proposal.executionReviewedAt = now();
-  emit("execution_review_complete", { case:c, proposal, review });
-  return review;
+  emit("execution_review_complete", { case:c, proposal, review:finalReview, channel:finalReview.role === "STANDALONE" ? "CROSS_PAGE_REALTIME" : "LOCAL_FALLBACK" });
+  return finalReview;
 }
 
 async function applyApprovedTreatment(caseId) {

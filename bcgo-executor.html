@@ -55,6 +55,21 @@ button{border:0;border-radius:10px;padding:9px 13px;font-weight:800;cursor:point
 <div id="nerveBanner" class="banner">Menunggu pulsa BCGO nyata...</div>
 </section>
 
+<section class="card" id="reviewPanel">
+<h2>🧠 Incoming Repair Candidate — Medicine ↔ Execution</h2>
+<p class="sub">Panel ini menerima kandidat perbaikan dari Medicine melalui BroadcastChannel + localStorage internal. Executor hanya melakukan deterministic review; <b>tidak menulis source dan tidak mengeksekusi kandidat yang masuk.</b></p>
+<div class="grid" style="margin-top:12px">
+<div class="item"><div class="label">Channel</div><div id="reviewChannel" class="value ok">CROSS-PAGE</div></div>
+<div class="item"><div class="label">Review Status</div><div id="incomingReviewStatus" class="value">WAITING</div></div>
+<div class="item"><div class="label">Case / Proposal</div><div id="incomingCase" class="value">-</div></div>
+<div class="item"><div class="label">Target File</div><div id="incomingFile" class="value">-</div></div>
+<div class="item"><div class="label">Fingerprint</div><div id="incomingFingerprint" class="value code">-</div></div>
+<div class="item"><div class="label">Transport</div><div id="incomingTransport" class="value">-</div></div>
+</div>
+<div id="incomingReviewBanner" class="banner">Menunggu candidate dari Medicine...</div>
+<pre id="incomingCandidate" style="margin-top:10px;min-height:160px">Belum ada candidate.</pre>
+</section>
+
 <section class="card">
 <h2>Executor Checklist</h2>
 <p class="sub">Ceklis mengikuti pondasi yang kita sepakati; setiap komponen berada di dalam tiga file internal ini.</p>
@@ -130,7 +145,25 @@ const ROUTE_VERSION = "v3.0.0";
     $("history").textContent=s.history?.length?pretty(s.history):"Belum ada audit.";
     if(s.source){ set("sourceFingerprint",s.source.fingerprint); set("sourceInfo",`${s.source.sourceId||s.source.file} • ${s.source.origin||"INTERNAL"} • ${s.source.updatedAt||"-"}`); }
     renderNerve(s.nerve);
+    renderIncomingReview(s);
     refreshSources();
+  }
+
+  function renderIncomingReview(s) {
+    const r=s?.executionReview || null;
+    const c=s?.incomingCandidate || null;
+    const status=r?.status || "WAITING";
+    const ok=status === "VALID";
+    const reviewing=status === "REVIEWING";
+    set("incomingReviewStatus", reviewing?"REVIEWING":(ok?"VALID":status));
+    set("incomingCase", [r?.caseId||c?.caseId||"-", r?.proposalId||c?.proposalId||"-"].join(" / "));
+    set("incomingFile", r?.file||c?.file||c?.request?.file||"-");
+    set("incomingFingerprint", c?.fingerprint||c?.request?.expectedFingerprint||"-");
+    set("incomingTransport", r?.source||r?.transport||"CROSS_PAGE");
+    $("incomingReviewStatus").className="value "+(ok?"ok":reviewing?"warn":"fail");
+    $("incomingReviewBanner").className="banner "+(ok?"live":reviewing?"warn":r?"fail":"");
+    $("incomingReviewBanner").textContent=ok?"REPAIR CANDIDATE VALID — tidak dieksekusi tanpa Human Approval.":reviewing?"Candidate diterima. Executor sedang memeriksa source, fingerprint dan operasi.":r?`Candidate ditolak: ${r.reason||"REVIEW_REJECTED"}`:"Menunggu candidate dari Medicine...";
+    $("incomingCandidate").textContent=c?pretty({file:c.file||c.request?.file,location:c.location,before:c.before,after:c.after,fingerprint:c.fingerprint,operation:c.operation,evidence:c.evidence}):"Belum ada candidate.";
   }
 
   function renderNerve(n) {
