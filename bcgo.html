@@ -147,6 +147,7 @@ body{font-family:'Inter',sans-serif}
         <div class="rounded-lg border border-rose-900/70 bg-rose-950/10 px-3 py-2">MISMATCH <span id="source-scan-mismatch" class="font-bold text-rose-300">0</span></div>
         <div class="rounded-lg border border-amber-900/70 bg-amber-950/10 px-3 py-2">VARIANT <span id="source-scan-variant" class="font-bold text-amber-300">0</span></div>
         <div class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2">UNKNOWN <span id="source-scan-unknown" class="font-bold text-slate-300">0</span></div>
+        <div class="rounded-lg border border-cyan-900/70 bg-cyan-950/10 px-3 py-2">LINKED <span id="source-scan-linked" class="font-bold text-cyan-300">0</span></div>
     </div>
     <div class="space-y-1">
         <div class="flex justify-between gap-3 text-[9px] code-font text-slate-500">
@@ -224,7 +225,7 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=2.11.0';
+import { runAutonomousEngine } from './bcgo.js?v=2.12.0';
 
 const $ = id => document.getElementById(id);
 
@@ -281,6 +282,7 @@ const sourceScanSyncEl = $('source-scan-sync');
 const sourceScanMismatchEl = $('source-scan-mismatch');
 const sourceScanVariantEl = $('source-scan-variant');
 const sourceScanUnknownEl = $('source-scan-unknown');
+const sourceScanLinkedEl = $('source-scan-linked');
 const sourceScanMessageEl = $('source-scan-message');
 const sourceScanCurrentEl = $('source-scan-current');
 const sourceScanProgressLabelEl = $('source-scan-progress-label');
@@ -389,6 +391,7 @@ function renderSourceScan(scan) {
     if (sourceScanMismatchEl) sourceScanMismatchEl.textContent = Number(summary.mismatch || 0);
     if (sourceScanVariantEl) sourceScanVariantEl.textContent = Number(summary.variant || 0);
     if (sourceScanUnknownEl) sourceScanUnknownEl.textContent = Number(summary.unknown || 0);
+    if (sourceScanLinkedEl) sourceScanLinkedEl.textContent = Number(summary.linked || 0);
     if (sourceScanMessageEl) sourceScanMessageEl.textContent = scan.message || 'Belum ada hasil scanner.';
     if (sourceScanCurrentEl) {
         sourceScanCurrentEl.textContent = scan.currentFile
@@ -441,7 +444,12 @@ function renderSourceScan(scan) {
         return `<div class="border ${border} rounded-lg px-3 py-2"><div class="flex justify-between gap-3 text-[10px]"><span class="font-bold ${text}">${esc(r.status)} · ${esc(title)} · ${esc(r.confidence || 'UNKNOWN')}</span><span class="text-slate-500 code-font">${esc(r.sourceFile || '-')} → ${esc(r.targetFile || '-')}</span></div><div class="text-[9px] text-slate-400 mt-1 code-font">${r.sourceLine ? `source:${esc(r.sourceLine)} ` : ''}${r.targetLine ? `target:${esc(r.targetLine)}` : ''}${coverage}${confidence}</div>${missing.length ? `<div class="text-[9px] mt-1 ${bad ? 'text-rose-300' : 'text-slate-500'} code-font">MISSING: ${esc(missing.join(', '))}</div>` : ''}</div>`;
     }).join('');
     if (!items.length && !relations.length) { crossFileFindingsEl.innerHTML = running ? '<div class="text-xs text-slate-600 code-font">Cross-file comparison menunggu seluruh source yang dibutuhkan selesai dibaca.</div>' : '<div class="text-xs text-slate-500">Belum ada relasi atau temuan cross-file yang membutuhkan pemeriksaan.</div>'; return; }
-    const findingHtml = items.map(f => `<div class="border ${f.severity === 'HIGH' ? 'border-rose-900 bg-rose-950/20' : 'border-amber-900 bg-amber-950/20'} rounded-lg px-3 py-2"><div class="flex justify-between gap-3 text-[10px]"><span class="font-bold ${f.severity === 'HIGH' ? 'text-rose-400' : 'text-amber-400'}">${esc(f.type || 'SOURCE_FINDING')}</span><span class="text-slate-500">${esc(f.sourceFile || f.file || '-')} ${f.sourceLine ? `:${esc(f.sourceLine)}` : ''}</span></div><div class="text-xs text-slate-200 mt-1">${esc(f.message || '-')}</div>${f.targetFile ? `<div class="text-[9px] text-slate-500 mt-1 code-font">REFERENCE CANDIDATE: ${esc(f.sourceFile)}:${esc(f.sourceLine)} → TARGET CANDIDATE: ${esc(f.targetFile)}:${esc(f.targetLine)}</div>` : ''}</div>`).join('');
+    const findingHtml = items.map(f => {
+        const ev = f.evidence || {};
+        const anchors = (ev.missingAnchors || []).slice(0,8);
+        const anchorLines = (ev.missingAnchorLines || []).slice(0,8).map(x => `${x.anchor}@${x.line}`).join(', ');
+        return `<div class="border ${f.severity === 'HIGH' ? 'border-rose-900 bg-rose-950/20' : 'border-amber-900 bg-amber-950/20'} rounded-lg px-3 py-2"><div class="flex justify-between gap-3 text-[10px]"><span class="font-bold ${f.severity === 'HIGH' ? 'text-rose-400' : 'text-amber-400'}">${esc(f.type || 'SOURCE_FINDING')}</span><span class="text-slate-500">${esc(f.sourceFile || f.file || '-')} ${f.sourceLine ? `:${esc(f.sourceLine)}` : ''}</span></div><div class="text-xs text-slate-200 mt-1">${esc(f.message || '-')}</div>${f.targetFile ? `<div class="text-[9px] text-slate-500 mt-1 code-font">REFERENCE CANDIDATE: ${esc(f.sourceFile)}:${esc(f.sourceLine)} → TARGET CANDIDATE: ${esc(f.targetFile)}:${esc(f.targetLine)}</div>` : ''}${anchors.length ? `<div class="text-[9px] text-rose-300 mt-1 code-font">MISSING ANCHORS: ${esc(anchors.join(', '))}${anchorLines ? ` · SOURCE LINES: ${esc(anchorLines)}` : ''}</div>` : ''}</div>`;
+      }).join('');
     crossFileFindingsEl.innerHTML = findingHtml + relationHtml;
 }
 

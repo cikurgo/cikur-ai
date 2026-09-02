@@ -44,7 +44,7 @@ const ORGAN_COUNT = Object.keys(ORGAN_REGISTRY).length;
 
 const SOURCE_SCAN_INTERVAL = 20000;
 const SOURCE_SCAN_FETCH_TIMEOUT = 10000;
-const SOURCE_SCAN_VERSION = "1.7.0";
+const SOURCE_SCAN_VERSION = "1.8.0";
 
 const ACTIVE_WINDOW = 15 * 60 * 1000;
 const CLOCK_SKEW = 5 * 60 * 1000;
@@ -400,6 +400,41 @@ export function runAutonomousEngine(onCycleUpdate) {
       let match;
       while ((match = re.exec(source))) captures.push({ match, kind });
     }
+    const extractStringAnchors = body => {
+      const values = [];
+      const re = /(['"`])((?:\\.|(?!\1)[^\\]){2,120})\1/g;
+      let m;
+      while ((m = re.exec(String(body || '')))) {
+        const v = String(m[2]).trim();
+        if (!v || /^(use strict|javascript|text|click|change|submit|active|block|none)$/i.test(v)) continue;
+        if (/^[A-Za-z_$][\w$.-]{2,80}$/.test(v) || /[A-Za-z]{4,}/.test(v)) values.push(v.toLowerCase());
+      }
+      return [...new Set(values)];
+    };
+    const extractDomAnchors = body => {
+      const out = new Set();
+      const textBody = String(body || '');
+      const patterns = [
+        /getElementById\(\s*['"]([^'"]+)['"]\s*\)/gi,
+        /querySelector(?:All)?\(\s*['"]([^'"]+)['"]\s*\)/gi,
+        /getElementsBy(?:ClassName|Name|TagName)\(\s*['"]([^'"]+)['"]\s*\)/gi
+      ];
+      for (const re of patterns) {
+        let m;
+        while ((m = re.exec(textBody))) out.add(String(m[1]).toLowerCase());
+      }
+      return [...out];
+    };
+    const extractCalls = body => {
+      const out = new Set();
+      const re = /\b([A-Za-z_$][\w$]*)\s*\(/g;
+      let m;
+      while ((m = re.exec(String(body || '')))) {
+        const n = m[1];
+        if (!['if','for','while','switch','catch','function','setTimeout','setInterval','String','Number','Boolean','Math','Date','Array','Object','Promise','Error'].includes(n)) out.add(n.toLowerCase());
+      }
+      return [...out];
+    };
     for (const { match, kind } of captures.sort((a,b) => a.match.index - b.match.index)) {
       const name = match[1];
       const rawParams = match[2] || '';
@@ -419,13 +454,23 @@ export function runAutonomousEngine(onCycleUpdate) {
         else if (ch === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
       }
       const body = source.slice(start, end);
+      const domAnchors = extractDomAnchors(body);
+      const stringAnchors = extractStringAnchors(body);
+      const callNames = extractCalls(body);
+      const bodyTokens = [...codeTokenSet(body)];
       functions.set(name, {
         name, kind,
         line: sourceLineNumber(source, match.index),
         params,
         bodyLength: body.length,
         bodyHash: sourceHash(body),
-        normalizedBody: body.replace(/\s+/g, ' ').trim()
+        normalizedBody: body.replace(/\s+/g, ' ').trim(),
+        bodyText: body,
+        domAnchors,
+        stringAnchors,
+        callNames,
+        anchorTokens: [...new Set([...domAnchors, ...stringAnchors, ...callNames])],
+        tokenCount: bodyTokens.length
       });
     }
     return [...functions.values()];
@@ -592,7 +637,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     return {
       file, type:ORGAN_REGISTRY[file]?.type || 'UNKNOWN', role:ORGAN_REGISTRY[file]?.role || 'unknown',
       bytes:new Blob([source]).size, lines:String(source).split('\n').length, hash:sourceHash(source),
-      refs:extractLocalRefs(file, source), ...parsed
+      rawSource:String(source), refs:extractLocalRefs(file, source), ...parsed
     };
   }
 
@@ -706,18 +751,67 @@ export function runAutonomousEngine(onCycleUpdate) {
     const missing = a.tokens.filter(token => !b.tokens.includes(token));
     const extra = b.tokens.filter(token => !a.tokens.includes(token));
     const shared = a.tokens.filter(token => b.tokens.includes(token));
+    const anchorA = new Set(reference?.anchorTokens || []);
+    const anchorB = new Set(target?.anchorTokens || []);
+    const sharedAnchors = [...anchorA].filter(x => anchorB.has(x));
+    const missingAnchors = [...anchorA].filter(x => !anchorB.has(x));
     const targetCoverage = a.tokens.length ? shared.length / a.tokens.length : 0;
     const referenceCoverage = b.tokens.length ? shared.length / b.tokens.length : 0;
+    const tokenUnion = new Set([...a.tokens, ...b.tokens]).size || 1;
+    const tokenJaccard = shared.length / tokenUnion;
     const distinctive = shared.filter(token => token.length >= 6 && !['render','update','handle','submit','button','status','profile','system','data','element'].includes(token));
+    const sizeRatio = Math.min(reference.bodyLength, target.bodyLength) / Math.max(reference.bodyLength, target.bodyLength || 1);
     return {
-      missing, extra, shared, targetCoverage, referenceCoverage,
+      missing, extra, shared, targetCoverage, referenceCoverage, tokenJaccard,
       distinctive, sourceSize:a.size, targetSize:b.size,
-      sizeGap:Math.max(0, a.size - b.size)
+      sizeGap:Math.max(0, a.size - b.size), sizeRatio,
+      sharedAnchors, missingAnchors,
+      sharedDomAnchors:sharedAnchors.filter(x => (reference.domAnchors||[]).includes(x) && (target.domAnchors||[]).includes(x)),
+      missingDomAnchors:missingAnchors.filter(x => (reference.domAnchors||[]).includes(x))
     };
+  }
+
+  function functionSimilarity(a, b) {
+    const c = compareFunctionContract(a, b);
+    const anchorUnion = new Set([...(a.anchorTokens || []), ...(b.anchorTokens || [])]).size || 1;
+    const anchorJaccard = c.sharedAnchors.length / anchorUnion;
+    return { ...c, anchorJaccard };
+  }
+
+  function anchorSourceLines(fn, anchors) {
+    const body = String(fn?.bodyText || fn?.normalizedBody || '');
+    return (anchors || []).slice(0, 12).map(anchor => {
+      const safe = String(anchor).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const index = body.search(new RegExp(safe, 'i'));
+      return { anchor, line: index >= 0 ? (fn.line + body.slice(0, index).split('\n').length - 1) : fn.line };
+    });
   }
 
   function functionNameIsGeneric(name) {
     return new Set(['init','setup','start','stop','load','render','update','refresh','handle','submit','click','open','close','toggle','reset','save','send','getdata','setdata']).has(String(name || '').toLowerCase());
+  }
+
+  function compareFileSurface(reference, target) {
+    const aTokens = [...codeTokenSet(reference?.rawSource || '')];
+    const bTokens = [...codeTokenSet(target?.rawSource || '')];
+    const shared = aTokens.filter(x => bTokens.includes(x));
+    const missing = aTokens.filter(x => !bTokens.includes(x));
+    const union = new Set([...aTokens, ...bTokens]).size || 1;
+    const jaccard = shared.length / union;
+    const coverage = aTokens.length ? shared.length / aTokens.length : 0;
+    const aFns = new Set((reference?.functions || []).map(x => x.name));
+    const bFns = new Set((target?.functions || []).map(x => x.name));
+    const sharedFunctions = [...aFns].filter(x => bFns.has(x));
+    const missingFunctions = [...aFns].filter(x => !bFns.has(x));
+    const aIds = new Set((reference?.ids || []).map(x => x.id));
+    const bIds = new Set((target?.ids || []).map(x => x.id));
+    const sharedIds = [...aIds].filter(x => bIds.has(x));
+    const missingIds = [...aIds].filter(x => !bIds.has(x));
+    const sizeRatio = Math.min(reference.rawSource.length, target.rawSource.length) / Math.max(reference.rawSource.length, target.rawSource.length || 1);
+    const identity = (sharedFunctions.length >= 3 ? 0.45 : sharedFunctions.length / 3 * 0.45)
+      + (sharedIds.length >= 4 ? 0.35 : sharedIds.length / 4 * 0.35)
+      + Math.min(0.20, jaccard * 0.20);
+    return {shared, missing, jaccard, coverage, sharedFunctions, missingFunctions, sharedIds, missingIds, sizeRatio, identity};
   }
 
   function compareCrossFileSources(scanned) {
@@ -834,71 +928,127 @@ export function runAutonomousEngine(onCycleUpdate) {
       addRelation({sourceFile:item.file,targetFile:ref,type:'EXPLICIT_FILE_REFERENCE',status:'LINKED',confidence:'HIGH',evidence:{reason:'Referensi file ditemukan langsung di source; belum berarti kedua surface harus identik.'}});
     }
 
-    // 4) Same function name is not enough by itself. However, when the two
-    // implementations share a substantial semantic body and one implementation
-    // is demonstrably a subset of the other, BCGO can raise a deterministic
-    // synchronization candidate. Generic lifecycle names stay informational.
+    // 4) Function contracts: use sibling consensus before declaring an outlier.
+    // Two-file families use deterministic subset evidence. Three-or-more-file families
+    // use majority/similarity support so BCGO can identify the implementation that
+    // diverges from the shared contract without pretending that file length is truth.
     for (const [name, entries] of functionMap) {
-      const unique=[...new Map(entries.map(x=>[x.file,x])).values()];
-      if (unique.length<2) continue;
-      for(let i=0;i<unique.length;i++) for(let j=i+1;j<unique.length;j++) {
-        const a=unique[i], b=unique[j];
-        const linked=explicitRef(a.file,b.file);
-        const comparison = compareFunctionContract(a,b);
-        const identityStrong = !functionNameIsGeneric(name) && (
-          comparison.distinctive.length >= 2 || linked
-        ) && comparison.shared.length >= 5;
-        // Orient the comparison by observed contract breadth, not by the
-        // directional coverage ratio. The previous ratio-based orientation
-        // could select the smaller implementation as the reference, making
-        // sizeGap zero and effectively disabling the mismatch gate.
-        // Orient by observed implementation breadth. This is only an
-        // evidence orientation; it is NOT a claim that the longer function
-        // is canonical. Medicine must still verify the actual source of truth.
-        const aRef = a.bodyLength >= b.bodyLength ? a : b;
-        const bTarget = aRef === a ? b : a;
-        const c = aRef === a ? comparison : compareFunctionContract(b,a);
-        const subsetLike = c.targetCoverage >= 0.68 && c.sizeGap >= 5 && c.missing.length >= 3;
-        const mismatch = identityStrong && subsetLike;
-        const status = mismatch ? 'MISMATCH_CANDIDATE' : 'VARIANT';
-        const confidence = mismatch && (linked || c.targetCoverage >= 0.80) ? 'HIGH' : mismatch ? 'MEDIUM' : 'LOW';
+      const unique = [...new Map(entries.map(x => [x.file, x])).values()];
+      if (unique.length < 2) continue;
+
+      const family = unique.map(fn => ({
+        fn,
+        support: unique.filter(other => other.file !== fn.file).reduce((score, other) => {
+          const s = functionSimilarity(fn, other);
+          const sameBody = fn.bodyHash === other.bodyHash;
+          const strong = sameBody || (s.sharedAnchors.length >= 2 && s.tokenJaccard >= 0.62 && s.targetCoverage >= 0.72);
+          return score + (strong ? 1 : 0);
+        }, 0)
+      }));
+      const consensus = family.slice().sort((a,b) => b.support - a.support || b.fn.bodyLength - a.fn.bodyLength)[0];
+      const consensusCount = consensus.support + 1;
+
+      for (const entry of unique) {
+        if (entry.file === consensus.fn.file) continue;
+        const reference = consensus.fn;
+        const target = entry;
+        const linked = explicitRef(reference.file, target.file);
+        const c = functionSimilarity(reference, target);
+        const sameBody = reference.bodyHash === target.bodyHash;
+        const familyHasConsensus = unique.length >= 3 && consensusCount >= 2;
+        const identityStrong = (
+          sameBody || c.sharedAnchors.length >= 2 || c.distinctive.length >= 2 || linked
+        ) && c.shared.length >= 4;
+
+        const targetLooksIncomplete = !sameBody && identityStrong && (
+          (c.targetCoverage >= 0.72 && c.missingAnchors.length >= 1 && c.sizeRatio <= 0.82) ||
+          (c.targetCoverage >= 0.80 && c.missingAnchors.length >= 2 && c.sizeGap >= 8) ||
+          (familyHasConsensus && c.targetCoverage >= 0.70 && c.missingAnchors.length >= 2 && c.anchorJaccard >= 0.45)
+        );
+        const status = sameBody ? 'SYNCHRONIZED' : targetLooksIncomplete ? 'MISMATCH_CANDIDATE' : 'VARIANT';
+        const confidence = sameBody ? 'HIGH' : targetLooksIncomplete && (familyHasConsensus || linked || c.targetCoverage >= 0.82) ? 'HIGH' : targetLooksIncomplete ? 'MEDIUM' : 'LOW';
+        const relationType = sameBody ? 'SHARED_FUNCTION_SYNC' : targetLooksIncomplete ? 'CROSS_FILE_FUNCTION_CONTRACT' : 'SHARED_FUNCTION_VARIANT';
+        const missingAnchorLines = anchorSourceLines(reference, c.missingAnchors);
+
         addRelation({
-          sourceFile:aRef.file,targetFile:bTarget.file,
-          type:mismatch ? 'CROSS_FILE_FUNCTION_CONTRACT' : 'SHARED_FUNCTION_VARIANT',
-          status,confidence,sourceLine:aRef.line,targetLine:bTarget.line,key:name,
+          sourceFile:reference.file, targetFile:target.file, type:relationType, status, confidence,
+          sourceLine:reference.line, targetLine:target.line, key:name,
           evidence:{
-            explicitReference:linked,
-            sharedTokens:comparison.shared,
-            missingTokens:c.missing.slice(0,80),
-            extraTokens:c.extra.slice(0,80),
-            targetCoverage:Number((c.targetCoverage*100).toFixed(1)),
-            referenceCoverage:Number((c.referenceCoverage*100).toFixed(1)),
-            sourceTokenCount:c.sourceSize,targetTokenCount:c.targetSize,sizeGap:c.sizeGap,
-            distinctiveTokens:comparison.distinctive,
-            reason:mismatch
-              ? 'Implementasi fungsi memiliki identity semantik yang kuat dan target terbukti sebagai subset implementasi reference berdasarkan token kontrak; ini kandidat ketidaksinkronan, bukan keputusan canonical otomatis.'
-              : 'Nama fungsi yang sama tidak cukup untuk menyatakan sinkronisasi; relasi dipertahankan sebagai variant kecuali bukti kontrak subset memenuhi gate.'
+            familySize:unique.length, familyConsensusFile:reference.file, familyConsensusSupport:consensusCount,
+            explicitReference:linked, sameBody, sharedTokens:c.shared.slice(0,100), missingTokens:c.missing.slice(0,100),
+            extraTokens:c.extra.slice(0,100), sharedAnchors:c.sharedAnchors.slice(0,60), missingAnchors:c.missingAnchors.slice(0,60),
+            missingAnchorLines, sharedDomAnchors:c.sharedDomAnchors.slice(0,40), missingDomAnchors:c.missingDomAnchors.slice(0,40),
+            targetCoverage:Number((c.targetCoverage*100).toFixed(1)), referenceCoverage:Number((c.referenceCoverage*100).toFixed(1)),
+            tokenJaccard:Number((c.tokenJaccard*100).toFixed(1)), anchorJaccard:Number((c.anchorJaccard*100).toFixed(1)),
+            sourceTokenCount:c.sourceSize, targetTokenCount:c.targetSize, sizeGap:c.sizeGap,
+            sourceBodyLength:reference.bodyLength, targetBodyLength:target.bodyLength, sizeRatio:Number(c.sizeRatio.toFixed(3)),
+            referenceCandidateReason: familyHasConsensus
+              ? `Reference candidate dipilih dari keluarga fungsi berdasarkan dukungan ${consensusCount}/${unique.length} implementasi yang selaras; bukan berdasarkan panjang file saja.`
+              : 'Reference candidate dipilih dari implementasi yang memiliki bukti kontrak lebih lengkap; status tetap kandidat sampai Medicine memverifikasi source of truth.'
           }
         });
-        if (mismatch) {
+
+        if (targetLooksIncomplete) {
           findings.push({
             severity:confidence === 'HIGH' ? 'HIGH' : 'MEDIUM',
             type:'CROSS_FILE_FUNCTION_CONTRACT_MISMATCH',
-            sourceFile:aRef.file,sourceLine:aRef.line,targetFile:bTarget.file,targetLine:bTarget.line,
-            area:`FUNCTION:${name}`,confidence,
-            message:`Implementasi ${name} pada ${bTarget.file} tampak tidak lengkap dibanding reference candidate ${aRef.file}: coverage target ${Math.round(c.targetCoverage*100)}%, ${c.missing.length} token kontrak tidak terbukti pada target.`,
+            sourceFile:reference.file, sourceLine:reference.line, targetFile:target.file, targetLine:target.line,
+            area:`FUNCTION:${name}`, confidence,
+            message:`Implementasi ${name} pada ${target.file} terdeteksi sebagai kandidat tidak lengkap terhadap kontrak ${reference.file}: coverage ${Math.round(c.targetCoverage*100)}%, ${c.missingAnchors.length} anchor penting hilang dan ${c.missing.length} token kontrak tidak terbukti.`,
             evidence:{
-              referenceFunction:name,targetFunction:name,
-              missingTokens:c.missing.slice(0,80),sharedTokens:c.shared.slice(0,80),
-              targetCoverage:Number((c.targetCoverage*100).toFixed(1)),
-              referenceCoverage:Number((c.referenceCoverage*100).toFixed(1)),
-              sourceTokenCount:c.sourceSize,targetTokenCount:c.targetSize,
-              explicitReference:linked,
-              sourceCandidateReason:'Reference candidate ditentukan oleh cakupan kontrak/token yang lebih tinggi, bukan sekadar panjang file.'
+              referenceFunction:name, targetFunction:name, familySize:unique.length, familyConsensusFile:reference.file,
+              familyConsensusSupport:consensusCount, missingAnchors:c.missingAnchors.slice(0,60), missingAnchorLines,
+              sharedAnchors:c.sharedAnchors.slice(0,60), missingTokens:c.missing.slice(0,80), sharedTokens:c.shared.slice(0,80),
+              targetCoverage:Number((c.targetCoverage*100).toFixed(1)), referenceCoverage:Number((c.referenceCoverage*100).toFixed(1)),
+              tokenJaccard:Number((c.tokenJaccard*100).toFixed(1)), anchorJaccard:Number((c.anchorJaccard*100).toFixed(1)),
+              sourceTokenCount:c.sourceSize, targetTokenCount:c.targetSize, sourceBodyLength:reference.bodyLength,
+              targetBodyLength:target.bodyLength, sizeGap:c.sizeGap, explicitReference:linked,
+              sourceCandidateReason:familyHasConsensus
+                ? 'Kandidat reference memiliki dukungan keluarga implementasi yang lebih kuat; canonical tetap harus diverifikasi Medicine.'
+                : 'Kandidat reference memiliki cakupan kontrak lebih tinggi; canonical tetap harus diverifikasi Medicine.'
             }
           });
         }
       }
+
+      // If every sibling implementation is equivalent, publish one explicit family sync relation.
+      if (unique.length >= 2 && family.every(x => x.support === unique.length - 1)) {
+        const first = unique[0];
+        addRelation({
+          sourceFile:first.file, targetFile:unique[1].file, type:'FUNCTION_FAMILY_SYNC', status:'SYNCHRONIZED', confidence:'HIGH',
+          sourceLine:first.line, targetLine:unique[1].line, key:name,
+          evidence:{familySize:unique.length, reason:'Seluruh anggota keluarga fungsi memiliki kontrak yang setara pada bukti scanner.'}
+        });
+      }
+    }
+
+    // 5) Whole-file surface families: when two files are demonstrably siblings
+    // (shared functions + DOM IDs + substantial token overlap), detect an outlier
+    // file whose implementation is a strict/near-strict subset. This catches
+    // incomplete copied features even when there is no <form> key and no identical
+    // function name for every missing block.
+    const fileItems = items.filter(x => x.rawSource);
+    for (let i=0;i<fileItems.length;i++) for (let j=i+1;j<fileItems.length;j++) {
+      const a=fileItems[i], b=fileItems[j];
+      if (a.file===b.file) continue;
+      const cmpAB=compareFileSurface(a,b), cmpBA=compareFileSurface(b,a);
+      const linked=explicitRef(a.file,b.file);
+      const sameRole=String(a.role||'')===String(b.role||'');
+      const strongIdentity=(cmpAB.identity>=0.58 && (cmpAB.sharedFunctions.length>=3 || cmpAB.sharedIds.length>=4)) || (linked && cmpAB.jaccard>=0.20);
+      if (!strongIdentity) continue;
+      const aLarger = a.rawSource.length >= b.rawSource.length ? a : b;
+      const smaller = aLarger===a ? b : a;
+      const cmp = aLarger===a ? cmpAB : cmpBA;
+      const likelySubset = cmp.coverage>=0.68 && cmp.sizeRatio<=0.78 && (cmp.missingFunctions.length>=2 || cmp.missingIds.length>=3 || cmp.missing.length>=10);
+      const nearSync = cmp.jaccard>=0.88 && cmp.missingFunctions.length===0 && cmp.missingIds.length===0;
+      if (!likelySubset && !nearSync) continue;
+      const status=nearSync?'SYNCHRONIZED':'MISMATCH_CANDIDATE';
+      const confidence=nearSync?'HIGH':(linked || (sameRole && cmp.coverage>=0.80))?'HIGH':'MEDIUM';
+      const type=nearSync?'FILE_SURFACE_SYNC':'CROSS_FILE_FILE_SURFACE_CONTRACT';
+      const sourceFnLines=cmp.missingFunctions.slice(0,12).map(name=>({name,line:(aLarger.functions||[]).find(x=>x.name===name)?.line||null}));
+      const sourceIdLines=cmp.missingIds.slice(0,12).map(id=>({id,line:(aLarger.ids||[]).find(x=>x.id===id)?.line||null}));
+      addRelation({sourceFile:aLarger.file,targetFile:smaller.file,type,status,confidence,key:'FILE_SURFACE',sourceLine:1,targetLine:1,evidence:{linked,sameRole,identity:Number(cmp.identity.toFixed(3)),jaccard:Number((cmp.jaccard*100).toFixed(1)),coverage:Number((cmp.coverage*100).toFixed(1)),sizeRatio:Number(cmp.sizeRatio.toFixed(3)),sourceBytes:aLarger.bytes,targetBytes:smaller.bytes,sharedFunctions:cmp.sharedFunctions.slice(0,60),missingFunctions:cmp.missingFunctions.slice(0,60),missingFunctionLines:sourceFnLines,sharedIds:cmp.sharedIds.slice(0,60),missingIds:cmp.missingIds.slice(0,60),missingIdLines:sourceIdLines,missingTokens:cmp.missing.slice(0,60),reason:nearSync?'Whole-file contract surfaces are highly equivalent.':'Whole-file contract surface indicates the target is a materially smaller subset of a strongly related reference candidate; this is evidence of drift, not automatic canonical truth.'}});
+      if (!nearSync) findings.push({severity:confidence==='HIGH'?'HIGH':'MEDIUM',type:'CROSS_FILE_FILE_SURFACE_MISMATCH',sourceFile:aLarger.file,sourceLine:1,targetFile:smaller.file,targetLine:1,area:'FILE_SURFACE',confidence,message:`${smaller.file} tampak sebagai implementasi yang tidak lengkap terhadap surface ${aLarger.file}: coverage ${Math.round(cmp.coverage*100)}%, ${cmp.missingFunctions.length} fungsi dan ${cmp.missingIds.length} ID DOM yang tidak terbukti pada target.`,evidence:{linked,sameRole,identity:Number(cmp.identity.toFixed(3)),jaccard:Number((cmp.jaccard*100).toFixed(1)),coverage:Number((cmp.coverage*100).toFixed(1)),sizeRatio:Number(cmp.sizeRatio.toFixed(3)),missingFunctions:cmp.missingFunctions.slice(0,60),missingFunctionLines:sourceFnLines,missingIds:cmp.missingIds.slice(0,60),missingIdLines:sourceIdLines,missingTokens:cmp.missing.slice(0,80)}});
     }
 
     return {findings, relations};
@@ -964,10 +1114,11 @@ export function runAutonomousEngine(onCycleUpdate) {
       const relations = crossComparison.relations;
       const actionable = [...failures,...allFindings,...crossFileFindings].filter(f => f.severity !== 'INFO').slice(0,100);
       const relationSummary = {
-        synchronized: relations.filter(r => ['MATCHED_SURFACE','LINKED'].includes(r.status)).length,
+        synchronized: relations.filter(r => r.status === 'SYNCHRONIZED' || r.status === 'MATCHED_SURFACE').length,
         mismatch: relations.filter(r => /MISMATCH/.test(String(r.status))).length,
         variant: relations.filter(r => r.status === 'VARIANT' || r.status === 'VARIANT_SURFACE').length,
-        unknown: relations.filter(r => r.status === 'UNKNOWN').length
+        unknown: relations.filter(r => r.status === 'UNKNOWN').length,
+        linked: relations.filter(r => r.status === 'LINKED').length
       };
       const status = failures.length ? 'DEGRADED' : actionable.length ? 'FINDINGS' : 'CLEAN';
       state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:crossFileFindings.slice(0,100),relations:relations.slice(0,200),relationSummary,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),message:failures.length ? `Scanner selesai: ${files.length} source diproses, ${failures.length} source tidak terbaca.` : actionable.length ? `Scanner selesai: ${files.length} source dibaca; ${actionable.length} temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} source dibaca dan dianalisis tanpa temuan struktural/cross-file.` };
@@ -1031,7 +1182,7 @@ export function runAutonomousEngine(onCycleUpdate) {
         evidenceType: "SOURCE_SCAN",
         line: finding.targetLine ?? finding.line ?? organs[target].line ?? null,
         sourceFinding: finding,
-        message: finding.type === "CROSS_FILE_FORM_MISMATCH"
+        message: finding.type?.startsWith("CROSS_FILE_")
           ? `Cross-file mismatch: ${finding.sourceFile} → ${target}. ${finding.message}`
           : finding.message
       };
