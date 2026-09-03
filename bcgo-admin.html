@@ -822,15 +822,20 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-    // Security/session dikelola terpusat oleh bcgo-auth.js.
-    import "./bcgo-auth.js";
-    import { db } from "./cikur-config.js";
+    // Firebase App/Authentication/Firestore dipusatkan di cikur-config.js.
+    // Modul ini hanya memakai koneksi yang sama, sehingga tidak membuat
+    // Firebase App kedua dan tidak memicu app/duplicate-app.
+    import { db, auth } from "./cikur-config.js";
     import {
         collection, onSnapshot, query,
-        doc, updateDoc, serverTimestamp
-    } from "./lib/firebase/firebase-firestore.js";
-
+        doc, updateDoc, serverTimestamp, getDoc, setDoc
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import {
+        onAuthStateChanged, signInWithEmailAndPassword,
+        createUserWithEmailAndPassword, signOut
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     let currentUser = null;
+    let authMode = "login";
     let adminVerified = false;
 
     const badgeEl = document.getElementById("engineStatusBadge");
@@ -855,7 +860,9 @@
             : "Selamat malam 👋";
 
         const el = document.getElementById("greetingTitle");
-        if (el) el.textContent = greeting;
+        if (el) {
+            el.textContent = greeting;
+        }
     }
 
     updateGreeting();
@@ -867,6 +874,7 @@
     }
 
     window.showAuthMode = function(mode){
+        authMode = mode;
         const isRegister = mode === "register";
         document.getElementById("loginTab").classList.toggle("active", !isRegister);
         document.getElementById("registerTab").classList.toggle("active", isRegister);
@@ -878,7 +886,6 @@
             ? "Setelah registrasi, akun tetap terkunci sampai disetujui oleh super admin CIKUR GO."
             : "Akses admin diverifikasi melalui Firebase Authentication dan status administrator.";
         hideAuthMessage();
-        window.__bcgoAuthMode = isRegister ? "register" : "login";
     };
 
     function authMessage(text, type="error"){
@@ -886,13 +893,11 @@
         el.textContent = text;
         el.className = `auth-message show ${type}`;
     }
-
     function hideAuthMessage(){
         const el = document.getElementById("authMessage");
         el.className = "auth-message";
         el.textContent = "";
     }
-
     function friendlyAuthError(error){
         const code = error?.code || "";
         const map = {
@@ -903,10 +908,19 @@
             "auth/invalid-email":"Format email tidak valid.",
             "auth/too-many-requests":"Terlalu banyak percobaan. Coba lagi beberapa saat.",
             "auth/network-request-failed":"Koneksi internet bermasalah. Coba lagi.",
-            "auth/user-disabled":"Akun ini dinonaktifkan. Hubungi super admin.",
-            "auth/missing-credentials":"Email dan password wajib diisi."
+            "auth/user-disabled":"Akun ini dinonaktifkan. Hubungi super admin."
         };
         return map[code] || error?.message || "Terjadi kesalahan autentikasi.";
+    }
+
+    async function verifyAdmin(user){
+        try{
+            const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
+            return adminSnap.exists() && adminSnap.data()?.active === true;
+        }catch(error){
+            console.error("Admin verification failed:", error);
+            return false;
+        }
     }
 
     function enterDashboard(user){
@@ -919,20 +933,15 @@
         loadCustomerData();
     }
 
-    function lockPending(user, reason){
+    function lockPending(user){
         currentUser = user;
         adminVerified = false;
         document.getElementById("authGate").classList.add("hidden");
-
-        const text = reason === "VERIFICATION_ERROR"
-            ? "Status administrator belum dapat diverifikasi. Periksa koneksi dan izin Firestore, lalu coba lagi."
-            : `Akun ${user?.email || "ini"} sudah terdaftar, tetapi belum memiliki status administrator aktif. Minta super admin CIKUR GO mengaktifkan akun Anda.`;
-
-        document.getElementById("pendingText").textContent = text;
+        document.getElementById("pendingText").textContent = `Akun ${user.email || "ini"} sudah terdaftar, tetapi belum memiliki status administrator aktif. Minta super admin CIKUR GO mengaktifkan akun Anda.`;
         document.getElementById("pendingLock").classList.add("show");
     }
 
-    function cleanupDashboard(){
+    window.secureLogout = async function(){
         if(unsubscribeListener) unsubscribeListener();
         if(unsubscribeCustomerListener) unsubscribeCustomerListener();
         unsubscribeListener = null;
@@ -940,108 +949,73 @@
         cachedApplications = {};
         cachedCustomers = {};
         adminVerified = false;
-        currentUser = null;
-    }
-
-    window.secureLogout = async function(){
-        try {
-            await window.BCGOAuth.logout();
-        } catch(error) {
-            console.error("Logout error:", error);
-            authMessage(friendlyAuthError(error));
-        }
-    };
-
-    document.getElementById("authForm").addEventListener("submit", async function(e){
-        e.preventDefault();
-
-        const email = document.getElementById("authEmail").value.trim();
-        const password = document.getElementById("authPassword").value;
-        const confirm = document.getElementById("authConfirm").value;
-        const submit = document.getElementById("authSubmit");
-        const mode = window.__bcgoAuthMode || "login";
-
-        if(mode === "register" && password !== confirm){
-            authMessage("Konfirmasi password tidak sama.");
-            return;
-        }
-
-        submit.disabled = true;
-        hideAuthMessage();
-
-        try {
-            if(mode === "register") {
-                await window.BCGOAuth.register(email, password);
-                authMessage("Registrasi berhasil. Akun masih terkunci sampai disetujui super admin.", "ok");
-                document.getElementById("authForm").reset();
-                window.showAuthMode("login");
-            } else {
-                await window.BCGOAuth.login(email, password);
-                // Tidak memanggil verifyAdmin di sini. Observer auth tunggal
-                // akan menerima perubahan session dan menentukan status admin.
-            }
-        } catch(error) {
-            console.error("Authentication error:", error);
-            authMessage(friendlyAuthError(error));
-        } finally {
-            submit.disabled = false;
-        }
-    });
-
-    window.addEventListener("bcgo-auth:authorized", (event) => {
-        enterDashboard(event.detail.user);
-        setAuthReady();
-    });
-
-    window.addEventListener("bcgo-auth:pending", (event) => {
-        lockPending(event.detail.user, event.detail.reason);
-        setAuthReady();
-    });
-
-    window.addEventListener("bcgo-auth:verification_error", (event) => {
-        if(event.detail.user) lockPending(event.detail.user, "VERIFICATION_ERROR");
-        else document.getElementById("authGate").classList.remove("hidden");
-        setAuthReady();
-    });
-
-    window.addEventListener("bcgo-auth:signed_out", () => {
-        cleanupDashboard();
+        await signOut(auth);
         document.getElementById("pendingLock").classList.remove("show");
         document.getElementById("authGate").classList.remove("hidden");
         document.getElementById("authForm").reset();
         window.showAuthMode("login");
-        setAuthReady();
-    });
+    };
 
-    window.addEventListener("bcgo-auth:registration_submitted", () => {
-        // UI pesan registrasi sudah ditangani oleh submit handler.
-    });
-
-    window.addEventListener("bcgo-auth:ready", () => {
-        setAuthReady();
-    });
-
-    // Sinkronisasi jika auth observer sudah selesai sebelum listener UI terpasang.
-    // Ini mencegah dashboard terlihat stuck hanya karena event awal terlewat.
-    const authState = window.BCGOAuth.getState();
-    if (authState.ready) {
-        if (authState.status === "authorized" && authState.user) {
-            enterDashboard(authState.user);
-        } else if (authState.status === "pending" && authState.user) {
-            lockPending(authState.user, "ADMIN_INACTIVE");
-        } else if (authState.status === "verification_error") {
-            if (authState.user) lockPending(authState.user, "VERIFICATION_ERROR");
-            else document.getElementById("authGate").classList.remove("hidden");
-        } else if (authState.status === "signed_out") {
-            cleanupDashboard();
-            document.getElementById("authGate").classList.remove("hidden");
+    document.getElementById("authForm").addEventListener("submit", async function(e){
+        e.preventDefault();
+        const email = document.getElementById("authEmail").value.trim();
+        const password = document.getElementById("authPassword").value;
+        const confirm = document.getElementById("authConfirm").value;
+        const submit = document.getElementById("authSubmit");
+        if(authMode === "register" && password !== confirm){
+            authMessage("Konfirmasi password tidak sama.");
+            return;
         }
-        setAuthReady();
-    }
+        submit.disabled = true;
+        hideAuthMessage();
+        try{
+            if(authMode === "register"){
+                const cred = await createUserWithEmailAndPassword(auth, email, password);
+                await setDoc(doc(db, "admin_requests", cred.user.uid), {
+                    uid: cred.user.uid,
+                    email: cred.user.email,
+                    status: "pending",
+                    requestedAt: serverTimestamp()
+                });
+                await signOut(auth);
+                authMessage("Registrasi berhasil. Akun masih terkunci sampai disetujui super admin.", "ok");
+                document.getElementById("authForm").reset();
+                window.showAuthMode("login");
+            }else{
+                const cred = await signInWithEmailAndPassword(auth, email, password);
+                const approved = await verifyAdmin(cred.user);
+                if(!approved){
+                    await signOut(auth);
+                    lockPending(cred.user);
+                }else{
+                    enterDashboard(cred.user);
+                }
+            }
+        }catch(error){
+            console.error("Authentication error:", error);
+            authMessage(friendlyAuthError(error));
+        }finally{
+            submit.disabled = false;
+        }
+    });
 
-    // Default UI mode tanpa mengambil alih security lifecycle.
-    window.__bcgoAuthMode = "login";
-    window.showAuthMode("login");
+    onAuthStateChanged(auth, async user => {
+        if(!user){
+            currentUser = null;
+            adminVerified = false;
+            if(unsubscribeListener) unsubscribeListener();
+            if(unsubscribeCustomerListener) unsubscribeCustomerListener();
+            unsubscribeListener = null;
+            unsubscribeCustomerListener = null;
+            document.getElementById("authGate").classList.remove("hidden");
+            setAuthReady();
+            return;
+        }
+        const approved = await verifyAdmin(user);
+        if(approved) enterDashboard(user);
+        else lockPending(user);
+        setAuthReady();
+    });
 
     function showToast(message){
         const toast = document.getElementById("toast");
@@ -1059,7 +1033,6 @@
             .replaceAll('"',"&quot;")
             .replaceAll("'","&#039;");
     }
-
 
     function getPartnerName(data){
         return data.name || data.namaUsaha || data.businessName || data.ownerName ||
@@ -1834,3 +1807,5 @@
     
     // Error reporting global ditangani satu kali oleh cikur-config.js.
 </script>
+</body>
+</html>
