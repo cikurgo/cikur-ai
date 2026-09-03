@@ -1,38 +1,24 @@
 /*
-============================================================
- CIKUR GO — BCGO ADMIN AUTHORITY
- File : bcgo-auth.js
+ * BCGO AUTH — Central Authentication & Admin Authority
+ *
+ * Tanggung jawab file ini HANYA keamanan/session:
+ * - Firebase Authentication
+ * - login / register / logout
+ * - pemantauan session realtime
+ * - verifikasi admin_users/{uid}.active
+ * - broadcast status AUTH_READY / AUTHORIZED / PENDING / SIGNED_OUT
+ *
+ * Dashboard (bcgo-admin.html) tidak lagi mengelola lifecycle auth sendiri.
+ * Firebase connection tetap berasal dari cikur-config.js.
+ */
 
- Tanggung jawab:
- - Firebase Authentication session
- - Login
- - Logout
- - Admin registration
- - admin_users verification
- - Session restore
- - Auth state lifecycle
- - Admin authorization
-
- TIDAK:
- - mengubah dashboard
- - menjalankan BCGO
- - menjalankan Medicine
- - menjalankan Executor
-============================================================
-*/
-
-import {
-    db,
-    auth
-} from "./cikur-config.js";
-
+import { db, auth } from "./cikur-config.js";
 import {
     doc,
     getDoc,
     setDoc,
     serverTimestamp
 } from "./lib/firebase/firebase-firestore.js";
-
 import {
     onAuthStateChanged,
     signInWithEmailAndPassword,
@@ -40,466 +26,219 @@ import {
     signOut
 } from "./lib/firebase/firebase-auth.js";
 
+const listeners = new Map();
 
-const BCGO_AUTH = {
-    currentUser: null,
-    adminVerified: false,
-    initialized: false,
-    destroyed: false,
-
-    unsubscribeAuth: null,
-
-    callbacks: {
-        ready: [],
-        authorized: [],
-        unauthorized: [],
-        logout: [],
-        error: []
-    }
+const state = {
+    ready: false,
+    status: "initializing",
+    user: null,
+    admin: false,
+    error: null
 };
 
+function emit(event, payload = {}) {
+    const detail = { ...payload, state: getState() };
 
-/* ============================================================
-   CALLBACK SYSTEM
-============================================================ */
-
-function emit(type, payload = null) {
-
-    const list = BCGO_AUTH.callbacks[type];
-
-    if (!Array.isArray(list)) {
-        return;
-    }
-
-    for (const callback of list) {
-
-        try {
-            callback(payload);
-        } catch (error) {
-
-            console.error(
-                "[BCGO AUTH] Callback error:",
-                error
-            );
+    const bucket = listeners.get(event);
+    if (bucket) {
+        for (const callback of [...bucket]) {
+            try { callback(detail); } catch (error) {
+                console.error(`[BCGOAuth] listener error (${event})`, error);
+            }
         }
     }
+
+    window.dispatchEvent(new CustomEvent(`bcgo-auth:${event}`, { detail }));
 }
 
-
-function on(type, callback) {
-
-    if (!BCGO_AUTH.callbacks[type]) {
-        BCGO_AUTH.callbacks[type] = [];
-    }
-
-    BCGO_AUTH.callbacks[type].push(callback);
-
-    return () => {
-
-        const list = BCGO_AUTH.callbacks[type];
-
-        const index = list.indexOf(callback);
-
-        if (index !== -1) {
-            list.splice(index, 1);
-        }
+function getState() {
+    return {
+        ready: state.ready,
+        status: state.status,
+        user: state.user,
+        admin: state.admin,
+        error: state.error
     };
 }
 
-
-/* ============================================================
-   ADMIN VERIFICATION
-============================================================ */
+function normalizeError(error) {
+    return {
+        code: error?.code || "auth/unknown",
+        message: error?.message || "Terjadi kesalahan autentikasi."
+    };
+}
 
 async function verifyAdmin(user) {
-
-    if (!user || !user.uid) {
-        return {
-            ok: false,
-            reason: "NO_USER"
-        };
+    if (!user?.uid) {
+        return { approved: false, reason: "NO_USER" };
     }
 
     try {
+        const snap = await getDoc(doc(db, "admin_users", user.uid));
 
-        const adminRef = doc(
-            db,
-            "admin_users",
-            user.uid
-        );
-
-        const snapshot = await getDoc(adminRef);
-
-        if (!snapshot.exists()) {
-
-            return {
-                ok: false,
-                reason: "NOT_ADMIN"
-            };
+        if (!snap.exists()) {
+            return { approved: false, reason: "NOT_ADMIN" };
         }
 
-        const data = snapshot.data();
-
-        if (data?.active !== true) {
-
-            return {
-                ok: false,
-                reason: "ADMIN_INACTIVE"
-            };
+        const data = snap.data() || {};
+        if (data.active !== true) {
+            return { approved: false, reason: "ADMIN_INACTIVE", data };
         }
 
-        return {
-            ok: true,
-            reason: "AUTHORIZED",
-            data
-        };
-
+        return { approved: true, reason: "AUTHORIZED", data };
     } catch (error) {
-
-        console.error(
-            "[BCGO AUTH] Admin verification failed:",
-            error
-        );
-
+        console.error("[BCGOAuth] Admin verification failed:", error);
         return {
-            ok: false,
+            approved: false,
             reason: "VERIFICATION_ERROR",
-            error
+            error: normalizeError(error)
         };
     }
 }
 
-
-/* ============================================================
-   AUTH STATE HANDLER
-============================================================ */
-
-async function handleAuthState(user) {
-
-    if (BCGO_AUTH.destroyed) {
-        return;
-    }
-
-    BCGO_AUTH.currentUser = user || null;
-    BCGO_AUTH.adminVerified = false;
-
-
-    /*
-    ------------------------------------------------------------
-    Tidak ada user
-    ------------------------------------------------------------
-    */
+async function handleAuthUser(user) {
+    state.error = null;
+    state.user = user || null;
+    state.admin = false;
 
     if (!user) {
-
-        emit("unauthorized", {
-            reason: "NO_SESSION"
-        });
-
-        emit("ready", {
-            authenticated: false,
-            authorized: false
-        });
-
+        state.status = "signed_out";
+        emit("signed_out", { user: null });
         return;
     }
-
-
-    /*
-    ------------------------------------------------------------
-    Verifikasi administrator
-    ------------------------------------------------------------
-    */
 
     const result = await verifyAdmin(user);
 
-
-    if (BCGO_AUTH.destroyed) {
-        return;
-    }
-
-
-    /*
-    ------------------------------------------------------------
-    Error Firestore / verification
-    ------------------------------------------------------------
-    */
-
-    if (result.reason === "VERIFICATION_ERROR") {
-
-        BCGO_AUTH.adminVerified = false;
-
-        emit("error", result.error);
-
-        emit("ready", {
-            authenticated: true,
-            authorized: false,
-            verificationError: true
-        });
-
-        return;
-    }
-
-
-    /*
-    ------------------------------------------------------------
-    Bukan admin / belum aktif
-    ------------------------------------------------------------
-    */
-
-    if (!result.ok) {
-
-        BCGO_AUTH.adminVerified = false;
-
-        emit("unauthorized", {
+    if (result.approved) {
+        state.status = "authorized";
+        state.admin = true;
+        emit("authorized", {
             user,
-            reason: result.reason
+            adminData: result.data || null
         });
-
-        emit("ready", {
-            authenticated: true,
-            authorized: false
-        });
-
         return;
     }
 
+    // Jika verifikasi Firestore gagal, jangan menyamakan error jaringan/
+    // permission dengan akun yang memang bukan admin.
+    if (result.reason === "VERIFICATION_ERROR") {
+        state.status = "verification_error";
+        state.error = result.error || null;
+        emit("verification_error", {
+            user,
+            error: result.error || null
+        });
+        return;
+    }
 
-    /*
-    ------------------------------------------------------------
-    ADMIN AKTIF
-    ------------------------------------------------------------
-    */
-
-    BCGO_AUTH.adminVerified = true;
-
-    emit("authorized", {
+    state.status = "pending";
+    emit("pending", {
         user,
-        admin: result.data
-    });
-
-    emit("ready", {
-        authenticated: true,
-        authorized: true
+        reason: result.reason
     });
 }
 
-
-/* ============================================================
-   INITIALIZE
-============================================================ */
-
-function initialize() {
-
-    if (BCGO_AUTH.initialized) {
-        return;
+async function initialize() {
+    try {
+        onAuthStateChanged(auth, async (user) => {
+            try {
+                await handleAuthUser(user);
+            } catch (error) {
+                state.status = "verification_error";
+                state.error = normalizeError(error);
+                emit("verification_error", {
+                    user,
+                    error: state.error
+                });
+            } finally {
+                if (!state.ready) {
+                    state.ready = true;
+                    emit("ready");
+                }
+            }
+        });
+    } catch (error) {
+        state.ready = true;
+        state.status = "verification_error";
+        state.error = normalizeError(error);
+        emit("ready");
+        emit("verification_error", { error: state.error });
     }
-
-    BCGO_AUTH.initialized = true;
-
-    BCGO_AUTH.unsubscribeAuth =
-        onAuthStateChanged(
-            auth,
-            handleAuthState
-        );
 }
-
-
-/* ============================================================
-   LOGIN
-============================================================ */
 
 async function login(email, password) {
-
     if (!email || !password) {
-
-        throw new Error(
-            "Email dan password wajib diisi."
-        );
-    }
-
-    try {
-
-        /*
-        Penting:
-        Login hanya melakukan sign-in.
-
-        Tidak melakukan verifyAdmin di sini.
-
-        Setelah Firebase mengubah session,
-        onAuthStateChanged() menjadi satu-satunya
-        jalur verifikasi authorization.
-        */
-
-        const credential =
-            await signInWithEmailAndPassword(
-                auth,
-                email,
-                password
-            );
-
-        return credential.user;
-
-    } catch (error) {
-
-        emit("error", error);
-
+        const error = new Error("Email dan password wajib diisi.");
+        error.code = "auth/missing-credentials";
         throw error;
     }
+
+    // Jangan verifikasi admin di sini.
+    // onAuthStateChanged adalah satu-satunya pemilik lifecycle session.
+    return signInWithEmailAndPassword(auth, email, password);
 }
-
-
-/* ============================================================
-   REGISTER ADMIN
-============================================================ */
 
 async function register(email, password) {
-
     if (!email || !password) {
-
-        throw new Error(
-            "Email dan password wajib diisi."
-        );
-    }
-
-    try {
-
-        const credential =
-            await createUserWithEmailAndPassword(
-                auth,
-                email,
-                password
-            );
-
-        const user = credential.user;
-
-
-        await setDoc(
-            doc(
-                db,
-                "admin_requests",
-                user.uid
-            ),
-            {
-                uid: user.uid,
-                email: user.email,
-                status: "pending",
-                requestedAt: serverTimestamp()
-            }
-        );
-
-
-        /*
-        Registrasi bukan berarti langsung menjadi admin.
-        */
-
-        await signOut(auth);
-
-        return user;
-
-    } catch (error) {
-
-        emit("error", error);
-
+        const error = new Error("Email dan password wajib diisi.");
+        error.code = "auth/missing-credentials";
         throw error;
     }
+
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = credential.user;
+
+    try {
+        await setDoc(doc(db, "admin_requests", user.uid), {
+            uid: user.uid,
+            email: user.email || email,
+            status: "pending",
+            requestedAt: serverTimestamp()
+        });
+    } catch (error) {
+        // Jangan meninggalkan session admin baru dalam keadaan aktif jika
+        // permintaan akses gagal disimpan.
+        try { await signOut(auth); } catch (_) {}
+        throw error;
+    }
+
+    await signOut(auth);
+
+    emit("registration_submitted", {
+        email: user.email || email,
+        uid: user.uid
+    });
+
+    return { user, submitted: true };
 }
-
-
-/* ============================================================
-   LOGOUT
-============================================================ */
 
 async function logout() {
-
-    try {
-
-        BCGO_AUTH.adminVerified = false;
-        BCGO_AUTH.currentUser = null;
-
-        await signOut(auth);
-
-        emit("logout");
-
-    } catch (error) {
-
-        emit("error", error);
-
-        throw error;
-    }
+    await signOut(auth);
 }
 
+function on(event, callback) {
+    if (typeof callback !== "function") return () => {};
 
-/* ============================================================
-   GETTERS
-============================================================ */
+    if (!listeners.has(event)) listeners.set(event, new Set());
+    listeners.get(event).add(callback);
 
-function getUser() {
-
-    return BCGO_AUTH.currentUser;
+    return () => listeners.get(event)?.delete(callback);
 }
 
-
-function isAuthenticated() {
-
-    return !!BCGO_AUTH.currentUser;
-}
-
-
-function isAdmin() {
-
-    return BCGO_AUTH.adminVerified === true;
-}
-
-
-/* ============================================================
-   DESTROY
-============================================================ */
-
-function destroy() {
-
-    BCGO_AUTH.destroyed = true;
-
-    if (typeof BCGO_AUTH.unsubscribeAuth === "function") {
-
-        BCGO_AUTH.unsubscribeAuth();
-
-        BCGO_AUTH.unsubscribeAuth = null;
-    }
-
-    BCGO_AUTH.currentUser = null;
-    BCGO_AUTH.adminVerified = false;
-}
-
-
-/* ============================================================
-   PUBLIC API
-============================================================ */
-
-window.BCGOAuth = {
-
+const BCGOAuth = Object.freeze({
     initialize,
-
     login,
-
     register,
-
     logout,
+    verifyAdmin,
+    on,
+    getState,
+    get currentUser() { return state.user; },
+    get isAdmin() { return state.admin; },
+    get status() { return state.status; }
+});
 
-    getUser,
+window.BCGOAuth = BCGOAuth;
 
-    isAuthenticated,
-
-    isAdmin,
-
-    destroy,
-
-    on
-};
-
-
-/* ============================================================
-   AUTO INITIALIZE
-============================================================ */
-
+// Satu kali saja. File ini menjadi satu-satunya pemilik auth observer.
 initialize();
