@@ -6,8 +6,8 @@ import {
   limit,
   doc,
   getDoc
-} from "./lib/firebase/firebase-firestore.js";
-import { onAuthStateChanged } from "./lib/firebase/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
 
 /*
