@@ -43,18 +43,18 @@ button{background:#172554;color:#f8fafc;border:1px solid #334155}.secondary{back
 </style></head>
 <body>
 <main><section class="card">
-<h1>🛡️ EXECUTOR — REVIEW CONTROL ROOM</h1>
-<p class="sub">Gerbang pemeriksaan deterministik internal CIKUR GO. Executor menerima hasil Medicine, memeriksa bukti/candidate, lalu mengembalikan VALID atau REJECTED. Tidak ada API eksternal sebagai otak sistem.</p>
+<h1>⚙️ EXECUTOR — CONTROL ROOM</h1>
+<p class="sub">Mesin eksekusi source deterministik internal CIKUR GO. Tidak menggunakan API eksternal sebagai otak eksekusi.</p>
 <div class="banner" id="systemBanner">Memulai pemeriksaan executor...</div>
 <div class="grid" style="margin-top:12px">
-<div class="item"><div class="label">Role</div><div class="value" id="engine">REVIEW GATE</div></div>
+<div class="item"><div class="label">Engine</div><div class="value" id="engine">BOOTING</div></div>
 <div class="item"><div class="label">Version</div><div class="value" id="version">-</div></div>
 <div class="item"><div class="label">Status</div><div class="value" id="status">-</div></div>
 <div class="item"><div class="label">Core</div><div class="value" id="core">-</div></div>
-<div class="item"><div class="label">Audit Storage</div><div class="value" id="persistence">-</div></div>
+<div class="item"><div class="label">Persistence</div><div class="value" id="persistence">-</div></div>
 <div class="item"><div class="label">External Service</div><div class="value ok" id="external">NONE</div></div>
 </div>
-<div class="banner live">Realtime aktif — halaman ini memperbarui sendiri dari bridge BCGO ↔ Medicine. Tidak diperlukan refresh manual.</div>
+<div class="actions"><button class="secondary" id="refresh">Perbarui Status</button><button class="secondary" id="reset">Reset Runtime</button></div>
 </section><section class="card priority-card">
 <h2><span class="lamp off" id="nerveLamp"></span>🫀 LIVE NERVE — BCGO → EXECUTOR</h2>
 <p class="sub">Lampu ini <b>tidak pernah dibuat hijau secara dummy</b>. Hijau hanya setelah executor menerima state BCGO nyata melalui bridge browser internal yang sudah dipakai BCGO.</p>
@@ -94,42 +94,45 @@ button{background:#172554;color:#f8fafc;border:1px solid #334155}.secondary{back
 </div>
 <div class="banner" id="incomingReviewBanner">Menunggu candidate dari Medicine...</div>
 <pre id="incomingCandidate" style="margin-top:10px;min-height:160px">Belum ada candidate.</pre>
-<div class="banner warn">Gate manusia: Executor hanya menilai secara deterministic. Tidak ada source write dari candidate cross-page tanpa persetujuan manusia.</div></section><section class="card priority-card">
-<h2>🛡️ EXECUTOR — DETERMINISTIC REVIEW GATE</h2>
-<p class="sub">Ini adalah gerbang pemeriksaan, bukan tempat Medicine mendiagnosis dan bukan tempat source ditulis otomatis. Executor menerima hasil investigasi Medicine, memeriksa candidate terhadap source yang dikirim, lalu mengembalikan keputusan <b>VALID / REJECTED</b>.</p>
-<div class="grid">
-<div class="item"><div class="label">Role</div><div class="value ok">REVIEW GATE</div></div>
-<div class="item"><div class="label">Case</div><div class="value" id="gateCase">-</div></div>
-<div class="item"><div class="label">Decision</div><div class="value" id="gateDecision">WAITING</div></div>
-<div class="item"><div class="label">Source Reference</div><div class="value" id="gateSource">-</div></div>
-<div class="item"><div class="label">Target File</div><div class="value" id="gateTarget">-</div></div>
-<div class="item"><div class="label">Exact Location</div><div class="value" id="gateLocation">-</div></div>
+<div class="banner warn">Gate manusia: Executor hanya menilai secara deterministic. Tidak ada source write dari candidate cross-page tanpa persetujuan manusia.</div></section><section class="card gate-card">
+<h2>🛡️ REVIEW / EXECUTION RESULT</h2><p class="sub">VALID berarti candidate lolos deterministic review. Write/execute tetap menunggu approval manusia.</p><pre id="result">Belum ada execution.</pre>
+</section><section class="card advanced">
+<h2>Executor Checklist</h2>
+<p class="sub">Ceklis mengikuti pondasi yang kita sepakati; setiap komponen berada di dalam tiga file internal ini.</p>
+<table><thead><tr><th>File</th><th>Komponen</th><th>Status</th></tr></thead><tbody>
+<tr><td>bcgo-executor-core.js</td><td>Patch Engine</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor-core.js</td><td>Fingerprint Engine</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor-core.js</td><td>Diff Engine</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor-core.js</td><td>Validation Engine</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor-core.js</td><td>Rollback Engine</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor.js</td><td>Request Manager</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor.js</td><td>Approval Gate</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor.js</td><td>Execution Manager</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor.js</td><td>Source Manager</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor.js</td><td>Persistence Manager</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor.js</td><td>Audit Manager</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor.html</td><td>Control / Monitoring</td><td class="check">☑ AKTIF</td></tr>
+</tbody></table>
+</section><section class="card advanced">
+<h2>Source Manager</h2>
+<p class="sub">Source yang terdaftar disimpan di IndexedDB internal. Import file membaca source; koneksi File System Access, bila tersedia browser, dapat memberi executor handle untuk menulis kembali file lokal dan melakukan read-back verification.</p>
+<div class="two">
+<div><label>Source ID / File</label><input id="sourceId" value="demo-config.js"/></div>
+<div><label>Fingerprint saat ini</label><input id="sourceFingerprint" readonly="" value="-"/></div>
 </div>
-<div class="banner" id="gateBanner">Menunggu candidate repair dari Medicine...</div>
-</section>
-<section class="card priority-card">
-<h2>🔎 EXACT BEFORE → AFTER</h2>
-<p class="sub">Yang ditampilkan di sini harus berasal dari candidate Medicine. Executor tidak membuat kode baru dan tidak mengarang source.</p>
-<div class="codebox"><div class="codehead"><span>BEFORE — TARGET SAAT INI</span><button class="copy" id="copyGateBefore">📋 COPY</button></div><pre id="gateBefore">Belum ada candidate.</pre></div>
-<div class="codebox" style="margin-top:10px"><div class="codehead"><span>AFTER — SOLUSI DARI MEDICINE</span><button class="copy solution" id="copyGateAfter">📋 COPY SOLUSI</button></div><pre id="gateAfter">Belum ada candidate.</pre></div>
-<div class="grid" style="margin-top:10px">
-<div class="item"><div class="label">Operation</div><div class="value code" id="gateOperation">-</div></div>
-<div class="item"><div class="label">Fingerprint</div><div class="value code" id="gateFingerprint">-</div></div>
-<div class="item"><div class="label">Evidence</div><div class="value" id="gateEvidence">-</div></div>
-</div>
-</section>
-<section class="card gate-card">
-<h2>👤 HUMAN GATE</h2>
-<p class="sub">Jika keputusan Executor <b>VALID</b>, manusia tetap melakukan copy ke target file dan menyetujui perubahan. Executor tidak melakukan source write dari candidate lintas halaman.</p>
-<div class="banner warn" id="humanGateBanner">Belum ada candidate yang lolos review.</div>
-<div class="actions"><button class="success" id="copyApprovedSolution" disabled>📋 COPY SOLUSI VALID</button></div>
-</section>
-<section class="card advanced">
-<h2>Audit / Runtime History</h2>
-<p class="sub">Riwayat hanya mencatat perjalanan nerve, investigation, candidate dan hasil deterministic review.</p>
-<pre id="history">Belum ada audit.</pre>
-</section>
-</main>
+<div class="codebox" style="margin-top:10px"><div class="codehead"><span>ISI SOURCE INTERNAL</span><button class="copy" data-copy="sourceText">📋 COPY CODE</button></div><textarea class="code" id="sourceText" spellcheck="false">// CIKUR GO Internal Demo Config
+const STATUS_MODE = "STABLE_OFFLINE";
+const ROUTE_VERSION = "v3.0.0";
+</textarea></div>
+<div class="actions"><button class="success" id="saveSource">Simpan Source Internal</button><button class="secondary" id="loadSource">Muat Source</button><button class="secondary" id="importFile">Import File</button><button class="secondary" id="bindFile">Hubungkan File Lokal</button><input hidden="" id="fileInput" type="file"/></div>
+<div class="small" id="sourceInfo" style="margin-top:8px">Belum membaca source.</div>
+</section><section class="card advanced">
+<h2>Deterministic Patch Test</h2>
+<p class="sub">Alur nyata: Request → Approval Gate → Fingerprint → Exact Patch → Diff → Validation → Persistence → Read-back Verification.</p>
+<div class="codebox"><div class="codehead"><span>EXACT TARGET / BEFORE</span><button class="copy" data-copy="targetBefore">📋 COPY CODE</button></div><textarea class="code" id="targetBefore" spellcheck="false">const STATUS_MODE = "STABLE_OFFLINE";</textarea></div>
+<div class="codebox" style="margin-top:10px"><div class="codehead"><span>SOLUTION / AFTER</span><button class="copy solution" data-copy="targetAfter">📋 COPY SOLUSI</button></div><textarea class="code" id="targetAfter" spellcheck="false">const STATUS_MODE = "SECURE_ACTIVE";</textarea></div>
+<div class="actions"><button class="success" id="runTest">Jalankan Test APPROVED</button><button class="secondary" id="resetDemo">Reset Demo Source</button></div>
+</section><section class="card advanced"><h2>Internal Sources</h2><pre id="sources">Memuat...</pre></section><section class="card advanced"><h2>Audit / Runtime History</h2><pre id="history">Belum ada audit.</pre></section></main>
 <script src="./bcgo-executor-core.js?v=3.2.0"></script>
 <script src="./bcgo-executor.js?v=3.2.0"></script>
 <script>
@@ -148,15 +151,17 @@ button{background:#172554;color:#f8fafc;border:1px solid #334155}.secondary{back
     }
     const s=e.getStatus();
     set("engine",s.engine); set("version",s.version); set("status",s.status); set("core",s.coreReady?"READY":"OFFLINE");
-    set("persistence",s.persistenceReady?"AUDIT / INTERNAL":"UNAVAILABLE"); set("external","NONE");
+    set("persistence",s.persistence ? s.persistence.mode+" / VERIFIED" : (s.persistenceReady?"INTERNAL READY":"UNAVAILABLE")); set("external","NONE");
     const ready=s.coreReady && s.persistenceReady;
     $("systemBanner").className="banner "+(ready?"live":"warn");
-    $("systemBanner").textContent=ready?"Deterministic Review Gate aktif. Realtime BCGO ↔ Medicine ↔ Executor berjalan tanpa refresh manual.":"Executor belum lengkap; review gate belum siap.";
-    if($("history")) $("history").textContent=s.history?.length?pretty(s.history):"Belum ada audit.";
-    if($("result")) $("result").textContent=s.lastResult?pretty(s.lastResult):"Belum ada execution.";
+    $("systemBanner").textContent=ready?"Executor internal aktif. Self-test dan persistence internal tersedia.":"Executor belum lengkap; persistence browser tidak tersedia.";
+    $("result").textContent=s.lastResult?pretty(s.lastResult):"Belum ada execution.";
+    $("history").textContent=s.history?.length?pretty(s.history):"Belum ada audit.";
+    if(s.source){ set("sourceFingerprint",s.source.fingerprint); set("sourceInfo",`${s.source.sourceId||s.source.file} • ${s.source.origin||"INTERNAL"} • ${s.source.updatedAt||"-"}`); }
     renderNerve(s.nerve);
     renderInvestigation(s.investigation);
     renderIncomingReview(s);
+    refreshSources();
   }
 
   function renderInvestigation(i) {
@@ -180,36 +185,18 @@ button{background:#172554;color:#f8fafc;border:1px solid #334155}.secondary{back
   function renderIncomingReview(s) {
     const r=s?.executionReview || null;
     const c=s?.incomingCandidate || null;
-    const req=c?.request || c || s?.request || null;
     const status=r?.status || "WAITING";
     const ok=status === "VALID";
     const reviewing=status === "REVIEWING";
-    const file=r?.file||req?.file||c?.file||"-";
-    const location=(req?.location || c?.location) || (req?.line != null ? `line ${req.line}${req?.column != null ? `:${req.column}` : ""}` : "-");
     set("incomingReviewStatus", reviewing?"REVIEWING":(ok?"VALID":status));
-    set("incomingCase", [r?.caseId||req?.caseId||c?.caseId||"-", r?.proposalId||req?.proposalId||c?.proposalId||"-"].join(" / "));
-    set("incomingFile",file);
-    set("incomingFingerprint", req?.expectedFingerprint||c?.fingerprint||"-");
+    set("incomingCase", [r?.caseId||c?.caseId||"-", r?.proposalId||c?.proposalId||"-"].join(" / "));
+    set("incomingFile", r?.file||c?.file||c?.request?.file||"-");
+    set("incomingFingerprint", c?.fingerprint||c?.request?.expectedFingerprint||"-");
     set("incomingTransport", r?.source||r?.transport||"CROSS_PAGE");
-    if($("incomingReviewStatus")) $("incomingReviewStatus").className="value "+(ok?"ok":reviewing?"warn":"fail");
-    if($("incomingReviewBanner")){ $("incomingReviewBanner").className="banner "+(ok?"live":reviewing?"warn":r?"fail":""); $("incomingReviewBanner").textContent=ok?"REPAIR CANDIDATE VALID — menunggu tindakan manusia.":reviewing?"Candidate diterima. Executor sedang melakukan deterministic review.":r?`Candidate ditolak: ${r.reason||"REVIEW_REJECTED"}`:"Menunggu candidate dari Medicine..."; }
-    if($("incomingCandidate")) $("incomingCandidate").textContent=c?pretty({file,location,before:req?.before,after:req?.after,fingerprint:req?.expectedFingerprint||c?.fingerprint,operation:req?.operation,evidence:req?.evidence}):"Belum ada candidate.";
-    set("gateCase", [r?.caseId||req?.caseId||c?.caseId||"-", r?.proposalId||req?.proposalId||c?.proposalId||"-"].join(" / "));
-    set("gateDecision", ok?"VALID":reviewing?"REVIEWING":status);
-    set("gateSource", req?.sourceReference || req?.sourceFile || c?.sourceFile || req?.referenceFile || "-");
-    set("gateTarget", file);
-    set("gateLocation", location);
-    set("gateOperation", req?.operation || c?.operation || "-");
-    set("gateFingerprint", req?.expectedFingerprint || c?.fingerprint || "-");
-    set("gateEvidence", r?.validation ? "Deterministic checks passed" : (Array.isArray(req?.evidence) ? `${req.evidence.length} evidence` : "-"));
-    set("gateBefore", req?.before || c?.before || "Belum ada candidate.");
-    set("gateAfter", req?.after || c?.after || "Belum ada candidate.");
-    if($("gateDecision")) $("gateDecision").className="value "+(ok?"ok":reviewing?"warn":"fail");
-    if($("gateBanner")){ $("gateBanner").className="banner "+(ok?"live":reviewing?"warn":r?"fail":""); $("gateBanner").textContent=ok?"VALID — candidate terikat pada evidence/source dan lolos deterministic review. Tidak ada source write otomatis.":reviewing?"REVIEWING — Executor sedang memeriksa fingerprint, operasi exact dan source.":r?`REJECTED — ${r.reason||"candidate tidak memenuhi gate"}`:"Menunggu candidate repair dari Medicine..."; }
-    if($("humanGateBanner")) $("humanGateBanner").textContent=ok?"Executor menyatakan VALID. Sekarang manusia menyalin AFTER ke target file lalu melakukan persetujuan di alur Medicine.":"Belum ada candidate yang lolos review.";
-    if($("copyApprovedSolution")){ $("copyApprovedSolution").disabled=!ok || !(req?.after||c?.after); $("copyApprovedSolution").onclick=async()=>{ try{ await navigator.clipboard.writeText(req?.after||c?.after||""); $("humanGateBanner").textContent="Solusi VALID sudah disalin ke clipboard. Perubahan source tetap manual."; }catch{ $("humanGateBanner").textContent="Clipboard tidak tersedia. Gunakan blok AFTER untuk menyalin manual."; } }; }
-    if($("copyGateBefore")) $("copyGateBefore").onclick=async()=>{try{await navigator.clipboard.writeText(req?.before||c?.before||"")}catch{}};
-    if($("copyGateAfter")) $("copyGateAfter").onclick=async()=>{try{await navigator.clipboard.writeText(req?.after||c?.after||"")}catch{}};
+    $("incomingReviewStatus").className="value "+(ok?"ok":reviewing?"warn":"fail");
+    $("incomingReviewBanner").className="banner "+(ok?"live":reviewing?"warn":r?"fail":"");
+    $("incomingReviewBanner").textContent=ok?"REPAIR CANDIDATE VALID — tidak dieksekusi tanpa Human Approval.":reviewing?"Candidate diterima. Executor sedang memeriksa source, fingerprint dan operasi.":r?`Candidate ditolak: ${r.reason||"REVIEW_REJECTED"}`:"Menunggu candidate dari Medicine...";
+    $("incomingCandidate").textContent=c?pretty({file:c.file||c.request?.file,location:c.location,before:c.before,after:c.after,fingerprint:c.fingerprint,operation:c.operation,evidence:c.evidence}):"Belum ada candidate.";
   }
 
   function renderNerve(n) {
@@ -227,14 +214,28 @@ button{background:#172554;color:#f8fafc;border:1px solid #334155}.secondary{back
     $("nerveBanner").textContent=live?"SARAF BCGO TERHUBUNG — pulsa state nyata diterima real-time.":stale?"Pulsa BCGO terakhir sudah kedaluwarsa. Lampu ditahan AMBER sampai pulsa baru diterima.":"Belum ada pulsa BCGO. Lampu MERAH; tidak ada klaim koneksi.";
   }
 
+  async function refreshSources(){
+    const e=window.BCGOInternalExecutor;if(!e)return;
+    try{const list=await e.listSources(); $("sources").textContent=list.length?pretty(list.map(x=>({sourceId:x.sourceId,file:x.file,fingerprint:x.fingerprint,updatedAt:x.updatedAt,origin:x.origin}))):"Belum ada source tersimpan.";}catch(err){$("sources").textContent="Gagal membaca IndexedDB: "+err.message;}
+  }
+
   async function copyFrom(id,btn){
     const el=$(id);if(!el)return;
     try{await navigator.clipboard.writeText(el.value??el.textContent??"");const old=btn.textContent;btn.textContent="✓ TERSALIN";setTimeout(()=>btn.textContent=old,1200);}catch{alert("Clipboard ditolak browser. Silakan salin manual.");}
   }
   document.querySelectorAll("[data-copy]").forEach(btn=>btn.addEventListener("click",()=>copyFrom(btn.dataset.copy,btn)));
 
+  $("saveSource").addEventListener("click",async()=>{const e=window.BCGOInternalExecutor;if(!e)return;try{const r=await e.registerSource($("sourceId").value.trim(),$("sourceText").value,{file:$("sourceId").value.trim(),origin:"CONTROL_PANEL"});set("sourceFingerprint",r.fingerprint);set("sourceInfo",`${r.sourceId} • ${r.origin} • ${r.updatedAt}`);render();}catch(err){alert("Gagal menyimpan source: "+err.message);}});
+  $("loadSource").addEventListener("click",async()=>{const e=window.BCGOInternalExecutor;if(!e)return;const id=$("sourceId").value.trim();try{const r=await e.getSource(id);if(!r){alert("Source belum tersimpan: "+id);return;}$("sourceText").value=r.content;set("sourceFingerprint",r.fingerprint);set("sourceInfo",`${r.sourceId} • ${r.origin||"INTERNAL"}`);}catch(err){alert("Gagal memuat source: "+err.message);}});
+  $("importFile").addEventListener("click",()=>$("fileInput").click());
+  $("fileInput").addEventListener("change",async ev=>{const file=ev.target.files?.[0];if(!file)return;const text=await file.text();$("sourceId").value=file.name;$("sourceText").value=text;const e=window.BCGOInternalExecutor;try{const r=await e.registerSource(file.name,text,{file:file.name,origin:"IMPORTED_FILE"});set("sourceFingerprint",r.fingerprint);set("sourceInfo",`${file.name} • IMPORTED_FILE • ${r.updatedAt}`);render();}catch(err){alert("Import gagal: "+err.message);}});
+  $("bindFile").addEventListener("click",async()=>{const e=window.BCGOInternalExecutor;if(!e)return;if(typeof window.showOpenFilePicker!=="function"){alert("Browser ini tidak menyediakan File System Access API. Gunakan Import File; source tetap dapat diproses dan disimpan di IndexedDB internal.");return;}try{const [handle]=await window.showOpenFilePicker({multiple:false});const file=await handle.getFile();await e.bindLocalFile(file.name,handle);const r=await e.getSource(file.name);$("sourceId").value=file.name;$("sourceText").value=r?.content||await file.text();set("sourceFingerprint",r?.fingerprint||"-");set("sourceInfo",`${file.name} • LOCAL_FILE_HANDLE`);render();}catch(err){if(err?.name!=="AbortError")alert("Gagal menghubungkan file lokal: "+err.message);}});
+
+  $("runTest").addEventListener("click",async()=>{const e=window.BCGOInternalExecutor;if(!e){alert("Executor belum siap.");return;}const request={requestId:"REQ_"+Date.now(),caseId:"CASE_DEMO_001",proposalId:"PROP_DEMO_001",planId:"PLAN_DEMO_001",sourceId:$("sourceId").value.trim()||"demo-config.js",file:$("sourceId").value.trim()||"demo-config.js",operation:"REPLACE_EXACT",before:$("targetBefore").value,after:$("targetAfter").value,approval:"APPROVED"};$("result").textContent="Menjalankan pipeline internal...";try{const r=await e.execute(request);render();}catch(err){$("result").textContent="Execution error: "+err.message;}});
+  $("resetDemo").addEventListener("click",async()=>{const e=window.BCGOInternalExecutor;if(!e)return;const id="demo-config.js";const text='// CIKUR GO Internal Demo Config\nconst STATUS_MODE = "STABLE_OFFLINE";\nconst ROUTE_VERSION = "v3.0.0";\n';try{const r=await e.registerSource(id,text,{file:id,origin:"DEMO_RESET"});$("sourceId").value=id;$("sourceText").value=text;$("targetBefore").value='const STATUS_MODE = "STABLE_OFFLINE";';set("sourceFingerprint",r.fingerprint);render();}catch(err){alert("Reset demo gagal: "+err.message);}});
+  $("refresh").addEventListener("click",render); $("reset").addEventListener("click",()=>{window.BCGOInternalExecutor?.reset();render();});
   window.addEventListener("bcgo-executor-state",render); window.addEventListener("bcgo-executor-core-ready",render); window.addEventListener("bcgo-executor-ready",render); window.addEventListener("bcgo-executor-nerve",render);
-  setInterval(render,1500); render();
+  setInterval(render,3000); render();
 })();
 </script>
 </body>

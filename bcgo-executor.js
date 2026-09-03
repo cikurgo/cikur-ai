@@ -362,32 +362,6 @@
     return state.nerve;
   }
 
-  function recoverBridgeCaches() {
-    try {
-      const cached = localStorage.getItem(NERVE_STATE_KEY);
-      if (cached) updateNerve(JSON.parse(cached), "LOCAL_STORAGE_RECOVERY");
-    } catch {}
-    if (EXECUTOR_ROLE !== "STANDALONE") return;
-    try {
-      const investigation = localStorage.getItem(INVESTIGATION_KEY);
-      if (investigation) handleInvestigationRequest(JSON.parse(investigation), "LOCAL_STORAGE_RECOVERY");
-    } catch {}
-    try {
-      const candidate = localStorage.getItem(REPAIR_CANDIDATE_KEY);
-      if (candidate) handleRepairCandidate(JSON.parse(candidate), "LOCAL_STORAGE_RECOVERY").catch(() => {});
-    } catch {}
-  }
-
-  function startBridgeRecovery() {
-    if (bridgeRecoveryTimer !== null) return;
-    bridgeRecoveryTimer = setInterval(recoverBridgeCaches, 3000);
-    window.addEventListener("pageshow", recoverBridgeCaches);
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") recoverBridgeCaches();
-    });
-    recoverBridgeCaches();
-  }
-
   function startNerveMonitor() {
     try {
       nerveChannel?.addEventListener("message", event => updateNerve(event.data, "BROADCAST_CHANNEL"));
@@ -409,7 +383,6 @@
   }
 
   const sourceHandles = new Map();
-  let bridgeRecoveryTimer = null;
 
   async function registerSource(sourceId, text, metadata = {}) {
     if (!sourceId) throw new Error("SOURCE_ID_REQUIRED");
@@ -932,11 +905,24 @@
   });
 
   function boot() {
-    startBridgeRecovery();
     startNerveMonitor();
     startInvestigationBridge();
     startRepairCandidateBridge();
     setStatus(core() ? STATUS.READY : STATUS.OFFLINE);
+    // Inisialisasi demo source otomatis agar langsung siap uji coba
+    setTimeout(async () => {
+      try {
+        const existing = await getSource("demo-config.js");
+        if (!existing) {
+          await registerSource("demo-config.js", "// CIKUR GO Internal Demo Config\nconst STATUS_MODE = \"STABLE_OFFLINE\";\nconst ROUTE_VERSION = \"v3.0.0\";\n", { file: "demo-config.js" });
+        } else {
+          state.source = existing;
+        }
+        emit();
+      } catch (e) {
+        console.error("Auto init demo source error:", e);
+      }
+    }, 200);
   }
 
   if (core()) boot();
