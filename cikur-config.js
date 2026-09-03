@@ -3,7 +3,7 @@
 // Firebase Authentication + Firestore
 // ==========================================
 
-import { initializeApp, getApps, getApp } from "./lib/firebase/firebase-app.js";
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 
 import {
     getFirestore,
@@ -19,7 +19,7 @@ import {
     doc,
     getDoc,
     serverTimestamp
-} from "./lib/firebase/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 import {
     getAuth,
@@ -30,7 +30,7 @@ import {
     EmailAuthProvider,
     linkWithCredential,
     fetchSignInMethodsForEmail
-} from "./lib/firebase/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 
 // ==========================================
@@ -53,8 +53,7 @@ const firebaseConfig = {
 
 // Gunakan Firebase App DEFAULT yang sudah ada bila halaman lain sudah menginisialisasikannya.
 // Ini mencegah error app/duplicate-app saat beberapa modul memakai konfigurasi yang sama.
-const existingApps = getApps();
-const app = existingApps.some(existingApp => existingApp.name === "[DEFAULT]")
+const app = getApps().some(existingApp => existingApp.name === "[DEFAULT]")
     ? getApp()
     : initializeApp(firebaseConfig);
 
