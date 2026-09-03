@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#0b1220">
     <title>BCGO Intelligent Control Center - CIKUR GO</title>
 
+    <script type="module" src="cikur-config.js"></script>
     <script src="bcgo-engine.js"></script>
 
     <style>
@@ -39,8 +40,8 @@
         *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
         html{scroll-behavior:smooth}
         body{background:var(--bg);color:var(--ink);min-height:100vh}
-        body.auth-pending .auth-gate{visibility:visible;opacity:1;pointer-events:auto}
-        body.auth-pending .app-shell{visibility:hidden;opacity:0;pointer-events:none}
+        body.auth-pending .auth-gate{visibility:hidden;opacity:0;pointer-events:none}
+        body.auth-pending .app-shell{visibility:hidden;opacity:0}
         body.auth-ready .auth-gate,body.auth-ready .app-shell{visibility:visible;opacity:1;transition:opacity .12s ease}
         button,input{font:inherit}
         button{cursor:pointer}
@@ -820,16 +821,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script>
-    // Opaque blank-page prevention: auth form stays visible while the security
-    // module boots. The dashboard itself remains hidden until auth is verified.
-    window.addEventListener("error", function(event){
-        if(event?.filename && event.filename.includes("firebase")){
-            console.error("BCGO Admin security module error:", event.error || event.message);
-        }
-    });
-</script>
-
 <script type="module">
     // Firebase App/Authentication/Firestore dipusatkan di cikur-config.js.
     // Modul ini hanya memakai koneksi yang sama, sehingga tidak membuat
@@ -838,11 +829,11 @@
     import {
         collection, onSnapshot, query,
         doc, updateDoc, serverTimestamp, getDoc, setDoc
-    } from "./lib/firebase/firebase-firestore.js";
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
     import {
         onAuthStateChanged, signInWithEmailAndPassword,
         createUserWithEmailAndPassword, signOut
-    } from "./lib/firebase/firebase-auth.js";
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     let currentUser = null;
     let authMode = "login";
     let adminVerified = false;
@@ -859,22 +850,6 @@
     let categoryCounts = { agent: 0, resto: 0, driver: 0 };
     let lastAnalysis = { low: 0, review: 0, high: 0 };
     let customerPresenceTimer = null;
-
-    function stopCustomerPresenceTimer(){
-        if(customerPresenceTimer !== null){
-            clearInterval(customerPresenceTimer);
-            customerPresenceTimer = null;
-        }
-    }
-
-    function startCustomerPresenceTimer(){
-        stopCustomerPresenceTimer();
-        customerPresenceTimer = setInterval(() => {
-            if(adminVerified && Object.keys(cachedCustomers).length){
-                renderCustomerData();
-            }
-        }, 30000);
-    }
 
     function updateGreeting(){
         const hour = new Date().getHours();
@@ -896,11 +871,6 @@
     function setAuthReady(){
         document.body.classList.remove("auth-pending");
         document.body.classList.add("auth-ready");
-    }
-
-    function showLoginGate(){
-        document.getElementById("authGate").classList.remove("hidden");
-        document.getElementById("pendingLock").classList.remove("show");
     }
 
     window.showAuthMode = function(mode){
@@ -961,7 +931,6 @@
         document.getElementById("userEmail").textContent = user.email || "Admin";
         loadAdminData("agent");
         loadCustomerData();
-        startCustomerPresenceTimer();
     }
 
     function lockPending(user){
@@ -980,18 +949,12 @@
         cachedApplications = {};
         cachedCustomers = {};
         adminVerified = false;
-        stopCustomerPresenceTimer();
         await signOut(auth);
         document.getElementById("pendingLock").classList.remove("show");
         document.getElementById("authGate").classList.remove("hidden");
         document.getElementById("authForm").reset();
         window.showAuthMode("login");
     };
-
-    // Login tetap memiliki jalur verifikasi langsung seperti baseline yang sudah terbukti berjalan.
-    // onAuthStateChanged() hanya menangani pemulihan sesi/perubahan auth yang terjadi di luar submit login.
-    let authTransition = 0;
-    let explicitAuthAction = false;
 
     document.getElementById("authForm").addEventListener("submit", async function(e){
         e.preventDefault();
@@ -1005,8 +968,6 @@
         }
         submit.disabled = true;
         hideAuthMessage();
-        explicitAuthAction = true;
-        const transition = ++authTransition;
         try{
             if(authMode === "register"){
                 const cred = await createUserWithEmailAndPassword(auth, email, password);
@@ -1022,38 +983,23 @@
                 window.showAuthMode("login");
             }else{
                 const cred = await signInWithEmailAndPassword(auth, email, password);
-                if(transition !== authTransition || auth.currentUser?.uid !== cred.user.uid){
-                    return;
-                }
                 const approved = await verifyAdmin(cred.user);
-                if(transition !== authTransition || auth.currentUser?.uid !== cred.user.uid){
-                    return;
-                }
-                if(approved){
-                    enterDashboard(cred.user);
-                }else{
+                if(!approved){
                     await signOut(auth);
                     lockPending(cred.user);
+                }else{
+                    enterDashboard(cred.user);
                 }
-                setAuthReady();
             }
         }catch(error){
             console.error("Authentication error:", error);
             authMessage(friendlyAuthError(error));
         }finally{
-            explicitAuthAction = false;
             submit.disabled = false;
         }
     });
 
     onAuthStateChanged(auth, async user => {
-        const transition = ++authTransition;
-
-        if(explicitAuthAction){
-            // Submit login/register menangani hasil auth sendiri.
-            return;
-        }
-
         if(!user){
             currentUser = null;
             adminVerified = false;
@@ -1061,19 +1007,11 @@
             if(unsubscribeCustomerListener) unsubscribeCustomerListener();
             unsubscribeListener = null;
             unsubscribeCustomerListener = null;
-            stopCustomerPresenceTimer();
-            showLoginGate();
+            document.getElementById("authGate").classList.remove("hidden");
             setAuthReady();
             return;
         }
-
         const approved = await verifyAdmin(user);
-
-        // Abaikan hasil lama jika sesi berubah selama verifikasi.
-        if(explicitAuthAction || transition !== authTransition || auth.currentUser?.uid !== user.uid){
-            return;
-        }
-
         if(approved) enterDashboard(user);
         else lockPending(user);
         setAuthReady();
