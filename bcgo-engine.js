@@ -24,11 +24,6 @@
 
 "use strict";
 
-if (window.__CIKUR_BCGO_ENGINE_LOADED__) {
-    console.warn("[BCGO ENGINE] Duplicate load diabaikan.");
-} else {
-    window.__CIKUR_BCGO_ENGINE_LOADED__ = true;
-
 /* ============================================================
    BCGO CORE CONFIGURATION
 ============================================================ */
@@ -901,4 +896,4 @@ if (typeof window !== "undefined") {
         ready: true
     };
 }
-}
+
