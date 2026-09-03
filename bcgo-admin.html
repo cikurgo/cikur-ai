@@ -988,6 +988,11 @@
         window.showAuthMode("login");
     };
 
+    // Login tetap memiliki jalur verifikasi langsung seperti baseline yang sudah terbukti berjalan.
+    // onAuthStateChanged() hanya menangani pemulihan sesi/perubahan auth yang terjadi di luar submit login.
+    let authTransition = 0;
+    let explicitAuthAction = false;
+
     document.getElementById("authForm").addEventListener("submit", async function(e){
         e.preventDefault();
         const email = document.getElementById("authEmail").value.trim();
@@ -1000,6 +1005,8 @@
         }
         submit.disabled = true;
         hideAuthMessage();
+        explicitAuthAction = true;
+        const transition = ++authTransition;
         try{
             if(authMode === "register"){
                 const cred = await createUserWithEmailAndPassword(auth, email, password);
@@ -1014,23 +1021,38 @@
                 document.getElementById("authForm").reset();
                 window.showAuthMode("login");
             }else{
-                // Satu-satunya pemilik transisi sesi adalah onAuthStateChanged().
-                // Handler login hanya melakukan sign-in; ini mencegah dua jalur
-                // verify/enter/lock berjalan bersamaan.
-                await signInWithEmailAndPassword(auth, email, password);
+                const cred = await signInWithEmailAndPassword(auth, email, password);
+                if(transition !== authTransition || auth.currentUser?.uid !== cred.user.uid){
+                    return;
+                }
+                const approved = await verifyAdmin(cred.user);
+                if(transition !== authTransition || auth.currentUser?.uid !== cred.user.uid){
+                    return;
+                }
+                if(approved){
+                    enterDashboard(cred.user);
+                }else{
+                    await signOut(auth);
+                    lockPending(cred.user);
+                }
+                setAuthReady();
             }
         }catch(error){
             console.error("Authentication error:", error);
             authMessage(friendlyAuthError(error));
         }finally{
+            explicitAuthAction = false;
             submit.disabled = false;
         }
     });
 
-    let authTransition = 0;
-
     onAuthStateChanged(auth, async user => {
         const transition = ++authTransition;
+
+        if(explicitAuthAction){
+            // Submit login/register menangani hasil auth sendiri.
+            return;
+        }
 
         if(!user){
             currentUser = null;
@@ -1047,8 +1069,8 @@
 
         const approved = await verifyAdmin(user);
 
-        // Abaikan hasil lama jika sesi sudah berubah selama verifikasi.
-        if(transition !== authTransition || auth.currentUser?.uid !== user.uid){
+        // Abaikan hasil lama jika sesi berubah selama verifikasi.
+        if(explicitAuthAction || transition !== authTransition || auth.currentUser?.uid !== user.uid){
             return;
         }
 
