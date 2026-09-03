@@ -6,7 +6,6 @@
     <meta name="theme-color" content="#0b1220">
     <title>BCGO Intelligent Control Center - CIKUR GO</title>
 
-    <script type="module" src="cikur-config.js"></script>
     <script src="bcgo-engine.js"></script>
 
     <style>
@@ -40,8 +39,8 @@
         *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
         html{scroll-behavior:smooth}
         body{background:var(--bg);color:var(--ink);min-height:100vh}
-        body.auth-pending .auth-gate{visibility:hidden;opacity:0;pointer-events:none}
-        body.auth-pending .app-shell{visibility:hidden;opacity:0}
+        body.auth-pending .auth-gate{visibility:visible;opacity:1;pointer-events:auto}
+        body.auth-pending .app-shell{visibility:hidden;opacity:0;pointer-events:none}
         body.auth-ready .auth-gate,body.auth-ready .app-shell{visibility:visible;opacity:1;transition:opacity .12s ease}
         button,input{font:inherit}
         button{cursor:pointer}
@@ -821,6 +820,16 @@
 
 <div class="toast" id="toast"></div>
 
+<script>
+    // Opaque blank-page prevention: auth form stays visible while the security
+    // module boots. The dashboard itself remains hidden until auth is verified.
+    window.addEventListener("error", function(event){
+        if(event?.filename && event.filename.includes("firebase")){
+            console.error("BCGO Admin security module error:", event.error || event.message);
+        }
+    });
+</script>
+
 <script type="module">
     // Firebase App/Authentication/Firestore dipusatkan di cikur-config.js.
     // Modul ini hanya memakai koneksi yang sama, sehingga tidak membuat
@@ -851,6 +860,22 @@
     let lastAnalysis = { low: 0, review: 0, high: 0 };
     let customerPresenceTimer = null;
 
+    function stopCustomerPresenceTimer(){
+        if(customerPresenceTimer !== null){
+            clearInterval(customerPresenceTimer);
+            customerPresenceTimer = null;
+        }
+    }
+
+    function startCustomerPresenceTimer(){
+        stopCustomerPresenceTimer();
+        customerPresenceTimer = setInterval(() => {
+            if(adminVerified && Object.keys(cachedCustomers).length){
+                renderCustomerData();
+            }
+        }, 30000);
+    }
+
     function updateGreeting(){
         const hour = new Date().getHours();
         const greeting =
@@ -871,6 +896,11 @@
     function setAuthReady(){
         document.body.classList.remove("auth-pending");
         document.body.classList.add("auth-ready");
+    }
+
+    function showLoginGate(){
+        document.getElementById("authGate").classList.remove("hidden");
+        document.getElementById("pendingLock").classList.remove("show");
     }
 
     window.showAuthMode = function(mode){
@@ -931,6 +961,7 @@
         document.getElementById("userEmail").textContent = user.email || "Admin";
         loadAdminData("agent");
         loadCustomerData();
+        startCustomerPresenceTimer();
     }
 
     function lockPending(user){
@@ -949,6 +980,7 @@
         cachedApplications = {};
         cachedCustomers = {};
         adminVerified = false;
+        stopCustomerPresenceTimer();
         await signOut(auth);
         document.getElementById("pendingLock").classList.remove("show");
         document.getElementById("authGate").classList.remove("hidden");
@@ -982,14 +1014,10 @@
                 document.getElementById("authForm").reset();
                 window.showAuthMode("login");
             }else{
-                const cred = await signInWithEmailAndPassword(auth, email, password);
-                const approved = await verifyAdmin(cred.user);
-                if(!approved){
-                    await signOut(auth);
-                    lockPending(cred.user);
-                }else{
-                    enterDashboard(cred.user);
-                }
+                // Satu-satunya pemilik transisi sesi adalah onAuthStateChanged().
+                // Handler login hanya melakukan sign-in; ini mencegah dua jalur
+                // verify/enter/lock berjalan bersamaan.
+                await signInWithEmailAndPassword(auth, email, password);
             }
         }catch(error){
             console.error("Authentication error:", error);
@@ -999,7 +1027,11 @@
         }
     });
 
+    let authTransition = 0;
+
     onAuthStateChanged(auth, async user => {
+        const transition = ++authTransition;
+
         if(!user){
             currentUser = null;
             adminVerified = false;
@@ -1007,11 +1039,19 @@
             if(unsubscribeCustomerListener) unsubscribeCustomerListener();
             unsubscribeListener = null;
             unsubscribeCustomerListener = null;
-            document.getElementById("authGate").classList.remove("hidden");
+            stopCustomerPresenceTimer();
+            showLoginGate();
             setAuthReady();
             return;
         }
+
         const approved = await verifyAdmin(user);
+
+        // Abaikan hasil lama jika sesi sudah berubah selama verifikasi.
+        if(transition !== authTransition || auth.currentUser?.uid !== user.uid){
+            return;
+        }
+
         if(approved) enterDashboard(user);
         else lockPending(user);
         setAuthReady();
