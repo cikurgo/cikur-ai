@@ -6,7 +6,32 @@
     <meta name="theme-color" content="#0b1220">
     <title>BCGO Intelligent Control Center - CIKUR GO</title>
 
-    <script type="module" src="cikur-config.js"></script>
+    <script>
+        /*
+         * ADMIN BOOT FAILSAFE
+         * Jangan biarkan kegagalan module/Firebase berubah menjadi layar putih.
+         * Tidak memakai layanan eksternal; hanya memberi diagnosa lokal di halaman.
+         */
+        (function(){
+            const state = window.__BCGO_ADMIN_BOOT__ = { ready:false, failed:false };
+            const timer = window.__BCGO_ADMIN_BOOT_TIMER__ = setTimeout(() => {
+                if (state.ready) return;
+                state.failed = true;
+                const box = document.getElementById("bootFailsafe");
+                const detail = document.getElementById("bootFailsafeDetail");
+                if (detail) {
+                    detail.textContent = "Modul admin belum selesai dimuat. Periksa koneksi dan pastikan cikur-config.js serta folder lib/firebase tersedia pada deployment yang sama.";
+                }
+                if (box) box.hidden = false;
+                document.body.classList.remove("auth-pending");
+                document.body.classList.add("auth-ready");
+            }, 8000);
+            window.__BCGO_ADMIN_MARK_READY__ = function(){
+                state.ready = true;
+                clearTimeout(timer);
+            };
+        })();
+    </script>
     <script src="bcgo-engine.js"></script>
 
     <style>
@@ -40,6 +65,12 @@
         *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
         html{scroll-behavior:smooth}
         body{background:var(--bg);color:var(--ink);min-height:100vh}
+        .boot-failsafe{position:fixed;inset:0;z-index:10000;background:rgba(7,16,31,.96);display:flex;align-items:center;justify-content:center;padding:22px;color:#fff}
+        .boot-failsafe[hidden]{display:none}
+        .boot-failsafe-card{width:min(520px,100%);background:#101a2d;border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+        .boot-failsafe-title{font-size:18px;font-weight:850;margin-bottom:8px}
+        .boot-failsafe-text{font-size:13px;line-height:1.6;color:#cbd5e1}
+        .boot-failsafe-code{margin-top:14px;padding:12px;border-radius:10px;background:#07101f;color:#f8fafc;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-word}
         body.auth-pending .auth-gate{visibility:hidden;opacity:0;pointer-events:none}
         body.auth-pending .app-shell{visibility:hidden;opacity:0}
         body.auth-ready .auth-gate,body.auth-ready .app-shell{visibility:visible;opacity:1;transition:opacity .12s ease}
@@ -396,6 +427,13 @@
 </head>
 
 <body class="auth-pending">
+<div class="boot-failsafe" id="bootFailsafe" hidden>
+    <div class="boot-failsafe-card">
+        <div class="boot-failsafe-title">BCGO Admin belum selesai memuat</div>
+        <div class="boot-failsafe-text" id="bootFailsafeDetail">Sistem sedang menunggu modul internal CIKUR GO.</div>
+        <div class="boot-failsafe-code">Tidak ada API/AI eksternal yang digunakan untuk pemulihan ini.</div>
+    </div>
+</div>
 <div class="auth-gate" id="authGate">
     <div class="auth-card">
         <div class="auth-brand">
@@ -834,6 +872,10 @@
         onAuthStateChanged, signInWithEmailAndPassword,
         createUserWithEmailAndPassword, signOut
     } from "./lib/firebase/firebase-auth.js";
+
+    // Semua import internal berhasil dievaluasi. Hentikan watchdog boot.
+    window.__BCGO_ADMIN_MARK_READY__?.();
+
     let currentUser = null;
     let authMode = "login";
     let adminVerified = false;
