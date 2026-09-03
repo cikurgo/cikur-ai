@@ -53,7 +53,8 @@ const firebaseConfig = {
 
 // Gunakan Firebase App DEFAULT yang sudah ada bila halaman lain sudah menginisialisasikannya.
 // Ini mencegah error app/duplicate-app saat beberapa modul memakai konfigurasi yang sama.
-const app = getApps().some(existingApp => existingApp.name === "[DEFAULT]")
+const existingApps = getApps();
+const app = existingApps.some(existingApp => existingApp.name === "[DEFAULT]")
     ? getApp()
     : initializeApp(firebaseConfig);
 

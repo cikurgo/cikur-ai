@@ -851,6 +851,22 @@
     let lastAnalysis = { low: 0, review: 0, high: 0 };
     let customerPresenceTimer = null;
 
+    function stopCustomerPresenceTimer(){
+        if(customerPresenceTimer !== null){
+            clearInterval(customerPresenceTimer);
+            customerPresenceTimer = null;
+        }
+    }
+
+    function startCustomerPresenceTimer(){
+        stopCustomerPresenceTimer();
+        customerPresenceTimer = setInterval(() => {
+            if(adminVerified && Object.keys(cachedCustomers).length) {
+                renderCustomerData();
+            }
+        }, 30000);
+    }
+
     function updateGreeting(){
         const hour = new Date().getHours();
         const greeting =
@@ -931,6 +947,7 @@
         document.getElementById("userEmail").textContent = user.email || "Admin";
         loadAdminData("agent");
         loadCustomerData();
+        startCustomerPresenceTimer();
     }
 
     function lockPending(user){
@@ -942,6 +959,7 @@
     }
 
     window.secureLogout = async function(){
+        stopCustomerPresenceTimer();
         if(unsubscribeListener) unsubscribeListener();
         if(unsubscribeCustomerListener) unsubscribeCustomerListener();
         unsubscribeListener = null;
@@ -982,14 +1000,10 @@
                 document.getElementById("authForm").reset();
                 window.showAuthMode("login");
             }else{
-                const cred = await signInWithEmailAndPassword(auth, email, password);
-                const approved = await verifyAdmin(cred.user);
-                if(!approved){
-                    await signOut(auth);
-                    lockPending(cred.user);
-                }else{
-                    enterDashboard(cred.user);
-                }
+                // Setelah signIn, satu-satunya pemilik transisi sesi adalah
+                // onAuthStateChanged di bawah. Ini mencegah verifikasi dan
+                // pembukaan listener Firestore dilakukan dua kali.
+                await signInWithEmailAndPassword(auth, email, password);
             }
         }catch(error){
             console.error("Authentication error:", error);
@@ -999,19 +1013,34 @@
         }
     });
 
+    let authTransition = 0;
+
     onAuthStateChanged(auth, async user => {
+        const transition = ++authTransition;
+
         if(!user){
+            stopCustomerPresenceTimer();
             currentUser = null;
             adminVerified = false;
             if(unsubscribeListener) unsubscribeListener();
             if(unsubscribeCustomerListener) unsubscribeCustomerListener();
             unsubscribeListener = null;
             unsubscribeCustomerListener = null;
+            cachedApplications = {};
+            cachedCustomers = {};
             document.getElementById("authGate").classList.remove("hidden");
+            document.getElementById("pendingLock").classList.remove("show");
             setAuthReady();
             return;
         }
+
         const approved = await verifyAdmin(user);
+
+        // Abaikan hasil verifikasi lama jika sesi sudah berubah.
+        if(transition !== authTransition || auth.currentUser?.uid !== user.uid){
+            return;
+        }
+
         if(approved) enterDashboard(user);
         else lockPending(user);
         setAuthReady();
@@ -1228,14 +1257,6 @@
             cachedCustomers = {};
             renderCustomerData();
         });
-    }
-
-    if(!customerPresenceTimer){
-        customerPresenceTimer = setInterval(() => {
-            if(adminVerified && Object.keys(cachedCustomers).length) {
-                renderCustomerData();
-            }
-        }, 30000);
     }
 
     function renderPartnerData(){

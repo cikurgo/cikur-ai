@@ -1450,8 +1450,6 @@ export function runAutonomousEngine(onCycleUpdate) {
     unsubscribeFirestore = null;
     unsubscribeSystemLogs = null;
     realtimeBusy = false;
-    if (sourceScanTimer) { clearTimeout(sourceScanTimer); sourceScanTimer = null; }
-    sourceScanGeneration++;
   }
 
   function startSystemLogs() {
