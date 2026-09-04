@@ -174,6 +174,12 @@ export function runAutonomousEngine(onCycleUpdate) {
     try { return JSON.parse(JSON.stringify(value)); } catch { return value; }
   }
 
+  function buildInternalAIHandoff(aiSnapshot) {
+    const r = aiSnapshot?.reasoning || {};
+    const g = aiSnapshot?.guardian || {};
+    return { version:aiSnapshot?.version||null, reasoningVersion:aiSnapshot?.reasoningVersion||null, knowledgeVersion:aiSnapshot?.knowledgeVersion||null, guardianVersion:aiSnapshot?.guardianVersion||null, signal:aiSnapshot?.signal||"UNKNOWN", classification:r.classification||"UNKNOWN", evidenceCount:Array.isArray(r.evidence)?r.evidence.length:0, independentEvidenceCount:Number(r.correlations?.independentEvidenceCount||0), hypotheses:Array.isArray(r.hypotheses)?r.hypotheses.slice(0,10):[], selectedHypothesisId:r.selectedHypothesisId||null, precisionGate:{pass:r.precisionGate?.pass===true,blockers:Array.isArray(r.precisionGate?.blockers)?r.precisionGate.blockers.slice(0,20):[]}, investigation:r.investigation||null, causalLinks:Array.isArray(r.causalLinks)?r.causalLinks.slice(0,30):[], guardian:{healthy:g.healthy===true,level:g.level||"UNKNOWN",issues:Array.isArray(g.issues)?g.issues.slice(0,10):[]}, at:aiSnapshot?.at||Date.now() };
+  }
+
   function publishBCGOStateToMedicine(snapshot) {
     const packet = {
       id: `BCGO-${Date.now()}-${state.cycle}-${Math.random().toString(36).slice(2,8)}`,
@@ -1194,6 +1200,11 @@ export function runAutonomousEngine(onCycleUpdate) {
       const status = failures.length ? 'DEGRADED' : actionable.length ? 'FINDINGS' : 'CLEAN';
       state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:crossFileFindings.slice(0,100),relations:relations.slice(0,200),relationSummary,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),sourceIntelligence:buildSourceIntelligence(scanned, latestSystemLogs),message:failures.length ? `Scanner selesai: ${files.length} source diproses, ${failures.length} source tidak terbaca.` : actionable.length ? `Scanner selesai: ${files.length} source dibaca; ${actionable.length} temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} source dibaca dan dianalisis tanpa temuan struktural/cross-file.` };
       recordEvent('SOURCE_SCAN_RESULT', state.sourceScan.message, actionable.length ? 'SYS_SOURCE_FINDINGS' : 'SYS_SOURCE_CLEAN');
+      try {
+        const aiSnapshot = internalAI.ingestBCGOState(safeClone(state));
+        state.internalAI = buildInternalAIHandoff(aiSnapshot);
+      } catch (error) { console.warn('CIKUR Internal AI source-scan intake error:', error); }
+      window.BCGO_STATE = safeClone(state);
       publishToUI(safeClone(state));
       publishBCGOStateToMedicine(safeClone(state));
     } finally { sourceScanBusy = false; }
@@ -1343,9 +1354,19 @@ export function runAutonomousEngine(onCycleUpdate) {
       state.lastTelemetryMessage = options.telemetry.message || null;
     }
 
-    const snapshot = safeClone(state);
+    let snapshot = safeClone(state);
     window.BCGO_STATE = snapshot;
-    try { internalAI.ingestBCGOState(snapshot); } catch (error) { console.warn("CIKUR Internal AI intake error:", error); }
+    try {
+      const aiSnapshot = internalAI.ingestBCGOState(snapshot);
+      state.internalAI = buildInternalAIHandoff(aiSnapshot);
+      snapshot = safeClone(state);
+      window.BCGO_STATE = snapshot;
+    } catch (error) {
+      state.internalAI = {version:null,signal:"AI_INTAKE_ERROR",classification:"ERROR",precisionGate:{pass:false,blockers:[`INTERNAL_AI_ERROR:${error?.message||String(error)}`]},at:Date.now()};
+      snapshot = safeClone(state);
+      window.BCGO_STATE = snapshot;
+      console.warn("CIKUR Internal AI intake error:", error);
+    }
     publishToUI(snapshot);
     publishBCGOStateToMedicine(snapshot);
   }
@@ -1613,8 +1634,13 @@ export function runAutonomousEngine(onCycleUpdate) {
     state.firestore = { ...firestore };
     state.connection = deriveConnection();
     window.BCGO_STATE = safeClone(state);
-    try { internalAI.ingestBCGOState(window.BCGO_STATE); } catch (error) { console.warn("CIKUR Internal AI intake error:", error); }
+    try {
+      const aiSnapshot = internalAI.ingestBCGOState(window.BCGO_STATE);
+      state.internalAI = buildInternalAIHandoff(aiSnapshot);
+      window.BCGO_STATE = safeClone(state);
+    } catch (error) { console.warn("CIKUR Internal AI intake error:", error); }
     publishToUI(safeClone(state));
+    publishBCGOStateToMedicine(safeClone(state));
   }
 
   function scheduleNext(delay) {
