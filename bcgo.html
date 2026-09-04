@@ -723,7 +723,8 @@ window.addEventListener("cikur-internal-ai-state", event => {
         const h = r.hypotheses?.[0];
         reasoningEl.textContent =
             `REASONING: ${r.classification || "UNKNOWN"} · evidence ${r.evidence?.length || 0} · hypotheses ${r.hypotheses?.length || 0} · gate ${r.precisionGate?.pass ? "PASS" : "BLOCKED"}`
-            + (h ? ` · top: ${String(h.claim).slice(0, 180)}` : "");
+            + (h ? ` · top: ${String(h.claim).slice(0, 180)}` : "")
+            + (snap.guardian ? ` · guardian ${snap.guardian.level}` : "");
     }
 });
 
@@ -737,6 +738,14 @@ window.addEventListener("cikur-internal-ai-reasoning", event => {
             `REASONING: ${d.classification || "UNKNOWN"} · evidence ${d.evidenceCount || 0} · hypotheses ${d.hypotheses?.length || 0} · gate ${d.precisionGate?.pass ? "PASS" : "BLOCKED"}`
             + (h ? ` · top: ${String(h.claim).slice(0, 180)}` : "");
     }
+});
+
+window.addEventListener("cikur-internal-ai-guardian", event => {
+    const g = event.detail || {};
+    const el = document.getElementById("internal-ai-status");
+    if (!el) return;
+    if (g.level === "NONE") return;
+    el.textContent += ` · GUARD ${g.level}`;
 });
 
 window.addEventListener("cikur-internal-ai-thought", event => {
