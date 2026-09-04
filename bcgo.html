@@ -199,15 +199,13 @@ body{font-family:'Inter',sans-serif}
             <div>
                 <div class="text-xs font-semibold text-indigo-300 uppercase tracking-wider">Komunikasi dengan BCGO</div>
                 <div class="text-[10px] text-slate-500 mt-1">Jawaban dibangun dari kondisi saraf aktual.</div>
-                <div id="internal-ai-status" class="mt-2 text-[9px] code-font text-cyan-300">INTERNAL AI: MENUNGGU IMPULS</div>
-                <div id="internal-ai-reasoning" class="mt-2 text-[9px] leading-4 text-slate-400">
-                    REASONING: menunggu evidence...
-                </div>
-                <div id="internal-ai-causal" class="mt-1 text-[9px] leading-4 text-slate-500">
-                    CAUSAL TRACE: menunggu hubungan sebab-akibat...
-                </div>
             </div>
             <span class="text-[10px] code-font text-indigo-400">BCGO::CHAT</span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-[9px] code-font">
+            <div id="internal-ai-status" class="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-cyan-300">INTERNAL AI: MENUNGGU</div>
+            <div id="internal-ai-reasoning" class="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-slate-400">REASONING: MENUNGGU</div>
+            <div id="internal-ai-investigation" class="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-slate-400">INVESTIGATION: MENUNGGU</div>
         </div>
 
         <div id="chat-feed" class="chat-scroll bg-slate-950 border border-slate-800 rounded-lg p-3 h-72 overflow-y-auto space-y-3">
@@ -232,7 +230,7 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=8.1.0';
+import { runAutonomousEngine } from './bcgo.js?v=9.0.0';
 
 const $ = id => document.getElementById(id);
 
@@ -699,80 +697,25 @@ runAutonomousEngine(state => {
         addChat('bcgo', `Kanal komunikasi aktif. Saya membaca BCGO_STATE yang sama dengan monitor. Saat ini saya berada di tahap ${state.step}, cycle #${state.cycle}. Silakan tanya apa yang sedang saya kerjakan.`);
     }
 });
-window.addEventListener("cikur-internal-ai-state", event => {
-    const snap = event.detail;
-    const el = document.getElementById("internal-ai-status");
-    const reasoningEl = document.getElementById("internal-ai-reasoning");
-    const causalEl = document.getElementById("internal-ai-causal");
-    if (!snap) return;
-    if (el) {
-        const label = {
-            STABLE:"STABLE",
-            ATTENTION:"ATTENTION",
-            REVIEW_REQUIRED:"REVIEW REQUIRED",
-            INFRASTRUCTURE_ERROR:"INFRASTRUCTURE ERROR",
-            REASONING_ACTIVE:"REASONING ACTIVE",
-            EVIDENCE_ACTIVE:"EVIDENCE ACTIVE",
-            CONTRADICTORY:"CONTRADICTORY"
-        }[snap.signal] || snap.signal;
-        el.textContent = `INTERNAL AI: ${label} · ${snap.telemetry?.step || "-"} · cycle #${snap.telemetry?.cycle ?? 0}`;
-        el.className = `mt-2 text-[9px] code-font ${
-            snap.signal === "STABLE" ? "text-emerald-300" :
-            snap.signal === "INFRASTRUCTURE_ERROR" || snap.signal === "CONTRADICTORY" ? "text-rose-300" :
-            "text-cyan-300"
-        }`;
-    }
-    if (reasoningEl && snap.reasoning) {
-        const r = snap.reasoning;
-        const h = r.hypotheses?.[0];
-        reasoningEl.textContent =
-            `REASONING: ${r.classification || "UNKNOWN"} · evidence ${r.evidence?.length || 0} · hypotheses ${r.hypotheses?.length || 0} · gate ${r.precisionGate?.pass ? "PASS" : "BLOCKED"}`
-            + (h ? ` · top: ${String(h.claim).slice(0, 180)}` : "")
-            + (snap.guardian ? ` · guardian ${snap.guardian.healthy ? "OK" : snap.guardian.level}` : "");
-        if (causalEl) {
-            const links = Array.isArray(r.causalLinks) ? r.causalLinks.filter(x => x?.from).slice(0, 2) : [];
-            causalEl.textContent = links.length
-                ? `CAUSAL TRACE: ${links.map(x => `${x.from} → ${x.relation}${x.verified ? " ✓" : " ?"}`).join(" · ")}`
-                : "CAUSAL TRACE: belum ada hubungan sebab-akibat yang terbukti.";
-        }
-    }
-});
+</script>
 
-let lastInternalThought = "";
-window.addEventListener("cikur-internal-ai-reasoning", event => {
-    const d = event.detail || {};
-    const h = d.hypotheses?.[0];
-    const reasoningEl = document.getElementById("internal-ai-reasoning");
-    const causalEl = document.getElementById("internal-ai-causal");
-    if (reasoningEl) {
-        reasoningEl.textContent =
-            `REASONING: ${d.classification || "UNKNOWN"} · evidence ${d.evidenceCount || 0} · hypotheses ${d.hypotheses?.length || 0} · gate ${d.precisionGate?.pass ? "PASS" : "BLOCKED"}`
-            + (h ? ` · top: ${String(h.claim).slice(0, 180)}` : "");
-    }
-    if (causalEl) {
-        const links = Array.isArray(d.causalLinks) ? d.causalLinks.filter(x => x?.from).slice(0, 2) : [];
-        causalEl.textContent = links.length
-            ? `CAUSAL TRACE: ${links.map(x => `${x.from} → ${x.relation}${x.verified ? " ✓" : " ?"}`).join(" · ")}`
-            : "CAUSAL TRACE: belum ada hubungan sebab-akibat yang terbukti.";
-    }
-});
-
-window.addEventListener("cikur-internal-ai-guardian", event => {
+<script>
+/* CIKUR GO Internal AI — presentation-only observer. */
+(() => {
+  const status = document.getElementById('internal-ai-status');
+  const reasoning = document.getElementById('internal-ai-reasoning');
+  const investigation = document.getElementById('internal-ai-investigation');
+  window.addEventListener('cikur-internal-ai-state', event => {
+    const d = event.detail || {}, r = d.reasoning || {}, g = d.guardian || {};
+    if (status) { status.textContent = `INTERNAL AI: ${d.signal || 'WAITING'} • GUARD ${g.healthy ? 'OK' : (g.level || 'BLOCK')}`; status.className = `rounded border px-2 py-1 ${g.healthy ? 'border-emerald-900 text-emerald-300' : 'border-rose-900 text-rose-300'}`; }
+    if (reasoning) reasoning.textContent = `REASONING: ${r.classification || 'WAITING'} • evidence ${r.evidence?.length || 0} • hypotheses ${r.hypotheses?.length || 0}`;
+    if (investigation) investigation.textContent = `INVESTIGATION: ${r.investigation?.status || 'WAITING'} • ${String(r.investigation?.nextEvidence || '').slice(0,80)}`;
+  });
+  window.addEventListener('cikur-internal-ai-guardian', event => {
     const g = event.detail || {};
-    const el = document.getElementById("internal-ai-status");
-    if (!el) return;
-    if (g.level === "NONE") { el.textContent += " · GUARD OK"; return; }
-    el.textContent += ` · GUARD ${g.level}`;
-});
-
-window.addEventListener("cikur-internal-ai-thought", event => {
-    const d = event.detail || {};
-    const text = String(d.text || "").trim();
-    if (!text || text === lastInternalThought) return;
-    lastInternalThought = text;
-    if (typeof addChat === "function" && d.event?.type !== "SOURCE_SCAN_RESULT") addChat("bcgo", `🧠 ${text}`);
-});
-
+    if (status) status.textContent = `INTERNAL AI: GUARD ${g.healthy ? 'OK' : (g.level || 'BLOCK')}`;
+  });
+})();
 </script>
 
 <script>

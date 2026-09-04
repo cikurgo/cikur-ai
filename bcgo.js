@@ -9,10 +9,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
-import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v6.js?v=6.0.1";
+import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v9.js?v=9.0.0";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.13.0 + INTERNAL AI V8
+ * BCGO MASTER NERVE SYSTEM v2.14.0 + INTERNAL AI V9
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -45,7 +45,7 @@ const ORGAN_COUNT = Object.keys(ORGAN_REGISTRY).length;
 
 const SOURCE_SCAN_INTERVAL = 20000;
 const SOURCE_SCAN_FETCH_TIMEOUT = 10000;
-const SOURCE_SCAN_VERSION = "1.8.0";
+const SOURCE_SCAN_VERSION = "1.9.0";
 
 const ACTIVE_WINDOW = 15 * 60 * 1000;
 const CLOCK_SKEW = 5 * 60 * 1000;
@@ -643,6 +643,75 @@ export function runAutonomousEngine(onCycleUpdate) {
     };
   }
 
+  // Compact source intelligence: cukup untuk investigasi Internal AI tanpa mengirim
+  // seluruh source code ke BCGO_STATE. Source asli tetap hanya berada di scanner.
+  function extractSymbolFromText(value) {
+    const m = String(value || '').match(/(?:ReferenceError|is not defined)\s*:?\s*([A-Za-z_$][\w$]*)/i);
+    return m ? m[1] : null;
+  }
+
+  function sourceLineHits(source, symbol) {
+    if (!symbol) return [];
+    const re = new RegExp(`\\b${String(symbol).replace(/[.*+?^${}()|[\\]\\]/g,'\\$&')}\\b`, 'g');
+    const lines = String(source || '').split('\n');
+    const hits = [];
+    for (let i=0;i<lines.length && hits.length<12;i++) if (re.test(lines[i])) { hits.push({line:i+1,text:lines[i].trim().slice(0,220)}); re.lastIndex=0; }
+    return hits;
+  }
+
+  function buildSourceIntelligence(scanned, logs) {
+    const files = {};
+    const symbols = new Map();
+    const runtimeSymbols = [];
+    for (const [file,item] of Object.entries(scanned)) {
+      const functions = (item.functions || []).map(fn => ({
+        name:fn.name, line:fn.line, params:fn.params || '', bodyHash:fn.bodyHash,
+        callNames:(fn.callNames || []).slice(0,80), domAnchors:(fn.domAnchors || []).slice(0,40),
+        stringAnchors:(fn.stringAnchors || []).slice(0,40)
+      }));
+      const functionNames = functions.map(x => x.name);
+      const calledNames = [...new Set(functions.flatMap(x => x.callNames || []))];
+      files[file] = {
+        file, type:item.type, role:item.role, lines:item.lines, bytes:item.bytes, hash:item.hash,
+        refs:(item.refs || []).slice(0,80), functions, functionNames, calledNames,
+        ids:(item.ids || []).slice(0,120),
+        onclicks:(item.onclicks || []).slice(0,80).map(x=>({name:x.name,line:x.line,expression:String(x.expression||'').slice(0,220)})),
+        forms:(item.forms || []).slice(0,40).map(x=>({key:x.key,line:x.line,handlers:x.handlerRefs||[],submitHandler:x.submitHandler||null,action:x.action||null})),
+        findings:(item.findings || []).slice(0,40)
+      };
+      for (const fn of functions) {
+        const k=fn.name.toLowerCase();
+        if (!symbols.has(k)) symbols.set(k,{symbol:fn.name,definedIn:[],calledIn:[],onclickIn:[],importedBy:[]});
+        symbols.get(k).definedIn.push({file,line:fn.line});
+      }
+      for (const called of calledNames) {
+        const k=called.toLowerCase();
+        if (!symbols.has(k)) symbols.set(k,{symbol:called,definedIn:[],calledIn:[],onclickIn:[],importedBy:[]});
+        const holder=symbols.get(k);
+        holder.calledIn.push({file,lines:functions.filter(fn=>(fn.callNames||[]).includes(called)).map(fn=>fn.line).slice(0,12)});
+      }
+      for (const click of item.onclicks || []) {
+        const k=String(click.name||'').toLowerCase();
+        if (!k) continue;
+        if (!symbols.has(k)) symbols.set(k,{symbol:click.name,definedIn:[],calledIn:[],onclickIn:[],importedBy:[]});
+        symbols.get(k).onclickIn.push({file,line:click.line});
+      }
+    }
+    const logSymbols = (logs || []).map(l => extractSymbolFromText(l?.message||l?.error||l?.text)).filter(Boolean);
+    const findingSymbols = Object.values(scanned).flatMap(x=>(x.findings||[]).map(f=>extractSymbolFromText(f?.message||f?.error||f?.detail))).filter(Boolean);
+    for (const symbol of [...new Set([...logSymbols,...findingSymbols])].slice(0,30)) {
+      const k=symbol.toLowerCase(), rec=symbols.get(k)||{symbol,definedIn:[],calledIn:[],onclickIn:[],importedBy:[]};
+      for (const [file,item] of Object.entries(scanned)) {
+        const hits=sourceLineHits(item.rawSource,symbol);
+        if (hits.length) rec.sourceHits=(rec.sourceHits||[]).concat(hits.map(h=>({file,...h}))).slice(0,24);
+        if ((item.refs||[]).some(r=>String(r).toLowerCase().includes(k))) rec.importedBy.push({file,ref:rec.symbol});
+      }
+      rec.status = rec.definedIn.length ? (rec.definedIn.length===1 ? 'DEFINED_ONCE' : 'DEFINED_MULTIPLE') : 'NOT_DEFINED_IN_SCANNED_SOURCE';
+      runtimeSymbols.push(rec);
+    }
+    return {version:'1.0.0-source-intelligence',generatedAt:Date.now(),files,symbols:runtimeSymbols,policy:{rawSourceExcluded:true,definitionsAreSourceEvidence:true,absenceOnlyMeansNotFoundInScannedSources:true,rootCauseStillRequiresMedicine:true}};
+  }
+
   function tokenSet(values) {
     return new Set((values || []).map(v => String(v || '').toLowerCase().trim()).filter(Boolean));
   }
@@ -1079,7 +1148,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     for (const file of files) fileStates[file] = { status:'QUEUED', line:null, message:'Menunggu giliran scan...' };
 
     const publishProgress = patch => {
-      state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, totalFiles:files.length, fileStates:{...fileStates}, findings:[...failures, ...Object.values(scanned).flatMap(item => item.findings || [])].slice(0,100), crossFileFindings:[], relations:[], sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])), ...patch };
+      state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, totalFiles:files.length, fileStates:{...fileStates}, findings:[...failures, ...Object.values(scanned).flatMap(item => item.findings || [])].slice(0,100), crossFileFindings:[], relations:[], sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])), sourceIntelligence:buildSourceIntelligence(scanned, latestSystemLogs), ...patch };
       publishToUI(safeClone(state));
     };
 
@@ -1123,7 +1192,7 @@ export function runAutonomousEngine(onCycleUpdate) {
         linked: relations.filter(r => r.status === 'LINKED').length
       };
       const status = failures.length ? 'DEGRADED' : actionable.length ? 'FINDINGS' : 'CLEAN';
-      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:crossFileFindings.slice(0,100),relations:relations.slice(0,200),relationSummary,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),message:failures.length ? `Scanner selesai: ${files.length} source diproses, ${failures.length} source tidak terbaca.` : actionable.length ? `Scanner selesai: ${files.length} source dibaca; ${actionable.length} temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} source dibaca dan dianalisis tanpa temuan struktural/cross-file.` };
+      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:crossFileFindings.slice(0,100),relations:relations.slice(0,200),relationSummary,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),sourceIntelligence:buildSourceIntelligence(scanned, latestSystemLogs),message:failures.length ? `Scanner selesai: ${files.length} source diproses, ${failures.length} source tidak terbaca.` : actionable.length ? `Scanner selesai: ${files.length} source dibaca; ${actionable.length} temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} source dibaca dan dianalisis tanpa temuan struktural/cross-file.` };
       recordEvent('SOURCE_SCAN_RESULT', state.sourceScan.message, actionable.length ? 'SYS_SOURCE_FINDINGS' : 'SYS_SOURCE_CLEAN');
       publishToUI(safeClone(state));
       publishBCGOStateToMedicine(safeClone(state));

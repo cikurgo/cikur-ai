@@ -70,7 +70,7 @@ export { db, auth, firebaseConfig };
 export const CIKUR_INTERNAL_AI_CONTEXT = Object.freeze({
   system: "CIKUR GO",
   role: "INTERNAL_INTELLIGENCE_CONTEXT_GATE",
-  version: "8.0.0",
+  version: "9.0.0",
   externalAI: false,
   automaticPatch: false,
   automaticExecution: false,
