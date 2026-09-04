@@ -9,10 +9,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
-import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v9.js?v=9.0.0";
+import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v9.js?v=10.1.0";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.15.0 + INTERNAL AI V9
+ * BCGO MASTER NERVE SYSTEM v2.15.1 + INTERNAL AI OPERATIONAL
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -177,7 +177,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   function buildInternalAIHandoff(aiSnapshot) {
     const r = aiSnapshot?.reasoning || {};
     const g = aiSnapshot?.guardian || {};
-    return { version:aiSnapshot?.version||null, reasoningVersion:aiSnapshot?.reasoningVersion||null, knowledgeVersion:aiSnapshot?.knowledgeVersion||null, guardianVersion:aiSnapshot?.guardianVersion||null, signal:aiSnapshot?.signal||"UNKNOWN", classification:r.classification||"UNKNOWN", evidenceCount:Array.isArray(r.evidence)?r.evidence.length:0, independentEvidenceCount:Number(r.correlations?.independentEvidenceCount||0), hypotheses:Array.isArray(r.hypotheses)?r.hypotheses.slice(0,10):[], selectedHypothesisId:r.selectedHypothesisId||null, precisionGate:{pass:r.precisionGate?.pass===true,blockers:Array.isArray(r.precisionGate?.blockers)?r.precisionGate.blockers.slice(0,20):[]}, investigation:r.investigation||null, causalLinks:Array.isArray(r.causalLinks)?r.causalLinks.slice(0,30):[], guardian:{healthy:g.healthy===true,level:g.level||"UNKNOWN",issues:Array.isArray(g.issues)?g.issues.slice(0,10):[]}, at:aiSnapshot?.at||Date.now() };
+    return { version:aiSnapshot?.version||null, reasoningVersion:aiSnapshot?.reasoningVersion||null, knowledgeVersion:aiSnapshot?.knowledgeVersion||null, guardianVersion:aiSnapshot?.guardianVersion||null, signal:aiSnapshot?.signal||"UNKNOWN", classification:r.classification||"UNKNOWN", evidenceCount:Array.isArray(r.evidence)?r.evidence.length:0, independentEvidenceCount:Number(r.correlations?.independentEvidenceCount||0), hypotheses:Array.isArray(r.hypotheses)?r.hypotheses.slice(0,10):[], selectedHypothesisId:r.selectedHypothesisId||null, precisionGate:{pass:r.precisionGate?.pass===true,blockers:Array.isArray(r.precisionGate?.blockers)?r.precisionGate.blockers.slice(0,20):[]}, investigation:r.investigation||null, operationalInvestigation:r.operationalInvestigation||null, causalLinks:Array.isArray(r.causalLinks)?r.causalLinks.slice(0,30):[], guardian:{healthy:g.healthy===true,level:g.level||"UNKNOWN",issues:Array.isArray(g.issues)?g.issues.slice(0,10):[]}, at:aiSnapshot?.at||Date.now() };
   }
 
   function publishBCGOStateToMedicine(snapshot) {

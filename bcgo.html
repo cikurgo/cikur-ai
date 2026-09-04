@@ -206,6 +206,7 @@ body{font-family:'Inter',sans-serif}
             <div id="internal-ai-status" class="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-cyan-300">INTERNAL AI: MENUNGGU</div>
             <div id="internal-ai-reasoning" class="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-slate-400">REASONING: MENUNGGU</div>
             <div id="internal-ai-investigation" class="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-slate-400">INVESTIGATION: MENUNGGU</div>
+            <div id="internal-ai-directive" class="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-slate-400">DIRECTIVE: MENUNGGU</div>
         </div>
 
         <div id="chat-feed" class="chat-scroll bg-slate-950 border border-slate-800 rounded-lg p-3 h-72 overflow-y-auto space-y-3">
@@ -230,7 +231,7 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=9.1.0';
+import { runAutonomousEngine } from './bcgo.js?v=2.15.1';
 
 const $ = id => document.getElementById(id);
 
@@ -705,11 +706,13 @@ runAutonomousEngine(state => {
   const status = document.getElementById('internal-ai-status');
   const reasoning = document.getElementById('internal-ai-reasoning');
   const investigation = document.getElementById('internal-ai-investigation');
+  const directive = document.getElementById('internal-ai-directive');
   window.addEventListener('cikur-internal-ai-state', event => {
     const d = event.detail || {}, r = d.reasoning || {}, g = d.guardian || {};
     if (status) { status.textContent = `INTERNAL AI: ${d.signal || 'WAITING'} • GUARD ${g.healthy ? 'OK' : (g.level || 'BLOCK')}`; status.className = `rounded border px-2 py-1 ${g.healthy ? 'border-emerald-900 text-emerald-300' : 'border-rose-900 text-rose-300'}`; }
-    if (reasoning) reasoning.textContent = `REASONING: ${r.classification || 'WAITING'} • evidence ${r.evidence?.length || 0} • hypotheses ${r.hypotheses?.length || 0}`;
-    if (investigation) investigation.textContent = `INVESTIGATION: ${r.investigation?.status || 'WAITING'} • ${String(r.investigation?.nextEvidence || '').slice(0,80)}`;
+    if (reasoning) reasoning.textContent = `REASONING: ${r.classification || 'WAITING'} • evidence ${r.evidence?.length || 0} • hypotheses ${r.hypotheses?.length || 0} • focus ${r.operationalInvestigation?.focus?.target || '-'}`;
+    if (investigation) investigation.textContent = `INVESTIGATION: ${r.operationalInvestigation?.decision || r.investigation?.status || 'WAITING'} • ${(r.operationalInvestigation?.nextActions || []).slice(0,2).map(a=>a.code).join(' → ') || String(r.investigation?.nextEvidence || '').slice(0,70)}`;
+    if (directive) { const f=r.operationalInvestigation?.focus; directive.textContent=`DIRECTIVE: ${f?.target || '-'} • ${(f?.actions || []).slice(0,2).map(a=>a.code).join(' → ') || 'WAITING'}`; }
   });
   window.addEventListener('cikur-internal-ai-guardian', event => {
     const g = event.detail || {};

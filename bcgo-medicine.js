@@ -11,11 +11,11 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
-import { reason as internalAIReason } from "./cikur-internal-ai-core-v9.js";
+import { reason as internalAIReason } from "./cikur-internal-ai-core-v9.js?v=10.1.0";
 
 /*
  * ================================================================
- * BCGO MEDICINE v3.2.0 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
+ * BCGO MEDICINE v3.4.0 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
  * ================================================================
  * Boundary:
  *   Medicine observes, investigates, proves, proposes and validates.
@@ -126,7 +126,7 @@ const TERMINAL_STATUSES = new Set(["REJECTED","FIXED_VERIFIED","RECOVERED"]);
 const MAX_INVESTIGATION_ATTEMPTS_PER_REVISION = 3;
 
 const S = {
-  version: "3.2.0",
+  version: "3.4.0",
   registry: REGISTRY,
   surface: null,
   logs: [],
@@ -312,6 +312,7 @@ function publishInvestigationRequest(c, phase = "INVESTIGATING", extra = {}) {
     decisionStatus: c.investigationDecision?.status || null,
     nextAction: c.investigationDecision?.nextAction || null,
     decisionReason: c.investigationDecision?.reason || null,
+    aiDirective: c.investigationDecision?.aiDirective || S.aiCore?.investigation?.nextEvidence || null,
     sourceEvidenceCount: Array.isArray(c.sourceEvidence) ? c.sourceEvidence.length : 0,
     checkedFiles: Array.isArray(c.verification?.checkedFiles) ? c.verification.checkedFiles.length : 0,
     message: String(extra.message || "").slice(0,500),
@@ -1012,7 +1013,18 @@ function classifyError(message) {
       treatment: "REALTIME_LISTENER_REVIEW"
     };
   }
-  if (/not defined|undefined|is not a function/.test(m)) {
+  if (/referenceerror|(?:is not defined|not defined)/.test(m)) {
+    const symbol = m.match(/(?:referenceerror|is not defined|not defined)\s*:?[\s]*([a-z_$][\w$]*)/i)?.[1] || null;
+    return {
+      code: "UNDEFINED_SYMBOL",
+      title: symbol ? `Simbol JavaScript tidak tersedia: ${symbol}` : "Simbol JavaScript tidak tersedia",
+      severity: "HIGH",
+      confidence: 0.96,
+      treatment: "SYMBOL_SCOPE_REVIEW",
+      symbol
+    };
+  }
+  if (/is not a function|undefined/.test(m)) {
     return {
       code: "JAVASCRIPT_CONTRACT",
       title: "Kontrak JavaScript tidak terpenuhi",
@@ -1583,11 +1595,54 @@ function buildRepairPlan(c, verification) {
   };
 }
 
+function extractRuntimeSymbol(log, caseItem=null) {
+  const msg=String(log?.message||log?.error||log?.text||"");
+  const explicit=log?.symbol || log?.details?.symbol || caseItem?.diagnosis?.symbol;
+  if(explicit) return String(explicit).trim();
+  return msg.match(/(?:ReferenceError|is not defined|not defined)\s*:?[\s]*([A-Za-z_$][\w$]*)/i)?.[1] || null;
+}
+function symbolDefinitionHits(source,symbol){
+  const s=String(source||""), n=escRe(symbol);
+  const patterns=[
+    new RegExp(`(?:^|\\n)\\s*(?:async\\s+)?function\\s+${n}\\s*\\(`,'g'),
+    new RegExp(`\\b(?:const|let|var)\\s+${n}\\s*=`, 'g'),
+    new RegExp(`\\bwindow\\.${n}\\s*=`, 'g'),
+    new RegExp(`\\bglobalThis\\.${n}\\s*=`, 'g')
+  ];
+  const out=[]; for(const re of patterns){let m;while((m=re.exec(s))&&out.length<20)out.push({line:lineOf(s,m.index),snippet:m[0].trim()});} return out.sort((a,b)=>a.line-b.line);
+}
+function symbolCallHits(source,symbol){
+  const s=String(source||""), n=escRe(symbol); const re=new RegExp(`\\b${n}\\s*\\(`,'g'); const out=[];let m;while((m=re.exec(s))&&out.length<30)out.push({line:lineOf(s,m.index),snippet:s.split(/\r?\n/)[lineOf(s,m.index)-1]?.trim().slice(0,260)||""});return out;
+}
+async function buildUndefinedSymbolEvidence(targetFile,log,caseItem=null){
+  const symbol=extractRuntimeSymbol(log, caseItem); if(!symbol)return null;
+  const names=await discoverSystemSurface(); const rows=[]; let definitions=[],calls=[];
+  for(const name of names){const src=await fetchFile(name);if(!src.ok||!src.text)continue;const defs=symbolDefinitionHits(src.text,symbol);const hits=symbolCallHits(src.text,symbol);if(defs.length)definitions.push(...defs.map(x=>({file:name,...x})));if(hits.length)calls.push(...hits.map(x=>({file:name,...x})));}
+  const targetCalls=calls.filter(x=>normalizeFile(x.file)===normalizeFile(targetFile));
+  if(!targetCalls.length && !calls.length)return null;
+  const sameFileDefs=definitions.filter(x=>normalizeFile(x.file)===normalizeFile(targetFile));
+  const allEvidence=[];
+  for(const hit of targetCalls.slice(0,12)) allEvidence.push({file:hit.file,line:hit.line,symbol,kind:"SYMBOL_CALL_SITE",before:hit.snippet,evidenceStrength:"HIGH",evidenceReason:`Runtime melaporkan simbol ${symbol} tidak tersedia dan source aktual ${hit.file}:${hit.line} memang memanggil simbol tersebut.`});
+  if(!definitions.length){
+    return {symbol,definitions,calls,sourceEvidence:allEvidence,rootCauseStatus:targetCalls.length?"CONTRACT_ROOT_CAUSE_IDENTIFIED":"UNPROVEN",rootCauseFile:targetFile,rootCauseCandidates:[{file:targetFile,line:targetCalls[0]?.line||null,symbol,reason:`Simbol ${symbol} dipanggil pada runtime tetapi tidak memiliki definisi pada seluruh source diagnostic yang berhasil dibaca.`,evidenceStrength:"HIGH"}],resolvedOperation:null,reason:"SYMBOL_DEFINITION_MISSING_ACROSS_SCANNED_SURFACE"};
+  }
+  const providerFiles=[...new Set(definitions.map(x=>x.file))];
+  return {symbol,definitions,calls,sourceEvidence:[...allEvidence,...definitions.slice(0,12).map(d=>({file:d.file,line:d.line,symbol,kind:"SYMBOL_DEFINITION",before:d.snippet,evidenceStrength:"HIGH",evidenceReason:`Definisi ${symbol} ditemukan di ${d.file}:${d.line}; Medicine harus memverifikasi loading/scope runtime sebelum menyimpulkan root cause.`}))],rootCauseStatus:sameFileDefs.length?"CONTRACT_ROOT_CAUSE_IDENTIFIED":"UNPROVEN",rootCauseFile:targetFile,rootCauseCandidates:[{file:targetFile,line:targetCalls[0]?.line||null,symbol,providerFiles,reason:sameFileDefs.length?`Runtime menyatakan ${symbol} undefined walau definisinya ada di source yang sama; indikasi kuat masalah scope/load order.`:`${symbol} dipanggil di ${targetFile} tetapi definisinya berada di provider ${providerFiles.join(", ")}; loading/import scope harus diverifikasi.`,evidenceStrength:"HIGH"}],resolvedOperation:null,reason:"SYMBOL_RUNTIME_AVAILABILITY_REQUIRES_SCOPE_VERIFICATION"};
+}
 async function resolveRootCause(c) {
   const log = c.evidence || {};
   const original = normalizeFile(c.source) || c.source;
   const locations = parseRuntimeLocations(log)
     .filter(loc => isDiagnosticFile(loc.file));
+
+  // 0. Runtime undefined-symbol proof. This path converts visible ReferenceError
+  // telemetry into exact source evidence instead of leaving Medicine at 0 evidence.
+  if (c.diagnosis?.code === "UNDEFINED_SYMBOL" || /(?:ReferenceError|is not defined|not defined)/i.test(String(log?.message||log?.error||""))) {
+    const symbolProof=await buildUndefinedSymbolEvidence(original,log,c);
+    if(symbolProof?.sourceEvidence?.length){
+      return {rootCauseFile:symbolProof.rootCauseFile,rootCauseStatus:symbolProof.rootCauseStatus,sourceEvidence:symbolProof.sourceEvidence,candidates:symbolProof.rootCauseCandidates,resolvedOperation:null};
+    }
+  }
 
   // 1. Exact runtime file + line.
   for (const loc of locations.filter(x => x.file && x.line && REGISTRY[x.file])) {
@@ -2206,6 +2261,7 @@ function buildInvestigationDecision(c, v, plan, context = {}) {
     highEvidenceCount:Array.isArray(v?.sourceEvidence)?v.sourceEvidence.filter(e=>e.evidenceStrength==="HIGH").length:0,
     runtimeEvidenceCount:Array.isArray(v?.runtimeEvidence)?v.runtimeEvidence.length:0, operationCount:Array.isArray(plan?.operations)?plan.operations.length:0,
     precisionGate:ready, status, missingEvidence:unique, nextAction,
+    aiDirective: context.ai?.operationalInvestigation?.evidenceRequests || context.ai?.investigation?.nextEvidence || null,
     message:ready ? "Candidate exact terbukti dan siap untuk deterministic Executor review." : (rootVerified ? "Root cause sudah teridentifikasi, tetapi Precision Gate masih terkunci." : "Medicine belum dapat membuktikan root cause dan exact source secara penuh."),
     reason:unique.join(" | ") || null, revisionToken:c?.lastInvestigatedRevisionToken || null, decidedAt:now(), trigger:context.trigger || "verification"
   };
@@ -2218,12 +2274,14 @@ function runInternalAIReasoning(c, v, plan, context = {}) {
       target:c?.source || v?.target || null,
       errorLog:c?.lastEvidence || c?.evidence || null,
       activeCases:activeCases(), latestLogs:S.logs.slice(0,50),
-      sourceScan:S.bcgoSourceScan, recentEvents:context.recentEvents || [], bcgoAIContext:S.bcgoAIContext || null
+      sourceScan:S.bcgoSourceScan, recentEvents:context.recentEvents || [], bcgoAIContext:S.bcgoAIContext || null,
+      medicineEvidence:Array.isArray(v?.sourceEvidence) ? v.sourceEvidence : [],
+      medicinePlan:plan ? {rootCauseFile:plan.rootCauseFile,rootCauseStatus:plan.rootCauseStatus,precisionGate:!!plan.precisionGate,operationCount:Array.isArray(plan.operations)?plan.operations.length:0} : null
     }, context.history || {});
   } catch (error) {
     result = {version:"V9_ERROR",classification:"ERROR",evidence:[],hypotheses:[],selectedHypothesisId:null,precisionGate:{pass:false,blockers:[`INTERNAL_AI_ERROR:${error?.message||String(error)}`]},investigation:{status:"BLOCKED"}};
   }
-  S.aiCore={version:result.version||null,classification:result.classification||"UNKNOWN",precisionGate:result.precisionGate?.pass===true,blockers:Array.isArray(result.precisionGate?.blockers)?result.precisionGate.blockers:[],evidenceCount:result.evidence?.length||0,hypothesisCount:result.hypotheses?.length||0,selectedHypothesisId:result.selectedHypothesisId||null,investigation:result.investigation||null,lastAt:now()};
+  S.aiCore={version:result.version||null,classification:result.classification||"UNKNOWN",precisionGate:result.precisionGate?.pass===true,blockers:Array.isArray(result.precisionGate?.blockers)?result.precisionGate.blockers:[],evidenceCount:result.evidence?.length||0,hypothesisCount:result.hypotheses?.length||0,selectedHypothesisId:result.selectedHypothesisId||null,investigation:result.investigation||null,operationalInvestigation:result.operationalInvestigation||null,lastAt:now()};
   emit("internal_ai_state",{case:c, ai:S.aiCore});
   return result;
 }
@@ -2360,7 +2418,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
             : "Evidence/source exact belum cukup; Execution tetap ikut memantau tetapi belum melakukan review patch."
       });
 
-      const decision = buildInvestigationDecision(c, v, plan, { ai:{...aiReasoning?.precisionGate, pass:aiCompatible}, trigger:context.autoRecovery ? "auto_recovery" : "verification" });
+      const decision = buildInvestigationDecision(c, v, plan, { ai:{...aiReasoning?.precisionGate, pass:aiCompatible, investigation:aiReasoning?.investigation || null, operationalInvestigation:aiReasoning?.operationalInvestigation || null}, trigger:context.autoRecovery ? "auto_recovery" : "verification" });
       c.investigationDecision = decision;
       emit("investigation_decision", { case:c, decision, ai:S.aiCore });
 

@@ -114,27 +114,18 @@ button{background:#172554;color:#f8fafc;border:1px solid #334155}.secondary{back
 <tr><td>bcgo-executor.html</td><td>Control / Monitoring</td><td class="check">☑ AKTIF</td></tr>
 </tbody></table>
 </section><section class="card advanced">
-<h2>Source Manager</h2>
-<p class="sub">Source yang terdaftar disimpan di IndexedDB internal. Import file membaca source; koneksi File System Access, bila tersedia browser, dapat memberi executor handle untuk menulis kembali file lokal dan melakukan read-back verification.</p>
+<h2>Source Manager — REAL SOURCE ONLY</h2>
+<p class="sub">Executor hanya menerima source melalui candidate Medicine, import source nyata, atau file lokal yang sengaja dihubungkan manusia. Tidak ada source contoh atau jalur pengujian palsu di jalur produksi.</p>
 <div class="two">
-<div><label>Source ID / File</label><input id="sourceId" value="demo-config.js"/></div>
+<div><label>Source ID / File</label><input id="sourceId" placeholder="contoh: index.html" value=""/></div>
 <div><label>Fingerprint saat ini</label><input id="sourceFingerprint" readonly="" value="-"/></div>
 </div>
-<div class="codebox" style="margin-top:10px"><div class="codehead"><span>ISI SOURCE INTERNAL</span><button class="copy" data-copy="sourceText">📋 COPY CODE</button></div><textarea class="code" id="sourceText" spellcheck="false">// CIKUR GO Internal Demo Config
-const STATUS_MODE = "STABLE_OFFLINE";
-const ROUTE_VERSION = "v3.0.0";
-</textarea></div>
+<div class="codebox" style="margin-top:10px"><div class="codehead"><span>ISI SOURCE TERDAFTAR</span><button class="copy" data-copy="sourceText">📋 COPY CODE</button></div><textarea class="code" id="sourceText" spellcheck="false" placeholder="Belum ada source. Import atau hubungkan file lokal jika memang diperlukan."></textarea></div>
 <div class="actions"><button class="success" id="saveSource">Simpan Source Internal</button><button class="secondary" id="loadSource">Muat Source</button><button class="secondary" id="importFile">Import File</button><button class="secondary" id="bindFile">Hubungkan File Lokal</button><input hidden="" id="fileInput" type="file"/></div>
-<div class="small" id="sourceInfo" style="margin-top:8px">Belum membaca source.</div>
-</section><section class="card advanced">
-<h2>🧪 Deterministic Patch Test — DEMO ONLY</h2>
-<p class="sub"><b>SIMULASI INTERNAL:</b> tombol di bawah bukan tombol approval kasus Medicine. Approval produksi tetap hanya berasal dari Human Approval di Medicine. Alur nyata: Request → Approval Gate → Fingerprint → Exact Patch → Diff → Validation → Persistence → Read-back Verification.</p>
-<div class="codebox"><div class="codehead"><span>EXACT TARGET / BEFORE</span><button class="copy" data-copy="targetBefore">📋 COPY CODE</button></div><textarea class="code" id="targetBefore" spellcheck="false">const STATUS_MODE = "STABLE_OFFLINE";</textarea></div>
-<div class="codebox" style="margin-top:10px"><div class="codehead"><span>SOLUTION / AFTER</span><button class="copy solution" data-copy="targetAfter">📋 COPY SOLUSI</button></div><textarea class="code" id="targetAfter" spellcheck="false">const STATUS_MODE = "SECURE_ACTIVE";</textarea></div>
-<div class="actions"><button class="success" id="runTest">Jalankan SIMULASI APPROVED (DEMO)</button><button class="secondary" id="resetDemo">Reset Demo Source</button></div>
+<div class="small" id="sourceInfo" style="margin-top:8px">Menunggu source nyata.</div>
 </section><section class="card advanced"><h2>Internal Sources</h2><pre id="sources">Memuat...</pre></section><section class="card advanced"><h2>Audit / Runtime History</h2><pre id="history">Belum ada audit.</pre></section></main>
-<script src="./bcgo-executor-core.js?v=3.1.0"></script>
-<script src="./bcgo-executor.js?v=3.2.0"></script>
+<script src="./bcgo-executor-core.js?v=3.2.0"></script>
+<script src="./bcgo-executor.js?v=3.3.0"></script>
 <script>
 (() => {
   const $ = id => document.getElementById(id);
@@ -230,9 +221,6 @@ const ROUTE_VERSION = "v3.0.0";
   $("importFile").addEventListener("click",()=>$("fileInput").click());
   $("fileInput").addEventListener("change",async ev=>{const file=ev.target.files?.[0];if(!file)return;const text=await file.text();$("sourceId").value=file.name;$("sourceText").value=text;const e=window.BCGOInternalExecutor;try{const r=await e.registerSource(file.name,text,{file:file.name,origin:"IMPORTED_FILE"});set("sourceFingerprint",r.fingerprint);set("sourceInfo",`${file.name} • IMPORTED_FILE • ${r.updatedAt}`);render();}catch(err){alert("Import gagal: "+err.message);}});
   $("bindFile").addEventListener("click",async()=>{const e=window.BCGOInternalExecutor;if(!e)return;if(typeof window.showOpenFilePicker!=="function"){alert("Browser ini tidak menyediakan File System Access API. Gunakan Import File; source tetap dapat diproses dan disimpan di IndexedDB internal.");return;}try{const [handle]=await window.showOpenFilePicker({multiple:false});const file=await handle.getFile();await e.bindLocalFile(file.name,handle);const r=await e.getSource(file.name);$("sourceId").value=file.name;$("sourceText").value=r?.content||await file.text();set("sourceFingerprint",r?.fingerprint||"-");set("sourceInfo",`${file.name} • LOCAL_FILE_HANDLE`);render();}catch(err){if(err?.name!=="AbortError")alert("Gagal menghubungkan file lokal: "+err.message);}});
-
-  $("runTest").addEventListener("click",async()=>{const e=window.BCGOInternalExecutor;if(!e){alert("Executor belum siap.");return;}const request={requestId:"REQ_"+Date.now(),caseId:"CASE_DEMO_001",proposalId:"PROP_DEMO_001",planId:"PLAN_DEMO_001",sourceId:$("sourceId").value.trim()||"demo-config.js",file:$("sourceId").value.trim()||"demo-config.js",operation:"REPLACE_EXACT",before:$("targetBefore").value,after:$("targetAfter").value,approval:"APPROVED"};$("result").textContent="Menjalankan pipeline internal...";try{const r=await e.execute(request);render();}catch(err){$("result").textContent="Execution error: "+err.message;}});
-  $("resetDemo").addEventListener("click",async()=>{const e=window.BCGOInternalExecutor;if(!e)return;const id="demo-config.js";const text='// CIKUR GO Internal Demo Config\nconst STATUS_MODE = "STABLE_OFFLINE";\nconst ROUTE_VERSION = "v3.0.0";\n';try{const r=await e.registerSource(id,text,{file:id,origin:"DEMO_RESET"});$("sourceId").value=id;$("sourceText").value=text;$("targetBefore").value='const STATUS_MODE = "STABLE_OFFLINE";';set("sourceFingerprint",r.fingerprint);render();}catch(err){alert("Reset demo gagal: "+err.message);}});
   $("refresh").addEventListener("click",render); $("reset").addEventListener("click",()=>{window.BCGOInternalExecutor?.reset();render();});
   window.addEventListener("bcgo-executor-state",render); window.addEventListener("bcgo-executor-core-ready",render); window.addEventListener("bcgo-executor-ready",render); window.addEventListener("bcgo-executor-nerve",render);
   setInterval(render,3000); render();

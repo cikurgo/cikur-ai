@@ -1,9 +1,9 @@
-/** CIKUR GO INTERNAL AI — REASONING CORE V9
+/** CIKUR GO INTERNAL AI — REASONING CORE V10.1
  * Investigation-first, source-aware, dependency-aware reasoning.
  * Read-only: no patch, no execution, no external AI/API.
  */
 "use strict";
-export const VERSION="9.0.0-investigation-core";
+export const VERSION="10.1.0-operational-intelligence";
 const clone=v=>{try{return JSON.parse(JSON.stringify(v));}catch{return v;}};
 const text=v=>String(v??"").trim();
 const norm=v=>text(v).toLowerCase().replace(/\s+/g," ").trim();
@@ -25,7 +25,62 @@ function collect(t){
   for(const rec of (si?.symbols||[])){const symbol=rec.symbol;if(!symbol)continue;const base={symbol,status:rec.status,definedIn:rec.definedIn||[],calledIn:rec.calledIn||[],onclickIn:rec.onclickIn||[],sourceHits:rec.sourceHits||[]};if(rec.definedIn?.length)add(raw,"SOURCE_DEFINITION","BCGO_STATE.sourceScan.sourceIntelligence",`Simbol "${symbol}" memiliki definisi source yang ditemukan.`,{symbol,providers:rec.definedIn,verifiedBySource:true});else if(rec.calledIn?.length||rec.onclickIn?.length)add(raw,"SOURCE_ABSENCE","BCGO_STATE.sourceScan.sourceIntelligence",`Simbol "${symbol}" tidak ditemukan definisinya pada source yang dipindai, tetapi ada pemakaian source.`,base);if(rec.calledIn?.length)for(const c of rec.calledIn.slice(0,12))add(raw,"SOURCE_CALL_SITE","BCGO_STATE.sourceScan.sourceIntelligence",`Simbol "${symbol}" dipanggil di ${c.file}.`,{symbol,file:c.file,lines:c.lines||[]});if(rec.onclickIn?.length)for(const c of rec.onclickIn.slice(0,12))add(raw,"DOM_HANDLER_REFERENCE","BCGO_STATE.sourceScan.sourceIntelligence",`Handler "${symbol}" direferensikan dari DOM di ${c.file}.`,{symbol,file:c.file,line:c.line});for(const h of (rec.sourceHits||[]).slice(0,20))add(raw,"SOURCE_SYMBOL_HIT","BCGO_STATE.sourceScan.sourceIntelligence",`Kemunculan simbol "${symbol}" ditemukan di ${h.file}:${h.line}.`,{symbol,file:h.file,line:h.line,snippet:h.text});}
   for(const [file,info] of Object.entries(si?.files||{})){for(const fn of (info.functions||[]).slice(0,120))add(raw,"SOURCE_FUNCTION","BCGO_STATE.sourceScan.sourceIntelligence",`Fungsi ${fn.name} didefinisikan di ${file}:${fn.line}.`,{file,line:fn.line,symbol:fn.name,kind:fn.kind,bodyHash:fn.bodyHash,calls:fn.callNames||[]});for(const ref of (info.refs||[]).slice(0,80))add(raw,"SOURCE_REFERENCE","BCGO_STATE.sourceScan.sourceIntelligence",`${file} memiliki referensi lokal ${ref}.`,{file,ref});}
   for(const e of (Array.isArray(t.recentEvents)?t.recentEvents:[]).slice(0,40)){const msg=e?.message||e?.text;if(msg&&/error|anomal|finding|failed|offline|mismatch|medicine|execution/i.test(msg))add(raw,"EVENT","BCGO_STATE.recentEvents",msg,{type:e?.type,target:e?.target||null},e?.at||e?.timestamp);}
+  const medicineEvidence=Array.isArray(t.medicineEvidence)?t.medicineEvidence:[];
+  for(const m of medicineEvidence.slice(0,80)){
+    const file=m?.file||m?.sourceFile||m?.targetFile||null;
+    const claim=m?.evidenceReason||m?.message||m?.reason||m?.claim||"Medicine memberikan evidence verifikasi.";
+    add(raw,"MEDICINE_VERIFIED_EVIDENCE","MEDICINE_VERIFICATION",claim,{file,line:m?.line||m?.sourceLine||m?.targetLine||null,verified:true,evidenceStrength:m?.evidenceStrength||"HIGH",operationType:m?.operationType||null},m?.observedAt||m?.checkedAt);
+  }
   const unique=new Map();for(const x of raw){const old=unique.get(x.fingerprint);if(!old||x.weight>old.weight)unique.set(x.fingerprint,x);}return [...unique.values()].sort((a,b)=>b.weight-a.weight).slice(0,260);
+}
+function extractSymbolsFromText(value){
+  const out=new Set();
+  const textValue=String(value||"");
+  const re=/(?:ReferenceError|is not defined|not defined)\s*:?[\s]*([A-Za-z_$][\w$]*)/gi;
+  let m; while((m=re.exec(textValue))) out.add(m[1]);
+  return [...out];
+}
+function buildOperationalInvestigation(t,e){
+  const si=t.sourceScan?.sourceIntelligence||{};
+  const files=si.files||{};
+  const symbols=Array.isArray(si.symbols)?si.symbols:[];
+  const findings=Array.isArray(t.sourceScan?.findings)?t.sourceScan.findings:[];
+  const cross=Array.isArray(t.sourceScan?.crossFileFindings)?t.sourceScan.crossFileFindings:[];
+  const cases=Array.isArray(t.activeCases)?t.activeCases:[];
+  const rows=[];
+  const allText=[t.errorLog?.message,t.errorLog?.error,...e.map(x=>x.claim)].filter(Boolean).join(" | ");
+  const errorSymbols=extractSymbolsFromText(allText);
+  const caseTargets=[...new Set(cases.map(c=>c?.target||c?.file).filter(Boolean))];
+  const findingTargets=[...new Set(findings.map(f=>f?.file||f?.targetFile).filter(Boolean))];
+  const targets=[...new Set([...caseTargets,...findingTargets,...errorSymbols.map(()=>null)].filter(Boolean))];
+  for(const target of targets.slice(0,20)){
+    const localFindings=findings.filter(f=>(f?.file||f?.targetFile)===target);
+    const localCases=cases.filter(c=>(c?.target||c?.file)===target);
+    const runtime=e.filter(x=>x.file===target || x.details?.target===target);
+    const high=localFindings.filter(f=>String(f?.severity||"").toUpperCase()==="HIGH");
+    const actions=[];
+    if(runtime.length) actions.push({code:"RECHECK_RUNTIME_LOCATION",priority:"HIGH",reason:"Telemetry runtime berkorelasi dengan target."});
+    if(high.length) actions.push({code:"VERIFY_EXACT_SOURCE_FINDING",priority:"HIGH",reason:`${high.length} source finding HIGH ditemukan pada target.`});
+    if(localFindings.some(f=>String(f?.type||f?.kind||"").startsWith("CROSS_FILE_")) || cross.some(f=>(f?.sourceFile||f?.file)===target || f?.targetFile===target)) actions.push({code:"VERIFY_CROSS_FILE_CONTRACT",priority:"HIGH",reason:"Ada indikasi dependency/contract lintas-file."});
+    for(const symbol of errorSymbols){
+      const rec=symbols.find(x=>String(x?.symbol||"").toLowerCase()===symbol.toLowerCase());
+      if(rec?.status==="NOT_DEFINED_IN_SCANNED_SOURCE") actions.push({code:"TRACE_MISSING_SYMBOL_PROVIDER",priority:"CRITICAL",symbol,reason:`${symbol} dipakai tetapi definisinya tidak ditemukan pada source yang dipindai.`});
+      else if(rec) actions.push({code:"TRACE_RUNTIME_SYMBOL_SCOPE",priority:"HIGH",symbol,reason:`${symbol} memiliki definisi/caller source; runtime availability masih harus dibuktikan.`});
+    }
+    if(!actions.length) actions.push({code:"COLLECT_DIRECT_SOURCE_EVIDENCE",priority:"MEDIUM",reason:"Belum ada bukti langsung yang cukup spesifik."});
+    const score=Math.min(1,.35+(high.length*.12)+(runtime.length*.08)+(localCases.length*.08)+(cross.filter(f=>(f?.sourceFile||f?.file)===target||f?.targetFile===target).length*.06));
+    rows.push({target,caseIds:localCases.map(c=>c?.id).filter(Boolean),findingCount:localFindings.length,highFindingCount:high.length,runtimeEvidenceCount:runtime.length,operationalScore:Math.round(score*100)/100,actions:actions.slice(0,8)});
+  }
+  const symbolRows=errorSymbols.map(symbol=>{
+    const rec=symbols.find(x=>String(x?.symbol||"").toLowerCase()===symbol.toLowerCase())||null;
+    return {symbol,status:rec?.status||"NOT_IN_SYMBOL_INDEX",definedIn:rec?.definedIn||[],calledIn:rec?.calledIn||[],onclickIn:rec?.onclickIn||[],sourceHits:rec?.sourceHits||[],nextAction:rec?.status==="NOT_DEFINED_IN_SCANNED_SOURCE"?"TRACE_PROVIDER_AND_RUNTIME_SCOPE":"VERIFY_RUNTIME_AVAILABILITY"};
+  });
+  rows.sort((a,b)=>b.operationalScore-a.operationalScore||b.highFindingCount-a.highFindingCount);
+  const focus=rows[0]||null;
+  const medicineVerifiedCount=medicineEvidence.length;
+  const evidenceRequests=(focus?.actions||[]).map(a=>({code:a.code,priority:a.priority,reason:a.reason,owner:"MEDICINE",state:"REQUESTED"}));
+  if(focus && !evidenceRequests.some(a=>a.code==="COLLECT_DIRECT_SOURCE_EVIDENCE")) evidenceRequests.push({code:"READ_DEPLOYED_SOURCE_DIRECTLY",priority:"HIGH",reason:`Baca source deployment aktual untuk ${focus.target} dan simpan fingerprint sebelum reasoning lanjutan.`,owner:"MEDICINE",state:"REQUESTED"});
+  return {version:"1.1.0-operational-investigation",generatedAt:new Date().toISOString(),focus,targets:rows.slice(0,12),symbols:symbolRows,medicineVerifiedCount,evidenceRequests:evidenceRequests.slice(0,12),decision:focus?"INVESTIGATION_DIRECTIVE_READY":"WAITING_FOR_DIRECT_EVIDENCE",nextActions:(focus?.actions||[{code:"WAIT_FOR_TELEMETRY",priority:"LOW",reason:"Belum ada target operasional."}]).slice(0,8),policy:{aiMayPrioritize:true,aiMayCorrelate:true,aiMayRequestEvidence:true,aiMayProposeHypothesis:true,aiMayUseMedicineVerification:true,aiMayProveRootCause:false,aiMayPatch:false,aiMayExecute:false}};
 }
 function extractSymbol(e){const all=e.map(x=>x.claim).join(" | ");const m=all.match(/(?:ReferenceError|is not defined)\s*:?\s*([A-Za-z_$][\w$]*)/i);return m?m[1]:null;}
 function classify(t,e){if(t.connection?.status==="OFFLINE"||t.firestore?.error)return "INFRASTRUCTURE";if((t.activeCases||[]).length)return "ACTIVE_CASE";if(e.some(x=>x.kind==="RUNTIME_ERROR"||x.kind==="LOG"))return "RUNTIME_SIGNAL";if(e.some(x=>x.kind.includes("SOURCE")))return "SOURCE_REVIEW";if(e.length)return "OBSERVED_SIGNAL";return "STABLE";}
@@ -37,5 +92,5 @@ function buildCausalLinks(t,e,hs){const links=[];for(const h of hs){const suppor
     const cross=supported.filter(x=>x.kind==="CROSS_FILE_FINDING"&&x.file&&x.details?.target);for(const x of cross.slice(0,6))links.push({hypothesisId:h.id,from:x.file,to:x.details.target,relation:"POTENTIAL_CAUSE_OF",verified:false,evidenceIds:[x.id],basis:"explicit_cross_file_finding"});}
   return links;}
 function investigationPlan(t,e,hs,links){const h=hs[0];if(!h)return {status:"WAITING",objective:"Kumpulkan evidence yang dapat diverifikasi.",nextEvidence:"Source evidence + runtime context",required:["exact source","dependency/caller context","runtime context"]};const symbol=h.details?.symbol;let required=["runtime context","exact source","dependency/caller context","cross-file consistency"];let next=h.nextEvidence;if(symbol){const defs=e.filter(x=>x.kind==="SOURCE_DEFINITION"&&x.details?.symbol===symbol);const calls=e.filter(x=>(x.kind==="SOURCE_CALL_SITE"||x.kind==="DOM_HANDLER_REFERENCE")&&x.details?.symbol===symbol);if(!defs.length)required=["scope/runtime provider","script/import loading","exact caller source","definition search beyond scanned registry"];else required=["caller → provider dependency","script/import/export scope","load order/runtime availability","exact source context"];next=defs.length?`Uji mengapa "${symbol}" tidak tersedia pada runtime meski definisinya terdeteksi.`:`Cari provider/scope untuk "${symbol}" karena definisi belum ditemukan pada source registry.`;return {status:"ACTIVE",objective:"Buktikan atau gugurkan hipotesis melalui dependency dan source evidence.",nextEvidence:next,required,focus:{symbol,definitionCount:defs.length,callSiteCount:calls.length},doNotConclude:["root cause","exact source","safe patch"]};}return {status:"ACTIVE",objective:"Buktikan hubungan sebab-akibat melalui evidence langsung.",nextEvidence:next,required,causalLinksPending:links.length,doNotConclude:["root cause","exact source","safe patch"]};}
-export function reason(telemetry={},history={}){const t=clone(telemetry||{}),evidence=collect(t),classification=classify(t,evidence),raw=buildHypotheses(t,evidence),hypotheses=scoreHypotheses(raw,evidence),contradictionIds=contradictionCheck(evidence,hypotheses),selected=hypotheses[0]||null,links=buildCausalLinks(t,evidence,hypotheses),blockers=[];if(classification!=="STABLE"&&!evidence.length)blockers.push("EVIDENCE_MISSING");if(contradictionIds.length)blockers.push("CONTRADICTORY_EVIDENCE");if(classification!=="STABLE"&&!selected)blockers.push("HYPOTHESIS_MISSING");if(selected&&selected.confidence<.72)blockers.push("HYPOTHESIS_CONFIDENCE_LOW");if(classification!=="STABLE"&&!evidence.some(x=>x.kind.includes("SOURCE")))blockers.push("DIRECT_SOURCE_EVIDENCE_MISSING");if(t.connection?.status==="OFFLINE"||t.firestore?.error)blockers.push("LIVE_STATE_UNAVAILABLE");if(classification!=="STABLE")blockers.push("ROOT_CAUSE_REQUIRES_MEDICINE_VERIFICATION","EXACT_SOURCE_REQUIRES_VERIFICATION");if(links.some(x=>!x.verified))blockers.push("CAUSAL_LINK_UNVERIFIED");const stable=classification==="STABLE";return {version:VERSION,generatedAt:new Date().toISOString(),classification,evidence,hypotheses,selectedHypothesisId:selected?.id||null,correlations:{target:t.targetCell||null,activeCaseCount:(t.activeCases||[]).length,evidenceCount:evidence.length,independentEvidenceCount:new Set(evidence.map(x=>x.fingerprint)).size,sourceDiversity:new Set(evidence.map(x=>x.source)).size},causalLinks:links,precisionGate:{pass:stable&&blockers.length===0,blockers,verifiedRootCause:false,verifiedExactSource:false},investigation:investigationPlan(t,evidence,hypotheses,links),historyHint:history&&selected?{occurrences:num(history[norm(selected.claim)]||0)}:{occurrences:0}};}
+export function reason(telemetry={},history={}){const t=clone(telemetry||{}),evidence=collect(t),classification=classify(t,evidence),raw=buildHypotheses(t,evidence),hypotheses=scoreHypotheses(raw,evidence),contradictionIds=contradictionCheck(evidence,hypotheses),selected=hypotheses[0]||null,links=buildCausalLinks(t,evidence,hypotheses),blockers=[];if(classification!=="STABLE"&&!evidence.length)blockers.push("EVIDENCE_MISSING");if(contradictionIds.length)blockers.push("CONTRADICTORY_EVIDENCE");if(classification!=="STABLE"&&!selected)blockers.push("HYPOTHESIS_MISSING");if(selected&&selected.confidence<.72)blockers.push("HYPOTHESIS_CONFIDENCE_LOW");if(classification!=="STABLE"&&!evidence.some(x=>x.kind.includes("SOURCE")))blockers.push("DIRECT_SOURCE_EVIDENCE_MISSING");if(t.connection?.status==="OFFLINE"||t.firestore?.error)blockers.push("LIVE_STATE_UNAVAILABLE");if(classification!=="STABLE")blockers.push("ROOT_CAUSE_REQUIRES_MEDICINE_VERIFICATION","EXACT_SOURCE_REQUIRES_VERIFICATION");if(links.some(x=>!x.verified))blockers.push("CAUSAL_LINK_UNVERIFIED");const stable=classification==="STABLE";const operationalInvestigation=buildOperationalInvestigation(t,evidence);return {version:VERSION,generatedAt:new Date().toISOString(),classification,evidence,hypotheses,selectedHypothesisId:selected?.id||null,correlations:{target:t.targetCell||null,activeCaseCount:(t.activeCases||[]).length,evidenceCount:evidence.length,independentEvidenceCount:new Set(evidence.map(x=>x.fingerprint)).size,sourceDiversity:new Set(evidence.map(x=>x.source)).size},causalLinks:links,precisionGate:{pass:stable&&blockers.length===0,blockers,verifiedRootCause:false,verifiedExactSource:false},investigation:investigationPlan(t,evidence,hypotheses,links),operationalInvestigation,historyHint:history&&selected?{occurrences:num(history[norm(selected.claim)]||0)}:{occurrences:0}};}
 if(typeof globalThis!=="undefined")globalThis.CIKURInternalAIReasoningCore={VERSION,reason};

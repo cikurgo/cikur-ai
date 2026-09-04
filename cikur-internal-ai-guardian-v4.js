@@ -1,6 +1,6 @@
-/** CIKUR GO INTERNAL AI — SYSTEM GUARDIAN V4 — INVESTIGATION GUARDIAN */
+/** CIKUR GO INTERNAL AI — SYSTEM GUARDIAN V5.1 — INVESTIGATION GUARDIAN */
 "use strict";
-export const VERSION="4.0.0-investigation-guardian";
+export const VERSION="5.1.0-operational-guardian";
 const clone=v=>{try{return JSON.parse(JSON.stringify(v));}catch{return v;}};
 const issue=(code,severity,message,details={})=>({code,severity,message,details:clone(details)});
 const REQUIRED=["cycle","step","metrics","connection","sourceScan"];
@@ -24,7 +24,7 @@ export function inspect({state,context,runtimeVersion,expectedRuntimeVersion,run
   if(total&&active+recovered>total)issues.push(issue("METRIC_INCONSISTENT","MEDIUM","Metric aktif + recovered melebihi total organ.",{active,recovered,total}));
   if(s.connection?.status==="OFFLINE")issues.push(issue("BCGO_OFFLINE","HIGH","BCGO offline; state terakhir tidak boleh diperlakukan sebagai fakta live."));
   if(s.firestore?.error)issues.push(issue("FIRESTORE_ERROR","HIGH","Firestore error; evidence yang bergantung pada Firestore harus ditahan."));
-  const si=s.sourceScan?.sourceIntelligence;
+  const oi=s.operationalInvestigation || null; if(oi?.decision==="INVESTIGATION_DIRECTIVE_READY"&&!oi.focus)issues.push(issue("AI_FOCUS_MISSING","MEDIUM","Internal AI menyatakan directive siap tetapi tidak memiliki focus target.")); const si=s.sourceScan?.sourceIntelligence;
   if(s.sourceScan?.status==="COMPLETE"&&!si)issues.push(issue("SOURCE_INTELLIGENCE_MISSING","HIGH","Source scan selesai tetapi source intelligence belum tersedia untuk investigasi."));
   const findings=Number(s.sourceScan?.findingsCount??s.sourceScan?.findings?.length??0),cross=Number(s.sourceScan?.crossFileFindings?.length??0);
   if(findings+cross>0&&active===0)issues.push(issue("SCAN_ACTIVE_DISCONNECT","MEDIUM","Source scan memiliki temuan tetapi tidak ada anomaly aktif; perlu korelasi."));
