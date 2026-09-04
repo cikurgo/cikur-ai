@@ -199,6 +199,7 @@ body{font-family:'Inter',sans-serif}
             <div>
                 <div class="text-xs font-semibold text-indigo-300 uppercase tracking-wider">Komunikasi dengan BCGO</div>
                 <div class="text-[10px] text-slate-500 mt-1">Jawaban dibangun dari kondisi saraf aktual.</div>
+                <div id="internal-ai-status" class="mt-2 text-[9px] code-font text-cyan-300">INTERNAL AI: MENUNGGU IMPULS</div>
             </div>
             <span class="text-[10px] code-font text-indigo-400">BCGO::CHAT</span>
         </div>
@@ -605,7 +606,8 @@ function sendQuestion(question) {
     const text = String(question || '').trim();
     if (!text) return;
     addChat('user', text);
-    const answer = window.BCGOBrain.ask(text);
+    const runtime = window.CIKURInternalAIRuntime;
+    const answer = runtime?.ask ? runtime.ask(text) : window.BCGOBrain.ask(text);
     setTimeout(() => addChat('bcgo', answer), 120);
 }
 
@@ -691,6 +693,24 @@ runAutonomousEngine(state => {
         addChat('bcgo', `Kanal komunikasi aktif. Saya membaca BCGO_STATE yang sama dengan monitor. Saat ini saya berada di tahap ${state.step}, cycle #${state.cycle}. Silakan tanya apa yang sedang saya kerjakan.`);
     }
 });
+window.addEventListener("cikur-internal-ai-state", event => {
+    const snap = event.detail;
+    const el = document.getElementById("internal-ai-status");
+    if (!el || !snap) return;
+    const label = { STABLE:"STABLE", ATTENTION:"ATTENTION", REVIEW_REQUIRED:"REVIEW REQUIRED", INFRASTRUCTURE_ERROR:"INFRASTRUCTURE ERROR" }[snap.signal] || snap.signal;
+    el.textContent = `INTERNAL AI: ${label} · ${snap.telemetry?.step || "-"} · cycle #${snap.telemetry?.cycle ?? 0}`;
+    el.className = `mt-2 text-[9px] code-font ${snap.signal === "STABLE" ? "text-emerald-300" : snap.signal === "INFRASTRUCTURE_ERROR" ? "text-rose-300" : "text-cyan-300"}`;
+});
+
+let lastInternalThought = "";
+window.addEventListener("cikur-internal-ai-thought", event => {
+    const d = event.detail || {};
+    const text = String(d.text || "").trim();
+    if (!text || text === lastInternalThought) return;
+    lastInternalThought = text;
+    if (typeof addChat === "function" && d.event?.type !== "SOURCE_SCAN_RESULT") addChat("bcgo", `🧠 ${text}`);
+});
+
 </script>
 
 <script>

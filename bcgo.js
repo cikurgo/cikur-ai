@@ -9,6 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
+import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v2.js";
 
 /*
  * BCGO MASTER NERVE SYSTEM v2.11.0
@@ -80,6 +81,7 @@ const normalizeFile = value => {
 };
 
 export function runAutonomousEngine(onCycleUpdate) {
+  const internalAI = installInternalAI();
   if (typeof onCycleUpdate !== "function") {
     throw new TypeError("BCGO membutuhkan callback UI.");
   }
@@ -1274,6 +1276,7 @@ export function runAutonomousEngine(onCycleUpdate) {
 
     const snapshot = safeClone(state);
     window.BCGO_STATE = snapshot;
+    try { internalAI.ingestBCGOState(snapshot); } catch (error) { console.warn("CIKUR Internal AI intake error:", error); }
     publishToUI(snapshot);
     publishBCGOStateToMedicine(snapshot);
   }
@@ -1537,6 +1540,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     state.firestore = { ...firestore };
     state.connection = deriveConnection();
     window.BCGO_STATE = safeClone(state);
+    try { internalAI.ingestBCGOState(window.BCGO_STATE); } catch (error) { console.warn("CIKUR Internal AI intake error:", error); }
     publishToUI(safeClone(state));
   }
 
