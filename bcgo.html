@@ -203,6 +203,9 @@ body{font-family:'Inter',sans-serif}
                 <div id="internal-ai-reasoning" class="mt-2 text-[9px] leading-4 text-slate-400">
                     REASONING: menunggu evidence...
                 </div>
+                <div id="internal-ai-causal" class="mt-1 text-[9px] leading-4 text-slate-500">
+                    CAUSAL TRACE: menunggu hubungan sebab-akibat...
+                </div>
             </div>
             <span class="text-[10px] code-font text-indigo-400">BCGO::CHAT</span>
         </div>
@@ -229,7 +232,7 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=3.0.0';
+import { runAutonomousEngine } from './bcgo.js?v=4.0.0';
 
 const $ = id => document.getElementById(id);
 
@@ -700,6 +703,7 @@ window.addEventListener("cikur-internal-ai-state", event => {
     const snap = event.detail;
     const el = document.getElementById("internal-ai-status");
     const reasoningEl = document.getElementById("internal-ai-reasoning");
+    const causalEl = document.getElementById("internal-ai-causal");
     if (!snap) return;
     if (el) {
         const label = {
@@ -725,6 +729,12 @@ window.addEventListener("cikur-internal-ai-state", event => {
             `REASONING: ${r.classification || "UNKNOWN"} · evidence ${r.evidence?.length || 0} · hypotheses ${r.hypotheses?.length || 0} · gate ${r.precisionGate?.pass ? "PASS" : "BLOCKED"}`
             + (h ? ` · top: ${String(h.claim).slice(0, 180)}` : "")
             + (snap.guardian ? ` · guardian ${snap.guardian.level}` : "");
+        if (causalEl) {
+            const links = Array.isArray(r.causalLinks) ? r.causalLinks.filter(x => x?.from).slice(0, 2) : [];
+            causalEl.textContent = links.length
+                ? `CAUSAL TRACE: ${links.map(x => `${x.from} → ${x.relation}${x.verified ? " ✓" : " ?"}`).join(" · ")}`
+                : "CAUSAL TRACE: belum ada hubungan sebab-akibat yang terbukti.";
+        }
     }
 });
 
@@ -733,10 +743,17 @@ window.addEventListener("cikur-internal-ai-reasoning", event => {
     const d = event.detail || {};
     const h = d.hypotheses?.[0];
     const reasoningEl = document.getElementById("internal-ai-reasoning");
+    const causalEl = document.getElementById("internal-ai-causal");
     if (reasoningEl) {
         reasoningEl.textContent =
             `REASONING: ${d.classification || "UNKNOWN"} · evidence ${d.evidenceCount || 0} · hypotheses ${d.hypotheses?.length || 0} · gate ${d.precisionGate?.pass ? "PASS" : "BLOCKED"}`
             + (h ? ` · top: ${String(h.claim).slice(0, 180)}` : "");
+    }
+    if (causalEl) {
+        const links = Array.isArray(d.causalLinks) ? d.causalLinks.filter(x => x?.from).slice(0, 2) : [];
+        causalEl.textContent = links.length
+            ? `CAUSAL TRACE: ${links.map(x => `${x.from} → ${x.relation}${x.verified ? " ✓" : " ?"}`).join(" · ")}`
+            : "CAUSAL TRACE: belum ada hubungan sebab-akibat yang terbukti.";
     }
 });
 

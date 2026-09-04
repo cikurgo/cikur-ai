@@ -68,15 +68,15 @@ export { db, auth, firebaseConfig };
 // Context gate for CIKUR GO Internal AI.
 // This exposes identity/version only; reasoning remains in the AI runtime.
 export const CIKUR_INTERNAL_AI_CONTEXT = Object.freeze({
-    system: "CIKUR GO",
-    role: "INTERNAL_INTELLIGENCE_CONTEXT_GATE",
-    intelligenceVersion: "V4_REASONING_GUARDIAN",
-    externalAI: false,
-    externalNetworkAI: false,
-    automaticPatch: false,
-    automaticSourceMutation: false,
-    automaticExecution: false,
-    humanApprovalRequired: true
+  system: "CIKUR GO",
+  role: "INTERNAL_INTELLIGENCE_CONTEXT_GATE",
+  version: "7.0.0",
+  externalAI: false,
+  automaticPatch: false,
+  automaticExecution: false,
+  humanApprovalRequired: true,
+  medicineOwnsVerification: true,
+  executorOwnsExecutionGate: true
 });
 window.CIKURInternalAIContext = CIKUR_INTERNAL_AI_CONTEXT;
 
