@@ -15,7 +15,7 @@ import { reason as internalAIReason } from "./cikur-internal-ai-core-v9.js";
 
 /*
  * ================================================================
- * BCGO MEDICINE v3.1.0 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
+ * BCGO MEDICINE v3.1.1 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
  * ================================================================
  * Boundary:
  *   Medicine observes, investigates, proves, proposes and validates.
@@ -2755,7 +2755,26 @@ function ingestBCGOActiveCases(activeCases, packet = {}) {
     if(!target || !REGISTRY[target]) continue;
     const bcgoId=String(bcgoCase?.id||"").trim();
     const signature=text(bcgoCase?.evidence?.message||bcgoCase?.message||bcgoCase?.signature||"BCGO anomaly",700);
-    const revisionToken=investigationEvidenceToken({id:bcgoId,reportedAt:bcgoCase?.evidence?.reportedAt||packet?.at||Date.now(),fileName:target,line:bcgoCase?.evidence?.line??null,column:bcgoCase?.evidence?.column??null,message:signature,sourceRevision:bcgoCase?.evidence?.sourceFinding?.hash||bcgoCase?.evidence?.sourceFinding?.fingerprint||""});
+    // BCGO_STATE is a live heartbeat. packet.at/cycle must NOT become part of
+    // the evidence revision, otherwise every heartbeat looks like new evidence
+    // and Medicine reopens the same investigation forever. Revision is derived
+    // only from stable case/evidence content.
+    const sourceFinding = bcgoCase?.evidence?.sourceFinding || {};
+    const revisionToken=investigationEvidenceToken({
+      id:bcgoId || bcgoCase?.evidence?.evidenceId || "",
+      reportedAt:bcgoCase?.evidence?.reportedAt || "",
+      fileName:target,
+      line:bcgoCase?.evidence?.line ?? null,
+      column:bcgoCase?.evidence?.column ?? null,
+      message:signature,
+      sourceRevision:sourceFinding?.hash || sourceFinding?.fingerprint || bcgoCase?.evidence?.evidenceFingerprint || "",
+      sourceFindingType:sourceFinding?.type || sourceFinding?.kind || "",
+      sourceFile:sourceFinding?.sourceFile || "",
+      targetFile:sourceFinding?.targetFile || "",
+      sourceLine:sourceFinding?.sourceLine ?? null,
+      targetLine:sourceFinding?.targetLine ?? null,
+      area:sourceFinding?.area || ""
+    });
     let c=bcgoId?S.cases.find(x=>x.bcgoCaseId===bcgoId&&!isTerminal(x)):null;
     if(!c)c=S.cases.find(x=>x.source===target&&x.signature===signature&&!isTerminal(x));
     if(c){

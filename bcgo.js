@@ -12,7 +12,7 @@ import { db, auth } from "./cikur-config.js";
 import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v9.js?v=9.0.0";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.14.0 + INTERNAL AI V9
+ * BCGO MASTER NERVE SYSTEM v2.14.1 + INTERNAL AI V9
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -45,7 +45,7 @@ const ORGAN_COUNT = Object.keys(ORGAN_REGISTRY).length;
 
 const SOURCE_SCAN_INTERVAL = 20000;
 const SOURCE_SCAN_FETCH_TIMEOUT = 10000;
-const SOURCE_SCAN_VERSION = "1.9.0";
+const SOURCE_SCAN_VERSION = "1.9.1";
 
 const ACTIVE_WINDOW = 15 * 60 * 1000;
 const CLOCK_SKEW = 5 * 60 * 1000;
@@ -1283,25 +1283,59 @@ export function runAutonomousEngine(onCycleUpdate) {
     return Object.entries(organs)
       .filter(([, info]) => info.state === "ACTIVE")
       .map(([file, info]) => {
-        const t = timestamp(info.reportedAt) || Date.now();
-        const fingerprint = `${file}|${info.message}|${t}`.replace(/\s+/g, " ");
-        let hash = 0;
-        for (let i = 0; i < fingerprint.length; i++) hash = ((hash << 5) - hash + fingerprint.charCodeAt(i)) | 0;
-        const id = `CASE-${Math.abs(hash).toString(36).toUpperCase()}`;
+        // Case identity must represent the evidence, not the heartbeat.
+        // A source-scan finding can remain active for many BCGO cycles; using
+        // Date.now() here previously created a brand-new case every cycle and
+        // made Medicine re-investigate the same finding repeatedly.
+        const sourceFinding = info.sourceFinding || null;
+        const stableEvidenceId = sourceFinding?.id || sourceFinding?.findingId || info.evidenceId || null;
+        const stableFingerprint = [
+          file,
+          info.evidenceType || "TELEMETRY",
+          stableEvidenceId || "",
+          info.line ?? "",
+          info.column ?? "",
+          sourceFinding?.type || sourceFinding?.kind || "",
+          sourceFinding?.sourceFile || "",
+          sourceFinding?.targetFile || "",
+          sourceFinding?.sourceLine ?? "",
+          sourceFinding?.targetLine ?? "",
+          sourceFinding?.area || "",
+          sourceFinding?.hash || sourceFinding?.fingerprint || "",
+          String(info.message || "").replace(/\s+/g, " ").trim()
+        ].join("|");
+        let hash = 2166136261;
+        for (let i = 0; i < stableFingerprint.length; i++) {
+          hash ^= stableFingerprint.charCodeAt(i);
+          hash = Math.imul(hash, 16777619);
+        }
+        const id = `CASE-${(hash >>> 0).toString(36).toUpperCase()}`;
+
+        const hasSourceProof = info.evidenceType === "SOURCE_SCAN" && !!sourceFinding;
+        const hasRuntimeEvidence = info.evidenceType !== "SOURCE_SCAN" && !!info.reportedAt;
+        const severity = /security|permission|denied|failed|undefined|null/i.test(String(info.message || ""))
+          ? "HIGH"
+          : (hasSourceProof ? (sourceFinding?.severity || "MEDIUM") : "MEDIUM");
+        const confidence = hasSourceProof
+          ? (String(sourceFinding?.confidence || "").toUpperCase() === "HIGH" ? 95 : 82)
+          : (hasRuntimeEvidence ? 88 : 60);
+
         return {
           id,
           target: file,
           rootCandidate: file,
-          severity: /security|permission|denied|failed|undefined|null/i.test(info.message) ? "HIGH" : "MEDIUM",
-          confidence: 92,
-          status: info.evidenceType === "SOURCE_SCAN" ? "SOURCE_SCAN_CONFIRMED" : "TELEMETRY_CONFIRMED",
+          severity,
+          confidence,
+          status: hasSourceProof ? "SOURCE_SCAN_DETECTED" : "TELEMETRY_DETECTED",
           evidence: {
             type: info.evidenceType || "TELEMETRY",
             message: info.message,
-            reportedAt: info.reportedAt,
-            line: info.line,
-            column: info.column,
-            sourceFinding: info.sourceFinding || null
+            reportedAt: info.reportedAt || null,
+            line: info.line ?? null,
+            column: info.column ?? null,
+            sourceFinding,
+            evidenceId: stableEvidenceId,
+            evidenceFingerprint: stableFingerprint
           }
         };
       });
