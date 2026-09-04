@@ -200,6 +200,9 @@ body{font-family:'Inter',sans-serif}
                 <div class="text-xs font-semibold text-indigo-300 uppercase tracking-wider">Komunikasi dengan BCGO</div>
                 <div class="text-[10px] text-slate-500 mt-1">Jawaban dibangun dari kondisi saraf aktual.</div>
                 <div id="internal-ai-status" class="mt-2 text-[9px] code-font text-cyan-300">INTERNAL AI: MENUNGGU IMPULS</div>
+                <div id="internal-ai-reasoning" class="mt-2 text-[9px] leading-4 text-slate-400">
+                    REASONING: menunggu evidence...
+                </div>
             </div>
             <span class="text-[10px] code-font text-indigo-400">BCGO::CHAT</span>
         </div>
@@ -226,7 +229,7 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=2.12.0';
+import { runAutonomousEngine } from './bcgo.js?v=3.0.0';
 
 const $ = id => document.getElementById(id);
 
@@ -696,13 +699,46 @@ runAutonomousEngine(state => {
 window.addEventListener("cikur-internal-ai-state", event => {
     const snap = event.detail;
     const el = document.getElementById("internal-ai-status");
-    if (!el || !snap) return;
-    const label = { STABLE:"STABLE", ATTENTION:"ATTENTION", REVIEW_REQUIRED:"REVIEW REQUIRED", INFRASTRUCTURE_ERROR:"INFRASTRUCTURE ERROR" }[snap.signal] || snap.signal;
-    el.textContent = `INTERNAL AI: ${label} · ${snap.telemetry?.step || "-"} · cycle #${snap.telemetry?.cycle ?? 0}`;
-    el.className = `mt-2 text-[9px] code-font ${snap.signal === "STABLE" ? "text-emerald-300" : snap.signal === "INFRASTRUCTURE_ERROR" ? "text-rose-300" : "text-cyan-300"}`;
+    const reasoningEl = document.getElementById("internal-ai-reasoning");
+    if (!snap) return;
+    if (el) {
+        const label = {
+            STABLE:"STABLE",
+            ATTENTION:"ATTENTION",
+            REVIEW_REQUIRED:"REVIEW REQUIRED",
+            INFRASTRUCTURE_ERROR:"INFRASTRUCTURE ERROR",
+            REASONING_ACTIVE:"REASONING ACTIVE",
+            EVIDENCE_ACTIVE:"EVIDENCE ACTIVE",
+            CONTRADICTORY:"CONTRADICTORY"
+        }[snap.signal] || snap.signal;
+        el.textContent = `INTERNAL AI: ${label} · ${snap.telemetry?.step || "-"} · cycle #${snap.telemetry?.cycle ?? 0}`;
+        el.className = `mt-2 text-[9px] code-font ${
+            snap.signal === "STABLE" ? "text-emerald-300" :
+            snap.signal === "INFRASTRUCTURE_ERROR" || snap.signal === "CONTRADICTORY" ? "text-rose-300" :
+            "text-cyan-300"
+        }`;
+    }
+    if (reasoningEl && snap.reasoning) {
+        const r = snap.reasoning;
+        const h = r.hypotheses?.[0];
+        reasoningEl.textContent =
+            `REASONING: ${r.classification || "UNKNOWN"} · evidence ${r.evidence?.length || 0} · hypotheses ${r.hypotheses?.length || 0} · gate ${r.precisionGate?.pass ? "PASS" : "BLOCKED"}`
+            + (h ? ` · top: ${String(h.claim).slice(0, 180)}` : "");
+    }
 });
 
 let lastInternalThought = "";
+window.addEventListener("cikur-internal-ai-reasoning", event => {
+    const d = event.detail || {};
+    const h = d.hypotheses?.[0];
+    const reasoningEl = document.getElementById("internal-ai-reasoning");
+    if (reasoningEl) {
+        reasoningEl.textContent =
+            `REASONING: ${d.classification || "UNKNOWN"} · evidence ${d.evidenceCount || 0} · hypotheses ${d.hypotheses?.length || 0} · gate ${d.precisionGate?.pass ? "PASS" : "BLOCKED"}`
+            + (h ? ` · top: ${String(h.claim).slice(0, 180)}` : "");
+    }
+});
+
 window.addEventListener("cikur-internal-ai-thought", event => {
     const d = event.detail || {};
     const text = String(d.text || "").trim();

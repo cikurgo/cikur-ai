@@ -9,7 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
-import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v2.js";
+import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v3.js?v=3.0.0";
 
 /*
  * BCGO MASTER NERVE SYSTEM v2.11.0
