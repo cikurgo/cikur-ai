@@ -232,7 +232,7 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=4.0.0';
+import { runAutonomousEngine } from './bcgo.js?v=8.1.0';
 
 const $ = id => document.getElementById(id);
 
@@ -728,7 +728,7 @@ window.addEventListener("cikur-internal-ai-state", event => {
         reasoningEl.textContent =
             `REASONING: ${r.classification || "UNKNOWN"} · evidence ${r.evidence?.length || 0} · hypotheses ${r.hypotheses?.length || 0} · gate ${r.precisionGate?.pass ? "PASS" : "BLOCKED"}`
             + (h ? ` · top: ${String(h.claim).slice(0, 180)}` : "")
-            + (snap.guardian ? ` · guardian ${snap.guardian.level}` : "");
+            + (snap.guardian ? ` · guardian ${snap.guardian.healthy ? "OK" : snap.guardian.level}` : "");
         if (causalEl) {
             const links = Array.isArray(r.causalLinks) ? r.causalLinks.filter(x => x?.from).slice(0, 2) : [];
             causalEl.textContent = links.length
@@ -761,7 +761,7 @@ window.addEventListener("cikur-internal-ai-guardian", event => {
     const g = event.detail || {};
     const el = document.getElementById("internal-ai-status");
     if (!el) return;
-    if (g.level === "NONE") return;
+    if (g.level === "NONE") { el.textContent += " · GUARD OK"; return; }
     el.textContent += ` · GUARD ${g.level}`;
 });
 

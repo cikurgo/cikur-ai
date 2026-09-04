@@ -9,10 +9,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
-import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v5.js?v=5.0.0";
+import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v6.js?v=6.0.1";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.12.0 + INTERNAL AI V7
+ * BCGO MASTER NERVE SYSTEM v2.13.0 + INTERNAL AI V8
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -1486,6 +1486,10 @@ export function runAutonomousEngine(onCycleUpdate) {
         state.lastTelemetryAt = topAt || state.lastTelemetryAt;
         state.lastTelemetryMessage = top?.message || state.lastTelemetryMessage;
         window.BCGO_STATE = safeClone(state);
+        // Every authoritative system_logs snapshot must pass through Internal AI.
+        // The adapter itself deduplicates identical evidence, so this keeps the AI
+        // synchronized without turning heartbeat/listener refreshes into new evidence.
+        try { internalAI.ingestBCGOState(window.BCGO_STATE); } catch (error) { console.warn("CIKUR Internal AI system_logs intake error:", error); }
 
         if (top && `${normalizeFile(top.fileName)}|${String(top.message || "")}|${topAt}` !== previousTop) {
           interruptForTelemetry(top.fileName, top.message, top);
