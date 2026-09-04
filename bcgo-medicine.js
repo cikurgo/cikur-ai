@@ -126,7 +126,7 @@ const TERMINAL_STATUSES = new Set(["REJECTED","FIXED_VERIFIED","RECOVERED"]);
 const MAX_INVESTIGATION_ATTEMPTS_PER_REVISION = 3;
 
 const S = {
-  version: "3.1.0",
+  version: "3.1.1",
   registry: REGISTRY,
   surface: null,
   logs: [],
@@ -1152,6 +1152,38 @@ function htmlHasElement(source, selector) {
   return new RegExp(`(?:id|name)\\s*=\\s*["']${escRe(id)}["']`, "i").test(source);
 }
 
+
+function javascriptContractEvidence(file, source, log) {
+  const message = String(log?.message || log?.error || "");
+  const match = message.match(/\b([A-Za-z_$][\w$]*)\s+is not defined\b/i);
+  if (!match) return [];
+  const symbol = match[1];
+  const lines = sourceLines(source);
+  const declaration = new RegExp(
+    `(?:function\\s+${escRe(symbol)}\\b|(?:const|let|var|class)\\s+${escRe(symbol)}\\b|${escRe(symbol)}\\s*=\\s*(?:async\\s*)?(?:function|\\([^)]*\\)\\s*=>))`
+  );
+  const references = [];
+  lines.forEach((code, idx) => {
+    if (new RegExp(`\\b${escRe(symbol)}\\b`).test(code)) references.push({ line: idx + 1, code });
+  });
+  const declarations = references.filter(x => declaration.test(x.code));
+  const uses = references.filter(x => !declaration.test(x.code));
+  if (!uses.length || declarations.length) return [];
+  const runtimeLocations = parseRuntimeLocations(log);
+  const exact = runtimeLocations.find(x => lower(x.file) === lower(file) && x.line);
+  const hit = exact ? uses.find(x => x.line === Number(exact.line)) : uses[0];
+  if (!hit) return [];
+  return [{
+    file, line: hit.line, column: exact?.col || null, variable: symbol, before: hit.code, after: null,
+    kind: "UNDEFINED_SYMBOL", symbol, exactLineHit: !!exact && hit.line === Number(exact.line), signatureHit: true,
+    evidenceStrength: exact && hit.line === Number(exact.line) ? "HIGH" : "MEDIUM",
+    evidenceReason: exact && hit.line === Number(exact.line)
+      ? `Runtime melaporkan ${symbol} undefined tepat pada ${file}:${hit.line}; source menggunakan simbol tersebut tetapi tidak memiliki deklarasi yang terbukti.`
+      : `Source ${file}:${hit.line} menggunakan ${symbol}, sementara tidak ditemukan deklarasi ${symbol} pada source yang dipindai.`,
+    contractStatus: "MISSING_DECLARATION", solutionStatus: "REQUIRES_BEHAVIORAL_CONTRACT"
+  }];
+}
+
 function exactDomEvidence(file, source, log) {
   const locations = parseRuntimeLocations(log);
   const assignments = domAssignments(file, source);
@@ -1211,7 +1243,8 @@ async function buildSourceEvidence(targetFile, log) {
       ? Object.keys(htmlResults).filter(page => extractDependencies(page, htmlResults[page].text).includes(name))
       : [];
 
-    for (const e of exactDomEvidence(name, data.text, log)) {
+    const contractEvidence = javascriptContractEvidence(name, data.text, log);
+    for (const e of [...exactDomEvidence(name, data.text, log), ...contractEvidence]) {
       let strength = e.evidenceStrength;
       let reason = e.evidenceReason;
 

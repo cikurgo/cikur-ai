@@ -12,7 +12,7 @@ import { db, auth } from "./cikur-config.js";
 import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v9.js?v=9.0.0";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.14.1 + INTERNAL AI V9
+ * BCGO MASTER NERVE SYSTEM v2.14.2 + INTERNAL AI V9
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -45,7 +45,7 @@ const ORGAN_COUNT = Object.keys(ORGAN_REGISTRY).length;
 
 const SOURCE_SCAN_INTERVAL = 20000;
 const SOURCE_SCAN_FETCH_TIMEOUT = 10000;
-const SOURCE_SCAN_VERSION = "1.9.1";
+const SOURCE_SCAN_VERSION = "1.9.2";
 
 const ACTIVE_WINDOW = 15 * 60 * 1000;
 const CLOCK_SKEW = 5 * 60 * 1000;
@@ -1186,10 +1186,36 @@ export function runAutonomousEngine(onCycleUpdate) {
         }
       }
       const allFindings = Object.values(scanned).flatMap(item => item.findings || []);
+      const sourceIntelligence = buildSourceIntelligence(scanned, latestSystemLogs);
+      const runtimeContractFindings = [];
+      for (const rec of (sourceIntelligence.symbols || [])) {
+        if (rec.status !== "NOT_DEFINED_IN_SCANNED_SOURCE") continue;
+        const runtimeMatch = (latestSystemLogs || []).find(log =>
+          String(extractSymbolFromText(log?.message || log?.error || log?.text) || "").toLowerCase() === String(rec.symbol || "").toLowerCase()
+        );
+        const hit = (rec.sourceHits || [])[0];
+        const file = hit?.file || runtimeMatch?.fileName || runtimeMatch?.file || null;
+        if (!file) continue;
+        runtimeContractFindings.push({
+          severity: "HIGH",
+          type: "JS_UNDEFINED_SYMBOL",
+          kind: "JS_UNDEFINED_SYMBOL",
+          file: normalizeFile(file),
+          line: Number(hit?.line || runtimeMatch?.lineNumber || runtimeMatch?.line || 0) || null,
+          column: Number(runtimeMatch?.columnNumber || runtimeMatch?.column || 0) || null,
+          sourceFile: normalizeFile(file),
+          targetFile: normalizeFile(file),
+          area: `FUNCTION:${rec.symbol}`,
+          confidence: "HIGH",
+          message: `Runtime melaporkan ${rec.symbol} tidak didefinisikan dan source scan tidak menemukan deklarasi ${rec.symbol} pada source yang tersedia.`,
+          evidence: { symbol: rec.symbol, status: rec.status, sourceHits: rec.sourceHits || [], definedIn: rec.definedIn || [], runtimeEvidence: runtimeMatch || null }
+        });
+      }
+      const combinedFindings = [...allFindings, ...runtimeContractFindings];
       const crossComparison = compareCrossFileSources(scanned);
       const crossFileFindings = crossComparison.findings;
       const relations = crossComparison.relations;
-      const actionable = [...failures,...allFindings,...crossFileFindings].filter(f => f.severity !== 'INFO').slice(0,100);
+      const actionable = [...failures,...combinedFindings,...crossFileFindings].filter(f => f.severity !== 'INFO').slice(0,100);
       const relationSummary = {
         synchronized: relations.filter(r => r.status === 'SYNCHRONIZED' || r.status === 'MATCHED_SURFACE').length,
         mismatch: relations.filter(r => /MISMATCH/.test(String(r.status))).length,
@@ -1198,7 +1224,7 @@ export function runAutonomousEngine(onCycleUpdate) {
         linked: relations.filter(r => r.status === 'LINKED').length
       };
       const status = failures.length ? 'DEGRADED' : actionable.length ? 'FINDINGS' : 'CLEAN';
-      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:crossFileFindings.slice(0,100),relations:relations.slice(0,200),relationSummary,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),sourceIntelligence:buildSourceIntelligence(scanned, latestSystemLogs),message:failures.length ? `Scanner selesai: ${files.length} source diproses, ${failures.length} source tidak terbaca.` : actionable.length ? `Scanner selesai: ${files.length} source dibaca; ${actionable.length} temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} source dibaca dan dianalisis tanpa temuan struktural/cross-file.` };
+      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...combinedFindings].slice(0,100),crossFileFindings:crossFileFindings.slice(0,100),relations:relations.slice(0,200),relationSummary,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),sourceIntelligence, message:failures.length ? `Scanner selesai: ${files.length} source diproses, ${failures.length} source tidak terbaca.` : actionable.length ? `Scanner selesai: ${files.length} source dibaca; ${actionable.length} temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} source dibaca dan dianalisis tanpa temuan struktural/cross-file.` };
       recordEvent('SOURCE_SCAN_RESULT', state.sourceScan.message, actionable.length ? 'SYS_SOURCE_FINDINGS' : 'SYS_SOURCE_CLEAN');
       try {
         const aiSnapshot = internalAI.ingestBCGOState(safeClone(state));
