@@ -12,7 +12,7 @@ import { db, auth } from "./cikur-config.js";
 import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v9.js?v=9.0.0";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.14.2 + INTERNAL AI V9
+ * BCGO MASTER NERVE SYSTEM v2.15.0 + INTERNAL AI V9
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -45,7 +45,7 @@ const ORGAN_COUNT = Object.keys(ORGAN_REGISTRY).length;
 
 const SOURCE_SCAN_INTERVAL = 20000;
 const SOURCE_SCAN_FETCH_TIMEOUT = 10000;
-const SOURCE_SCAN_VERSION = "1.9.2";
+const SOURCE_SCAN_VERSION = "1.10.0";
 
 const ACTIVE_WINDOW = 15 * 60 * 1000;
 const CLOCK_SKEW = 5 * 60 * 1000;
@@ -554,8 +554,13 @@ export function runAutonomousEngine(onCycleUpdate) {
     const tagStack = [];
     const trackedTags = new Set(['div','section','form','main','header','footer','script','style']);
     const tagRe = /<\/?([a-zA-Z][\w:-]*)(\s[^>]*?)?\/?\s*>/g;
+    // Structural HTML parsing must not interpret '<div>' / '</div>' strings
+    // inside inline JavaScript or CSS as real DOM tags. Keep offsets/line
+    // numbers identical while blanking script/style bodies for the tag stack.
+    const structuralText = text.replace(/(<script\b[^>]*>)[\s\S]*?(<\/script\s*>)/gi, (_,open,close) => open + ' '.repeat(Math.max(0, _.length - open.length - close.length)) + close)
+      .replace(/(<style\b[^>]*>)[\s\S]*?(<\/style\s*>)/gi, (_,open,close) => open + ' '.repeat(Math.max(0, _.length - open.length - close.length)) + close);
     let match;
-    while ((match = tagRe.exec(text))) {
+    while ((match = tagRe.exec(structuralText))) {
       const tag = match[1].toLowerCase();
       const raw = match[0];
       const line = sourceLineNumber(text, match.index);
@@ -1186,36 +1191,10 @@ export function runAutonomousEngine(onCycleUpdate) {
         }
       }
       const allFindings = Object.values(scanned).flatMap(item => item.findings || []);
-      const sourceIntelligence = buildSourceIntelligence(scanned, latestSystemLogs);
-      const runtimeContractFindings = [];
-      for (const rec of (sourceIntelligence.symbols || [])) {
-        if (rec.status !== "NOT_DEFINED_IN_SCANNED_SOURCE") continue;
-        const runtimeMatch = (latestSystemLogs || []).find(log =>
-          String(extractSymbolFromText(log?.message || log?.error || log?.text) || "").toLowerCase() === String(rec.symbol || "").toLowerCase()
-        );
-        const hit = (rec.sourceHits || [])[0];
-        const file = hit?.file || runtimeMatch?.fileName || runtimeMatch?.file || null;
-        if (!file) continue;
-        runtimeContractFindings.push({
-          severity: "HIGH",
-          type: "JS_UNDEFINED_SYMBOL",
-          kind: "JS_UNDEFINED_SYMBOL",
-          file: normalizeFile(file),
-          line: Number(hit?.line || runtimeMatch?.lineNumber || runtimeMatch?.line || 0) || null,
-          column: Number(runtimeMatch?.columnNumber || runtimeMatch?.column || 0) || null,
-          sourceFile: normalizeFile(file),
-          targetFile: normalizeFile(file),
-          area: `FUNCTION:${rec.symbol}`,
-          confidence: "HIGH",
-          message: `Runtime melaporkan ${rec.symbol} tidak didefinisikan dan source scan tidak menemukan deklarasi ${rec.symbol} pada source yang tersedia.`,
-          evidence: { symbol: rec.symbol, status: rec.status, sourceHits: rec.sourceHits || [], definedIn: rec.definedIn || [], runtimeEvidence: runtimeMatch || null }
-        });
-      }
-      const combinedFindings = [...allFindings, ...runtimeContractFindings];
       const crossComparison = compareCrossFileSources(scanned);
       const crossFileFindings = crossComparison.findings;
       const relations = crossComparison.relations;
-      const actionable = [...failures,...combinedFindings,...crossFileFindings].filter(f => f.severity !== 'INFO').slice(0,100);
+      const actionable = [...failures,...allFindings,...crossFileFindings].filter(f => f.severity !== 'INFO').slice(0,100);
       const relationSummary = {
         synchronized: relations.filter(r => r.status === 'SYNCHRONIZED' || r.status === 'MATCHED_SURFACE').length,
         mismatch: relations.filter(r => /MISMATCH/.test(String(r.status))).length,
@@ -1224,7 +1203,7 @@ export function runAutonomousEngine(onCycleUpdate) {
         linked: relations.filter(r => r.status === 'LINKED').length
       };
       const status = failures.length ? 'DEGRADED' : actionable.length ? 'FINDINGS' : 'CLEAN';
-      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...combinedFindings].slice(0,100),crossFileFindings:crossFileFindings.slice(0,100),relations:relations.slice(0,200),relationSummary,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),sourceIntelligence, message:failures.length ? `Scanner selesai: ${files.length} source diproses, ${failures.length} source tidak terbaca.` : actionable.length ? `Scanner selesai: ${files.length} source dibaca; ${actionable.length} temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} source dibaca dan dianalisis tanpa temuan struktural/cross-file.` };
+      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:crossFileFindings.slice(0,100),relations:relations.slice(0,200),relationSummary,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),sourceIntelligence:buildSourceIntelligence(scanned, latestSystemLogs),message:failures.length ? `Scanner selesai: ${files.length} source diproses, ${failures.length} source tidak terbaca.` : actionable.length ? `Scanner selesai: ${files.length} source dibaca; ${actionable.length} temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} source dibaca dan dianalisis tanpa temuan struktural/cross-file.` };
       recordEvent('SOURCE_SCAN_RESULT', state.sourceScan.message, actionable.length ? 'SYS_SOURCE_FINDINGS' : 'SYS_SOURCE_CLEAN');
       try {
         const aiSnapshot = internalAI.ingestBCGOState(safeClone(state));
@@ -1309,59 +1288,25 @@ export function runAutonomousEngine(onCycleUpdate) {
     return Object.entries(organs)
       .filter(([, info]) => info.state === "ACTIVE")
       .map(([file, info]) => {
-        // Case identity must represent the evidence, not the heartbeat.
-        // A source-scan finding can remain active for many BCGO cycles; using
-        // Date.now() here previously created a brand-new case every cycle and
-        // made Medicine re-investigate the same finding repeatedly.
-        const sourceFinding = info.sourceFinding || null;
-        const stableEvidenceId = sourceFinding?.id || sourceFinding?.findingId || info.evidenceId || null;
-        const stableFingerprint = [
-          file,
-          info.evidenceType || "TELEMETRY",
-          stableEvidenceId || "",
-          info.line ?? "",
-          info.column ?? "",
-          sourceFinding?.type || sourceFinding?.kind || "",
-          sourceFinding?.sourceFile || "",
-          sourceFinding?.targetFile || "",
-          sourceFinding?.sourceLine ?? "",
-          sourceFinding?.targetLine ?? "",
-          sourceFinding?.area || "",
-          sourceFinding?.hash || sourceFinding?.fingerprint || "",
-          String(info.message || "").replace(/\s+/g, " ").trim()
-        ].join("|");
-        let hash = 2166136261;
-        for (let i = 0; i < stableFingerprint.length; i++) {
-          hash ^= stableFingerprint.charCodeAt(i);
-          hash = Math.imul(hash, 16777619);
-        }
-        const id = `CASE-${(hash >>> 0).toString(36).toUpperCase()}`;
-
-        const hasSourceProof = info.evidenceType === "SOURCE_SCAN" && !!sourceFinding;
-        const hasRuntimeEvidence = info.evidenceType !== "SOURCE_SCAN" && !!info.reportedAt;
-        const severity = /security|permission|denied|failed|undefined|null/i.test(String(info.message || ""))
-          ? "HIGH"
-          : (hasSourceProof ? (sourceFinding?.severity || "MEDIUM") : "MEDIUM");
-        const confidence = hasSourceProof
-          ? (String(sourceFinding?.confidence || "").toUpperCase() === "HIGH" ? 95 : 82)
-          : (hasRuntimeEvidence ? 88 : 60);
-
+        const t = timestamp(info.reportedAt) || Date.now();
+        const fingerprint = `${file}|${info.message}|${t}`.replace(/\s+/g, " ");
+        let hash = 0;
+        for (let i = 0; i < fingerprint.length; i++) hash = ((hash << 5) - hash + fingerprint.charCodeAt(i)) | 0;
+        const id = `CASE-${Math.abs(hash).toString(36).toUpperCase()}`;
         return {
           id,
           target: file,
           rootCandidate: file,
-          severity,
-          confidence,
-          status: hasSourceProof ? "SOURCE_SCAN_DETECTED" : "TELEMETRY_DETECTED",
+          severity: /security|permission|denied|failed|undefined|null/i.test(info.message) ? "HIGH" : "MEDIUM",
+          confidence: 92,
+          status: info.evidenceType === "SOURCE_SCAN" ? "SOURCE_SCAN_CONFIRMED" : "TELEMETRY_CONFIRMED",
           evidence: {
             type: info.evidenceType || "TELEMETRY",
             message: info.message,
-            reportedAt: info.reportedAt || null,
-            line: info.line ?? null,
-            column: info.column ?? null,
-            sourceFinding,
-            evidenceId: stableEvidenceId,
-            evidenceFingerprint: stableFingerprint
+            reportedAt: info.reportedAt,
+            line: info.line,
+            column: info.column,
+            sourceFinding: info.sourceFinding || null
           }
         };
       });

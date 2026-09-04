@@ -1,6 +1,6 @@
 /* ============================================================
    BCGO INTERNAL EXECUTOR CORE
-   Version 3.1.1 (Production Enhanced)
+   Version 3.1.0 (Production Enhanced)
    ------------------------------------------------------------
    Pure deterministic execution engine.
    No external network, AI API, GitHub API, Firebase Functions,
@@ -9,7 +9,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "3.1.1";
+  const VERSION = "3.1.0";
   const NAME = "BCGO_INTERNAL_EXECUTOR_CORE";
 
   const OPS = Object.freeze({

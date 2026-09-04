@@ -15,7 +15,7 @@ import { reason as internalAIReason } from "./cikur-internal-ai-core-v9.js";
 
 /*
  * ================================================================
- * BCGO MEDICINE v3.1.1 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
+ * BCGO MEDICINE v3.2.0 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
  * ================================================================
  * Boundary:
  *   Medicine observes, investigates, proves, proposes and validates.
@@ -126,7 +126,7 @@ const TERMINAL_STATUSES = new Set(["REJECTED","FIXED_VERIFIED","RECOVERED"]);
 const MAX_INVESTIGATION_ATTEMPTS_PER_REVISION = 3;
 
 const S = {
-  version: "3.1.1",
+  version: "3.2.0",
   registry: REGISTRY,
   surface: null,
   logs: [],
@@ -487,6 +487,156 @@ function bestCrossFileFinding(scan) {
     .sort((a,b)=>(severityRank[b.severity]||0)-(severityRank[a.severity]||0));
 }
 
+function trackedHtmlStack(source) {
+  const trackedTags = new Set(['div','section','form','main','header','footer','script','style','body','html']);
+  const stack = [];
+  const textSource = String(source || '');
+  const tagRe = /<\/?([a-zA-Z][\w:-]*)(\s[^>]*?)?\/?\s*>/g;
+  let match;
+  while ((match = tagRe.exec(textSource))) {
+    const tag = String(match[1] || '').toLowerCase();
+    if (!trackedTags.has(tag)) continue;
+    const raw = match[0];
+    const line = sourceLineNumber(textSource, match.index);
+    if (/^<\//.test(raw)) {
+      const pos = stack.map(x => x.tag).lastIndexOf(tag);
+      if (pos !== -1) stack.splice(pos, 1);
+    } else if (!/\/\s*>$/.test(raw) && !['meta','link','img','input','br','hr','source','area','base','embed','param','track','wbr'].includes(tag)) {
+      stack.push({tag,line,index:match.index,open:raw});
+    }
+  }
+  return stack;
+}
+
+function buildLocalSourceFindingCandidate(finding, record) {
+  const file = normalizeFile(finding?.file || finding?.sourceFile || finding?.targetFile);
+  const source = String(record?.text || '');
+  if (!file || !source) return {ready:false,reason:'SOURCE_NOT_READABLE'};
+
+  const type = String(finding?.type || finding?.kind || '').toUpperCase();
+
+  if (type === 'UNBALANCED_HTML') {
+    const tagMatch = String(finding?.message || '').match(/<\/?([a-zA-Z][\w:-]*)>/);
+    const tag = tagMatch ? tagMatch[1].toLowerCase() : null;
+    const stack = trackedHtmlStack(source);
+    const target = stack.find(x => Number(x.line) === Number(finding?.line) && (!tag || x.tag === tag))
+      || stack.find(x => (!tag || x.tag === tag));
+    if (!target) return {ready:false,reason:'UNBALANCED_HTML_TARGET_NOT_FOUND'};
+
+    const closers = stack.slice().reverse().map(x => `</${x.tag}>`);
+    if (!closers.length) return {ready:false,reason:'NO_UNCLOSED_TAGS_FOUND'};
+
+    const bodyClose = source.match(/<\/body\s*>/i);
+    const htmlClose = source.match(/<\/html\s*>/i);
+    const anchor = bodyClose || htmlClose;
+    const before = anchor ? anchor[0] : source.slice(-1);
+    const after = anchor
+      ? `${closers.map(x => `\n${x}`).join('')}\n`
+      : `\n${closers.join('\n')}\n`;
+
+    return {
+      ready:true,
+      operation:{
+        type:'INSERT_EXACT',
+        file,
+        line:target.line,
+        before,
+        after,
+        reason:`Source scanner menemukan tag <${target.tag}> yang belum tertutup. Medicine membaca ulang source dan menutup seluruh tracked-tag yang benar-benar masih terbuka secara deterministic sebelum ${anchor ? anchor[0] : 'EOF'}.`,
+        evidenceReason:`Bukti HIGH berasal dari source aktual ${file}:${target.line}; stack HTML dihitung ulang dari source yang sama dan target exact ditemukan.`
+      },
+      sourceBlock:{file,line:target.line,code:target.open},
+      targetBlock:{file,line:target.line,code:target.open},
+      evidenceStrength:'HIGH',
+      evidenceReason:`Source aktual ${file} mengandung tracked tag <${target.tag}> yang belum memiliki pasangan penutup.`
+    };
+  }
+
+  if (type === 'DUPLICATE_ID') {
+    return {ready:false,reason:'DUPLICATE_ID_REQUIRES_SEMANTIC_REVIEW',evidenceStrength:'HIGH',evidenceReason:'Duplicate ID terbukti di source aktual, tetapi perubahan nama/remove ID dapat memutus dependency DOM sehingga tidak dibuka sebagai patch otomatis.'};
+  }
+
+  if (type === 'UNBALANCED_JS' || type === 'UNTERMINATED_STRING') {
+    return {ready:false,reason:`${type}_REQUIRES_CODE_PARSE`,evidenceStrength:'HIGH',evidenceReason:'Finding source aktual terbukti, tetapi patch otomatis ditahan karena scanner belum memiliki transformasi AST/parser yang cukup aman untuk menghasilkan BEFORE → AFTER exact.'};
+  }
+
+  return {ready:false,reason:'SOURCE_FINDING_NOT_AUTOMATABLE',evidenceStrength:finding?.severity === 'HIGH' ? 'HIGH' : 'MEDIUM',evidenceReason:'Finding source aktual terbukti, tetapi belum memiliki transformasi deterministic yang aman.'};
+}
+
+async function createLocalSourceFindingCase(finding, sources, scan) {
+  const file = normalizeFile(finding?.file || finding?.sourceFile || finding?.targetFile);
+  if (!file || !isDiagnosticFile(file)) return null;
+  const sourceRecord = sources[file];
+  if (!sourceRecord?.ok || typeof sourceRecord.text !== 'string') return null;
+
+  const key = `LOCAL_SOURCE|${String(finding.type || finding.kind || '')}|${file}|${finding.line || ''}|${text(finding.message || finding.detail || '',500)}`;
+  let c = S.cases.find(x => x.localSourceKey === key && !isTerminal(x));
+  if (!c) {
+    const diagnosis = {
+      code: String(finding.type || finding.kind || 'SOURCE_FINDING'),
+      title: `Source anomaly terverifikasi pada ${file}`,
+      severity: String(finding.severity || 'MEDIUM').toUpperCase(),
+      confidence: String(finding.severity || '').toUpperCase() === 'HIGH' ? 0.98 : 0.84,
+      treatment: 'SOURCE_PRECISION_REPAIR'
+    };
+    c = {
+      id:`CASE-${uid().toUpperCase()}`,
+      evidenceId:null,bcgoCaseId:null,source:file,
+      signature:text(finding.message || finding.detail || `${finding.type || finding.kind} pada ${file}`,700),
+      diagnosis,prescription:{treatment:'SOURCE_PRECISION_REPAIR',risk:diagnosis.severity,mode:'BCGO_SOURCE_SCAN'},
+      status:'INVESTIGATING',createdAt:now(),lastSeenAt:now(),evidenceCount:1,
+      evidence:{kind:'BCGO_SOURCE_FINDING',finding},lastEvidence:{kind:'BCGO_SOURCE_FINDING',finding},
+      runtimeLocation:{file,line:Number(finding.line)||null,col:Number(finding.column)||null,stack:''},
+      rootCauseFile:file,rootCauseStatus:'UNPROVEN',sourceEvidence:[],repairPlan:null,patchProposal:null,validation:null,
+      localSourceKey:key,bcgoSourceFinding:finding,sourceFile:file,targetFile:file,
+      bcgoCycle:Number(scan?.cycle || 0),bcgoReceivedAt:now(),bcgoRevisionToken:bcgoScanToken(scan),lastInvestigatedEvidenceToken:null
+    };
+    S.cases.unshift(c); S.cases=S.cases.slice(0,100); S.activeCase=c;
+    emit('case_created',{case:c,source:'BCGO_LOCAL_SOURCE_SCAN'});
+  } else {
+    c.lastSeenAt=now();c.bcgoSourceFinding=finding;c.evidence={...(c.evidence||{}),kind:'BCGO_SOURCE_FINDING',finding};c.lastEvidence=c.evidence;S.activeCase=c;
+  }
+
+  const candidate=buildLocalSourceFindingCandidate(finding,sourceRecord);
+  const checkedFiles=Object.keys(sources);
+  const sourceEvidence=[{...finding,file,line:Number(finding.line)||null,sourceFile:file,targetFile:file,
+    evidenceStrength:candidate.evidenceStrength || (String(finding.severity||'').toUpperCase()==='HIGH' ? 'HIGH':'MEDIUM'),
+    evidenceReason:candidate.evidenceReason || 'Finding terbukti melalui source aktual yang dibaca ulang oleh Medicine.'}];
+  const verification={requestedTarget:file,target:file,rootCauseFile:file,
+    rootCauseStatus:candidate.ready?'CONFIRMED_ORIGINAL_TARGET':'UNPROVEN',
+    verdict:candidate.ready?'SUPPORTED_BY_EXACT_SOURCE_EVIDENCE':'SOURCE_FINDING_REQUIRES_DEEPER_REVIEW',
+    rootCauseCandidates:[{file,line:Number(finding.line)||null,type:finding.type||finding.kind,reason:finding.message||finding.detail,evidenceStrength:sourceEvidence[0].evidenceStrength}],
+    sourceEvidence,runtimeEvidence:[],checkedFiles,checkedCount:checkedFiles.length,checkedAt:now(),question:'BCGO local source finding'};
+
+  const plan=buildRepairPlan(c,verification);
+  plan.rootCauseFile=file;plan.rootCauseStatus=verification.rootCauseStatus;plan.candidates=verification.rootCauseCandidates;plan.sourceEvidence=sourceEvidence;
+  plan.strategy=candidate.ready?'DETERMINISTIC_SOURCE_FINDING_REPAIR':'SOURCE_FINDING_INVESTIGATION';
+  if (candidate.ready && candidate.operation) {
+    plan.operations.push(candidate.operation);plan.beforeAfter.push({file,line:candidate.operation.line,before:candidate.operation.before,after:candidate.operation.after});
+    plan.precisionGate=true;plan.status='PROPOSED';plan.blockReason=null;c.rootCauseStatus='CONFIRMED_ORIGINAL_TARGET';c.status='VERIFIED_DIAGNOSIS';
+  } else {
+    plan.precisionGate=false;plan.status='PATCH_REQUIRES_REVIEW';plan.blockReason=`${candidate.reason || 'SOURCE_FINDING_REQUIRES_DEEPER_REVIEW'} — Medicine tidak mengarang patch.`;c.status='INVESTIGATION_BLOCKED';
+  }
+  c.verification=verification;c.repairPlan=plan;c.rootCauseFile=file;c.sourceEvidence=sourceEvidence;
+
+  const proposal={proposalId:`PATCH-${uid().toUpperCase()}`,caseId:c.id,telemetryTarget:c.source,originalTarget:file,repairTarget:file,
+    rootCauseStatus:plan.rootCauseStatus,diagnosis:c.diagnosis,verification,repairPlan:plan,operations:plan.operations,beforeAfter:plan.beforeAfter,
+    precisionGate:plan.precisionGate,sourceWrite:false,requiresHumanApproval:true,requiresPostValidation:true,status:plan.precisionGate?'PROPOSED':'PATCH_REQUIRES_REVIEW',createdAt:now(),sourceFinding:finding};
+
+  if (plan.precisionGate) {
+    const executionReview=await reviewProposalWithExecutor(c,proposal);proposal.executionReview=executionReview;verification.executionReview=executionReview;c.verification=verification;
+    if (executionReview?.status==='VALID') { proposal.status='READY_FOR_HUMAN_APPROVAL';c.status='READY_FOR_HUMAN_APPROVAL';plan.status='READY_FOR_HUMAN_APPROVAL'; }
+    else { proposal.status='EXECUTION_REVIEW_REJECTED';c.status='INVESTIGATION_BLOCKED';plan.precisionGate=false;plan.status='PATCH_REQUIRES_REVIEW';plan.blockReason=`Execution review belum valid: ${executionReview?.reason||'UNKNOWN'}`; }
+  }
+  c.patchProposal=proposal;S.patchProposals.unshift(proposal);S.patchProposals=S.patchProposals.slice(0,50);
+  emit('bcgo_local_source_investigation_complete',{case:c,finding,candidate,file});emit('patch_proposed',{proposal,case:c});emit('case_updated',{case:c});
+  await safeAddMessage('medicine',candidate.ready
+    ? `BCGO source scan menemukan ${finding.type||finding.kind} pada ${file}:${finding.line||'-'}. Saya membaca ulang source aktual, membuktikan target exact, membentuk BEFORE → AFTER deterministic, dan mengirim candidate ke Executor untuk review.`
+    : `BCGO source scan menemukan ${finding.type||finding.kind} pada ${file}:${finding.line||'-'}. Evidence source terbukti, tetapi transformasi patch belum aman sehingga Medicine menahan treatment.`,
+    {kind:'BCGO_LOCAL_SOURCE_INVESTIGATION',caseId:c.id,file,findingType:finding.type||finding.kind});
+  return c;
+}
+
 function buildCrossFileCandidate(finding, sources) {
   const sourceFile = normalizeFile(finding?.sourceFile);
   const targetFile = normalizeFile(finding?.targetFile);
@@ -593,6 +743,25 @@ async function ingestBCGOScan(scan, packet = {}) {
     findings:[...findings,...cross]
   };
   window.dispatchEvent(new CustomEvent("bcgo:medicine",{detail:{event:"bcgo_source_scan_complete",surface:getLiveSurface()}}));
+
+  // Consume LOCAL source findings as first-class Medicine evidence too.
+  // Previously only CROSS_FILE findings entered Medicine, which made real
+  // scanner findings disappear at the Medicine root-cause gate.
+  const localActionable = (Array.isArray(scan.findings) ? scan.findings : [])
+    .filter(f => f && f.file && isDiagnosticFile(f.file) && f.severity !== 'INFO')
+    .slice(0,100);
+  emit('bcgo_local_source_queue_ready',{count:localActionable.length,cycle,findings:localActionable});
+  for (const finding of localActionable) {
+    const file=normalizeFile(finding.file);
+    const sourceHash=results[file]?.hash || '';
+    const evidenceKey=`LOCAL|${finding.type || finding.kind || ''}|${file}|${finding.line || ''}|${sourceHash}|${text(finding.message || finding.detail || '',500)}`;
+    if (S.processedCrossFileEvidence.has(evidenceKey)) continue;
+    S.processedCrossFileEvidence.add(evidenceKey);
+    if (S.processedCrossFileEvidence.size>200) S.processedCrossFileEvidence.delete(S.processedCrossFileEvidence.values().next().value);
+    emit('bcgo_local_source_investigation_started',{finding,file,evidenceKey});
+    try { await createLocalSourceFindingCase(finding,results,scan); }
+    catch (error) { emit('bcgo_local_source_investigation_error',{finding,file,message:error?.message || String(error)}); }
+  }
 
   // BCGO is the detector; Medicine must consume the complete actionable
   // cross-file result set, not silently reduce it to the first finding.
@@ -1152,38 +1321,6 @@ function htmlHasElement(source, selector) {
   return new RegExp(`(?:id|name)\\s*=\\s*["']${escRe(id)}["']`, "i").test(source);
 }
 
-
-function javascriptContractEvidence(file, source, log) {
-  const message = String(log?.message || log?.error || "");
-  const match = message.match(/\b([A-Za-z_$][\w$]*)\s+is not defined\b/i);
-  if (!match) return [];
-  const symbol = match[1];
-  const lines = sourceLines(source);
-  const declaration = new RegExp(
-    `(?:function\\s+${escRe(symbol)}\\b|(?:const|let|var|class)\\s+${escRe(symbol)}\\b|${escRe(symbol)}\\s*=\\s*(?:async\\s*)?(?:function|\\([^)]*\\)\\s*=>))`
-  );
-  const references = [];
-  lines.forEach((code, idx) => {
-    if (new RegExp(`\\b${escRe(symbol)}\\b`).test(code)) references.push({ line: idx + 1, code });
-  });
-  const declarations = references.filter(x => declaration.test(x.code));
-  const uses = references.filter(x => !declaration.test(x.code));
-  if (!uses.length || declarations.length) return [];
-  const runtimeLocations = parseRuntimeLocations(log);
-  const exact = runtimeLocations.find(x => lower(x.file) === lower(file) && x.line);
-  const hit = exact ? uses.find(x => x.line === Number(exact.line)) : uses[0];
-  if (!hit) return [];
-  return [{
-    file, line: hit.line, column: exact?.col || null, variable: symbol, before: hit.code, after: null,
-    kind: "UNDEFINED_SYMBOL", symbol, exactLineHit: !!exact && hit.line === Number(exact.line), signatureHit: true,
-    evidenceStrength: exact && hit.line === Number(exact.line) ? "HIGH" : "MEDIUM",
-    evidenceReason: exact && hit.line === Number(exact.line)
-      ? `Runtime melaporkan ${symbol} undefined tepat pada ${file}:${hit.line}; source menggunakan simbol tersebut tetapi tidak memiliki deklarasi yang terbukti.`
-      : `Source ${file}:${hit.line} menggunakan ${symbol}, sementara tidak ditemukan deklarasi ${symbol} pada source yang dipindai.`,
-    contractStatus: "MISSING_DECLARATION", solutionStatus: "REQUIRES_BEHAVIORAL_CONTRACT"
-  }];
-}
-
 function exactDomEvidence(file, source, log) {
   const locations = parseRuntimeLocations(log);
   const assignments = domAssignments(file, source);
@@ -1243,8 +1380,7 @@ async function buildSourceEvidence(targetFile, log) {
       ? Object.keys(htmlResults).filter(page => extractDependencies(page, htmlResults[page].text).includes(name))
       : [];
 
-    const contractEvidence = javascriptContractEvidence(name, data.text, log);
-    for (const e of [...exactDomEvidence(name, data.text, log), ...contractEvidence]) {
+    for (const e of exactDomEvidence(name, data.text, log)) {
       let strength = e.evidenceStrength;
       let reason = e.evidenceReason;
 
@@ -1371,7 +1507,7 @@ function buildCodePrescription(plan) {
   ].includes(plan?.rootCauseStatus);
 
   const exact = items.length > 0 &&
-    items.every(x => x.type === "REPLACE_EXACT" && x.before && x.after);
+    items.every(x => (x.type === "REPLACE_EXACT" || x.type === "INSERT_EXACT") && x.before && x.after);
 
   const high = items.every(x => x.evidenceStrength === "HIGH");
 
@@ -2168,7 +2304,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
       const exactEvidence = plan.sourceEvidence.some(e => e.evidenceStrength === "HIGH");
       const exactOps = plan.operations.length > 0 &&
         plan.operations.every(op =>
-          op.type === "REPLACE_EXACT" &&
+          (op.type === "REPLACE_EXACT" || op.type === "INSERT_EXACT") &&
           op.before &&
           op.after &&
           op.file === plan.rootCauseFile
@@ -2334,7 +2470,7 @@ function canApprove(c) {
     v?.verdict === "SUPPORTED_BY_EXACT_SOURCE_EVIDENCE" &&
     p.operations?.length &&
     p.operations.every(op =>
-      op.type === "REPLACE_EXACT" &&
+      (op.type === "REPLACE_EXACT" || op.type === "INSERT_EXACT") &&
       op.file === p.rootCauseFile &&
       op.before &&
       op.after
@@ -2506,9 +2642,11 @@ async function validateAfterPatch(caseId) {
 
   let operationVerified = operations.length > 0;
   for (const op of operations) {
+    const textToCheck = internalSource?.content || deployed.text || "";
     if (op.type === "REPLACE_EXACT") {
-      const textToCheck = internalSource?.content || deployed.text || "";
       if (textToCheck.includes(op.before) || !textToCheck.includes(op.after)) operationVerified = false;
+    } else if (op.type === "INSERT_EXACT") {
+      if (!textToCheck.includes(op.before + op.after) && !textToCheck.includes(op.after + op.before)) operationVerified = false;
     }
   }
 
@@ -2788,26 +2926,7 @@ function ingestBCGOActiveCases(activeCases, packet = {}) {
     if(!target || !REGISTRY[target]) continue;
     const bcgoId=String(bcgoCase?.id||"").trim();
     const signature=text(bcgoCase?.evidence?.message||bcgoCase?.message||bcgoCase?.signature||"BCGO anomaly",700);
-    // BCGO_STATE is a live heartbeat. packet.at/cycle must NOT become part of
-    // the evidence revision, otherwise every heartbeat looks like new evidence
-    // and Medicine reopens the same investigation forever. Revision is derived
-    // only from stable case/evidence content.
-    const sourceFinding = bcgoCase?.evidence?.sourceFinding || {};
-    const revisionToken=investigationEvidenceToken({
-      id:bcgoId || bcgoCase?.evidence?.evidenceId || "",
-      reportedAt:bcgoCase?.evidence?.reportedAt || "",
-      fileName:target,
-      line:bcgoCase?.evidence?.line ?? null,
-      column:bcgoCase?.evidence?.column ?? null,
-      message:signature,
-      sourceRevision:sourceFinding?.hash || sourceFinding?.fingerprint || bcgoCase?.evidence?.evidenceFingerprint || "",
-      sourceFindingType:sourceFinding?.type || sourceFinding?.kind || "",
-      sourceFile:sourceFinding?.sourceFile || "",
-      targetFile:sourceFinding?.targetFile || "",
-      sourceLine:sourceFinding?.sourceLine ?? null,
-      targetLine:sourceFinding?.targetLine ?? null,
-      area:sourceFinding?.area || ""
-    });
+    const revisionToken=investigationEvidenceToken({id:bcgoId,reportedAt:bcgoCase?.evidence?.reportedAt||packet?.at||Date.now(),fileName:target,line:bcgoCase?.evidence?.line??null,column:bcgoCase?.evidence?.column??null,message:signature,sourceRevision:bcgoCase?.evidence?.sourceFinding?.hash||bcgoCase?.evidence?.sourceFinding?.fingerprint||""});
     let c=bcgoId?S.cases.find(x=>x.bcgoCaseId===bcgoId&&!isTerminal(x)):null;
     if(!c)c=S.cases.find(x=>x.source===target&&x.signature===signature&&!isTerminal(x));
     if(c){
