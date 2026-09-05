@@ -11,7 +11,7 @@ import * as Logic from "./cgo-ai-logic.js";
 import * as Memory from "./cgo-ai-memory.js";
 import { createRuntime } from "./cgo-ai-runtime-adapter.js";
 
-const VERSION = "V5.2-BROWSER-BRIDGE-1.3.0-CAUSAL-LOOP";
+const VERSION = "V5.2-BROWSER-BRIDGE-1.4.0-ACTIVE-SOURCE";
 const runtime = createRuntime({});
 const memory = Memory.createMemory();
 const caseIds = new Map();
@@ -286,7 +286,7 @@ async function runActiveInvestigation(caseId, state) {
   const runPromise = (async () => {
     try {
       const out = await engine.run(current, provider, knowledge, {
-        maxSteps:6,
+        maxSteps:10,
         onStep: async (stepOut, stepNumber) => {
           emitBrainEvent(caseId, "ACTIVE_INVESTIGATION_PROGRESS", {
             step: stepNumber,

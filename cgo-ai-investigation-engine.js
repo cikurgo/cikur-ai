@@ -8,7 +8,7 @@
 import * as Core from "./cgo-ai-core.js";
 import * as Investigator from "./cgo-ai-investigator.js";
 
-const VERSION = "2.1.0-ACTIVE-NERVE";
+const VERSION = "2.2.0-ACTIVE-CAUSAL-SOURCE";
 const MAX_STEPS_DEFAULT = 10;
 const MAX_FILES_DEFAULT = 40;
 
@@ -246,11 +246,29 @@ function buildHypotheses(caseData, context) {
   }
 
   if (dom.length) {
+    const targetFile=normalizeFile(caseData?.target) || "TARGET";
+    const sourceSnapshots=ev.filter(e =>
+      e.type==="SOURCE_SNAPSHOT" &&
+      normalizeFile(e.metadata?.file || e.source)===targetFile &&
+      e.status==="VERIFIED"
+    );
+    const relatedNerve=sourceFinding.filter(e =>
+      normalizeFile(e.metadata?.file || e.source)===targetFile &&
+      e.status==="VERIFIED"
+    );
     hs.push({
-      id:`H-HTML-STRUCTURE-${normalizeFile(caseData?.target) || "TARGET"}`,
+      id:`H-HTML-STRUCTURE-${targetFile}`,
       statement:`Struktur HTML target tidak seimbang pada elemen div dan dapat memutus struktur DOM yang diharapkan oleh runtime/UI.`,
-      evidenceIds:unique(dom.map(e=>e.id)),
-      nodeIds:unique(dom.map(e=>e.metadata?.file)),
+      evidenceIds:unique([
+        ...dom.map(e=>e.id),
+        ...sourceSnapshots.map(e=>e.id),
+        ...relatedNerve.map(e=>e.id)
+      ]),
+      nodeIds:unique([
+        ...dom.map(e=>e.metadata?.file),
+        ...sourceSnapshots.map(e=>e.metadata?.file || e.source),
+        ...relatedNerve.map(e=>e.metadata?.file)
+      ]),
       causal:true
     });
   }
@@ -264,6 +282,18 @@ function chooseProbe(engine, caseData, knowledge) {
   const target = normalizeFile(caseData?.target);
   const done = s.completedProbes;
   if (target && !done.has(`SOURCE_READ:${target}`)) return {type:"SOURCE_READ",file:target,score:1};
+
+  // Source findings outrank generic symbol probing. A concrete BCGO HTML
+  // finding must be validated against the live source first.
+  const hasStructuralFinding = (caseData?.evidence || []).some(e =>
+    e?.type === "NERVE_SOURCE_FINDING" &&
+    /div|html|structure|syntax/i.test(String(e?.metadata?.kind || "") + " " + String(e?.claim || ""))
+  );
+  if (target && !done.has(`HTML_STRUCTURE:${target}`) &&
+      (/\.html?$/i.test(target) && (hasStructuralFinding || /<div/i.test(String(caseData?.symptom || ""))))) {
+    return {type:"HTML_STRUCTURE",file:target,score:1};
+  }
+
   for (const sym of symbols) {
     if (!done.has(`SYMBOL_CALLS:${sym}`)) return {type:"SYMBOL_CALLS",symbol:sym,score:.98};
     if (!done.has(`SYMBOL_DEFINITIONS:${sym}`)) return {type:"SYMBOL_DEFINITIONS",symbol:sym,score:.97};
@@ -462,20 +492,34 @@ export function createInvestigationEngine(caseData, knowledge={}, options={}) {
     // verified call-site evidence. The original source line is fetched again so
     // the binding is against the real current source, not a remembered snippet.
     if(nextCase.rootCause && !nextCase.exactSource) {
+      // Bind either a verified runtime call-site OR a verified deterministic
+      // HTML-structure anchor to the live source. Neither path mutates source.
       const call=nextCase.evidence.find(e=>e.type==="SYMBOL_CALL_SITE" && e.status==="VERIFIED" && e.exact);
-      if(call) {
+      const dom=nextCase.evidence.find(e=>e.type==="HTML_DIV_BALANCE" && e.status==="VERIFIED" && e.exact);
+      const anchor=call || dom;
+      if(anchor) {
         try {
-          const r=await provider.readSource(call.source);
-          const lineText=String(r.source).split("\n")[Math.max(0,Number(call.metadata?.line||1)-1)] || "";
-          const symbol = String(call.metadata?.symbol || symbolFromCase(nextCase) || "").trim();
-          const callMatch = symbol ? lineText.match(new RegExp(`\\b${escapeRegExp(symbol)}\\s*\\([^\\n;]*\\)`)) : null;
-          const originalCode = callMatch?.[0] || lineText;
+          const file=normalizeFile(anchor.source || anchor.metadata?.file || nextCase.target);
+          const r=await provider.readSource(file);
+          const lines=String(r.source).split("\n");
+          const line=Number(anchor.metadata?.line || 1);
+          const lineText=lines[Math.max(0,line-1)] || "";
+          let originalCode=lineText;
+          if(call) {
+            const symbol=String(call.metadata?.symbol || symbolFromCase(nextCase) || "").trim();
+            const callMatch=symbol ? lineText.match(new RegExp(`\\b${escapeRegExp(symbol)}\\s*\\([^\\n;]*\\)`)) : null;
+            originalCode=callMatch?.[0] || lineText;
+          }
           if(originalCode.trim()) {
             const fp=Core.contentFingerprint(originalCode);
-            const ids=nextCase.rootCause.evidenceIds.filter(id=>id===call.id || nextCase.evidence.some(e=>e.id===id && e.metadata?.file===call.source));
+            const ids=nextCase.rootCause.evidenceIds.filter(id =>
+              id===anchor.id || nextCase.evidence.some(e=>e.id===id && e.metadata?.file===file)
+            );
             if(ids.length) nextCase=Core.verifyExactSource(nextCase,{
-              file:call.source, originalCode, proposedCode:null, operation:"REPLACE_EXACT",
-              fingerprint:fp, contentFingerprint:fp, sourceFingerprint:r.fingerprint || Core.contentFingerprint(r.source), evidenceIds:ids
+              file, originalCode, proposedCode:null, operation:"REPLACE_EXACT",
+              fingerprint:fp, contentFingerprint:fp,
+              sourceFingerprint:r.fingerprint || Core.contentFingerprint(r.source),
+              evidenceIds:ids
             });
           }
         } catch {}
@@ -488,7 +532,9 @@ export function createInvestigationEngine(caseData, knowledge={}, options={}) {
     state.events.push({type:"PROBE_EXECUTED",cycle:state.cycle,probe:request,evidenceCount:(result.evidence||[]).length,at:now()});
     state.updatedAt=now();
 
-    const stopStates=new Set(["SOURCE_VERIFIED","CANDIDATE_READY","EXECUTOR_REVIEW","HUMAN_APPROVAL","EXECUTING","VALIDATING","RESOLVED","INVESTIGATION_BLOCKED"]);
+    // BLOCKED is not terminal: it can mean the proof attempt was premature.
+    // Continue probing until source proof is actually reached or the budget ends.
+    const stopStates=new Set(["SOURCE_VERIFIED","CANDIDATE_READY","EXECUTOR_REVIEW","HUMAN_APPROVAL","EXECUTING","VALIDATING","RESOLVED"]);
     if(stopStates.has(nextCase.state)) state.status="COMPLETE";
     return {caseData:nextCase,investigation:snapshot(),progress:true,probe:request,evidence:result.evidence||[],source:result.source||null};
   }
