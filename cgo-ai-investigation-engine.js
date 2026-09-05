@@ -8,7 +8,7 @@
 import * as Core from "./cgo-ai-core.js";
 import * as Investigator from "./cgo-ai-investigator.js";
 
-const VERSION = "2.0.1-ACTIVE";
+const VERSION = "2.1.0-ACTIVE-NERVE";
 const MAX_STEPS_DEFAULT = 10;
 const MAX_FILES_DEFAULT = 40;
 
@@ -142,6 +142,8 @@ function buildHypotheses(caseData, context) {
   const absence = ev.filter(e => e.type === "SYMBOL_DEFINITION_ABSENCE");
   const scripts = ev.filter(e => e.type === "SCRIPT_LOADING_CONTEXT");
   const dom = ev.filter(e => e.type === "HTML_DIV_BALANCE");
+  const nerveUnresolved = ev.filter(e => e.type === "NERVE_UNRESOLVED_SYMBOL");
+  const nerveFindings = ev.filter(e => e.type === "NERVE_SOURCE_FINDING");
 
   if (sourceSurfaceComplete && symbol && calls.length && !defs.length && absence.length) {
     hs.push({
@@ -152,6 +154,29 @@ function buildHypotheses(caseData, context) {
       causal:true
     });
   }
+  // If runtime says a symbol is undefined but the current source surface DOES contain
+  // a definition, do not manufacture a missing-symbol root cause. This is a discrepancy
+  // that requires execution-context investigation (scope/module/load/runtime state).
+  if (symbol && calls.length && defs.length && !absence.length) {
+    hs.push({
+      id:`H-SYMBOL-RUNTIME-CONTEXT-${symbol}`,
+      statement:`Runtime melaporkan ${symbol} tidak terdefinisi, tetapi source surface saat ini memiliki definisi ${symbol}; penyebab runtime belum terbukti dan harus ditelusuri pada execution context.`,
+      evidenceIds:unique([...calls.map(e=>e.id), ...defs.map(e=>e.id), ...nerveUnresolved.map(e=>e.id)]),
+      nodeIds:unique([...calls.map(e=>e.metadata?.file), ...defs.map(e=>e.metadata?.file)]),
+      causal:false
+    });
+  }
+
+  if (nerveUnresolved.length && symbol && !calls.length && !defs.length) {
+    hs.push({
+      id:`H-NERVE-UNRESOLVED-${symbol}`,
+      statement:`BCGO nerve menandai simbol ${symbol} belum terverifikasi; source probe diperlukan sebelum causal root cause dapat dinyatakan.`,
+      evidenceIds:unique(nerveUnresolved.map(e=>e.id)),
+      nodeIds:unique(nerveUnresolved.map(e=>e.metadata?.file)),
+      causal:false
+    });
+  }
+
   const moduleBoundary = symbol && calls.some(e=>
     normalizeFile(e.metadata?.file)===normalizeFile(caseData?.target) &&
     /(?:onclick|onchange|onsubmit|oninput|onload)\s*=/.test(String(e.metadata?.snippet||""))
@@ -190,6 +215,7 @@ function chooseProbe(engine, caseData, knowledge) {
   if (symbol && !done.has(`SYMBOL_DEFINITIONS:${symbol}`)) return {type:"SYMBOL_DEFINITIONS",symbol,score:.97};
   if (symbol && !done.has(`SYMBOL_IMPORTS_EXPORTS:${symbol}`)) return {type:"SYMBOL_IMPORTS_EXPORTS",symbol,score:.92};
   if (symbol && !done.has(`SCRIPT_LOADING:${target}`)) return {type:"SCRIPT_LOADING",file:target,score:.88};
+  if (symbol && caseData?.hypotheses?.some(h => h.id === `H-SYMBOL-RUNTIME-CONTEXT-${symbol}`) && !done.has(`RUNTIME_CONTEXT:${target}:${symbol}`)) return {type:"RUNTIME_CONTEXT",file:target,symbol,score:.90};
   if (!done.has(`HTML_STRUCTURE:${target}`)) return {type:"HTML_STRUCTURE",file:target,score:.84};
 
   const ranked = Investigator.rankProbes({visitedNodes:[...s.visitedNodes]},caseData,knowledge);
@@ -282,6 +308,30 @@ export function createInvestigationEngine(caseData, knowledge={}, options={}) {
       }))};
     }
 
+    if(type === "RUNTIME_CONTEXT") {
+      const r=await read(probeRequest.file);
+      const tags=scriptTags(r.source,r.file);
+      const symbol=String(probeRequest.symbol || "").trim();
+      const hits=findSymbolHits(r.source,r.file,symbol);
+      const defs=findDefinitions(r.source,r.file,symbol);
+      const contextEvidence=[];
+      for (const d of defs) {
+        const line=Number(d.line||1);
+        const lines=String(r.source).split("\n");
+        const start=Math.max(0,line-40), end=Math.min(lines.length,line+10);
+        const nearby=lines.slice(start,end).join("\n");
+        const moduleLikely=tags.some(t=>String(t.type||"").toLowerCase()==="module" && Number(t.line||0)<=line);
+        const globalAssign=new RegExp(`(?:window|globalThis)\\.${escapeRegExp(symbol)}\\s*=`).test(nearby);
+        contextEvidence.push(makeEvidence(`PROBE-RUNTIME-CONTEXT-${symbol}-${d.line}`,{
+          type:"RUNTIME_CONTEXT_ANALYSIS",source:r.file,file:r.file,
+          claim:`Definisi ${symbol} ditemukan pada ${r.file}:${line}; konteks script=${moduleLikely?"MODULE_OR_MODULE_NEARBY":"CLASSIC_OR_UNKNOWN"}, explicitGlobalAssignment=${globalAssign}.`,
+          exact:true,strength:.8,fingerprint:r.fingerprint || Core.contentFingerprint(r.source),
+          metadata:{symbol,line,moduleLikely,globalAssignment:globalAssign,scriptTags:tags.slice(0,30),proofRequired:true}
+        }));
+      }
+      return {evidence:contextEvidence};
+    }
+
     if(type === "HTML_STRUCTURE") {
       const r=await read(probeRequest.file);
       const signals=structuralSignals(r.source,r.file);
@@ -343,7 +393,7 @@ export function createInvestigationEngine(caseData, knowledge={}, options={}) {
     // evidence required by the selected hypothesis. This is not a confidence
     // shortcut: Core.verifyRootCause performs the binding/score/independence gates.
     const selected=nextCase.selectedHypothesis;
-    if(!nextCase.rootCause && selected && Number(selected.score)>=0.60 && Array.isArray(selected.evidenceIds) && selected.evidenceIds.length>=2){
+    if(!nextCase.rootCause && selected?.causal === true && Number(selected.score)>=0.60 && Array.isArray(selected.evidenceIds) && selected.evidenceIds.length>=2){
       try {
         nextCase=Core.verifyRootCause(nextCase,{
           statement:selected.statement,
@@ -398,6 +448,9 @@ export function createInvestigationEngine(caseData, knowledge={}, options={}) {
       c=out.caseData;
       trace.push(out);
       steps++;
+      if (typeof optionsOverride.onStep === "function") {
+        try { await optionsOverride.onStep(clone(out), steps); } catch {}
+      }
       const evalLike = c.rootCause && c.exactSource;
       if(evalLike || state.status !== "ACTIVE" || !out.progress) break;
     }

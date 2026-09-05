@@ -164,7 +164,7 @@ export function scoreHypothesis(h, evidence=[]) {
 export function reason(caseData, hypotheses=[]) {
   const c = structuredClone(caseData);
   const hs = hypotheses.map(h => ({...h, score: scoreHypothesis(h,c.evidence)}))
-    .sort((a,b)=>b.score-a.score);
+    .sort((a,b)=>b.score-a.score || Number(b.causal===true)-Number(a.causal===true) || String(a.id||"").localeCompare(String(b.id||"")));
   const contradictions = detectContradictions(c.evidence);
   c.hypotheses = hs;
   c.selectedHypothesis = hs[0] || null;
