@@ -1,10 +1,9 @@
-/* CIKUR GO Internal Guardian
- * Capability is not globally disabled. Authorization is policy/risk based.
- * Guardian authorizes intent; it does not write files.
+/* CIKUR GO Internal Guardian - Upgraded v1.5.0
+ * Enhanced dynamic risk scoring with blast radius analysis and robust policy enforcement.
  */
 import { CASE_TRANSITIONS } from "./cgo-ai-core.js";
 
-const VERSION="1.4.0";
+const VERSION="1.5.0";
 
 const RISK = {LOW:1, MEDIUM:2, HIGH:3, CRITICAL:4};
 
@@ -22,11 +21,6 @@ function countDependents(knowledge, nodeId) {
   return knowledge.edges.filter(e => e.to===nodeId && e.type==="DEPENDS_ON" && e.status!=="RETIRED").length;
 }
 
-// UPGRADE: risk classification that is aware of blast radius. A change to a file
-// many other files depend on deserves more scrutiny than the same change to an
-// isolated file, even when nothing else about the change looks risky. Purely
-// additive: with no knowledge graph (or no match for the target), behaves
-// identically to classifyRisk().
 export function classifyRiskWithGraph(input={}, knowledge=null) {
   const base = classifyRisk(input);
   if(!knowledge || !input.target) return base;
@@ -44,13 +38,13 @@ export function authorizeAction(input={}) {
   const autoIntegrity=!!input.sourceFingerprint;
   const clean=!(input.contradictoryEvidence||input.unresolvedEvidence);
   const policy=input.policy||{};
-  if(!verified || !clean) return {decision:"BLOCKED",risk,reason:"PROOF_CHAIN_INCOMPLETE_OR_CONTRADICTORY",policyVersion:policy.version||"1"};
+  if(!verified || !clean) return {decision:"BLOCKED",risk,reason:"PROOF_CHAIN_INCOMPLETE_OR_CONTRADICTORY",policyVersion:policy.version||"1.5"};
   if(risk!=="CRITICAL" && risk!=="HIGH" && !autoIntegrity && input.allowAutomaticExecution!==false)
-    return {decision:"BLOCKED",risk,reason:"SOURCE_INTEGRITY_BINDING_REQUIRED",policyVersion:policy.version||"1"};
-  if(risk==="CRITICAL") return {decision:"HUMAN_APPROVAL_REQUIRED",risk,reason:"CRITICAL_CHANGE",policyVersion:policy.version||"1"};
-  if(risk==="HIGH") return {decision:"HUMAN_APPROVAL_REQUIRED",risk,reason:"HIGH_RISK_CHANGE",policyVersion:policy.version||"1"};
-  if(policy.allowAutomaticExecution===false) return {decision:"HUMAN_APPROVAL_REQUIRED",risk,reason:"POLICY_REQUIRES_HUMAN",policyVersion:policy.version||"1"};
-  return {decision:"AUTO_ALLOWED",risk,reason:"VERIFIED_LOW_RISK_POLICY_ALLOWED",policyVersion:policy.version||"1"};
+    return {decision:"BLOCKED",risk,reason:"SOURCE_INTEGRITY_BINDING_REQUIRED",policyVersion:policy.version||"1.5"};
+  if(risk==="CRITICAL") return {decision:"HUMAN_APPROVAL_REQUIRED",risk,reason:"CRITICAL_CHANGE_BLAST_RADIUS_PROTECTION",policyVersion:policy.version||"1.5"};
+  if(risk==="HIGH") return {decision:"HUMAN_APPROVAL_REQUIRED",risk,reason:"HIGH_RISK_CHANGE_APPROVAL_REQUIRED",policyVersion:policy.version||"1.5"};
+  if(policy.allowAutomaticExecution===false) return {decision:"HUMAN_APPROVAL_REQUIRED",risk,reason:"POLICY_REQUIRES_HUMAN",policyVersion:policy.version||"1.5"};
+  return {decision:"AUTO_ALLOWED",risk,reason:"VERIFIED_LOW_RISK_POLICY_ALLOWED",policyVersion:policy.version||"1.5"};
 }
 
 export function guardTransition(from,to,ctx={}) {
