@@ -126,7 +126,7 @@ const TERMINAL_STATUSES = new Set(["REJECTED","FIXED_VERIFIED","RECOVERED"]);
 const MAX_INVESTIGATION_ATTEMPTS_PER_REVISION = 3;
 
 const S = {
-  version: "3.4.0",
+  version: "3.4.1",
   registry: REGISTRY,
   surface: null,
   logs: [],
@@ -708,6 +708,10 @@ async function ingestBCGOScan(scan, packet = {}) {
     sources:sourcesMeta
   };
 
+  // Preserve the previous verified surface before replacing its live metadata.
+  // Otherwise the reuse check below would see an empty result map and still
+  // download every file on each changed scan token.
+  const previousResults = S.liveSurface.results || {};
   S.liveSurface = {
     ...S.liveSurface,
     status:"READING",
@@ -720,14 +724,24 @@ async function ingestBCGOScan(scan, packet = {}) {
   };
   window.dispatchEvent(new CustomEvent("bcgo:medicine",{detail:{event:"bcgo_source_scan_received",scan:S.bcgoSourceScan}}));
 
+  // Reuse an already verified live-surface record when BCGO reports the same
+  // source hash. Only changed/previously unreadable files are fetched again.
+  // This is critical for realtime operation: a new scan heartbeat must not turn
+  // into N no-store HTTP downloads every few seconds.
   const results = {};
   for (const file of names) {
     const meta = sourcesMeta[file] || {};
-    const data = await fetchFile(file,{force:true});
-    if (data.ok && typeof data.text === "string") {
-      results[file] = makeFullSourceRecord(file,data.text,meta);
+    const previous = previousResults[file];
+    const sameHash = !!meta.hash && !!previous?.hash && String(meta.hash) === String(previous.hash) && previous.ok === true;
+    if (sameHash) {
+      results[file] = previous;
     } else {
-      results[file] = {file,ok:false,lines:0,bytes:0,hash:null,refs:[],fields:[],text:"",lineIndex:[]};
+      const data = await fetchFile(file,{force:true});
+      if (data.ok && typeof data.text === "string") {
+        results[file] = makeFullSourceRecord(file,data.text,meta);
+      } else {
+        results[file] = {file,ok:false,lines:0,bytes:0,hash:null,refs:[],fields:[],text:"",lineIndex:[]};
+      }
     }
     S.liveSurface.results = {...results};
     S.liveSurface.updatedAt = Date.now();
@@ -922,7 +936,10 @@ function bcgoScanToken(scan) {
     .map(f => `${f?.type || ""}:${f?.sourceFile || ""}:${f?.targetFile || ""}:${f?.sourceLine || ""}:${f?.targetLine || ""}:${f?.area || ""}`)
     .sort()
     .join("|");
-  return `${scan.status || ""}|${scan.completedAt || ""}|${scan.filesScanned || 0}|${scan.filesReadable || 0}|${scan.filesFailed || 0}|${sourceHashes}|${findings}`;
+  // Do not include volatile scan timestamps. BCGO may publish the same source
+  // snapshot every cycle; a timestamp-only change must NOT force Medicine to
+  // re-download every file and rebuild the entire live surface.
+  return `${scan.status || ""}|${scan.filesScanned || 0}|${scan.filesReadable || 0}|${scan.filesFailed || 0}|${sourceHashes}|${findings}`;
 }
 
 async function syncBCGOStateFromCache(source = "LOCAL_STORAGE_CACHE") {

@@ -68,3 +68,17 @@ Keep the existing production asset `cikurgoicon.png` and the existing Firebase c
 - Guardian/Logic/Core action gates now require a concrete non-empty proposed solution before any execution authorization/action can be produced. Root-cause/source proof remains distinct from solution readiness.
 - Cache-busting versions were advanced for the updated browser bridge (`5.2.2`) and BCGO bridge asset (`2.15.2` in the page import must be applied in the production `bcgo.html`).
 - Validation after hardening: all JS syntax checks pass; active missing-symbol, module-boundary, incomplete-surface, negative-global, candidate-gate, and deterministic execution tests pass.
+
+
+## V5.2.2 MEDICINE LOADING HARDENING — 2026-09-05
+
+- Removed volatile `completedAt` from the BCGO source-scan deduplication token.
+- Prevented unchanged scan heartbeats from triggering a full source re-download.
+- Reused verified live-surface source records when the BCGO-reported source hash is unchanged.
+- Changed Medicine runtime version to `3.4.1` to match the cache-busted HTML import.
+- No external AI/API was added. No source mutation behavior was added.
+
+### Reason
+The previous live-surface path could treat every BCGO scan heartbeat as a new scan because `completedAt` was part of the token. `ingestBCGOScan()` then forced `fetch(..., cache: "no-store")` for every diagnostic file. On a mobile connection this could repeatedly download and re-parse the whole source surface, causing heavy loading and making Medicine appear stuck/not opening.
+
+The hardened path only re-fetches a file when its reported source hash changes or no verified previous record exists.
