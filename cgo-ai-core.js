@@ -15,9 +15,9 @@ export const CASE_TRANSITIONS = {
   OBSERVING:["EVIDENCE_COLLECTING","INVESTIGATING"],
   EVIDENCE_COLLECTING:["INVESTIGATING","HYPOTHESIS_FORMED","VERIFYING","ROOT_CAUSE_VERIFIED","CONTRADICTORY_EVIDENCE","INSUFFICIENT_EVIDENCE"],
   INVESTIGATING:["HYPOTHESIS_FORMED","VERIFYING","INSUFFICIENT_EVIDENCE","CONTRADICTORY_EVIDENCE"],
-  HYPOTHESIS_FORMED:["VERIFYING","ROOT_CAUSE_VERIFIED","INVESTIGATING","CONTRADICTORY_EVIDENCE"],
+  HYPOTHESIS_FORMED:["VERIFYING","ROOT_CAUSE_VERIFIED","INVESTIGATING","INSUFFICIENT_EVIDENCE","CONTRADICTORY_EVIDENCE"],
   VERIFYING:["ROOT_CAUSE_VERIFIED","SOURCE_NOT_VERIFIED","INSUFFICIENT_EVIDENCE","CONTRADICTORY_EVIDENCE"],
-  ROOT_CAUSE_VERIFIED:["SOURCE_VERIFIED","INVESTIGATING","EVIDENCE_COLLECTING"],
+  ROOT_CAUSE_VERIFIED:["SOURCE_VERIFIED","SOURCE_NOT_VERIFIED","INVESTIGATING","EVIDENCE_COLLECTING"],
   // FIX: SOURCE_VERIFIED must be able to reach INVESTIGATION_BLOCKED. buildActionPlan()
   // can produce a BLOCKED action from a case that is already SOURCE_VERIFIED (proof
   // chain complete, but Guardian denies authorization e.g. missing integrity binding
@@ -177,12 +177,28 @@ export function reason(caseData, hypotheses=[]) {
 
 export function verifyRootCause(caseData, rootCause) {
   const c = structuredClone(caseData);
+  if(typeof rootCause?.statement!=="string" || !rootCause.statement.trim()) {
+    c.rootCause=null;
+    transition(c,"INSUFFICIENT_EVIDENCE");
+    c.updatedAt=now(); c.revision++;
+    return c;
+  }
   const required = Array.isArray(rootCause?.evidenceIds) ? uniq(rootCause.evidenceIds) : [];
   const evidence = c.evidence.filter(e=>required.includes(e.id));
+  const hypothesisId = typeof rootCause?.hypothesisId==="string" ? rootCause.hypothesisId.trim() : "";
+  const hypothesis = c.hypotheses.find(h=>h?.id===hypothesisId);
+  const hypothesisEvidence = Array.isArray(hypothesis?.evidenceIds) ? uniq(hypothesis.evidenceIds) : [];
+  const independentSources = new Set(evidence.map(e=>e.source || e.metadata?.file || e.type || e.id));
+  const independentSupport = independentSources.size>=2 || evidence.length>=2;
+  const causalScore = Number(hypothesis?.score);
   const allVerified = required.length>0 && evidence.length===required.length &&
-    evidence.every(e=>e.status==="VERIFIED") && !detectContradictions(evidence).length;
+    evidence.every(e=>e.status==="VERIFIED") && !detectContradictions(evidence).length &&
+    !!hypothesis && causalScore>=0.60 && hypothesisEvidence.length>0 &&
+    required.every(id=>hypothesisEvidence.includes(id)) && independentSupport;
   c.rootCause = allVerified ? {
     statement: rootCause.statement,
+    hypothesisId,
+    hypothesisScore: causalScore,
     evidenceIds: required,
     verifiedAt: now()
   } : null;
@@ -193,12 +209,17 @@ export function verifyRootCause(caseData, rootCause) {
 
 export function verifyExactSource(caseData, source) {
   const c = structuredClone(caseData);
+  const boundEvidence = Array.isArray(source?.evidenceIds) ? c.evidence.filter(e=>source.evidenceIds.includes(e.id)) : [];
+  const exactBoundEvidence = boundEvidence.filter(e=>e.status==="VERIFIED" && e.exact && (
+    e.fingerprint===source?.fingerprint || e.metadata?.file===source?.file || e.source===source?.file
+  ));
   const valid = !!c.rootCause && !!source?.file && !!source?.originalCode &&
     !!source?.fingerprint && Array.isArray(source.evidenceIds) &&
     source.evidenceIds.length>0 &&
     source.evidenceIds.every(id => c.evidence.some(e=>e.id===id && e.status==="VERIFIED")) &&
     new Set(source.evidenceIds).size===source.evidenceIds.length &&
     source.evidenceIds.every(id => c.rootCause.evidenceIds.includes(id)) &&
+    exactBoundEvidence.length>0 &&
     source.contentFingerprint === contentFingerprint(source.originalCode);
   c.exactSource = valid ? {...source, verifiedAt:now()} : null;
   transition(c,valid ? "SOURCE_VERIFIED" : "SOURCE_NOT_VERIFIED");

@@ -44,12 +44,14 @@ export function authorizeAction(input={}) {
   const autoIntegrity=!!input.sourceFingerprint;
   const clean=!(input.contradictoryEvidence||input.unresolvedEvidence);
   const policy=input.policy||{};
+  // Automatic execution is opt-in: only an explicit true may permit it.
+  // Undefined and false both require human approval after proof/risk gates pass.
   if(!verified || !clean) return {decision:"BLOCKED",risk,reason:"PROOF_CHAIN_INCOMPLETE_OR_CONTRADICTORY",policyVersion:policy.version||"1"};
-  if(risk!=="CRITICAL" && risk!=="HIGH" && !autoIntegrity && input.allowAutomaticExecution!==false)
+  if(risk!=="CRITICAL" && risk!=="HIGH" && !autoIntegrity && input.allowAutomaticExecution===true)
     return {decision:"BLOCKED",risk,reason:"SOURCE_INTEGRITY_BINDING_REQUIRED",policyVersion:policy.version||"1"};
   if(risk==="CRITICAL") return {decision:"HUMAN_APPROVAL_REQUIRED",risk,reason:"CRITICAL_CHANGE",policyVersion:policy.version||"1"};
   if(risk==="HIGH") return {decision:"HUMAN_APPROVAL_REQUIRED",risk,reason:"HIGH_RISK_CHANGE",policyVersion:policy.version||"1"};
-  if(policy.allowAutomaticExecution===false) return {decision:"HUMAN_APPROVAL_REQUIRED",risk,reason:"POLICY_REQUIRES_HUMAN",policyVersion:policy.version||"1"};
+  if(input.allowAutomaticExecution!==true) return {decision:"HUMAN_APPROVAL_REQUIRED",risk,reason:"POLICY_REQUIRES_HUMAN_OR_NOT_EXPLICITLY_ENABLED",policyVersion:policy.version||"1"};
   return {decision:"AUTO_ALLOWED",risk,reason:"VERIFIED_LOW_RISK_POLICY_ALLOWED",policyVersion:policy.version||"1"};
 }
 

@@ -13,14 +13,19 @@ function clone(v){ return structuredClone(v); }
 function verifiedEvidence(caseData){ return (caseData?.evidence||[]).filter(e=>e?.status==="VERIFIED"); }
 function contradictions(caseData){ return Core.detectContradictions(caseData?.evidence||[]); }
 
-export function evaluate(caseData, policy={}){
+export function evaluate(caseData, policy={}, knowledge=null){
   const c=clone(caseData||{});
   const verified=verifiedEvidence(c);
   const contradictory=contradictions(c);
   const unresolved=(c.evidence||[]).some(e=>e?.status!=="VERIFIED");
   const rootIds=Array.isArray(c.rootCause?.evidenceIds)?c.rootCause.evidenceIds:[];
   const rootEvidenceBound=!!c.rootCause && rootIds.length>0 && new Set(rootIds).size===rootIds.length && rootIds.every(id=>verified.some(e=>e.id===id));
-  const rootVerified=rootEvidenceBound && c.state!=="CONTRADICTORY_EVIDENCE";
+  const rootHypothesis = c.hypotheses?.find(h=>h?.id===c.rootCause?.hypothesisId);
+  const rootHypothesisEvidence = Array.isArray(rootHypothesis?.evidenceIds) ? rootHypothesis.evidenceIds : [];
+  const independentRootSupport = new Set(rootIds.map(id=>{const e=verified.find(x=>x.id===id); return e?.source || e?.metadata?.file || e?.type || e?.id;})).size>=2 || rootIds.length>=2;
+  const causalRootVerified = rootEvidenceBound && !!rootHypothesis && Number(rootHypothesis.score)>=0.60 &&
+    rootHypothesisEvidence.length>0 && rootIds.every(id=>rootHypothesisEvidence.includes(id)) && independentRootSupport;
+  const rootVerified=causalRootVerified && c.state!=="CONTRADICTORY_EVIDENCE";
   const sourceEvidenceBound=!!c.exactSource && Array.isArray(c.exactSource.evidenceIds) &&
     c.exactSource.evidenceIds.length>0 && c.exactSource.evidenceIds.every(id=>rootIds.includes(id));
   const sourceVerified=!!c.exactSource && sourceEvidenceBound;
@@ -33,6 +38,7 @@ export function evaluate(caseData, policy={}){
     unresolved,
     contradictory:contradictory.length>0,
     rootCauseVerified:rootVerified,
+    causalRootVerified,
     rootEvidenceBound,
     sourceVerified,
     fingerprintBound,
@@ -42,16 +48,17 @@ export function evaluate(caseData, policy={}){
   };
   const cognition=Cognition.deliberate({
     evidence:c.evidence||[], rootCause:c.rootCause, exactSource:c.exactSource,
-    contradictions:contradictory
+    contradictions:contradictory, proofComplete:(rootVerified && sourceVerified && fingerprintBound && sourceFingerprintBound && sourceEvidenceBound && !unresolved && !contradictory.length)
   });
   const guardian=Guardian.authorizeAction({
     caseId:c.caseId,
     rootCauseVerified:rootVerified,
+    causalRootVerified,
     rootEvidenceBound,
     sourceVerified,
     exactFingerprint:fingerprintBound ? c.exactSource.fingerprint : null,
     sourceFingerprint:c.exactSource?.sourceFingerprint||null,
-    allowAutomaticExecution:policy.allowAutomaticExecution===false,
+    allowAutomaticExecution:policy.allowAutomaticExecution,
     contradictoryEvidence:proof.contradictory,
     unresolvedEvidence:proof.unresolved,
     severity:c.severity,
@@ -63,15 +70,15 @@ export function evaluate(caseData, policy={}){
   return clone({caseId:c.caseId, revision:c.revision||0, proof, cognition, guardian, decision:action, reason});
 }
 
-export function decide(caseData, policy={}){
-  const evaluation=evaluate(caseData,policy);
+export function decide(caseData, policy={}, knowledge=null){
+  const evaluation=evaluate(caseData,policy,knowledge);
   if(evaluation.decision!=="AUTO_ALLOWED") return evaluation;
   if(!evaluation.proof.complete) return {...evaluation,decision:"BLOCKED",reason:"PROOF_CHAIN_INCOMPLETE"};
   return {...evaluation,decision:"AUTO_ALLOWED",reason:"AUTO_PATCH_EXECUTION_READY"};
 }
 
-export function reconcile(caseData, policy={}, previous=null){
-  const current=decide(caseData,policy);
+export function reconcile(caseData, policy={}, previous=null, knowledge=null){
+  const current=decide(caseData,policy,knowledge);
   if(!previous) return current;
   if(previous.caseId!==current.caseId) return current;
   if(Number(previous.revision||0)>Number(current.revision||0))

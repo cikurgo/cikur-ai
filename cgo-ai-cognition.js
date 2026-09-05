@@ -21,7 +21,7 @@ export function deliberate(context={}) {
   const unresolved=evidence.filter(e=>e.status==="UNVERIFIED");
   let conclusion="INSUFFICIENT_EVIDENCE";
   if(contradictions.length) conclusion="CONTRADICTORY_EVIDENCE";
-  else if(verified.length && context.rootCause && context.exactSource) conclusion="READY_FOR_ACTION_POLICY";
+  else if(context.proofComplete===true) conclusion="READY_FOR_ACTION_POLICY";
   else if(verified.length) conclusion="CONTINUE_INVESTIGATION";
   const countFactor=Math.min(1, verified.length/4);
   const avgQuality=verified.length ? verified.reduce((s,e)=>s+evidenceQuality(e),0)/verified.length : 0;
@@ -38,7 +38,7 @@ export function deliberate(context={}) {
 export function speak(result, mode="SYSTEM") {
   if(result.conclusion==="INSUFFICIENT_EVIDENCE") return "Bukti belum cukup. Investigasi harus dilanjutkan.";
   if(result.conclusion==="CONTRADICTORY_EVIDENCE") return "Bukti saling bertentangan. Tindakan diblokir sampai kontradiksi diselesaikan.";
-  if(result.conclusion==="READY_FOR_ACTION_POLICY") return "Rantai bukti dan sumber sudah terverifikasi. Selanjutnya keputusan tindakan mengikuti policy.";
+  if(result.conclusion==="READY_FOR_ACTION_POLICY") return "Rantai bukti lengkap dan terverifikasi. Selanjutnya keputusan tindakan mengikuti policy.";
   return "Bukti awal tersedia, tetapi pembuktian belum selesai.";
 }
 export { VERSION };

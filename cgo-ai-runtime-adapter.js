@@ -42,6 +42,7 @@ export function createDeterministicExecutor(target={}) {
       if(typeof proposed!=="string") throw new Error("PROPOSED_CODE_REQUIRED");
       const at=source.indexOf(original);
       if(at<0) throw new Error("INSERT_ANCHOR_NOT_FOUND");
+      if(source.indexOf(original,at+1)>=0) throw new Error("AMBIGUOUS_INSERT_ANCHOR");
       return source.slice(0,at)+proposed+source.slice(at);
     }
     if(operation==="REMOVE_EXACT"){
@@ -78,8 +79,11 @@ export function createDeterministicExecutor(target={}) {
       const verification = request.operation==="REMOVE_EXACT"
         ? !next.includes(String(request.originalCode))
         : request.operation==="INSERT_EXACT"
-          ? next.includes(String(request.proposedCode))
-          : next.includes(String(request.proposedCode));
+          ? next === (current.slice(0,current.indexOf(String(request.originalCode))) +
+              String(request.proposedCode) + current.slice(current.indexOf(String(request.originalCode))))
+          : next === (current.slice(0,current.indexOf(String(request.originalCode))) +
+              String(request.proposedCode) +
+              current.slice(current.indexOf(String(request.originalCode))+String(request.originalCode).length));
       if(!verification) throw new Error("PATCH_READBACK_VERIFICATION_FAILED");
       await bound.write(next);
       const readBack=String(await bound.read());
@@ -163,6 +167,13 @@ export function createRuntime(options={}) {
       throw new Error(`INVALID_SNAPSHOT_LIFECYCLE:${c.caseId}`);
     if(["EXECUTING","VALIDATING","RESOLVED"].includes(c.state) && !c.validation && !c.execution)
       throw new Error(`INVALID_SNAPSHOT_LIFECYCLE:${c.caseId}`);
+    if(c.rootCause){
+      const h=c.hypotheses.find(x=>x?.id===c.rootCause.hypothesisId);
+      if(typeof c.rootCause.statement!=="string" || !c.rootCause.statement.trim() || !h || Number(h.score)<0.60 ||
+         !Array.isArray(c.rootCause.evidenceIds) || !c.rootCause.evidenceIds.length ||
+         !Array.isArray(h.evidenceIds) || !c.rootCause.evidenceIds.every(id=>h.evidenceIds.includes(id)))
+        throw new Error(`INVALID_SNAPSHOT_ROOT_CAUSE:${c.caseId}`);
+    }
     if(c.exactSource){
       if(c.exactSource.contentFingerprint!==Core.contentFingerprint(c.exactSource.originalCode||""))
         throw new Error(`INVALID_SNAPSHOT_PROOF_FINGERPRINT:${c.caseId}`);
@@ -179,14 +190,11 @@ export function createRuntime(options={}) {
 
   function authorizationDecision(caseId,policy={}){
     const c=cases.get(caseId);
-    return Guardian.authorizeAction({
-      caseId, rootCauseVerified:!!c?.rootCause, sourceVerified:!!c?.exactSource,
-      exactFingerprint:c?.exactSource?.fingerprint, sourceFingerprint:c?.exactSource?.sourceFingerprint||null,
-      allowAutomaticExecution:policy.allowAutomaticExecution===false,
-      contradictoryEvidence:c?.state==="CONTRADICTORY_EVIDENCE",
-      unresolvedEvidence:(c?.evidence||[]).some(e=>e.status!=="VERIFIED"),
-      severity:c?.severity, target:c?.target, policy
-    });
+    if(!c) throw new Error(`CASE_NOT_FOUND:${caseId}`);
+    // Every authorization path re-runs the complete proof chain. Truthy
+    // rootCause/exactSource objects are never sufficient by themselves.
+    const evaluation=Logic.evaluate(c,policy,knowledge);
+    return evaluation.guardian;
   }
 
   const api={
@@ -216,7 +224,7 @@ export function createRuntime(options={}) {
       const c=Core.createCase(input);
       c.event = {eventId: input.eventId || null, sequence: Number.isInteger(input.sequence) ? input.sequence : 0, observedAt: input.observedAt || c.createdAt, source: input.source || "BCGO"};
       cases.set(c.caseId,c);
-      eventLedger.set(c.caseId,{sequence:c.event.sequence,eventIds:new Set(c.event.eventId?[c.event.eventId]:[])});
+      eventLedger.set(c.caseId,{sequence:Number.isInteger(c.event.sequence)?c.event.sequence:-1,eventIds:new Set(c.event.eventId?[c.event.eventId]:[])});
       investigations.set(c.caseId,Investigator.createInvestigation(c,knowledge));
       emit("CASE_DETECTED",c);
       return structuredClone(c);
@@ -226,7 +234,7 @@ export function createRuntime(options={}) {
       const c0=cases.get(caseId);
       if(!c0) throw new Error(`CASE_NOT_FOUND:${caseId}`);
       const incoming=Array.isArray(evidence)?evidence:[evidence];
-      const ledger=eventLedger.get(caseId)||{sequence:c0.event?.sequence||0,eventIds:new Set()};
+      const ledger=eventLedger.get(caseId)||{sequence:Number.isInteger(c0.event?.sequence)?c0.event.sequence:-1,eventIds:new Set()};
       for(const e of incoming){
         if(e?.eventId && ledger.eventIds.has(e.eventId)) throw new Error(`DUPLICATE_EVENT:${e.eventId}`);
         if(Number.isInteger(e?.sequence) && e.sequence <= ledger.sequence) throw new Error(`STALE_EVENT:${e.sequence}<=${ledger.sequence}`);
@@ -286,6 +294,7 @@ export function createRuntime(options={}) {
         revision:c?.revision||0,
         fingerprint:c?.exactSource?.fingerprint||null,
         sourceFingerprint:c?.exactSource?.sourceFingerprint||null,
+        proposedFingerprint:c?.exactSource?.proposedCode==null ? null : Core.contentFingerprint(c.exactSource.proposedCode),
         file:c?.exactSource?.file||null,
         operation:c?.exactSource?.operation||null,
         decision:auth.decision,
@@ -313,6 +322,7 @@ export function createRuntime(options={}) {
       const parsed=JSON.parse(rec.binding);
       if(auth.decision!==parsed.decision || auth.risk!==parsed.risk || auth.policyVersion!==parsed.policyVersion)
         throw new Error(`AUTHORIZATION_BINDING_MISMATCH:${auth.authorizationId}`);
+      if(parsed.decision==="BLOCKED") throw new Error(`AUTHORIZATION_NOT_EXECUTABLE:${auth.authorizationId}`);
       if(expected.caseId && expected.caseId!==rec.caseId) throw new Error("AUTHORIZATION_CASE_MISMATCH");
       if(expected.fingerprint && parsed.fingerprint!==expected.fingerprint) throw new Error("AUTHORIZATION_SOURCE_MISMATCH");
       if(expected.sourceFingerprint && parsed.sourceFingerprint!==expected.sourceFingerprint) throw new Error("AUTHORIZATION_SOURCE_MISMATCH");
@@ -330,28 +340,8 @@ export function createRuntime(options={}) {
          existing.request?.operation===(c0.exactSource?.operation||"REPLACE_EXACT")){
         return structuredClone(c0);
       }
-      if(existing && existing.request?.fingerprint===c0.exactSource?.fingerprint &&
-         existing.request?.file===c0.exactSource?.file &&
-         existing.request?.operation===(c0.exactSource?.operation||"REPLACE_EXACT")){
-        const rec=existing.authorizationId?authorizationLedger.get(existing.authorizationId):null;
-        const validRec=!!rec && !rec.consumed && Date.now()<=Date.parse(rec.expiresAt);
-        if(validRec){
-          const authDecision=Guardian.authorizeAction({
-            caseId, rootCauseVerified:!!c0?.rootCause, sourceVerified:!!c0?.exactSource,
-            exactFingerprint:c0?.exactSource?.fingerprint,
-            sourceFingerprint:c0?.exactSource?.sourceFingerprint||null,
-            allowAutomaticExecution:policy.allowAutomaticExecution===false,
-            contradictoryEvidence:c0?.state==="CONTRADICTORY_EVIDENCE",
-            unresolvedEvidence:(c0?.evidence||[]).some(e=>e.status!=="VERIFIED"),
-            severity:c0?.severity,target:c0?.target,policy
-          });
-          if(existing.authorization===authDecision.decision && existing.risk===authDecision.risk && rec.binding===JSON.stringify({...JSON.parse(rec.binding),policyVersion:authDecision.policyVersion})){
-            return structuredClone(c0);
-          }
-        }
-      }
       const decision=authorizationDecision(caseId,policy);
-      const key=JSON.stringify({caseId,proofFingerprint:c0.exactSource?.fingerprint||null,sourceFingerprint:c0.exactSource?.sourceFingerprint||null,rootEvidence:c0.rootCause?.evidenceIds||[],decision:decision.decision,risk:decision.risk,policy});
+      const key=JSON.stringify({caseId,revision:c0.revision||0,proofFingerprint:c0.exactSource?.fingerprint||null,sourceFingerprint:c0.exactSource?.sourceFingerprint||null,proposedFingerprint:c0.exactSource?.proposedCode==null?null:Core.contentFingerprint(c0.exactSource.proposedCode),rootEvidence:c0.rootCause?.evidenceIds||[],decision:decision.decision,risk:decision.risk,policy});
       if(planCache.has(key)){
         const cached=planCache.get(key);
         const rec=cached?.actionPlan?.authorizationId?authorizationLedger.get(cached.actionPlan.authorizationId):null;
@@ -380,13 +370,17 @@ export function createRuntime(options={}) {
       const current=cases.get(caseId);
       const bound=JSON.parse(rec.binding);
       if(!current?.exactSource || current.exactSource.fingerprint!==action.request?.fingerprint ||
-         current.exactSource.file!==bound.file || current.exactSource.operation!==bound.operation)
+         current.exactSource.file!==bound.file || current.exactSource.operation!==bound.operation ||
+         (current.exactSource.proposedCode==null ? null : Core.contentFingerprint(current.exactSource.proposedCode))!==bound.proposedFingerprint ||
+         Number(current.revision||0)!==Number(bound.revision||0))
         throw new Error("EXECUTION_PROOF_BINDING_MISMATCH");
       if(rec.consumed) throw new Error(`AUTHORIZATION_REPLAY:${authId}`);
       if(rec.inFlight) throw new Error(`AUTHORIZATION_IN_FLIGHT:${authId}`);
       if(Date.now()>Date.parse(rec.expiresAt)) throw new Error(`AUTHORIZATION_EXPIRED:${authId}`);
       if(bound.caseId!==caseId || bound.fingerprint!==action.request.fingerprint || bound.sourceFingerprint!==(action.request.sourceFingerprint||null) || bound.file!==action.request.file ||
-         bound.operation!==(action.request.operation||"REPLACE_EXACT"))
+         bound.operation!==(action.request.operation||"REPLACE_EXACT") ||
+         bound.proposedFingerprint!==(action.request.proposedCode==null ? null : Core.contentFingerprint(action.request.proposedCode)) ||
+         Number(bound.revision||0)!==Number(action.revision||0))
         throw new Error("EXECUTION_AUTHORIZATION_BINDING_MISMATCH");
       rec.inFlight=true;
       authorizationLedger.set(authId,rec);
@@ -430,7 +424,7 @@ export function createRuntime(options={}) {
     logic(caseId,policy={}){
       const c=cases.get(caseId);
       if(!c) throw new Error(`CASE_NOT_FOUND:${caseId}`);
-      return Logic.decide(c,policy);
+      return Logic.decide(c,policy,knowledge);
     },
 
     validate(caseId, outcome={}){
@@ -446,13 +440,16 @@ export function createRuntime(options={}) {
       return structuredClone(cases.get(caseId));
     },
 
-    deliberate(caseId){
+    deliberate(caseId,policy={}){
       const c=cases.get(caseId);
+      if(!c) throw new Error(`CASE_NOT_FOUND:${caseId}`);
+      const evaluation=Logic.evaluate(c,policy,knowledge);
       return Cognition.deliberate({
         evidence:c.evidence,
         rootCause:c.rootCause,
         exactSource:c.exactSource,
-        contradictions:Core.detectContradictions(c.evidence)
+        contradictions:Core.detectContradictions(c.evidence),
+        proofComplete:evaluation.proof.complete
       });
     },
 
@@ -487,7 +484,7 @@ export function createRuntime(options={}) {
         validateRestoredCase(c);
         cases.set(c.caseId,structuredClone(c));
         investigations.set(c.caseId,Investigator.createInvestigation(c,knowledge));
-        eventLedger.set(c.caseId,{sequence:Number.isInteger(c.event?.sequence)?c.event.sequence:0,eventIds:new Set(c.event?.eventId?[c.event.eventId]:[])});
+        eventLedger.set(c.caseId,{sequence:Number.isInteger(c.event?.sequence)?c.event.sequence:-1,eventIds:new Set(c.event?.eventId?[c.event.eventId]:[])});
       }
       memory=structuredClone(snapshot.memory);
       for(const entry of (snapshot.authorizations||[])){
