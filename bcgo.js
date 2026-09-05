@@ -9,10 +9,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
-import { install as installInternalAI } from "./cgo-ai-browser-adapter.js?v=5.2.2";
+import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v9.js?v=10.1.0";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.15.1 + CIKUR GO INTERNAL AI V5.2
+ * BCGO MASTER NERVE SYSTEM v2.15.1 + INTERNAL AI OPERATIONAL
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -45,7 +45,7 @@ const ORGAN_COUNT = Object.keys(ORGAN_REGISTRY).length;
 
 const SOURCE_SCAN_INTERVAL = 20000;
 const SOURCE_SCAN_FETCH_TIMEOUT = 10000;
-const SOURCE_SCAN_VERSION = "1.10.0";
+const SOURCE_SCAN_VERSION = "1.11.0-NERVE";
 
 const ACTIVE_WINDOW = 15 * 60 * 1000;
 const CLOCK_SKEW = 5 * 60 * 1000;
@@ -128,6 +128,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     activeCases: [],
     medicineQueue: [],
     connection: { status: "CONNECTING", lastServerAt: 0 },
+    fileNerves: {},
     sourceScan: {
       version: SOURCE_SCAN_VERSION, status: "WAITING", startedAt: 0, completedAt: 0,
       filesScanned: 0, filesReadable: 0, filesFailed: 0, currentFile: null, currentIndex: 0,
@@ -1136,6 +1137,133 @@ export function runAutonomousEngine(onCycleUpdate) {
     return {findings, relations};
   }
 
+
+  // ============================================================
+  // BCGO FILE NERVE MAP — RUNTIME + SOURCE + DEPENDENCY + CONTRACT
+  // This is the canonical sensor packet consumed by the Internal AI.
+  // A file is not called healthy merely because it has no recent telemetry.
+  // ============================================================
+  const NERVE_BUILTINS = new Set([
+    'if','for','while','switch','catch','function','setTimeout','setInterval',
+    'clearTimeout','clearInterval','String','Number','Boolean','Math','Date','Array',
+    'Object','Promise','Error','RegExp','JSON','Map','Set','WeakMap','WeakSet','Symbol',
+    'parseInt','parseFloat','isNaN','isFinite','decodeURI','decodeURIComponent',
+    'encodeURI','encodeURIComponent','console','window','document','navigator','location',
+    'fetch','URL','URLSearchParams','AbortController','Blob','File','FormData','Headers',
+    'Request','Response','Intl','BigInt','undefined','NaN','Infinity'
+  ]);
+
+  function buildFileNerves(scanned, logs, relations, crossFileFindings) {
+    const intelligence = buildSourceIntelligence(scanned, logs);
+    const definitions = new Map();
+    const fileNerves = {};
+
+    for (const [file,item] of Object.entries(scanned || {})) {
+      for (const fn of item.functions || []) {
+        const key = String(fn.name || '').toLowerCase();
+        if (!key) continue;
+        if (!definitions.has(key)) definitions.set(key, []);
+        definitions.get(key).push({ file, line:fn.line, name:fn.name });
+      }
+    }
+
+    // Cross-file relation index: every relation becomes a dependency nerve,
+    // regardless of whether it is currently actionable.
+    const relByFile = new Map();
+    for (const relation of relations || []) {
+      for (const file of [normalizeFile(relation.sourceFile), normalizeFile(relation.targetFile)]) {
+        if (!file || file === 'UNKNOWN' || !ORGAN_REGISTRY[file]) continue;
+        if (!relByFile.has(file)) relByFile.set(file, []);
+        relByFile.get(file).push(relation);
+      }
+    }
+
+    // Runtime ReferenceError is promoted into a source-bound nerve only when
+    // the current source surface proves the symbol is not defined anywhere.
+    const runtimeErrorsByFile = new Map();
+    for (const log of logs || []) {
+      const file = normalizeFile(log?.fileName || log?.sourceFile || log?.file);
+      if (!ORGAN_REGISTRY[file]) continue;
+      const message = String(log?.message || log?.error || log?.text || '');
+      if (!message) continue;
+      if (!runtimeErrorsByFile.has(file)) runtimeErrorsByFile.set(file, []);
+      runtimeErrorsByFile.get(file).push({
+        type: /ReferenceError/i.test(message) ? 'REFERENCE_ERROR' : 'RUNTIME_ERROR',
+        message: message.slice(0,500),
+        line: log?.line ?? log?.lineno ?? null,
+        column: log?.column ?? log?.colno ?? null,
+        at: timestamp(log?.reportedAt)
+      });
+    }
+
+    for (const [file,item] of Object.entries(scanned || {})) {
+      const info = intelligence.files?.[file] || {};
+      const runtime = runtimeErrorsByFile.get(file) || [];
+      const localFindings = (item.findings || []).slice(0,40);
+      const relationList = (relByFile.get(file) || []).slice(0,80);
+      const unresolved = [];
+
+      // Do not treat every generic function call as an error: browser globals,
+      // imported Firebase helpers, object methods, and methods defined with syntax
+      // that the lightweight parser cannot enumerate would create false positives.
+      // Static absence is therefore promoted only for explicit HTML handlers here;
+      // runtime ReferenceError is handled below with stronger telemetry evidence.
+      //
+      // Function-body call names are still retained in the contract/dependency
+      // surface through intelligence.files[*].calledNames.
+
+      // Runtime symbol proof is stronger than a generic static absence. It is
+      // bound to the current source scan and therefore becomes an explicit nerve.
+      for (const error of runtime) {
+        const symbol = extractSymbolFromText(error.message);
+        if (!symbol || !/ReferenceError|is not defined/i.test(error.message)) continue;
+        const defs = definitions.get(symbol.toLowerCase()) || [];
+        const hits = sourceLineHits(item.rawSource, symbol);
+        if (!defs.length) {
+          unresolved.push({
+            symbol, kind:'RUNTIME_UNDEFINED', file,
+            line:error.line || hits[0]?.line || null,
+            source:'RUNTIME_TELEMETRY + COMPLETE_SOURCE_SURFACE',
+            evidence:`Telemetry ${file} melaporkan ${symbol} tidak terdefinisi dan scanner tidak menemukan definisi ${symbol} pada ${Object.keys(scanned || {}).length} source yang terbaca.`
+          });
+        }
+      }
+
+      const uniqueUnresolved = [...new Map(unresolved.map(x => [`${x.symbol}|${x.kind}|${x.line}`, x])).values()].slice(0,40);
+      const sourceReadable = Boolean(item.rawSource && item.hash);
+      const sourceFindings = [...localFindings, ...(crossFileFindings || []).filter(f => normalizeFile(f.file || f.sourceFile || f.targetFile) === file || normalizeFile(f.targetFile) === file)].slice(0,60);
+      const high = sourceFindings.filter(f => f.severity === 'HIGH').length;
+      const medium = sourceFindings.filter(f => f.severity === 'MEDIUM').length;
+      const runtimeActive = runtime.some(e => isRecent(e.at));
+      const dependencyIssues = relationList.filter(r => /MISMATCH|UNKNOWN|VARIANT/.test(String(r.status || '')));
+      const contractIssues = sourceFindings.filter(f => /CONTRACT|FUNCTION|FORM|FILE_SURFACE|VARIANT/.test(String(f.type || '')));
+
+      let overall = 'HEALTHY';
+      if (!sourceReadable) overall = 'SOURCE_UNREADABLE';
+      else if (uniqueUnresolved.length || runtimeActive || high) overall = 'ANOMALY';
+      else if (medium || dependencyIssues.length || contractIssues.length) overall = 'REVIEW';
+      else if ((item.refs || []).length || relationList.length || (info.functions || []).length) overall = 'OBSERVED';
+
+      fileNerves[file] = {
+        file,
+        role:item.role,
+        type:item.type,
+        revision:item.hash,
+        source:{ readable:sourceReadable, lines:item.lines || 0, bytes:item.bytes || 0, hash:item.hash || null },
+        runtime:{ active:runtimeActive, count:runtime.length, errors:runtime.slice(-12) },
+        dependency:{ refs:(item.refs || []).slice(0,80), relationCount:relationList.length, issues:dependencyIssues.slice(0,30), relations:relationList.slice(0,40) },
+        contract:{ functions:(info.functions || []).length, definitions:(info.functionNames || []).slice(0,80), callers:(info.calledNames || []).slice(0,80), onclicks:(info.onclicks || []).slice(0,60), findings:contractIssues.slice(0,30) },
+        unresolved:uniqueUnresolved,
+        findings:{ total:sourceFindings.length, high, medium, items:sourceFindings.slice(0,40) },
+        health:{ overall, runtime:runtimeActive ? 'ANOMALY' : 'HEALTHY', source:sourceReadable ? 'READABLE' : 'FAILED', dependency:dependencyIssues.length ? 'REVIEW' : 'SYNC', contract:contractIssues.length || uniqueUnresolved.length ? 'REVIEW' : 'OK' },
+        evidenceSummary:{ runtime:runtime.length, unresolved:uniqueUnresolved.length, relations:relationList.length, sourceFindings:sourceFindings.length },
+        updatedAt:Date.now()
+      };
+    }
+
+    return { fileNerves, intelligence };
+  }
+
   async function fetchSourceForScan(file, generation) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), SOURCE_SCAN_FETCH_TIMEOUT);
@@ -1202,8 +1330,16 @@ export function runAutonomousEngine(onCycleUpdate) {
         unknown: relations.filter(r => r.status === 'UNKNOWN').length,
         linked: relations.filter(r => r.status === 'LINKED').length
       };
-      const status = failures.length ? 'DEGRADED' : actionable.length ? 'FINDINGS' : 'CLEAN';
-      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:crossFileFindings.slice(0,100),relations:relations.slice(0,200),relationSummary,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),sourceIntelligence:buildSourceIntelligence(scanned, latestSystemLogs),message:failures.length ? `Scanner selesai: ${files.length} source diproses, ${failures.length} source tidak terbaca.` : actionable.length ? `Scanner selesai: ${files.length} source dibaca; ${actionable.length} temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} source dibaca dan dianalisis tanpa temuan struktural/cross-file.` };
+      const nerve = buildFileNerves(scanned, latestSystemLogs, relations, crossFileFindings);
+      const nerveFindings = Object.values(nerve.fileNerves).flatMap(n => (n.unresolved || []).map(u => ({
+        severity:'HIGH', type:'UNRESOLVED_SYMBOL', file:n.file, line:u.line ?? null, targetFile:n.file, targetLine:u.line ?? null,
+        area:'SYMBOL_DEPENDENCY', symbol:u.symbol, message:u.evidence, evidence:{symbol:u.symbol,kind:u.kind,source:u.source}
+      })));
+      const mergedCrossFindings = [...crossFileFindings, ...nerveFindings].slice(0,160);
+      const mergedActionable = [...failures,...allFindings,...mergedCrossFindings].filter(f => f.severity !== 'INFO').slice(0,120);
+      const status = failures.length ? 'DEGRADED' : mergedActionable.length ? 'FINDINGS' : 'CLEAN';
+      state.fileNerves = nerve.fileNerves;
+      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:mergedCrossFindings,relations:relations.slice(0,200),relationSummary,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),sourceIntelligence:nerve.intelligence,nerveSummary:{healthy:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='HEALTHY').length,observed:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='OBSERVED').length,review:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='REVIEW').length,anomaly:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='ANOMALY').length,unresolved:nerveFindings.length},message:failures.length ? `Scanner selesai: ${files.length} source diproses, ${failures.length} source tidak terbaca.` : mergedActionable.length ? `Scanner selesai: ${files.length} source dibaca; ${mergedActionable.length} bukti/temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} source dibaca dan dianalisis tanpa temuan struktural/cross-file.` };
       recordEvent('SOURCE_SCAN_RESULT', state.sourceScan.message, actionable.length ? 'SYS_SOURCE_FINDINGS' : 'SYS_SOURCE_CLEAN');
       try {
         const aiSnapshot = internalAI.ingestBCGOState(safeClone(state));
@@ -1259,6 +1395,23 @@ export function runAutonomousEngine(onCycleUpdate) {
       ...(Array.isArray(state.sourceScan?.findings) ? state.sourceScan.findings : []),
       ...(Array.isArray(state.sourceScan?.crossFileFindings) ? state.sourceScan.crossFileFindings : [])
     ].filter(f => f && f.severity === "HIGH");
+    // File nerves are authoritative for source-bound unresolved symbols and
+    // runtime/source correlation. They can promote a file even when the raw
+    // telemetry window alone would otherwise leave it green.
+    const nerveEntries = Object.entries(state.fileNerves || {});
+    for (const [file, nerve] of nerveEntries) {
+      if (!organs[file]) continue;
+      if (nerve?.health?.overall === 'ANOMALY' && (nerve.unresolved?.length || nerve.runtime?.active || nerve.findings?.high)) {
+        const first = nerve.unresolved?.[0];
+        organs[file] = {
+          ...organs[file], status:'ANOMALY', state:'ACTIVE', evidenceType:'FILE_NERVE',
+          line:first?.line ?? organs[file].line ?? null,
+          message:first?.evidence || nerve.runtime?.errors?.[0]?.message || `Saraf source mendeteksi ${nerve.findings?.high || 0} temuan HIGH.`
+        };
+      } else if (organs[file]?.state === 'HEALTHY' && nerve?.health?.overall === 'REVIEW') {
+        organs[file] = { ...organs[file], status:'REVIEW', state:'REVIEW', evidenceType:'FILE_NERVE', message:`Source terbaca, tetapi saraf dependency/contract memerlukan verifikasi (${nerve.evidenceSummary?.relations || 0} relasi, ${nerve.evidenceSummary?.sourceFindings || 0} temuan).` };
+      }
+    }
     for (const finding of sourceFindings) {
       const target = normalizeFile(finding.targetFile || finding.file);
       if (!ORGAN_REGISTRY[target] || !organs[target]) continue;
@@ -1319,6 +1472,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       active: values.filter(v => v.state === "ACTIVE").length,
       recovered: values.filter(v => v.state === "RECOVERED").length,
       healthy: values.filter(v => v.state === "HEALTHY").length,
+      review: values.filter(v => v.state === "REVIEW").length,
       logCount: latestSystemLogs.length,
       firestoreCount: firestore.count,
       sourceScanStatus: state.sourceScan?.status || "WAITING",
@@ -1755,27 +1909,6 @@ export function runAutonomousEngine(onCycleUpdate) {
     }
   });
 
-  const internalAIProgressListener = event => {
-    if (stopped || !event?.detail) return;
-    try {
-      const snapshot = event.detail;
-      state.internalAI = buildInternalAIHandoff(snapshot);
-      state.internalAI.progress = {
-        active:true,
-        investigationStatus:snapshot?.reasoning?.investigation?.status || "UNKNOWN",
-        operationalStatus:snapshot?.reasoning?.operationalInvestigation?.status || "UNKNOWN",
-        nextProbe:snapshot?.reasoning?.investigation?.nextProbe || null,
-        at:snapshot?.at || Date.now()
-      };
-      window.BCGO_STATE = safeClone(state);
-      publishToUI(safeClone(state));
-      publishBCGOStateToMedicine(safeClone(state));
-    } catch (error) {
-      console.warn("BCGO internal AI progress sync failed:", error);
-    }
-  };
-  window.addEventListener("cikur-internal-ai-state", internalAIProgressListener);
-
   window.addEventListener("unhandledrejection", event => {
     if (stopped) return;
     const reason = event?.reason?.message || String(event?.reason || "Unhandled Promise rejection.");
@@ -1805,7 +1938,6 @@ export function runAutonomousEngine(onCycleUpdate) {
       clearInterval(refreshTimer);
       if (typeof unsubscribeAuth === "function") unsubscribeAuth();
       cleanupRealtime();
-      window.removeEventListener("cikur-internal-ai-state", internalAIProgressListener);
       try { medicineBridgeChannel?.close(); } catch {}
     }
   };

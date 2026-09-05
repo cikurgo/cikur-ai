@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO Universal Neural Monitor</title>
+<title>BCGO Universal Neural Monitor v2.16 — File Nerve</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -36,7 +36,7 @@ body{font-family:'Inter',sans-serif}
                 <span id="pulse-dot" class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></span>
                 BCGO Universal Neural Monitor
             </h1>
-            <p class="text-xs text-slate-400 mt-1">Pusat Saraf Master & Pemantau Organ Lintas File Cikur Go</p>
+            <p class="text-xs text-slate-400 mt-1">Pusat Saraf Master & Pemetaan Saraf Lintas File Cikur Go</p>
         </div>
     </div>
     <div id="system-status-badge" class="px-3 py-1 rounded-md text-xs font-semibold bg-slate-900 text-slate-400 border border-slate-700">
@@ -132,7 +132,7 @@ body{font-family:'Inter',sans-serif}
 
 <section class="bg-slate-900 border border-rose-900/60 rounded-xl p-5 space-y-3">
     <div class="flex justify-between items-center gap-3">
-        <div><div class="text-xs font-semibold text-rose-300 uppercase tracking-wider">Source Code Integrity Scanner</div><div class="text-[10px] text-slate-500 mt-1">BCGO membaca source aktual dari registry, bukan hanya menunggu telemetry.</div></div>
+        <div><div class="text-xs font-semibold text-rose-300 uppercase tracking-wider">Source Code Integrity Scanner</div><div class="text-[10px] text-slate-500 mt-1">BCGO membaca source aktual, telemetry, dependency, dan contract. Hijau bukan lagi sekadar berarti “tidak ada telemetry error”.</div></div>
         <span id="source-scan-status" class="text-[10px] code-font text-slate-400">WAITING</span>
     </div>
     <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-[10px]">
@@ -159,13 +159,17 @@ body{font-family:'Inter',sans-serif}
         </div>
     </div>
     <div id="source-scan-files" class="grid grid-cols-2 md:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto"></div>
+    <div class="rounded-lg border border-cyan-900/60 bg-cyan-950/10 px-3 py-2 text-[9px] code-font">
+        <div class="text-cyan-300 font-semibold">SARAF PER FILE</div>
+        <div id="nerve-summary" class="text-slate-400 mt-1">Menunggu source surface...</div>
+    </div>
     <div class="text-[9px] text-slate-500 uppercase tracking-wider">Peta Kecocokan Antar-File</div>
     <div id="cross-file-findings" class="space-y-2 max-h-72 overflow-y-auto"><div class="text-xs text-slate-500">Belum ada hasil cross-file.</div></div>
     <div id="source-scan-message" class="text-[10px] text-slate-400 code-font">Pemindaian source belum dimulai.</div>
 </section>
 
 <section class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
-    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Status Tiap File — Source Scan + Telemetry Real-Time</div>
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Status Tiap File — SOURCE + TELEMETRY + DEPENDENCY + CONTRACT</div>
     <div id="organ-grid" class="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs"></div>
 </section>
 
@@ -231,7 +235,7 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=2.15.2';
+import { runAutonomousEngine } from './bcgo.js?v=2.16.0';
 
 const $ = id => document.getElementById(id);
 
@@ -295,6 +299,7 @@ const sourceScanProgressLabelEl = $('source-scan-progress-label');
 const sourceScanProgressEl = $('source-scan-progress');
 const sourceScanFilesEl = $('source-scan-files');
 const crossFileFindingsEl = $('cross-file-findings');
+const nerveSummaryEl = $('nerve-summary');
 
 let liveState = null;
 let conversation = [];
@@ -399,6 +404,10 @@ function renderSourceScan(scan) {
     if (sourceScanUnknownEl) sourceScanUnknownEl.textContent = Number(summary.unknown || 0);
     if (sourceScanLinkedEl) sourceScanLinkedEl.textContent = Number(summary.linked || 0);
     if (sourceScanMessageEl) sourceScanMessageEl.textContent = scan.message || 'Belum ada hasil scanner.';
+    if (nerveSummaryEl) {
+        const n = scan.nerveSummary || {};
+        nerveSummaryEl.textContent = `HEALTHY ${n.healthy || 0} • OBSERVED ${n.observed || 0} • REVIEW ${n.review || 0} • ANOMALY ${n.anomaly || 0} • UNRESOLVED ${n.unresolved || 0}`;
+    }
     if (sourceScanCurrentEl) {
         sourceScanCurrentEl.textContent = scan.currentFile
             ? `${scan.phase || 'SCAN'} · ${scan.currentFile}`
@@ -459,26 +468,46 @@ function renderSourceScan(scan) {
     crossFileFindingsEl.innerHTML = findingHtml + relationHtml;
 }
 
-function renderOrgans(organs) {
+function renderOrgans(organs, nerves) {
     if (!organGrid) return;
     const entries = Object.entries(organs || {});
     organGrid.innerHTML = entries.map(([file, info]) => {
-        const active = info.state === 'ACTIVE';
+        const nerve = nerves?.[file] || {};
+        const health = nerve.health || {};
+        const active = info.state === 'ACTIVE' || health.overall === 'ANOMALY';
+        const review = info.state === 'REVIEW' || health.overall === 'REVIEW';
         const recovered = info.state === 'RECOVERED';
 
         const classes = active
-            ? 'border-rose-800 bg-rose-950/50 text-rose-400 animate-pulse'
-            : recovered
-                ? 'border-amber-800 bg-amber-950/30 text-amber-400'
-                : 'border-emerald-800 bg-emerald-950/30 text-emerald-400';
+            ? 'border-rose-800 bg-rose-950/50 text-rose-400'
+            : review
+                ? 'border-amber-800 bg-amber-950/30 text-amber-300'
+                : recovered
+                    ? 'border-amber-800 bg-amber-950/20 text-amber-400'
+                    : 'border-emerald-800 bg-emerald-950/30 text-emerald-400';
 
-        const label = active ? 'ANOMALY' : recovered ? 'RECOVERED' : 'HEALTHY';
+        const label = active ? 'ANOMALY' : review ? 'REVIEW' : recovered ? 'RECOVERED' : 'HEALTHY';
+        const runtime = health.runtime || (nerve.runtime?.active ? 'ANOMALY' : 'HEALTHY');
+        const source = health.source || (nerve.source?.readable ? 'READABLE' : 'WAITING');
+        const dependency = health.dependency || 'WAITING';
+        const contract = health.contract || 'WAITING';
+        const evidence = nerve.evidenceSummary || {};
+        const unresolved = Number(evidence.unresolved || 0);
+        const relations = Number(evidence.relations || 0);
 
         return `
-            <div class="border rounded-lg px-3 py-2 min-h-[72px] ${classes}">
-                <div class="font-semibold code-font">${esc(file)}</div>
-                <div class="text-[10px] opacity-80">${esc(info.type)} — ${label}</div>
-                <div class="text-[9px] opacity-60 mt-1">${esc(info.message || '')}</div>
+            <div class="border rounded-lg px-3 py-2 min-h-[106px] ${classes}">
+                <div class="flex justify-between gap-2 items-center">
+                    <div class="font-semibold code-font truncate">${esc(file)}</div>
+                    <span class="text-[8px] font-bold shrink-0">${label}</span>
+                </div>
+                <div class="text-[9px] opacity-70 mt-1">${esc(info.type)}</div>
+                <div class="grid grid-cols-2 gap-x-2 gap-y-0.5 mt-2 text-[8px] code-font opacity-80">
+                    <span>RUN:${esc(runtime)}</span><span>SRC:${esc(source)}</span>
+                    <span>DEP:${esc(dependency)}</span><span>CTR:${esc(contract)}</span>
+                </div>
+                <div class="text-[8px] opacity-60 mt-1.5">relasi:${relations} • unresolved:${unresolved}</div>
+                <div class="text-[9px] opacity-70 mt-1 line-clamp-2">${esc(info.message || nerve.unresolved?.[0]?.evidence || '')}</div>
             </div>
         `;
     }).join('');
@@ -689,7 +718,7 @@ runAutonomousEngine(state => {
 
     activatePhase(state.step, state);
     setHeader(state.step, state);
-    renderOrgans(state.systemOrgans);
+    renderOrgans(state.systemOrgans, state.fileNerves);
     renderLogs(state.systemLogs);
 
     if (!chatFeed.dataset.ready) {
