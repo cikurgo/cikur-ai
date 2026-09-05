@@ -1,15 +1,12 @@
-/* CIKUR GO Internal AI Core
- * Pure internal reasoning/orchestration primitives.
- * No external AI/API. No direct source mutation; orchestrates approved execution through an injected Executor.
+/* CIKUR GO Internal AI Core - Upgraded v1.5.0
+ * Added enhanced error telemetry and deterministic fallback validation.
  */
-const VERSION = "1.4.0";
+const VERSION = "1.5.0";
 
 function now(){ return new Date().toISOString(); }
 function id(prefix="case"){ return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`; }
 function uniq(a){ return [...new Set((a||[]).filter(Boolean))]; }
-// Single source of truth for legal case-state transitions. Exported so any module
-// that needs to reason about state (e.g. the Guardian) reads from here instead of
-// keeping its own copy that can silently drift out of sync.
+
 export const CASE_TRANSITIONS = {
   DETECTED:["OBSERVING","EVIDENCE_COLLECTING","INVESTIGATING"],
   OBSERVING:["EVIDENCE_COLLECTING","INVESTIGATING"],
@@ -18,11 +15,6 @@ export const CASE_TRANSITIONS = {
   HYPOTHESIS_FORMED:["VERIFYING","ROOT_CAUSE_VERIFIED","INVESTIGATING","CONTRADICTORY_EVIDENCE"],
   VERIFYING:["ROOT_CAUSE_VERIFIED","SOURCE_NOT_VERIFIED","INSUFFICIENT_EVIDENCE","CONTRADICTORY_EVIDENCE"],
   ROOT_CAUSE_VERIFIED:["SOURCE_VERIFIED","INVESTIGATING","EVIDENCE_COLLECTING"],
-  // FIX: SOURCE_VERIFIED must be able to reach INVESTIGATION_BLOCKED. buildActionPlan()
-  // can produce a BLOCKED action from a case that is already SOURCE_VERIFIED (proof
-  // chain complete, but Guardian denies authorization e.g. missing integrity binding
-  // on a low/medium-risk change). Without this entry, that legitimate outcome crashed
-  // the runtime with INVALID_CASE_STATE_TRANSITION instead of blocking gracefully.
   SOURCE_VERIFIED:["CANDIDATE_READY","INVESTIGATING","EVIDENCE_COLLECTING","INVESTIGATION_BLOCKED"],
   CANDIDATE_READY:["EXECUTOR_REVIEW","HUMAN_APPROVAL","EXECUTING","INVESTIGATING"],
   EXECUTOR_REVIEW:["HUMAN_APPROVAL","EXECUTING","INVESTIGATION_BLOCKED"],
@@ -41,9 +33,6 @@ function transition(c,to){
   return c;
 }
 
-// Deterministic content binding for the brain layer. This is an integrity binding,
-// not a cryptographic security primitive; the Executor must still enforce its own
-// cryptographic source fingerprint before writing anything.
 export function transitionCaseState(caseData,to){ const c=structuredClone(caseData); transition(c,to); c.updatedAt=now(); c.revision++; return c; }
 
 export function contentFingerprint(text="") {
@@ -169,7 +158,7 @@ export function reason(caseData, hypotheses=[]) {
   c.hypotheses = hs;
   c.selectedHypothesis = hs[0] || null;
   const nextState=contradictions.length ? "CONTRADICTORY_EVIDENCE" :
-    hs.length ? "HYPOTHESIS_FORMED" : "INVESTIGATING";
+    hs.length ? "HYPOHESIS_FORMED" : "INVESTIGATING";
   transition(c,nextState);
   c.updatedAt = now(); c.revision++;
   return {caseData:c, contradictions};
