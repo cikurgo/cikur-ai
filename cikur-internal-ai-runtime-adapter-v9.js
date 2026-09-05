@@ -1,177 +1,48 @@
-/*
- * CIKUR GO INTERNAL AI — MASTER RUNTIME GATEWAY / SYNCHRONIZED BRAIN
- *
- * This filename is retained as the single deployment entrypoint requested by
- * the project. The three renamed foundation modules are the original source
- * contents moved without rewriting:
- *   cikur-internal-ai-core-v9.js     -> cgo-core.js
- *   cikur-internal-ai-knowledge-v6.js -> cgo-knowledge.js
- *   cikur-internal-ai-guardian-v4.js  -> cgo-guardian.js
- *
- * The active V5.2 brain remains available as the causal/proof/investigation
- * layer. This gateway composes both layers without allowing source mutation,
- * external AI, patching, or execution.
+/**
+ * CIKUR GO INTERNAL AI — RUNTIME BRAIN V10.1
+ * Separates state updates from substantive reasoning/thought events.
+ * No external AI/API. No source mutation. No execution.
  */
-import * as FoundationCore from "./cgo-core.js?v=5.2.5-sync-20260905";
-import * as FoundationKnowledge from "./cgo-knowledge.js?v=5.2.5-sync-20260905";
-import * as FoundationGuardian from "./cgo-guardian.js?v=5.2.5-sync-20260905";
-import * as Core from "./cgo-ai-core.js?v=5.2.5-sync-20260905";
-import * as Logic from "./cgo-ai-logic.js?v=5.2.5-sync-20260905";
-import * as Cognition from "./cgo-ai-cognition.js?v=5.2.5-sync-20260905";
-import * as Investigator from "./cgo-ai-investigator.js?v=5.2.5-sync-20260905";
-import * as InvestigationEngine from "./cgo-ai-investigation-engine.js?v=5.2.5-sync-20260905";
-import * as Knowledge from "./cgo-ai-knowledge.js?v=5.2.5-sync-20260905";
-import * as Guardian from "./cgo-ai-guardian.js?v=5.2.5-sync-20260905";
-import * as Memory from "./cgo-ai-memory.js?v=5.2.5-sync-20260905";
-import * as RuntimeAdapter from "./cgo-ai-runtime-adapter.js?v=5.2.5-sync-20260905";
-import * as BrowserBridge from "./cgo-ai-browser-adapter.js?v=5.2.5-sync-20260905";
-
-export const VERSION = "V5.2.5-SYNCHRONIZED-MASTER-RUNTIME";
-export const ARCHITECTURE = "CGO_INTERNAL_BRAIN_SYNCHRONIZED_MASTER_GATEWAY";
-export const LEGACY_V9 = false;
-
-export { FoundationCore, FoundationKnowledge, FoundationGuardian,
-  Core, Logic, Cognition, Investigator, InvestigationEngine, Knowledge,
-  Guardian, Memory, RuntimeAdapter, BrowserBridge };
-
-const policy = Object.freeze({
-  externalAI: false,
-  automaticPatch: true,
-  automaticExecution: true,
-  automaticSourceMutation: false,
-  humanApprovalRequired: true,
-  medicineOwnsVerification: true,
-  executorOwnsExecutionGate: true,
-  sourceBoundProof: true,
-  causalVerification: true,
-  staleStateProtection: true
-});
-
-function clone(v) {
-  try { return typeof structuredClone === "function" ? structuredClone(v) : JSON.parse(JSON.stringify(v)); }
-  catch { return v; }
+"use strict";
+import {reason,VERSION as REASONING_VERSION} from "./cikur-internal-ai-core-v9.js";
+import {createKnowledgeSnapshot,VERSION as KNOWLEDGE_VERSION} from "./cikur-internal-ai-knowledge-v6.js";
+import {inspect,VERSION as GUARDIAN_VERSION} from "./cikur-internal-ai-guardian-v4.js";
+export const VERSION="10.1.0-operational-runtime";
+export const INTERNAL_AI_EVENTS=Object.freeze({STATE:"cikur-internal-ai-state",CASE:"cikur-internal-ai-case",THOUGHT:"cikur-internal-ai-thought",REASONING:"cikur-internal-ai-reasoning",GUARDIAN:"cikur-internal-ai-guardian",READY:"cikur-internal-ai-ready"});
+const clone=v=>{try{return JSON.parse(JSON.stringify(v));}catch{return v;}};
+const emit=(n,d)=>{try{window.dispatchEvent(new CustomEvent(n,{detail:clone(d)}));}catch{}};
+const norm=v=>String(v??"").toLowerCase().replace(/\s+/g," ").trim();
+const digest=v=>{try{return JSON.stringify(v);}catch{return String(v);}};
+function normalize(s){return {source:"BCGO_STATE",capturedAt:Date.now(),cycle:Number(s?.cycle||0),step:s?.step||"UNKNOWN",cycleMode:s?.cycleMode||"UNKNOWN",targetCell:s?.targetCell||null,message:String(s?.message||""),errorLog:clone(s?.errorLog||null),metrics:clone(s?.metrics||{}),firestore:clone(s?.firestore||{}),connection:clone(s?.connection||{}),activeCases:clone(Array.isArray(s?.activeCases)?s.activeCases:[]),recentEvents:clone(Array.isArray(s?.recentEvents)?s.recentEvents.slice(0,30):[]),latestLogs:clone(Array.isArray(s?.systemLogs)?s.systemLogs.slice(0,50):[]),sourceScan:clone(s?.sourceScan||{}),medicineBridge:clone(s?.medicineBridge||{}),executionBridge:clone(s?.executionBridge||{})};}
+function signal(t,r,g){if(g.level==="CRITICAL")return "GUARD_BLOCK";if(t.connection?.status==="OFFLINE"||t.firestore?.error)return "INFRASTRUCTURE_ERROR";if(r.precisionGate?.blockers?.includes("CONTRADICTORY_EVIDENCE"))return "CONTRADICTORY";if(r.hypotheses?.length)return "REASONING_ACTIVE";if(r.evidence?.length)return "EVIDENCE_ACTIVE";return "STABLE";}
+function thought(t,r,g){if(g.level!=="NONE")return `Guardian menahan kepercayaan pada state: ${g.issues[0]?.message||"risiko integritas terdeteksi"}`;const h=r.hypotheses?.[0];if(h)return `Saya sedang menguji bukti terhadap source dan dependency. Hipotesis terkuat: ${h.claim} Confidence ${Math.round(h.confidence*100)}%. Status masih UNVERIFIED; root cause belum ditetapkan.`;if(r.evidence.length)return `Saya memiliki ${r.evidence.length} evidence unik, tetapi belum cukup untuk menyimpulkan akar masalah.`;return "Belum ada evidence yang cukup; saya tetap memantau BCGO_STATE.";}
+function answer(q,latest){const x=norm(q);if(!latest)return "Internal Intelligence belum menerima BCGO_STATE.";const {telemetry:t,reasoning:r,guardian:g}=latest,h=r.hypotheses?.[0];if(/halo|hai|siapa kamu/.test(x))return "Saya CIKUR GO Internal Intelligence. Saya membaca evidence runtime, menguji hubungan sebab-akibat, menjaga integrity gate, dan menyiapkan konteks untuk Medicine. Saya tidak melakukan patch atau eksekusi.";if(/sedang apa|lagi apa|mengerjakan/.test(x))return `${thought(t,r,g)} Sekarang ${t.step}, cycle #${t.cycle}.`;if(/hipotesis|dugaan|kemungkinan|penyebab/.test(x))return h?`Hipotesis terkuat: ${h.claim} Confidence ${Math.round(h.confidence*100)}%. Evidence independen ${h.independentEvidenceCount}, source diversity ${h.sourceDiversity}. Status UNVERIFIED. Investigation: ${r.investigation?.nextEvidence||"lanjut kumpulkan bukti"}`:"Belum ada hipotesis yang cukup kuat.";if(/evidence|bukti/.test(x))return `Saya menyimpan ${r.evidence.length} evidence unik dari ${r.correlations.sourceDiversity} jalur sumber. Evidence identik tidak dihitung ulang sebagai bukti independen. Precision Gate: ${r.precisionGate.pass?"PASS":"BLOCKED"}.`;if(/guardian|jaga|aman|integritas|security/.test(x))return g.healthy?"Guardian OK: policy, state schema, dan capability boundary aman pada impuls terakhir.":`Guardian menahan sistem pada level ${g.level}: ${g.issues.map(i=>i.message).join(" | ")}`;if(/target|fokus|focus|prioritas|prioriti/.test(x)){const o=r.operationalInvestigation;const f=o?.focus;return f?`Fokus investigasi internal: ${f.target}. Score operasional ${Math.round((f.operationalScore||0)*100)}%, source HIGH ${f.highFindingCount}, runtime evidence ${f.runtimeEvidenceCount}. Next: ${(f.actions||[]).slice(0,4).map(a=>a.code).join(" → ")}.`:`Belum ada fokus operasional yang cukup kuat.`;}if(/aksi|tindakan|langkah|next action/.test(x)){const a=r.operationalInvestigation?.nextActions||[];return a.length?`Directive internal: ${a.map(x=>x.code).join(" → ")}. Medicine menerima prioritas ini sebagai konteks investigasi, bukan bukti final.`:`Belum ada directive investigasi.`;}if(/symbol|simbol|fungsi yang hilang|provider/.test(x)){const rows=r.operationalInvestigation?.symbols||[];return rows.length?rows.map(z=>`${z.symbol}: ${z.status} → ${z.nextAction}`).join(" | "):"Belum ada simbol runtime yang terdeteksi.";}if(/akar|root cause/.test(x))return h?`Saya belum menetapkan root cause. Hipotesis: ${h.claim}. Medicine wajib memverifikasi root cause dan exact source.`:"Belum ada dasar untuk root cause.";if(/investigasi|selanjutnya|next/.test(x))return `Investigation aktif. Next evidence: ${r.investigation?.nextEvidence||"kumpulkan evidence langsung"}. Required: ${(r.investigation?.required||[]).join(", ")}.`;if(/medicine/.test(x))return "Saya menyiapkan evidence, causal hypotheses, dan investigation context untuk Medicine. Medicine tetap pemegang verifikasi root cause/exact source.";if(/executor|patch|eksekusi/.test(x))return "Saya tidak memiliki capability patch atau execute. Setelah Medicine memverifikasi solusi, Executor dan human approval tetap menjadi gate.";if(/status|kondisi/.test(x))return `Signal ${latest.signal}; classification ${r.classification}; evidence ${r.evidence.length}; hypotheses ${r.hypotheses.length}; guardian ${g.healthy?"OK":g.level}; gate ${r.precisionGate.pass?"PASS":"BLOCKED"}.`;return `${thought(t,r,g)} Evidence ${r.evidence.length}, hypotheses ${r.hypotheses.length}, guardian ${g.healthy?"OK":g.level}.`;}
+export function install(){if(typeof window==="undefined")throw new Error("RUNTIME_ADAPTER_BROWSER_ONLY");if(window.CIKURInternalAIRuntime?.version===VERSION)return window.CIKURInternalAIRuntime;let latest=null,lastReasoningKey="",lastThoughtKey="",lastThoughtAt=0;const history=Object.create(null),seenEvidence=Object.create(null);
+const MEMORY_KEY="CIKUR_GO_INTERNAL_AI_MEMORY_V10_1";
+try{const saved=JSON.parse(localStorage.getItem(MEMORY_KEY)||"null");if(saved?.history)for(const [k,v] of Object.entries(saved.history))history[k]=Number(v)||0;if(saved?.seenEvidence)for(const [k,v] of Object.entries(saved.seenEvidence))seenEvidence[k]=Number(v)||Date.now();}catch{}const context=window.CIKURInternalAIContext||{externalAI:false,automaticPatch:false,automaticExecution:false,humanApprovalRequired:true,medicineOwnsVerification:true,executorOwnsExecutionGate:true};
+function ingestBCGOState(state){
+  const telemetry=normalize(state);
+  const reasoning=reason(telemetry,history);
+  const evidenceEpoch=digest((reasoning.evidence||[]).map(e=>e.fingerprint).sort());
+  const isNewEvidence=Boolean(evidenceEpoch)&&!seenEvidence[evidenceEpoch];
+  if(isNewEvidence){seenEvidence[evidenceEpoch]=Date.now();const top=reasoning.hypotheses?.[0];if(top?.claim){const k=norm(top.claim);history[k]=(history[k]||0)+1;}}
+  const knowledge=createKnowledgeSnapshot(telemetry,reasoning);
+  try{localStorage.setItem(MEMORY_KEY,JSON.stringify({version:VERSION,updatedAt:Date.now(),history,seenEvidence:Object.fromEntries(Object.entries(seenEvidence).slice(-300))}));}catch{}
+  const provisionalApi={version:VERSION,events:INTERNAL_AI_EVENTS,ingestBCGOState};
+  const guardian=inspect({state:telemetry,context,runtimeVersion:VERSION,expectedRuntimeVersion:VERSION,runtimeApi:provisionalApi});
+  const signalValue=signal(telemetry,reasoning,guardian);
+  latest={version:VERSION,reasoningVersion:REASONING_VERSION,knowledgeVersion:KNOWLEDGE_VERSION,guardianVersion:GUARDIAN_VERSION,type:"CIKUR_INTERNAL_AI_SNAPSHOT",at:Date.now(),signal:signalValue,telemetry,reasoning,knowledge,guardian,sessionMemorySize:Object.keys(history).length,policy:{evidenceFirst:true,causalReasoning:true,evidenceDeduplication:true,heartbeatIsNotEvidence:true,externalAI:false,automaticPatch:false,automaticExecution:false,humanApprovalRequired:true,medicineOwnsVerification:true,executorOwnsExecutionGate:true}};
+  emit(INTERNAL_AI_EVENTS.STATE,latest);emit(INTERNAL_AI_EVENTS.GUARDIAN,guardian);
+  for(const c of telemetry.activeCases.slice(0,10))emit(INTERNAL_AI_EVENTS.CASE,{version:VERSION,at:Date.now(),case:clone(c),source:"BCGO_STATE"});
+  const top=reasoning.hypotheses?.[0];
+  const reasoningKey=digest({classification:reasoning.classification,top:[top?.id,Math.round((top?.confidence||0)*20)/20,top?.status,top?.independentEvidenceCount],blockers:reasoning.precisionGate.blockers,guardian:guardian.level,signal:signalValue,causal:(reasoning.causalLinks||[]).map(x=>[x.from,x.to,x.relation,x.verified])});
+  if(reasoningKey!==lastReasoningKey){lastReasoningKey=reasoningKey;emit(INTERNAL_AI_EVENTS.REASONING,{version:VERSION,at:Date.now(),signal:signalValue,cycle:telemetry.cycle,step:telemetry.step,classification:reasoning.classification,evidenceCount:reasoning.evidence.length,independentEvidenceCount:reasoning.correlations.independentEvidenceCount,hypotheses:clone(reasoning.hypotheses),precisionGate:clone(reasoning.precisionGate),investigation:clone(reasoning.investigation),operationalInvestigation:clone(reasoning.operationalInvestigation),causalLinks:clone(reasoning.causalLinks)});}
+  const thoughtKey=digest({signal:signalValue,classification:reasoning.classification,topClaim:top?.claim||null,topStatus:top?.status||null,confidenceBand:Math.round((top?.confidence||0)*20)/20,blockers:reasoning.precisionGate.blockers,guardian:guardian.level,causal:(reasoning.causalLinks||[]).map(x=>[x.from,x.to,x.relation,x.verified]),cases:telemetry.activeCases.map(c=>c?.id||c?.target||c?.file).sort()});
+  const substantiveChange=thoughtKey!==lastThoughtKey;
+  const cooldown=Date.now()-lastThoughtAt>=12000;
+  if(substantiveChange&&cooldown&&(signalValue!=="STABLE"||reasoning.evidence.length===0)){lastThoughtKey=thoughtKey;lastThoughtAt=Date.now();emit(INTERNAL_AI_EVENTS.THOUGHT,{version:VERSION,at:Date.now(),signal:signalValue,cycle:telemetry.cycle,step:telemetry.step,text:thought(telemetry,reasoning,guardian),reasoningChange:"SUBSTANTIVE"});}
+  return clone(latest);
 }
-
-function foundationReason(state, history = {}) {
-  try { return FoundationCore.reason(clone(state), clone(history)); }
-  catch (error) { return { version: FoundationCore.VERSION, classification: "FOUNDATION_ERROR", error: String(error?.message || error) }; }
-}
-
-function foundationKnowledge(state, foundationReasoning) {
-  try { return FoundationKnowledge.createKnowledgeSnapshot(clone(state), clone(foundationReasoning)); }
-  catch (error) { return { version: FoundationKnowledge.VERSION, nodes: [], edges: [], error: String(error?.message || error) }; }
-}
-
-function foundationGuardian(state) {
-  try {
-    return FoundationGuardian.inspect({
-      state: clone(state),
-      // Foundation guardian is the preserved legacy lineage auditor.
-      // Its historical policy is intentionally fixed to non-mutating capability.
-      // The active execution policy is owned by the V5.2 guardian/Executor path.
-      context: { ...policy, automaticPatch: false, automaticExecution: false },
-      runtimeVersion: VERSION,
-      expectedRuntimeVersion: VERSION,
-      runtimeApi: { version: VERSION, ingestBCGOState: true }
-    });
-  } catch (error) {
-    return { version: FoundationGuardian.VERSION, healthy: false, level: "CRITICAL", issues: [{ code: "FOUNDATION_GUARDIAN_ERROR", severity: "CRITICAL", message: String(error?.message || error) }] };
-  }
-}
-
-let cached = null;
-
-export function install() {
-  if (cached) return cached;
-  const bridge = BrowserBridge.install();
-  const gateway = {
-    version: VERSION,
-    architecture: ARCHITECTURE,
-    ingestBCGOState(state = {}) {
-      const active = bridge.ingestBCGOState(clone(state));
-      const foundation = foundationReason(state);
-      const graph = foundationKnowledge(state, foundation);
-      const guard = foundationGuardian(state);
-      const merged = {
-        ...active,
-        masterRuntimeVersion: VERSION,
-        foundation: { reasoning: foundation, knowledge: graph, guardian: guard },
-        policy
-      };
-      try {
-        window.dispatchEvent(new CustomEvent("cikur-internal-ai-master-state", { detail: clone(merged) }));
-      } catch {}
-      return merged;
-    },
-    getSnapshot() { return bridge.getSnapshot?.() || null; },
-    deliberate: bridge.deliberate,
-    investigate: bridge.investigate,
-    logic: bridge.logic,
-    getRuntime: bridge.getRuntime
-  };
-  cached = Object.freeze(gateway);
-  return cached;
-}
-
-export function reason(context = {}, history = {}) {
-  const active = BrowserBridge.reason(context, history);
-  const foundationInput = {
-    source: "MEDICINE",
-    targetCell: context.target || null,
-    errorLog: context.errorLog || null,
-    medicineEvidence: clone(context.medicineEvidence || []),
-    activeCases: context.activeCases || [],
-    sourceScan: context.sourceScan || {},
-    connection: context.connection || { status: "UNKNOWN" },
-    firestore: context.firestore || {}
-  };
-  const foundation = foundationReason(foundationInput, history);
-  const graph = foundationKnowledge(foundationInput, foundation);
-  return {
-    ...active,
-    masterRuntimeVersion: VERSION,
-    foundation: { reasoning: foundation, knowledge: graph },
-    policy
-  };
-}
-
-export function getBrainManifest() {
-  return Object.freeze({
-    version: VERSION,
-    architecture: ARCHITECTURE,
-    gateway: "cikur-internal-ai-runtime-adapter-v9.js",
-    lineage: Object.freeze({
-      core: "cikur-internal-ai-core-v9.js -> cgo-core.js (original content)",
-      knowledge: "cikur-internal-ai-knowledge-v6.js -> cgo-knowledge.js (original content)",
-      guardian: "cikur-internal-ai-guardian-v4.js -> cgo-guardian.js (original content)"
-    }),
-    modules: Object.freeze({
-      foundationCore: FoundationCore.VERSION,
-      foundationKnowledge: FoundationKnowledge.VERSION,
-      foundationGuardian: FoundationGuardian.VERSION,
-      core: Core.VERSION,
-      logic: Logic.VERSION,
-      cognition: Cognition.VERSION,
-      investigator: Investigator.VERSION,
-      investigationEngine: InvestigationEngine.VERSION,
-      knowledge: Knowledge.VERSION,
-      guardian: Guardian.VERSION,
-      memory: Memory.VERSION,
-      runtimeAdapter: RuntimeAdapter.VERSION,
-      browserBridge: BrowserBridge.VERSION
-    }),
-    policy
-  });
-}
-
-export function createMasterRuntime(options = {}) {
-  const runtime = RuntimeAdapter.createRuntime(options);
-  return Object.freeze({
-    version: VERSION,
-    manifest: getBrainManifest(),
-    runtime,
-    foundation: { Core: FoundationCore, Knowledge: FoundationKnowledge, Guardian: FoundationGuardian },
-    brain: { Core, Logic, Cognition, Investigator, InvestigationEngine, Knowledge, Guardian, Memory, RuntimeAdapter },
-    browser: { install, reason }
-  });
-}
+const api=Object.freeze({version:VERSION,events:INTERNAL_AI_EVENTS,ingestBCGOState,getSnapshot:()=>clone(latest),getReasoning:()=>clone(latest?.reasoning||null),getKnowledge:()=>clone(latest?.knowledge||null),getGuardian:()=>clone(latest?.guardian||null),getOperationalInvestigation:()=>clone(latest?.reasoning?.operationalInvestigation||null),getSessionMemory:()=>clone(history),getPosture:()=>latest?thought(latest.telemetry,latest.reasoning,latest.guardian):"Menunggu BCGO_STATE.",ask:q=>answer(q,latest),reset:()=>{latest=null;lastReasoningKey="";lastThoughtKey="";lastThoughtAt=0;for(const k of Object.keys(history))delete history[k];for(const k of Object.keys(seenEvidence))delete seenEvidence[k];try{localStorage.removeItem(MEMORY_KEY);}catch{}}});
+window.CIKURInternalAIRuntime=api;emit(INTERNAL_AI_EVENTS.READY,{version:VERSION,reasoningVersion:REASONING_VERSION,knowledgeVersion:KNOWLEDGE_VERSION,guardianVersion:GUARDIAN_VERSION,at:Date.now()});return api;}
+if(typeof globalThis!=="undefined")globalThis.CIKURInternalAIRuntimeAdapter={VERSION,INTERNAL_AI_EVENTS,install};
