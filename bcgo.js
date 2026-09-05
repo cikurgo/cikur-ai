@@ -11,7 +11,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/fi
 import { db, auth } from "./cikur-config.js";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.16.2 + FILE NERVE FOUNDATION + SYNCHRONIZED INTERNAL AI
+ * BCGO MASTER NERVE SYSTEM v2.16.1 + FILE NERVE FOUNDATION
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -96,7 +96,6 @@ export function runAutonomousEngine(onCycleUpdate) {
   let cycleTimer = null;
   let refreshTimer = null;
   let unsubscribeAuth = null;
-  let authCallbackTimer = null;
   let unsubscribeFirestore = null;
   let unsubscribeSystemLogs = null;
   let latestSystemLogs = [];
@@ -113,7 +112,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   async function loadInternalAI() {
     if (stopped || internalAI) return internalAI;
     try {
-      const mod = await import("./cikur-internal-ai-runtime-adapter-v9.js?v=5.2.5-sync");
+      const mod = await import("./cikur-internal-ai-runtime-adapter-v9.js?v=10.1.0");
       if (typeof mod.install !== "function") throw new Error("INTERNAL_AI_ADAPTER_INVALID");
       internalAI = mod.install();
       internalAIStatus = "READY";
@@ -126,7 +125,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       // under cgo-ai-browser-adapter.js. BCGO must never die merely because an
       // optional reasoning adapter is absent.
       try {
-        const mod = await import("./cgo-ai-browser-adapter.js?v=5.2.5-sync");
+        const mod = await import("./cgo-ai-browser-adapter.js?v=5.2.2");
         if (typeof mod.install !== "function") throw new Error("BROWSER_BRAIN_ADAPTER_INVALID");
         internalAI = mod.install();
         internalAIStatus = "READY";
@@ -1894,14 +1893,6 @@ export function runAutonomousEngine(onCycleUpdate) {
     scheduleNext(CYCLE.OUT);
   }
 
-  async function getAdminSnapshotWithTimeout(user, timeoutMs = 12000) {
-    const read = getDoc(doc(db, "admin_users", user.uid));
-    const timeout = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("ADMIN_VERIFICATION_TIMEOUT")), timeoutMs);
-    });
-    return Promise.race([read, timeout]);
-  }
-
   async function verifyAdmin(user, epoch) {
     if (stopped || epoch !== authEpoch) return;
     if (!user) {
@@ -1913,7 +1904,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     }
 
     try {
-      const snap = await getAdminSnapshotWithTimeout(user);
+      const snap = await getDoc(doc(db, "admin_users", user.uid));
       if (stopped || epoch !== authEpoch || auth.currentUser?.uid !== user.uid) return;
       const data = snap.exists() ? snap.data() : null;
       if (data?.active !== true) {
@@ -1994,7 +1985,6 @@ export function runAutonomousEngine(onCycleUpdate) {
       ++authEpoch;
       clearTimeout(cycleTimer);
       clearInterval(refreshTimer);
-      if (authCallbackTimer !== null) { clearTimeout(authCallbackTimer); authCallbackTimer = null; }
       if (typeof unsubscribeAuth === "function") unsubscribeAuth();
       cleanupRealtime();
       try { medicineBridgeChannel?.close(); } catch {}
@@ -2008,7 +1998,6 @@ export function runAutonomousEngine(onCycleUpdate) {
   // can never prevent the BCGO sensor, Firestore listener, or source scanner from booting.
   void loadInternalAI();
   unsubscribeAuth = onAuthStateChanged(auth, user => {
-    if (authCallbackTimer !== null) { clearTimeout(authCallbackTimer); authCallbackTimer = null; }
     const epoch = ++authEpoch;
     verifyAdmin(user, epoch).catch(error => {
       if (stopped || epoch !== authEpoch) return;
@@ -2018,10 +2007,5 @@ export function runAutonomousEngine(onCycleUpdate) {
       emit("OUT", "Saya gagal memverifikasi status Admin.", "SYS_AUTH_CHECK_FAILED", error?.message, { cycleMode: "ERROR" });
     });
   });
-  authCallbackTimer = setTimeout(() => {
-    authCallbackTimer = null;
-    if (stopped || authorized) return;
-    emit("OUT", "Firebase Authentication belum memberikan respons. BCGO menghentikan penantian BOOT agar tidak stuck diam-diam.", "SYS_AUTH_CALLBACK_TIMEOUT", "AUTH_CALLBACK_TIMEOUT", { cycleMode: "ERROR" });
-  }, 12000);
   return brain;
 }
