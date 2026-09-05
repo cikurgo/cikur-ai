@@ -3,7 +3,7 @@
 // Firebase Authentication + Firestore
 // ==========================================
 
-import { initializeApp, getApps, getApp } from "./lib/firebase/firebase-app.js?v=5.2.5-sync-20260905";
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 
 import {
     getFirestore,
@@ -19,7 +19,7 @@ import {
     doc,
     getDoc,
     serverTimestamp
-} from "./lib/firebase/firebase-firestore.js?v=5.2.5-sync-20260905";
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 import {
     getAuth,
@@ -30,7 +30,7 @@ import {
     EmailAuthProvider,
     linkWithCredential,
     fetchSignInMethodsForEmail
-} from "./lib/firebase/firebase-auth.js?v=5.2.5-sync-20260905";
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 
 // ==========================================
