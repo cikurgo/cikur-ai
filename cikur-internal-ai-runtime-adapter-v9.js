@@ -9,8 +9,8 @@
  *   cikur-internal-ai-guardian-v4.js  -> cgo-guardian.js
  *
  * The active V5.2 brain remains available as the causal/proof/investigation
- * layer. The foundation layer remains a preserved non-mutating auditor; the
- * active V5.2 guardian/Executor path owns approved patch/execution gates.
+ * layer. This gateway composes both layers without allowing source mutation,
+ * external AI, patching, or execution.
  */
 import * as FoundationCore from "./cgo-core.js";
 import * as FoundationKnowledge from "./cgo-knowledge.js";
@@ -66,9 +66,9 @@ function foundationGuardian(state) {
   try {
     return FoundationGuardian.inspect({
       state: clone(state),
-      // Preserve the original foundation guardian contract as a non-mutating
-      // lineage auditor. The active V5.2 guardian/Executor path owns the live
-      // automaticPatch/automaticExecution policy shown below.
+      // Foundation guardian is the preserved legacy lineage auditor.
+      // Its historical policy is intentionally fixed to non-mutating capability.
+      // The active execution policy is owned by the V5.2 guardian/Executor path.
       context: { ...policy, automaticPatch: false, automaticExecution: false },
       runtimeVersion: VERSION,
       expectedRuntimeVersion: VERSION,
