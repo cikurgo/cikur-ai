@@ -11,7 +11,7 @@ import * as Logic from "./cgo-ai-logic.js";
 import * as Memory from "./cgo-ai-memory.js";
 import { createRuntime } from "./cgo-ai-runtime-adapter.js";
 
-const VERSION = "V5.2-BROWSER-BRIDGE-1.2.1";
+const VERSION = "V5.2-BROWSER-BRIDGE-1.4.0-ACTIVE-SOURCE";
 const runtime = createRuntime({});
 const memory = Memory.createMemory();
 const caseIds = new Map();
@@ -104,6 +104,86 @@ function mapEvidence(raw, sourceKind = "BCGO") {
   };
 }
 
+
+function stableNerveToken(nerve = {}, sourceScan = {}) {
+  const clean = {
+    file: nerve.file || null,
+    revision: nerve.revision || nerve.source?.hash || null,
+    health: nerve.health || null,
+    unresolved: (nerve.unresolved || []).map(x => ({symbol:x.symbol,kind:x.kind,line:x.line,evidence:x.evidence})),
+    dependency: {
+      refs: (nerve.dependency?.refs || []).slice(0,80),
+      relationCount: Number(nerve.dependency?.relationCount || 0),
+      issues: (nerve.dependency?.issues || []).map(x => ({status:x.status,sourceFile:x.sourceFile,targetFile:x.targetFile,type:x.type}))
+    },
+    contract: {
+      definitions: (nerve.contract?.definitions || []).slice(0,80),
+      callers: (nerve.contract?.callers || []).slice(0,80),
+      onclicks: (nerve.contract?.onclicks || []).slice(0,40)
+    },
+    findings: (nerve.findings?.items || []).slice(0,40).map(x => ({kind:x.kind,type:x.type,severity:x.severity,file:x.file,sourceFile:x.sourceFile,targetFile:x.targetFile,line:x.line,detail:x.detail,missing:x.missing}))
+  };
+  return JSON.stringify(clean).slice(0,12000);
+}
+
+function buildNerveEvidence(state, target) {
+  const nerve = state?.fileNerves?.[target];
+  if (!nerve) return [];
+  const out = [];
+  const base = {
+    sourceKind: "BCGO_FILE_NERVE",
+    fileName: target,
+    status: "VERIFIED",
+    strength: 0.85,
+    exact: false,
+    reportedAt: new Date().toISOString()
+  };
+  out.push({
+    ...base,
+    id:`NERVE:${target}:SUMMARY:${nerve.revision || nerve.source?.hash || "NA"}`,
+    type:"FILE_NERVE_SUMMARY",
+    claim:`BCGO nerve ${target}: source=${nerve.health?.source || "UNKNOWN"}, runtime=${nerve.health?.runtime || "UNKNOWN"}, dependency=${nerve.health?.dependency || "UNKNOWN"}, contract=${nerve.health?.contract || "UNKNOWN"}, unresolved=${nerve.unresolved?.length || 0}, relations=${nerve.evidenceSummary?.relations || 0}, findings=${nerve.evidenceSummary?.sourceFindings || 0}.`,
+    metadata:{file:target,health:nerve.health||{},evidenceSummary:nerve.evidenceSummary||{},revision:nerve.revision||nerve.source?.hash||null,proofRequired:true}
+  });
+  for (const x of (nerve.unresolved || []).slice(0,20)) {
+    out.push({
+      ...base,
+      id:`NERVE:${target}:UNRESOLVED:${x.symbol}:${x.kind}:${x.line ?? "NA"}`,
+      type:"NERVE_UNRESOLVED_SYMBOL",
+      claim:x.evidence || `BCGO menemukan simbol ${x.symbol || "UNKNOWN"} belum terverifikasi pada ${target}.`,
+      exact:Number.isFinite(x.line),
+      metadata:{file:target,symbol:x.symbol||null,kind:x.kind||null,line:x.line??null,source:x.source||"BCGO_FILE_NERVE",proofRequired:true}
+    });
+  }
+  for (const f of (nerve.findings?.items || []).slice(0,20)) {
+    const fFile=normalizeFile(f.file || f.sourceFile || target);
+    if (fFile !== target && normalizeFile(f.targetFile) !== target) continue;
+    out.push({
+      ...base,
+      id:`NERVE:${target}:FINDING:${f.kind || f.type || "UNKNOWN"}:${f.line ?? "NA"}:${String(f.detail || f.message || "").slice(0,80)}`,
+      type:"NERVE_SOURCE_FINDING",
+      claim:`BCGO source finding pada ${target}: ${f.detail || f.message || f.kind || f.type || "temuan source"}.`,
+      strength:f.severity === "HIGH" ? 1 : f.severity === "MEDIUM" ? .75 : .55,
+      exact:Number.isFinite(f.line),
+      metadata:{file:target,kind:f.kind||f.type||null,severity:f.severity||null,line:f.line??null,targetFile:normalizeFile(f.targetFile)||null,missing:f.missing||[],proofRequired:true}
+    });
+  }
+  return out.slice(0,32);
+}
+
+function buildNerveRelations(state, target) {
+  return (state?.sourceScan?.relations || []).filter(r =>
+    normalizeFile(r.sourceFile || r.from || r.file) === target || normalizeFile(r.targetFile || r.to || r.relatedFile) === target
+  ).slice(0,24).map((r,i) => ({
+    id:`NERVE:${target}:REL:${i}:${r.sourceFile || r.from || ""}:${r.targetFile || r.to || ""}:${r.type || ""}`,
+    type:"NERVE_DEPENDENCY_RELATION",
+    source:target,
+    claim:`BCGO dependency relation ${normalizeFile(r.sourceFile || r.from) || "?"} → ${normalizeFile(r.targetFile || r.to) || "?"} berstatus ${r.status || "OBSERVED"}.`,
+    status:"VERIFIED", strength:/MISMATCH|UNKNOWN|VARIANT/.test(String(r.status||"")) ? .8 : .65, exact:false,
+    observedAt:new Date().toISOString(), metadata:{file:target,from:normalizeFile(r.sourceFile || r.from),to:normalizeFile(r.targetFile || r.to),relationType:r.type||null,relationStatus:r.status||"OBSERVED",proofRequired:true}
+  }));
+}
+
 function upsertBCGOCase(item, state) {
   const source = normalizeFile(item?.target || item?.source || state?.lastTelemetryFile) || "UNKNOWN";
   const caseId = String(item?.id || `BCGO-${source}`);
@@ -136,6 +216,22 @@ function upsertBCGOCase(item, state) {
     try { c = runtime.addEvidence(caseId, { ...ev, sequence, eventId: `${caseId}:${sequence}` }); }
     catch { c = runtime.getCase(caseId); }
     evidenceTokens.set(caseId, t);
+  }
+  const nerve = state?.fileNerves?.[source];
+  if (nerve) {
+    const nerveToken = stableNerveToken(nerve, state?.sourceScan);
+    const priorNerveToken = evidenceTokens.get(`${caseId}:nerve`);
+    if (priorNerveToken !== nerveToken) {
+      const nerveEvidence = [...buildNerveEvidence(state, source), ...buildNerveRelations(state, source)];
+      if (nerveEvidence.length) {
+        const current = runtime.getCase(caseId);
+        const startSeq = Number(current?.event?.sequence ?? -1);
+        const stamped = nerveEvidence.map((e,i) => ({...e, sequence:startSeq+i+1, eventId:`${caseId}:nerve:${i}:${nerveToken.slice(0,32)}`}));
+        try { c = runtime.addEvidence(caseId, stamped); } catch { c = runtime.getCase(caseId); }
+        emitBrainEvent(caseId, "BCGO_NERVE_EVIDENCE_INGESTED", {file:source,evidenceCount:nerveEvidence.length,revision:nerve.revision||nerve.source?.hash||null});
+      }
+      evidenceTokens.set(`${caseId}:nerve`, nerveToken);
+    }
   }
   caseIds.set(source, caseId);
   return c;
@@ -189,7 +285,29 @@ async function runActiveInvestigation(caseId, state) {
   const provider = createInternalProbeProvider(state);
   const runPromise = (async () => {
     try {
-      const out = await engine.run(current, provider, knowledge, {maxSteps:6});
+      const out = await engine.run(current, provider, knowledge, {
+        maxSteps:10,
+        onStep: async (stepOut, stepNumber) => {
+          emitBrainEvent(caseId, "ACTIVE_INVESTIGATION_PROGRESS", {
+            step: stepNumber,
+            probe: stepOut.probe || null,
+            evidenceCount: (stepOut.evidence || []).length,
+            caseState: stepOut.caseData?.state || null,
+            investigationStatus: stepOut.investigation?.status || null,
+            selectedHypothesis: stepOut.caseData?.selectedHypothesis ? {
+              id: stepOut.caseData.selectedHypothesis.id,
+              statement: stepOut.caseData.selectedHypothesis.statement,
+              score: stepOut.caseData.selectedHypothesis.score,
+              causal: stepOut.caseData.selectedHypothesis.causal === true
+            } : null
+          });
+          try {
+            window.dispatchEvent(new CustomEvent("cikur-internal-ai-state", {
+              detail: compatibleSnapshot(caseId, "ACTIVE_INVESTIGATION_PROGRESS", stepOut.caseData)
+            }));
+          } catch {}
+        }
+      });
       const before = runtime.getCase(caseId);
       if (!before) return;
       // If telemetry/evidence arrived while probes were running, the result is
@@ -230,6 +348,9 @@ async function runActiveInvestigation(caseId, state) {
         probeLog:out.investigation?.probeLog || [],
         evidenceAdded:newEvidence.length,
         selectedHypothesisId:synced?.selectedHypothesis?.id || null,
+        selectedHypothesis:synced?.selectedHypothesis ? {id:synced.selectedHypothesis.id,score:synced.selectedHypothesis.score,causal:synced.selectedHypothesis.causal===true} : null,
+        rootCauseVerified:!!synced?.rootCause,
+        exactSourceVerified:!!synced?.exactSource,
         state:synced?.state || null
       });
 
@@ -259,8 +380,8 @@ function emitBrainEvent(caseId, type, payload) {
   try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-investigation", {detail})); } catch {}
 }
 
-function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY") {
-  const c = runtime.getCase(caseId);
+function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = null) {
+  const c = caseOverride || runtime.getCase(caseId);
   if (!c) {
     return {
       version: VERSION, signal, at: Date.now(),
@@ -276,7 +397,7 @@ function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY") {
     };
   }
 
-  const evaluation = Logic.evaluate(c, { allowAutomaticExecution: false }, knowledge);
+  const evaluation = Logic.evaluate(c, { allowAutomaticExecution: true, automaticPatch: true, automaticExecution: true }, knowledge);
   const active = activeEngines.get(caseId);
   const investigation = active ? active.snapshot() : Investigator.createInvestigation(c, knowledge);
   const probe = active && active.state.status === "ACTIVE"
@@ -473,7 +594,7 @@ export function reason(context = {}, history = {}) {
     }
   }
 
-  const evaluation = Logic.evaluate(c, { allowAutomaticExecution: false }, knowledge);
+  const evaluation = Logic.evaluate(c, { allowAutomaticExecution: true, automaticPatch: true, automaticExecution: true }, knowledge);
   const deliberate = Cognition.deliberate({
     evidence: c.evidence,
     rootCause: c.rootCause,

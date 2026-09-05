@@ -8,7 +8,7 @@
 import * as Core from "./cgo-ai-core.js";
 import * as Investigator from "./cgo-ai-investigator.js";
 
-const VERSION = "2.0.1-ACTIVE";
+const VERSION = "2.2.0-ACTIVE-CAUSAL-SOURCE";
 const MAX_STEPS_DEFAULT = 10;
 const MAX_FILES_DEFAULT = 40;
 
@@ -36,6 +36,22 @@ function symbolFromCase(caseData) {
     if (m?.[1]) return m[1];
   }
   return null;
+}
+
+
+function symbolsFromCase(caseData) {
+  const out = new Set();
+  const add = v => {
+    const s = String(v || "").trim();
+    if (/^[A-Za-z_$][\w$]*$/.test(s)) out.add(s);
+  };
+  add(symbolFromCase(caseData));
+  for (const e of (caseData?.evidence || [])) {
+    add(e?.metadata?.symbol);
+    const text = String(e?.claim || "");
+    for (const m of text.matchAll(/(?:ReferenceError:\s*)?([A-Za-z_$][\w$]*)\s+is not defined/gi)) add(m[1]);
+  }
+  return [...out].slice(0, 12);
 }
 
 function structuralSignals(source, file) {
@@ -67,7 +83,7 @@ function findSymbolHits(source, file, symbol) {
     // It must not be emitted as a runtime call-site.
     const call = !declarationLike && /^\s*\(/.test(after);
     const definition = declarationLike;
-    const handler = /(?:onclick|onchange|onsubmit|oninput|onload)\s*=\s*['"][^'"]*$/i.test(before);
+    const handler = /(?:onclick|onchange|onsubmit|oninput|onload)\s*=/.test(before);
     hits.push({file, line:lineOf(source,i), snippet:snippet(source,i), definition, call, handler});
   }
   return hits;
@@ -135,13 +151,16 @@ function unique(arr) { return [...new Set((arr || []).filter(Boolean))]; }
 function buildHypotheses(caseData, context) {
   const ev = caseData?.evidence || [];
   const sourceSurfaceComplete = context.sourceSurfaceComplete === true;
-  const symbol = context.symbol || symbolFromCase(caseData);
+  const symbols = Array.isArray(context.symbols) ? context.symbols : [context.symbol || symbolFromCase(caseData)].filter(Boolean);
+  const symbol = symbols[0] || null;
   const hs = [];
   const calls = ev.filter(e => e.type === "SYMBOL_CALL_SITE");
   const defs = ev.filter(e => e.type === "SYMBOL_DEFINITION");
   const absence = ev.filter(e => e.type === "SYMBOL_DEFINITION_ABSENCE");
   const scripts = ev.filter(e => e.type === "SCRIPT_LOADING_CONTEXT");
   const dom = ev.filter(e => e.type === "HTML_DIV_BALANCE");
+  const nerveUnresolved = ev.filter(e => e.type === "NERVE_UNRESOLVED_SYMBOL");
+  const nerveFindings = ev.filter(e => e.type === "NERVE_SOURCE_FINDING");
 
   if (sourceSurfaceComplete && symbol && calls.length && !defs.length && absence.length) {
     hs.push({
@@ -152,12 +171,59 @@ function buildHypotheses(caseData, context) {
       causal:true
     });
   }
+  // If runtime says a symbol is undefined but the current source surface DOES contain
+  // a definition, do not manufacture a missing-symbol root cause. This is a discrepancy
+  // that requires execution-context investigation (scope/module/load/runtime state).
+  if (symbol && calls.length && defs.length && !absence.length) {
+    hs.push({
+      id:`H-SYMBOL-RUNTIME-CONTEXT-${symbol}`,
+      statement:`Runtime melaporkan ${symbol} tidak terdefinisi, tetapi source surface saat ini memiliki definisi ${symbol}; penyebab runtime belum terbukti dan harus ditelusuri pada execution context.`,
+      evidenceIds:unique([...calls.map(e=>e.id), ...defs.map(e=>e.id), ...nerveUnresolved.map(e=>e.id)]),
+      nodeIds:unique([...calls.map(e=>e.metadata?.file), ...defs.map(e=>e.metadata?.file)]),
+      causal:false
+    });
+  }
+
+  if (nerveUnresolved.length && symbol && !calls.length && !defs.length) {
+    hs.push({
+      id:`H-NERVE-UNRESOLVED-${symbol}`,
+      statement:`BCGO nerve menandai simbol ${symbol} belum terverifikasi; source probe diperlukan sebelum causal root cause dapat dinyatakan.`,
+      evidenceIds:unique(nerveUnresolved.map(e=>e.id)),
+      nodeIds:unique(nerveUnresolved.map(e=>e.metadata?.file)),
+      causal:false
+    });
+  }
+
+  for (const sym of symbols.slice(1)) {
+    const scalls = ev.filter(e => e.type === "SYMBOL_CALL_SITE" && e.metadata?.symbol === sym);
+    const sdefs = ev.filter(e => e.type === "SYMBOL_DEFINITION" && e.metadata?.symbol === sym);
+    const sabs = ev.filter(e => e.type === "SYMBOL_DEFINITION_ABSENCE" && e.metadata?.symbol === sym);
+    if (sourceSurfaceComplete && scalls.length && !sdefs.length && sabs.length) {
+      hs.push({
+        id:`H-SYMBOL-MISSING-${sym}`,
+        statement:`Simbol ${sym} dipanggil pada runtime/source target tetapi tidak memiliki definisi pada seluruh source surface yang berhasil diverifikasi.`,
+        evidenceIds:unique([...scalls.map(e=>e.id), ...sabs.map(e=>e.id)]),
+        nodeIds:unique([...scalls.map(e=>e.metadata?.file), ...sabs.map(e=>e.metadata?.file)]),
+        causal:true
+      });
+    } else if (scalls.length && sdefs.length && !sabs.length) {
+      hs.push({
+        id:`H-SYMBOL-RUNTIME-CONTEXT-${sym}`,
+        statement:`Runtime melaporkan ${sym} tidak terdefinisi, tetapi source surface saat ini memiliki definisi ${sym}; penyebab runtime belum terbukti dan harus ditelusuri pada execution context.`,
+        evidenceIds:unique([...scalls.map(e=>e.id), ...sdefs.map(e=>e.id)]),
+        nodeIds:unique([...scalls.map(e=>e.metadata?.file), ...sdefs.map(e=>e.metadata?.file)]),
+        causal:false
+      });
+    }
+  }
+
   const moduleBoundary = symbol && calls.some(e=>
     normalizeFile(e.metadata?.file)===normalizeFile(caseData?.target) &&
     /(?:onclick|onchange|onsubmit|oninput|onload)\s*=/.test(String(e.metadata?.snippet||""))
   ) && defs.length && scripts.some(e=>{
     const src = normalizeFile(e.metadata?.src);
-    return String(e.metadata?.type||"").toLowerCase()==="module" && src && defs.some(d=>normalizeFile(d.metadata?.file)===normalizeFile(src));
+    const isModule = String(e.metadata?.type||"").toLowerCase()==="module";
+    return isModule && src && defs.some(d=>normalizeFile(d.metadata?.file)===normalizeFile(src));
   });
   if (moduleBoundary) {
     hs.push({
@@ -168,12 +234,41 @@ function buildHypotheses(caseData, context) {
       causal:true
     });
   }
-  if (dom.length) {
+  const sourceFinding = nerveFindings.filter(e => /div|html|structure|syntax/i.test(String(e.metadata?.kind || "") + " " + String(e.claim || "")));
+  if (sourceFinding.length) {
     hs.push({
-      id:`H-HTML-STRUCTURE-${normalizeFile(caseData?.target) || "TARGET"}`,
+      id:`H-SOURCE-FINDING-${normalizeFile(caseData?.target) || "TARGET"}`,
+      statement:`Temuan source BCGO pada ${normalizeFile(caseData?.target) || "target"} perlu divalidasi langsung terhadap source aktual sebelum causal root cause dapat dinyatakan.`,
+      evidenceIds:unique(sourceFinding.map(e=>e.id)),
+      nodeIds:unique(sourceFinding.map(e=>e.metadata?.file)),
+      causal:false
+    });
+  }
+
+  if (dom.length) {
+    const targetFile=normalizeFile(caseData?.target) || "TARGET";
+    const sourceSnapshots=ev.filter(e =>
+      e.type==="SOURCE_SNAPSHOT" &&
+      normalizeFile(e.metadata?.file || e.source)===targetFile &&
+      e.status==="VERIFIED"
+    );
+    const relatedNerve=sourceFinding.filter(e =>
+      normalizeFile(e.metadata?.file || e.source)===targetFile &&
+      e.status==="VERIFIED"
+    );
+    hs.push({
+      id:`H-HTML-STRUCTURE-${targetFile}`,
       statement:`Struktur HTML target tidak seimbang pada elemen div dan dapat memutus struktur DOM yang diharapkan oleh runtime/UI.`,
-      evidenceIds:unique(dom.map(e=>e.id)),
-      nodeIds:unique(dom.map(e=>e.metadata?.file)),
+      evidenceIds:unique([
+        ...dom.map(e=>e.id),
+        ...sourceSnapshots.map(e=>e.id),
+        ...relatedNerve.map(e=>e.id)
+      ]),
+      nodeIds:unique([
+        ...dom.map(e=>e.metadata?.file),
+        ...sourceSnapshots.map(e=>e.metadata?.file || e.source),
+        ...relatedNerve.map(e=>e.metadata?.file)
+      ]),
       causal:true
     });
   }
@@ -182,14 +277,30 @@ function buildHypotheses(caseData, context) {
 
 function chooseProbe(engine, caseData, knowledge) {
   const s = engine.state;
-  const symbol = symbolFromCase(caseData);
+  const symbols = symbolsFromCase(caseData);
+  const symbol = symbols[0] || null;
   const target = normalizeFile(caseData?.target);
   const done = s.completedProbes;
   if (target && !done.has(`SOURCE_READ:${target}`)) return {type:"SOURCE_READ",file:target,score:1};
-  if (symbol && !done.has(`SYMBOL_CALLS:${symbol}`)) return {type:"SYMBOL_CALLS",symbol,score:.98};
-  if (symbol && !done.has(`SYMBOL_DEFINITIONS:${symbol}`)) return {type:"SYMBOL_DEFINITIONS",symbol,score:.97};
-  if (symbol && !done.has(`SYMBOL_IMPORTS_EXPORTS:${symbol}`)) return {type:"SYMBOL_IMPORTS_EXPORTS",symbol,score:.92};
-  if (symbol && !done.has(`SCRIPT_LOADING:${target}`)) return {type:"SCRIPT_LOADING",file:target,score:.88};
+
+  // Source findings outrank generic symbol probing. A concrete BCGO HTML
+  // finding must be validated against the live source first.
+  const hasStructuralFinding = (caseData?.evidence || []).some(e =>
+    e?.type === "NERVE_SOURCE_FINDING" &&
+    /div|html|structure|syntax/i.test(String(e?.metadata?.kind || "") + " " + String(e?.claim || ""))
+  );
+  if (target && !done.has(`HTML_STRUCTURE:${target}`) &&
+      (/\.html?$/i.test(target) && (hasStructuralFinding || /<div/i.test(String(caseData?.symptom || ""))))) {
+    return {type:"HTML_STRUCTURE",file:target,score:1};
+  }
+
+  for (const sym of symbols) {
+    if (!done.has(`SYMBOL_CALLS:${sym}`)) return {type:"SYMBOL_CALLS",symbol:sym,score:.98};
+    if (!done.has(`SYMBOL_DEFINITIONS:${sym}`)) return {type:"SYMBOL_DEFINITIONS",symbol:sym,score:.97};
+    if (!done.has(`SYMBOL_IMPORTS_EXPORTS:${sym}`)) return {type:"SYMBOL_IMPORTS_EXPORTS",symbol:sym,score:.92};
+    if (!done.has(`SCRIPT_LOADING:${sym}`)) return {type:"SCRIPT_LOADING",file:target,symbol:sym,score:.88};
+    if (caseData?.hypotheses?.some(h => h.id === `H-SYMBOL-RUNTIME-CONTEXT-${sym}`) && !done.has(`RUNTIME_CONTEXT:${sym}`)) return {type:"RUNTIME_CONTEXT",file:target,symbol:sym,score:.90};
+  }
   if (!done.has(`HTML_STRUCTURE:${target}`)) return {type:"HTML_STRUCTURE",file:target,score:.84};
 
   const ranked = Investigator.rankProbes({visitedNodes:[...s.visitedNodes]},caseData,knowledge);
@@ -282,6 +393,30 @@ export function createInvestigationEngine(caseData, knowledge={}, options={}) {
       }))};
     }
 
+    if(type === "RUNTIME_CONTEXT") {
+      const r=await read(probeRequest.file);
+      const tags=scriptTags(r.source,r.file);
+      const symbol=String(probeRequest.symbol || "").trim();
+      const hits=findSymbolHits(r.source,r.file,symbol);
+      const defs=findDefinitions(r.source,r.file,symbol);
+      const contextEvidence=[];
+      for (const d of defs) {
+        const line=Number(d.line||1);
+        const lines=String(r.source).split("\n");
+        const start=Math.max(0,line-40), end=Math.min(lines.length,line+10);
+        const nearby=lines.slice(start,end).join("\n");
+        const moduleLikely=tags.some(t=>String(t.type||"").toLowerCase()==="module" && Number(t.line||0)<=line);
+        const globalAssign=new RegExp(`(?:window|globalThis)\\.${escapeRegExp(symbol)}\\s*=`).test(nearby);
+        contextEvidence.push(makeEvidence(`PROBE-RUNTIME-CONTEXT-${symbol}-${d.line}`,{
+          type:"RUNTIME_CONTEXT_ANALYSIS",source:r.file,file:r.file,
+          claim:`Definisi ${symbol} ditemukan pada ${r.file}:${line}; konteks script=${moduleLikely?"MODULE_OR_MODULE_NEARBY":"CLASSIC_OR_UNKNOWN"}, explicitGlobalAssignment=${globalAssign}.`,
+          exact:true,strength:.8,fingerprint:r.fingerprint || Core.contentFingerprint(r.source),
+          metadata:{symbol,line,moduleLikely,globalAssignment:globalAssign,scriptTags:tags.slice(0,30),proofRequired:true}
+        }));
+      }
+      return {evidence:contextEvidence};
+    }
+
     if(type === "HTML_STRUCTURE") {
       const r=await read(probeRequest.file);
       const signals=structuralSignals(r.source,r.file);
@@ -334,7 +469,7 @@ export function createInvestigationEngine(caseData, knowledge={}, options={}) {
     const result=await probe(request,currentCase,provider);
     let nextCase=clone(currentCase);
     if(result.evidence?.length) nextCase=Core.ingestEvidence(nextCase,result.evidence);
-    const context={symbol:symbolFromCase(nextCase),sourceSurfaceComplete:provider.sourceSurfaceComplete===true};
+    const context={symbols:symbolsFromCase(nextCase),symbol:symbolFromCase(nextCase),sourceSurfaceComplete:provider.sourceSurfaceComplete===true};
     const hypotheses=buildHypotheses(nextCase,context);
     if(hypotheses.length && nextCase.state!=="ROOT_CAUSE_VERIFIED" && nextCase.state!=="SOURCE_VERIFIED")
       nextCase=Core.reason(nextCase,hypotheses).caseData;
@@ -343,7 +478,7 @@ export function createInvestigationEngine(caseData, knowledge={}, options={}) {
     // evidence required by the selected hypothesis. This is not a confidence
     // shortcut: Core.verifyRootCause performs the binding/score/independence gates.
     const selected=nextCase.selectedHypothesis;
-    if(!nextCase.rootCause && selected && Number(selected.score)>=0.60 && Array.isArray(selected.evidenceIds) && selected.evidenceIds.length>=2){
+    if(!nextCase.rootCause && selected?.causal === true && Number(selected.score)>=0.60 && Array.isArray(selected.evidenceIds) && selected.evidenceIds.length>=2){
       try {
         nextCase=Core.verifyRootCause(nextCase,{
           statement:selected.statement,
@@ -357,20 +492,34 @@ export function createInvestigationEngine(caseData, knowledge={}, options={}) {
     // verified call-site evidence. The original source line is fetched again so
     // the binding is against the real current source, not a remembered snippet.
     if(nextCase.rootCause && !nextCase.exactSource) {
+      // Bind either a verified runtime call-site OR a verified deterministic
+      // HTML-structure anchor to the live source. Neither path mutates source.
       const call=nextCase.evidence.find(e=>e.type==="SYMBOL_CALL_SITE" && e.status==="VERIFIED" && e.exact);
-      if(call) {
+      const dom=nextCase.evidence.find(e=>e.type==="HTML_DIV_BALANCE" && e.status==="VERIFIED" && e.exact);
+      const anchor=call || dom;
+      if(anchor) {
         try {
-          const r=await provider.readSource(call.source);
-          const lineText=String(r.source).split("\n")[Math.max(0,Number(call.metadata?.line||1)-1)] || "";
-          const symbol = String(call.metadata?.symbol || symbolFromCase(nextCase) || "").trim();
-          const callMatch = symbol ? lineText.match(new RegExp(`\\b${escapeRegExp(symbol)}\\s*\\([^\\n;]*\\)`)) : null;
-          const originalCode = callMatch?.[0] || lineText;
+          const file=normalizeFile(anchor.source || anchor.metadata?.file || nextCase.target);
+          const r=await provider.readSource(file);
+          const lines=String(r.source).split("\n");
+          const line=Number(anchor.metadata?.line || 1);
+          const lineText=lines[Math.max(0,line-1)] || "";
+          let originalCode=lineText;
+          if(call) {
+            const symbol=String(call.metadata?.symbol || symbolFromCase(nextCase) || "").trim();
+            const callMatch=symbol ? lineText.match(new RegExp(`\\b${escapeRegExp(symbol)}\\s*\\([^\\n;]*\\)`)) : null;
+            originalCode=callMatch?.[0] || lineText;
+          }
           if(originalCode.trim()) {
             const fp=Core.contentFingerprint(originalCode);
-            const ids=nextCase.rootCause.evidenceIds.filter(id=>id===call.id || nextCase.evidence.some(e=>e.id===id && e.metadata?.file===call.source));
+            const ids=nextCase.rootCause.evidenceIds.filter(id =>
+              id===anchor.id || nextCase.evidence.some(e=>e.id===id && e.metadata?.file===file)
+            );
             if(ids.length) nextCase=Core.verifyExactSource(nextCase,{
-              file:call.source, originalCode, proposedCode:null, operation:"REPLACE_EXACT",
-              fingerprint:fp, contentFingerprint:fp, sourceFingerprint:r.fingerprint || Core.contentFingerprint(r.source), evidenceIds:ids
+              file, originalCode, proposedCode:null, operation:"REPLACE_EXACT",
+              fingerprint:fp, contentFingerprint:fp,
+              sourceFingerprint:r.fingerprint || Core.contentFingerprint(r.source),
+              evidenceIds:ids
             });
           }
         } catch {}
@@ -383,7 +532,9 @@ export function createInvestigationEngine(caseData, knowledge={}, options={}) {
     state.events.push({type:"PROBE_EXECUTED",cycle:state.cycle,probe:request,evidenceCount:(result.evidence||[]).length,at:now()});
     state.updatedAt=now();
 
-    const stopStates=new Set(["SOURCE_VERIFIED","CANDIDATE_READY","EXECUTOR_REVIEW","HUMAN_APPROVAL","EXECUTING","VALIDATING","RESOLVED","INVESTIGATION_BLOCKED"]);
+    // BLOCKED is not terminal: it can mean the proof attempt was premature.
+    // Continue probing until source proof is actually reached or the budget ends.
+    const stopStates=new Set(["SOURCE_VERIFIED","CANDIDATE_READY","EXECUTOR_REVIEW","HUMAN_APPROVAL","EXECUTING","VALIDATING","RESOLVED"]);
     if(stopStates.has(nextCase.state)) state.status="COMPLETE";
     return {caseData:nextCase,investigation:snapshot(),progress:true,probe:request,evidence:result.evidence||[],source:result.source||null};
   }
@@ -398,6 +549,9 @@ export function createInvestigationEngine(caseData, knowledge={}, options={}) {
       c=out.caseData;
       trace.push(out);
       steps++;
+      if (typeof optionsOverride.onStep === "function") {
+        try { await optionsOverride.onStep(clone(out), steps); } catch {}
+      }
       const evalLike = c.rootCause && c.exactSource;
       if(evalLike || state.status !== "ACTIVE" || !out.progress) break;
     }

@@ -112,7 +112,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   async function loadInternalAI() {
     if (stopped || internalAI) return internalAI;
     try {
-      const mod = await import("./cikur-internal-ai-runtime-adapter-v9.js?v=10.1.0");
+      const mod = await import("./cgo-runtime-adapter.js?v=5.2.5");
       if (typeof mod.install !== "function") throw new Error("INTERNAL_AI_ADAPTER_INVALID");
       internalAI = mod.install();
       internalAIStatus = "READY";
