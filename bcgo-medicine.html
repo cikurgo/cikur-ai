@@ -40,7 +40,7 @@ main{width:min(1280px,100%);margin:0 auto}.panel{padding:16px}.grid{display:grid
 <main class="max-w-7xl mx-auto space-y-4"><header class="panel p-4 md:p-5 flex flex-wrap justify-between items-center gap-3">
 <div class="flex items-center gap-3 min-w-0">
 <img alt="CIKUR GO" class="brand-logo" decoding="async" loading="eager" src="./cikurgoicon.png"/>
-<div class="min-w-0"><h1 class="text-xl font-bold">💊 BCGO Medicine v3.4.0 <span class="text-xs text-cyan-300 code">PRECISION ROOT-CAUSE REPAIR</span></h1><p class="text-xs text-slate-400 mt-1">CIKUR GO • System Logs → Cross-File Investigation • Root Cause • Verify • Repair Plan • Human Approval • Execute • Validate</p></div>
+<div class="min-w-0"><h1 class="text-xl font-bold">💊 BCGO Medicine v3.4.2 <span class="text-xs text-cyan-300 code">PRECISION ROOT-CAUSE REPAIR</span></h1><p class="text-xs text-slate-400 mt-1">CIKUR GO • System Logs → Cross-File Investigation • Root Cause • Verify • Repair Plan • Human Approval • Execute • Validate</p></div>
 </div>
 <div class="flex gap-2 text-[10px] code"><span class="border border-slate-700 px-2 py-1 rounded" id="auth">AUTH WAITING</span><span class="border border-slate-700 px-2 py-1 rounded" id="sys">BOOT</span></div>
 </header><div class="grid lg:grid-cols-3 gap-4"><section class="panel p-3">
@@ -130,7 +130,22 @@ main{width:min(1280px,100%);margin:0 auto}.panel{padding:16px}.grid{display:grid
 <script src="./bcgo-executor-core.js?v=3.2.0"></script>
 <script src="./bcgo-executor.js?v=3.3.0"></script>
 <script type="module">
-import './bcgo-medicine.js?v=3.4.0';
+// Fast-paint boot: the Medicine UI must render immediately. The heavy module graph
+// (Firebase + internal CGO brain) is loaded after the document is visible so a slow
+// module fetch can never leave the user staring at a blank screen. Errors are surfaced
+// in the UI instead of silently failing.
+const bootState=document.createElement('div');
+bootState.id='medicineBootState';
+bootState.style.cssText='position:fixed;left:12px;right:12px;bottom:12px;z-index:9999;padding:10px 12px;border:1px solid #243047;border-radius:12px;background:rgba(2,6,23,.96);color:#67e8f9;font:11px ui-monospace,monospace;box-shadow:0 8px 30px rgba(0,0,0,.35)';
+bootState.textContent='MEDICINE: MEMUAT OTak CGO + ENGINE...';
+document.body.appendChild(bootState);
+
+async function bootMedicine(){
+  try {
+    await import('./bcgo-medicine.js?v=3.4.2');
+    bootState.textContent='MEDICINE: ENGINE SIAP';
+    setTimeout(()=>bootState.remove(),1200);
+
 // The module is already evaluated before this script continues. Rehydrate initial state
 // instead of depending on a one-shot 'ready' event that may have fired earlier.
 const $=id=>document.getElementById(id);
@@ -334,6 +349,16 @@ on('apply','click',async()=>{const c=window.BCGOMedicine?.activeCase;if(!c)retur
 on('validate','click',async()=>{const c=window.BCGOMedicine?.activeCase;if(!c)return;const b=$('validate');if(b)b.disabled=true;try{renderValidation(await window.BCGOMedicine?.validateAfterPatch?.(c.id));render(c)}catch(e){chat('medicine','Validasi gagal: '+e.message,'valerr-'+Date.now())}finally{if(b)b.disabled=false}});
 on('pause','click',async()=>{await window.BCGOMedicine?.setHumanMode?.(!window.BCGOMedicine?.human?.paused)});
 on('reject','click',async()=>{const c=window.BCGOMedicine?.activeCase;if(!c){chat('medicine','Belum ada case aktif untuk ditolak.','reject-none');return;}const reason=prompt('Alasan penolakan treatment (opsional):','Saya ingin Medicine melakukan review ulang.');if(reason===null)return;try{render(await window.BCGOMedicine?.rejectTreatment?.(c.id,reason||'Treatment ditolak oleh manusia.'))}catch(e){chat('medicine','Penolakan gagal: '+e.message,'rejecterr-'+Date.now())}});
+  } catch (error) {
+    bootState.style.color='#fda4af';
+    bootState.style.borderColor='#881337';
+    bootState.textContent='MEDICINE GAGAL BOOT: '+(error?.message||String(error));
+    console.error('[BCGO Medicine] boot failure', error);
+  }
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootMedicine, {once:true});
+else bootMedicine();
 </script>
 </body>
 </html>
