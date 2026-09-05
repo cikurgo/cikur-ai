@@ -468,7 +468,7 @@ function renderSourceScan(scan) {
     crossFileFindingsEl.innerHTML = findingHtml + relationHtml;
 }
 
-function renderOrgans(organs, nerves) {
+function renderOrgans(organs, nerves, relations = []) {
     if (!organGrid) return;
     const entries = Object.entries(organs || {});
     organGrid.innerHTML = entries.map(([file, info]) => {
@@ -493,7 +493,29 @@ function renderOrgans(organs, nerves) {
         const contract = health.contract || 'WAITING';
         const evidence = nerve.evidenceSummary || {};
         const unresolved = Number(evidence.unresolved || 0);
-        const relations = Number(evidence.relations || 0);
+        const relationCount = Number(evidence.relations || 0);
+
+        const linked = (Array.isArray(relations) ? relations : [])
+            .filter(r => {
+                const a = String(r?.sourceFile || r?.from || r?.file || '').split('?')[0].split('#')[0].split('/').pop();
+                const b = String(r?.targetFile || r?.to || r?.relatedFile || '').split('?')[0].split('#')[0].split('/').pop();
+                return a === file || b === file;
+            })
+            .map(r => {
+                const a = String(r?.sourceFile || r?.from || r?.file || '').split('?')[0].split('#')[0].split('/').pop();
+                const b = String(r?.targetFile || r?.to || r?.relatedFile || '').split('?')[0].split('#')[0].split('/').pop();
+                return {
+                    pair: a && b ? `${a} × ${b}` : null,
+                    status: String(r?.status || 'OBSERVED')
+                };
+            })
+            .filter(x => x.pair)
+            .filter((x, i, arr) => arr.findIndex(y => y.pair === x.pair) === i)
+            .slice(0, 3);
+
+        const relationLine = linked.length
+            ? linked.map(x => `<span class="inline-block mr-2 mb-0.5">${esc(x.pair)}</span>`).join('')
+            : '<span class="opacity-40">Belum ada pasangan source yang terbukti.</span>';
 
         return `
             <div class="border rounded-lg px-3 py-2 min-h-[106px] ${classes}">
@@ -506,7 +528,8 @@ function renderOrgans(organs, nerves) {
                     <span>RUN:${esc(runtime)}</span><span>SRC:${esc(source)}</span>
                     <span>DEP:${esc(dependency)}</span><span>CTR:${esc(contract)}</span>
                 </div>
-                <div class="text-[8px] opacity-60 mt-1.5">relasi:${relations} • unresolved:${unresolved}</div>
+                <div class="text-[8px] opacity-60 mt-1.5">relasi:${relationCount} • unresolved:${unresolved}</div>
+                <div class="text-[8px] mt-1 text-cyan-200/80 leading-tight">TERHUBUNG: ${relationLine}${linked.length < relationCount ? ` <span class="opacity-50">+${relationCount - linked.length} lainnya</span>` : ''}</div>
                 <div class="text-[9px] opacity-70 mt-1 line-clamp-2">${esc(info.message || nerve.unresolved?.[0]?.evidence || '')}</div>
             </div>
         `;
@@ -642,10 +665,12 @@ async function sendQuestion(question) {
     addChat('user', text);
     const runtime = window.CIKURInternalAIRuntime;
     try {
-        const answer = runtime?.ask ? await runtime.ask(text) : await window.BCGOBrain.ask(text);
+        const answer = runtime?.ask
+            ? await runtime.ask(text)
+            : await window.BCGOBrain.ask(text);
         setTimeout(() => addChat('bcgo', answer), 120);
     } catch (error) {
-        setTimeout(() => addChat('bcgo', `Saya gagal menyelesaikan permintaan itu dengan evidence yang tersedia: ${String(error?.message || error)}`), 120);
+        setTimeout(() => addChat('bcgo', `Maaf, saya sedang mengambil data sistem dan gagal menyelesaikan pertanyaan itu. ${String(error?.message || error).slice(0, 220)}`), 120);
     }
 }
 
@@ -734,7 +759,7 @@ runAutonomousEngine(state => {
 
     activatePhase(state.step, state);
     setHeader(state.step, state);
-    renderOrgans(state.systemOrgans, state.fileNerves);
+    renderOrgans(state.systemOrgans, state.fileNerves, state.sourceScan?.relations || []);
     renderLogs(state.systemLogs);
 
     if (!chatFeed.dataset.ready) {

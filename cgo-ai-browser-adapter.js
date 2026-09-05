@@ -9,7 +9,7 @@ import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js";
 import * as Cognition from "./cgo-ai-cognition.js";
 import * as Logic from "./cgo-ai-logic.js";
 import * as Memory from "./cgo-ai-memory.js";
-import { createRuntime } from "./cgo-runtime-adapter.js";
+import { createRuntime } from "./cgo-ai-runtime-adapter.js";
 
 const VERSION = "V5.2-BROWSER-BRIDGE-1.4.0-ACTIVE-SOURCE";
 const runtime = createRuntime({});
@@ -20,6 +20,7 @@ const activeEngines = new Map();
 const activeRuns = new Map();
 let knowledge = Knowledge.createKnowledgeStore();
 let latest = null;
+let latestBCGOState = null;
 
 function clone(v) {
   return typeof structuredClone === "function"
@@ -380,6 +381,123 @@ function emitBrainEvent(caseId, type, payload) {
   try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-investigation", {detail})); } catch {}
 }
 
+function chatAnswer(question = {}) {
+  const raw = typeof question === "string"
+    ? question
+    : String(question?.text || question?.question || "");
+  const q = raw.toLowerCase().trim();
+  const state = latestBCGOState || {};
+  const snapshot = latest;
+  const reasoning = snapshot?.reasoning || {};
+  const proof = reasoning.precisionGate || {};
+  const organs = state?.systemOrgans || {};
+  const metrics = state?.metrics || {};
+  const relations = Array.isArray(state?.sourceScan?.relations) ? state.sourceScan.relations : [];
+  const findings = [
+    ...(Array.isArray(state?.sourceScan?.findings) ? state.sourceScan.findings : []),
+    ...(Array.isArray(state?.sourceScan?.crossFileFindings) ? state.sourceScan.crossFileFindings : [])
+  ];
+  const active = Object.entries(organs).filter(([,v]) => v?.state === "ACTIVE");
+  const review = Object.entries(organs).filter(([,v]) => v?.state === "REVIEW");
+  const target = String(state?.targetCell || state?.lastTelemetryFile || "sistem");
+  const requestedFile = Object.keys(organs).find(file => q.includes(file.toLowerCase())) || null;
+
+  const relationFor = file => relations
+    .filter(r => {
+      const a = String(r?.sourceFile || r?.from || r?.file || "").split("?")[0].split("#")[0].split("/").pop();
+      const b = String(r?.targetFile || r?.to || r?.relatedFile || "").split("?")[0].split("#")[0].split("/").pop();
+      return a === file || b === file;
+    })
+    .map(r => {
+      const a = String(r?.sourceFile || r?.from || r?.file || "").split("?")[0].split("#")[0].split("/").pop();
+      const b = String(r?.targetFile || r?.to || r?.relatedFile || "").split("?")[0].split("#")[0].split("/").pop();
+      return { pair: a && b ? `${a} × ${b}` : null, status: r?.status || "OBSERVED" };
+    })
+    .filter(x => x.pair)
+    .filter((x,i,arr) => arr.findIndex(y => y.pair === x.pair) === i);
+
+  const sayStatus = () => {
+    if (state?.connection?.status === "OFFLINE" || state?.firestore?.error) {
+      return `Untuk kondisi sekarang, saya belum mau bilang 100% aman. Koneksi Firestore sedang ${state.connection?.status || "bermasalah"}.`;
+    }
+    if (active.length) {
+      const names = active.slice(0,4).map(([f]) => f).join(", ");
+      return `Saya sudah cek. Sistem sedang hidup dan telemetry masuk, tapi belum bisa saya sebut sepenuhnya aman karena ada ${active.length} anomaly aktif: ${names}. Saya tetap memisahkan temuan aktif dari file yang hanya berstatus review.`;
+    }
+    return `Sejauh telemetry yang sedang hidup, sistem dalam kondisi baik: ${metrics.healthy ?? 0} file stabil, ${metrics.review ?? review.length} perlu review, dan tidak ada anomaly aktif. Koneksi Firestore ${state.connection?.status || "UNKNOWN"}.`;
+  };
+
+  if (!q) return "Siap. Ceritakan saja apa yang ingin kamu cek. Saya akan jawab dari keadaan BCGO yang sedang hidup, bukan dari tebakan.";
+
+  if (/^(halo|hai|hello|pagi|siang|sore|malam)\b/.test(q)) {
+    return `Hehe, iya 😊 Saya di sini. Sekarang saya sedang berada di cycle #${state.cycle ?? "-"}, tahap ${state.step || "-"} dan terus membaca telemetry BCGO. Kalau mau, langsung tanya sistem, file, hubungan antar-file, atau kasus yang sedang saya selidiki.`;
+  }
+
+  if (/aman|sehat|normal|kondisi sistem|status sistem|sistem aman/.test(q)) {
+    return `Baik, saya cek dulu kondisi yang benar-benar saya punya sekarang. ${sayStatus()} Jadi saya tidak sekadar melihat lampu hijau; saya cocokkan koneksi, telemetry, anomaly, dan hasil scanner.`;
+  }
+
+  if (/sedang apa|lagi apa|sedang mengerjakan|ngapain|kerja apa/.test(q)) {
+    const focus = active[0]?.[0] || state.targetCell || "seluruh organ";
+    return `Saya sedang bekerja di cycle #${state.cycle ?? "-"}, tahap ${state.step || "-"}. Fokus saya sekarang ${focus}. ${state.message || "Saya sedang menjaga telemetry dan source scan tetap sinkron."} Kalau ada bukti baru, saya akan pindah fokus berdasarkan evidence, bukan sekadar nama file.`;
+  }
+
+  if (/hubungan|terhubung|relasi|dependency|terkait/.test(q)) {
+    const file = requestedFile || state.targetCell || null;
+    if (file) {
+      const rel = relationFor(file);
+      if (!rel.length) return `Saya sudah mencari relasi untuk ${file}, tetapi pada snapshot scanner saat ini belum ada pasangan source yang bisa saya tampilkan sebagai hubungan terdeteksi. Saya tidak akan mengarang relasi.`;
+      return `Untuk ${file}, saya menemukan ${rel.length} hubungan source yang tercatat. Yang terlihat sekarang: ${rel.slice(0,6).map(x => `${x.pair} (${x.status})`).join("; ")}. Jadi pasangan yang muncul di kartu memang berasal dari hasil scanner, bukan dekorasi UI.`;
+    }
+    return `Saat ini scanner mencatat ${relations.length} relasi antar-file. Sebutkan nama file, misalnya “hubungan agentcgo.html”, dan saya bisa uraikan pasangan yang terdeteksi.`;
+  }
+
+  if (requestedFile) {
+    const info = organs[requestedFile];
+    const rel = relationFor(requestedFile);
+    const status = info?.state || "UNKNOWN";
+    const finding = findings.find(f => String(f?.file || f?.sourceFile || f?.targetFile || "").includes(requestedFile));
+    const relationText = rel.length ? rel.slice(0,4).map(x => `${x.pair} [${x.status}]`).join("; ") : "belum ada relasi yang terbukti";
+    if (!info) return `Saya mengenali ${requestedFile}, tetapi snapshot live belum membawa status file itu.`;
+    return `Oke, saya cek ${requestedFile}. Statusnya ${status}. ${info.message || "Belum ada pesan tambahan."} Hubungan yang saya punya: ${relationText}.${finding ? ` Ada temuan terkait: ${finding.message || finding.detail || finding.type || "temuan scanner"}.` : ""}`;
+  }
+
+  if (/error|masalah|anomaly|gangguan|rusak/.test(q)) {
+    if (!active.length) return `Saya sudah cek telemetry aktif. Saat ini tidak ada anomaly aktif. Ada ${review.length} file yang masih perlu review, jadi “tidak ada anomaly aktif” bukan berarti saya mengklaim semua source sempurna.`;
+    return `Iya, ada ${active.length} anomaly aktif. Yang paling menonjol ${active.slice(0,4).map(([f,v]) => `${f}: ${v.message || "temuan aktif"}`).join(" | ")}. Saya akan mempertahankan evidence-nya sebelum menyebut root cause.`;
+  }
+
+  if (/root cause|akar masalah|penyebab|kenapa|mengapa/.test(q)) {
+    const root = reasoning?.rootCause || null;
+    if (root) return `Untuk kasus ${target}, root cause sudah tercatat: ${root.statement}. Saya hanya menyebutnya root cause karena sudah masuk proof chain CGO.`;
+    const blockers = proof.blockers?.length ? proof.blockers.slice(0,4).join(", ") : "evidence kausal belum cukup";
+    return `Saya belum mau menyebut root cause. Saat ini yang paling aman adalah ${blockers}. Hipotesis boleh ada, tetapi belum saya naikkan menjadi fakta.`;
+  }
+
+  if (/bukti|evidence|telemetry/.test(q)) {
+    const evidence = Array.isArray(snapshot?.reasoning?.evidence) ? snapshot.reasoning.evidence : [];
+    const verified = evidence.filter(e => e?.status === "VERIFIED");
+    const detail = verified.slice(0,4).map(e => e.claim || e.message || e.type).filter(Boolean).join(" | ");
+    return `Yang bisa saya pertanggungjawabkan sekarang: ${verified.length} evidence terverifikasi dari ${evidence.length}. ${detail || "Belum ada evidence terverifikasi yang cukup untuk saya ceritakan lebih jauh."}`;
+  }
+
+  if (/data-cgo|data customer|customer|yang daftar|pendaftar|jumlah daftar/.test(q)) {
+    const probeCount = Number(metrics.firestoreCount || 0);
+    return `Saya menangkap maksudmu: kamu ingin angka data, bukan status source. Saat ini BCGO punya probe Firestore aktif dan snapshot terakhir membaca ${probeCount} dokumen pada sensor yang sedang dipantau. Tetapi saya belum punya bukti bahwa angka itu adalah total customer yang terdaftar; jadi saya tidak akan menyebutnya sebagai jumlah customer. Untuk angka pendaftaran yang benar, saya perlu membuka collection data yang memang menjadi sumber pendaftaran dan memverifikasi izin baca-nya.`;
+  }
+
+  if (/medicine|perbaiki|repair|solusi|patch/.test(q)) {
+    if (!active.length) return "Belum ada kasus aktif yang cukup kuat untuk saya teruskan. Saya lebih baik menunggu evidence daripada membuat Medicine bekerja dari dugaan.";
+    return `Saya bisa menyiapkan konteks untuk Medicine dari kasus ${active[0][0]}, tetapi root cause dan exact source tetap harus terbukti dulu. CGO tidak akan menganggap “target awal” sebagai penyebab hanya karena telemetry menunjuk ke sana.`;
+  }
+
+  if (/scan ulang|rescan|pindai ulang|cek ulang/.test(q)) {
+    return `Bisa. Saya sedang menjaga source scanner tetap berjalan. Permintaanmu saya perlakukan sebagai permintaan pemeriksaan ulang, tetapi saya tidak akan mengubah source hanya karena diminta lewat chat.`;
+  }
+
+  return `Saya paham. Untuk “${raw}”, saya bisa bantu, tapi saya ingin jawab dengan fakta yang memang tersedia di BCGO. Sekarang fokus saya ${target}, cycle #${state.cycle ?? "-"}, dengan ${metrics.active ?? active.length} anomaly aktif dan ${relations.length} relasi source yang sudah terdeteksi. Kalau kamu sebut file atau data yang ingin dilihat, saya akan uraikan dari evidence yang ada.`;
+}
+
 function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = null) {
   const c = caseOverride || runtime.getCase(caseId);
   if (!c) {
@@ -463,6 +581,7 @@ export function install() {
   return {
     version: VERSION,
     ingestBCGOState(state = {}) {
+      latestBCGOState = clone(state);
       ensureKnowledge(state);
       const active = Array.isArray(state.activeCases) ? state.activeCases : [];
       let primary = null;
@@ -495,6 +614,7 @@ export function install() {
       return clone(latest);
     },
     getSnapshot() { return clone(latest); },
+    ask(question) { return chatAnswer(question); },
     deliberate(caseId, policy = {}) {
       return runtime.deliberate(caseId, policy);
     },

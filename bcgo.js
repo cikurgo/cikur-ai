@@ -112,9 +112,10 @@ export function runAutonomousEngine(onCycleUpdate) {
   async function loadInternalAI() {
     if (stopped || internalAI) return internalAI;
     try {
-      const mod = await import("./cgo-runtime-adapter.js?v=5.3.0");
+      const mod = await import("./cgo-runtime-adapter.js?v=5.2.5");
       if (typeof mod.install !== "function") throw new Error("INTERNAL_AI_ADAPTER_INVALID");
       internalAI = mod.install();
+      window.CIKURInternalAIRuntime = internalAI;
       internalAIStatus = "READY";
       internalAIError = null;
       recordEvent("INTERNAL_AI", "Internal AI adapter aktif; BCGO_STATE mulai diserahkan setelah sensor BCGO hidup.", "SYS_INTERNAL_AI_READY");
@@ -128,6 +129,7 @@ export function runAutonomousEngine(onCycleUpdate) {
         const mod = await import("./cgo-ai-browser-adapter.js?v=5.2.2");
         if (typeof mod.install !== "function") throw new Error("BROWSER_BRAIN_ADAPTER_INVALID");
         internalAI = mod.install();
+        window.CIKURInternalAIRuntime = internalAI;
         internalAIStatus = "READY";
         internalAIError = null;
         recordEvent("INTERNAL_AI", "Internal AI browser bridge aktif melalui adapter V5.2.", "SYS_INTERNAL_AI_READY");
@@ -135,6 +137,7 @@ export function runAutonomousEngine(onCycleUpdate) {
         return internalAI;
       } catch (fallbackError) {
         internalAIStatus = "UNAVAILABLE";
+        try { delete window.CIKURInternalAIRuntime; } catch {}
         internalAIError = fallbackError?.message || primaryError?.message || String(fallbackError);
         state.internalAI = {
           version:null, signal:"WAITING", classification:"BCGO_SENSOR_ONLY",
