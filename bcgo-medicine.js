@@ -15,7 +15,7 @@ import { reason as internalAIReason } from "./cgo-ai-browser-adapter.js?v=5.2.2"
 
 /*
  * ================================================================
- * BCGO MEDICINE v3.4.0 + INTERNAL AI V5 BRIDGE — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
+ * BCGO MEDICINE v3.4.2 + INTERNAL AI V5 BRIDGE — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
  * ================================================================
  * Boundary:
  *   Medicine observes, investigates, proves, proposes and validates.
@@ -126,7 +126,7 @@ const TERMINAL_STATUSES = new Set(["REJECTED","FIXED_VERIFIED","RECOVERED"]);
 const MAX_INVESTIGATION_ATTEMPTS_PER_REVISION = 3;
 
 const S = {
-  version: "3.4.1",
+  version: "3.4.2",
   registry: REGISTRY,
   surface: null,
   logs: [],
