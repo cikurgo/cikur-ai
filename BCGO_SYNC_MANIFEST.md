@@ -1,6 +1,6 @@
-# BCGO V2.15.5 — SYNCHRONIZED BRAIN DEPLOYMENT
+# BCGO V2.15.6 — SYNCHRONIZED BRAIN DEPLOYMENT
 
-Entry: bcgo.js -> cikur-internal-ai-runtime-adapter-v9.js?v=5.2.5
+Entry: bcgo.html -> bcgo.js?v=2.15.6 -> cikur-internal-ai-runtime-adapter-v9.js?v=5.2.6
 
 Active policy:
 - automaticPatch: true
@@ -11,10 +11,12 @@ Active policy:
 - medicineOwnsVerification: true
 - executorOwnsExecutionGate: true
 
-Foundation lineage included unchanged:
-- cgo-core.js
-- cgo-knowledge.js
-- cgo-guardian.js
+Deployment closure:
+- cikur-config.js is bundled because bcgo.js imports it directly.
+- cgo-core.js, cgo-knowledge.js, cgo-guardian.js are bundled because the master runtime imports them directly.
+- All local JavaScript imports in the BCGO package resolve to files included in this deployment.
 
-Critical deployment requirement:
-The foundation files are bundled in the same deployment directory because the master runtime imports them. Missing them causes module-load failure before BCGO can initialize.
+Foundation guardian note:
+- cgo-guardian.js is preserved original lineage and remains a non-mutating foundation auditor.
+- Its historical automaticPatch=false / automaticExecution=false contract is intentionally preserved.
+- The live V5.2 guardian + deterministic Executor path owns the active approved patch/execution policy.

@@ -9,10 +9,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
-import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v9.js?v=5.2.5";
+import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v9.js?v=5.2.6";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.15.3 + CIKUR GO INTERNAL AI V5.2.4
+ * BCGO MASTER NERVE SYSTEM v2.15.6 + CIKUR GO INTERNAL AI V5.2.5
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
