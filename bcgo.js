@@ -9,10 +9,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
-import { install as installInternalAI } from "./cgo-ai-browser-adapter.js?v=5.2.4";
+import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v9.js?v=5.2.5";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.15.1 + CIKUR GO INTERNAL AI V5.2
+ * BCGO MASTER NERVE SYSTEM v2.15.3 + CIKUR GO INTERNAL AI V5.2.4
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -1727,7 +1727,14 @@ export function runAutonomousEngine(onCycleUpdate) {
       startSystemLogs();
       startFirestoreProbe();
       if (sourceScanTimer === null) {
+        // Start immediately after admin authorization. A short watchdog below
+        // guarantees WAITING cannot remain stuck if an earlier boot race occurs.
         runSourceScan("BOOT").finally(() => { if (!stopped && authorized) scheduleSourceScan(SOURCE_SCAN_INTERVAL); });
+        setTimeout(() => {
+          if (!stopped && authorized && state.sourceScan?.status === "WAITING" && !sourceScanBusy) {
+            runSourceScan("AUTH_WATCHDOG").finally(() => { if (!stopped && authorized) scheduleSourceScan(SOURCE_SCAN_INTERVAL); });
+          }
+        }, 1800);
       }
       refreshTimer = setInterval(refreshState, 15000);
       phaseIndex = -1;
