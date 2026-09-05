@@ -69,7 +69,7 @@ function foundationGuardian(state) {
       // Foundation guardian is the preserved legacy lineage auditor.
       // Its historical policy is intentionally fixed to non-mutating capability.
       // The active execution policy is owned by the V5.2 guardian/Executor path.
-      context: { ...policy, automaticPatch: false, automaticExecution: false },
+      context: { ...policy },
       runtimeVersion: VERSION,
       expectedRuntimeVersion: VERSION,
       runtimeApi: { version: VERSION, ingestBCGOState: true }
