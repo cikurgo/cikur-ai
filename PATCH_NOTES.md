@@ -1,23 +1,18 @@
-# CIKUR GO Internal AI V5.2.2 — Brain Nerve Patch
+# CIKUR GO Internal AI V5.2.3 — Causal Investigation Loop
 
-Focused patch after BCGO Foundation v2.16.1 was confirmed LIVE.
+Focused brain patch. Does not modify BCGO UI, Medicine, Executor, or Firestore Rules.
 
-## Changed
-- cgo-ai-browser-adapter.js v5.2 browser bridge now ingests BCGO fileNerves, source findings, and dependency relations as proof-bound observations with stable deduplication.
-- cgo-ai-investigation-engine.js v2.1.0 now distinguishes causal hypotheses from non-causal runtime/source discrepancies, adds runtime-context probing, and supports per-step progress callbacks.
-- cgo-ai-core.js keeps causal hypotheses preferred on equal scores; non-causal hypotheses cannot be promoted to ROOT_CAUSE_VERIFIED.
-
-## Safety
-- No external AI/API added.
-- No source mutation.
-- No automatic patch execution.
-- Existing Guardian / Executor gates remain authoritative.
-
-## Deployment
-Replace only the three JS files above in the existing internal-AI deployment. Do not replace bcgo.js, bcgo.html, Medicine, Executor, or Firestore Rules with this patch.
+## Changes
+- CGO consumes multiple unresolved symbols from BCGO nerve evidence instead of only the first runtime symbol.
+- Active probe queue now correctly advances through SYMBOL_CALLS -> SYMBOL_DEFINITIONS -> SYMBOL_IMPORTS_EXPORTS -> SCRIPT_LOADING -> RUNTIME_CONTEXT/HTML_STRUCTURE without repeating the same SCRIPT_LOADING probe.
+- Causal module-boundary hypotheses are preferred over generic non-causal runtime-context hypotheses when evidence confidence is equal.
+- BCGO source findings related to HTML/structure are represented as investigation hypotheses without being promoted to causal root cause until source probes validate them.
+- Browser bridge now exposes the active step's actual case snapshot to the UI during async investigation, so progress is not hidden behind the old runtime snapshot.
+- Progress events include selected hypothesis, score, causal flag, root-cause verification, and exact-source verification.
+- No external AI/API. No source mutation. No automatic execution.
 
 ## Validation
-- All brain JS syntax checks PASS.
-- Missing-symbol causal test: SOURCE_VERIFIED PASS.
-- Defined-symbol runtime discrepancy: remains HYPOTHESIS_FORMED / no false root cause PASS.
-- Module-boundary causal test: SOURCE_VERIFIED PASS.
+- JS syntax: PASS
+- Missing-symbol causal proof: PASS -> SOURCE_VERIFIED
+- Module-boundary causal proof: PASS -> SOURCE_VERIFIED
+- Multiple-symbol nerve input: PASS

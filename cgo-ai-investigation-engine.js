@@ -38,6 +38,22 @@ function symbolFromCase(caseData) {
   return null;
 }
 
+
+function symbolsFromCase(caseData) {
+  const out = new Set();
+  const add = v => {
+    const s = String(v || "").trim();
+    if (/^[A-Za-z_$][\w$]*$/.test(s)) out.add(s);
+  };
+  add(symbolFromCase(caseData));
+  for (const e of (caseData?.evidence || [])) {
+    add(e?.metadata?.symbol);
+    const text = String(e?.claim || "");
+    for (const m of text.matchAll(/(?:ReferenceError:\s*)?([A-Za-z_$][\w$]*)\s+is not defined/gi)) add(m[1]);
+  }
+  return [...out].slice(0, 12);
+}
+
 function structuralSignals(source, file) {
   const text = String(source || "");
   const out = [];
@@ -67,7 +83,7 @@ function findSymbolHits(source, file, symbol) {
     // It must not be emitted as a runtime call-site.
     const call = !declarationLike && /^\s*\(/.test(after);
     const definition = declarationLike;
-    const handler = /(?:onclick|onchange|onsubmit|oninput|onload)\s*=\s*['"][^'"]*$/i.test(before);
+    const handler = /(?:onclick|onchange|onsubmit|oninput|onload)\s*=/.test(before);
     hits.push({file, line:lineOf(source,i), snippet:snippet(source,i), definition, call, handler});
   }
   return hits;
@@ -135,7 +151,8 @@ function unique(arr) { return [...new Set((arr || []).filter(Boolean))]; }
 function buildHypotheses(caseData, context) {
   const ev = caseData?.evidence || [];
   const sourceSurfaceComplete = context.sourceSurfaceComplete === true;
-  const symbol = context.symbol || symbolFromCase(caseData);
+  const symbols = Array.isArray(context.symbols) ? context.symbols : [context.symbol || symbolFromCase(caseData)].filter(Boolean);
+  const symbol = symbols[0] || null;
   const hs = [];
   const calls = ev.filter(e => e.type === "SYMBOL_CALL_SITE");
   const defs = ev.filter(e => e.type === "SYMBOL_DEFINITION");
@@ -177,12 +194,36 @@ function buildHypotheses(caseData, context) {
     });
   }
 
+  for (const sym of symbols.slice(1)) {
+    const scalls = ev.filter(e => e.type === "SYMBOL_CALL_SITE" && e.metadata?.symbol === sym);
+    const sdefs = ev.filter(e => e.type === "SYMBOL_DEFINITION" && e.metadata?.symbol === sym);
+    const sabs = ev.filter(e => e.type === "SYMBOL_DEFINITION_ABSENCE" && e.metadata?.symbol === sym);
+    if (sourceSurfaceComplete && scalls.length && !sdefs.length && sabs.length) {
+      hs.push({
+        id:`H-SYMBOL-MISSING-${sym}`,
+        statement:`Simbol ${sym} dipanggil pada runtime/source target tetapi tidak memiliki definisi pada seluruh source surface yang berhasil diverifikasi.`,
+        evidenceIds:unique([...scalls.map(e=>e.id), ...sabs.map(e=>e.id)]),
+        nodeIds:unique([...scalls.map(e=>e.metadata?.file), ...sabs.map(e=>e.metadata?.file)]),
+        causal:true
+      });
+    } else if (scalls.length && sdefs.length && !sabs.length) {
+      hs.push({
+        id:`H-SYMBOL-RUNTIME-CONTEXT-${sym}`,
+        statement:`Runtime melaporkan ${sym} tidak terdefinisi, tetapi source surface saat ini memiliki definisi ${sym}; penyebab runtime belum terbukti dan harus ditelusuri pada execution context.`,
+        evidenceIds:unique([...scalls.map(e=>e.id), ...sdefs.map(e=>e.id)]),
+        nodeIds:unique([...scalls.map(e=>e.metadata?.file), ...sdefs.map(e=>e.metadata?.file)]),
+        causal:false
+      });
+    }
+  }
+
   const moduleBoundary = symbol && calls.some(e=>
     normalizeFile(e.metadata?.file)===normalizeFile(caseData?.target) &&
     /(?:onclick|onchange|onsubmit|oninput|onload)\s*=/.test(String(e.metadata?.snippet||""))
   ) && defs.length && scripts.some(e=>{
     const src = normalizeFile(e.metadata?.src);
-    return String(e.metadata?.type||"").toLowerCase()==="module" && src && defs.some(d=>normalizeFile(d.metadata?.file)===normalizeFile(src));
+    const isModule = String(e.metadata?.type||"").toLowerCase()==="module";
+    return isModule && src && defs.some(d=>normalizeFile(d.metadata?.file)===normalizeFile(src));
   });
   if (moduleBoundary) {
     hs.push({
@@ -193,6 +234,17 @@ function buildHypotheses(caseData, context) {
       causal:true
     });
   }
+  const sourceFinding = nerveFindings.filter(e => /div|html|structure|syntax/i.test(String(e.metadata?.kind || "") + " " + String(e.claim || "")));
+  if (sourceFinding.length) {
+    hs.push({
+      id:`H-SOURCE-FINDING-${normalizeFile(caseData?.target) || "TARGET"}`,
+      statement:`Temuan source BCGO pada ${normalizeFile(caseData?.target) || "target"} perlu divalidasi langsung terhadap source aktual sebelum causal root cause dapat dinyatakan.`,
+      evidenceIds:unique(sourceFinding.map(e=>e.id)),
+      nodeIds:unique(sourceFinding.map(e=>e.metadata?.file)),
+      causal:false
+    });
+  }
+
   if (dom.length) {
     hs.push({
       id:`H-HTML-STRUCTURE-${normalizeFile(caseData?.target) || "TARGET"}`,
@@ -207,15 +259,18 @@ function buildHypotheses(caseData, context) {
 
 function chooseProbe(engine, caseData, knowledge) {
   const s = engine.state;
-  const symbol = symbolFromCase(caseData);
+  const symbols = symbolsFromCase(caseData);
+  const symbol = symbols[0] || null;
   const target = normalizeFile(caseData?.target);
   const done = s.completedProbes;
   if (target && !done.has(`SOURCE_READ:${target}`)) return {type:"SOURCE_READ",file:target,score:1};
-  if (symbol && !done.has(`SYMBOL_CALLS:${symbol}`)) return {type:"SYMBOL_CALLS",symbol,score:.98};
-  if (symbol && !done.has(`SYMBOL_DEFINITIONS:${symbol}`)) return {type:"SYMBOL_DEFINITIONS",symbol,score:.97};
-  if (symbol && !done.has(`SYMBOL_IMPORTS_EXPORTS:${symbol}`)) return {type:"SYMBOL_IMPORTS_EXPORTS",symbol,score:.92};
-  if (symbol && !done.has(`SCRIPT_LOADING:${target}`)) return {type:"SCRIPT_LOADING",file:target,score:.88};
-  if (symbol && caseData?.hypotheses?.some(h => h.id === `H-SYMBOL-RUNTIME-CONTEXT-${symbol}`) && !done.has(`RUNTIME_CONTEXT:${target}:${symbol}`)) return {type:"RUNTIME_CONTEXT",file:target,symbol,score:.90};
+  for (const sym of symbols) {
+    if (!done.has(`SYMBOL_CALLS:${sym}`)) return {type:"SYMBOL_CALLS",symbol:sym,score:.98};
+    if (!done.has(`SYMBOL_DEFINITIONS:${sym}`)) return {type:"SYMBOL_DEFINITIONS",symbol:sym,score:.97};
+    if (!done.has(`SYMBOL_IMPORTS_EXPORTS:${sym}`)) return {type:"SYMBOL_IMPORTS_EXPORTS",symbol:sym,score:.92};
+    if (!done.has(`SCRIPT_LOADING:${sym}`)) return {type:"SCRIPT_LOADING",file:target,symbol:sym,score:.88};
+    if (caseData?.hypotheses?.some(h => h.id === `H-SYMBOL-RUNTIME-CONTEXT-${sym}`) && !done.has(`RUNTIME_CONTEXT:${sym}`)) return {type:"RUNTIME_CONTEXT",file:target,symbol:sym,score:.90};
+  }
   if (!done.has(`HTML_STRUCTURE:${target}`)) return {type:"HTML_STRUCTURE",file:target,score:.84};
 
   const ranked = Investigator.rankProbes({visitedNodes:[...s.visitedNodes]},caseData,knowledge);
@@ -384,7 +439,7 @@ export function createInvestigationEngine(caseData, knowledge={}, options={}) {
     const result=await probe(request,currentCase,provider);
     let nextCase=clone(currentCase);
     if(result.evidence?.length) nextCase=Core.ingestEvidence(nextCase,result.evidence);
-    const context={symbol:symbolFromCase(nextCase),sourceSurfaceComplete:provider.sourceSurfaceComplete===true};
+    const context={symbols:symbolsFromCase(nextCase),symbol:symbolFromCase(nextCase),sourceSurfaceComplete:provider.sourceSurfaceComplete===true};
     const hypotheses=buildHypotheses(nextCase,context);
     if(hypotheses.length && nextCase.state!=="ROOT_CAUSE_VERIFIED" && nextCase.state!=="SOURCE_VERIFIED")
       nextCase=Core.reason(nextCase,hypotheses).caseData;

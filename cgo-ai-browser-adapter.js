@@ -11,7 +11,7 @@ import * as Logic from "./cgo-ai-logic.js";
 import * as Memory from "./cgo-ai-memory.js";
 import { createRuntime } from "./cgo-ai-runtime-adapter.js";
 
-const VERSION = "V5.2-BROWSER-BRIDGE-1.2.2-NERVE";
+const VERSION = "V5.2-BROWSER-BRIDGE-1.3.0-CAUSAL-LOOP";
 const runtime = createRuntime({});
 const memory = Memory.createMemory();
 const caseIds = new Map();
@@ -293,11 +293,17 @@ async function runActiveInvestigation(caseId, state) {
             probe: stepOut.probe || null,
             evidenceCount: (stepOut.evidence || []).length,
             caseState: stepOut.caseData?.state || null,
-            investigationStatus: stepOut.investigation?.status || null
+            investigationStatus: stepOut.investigation?.status || null,
+            selectedHypothesis: stepOut.caseData?.selectedHypothesis ? {
+              id: stepOut.caseData.selectedHypothesis.id,
+              statement: stepOut.caseData.selectedHypothesis.statement,
+              score: stepOut.caseData.selectedHypothesis.score,
+              causal: stepOut.caseData.selectedHypothesis.causal === true
+            } : null
           });
           try {
             window.dispatchEvent(new CustomEvent("cikur-internal-ai-state", {
-              detail: compatibleSnapshot(caseId, "ACTIVE_INVESTIGATION_PROGRESS")
+              detail: compatibleSnapshot(caseId, "ACTIVE_INVESTIGATION_PROGRESS", stepOut.caseData)
             }));
           } catch {}
         }
@@ -342,6 +348,9 @@ async function runActiveInvestigation(caseId, state) {
         probeLog:out.investigation?.probeLog || [],
         evidenceAdded:newEvidence.length,
         selectedHypothesisId:synced?.selectedHypothesis?.id || null,
+        selectedHypothesis:synced?.selectedHypothesis ? {id:synced.selectedHypothesis.id,score:synced.selectedHypothesis.score,causal:synced.selectedHypothesis.causal===true} : null,
+        rootCauseVerified:!!synced?.rootCause,
+        exactSourceVerified:!!synced?.exactSource,
         state:synced?.state || null
       });
 
@@ -371,8 +380,8 @@ function emitBrainEvent(caseId, type, payload) {
   try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-investigation", {detail})); } catch {}
 }
 
-function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY") {
-  const c = runtime.getCase(caseId);
+function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = null) {
+  const c = caseOverride || runtime.getCase(caseId);
   if (!c) {
     return {
       version: VERSION, signal, at: Date.now(),
