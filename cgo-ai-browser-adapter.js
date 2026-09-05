@@ -380,6 +380,64 @@ function emitBrainEvent(caseId, type, payload) {
   try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-investigation", {detail})); } catch {}
 }
 
+function chatAnswer(question = {}) {
+  const raw = typeof question === "string" ? question : String(question?.text || question?.question || "");
+  const q = raw.toLowerCase().trim();
+  const snapshot = latest;
+  if (!q) return "Saya siap. Tanyakan kondisi sistem, masalah aktif, bukti, root cause, source exact, investigasi, atau langkah berikutnya.";
+
+  const requestedFile = [...caseIds.keys()].find(file => q.includes(String(file).toLowerCase())) || null;
+  const caseId = requestedFile ? caseIds.get(requestedFile) : [...caseIds.values()][0] || null;
+  const c = caseId ? runtime.getCase(caseId) : null;
+  const reasoning = snapshot?.reasoning || {};
+  const proof = reasoning.precisionGate || {};
+  const status = c?.state || reasoning.investigation?.status || "NO_ACTIVE_CASE";
+  const evidence = Array.isArray(c?.evidence) ? c.evidence : (reasoning.evidence || []);
+  const verified = evidence.filter(e => e?.status === "VERIFIED");
+  const unresolved = evidence.filter(e => e?.status !== "VERIFIED");
+  const hypothesis = c?.selectedHypothesis || c?.hypotheses?.find(h => h.id === reasoning.selectedHypothesisId) || null;
+  const target = c?.target || requestedFile || "sistem";
+  const root = c?.rootCause || null;
+  const source = c?.exactSource || null;
+  const next = reasoning.investigation?.nextProbe || reasoning.investigation?.nextEvidence || null;
+  const nextText = next ? String(next.description || next.question || next.action || next.type || JSON.stringify(next)).slice(0, 260) : "belum ada probe berikutnya yang dipastikan";
+
+  if (/halo|hai|hello|siapa kamu/.test(q)) {
+    return `Saya CGO di dalam BCGO. Saya membaca telemetry, evidence, dependency, dan hasil investigasi yang sedang hidup; saya tidak mengarang root cause. Status saya ${status}, evidence terverifikasi ${verified.length}, dan precision gate ${proof.pass ? "LULUS" : "BELUM LULUS"}.`;
+  }
+  if (/sedang apa|sedang mengerjakan|lagi apa|ngapain|kerja apa/.test(q)) {
+    return `Saya sedang menginvestigasi ${target}. Tahap kasus: ${status}. ${hypothesis ? `Hipotesis terpilih: ${hypothesis.statement} (score ${Number(hypothesis.score || 0).toFixed(2)}).` : "Belum ada hipotesis yang cukup kuat."} ${root ? `Root cause sudah terverifikasi: ${root.statement}.` : "Root cause belum terverifikasi."} ${source ? `Source exact sudah terikat ke ${source.file}.` : "Source exact belum terverifikasi."}`;
+  }
+  if (/kenapa|mengapa|alasan|why/.test(q)) {
+    return `Saya berada pada ${status} karena proof chain belum boleh dilewati. Saat ini ${verified.length} evidence terverifikasi dan ${unresolved.length} belum terverifikasi. ${proof.blockers?.length ? `Penghalang: ${proof.blockers.slice(0,4).join(", ")}.` : "Tidak ada blocker pada precision gate."}`;
+  }
+  if (/root cause|akar masalah|akar penyebab|penyebab/.test(q)) {
+    if (!root) return `Saya belum menyatakan root cause untuk ${target}. ${hypothesis ? `Hipotesis saat ini: ${hypothesis.statement} (score ${Number(hypothesis.score || 0).toFixed(2)}), tetapi belum saya naikkan menjadi root cause terverifikasi.` : "Saya masih membutuhkan evidence kausal tambahan."}`;
+    return `Root cause ${target}: ${root.statement}. Evidence pengikat: ${(root.evidenceIds || []).join(", ") || "tidak tersedia"}. Ini saya sebut root cause hanya karena sudah tercatat pada proof chain CGO.`;
+  }
+  if (/source exact|exact source|source asli|kode asli|baris|line/.test(q)) {
+    if (!source) return `Saya belum memiliki exact source yang terverifikasi untuk ${target}. Saya tidak akan menebak potongan kode.`;
+    return `Exact source sudah terverifikasi pada ${source.file}${source.line != null ? `, baris ${source.line}` : ""}. Fingerprint source: ${source.fingerprint || source.contentFingerprint || "belum tersedia"}.`;
+  }
+  if (/bukti|evidence|telemetry/.test(q)) {
+    const detail = verified.slice(0,5).map(e => `${e.source || e.type}: ${e.claim || "-"}`).join(" | ");
+    return `Bukti untuk ${target}: ${verified.length} terverifikasi dari ${evidence.length} evidence. ${detail || "Belum ada evidence terverifikasi yang cukup."}`;
+  }
+  if (/investigasi|investigate|cek|periksa|selanjutnya|langkah berikut|next/.test(q)) {
+    return `Investigasi CGO saat ini ${status}. Probe berikutnya: ${nextText}. Saya akan menambah evidence dulu sebelum mengubah kesimpulan.`;
+  }
+  if (/medicine|obat|perbaiki|repair|solusi/.test(q)) {
+    if (!root || !source) return `Belum waktunya memberi solusi ke Medicine untuk ${target}. Root cause dan/atau exact source belum lengkap; precision gate masih ${proof.pass ? "LULUS" : "TERTUTUP"}.`;
+    return `Kasus ${target} sudah memiliki root cause dan exact source. Konteks dapat diteruskan ke Medicine untuk menyusun solusi BEFORE → AFTER; CGO sendiri tidak menulis source.`;
+  }
+  if (/status|kondisi|sehat|aman/.test(q)) {
+    return `Status CGO: ${status}. Classification: ${reasoning.classification || "-"}. Evidence ${verified.length}/${evidence.length} terverifikasi. Precision gate: ${proof.pass ? "PASS" : "BLOCK"}. Guardian: ${snapshot?.guardian?.healthy ? "OK" : (snapshot?.guardian?.level || "BLOCK")}.`;
+  }
+
+  const activeCaseText = c ? `Kasus aktif ${target} berada di ${status}` : "Belum ada kasus aktif yang dapat saya jadikan dasar";
+  return `${activeCaseText}. Saya dapat menjawab lebih spesifik berdasarkan evidence yang tersedia: ${verified.length} terverifikasi, ${unresolved.length} belum terverifikasi. Jika pertanyaanmu tentang penyebab, saya akan membedakan hipotesis dari root cause; jika tentang kode, saya hanya akan menyebut exact source yang benar-benar terbukti.`;
+}
+
 function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = null) {
   const c = caseOverride || runtime.getCase(caseId);
   if (!c) {
@@ -495,6 +553,7 @@ export function install() {
       return clone(latest);
     },
     getSnapshot() { return clone(latest); },
+    ask(question) { return chatAnswer(question); },
     deliberate(caseId, policy = {}) {
       return runtime.deliberate(caseId, policy);
     },
