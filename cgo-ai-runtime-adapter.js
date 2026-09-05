@@ -201,6 +201,12 @@ export function createRuntime(options={}) {
     version:VERSION,
     on(fn){listeners.add(fn); return ()=>listeners.delete(fn);},
     getKnowledge(){return structuredClone(knowledge);},
+    setKnowledge(next){
+      if(!next || typeof next!=="object") throw new Error("KNOWLEDGE_REQUIRED");
+      Knowledge.validateStore(next);
+      knowledge=structuredClone(next);
+      return structuredClone(knowledge);
+    },
     getMemory(){return structuredClone(memory);},
     getCase(caseId){return structuredClone(cases.get(caseId)||null);},
     setExecutor(nextExecutor){
@@ -341,6 +347,26 @@ export function createRuntime(options={}) {
         return structuredClone(c0);
       }
       const decision=authorizationDecision(caseId,policy);
+      // Reuse a still-live plan when its authorization decision/risk and revision
+      // still match the current proof. Rebuilding the same plan would increment
+      // revision and invalidate the authorization binding just before execution.
+      if(existing?.authorizationId && existing.authorization===decision.decision && existing.risk===decision.risk){
+        const rec=authorizationLedger.get(existing.authorizationId);
+        if(rec && !rec.consumed && !rec.inFlight && Date.now()<=Date.parse(rec.expiresAt)){
+          try{
+            const parsed=JSON.parse(rec.binding);
+            if(parsed.caseId===caseId && Number(parsed.revision||0)===Number(c0.revision||0) &&
+               parsed.decision===decision.decision && parsed.risk===decision.risk &&
+               parsed.fingerprint===(c0.exactSource?.fingerprint||null) &&
+               parsed.sourceFingerprint===(c0.exactSource?.sourceFingerprint||null) &&
+               parsed.proposedFingerprint===(c0.exactSource?.proposedCode==null?null:Core.contentFingerprint(c0.exactSource.proposedCode)) &&
+               parsed.file===(c0.exactSource?.file||null) &&
+               parsed.operation===(c0.exactSource?.operation||null)){
+              return structuredClone(c0);
+            }
+          }catch{}
+        }
+      }
       const key=JSON.stringify({caseId,revision:c0.revision||0,proofFingerprint:c0.exactSource?.fingerprint||null,sourceFingerprint:c0.exactSource?.sourceFingerprint||null,proposedFingerprint:c0.exactSource?.proposedCode==null?null:Core.contentFingerprint(c0.exactSource.proposedCode),rootEvidence:c0.rootCause?.evidenceIds||[],decision:decision.decision,risk:decision.risk,policy});
       if(planCache.has(key)){
         const cached=planCache.get(key);
@@ -372,7 +398,8 @@ export function createRuntime(options={}) {
       if(!current?.exactSource || current.exactSource.fingerprint!==action.request?.fingerprint ||
          current.exactSource.file!==bound.file || current.exactSource.operation!==bound.operation ||
          (current.exactSource.proposedCode==null ? null : Core.contentFingerprint(current.exactSource.proposedCode))!==bound.proposedFingerprint ||
-         Number(current.revision||0)!==Number(bound.revision||0))
+         Number(current.revision||0)!==Number(action.revision||0) ||
+         Number(action.revision||0)<Number(bound.revision||0))
         throw new Error("EXECUTION_PROOF_BINDING_MISMATCH");
       if(rec.consumed) throw new Error(`AUTHORIZATION_REPLAY:${authId}`);
       if(rec.inFlight) throw new Error(`AUTHORIZATION_IN_FLIGHT:${authId}`);
@@ -380,7 +407,7 @@ export function createRuntime(options={}) {
       if(bound.caseId!==caseId || bound.fingerprint!==action.request.fingerprint || bound.sourceFingerprint!==(action.request.sourceFingerprint||null) || bound.file!==action.request.file ||
          bound.operation!==(action.request.operation||"REPLACE_EXACT") ||
          bound.proposedFingerprint!==(action.request.proposedCode==null ? null : Core.contentFingerprint(action.request.proposedCode)) ||
-         Number(bound.revision||0)!==Number(action.revision||0))
+         Number(action.revision||0)<Number(bound.revision||0))
         throw new Error("EXECUTION_AUTHORIZATION_BINDING_MISMATCH");
       rec.inFlight=true;
       authorizationLedger.set(authId,rec);

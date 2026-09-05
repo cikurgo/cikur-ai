@@ -229,7 +229,8 @@ export function verifyExactSource(caseData, source) {
 
 export function buildActionPlan(caseData, authorization) {
   const c = structuredClone(caseData);
-  const verified = c.state==="SOURCE_VERIFIED" && !!c.rootCause && !!c.exactSource;
+  const proofState = ["SOURCE_VERIFIED","CANDIDATE_READY","EXECUTOR_REVIEW","HUMAN_APPROVAL"].includes(c.state);
+  const verified = proofState && !!c.rootCause && !!c.exactSource;
   const decision = authorization?.decision || "BLOCKED";
   const action = !verified ? "INVESTIGATE" :
     decision==="AUTO_ALLOWED" ? "AUTO_PATCH_AND_EXECUTE_INTENT" :
@@ -255,6 +256,7 @@ export function buildActionPlan(caseData, authorization) {
   transition(c,action==="INVESTIGATE" ? "INVESTIGATING" :
     action==="BLOCKED" ? "INVESTIGATION_BLOCKED" : "CANDIDATE_READY");
   c.updatedAt=now(); c.revision++;
+  c.actionPlan.revision=c.revision;
   return c;
 }
 

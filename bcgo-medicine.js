@@ -11,11 +11,11 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
-import { reason as internalAIReason } from "./cikur-internal-ai-core-v9.js?v=10.1.0";
+import { reason as internalAIReason } from "./cgo-ai-browser-adapter.js?v=5.1.0";
 
 /*
  * ================================================================
- * BCGO MEDICINE v3.4.0 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
+ * BCGO MEDICINE v3.4.0 + INTERNAL AI V5 BRIDGE — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
  * ================================================================
  * Boundary:
  *   Medicine observes, investigates, proves, proposes and validates.
@@ -2276,10 +2276,18 @@ function runInternalAIReasoning(c, v, plan, context = {}) {
       activeCases:activeCases(), latestLogs:S.logs.slice(0,50),
       sourceScan:S.bcgoSourceScan, recentEvents:context.recentEvents || [], bcgoAIContext:S.bcgoAIContext || null,
       medicineEvidence:Array.isArray(v?.sourceEvidence) ? v.sourceEvidence : [],
-      medicinePlan:plan ? {rootCauseFile:plan.rootCauseFile,rootCauseStatus:plan.rootCauseStatus,precisionGate:!!plan.precisionGate,operationCount:Array.isArray(plan.operations)?plan.operations.length:0} : null
+      sourceFingerprint:c?.lastObservedSourceFingerprint || null,
+      medicinePlan:plan ? {
+        rootCauseFile:plan.rootCauseFile,
+        rootCauseStatus:plan.rootCauseStatus,
+        precisionGate:!!plan.precisionGate,
+        operationCount:Array.isArray(plan.operations)?plan.operations.length:0,
+        candidates:Array.isArray(plan.candidates) ? plan.candidates : [],
+        operations:Array.isArray(plan.operations) ? plan.operations : []
+      } : null
     }, context.history || {});
   } catch (error) {
-    result = {version:"V9_ERROR",classification:"ERROR",evidence:[],hypotheses:[],selectedHypothesisId:null,precisionGate:{pass:false,blockers:[`INTERNAL_AI_ERROR:${error?.message||String(error)}`]},investigation:{status:"BLOCKED"}};
+    result = {version:"V5_BRIDGE_ERROR",classification:"ERROR",evidence:[],hypotheses:[],selectedHypothesisId:null,precisionGate:{pass:false,blockers:[`INTERNAL_AI_ERROR:${error?.message||String(error)}`]},investigation:{status:"BLOCKED"}};
   }
   S.aiCore={version:result.version||null,classification:result.classification||"UNKNOWN",precisionGate:result.precisionGate?.pass===true,blockers:Array.isArray(result.precisionGate?.blockers)?result.precisionGate.blockers:[],evidenceCount:result.evidence?.length||0,hypothesisCount:result.hypotheses?.length||0,selectedHypothesisId:result.selectedHypothesisId||null,investigation:result.investigation||null,operationalInvestigation:result.operationalInvestigation||null,lastAt:now()};
   emit("internal_ai_state",{case:c, ai:S.aiCore});
@@ -2355,7 +2363,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
         });
       }
 
-      // Internal AI V9 reasons over the completed Medicine evidence surface.
+      // Internal AI V5 reasons over the completed Medicine evidence surface.
       // It never proves root cause itself; Medicine remains the verification authority.
       const aiReasoning = runInternalAIReasoning(c, v, plan, context);
 
@@ -2374,7 +2382,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
         "CONTRACT_ROOT_CAUSE_IDENTIFIED"
       ].includes(plan.rootCauseStatus);
 
-      // V9 is the reasoning layer, not the final proof authority.
+      // V5 is the reasoning layer, not the final proof authority.
       // Its own gate intentionally stays closed until Medicine verifies root cause/exact source.
       // Therefore Medicine must NOT require aiReasoning.precisionGate.pass here.
       const aiHardBlocked = new Set(["CONTRADICTORY_EVIDENCE","LIVE_STATE_UNAVAILABLE","HYPOTHESIS_MISSING","EVIDENCE_MISSING"]);

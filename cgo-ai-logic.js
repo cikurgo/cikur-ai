@@ -63,6 +63,7 @@ export function evaluate(caseData, policy={}, knowledge=null){
     unresolvedEvidence:proof.unresolved,
     severity:c.severity,
     target:c.target,
+    knowledge,
     policy
   });
   const action = proof.complete ? guardian.decision : "BLOCKED";
