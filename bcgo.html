@@ -235,7 +235,7 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=2.16.0';
+import { runAutonomousEngine } from './bcgo.js?v=2.16.1';
 
 const $ = id => document.getElementById(id);
 
@@ -694,6 +694,18 @@ function renderConnection(state) {
     stateIntegrityEl.textContent = state.cycle === liveState?.cycle ? 'SYNC' : 'UPDATING';
 }
 
+// Boot watchdog: a failed module graph must never look like a silent blank/idle monitor.
+setTimeout(() => {
+  if (!window.BCGOBrain) {
+    const speech = document.getElementById('live-speech');
+    if (speech) speech.textContent = '> [BOOT] BCGO engine belum berhasil dimuat. Periksa modul/dependency BCGO.';
+    const badge = document.getElementById('system-status-badge');
+    if (badge) badge.textContent = 'BCGO BOOT ERROR';
+    console.error('[BCGO] Boot watchdog: window.BCGOBrain belum tersedia setelah 5 detik.');
+  }
+}, 5000);
+
+try {
 runAutonomousEngine(state => {
     liveState = state;
     window.BCGO_STATE = state;
@@ -727,6 +739,13 @@ runAutonomousEngine(state => {
         addChat('bcgo', `Kanal komunikasi aktif. Saya membaca BCGO_STATE yang sama dengan monitor. Saat ini saya berada di tahap ${state.step}, cycle #${state.cycle}. Silakan tanya apa yang sedang saya kerjakan.`);
     }
 });
+} catch (error) {
+  const speech = document.getElementById('live-speech');
+  if (speech) speech.textContent = `> [BOOT ERROR] ${String(error?.message || error).slice(0, 300)}`;
+  const badge = document.getElementById('system-status-badge');
+  if (badge) badge.textContent = 'BCGO BOOT ERROR';
+  console.error('[BCGO] runAutonomousEngine gagal:', error);
+}
 </script>
 
 <script>

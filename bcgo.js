@@ -9,10 +9,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
-import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v9.js?v=10.1.0";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.15.1 + INTERNAL AI OPERATIONAL
+ * BCGO MASTER NERVE SYSTEM v2.16.1 + FILE NERVE FOUNDATION
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -81,7 +80,9 @@ const normalizeFile = value => {
 };
 
 export function runAutonomousEngine(onCycleUpdate) {
-  const internalAI = installInternalAI();
+  let internalAI = null;
+  let internalAIStatus = "WAITING";
+  let internalAIError = null;
   if (typeof onCycleUpdate !== "function") {
     throw new TypeError("BCGO membutuhkan callback UI.");
   }
@@ -108,6 +109,57 @@ export function runAutonomousEngine(onCycleUpdate) {
   let sourceScanGeneration = 0;
 
   const firestore = { connected: false, count: 0, error: null, lastServerAt: 0 };
+  async function loadInternalAI() {
+    if (stopped || internalAI) return internalAI;
+    try {
+      const mod = await import("./cikur-internal-ai-runtime-adapter-v9.js?v=10.1.0");
+      if (typeof mod.install !== "function") throw new Error("INTERNAL_AI_ADAPTER_INVALID");
+      internalAI = mod.install();
+      internalAIStatus = "READY";
+      internalAIError = null;
+      recordEvent("INTERNAL_AI", "Internal AI adapter aktif; BCGO_STATE mulai diserahkan setelah sensor BCGO hidup.", "SYS_INTERNAL_AI_READY");
+      publishToUI(safeClone(state));
+      return internalAI;
+    } catch (primaryError) {
+      // Compatibility fallback: the current brain bridge may already be deployed
+      // under cgo-ai-browser-adapter.js. BCGO must never die merely because an
+      // optional reasoning adapter is absent.
+      try {
+        const mod = await import("./cgo-ai-browser-adapter.js?v=5.2.2");
+        if (typeof mod.install !== "function") throw new Error("BROWSER_BRAIN_ADAPTER_INVALID");
+        internalAI = mod.install();
+        internalAIStatus = "READY";
+        internalAIError = null;
+        recordEvent("INTERNAL_AI", "Internal AI browser bridge aktif melalui adapter V5.2.", "SYS_INTERNAL_AI_READY");
+        publishToUI(safeClone(state));
+        return internalAI;
+      } catch (fallbackError) {
+        internalAIStatus = "UNAVAILABLE";
+        internalAIError = fallbackError?.message || primaryError?.message || String(fallbackError);
+        state.internalAI = {
+          version:null, signal:"WAITING", classification:"BCGO_SENSOR_ONLY",
+          status:"ADAPTER_UNAVAILABLE", error:internalAIError,
+          precisionGate:{pass:false, blockers:["INTERNAL_AI_NOT_LOADED"]}, at:Date.now()
+        };
+        recordEvent("INTERNAL_AI_WAITING", "BCGO tetap hidup sebagai sensor; adapter Internal AI belum tersedia.", "SYS_INTERNAL_AI_WAITING");
+        publishToUI(safeClone(state));
+        return null;
+      }
+    }
+  }
+
+  function ingestInternalAI(snapshot) {
+    if (!internalAI || typeof internalAI.ingestBCGOState !== "function") return null;
+    try {
+      return internalAI.ingestBCGOState(snapshot);
+    } catch (error) {
+      internalAIStatus = "ERROR";
+      internalAIError = error?.message || String(error);
+      console.warn("CIKUR Internal AI intake error:", error);
+      return null;
+    }
+  }
+
   const state = {
     step: "IN",
     message: "Membangunkan Pusat Saraf Master...",
@@ -1341,10 +1393,8 @@ export function runAutonomousEngine(onCycleUpdate) {
       state.fileNerves = nerve.fileNerves;
       state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:mergedCrossFindings,relations:relations.slice(0,200),relationSummary,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),sourceIntelligence:nerve.intelligence,nerveSummary:{healthy:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='HEALTHY').length,observed:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='OBSERVED').length,review:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='REVIEW').length,anomaly:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='ANOMALY').length,unresolved:nerveFindings.length},message:failures.length ? `Scanner selesai: ${files.length} source diproses, ${failures.length} source tidak terbaca.` : mergedActionable.length ? `Scanner selesai: ${files.length} source dibaca; ${mergedActionable.length} bukti/temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} source dibaca dan dianalisis tanpa temuan struktural/cross-file.` };
       recordEvent('SOURCE_SCAN_RESULT', state.sourceScan.message, actionable.length ? 'SYS_SOURCE_FINDINGS' : 'SYS_SOURCE_CLEAN');
-      try {
-        const aiSnapshot = internalAI.ingestBCGOState(safeClone(state));
-        state.internalAI = buildInternalAIHandoff(aiSnapshot);
-      } catch (error) { console.warn('CIKUR Internal AI source-scan intake error:', error); }
+      const aiSnapshot = ingestInternalAI(safeClone(state));
+      if (aiSnapshot) state.internalAI = buildInternalAIHandoff(aiSnapshot);
       window.BCGO_STATE = safeClone(state);
       publishToUI(safeClone(state));
       publishBCGOStateToMedicine(safeClone(state));
@@ -1515,16 +1565,15 @@ export function runAutonomousEngine(onCycleUpdate) {
 
     let snapshot = safeClone(state);
     window.BCGO_STATE = snapshot;
-    try {
-      const aiSnapshot = internalAI.ingestBCGOState(snapshot);
+    const aiSnapshot = ingestInternalAI(snapshot);
+    if (aiSnapshot) {
       state.internalAI = buildInternalAIHandoff(aiSnapshot);
       snapshot = safeClone(state);
       window.BCGO_STATE = snapshot;
-    } catch (error) {
-      state.internalAI = {version:null,signal:"AI_INTAKE_ERROR",classification:"ERROR",precisionGate:{pass:false,blockers:[`INTERNAL_AI_ERROR:${error?.message||String(error)}`]},at:Date.now()};
+    } else if (!state.internalAI) {
+      state.internalAI = {version:null,signal:"WAITING",classification:"BCGO_SENSOR_ONLY",status:internalAIStatus,error:internalAIError,precisionGate:{pass:false,blockers:["INTERNAL_AI_NOT_READY"]},at:Date.now()};
       snapshot = safeClone(state);
       window.BCGO_STATE = snapshot;
-      console.warn("CIKUR Internal AI intake error:", error);
     }
     publishToUI(snapshot);
     publishBCGOStateToMedicine(snapshot);
@@ -1738,7 +1787,7 @@ export function runAutonomousEngine(onCycleUpdate) {
         // Every authoritative system_logs snapshot must pass through Internal AI.
         // The adapter itself deduplicates identical evidence, so this keeps the AI
         // synchronized without turning heartbeat/listener refreshes into new evidence.
-        try { internalAI.ingestBCGOState(window.BCGO_STATE); } catch (error) { console.warn("CIKUR Internal AI system_logs intake error:", error); }
+        ingestInternalAI(window.BCGO_STATE);
 
         if (top && `${normalizeFile(top.fileName)}|${String(top.message || "")}|${topAt}` !== previousTop) {
           interruptForTelemetry(top.fileName, top.message, top);
@@ -1793,11 +1842,11 @@ export function runAutonomousEngine(onCycleUpdate) {
     state.firestore = { ...firestore };
     state.connection = deriveConnection();
     window.BCGO_STATE = safeClone(state);
-    try {
-      const aiSnapshot = internalAI.ingestBCGOState(window.BCGO_STATE);
+    const aiSnapshot = ingestInternalAI(window.BCGO_STATE);
+    if (aiSnapshot) {
       state.internalAI = buildInternalAIHandoff(aiSnapshot);
       window.BCGO_STATE = safeClone(state);
-    } catch (error) { console.warn("CIKUR Internal AI intake error:", error); }
+    }
     publishToUI(safeClone(state));
     publishBCGOStateToMedicine(safeClone(state));
   }
@@ -1945,6 +1994,9 @@ export function runAutonomousEngine(onCycleUpdate) {
   window.BCGOBrain = brain;
   window.BCGO_STATE = safeClone(state);
   publishBCGOStateToMedicine(safeClone(state));
+  // Optional reasoning adapter: load asynchronously so a missing/stale adapter
+  // can never prevent the BCGO sensor, Firestore listener, or source scanner from booting.
+  void loadInternalAI();
   unsubscribeAuth = onAuthStateChanged(auth, user => {
     const epoch = ++authEpoch;
     verifyAdmin(user, epoch).catch(error => {
