@@ -9,10 +9,11 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
-import { install as installInternalAI } from "./cgo-ai-browser-adapter.js?v=5.2.3";
+import { install as installInternalAI } from "./cikur-internal-ai-runtime-adapter-v9.js?v=10.1.0";
+import { createInvestigationEngine } from "./cgo-ai-investigation-engine.js?v=2.1.0";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.15.1 + CIKUR GO INTERNAL AI V5.2
+ * BCGO MASTER NERVE SYSTEM v2.15.1 + INTERNAL AI OPERATIONAL
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -82,6 +83,8 @@ const normalizeFile = value => {
 
 export function runAutonomousEngine(onCycleUpdate) {
   const internalAI = installInternalAI();
+  let activeInvestigationEngine = null;
+  let activeInvestigationGeneration = 0;
   if (typeof onCycleUpdate !== "function") {
     throw new TypeError("BCGO membutuhkan callback UI.");
   }
@@ -1209,6 +1212,41 @@ export function runAutonomousEngine(onCycleUpdate) {
         const aiSnapshot = internalAI.ingestBCGOState(safeClone(state));
         state.internalAI = buildInternalAIHandoff(aiSnapshot);
       } catch (error) { console.warn('CIKUR Internal AI source-scan intake error:', error); }
+
+      // ACTIVE BRAIN: source-scan evidence is now handed to a persistent
+      // same-origin investigation engine. It investigates; it never mutates
+      // source and never bypasses Medicine/Executor proof gates.
+      try {
+        const top = latestSystemLogs[0] || null;
+        const target = normalizeFile(top?.fileName || top?.source || top?.file || state.lastTelemetryFile || '');
+        const hasActionableFinding = actionable.length > 0 || /(?:ReferenceError|is not defined|not defined)/i.test(String(top?.message || top?.error || ''));
+        if (target && hasActionableFinding) {
+          const generation = ++activeInvestigationGeneration;
+          activeInvestigationEngine = createInvestigationEngine({
+            caseId: state.activeCases?.[0]?.caseId || `BCGO-${state.cycle}`,
+            target, lastEvidence: top, sourceScan: safeClone(state.sourceScan)
+          }, {
+            sourceSurfaceComplete: state.sourceScan.status === 'CLEAN' || state.sourceScan.status === 'FINDINGS',
+            fetchSource: async file => {
+              const controller = new AbortController();
+              const timer = setTimeout(() => controller.abort(), SOURCE_SCAN_FETCH_TIMEOUT);
+              try {
+                const response = await fetch(sourceUrl(file), { method:'GET', cache:'no-store', credentials:'same-origin', signal:controller.signal });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return await response.text();
+              } finally { clearTimeout(timer); }
+            }
+          });
+          const activeBrain = await activeInvestigationEngine.step();
+          if (generation === activeInvestigationGeneration) {
+            state.internalAI = { ...(state.internalAI || {}), activeBrain: activeBrain.operationalInvestigation, investigation: activeBrain.operationalInvestigation, reasoning: { ...((state.internalAI || {}).reasoning || {}), operationalInvestigation: activeBrain.operationalInvestigation, classification: activeBrain.status || 'ACTIVE_INVESTIGATION', evidence: activeBrain.evidence || [], hypotheses: activeBrain.hypotheses || [] } };
+            publishToUI(safeClone(state));
+            publishBCGOStateToMedicine(safeClone(state));
+          }
+        }
+      } catch (error) {
+        console.warn('CIKUR Active Brain investigation error:', error);
+      }
       window.BCGO_STATE = safeClone(state);
       publishToUI(safeClone(state));
       publishBCGOStateToMedicine(safeClone(state));
@@ -1755,27 +1793,6 @@ export function runAutonomousEngine(onCycleUpdate) {
     }
   });
 
-  const internalAIProgressListener = event => {
-    if (stopped || !event?.detail) return;
-    try {
-      const snapshot = event.detail;
-      state.internalAI = buildInternalAIHandoff(snapshot);
-      state.internalAI.progress = {
-        active:true,
-        investigationStatus:snapshot?.reasoning?.investigation?.status || "UNKNOWN",
-        operationalStatus:snapshot?.reasoning?.operationalInvestigation?.status || "UNKNOWN",
-        nextProbe:snapshot?.reasoning?.investigation?.nextProbe || null,
-        at:snapshot?.at || Date.now()
-      };
-      window.BCGO_STATE = safeClone(state);
-      publishToUI(safeClone(state));
-      publishBCGOStateToMedicine(safeClone(state));
-    } catch (error) {
-      console.warn("BCGO internal AI progress sync failed:", error);
-    }
-  };
-  window.addEventListener("cikur-internal-ai-state", internalAIProgressListener);
-
   window.addEventListener("unhandledrejection", event => {
     if (stopped) return;
     const reason = event?.reason?.message || String(event?.reason || "Unhandled Promise rejection.");
@@ -1805,7 +1822,6 @@ export function runAutonomousEngine(onCycleUpdate) {
       clearInterval(refreshTimer);
       if (typeof unsubscribeAuth === "function") unsubscribeAuth();
       cleanupRealtime();
-      window.removeEventListener("cikur-internal-ai-state", internalAIProgressListener);
       try { medicineBridgeChannel?.close(); } catch {}
     }
   };
