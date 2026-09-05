@@ -3,13 +3,13 @@
  * Orchestrates approved repair/execution through an injected deterministic Executor.
  * The brain never writes source directly; it can trigger Executor execution when policy permits.
  */
-import * as Core from "./cgo-ai-core.js";
-import * as Knowledge from "./cgo-ai-knowledge.js";
-import * as Investigator from "./cgo-ai-investigator.js";
-import * as Memory from "./cgo-ai-memory.js";
-import * as Cognition from "./cgo-ai-cognition.js";
-import * as Guardian from "./cgo-ai-guardian.js";
-import * as Logic from "./cgo-ai-logic.js";
+import * as Core from "./cgo-ai-core.js?v=5.2.5-sync-20260905";
+import * as Knowledge from "./cgo-ai-knowledge.js?v=5.2.5-sync-20260905";
+import * as Investigator from "./cgo-ai-investigator.js?v=5.2.5-sync-20260905";
+import * as Memory from "./cgo-ai-memory.js?v=5.2.5-sync-20260905";
+import * as Cognition from "./cgo-ai-cognition.js?v=5.2.5-sync-20260905";
+import * as Guardian from "./cgo-ai-guardian.js?v=5.2.5-sync-20260905";
+import * as Logic from "./cgo-ai-logic.js?v=5.2.5-sync-20260905";
 
 const VERSION="1.9.0";
 

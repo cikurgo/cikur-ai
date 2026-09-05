@@ -2,7 +2,7 @@
  * Capability is not globally disabled. Authorization is policy/risk based.
  * Guardian authorizes intent; it does not write files.
  */
-import { CASE_TRANSITIONS } from "./cgo-ai-core.js";
+import { CASE_TRANSITIONS } from "./cgo-ai-core.js?v=5.2.5-sync-20260905";
 
 const VERSION="1.4.0";
 

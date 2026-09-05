@@ -5,8 +5,8 @@
  * The engine never invents source. Every conclusion must be backed by a probe result
  * produced by the injected internal probe provider.
  */
-import * as Core from "./cgo-ai-core.js";
-import * as Investigator from "./cgo-ai-investigator.js";
+import * as Core from "./cgo-ai-core.js?v=5.2.5-sync-20260905";
+import * as Investigator from "./cgo-ai-investigator.js?v=5.2.5-sync-20260905";
 
 const VERSION = "2.2.0-ACTIVE-CAUSAL-SOURCE";
 const MAX_STEPS_DEFAULT = 10;

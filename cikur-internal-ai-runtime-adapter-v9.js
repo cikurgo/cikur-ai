@@ -12,19 +12,19 @@
  * layer. This gateway composes both layers without allowing source mutation,
  * external AI, patching, or execution.
  */
-import * as FoundationCore from "./cgo-core.js";
-import * as FoundationKnowledge from "./cgo-knowledge.js";
-import * as FoundationGuardian from "./cgo-guardian.js";
-import * as Core from "./cgo-ai-core.js";
-import * as Logic from "./cgo-ai-logic.js";
-import * as Cognition from "./cgo-ai-cognition.js";
-import * as Investigator from "./cgo-ai-investigator.js";
-import * as InvestigationEngine from "./cgo-ai-investigation-engine.js";
-import * as Knowledge from "./cgo-ai-knowledge.js";
-import * as Guardian from "./cgo-ai-guardian.js";
-import * as Memory from "./cgo-ai-memory.js";
-import * as RuntimeAdapter from "./cgo-ai-runtime-adapter.js";
-import * as BrowserBridge from "./cgo-ai-browser-adapter.js";
+import * as FoundationCore from "./cgo-core.js?v=5.2.5-sync-20260905";
+import * as FoundationKnowledge from "./cgo-knowledge.js?v=5.2.5-sync-20260905";
+import * as FoundationGuardian from "./cgo-guardian.js?v=5.2.5-sync-20260905";
+import * as Core from "./cgo-ai-core.js?v=5.2.5-sync-20260905";
+import * as Logic from "./cgo-ai-logic.js?v=5.2.5-sync-20260905";
+import * as Cognition from "./cgo-ai-cognition.js?v=5.2.5-sync-20260905";
+import * as Investigator from "./cgo-ai-investigator.js?v=5.2.5-sync-20260905";
+import * as InvestigationEngine from "./cgo-ai-investigation-engine.js?v=5.2.5-sync-20260905";
+import * as Knowledge from "./cgo-ai-knowledge.js?v=5.2.5-sync-20260905";
+import * as Guardian from "./cgo-ai-guardian.js?v=5.2.5-sync-20260905";
+import * as Memory from "./cgo-ai-memory.js?v=5.2.5-sync-20260905";
+import * as RuntimeAdapter from "./cgo-ai-runtime-adapter.js?v=5.2.5-sync-20260905";
+import * as BrowserBridge from "./cgo-ai-browser-adapter.js?v=5.2.5-sync-20260905";
 
 export const VERSION = "V5.2.5-SYNCHRONIZED-MASTER-RUNTIME";
 export const ARCHITECTURE = "CGO_INTERNAL_BRAIN_SYNCHRONIZED_MASTER_GATEWAY";
