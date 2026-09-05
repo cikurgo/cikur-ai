@@ -41,12 +41,14 @@ export function classifyRiskWithGraph(input={}, knowledge=null) {
 export function authorizeAction(input={}) {
   const risk = input.knowledge ? classifyRiskWithGraph(input, input.knowledge) : classifyRisk(input);
   const verified=!!input.rootCauseVerified && !!input.sourceVerified && !!input.exactFingerprint;
+  const candidateReady=typeof input.proposedCode === "string" && input.proposedCode.trim().length>0;
   const autoIntegrity=!!input.sourceFingerprint;
   const clean=!(input.contradictoryEvidence||input.unresolvedEvidence);
   const policy=input.policy||{};
   // Automatic execution is opt-in: only an explicit true may permit it.
   // Undefined and false both require human approval after proof/risk gates pass.
   if(!verified || !clean) return {decision:"BLOCKED",risk,reason:"PROOF_CHAIN_INCOMPLETE_OR_CONTRADICTORY",policyVersion:policy.version||"1"};
+  if(!candidateReady) return {decision:"BLOCKED",risk,reason:"CONCRETE_SOLUTION_NOT_READY",policyVersion:policy.version||"1"};
   if(risk!=="CRITICAL" && risk!=="HIGH" && !autoIntegrity && input.allowAutomaticExecution===true)
     return {decision:"BLOCKED",risk,reason:"SOURCE_INTEGRITY_BINDING_REQUIRED",policyVersion:policy.version||"1"};
   if(risk==="CRITICAL") return {decision:"HUMAN_APPROVAL_REQUIRED",risk,reason:"CRITICAL_CHANGE",policyVersion:policy.version||"1"};

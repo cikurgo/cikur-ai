@@ -9,10 +9,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
-import { install as installInternalAI } from "./cgo-ai-browser-adapter.js?v=5.1.0";
+import { install as installInternalAI } from "./cgo-ai-browser-adapter.js?v=5.2.2";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.15.1 + CIKUR GO INTERNAL AI V5
+ * BCGO MASTER NERVE SYSTEM v2.15.1 + CIKUR GO INTERNAL AI V5.2
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -1755,6 +1755,27 @@ export function runAutonomousEngine(onCycleUpdate) {
     }
   });
 
+  const internalAIProgressListener = event => {
+    if (stopped || !event?.detail) return;
+    try {
+      const snapshot = event.detail;
+      state.internalAI = buildInternalAIHandoff(snapshot);
+      state.internalAI.progress = {
+        active:true,
+        investigationStatus:snapshot?.reasoning?.investigation?.status || "UNKNOWN",
+        operationalStatus:snapshot?.reasoning?.operationalInvestigation?.status || "UNKNOWN",
+        nextProbe:snapshot?.reasoning?.investigation?.nextProbe || null,
+        at:snapshot?.at || Date.now()
+      };
+      window.BCGO_STATE = safeClone(state);
+      publishToUI(safeClone(state));
+      publishBCGOStateToMedicine(safeClone(state));
+    } catch (error) {
+      console.warn("BCGO internal AI progress sync failed:", error);
+    }
+  };
+  window.addEventListener("cikur-internal-ai-state", internalAIProgressListener);
+
   window.addEventListener("unhandledrejection", event => {
     if (stopped) return;
     const reason = event?.reason?.message || String(event?.reason || "Unhandled Promise rejection.");
@@ -1784,6 +1805,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       clearInterval(refreshTimer);
       if (typeof unsubscribeAuth === "function") unsubscribeAuth();
       cleanupRealtime();
+      window.removeEventListener("cikur-internal-ai-state", internalAIProgressListener);
       try { medicineBridgeChannel?.close(); } catch {}
     }
   };

@@ -18,7 +18,7 @@ export function deliberate(context={}) {
   const evidence=context.evidence||[];
   const verified=evidence.filter(e=>e.status==="VERIFIED");
   const contradictions=context.contradictions||[];
-  const unresolved=evidence.filter(e=>e.status==="UNVERIFIED");
+  const unresolved=evidence.filter(e=>e.status==="UNVERIFIED" && e?.metadata?.proofRequired!==false);
   let conclusion="INSUFFICIENT_EVIDENCE";
   if(contradictions.length) conclusion="CONTRADICTORY_EVIDENCE";
   else if(context.proofComplete===true) conclusion="READY_FOR_ACTION_POLICY";

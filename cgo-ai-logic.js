@@ -17,13 +17,15 @@ export function evaluate(caseData, policy={}, knowledge=null){
   const c=clone(caseData||{});
   const verified=verifiedEvidence(c);
   const contradictory=contradictions(c);
-  const unresolved=(c.evidence||[]).some(e=>e?.status!=="VERIFIED");
+  const unresolved=(c.evidence||[]).some(e=>e?.status!=="VERIFIED" && e?.metadata?.proofRequired!==false);
   const rootIds=Array.isArray(c.rootCause?.evidenceIds)?c.rootCause.evidenceIds:[];
   const rootEvidenceBound=!!c.rootCause && rootIds.length>0 && new Set(rootIds).size===rootIds.length && rootIds.every(id=>verified.some(e=>e.id===id));
   const rootHypothesis = c.hypotheses?.find(h=>h?.id===c.rootCause?.hypothesisId);
   const rootHypothesisEvidence = Array.isArray(rootHypothesis?.evidenceIds) ? rootHypothesis.evidenceIds : [];
   const independentRootSupport = new Set(rootIds.map(id=>{const e=verified.find(x=>x.id===id); return e?.source || e?.metadata?.file || e?.type || e?.id;})).size>=2 || rootIds.length>=2;
   const causalRootVerified = rootEvidenceBound && !!rootHypothesis && Number(rootHypothesis.score)>=0.60 &&
+    Number(c.rootCause?.hypothesisScore)===Number(rootHypothesis.score) &&
+    String(c.rootCause?.statement || "").trim()===String(rootHypothesis.statement || "").trim() &&
     rootHypothesisEvidence.length>0 && rootIds.every(id=>rootHypothesisEvidence.includes(id)) && independentRootSupport;
   const rootVerified=causalRootVerified && c.state!=="CONTRADICTORY_EVIDENCE";
   const sourceEvidenceBound=!!c.exactSource && Array.isArray(c.exactSource.evidenceIds) &&
@@ -63,6 +65,7 @@ export function evaluate(caseData, policy={}, knowledge=null){
     unresolvedEvidence:proof.unresolved,
     severity:c.severity,
     target:c.target,
+    proposedCode:c.exactSource?.proposedCode || null,
     knowledge,
     policy
   });
@@ -92,6 +95,8 @@ export function buildAction(caseData, authorization){
   const auth=clone(authorization||{});
   if(c.state!=="SOURCE_VERIFIED" || !c.rootCause || !c.exactSource)
     return {action:"INVESTIGATE",executable:false,reason:"PROOF_CHAIN_INCOMPLETE"};
+  if(typeof c.exactSource.proposedCode!=="string" || !c.exactSource.proposedCode.trim())
+    return {action:"INVESTIGATE",executable:false,reason:"CONCRETE_SOLUTION_NOT_READY"};
   if(auth.decision==="AUTO_ALLOWED") return {
     action:"AUTO_PATCH_AND_EXECUTE_INTENT", executable:true,
     authorizationId:auth.authorizationId||null, caseId:c.caseId,

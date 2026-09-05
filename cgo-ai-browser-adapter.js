@@ -1,20 +1,23 @@
 /* CIKUR GO Internal AI — Browser Synchronization Bridge
- * Binds the V5 eight-module brain to the existing BCGO / Medicine contracts.
+ * Binds the V5.2 active-investigation brain to the existing BCGO / Medicine contracts.
  * No external AI/API. No source mutation. Medicine remains proof authority.
  */
 import * as Core from "./cgo-ai-core.js";
 import * as Knowledge from "./cgo-ai-knowledge.js";
 import * as Investigator from "./cgo-ai-investigator.js";
+import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js";
 import * as Cognition from "./cgo-ai-cognition.js";
 import * as Logic from "./cgo-ai-logic.js";
 import * as Memory from "./cgo-ai-memory.js";
 import { createRuntime } from "./cgo-ai-runtime-adapter.js";
 
-const VERSION = "V5-BROWSER-BRIDGE-1.1.0";
+const VERSION = "V5.2-BROWSER-BRIDGE-1.2.1";
 const runtime = createRuntime({});
 const memory = Memory.createMemory();
 const caseIds = new Map();
 const evidenceTokens = new Map();
+const activeEngines = new Map();
+const activeRuns = new Map();
 let knowledge = Knowledge.createKnowledgeStore();
 let latest = null;
 
@@ -95,7 +98,8 @@ function mapEvidence(raw, sourceKind = "BCGO") {
       file: file || null,
       sourceKind,
       line: raw?.line ?? raw?.lineNumber ?? null,
-      evidenceStrength: raw?.evidenceStrength || null
+      evidenceStrength: raw?.evidenceStrength || null,
+      proofRequired: raw?.proofRequired !== false
     }
   };
 }
@@ -121,6 +125,10 @@ function upsertBCGOCase(item, state) {
     reportedAt: item?.reportedAt || state?.lastTelemetryAt || now()
   };
   const ev = mapEvidence(raw, raw?.type || "BCGO_TELEMETRY");
+  // Runtime telemetry is an observation signal, not source proof. It must not
+  // permanently block a later proof chain merely because the original symptom
+  // remains in the case ledger.
+  ev.metadata.proofRequired = false;
   const t = token(ev);
   if (evidenceTokens.get(caseId) !== t) {
     const current = runtime.getCase(caseId);
@@ -131,6 +139,124 @@ function upsertBCGOCase(item, state) {
   }
   caseIds.set(source, caseId);
   return c;
+}
+
+
+function investigationFiles(state) {
+  const sources = state?.sourceScan?.sources;
+  if (sources && typeof sources === "object") return Object.keys(sources).map(normalizeFile).filter(Boolean);
+  const states = state?.sourceScan?.fileStates;
+  if (states && typeof states === "object") return Object.keys(states).map(normalizeFile).filter(Boolean);
+  return [];
+}
+
+function createInternalProbeProvider(state) {
+  const files = investigationFiles(state);
+  return {
+    sourceSurfaceComplete: state?.sourceScan?.status === "CLEAN" || state?.sourceScan?.status === "FINDINGS",
+    async listFiles() { return files.slice(); },
+    async readSource(file) {
+      const normalized = normalizeFile(file);
+      if (!normalized) throw new Error("SOURCE_FILE_REQUIRED");
+      const url = new URL(normalized, window.location.href).href;
+      const response = await fetch(url, {method:"GET", cache:"no-store", credentials:"same-origin"});
+      if (!response.ok) throw new Error(`SOURCE_READ_HTTP_${response.status}:${normalized}`);
+      const source = await response.text();
+      if (!source.trim()) throw new Error(`SOURCE_EMPTY:${normalized}`);
+      return {file:normalized, source, fingerprint:Core.contentFingerprint(source)};
+    }
+  };
+}
+
+function getActiveEngine(caseId, caseData) {
+  let engine = activeEngines.get(caseId);
+  // Evidence invalidation starts a new investigation generation. Never keep a
+  // probe cache from an older case revision after new telemetry/source arrives.
+  if (!engine || Number(engine.state?.caseRevision ?? -1) !== Number(caseData?.revision ?? 0)) {
+    engine = ActiveInvestigation.createInvestigationEngine(caseData, knowledge, {maxSteps:10, maxFiles:40});
+    engine.state.caseRevision = Number(caseData?.revision ?? 0);
+    activeEngines.set(caseId, engine);
+  }
+  return engine;
+}
+
+async function runActiveInvestigation(caseId, state) {
+  if (!caseId || activeRuns.has(caseId)) return;
+  const current = runtime.getCase(caseId);
+  if (!current) return;
+  const startRevision = Number(current.revision ?? 0);
+  const engine = getActiveEngine(caseId, current);
+  const provider = createInternalProbeProvider(state);
+  const runPromise = (async () => {
+    try {
+      const out = await engine.run(current, provider, knowledge, {maxSteps:6});
+      const before = runtime.getCase(caseId);
+      if (!before) return;
+      // If telemetry/evidence arrived while probes were running, the result is
+      // stale. Do not merge stale hypotheses/proof into the newer authoritative
+      // case; the finally block will schedule a fresh generation.
+      if (Number(before.revision ?? 0) !== startRevision) {
+        emitBrainEvent(caseId, "STALE_INVESTIGATION_RESULT_DROPPED", {startRevision,currentRevision:before.revision,steps:out.steps});
+        return;
+      }
+
+      // Sync only new evidence into the authoritative runtime. The engine never
+      // writes source; runtime.addEvidence invalidates old proof before accepting it.
+      const known = new Set(before.evidence.map(e => e.id));
+      const newEvidence = out.caseData.evidence.filter(e => !known.has(e.id));
+      if (newEvidence.length) {
+        const startSeq = Number(before.event?.sequence ?? -1);
+        const stamped = newEvidence.map((e,i) => ({...e, eventId:`CGO-PROBE:${caseId}:${startSeq+i+1}`, sequence:startSeq+i+1, source:e.source || "CGO_INTERNAL_PROBE"}));
+        try { runtime.addEvidence(caseId, stamped); } catch (err) {
+          emitBrainEvent(caseId, "PROBE_SYNC_REJECTED", {error:String(err?.message || err), evidenceIds:newEvidence.map(e=>e.id)});
+        }
+      }
+
+      let synced = runtime.getCase(caseId) || before;
+      if (out.caseData.hypotheses?.length) {
+        try { synced = runtime.reason(caseId, out.caseData.hypotheses); } catch {}
+      }
+      if (out.caseData.rootCause && !synced.rootCause) {
+        try { synced = runtime.proveRootCause(caseId, out.caseData.rootCause); } catch {}
+      }
+      if (out.caseData.exactSource && !synced.exactSource) {
+        try { synced = runtime.proveSource(caseId, out.caseData.exactSource); } catch {}
+      }
+
+      emitBrainEvent(caseId, "ACTIVE_INVESTIGATION_STEP", {
+        status:out.status,
+        steps:out.steps,
+        cycle:out.investigation?.cycle || 0,
+        probeLog:out.investigation?.probeLog || [],
+        evidenceAdded:newEvidence.length,
+        selectedHypothesisId:synced?.selectedHypothesis?.id || null,
+        state:synced?.state || null
+      });
+
+      latest = compatibleSnapshot(caseId, "ACTIVE_INVESTIGATION");
+      try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-state", {detail:latest})); } catch {}
+    } catch (err) {
+      emitBrainEvent(caseId, "ACTIVE_INVESTIGATION_ERROR", {error:String(err?.message || err)});
+    } finally {
+      activeRuns.delete(caseId);
+      const latestCase = runtime.getCase(caseId);
+      if (latestCase && Number(latestCase.revision ?? 0) !== startRevision) {
+        // A new event may have arrived while this generation was running.
+        // Re-enter with the newest case after the current promise fully closes.
+        setTimeout(() => {
+          const fresh = runtime.getCase(caseId);
+          if (fresh) void runActiveInvestigation(caseId, state);
+        }, 0);
+      }
+    }
+  })();
+  activeRuns.set(caseId, runPromise);
+  await runPromise;
+}
+
+function emitBrainEvent(caseId, type, payload) {
+  const detail = {version:VERSION,caseId,type,at:Date.now(),payload:clone(payload || {})};
+  try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-investigation", {detail})); } catch {}
 }
 
 function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY") {
@@ -151,8 +277,11 @@ function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY") {
   }
 
   const evaluation = Logic.evaluate(c, { allowAutomaticExecution: false }, knowledge);
-  const investigation = Investigator.createInvestigation(c, knowledge);
-  const probe = Investigator.nextProbe(investigation, c, knowledge);
+  const active = activeEngines.get(caseId);
+  const investigation = active ? active.snapshot() : Investigator.createInvestigation(c, knowledge);
+  const probe = active && active.state.status === "ACTIVE"
+    ? (active.state.probeLog.at(-1) || Investigator.nextProbe(investigation, c, knowledge))
+    : Investigator.nextProbe(investigation, c, knowledge);
   const deliberate = Cognition.deliberate({
     evidence: c.evidence,
     rootCause: c.rootCause,
@@ -236,6 +365,11 @@ export function install() {
       }
       latest = compatibleSnapshot(primary?.caseId, primary ? "LIVE_TELEMETRY" : "NO_ACTIVE_CASE");
       try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-state", { detail: latest })); } catch {}
+      if (primary?.caseId) {
+        // Fire-and-progress: the bridge remains responsive while CGO performs its
+        // internal source probes asynchronously. No external service is called.
+        runActiveInvestigation(primary.caseId, state).catch(()=>{});
+      }
       try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-guardian", { detail: latest.guardian })); } catch {}
       return clone(latest);
     },
@@ -245,6 +379,15 @@ export function install() {
     },
     logic(caseId, policy = {}) {
       return runtime.logic(caseId, policy);
+    },
+    async investigate(caseId, state = {}, options = {}) {
+      if (!caseId) throw new Error("CASE_ID_REQUIRED");
+      const current = runtime.getCase(caseId);
+      if (!current) throw new Error("CASE_NOT_FOUND");
+      const engine = getActiveEngine(caseId, current);
+      const provider = createInternalProbeProvider(state);
+      const out = await engine.run(current, provider, knowledge, options);
+      return clone(out);
     },
     getRuntime() { return runtime; }
   };

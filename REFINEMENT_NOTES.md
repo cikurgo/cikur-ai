@@ -1,58 +1,70 @@
-# CIKUR GO Internal AI — Refined v2
+# CIKUR GO Internal AI V5.2 — ACTIVE INVESTIGATION BRAIN
 
-Baseline: the 8 uploaded JavaScript modules supplied for the refinement pass.
+## Purpose
+This pass converts the internal CGO brain from a probe-planning/evaluation layer into an active, evidence-driven investigation loop.
 
-## Corrections made
-1. Fixed the `allowAutomaticExecution` boolean inversion across runtime/logic authorization flow.
-   - `false` now means human approval is required.
-   - `true`/undefined no longer bypasses the source-integrity gate.
-2. Passed the Knowledge/System Graph into Guardian risk evaluation so dependency blast-radius risk is actually used.
-3. Hardened `INSERT_EXACT` so an ambiguous anchor is rejected.
-4. Hardened patch verification so INSERT/REPLACE verification compares the exact expected resulting source rather than merely checking that the proposed text exists somewhere.
-5. Allowed telemetry/evidence sequence `0` as the first event by initializing an empty event ledger at `-1`.
-6. Kept the internal-only architecture: no external AI/API was introduced, and the brain modules still do not directly mutate source.
+## Core change
+Added `cgo-ai-investigation-engine.js`.
 
-## Intentionally unchanged
-- Human approval remains required for HIGH/CRITICAL risk.
-- Memory remains advisory and never proof.
-- Medicine/brain reasoning does not directly write source; execution remains through the injected executor.
-- No third-party AI/API was added.
+The engine can now, through an injected same-origin internal probe provider:
+- read the real deployed source;
+- search symbol call sites;
+- search symbol definitions;
+- inspect import/export relationships;
+- inspect HTML script loading/module context;
+- inspect basic HTML structural integrity;
+- inspect registered dependency-graph relations;
+- record every probe as explicit evidence with provenance;
+- build competing hypotheses from collected evidence;
+- re-evaluate after each probe;
+- attempt causal root-cause proof only after required evidence exists;
+- bind an exact source segment to the current source fingerprint;
+- stop only at a proof state or an investigation yield/block state.
+
+## Safety
+- No external AI/API was introduced.
+- The active engine never writes repository source.
+- Source is read through the existing deployment origin only.
+- Raw BCGO runtime telemetry is observational and does not permanently block a later proof chain.
+- Exact source is bound to the current source fingerprint.
+- Human approval and Guardian/Executor gates remain unchanged.
+
+## Browser integration
+`cgo-ai-browser-adapter.js` now:
+- keeps a persistent active investigation engine per case;
+- runs bounded asynchronous internal probe cycles after BCGO intake;
+- synchronizes newly produced evidence back into the authoritative runtime;
+- synchronizes hypotheses/root-cause/source proof through the runtime gates;
+- dispatches `cikur-internal-ai-investigation` progress events;
+- updates the existing `cikur-internal-ai-state` snapshot after asynchronous progress.
+
+`bcgo.js` now listens for asynchronous internal-AI state updates and republishes the updated brain state to the BCGO UI and Medicine bridge without requiring a page refresh.
+
+## Causal hardening
+A generic "definition exists" observation is not treated as a root cause by itself. The current module-boundary proof path requires:
+- a runtime/HTML handler reference;
+- a verified definition in the referenced module;
+- a verified `<script type="module">` loading context for that provider.
+
+A missing-symbol path requires both a verified call-site and a verified absence across the scanned source surface.
+
+## Validation
+- All JS syntax checks: PASS.
+- Undefined-symbol active investigation self-test: PASS.
+- Module-boundary causal gate self-test: PASS.
+- Classic/global definition negative causal gate self-test: PASS.
+- No automatic patch/execution was introduced.
+
+## Deployment note
+Keep the existing production asset `cikurgoicon.png` and the existing Firebase configuration/permissions unchanged. This package focuses on the CGO brain and its browser synchronization bridge.
 
 
-## V3 Deep-Hardening Pass
-- Runtime authorization now re-runs the complete Logic proof chain; truthy `rootCause`/`exactSource` objects can no longer bypass proof gates.
-- Exact-source proof now requires at least one VERIFIED, exact/source-bound evidence item tied to the claimed file or source fingerprint.
-- Authorization binding now includes case revision and a deterministic fingerprint of the proposed code, preventing post-authorization proposal mutation from being executed.
-- Execution rejects stale revision/proposal mismatches before dispatch.
-- Root-cause statements must be non-empty before verification.
-- Invalid exact-source proof now fails closed into `SOURCE_NOT_VERIFIED` without crashing the state machine.
-- No external AI/API introduced; the internal-only architecture and human-control boundaries remain intact.
-- V3 security self-test passed: authorization bypass blocked, exact-source gate blocked, and ambiguous INSERT anchor blocked.
-
-
-## V5 hardening
-- Automatic execution is now explicit opt-in: `allowAutomaticExecution` must be exactly `true`; undefined is human approval, not permission.
-- Removed the weaker existing-plan authorization path; plan reuse now depends on the full Logic proof chain.
-- Plan cache binding now includes case revision and proposed-code fingerprint.
-- Blocked authorizations cannot be consumed.
-- Cognition reports `READY_FOR_ACTION_POLICY` only when the complete Logic proof chain is complete, preventing an earlier UI-level readiness signal from outrunning Guardian/Logic.
-- Runtime `deliberate()` now supplies the actual Logic proof-complete result.
-
-- Added explicit causal root-cause proof: a verified root cause must bind to an actual scored hypothesis (`hypothesisId`), meet score >= 0.60, use evidence belonging to that hypothesis, and have independent support (two source/type groups or two evidence items).
-- Logic now exposes `causalRootVerified` separately from simple evidence binding.
-- Snapshot restore validates the causal root-cause binding instead of trusting shape alone.
-
-## V5.1 Production Synchronization Audit
-
-Additional hardening performed after full cross-file audit:
-
-1. Evidence status integrity: HIGH evidence strength no longer upgrades an evidence item to VERIFIED. Only explicit VERIFIED status is treated as verified proof.
-2. Guardian graph binding: Logic now passes the active Knowledge Graph to Guardian so dependency blast radius can affect risk classification.
-3. Runtime knowledge synchronization: browser bridge synchronizes its knowledge graph into the runtime.
-4. Action-plan lifecycle: verified proof remains valid through CANDIDATE_READY / EXECUTOR_REVIEW / HUMAN_APPROVAL states.
-5. Action-plan revision binding: the generated action plan records its post-transition revision, preventing false stale-proof rejection.
-6. Plan reuse: a still-live authorization/plan is reused only when its decision, risk, proof fingerprints, file, operation and revision still match.
-7. Runtime execution was tested for normal execution, validation, and stale-source rejection.
-8. Snapshot restore was tested with an executable authorization and preserved revision binding.
-
-Result: V5.1 integration, runtime execution, and snapshot restore self-tests PASS.
+## Pre-test audit hardening — 2026-09-05
+- Fixed symbol-call classification so function/method declarations are not falsely recorded as runtime call sites.
+- Missing-symbol absence proof is now allowed only when the source surface is explicitly complete; partial scans cannot be described as whole-surface absence.
+- Added investigation-generation invalidation: new case revisions no longer reuse stale probe caches.
+- Added stale-run protection: if telemetry/evidence changes while a probe run is active, the stale result is dropped and a fresh investigation generation is scheduled.
+- Root-cause verification now binds the statement and hypothesis score to the actual selected hypothesis. Invalid re-verification is non-destructive when a valid proof already exists.
+- Guardian/Logic/Core action gates now require a concrete non-empty proposed solution before any execution authorization/action can be produced. Root-cause/source proof remains distinct from solution readiness.
+- Cache-busting versions were advanced for the updated browser bridge (`5.2.2`) and BCGO bridge asset (`2.15.2` in the page import must be applied in the production `bcgo.html`).
+- Validation after hardening: all JS syntax checks pass; active missing-symbol, module-boundary, incomplete-surface, negative-global, candidate-gate, and deterministic execution tests pass.

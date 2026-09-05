@@ -178,7 +178,10 @@ export function reason(caseData, hypotheses=[]) {
 export function verifyRootCause(caseData, rootCause) {
   const c = structuredClone(caseData);
   if(typeof rootCause?.statement!=="string" || !rootCause.statement.trim()) {
-    c.rootCause=null;
+    // Never destroy an already-proven root cause because a later malformed
+    // verification request was submitted. New evidence invalidates proof at
+    // ingest time; a bad re-verification request must be non-destructive.
+    if(c.rootCause) return c;
     transition(c,"INSUFFICIENT_EVIDENCE");
     c.updatedAt=now(); c.revision++;
     return c;
@@ -191,18 +194,25 @@ export function verifyRootCause(caseData, rootCause) {
   const independentSources = new Set(evidence.map(e=>e.source || e.metadata?.file || e.type || e.id));
   const independentSupport = independentSources.size>=2 || evidence.length>=2;
   const causalScore = Number(hypothesis?.score);
+  const statementBound = !!hypothesis && String(rootCause.statement).trim() === String(hypothesis.statement || "").trim();
   const allVerified = required.length>0 && evidence.length===required.length &&
     evidence.every(e=>e.status==="VERIFIED") && !detectContradictions(evidence).length &&
-    !!hypothesis && causalScore>=0.60 && hypothesisEvidence.length>0 &&
+    !!hypothesis && statementBound && causalScore>=0.60 && hypothesisEvidence.length>0 &&
     required.every(id=>hypothesisEvidence.includes(id)) && independentSupport;
-  c.rootCause = allVerified ? {
+  if(!allVerified) {
+    if(c.rootCause) return c;
+    transition(c,"INSUFFICIENT_EVIDENCE");
+    c.updatedAt=now(); c.revision++;
+    return c;
+  }
+  c.rootCause = {
     statement: rootCause.statement,
     hypothesisId,
     hypothesisScore: causalScore,
     evidenceIds: required,
     verifiedAt: now()
-  } : null;
-  transition(c,allVerified ? "ROOT_CAUSE_VERIFIED" : "INSUFFICIENT_EVIDENCE");
+  };
+  transition(c,"ROOT_CAUSE_VERIFIED");
   c.updatedAt = now(); c.revision++;
   return c;
 }
@@ -221,8 +231,14 @@ export function verifyExactSource(caseData, source) {
     source.evidenceIds.every(id => c.rootCause.evidenceIds.includes(id)) &&
     exactBoundEvidence.length>0 &&
     source.contentFingerprint === contentFingerprint(source.originalCode);
-  c.exactSource = valid ? {...source, verifiedAt:now()} : null;
-  transition(c,valid ? "SOURCE_VERIFIED" : "SOURCE_NOT_VERIFIED");
+  if(!valid) {
+    if(c.exactSource) return c;
+    transition(c,"SOURCE_NOT_VERIFIED");
+    c.updatedAt = now(); c.revision++;
+    return c;
+  }
+  c.exactSource = {...source, verifiedAt:now()};
+  transition(c,"SOURCE_VERIFIED");
   c.updatedAt = now(); c.revision++;
   return c;
 }
@@ -231,8 +247,9 @@ export function buildActionPlan(caseData, authorization) {
   const c = structuredClone(caseData);
   const proofState = ["SOURCE_VERIFIED","CANDIDATE_READY","EXECUTOR_REVIEW","HUMAN_APPROVAL"].includes(c.state);
   const verified = proofState && !!c.rootCause && !!c.exactSource;
+  const candidateReady = verified && typeof c.exactSource?.proposedCode === "string" && c.exactSource.proposedCode.trim().length>0;
   const decision = authorization?.decision || "BLOCKED";
-  const action = !verified ? "INVESTIGATE" :
+  const action = !candidateReady ? "INVESTIGATE" :
     decision==="AUTO_ALLOWED" ? "AUTO_PATCH_AND_EXECUTE_INTENT" :
     decision==="HUMAN_APPROVAL_REQUIRED" ? "HUMAN_APPROVAL_PATCH_AND_EXECUTE" :
     "BLOCKED";
