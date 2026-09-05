@@ -397,7 +397,7 @@ function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = nu
     };
   }
 
-  const evaluation = Logic.evaluate(c, { allowAutomaticExecution: false }, knowledge);
+  const evaluation = Logic.evaluate(c, { allowAutomaticExecution: true, automaticPatch: true, automaticExecution: true }, knowledge);
   const active = activeEngines.get(caseId);
   const investigation = active ? active.snapshot() : Investigator.createInvestigation(c, knowledge);
   const probe = active && active.state.status === "ACTIVE"
@@ -594,7 +594,7 @@ export function reason(context = {}, history = {}) {
     }
   }
 
-  const evaluation = Logic.evaluate(c, { allowAutomaticExecution: false }, knowledge);
+  const evaluation = Logic.evaluate(c, { allowAutomaticExecution: true, automaticPatch: true, automaticExecution: true }, knowledge);
   const deliberate = Cognition.deliberate({
     evidence: c.evidence,
     rootCause: c.rootCause,
