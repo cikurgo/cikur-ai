@@ -1,7 +1,8 @@
-/* CIKUR GO Internal Investigator - Upgraded v1.3.0
- * Enhanced multi-hop predictive probing and advanced discrimination scoring.
+/* CIKUR GO Internal Investigator
+ * Information-gain oriented internal investigation orchestration.
+ * Never invents source; probes are ranked from observed evidence and graph structure.
  */
-const VERSION="1.3.0";
+const VERSION="1.2.0";
 const now=()=>new Date().toISOString();
 
 export function createInvestigation(caseData, knowledge={}) {
@@ -9,7 +10,7 @@ export function createInvestigation(caseData, knowledge={}) {
     investigationId:`inv_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,
     caseId:caseData.caseId,
     status:"ACTIVE",
-    objective:"PROVE_ROOT_CAUSE_AND_EXACT_SOURCE_ADVANCED",
+    objective:"PROVE_ROOT_CAUSE_AND_EXACT_SOURCE",
     requests:[],
     findings:[],
     visitedNodes:[],
@@ -47,6 +48,10 @@ function nodeEvidence(caseData,nodeId){
       (Array.isArray(m.relatedNodeIds)&&m.relatedNodeIds.includes(nodeId));
   });
 }
+function hypothesisCoverage(caseData,nodeId){
+  const nodeIds=new Set((caseData?.hypotheses||[]).flatMap(h=>Array.isArray(h.nodeIds)?h.nodeIds:[]));
+  return nodeIds.has(nodeId)?1:0;
+}
 export function rankProbes(inv,caseData,knowledge={}) {
   const graph=knowledge||{};
   const visited=new Set(inv?.visitedNodes||[]);
@@ -76,19 +81,19 @@ export function rankProbes(inv,caseData,knowledge={}) {
     const coverage= Math.min(1,hyp/totalHyp);
     const novelty=verified===0?1:Math.max(0,1-(verified/3));
     const score=Math.max(0,Math.min(1,
-      depthValue*0.12 + coverage*0.22 + novelty*0.26 + (unresolved?0.30:0.10) + (conflict?0.10:0)
+      depthValue*0.10 + coverage*0.20 + novelty*0.25 + (unresolved?0.35:0.05) + (conflict?0.10:0)
     ));
-    return {type:"DEPENDENCY_TRACE",nodeId:d.nodeId,nodeName:node.name||null,depth:d.depth,edgeId:d.edgeId,score,reason:"Advanced multi-hop predictive discrimination"};
+    return {type:"DEPENDENCY_TRACE",nodeId:d.nodeId,nodeName:node.name||null,depth:d.depth,edgeId:d.edgeId,score,reason:"Highest expected discrimination among unvisited dependencies"};
   }).sort((a,b)=>b.score-a.score||a.depth-b.depth||String(a.nodeId).localeCompare(String(b.nodeId)));
   return candidates;
 }
 export function nextProbe(inv, caseData, knowledge={}) {
   const verified=caseData?.evidence?.filter(e=>e.status==="VERIFIED")||[];
   const exact=verified.filter(e=>e.exact);
-  if(!verified.length) return {type:"SOURCE_ACQUISITION",reason:"No verified evidence available",score:1};
+  if(!verified.length) return {type:"SOURCE_ACQUISITION",reason:"No verified evidence",score:1};
   if(!caseData.rootCause){
     const ranked=rankProbes(inv,caseData,knowledge);
-    if(ranked.length) return {type:"DEPENDENCY_TRACE",reason:"Probe selected by advanced information gain",score:ranked[0].score,nodeIds:[ranked[0].nodeId],candidates:ranked.slice(0,5)};
+    if(ranked.length) return {type:"DEPENDENCY_TRACE",reason:"Probe selected by expected information gain",score:ranked[0].score,nodeIds:[ranked[0].nodeId],candidates:ranked.slice(0,5)};
     const targetNodes=(knowledge.nodes||[]).filter(n=>n.name===caseData.target||n.id===caseData.target).map(n=>n.id);
     return targetNodes.length?{type:"DEPENDENCY_TRACE",reason:"Root cause not verified",nodeIds:targetNodes,score:.5}:
       {type:"ROOT_CAUSE_PROOF",reason:"Root cause not verified",score:.4};

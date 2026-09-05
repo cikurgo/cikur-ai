@@ -1,7 +1,5 @@
-/* CIKUR GO Internal Knowledge / System Graph - Upgraded v1.3.0
- * Enhanced metadata protection and smart dependency impact scoring.
- */
-const VERSION="1.3.0";
+/* CIKUR GO Internal AI Knowledge / System Graph */
+const VERSION="1.2.0";
 const now=()=>new Date().toISOString();
 
 export function createKnowledgeStore(seed={}) {
@@ -38,12 +36,16 @@ export function upsertNode(store,node) {
   if(!node||typeof node!=="object"||Array.isArray(node)) throw new Error("KNOWLEDGE_NODE_REQUIRED");
   const nodeId=node.id||nodeKey(node);
   const prior=s.nodes.find(x=>x.id===nodeId);
+  // FIX: a partial upsert (e.g. only updating metadata) must not silently wipe an
+  // already-verified status or overwrite real provenance (audit trail: who/what/when
+  // observed this node) with a fabricated "just observed now" record. Only fall back
+  // to defaults when there is no prior node and the caller supplied nothing.
   const n={
     ...node,
     id:nodeId,
     updatedAt:now(),
     status:node.status || prior?.status || "OBSERVED",
-    provenance:node.provenance || prior?.provenance || {source:"INTERNAL_GRAPH_ENHANCED",observedAt:now()}
+    provenance:node.provenance || prior?.provenance || {source:"INTERNAL_GRAPH",observedAt:now()}
   };
   if(prior && JSON.stringify(immutableNodeFields(prior))!==JSON.stringify(immutableNodeFields(n)))
     throw new Error(`KNOWLEDGE_NODE_IDENTITY_COLLISION:${n.id}`);
