@@ -2,16 +2,16 @@
  * Binds the V5.2 active-investigation brain to the existing BCGO / Medicine contracts.
  * No external AI/API. No source mutation. Medicine remains proof authority.
  */
-import * as Core from "./cgo-ai-core.js?v=20260906-2015-chatlive8";
-import * as Knowledge from "./cgo-ai-knowledge.js?v=20260906-2015-chatlive8";
-import * as Investigator from "./cgo-ai-investigator.js?v=20260906-2015-chatlive8";
-import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js?v=20260906-2015-chatlive8";
-import * as Cognition from "./cgo-ai-cognition.js?v=20260906-2015-chatlive8";
-import * as Logic from "./cgo-ai-logic.js?v=20260906-2015-chatlive8";
-import * as Memory from "./cgo-ai-memory.js?v=20260906-2015-chatlive8";
-import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260906-2015-chatlive8";
+import * as Core from "./cgo-ai-core.js?v=20260906-2045-chatlive9";
+import * as Knowledge from "./cgo-ai-knowledge.js?v=20260906-2045-chatlive9";
+import * as Investigator from "./cgo-ai-investigator.js?v=20260906-2045-chatlive9";
+import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js?v=20260906-2045-chatlive9";
+import * as Cognition from "./cgo-ai-cognition.js?v=20260906-2045-chatlive9";
+import * as Logic from "./cgo-ai-logic.js?v=20260906-2045-chatlive9";
+import * as Memory from "./cgo-ai-memory.js?v=20260906-2045-chatlive9";
+import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260906-2045-chatlive9";
 
-const VERSION = "V5.3-BROWSER-BRIDGE-2.7.0-LIVE-CONVERSATION-ORCHESTRATOR";
+const VERSION = "V5.3-BROWSER-BRIDGE-2.8.0-TARGET-TRUTH-LIVE-CHAT";
 const INTERNAL_AUTO_POLICY = Object.freeze({
   version:"CIKUR-INTERNAL-AUTO-1",
   allowAutomaticExecution:true,
@@ -542,10 +542,18 @@ function chatSourceFiles(state = {}) {
   return [...files].filter(Boolean);
 }
 
+function explicitFileMentions(q) {
+  const text = String(q || "");
+  const matches = text.match(/(?:[A-Za-z0-9_-]+\.)+(?:html?|js|mjs|cjs|css|json|jsx|tsx|ts|txt)/gi) || [];
+  return [...new Set(matches.map(normalizeFile).filter(Boolean))];
+}
+
 function requestedChatFiles(q, state) {
   const files = chatSourceFiles(state);
   const lower = String(q || "").toLowerCase();
-  return [...new Set(files.filter(file => lower.includes(String(file).toLowerCase())))].sort((a,b) => {
+  const explicit = explicitFileMentions(q);
+  const known = files.filter(file => lower.includes(String(file).toLowerCase()));
+  return [...new Set([...explicit, ...known])].sort((a,b) => {
     const ai = lower.indexOf(String(a).toLowerCase());
     const bi = lower.indexOf(String(b).toLowerCase());
     return (ai < 0 ? Number.MAX_SAFE_INTEGER : ai) - (bi < 0 ? Number.MAX_SAFE_INTEGER : bi);
@@ -554,6 +562,12 @@ function requestedChatFiles(q, state) {
 
 function requestedChatFile(q, state) {
   return requestedChatFiles(q, state)[0] || null;
+}
+
+function fileKnownToBCGO(file, state) {
+  const target = normalizeFile(file);
+  if (!target || target === "UNKNOWN") return false;
+  return chatSourceFiles(state).some(f => normalizeFile(f).toLowerCase() === target.toLowerCase());
 }
 
 function findChatCaseForFile(file) {
@@ -870,9 +884,16 @@ function chatAnswer(question = {}) {
   const active = Object.entries(organs).filter(([,v]) => v?.state === "ACTIVE");
   const review = Object.entries(organs).filter(([,v]) => v?.state === "REVIEW");
   const mentionedFiles = requestedChatFiles(q, state);
+  const explicitMentions = explicitFileMentions(raw);
+  const unknownExplicitFiles = explicitMentions.filter(file => !fileKnownToBCGO(file, state));
   const ref = resolveChatReference(raw, state, mentionedFiles);
   const requestedFile = mentionedFiles[0] || null;
-  const chatFile = requestedFile || ref.file;
+  const explicitRequestedFile = explicitMentions[0] || null;
+  // An explicit human filename always outranks remembered telemetry/context.
+  // If that filename is not known to the live BCGO registry/source surface,
+  // preserve it as the requested target and ask for clarification instead of
+  // silently substituting index.html or lastTelemetryFile.
+  const chatFile = explicitRequestedFile || requestedFile || ref.file;
   const intent = classifyChatIntent(raw, chatSession);
   const newPlan = buildChatWorkPlan(intent, raw);
 
@@ -884,6 +905,7 @@ function chatAnswer(question = {}) {
       ? (chatSession.files?.length ? chatSession.files : [chatSession.primaryFile].filter(Boolean))
       : [];
   const effectiveFile = chatFile || chatSession.primaryFile || contextualFiles[0] || null;
+  const explicitTargetIsUnknown = !!explicitRequestedFile && unknownExplicitFiles.some(f => f.toLowerCase() === explicitRequestedFile.toLowerCase());
   const comparison = contextualFiles.length > 1
     ? true
     : chatSession.comparison === true;
@@ -902,6 +924,29 @@ function chatAnswer(question = {}) {
 
   if (!q) return 'Saya di sini. Ceritakan apa yang ingin kamu periksa atau kerjakan.';
   if (intent.cancel) return cancelChatWork();
+
+  // Never replace an explicit human filename with telemetry or a previous
+  // conversation target. If the filename is unknown to the live source
+  // surface, say so plainly and offer the nearest registered candidate when
+  // there is an obvious basename typo (for example bcgo-engine.html vs
+  // bcgo-engine.js). This is a target-integrity gate, not a generic fallback.
+  if (explicitTargetIsUnknown && newPlan && chatPlanNeedsTarget(newPlan)) {
+    const requested = explicitRequestedFile;
+    const available = chatSourceFiles(state);
+    const stem = requested.replace(/\.[^.]+$/, '').toLowerCase();
+    const nearest = available.find(f => normalizeFile(f).replace(/\.[^.]+$/, '').toLowerCase() === stem);
+    setChatSession({
+      pendingWork:newPlan,
+      clarificationNeeded:true,
+      primaryFile:null,
+      files:[],
+      pendingCommand:newPlan.actions.includes('REPAIR') ? 'REPAIR' : null,
+      intent:newPlan.actions.includes('REPAIR') ? 'REPAIR' : 'INVESTIGATE'
+    });
+    return nearest
+      ? `Saya menangkap target yang kamu sebut: ${requested}. Tetapi file itu belum ada pada source/ORGAN_REGISTRY BCGO yang sedang terbaca, jadi saya tidak akan menggantinya diam-diam dengan file lain. Yang terdaftar dengan nama dasar yang sama adalah ${normalizeFile(nearest)}. Kalau itu yang kamu maksud, katakan saja dan saya lanjutkan penelusurannya.`
+      : `Saya menangkap target yang kamu sebut: ${requested}. Tetapi file itu belum ada pada source/ORGAN_REGISTRY BCGO yang sedang terbaca. Saya tidak akan menebak atau menggantinya dengan file lain. Sebutkan file yang benar atau tambahkan file tersebut ke source BCGO.`;
+  }
 
   // If the previous turn asked the human to identify an ambiguous target, a
   // file name in the next turn is treated as the answer to that clarification,
@@ -972,7 +1017,7 @@ function chatAnswer(question = {}) {
   // Repair has priority over check/continue because a sentence may naturally
   // contain both: "cek lagi lalu perbaiki bagian itu".
   if (intent.repair || (intent.continuation && chatSession.pendingCommand === 'REPAIR')) {
-    const targetFile = effectiveFile || state.targetCell || state.lastTelemetryFile;
+    const targetFile = effectiveFile || chatSession.primaryFile || null;
     if (!targetFile) return 'Saya siap memperbaiki, tetapi targetnya belum cukup jelas. Sebutkan file atau bagian yang dimaksud.';
     const result = repairChatCase(targetFile, state, raw);
     const c = result?.caseId ? runtime.getCase(result.caseId) : chatCaseFromSession();
