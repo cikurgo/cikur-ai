@@ -563,6 +563,9 @@ function renderLogs(logs) {
 
 function addChat(role, text) {
     if (!chatFeed) return;
+    const liveStatus = chatFeed.querySelector('[data-chat-live-status="1"]');
+    if (liveStatus) liveStatus.remove();
+
     const row = document.createElement('div');
     row.className = role === 'user'
         ? 'flex justify-end'
@@ -576,6 +579,32 @@ function addChat(role, text) {
     bubble.innerHTML = `<div class="text-[9px] uppercase opacity-60 mb-1">${role === 'user' ? 'Anda' : 'BCGO'}</div>${esc(text)}`;
     row.appendChild(bubble);
     chatFeed.appendChild(row);
+    chatFeed.scrollTop = chatFeed.scrollHeight;
+}
+
+function setChatLiveStatus(text, kind = 'working') {
+    if (!chatFeed || !text) return;
+    let row = chatFeed.querySelector('[data-chat-live-status="1"]');
+    if (!row) {
+        row = document.createElement('div');
+        row.dataset.chatLiveStatus = '1';
+        row.className = 'flex justify-start';
+        const bubble = document.createElement('div');
+        bubble.className = 'w-full rounded-lg border border-cyan-900/70 bg-slate-900/80 px-3 py-2 text-xs text-cyan-100';
+        bubble.innerHTML = '<div class="text-[9px] uppercase opacity-60 mb-1">CGO • LIVE</div><div data-chat-live-text></div>';
+        row.appendChild(bubble);
+        chatFeed.appendChild(row);
+    }
+    const bubble = row.firstElementChild;
+    if (bubble) {
+        bubble.className = kind === 'done'
+            ? 'w-full rounded-lg border border-emerald-900/70 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-100'
+            : kind === 'blocked'
+              ? 'w-full rounded-lg border border-amber-900/70 bg-amber-950/20 px-3 py-2 text-xs text-amber-100'
+              : 'w-full rounded-lg border border-cyan-900/70 bg-slate-900/80 px-3 py-2 text-xs text-cyan-100';
+        const textEl = bubble.querySelector('[data-chat-live-text]');
+        if (textEl) textEl.textContent = text;
+    }
     chatFeed.scrollTop = chatFeed.scrollHeight;
 }
 
@@ -664,11 +693,10 @@ document.querySelectorAll('.quick-q').forEach(button => {
     button.addEventListener('click', () => void sendQuestion(button.dataset.q));
 });
 
-/* Live conversation layer: investigation events become short, human-readable
-   progress messages in the same chat. The event is never treated as proof by
-   itself; it only tells the user what CGO is actually doing right now. */
+/* Live conversation layer. Investigation progress is a LIVE STATUS, not a chat
+   history message. A single case can emit many internal events; the chat must
+   feel alive without flooding the conversation with duplicate bubbles. */
 (() => {
-    const seen = new Set();
     const messages = new Map([
         ['ACTIVE_INVESTIGATION_PROGRESS', d => {
             const p = d.payload || {};
@@ -676,40 +704,42 @@ document.querySelectorAll('.quick-q').forEach(button => {
             const labels = { SOURCE_READ:'membaca source aktual', SYMBOL_CALLS:'menelusuri pemanggilan fungsi', SYMBOL_DEFINITIONS:'memastikan definisi fungsi', SYMBOL_IMPORTS_EXPORTS:'menelusuri import dan export', DEPENDENCY_TRACE:'menelusuri dependency', RELATION_TRACE:'mencocokkan hubungan antar-file' };
             const probe = p.probe?.type || '';
             const work = labels[probe] || 'mengumpulkan evidence';
-            return step > 0 ? `Saya masih bekerja. Langkah ${step}: saya ${work}. Hasilnya tetap saya ikat ke case yang sama.` : `Saya masih bekerja. Saya ${work} dan tetap membawa konteks percakapan kita.`;
+            return { text: step > 0 ? `Saya sedang bekerja. Langkah ${step}: ${work}.` : `Saya sedang bekerja: ${work}.`, kind:'working' };
         }],
         ['ACTIVE_INVESTIGATION_STEP', d => {
             const p = d.payload || {};
-            if (p.status === 'COMPLETE' && p.exactSourceVerified) return 'Investigasi selesai. Root cause dan exact source sudah terikat; saya belum menyentuh source dan akan menunggu solusi konkret bila pekerjaan ini meminta perbaikan.';
-            if (p.exactSourceVerified) return 'Saya sudah mengikat exact source. Saya lanjut memastikan solusi dan integrity sebelum ada tindakan.';
-            if (p.rootCauseVerified) return 'Root cause sudah terbukti. Saya lanjut ke verifikasi exact source dan konteks perubahan.';
-            return 'Saya mendapat evidence baru dan melanjutkan investigasi dari hasil terbaru.';
+            if (p.status === 'COMPLETE' && p.exactSourceVerified) return { text:'Investigasi selesai. Root cause dan exact source sudah terbukti. Saya belum menyentuh source.', kind:'done' };
+            if (p.exactSourceVerified) return { text:'Exact source sudah terbukti. Saya lanjut mengikat solusi dan integrity sebelum tindakan.', kind:'working' };
+            if (p.rootCauseVerified) return { text:'Root cause sudah terbukti. Saya lanjut memastikan exact source.', kind:'working' };
+            return { text:'Evidence baru masuk. Saya melanjutkan investigasi dari posisi terakhir.', kind:'working' };
         }],
         ['CHAT_REPAIR_WAITING', d => {
             const p = d.payload || {};
             const blockers = Array.isArray(p.blockers) ? p.blockers.slice(0,2).join(', ') : '';
-            return blockers ? `Perintah perbaikan tetap saya pegang. Saya masih menunggu bukti: ${blockers}.` : 'Perintah perbaikan tetap saya pegang. Saya masih melengkapi proof sebelum menyentuh source.';
+            return { text: blockers ? `Perintah perbaikan tetap saya pegang. Saya masih menunggu: ${blockers}.` : 'Perintah perbaikan tetap saya pegang. Saya masih melengkapi proof.', kind:'working' };
         }],
-        ['CHAT_REPAIR_READY_EXECUTOR_MISSING', () => 'Proof sudah siap, tetapi Executor internal belum terhubung. Saya tidak akan mengklaim source sudah berubah.'],
-        ['CHAT_REPAIR_BLOCKED', d => `Saya menahan perintah perbaikan karena gerbang internal belum mengizinkannya: ${String(d.payload?.reason || 'proof atau policy belum memenuhi syarat')}.`],
-        ['CHAT_REPAIR_EXECUTED', () => 'Perubahan sudah dikirim ke Executor internal. Sekarang saya masuk ke validation dan belum akan menyebut selesai sebelum read-back terbukti.'],
-        ['CHAT_REPAIR_FAILED', d => `Execution berhenti dan saya tidak akan menyebutnya berhasil. ${String(d.payload?.error || 'Ada kegagalan pada jalur execution.').slice(0,180)}`],
-        ['CHAT_INVESTIGATION_ERROR', d => `Investigasi mengalami kendala internal: ${String(d.payload?.error || 'unknown error').slice(0,180)}.`]
+        ['CHAT_REPAIR_READY_EXECUTOR_MISSING', () => ({ text:'Proof sudah siap, tetapi Executor internal belum terhubung. Source tetap tidak saya klaim berubah.', kind:'blocked' })],
+        ['CHAT_REPAIR_BLOCKED', d => ({ text:`Perintah perbaikan saya tahan karena gerbang internal belum mengizinkan: ${String(d.payload?.reason || 'proof/policy belum memenuhi syarat')}.`, kind:'blocked' })],
+        ['CHAT_REPAIR_EXECUTED', () => ({ text:'Perubahan sudah diteruskan ke Executor internal. Saya sekarang menunggu validation dan read-back.', kind:'working' })],
+        ['CHAT_REPAIR_FAILED', d => ({ text:`Execution berhenti dan tidak saya nyatakan berhasil. ${String(d.payload?.error || 'Ada kegagalan pada jalur execution.').slice(0,180)}`, kind:'blocked' })],
+        ['CHAT_INVESTIGATION_ERROR', d => ({ text:`Investigasi mengalami kendala internal: ${String(d.payload?.error || 'unknown error').slice(0,180)}.`, kind:'blocked' })]
     ]);
+    let lastSemantic = '';
+    let lastCaseId = '';
     window.addEventListener('cikur-internal-ai-investigation', event => {
         const d = event.detail || {};
         const runtime = window.CIKURInternalAIRuntime;
         const ctx = runtime?.getChatContext?.();
         if (!ctx?.caseId || d.caseId !== ctx.caseId) return;
-        const step = Number(d.payload?.step || 0);
-        const key = `${d.caseId}:${d.type}:${step || d.at}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-        if (seen.size > 80) seen.delete(seen.values().next().value);
         const make = messages.get(d.type);
         if (!make) return;
-        const text = make(d);
-        if (text) addChat('bcgo', text);
+        const result = make(d);
+        if (!result?.text) return;
+        const semantic = `${d.caseId}:${d.type}:${result.kind}:${result.text}`;
+        if (semantic === lastSemantic && d.caseId === lastCaseId) return;
+        lastSemantic = semantic;
+        lastCaseId = d.caseId;
+        setChatLiveStatus(result.text, result.kind);
     });
 })();
 
@@ -793,7 +823,6 @@ runAutonomousEngine(state => {
     if (!chatFeed.dataset.ready) {
         chatFeed.dataset.ready = '1';
         chatFeed.innerHTML = '';
-        addChat('bcgo', 'Kanal komunikasi aktif. Saya membaca state BCGO yang sedang hidup. Silakan bicara atau beri perintah; saya akan membawa konteks percakapan ini.');
     }
 });
 } catch (error) {

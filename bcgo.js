@@ -8,7 +8,7 @@ import {
   getDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { db, auth } from "./cikur-config.js?v=20260906-1345-sync3";
+import { db, auth } from "./cikur-config.js?v=20260906-1915-chatlive6";
 
 /*
  * BCGO MASTER NERVE SYSTEM v2.16.4 + LIVE CHAT COMMAND SYNC

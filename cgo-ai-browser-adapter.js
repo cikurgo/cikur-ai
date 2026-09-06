@@ -2,16 +2,16 @@
  * Binds the V5.2 active-investigation brain to the existing BCGO / Medicine contracts.
  * No external AI/API. No source mutation. Medicine remains proof authority.
  */
-import * as Core from "./cgo-ai-core.js?v=20260906-1805-chatlive5";
-import * as Knowledge from "./cgo-ai-knowledge.js?v=20260906-1805-chatlive5";
-import * as Investigator from "./cgo-ai-investigator.js?v=20260906-1805-chatlive5";
-import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js?v=20260906-1805-chatlive5";
-import * as Cognition from "./cgo-ai-cognition.js?v=20260906-1805-chatlive5";
-import * as Logic from "./cgo-ai-logic.js?v=20260906-1805-chatlive5";
-import * as Memory from "./cgo-ai-memory.js?v=20260906-1805-chatlive5";
-import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260906-1805-chatlive5";
+import * as Core from "./cgo-ai-core.js?v=20260906-1915-chatlive6";
+import * as Knowledge from "./cgo-ai-knowledge.js?v=20260906-1915-chatlive6";
+import * as Investigator from "./cgo-ai-investigator.js?v=20260906-1915-chatlive6";
+import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js?v=20260906-1915-chatlive6";
+import * as Cognition from "./cgo-ai-cognition.js?v=20260906-1915-chatlive6";
+import * as Logic from "./cgo-ai-logic.js?v=20260906-1915-chatlive6";
+import * as Memory from "./cgo-ai-memory.js?v=20260906-1915-chatlive6";
+import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260906-1915-chatlive6";
 
-const VERSION = "V5.3-BROWSER-BRIDGE-2.3.0-LIVE-CHAT-CONTEXT-COMMAND-STATE";
+const VERSION = "V5.3-BROWSER-BRIDGE-2.4.0-LIVE-CHAT-STATUS-CONTEXT-COMMAND";
 const INTERNAL_AUTO_POLICY = Object.freeze({
   version:"CIKUR-INTERNAL-AUTO-1",
   allowAutomaticExecution:true,
