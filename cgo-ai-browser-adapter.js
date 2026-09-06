@@ -11,7 +11,7 @@ import * as Logic from "./cgo-ai-logic.js?v=20260906-2115-chatlive10";
 import * as Memory from "./cgo-ai-memory.js?v=20260906-2115-chatlive10";
 import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260906-2115-chatlive10";
 
-const VERSION = "V5.3-BROWSER-BRIDGE-3.0.1-CONVERSATION-ORCHESTRATOR";
+const VERSION = "V5.3-BROWSER-BRIDGE-3.1.0-COMMAND-TO-COMPLETION";
 const INTERNAL_AUTO_POLICY = Object.freeze({
   version:"CIKUR-INTERNAL-AUTO-1",
   allowAutomaticExecution:true,
@@ -742,10 +742,12 @@ async function continuePendingRepair(caseId, state) {
   clearPendingRepair(caseId);
   try {
     const result = await runtime.execute(caseId, INTERNAL_AUTO_POLICY);
+    const finalCase = runtime.getCase(caseId);
+    const completed = finalCase?.state === "RESOLVED" || result?.status === "RESOLVED";
     if (chatSession.caseId === caseId) {
-      setChatSession({caseId, primaryFile:normalizeFile(c.exactSource?.file || c.target), pendingCommand:null, intent:'REPAIR', lastCaseRevision:Number(c.revision ?? 0)});
+      setChatSession({caseId, primaryFile:normalizeFile(finalCase?.exactSource?.file || c.exactSource?.file || c.target), pendingCommand:completed ? null : 'REPAIR', intent:'REPAIR', lastCaseRevision:Number(finalCase?.revision ?? c.revision ?? 0)});
     }
-    emitBrainEvent(caseId, "CHAT_REPAIR_EXECUTED", {result, target:normalizeFile(c.exactSource?.file || c.target)});
+    emitBrainEvent(caseId, completed ? "CHAT_REPAIR_COMPLETED" : "CHAT_REPAIR_EXECUTED", {result, state:finalCase?.state || null, target:normalizeFile(finalCase?.exactSource?.file || c.exactSource?.file || c.target)});
     latest = compatibleSnapshot(caseId, "CHAT_REPAIR_EXECUTED");
     try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-state", {detail:latest})); } catch {}
     return result;

@@ -11,7 +11,7 @@ import * as Cognition from "./cgo-ai-cognition.js?v=20260906-2115-chatlive10";
 import * as Guardian from "./cgo-ai-guardian.js?v=20260906-2115-chatlive10";
 import * as Logic from "./cgo-ai-logic.js?v=20260906-2115-chatlive10";
 
-const VERSION="1.9.0";
+const VERSION="1.11.0";
 
 export function createDeterministicExecutor(target={}) {
   let bound = target && typeof target.read === "function" && typeof target.write === "function" ? target : null;
@@ -57,6 +57,13 @@ export function createDeterministicExecutor(target={}) {
   return {
     version:"1.1.0",
     bind,
+    async verifyCurrent(file, expectedFingerprint){
+      if(!bound) throw new Error("EXECUTION_TARGET_NOT_BOUND");
+      if(!expectedFingerprint) throw new Error("VALIDATION_EXPECTED_FINGERPRINT_REQUIRED");
+      const current=String(await bound.read(file||null));
+      const fingerprint=Core.contentFingerprint(current);
+      return {verified:fingerprint===expectedFingerprint,fingerprint};
+    },
     snapshot(){ return {consumed:[...consumed]}; },
     restore(state={}){
       if(state===null || state===undefined) return true;
@@ -85,7 +92,16 @@ export function createDeterministicExecutor(target={}) {
               String(request.proposedCode) +
               current.slice(current.indexOf(String(request.originalCode))+String(request.originalCode).length));
       if(!verification) throw new Error("PATCH_READBACK_VERIFICATION_FAILED");
-      await bound.write(next, request.file||null);
+      const preWrite=String(await bound.read(request.file||null));
+      if(Core.contentFingerprint(preWrite)!==request.sourceFingerprint)
+        throw new Error("EXECUTION_SOURCE_CHANGED_DURING_EXECUTION");
+      if(typeof bound.writeIfUnchanged==="function") {
+        const atomicResult=await bound.writeIfUnchanged(preWrite,next,request.file||null);
+        if(atomicResult===false || atomicResult?.success===false)
+          throw new Error("EXECUTION_ATOMIC_WRITE_REJECTED");
+      } else {
+        await bound.write(next, request.file||null);
+      }
       const readBack=String(await bound.read(request.file||null));
       if(readBack!==next) throw new Error("PATCH_PERSISTENCE_READBACK_MISMATCH");
       let executionResult;
@@ -101,7 +117,15 @@ export function createDeterministicExecutor(target={}) {
         });
       } catch(err) {
         try {
-          await bound.write(current, request.file||null);
+          if(typeof bound.writeIfUnchanged==="function") {
+            const rollbackResult=await bound.writeIfUnchanged(readBack,current,request.file||null);
+            if(rollbackResult===false || rollbackResult?.success===false)
+              throw new Error("PATCH_ROLLBACK_ATOMIC_WRITE_REJECTED");
+          } else {
+            const rollbackCurrent=String(await bound.read(request.file||null));
+            if(rollbackCurrent!==readBack) throw new Error("PATCH_ROLLBACK_SOURCE_CHANGED");
+            await bound.write(current, request.file||null);
+          }
           const rollback=String(await bound.read(request.file||null));
           if(rollback!==current) throw new Error("PATCH_ROLLBACK_READBACK_MISMATCH");
         } catch(rollbackErr) {
@@ -111,8 +135,16 @@ export function createDeterministicExecutor(target={}) {
       }
       if(executionResult===false || executionResult?.success===false) {
         try {
-          await bound.write(current);
-          const rollback=String(await bound.read());
+          if(typeof bound.writeIfUnchanged==="function") {
+            const rollbackResult=await bound.writeIfUnchanged(readBack,current,request.file||null);
+            if(rollbackResult===false || rollbackResult?.success===false)
+              throw new Error("PATCH_ROLLBACK_ATOMIC_WRITE_REJECTED");
+          } else {
+            const rollbackCurrent=String(await bound.read(request.file||null));
+            if(rollbackCurrent!==readBack) throw new Error("PATCH_ROLLBACK_SOURCE_CHANGED");
+            await bound.write(current, request.file||null);
+          }
+          const rollback=String(await bound.read(request.file||null));
           if(rollback!==current) throw new Error("PATCH_ROLLBACK_READBACK_MISMATCH");
         } catch(rollbackErr) {
           throw new Error(`AUTOMATIC_EXECUTION_FAILED_ROLLBACK_FAILED:${rollbackErr.message}`);
@@ -347,6 +379,12 @@ export function createRuntime(options={}) {
         return structuredClone(c0);
       }
       const decision=authorizationDecision(caseId,policy);
+      if(existing?.authorizationId){
+        const existingRec=authorizationLedger.get(existing.authorizationId);
+        if(existingRec?.inFlight) throw new Error(`AUTHORIZATION_IN_FLIGHT:${existing.authorizationId}`);
+        if(existingRec && !existingRec.consumed && Date.now()>Date.parse(existingRec.expiresAt))
+          throw new Error(`AUTHORIZATION_EXPIRED:${existing.authorizationId}`);
+      }
       // Reuse a still-live plan when its authorization decision/risk and revision
       // still match the current proof. Rebuilding the same plan would increment
       // revision and invalidate the authorization binding just before execution.
@@ -435,7 +473,32 @@ export function createRuntime(options={}) {
       validating.actionPlan={...structuredClone(validating.actionPlan),executionStatus:"CONSUMED",executedAt:new Date().toISOString()};
       cases.set(caseId,Core.transitionCaseState(validating,"VALIDATING"));
       emit("AUTO_EXECUTION_DISPATCHED",{caseId,authorizationId:authId,planId:action.planId,result});
-      return {status:"EXECUTION_DISPATCHED",caseId,authorizationId:authId,planId:action.planId,result};
+
+      // Command-to-Completion: once the Executor reports a successful patch/readback/
+      // execution, close the lifecycle through the Runtime validation gate. The
+      // brain still never writes source itself; validation consumes only the
+      // Executor's concrete result. A failed Executor throws above and therefore
+      // cannot be marked RESOLVED.
+      let validation;
+      try {
+        validation = await api.validate(caseId, {
+          success: result?.status === "PATCH_APPLIED_AND_EXECUTED" &&
+            result?.readBackVerified === true && result?.executed === true,
+          status: result?.status || "EXECUTION_RESULT",
+          executionResult: result?.executionResult ?? null,
+          file: result?.file || action.request?.file || null,
+          beforeFingerprint: result?.beforeFingerprint || action.request?.sourceFingerprint || null,
+          afterFingerprint: result?.afterFingerprint || null,
+          readBackVerified: result?.readBackVerified === true,
+          executed: result?.executed === true,
+          authorizationId: authId,
+          planId: action.planId
+        });
+      } catch (err) {
+        emit("COMMAND_TO_COMPLETION_VALIDATION_ERROR",{caseId,authorizationId:authId,error:String(err?.message||err)});
+        return {status:"EXECUTION_DISPATCHED",caseId,authorizationId:authId,planId:action.planId,result,validation:{status:"VALIDATION_ERROR",success:false,error:String(err?.message||err)}};
+      }
+      return {status:validation?.state === "RESOLVED" ? "RESOLVED" : "REOPENED",caseId,authorizationId:authId,planId:action.planId,result,validation};
     },
 
     investigate(caseId){
@@ -454,13 +517,25 @@ export function createRuntime(options={}) {
       return Logic.decide(c,policy,knowledge);
     },
 
-    validate(caseId, outcome={}){
+    async validate(caseId, outcome={}){
       const c0=cases.get(caseId);
       if(!c0) throw new Error(`CASE_NOT_FOUND:${caseId}`);
       if(c0.state!=="VALIDATING") throw new Error(`VALIDATION_STATE_REQUIRED:${c0.state}`);
-      const success=outcome===true || outcome?.success===true || outcome?.status==="FIXED_VERIFIED";
+      const execution=c0.execution;
+      const provenance=!!execution && outcome?.authorizationId===execution.authorizationId &&
+        outcome?.planId===execution.planId && outcome?.file===execution.file &&
+        outcome?.status===execution.status && outcome?.readBackVerified===true &&
+        outcome?.executed===true && outcome?.afterFingerprint===execution.afterFingerprint &&
+        outcome?.beforeFingerprint===execution.beforeFingerprint;
+      let sourceVerified=false, observedFingerprint=null;
+      if(provenance && typeof executor?.verifyCurrent==="function" && execution.afterFingerprint){
+        const check=await executor.verifyCurrent(execution.file,execution.afterFingerprint);
+        sourceVerified=check?.verified===true; observedFingerprint=check?.fingerprint||null;
+      }
+      const success=provenance && sourceVerified;
+      const details={...structuredClone(outcome),provenanceVerified:provenance,sourceVerified,observedFingerprint};
       const c=structuredClone(c0);
-      c.validation={status:success?"FIXED_VERIFIED":"VALIDATION_FAILED",success,details:structuredClone(outcome),validatedAt:new Date().toISOString()};
+      c.validation={status:success?"FIXED_VERIFIED":"VALIDATION_FAILED",success,details,validatedAt:new Date().toISOString()};
       const next=success?"RESOLVED":"REOPENED";
       cases.set(caseId,Core.transitionCaseState(c,next));
       emit(success?"CASE_RESOLVED":"VALIDATION_FAILED",cases.get(caseId));
