@@ -11,7 +11,7 @@ import * as Logic from "./cgo-ai-logic.js";
 import * as Memory from "./cgo-ai-memory.js";
 import { createRuntime } from "./cgo-ai-runtime-adapter.js";
 
-const VERSION = "V5.3-BROWSER-BRIDGE-1.5.0-CHAT-ACTION";
+const VERSION = "V5.3-BROWSER-BRIDGE-1.6.0-NATURAL-CHAT";
 const INTERNAL_AUTO_POLICY = Object.freeze({
   version:"CIKUR-INTERNAL-AUTO-1",
   allowAutomaticExecution:true,
@@ -30,6 +30,7 @@ let knowledge = Knowledge.createKnowledgeStore();
 let latest = null;
 let latestBCGOState = null;
 let lastChatCaseId = null;
+let lastChatContext = { files: [], comparison: false, question: null };
 
 function clone(v) {
   return typeof structuredClone === "function"
@@ -400,9 +401,13 @@ function chatSourceFiles(state = {}) {
   return [...files].filter(Boolean);
 }
 
-function requestedChatFile(q, state) {
+function requestedChatFiles(q, state) {
   const files = chatSourceFiles(state);
-  return files.find(file => q.includes(String(file).toLowerCase())) || null;
+  return [...new Set(files.filter(file => q.includes(String(file).toLowerCase())))];
+}
+
+function requestedChatFile(q, state) {
+  return requestedChatFiles(q, state)[0] || null;
 }
 
 function findCaseForFile(file) {
@@ -411,7 +416,7 @@ function findCaseForFile(file) {
   return caseId ? runtime.getCase(caseId) : null;
 }
 
-function createChatCase(file, state, rawQuestion) {
+function createChatCase(file, state, rawQuestion, chatContext = lastChatContext) {
   const targetFile = normalizeFile(file);
   if (!targetFile) return null;
   const existing = findCaseForFile(targetFile);
@@ -442,7 +447,12 @@ function createChatCase(file, state, rawQuestion) {
       status: "VERIFIED",
       strength: 0.70,
       exact: false,
-      metadata: { file: targetFile, proofRequired: false, userIntent: "CHECK" }
+      metadata: {
+        file: targetFile,
+        proofRequired: false,
+        userIntent: chatContext?.comparison ? "CROSS_FILE_CHECK" : "CHECK",
+        relatedFiles: Array.isArray(chatContext?.files) ? chatContext.files.filter(f => f !== targetFile).slice(0,8) : []
+      }
     });
   } catch {}
   caseIds.set(targetFile, caseId);
@@ -450,8 +460,8 @@ function createChatCase(file, state, rawQuestion) {
   return runtime.getCase(caseId) || c;
 }
 
-function scheduleChatInvestigation(file, state, rawQuestion) {
-  const c = createChatCase(file, state, rawQuestion);
+function scheduleChatInvestigation(file, state, rawQuestion, chatContext = lastChatContext) {
+  const c = createChatCase(file, state, rawQuestion, chatContext);
   if (!c) return null;
   if (!activeRuns.has(c.caseId)) {
     void runActiveInvestigation(c.caseId, state).catch(err => {
@@ -544,20 +554,36 @@ function chatAnswer(question = {}) {
   const active = Object.entries(organs).filter(([,v]) => v?.state === "ACTIVE");
   const review = Object.entries(organs).filter(([,v]) => v?.state === "REVIEW");
   const target = String(state?.targetCell || state?.lastTelemetryFile || "sistem");
-  const requestedFile = requestedChatFile(q, state);
-  const isCheckCommand = /\b(cek|periksa|check|telusuri|investigasi|selidiki)\b/.test(q) && !!requestedFile;
-  const isRepairCommand = /\b(perbaiki|perbaiki saja|fix|repair|patch)\b/.test(q);
+  const mentionedFiles = requestedChatFiles(q, state);
+  const requestedFile = mentionedFiles[0] || null;
+  const chatFile = requestedFile || requestedChatFile(q, state);
+  const isCheckCommand = /\b(cek|periksa|check|telusuri|investigasi|selidiki|bandingkan|cocokkan)\b/.test(q) && !!chatFile;
+  const isRepairCommand = /\b(perbaiki|perbaikan|lakukan perbaikan|fix|repair|patch)\b/.test(q);
+  const comparisonRequested = mentionedFiles.length > 1 && /\b(bandingkan|cocokkan|sesuai|tidak sesuai|beda|berbeda|form|bagian|kode|code)\b/.test(q);
 
   if (isCheckCommand) {
-    const c = scheduleChatInvestigation(requestedFile, state, raw);
-    if (!c) return `Saya belum bisa membuka target ${requestedFile}.`;
-    return `Siap. Saya mulai investigasi ${requestedFile} sekarang. Saya akan telusuri source aktual, dependency, root cause, dan exact source. Belum ada source yang saya ubah.`;
+    lastChatContext = { files: mentionedFiles.length ? mentionedFiles : [chatFile], comparison: comparisonRequested, question: raw };
+    const c = scheduleChatInvestigation(chatFile, state, raw, lastChatContext);
+    if (!c) return `Saya belum bisa membuka target ${chatFile}.`;
+    if (comparisonRequested) {
+      const peers = mentionedFiles.filter(f => f !== chatFile);
+      return `Siap, saya tangkap maksudmu. Saya tidak hanya mengecek ${chatFile}; saya akan mencocokkan bagian form yang kamu maksud dengan ${peers.join(" dan ")}. Saya telusuri source aktual, field, binding, dependency, root cause, dan exact source. Untuk sekarang belum ada source yang saya ubah.`;
+    }
+    return `Siap. Saya cek ${chatFile} dari source aktual sekarang. Saya telusuri dependency, root cause, dan exact source dulu. Belum ada source yang saya ubah.`;
   }
 
   if (isRepairCommand) {
-    const targetFile = requestedFile || runtime.getCase(lastChatCaseId)?.target || state.targetCell || state.lastTelemetryFile;
-    if (!targetFile) return "Saya menerima perintah perbaikan, tetapi belum punya target file yang jelas. Sebutkan file atau lakukan pemeriksaan terlebih dahulu.";
-    return repairChatCase(targetFile, state, raw).text;
+    const targetFile = chatFile || runtime.getCase(lastChatCaseId)?.target || state.targetCell || state.lastTelemetryFile || lastChatContext.files[0];
+    if (!targetFile) return "Saya terima perintah perbaikan, tetapi belum punya target yang cukup jelas. Sebutkan file atau minta saya cek dulu.";
+    const result = repairChatCase(targetFile, state, raw);
+    if (result && typeof result === "object") {
+      if (lastChatContext.comparison && lastChatContext.files.length > 1 && result.text?.startsWith("Baik. Perintah")) {
+        const peers = lastChatContext.files.filter(f => f !== normalizeFile(targetFile));
+        result.text = `Baik. Saya lanjutkan perbaikan yang tadi kita bahas. Fokusnya hanya mismatch yang sudah terbukti antara ${normalizeFile(targetFile)} dan ${peers.join(" / ")}. Saya akan menerapkan perubahan exact yang terikat pada proof, lalu lanjut validasi supaya fungsi lain tetap utuh.`;
+      }
+      return result.text;
+    }
+    return result;
   }
 
   const relationFor = file => relations
