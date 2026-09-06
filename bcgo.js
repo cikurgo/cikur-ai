@@ -11,7 +11,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/fi
 import { db, auth } from "./cikur-config.js?v=20260906-1345-sync3";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.16.3 + LIVE COMMAND SYNC
+ * BCGO MASTER NERVE SYSTEM v2.16.4 + LIVE CHAT COMMAND SYNC
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -121,7 +121,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   async function loadInternalAI() {
     if (stopped || internalAI) return internalAI;
     try {
-      const mod = await import("./cgo-runtime-adapter.js?v=5.2.6-sync3");
+      const mod = await import("./cgo-runtime-adapter.js?v=5.2.7-chatlive5");
       if (typeof mod.install !== "function") throw new Error("INTERNAL_AI_ADAPTER_INVALID");
       internalAI = mod.install();
       window.CIKURInternalAIRuntime = internalAI;
@@ -135,7 +135,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       // under cgo-ai-browser-adapter.js. BCGO must never die merely because an
       // optional reasoning adapter is absent.
       try {
-        const mod = await import("./cgo-ai-browser-adapter.js?v=5.3.0-sync3");
+        const mod = await import("./cgo-ai-browser-adapter.js?v=5.3.1-chatlive5");
         if (typeof mod.install !== "function") throw new Error("BROWSER_BRAIN_ADAPTER_INVALID");
         internalAI = mod.install();
         window.CIKURInternalAIRuntime = internalAI;
@@ -2019,8 +2019,18 @@ export function runAutonomousEngine(onCycleUpdate) {
   });
 
   const brain = {
-    ask: answerQuestion,
+    // There is exactly one conversational brain. The legacy sensor-level answer
+    // table remains available internally for telemetry utilities, but BCGOBrain
+    // itself delegates to the live Internal AI runtime so callers cannot receive
+    // a second, stale conversation brain.
+    async ask(question) {
+      const ai = internalAI || await loadInternalAI();
+      if (ai?.ask) return ai.ask(question);
+      return "Saya masih menyalakan Internal AI. Saya belum akan menjawab seolah-olah perintah sudah diterima sebelum jalur percakapan siap.";
+    },
     getState: () => {
+      const live = window.BCGO_STATE;
+      if (live && typeof live === "object") return safeClone(live);
       const organs = buildOrgans();
       state.systemOrgans = organs;
       state.metrics = makeMetrics(organs);

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO Universal Neural Monitor v2.16 — File Nerve</title>
+<title>BCGO Universal Neural Monitor v2.16.4 — Live Chat Nerve</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -235,7 +235,7 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=2.16.3-sync3';
+import { runAutonomousEngine } from './bcgo.js?v=2.16.4-chatlive4';
 
 const $ = id => document.getElementById(id);
 
@@ -302,7 +302,6 @@ const crossFileFindingsEl = $('cross-file-findings');
 const nerveSummaryEl = $('nerve-summary');
 
 let liveState = null;
-let conversation = [];
 
 function esc(value) {
     return String(value ?? '-')
@@ -602,7 +601,7 @@ function authoritativeBCGOState() {
     return liveState || null;
 }
 
-async function waitForInternalAI(timeoutMs = 4000) {
+async function waitForInternalAI(timeoutMs = 12000) {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
         if (window.CIKURInternalAIRuntime?.ask) return window.CIKURInternalAIRuntime;
@@ -611,96 +610,45 @@ async function waitForInternalAI(timeoutMs = 4000) {
     return window.CIKURInternalAIRuntime || null;
 }
 
-function brainAnswer(question) {
-    const q = String(question || '').toLowerCase().trim();
-    const st = authoritativeBCGOState();
-    if (!st) return 'Saya belum menerima state saraf. Tunggu sebentar sampai neural monitor tersinkron.';
-
-    const active = activeOrgans(st);
-    const recovered = recoveredOrgans(st);
-    const files = Object.keys(st.systemOrgans || {});
-    const last = st.lastTelemetryFile || st.targetCell || '-';
-    const conn = st.connection?.status || 'UNKNOWN';
-
-    const says = (...words) => words.some(w => q.includes(w));
-
-    if (says('halo','hai','hello','pagi','siang','sore','malam')) {
-        return `Halo. Saya BCGO. Saat ini saya berada di tahap ${st.step}, neural cycle #${st.cycle}. Saya terus memantau ${st.metrics?.total ?? files.length} organ dan mendengarkan telemetry real-time.`;
-    }
-
-    if (says('sedang mengerjakan','sedang apa','kerjakan','ngapain','lagi apa')) {
-        return `Saat ini saya berada di tahap ${st.step}, neural cycle #${st.cycle}. ${st.message} Status saya: ${st.metrics?.active ?? active.length} anomaly aktif, ${st.metrics?.recovered ?? recovered.length} recovered, dan ${st.metrics?.healthy ?? 0} stabil.`;
-    }
-
-    if (says('cycle','siklus')) {
-        return `Neural cycle saya sekarang #${st.cycle}, tahap ${st.step}. Semua informasi cycle yang saya jawab berasal dari BCGO_STATE yang juga dipakai layar monitor ini.`;
-    }
-
-    if (says('aman','status sistem','status sekarang','kondisi sistem','semua aman')) {
-        if (conn === 'OFFLINE') return `Belum bisa saya nyatakan aman. Listener Firestore sedang bermasalah. Saya mempertahankan state terakhir dan menunggu koneksi pulih.`;
-        if (active.length) return `Belum sepenuhnya aman. Saya menemukan ${active.length} anomaly aktif: ${active.map(([f]) => f).join(', ')}. Saya sedang meninjau ${active[0][0]}.`;
-        return `Saat ini tidak ada anomaly aktif. ${st.metrics?.total ?? files.length} organ terpantau; ${st.metrics?.healthy ?? 0} stabil dan ${st.metrics?.recovered ?? 0} recovered. Koneksi: ${conn}.`;
-    }
-
-    if (says('masalah','error','anomaly','gangguan')) {
-        if (!active.length && !st.errorLog) return `Saat ini saya tidak melihat anomaly aktif. Saya tetap mendengarkan system_logs untuk impuls baru.`;
-        const detail = active.map(([f,v]) => `${f}: ${v.message}`).join(' | ');
-        return `Saya melihat ${active.length} anomaly aktif. ${detail || st.errorLog || 'Saya sedang mengevaluasi sumber gangguan.'}`;
-    }
-
-    if (says('recovered','pulih','dipulihkan')) {
-        return recovered.length ? `Saya memiliki ${recovered.length} organ dengan riwayat error yang sudah melewati window aktif: ${recovered.map(([f]) => f).join(', ')}.` : 'Saat ini belum ada organ yang berstatus RECOVERED dari telemetry yang saya terima.';
-    }
-
-    if (says('file terakhir','terakhir','telemetry terakhir','impuls terakhir')) {
-        return st.lastTelemetryAt ? `Impuls telemetry terakhir yang saya catat berasal dari ${last}. Saya menerimanya ${getStateAgeText(st)}.` : 'Belum ada impuls telemetry yang bisa saya pastikan dari state saat ini.';
-    }
-
-    if (says('kenapa','mengapa')) {
-        return `Saya sedang di ${st.step} karena state terbaru meminta saya menjalankan: ${st.message} Target saraf saya saat ini adalah ${st.targetCell || '-'}.`;
-    }
-
-    if (says('apa yang kamu lihat','lihat apa','pantau apa','memantau apa')) {
-        return `Saya sedang memantau ${st.metrics?.total ?? files.length} organ. Target saat ini ${st.targetCell || '-'}, dengan ${st.metrics?.active ?? active.length} anomaly aktif, ${st.metrics?.recovered ?? recovered.length} recovered, dan ${st.metrics?.healthy ?? 0} stabil.`;
-    }
-
-    return `Saya memahami pertanyaanmu, tetapi saya ingin tetap akurat. State saya sekarang: cycle #${st.cycle}, tahap ${st.step}, ${st.metrics?.active ?? active.length} anomaly aktif, koneksi ${conn}. Coba tanyakan “kamu sedang mengerjakan apa?”, “ada masalah?”, atau “telemetry terakhir apa?”.`;
-}
-
 window.BCGOBrain = {
-    ask(question) {
-        const answer = brainAnswer(question);
-        conversation.push({role:'user', text:String(question), at:Date.now()});
-        const st = authoritativeBCGOState();
-        conversation.push({role:'bcgo', text:answer, at:Date.now(), cycle:st?.cycle ?? null});
-        conversation = conversation.slice(-20);
-        return answer;
+    async ask(question) {
+        const runtime = await waitForInternalAI();
+        if (!runtime?.ask) throw new Error('INTERNAL_AI_NOT_READY');
+        return runtime.ask(question);
     },
-    getConversation() { return conversation.slice(); },
-    getState() { return liveState || window.BCGO_STATE || null; }
+    getConversation() {
+        try { return window.CIKURInternalAIRuntime?.getChatConversation?.() || []; } catch { return []; }
+    },
+    getState() { return authoritativeBCGOState(); }
 };
 
 let chatRequestBusy = false;
 
+function setChatBusy(busy) {
+    chatRequestBusy = busy;
+    if (chatInput) chatInput.disabled = busy;
+    const submit = chatForm?.querySelector('button[type="submit"], button:not(.quick-q)');
+    if (submit) {
+        submit.disabled = busy;
+        submit.textContent = busy ? 'Memproses…' : 'Kirim';
+    }
+}
+
 async function sendQuestion(question) {
     const text = String(question || '').trim();
     if (!text || chatRequestBusy) return;
-    chatRequestBusy = true;
+    setChatBusy(true);
     addChat('user', text);
     try {
         const runtime = await waitForInternalAI();
-        const stateBefore = authoritativeBCGOState();
-        if (!runtime?.ask) {
-            throw new Error('INTERNAL_AI_NOT_READY');
-        }
+        if (!runtime?.ask) throw new Error('INTERNAL_AI_NOT_READY');
         const answer = await runtime.ask(text);
-        const stateAfter = authoritativeBCGOState();
-        const cycle = stateAfter?.cycle ?? stateBefore?.cycle ?? '-';
-        addChat('bcgo', `${answer}\n\n[SYNC] Jawaban diambil dari BCGO_STATE live • cycle #${cycle}.`);
+        if (answer) addChat('bcgo', answer);
     } catch (error) {
-        addChat('bcgo', `Saya belum akan berpura-pura sudah menerima perintah. Internal AI belum siap atau gagal memprosesnya: ${String(error?.message || error).slice(0, 220)}`);
+        addChat('bcgo', `Saya belum bisa menyelesaikan pesan ini dengan aman. Internal AI belum siap atau gagal memprosesnya: ${String(error?.message || error).slice(0, 220)}`);
     } finally {
-        chatRequestBusy = false;
+        setChatBusy(false);
+        chatInput?.focus();
     }
 }
 
@@ -709,12 +657,61 @@ chatForm?.addEventListener('submit', event => {
     const text = chatInput.value.trim();
     if (!text) return;
     chatInput.value = '';
-    sendQuestion(text);
+    void sendQuestion(text);
 });
 
 document.querySelectorAll('.quick-q').forEach(button => {
-    button.addEventListener('click', () => sendQuestion(button.dataset.q));
+    button.addEventListener('click', () => void sendQuestion(button.dataset.q));
 });
+
+/* Live conversation layer: investigation events become short, human-readable
+   progress messages in the same chat. The event is never treated as proof by
+   itself; it only tells the user what CGO is actually doing right now. */
+(() => {
+    const seen = new Set();
+    const messages = new Map([
+        ['ACTIVE_INVESTIGATION_PROGRESS', d => {
+            const p = d.payload || {};
+            const step = Number(p.step || 0);
+            const labels = { SOURCE_READ:'membaca source aktual', SYMBOL_CALLS:'menelusuri pemanggilan fungsi', SYMBOL_DEFINITIONS:'memastikan definisi fungsi', SYMBOL_IMPORTS_EXPORTS:'menelusuri import dan export', DEPENDENCY_TRACE:'menelusuri dependency', RELATION_TRACE:'mencocokkan hubungan antar-file' };
+            const probe = p.probe?.type || '';
+            const work = labels[probe] || 'mengumpulkan evidence';
+            return step > 0 ? `Saya masih bekerja. Langkah ${step}: saya ${work}. Hasilnya tetap saya ikat ke case yang sama.` : `Saya masih bekerja. Saya ${work} dan tetap membawa konteks percakapan kita.`;
+        }],
+        ['ACTIVE_INVESTIGATION_STEP', d => {
+            const p = d.payload || {};
+            if (p.status === 'COMPLETE' && p.exactSourceVerified) return 'Investigasi selesai. Root cause dan exact source sudah terikat; saya belum menyentuh source dan akan menunggu solusi konkret bila pekerjaan ini meminta perbaikan.';
+            if (p.exactSourceVerified) return 'Saya sudah mengikat exact source. Saya lanjut memastikan solusi dan integrity sebelum ada tindakan.';
+            if (p.rootCauseVerified) return 'Root cause sudah terbukti. Saya lanjut ke verifikasi exact source dan konteks perubahan.';
+            return 'Saya mendapat evidence baru dan melanjutkan investigasi dari hasil terbaru.';
+        }],
+        ['CHAT_REPAIR_WAITING', d => {
+            const p = d.payload || {};
+            const blockers = Array.isArray(p.blockers) ? p.blockers.slice(0,2).join(', ') : '';
+            return blockers ? `Perintah perbaikan tetap saya pegang. Saya masih menunggu bukti: ${blockers}.` : 'Perintah perbaikan tetap saya pegang. Saya masih melengkapi proof sebelum menyentuh source.';
+        }],
+        ['CHAT_REPAIR_READY_EXECUTOR_MISSING', () => 'Proof sudah siap, tetapi Executor internal belum terhubung. Saya tidak akan mengklaim source sudah berubah.'],
+        ['CHAT_REPAIR_BLOCKED', d => `Saya menahan perintah perbaikan karena gerbang internal belum mengizinkannya: ${String(d.payload?.reason || 'proof atau policy belum memenuhi syarat')}.`],
+        ['CHAT_REPAIR_EXECUTED', () => 'Perubahan sudah dikirim ke Executor internal. Sekarang saya masuk ke validation dan belum akan menyebut selesai sebelum read-back terbukti.'],
+        ['CHAT_REPAIR_FAILED', d => `Execution berhenti dan saya tidak akan menyebutnya berhasil. ${String(d.payload?.error || 'Ada kegagalan pada jalur execution.').slice(0,180)}`],
+        ['CHAT_INVESTIGATION_ERROR', d => `Investigasi mengalami kendala internal: ${String(d.payload?.error || 'unknown error').slice(0,180)}.`]
+    ]);
+    window.addEventListener('cikur-internal-ai-investigation', event => {
+        const d = event.detail || {};
+        const runtime = window.CIKURInternalAIRuntime;
+        const ctx = runtime?.getChatContext?.();
+        if (!ctx?.caseId || d.caseId !== ctx.caseId) return;
+        const step = Number(d.payload?.step || 0);
+        const key = `${d.caseId}:${d.type}:${step || d.at}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        if (seen.size > 80) seen.delete(seen.values().next().value);
+        const make = messages.get(d.type);
+        if (!make) return;
+        const text = make(d);
+        if (text) addChat('bcgo', text);
+    });
+})();
 
 function renderNeuralEvents(events) {
     if (!eventCounterEl || !neuralEventsEl) return;
@@ -796,7 +793,7 @@ runAutonomousEngine(state => {
     if (!chatFeed.dataset.ready) {
         chatFeed.dataset.ready = '1';
         chatFeed.innerHTML = '';
-        addChat('bcgo', 'Kanal komunikasi aktif. Saya membaca BCGO_STATE live yang sama dengan monitor. Saya tidak mengunci cycle di pesan awal. Silakan kirim pertanyaan atau perintah.');
+        addChat('bcgo', 'Kanal komunikasi aktif. Saya membaca state BCGO yang sedang hidup. Silakan bicara atau beri perintah; saya akan membawa konteks percakapan ini.');
     }
 });
 } catch (error) {
