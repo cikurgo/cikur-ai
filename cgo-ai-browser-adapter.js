@@ -11,7 +11,7 @@ import * as Logic from "./cgo-ai-logic.js";
 import * as Memory from "./cgo-ai-memory.js";
 import { createRuntime } from "./cgo-ai-runtime-adapter.js";
 
-const VERSION = "V5.3-BROWSER-BRIDGE-1.6.0-NATURAL-CHAT";
+const VERSION = "V5.3-BROWSER-BRIDGE-1.9.0-GENERIC-SYNC-NATURAL-CHAT";
 const INTERNAL_AUTO_POLICY = Object.freeze({
   version:"CIKUR-INTERNAL-AUTO-1",
   allowAutomaticExecution:true,
@@ -30,7 +30,19 @@ let knowledge = Knowledge.createKnowledgeStore();
 let latest = null;
 let latestBCGOState = null;
 let lastChatCaseId = null;
-let lastChatContext = { files: [], comparison: false, question: null };
+const chatCaseIds = new Map();
+let lastChatContext = { files: [], comparison: false, question: null, stateRevision: null };
+
+// BCGO_STATE is the single authoritative live state. The bridge may receive a
+// cloned snapshot during an engine callback, but chat/probes must always prefer
+// the newest state published by BCGO itself. This prevents chat from answering
+// from an older cycle while the monitor has already advanced.
+function getLiveBCGOState(fallback = latestBCGOState) {
+  try {
+    if (window?.BCGO_STATE && typeof window.BCGO_STATE === "object") return clone(window.BCGO_STATE);
+  } catch {}
+  return fallback ? clone(fallback) : {};
+}
 
 function clone(v) {
   return typeof structuredClone === "function"
@@ -222,6 +234,9 @@ function upsertBCGOCase(item, state) {
   ev.metadata.proofRequired = false;
   const t = token(ev);
   if (evidenceTokens.get(caseId) !== t) {
+    // This is new authoritative BCGO telemetry. Invalidate the old probe plan
+    // so the next generation starts from the newest evidence revision.
+    activeEngines.delete(caseId);
     const current = runtime.getCase(caseId);
     const sequence = Number(current?.event?.sequence || 0) + 1;
     try { c = runtime.addEvidence(caseId, { ...ev, sequence, eventId: `${caseId}:${sequence}` }); }
@@ -235,6 +250,9 @@ function upsertBCGOCase(item, state) {
     if (priorNerveToken !== nerveToken) {
       const nerveEvidence = [...buildNerveEvidence(state, source), ...buildNerveRelations(state, source)];
       if (nerveEvidence.length) {
+        // File-nerve changes are authoritative source-scan evidence and therefore
+        // invalidate the previous investigation generation as well.
+        activeEngines.delete(caseId);
         const current = runtime.getCase(caseId);
         const startSeq = Number(current?.event?.sequence ?? -1);
         const stamped = nerveEvidence.map((e,i) => ({...e, sequence:startSeq+i+1, eventId:`${caseId}:nerve:${i}:${nerveToken.slice(0,32)}`}));
@@ -250,18 +268,21 @@ function upsertBCGOCase(item, state) {
 
 
 function investigationFiles(state) {
-  const sources = state?.sourceScan?.sources;
+  const live = getLiveBCGOState(state);
+  const sources = live?.sourceScan?.sources;
   if (sources && typeof sources === "object") return Object.keys(sources).map(normalizeFile).filter(Boolean);
-  const states = state?.sourceScan?.fileStates;
+  const states = live?.sourceScan?.fileStates;
   if (states && typeof states === "object") return Object.keys(states).map(normalizeFile).filter(Boolean);
   return [];
 }
 
 function createInternalProbeProvider(state) {
-  const files = investigationFiles(state);
   return {
-    sourceSurfaceComplete: state?.sourceScan?.status === "CLEAN" || state?.sourceScan?.status === "FINDINGS",
-    async listFiles() { return files.slice(); },
+    get sourceSurfaceComplete() {
+      const live = getLiveBCGOState(state);
+      return live?.sourceScan?.status === "CLEAN" || live?.sourceScan?.status === "FINDINGS";
+    },
+    async listFiles() { return investigationFiles(state); },
     async readSource(file) {
       const normalized = normalizeFile(file);
       if (!normalized) throw new Error("SOURCE_FILE_REQUIRED");
@@ -277,9 +298,12 @@ function createInternalProbeProvider(state) {
 
 function getActiveEngine(caseId, caseData) {
   let engine = activeEngines.get(caseId);
-  // Evidence invalidation starts a new investigation generation. Never keep a
-  // probe cache from an older case revision after new telemetry/source arrives.
-  if (!engine || Number(engine.state?.caseRevision ?? -1) !== Number(caseData?.revision ?? 0)) {
+  // A probe generation owns its completed-probe cache. Internal probe evidence
+  // also increments the runtime case revision, so revision alone cannot be used
+  // as a reason to recreate the engine (that previously caused duplicate
+  // SOURCE_READ evidence and EVIDENCE_ID_COLLISION). Authoritative BCGO evidence
+  // explicitly deletes the engine above, which starts a clean generation.
+  if (!engine) {
     engine = ActiveInvestigation.createInvestigationEngine(caseData, knowledge, {maxSteps:10, maxFiles:40});
     engine.state.caseRevision = Number(caseData?.revision ?? 0);
     activeEngines.set(caseId, engine);
@@ -293,6 +317,7 @@ async function runActiveInvestigation(caseId, state) {
   if (!current) return;
   const startRevision = Number(current.revision ?? 0);
   const engine = getActiveEngine(caseId, current);
+  if (engine.state?.status !== "ACTIVE") return;
   const provider = createInternalProbeProvider(state);
   const runPromise = (async () => {
     try {
@@ -342,6 +367,9 @@ async function runActiveInvestigation(caseId, state) {
       }
 
       let synced = runtime.getCase(caseId) || before;
+      // The runtime revision may advance when CGO probe evidence is committed;
+      // keep this same probe generation attached to the new revision.
+      engine.state.caseRevision = Number(synced?.revision ?? engine.state.caseRevision ?? 0);
       if (out.caseData.hypotheses?.length) {
         try { synced = runtime.reason(caseId, out.caseData.hypotheses); } catch {}
       }
@@ -372,9 +400,10 @@ async function runActiveInvestigation(caseId, state) {
     } finally {
       activeRuns.delete(caseId);
       const latestCase = runtime.getCase(caseId);
-      if (latestCase && Number(latestCase.revision ?? 0) !== startRevision) {
-        // A new event may have arrived while this generation was running.
-        // Re-enter with the newest case after the current promise fully closes.
+      if (latestCase && Number(latestCase.revision ?? 0) !== startRevision && activeEngines.get(caseId) !== engine) {
+        // Only an authoritative BCGO evidence update replaces the engine. Internal
+        // probe evidence also advances the case revision, but must NOT restart the
+        // same generation (otherwise SOURCE_READ can be emitted twice and collide).
         setTimeout(() => {
           const fresh = runtime.getCase(caseId);
           if (fresh) void runActiveInvestigation(caseId, state);
@@ -403,27 +432,72 @@ function chatSourceFiles(state = {}) {
 
 function requestedChatFiles(q, state) {
   const files = chatSourceFiles(state);
-  return [...new Set(files.filter(file => q.includes(String(file).toLowerCase())))];
+  const lower = String(q || "").toLowerCase();
+  return [...new Set(files.filter(file => lower.includes(String(file).toLowerCase())))].sort((a,b) => {
+    const ai = lower.indexOf(String(a).toLowerCase());
+    const bi = lower.indexOf(String(b).toLowerCase());
+    return (ai < 0 ? Number.MAX_SAFE_INTEGER : ai) - (bi < 0 ? Number.MAX_SAFE_INTEGER : bi);
+  });
 }
 
 function requestedChatFile(q, state) {
   return requestedChatFiles(q, state)[0] || null;
 }
 
-function findCaseForFile(file) {
+function findChatCaseForFile(file) {
   const normalized = normalizeFile(file);
-  const caseId = normalized ? caseIds.get(normalized) : null;
+  const caseId = normalized ? chatCaseIds.get(normalized) : null;
   return caseId ? runtime.getCase(caseId) : null;
+}
+
+function chatFindingMatches(finding, files) {
+  const wanted = new Set((files || []).map(normalizeFile).filter(Boolean));
+  const a = normalizeFile(finding?.file || finding?.sourceFile || finding?.source);
+  const b = normalizeFile(finding?.targetFile || finding?.relatedFile || finding?.to);
+  return wanted.has(a) || wanted.has(b);
+}
+
+function syncChatContextEvidence(caseId, state, files, comparison) {
+  const c = runtime.getCase(caseId);
+  if (!c) return null;
+  const scan = state?.sourceScan || {};
+  const candidates = [
+    ...(Array.isArray(scan.findings) ? scan.findings : []),
+    ...(Array.isArray(scan.crossFileFindings) ? scan.crossFileFindings : [])
+  ].filter(f => chatFindingMatches(f, files));
+  const existing = new Set((c.evidence || []).map(e => e.id));
+  const additions = candidates.slice(0, 32).map((f, i) => {
+    const file = normalizeFile(f?.file || f?.sourceFile || f?.source);
+    const line = f?.line ?? f?.targetLine ?? null;
+    const kind = f?.type || f?.kind || "SOURCE_FINDING";
+    const symbol = f?.symbol || f?.missing?.[0] || f?.metadata?.symbol || null;
+    return {
+      id:`CGO_CHAT_SCAN:${file || "unknown"}:${line ?? "NA"}:${kind}:${i}`,
+      eventId:`CGO_CHAT_SCAN:${file || "unknown"}:${line ?? "NA"}:${kind}:${i}`,
+      type:"CHAT_SOURCE_FINDING",
+      source:"BCGO_SOURCE_SCAN",
+      claim:`BCGO scanner menemukan ${kind} pada ${file || "source"}${line ? `:${line}` : ""}: ${f?.message || f?.detail || f?.claim || "temuan source"}.`,
+      status:"VERIFIED",
+      strength:f?.severity === "HIGH" ? 1 : f?.severity === "MEDIUM" ? .8 : .65,
+      exact:Number.isFinite(line),
+      fingerprint:f?.fingerprint || null,
+      observedAt:now(),
+      metadata:{
+        file, line, kind, symbol,
+        targetFile:normalizeFile(f?.targetFile || f?.relatedFile || f?.to),
+        comparison:!!comparison,
+        proofRequired:true
+      }
+    };
+  }).filter(e => !existing.has(e.id));
+  if (!additions.length) return c;
+  try { return runtime.addEvidence(caseId, additions); } catch { return runtime.getCase(caseId) || c; }
 }
 
 function createChatCase(file, state, rawQuestion, chatContext = lastChatContext) {
   const targetFile = normalizeFile(file);
   if (!targetFile) return null;
-  const existing = findCaseForFile(targetFile);
-  if (existing) {
-    lastChatCaseId = existing.caseId;
-    return existing;
-  }
+  const live = getLiveBCGOState(state);
   const caseId = `CGO-CHAT-${targetFile}`;
   let c = runtime.getCase(caseId);
   if (!c) {
@@ -434,28 +508,35 @@ function createChatCase(file, state, rawQuestion, chatContext = lastChatContext)
       severity: "UNKNOWN",
       source: "CGO_CHAT"
     });
+  } else {
+    // A new user message is a new observation. Keep the dedicated chat case,
+    // but append the message so the investigation context never silently
+    // remains attached to an older question.
+    try {
+      const seq = Number(c.event?.sequence ?? 0) + 1;
+      c = runtime.addEvidence(caseId, {
+        id:`CGO_CHAT:${targetFile}:${seq}`, eventId:`CGO_CHAT:${targetFile}:${seq}`,
+        sequence:seq, type:"CHAT_REQUEST", source:"CGO_CHAT",
+        claim:`Pengguna meminta CGO memeriksa ${targetFile}: ${rawQuestion}`,
+        status:"VERIFIED", strength:.70, exact:false,
+        metadata:{file:targetFile, proofRequired:false, userIntent:chatContext?.comparison ? "CROSS_FILE_CHECK" : "CHECK", relatedFiles:Array.isArray(chatContext?.files) ? chatContext.files.filter(f => f !== targetFile).slice(0,8) : []}
+      });
+    } catch {}
   }
   try {
-    const seq = Number(c.event?.sequence ?? 0) + 1;
-    c = runtime.addEvidence(caseId, {
-      id: `CGO_CHAT:${targetFile}:${seq}`,
-      eventId: `CGO_CHAT:${targetFile}:${seq}`,
-      sequence: seq,
-      type: "CHAT_REQUEST",
-      source: "CGO_CHAT",
-      claim: `Pengguna meminta CGO memeriksa ${targetFile}: ${rawQuestion}`,
-      status: "VERIFIED",
-      strength: 0.70,
-      exact: false,
-      metadata: {
-        file: targetFile,
-        proofRequired: false,
-        userIntent: chatContext?.comparison ? "CROSS_FILE_CHECK" : "CHECK",
-        relatedFiles: Array.isArray(chatContext?.files) ? chatContext.files.filter(f => f !== targetFile).slice(0,8) : []
-      }
-    });
+    const current = runtime.getCase(caseId) || c;
+    if (!current.evidence?.some(e => e.type === "CHAT_REQUEST")) {
+      const seq = Number(current.event?.sequence ?? 0) + 1;
+      c = runtime.addEvidence(caseId, {
+        id:`CGO_CHAT:${targetFile}:${seq}`, eventId:`CGO_CHAT:${targetFile}:${seq}`, sequence:seq,
+        type:"CHAT_REQUEST", source:"CGO_CHAT", claim:`Pengguna meminta CGO memeriksa ${targetFile}: ${rawQuestion}`,
+        status:"VERIFIED", strength:.70, exact:false,
+        metadata:{file:targetFile, proofRequired:false, userIntent:chatContext?.comparison ? "CROSS_FILE_CHECK" : "CHECK", relatedFiles:Array.isArray(chatContext?.files) ? chatContext.files.filter(f => f !== targetFile).slice(0,8) : []}
+      });
+    }
   } catch {}
-  caseIds.set(targetFile, caseId);
+  c = syncChatContextEvidence(caseId, live, chatContext?.files?.length ? chatContext.files : [targetFile], chatContext?.comparison);
+  chatCaseIds.set(targetFile, caseId);
   lastChatCaseId = caseId;
   return runtime.getCase(caseId) || c;
 }
@@ -487,24 +568,31 @@ function bindInternalExecutionTarget() {
 }
 
 function repairChatCase(file, state, rawQuestion) {
-  let c = findCaseForFile(file);
+  let c = findChatCaseForFile(file);
   if (!c) c = scheduleChatInvestigation(file, state, rawQuestion);
   if (!c) return {text:"Saya belum bisa menentukan file target dari perintah itu.", caseId:null};
 
   const policy = INTERNAL_AUTO_POLICY;
   const evaluation = Logic.evaluate(c, policy, knowledge);
+  const exactFile = normalizeFile(c.exactSource?.file) || normalizeFile(file);
   if (!evaluation.proof.complete) {
-    if (!activeRuns.has(c.caseId)) void runActiveInvestigation(c.caseId, state).catch(()=>{});
+    if (!activeRuns.has(c.caseId)) void runActiveInvestigation(exactFile, state, rawQuestion).catch(()=>{});
+    const rootStatus = evaluation.proof.rootCauseVerified ? "root cause terbukti" : "root cause belum terbukti";
+    const sourceStatus = evaluation.proof.sourceVerified ? "exact source terbukti" : "exact source belum terbukti";
+    const locationText = exactFile && exactFile !== normalizeFile(file)
+      ? ` Hasil investigasi sementara mengikat source ke ${exactFile}, bukan sekadar target chat ${normalizeFile(file)}.`
+      : "";
+    const solutionStatus = evaluation.proof.solutionReady ? "solusi konkret sudah siap" : "solusi konkret belum siap";
     return {
       caseId:c.caseId,
-      text:`Saya terima perintah perbaikan untuk ${normalizeFile(file)}. Tetapi saya belum mengubah source. Proof belum lengkap: ${evaluation.proof.rootCauseVerified ? "root cause terbukti" : "root cause belum terbukti"}, ${evaluation.proof.sourceVerified ? "exact source terbukti" : "exact source belum terbukti"}. Saya lanjutkan investigasi internal dulu.`
+      text:`Saya terima perintah perbaikan. Saya belum mengubah source. Saat ini ${rootStatus}, ${sourceStatus}, dan ${solutionStatus}.${locationText} Saya lanjutkan hanya dari evidence dan source yang sudah terbukti.`
     };
   }
 
   if (evaluation.guardian?.decision !== "AUTO_ALLOWED") {
     return {
       caseId:c.caseId,
-      text:`Proof untuk ${normalizeFile(file)} sudah lengkap, tetapi gerbang internal belum menghasilkan AUTO_ALLOWED: ${evaluation.guardian?.reason || "UNKNOWN"}. Saya tidak akan melewati gerbang tersebut.`
+      text:`Proof untuk ${exactFile} sudah lengkap, tetapi gerbang internal belum menghasilkan AUTO_ALLOWED: ${evaluation.guardian?.reason || "UNKNOWN"}. Saya tidak akan melewati gerbang tersebut.`
     };
   }
 
@@ -540,7 +628,9 @@ function chatAnswer(question = {}) {
     ? question
     : String(question?.text || question?.question || "");
   const q = raw.toLowerCase().trim();
-  const state = latestBCGOState || {};
+  const state = getLiveBCGOState();
+  // Keep the bridge cache aligned with the exact state used for this answer.
+  latestBCGOState = clone(state);
   const snapshot = latest;
   const reasoning = snapshot?.reasoning || {};
   const proof = reasoning.precisionGate || {};
@@ -562,7 +652,7 @@ function chatAnswer(question = {}) {
   const comparisonRequested = mentionedFiles.length > 1 && /\b(bandingkan|cocokkan|sesuai|tidak sesuai|beda|berbeda|form|bagian|kode|code)\b/.test(q);
 
   if (isCheckCommand) {
-    lastChatContext = { files: mentionedFiles.length ? mentionedFiles : [chatFile], comparison: comparisonRequested, question: raw };
+    lastChatContext = { files: mentionedFiles.length ? mentionedFiles : [chatFile], comparison: comparisonRequested, question: raw, stateRevision: state.lastEventAt || state.sourceScan?.completedAt || state.cycle || 0 };
     const c = scheduleChatInvestigation(chatFile, state, raw, lastChatContext);
     if (!c) return `Saya belum bisa membuka target ${chatFile}.`;
     if (comparisonRequested) {
@@ -573,7 +663,7 @@ function chatAnswer(question = {}) {
   }
 
   if (isRepairCommand) {
-    const targetFile = chatFile || runtime.getCase(lastChatCaseId)?.target || state.targetCell || state.lastTelemetryFile || lastChatContext.files[0];
+    const targetFile = chatFile || lastChatContext.files[0] || runtime.getCase(lastChatCaseId)?.target || state.targetCell || state.lastTelemetryFile;
     if (!targetFile) return "Saya terima perintah perbaikan, tetapi belum punya target yang cukup jelas. Sebutkan file atau minta saya cek dulu.";
     const result = repairChatCase(targetFile, state, raw);
     if (result && typeof result === "object") {
@@ -633,7 +723,7 @@ function chatAnswer(question = {}) {
       if (!rel.length) return `Saya sudah mencari relasi untuk ${file}, tetapi pada snapshot scanner saat ini belum ada pasangan source yang bisa saya tampilkan sebagai hubungan terdeteksi. Saya tidak akan mengarang relasi.`;
       return `Untuk ${file}, saya menemukan ${rel.length} hubungan source yang tercatat. Yang terlihat sekarang: ${rel.slice(0,6).map(x => `${x.pair} (${x.status})`).join("; ")}. Jadi pasangan yang muncul di kartu memang berasal dari hasil scanner, bukan dekorasi UI.`;
     }
-    return `Saat ini scanner mencatat ${relations.length} relasi antar-file. Sebutkan nama file, misalnya “hubungan agentcgo.html”, dan saya bisa uraikan pasangan yang terdeteksi.`;
+    return `Saat ini scanner mencatat ${relations.length} relasi antar-file. Sebutkan nama file yang ingin diperiksa, dan saya bisa uraikan pasangan serta dependency yang terdeteksi.`;
   }
 
   if (requestedFile) {
@@ -720,6 +810,7 @@ function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = nu
   if (!evaluation.proof.rootCauseVerified) blockers.push("ROOT_CAUSE_NOT_VERIFIED");
   if (!evaluation.proof.sourceVerified) blockers.push("EXACT_SOURCE_NOT_VERIFIED");
 
+  const liveState = getLiveBCGOState();
   return {
     version: VERSION,
     brainVersion: Core.VERSION,
@@ -728,6 +819,14 @@ function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = nu
     guardianVersion: evaluation.guardian?.policyVersion || "1",
     signal,
     at: Date.now(),
+    bcgoState: {
+      cycle: liveState?.cycle ?? null,
+      step: liveState?.step || null,
+      cycleMode: liveState?.cycleMode || null,
+      lastEventAt: liveState?.lastEventAt || null,
+      sourceScanCompletedAt: liveState?.sourceScan?.completedAt || null,
+      stateAgeMs: liveState?.lastEventAt ? Math.max(0, Date.now() - Number(liveState.lastEventAt)) : null
+    },
     reasoning: {
       classification: deliberate.conclusion,
       evidence: c.evidence.map(e => ({
@@ -765,6 +864,8 @@ export function install() {
   return {
     version: VERSION,
     ingestBCGOState(state = {}) {
+      // BCGO_STATE is authoritative. Each intake replaces the previous bridge
+      // snapshot; chat never treats an older investigation snapshot as live state.
       latestBCGOState = clone(state);
       ensureKnowledge(state);
       const active = Array.isArray(state.activeCases) ? state.activeCases : [];
@@ -798,6 +899,7 @@ export function install() {
       return clone(latest);
     },
     getSnapshot() { return clone(latest); },
+    getBCGOState() { return getLiveBCGOState(); },
     ask(question) { return chatAnswer(question); },
     executionStatus() { return { executorAvailable: !!runtime.hasExecutionHand?.(), lastChatCaseId, latest: clone(latest) }; },
     deliberate(caseId, policy = {}) {

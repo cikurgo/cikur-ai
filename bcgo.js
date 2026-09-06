@@ -11,7 +11,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/fi
 import { db, auth } from "./cikur-config.js";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.16.1 + FILE NERVE FOUNDATION
+ * BCGO MASTER NERVE SYSTEM v2.16.2 + GENERIC ORGAN REGISTRY
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -37,14 +37,23 @@ const ORGAN_REGISTRY = {
   "cikur-config.js": { type: "Sistem Config", role: "system" },
   "bcgo-engine.js": { type: "Sistem Core", role: "system" },
   "bcgo-admin.html": { type: "Sistem Admin", role: "admin" },
-  "data-cgo.html": { type: "Data Sistem", role: "data" }
+  "data-cgo.html": { type: "Data Sistem", role: "data" },
+
+  // Reserved organ slots: already part of the BCGO nerve registry so CGO can
+  // reason about them immediately when they are deployed. They are optional
+  // until the real source exists; an absent reserved source is NOT an anomaly.
+  "payment.html": { type: "Zona Payment", role: "payment", optional: true },
+  "merchant.html": { type: "Zona Merchant", role: "merchant", optional: true },
+  "new-service.html": { type: "Zona Service", role: "service", optional: true },
+  "new-engine.js": { type: "Sistem Engine", role: "engine", optional: true }
 };
 
 const ORGAN_COUNT = Object.keys(ORGAN_REGISTRY).length;
+const RESERVED_OPTIONAL_ORGANS = new Set(Object.entries(ORGAN_REGISTRY).filter(([,meta]) => meta?.optional).map(([file]) => file));
 
 const SOURCE_SCAN_INTERVAL = 20000;
 const SOURCE_SCAN_FETCH_TIMEOUT = 10000;
-const SOURCE_SCAN_VERSION = "1.11.0-NERVE";
+const SOURCE_SCAN_VERSION = "1.14.0-NERVE-CONTRACT-DYNAMIC-DOM";
 
 const ACTIVE_WINDOW = 15 * 60 * 1000;
 const CLOCK_SKEW = 5 * 60 * 1000;
@@ -675,7 +684,26 @@ export function runAutonomousEngine(onCycleUpdate) {
       });
     }
     const dom = extractDomSurface(file, text);
-    return { findings, forms, ids:[...ids.entries()].map(([id,line]) => ({id,line})), onclicks:dom.onclicks, functions:extractFunctionSurface(text) };
+    const functions = extractFunctionSurface(text);
+    const definedNames = new Set(functions.map(fn => String(fn?.name || '').trim()).filter(Boolean));
+    // Inline handlers are executable references. If the source surface is fully
+    // readable and an inline handler points to a function that is not defined in
+    // this source, preserve that as a concrete source finding. It is a finding,
+    // not an automatic repair direction; CGO must still prove the call site and
+    // definition across the complete deployment surface.
+    for (const click of dom.onclicks || []) {
+      const symbol = String(click?.name || '').trim();
+      if (!symbol || definedNames.has(symbol)) continue;
+      findings.push({
+        severity:'HIGH',
+        type:'UNRESOLVED_INLINE_HANDLER',
+        file,
+        line:click.line,
+        symbol,
+        message:`Inline handler ${symbol}() dipanggil pada ${file}, tetapi definisinya tidak ditemukan di source file ini.`
+      });
+    }
+    return { findings, forms, ids:[...ids.entries()].map(([id,line]) => ({id,line})), onclicks:dom.onclicks, functions };
   }
 
   function scanJsSource(file, source) {
@@ -1367,10 +1395,18 @@ export function runAutonomousEngine(onCycleUpdate) {
           fileStates[file] = { status:localFindings.length ? 'FINDING' : 'CLEAN', line:localFindings[0]?.line ?? null, message:localFindings.length ? `${localFindings.length} temuan lokal terdeteksi; bukti disimpan.` : `Source dibaca dan dianalisis: ${item.lines} baris, hash ${item.hash}.` };
           publishProgress({ currentFile:file, currentIndex:index+1, filesScanned:index+1, filesReadable:Object.keys(scanned).length, filesFailed:failures.length, phase:'FILE_DONE', message:`Selesai ${index+1}/${files.length}: ${file} — ${localFindings.length ? localFindings.length+' temuan' : 'tidak ada temuan lokal'}.` });
         } catch (error) {
-          const finding = { severity:'HIGH', type:'SOURCE_UNREADABLE', file, line:null, message:`Source ${file} tidak dapat dibaca: ${String(error?.message || error)}` };
-          failures.push(finding);
-          fileStates[file] = { status:'FAILED', line:null, message:finding.message };
-          publishProgress({ currentFile:file, currentIndex:index+1, filesScanned:index+1, filesReadable:Object.keys(scanned).length, filesFailed:failures.length, phase:'FILE_FAILED', message:`Gagal membaca ${file}; scanner lanjut ke file berikutnya.` });
+          const message = `Source ${file} tidak dapat dibaca: ${String(error?.message || error)}`;
+          if (RESERVED_OPTIONAL_ORGANS.has(file)) {
+            // Reserved future organs are deliberately neutral until deployed.
+            // They remain discoverable to CGO without poisoning scanner health.
+            fileStates[file] = { status:'NOT_DEPLOYED', optional:true, line:null, message:`${file} sudah terdaftar sebagai organ standby, tetapi source belum tersedia.` };
+            publishProgress({ currentFile:file, currentIndex:index+1, filesScanned:index+1, filesReadable:Object.keys(scanned).length, filesFailed:failures.length, phase:'OPTIONAL_NOT_DEPLOYED', message:`${file} adalah organ standby; source belum tersedia, scanner lanjut tanpa menandainya sebagai error.` });
+          } else {
+            const finding = { severity:'HIGH', type:'SOURCE_UNREADABLE', file, line:null, message };
+            failures.push(finding);
+            fileStates[file] = { status:'FAILED', line:null, message:finding.message };
+            publishProgress({ currentFile:file, currentIndex:index+1, filesScanned:index+1, filesReadable:Object.keys(scanned).length, filesFailed:failures.length, phase:'FILE_FAILED', message:`Gagal membaca ${file}; scanner lanjut ke file berikutnya.` });
+          }
         }
       }
       const allFindings = Object.values(scanned).flatMap(item => item.findings || []);

@@ -54,6 +54,18 @@ function symbolsFromCase(caseData) {
   return [...out].slice(0, 12);
 }
 
+function relatedFilesFromCase(caseData) {
+  const out = new Set();
+  for (const e of (caseData?.evidence || [])) {
+    if (e?.type !== "CHAT_REQUEST") continue;
+    for (const f of (e?.metadata?.relatedFiles || [])) {
+      const n = normalizeFile(f);
+      if (n && n !== normalizeFile(caseData?.target)) out.add(n);
+    }
+  }
+  return [...out].slice(0, 12);
+}
+
 function structuralSignals(source, file) {
   const text = String(source || "");
   const out = [];
@@ -282,6 +294,14 @@ function chooseProbe(engine, caseData, knowledge) {
   const target = normalizeFile(caseData?.target);
   const done = s.completedProbes;
   if (target && !done.has(`SOURCE_READ:${target}`)) return {type:"SOURCE_READ",file:target,score:1};
+
+  // A cross-file chat request is a real investigation context, not a UI-only
+  // phrase. Read every explicitly related deployment source before falling back
+  // to generic structural probing. This keeps comparison chat anchored to actual
+  // source rather than to whichever file happened to be named first.
+  for (const related of relatedFilesFromCase(caseData)) {
+    if (!done.has(`SOURCE_READ:${related}`)) return {type:"SOURCE_READ",file:related,score:.995};
+  }
 
   // Source findings outrank generic symbol probing. A concrete BCGO HTML
   // finding must be validated against the live source first.

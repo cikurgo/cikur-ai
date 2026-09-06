@@ -113,13 +113,13 @@ body{font-family:'Inter',sans-serif}
 
     <div class="grid grid-cols-2 md:grid-cols-5 gap-2 pt-2">
         <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">
-            <div class="text-[9px] text-slate-500">TOTAL ORGAN</div><div id="metric-total" class="font-bold text-white">12</div>
+            <div class="text-[9px] text-slate-500">TOTAL ORGAN</div><div id="metric-total" class="font-bold text-white">-</div>
         </div>
         <div class="rounded-lg border border-rose-900 bg-rose-950/20 px-3 py-2">
             <div class="text-[9px] text-slate-500">ANOMALY AKTIF</div><div id="metric-active" class="font-bold text-rose-400">0</div>
         </div>
         <div class="rounded-lg border border-emerald-900 bg-emerald-950/20 px-3 py-2">
-            <div class="text-[9px] text-slate-500">STABIL</div><div id="metric-healthy" class="font-bold text-emerald-400">12</div>
+            <div class="text-[9px] text-slate-500">STABIL</div><div id="metric-healthy" class="font-bold text-emerald-400">-</div>
         </div>
         <div class="rounded-lg border border-amber-900 bg-amber-950/20 px-3 py-2">
             <div class="text-[9px] text-slate-500">RECOVERED</div><div id="metric-recovered" class="font-bold text-amber-400">0</div>
@@ -720,7 +720,8 @@ function renderConnection(state) {
     connectionStateEl.innerHTML = `<span class="connection-dot ${dot}"></span>${label}`;
     connectionAgeEl.textContent = getStateAgeText(state);
     telemetrySourceEl.textContent = state.lastTelemetryFile || 'system_logs aktif';
-    stateIntegrityEl.textContent = state.cycle === liveState?.cycle ? 'SYNC' : 'UPDATING';
+    const aiCycle = Number(window.CIKURInternalAIRuntime?.getBCGOState?.()?.cycle);
+    stateIntegrityEl.textContent = Number.isFinite(aiCycle) && aiCycle === Number(state.cycle) ? 'SYNC' : 'UPDATING';
 }
 
 // Boot watchdog: a failed module graph must never look like a silent blank/idle monitor.
@@ -751,9 +752,9 @@ runAutonomousEngine(state => {
         ? `Impuls terakhir: ${formatTime(state.lastEventAt)}`
         : 'Belum ada impuls baru';
 
-    if (metrics.total) metrics.total.textContent = state.metrics?.total ?? 12;
+    if (metrics.total) metrics.total.textContent = state.metrics?.total ?? 0;
     if (metrics.active) metrics.active.textContent = state.metrics?.active ?? 0;
-    if (metrics.healthy) metrics.healthy.textContent = state.metrics?.healthy ?? 12;
+    if (metrics.healthy) metrics.healthy.textContent = state.metrics?.healthy ?? 0;
     if (metrics.recovered) metrics.recovered.textContent = state.metrics?.recovered ?? 0;
     if (metrics.firestore) metrics.firestore.textContent = state.metrics?.firestoreCount ?? 0;
 
@@ -787,9 +788,10 @@ runAutonomousEngine(state => {
   window.addEventListener('cikur-internal-ai-state', event => {
     const d = event.detail || {}, r = d.reasoning || {}, g = d.guardian || {};
     if (status) { status.textContent = `INTERNAL AI: ${d.signal || 'WAITING'} • GUARD ${g.healthy ? 'OK' : (g.level || 'BLOCK')}`; status.className = `rounded border px-2 py-1 ${g.healthy ? 'border-emerald-900 text-emerald-300' : 'border-rose-900 text-rose-300'}`; }
-    if (reasoning) reasoning.textContent = `REASONING: ${r.classification || 'WAITING'} • evidence ${r.evidence?.length || 0} • hypotheses ${r.hypotheses?.length || 0} • focus ${r.operationalInvestigation?.focus?.target || '-'}`;
-    if (investigation) investigation.textContent = `INVESTIGATION: ${r.operationalInvestigation?.decision || r.investigation?.status || 'WAITING'} • ${(r.operationalInvestigation?.nextActions || []).slice(0,2).map(a=>a.code).join(' → ') || String(r.investigation?.nextEvidence || '').slice(0,70)}`;
-    if (directive) { const f=r.operationalInvestigation?.focus; directive.textContent=`DIRECTIVE: ${f?.target || '-'} • ${(f?.actions || []).slice(0,2).map(a=>a.code).join(' → ') || 'WAITING'}`; }
+    const live = d.bcgoState || {};
+    if (reasoning) reasoning.textContent = `REASONING: ${r.classification || 'WAITING'} • evidence ${r.evidence?.length || 0} • hypotheses ${r.hypotheses?.length || 0} • focus ${r.operationalInvestigation?.focus?.target || '-'} • BCGO #${live.cycle ?? '-'}`;
+    if (investigation) investigation.textContent = `INVESTIGATION: ${r.operationalInvestigation?.decision || r.investigation?.status || 'WAITING'} • ${(r.operationalInvestigation?.nextActions || []).slice(0,2).map(a=>a.code).join(' → ') || String(r.investigation?.nextEvidence || '').slice(0,70)} • ${live.step || '-'}`;
+    if (directive) { const f=r.operationalInvestigation?.focus; directive.textContent=`DIRECTIVE: ${f?.target || '-'} • ${(f?.actions || []).slice(0,2).map(a=>a.code).join(' → ') || 'WAITING'} • cycle #${live.cycle ?? '-'}`; }
   });
   window.addEventListener('cikur-internal-ai-guardian', event => {
     const g = event.detail || {};
