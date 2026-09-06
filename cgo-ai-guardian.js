@@ -7,7 +7,7 @@
  * remains the mandatory gate and allows automatic execution only for the exact
  * CIKUR internal execution policy with complete proof/integrity bindings.
  */
-import { CASE_TRANSITIONS } from "./cgo-ai-core.js?v=20260906-2045-chatlive9";
+import { CASE_TRANSITIONS } from "./cgo-ai-core.js?v=20260906-2115-chatlive10";
 
 const VERSION="1.6.0";
 const INTERNAL_AUTO_POLICY="CIKUR-INTERNAL-AUTO-1";

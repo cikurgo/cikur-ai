@@ -8,7 +8,7 @@ import {
   getDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { db, auth } from "./cikur-config.js?v=20260906-2045-chatlive9";
+import { db, auth } from "./cikur-config.js?v=20260906-2115-chatlive10";
 
 /*
  * BCGO MASTER NERVE SYSTEM v2.16.5 + LIVE CONVERSATION BRAIN
@@ -121,7 +121,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   async function loadInternalAI() {
     if (stopped || internalAI) return internalAI;
     try {
-      const mod = await import("./cgo-runtime-adapter.js?v=20260906-2045-chatlive9");
+      const mod = await import("./cgo-runtime-adapter.js?v=20260906-2115-chatlive10");
       if (typeof mod.install !== "function") throw new Error("INTERNAL_AI_ADAPTER_INVALID");
       internalAI = mod.install();
       window.CIKURInternalAIRuntime = internalAI;
@@ -135,7 +135,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       // under cgo-ai-browser-adapter.js. BCGO must never die merely because an
       // optional reasoning adapter is absent.
       try {
-        const mod = await import("./cgo-ai-browser-adapter.js?v=20260906-2045-chatlive9");
+        const mod = await import("./cgo-ai-browser-adapter.js?v=20260906-2115-chatlive10");
         if (typeof mod.install !== "function") throw new Error("BROWSER_BRAIN_ADAPTER_INVALID");
         internalAI = mod.install();
         window.CIKURInternalAIRuntime = internalAI;
