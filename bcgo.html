@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO Universal Neural Monitor v2.16.4 — Live Chat Nerve</title>
+<title>BCGO Universal Neural Monitor v2.16.5 — Live Conversation Brain</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -235,7 +235,7 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=2.16.4-chatlive4';
+import { runAutonomousEngine } from './bcgo.js?v=20260906-2015-chatlive8';
 
 const $ = id => document.getElementById(id);
 
@@ -563,8 +563,10 @@ function renderLogs(logs) {
 
 function addChat(role, text) {
     if (!chatFeed) return;
+    // A real conversational turn supersedes the transient work indicator.
+    // Progress events themselves never call addChat(), so they cannot become history.
     const liveStatus = chatFeed.querySelector('[data-chat-live-status="1"]');
-    if (liveStatus) liveStatus.remove();
+    if (liveStatus && (role === 'bcgo' || role === 'user')) liveStatus.remove();
 
     const row = document.createElement('div');
     row.className = role === 'user'
@@ -576,7 +578,7 @@ function addChat(role, text) {
         ? 'max-w-[90%] rounded-lg bg-indigo-950 border border-indigo-800 px-3 py-2 text-xs text-indigo-100'
         : 'max-w-[90%] rounded-lg bg-emerald-950/40 border border-emerald-900 px-3 py-2 text-xs text-emerald-100';
 
-    bubble.innerHTML = `<div class="text-[9px] uppercase opacity-60 mb-1">${role === 'user' ? 'Anda' : 'BCGO'}</div>${esc(text)}`;
+    bubble.innerHTML = `<div class="text-[9px] uppercase opacity-60 mb-1">${role === 'user' ? 'Anda' : 'CGO'}</div>${esc(text)}`;
     row.appendChild(bubble);
     chatFeed.appendChild(row);
     chatFeed.scrollTop = chatFeed.scrollHeight;
