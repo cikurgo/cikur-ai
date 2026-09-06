@@ -2,16 +2,16 @@
  * Binds the V5.2 active-investigation brain to the existing BCGO / Medicine contracts.
  * No external AI/API. No source mutation. Medicine remains proof authority.
  */
-import * as Core from "./cgo-ai-core.js";
-import * as Knowledge from "./cgo-ai-knowledge.js";
-import * as Investigator from "./cgo-ai-investigator.js";
-import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js";
-import * as Cognition from "./cgo-ai-cognition.js";
-import * as Logic from "./cgo-ai-logic.js";
-import * as Memory from "./cgo-ai-memory.js";
-import { createRuntime } from "./cgo-ai-runtime-adapter.js";
+import * as Core from "./cgo-ai-core.js?v=20260906-1345-sync3";
+import * as Knowledge from "./cgo-ai-knowledge.js?v=20260906-1345-sync3";
+import * as Investigator from "./cgo-ai-investigator.js?v=20260906-1345-sync3";
+import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js?v=20260906-1345-sync3";
+import * as Cognition from "./cgo-ai-cognition.js?v=20260906-1345-sync3";
+import * as Logic from "./cgo-ai-logic.js?v=20260906-1345-sync3";
+import * as Memory from "./cgo-ai-memory.js?v=20260906-1345-sync3";
+import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260906-1345-sync3";
 
-const VERSION = "V5.3-BROWSER-BRIDGE-1.9.0-GENERIC-SYNC-NATURAL-CHAT";
+const VERSION = "V5.3-BROWSER-BRIDGE-2.1.0-LIVE-COMMAND-SYNC-GENERIC";
 const INTERNAL_AUTO_POLICY = Object.freeze({
   version:"CIKUR-INTERNAL-AUTO-1",
   allowAutomaticExecution:true,
@@ -31,6 +31,7 @@ let latest = null;
 let latestBCGOState = null;
 let lastChatCaseId = null;
 const chatCaseIds = new Map();
+const pendingRepairIntents = new Map();
 let lastChatContext = { files: [], comparison: false, question: null, stateRevision: null };
 
 // BCGO_STATE is the single authoritative live state. The bridge may receive a
@@ -51,6 +52,17 @@ function clone(v) {
 }
 
 function now() { return new Date().toISOString(); }
+
+function stateRevisionOf(state = {}) {
+  const candidates = [state?.lastEventAt, state?.sourceScan?.completedAt, state?.lastTelemetryAt];
+  for (const value of candidates) {
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+    const parsed = Date.parse(String(value || ""));
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  const cycle = Number(state?.cycle);
+  return Number.isFinite(cycle) ? cycle : 0;
+}
 
 function normalizeFile(v) {
   const raw = String(v || "").trim();
@@ -400,6 +412,11 @@ async function runActiveInvestigation(caseId, state) {
     } finally {
       activeRuns.delete(caseId);
       const latestCase = runtime.getCase(caseId);
+      if (latestCase && pendingRepairIntents.has(caseId)) {
+        void continuePendingRepair(caseId, getLiveBCGOState(state)).catch(err => {
+          emitBrainEvent(caseId, "CHAT_REPAIR_CONTINUE_ERROR", {error:String(err?.message || err)});
+        });
+      }
       if (latestCase && Number(latestCase.revision ?? 0) !== startRevision && activeEngines.get(caseId) !== engine) {
         // Only an authoritative BCGO evidence update replaces the engine. Internal
         // probe evidence also advances the case revision, but must NOT restart the
@@ -567,16 +584,75 @@ function bindInternalExecutionTarget() {
   }
 }
 
+function setPendingRepair(caseId, file, rawQuestion, context = lastChatContext) {
+  if (!caseId) return;
+  pendingRepairIntents.set(caseId, {
+    caseId,
+    target: normalizeFile(file),
+    question: String(rawQuestion || ""),
+    relatedFiles: Array.isArray(context?.files) ? context.files.slice(0, 12).map(normalizeFile).filter(Boolean) : [],
+    comparison: context?.comparison === true,
+    requestedAt: Date.now(),
+    stateRevision: stateRevisionOf(getLiveBCGOState())
+  });
+}
+
+function clearPendingRepair(caseId) {
+  if (caseId) pendingRepairIntents.delete(caseId);
+}
+
+async function continuePendingRepair(caseId, state) {
+  const intent = pendingRepairIntents.get(caseId);
+  if (!intent || activeRuns.has(caseId)) return null;
+  const c = runtime.getCase(caseId);
+  if (!c) { clearPendingRepair(caseId); return null; }
+  const evaluation = Logic.evaluate(c, INTERNAL_AUTO_POLICY, knowledge);
+  if (!evaluation.proof.complete) {
+    emitBrainEvent(caseId, "CHAT_REPAIR_WAITING", {
+      target: normalizeFile(intent.target || c.target),
+      revision: c.revision,
+      blockers: evaluation.proof?.blockers || [],
+      solutionReady: evaluation.proof?.solutionReady === true,
+      stateRevision: stateRevisionOf(getLiveBCGOState(state))
+    });
+    return evaluation;
+  }
+  if (evaluation.guardian?.decision !== "AUTO_ALLOWED") {
+    emitBrainEvent(caseId, "CHAT_REPAIR_BLOCKED", {reason:evaluation.guardian?.reason || "GUARDIAN_BLOCKED", target:normalizeFile(c.exactSource?.file || c.target)});
+    return evaluation;
+  }
+  if (!bindInternalExecutionTarget()) {
+    emitBrainEvent(caseId, "CHAT_REPAIR_READY_EXECUTOR_MISSING", {target:normalizeFile(c.exactSource?.file || c.target)});
+    return evaluation;
+  }
+  clearPendingRepair(caseId);
+  try {
+    const result = await runtime.execute(caseId, INTERNAL_AUTO_POLICY);
+    emitBrainEvent(caseId, "CHAT_REPAIR_EXECUTED", {result, target:normalizeFile(c.exactSource?.file || c.target)});
+    latest = compatibleSnapshot(caseId, "CHAT_REPAIR_EXECUTED");
+    try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-state", {detail:latest})); } catch {}
+    return result;
+  } catch (err) {
+    // Keep the intent only for recoverable readiness failures; execution failures
+    // must not silently retry a consumed or integrity-failed authorization.
+    const msg = String(err?.message || err);
+    if (/AUTHORIZATION_|EXECUTION_PROOF_|EXECUTION_AUTHORIZATION_|EXECUTOR_NOT_CONFIGURED/.test(msg)) clearPendingRepair(caseId);
+    emitBrainEvent(caseId, "CHAT_REPAIR_FAILED", {error:msg,target:normalizeFile(c.exactSource?.file || c.target)});
+    return {status:"FAILED",reason:msg,caseId};
+  }
+}
+
 function repairChatCase(file, state, rawQuestion) {
   let c = findChatCaseForFile(file);
   if (!c) c = scheduleChatInvestigation(file, state, rawQuestion);
   if (!c) return {text:"Saya belum bisa menentukan file target dari perintah itu.", caseId:null};
+  setPendingRepair(c.caseId, file, rawQuestion, lastChatContext);
 
   const policy = INTERNAL_AUTO_POLICY;
   const evaluation = Logic.evaluate(c, policy, knowledge);
   const exactFile = normalizeFile(c.exactSource?.file) || normalizeFile(file);
   if (!evaluation.proof.complete) {
-    if (!activeRuns.has(c.caseId)) void runActiveInvestigation(exactFile, state, rawQuestion).catch(()=>{});
+    if (!activeRuns.has(c.caseId)) void runActiveInvestigation(c.caseId, state).catch(()=>{});
     const rootStatus = evaluation.proof.rootCauseVerified ? "root cause terbukti" : "root cause belum terbukti";
     const sourceStatus = evaluation.proof.sourceVerified ? "exact source terbukti" : "exact source belum terbukti";
     const locationText = exactFile && exactFile !== normalizeFile(file)
@@ -601,25 +677,19 @@ function repairChatCase(file, state, rawQuestion) {
       decision:evaluation.guardian?.decision,
       risk:evaluation.guardian?.risk,
       reason:evaluation.guardian?.reason,
-      target:normalizeFile(file),
+      target:normalizeFile(exactFile),
       next:"PATCH_EXECUTOR_BIND_REQUIRED"
     });
     return {
       caseId:c.caseId,
-      text:`Proof sudah lengkap dan CGO sudah mengotorisasi automatic execution untuk ${normalizeFile(file)}. Saya belum menulis source dari browser karena target Patch Executor internal belum ter-bind. Begitu executor internal terhubung, perintah “Perbaiki” ini dapat diteruskan ke execution dan validation.`
+      text:`Proof sudah lengkap dan gerbang internal sudah AUTO_ALLOWED untuk ${normalizeFile(exactFile)}, tetapi Patch Executor internal belum ter-bind. Saya mempertahankan perintah “Perbaiki” sebagai intent tertunda dan tidak akan mengarang eksekusi.`
     };
   }
 
-  void runtime.execute(c.caseId, policy).then(result => {
-    emitBrainEvent(c.caseId, "CHAT_REPAIR_EXECUTED", {result});
-    latest = compatibleSnapshot(c.caseId, "CHAT_REPAIR_EXECUTED");
-    try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-state", {detail:latest})); } catch {}
-  }).catch(err => {
-    emitBrainEvent(c.caseId, "CHAT_REPAIR_FAILED", {error:String(err?.message || err)});
-  });
+  void continuePendingRepair(c.caseId, state);
   return {
     caseId:c.caseId,
-    text:`Baik. Perintah “Perbaiki” untuk ${normalizeFile(file)} diterima. Proof lengkap, internal guard AUTO_ALLOWED, dan saya kirim ke executor untuk execution lalu validation.`
+    text:`Baik. Perintah “Perbaiki” untuk ${normalizeFile(exactFile)} diterima. Proof dan gerbang internal akan saya ikat ke source/fingerprint terbaru sebelum execution lalu validation.`
   };
 }
 
@@ -652,7 +722,7 @@ function chatAnswer(question = {}) {
   const comparisonRequested = mentionedFiles.length > 1 && /\b(bandingkan|cocokkan|sesuai|tidak sesuai|beda|berbeda|form|bagian|kode|code)\b/.test(q);
 
   if (isCheckCommand) {
-    lastChatContext = { files: mentionedFiles.length ? mentionedFiles : [chatFile], comparison: comparisonRequested, question: raw, stateRevision: state.lastEventAt || state.sourceScan?.completedAt || state.cycle || 0 };
+    lastChatContext = { files: mentionedFiles.length ? mentionedFiles : [chatFile], comparison: comparisonRequested, question: raw, stateRevision: stateRevisionOf(state) };
     const c = scheduleChatInvestigation(chatFile, state, raw, lastChatContext);
     if (!c) return `Saya belum bisa membuka target ${chatFile}.`;
     if (comparisonRequested) {
@@ -825,7 +895,8 @@ function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = nu
       cycleMode: liveState?.cycleMode || null,
       lastEventAt: liveState?.lastEventAt || null,
       sourceScanCompletedAt: liveState?.sourceScan?.completedAt || null,
-      stateAgeMs: liveState?.lastEventAt ? Math.max(0, Date.now() - Number(liveState.lastEventAt)) : null
+      stateRevision: stateRevisionOf(liveState),
+      stateAgeMs: (() => { const rev = stateRevisionOf(liveState); return rev > 0 ? Math.max(0, Date.now() - rev) : null; })()
     },
     reasoning: {
       classification: deliberate.conclusion,
@@ -901,7 +972,35 @@ export function install() {
     getSnapshot() { return clone(latest); },
     getBCGOState() { return getLiveBCGOState(); },
     ask(question) { return chatAnswer(question); },
-    executionStatus() { return { executorAvailable: !!runtime.hasExecutionHand?.(), lastChatCaseId, latest: clone(latest) }; },
+    getChatCommandStatus() {
+      return [...pendingRepairIntents.values()].map(x => clone(x));
+    },
+    async acceptRepairProposal(caseId, proposal = {}) {
+      const current = runtime.getCase(caseId);
+      if (!current) throw new Error("CASE_NOT_FOUND");
+      if (!current.rootCause || !current.exactSource) throw new Error("PROOF_CHAIN_INCOMPLETE");
+      const file = normalizeFile(proposal.file || proposal.targetFile || current.exactSource.file);
+      if (!file || file !== normalizeFile(current.exactSource.file)) throw new Error("REPAIR_SOURCE_TARGET_MISMATCH");
+      const provider = createInternalProbeProvider(getLiveBCGOState());
+      const live = await provider.readSource(file);
+      const originalCode = String(proposal.before ?? proposal.originalCode ?? current.exactSource.originalCode ?? "");
+      const proposedCode = String(proposal.after ?? proposal.proposedCode ?? "");
+      if (!originalCode.trim() || !proposedCode.trim()) throw new Error("CONCRETE_SOLUTION_REQUIRED");
+      if (!String(live.source).includes(originalCode)) throw new Error("REPAIR_ORIGINAL_CODE_NOT_PRESENT");
+      const sourceFingerprint = live.fingerprint || Core.contentFingerprint(live.source);
+      if (proposal.sourceFingerprint && proposal.sourceFingerprint !== sourceFingerprint) throw new Error("REPAIR_SOURCE_FINGERPRINT_MISMATCH");
+      const verified = runtime.proveSource(caseId, {
+        file, originalCode, proposedCode, operation: proposal.operation || "REPLACE_EXACT",
+        fingerprint: Core.contentFingerprint(originalCode), contentFingerprint: Core.contentFingerprint(originalCode),
+        sourceFingerprint, evidenceIds: current.rootCause.evidenceIds
+      });
+      emitBrainEvent(caseId, "CHAT_REPAIR_SOLUTION_ACCEPTED", {file, sourceFingerprint, proposedFingerprint:Core.contentFingerprint(proposedCode)});
+      const continued = pendingRepairIntents.has(caseId) ? await continuePendingRepair(caseId, getLiveBCGOState()) : null;
+      latest = compatibleSnapshot(caseId, "CHAT_REPAIR_SOLUTION_ACCEPTED");
+      try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-state", {detail:latest})); } catch {}
+      return {caseData:verified, continuation:continued};
+    },
+    executionStatus() { return { executorAvailable: !!runtime.hasExecutionHand?.(), lastChatCaseId, pendingRepairCases: pendingRepairIntents.size, latest: clone(latest) }; },
     deliberate(caseId, policy = {}) {
       return runtime.deliberate(caseId, policy);
     },

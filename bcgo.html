@@ -235,7 +235,7 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=2.16.1';
+import { runAutonomousEngine } from './bcgo.js?v=2.16.3-sync3';
 
 const $ = id => document.getElementById(id);
 
@@ -406,7 +406,7 @@ function renderSourceScan(scan) {
     if (sourceScanMessageEl) sourceScanMessageEl.textContent = scan.message || 'Belum ada hasil scanner.';
     if (nerveSummaryEl) {
         const n = scan.nerveSummary || {};
-        nerveSummaryEl.textContent = `HEALTHY ${n.healthy || 0} • OBSERVED ${n.observed || 0} • REVIEW ${n.review || 0} • ANOMALY ${n.anomaly || 0} • UNRESOLVED ${n.unresolved || 0}`;
+        nerveSummaryEl.textContent = `HEALTHY ${n.healthy || 0} • STANDBY ${n.standby || 0} • OBSERVED ${n.observed || 0} • REVIEW ${n.review || 0} • ANOMALY ${n.anomaly || 0} • UNRESOLVED ${n.unresolved || 0}`;
     }
     if (sourceScanCurrentEl) {
         sourceScanCurrentEl.textContent = scan.currentFile
@@ -429,7 +429,8 @@ function renderSourceScan(scan) {
             ANALYZING: ['text-amber-300','border-amber-800','◌'],
             CLEAN: ['text-emerald-300','border-emerald-800','✓'],
             FINDING: ['text-rose-300','border-rose-800','!'],
-            FAILED: ['text-rose-300','border-rose-800','×']
+            FAILED: ['text-rose-300','border-rose-800','×'],
+            NOT_DEPLOYED: ['text-slate-400','border-slate-700','○']
         };
         sourceScanFilesEl.innerHTML = entries.map(([file, info]) => {
             const meta = stateMeta[info?.status] || stateMeta.QUEUED;
@@ -477,6 +478,7 @@ function renderOrgans(organs, nerves, relations = []) {
         const active = info.state === 'ACTIVE' || health.overall === 'ANOMALY';
         const review = info.state === 'REVIEW' || health.overall === 'REVIEW';
         const recovered = info.state === 'RECOVERED';
+        const standby = info.state === 'STANDBY' || info.status === 'STANDBY' || info.optional === true && info.state === 'STANDBY';
 
         const classes = active
             ? 'border-rose-800 bg-rose-950/50 text-rose-400'
@@ -484,11 +486,13 @@ function renderOrgans(organs, nerves, relations = []) {
                 ? 'border-amber-800 bg-amber-950/30 text-amber-300'
                 : recovered
                     ? 'border-amber-800 bg-amber-950/20 text-amber-400'
-                    : 'border-emerald-800 bg-emerald-950/30 text-emerald-400';
+                    : standby
+                        ? 'border-slate-700 bg-slate-950/70 text-slate-400'
+                        : 'border-emerald-800 bg-emerald-950/30 text-emerald-400';
 
-        const label = active ? 'ANOMALY' : review ? 'REVIEW' : recovered ? 'RECOVERED' : 'HEALTHY';
-        const runtime = health.runtime || (nerve.runtime?.active ? 'ANOMALY' : 'HEALTHY');
-        const source = health.source || (nerve.source?.readable ? 'READABLE' : 'WAITING');
+        const label = active ? 'ANOMALY' : review ? 'REVIEW' : recovered ? 'RECOVERED' : standby ? 'STANDBY' : 'HEALTHY';
+        const runtime = standby ? 'STANDBY' : (health.runtime || (nerve.runtime?.active ? 'ANOMALY' : 'HEALTHY'));
+        const source = standby ? 'NOT_DEPLOYED' : (health.source || (nerve.source?.readable ? 'READABLE' : 'WAITING'));
         const dependency = health.dependency || 'WAITING';
         const contract = health.contract || 'WAITING';
         const evidence = nerve.evidenceSummary || {};
@@ -591,9 +595,25 @@ function recoveredOrgans(state) {
     return Object.entries(state?.systemOrgans || {}).filter(([,v]) => v?.state === 'RECOVERED');
 }
 
+function authoritativeBCGOState() {
+    try {
+        if (window.BCGO_STATE && typeof window.BCGO_STATE === 'object') return window.BCGO_STATE;
+    } catch {}
+    return liveState || null;
+}
+
+async function waitForInternalAI(timeoutMs = 4000) {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+        if (window.CIKURInternalAIRuntime?.ask) return window.CIKURInternalAIRuntime;
+        await new Promise(resolve => setTimeout(resolve, 80));
+    }
+    return window.CIKURInternalAIRuntime || null;
+}
+
 function brainAnswer(question) {
     const q = String(question || '').toLowerCase().trim();
-    const st = liveState || window.BCGO_STATE;
+    const st = authoritativeBCGOState();
     if (!st) return 'Saya belum menerima state saraf. Tunggu sebentar sampai neural monitor tersinkron.';
 
     const active = activeOrgans(st);
@@ -651,7 +671,8 @@ window.BCGOBrain = {
     ask(question) {
         const answer = brainAnswer(question);
         conversation.push({role:'user', text:String(question), at:Date.now()});
-        conversation.push({role:'bcgo', text:answer, at:Date.now(), cycle:liveState?.cycle ?? null});
+        const st = authoritativeBCGOState();
+        conversation.push({role:'bcgo', text:answer, at:Date.now(), cycle:st?.cycle ?? null});
         conversation = conversation.slice(-20);
         return answer;
     },
@@ -659,18 +680,27 @@ window.BCGOBrain = {
     getState() { return liveState || window.BCGO_STATE || null; }
 };
 
+let chatRequestBusy = false;
+
 async function sendQuestion(question) {
     const text = String(question || '').trim();
-    if (!text) return;
+    if (!text || chatRequestBusy) return;
+    chatRequestBusy = true;
     addChat('user', text);
-    const runtime = window.CIKURInternalAIRuntime;
     try {
-        const answer = runtime?.ask
-            ? await runtime.ask(text)
-            : await window.BCGOBrain.ask(text);
-        setTimeout(() => addChat('bcgo', answer), 120);
+        const runtime = await waitForInternalAI();
+        const stateBefore = authoritativeBCGOState();
+        if (!runtime?.ask) {
+            throw new Error('INTERNAL_AI_NOT_READY');
+        }
+        const answer = await runtime.ask(text);
+        const stateAfter = authoritativeBCGOState();
+        const cycle = stateAfter?.cycle ?? stateBefore?.cycle ?? '-';
+        addChat('bcgo', `${answer}\n\n[SYNC] Jawaban diambil dari BCGO_STATE live • cycle #${cycle}.`);
     } catch (error) {
-        setTimeout(() => addChat('bcgo', `Maaf, saya sedang mengambil data sistem dan gagal menyelesaikan pertanyaan itu. ${String(error?.message || error).slice(0, 220)}`), 120);
+        addChat('bcgo', `Saya belum akan berpura-pura sudah menerima perintah. Internal AI belum siap atau gagal memprosesnya: ${String(error?.message || error).slice(0, 220)}`);
+    } finally {
+        chatRequestBusy = false;
     }
 }
 
@@ -766,7 +796,7 @@ runAutonomousEngine(state => {
     if (!chatFeed.dataset.ready) {
         chatFeed.dataset.ready = '1';
         chatFeed.innerHTML = '';
-        addChat('bcgo', `Kanal komunikasi aktif. Saya membaca BCGO_STATE yang sama dengan monitor. Saat ini saya berada di tahap ${state.step}, cycle #${state.cycle}. Silakan tanya apa yang sedang saya kerjakan.`);
+        addChat('bcgo', 'Kanal komunikasi aktif. Saya membaca BCGO_STATE live yang sama dengan monitor. Saya tidak mengunci cycle di pesan awal. Silakan kirim pertanyaan atau perintah.');
     }
 });
 } catch (error) {
@@ -789,9 +819,14 @@ runAutonomousEngine(state => {
     const d = event.detail || {}, r = d.reasoning || {}, g = d.guardian || {};
     if (status) { status.textContent = `INTERNAL AI: ${d.signal || 'WAITING'} • GUARD ${g.healthy ? 'OK' : (g.level || 'BLOCK')}`; status.className = `rounded border px-2 py-1 ${g.healthy ? 'border-emerald-900 text-emerald-300' : 'border-rose-900 text-rose-300'}`; }
     const live = d.bcgoState || {};
-    if (reasoning) reasoning.textContent = `REASONING: ${r.classification || 'WAITING'} • evidence ${r.evidence?.length || 0} • hypotheses ${r.hypotheses?.length || 0} • focus ${r.operationalInvestigation?.focus?.target || '-'} • BCGO #${live.cycle ?? '-'}`;
-    if (investigation) investigation.textContent = `INVESTIGATION: ${r.operationalInvestigation?.decision || r.investigation?.status || 'WAITING'} • ${(r.operationalInvestigation?.nextActions || []).slice(0,2).map(a=>a.code).join(' → ') || String(r.investigation?.nextEvidence || '').slice(0,70)} • ${live.step || '-'}`;
-    if (directive) { const f=r.operationalInvestigation?.focus; directive.textContent=`DIRECTIVE: ${f?.target || '-'} • ${(f?.actions || []).slice(0,2).map(a=>a.code).join(' → ') || 'WAITING'} • cycle #${live.cycle ?? '-'}`; }
+    const current = window.BCGO_STATE || {};
+    const snapRev = Number(live.stateRevision || live.lastEventAt || live.sourceScanCompletedAt || live.cycle || 0);
+    const currentRev = Number(current.lastEventAt || current.sourceScan?.completedAt || current.cycle || 0);
+    const sameState = snapRev > 0 && currentRev > 0 && snapRev === currentRev;
+    const syncLabel = sameState ? 'SYNC' : (snapRev && currentRev ? `SYNCING ${live.cycle ?? '-'}→${current.cycle ?? '-'}` : 'SYNCING');
+    if (reasoning) reasoning.textContent = `REASONING: ${r.classification || 'WAITING'} • evidence ${r.evidence?.length || 0} • hypotheses ${r.hypotheses?.length || 0} • focus ${r.operationalInvestigation?.focus?.target || '-'} • BCGO #${current.cycle ?? live.cycle ?? '-'} • ${syncLabel}`;
+    if (investigation) investigation.textContent = `INVESTIGATION: ${sameState ? (r.operationalInvestigation?.decision || r.investigation?.status || 'WAITING') : 'SYNCING'} • ${(r.operationalInvestigation?.nextActions || []).slice(0,2).map(a=>a.code).join(' → ') || String(r.investigation?.nextEvidence || '').slice(0,70)} • ${current.step || live.step || '-'}`;
+    if (directive) { const f=r.operationalInvestigation?.focus; directive.textContent=`DIRECTIVE: ${sameState ? (f?.target || '-') : 'SYNCING'} • ${(f?.actions || []).slice(0,2).map(a=>a.code).join(' → ') || 'WAITING'} • cycle #${current.cycle ?? live.cycle ?? '-'}`; }
   });
   window.addEventListener('cikur-internal-ai-guardian', event => {
     const g = event.detail || {};

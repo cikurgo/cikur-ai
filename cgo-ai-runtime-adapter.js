@@ -3,13 +3,13 @@
  * Orchestrates approved repair/execution through an injected deterministic Executor.
  * The brain never writes source directly; it can trigger Executor execution when policy permits.
  */
-import * as Core from "./cgo-ai-core.js";
-import * as Knowledge from "./cgo-ai-knowledge.js";
-import * as Investigator from "./cgo-ai-investigator.js";
-import * as Memory from "./cgo-ai-memory.js";
-import * as Cognition from "./cgo-ai-cognition.js";
-import * as Guardian from "./cgo-ai-guardian.js";
-import * as Logic from "./cgo-ai-logic.js";
+import * as Core from "./cgo-ai-core.js?v=20260906-1345-sync3";
+import * as Knowledge from "./cgo-ai-knowledge.js?v=20260906-1345-sync3";
+import * as Investigator from "./cgo-ai-investigator.js?v=20260906-1345-sync3";
+import * as Memory from "./cgo-ai-memory.js?v=20260906-1345-sync3";
+import * as Cognition from "./cgo-ai-cognition.js?v=20260906-1345-sync3";
+import * as Guardian from "./cgo-ai-guardian.js?v=20260906-1345-sync3";
+import * as Logic from "./cgo-ai-logic.js?v=20260906-1345-sync3";
 
 const VERSION="1.9.0";
 
@@ -71,7 +71,7 @@ export function createDeterministicExecutor(target={}) {
       if(consumed.has(context.authorizationId)) throw new Error("EXECUTOR_AUTHORIZATION_REPLAY");
       if(!bound) throw new Error("EXECUTION_TARGET_NOT_BOUND");
       if(typeof bound.execute!=="function") throw new Error("EXECUTION_TARGET_EXECUTE_REQUIRED");
-      const current=String(await bound.read());
+      const current=String(await bound.read(request.file||null));
       if(!request.sourceFingerprint) throw new Error("EXECUTION_SOURCE_FINGERPRINT_REQUIRED");
       if(Core.contentFingerprint(current)!==request.sourceFingerprint)
         throw new Error("EXECUTION_SOURCE_FINGERPRINT_MISMATCH");
@@ -85,8 +85,8 @@ export function createDeterministicExecutor(target={}) {
               String(request.proposedCode) +
               current.slice(current.indexOf(String(request.originalCode))+String(request.originalCode).length));
       if(!verification) throw new Error("PATCH_READBACK_VERIFICATION_FAILED");
-      await bound.write(next);
-      const readBack=String(await bound.read());
+      await bound.write(next, request.file||null);
+      const readBack=String(await bound.read(request.file||null));
       if(readBack!==next) throw new Error("PATCH_PERSISTENCE_READBACK_MISMATCH");
       let executionResult;
       try {
@@ -101,8 +101,8 @@ export function createDeterministicExecutor(target={}) {
         });
       } catch(err) {
         try {
-          await bound.write(current);
-          const rollback=String(await bound.read());
+          await bound.write(current, request.file||null);
+          const rollback=String(await bound.read(request.file||null));
           if(rollback!==current) throw new Error("PATCH_ROLLBACK_READBACK_MISMATCH");
         } catch(rollbackErr) {
           throw new Error(`AUTOMATIC_EXECUTION_FAILED_ROLLBACK_FAILED:${rollbackErr.message}`);

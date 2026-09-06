@@ -8,10 +8,10 @@ import {
   getDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { db, auth } from "./cikur-config.js";
+import { db, auth } from "./cikur-config.js?v=20260906-1345-sync3";
 
 /*
- * BCGO MASTER NERVE SYSTEM v2.16.2 + GENERIC ORGAN REGISTRY
+ * BCGO MASTER NERVE SYSTEM v2.16.3 + LIVE COMMAND SYNC
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -53,7 +53,7 @@ const RESERVED_OPTIONAL_ORGANS = new Set(Object.entries(ORGAN_REGISTRY).filter((
 
 const SOURCE_SCAN_INTERVAL = 20000;
 const SOURCE_SCAN_FETCH_TIMEOUT = 10000;
-const SOURCE_SCAN_VERSION = "1.14.0-NERVE-CONTRACT-DYNAMIC-DOM";
+const SOURCE_SCAN_VERSION = "1.15.0-NERVE-CONTRACT-DYNAMIC-DOM-SYNC";
 
 const ACTIVE_WINDOW = 15 * 60 * 1000;
 const CLOCK_SKEW = 5 * 60 * 1000;
@@ -121,7 +121,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   async function loadInternalAI() {
     if (stopped || internalAI) return internalAI;
     try {
-      const mod = await import("./cgo-runtime-adapter.js?v=5.2.5");
+      const mod = await import("./cgo-runtime-adapter.js?v=5.2.6-sync3");
       if (typeof mod.install !== "function") throw new Error("INTERNAL_AI_ADAPTER_INVALID");
       internalAI = mod.install();
       window.CIKURInternalAIRuntime = internalAI;
@@ -135,7 +135,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       // under cgo-ai-browser-adapter.js. BCGO must never die merely because an
       // optional reasoning adapter is absent.
       try {
-        const mod = await import("./cgo-ai-browser-adapter.js?v=5.2.2");
+        const mod = await import("./cgo-ai-browser-adapter.js?v=5.3.0-sync3");
         if (typeof mod.install !== "function") throw new Error("BROWSER_BRAIN_ADAPTER_INVALID");
         internalAI = mod.install();
         window.CIKURInternalAIRuntime = internalAI;
@@ -1430,7 +1430,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       const mergedActionable = [...failures,...allFindings,...mergedCrossFindings].filter(f => f.severity !== 'INFO').slice(0,120);
       const status = failures.length ? 'DEGRADED' : mergedActionable.length ? 'FINDINGS' : 'CLEAN';
       state.fileNerves = nerve.fileNerves;
-      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:mergedCrossFindings,relations:relations.slice(0,200),relationSummary,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),sourceIntelligence:nerve.intelligence,nerveSummary:{healthy:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='HEALTHY').length,observed:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='OBSERVED').length,review:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='REVIEW').length,anomaly:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='ANOMALY').length,unresolved:nerveFindings.length},message:failures.length ? `Scanner selesai: ${files.length} source diproses, ${failures.length} source tidak terbaca.` : mergedActionable.length ? `Scanner selesai: ${files.length} source dibaca; ${mergedActionable.length} bukti/temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} source dibaca dan dianalisis tanpa temuan struktural/cross-file.` };
+      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:mergedCrossFindings,relations:relations.slice(0,200),relationSummary,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),sourceIntelligence:nerve.intelligence,nerveSummary:{healthy:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='HEALTHY').length,standby:Object.values(state.systemOrgans || {}).filter(n=>n.state==='STANDBY').length,observed:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='OBSERVED').length,review:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='REVIEW').length,anomaly:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='ANOMALY').length,unresolved:nerveFindings.length},message:failures.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, ${RESERVED_OPTIONAL_ORGANS.size - Object.keys(scanned).filter(f => RESERVED_OPTIONAL_ORGANS.has(f)).length} organ standby belum dideploy, dan ${failures.length} source gagal dibaca.` : mergedActionable.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca; ${mergedActionable.length} bukti/temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, dan organ standby yang belum dideploy tetap dipisahkan dari HEALTHY.` };
       recordEvent('SOURCE_SCAN_RESULT', state.sourceScan.message, actionable.length ? 'SYS_SOURCE_FINDINGS' : 'SYS_SOURCE_CLEAN');
       const aiSnapshot = ingestInternalAI(safeClone(state));
       if (aiSnapshot) state.internalAI = buildInternalAIHandoff(aiSnapshot);
@@ -1453,7 +1453,14 @@ export function runAutonomousEngine(onCycleUpdate) {
       const item = recent.get(file);
       const historical = latestSystemLogs.some(log => normalizeFile(log?.fileName) === file);
 
-      if (item && isRecent(item.time)) {
+      if (meta?.optional && !item && !historical) {
+        organs[file] = {
+          ...meta,
+          status: "STANDBY",
+          state: "STANDBY",
+          message: "Organ standby terdaftar, tetapi source aktual belum dideploy."
+        };
+      } else if (item && isRecent(item.time)) {
         organs[file] = {
           ...meta,
           status: "ANOMALY",
@@ -1517,6 +1524,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       };
     }
     for (const file of Object.keys(ORGAN_REGISTRY)) {
+      if (ORGAN_REGISTRY[file]?.optional && organs[file]?.state === "STANDBY") continue;
       if (state.sourceScan?.status === "SCANNING" && !state.sourceScan?.sources?.[file] && !sourceFindings.some(f => normalizeFile(f.file || f.targetFile) === file)) {
         organs[file] = { ...organs[file], status:"SCANNING", state:"SCANNING", message:`Source sedang dipindai (${state.sourceScan.currentFile || "antrian"}).` };
       } else if (organs[file]?.state === "HEALTHY" && state.sourceScan?.sources?.[file]) {
@@ -1561,11 +1569,14 @@ export function runAutonomousEngine(onCycleUpdate) {
       active: values.filter(v => v.state === "ACTIVE").length,
       recovered: values.filter(v => v.state === "RECOVERED").length,
       healthy: values.filter(v => v.state === "HEALTHY").length,
+      standby: values.filter(v => v.state === "STANDBY").length,
       review: values.filter(v => v.state === "REVIEW").length,
       logCount: latestSystemLogs.length,
       firestoreCount: firestore.count,
       sourceScanStatus: state.sourceScan?.status || "WAITING",
       sourceFindings: Array.isArray(state.sourceScan?.findings) ? state.sourceScan.findings.length : 0,
+      sourceReadable: Number(state.sourceScan?.filesReadable || 0),
+      sourceStandby: values.filter(v => v.state === "STANDBY").length,
       crossFileFindings: Array.isArray(state.sourceScan?.crossFileFindings) ? state.sourceScan.crossFileFindings.filter(f => f.severity !== "INFO").length : 0
     };
   }

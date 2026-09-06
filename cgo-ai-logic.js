@@ -3,9 +3,9 @@
  * No external AI/API. No source mutation. Automatic patch/execution remains capability-driven
  * and is allowed only when proof + policy + integrity gates all pass.
  */
-import * as Core from "./cgo-ai-core.js";
-import * as Guardian from "./cgo-ai-guardian.js";
-import * as Cognition from "./cgo-ai-cognition.js";
+import * as Core from "./cgo-ai-core.js?v=20260906-1345-sync3";
+import * as Guardian from "./cgo-ai-guardian.js?v=20260906-1345-sync3";
+import * as Cognition from "./cgo-ai-cognition.js?v=20260906-1345-sync3";
 
 const VERSION="1.4.0";
 
@@ -34,6 +34,7 @@ export function evaluate(caseData, policy={}, knowledge=null){
   const fingerprintBound=sourceVerified && !!c.exactSource?.fingerprint &&
     c.exactSource.contentFingerprint===Core.contentFingerprint(c.exactSource.originalCode||"");
   const sourceFingerprintBound=sourceVerified && !!c.exactSource?.sourceFingerprint;
+  const solutionReady=typeof c.exactSource?.proposedCode === "string" && c.exactSource.proposedCode.trim().length>0;
   const proof={
     evidenceCount:(c.evidence||[]).length,
     verifiedEvidenceCount:verified.length,
@@ -46,8 +47,17 @@ export function evaluate(caseData, policy={}, knowledge=null){
     fingerprintBound,
     sourceFingerprintBound,
     sourceEvidenceBound,
-    complete:rootVerified && sourceVerified && fingerprintBound && sourceFingerprintBound && sourceEvidenceBound && !unresolved && !contradictory.length
+    solutionReady,
+    complete:rootVerified && sourceVerified && fingerprintBound && sourceFingerprintBound && sourceEvidenceBound && solutionReady && !unresolved && !contradictory.length
   };
+  proof.blockers = [];
+  if (!proof.rootCauseVerified) proof.blockers.push("ROOT_CAUSE_NOT_VERIFIED");
+  if (!proof.sourceVerified) proof.blockers.push("EXACT_SOURCE_NOT_VERIFIED");
+  if (!proof.fingerprintBound) proof.blockers.push("SOURCE_FINGERPRINT_REQUIRED");
+  if (!proof.sourceEvidenceBound) proof.blockers.push("SOURCE_EVIDENCE_BINDING_REQUIRED");
+  if (!proof.solutionReady) proof.blockers.push("CONCRETE_SOLUTION_NOT_READY");
+  if (proof.unresolved) proof.blockers.push("UNVERIFIED_EVIDENCE_PRESENT");
+  if (proof.contradictory) proof.blockers.push("CONTRADICTORY_EVIDENCE");
   const cognition=Cognition.deliberate({
     evidence:c.evidence||[], rootCause:c.rootCause, exactSource:c.exactSource,
     contradictions:contradictory, proofComplete:(rootVerified && sourceVerified && fingerprintBound && sourceFingerprintBound && sourceEvidenceBound && !unresolved && !contradictory.length)
@@ -70,7 +80,7 @@ export function evaluate(caseData, policy={}, knowledge=null){
     policy
   });
   const action = proof.complete ? guardian.decision : "BLOCKED";
-  const reason = !proof.complete ? "PROOF_CHAIN_INCOMPLETE" : guardian.reason;
+  const reason = !proof.complete ? (solutionReady ? "PROOF_CHAIN_INCOMPLETE" : "CONCRETE_SOLUTION_NOT_READY") : guardian.reason;
   return clone({caseId:c.caseId, revision:c.revision||0, proof, cognition, guardian, decision:action, reason});
 }
 
