@@ -235,7 +235,7 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=20260906-2115-chatlive10';
+import { runAutonomousEngine } from './bcgo.js?v=20260907-1146-chatstress12';
 
 const $ = id => document.getElementById(id);
 
@@ -632,18 +632,6 @@ function authoritativeBCGOState() {
     return liveState || null;
 }
 
-function restoreChatFeedFromRuntime(runtime) {
-    if (!chatFeed || !runtime?.getConversation) return;
-    try {
-        const turns = runtime.getConversation();
-        if (!Array.isArray(turns) || !turns.length) return;
-        chatFeed.innerHTML = '';
-        for (const turn of turns) {
-            if (turn?.role === 'user' || turn?.role === 'bcgo') addChat(turn.role, turn.text || '');
-        }
-    } catch {}
-}
-
 async function waitForInternalAI(timeoutMs = 12000) {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
@@ -677,15 +665,34 @@ function setChatBusy(busy) {
     }
 }
 
+function restoreVisibleConversation() {
+    try {
+        const runtime = window.CIKURInternalAIRuntime;
+        const history = runtime?.getChatConversation?.() || [];
+        if (!chatFeed || !Array.isArray(history) || !history.length) return;
+        const liveStatus = chatFeed.querySelector('[data-chat-live-status="1"]');
+        if (liveStatus) liveStatus.remove();
+        for (const item of history.slice(-40)) {
+            if (item?.role !== 'user' && item?.role !== 'bcgo') continue;
+            addChat(item.role, item.text || '');
+        }
+        const restoration = runtime?.getChatRestoration?.();
+        if (restoration?.restored && restoration.context) {
+            setChatLiveStatus('Konteks percakapan dipulihkan. Saya membaca ulang state live sebelum melanjutkan pekerjaan.', 'working');
+        }
+    } catch (error) {
+        console.warn('[BCGO] Chat restore skipped:', error);
+    }
+}
+
 async function sendQuestion(question) {
     const text = String(question || '').trim();
     if (!text || chatRequestBusy) return;
     setChatBusy(true);
+    addChat('user', text);
     try {
         const runtime = await waitForInternalAI();
         if (!runtime?.ask) throw new Error('INTERNAL_AI_NOT_READY');
-        restoreChatFeedFromRuntime(runtime);
-        addChat('user', text);
         const answer = await runtime.ask(text);
         if (answer) addChat('bcgo', answer);
     } catch (error) {
@@ -695,8 +702,6 @@ async function sendQuestion(question) {
         chatInput?.focus();
     }
 }
-
-void waitForInternalAI().then(runtime => restoreChatFeedFromRuntime(runtime));
 
 chatForm?.addEventListener('submit', event => {
     event.preventDefault();
@@ -840,6 +845,7 @@ runAutonomousEngine(state => {
     if (!chatFeed.dataset.ready) {
         chatFeed.dataset.ready = '1';
         chatFeed.innerHTML = '';
+        restoreVisibleConversation();
     }
 });
 } catch (error) {

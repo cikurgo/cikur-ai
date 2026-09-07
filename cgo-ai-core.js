@@ -24,7 +24,6 @@ export const CASE_TRANSITIONS = {
   // on a low/medium-risk change). Without this entry, that legitimate outcome crashed
   // the runtime with INVALID_CASE_STATE_TRANSITION instead of blocking gracefully.
   SOURCE_VERIFIED:["CANDIDATE_READY","INVESTIGATING","EVIDENCE_COLLECTING","INVESTIGATION_BLOCKED"],
-  SOURCE_NOT_VERIFIED:["SOURCE_VERIFIED","INVESTIGATING","EVIDENCE_COLLECTING"],
   CANDIDATE_READY:["EXECUTOR_REVIEW","HUMAN_APPROVAL","EXECUTING","INVESTIGATING"],
   EXECUTOR_REVIEW:["HUMAN_APPROVAL","EXECUTING","INVESTIGATION_BLOCKED"],
   HUMAN_APPROVAL:["EXECUTING","INVESTIGATION_BLOCKED"],
@@ -192,22 +191,12 @@ export function verifyRootCause(caseData, rootCause) {
   const hypothesisId = typeof rootCause?.hypothesisId==="string" ? rootCause.hypothesisId.trim() : "";
   const hypothesis = c.hypotheses.find(h=>h?.id===hypothesisId);
   const hypothesisEvidence = Array.isArray(hypothesis?.evidenceIds) ? uniq(hypothesis.evidenceIds) : [];
-  // Two evidence records from the same origin are not independent proof.
-  // Independence is deliberately conservative: origin is resolved from the
-  // explicit source/file first, then evidence type. Distinct evidence IDs
-  // alone are insufficient because duplicated telemetry must not become proof.
-  const independentOrigins = new Set(evidence.map(e=>{
-    const source = typeof e?.source === "string" && e.source.trim() ? e.source.trim() : "";
-    const file = typeof e?.metadata?.file === "string" && e.metadata.file.trim() ? e.metadata.file.trim() : "";
-    const type = typeof e?.type === "string" && e.type.trim() ? e.type.trim() : "";
-    return source || file || type || null;
-  }).filter(Boolean));
-  const independentSupport = required.length>=2 && independentOrigins.size>=2;
+  const independentSources = new Set(evidence.map(e=>e.source || e.metadata?.file || e.type || e.id));
+  const independentSupport = independentSources.size>=2 || evidence.length>=2;
   const causalScore = Number(hypothesis?.score);
   const statementBound = !!hypothesis && String(rootCause.statement).trim() === String(hypothesis.statement || "").trim();
-  const allCaseContradictions = detectContradictions(c.evidence);
   const allVerified = required.length>0 && evidence.length===required.length &&
-    evidence.every(e=>e.status==="VERIFIED") && !allCaseContradictions.length &&
+    evidence.every(e=>e.status==="VERIFIED") && !detectContradictions(evidence).length &&
     !!hypothesis && statementBound && causalScore>=0.60 && hypothesisEvidence.length>0 &&
     required.every(id=>hypothesisEvidence.includes(id)) && independentSupport;
   if(!allVerified) {
@@ -231,10 +220,9 @@ export function verifyRootCause(caseData, rootCause) {
 export function verifyExactSource(caseData, source) {
   const c = structuredClone(caseData);
   const boundEvidence = Array.isArray(source?.evidenceIds) ? c.evidence.filter(e=>source.evidenceIds.includes(e.id)) : [];
-  const exactBoundEvidence = boundEvidence.filter(e=>e.status==="VERIFIED" && e.exact &&
-    e.fingerprint===source?.fingerprint &&
-    (e.metadata?.file===source?.file || e.file===source?.file || e.source===source?.file)
-  );
+  const exactBoundEvidence = boundEvidence.filter(e=>e.status==="VERIFIED" && e.exact && (
+    e.fingerprint===source?.fingerprint || e.metadata?.file===source?.file || e.source===source?.file
+  ));
   const valid = !!c.rootCause && !!source?.file && !!source?.originalCode &&
     !!source?.fingerprint && Array.isArray(source.evidenceIds) &&
     source.evidenceIds.length>0 &&

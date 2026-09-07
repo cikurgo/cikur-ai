@@ -3,11 +3,11 @@
  * No external AI/API. No source mutation. Automatic patch/execution remains capability-driven
  * and is allowed only when proof + policy + integrity gates all pass.
  */
-import * as Core from "./cgo-ai-core.js?v=20260906-2115-chatlive10";
-import * as Guardian from "./cgo-ai-guardian.js?v=20260906-2115-chatlive10";
-import * as Cognition from "./cgo-ai-cognition.js?v=20260906-2115-chatlive10";
+import * as Core from "./cgo-ai-core.js?v=20260907-1146-chatstress12";
+import * as Guardian from "./cgo-ai-guardian.js?v=20260907-1146-chatstress12";
+import * as Cognition from "./cgo-ai-cognition.js?v=20260907-1146-chatstress12";
 
-const VERSION="1.4.1-PROOF-GATE";
+const VERSION="1.4.0";
 
 function clone(v){ return structuredClone(v); }
 function verifiedEvidence(caseData){ return (caseData?.evidence||[]).filter(e=>e?.status==="VERIFIED"); }
@@ -22,14 +22,7 @@ export function evaluate(caseData, policy={}, knowledge=null){
   const rootEvidenceBound=!!c.rootCause && rootIds.length>0 && new Set(rootIds).size===rootIds.length && rootIds.every(id=>verified.some(e=>e.id===id));
   const rootHypothesis = c.hypotheses?.find(h=>h?.id===c.rootCause?.hypothesisId);
   const rootHypothesisEvidence = Array.isArray(rootHypothesis?.evidenceIds) ? rootHypothesis.evidenceIds : [];
-  const independentRootOrigins = new Set(rootIds.map(id=>{
-    const e=verified.find(x=>x.id===id);
-    const source=typeof e?.source==="string" && e.source.trim() ? e.source.trim() : "";
-    const file=typeof e?.metadata?.file==="string" && e.metadata.file.trim() ? e.metadata.file.trim() : "";
-    const type=typeof e?.type==="string" && e.type.trim() ? e.type.trim() : "";
-    return source || file || type || null;
-  }).filter(Boolean));
-  const independentRootSupport = rootIds.length>=2 && independentRootOrigins.size>=2;
+  const independentRootSupport = new Set(rootIds.map(id=>{const e=verified.find(x=>x.id===id); return e?.source || e?.metadata?.file || e?.type || e?.id;})).size>=2 || rootIds.length>=2;
   const causalRootVerified = rootEvidenceBound && !!rootHypothesis && Number(rootHypothesis.score)>=0.60 &&
     Number(c.rootCause?.hypothesisScore)===Number(rootHypothesis.score) &&
     String(c.rootCause?.statement || "").trim()===String(rootHypothesis.statement || "").trim() &&

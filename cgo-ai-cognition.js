@@ -1,7 +1,7 @@
 /* CIKUR GO Internal Cognition
  * Deep deliberation over supplied facts. It may say "insufficient evidence".
  */
-const VERSION="1.1.0";
+const VERSION="1.2.0-CONVERSATIONAL-COGNITION";
 
 // UPGRADE: confidence used to be purely a headcount (verified.length/4), so four
 // weak, unverified-strength pieces of evidence scored identically to four strong,
