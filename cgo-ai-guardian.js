@@ -7,9 +7,10 @@
  * remains the mandatory gate and allows automatic execution only for the exact
  * CIKUR internal execution policy with complete proof/integrity bindings.
  */
-import { CASE_TRANSITIONS } from "./cgo-ai-core.js?v=20260907-1146-chatstress12";
+import { CASE_TRANSITIONS } from "./cgo-ai-core.js?v=20260907-1315-instruction1";
+import * as Instruction from "./cgo-instruction.js";
 
-const VERSION="1.6.0";
+const VERSION="1.7.0-CONSTITUTION-BOUND";
 const INTERNAL_AUTO_POLICY="CIKUR-INTERNAL-AUTO-1";
 const RISK = {LOW:1, MEDIUM:2, HIGH:3, CRITICAL:4};
 
@@ -81,4 +82,4 @@ export function guardTransition(from,to,ctx={}) {
   return {ok,from,to,reason:ok?"ALLOWED":"INVALID_TRANSITION"};
 }
 
-export { VERSION, INTERNAL_AUTO_POLICY };
+export { VERSION, INTERNAL_AUTO_POLICY, Instruction };

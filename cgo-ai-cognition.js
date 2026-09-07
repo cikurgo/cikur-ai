@@ -1,7 +1,9 @@
 /* CIKUR GO Internal Cognition
  * Deep deliberation over supplied facts. It may say "insufficient evidence".
  */
-const VERSION="1.2.0-CONVERSATIONAL-COGNITION";
+import * as Instruction from "./cgo-instruction.js";
+
+const VERSION="1.4.0-CONVERSATIONAL-COGNITION-CONSTITUTION";
 
 // UPGRADE: confidence used to be purely a headcount (verified.length/4), so four
 // weak, unverified-strength pieces of evidence scored identically to four strong,
@@ -35,10 +37,23 @@ export function deliberate(context={}) {
   };
 }
 
+export function dialogueMode(context={}) {
+  const classified=Instruction.classifyDialogue(context.text||"", {
+    caseId:context.workContext ? "WORK_CONTEXT" : null,
+    primaryFile:context.primaryFile || null,
+    topic:context.topic || null
+  });
+  if(classified?.mode==="CONVERSATION_WITH_WORK_CONTEXT") return "CONVERSATION_WITH_WORK_CONTEXT";
+  if(classified?.conversationFirst) return "CONVERSATION";
+  const text=String(context.text||"").trim().toLowerCase();
+  const technical=/(file|source|error|bug|cek|periksa|investigasi|root cause|evidence|telemetry|dependency|perbaiki|patch|system|status)/i.test(text);
+  return technical ? "INFORMATIONAL" : "CONVERSATION";
+}
+
 export function speak(result, mode="SYSTEM") {
   if(result.conclusion==="INSUFFICIENT_EVIDENCE") return "Bukti belum cukup. Investigasi harus dilanjutkan.";
   if(result.conclusion==="CONTRADICTORY_EVIDENCE") return "Bukti saling bertentangan. Tindakan diblokir sampai kontradiksi diselesaikan.";
   if(result.conclusion==="READY_FOR_ACTION_POLICY") return "Rantai bukti lengkap dan terverifikasi. Selanjutnya keputusan tindakan mengikuti policy.";
   return "Bukti awal tersedia, tetapi pembuktian belum selesai.";
 }
-export { VERSION };
+export { VERSION, Instruction };

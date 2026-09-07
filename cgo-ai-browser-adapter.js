@@ -2,16 +2,17 @@
  * Binds the V5.2 active-investigation brain to the existing BCGO / Medicine contracts.
  * No external AI/API. No source mutation. Medicine remains proof authority.
  */
-import * as Core from "./cgo-ai-core.js?v=20260907-1146-chatstress12";
-import * as Knowledge from "./cgo-ai-knowledge.js?v=20260907-1146-chatstress12";
-import * as Investigator from "./cgo-ai-investigator.js?v=20260907-1146-chatstress12";
-import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js?v=20260907-1146-chatstress12";
-import * as Cognition from "./cgo-ai-cognition.js?v=20260907-1146-chatstress12";
-import * as Logic from "./cgo-ai-logic.js?v=20260907-1146-chatstress12";
-import * as Memory from "./cgo-ai-memory.js?v=20260907-1146-chatstress12";
-import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260907-1146-chatstress12";
+import * as Core from "./cgo-ai-core.js?v=20260907-1315-instruction1";
+import * as Knowledge from "./cgo-ai-knowledge.js?v=20260907-1315-instruction1";
+import * as Investigator from "./cgo-ai-investigator.js?v=20260907-1315-instruction1";
+import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js?v=20260907-1315-instruction1";
+import * as Cognition from "./cgo-ai-cognition.js?v=20260907-1315-instruction1";
+import * as Instruction from "./cgo-instruction.js";
+import * as Logic from "./cgo-ai-logic.js?v=20260907-1315-instruction1";
+import * as Memory from "./cgo-ai-memory.js?v=20260907-1315-instruction1";
+import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260907-1315-instruction1";
 
-const VERSION = "V5.3-BROWSER-BRIDGE-3.2.0-CONVERSATION-CONTINUITY-STRESS-HARDENED";
+const VERSION = "V5.5-BROWSER-BRIDGE-3.4.0-INSTRUCTION-CONSTITUTION";
 const INTERNAL_AUTO_POLICY = Object.freeze({
   version:"CIKUR-INTERNAL-AUTO-1",
   allowAutomaticExecution:true,
@@ -38,7 +39,8 @@ let chatTranscript = [];
 let chatSession = {
   turn: 0, lastUserText: null, primaryFile: null, files: [], comparison: false,
   caseId: null, intent: null, pendingCommand: null, lastCaseRevision: null, updatedAt: 0,
-  pendingWork: null, clarificationNeeded: false, restoredCaseId: null, restoredAt: 0
+  pendingWork: null, clarificationNeeded: false, restoredCaseId: null, restoredAt: 0,
+  dialogueMode: "IDLE", topic: null, tone: "WARM", address: null
 };
 
 // Conversation continuity is deliberately separate from operational proof.
@@ -88,6 +90,10 @@ function writeChatMemory() {
         pendingCommand:chatSession.pendingCommand || null,
         pendingWork:chatSession.pendingWork ? clone(chatSession.pendingWork) : null,
         clarificationNeeded:chatSession.clarificationNeeded === true,
+        dialogueMode:chatSession.dialogueMode || "IDLE",
+        topic:chatSession.topic || null,
+        tone:chatSession.tone || "WARM",
+        address:chatSession.address || null,
         restoredCaseId:chatSession.caseId || chatSession.restoredCaseId || null
       },
       context:{
@@ -128,7 +134,8 @@ function restoreChatMemory() {
     caseId:null, intent:s.intent || null, pendingCommand:s.pendingCommand || null,
     lastCaseRevision:null, updatedAt:Date.now(), pendingWork:s.pendingWork ? clone(s.pendingWork) : null,
     clarificationNeeded:s.clarificationNeeded === true,
-    restoredCaseId:s.restoredCaseId || null, restoredAt:Number(saved.savedAt || Date.now())
+    restoredCaseId:s.restoredCaseId || null, restoredAt:Number(saved.savedAt || Date.now()),
+    dialogueMode:s.dialogueMode || "IDLE", topic:s.topic || null, tone:s.tone || "WARM", address:s.address || null
   };
   chatRestoration = {
     restored:true, restoredAt:chatSession.restoredAt,
@@ -958,8 +965,61 @@ function lastChatAssistantText() {
   return '';
 }
 
+function classifyDialogue(raw, session = chatSession) {
+  return Instruction.classifyDialogue(raw, session);
+}
+
+function conversationalAnswer(dialogue, state = {}, session = chatSession) {
+  if (!dialogue?.casual) return null;
+  if (dialogue.identity) {
+    return 'Aku CGO — lapisan kecerdasan internal CIKUR GO yang berbicara melalui kanal BCGO. Aku bisa ngobrol, memahami konteks percakapan, dan saat masuk pekerjaan teknis aku beralih ke mode evidence-first: source, dependency, root cause, proof, lalu tindakan yang diizinkan.';
+  }
+  if (dialogue.systemRole) {
+    return 'BCGO bukan “hanya sistem” yang berdiri sendiri. BCGO adalah lingkungan saraf/operasional yang membaca telemetry, source scan, event, dan state live. CGO adalah intelligence yang memahami informasi itu dan berbicara kepadamu melalui UI BCGO. Jadi sederhananya: BCGO memberi keadaan nyata, CGO memahami dan meresponsnya.';
+  }
+  if (dialogue.capability) {
+    return 'Aku bisa menemani percakapan biasa, menjaga konteks, membaca keadaan BCGO yang live, menelusuri source dan dependency, membedakan fakta dari hipotesis, serta menyiapkan tindakan teknis hanya jika buktinya cukup. Untuk perubahan source, aku tetap terikat pada proof dan gerbang execution — bukan asal mengubah file.';
+  }
+  if (dialogue.emotional) {
+    return 'Aku bisa memakai bahasa yang hangat dan merespons nuansa percakapan, tetapi aku tidak akan berpura-pura punya perasaan manusia. Yang penting, aku bisa tetap hadir dalam percakapan dan memahami konteks yang sedang kita bicarakan.';
+  }
+  if (dialogue.currentActivity) {
+    if (session?.caseId && session?.primaryFile) {
+      const action = session.pendingCommand === 'REPAIR' ? 'menangani perbaikan' : 'menelusuri';
+      return `Saat ini aku sedang ${action} ${session.primaryFile}. Aku masih mengikuti evidence dan konteks pekerjaan itu, jadi kalau kamu bertanya lanjut seperti “kenapa?” atau “gimana?”, aku akan mengaitkannya ke pekerjaan ini.`;
+    }
+    return 'Saat ini aku sedang mengikuti percakapan ini dan membaca konteks yang kamu berikan. Kalau kamu mengarahkan ke pekerjaan sistem, aku bisa berpindah ke mode investigasi tanpa kehilangan konteks obrolan.';
+  }
+  if (dialogue.contextualWhy) {
+    if (session?.topic === 'CURRENT_ACTIVITY') return 'Karena aku sedang menjaga percakapan dan konteks pekerjaan/pertanyaan terakhir tetap nyambung. Kalau yang kamu maksud “kenapa” terhadap keputusan teknis tertentu, sebutkan bagian itu dan aku akan membedah alasannya berdasarkan evidence.';
+    if (session?.topic === 'CGO_BCGO_ROLE') return 'Karena keduanya memang punya tugas berbeda dalam satu alur: BCGO menyediakan keadaan nyata sistem, sementara CGO memahami, menalar, dan berkomunikasi berdasarkan keadaan itu.';
+    if (session?.topic === 'IDENTITY') return 'Karena peranku memang sebagai intelligence internal yang memahami percakapan dan keadaan BCGO, bukan sekadar tampilan dashboard.';
+    return 'Karena aku masih mengikuti konteks percakapan terakhir. Kalau “kenapa” yang kamu maksud adalah alasan teknis, aku akan membedakannya dari obrolan biasa dan meminta evidence yang relevan sebelum menyimpulkan.';
+  }
+  if (dialogue.contextualFollowUp) {
+    if (session?.topic === 'CGO_BCGO_ROLE') return 'Kalau maksudmu penjelasan tadi: hubungan keduanya memang seperti itu — BCGO menjaga keadaan nyata sistem, sedangkan CGO menjadi lapisan intelligence yang memahami keadaan tersebut dan berbicara melalui BCGO. Jadi bukan dua otak yang saling bersaing; keduanya punya peran berbeda dalam satu alur.';
+    if (session?.topic === 'IDENTITY') return 'Kalau maksudmu tentang aku tadi: aku CGO, intelligence internal yang berbicara melalui BCGO. Aku bisa berpindah dari obrolan biasa ke pekerjaan teknis tanpa memutus konteks, tetapi untuk kebenaran sistem aku tetap tunduk pada evidence.';
+    if (session?.topic === 'CAPABILITY') return 'Kalau maksudmu “terus bagaimana cara kerjanya?”: percakapan tetap ditangani CGO, sementara BCGO memasok state, telemetry, event, dan source surface yang nyata. Saat kamu memberi instruksi teknis, konteks itu berubah menjadi case dan masuk ke jalur investigasi.';
+    return 'Kalau maksudmu melanjutkan obrolan tadi, aku masih mengikuti topiknya. Lanjutkan saja dengan bahasa biasa; aku akan menjaga konteksnya selama konteks itu memang masih jelas.';
+  }
+
+  if (dialogue.greeting) {
+    const cycle = Number(state?.cycle);
+    const live = state?.connection?.status === 'LIVE' ? 'BCGO juga sedang menerima state live.' : 'Aku tetap siap meski state live belum lengkap.';
+    return Number.isFinite(cycle) && cycle > 0
+      ? `Halo 😊 Aku di sini. Cycle BCGO sekarang #${cycle}; ${live} Kalau mau ngobrol santai boleh, kalau mau kerja teknis juga tinggal arahkan.`
+      : `Halo 😊 Aku di sini. ${live} Kita bisa ngobrol biasa atau langsung masuk ke pekerjaan sistem.`;
+  }
+  if (dialogue.gratitude) return 'Sama-sama 😊. Kita lanjut pelan-pelan tapi tetap presisi. Kalau ada yang mau dicek atau dibahas, bilang saja.';
+  if (dialogue.apology) return 'Tidak apa-apa 😊. Kita luruskan saja konteksnya dan lanjut dari bagian yang benar. Kalau menyangkut sistem, aku tetap pastikan buktinya jelas.';
+  if (dialogue.farewell) return 'Baik 😊. Sampai ketemu lagi. Konteks percakapan yang aman boleh tersimpan, tetapi proof/runtime lama tetap harus diverifikasi ulang ketika pekerjaan teknis dilanjutkan.';
+  if (dialogue.affection) return 'Hehe 😊 Aku terima semangatnya. Kita lanjutkan dengan tenang — ngobrol boleh santai, tapi kalau sudah menyentuh source dan tindakan sistem, aku tetap harus disiplin pada bukti.';
+  return null;
+}
+
 function classifyChatIntent(raw, session = chatSession) {
   const q = String(raw || '').toLowerCase().trim();
+  const dialogue = classifyDialogue(raw, session);
   const has = re => re.test(q);
   const cancel = has(/\b(batal|batalkan|hentikan|stop|jangan lanjut|jangan diteruskan)\b/);
   const repair = has(/\b(perbaiki|perbaikan|perbaiki(?:kan)?|fix|repair|patch|benahi|betulkan|perbaiki sekarang)\b/);
@@ -976,9 +1036,18 @@ function classifyChatIntent(raw, session = chatSession) {
   const feedback = has(/\b(jawabanmu|jawaban kamu|responmu|respon kamu|jawabannya|tidak sesuai|nggak sesuai|tidak nyambung|nggak nyambung|kurang tepat|tidak menjawab|bukan yang saya tanyakan|saya nanya apa)\b/);
   const question = has(/\b(apa|apakah|kenapa|mengapa|gimana|bagaimana|bisa|boleh|dimana|di mana|yang mana)\b/) || q.endsWith('?');
   const action = has(/\b(lakukan|kerjakan|jalankan|cek|periksa|telusuri|bandingkan|cocokkan|perbaiki|benahi|betulkan|lanjutkan|tangani)\b/);
-  return { cancel, repair, result, explicitCheck, continuation, greeting, presence, acknowledgement, correction, feedback, question, action,
+  const conversationFirst = dialogue?.conversationFirst === true && !dialogue?.contextualWhy && !dialogue?.contextualFollowUp;
+  return {
+    cancel,
+    repair: conversationFirst ? false : repair,
+    result: conversationFirst ? false : result,
+    explicitCheck: conversationFirst ? false : explicitCheck,
+    continuation: conversationFirst ? false : continuation,
+    greeting, presence, acknowledgement, correction, feedback, question,
+    action: conversationFirst ? false : action,
     followUp: has(/\b(yang tadi|bagian itu|file itu|yang barusan|sebelumnya|tadi|kasus itu|case itu|bagian tersebut|yang itu|yang dimaksud|yang saya bilang|yang aku bilang)\b/),
-    continuationOnly, statusOnly, contextualStatusOnly,
+    continuationOnly: conversationFirst ? false : continuationOnly,
+    statusOnly, contextualStatusOnly, dialogue,
     q, hasWorkContext: !!(session?.caseId || session?.primaryFile || session?.files?.length)
   };
 }
@@ -1082,6 +1151,10 @@ function chatAnswer(question = {}) {
     }
     const continued = continueExistingChatWork(state, intent);
     if (continued.handled) return continued.text;
+    if (intent.dialogue?.contextualFollowUp && chatSession.topic) {
+      const follow = conversationalAnswer(intent.dialogue, state, chatSession);
+      if (follow) return follow;
+    }
     // If the human just corrected a target and then says “lanjutkan”, treat that
     // as an instruction to start work on the corrected target, but create a new
     // case rather than reviving an older case for the same filename.
@@ -1195,11 +1268,26 @@ function chatAnswer(question = {}) {
     intent: intent.cancel ? chatSession.intent : (isSystemStatusQuestion(q) && !intent.repair) ? chatSession.intent : intent.repair ? 'REPAIR' : intent.explicitCheck ? 'INVESTIGATE' : (intent.continuation ? (chatSession.intent || 'CONTINUE') : chatSession.intent),
     pendingCommand: intent.cancel ? null : intent.repair ? 'REPAIR' : chatSession.pendingCommand,
     pendingWork: intent.cancel ? null : (newPlan || chatSession.pendingWork),
-    clarificationNeeded: newPlan ? false : chatSession.clarificationNeeded
+    clarificationNeeded: newPlan ? false : chatSession.clarificationNeeded,
+    dialogueMode: intent.dialogue?.mode || chatSession.dialogueMode || "IDLE",
+    topic: intent.dialogue?.topic || chatSession.topic || null,
+    tone: "WARM"
   });
 
   if (!q) return 'Saya di sini. Ceritakan apa yang ingin kamu periksa atau kerjakan.';
   if (intent.cancel) return cancelChatWork();
+
+  // Pure conversation is answered by CGO's conversational layer. Work commands
+  // remain higher priority, so a warm phrase never creates or hijacks a case.
+  const conversational = conversationalAnswer(intent.dialogue, state, chatSession);
+  if (conversational && !newPlan && !intent.explicitCheck && !intent.repair && !intent.continuation && !intent.correction && !intent.feedback) {
+    setChatSession({
+      dialogueMode:intent.dialogue.mode || 'CONVERSATION',
+      topic:intent.dialogue.topic || chatSession.topic,
+      tone:'WARM'
+    });
+    return conversational;
+  }
 
   // Never replace an explicit human filename with telemetry or a previous
   // conversation target. If the filename is unknown to the live source
@@ -1420,6 +1508,14 @@ function chatAnswer(question = {}) {
     }
     return `Saat ini scanner mencatat ${relations.length} relasi antar-file. Sebutkan file yang ingin kamu telusuri, dan saya ikuti dependency-nya.`;
   }
+  if (/\b(apa saja|ada apa saja|isi sistem|isi dari sistem|file apa saja|daftar file|daftar sistem|komponen sistem|organ sistem)\b/.test(q) && !intent.explicitCheck && !intent.repair) {
+    const entries = Object.entries(organs);
+    if (!entries.length) return `Saya belum menerima daftar organ dari BCGO. Saya tidak akan mengarang isi sistem sebelum registry live terbaca.`;
+    const shown = entries.slice(0, 14).map(([file, info]) => `${file} [${info?.state || info?.status || 'UNKNOWN'}]`);
+    const more = entries.length > shown.length ? ` dan ${entries.length - shown.length} lainnya` : '';
+    return `Saat ini BCGO mengirim ${entries.length} organ/komponen ke saya: ${shown.join('; ')}${more}. Status tersebut berasal dari state live BCGO, bukan tebakan. Kalau kamu mau, aku bisa lanjut jelaskan mana yang aktif, bermasalah, standby, atau saling terhubung.`;
+  }
+
   if (requestedFile) {
     const info = organs[requestedFile];
     if (!info) return `Saya mengenali ${requestedFile}, tetapi snapshot live belum membawa status file itu.`;
@@ -1488,6 +1584,11 @@ function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = nu
   const probe = active && active.state.status === "ACTIVE"
     ? (active.state.probeLog.at(-1) || Investigator.nextProbe(investigation, c, knowledge))
     : Investigator.nextProbe(investigation, c, knowledge);
+  const conversation = {
+    mode: Cognition.dialogueMode({ text: chatSession.lastUserText || "", workContext: !!chatSession.caseId }),
+    dialogueMode: chatSession.dialogueMode || "IDLE",
+    topic: chatSession.topic || null
+  };
   const deliberate = Cognition.deliberate({
     evidence: c.evidence,
     rootCause: c.rootCause,
@@ -1546,6 +1647,7 @@ function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = nu
         evidenceIds: c.rootCause.evidenceIds
       }] : []
     },
+    conversation,
     guardian: {
       healthy: evaluation.guardian?.decision !== "BLOCKED",
       level: evaluation.guardian?.risk || "UNKNOWN",
@@ -1553,6 +1655,8 @@ function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = nu
     }
   };
 }
+
+export function getCGOInstruction() { return Instruction.getInstruction(); }
 
 export function install() {
   return {
@@ -1612,7 +1716,7 @@ export function install() {
       try { storage?.removeItem(CHAT_MEMORY_KEY); } catch {}
       chatTranscript = [];
       chatRestoration = { restored:false, restoredAt:0, context:false, staleCaseDiscarded:false };
-      chatSession = { turn:0, lastUserText:null, primaryFile:null, files:[], comparison:false, caseId:null, intent:null, pendingCommand:null, lastCaseRevision:null, updatedAt:Date.now(), pendingWork:null, clarificationNeeded:false, restoredCaseId:null, restoredAt:0 };
+      chatSession = { turn:0, lastUserText:null, primaryFile:null, files:[], comparison:false, caseId:null, intent:null, pendingCommand:null, lastCaseRevision:null, updatedAt:Date.now(), pendingWork:null, clarificationNeeded:false, restoredCaseId:null, restoredAt:0, dialogueMode:"IDLE", topic:null, tone:"WARM", address:null };
       lastChatContext = { files:[], comparison:false, question:null, stateRevision:null };
       return true;
     },

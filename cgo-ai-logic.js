@@ -3,11 +3,12 @@
  * No external AI/API. No source mutation. Automatic patch/execution remains capability-driven
  * and is allowed only when proof + policy + integrity gates all pass.
  */
-import * as Core from "./cgo-ai-core.js?v=20260907-1146-chatstress12";
-import * as Guardian from "./cgo-ai-guardian.js?v=20260907-1146-chatstress12";
-import * as Cognition from "./cgo-ai-cognition.js?v=20260907-1146-chatstress12";
+import * as Core from "./cgo-ai-core.js?v=20260907-1315-instruction1";
+import * as Guardian from "./cgo-ai-guardian.js?v=20260907-1315-instruction1";
+import * as Cognition from "./cgo-ai-cognition.js?v=20260907-1315-instruction1";
+import * as Instruction from "./cgo-instruction.js";
 
-const VERSION="1.4.0";
+const VERSION="1.5.0-CONSTITUTION-BOUND";
 
 function clone(v){ return structuredClone(v); }
 function verifiedEvidence(caseData){ return (caseData?.evidence||[]).filter(e=>e?.status==="VERIFIED"); }
@@ -81,7 +82,7 @@ export function evaluate(caseData, policy={}, knowledge=null){
   });
   const action = proof.complete ? guardian.decision : "BLOCKED";
   const reason = !proof.complete ? (solutionReady ? "PROOF_CHAIN_INCOMPLETE" : "CONCRETE_SOLUTION_NOT_READY") : guardian.reason;
-  return clone({caseId:c.caseId, revision:c.revision||0, proof, cognition, guardian, decision:action, reason});
+  return clone({caseId:c.caseId, revision:c.revision||0, proof, cognition, guardian, decision:action, reason, constitutionVersion:Instruction.CONSTITUTION_VERSION});
 }
 
 export function decide(caseData, policy={}, knowledge=null){
@@ -128,4 +129,4 @@ export function buildAction(caseData, authorization){
   return {action:"BLOCKED",executable:false,reason:auth.reason||"POLICY_BLOCKED",caseId:c.caseId};
 }
 
-export { VERSION };
+export { VERSION, Instruction };
