@@ -100,7 +100,7 @@ CHAT LIVE FIX 2.4:
 
 
 CHAT LIVE ROOT FIX — 2026-09-06 (2.6.0):
-- All internal module imports now share the same build token 20260907-1315-instruction1.
+- All internal module imports now share the same build token 20260907-0900-constitution-connectivity1.
 - The master gateway no longer points at the previous cached Browser Bridge build.
 - Browser chat is a contextual conversation layer: corrections/feedback stay in the same dialogue, active-case questions use live case state, and technical instructions remain bound to case/evidence/proof.
 - Operational investigation progress remains a replaceable LIVE status and is never promoted into chat history.
@@ -114,7 +114,7 @@ CHAT LIVE ORCHESTRATOR 2.7.0 — PRE-DEPLOYMENT HARDENING
 - Follow-up references (file itu, bagian itu, yang tadi, lanjut) resolve only against established conversation context.
 - System-status questions are informational and do not create a source-investigation case merely because they contain the word cek.
 - Chat response, live operational progress, and investigation evidence are separate channels.
-- BCGO loader cache tokens were aligned to the same 20260907-1315-instruction1 build as the master gateway and Browser Bridge.
+- BCGO loader cache tokens were aligned to the same 20260907-0900-constitution-connectivity1 build as the master gateway and Browser Bridge.
 
 
 CHAT LIVE RE-AUDIT 3.0.0
@@ -230,7 +230,7 @@ CONVERSATIONAL INTELLIGENCE UPGRADE 3.3.0 — 2026-09-07
 - No external AI/API, direct source mutation, Medicine, Patch Executor, Firestore Rules, or deployment source was added or modified.
 
 CONVERSATIONAL INTELLIGENCE VERIFICATION — 2026-09-07
-- Build/cache token for the full baseline is synchronized to 20260907-1315-instruction1.
+- Build/cache token for the full baseline is synchronized to 20260907-0900-constitution-connectivity1.
 - Pure conversational checks: identity, CGO/BCGO role, capability, greeting, thanks, apology, casual warmth, and emotion-boundary response all route through the CGO conversational layer.
 - Contextual conversational follow-up such as “gimana?” / “terus” can continue a prior conversational topic when no technical case is active.
 - System inventory question (“ada apa saja di sistem?”) reads the live BCGO organ registry and reports only observed entries.
@@ -249,5 +249,69 @@ CGO INSTRUCTION CONSTITUTION — 2026-09-07
 - Contextual short follow-ups such as “kenapa?” may remain attached to a conversational topic without being misclassified as a root-cause request.
 - No external AI/API, Medicine, Patch Executor, Firestore Rules, or deployment source was added or modified by this instruction-layer milestone.
 - Full baseline increases from 14 files to 15 files.
-- Build/cache token: 20260907-1315-instruction1
+- Build/cache token: 20260907-0900-constitution-connectivity1
 - Status: INSTRUCTION LAYER INTEGRATED — NOT FINAL.
+
+
+ACTIVE INVESTIGATION LIFECYCLE FIX — 2026-09-07
+- Fixed the conversational investigation lifecycle that could appear stuck after the engine reached SOURCE_VERIFIED.
+- SOURCE_VERIFIED is now treated as a valid diagnostic completion boundary when root cause and exact source are both proven, rather than as an indefinite WORKING state.
+- Browser Bridge now emits ACTIVE_INVESTIGATION_COMPLETED with an explicit conclusion, phase, blockers, evidence/probe counts, and nextAction.
+- Chat status now reports the actual terminal diagnostic result and the concrete next stage instead of repeatedly saying it is still investigating.
+- BCGO chat UI consumes the completion event and replaces the transient LIVE indicator with a clear completion/blocked state.
+- No automatic source mutation was added; a missing concrete solution remains explicitly blocked rather than fabricated.
+- No external AI/API, Medicine, Patch Executor, Firestore Rules, or deployment source was modified.
+- JavaScript syntax validation and the 15-file baseline packaging must be re-run after this milestone.
+- Status: LIFECYCLE FIX — AWAITING BROWSER VALIDATION.
+
+============================================================
+CGO CONSTITUTION UPGRADE — 2026-09-07
+============================================================
+Version: 1.2.0-CGO-CONSTITUTION
+Constitution: CGO-CONSTITUTION-1.2
+
+Source basis:
+- CGO_003_COMMUNICATION_ENGINE.md Version 1.0 (official CIKUR GO communication standard)
+
+Implemented in cgo-instruction.js:
+- Expanded central Constitution to the agreed nine-domain structure:
+  IDENTITY, CONVERSATION, HUMAN BEHAVIOR, COMMUNICATION STYLE,
+  INTELLIGENCE, SYSTEM, REPAIR, RESPONSE, BOUNDARIES.
+- Added listen-first and intent-first communication rules.
+- Added explicit conversation continuity/reference/topic-transition rules.
+- Added human-behavior guidance for positive, sad, confused, disappointed,
+  excited, joking, casual, angry, praised, and criticized contexts.
+- Added formal/casual/short/complex/variation/emoji communication guidance.
+- Added technical response contracts and completion contracts.
+- Added golden-rule response evaluation: true, polite, understandable,
+  helpful, and aligned with CIKUR GO.
+- Added createConversationState() as a safe conversational-state model.
+- Expanded dialogue classification for contextual follow-ups and human-behavior signals.
+
+Safety / architecture preserved:
+- No external AI/API added.
+- No automatic source mutation added.
+- No Guardian, authorization, execution, rollback, or validation gate bypass.
+- Historical memory remains advisory only and is never proof.
+- Medicine and Patch Executor files were not modified.
+- Firestore Rules were not modified.
+
+Validation status:
+- cgo-instruction.js syntax: PASS
+- ESM import/export smoke test: PASS
+- Constitution section inventory: PASS
+- Conversation regression classification smoke test: PASS
+- Browser validation: NOT YET PERFORMED
+============================================================
+
+
+CGO CONSTITUTION + CONNECTIVITY INVESTIGATION UPGRADE — 2026-09-07
+- Constitution advanced to CGO-CONSTITUTION-1.4.
+- Added explicit system connectivity law: source topology must be observed; declared references are distinguished from runtime loading; missing dependencies and unproven orphan candidates are surfaced without automatically declaring root cause.
+- Active Investigation Engine advanced to 2.3.0-CONNECTIVITY-AWARE-INVESTIGATION.
+- Added source-level connectivity probe across the available BCGO source surface: JS imports/exports/dynamic references and HTML script src references are compared against the live source registry.
+- Missing referenced files are emitted as SOURCE_DEPENDENCY_MISSING evidence; available files without inbound references are emitted only as SOURCE_ORPHAN_CANDIDATE (UNVERIFIED).
+- Connectivity is now an investigation dimension before causal conclusion, but file existence or an orphan candidate alone is never treated as root-cause proof.
+- All module cache/build tokens were aligned to 20260907-0900-constitution-connectivity1 so the browser cannot silently retain the previous engine build.
+- No external AI/API added. No direct source mutation added. Medicine, Patch Executor, Firestore Rules, and unrelated deployment source were not modified.
+- Browser validation remains REQUIRED before declaring deployment PASS.

@@ -3,9 +3,9 @@
  * No external AI/API. No source mutation. Automatic patch/execution remains capability-driven
  * and is allowed only when proof + policy + integrity gates all pass.
  */
-import * as Core from "./cgo-ai-core.js?v=20260907-1315-instruction1";
-import * as Guardian from "./cgo-ai-guardian.js?v=20260907-1315-instruction1";
-import * as Cognition from "./cgo-ai-cognition.js?v=20260907-1315-instruction1";
+import * as Core from "./cgo-ai-core.js?v=20260907-0900-constitution-connectivity1";
+import * as Guardian from "./cgo-ai-guardian.js?v=20260907-0900-constitution-connectivity1";
+import * as Cognition from "./cgo-ai-cognition.js?v=20260907-0900-constitution-connectivity1";
 import * as Instruction from "./cgo-instruction.js";
 
 const VERSION="1.5.0-CONSTITUTION-BOUND";

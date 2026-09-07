@@ -235,7 +235,7 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=20260907-1315-instruction1';
+import { runAutonomousEngine } from './bcgo.js?v=20260907-0900-constitution-connectivity1';
 
 const $ = id => document.getElementById(id);
 
@@ -731,9 +731,17 @@ document.querySelectorAll('.quick-q').forEach(button => {
         ['ACTIVE_INVESTIGATION_STEP', d => {
             const p = d.payload || {};
             if (p.status === 'COMPLETE' && p.exactSourceVerified) return { text:'Investigasi selesai. Root cause dan exact source sudah terbukti. Saya belum menyentuh source.', kind:'done' };
-            if (p.exactSourceVerified) return { text:'Exact source sudah terbukti. Saya lanjut mengikat solusi dan integrity sebelum tindakan.', kind:'working' };
+            if (p.exactSourceVerified) return { text:'Exact source sudah terbukti. Saya menunggu hasil akhir investigasi sebelum menyatakan tindak lanjut.', kind:'working' };
             if (p.rootCauseVerified) return { text:'Root cause sudah terbukti. Saya lanjut memastikan exact source.', kind:'working' };
             return { text:'Evidence baru masuk. Saya melanjutkan investigasi dari posisi terakhir.', kind:'working' };
+        }],
+        ['ACTIVE_INVESTIGATION_COMPLETED', d => {
+            const p = d.payload || {};
+            if (p.phase === 'PROOF_COMPLETE') return { text:`Investigasi selesai. ${p.conclusion || 'Proof chain lengkap.'} Tindak lanjut: gerbang Guardian dan execution.`, kind:'done' };
+            if (p.phase === 'DIAGNOSIS_COMPLETE_SOLUTION_PENDING') return { text:`Investigasi selesai. ${p.conclusion || 'Root cause dan exact source sudah terverifikasi.'} Tindak lanjut: solusi konkret. Source tetap belum diubah.`, kind:'done' };
+            if (p.phase === 'ROOT_CAUSE_COMPLETE_SOURCE_PENDING') return { text:`Tahap root cause selesai. ${p.conclusion || 'Exact source masih perlu diverifikasi.'}`, kind:'working' };
+            if (p.phase === 'INVESTIGATION_STOPPED_WITHOUT_PROOF') return { text:`Investigasi berhenti tanpa proof lengkap. ${p.conclusion || 'Saya belum punya dasar untuk menyatakan root cause.'} Tindak lanjut: evidence/probe berikutnya.`, kind:'blocked' };
+            return { text:`Investigasi belum selesai. ${p.conclusion || 'Saya masih membutuhkan evidence.'}`, kind:'working' };
         }],
         ['CHAT_REPAIR_WAITING', d => {
             const p = d.payload || {};

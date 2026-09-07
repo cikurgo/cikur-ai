@@ -5,10 +5,10 @@
  * The engine never invents source. Every conclusion must be backed by a probe result
  * produced by the injected internal probe provider.
  */
-import * as Core from "./cgo-ai-core.js?v=20260907-1315-instruction1";
-import * as Investigator from "./cgo-ai-investigator.js?v=20260907-1315-instruction1";
+import * as Core from "./cgo-ai-core.js?v=20260907-0900-constitution-connectivity1";
+import * as Investigator from "./cgo-ai-investigator.js?v=20260907-0900-constitution-connectivity1";
 
-const VERSION = "2.2.0-ACTIVE-CAUSAL-SOURCE";
+const VERSION = "2.3.0-CONNECTIVITY-AWARE-INVESTIGATION";
 const MAX_STEPS_DEFAULT = 10;
 const MAX_FILES_DEFAULT = 40;
 
@@ -123,6 +123,58 @@ function findImportsExports(source, file, symbol) {
     const i = m.index ?? 0;
     return {file,line:lineOf(source,i),snippet:snippet(source,i),exact:true};
   });
+}
+
+function dependencyReferences(source, file) {
+  const text = String(source || "");
+  const out = [];
+  const add = (kind, raw, index) => {
+    const ref = normalizeFile(raw);
+    if (!ref) return;
+    out.push({kind, from:normalizeFile(file), to:ref, line:lineOf(text,index), snippet:snippet(text,index,180), exact:true});
+  };
+  for (const m of text.matchAll(/(?:import\s+(?:[^'";]+?\s+from\s+)?|export\s+[^'";]+?\s+from\s+|import\s*\(|(?:fetch|location\.href|window\.location)\s*\()\s*["']([^"']+)["']/g)) {
+    add("JS_REFERENCE", m[1], m.index ?? 0);
+  }
+  for (const m of text.matchAll(/<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi)) {
+    add("HTML_SCRIPT_REFERENCE", m[1], m.index ?? 0);
+  }
+  return out;
+}
+
+function connectivityFindings(sourceMap, availableFiles) {
+  const available = new Set((availableFiles || []).map(normalizeFile).filter(Boolean).map(x => x.toLowerCase()));
+  const refs = [];
+  for (const [file, source] of Object.entries(sourceMap || {})) {
+    for (const ref of dependencyReferences(source, file)) refs.push(ref);
+  }
+  const findings = [];
+  for (const ref of refs) {
+    const exists = available.has(String(ref.to).toLowerCase());
+    findings.push({
+      ...ref,
+      type: exists ? "SOURCE_DEPENDENCY_REFERENCE" : "SOURCE_DEPENDENCY_MISSING",
+      status: exists ? "VERIFIED" : "UNVERIFIED",
+      strength: exists ? .9 : 1,
+      claim: exists
+        ? `${ref.from} mereferensikan ${ref.to} melalui ${ref.kind}.`
+        : `${ref.from} mereferensikan ${ref.to} melalui ${ref.kind}, tetapi ${ref.to} tidak tersedia pada source surface BCGO yang berhasil diverifikasi.`,
+      missing: !exists
+    });
+  }
+  const inbound = new Map();
+  for (const ref of refs) inbound.set(ref.to.toLowerCase(), (inbound.get(ref.to.toLowerCase()) || 0) + 1);
+  for (const file of available) {
+    if (!inbound.has(file) && /^(?:bcgo|cgo|agent|driver|resto|merchant|payment|new-service|new-engine)/i.test(file)) {
+      findings.push({
+        type:"SOURCE_ORPHAN_CANDIDATE", status:"UNVERIFIED", strength:.55, exact:false,
+        from:null, to:file, kind:"NO_INBOUND_REFERENCE", line:null, snippet:null, missing:false,
+        claim:`${file} tersedia pada source surface tetapi tidak ditemukan referensi masuk dari source yang dipindai; keterhubungan deployment belum terbukti.`,
+        orphanCandidate:true
+      });
+    }
+  }
+  return {refs, findings};
 }
 
 function scriptTags(source, file) {
@@ -246,6 +298,27 @@ function buildHypotheses(caseData, context) {
       causal:true
     });
   }
+  const connectivityMissing = ev.filter(e => e.type === "SOURCE_DEPENDENCY_MISSING");
+  if (connectivityMissing.length) {
+    hs.push({
+      id:`H-CONNECTIVITY-MISSING-${normalizeFile(caseData?.target) || "TARGET"}`,
+      statement:`Source memiliki referensi dependency yang tidak tersedia pada source surface BCGO yang berhasil diverifikasi; jalur keterhubungan deployment belum lengkap atau target dependency tidak tersedia.`,
+      evidenceIds:unique(connectivityMissing.map(e=>e.id)),
+      nodeIds:unique(connectivityMissing.flatMap(e=>[e.metadata?.from,e.metadata?.to]).filter(Boolean)),
+      causal:false
+    });
+  }
+  const orphanCandidates = ev.filter(e => e.type === "SOURCE_ORPHAN_CANDIDATE");
+  if (orphanCandidates.length) {
+    hs.push({
+      id:`H-CONNECTIVITY-ORPHAN-${normalizeFile(caseData?.target) || "TARGET"}`,
+      statement:`Keterhubungan masuk ke source yang tersedia belum terbukti dari source yang dipindai; ini adalah kandidat orphan dan bukan root cause terverifikasi.`,
+      evidenceIds:unique(orphanCandidates.map(e=>e.id)),
+      nodeIds:unique(orphanCandidates.flatMap(e=>[e.metadata?.from,e.metadata?.to]).filter(Boolean)),
+      causal:false
+    });
+  }
+
   const sourceFinding = nerveFindings.filter(e => /div|html|structure|syntax/i.test(String(e.metadata?.kind || "") + " " + String(e.claim || "")));
   if (sourceFinding.length) {
     hs.push({
@@ -294,6 +367,7 @@ function chooseProbe(engine, caseData, knowledge) {
   const target = normalizeFile(caseData?.target);
   const done = s.completedProbes;
   if (target && !done.has(`SOURCE_READ:${target}`)) return {type:"SOURCE_READ",file:target,score:1};
+  if (target && !done.has(`SOURCE_CONNECTIVITY:${target}`)) return {type:"SOURCE_CONNECTIVITY",file:target,score:.995};
 
   // A cross-file chat request is a real investigation context, not a UI-only
   // phrase. Read every explicitly related deployment source before falling back
@@ -374,6 +448,39 @@ export function createInvestigationEngine(caseData, knowledge={}, options={}) {
         })],
         source:r
       };
+    }
+
+    if(type === "SOURCE_CONNECTIVITY") {
+      const listed = unique(await provider.listFiles());
+      const sourceMap = {};
+      for (const file of listed.slice(0, options.maxFiles || MAX_FILES_DEFAULT)) {
+        try {
+          const r = await provider.readSource(file);
+          if (r && typeof r.source === "string") sourceMap[normalizeFile(file)] = r.source;
+        } catch {}
+      }
+      const connectivity = connectivityFindings(sourceMap, listed);
+      const targetFile = normalizeFile(probeRequest.file || currentCase.target);
+      const relevant = connectivity.findings.filter(f =>
+        normalizeFile(f.from) === targetFile || normalizeFile(f.to) === targetFile
+      );
+      const evidence = [];
+      for (const f of (relevant.length ? relevant : connectivity.findings.filter(f => f.from === targetFile).slice(0, 20))) {
+        evidence.push(makeEvidence(`PROBE-CONNECTIVITY-${targetFile}-${f.type}-${f.line ?? "NA"}-${f.to || ""}`, {
+          type:f.type, source:f.from || "CGO_SOURCE_SURFACE", file:f.from || f.to,
+          claim:f.claim, status:f.status, strength:f.strength, exact:f.exact,
+          metadata:{from:f.from,to:f.to,kind:f.kind,line:f.line,snippet:f.snippet,missing:f.missing===true,orphanCandidate:f.orphanCandidate===true}
+        }));
+      }
+      if (!relevant.length) {
+        evidence.push(makeEvidence(`PROBE-CONNECTIVITY-${targetFile}-NO_DIRECT_RELATION`, {
+          type:"SOURCE_CONNECTIVITY_UNVERIFIED", source:"CGO_SOURCE_SURFACE", file:targetFile,
+          claim:`Belum ditemukan bukti source-level yang cukup untuk menyatakan bagaimana ${targetFile} terhubung ke source surface; keterhubungan tidak boleh diasumsikan.`,
+          status:"UNVERIFIED", strength:.4, exact:false,
+          metadata:{file:targetFile,scannedFiles:listed.length,availableFiles:listed}
+        }));
+      }
+      return {source:null, evidence};
     }
 
     if(type === "SYMBOL_CALLS" || type === "SYMBOL_DEFINITIONS" || type === "SYMBOL_IMPORTS_EXPORTS") {

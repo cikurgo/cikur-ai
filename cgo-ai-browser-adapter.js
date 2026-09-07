@@ -2,15 +2,15 @@
  * Binds the V5.2 active-investigation brain to the existing BCGO / Medicine contracts.
  * No external AI/API. No source mutation. Medicine remains proof authority.
  */
-import * as Core from "./cgo-ai-core.js?v=20260907-1315-instruction1";
-import * as Knowledge from "./cgo-ai-knowledge.js?v=20260907-1315-instruction1";
-import * as Investigator from "./cgo-ai-investigator.js?v=20260907-1315-instruction1";
-import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js?v=20260907-1315-instruction1";
-import * as Cognition from "./cgo-ai-cognition.js?v=20260907-1315-instruction1";
+import * as Core from "./cgo-ai-core.js?v=20260907-0900-constitution-connectivity1";
+import * as Knowledge from "./cgo-ai-knowledge.js?v=20260907-0900-constitution-connectivity1";
+import * as Investigator from "./cgo-ai-investigator.js?v=20260907-0900-constitution-connectivity1";
+import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js?v=20260907-0900-constitution-connectivity1";
+import * as Cognition from "./cgo-ai-cognition.js?v=20260907-0900-constitution-connectivity1";
 import * as Instruction from "./cgo-instruction.js";
-import * as Logic from "./cgo-ai-logic.js?v=20260907-1315-instruction1";
-import * as Memory from "./cgo-ai-memory.js?v=20260907-1315-instruction1";
-import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260907-1315-instruction1";
+import * as Logic from "./cgo-ai-logic.js?v=20260907-0900-constitution-connectivity1";
+import * as Memory from "./cgo-ai-memory.js?v=20260907-0900-constitution-connectivity1";
+import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260907-0900-constitution-connectivity1";
 
 const VERSION = "V5.5-BROWSER-BRIDGE-3.4.0-INSTRUCTION-CONSTITUTION";
 const INTERNAL_AUTO_POLICY = Object.freeze({
@@ -225,8 +225,9 @@ function chatCaseStatusText(c) {
     if (proof.rootCauseVerified) return `Saya masih mengerjakan perbaikan yang tadi. Root cause untuk ${file} sudah terbukti, tetapi exact source dan/atau bukti lanjutan masih saya lengkapi.`;
     return `Saya masih mengerjakan perbaikan yang tadi. Saya sedang mengumpulkan bukti untuk ${file}; saya belum akan menganggap dugaan sebagai root cause.`;
   }
-  if (proof.complete) return `Proof untuk ${file} sudah lengkap. Saya sedang mengikat solusi, Guardian, dan execution sebelum menyatakan pekerjaan selesai.`;
-  if (c.exactSource) return `Saya sudah mengikat exact source pada ${file}. Saya masih memastikan causal proof dan konteks solusi tetap konsisten.`;
+  if (proof.complete) return `Proof untuk ${file} sudah lengkap. Tindak lanjutnya adalah gerbang Guardian dan execution; source belum saya klaim berubah sebelum validation.`;
+  if (c.rootCause && c.exactSource && !activeRuns.has(c.caseId)) return `Investigasi ${file} sudah selesai: root cause dan exact source terverifikasi. Source belum diubah. Tindak lanjut berikutnya adalah solusi konkret yang terikat ke source tersebut; saya tidak akan mengarang solusi.`;
+  if (c.exactSource) return `Exact source ${file} sudah terikat. Investigasi belum saya nyatakan selesai sampai status causal/proof-nya konsisten.`;
   if (c.rootCause) return `Root cause untuk ${file} sudah terbukti. Saya lanjut memastikan exact source dan dependency yang benar sebelum mengambil tindakan.`;
   if (activeRuns.has(c.caseId)) return `Saya masih bekerja pada ${file}. Investigasi sedang berjalan dan saya mengikuti evidence terbaru.`;
   return `Saya masih menyelidiki ${file}. Status internalnya ${c.state || 'EVIDENCE_COLLECTING'} dan saya belum akan menganggap dugaan sebagai penyebab.`;
@@ -618,6 +619,19 @@ async function runActiveInvestigation(caseId, state) {
         state:synced?.state || null
       });
 
+      // The engine can legitimately stop at SOURCE_VERIFIED. Always convert
+      // that terminal diagnostic state into an explicit human-readable outcome
+      // and next action; otherwise the live chat indicator has no completion
+      // signal and appears to be stuck forever.
+      const outcome = investigationOutcome(synced, out.investigation);
+      emitBrainEvent(caseId, "ACTIVE_INVESTIGATION_COMPLETED", {
+        ...outcome,
+        steps:out.steps,
+        cycle:out.investigation?.cycle || 0,
+        evidenceCount:Array.isArray(synced?.evidence) ? synced.evidence.length : 0,
+        probeCount:Array.isArray(out.investigation?.probeLog) ? out.investigation.probeLog.length : 0
+      });
+
       latest = compatibleSnapshot(caseId, "ACTIVE_INVESTIGATION");
       try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-state", {detail:latest})); } catch {}
     } catch (err) {
@@ -643,6 +657,79 @@ async function runActiveInvestigation(caseId, state) {
   })();
   activeRuns.set(caseId, runPromise);
   await runPromise;
+}
+
+function investigationOutcome(caseData, investigation = null) {
+  const evaluation = Logic.evaluate(caseData, INTERNAL_AUTO_POLICY, knowledge);
+  const proof = evaluation.proof || {};
+  const file = normalizeFile(caseData?.exactSource?.file || caseData?.target) || "target";
+  const status = String(investigation?.status || caseData?.state || "UNKNOWN");
+  const nextProbe = investigation?.nextProbe || investigation?.nextEvidence || null;
+
+  if (proof.complete) {
+    return {
+      phase: "PROOF_COMPLETE",
+      status,
+      conclusion: `Proof chain untuk ${file} sudah lengkap. Root cause, exact source, fingerprint, dan solusi konkret sudah terikat.`,
+      nextAction: "GUARDIAN_AND_EXECUTION_GATE",
+      blockers: [],
+      target: file,
+      rootCauseVerified: true,
+      exactSourceVerified: true,
+      solutionReady: true,
+      nextProbe: null
+    };
+  }
+
+  // SOURCE_VERIFIED is a valid diagnostic stopping point. The previous bridge
+  // treated it as if investigation were still running, even though the engine
+  // had intentionally stopped after binding the real source. That made the UI
+  // appear stuck and gave the human no explicit conclusion or next action.
+  if (proof.rootCauseVerified && proof.sourceVerified) {
+    return {
+      phase: "DIAGNOSIS_COMPLETE_SOLUTION_PENDING",
+      status,
+      conclusion: `Investigasi selesai untuk ${file}. Root cause dan exact source sudah terverifikasi; source belum diubah.`,
+      nextAction: "CONCRETE_SOLUTION_REQUIRED",
+      blockers: proof.solutionReady ? [] : ["CONCRETE_SOLUTION_NOT_READY"],
+      target: file,
+      rootCauseVerified: true,
+      exactSourceVerified: true,
+      solutionReady: proof.solutionReady === true,
+      nextProbe: null
+    };
+  }
+
+  if (proof.rootCauseVerified) {
+    return {
+      phase: "ROOT_CAUSE_COMPLETE_SOURCE_PENDING",
+      status,
+      conclusion: `Root cause untuk ${file} sudah terverifikasi, tetapi exact source belum lengkap terikat.`,
+      nextAction: "VERIFY_EXACT_SOURCE",
+      blockers: ["EXACT_SOURCE_NOT_VERIFIED"],
+      target: file,
+      rootCauseVerified: true,
+      exactSourceVerified: false,
+      solutionReady: false,
+      nextProbe
+    };
+  }
+
+  const blockers = Array.isArray(proof.blockers) ? proof.blockers.slice(0, 8) : ["PROOF_CHAIN_INCOMPLETE"];
+  return {
+    phase: status === "LIMIT_REACHED" || status === "YIELD" || status === "STABLE"
+      ? "INVESTIGATION_STOPPED_WITHOUT_PROOF"
+      : "INVESTIGATION_INCOMPLETE",
+    status,
+    conclusion: `Investigasi ${file} belum menghasilkan root cause yang terverifikasi. Saya tidak akan mengarang kesimpulan.`,
+    nextAction: nextProbe ? "CONTINUE_WITH_NEXT_PROBE" : "REQUEST_MORE_EVIDENCE",
+    blockers,
+    target: file,
+    rootCauseVerified: false,
+    exactSourceVerified: false,
+    solutionReady: false,
+    nextProbe
+  };
 }
 
 function emitBrainEvent(caseId, type, payload) {
