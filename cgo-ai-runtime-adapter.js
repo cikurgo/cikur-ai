@@ -200,10 +200,8 @@ export function createRuntime(options={}) {
     if(["EXECUTING","VALIDATING","RESOLVED"].includes(c.state) && !c.validation && !c.execution)
       throw new Error(`INVALID_SNAPSHOT_LIFECYCLE:${c.caseId}`);
     if(c.rootCause){
-      const h=c.hypotheses.find(x=>x?.id===c.rootCause.hypothesisId);
-      if(typeof c.rootCause.statement!=="string" || !c.rootCause.statement.trim() || !h || Number(h.score)<0.60 ||
-         !Array.isArray(c.rootCause.evidenceIds) || !c.rootCause.evidenceIds.length ||
-         !Array.isArray(h.evidenceIds) || !c.rootCause.evidenceIds.every(id=>h.evidenceIds.includes(id)))
+      const evaluation=Logic.evaluate(c,{},knowledge);
+      if(!evaluation.proof.rootCauseVerified)
         throw new Error(`INVALID_SNAPSHOT_ROOT_CAUSE:${c.caseId}`);
     }
     if(c.exactSource){
@@ -495,8 +493,27 @@ export function createRuntime(options={}) {
           planId: action.planId
         });
       } catch (err) {
-        emit("COMMAND_TO_COMPLETION_VALIDATION_ERROR",{caseId,authorizationId:authId,error:String(err?.message||err)});
-        return {status:"EXECUTION_DISPATCHED",caseId,authorizationId:authId,planId:action.planId,result,validation:{status:"VALIDATION_ERROR",success:false,error:String(err?.message||err)}};
+        const message=String(err?.message||err);
+        const failedValidation=cases.get(caseId);
+        if(failedValidation){
+          failedValidation.validation={
+            status:"VALIDATION_FAILED",
+            success:false,
+            details:{
+              status:result?.status||"EXECUTION_RESULT",
+              authorizationId:authId,
+              planId:action.planId,
+              file:result?.file||action.request?.file||null,
+              error:message,
+              validationError:true
+            },
+            validatedAt:new Date().toISOString()
+          };
+          try { cases.set(caseId,Core.transitionCaseState(failedValidation,"REOPENED")); } catch {}
+          emit("VALIDATION_FAILED",cases.get(caseId));
+        }
+        emit("COMMAND_TO_COMPLETION_VALIDATION_ERROR",{caseId,authorizationId:authId,error:message});
+        return {status:"REOPENED",caseId,authorizationId:authId,planId:action.planId,result,validation:{status:"VALIDATION_FAILED",success:false,error:message}};
       }
       return {status:validation?.state === "RESOLVED" ? "RESOLVED" : "REOPENED",caseId,authorizationId:authId,planId:action.planId,result,validation};
     },

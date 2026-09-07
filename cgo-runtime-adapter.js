@@ -21,7 +21,7 @@ import * as Memory from "./cgo-ai-memory.js?v=20260906-2115-chatlive10";
 import * as RuntimeAdapter from "./cgo-ai-runtime-adapter.js?v=20260906-2115-chatlive10";
 import * as BrowserBridge from "./cgo-ai-browser-adapter.js?v=20260906-2115-chatlive10";
 
-export const VERSION = "V5.2.5-MASTER-RUNTIME";
+export const VERSION = "V5.2.5-MASTER-RUNTIME-PROOF-GATE-3.2.0";
 export const ARCHITECTURE = "CGO_INTERNAL_BRAIN_MASTER_GATEWAY";
 export const LEGACY_V9 = false;
 

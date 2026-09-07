@@ -632,6 +632,18 @@ function authoritativeBCGOState() {
     return liveState || null;
 }
 
+function restoreChatFeedFromRuntime(runtime) {
+    if (!chatFeed || !runtime?.getConversation) return;
+    try {
+        const turns = runtime.getConversation();
+        if (!Array.isArray(turns) || !turns.length) return;
+        chatFeed.innerHTML = '';
+        for (const turn of turns) {
+            if (turn?.role === 'user' || turn?.role === 'bcgo') addChat(turn.role, turn.text || '');
+        }
+    } catch {}
+}
+
 async function waitForInternalAI(timeoutMs = 12000) {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
@@ -669,10 +681,11 @@ async function sendQuestion(question) {
     const text = String(question || '').trim();
     if (!text || chatRequestBusy) return;
     setChatBusy(true);
-    addChat('user', text);
     try {
         const runtime = await waitForInternalAI();
         if (!runtime?.ask) throw new Error('INTERNAL_AI_NOT_READY');
+        restoreChatFeedFromRuntime(runtime);
+        addChat('user', text);
         const answer = await runtime.ask(text);
         if (answer) addChat('bcgo', answer);
     } catch (error) {
@@ -682,6 +695,8 @@ async function sendQuestion(question) {
         chatInput?.focus();
     }
 }
+
+void waitForInternalAI().then(runtime => restoreChatFeedFromRuntime(runtime));
 
 chatForm?.addEventListener('submit', event => {
     event.preventDefault();
