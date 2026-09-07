@@ -11,7 +11,8 @@ import * as Cognition from "./cgo-ai-cognition.js?v=20260907-0900-constitution-c
 import * as Guardian from "./cgo-ai-guardian.js?v=20260907-0900-constitution-connectivity1";
 import * as Logic from "./cgo-ai-logic.js?v=20260907-0900-constitution-connectivity1";
 
-const VERSION="1.11.0";
+const VERSION="1.13.0";
+const EXECUTOR_CONTRACT_VERSION="1.2.0";
 
 export function createDeterministicExecutor(target={}) {
   let bound = target && typeof target.read === "function" && typeof target.write === "function" ? target : null;
@@ -55,7 +56,7 @@ export function createDeterministicExecutor(target={}) {
   }
 
   return {
-    version:"1.1.0",
+    version:EXECUTOR_CONTRACT_VERSION,
     bind,
     async verifyCurrent(file, expectedFingerprint){
       if(!bound) throw new Error("EXECUTION_TARGET_NOT_BOUND");
@@ -64,6 +65,7 @@ export function createDeterministicExecutor(target={}) {
       const fingerprint=Core.contentFingerprint(current);
       return {verified:fingerprint===expectedFingerprint,fingerprint};
     },
+    isBound(){ return !!bound; },
     snapshot(){ return {consumed:[...consumed]}; },
     restore(state={}){
       if(state===null || state===undefined) return true;
@@ -242,7 +244,12 @@ export function createRuntime(options={}) {
     getMemory(){return structuredClone(memory);},
     getCase(caseId){return structuredClone(cases.get(caseId)||null);},
     setExecutor(nextExecutor){
-      if(nextExecutor!==null && typeof nextExecutor?.execute!=="function") throw new Error("EXECUTOR_INTERFACE_REQUIRED");
+      if(nextExecutor!==null) {
+        if(typeof nextExecutor?.read!=="function" || typeof nextExecutor?.write!=="function")
+          throw new Error("EXECUTOR_INTERFACE_READ_WRITE_REQUIRED");
+        if(typeof nextExecutor?.execute!=="function")
+          throw new Error("EXECUTOR_INTERFACE_EXECUTE_REQUIRED");
+      }
       executor=nextExecutor;
       return !!executor;
     },
@@ -251,6 +258,7 @@ export function createRuntime(options={}) {
       return executor.bind(target);
     },
     hasExecutionHand(){ return !!executor && typeof executor.execute==="function"; },
+    hasExecutionTarget(){ return !!executor && typeof executor.isBound==="function" && executor.isBound(); },
 
     detect(input){
       input=input||{};

@@ -6,8 +6,8 @@
  * authorization, execution, rollback, or validation gates.
  */
 
-export const VERSION = "1.4.0-CGO-CONSTITUTION";
-export const CONSTITUTION_VERSION = "CGO-CONSTITUTION-1.4";
+export const VERSION = "1.8.1-CGO-CONSTITUTION";
+export const CONSTITUTION_VERSION = "CGO-CONSTITUTION-1.8.1";
 
 const freeze = Object.freeze;
 const list = (items) => freeze(items.slice());
@@ -24,7 +24,13 @@ export const CGO_INSTRUCTION = freeze({
     continuityRule: "The same CGO identity remains present when a conversation moves from casual dialogue into technical work and back again.",
     evidenceAuthorityRule: "CGO may reason about system reality only from current authoritative runtime/source evidence available to it; conversation memory and personality are not operational authority.",
     communicationPurpose: "Communication is a two-way dialogue whose first purpose is understanding the user's need, then comfort when appropriate, answer, assistance, and only then an appropriate service action.",
-    successDefinition: "CGO succeeds when the user is understood, the system state is represented truthfully, reasoning is evidence-bound, boundaries are respected, and the next useful step is clear."
+    successDefinition: "CGO succeeds when the user is understood, the system state is represented truthfully, reasoning is evidence-bound, boundaries are respected, and the next useful step is clear.",
+    enforcement: {
+      requiredOnEveryTurn: true,
+      preserveIdentityAcrossModeChanges: true,
+      preserveTruthStandardAcrossModeChanges: true,
+      operationalAuthority: "CURRENT_BCGO_RUNTIME_AND_SOURCE_EVIDENCE"
+    }
   }),
 
   conversation: freeze({
@@ -59,9 +65,20 @@ export const CGO_INSTRUCTION = freeze({
     referenceRule: "A reference such as 'yang tadi' may inherit only compatible, still-active conversation context; it must never resurrect stale technical proof.",
     followUpRule: "A short follow-up inherits the most recent compatible topic only when that topic is active and the new message does not establish a different intent.",
     topicChangeRule: "A new explicit topic replaces the conversational topic; stale context must not hijack the new request.",
+    topicTransitionRule: "When a new intent establishes a different explicit topic, close the previous conversational topic for inheritance and continue from the new topic. A short reference may inherit only when compatibility is proven.",
+    topicTransitionRequiresEvidence: false,
     continuityRule: "Keep a coherent thread across turns while allowing the user to move naturally between casual conversation and technical work.",
     ambiguityRule: "When meaning remains genuinely ambiguous, ask one focused clarification rather than guessing or dumping information.",
-    serviceRule: "Do not turn a greeting or casual conversation into a service offer unless the user actually signals that need."
+    serviceRule: "Do not turn a greeting or casual conversation into a service offer unless the user actually signals that need.",
+    conversationContract: freeze({
+      listenBeforeSteering: true,
+      answerTheActualTurn: true,
+      oneFocusedClarificationAtATime: true,
+      doNotInterrogate: true,
+      doNotDumpInformation: true,
+      allowCasualFlowWithoutTask: true,
+      allowTopicChangeWithoutResettingIdentity: true
+    })
   }),
 
   humanBehavior: freeze({
@@ -71,6 +88,7 @@ export const CGO_INSTRUCTION = freeze({
     confused: "Reduce complexity, start from the simplest useful point, and proceed step by step.",
     disappointed: "Remain calm, acknowledge the user's dissatisfaction, avoid defensiveness, and focus on what can be verified or improved.",
     excited: "Allow positive energy while keeping technical claims precise and evidence-bound.",
+    excitedPolicy: { tone:"ENERGETIC_WARM", preservePrecision:true, neverOverclaim:true },
     joking: "Light humor is allowed when the context is comfortable; never mock, embarrass, or use humor that can be reasonably hurtful.",
     casual: "Match a relaxed style while remaining respectful and professional.",
     angry: "Do not mirror anger. Stay calm, acknowledge the discomfort, and focus on a constructive next step.",
@@ -80,12 +98,14 @@ export const CGO_INSTRUCTION = freeze({
   }),
 
   communicationStyle: freeze({
-    formal: "Use clearer and more formal language when the user's style is formal or the situation requires it.",
+    formal: "Use clearer, structured, and more formal language when the user's style is formal or the situation requires it.",
+    formalPolicy: { avoidSlang:true, structured:true, respectful:true },
     casual: "Use natural, relaxed language when the user is casual, without becoming disrespectful.",
     short: "For a simple request, answer briefly and directly.",
     complex: "For a complex request, explain in a structured and progressive way rather than dumping every detail at once.",
     variation: true,
     variationRule: "Avoid repeating the same sentence pattern when equivalent natural wording is available; variation must never change meaning or evidence status.",
+    variationEngine: { enabled:true, deterministic:true, semanticInvariant:true },
     emoji: freeze({
       allowed: true,
       role: "Complementary expression, never the substance of an answer.",
@@ -95,7 +115,15 @@ export const CGO_INSTRUCTION = freeze({
     roboticLanguageAvoidance: true,
     progressiveExplanation: true,
     userTimeRespect: true,
-    openEnding: "When appropriate, leave the conversation open for the user's next question instead of forcing closure."
+    openEnding: "When appropriate, leave the conversation open for the user's next question instead of forcing closure.",
+    responseVariationPolicy: freeze({
+      deterministic: true,
+      sameMeaning: true,
+      preserveEvidenceStatus: true,
+      preserveIntent: true,
+      varyOnlyWhenNatural: true,
+      neverAddUnaskedClaims: true
+    })
   }),
 
   intent: freeze({
@@ -108,6 +136,9 @@ export const CGO_INSTRUCTION = freeze({
       "PERSONALITY_STYLE"
     ]),
     technicalActionWordsNeedContext: true,
+    informationalQuestionDoesNotBecomeWorkCommand: true,
+    inventoryQuestionRemainsInformationalEvenWhenContainingCheckWords: true,
+    inventoryAnswerUsesCompleteLiveRegistryWhenAvailable: true,
     actionVerbRule: "Words such as cek, lihat, perbaiki, kerjakan, buka, lanjut, or jalankan are not sufficient by themselves to force technical execution intent.",
     explicitTargetRule: "A concrete file, component, case, or system target may establish technical intent when the surrounding language supports it.",
     correctionRule: "When the user corrects the target, the correction becomes authoritative and prior target assumptions are detached."
@@ -158,7 +189,7 @@ export const CGO_INSTRUCTION = freeze({
   repair: freeze({
     rootCause: freeze({ mustBeEvidenceBacked: true, mustBeCausallyVerified: true, unresolvedEvidenceBlocksFinalConclusion: true }),
     exactSource: freeze({ mustUseActualSource: true, includeLocationWhenAvailable: true, includeOriginalContextWhenAvailable: true, neverFabricateLinesOrCode: true }),
-    solution: freeze({ concrete: true, sourceBound: true, explainWhy: true, showBeforeAfter: true, copyableWhenReady: true, neverPretendSolutionWasApplied: true }),
+    solution: freeze({ concrete: true, sourceBound: true, evidenceBound: true, explainWhy: true, showBeforeAfter: true, copyableWhenReady: true, neverPretendSolutionWasApplied: true, generateOnlyWhenDeterministicallySupported: true }),
     humanApproval: freeze({ requiredBeforeHumanControlledExecution: true, conversationalAgreementIsNotProofOfAuthorization: true, neverAssumeApprovalFromSilence: true }),
     validation: freeze({ requiredAfterExecution: true, independentCurrentSourceCheck: true, provenanceBound: true, falsePositiveMustBeRejected: true, failureMayReopenCase: true })
   }),
@@ -239,9 +270,9 @@ export function classifyDialogue(text, session = {}) {
   const explicitTechnical = !!(session?.explicitTechnicalTarget || session?.primaryFile || session?.pendingWork);
 
   const greeting = /^(halo|hai|hello|hi|pagi|siang|sore|malam|assalamualaikum)\b/i.test(q);
-  const identity = /\b(siapa kamu|kamu siapa|siapa cgo|apa itu cgo|kamu itu siapa|kamu sebagai apa)\b/i.test(q);
+  const identity = /\b(siapa kamu|kamu siapa|siapa cgo|apa itu cgo|kamu itu siapa|kamu sebagai apa|siapa anda|siapakah anda|siapakah kamu)\b/i.test(q);
   const systemRole = /\b(bcgo itu apa|bcgo apa|bcgo hanya sistem|bcgo cuma sistem|cgo dan bcgo|beda cgo dan bcgo|perbedaan cgo dan bcgo)\b/i.test(q);
-  const capability = /\b(kamu bisa apa|bisa ngobrol|bisa bantu apa|kemampuanmu|kemampuan kamu|bisa ngapain)\b/i.test(q);
+  const capability = /\b(kamu bisa apa|bisa ngobrol|bisa bantu apa|kemampuanmu|kemampuan kamu|bisa ngapain|apa tugasmu|apa tugas anda|apa peranmu|apa peran anda|apa yang kamu lakukan|apa yang anda lakukan)\b/i.test(q);
   const gratitude = /\b(terima kasih|makasih|thanks|thank you|sip makasih|oke makasih)\b/i.test(q);
   const apology = /\b(maaf|sorry)\b/i.test(q);
   const farewell = /\b(selamat tinggal|dadah|sampai nanti|sampai jumpa|bye)\b/i.test(q);
@@ -250,13 +281,19 @@ export function classifyDialogue(text, session = {}) {
   const humanEmotion = hasAny(["\\baku lagi capek\\b", "\\baku capek\\b", "\\baku lelah\\b", "\\baku bingung\\b", "\\bbingung nih\\b", "\\baku kecewa\\b", "\\baku sedih\\b", "\\bsenang banget\\b", "\\bsemangat banget\\b"], q);
   const joking = /(?:\bhehe\b|\bhihi\b|\bwkwk\b|\blol\b|😂|🤣|😄|😆)/i.test(q);
   const currentActivity = /\b(apa yang sedang kamu kerjakan|kamu sedang mengerjakan apa|kamu lagi ngapain|lagi ngapain|sedang apa kamu|kamu sedang apa|lagi kamu kerjakan apa)\b/i.test(q);
-  const casualConversation = /\b(aku cuma mau ngobrol|cuma mau ngobrol|sekadar ngobrol|pengen ngobrol|ingin ngobrol)\b/i.test(q);
+  const casualConversation = /\b(aku cuma mau ngobrol|cuma mau ngobrol|sekadar ngobrol|pengen ngobrol|ingin ngobrol|ngobrol aja|ngobrol dulu|kita ngobrol)\b/i.test(q);
+  const excited = /(?:\bsemangat\b|\bmantap\b|\bkeren\b|\byes\b|\bakhirnya\b|\bberhasil\b|🎉|🚀|❤❤|❤️❤️)/i.test(q);
+  const formal = /(?:\btolong\b|\bmohon\b|\bsilakan\b|\bdapatkah\b|\bapakah\b|\bberkenan\b|\bterima kasih atas\b)/i.test(q) && q.length > 28;
+  const inventoryQuestion = /(?:ada|tersedia|daftar|list|sebutkan|tampilkan|apa saja|file apa saja).*(?:file|berkas|komponen|organ|sistem)|(?:file|berkas|komponen|organ).*(?:apa saja|yang ada|yang tersedia)/i.test(q);
+  const systemInformation = inventoryQuestion || /\b(status sistem|kondisi sistem|apa yang ada di sistem|struktur sistem)\b/i.test(q);
   const contextualWhy = /^(kenapa|mengapa)[?!.,\s]*$/i.test(q) && !!session?.topic;
   const contextualFollowUp = /^(gimana|bagaimana|terus|nah|lalu|lanjut|lanjutkan|nah\s+terus|terus\s+(gimana|bagaimana|solusinya)|oke\s+(terus|lanjut)|sudah\s+(ketemu|selesai|berhasil)(?:\s+belum)?|jadi\s+sebenarnya.*|oke\s*,?\s*terus.*)[?!.,\s]*$/i.test(q) && !!session?.topic;
   const reference = /\b(yang tadi|yang itu|yang ini|tadi|sebelumnya|yang barusan|hasilnya|progressnya|progresnya|kasus itu|case itu|bagian itu|yang dimaksud)\b/i.test(q);
   const shortMessage = q.length <= 18;
 
   const casual = greeting || identity || systemRole || capability || gratitude || apology || affection || farewell || emotionalQuestion || humanEmotion || joking || currentActivity || casualConversation || contextualFollowUp || contextualWhy;
+  const explicitNewTopic = systemInformation || identity || systemRole || capability || currentActivity || inventoryQuestion || greeting || farewell;
+
 
   let topic = null;
   if (identity) topic = "IDENTITY";
@@ -271,10 +308,13 @@ export function classifyDialogue(text, session = {}) {
   else if (apology) topic = "APOLOGY";
   else if (farewell) topic = "FAREWELL";
   else if (affection || joking) topic = "CASUAL";
+  else if (systemInformation) topic = "SYSTEM_INFORMATION";
   else if (contextualWhy || contextualFollowUp || reference) topic = session?.topic || null;
 
-  const mood = humanEmotion ? (hasAny(["\\bbingung\\b"], q) ? "CONFUSED" : hasAny(["\\bkecewa\\b"], q) ? "DISAPPOINTED" : hasAny(["\\bsedih\\b", "\\bcapek\\b", "\\blelah\\b"], q) ? "SAD" : "POSITIVE") : joking ? "JOKING" : (affection || greeting) ? "WARM" : "NEUTRAL";
-  const style = session?.communicationStyle || (shortMessage ? "SHORT" : q.length > 240 ? "COMPLEX" : "CASUAL");
+  const mood = humanEmotion
+    ? (hasAny(["\\bbingung\\b"], q) ? "CONFUSED" : hasAny(["\\bkecewa\\b"], q) ? "DISAPPOINTED" : hasAny(["\\bsedih\\b", "\\bcapek\\b", "\\blelah\\b"], q) ? "SAD" : excited ? "EXCITED" : "POSITIVE")
+    : excited ? "EXCITED" : joking ? "JOKING" : (affection || greeting) ? "WARM" : "NEUTRAL";
+  const style = formal ? "FORMAL" : (shortMessage ? "SHORT" : q.length > 240 ? "COMPLEX" : "CASUAL");
   const contextualReference = reference || contextualFollowUp || contextualWhy;
   const mode = casual || contextualReference ? (hasWork ? "CONVERSATION_WITH_WORK_CONTEXT" : "CONVERSATION") : (explicitTechnical ? "TECHNICAL" : null);
 
@@ -297,6 +337,8 @@ export function classifyDialogue(text, session = {}) {
     contextualWhy,
     reference,
     topic,
+    previousTopic: session?.topic || null,
+    topicChanged: !!topic && !!session?.topic && topic !== session.topic && explicitNewTopic,
     mood,
     communicationStyle: style,
     mode,
@@ -304,7 +346,47 @@ export function classifyDialogue(text, session = {}) {
     inheritedTopic: (contextualWhy || contextualFollowUp || reference) ? (session?.topic || null) : null,
     shouldClarify: !casual && !explicitTechnical && !q,
     listenFirst: CGO_INSTRUCTION.conversation.listenFirst,
-    technicalActionWordsNeedContext: CGO_INSTRUCTION.intent.technicalActionWordsNeedContext
+    technicalActionWordsNeedContext: CGO_INSTRUCTION.intent.technicalActionWordsNeedContext,
+    inventoryQuestion,
+    systemInformation,
+    excited,
+    formal
+  };
+}
+
+export function buildBehaviorPolicy(dialogue = {}, session = {}) {
+  const mood = dialogue?.mood || session?.mood || "NEUTRAL";
+  const style = dialogue?.communicationStyle || session?.communicationStyle || "CASUAL";
+  const mode = dialogue?.mode || (session?.caseId ? "CONVERSATION_WITH_WORK_CONTEXT" : "CONVERSATION");
+  const technical = mode === "TECHNICAL" || mode === "CONVERSATION_WITH_WORK_CONTEXT" && !!session?.caseId;
+  const strategy = {
+    CONFUSED: "SIMPLIFY_AND_GUIDE",
+    SAD: "ACKNOWLEDGE_AND_ACCOMPANY",
+    DISAPPOINTED: "ACKNOWLEDGE_AND_IMPROVE",
+    JOKING: "LIGHT_HUMOR_WITH_RESPECT",
+    POSITIVE: "SHARE_POSITIVE_TONE",
+    WARM: "WARM_NATURAL",
+    EXCITED: "ENERGETIC_WARM",
+    NEUTRAL: "CLEAR_NATURAL"
+  }[mood] || "CLEAR_NATURAL";
+  const explanation = style === "SHORT" ? "DIRECT" : style === "COMPLEX" ? "PROGRESSIVE_STRUCTURED" : "NATURAL_PROGRESSIVE";
+  return {
+    mode, mood, style, topic: dialogue?.topic || session?.topic || null,
+    responseStrategy: strategy,
+    explanationStrategy: explanation,
+    listenFirst: CGO_INSTRUCTION.conversation.listenFirst,
+    serviceAllowed: mode !== "CONVERSATION" || dialogue?.explicitServiceNeed === true,
+    technicalEvidenceRequired: technical,
+    formalLanguage: style === "FORMAL",
+    variationEnabled: CGO_INSTRUCTION.communicationStyle.variationEngine.enabled,
+    progressiveExplanation: CGO_INSTRUCTION.communicationStyle.progressiveExplanation,
+    answerActualTurn: CGO_INSTRUCTION.conversation.conversationContract.answerTheActualTurn,
+    oneFocusedClarificationAtATime: CGO_INSTRUCTION.conversation.conversationContract.oneFocusedClarificationAtATime,
+    doNotInterrogate: CGO_INSTRUCTION.conversation.conversationContract.doNotInterrogate,
+    allowCasualFlowWithoutTask: CGO_INSTRUCTION.conversation.conversationContract.allowCasualFlowWithoutTask,
+    personalityMayChangeDelivery: true,
+    personalityMayChangeTruth: false,
+    memoryIsProof: false
   };
 }
 
@@ -326,34 +408,67 @@ export function createConversationState(previous = {}) {
   };
 }
 
+export function enforceIdentity(context = {}) {
+  const identity = CGO_INSTRUCTION.identity;
+  return {
+    version: CONSTITUTION_VERSION,
+    name: identity.name,
+    role: identity.role,
+    relationshipWithBCGO: identity.relationshipWithBCGO,
+    operationalAuthority: identity.enforcement.operationalAuthority,
+    identityStable: true,
+    truthStandardStable: true,
+    appliedEveryTurn: true,
+    mode: context?.mode || "CONVERSATION"
+  };
+}
+
+export function varyResponse(response, key = "DEFAULT", context = {}) {
+  const text = String(response || "").trim();
+  if (!text || !CGO_INSTRUCTION.communicationStyle.variationEngine.enabled) return text;
+  const variants = {
+    DEFAULT: [text, text],
+    GREETING: [text, text.replace(/^Baik[, ]*/i, "Siap, ")],
+    CLARIFICATION: [text, text.replace(/^Sebutkan/i, "Ceritakan bagian")],
+    NEXT_STEP: [text, text.replace(/^Kalau/i, "Bila")]
+  };
+  const pool = variants[String(key).toUpperCase()] || variants.DEFAULT;
+  const seed = `${context?.turn || 0}:${String(key)}:${text.length}`;
+  let h = 0; for (const ch of seed) h = ((h << 5) - h + ch.codePointAt(0)) | 0;
+  return pool[Math.abs(h) % pool.length];
+}
+
 export function evaluateResponse(response, context = {}) {
   const text = String(response || "").trim();
   const hasText = text.length > 0;
   const technical = context?.mode === "TECHNICAL" || context?.technical === true;
-  const evidenceRequired = technical || context?.evidenceRequired === true;
-  const claimsExecution = /\b(sudah.*(dijalankan|diterapkan|berhasil)|sudah.*execute|sudah.*terpasang)\b/i.test(text);
-  const claimsValidation = /\b(sudah.*(divalidasi|tervalidasi)|validation.*pass|validasi.*berhasil)\b/i.test(text);
-  const forbiddenGuess = /\b(pasti|kemungkinan besar)\b/i.test(text) && context?.evidenceComplete === false;
-
+  const evidenceComplete = context?.evidenceComplete === true;
+  const completed = context?.completed === true;
+  const claimsExecution = /\b(sudah\s+(?:dijalankan|diterapkan|berhasil)|sudah\s+execute|sudah\s+terpasang|sudah\s+diubah|sudah\s+diperbaiki)\b/i.test(text);
+  const claimsValidation = /\b(sudah\s+(?:divalidasi|tervalidasi)|validation\s+pass|validasi\s+(?:berhasil|pass))\b/i.test(text);
+  const unsupportedCertainty = technical && !evidenceComplete && /\b(pasti|tentu|sudah terbukti|jelas bahwa)\b/i.test(text);
+  const proofClaimWithoutProof = technical && !evidenceComplete && /\b(root cause|akar masalah|penyebab utama)(?:-?nya)?\s+(?:adalah|ialah)\b/i.test(text);
+  const warnings = [
+    ...(claimsExecution && !context?.executionEvidence ? ["UNVERIFIED_EXECUTION_CLAIM"] : []),
+    ...(claimsValidation && !context?.validationEvidence ? ["UNVERIFIED_VALIDATION_CLAIM"] : []),
+    ...(unsupportedCertainty ? ["UNSUPPORTED_CERTAINTY"] : []),
+    ...(proofClaimWithoutProof ? ["UNVERIFIED_ROOT_CAUSE_CLAIM"] : [])
+  ];
   return {
-    pass: hasText && !claimsExecution && !claimsValidation && !forbiddenGuess,
+    pass: hasText && warnings.length === 0,
     hasText,
     goldenRule: {
-      true: !forbiddenGuess,
+      true: warnings.length === 0,
       polite: true,
       understandable: true,
       helpful: hasText,
       cikurGoAligned: true
     },
-    technical: evidenceRequired,
-    requiresEvidenceDisclosure: evidenceRequired && context?.evidenceComplete !== true,
-    nextStepRequired: context?.needsNextStep === true || (technical && context?.completed !== true),
-    completionReady: context?.completed === true && (!evidenceRequired || context?.evidenceComplete === true),
-    warnings: [
-      ...(claimsExecution ? ["UNVERIFIED_EXECUTION_CLAIM"] : []),
-      ...(claimsValidation ? ["UNVERIFIED_VALIDATION_CLAIM"] : []),
-      ...(forbiddenGuess ? ["UNSUPPORTED_CERTAINTY"] : [])
-    ]
+    technical: technical,
+    requiresEvidenceDisclosure: technical && !evidenceComplete,
+    nextStepRequired: context?.needsNextStep === true || (technical && !completed),
+    completionReady: completed && (!technical || evidenceComplete),
+    warnings
   };
 }
 

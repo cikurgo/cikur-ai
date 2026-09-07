@@ -24,6 +24,40 @@ const escapeRegExp = v => String(v || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 const lineOf = (source, index) => String(source || "").slice(0, Math.max(0, index)).split("\n").length;
 const snippet = (source, index, radius = 120) => String(source || "").slice(Math.max(0, index - radius), Math.min(String(source || "").length, index + radius)).trim();
 
+function buildConcreteSolution(caseData, targetSource, provider) {
+  const symbol = symbolFromCase(caseData);
+  if (!symbol || !caseData?.rootCause || !caseData?.exactSource || typeof targetSource?.source !== "string") return null;
+  if (!/ReferenceError/i.test(String(caseData.symptom || ""))) return null;
+  const targetFile = normalizeFile(caseData.exactSource.file || caseData.target);
+  if (!/\.html?$/i.test(String(targetFile || ""))) return null;
+  const defs = (caseData.evidence || []).filter(e => e.type === "SYMBOL_DEFINITION" && e.status === "VERIFIED" && e.exact && String(e.metadata?.symbol || "") === symbol && normalizeFile(e.file || e.source) !== targetFile);
+  if (!defs.length) return null;
+  const providerFile = normalizeFile(defs[0].file || defs[0].source);
+  if (!providerFile || !/\.js$/i.test(providerFile)) return null;
+  const html = String(targetSource.source);
+  const alreadyLoaded = new RegExp(`<script\\b[^>]*\\bsrc\\s*=\\s*[\"'](?:[^\"']*\\/)?${escapeRegExp(providerFile)}(?:[?#][^\"']*)?[\"'][^>]*>`, "i").test(html);
+  if (alreadyLoaded) return null;
+  const anchorMatch = html.match(/<script\b[^>]*>/i);
+  if (!anchorMatch) return null;
+  const anchor = anchorMatch[0];
+  const proposed = `<script src="${providerFile}"></script>\n`;
+  return {
+    type:"SOURCE_BOUND_CONCRETE_SOLUTION",
+    status:"CANDIDATE_READY",
+    reason:`Verified symbol ${symbol} is defined by ${providerFile}, but ${targetFile} does not load that provider in its HTML script context.`,
+    file:targetFile,
+    operation:"INSERT_EXACT",
+    originalCode:anchor,
+    proposedCode:proposed,
+    anchorFingerprint:Core.contentFingerprint(anchor),
+    sourceFingerprint:targetSource.fingerprint || Core.contentFingerprint(targetSource.source),
+    providerFile,
+    symbol,
+    evidenceIds:defs.map(e=>e.id).concat((caseData.rootCause?.evidenceIds || []).filter(Boolean)).slice(0,20),
+    humanReviewRequired:true
+  };
+}
+
 function symbolFromCase(caseData) {
   const text = String(caseData?.symptom || "");
   const patterns = [
@@ -651,6 +685,28 @@ export function createInvestigationEngine(caseData, knowledge={}, options={}) {
           }
         } catch {}
       }
+    }
+
+    if (nextCase.rootCause && nextCase.exactSource && !nextCase.exactSource.proposedCode) {
+      try {
+        const liveTarget = await provider.readSource(normalizeFile(nextCase.exactSource.file || nextCase.target));
+        const solution = buildConcreteSolution(nextCase, liveTarget, provider);
+        if (solution) {
+          const priorExactSource = nextCase.exactSource;
+          nextCase.exactSource = { ...priorExactSource,
+            callSite: priorExactSource.callSite || {file:priorExactSource.file, originalCode:priorExactSource.originalCode, fingerprint:priorExactSource.fingerprint},
+            solution,
+            proposedCode:solution.proposedCode,
+            operation:solution.operation,
+            originalCode:solution.originalCode,
+            fingerprint:solution.anchorFingerprint,
+            contentFingerprint:solution.anchorFingerprint,
+            sourceFingerprint:solution.sourceFingerprint,
+            evidenceIds:priorExactSource.evidenceIds || []
+          };
+          try { nextCase = Core.verifyExactSource(nextCase, nextCase.exactSource); } catch {}
+        }
+      } catch {}
     }
 
     state.completedProbes.add(key);

@@ -315,3 +315,80 @@ CGO CONSTITUTION + CONNECTIVITY INVESTIGATION UPGRADE — 2026-09-07
 - All module cache/build tokens were aligned to 20260907-0900-constitution-connectivity1 so the browser cannot silently retain the previous engine build.
 - No external AI/API added. No direct source mutation added. Medicine, Patch Executor, Firestore Rules, and unrelated deployment source were not modified.
 - Browser validation remains REQUIRED before declaring deployment PASS.
+
+
+CGO CONVERSATIONAL INVENTORY FIX — 2026-09-07
+- Version: CGO Constitution 1.5 / Browser Bridge 3.5.0
+- Fixed a conversational intent collision where inventory questions containing words such as “cek” were misclassified as technical CHECK/INVESTIGATE work.
+- Inventory questions now remain informational even when they contain work/check vocabulary.
+- Live organ inventory is returned directly from BCGO_STATE.systemOrgans without creating a case, selecting a stale target, or starting investigation.
+- Inventory output now reports the complete live registry available in the snapshot plus state counts, rather than truncating the visible list to 14 entries.
+- This fix preserves the Integrity Laws: no invented files, no guessed target, no fake proof, no source mutation, no authorization bypass.
+- Browser validation remains separate and is not claimed PASS by static/smoke tests alone.
+
+CGO CONSTITUTION ENFORCEMENT UPGRADE — 2026-09-07
+Version: CGO-CONSTITUTION-1.6 / Browser Bridge 3.6
+- Constitution behavior policy is now consumed by the Browser Bridge per conversation turn.
+- createConversationState() is now populated into live chat session state.
+- buildBehaviorPolicy() maps mood, communication style, conversation mode, and evidence requirements into an executable response policy.
+- Human-behavior responses now distinguish confused, disappointed, sad, and positive signals without claiming certainty about inner emotion.
+- Response evaluation is now executed before chat output is persisted; unsupported execution/validation/root-cause certainty claims are blocked and replaced with evidence-bound wording.
+- Personality remains delivery-only and cannot alter truth/evidence status.
+- No external AI/API added. No direct source mutation added. Medicine, Patch Executor, and Firestore Rules remain untouched.
+- Browser validation remains required before declaring runtime PASS.
+
+
+CGO CONSTITUTION ENFORCEMENT UPGRADE — 2026-09-07
+Version: 1.7
+Status: IMPLEMENTATION + REGRESSION VALIDATION
+
+This milestone turns the remaining yellow Constitution areas into executable policy where deterministic implementation is possible:
+- Identity enforcement is attached to every Browser Bridge conversation turn and persisted in constitutionState.
+- Topic transition now records previousTopic/topicChanged and prevents stale topic inheritance when a new explicit topic is established.
+- Excited human behavior is classified and mapped to an energetic-but-precise response strategy.
+- Formal communication style is detected per turn and represented in behaviorPolicy.
+- Deterministic response variation is applied after the truth/proof response gate and is semantically invariant.
+- A narrow, source-bound concrete-solution generator is added for a verified ReferenceError + missing HTML script-provider case; it never fabricates a solution and marks human review required.
+- Solution readiness now requires a concrete candidate and preserves the existing proof/authorization gates.
+
+Remaining yellow items are only those that genuinely require broader response generation or richer causal solution synthesis; they are not claimed green merely because a field exists.
+No external AI/API added. No direct source mutation added. Medicine/Patch Executor/Firestore Rules unchanged. Browser validation remains required before deployment acceptance.
+
+CGO CONSTITUTION NATURAL CONVERSATION HARDENING — 2026-09-07
+Version: CGO-CONSTITUTION-1.8.1 / Browser Bridge 3.7.1
+Status: IMPLEMENTATION + REGRESSION VALIDATION
+- Hardened natural conversation routing so contextual follow-ups such as “nah terus?” remain conversational when no active technical work exists, even though the same words can also appear in work commands.
+- Added explicit casual-conversation handling for “aku cuma mau ngobrol”, “ngobrol aja”, and related phrases; these do not create a technical work plan.
+- Added bounded formal-response adaptation for conversational answers: formal turns use “Saya/Anda”, restrained punctuation, and no unnecessary emoji.
+- Expanded identity/capability recognition for formal Indonesian variants such as “siapa Anda”, “apa tugas Anda”, and “apa peran Anda”.
+- Excited mood now takes precedence over generic positive mood when the user expresses excitement without a stronger negative emotion, so the EXCITED behavior policy is actually reachable.
+- The conversational layer now follows the official Communication Engine principles: listen first, understand intent before steering, do not interrogate, do not dump information, vary natural wording without changing meaning, and leave casual conversation open.
+- No external AI/API added. No direct source mutation added. Medicine, Patch Executor, Firestore Rules, and unrelated deployment source were not modified.
+- Browser validation remains required before deployment acceptance.
+
+=== EXECUTION CONTRACT HARDENING — 2026-09-07 ===
+- Deterministic Executor contract version aligned to 1.2.0; runtime adapter is VERSION 1.13.0.
+- Runtime setExecutor() now validates the complete execution target contract (read + write + execute) before binding.
+- AUTO policy remains intentionally active as CIKUR-INTERNAL-AUTO-1; complete proof may receive AUTO_ALLOWED without a second human approval step.
+- This does NOT mean production auto-repair is connected: a real CIKURInternalExecutionTarget / BCGOPatchExecutor remains an external integration boundary and must be explicitly bound.
+- Execution law remains PROOF -> POLICY -> AUTHORIZATION -> EXECUTION -> VALIDATION.
+- No Medicine, Patch Executor, Firestore Rules, or unrelated deployment source was modified.
+- Browser validation remains required before deployment acceptance.
+
+=== EXECUTION TARGET BINDING CONTRACT HARDENING — 2026-09-07 ===
+- Browser binding now reports success only when the deterministic Executor confirms a real target is actually bound.
+- A target implementing read + write + execute is sufficient; it is not required to expose the internal isBound() helper.
+- No target is fabricated or auto-created by this phase.
+- Production execution remains blocked until an actual CIKURInternalExecutionTarget / BCGOPatchExecutor is present and bound.
+- Browser end-to-end validation remains pending.
+
+=== EXECUTION READINESS OBSERVABILITY HARDENING — 2026-09-07 ===
+
+- Runtime 1.13.0 exposes explicit execution-target binding state separately from executor availability.
+- Executor availability alone is NOT treated as production execution readiness because the built-in deterministic Executor may exist while no real execution target is bound.
+- The deterministic Executor exposes isBound(); the runtime exposes hasExecutionTarget().
+- Browser executionStatus() now reports executorAvailable, executionTargetBound, and readyForExecution independently.
+- readyForExecution is true only when a real execution target is actually bound to the deterministic Executor.
+- This is observability only; it does not create, auto-discover, or fabricate a Patch Executor.
+- Medicine and Patch Executor remain outside this phase and are not modified.
+- Browser validation remains required before deployment acceptance.

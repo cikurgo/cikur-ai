@@ -35,7 +35,8 @@ export function evaluate(caseData, policy={}, knowledge=null){
   const fingerprintBound=sourceVerified && !!c.exactSource?.fingerprint &&
     c.exactSource.contentFingerprint===Core.contentFingerprint(c.exactSource.originalCode||"");
   const sourceFingerprintBound=sourceVerified && !!c.exactSource?.sourceFingerprint;
-  const solutionReady=typeof c.exactSource?.proposedCode === "string" && c.exactSource.proposedCode.trim().length>0;
+  const solutionReady=typeof c.exactSource?.proposedCode === "string" && c.exactSource.proposedCode.trim().length>0 &&
+    (!c.exactSource?.solution || (c.exactSource.solution.status === "CANDIDATE_READY" && c.exactSource.solution.humanReviewRequired === true));
   const proof={
     evidenceCount:(c.evidence||[]).length,
     verifiedEvidenceCount:verified.length,
