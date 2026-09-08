@@ -9,15 +9,16 @@
  * - This module only observes real internal state/bridge packets and emits
  *   bounded directives. Proof/Guardian/Executor remain authoritative gates.
  */
-const VERSION = "1.4.1-INTERNAL-CAPTAIN-CENTRIC-HARDENED";
+const VERSION = "2.0.0-INTERNAL-CAPTAIN-SUPERVISOR";
 const BRIDGE = "CIKUR_GO_BCGO_MEDICINE_V1";
 const MAX_ROUNDS = 4;
-const DIRECTIVE_COOLDOWN = 7000;
-const BLOCKER_REPEAT_COOLDOWN = 15000;
+const DIRECTIVE_COOLDOWN = 12000;
+const BLOCKER_REPEAT_COOLDOWN = 30000;
 const HUMAN_COMMAND_WAIT_MS = 2500;
 const CAPTAIN_ANALYSIS_PROMPT = "Terima kasih atas update-nya. Saya butuh data paling akurat dari kalian: 1. Apa penyebab paling mungkin? 2. Langkah apa yang harus dilakukan selanjutnya? 3. Apa yang saya perlu setujui? Saya menunggu evidence dan review sebelum membuka gerbang manusia.";
 const HUMAN_APPROVAL_KEY = `${BRIDGE}_HUMAN_APPROVAL`;
 const HUMAN_APPROVAL_MAX_AGE = 120000;
+const CASE_STALE_MS = 10 * 60 * 1000;
 
 const clone = value => {
   try { return JSON.parse(JSON.stringify(value)); } catch { return value; }
@@ -145,7 +146,9 @@ export function createCaptain(options = {}) {
       const approval = post("CGO_HUMAN_APPROVAL", { caseId, decision: "REJECT", reason: raw, humanCommand: raw, approvalId: `HUMAN-${caseId}-${Date.now()}` });
       persistHumanApproval(approval);
       set({ status: "LIVE", phase: "REINVESTIGATING", decision: "HUMAN_REJECTED", nextAction: "MEDICINE_INVESTIGATE", humanGate: false, blocker: "HUMAN_REJECTED" }, "CAPTAIN_HUMAN_COMMAND");
-      directive("CGO_REJECT_CANDIDATE", { caseId, reason: `Perintah manusia: ${raw}` }, { force: true });
+      // The Human Approval packet is the single reject command. Medicine consumes it
+      // once and performs the reopen/re-investigation path; do not send a second
+      // CGO_REJECT_CANDIDATE command here or the same case can be processed twice.
       return captainReply("Baik. Candidate ditolak. Saya meminta Medicine kembali mencari evidence dan solusi; tidak ada perubahan source yang diteruskan.", { decision: "REJECT" });
     }
 
@@ -194,13 +197,13 @@ export function createCaptain(options = {}) {
     set({ status: "LIVE", phase: "STATUS_REQUEST", decision: "REQUESTING_UPDATES", nextAction: "ASK_TEAM" }, "CAPTAIN_GREETING");
     post("CGO_REQUEST_UPDATE", {
       caseId: state.caseId,
-      message: "Hallo,, BCGO, MEDICINE dan EXECUTOR, Tolong update Kalian sedang mengerjakan apa"
+      message: "Hallo,, BCGO, MEDICINE dan EXECUTOR. Tolong update Kalian sedang mengerjakan apa"
     });
   }
 
   function chooseFromState() {
     const active = Array.isArray(latestBCGO?.activeCases) ? latestBCGO.activeCases : [];
-    const primary = active[0] || (latestBCGO?.lastTelemetryFile ? { id:`BCGO-${latestBCGO.lastTelemetryFile}`, target:latestBCGO.lastTelemetryFile } : null);
+    const primary = (state.caseId && active.find(x => (x.id || x.caseId || x.target) === state.caseId)) || active[0] || (latestBCGO?.lastTelemetryFile ? { id:`BCGO-${latestBCGO.lastTelemetryFile}`, target:latestBCGO.lastTelemetryFile } : null);
     if (!primary) {
       set({ phase: "OBSERVING", decision: "WAIT", nextAction: "WAIT_FOR_CASE", blocker: "NO_ACTIVE_CASE" }, "CAPTAIN_WAITING");
       return;
@@ -253,6 +256,7 @@ export function createCaptain(options = {}) {
     const caseId = packet.caseId || packet.medicine?.caseId || state.caseId;
     registerCase(caseId);
     const current = cases.get(caseId);
+    if (packet.at && Date.now() - Number(packet.at) > CASE_STALE_MS) return;
     current.teamReports.medicine = true;
     const msg = String(packet.message || packet.medicineEvent || packet.type || "Medicine report");
     const phase = String(packet.phase || packet.medicine?.status || "").toUpperCase();
@@ -339,6 +343,7 @@ export function createCaptain(options = {}) {
     const current = cases.get(caseId);
     const review = packet.review || {};
     const status = String(review.status || packet.status || "").toUpperCase();
+    if (packet.at && Date.now() - Number(packet.at) > CASE_STALE_MS) return;
     current.teamReports.executor = true;
 
     if (packet.type === "EXECUTION_CGO_UPDATE") maybePromptTeamAnalysis(caseId);
@@ -389,11 +394,25 @@ export function createCaptain(options = {}) {
     if (!stateSnapshot || typeof stateSnapshot !== "object") return;
     latestBCGO = clone(stateSnapshot);
     const active = Array.isArray(latestBCGO?.activeCases) ? latestBCGO.activeCases : [];
-    const primary = active[0] || (latestBCGO?.lastTelemetryFile ? { id:`BCGO-${latestBCGO.lastTelemetryFile}`, target:latestBCGO.lastTelemetryFile } : null);
+    const primary = (state.caseId && active.find(x => (x.id || x.caseId || x.target) === state.caseId)) || active[0] || (latestBCGO?.lastTelemetryFile ? { id:`BCGO-${latestBCGO.lastTelemetryFile}`, target:latestBCGO.lastTelemetryFile } : null);
     if (primary) {
       const caseId = primary.id || primary.caseId || primary.target;
       const current = registerCase(caseId);
       current.teamReports.bcgo = true;
+      const scan = latestBCGO?.sourceScan || {};
+      const high = Array.isArray(scan.findings) ? scan.findings.filter(f => String(f.severity).toUpperCase() === "HIGH") : [];
+      const cross = Array.isArray(scan.crossFileFindings) ? scan.crossFileFindings.filter(f => String(f.severity).toUpperCase() === "HIGH") : [];
+      const target = primary.target || primary.source || latestBCGO?.lastTelemetryFile || null;
+      current.bcgoReport = {
+        target,
+        sourceScanStatus: scan.status || null,
+        filesReadable: Number(scan.filesReadable || 0),
+        filesFailed: Number(scan.filesFailed || 0),
+        highFindings: [...high, ...cross].slice(0, 8).map(f => ({ type:f.type, sourceFile:f.sourceFile || f.file || null, targetFile:f.targetFile || null, line:f.line || f.sourceLine || null, targetLine:f.targetLine || null, message:f.message || null })),
+        lastTelemetryFile: latestBCGO?.lastTelemetryFile || null,
+        at: Date.now()
+      };
+      set({ decision: "BCGO_REPORT_RECEIVED", nextAction: state.nextAction, blocker: null }, "CAPTAIN_BCGO_REPORT");
     }
     if (state.status === "WAITING") announceGreeting();
     chooseFromState();
@@ -458,6 +477,7 @@ export function createCaptain(options = {}) {
       return packet;
     },
     humanReject(caseId = state.caseId, reason = "Human menolak candidate melalui Captain.") {
+      if (!state.humanGate) return captainReply("Gerbang keputusan belum terbuka. Saya tidak meneruskan penolakan di luar case candidate yang aktif.", { decision: "REJECTION_BLOCKED" });
       state.humanGate = false;
       const packet = post("CGO_HUMAN_APPROVAL", { caseId, decision: "REJECT", reason, approvalId: `HUMAN-${caseId}-${Date.now()}` });
       persistHumanApproval(packet);

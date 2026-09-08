@@ -106,16 +106,16 @@ button{background:#172554;color:#f8fafc;border:1px solid #334155}.secondary{back
 <tr><td>bcgo-executor-core.js</td><td>Validation Engine</td><td class="check">☑ AKTIF</td></tr>
 <tr><td>bcgo-executor-core.js</td><td>Rollback Engine</td><td class="check">☑ AKTIF</td></tr>
 <tr><td>bcgo-executor.js</td><td>Request Manager</td><td class="check">☑ AKTIF</td></tr>
-<tr><td>bcgo-executor.js</td><td>Approval Gate</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor.js</td><td>Captain Authorization Gate</td><td class="check">☑ AKTIF</td></tr>
 <tr><td>bcgo-executor.js</td><td>Execution Manager</td><td class="check">☑ AKTIF</td></tr>
-<tr><td>bcgo-executor.js</td><td>Source Manager</td><td class="check">☑ AKTIF</td></tr>
+<tr><td>bcgo-executor.js</td><td>Execution Source Binding</td><td class="check">☑ AKTIF</td></tr>
 <tr><td>bcgo-executor.js</td><td>Persistence Manager</td><td class="check">☑ AKTIF</td></tr>
 <tr><td>bcgo-executor.js</td><td>Audit Manager</td><td class="check">☑ AKTIF</td></tr>
 <tr><td>bcgo-executor.html</td><td>Control / Monitoring</td><td class="check">☑ AKTIF</td></tr>
 </tbody></table>
 </section><section class="card advanced">
-<h2>Source Manager — REAL SOURCE ONLY</h2>
-<p class="sub">Executor hanya menerima source melalui candidate Medicine, import source nyata, atau file lokal yang sengaja dihubungkan manusia. Tidak ada source contoh atau jalur pengujian palsu di jalur produksi.</p>
+<h2>Execution Source Binding — REAL SOURCE ONLY</h2>
+<p class="sub">Executor hanya menerima source melalui candidate Medicine, import source nyata, atau file lokal yang sengaja dihubungkan manusia. Tidak ada source contoh atau jalur pengujian palsu di jalur produksi.</p><p class="sub text-cyan-300">Gerbang manusia berada di CGO. Executor tidak menyediakan COPY / APPROVE / REJECT untuk keputusan produksi; halaman ini hanya mengikat candidate, memeriksa otorisasi Captain, mengeksekusi, read-back, dan validasi.</p>
 <div class="two">
 <div><label>Source ID / File</label><input id="sourceId" placeholder="contoh: index.html" value=""/></div>
 <div><label>Fingerprint saat ini</label><input id="sourceFingerprint" readonly="" value="-"/></div>
@@ -186,7 +186,7 @@ button{background:#172554;color:#f8fafc;border:1px solid #334155}.secondary{back
     set("incomingTransport", r?.source||r?.transport||"CROSS_PAGE");
     $("incomingReviewStatus").className="value "+(ok?"ok":reviewing?"warn":"fail");
     $("incomingReviewBanner").className="banner "+(ok?"live":reviewing?"warn":r?"fail":"");
-    $("incomingReviewBanner").textContent=ok?"REPAIR CANDIDATE VALID — tidak dieksekusi tanpa Human Approval.":reviewing?"Candidate diterima. Executor sedang memeriksa source, fingerprint dan operasi.":r?`Candidate ditolak: ${r.reason||"REVIEW_REJECTED"}`:"Menunggu candidate dari Medicine...";
+    $("incomingReviewBanner").textContent=ok?"REPAIR CANDIDATE VALID — menunggu otorisasi Captain; tidak ada Human Gate di Executor.":reviewing?"Candidate diterima. Executor memeriksa source, fingerprint, dan operasi secara deterministic.":r?`Candidate ditolak: ${r.reason||"REVIEW_REJECTED"}`:"Menunggu candidate dari Medicine...";
     $("incomingCandidate").textContent=c?pretty({file:c.file||c.request?.file,location:c.location,before:c.before,after:c.after,fingerprint:c.fingerprint,operation:c.operation,evidence:c.evidence}):"Belum ada candidate.";
   }
 
@@ -209,12 +209,6 @@ button{background:#172554;color:#f8fafc;border:1px solid #334155}.secondary{back
     const e=window.BCGOInternalExecutor;if(!e)return;
     try{const list=await e.listSources(); $("sources").textContent=list.length?pretty(list.map(x=>({sourceId:x.sourceId,file:x.file,fingerprint:x.fingerprint,updatedAt:x.updatedAt,origin:x.origin}))):"Belum ada source tersimpan.";}catch(err){$("sources").textContent="Gagal membaca IndexedDB: "+err.message;}
   }
-
-  async function copyFrom(id,btn){
-    const el=$(id);if(!el)return;
-    try{await navigator.clipboard.writeText(el.value??el.textContent??"");const old=btn.textContent;btn.textContent="✓ TERSALIN";setTimeout(()=>btn.textContent=old,1200);}catch{alert("Clipboard ditolak browser. Silakan salin manual.");}
-  }
-  document.querySelectorAll("[data-copy]").forEach(btn=>btn.addEventListener("click",()=>copyFrom(btn.dataset.copy,btn)));
 
   $("saveSource").addEventListener("click",async()=>{const e=window.BCGOInternalExecutor;if(!e)return;try{const r=await e.registerSource($("sourceId").value.trim(),$("sourceText").value,{file:$("sourceId").value.trim(),origin:"CONTROL_PANEL"});set("sourceFingerprint",r.fingerprint);set("sourceInfo",`${r.sourceId} • ${r.origin} • ${r.updatedAt}`);render();}catch(err){alert("Gagal menyimpan source: "+err.message);}});
   $("loadSource").addEventListener("click",async()=>{const e=window.BCGOInternalExecutor;if(!e)return;const id=$("sourceId").value.trim();try{const r=await e.getSource(id);if(!r){alert("Source belum tersimpan: "+id);return;}$("sourceText").value=r.content;set("sourceFingerprint",r.fingerprint);set("sourceInfo",`${r.sourceId} • ${r.origin||"INTERNAL"}`);}catch(err){alert("Gagal memuat source: "+err.message);}});

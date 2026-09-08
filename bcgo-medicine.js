@@ -517,7 +517,7 @@ async function handleCaptainDirective(packet, source = "BROADCAST_CHANNEL") {
         if (!c.patchProposal?.executionReview || c.patchProposal.executionReview.status !== "VALID") throw new Error("CAPTAIN_APPROVAL_BLOCKED_EXECUTOR_REVIEW");
         processedCaptainApprovalIds.add(approvalId);
         if (processedCaptainApprovalIds.size > 200) processedCaptainApprovalIds.delete(processedCaptainApprovalIds.values().next().value);
-        publishCaptainResponse("MEDICINE_CGO_ACK", {caseId:c.id, message:"Human approval diterima. Medicine masuk tahap finalisasi: validasi ulang Precision Gate, binding source/proposal, lalu menyiapkan authorization untuk Executor."});
+        publishCaptainResponse("MEDICINE_CGO_ACK", {caseId:c.id, message:"Captain Human Gate disetujui. Medicine masuk tahap finalisasi: validasi ulang Precision Gate, binding source/proposal, lalu menyiapkan authorization untuk Executor."});
         const executionApproval = await approveTreatment(c.id);
         try { localStorage.removeItem(HUMAN_APPROVAL_KEY); } catch {}
         publishCaptainResponse("MEDICINE_FINALIZED_FOR_EXECUTION", {
@@ -3290,7 +3290,7 @@ async function approveTreatment(caseId) {
 
   await safeAddMessage(
     "medicine",
-    `Human Approval diterima untuk ${c.id}. Candidate exact dikirim ke Executor untuk eksekusi terkontrol; Medicine tetap tidak menulis source.`,
+    `Captain Human Gate disetujui untuk ${c.id}. Medicine memfinalisasi proof dan authorization; source tetap tidak ditulis oleh Medicine.`,
     {kind:"CAPTAIN_EXECUTION_AUTHORIZATION",caseId:c.id,requestId:executionApproval.requestId,authorizationId:executionApproval.authorization?.authorizationId||null}
   );
 
@@ -3349,7 +3349,7 @@ function medicineAnswer(question) {
   }
   if (i.repair) {
     return c?.repairPlan?.operations?.length
-      ? `Saya memiliki ${c.repairPlan.operations.length} operasi exact. Source tetap terkunci sampai Human Approval.`
+      ? `Saya memiliki ${c.repairPlan.operations.length} operasi exact. Source tetap terkunci sampai Captain membuka dan manusia menyetujui gerbang utama.`
       : "Belum ada operasi exact yang aman. Saya menahan treatment.";
   }
   if (i.root || i.investigate || i.code) {
