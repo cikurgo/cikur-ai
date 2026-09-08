@@ -1,0 +1,320 @@
+/*
+ * CIKUR GO INTERNAL CAPTAIN ORCHESTRATOR
+ * Deterministic supervisor for BCGO <-> MEDICINE <-> EXECUTOR.
+ *
+ * IMPORTANT:
+ * - No external AI/API.
+ * - No cloud backend SDK or server function dependency.
+ * - No source mutation.
+ * - This module only observes real internal state/bridge packets and emits
+ *   bounded directives. Proof/Guardian/Executor remain authoritative gates.
+ */
+const VERSION = "1.0.0-INTERNAL-CAPTAIN-ORCHESTRATOR";
+const BRIDGE = "CIKUR_GO_BCGO_MEDICINE_V1";
+const MAX_ROUNDS = 4;
+const DIRECTIVE_COOLDOWN = 7000;
+
+const clone = value => {
+  try { return JSON.parse(JSON.stringify(value)); } catch { return value; }
+};
+
+export function createCaptain(options = {}) {
+  const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(BRIDGE) : null;
+  const listeners = new Set();
+  const seen = new Set();
+  const cases = new Map();
+  let latestBCGO = null;
+  let latestAI = null;
+  let latestMedicine = null;
+  let latestExecutor = null;
+  let lastDirectiveAt = 0;
+  let started = false;
+
+  const state = {
+    version: VERSION,
+    role: "CAPTAIN",
+    status: "WAITING",
+    phase: "IDLE",
+    caseId: null,
+    round: 0,
+    maxRounds: MAX_ROUNDS,
+    decision: "WAITING",
+    nextAction: "WAIT_FOR_BCGO",
+    blocker: null,
+    candidate: null,
+    humanGate: false,
+    at: Date.now()
+  };
+
+  function emit(event, data = {}) {
+    const snapshot = clone({ ...state, event, data, at: Date.now() });
+    for (const fn of listeners) { try { fn(snapshot); } catch {} }
+    try { window.dispatchEvent(new CustomEvent("cikur-captain-state", { detail: snapshot })); } catch {}
+    return snapshot;
+  }
+
+  function set(patch = {}, event = "CAPTAIN_STATE") {
+    Object.assign(state, patch, { at: Date.now() });
+    return emit(event, patch);
+  }
+
+  function post(type, payload = {}) {
+    const packet = {
+      id: `CAPTAIN-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+      bridge: BRIDGE,
+      from: "CAPTAIN",
+      type,
+      at: Date.now(),
+      caseId: payload.caseId || state.caseId || null,
+      captain: { version: VERSION, round: state.round, phase: state.phase },
+      ...payload
+    };
+    try { channel?.postMessage(packet); } catch {}
+    try { localStorage.setItem(`${BRIDGE}_EVENT`, JSON.stringify(packet)); } catch {}
+    return packet;
+  }
+
+  function directive(type, payload = {}, options = {}) {
+    const now = Date.now();
+    if (!options.force && now - lastDirectiveAt < DIRECTIVE_COOLDOWN) return null;
+    lastDirectiveAt = now;
+    return post(type, payload);
+  }
+
+  function currentCaseId() {
+    if (state.caseId) return state.caseId;
+    const active = Array.isArray(latestBCGO?.activeCases) ? latestBCGO.activeCases : [];
+    const primary = active[0];
+    return primary?.id || primary?.caseId || primary?.target || null;
+  }
+
+  function captainReply(text, meta = {}) {
+    const response = {
+      from: "CAPTAIN",
+      type: "CAPTAIN_HUMAN_RESPONSE",
+      bridge: BRIDGE,
+      caseId: currentCaseId(),
+      message: String(text || ""),
+      at: Date.now(),
+      ...meta
+    };
+    emit("CAPTAIN_HUMAN_RESPONSE", response);
+    return response;
+  }
+
+  function receiveHumanCommand(text, meta = {}) {
+    const raw = String(text || "").trim();
+    if (!raw) return { handled: false, reason: "EMPTY_COMMAND" };
+
+    // Only direct operator commands are claimed by Captain. Other ordinary
+    // questions remain available to the existing internal BCGO conversation.
+    const lower = raw.toLocaleLowerCase("id-ID");
+    const addressed = /(^|[\s,.:!?])cgo([\s,.:!?]|$)/i.test(raw) || /kapten cgo/i.test(raw);
+    if (!addressed) return { handled: false, reason: "NOT_ADDRESSED_TO_CAPTAIN" };
+
+    const caseId = currentCaseId();
+    if (caseId) registerCase(caseId);
+
+    const isApprove = /\b(setujui|approve|saya setuju|izinkan|lanjutkan perubahan)\b/i.test(raw);
+    const isReject = /\b(tolak|reject|jangan setujui|jangan lanjutkan|batalkan candidate)\b/i.test(raw);
+    const isInvestigate = /\b(cek|periksa|periksa lagi|investigasi|selidiki|pengecekan|pengecekan ulang|cari tahu|telusuri|janggal|aneh|anomali|evidence|bukti)\b/i.test(raw);
+    const isUpdate = /\b(update|laporkan|laporan|status|sedang mengerjakan apa|apa yang dikerjakan)\b/i.test(raw);
+
+    if (isApprove) {
+      if (!state.humanGate) {
+        return captainReply("Saya belum membuka gerbang persetujuan. Candidate belum lolos seluruh pemeriksaan Captain, Medicine, dan Executor.", { decision: "APPROVAL_BLOCKED" });
+      }
+      post("CGO_HUMAN_APPROVAL", { caseId, decision: "APPROVE", humanCommand: raw });
+      set({ status: "LIVE", phase: "HUMAN_APPROVAL", decision: "HUMAN_APPROVED", nextAction: "MEDICINE_AUTHORIZE", humanGate: false }, "CAPTAIN_HUMAN_COMMAND");
+      return captainReply("Baik. Persetujuan manusia diterima. Saya meneruskannya melalui jalur internal yang sudah digate; Captain sendiri tidak mengubah source.", { decision: "APPROVE" });
+    }
+
+    if (isReject) {
+      post("CGO_HUMAN_APPROVAL", { caseId, decision: "REJECT", reason: raw, humanCommand: raw });
+      set({ status: "LIVE", phase: "REINVESTIGATING", decision: "HUMAN_REJECTED", nextAction: "MEDICINE_INVESTIGATE", humanGate: false, blocker: "HUMAN_REJECTED" }, "CAPTAIN_HUMAN_COMMAND");
+      directive("CGO_REJECT_CANDIDATE", { caseId, reason: `Perintah manusia: ${raw}` }, { force: true });
+      return captainReply("Baik. Candidate ditolak. Saya meminta Medicine kembali mencari evidence dan solusi; tidak ada perubahan source yang diteruskan.", { decision: "REJECT" });
+    }
+
+    if (isInvestigate) {
+      const packet = directive("CGO_INVESTIGATE", {
+        caseId,
+        target: latestBCGO?.lastTelemetryFile || latestMedicine?.target || null,
+        question: raw,
+        humanCommand: true,
+        commander: "HUMAN"
+      }, { force: true });
+      set({ status: "LIVE", phase: "DELEGATING", decision: "HUMAN_REQUESTED_INVESTIGATION", nextAction: "MEDICINE_INVESTIGATE", blocker: null }, "CAPTAIN_HUMAN_COMMAND");
+      return captainReply(packet
+        ? `Baik. Perintah manusia saya terima. Saya instruksikan Medicine untuk melakukan pengecekan terarah sekarang. Belum ada izin perubahan source.`
+        : "Perintah diterima, tetapi jalur internal belum siap mengirim directive. Saya menahan eksekusi dan tidak mengubah source.",
+        { decision: packet ? "INVESTIGATION_DISPATCHED" : "INVESTIGATION_BLOCKED" });
+    }
+
+    if (isUpdate) {
+      const packet = directive("CGO_REQUEST_UPDATE", { caseId, humanCommand: raw, commander: "HUMAN" }, { force: true });
+      set({ status: "LIVE", phase: "STATUS_REQUEST", decision: "HUMAN_REQUESTED_UPDATE", nextAction: "ASK_TEAM" }, "CAPTAIN_HUMAN_COMMAND");
+      return captainReply(packet
+        ? "Baik. Saya meminta BCGO, Medicine, dan Executor melaporkan pekerjaan serta blocker mereka sekarang."
+        : "Perintah diterima, tetapi jalur laporan sedang sibuk. Saya tidak membuka tindakan baru di luar gerbang.",
+        { decision: packet ? "UPDATE_DISPATCHED" : "UPDATE_BLOCKED" });
+    }
+
+    return captainReply("Saya menerima perintah kakak. Jelaskan tindakan yang diinginkan—misalnya minta tim melakukan pengecekan, minta update, atau setujui/tolak candidate yang sudah membuka gerbang manusia.", { decision: "COMMAND_NEEDS_SCOPE" });
+  }
+
+  function registerCase(caseId) {
+    if (!caseId) return { round: 0 };
+    if (!cases.has(caseId)) cases.set(caseId, { round: 0, lastAction: null, candidate: null });
+    const c = cases.get(caseId);
+    state.caseId = caseId;
+    state.round = c.round;
+    return c;
+  }
+
+  function announceGreeting() {
+    if (state.status !== "WAITING" && state.status !== "LIVE") return;
+    set({ status: "LIVE", phase: "STATUS_REQUEST", decision: "REQUESTING_UPDATES", nextAction: "ASK_TEAM" }, "CAPTAIN_GREETING");
+    post("CGO_REQUEST_UPDATE", {
+      caseId: state.caseId,
+      message: "Hallo,, BCGO, MEDICINE dan EXECUTOR, Tolong update Kalian sedang mengerjakan apa"
+    });
+  }
+
+  function chooseFromState() {
+    const active = Array.isArray(latestBCGO?.activeCases) ? latestBCGO.activeCases : [];
+    const primary = active[0] || (latestBCGO?.lastTelemetryFile ? { id:`BCGO-${latestBCGO.lastTelemetryFile}`, target:latestBCGO.lastTelemetryFile } : null);
+    if (!primary) {
+      set({ phase: "OBSERVING", decision: "WAIT", nextAction: "WAIT_FOR_CASE", blocker: "NO_ACTIVE_CASE" }, "CAPTAIN_WAITING");
+      return;
+    }
+    const c = registerCase(primary.id || primary.caseId || primary.target);
+    const current = cases.get(state.caseId);
+    if (current.round === 0 && !current.lastAction) {
+      set({ phase: "DELEGATING", decision: "MEDICINE_INVESTIGATION", nextAction: "MEDICINE_INVESTIGATE", blocker: null }, "CAPTAIN_DELEGATE");
+      const packet = directive("CGO_INVESTIGATE", {
+        caseId: state.caseId,
+        target: primary.target || primary.file || latestBCGO.lastTelemetryFile || null,
+        question: "Captain meminta Medicine menelusuri symptom → dependency → root cause → exact source."
+      });
+      current.lastAction = packet ? "MEDICINE_INVESTIGATE" : current.lastAction;
+    }
+  }
+
+  function handleMedicine(packet) {
+    latestMedicine = clone(packet);
+    const caseId = packet.caseId || packet.medicine?.caseId || state.caseId;
+    registerCase(caseId);
+    const current = cases.get(caseId);
+    const msg = String(packet.message || packet.medicineEvent || packet.type || "Medicine report");
+    const phase = String(packet.phase || packet.medicine?.status || "").toUpperCase();
+    const blocked = /BLOCK|INSUFFICIENT|UNPROVEN|WAITING|REJECT/i.test(`${phase} ${msg}`);
+
+    if (packet.type === "MEDICINE_REPAIR_CANDIDATE") {
+      current.candidate = clone(packet);
+      set({ phase: "EXECUTOR_REVIEW", decision: "WAIT_EXECUTOR_REVIEW", nextAction: "EXECUTOR_REVIEW", blocker: null, candidate: clone(packet.candidate || packet) }, "CAPTAIN_CANDIDATE_RECEIVED");
+      return;
+    }
+
+    if (packet.type === "MEDICINE_CGO_UPDATE" || packet.type === "MEDICINE_CGO_ACK" || packet.type === "MEDICINE_CGO_BLOCKED" || packet.type === "MEDICINE_CGO_ERROR") {
+      emit("CAPTAIN_MEDICINE_REPORT", { packet });
+    }
+
+    if (blocked && current.round < MAX_ROUNDS) {
+      current.round += 1;
+      set({ round: current.round, phase: "REINVESTIGATING", decision: "REQUEST_MORE_EVIDENCE", nextAction: "MEDICINE_INVESTIGATE", blocker: msg }, "CAPTAIN_RETRY");
+      directive("CGO_INVESTIGATE", {
+        caseId,
+        target: packet.target || packet.medicine?.target || latestBCGO?.lastTelemetryFile || null,
+        question: `Captain menilai bukti belum cukup. Putaran ${current.round}/${MAX_ROUNDS}: cari evidence baru, koreksi target bila perlu, dan verifikasi source exact.`
+      });
+      return;
+    }
+
+    if (current.round >= MAX_ROUNDS && blocked) {
+      set({ phase: "BLOCKED", decision: "HOLD", nextAction: "HUMAN_REVIEW_REQUIRED", blocker: "MAX_INVESTIGATION_ROUNDS_REACHED" }, "CAPTAIN_HOLD");
+    }
+  }
+
+  function handleExecutor(packet) {
+    latestExecutor = clone(packet);
+    const caseId = packet.caseId || packet.review?.caseId || state.caseId;
+    registerCase(caseId);
+    const review = packet.review || {};
+    const status = String(review.status || packet.status || "").toUpperCase();
+
+    if (packet.type === "EXECUTION_REVIEW_RESULT") {
+      if (status === "VALID") {
+        const candidate = cases.get(caseId)?.candidate || null;
+        set({ phase: "HUMAN_APPROVAL", decision: "CANDIDATE_READY", nextAction: "HUMAN_APPROVAL", blocker: null, humanGate: true, candidate: clone(candidate?.candidate || candidate) }, "CAPTAIN_HUMAN_GATE");
+        emit("CAPTAIN_CODE_READY", { candidate: clone(candidate?.candidate || candidate), review: clone(review) });
+      } else {
+        const current = cases.get(caseId);
+        if (current && current.round < MAX_ROUNDS) current.round += 1;
+        set({ round: current?.round || state.round, phase: "REINVESTIGATING", decision: "REJECT_CANDIDATE", nextAction: "MEDICINE_INVESTIGATE", blocker: review.reason || status || "EXECUTOR_REVIEW_REJECTED", humanGate: false }, "CAPTAIN_EXECUTOR_REJECT");
+        directive("CGO_REJECT_CANDIDATE", { caseId, reason: review.reason || `Executor review ${status || "REJECTED"}; source/evidence must be reacquired.` });
+      }
+      return;
+    }
+    emit("CAPTAIN_EXECUTOR_REPORT", { packet });
+  }
+
+  function handlePacket(packet) {
+    if (!packet || packet.bridge !== BRIDGE) return;
+    const id = String(packet.id || `${packet.from}:${packet.type}:${packet.at}:${packet.caseId || ""}`);
+    if (seen.has(id)) return;
+    seen.add(id);
+    if (seen.size > 500) seen.delete(seen.values().next().value);
+    if (packet.from === "MEDICINE") handleMedicine(packet);
+    if (packet.from === "EXECUTION") handleExecutor(packet);
+  }
+
+  function onBCGO(stateSnapshot) {
+    if (!stateSnapshot || typeof stateSnapshot !== "object") return;
+    latestBCGO = clone(stateSnapshot);
+    if (state.status === "WAITING") announceGreeting();
+    chooseFromState();
+  }
+
+  function start() {
+    if (started) return api;
+    started = true;
+    channel?.addEventListener("message", e => handlePacket(e.data));
+    window.addEventListener("storage", e => {
+      if (e.key !== `${BRIDGE}_EVENT` || !e.newValue) return;
+      try { handlePacket(JSON.parse(e.newValue)); } catch {}
+    });
+    window.addEventListener("cikur-bcgo-state", e => onBCGO(e.detail || {}));
+    window.addEventListener("cikur-internal-ai-state", e => {
+      latestAI = clone(e.detail || {});
+      emit("CAPTAIN_AI_UPDATE", { ai: latestAI });
+    });
+    if (window.BCGO_STATE) onBCGO(window.BCGO_STATE);
+    set({ status: "WAITING", phase: "IDLE", nextAction: "WAIT_FOR_BCGO" }, "CAPTAIN_READY");
+    return api;
+  }
+
+  const api = Object.freeze({
+    version: VERSION,
+    start,
+    stop() { try { channel?.close(); } catch {} started = false; },
+    onState(fn) { if (typeof fn === "function") listeners.add(fn); return () => listeners.delete(fn); },
+    getState() { return clone(state); },
+    getSnapshot() { return { captain: clone(state), bcgo: clone(latestBCGO), ai: clone(latestAI), medicine: clone(latestMedicine), executor: clone(latestExecutor) }; },
+    requestUpdate() { return directive("CGO_REQUEST_UPDATE", { caseId: state.caseId }); },
+    receiveHumanCommand,
+    humanApprove(caseId = state.caseId) {
+      if (!state.humanGate) return captainReply("Gerbang persetujuan belum terbuka. Saya tidak meneruskan approval.", { decision: "APPROVAL_BLOCKED" });
+      state.humanGate = false;
+      return post("CGO_HUMAN_APPROVAL", { caseId, decision: "APPROVE" });
+    },
+    humanReject(caseId = state.caseId, reason = "Human menolak candidate melalui Captain.") {
+      state.humanGate = false;
+      return post("CGO_HUMAN_APPROVAL", { caseId, decision: "REJECT", reason });
+    }
+  });
+
+  return api;
+}
+
+export const VERSION_EXPORT = VERSION;

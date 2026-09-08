@@ -168,7 +168,48 @@ import { db } from "./cikur-config.js";
   const seenInvestigations = new Set();
   const lastInvestigationPhase = new Map();
 
-  function publishInvestigationAck(packet) {
+  
+function publishCaptainUpdate(message, extra = {}) {
+  const packet = {
+    bridge: BRIDGE_CHANNEL,
+    from: "EXECUTION",
+    type: "EXECUTION_CGO_UPDATE",
+    role: EXECUTOR_ROLE,
+    at: Date.now(),
+    message: String(message || "").slice(0, 700),
+    state: {
+      status: state?.status || "UNKNOWN",
+      investigation: state?.investigation || null,
+      requestId: state?.requestId || null
+    },
+    ...extra
+  };
+  try { bridgeChannel?.postMessage(packet); } catch {}
+  try { localStorage.setItem(INVESTIGATION_ACK_KEY, JSON.stringify(packet)); } catch {}
+  return packet;
+}
+
+function handleCaptainDirective(packet) {
+  if (!packet || packet.bridge !== BRIDGE_CHANNEL || packet.from !== "CAPTAIN") return false;
+  const type = String(packet.type || "").toUpperCase();
+  if (!type.startsWith("CGO_")) return false;
+  if (type === "CGO_REQUEST_UPDATE") {
+    publishCaptainUpdate(
+      state?.investigation
+        ? `Executor aktif sebagai ${EXECUTOR_ROLE}; investigasi ${state.investigation.investigationId || "-"} berada pada fase ${state.investigation.phase || "-"}, status ${state.investigation.status || "-"}.`
+        : `Executor ${EXECUTOR_ROLE} aktif dan menunggu sesi investigasi/candidate dari Medicine.`,
+      {caseId:packet.caseId || state?.investigation?.caseId || null}
+    );
+    return true;
+  }
+  if (type === "CGO_REVIEW_STATUS") {
+    publishCaptainUpdate("Executor menerima permintaan status review dari Captain.", {caseId:packet.caseId || null, requestId:packet.requestId || null});
+    return true;
+  }
+  return false;
+}
+
+function publishInvestigationAck(packet) {
     const message = {
       bridge: BRIDGE_CHANNEL,
       from: "EXECUTION",
@@ -249,6 +290,17 @@ import { db } from "./cikur-config.js";
     emit();
     publishInvestigationAck({ investigationId, caseId:packet.caseId || null, phase, status:participation, message, source, receivedAt:state.investigation.receivedAt });
     return true;
+  }
+
+  function startCaptainDirectiveBridge() {
+    try { bridgeChannel?.addEventListener("message", event => { handleCaptainDirective(event.data); }); } catch {}
+    try {
+      window.addEventListener("storage", event => {
+        if (event.key === INVESTIGATION_ACK_KEY && event.newValue) {
+          try { handleCaptainDirective(JSON.parse(event.newValue)); } catch {}
+        }
+      });
+    } catch {}
   }
 
   function startInvestigationBridge() {
@@ -1120,7 +1172,8 @@ import { db } from "./cikur-config.js";
   function boot() {
     startBridgeRecovery();
     startNerveMonitor();
-    startInvestigationBridge();
+    startCaptainDirectiveBridge();
+  startInvestigationBridge();
     startRepairCandidateBridge();
     startExecutionApprovalBridge();
     setStatus(core() ? STATUS.READY : STATUS.OFFLINE);

@@ -77,6 +77,61 @@ body{font-family:'Inter',sans-serif}
     </div>
 </section>
 
+<!-- CGO CAPTAIN / TEAM DIALOG — REAL BRIDGE OBSERVER -->
+<section id="captain-dialog" class="space-y-3">
+  <div class="flex items-center justify-between gap-3">
+    <div>
+      <div class="text-xs font-semibold text-cyan-300 uppercase tracking-wider">Dialog Kapten CGO</div>
+      <div class="text-[10px] text-slate-500 mt-1">Kolom ini membaca state dan paket saraf nyata. Tidak membuat percakapan palsu.</div>
+    </div>
+    <span id="captain-dialog-status" class="text-[9px] code-font px-2 py-1 rounded border border-slate-700 text-slate-400">WAITING</span>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <article class="bg-slate-900 border border-cyan-900/70 rounded-xl p-4 space-y-3 shadow-lg">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <div class="text-sm font-bold text-cyan-200">🧠 CGO (KAPTEN)</div>
+          <div class="text-[9px] text-slate-500">Otak • Orkestrasi • Keputusan</div>
+        </div>
+        <span id="captain-online" class="text-[9px] code-font text-slate-400">WAITING</span>
+      </div>
+      <div id="captain-chat" class="bg-slate-950 border border-slate-800 rounded-lg p-3 min-h-[230px] max-h-80 overflow-y-auto space-y-2">
+        <div class="text-xs text-slate-600">CGO menunggu BCGO_STATE yang hidup...</div>
+      </div>
+    </article>
+
+    <article class="bg-slate-900 border border-violet-900/70 rounded-xl p-4 space-y-3 shadow-lg">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <div class="text-sm font-bold text-violet-200">⚙️ BCGO-MEDICINE-EXECUTOR</div>
+          <div class="text-[9px] text-slate-500">Laporan aktual dari bridge lintas halaman</div>
+        </div>
+        <span id="team-online" class="text-[9px] code-font text-slate-400">WAITING</span>
+      </div>
+      <div id="team-chat" class="bg-slate-950 border border-slate-800 rounded-lg p-3 min-h-[230px] max-h-80 overflow-y-auto space-y-2">
+        <div class="text-xs text-slate-600">Menunggu paket Medicine / Executor...</div>
+      </div>
+    </article>
+  </div>
+
+  <div id="captain-decision-panel" class="bg-slate-900 border border-amber-900/70 rounded-xl p-4 space-y-2">
+    <div class="flex justify-between items-center gap-3">
+      <div class="text-xs font-semibold text-amber-300 uppercase tracking-wider">Keputusan CGO / Gerbang Eksekusi</div>
+      <span id="captain-decision-status" class="text-[9px] code-font text-amber-400">PROOF BELUM LENGKAP</span>
+    </div>
+    <div id="captain-decision-text" class="text-xs text-slate-400">CGO belum menerima proof lengkap untuk menampilkan kandidat perubahan. Source tidak disentuh.</div>
+    <div id="captain-code-panel" class="hidden grid grid-cols-1 md:grid-cols-2 gap-2">
+      <div><div class="text-[9px] text-slate-500 mb-1">BEFORE</div><pre id="captain-before" class="text-[9px] code-font bg-slate-950 border border-slate-800 rounded p-2 overflow-auto max-h-48"></pre></div>
+      <div><div class="text-[9px] text-slate-500 mb-1">AFTER</div><pre id="captain-after" class="text-[9px] code-font bg-slate-950 border border-slate-800 rounded p-2 overflow-auto max-h-48"></pre></div>
+    </div>
+    <div id="captain-human-gate" class="hidden flex flex-wrap gap-2 pt-1">
+      <button id="captain-approve" type="button" class="px-3 py-2 rounded-lg bg-emerald-700 text-xs font-semibold">SETUJUI PERUBAHAN</button>
+      <button id="captain-reject" type="button" class="px-3 py-2 rounded-lg bg-rose-800 text-xs font-semibold">TOLAK & INVESTIGASI ULANG</button>
+    </div>
+  </div>
+</section>
+
 <section class="grid grid-cols-1 md:grid-cols-4 gap-3">
     <div id="bagan-in" class="neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40">
         <div class="text-xs font-bold text-slate-500 mb-1">TAHAP 01</div>
@@ -691,6 +746,20 @@ async function sendQuestion(question) {
     setChatBusy(true);
     addChat('user', text);
     try {
+        // The original chat remains the human control channel. Direct
+        // commands addressed to CGO are handled by the real Captain first;
+        // ordinary questions keep using the existing internal BCGO brain.
+        const captain = window.CIKURCaptain;
+        const captainResult = captain?.receiveHumanCommand?.(text, { source: 'BCGO_OPERATOR_CHAT' });
+        if (captainResult?.handled !== false && captainResult?.type === 'CAPTAIN_HUMAN_RESPONSE') {
+            addChat('bcgo', captainResult.message || 'Perintah diterima Captain.');
+            return;
+        }
+        if (captainResult?.from === 'CAPTAIN' && captainResult?.message) {
+            addChat('bcgo', captainResult.message);
+            return;
+        }
+
         const runtime = await waitForInternalAI();
         if (!runtime?.ask) throw new Error('INTERNAL_AI_NOT_READY');
         const answer = await runtime.ask(text);
@@ -918,5 +987,135 @@ runAutonomousEngine(state => {
 })();
 </script>
 
+
+<script type="module">
+/* Internal Captain runtime bootstrap. No Firebase Functions/API. */
+import { createCaptain } from "./cgo-ai-captain.js?v=1.0.0-INTERNAL-CAPTAIN-ORCHESTRATOR";
+const captain = createCaptain();
+window.CIKURCaptain = captain;
+captain.start();
+</script>
+
+<script>
+/* CGO Captain presentation. UI only reflects the real internal Captain state. */
+(() => {
+  const $ = id => document.getElementById(id);
+  const captainChat = $('captain-chat');
+  const teamChat = $('team-chat');
+  const status = $('captain-dialog-status');
+  const captainOnline = $('captain-online');
+  const teamOnline = $('team-online');
+  const decisionStatus = $('captain-decision-status');
+  const decisionText = $('captain-decision-text');
+  const codePanel = $('captain-code-panel');
+  const humanGate = $('captain-human-gate');
+  const beforeEl = $('captain-before');
+  const afterEl = $('captain-after');
+  const bridgeKey = 'CIKUR_GO_BCGO_MEDICINE_V1';
+  const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(bridgeKey) : null;
+  const seen = new Set();
+  let latestCaseId = null;
+
+  const esc = v => String(v ?? '-').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
+  const time = v => { try { const d = new Date(v || Date.now()); return d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); } catch { return '--:--:--'; } };
+  function bubble(root, who, text, tone='cyan') {
+    if (!root || !text) return;
+    const row = document.createElement('div');
+    const cls = tone === 'violet' ? 'border-violet-900 bg-violet-950/20 text-violet-100' : tone === 'amber' ? 'border-amber-900 bg-amber-950/20 text-amber-100' : 'border-cyan-900 bg-cyan-950/20 text-cyan-100';
+    row.className = 'border rounded-lg px-3 py-2 ' + cls;
+    row.innerHTML = `<div class="flex justify-between gap-2 text-[9px] uppercase opacity-70"><span>${esc(who)}</span><span>${esc(time())}</span></div><div class="text-xs mt-1 whitespace-pre-line">${esc(text)}</div>`;
+    root.appendChild(row); root.scrollTop = root.scrollHeight;
+  }
+  function packetKey(packet) { return String(packet?.id || `${packet?.from}:${packet?.type}:${packet?.at}:${packet?.caseId || ''}`); }
+  function handleTeam(packet) {
+    if (!packet || packet.bridge !== bridgeKey || (packet.from !== 'MEDICINE' && packet.from !== 'EXECUTION')) return;
+    const key = packetKey(packet); if (seen.has(key)) return; seen.add(key);
+    const who = packet.from === 'MEDICINE' ? 'MEDICINE' : 'EXECUTOR';
+    const msg = packet.message || packet.review?.reason || packet.type || 'Laporan diterima.';
+    latestCaseId = packet.caseId || latestCaseId;
+    teamOnline.textContent = 'LIVE • ' + who; teamOnline.className = 'text-[9px] code-font text-emerald-300';
+    bubble(teamChat, who, msg, 'violet');
+    bubble(captainChat, `CGO • ${who}`, `Saya menerima laporan ${who}: ${msg}`);
+  }
+  channel?.addEventListener('message', e => handleTeam(e.data));
+  window.addEventListener('storage', e => { if (e.key === `${bridgeKey}_EVENT` && e.newValue) { try { handleTeam(JSON.parse(e.newValue)); } catch {} } });
+
+  window.addEventListener('cikur-captain-state', e => {
+    const s = e.detail || {};
+    latestCaseId = s.caseId || latestCaseId;
+    status.textContent = `LIVE • ${s.phase || 'CAPTAIN'}`;
+    status.className = 'text-[9px] code-font px-2 py-1 rounded border border-emerald-800 text-emerald-300';
+    captainOnline.textContent = `ONLINE • ${s.decision || 'INTERNAL'}`;
+    captainOnline.className = 'text-[9px] code-font text-emerald-300';
+    if (s.event === 'CAPTAIN_GREETING') bubble(captainChat, 'CGO • KAPTEN', 'Hallo,, BCGO, MEDICINE dan EXECUTOR,\nTolong update Kalian sedang mengerjakan apa');
+    if (s.event === 'CAPTAIN_HUMAN_RESPONSE') {
+      const r = s.data || {};
+      bubble(captainChat, 'CGO • KAPTEN', r.message || 'Perintah manusia diterima.', 'amber');
+    }
+    if (s.event === 'CAPTAIN_HUMAN_COMMAND') bubble(captainChat, 'MANUSIA → CGO', 'Perintah operator sedang diproses oleh Captain.', 'amber');
+    if (s.event === 'CAPTAIN_DELEGATE') bubble(captainChat, 'CGO • KEPUTUSAN', `Case ${s.caseId || '-'} saya serahkan ke Medicine untuk investigasi evidence → dependency → root cause → source exact.`);
+    if (s.event === 'CAPTAIN_RETRY') bubble(captainChat, 'CGO • KOREKSI', `Bukti belum cukup. Saya minta Medicine mengulang investigasi secara terarah. Putaran ${s.round}/${s.maxRounds}. Blocker: ${s.blocker || '-'}`, 'amber');
+    if (s.event === 'CAPTAIN_EXECUTOR_REJECT') bubble(captainChat, 'CGO • REJECT', `Executor menolak candidate: ${s.blocker || 'review tidak valid'}. Saya tidak meneruskan source. Medicine diminta memperoleh evidence baru.`, 'amber');
+    if (s.event === 'CAPTAIN_HUMAN_GATE') {
+      decisionStatus.textContent = 'CANDIDATE SIAP • MENUNGGU MANUSIA';
+      decisionStatus.className = 'text-[9px] code-font text-emerald-300';
+      decisionText.textContent = 'CGO menyatakan candidate siap setelah laporan Medicine + review Executor. Source belum disentuh; keputusan berikutnya milik manusia.';
+    }
+    if (s.event === 'CAPTAIN_HOLD') {
+      decisionStatus.textContent = 'HOLD';
+      decisionText.textContent = `CGO menahan alur: ${s.blocker || 'bukti belum cukup'}.`;
+      codePanel.classList.add('hidden'); humanGate.classList.add('hidden');
+    }
+  });
+
+  window.addEventListener('cikur-captain-state', e => {
+    const d = e.detail?.data || {};
+    if (d.packet?.from) handleTeam(d.packet);
+  });
+
+  window.addEventListener('cikur-captain-state', e => {
+    const s = e.detail || {};
+    if (s.event === 'CAPTAIN_AI_UPDATE') {
+      const ai = s.data?.ai || {};
+      const proof = ai.reasoning?.precisionGate;
+      if (proof && proof.pass !== true) {
+        decisionStatus.textContent = 'PRECISION GATE TERKUNCI';
+        decisionText.textContent = `CGO belum membuka candidate. Blocker: ${(proof.blockers || []).slice(0,4).join(', ') || 'proof belum lengkap'}.`;
+      }
+    }
+  });
+
+  window.addEventListener('cikur-captain-state', e => {
+    const s = e.detail || {};
+    if (s.event !== 'CAPTAIN_CODE_READY') return;
+    const candidate = s.data?.candidate || s.candidate || {};
+    if (candidate.before == null || candidate.after == null) return;
+    beforeEl.textContent = String(candidate.before);
+    afterEl.textContent = String(candidate.after);
+    codePanel.classList.remove('hidden');
+    humanGate.classList.remove('hidden');
+    latestCaseId = candidate.caseId || s.caseId || latestCaseId;
+  });
+
+  $('captain-approve')?.addEventListener('click', () => {
+    if (!window.CIKURCaptain || !latestCaseId) return;
+    bubble(captainChat, 'MANUSIA → CGO', 'Saya menyetujui candidate ini. CGO meneruskan persetujuan melalui jalur internal ke Medicine untuk Captain authorization.', 'amber');
+    window.CIKURCaptain.humanApprove(latestCaseId);
+    humanGate.classList.add('hidden');
+  });
+  $('captain-reject')?.addEventListener('click', () => {
+    if (!window.CIKURCaptain || !latestCaseId) return;
+    bubble(captainChat, 'MANUSIA → CGO', 'Saya menolak candidate ini. CGO meminta Medicine mencari evidence/solusi baru.', 'amber');
+    window.CIKURCaptain.humanReject(latestCaseId);
+    humanGate.classList.add('hidden');
+  });
+
+  window.addEventListener('cikur-bcgo-state', e => {
+    const state = e.detail || {};
+    if (state.lastTelemetryFile) latestCaseId = state.activeCases?.[0]?.id || latestCaseId;
+    teamOnline.textContent = teamOnline.textContent === 'WAITING' ? 'LISTENING' : teamOnline.textContent;
+  });
+})();
+</script>
 </body>
 </html>

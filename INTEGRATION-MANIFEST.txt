@@ -564,3 +564,24 @@ STAGE 11 — DURABLE CAPTAIN AUTHORIZATION + EXECUTION CONSUMPTION FENCE — 202
 - Firestore Rules were NOT changed in this stage. The deployment must permit the authenticated Medicine/Executor identities to read/update the selected `medicine_patch_requests` authorization record; otherwise the system must remain fail-closed.
 - FNV-1a32 fingerprints remain deterministic integrity bindings only; they are NOT cryptographic signatures.
 - Browser end-to-end execution remains unclaimed until tested in the user's actual deployment.
+
+
+CAPTAIN ORCHESTRATOR MILESTONE — 2026-09-08
+---------------------------------------------
+Added: cgo-ai-captain.js (INTERNAL CAPTAIN ORCHESTRATOR).
+Role: deterministic supervisor for BCGO -> Medicine -> Executor -> Human Gate.
+Boundary: browser/internal JavaScript only. No Firebase SDK, Cloud Functions, callable functions,
+external AI provider, external HTTP endpoint, or source mutation.
+Captain observes real BCGO_STATE and CIKUR_GO_BCGO_MEDICINE_V1 packets, issues bounded CGO_*
+directives, receives real Medicine/Executor reports, and opens the human gate only after an
+Executor review packet reports VALID. Investigation retries are bounded to MAX_ROUNDS=4.
+Human approval/rejection is transported as a Captain packet to Medicine; Medicine remains the
+proof/authorization authority and Executor remains the execution gate.
+
+[STAGE 12 HUMAN-CAPTAIN-CONTROL]
+- Existing BCGO human chat is now the Human → Captain control gate for direct commands addressed to CGO.
+- Direct operator commands such as "CGO, lakukan pengecekan" are handled by the internal Captain first, then converted into bounded CGO directives for the real BCGO/Medicine/Executor bridge.
+- Captain responses are returned to the original human chat and mirrored into the dedicated Captain panel.
+- Ordinary non-CGO chat remains available to the existing internal BCGO conversation path.
+- Human approval/rejection remains gated; Captain never mutates source directly and never bypasses Medicine/Guardian/Executor proof.
+- No external AI provider, external HTTP reasoning service, Firebase Cloud Function, or source mutation was introduced.

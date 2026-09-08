@@ -427,6 +427,105 @@ function publishInvestigationRequest(c, phase = "INVESTIGATING", extra = {}) {
   return message;
 }
 
+
+function publishCaptainResponse(type, data = {}) {
+  const message = {
+    bridge: MEDICINE_BRIDGE_KEY,
+    from: "MEDICINE",
+    type,
+    at: Date.now(),
+    caseId: data.caseId || S.activeCase?.id || null,
+    message: String(data.message || "").slice(0, 700),
+    medicine: {
+      status: S.activeCase?.status || "IDLE",
+      caseId: S.activeCase?.id || null,
+      target: S.activeCase?.source || null,
+      rootCauseFile: S.activeCase?.rootCauseFile || S.activeCase?.repairPlan?.rootCauseFile || null,
+      rootCauseStatus: S.activeCase?.rootCauseStatus || S.activeCase?.repairPlan?.rootCauseStatus || "UNPROVEN",
+      precisionGate: !!S.activeCase?.repairPlan?.precisionGate,
+      sourceEvidenceCount: Array.isArray(S.activeCase?.sourceEvidence) ? S.activeCase.sourceEvidence.length : 0,
+      checkedFiles: Array.isArray(S.activeCase?.verification?.checkedFiles) ? S.activeCase.verification.checkedFiles.length : 0
+    }
+  };
+  try { medicineBridgeChannel?.postMessage(message); } catch {}
+  try { localStorage.setItem(MEDICINE_BRIDGE_EVENT_KEY, JSON.stringify(message)); } catch {}
+  return message;
+}
+
+async function handleCaptainDirective(packet, source = "BROADCAST_CHANNEL") {
+  if (!packet || packet.bridge !== MEDICINE_BRIDGE_KEY || packet.from !== "CAPTAIN") return false;
+  const type = String(packet.type || "").toUpperCase();
+  if (!type.startsWith("CGO_")) return false;
+  const caseId = String(packet.caseId || "").trim();
+  const target = normalizeFile(packet.target || packet.file || S.activeCase?.source || "");
+  try {
+    if (type === "CGO_REQUEST_UPDATE") {
+      publishCaptainResponse("MEDICINE_CGO_UPDATE", {
+        caseId,
+        message: S.activeCase
+          ? `Medicine aktif pada ${S.activeCase.id}; status ${S.activeCase.status}; target ${S.activeCase.source || "-"}; root cause ${S.activeCase.rootCauseFile || "belum terbukti"}.`
+          : "Medicine belum memegang case aktif."
+      });
+      return true;
+    }
+    if (type === "CGO_INVESTIGATE") {
+      if (!auth.currentUser) {
+        publishCaptainResponse("MEDICINE_CGO_BLOCKED", {caseId, message:"Medicine belum terautentikasi; investigasi data ditahan."});
+        return false;
+      }
+      const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase;
+      if (!c) {
+        publishCaptainResponse("MEDICINE_CGO_BLOCKED", {caseId, message:"Captain meminta investigasi, tetapi case tidak ditemukan di Medicine."});
+        return false;
+      }
+      S.activeCase = c;
+      publishCaptainResponse("MEDICINE_CGO_ACK", {caseId:c.id, message:`Captain directive diterima. Medicine melanjutkan pembuktian ${target || c.source || "case aktif"}.`});
+      await verifyWithMedicine(target || c.source || null, {question: packet.question || "Captain meminta evidence tambahan dan root cause/source exact."});
+      return true;
+    }
+    if (type === "CGO_REJECT_CANDIDATE") {
+      const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase;
+      if (!c) return false;
+      await rejectTreatment(c.id, packet.reason || "Candidate ditolak oleh Captain/Human Gate; evidence harus diperoleh ulang.");
+      publishCaptainResponse("MEDICINE_CGO_ACK", {caseId:c.id, message:"Candidate ditolak. Medicine membuka kembali investigasi dan tidak menulis source."});
+      if (auth.currentUser) await verifyWithMedicine(c.source || target || null, {question:"Re-check setelah candidate ditolak; cari evidence baru dan source exact."});
+      return true;
+    }
+    if (type === "CGO_HUMAN_APPROVAL") {
+      const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase;
+      if (!c) return false;
+      if (packet.decision === "REJECT") {
+        await rejectTreatment(c.id, packet.reason || "Perubahan ditolak manusia melalui Captain.");
+        publishCaptainResponse("MEDICINE_CGO_ACK", {caseId:c.id, message:"Human menolak candidate. Medicine kembali ke investigasi."});
+        if (auth.currentUser) await verifyWithMedicine(c.source || target || null, {question:"Human menolak candidate; cari solusi/evidence alternatif."});
+        return true;
+      }
+      if (packet.decision === "APPROVE") {
+        if (!c.repairPlan?.precisionGate) throw new Error("CAPTAIN_APPROVAL_BLOCKED_PRECISION_GATE");
+        if (!c.patchProposal?.executionReview || c.patchProposal.executionReview.status !== "VALID") throw new Error("CAPTAIN_APPROVAL_BLOCKED_EXECUTOR_REVIEW");
+        await approveTreatment(c.id);
+        publishCaptainResponse("MEDICINE_CGO_ACK", {caseId:c.id, message:"Human approval diterima. Medicine meminta Captain authorization dan meneruskannya ke Executor."});
+        return true;
+      }
+    }
+  } catch (error) {
+    publishCaptainResponse("MEDICINE_CGO_ERROR", {caseId, message:`Directive ${type} gagal: ${String(error?.message || error)}`});
+    return false;
+  }
+  return false;
+}
+
+function startCaptainDirectiveBridge() {
+  try { medicineBridgeChannel?.addEventListener("message", event => { void handleCaptainDirective(event.data); }); } catch {}
+  try {
+    window.addEventListener("storage", event => {
+      if (event.key === MEDICINE_BRIDGE_EVENT_KEY && event.newValue) {
+        try { void handleCaptainDirective(JSON.parse(event.newValue), "LOCAL_STORAGE"); } catch {}
+      }
+    });
+  } catch {}
+}
+
 function receiveInvestigationAck(packet) {
   if (!packet || packet.bridge !== MEDICINE_BRIDGE_KEY || packet.from !== "EXECUTION" || packet.type !== "EXECUTION_INVESTIGATION_ACK") return false;
   const investigationId = String(packet.investigationId || "").trim();
@@ -3484,5 +3583,7 @@ window.BCGOMedicine = API;
 window.addEventListener("bcgo-executor-state", () => syncExecutorState());
 window.addEventListener("bcgo-executor-core-ready", () => syncExecutorState());
 setTimeout(() => syncExecutorState(), 0);
+
+startCaptainDirectiveBridge();
 
 emit("boot",{version:S.version,executorAvailable:executorAvailable()});
