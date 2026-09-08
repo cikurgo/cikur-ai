@@ -175,9 +175,6 @@ export function createDeterministicExecutor(target={}) {
 
 export function createRuntime(options={}) {
   let knowledge=Knowledge.createKnowledgeStore(options.knowledge);
-  // Durable authorization storage is injected by the infrastructure boundary.
-  // The internal brain never imports Firebase or another external service.
-  const authorizationStore = options.authorizationStore || null;
   let memory=Memory.createMemory(options.memory);
   const cases=new Map();
   const investigations=new Map();
@@ -227,18 +224,6 @@ export function createRuntime(options={}) {
     if(c.actionPlan?.request?.file && c.exactSource?.file && c.actionPlan.request.file!==c.exactSource.file)
       throw new Error(`INVALID_SNAPSHOT_ACTION_BINDING:${c.caseId}`);
     return true;
-  }
-
-  async function persistAuthorization(auth) {
-    if (!authorizationStore || typeof authorizationStore.issue !== "function")
-      throw new Error("DURABLE_AUTHORIZATION_STORE_REQUIRED");
-    return authorizationStore.issue(structuredClone(auth));
-  }
-
-  async function consumeDurableAuthorization(auth,expected={}) {
-    if (!authorizationStore || typeof authorizationStore.consume !== "function")
-      throw new Error("DURABLE_AUTHORIZATION_STORE_REQUIRED");
-    return authorizationStore.consume(structuredClone(auth), structuredClone(expected));
   }
 
   function authorizationDecision(caseId,policy={}){
@@ -419,9 +404,6 @@ export function createRuntime(options={}) {
       emit("EXECUTION_AUTHORIZATION_ISSUED",auth);
       return structuredClone(auth);
     },
-
-    persistAuthorization,
-    consumeDurableAuthorization,
 
     authorize(caseId,policy={}){
       const c=cases.get(caseId);

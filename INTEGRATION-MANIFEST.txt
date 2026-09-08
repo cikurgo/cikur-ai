@@ -1,4 +1,4 @@
-CIKUR GO / BCGO — INTERNAL BRAIN + BCGO INTEGRATION CANDIDATE — 3.4.0-INSTRUCTION-CONSTITUTION
+CIKUR GO / BCGO — INTERNAL BRAIN + BCGO INTEGRATION CANDIDATE — 3.5.0-CAPTAIN-DURABLE-AUTHORIZATION
 Generated: 2026-09-07
 
 Deployment overlay files:
@@ -552,12 +552,15 @@ Important limitation:
   binding contract; durable cross-page/server persistence of authorization
   consumption remains a later hardening stage.
 
-
-STAGE 11 — CAPTAIN DURABLE AUTHORIZATION + EXECUTION CONSUMPTION — 2026-09-08
-- Medicine now converts its verified evidence into the canonical Captain proof shape before execution authorization. Captain/Guardian remains the authority; insufficient proof is fail-closed.
-- Captain authorization is persisted to Firestore collection execution_authorizations with status ISSUED before the authorization packet is dispatched. Firestore is infrastructure/state storage only; it is not the intelligence engine.
-- Executor now atomically consumes the authorization in a Firestore transaction immediately before source persistence. A second consumer/replay cannot claim the same authorization because only ISSUED is claimable.
-- Once consumed, ambiguous persistence/readback failure is recorded as INDETERMINATE rather than silently retrying the same authorization. Successful readback marks the durable authorization EXECUTED.
-- The internal runtime exposes an infrastructure-neutral durable authorization store contract; the brain itself does not import Firebase.
-- Production dependency: Firestore Security Rules must explicitly protect execution_authorizations and permit only the intended authenticated/admin execution path. This package does NOT silently modify Firestore Rules.
-- FNV fingerprints remain deterministic consistency fingerprints, not cryptographic signatures.
+STAGE 11 — DURABLE CAPTAIN AUTHORIZATION + EXECUTION CONSUMPTION FENCE — 2026-09-08
+- Human-approved execution is no longer admitted from Medicine directly. Medicine first projects its verified source evidence into the Captain proof model, then requests a Captain HUMAN_AUTHORIZED artifact.
+- Captain authorization is persisted before transport using the existing Firestore infrastructure collection `medicine_patch_requests/{requestId}` under `executionAuthorization`.
+- Persistence failure is fail-closed: Medicine does not dispatch an execution authorization when the durable authorization record cannot be written.
+- Executor admission now consumes the durable authorization transactionally: ISSUED -> DISPATCH_PENDING. A second executor/page/process cannot consume the same authorization while it is already pending or terminal.
+- Durable consumption is bound to caseId, proposalId, planId, sourceId, file, operation, beforeFingerprint, proposedFingerprint, sourceFingerprint, and the Captain authorization binding.
+- Executor finalization records EXECUTED or FAILED. If finalization is ambiguous after an effecting operation, the result is INDETERMINATE and the authorization remains non-replayable; no blind retry is permitted.
+- Existing localStorage replay protection remains only as a secondary cache guard; it is NOT treated as the authoritative consumption record.
+- The internal brain remains infrastructure-agnostic: Firebase is used only as durable data/state infrastructure, never as reasoning or AI.
+- Firestore Rules were NOT changed in this stage. The deployment must permit the authenticated Medicine/Executor identities to read/update the selected `medicine_patch_requests` authorization record; otherwise the system must remain fail-closed.
+- FNV-1a32 fingerprints remain deterministic integrity bindings only; they are NOT cryptographic signatures.
+- Browser end-to-end execution remains unclaimed until tested in the user's actual deployment.
