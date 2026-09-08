@@ -121,9 +121,18 @@ body{font-family:'Inter',sans-serif}
       <span id="captain-decision-status" class="text-[9px] code-font text-amber-400">PROOF BELUM LENGKAP</span>
     </div>
     <div id="captain-decision-text" class="text-xs text-slate-400">CGO belum menerima proof lengkap untuk menampilkan kandidat perubahan. Source tidak disentuh.</div>
-    <div id="captain-code-panel" class="hidden grid grid-cols-1 md:grid-cols-2 gap-2">
-      <div><div class="text-[9px] text-slate-500 mb-1">BEFORE</div><pre id="captain-before" class="text-[9px] code-font bg-slate-950 border border-slate-800 rounded p-2 overflow-auto max-h-48"></pre></div>
-      <div><div class="text-[9px] text-slate-500 mb-1">AFTER</div><pre id="captain-after" class="text-[9px] code-font bg-slate-950 border border-slate-800 rounded p-2 overflow-auto max-h-48"></pre></div>
+    <div id="captain-code-panel" class="hidden space-y-2">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-[9px] code-font">
+        <div class="rounded border border-slate-800 bg-slate-950 px-2 py-2"><div class="text-slate-500">FILE</div><div id="captain-file" class="text-cyan-300 mt-1 break-all">-</div></div>
+        <div class="rounded border border-slate-800 bg-slate-950 px-2 py-2"><div class="text-slate-500">OPERATION</div><div id="captain-operation" class="text-cyan-300 mt-1">-</div></div>
+        <div class="rounded border border-slate-800 bg-slate-950 px-2 py-2"><div class="text-slate-500">FINGERPRINT</div><div id="captain-fingerprint" class="text-cyan-300 mt-1 break-all">-</div></div>
+        <div class="rounded border border-slate-800 bg-slate-950 px-2 py-2"><div class="text-slate-500">CASE</div><div id="captain-case" class="text-cyan-300 mt-1 break-all">-</div></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div><div class="flex justify-between items-center gap-2 text-[9px] text-slate-500 mb-1"><span>BEFORE</span></div><pre id="captain-before" class="text-[9px] code-font bg-slate-950 border border-slate-800 rounded p-2 overflow-auto max-h-48"></pre></div>
+        <div><div class="flex justify-between items-center gap-2 text-[9px] text-slate-500 mb-1"><span>AFTER</span><button id="captain-copy-after" type="button" class="px-2 py-1 rounded border border-cyan-800 text-cyan-300 hidden">📋 COPY CODE</button></div><pre id="captain-after" class="text-[9px] code-font bg-slate-950 border border-slate-800 rounded p-2 overflow-auto max-h-48"></pre></div>
+      </div>
+      <div class="text-[9px] text-slate-500">CGO tidak menulis source. Kode solusi untuk manusia hanya tersedia di gerbang utama ini. Medicine dan Executor tidak menjadi tempat approval/copy manusia.</div>
     </div>
     <div id="captain-human-gate" class="hidden flex flex-wrap gap-2 pt-1">
       <button id="captain-approve" type="button" class="px-3 py-2 rounded-lg bg-emerald-700 text-xs font-semibold">SETUJUI PERUBAHAN</button>
@@ -1007,7 +1016,7 @@ runAutonomousEngine(state => {
 
 <script type="module">
 /* Internal Captain runtime bootstrap. No Firebase Functions/API. */
-import { createCaptain } from "./cgo-ai-captain.js?v=1.2.0-INTERNAL-CAPTAIN-MEDICINE-EXECUTOR-HANDOFF";
+import { createCaptain } from "./cgo-ai-captain.js?v=1.4.1-INTERNAL-CAPTAIN-CENTRIC-HARDENED";
 const captain = createCaptain();
 window.CIKURCaptain = captain;
 captain.start();
@@ -1026,8 +1035,13 @@ captain.start();
   const decisionText = $('captain-decision-text');
   const codePanel = $('captain-code-panel');
   const humanGate = $('captain-human-gate');
+  const copyAfter = $('captain-copy-after');
   const beforeEl = $('captain-before');
   const afterEl = $('captain-after');
+  const fileEl = $('captain-file');
+  const operationEl = $('captain-operation');
+  const fingerprintEl = $('captain-fingerprint');
+  const caseEl = $('captain-case');
   const bridgeKey = 'CIKUR_GO_BCGO_MEDICINE_V1';
   const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(bridgeKey) : null;
   const seen = new Set();
@@ -1074,6 +1088,22 @@ captain.start();
   channel?.addEventListener('message', e => handleTeam(e.data));
   window.addEventListener('storage', e => { if (e.key === `${bridgeKey}_EVENT` && e.newValue) { try { handleTeam(JSON.parse(e.newValue)); } catch {} } });
 
+  let lastBCGOReport = '';
+  window.addEventListener('cikur-bcgo-state', e => {
+    const b = e.detail || {};
+    const active = Array.isArray(b.activeCases) ? b.activeCases[0] : null;
+    const summary = active
+      ? `Saya saat ini memantau ${Number(b.organs || b.organCount || 0) || '-'} organ, mendeteksi ${Number(b.anomalies || b.anomalyCount || 0) || '-'} anomali aktif. Anomali utama: ${active.target || active.source || b.lastTelemetryFile || '-'}; status case ${active.status || 'aktif'}.`
+      : `Saya sedang memantau jaringan saraf BCGO. File telemetry terakhir: ${b.lastTelemetryFile || '-'}; case aktif belum tersedia.`;
+    if (summary !== lastBCGOReport) {
+      lastBCGOReport = summary;
+      teamOnline.textContent = 'LIVE • BCGO';
+      teamOnline.className = 'text-[9px] code-font text-emerald-300';
+      bubble(teamChat, 'BCGO', summary, 'violet');
+      bubble(captainChat, 'CGO • BCGO', summary);
+    }
+  });
+
   window.addEventListener('cikur-captain-state', e => {
     const s = e.detail || {};
     latestCaseId = s.caseId || latestCaseId;
@@ -1088,6 +1118,7 @@ captain.start();
     }
     if (s.event === 'CAPTAIN_HUMAN_COMMAND') { const r = s.data || {}; bubble(captainChat, 'MANUSIA → CGO', `Perintah diterima: ${r.message || r.question || s.decision || 'instruksi operator'}.`, 'amber'); }
     if (s.event === 'CAPTAIN_DELEGATE') bubble(captainChat, 'CGO • KEPUTUSAN', `Case ${s.caseId || '-'} saya serahkan ke Medicine untuk investigasi evidence → dependency → root cause → source exact.`);
+    if (s.event === 'CAPTAIN_TEAM_ANALYSIS_REQUEST') bubble(captainChat, 'CGO • KAPTEN', s.data?.message || 'Saya meminta Medicine dan Executor memberikan analisis paling akurat sebelum gerbang manusia dibuka.', 'amber');
     if (s.event === 'CAPTAIN_RETRY') bubble(captainChat, 'CGO • KOREKSI', `Bukti belum cukup. Saya minta Medicine mengulang investigasi secara terarah. Putaran ${s.round}/${s.maxRounds}. Blocker: ${s.blocker || '-'}`, 'amber');
     if (s.event === 'CAPTAIN_EXECUTOR_REJECT') bubble(captainChat, 'CGO • REJECT', `Executor menolak candidate: ${s.blocker || 'review tidak valid'}. Saya tidak meneruskan source. Medicine diminta memperoleh evidence baru.`, 'amber');
     if (s.event === 'CAPTAIN_MEDICINE_FINALIZED') {
@@ -1118,7 +1149,7 @@ captain.start();
     if (s.event === 'CAPTAIN_HOLD') {
       decisionStatus.textContent = 'HOLD';
       decisionText.textContent = `CGO menahan alur: ${s.blocker || 'bukti belum cukup'}.`;
-      codePanel.classList.add('hidden'); humanGate.classList.add('hidden');
+      codePanel.classList.add('hidden'); humanGate.classList.add('hidden'); copyAfter?.classList.add('hidden');
     }
   });
 
@@ -1139,29 +1170,57 @@ captain.start();
     }
   });
 
-  window.addEventListener('cikur-captain-state', e => {
-    const s = e.detail || {};
-    if (s.event !== 'CAPTAIN_CODE_READY') return;
-    const candidate = s.data?.candidate || s.candidate || {};
-    if (candidate.before == null || candidate.after == null) return;
+  function renderHumanGate(s) {
+    const candidate = s?.data?.candidate || s?.candidate || {};
+    if (candidate.before == null || candidate.after == null || s?.humanGate !== true) return false;
     beforeEl.textContent = String(candidate.before);
     afterEl.textContent = String(candidate.after);
+    fileEl.textContent = String(candidate.file || '-');
+    operationEl.textContent = String(candidate.operation || '-');
+    fingerprintEl.textContent = String(candidate.fingerprint || '-');
+    caseEl.textContent = String(candidate.caseId || s.caseId || '-');
     codePanel.classList.remove('hidden');
     humanGate.classList.remove('hidden');
+    copyAfter?.classList.remove('hidden');
+    decisionStatus.textContent = 'CANDIDATE SIAP • MENUNGGU APPROVAL MANUSIA';
+    decisionStatus.className = 'text-[9px] code-font text-emerald-300';
+    decisionText.textContent = 'Medicine sudah mengikat source/proposal dan Executor sudah menyatakan review VALID. Tidak ada source yang disentuh. Pilih APPROVE atau REJECT.';
     latestCaseId = candidate.caseId || s.caseId || latestCaseId;
+    return true;
+  }
+
+  window.addEventListener('cikur-captain-state', e => {
+    const s = e.detail || {};
+    if (s.event === 'CAPTAIN_CODE_READY' || s.event === 'CAPTAIN_HUMAN_GATE') renderHumanGate(s);
+    else if (s.humanGate === true) renderHumanGate(s);
+  });
+
+  copyAfter?.addEventListener('click', async () => {
+    const value = String(afterEl?.textContent || '');
+    if (!value) return;
+    try {
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
+      else { const ta=document.createElement('textarea'); ta.value=value; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+      copyAfter.textContent='✓ COPIED';
+      setTimeout(()=>{ copyAfter.textContent='📋 COPY CODE'; }, 1400);
+    } catch {}
   });
 
   $('captain-approve')?.addEventListener('click', () => {
     if (!window.CIKURCaptain || !latestCaseId) return;
     bubble(captainChat, 'MANUSIA → CGO', 'Saya menyetujui candidate ini. CGO meneruskan persetujuan melalui jalur internal ke Medicine untuk Captain authorization.', 'amber');
-    window.CIKURCaptain.humanApprove(latestCaseId);
+    const result = window.CIKURCaptain.humanApprove(latestCaseId);
     humanGate.classList.add('hidden');
+    decisionStatus.textContent = 'APPROVAL DITERIMA • MEDICINE FINALISASI';
+    decisionText.textContent = result?.message || 'Approval manusia diteruskan ke Medicine untuk finalisasi terikat.';
   });
   $('captain-reject')?.addEventListener('click', () => {
     if (!window.CIKURCaptain || !latestCaseId) return;
     bubble(captainChat, 'MANUSIA → CGO', 'Saya menolak candidate ini. CGO meminta Medicine mencari evidence/solusi baru.', 'amber');
-    window.CIKURCaptain.humanReject(latestCaseId);
+    const result = window.CIKURCaptain.humanReject(latestCaseId);
     humanGate.classList.add('hidden');
+    decisionStatus.textContent = 'CANDIDATE DITOLAK • INVESTIGASI ULANG';
+    decisionText.textContent = result?.message || 'Candidate ditolak; Medicine diminta mencari evidence baru.';
   });
 
   window.addEventListener('cikur-bcgo-state', e => {

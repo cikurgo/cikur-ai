@@ -330,6 +330,8 @@ const EXECUTION_REVIEW_EVENT_KEY = `${MEDICINE_BRIDGE_KEY}_REPAIR_CANDIDATE`;
 const EXECUTION_REVIEW_RESULT_KEY = `${MEDICINE_BRIDGE_KEY}_EXECUTION_REVIEW`;
 const EXECUTION_APPROVAL_KEY = `${MEDICINE_BRIDGE_KEY}_EXECUTION_APPROVAL`;
 const EXECUTION_RESULT_KEY = `${MEDICINE_BRIDGE_KEY}_EXECUTION_RESULT`;
+const HUMAN_APPROVAL_KEY = `${MEDICINE_BRIDGE_KEY}_HUMAN_APPROVAL`;
+const HUMAN_APPROVAL_MAX_AGE = 120000;
 const seenExecutionResultIds = new Set();
 const INVESTIGATION_EVENT_KEY = `${MEDICINE_BRIDGE_KEY}_INVESTIGATION`;
 const INVESTIGATION_ACK_KEY = `${MEDICINE_BRIDGE_KEY}_INVESTIGATION_ACK`;
@@ -456,6 +458,11 @@ async function handleCaptainDirective(packet, source = "BROADCAST_CHANNEL") {
   if (!packet || packet.bridge !== MEDICINE_BRIDGE_KEY || packet.from !== "CAPTAIN") return false;
   const type = String(packet.type || "").toUpperCase();
   if (!type.startsWith("CGO_")) return false;
+  const approvalId = type === "CGO_HUMAN_APPROVAL" ? String(packet.approvalId || packet.id || "").trim() : "";
+  if (type === "CGO_HUMAN_APPROVAL") {
+    const at = Number(packet.at) || 0;
+    if (!at || Date.now() - at > HUMAN_APPROVAL_MAX_AGE || !approvalId) return false;
+  }
   const caseId = String(packet.caseId || "").trim();
   const target = normalizeFile(packet.target || packet.file || S.activeCase?.source || "");
   try {
@@ -495,16 +502,24 @@ async function handleCaptainDirective(packet, source = "BROADCAST_CHANNEL") {
       const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase;
       if (!c) return false;
       if (packet.decision === "REJECT") {
+        if (processedCaptainApprovalIds.has(approvalId)) return false;
+        processedCaptainApprovalIds.add(approvalId);
+        if (processedCaptainApprovalIds.size > 200) processedCaptainApprovalIds.delete(processedCaptainApprovalIds.values().next().value);
         await rejectTreatment(c.id, packet.reason || "Perubahan ditolak manusia melalui Captain.");
+        try { localStorage.removeItem(HUMAN_APPROVAL_KEY); } catch {}
         publishCaptainResponse("MEDICINE_CGO_ACK", {caseId:c.id, message:"Human menolak candidate. Medicine kembali ke investigasi."});
         if (auth.currentUser) await verifyWithMedicine(c.source || target || null, {question:"Human menolak candidate; cari solusi/evidence alternatif."});
         return true;
       }
       if (packet.decision === "APPROVE") {
+        if (processedCaptainApprovalIds.has(approvalId)) return false;
         if (!c.repairPlan?.precisionGate) throw new Error("CAPTAIN_APPROVAL_BLOCKED_PRECISION_GATE");
         if (!c.patchProposal?.executionReview || c.patchProposal.executionReview.status !== "VALID") throw new Error("CAPTAIN_APPROVAL_BLOCKED_EXECUTOR_REVIEW");
+        processedCaptainApprovalIds.add(approvalId);
+        if (processedCaptainApprovalIds.size > 200) processedCaptainApprovalIds.delete(processedCaptainApprovalIds.values().next().value);
         publishCaptainResponse("MEDICINE_CGO_ACK", {caseId:c.id, message:"Human approval diterima. Medicine masuk tahap finalisasi: validasi ulang Precision Gate, binding source/proposal, lalu menyiapkan authorization untuk Executor."});
         const executionApproval = await approveTreatment(c.id);
+        try { localStorage.removeItem(HUMAN_APPROVAL_KEY); } catch {}
         publishCaptainResponse("MEDICINE_FINALIZED_FOR_EXECUTION", {
           caseId:c.id,
           requestId:executionApproval?.requestId || c.executionRequestId || null,
@@ -531,7 +546,14 @@ function startCaptainDirectiveBridge() {
       if (event.key === MEDICINE_BRIDGE_EVENT_KEY && event.newValue) {
         try { void handleCaptainDirective(JSON.parse(event.newValue), "LOCAL_STORAGE"); } catch {}
       }
+      if (event.key === HUMAN_APPROVAL_KEY && event.newValue) {
+        try { void handleCaptainDirective(JSON.parse(event.newValue), "HUMAN_APPROVAL_CACHE"); } catch {}
+      }
     });
+    const cached = localStorage.getItem(HUMAN_APPROVAL_KEY);
+    if (cached) {
+      try { void handleCaptainDirective(JSON.parse(cached), "HUMAN_APPROVAL_CACHE"); } catch {}
+    }
   } catch {}
 }
 

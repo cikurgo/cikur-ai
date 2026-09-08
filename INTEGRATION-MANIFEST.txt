@@ -605,3 +605,31 @@ proof/authorization authority and Executor remains the execution gate.
 - Executor mengirim hasil execution; Medicine melakukan validationAfterPatch dan menerbitkan MEDICINE_VALIDATION_RESULT.
 - Captain menutup case hanya jika validasi final FIXED_VERIFIED; INTERNAL_VERIFIED_PENDING_DEPLOYMENT tidak dianggap selesai.
 - Tidak ada source mutation di Captain dan tidak ada external AI/provider/function dependency baru.
+
+[STAGE 15 CAPTAIN HUMAN-GATE STABILITY + CONCEPT ALIGNMENT]
+- Captain no longer treats every continuous BCGO heartbeat as permission to dispatch another investigation. It observes the case and waits for the three real team reports before issuing one bounded analysis directive.
+- The Captain workspace now mirrors the intended concept: BCGO report, Medicine report, Executor report, Captain analysis request, then a single candidate review gate.
+- The original bottom BCGO.html "GERBANG UTAMA • MANUSIA → CGO" remains the authoritative human control channel. Direct "CGO ..." commands are routed to the real Captain and are never silently redirected to ordinary BCGO chat.
+- Captain startup recovers the latest real repair-candidate and execution-review packets from the existing same-origin bridge cache so a page-load race cannot hide a valid human gate.
+- Candidate rendering normalizes the existing Medicine packet shape (candidate/request) and requires exact BEFORE + AFTER + case binding before opening the human gate.
+- Human approval remains explicit: APPROVE sends CGO_HUMAN_APPROVAL to the existing Medicine page; Medicine performs finalization/proof binding and hands the existing authorization to the existing Executor page.
+- Human rejection returns the existing case to Medicine investigation; Captain does not mutate source.
+- No external AI provider, external reasoning service, Firebase Cloud Function, or Captain-side source mutation was introduced.
+
+
+[STAGE 16 CAPTAIN-CENTRIC ROLE REALIGNMENT]
+- BCGO = detector/monitor; Captain = command/orchestration; Medicine = investigation/proof/candidate; Executor = deterministic review/execution; Human = single approval gate on bcgo.html.
+- Human COPY CODE / APPROVE / REJECT is exposed only at the CGO Human Gate in bcgo.html.
+- Medicine and Executor no longer expose human Copy/Approval controls as workflow decision surfaces. Their existing runtime IDs are retained hidden only where legacy event handlers require them.
+- After human APPROVE, Captain sends CGO_HUMAN_APPROVAL to Medicine; Medicine revalidates Precision Gate and finalizes Captain authorization; Executor receives the existing durable authorization and executes; validation returns to Captain/BCGO.
+- The proposed AFTER code remains visible at the CGO gate after approval so the human can audit exactly what was approved.
+- No external AI/provider/service introduced.
+
+[STAGE 16 HARDENED GENERAL CHECK + RUNTIME RESILIENCE]
+- Captain cache-buster aligned to the actual Captain module version 1.4.1.
+- Human approval is persisted in a dedicated internal handoff cache with a bounded 120-second lifetime so Medicine can recover an approval after page timing/reload without relying only on a one-shot BroadcastChannel event.
+- Medicine deduplicates human approval by approvalId and only marks the approval consumed after the target case is present and the approval path is accepted.
+- Captain can recover recent human approval state after reload without reopening the human gate.
+- Existing durable Captain authorization remains the authoritative execution capability; no source write is performed by Captain or Medicine.
+- Human COPY / APPROVE / REJECT remains exclusively in bcgo.html Human Gate. Medicine and Executor remain specialist workspaces.
+- No external AI provider, external reasoning service, or source mutation was introduced.

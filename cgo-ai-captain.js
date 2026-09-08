@@ -9,12 +9,15 @@
  * - This module only observes real internal state/bridge packets and emits
  *   bounded directives. Proof/Guardian/Executor remain authoritative gates.
  */
-const VERSION = "1.2.0-INTERNAL-CAPTAIN-MEDICINE-EXECUTOR-HANDOFF";
+const VERSION = "1.4.1-INTERNAL-CAPTAIN-CENTRIC-HARDENED";
 const BRIDGE = "CIKUR_GO_BCGO_MEDICINE_V1";
 const MAX_ROUNDS = 4;
 const DIRECTIVE_COOLDOWN = 7000;
 const BLOCKER_REPEAT_COOLDOWN = 15000;
 const HUMAN_COMMAND_WAIT_MS = 2500;
+const CAPTAIN_ANALYSIS_PROMPT = "Terima kasih atas update-nya. Saya butuh data paling akurat dari kalian: 1. Apa penyebab paling mungkin? 2. Langkah apa yang harus dilakukan selanjutnya? 3. Apa yang saya perlu setujui? Saya menunggu evidence dan review sebelum membuka gerbang manusia.";
+const HUMAN_APPROVAL_KEY = `${BRIDGE}_HUMAN_APPROVAL`;
+const HUMAN_APPROVAL_MAX_AGE = 120000;
 
 const clone = value => {
   try { return JSON.parse(JSON.stringify(value)); } catch { return value; }
@@ -106,6 +109,10 @@ export function createCaptain(options = {}) {
     return response;
   }
 
+  function persistHumanApproval(packet) {
+    try { localStorage.setItem(HUMAN_APPROVAL_KEY, JSON.stringify(packet)); } catch {}
+  }
+
   function receiveHumanCommand(text, meta = {}) {
     const raw = String(text || "").trim();
     if (!raw) return { handled: false, reason: "EMPTY_COMMAND" };
@@ -128,13 +135,15 @@ export function createCaptain(options = {}) {
       if (!state.humanGate) {
         return captainReply("Saya belum membuka gerbang persetujuan. Candidate belum lolos seluruh pemeriksaan Captain, Medicine, dan Executor.", { decision: "APPROVAL_BLOCKED" });
       }
-      post("CGO_HUMAN_APPROVAL", { caseId, decision: "APPROVE", humanCommand: raw });
+      const approval = post("CGO_HUMAN_APPROVAL", { caseId, decision: "APPROVE", humanCommand: raw, approvalId: `HUMAN-${caseId}-${Date.now()}` });
+      persistHumanApproval(approval);
       set({ status: "LIVE", phase: "HUMAN_APPROVAL", decision: "HUMAN_APPROVED", nextAction: "MEDICINE_AUTHORIZE", humanGate: false }, "CAPTAIN_HUMAN_COMMAND");
       return captainReply("Baik. Persetujuan manusia diterima. Saya meneruskannya melalui jalur internal yang sudah digate; Captain sendiri tidak mengubah source.", { decision: "APPROVE" });
     }
 
     if (isReject) {
-      post("CGO_HUMAN_APPROVAL", { caseId, decision: "REJECT", reason: raw, humanCommand: raw });
+      const approval = post("CGO_HUMAN_APPROVAL", { caseId, decision: "REJECT", reason: raw, humanCommand: raw, approvalId: `HUMAN-${caseId}-${Date.now()}` });
+      persistHumanApproval(approval);
       set({ status: "LIVE", phase: "REINVESTIGATING", decision: "HUMAN_REJECTED", nextAction: "MEDICINE_INVESTIGATE", humanGate: false, blocker: "HUMAN_REJECTED" }, "CAPTAIN_HUMAN_COMMAND");
       directive("CGO_REJECT_CANDIDATE", { caseId, reason: `Perintah manusia: ${raw}` }, { force: true });
       return captainReply("Baik. Candidate ditolak. Saya meminta Medicine kembali mencari evidence dan solusi; tidak ada perubahan source yang diteruskan.", { decision: "REJECT" });
@@ -171,7 +180,7 @@ export function createCaptain(options = {}) {
 
   function registerCase(caseId) {
     if (!caseId) return { round: 0 };
-    if (!cases.has(caseId)) cases.set(caseId, { round: 0, lastAction: null, candidate: null, investigationDispatched: false, awaitingEvidence: false, lastBlockerKey: null, lastBlockerAt: 0 });
+    if (!cases.has(caseId)) cases.set(caseId, { round: 0, lastAction: null, candidate: null, investigationDispatched: false, awaitingEvidence: false, lastBlockerKey: null, lastBlockerAt: 0, teamReports: { bcgo: false, medicine: false, executor: false }, analysisPrompted: false });
     const c = cases.get(caseId);
     state.caseId = caseId;
     state.round = c.round;
@@ -196,23 +205,46 @@ export function createCaptain(options = {}) {
       set({ phase: "OBSERVING", decision: "WAIT", nextAction: "WAIT_FOR_CASE", blocker: "NO_ACTIVE_CASE" }, "CAPTAIN_WAITING");
       return;
     }
-    const c = registerCase(primary.id || primary.caseId || primary.target);
-    const current = cases.get(state.caseId);
-    // BCGO heartbeat is continuous, but Captain work is event-driven. Once a
-    // case has been dispatched, subsequent heartbeat snapshots must not create
-    // another investigation request.
-    if (!current.investigationDispatched) {
-      set({ phase: "DELEGATING", decision: "MEDICINE_INVESTIGATION", nextAction: "MEDICINE_INVESTIGATE", blocker: null }, "CAPTAIN_DELEGATE");
-      const packet = directive("CGO_INVESTIGATE", {
-        caseId: state.caseId,
-        target: primary.target || primary.file || latestBCGO.lastTelemetryFile || null,
-        question: "Captain meminta Medicine menelusuri symptom → dependency → root cause → exact source."
-      });
-      if (packet) {
-        current.lastAction = "MEDICINE_INVESTIGATE";
-        current.investigationDispatched = true;
-        current.awaitingEvidence = true;
-      }
+    registerCase(primary.id || primary.caseId || primary.target);
+    // A heartbeat is observation, not permission to keep dispatching work.
+    // Captain waits for the three real reports before issuing one bounded
+    // investigation directive.
+    maybePromptTeamAnalysis(state.caseId);
+  }
+
+  function normalizeCandidatePacket(packet) {
+    const raw = packet?.candidate || packet?.request || packet || {};
+    const request = packet?.request || {};
+    return {
+      caseId: raw.caseId || packet?.caseId || request.caseId || state.caseId || null,
+      proposalId: raw.proposalId || packet?.proposalId || request.proposalId || null,
+      requestId: raw.requestId || packet?.requestId || request.requestId || null,
+      file: raw.file || request.file || packet?.file || null,
+      operation: raw.operation || request.operation || null,
+      before: raw.before ?? request.before ?? null,
+      after: raw.after ?? request.after ?? null,
+      fingerprint: raw.fingerprint || request.expectedFingerprint || packet?.sourceFingerprint || null,
+      location: raw.location || null,
+      evidence: raw.evidence || null,
+      sourceText: packet?.sourceText || null
+    };
+  }
+
+  function maybePromptTeamAnalysis(caseId) {
+    const current = cases.get(caseId);
+    if (!current || current.analysisPrompted) return;
+    if (!current.teamReports.bcgo || !current.teamReports.medicine || !current.teamReports.executor) return;
+    current.analysisPrompted = true;
+    set({ phase: "ANALYZING", decision: "TEAM_ANALYSIS_REQUESTED", nextAction: "MEDICINE_INVESTIGATE", blocker: null }, "CAPTAIN_TEAM_ANALYSIS_REQUEST");
+    const packet = directive("CGO_INVESTIGATE", {
+      caseId,
+      target: latestBCGO?.lastTelemetryFile || latestMedicine?.medicine?.target || null,
+      question: CAPTAIN_ANALYSIS_PROMPT
+    });
+    if (packet) {
+      current.lastAction = "MEDICINE_INVESTIGATE";
+      current.investigationDispatched = true;
+      current.awaitingEvidence = true;
     }
   }
 
@@ -221,6 +253,7 @@ export function createCaptain(options = {}) {
     const caseId = packet.caseId || packet.medicine?.caseId || state.caseId;
     registerCase(caseId);
     const current = cases.get(caseId);
+    current.teamReports.medicine = true;
     const msg = String(packet.message || packet.medicineEvent || packet.type || "Medicine report");
     const phase = String(packet.phase || packet.medicine?.status || "").toUpperCase();
 
@@ -256,7 +289,7 @@ export function createCaptain(options = {}) {
     }
 
     if (packet.type === "MEDICINE_REPAIR_CANDIDATE") {
-      current.candidate = clone(packet);
+      current.candidate = clone(normalizeCandidatePacket(packet));
       current.awaitingEvidence = false;
       set({ phase: "EXECUTOR_REVIEW", decision: "WAIT_EXECUTOR_REVIEW", nextAction: "EXECUTOR_REVIEW", blocker: null, candidate: clone(packet.candidate || packet) }, "CAPTAIN_CANDIDATE_RECEIVED");
       return;
@@ -264,6 +297,7 @@ export function createCaptain(options = {}) {
 
     if (packet.type === "MEDICINE_CGO_UPDATE" || packet.type === "MEDICINE_CGO_ACK" || packet.type === "MEDICINE_CGO_BLOCKED" || packet.type === "MEDICINE_CGO_ERROR") {
       emit("CAPTAIN_MEDICINE_REPORT", { packet });
+      maybePromptTeamAnalysis(caseId);
     }
 
     // WAITING/ACK/UPDATE are status, not failures. Only an explicit blocked or
@@ -302,8 +336,12 @@ export function createCaptain(options = {}) {
     latestExecutor = clone(packet);
     const caseId = packet.caseId || packet.review?.caseId || state.caseId;
     registerCase(caseId);
+    const current = cases.get(caseId);
     const review = packet.review || {};
     const status = String(review.status || packet.status || "").toUpperCase();
+    current.teamReports.executor = true;
+
+    if (packet.type === "EXECUTION_CGO_UPDATE") maybePromptTeamAnalysis(caseId);
 
     if (packet.type === "EXECUTION_RESULT") {
       const result = packet.result || {};
@@ -322,8 +360,9 @@ export function createCaptain(options = {}) {
         const candidate = cases.get(caseId)?.candidate || null;
         const current = cases.get(caseId);
         if (current) current.awaitingEvidence = false;
-        set({ phase: "HUMAN_APPROVAL", decision: "CANDIDATE_READY", nextAction: "HUMAN_APPROVAL", blocker: null, humanGate: true, candidate: clone(candidate?.candidate || candidate) }, "CAPTAIN_HUMAN_GATE");
-        emit("CAPTAIN_CODE_READY", { candidate: clone(candidate?.candidate || candidate), review: clone(review) });
+        const normalizedCandidate = normalizeCandidatePacket(candidate);
+        set({ phase: "HUMAN_APPROVAL", decision: "CANDIDATE_READY", nextAction: "HUMAN_APPROVAL", blocker: null, humanGate: true, candidate: clone(normalizedCandidate) }, "CAPTAIN_HUMAN_GATE");
+        emit("CAPTAIN_CODE_READY", { candidate: clone(normalizedCandidate), review: clone(review) });
       } else {
         const current = cases.get(caseId);
         if (current && current.round < MAX_ROUNDS) current.round += 1;
@@ -349,8 +388,38 @@ export function createCaptain(options = {}) {
   function onBCGO(stateSnapshot) {
     if (!stateSnapshot || typeof stateSnapshot !== "object") return;
     latestBCGO = clone(stateSnapshot);
+    const active = Array.isArray(latestBCGO?.activeCases) ? latestBCGO.activeCases : [];
+    const primary = active[0] || (latestBCGO?.lastTelemetryFile ? { id:`BCGO-${latestBCGO.lastTelemetryFile}`, target:latestBCGO.lastTelemetryFile } : null);
+    if (primary) {
+      const caseId = primary.id || primary.caseId || primary.target;
+      const current = registerCase(caseId);
+      current.teamReports.bcgo = true;
+    }
     if (state.status === "WAITING") announceGreeting();
     chooseFromState();
+  }
+
+  function recoverBridgeCaches() {
+    try {
+      const candidate = localStorage.getItem(`${BRIDGE}_REPAIR_CANDIDATE`);
+      if (candidate) handlePacket(JSON.parse(candidate));
+    } catch {}
+    try {
+      const review = localStorage.getItem(`${BRIDGE}_EXECUTION_REVIEW`);
+      if (review) handlePacket(JSON.parse(review));
+    } catch {}
+    try {
+      const approval = localStorage.getItem(HUMAN_APPROVAL_KEY);
+      if (approval) {
+        const packet = JSON.parse(approval);
+        const at = Number(packet?.at) || 0;
+        if (at && Date.now() - at <= HUMAN_APPROVAL_MAX_AGE && packet?.caseId) {
+          set({ status: "LIVE", phase: packet.decision === "APPROVE" ? "HUMAN_APPROVAL" : "REINVESTIGATING", decision: packet.decision === "APPROVE" ? "HUMAN_APPROVED" : "HUMAN_REJECTED", nextAction: packet.decision === "APPROVE" ? "MEDICINE_AUTHORIZE" : "MEDICINE_INVESTIGATE", humanGate: false }, "CAPTAIN_HUMAN_APPROVAL_RECOVERED");
+        } else {
+          localStorage.removeItem(HUMAN_APPROVAL_KEY);
+        }
+      }
+    } catch {}
   }
 
   function start() {
@@ -368,6 +437,7 @@ export function createCaptain(options = {}) {
     });
     if (window.BCGO_STATE) onBCGO(window.BCGO_STATE);
     set({ status: "WAITING", phase: "IDLE", nextAction: "WAIT_FOR_BCGO" }, "CAPTAIN_READY");
+    recoverBridgeCaches();
     return api;
   }
 
@@ -383,11 +453,15 @@ export function createCaptain(options = {}) {
     humanApprove(caseId = state.caseId) {
       if (!state.humanGate) return captainReply("Gerbang persetujuan belum terbuka. Saya tidak meneruskan approval.", { decision: "APPROVAL_BLOCKED" });
       state.humanGate = false;
-      return post("CGO_HUMAN_APPROVAL", { caseId, decision: "APPROVE" });
+      const packet = post("CGO_HUMAN_APPROVAL", { caseId, decision: "APPROVE", approvalId: `HUMAN-${caseId}-${Date.now()}` });
+      persistHumanApproval(packet);
+      return packet;
     },
     humanReject(caseId = state.caseId, reason = "Human menolak candidate melalui Captain.") {
       state.humanGate = false;
-      return post("CGO_HUMAN_APPROVAL", { caseId, decision: "REJECT", reason });
+      const packet = post("CGO_HUMAN_APPROVAL", { caseId, decision: "REJECT", reason, approvalId: `HUMAN-${caseId}-${Date.now()}` });
+      persistHumanApproval(packet);
+      return packet;
     }
   });
 
