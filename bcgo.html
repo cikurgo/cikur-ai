@@ -259,7 +259,7 @@ body{font-family:'Inter',sans-serif}
                 <div class="text-xs font-semibold text-indigo-300 uppercase tracking-wider">Komunikasi dengan CGO</div>
                 <div class="text-[10px] text-slate-500 mt-1">CGO berbicara melalui BCGO dan tetap membaca kondisi saraf aktual.</div>
             </div>
-            <span class="text-[10px] code-font text-indigo-400">CGO::CHAT • BCGO</span>
+            <span class="text-[10px] code-font text-indigo-400">GERBANG UTAMA • MANUSIA → CGO</span>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-[9px] code-font">
             <div id="internal-ai-status" class="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-cyan-300">INTERNAL AI: MENUNGGU</div>
@@ -267,6 +267,8 @@ body{font-family:'Inter',sans-serif}
             <div id="internal-ai-investigation" class="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-slate-400">INVESTIGATION: MENUNGGU</div>
             <div id="internal-ai-directive" class="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-slate-400">DIRECTIVE: MENUNGGU</div>
         </div>
+
+        <div id="captain-gate-link" class="rounded border border-indigo-900 bg-indigo-950/20 px-2 py-1 text-[9px] code-font text-indigo-300">GERBANG UTAMA TERHUBUNG → CGO KAPTEN • Perintah langsung “CGO …” masuk ke Captain, bukan ke jalur chat biasa.</div>
 
         <div id="chat-feed" class="chat-scroll bg-slate-950 border border-slate-800 rounded-lg p-3 h-72 overflow-y-auto space-y-3">
             <div class="text-xs text-slate-500">BCGO sedang menyiapkan kanal komunikasi...</div>
@@ -746,17 +748,27 @@ async function sendQuestion(question) {
     setChatBusy(true);
     addChat('user', text);
     try {
-        // The original chat remains the human control channel. Direct
-        // commands addressed to CGO are handled by the real Captain first;
-        // ordinary questions keep using the existing internal BCGO brain.
-        const captain = window.CIKURCaptain;
-        const captainResult = captain?.receiveHumanCommand?.(text, { source: 'BCGO_OPERATOR_CHAT' });
-        if (captainResult?.handled !== false && captainResult?.type === 'CAPTAIN_HUMAN_RESPONSE') {
-            addChat('bcgo', captainResult.message || 'Perintah diterima Captain.');
-            return;
-        }
-        if (captainResult?.from === 'CAPTAIN' && captainResult?.message) {
-            addChat('bcgo', captainResult.message);
+        // Direct CGO commands NEVER fall back to the ordinary BCGO chat.
+        // This keeps the bottom chat a real human → Captain control gate.
+        const addressedToCaptain = /(^|[\s,.:!?])cgo([\s,.:!?]|$)/i.test(text) || /kapten cgo/i.test(text);
+        if (addressedToCaptain) {
+            const started = Date.now();
+            while (!window.CIKURCaptain && Date.now() - started < 2500) {
+                await new Promise(resolve => setTimeout(resolve, 80));
+            }
+            const captain = window.CIKURCaptain;
+            if (!captain?.receiveHumanCommand) {
+                addChat('bcgo', 'Captain belum siap. Saya menahan perintah ini agar tidak salah jalur ke BCGO biasa.');
+                return;
+            }
+            const captainResult = captain.receiveHumanCommand(text, { source: 'BCGO_OPERATOR_CHAT' });
+            if (captainResult?.type === 'CAPTAIN_HUMAN_RESPONSE') {
+                addChat('bcgo', `CGO: ${captainResult.message || 'Perintah diterima Captain.'}`);
+                const gate = document.getElementById('captain-gate-link');
+                if (gate) gate.textContent = `GERBANG UTAMA LIVE → CGO KAPTEN • ${captainResult.decision || 'PERINTAH DITERIMA'} • ${new Date().toLocaleTimeString('id-ID')}`;
+                return;
+            }
+            addChat('bcgo', 'Captain menerima pesan, tetapi belum menghasilkan keputusan yang aman.');
             return;
         }
 
@@ -782,6 +794,11 @@ chatForm?.addEventListener('submit', event => {
 
 document.querySelectorAll('.quick-q').forEach(button => {
     button.addEventListener('click', () => void sendQuestion(button.dataset.q));
+});
+window.addEventListener('cikur-captain-human-response', event => {
+    const response = event.detail || {};
+    const gate = document.getElementById('captain-gate-link');
+    if (gate) gate.textContent = `GERBANG UTAMA LIVE → CGO KAPTEN • ${response.decision || 'RESPON DITERIMA'} • ${new Date().toLocaleTimeString('id-ID')}`;
 });
 
 /* Live conversation layer. Investigation progress is a LIVE STATUS, not a chat
@@ -990,7 +1007,7 @@ runAutonomousEngine(state => {
 
 <script type="module">
 /* Internal Captain runtime bootstrap. No Firebase Functions/API. */
-import { createCaptain } from "./cgo-ai-captain.js?v=1.0.0-INTERNAL-CAPTAIN-ORCHESTRATOR";
+import { createCaptain } from "./cgo-ai-captain.js?v=1.2.0-INTERNAL-CAPTAIN-MEDICINE-EXECUTOR-HANDOFF";
 const captain = createCaptain();
 window.CIKURCaptain = captain;
 captain.start();
@@ -1014,6 +1031,7 @@ captain.start();
   const bridgeKey = 'CIKUR_GO_BCGO_MEDICINE_V1';
   const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(bridgeKey) : null;
   const seen = new Set();
+  const recentSemantic = new Map();
   let latestCaseId = null;
 
   const esc = v => String(v ?? '-').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
@@ -1031,11 +1049,27 @@ captain.start();
     if (!packet || packet.bridge !== bridgeKey || (packet.from !== 'MEDICINE' && packet.from !== 'EXECUTION')) return;
     const key = packetKey(packet); if (seen.has(key)) return; seen.add(key);
     const who = packet.from === 'MEDICINE' ? 'MEDICINE' : 'EXECUTOR';
-    const msg = packet.message || packet.review?.reason || packet.type || 'Laporan diterima.';
+    const msg = packet.message || packet.review?.reason || '';
     latestCaseId = packet.caseId || latestCaseId;
+
+    // Routine heartbeat/context packets are not conversational reports. Only
+    // explicit Captain-facing reports or execution-review outcomes enter the
+    // two chat panels, and identical reports are throttled.
+    const meaningful = new Set([
+      'MEDICINE_CGO_UPDATE','MEDICINE_CGO_ACK','MEDICINE_CGO_BLOCKED','MEDICINE_CGO_ERROR',
+      'MEDICINE_REPAIR_CANDIDATE','EXECUTION_CGO_UPDATE','EXECUTION_REVIEW_RESULT'
+    ]);
+    if (!meaningful.has(packet.type)) return;
+    const semantic = `${who}|${packet.type}|${packet.caseId || ''}|${msg}|${packet.review?.status || ''}`;
+    const now = Date.now();
+    const last = recentSemantic.get(semantic) || 0;
+    if (now - last < 15000) return;
+    recentSemantic.set(semantic, now);
+    for (const [k,t] of recentSemantic) if (now - t > 60000) recentSemantic.delete(k);
+
     teamOnline.textContent = 'LIVE • ' + who; teamOnline.className = 'text-[9px] code-font text-emerald-300';
-    bubble(teamChat, who, msg, 'violet');
-    bubble(captainChat, `CGO • ${who}`, `Saya menerima laporan ${who}: ${msg}`);
+    bubble(teamChat, who, msg || packet.review?.reason || packet.type, 'violet');
+    bubble(captainChat, `CGO • ${who}`, `Saya menerima laporan ${who}: ${msg || packet.review?.reason || packet.type}`);
   }
   channel?.addEventListener('message', e => handleTeam(e.data));
   window.addEventListener('storage', e => { if (e.key === `${bridgeKey}_EVENT` && e.newValue) { try { handleTeam(JSON.parse(e.newValue)); } catch {} } });
@@ -1052,10 +1086,30 @@ captain.start();
       const r = s.data || {};
       bubble(captainChat, 'CGO • KAPTEN', r.message || 'Perintah manusia diterima.', 'amber');
     }
-    if (s.event === 'CAPTAIN_HUMAN_COMMAND') bubble(captainChat, 'MANUSIA → CGO', 'Perintah operator sedang diproses oleh Captain.', 'amber');
+    if (s.event === 'CAPTAIN_HUMAN_COMMAND') { const r = s.data || {}; bubble(captainChat, 'MANUSIA → CGO', `Perintah diterima: ${r.message || r.question || s.decision || 'instruksi operator'}.`, 'amber'); }
     if (s.event === 'CAPTAIN_DELEGATE') bubble(captainChat, 'CGO • KEPUTUSAN', `Case ${s.caseId || '-'} saya serahkan ke Medicine untuk investigasi evidence → dependency → root cause → source exact.`);
     if (s.event === 'CAPTAIN_RETRY') bubble(captainChat, 'CGO • KOREKSI', `Bukti belum cukup. Saya minta Medicine mengulang investigasi secara terarah. Putaran ${s.round}/${s.maxRounds}. Blocker: ${s.blocker || '-'}`, 'amber');
     if (s.event === 'CAPTAIN_EXECUTOR_REJECT') bubble(captainChat, 'CGO • REJECT', `Executor menolak candidate: ${s.blocker || 'review tidak valid'}. Saya tidak meneruskan source. Medicine diminta memperoleh evidence baru.`, 'amber');
+    if (s.event === 'CAPTAIN_MEDICINE_FINALIZED') {
+      decisionStatus.textContent = 'MEDICINE FINALIZED • EXECUTOR HANDOFF';
+      decisionStatus.className = 'text-[9px] code-font text-cyan-300';
+      decisionText.textContent = 'Human approval sudah diterima. Medicine menyelesaikan finalisasi dan mengirim authorization terikat ke halaman Executor yang sudah ada.';
+    }
+    if (s.event === 'CAPTAIN_EXECUTION_COMPLETE') {
+      decisionStatus.textContent = 'EXECUTOR SELESAI • MENUNGGU VALIDASI';
+      decisionStatus.className = 'text-[9px] code-font text-amber-300';
+      decisionText.textContent = 'Executor selesai. Medicine/BCGO harus membuktikan readback dan deployment sebelum CGO menutup case.';
+    }
+    if (s.event === 'CAPTAIN_CASE_RESOLVED') {
+      decisionStatus.textContent = 'CASE RESOLVED • VERIFIED';
+      decisionStatus.className = 'text-[9px] code-font text-emerald-300';
+      decisionText.textContent = 'Validasi akhir membuktikan perbaikan. CGO menutup case berdasarkan hasil Medicine/BCGO.';
+    }
+    if (s.event === 'CAPTAIN_VALIDATION_FAILED') {
+      decisionStatus.textContent = 'VALIDASI GAGAL • KEMBALI INVESTIGASI';
+      decisionStatus.className = 'text-[9px] code-font text-amber-300';
+      decisionText.textContent = `CGO membuka kembali investigasi karena validasi belum membuktikan perbaikan: ${s.blocker || '-'}.`;
+    }
     if (s.event === 'CAPTAIN_HUMAN_GATE') {
       decisionStatus.textContent = 'CANDIDATE SIAP • MENUNGGU MANUSIA';
       decisionStatus.className = 'text-[9px] code-font text-emerald-300';

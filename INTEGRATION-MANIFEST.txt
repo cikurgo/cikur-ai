@@ -585,3 +585,23 @@ proof/authorization authority and Executor remains the execution gate.
 - Ordinary non-CGO chat remains available to the existing internal BCGO conversation path.
 - Human approval/rejection remains gated; Captain never mutates source directly and never bypasses Medicine/Guardian/Executor proof.
 - No external AI provider, external HTTP reasoning service, Firebase Cloud Function, or source mutation was introduced.
+
+
+[STAGE 13 BOUNDED CAPTAIN LOOP + HUMAN CHAT GATE FIX]
+- Captain no longer treats routine WAITING/heartbeat reports as blockers.
+- Captain investigation dispatch is per-case and event-driven; repeated BCGO_STATE heartbeats cannot create an endless command loop.
+- Explicit MEDICINE_CGO_BLOCKED / MEDICINE_CGO_ERROR or explicit proof-failure states may trigger a bounded retry; repeated identical blockers enter HOLD until new evidence arrives.
+- Existing bottom BCGO chat is a strict Human -> Captain gate for messages addressed to CGO. Such commands never fall back to ordinary BCGO chat when Captain is unavailable.
+- Team/Captain chat panels suppress routine bcgo_ai_context/executor_state heartbeat packets and throttle identical meaningful reports.
+- No external AI provider, cloud reasoning service, or source mutation introduced.
+
+
+[STAGE 14 CAPTAIN HUMAN GATE -> MEDICINE FINALIZE -> EXECUTOR -> VALIDATE]
+- Gerbang Utama chat yang sudah ada di bagian paling bawah bcgo.html tetap dipertahankan sebagai kanal Human -> CGO Captain.
+- Pesan yang secara eksplisit ditujukan kepada CGO/Kapten CGO masuk langsung ke createCaptain().receiveHumanCommand(); tidak fallback ke chat BCGO biasa.
+- Captain memantulkan respons kembali ke Gerbang Utama dan panel CGO sehingga jalur manusia -> Captain terlihat sebagai satu percakapan operasional.
+- Setelah HUMAN_APPROVAL, Captain mengirim CGO_HUMAN_APPROVAL ke Medicine. Medicine melakukan finalisasi Precision Gate/binding dan menerbitkan MEDICINE_FINALIZED_FOR_EXECUTION.
+- Medicine tetap menjadi pemegang proof/authorization flow; Executor yang sudah ada menerima CAPTAIN_EXECUTION_AUTHORIZATION dan melakukan review, exact execution, readback, serta durable authorization consumption.
+- Executor mengirim hasil execution; Medicine melakukan validationAfterPatch dan menerbitkan MEDICINE_VALIDATION_RESULT.
+- Captain menutup case hanya jika validasi final FIXED_VERIFIED; INTERNAL_VERIFIED_PENDING_DEPLOYMENT tidak dianggap selesai.
+- Tidak ada source mutation di Captain dan tidak ada external AI/provider/function dependency baru.

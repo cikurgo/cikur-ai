@@ -448,6 +448,9 @@ function publishInvestigationAck(packet) {
     } catch {}
 
     processingApprovals.add(requestId);
+    publishCaptainUpdate("Captain authorization diterima. Executor memulai pemeriksaan binding final sebelum eksekusi.", {
+      caseId:packet.caseId || null, requestId, proposalId:packet.proposalId || null
+    });
     let reviewed = requestId ? reviewedCandidates.get(requestId) : null;
     if (!reviewed) {
       try {
@@ -487,6 +490,12 @@ function publishInvestigationAck(packet) {
       }
       audit(result.status === STATUS.SUCCESS ? "APPROVED_EXECUTION_SUCCESS" : "APPROVED_EXECUTION_FAILED", {requestId,caseId:packet.caseId||null,proposalId:packet.proposalId||null,source,status:result.status});
       const executionMessage = {id:`EXECUTION-${requestId}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,bridge:BRIDGE_CHANNEL,from:"EXECUTION",type:"EXECUTION_RESULT",at:Date.now(),role:EXECUTOR_ROLE,requestId,caseId:packet.caseId||null,proposalId:packet.proposalId||null,result};
+      publishCaptainUpdate(
+        result.status === STATUS.SUCCESS
+          ? "Executor selesai menjalankan operasi exact. Medicine diminta melakukan validasi readback/deployment."
+          : `Executor selesai dengan status ${result.status || "UNKNOWN"}. Case tidak dianggap selesai tanpa validasi.`,
+        { caseId:packet.caseId||null, requestId, proposalId:packet.proposalId||null, result: { status: result.status || null, reason: result.reason || null } }
+      );
       try { bridgeChannel?.postMessage(executionMessage); } catch {}
       try {
         const resultCache = `${BRIDGE_CHANNEL}_EXECUTION_RESULT`;

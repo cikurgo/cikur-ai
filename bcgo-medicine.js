@@ -503,8 +503,17 @@ async function handleCaptainDirective(packet, source = "BROADCAST_CHANNEL") {
       if (packet.decision === "APPROVE") {
         if (!c.repairPlan?.precisionGate) throw new Error("CAPTAIN_APPROVAL_BLOCKED_PRECISION_GATE");
         if (!c.patchProposal?.executionReview || c.patchProposal.executionReview.status !== "VALID") throw new Error("CAPTAIN_APPROVAL_BLOCKED_EXECUTOR_REVIEW");
-        await approveTreatment(c.id);
-        publishCaptainResponse("MEDICINE_CGO_ACK", {caseId:c.id, message:"Human approval diterima. Medicine meminta Captain authorization dan meneruskannya ke Executor."});
+        publishCaptainResponse("MEDICINE_CGO_ACK", {caseId:c.id, message:"Human approval diterima. Medicine masuk tahap finalisasi: validasi ulang Precision Gate, binding source/proposal, lalu menyiapkan authorization untuk Executor."});
+        const executionApproval = await approveTreatment(c.id);
+        publishCaptainResponse("MEDICINE_FINALIZED_FOR_EXECUTION", {
+          caseId:c.id,
+          requestId:executionApproval?.requestId || c.executionRequestId || null,
+          proposalId:c.patchProposal?.proposalId || null,
+          authorizationId:executionApproval?.authorization?.authorizationId || null,
+          file:c.patchProposal?.operations?.[0]?.file || c.source || null,
+          sourceFingerprint:c.patchProposal?.executionReview?.beforeFingerprint || null,
+          message:"Medicine selesai melakukan finalisasi dan menyerahkan candidate exact yang sudah terikat ke Executor. Medicine tidak menulis source."
+        });
         return true;
       }
     }
@@ -3026,6 +3035,16 @@ async function validateAfterPatch(caseId) {
   if (proposal) proposal.status = fullyFixed ? "VERIFIED_FIXED" : pendingDeployment ? "INTERNAL_VERIFIED" : "VALIDATION_FAILED";
 
   emit("validation_complete", { validation: v, case: c });
+  publishCaptainResponse("MEDICINE_VALIDATION_RESULT", {
+    caseId,
+    target: repairTarget,
+    validation: v,
+    message: v.status === "FIXED_VERIFIED"
+      ? "BCGO/Medicine memverifikasi perubahan berhasil pada source deployed."
+      : v.status === "INTERNAL_VERIFIED_PENDING_DEPLOYMENT"
+        ? "Perubahan terbukti pada Internal Repository, tetapi deployment belum terbukti berubah."
+        : "Validasi belum membuktikan perbaikan; case harus kembali ke investigasi."
+  });
   emit("case_updated", { case: c });
   return v;
 }
