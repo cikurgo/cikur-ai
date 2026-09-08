@@ -12,11 +12,11 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { db, auth } from "./cikur-config.js";
-import { Core as InternalCore, Cognition as InternalCognition, Investigator as InternalInvestigator, createMasterRuntime from "./cgo-runtime-adapter.js?v=20260907-0900-constitution-connectivity1";
+import { Cognition as InternalCognition, Investigator as InternalInvestigator, createMasterRuntime } from "./cgo-runtime-adapter.js?v=20260907-0900-constitution-connectivity1";
 
 /*
  * ================================================================
- * BCGO MEDICINE v3.5.0-STAGE11-DURABLE-AUTHORIZATION — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
+ * BCGO MEDICINE v3.4.0 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
  * ================================================================
  * Boundary:
  *   Medicine observes, investigates, proves, proposes and validates.
@@ -63,28 +63,7 @@ const REGISTRY = { ...BASE_REGISTRY };
  * runtime. Medicine never invents Captain transitions: every transition is
  * checked by the shared Core table + Guardian through CaptainState.
  */
-const CAPTAIN_AUTHORIZATION_STORE = Object.freeze({
-  async issue(authArtifact) {
-    const binding = JSON.parse(String(authArtifact?.binding || "{}"));
-    const ref = doc(db, "execution_authorizations", String(authArtifact.authorizationId));
-    await setDoc(ref, {
-      authorizationId: String(authArtifact.authorizationId), status: "ISSUED",
-      caseId: String(binding.caseId || ""), revision: Number(binding.revision || 0),
-      requestId: String(binding.approvalId || ""), proposalId: String(binding.proposalId || ""),
-      planId: String(binding.planId || ""), binding: String(authArtifact.binding),
-      policyVersion: String(authArtifact.policyVersion || "CIKUR-INTERNAL-AUTO-1"),
-      executionMode: String(binding.executionMode || authArtifact.executionMode || ""),
-      issuedAt: authArtifact.issuedAt || now(), expiresAt: authArtifact.expiresAt || null,
-      actorUid: auth.currentUser?.uid || null, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-    }, { merge:false });
-    return { authorizationId:String(authArtifact.authorizationId), status:"ISSUED" };
-  },
-  async consume() {
-    throw new Error("CAPTAIN_RUNTIME_CONSUMPTION_IS_EXECUTOR_OWNED");
-  }
-});
-
-const CAPTAIN_RUNTIME = createMasterRuntime({ authorizationStore: CAPTAIN_AUTHORIZATION_STORE }).runtime;
+const CAPTAIN_RUNTIME = createMasterRuntime().runtime;
 const MEDICINE_TO_CAPTAIN_STATE = Object.freeze({
   DIAGNOSED:"INVESTIGATING",
   INVESTIGATING:"INVESTIGATING",
@@ -341,6 +320,7 @@ const escRe = v => String(v).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const MEDICINE_BRIDGE_KEY = "CIKUR_GO_BCGO_MEDICINE_V1";
 const MEDICINE_BRIDGE_EVENT_KEY = `${MEDICINE_BRIDGE_KEY}_EVENT`;
 const MEDICINE_BRIDGE_LIVE_WINDOW = 15000;
+const MEDICINE_PRESENCE_INTERVAL = 5000;
 let medicineBridgeChannel = typeof BroadcastChannel !== "undefined"
   ? new BroadcastChannel(MEDICINE_BRIDGE_KEY) : null;
 let medicineSequence = 0;
@@ -371,7 +351,9 @@ function publishMedicineState(event, data = {}) {
       cycle: S.bcgoSync.cycle,
       step: S.bcgoSync.step,
       active: S.bcgoSync.active,
-      total: S.bcgoSync.total
+      total: S.bcgoSync.total,
+      auth: S.human.uid ? "AUTHENTICATED" : "WAITING",
+      bridge: "ONLINE"
     }
   };
   try { medicineBridgeChannel?.postMessage(packet); } catch {}
@@ -383,6 +365,18 @@ function emit(event, data = {}) {
     detail: { event, at: now(), ...data }
   }));
   if (!String(event).startsWith("bcgo_bridge_")) publishMedicineState(event, data);
+}
+
+function startMedicineBridgePresence() {
+  if (window.__BCGO_MEDICINE_PRESENCE_TIMER) return;
+  const pulse = () => publishMedicineState(S.human.uid ? "AUTHENTICATED" : "AUTH_WAITING", {
+    message: S.human.uid
+      ? "Medicine bridge online; Admin session active."
+      : "Medicine bridge online; menunggu autentikasi Admin.",
+    presenceOnly: true
+  });
+  window.__BCGO_MEDICINE_PRESENCE_TIMER = setInterval(pulse, MEDICINE_PRESENCE_INTERVAL);
+  pulse();
 }
 
 function publishExecutionCandidate(packet) {
@@ -2961,59 +2955,94 @@ async function requestReview(caseId) {
   return c;
 }
 
-function captainProofFromMedicine(c, proposal) {
-  if (!c?.id || !proposal?.proposalId) throw new Error("CAPTAIN_PROOF_CASE_REQUIRED");
-  const plan = proposal.repairPlan || c.repairPlan || {};
-  const verification = proposal.verification || c.verification || {};
-  const rawEvidence = [
-    ...(Array.isArray(verification.sourceEvidence) ? verification.sourceEvidence : []),
-    ...(Array.isArray(verification.runtimeEvidence) ? verification.runtimeEvidence : []),
-    ...(Array.isArray(plan.sourceEvidence) ? plan.sourceEvidence : [])
-  ];
-  const unique = [];
-  const seen = new Set();
-  for (const item of rawEvidence) {
-    if (!item || typeof item !== "object") continue;
-    const key = JSON.stringify([item.file || item.sourceFile || item.source || "", item.line ?? null, item.type || item.kind || "", item.message || item.detail || item.reason || ""]);
-    if (seen.has(key)) continue;
-    seen.add(key); unique.push(item);
-  }
-  const evidence = unique.map((item, index) => {
-    const id = String(item.id || `MED-PROOF-${c.id}-${index + 1}`);
-    const strength = String(item.evidenceStrength || "").toUpperCase() === "HIGH" ? 0.9 : Number.isFinite(item.strength) ? Math.max(0, Math.min(1, Number(item.strength))) : 0.5;
-    return {
-      id,
-      claim: String(item.claim || item.message || item.detail || item.reason || "Medicine evidence"),
-      source: String(item.source || item.file || item.sourceFile || plan.rootCauseFile || c.source || "MEDICINE"),
-      status: String(item.evidenceStrength || "").toUpperCase() === "HIGH" ? "VERIFIED" : "UNVERIFIED",
-      exact: String(item.evidenceStrength || "").toUpperCase() === "HIGH" || item.exact === true,
-      strength,
-      metadata: { file:item.file || item.sourceFile || null, line:item.line ?? null, medicineEvidenceStrength:item.evidenceStrength || null }
-    };
-  });
-  const verified = evidence.filter(e => e.status === "VERIFIED");
-  if (verified.length < 2) throw new Error("CAPTAIN_PROOF_REQUIRES_TWO_VERIFIED_EVIDENCE_ITEMS");
 
-  const op = Array.isArray(plan.operations) ? plan.operations[0] : null;
-  if (!op || typeof op.before !== "string" || typeof op.after !== "string") throw new Error("CAPTAIN_EXACT_SOURCE_OPERATION_REQUIRED");
-  const sourceFingerprint = String(proposal.executionReview?.sourceFingerprint || proposal.executionReview?.beforeFingerprint || fingerprint(op.before));
-  const sourceEvidenceIds = verified.map(e => e.id);
-  const rootStatement = String(verification.rootCauseCandidates?.[0]?.reason || plan.rootCauseStatus || c.diagnosis?.title || "Medicine root cause verified");
-  const score = verified.reduce((sum, e) => sum + e.strength, 0) / verified.length;
-  const hypothesis = { id:`MED-HYP-${c.id}`, statement:rootStatement, evidenceIds:sourceEvidenceIds, score, causal:true };
-  const externalCase = {
-    caseId:c.id, target:plan.rootCauseFile || c.rootCauseFile || c.source, severity:c.diagnosis?.severity || "UNKNOWN",
-    evidence, hypotheses:[hypothesis], selectedHypothesis:hypothesis,
-    rootCause:{statement:rootStatement,hypothesisId:hypothesis.id,hypothesisScore:score,evidenceIds:sourceEvidenceIds},
-    exactSource:{
-      file:op.file || plan.rootCauseFile || c.source, operation:op.type || "REPLACE_EXACT",
-      originalCode:op.before, proposedCode:op.after, fingerprint:InternalCore.contentFingerprint(op.before),
-      contentFingerprint:InternalCore.contentFingerprint(op.before), sourceFingerprint, evidenceIds:sourceEvidenceIds
-    },
-    state:"SOURCE_VERIFIED", revision:Number(CAPTAIN_RUNTIME.getCase(c.id)?.revision || 0),
-    updatedAt:now()
+async function persistCaptainExecutionAuthorization(requestId, captainAuthorization, request) {
+  if (!requestId || !captainAuthorization?.authorizationId || !captainAuthorization?.binding) {
+    throw new Error("EXECUTION_AUTHORIZATION_PERSISTENCE_INPUT_INVALID");
+  }
+  const ref = doc(db, "medicine_patch_requests", requestId);
+  const record = {
+    authorizationId: captainAuthorization.authorizationId,
+    status: "ISSUED",
+    binding: captainAuthorization.binding,
+    decision: captainAuthorization.decision || null,
+    risk: captainAuthorization.risk || null,
+    policyVersion: captainAuthorization.policyVersion || null,
+    executionMode: captainAuthorization.binding ? (() => { try { return JSON.parse(captainAuthorization.binding).executionMode || null; } catch { return null; } })() : null,
+    issuedAt: captainAuthorization.issuedAt || now(),
+    expiresAt: captainAuthorization.expiresAt || null,
+    caseId: request.caseId,
+    proposalId: request.proposalId,
+    planId: request.planId,
+    requestId,
+    updatedAt: serverTimestamp()
   };
-  return CAPTAIN_RUNTIME.adoptVerifiedCase(c.id, externalCase);
+  await setDoc(ref, { executionAuthorization: record }, { merge: true });
+  return record;
+}
+
+
+function adoptMedicineProofIntoCaptain(c, proposal, op, review) {
+  ensureCaptainCase(c);
+  const verification = proposal?.verification || c?.verification || {};
+  const rawEvidence = Array.isArray(verification.sourceEvidence) ? verification.sourceEvidence :
+    (Array.isArray(c?.sourceEvidence) ? c.sourceEvidence : []);
+  if (!rawEvidence.length) throw new Error("CAPTAIN_PROOF_ADOPTION_BLOCKED:NO_MEDICINE_SOURCE_EVIDENCE");
+  const evidence = rawEvidence.map((e, i) => ({
+    id: `med_${c.id}_${i + 1}`,
+    type: String(e?.kind || e?.type || "MEDICINE_SOURCE_EVIDENCE"),
+    source: String(e?.sourceFile || e?.file || op.file || "MEDICINE"),
+    claim: String(e?.evidenceReason || e?.message || e?.reason || "Medicine verified source evidence"),
+    status: e?.evidenceStrength === "HIGH" ? "VERIFIED" : "UNVERIFIED",
+    strength: e?.evidenceStrength === "HIGH" ? 0.9 : 0.5,
+    exact: e?.evidenceStrength === "HIGH",
+    fingerprint: typeof e?.before === "string" ? `fnv1a32:${fingerprint(e.before)}` : `fnv1a32:${fingerprint(op.before)}`,
+    observedAt: e?.observedAt || now(),
+    metadata: { file: e?.file || e?.sourceFile || op.file, line: e?.line ?? null, medicineCaseId:c.id }
+  }));
+  const high = evidence.filter(e => e.status === "VERIFIED");
+  if (high.length < 2) {
+    throw new Error("CAPTAIN_PROOF_ADOPTION_BLOCKED:CAPTAIN_REQUIRES_TWO_VERIFIED_EVIDENCE_RECORDS");
+  }
+  const hypothesisId = `med_h_${c.id}`;
+  const statement = String(
+    verification?.rootCauseCandidates?.[0]?.reason ||
+    verification?.verdict ||
+    c?.diagnosis ||
+    "Medicine verified the exact source root cause."
+  ).trim();
+  const sourceEvidenceIds = high.map(e => e.id);
+  const standardCase = {
+    caseId: c.id,
+    target: c.source || verification.rootCauseFile || op.file,
+    symptom: c.diagnosis || c.lastEvidence?.message || "Medicine verified source issue",
+    severity: c.severity || "HIGH",
+    evidence: high,
+    hypotheses: [{id:hypothesisId, statement, evidenceIds:sourceEvidenceIds, causal:true, score:0.9}],
+    rootCause: {
+      statement,
+      hypothesisId,
+      hypothesisScore: 0.9,
+      evidenceIds: sourceEvidenceIds,
+      verifiedAt: now()
+    },
+    exactSource: {
+      file: op.file,
+      operation: op.type || "REPLACE_EXACT",
+      originalCode: op.before,
+      proposedCode: op.after,
+      fingerprint: `fnv1a32:${fingerprint(op.before)}`,
+      contentFingerprint: `fnv1a32:${fingerprint(op.before)}`,
+      sourceFingerprint: review?.beforeFingerprint || review?.sourceFingerprint || null,
+      evidenceIds: sourceEvidenceIds,
+      solution: {status:"CANDIDATE_READY", humanReviewRequired:true},
+      verifiedAt: now()
+    },
+    actionPlan: c.repairPlan || {planId: proposal?.repairPlan?.planId || ""},
+    revision: Number(CAPTAIN_RUNTIME.getCase(c.id)?.revision || 0)
+  };
+  if (!standardCase.exactSource.sourceFingerprint) throw new Error("CAPTAIN_PROOF_ADOPTION_BLOCKED:SOURCE_FINGERPRINT_REQUIRED");
+  return CAPTAIN_RUNTIME.adoptVerifiedCase(c.id, standardCase);
 }
 
 async function publishExecutionApproval(c, proposal) {
@@ -3030,11 +3059,14 @@ async function publishExecutionApproval(c, proposal) {
     expectedFingerprint:review.beforeFingerprint || "", approval:"APPROVED",
     actorUid:auth.currentUser?.uid || null, target:c.repairPlan?.rootCauseFile || op.file, createdAt:now()
   };
+  try {
+    adoptMedicineProofIntoCaptain(c, proposal, op, review);
+  } catch (error) {
+    emit("execution_authorization_blocked", {case:c, proposal, requestId, phase:"CAPTAIN_PROOF_ADOPTION", error:String(error?.message || error)});
+    throw error;
+  }
   let captainAuthorization = null;
   try {
-    // Stage 11: Medicine proof is explicitly adopted into Captain's canonical
-    // proof model before Captain may issue the execution authorization.
-    captainProofFromMedicine(c, proposal);
     captainAuthorization = CAPTAIN_RUNTIME.authorizeExecution(c.id, {
       proposalId: proposal.proposalId,
       planId: c.repairPlan?.planId || "",
@@ -3054,19 +3086,15 @@ async function publishExecutionApproval(c, proposal) {
     emit("execution_authorization_blocked", {case:c,proposal,requestId,error:String(error?.message||error)});
     throw error;
   }
+  try {
+    await persistCaptainExecutionAuthorization(requestId, captainAuthorization, request);
+  } catch (error) {
+    emit("execution_authorization_persistence_blocked", {case:c, proposal, requestId, authorizationId:captainAuthorization?.authorizationId || null, error:String(error?.message || error)});
+    throw new Error(`EXECUTION_AUTHORIZATION_DURABLE_PERSISTENCE_FAILED:${error?.message || error}`);
+  }
   request.authorizationId = captainAuthorization.authorizationId;
   request.authorization = captainAuthorization;
   request.approval = "APPROVED";
-
-  // Stage 11: persist through the infrastructure adapter injected into the
-  // Captain runtime. Firebase remains outside the internal reasoning engine.
-  try {
-    await CAPTAIN_RUNTIME.persistAuthorization(captainAuthorization);
-  } catch (error) {
-    emit("execution_authorization_persistence_blocked", { case:c, proposal, requestId, error:String(error?.message || error) });
-    throw error;
-  }
-
   const message = {bridge:MEDICINE_BRIDGE_KEY,from:"CAPTAIN",type:"CAPTAIN_EXECUTION_AUTHORIZATION",at:Date.now(),approval:"CAPTAIN_AUTHORIZED",requestId,caseId:c.id,proposalId:proposal.proposalId,request,authorization:captainAuthorization,approvedBy:auth.currentUser?.uid||null};
   let transported = false;
   try {
@@ -3310,6 +3338,8 @@ window.addEventListener("storage", event => {
   if (event.key !== MEDICINE_BRIDGE_KEY + "_STATE" || !event.newValue) return;
   try { receiveBCGOState(JSON.parse(event.newValue)); } catch {}
 });
+startMedicineBridgePresence();
+
 setInterval(() => {
   if (!S.bcgoSync.lastAt) return;
   if (Date.now() - S.bcgoSync.lastAt > MEDICINE_BRIDGE_LIVE_WINDOW && S.bcgoSync.status === "LIVE") {

@@ -1,9 +1,9 @@
-import { doc, runTransaction, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { doc, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { db } from "./cikur-config.js";
 
 /* ============================================================
    BCGO INTERNAL EXECUTOR
-   Version 3.4.0 (Stage 11 Durable Authorization)
+   Version 3.3.0 (Production Enhanced)
    ------------------------------------------------------------
    Orchestration + Request + Approval + Source + Persistence +
    Audit management.
@@ -12,7 +12,7 @@ import { db } from "./cikur-config.js";
 (() => {
   "use strict";
 
-  const VERSION = "3.4.0";
+  const VERSION = "3.4.0-CAPTAIN-DURABLE-AUTH";
   const ENGINE = "BCGO_INTERNAL_EXECUTOR";
 
   const STATUS = Object.freeze({
@@ -25,7 +25,8 @@ import { db } from "./cikur-config.js";
     VERIFYING_PERSISTENCE: "VERIFYING_PERSISTENCE",
     SUCCESS: "SUCCESS",
     REJECTED: "REJECTED",
-    FAILED: "FAILED"
+    FAILED: "FAILED",
+    INDETERMINATE: "INDETERMINATE"
   });
 
   const STORAGE_DB = "BCGO_INTERNAL_EXECUTOR";
@@ -59,37 +60,6 @@ import { db } from "./cikur-config.js";
   const MAX_HISTORY = 100;
   const core = () => window.BCGOExecutorCore;
   const now = () => new Date().toISOString();
-  const AUTHORIZATION_COLLECTION = "execution_authorizations";
-
-  async function claimDurableAuthorization(captainAuth, request) {
-    const authorizationId = String(captainAuth?.authorizationId || "").trim();
-    if (!authorizationId) throw new Error("DURABLE_AUTHORIZATION_ID_REQUIRED");
-    const ref = doc(db, AUTHORIZATION_COLLECTION, authorizationId);
-    const expectedBinding = String(captainAuth?.binding || "");
-    if (!expectedBinding) throw new Error("DURABLE_AUTHORIZATION_BINDING_REQUIRED");
-    return runTransaction(db, async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists()) throw new Error("DURABLE_AUTHORIZATION_NOT_FOUND");
-      const data = snap.data() || {};
-      if (data.status !== "ISSUED") throw new Error(`DURABLE_AUTHORIZATION_NOT_AVAILABLE:${data.status || "UNKNOWN"}`);
-      if (String(data.binding || "") !== expectedBinding) throw new Error("DURABLE_AUTHORIZATION_BINDING_MISMATCH");
-      if (data.expiresAt && Date.now() > Date.parse(String(data.expiresAt))) throw new Error("DURABLE_AUTHORIZATION_EXPIRED");
-      if (String(data.requestId || "") !== String(request.requestId || "")) throw new Error("DURABLE_AUTHORIZATION_REQUEST_MISMATCH");
-      if (String(data.caseId || "") !== String(request.caseId || "")) throw new Error("DURABLE_AUTHORIZATION_CASE_MISMATCH");
-      const consumedAt = now();
-      tx.update(ref, { status: "CONSUMED", consumedAt, updatedAt: consumedAt, consumer: ENGINE, consumerVersion: VERSION });
-      return { authorizationId, status: "CONSUMED", consumedAt };
-    });
-  }
-
-  async function markDurableAuthorization(authorizationId, status, extra = {}) {
-    if (!authorizationId) return;
-    try {
-      await updateDoc(doc(db, AUTHORIZATION_COLLECTION, authorizationId), { status, ...extra, updatedAt: now() });
-    } catch (error) {
-      audit("DURABLE_AUTHORIZATION_STATUS_UPDATE_FAILED", { authorizationId, status, error: String(error?.message || error) });
-    }
-  }
 
   function emit() {
     window.dispatchEvent(new CustomEvent("bcgo-executor-state", {
@@ -345,6 +315,67 @@ import { db } from "./cikur-config.js";
     return true;
   }
 
+
+  async function consumeDurableCaptainAuthorization(request, captainAuth) {
+    const requestId = String(request?.requestId || "").trim();
+    const authorizationId = String(captainAuth?.authorizationId || "").trim();
+    if (!requestId || !authorizationId) throw new Error("DURABLE_AUTHORIZATION_ID_REQUIRED");
+    const ref = doc(db, "medicine_patch_requests", requestId);
+    const nowMs = Date.now();
+    return runTransaction(db, async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error("DURABLE_AUTHORIZATION_NOT_FOUND");
+      const data = snap.data() || {};
+      const rec = data.executionAuthorization;
+      if (!rec || String(rec.authorizationId || "") !== authorizationId) throw new Error("DURABLE_AUTHORIZATION_BINDING_MISMATCH");
+      if (rec.status !== "ISSUED") throw new Error(`DURABLE_AUTHORIZATION_REPLAY_OR_NON_ISSUED:${rec.status || "UNKNOWN"}`);
+      if (!rec.expiresAt || Date.parse(rec.expiresAt) <= nowMs) throw new Error("DURABLE_AUTHORIZATION_EXPIRED");
+      if (String(rec.binding || "") !== String(captainAuth.binding || "")) throw new Error("DURABLE_AUTHORIZATION_BINDING_MISMATCH");
+      const parsed = JSON.parse(rec.binding);
+      const expected = {
+        caseId:request.caseId, proposalId:request.proposalId, planId:request.planId,
+        sourceId:request.sourceId, file:request.file, operation:request.operation,
+        beforeFingerprint:core().fingerprint(request.before), proposedFingerprint:core().fingerprint(request.after)
+      };
+      for (const key of Object.keys(expected)) {
+        if (String(parsed[key] ?? "") !== String(expected[key] ?? "")) throw new Error(`DURABLE_AUTHORIZATION_${key.toUpperCase()}_MISMATCH`);
+      }
+      if (String(parsed.sourceFingerprint || "") !== String(request.expectedFingerprint || "")) throw new Error("DURABLE_AUTHORIZATION_SOURCE_FINGERPRINT_MISMATCH");
+      const updated = {
+        ...rec,
+        status:"DISPATCH_PENDING",
+        consumedAt:new Date(nowMs).toISOString(),
+        consumedBy:"BCGO_INTERNAL_EXECUTOR",
+        operationId:requestId,
+        updatedAt:new Date(nowMs).toISOString()
+      };
+      tx.set(ref, { executionAuthorization: updated }, { merge:true });
+      return updated;
+    });
+  }
+
+  async function finalizeDurableCaptainAuthorization(request, status, result) {
+    const requestId = String(request?.requestId || "").trim();
+    if (!requestId) return;
+    const ref = doc(db, "medicine_patch_requests", requestId);
+    await runTransaction(db, async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error("DURABLE_AUTHORIZATION_FINAL_RECORD_NOT_FOUND");
+      const data = snap.data() || {};
+      const rec = data.executionAuthorization;
+      if (!rec || String(rec.operationId || "") !== requestId) throw new Error("DURABLE_AUTHORIZATION_FINAL_BINDING_MISMATCH");
+      if (rec.status !== "DISPATCH_PENDING") throw new Error(`DURABLE_AUTHORIZATION_FINAL_STATE_INVALID:${rec.status || "UNKNOWN"}`);
+      tx.set(ref, { executionAuthorization: {
+        ...rec,
+        status,
+        finalizedAt:new Date().toISOString(),
+        resultStatus:result?.status || null,
+        resultFingerprint:result?.afterFingerprint || null,
+        updatedAt:new Date().toISOString()
+      } }, { merge:true });
+    });
+  }
+
   async function handleExecutionApproval(packet, source = "BROADCAST_CHANNEL") {
     if (EXECUTOR_ROLE !== "STANDALONE") return false;
     if (!packet || packet.bridge !== BRIDGE_CHANNEL || packet.from !== "CAPTAIN" || packet.type !== "CAPTAIN_EXECUTION_AUTHORIZATION") return false;
@@ -389,8 +420,20 @@ import { db } from "./cikur-config.js";
       const expected = {caseId:packet.caseId, proposalId:packet.proposalId, planId:request.planId, file:request.file, sourceId:request.sourceId, operation:request.operation, beforeFingerprint:core().fingerprint(request.before), proposedFingerprint:core().fingerprint(request.after)};
       for (const key of Object.keys(expected)) { if (String(binding[key] ?? "") !== String(expected[key] ?? "")) return false; }
       if (binding.sourceFingerprint && String(binding.sourceFingerprint) !== String(request.expectedFingerprint || "")) return false;
-      const result = await execute(request, reviewed.sourceText);
-      audit(result.status === STATUS.SUCCESS ? "APPROVED_EXECUTION_SUCCESS" : "APPROVED_EXECUTION_FAILED", {requestId,caseId:packet.caseId||null,proposalId:packet.proposalId||null,source});
+      let result;
+      try {
+        result = await execute(request, reviewed.sourceText);
+        const terminal = result?.status === STATUS.SUCCESS ? "EXECUTED" : (["PERSISTENCE_FAILED","PERSISTENCE_VERIFICATION_FAILED"].includes(String(result?.reason || "")) ? "INDETERMINATE" : "FAILED");
+        try { await finalizeDurableCaptainAuthorization(request, terminal, result); }
+        catch (finalizeError) {
+          result = { ...result, status: STATUS.INDETERMINATE, reason:"DURABLE_AUTHORIZATION_FINALIZATION_FAILED", detail:{executionResult:result, error:String(finalizeError?.message || finalizeError)} };
+          audit("DURABLE_AUTHORIZATION_INDETERMINATE", {requestId,caseId:packet.caseId||null,error:String(finalizeError?.message || finalizeError)});
+        }
+      } catch (executionError) {
+        result = {executor:ENGINE,version:VERSION,status:STATUS.INDETERMINATE,reason:"EXECUTION_OUTCOME_INDETERMINATE",detail:{error:String(executionError?.message || executionError)},requestId,caseId:packet.caseId||null,executedAt:now()};
+        try { await finalizeDurableCaptainAuthorization(request, "INDETERMINATE", result); } catch {}
+      }
+      audit(result.status === STATUS.SUCCESS ? "APPROVED_EXECUTION_SUCCESS" : "APPROVED_EXECUTION_FAILED", {requestId,caseId:packet.caseId||null,proposalId:packet.proposalId||null,source,status:result.status});
       const executionMessage = {id:`EXECUTION-${requestId}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,bridge:BRIDGE_CHANNEL,from:"EXECUTION",type:"EXECUTION_RESULT",at:Date.now(),role:EXECUTOR_ROLE,requestId,caseId:packet.caseId||null,proposalId:packet.proposalId||null,result};
       try { bridgeChannel?.postMessage(executionMessage); } catch {}
       try {
@@ -852,6 +895,13 @@ import { db } from "./cikur-config.js";
     }
     if (!authorizationBinding.sourceFingerprint || String(authorizationBinding.sourceFingerprint) !== String(r.expectedFingerprint || "")) return reject("CAPTAIN_SOURCE_FINGERPRINT_MISMATCH");
 
+    try {
+      await consumeDurableCaptainAuthorization(r, r.authorization);
+      audit("DURABLE_AUTHORIZATION_CONSUMED", {requestId:r.requestId, caseId:r.caseId, authorizationId:r.authorizationId});
+    } catch (error) {
+      return reject(error?.message || "DURABLE_AUTHORIZATION_CONSUMPTION_FAILED");
+    }
+
     const sourceId = r.sourceId || r.file;
     let source = sourceText;
 
@@ -898,16 +948,6 @@ import { db } from "./cikur-config.js";
       afterFingerprint: patch.afterFingerprint
     });
 
-    // Stage 11: atomically consume the durable one-time authorization BEFORE
-    // source persistence. A replaying Executor cannot pass this fence twice.
-    let durableClaim;
-    try {
-      durableClaim = await claimDurableAuthorization(r.authorization, r);
-    } catch (error) {
-      audit("DURABLE_AUTHORIZATION_REJECTED", { authorizationId:r.authorizationId, requestId:r.requestId, error:String(error?.message || error) });
-      return reject(String(error?.message || "DURABLE_AUTHORIZATION_REJECTED"));
-    }
-
     setStatus(STATUS.PERSISTING);
     audit("PERSISTENCE_STARTED", { sourceId, file: r.file });
 
@@ -917,12 +957,10 @@ import { db } from "./cikur-config.js";
         expectedFingerprint: patch.beforeFingerprint
       });
     } catch (error) {
-      await markDurableAuthorization(durableClaim.authorizationId, "INDETERMINATE", { indeterminateAt: now(), error: String(error?.message || error) });
       return fail("PERSISTENCE_FAILED", {
         error: error.message,
         sourceId,
-        afterFingerprint: patch.afterFingerprint,
-        authorizationState: "INDETERMINATE"
+        afterFingerprint: patch.afterFingerprint
       });
     }
 
@@ -932,12 +970,10 @@ import { db } from "./cikur-config.js";
     if (!persisted ||
         !core().fingerprintsEqual(persisted.fingerprint, patch.afterFingerprint) ||
         persisted.content !== patch.sourceAfter) {
-      await markDurableAuthorization(durableClaim.authorizationId, "INDETERMINATE", { indeterminateAt: now(), error: "PERSISTENCE_VERIFICATION_FAILED" });
       return fail("PERSISTENCE_VERIFICATION_FAILED", {
         sourceId,
         expectedFingerprint: patch.afterFingerprint,
-        actualFingerprint: persisted?.fingerprint || null,
-        authorizationState: "INDETERMINATE"
+        actualFingerprint: persisted?.fingerprint || null
       });
     }
 
@@ -967,7 +1003,6 @@ import { db } from "./cikur-config.js";
       executedAt: now()
     });
 
-    await markDurableAuthorization(durableClaim.authorizationId, "EXECUTED", { executedAt: result.executedAt, result: { status: STATUS.SUCCESS, afterFingerprint: result.afterFingerprint, readBackVerified: true } });
     state.result = result;
     state.source = persisted;
     audit("EXECUTION_SUCCESS", {
