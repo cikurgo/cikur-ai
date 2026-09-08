@@ -10,6 +10,8 @@ import * as Memory from "./cgo-ai-memory.js?v=20260907-0900-constitution-connect
 import * as Cognition from "./cgo-ai-cognition.js?v=20260907-0900-constitution-connectivity1";
 import * as Guardian from "./cgo-ai-guardian.js?v=20260907-0900-constitution-connectivity1";
 import * as Logic from "./cgo-ai-logic.js?v=20260907-0900-constitution-connectivity1";
+import * as CaptainState from "./cgo-ai-state-machine.js";
+import * as EvidenceLedger from "./cgo-ai-evidence-ledger.js";
 
 const VERSION="1.13.0";
 const EXECUTOR_CONTRACT_VERSION="1.2.0";
@@ -173,6 +175,9 @@ export function createDeterministicExecutor(target={}) {
 
 export function createRuntime(options={}) {
   let knowledge=Knowledge.createKnowledgeStore(options.knowledge);
+  // Durable authorization storage is injected by the infrastructure boundary.
+  // The internal brain never imports Firebase or another external service.
+  const authorizationStore = options.authorizationStore || null;
   let memory=Memory.createMemory(options.memory);
   const cases=new Map();
   const investigations=new Map();
@@ -181,6 +186,8 @@ export function createRuntime(options={}) {
   const planCache=new Map();
   const authorizationLedger=new Map();
   let executor = options.executor || createDeterministicExecutor(options.executionTarget);
+  const captainState = CaptainState.createStateMachine({transitions:Core.CASE_TRANSITIONS,guardTransition:Guardian.guardTransition});
+  const evidenceLedger = EvidenceLedger.createEvidenceLedger(options.evidenceLedger || []);
 
   function emit(event,payload){ for(const fn of listeners){ try{fn({event,payload,at:new Date().toISOString()});}catch{} } }
   function assertStateTransition(from,to){
@@ -222,6 +229,18 @@ export function createRuntime(options={}) {
     return true;
   }
 
+  async function persistAuthorization(auth) {
+    if (!authorizationStore || typeof authorizationStore.issue !== "function")
+      throw new Error("DURABLE_AUTHORIZATION_STORE_REQUIRED");
+    return authorizationStore.issue(structuredClone(auth));
+  }
+
+  async function consumeDurableAuthorization(auth,expected={}) {
+    if (!authorizationStore || typeof authorizationStore.consume !== "function")
+      throw new Error("DURABLE_AUTHORIZATION_STORE_REQUIRED");
+    return authorizationStore.consume(structuredClone(auth), structuredClone(expected));
+  }
+
   function authorizationDecision(caseId,policy={}){
     const c=cases.get(caseId);
     if(!c) throw new Error(`CASE_NOT_FOUND:${caseId}`);
@@ -233,6 +252,10 @@ export function createRuntime(options={}) {
 
   const api={
     version:VERSION,
+    captainState(){ return captainState; },
+    evidenceLedger(){ return evidenceLedger; },
+    getEvidenceLedger(caseId=null){ return evidenceLedger.list(caseId); },
+    verifyEvidenceLedger(){ return evidenceLedger.verify(); },
     on(fn){listeners.add(fn); return ()=>listeners.delete(fn);},
     getKnowledge(){return structuredClone(knowledge);},
     setKnowledge(next){
@@ -243,6 +266,15 @@ export function createRuntime(options={}) {
     },
     getMemory(){return structuredClone(memory);},
     getCase(caseId){return structuredClone(cases.get(caseId)||null);},
+    transitionCaseState(caseId,to,context={}){
+      const current=cases.get(caseId);
+      if(!current) throw new Error(`CASE_NOT_FOUND:${caseId}`);
+      const next=captainState.transition(current,to,context);
+      cases.set(caseId,next);
+      evidenceLedger.append("CAPTAIN_STATE_TRANSITION",{from:current.state,to:next.state,context:structuredClone(context||{})},{caseId,revision:next.revision,observedAt:next.updatedAt});
+      emit("CAPTAIN_STATE_TRANSITION",next);
+      return structuredClone(next);
+    },
     setExecutor(nextExecutor){
       if(nextExecutor!==null) {
         if(typeof nextExecutor?.read!=="function" || typeof nextExecutor?.write!=="function")
@@ -272,6 +304,7 @@ export function createRuntime(options={}) {
       cases.set(c.caseId,c);
       eventLedger.set(c.caseId,{sequence:Number.isInteger(c.event.sequence)?c.event.sequence:-1,eventIds:new Set(c.event.eventId?[c.event.eventId]:[])});
       investigations.set(c.caseId,Investigator.createInvestigation(c,knowledge));
+      evidenceLedger.append("CASE_DETECTED",{state:c.state,target:c.target,symptom:c.symptom,severity:c.severity},{caseId:c.caseId,revision:c.revision,observedAt:c.createdAt});
       emit("CASE_DETECTED",c);
       return structuredClone(c);
     },
@@ -310,12 +343,15 @@ export function createRuntime(options={}) {
       }
       c.event={eventId:incoming.at(-1)?.eventId||c0.event?.eventId||null,sequence:ledger.sequence,observedAt:incoming.at(-1)?.observedAt||new Date().toISOString(),source:incoming.at(-1)?.source||c0.event?.source||"BCGO"};
       eventLedger.set(caseId,ledger);
-      cases.set(caseId,c); emit("EVIDENCE_UPDATED",c); return structuredClone(c);
+      cases.set(caseId,c);
+      evidenceLedger.append("EVIDENCE_UPDATED",{evidence:incoming.map(x=>structuredClone(x)),state:c.state,event:c.event},{caseId,revision:c.revision,observedAt:c.updatedAt});
+      emit("EVIDENCE_UPDATED",c); return structuredClone(c);
     },
 
     reason(caseId,hypotheses){
       const out=Core.reason(cases.get(caseId),hypotheses);
       cases.set(caseId,out.caseData);
+      evidenceLedger.append("REASONING_UPDATED",{selectedHypothesis:out.caseData.selectedHypothesis||null,hypothesisCount:out.caseData.hypotheses?.length||0},{caseId,revision:out.caseData.revision});
       emit("REASONING_UPDATED",out);
       return structuredClone(out);
     },
@@ -323,14 +359,69 @@ export function createRuntime(options={}) {
     proveRootCause(caseId,rootCause){
       const before=cases.get(caseId);
       const c=Core.verifyRootCause(before,rootCause);
-      cases.set(caseId,c); emit("ROOT_CAUSE_VERIFIED",c); return structuredClone(c);
+      cases.set(caseId,c);
+      evidenceLedger.append("ROOT_CAUSE_VERIFIED",{rootCause:c.rootCause},{caseId,revision:c.revision});
+      emit("ROOT_CAUSE_VERIFIED",c); return structuredClone(c);
     },
 
     proveSource(caseId,source){
       const before=cases.get(caseId);
       const c=Core.verifyExactSource(before,source);
-      cases.set(caseId,c); emit("SOURCE_VERIFICATION",c); return structuredClone(c);
+      cases.set(caseId,c);
+      evidenceLedger.append("SOURCE_VERIFICATION",{exactSource:c.exactSource},{caseId,revision:c.revision});
+      emit("SOURCE_VERIFICATION",c); return structuredClone(c);
     },
+
+    adoptVerifiedCase(caseId, externalCase={}){
+      const current=cases.get(caseId);
+      if(!current) throw new Error(`CASE_NOT_FOUND:${caseId}`);
+      if(String(externalCase?.caseId||caseId)!==String(caseId)) throw new Error("CASE_BINDING_MISMATCH");
+      const candidate=structuredClone({...current, ...externalCase, caseId});
+      const evaluation=Logic.evaluate(candidate, {
+        version:"CIKUR-INTERNAL-AUTO-1",
+        allowAutomaticExecution:true, automaticPatch:true, automaticExecution:true, executionMode:"INTERNAL_AUTO"
+      }, knowledge);
+      if(!evaluation.proof?.complete) throw new Error(`CAPTAIN_PROOF_NOT_ADMISSIBLE:${(evaluation.proof?.blockers||[]).join(",")}`);
+      candidate.state="SOURCE_VERIFIED";
+      candidate.updatedAt=new Date().toISOString();
+      candidate.revision=Math.max(Number(current.revision||0),Number(externalCase.revision||0))+1;
+      cases.set(caseId,candidate);
+      evidenceLedger.append("CAPTAIN_PROOF_ADOPTED",{proof:evaluation.proof,rootCause:candidate.rootCause,exactSource:candidate.exactSource},{caseId,revision:candidate.revision,observedAt:candidate.updatedAt});
+      emit("CAPTAIN_PROOF_ADOPTED",candidate);
+      return structuredClone(candidate);
+    },
+
+    authorizeExecution(caseId,binding={},policy={}){
+      const c=cases.get(caseId);
+      if(!c) throw new Error(`CASE_NOT_FOUND:${caseId}`);
+      const auth=authorizationDecision(caseId,policy);
+      if(auth.decision!=="AUTO_ALLOWED" && auth.decision!=="HUMAN_AUTHORIZED") throw new Error(`EXECUTION_AUTHORIZATION_BLOCKED:${auth.reason}`);
+      const request=binding.request||{};
+      const before=typeof request.before==="string" ? request.before : (c.exactSource?.originalCode||"");
+      const after=typeof request.after==="string" ? request.after : (c.exactSource?.proposedCode||"");
+      const sourceFingerprint=binding.sourceFingerprint||c.exactSource?.sourceFingerprint||null;
+      if(!sourceFingerprint) throw new Error("SOURCE_FINGERPRINT_REQUIRED");
+      const bound={
+        caseId, revision:c.revision||0, proposalId:String(binding.proposalId||""), planId:String(binding.planId||""),
+        sourceId:String(binding.sourceId||c.exactSource?.file||""), file:String(binding.file||c.exactSource?.file||""),
+        operation:String(binding.operation||c.exactSource?.operation||"REPLACE_EXACT"),
+        sourceFingerprint, beforeFingerprint:Core.contentFingerprint(before),
+        proposedFingerprint:Core.contentFingerprint(after), scope:String(binding.scope||"SOURCE_MUTATION"),
+        policyVersion:auth.policyVersion, executionMode:String(policy.executionMode||""), approvalId:String(binding.approvalId||"")
+      };
+      if(!bound.file || !bound.proposalId || !bound.planId || !bound.sourceFingerprint || !after) throw new Error("EXECUTION_BINDING_INCOMPLETE");
+      auth.authorizationId=`cap_${caseId}_${c.revision}_${Math.random().toString(36).slice(2,10)}`;
+      auth.binding=JSON.stringify(bound); auth.issuedAt=new Date().toISOString();
+      auth.expiresAt=new Date(Date.now()+(Number.isFinite(policy.authorizationTtlMs)?Math.max(1000,policy.authorizationTtlMs):60000)).toISOString();
+      auth.consumed=false;
+      authorizationLedger.set(auth.authorizationId,{binding:auth.binding,expiresAt:auth.expiresAt,consumed:false,caseId});
+      evidenceLedger.append("EXECUTION_AUTHORIZATION_ISSUED",{authorizationId:auth.authorizationId,decision:auth.decision,binding:bound},{caseId,revision:c.revision});
+      emit("EXECUTION_AUTHORIZATION_ISSUED",auth);
+      return structuredClone(auth);
+    },
+
+    persistAuthorization,
+    consumeDurableAuthorization,
 
     authorize(caseId,policy={}){
       const c=cases.get(caseId);
@@ -372,6 +463,9 @@ export function createRuntime(options={}) {
       if(expected.caseId && expected.caseId!==rec.caseId) throw new Error("AUTHORIZATION_CASE_MISMATCH");
       if(expected.fingerprint && parsed.fingerprint!==expected.fingerprint) throw new Error("AUTHORIZATION_SOURCE_MISMATCH");
       if(expected.sourceFingerprint && parsed.sourceFingerprint!==expected.sourceFingerprint) throw new Error("AUTHORIZATION_SOURCE_MISMATCH");
+      for(const key of ["caseId","revision","proposalId","planId","sourceId","file","operation","beforeFingerprint","proposedFingerprint"]){
+        if(expected[key]!==undefined && String(parsed[key])!==String(expected[key])) throw new Error(`AUTHORIZATION_${key.toUpperCase()}_MISMATCH`);
+      }
       rec.consumed=true;
       authorizationLedger.set(auth.authorizationId,rec);
       return {authorizationId:auth.authorizationId,consumed:true,consumedAt:new Date().toISOString()};
@@ -579,7 +673,8 @@ export function createRuntime(options={}) {
         knowledge,
         memory,
         authorizations:[...authorizationLedger.entries()].map(([id,v])=>[id,v]),
-        executorState:executor && typeof executor.snapshot==="function" ? executor.snapshot() : null
+        executorState:executor && typeof executor.snapshot==="function" ? executor.snapshot() : null,
+        evidenceLedger:evidenceLedger.snapshot()
       };
     },
 
@@ -609,7 +704,11 @@ export function createRuntime(options={}) {
         authorizationLedger.set(entry[0],structuredClone(entry[1]));
       }
       if(snapshot.executorState!==undefined && executor && typeof executor.restore==="function") executor.restore(structuredClone(snapshot.executorState));
-      emit("RUNTIME_RESTORED",{caseCount:cases.size,authorizationCount:authorizationLedger.size});
+      if(snapshot.evidenceLedger){
+        const check=EvidenceLedger.createEvidenceLedger(snapshot.evidenceLedger).verify();
+        if(!check.ok) throw new Error(`INVALID_SNAPSHOT_EVIDENCE_LEDGER:${check.reason}`);
+      }
+      emit("RUNTIME_RESTORED",{caseCount:cases.size,authorizationCount:authorizationLedger.size,evidenceLedgerEntries:evidenceLedger.size()});
       return api.snapshot();
     }
   };

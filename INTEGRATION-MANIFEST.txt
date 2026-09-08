@@ -392,3 +392,172 @@ Status: IMPLEMENTATION + REGRESSION VALIDATION
 - This is observability only; it does not create, auto-discover, or fabricate a Patch Executor.
 - Medicine and Patch Executor remain outside this phase and are not modified.
 - Browser validation remains required before deployment acceptance.
+
+=== INVESTIGATION PROGRESS / RECOVERY HARDENING — 2026-09-07 ===
+- Internal investigation source reads now have an explicit 8-second fetch timeout so a hanging deployment request cannot leave an investigation silently active forever.
+- SOURCE_CONNECTIVITY probes emit bounded per-file progress (current file / index / total) while scanning the source surface, so the conversational UI can show continued work instead of appearing frozen after Step 1.
+- Probe read failures during SOURCE_CONNECTIVITY are recorded as progress failures and the scan continues to the next file; one unreadable source does not silently abort the entire connectivity pass.
+- ACTIVE_INVESTIGATION_ERROR is now surfaced by the browser conversation layer and followed by an explicit terminal investigation outcome with RETRY_INVESTIGATION rather than leaving the user with a stale "sedang bekerja" state.
+- This phase repairs investigation observability/recovery only. It does not fabricate evidence, alter proof rules, mutate source, or connect a production Patch Executor.
+- Medicine, Patch Executor, Firestore Rules, and unrelated deployment source remain untouched.
+- Browser validation remains required before deployment acceptance.
+
+
+=== INVESTIGATION PROGRESS RECOVERY CORRECTION — 2026-09-08 ===
+- Browser probe timeout is explicitly defined as 8000 ms; no undefined timeout constant is permitted in the internal source reader.
+- Investigation errors emit a terminal INVESTIGATION_INCOMPLETE outcome with RETRY_INVESTIGATION.
+- The BCGO chat maps that terminal outcome explicitly so an error cannot be immediately overwritten by a generic "still working" message.
+- This correction is diagnostic/investigation only. Medicine, Patch Executor, production execution target, Firestore Rules, and unrelated deployment files remain untouched.
+
+============================================================
+BROWSER E2E INTEGRATION HARDENING — 2026-09-08
+============================================================
+
+Finding:
+- The CGO 15-file brain baseline is internally complete at module level,
+  but the browser entrypoint bcgo.js imports ./cikur-config.js for the
+  authoritative Firebase data/realtime/auth layer.
+- cikur-config.js was therefore a required browser runtime dependency but
+  was not included in the previous 15-file distribution package.
+- This is a packaging/integration dependency gap, not an external-AI
+  dependency and not a reasoning dependency.
+
+Correction:
+- Added cikur-config.js to the deployable CGO browser baseline.
+- The selected config is the current CIKUR GO Firebase configuration already
+  used by the project and exports the shared db/auth instances expected by
+  bcgo.js.
+- Firebase remains classified as data/realtime/auth infrastructure; it is
+  NOT used as the CGO intelligence/reasoning engine.
+- No external AI provider/API was added.
+- No Medicine, Patch Executor, Firestore Rules, or source-mutation policy was changed.
+
+Cross-file validation:
+- All local JS import references resolve inside the packaged source surface.
+- bcgo.js -> cikur-config.js resolves.
+- cgo-runtime-adapter.js -> all internal cgo-ai-* modules resolves.
+- HTML -> bcgo.js resolves.
+- JavaScript syntax validation: PASS.
+- Inline HTML JavaScript syntax validation: PASS.
+
+Browser validation note:
+- Chromium is available in the validation environment, but a persistent
+  Firebase/realtime page prevents the headless process from terminating
+  normally; therefore a clean browser E2E PASS is NOT claimed from that run.
+- Browser boot must remain an explicit deployment acceptance gate.
+
+Baseline distribution:
+- Previous brain baseline: 15 files.
+- Browser-complete baseline: 16 files including cikur-config.js.
+============================================================
+
+SOVEREIGNTY HARDENING — 2026-09-08
+- The authoritative user-supplied cikur-config (19).js is now the production `cikur-config.js` dependency for this baseline.
+- `bcgo.js` imports `{ db, auth }` from `./cikur-config.js?v=20260907-0900-constitution-connectivity1`; the authoritative config exports `db`, `auth`, and `firebaseConfig`, so the local contract is satisfied.
+- Added `cgo-ai-sovereignty.js` as a dependency-free internal Sovereignty Gate.
+- Sovereignty policy is explicit: external AI providers are forbidden; external AI cannot be used as fallback or execution authority.
+- Firebase, gstatic Firebase SDK, Google Fonts, and Tailwind CDN remain infrastructure/presentation dependencies only; they are not intelligence providers.
+- Master gateway now exposes the Sovereignty Gate and includes its manifest in `getBrainManifest()`.
+- Production source scan found no external AI endpoint in the production baseline outside the Sovereignty Gate's own detection patterns.
+- All JavaScript syntax checks PASS after the hardening change.
+- Internal functional/adversarial assault remains PASS (9/9 existing scenarios).
+- Browser E2E remains UNVERIFIED in this environment; no browser PASS is claimed.
+- `cikurgoicon.png` is referenced by `bcgo.html` but was not found among the supplied baseline files; it is presentation-only and has not been fabricated.
+
+AUTHORITATIVE PRODUCTION BASELINE — 2026-09-08
+1. bcgo.html
+2. bcgo.js
+3. cgo-ai-browser-adapter.js
+4. cgo-ai-cognition.js
+5. cgo-ai-core.js
+6. cgo-ai-guardian.js
+7. cgo-ai-investigation-engine.js
+8. cgo-ai-investigator.js
+9. cgo-ai-knowledge.js
+10. cgo-ai-logic.js
+11. cgo-ai-memory.js
+12. cgo-ai-runtime-adapter.js
+13. cgo-ai-sovereignty.js
+14. cgo-instruction.js
+15. cgo-runtime-adapter.js
+16. cikur-config.js
+17. INTEGRATION-MANIFEST.txt
+
+======================================================================
+CAPTAIN READINESS MILESTONE 1 — STATE + EVIDENCE SPINE
+======================================================================
+Added internal modules:
+- cgo-ai-state-machine.js
+  - deterministic Captain lifecycle facade
+  - reads Core.CASE_TRANSITIONS (no duplicate transition table)
+  - consults Guardian.guardTransition()
+  - blocks undeclared/Guardian-rejected transitions
+- cgo-ai-evidence-ledger.js
+  - append-only internal evidence/provenance ledger
+  - deterministic hash-chain integrity
+  - case/revision binding on ledger entries
+  - tamper detection and snapshot support
+
+Runtime integration:
+- cgo-ai-runtime-adapter.js now records lifecycle evidence for detection,
+  evidence updates, reasoning, root-cause verification, and source verification.
+- Runtime snapshot now carries the evidence ledger.
+- Runtime restore validates supplied evidence-ledger integrity before accepting it.
+- cgo-runtime-adapter.js gateway exposes CaptainState and EvidenceLedger modules.
+- Gateway manifest exposes their versions.
+
+Validation:
+- Captain readiness test: PASS (7/7)
+- Ledger tamper test: PASS
+- Existing adversarial assault test: PASS (9/9)
+- JavaScript syntax checks: PASS
+- Browser E2E: UNVERIFIED (no claim of browser PASS)
+
+Important boundary:
+The State Machine does not replace Core/Guardian. It is a single deterministic
+Captain-facing lifecycle facade over the existing authoritative transition and
+guard policy. The Evidence Ledger is an integrity/provenance layer; it is not
+presented as a cryptographic security primitive.
+
+======================================================================
+STAGE 10 — CAPTAIN EXECUTION AUTHORIZATION BOUNDARY
+======================================================================
+
+Purpose:
+  Move execution admission from Medicine's legacy HUMAN_APPROVED transport
+  packet to a Captain-issued, Guardian-adjudicated authorization artifact.
+
+Production changes:
+  - cgo-ai-guardian.js: supports HUMAN_APPROVED authorization mode while
+    retaining INTERNAL_AUTO as the automatic-execution policy.
+  - cgo-ai-runtime-adapter.js: adds Captain proof-adoption and execution
+    authorization APIs; binds authorization to case/revision/proposal/plan,
+    source/file/operation, source fingerprint, before/after fingerprints,
+    policy and approval identity; consumption checks are strengthened.
+  - bcgo-medicine.js: human approval now requests a Captain authorization
+    artifact and transports CAPTAIN_EXECUTION_AUTHORIZATION.
+  - bcgo-executor.js: execution admission accepts only Captain authorization
+    packets and verifies exact binding before entering the write path.
+
+Non-changes:
+  - bcgo-executor-core.js remains deterministic and unchanged.
+  - no external AI/provider/API was introduced.
+  - Medicine remains non-writing.
+  - INTERNAL_AUTO capability remains available through Guardian policy.
+  - Browser E2E remains unverified unless separately demonstrated.
+
+Important limitation:
+  The current browser runtime authorization ledger is in-memory/local-runtime
+  scoped. This stage establishes the correct authority boundary and exact
+  binding contract; durable cross-page/server persistence of authorization
+  consumption remains a later hardening stage.
+
+
+STAGE 11 — CAPTAIN DURABLE AUTHORIZATION + EXECUTION CONSUMPTION — 2026-09-08
+- Medicine now converts its verified evidence into the canonical Captain proof shape before execution authorization. Captain/Guardian remains the authority; insufficient proof is fail-closed.
+- Captain authorization is persisted to Firestore collection execution_authorizations with status ISSUED before the authorization packet is dispatched. Firestore is infrastructure/state storage only; it is not the intelligence engine.
+- Executor now atomically consumes the authorization in a Firestore transaction immediately before source persistence. A second consumer/replay cannot claim the same authorization because only ISSUED is claimable.
+- Once consumed, ambiguous persistence/readback failure is recorded as INDETERMINATE rather than silently retrying the same authorization. Successful readback marks the durable authorization EXECUTED.
+- The internal runtime exposes an infrastructure-neutral durable authorization store contract; the brain itself does not import Firebase.
+- Production dependency: Firestore Security Rules must explicitly protect execution_authorizations and permit only the intended authenticated/admin execution path. This package does NOT silently modify Firestore Rules.
+- FNV fingerprints remain deterministic consistency fingerprints, not cryptographic signatures.

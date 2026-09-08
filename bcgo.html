@@ -726,7 +726,8 @@ document.querySelectorAll('.quick-q').forEach(button => {
             const labels = { SOURCE_READ:'membaca source aktual', SYMBOL_CALLS:'menelusuri pemanggilan fungsi', SYMBOL_DEFINITIONS:'memastikan definisi fungsi', SYMBOL_IMPORTS_EXPORTS:'menelusuri import dan export', DEPENDENCY_TRACE:'menelusuri dependency', RELATION_TRACE:'mencocokkan hubungan antar-file' };
             const probe = p.probe?.type || '';
             const work = labels[probe] || 'mengumpulkan evidence';
-            return { text: step > 0 ? `Saya sedang bekerja. Langkah ${step}: ${work}.` : `Saya sedang bekerja: ${work}.`, kind:'working' };
+            const sub = p.substep === 'READ' && p.currentFile ? ` (${p.currentIndex}/${p.totalFiles}: ${p.currentFile})` : p.substep === 'READ_FAILED' && p.currentFile ? ` (${p.currentFile}: source tidak terbaca, saya lanjut ke berikutnya)` : '';
+            return { text: step > 0 ? `Saya sedang bekerja. Langkah ${step}: ${work}${sub}.` : `Saya sedang bekerja: ${work}${sub}.`, kind:'working' };
         }],
         ['ACTIVE_INVESTIGATION_STEP', d => {
             const p = d.payload || {};
@@ -741,6 +742,7 @@ document.querySelectorAll('.quick-q').forEach(button => {
             if (p.phase === 'DIAGNOSIS_COMPLETE_SOLUTION_PENDING') return { text:`Investigasi selesai. ${p.conclusion || 'Root cause dan exact source sudah terverifikasi.'} Tindak lanjut: solusi konkret. Source tetap belum diubah.`, kind:'done' };
             if (p.phase === 'ROOT_CAUSE_COMPLETE_SOURCE_PENDING') return { text:`Tahap root cause selesai. ${p.conclusion || 'Exact source masih perlu diverifikasi.'}`, kind:'working' };
             if (p.phase === 'INVESTIGATION_STOPPED_WITHOUT_PROOF') return { text:`Investigasi berhenti tanpa proof lengkap. ${p.conclusion || 'Saya belum punya dasar untuk menyatakan root cause.'} Tindak lanjut: evidence/probe berikutnya.`, kind:'blocked' };
+            if (p.phase === 'INVESTIGATION_INCOMPLETE') return { text:`Investigasi belum dapat diselesaikan. ${p.conclusion || 'Probe internal mengalami kendala.'} Tindak lanjut: ${p.nextAction === 'RETRY_INVESTIGATION' ? 'coba probe lagi setelah kondisi sumber dapat dibaca.' : 'periksa blocker yang ditampilkan.'}`, kind:'blocked' };
             return { text:`Investigasi belum selesai. ${p.conclusion || 'Saya masih membutuhkan evidence.'}`, kind:'working' };
         }],
         ['CHAT_REPAIR_WAITING', d => {
@@ -752,6 +754,7 @@ document.querySelectorAll('.quick-q').forEach(button => {
         ['CHAT_REPAIR_BLOCKED', d => ({ text:`Perintah perbaikan saya tahan karena gerbang internal belum mengizinkan: ${String(d.payload?.reason || 'proof/policy belum memenuhi syarat')}.`, kind:'blocked' })],
         ['CHAT_REPAIR_EXECUTED', () => ({ text:'Perubahan sudah diteruskan ke Executor internal. Saya sekarang menunggu validation dan read-back.', kind:'working' })],
         ['CHAT_REPAIR_FAILED', d => ({ text:`Execution berhenti dan tidak saya nyatakan berhasil. ${String(d.payload?.error || 'Ada kegagalan pada jalur execution.').slice(0,180)}`, kind:'blocked' })],
+        ['ACTIVE_INVESTIGATION_ERROR', d => ({ text:`Investigasi mengalami kendala internal: ${String(d.payload?.error || 'unknown error').slice(0,180)}. Saya tidak menganggap hasilnya selesai; tindak lanjut: coba probe lagi.`, kind:'blocked' })],
         ['CHAT_INVESTIGATION_ERROR', d => ({ text:`Investigasi mengalami kendala internal: ${String(d.payload?.error || 'unknown error').slice(0,180)}.`, kind:'blocked' })]
     ]);
     let lastSemantic = '';

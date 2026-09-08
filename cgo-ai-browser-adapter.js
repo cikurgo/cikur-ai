@@ -2,17 +2,18 @@
  * Binds the V5.2 active-investigation brain to the existing BCGO / Medicine contracts.
  * No external AI/API. No source mutation. Medicine remains proof authority.
  */
-import * as Core from "./cgo-ai-core.js?v=20260907-2030-constitution-natural2";
-import * as Knowledge from "./cgo-ai-knowledge.js?v=20260907-2030-constitution-natural2";
-import * as Investigator from "./cgo-ai-investigator.js?v=20260907-2030-constitution-natural2";
-import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js?v=20260907-2030-constitution-natural2";
-import * as Cognition from "./cgo-ai-cognition.js?v=20260907-2030-constitution-natural2";
+import * as Core from "./cgo-ai-core.js?v=20260907-0900-constitution-connectivity1";
+import * as Knowledge from "./cgo-ai-knowledge.js?v=20260907-0900-constitution-connectivity1";
+import * as Investigator from "./cgo-ai-investigator.js?v=20260907-0900-constitution-connectivity1";
+import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js?v=20260907-0900-constitution-connectivity1";
+import * as Cognition from "./cgo-ai-cognition.js?v=20260907-0900-constitution-connectivity1";
 import * as Instruction from "./cgo-instruction.js";
-import * as Logic from "./cgo-ai-logic.js?v=20260907-2030-constitution-natural2";
-import * as Memory from "./cgo-ai-memory.js?v=20260907-2030-constitution-natural2";
-import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260907-2030-constitution-natural2";
+import * as Logic from "./cgo-ai-logic.js?v=20260907-0900-constitution-connectivity1";
+import * as Memory from "./cgo-ai-memory.js?v=20260907-0900-constitution-connectivity1";
+import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260907-0900-constitution-connectivity1";
 
 const VERSION = "V5.6.1-BROWSER-BRIDGE-3.7.1-CONSTITUTION-NATURAL";
+const INTERNAL_PROBE_FETCH_TIMEOUT = 8000;
 const INTERNAL_AUTO_POLICY = Object.freeze({
   version:"CIKUR-INTERNAL-AUTO-1",
   allowAutomaticExecution:true,
@@ -503,22 +504,34 @@ function investigationFiles(state) {
   return [];
 }
 
-function createInternalProbeProvider(state) {
+function createInternalProbeProvider(state, progress = null) {
   return {
     get sourceSurfaceComplete() {
       const live = getLiveBCGOState(state);
       return live?.sourceScan?.status === "CLEAN" || live?.sourceScan?.status === "FINDINGS";
     },
     async listFiles() { return investigationFiles(state); },
+    reportProgress(detail) {
+      try { if (typeof progress === "function") progress(detail || {}); } catch {}
+    },
     async readSource(file) {
       const normalized = normalizeFile(file);
       if (!normalized) throw new Error("SOURCE_FILE_REQUIRED");
-      const url = new URL(normalized, window.location.href).href;
-      const response = await fetch(url, {method:"GET", cache:"no-store", credentials:"same-origin"});
-      if (!response.ok) throw new Error(`SOURCE_READ_HTTP_${response.status}:${normalized}`);
-      const source = await response.text();
-      if (!source.trim()) throw new Error(`SOURCE_EMPTY:${normalized}`);
-      return {file:normalized, source, fingerprint:Core.contentFingerprint(source)};
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), INTERNAL_PROBE_FETCH_TIMEOUT);
+      try {
+        const url = new URL(normalized, window.location.href).href;
+        const response = await fetch(url, {method:"GET", cache:"no-store", credentials:"same-origin", signal:controller.signal});
+        if (!response.ok) throw new Error(`SOURCE_READ_HTTP_${response.status}:${normalized}`);
+        const source = await response.text();
+        if (!source.trim()) throw new Error(`SOURCE_EMPTY:${normalized}`);
+        return {file:normalized, source, fingerprint:Core.contentFingerprint(source)};
+      } catch (err) {
+        if (err?.name === "AbortError") throw new Error(`SOURCE_READ_TIMEOUT:${normalized}`);
+        throw err;
+      } finally {
+        clearTimeout(timer);
+      }
     }
   };
 }
@@ -545,7 +558,19 @@ async function runActiveInvestigation(caseId, state) {
   const startRevision = Number(current.revision ?? 0);
   const engine = getActiveEngine(caseId, current);
   if (engine.state?.status !== "ACTIVE") return;
-  const provider = createInternalProbeProvider(state);
+  const provider = createInternalProbeProvider(state, detail => {
+    emitBrainEvent(caseId, "ACTIVE_INVESTIGATION_PROGRESS", {
+      step: Number(detail?.step || 0),
+      probe: {type: detail?.type || "SOURCE_READ"},
+      substep: detail?.substep || null,
+      currentFile: detail?.currentFile || null,
+      currentIndex: Number(detail?.currentIndex || 0),
+      totalFiles: Number(detail?.totalFiles || 0),
+      evidenceCount: 0,
+      caseState: runtime.getCase(caseId)?.state || null,
+      investigationStatus: "ACTIVE"
+    });
+  });
   const runPromise = (async () => {
     try {
       const out = await engine.run(current, provider, knowledge, {
@@ -645,7 +670,19 @@ async function runActiveInvestigation(caseId, state) {
       latest = compatibleSnapshot(caseId, "ACTIVE_INVESTIGATION");
       try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-state", {detail:latest})); } catch {}
     } catch (err) {
-      emitBrainEvent(caseId, "ACTIVE_INVESTIGATION_ERROR", {error:String(err?.message || err)});
+      const error = String(err?.message || err);
+      emitBrainEvent(caseId, "ACTIVE_INVESTIGATION_ERROR", {error, nextAction:"RETRY_INVESTIGATION"});
+      emitBrainEvent(caseId, "ACTIVE_INVESTIGATION_COMPLETED", {
+        phase:"INVESTIGATION_INCOMPLETE",
+        status:"ERROR",
+        conclusion:`Investigasi berhenti karena probe internal mengalami kendala: ${error}. Saya tidak akan mengarang hasil.`,
+        nextAction:"RETRY_INVESTIGATION",
+        blockers:[error],
+        target:normalizeFile(runtime.getCase(caseId)?.exactSource?.file || runtime.getCase(caseId)?.target) || "target",
+        rootCauseVerified:!!runtime.getCase(caseId)?.rootCause,
+        exactSourceVerified:!!runtime.getCase(caseId)?.exactSource,
+        solutionReady:false
+      });
     } finally {
       activeRuns.delete(caseId);
       const latestCase = runtime.getCase(caseId);

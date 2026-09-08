@@ -21,6 +21,9 @@ import * as Memory from "./cgo-ai-memory.js?v=20260907-0900-constitution-connect
 import * as RuntimeAdapter from "./cgo-ai-runtime-adapter.js?v=20260907-0900-constitution-connectivity1";
 import * as BrowserBridge from "./cgo-ai-browser-adapter.js?v=20260907-0900-constitution-connectivity1";
 import * as Instruction from "./cgo-instruction.js";
+import * as Sovereignty from "./cgo-ai-sovereignty.js";
+import * as CaptainState from "./cgo-ai-state-machine.js";
+import * as EvidenceLedger from "./cgo-ai-evidence-ledger.js";
 
 export const VERSION = "V5.2.6-MASTER-RUNTIME-CONVERSATION-GATEWAY";
 export const ARCHITECTURE = "CGO_INTERNAL_BRAIN_MASTER_GATEWAY";
@@ -41,7 +44,10 @@ export {
   Memory,
   RuntimeAdapter,
   BrowserBridge,
-  Instruction
+  Instruction,
+  Sovereignty,
+  CaptainState,
+  EvidenceLedger
 };
 
 /*
@@ -69,8 +75,12 @@ export function getBrainManifest() {
       memory: Memory.VERSION,
       runtimeAdapter: RuntimeAdapter.VERSION,
       browserBridge: BrowserBridge.VERSION,
-      instruction: Instruction.VERSION
+      instruction: Instruction.VERSION,
+      sovereignty: Sovereignty.VERSION,
+      captainState: CaptainState.VERSION,
+      evidenceLedger: EvidenceLedger.VERSION
     }),
+    sovereignty: Sovereignty.getSovereigntyManifest(),
     policy: Object.freeze({
       externalAI: false,
       automaticSourceMutation: false,
@@ -97,7 +107,10 @@ export function createMasterRuntime(options = {}) {
       Knowledge,
       Guardian,
       Memory,
-      RuntimeAdapter
+      RuntimeAdapter,
+      Sovereignty,
+      CaptainState,
+      EvidenceLedger
     },
     browser: {
       install,

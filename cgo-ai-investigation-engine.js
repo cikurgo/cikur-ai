@@ -487,11 +487,16 @@ export function createInvestigationEngine(caseData, knowledge={}, options={}) {
     if(type === "SOURCE_CONNECTIVITY") {
       const listed = unique(await provider.listFiles());
       const sourceMap = {};
-      for (const file of listed.slice(0, options.maxFiles || MAX_FILES_DEFAULT)) {
+      const limitedFiles = listed.slice(0, options.maxFiles || MAX_FILES_DEFAULT);
+      for (let i = 0; i < limitedFiles.length; i++) {
+        const file = limitedFiles[i];
         try {
+          provider.reportProgress?.({type:"SOURCE_CONNECTIVITY",substep:"READ",currentFile:file,currentIndex:i+1,totalFiles:limitedFiles.length});
           const r = await provider.readSource(file);
           if (r && typeof r.source === "string") sourceMap[normalizeFile(file)] = r.source;
-        } catch {}
+        } catch (err) {
+          provider.reportProgress?.({type:"SOURCE_CONNECTIVITY",substep:"READ_FAILED",currentFile:file,currentIndex:i+1,totalFiles:limitedFiles.length,error:String(err?.message || err)});
+        }
       }
       const connectivity = connectivityFindings(sourceMap, listed);
       const targetFile = normalizeFile(probeRequest.file || currentCase.target);

@@ -47,6 +47,12 @@ function internalAutoPolicy(policy={}) {
     policy.executionMode==="INTERNAL_AUTO";
 }
 
+function humanApprovedPolicy(policy={}) {
+  return policy.version===INTERNAL_AUTO_POLICY &&
+    policy.executionMode==="HUMAN_APPROVED" &&
+    policy.humanApprovalVerified===true;
+}
+
 export function authorizeAction(input={}) {
   const risk=input.knowledge ? classifyRiskWithGraph(input,input.knowledge) : classifyRisk(input);
   const verified=!!input.rootCauseVerified && !!input.sourceVerified && !!input.exactFingerprint;
@@ -64,11 +70,11 @@ export function authorizeAction(input={}) {
   if(!sourceIntegrity)
     return {decision:"BLOCKED",risk,reason:"SOURCE_INTEGRITY_BINDING_REQUIRED",policyVersion:policy.version||INTERNAL_AUTO_POLICY};
 
-  if(!internalAutoPolicy(policy))
-    return {decision:"BLOCKED",risk,reason:"INTERNAL_AUTO_POLICY_REQUIRED",policyVersion:policy.version||INTERNAL_AUTO_POLICY};
+  if(!internalAutoPolicy(policy) && !humanApprovedPolicy(policy))
+    return {decision:"BLOCKED",risk,reason:"EXECUTION_AUTHORIZATION_POLICY_REQUIRED",policyVersion:policy.version||INTERNAL_AUTO_POLICY};
 
   return {
-    decision:"AUTO_ALLOWED",
+    decision:internalAutoPolicy(policy) ? "AUTO_ALLOWED" : "HUMAN_AUTHORIZED",
     risk,
     reason:risk==="CRITICAL" || risk==="HIGH"
       ? "VERIFIED_INTERNAL_AUTO_POLICY_ALLOWED_HIGH_ASSURANCE"
