@@ -1079,7 +1079,8 @@ runAutonomousEngine(state => {
 </script>
 
 <script>
-/* CGO Captain presentation bridge. Only consumes real BCGO/Medicine/Executor packets. */
+/* CGO Captain presentation bridge. Only consumes real BCGO/Medicine/Executor packets.
+   Anti-race: semantic dedupe + coalesce + chat cap. Status noise stays out of chat. */
 (() => {
   const $ = id => document.getElementById(id);
   const captainChat = $('captain-chat');
@@ -1095,47 +1096,150 @@ runAutonomousEngine(state => {
   const afterEl = $('captain-after');
   const bridgeKey = 'CIKUR_GO_BCGO_MEDICINE_V1';
   const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(bridgeKey) : null;
+
+  const MAX_BUBBLES = 12;
+  const COALESCE_MS = 12000;
+  const STATUS_NOISE = new Set([
+    'executor_state', 'captain_state_projection_blocked', 'investigation_blocked',
+    'waiting', 'reviewing', 'received', 'live', 'stale', 'queued'
+  ]);
+
   let greeted = false;
-  let lastTeamPacket = '';
   let latestState = null;
+  let lastCaptainSemantic = '';
+  const seenPacketIds = new Set();
+  const recentSemantics = new Map();
 
   const esc = v => String(v ?? '-').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
   const time = v => { try { const d = new Date(v || Date.now()); return d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); } catch { return '--:--:--'; } };
 
-  function bubble(root, who, text, tone='cyan') {
-    if (!root || !text) return;
+  function pruneChat(root) {
+    if (!root) return;
+    while (root.children.length > MAX_BUBBLES) root.removeChild(root.firstElementChild);
+  }
+
+  function bubble(root, who, text, tone='cyan', { replaceLast = false } = {}) {
+    if (!root || !text) return null;
+    if (replaceLast && root.lastElementChild) {
+      const row = root.lastElementChild;
+      row.innerHTML = `<div class="flex justify-between gap-2 text-[9px] uppercase opacity-70"><span>${esc(who)}</span><span>${esc(time())}</span></div><div class="text-xs mt-1 whitespace-pre-line">${esc(text)}</div>`;
+      root.scrollTop = root.scrollHeight;
+      return row;
+    }
     const row = document.createElement('div');
     const cls = tone === 'violet' ? 'border-violet-900 bg-violet-950/20 text-violet-100' : tone === 'amber' ? 'border-amber-900 bg-amber-950/20 text-amber-100' : 'border-cyan-900 bg-cyan-950/20 text-cyan-100';
     row.className = 'border rounded-lg px-3 py-2 ' + cls;
     row.innerHTML = `<div class="flex justify-between gap-2 text-[9px] uppercase opacity-70"><span>${esc(who)}</span><span>${esc(time())}</span></div><div class="text-xs mt-1 whitespace-pre-line">${esc(text)}</div>`;
-    root.appendChild(row); root.scrollTop = root.scrollHeight;
+    root.appendChild(row);
+    pruneChat(root);
+    root.scrollTop = root.scrollHeight;
+    return row;
+  }
+
+  function normalizeMsg(raw) {
+    return String(raw || '').replace(/\s+/g, ' ').trim().slice(0, 220).toLowerCase();
+  }
+
+  function isNoiseMessage(msg) {
+    const m = normalizeMsg(msg);
+    if (!m) return true;
+    if (STATUS_NOISE.has(m)) return true;
+    if (/^(executor_state|captain_state_projection_blocked|investigation_blocked)(\s|$)/i.test(m)) return true;
+    if (/^laporan medicine diterima:\s*(executor_state|captain_state_projection_blocked|investigation_blocked)/i.test(m)) return true;
+    return false;
+  }
+
+  function rememberSemantic(key, now) {
+    recentSemantics.set(key, now);
+    if (recentSemantics.size > 80) {
+      const cutoff = now - COALESCE_MS * 3;
+      for (const [k, t] of [...recentSemantics]) {
+        if (t < cutoff) recentSemantics.delete(k);
+      }
+    }
+  }
+
+  function isDuplicateSemantic(key, now) {
+    const prev = recentSemantics.get(key);
+    if (prev != null && (now - prev) < COALESCE_MS) return true;
+    rememberSemantic(key, now);
+    return false;
   }
 
   function captainGreeting(state) {
     if (greeted || !state) return;
     greeted = true;
-    status.textContent = 'LIVE'; status.className = 'text-[9px] code-font px-2 py-1 rounded border border-emerald-800 text-emerald-300';
-    captainOnline.textContent = 'ONLINE • INTERNAL'; captainOnline.className = 'text-[9px] code-font text-emerald-300';
-    bubble(captainChat, 'CGO • KAPTEN', 'Hallo,, BCGO, MEDICINE dan EXECUTOR,\nTolong update Kalian sedang mengerjakan apa?', 'cyan');
-    bubble(captainChat, 'CGO • STATE', `Saya membaca BCGO_STATE cycle #${state.cycle ?? '-'} • tahap ${state.step ?? '-'} • target ${state.lastTelemetryFile || state.targetCell || '-'} . Saya menunggu laporan aktual tim sebelum menentukan langkah berikutnya.`);
+    if (status) {
+      status.textContent = 'LIVE';
+      status.className = 'text-[9px] code-font px-2 py-1 rounded border border-emerald-800 text-emerald-300';
+    }
+    if (captainOnline) {
+      captainOnline.textContent = 'ONLINE • INTERNAL';
+      captainOnline.className = 'text-[9px] code-font text-emerald-300';
+    }
+    if (captainChat) captainChat.innerHTML = '';
+    bubble(captainChat, 'CGO • KAPTEN', 'Hallo, BCGO, MEDICINE dan EXECUTOR,\nTolong update kalian sedang mengerjakan apa?', 'cyan');
+    bubble(captainChat, 'CGO • STATE', `Saya membaca BCGO_STATE cycle #${state.cycle ?? '-'} • tahap ${state.step ?? '-'} • target ${state.lastTelemetryFile || state.targetCell || '-'}. Saya menunggu laporan aktual tim sebelum menentukan langkah berikutnya.`);
   }
 
   function handleTeam(packet) {
     if (!packet || packet.bridge !== bridgeKey) return;
     if (packet.from !== 'MEDICINE' && packet.from !== 'EXECUTION') return;
-    const key = String(packet.id || `${packet.from}:${packet.type}:${packet.at}:${packet.caseId || ''}`);
-    if (key === lastTeamPacket) return;
-    lastTeamPacket = key;
-    teamOnline.textContent = 'LIVE • ' + packet.from; teamOnline.className = 'text-[9px] code-font text-emerald-300';
+
+    const now = Date.now();
+    const packetId = String(packet.id || `${packet.from}:${packet.type}:${packet.at}:${packet.caseId || ''}`);
+    if (seenPacketIds.has(packetId)) return;
+    seenPacketIds.add(packetId);
+    if (seenPacketIds.size > 250) {
+      const first = seenPacketIds.values().next().value;
+      seenPacketIds.delete(first);
+    }
+
+    if (teamOnline) {
+      teamOnline.textContent = 'LIVE • ' + packet.from;
+      teamOnline.className = 'text-[9px] code-font text-emerald-300';
+    }
+
     const who = packet.from === 'MEDICINE' ? 'MEDICINE' : 'EXECUTOR';
-    const msg = packet.message || packet.review?.reason || (packet.type === 'EXECUTION_INVESTIGATION_ACK' ? 'Saya menerima sesi investigasi dan sedang melakukan review deterministic.' : packet.type || 'Laporan diterima.');
+    const rawMsg = packet.message || packet.review?.reason || packet.medicineEvent || packet.type || 'Laporan diterima.';
+    const msg = String(rawMsg).slice(0, 400);
+    const semantic = `${packet.from}|${normalizeMsg(msg)}|${packet.type || ''}|${packet.caseId || ''}`;
+
+    // Noise / intermediate machine status: update decision panel only, no chat flood.
+    if (isNoiseMessage(msg)) {
+      if (decisionText) {
+        decisionText.textContent = packet.from === 'MEDICINE'
+          ? `Medicine status: ${msg}. CGO menahan candidate sampai proof chain lengkap.`
+          : `Executor status: ${msg}.`;
+      }
+      if (decisionStatus && /blocked/i.test(msg)) {
+        decisionStatus.textContent = 'PROOF BELUM LENGKAP';
+        decisionStatus.className = 'text-[9px] code-font text-amber-400';
+      }
+      return;
+    }
+
+    if (isDuplicateSemantic(semantic, now)) {
+      if (teamChat?.lastElementChild) {
+        bubble(teamChat, who, msg, 'violet', { replaceLast: true });
+      }
+      return;
+    }
+
     bubble(teamChat, who, msg, 'violet');
 
-    if (packet.from === 'MEDICINE') {
-      bubble(captainChat, 'CGO • MENERIMA MEDICINE', `Laporan Medicine diterima: ${msg}`);
-      decisionText.textContent = 'CGO sedang menilai laporan Medicine bersama BCGO_STATE. Belum ada kandidat perubahan yang boleh ditampilkan tanpa proof.';
-    } else {
-      bubble(captainChat, 'CGO • MENERIMA EXECUTOR', `Laporan Executor diterima: ${msg}`);
+    const captainLine = packet.from === 'MEDICINE'
+      ? `Laporan Medicine diterima: ${msg}`
+      : `Laporan Executor diterima: ${msg}`;
+    const captainSemantic = `captain|${normalizeMsg(captainLine)}`;
+    if (!isDuplicateSemantic(captainSemantic, now) && captainSemantic !== lastCaptainSemantic) {
+      lastCaptainSemantic = captainSemantic;
+      bubble(captainChat, packet.from === 'MEDICINE' ? 'CGO • MENERIMA MEDICINE' : 'CGO • MENERIMA EXECUTOR', captainLine, 'cyan');
+      if (decisionText) {
+        decisionText.textContent = packet.from === 'MEDICINE'
+          ? 'CGO sedang menilai laporan Medicine bersama BCGO_STATE. Belum ada kandidat perubahan yang boleh ditampilkan tanpa proof.'
+          : 'CGO menerima laporan Executor. Source tidak disentuh tanpa proof + persetujuan.';
+      }
     }
   }
 
@@ -1145,19 +1249,36 @@ runAutonomousEngine(state => {
     try { handleTeam(JSON.parse(e.newValue)); } catch {}
   });
 
+  let lastProofSignature = '';
   window.addEventListener('cikur-internal-ai-state', e => {
     const d = e.detail || {};
     const proof = d.reasoning?.precisionGate || {};
     const proposal = d.reasoning?.proposal || d.proposal || null;
+    const blockers = Array.isArray(proof.blockers) ? proof.blockers.slice(0, 4).join(',') : '';
+    const sig = `${proof.pass === true}|${!!(proposal?.before != null && proposal?.after != null)}|${blockers}`;
+    if (sig === lastProofSignature) return;
+    lastProofSignature = sig;
+
     if (proof.pass === true && proposal?.before != null && proposal?.after != null) {
-      decisionStatus.textContent = 'CANDIDATE SIAP • MENUNGGU MANUSIA';
-      decisionStatus.className = 'text-[9px] code-font text-emerald-300';
-      decisionText.textContent = 'Proof internal menyatakan candidate siap. CGO menampilkan BEFORE → AFTER dan menunggu persetujuan manusia.';
-      beforeEl.textContent = proposal.before; afterEl.textContent = proposal.after;
-      codePanel.classList.remove('hidden'); humanGate.classList.remove('hidden');
+      if (decisionStatus) {
+        decisionStatus.textContent = 'CANDIDATE SIAP • MENUNGGU MANUSIA';
+        decisionStatus.className = 'text-[9px] code-font text-emerald-300';
+      }
+      if (decisionText) decisionText.textContent = 'Proof internal menyatakan candidate siap. CGO menampilkan BEFORE → AFTER dan menunggu persetujuan manusia.';
+      if (beforeEl) beforeEl.textContent = proposal.before;
+      if (afterEl) afterEl.textContent = proposal.after;
+      codePanel?.classList.remove('hidden');
+      humanGate?.classList.remove('hidden');
     } else {
-      decisionStatus.textContent = proof.pass === true ? 'PROOF LENGKAP • CANDIDATE BELUM TERSEDIA' : 'PROOF BELUM LENGKAP';
-      decisionText.textContent = proof.blockers?.length ? `CGO menahan perubahan. Blocker: ${proof.blockers.slice(0,3).join(', ')}` : 'CGO belum menerima proof lengkap untuk menampilkan kandidat perubahan. Source tidak disentuh.';
+      if (decisionStatus) {
+        decisionStatus.textContent = proof.pass === true ? 'PROOF LENGKAP • CANDIDATE BELUM TERSEDIA' : 'PROOF BELUM LENGKAP';
+        decisionStatus.className = 'text-[9px] code-font text-amber-400';
+      }
+      if (decisionText) {
+        decisionText.textContent = proof.blockers?.length
+          ? `CGO menahan perubahan. Blocker: ${proof.blockers.slice(0, 3).join(', ')}`
+          : 'CGO belum menerima proof lengkap untuk menampilkan kandidat perubahan. Source tidak disentuh.';
+      }
     }
   });
 
