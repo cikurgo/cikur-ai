@@ -133,6 +133,34 @@ body{font-family:'Inter',sans-serif}
       <button id="captain-reject" type="button" class="px-3 py-2 rounded-lg bg-rose-800 text-xs font-semibold">TOLAK & INVESTIGASI ULANG</button>
     </div>
   </div>
+
+  <!-- FULL CODE • BCGO ↔ CGO — persistent transparency workbench -->
+  <section id="bcgo-full-code-workbench" class="bg-slate-900 border border-cyan-900/70 rounded-xl p-5 space-y-3 shadow-lg">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <div class="text-xs font-semibold text-cyan-300 uppercase tracking-wider">🧬 FULL CODE • BCGO ↔ CGO</div>
+        <div class="text-[10px] text-slate-500 mt-1">Viewer source nyata untuk melihat proses, evidence, ORIGINAL, dan PROPOSED. Panel ini tidak mengubah source.</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="bcgo-wb-status" class="text-[9px] code-font px-2 py-1 rounded border border-slate-700 text-slate-400">WAITING</span>
+        <button id="bcgo-wb-refresh" type="button" class="rounded-lg border border-slate-700 px-3 py-1.5 text-[9px] text-slate-300">REFRESH VIEW</button>
+        <button id="bcgo-wb-copy" type="button" disabled class="rounded-lg border border-slate-700 px-3 py-1.5 text-[9px] text-slate-500">COPY PROPOSED</button>
+      </div>
+    </div>
+    <div id="bcgo-wb-file" class="text-[10px] text-cyan-200 code-font">Target source belum tersedia.</div>
+    <div id="bcgo-wb-meta" class="text-[9px] text-slate-400 code-font border-y border-slate-800 py-2">Menunggu paket source-bound dari internal CGO.</div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div class="min-w-0 border border-cyan-900/60 rounded-lg overflow-hidden bg-slate-950">
+        <div class="px-3 py-2 text-[9px] font-bold text-cyan-300 border-b border-slate-800">ORIGINAL • FULL SOURCE AKTUAL</div>
+        <pre id="bcgo-wb-original" class="cgo-wb-code text-slate-300 max-h-[520px] overflow-auto">Source belum tersedia.</pre>
+      </div>
+      <div class="min-w-0 border border-emerald-900/60 rounded-lg overflow-hidden bg-slate-950">
+        <div class="px-3 py-2 text-[9px] font-bold text-emerald-300 border-b border-slate-800">PROPOSED • FULL SOURCE SETELAH PERBAIKAN</div>
+        <pre id="bcgo-wb-proposed" class="cgo-wb-code text-slate-300 max-h-[520px] overflow-auto">Belum ada candidate. CGO tidak mengarang AFTER sebelum proof/candidate tersedia.</pre>
+      </div>
+    </div>
+    <div id="bcgo-wb-finding" class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-3 text-[10px] text-slate-300">TEMUAN / KONTEKS: menunggu evidence source.</div>
+  </section>
 </section>
 
 <section class="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -1002,16 +1030,51 @@ runAutonomousEngine(state => {
  const $=id=>document.getElementById(id); const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
  const lineCode=code=>String(code??'').split(/\r?\n/).map((x,i)=>String(i+1).padStart(5,'0')+'  '+x).join('\n');
  let latestWorkbench=null;
- window.addEventListener('cgo-code-workbench',e=>{const d=e.detail||{};latestWorkbench=d;const box=$('cgo-code-workbench');if(!box)return;box.classList.add('open');box.setAttribute('aria-hidden','false');$('cgo-wb-file').textContent=d.file||'-';
-   const provenance=d.proposed?.fullSource?'FULL PROPOSED SOURCE • SOURCE-BOUND':'SNIPPET ONLY • FULL PROPOSED SOURCE NOT PROVEN';
+ window.addEventListener('cgo-code-workbench',e=>{const d=e.detail||{};latestWorkbench=d;const provenance=d.proposed?.fullSource?'FULL PROPOSED SOURCE • SOURCE-BOUND':'SNIPPET ONLY • FULL PROPOSED SOURCE NOT PROVEN';const box=$('cgo-code-workbench');if(!box)return;box.classList.add('open');box.setAttribute('aria-hidden','false');$('cgo-wb-file').textContent=d.file||'-';
    $('cgo-wb-meta').textContent=d.status==='SOURCE_READ'?`ORIGINAL ${d.original?.lines||0} lines • ${d.original?.bytes||0} bytes • fingerprint ${d.original?.fingerprint||'-'} • PROPOSED ${d.proposed?.lines||0} lines • proposed fingerprint ${d.proposed?.fingerprint||'-'} • ${provenance}${d.sourceIntegrity?.match===false?' • CANDIDATE ORIGINAL FINGERPRINT MISMATCH — REVIEW':''}`:`STATUS ${d.status||'UNKNOWN'} • ${d.error||''}`;
    $('cgo-wb-original').textContent=d.original?.code?lineCode(d.original.code):'Source belum tersedia.';
    $('cgo-wb-proposed').textContent=d.proposed?.code?lineCode(d.proposed.code):'Belum ada candidate. CGO tidak mengarang AFTER sebelum proof/candidate tersedia.';
    const ranges=Array.isArray(d.proposed?.changedRanges)&&d.proposed.changedRanges.length?`<br><b class="text-cyan-300">MAPPING:</b> ${esc(JSON.stringify(d.proposed.changedRanges))}`:'';
+   const provenance=d.proposed?.fullSource?'FULL PROPOSED SOURCE • SOURCE-BOUND':'SNIPPET ONLY • FULL PROPOSED SOURCE NOT PROVEN';
    const f=d.finding?.statement||d.explanation||d.command||''; $('cgo-wb-finding').innerHTML=(f?'<b class="text-amber-300">TEMUAN / KONTEKS</b><br>'+esc(f):'Belum ada temuan yang diklaim.')+ranges;
  });
  $('cgo-wb-copy')?.addEventListener('click',async()=>{const code=latestWorkbench?.proposed?.code;if(!code)return;try{await navigator.clipboard.writeText(code);$('cgo-wb-copy').textContent='COPIED';setTimeout(()=>{$('cgo-wb-copy').textContent='COPY PROPOSED'},1200)}catch{$('cgo-wb-copy').textContent='COPY GAGAL'}});
  $('cgo-wb-close')?.addEventListener('click',()=>{$('cgo-code-workbench')?.classList.remove('open');$('cgo-code-workbench')?.setAttribute('aria-hidden','true')});
+})();
+</script>
+
+<script>
+/* Persistent Full Code transparency panel. Consumes the same real workbench packet as the modal. */
+(() => {
+  const $ = id => document.getElementById(id);
+  const lineCode = code => String(code ?? '').split(/\r?\n/).map((x,i)=>String(i+1).padStart(5,'0')+'  '+x).join('\n');
+  let latest = null;
+  const render = d => {
+    latest = d || null;
+    const status = $('bcgo-wb-status'), file = $('bcgo-wb-file'), meta = $('bcgo-wb-meta');
+    const original = $('bcgo-wb-original'), proposed = $('bcgo-wb-proposed'), finding = $('bcgo-wb-finding'), copy = $('bcgo-wb-copy');
+    if (!d) return;
+    const isRead = d.status === 'SOURCE_READ';
+    const fullProposed = d.proposed?.fullSource === true && typeof d.proposed?.code === 'string' && d.proposed.code.length > 0;
+    if (status) { status.textContent = d.status || 'UNKNOWN'; status.className = `text-[9px] code-font px-2 py-1 rounded border ${fullProposed ? 'border-emerald-800 text-emerald-300' : isRead ? 'border-cyan-800 text-cyan-300' : 'border-amber-800 text-amber-300'}`; }
+    if (file) file.textContent = d.file || 'Target source belum tersedia.';
+    if (meta) meta.textContent = isRead ? `ORIGINAL ${d.original?.lines || 0} lines • ${d.original?.bytes || 0} bytes • fingerprint ${d.original?.fingerprint || '-'} • PROPOSED ${d.proposed?.lines || 0} lines • proposed fingerprint ${d.proposed?.fingerprint || '-'} • ${fullProposed ? 'FULL PROPOSED SOURCE • SOURCE-BOUND' : 'SNIPPET ONLY • FULL PROPOSED SOURCE NOT PROVEN'}${d.sourceIntegrity?.match === false ? ' • CANDIDATE ORIGINAL FINGERPRINT MISMATCH — REVIEW' : ''}` : `STATUS ${d.status || 'UNKNOWN'} • ${d.error || ''}`;
+    if (original) original.textContent = d.original?.code ? lineCode(d.original.code) : 'Source belum tersedia.';
+    if (proposed) proposed.textContent = d.proposed?.code ? lineCode(d.proposed.code) : 'Belum ada candidate. CGO tidak mengarang AFTER sebelum proof/candidate tersedia.';
+    const ranges = Array.isArray(d.proposed?.changedRanges) && d.proposed.changedRanges.length ? `\nMAPPING: ${JSON.stringify(d.proposed.changedRanges)}` : '';
+    if (finding) finding.textContent = `${d.finding?.statement || d.explanation || d.command || 'TEMUAN / KONTEKS: belum ada temuan yang diklaim.'}${ranges}`;
+    if (copy) { copy.disabled = !fullProposed; copy.className = `rounded-lg border px-3 py-1.5 text-[9px] ${fullProposed ? 'border-emerald-800 text-emerald-300' : 'border-slate-700 text-slate-500'}`; }
+  };
+  window.addEventListener('cgo-code-workbench', e => render(e.detail || {}));
+  $('bcgo-wb-copy')?.addEventListener('click', async () => {
+    const code = latest?.proposed?.fullSource === true ? latest.proposed.code : '';
+    if (!code) return;
+    try { await navigator.clipboard.writeText(code); const b = $('bcgo-wb-copy'); if (b) { b.textContent = 'COPIED'; setTimeout(() => { b.textContent = 'COPY PROPOSED'; }, 1200); } } catch { const b = $('bcgo-wb-copy'); if (b) b.textContent = 'COPY GAGAL'; }
+  });
+  $('bcgo-wb-refresh')?.addEventListener('click', () => {
+    if (latest) render(latest);
+    else { const status = $('bcgo-wb-status'); if (status) status.textContent = 'WAITING'; }
+  });
 })();
 </script>
 
@@ -1112,9 +1175,8 @@ runAutonomousEngine(state => {
   });
 
   $('captain-open-workbench')?.addEventListener('click', () => {
-    const file = latestState?.lastTelemetryFile || null;
-    const runtime = window.CIKURInternalAIRuntime;
-    if (file && runtime?.openCodeWorkbench) runtime.openCodeWorkbench(file, { caseId: latestState?.caseId || undefined });
+    const file = latestState?.lastTelemetryFile || latestState?.targetCell || null;
+    if (file && window.BCGOBrain?.openCodeWorkbench) window.BCGOBrain.openCodeWorkbench(file, { caseId: latestState?.caseId || undefined });
     else bubble(captainChat, 'CGO • WORKBENCH', 'Belum ada target source live yang dapat dibuka. Saya tidak akan membuat Full Code dari tebakan.', 'amber');
   });
 
