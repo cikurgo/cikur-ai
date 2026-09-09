@@ -366,17 +366,49 @@ function emit(event, data = {}) {
   window.dispatchEvent(new CustomEvent("bcgo:medicine", {
     detail: { event, at: now(), ...data }
   }));
-  if (!String(event).startsWith("bcgo_bridge_")) publishMedicineState(event, data);
+  // CAPTAIN BRIDGE QUIET MODE (v3.4.1):
+  // Presence/heartbeat and intermediate probe chatter must NOT flood Captain chat.
+  // Only material progress, blockers, candidates, and human-gate outcomes reach the bridge.
+  const CAPTAIN_BRIDGE_EVENTS = new Set([
+    "ready",
+    "case_created",
+    "case_updated",
+    "bcgo_case_handoff",
+    "verification_complete",
+    "patch_proposed",
+    "execution_review_started",
+    "execution_review_complete",
+    "execution_review_received",
+    "execution_approval_sent",
+    "investigation_decision",
+    "investigation_ack_received",
+    "validation_complete",
+    "captain_state_projection_blocked",
+    "execution_authorization_blocked"
+  ]);
+  const ev = String(event || "");
+  if (ev.startsWith("bcgo_bridge_")) return;
+  if (data && data.presenceOnly) return;
+  if (!CAPTAIN_BRIDGE_EVENTS.has(ev)) return;
+  // Coalesce status-only case_updated without candidate/proof change
+  if (ev === "case_updated" && data?.case && !data.case.patchProposal && !data.case.repairPlan?.precisionGate) {
+    const st = String(data.case.status || "");
+    if (st === "INVESTIGATING" || st === "DIAGNOSED") return;
+  }
+  publishMedicineState(event, data);
 }
 
 function startMedicineBridgePresence() {
   if (window.__BCGO_MEDICINE_PRESENCE_TIMER) return;
-  const pulse = () => publishMedicineState(S.human.uid ? "AUTHENTICATED" : "AUTH_WAITING", {
-    message: S.human.uid
-      ? "Medicine bridge online; Admin session active."
-      : "Medicine bridge online; menunggu autentikasi Admin.",
-    presenceOnly: true
-  });
+  const pulse = () => {
+    // Presence is local-only; do not spam Captain chat/bridge EVENT key.
+    try {
+      localStorage.setItem(`${MEDICINE_BRIDGE_KEY}_PRESENCE`, JSON.stringify({
+        bridge: MEDICINE_BRIDGE_KEY, from: "MEDICINE", type: "MEDICINE_PRESENCE",
+        at: Date.now(), auth: !!S.human.uid
+      }));
+    } catch {}
+  };
   window.__BCGO_MEDICINE_PRESENCE_TIMER = setInterval(pulse, MEDICINE_PRESENCE_INTERVAL);
   pulse();
 }
@@ -397,6 +429,14 @@ function publishExecutionCandidate(packet) {
 function publishInvestigationRequest(c, phase = "INVESTIGATING", extra = {}) {
   if (!c?.id) return null;
   if (!c.investigationSessionId) c.investigationSessionId = `INV-${uid().toUpperCase()}`;
+  // Deduplicate identical phase spam to Captain/Executor (anti-race)
+  const phaseKey = `${c.id}|${String(phase || "").toUpperCase()}|${c.rootCauseStatus || ""}|${!!c.repairPlan?.precisionGate}`;
+  if (!c._lastInvPhaseKey) c._lastInvPhaseKey = null;
+  if (!c._lastInvPhaseAt) c._lastInvPhaseAt = 0;
+  const nowMs = Date.now();
+  if (c._lastInvPhaseKey === phaseKey && (nowMs - c._lastInvPhaseAt) < 8000) return null;
+  c._lastInvPhaseKey = phaseKey;
+  c._lastInvPhaseAt = nowMs;
   const message = {
     bridge: MEDICINE_BRIDGE_KEY,
     from: "MEDICINE",
@@ -438,6 +478,10 @@ function publishCaptainResponse(type, data = {}) {
     at: Date.now(),
     caseId: data.caseId || S.activeCase?.id || null,
     message: String(data.message || "").slice(0, 700),
+    // Surface candidate/review/request for Captain Human Gate + workbench
+    candidate: data.candidate || null,
+    review: data.review || null,
+    request: data.request || null,
     medicine: {
       status: S.activeCase?.status || "IDLE",
       caseId: S.activeCase?.id || null,
@@ -452,6 +496,31 @@ function publishCaptainResponse(type, data = {}) {
   try { medicineBridgeChannel?.postMessage(message); } catch {}
   try { localStorage.setItem(MEDICINE_BRIDGE_EVENT_KEY, JSON.stringify(message)); } catch {}
   return message;
+}
+
+
+function handoffValidatedCandidateToCaptain(c, proposal, executionReview) {
+  try {
+    const op0 = proposal?.operations?.[0] || null;
+    publishCaptainResponse("MEDICINE_FINALIZED_FOR_EXECUTION", {
+      caseId: c?.id || null,
+      message: `Candidate VALID. File ${op0?.file || c?.source || "-"}. BEFORE→AFTER exact siap untuk Human Gate di CGO.`,
+      candidate: {
+        caseId: c?.id || null,
+        proposalId: proposal?.proposalId || null,
+        file: op0?.file || c?.source || null,
+        operation: op0?.type || "REPLACE_EXACT",
+        before: op0?.before || null,
+        after: op0?.after || null,
+        originalSource: proposal?.repairPlan?.sourceContext?.originalSource || null,
+        proposedSource: proposal?.repairPlan?.sourceContext?.proposedSource || null,
+        fingerprint: executionReview?.beforeFingerprint || null,
+        evidence: proposal?.repairPlan?.sourceEvidence || c?.sourceEvidence || null
+      },
+      review: executionReview || null,
+      request: executionReview?.requestId ? { requestId: executionReview.requestId } : null
+    });
+  } catch {}
 }
 
 async function handleCaptainDirective(packet, source = "BROADCAST_CHANNEL") {
@@ -861,7 +930,7 @@ async function createLocalSourceFindingCase(finding, sources, scan) {
 
   if (plan.precisionGate) {
     const executionReview=await reviewProposalWithExecutor(c,proposal);proposal.executionReview=executionReview;verification.executionReview=executionReview;c.verification=verification;
-    if (executionReview?.status==='VALID') { proposal.status='READY_FOR_HUMAN_APPROVAL';setMedicineCaseStatus(c, 'READY_FOR_HUMAN_APPROVAL');plan.status='READY_FOR_HUMAN_APPROVAL'; }
+    if (executionReview?.status==='VALID') { proposal.status='READY_FOR_HUMAN_APPROVAL';setMedicineCaseStatus(c, 'READY_FOR_HUMAN_APPROVAL');plan.status='READY_FOR_HUMAN_APPROVAL'; handoffValidatedCandidateToCaptain(c, proposal, executionReview); }
     else { proposal.status='EXECUTION_REVIEW_REJECTED';setMedicineCaseStatus(c, 'INVESTIGATION_BLOCKED');plan.precisionGate=false;plan.status='PATCH_REQUIRES_REVIEW';plan.blockReason=`Execution review belum valid: ${executionReview?.reason||'UNKNOWN'}`; }
   }
   c.patchProposal=proposal;S.patchProposals.unshift(proposal);S.patchProposals=S.patchProposals.slice(0,50);
@@ -1115,7 +1184,7 @@ async function createCrossFileCase(finding, sources, scan) {
   if (plan.precisionGate) {
     const executionReview=await reviewProposalWithExecutor(c,proposal);
     proposal.executionReview=executionReview;verification.executionReview=executionReview;c.verification=verification;
-    if (executionReview?.status === "VALID") { proposal.status="READY_FOR_HUMAN_APPROVAL";setMedicineCaseStatus(c, "READY_FOR_HUMAN_APPROVAL");plan.status="READY_FOR_HUMAN_APPROVAL"; }
+    if (executionReview?.status === "VALID") { proposal.status="READY_FOR_HUMAN_APPROVAL";setMedicineCaseStatus(c, "READY_FOR_HUMAN_APPROVAL");plan.status="READY_FOR_HUMAN_APPROVAL"; handoffValidatedCandidateToCaptain(c, proposal, executionReview); }
     else { proposal.status="EXECUTION_REVIEW_REJECTED";setMedicineCaseStatus(c, "INVESTIGATION_BLOCKED");plan.precisionGate=false;plan.status="PATCH_REQUIRES_REVIEW";plan.blockReason=`Execution review belum valid: ${executionReview?.reason || "UNKNOWN"}`; }
   }
 
@@ -2763,6 +2832,7 @@ async function verifyWithMedicine(targetFile = null, context = {}) {
         if (executionReview?.status === "VALID") {
           proposal.status = "READY_FOR_HUMAN_APPROVAL";
           setMedicineCaseStatus(c, "READY_FOR_HUMAN_APPROVAL");
+          handoffValidatedCandidateToCaptain(c, proposal, executionReview);
         } else {
           proposal.status = "EXECUTION_REVIEW_REJECTED";
           setMedicineCaseStatus(c, "INVESTIGATING");
@@ -3432,7 +3502,19 @@ function ingestBCGOActiveCases(activeCases, packet = {}) {
       c.evidenceCount=Math.max(1,Number(c.evidenceCount||1)+(previousToken===revisionToken?0:1));
       c.lastSeenAt=now(); c.bcgoCaseId=bcgoId||c.bcgoCaseId||null; c.bcgoHandoff="READY_FOR_MEDICINE"; c.bcgoCycle=Number(packet?.state?.cycle||0); c.bcgoReceivedAt=now();
       c.lastEvidence={...(bcgoCase.evidence||{}),bcgoCaseId:bcgoId,source:"BCGO_STATE",revisionToken}; c.evidence=c.lastEvidence; c.bcgoRevisionToken=revisionToken;
-      if(previousToken!==revisionToken){setMedicineCaseStatus(c, "INVESTIGATION_BLOCKED"); queueAutoInvestigation(c,"bcgo_state_revision_changed");}
+      if(previousToken!==revisionToken){
+        // Only reopen investigation when material evidence actually changed.
+        // Identical signature + same file/line must not thrash an in-flight proof chain.
+        const materialChanged = text(c.signature || "", 400) !== text(signature || "", 400)
+          || String(c.runtimeLocation?.line || "") !== String(bcgoCase?.evidence?.line ?? "");
+        if (materialChanged) {
+          setMedicineCaseStatus(c, "INVESTIGATION_BLOCKED");
+          queueAutoInvestigation(c,"bcgo_state_revision_changed");
+        } else {
+          // Soft update only — keep existing proof / candidate intact
+          c.lastSeenAt = now();
+        }
+      }
       S.activeCase=c; continue;
     }
     const d=classifyError(signature);
