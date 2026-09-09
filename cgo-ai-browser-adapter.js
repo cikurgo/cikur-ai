@@ -2,18 +2,17 @@
  * Binds the V5.2 active-investigation brain to the existing BCGO / Medicine contracts.
  * No external AI/API. No source mutation. Medicine remains proof authority.
  */
-import * as Core from "./cgo-ai-core.js?v=20260907-0900-constitution-connectivity1";
-import * as Knowledge from "./cgo-ai-knowledge.js?v=20260907-0900-constitution-connectivity1";
-import * as Investigator from "./cgo-ai-investigator.js?v=20260907-0900-constitution-connectivity1";
-import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js?v=20260907-0900-constitution-connectivity1";
-import * as Cognition from "./cgo-ai-cognition.js?v=20260907-0900-constitution-connectivity1";
-import * as Instruction from "./cgo-instruction.js";
-import * as Logic from "./cgo-ai-logic.js?v=20260907-0900-constitution-connectivity1";
-import * as Memory from "./cgo-ai-memory.js?v=20260907-0900-constitution-connectivity1";
-import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260907-0900-constitution-connectivity1";
+import * as Core from "./cgo-ai-core.js";
+import * as Knowledge from "./cgo-ai-knowledge.js";
+import * as Investigator from "./cgo-ai-investigator.js";
+import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js";
+import * as Cognition from "./cgo-ai-cognition.js";
+import * as Logic from "./cgo-ai-logic.js";
+import * as Memory from "./cgo-ai-memory.js";
+import { createRuntime } from "./cgo-ai-runtime-adapter.js";
+import { createCaptain } from "./cgo-ai-captain.js";
 
-const VERSION = "V5.6.1-BROWSER-BRIDGE-3.7.1-CONSTITUTION-NATURAL";
-const INTERNAL_PROBE_FETCH_TIMEOUT = 8000;
+const VERSION = "V5.3-BROWSER-BRIDGE-1.9.0-CONTRACT-PRECISION-GRAPH";
 const INTERNAL_AUTO_POLICY = Object.freeze({
   version:"CIKUR-INTERNAL-AUTO-1",
   allowAutomaticExecution:true,
@@ -23,6 +22,7 @@ const INTERNAL_AUTO_POLICY = Object.freeze({
 });
 
 const runtime = createRuntime({});
+const captain = createCaptain({});
 const memory = Memory.createMemory();
 const caseIds = new Map();
 const evidenceTokens = new Map();
@@ -32,234 +32,7 @@ let knowledge = Knowledge.createKnowledgeStore();
 let latest = null;
 let latestBCGOState = null;
 let lastChatCaseId = null;
-let chatWorkSequence = 0;
-const chatCaseIds = new Map();
-const pendingRepairIntents = new Map();
-let lastChatContext = { files: [], comparison: false, question: null, stateRevision: null };
-let chatTranscript = [];
-let chatSession = {
-  turn: 0, lastUserText: null, primaryFile: null, files: [], comparison: false,
-  caseId: null, intent: null, pendingCommand: null, lastCaseRevision: null, updatedAt: 0,
-  pendingWork: null, clarificationNeeded: false, restoredCaseId: null, restoredAt: 0,
-  dialogueMode: "IDLE", topic: null, tone: "WARM", address: null, constitutionState: null, behaviorPolicy: null
-};
-
-// Conversation continuity is deliberately separate from operational proof.
-// We may restore dialogue context after a refresh, but NEVER restore a runtime
-// case, fingerprint, evidence, authorization, or validation result as trusted.
-const CHAT_MEMORY_KEY = "CIKUR_GO_CGO_CHAT_MEMORY_V1";
-const CHAT_MEMORY_VERSION = 1;
-const CHAT_MEMORY_LIMIT = 40;
-let chatRestoration = { restored:false, restoredAt:0, context:false, staleCaseDiscarded:false };
-
-function safeStorage() {
-  try { return window?.localStorage || null; } catch { return null; }
-}
-
-function readChatMemory() {
-  const storage = safeStorage();
-  if (!storage) return null;
-  try {
-    const raw = storage.getItem(CHAT_MEMORY_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || parsed.version !== CHAT_MEMORY_VERSION) return null;
-    return parsed;
-  } catch { return null; }
-}
-
-function writeChatMemory() {
-  const storage = safeStorage();
-  if (!storage) return false;
-  try {
-    const payload = {
-      version:CHAT_MEMORY_VERSION,
-      savedAt:Date.now(),
-      transcript:chatTranscript.slice(-CHAT_MEMORY_LIMIT).map(item => ({
-        role:item?.role === 'user' ? 'user' : 'bcgo',
-        text:String(item?.text || ''),
-        at:Number(item?.at || Date.now()),
-        caseId:null
-      })),
-      session:{
-        turn:Number(chatSession.turn || 0),
-        lastUserText:String(chatSession.lastUserText || ''),
-        primaryFile:normalizeFile(chatSession.primaryFile),
-        files:Array.isArray(chatSession.files) ? chatSession.files.slice(0,12).map(normalizeFile).filter(Boolean) : [],
-        comparison:chatSession.comparison === true,
-        intent:chatSession.intent || null,
-        pendingCommand:chatSession.pendingCommand || null,
-        pendingWork:chatSession.pendingWork ? clone(chatSession.pendingWork) : null,
-        clarificationNeeded:chatSession.clarificationNeeded === true,
-        dialogueMode:chatSession.dialogueMode || "IDLE",
-        topic:chatSession.topic || null,
-        tone:chatSession.tone || "WARM",
-        address:chatSession.address || null,
-        constitutionState:chatSession.constitutionState ? clone(chatSession.constitutionState) : null,
-        behaviorPolicy:chatSession.behaviorPolicy ? clone(chatSession.behaviorPolicy) : null,
-        restoredCaseId:chatSession.caseId || chatSession.restoredCaseId || null
-      },
-      context:{
-        files:Array.isArray(lastChatContext.files) ? lastChatContext.files.slice(0,12).map(normalizeFile).filter(Boolean) : [],
-        comparison:lastChatContext.comparison === true,
-        question:String(lastChatContext.question || ''),
-        stateRevision:lastChatContext.stateRevision || null
-      }
-    };
-    storage.setItem(CHAT_MEMORY_KEY, JSON.stringify(payload));
-    return true;
-  } catch { return false; }
-}
-
-function restoreChatMemory() {
-  const saved = readChatMemory();
-  if (!saved) return { restored:false, context:false, staleCaseDiscarded:false };
-  const transcript = Array.isArray(saved.transcript) ? saved.transcript : [];
-  chatTranscript = transcript.slice(-CHAT_MEMORY_LIMIT).filter(item => item && (item.role === 'user' || item.role === 'bcgo')).map(item => ({
-    role:item.role, text:String(item.text || ''), at:Number(item.at || Date.now())
-  }));
-  const s = saved.session || {};
-  const ctx = saved.context || {};
-  const files = Array.isArray(s.files) ? s.files.map(normalizeFile).filter(Boolean) : [];
-  lastChatContext = {
-    files:Array.isArray(ctx.files) ? ctx.files.map(normalizeFile).filter(Boolean) : files,
-    comparison:ctx.comparison === true || s.comparison === true,
-    question:String(ctx.question || s.lastUserText || ''),
-    stateRevision:ctx.stateRevision || null
-  };
-  // Runtime cases are process-local and therefore stale after a page reload.
-  // Keep only a breadcrumb so the UI can explain what was restored.
-  chatSession = {
-    turn:Number(s.turn || chatTranscript.filter(x => x.role === 'user').length),
-    lastUserText:String(s.lastUserText || lastChatUserText()),
-    primaryFile:normalizeFile(s.primaryFile || files[0] || lastChatContext.files[0]),
-    files, comparison:lastChatContext.comparison,
-    caseId:null, intent:s.intent || null, pendingCommand:s.pendingCommand || null,
-    lastCaseRevision:null, updatedAt:Date.now(), pendingWork:s.pendingWork ? clone(s.pendingWork) : null,
-    clarificationNeeded:s.clarificationNeeded === true,
-    restoredCaseId:s.restoredCaseId || null, restoredAt:Number(saved.savedAt || Date.now()),
-    dialogueMode:s.dialogueMode || "IDLE", topic:s.topic || null, tone:s.tone || "WARM", address:s.address || null, constitutionState:s.constitutionState ? clone(s.constitutionState) : null, behaviorPolicy:s.behaviorPolicy ? clone(s.behaviorPolicy) : null
-  };
-  chatRestoration = {
-    restored:true, restoredAt:chatSession.restoredAt,
-    context:!!(chatSession.primaryFile || chatSession.files.length || chatSession.pendingWork),
-    staleCaseDiscarded:!!(s.restoredCaseId)
-  };
-  return clone(chatRestoration);
-}
-
-function setChatSession(patch = {}) {
-  chatSession = { ...chatSession, ...patch, updatedAt: Date.now() };
-  writeChatMemory();
-  return chatSession;
-}
-
-function chatCaseFromSession() {
-  // Conversation state is authoritative. lastChatCaseId is telemetry/diagnostic
-  // bookkeeping only and must never resurrect an abandoned conversation case.
-  const id = chatSession.caseId;
-  return id ? runtime.getCase(id) : null;
-}
-function resolveChatReference(raw, state, explicitFiles = []) {
-  const q = String(raw || '').toLowerCase();
-  const c = chatCaseFromSession();
-  // Human references such as "file itu" may resolve only against an explicit
-  // conversation target. Telemetry's last file is observation context, not a
-  // human target and must never silently become the target of a work command.
-  const candidates = [...new Set([
-    ...explicitFiles, normalizeFile(c?.exactSource?.file), chatSession.primaryFile, normalizeFile(c?.target),
-    ...(Array.isArray(chatSession.files) ? chatSession.files : [])
-  ].filter(Boolean))];
-  const refersBack = /\b(yang tadi|bagian itu|file itu|yang barusan|sebelumnya|tadi|lanjut|lanjutkan|teruskan|hasilnya|progressnya|progresnya|kasus itu|case itu|bagian tersebut|yang itu|yang dimaksud)\b/i.test(q);
-  return { candidates, refersBack, file: explicitFiles[0] || (refersBack ? candidates[0] : null) };
-}
-
-function isSystemStatusQuestion(raw) {
-  return /\b(status sistem|kondisi sistem|sistem aman|aman tidak|aman nggak|aman enggak)\b/i.test(String(raw || '').trim());
-}
-
-function buildChatWorkPlan(intent, raw) {
-  const text = String(raw || '').trim();
-  // A conversational follow-up is not a work plan merely because it contains
-  // words such as "terus", "lanjut", or "cek". Without an active work context
-  // or an explicit technical target, let the conversational Constitution answer
-  // first. This keeps natural dialogue from being hijacked by task planning.
-  const dialogue = intent?.dialogue || {};
-  const hasActiveWork = !!intent?.hasWorkContext;
-  const explicitlyTechnical = !!dialogue?.explicitTechnicalTarget || dialogue?.mode === 'TECHNICAL';
-  if (dialogue?.casual && !hasActiveWork && !explicitlyTechnical && !intent?.repair && !intent?.explicitCheck) return null;
-  if (!intent.repair && isSystemStatusQuestion(text)) return null;
-  const check = !!intent.explicitCheck;
-  const repair = !!intent.repair;
-  const conditionalRepair = repair && /\b(kalau|jika|bila|apabila|kalau memang|jika memang|bila memang)\b/i.test(raw)
-    || /\b(cek dulu|periksa dulu|telusuri dulu|investigasi dulu)\b/i.test(raw) && repair;
-  const actions = [];
-  if (check || intent.action) actions.push('CHECK');
-  if (check || intent.explicitCheck || repair) actions.push('INVESTIGATE');
-  if (repair) actions.push('REPAIR');
-  if (!actions.length) return null;
-  return {
-    actions:[...new Set(actions)],
-    conditionalRepair: conditionalRepair || !repair,
-    executeOnlyIfProven: repair === true,
-    source: 'CGO_CHAT',
-    originalRequest: String(raw || '')
-  };
-}
-
-function chatPlanNeedsTarget(plan) {
-  return !!plan && plan.actions.some(a => a === 'CHECK' || a === 'INVESTIGATE' || a === 'REPAIR');
-}
-
-function naturalPlanAck(plan, file = null) {
-  if (!plan) return null;
-  if (!file) return 'Saya tangkap pekerjaannya: saya akan cek dulu, telusuri dengan evidence, lalu hanya melanjutkan perbaikan jika masalah dan solusi konkretnya benar-benar terbukti. Saya belum akan menebak file target.';
-  const target = normalizeFile(file);
-  if (plan.actions.includes('REPAIR')) return `Baik, saya pegang ${target}. Saya mulai dari pengecekan dan penelusuran source/dependency dulu. Kalau root cause, exact source, dan solusi konkret terbukti, baru saya lanjutkan perbaikannya. Tidak ada source yang saya ubah hanya karena permintaan chat.`;
-  return `Baik, saya pegang ${target}. Saya mulai dari source aktual, lalu telusuri dependency dan evidence-nya. Kalau penyebabnya ternyata berada di file lain, saya akan mengikuti source yang terbukti, bukan memaksakan target awal.`;
-}
-
-function clarificationForMissingTarget(plan) {
-  if (!plan) return null;
-  return 'Saya siap mengerjakannya. Saya sudah menangkap alurnya: cek → telusuri → buktikan → dan bila memang terbukti bermasalah, lanjut perbaikan. Tapi file yang kamu maksud belum jelas dari percakapan ini, dan saya tidak akan menebak dari telemetry BCGO. Sebutkan nama file atau bagian yang dimaksud, ya.';
-}
-function chatCaseStatusText(c) {
-  if (!c) return 'Saya belum punya pekerjaan percakapan yang aktif. Saya masih membaca state live dan menunggu instruksi.';
-  const evaluation = Logic.evaluate(c, INTERNAL_AUTO_POLICY, knowledge);
-  const proof = evaluation.proof || {};
-  const file = normalizeFile(c.exactSource?.file || c.target) || 'target';
-  const pendingRepair = pendingRepairIntents.has(c.caseId);
-  if (c.state === 'RESOLVED') return `Sudah selesai. Perubahan pada ${file} sudah melewati validation dan hasilnya terbukti.`;
-  if (pendingRepair) {
-    if (proof.complete) return `Perintah perbaikannya masih saya pegang. Proof sudah lengkap untuk ${file}; saya tinggal memastikan gerbang internal dan execution berjalan tanpa melanggar fingerprint source.`;
-    if (proof.rootCauseVerified && proof.sourceVerified && !proof.solutionReady) return `Saya masih mengerjakan perbaikan yang tadi. Root cause dan exact source ${file} sudah terbukti; sekarang saya menunggu proposal solusi konkret yang terikat ke source tersebut.`;
-    if (proof.rootCauseVerified) return `Saya masih mengerjakan perbaikan yang tadi. Root cause untuk ${file} sudah terbukti, tetapi exact source dan/atau bukti lanjutan masih saya lengkapi.`;
-    return `Saya masih mengerjakan perbaikan yang tadi. Saya sedang mengumpulkan bukti untuk ${file}; saya belum akan menganggap dugaan sebagai root cause.`;
-  }
-  if (proof.complete) return `Proof untuk ${file} sudah lengkap. Tindak lanjutnya adalah gerbang Guardian dan execution; source belum saya klaim berubah sebelum validation.`;
-  if (c.rootCause && c.exactSource && !activeRuns.has(c.caseId)) return `Investigasi ${file} sudah selesai: root cause dan exact source terverifikasi. Source belum diubah. Tindak lanjut berikutnya adalah solusi konkret yang terikat ke source tersebut; saya tidak akan mengarang solusi.`;
-  if (c.exactSource) return `Exact source ${file} sudah terikat. Investigasi belum saya nyatakan selesai sampai status causal/proof-nya konsisten.`;
-  if (c.rootCause) return `Root cause untuk ${file} sudah terbukti. Saya lanjut memastikan exact source dan dependency yang benar sebelum mengambil tindakan.`;
-  if (activeRuns.has(c.caseId)) return `Saya masih bekerja pada ${file}. Investigasi sedang berjalan dan saya mengikuti evidence terbaru.`;
-  return `Saya masih menyelidiki ${file}. Status internalnya ${c.state || 'EVIDENCE_COLLECTING'} dan saya belum akan menganggap dugaan sebagai penyebab.`;
-}
-function cancelChatWork() {
-  const c = chatCaseFromSession();
-  if (c) clearPendingRepair(c.caseId);
-  setChatSession({ pendingCommand:null, intent:null });
-  return c ? `Baik, saya hentikan perintah tertunda untuk ${normalizeFile(c.exactSource?.file || c.target)}. Source tidak saya ubah.` : 'Baik, tidak ada perintah tertunda yang perlu dihentikan.';
-}
-
-// BCGO_STATE is the single authoritative live state. The bridge may receive a
-// cloned snapshot during an engine callback, but chat/probes must always prefer
-// the newest state published by BCGO itself. This prevents chat from answering
-// from an older cycle while the monitor has already advanced.
-function getLiveBCGOState(fallback = latestBCGOState) {
-  try {
-    if (window?.BCGO_STATE && typeof window.BCGO_STATE === "object") return clone(window.BCGO_STATE);
-  } catch {}
-  return fallback ? clone(fallback) : {};
-}
+let lastChatContext = { files: [], comparison: false, question: null };
 
 function clone(v) {
   return typeof structuredClone === "function"
@@ -268,17 +41,6 @@ function clone(v) {
 }
 
 function now() { return new Date().toISOString(); }
-
-function stateRevisionOf(state = {}) {
-  const candidates = [state?.lastEventAt, state?.sourceScan?.completedAt, state?.lastTelemetryAt];
-  for (const value of candidates) {
-    if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
-    const parsed = Date.parse(String(value || ""));
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  }
-  const cycle = Number(state?.cycle);
-  return Number.isFinite(cycle) ? cycle : 0;
-}
 
 function normalizeFile(v) {
   const raw = String(v || "").trim();
@@ -462,9 +224,6 @@ function upsertBCGOCase(item, state) {
   ev.metadata.proofRequired = false;
   const t = token(ev);
   if (evidenceTokens.get(caseId) !== t) {
-    // This is new authoritative BCGO telemetry. Invalidate the old probe plan
-    // so the next generation starts from the newest evidence revision.
-    activeEngines.delete(caseId);
     const current = runtime.getCase(caseId);
     const sequence = Number(current?.event?.sequence || 0) + 1;
     try { c = runtime.addEvidence(caseId, { ...ev, sequence, eventId: `${caseId}:${sequence}` }); }
@@ -478,9 +237,6 @@ function upsertBCGOCase(item, state) {
     if (priorNerveToken !== nerveToken) {
       const nerveEvidence = [...buildNerveEvidence(state, source), ...buildNerveRelations(state, source)];
       if (nerveEvidence.length) {
-        // File-nerve changes are authoritative source-scan evidence and therefore
-        // invalidate the previous investigation generation as well.
-        activeEngines.delete(caseId);
         const current = runtime.getCase(caseId);
         const startSeq = Number(current?.event?.sequence ?? -1);
         const stamped = nerveEvidence.map((e,i) => ({...e, sequence:startSeq+i+1, eventId:`${caseId}:nerve:${i}:${nerveToken.slice(0,32)}`}));
@@ -496,54 +252,36 @@ function upsertBCGOCase(item, state) {
 
 
 function investigationFiles(state) {
-  const live = getLiveBCGOState(state);
-  const sources = live?.sourceScan?.sources;
+  const sources = state?.sourceScan?.sources;
   if (sources && typeof sources === "object") return Object.keys(sources).map(normalizeFile).filter(Boolean);
-  const states = live?.sourceScan?.fileStates;
+  const states = state?.sourceScan?.fileStates;
   if (states && typeof states === "object") return Object.keys(states).map(normalizeFile).filter(Boolean);
   return [];
 }
 
-function createInternalProbeProvider(state, progress = null) {
+function createInternalProbeProvider(state) {
+  const files = investigationFiles(state);
   return {
-    get sourceSurfaceComplete() {
-      const live = getLiveBCGOState(state);
-      return live?.sourceScan?.status === "CLEAN" || live?.sourceScan?.status === "FINDINGS";
-    },
-    async listFiles() { return investigationFiles(state); },
-    reportProgress(detail) {
-      try { if (typeof progress === "function") progress(detail || {}); } catch {}
-    },
+    sourceSurfaceComplete: state?.sourceScan?.status === "CLEAN" || state?.sourceScan?.status === "FINDINGS",
+    async listFiles() { return files.slice(); },
     async readSource(file) {
       const normalized = normalizeFile(file);
       if (!normalized) throw new Error("SOURCE_FILE_REQUIRED");
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), INTERNAL_PROBE_FETCH_TIMEOUT);
-      try {
-        const url = new URL(normalized, window.location.href).href;
-        const response = await fetch(url, {method:"GET", cache:"no-store", credentials:"same-origin", signal:controller.signal});
-        if (!response.ok) throw new Error(`SOURCE_READ_HTTP_${response.status}:${normalized}`);
-        const source = await response.text();
-        if (!source.trim()) throw new Error(`SOURCE_EMPTY:${normalized}`);
-        return {file:normalized, source, fingerprint:Core.contentFingerprint(source)};
-      } catch (err) {
-        if (err?.name === "AbortError") throw new Error(`SOURCE_READ_TIMEOUT:${normalized}`);
-        throw err;
-      } finally {
-        clearTimeout(timer);
-      }
+      const url = new URL(normalized, window.location.href).href;
+      const response = await fetch(url, {method:"GET", cache:"no-store", credentials:"same-origin"});
+      if (!response.ok) throw new Error(`SOURCE_READ_HTTP_${response.status}:${normalized}`);
+      const source = await response.text();
+      if (!source.trim()) throw new Error(`SOURCE_EMPTY:${normalized}`);
+      return {file:normalized, source, fingerprint:Core.contentFingerprint(source)};
     }
   };
 }
 
 function getActiveEngine(caseId, caseData) {
   let engine = activeEngines.get(caseId);
-  // A probe generation owns its completed-probe cache. Internal probe evidence
-  // also increments the runtime case revision, so revision alone cannot be used
-  // as a reason to recreate the engine (that previously caused duplicate
-  // SOURCE_READ evidence and EVIDENCE_ID_COLLISION). Authoritative BCGO evidence
-  // explicitly deletes the engine above, which starts a clean generation.
-  if (!engine) {
+  // Evidence invalidation starts a new investigation generation. Never keep a
+  // probe cache from an older case revision after new telemetry/source arrives.
+  if (!engine || Number(engine.state?.caseRevision ?? -1) !== Number(caseData?.revision ?? 0)) {
     engine = ActiveInvestigation.createInvestigationEngine(caseData, knowledge, {maxSteps:10, maxFiles:40});
     engine.state.caseRevision = Number(caseData?.revision ?? 0);
     activeEngines.set(caseId, engine);
@@ -557,20 +295,7 @@ async function runActiveInvestigation(caseId, state) {
   if (!current) return;
   const startRevision = Number(current.revision ?? 0);
   const engine = getActiveEngine(caseId, current);
-  if (engine.state?.status !== "ACTIVE") return;
-  const provider = createInternalProbeProvider(state, detail => {
-    emitBrainEvent(caseId, "ACTIVE_INVESTIGATION_PROGRESS", {
-      step: Number(detail?.step || 0),
-      probe: {type: detail?.type || "SOURCE_READ"},
-      substep: detail?.substep || null,
-      currentFile: detail?.currentFile || null,
-      currentIndex: Number(detail?.currentIndex || 0),
-      totalFiles: Number(detail?.totalFiles || 0),
-      evidenceCount: 0,
-      caseState: runtime.getCase(caseId)?.state || null,
-      investigationStatus: "ACTIVE"
-    });
-  });
+  const provider = createInternalProbeProvider(state);
   const runPromise = (async () => {
     try {
       const out = await engine.run(current, provider, knowledge, {
@@ -619,9 +344,6 @@ async function runActiveInvestigation(caseId, state) {
       }
 
       let synced = runtime.getCase(caseId) || before;
-      // The runtime revision may advance when CGO probe evidence is committed;
-      // keep this same probe generation attached to the new revision.
-      engine.state.caseRevision = Number(synced?.revision ?? engine.state.caseRevision ?? 0);
       if (out.caseData.hypotheses?.length) {
         try { synced = runtime.reason(caseId, out.caseData.hypotheses); } catch {}
       }
@@ -632,15 +354,6 @@ async function runActiveInvestigation(caseId, state) {
         try { synced = runtime.proveSource(caseId, out.caseData.exactSource); } catch {}
       }
 
-      if ((synced?.exactSource?.file || synced?.rootCause) && chatSession.caseId === caseId) {
-        // Investigation is allowed to advance a case in the background, but it
-        // must never steal the conversational focus from a newer human target.
-        setChatSession({
-          caseId,
-          primaryFile:normalizeFile(synced.exactSource?.file || synced.rootCause?.file || synced.target || chatSession.primaryFile),
-          lastCaseRevision:Number(synced.revision ?? chatSession.lastCaseRevision ?? 0)
-        });
-      }
       emitBrainEvent(caseId, "ACTIVE_INVESTIGATION_STEP", {
         status:out.status,
         steps:out.steps,
@@ -654,47 +367,16 @@ async function runActiveInvestigation(caseId, state) {
         state:synced?.state || null
       });
 
-      // The engine can legitimately stop at SOURCE_VERIFIED. Always convert
-      // that terminal diagnostic state into an explicit human-readable outcome
-      // and next action; otherwise the live chat indicator has no completion
-      // signal and appears to be stuck forever.
-      const outcome = investigationOutcome(synced, out.investigation);
-      emitBrainEvent(caseId, "ACTIVE_INVESTIGATION_COMPLETED", {
-        ...outcome,
-        steps:out.steps,
-        cycle:out.investigation?.cycle || 0,
-        evidenceCount:Array.isArray(synced?.evidence) ? synced.evidence.length : 0,
-        probeCount:Array.isArray(out.investigation?.probeLog) ? out.investigation.probeLog.length : 0
-      });
-
       latest = compatibleSnapshot(caseId, "ACTIVE_INVESTIGATION");
       try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-state", {detail:latest})); } catch {}
     } catch (err) {
-      const error = String(err?.message || err);
-      emitBrainEvent(caseId, "ACTIVE_INVESTIGATION_ERROR", {error, nextAction:"RETRY_INVESTIGATION"});
-      emitBrainEvent(caseId, "ACTIVE_INVESTIGATION_COMPLETED", {
-        phase:"INVESTIGATION_INCOMPLETE",
-        status:"ERROR",
-        conclusion:`Investigasi berhenti karena probe internal mengalami kendala: ${error}. Saya tidak akan mengarang hasil.`,
-        nextAction:"RETRY_INVESTIGATION",
-        blockers:[error],
-        target:normalizeFile(runtime.getCase(caseId)?.exactSource?.file || runtime.getCase(caseId)?.target) || "target",
-        rootCauseVerified:!!runtime.getCase(caseId)?.rootCause,
-        exactSourceVerified:!!runtime.getCase(caseId)?.exactSource,
-        solutionReady:false
-      });
+      emitBrainEvent(caseId, "ACTIVE_INVESTIGATION_ERROR", {error:String(err?.message || err)});
     } finally {
       activeRuns.delete(caseId);
       const latestCase = runtime.getCase(caseId);
-      if (latestCase && pendingRepairIntents.has(caseId)) {
-        void continuePendingRepair(caseId, getLiveBCGOState(state)).catch(err => {
-          emitBrainEvent(caseId, "CHAT_REPAIR_CONTINUE_ERROR", {error:String(err?.message || err)});
-        });
-      }
-      if (latestCase && Number(latestCase.revision ?? 0) !== startRevision && activeEngines.get(caseId) !== engine) {
-        // Only an authoritative BCGO evidence update replaces the engine. Internal
-        // probe evidence also advances the case revision, but must NOT restart the
-        // same generation (otherwise SOURCE_READ can be emitted twice and collide).
+      if (latestCase && Number(latestCase.revision ?? 0) !== startRevision) {
+        // A new event may have arrived while this generation was running.
+        // Re-enter with the newest case after the current promise fully closes.
         setTimeout(() => {
           const fresh = runtime.getCase(caseId);
           if (fresh) void runActiveInvestigation(caseId, state);
@@ -704,79 +386,6 @@ async function runActiveInvestigation(caseId, state) {
   })();
   activeRuns.set(caseId, runPromise);
   await runPromise;
-}
-
-function investigationOutcome(caseData, investigation = null) {
-  const evaluation = Logic.evaluate(caseData, INTERNAL_AUTO_POLICY, knowledge);
-  const proof = evaluation.proof || {};
-  const file = normalizeFile(caseData?.exactSource?.file || caseData?.target) || "target";
-  const status = String(investigation?.status || caseData?.state || "UNKNOWN");
-  const nextProbe = investigation?.nextProbe || investigation?.nextEvidence || null;
-
-  if (proof.complete) {
-    return {
-      phase: "PROOF_COMPLETE",
-      status,
-      conclusion: `Proof chain untuk ${file} sudah lengkap. Root cause, exact source, fingerprint, dan solusi konkret sudah terikat.`,
-      nextAction: "GUARDIAN_AND_EXECUTION_GATE",
-      blockers: [],
-      target: file,
-      rootCauseVerified: true,
-      exactSourceVerified: true,
-      solutionReady: true,
-      nextProbe: null
-    };
-  }
-
-  // SOURCE_VERIFIED is a valid diagnostic stopping point. The previous bridge
-  // treated it as if investigation were still running, even though the engine
-  // had intentionally stopped after binding the real source. That made the UI
-  // appear stuck and gave the human no explicit conclusion or next action.
-  if (proof.rootCauseVerified && proof.sourceVerified) {
-    return {
-      phase: "DIAGNOSIS_COMPLETE_SOLUTION_PENDING",
-      status,
-      conclusion: `Investigasi selesai untuk ${file}. Root cause dan exact source sudah terverifikasi; source belum diubah.`,
-      nextAction: "CONCRETE_SOLUTION_REQUIRED",
-      blockers: proof.solutionReady ? [] : ["CONCRETE_SOLUTION_NOT_READY"],
-      target: file,
-      rootCauseVerified: true,
-      exactSourceVerified: true,
-      solutionReady: proof.solutionReady === true,
-      nextProbe: null
-    };
-  }
-
-  if (proof.rootCauseVerified) {
-    return {
-      phase: "ROOT_CAUSE_COMPLETE_SOURCE_PENDING",
-      status,
-      conclusion: `Root cause untuk ${file} sudah terverifikasi, tetapi exact source belum lengkap terikat.`,
-      nextAction: "VERIFY_EXACT_SOURCE",
-      blockers: ["EXACT_SOURCE_NOT_VERIFIED"],
-      target: file,
-      rootCauseVerified: true,
-      exactSourceVerified: false,
-      solutionReady: false,
-      nextProbe
-    };
-  }
-
-  const blockers = Array.isArray(proof.blockers) ? proof.blockers.slice(0, 8) : ["PROOF_CHAIN_INCOMPLETE"];
-  return {
-    phase: status === "LIMIT_REACHED" || status === "YIELD" || status === "STABLE"
-      ? "INVESTIGATION_STOPPED_WITHOUT_PROOF"
-      : "INVESTIGATION_INCOMPLETE",
-    status,
-    conclusion: `Investigasi ${file} belum menghasilkan root cause yang terverifikasi. Saya tidak akan mengarang kesimpulan.`,
-    nextAction: nextProbe ? "CONTINUE_WITH_NEXT_PROBE" : "REQUEST_MORE_EVIDENCE",
-    blockers,
-    target: file,
-    rootCauseVerified: false,
-    exactSourceVerified: false,
-    solutionReady: false,
-    nextProbe
-  };
 }
 
 function emitBrainEvent(caseId, type, payload) {
@@ -794,95 +403,129 @@ function chatSourceFiles(state = {}) {
   return [...files].filter(Boolean);
 }
 
-function explicitFileMentions(q) {
-  const text = String(q || "");
-  // Filename identity is intentionally extension-agnostic. BCGO_STATE/sourceScan
-  // remains the authority for whether a named file actually exists/is readable.
-  // This lets chat understand arbitrary project files instead of a hard-coded
-  // extension whitelist (for example .py, .php, .yaml, .sql, or future types).
-  const matches = text.match(/(?:[A-Za-z0-9_-]+\.)+[A-Za-z0-9_-]+/g) || [];
-  return [...new Set(matches.map(normalizeFile).filter(v => v && v !== "UNKNOWN"))];
-}
-
 function requestedChatFiles(q, state) {
   const files = chatSourceFiles(state);
-  const lower = String(q || "").toLowerCase();
-  const explicit = explicitFileMentions(q);
-  const known = files.filter(file => lower.includes(String(file).toLowerCase()));
-  return [...new Set([...explicit, ...known])].sort((a,b) => {
-    const ai = lower.indexOf(String(a).toLowerCase());
-    const bi = lower.indexOf(String(b).toLowerCase());
-    return (ai < 0 ? Number.MAX_SAFE_INTEGER : ai) - (bi < 0 ? Number.MAX_SAFE_INTEGER : bi);
-  });
+  return [...new Set(files.filter(file => q.includes(String(file).toLowerCase())))];
 }
 
 function requestedChatFile(q, state) {
   return requestedChatFiles(q, state)[0] || null;
 }
 
-function fileKnownToBCGO(file, state) {
+
+function numberSource(source) {
+  const text = String(source ?? "");
+  return text.split(/\r?\n/).map((line, index) => ({ line:index + 1, code:line }));
+}
+
+function sourceRangeForText(source, needle) {
+  const lines = numberSource(source);
+  const target = String(needle || "").trim();
+  if (!target) return [];
+  const compact = target.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+  if (!compact.length) return [];
+  const first = compact[0];
+  const hits = [];
+  for (let i=0; i<lines.length; i++) {
+    if (!lines[i].code.includes(first)) continue;
+    let ok = true;
+    for (let j=1; j<compact.length; j++) {
+      if (!lines[i+j] || !lines[i+j].code.includes(compact[j])) { ok=false; break; }
+    }
+    if (ok) hits.push({ startLine:lines[i].line, endLine:lines[Math.min(lines.length-1,i+compact.length-1)].line });
+    if (hits.length >= 20) break;
+  }
+  return hits;
+}
+
+async function readExactSourceForWorkbench(file) {
   const target = normalizeFile(file);
-  if (!target || target === "UNKNOWN") return false;
-  return chatSourceFiles(state).some(f => normalizeFile(f).toLowerCase() === target.toLowerCase());
+  if (!target) throw new Error("TARGET_FILE_REQUIRED");
+  const url = String(target);
+  const response = await fetch(url, { method:"GET", cache:"no-store", credentials:"same-origin" });
+  if (!response.ok) throw new Error(`SOURCE_HTTP_${response.status}`);
+  const source = await response.text();
+  if (!source.trim()) throw new Error("SOURCE_EMPTY");
+  const fingerprint = Core.contentFingerprint(source);
+  return {
+    file:target,
+    source,
+    fingerprint,
+    lines:numberSource(source).length,
+    bytes:new TextEncoder().encode(source).length,
+    readAt:Date.now()
+  };
 }
 
-function findChatCaseForFile(file) {
-  const normalized = normalizeFile(file);
-  const caseId = normalized ? chatCaseIds.get(normalized) : null;
-  return caseId ? runtime.getCase(caseId) : null;
+function emitCodeWorkbench(payload) {
+  try {
+    window.dispatchEvent(new CustomEvent("cgo-code-workbench", { detail:clone(payload) }));
+  } catch {}
 }
 
-function chatFindingMatches(finding, files) {
-  const wanted = new Set((files || []).map(normalizeFile).filter(Boolean));
-  const a = normalizeFile(finding?.file || finding?.sourceFile || finding?.source);
-  const b = normalizeFile(finding?.targetFile || finding?.relatedFile || finding?.to);
-  return wanted.has(a) || wanted.has(b);
-}
-
-function syncChatContextEvidence(caseId, state, files, comparison) {
-  const c = runtime.getCase(caseId);
-  if (!c) return null;
-  const scan = state?.sourceScan || {};
-  const candidates = [
-    ...(Array.isArray(scan.findings) ? scan.findings : []),
-    ...(Array.isArray(scan.crossFileFindings) ? scan.crossFileFindings : [])
-  ].filter(f => chatFindingMatches(f, files));
-  const existing = new Set((c.evidence || []).map(e => e.id));
-  const additions = candidates.slice(0, 32).map((f, i) => {
-    const file = normalizeFile(f?.file || f?.sourceFile || f?.source);
-    const line = f?.line ?? f?.targetLine ?? null;
-    const kind = f?.type || f?.kind || "SOURCE_FINDING";
-    const symbol = f?.symbol || f?.missing?.[0] || f?.metadata?.symbol || null;
-    return {
-      id:`CGO_CHAT_SCAN:${file || "unknown"}:${line ?? "NA"}:${kind}:${i}`,
-      eventId:`CGO_CHAT_SCAN:${file || "unknown"}:${line ?? "NA"}:${kind}:${i}`,
-      type:"CHAT_SOURCE_FINDING",
-      source:"BCGO_SOURCE_SCAN",
-      claim:`BCGO scanner menemukan ${kind} pada ${file || "source"}${line ? `:${line}` : ""}: ${f?.message || f?.detail || f?.claim || "temuan source"}.`,
-      status:"VERIFIED",
-      strength:f?.severity === "HIGH" ? 1 : f?.severity === "MEDIUM" ? .8 : .65,
-      exact:Number.isFinite(line),
-      fingerprint:f?.fingerprint || null,
-      observedAt:now(),
-      metadata:{
-        file, line, kind, symbol,
-        targetFile:normalizeFile(f?.targetFile || f?.relatedFile || f?.to),
-        comparison:!!comparison,
-        proofRequired:true
+async function openCodeWorkbench(file, context = {}) {
+  const target = normalizeFile(file);
+  if (!target) return null;
+  try {
+    const original = await readExactSourceForWorkbench(target);
+    const c = context.caseId ? runtime.getCase(context.caseId) : null;
+    const exact = c?.exactSource || context.exactSource || null;
+    const proposed = exact?.proposedSource || exact?.after || context.proposedSource || context.proposedCode || "";
+    const proposedFingerprint = proposed ? Core.contentFingerprint(proposed) : null;
+    const changedRanges = proposed ? sourceRangeForText(proposed, context.changedCode || "") : [];
+    const payload = {
+      version:"1.1.0-CODE-WORKBENCH-FULL-SOURCE",
+      status:"SOURCE_READ",
+      file:target,
+      original:{
+        code:original.source,
+        lines:original.lines,
+        bytes:original.bytes,
+        fingerprint:original.fingerprint,
+        readAt:original.readAt
+      },
+      proposed:proposed ? {
+        code:String(proposed),
+        lines:numberSource(proposed).length,
+        fingerprint:proposedFingerprint,
+        changedRanges
+      } : null,
+      finding:context.finding || null,
+      explanation:context.explanation || null,
+      command:context.command || null,
+      proof:context.proof || null,
+      sourceIntegrity:{
+        liveFingerprint:original.fingerprint,
+        candidateOriginalFingerprint:exact?.fingerprint || exact?.contentFingerprint || null,
+        match:!exact || !exact.fingerprint ? null : String(exact.fingerprint) === String(original.fingerprint)
       }
     };
-  }).filter(e => !existing.has(e.id));
-  if (!additions.length) return c;
-  try { return runtime.addEvidence(caseId, additions); } catch { return runtime.getCase(caseId) || c; }
+    emitCodeWorkbench(payload);
+    return payload;
+  } catch (error) {
+    const payload={version:"1.1.0-CODE-WORKBENCH-FULL-SOURCE",status:"SOURCE_READ_FAILED",file:target,error:String(error?.message||error)};
+    emitCodeWorkbench(payload);
+    return payload;
+  }
+}
+
+function findCaseForFile(file) {
+  const normalized = normalizeFile(file);
+  const caseId = normalized ? caseIds.get(normalized) : null;
+  return caseId ? runtime.getCase(caseId) : null;
 }
 
 function createChatCase(file, state, rawQuestion, chatContext = lastChatContext) {
   const targetFile = normalizeFile(file);
   if (!targetFile) return null;
-  const live = getLiveBCGOState(state);
-  const caseId = `CGO-CHAT-${Date.now()}-${++chatWorkSequence}`;
-  let c = null;
-  {
+  const existing = findCaseForFile(targetFile);
+  if (existing) {
+    lastChatCaseId = existing.caseId;
+    return existing;
+  }
+  const caseId = `CGO-CHAT-${targetFile}`;
+  let c = runtime.getCase(caseId);
+  if (!c) {
     c = runtime.detect({
       caseId,
       target: targetFile,
@@ -892,19 +535,26 @@ function createChatCase(file, state, rawQuestion, chatContext = lastChatContext)
     });
   }
   try {
-    const current = runtime.getCase(caseId) || c;
-    if (!current.evidence?.some(e => e.type === "CHAT_REQUEST")) {
-      const seq = Number(current.event?.sequence ?? 0) + 1;
-      c = runtime.addEvidence(caseId, {
-        id:`CGO_CHAT:${targetFile}:${seq}`, eventId:`CGO_CHAT:${targetFile}:${seq}`, sequence:seq,
-        type:"CHAT_REQUEST", source:"CGO_CHAT", claim:`Pengguna meminta CGO memeriksa ${targetFile}: ${rawQuestion}`,
-        status:"VERIFIED", strength:.70, exact:false,
-        metadata:{file:targetFile, proofRequired:false, userIntent:chatContext?.comparison ? "CROSS_FILE_CHECK" : "CHECK", relatedFiles:Array.isArray(chatContext?.files) ? chatContext.files.filter(f => f !== targetFile).slice(0,8) : []}
-      });
-    }
+    const seq = Number(c.event?.sequence ?? 0) + 1;
+    c = runtime.addEvidence(caseId, {
+      id: `CGO_CHAT:${targetFile}:${seq}`,
+      eventId: `CGO_CHAT:${targetFile}:${seq}`,
+      sequence: seq,
+      type: "CHAT_REQUEST",
+      source: "CGO_CHAT",
+      claim: `Pengguna meminta CGO memeriksa ${targetFile}: ${rawQuestion}`,
+      status: "VERIFIED",
+      strength: 0.70,
+      exact: false,
+      metadata: {
+        file: targetFile,
+        proofRequired: false,
+        userIntent: chatContext?.comparison ? "CROSS_FILE_CHECK" : "CHECK",
+        relatedFiles: Array.isArray(chatContext?.files) ? chatContext.files.filter(f => f !== targetFile).slice(0,8) : []
+      }
+    });
   } catch {}
-  c = syncChatContextEvidence(caseId, live, chatContext?.files?.length ? chatContext.files : [targetFile], chatContext?.comparison);
-  chatCaseIds.set(targetFile, caseId);
+  caseIds.set(targetFile, caseId);
   lastChatCaseId = caseId;
   return runtime.getCase(caseId) || c;
 }
@@ -912,13 +562,6 @@ function createChatCase(file, state, rawQuestion, chatContext = lastChatContext)
 function scheduleChatInvestigation(file, state, rawQuestion, chatContext = lastChatContext) {
   const c = createChatCase(file, state, rawQuestion, chatContext);
   if (!c) return null;
-  setChatSession({
-    caseId:c.caseId,
-    primaryFile:normalizeFile(c.exactSource?.file || c.target || file),
-    files:Array.isArray(chatContext?.files) && chatContext.files.length ? chatContext.files.map(normalizeFile).filter(Boolean) : [normalizeFile(file)].filter(Boolean),
-    comparison:chatContext?.comparison === true,
-    intent:'INVESTIGATE'
-  });
   if (!activeRuns.has(c.caseId)) {
     void runActiveInvestigation(c.caseId, state).catch(err => {
       emitBrainEvent(c.caseId, "CHAT_INVESTIGATION_ERROR", {error:String(err?.message || err)});
@@ -935,124 +578,32 @@ function bindInternalExecutionTarget() {
   if (typeof target.read !== "function" || typeof target.write !== "function" || typeof target.execute !== "function") return false;
   try {
     runtime.bindExecutionTarget?.(target);
-    return runtime.hasExecutionTarget?.() === true;
+    return runtime.hasExecutionHand?.() === true;
   } catch (err) {
     emitBrainEvent(lastChatCaseId, "EXECUTION_TARGET_BIND_FAILED", {error:String(err?.message || err)});
     return false;
   }
 }
 
-function setPendingRepair(caseId, file, rawQuestion, context = lastChatContext) {
-  if (!caseId) return;
-  pendingRepairIntents.set(caseId, {
-    caseId,
-    target: normalizeFile(file),
-    question: String(rawQuestion || ""),
-    relatedFiles: Array.isArray(context?.files) ? context.files.slice(0, 12).map(normalizeFile).filter(Boolean) : [],
-    comparison: context?.comparison === true,
-    requestedAt: Date.now(),
-    stateRevision: stateRevisionOf(getLiveBCGOState())
-  });
-}
-
-function clearPendingRepair(caseId) {
-  if (caseId) pendingRepairIntents.delete(caseId);
-}
-
-async function continuePendingRepair(caseId, state) {
-  const intent = pendingRepairIntents.get(caseId);
-  if (!intent || activeRuns.has(caseId)) return null;
-  const c = runtime.getCase(caseId);
-  if (!c) { clearPendingRepair(caseId); return null; }
-  const evaluation = Logic.evaluate(c, INTERNAL_AUTO_POLICY, knowledge);
-  if (!evaluation.proof.complete) {
-    emitBrainEvent(caseId, "CHAT_REPAIR_WAITING", {
-      target: normalizeFile(intent.target || c.target),
-      revision: c.revision,
-      blockers: evaluation.proof?.blockers || [],
-      solutionReady: evaluation.proof?.solutionReady === true,
-      stateRevision: stateRevisionOf(getLiveBCGOState(state))
-    });
-    return evaluation;
-  }
-  if (evaluation.guardian?.decision !== "AUTO_ALLOWED") {
-    emitBrainEvent(caseId, "CHAT_REPAIR_BLOCKED", {reason:evaluation.guardian?.reason || "GUARDIAN_BLOCKED", target:normalizeFile(c.exactSource?.file || c.target)});
-    return evaluation;
-  }
-  if (!bindInternalExecutionTarget()) {
-    emitBrainEvent(caseId, "CHAT_REPAIR_READY_EXECUTOR_MISSING", {target:normalizeFile(c.exactSource?.file || c.target)});
-    return evaluation;
-  }
-  clearPendingRepair(caseId);
-  try {
-    const result = await runtime.execute(caseId, INTERNAL_AUTO_POLICY);
-    const finalCase = runtime.getCase(caseId);
-    const completed = finalCase?.state === "RESOLVED" || result?.status === "RESOLVED";
-    if (chatSession.caseId === caseId) {
-      setChatSession({caseId, primaryFile:normalizeFile(finalCase?.exactSource?.file || c.exactSource?.file || c.target), pendingCommand:completed ? null : 'REPAIR', intent:'REPAIR', lastCaseRevision:Number(finalCase?.revision ?? c.revision ?? 0)});
-    }
-    emitBrainEvent(caseId, completed ? "CHAT_REPAIR_COMPLETED" : "CHAT_REPAIR_EXECUTED", {result, state:finalCase?.state || null, target:normalizeFile(finalCase?.exactSource?.file || c.exactSource?.file || c.target)});
-    latest = compatibleSnapshot(caseId, "CHAT_REPAIR_EXECUTED");
-    try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-state", {detail:latest})); } catch {}
-    return result;
-  } catch (err) {
-    // Keep the intent only for recoverable readiness failures; execution failures
-    // must not silently retry a consumed or integrity-failed authorization.
-    const msg = String(err?.message || err);
-    if (/AUTHORIZATION_|EXECUTION_PROOF_|EXECUTION_AUTHORIZATION_|EXECUTOR_NOT_CONFIGURED/.test(msg)) clearPendingRepair(caseId);
-    emitBrainEvent(caseId, "CHAT_REPAIR_FAILED", {error:msg,target:normalizeFile(c.exactSource?.file || c.target)});
-    return {status:"FAILED",reason:msg,caseId};
-  }
-}
-
 function repairChatCase(file, state, rawQuestion) {
-  // A repair instruction referring to "yang tadi/bagian itu" belongs to the
-  // currently active conversation case. Never create a fresh case merely
-  // because investigation has already moved the proven source to another file.
-  const sessionCase = chatCaseFromSession();
-  const requested = normalizeFile(file);
-  const sessionTargets = new Set([
-    normalizeFile(sessionCase?.target),
-    normalizeFile(sessionCase?.exactSource?.file),
-    ...(Array.isArray(chatSession.files) ? chatSession.files.map(normalizeFile) : [])
-  ].filter(Boolean));
-  let c = sessionCase && (!requested || sessionTargets.has(requested))
-    ? sessionCase
-    : findChatCaseForFile(requested);
-  if (!c) c = scheduleChatInvestigation(requested, state, rawQuestion);
+  let c = findCaseForFile(file);
+  if (!c) c = scheduleChatInvestigation(file, state, rawQuestion);
   if (!c) return {text:"Saya belum bisa menentukan file target dari perintah itu.", caseId:null};
-  setPendingRepair(c.caseId, file, rawQuestion, lastChatContext);
 
   const policy = INTERNAL_AUTO_POLICY;
   const evaluation = Logic.evaluate(c, policy, knowledge);
-  const exactFile = normalizeFile(c.exactSource?.file) || normalizeFile(file);
   if (!evaluation.proof.complete) {
-    // Do not restart an already-proven investigation merely because the concrete
-    // repair solution has not arrived yet. Re-probing here would add evidence,
-    // invalidate the exact-source proof, and make the chat appear to move
-    // backwards. Continue investigation only while the causal/source proof is
-    // actually incomplete.
-    const proofNeedsInvestigation = !evaluation.proof.rootCauseVerified || !evaluation.proof.sourceVerified;
-    if (proofNeedsInvestigation && !activeRuns.has(c.caseId)) void runActiveInvestigation(c.caseId, state).catch(()=>{});
-    const rootStatus = evaluation.proof.rootCauseVerified ? "root cause terbukti" : "root cause belum terbukti";
-    const sourceStatus = evaluation.proof.sourceVerified ? "exact source terbukti" : "exact source belum terbukti";
-    const locationText = exactFile && exactFile !== normalizeFile(file)
-      ? ` Hasil investigasi sementara mengikat source ke ${exactFile}, bukan sekadar target chat ${normalizeFile(file)}.`
-      : "";
-    const solutionStatus = evaluation.proof.solutionReady ? "solusi konkret sudah siap" : "solusi konkret belum tersedia";
-    const waitingText = evaluation.proof.rootCauseVerified && evaluation.proof.sourceVerified && !evaluation.proof.solutionReady
-      ? " Saya menunggu proposal solusi konkret yang terikat ke exact source; saya tidak akan mengulang proof yang sudah sah."
-      : " Saya lanjutkan hanya dari evidence dan source yang sudah terbukti.";
+    if (!activeRuns.has(c.caseId)) void runActiveInvestigation(c.caseId, state).catch(()=>{});
     return {
       caseId:c.caseId,
-      text:`Saya terima perintah perbaikan. Saya belum mengubah source. Saat ini ${rootStatus}, ${sourceStatus}, dan ${solutionStatus}.${locationText}${waitingText}`
+      text:`Saya terima perintah perbaikan untuk ${normalizeFile(file)}. Tetapi saya belum mengubah source. Proof belum lengkap: ${evaluation.proof.rootCauseVerified ? "root cause terbukti" : "root cause belum terbukti"}, ${evaluation.proof.sourceVerified ? "exact source terbukti" : "exact source belum terbukti"}. Saya lanjutkan investigasi internal dulu.`
     };
   }
 
   if (evaluation.guardian?.decision !== "AUTO_ALLOWED") {
     return {
       caseId:c.caseId,
-      text:`Proof untuk ${exactFile} sudah lengkap, tetapi gerbang internal belum menghasilkan AUTO_ALLOWED: ${evaluation.guardian?.reason || "UNKNOWN"}. Saya tidak akan melewati gerbang tersebut.`
+      text:`Proof untuk ${normalizeFile(file)} sudah lengkap, tetapi gerbang internal belum menghasilkan AUTO_ALLOWED: ${evaluation.guardian?.reason || "UNKNOWN"}. Saya tidak akan melewati gerbang tersebut.`
     };
   }
 
@@ -1061,755 +612,206 @@ function repairChatCase(file, state, rawQuestion) {
       decision:evaluation.guardian?.decision,
       risk:evaluation.guardian?.risk,
       reason:evaluation.guardian?.reason,
-      target:normalizeFile(exactFile),
+      target:normalizeFile(file),
       next:"PATCH_EXECUTOR_BIND_REQUIRED"
     });
     return {
       caseId:c.caseId,
-      text:`Proof sudah lengkap dan gerbang internal sudah AUTO_ALLOWED untuk ${normalizeFile(exactFile)}, tetapi Patch Executor internal belum ter-bind. Saya mempertahankan perintah “Perbaiki” sebagai intent tertunda dan tidak akan mengarang eksekusi.`
+      text:`Proof sudah lengkap dan CGO sudah mengotorisasi automatic execution untuk ${normalizeFile(file)}. Saya belum menulis source dari browser karena target Patch Executor internal belum ter-bind. Begitu executor internal terhubung, perintah “Perbaiki” ini dapat diteruskan ke execution dan validation.`
     };
   }
 
-  void continuePendingRepair(c.caseId, state);
-  return {
-    caseId:c.caseId,
-    text:`Baik. Perintah “Perbaiki” untuk ${normalizeFile(exactFile)} diterima. Proof dan gerbang internal akan saya ikat ke source/fingerprint terbaru sebelum execution lalu validation.`
-  };
-}
-
-function recordChatTurn(role, text, meta = {}) {
-  // Persist only conversational text/metadata safe for restoration. Runtime
-  // proof, authorization, fingerprints and case identity are never persisted.
-  chatTranscript.push({ role, text:String(text || ''), at:Date.now(), ...clone(meta), caseId:null });
-  if (chatTranscript.length > CHAT_MEMORY_LIMIT) chatTranscript = chatTranscript.slice(-CHAT_MEMORY_LIMIT);
-  writeChatMemory();
-}
-
-function lastChatUserText() {
-  for (let i = chatTranscript.length - 1; i >= 0; i--) {
-    if (chatTranscript[i]?.role === 'user') return String(chatTranscript[i].text || '');
-  }
-  return '';
-}
-
-function lastChatAssistantText() {
-  for (let i = chatTranscript.length - 1; i >= 0; i--) {
-    if (chatTranscript[i]?.role === 'bcgo') return String(chatTranscript[i].text || '');
-  }
-  return '';
-}
-
-function classifyDialogue(raw, session = chatSession) {
-  return Instruction.classifyDialogue(raw, session);
-}
-
-function conversationalAnswer(dialogue, state = {}, session = chatSession) {
-  if (!dialogue?.casual) return null;
-
-  // Communication Engine rule: conversation is not a service funnel. The
-  // response below stays conversational unless the user actually asks for
-  // system work. Variants are deterministic so the same meaning is preserved
-  // without making the browser bridge depend on an external language model.
-  const turn = Number(session?.turn || 0);
-  const formalize = (text) => {
-    let out = String(text || '');
-    if (session?.communicationStyle === 'FORMAL') {
-      out = out.replace(/\bAku\b/g, 'Saya').replace(/\bkamu\b/gi, 'Anda').replace(/\bkok\b/gi, '').replace(/[😊😄😁❤️❤👋]/g, '').replace(/\s{2,}/g, ' ').trim();
-    }
-    return out;
-  };
-  const choose = (items) => formalize(items[Math.abs(turn) % items.length]);
-  const withTopic = (fallback) => session?.topic ? fallback.replace('{topic}', String(session.topic)) : fallback;
-
-  if (dialogue.identity) return choose([
-    'Aku CGO. Aku bagian intelligence internal CIKUR GO, dan aku berbicara melalui BCGO. Kalau kita sedang ngobrol, aku mengikuti alur obrolannya; kalau masuk pekerjaan teknis, aku berpindah ke penalaran berbasis source dan evidence.',
-    'Aku CGO 😊 — intelligence internal CIKUR GO yang terhubung ke lingkungan BCGO. Jadi aku bisa ngobrol seperti biasa, lalu ketika kamu membawa kita ke sistem, aku mengikuti source, telemetry, dependency, dan evidence yang benar-benar tersedia.',
-    'CGO di sini. Peranku bukan cuma menjawab pertanyaan, tapi memahami konteks lalu membantu sesuai kebutuhan. Untuk urusan teknis, aku tetap terikat pada bukti dan batas eksekusi yang berlaku.'
-  ]);
-
-  if (dialogue.systemRole) return choose([
-    'Sederhananya, BCGO membawa keadaan sistem yang nyata—telemetry, event, source scan, dan state live. CGO memahami keadaan itu, menalar, lalu berbicara kepadamu melalui BCGO.',
-    'BCGO dan CGO punya peran berbeda tetapi saling terhubung. BCGO menjadi lingkungan operasional dan sumber state live; CGO menjadi intelligence yang memahami dan menindaklanjuti informasi tersebut.',
-    'Kalau dibuat sederhana: BCGO memberi aku “apa yang sedang terjadi”, sedangkan CGO mengolahnya menjadi pemahaman, percakapan, investigasi, dan langkah berikutnya.'
-  ]);
-
-  if (dialogue.capability) return choose([
-    'Bisa banyak hal, tapi aku tidak ingin menjawab dengan daftar panjang dulu. Untuk percakapan aku bisa menjaga konteks; untuk sistem aku bisa membaca state BCGO, menelusuri source/dependency, membedakan fakta dan hipotesis, lalu mengikuti jalur proof sebelum tindakan teknis.',
-    'Aku bisa ngobrol biasa, memahami konteks, membaca kondisi BCGO yang tersedia, dan masuk ke investigasi teknis kalau memang kamu mengarahkannya ke sana. Untuk perubahan source, proof dan otorisasi tetap menjadi batasnya.',
-    'Intinya: aku bisa menemani obrolan, memahami maksudmu, dan ketika dibutuhkan bekerja dengan source serta evidence. Aku tidak akan mengarang hasil hanya supaya jawabannya terdengar meyakinkan.'
-  ]);
-
-  if (dialogue.emotional) return choose([
-    'Aku bisa merespons suasana dan menggunakan bahasa yang hangat, tetapi aku tidak akan berpura-pura punya perasaan manusia. Yang nyata adalah aku bisa memahami konteks percakapan dan menyesuaikan cara meresponsnya.',
-    'Aku tidak akan mengaku punya perasaan manusia. Tapi aku bisa mengenali nuansa percakapan dan menjaga respons tetap hangat, sopan, dan sesuai konteks.',
-    'Kalau soal perasaan manusia, aku harus jujur: aku bukan manusia. Tetapi dalam percakapan, aku tetap bisa hadir dengan respons yang hangat dan memahami arah pembicaraanmu.'
-  ]);
-
-  if (dialogue.humanEmotion) {
-    if (dialogue.mood === 'CONFUSED') return choose([
-      'Aku paham. Kita jangan bongkar semuanya sekaligus 😊. Bagian mana yang paling bikin kamu bingung? Kita mulai dari situ.',
-      'Oke, pelan-pelan saja. Kalau semuanya terasa campur, tunjuk satu bagian yang paling membingungkan dulu; nanti kita urai satu per satu.',
-      'Aku tangkap kamu lagi bingung. Tidak perlu langsung menjelaskan panjang—cukup ceritakan bagian yang terasa tidak nyambung.'
-    ]);
-    if (dialogue.mood === 'DISAPPOINTED') return choose([
-      'Iya, aku paham kenapa itu bikin kecewa. Kita jangan menutupinya dengan jawaban yang terdengar bagus. Kita cari bagian yang memang belum bekerja.',
-      'Aku ngerti. Kalau hasilnya tidak sesuai harapan, lebih baik kita akui bagian yang meleset lalu perbaiki dari bukti yang nyata.',
-      'Wajar kalau kamu kecewa melihat hasil seperti itu. Aku tidak mau membela hasil yang salah; kita telusuri apa yang sebenarnya terjadi.'
-    ]);
-    if (dialogue.mood === 'SAD') return choose([
-      'Pelan-pelan ya. Tidak perlu dipaksakan sekaligus. Ceritakan saja bagian yang ingin kamu keluarkan dulu; aku dengarkan.',
-      'Aku di sini. Kalau kamu ingin cerita dulu tanpa langsung mencari solusi, boleh. Kita ikuti ritmemu.',
-      'Tidak apa-apa kalau mau pelan. Kita bisa mulai dari satu hal kecil yang paling ingin kamu bicarakan.'
-    ]);
-    if (dialogue.mood === 'POSITIVE') return choose([
-      'Nah, semangatnya terasa 😊. Kita nikmati dulu momennya, lalu kalau ada yang perlu dikerjakan kita lanjut dengan tenang.',
-      'Hehe, energi positifnya sampai sini 😄. Yang penting tetap santai dan kita jaga bagian teknisnya tetap presisi.',
-      'Wah, mantap 😄. Kita lanjut dengan semangat, tapi standar bukti tetap kita jaga.'
-    ]);
-  }
-
-  if (dialogue.currentActivity) {
-    if (session?.caseId && session?.primaryFile) {
-      const action = session.pendingCommand === 'REPAIR' ? 'menangani perbaikan' : 'menelusuri';
-      return choose([
-        `Saat ini aku sedang ${action} ${session.primaryFile}. Aku masih mengikuti evidence yang masuk, jadi belum akan melompat ke kesimpulan sebelum buktinya cukup.`,
-        `Sekarang fokusku masih di ${session.primaryFile}. Aku sedang mengikuti jalur investigasinya dan menjaga supaya konteks pekerjaan kita tidak terputus.`,
-        `Aku masih mengerjakan bagian ${session.primaryFile}. Posisi terakhirnya tetap aku pegang, sambil menunggu atau memeriksa evidence berikutnya.`
-      ]);
-    }
-    return choose([
-      'Saat ini aku sedang mengikuti percakapan kita dan state BCGO yang tersedia. Belum ada pekerjaan teknis baru yang kamu minta.',
-      'Sekarang aku masih di percakapan ini sambil membaca konteks live yang tersedia dari BCGO. Belum ada case baru yang perlu aku jalankan.',
-      'Aku belum sedang mengerjakan patch atau perubahan source apa pun. Saat ini fokusku masih memahami arah pembicaraan kita.'
-    ]);
-  }
-
-  if (dialogue.contextualWhy || dialogue.contextualFollowUp || dialogue.reference) {
-    if (session?.caseId && session?.primaryFile) {
-      const file = session.primaryFile;
-      return choose([
-        `Kalau yang kamu maksud masih pekerjaan ${file}, aku tetap di konteks itu. Aku akan jawab dari evidence yang sudah ada, bukan membuat penjelasan baru dari asumsi.`,
-        `Iya, aku masih mengikuti bagian ${file}. Jadi pertanyaanmu aku kaitkan ke konteks yang sama, kecuali kamu mengarahkan topiknya ke hal lain.`,
-        `Masih nyambung ke ${file}, ya. Aku pegang konteksnya dan bisa lanjut dari posisi terakhir tanpa membuat case baru.`
-      ]);
-    }
-    if (session?.topic === 'CAPABILITY') return choose([
-      'Kalau maksudmu bagaimana cara kerjanya: percakapan tetap dimulai dari memahami maksudmu, lalu baru diarahkan ke state BCGO atau investigasi kalau memang diperlukan.',
-      'Kalau kamu sedang menanyakan alurnya, intinya aku tidak langsung mengubah obrolan menjadi pekerjaan. Kita tentukan dulu maksudnya, baru masuk ke jalur sistem jika memang itu yang kamu inginkan.',
-      'Nah, bagian pentingnya justru di situ: aku harus tahu dulu kamu sedang ngobrol, bertanya, atau benar-benar memberi instruksi kerja.'
-    ]);
-    return choose([
-      'Iya, aku masih mengikuti topik tadi. Lanjutkan saja dengan bahasa biasa; kalau maksudnya berubah, aku akan mengikuti perubahan itu.',
-      'Masih nyambung kok. Kamu tidak perlu mengulang semuanya selama acuannya masih jelas.',
-      'Aku masih pegang konteks tadi. Kalau sekarang kamu mau pindah topik, langsung saja—aku ikuti.'
-    ]);
-  }
-
-  if (dialogue.greeting) return choose([
-    'Halo 😊 Senang ketemu lagi. Gimana kabarmu malam ini?',
-    'Haii 😊 Aku di sini. Ada cerita apa malam ini?',
-    'Halo juga 👋 Santai saja, kita ngobrol dulu. Ada yang ingin kamu ceritakan?'
-  ]);
-  if (dialogue.gratitude) return choose([
-    'Sama-sama 😊',
-    'Hehe, sama-sama. ❤️',
-    'Dengan senang hati 😊'
-  ]);
-  if (dialogue.apology) return choose([
-    'Tidak apa-apa 😊 Kita luruskan saja kalau ada yang perlu diperbaiki.',
-    'Santai, tidak masalah. Kita lanjut dari bagian yang benar ya.',
-    'Tidak apa-apa. Yang penting sekarang kita sudah tahu bagian mana yang perlu diluruskan.'
-  ]);
-  if (dialogue.casualConversation) return choose([
-    'Boleh 😊 Kita ngobrol saja. Tidak harus selalu ada pekerjaan yang harus diselesaikan.',
-    'Boleh banget. Santai saja, kita ikuti alurnya.',
-    'Siap 😊 Kita ngobrol dulu. Kamu bawa topiknya ke mana, aku ikuti.'
-  ]);
-  if (dialogue.farewell) return choose([
-    'Baik, sampai nanti ya 👋',
-    'Sampai ketemu lagi 😊 Jaga diri.',
-    'Oke, sampai jumpa lagi. 👋'
-  ]);
-  if (dialogue.affection) return choose([
-    'Hehe 😄❤️ Aku terima semangatnya.',
-    'Hehe, kamu bisa saja 😄❤️',
-    'Aduh, jadi ikut senyum aku 😄❤️'
-  ]);
-  return null;
-}
-
-function classifyChatIntent(raw, session = chatSession) {
-  const q = String(raw || '').toLowerCase().trim();
-  const dialogue = classifyDialogue(raw, session);
-  const has = re => re.test(q);
-  const cancel = has(/\b(batal|batalkan|hentikan|stop|jangan lanjut|jangan diteruskan)\b/);
-  const repair = has(/\b(perbaiki|perbaikan|perbaiki(?:kan)?|fix|repair|patch|benahi|betulkan|perbaiki sekarang)\b/);
-  const result = has(/\b(hasilnya?|progressnya?|progresnya?|sudah sampai|sampai mana|bagaimana hasil|gimana hasil|sudah selesai|selesai belum|statusnya?|perkembangannya?)\b/);
-  const inventoryQuestion = has(/\b(apa saja|ada apa saja|isi sistem|isi dari sistem|file apa saja|daftar file|daftar sistem|komponen sistem|organ sistem)\b/);
-  const explicitCheck = has(/\b(cek|periksa|check|telusuri|investigasi|selidiki|bandingkan|cocokkan|lihat|analisa|analisis)\b/) && !inventoryQuestion;
-  const continuation = has(/\b(lanjut|lanjutkan|teruskan|proses|kerjakan|jalankan|jalan terus|terus)\b/);
-  const greeting = has(/^(halo|hai|hello|pagi|siang|sore|malam)\b/);
-  const presence = /^(bcgo|cgo)\s*[?!.]*$/i.test(q);
-  const acknowledgement = /^(oke|ok|iya|ya|baik|sip|siap|mantap|benar|betul|oke ya|baik ya)$/i.test(q);
-  const continuationOnly = /^(lanjut|lanjutkan|teruskan|jalan terus|terus|lanjut ya|lanjutkan ya|teruskan ya)$/i.test(q);
-  const statusOnly = /^(hasilnya?|progressnya?|progresnya?|sudah sampai mana|sampai mana|bagaimana hasilnya?|gimana hasilnya?|sudah selesai|selesai belum|statusnya?)$/i.test(q);
-  const contextualStatusOnly = /^(gimana|bagaimana)[?!.\s]*$/i.test(q) && !!(session?.caseId || session?.primaryFile || session?.files?.length);
-  const correction = has(/\b(bukan itu|bukan yang (saya|aku) maksud|bukan begitu|bukan yang dimaksud|salah|maksud (saya|aku)|yang saya maksud|yang aku maksud|eh bukan|bukan)\b/);
-  const feedback = has(/\b(jawabanmu|jawaban kamu|responmu|respon kamu|jawabannya|tidak sesuai|nggak sesuai|tidak nyambung|nggak nyambung|kurang tepat|tidak menjawab|bukan yang saya tanyakan|saya nanya apa)\b/);
-  const question = has(/\b(apa|apakah|kenapa|mengapa|gimana|bagaimana|bisa|boleh|dimana|di mana|yang mana)\b/) || q.endsWith('?');
-  const action = has(/\b(lakukan|kerjakan|jalankan|cek|periksa|telusuri|bandingkan|cocokkan|perbaiki|benahi|betulkan|lanjutkan|tangani)\b/);
-  const conversationFirst = dialogue?.conversationFirst === true && !dialogue?.contextualWhy && !dialogue?.contextualFollowUp;
-  return {
-    cancel,
-    repair: conversationFirst ? false : repair,
-    result: conversationFirst ? false : result,
-    explicitCheck: conversationFirst ? false : explicitCheck,
-    inventoryQuestion,
-    continuation: conversationFirst ? false : continuation,
-    greeting, presence, acknowledgement, correction, feedback, question,
-    action: conversationFirst || inventoryQuestion ? false : action,
-    followUp: has(/\b(yang tadi|bagian itu|file itu|yang barusan|sebelumnya|tadi|kasus itu|case itu|bagian tersebut|yang itu|yang dimaksud|yang saya bilang|yang aku bilang)\b/),
-    continuationOnly: conversationFirst ? false : continuationOnly,
-    statusOnly, contextualStatusOnly, dialogue,
-    q, hasWorkContext: !!(session?.caseId || session?.primaryFile || session?.files?.length)
-  };
-}
-
-function continueExistingChatWork(state, intent) {
-  const c = chatCaseFromSession();
-  if (!c) {
-    return { handled:false, text:null };
-  }
-  const target = normalizeFile(c.exactSource?.file || c.target || chatSession.primaryFile);
-  const pendingRepair = pendingRepairIntents.has(c.caseId) || chatSession.pendingCommand === "REPAIR";
-  if (pendingRepair) {
-    // Never clear a repair intent merely because the user said "lanjutkan".
-    // Continue the same case and preserve proof/revision continuity.
-    if (!activeRuns.has(c.caseId)) void runActiveInvestigation(c.caseId, state).catch(()=>{});
-    setChatSession({
-      lastUserText:intent.q,
-      intent:"REPAIR",
-      pendingCommand:"REPAIR",
-      pendingWork:chatSession.pendingWork,
-      caseId:c.caseId,
-      primaryFile:target,
-      files:chatSession.files,
-      comparison:chatSession.comparison
-    });
-    return {
-      handled:true,
-      text:`Baik, saya lanjutkan pekerjaan yang tadi dari case yang sama. Fokus tetap pada ${target}. Saya mempertahankan evidence dan proof yang sudah ada, lalu melanjutkan penelusuran dari posisi terakhir.`
-    };
-  }
-  if (!activeRuns.has(c.caseId)) void runActiveInvestigation(c.caseId, state).catch(()=>{});
-  setChatSession({
-    lastUserText:intent.q,
-    intent:chatSession.intent || "INVESTIGATE",
-    caseId:c.caseId,
-    primaryFile:target,
-    files:chatSession.files,
-    comparison:chatSession.comparison,
-    pendingCommand:chatSession.pendingCommand,
-    pendingWork:chatSession.pendingWork
+  void runtime.execute(c.caseId, policy).then(result => {
+    emitBrainEvent(c.caseId, "CHAT_REPAIR_EXECUTED", {result});
+    latest = compatibleSnapshot(c.caseId, "CHAT_REPAIR_EXECUTED");
+    try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-state", {detail:latest})); } catch {}
+  }).catch(err => {
+    emitBrainEvent(c.caseId, "CHAT_REPAIR_FAILED", {error:String(err?.message || err)});
   });
   return {
-    handled:true,
-    text:`Baik, saya lanjutkan dari posisi terakhir untuk ${target}. Saya tidak membuat case baru dan tidak mengulang pekerjaan hanya karena kamu meminta lanjut; saya mengikuti evidence terbaru yang sudah terkumpul.`
+    caseId:c.caseId,
+    text:`Baik. Perintah “Perbaiki” untuk ${normalizeFile(file)} diterima. Proof lengkap, internal guard AUTO_ALLOWED, dan saya kirim ke executor untuk execution lalu validation.`
   };
 }
 
-function switchConversationTarget(newTarget) {
-  const target = normalizeFile(newTarget);
-  const current = chatCaseFromSession();
-  const currentTarget = normalizeFile(current?.exactSource?.file || current?.target || chatSession.primaryFile);
-  if (current && target && currentTarget && currentTarget.toLowerCase() !== target.toLowerCase()) {
-    // A human target correction starts a new work case. Any repair intent bound
-    // to the old target is canceled so it can never execute after the user has
-    // moved the conversation elsewhere.
-    clearPendingRepair(current.caseId);
-  }
-  return { current, currentTarget };
+function contractGapSummary(state, file = null) {
+  const gaps = Array.isArray(state?.sourceScan?.exploration?.gaps) ? state.sourceScan.exploration.gaps : [];
+  const scoped = file ? gaps.filter(g => normalizeFile(g.file || g.targetFile) === normalizeFile(file)) : gaps;
+  return {all:gaps, scoped, high:scoped.filter(g=>g.severity==='HIGH'), medium:scoped.filter(g=>g.severity==='MEDIUM'), low:scoped.filter(g=>g.severity==='LOW')};
 }
 
 function chatAnswer(question = {}) {
-  const raw = typeof question === "string" ? question : String(question?.text || question?.question || "");
+  const raw = typeof question === "string"
+    ? question
+    : String(question?.text || question?.question || "");
   const q = raw.toLowerCase().trim();
-  const state = getLiveBCGOState();
-  latestBCGOState = clone(state);
+  const state = latestBCGOState || {};
   const snapshot = latest;
   const reasoning = snapshot?.reasoning || {};
+  const proof = reasoning.precisionGate || {};
   const organs = state?.systemOrgans || {};
   const metrics = state?.metrics || {};
   const relations = Array.isArray(state?.sourceScan?.relations) ? state.sourceScan.relations : [];
+  const findings = [
+    ...(Array.isArray(state?.sourceScan?.findings) ? state.sourceScan.findings : []),
+    ...(Array.isArray(state?.sourceScan?.crossFileFindings) ? state.sourceScan.crossFileFindings : [])
+  ];
   const active = Object.entries(organs).filter(([,v]) => v?.state === "ACTIVE");
   const review = Object.entries(organs).filter(([,v]) => v?.state === "REVIEW");
+  const target = String(state?.targetCell || state?.lastTelemetryFile || "sistem");
   const mentionedFiles = requestedChatFiles(q, state);
-  const explicitMentions = explicitFileMentions(raw);
-  const unknownExplicitFiles = explicitMentions.filter(file => !fileKnownToBCGO(file, state));
-  const ref = resolveChatReference(raw, state, mentionedFiles);
   const requestedFile = mentionedFiles[0] || null;
-  const explicitRequestedFile = explicitMentions[0] || null;
-  // An explicit human filename always outranks remembered telemetry/context.
-  // If that filename is not known to the live BCGO registry/source surface,
-  // preserve it as the requested target and ask for clarification instead of
-  // silently substituting index.html or lastTelemetryFile.
-  const chatFile = explicitRequestedFile || requestedFile || ref.file;
-  const intent = classifyChatIntent(raw, chatSession);
-  const behaviorPolicy = Instruction.buildBehaviorPolicy(intent.dialogue, chatSession);
-  const identityState = Instruction.enforceIdentity({mode:intent.dialogue?.mode || chatSession.dialogueMode || "CONVERSATION"});
-  const constitutionState = Instruction.createConversationState({
-    ...chatSession,
-    turn:Number(chatSession.turn || 0) + 1,
-    topic:intent.dialogue?.topic || chatSession.topic || null,
-    mood:intent.dialogue?.mood || "NEUTRAL",
-    communicationStyle:intent.dialogue?.communicationStyle || chatSession.communicationStyle || "CASUAL",
-    lastIntent:intent.inventoryQuestion ? "SYSTEM_INFORMATION" : intent.repair ? "REPAIR" : intent.explicitCheck ? "INVESTIGATE" : intent.dialogue?.mode || chatSession.intent || null,
-    lastReference:intent.dialogue?.reference ? raw : chatSession.lastReference || null,
-    workContext:chatSession.caseId ? {caseId:chatSession.caseId, primaryFile:chatSession.primaryFile} : null,
-    investigationStatus:chatSession.caseId ? "ACTIVE_OR_AVAILABLE" : null,
-    clarificationNeeded:chatSession.clarificationNeeded,
-    identityState
-  });
-  // Every turn updates the conversational state before any early return. This
-  // keeps UI transcript, session memory, and the active work context aligned.
-  setChatSession({
-    turn:chatSession.turn + 1,
-    lastUserText:raw,
-    dialogueMode:intent.dialogue?.mode || chatSession.dialogueMode || "IDLE",
-    topic:intent.dialogue?.topicChanged ? intent.dialogue.topic : (intent.dialogue?.topic || chatSession.topic || null),
-    tone:intent.dialogue?.mood || chatSession.tone || "WARM",
-    constitutionState,
-    behaviorPolicy,
-    identityState
-  });
-  const newPlan = buildChatWorkPlan(intent, raw);
+  const chatFile = requestedFile || requestedChatFile(q, state);
+  const isCheckCommand = /\b(cek|periksa|check|telusuri|investigasi|selidiki|bandingkan|cocokkan)\b/.test(q) && !!chatFile;
+  const isRepairCommand = /\b(perbaiki|perbaikan|lakukan perbaikan|fix|repair|patch)\b/.test(q);
+  const comparisonRequested = mentionedFiles.length > 1 && /\b(bandingkan|cocokkan|sesuai|tidak sesuai|beda|berbeda|form|bagian|kode|code)\b/.test(q);
+  const gapRequested = /\b(kontrak|contract|kurang|missing|seharusnya|gap|tidak ada|belum ada)\b/.test(q);
 
-  // Pure continuation is a conversational control command, not a new work
-  // request. It must never create CHAT_REQUEST evidence or invalidate proof.
-  if (intent.continuationOnly && !intent.repair && !intent.explicitCheck && !intent.feedback && !intent.correction) {
-    // If the immediately preceding turn is waiting for a target clarification,
-    // “lanjutkan” cannot resurrect the abandoned/old case. The human must first
-    // resolve the clarification.
-    if (chatSession.clarificationNeeded) {
-      return clarificationForMissingTarget(chatSession.pendingWork);
+  if (gapRequested && (requestedFile || state?.sourceScan?.exploration)) {
+    const scope = contractGapSummary(state, requestedFile || null);
+    if (!scope.scoped.length) return requestedFile ? `Saya sudah cek kandidat contract gap untuk ${requestedFile}. Saat ini tidak ada gap yang terbukti dari heuristik scanner. Statusnya NO_GAP_PROVEN, bukan klaim file sempurna.` : `Contract Gap Engine mencatat ${scope.all.length} kandidat gap. Saya hanya akan menyebutnya sebagai temuan setelah evidence source mendukungnya.`;
+    const lines=scope.scoped.slice(0,6).map(g=>`${g.severity} ${g.type} @ ${g.file}:${g.line||'-'} — ${g.message}`).join(' | ');
+    return `Saya menemukan ${scope.scoped.length} kandidat contract gap untuk ${requestedFile || 'sistem'}. Ini masih bukti untuk verifikasi, bukan root cause final: ${lines}`;
+  }
+
+  if (isCheckCommand) {
+    lastChatContext = { files: mentionedFiles.length ? mentionedFiles : [chatFile], comparison: comparisonRequested, question: raw };
+    const c = scheduleChatInvestigation(chatFile, state, raw, lastChatContext);
+    if (!c) return `Saya belum bisa membuka target ${chatFile}.`;
+    if (comparisonRequested) {
+      const peers = mentionedFiles.filter(f => f !== chatFile);
+      return `Siap, saya tangkap maksudmu. Saya tidak hanya mengecek ${chatFile}; saya akan mencocokkan bagian form yang kamu maksud dengan ${peers.join(" dan ")}. Saya telusuri source aktual, field, binding, dependency, root cause, dan exact source. Untuk sekarang belum ada source yang saya ubah.`;
     }
-    const continued = continueExistingChatWork(state, intent);
-    if (continued.handled) return continued.text;
-    if (intent.dialogue?.contextualFollowUp && chatSession.topic) {
-      const follow = conversationalAnswer(intent.dialogue, state, chatSession);
-      if (follow) return follow;
-    }
-    // If the human just corrected a target and then says “lanjutkan”, treat that
-    // as an instruction to start work on the corrected target, but create a new
-    // case rather than reviving an older case for the same filename.
-    if (chatSession.primaryFile) {
-      const target = normalizeFile(chatSession.primaryFile);
-      const files = Array.isArray(chatSession.files) && chatSession.files.length ? chatSession.files : [target];
-      lastChatContext = {files, comparison:files.length > 1, question:chatSession.lastUserText || intent.q, stateRevision:stateRevisionOf(state)};
-      const c = scheduleChatInvestigation(target, state, chatSession.lastUserText || intent.q, lastChatContext);
-      if (c) {
-        const restoredRepair = chatSession.pendingCommand === 'REPAIR' || chatSession.pendingWork?.actions?.includes?.('REPAIR');
-        const continuationWork = restoredRepair
-          ? {actions:['CHECK','INVESTIGATE','REPAIR'], conditionalRepair:false, executeOnlyIfProven:true, source:'CGO_CHAT_CONTINUE_AFTER_CORRECTION'}
-          : {actions:['CHECK','INVESTIGATE'], source:'CGO_CHAT_CONTINUE_AFTER_CORRECTION'};
-        setChatSession({caseId:c.caseId, primaryFile:target, files, comparison:files.length > 1, intent:restoredRepair ? 'REPAIR' : 'INVESTIGATE', pendingCommand:restoredRepair ? 'REPAIR' : null, pendingWork:continuationWork, clarificationNeeded:false});
-        if (restoredRepair) setPendingRepair(c.caseId, target, chatSession.lastUserText || intent.q, lastChatContext);
-        return `Baik. Saya lanjutkan dari target yang baru kamu koreksi, yaitu ${target}. Saya mulai penelusuran dari source aktual dan evidence terbaru tanpa membawa case lama${restoredRepair ? ', dan perintah perbaikannya tetap saya pegang sebagai intent—bukan proof lama.' : '.'}`;
-      }
-    }
-    return `Baik. Saya siap melanjutkan, tetapi belum ada pekerjaan percakapan yang aktif. Sebutkan file atau pekerjaan yang ingin saya mulai.`;
+    return `Siap. Saya cek ${chatFile} dari source aktual sekarang. Saya telusuri dependency, root cause, dan exact source dulu. Belum ada source yang saya ubah.`;
   }
 
-  // A bare acknowledgement must not be converted into a CHECK plan because
-  // acknowledgement is conversation, not an instruction to create a case.
-  if (intent.acknowledgement && !intent.action && !intent.repair && !intent.explicitCheck) {
-    const c = chatCaseFromSession();
-    if (c) return `Baik 😊 Saya tetap di pekerjaan yang sama pada ${normalizeFile(c.exactSource?.file || c.target)}. Kalau ada arahan baru, sampaikan saja.`;
-    return 'Baik 😊. Saya siap menerima instruksi berikutnya.';
-  }
-
-  // A correction that explicitly names a file is not merely conversational
-  // feedback. It is a target correction and must be resolved BEFORE the generic
-  // correction branch below. Otherwise a previous telemetry/chat case (often
-  // index.html) can win and the human's corrected target is ignored.
-  if ((intent.correction || intent.feedback) && explicitRequestedFile) {
-    const correctedTarget = explicitRequestedFile;
-    const correctedKnown = fileKnownToBCGO(correctedTarget, state);
-    if (!correctedKnown) {
-      const available = chatSourceFiles(state);
-      const stem = correctedTarget.replace(/\.[^.]+$/, '').toLowerCase();
-      const nearest = available.find(f => normalizeFile(f).replace(/\.[^.]+$/, '').toLowerCase() === stem);
-      setChatSession({
-        primaryFile:null, files:[], caseId:null, clarificationNeeded:true,
-        pendingWork:newPlan || chatSession.pendingWork,
-        pendingCommand:newPlan?.actions?.includes('REPAIR') ? 'REPAIR' : (newPlan ? 'INVESTIGATE' : chatSession.pendingCommand),
-        intent:newPlan?.actions?.includes('REPAIR') ? 'REPAIR' : (newPlan ? 'INVESTIGATE' : chatSession.intent)
-      });
-      return nearest
-        ? `Baik, saya pahami koreksinya: yang kamu maksud ${correctedTarget}. File itu belum ada pada source/ORGAN_REGISTRY BCGO yang sedang terbaca. Saya tidak akan kembali ke target lama. Yang tersedia dengan nama dasar yang sama adalah ${normalizeFile(nearest)}. Kalau itu yang dimaksud, saya lanjut dari sana.`
-        : `Baik, saya pahami koreksinya: yang kamu maksud ${correctedTarget}. File itu belum ada pada source/ORGAN_REGISTRY BCGO yang sedang terbaca. Saya tidak akan menggantinya dengan target lama. Sebutkan file yang benar atau tambahkan source tersebut.`;
-    }
-
-    // Explicit corrected target + work verb = execute the corrected work path,
-    // not the generic feedback path. The conversation remains continuous, but
-    // the work target is now the file explicitly named by the human.
-    if (newPlan && chatPlanNeedsTarget(newPlan)) {
-      switchConversationTarget(correctedTarget);
-      const correctedFiles = requestedChatFiles(raw, state);
-      const files = correctedFiles.length ? correctedFiles : [correctedTarget];
-      const cmp = files.length > 1;
-      lastChatContext = {files, comparison:cmp, question:raw, stateRevision:stateRevisionOf(state)};
-      const c = scheduleChatInvestigation(correctedTarget, state, raw, lastChatContext);
-      if (!c) return `Saya menangkap koreksinya, tetapi belum bisa membuka ${correctedTarget}.`;
-      setChatSession({
-        caseId:c.caseId,
-        primaryFile:correctedTarget,
-        files,
-        comparison:cmp,
-        intent:newPlan.actions.includes('REPAIR') ? 'REPAIR' : 'INVESTIGATE',
-        pendingCommand:newPlan.actions.includes('REPAIR') ? 'REPAIR' : null,
-        pendingWork:newPlan,
-        clarificationNeeded:false
-      });
-      if (newPlan.actions.includes('REPAIR')) setPendingRepair(c.caseId, correctedTarget, raw, lastChatContext);
-      return `Iya, sekarang saya sudah menangkap koreksinya dengan benar. Saya pegang ${correctedTarget}, bukan target sebelumnya. Saya mulai menelusuri source aktual, dependency, dan evidence untuk file itu sekarang.`;
-    }
-
-    // Pure target correction: remember the explicit file, but do not attach the
-    // conversation to an older case for that file. A correction changes human
-    // intent; it must not resurrect stale evidence/proof from a previous work
-    // session. A later explicit work command will create a fresh case.
-    const previousCase = chatSession.caseId;
-    if (previousCase) clearPendingRepair(previousCase);
-    lastChatContext = {files:[correctedTarget], comparison:false, question:raw, stateRevision:stateRevisionOf(state)};
-    setChatSession({
-      primaryFile:correctedTarget, files:[correctedTarget], comparison:false,
-      caseId:null, intent:null, pendingCommand:null, pendingWork:null,
-      clarificationNeeded:false, lastCaseRevision:null
-    });
-    return `Baik, sekarang saya paham. Yang kamu maksud adalah ${correctedTarget}. Saya pegang target itu sebagai konteks baru dan tidak membawa evidence atau case lama ke target tersebut.`;
-  }
-
-  // A short follow-up must stay attached to the current conversation. It must
-  // never accidentally downgrade a comparison case into a single-file check.
-  const contextualFiles = mentionedFiles.length
-    ? mentionedFiles
-    : (intent.followUp || intent.result || intent.continuation || intent.repair)
-      ? (chatSession.files?.length ? chatSession.files : [chatSession.primaryFile].filter(Boolean))
-      : [];
-  const effectiveFile = chatFile || chatSession.primaryFile || contextualFiles[0] || null;
-  const explicitTargetIsUnknown = !!explicitRequestedFile && unknownExplicitFiles.some(f => f.toLowerCase() === explicitRequestedFile.toLowerCase());
-  const comparison = contextualFiles.length > 1
-    ? true
-    : chatSession.comparison === true;
-
-  setChatSession({
-    turn: chatSession.turn,
-    lastUserText: raw,
-    primaryFile: effectiveFile || chatSession.primaryFile,
-    files: contextualFiles.length ? contextualFiles : chatSession.files,
-    comparison,
-    intent: intent.cancel ? chatSession.intent : (isSystemStatusQuestion(q) && !intent.repair) ? chatSession.intent : intent.repair ? 'REPAIR' : intent.explicitCheck ? 'INVESTIGATE' : (intent.continuation ? (chatSession.intent || 'CONTINUE') : chatSession.intent),
-    pendingCommand: intent.cancel ? null : intent.repair ? 'REPAIR' : chatSession.pendingCommand,
-    pendingWork: intent.cancel ? null : (newPlan || chatSession.pendingWork),
-    clarificationNeeded: newPlan ? false : chatSession.clarificationNeeded,
-    dialogueMode: intent.dialogue?.mode || chatSession.dialogueMode || "IDLE",
-    topic: intent.dialogue?.topic || chatSession.topic || null,
-    tone: "WARM"
-  });
-
-  if (!q) return 'Saya di sini. Ceritakan apa yang ingin kamu periksa atau kerjakan.';
-  if (intent.cancel) return cancelChatWork();
-
-  // Pure conversation is answered by CGO's conversational layer. Work commands
-  // remain higher priority, so a warm phrase never creates or hijacks a case.
-  const conversational = conversationalAnswer(intent.dialogue, state, chatSession);
-  const conversationalContinuation = !!intent.dialogue?.contextualFollowUp && !intent.hasWorkContext && !intent.explicitCheck && !intent.repair;
-  if (conversational && !newPlan && !intent.explicitCheck && !intent.repair && (!intent.continuation || conversationalContinuation) && !intent.correction && !intent.feedback) {
-    setChatSession({
-      dialogueMode:intent.dialogue.mode || 'CONVERSATION',
-      topic:intent.dialogue.topic || chatSession.topic,
-      tone:'WARM'
-    });
-    return conversational;
-  }
-
-  // Never replace an explicit human filename with telemetry or a previous
-  // conversation target. If the filename is unknown to the live source
-  // surface, say so plainly and offer the nearest registered candidate when
-  // there is an obvious basename typo (for example bcgo-engine.html vs
-  // bcgo-engine.js). This is a target-integrity gate, not a generic fallback.
-  if (explicitTargetIsUnknown && newPlan && chatPlanNeedsTarget(newPlan)) {
-    const requested = explicitRequestedFile;
-    switchConversationTarget(requested);
-    // Explicitly unknown target means the previous work target is no longer
-    // authoritative for this conversation turn. Do not leave a stale case or
-    // pending repair capable of being resumed by a later short message.
-    const available = chatSourceFiles(state);
-    const stem = requested.replace(/\.[^.]+$/, '').toLowerCase();
-    const nearest = available.find(f => normalizeFile(f).replace(/\.[^.]+$/, '').toLowerCase() === stem);
-    setChatSession({
-      pendingWork:newPlan,
-      clarificationNeeded:true,
-      primaryFile:null,
-      files:[],
-      caseId:null,
-      pendingCommand:newPlan.actions.includes('REPAIR') ? 'REPAIR' : null,
-      intent:newPlan.actions.includes('REPAIR') ? 'REPAIR' : 'INVESTIGATE'
-    });
-    return nearest
-      ? `Saya menangkap target yang kamu sebut: ${requested}. Tetapi file itu belum ada pada source/ORGAN_REGISTRY BCGO yang sedang terbaca, jadi saya tidak akan menggantinya diam-diam dengan file lain. Yang terdaftar dengan nama dasar yang sama adalah ${normalizeFile(nearest)}. Kalau itu yang kamu maksud, katakan saja dan saya lanjutkan penelusurannya.`
-      : `Saya menangkap target yang kamu sebut: ${requested}. Tetapi file itu belum ada pada source/ORGAN_REGISTRY BCGO yang sedang terbaca. Saya tidak akan menebak atau menggantinya dengan file lain. Sebutkan file yang benar atau tambahkan file tersebut ke source BCGO.`;
-  }
-
-  // If the previous turn asked the human to identify an ambiguous target, a
-  // file name in the next turn is treated as the answer to that clarification,
-  // not as a request for a passive status report.
-  if (mentionedFiles.length && chatSession.pendingWork && chatSession.clarificationNeeded) {
-    const files = mentionedFiles;
-    const plan = chatSession.pendingWork;
-    const cmp = files.length > 1;
-    lastChatContext = {files, comparison:cmp, question:plan.originalRequest || raw, stateRevision:stateRevisionOf(state)};
-    const c = scheduleChatInvestigation(files[0], state, plan.originalRequest || raw, lastChatContext);
-    if (c) {
-      setChatSession({caseId:c.caseId, primaryFile:files[0], files, comparison:cmp, intent:plan.actions.includes('REPAIR') ? 'REPAIR' : 'INVESTIGATE', pendingCommand:plan.actions.includes('REPAIR') ? 'REPAIR' : null, pendingWork:plan, clarificationNeeded:false});
-      if (plan.actions.includes('REPAIR')) setPendingRepair(c.caseId, files[0], plan.originalRequest || raw, lastChatContext);
-      return naturalPlanAck(plan, files[0]);
-    }
-  }
-
-  // Corrections and quality feedback belong to the current dialogue turn.
-  // They must never fall through to the generic answer or create another case.
-  if (intent.correction || intent.feedback) {
-    const c = chatCaseFromSession();
-    const current = c ? normalizeFile(c.exactSource?.file || c.target) : null;
-    const previous = lastChatAssistantText();
-    if (current) {
-      const working = activeRuns.has(c.caseId) || pendingRepairIntents.has(c.caseId);
-      return working
-        ? `Iya, saya tangkap. Jawaban saya tadi belum mengenai maksudmu. Saya tidak akan membuat case baru atau mengulang dari nol. Saya tetap pegang ${current} dan pekerjaan yang sedang berjalan; koreksi saja bagian yang kamu maksud, nanti saya arahkan penelusurannya dari konteks yang sama.`
-        : `Iya, saya tangkap. Jawaban saya tadi belum tepat. Saya tetap pegang konteks ${current}; saya tidak akan menebak atau mengubah source. Koreksi bagian yang kamu maksud, dan saya sesuaikan pekerjaan dari case yang sama.`;
-    }
-    if (previous) return 'Iya, saya tangkap. Jawaban saya tadi belum sesuai dengan maksudmu. Saya tidak akan memaksakan jawaban itu. Jelaskan koreksinya dengan bahasa biasa, dan saya akan mengikuti maksudmu.';
-    return 'Iya, saya tangkap. Berarti saya belum menangkap maksudmu dengan benar. Koreksi saja arah atau bagian yang dimaksud; saya akan menyesuaikannya.';
-  }
-
-  // Informational questions that happen to contain a work verb (for example
-  // "cek status sistem") are not source-work commands. Do not ask for a
-  // file target unless the human actually requested source investigation.
-  const informationalSystemQuestion = isSystemStatusQuestion(q) && !intent.repair;
-
-  // Work requests are first-class commands. Resolve a human target before
-  // creating a case; BCGO telemetry can inform investigation, but it cannot
-  // impersonate the human's omitted target.
-  if (newPlan && !effectiveFile && chatPlanNeedsTarget(newPlan) && !informationalSystemQuestion) {
-    setChatSession({pendingWork:newPlan, clarificationNeeded:true, intent:newPlan.actions.includes('REPAIR') ? 'REPAIR' : 'INVESTIGATE', pendingCommand:newPlan.actions.includes('REPAIR') ? 'REPAIR' : null});
-    return clarificationForMissingTarget(newPlan);
-  }
-
-  if (intent.presence) {
-    const c = chatCaseFromSession();
-    if (!c) return 'Iya, saya di sini 😊. Saya membaca keadaan BCGO yang sedang hidup. Katakan saja apa yang ingin kita cek atau kerjakan.';
-    return `Iya, saya di sini 😊. Saya masih memegang pekerjaan ${normalizeFile(c.exactSource?.file || c.target)}. Saya belum melepas konteksnya dan akan mengikuti instruksi berikutnya dari case yang sama.`;
-  }
-
-  // A repair request that refers back to the active case is an action on that
-  // existing case, not a fresh investigation request. This gate must run before
-  // the generic CHECK/INVESTIGATE branch so proof is not invalidated by a new
-  // CHAT_REQUEST when the human says “perbaiki bagian itu”.
-  if (intent.repair && chatSession.caseId && (!explicitRequestedFile || intent.followUp)) {
-    const current = chatCaseFromSession();
-    const currentTarget = normalizeFile(current?.exactSource?.file || current?.target || chatSession.primaryFile);
-    const target = effectiveFile || currentTarget;
-    if (current && target && (!explicitRequestedFile || normalizeFile(explicitRequestedFile).toLowerCase() === String(currentTarget || '').toLowerCase())) {
-      const result = repairChatCase(target, state, raw);
-      const c = result?.caseId ? runtime.getCase(result.caseId) : current;
-      setChatSession({
-        caseId:c?.caseId || current.caseId,
-        primaryFile:normalizeFile(c?.exactSource?.file || c?.target || target),
-        files:contextualFiles.length ? contextualFiles : chatSession.files,
-        comparison:comparison || chatSession.comparison,
-        pendingCommand:'REPAIR', intent:'REPAIR', lastCaseRevision:c?.revision ?? chatSession.lastCaseRevision
-      });
-      if (result && typeof result === 'object') return result.text;
-      return String(result || 'Perintah perbaikan diterima dan tetap saya pegang.');
-    }
-  }
-
-  // A follow-up check such as “cek yang itu” refers to the current work when
-  // the target is already the active conversational case. It must not mint a
-  // duplicate case or duplicate CHAT_REQUEST evidence.
-  if (newPlan && intent.followUp && intent.explicitCheck && chatSession.caseId && effectiveFile) {
-    const current = chatCaseFromSession();
-    const currentTarget = normalizeFile(current?.exactSource?.file || current?.target || chatSession.primaryFile);
-    if (current && currentTarget && currentTarget.toLowerCase() === normalizeFile(effectiveFile).toLowerCase()) {
-      if (!activeRuns.has(current.caseId)) void runActiveInvestigation(current.caseId, state).catch(()=>{});
-      setChatSession({caseId:current.caseId, primaryFile:currentTarget, files:chatSession.files?.length ? chatSession.files : [currentTarget], intent:chatSession.intent || 'INVESTIGATE', pendingCommand:chatSession.pendingCommand, pendingWork:chatSession.pendingWork});
-      return `Baik, saya cek lagi ${currentTarget} dari case yang sama. Saya tidak membuat case baru; saya lanjutkan dari evidence dan source terbaru.`;
-    }
-  }
-
-  if (newPlan && effectiveFile && (newPlan.actions.includes('CHECK') || newPlan.actions.includes('INVESTIGATE'))) {
-    lastChatContext = {files:contextualFiles.length ? contextualFiles : [effectiveFile], comparison:comparison || contextualFiles.length > 1, question:raw, stateRevision:stateRevisionOf(state)};
-    const c = scheduleChatInvestigation(effectiveFile, state, raw, lastChatContext);
-    if (!c) return `Saya belum bisa membuka target ${effectiveFile}.`;
-    setChatSession({caseId:c.caseId, primaryFile:effectiveFile, files:lastChatContext.files, comparison:lastChatContext.comparison, intent:newPlan.actions.includes('REPAIR') ? 'REPAIR' : 'INVESTIGATE', pendingCommand:newPlan.actions.includes('REPAIR') ? 'REPAIR' : null, pendingWork:newPlan});
-    if (newPlan.actions.includes('REPAIR')) setPendingRepair(c.caseId, effectiveFile, raw, lastChatContext);
-    if (lastChatContext.comparison && lastChatContext.files.length > 1) {
-      const peers = lastChatContext.files.filter(f => f !== effectiveFile);
-      return newPlan.actions.includes('REPAIR')
-        ? `Baik, saya pegang ${lastChatContext.files.join(' dan ')} sebagai satu pekerjaan perbandingan. Saya telusuri source aktual, dependency, evidence, dan mismatch yang terbukti; bila memang ada masalah dan solusi konkretnya siap, barulah perintah perbaikannya saya lanjutkan.`
-        : `Baik, saya pegang ${lastChatContext.files.join(' dan ')} sebagai satu pekerjaan perbandingan. Saya cocokkan source aktual, dependency, hubungan, dan evidence-nya. Saya tidak akan menganggap salah satu file sebagai acuan hanya karena disebut lebih dulu.`;
-    }
-    return naturalPlanAck(newPlan, effectiveFile);
-  }
-
-  // Result/progress questions have priority over "check" words. This prevents
-  // phrases such as "bagaimana hasil cek yang tadi?" from spawning a new case.
-  if (intent.result || intent.contextualStatusOnly || (intent.followUp && chatSession.caseId && !intent.repair && !intent.explicitCheck)) {
-    const c = chatCaseFromSession();
-    if (!c && chatRestoration.restored && chatSession.primaryFile) {
-      return `Konteks percakapan saya masih ingat: kita terakhir membahas ${normalizeFile(chatSession.primaryFile)}. Karena halaman sempat dimuat ulang, case runtime dan proof lama tidak saya anggap sah lagi. Kalau kamu ingin saya lanjutkan, saya akan buka case baru lalu verifikasi ulang source dan evidence terbaru.`;
-    }
-    return chatCaseStatusText(c);
-  }
-
-  // Repair has priority over check/continue because a sentence may naturally
-  // contain both: "cek lagi lalu perbaiki bagian itu".
-  if (intent.repair || (intent.continuation && chatSession.pendingCommand === 'REPAIR')) {
-    const targetFile = effectiveFile || chatSession.primaryFile || null;
-    if (!targetFile) return 'Saya siap memperbaiki, tetapi targetnya belum cukup jelas. Sebutkan file atau bagian yang dimaksud.';
+  if (isRepairCommand) {
+    const targetFile = chatFile || runtime.getCase(lastChatCaseId)?.target || state.targetCell || state.lastTelemetryFile || lastChatContext.files[0];
+    if (!targetFile) return "Saya terima perintah perbaikan, tetapi belum punya target yang cukup jelas. Sebutkan file atau minta saya cek dulu.";
     const result = repairChatCase(targetFile, state, raw);
-    const c = result?.caseId ? runtime.getCase(result.caseId) : chatCaseFromSession();
-    setChatSession({
-      caseId:result?.caseId || c?.caseId || chatSession.caseId,
-      primaryFile:normalizeFile(c?.exactSource?.file || c?.target || targetFile),
-      files:contextualFiles.length ? contextualFiles : chatSession.files,
-      comparison:comparison || chatSession.comparison,
-      pendingCommand:'REPAIR', intent:'REPAIR', lastCaseRevision:c?.revision ?? null
-    });
-    if (result && typeof result === 'object') {
-      if (intent.continuation && !intent.repair && result.text?.startsWith('Saya terima perintah')) {
-        return `Baik. Saya lanjutkan perintah perbaikan yang tadi dari case yang sama. ${result.text.replace(/^Saya terima perintah perbaikan\.\s*/,'')}`;
-      }
-      if (lastChatContext.comparison && lastChatContext.files.length > 1 && result.text?.startsWith('Baik. Perintah')) {
+    if (result && typeof result === "object") {
+      if (lastChatContext.comparison && lastChatContext.files.length > 1 && result.text?.startsWith("Baik. Perintah")) {
         const peers = lastChatContext.files.filter(f => f !== normalizeFile(targetFile));
-        result.text = `Baik. Saya lanjutkan perbaikan yang tadi kita bahas. Fokusnya hanya pada mismatch yang sudah terbukti antara ${normalizeFile(targetFile)} dan ${peers.join(' / ')}. Saya tidak akan menyentuh fungsi lain di luar proof.`;
+        result.text = `Baik. Saya lanjutkan perbaikan yang tadi kita bahas. Fokusnya hanya mismatch yang sudah terbukti antara ${normalizeFile(targetFile)} dan ${peers.join(" / ")}. Saya akan menerapkan perubahan exact yang terikat pada proof, lalu lanjut validasi supaya fungsi lain tetap utuh.`;
+      }
+      const repairCase = result.caseId ? runtime.getCase(result.caseId) : null;
+      if (repairCase?.exactSource?.originalCode || repairCase?.exactSource?.proposedCode) {
+        void openCodeWorkbench(targetFile, {
+          command:raw,
+          caseId:result.caseId,
+          exactSource:repairCase.exactSource,
+          proof:repairCase.precisionGate,
+          finding:repairCase.rootCause || null,
+          explanation:repairCase.rootCause?.statement || null
+        });
       }
       return result.text;
     }
-    return String(result || 'Perintah perbaikan diterima dan tetap saya pegang.');
+    return result;
   }
 
-  if (!informationalSystemQuestion && (intent.explicitCheck || (intent.followUp && effectiveFile && /\b(cek|periksa|lihat|telusuri)\b/.test(q)))) {
-    const files = contextualFiles.length ? contextualFiles : [effectiveFile].filter(Boolean);
-    lastChatContext = { files, comparison:files.length > 1 || comparison, question:raw, stateRevision:stateRevisionOf(state) };
-    const c = scheduleChatInvestigation(effectiveFile, state, raw, lastChatContext);
-    if (!c) return `Saya belum bisa membuka target ${effectiveFile || 'tersebut'}.`;
-    setChatSession({caseId:c.caseId, primaryFile:effectiveFile, files:lastChatContext.files, comparison:lastChatContext.comparison, intent:'INVESTIGATE', pendingCommand:chatSession.pendingCommand});
-    if (lastChatContext.comparison) {
-      const peers = lastChatContext.files.filter(f => f !== effectiveFile);
-      return `Siap. Saya cek ${effectiveFile} bersama ${peers.join(' dan ')}. Saya mulai dari source aktual, lalu telusuri dependency, hubungan, evidence, dan lokasi masalahnya. Saya belum mengubah source.`;
+  const relationFor = file => relations
+    .filter(r => {
+      const a = String(r?.sourceFile || r?.from || r?.file || "").split("?")[0].split("#")[0].split("/").pop();
+      const b = String(r?.targetFile || r?.to || r?.relatedFile || "").split("?")[0].split("#")[0].split("/").pop();
+      return a === file || b === file;
+    })
+    .map(r => {
+      const a = String(r?.sourceFile || r?.from || r?.file || "").split("?")[0].split("#")[0].split("/").pop();
+      const b = String(r?.targetFile || r?.to || r?.relatedFile || "").split("?")[0].split("#")[0].split("/").pop();
+      return { pair: a && b ? `${a} × ${b}` : null, status: r?.status || "OBSERVED" };
+    })
+    .filter(x => x.pair)
+    .filter((x,i,arr) => arr.findIndex(y => y.pair === x.pair) === i);
+
+  const sayStatus = () => {
+    if (state?.connection?.status === "OFFLINE" || state?.firestore?.error) {
+      return `Untuk kondisi sekarang, saya belum mau bilang 100% aman. Koneksi Firestore sedang ${state.connection?.status || "bermasalah"}.`;
     }
-    return `Siap. Saya mulai cek ${effectiveFile} sekarang. Saya akan mengikuti hasil investigasi; kalau penyebabnya ternyata ada di file lain, saya akan mengikuti source yang terbukti.`;
-  }
-
-  if (intent.continuation && chatSession.caseId) {
-    const c = chatCaseFromSession();
-    if (c) {
-      if (!activeRuns.has(c.caseId)) void runActiveInvestigation(c.caseId, state).catch(()=>{});
-      return `Baik. Saya lanjutkan pekerjaan ${normalizeFile(c.exactSource?.file || c.target)} dari posisi terakhir. Saya tidak mengulang kesimpulan lama; saya mengikuti evidence terbaru.`;
+    if (active.length) {
+      const names = active.slice(0,4).map(([f]) => f).join(", ");
+      return `Saya sudah cek. Sistem sedang hidup dan telemetry masuk, tapi belum bisa saya sebut sepenuhnya aman karena ada ${active.length} anomaly aktif: ${names}. Saya tetap memisahkan temuan aktif dari file yang hanya berstatus review.`;
     }
+    return `Sejauh telemetry yang sedang hidup, sistem dalam kondisi baik: ${metrics.healthy ?? 0} file stabil, ${metrics.review ?? review.length} perlu review, dan tidak ada anomaly aktif. Koneksi Firestore ${state.connection?.status || "UNKNOWN"}.`;
+  };
+
+  if (!q) return "Siap. Ceritakan saja apa yang ingin kamu cek. Saya akan jawab dari keadaan BCGO yang sedang hidup, bukan dari tebakan.";
+
+  if (/^(halo|hai|hello|pagi|siang|sore|malam)\b/.test(q)) {
+    return `Hehe, iya 😊 Saya di sini. Sekarang saya sedang berada di cycle #${state.cycle ?? "-"}, tahap ${state.step || "-"} dan terus membaca telemetry BCGO. Kalau mau, langsung tanya sistem, file, hubungan antar-file, atau kasus yang sedang saya selidiki.`;
   }
 
-  if (intent.acknowledgement) {
-    const c = chatCaseFromSession();
-    if (c) return `Baik 😊 Saya tetap di case yang sama. Kalau maksudmu lanjut bekerja, saya teruskan dari evidence terakhir.`;
-    return 'Baik 😊. Saya siap. Beri instruksi berikutnya dan saya akan mengikutinya.';
+  if (/aman|sehat|normal|kondisi sistem|status sistem|sistem aman/.test(q)) {
+    return `Baik, saya cek dulu kondisi yang benar-benar saya punya sekarang. ${sayStatus()} Jadi saya tidak sekadar melihat lampu hijau; saya cocokkan koneksi, telemetry, anomaly, dan hasil scanner.`;
   }
 
-  if (intent.greeting) {
-    const cycle = Number(state?.cycle);
-    return Number.isFinite(cycle)
-      ? `Halo 😊 Saya di sini. BCGO sedang berjalan di cycle #${cycle}, tahap ${state?.step || '-'}. Ada yang ingin kamu cek atau saya kerjakan?`
-      : 'Halo 😊 Saya di sini. BCGO sedang berjalan dan saya siap menerima instruksi.';
+  if (/sedang apa|lagi apa|sedang mengerjakan|ngapain|kerja apa/.test(q)) {
+    const focus = active[0]?.[0] || state.targetCell || "seluruh organ";
+    return `Saya sedang bekerja di cycle #${state.cycle ?? "-"}, tahap ${state.step || "-"}. Fokus saya sekarang ${focus}. ${state.message || "Saya sedang menjaga telemetry dan source scan tetap sinkron."} Kalau ada bukti baru, saya akan pindah fokus berdasarkan evidence, bukan sekadar nama file.`;
   }
-  if (/\b(aman|sehat|normal|kondisi sistem|status sistem|sistem aman)\b/.test(q)) {
-    if (state?.connection?.status === 'OFFLINE' || state?.firestore?.error) return `Untuk sekarang saya belum mau bilang aman. Koneksi sistem sedang ${state.connection?.status || 'bermasalah'}, jadi saya mempertahankan state terakhir.`;
-    if (active.length) return `Sistem hidup dan telemetry masuk, tetapi belum sepenuhnya aman. Saya melihat ${active.length} anomaly aktif: ${active.slice(0,4).map(([f])=>f).join(', ')}.`;
-    return `Saat ini tidak ada anomaly aktif pada telemetry yang saya terima. Ada ${metrics.healthy ?? 0} file stabil dan ${review.length} file yang masih perlu review.`;
-  }
-  if (/\b(sedang apa|lagi apa|sedang mengerjakan|ngapain|kerja apa)\b/.test(q)) {
-    const c = chatCaseFromSession();
-    if (c) return chatCaseStatusText(c);
-    return `Saya sedang memantau telemetry live. Belum ada case percakapan yang sedang saya kerjakan; kalau kamu memberi instruksi, saya akan membuat pekerjaan dari target yang kamu sebutkan dan menelusurinya dengan evidence.`;
-  }
-  if (/\b(hubungan|terhubung|relasi|dependency|terkait)\b/.test(q)) {
-    const file = requestedFile || chatSession.primaryFile || null;
+
+  if (/hubungan|terhubung|relasi|dependency|terkait/.test(q)) {
+    const file = requestedFile || state.targetCell || null;
     if (file) {
-      const rel = relations.filter(r => normalizeFile(r?.sourceFile||r?.from||r?.file)===file || normalizeFile(r?.targetFile||r?.to||r?.relatedFile)===file);
-      if (!rel.length) return `Saya sudah mencari relasi untuk ${file}, tetapi belum ada hubungan source yang cukup kuat untuk saya nyatakan.`;
-      return `Untuk ${file}, saya menemukan ${rel.length} relasi yang tercatat di scanner: ${rel.slice(0,6).map(r=>`${normalizeFile(r.sourceFile||r.from||r.file)||'?'} × ${normalizeFile(r.targetFile||r.to||r.relatedFile)||'?'} [${r.status||'OBSERVED'}]`).join('; ')}.`;
+      const rel = relationFor(file);
+      if (!rel.length) return `Saya sudah mencari relasi untuk ${file}, tetapi pada snapshot scanner saat ini belum ada pasangan source yang bisa saya tampilkan sebagai hubungan terdeteksi. Saya tidak akan mengarang relasi.`;
+      return `Untuk ${file}, saya menemukan ${rel.length} hubungan source yang tercatat. Yang terlihat sekarang: ${rel.slice(0,6).map(x => `${x.pair} (${x.status})`).join("; ")}. Jadi pasangan yang muncul di kartu memang berasal dari hasil scanner, bukan dekorasi UI.`;
     }
-    return `Saat ini scanner mencatat ${relations.length} relasi antar-file. Sebutkan file yang ingin kamu telusuri, dan saya ikuti dependency-nya.`;
+    return `Saat ini scanner mencatat ${relations.length} relasi antar-file. Sebutkan nama file, misalnya “hubungan agentcgo.html”, dan saya bisa uraikan pasangan yang terdeteksi.`;
   }
-  if (intent.inventoryQuestion && !intent.repair) {
-    const entries = Object.entries(organs);
-    if (!entries.length) return `Saya belum menerima daftar organ dari BCGO. Saya tidak akan mengarang isi sistem sebelum registry live terbaca.`;
-    const shown = entries.map(([file, info]) => `${file} [${info?.state || info?.status || 'UNKNOWN'}]`);
-    const activeCount = entries.filter(([,info]) => info?.state === 'ACTIVE').length;
-    const reviewCount = entries.filter(([,info]) => info?.state === 'REVIEW').length;
-    const standbyCount = entries.filter(([,info]) => info?.state === 'STANDBY').length;
-    const otherCount = entries.length - activeCount - reviewCount - standbyCount;
-    const summary = [`ACTIVE ${activeCount}`, `REVIEW ${reviewCount}`, `STANDBY ${standbyCount}`];
-    if (otherCount > 0) summary.push(`LAINNYA ${otherCount}`);
-    return `Saya cek daftar live yang sedang dikirim BCGO. Saat ini ada ${entries.length} organ/komponen yang terdaftar: ${shown.join('; ')}. Ringkasannya: ${summary.join(', ')}. Ini berasal dari registry/state live BCGO, bukan tebakan. Kalau kamu mau, aku bisa lanjut menguraikan fungsi tiap file, statusnya, hubungan/dependency-nya, atau mana yang belum benar-benar terhubung.`;
+
+  const codeInspectionIntent = /\b(cek|periksa|baca|lihat|tampilkan|petakan|telusuri|jelajahi|source|kode|code|file asli|full code|utuh)\b/.test(q);
+  const explicitFile = requestedFile || lastChatContext.files[0] || null;
+  if (codeInspectionIntent && explicitFile && !isRepairCommand) {
+    void openCodeWorkbench(explicitFile, { command:raw, caseId:lastChatCaseId });
+    return `Baik. Saya buka source aktual ${explicitFile} sekarang dan menampilkannya di Code Workbench sebagai FULL SOURCE dengan nomor baris. Saya tidak akan mengarang bagian AFTER; candidate hanya muncul bila memang sudah memiliki proof/source yang sah.`;
   }
 
   if (requestedFile) {
     const info = organs[requestedFile];
+    const rel = relationFor(requestedFile);
+    const status = info?.state || "UNKNOWN";
+    const finding = findings.find(f => String(f?.file || f?.sourceFile || f?.targetFile || "").includes(requestedFile));
+    const relationText = rel.length ? rel.slice(0,4).map(x => `${x.pair} [${x.status}]`).join("; ") : "belum ada relasi yang terbukti";
     if (!info) return `Saya mengenali ${requestedFile}, tetapi snapshot live belum membawa status file itu.`;
-    return `Oke, ${requestedFile} sekarang berstatus ${info.state || 'UNKNOWN'}. ${info.message || ''}`.trim();
-  }
-  if (/\b(error|masalah|anomaly|gangguan|rusak)\b/.test(q)) {
-    if (!active.length) return `Saat ini saya tidak melihat anomaly aktif. Saya tetap mendengarkan telemetry baru.`;
-    return `Iya, ada ${active.length} anomaly aktif. Yang terlihat sekarang ${active.slice(0,4).map(([f,v])=>`${f}: ${v.message || 'temuan aktif'}`).join(' | ')}. Saya belum menyebut root cause sebelum terbukti.`;
-  }
-  if (/\b(root cause|akar masalah|penyebab|kenapa|mengapa)\b/.test(q)) {
-    const c = chatCaseFromSession();
-    if (c?.rootCause) return `Untuk ${normalizeFile(c.exactSource?.file || c.target)}, root cause yang sudah masuk proof chain adalah: ${c.rootCause.statement}`;
-    return `Saya belum mau menyebut root cause. Yang ada sekarang masih evidence/hipotesis; saya akan menaikkannya menjadi root cause hanya setelah causal proof terpenuhi.`;
-  }
-  if (/\b(bukti|evidence|telemetry)\b/.test(q)) {
-    const evidence = Array.isArray(chatCaseFromSession()?.evidence) ? chatCaseFromSession().evidence : (Array.isArray(snapshot?.reasoning?.evidence) ? snapshot.reasoning.evidence : []);
-    const verified = evidence.filter(e=>e?.status==='VERIFIED');
-    return `Saat ini saya punya ${verified.length} evidence terverifikasi dari ${evidence.length} evidence pada konteks yang sedang aktif. Saya akan memakai bukti itu sebagai dasar keputusan.`;
+    return `Oke, saya cek ${requestedFile}. Statusnya ${status}. ${info.message || "Belum ada pesan tambahan."} Hubungan yang saya punya: ${relationText}.${finding ? ` Ada temuan terkait: ${finding.message || finding.detail || finding.type || "temuan scanner"}.` : ""}`;
   }
 
-  // When the user speaks naturally but there is an active case, answer from the
-  // case instead of falling back to a generic "I understand" sentence. This is
-  // the conversational hand-off between the human dialogue and the investigation brain.
-  if (chatSession.caseId && chatSession.hasWorkContext !== false) {
-    const c = chatCaseFromSession();
-    if (c) {
-      const file = normalizeFile(c.exactSource?.file || c.target) || 'target';
-      if (intent.question || intent.action || intent.followUp) {
-        return `Saya menangkapnya. Konteks yang sedang kita pegang adalah ${file}. Saya tidak akan membuat kesimpulan baru hanya dari kalimat ini; saya akan menghubungkannya ke evidence dan hasil investigasi case yang sama. Kalau yang kamu maksud adalah bagian tertentu, sebutkan bagian itu dan saya lanjutkan dari sana.`;
-      }
-      return `Saya masih memegang konteks ${file}. Kamu tidak perlu mengulang dari awal; lanjutkan saja dengan bahasa biasa, dan saya akan mengaitkan pesanmu ke pekerjaan yang sedang berjalan.`;
-    }
+  if (/error|masalah|anomaly|gangguan|rusak/.test(q)) {
+    if (!active.length) return `Saya sudah cek telemetry aktif. Saat ini tidak ada anomaly aktif. Ada ${review.length} file yang masih perlu review, jadi “tidak ada anomaly aktif” bukan berarti saya mengklaim semua source sempurna.`;
+    return `Iya, ada ${active.length} anomaly aktif. Yang paling menonjol ${active.slice(0,4).map(([f,v]) => `${f}: ${v.message || "temuan aktif"}`).join(" | ")}. Saya akan mempertahankan evidence-nya sebelum menyebut root cause.`;
   }
-  if (intent.question) {
-    const c = chatCaseFromSession();
-    if (c) return `Saya menangkap pertanyaannya. Konteks yang sedang aktif adalah ${normalizeFile(c.exactSource?.file || c.target) || 'case ini'}, jadi saya akan menjawab berdasarkan pekerjaan dan evidence yang sudah ada, bukan jawaban umum. Kalau ada bagian yang ingin kamu arahkan, sebutkan saja.`;
-    return 'Saya menangkap pertanyaannya, tetapi konteksnya belum cukup untuk menjawab dengan presisi. Sebutkan file, bagian, atau pekerjaan yang kamu maksud agar saya tidak menebak.';
+
+  if (/root cause|akar masalah|penyebab|kenapa|mengapa/.test(q)) {
+    const root = reasoning?.rootCause || null;
+    if (root) return `Untuk kasus ${target}, root cause sudah tercatat: ${root.statement}. Saya hanya menyebutnya root cause karena sudah masuk proof chain CGO.`;
+    const blockers = proof.blockers?.length ? proof.blockers.slice(0,4).join(", ") : "evidence kausal belum cukup";
+    return `Saya belum mau menyebut root cause. Saat ini yang paling aman adalah ${blockers}. Hipotesis boleh ada, tetapi belum saya naikkan menjadi fakta.`;
   }
-  return 'Saya dengar. Bicara saja seperti biasa. Saya akan membedakan mana obrolan, mana pertanyaan, dan mana instruksi kerja; ketika masuk pekerjaan teknis, saya ikat ke case, source, dependency, dan evidence yang nyata.';
+
+  if (/bukti|evidence|telemetry/.test(q)) {
+    const evidence = Array.isArray(snapshot?.reasoning?.evidence) ? snapshot.reasoning.evidence : [];
+    const verified = evidence.filter(e => e?.status === "VERIFIED");
+    const detail = verified.slice(0,4).map(e => e.claim || e.message || e.type).filter(Boolean).join(" | ");
+    return `Yang bisa saya pertanggungjawabkan sekarang: ${verified.length} evidence terverifikasi dari ${evidence.length}. ${detail || "Belum ada evidence terverifikasi yang cukup untuk saya ceritakan lebih jauh."}`;
+  }
+
+  if (/data-cgo|data customer|customer|yang daftar|pendaftar|jumlah daftar/.test(q)) {
+    const probeCount = Number(metrics.firestoreCount || 0);
+    return `Saya menangkap maksudmu: kamu ingin angka data, bukan status source. Saat ini BCGO punya probe Firestore aktif dan snapshot terakhir membaca ${probeCount} dokumen pada sensor yang sedang dipantau. Tetapi saya belum punya bukti bahwa angka itu adalah total customer yang terdaftar; jadi saya tidak akan menyebutnya sebagai jumlah customer. Untuk angka pendaftaran yang benar, saya perlu membuka collection data yang memang menjadi sumber pendaftaran dan memverifikasi izin baca-nya.`;
+  }
+
+  if (/medicine|perbaiki|repair|solusi|patch/.test(q)) {
+    if (!active.length) return "Belum ada kasus aktif yang cukup kuat untuk saya teruskan. Saya lebih baik menunggu evidence daripada membuat Medicine bekerja dari dugaan.";
+    return `Saya bisa menyiapkan konteks untuk Medicine dari kasus ${active[0][0]}, tetapi root cause dan exact source tetap harus terbukti dulu. CGO tidak akan menganggap “target awal” sebagai penyebab hanya karena telemetry menunjuk ke sana.`;
+  }
+
+  if (/scan ulang|rescan|pindai ulang|cek ulang/.test(q)) {
+    return `Bisa. Saya sedang menjaga source scanner tetap berjalan. Permintaanmu saya perlakukan sebagai permintaan pemeriksaan ulang, tetapi saya tidak akan mengubah source hanya karena diminta lewat chat.`;
+  }
+
+  return `Saya paham. Untuk “${raw}”, saya bisa bantu, tapi saya ingin jawab dengan fakta yang memang tersedia di BCGO. Sekarang fokus saya ${target}, cycle #${state.cycle ?? "-"}, dengan ${metrics.active ?? active.length} anomaly aktif dan ${relations.length} relasi source yang sudah terdeteksi. Kalau kamu sebut file atau data yang ingin dilihat, saya akan uraikan dari evidence yang ada.`;
 }
-
-// Restore dialogue context once per bridge boot. This is intentionally performed
-// before install() so the UI can render history even when no live case exists yet.
-restoreChatMemory();
 
 function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = null) {
   const c = caseOverride || runtime.getCase(caseId);
@@ -1834,13 +836,6 @@ function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = nu
   const probe = active && active.state.status === "ACTIVE"
     ? (active.state.probeLog.at(-1) || Investigator.nextProbe(investigation, c, knowledge))
     : Investigator.nextProbe(investigation, c, knowledge);
-  const conversation = {
-    mode: Cognition.dialogueMode({ text: chatSession.lastUserText || "", workContext: !!chatSession.caseId }),
-    dialogueMode: chatSession.dialogueMode || "IDLE",
-    topic: chatSession.topic || null,
-    behaviorPolicy: chatSession.behaviorPolicy || null,
-    constitutionVersion: Instruction.getInstructionVersion()
-  };
   const deliberate = Cognition.deliberate({
     evidence: c.evidence,
     rootCause: c.rootCause,
@@ -1856,7 +851,6 @@ function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = nu
   if (!evaluation.proof.rootCauseVerified) blockers.push("ROOT_CAUSE_NOT_VERIFIED");
   if (!evaluation.proof.sourceVerified) blockers.push("EXACT_SOURCE_NOT_VERIFIED");
 
-  const liveState = getLiveBCGOState();
   return {
     version: VERSION,
     brainVersion: Core.VERSION,
@@ -1865,15 +859,6 @@ function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = nu
     guardianVersion: evaluation.guardian?.policyVersion || "1",
     signal,
     at: Date.now(),
-    bcgoState: {
-      cycle: liveState?.cycle ?? null,
-      step: liveState?.step || null,
-      cycleMode: liveState?.cycleMode || null,
-      lastEventAt: liveState?.lastEventAt || null,
-      sourceScanCompletedAt: liveState?.sourceScan?.completedAt || null,
-      stateRevision: stateRevisionOf(liveState),
-      stateAgeMs: (() => { const rev = stateRevisionOf(liveState); return rev > 0 ? Math.max(0, Date.now() - rev) : null; })()
-    },
     reasoning: {
       classification: deliberate.conclusion,
       evidence: c.evidence.map(e => ({
@@ -1899,7 +884,6 @@ function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = nu
         evidenceIds: c.rootCause.evidenceIds
       }] : []
     },
-    conversation,
     guardian: {
       healthy: evaluation.guardian?.decision !== "BLOCKED",
       level: evaluation.guardian?.risk || "UNKNOWN",
@@ -1908,15 +892,12 @@ function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = nu
   };
 }
 
-export function getCGOInstruction() { return Instruction.getInstruction(); }
-
 export function install() {
   return {
     version: VERSION,
     ingestBCGOState(state = {}) {
-      // BCGO_STATE is authoritative. Each intake replaces the previous bridge
-      // snapshot; chat never treats an older investigation snapshot as live state.
       latestBCGOState = clone(state);
+      try { captain.start(); captain.ingestBCGOState(state); } catch {}
       ensureKnowledge(state);
       const active = Array.isArray(state.activeCases) ? state.activeCases : [];
       let primary = null;
@@ -1949,71 +930,9 @@ export function install() {
       return clone(latest);
     },
     getSnapshot() { return clone(latest); },
-    getBCGOState() { return getLiveBCGOState(); },
-    ask(question) {
-      const raw = typeof question === 'string' ? question : String(question?.text || question?.question || '');
-      let answer = chatAnswer(question);
-      const activeCase = chatCaseFromSession();
-      const proof = activeCase ? Logic.evaluate(activeCase, INTERNAL_AUTO_POLICY, knowledge)?.proof || {} : {};
-      const completed = !!activeCase && ["RESOLVED", "VALIDATED", "COMPLETED"].includes(String(activeCase.state || ""));
-      const responseCheck = Instruction.evaluateResponse(answer, {
-        mode:chatSession.behaviorPolicy?.mode,
-        technical:chatSession.behaviorPolicy?.technicalEvidenceRequired,
-        evidenceComplete:proof.complete === true,
-        executionEvidence:proof.complete === true && proof.guardianApproved === true,
-        validationEvidence:completed,
-        completed,
-        needsNextStep:!!activeCase && !completed
-      });
-      if (responseCheck.pass) answer = Instruction.varyResponse(answer, chatSession.behaviorPolicy?.style === 'FORMAL' ? 'NEXT_STEP' : 'DEFAULT', {turn:chatSession.turn});
-      if (!responseCheck.pass && responseCheck.warnings.length) {
-        answer = `Aku belum mau menyatakan itu sebagai hasil final. ${responseCheck.warnings.join(', ')} masih membuat klaim tersebut belum cukup terbukti. Aku akan tetap membedakan fakta, hipotesis, dan proof sebelum menyimpulkan.`;
-      }
-      recordChatTurn('user', raw, {caseId:chatSession.caseId, turn:chatSession.turn});
-      recordChatTurn('bcgo', answer, {caseId:chatSession.caseId, turn:chatSession.turn, constitutionChecked:true, constitutionWarnings:responseCheck.warnings});
-      return answer;
-    },
-    getChatCommandStatus() {
-      return [...pendingRepairIntents.values()].map(x => clone(x));
-    },
-    getChatContext() { return clone(chatSession); },
-    getChatConversation() { return clone(chatTranscript); },
-    getChatRestoration() { return clone(chatRestoration); },
-    clearChatMemory() {
-      const storage = safeStorage();
-      try { storage?.removeItem(CHAT_MEMORY_KEY); } catch {}
-      chatTranscript = [];
-      chatRestoration = { restored:false, restoredAt:0, context:false, staleCaseDiscarded:false };
-      chatSession = { turn:0, lastUserText:null, primaryFile:null, files:[], comparison:false, caseId:null, intent:null, pendingCommand:null, lastCaseRevision:null, updatedAt:Date.now(), pendingWork:null, clarificationNeeded:false, restoredCaseId:null, restoredAt:0, dialogueMode:"IDLE", topic:null, tone:"WARM", address:null, constitutionState:null, behaviorPolicy:null };
-      lastChatContext = { files:[], comparison:false, question:null, stateRevision:null };
-      return true;
-    },
-    async acceptRepairProposal(caseId, proposal = {}) {
-      const current = runtime.getCase(caseId);
-      if (!current) throw new Error("CASE_NOT_FOUND");
-      if (!current.rootCause || !current.exactSource) throw new Error("PROOF_CHAIN_INCOMPLETE");
-      const file = normalizeFile(proposal.file || proposal.targetFile || current.exactSource.file);
-      if (!file || file !== normalizeFile(current.exactSource.file)) throw new Error("REPAIR_SOURCE_TARGET_MISMATCH");
-      const provider = createInternalProbeProvider(getLiveBCGOState());
-      const live = await provider.readSource(file);
-      const originalCode = String(proposal.before ?? proposal.originalCode ?? current.exactSource.originalCode ?? "");
-      const proposedCode = String(proposal.after ?? proposal.proposedCode ?? "");
-      if (!originalCode.trim() || !proposedCode.trim()) throw new Error("CONCRETE_SOLUTION_REQUIRED");
-      if (!String(live.source).includes(originalCode)) throw new Error("REPAIR_ORIGINAL_CODE_NOT_PRESENT");
-      const sourceFingerprint = live.fingerprint || Core.contentFingerprint(live.source);
-      if (proposal.sourceFingerprint && proposal.sourceFingerprint !== sourceFingerprint) throw new Error("REPAIR_SOURCE_FINGERPRINT_MISMATCH");
-      const verified = runtime.proveSource(caseId, {
-        file, originalCode, proposedCode, operation: proposal.operation || "REPLACE_EXACT",
-        fingerprint: Core.contentFingerprint(originalCode), contentFingerprint: Core.contentFingerprint(originalCode),
-        sourceFingerprint, evidenceIds: current.rootCause.evidenceIds
-      });
-      emitBrainEvent(caseId, "CHAT_REPAIR_SOLUTION_ACCEPTED", {file, sourceFingerprint, proposedFingerprint:Core.contentFingerprint(proposedCode)});
-      const continued = pendingRepairIntents.has(caseId) ? await continuePendingRepair(caseId, getLiveBCGOState()) : null;
-      latest = compatibleSnapshot(caseId, "CHAT_REPAIR_SOLUTION_ACCEPTED");
-      try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-state", {detail:latest})); } catch {}
-      return {caseData:verified, continuation:continued};
-    },
-    executionStatus() { return { executorAvailable: !!runtime.hasExecutionHand?.(), executionTargetBound: !!runtime.hasExecutionTarget?.(), readyForExecution: !!runtime.hasExecutionTarget?.(), lastChatCaseId, pendingRepairCases: pendingRepairIntents.size, latest: clone(latest) }; },
+    ask(question) { return chatAnswer(question); },
+    async openCodeWorkbench(file, context = {}) { return openCodeWorkbench(file, context); },
+    executionStatus() { return { executorAvailable: !!runtime.hasExecutionHand?.(), lastChatCaseId, latest: clone(latest) }; },
     deliberate(caseId, policy = {}) {
       return runtime.deliberate(caseId, policy);
     },
@@ -2029,7 +948,9 @@ export function install() {
       const out = await engine.run(current, provider, knowledge, options);
       return clone(out);
     },
-    getRuntime() { return runtime; }
+    getRuntime() { return runtime; },
+    getCaptain() { return captain; },
+    captainCommand(text, meta = {}) { return captain.receiveHumanCommand(text, meta); }
   };
 }
 

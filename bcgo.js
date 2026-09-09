@@ -53,7 +53,7 @@ const RESERVED_OPTIONAL_ORGANS = new Set(Object.entries(ORGAN_REGISTRY).filter((
 
 const SOURCE_SCAN_INTERVAL = 20000;
 const SOURCE_SCAN_FETCH_TIMEOUT = 10000;
-const SOURCE_SCAN_VERSION = "1.15.0-NERVE-CONTRACT-DYNAMIC-DOM-SYNC";
+const SOURCE_SCAN_VERSION = "1.20.0-CAPTAIN-NEXT-PROBE";
 
 const ACTIVE_WINDOW = 15 * 60 * 1000;
 const CLOCK_SKEW = 5 * 60 * 1000;
@@ -197,7 +197,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       version: SOURCE_SCAN_VERSION, status: "WAITING", startedAt: 0, completedAt: 0,
       filesScanned: 0, filesReadable: 0, filesFailed: 0, currentFile: null, currentIndex: 0,
       totalFiles: ORGAN_COUNT, phase: "WAITING", fileStates: {}, findings: [], crossFileFindings: [], relations: [], relationSummary: { synchronized:0, mismatch:0, variant:0, unknown:0 },
-      sources: {}, message: "Pemindaian source code belum dimulai."
+      sources: {}, exploration: { version:"1.1.0-CONTRACT-PRECISION-GRAPH", status:"WAITING", generatedAt:0, nodes:[], edges:[], gaps:[], assignments:[], nextActions:[], message:"Pemetaan kontrak belum dimulai." }, message: "Pemindaian source code belum dimulai."
     },
     medicineBridge: {
       status: "DISCONNECTED",
@@ -303,6 +303,66 @@ export function runAutonomousEngine(onCycleUpdate) {
       receiveMedicineBridge(event.data);
     });
   }
+  const seenCaptainDirectiveIds = new Set();
+  function receiveCaptainDirective(packet) {
+    if (!packet || packet.bridge !== MEDICINE_BRIDGE_KEY || packet.from !== 'CAPTAIN') return;
+    const id = String(packet.id || `${packet.type || 'CAPTAIN'}-${packet.at || 0}-${packet.caseId || ''}`);
+    if (seenCaptainDirectiveIds.has(id)) return;
+    seenCaptainDirectiveIds.add(id);
+    if (seenCaptainDirectiveIds.size > 200) seenCaptainDirectiveIds.delete(seenCaptainDirectiveIds.values().next().value);
+    if (packet.type !== 'CGO_BCGO_EXPLORE') return;
+    const probe = packet.probe || null;
+    recordEvent('CAPTAIN', `Captain meminta BCGO ${probe?.type ? `menjalankan probe ${probe.type}` : 'menjelajah ulang source/contract'}: ${String(packet.question || '').slice(0,220)}`, packet.caseId || 'CAPTAIN');
+    runSourceScan('CAPTAIN_BCGO_EXPLORE').then(() => {
+      const exploration = state.sourceScan?.exploration || {};
+      const gaps = Array.isArray(exploration.gaps) ? exploration.gaps : [];
+      const probeGapTypes = {
+        VERIFY_HANDLER_BINDING:['CONTRACT_GAP_UNRESOLVED_HANDLER','CONTRACT_GAP_AMBIGUOUS_HANDLER_BINDING'],
+        TRACE_HANDLER_DEPENDENCIES:['CONTRACT_GAP_NO_DOWNSTREAM_CONSEQUENCE'],
+        TRACE_DOM_CONSUMER:['CONTRACT_GAP_MISSING_DOM_CONSUMER'],
+        VERIFY_SYMBOL_PRODUCER:['CONTRACT_GAP_MISSING_PRODUCER'],
+        VERIFY_FUNCTION_CONSUMER:['CONTRACT_GAP_ORPHAN_PRODUCER'],
+        TRACE_STATE_CONSUMER:['CONTRACT_GAP_STATE_WITHOUT_OBSERVED_CONSUMER'],
+        VERIFY_ASSET_PATH_OR_DEPLOYMENT:['CONTRACT_GAP_MISSING_ASSET'],
+        RETRY_ASSET_PROBE:['CONTRACT_GAP_ASSET_UNVERIFIED'],
+        TRACE_DYNAMIC_EVENT_BINDING:['CONTRACT_GAP_FORM_SUBMISSION_PATH']
+      };
+      const expectedTypes = probe ? (probeGapTypes[String(probe.type || '').toUpperCase()] || []) : [];
+      const matched = probe ? gaps.filter(g => {
+        const typeOk = !expectedTypes.length || expectedTypes.includes(String(g.type || '').toUpperCase());
+        const fileOk = !probe.file || String(g.file || g.sourceFile || '').toLowerCase() === String(probe.file).toLowerCase();
+        const lineOk = !probe.line || Number(g.line || g.handlerLine || 0) === Number(probe.line);
+        const symbol = String(g.handler || g.function || g.consumerSymbol || g.state || g.asset || '');
+        const symbolOk = !probe.symbol || symbol.toLowerCase() === String(probe.symbol).toLowerCase();
+        return typeOk && fileOk && lineOk && symbolOk;
+      }).slice(0, 12) : gaps.slice(0, 12);
+      const resultPacket = {
+        id: `BCGO-PROBE-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+        bridge: MEDICINE_BRIDGE_KEY,
+        from: 'BCGO',
+        type: 'BCGO_PROBE_RESULT',
+        at: Date.now(),
+        caseId: packet.caseId || null,
+        probe: bridgeClone(probe),
+        result: { status: matched.length ? 'EVIDENCE_FOUND' : 'NO_MATCH_IN_CURRENT_SCAN', matchedGaps: bridgeClone(matched), summary: bridgeClone(exploration.summary || {}), sourceScanVersion: state.sourceScan?.version || null },
+        state: bridgeClone(state)
+      };
+      try { medicineBridgeChannel?.postMessage(resultPacket); } catch {}
+      try { localStorage.setItem(`${MEDICINE_BRIDGE_KEY}_EVENT`, JSON.stringify(resultPacket)); } catch {}
+      recordEvent('CAPTAIN', `Probe ${probe?.type || 'SOURCE_CONTRACT_MULTI_HOP'} selesai: ${matched.length ? 'evidence ditemukan' : 'tidak ada match baru pada scan saat ini'}.`, packet.caseId || 'CAPTAIN');
+    }).catch(error => {
+      recordEvent('CAPTAIN', `Eksplorasi Captain gagal: ${String(error?.message || error).slice(0,220)}`, packet.caseId || 'CAPTAIN');
+    });
+  }
+
+  if (medicineBridgeChannel) {
+    medicineBridgeChannel.addEventListener('message', event => receiveCaptainDirective(event.data));
+  }
+  window.addEventListener('storage', event => {
+    if (event.key !== `${MEDICINE_BRIDGE_KEY}_EVENT` || !event.newValue) return;
+    try { receiveCaptainDirective(JSON.parse(event.newValue)); } catch {}
+  });
+
 
   window.addEventListener("storage", event => {
     if (event.key !== "CIKUR_GO_BCGO_MEDICINE_V1_EVENT" || !event.newValue) return;
@@ -462,6 +522,37 @@ export function runAutonomousEngine(onCycleUpdate) {
     return [...refs];
   }
 
+  function extractAssetRefs(file, source) {
+    const refs = new Map();
+    const text = String(source || '');
+    const re = /(?:src|href|poster|data-src|data-icon|background(?:-image)?|url)\s*(?:=|:)\s*["'`]?([^"'`\s)]+\.(?:png|jpe?g|gif|webp|svg|ico|avif)(?:\?[^"'`\s)]*)?)["'`]?/gi;
+    let m;
+    while ((m = re.exec(text))) {
+      const raw = String(m[1] || '').trim();
+      if (!raw || /^data:/i.test(raw) || /^(?:https?:)?\/\//i.test(raw)) continue;
+      const clean = raw.split('?')[0].split('#')[0].replace(/^\.\//,'');
+      if (!clean) continue;
+      const key = clean.toLowerCase();
+      if (!refs.has(key)) refs.set(key, {path:clean,line:sourceLineNumber(text,m.index)});
+    }
+    return [...refs.values()];
+  }
+
+  function extractStateSurface(source) {
+    const text = String(source || ''), states = new Map(), transitions = [];
+    const addState = (name, line, kind) => { const key=String(name||'').trim().toLowerCase(); if(!key)return; if(!states.has(key))states.set(key,{name:String(name).trim(),line,kind}); };
+    let m;
+    const patterns = [
+      /\b(?:state|status)\s*\.\s*(?:status|state)\s*=\s*["'`]([^"'`]+)["'`]/gi,
+      /\b(?:status|state)\s*[:=]\s*["'`]([^"'`]+)["'`]/gi,
+      /\bset(?:Status|State)\s*\(\s*["'`]([^"'`]+)["'`]/gi
+    ];
+    for (const re of patterns) while ((m=re.exec(text))) addState(m[1],sourceLineNumber(text,m.index),'ASSIGNMENT');
+    const transitionRe = /\b(?:transition|setStatus|setState|updateStatus|updateState)\s*\(\s*["'`]([^"'`]+)["'`]/gi;
+    while ((m=transitionRe.exec(text))) transitions.push({to:String(m[1]).trim(),line:sourceLineNumber(text,m.index),expression:m[0]});
+    return {states:[...states.values()],transitions};
+  }
+
   function extractFunctionSurface(text) {
     const functions = new Map();
     const source = String(text || '');
@@ -612,6 +703,21 @@ export function runAutonomousEngine(onCycleUpdate) {
     return refs;
   }
 
+  function extractDynamicEventBindings(source) {
+    const text = String(source || ''), bindings = [], seen = new Set();
+    const add = (event, target, line, expression, mode) => {
+      const key = [event, target, line, mode].join('|');
+      if (!event || !target || seen.has(key)) return;
+      seen.add(key); bindings.push({ event, target, line, expression, mode });
+    };
+    let m;
+    const direct = /(?:\.addEventListener|\.removeEventListener)\s*\(\s*['"]([a-zA-Z]+)['"]\s*,\s*([A-Za-z_$][\w$]*)/g;
+    while ((m = direct.exec(text))) add(m[1].toLowerCase(), m[2], sourceLineNumber(text, m.index), m[0], 'DIRECT_SYMBOL');
+    const inline = /(?:\.addEventListener|\.removeEventListener)\s*\(\s*['"]([a-zA-Z]+)['"]\s*,\s*(?:function\s*\([^)]*\)|\([^)]*\)\s*=>|[A-Za-z_$][\w$]*\s*=>)/g;
+    while ((m = inline.exec(text))) add(m[1].toLowerCase(), '<INLINE>', sourceLineNumber(text, m.index), m[0], 'INLINE_CALLBACK');
+    return bindings;
+  }
+
   function scanHtmlSource(file, source) {
     const findings = [];
     const text = String(source || '');
@@ -703,7 +809,7 @@ export function runAutonomousEngine(onCycleUpdate) {
         message:`Inline handler ${symbol}() dipanggil pada ${file}, tetapi definisinya tidak ditemukan di source file ini.`
       });
     }
-    return { findings, forms, ids:[...ids.entries()].map(([id,line]) => ({id,line})), onclicks:dom.onclicks, functions };
+    return { findings, forms, ids:[...ids.entries()].map(([id,line]) => ({id,line})), onclicks:dom.onclicks, dynamicEventBindings:extractDynamicEventBindings(text), functions, assetRefs:extractAssetRefs(file,text), stateSurface:extractStateSurface(text) };
   }
 
   function scanJsSource(file, source) {
@@ -726,7 +832,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     }
     if (quote) findings.push({ severity:'HIGH', type:'UNTERMINATED_STRING', file, line, message:'String/template literal tampak tidak tertutup.' });
     if (depth !== 0) findings.push({ severity:'HIGH', type:'UNBALANCED_JS', file, line, message:`Keseimbangan kurung kurawal gagal (depth=${depth}).` });
-    return { findings, forms:[], ids:[], onclicks:[], functions:extractFunctionSurface(text) };
+    return { findings, forms:[], ids:[], onclicks:[], dynamicEventBindings:extractDynamicEventBindings(text), functions:extractFunctionSurface(text), assetRefs:extractAssetRefs(file,text), stateSurface:extractStateSurface(text) };
   }
 
   function scanSourceFile(file, source) {
@@ -1360,6 +1466,156 @@ export function runAutonomousEngine(onCycleUpdate) {
     } finally { clearTimeout(timeout); }
   }
 
+  function classifyFormIntent(form) {
+    const text = [form?.key, ...(form?.fields || []), ...(form?.semanticSurface || []), ...(form?.surfaceLabel || []), form?.submitHandler, form?.action].join(' ').toLowerCase();
+    if (/register|registration|registr|daftar|signup|sign up|pendaftaran|mitra/.test(text)) return 'REGISTRATION';
+    if (/login|signin|sign in|masuk|password/.test(text)) return 'AUTHENTICATION';
+    if (/upload|unggah|foto|photo|image|gambar|dokumen|ktp|sim|stnk/.test(text)) return 'UPLOAD';
+    if (/edit|update|ubah|profil|profile|simpan|save/.test(text)) return 'PROFILE_UPDATE';
+    if (/search|cari|filter/.test(text)) return 'SEARCH';
+    if (/checkout|order|pesan|booking|reservasi/.test(text)) return 'TRANSACTION';
+    return 'GENERIC_FORM';
+  }
+
+  function contractGapEngine(scanned, relations, existingFindings = []) {
+    const gaps = [], assignments = [], nextActions = [];
+    const nodes = Object.values(scanned).map(item => ({file:item.file,type:item.type,role:item.role,lines:item.lines,hash:item.hash,forms:(item.forms||[]).length,functions:(item.functions||[]).length,ids:(item.ids||[]).length,assets:(item.assetRefs||[]).length,states:(item.stateSurface?.states||[]).length}));
+    const edges = [], edgeKeys = new Set();
+    const addEdge = (a,b,type,confidence,evidence={}) => { if(!a||!b||a===b)return; const k=[a,b,type].join('|'); if(edgeKeys.has(k))return; edgeKeys.add(k); edges.push({sourceFile:a,targetFile:b,type,confidence,evidence}); };
+    for(const item of Object.values(scanned)) for(const ref of item.refs||[]) if(scanned[ref]) addEdge(item.file,ref,'FILE_REFERENCE','HIGH');
+    for(const r of relations||[]) addEdge(r.sourceFile,r.targetFile,r.type||'RELATION',r.confidence||'UNKNOWN',{status:r.status});
+
+    const functionIndex = new Map();
+    for(const item of Object.values(scanned)) for(const fn of item.functions||[]) {
+      const key=String(fn?.name||'').toLowerCase(); if(!key)continue;
+      if(!functionIndex.has(key))functionIndex.set(key,[]);
+      functionIndex.get(key).push({file:item.file,fn});
+    }
+    const reverseCalls = new Map();
+    for(const item of Object.values(scanned)) for(const fn of item.functions||[]) for(const call of fn.callNames||[]) {
+      const key=String(call||'').toLowerCase(); if(!key)continue;
+      if(!reverseCalls.has(key))reverseCalls.set(key,[]);
+      reverseCalls.get(key).push({file:item.file,fn:fn.name,line:fn.line});
+    }
+    const resolveFunction = name => {
+      const defs=functionIndex.get(String(name||'').toLowerCase())||[];
+      if(defs.length===0)return {status:'NOT_FOUND',definitions:[]};
+      if(defs.length>1)return {status:'AMBIGUOUS_BINDING',definitions:defs};
+      return {status:'UNIQUE_DEFINITION',definitions:defs};
+    };
+    const body = fn => String(fn?.bodyText||fn?.normalizedBody||'').toLowerCase();
+    const directCalls = fn => new Set((fn?.callNames||[]).map(x=>String(x||'').toLowerCase()));
+    const semanticConsequence = new Set(['setdoc','adddoc','updatedoc','deletedoc','createuserwithemailandpassword','signinwithemailandpassword','signout','fetch','post','put','patch','onsnapshot','set','update','remove']);
+    const hasConsequence = fn => { const b=body(fn), names=directCalls(fn); return [...semanticConsequence].some(x=>names.has(x)||b.includes(x+'(')||b.includes('.'+x+'(')); };
+    const dynamicBindings = Object.values(scanned).flatMap(item => (item.dynamicEventBindings||[]).map(b=>({file:item.file,...b})));
+    const dynamicFor = (event,file) => dynamicBindings.filter(b=>b.file===file && b.event===event);
+    const TRACE_MAX_DEPTH = 4;
+    const called = (holder, depth=0, visited=new Set(), path=[]) => {
+      if(!holder || depth>TRACE_MAX_DEPTH)return {found:false,path,reason:'MAX_DEPTH'};
+      const key=holder.file+'::'+holder.fn.name;
+      if(visited.has(key))return {found:false,path,reason:'CYCLE'};
+      const nextVisited=new Set(visited); nextVisited.add(key);
+      const nextPath=[...path,{file:holder.file,function:holder.fn.name,line:holder.fn.line,depth}];
+      if(hasConsequence(holder.fn))return {found:true,path:nextPath,reason:'CONSEQUENCE'};
+      for(const call of holder.fn.callNames||[]) {
+        const r=resolveFunction(call);
+        if(r.status!=='UNIQUE_DEFINITION')continue;
+        const child=r.definitions[0], out=called(child,depth+1,nextVisited,nextPath);
+        if(out.found)return out;
+      }
+      return {found:false,path:nextPath,reason:depth>=TRACE_MAX_DEPTH?'MAX_DEPTH':'NO_CONSEQUENCE'};
+    };
+    const traceCalls = holder => { const root=called(holder,0,new Set(),[]); return {found:root.found,reason:root.reason||null,depth:Math.max(0,(root.path||[]).length-1),path:root.path||[]}; };
+    const tracePathLabel = path => (path||[]).map(step => `${step.file}:${step.function}@${step.line ?? '?'}`).join(' -> ');
+    const addGap=(g, owner, action) => { gaps.push(g); if(owner)assignments.push({owner,target:g.file,line:g.line||null,action}); if(action)nextActions.push(action); };
+    const ignoredCalls = new Set(['if','for','while','switch','catch','function','settimeout','setinterval','string','number','boolean','math','date','array','object','promise','error','log','warn','error','queryselector','queryselectorall','getelementbyid','preventdefault','dispatch','json','parse','stringify']);
+
+    for(const item of Object.values(scanned)) {
+      for(const form of item.forms||[]) {
+        const intent=classifyFormIntent(form);
+        const handlers=[...new Set([form?.submitHandler,...(form?.handlerRefs||[]).map(x=>x?.name)].map(x=>String(x||'').trim()).filter(Boolean))];
+        const base={file:item.file,line:form.line,key:form.key||null,intent,fields:form.fields||[],handlers};
+        for(const name of handlers) {
+          const resolved=resolveFunction(name);
+          if(resolved.status==='NOT_FOUND') addGap({...base,severity:'HIGH',type:'CONTRACT_GAP_UNRESOLVED_FORM_HANDLER',handler:name,message:`Form ${form.key||'(tanpa key)'} memanggil ${name}(), tetapi definisi tidak ditemukan pada seluruh source yang terbaca.`,confidence:'HIGH',proofStatus:'NOT_FOUND_IN_SCANNED_SOURCE',bindingStatus:'NOT_FOUND',nextAction:'VERIFY_HANDLER_OR_EXTERNAL_BINDING'},'BCGO_RECON','VERIFY_HANDLER_OR_EXTERNAL_BINDING');
+          else if(resolved.status==='AMBIGUOUS_BINDING') addGap({...base,severity:'HIGH',type:'CONTRACT_GAP_AMBIGUOUS_HANDLER_BINDING',handler:name,definitions:resolved.definitions.map(d=>({file:d.file,line:d.fn.line})),message:`Form ${form.key||'(tanpa key)'} memanggil ${name}(), tetapi ditemukan ${resolved.definitions.length} definisi. Binding yang benar belum dapat dipastikan.`,confidence:'HIGH',proofStatus:'AMBIGUOUS_BINDING',bindingStatus:'AMBIGUOUS_BINDING',nextAction:'VERIFY_HANDLER_BINDING'},'CGO_REASONING','VERIFY_HANDLER_BINDING');
+          else {
+            const holder=resolved.definitions[0]; addEdge(item.file,holder.file,'HANDLER_BINDING','HIGH',{formLine:form.line,handler:name,handlerLine:holder.fn.line});
+            if(['REGISTRATION','AUTHENTICATION','PROFILE_UPDATE'].includes(intent)) {
+              const consequence=traceCalls(holder);
+              if(!consequence.found && !/preventdefault|return false/.test(body(holder.fn))) addGap({...base,severity:'MEDIUM',type:'CONTRACT_GAP_NO_DOWNSTREAM_CONSEQUENCE',handler:name,handlerFile:holder.file,handlerLine:holder.fn.line,message:`Form ${form.key||'(tanpa key)'} terhubung ke ${name}(), tetapi jalur dependency hingga ${TRACE_MAX_DEPTH} tingkat belum menunjukkan persistence/auth/network yang dapat dibuktikan.`,confidence:'MEDIUM',proofStatus:'OBSERVED_GAP_CANDIDATE',bindingStatus:'UNIQUE_DEFINITION',nextAction:'TRACE_HANDLER_DEPENDENCIES',dependencyPath:consequence.path,dependencyTrace:tracePathLabel(consequence.path),traceReason:consequence.reason},'CGO_REASONING','TRACE_HANDLER_DEPENDENCIES');
+              else if(consequence.found && consequence.path.length>1) addEdge(holder.file,consequence.path.at(-1).split('::')[0],'INDIRECT_CONSEQUENCE','MEDIUM',{handler:name,depth:consequence.path.length-1});
+            }
+          }
+        }
+        const semantic=(form.semanticSurface||[]).join(' ');
+        const dynamicSubmit=dynamicFor('submit',item.file).length>0;
+        if(form.controlCount>0&&!form.submitHandler&&!form.action&&!handlers.length&&!dynamicSubmit&&/submit|daftar|login|masuk|simpan|save|kirim|pesan|booking|register/i.test(semantic)) addGap({...base,severity:'MEDIUM',type:'CONTRACT_GAP_FORM_SUBMISSION_PATH',message:`Form ${form.key||'(tanpa key)'} memiliki control dan semantic submit, tetapi tidak ditemukan jalur submit/action/handler maupun addEventListener('submit', ...) pada source file.`,confidence:'MEDIUM',proofStatus:'OBSERVED_GAP_CANDIDATE',nextAction:'TRACE_DYNAMIC_EVENT_BINDING',bindingStatus:'NOT_OBSERVED'},'BCGO_RECON','TRACE_DYNAMIC_EVENT_BINDING');
+      }
+
+      const ids=new Set((item.ids||[]).map(x=>String(x.id||'').toLowerCase()));
+      for(const fn of item.functions||[]) for(const anchor of fn.domAnchors||[]) if(!ids.has(String(anchor).toLowerCase())) addGap({file:item.file,line:fn.line,severity:'MEDIUM',type:'CONTRACT_GAP_MISSING_DOM_CONSUMER',function:fn.name,anchor,message:`${fn.name}() menggunakan DOM anchor "${anchor}", tetapi ID tersebut tidak ditemukan pada source file ${item.file}.`,confidence:'MEDIUM',proofStatus:'OBSERVED_GAP_CANDIDATE',nextAction:'TRACE_DOM_CONSUMER',bindingStatus:'UNVERIFIED'},'BCGO_RECON','TRACE_DOM_CONSUMER');
+
+      // Producer/consumer precision: an internal-looking call with no producer.
+      for(const fn of item.functions||[]) for(const call of fn.callNames||[]) {
+        const key=String(call||'').toLowerCase();
+        if(!key || ignoredCalls.has(key) || key.length<3 || functionIndex.has(key)) continue;
+        if(/^(console|firebase|window|document|alert|confirm|prompt|settimeout|setinterval)$/.test(key)) continue;
+        addGap({file:item.file,line:fn.line,severity:'MEDIUM',type:'CONTRACT_GAP_MISSING_PRODUCER',function:fn.name,consumerSymbol:call,message:`${fn.name}() memanggil ${call}(), tetapi producer/definition internal tidak ditemukan pada source yang dipindai. Ini kandidat missing producer atau binding eksternal yang belum terbukti.`,confidence:'MEDIUM',proofStatus:'OBSERVED_GAP_CANDIDATE',bindingStatus:'NOT_FOUND',nextAction:'VERIFY_SYMBOL_PRODUCER'},'BCGO_RECON','VERIFY_SYMBOL_PRODUCER');
+      }
+
+      // Orphan producers: a non-generic function is defined but no scanned function consumes it.
+      for(const fn of item.functions||[]) {
+        const key=String(fn?.name||'').toLowerCase();
+        if(!key || functionNameIsGeneric(fn.name) || /^_/.test(key)) continue;
+        if(!reverseCalls.has(key) && !/export\s+(?:async\s+)?function\s+/.test(String(item.rawSource||'')) && !/^on|^handle/i.test(fn.name)) addGap({file:item.file,line:fn.line,severity:'LOW',type:'CONTRACT_GAP_ORPHAN_PRODUCER',function:fn.name,message:`Fungsi ${fn.name}() terdefinisi tetapi tidak ditemukan consumer function di source yang dipindai. Bisa jadi entrypoint runtime, global binding, atau fungsi yatim; perlu verifikasi sebelum dianggap masalah.`,confidence:'LOW',proofStatus:'OBSERVED_GAP_CANDIDATE',bindingStatus:'UNVERIFIED',nextAction:'VERIFY_FUNCTION_CONSUMER'},'CGO_REASONING','VERIFY_FUNCTION_CONSUMER');
+      }
+
+      // State contract: explicit state/transition names must have an observed consumer.
+      const stateSurface=item.stateSurface||{states:[],transitions:[]};
+      const allStateText=[...(item.functions||[]).flatMap(fn=>fn.stringAnchors||[]), ...(item.functions||[]).flatMap(fn=>fn.callNames||[])].map(x=>String(x||'').toLowerCase());
+      for(const st of stateSurface.states||[]) {
+        const n=String(st.name||'').toLowerCase();
+        const consumerCount=allStateText.filter(x=>x===n || x.includes(n)).length;
+        if(consumerCount<=1 && n.length>=3) addGap({file:item.file,line:st.line,severity:'LOW',type:'CONTRACT_GAP_STATE_WITHOUT_OBSERVED_CONSUMER',state:st.name,message:`State "${st.name}" terdeteksi pada assignment tetapi consumer/render/transition berikutnya belum dapat dibuktikan dari source scan.`,confidence:'LOW',proofStatus:'OBSERVED_GAP_CANDIDATE',nextAction:'TRACE_STATE_CONSUMER',bindingStatus:'UNVERIFIED'},'CGO_REASONING','TRACE_STATE_CONSUMER');
+      }
+    }
+
+    // Asset/UI contract: references are real evidence; missing file existence is checked later by the async scan verifier.
+    const assets=[];
+    for(const item of Object.values(scanned)) for(const asset of item.assetRefs||[]) assets.push({sourceFile:item.file,...asset});
+    for(const f of existingFindings||[]) if(/MISSING|UNRESOLVED|CONTRACT/i.test(String(f?.type||''))&&f?.file) gaps.push({severity:f.severity||'MEDIUM',type:'CONTRACT_GAP_FROM_EXISTING_FINDING',file:f.file,line:f.line||null,message:f.message||'Temuan kontrak sebelumnya memerlukan verifikasi.',confidence:f.confidence||'UNKNOWN',proofStatus:'INHERITED_EVIDENCE',nextAction:'CGO_REASONING_VERIFY',sourceFindingType:f.type});
+    const unique=[],seen=new Set(); for(const g of gaps){const k=[g.type,g.file,g.line,g.handler||'',g.function||'',g.anchor||'',g.consumerSymbol||'',g.state||'',g.message].join('|');if(!seen.has(k)){seen.add(k);unique.push(g);}}
+    const rank={HIGH:3,MEDIUM:2,LOW:1}; unique.sort((a,b)=>(rank[b.severity]||0)-(rank[a.severity]||0));
+    if(unique.some(x=>x.severity==='HIGH'))assignments.push({owner:'CGO_REASONING',action:'SELECT_HYPOTHESIS_AND_PROBE',reason:'Contract precision menemukan gap HIGH atau binding ambigu.'});
+    const traceGaps=unique.filter(x=>Array.isArray(x.dependencyPath));
+    const traceDepths=traceGaps.map(x=>Math.max(0,(x.dependencyPath||[]).length-1));
+    const summary={gapCount:unique.length,high:unique.filter(x=>x.severity==='HIGH').length,medium:unique.filter(x=>x.severity==='MEDIUM').length,low:unique.filter(x=>x.severity==='LOW').length,ambiguousBindings:unique.filter(x=>x.bindingStatus==='AMBIGUOUS_BINDING').length,dynamicSubmitBindings:dynamicBindings.filter(x=>x.event==='submit').length,missingProducers:unique.filter(x=>x.type==='CONTRACT_GAP_MISSING_PRODUCER').length,orphanProducers:unique.filter(x=>x.type==='CONTRACT_GAP_ORPHAN_PRODUCER').length,stateCandidates:unique.filter(x=>x.type==='CONTRACT_GAP_STATE_WITHOUT_OBSERVED_CONSUMER').length,assetReferences:assets.length,maxTraceDepth:Math.max(0,...traceDepths),multiHopTraces:traceDepths.filter(d=>d>=2).length};
+    return {version:'1.3.0-MULTI-HOP-CONTRACT-TRACE',status:unique.length?'GAPS_FOUND':'NO_GAP_PROVEN',generatedAt:Date.now(),nodes,edges,gaps:unique.slice(0,220),assignments:assignments.slice(0,80),nextActions:[...new Set(nextActions)].slice(0,80),assets:assets.slice(0,160),summary,message:unique.length?`Multi-Hop Contract Trace menemukan ${unique.length} kandidat; jalur dependency hingga ${TRACE_MAX_DEPTH} tingkat disimpan sebagai evidence untuk CGO.`:'Tidak ada contract gap yang terbukti dari heuristik source saat ini.'};
+  }
+
+  async function verifyAssetContracts(scanned, generation) {
+    const refs=[];
+    for (const item of Object.values(scanned)) for (const asset of item.assetRefs || []) refs.push({sourceFile:item.file,...asset});
+    const unique=[]; const seen=new Set();
+    for (const ref of refs) {
+      const path=String(ref.path||'').trim(); if(!path) continue;
+      const key=path.toLowerCase(); if(seen.has(key)) continue; seen.add(key); unique.push(ref);
+    }
+    const results=[];
+    for (const ref of unique.slice(0,160)) {
+      if (generation !== sourceScanGeneration) return {references:unique,results};
+      try {
+        const url=new URL(ref.path,window.location.href).href;
+        const response=await fetch(url,{method:'HEAD',cache:'no-store',credentials:'same-origin'});
+        results.push({...ref,status:response.ok?'PRESENT':'MISSING',httpStatus:response.status,url});
+      } catch (error) {
+        results.push({...ref,status:'UNVERIFIED',httpStatus:null,url:null,error:String(error?.message||error)});
+      }
+    }
+    return {references:unique,results};
+  }
+
   async function runSourceScan(reason = 'REALTIME') {
     if (stopped || !authorized || sourceScanBusy) return;
     sourceScanBusy = true;
@@ -1428,9 +1684,25 @@ export function runAutonomousEngine(onCycleUpdate) {
       })));
       const mergedCrossFindings = [...crossFileFindings, ...nerveFindings].slice(0,160);
       const mergedActionable = [...failures,...allFindings,...mergedCrossFindings].filter(f => f.severity !== 'INFO').slice(0,120);
-      const status = failures.length ? 'DEGRADED' : mergedActionable.length ? 'FINDINGS' : 'CLEAN';
+      const assetVerification = await verifyAssetContracts(scanned, generation);
+      const assetGaps = [];
+      for (const asset of assetVerification.results || []) {
+        if (asset.status === 'MISSING') assetGaps.push({file:asset.sourceFile,line:asset.line,severity:'HIGH',type:'CONTRACT_GAP_MISSING_ASSET',asset:asset.path,message:`Asset lokal "${asset.path}" direferensikan dari ${asset.sourceFile}, tetapi deployment mengembalikan HTTP ${asset.httpStatus}; consumer UI/source berpotensi kehilangan producer asset.`,confidence:'HIGH',proofStatus:'DEPLOYMENT_ASSET_MISSING',nextAction:'VERIFY_ASSET_PATH_OR_DEPLOYMENT',bindingStatus:'NOT_FOUND'});
+        else if (asset.status === 'UNVERIFIED') assetGaps.push({file:asset.sourceFile,line:asset.line,severity:'LOW',type:'CONTRACT_GAP_ASSET_UNVERIFIED',asset:asset.path,message:`Asset lokal "${asset.path}" direferensikan dari ${asset.sourceFile}, tetapi keberadaannya belum dapat diverifikasi dari deployment.`,confidence:'LOW',proofStatus:'ASSET_UNVERIFIED',nextAction:'RETRY_ASSET_PROBE',bindingStatus:'UNVERIFIED'});
+      }
+      const contractGap = contractGapEngine(scanned, relations, [...mergedActionable,...assetGaps]);
+      contractGap.assets = assetVerification;
+      for (const gap of assetGaps) if (!(contractGap.gaps||[]).some(x=>x.type===gap.type && x.file===gap.file && x.line===gap.line && x.asset===gap.asset)) contractGap.gaps.push(gap);
+      contractGap.gaps = contractGap.gaps.slice(0,220);
+      contractGap.summary.assetReferences = assetVerification.references?.length || 0;
+      contractGap.summary.missingAssets = assetGaps.filter(x=>x.type==='CONTRACT_GAP_MISSING_ASSET').length;
+      contractGap.summary.unverifiedAssets = assetGaps.filter(x=>x.type==='CONTRACT_GAP_ASSET_UNVERIFIED').length;
+      const contractGapFindings = (contractGap.gaps || []).map(g => ({...g, area:g.area || `CONTRACT:${g.type}`, evidence:{contractGap:true,proofStatus:g.proofStatus,confidence:g.confidence,nextAction:g.nextAction}}));
+      const mergedWithContract = [...mergedCrossFindings,...contractGapFindings].slice(0,220);
+      const mergedActionableWithContract = [...failures,...allFindings,...mergedWithContract].filter(f => f.severity !== 'INFO').slice(0,160);
+      const status = failures.length ? 'DEGRADED' : mergedActionableWithContract.length ? 'FINDINGS' : 'CLEAN';
       state.fileNerves = nerve.fileNerves;
-      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:mergedCrossFindings,relations:relations.slice(0,200),relationSummary,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),sourceIntelligence:nerve.intelligence,nerveSummary:{healthy:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='HEALTHY').length,standby:Object.values(state.systemOrgans || {}).filter(n=>n.state==='STANDBY').length,observed:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='OBSERVED').length,review:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='REVIEW').length,anomaly:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='ANOMALY').length,unresolved:nerveFindings.length},message:failures.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, ${RESERVED_OPTIONAL_ORGANS.size - Object.keys(scanned).filter(f => RESERVED_OPTIONAL_ORGANS.has(f)).length} organ standby belum dideploy, dan ${failures.length} source gagal dibaca.` : mergedActionable.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca; ${mergedActionable.length} bukti/temuan membutuhkan pemeriksaan.` : `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, dan organ standby yang belum dideploy tetap dipisahkan dari HEALTHY.` };
+      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:mergedWithContract,relations:relations.slice(0,200),relationSummary,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),sourceIntelligence:nerve.intelligence,exploration:contractGap,nerveSummary:{healthy:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='HEALTHY').length,standby:Object.values(state.systemOrgans || {}).filter(n=>n.state==='STANDBY').length,observed:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='OBSERVED').length,review:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='REVIEW').length,anomaly:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='ANOMALY').length,unresolved:nerveFindings.length},message:failures.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, ${RESERVED_OPTIONAL_ORGANS.size - Object.keys(scanned).filter(f => RESERVED_OPTIONAL_ORGANS.has(f)).length} organ standby belum dideploy, dan ${failures.length} source gagal dibaca.` : mergedActionableWithContract.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca; ${mergedActionableWithContract.length} bukti/temuan membutuhkan pemeriksaan, termasuk ${contractGap.gaps?.length || 0} kandidat contract gap.` : `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, dan organ standby yang belum dideploy tetap dipisahkan dari HEALTHY.` };
       recordEvent('SOURCE_SCAN_RESULT', state.sourceScan.message, actionable.length ? 'SYS_SOURCE_FINDINGS' : 'SYS_SOURCE_CLEAN');
       const aiSnapshot = ingestInternalAI(safeClone(state));
       if (aiSnapshot) state.internalAI = buildInternalAIHandoff(aiSnapshot);
@@ -2040,6 +2312,8 @@ export function runAutonomousEngine(onCycleUpdate) {
     },
     getSituation: situation,
     getRegistry: () => ({ ...ORGAN_REGISTRY }),
+    getExploration: () => safeClone(state.sourceScan?.exploration || null),
+    getContractGaps: () => safeClone(state.sourceScan?.exploration?.gaps || []),
     stop() {
       stopped = true;
       ++authEpoch;

@@ -9,7 +9,7 @@
  * - This module only observes real internal state/bridge packets and emits
  *   bounded directives. Proof/Guardian/Executor remain authoritative gates.
  */
-const VERSION = "2.0.0-INTERNAL-CAPTAIN-SUPERVISOR";
+const VERSION = "2.2.0-INTERNAL-CAPTAIN-BCGO-NEXT-PROBE";
 const BRIDGE = "CIKUR_GO_BCGO_MEDICINE_V1";
 const MAX_ROUNDS = 4;
 const DIRECTIVE_COOLDOWN = 12000;
@@ -19,6 +19,7 @@ const CAPTAIN_ANALYSIS_PROMPT = "Terima kasih atas update-nya. Saya butuh data p
 const HUMAN_APPROVAL_KEY = `${BRIDGE}_HUMAN_APPROVAL`;
 const HUMAN_APPROVAL_MAX_AGE = 120000;
 const CASE_STALE_MS = 10 * 60 * 1000;
+const PROBE_MAX_PER_CASE = 6;
 
 const clone = value => {
   try { return JSON.parse(JSON.stringify(value)); } catch { return value; }
@@ -50,7 +51,9 @@ export function createCaptain(options = {}) {
     blocker: null,
     candidate: null,
     humanGate: false,
-    at: Date.now()
+    at: Date.now(),
+    bcgoExploration: null,
+    captainAssessment: null
   };
 
   function emit(event, data = {}) {
@@ -153,18 +156,19 @@ export function createCaptain(options = {}) {
     }
 
     if (isInvestigate) {
-      const packet = directive("CGO_INVESTIGATE", {
+      const packet = directive("CGO_BCGO_EXPLORE", {
         caseId,
         target: latestBCGO?.lastTelemetryFile || latestMedicine?.target || null,
         question: raw,
         humanCommand: true,
-        commander: "HUMAN"
+        commander: "HUMAN",
+        exploration: "SOURCE_CONTRACT_MULTI_HOP"
       }, { force: true });
       const current = cases.get(caseId);
-      if (current) { current.investigationDispatched = !!packet; current.awaitingEvidence = !!packet; current.lastAction = packet ? "MEDICINE_INVESTIGATE" : current.lastAction; }
-      set({ status: "LIVE", phase: "DELEGATING", decision: "HUMAN_REQUESTED_INVESTIGATION", nextAction: "MEDICINE_INVESTIGATE", blocker: null }, "CAPTAIN_HUMAN_COMMAND");
+      if (current) { current.investigationDispatched = !!packet; current.awaitingEvidence = !!packet; current.lastAction = packet ? "BCGO_EXPLORE" : current.lastAction; }
+      set({ status: "LIVE", phase: "DELEGATING", decision: "HUMAN_REQUESTED_INVESTIGATION", nextAction: "BCGO_EXPLORE", blocker: null }, "CAPTAIN_HUMAN_COMMAND");
       return captainReply(packet
-        ? `Baik. Perintah manusia saya terima. Saya instruksikan Medicine untuk melakukan pengecekan terarah sekarang. Belum ada izin perubahan source.`
+        ? `Baik. Perintah manusia saya terima. Saya instruksikan BCGO untuk menjelajah source dan kontraknya sekarang. Belum ada izin perubahan source.`
         : "Perintah diterima, tetapi jalur internal belum siap mengirim directive. Saya menahan eksekusi dan tidak mengubah source.",
         { decision: packet ? "INVESTIGATION_DISPATCHED" : "INVESTIGATION_BLOCKED" });
     }
@@ -199,6 +203,102 @@ export function createCaptain(options = {}) {
       caseId: state.caseId,
       message: "Hallo,, BCGO, MEDICINE dan EXECUTOR. Tolong update Kalian sedang mengerjakan apa"
     });
+  }
+
+  function chooseNextBCGOProbe(snapshot = latestBCGO) {
+    const exploration = snapshot?.sourceScan?.exploration || {};
+    const gaps = Array.isArray(exploration.gaps) ? exploration.gaps : [];
+    const rank = { HIGH: 3, MEDIUM: 2, LOW: 1 };
+    const current = state.caseId ? cases.get(state.caseId) : null;
+    const history = Array.isArray(current?.probeHistory) ? current.probeHistory : [];
+    if (history.length >= PROBE_MAX_PER_CASE) return null;
+    const used = new Set(history.map(x => String(x.type || '').toUpperCase() + '|' + String(x.file || '') + '|' + String(x.line || '') + '|' + String(x.symbol || x.handler || x.asset || '')));
+    const map = {
+      CONTRACT_GAP_UNRESOLVED_HANDLER: 'VERIFY_HANDLER_BINDING',
+      CONTRACT_GAP_AMBIGUOUS_HANDLER_BINDING: 'VERIFY_HANDLER_BINDING',
+      CONTRACT_GAP_NO_DOWNSTREAM_CONSEQUENCE: 'TRACE_HANDLER_DEPENDENCIES',
+      CONTRACT_GAP_MISSING_DOM_CONSUMER: 'TRACE_DOM_CONSUMER',
+      CONTRACT_GAP_MISSING_PRODUCER: 'VERIFY_SYMBOL_PRODUCER',
+      CONTRACT_GAP_ORPHAN_PRODUCER: 'VERIFY_FUNCTION_CONSUMER',
+      CONTRACT_GAP_STATE_WITHOUT_OBSERVED_CONSUMER: 'TRACE_STATE_CONSUMER',
+      CONTRACT_GAP_MISSING_ASSET: 'VERIFY_ASSET_PATH_OR_DEPLOYMENT',
+      CONTRACT_GAP_ASSET_UNVERIFIED: 'RETRY_ASSET_PROBE',
+      CONTRACT_GAP_FORM_SUBMISSION_PATH: 'TRACE_DYNAMIC_EVENT_BINDING'
+    };
+    const sorted = gaps.slice().sort((a,b)=>(rank[String(b?.severity||'').toUpperCase()]||0)-(rank[String(a?.severity||'').toUpperCase()]||0));
+    for (const g of sorted) {
+      const type = map[g?.type] || g?.nextAction || null;
+      if (!type || type === 'CONTINUE_OBSERVATION') continue;
+      const file = g?.file || g?.sourceFile || null;
+      const line = g?.line || g?.handlerLine || null;
+      const symbol = g?.handler || g?.function || g?.consumerSymbol || g?.state || g?.asset || null;
+      const key = String(type).toUpperCase() + '|' + String(file || '') + '|' + String(line || '') + '|' + String(symbol || '');
+      if (used.has(key)) continue;
+      return { probeId:`PROBE-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, type, caseId:state.caseId || null, file, line, symbol, gapType:g?.type || null, severity:g?.severity || 'UNKNOWN', confidence:g?.confidence || 'UNVERIFIED', dependencyTrace:g?.dependencyTrace || null, reason:g?.message || 'BCGO evidence requires a bounded verification probe.', round:state.round, createdAt:Date.now() };
+    }
+    return null;
+  }
+
+  function dispatchNextBCGOProbe(snapshot = latestBCGO, reason = 'CAPTAIN_SELECTED_NEXT_PROBE') {
+    const probe = chooseNextBCGOProbe(snapshot);
+    if (!probe) return null;
+    const current = state.caseId ? cases.get(state.caseId) : null;
+    if (current) {
+      current.probeHistory = Array.isArray(current.probeHistory) ? current.probeHistory : [];
+      current.probeHistory.push(clone(probe));
+      current.lastProbe = clone(probe);
+      current.lastAction = 'BCGO_PROBE';
+      current.awaitingEvidence = true;
+    }
+    const packet = directive('CGO_BCGO_EXPLORE', { caseId:probe.caseId, exploration:'TARGETED_PROBE', probe, question:`Captain memilih probe ${probe.type} untuk memverifikasi ${probe.file || 'source'}${probe.line ? `:${probe.line}` : ''}${probe.symbol ? ` / ${probe.symbol}` : ''}.` });
+    if (!packet) return null;
+    set({ phase:'BCGO_PROBING', decision:'NEXT_PROBE_DISPATCHED', nextAction:probe.type, blocker:null }, reason);
+    return probe;
+  }
+
+  function assessBCGOExploration(snapshot) {
+    const scan = snapshot?.sourceScan || {};
+    const exploration = scan.exploration || {};
+    const gaps = Array.isArray(exploration.gaps) ? exploration.gaps : [];
+    const traces = Array.isArray(exploration.traces) ? exploration.traces : [];
+    const summary = exploration.summary || {};
+    const high = Number(summary.high || 0);
+    const medium = Number(summary.medium || 0);
+    const unresolved = gaps.filter(g => String(g?.proofStatus || '').toUpperCase() !== 'INHERITED_EVIDENCE');
+    const assessment = {
+      status: exploration.status || scan.status || 'UNVERIFIED',
+      gapCount: gaps.length,
+      high,
+      medium,
+      unresolved: unresolved.length,
+      multiHopTraces: Number(summary.multiHopTraces || 0),
+      maxTraceDepth: Number(summary.maxTraceDepth || 0),
+      nextActions: Array.isArray(exploration.nextActions) ? exploration.nextActions.slice(0,8) : [],
+      at: Date.now()
+    };
+    state.bcgoExploration = clone(assessment);
+    if (unresolved.length || high || medium) {
+      state.captainAssessment = {
+        conclusion: 'BCGO_EVIDENCE_REQUIRES_REVIEW',
+        rule: 'OBSERVED_CANDIDATE_NOT_ROOT_CAUSE',
+        priority: high ? 'HIGH' : 'MEDIUM',
+        nextAction: assessment.nextActions[0] || 'VERIFY_BCGO_EVIDENCE',
+        evidence: unresolved.slice(0,6).map(g => ({
+          type:g.type || null, file:g.file || g.sourceFile || null, line:g.line || null,
+          severity:g.severity || 'UNKNOWN', confidence:g.confidence || 'UNVERIFIED',
+          dependencyTrace:g.dependencyTrace || null
+        }))
+      };
+      set({ phase: 'BCGO_EXPLORATION', decision: 'BCGO_EVIDENCE_RECEIVED', nextAction: assessment.nextAction || 'VERIFY_BCGO_EVIDENCE', blocker: null }, 'CAPTAIN_BCGO_EXPLORATION_ASSESSED');
+      if (state.caseId) {
+        const c = cases.get(state.caseId);
+        if (!c?.awaitingEvidence) dispatchNextBCGOProbe(snapshot);
+      }
+    } else {
+      state.captainAssessment = { conclusion:'NO_ACTIONABLE_GAP_OBSERVED', rule:'NO_GAP_PROVEN', nextAction:'CONTINUE_OBSERVATION', evidence:[] };
+      set({ phase: 'OBSERVING', decision: 'BCGO_NO_ACTIONABLE_GAP', nextAction:'CONTINUE_OBSERVATION', blocker:null }, 'CAPTAIN_BCGO_EXPLORATION_ASSESSED');
+    }
+    return clone(state.captainAssessment);
   }
 
   function chooseFromState() {
@@ -380,12 +480,27 @@ export function createCaptain(options = {}) {
     emit("CAPTAIN_EXECUTOR_REPORT", { packet });
   }
 
+  function handleBCGOProbeResult(packet) {
+    latestBCGO = clone(packet.state || latestBCGO || {});
+    const caseId = packet.caseId || state.caseId;
+    if (caseId) registerCase(caseId);
+    const current = caseId ? cases.get(caseId) : null;
+    if (current) current.awaitingEvidence = false;
+    set({ phase:'BCGO_PROBE_RESULT', decision:'BCGO_PROBE_RESULT_RECEIVED', nextAction:'ASSESS_PROBE_RESULT', blocker:null }, 'CAPTAIN_BCGO_PROBE_RESULT');
+    const assessment = assessBCGOExploration(latestBCGO);
+    if (assessment?.conclusion === 'BCGO_EVIDENCE_REQUIRES_REVIEW') {
+      const probe = dispatchNextBCGOProbe(latestBCGO, 'CAPTAIN_PROBE_RESULT_ASSESSED');
+      if (!probe) set({ phase:'BCGO_EXPLORATION', decision:'EVIDENCE_REQUIRES_HUMAN_REVIEW', nextAction:'HUMAN_REVIEW', blocker:'PROBE_BUDGET_OR_NO_NEW_PROBE' }, 'CAPTAIN_PROBE_BOUNDARY');
+    }
+  }
+
   function handlePacket(packet) {
     if (!packet || packet.bridge !== BRIDGE) return;
     const id = String(packet.id || `${packet.from}:${packet.type}:${packet.at}:${packet.caseId || ""}`);
     if (seen.has(id)) return;
     seen.add(id);
     if (seen.size > 500) seen.delete(seen.values().next().value);
+    if (packet.from === "BCGO" && packet.type === 'BCGO_PROBE_RESULT') handleBCGOProbeResult(packet);
     if (packet.from === "MEDICINE") handleMedicine(packet);
     if (packet.from === "EXECUTION") handleExecutor(packet);
   }
@@ -415,6 +530,8 @@ export function createCaptain(options = {}) {
       set({ decision: "BCGO_REPORT_RECEIVED", nextAction: state.nextAction, blocker: null }, "CAPTAIN_BCGO_REPORT");
     }
     if (state.status === "WAITING") announceGreeting();
+    const assessment = assessBCGOExploration(latestBCGO);
+    if (assessment?.conclusion === 'BCGO_EVIDENCE_REQUIRES_REVIEW') return;
     chooseFromState();
   }
 
@@ -445,16 +562,16 @@ export function createCaptain(options = {}) {
     if (started) return api;
     started = true;
     channel?.addEventListener("message", e => handlePacket(e.data));
-    window.addEventListener("storage", e => {
+    if (typeof window !== "undefined") window.addEventListener("storage", e => {
       if (e.key !== `${BRIDGE}_EVENT` || !e.newValue) return;
       try { handlePacket(JSON.parse(e.newValue)); } catch {}
     });
-    window.addEventListener("cikur-bcgo-state", e => onBCGO(e.detail || {}));
-    window.addEventListener("cikur-internal-ai-state", e => {
+    if (typeof window !== "undefined") window.addEventListener("cikur-bcgo-state", e => onBCGO(e.detail || {}));
+    if (typeof window !== "undefined") window.addEventListener("cikur-internal-ai-state", e => {
       latestAI = clone(e.detail || {});
       emit("CAPTAIN_AI_UPDATE", { ai: latestAI });
     });
-    if (window.BCGO_STATE) onBCGO(window.BCGO_STATE);
+    if (typeof window !== "undefined" && window.BCGO_STATE) onBCGO(window.BCGO_STATE);
     set({ status: "WAITING", phase: "IDLE", nextAction: "WAIT_FOR_BCGO" }, "CAPTAIN_READY");
     recoverBridgeCaches();
     return api;
@@ -467,6 +584,10 @@ export function createCaptain(options = {}) {
     onState(fn) { if (typeof fn === "function") listeners.add(fn); return () => listeners.delete(fn); },
     getState() { return clone(state); },
     getSnapshot() { return { captain: clone(state), bcgo: clone(latestBCGO), ai: clone(latestAI), medicine: clone(latestMedicine), executor: clone(latestExecutor) }; },
+    ingestBCGOState(snapshot = {}) { onBCGO(snapshot); return clone(state); },
+    assessBCGOExploration(snapshot = latestBCGO) { return assessBCGOExploration(snapshot || {}); },
+    chooseNextBCGOProbe(snapshot = latestBCGO) { return chooseNextBCGOProbe(snapshot || {}); },
+    dispatchNextBCGOProbe(snapshot = latestBCGO) { return dispatchNextBCGOProbe(snapshot || {}); },
     requestUpdate() { return directive("CGO_REQUEST_UPDATE", { caseId: state.caseId }); },
     receiveHumanCommand,
     humanApprove(caseId = state.caseId) {
