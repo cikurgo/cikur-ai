@@ -1003,11 +1003,11 @@ runAutonomousEngine(state => {
  const lineCode=code=>String(code??'').split(/\r?\n/).map((x,i)=>String(i+1).padStart(5,'0')+'  '+x).join('\n');
  let latestWorkbench=null;
  window.addEventListener('cgo-code-workbench',e=>{const d=e.detail||{};latestWorkbench=d;const box=$('cgo-code-workbench');if(!box)return;box.classList.add('open');box.setAttribute('aria-hidden','false');$('cgo-wb-file').textContent=d.file||'-';
+   const provenance=d.proposed?.fullSource?'FULL PROPOSED SOURCE • SOURCE-BOUND':'SNIPPET ONLY • FULL PROPOSED SOURCE NOT PROVEN';
    $('cgo-wb-meta').textContent=d.status==='SOURCE_READ'?`ORIGINAL ${d.original?.lines||0} lines • ${d.original?.bytes||0} bytes • fingerprint ${d.original?.fingerprint||'-'} • PROPOSED ${d.proposed?.lines||0} lines • proposed fingerprint ${d.proposed?.fingerprint||'-'} • ${provenance}${d.sourceIntegrity?.match===false?' • CANDIDATE ORIGINAL FINGERPRINT MISMATCH — REVIEW':''}`:`STATUS ${d.status||'UNKNOWN'} • ${d.error||''}`;
    $('cgo-wb-original').textContent=d.original?.code?lineCode(d.original.code):'Source belum tersedia.';
    $('cgo-wb-proposed').textContent=d.proposed?.code?lineCode(d.proposed.code):'Belum ada candidate. CGO tidak mengarang AFTER sebelum proof/candidate tersedia.';
    const ranges=Array.isArray(d.proposed?.changedRanges)&&d.proposed.changedRanges.length?`<br><b class="text-cyan-300">MAPPING:</b> ${esc(JSON.stringify(d.proposed.changedRanges))}`:'';
-   const provenance=d.proposed?.fullSource?'FULL PROPOSED SOURCE • SOURCE-BOUND':'SNIPPET ONLY • FULL PROPOSED SOURCE NOT PROVEN';
    const f=d.finding?.statement||d.explanation||d.command||''; $('cgo-wb-finding').innerHTML=(f?'<b class="text-amber-300">TEMUAN / KONTEKS</b><br>'+esc(f):'Belum ada temuan yang diklaim.')+ranges;
  });
  $('cgo-wb-copy')?.addEventListener('click',async()=>{const code=latestWorkbench?.proposed?.code;if(!code)return;try{await navigator.clipboard.writeText(code);$('cgo-wb-copy').textContent='COPIED';setTimeout(()=>{$('cgo-wb-copy').textContent='COPY PROPOSED'},1200)}catch{$('cgo-wb-copy').textContent='COPY GAGAL'}});
@@ -1112,8 +1112,9 @@ runAutonomousEngine(state => {
   });
 
   $('captain-open-workbench')?.addEventListener('click', () => {
-    const file = latestState?.lastTelemetryFile || latestState?.targetCell || null;
-    if (file && window.BCGOBrain?.openCodeWorkbench) window.BCGOBrain.openCodeWorkbench(file, { caseId: latestState?.caseId || undefined });
+    const file = latestState?.lastTelemetryFile || null;
+    const runtime = window.CIKURInternalAIRuntime;
+    if (file && runtime?.openCodeWorkbench) runtime.openCodeWorkbench(file, { caseId: latestState?.caseId || undefined });
     else bubble(captainChat, 'CGO • WORKBENCH', 'Belum ada target source live yang dapat dibuka. Saya tidak akan membuat Full Code dari tebakan.', 'amber');
   });
 
