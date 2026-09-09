@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BCGO Universal Neural Monitor v2.16.5 — Live Conversation Brain</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+.brand-logo{box-shadow:0 0 0 1px rgba(255,255,255,.08),0 6px 18px rgba(0,0,0,.28)}
+body{font-family:'Inter',sans-serif}
+.code-font{font-family:'Fira Code',monospace}
+.neural-card{transition:all .35s ease}
+.neural-active{transform:translateY(-2px);box-shadow:0 0 28px rgba(99,102,241,.18)}
+.chat-scroll{scroll-behavior:smooth}
+.signal-line{height:2px;position:relative;overflow:hidden}
+.signal-line:after{content:"";position:absolute;left:-30%;top:0;width:30%;height:100%;background:currentColor;animation:signal 1.2s linear infinite}
+@keyframes signal{from{left:-30%}to{left:100%}}
+@keyframes breathe{0%,100%{opacity:.45}50%{opacity:1}}
+.breathe{animation:breathe 2s ease-in-out infinite}
+.connection-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+.neural-event{border-left:2px solid #334155;padding-left:10px}
+.neural-event-live{border-left-color:#22c55e}
+.chat-thinking{animation:breathe 1s ease-in-out infinite}
+</style>
+</head>
+
+<body class="bg-slate-950 text-slate-100 antialiased p-4 md:p-6 min-h-screen">
+<div class="max-w-5xl mx-auto w-full space-y-5">
+
+<header class="flex justify-between items-center border-b border-slate-800 pb-4 gap-3">
+    <div class="flex items-center gap-3 min-w-0">
+        <img class="brand-logo w-12 h-12 md:w-14 md:h-14 object-contain rounded-xl bg-white p-1 shrink-0" src="./cikurgoicon.png" alt="CIKUR GO" width="56" height="56" decoding="async">
+        <div class="min-w-0">
+            <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                <span id="pulse-dot" class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></span>
+                BCGO Universal Neural Monitor
+            </h1>
+            <p class="text-xs text-slate-400 mt-1">Pusat Saraf Master & Pemetaan Saraf Lintas File Cikur Go</p>
+        </div>
+    </div>
+    <div id="system-status-badge" class="px-3 py-1 rounded-md text-xs font-semibold bg-slate-900 text-slate-400 border border-slate-700">
+        Membangunkan Saraf
+    </div>
+</header>
+
+<div class="bg-blue-950/40 border border-blue-800 rounded-xl px-4 py-3 text-xs text-blue-300 leading-relaxed">
+    🧠 <b>Neural Heartbeat aktif.</b> BCGO melakukan siklus IN → PROCESS → REVIEW → OUT secara terus-menerus.
+    Semua panel membaca <span class="code-font">BCGO_STATE</span> yang sama sehingga cycle, stage, telemetry, dan chat tidak boleh berbeda.
+</div>
+
+<div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-xs">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="text-slate-400">SUMBER KEBENARAN SARAF: <span class="code-font text-indigo-300">BCGO_STATE</span></div>
+        <div id="connection-state" class="font-semibold text-slate-400"><span class="connection-dot bg-slate-500"></span>CONNECTING</div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2 text-[10px] text-slate-500">
+        <div>Server signal: <span id="connection-age" class="text-slate-300">menunggu...</span></div>
+        <div>Telemetry: <span id="telemetry-source" class="text-slate-300">menunggu...</span></div>
+        <div>Integrity: <span id="state-integrity" class="text-emerald-400">SYNC</span></div>
+        <div>Medicine bridge: <span id="medicine-bridge-state" class="text-slate-300">WAITING</span></div>
+    </div>
+</div>
+
+<section class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-2xl space-y-3">
+    <div class="flex justify-between items-center gap-3">
+        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Layar Dialog Saraf</div>
+        <div class="text-[10px] text-slate-500 code-font">NEURAL CYCLE #<span id="cycle-number">0</span></div>
+    </div>
+    <div id="live-speech" class="code-font text-sm bg-slate-950 p-4 rounded-lg border border-slate-800 text-emerald-400 min-h-[78px] flex items-center">
+        Membangunkan Pusat Saraf Master...
+    </div>
+    <div class="signal-line text-emerald-500 bg-slate-800"></div>
+    <div class="flex justify-between text-[10px] text-slate-500">
+        <span id="event-state">Menunggu impuls...</span>
+        <span id="cycle-mode">BOOT</span>
+    </div>
+</section>
+
+<!-- CGO CAPTAIN / TEAM DIALOG — REAL BRIDGE OBSERVER -->
+<section id="captain-dialog" class="space-y-3">
+  <div class="flex items-center justify-between gap-3">
+    <div>
+      <div class="text-xs font-semibold text-cyan-300 uppercase tracking-wider">Dialog Kapten CGO</div>
+      <div class="text-[10px] text-slate-500 mt-1">Kolom ini membaca state dan paket saraf nyata. Tidak membuat percakapan palsu.</div>
+    </div>
+    <span id="captain-dialog-status" class="text-[9px] code-font px-2 py-1 rounded border border-slate-700 text-slate-400">WAITING</span>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <article class="bg-slate-900 border border-cyan-900/70 rounded-xl p-4 space-y-3 shadow-lg">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <div class="text-sm font-bold text-cyan-200">🧠 CGO (KAPTEN)</div>
+          <div class="text-[9px] text-slate-500">Otak • Orkestrasi • Keputusan</div>
+        </div>
+        <span id="captain-online" class="text-[9px] code-font text-slate-400">WAITING</span>
+      </div>
+      <div id="captain-chat" class="bg-slate-950 border border-slate-800 rounded-lg p-3 min-h-[230px] max-h-80 overflow-y-auto space-y-2">
+        <div class="text-xs text-slate-600">CGO menunggu BCGO_STATE yang hidup...</div>
+      </div>
+    </article>
+
+    <article class="bg-slate-900 border border-violet-900/70 rounded-xl p-4 space-y-3 shadow-lg">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <div class="text-sm font-bold text-violet-200">⚙️ BCGO-MEDICINE-EXECUTOR</div>
+          <div class="text-[9px] text-slate-500">Laporan aktual dari bridge lintas halaman</div>
+        </div>
+        <span id="team-online" class="text-[9px] code-font text-slate-400">WAITING</span>
+      </div>
+      <div id="team-chat" class="bg-slate-950 border border-slate-800 rounded-lg p-3 min-h-[230px] max-h-80 overflow-y-auto space-y-2">
+        <div class="text-xs text-slate-600">Menunggu paket Medicine / Executor...</div>
+      </div>
+    </article>
+  </div>
+
+  <div id="captain-decision-panel" class="bg-slate-900 border border-amber-900/70 rounded-xl p-4 space-y-2">
+    <div class="flex justify-between items-center gap-3">
+      <div class="text-xs font-semibold text-amber-300 uppercase tracking-wider">Keputusan CGO / Gerbang Eksekusi</div>
+      <span id="captain-decision-status" class="text-[9px] code-font text-amber-400">PROOF BELUM LENGKAP</span>
+    </div>
+    <div id="captain-decision-text" class="text-xs text-slate-400">CGO belum menerima proof lengkap untuk menampilkan kandidat perubahan. Source tidak disentuh.</div>
+    <div id="captain-code-panel" class="hidden space-y-2">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div><div class="text-[9px] text-slate-500 mb-1">BEFORE • EXACT ANCHOR</div><pre id="captain-before" class="text-[9px] code-font bg-slate-950 border border-slate-800 rounded p-2 overflow-auto max-h-40"></pre></div>
+        <div><div class="text-[9px] text-slate-500 mb-1">AFTER • EXACT CHANGE</div><pre id="captain-after" class="text-[9px] code-font bg-slate-950 border border-slate-800 rounded p-2 overflow-auto max-h-40"></pre></div>
+      </div>
+      <button id="captain-open-workbench" type="button" class="w-full border border-cyan-800 text-cyan-300 rounded-lg py-2 text-[10px]">🧬 BUKA FULL CODE WORKBENCH • ORIGINAL vs PROPOSED</button>
+    </div>
+    <div id="captain-human-gate" class="hidden flex flex-wrap gap-2 pt-1">
+      <button id="captain-approve" type="button" class="px-3 py-2 rounded-lg bg-emerald-700 text-xs font-semibold">SETUJUI PERUBAHAN</button>
+      <button id="captain-reject" type="button" class="px-3 py-2 rounded-lg bg-rose-800 text-xs font-semibold">TOLAK & INVESTIGASI ULANG</button>
+    </div>
+  </div>
+</section>
+
+<section class="grid grid-cols-1 md:grid-cols-4 gap-3">
+    <div id="bagan-in" class="neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40">
+        <div class="text-xs font-bold text-slate-500 mb-1">TAHAP 01</div>
+        <div class="text-sm font-bold text-slate-200">IN (Pindai Organ)</div>
+        <div id="sub-in" class="text-[9px] text-slate-500 mt-2">Menunggu...</div>
+    </div>
+    <div id="bagan-process" class="neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40">
+        <div class="text-xs font-bold text-slate-500 mb-1">TAHAP 02</div>
+        <div class="text-sm font-bold text-slate-200">PROCESS (Deteksi Anomali)</div>
+        <div id="sub-process" class="text-[9px] text-slate-500 mt-2">Menunggu...</div>
+    </div>
+    <div id="bagan-review" class="neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40">
+        <div class="text-xs font-bold text-slate-500 mb-1">TAHAP 03</div>
+        <div class="text-sm font-bold text-slate-200">REVIEW (Diagnostik)</div>
+        <div id="sub-review" class="text-[9px] text-slate-500 mt-2">Menunggu...</div>
+    </div>
+    <div id="bagan-out" class="neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40">
+        <div class="text-xs font-bold text-slate-500 mb-1">TAHAP 04</div>
+        <div class="text-sm font-bold text-slate-200">OUT (Sinkronisasi)</div>
+        <div id="sub-out" class="text-[9px] text-slate-500 mt-2">Menunggu...</div>
+    </div>
+</section>
+
+<section class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pemetaan Organ File Target</div>
+    <div class="flex justify-between items-center text-sm gap-3">
+        <span class="text-slate-400">ID Organ / File Saraf:</span>
+        <span id="target-cell-id" class="code-font text-amber-400 font-semibold text-right">-</span>
+    </div>
+    <div class="flex justify-between items-start text-sm gap-3">
+        <span class="text-slate-400">Pesan Diagnostik:</span>
+        <span id="error-log-desc" class="code-font text-rose-400 font-semibold text-right break-all max-w-[70%]">Normal</span>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-2 pt-2">
+        <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">
+            <div class="text-[9px] text-slate-500">TOTAL ORGAN</div><div id="metric-total" class="font-bold text-white">-</div>
+        </div>
+        <div class="rounded-lg border border-rose-900 bg-rose-950/20 px-3 py-2">
+            <div class="text-[9px] text-slate-500">ANOMALY AKTIF</div><div id="metric-active" class="font-bold text-rose-400">0</div>
+        </div>
+        <div class="rounded-lg border border-emerald-900 bg-emerald-950/20 px-3 py-2">
+            <div class="text-[9px] text-slate-500">STABIL</div><div id="metric-healthy" class="font-bold text-emerald-400">-</div>
+        </div>
+        <div class="rounded-lg border border-amber-900 bg-amber-950/20 px-3 py-2">
+            <div class="text-[9px] text-slate-500">RECOVERED</div><div id="metric-recovered" class="font-bold text-amber-400">0</div>
+        </div>
+        <div class="rounded-lg border border-blue-900 bg-blue-950/20 px-3 py-2">
+            <div class="text-[9px] text-slate-500">MITRA TERBACA</div><div id="metric-firestore" class="font-bold text-blue-400">0</div>
+        </div>
+    </div>
+</section>
+
+<section class="bg-slate-900 border border-rose-900/60 rounded-xl p-5 space-y-3">
+    <div class="flex justify-between items-center gap-3">
+        <div><div class="text-xs font-semibold text-rose-300 uppercase tracking-wider">Source Code Integrity Scanner</div><div class="text-[10px] text-slate-500 mt-1">BCGO membaca source aktual, telemetry, dependency, dan contract. Hijau bukan lagi sekadar berarti “tidak ada telemetry error”.</div></div>
+        <span id="source-scan-status" class="text-[10px] code-font text-slate-400">WAITING</span>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-[10px]">
+        <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">DIPINDAI <span id="source-scan-count" class="font-bold text-white">0</span></div>
+        <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">TERBACA <span id="source-scan-readable" class="font-bold text-emerald-400">0</span></div>
+        <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">GAGAL <span id="source-scan-failed" class="font-bold text-rose-400">0</span></div>
+        <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">TEMUAN <span id="source-scan-findings" class="font-bold text-amber-400">0</span></div>
+        <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">RELASI <span id="source-scan-relations" class="font-bold text-cyan-400">0</span></div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-[9px]">
+        <div class="rounded-lg border border-emerald-900/70 bg-emerald-950/10 px-3 py-2">SYNCHRONIZED <span id="source-scan-sync" class="font-bold text-emerald-300">0</span></div>
+        <div class="rounded-lg border border-rose-900/70 bg-rose-950/10 px-3 py-2">MISMATCH <span id="source-scan-mismatch" class="font-bold text-rose-300">0</span></div>
+        <div class="rounded-lg border border-amber-900/70 bg-amber-950/10 px-3 py-2">VARIANT <span id="source-scan-variant" class="font-bold text-amber-300">0</span></div>
+        <div class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2">UNKNOWN <span id="source-scan-unknown" class="font-bold text-slate-300">0</span></div>
+        <div class="rounded-lg border border-cyan-900/70 bg-cyan-950/10 px-3 py-2">LINKED <span id="source-scan-linked" class="font-bold text-cyan-300">0</span></div>
+    </div>
+    <div class="space-y-1">
+        <div class="flex justify-between gap-3 text-[9px] code-font text-slate-500">
+            <span id="source-scan-current">Menunggu scanner...</span>
+            <span id="source-scan-progress-label">0/0</span>
+        </div>
+        <div class="h-1.5 rounded-full bg-slate-950 overflow-hidden border border-slate-800">
+            <div id="source-scan-progress" class="h-full rounded-full bg-cyan-500 transition-all duration-300" style="width:0%"></div>
+        </div>
+    </div>
+    <div id="source-scan-files" class="grid grid-cols-2 md:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto"></div>
+    <div class="rounded-lg border border-cyan-900/60 bg-cyan-950/10 px-3 py-2 text-[9px] code-font">
+        <div class="text-cyan-300 font-semibold">SARAF PER FILE</div>
+        <div id="nerve-summary" class="text-slate-400 mt-1">Menunggu source surface...</div>
+    </div>
+    <div class="text-[9px] text-slate-500 uppercase tracking-wider">Peta Kecocokan Antar-File</div>
+    <div id="cross-file-findings" class="space-y-2 max-h-72 overflow-y-auto"><div class="text-xs text-slate-500">Belum ada hasil cross-file.</div></div>
+    <div id="source-scan-message" class="text-[10px] text-slate-400 code-font">Pemindaian source belum dimulai.</div>
+</section>
+
+<section class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Status Tiap File — SOURCE + TELEMETRY + DEPENDENCY + CONTRACT</div>
+    <div id="organ-grid" class="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs"></div>
+</section>
+
+<section class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+    <div class="flex justify-between items-center">
+        <div>
+            <div class="text-xs font-semibold text-cyan-300 uppercase tracking-wider">Neural Event Stream</div>
+            <div class="text-[10px] text-slate-500 mt-1">Urutan kejadian yang baru dilihat BCGO — bukan animasi palsu.</div>
+        </div>
+        <span id="event-counter" class="text-[10px] text-slate-500">0 event</span>
+    </div>
+    <div id="neural-events" class="space-y-2 max-h-64 overflow-y-auto">
+        <div class="text-xs text-slate-500">Menunggu event saraf...</div>
+    </div>
+</section>
+
+<section class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+        <div class="flex justify-between items-center">
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Laporan Error Terbaru</div>
+            <span id="log-counter" class="text-[10px] text-slate-500">0 laporan</span>
+        </div>
+        <div id="error-feed" class="space-y-2 max-h-80 overflow-y-auto">
+            <div class="text-xs text-slate-500">Menunggu telemetry system_logs...</div>
+        </div>
+    </div>
+
+    <div class="bg-slate-900 border border-indigo-900 rounded-xl p-5 space-y-3">
+        <div class="flex justify-between items-center">
+            <div>
+                <div class="text-xs font-semibold text-indigo-300 uppercase tracking-wider">Komunikasi dengan CGO</div>
+                <div class="text-[10px] text-slate-500 mt-1">CGO berbicara melalui BCGO dan tetap membaca kondisi saraf aktual.</div>
+            </div>
+            <span class="text-[10px] code-font text-indigo-400">CGO::CHAT • BCGO</span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-[9px] code-font">
+            <div id="internal-ai-status" class="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-cyan-300">INTERNAL AI: MENUNGGU</div>
+            <div id="internal-ai-reasoning" class="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-slate-400">REASONING: MENUNGGU</div>
+            <div id="internal-ai-investigation" class="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-slate-400">INVESTIGATION: MENUNGGU</div>
+            <div id="internal-ai-directive" class="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-slate-400">DIRECTIVE: MENUNGGU</div>
+        </div>
+
+        <div id="chat-feed" class="chat-scroll bg-slate-950 border border-slate-800 rounded-lg p-3 h-72 overflow-y-auto space-y-3">
+            <div class="text-xs text-slate-500">BCGO sedang menyiapkan kanal komunikasi...</div>
+        </div>
+
+        <form id="chat-form" class="flex gap-2">
+            <input id="chat-input" autocomplete="off"
+                class="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                placeholder="Tanya BCGO: apa yang sedang kamu kerjakan?">
+            <button class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold">Kirim</button>
+        </form>
+
+        <div class="flex flex-wrap gap-2">
+            <button class="quick-q text-[10px] px-2 py-1 rounded-md border border-slate-700 text-slate-400" data-q="Hai BCGO, apa yang sedang kamu kerjakan?">Apa yang kamu kerjakan?</button>
+            <button class="quick-q text-[10px] px-2 py-1 rounded-md border border-slate-700 text-slate-400" data-q="Bagaimana status sistem sekarang?">Status sistem?</button>
+            <button class="quick-q text-[10px] px-2 py-1 rounded-md border border-slate-700 text-slate-400" data-q="Ada masalah atau error?">Ada masalah?</button>
+        </div>
+    </div>
+
+</section>
+</div>
+
+<script type="module">
+import { runAutonomousEngine } from './bcgo.js?v=20260909-CODE-WORKBENCH1';
+
+const $ = id => document.getElementById(id);
+
+const liveSpeech = $('live-speech');
+const targetCellId = $('target-cell-id');
+const errorLogDesc = $('error-log-desc');
+const badge = $('system-status-badge');
+const pulse = $('pulse-dot');
+const cycleNumber = $('cycle-number');
+const eventState = $('event-state');
+const cycleMode = $('cycle-mode');
+
+const bagans = {
+    IN: $('bagan-in'),
+    PROCESS: $('bagan-process'),
+    REVIEW: $('bagan-review'),
+    OUT: $('bagan-out')
+};
+
+const subtitles = {
+    IN: $('sub-in'),
+    PROCESS: $('sub-process'),
+    REVIEW: $('sub-review'),
+    OUT: $('sub-out')
+};
+
+const metrics = {
+    total: $('metric-total'),
+    active: $('metric-active'),
+    healthy: $('metric-healthy'),
+    recovered: $('metric-recovered'),
+    firestore: $('metric-firestore')
+};
+
+const organGrid = $('organ-grid');
+const errorFeed = $('error-feed');
+const logCounter = $('log-counter');
+const chatFeed = $('chat-feed');
+const chatForm = $('chat-form');
+const chatInput = $('chat-input');
+const connectionStateEl = $('connection-state');
+const connectionAgeEl = $('connection-age');
+const telemetrySourceEl = $('telemetry-source');
+const stateIntegrityEl = $('state-integrity');
+const neuralEventsEl = $('neural-events');
+const eventCounterEl = $('event-counter');
+const sourceScanStatusEl = $('source-scan-status');
+const sourceScanCountEl = $('source-scan-count');
+const sourceScanReadableEl = $('source-scan-readable');
+const sourceScanFailedEl = $('source-scan-failed');
+const sourceScanFindingsEl = $('source-scan-findings');
+const sourceScanRelationsEl = $('source-scan-relations');
+const sourceScanSyncEl = $('source-scan-sync');
+const sourceScanMismatchEl = $('source-scan-mismatch');
+const sourceScanVariantEl = $('source-scan-variant');
+const sourceScanUnknownEl = $('source-scan-unknown');
+const sourceScanLinkedEl = $('source-scan-linked');
+const sourceScanMessageEl = $('source-scan-message');
+const sourceScanCurrentEl = $('source-scan-current');
+const sourceScanProgressLabelEl = $('source-scan-progress-label');
+const sourceScanProgressEl = $('source-scan-progress');
+const sourceScanFilesEl = $('source-scan-files');
+const crossFileFindingsEl = $('cross-file-findings');
+const nerveSummaryEl = $('nerve-summary');
+
+let liveState = null;
+
+function esc(value) {
+    return String(value ?? '-')
+        .replaceAll('&','&amp;')
+        .replaceAll('<','&lt;')
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;')
+        .replaceAll("'","&#039;");
+}
+
+function formatTime(value) {
+    try {
+        const date = value?.toDate ? value.toDate() : new Date(value);
+        if (Number.isNaN(date.getTime())) return '-';
+        return date.toLocaleString('id-ID');
+    } catch {
+        return '-';
+    }
+}
+
+function dimAll() {
+    Object.values(bagans).forEach(el => {
+        if (!el) return;
+        el.className = 'neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40';
+    });
+}
+
+function activatePhase(step, state) {
+    dimAll();
+
+    const classes = {
+        IN: 'bg-blue-950/90 border border-blue-500 shadow-lg shadow-blue-900/20',
+        PROCESS: 'bg-amber-950/90 border border-amber-500 shadow-lg shadow-amber-900/20',
+        REVIEW: 'bg-purple-950/90 border border-purple-500 shadow-lg shadow-purple-900/20',
+        OUT: 'bg-emerald-950/90 border border-emerald-500 shadow-lg shadow-emerald-900/20'
+    };
+
+    if (bagans[step]) {
+        bagans[step].className = `neural-card ${classes[step]} rounded-xl p-4 opacity-100 neural-active`;
+    }
+
+    const subText = {
+        IN: `Cycle #${state.cycle} • scanning`,
+        PROCESS: state.cycleMode === 'INTERRUPTED' ? '⚡ impuls real-time' : 'analysing telemetry',
+        REVIEW: 'diagnosing signal',
+        OUT: 'synchronizing'
+    };
+
+    Object.keys(subtitles).forEach(k => { if (subtitles[k]) subtitles[k].textContent = subText[k]; });
+}
+
+function setHeader(step, state) {
+    const styles = {
+        IN: ['bg-blue-950','text-blue-400','border-blue-800','Memindai Organ'],
+        PROCESS: ['bg-amber-950','text-amber-400','border-amber-800','Memproses Sinyal'],
+        REVIEW: ['bg-purple-950','text-purple-400','border-purple-800','Evaluasi Saraf'],
+        OUT: ['bg-emerald-950','text-emerald-400','border-emerald-800','Sistem Sinkron']
+    };
+
+    const [bg,text,border,label] = styles[step] || styles.OUT;
+    if (badge) {
+        badge.className = `px-3 py-1 rounded-md text-xs font-semibold ${bg} ${text} border ${border}`;
+        badge.textContent = state.cycleMode === 'INTERRUPTED' ? '⚡ Impuls Terdeteksi' : label;
+    }
+
+    const dotColor = {
+        IN: 'bg-blue-500',
+        PROCESS: 'bg-amber-500',
+        REVIEW: 'bg-purple-500',
+        OUT: 'bg-emerald-500'
+    }[step] || 'bg-emerald-500';
+
+    if (pulse) pulse.className = `w-3 h-3 rounded-full ${dotColor} animate-ping`;
+}
+
+function renderSourceScan(scan) {
+    if (!scan) return;
+    const total = Number(scan.totalFiles || 0);
+    const scanned = Number(scan.filesScanned || 0);
+    const readable = Number(scan.filesReadable || 0);
+    const failed = Number(scan.filesFailed || 0);
+    const progress = total ? Math.min(100, Math.round((scanned / total) * 100)) : 0;
+    const running = scan.status === 'SCANNING';
+
+    if (sourceScanStatusEl) {
+        sourceScanStatusEl.textContent = running ? `SCANNING ${progress}%` : (scan.status || 'WAITING');
+        sourceScanStatusEl.className = `text-[10px] code-font ${scan.status === 'FINDINGS' || scan.status === 'DEGRADED' ? 'text-rose-400' : scan.status === 'CLEAN' ? 'text-emerald-400' : 'text-amber-400'}`;
+    }
+    if (sourceScanCountEl) sourceScanCountEl.textContent = scanned;
+    if (sourceScanReadableEl) sourceScanReadableEl.textContent = readable;
+    if (sourceScanFailedEl) sourceScanFailedEl.textContent = failed;
+    const actionable = [...(Array.isArray(scan.findings) ? scan.findings : []), ...(Array.isArray(scan.crossFileFindings) ? scan.crossFileFindings : [])].filter(f => f && f.severity !== 'INFO');
+    if (sourceScanFindingsEl) sourceScanFindingsEl.textContent = actionable.length;
+    if (sourceScanRelationsEl) sourceScanRelationsEl.textContent = Array.isArray(scan.relations) ? scan.relations.length : 0;
+    const summary = scan.relationSummary || {};
+    if (sourceScanSyncEl) sourceScanSyncEl.textContent = Number(summary.synchronized || 0);
+    if (sourceScanMismatchEl) sourceScanMismatchEl.textContent = Number(summary.mismatch || 0);
+    if (sourceScanVariantEl) sourceScanVariantEl.textContent = Number(summary.variant || 0);
+    if (sourceScanUnknownEl) sourceScanUnknownEl.textContent = Number(summary.unknown || 0);
+    if (sourceScanLinkedEl) sourceScanLinkedEl.textContent = Number(summary.linked || 0);
+    if (sourceScanMessageEl) sourceScanMessageEl.textContent = scan.message || 'Belum ada hasil scanner.';
+    if (nerveSummaryEl) {
+        const n = scan.nerveSummary || {};
+        nerveSummaryEl.textContent = `HEALTHY ${n.healthy || 0} • STANDBY ${n.standby || 0} • OBSERVED ${n.observed || 0} • REVIEW ${n.review || 0} • ANOMALY ${n.anomaly || 0} • UNRESOLVED ${n.unresolved || 0}`;
+    }
+    if (sourceScanCurrentEl) {
+        sourceScanCurrentEl.textContent = scan.currentFile
+            ? `${scan.phase || 'SCAN'} · ${scan.currentFile}`
+            : (scan.phase === 'COMPLETE' ? 'SCAN COMPLETE · seluruh source sudah diproses' : 'Menunggu scanner...');
+        sourceScanCurrentEl.className = `text-[9px] code-font ${running ? 'text-cyan-300' : scan.status === 'FINDINGS' || scan.status === 'DEGRADED' ? 'text-rose-300' : 'text-slate-500'}`;
+    }
+    if (sourceScanProgressLabelEl) sourceScanProgressLabelEl.textContent = `${scanned}/${total}`;
+    if (sourceScanProgressEl) {
+        sourceScanProgressEl.style.width = `${progress}%`;
+        sourceScanProgressEl.className = `h-full rounded-full transition-all duration-300 ${running ? 'bg-cyan-500' : scan.status === 'FINDINGS' || scan.status === 'DEGRADED' ? 'bg-rose-500' : scan.status === 'CLEAN' ? 'bg-emerald-500' : 'bg-slate-700'}`;
+    }
+
+    if (sourceScanFilesEl) {
+        const states = scan.fileStates || {};
+        const entries = Object.entries(states);
+        const stateMeta = {
+            QUEUED: ['text-slate-500','border-slate-800','○'],
+            READING: ['text-cyan-300','border-cyan-800','◉'],
+            ANALYZING: ['text-amber-300','border-amber-800','◌'],
+            CLEAN: ['text-emerald-300','border-emerald-800','✓'],
+            FINDING: ['text-rose-300','border-rose-800','!'],
+            FAILED: ['text-rose-300','border-rose-800','×'],
+            NOT_DEPLOYED: ['text-slate-400','border-slate-700','○']
+        };
+        sourceScanFilesEl.innerHTML = entries.map(([file, info]) => {
+            const meta = stateMeta[info?.status] || stateMeta.QUEUED;
+            const active = ['READING','ANALYZING'].includes(info?.status);
+            return `<div class="rounded-md border ${meta[1]} bg-slate-950/80 px-2 py-1.5 ${active ? 'ring-1 ring-cyan-900/60' : ''}">
+                <div class="flex items-center gap-1.5 text-[9px] code-font ${meta[0]}"><span class="${active ? 'animate-pulse' : ''}">${meta[2]}</span><span class="truncate">${esc(file)}</span></div>
+                <div class="text-[8px] text-slate-600 mt-0.5 truncate">${esc(info?.message || '')}</div>
+            </div>`;
+        }).join('');
+    }
+
+    if (!crossFileFindingsEl) return;
+    const findings = (Array.isArray(scan.crossFileFindings) ? scan.crossFileFindings : []).filter(f => f.severity !== 'INFO').slice(0, 12);
+    const failures = (Array.isArray(scan.findings) ? scan.findings : []).filter(f => f.type === 'SOURCE_UNREADABLE').slice(0, 12);
+    const relations = (Array.isArray(scan.relations) ? scan.relations : []).filter(r => r.status && r.status !== 'LINKED').slice(0, 16);
+    const items = [...findings, ...failures];
+    const relationHtml = relations.map(r => {
+        const bad = /MISMATCH/.test(String(r.status));
+        const informative = /VARIANT|LINKED/.test(String(r.status));
+        const title = r.type === 'CROSS_FILE_CONTRACT' ? `CONTRACT:${r.key}` : r.type === 'CROSS_FILE_SURFACE' ? `SURFACE:${r.key}` : r.type === 'SHARED_FUNCTION_VARIANT' ? `FUNCTION:${r.key}` : r.type;
+        const ev = r.evidence || {};
+        const missing = [...(ev.missingFields || []), ...(ev.missingHandlers || []), ...(ev.missingSemantic || [])].slice(0,8);
+        const coverage = Number.isFinite(ev.targetCoverageOfReference) ? ` · coverage:${ev.targetCoverageOfReference}%` : '';
+        const confidence = ev.identityScore ? ` · identity:${ev.identityScore}` : '';
+        const border = bad ? 'border-rose-900 bg-rose-950/20' : informative ? 'border-slate-800 bg-slate-950/40' : 'border-cyan-900 bg-cyan-950/10';
+        const text = bad ? 'text-rose-400' : informative ? 'text-slate-400' : 'text-cyan-300';
+        return `<div class="border ${border} rounded-lg px-3 py-2"><div class="flex justify-between gap-3 text-[10px]"><span class="font-bold ${text}">${esc(r.status)} · ${esc(title)} · ${esc(r.confidence || 'UNKNOWN')}</span><span class="text-slate-500 code-font">${esc(r.sourceFile || '-')} → ${esc(r.targetFile || '-')}</span></div><div class="text-[9px] text-slate-400 mt-1 code-font">${r.sourceLine ? `source:${esc(r.sourceLine)} ` : ''}${r.targetLine ? `target:${esc(r.targetLine)}` : ''}${coverage}${confidence}</div>${missing.length ? `<div class="text-[9px] mt-1 ${bad ? 'text-rose-300' : 'text-slate-500'} code-font">MISSING: ${esc(missing.join(', '))}</div>` : ''}</div>`;
+    }).join('');
+    if (!items.length && !relations.length) { crossFileFindingsEl.innerHTML = running ? '<div class="text-xs text-slate-600 code-font">Cross-file comparison menunggu seluruh source yang dibutuhkan selesai dibaca.</div>' : '<div class="text-xs text-slate-500">Belum ada relasi atau temuan cross-file yang membutuhkan pemeriksaan.</div>'; return; }
+    const findingHtml = items.map(f => {
+        const ev = f.evidence || {};
+        const anchors = (ev.missingAnchors || []).slice(0,8);
+        const anchorLines = (ev.missingAnchorLines || []).slice(0,8).map(x => `${x.anchor}@${x.line}`).join(', ');
+        return `<div class="border ${f.severity === 'HIGH' ? 'border-rose-900 bg-rose-950/20' : 'border-amber-900 bg-amber-950/20'} rounded-lg px-3 py-2"><div class="flex justify-between gap-3 text-[10px]"><span class="font-bold ${f.severity === 'HIGH' ? 'text-rose-400' : 'text-amber-400'}">${esc(f.type || 'SOURCE_FINDING')}</span><span class="text-slate-500">${esc(f.sourceFile || f.file || '-')} ${f.sourceLine ? `:${esc(f.sourceLine)}` : ''}</span></div><div class="text-xs text-slate-200 mt-1">${esc(f.message || '-')}</div>${f.targetFile ? `<div class="text-[9px] text-slate-500 mt-1 code-font">REFERENCE CANDIDATE: ${esc(f.sourceFile)}:${esc(f.sourceLine)} → TARGET CANDIDATE: ${esc(f.targetFile)}:${esc(f.targetLine)}</div>` : ''}${anchors.length ? `<div class="text-[9px] text-rose-300 mt-1 code-font">MISSING ANCHORS: ${esc(anchors.join(', '))}${anchorLines ? ` · SOURCE LINES: ${esc(anchorLines)}` : ''}</div>` : ''}</div>`;
+      }).join('');
+    crossFileFindingsEl.innerHTML = findingHtml + relationHtml;
+}
+
+function renderOrgans(organs, nerves, relations = []) {
+    if (!organGrid) return;
+    const entries = Object.entries(organs || {});
+    organGrid.innerHTML = entries.map(([file, info]) => {
+        const nerve = nerves?.[file] || {};
+        const health = nerve.health || {};
+        const active = info.state === 'ACTIVE' || health.overall === 'ANOMALY';
+        const review = info.state === 'REVIEW' || health.overall === 'REVIEW';
+        const recovered = info.state === 'RECOVERED';
+        const standby = info.state === 'STANDBY' || info.status === 'STANDBY' || info.optional === true && info.state === 'STANDBY';
+
+        const classes = active
+            ? 'border-rose-800 bg-rose-950/50 text-rose-400'
+            : review
+                ? 'border-amber-800 bg-amber-950/30 text-amber-300'
+                : recovered
+                    ? 'border-amber-800 bg-amber-950/20 text-amber-400'
+                    : standby
+                        ? 'border-slate-700 bg-slate-950/70 text-slate-400'
+                        : 'border-emerald-800 bg-emerald-950/30 text-emerald-400';
+
+        const label = active ? 'ANOMALY' : review ? 'REVIEW' : recovered ? 'RECOVERED' : standby ? 'STANDBY' : 'HEALTHY';
+        const runtime = standby ? 'STANDBY' : (health.runtime || (nerve.runtime?.active ? 'ANOMALY' : 'HEALTHY'));
+        const source = standby ? 'NOT_DEPLOYED' : (health.source || (nerve.source?.readable ? 'READABLE' : 'WAITING'));
+        const dependency = health.dependency || 'WAITING';
+        const contract = health.contract || 'WAITING';
+        const evidence = nerve.evidenceSummary || {};
+        const unresolved = Number(evidence.unresolved || 0);
+        const relationCount = Number(evidence.relations || 0);
+
+        const linked = (Array.isArray(relations) ? relations : [])
+            .filter(r => {
+                const a = String(r?.sourceFile || r?.from || r?.file || '').split('?')[0].split('#')[0].split('/').pop();
+                const b = String(r?.targetFile || r?.to || r?.relatedFile || '').split('?')[0].split('#')[0].split('/').pop();
+                return a === file || b === file;
+            })
+            .map(r => {
+                const a = String(r?.sourceFile || r?.from || r?.file || '').split('?')[0].split('#')[0].split('/').pop();
+                const b = String(r?.targetFile || r?.to || r?.relatedFile || '').split('?')[0].split('#')[0].split('/').pop();
+                return {
+                    pair: a && b ? `${a} × ${b}` : null,
+                    status: String(r?.status || 'OBSERVED')
+                };
+            })
+            .filter(x => x.pair)
+            .filter((x, i, arr) => arr.findIndex(y => y.pair === x.pair) === i)
+            .slice(0, 3);
+
+        const relationLine = linked.length
+            ? linked.map(x => `<span class="inline-block mr-2 mb-0.5">${esc(x.pair)}</span>`).join('')
+            : '<span class="opacity-40">Belum ada pasangan source yang terbukti.</span>';
+
+        return `
+            <div class="border rounded-lg px-3 py-2 min-h-[106px] ${classes}">
+                <div class="flex justify-between gap-2 items-center">
+                    <div class="font-semibold code-font truncate">${esc(file)}</div>
+                    <span class="text-[8px] font-bold shrink-0">${label}</span>
+                </div>
+                <div class="text-[9px] opacity-70 mt-1">${esc(info.type)}</div>
+                <div class="grid grid-cols-2 gap-x-2 gap-y-0.5 mt-2 text-[8px] code-font opacity-80">
+                    <span>RUN:${esc(runtime)}</span><span>SRC:${esc(source)}</span>
+                    <span>DEP:${esc(dependency)}</span><span>CTR:${esc(contract)}</span>
+                </div>
+                <div class="text-[8px] opacity-60 mt-1.5">relasi:${relationCount} • unresolved:${unresolved}</div>
+                <div class="text-[8px] mt-1 text-cyan-200/80 leading-tight">TERHUBUNG: ${relationLine}${linked.length < relationCount ? ` <span class="opacity-50">+${relationCount - linked.length} lainnya</span>` : ''}</div>
+                <div class="text-[9px] opacity-70 mt-1 line-clamp-2">${esc(info.message || nerve.unresolved?.[0]?.evidence || '')}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderLogs(logs) {
+    if (!logCounter || !errorFeed) return;
+    logCounter.textContent = `${logs?.length || 0} laporan`;
+
+    if (!logs?.length) {
+        errorFeed.innerHTML = '<div class="text-xs text-slate-500">Belum ada laporan error masuk.</div>';
+        return;
+    }
+
+    errorFeed.innerHTML = logs.map(log => `
+        <div class="border border-slate-800 bg-slate-950/70 rounded-lg px-3 py-2">
+            <div class="flex justify-between gap-3 text-[10px]">
+                <span class="font-bold text-slate-300 code-font">${esc(log.fileName || 'UNKNOWN')}</span>
+                <span class="text-slate-500">${esc(formatTime(log.reportedAt))}</span>
+            </div>
+            <div class="text-[9px] text-slate-500 uppercase mt-1">TELEMETRY</div>
+            <div class="text-xs text-slate-300 mt-1 code-font break-all">${esc(log.message || '-')}</div>
+        </div>
+    `).join('');
+    errorFeed.scrollTop = 0;
+}
+
+function addChat(role, text) {
+    if (!chatFeed) return;
+    // A real conversational turn supersedes the transient work indicator.
+    // Progress events themselves never call addChat(), so they cannot become history.
+    const liveStatus = chatFeed.querySelector('[data-chat-live-status="1"]');
+    if (liveStatus && (role === 'bcgo' || role === 'user')) liveStatus.remove();
+
+    const row = document.createElement('div');
+    row.className = role === 'user'
+        ? 'flex justify-end'
+        : 'flex justify-start';
+
+    const bubble = document.createElement('div');
+    bubble.className = role === 'user'
+        ? 'max-w-[90%] rounded-lg bg-indigo-950 border border-indigo-800 px-3 py-2 text-xs text-indigo-100'
+        : 'max-w-[90%] rounded-lg bg-emerald-950/40 border border-emerald-900 px-3 py-2 text-xs text-emerald-100';
+
+    bubble.innerHTML = `<div class="text-[9px] uppercase opacity-60 mb-1">${role === 'user' ? 'Anda' : 'CGO'}</div>${esc(text)}`;
+    row.appendChild(bubble);
+    chatFeed.appendChild(row);
+    chatFeed.scrollTop = chatFeed.scrollHeight;
+}
+
+function setChatLiveStatus(text, kind = 'working') {
+    if (!chatFeed || !text) return;
+    let row = chatFeed.querySelector('[data-chat-live-status="1"]');
+    if (!row) {
+        row = document.createElement('div');
+        row.dataset.chatLiveStatus = '1';
+        row.className = 'flex justify-start';
+        const bubble = document.createElement('div');
+        bubble.className = 'w-full rounded-lg border border-cyan-900/70 bg-slate-900/80 px-3 py-2 text-xs text-cyan-100';
+        bubble.innerHTML = '<div class="text-[9px] uppercase opacity-60 mb-1">CGO • LIVE</div><div data-chat-live-text></div>';
+        row.appendChild(bubble);
+        chatFeed.appendChild(row);
+    }
+    const bubble = row.firstElementChild;
+    if (bubble) {
+        bubble.className = kind === 'done'
+            ? 'w-full rounded-lg border border-emerald-900/70 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-100'
+            : kind === 'blocked'
+              ? 'w-full rounded-lg border border-amber-900/70 bg-amber-950/20 px-3 py-2 text-xs text-amber-100'
+              : 'w-full rounded-lg border border-cyan-900/70 bg-slate-900/80 px-3 py-2 text-xs text-cyan-100';
+        const textEl = bubble.querySelector('[data-chat-live-text]');
+        if (textEl) textEl.textContent = text;
+    }
+    chatFeed.scrollTop = chatFeed.scrollHeight;
+}
+
+function getStateAgeText(state) {
+    const t = state?.connection?.lastServerAt ? new Date(state.connection.lastServerAt).getTime() : 0;
+    if (!t) return 'belum ada sinyal server';
+    const sec = Math.max(0, Math.round((Date.now() - t) / 1000));
+    return sec < 2 ? 'baru saja' : `${sec} detik lalu`;
+}
+
+function activeOrgans(state) {
+    return Object.entries(state?.systemOrgans || {}).filter(([,v]) => v?.state === 'ACTIVE');
+}
+
+function recoveredOrgans(state) {
+    return Object.entries(state?.systemOrgans || {}).filter(([,v]) => v?.state === 'RECOVERED');
+}
+
+function authoritativeBCGOState() {
+    try {
+        if (window.BCGO_STATE && typeof window.BCGO_STATE === 'object') return window.BCGO_STATE;
+    } catch {}
+    return liveState || null;
+}
+
+async function waitForInternalAI(timeoutMs = 12000) {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+        if (window.CIKURInternalAIRuntime?.ask) return window.CIKURInternalAIRuntime;
+        await new Promise(resolve => setTimeout(resolve, 80));
+    }
+    return window.CIKURInternalAIRuntime || null;
+}
+
+window.BCGOBrain = {
+    async ask(question) {
+        const runtime = await waitForInternalAI();
+        if (!runtime?.ask) throw new Error('INTERNAL_AI_NOT_READY');
+        return runtime.ask(question);
+    },
+    getConversation() {
+        try { return window.CIKURInternalAIRuntime?.getChatConversation?.() || []; } catch { return []; }
+    },
+    getState() { return authoritativeBCGOState(); }
+};
+
+let chatRequestBusy = false;
+
+function setChatBusy(busy) {
+    chatRequestBusy = busy;
+    if (chatInput) chatInput.disabled = busy;
+    const submit = chatForm?.querySelector('button[type="submit"], button:not(.quick-q)');
+    if (submit) {
+        submit.disabled = busy;
+        submit.textContent = busy ? 'Memproses…' : 'Kirim';
+    }
+}
+
+function restoreVisibleConversation() {
+    try {
+        const runtime = window.CIKURInternalAIRuntime;
+        const history = runtime?.getChatConversation?.() || [];
+        if (!chatFeed || !Array.isArray(history) || !history.length) return;
+        const liveStatus = chatFeed.querySelector('[data-chat-live-status="1"]');
+        if (liveStatus) liveStatus.remove();
+        for (const item of history.slice(-40)) {
+            if (item?.role !== 'user' && item?.role !== 'bcgo') continue;
+            addChat(item.role, item.text || '');
+        }
+        const restoration = runtime?.getChatRestoration?.();
+        if (restoration?.restored && restoration.context) {
+            setChatLiveStatus('Konteks percakapan dipulihkan. Saya membaca ulang state live sebelum melanjutkan pekerjaan.', 'working');
+        }
+    } catch (error) {
+        console.warn('[BCGO] Chat restore skipped:', error);
+    }
+}
+
+async function sendQuestion(question) {
+    const text = String(question || '').trim();
+    if (!text || chatRequestBusy) return;
+    setChatBusy(true);
+    addChat('user', text);
+    try {
+        const runtime = await waitForInternalAI();
+        if (!runtime?.ask) throw new Error('INTERNAL_AI_NOT_READY');
+        const answer = await runtime.ask(text);
+        if (answer) addChat('bcgo', answer);
+    } catch (error) {
+        addChat('bcgo', `Saya belum bisa menyelesaikan pesan ini dengan aman. Internal AI belum siap atau gagal memprosesnya: ${String(error?.message || error).slice(0, 220)}`);
+    } finally {
+        setChatBusy(false);
+        chatInput?.focus();
+    }
+}
+
+chatForm?.addEventListener('submit', event => {
+    event.preventDefault();
+    const text = chatInput.value.trim();
+    if (!text) return;
+    chatInput.value = '';
+    void sendQuestion(text);
+});
+
+document.querySelectorAll('.quick-q').forEach(button => {
+    button.addEventListener('click', () => void sendQuestion(button.dataset.q));
+});
+
+/* Live conversation layer. Investigation progress is a LIVE STATUS, not a chat
+   history message. A single case can emit many internal events; the chat must
+   feel alive without flooding the conversation with duplicate bubbles. */
+(() => {
+    const messages = new Map([
+        ['ACTIVE_INVESTIGATION_PROGRESS', d => {
+            const p = d.payload || {};
+            const step = Number(p.step || 0);
+            const labels = { SOURCE_READ:'membaca source aktual', SYMBOL_CALLS:'menelusuri pemanggilan fungsi', SYMBOL_DEFINITIONS:'memastikan definisi fungsi', SYMBOL_IMPORTS_EXPORTS:'menelusuri import dan export', DEPENDENCY_TRACE:'menelusuri dependency', RELATION_TRACE:'mencocokkan hubungan antar-file' };
+            const probe = p.probe?.type || '';
+            const work = labels[probe] || 'mengumpulkan evidence';
+            const sub = p.substep === 'READ' && p.currentFile ? ` (${p.currentIndex}/${p.totalFiles}: ${p.currentFile})` : p.substep === 'READ_FAILED' && p.currentFile ? ` (${p.currentFile}: source tidak terbaca, saya lanjut ke berikutnya)` : '';
+            return { text: step > 0 ? `Saya sedang bekerja. Langkah ${step}: ${work}${sub}.` : `Saya sedang bekerja: ${work}${sub}.`, kind:'working' };
+        }],
+        ['ACTIVE_INVESTIGATION_STEP', d => {
+            const p = d.payload || {};
+            if (p.status === 'COMPLETE' && p.exactSourceVerified) return { text:'Investigasi selesai. Root cause dan exact source sudah terbukti. Saya belum menyentuh source.', kind:'done' };
+            if (p.exactSourceVerified) return { text:'Exact source sudah terbukti. Saya menunggu hasil akhir investigasi sebelum menyatakan tindak lanjut.', kind:'working' };
+            if (p.rootCauseVerified) return { text:'Root cause sudah terbukti. Saya lanjut memastikan exact source.', kind:'working' };
+            return { text:'Evidence baru masuk. Saya melanjutkan investigasi dari posisi terakhir.', kind:'working' };
+        }],
+        ['ACTIVE_INVESTIGATION_COMPLETED', d => {
+            const p = d.payload || {};
+            if (p.phase === 'PROOF_COMPLETE') return { text:`Investigasi selesai. ${p.conclusion || 'Proof chain lengkap.'} Tindak lanjut: gerbang Guardian dan execution.`, kind:'done' };
+            if (p.phase === 'DIAGNOSIS_COMPLETE_SOLUTION_PENDING') return { text:`Investigasi selesai. ${p.conclusion || 'Root cause dan exact source sudah terverifikasi.'} Tindak lanjut: solusi konkret. Source tetap belum diubah.`, kind:'done' };
+            if (p.phase === 'ROOT_CAUSE_COMPLETE_SOURCE_PENDING') return { text:`Tahap root cause selesai. ${p.conclusion || 'Exact source masih perlu diverifikasi.'}`, kind:'working' };
+            if (p.phase === 'INVESTIGATION_STOPPED_WITHOUT_PROOF') return { text:`Investigasi berhenti tanpa proof lengkap. ${p.conclusion || 'Saya belum punya dasar untuk menyatakan root cause.'} Tindak lanjut: evidence/probe berikutnya.`, kind:'blocked' };
+            if (p.phase === 'INVESTIGATION_INCOMPLETE') return { text:`Investigasi belum dapat diselesaikan. ${p.conclusion || 'Probe internal mengalami kendala.'} Tindak lanjut: ${p.nextAction === 'RETRY_INVESTIGATION' ? 'coba probe lagi setelah kondisi sumber dapat dibaca.' : 'periksa blocker yang ditampilkan.'}`, kind:'blocked' };
+            return { text:`Investigasi belum selesai. ${p.conclusion || 'Saya masih membutuhkan evidence.'}`, kind:'working' };
+        }],
+        ['CHAT_REPAIR_WAITING', d => {
+            const p = d.payload || {};
+            const blockers = Array.isArray(p.blockers) ? p.blockers.slice(0,2).join(', ') : '';
+            return { text: blockers ? `Perintah perbaikan tetap saya pegang. Saya masih menunggu: ${blockers}.` : 'Perintah perbaikan tetap saya pegang. Saya masih melengkapi proof.', kind:'working' };
+        }],
+        ['CHAT_REPAIR_READY_EXECUTOR_MISSING', () => ({ text:'Proof sudah siap, tetapi Executor internal belum terhubung. Source tetap tidak saya klaim berubah.', kind:'blocked' })],
+        ['CHAT_REPAIR_BLOCKED', d => ({ text:`Perintah perbaikan saya tahan karena gerbang internal belum mengizinkan: ${String(d.payload?.reason || 'proof/policy belum memenuhi syarat')}.`, kind:'blocked' })],
+        ['CHAT_REPAIR_EXECUTED', () => ({ text:'Perubahan sudah diteruskan ke Executor internal. Saya sekarang menunggu validation dan read-back.', kind:'working' })],
+        ['CHAT_REPAIR_FAILED', d => ({ text:`Execution berhenti dan tidak saya nyatakan berhasil. ${String(d.payload?.error || 'Ada kegagalan pada jalur execution.').slice(0,180)}`, kind:'blocked' })],
+        ['ACTIVE_INVESTIGATION_ERROR', d => ({ text:`Investigasi mengalami kendala internal: ${String(d.payload?.error || 'unknown error').slice(0,180)}. Saya tidak menganggap hasilnya selesai; tindak lanjut: coba probe lagi.`, kind:'blocked' })],
+        ['CHAT_INVESTIGATION_ERROR', d => ({ text:`Investigasi mengalami kendala internal: ${String(d.payload?.error || 'unknown error').slice(0,180)}.`, kind:'blocked' })]
+    ]);
+    let lastSemantic = '';
+    let lastCaseId = '';
+    window.addEventListener('cikur-internal-ai-investigation', event => {
+        const d = event.detail || {};
+        const runtime = window.CIKURInternalAIRuntime;
+        const ctx = runtime?.getChatContext?.();
+        if (!ctx?.caseId || d.caseId !== ctx.caseId) return;
+        const make = messages.get(d.type);
+        if (!make) return;
+        const result = make(d);
+        if (!result?.text) return;
+        const semantic = `${d.caseId}:${d.type}:${result.kind}:${result.text}`;
+        if (semantic === lastSemantic && d.caseId === lastCaseId) return;
+        lastSemantic = semantic;
+        lastCaseId = d.caseId;
+        setChatLiveStatus(result.text, result.kind);
+    });
+})();
+
+function renderNeuralEvents(events) {
+    if (!eventCounterEl || !neuralEventsEl) return;
+    const list = Array.isArray(events) ? events.slice(0, 8) : [];
+    eventCounterEl.textContent = `${Array.isArray(events) ? events.length : 0} event`;
+    if (!list.length) {
+        neuralEventsEl.innerHTML = '<div class="text-xs text-slate-500">Belum ada event.</div>';
+        return;
+    }
+    neuralEventsEl.innerHTML = list.map((ev, i) => `
+        <div class="neural-event ${i === 0 ? 'neural-event-live' : ''} text-xs py-1">
+            <div class="flex justify-between gap-3">
+                <span class="text-cyan-300 code-font">${esc(ev.type || 'EVENT')}</span>
+                <span class="text-[9px] text-slate-600">${esc(formatTime(ev.at))}</span>
+            </div>
+            <div class="text-slate-300 mt-1">${esc(ev.message || '-')}</div>
+            <div class="text-[9px] text-slate-600 code-font">→ ${esc(ev.target || '-')}</div>
+        </div>`).join('');
+}
+
+function renderConnection(state) {
+    if (!connectionStateEl || !connectionAgeEl || !telemetrySourceEl || !stateIntegrityEl) return;
+    const conn = state.connection || {};
+    const status = conn.status || 'CONNECTING';
+    const map = {
+        LIVE: ['bg-emerald-500','text-emerald-400','LIVE — SERVER'],
+        CACHE: ['bg-amber-500','text-amber-400','CACHE — DATA LOKAL'],
+        OFFLINE: ['bg-rose-500','text-rose-400','OFFLINE — STATE TERAKHIR'],
+        CONNECTING: ['bg-slate-500','text-slate-400','CONNECTING']
+    };
+    const [dot, text, label] = map[status] || map.CONNECTING;
+    connectionStateEl.className = `font-semibold ${text}`;
+    connectionStateEl.innerHTML = `<span class="connection-dot ${dot}"></span>${label}`;
+    connectionAgeEl.textContent = getStateAgeText(state);
+    telemetrySourceEl.textContent = state.lastTelemetryFile || 'system_logs aktif';
+    const aiCycle = Number(window.CIKURInternalAIRuntime?.getBCGOState?.()?.cycle);
+    stateIntegrityEl.textContent = Number.isFinite(aiCycle) && aiCycle === Number(state.cycle) ? 'SYNC' : 'UPDATING';
+}
+
+// Boot watchdog: a failed module graph must never look like a silent blank/idle monitor.
+setTimeout(() => {
+  if (!window.BCGOBrain) {
+    const speech = document.getElementById('live-speech');
+    if (speech) speech.textContent = '> [BOOT] BCGO engine belum berhasil dimuat. Periksa modul/dependency BCGO.';
+    const badge = document.getElementById('system-status-badge');
+    if (badge) badge.textContent = 'BCGO BOOT ERROR';
+    console.error('[BCGO] Boot watchdog: window.BCGOBrain belum tersedia setelah 5 detik.');
+  }
+}, 5000);
+
+try {
+runAutonomousEngine(state => {
+    liveState = state;
+    window.BCGO_STATE = state;
+    renderConnection(state);
+    renderNeuralEvents(state.recentEvents);
+    renderSourceScan(state.sourceScan);
+    if (liveSpeech) liveSpeech.textContent = `> [${state.step}] ${state.message}`;
+    if (targetCellId) targetCellId.textContent = state.targetCell || '-';
+    if (errorLogDesc) errorLogDesc.textContent = state.errorLog || 'Normal (tidak ada anomali aktif)';
+
+    if (cycleNumber) cycleNumber.textContent = state.cycle ?? 0;
+    if (cycleMode) cycleMode.textContent = state.cycleMode || 'NORMAL';
+    if (eventState) eventState.textContent = state.lastEventAt
+        ? `Impuls terakhir: ${formatTime(state.lastEventAt)}`
+        : 'Belum ada impuls baru';
+
+    if (metrics.total) metrics.total.textContent = state.metrics?.total ?? 0;
+    if (metrics.active) metrics.active.textContent = state.metrics?.active ?? 0;
+    if (metrics.healthy) metrics.healthy.textContent = state.metrics?.healthy ?? 0;
+    if (metrics.recovered) metrics.recovered.textContent = state.metrics?.recovered ?? 0;
+    if (metrics.firestore) metrics.firestore.textContent = state.metrics?.firestoreCount ?? 0;
+
+    activatePhase(state.step, state);
+    setHeader(state.step, state);
+    renderOrgans(state.systemOrgans, state.fileNerves, state.sourceScan?.relations || []);
+    renderLogs(state.systemLogs);
+
+    if (!chatFeed.dataset.ready) {
+        chatFeed.dataset.ready = '1';
+        chatFeed.innerHTML = '';
+        restoreVisibleConversation();
+    }
+});
+} catch (error) {
+  const speech = document.getElementById('live-speech');
+  if (speech) speech.textContent = `> [BOOT ERROR] ${String(error?.message || error).slice(0, 300)}`;
+  const badge = document.getElementById('system-status-badge');
+  if (badge) badge.textContent = 'BCGO BOOT ERROR';
+  console.error('[BCGO] runAutonomousEngine gagal:', error);
+}
+</script>
+
+<script>
+/* CIKUR GO Internal AI — presentation-only observer. */
+(() => {
+  const status = document.getElementById('internal-ai-status');
+  const reasoning = document.getElementById('internal-ai-reasoning');
+  const investigation = document.getElementById('internal-ai-investigation');
+  const directive = document.getElementById('internal-ai-directive');
+  window.addEventListener('cikur-internal-ai-state', event => {
+    const d = event.detail || {}, r = d.reasoning || {}, g = d.guardian || {};
+    if (status) { status.textContent = `INTERNAL AI: ${d.signal || 'WAITING'} • GUARD ${g.healthy ? 'OK' : (g.level || 'BLOCK')}`; status.className = `rounded border px-2 py-1 ${g.healthy ? 'border-emerald-900 text-emerald-300' : 'border-rose-900 text-rose-300'}`; }
+    const live = d.bcgoState || {};
+    const current = window.BCGO_STATE || {};
+    const snapRev = Number(live.stateRevision || live.lastEventAt || live.sourceScanCompletedAt || live.cycle || 0);
+    const currentRev = Number(current.lastEventAt || current.sourceScan?.completedAt || current.cycle || 0);
+    const sameState = snapRev > 0 && currentRev > 0 && snapRev === currentRev;
+    const syncLabel = sameState ? 'SYNC' : (snapRev && currentRev ? `SYNCING ${live.cycle ?? '-'}→${current.cycle ?? '-'}` : 'SYNCING');
+    if (reasoning) reasoning.textContent = `REASONING: ${r.classification || 'WAITING'} • evidence ${r.evidence?.length || 0} • hypotheses ${r.hypotheses?.length || 0} • focus ${r.operationalInvestigation?.focus?.target || '-'} • BCGO #${current.cycle ?? live.cycle ?? '-'} • ${syncLabel}`;
+    if (investigation) investigation.textContent = `INVESTIGATION: ${sameState ? (r.operationalInvestigation?.decision || r.investigation?.status || 'WAITING') : 'SYNCING'} • ${(r.operationalInvestigation?.nextActions || []).slice(0,2).map(a=>a.code).join(' → ') || String(r.investigation?.nextEvidence || '').slice(0,70)} • ${current.step || live.step || '-'}`;
+    if (directive) { const f=r.operationalInvestigation?.focus; directive.textContent=`DIRECTIVE: ${sameState ? (f?.target || '-') : 'SYNCING'} • ${(f?.actions || []).slice(0,2).map(a=>a.code).join(' → ') || 'WAITING'} • cycle #${current.cycle ?? live.cycle ?? '-'}`; }
+  });
+  window.addEventListener('cikur-internal-ai-guardian', event => {
+    const g = event.detail || {};
+    if (status) status.textContent = `INTERNAL AI: GUARD ${g.healthy ? 'OK' : (g.level || 'BLOCK')}`;
+  });
+})();
+</script>
+
+<script>
+/* BCGO ↔ MEDICINE bridge surface.
+   This page does not import Medicine and never lets Medicine overwrite BCGO_STATE. */
+(() => {
+  const key = "CIKUR_GO_BCGO_MEDICINE_V1";
+  const eventKey = `${key}_EVENT`;
+  const status = document.getElementById("medicine-bridge-state");
+  const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(key) : null;
+  function handle(packet) {
+    if (!packet || packet.bridge !== key || packet.from !== "MEDICINE") return;
+    if (status) {
+      status.textContent = `LIVE • ${packet.medicineEvent || "EVENT"}`;
+      status.className = "text-emerald-400";
+    }
+  }
+  channel?.addEventListener("message", e => handle(e.data));
+  window.addEventListener("storage", e => {
+    if (e.key !== eventKey || !e.newValue) return;
+    try { handle(JSON.parse(e.newValue)); } catch {}
+  });
+})();
+</script>
+
+
+<style>
+#cgo-code-workbench{position:fixed;inset:4vh 3vw 4vh 3vw;z-index:9999;display:none;background:rgba(2,6,23,.98);border:1px solid rgba(34,211,238,.35);border-radius:14px;box-shadow:0 20px 70px rgba(0,0,0,.55);overflow:hidden}
+#cgo-code-workbench.open{display:flex;flex-direction:column}
+.cgo-wb-code{white-space:pre;overflow:auto;font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;padding:12px 14px;tab-size:2}
+.cgo-wb-pane{min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.cgo-wb-grid{min-height:0;flex:1;display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(51,65,85,.35)}
+@media(max-width:900px){#cgo-code-workbench{inset:2vh 2vw}.cgo-wb-grid{grid-template-columns:1fr}.cgo-wb-pane{min-height:38vh}.cgo-wb-code{max-height:42vh}}
+</style>
+<div id="cgo-code-workbench" aria-hidden="true">
+  <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-800 bg-slate-950">
+    <div><div class="text-[11px] font-bold text-cyan-300 tracking-wider">CGO CODE WORKBENCH</div><div id="cgo-wb-file" class="text-[10px] text-slate-400 code-font mt-1">SOURCE</div></div>
+    <div class="flex gap-2"><button id="cgo-wb-copy" class="rounded-lg border border-emerald-800 px-3 py-1.5 text-[10px] text-emerald-300">COPY PROPOSED</button><button id="cgo-wb-close" class="rounded-lg border border-slate-700 px-3 py-1.5 text-[10px] text-slate-300">Tutup</button></div>
+  </div>
+  <div id="cgo-wb-meta" class="px-4 py-2 text-[9px] text-slate-400 code-font border-b border-slate-800"></div>
+  <div class="cgo-wb-grid">
+    <div class="cgo-wb-pane bg-slate-950"><div class="px-3 py-2 text-[9px] font-bold text-cyan-300 border-b border-slate-800">ORIGINAL — SOURCE AKTUAL + NOMOR BARIS</div><pre id="cgo-wb-original" class="cgo-wb-code text-slate-300"></pre></div>
+    <div class="cgo-wb-pane bg-slate-950"><div class="px-3 py-2 text-[9px] font-bold text-emerald-300 border-b border-slate-800">PROPOSED — FULL SOURCE SETELAH PERBAIKAN</div><pre id="cgo-wb-proposed" class="cgo-wb-code text-slate-300">Belum ada candidate. CGO tidak mengarang AFTER sebelum proof/candidate tersedia.</pre></div>
+  </div>
+  <div id="cgo-wb-finding" class="max-h-32 overflow-auto px-4 py-3 border-t border-slate-800 text-[10px] text-slate-300"></div>
+</div>
+<script>
+(()=>{
+ const $=id=>document.getElementById(id); const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+ const lineCode=code=>String(code??'').split(/\r?\n/).map((x,i)=>String(i+1).padStart(5,'0')+'  '+x).join('\n');
+ let latestWorkbench=null;
+ window.addEventListener('cgo-code-workbench',e=>{const d=e.detail||{};latestWorkbench=d;const box=$('cgo-code-workbench');if(!box)return;box.classList.add('open');box.setAttribute('aria-hidden','false');$('cgo-wb-file').textContent=d.file||'-';
+   $('cgo-wb-meta').textContent=d.status==='SOURCE_READ'?`ORIGINAL ${d.original?.lines||0} lines • ${d.original?.bytes||0} bytes • fingerprint ${d.original?.fingerprint||'-'} • PROPOSED ${d.proposed?.lines||0} lines • proposed fingerprint ${d.proposed?.fingerprint||'-'} • ${provenance}${d.sourceIntegrity?.match===false?' • CANDIDATE ORIGINAL FINGERPRINT MISMATCH — REVIEW':''}`:`STATUS ${d.status||'UNKNOWN'} • ${d.error||''}`;
+   $('cgo-wb-original').textContent=d.original?.code?lineCode(d.original.code):'Source belum tersedia.';
+   $('cgo-wb-proposed').textContent=d.proposed?.code?lineCode(d.proposed.code):'Belum ada candidate. CGO tidak mengarang AFTER sebelum proof/candidate tersedia.';
+   const ranges=Array.isArray(d.proposed?.changedRanges)&&d.proposed.changedRanges.length?`<br><b class="text-cyan-300">MAPPING:</b> ${esc(JSON.stringify(d.proposed.changedRanges))}`:'';
+   const provenance=d.proposed?.fullSource?'FULL PROPOSED SOURCE • SOURCE-BOUND':'SNIPPET ONLY • FULL PROPOSED SOURCE NOT PROVEN';
+   const f=d.finding?.statement||d.explanation||d.command||''; $('cgo-wb-finding').innerHTML=(f?'<b class="text-amber-300">TEMUAN / KONTEKS</b><br>'+esc(f):'Belum ada temuan yang diklaim.')+ranges;
+ });
+ $('cgo-wb-copy')?.addEventListener('click',async()=>{const code=latestWorkbench?.proposed?.code;if(!code)return;try{await navigator.clipboard.writeText(code);$('cgo-wb-copy').textContent='COPIED';setTimeout(()=>{$('cgo-wb-copy').textContent='COPY PROPOSED'},1200)}catch{$('cgo-wb-copy').textContent='COPY GAGAL'}});
+ $('cgo-wb-close')?.addEventListener('click',()=>{$('cgo-code-workbench')?.classList.remove('open');$('cgo-code-workbench')?.setAttribute('aria-hidden','true')});
+})();
+</script>
+
+<script>
+/* CGO Captain presentation bridge. Only consumes real BCGO/Medicine/Executor packets. */
+(() => {
+  const $ = id => document.getElementById(id);
+  const captainChat = $('captain-chat');
+  const teamChat = $('team-chat');
+  const status = $('captain-dialog-status');
+  const captainOnline = $('captain-online');
+  const teamOnline = $('team-online');
+  const decisionStatus = $('captain-decision-status');
+  const decisionText = $('captain-decision-text');
+  const codePanel = $('captain-code-panel');
+  const humanGate = $('captain-human-gate');
+  const beforeEl = $('captain-before');
+  const afterEl = $('captain-after');
+  const bridgeKey = 'CIKUR_GO_BCGO_MEDICINE_V1';
+  const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(bridgeKey) : null;
+  let greeted = false;
+  let lastTeamPacket = '';
+  let latestState = null;
+
+  const esc = v => String(v ?? '-').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
+  const time = v => { try { const d = new Date(v || Date.now()); return d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); } catch { return '--:--:--'; } };
+
+  function bubble(root, who, text, tone='cyan') {
+    if (!root || !text) return;
+    const row = document.createElement('div');
+    const cls = tone === 'violet' ? 'border-violet-900 bg-violet-950/20 text-violet-100' : tone === 'amber' ? 'border-amber-900 bg-amber-950/20 text-amber-100' : 'border-cyan-900 bg-cyan-950/20 text-cyan-100';
+    row.className = 'border rounded-lg px-3 py-2 ' + cls;
+    row.innerHTML = `<div class="flex justify-between gap-2 text-[9px] uppercase opacity-70"><span>${esc(who)}</span><span>${esc(time())}</span></div><div class="text-xs mt-1 whitespace-pre-line">${esc(text)}</div>`;
+    root.appendChild(row); root.scrollTop = root.scrollHeight;
+  }
+
+  function captainGreeting(state) {
+    if (greeted || !state) return;
+    greeted = true;
+    status.textContent = 'LIVE'; status.className = 'text-[9px] code-font px-2 py-1 rounded border border-emerald-800 text-emerald-300';
+    captainOnline.textContent = 'ONLINE • INTERNAL'; captainOnline.className = 'text-[9px] code-font text-emerald-300';
+    bubble(captainChat, 'CGO • KAPTEN', 'Hallo,, BCGO, MEDICINE dan EXECUTOR,\nTolong update Kalian sedang mengerjakan apa?', 'cyan');
+    bubble(captainChat, 'CGO • STATE', `Saya membaca BCGO_STATE cycle #${state.cycle ?? '-'} • tahap ${state.step ?? '-'} • target ${state.lastTelemetryFile || state.targetCell || '-'} . Saya menunggu laporan aktual tim sebelum menentukan langkah berikutnya.`);
+  }
+
+  function handleTeam(packet) {
+    if (!packet || packet.bridge !== bridgeKey) return;
+    if (packet.from !== 'MEDICINE' && packet.from !== 'EXECUTION') return;
+    const key = String(packet.id || `${packet.from}:${packet.type}:${packet.at}:${packet.caseId || ''}`);
+    if (key === lastTeamPacket) return;
+    lastTeamPacket = key;
+    teamOnline.textContent = 'LIVE • ' + packet.from; teamOnline.className = 'text-[9px] code-font text-emerald-300';
+    const who = packet.from === 'MEDICINE' ? 'MEDICINE' : 'EXECUTOR';
+    const msg = packet.message || packet.review?.reason || (packet.type === 'EXECUTION_INVESTIGATION_ACK' ? 'Saya menerima sesi investigasi dan sedang melakukan review deterministic.' : packet.type || 'Laporan diterima.');
+    bubble(teamChat, who, msg, 'violet');
+
+    if (packet.from === 'MEDICINE') {
+      bubble(captainChat, 'CGO • MENERIMA MEDICINE', `Laporan Medicine diterima: ${msg}`);
+      decisionText.textContent = 'CGO sedang menilai laporan Medicine bersama BCGO_STATE. Belum ada kandidat perubahan yang boleh ditampilkan tanpa proof.';
+    } else {
+      bubble(captainChat, 'CGO • MENERIMA EXECUTOR', `Laporan Executor diterima: ${msg}`);
+    }
+  }
+
+  channel?.addEventListener('message', e => handleTeam(e.data));
+  window.addEventListener('storage', e => {
+    if (e.key !== `${bridgeKey}_EVENT` || !e.newValue) return;
+    try { handleTeam(JSON.parse(e.newValue)); } catch {}
+  });
+
+  window.addEventListener('cikur-internal-ai-state', e => {
+    const d = e.detail || {};
+    const proof = d.reasoning?.precisionGate || {};
+    const proposal = d.reasoning?.proposal || d.proposal || null;
+    if (proof.pass === true && proposal?.before != null && proposal?.after != null) {
+      decisionStatus.textContent = 'CANDIDATE SIAP • MENUNGGU MANUSIA';
+      decisionStatus.className = 'text-[9px] code-font text-emerald-300';
+      decisionText.textContent = 'Proof internal menyatakan candidate siap. CGO menampilkan BEFORE → AFTER dan menunggu persetujuan manusia.';
+      beforeEl.textContent = proposal.before; afterEl.textContent = proposal.after;
+      codePanel.classList.remove('hidden'); humanGate.classList.remove('hidden');
+    } else {
+      decisionStatus.textContent = proof.pass === true ? 'PROOF LENGKAP • CANDIDATE BELUM TERSEDIA' : 'PROOF BELUM LENGKAP';
+      decisionText.textContent = proof.blockers?.length ? `CGO menahan perubahan. Blocker: ${proof.blockers.slice(0,3).join(', ')}` : 'CGO belum menerima proof lengkap untuk menampilkan kandidat perubahan. Source tidak disentuh.';
+    }
+  });
+
+  $('captain-approve')?.addEventListener('click', () => {
+    const captain = window.BCGOBrain?.getCaptain?.();
+    const captainState = captain?.getState?.() || {};
+    const out = captain?.humanApprove?.(captainState.caseId || latestState?.caseId || undefined);
+    bubble(captainChat, 'CGO • HUMAN GATE', out?.decision === 'APPROVAL_BLOCKED' ? out.text : 'Persetujuan manusia dikirim melalui Captain runtime dan terikat pada case aktif. Executor belum boleh bertindak di luar authorization.', 'amber');
+  });
+  $('captain-reject')?.addEventListener('click', () => {
+    const captain = window.BCGOBrain?.getCaptain?.();
+    const captainState = captain?.getState?.() || {};
+    const out = captain?.humanReject?.(captainState.caseId || latestState?.caseId || undefined, 'Human menolak candidate melalui Captain UI.');
+    bubble(captainChat, 'CGO • HUMAN GATE', out?.decision === 'REJECTION_BLOCKED' ? out.text : 'Candidate ditolak. Captain mengirim keputusan penolakan dan jalur investigasi harus memperoleh evidence baru.', 'amber');
+  });
+
+  $('captain-open-workbench')?.addEventListener('click', () => {
+    const file = latestState?.lastTelemetryFile || latestState?.targetCell || null;
+    if (file && window.BCGOBrain?.openCodeWorkbench) window.BCGOBrain.openCodeWorkbench(file, { caseId: latestState?.caseId || undefined });
+    else bubble(captainChat, 'CGO • WORKBENCH', 'Belum ada target source live yang dapat dibuka. Saya tidak akan membuat Full Code dari tebakan.', 'amber');
+  });
+
+  const renderState = state => {
+    latestState = state;
+    captainGreeting(state);
+    if (status) status.textContent = state?.connection?.status === 'LIVE' ? 'LIVE • STATE' : 'WAITING';
+  };
+
+  const prior = window.BCGO_STATE;
+  if (prior) renderState(prior);
+  window.addEventListener('cikur-bcgo-state', e => renderState(e.detail || {}));
+  window.addEventListener('cikur-internal-ai-state', e => {
+    const s = e.detail?.bcgoState;
+    if (s && typeof s === 'object') renderState(s);
+  });
+  const captainStatePoll = setInterval(() => {
+    if (window.BCGO_STATE && typeof window.BCGO_STATE === 'object') renderState(window.BCGO_STATE);
+  }, 1000);
+  setTimeout(() => clearInterval(captainStatePoll), 30000);
+})();
+</script>
+</body>
+</html>
