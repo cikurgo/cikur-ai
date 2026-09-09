@@ -6,8 +6,8 @@
  * authorization, execution, rollback, or validation gates.
  */
 
-export const VERSION = "1.9.0-CGO-CONSTITUTION-SOVEREIGN-CONSTRUCTION";
-export const CONSTITUTION_VERSION = "CGO-CONSTITUTION-1.9.0";
+export const VERSION = "1.8.1-CGO-CONSTITUTION";
+export const CONSTITUTION_VERSION = "CGO-CONSTITUTION-1.8.1";
 
 const freeze = Object.freeze;
 const list = (items) => freeze(items.slice());
@@ -183,16 +183,16 @@ export const CGO_INSTRUCTION = freeze({
     source: freeze({ useAuthoritativeSourceRegistry: true, exactSourceMustBeExtractedFromAvailableSource: true, neverInventSource: true, sourceAvailabilityIsAuthoritative: true, bindCriticalClaimsToFingerprintWhenAvailable: true }),
     runtime: freeze({ deterministicRuntimeIsOperationalAuthority: true, staleStateProtection: true, authorizationIsSeparateFromConversation: true, conversationCannotBypassRuntimeGates: true }),
     connectivity: freeze({ sourceTopologyMustBeObserved: true, distinguishDeclaredReferenceFromLoadedRuntime: true, detectMissingDependencies: true, detectUnprovenOrphanSources: true, neverAssumeConnectivityFromFileExistence: true, connectivityFindingsAreEvidenceNotAutomaticRootCause: true }),
-    investigation: freeze({ investigateBeforeConclusion: true, traceDependencies: true, traceSourceConnectivity: true, testCompetingCauses: true, verifyRootCauseBeforeRepair: true, verifyExactSourceBeforeRepair: true, continueWhenEvidenceIsInsufficient: true }),
-    sovereignty: freeze({ internalOnly: true, externalAIForbidden: true, externalReasoningForbidden: true, externalCodeGenerationForbidden: true, noHiddenFallback: true, sourceMustNotBeSentToExternalReasoning: true, infrastructureMayBeExternalOnlyForDataAuthRealtimePresentation: true, generatedCodeMustPassSovereigntyGate: true })
+    investigation: freeze({ investigateBeforeConclusion: true, traceDependencies: true, traceSourceConnectivity: true, testCompetingCauses: true, verifyRootCauseBeforeRepair: true, verifyExactSourceBeforeRepair: true, continueWhenEvidenceIsInsufficient: true })
   }),
 
   repair: freeze({
     rootCause: freeze({ mustBeEvidenceBacked: true, mustBeCausallyVerified: true, unresolvedEvidenceBlocksFinalConclusion: true }),
     exactSource: freeze({ mustUseActualSource: true, includeLocationWhenAvailable: true, includeOriginalContextWhenAvailable: true, neverFabricateLinesOrCode: true }),
-    solution: freeze({ concrete: true, sourceBound: true, evidenceBound: true, explainWhy: true, showBeforeAfter: true, copyableWhenReady: true, neverPretendSolutionWasApplied: true, generateOnlyWhenDeterministicallySupported: true, constructInsideCGO: true, candidateMustContainFullProposedSourceWhenAvailable: true, candidateMustContainExactOperationAnchor: true, candidateMustCarrySourceFingerprint: true, candidateMustCarryEvidenceIds: true, candidateMustCarrySovereigntyProof: true, unsupportedSemanticRepairMustBeExplicit: true }),
+    solution: freeze({ concrete: true, sourceBound: true, evidenceBound: true, explainWhy: true, showBeforeAfter: true, fullOriginalSource: true, fullProposedSource: true, lineMapping: true, copyableWhenReady: true, neverPretendSolutionWasApplied: true, generateOnlyWhenDeterministicallySupported: true, unsupportedRepairMustBeExplicit: true, constructionMustNotDelegateCodeGenerationToExternalServices: true, generatedCodeMustPassSovereigntyGate: true }),
     humanApproval: freeze({ requiredBeforeHumanControlledExecution: true, conversationalAgreementIsNotProofOfAuthorization: true, neverAssumeApprovalFromSilence: true }),
-    validation: freeze({ requiredAfterExecution: true, independentCurrentSourceCheck: true, provenanceBound: true, falsePositiveMustBeRejected: true, failureMayReopenCase: true })
+    validation: freeze({ requiredAfterExecution: true, independentCurrentSourceCheck: true, provenanceBound: true, falsePositiveMustBeRejected: true, failureMayReopenCase: true }),
+    sovereignty: freeze({ internalOnly: true, externalAIForbidden: true, externalReasoningForbidden: true, externalCodeGenerationForbidden: true, sourceMustNotLeaveSystemForReasoning: true })
   }),
 
   response: freeze({

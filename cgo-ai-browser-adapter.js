@@ -470,11 +470,12 @@ async function openCodeWorkbench(file, context = {}) {
     const original = await readExactSourceForWorkbench(target);
     const c = context.caseId ? runtime.getCase(context.caseId) : null;
     const exact = c?.exactSource || context.exactSource || null;
-    const proposed = exact?.proposedSource || exact?.after || context.proposedSource || context.proposedCode || "";
+    const proposed = exact?.proposedSource || context.proposedSource || exact?.proposedCode || exact?.after || context.proposedCode || "";
+    const proposedIsFullSource = Boolean(exact?.proposedSource || context.proposedSource);
     const proposedFingerprint = proposed ? Core.contentFingerprint(proposed) : null;
-    const changedRanges = proposed ? sourceRangeForText(proposed, context.changedCode || "") : [];
+    const changedRanges = proposedIsFullSource ? (exact?.changedRanges || context.changedRanges || []) : (proposed ? sourceRangeForText(proposed, context.changedCode || "") : []);
     const payload = {
-      version:"1.1.0-CODE-WORKBENCH-FULL-SOURCE",
+      version:"1.1.0-FULL-SOURCE-CODE-WORKBENCH",
       status:"SOURCE_READ",
       file:target,
       original:{
@@ -488,7 +489,8 @@ async function openCodeWorkbench(file, context = {}) {
         code:String(proposed),
         lines:numberSource(proposed).length,
         fingerprint:proposedFingerprint,
-        changedRanges
+        changedRanges,
+        fullSource:proposedIsFullSource
       } : null,
       finding:context.finding || null,
       explanation:context.explanation || null,
@@ -503,7 +505,7 @@ async function openCodeWorkbench(file, context = {}) {
     emitCodeWorkbench(payload);
     return payload;
   } catch (error) {
-    const payload={version:"1.1.0-CODE-WORKBENCH-FULL-SOURCE",status:"SOURCE_READ_FAILED",file:target,error:String(error?.message||error)};
+    const payload={version:"1.0.0-CODE-WORKBENCH",status:"SOURCE_READ_FAILED",file:target,error:String(error?.message||error)};
     emitCodeWorkbench(payload);
     return payload;
   }

@@ -77,6 +77,64 @@ body{font-family:'Inter',sans-serif}
     </div>
 </section>
 
+<!-- CGO CAPTAIN / TEAM DIALOG — REAL BRIDGE OBSERVER -->
+<section id="captain-dialog" class="space-y-3">
+  <div class="flex items-center justify-between gap-3">
+    <div>
+      <div class="text-xs font-semibold text-cyan-300 uppercase tracking-wider">Dialog Kapten CGO</div>
+      <div class="text-[10px] text-slate-500 mt-1">Kolom ini membaca state dan paket saraf nyata. Tidak membuat percakapan palsu.</div>
+    </div>
+    <span id="captain-dialog-status" class="text-[9px] code-font px-2 py-1 rounded border border-slate-700 text-slate-400">WAITING</span>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <article class="bg-slate-900 border border-cyan-900/70 rounded-xl p-4 space-y-3 shadow-lg">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <div class="text-sm font-bold text-cyan-200">🧠 CGO (KAPTEN)</div>
+          <div class="text-[9px] text-slate-500">Otak • Orkestrasi • Keputusan</div>
+        </div>
+        <span id="captain-online" class="text-[9px] code-font text-slate-400">WAITING</span>
+      </div>
+      <div id="captain-chat" class="bg-slate-950 border border-slate-800 rounded-lg p-3 min-h-[230px] max-h-80 overflow-y-auto space-y-2">
+        <div class="text-xs text-slate-600">CGO menunggu BCGO_STATE yang hidup...</div>
+      </div>
+    </article>
+
+    <article class="bg-slate-900 border border-violet-900/70 rounded-xl p-4 space-y-3 shadow-lg">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <div class="text-sm font-bold text-violet-200">⚙️ BCGO-MEDICINE-EXECUTOR</div>
+          <div class="text-[9px] text-slate-500">Laporan aktual dari bridge lintas halaman</div>
+        </div>
+        <span id="team-online" class="text-[9px] code-font text-slate-400">WAITING</span>
+      </div>
+      <div id="team-chat" class="bg-slate-950 border border-slate-800 rounded-lg p-3 min-h-[230px] max-h-80 overflow-y-auto space-y-2">
+        <div class="text-xs text-slate-600">Menunggu paket Medicine / Executor...</div>
+      </div>
+    </article>
+  </div>
+
+  <div id="captain-decision-panel" class="bg-slate-900 border border-amber-900/70 rounded-xl p-4 space-y-2">
+    <div class="flex justify-between items-center gap-3">
+      <div class="text-xs font-semibold text-amber-300 uppercase tracking-wider">Keputusan CGO / Gerbang Eksekusi</div>
+      <span id="captain-decision-status" class="text-[9px] code-font text-amber-400">PROOF BELUM LENGKAP</span>
+    </div>
+    <div id="captain-decision-text" class="text-xs text-slate-400">CGO belum menerima proof lengkap untuk menampilkan kandidat perubahan. Source tidak disentuh.</div>
+    <div id="captain-code-panel" class="hidden space-y-2">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div><div class="text-[9px] text-slate-500 mb-1">BEFORE • EXACT ANCHOR</div><pre id="captain-before" class="text-[9px] code-font bg-slate-950 border border-slate-800 rounded p-2 overflow-auto max-h-40"></pre></div>
+        <div><div class="text-[9px] text-slate-500 mb-1">AFTER • EXACT CHANGE</div><pre id="captain-after" class="text-[9px] code-font bg-slate-950 border border-slate-800 rounded p-2 overflow-auto max-h-40"></pre></div>
+      </div>
+      <button id="captain-open-workbench" type="button" class="w-full border border-cyan-800 text-cyan-300 rounded-lg py-2 text-[10px]">🧬 BUKA FULL CODE WORKBENCH • ORIGINAL vs PROPOSED</button>
+    </div>
+    <div id="captain-human-gate" class="hidden flex flex-wrap gap-2 pt-1">
+      <button id="captain-approve" type="button" class="px-3 py-2 rounded-lg bg-emerald-700 text-xs font-semibold">SETUJUI PERUBAHAN</button>
+      <button id="captain-reject" type="button" class="px-3 py-2 rounded-lg bg-rose-800 text-xs font-semibold">TOLAK & INVESTIGASI ULANG</button>
+    </div>
+  </div>
+</section>
+
 <section class="grid grid-cols-1 md:grid-cols-4 gap-3">
     <div id="bagan-in" class="neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40">
         <div class="text-xs font-bold text-slate-500 mb-1">TAHAP 01</div>
@@ -925,12 +983,12 @@ runAutonomousEngine(state => {
 .cgo-wb-code{white-space:pre;overflow:auto;font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;padding:12px 14px;tab-size:2}
 .cgo-wb-pane{min-height:0;overflow:hidden;display:flex;flex-direction:column}
 .cgo-wb-grid{min-height:0;flex:1;display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(51,65,85,.35)}
-@media(max-width:900px){#cgo-code-workbench{inset:2vh 2vw}.cgo-wb-grid{grid-template-columns:1fr}.cgo-wb-grid .cgo-wb-pane:nth-child(2){display:none}}
+@media(max-width:900px){#cgo-code-workbench{inset:2vh 2vw}.cgo-wb-grid{grid-template-columns:1fr}.cgo-wb-pane{min-height:38vh}.cgo-wb-code{max-height:42vh}}
 </style>
 <div id="cgo-code-workbench" aria-hidden="true">
   <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-800 bg-slate-950">
     <div><div class="text-[11px] font-bold text-cyan-300 tracking-wider">CGO CODE WORKBENCH</div><div id="cgo-wb-file" class="text-[10px] text-slate-400 code-font mt-1">SOURCE</div></div>
-    <button id="cgo-wb-close" class="rounded-lg border border-slate-700 px-3 py-1.5 text-[10px] text-slate-300">Tutup</button>
+    <div class="flex gap-2"><button id="cgo-wb-copy" class="rounded-lg border border-emerald-800 px-3 py-1.5 text-[10px] text-emerald-300">COPY PROPOSED</button><button id="cgo-wb-close" class="rounded-lg border border-slate-700 px-3 py-1.5 text-[10px] text-slate-300">Tutup</button></div>
   </div>
   <div id="cgo-wb-meta" class="px-4 py-2 text-[9px] text-slate-400 code-font border-b border-slate-800"></div>
   <div class="cgo-wb-grid">
@@ -943,15 +1001,140 @@ runAutonomousEngine(state => {
 (()=>{
  const $=id=>document.getElementById(id); const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
  const lineCode=code=>String(code??'').split(/\r?\n/).map((x,i)=>String(i+1).padStart(5,'0')+'  '+x).join('\n');
- window.addEventListener('cgo-code-workbench',e=>{const d=e.detail||{};const box=$('cgo-code-workbench');if(!box)return;box.classList.add('open');box.setAttribute('aria-hidden','false');$('cgo-wb-file').textContent=d.file||'-';
-   $('cgo-wb-meta').textContent=d.status==='SOURCE_READ'?`ORIGINAL ${d.original?.lines||0} lines • ${d.original?.bytes||0} bytes • fingerprint ${d.original?.fingerprint||'-'}${d.sourceIntegrity?.match===false?' • CANDIDATE ORIGINAL FINGERPRINT MISMATCH — REVIEW':''}`:`STATUS ${d.status||'UNKNOWN'} • ${d.error||''}`;
+ let latestWorkbench=null;
+ window.addEventListener('cgo-code-workbench',e=>{const d=e.detail||{};latestWorkbench=d;const box=$('cgo-code-workbench');if(!box)return;box.classList.add('open');box.setAttribute('aria-hidden','false');$('cgo-wb-file').textContent=d.file||'-';
+   $('cgo-wb-meta').textContent=d.status==='SOURCE_READ'?`ORIGINAL ${d.original?.lines||0} lines • ${d.original?.bytes||0} bytes • fingerprint ${d.original?.fingerprint||'-'} • PROPOSED ${d.proposed?.lines||0} lines • proposed fingerprint ${d.proposed?.fingerprint||'-'} • ${provenance}${d.sourceIntegrity?.match===false?' • CANDIDATE ORIGINAL FINGERPRINT MISMATCH — REVIEW':''}`:`STATUS ${d.status||'UNKNOWN'} • ${d.error||''}`;
    $('cgo-wb-original').textContent=d.original?.code?lineCode(d.original.code):'Source belum tersedia.';
    $('cgo-wb-proposed').textContent=d.proposed?.code?lineCode(d.proposed.code):'Belum ada candidate. CGO tidak mengarang AFTER sebelum proof/candidate tersedia.';
-   const f=d.finding?.statement||d.explanation||d.command||''; $('cgo-wb-finding').innerHTML=f?'<b class="text-amber-300">TEMUAN / KONTEKS</b><br>'+esc(f):'Belum ada temuan yang diklaim.';
+   const ranges=Array.isArray(d.proposed?.changedRanges)&&d.proposed.changedRanges.length?`<br><b class="text-cyan-300">MAPPING:</b> ${esc(JSON.stringify(d.proposed.changedRanges))}`:'';
+   const provenance=d.proposed?.fullSource?'FULL PROPOSED SOURCE • SOURCE-BOUND':'SNIPPET ONLY • FULL PROPOSED SOURCE NOT PROVEN';
+   const f=d.finding?.statement||d.explanation||d.command||''; $('cgo-wb-finding').innerHTML=(f?'<b class="text-amber-300">TEMUAN / KONTEKS</b><br>'+esc(f):'Belum ada temuan yang diklaim.')+ranges;
  });
+ $('cgo-wb-copy')?.addEventListener('click',async()=>{const code=latestWorkbench?.proposed?.code;if(!code)return;try{await navigator.clipboard.writeText(code);$('cgo-wb-copy').textContent='COPIED';setTimeout(()=>{$('cgo-wb-copy').textContent='COPY PROPOSED'},1200)}catch{$('cgo-wb-copy').textContent='COPY GAGAL'}});
  $('cgo-wb-close')?.addEventListener('click',()=>{$('cgo-code-workbench')?.classList.remove('open');$('cgo-code-workbench')?.setAttribute('aria-hidden','true')});
 })();
 </script>
 
+<script>
+/* CGO Captain presentation bridge. Only consumes real BCGO/Medicine/Executor packets. */
+(() => {
+  const $ = id => document.getElementById(id);
+  const captainChat = $('captain-chat');
+  const teamChat = $('team-chat');
+  const status = $('captain-dialog-status');
+  const captainOnline = $('captain-online');
+  const teamOnline = $('team-online');
+  const decisionStatus = $('captain-decision-status');
+  const decisionText = $('captain-decision-text');
+  const codePanel = $('captain-code-panel');
+  const humanGate = $('captain-human-gate');
+  const beforeEl = $('captain-before');
+  const afterEl = $('captain-after');
+  const bridgeKey = 'CIKUR_GO_BCGO_MEDICINE_V1';
+  const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(bridgeKey) : null;
+  let greeted = false;
+  let lastTeamPacket = '';
+  let latestState = null;
+
+  const esc = v => String(v ?? '-').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
+  const time = v => { try { const d = new Date(v || Date.now()); return d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); } catch { return '--:--:--'; } };
+
+  function bubble(root, who, text, tone='cyan') {
+    if (!root || !text) return;
+    const row = document.createElement('div');
+    const cls = tone === 'violet' ? 'border-violet-900 bg-violet-950/20 text-violet-100' : tone === 'amber' ? 'border-amber-900 bg-amber-950/20 text-amber-100' : 'border-cyan-900 bg-cyan-950/20 text-cyan-100';
+    row.className = 'border rounded-lg px-3 py-2 ' + cls;
+    row.innerHTML = `<div class="flex justify-between gap-2 text-[9px] uppercase opacity-70"><span>${esc(who)}</span><span>${esc(time())}</span></div><div class="text-xs mt-1 whitespace-pre-line">${esc(text)}</div>`;
+    root.appendChild(row); root.scrollTop = root.scrollHeight;
+  }
+
+  function captainGreeting(state) {
+    if (greeted || !state) return;
+    greeted = true;
+    status.textContent = 'LIVE'; status.className = 'text-[9px] code-font px-2 py-1 rounded border border-emerald-800 text-emerald-300';
+    captainOnline.textContent = 'ONLINE • INTERNAL'; captainOnline.className = 'text-[9px] code-font text-emerald-300';
+    bubble(captainChat, 'CGO • KAPTEN', 'Hallo,, BCGO, MEDICINE dan EXECUTOR,\nTolong update Kalian sedang mengerjakan apa?', 'cyan');
+    bubble(captainChat, 'CGO • STATE', `Saya membaca BCGO_STATE cycle #${state.cycle ?? '-'} • tahap ${state.step ?? '-'} • target ${state.lastTelemetryFile || state.targetCell || '-'} . Saya menunggu laporan aktual tim sebelum menentukan langkah berikutnya.`);
+  }
+
+  function handleTeam(packet) {
+    if (!packet || packet.bridge !== bridgeKey) return;
+    if (packet.from !== 'MEDICINE' && packet.from !== 'EXECUTION') return;
+    const key = String(packet.id || `${packet.from}:${packet.type}:${packet.at}:${packet.caseId || ''}`);
+    if (key === lastTeamPacket) return;
+    lastTeamPacket = key;
+    teamOnline.textContent = 'LIVE • ' + packet.from; teamOnline.className = 'text-[9px] code-font text-emerald-300';
+    const who = packet.from === 'MEDICINE' ? 'MEDICINE' : 'EXECUTOR';
+    const msg = packet.message || packet.review?.reason || (packet.type === 'EXECUTION_INVESTIGATION_ACK' ? 'Saya menerima sesi investigasi dan sedang melakukan review deterministic.' : packet.type || 'Laporan diterima.');
+    bubble(teamChat, who, msg, 'violet');
+
+    if (packet.from === 'MEDICINE') {
+      bubble(captainChat, 'CGO • MENERIMA MEDICINE', `Laporan Medicine diterima: ${msg}`);
+      decisionText.textContent = 'CGO sedang menilai laporan Medicine bersama BCGO_STATE. Belum ada kandidat perubahan yang boleh ditampilkan tanpa proof.';
+    } else {
+      bubble(captainChat, 'CGO • MENERIMA EXECUTOR', `Laporan Executor diterima: ${msg}`);
+    }
+  }
+
+  channel?.addEventListener('message', e => handleTeam(e.data));
+  window.addEventListener('storage', e => {
+    if (e.key !== `${bridgeKey}_EVENT` || !e.newValue) return;
+    try { handleTeam(JSON.parse(e.newValue)); } catch {}
+  });
+
+  window.addEventListener('cikur-internal-ai-state', e => {
+    const d = e.detail || {};
+    const proof = d.reasoning?.precisionGate || {};
+    const proposal = d.reasoning?.proposal || d.proposal || null;
+    if (proof.pass === true && proposal?.before != null && proposal?.after != null) {
+      decisionStatus.textContent = 'CANDIDATE SIAP • MENUNGGU MANUSIA';
+      decisionStatus.className = 'text-[9px] code-font text-emerald-300';
+      decisionText.textContent = 'Proof internal menyatakan candidate siap. CGO menampilkan BEFORE → AFTER dan menunggu persetujuan manusia.';
+      beforeEl.textContent = proposal.before; afterEl.textContent = proposal.after;
+      codePanel.classList.remove('hidden'); humanGate.classList.remove('hidden');
+    } else {
+      decisionStatus.textContent = proof.pass === true ? 'PROOF LENGKAP • CANDIDATE BELUM TERSEDIA' : 'PROOF BELUM LENGKAP';
+      decisionText.textContent = proof.blockers?.length ? `CGO menahan perubahan. Blocker: ${proof.blockers.slice(0,3).join(', ')}` : 'CGO belum menerima proof lengkap untuk menampilkan kandidat perubahan. Source tidak disentuh.';
+    }
+  });
+
+  $('captain-approve')?.addEventListener('click', () => {
+    const captain = window.BCGOBrain?.getCaptain?.();
+    const captainState = captain?.getState?.() || {};
+    const out = captain?.humanApprove?.(captainState.caseId || latestState?.caseId || undefined);
+    bubble(captainChat, 'CGO • HUMAN GATE', out?.decision === 'APPROVAL_BLOCKED' ? out.text : 'Persetujuan manusia dikirim melalui Captain runtime dan terikat pada case aktif. Executor belum boleh bertindak di luar authorization.', 'amber');
+  });
+  $('captain-reject')?.addEventListener('click', () => {
+    const captain = window.BCGOBrain?.getCaptain?.();
+    const captainState = captain?.getState?.() || {};
+    const out = captain?.humanReject?.(captainState.caseId || latestState?.caseId || undefined, 'Human menolak candidate melalui Captain UI.');
+    bubble(captainChat, 'CGO • HUMAN GATE', out?.decision === 'REJECTION_BLOCKED' ? out.text : 'Candidate ditolak. Captain mengirim keputusan penolakan dan jalur investigasi harus memperoleh evidence baru.', 'amber');
+  });
+
+  $('captain-open-workbench')?.addEventListener('click', () => {
+    const file = latestState?.lastTelemetryFile || latestState?.targetCell || null;
+    if (file && window.BCGOBrain?.openCodeWorkbench) window.BCGOBrain.openCodeWorkbench(file, { caseId: latestState?.caseId || undefined });
+    else bubble(captainChat, 'CGO • WORKBENCH', 'Belum ada target source live yang dapat dibuka. Saya tidak akan membuat Full Code dari tebakan.', 'amber');
+  });
+
+  const renderState = state => {
+    latestState = state;
+    captainGreeting(state);
+    if (status) status.textContent = state?.connection?.status === 'LIVE' ? 'LIVE • STATE' : 'WAITING';
+  };
+
+  const prior = window.BCGO_STATE;
+  if (prior) renderState(prior);
+  window.addEventListener('cikur-bcgo-state', e => renderState(e.detail || {}));
+  window.addEventListener('cikur-internal-ai-state', e => {
+    const s = e.detail?.bcgoState;
+    if (s && typeof s === 'object') renderState(s);
+  });
+  const captainStatePoll = setInterval(() => {
+    if (window.BCGO_STATE && typeof window.BCGO_STATE === 'object') renderState(window.BCGO_STATE);
+  }, 1000);
+  setTimeout(() => clearInterval(captainStatePoll), 30000);
+})();
+</script>
 </body>
 </html>
