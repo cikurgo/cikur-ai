@@ -23,6 +23,8 @@ import {
 
 import {
     getAuth,
+    initializeAuth,
+    browserSessionPersistence,
     onAuthStateChanged,
     signInAnonymously,
     createUserWithEmailAndPassword,
@@ -70,7 +72,9 @@ const ADMIN_APP_NAME = "CIKUR_GO_ADMIN";
 const adminApp = getApps().some(existingApp => existingApp.name === ADMIN_APP_NAME)
     ? getApp(ADMIN_APP_NAME)
     : initializeApp(firebaseConfig, ADMIN_APP_NAME);
-const adminAuth = getAuth(adminApp);
+const adminAuth = initializeAuth(adminApp, {
+    persistence: browserSessionPersistence
+});
 
 // Export supaya modul lain dapat memakai koneksi yang tepat.
 export { db, auth, adminAuth, firebaseConfig };
