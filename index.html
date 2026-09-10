@@ -268,6 +268,11 @@ body{
     font-weight: 800;
     cursor: pointer;
     box-shadow: 0 6px 16px rgba(229, 9, 20, 0.2);
+}
+.qris-scan-btn:disabled{
+    opacity:.58;
+    cursor:not-allowed;
+    box-shadow:none;
 }        
 
 /* =========================
@@ -1479,19 +1484,24 @@ footer p { margin: 0; }
 
             <div class="qris-card">
                 <div class="qris-card-header">
-                    <h3>Bayar dengan QRIS</h3>
-                    <p>Scan QR untuk pembayaran cepat melalui CikurPay</p>
+                    <h3>Pembayaran CIKURPAY</h3>
+                    <p>Saldo internal CIKUR GO untuk transaksi yang benar-benar tercatat.</p>
                 </div>
-                <div class="qris-code-box" onclick="bukaZoomBarcode()">
-                    <div id="mainQisBarcodeRender" class="qris-render"></div>
-                    <span class="qris-merchant-id">CG0-QRIS-98210384</span>
-                    <span class="qris-hint">Ketuk untuk memperbesar 🔍</span>
+                <div class="qris-code-box" style="cursor:default;">
+                    <div class="qris-render" style="display:flex;align-items:center;justify-content:center;min-height:150px;padding:12px;box-sizing:border-box;">
+                        <div style="text-align:center;max-width:230px;">
+                            <div style="font-size:30px;margin-bottom:8px;">💳</div>
+                            <strong style="display:block;font-size:12px;color:#0f172a;margin-bottom:5px;">CIKURPAY INTERNAL</strong>
+                            <span style="display:block;font-size:10px;line-height:1.45;color:#64748b;">Pembayaran QR/scan belum diaktifkan. Tidak ada kode QR dummy yang digunakan.</span>
+                        </div>
+                    </div>
+                    <span class="qris-hint">QR & Scanner akan aktif setelah alur transaksi nyata siap.</span>
                 </div>
-                <button class="qris-scan-btn" onclick="bukaModalScanQris()">
+                <button class="qris-scan-btn" type="button" disabled aria-disabled="true">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
                     </svg>
-                    Scan QRIS
+                    Scanner QR — Belum Aktif
                 </button>
             </div>
         </div>
@@ -1573,28 +1583,14 @@ footer p { margin: 0; }
 </div> 
 
 <script>
-window.addEventListener("DOMContentLoaded", function () {
+function hideCikurSplash() {
     const splash = document.getElementById("splash-screen");
-    if (splash) {
-        setTimeout(function () {
-            splash.classList.add("hide");
-            setTimeout(function () { splash.style.display = "none"; }, 400);
-        }, 1200);
-    }
-    
-    const renderBox = document.getElementById("mainQisBarcodeRender");
-    if (renderBox && window.QRCode) {
-        renderBox.innerHTML = "";
-        new QRCode(renderBox, {
-            text: "CG0-QRIS-98210384",
-            width: 150,
-            height: 150,
-            colorDark: "#0f172a",
-            colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.H
-        });
-    }
-});
+    if (!splash) return;
+    splash.classList.add("hide");
+    setTimeout(function () { splash.style.display = "none"; }, 400);
+}
+
+let cgoAuthGateRequired = false;
 
 let userProfile = {
     name: "",
@@ -1966,14 +1962,17 @@ function bukaModalRegistrasi() {
             }
 
 
+            setCgoAuthGate(false);
+
             alert(
                 "Registrasi CIKUR GO berhasil!"
             );
 
             if (
-                typeof closeModal === "function"
+                typeof assistantScreen !== "undefined" &&
+                assistantScreen
             ) {
-                closeModal();
+                assistantScreen.style.display = "none";
             }
 
         } catch (error) {
@@ -2121,9 +2120,11 @@ function bukaModalLogin() {
                 if (typeof updateUIAkun === "function") updateUIAkun(userProfile);
                 if (typeof startCustomerPresenceHeartbeat === "function") startCustomerPresenceHeartbeat();
 
+                setCgoAuthGate(false);
+
                 alert("Login berhasil! Selamat datang kembali.");
 
-                if (typeof closeModal === "function") closeModal();
+                if (assistantScreen) assistantScreen.style.display = "none";
 
             } catch (error) {
                 console.error("[CIKUR GO] Gagal login:", error);
@@ -2179,48 +2180,47 @@ async function loadCurrentUserProfileIndex() {
         }
 
         if (!window.CikurCloud) {
-            console.warn("[CIKUR GO] CikurCloud belum tersedia. Guest Mode.");
-            updateUIProfile();
-            return;
+            throw new Error("CIKUR Cloud belum tersedia.");
         }
 
         let firebaseUser = null;
-
         try {
             firebaseUser = await window.CikurCloud.waitForAuth();
         } catch (authError) {
-            console.warn("[CIKUR GO] Auth belum tersedia:", authError);
-            firebaseUser = null;
+            console.error("[CIKUR GO] Gagal memulihkan session Customer/Mitra:", authError);
         }
 
+        // Tidak ada session = gerbang registrasi/login.
+        // Guest Mode tidak lagi digunakan sebagai jalur masuk utama.
         if (!firebaseUser) {
-            console.log("[CIKUR GO] Belum ada sesi login. Guest Mode.");
-            updateUIProfile();
+            setCgoAuthGate(true);
+            hideCikurSplash();
+            bukaModalRegistrasi();
             return;
         }
 
         let profile = null;
-
         try {
             profile = await window.CikurCloud.getProfile(firebaseUser.uid);
         } catch (profileError) {
             console.error("[CIKUR GO] Gagal mengambil profil:", profileError);
-            profile = null;
         }
 
         if (!profile) {
-            console.log("[CIKUR GO] UID ditemukan, tetapi profil belum tersedia.");
-            updateUIProfile();
+            // Akun Auth ada, tetapi profil aplikasi belum ada.
+            // Kita tetap menahan aplikasi dan meminta data profil nyata.
+            setCgoAuthGate(true);
+            hideCikurSplash();
+            bukaModalRegistrasi();
             return;
         }
 
         userProfile = {
             ...userProfile,
             ...profile,
-            uid: firebaseUser.uid
+            uid: firebaseUser.uid,
+            isLoggedIn: true
         };
-
-        console.log("[CIKUR GO] Profil berhasil dimuat dari Cloud:", userProfile);
 
         updateUIProfile();
 
@@ -2229,10 +2229,14 @@ async function loadCurrentUserProfileIndex() {
         }
 
         startCustomerPresenceHeartbeat();
+        setCgoAuthGate(false);
+        hideCikurSplash();
 
     } catch (error) {
         console.error("[CIKUR GO] Gagal memuat profil saat startup:", error);
-        updateUIProfile();
+        setCgoAuthGate(true);
+        hideCikurSplash();
+        bukaModalRegistrasi();
     }
 }
 
@@ -2321,30 +2325,17 @@ function switchTab(tabName) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function bukaZoomBarcode() {
-    openModal("QRIS CIKURPAY (ZOOM) 🔍");
+    openModal("CIKURPAY — QR / BARCODE");
     if (modalMainContent) {
         modalMainContent.innerHTML = `
-            <div style="text-align:center; padding: 10px;">
-                <div id="zoomQrcodeBox" style="background:#fff; padding:15px; border-radius:16px; display:inline-block; box-shadow:0 10px 25px rgba(0,0,0,0.1); border:1px solid #e2e8f0; margin-bottom:12px;"></div>
-                <h3 style="font-size:16px; font-weight:800; color:var(--text-main); margin-bottom:4px;">CikurPay Merchant ID</h3>
-                <p style="font-size:13px; font-weight:700; color:var(--primary-red); letter-spacing:1px; margin-bottom:16px;">CG0-QRIS-98210384</p>
-                <p style="font-size:11px; color:#64748b; line-height:1.4;">Tunjukkan QR code ini ke kasir atau merchant partner untuk melakukan penerimaan dana secara instan.</p>
+            <div style="text-align:center; padding:18px 10px;">
+                <div style="width:150px;height:150px;margin:0 auto 16px;border-radius:20px;background:#f8fafc;border:1px dashed #cbd5e1;display:flex;align-items:center;justify-content:center;">
+                    <div style="font-size:11px;color:#64748b;font-weight:700;line-height:1.45;padding:16px;">QR / Barcode transaksi nyata belum diaktifkan.</div>
+                </div>
+                <h3 style="font-size:16px;font-weight:800;color:var(--text-main);margin-bottom:6px;">CIKURPAY Internal</h3>
+                <p style="font-size:11px;color:#64748b;line-height:1.5;margin:0;">Kami tidak menampilkan kode QR palsu. Fitur ini akan menggunakan identitas transaksi yang benar-benar dibuat oleh sistem CIKUR GO.</p>
             </div>
         `;
-        setTimeout(() => {
-            const zoomBox = document.getElementById("zoomQrcodeBox");
-            if (zoomBox && window.QRCode) {
-                zoomBox.innerHTML = "";
-                new QRCode(zoomBox, {
-                    text: "CG0-QRIS-98210384",
-                    width: 220,
-                    height: 220,
-                    colorDark: "#0f172a",
-                    colorLight: "#ffffff",
-                    correctLevel: QRCode.CorrectLevel.H
-                });
-            }
-        }, 100);
     }
 }
       
@@ -2609,11 +2600,24 @@ function openModal(titleHTML) {
 }
 
 if(closeAssistant) {
-    closeAssistant.addEventListener("click", () => { if (assistantScreen) assistantScreen.style.display = "none"; });
+    closeAssistant.addEventListener("click", () => {
+        if (cgoAuthGateRequired) return;
+        if (assistantScreen) assistantScreen.style.display = "none";
+    });
 }
 
 function closeModal() {
+    if (cgoAuthGateRequired) return;
     if (assistantScreen) assistantScreen.style.display = "none";
+}
+
+function setCgoAuthGate(required) {
+    cgoAuthGateRequired = !!required;
+    document.body.classList.toggle("cgo-auth-required", cgoAuthGateRequired);
+
+    if (closeAssistant) {
+        closeAssistant.style.display = cgoAuthGateRequired ? "none" : "";
+    }
 }
 
 function bukaModalPengaturanProfil() {

@@ -26,7 +26,6 @@ import {
     browserLocalPersistence,
     browserSessionPersistence,
     onAuthStateChanged,
-    signInAnonymously,
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
     EmailAuthProvider,
@@ -127,7 +126,7 @@ window.CikurCloud = {
             );
             return user;
         }
-        
+
         user = await this.waitForAuth();
         if (user) {
             console.log(
@@ -137,15 +136,12 @@ window.CikurCloud = {
             return user;
         }
 
+        // Tidak membuat Anonymous User secara diam-diam.
+        // Seluruh transaksi Customer/Mitra harus berasal dari akun nyata.
         console.log(
-            "[CIKUR GO] Tidak ada session. Membuat Anonymous User baru..."
+            "[CIKUR GO] Tidak ada session Customer/Mitra aktif."
         );
-        const credential = await signInAnonymously(auth);
-        console.log(
-            "[CIKUR GO] Anonymous User baru:",
-            credential.user.uid
-        );
-        return credential.user;
+        return null;
     },
 
     // ======================================
