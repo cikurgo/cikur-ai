@@ -369,37 +369,15 @@ export function createCaptain(options = {}) {
     if (packet.type === "MEDICINE_FINALIZED_FOR_EXECUTION") {
       current.awaitingEvidence = false;
       current.finalized = true;
-      const normalized = normalizeCandidatePacket(packet.candidate || packet);
-      if (normalized && (normalized.before != null || normalized.after != null)) {
-        current.candidate = clone(normalized);
-      }
       set({
-        phase: "HUMAN_APPROVAL",
-        decision: "CANDIDATE_READY",
-        nextAction: "HUMAN_APPROVAL",
+        phase: "EXECUTOR_HANDOFF",
+        decision: "MEDICINE_FINALIZED",
+        nextAction: "EXECUTOR_EXECUTE",
         blocker: null,
-        humanGate: true,
-        candidate: clone(current.candidate || normalized || null)
-      }, "CAPTAIN_HUMAN_GATE");
-      emit("CAPTAIN_CODE_READY", { candidate: clone(current.candidate || normalized || null), review: clone(packet.review || null) });
-      try {
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("cgo-code-workbench", {
-            detail: {
-              file: (current.candidate || normalized || {}).file || null,
-              caseId: caseId,
-              original: {
-                snippet: (current.candidate || normalized || {}).before || "",
-                fullSource: (current.candidate || normalized || {}).originalSource || null
-              },
-              proposed: {
-                snippet: (current.candidate || normalized || {}).after || "",
-                fullSource: (current.candidate || normalized || {}).proposedSource || null
-              }
-            }
-          }));
-        }
-      } catch {}
+        humanGate: false,
+        candidate: clone(current.candidate?.candidate || current.candidate || null)
+      }, "CAPTAIN_MEDICINE_FINALIZED");
+      emit("CAPTAIN_EXECUTOR_HANDOFF", { packet: clone(packet) });
       return;
     }
 
@@ -495,18 +473,6 @@ export function createCaptain(options = {}) {
         const normalizedCandidate = normalizeCandidatePacket(candidate);
         set({ phase: "HUMAN_APPROVAL", decision: "CANDIDATE_READY", nextAction: "HUMAN_APPROVAL", blocker: null, humanGate: true, candidate: clone(normalizedCandidate) }, "CAPTAIN_HUMAN_GATE");
         emit("CAPTAIN_CODE_READY", { candidate: clone(normalizedCandidate), review: clone(review) });
-        try {
-          if (typeof window !== "undefined" && normalizedCandidate) {
-            window.dispatchEvent(new CustomEvent("cgo-code-workbench", {
-              detail: {
-                file: normalizedCandidate.file || null,
-                caseId: caseId,
-                original: { snippet: normalizedCandidate.before || "", fullSource: normalizedCandidate.originalSource || null },
-                proposed: { snippet: normalizedCandidate.after || "", fullSource: normalizedCandidate.proposedSource || null }
-              }
-            }));
-          }
-        } catch {}
       } else {
         const current = cases.get(caseId);
         if (current && current.round < MAX_ROUNDS) current.round += 1;

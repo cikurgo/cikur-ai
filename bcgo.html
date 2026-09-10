@@ -135,6 +135,22 @@ body{font-family:'Inter',sans-serif}
   </div>
 </section>
 
+<section id="cgo-live-code-column" class="bg-slate-900 border border-cyan-900/70 rounded-xl overflow-hidden shadow-lg">
+  <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-800 bg-slate-950">
+    <div>
+      <div class="text-sm font-bold text-cyan-200">🧬 KODE YANG SEDANG DIKERJAKAN BCGO-CGO</div>
+      <div id="cgo-live-file" class="text-[10px] text-slate-500 code-font mt-1">Belum ada file aktif</div>
+    </div>
+    <button id="cgo-live-copy" type="button" class="rounded-lg border border-emerald-800 px-3 py-1.5 text-[10px] text-emerald-300">COPY PROPOSED</button>
+  </div>
+  <div id="cgo-live-meta" class="px-4 py-2 text-[9px] text-slate-400 code-font border-b border-slate-800">Kolom ini otomatis terisi begitu CGO membaca source asli dan/atau mengusulkan perubahan nyata. Tidak ada kode yang dikarang di sini.</div>
+  <div class="cgo-wb-grid" style="min-height:260px">
+    <div class="cgo-wb-pane bg-slate-950"><div class="px-3 py-2 text-[9px] font-bold text-cyan-300 border-b border-slate-800">ORIGINAL — SOURCE AKTUAL + NOMOR BARIS</div><pre id="cgo-live-original" class="cgo-wb-code text-slate-300" style="max-height:320px">Belum ada source yang dibaca.</pre></div>
+    <div class="cgo-wb-pane bg-slate-950"><div class="px-3 py-2 text-[9px] font-bold text-emerald-300 border-b border-slate-800">PROPOSED — FULL SOURCE SETELAH PERBAIKAN</div><pre id="cgo-live-proposed" class="cgo-wb-code text-slate-300" style="max-height:320px">Belum ada candidate. CGO tidak mengarang AFTER sebelum proof/candidate tersedia.</pre></div>
+  </div>
+  <div id="cgo-live-finding" class="max-h-32 overflow-auto px-4 py-3 border-t border-slate-800 text-[10px] text-slate-300">Belum ada temuan yang diklaim.</div>
+</section>
+
 <section class="grid grid-cols-1 md:grid-cols-4 gap-3">
     <div id="bagan-in" class="neural-card bg-slate-900 border border-slate-800 rounded-xl p-4 opacity-40">
         <div class="text-xs font-bold text-slate-500 mb-1">TAHAP 01</div>
@@ -1002,7 +1018,17 @@ runAutonomousEngine(state => {
  const $=id=>document.getElementById(id); const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
  const lineCode=code=>String(code??'').split(/\r?\n/).map((x,i)=>String(i+1).padStart(5,'0')+'  '+x).join('\n');
  let latestWorkbench=null;
- window.addEventListener('cgo-code-workbench',e=>{const d=e.detail||{};latestWorkbench=d;const box=$('cgo-code-workbench');if(!box)return;box.classList.add('open');box.setAttribute('aria-hidden','false');$('cgo-wb-file').textContent=d.file||'-';
+ const renderLive=d=>{
+   $('cgo-live-file').textContent=d.file?`FILE AKTIF: ${d.file}`:'Belum ada file aktif';
+   const provenanceLive=d.proposed?.fullSource?'FULL PROPOSED SOURCE • SOURCE-BOUND':'SNIPPET ONLY • FULL PROPOSED SOURCE NOT PROVEN';
+   $('cgo-live-meta').textContent=d.status==='SOURCE_READ'?`ORIGINAL ${d.original?.lines||0} lines • ${d.original?.bytes||0} bytes • fingerprint ${d.original?.fingerprint||'-'} • PROPOSED ${d.proposed?.lines||0} lines • proposed fingerprint ${d.proposed?.fingerprint||'-'} • ${provenanceLive}${d.sourceIntegrity?.match===false?' • CANDIDATE ORIGINAL FINGERPRINT MISMATCH — REVIEW':''}`:`STATUS ${d.status||'UNKNOWN'} • ${d.error||''}`;
+   $('cgo-live-original').textContent=d.original?.code?lineCode(d.original.code):'Belum ada source yang dibaca.';
+   $('cgo-live-proposed').textContent=d.proposed?.code?lineCode(d.proposed.code):'Belum ada candidate. CGO tidak mengarang AFTER sebelum proof/candidate tersedia.';
+   const rangesLive=Array.isArray(d.proposed?.changedRanges)&&d.proposed.changedRanges.length?`<br><b class="text-cyan-300">MAPPING:</b> ${esc(JSON.stringify(d.proposed.changedRanges))}`:'';
+   const fLive=d.finding?.statement||d.explanation||d.command||''; $('cgo-live-finding').innerHTML=(fLive?'<b class="text-amber-300">TEMUAN / KONTEKS</b><br>'+esc(fLive):'Belum ada temuan yang diklaim.')+rangesLive;
+ };
+ $('cgo-live-copy')?.addEventListener('click',async()=>{const code=latestWorkbench?.proposed?.code;if(!code)return;try{await navigator.clipboard.writeText(code);$('cgo-live-copy').textContent='COPIED';setTimeout(()=>{$('cgo-live-copy').textContent='COPY PROPOSED'},1200)}catch{$('cgo-live-copy').textContent='COPY GAGAL'}});
+ window.addEventListener('cgo-code-workbench',e=>{const d=e.detail||{};latestWorkbench=d;renderLive(d);const box=$('cgo-code-workbench');if(!box)return;box.classList.add('open');box.setAttribute('aria-hidden','false');$('cgo-wb-file').textContent=d.file||'-';
    const provenance=d.proposed?.fullSource?'FULL PROPOSED SOURCE • SOURCE-BOUND':'SNIPPET ONLY • FULL PROPOSED SOURCE NOT PROVEN';
    $('cgo-wb-meta').textContent=d.status==='SOURCE_READ'?`ORIGINAL ${d.original?.lines||0} lines • ${d.original?.bytes||0} bytes • fingerprint ${d.original?.fingerprint||'-'} • PROPOSED ${d.proposed?.lines||0} lines • proposed fingerprint ${d.proposed?.fingerprint||'-'} • ${provenance}${d.sourceIntegrity?.match===false?' • CANDIDATE ORIGINAL FINGERPRINT MISMATCH — REVIEW':''}`:`STATUS ${d.status||'UNKNOWN'} • ${d.error||''}`;
    $('cgo-wb-original').textContent=d.original?.code?lineCode(d.original.code):'Source belum tersedia.';
