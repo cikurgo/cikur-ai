@@ -1008,114 +1008,6 @@ footer p { margin: 0; }
     box-shadow: 0 -10px 30px rgba(0,0,0,0.06);
 }
 
-/* =========================================================
-   CGO / BOTPRESS — ROBOT DI ATAS BOTTOM NAV
-========================================================= */
-.bottom-nav {
-    z-index: 2147483000 !important;
-    background-color: #ffffff !important;
-}
-
-.bpFabWrapper {
-    position: fixed !important;
-    right: max(18px, calc((100vw - 440px) / 2 + 18px)) !important;
-    bottom: calc(74px + env(safe-area-inset-bottom, 0px) + 10px) !important;
-    z-index: 2147483646 !important;
-    transform: none !important;
-}
-
-.bpFabContainer,
-.bpFab,
-.bpFabIcon,
-.bpFabImage {
-    position: relative !important;
-    z-index: 2147483646 !important;
-}
-
-.bpWebchat {
-    z-index: 2147483647 !important;
-}
-
-@media (max-width: 440px){
-    .bpFabWrapper{right:16px !important;}
-}
-
-.nav-item {
-    background: none;
-    border: none;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    flex: 1;
-    cursor: pointer;
-    color: var(--text-muted);
-    transition: all 0.25s ease;
-    position: relative;
-    height: 100%;
-}
-
-.nav-item svg {
-    width: 22px;
-    height: 22px;
-    margin-bottom: 4px;
-    fill: currentColor;
-    transition: transform 0.25s ease;
-}
-
-.nav-item span {
-    font-size: 10px;
-    font-weight: 700;
-}
-
-.nav-item.active {
-    color: var(--primary-red);
-}
-
-.nav-item.active svg {
-    transform: scale(1.15);
-}
-
-.nav-item.prominent {
-    position: relative;
-}
-
-.nav-item.prominent .transaksi-btn-wrapper {
-    position: absolute;
-    top: -12px;
-    background: linear-gradient(135deg, var(--primary-red) 0%, var(--primary-red-hover) 100%);
-    color: #ffffff;
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 8px 20px rgba(229, 9, 20, 0.45);
-    border: 4px solid #ffffff;
-    transition: transform 0.25s ease;
-}
-
-.nav-item.prominent .transaksi-btn-wrapper svg {
-    width: 22px;
-    height: 22px;
-    margin-bottom: 0;
-    fill: #ffffff;
-}
-
-.nav-item.prominent span {
-    position: absolute;
-    bottom: 6px;
-    font-size: 10px;
-    font-weight: 800;
-    color: var(--text-muted);
-}
-
-.nav-item.prominent.active span {
-    color: var(--primary-red);
-}
-
 /* ===========================
    MODAL & INVOICE SCREEN
 =========================== */
@@ -2828,14 +2720,18 @@ function bukaModalTopUp() {
 const cgoVoiceWave = document.getElementById("cgoVoiceWave");
 if (cgoVoiceWave) {
     function bukaChatCGO() {
-        if (window.botpress && typeof window.botpress.open === "function") {
-            window.botpress.open();
-        } else {
-            setTimeout(() => {
-                if (window.botpress && typeof window.botpress.open === "function") {
-                    window.botpress.open();
-                }
-            }, 300);
+        // Gerbang tetap internal; tidak bergantung pada mesin AI pihak ketiga.
+        // Saat modul CGO internal dimuat, gunakan handler internal yang tersedia.
+        if (window.CGO && typeof window.CGO.open === "function") {
+            window.CGO.open();
+            return;
+        }
+        if (window.CGOAI && typeof window.CGOAI.open === "function") {
+            window.CGOAI.open();
+            return;
+        }
+        if (typeof window.showCGONotification === "function") {
+            window.showCGONotification("warning", "CGO", "Gerbang CGO internal aktif. Mesin percakapan internal belum dimuat di halaman ini.");
         }
     }
 
@@ -2903,8 +2799,6 @@ if (cgoVoiceWave) {
     
 </script>
 
-<script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
-<script src="https://files.bpcontent.cloud/2026/07/15/02/20260715020640-8DLE30VX.js" defer></script>
     
 </body>
 </html>

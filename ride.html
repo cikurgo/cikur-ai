@@ -303,66 +303,90 @@ body{
 </div>
 
 <script>
-let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { saldo: 125000 };
-let selectedRide = { type: "CIKUR-Bike (Motor)", price: 10000 };
+let userProfile = {};
+let selectedRide = { type: "CIKUR-Bike (Motor)", vehicleType: "bike", price: 10000 };
 
 function selectFleet(type, price) {
-    let cardBike = document.getElementById("fleetBike");
-    let cardCar = document.getElementById("fleetCar");
-    
-    if(type === 'bike') {
+    const cardBike = document.getElementById("fleetBike");
+    const cardCar = document.getElementById("fleetCar");
+
+    if (type === 'bike') {
         cardBike.classList.add("selected");
         cardCar.classList.remove("selected");
-        selectedRide = { type: "CIKUR-Bike (Motor)", price: 10000 };
+        selectedRide = { type: "CIKUR-Bike (Motor)", vehicleType: "bike", price: 10000 };
     } else {
         cardCar.classList.add("selected");
         cardBike.classList.remove("selected");
-        selectedRide = { type: "CIKUR-Car (Mobil)", price: 25000 };
+        selectedRide = { type: "CIKUR-Car (Mobil)", vehicleType: "car", price: 25000 };
     }
 
     document.getElementById("rideTypeName").innerText = selectedRide.type;
     document.getElementById("rideTotalPrice").innerText = "Rp " + selectedRide.price.toLocaleString('id-ID');
 }
 
-function prosesPesanRide() {
-    let destination = document.getElementById("destLocation").value.trim();
-    if(!destination) {
+async function loadRideUser() {
+    if (!window.CikurCloud) return;
+    try {
+        const firebaseUser = await window.CikurCloud.ensureAuth();
+        const profile = await window.CikurCloud.getProfile(firebaseUser.uid);
+        userProfile = {
+            uid: firebaseUser.uid,
+            name: profile?.name || "Customer",
+            phone: profile?.phone || ""
+        };
+    } catch (error) {
+        console.error("[CIKUR RIDE] Gagal memuat profil:", error);
+        userProfile = { uid: "", name: "Customer", phone: "" };
+    }
+}
+
+async function prosesPesanRide() {
+    const pickup = document.getElementById("pickupLocation").value.trim();
+    const destination = document.getElementById("destLocation").value.trim();
+
+    if (!destination) {
         alert("[!] Mohon masukkan tujuan perjalanan terlebih dahulu.");
         return;
     }
-
-    if (userProfile.saldo < selectedRide.price) {
-        alert("[!] Saldo CikurPay tidak mencukupi untuk memesan perjalanan ini. Silakan lakukan Top-Up.");
+    if (!pickup || pickup === "Lokasi Anda Saat Ini (GPS)") {
+        alert("[!] Mohon tentukan lokasi penjemputan terlebih dahulu.");
         return;
     }
-    
-    userProfile.saldo -= selectedRide.price;
-    localStorage.setItem('cikur_user', JSON.stringify(userProfile));
-    
-    alert(`[SUKSES] Pesanan ${selectedRide.type} ke "${destination}" berhasil dibuat! Driver sedang menuju lokasimu.`);
-    window.location.href = "index.html";
-}
-    function prosesPesanRide() {
-    let destination = document.getElementById("destLocation").value.trim();
-    if(!destination) {
-        alert("[!] Mohon masukkan tujuan perjalanan.");
+    if (!window.CikurCloud) {
+        alert("[!] CIKUR Cloud belum siap. Silakan coba lagi.");
         return;
     }
 
-    if (userProfile.saldo < selectedRide.price) {
-        alert("[!] Saldo CikurPay tidak mencukupi.");
-        return;
+    const button = document.querySelector('.btn-order');
+    if (button) { button.disabled = true; button.textContent = "Mengirim pesanan..."; }
+
+    try {
+        if (!userProfile.uid) await loadRideUser();
+        const order = await window.CikurCloud.createOrder("RIDE", {
+            service: "RIDE",
+            vehicleType: selectedRide.vehicleType,
+            vehicleName: selectedRide.type,
+            fare: selectedRide.price,
+            pickup,
+            destination,
+            customerName: userProfile.name || "Customer",
+            customerPhone: userProfile.phone || "",
+            paymentMethod: "CIKURPAY",
+            paymentStatus: "PENDING",
+            mode: "REGULAR"
+        });
+
+        if (!order?.id) throw new Error("Pesanan Ride tidak menghasilkan ID.");
+        alert(`[TERKIRIM] Pesanan ${selectedRide.type} sudah masuk ke CIKUR Cloud. Menunggu driver menerima.`);
+        window.location.href = `index.html?rideOrder=${encodeURIComponent(order.id)}`;
+    } catch (error) {
+        console.error("[CIKUR RIDE] Gagal membuat order:", error);
+        alert("Pesanan Ride gagal dikirim: " + (error?.message || error));
+        if (button) { button.disabled = false; button.textContent = "Pesan Driver Sekarang ⚡"; }
     }
-    
-    userProfile.saldo -= selectedRide.price;
-    localStorage.setItem('cikur_user', JSON.stringify(userProfile));
-    
-    // Catat ke riwayat global aplikasi
-    simpanRiwayatTransaksi(`${selectedRide.type} ke ${destination}`, selectedRide.price, 'CIKUR Ride');
-    
-    alert(`[SUKSES] Pesanan ${selectedRide.type} berhasil dibuat!`);
-    window.location.href = "index.html";
 }
+
+document.addEventListener("DOMContentLoaded", loadRideUser);
 </script>
 
 </body>
