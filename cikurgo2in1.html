@@ -249,51 +249,73 @@
         });
 
         // Proses Checkout / Pemesanan Paket 2IN1
-        function prosesPesan2In1() {
+        async function prosesPesan2In1() {
             if (currentFoodTotal <= 0) {
                 alert("[!] Silakan pilih menu makanan terlebih dahulu sebelum melanjutkan pesanan 2IN1.");
                 return;
             }
 
-            let userProfile = JSON.parse(localStorage.getItem('cikur_user')) || { saldo: 125000 };
-            let grandTotal = currentFoodTotal + currentAssistantFee + serviceFee;
-
-            if (userProfile.saldo < grandTotal) {
-                alert("[!] Saldo CikurPay tidak mencukupi untuk total transaksi paket 2IN1 ini.");
+            if (!window.CikurCloud) {
+                alert("[!] CIKUR Cloud belum siap. Silakan coba lagi.");
                 return;
             }
 
-            userProfile.saldo -= grandTotal;
-            localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+            const savedBundle = localStorage.getItem('cikur_bundle_cart');
+            let bundleData = null;
+            try { bundleData = savedBundle ? JSON.parse(savedBundle) : null; } catch (e) { bundleData = null; }
+            if (!bundleData || !Array.isArray(bundleData.items) || !bundleData.items.length) {
+                alert("[!] Data menu 2IN1 tidak ditemukan. Silakan pilih menu kembali.");
+                return;
+            }
 
-            let riwayatPesanan = JSON.parse(localStorage.getItem('cikur_orders')) || [];
-            let riwayatTransaksi = JSON.parse(localStorage.getItem('cikur_transactions')) || [];
-            let kodeTrx = 'TRX-2IN1-' + Math.floor(100000 + Math.random() * 900000);
-            let waktuSekarang = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) + ' • ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            const grandTotal = currentFoodTotal + currentAssistantFee + serviceFee;
+            const firstItem = bundleData.items[0] || {};
+            const button = document.querySelector('button[onclick="prosesPesan2In1()"]');
+            if (button) { button.disabled = true; button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mengirim ke CIKUR Cloud...'; }
 
-            riwayatPesanan.unshift({
-                kode: kodeTrx,
-                layanan: `Paket Bundling 2IN1 (Food & Assistant)`,
-                kategori: 'CIKUR GO 2IN1',
-                harga: grandTotal,
-                status: 'Diproses & Jadwal Disinkronkan',
-                waktu: waktuSekarang
-            });
+            try {
+                const firebaseUser = await window.CikurCloud.ensureAuth();
+                const profile = await window.CikurCloud.getProfile(firebaseUser.uid);
+                const customerName = profile?.name || "Customer";
+                const customerPhone = profile?.phone || "";
+                const arrivalTime = document.getElementById('arrivalTime')?.value || null;
+                const duration = Number(document.getElementById('durationPackage')?.value || 60);
 
-            riwayatTransaksi.unshift({
-                kode: kodeTrx,
-                ket: `Pembayaran Paket CIKUR GO 2IN1`,
-                nominal: -grandTotal,
-                waktu: waktuSekarang,
-                status: 'Berhasil'
-            });
+                const result = await window.CikurCloud.create2in1Bundle({
+                    customerName,
+                    customerPhone,
+                    restoId: bundleData.restoId || firstItem.restoId || "",
+                    restoName: bundleData.restoName || firstItem.restoName || "Mitra Resto Cikur",
+                    items: bundleData.items,
+                    foodSubtotal: currentFoodTotal,
+                    foodTotal: currentFoodTotal,
+                    foodNotes: document.getElementById('bundleNotes')?.value.trim() || "",
+                    assistantFee: currentAssistantFee,
+                    serviceFee,
+                    grandTotal,
+                    paymentMethod: "CIKURPAY",
+                    packageKey: "dine",
+                    packageName: "DINE-IN ASSISTANT",
+                    schedule: { date: new Date().toISOString().slice(0, 10), time: arrivalTime, durationMinutes: duration },
+                    location: bundleData.address || null,
+                    assistantNotes: document.getElementById('bundleNotes')?.value.trim() || ""
+                });
 
-            localStorage.setItem('cikur_orders', JSON.stringify(riwayatPesanan));
-            localStorage.setItem('cikur_transactions', JSON.stringify(riwayatTransaksi));
-            localStorage.removeItem('cikur_bundle_cart');
+                if (!result?.bundleId || !result.foodOrder?.id || !result.assistantOrder?.id) {
+                    throw new Error("CIKUR Cloud tidak mengembalikan pasangan order 2IN1 yang lengkap.");
+                }
 
-            alert(`[SUKSES] Pesanan CIKUR GO 2IN1 berhasil dibuat! Rp ${grandTotal.toLocaleString('id-ID')} dipotong dari CikurPay.`);
-            window.location.href = "index.html";
+                localStorage.removeItem('cikur_bundle_cart');
+                alert(`[TERKIRIM] Paket CIKUR GO 2IN1 sudah masuk ke CIKUR Cloud.
+Food: ${result.foodOrder.id}
+Assistant: ${result.assistantOrder.id}
+Pembayaran masih berstatus PENDING dan tidak dipalsukan sebagai berhasil.`);
+                window.location.href = `index.html?bundleId=${encodeURIComponent(result.bundleId)}`;
+            } catch (error) {
+                console.error("[CIKUR 2IN1] Gagal membuat bundle:", error);
+                alert("Pesanan 2IN1 gagal dikirim: " + (error?.message || error));
+                if (button) { button.disabled = false; button.innerHTML = '<i class="fa-solid fa-circle-check"></i> Pesan CIKUR 2IN1 Sekarang'; }
+            }
         }
 
         // Pembatalan Pesanan
