@@ -22,8 +22,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 import {
-    getAuth,
     initializeAuth,
+    browserLocalPersistence,
     browserSessionPersistence,
     onAuthStateChanged,
     signInAnonymously,
@@ -60,24 +60,41 @@ const app = getApps().some(existingApp => existingApp.name === "[DEFAULT]")
     : initializeApp(firebaseConfig);
 
 const db = getFirestore(app);
-const auth = getAuth(app);
 
-// ==========================================
-// DEDICATED SUPER ADMIN AUTH
-// ==========================================
-// Customer/Mitra tetap memakai Firebase App DEFAULT + auth di atas.
-// Super Admin memakai Firebase App bernama khusus agar persistence
-// sesi Auth-nya terpisah di browser yang sama. Firestore tetap shared.
+// ======================================================
+// AUTH NAMESPACE — CUSTOMER / MITRA
+// ======================================================
+// Auth Customer/Mitra sengaja memakai Firebase App bernama
+// CIKUR_GO_CUSTOMER. Ini memisahkan persistence/auth state
+// dari namespace Super Admin. Firestore tetap memakai DEFAULT.
+const CUSTOMER_APP_NAME = "CIKUR_GO_CUSTOMER";
+const customerApp = getApps().some(existingApp => existingApp.name === CUSTOMER_APP_NAME)
+    ? getApp(CUSTOMER_APP_NAME)
+    : initializeApp(firebaseConfig, CUSTOMER_APP_NAME);
+
+const auth = initializeAuth(customerApp, {
+    persistence: browserLocalPersistence,
+    popupRedirectResolver: undefined
+});
+
+// ======================================================
+// AUTH NAMESPACE — SUPER ADMIN
+// ======================================================
+// Super Admin memakai App/Auth terpisah dan persistence
+// session. Logout admin tidak boleh menjadi signOut untuk
+// Customer/Mitra.
 const ADMIN_APP_NAME = "CIKUR_GO_ADMIN";
 const adminApp = getApps().some(existingApp => existingApp.name === ADMIN_APP_NAME)
     ? getApp(ADMIN_APP_NAME)
     : initializeApp(firebaseConfig, ADMIN_APP_NAME);
+
 const adminAuth = initializeAuth(adminApp, {
     persistence: browserSessionPersistence,
     popupRedirectResolver: undefined
 });
 
-// Export supaya modul lain dapat memakai koneksi yang tepat.
+// Export supaya modul Customer/Mitra dan Admin memakai
+// namespace Auth yang tepat, sementara Firestore tetap satu.
 export { db, auth, adminAuth, firebaseConfig };
 
 // ==========================================
