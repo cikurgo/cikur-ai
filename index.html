@@ -355,7 +355,7 @@ body{
     height:100%;
     background:linear-gradient(90deg,#e50914,#ff4040);
     border-radius:99px;
-    animation:splashLoading 1.2s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+    animation:splashLoading 1.8s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
 }
 
 @keyframes splashLoading{
@@ -366,6 +366,47 @@ body{
 html, body, * {
     -webkit-tap-highlight-color: transparent;
 }
+
+/* AUTH GATE — layar registrasi/login benar-benar menutup aplikasi di belakangnya */
+body.cgo-auth-required {
+    overflow: hidden !important;
+    overscroll-behavior: none;
+}
+body.cgo-auth-required .assistant-screen {
+    top: 0;
+    height: 100dvh;
+    background: #ffffff;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+body.cgo-auth-required .assistant-page {
+    top: 0;
+    bottom: 0;
+    min-height: 100dvh;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* Auth links mengikuti tipografi form utama dan tidak berhimpitan */
+.auth-recovery-links {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    margin: 12px 0 0;
+    font-size: 11px;
+    line-height: 1.35;
+}
+.auth-recovery-links a {
+    font-size: 11px !important;
+    font-weight: 700;
+    line-height: 1.35;
+    padding: 1px 4px;
+}
+.auth-recovery-links .dot { display:none; }
+
+
+
     
 /* ===========================
    HEADER GO-APP PREMIUM v2
@@ -438,11 +479,11 @@ html, body, * {
 
 .avatar-placeholder{
     position:relative;
-    background:linear-gradient(145deg,#f8fafc,#e2e8f0);
-    color:#64748b;
+    background:linear-gradient(145deg,#f5f6f8,#e5e7eb);
+    color:#a3aab5;
     border:2px solid #fff;
 }
-.avatar-placeholder > svg{width:25px;height:25px;fill:currentColor;}
+.avatar-placeholder > svg{width:27px;height:27px;fill:currentColor;}
 .avatar-camera-badge{position:absolute;right:-1px;bottom:-1px;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#E50914;border:2px solid #fff;color:#fff;}
 .avatar-camera-badge svg{width:10px;height:10px;fill:currentColor;}
 .profile-view-avatar{position:relative;}
@@ -1256,7 +1297,7 @@ footer p { margin: 0; }
 }
 .cgo-notification.show {opacity:1;visibility:visible;transform:translate(-50%,0);}
 .cgo-notification-card {
-    position:relative;width:100%;display:flex;align-items:center;gap:11px;padding:11px 38px 11px 11px;
+    position:relative;width:100%;display:flex;align-items:center;gap:12px;padding:12px 38px 12px 12px;
     background:rgba(255,255,255,.98);border:1px solid rgba(15,23,42,.07);border-radius:17px;
     box-shadow:0 16px 36px rgba(15,23,42,.16),0 4px 12px rgba(15,23,42,.08);
     backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);overflow:hidden;
@@ -1265,7 +1306,7 @@ footer p { margin: 0; }
 .cgo-notification-icon{width:39px;height:39px;flex:0 0 39px;display:flex;align-items:center;justify-content:center;border-radius:13px;background:#dcfce7;color:#16a34a;font-size:18px;font-weight:900;}
 .cgo-notification-content{min-width:0;padding-top:1px;}
 .cgo-notification-content strong{display:block;margin-bottom:2px;font-size:12px;font-weight:850;color:var(--text-main);}
-.cgo-notification-content p{margin:0;font-size:10.5px;line-height:1.35;font-weight:600;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.cgo-notification-content p{margin:0;font-size:11px;line-height:1.4;font-weight:600;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .cgo-notification-close{position:absolute;top:8px;right:8px;width:24px;height:24px;border:none;border-radius:50%;background:#f1f5f9;color:#64748b;font-size:16px;line-height:1;cursor:pointer;}
 .cgo-notification.warning .cgo-notification-icon{background:#fef3c7;color:#d97706;}
 .cgo-notification.warning .cgo-notification-card::after{background:linear-gradient(90deg,#d97706,#f59e0b);}
@@ -1273,6 +1314,32 @@ footer p { margin: 0; }
 .cgo-notification.error .cgo-notification-card::after{background:linear-gradient(90deg,#E50914,#ff4040);}
 @keyframes cgoToastTimer{from{transform:scaleX(1)}to{transform:scaleX(0)}}
 @media (max-width:440px){.cgo-notification{width:calc(100% - 22px);bottom:calc(74px + env(safe-area-inset-bottom, 0px) + 10px);}}
+
+/* =========================================================
+   CIKUR GO — PROFIL & PASSWORD UI REFINEMENT
+========================================================= */
+.cgo-profile-edit-head{ text-align:center; margin-bottom:16px; }
+.cgo-profile-edit-avatar{ width:76px; height:76px; margin:0 auto 8px; border-radius:50%; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#eef1f4; color:#9aa3ad; border:2px solid #fff; box-shadow:0 6px 16px rgba(15,23,42,.10); }
+.cgo-profile-edit-avatar img{ width:100%; height:100%; object-fit:cover; border-radius:50%; }
+.cgo-profile-edit-avatar svg{ width:40px; height:40px; fill:currentColor; }
+.cgo-profile-edit-name{ font-size:15px; font-weight:800; color:#0f172a; line-height:1.25; }
+.cgo-profile-edit-sub{ margin-top:3px; font-size:10px; color:#64748b; line-height:1.4; }
+.cgo-profile-section{ background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:13px; margin-bottom:12px; }
+.cgo-profile-section-title{ font-size:10px; font-weight:800; letter-spacing:.06em; color:#64748b; margin-bottom:10px; }
+.cgo-field-note{ font-size:9px; color:#94a3b8; line-height:1.4; margin-top:4px; }
+.cgo-file-input{ font-size:11px !important; padding:7px !important; background:#fff !important; }
+.cgo-secondary-action{ background:#fff !important; color:#334155 !important; border:1px solid #dbe2ea !important; margin-bottom:8px; }
+.cgo-secondary-action:last-child{ margin-bottom:0; }
+.cgo-security-section{ background:#fff; }
+.cgo-form-intro{ text-align:center; margin:2px 0 16px; }
+.cgo-form-intro-icon{ font-size:25px; margin-bottom:4px; }
+.cgo-form-intro-title{ font-size:14px; font-weight:800; color:#0f172a; }
+.cgo-form-intro-text{ font-size:10px; color:#64748b; line-height:1.5; margin-top:4px; }
+.cgo-password-wrap{ position:relative; width:100%; }
+.cgo-password-wrap .input-box{ padding-right:42px !important; }
+.cgo-password-toggle{ position:absolute; right:8px; top:50%; transform:translateY(-50%); width:30px; height:30px; border:0; background:transparent; color:#64748b; display:flex; align-items:center; justify-content:center; border-radius:8px; cursor:pointer; padding:0; }
+.cgo-password-toggle:hover{ background:#f1f5f9; color:#334155; }
+.cgo-password-toggle svg{ width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
 </style>
 </head>
     
@@ -1583,7 +1650,7 @@ footer p { margin: 0; }
 </div> 
 
 <script>
-const CIKUR_SPLASH_MIN_MS = 1200;
+const CIKUR_SPLASH_MIN_MS = 1800;
 const cikurSplashStartedAt = Date.now();
 let cikurSplashHideRequested = false;
 
@@ -1688,9 +1755,9 @@ function bukaModalRegistrasi() {
                 width:56px;
                 height:56px;
                 border-radius:50%;
-                background:#fee2e2;
-                border:2px solid #E50914;
-                color:#E50914;
+                background:#f1f3f5;
+                border:1px solid #d7dce2;
+                color:#a3aab5;
                 font-size:18px;
                 font-weight:800;
                 display:flex;
@@ -2124,9 +2191,9 @@ function bukaModalLogin() {
                 width:56px;
                 height:56px;
                 border-radius:50%;
-                background:#fee2e2;
-                border:2px solid #E50914;
-                color:#E50914;
+                background:#f1f3f5;
+                border:1px solid #d7dce2;
+                color:#a3aab5;
                 font-size:18px;
                 font-weight:800;
                 display:flex;
@@ -2171,10 +2238,9 @@ function bukaModalLogin() {
             Masuk Sekarang ✓
         </button>
 
-        <div class="auth-recovery-links">
-            <a href="#" id="linkLupaPassword" style="color:#0284c7;font-weight:700;text-decoration:none;">Lupa Password?</a>
-            <span class="dot">•</span>
-            <a href="#" id="linkLupaPin" style="color:#f97316;font-weight:700;text-decoration:none;">Lupa PIN CikurPay?</a>
+        <div class="auth-recovery-links" aria-label="Pemulihan akun">
+            <a href="#" id="linkLupaPassword" style="color:#0284c7;text-decoration:none;">Lupa Password?</a>
+            <a href="#" id="linkLupaPin" style="color:#f97316;text-decoration:none;">Lupa PIN CikurPay?</a>
         </div>
 
         <p style="text-align:center; font-size:11px; color:#64748b; margin-top:12px;">
@@ -2211,6 +2277,7 @@ function bukaModalLogin() {
                     ...userProfile,
                     ...(profile || {}),
                     uid: firebaseUser.uid,
+                    email: profile?.email || firebaseUser.email || "",
                     isLoggedIn: true
                 };
 
@@ -2321,11 +2388,18 @@ async function loadCurrentUserProfileIndex() {
         }
 
         if (!profile) {
-            // Akun Auth ada, tetapi profil aplikasi belum ada.
-            // Kita tetap menahan aplikasi dan meminta data profil nyata.
+            // Auth sudah ada tetapi profil aplikasi belum lengkap.
+            // Jangan membuka registrasi ulang karena email sudah terdaftar.
+            // Tampilkan form pelengkapan profil pada akun yang sama.
             setCgoAuthGate(true);
             hideCikurSplash();
-            bukaModalRegistrasi();
+            userProfile = {
+                ...userProfile,
+                uid: firebaseUser.uid,
+                email: firebaseUser.email || "",
+                isLoggedIn: true
+            };
+            bukaModalPengaturanProfil();
             return;
         }
 
@@ -2333,6 +2407,7 @@ async function loadCurrentUserProfileIndex() {
             ...userProfile,
             ...profile,
             uid: firebaseUser.uid,
+            email: profile?.email || firebaseUser.email || "",
             isLoggedIn: true
         };
 
@@ -2343,6 +2418,16 @@ async function loadCurrentUserProfileIndex() {
         }
 
         startCustomerPresenceHeartbeat();
+
+        // Akun lama boleh saja sudah punya Auth tetapi belum lengkap datanya.
+        // Tahan aplikasi sampai data minimum profil tersedia.
+        if (!String(userProfile.name || "").trim() || !String(userProfile.phone || "").trim()) {
+            setCgoAuthGate(true);
+            hideCikurSplash();
+            bukaModalPengaturanProfil();
+            return;
+        }
+
         setCgoAuthGate(false);
         hideCikurSplash();
 
@@ -2734,96 +2819,243 @@ function setCgoAuthGate(required) {
     }
 }
 
-function bukaModalPengaturanProfil() {
+async function bukaModalPengaturanProfil() {
     closeHeaderDropdown();
     openModal("PENGATURAN PROFIL & FOTO AKUN");
-    let avatarPreviewHTML = userProfile.avatar ? `<img src="${userProfile.avatar}" style="width:100%; height:100%; object-fit:cover;">` : `<svg class="avatar-empty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.2 4.2 0 1 0 0-8.4A4.2 4.2 0 0 0 12 12Zm0 2c-4.4 0-8 2.3-8 5.2 0 .6.4 1 1 1h14c.6 0 1-.4 1-1 0-2.9-3.6-5.2-8-8-5.2Z"/></svg>`;
+
+    // Ambil ulang data profil dari Cloud sebelum form ditampilkan.
+    // Ini mencegah form kosong/stale ketika state UI belum selesai dipulihkan.
+    try {
+        if (window.CikurCloud?.waitForAuth && window.CikurCloud?.getProfile) {
+            const firebaseUser = await window.CikurCloud.waitForAuth();
+            if (firebaseUser) {
+                const freshProfile = await window.CikurCloud.getProfile(firebaseUser.uid);
+                if (freshProfile) {
+                    userProfile = {
+                        ...userProfile,
+                        ...freshProfile,
+                        uid: firebaseUser.uid,
+                        email: freshProfile.email || firebaseUser.email || "",
+                        isLoggedIn: true
+                    };
+                    updateUIProfile();
+                }
+            }
+        }
+    } catch (error) {
+        console.warn("[CIKUR GO] Profil Cloud belum dapat disegarkan:", error);
+    }
+
+    const safeName = String(userProfile.name || "").replace(/"/g, "&quot;");
+    const safeEmail = String(userProfile.email || "").replace(/"/g, "&quot;");
+    const safePhone = String(userProfile.phone || "").replace(/"/g, "&quot;");
+    const avatarPreviewHTML = userProfile.avatar
+        ? `<img src="${userProfile.avatar}" alt="Foto profil" style="width:100%;height:100%;object-fit:cover;">`
+        : `<svg class="avatar-empty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.2 4.2 0 1 0 0-8.4A4.2 4.2 0 0 0 12 12Zm0 2c-4.4 0-8 2.3-8 5.2 0 .6.4 1 1 1h14c.6 0 1-.4 1-1 0-2.9-3.6-5.2-8-5.2Z"/></svg>`;
 
     if (modalMainContent) {
         modalMainContent.innerHTML = `
-            <div style="text-align:center; margin-bottom:14px;">
-                <div style="width:70px; height:70px; border-radius:50%; background:#fee2e2; border:2px solid #E50914; color:#E50914; font-size:22px; font-weight:800; display:flex; align-items:center; justify-content:center; margin:0 auto 8px; overflow:hidden;" id="modalAvatarPreviewBox">${avatarPreviewHTML}</div>
-                <h3 style="font-size:15px; color:#0f172a; font-weight:800;">${userProfile.name}</h3>
+            <div class="cgo-profile-edit-head">
+                <div class="cgo-profile-edit-avatar" id="modalAvatarPreviewBox">${avatarPreviewHTML}</div>
+                <div class="cgo-profile-edit-name">${safeName || "Lengkapi Profil"}</div>
+                <div class="cgo-profile-edit-sub">Data akun tersimpan di CIKUR GO Cloud</div>
             </div>
-            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:14px; margin-bottom:14px;">
-                <div class="form-group"><label>Ganti Foto Profil</label><input type="file" id="inputFotoProfil" accept="image/*" class="input-box" style="font-size:11px; padding:7px; background:#fff;"></div>
-                <div class="form-group"><label>Nama Lengkap</label><input type="text" id="inputNamaUser" class="input-box" value="${userProfile.name}"></div>
-                <div class="form-group"><label>Email</label><input type="email" id="inputEmailUser" class="input-box" value="${userProfile.email || ''}" placeholder="contoh@email.com"></div>
-                <div class="form-group" style="margin-bottom:0;"><label>Nomor WhatsApp / HP</label><input type="text" id="inputPhoneUser" class="input-box" value="${userProfile.phone}"></div>
+
+            <div class="cgo-profile-section">
+                <div class="cgo-profile-section-title">DATA PRIBADI</div>
+                <div class="form-group">
+                    <label>Foto Profil</label>
+                    <input type="file" id="inputFotoProfil" accept="image/*" class="input-box cgo-file-input">
+                </div>
+                <div class="form-group">
+                    <label>Nama Lengkap</label>
+                    <input type="text" id="inputNamaUser" class="input-box" value="${safeName}" autocomplete="name" placeholder="Nama lengkap">
+                </div>
+                <div class="form-group">
+                    <label>Email Akun</label>
+                    <input type="email" id="inputEmailUser" class="input-box" value="${safeEmail}" autocomplete="email" readonly>
+                    <div class="cgo-field-note">Email login tidak diubah dari form profil agar akun Auth dan data profil tetap sinkron.</div>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Nomor WhatsApp / HP</label>
+                    <input type="tel" id="inputPhoneUser" class="input-box" value="${safePhone}" autocomplete="tel" inputmode="tel" placeholder="08xxxxxxxxxx">
+                </div>
             </div>
-            <button class="btn-pesan-form" id="btnSimpanProfil">Simpan Perubahan ✓</button>
+
+            <div class="cgo-profile-section cgo-security-section">
+                <div class="cgo-profile-section-title">KEAMANAN AKUN</div>
+                <button class="btn-pesan-form cgo-secondary-action" id="btnGantiPasswordProfil" type="button">Ganti Password</button>
+                <button class="btn-pesan-form cgo-secondary-action" id="btnAturPinProfil" type="button">Atur PIN CikurPay 🔒</button>
+            </div>
+
+            <button class="btn-pesan-form" id="btnSimpanProfil" type="button">Simpan Perubahan ✓</button>
         `;
     }
 
-    let temporaryAvatar = userProfile.avatar;
+    let temporaryAvatar = userProfile.avatar || "";
     const inputFotoEl = document.getElementById("inputFotoProfil");
     if (inputFotoEl) {
         inputFotoEl.addEventListener("change", function(e) {
-            let file = e.target.files[0];
-            if(file) {
-                let reader = new FileReader();
-                reader.onload = function(uploadEvent) {
-                    temporaryAvatar = uploadEvent.target.result;
-                    const previewBox = document.getElementById("modalAvatarPreviewBox");
-                    if (previewBox) previewBox.innerHTML = `<img src="${temporaryAvatar}" style="width:100%; height:100%; object-fit:cover;">`;
-                };
-                reader.readAsDataURL(file);
+            const file = e.target.files?.[0];
+            if (!file) return;
+            if (!file.type.startsWith("image/")) {
+                alert("File foto harus berupa gambar.");
+                inputFotoEl.value = "";
+                return;
             }
+            if (file.size > 2 * 1024 * 1024) {
+                alert("Ukuran foto maksimal 2 MB.");
+                inputFotoEl.value = "";
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(uploadEvent) {
+                temporaryAvatar = uploadEvent.target.result;
+                const previewBox = document.getElementById("modalAvatarPreviewBox");
+                if (previewBox) {
+                    previewBox.innerHTML = `<img src="${temporaryAvatar}" alt="Foto profil" style="width:100%;height:100%;object-fit:cover;">`;
+                }
+            };
+            reader.readAsDataURL(file);
         });
+    }
+
+    const btnGantiPasswordProfil = document.getElementById("btnGantiPasswordProfil");
+    if (btnGantiPasswordProfil) {
+        btnGantiPasswordProfil.addEventListener("click", () => bukaModalGantiPassword());
+    }
+    const btnAturPinProfil = document.getElementById("btnAturPinProfil");
+    if (btnAturPinProfil) {
+        btnAturPinProfil.addEventListener("click", () => bukaModalAturPin());
     }
 
     const btnSimpanProfilEl = document.getElementById("btnSimpanProfil");
     if (btnSimpanProfilEl) {
         btnSimpanProfilEl.addEventListener("click", async () => {
-            let newName = document.getElementById("inputNamaUser").value.trim();
-            let newEmail = document.getElementById("inputEmailUser").value.trim().toLowerCase();
-            let newPhone = document.getElementById("inputPhoneUser").value.trim();
+            const newName = document.getElementById("inputNamaUser")?.value.trim() || "";
+            const newEmail = document.getElementById("inputEmailUser")?.value.trim().toLowerCase() || "";
+            const newPhone = document.getElementById("inputPhoneUser")?.value.trim() || "";
 
-            if(!newName || !newPhone) { alert("Nama dan No HP tidak boleh kosong."); return; }
-
+            if (!newName || !newPhone) {
+                alert("Nama lengkap dan nomor HP wajib diisi.");
+                return;
+            }
+            if (newName.length < 2) {
+                alert("Nama lengkap terlalu pendek.");
+                return;
+            }
+            const phonePattern = /^[0-9+()\-\s]{8,20}$/;
+            if (!phonePattern.test(newPhone)) {
+                alert("Format nomor WhatsApp / HP tidak valid.");
+                return;
+            }
             const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (newEmail && !emailPattern.test(newEmail)) {
                 alert("Format email tidak valid.");
                 return;
             }
 
-            userProfile.name = newName;
-            userProfile.email = newEmail;
-            userProfile.phone = newPhone;
-            userProfile.avatar = temporaryAvatar;
-
             btnSimpanProfilEl.disabled = true;
             btnSimpanProfilEl.textContent = "Menyimpan...";
 
             try {
-                if (window.CikurCloud) {
-                    const firebaseUser = await window.CikurCloud.ensureAuth();
-                    if (firebaseUser) {
-                        await window.CikurCloud.saveProfile(firebaseUser.uid, {
-                            name: newName,
-                            email: newEmail,
-                            phone: newPhone,
-                            avatar: temporaryAvatar
-                        });
-                    }
-                }
+                const firebaseUser = await window.CikurCloud?.waitForAuth?.();
+                if (!firebaseUser) throw new Error("NO_AUTHENTICATED_USER");
 
-                localStorage.setItem('cikur_user', JSON.stringify(userProfile));
+                await window.CikurCloud.saveProfile(firebaseUser.uid, {
+                    name: newName,
+                    email: newEmail || firebaseUser.email || "",
+                    phone: newPhone,
+                    avatar: temporaryAvatar,
+                    profileCompleted: true,
+                    updatedAt: new Date().toISOString()
+                });
+
+                userProfile = {
+                    ...userProfile,
+                    name: newName,
+                    email: newEmail || firebaseUser.email || "",
+                    phone: newPhone,
+                    avatar: temporaryAvatar,
+                    uid: firebaseUser.uid,
+                    isLoggedIn: true,
+                    profileCompleted: true
+                };
                 updateUIProfile();
                 alert("Profil berhasil diperbarui!");
                 closeModal();
-
             } catch (error) {
                 console.error("[CIKUR GO] Gagal menyimpan profil:", error);
                 const errorCode = error?.code ? ` (${error.code})` : "";
                 alert(`Gagal menyimpan profil ke Cloud${errorCode}: ${error?.message || error}`);
-
             } finally {
                 btnSimpanProfilEl.disabled = false;
                 btnSimpanProfilEl.textContent = "Simpan Perubahan ✓";
             }
         });
     }
+}
+
+function bukaModalGantiPassword() {
+    openModal("GANTI PASSWORD AKUN");
+    if (!modalMainContent) return;
+    modalMainContent.innerHTML = `
+        <div class="cgo-form-intro">
+            <div class="cgo-form-intro-icon">🔐</div>
+            <div class="cgo-form-intro-title">Amankan akun CIKUR GO</div>
+            <div class="cgo-form-intro-text">Masukkan password saat ini, lalu buat password baru. Perubahan akan diverifikasi langsung oleh Firebase Auth.</div>
+        </div>
+        <div class="form-group">
+            <label>Password Saat Ini</label>
+            <input type="password" id="changeCurrentPassword" class="input-box" autocomplete="current-password" placeholder="Password saat ini">
+        </div>
+        <div class="form-group">
+            <label>Password Baru</label>
+            <input type="password" id="changeNewPassword" class="input-box" autocomplete="new-password" placeholder="Minimal 8 karakter">
+        </div>
+        <div class="form-group">
+            <label>Konfirmasi Password Baru</label>
+            <input type="password" id="changeConfirmPassword" class="input-box" autocomplete="new-password" placeholder="Ulangi password baru">
+        </div>
+        <button class="btn-pesan-form" id="btnChangePassword" type="button">Simpan Password Baru ✓</button>
+    `;
+
+    const btn = document.getElementById("btnChangePassword");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+        const current = document.getElementById("changeCurrentPassword")?.value || "";
+        const next = document.getElementById("changeNewPassword")?.value || "";
+        const confirmNext = document.getElementById("changeConfirmPassword")?.value || "";
+        if (!current || !next || !confirmNext) {
+            alert("Semua password wajib diisi.");
+            return;
+        }
+        if (next.length < 8) {
+            alert("Password baru minimal 8 karakter.");
+            return;
+        }
+        if (next !== confirmNext) {
+            alert("Konfirmasi password baru tidak cocok.");
+            return;
+        }
+        btn.disabled = true;
+        btn.textContent = "Memverifikasi...";
+        try {
+            if (!window.CikurCloud?.changePassword) throw new Error("CHANGE_PASSWORD_UNAVAILABLE");
+            await window.CikurCloud.changePassword(current, next);
+            alert("Password berhasil diganti. Gunakan password baru saat login berikutnya.");
+            closeModal();
+        } catch (error) {
+            console.error("[CIKUR GO] Gagal mengganti password:", error);
+            let msg = "Gagal mengganti password.";
+            if (error?.code === "auth/invalid-credential" || error?.code === "auth/wrong-password") msg = "Password saat ini salah.";
+            if (error?.code === "auth/weak-password") msg = "Password baru terlalu lemah.";
+            alert(msg);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = "Simpan Password Baru ✓";
+        }
+    });
 }
 
 function bukaModalTopUp() {
@@ -2986,6 +3218,59 @@ if (cgoVoiceWave) {
         }
         showCGONotification(type, notificationTitle, text);
     };
+})();
+
+
+/* =========================================================
+   PASSWORD / PIN VISIBILITY TOGGLE
+   Berlaku juga untuk form modal yang dibuat secara dinamis.
+========================================================= */
+(function setupCGOPasswordVisibility(){
+    const eyeOn = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.2 12s3.3-6 9.8-6 9.8 6 9.8 6-3.3 6-9.8 6-9.8-6-9.8-6Z"/><circle cx="12" cy="12" r="2.7"/></svg>';
+    const eyeOff = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 3 18 18"/><path d="M10.6 6.2A11.4 11.4 0 0 1 12 6c6.5 0 9.8 6 9.8 6a16.7 16.7 0 0 1-3.2 3.7"/><path d="M6.4 6.5C3.5 8.2 2.2 12 2.2 12s3.3 6 9.8 6c1.2 0 2.3-.2 3.3-.5"/><path d="M9.9 9.9a2.7 2.7 0 0 0 3.8 3.8"/></svg>';
+
+    function enhance(root){
+        if (!root?.querySelectorAll) return;
+        root.querySelectorAll('input[type="password"]').forEach(input => {
+            if (input.dataset.cgoEyeReady === "true") return;
+            input.dataset.cgoEyeReady = "true";
+            const parent = input.parentElement;
+            if (!parent) return;
+
+            let wrap = parent;
+            if (!parent.classList.contains("cgo-password-wrap")) {
+                wrap = document.createElement("div");
+                wrap.className = "cgo-password-wrap";
+                parent.insertBefore(wrap, input);
+                wrap.appendChild(input);
+            }
+
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "cgo-password-toggle";
+            button.setAttribute("aria-label", "Tampilkan password");
+            button.setAttribute("title", "Tampilkan");
+            button.innerHTML = eyeOn;
+            button.addEventListener("click", () => {
+                const visible = input.type === "text";
+                input.type = visible ? "password" : "text";
+                button.innerHTML = visible ? eyeOn : eyeOff;
+                button.setAttribute("aria-label", visible ? "Tampilkan password" : "Sembunyikan password");
+                button.setAttribute("title", visible ? "Tampilkan" : "Sembunyikan");
+            });
+            wrap.appendChild(button);
+        });
+    }
+
+    enhance(document);
+    const observer = new MutationObserver(mutations => {
+        for (const mutation of mutations) {
+            mutation.addedNodes.forEach(node => {
+                if (node.nodeType === 1) enhance(node);
+            });
+        }
+    });
+    if (document.body) observer.observe(document.body, {childList:true, subtree:true});
 })();
 
     window.addEventListener("error", (e) => {
