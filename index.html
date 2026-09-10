@@ -1583,9 +1583,23 @@ footer p { margin: 0; }
 </div> 
 
 <script>
+const CIKUR_SPLASH_MIN_MS = 1400;
+const cikurSplashStartedAt = Date.now();
+let cikurSplashHideRequested = false;
+
 function hideCikurSplash() {
     const splash = document.getElementById("splash-screen");
-    if (!splash) return;
+    if (!splash || cikurSplashHideRequested) return;
+
+    const elapsed = Date.now() - cikurSplashStartedAt;
+    const remaining = Math.max(0, CIKUR_SPLASH_MIN_MS - elapsed);
+
+    if (remaining > 0) {
+        setTimeout(hideCikurSplash, remaining);
+        return;
+    }
+
+    cikurSplashHideRequested = true;
     splash.classList.add("hide");
     setTimeout(function () { splash.style.display = "none"; }, 400);
 }
@@ -2019,6 +2033,84 @@ function bukaModalRegistrasi() {
 }
 
 // ======================================
+// PEMULIHAN PASSWORD AKUN
+// ======================================
+
+function bukaModalLupaPassword() {
+    openModal("LUPA PASSWORD AKUN");
+    if (!modalMainContent) return;
+
+    modalMainContent.innerHTML = `
+        <div style="text-align:center; margin-bottom:14px;">
+            <div style="width:56px;height:56px;border-radius:50%;background:#eff6ff;border:2px solid #0284c7;color:#0284c7;font-size:22px;font-weight:800;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;">🔑</div>
+            <h3 style="font-size:15px;font-weight:800;color:#0f172a;">Pulihkan Password</h3>
+            <p style="font-size:10px;color:#64748b;margin-top:4px;">Masukkan email akun CIKUR GO. Kami akan mengirim tautan resmi untuk membuat password baru.</p>
+        </div>
+
+        <div class="form-group">
+            <label>Email Akun</label>
+            <input type="email" id="resetPasswordEmail" class="input-box" placeholder="contoh@email.com" autocomplete="email" inputmode="email">
+        </div>
+
+        <button class="btn-pesan-form" id="btnResetPassword">Kirim Link Pemulihan ✓</button>
+
+        <p style="text-align:center;font-size:10px;color:#64748b;margin-top:12px;">
+            Setelah password berhasil dibuat ulang, kembali ke halaman login.
+        </p>
+    `;
+
+    const btn = document.getElementById("btnResetPassword");
+    btn?.addEventListener("click", async () => {
+        const email = document.getElementById("resetPasswordEmail")?.value.trim().toLowerCase() || "";
+        if (!email) { alert("Mohon isi email akun Anda."); return; }
+        if (!window.CikurCloud?.sendPasswordReset) { alert("Layanan pemulihan password belum tersedia."); return; }
+
+        btn.disabled = true;
+        btn.textContent = "Mengirim Link...";
+        try {
+            await window.CikurCloud.sendPasswordReset(email);
+            alert("Link pemulihan password sudah dikirim. Periksa email Anda, termasuk folder Spam/Junk.");
+            bukaModalLogin();
+        } catch (error) {
+            console.error("[CIKUR GO] Gagal mengirim reset password:", error);
+            let message = "Gagal mengirim link pemulihan password.";
+            if (error?.code === "auth/invalid-email") message = "Format email tidak valid.";
+            else if (error?.code === "auth/too-many-requests") message = "Terlalu banyak permintaan. Silakan coba lagi nanti.";
+            alert(message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = "Kirim Link Pemulihan ✓";
+        }
+    });
+}
+
+// ======================================
+// LUPA PIN CIKURPAY
+// Tidak melakukan reset PIN hanya berdasarkan email.
+// Pengguna harus memulihkan password dan masuk kembali terlebih dahulu.
+// ======================================
+
+function bukaModalLupaPin() {
+    openModal("LUPA PIN CIKURPAY 🔒");
+    if (!modalMainContent) return;
+    modalMainContent.innerHTML = `
+        <div style="text-align:center;margin-bottom:14px;">
+            <div style="width:56px;height:56px;border-radius:50%;background:#fff7ed;border:2px solid #f97316;color:#f97316;font-size:22px;font-weight:800;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;">🔒</div>
+            <h3 style="font-size:15px;font-weight:800;color:#0f172a;">PIN CikurPay Terlupa?</h3>
+            <p style="font-size:10px;color:#64748b;margin-top:5px;line-height:1.5;">Demi keamanan saldo dan transaksi, PIN tidak dapat direset hanya dengan memasukkan email.</p>
+        </div>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;font-size:10px;color:#475569;line-height:1.55;">
+            <strong>Urutan pemulihan:</strong><br>
+            1. Pulihkan password akun melalui <b>Lupa Password</b>.<br>
+            2. Login kembali ke CIKUR GO.<br>
+            3. Buka <b>Keamanan PIN CikurPay</b> untuk mengatur PIN baru melalui verifikasi akun.
+        </div>
+        <button class="btn-pesan-form" id="btnLanjutResetPassword" style="margin-top:12px;">Pulihkan Password Akun</button>
+    `;
+    document.getElementById("btnLanjutResetPassword")?.addEventListener("click", () => bukaModalLupaPassword());
+}
+
+// ======================================
 // MODAL LOGIN (untuk akun yang sudah ada,
 // bisa dipulihkan dari device/browser manapun)
 // ======================================
@@ -2078,6 +2170,12 @@ function bukaModalLogin() {
         <button class="btn-pesan-form" id="btnProsesLogin">
             Masuk Sekarang ✓
         </button>
+
+        <div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:11px;font-size:10px;">
+            <a href="#" id="linkLupaPassword" style="color:#0284c7;font-weight:700;text-decoration:none;">Lupa Password?</a>
+            <span style="color:#cbd5e1;">•</span>
+            <a href="#" id="linkLupaPin" style="color:#f97316;font-weight:700;text-decoration:none;">Lupa PIN CikurPay?</a>
+        </div>
 
         <p style="text-align:center; font-size:11px; color:#64748b; margin-top:12px;">
             Belum punya akun?
@@ -2140,6 +2238,22 @@ function bukaModalLogin() {
                 btnProsesLogin.disabled = false;
                 btnProsesLogin.textContent = "Masuk Sekarang ✓";
             }
+        });
+    }
+
+    const linkLupaPassword = document.getElementById("linkLupaPassword");
+    if (linkLupaPassword) {
+        linkLupaPassword.addEventListener("click", (e) => {
+            e.preventDefault();
+            bukaModalLupaPassword();
+        });
+    }
+
+    const linkLupaPin = document.getElementById("linkLupaPin");
+    if (linkLupaPin) {
+        linkLupaPin.addEventListener("click", (e) => {
+            e.preventDefault();
+            bukaModalLupaPin();
         });
     }
 

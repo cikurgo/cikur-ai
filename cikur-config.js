@@ -28,6 +28,9 @@ import {
     onAuthStateChanged,
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
+    sendPasswordResetEmail,
+    updatePassword,
+    reauthenticateWithCredential,
     EmailAuthProvider,
     linkWithCredential,
     fetchSignInMethodsForEmail
@@ -205,6 +208,42 @@ window.CikurCloud = {
         const result = await signInWithEmailAndPassword(auth, email, password);
         console.log("[CIKUR GO] Login berhasil:", result.user.uid);
         return result.user;
+    },
+
+    // ======================================
+    // PEMULIHAN PASSWORD AKUN
+    // Menggunakan mekanisme reset resmi Firebase Auth.
+    // Tidak membuat password sementara/dummy.
+    // ======================================
+
+    async sendPasswordReset(email) {
+        const normalizedEmail = String(email || "").trim().toLowerCase();
+        if (!normalizedEmail) {
+            throw new Error("EMAIL_REQUIRED");
+        }
+        await sendPasswordResetEmail(auth, normalizedEmail);
+        console.log("[CIKUR GO] Email pemulihan password dikirim.");
+        return true;
+    },
+
+    // ======================================
+    // GANTI PASSWORD SAAT SUDAH LOGIN
+    // Firebase dapat meminta re-authentication untuk operasi sensitif.
+    // ======================================
+
+    async changePassword(currentPassword, newPassword) {
+        const user = auth.currentUser || await this.waitForAuth();
+        if (!user || !user.email) {
+            throw new Error("NO_AUTHENTICATED_USER");
+        }
+        if (!currentPassword || !newPassword) {
+            throw new Error("PASSWORD_REQUIRED");
+        }
+        const credential = EmailAuthProvider.credential(user.email, currentPassword);
+        await reauthenticateWithCredential(user, credential);
+        await updatePassword(user, newPassword);
+        console.log("[CIKUR GO] Password akun berhasil diperbarui.");
+        return true;
     },
 
     // ======================================
