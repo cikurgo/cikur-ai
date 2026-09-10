@@ -1340,6 +1340,13 @@ footer p { margin: 0; }
 .cgo-password-toggle{ position:absolute; right:8px; top:50%; transform:translateY(-50%); width:30px; height:30px; border:0; background:transparent; color:#64748b; display:flex; align-items:center; justify-content:center; border-radius:8px; cursor:pointer; padding:0; }
 .cgo-password-toggle:hover{ background:#f1f5f9; color:#334155; }
 .cgo-password-toggle svg{ width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+
+.cgo-form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.cgo-security-status{display:grid;gap:7px;margin:0 0 10px;}
+.cgo-security-status div{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;font-size:11px;}
+.cgo-security-status span{color:#64748b;}
+.cgo-security-status strong{color:#0f172a;font-weight:700;text-align:right;}
+@media(max-width:480px){.cgo-form-row{grid-template-columns:1fr;gap:0;}}
 </style>
 </head>
     
@@ -1976,27 +1983,51 @@ function bukaModalRegistrasi() {
             // DATA CUSTOMER
             // ==========================
 
+            const nowISO = new Date().toISOString();
             const customerProfile = {
                 uid: firebaseUser.uid,
+                customerId: userProfile?.customerId || `CGC-${new Date().getFullYear()}-${firebaseUser.uid.slice(0, 10).toUpperCase()}`,
 
+                // IDENTITAS AKUN
                 name: nameVal,
-
                 email: emailVal,
-
                 phone: phoneVal,
+                statusAkun: "active",
+                tanggalDaftar: userProfile?.tanggalDaftar || nowISO,
+                lastLogin: nowISO,
 
-                pin: pinVal,
+                // VERIFIKASI
+                emailVerified: !!firebaseUser.emailVerified,
+                phoneVerified: false,
+                identityVerified: false,
+                verificationLevel: firebaseUser.emailVerified ? "EMAIL" : "BASIC",
+
+                // PROFIL — sisanya dilengkapi setelah registrasi
+                namaLengkap: nameVal,
+                namaPanggilan: userProfile?.namaPanggilan || "",
+                jenisKelamin: userProfile?.jenisKelamin || "",
+                tanggalLahir: userProfile?.tanggalLahir || "",
+                alamatUtama: userProfile?.alamatUtama || "",
+
+                // KEAMANAN
+                pinConfigured: true,
+                securityLevel: "PIN_CONFIGURED",
+
+                // PREFERENSI
+                bahasa: userProfile?.bahasa || "id",
+                notifikasi: userProfile?.notifikasi !== false,
+                promo: userProfile?.promo !== false,
+
+                // CIKURPAY
+                walletStatus: userProfile?.walletStatus || "active",
+                saldo: Number(userProfile?.saldo || 0),
 
                 avatar: userProfile?.avatar || "",
-
-                saldo: Number(
-                    userProfile?.saldo || 0
-                ),
-
+                profileCompleted: false,
+                profileCompletionVersion: 1,
                 isLoggedIn: true,
-
-                updatedAt:
-                    new Date().toISOString()
+                createdAt: userProfile?.createdAt || nowISO,
+                updatedAt: nowISO
             };
 
 
@@ -2009,6 +2040,9 @@ function bukaModalRegistrasi() {
                 customerProfile
             );
 
+            // PIN tidak disimpan sebagai teks biasa. Simpan hash + status saja.
+            await window.CikurCloud.setCustomerPin(firebaseUser.uid, pinVal);
+
 
             // ==========================
             // UPDATE STATE
@@ -2016,7 +2050,9 @@ function bukaModalRegistrasi() {
 
             userProfile = {
                 ...userProfile,
-                ...customerProfile
+                ...customerProfile,
+                pin: "",
+                pinConfigured: true
             };
 
 
@@ -2278,6 +2314,8 @@ function bukaModalLogin() {
                     ...(profile || {}),
                     uid: firebaseUser.uid,
                     email: profile?.email || firebaseUser.email || "",
+                    emailVerified: !!firebaseUser.emailVerified,
+                    lastLogin: new Date().toISOString(),
                     isLoggedIn: true
                 };
 
@@ -2411,6 +2449,7 @@ async function loadCurrentUserProfileIndex() {
             isLoggedIn: true
         };
 
+        await refreshCustomerSecurityState(firebaseUser);
         updateUIProfile();
 
         if (typeof updateUIAkun === "function") {
@@ -2650,8 +2689,8 @@ function bukaModalAturPin() {
         const newPin = document.getElementById("newPin").value.trim();
         const confirmPin = document.getElementById("confirmPin").value.trim();
 
-        if (userProfile.pin && oldPin !== userProfile.pin) {
-            alert("PIN Lama yang Anda masukkan salah.");
+        if (!/^\d{6}$/.test(oldPin) && (userProfile.pinConfigured || userProfile.pinHash || userProfile.pin)) {
+            alert("PIN Lama harus tepat 6 digit angka.");
             return;
         }
 
@@ -2679,11 +2718,23 @@ function bukaModalAturPin() {
                 throw new Error("Firebase User tidak tersedia.");
             }
 
-            await window.CikurCloud.saveProfile(firebaseUser.uid, {
-                pin: newPin
-            });
+            if (userProfile.pinConfigured || userProfile.pinHash || userProfile.pin) {
+                const oldPinValid = await window.CikurCloud.verifyCustomerPin(firebaseUser.uid, oldPin);
+                // Kompatibilitas satu kali untuk akun lama yang masih memiliki PIN plaintext.
+                if (!oldPinValid && userProfile.pin && oldPin === userProfile.pin) {
+                    // akun lama valid; lanjut migrasi ke hash
+                } else if (!oldPinValid) {
+                    alert("PIN Lama yang Anda masukkan salah.");
+                    return;
+                }
+            }
 
-            userProfile.pin = newPin;
+            await window.CikurCloud.setCustomerPin(firebaseUser.uid, newPin);
+
+            userProfile.pin = "";
+            userProfile.pinHash = "";
+            userProfile.pinConfigured = true;
+            userProfile.securityLevel = "PIN_CONFIGURED";
             updateUIProfile();
             alert("PIN CikurPay berhasil diperbarui!");
 
@@ -2819,6 +2870,31 @@ function setCgoAuthGate(required) {
     }
 }
 
+function calculateCustomerProfileCompletion(profile = userProfile) {
+    const checks = [
+        !!profile?.name,
+        !!profile?.email,
+        !!profile?.phone,
+        !!profile?.avatar,
+        !!profile?.namaLengkap,
+        !!profile?.alamatUtama
+    ];
+    const completed = checks.filter(Boolean).length;
+    return Math.round((completed / checks.length) * 100);
+}
+
+async function refreshCustomerSecurityState(firebaseUser) {
+    if (!firebaseUser) return;
+    const emailVerified = !!firebaseUser.emailVerified;
+    userProfile = {
+        ...userProfile,
+        uid: firebaseUser.uid,
+        email: userProfile.email || firebaseUser.email || "",
+        emailVerified,
+        verificationLevel: emailVerified ? (userProfile.phoneVerified ? "EMAIL_PHONE" : "EMAIL") : "BASIC"
+    };
+}
+
 async function bukaModalPengaturanProfil() {
     closeHeaderDropdown();
     openModal("PENGATURAN PROFIL & FOTO AKUN");
@@ -2880,10 +2956,39 @@ async function bukaModalPengaturanProfil() {
                     <label>Nomor WhatsApp / HP</label>
                     <input type="tel" id="inputPhoneUser" class="input-box" value="${safePhone}" autocomplete="tel" inputmode="tel" placeholder="08xxxxxxxxxx">
                 </div>
+                <div class="form-group">
+                    <label>Nama Panggilan <span style="font-weight:500;color:#94a3b8;">(opsional)</span></label>
+                    <input type="text" id="inputNicknameUser" class="input-box" value="${String(userProfile.namaPanggilan || "").replace(/"/g, "&quot;")}" placeholder="Nama yang biasa dipanggil">
+                </div>
+                <div class="cgo-form-row">
+                    <div class="form-group">
+                        <label>Jenis Kelamin <span style="font-weight:500;color:#94a3b8;">(opsional)</span></label>
+                        <select id="inputGenderUser" class="input-box">
+                            <option value="">Pilih</option>
+                            <option value="L" ${userProfile.jenisKelamin === "L" ? "selected" : ""}>Laki-laki</option>
+                            <option value="P" ${userProfile.jenisKelamin === "P" ? "selected" : ""}>Perempuan</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Tanggal Lahir <span style="font-weight:500;color:#94a3b8;">(opsional)</span></label>
+                        <input type="date" id="inputBirthDateUser" class="input-box" value="${userProfile.tanggalLahir || ""}">
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Alamat Utama <span style="font-weight:500;color:#94a3b8;">(opsional)</span></label>
+                    <textarea id="inputAddressUser" class="input-box" rows="3" placeholder="Alamat yang biasa digunakan untuk layanan CIKUR GO">${String(userProfile.alamatUtama || "")}</textarea>
+                </div>
             </div>
 
             <div class="cgo-profile-section cgo-security-section">
-                <div class="cgo-profile-section-title">KEAMANAN AKUN</div>
+                <div class="cgo-profile-section-title">VERIFIKASI & KEAMANAN</div>
+                <div class="cgo-security-status">
+                    <div><span>Email</span><strong>${userProfile.emailVerified ? "Terverifikasi ✓" : "Belum terverifikasi"}</strong></div>
+                    <div><span>PIN CikurPay</span><strong>${userProfile.pinConfigured || userProfile.pinHash ? "Terdaftar ✓" : "Belum diatur"}</strong></div>
+                    <div><span>Kelengkapan profil</span><strong>${calculateCustomerProfileCompletion(userProfile)}%</strong></div>
+                </div>
+                ${!userProfile.emailVerified ? '<button class="btn-pesan-form cgo-secondary-action" id="btnVerifikasiEmailProfil" type="button">Kirim Verifikasi Email</button>' : ""}
+
                 <button class="btn-pesan-form cgo-secondary-action" id="btnGantiPasswordProfil" type="button">Ganti Password</button>
                 <button class="btn-pesan-form cgo-secondary-action" id="btnAturPinProfil" type="button">Atur PIN CikurPay 🔒</button>
             </div>
@@ -2928,6 +3033,18 @@ async function bukaModalPengaturanProfil() {
     if (btnAturPinProfil) {
         btnAturPinProfil.addEventListener("click", () => bukaModalAturPin());
     }
+    const btnVerifikasiEmailProfil = document.getElementById("btnVerifikasiEmailProfil");
+    if (btnVerifikasiEmailProfil) {
+        btnVerifikasiEmailProfil.addEventListener("click", async () => {
+            try {
+                await window.CikurCloud.sendEmailVerification();
+                alert("Email verifikasi berhasil dikirim. Silakan cek inbox email Anda.");
+            } catch (error) {
+                console.error("[CIKUR GO] Gagal mengirim verifikasi email:", error);
+                alert("Gagal mengirim email verifikasi. Silakan coba lagi beberapa saat lagi.");
+            }
+        });
+    }
 
     const btnSimpanProfilEl = document.getElementById("btnSimpanProfil");
     if (btnSimpanProfilEl) {
@@ -2935,6 +3052,10 @@ async function bukaModalPengaturanProfil() {
             const newName = document.getElementById("inputNamaUser")?.value.trim() || "";
             const newEmail = document.getElementById("inputEmailUser")?.value.trim().toLowerCase() || "";
             const newPhone = document.getElementById("inputPhoneUser")?.value.trim() || "";
+            const newNickname = document.getElementById("inputNicknameUser")?.value.trim() || "";
+            const newGender = document.getElementById("inputGenderUser")?.value || "";
+            const newBirthDate = document.getElementById("inputBirthDateUser")?.value || "";
+            const newAddress = document.getElementById("inputAddressUser")?.value.trim() || "";
 
             if (!newName || !newPhone) {
                 alert("Nama lengkap dan nomor HP wajib diisi.");
@@ -2964,22 +3085,34 @@ async function bukaModalPengaturanProfil() {
 
                 await window.CikurCloud.saveProfile(firebaseUser.uid, {
                     name: newName,
+                    namaLengkap: newName,
+                    namaPanggilan: newNickname,
                     email: newEmail || firebaseUser.email || "",
                     phone: newPhone,
+                    jenisKelamin: newGender,
+                    tanggalLahir: newBirthDate,
+                    alamatUtama: newAddress,
                     avatar: temporaryAvatar,
                     profileCompleted: true,
+                    profileCompletionVersion: 1,
                     updatedAt: new Date().toISOString()
                 });
 
                 userProfile = {
                     ...userProfile,
                     name: newName,
+                    namaLengkap: newName,
+                    namaPanggilan: newNickname,
                     email: newEmail || firebaseUser.email || "",
                     phone: newPhone,
+                    jenisKelamin: newGender,
+                    tanggalLahir: newBirthDate,
+                    alamatUtama: newAddress,
                     avatar: temporaryAvatar,
                     uid: firebaseUser.uid,
                     isLoggedIn: true,
-                    profileCompleted: true
+                    profileCompleted: true,
+                    profileCompletionVersion: 1
                 };
                 updateUIProfile();
                 alert("Profil berhasil diperbarui!");

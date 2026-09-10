@@ -18,7 +18,8 @@ import {
     updateDoc,
     doc,
     getDoc,
-    serverTimestamp
+    serverTimestamp,
+    deleteField
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 import {
@@ -244,6 +245,65 @@ window.CikurCloud = {
         await updatePassword(user, newPassword);
         console.log("[CIKUR GO] Password akun berhasil diperbarui.");
         return true;
+    },
+
+    // ======================================
+    // VERIFIKASI EMAIL AKUN CUSTOMER
+    // ======================================
+
+    async sendEmailVerification() {
+        const user = auth.currentUser || await this.waitForAuth();
+        if (!user) throw new Error("NO_AUTHENTICATED_USER");
+        if (user.emailVerified) return true;
+        const { sendEmailVerification } = await import(
+            "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js"
+        );
+        await sendEmailVerification(user);
+        return true;
+    },
+
+    // ======================================
+    // PIN CIKURPAY — TIDAK DISIMPAN PLAINTEXT
+    // ======================================
+
+    async hashCustomerPin(pin) {
+        const normalizedPin = String(pin || "").trim();
+        if (!/^\d{6}$/.test(normalizedPin)) {
+            throw new Error("INVALID_PIN");
+        }
+        if (!globalThis.crypto?.subtle) {
+            throw new Error("SECURE_CRYPTO_UNAVAILABLE");
+        }
+        const bytes = new TextEncoder().encode(normalizedPin);
+        const digest = await crypto.subtle.digest("SHA-256", bytes);
+        return Array.from(new Uint8Array(digest))
+            .map(byte => byte.toString(16).padStart(2, "0"))
+            .join("");
+    },
+
+    async setCustomerPin(userId, pin) {
+        if (!userId) throw new Error("USER_ID_REQUIRED");
+        const pinHash = await this.hashCustomerPin(pin);
+        await setDoc(
+            doc(db, "users", userId),
+            {
+                pinHash,
+                pinConfigured: true,
+                securityLevel: "PIN_CONFIGURED",
+                lastSecurityUpdate: new Date().toISOString(),
+                pin: deleteField()
+            },
+            { merge: true }
+        );
+        return { pinConfigured: true };
+    },
+
+    async verifyCustomerPin(userId, pin) {
+        if (!userId) throw new Error("USER_ID_REQUIRED");
+        const profile = await this.getProfile(userId);
+        if (!profile?.pinHash) return false;
+        const suppliedHash = await this.hashCustomerPin(pin);
+        return suppliedHash === profile.pinHash;
     },
 
     // ======================================
