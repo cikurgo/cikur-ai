@@ -824,7 +824,7 @@
     // Firebase App/Authentication/Firestore dipusatkan di cikur-config.js.
     // Modul ini hanya memakai koneksi yang sama, sehingga tidak membuat
     // Firebase App kedua dan tidak memicu app/duplicate-app.
-    import { db, adminAuth } from "./cikur-config.js";
+    import { adminDb, adminAuth } from "./cikur-config.js";
     import {
         collection, onSnapshot, query,
         doc, updateDoc, serverTimestamp, getDoc, setDoc
@@ -916,7 +916,7 @@
     async function verifySuperAdmin(user){
         if(!user) return {ok:false, reason:"NO_SESSION"};
         try{
-            const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
+            const adminSnap = await getDoc(doc(adminDb, "admin_users", user.uid));
             if(!adminSnap.exists()) return {ok:false, reason:"NOT_REGISTERED"};
             const data = adminSnap.data() || {};
             if(data.active !== true) return {ok:false, reason:"INACTIVE", data};
@@ -959,7 +959,7 @@
 
     function watchSuperAdmin(user){
         if(unsubscribeSuperAdmin) unsubscribeSuperAdmin();
-        unsubscribeSuperAdmin = onSnapshot(doc(db, "admin_users", user.uid), snap => {
+        unsubscribeSuperAdmin = onSnapshot(doc(adminDb, "admin_users", user.uid), snap => {
             const data = snap.exists() ? (snap.data() || {}) : null;
             const approved = data?.active === true && data?.role === "super_admin";
             if(approved){
@@ -1010,7 +1010,7 @@
         try{
             if(authMode === "register"){
                 const cred = await createUserWithEmailAndPassword(adminAuth, email, password);
-                await setDoc(doc(db, "admin_requests", cred.user.uid), {
+                await setDoc(doc(adminDb, "admin_requests", cred.user.uid), {
                     uid: cred.user.uid,
                     email: cred.user.email,
                     status: "pending",
@@ -1260,7 +1260,7 @@
             </td></tr>
         `;
 
-        const q = query(collection(db, "customers"));
+        const q = query(collection(adminDb, "customers"));
 
         unsubscribeCustomerListener = onSnapshot(q, snapshot => {
             cachedCustomers = {};
@@ -1407,7 +1407,7 @@
             </td></tr>
         `;
 
-        const q = query(collection(db, "mitra_applications"));
+        const q = query(collection(adminDb, "mitra_applications"));
 
         unsubscribeListener = onSnapshot(q, snapshot => {
             setEngineStatus(true, "DATA AKTIF");
@@ -1806,7 +1806,7 @@
         if(!confirm(`Ubah status ${nama} menjadi ${newStatus.toUpperCase()}?`)) return;
 
         try{
-            await updateDoc(doc(db, "mitra_applications", docId), {
+            await updateDoc(doc(adminDb, "mitra_applications", docId), {
                 status:newStatus,
                 updatedAt:serverTimestamp()
             });
@@ -1825,7 +1825,7 @@
         if(!confirm(`Ubah status akun ${nama} menjadi ${newStatus.toUpperCase()}?`)) return;
 
         try{
-            await updateDoc(doc(db, "customers", docId), {
+            await updateDoc(doc(adminDb, "customers", docId), {
                 status: newStatus,
                 updatedAt: serverTimestamp()
             });

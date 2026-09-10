@@ -53,49 +53,48 @@ const firebaseConfig = {
 // FIREBASE INITIALIZATION
 // ==========================================
 
-// Gunakan Firebase App DEFAULT yang sudah ada bila halaman lain sudah menginisialisasikannya.
-// Ini mencegah error app/duplicate-app saat beberapa modul memakai konfigurasi yang sama.
-const app = getApps().some(existingApp => existingApp.name === "[DEFAULT]")
-    ? getApp()
-    : initializeApp(firebaseConfig);
+// Firebase Apps dipisahkan secara eksplisit.
+// Firestore juga harus dibuat dari App yang sama dengan Auth yang memakainya,
+// agar request Firestore membawa token Auth dari namespace yang benar.
 
-const db = getFirestore(app);
-
-// ======================================================
-// AUTH NAMESPACE — CUSTOMER / MITRA
-// ======================================================
-// Auth Customer/Mitra sengaja memakai Firebase App bernama
-// CIKUR_GO_CUSTOMER. Ini memisahkan persistence/auth state
-// dari namespace Super Admin. Firestore tetap memakai DEFAULT.
+// ==========================================
+// DEDICATED CUSTOMER/MITRA AUTH
+// ==========================================
+// Jangan gunakan DEFAULT Firebase Auth untuk Customer/Mitra.
+// Auth Customer/Mitra memakai App bernama khusus agar sesi mereka
+// benar-benar memiliki namespace persistence sendiri, terpisah dari Admin.
 const CUSTOMER_APP_NAME = "CIKUR_GO_CUSTOMER";
 const customerApp = getApps().some(existingApp => existingApp.name === CUSTOMER_APP_NAME)
     ? getApp(CUSTOMER_APP_NAME)
     : initializeApp(firebaseConfig, CUSTOMER_APP_NAME);
-
 const auth = initializeAuth(customerApp, {
     persistence: browserLocalPersistence,
     popupRedirectResolver: undefined
 });
+const customerDb = getFirestore(customerApp);
 
-// ======================================================
-// AUTH NAMESPACE — SUPER ADMIN
-// ======================================================
-// Super Admin memakai App/Auth terpisah dan persistence
-// session. Logout admin tidak boleh menjadi signOut untuk
-// Customer/Mitra.
+// ==========================================
+// DEDICATED SUPER ADMIN AUTH
+// ==========================================
+// Customer/Mitra dan Super Admin masing-masing memiliki Firebase App/Auth namespace khusus.
+// Firestore tetap memakai App DEFAULT dan tetap shared.
 const ADMIN_APP_NAME = "CIKUR_GO_ADMIN";
 const adminApp = getApps().some(existingApp => existingApp.name === ADMIN_APP_NAME)
     ? getApp(ADMIN_APP_NAME)
     : initializeApp(firebaseConfig, ADMIN_APP_NAME);
-
 const adminAuth = initializeAuth(adminApp, {
     persistence: browserSessionPersistence,
     popupRedirectResolver: undefined
 });
+const adminDb = getFirestore(adminApp);
 
-// Export supaya modul Customer/Mitra dan Admin memakai
-// namespace Auth yang tepat, sementara Firestore tetap satu.
-export { db, auth, adminAuth, firebaseConfig };
+// Alias db dipertahankan untuk seluruh modul Customer/Mitra lama.
+// Halaman Admin wajib memakai adminDb agar Firestore dan Admin Auth berasal
+// dari Firebase App namespace yang sama.
+const db = customerDb;
+
+// Export supaya modul lain dapat memakai koneksi yang tepat.
+export { db, customerDb, adminDb, auth, adminAuth, firebaseConfig };
 
 // ==========================================
 // CIKUR CLOUD GLOBAL ENGINE
