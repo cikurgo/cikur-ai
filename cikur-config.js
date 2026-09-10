@@ -18,9 +18,7 @@ import {
     updateDoc,
     doc,
     getDoc,
-    serverTimestamp,
-    writeBatch,
-    runTransaction
+    serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 import {
@@ -442,102 +440,6 @@ window.CikurCloud = {
     },
 
     // ======================================
-    // ATOMIC 2IN1 BUNDLE
-    // Membuat pasangan FOOD + ASSISTANT dalam satu batch Firestore.
-    // Tidak memakai localStorage sebagai sumber kebenaran order.
-    // ======================================
-
-    async create2in1Bundle(bundleDetails = {}) {
-        const firebaseUser = await this.ensureAuth();
-        const batch = writeBatch(db);
-        const bundleId = bundleDetails.bundleId || (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `2IN1-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
-        const common = {
-            userId: firebaseUser.uid,
-            bundleId,
-            source: "CIKURGO_2IN1",
-            status: "PENDING",
-            paymentStatus: "PENDING",
-            paymentMethod: bundleDetails.paymentMethod || "CIKURPAY",
-            timestamp: serverTimestamp()
-        };
-
-        const foodRef = doc(collection(db, "orders"));
-        const assistantRef = doc(collection(db, "orders"));
-
-        batch.set(foodRef, {
-            ...common,
-            type: "FOOD",
-            bundleRole: "FOOD",
-            restoId: bundleDetails.restoId || "",
-            restoName: bundleDetails.restoName || "Mitra Resto Cikur",
-            customerName: bundleDetails.customerName || "",
-            customerPhone: bundleDetails.customerPhone || "",
-            items: Array.isArray(bundleDetails.items) ? bundleDetails.items : [],
-            subtotal: Number(bundleDetails.foodSubtotal || 0),
-            deliveryFee: Number(bundleDetails.deliveryFee || 0),
-            total: Number(bundleDetails.foodTotal || 0),
-            notes: bundleDetails.foodNotes || "",
-            address: bundleDetails.address || null,
-            mode: "2IN1"
-        });
-
-        batch.set(assistantRef, {
-            ...common,
-            type: "ASSISTANT",
-            bundleRole: "ASSISTANT",
-            service: "ASSISTANT",
-            packageKey: bundleDetails.packageKey || "dine",
-            packageName: bundleDetails.packageName || "DINE-IN ASSISTANT",
-            customer: {
-                name: bundleDetails.customerName || "",
-                phone: bundleDetails.customerPhone || ""
-            },
-            schedule: bundleDetails.schedule || {},
-            location: bundleDetails.location || null,
-            notes: bundleDetails.assistantNotes || "",
-            pricing: {
-                basePrice: Number(bundleDetails.assistantFee || 0),
-                extraUnits: 0,
-                extraCost: 0,
-                total: Number(bundleDetails.assistantFee || 0)
-            },
-            serviceFee: Number(bundleDetails.serviceFee || 0),
-            bundleFoodTotal: Number(bundleDetails.foodTotal || 0),
-            bundleGrandTotal: Number(bundleDetails.grandTotal || 0)
-        });
-
-        await batch.commit();
-        return {
-            bundleId,
-            foodOrder: { id: foodRef.id },
-            assistantOrder: { id: assistantRef.id }
-        };
-    },
-
-    async claimRideOrder(orderId, driverId, driverName) {
-        if (!orderId || !driverId) throw new Error("Order Ride atau driver tidak tersedia.");
-
-        await runTransaction(db, async (transaction) => {
-            const ref = doc(db, "orders", orderId);
-            const snap = await transaction.get(ref);
-            if (!snap.exists()) throw new Error("Order Ride sudah tidak tersedia.");
-            const data = snap.data();
-            if (data.type !== "RIDE") throw new Error("Order ini bukan CIKUR Ride.");
-            if (data.status !== "PENDING" || data.driverId) throw new Error("Order Ride sudah diambil driver lain atau tidak lagi tersedia.");
-
-            transaction.update(ref, {
-                status: "DEAL",
-                driverId,
-                driverName: driverName || "Driver",
-                claimedAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
-            });
-        });
-
-        return true;
-    },
-
-    // ======================================
     // REALTIME ORDER LISTENER (SEMUA ORDER PER TYPE)
     // ======================================
 
@@ -806,6 +708,33 @@ window.CikurCloud = {
                 callback(orders);
             }
         });
+    },
+
+    // ======================================
+    // DRIVER KLAIM RIDE SECARA ATOMIK
+    // ======================================
+
+    async claimRideOrder(orderId, driverId, driverName) {
+        if (!orderId || !driverId) throw new Error("Data klaim Ride tidak lengkap.");
+
+        const orderRef = doc(db, "orders", orderId);
+        const current = await getDoc(orderRef);
+        if (!current.exists()) throw new Error("Order Ride tidak ditemukan.");
+
+        const data = current.data() || {};
+        if (data.type !== "RIDE") throw new Error("Order ini bukan order Ride.");
+        if (data.status !== "PENDING" || data.driverId) {
+            throw new Error("Order Ride sudah diambil driver lain atau tidak lagi tersedia.");
+        }
+
+        await updateDoc(orderRef, {
+            driverId,
+            driverName: driverName || "",
+            status: "DIAMBIL_DRIVER",
+            updatedAt: serverTimestamp()
+        });
+
+        return true;
     },
 
     // ======================================

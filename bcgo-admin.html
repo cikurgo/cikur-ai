@@ -6,7 +6,6 @@
     <meta name="theme-color" content="#0b1220">
     <title>BCGO Intelligent Control Center - CIKUR GO</title>
 
-    <script type="module" src="cikur-config.js"></script>
     <script src="bcgo-engine.js"></script>
 
     <style>
@@ -40,8 +39,8 @@
         *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
         html{scroll-behavior:smooth}
         body{background:var(--bg);color:var(--ink);min-height:100vh}
-        body.auth-pending .auth-gate{visibility:hidden;opacity:0;pointer-events:none}
-        body.auth-pending .app-shell{visibility:hidden;opacity:0}
+        body.auth-pending .auth-gate{visibility:visible;opacity:1;pointer-events:auto}
+        body.auth-pending .app-shell{visibility:hidden;opacity:0;pointer-events:none}
         body.auth-ready .auth-gate,body.auth-ready .app-shell{visibility:visible;opacity:1;transition:opacity .12s ease}
         button,input{font:inherit}
         button{cursor:pointer}
@@ -416,7 +415,7 @@
             <div class="auth-field" id="confirmField" style="display:none"><label>Konfirmasi Password</label><input id="authConfirm" type="password" autocomplete="new-password" placeholder="Ulangi password" minlength="6"></div>
             <button class="auth-submit" id="authSubmit" type="submit">Masuk ke Dashboard</button>
         </form>
-        <div class="auth-note" id="authNote">Akses admin diverifikasi melalui Firebase Authentication dan status administrator.</div>
+        <div class="auth-note" id="authNote">Menghubungkan ke CIKUR Cloud untuk memverifikasi akses administrator...</div>
         <div class="auth-footer">CIKUR GO • BCGO Intelligence • Secure Operations</div>
     </div>
 </div>
@@ -850,6 +849,7 @@
     let categoryCounts = { agent: 0, resto: 0, driver: 0 };
     let lastAnalysis = { low: 0, review: 0, high: 0 };
     let customerPresenceTimer = null;
+    let unsubscribeSuperAdmin = null;
 
     function updateGreeting(){
         const hour = new Date().getHours();
@@ -883,8 +883,8 @@
         document.getElementById("confirmField").style.display = isRegister ? "block" : "none";
         document.getElementById("authConfirm").required = isRegister;
         document.getElementById("authNote").textContent = isRegister
-            ? "Setelah registrasi, akun tetap terkunci sampai disetujui oleh super admin CIKUR GO."
-            : "Akses admin diverifikasi melalui Firebase Authentication dan status administrator.";
+            ? "Setelah registrasi, akun tetap terkunci sampai diaktifkan dan diberi role super_admin oleh Super Admin CIKUR GO."
+            : "Akses Super Admin diverifikasi melalui Firebase Authentication + admin_users.active + admin_users.role.";
         hideAuthMessage();
     };
 
@@ -913,19 +913,25 @@
         return map[code] || error?.message || "Terjadi kesalahan autentikasi.";
     }
 
-    async function verifyAdmin(user){
+    async function verifySuperAdmin(user){
+        if(!user) return {ok:false, reason:"NO_SESSION"};
         try{
             const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
-            return adminSnap.exists() && adminSnap.data()?.active === true;
+            if(!adminSnap.exists()) return {ok:false, reason:"NOT_REGISTERED"};
+            const data = adminSnap.data() || {};
+            if(data.active !== true) return {ok:false, reason:"INACTIVE", data};
+            if(data.role !== "super_admin") return {ok:false, reason:"NOT_SUPER_ADMIN", data};
+            return {ok:true, data};
         }catch(error){
-            console.error("Admin verification failed:", error);
-            return false;
+            console.error("Super Admin verification failed:", error);
+            return {ok:false, reason:"CHECK_FAILED", error};
         }
     }
 
     function enterDashboard(user){
         currentUser = user;
         adminVerified = true;
+        window.BCGO_SUPER_ADMIN = {uid:user.uid, email:user.email || null, verified:true};
         document.getElementById("authGate").classList.add("hidden");
         document.getElementById("pendingLock").classList.remove("show");
         document.getElementById("userEmail").textContent = user.email || "Admin";
@@ -933,19 +939,52 @@
         loadCustomerData();
     }
 
-    function lockPending(user){
+    function lockPending(user, result={}){
         currentUser = user;
         adminVerified = false;
+        window.BCGO_SUPER_ADMIN = null;
         document.getElementById("authGate").classList.add("hidden");
-        document.getElementById("pendingText").textContent = `Akun ${user.email || "ini"} sudah terdaftar, tetapi belum memiliki status administrator aktif. Minta super admin CIKUR GO mengaktifkan akun Anda.`;
+        const reason = result?.reason;
+        const message =
+            reason === "NOT_REGISTERED"
+                ? `Akun ${user.email || "ini"} belum terdaftar sebagai administrator CIKUR GO.`
+                : reason === "NOT_SUPER_ADMIN"
+                    ? `Akun ${user.email || "ini"} aktif, tetapi role-nya bukan super_admin. Halaman ini khusus Super Admin.`
+                    : reason === "CHECK_FAILED"
+                        ? "Status Super Admin gagal diverifikasi. Periksa koneksi dan Rules Firestore."
+                        : `Akun ${user.email || "ini"} belum aktif sebagai Super Admin. Minta Super Admin CIKUR GO mengaktifkan akses.`;
+        document.getElementById("pendingText").textContent = message;
         document.getElementById("pendingLock").classList.add("show");
+    }
+
+    function watchSuperAdmin(user){
+        if(unsubscribeSuperAdmin) unsubscribeSuperAdmin();
+        unsubscribeSuperAdmin = onSnapshot(doc(db, "admin_users", user.uid), snap => {
+            const data = snap.exists() ? (snap.data() || {}) : null;
+            const approved = data?.active === true && data?.role === "super_admin";
+            if(approved){
+                enterDashboard(user);
+            }else{
+                lockPending(user, {
+                    reason: !snap.exists() ? "NOT_REGISTERED"
+                        : data?.active !== true ? "INACTIVE"
+                        : "NOT_SUPER_ADMIN",
+                    data
+                });
+            }
+        }, error => {
+            console.error("Super Admin listener failed:", error);
+            lockPending(user, {reason:"CHECK_FAILED", error});
+        });
     }
 
     window.secureLogout = async function(){
         if(unsubscribeListener) unsubscribeListener();
         if(unsubscribeCustomerListener) unsubscribeCustomerListener();
+        if(unsubscribeSuperAdmin) unsubscribeSuperAdmin();
         unsubscribeListener = null;
         unsubscribeCustomerListener = null;
+        unsubscribeSuperAdmin = null;
         cachedApplications = {};
         cachedCustomers = {};
         adminVerified = false;
@@ -978,17 +1017,18 @@
                     requestedAt: serverTimestamp()
                 });
                 await signOut(auth);
-                authMessage("Registrasi berhasil. Akun masih terkunci sampai disetujui super admin.", "ok");
+                authMessage("Registrasi berhasil. Akun masih terkunci sampai diaktifkan dengan role super_admin oleh Super Admin CIKUR GO.", "ok");
                 document.getElementById("authForm").reset();
                 window.showAuthMode("login");
             }else{
                 const cred = await signInWithEmailAndPassword(auth, email, password);
-                const approved = await verifyAdmin(cred.user);
-                if(!approved){
+                const result = await verifySuperAdmin(cred.user);
+                if(!result.ok){
                     await signOut(auth);
-                    lockPending(cred.user);
+                    lockPending(cred.user, result);
                 }else{
                     enterDashboard(cred.user);
+                    watchSuperAdmin(cred.user);
                 }
             }
         }catch(error){
@@ -1000,20 +1040,31 @@
     });
 
     onAuthStateChanged(auth, async user => {
+        if(unsubscribeSuperAdmin){
+            unsubscribeSuperAdmin();
+            unsubscribeSuperAdmin = null;
+        }
         if(!user){
             currentUser = null;
             adminVerified = false;
+            window.BCGO_SUPER_ADMIN = null;
             if(unsubscribeListener) unsubscribeListener();
             if(unsubscribeCustomerListener) unsubscribeCustomerListener();
             unsubscribeListener = null;
             unsubscribeCustomerListener = null;
             document.getElementById("authGate").classList.remove("hidden");
+            document.getElementById("pendingLock").classList.remove("show");
             setAuthReady();
             return;
         }
-        const approved = await verifyAdmin(user);
-        if(approved) enterDashboard(user);
-        else lockPending(user);
+        const result = await verifySuperAdmin(user);
+        if(result.ok){
+            enterDashboard(user);
+            watchSuperAdmin(user);
+        }else{
+            lockPending(user, result);
+            watchSuperAdmin(user);
+        }
         setAuthReady();
     });
 
@@ -1806,6 +1857,21 @@
     });
     
     // Error reporting global ditangani satu kali oleh cikur-config.js.
+    window.__BCGO_ADMIN_MODULE_READY__ = true;
+</script>
+<script>
+    // Watchdog: jika module gagal dimuat, halaman admin tetap menampilkan gerbang login
+    // dan memberi pesan yang jelas, bukan layar kosong.
+    window.setTimeout(function(){
+        if (window.__BCGO_ADMIN_MODULE_READY__) return;
+        const msg = document.getElementById("authMessage");
+        const note = document.getElementById("authNote");
+        if (msg) {
+            msg.textContent = "Mesin BCGO Admin belum berhasil dimuat. Cek cikur-config.js / koneksi Firebase lalu muat ulang halaman.";
+            msg.className = "auth-message show error";
+        }
+        if (note) note.textContent = "BCGO Admin terpisah dari index.html. Tidak ada login Super Admin di halaman Customer/Mitra.";
+    }, 5000);
 </script>
 </body>
 </html>
