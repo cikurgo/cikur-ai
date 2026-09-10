@@ -60,10 +60,18 @@ const app = getApps().some(existingApp => existingApp.name === "[DEFAULT]")
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+// Dedicated Firebase App/Auth instance for Super Admin.
+// Firestore remains shared; Auth persistence is isolated from Customer/Mitra.
+const ADMIN_APP_NAME = "CIKUR_GO_ADMIN";
+const adminApp = getApps().some(existingApp => existingApp.name === ADMIN_APP_NAME)
+    ? getApp(ADMIN_APP_NAME)
+    : initializeApp(firebaseConfig, ADMIN_APP_NAME);
+const adminAuth = getAuth(adminApp);
+
 // Export supaya modul lain (mis. bcgo.js) bisa memakai
 // KONEKSI YANG SAMA, bukan membuat Firebase App baru
 // (initializeApp kedua kali akan error "already exists").
-export { db, auth, firebaseConfig };
+export { db, auth, adminAuth, firebaseConfig };
 
 // ==========================================
 // CIKUR CLOUD GLOBAL ENGINE
@@ -708,33 +716,6 @@ window.CikurCloud = {
                 callback(orders);
             }
         });
-    },
-
-    // ======================================
-    // DRIVER KLAIM RIDE SECARA ATOMIK
-    // ======================================
-
-    async claimRideOrder(orderId, driverId, driverName) {
-        if (!orderId || !driverId) throw new Error("Data klaim Ride tidak lengkap.");
-
-        const orderRef = doc(db, "orders", orderId);
-        const current = await getDoc(orderRef);
-        if (!current.exists()) throw new Error("Order Ride tidak ditemukan.");
-
-        const data = current.data() || {};
-        if (data.type !== "RIDE") throw new Error("Order ini bukan order Ride.");
-        if (data.status !== "PENDING" || data.driverId) {
-            throw new Error("Order Ride sudah diambil driver lain atau tidak lagi tersedia.");
-        }
-
-        await updateDoc(orderRef, {
-            driverId,
-            driverName: driverName || "",
-            status: "DIAMBIL_DRIVER",
-            updatedAt: serverTimestamp()
-        });
-
-        return true;
     },
 
     // ======================================

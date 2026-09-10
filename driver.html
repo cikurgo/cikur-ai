@@ -566,14 +566,10 @@ function switchDriverTab(tab) {
 
 let unsubscribeAvailableFood = null;
 let unsubscribeMyActiveFood = null;
-let unsubscribeRideOrders = null;
 let availableFoodOrdersCache = [];
 let myActiveFoodOrdersCache = [];
-let rideOrdersCache = [];
 let driverFoodMessageUnsubscribers = {};
 let driverFoodMessagesCache = {};
-let driverRideMessageUnsubscribers = {};
-let driverRideMessagesCache = {};
 
 function loadDriverOrders() {
     let container = document.getElementById("driverOrderContainer");
@@ -582,18 +578,15 @@ function loadDriverOrders() {
     if(!isOnline) {
         container.innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Status Anda <b>OFFLINE</b>. Aktifkan status untuk memindai orderan asli yang masuk.</div>`;
         stopFoodOrderListeners();
-        stopRideOrderListeners();
         return;
     }
 
     if(currentTab === 'food') {
-        stopRideOrderListeners();
         startFoodOrderListeners();
         renderFoodOrderList();
     } else {
         stopFoodOrderListeners();
-        startRideOrderListeners();
-        renderRideOrderList();
+        renderRideOrderListLegacy();
     }
 }
 
@@ -719,72 +712,59 @@ async function claimThisFoodOrder(orderId) {
     }
 }
 
-function stopRideOrderListeners() {
-    if (typeof unsubscribeRideOrders === "function") unsubscribeRideOrders();
-    unsubscribeRideOrders = null;
-    Object.values(driverRideMessageUnsubscribers).forEach(fn => {
-        if (typeof fn === "function") fn();
-    });
-    driverRideMessageUnsubscribers = {};
-    driverRideMessagesCache = {};
-}
+// CATATAN: Ride masih localStorage untuk sementara -
+// akan disinkronkan ke Firestore begitu ride.html dibangun.
+function renderRideOrderListLegacy() {
+    let container = document.getElementById("driverOrderContainer");
+    let rawRide = localStorage.getItem('cikur_driver_ride_orders');
+    let rideOrders = [];
 
-function startRideOrderListeners() {
-    if (!window.CikurCloud || !userProfile?.uid || !isOnline) return;
-    if (unsubscribeRideOrders) return;
+    try {
+        rideOrders = rawRide ? JSON.parse(rawRide) : [];
+    } catch(e) {
+        rideOrders = [];
+    }
 
-    unsubscribeRideOrders = window.CikurCloud.listenOrders("RIDE", (orders) => {
-        rideOrdersCache = (orders || []).filter(order =>
-            order && (order.status === "PENDING" || order.driverId === userProfile.uid)
-        );
-        renderRideOrderList();
-    });
-}
+    let validRides = rideOrders.filter(r => r && r.pickup && r.destination);
 
-function renderRideOrderList() {
-    const container = document.getElementById("driverOrderContainer");
-    if (!container || currentTab !== 'ride') return;
-
-    if (!rideOrdersCache.length) {
-        container.innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Belum ada pesanan Cikur Ride yang tersedia.</div>`;
+    if(validRides.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding: 25px; color: var(--text-muted); font-size: 11px;">Belum ada pesanan Cikur Ride reguler yang masuk dari <b>ride.html</b>.</div>`;
         return;
     }
 
-    container.innerHTML = rideOrdersCache.map(ride => {
-        const isMine = ride.driverId === userProfile.uid;
-        const messages = driverRideMessagesCache[ride.id] || [];
-        if (isMine && !driverRideMessageUnsubscribers[ride.id]) {
-            driverRideMessageUnsubscribers[ride.id] = window.CikurCloud.listenOrderMessages(ride.id, (list) => {
-                driverRideMessagesCache[ride.id] = list;
-                renderRideOrderList();
-            });
-        }
-        const chatHtml = messages.map(m => `<div class="chat-msg ${m.sender === 'driver' ? 'driver' : 'other'}">${m.sender === 'driver' ? 'Anda' : (m.sender === 'customer' ? 'Customer' : 'Sistem')}: "${String(m.text || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}"</div>`).join('') || '<div class="chat-msg other">Belum ada pesan.</div>';
-        const action = isMine
-            ? `<div style="display:flex;gap:8px;margin-top:4px;"><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ride.destination || '')}" target="_blank" class="form-input" style="background:#0284c7;color:#fff;text-align:center;text-decoration:none;font-weight:700;display:flex;align-items:center;justify-content:center;">🗺️ Peta Tujuan</a><button type="button" class="btn-primary" style="flex:1;background:#0284c7;" onclick="completeRideOrder('${ride.id}')">Selesaikan Ride ✓</button></div>`
-            : `<button type="button" class="btn-primary" style="background:#0284c7;" onclick="claimRideOrder('${ride.id}')">Ambil Ride Ini ✓</button>`;
-        return `<div class="order-card" style="border-color:${isMine ? '#16a34a' : '#0284c7'};">
-            <div style="display:flex;justify-content:space-between;align-items:center;"><span class="badge-type badge-ride">CIKUR RIDE REGULER</span><span style="font-size:10px;color:${isMine ? '#16a34a' : '#0284c7'};font-weight:700;">${isMine ? '✓ Order Anda' : 'Menunggu Driver'}</span></div>
-            <div style="font-size:11px;font-weight:700;">🟢 Titik Jemput: ${String(ride.pickup || '-').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-            <div style="font-size:11px;font-weight:700;">🏁 Alamat Tujuan: ${String(ride.destination || '-').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-            <div style="font-size:11px;color:var(--text-muted);">Penumpang: <b>${String(ride.customerName || 'Customer').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</b></div>
-            <div style="font-size:12px;font-weight:800;color:#0284c7;">Tarif Ride: Rp ${Number(ride.fare || 0).toLocaleString('id-ID')}</div>
-            ${isMine ? `<div style="font-size:11px;font-weight:700;margin-top:4px;">💬 Chat Penumpang Ride:</div><div class="chat-container"><div class="chat-box" id="chatRideBox_${ride.id}">${chatHtml}</div><div class="chat-input-group"><input type="text" id="inputRideChat_${ride.id}" class="form-input" style="flex:1;" placeholder="Balas chat penumpang..."><button type="button" class="btn-primary" style="padding:6px 12px;font-size:10px;background:#0284c7;" onclick="sendRideChat('${ride.id}')">Kirim</button></div></div>` : ''}
-            ${action}
-        </div>`;
-    }).join('');
-}
+    let html = "";
+    validRides.forEach((ride) => {
+        let distance = ride.distance || 4.0;
+        let rideFee = distance * 3000;
 
-async function claimRideOrder(orderId) {
-    try {
-        if (typeof window.CikurCloud.claimRideOrder !== "function") {
-            throw new Error("Mesin klaim Ride belum tersedia di CIKUR Cloud.");
-        }
-        await window.CikurCloud.claimRideOrder(orderId, userProfile.uid, userProfile.name || "Driver");
-        await window.CikurCloud.sendOrderMessage(orderId, "system", "Driver telah menerima pesanan Ride dan sedang menuju titik jemput.");
-    } catch (error) {
-        alert("Ride gagal diambil: " + (error?.message || error));
-    }
+        html += `
+            <div class="order-card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span class="badge-type badge-ride">CIKUR RIDE REGULER</span>
+                </div>
+                <div style="font-size: 11px; font-weight: 700;">🟢 Titik Jemput: ${ride.pickup}</div>
+                <div style="font-size: 11px; font-weight: 700;">🏁 Alamat Tujuan: ${ride.destination}</div>
+                <div style="font-size: 11px; color: var(--text-muted);">Penumpang: <b>${ride.passenger || 'Customer'}</b></div>
+                <div style="font-size: 12px; font-weight: 800; color: #0284c7;">Tarif Ride: Rp ${rideFee.toLocaleString('id-ID')}</div>
+
+                <div style="font-size: 11px; font-weight: 700; margin-top: 4px;">💬 Chat Penumpang Ride:</div>
+                <div class="chat-container">
+                    <div class="chat-box" id="chatRideBox_${ride.id}">
+                        <div class="chat-msg other">Penumpang: "Halo driver, saya menunggu di titik jemput."</div>
+                    </div>
+                    <div class="chat-input-group">
+                        <input type="text" id="inputRideChat_${ride.id}" class="form-input" style="flex:1;" placeholder="Balas chat penumpang...">
+                        <button type="button" class="btn-primary" style="padding: 6px 12px; font-size: 10px; background: #0284c7;" onclick="sendRideChat('${ride.id}')">Kirim</button>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-top: 4px;">
+                    <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ride.destination)}" target="_blank" class="form-input" style="background:#0284c7; color:#fff; text-align:center; text-decoration:none; font-weight:700; display:flex; align-items:center; justify-content:center;">🗺️ Peta Tujuan</a>
+                    <button type="button" class="btn-primary" style="flex:1; background:#0284c7;" onclick="completeRideOrder('${ride.id}')">Selesaikan Ride ✓</button>
+                </div>
+            </div>`;
+    });
+    container.innerHTML = html;
 }
 
 function sendFoodChat(orderId) {
@@ -798,17 +778,15 @@ function sendFoodChat(orderId) {
     box.scrollTop = box.scrollHeight;
 }
 
-async function sendRideChat(orderId) {
-    const input = document.getElementById(`inputRideChat_${orderId}`);
+function sendRideChat(orderId) {
+    let input = document.getElementById(`inputRideChat_${orderId}`);
     if(!input) return;
-    const text = input.value.trim();
+    let text = input.value.trim();
     if(!text) return;
-    try {
-        await window.CikurCloud.sendOrderMessage(orderId, "driver", text);
-        input.value = "";
-    } catch (error) {
-        alert("Pesan Ride gagal dikirim: " + (error?.message || error));
-    }
+    let box = document.getElementById(`chatRideBox_${orderId}`);
+    box.innerHTML += `<div class="chat-msg driver" style="background:#dbeafe; color:#1e40af;">Driver: "${text}"</div>`;
+    input.value = "";
+    box.scrollTop = box.scrollHeight;
 }
 
 async function completeFoodOrder(orderId) {
@@ -822,14 +800,13 @@ async function completeFoodOrder(orderId) {
     }
 }
 
-async function completeRideOrder(orderId) {
-    if(!confirm("Selesaikan perjalanan Cikur Ride ini?")) return;
-    try {
-        await window.CikurCloud.updateOrderStatus(orderId, { status: "SELESAI", completedAt: new Date() });
-        await window.CikurCloud.sendOrderMessage(orderId, "system", "Perjalanan Ride telah selesai. Terima kasih telah menggunakan CIKUR GO.");
+function completeRideOrder(orderId) {
+    if(confirm("Selesaikan perjalanan Cikur Ride ini?")) {
+        let rideOrders = JSON.parse(localStorage.getItem('cikur_driver_ride_orders')) || [];
+        let filtered = rideOrders.filter(r => r.id !== orderId);
+        localStorage.setItem('cikur_driver_ride_orders', JSON.stringify(filtered));
+        loadDriverOrders();
         alert("Perjalanan reguler selesai!");
-    } catch (error) {
-        alert("Gagal menyelesaikan Ride: " + (error?.message || error));
     }
 }
 </script>
