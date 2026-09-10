@@ -73,7 +73,8 @@ const adminApp = getApps().some(existingApp => existingApp.name === ADMIN_APP_NA
     ? getApp(ADMIN_APP_NAME)
     : initializeApp(firebaseConfig, ADMIN_APP_NAME);
 const adminAuth = initializeAuth(adminApp, {
-    persistence: browserSessionPersistence
+    persistence: browserSessionPersistence,
+    popupRedirectResolver: undefined
 });
 
 // Export supaya modul lain dapat memakai koneksi yang tepat.
