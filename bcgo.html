@@ -971,7 +971,7 @@ runAutonomousEngine(state => {
     const sameState = snapRev > 0 && currentRev > 0 && snapRev === currentRev;
     const syncLabel = sameState ? 'SYNC' : (snapRev && currentRev ? `SYNCING ${live.cycle ?? '-'}→${current.cycle ?? '-'}` : 'SYNCING');
     if (reasoning) reasoning.textContent = `REASONING: ${r.classification || 'WAITING'} • evidence ${r.evidence?.length || 0} • hypotheses ${r.hypotheses?.length || 0} • focus ${r.operationalInvestigation?.focus?.target || '-'} • BCGO #${current.cycle ?? live.cycle ?? '-'} • ${syncLabel}`;
-    if (investigation) investigation.textContent = `INVESTIGATION: ${sameState ? (r.operationalInvestigation?.decision || r.investigation?.status || 'WAITING') : 'SYNCING'} • ${(r.operationalInvestigation?.nextActions || []).slice(0,2).map(a=>a.code).join(' → ') || String(r.investigation?.nextEvidence || '').slice(0,70)} • ${current.step || live.step || '-'}`;
+    if (investigation) { const ne = r.investigation?.nextEvidence; const neText = ne && typeof ne === 'object' ? [ne.type, ne.reason].filter(Boolean).join(': ') : String(ne || ''); investigation.textContent = `INVESTIGATION: ${sameState ? (r.operationalInvestigation?.decision || r.investigation?.status || 'WAITING') : 'SYNCING'} • ${(r.operationalInvestigation?.nextActions || []).slice(0,2).map(a=>a.code).join(' → ') || neText.slice(0,70)} • ${current.step || live.step || '-'}`; }
     if (directive) { const f=r.operationalInvestigation?.focus; directive.textContent=`DIRECTIVE: ${sameState ? (f?.target || '-') : 'SYNCING'} • ${(f?.actions || []).slice(0,2).map(a=>a.code).join(' → ') || 'WAITING'} • cycle #${current.cycle ?? live.cycle ?? '-'}`; }
   });
   window.addEventListener('cikur-internal-ai-guardian', event => {

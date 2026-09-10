@@ -1630,7 +1630,10 @@ export function runAutonomousEngine(onCycleUpdate) {
       publishToUI(safeClone(state));
     };
 
-    state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, filesScanned:0, filesReadable:0, filesFailed:0, currentFile:null, currentIndex:0, totalFiles:files.length, phase:'QUEUE', fileStates:{...fileStates}, findings:[], crossFileFindings:[], sources:{}, message:`Antrian scan dibuka: ${files.length} source akan dibaca dari deployment aktif.` };
+    state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, filesScanned:0, filesReadable:0, filesFailed:0, currentFile:null, currentIndex:0, totalFiles:files.length, phase:'QUEUE', fileStates:{...fileStates}, findings:[], crossFileFindings:[], sources:{}, relationSummary:{synchronized:0,mismatch:0,variant:0,unknown:0,linked:0}, nerveSummary:{healthy:0,standby:0,observed:0,review:0,anomaly:0,unresolved:0}, message:`Antrian scan dibuka: ${files.length} source akan dibaca dari deployment aktif.` };
+    // Kosongkan hasil nerve/organ dari siklus sebelumnya juga, supaya kartu "STATUS TIAP FILE"
+    // tidak menampilkan hasil lama yang sudah tidak sinkron dengan counter scan yang baru direset.
+    state.fileNerves = {};
     recordEvent('SOURCE_SCAN', `Pemindaian source code dimulai (${reason}) — ${files.length} organ.`, 'SYS_SOURCE_SCANNER');
     publishToUI(safeClone(state));
 
