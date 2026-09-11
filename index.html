@@ -2086,6 +2086,8 @@ function bukaModalRegistrasi() {
                 firebaseUser.uid,
                 customerProfile
             );
+            await window.CikurCloud.ensureCustomerAccount(firebaseUser.uid, customerProfile);
+            await window.CikurCloud.syncCustomerAccount(firebaseUser.uid, customerProfile);
 
             // PIN tidak disimpan sebagai teks biasa. Simpan hash + status saja.
             await window.CikurCloud.setCustomerPin(firebaseUser.uid, pinVal);
@@ -2366,6 +2368,10 @@ function bukaModalLogin() {
                     isLoggedIn: true
                 };
 
+                await window.CikurCloud.ensureCustomerAccount(firebaseUser.uid, userProfile);
+                await window.CikurCloud.syncCustomerAccount(firebaseUser.uid, userProfile);
+                if (!(await enforceCustomerAccountStatus(firebaseUser))) return;
+                startCustomerStatusWatcher(firebaseUser);
                 if (typeof updateUIProfile === "function") updateUIProfile();
                 if (typeof updateUIAkun === "function") updateUIAkun(userProfile);
                 if (typeof startCustomerPresenceHeartbeat === "function") startCustomerPresenceHeartbeat();
@@ -2496,6 +2502,10 @@ async function loadCurrentUserProfileIndex() {
             isLoggedIn: true
         };
 
+        await window.CikurCloud.ensureCustomerAccount(firebaseUser.uid, userProfile);
+        await window.CikurCloud.syncCustomerAccount(firebaseUser.uid, userProfile);
+        if (!(await enforceCustomerAccountStatus(firebaseUser))) return;
+        startCustomerStatusWatcher(firebaseUser);
         await refreshCustomerSecurityState(firebaseUser);
         updateUIProfile();
 
@@ -2526,6 +2536,54 @@ async function loadCurrentUserProfileIndex() {
 }
 
 let presenceHeartbeatInterval = null;
+let customerStatusUnsubscribe = null;
+
+async function enforceCustomerAccountStatus(firebaseUser) {
+    if (!firebaseUser || !window.CikurCloud) return true;
+
+    let account = null;
+    try {
+        account = await window.CikurCloud.getCustomerAccount(firebaseUser.uid);
+    } catch (error) {
+        console.error("[CIKUR GO] Gagal membaca status akun Customer:", error);
+        return true;
+    }
+
+    const status = String(account?.statusAkun || account?.status || "active").toLowerCase();
+    if (status === "inactive") {
+        if (presenceHeartbeatInterval) {
+            clearInterval(presenceHeartbeatInterval);
+            presenceHeartbeatInterval = null;
+        }
+        setCgoAuthGate(true);
+        try {
+            await window.CikurCloud.logout();
+        } catch (logoutError) {
+            console.error("[CIKUR GO] Gagal menutup sesi Customer nonaktif:", logoutError);
+        }
+        alert("Akun Customer Anda sedang nonaktif. Silakan hubungi Super Admin CIKUR GO.");
+        return false;
+    }
+
+    return true;
+}
+
+function startCustomerStatusWatcher(firebaseUser) {
+    if (!firebaseUser || !window.CikurCloud) return;
+    if (customerStatusUnsubscribe) customerStatusUnsubscribe();
+
+    customerStatusUnsubscribe = window.CikurCloud.listenCustomerAccount(
+        firebaseUser.uid,
+        async (account) => {
+            if (!account || account._error) return;
+            const status = String(account.statusAkun || account.status || "active").toLowerCase();
+            userProfile.statusAkun = status;
+            if (status === "inactive") {
+                await enforceCustomerAccountStatus(firebaseUser);
+            }
+        }
+    );
+}
 
 function startCustomerPresenceHeartbeat() {
     if (!userProfile.uid || !window.CikurCloud) return;
@@ -2534,8 +2592,7 @@ function startCustomerPresenceHeartbeat() {
         window.CikurCloud.updateCustomerPresence(userProfile.uid, {
             name: userProfile.name || "",
             email: userProfile.email || "",
-            phone: userProfile.phone || "",
-            status: "active"
+            phone: userProfile.phone || ""
         });
     };
 
@@ -3174,6 +3231,22 @@ async function bukaModalPengaturanProfil() {
                     profileCompleted: true,
                     profileCompletionVersion: 1,
                     updatedAt: new Date().toISOString()
+                });
+                await window.CikurCloud.syncCustomerAccount(firebaseUser.uid, {
+                    ...userProfile,
+                    name: newName,
+                    namaLengkap: newName,
+                    namaPanggilan: newNickname,
+                    email: newEmail || firebaseUser.email || "",
+                    phone: newPhone,
+                    jenisKelamin: newGender,
+                    tanggalLahir: newBirthDate,
+                    alamatUtama: newAddress,
+                    notifikasi: newNotif,
+                    promo: newPromo,
+                    avatar: temporaryAvatar,
+                    profileCompleted: true,
+                    profileCompletionVersion: 1
                 });
 
                 userProfile = {

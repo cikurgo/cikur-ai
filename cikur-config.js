@@ -34,7 +34,8 @@ import {
     reauthenticateWithCredential,
     EmailAuthProvider,
     linkWithCredential,
-    fetchSignInMethodsForEmail
+    fetchSignInMethodsForEmail,
+    signOut
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 
@@ -209,6 +210,12 @@ window.CikurCloud = {
         const result = await signInWithEmailAndPassword(auth, email, password);
         console.log("[CIKUR GO] Login berhasil:", result.user.uid);
         return result.user;
+    },
+
+    async logout() {
+        await signOut(auth);
+        console.log("[CIKUR GO] Session Customer/Mitra ditutup.");
+        return true;
     },
 
     // ======================================
@@ -438,6 +445,82 @@ window.CikurCloud = {
             id: profileSnapshot.id,
             ...profileSnapshot.data()
         };
+    },
+
+    async getCustomerAccount(userId) {
+        if (!userId) return null;
+
+        const snapshot = await getDoc(doc(db, "customers", userId));
+        if (!snapshot.exists()) return null;
+
+        return {
+            id: snapshot.id,
+            ...snapshot.data()
+        };
+    },
+
+    listenCustomerAccount(userId, callback) {
+        if (!userId) return () => {};
+
+        return onSnapshot(
+            doc(db, "customers", userId),
+            (snapshot) => {
+                if (!snapshot.exists()) {
+                    if (typeof callback === "function") callback(null);
+                    return;
+                }
+                if (typeof callback === "function") {
+                    callback({ id: snapshot.id, ...snapshot.data() });
+                }
+            },
+            (error) => {
+                console.error("[CIKUR GO] Gagal memantau status Customer:", error);
+                if (typeof callback === "function") {
+                    callback({ _error: true, code: error.code, message: error.message });
+                }
+            }
+        );
+    },
+
+    async syncCustomerAccount(userId, data = {}) {
+        if (!userId) return false;
+
+        // Hanya mirror data profil/presence. STATUS AKUN TIDAK PERNAH
+        // ditulis dari sisi Customer agar keputusan Admin tidak tertimpa.
+        const mirror = {
+            uid: userId,
+            customerId: data.customerId || undefined,
+            name: data.name || "",
+            email: data.email || "",
+            phone: data.phone || "",
+            namaLengkap: data.namaLengkap || data.name || "",
+            namaPanggilan: data.namaPanggilan || "",
+            jenisKelamin: data.jenisKelamin || "",
+            tanggalLahir: data.tanggalLahir || "",
+            alamatUtama: data.alamatUtama || "",
+            emailVerified: !!data.emailVerified,
+            phoneVerified: !!data.phoneVerified,
+            identityVerified: !!data.identityVerified,
+            verificationLevel: data.verificationLevel || "BASIC",
+            pinConfigured: !!data.pinConfigured,
+            securityLevel: data.securityLevel || "BASIC",
+            bahasa: data.bahasa || "id",
+            notifikasi: data.notifikasi !== false,
+            promo: data.promo !== false,
+            walletStatus: data.walletStatus || "active",
+            profileCompleted: !!data.profileCompleted,
+            profileCompletionVersion: data.profileCompletionVersion || 1,
+            avatar: data.avatar || "",
+            lastLogin: data.lastLogin || undefined,
+            updatedAt: serverTimestamp()
+        };
+
+        Object.keys(mirror).forEach((key) => {
+            if (mirror[key] === undefined) delete mirror[key];
+        });
+
+        await setDoc(doc(db, "customers", userId), mirror, { merge: true });
+        return true;
     },
 
     // ======================================

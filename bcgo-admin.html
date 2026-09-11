@@ -759,9 +759,9 @@
                         <thead>
                             <tr>
                                 <th>Status Koneksi</th>
-                                <th>Waktu Bergabung / Terakhir Aktif</th>
-                                <th>Customer</th>
-                                <th>Kontak / Email</th>
+                                <th>Tanggal Daftar</th>
+                                <th>Customer / ID</th>
+                                <th>HP / Email</th>
                                 <th>Status Akun</th>
                                 <th>Aksi</th>
                             </tr>
@@ -1107,7 +1107,31 @@
     }
 
     function getCustomerName(data){
-        return data.name || data.fullName || data.nama || data.username || "Customer CIKUR";
+        return data.name || data.namaLengkap || data.fullName || data.nama || data.username || "Customer CIKUR";
+    }
+
+    function getCustomerId(data){
+        return data.customerId || "Belum tersedia";
+    }
+
+    function getCustomerStatus(data){
+        return data.statusAkun || data.status || "active";
+    }
+
+    function getCustomerDate(data){
+        const value = data.tanggalDaftar || data.createdAt || data.joinedAt;
+        if(value && typeof value.toDate === "function") return value.toDate();
+        if(value instanceof Date) return value;
+        if(typeof value === "string" && value) {
+            const parsed = new Date(value);
+            if(!Number.isNaN(parsed.getTime())) return parsed;
+        }
+        return null;
+    }
+
+    function formatCustomerDate(data){
+        const date = getCustomerDate(data);
+        return date ? date.toLocaleString("id-ID", {day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit"}) : "-";
     }
 
     function getPhone(data){
@@ -1197,26 +1221,25 @@
         let offlineCount = 0;
 
         entries.sort((a,b) => {
-            const av = timestampMillis(a[1]?.createdAt || a[1]?.lastSeen || a[1]?.updatedAt);
-            const bv = timestampMillis(b[1]?.createdAt || b[1]?.lastSeen || b[1]?.updatedAt);
+            const av = timestampMillis(a[1]?.tanggalDaftar || a[1]?.createdAt || a[1]?.lastSeen || a[1]?.updatedAt);
+            const bv = timestampMillis(b[1]?.tanggalDaftar || b[1]?.createdAt || b[1]?.lastSeen || b[1]?.updatedAt);
             return bv - av;
         });
 
         let rowsHtml = "";
 
         entries.forEach(([docId, data]) => {
-            let lastSeenTime = timestampMillis(data.lastSeen || data.updatedAt);
+            const lastSeenTime = timestampMillis(data.lastSeen || data.lastActive || data.updatedAt);
             const isOnline = lastSeenTime > 0 && (now - lastSeenTime) <= FIVE_MINUTES;
-
-            if(isOnline) onlineCount++;
-            else offlineCount++;
+            if(isOnline) onlineCount++; else offlineCount++;
 
             const nama = getCustomerName(data);
+            const customerId = getCustomerId(data);
             const email = data.email || "-";
-            const phone = data.phone || data.kontak || "-";
-            const date = getDate(data);
+            const phone = data.phone || data.nomorHP || data.kontak || "-";
+            const date = formatCustomerDate(data);
             const initial = esc(nama.charAt(0).toUpperCase());
-            const status = data.status || "active";
+            const status = getCustomerStatus(data);
             const accountStatusClass = status === "inactive" ? "inactive" : "active";
             const accountStatusText = status === "inactive" ? "Inactive" : "Active";
             const presenceClass = isOnline ? "online" : "offline";
@@ -1231,11 +1254,11 @@
                             <div class="avatar">${initial}</div>
                             <div>
                                 <div class="name-main">${esc(nama)}</div>
-                                <div class="name-sub">ID: ${esc(docId.substring(0,8))}...</div>
+                                <div class="name-sub">${esc(customerId)}</div>
                             </div>
                         </div>
                     </td>
-                    <td>${esc(email)} / ${esc(phone)}</td>
+                    <td>${esc(phone)} / ${esc(email)}</td>
                     <td><span class="status ${accountStatusClass}">${accountStatusText}</span></td>
                     <td>
                         <div class="action-group">
@@ -1780,33 +1803,71 @@
         if(!data) return;
 
         const nama = getCustomerName(data);
+        const customerId = getCustomerId(data);
         const email = data.email || "-";
-        const phone = data.phone || data.kontak || "-";
-        const date = getDate(data);
-        const status = data.status || "active";
+        const phone = data.phone || data.nomorHP || data.kontak || "-";
+        const date = formatCustomerDate(data);
+        const status = getCustomerStatus(data);
+        const address = data.alamatUtama || data.address || data.alamat || "Belum diatur";
+        const verification = data.verificationLevel || "BASIC";
+        const emailVerified = data.emailVerified === true ? "Terverifikasi" : "Belum terverifikasi";
+        const phoneVerified = data.phoneVerified === true ? "Terverifikasi" : "Belum terverifikasi";
+        const identityVerified = data.identityVerified === true ? "Terverifikasi" : "Belum terverifikasi";
+        const pinStatus = data.pinConfigured === true || !!data.pinHash ? "Terdaftar" : "Belum diatur";
+        const profileStatus = data.profileCompleted === true ? "Lengkap" : "Belum lengkap";
+        const walletStatus = data.walletStatus || "Belum diaktifkan";
+        const serviceCount = [data.food, data.ride, data.assistant, data["2in1"]].filter(Boolean).length;
 
-        let html = `
+        const html = `
             <div class="detail-section">
-                <div class="detail-section-title">Informasi Akun Customer</div>
+                <div class="detail-section-title">Identitas Akun</div>
                 <div class="detail-grid">
-                    <div class="detail-row"><span class="detail-label">ID Pelanggan</span><span class="detail-value">${esc(docId)}</span></div>
-                    <div class="detail-row"><span class="detail-label">Nama Lengkap</span><span class="detail-value">${esc(nama)}</span></div>
-                    <div class="detail-row"><span class="detail-label">Email Akun</span><span class="detail-value">${esc(email)}</span></div>
-                    <div class="detail-row"><span class="detail-label">Nomor Telepon / WhatsApp</span><span class="detail-value">${esc(phone)}</span></div>
-                    <div class="detail-row"><span class="detail-label">Tanggal Bergabung</span><span class="detail-value">${esc(date)}</span></div>
+                    <div class="detail-row"><span class="detail-label">Customer ID</span><span class="detail-value">${esc(customerId)}</span></div>
+                    <div class="detail-row"><span class="detail-label">UID Firebase</span><span class="detail-value">${esc(docId)}</span></div>
+                    <div class="detail-row"><span class="detail-label">Nama Lengkap</span><span class="detail-value">${esc(data.namaLengkap || nama)}</span></div>
+                    <div class="detail-row"><span class="detail-label">Nama Panggilan</span><span class="detail-value">${esc(data.namaPanggilan || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Email</span><span class="detail-value">${esc(email)}</span></div>
+                    <div class="detail-row"><span class="detail-label">Nomor HP</span><span class="detail-value">${esc(phone)}</span></div>
+                    <div class="detail-row"><span class="detail-label">Tanggal Daftar</span><span class="detail-value">${esc(date)}</span></div>
                     <div class="detail-row"><span class="detail-label">Status Akun</span><span class="detail-value">${esc(status.toUpperCase())}</span></div>
                 </div>
             </div>
+
             <div class="detail-section">
-                <div class="detail-section-title">Aktivitas & Alamat Terakhir</div>
+                <div class="detail-section-title">Verifikasi & Profil</div>
                 <div class="detail-grid">
-                    <div class="detail-row"><span class="detail-label">Alamat Utama</span><span class="detail-value">${esc(data.address || data.alamat || "Belum diatur")}</span></div>
-                    <div class="detail-row"><span class="detail-label">Total Pesanan</span><span class="detail-value">${esc(data.totalOrders || data.orderCount || "0")} Pesanan</span></div>
+                    <div class="detail-row"><span class="detail-label">Level Verifikasi</span><span class="detail-value">${esc(verification)}</span></div>
+                    <div class="detail-row"><span class="detail-label">Email</span><span class="detail-value">${emailVerified}</span></div>
+                    <div class="detail-row"><span class="detail-label">Telepon</span><span class="detail-value">${phoneVerified}</span></div>
+                    <div class="detail-row"><span class="detail-label">Identitas</span><span class="detail-value">${identityVerified}</span></div>
+                    <div class="detail-row"><span class="detail-label">Profil</span><span class="detail-value">${profileStatus}</span></div>
+                    <div class="detail-row"><span class="detail-label">Alamat Utama</span><span class="detail-value">${esc(address)}</span></div>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <div class="detail-section-title">Keamanan & Preferensi</div>
+                <div class="detail-grid">
+                    <div class="detail-row"><span class="detail-label">PIN CikurPay</span><span class="detail-value">${pinStatus}</span></div>
+                    <div class="detail-row"><span class="detail-label">Security Level</span><span class="detail-value">${esc(data.securityLevel || "BASIC")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Notifikasi</span><span class="detail-value">${data.notifikasi === false ? "Nonaktif" : "Aktif"}</span></div>
+                    <div class="detail-row"><span class="detail-label">Promo</span><span class="detail-value">${data.promo === false ? "Nonaktif" : "Aktif"}</span></div>
+                    <div class="detail-row"><span class="detail-label">Bahasa</span><span class="detail-value">${esc(data.bahasa || "id")}</span></div>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <div class="detail-section-title">CIKURPAY & Aktivitas</div>
+                <div class="detail-grid">
+                    <div class="detail-row"><span class="detail-label">Wallet Status</span><span class="detail-value">${esc(walletStatus)}</span></div>
+                    <div class="detail-row"><span class="detail-label">Layanan Tercatat</span><span class="detail-value">${serviceCount}</span></div>
+                    <div class="detail-row"><span class="detail-label">Aktif Terakhir</span><span class="detail-value">${esc(formatCustomerDate({tanggalDaftar:data.lastActive || data.lastSeen || data.updatedAt}))}</span></div>
+                    <div class="detail-row"><span class="detail-label">Terakhir Login</span><span class="detail-value">${esc(formatCustomerDate({tanggalDaftar:data.lastLogin}))}</span></div>
                 </div>
             </div>
         `;
 
-        document.getElementById("modalTitle").textContent = `Detail Customer: ${nama}`;
+        document.getElementById("modalTitle").textContent = `Data Akun Customer: ${nama}`;
         document.getElementById("modalBodyContent").innerHTML = html;
         document.getElementById("detailModal").style.display = "flex";
     };
@@ -1842,7 +1903,7 @@
 
         try{
             await updateDoc(doc(adminDb, "customers", docId), {
-                status: newStatus,
+                statusAkun: newStatus,
                 updatedAt: serverTimestamp()
             });
             showToast(`Status customer ${nama} berhasil diubah ke ${newStatus}.`);
