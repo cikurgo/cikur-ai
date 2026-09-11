@@ -1482,12 +1482,152 @@ footer p { margin: 0; }
 @media(max-width:420px){.cgo-profile-stat-grid{grid-template-columns:1fr;}.cgo-profile-id-row{align-items:flex-start;flex-direction:column;}.cgo-profile-completion{white-space:normal;}}
 
 
+
+/* =========================================================
+   CUSTOMER UI POLISH — AVATAR, STATUS & NAVIGATION
+   - avatar selalu bulat
+   - camera badge konsisten saat ada/tidak ada foto
+   - status/verification punya indikator hidup
+   - bottom nav tidak memotong tombol Transaksi
+   - Profile diberi breathing room dari viewport atas
+========================================================= */
+.user-avatar,
+.profile-view-avatar,
+.cgo-profile-edit-avatar{
+    border-radius:50% !important;
+    overflow:hidden !important;
+}
+.user-avatar{position:relative;isolation:isolate;}
+.user-avatar img,
+.profile-view-avatar img,
+.cgo-profile-edit-avatar img{
+    display:block;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    border-radius:50%;
+}
+.avatar-camera-badge{
+    right:1px !important;
+    bottom:1px !important;
+    width:19px !important;
+    height:19px !important;
+    z-index:4;
+    box-shadow:0 2px 7px rgba(15,23,42,.22);
+}
+.profile-view-avatar .avatar-camera-badge{
+    right:1px !important;
+    bottom:1px !important;
+}
+
+/* Jangan potong lingkaran tombol Transaksi yang memang sedikit keluar dari bar. */
+.bottom-nav{
+    overflow:visible !important;
+}
+.bottom-nav .nav-item.prominent{
+    overflow:visible !important;
+}
+.bottom-nav .nav-item.prominent .transaksi-btn-wrapper{
+    top:-14px;
+    z-index:3;
+}
+.bottom-nav .nav-item.prominent span{
+    bottom:3px;
+    z-index:4;
+    white-space:nowrap;
+}
+
+/* Halaman profil tidak menempel ke bibir atas area aplikasi. */
+#view-profil{
+    padding-top:18px;
+}
+#view-profil .cgo-profile-page{
+    padding-top:4px;
+}
+
+/* Status hidup — hijau untuk aktif/terverifikasi, amber untuk proses. */
+#profileViewStatus,
+#profileViewVerification{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    width:max-content;
+    max-width:100%;
+    padding:5px 9px;
+    border-radius:999px;
+    background:#f1f5f9;
+    color:#475569;
+    font-size:10px !important;
+    font-weight:850 !important;
+    box-shadow:inset 0 0 0 1px rgba(148,163,184,.14);
+}
+#profileViewStatus::before,
+#profileViewVerification::before{
+    content:"";
+    width:7px;
+    height:7px;
+    flex:0 0 7px;
+    border-radius:50%;
+    background:#94a3b8;
+}
+#profileViewStatus.is-active,
+#profileViewVerification.is-full{
+    color:#047857 !important;
+    background:#ecfdf5 !important;
+    box-shadow:0 0 0 1px rgba(16,185,129,.12), 0 4px 12px rgba(16,185,129,.12);
+}
+#profileViewStatus.is-active::before,
+#profileViewVerification.is-full::before{
+    background:#10b981;
+    box-shadow:0 0 0 3px rgba(16,185,129,.13), 0 0 9px rgba(16,185,129,.55);
+    animation:cgoStatusPulse 1.8s ease-in-out infinite;
+}
+#profileViewVerification.is-partial{
+    color:#b45309 !important;
+    background:#fffbeb !important;
+    box-shadow:0 0 0 1px rgba(245,158,11,.12);
+}
+#profileViewVerification.is-partial::before{
+    background:#f59e0b;
+    box-shadow:0 0 0 3px rgba(245,158,11,.10);
+}
+@keyframes cgoStatusPulse{
+    0%,100%{transform:scale(1);opacity:1;}
+    50%{transform:scale(1.15);opacity:.82;}
+}
+
+/* Kartu verifikasi di Pengaturan Profil juga langsung terbaca secara visual. */
+.cgo-profile-verify-item.is-verified{
+    border-color:rgba(16,185,129,.25) !important;
+    background:linear-gradient(180deg,#ffffff,#f0fdf4) !important;
+}
+.cgo-profile-verify-item.is-verified strong{color:#047857 !important;}
+.cgo-profile-verify-item.is-verified strong::before{
+    content:"● ";
+    color:#10b981;
+}
+.cgo-profile-verify-item.is-pending{
+    border-color:rgba(245,158,11,.24) !important;
+    background:#fffbeb !important;
+}
+
+/* Progress profile lebih mudah dibaca tanpa mengubah nilai datanya. */
+.cgo-profile-completion{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    padding:4px 8px;
+    border-radius:999px;
+    background:#fff1f2;
+    box-shadow:inset 0 0 0 1px rgba(229,9,20,.08);
+}
+
 /* Layering: modal must cover persistent navigation while open. */
 .assistant-screen { z-index: 5000 !important; }
 .assistant-page { overscroll-behavior: contain; }
 
 </style>
-<!-- CUSTOMER_UI_REBUILD_2026-09-11: ID verification baseline + modern profile + true app-scroll nav lock -->
+<!-- CUSTOMER_UI_REBUILD_2026-09-11: ID verification baseline + profile polish + true app-scroll nav lock -->
 </head>
     
 <body class="cgo-booting">
@@ -1884,13 +2024,17 @@ function updateUIProfile() {
 
         const profileViewStatus = document.getElementById("profileViewStatus");
         if (profileViewStatus) {
-            profileViewStatus.innerText = String(userProfile.statusAkun || "active") === "active" ? "Aktif" : "Nonaktif";
+            const isActive = String(userProfile.statusAkun || "active") === "active";
+            profileViewStatus.innerText = isActive ? "Aktif" : "Nonaktif";
+            profileViewStatus.classList.toggle("is-active", isActive);
         }
 
         const profileViewVerification = document.getElementById("profileViewVerification");
         if (profileViewVerification) {
             const verified = [userProfile.emailVerified, userProfile.phoneVerified, userProfile.identityVerified].filter(Boolean).length;
             profileViewVerification.innerText = verified === 3 ? "Terverifikasi penuh ✓" : `${verified}/3 terverifikasi`;
+            profileViewVerification.classList.toggle("is-full", verified === 3);
+            profileViewVerification.classList.toggle("is-partial", verified > 0 && verified < 3);
         }
     }
 
@@ -1909,6 +2053,7 @@ function updateUIProfile() {
                     src="${userProfile.avatar}"
                     alt="Foto Profil"
                 >
+                <span class="avatar-camera-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 4.5 10.2 3h3.6L15 4.5H18A2 2 0 0 1 20 6.5v10A2 2 0 0 1 18 18.5H6a2 2 0 0 1-2-2v-10a2 2 0 0 1 2-2h3ZM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0-1.7a2.3 2.3 0 1 1 0-4.6 2.3 2.3 0 0 1 0 4.6Z"/></svg></span>
             `;
         }
 
@@ -1920,6 +2065,7 @@ function updateUIProfile() {
                     alt="Foto Profil"
                     style="width:100%;height:100%;object-fit:cover;border-radius:50%;"
                 >
+                <span class="avatar-camera-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 4.5 10.2 3h3.6L15 4.5H18A2 2 0 0 1 20 6.5v10A2 2 0 0 1 18 18.5H6a2 2 0 0 1-2-2v-10a2 2 0 0 1 2-2h3ZM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0-1.7a2.3 2.3 0 1 1 0-4.6 2.3 2.3 0 0 1 0 4.6Z"/></svg></span>
             `;
         }
     } else {
@@ -1927,7 +2073,7 @@ function updateUIProfile() {
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.25 4.25 0 1 0 0-8.5A4.25 4.25 0 0 0 12 12Zm0 2c-4.14 0-7.5 2.12-7.5 4.75V20h15v-1.25C19.5 16.12 16.14 14 12 14Z"/></svg>
             <span class="avatar-camera-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 4.5 10.2 3h3.6L15 4.5H18A2 2 0 0 1 20 6.5v10A2 2 0 0 1 18 18.5H6a2 2 0 0 1-2-2v-10a2 2 0 0 1 2-2h3ZM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0-1.7a2.3 2.3 0 1 1 0-4.6 2.3 2.3 0 0 1 0 4.6Z"/></svg></span>`;
         if (avatarContainer) { avatarContainer.classList.add("avatar-placeholder"); avatarContainer.innerHTML = placeholder; }
-        if (profileViewAvatar) { profileViewAvatar.classList.add("avatar-placeholder"); profileViewAvatar.innerHTML = placeholder.replace(/<span class="avatar-camera-badge"[\s\S]*?<\/span>/, ""); }
+        if (profileViewAvatar) { profileViewAvatar.classList.add("avatar-placeholder"); profileViewAvatar.innerHTML = placeholder; }
     }
 }  
     
@@ -3321,6 +3467,16 @@ async function bukaModalPengaturanProfil() {
             <button class="btn-pesan-form cgo-profile-save" id="btnSimpanProfil" type="button">Simpan Perubahan ✓</button>
         `;
     }
+
+    // Tandai status verifikasi secara visual agar yang sudah selesai terasa "hidup".
+    document.querySelectorAll(".cgo-profile-verify-item").forEach((item) => {
+        const label = item.querySelector("span")?.innerText?.trim().toLowerCase() || "";
+        const strong = item.querySelector("strong");
+        const text = strong?.innerText?.trim().toLowerCase() || "";
+        item.classList.remove("is-verified", "is-pending");
+        if (text.includes("terverifikasi") || text.includes("terdaftar")) item.classList.add("is-verified");
+        else if (text.includes("menunggu")) item.classList.add("is-pending");
+    });
 
     let temporaryAvatar = userProfile.avatar || "";
     const inputFotoEl = document.getElementById("inputFotoProfil");
