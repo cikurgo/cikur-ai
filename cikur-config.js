@@ -459,6 +459,70 @@ window.CikurCloud = {
         };
     },
 
+    // ======================================
+    // CUSTOMER ACCOUNT CANONICALIZER
+    // Memperbaiki dokumen customers lama/gantung tanpa menimpa
+    // keputusan Admin pada status/verifikasi.
+    // ======================================
+
+    async ensureCustomerAccount(userId, data = {}) {
+        if (!userId) throw new Error("USER_ID_REQUIRED");
+
+        const existing = await this.getCustomerAccount(userId);
+        const nowISO = new Date().toISOString();
+        const customerId = existing?.customerId
+            || data?.customerId
+            || `CGC-${new Date().getFullYear()}-${userId.slice(0, 10).toUpperCase()}`;
+
+        const canonical = {
+            uid: userId,
+            customerId,
+            name: existing?.name || data?.name || "",
+            email: existing?.email || data?.email || "",
+            phone: existing?.phone || data?.phone || "",
+            statusAkun: existing?.statusAkun || existing?.status || "active",
+            tanggalDaftar: existing?.tanggalDaftar || data?.tanggalDaftar || nowISO,
+            lastLogin: data?.lastLogin || existing?.lastLogin || nowISO,
+            emailVerified: typeof existing?.emailVerified === "boolean"
+                ? existing.emailVerified : !!data?.emailVerified,
+            phoneVerified: typeof existing?.phoneVerified === "boolean"
+                ? existing.phoneVerified : false,
+            identityVerified: typeof existing?.identityVerified === "boolean"
+                ? existing.identityVerified : false,
+            verificationLevel: existing?.verificationLevel || data?.verificationLevel || "BASIC",
+            namaLengkap: existing?.namaLengkap || data?.namaLengkap || data?.name || "",
+            namaPanggilan: existing?.namaPanggilan || data?.namaPanggilan || "",
+            jenisKelamin: existing?.jenisKelamin || data?.jenisKelamin || "",
+            tanggalLahir: existing?.tanggalLahir || data?.tanggalLahir || "",
+            alamatUtama: existing?.alamatUtama || data?.alamatUtama || "",
+            pinConfigured: typeof existing?.pinConfigured === "boolean"
+                ? existing.pinConfigured : !!data?.pinConfigured,
+            securityLevel: existing?.securityLevel || data?.securityLevel || "BASIC",
+            bahasa: existing?.bahasa || data?.bahasa || "id",
+            notifikasi: typeof existing?.notifikasi === "boolean"
+                ? existing.notifikasi : data?.notifikasi !== false,
+            promo: typeof existing?.promo === "boolean"
+                ? existing.promo : data?.promo !== false,
+            walletStatus: existing?.walletStatus || data?.walletStatus || "active",
+            saldo: Number.isFinite(Number(existing?.saldo)) ? Number(existing.saldo) : Number(data?.saldo || 0),
+            avatar: existing?.avatar || data?.avatar || "",
+            profileCompleted: typeof existing?.profileCompleted === "boolean"
+                ? existing.profileCompleted : !!data?.profileCompleted,
+            profileCompletionVersion: existing?.profileCompletionVersion || data?.profileCompletionVersion || 1,
+            updatedAt: serverTimestamp()
+        };
+
+        await setDoc(doc(db, "customers", userId), canonical, { merge: true });
+
+        return {
+            id: userId,
+            ...(existing || {}),
+            ...canonical,
+            // Admin-owned legacy status is normalized only as a read fallback.
+            statusAkun: existing?.statusAkun || existing?.status || canonical.statusAkun
+        };
+    },
+
     listenCustomerAccount(userId, callback) {
         if (!userId) return () => {};
 
@@ -498,10 +562,10 @@ window.CikurCloud = {
             jenisKelamin: data.jenisKelamin || "",
             tanggalLahir: data.tanggalLahir || "",
             alamatUtama: data.alamatUtama || "",
+            // emailVerified mengikuti Firebase Auth.
             emailVerified: !!data.emailVerified,
-            phoneVerified: !!data.phoneVerified,
-            identityVerified: !!data.identityVerified,
-            verificationLevel: data.verificationLevel || "BASIC",
+            // phoneVerified, identityVerified, verificationLevel, dan statusAkun
+            // adalah state yang tidak boleh ditimpa oleh sinkronisasi Customer.
             pinConfigured: !!data.pinConfigured,
             securityLevel: data.securityLevel || "BASIC",
             bahasa: data.bahasa || "id",

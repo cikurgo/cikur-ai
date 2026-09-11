@@ -1383,6 +1383,28 @@ footer p { margin: 0; }
 .cgo-account-meta strong{color:#0f172a;font-weight:700;text-align:right;overflow-wrap:anywhere;}
 .cgo-preference-grid{display:grid;gap:8px;}
 .cgo-preference-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 10px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;}
+/* PROFIL CUSTOMER — layout kartu agar form tidak menumpuk */
+.cgo-profile-layout{display:grid;gap:12px;}
+.cgo-profile-section{box-shadow:0 3px 12px rgba(15,23,42,.035);}
+.cgo-profile-section-title{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:900;letter-spacing:.08em;color:#475569;margin-bottom:11px;}
+.cgo-profile-section-title::before{content:"";width:4px;height:16px;border-radius:99px;background:var(--primary-red);display:inline-block;}
+.cgo-profile-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.cgo-profile-fields .form-group{margin-bottom:0;}
+.cgo-profile-fields .cgo-field-full{grid-column:1/-1;}
+.cgo-profile-account-card{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+.cgo-profile-account-item{min-width:0;padding:10px 11px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;}
+.cgo-profile-account-item span{display:block;font-size:9px;color:#64748b;margin-bottom:4px;}
+.cgo-profile-account-item strong{display:block;font-size:11px;color:#0f172a;overflow-wrap:anywhere;line-height:1.35;}
+.cgo-profile-status{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:999px;background:#ecfdf5;color:#047857;font-size:9px!important;font-weight:800;}
+.cgo-profile-status::before{content:"";width:6px;height:6px;border-radius:50%;background:#10b981;}
+.cgo-profile-verify-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.cgo-profile-verify-item{padding:9px 10px;border:1px solid #e2e8f0;border-radius:11px;background:#fff;}
+.cgo-profile-verify-item span{display:block;color:#64748b;font-size:9px;margin-bottom:4px;}
+.cgo-profile-verify-item strong{display:block;color:#0f172a;font-size:10px;line-height:1.3;}
+.cgo-profile-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.cgo-profile-actions .btn-pesan-form{margin-bottom:0;}
+.cgo-profile-save{position:sticky;bottom:8px;z-index:3;box-shadow:0 8px 20px rgba(15,23,42,.12);}
+@media(max-width:520px){.cgo-profile-fields,.cgo-profile-account-card,.cgo-profile-verify-grid,.cgo-profile-actions{grid-template-columns:1fr;} .cgo-profile-fields .cgo-field-full{grid-column:auto;}}
 .cgo-preference-row label{font-size:11px;font-weight:700;color:#334155;}
 .cgo-preference-row small{display:block;font-size:9px;font-weight:500;color:#94a3b8;margin-top:2px;}
 .cgo-switch{position:relative;width:42px;height:24px;flex:0 0 auto;}
@@ -2086,8 +2108,11 @@ function bukaModalRegistrasi() {
                 firebaseUser.uid,
                 customerProfile
             );
-            await window.CikurCloud.ensureCustomerAccount(firebaseUser.uid, customerProfile);
-            await window.CikurCloud.syncCustomerAccount(firebaseUser.uid, customerProfile);
+            const ensuredRegistrationAccount = await window.CikurCloud.ensureCustomerAccount(firebaseUser.uid, customerProfile);
+            await window.CikurCloud.syncCustomerAccount(firebaseUser.uid, {
+                ...customerProfile,
+                ...(ensuredRegistrationAccount || {})
+            });
 
             // PIN tidak disimpan sebagai teks biasa. Simpan hash + status saja.
             await window.CikurCloud.setCustomerPin(firebaseUser.uid, pinVal);
@@ -2368,7 +2393,20 @@ function bukaModalLogin() {
                     isLoggedIn: true
                 };
 
-                await window.CikurCloud.ensureCustomerAccount(firebaseUser.uid, userProfile);
+                // Pulihkan/benahi Customer record canonical sebelum UI dibuka.
+                // Ini juga memperbaiki data customer lama yang sebelumnya hanya
+                // memiliki nama/email/HP (data gantung).
+                const ensuredAccount = await window.CikurCloud.ensureCustomerAccount(firebaseUser.uid, userProfile);
+                userProfile = {
+                    ...userProfile,
+                    ...(ensuredAccount || {}),
+                    uid: firebaseUser.uid,
+                    email: profile?.email || ensuredAccount?.email || firebaseUser.email || "",
+                    emailVerified: !!firebaseUser.emailVerified,
+                    lastLogin: new Date().toISOString(),
+                    isLoggedIn: true
+                };
+
                 await window.CikurCloud.syncCustomerAccount(firebaseUser.uid, userProfile);
                 if (!(await enforceCustomerAccountStatus(firebaseUser))) return;
                 startCustomerStatusWatcher(firebaseUser);
@@ -2502,7 +2540,14 @@ async function loadCurrentUserProfileIndex() {
             isLoggedIn: true
         };
 
-        await window.CikurCloud.ensureCustomerAccount(firebaseUser.uid, userProfile);
+        const ensuredAccount = await window.CikurCloud.ensureCustomerAccount(firebaseUser.uid, userProfile);
+        userProfile = {
+            ...userProfile,
+            ...(ensuredAccount || {}),
+            uid: firebaseUser.uid,
+            email: userProfile.email || ensuredAccount?.email || firebaseUser.email || "",
+            isLoggedIn: true
+        };
         await window.CikurCloud.syncCustomerAccount(firebaseUser.uid, userProfile);
         if (!(await enforceCustomerAccountStatus(firebaseUser))) return;
         startCustomerStatusWatcher(firebaseUser);
@@ -3013,12 +3058,14 @@ async function bukaModalPengaturanProfil() {
             const firebaseUser = await window.CikurCloud.waitForAuth();
             if (firebaseUser) {
                 const freshProfile = await window.CikurCloud.getProfile(firebaseUser.uid);
-                if (freshProfile) {
+                const freshCustomer = await window.CikurCloud.getCustomerAccount(firebaseUser.uid);
+                if (freshProfile || freshCustomer) {
                     userProfile = {
                         ...userProfile,
-                        ...freshProfile,
+                        ...(freshProfile || {}),
+                        ...(freshCustomer || {}),
                         uid: firebaseUser.uid,
-                        email: freshProfile.email || firebaseUser.email || "",
+                        email: freshProfile?.email || freshCustomer?.email || firebaseUser.email || "",
                         isLoggedIn: true
                     };
                     updateUIProfile();
@@ -3044,86 +3091,90 @@ async function bukaModalPengaturanProfil() {
                 <div class="cgo-profile-edit-sub">Data akun tersimpan di CIKUR GO Cloud</div>
             </div>
 
-            <div class="cgo-profile-section">
-                <div class="cgo-profile-section-title">DATA PRIBADI</div>
-                <div class="form-group">
-                    <label>Foto Profil</label>
-                    <input type="file" id="inputFotoProfil" accept="image/*" class="input-box cgo-file-input">
-                </div>
-                <div class="form-group">
-                    <label>Nama Lengkap</label>
-                    <input type="text" id="inputNamaUser" class="input-box" value="${safeName}" autocomplete="name" placeholder="Nama lengkap">
-                </div>
-                <div class="form-group">
-                    <label>Email Akun</label>
-                    <input type="email" id="inputEmailUser" class="input-box" value="${safeEmail}" autocomplete="email" readonly>
-                    <div class="cgo-field-note">Email login tidak diubah dari form profil agar akun Auth dan data profil tetap sinkron.</div>
-                </div>
-                <div class="form-group" style="margin-bottom:0;">
-                    <label>Nomor WhatsApp / HP</label>
-                    <input type="tel" id="inputPhoneUser" class="input-box" value="${safePhone}" autocomplete="tel" inputmode="tel" placeholder="08xxxxxxxxxx">
-                </div>
-                <div class="form-group">
-                    <label>Nama Panggilan <span style="font-weight:500;color:#94a3b8;">(opsional)</span></label>
-                    <input type="text" id="inputNicknameUser" class="input-box" value="${String(userProfile.namaPanggilan || "").replace(/"/g, "&quot;")}" placeholder="Nama yang biasa dipanggil">
-                </div>
-                <div class="cgo-form-row">
-                    <div class="form-group">
-                        <label>Jenis Kelamin <span style="font-weight:500;color:#94a3b8;">(opsional)</span></label>
-                        <select id="inputGenderUser" class="input-box">
-                            <option value="">Pilih</option>
-                            <option value="L" ${userProfile.jenisKelamin === "L" ? "selected" : ""}>Laki-laki</option>
-                            <option value="P" ${userProfile.jenisKelamin === "P" ? "selected" : ""}>Perempuan</option>
-                        </select>
+            <div class="cgo-profile-layout">
+                <div class="cgo-profile-section">
+                    <div class="cgo-profile-section-title">DATA PRIBADI</div>
+                    <div class="cgo-profile-fields">
+                        <div class="form-group cgo-field-full">
+                            <label>Foto Profil</label>
+                            <input type="file" id="inputFotoProfil" accept="image/*" class="input-box cgo-file-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Nama Lengkap</label>
+                            <input type="text" id="inputNamaUser" class="input-box" value="${safeName}" autocomplete="name" placeholder="Nama lengkap">
+                        </div>
+                        <div class="form-group">
+                            <label>Nama Panggilan <span style="font-weight:500;color:#94a3b8;">(opsional)</span></label>
+                            <input type="text" id="inputNicknameUser" class="input-box" value="${String(userProfile.namaPanggilan || "").replace(/"/g, "&quot;")}" placeholder="Nama yang biasa dipanggil">
+                        </div>
+                        <div class="form-group">
+                            <label>Nomor WhatsApp / HP</label>
+                            <input type="tel" id="inputPhoneUser" class="input-box" value="${safePhone}" autocomplete="tel" inputmode="tel" placeholder="08xxxxxxxxxx">
+                        </div>
+                        <div class="form-group">
+                            <label>Email Akun</label>
+                            <input type="email" id="inputEmailUser" class="input-box" value="${safeEmail}" autocomplete="email" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label>Jenis Kelamin <span style="font-weight:500;color:#94a3b8;">(opsional)</span></label>
+                            <select id="inputGenderUser" class="input-box">
+                                <option value="">Pilih</option>
+                                <option value="L" ${userProfile.jenisKelamin === "L" ? "selected" : ""}>Laki-laki</option>
+                                <option value="P" ${userProfile.jenisKelamin === "P" ? "selected" : ""}>Perempuan</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Tanggal Lahir <span style="font-weight:500;color:#94a3b8;">(opsional)</span></label>
+                            <input type="date" id="inputBirthDateUser" class="input-box" value="${userProfile.tanggalLahir || ""}">
+                        </div>
+                        <div class="form-group cgo-field-full" style="margin-bottom:0;">
+                            <label>Alamat Utama <span style="font-weight:500;color:#94a3b8;">(opsional)</span></label>
+                            <textarea id="inputAddressUser" class="input-box" rows="3" placeholder="Alamat yang biasa digunakan untuk layanan CIKUR GO">${String(userProfile.alamatUtama || "")}</textarea>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Tanggal Lahir <span style="font-weight:500;color:#94a3b8;">(opsional)</span></label>
-                        <input type="date" id="inputBirthDateUser" class="input-box" value="${userProfile.tanggalLahir || ""}">
+                </div>
+
+                <div class="cgo-profile-section">
+                    <div class="cgo-profile-section-title">IDENTITAS AKUN CUSTOMER</div>
+                    <div class="cgo-profile-account-card">
+                        <div class="cgo-profile-account-item"><span>Customer ID</span><strong>${String(userProfile.customerId || "Belum tersedia")}</strong></div>
+                        <div class="cgo-profile-account-item"><span>Status Akun</span><strong class="cgo-profile-status">${String(userProfile.statusAkun || "active") === "active" ? "Aktif" : "Nonaktif"}</strong></div>
+                        <div class="cgo-profile-account-item"><span>Tanggal Daftar</span><strong>${userProfile.tanggalDaftar ? new Date(userProfile.tanggalDaftar).toLocaleDateString("id-ID") : "Belum tersedia"}</strong></div>
+                        <div class="cgo-profile-account-item"><span>Kelengkapan Profil</span><strong>${calculateCustomerProfileCompletion(userProfile)}%</strong></div>
                     </div>
                 </div>
-                <div class="form-group" style="margin-bottom:0;">
-                    <label>Alamat Utama <span style="font-weight:500;color:#94a3b8;">(opsional)</span></label>
-                    <textarea id="inputAddressUser" class="input-box" rows="3" placeholder="Alamat yang biasa digunakan untuk layanan CIKUR GO">${String(userProfile.alamatUtama || "")}</textarea>
+
+                <div class="cgo-profile-section">
+                    <div class="cgo-profile-section-title">VERIFIKASI & KEAMANAN</div>
+                    <div class="cgo-profile-verify-grid">
+                        <div class="cgo-profile-verify-item"><span>Email</span><strong>${userProfile.emailVerified ? "Terverifikasi ✓" : "Belum terverifikasi"}</strong></div>
+                        <div class="cgo-profile-verify-item"><span>Nomor HP</span><strong>${userProfile.phoneVerified ? "Terverifikasi ✓" : "Belum terverifikasi"}</strong></div>
+                        <div class="cgo-profile-verify-item"><span>Identitas</span><strong>${userProfile.identityVerified ? "Terverifikasi ✓" : "Belum terverifikasi"}</strong></div>
+                        <div class="cgo-profile-verify-item"><span>PIN CikurPay</span><strong>${userProfile.pinConfigured || userProfile.pinHash ? "Terdaftar ✓" : "Belum diatur"}</strong></div>
+                    </div>
+                    ${!userProfile.emailVerified ? '<button class="btn-pesan-form cgo-secondary-action" id="btnVerifikasiEmailProfil" type="button" style="margin-top:9px;">Kirim Verifikasi Email</button>' : ""}
+                    <div class="cgo-profile-actions" style="margin-top:8px;">
+                        <button class="btn-pesan-form cgo-secondary-action" id="btnGantiPasswordProfil" type="button">Ganti Password</button>
+                        <button class="btn-pesan-form cgo-secondary-action" id="btnAturPinProfil" type="button">Atur PIN CikurPay 🔒</button>
+                    </div>
+                </div>
+
+                <div class="cgo-profile-section">
+                    <div class="cgo-profile-section-title">PREFERENSI CUSTOMER</div>
+                    <div class="cgo-preference-grid">
+                        <div class="cgo-preference-row">
+                            <div><label>Notifikasi aplikasi</label><small>Info pesanan, keamanan, dan aktivitas akun</small></div>
+                            <label class="cgo-switch" aria-label="Notifikasi aplikasi"><input type="checkbox" id="inputNotifUser" ${userProfile.notifikasi !== false ? "checked" : ""}><span></span></label>
+                        </div>
+                        <div class="cgo-preference-row">
+                            <div><label>Promo & penawaran</label><small>Penawaran layanan dan promo CIKUR GO</small></div>
+                            <label class="cgo-switch" aria-label="Promo dan penawaran"><input type="checkbox" id="inputPromoUser" ${userProfile.promo !== false ? "checked" : ""}><span></span></label>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="cgo-profile-section">
-                <div class="cgo-profile-section-title">DATA AKUN CUSTOMER</div>
-                <div class="cgo-account-meta">
-                    <div><span>Customer ID</span><strong>${String(userProfile.customerId || "Belum tersedia")}</strong></div>
-                    <div><span>Status Akun</span><strong>${String(userProfile.statusAkun || "active") === "active" ? "Aktif" : String(userProfile.statusAkun || "Belum ditentukan")}</strong></div>
-                    <div><span>Terdaftar</span><strong>${userProfile.tanggalDaftar ? new Date(userProfile.tanggalDaftar).toLocaleDateString("id-ID") : "-"}</strong></div>
-                </div>
-            </div>
-
-            <div class="cgo-profile-section">
-                <div class="cgo-profile-section-title">PREFERENSI CUSTOMER</div>
-                <div class="cgo-preference-grid">
-                    <div class="cgo-preference-row">
-                        <div><label>Notifikasi aplikasi</label><small>Info pesanan, keamanan, dan aktivitas akun</small></div>
-                        <label class="cgo-switch" aria-label="Notifikasi aplikasi"><input type="checkbox" id="inputNotifUser" ${userProfile.notifikasi !== false ? "checked" : ""}><span></span></label>
-                    </div>
-                    <div class="cgo-preference-row">
-                        <div><label>Promo & penawaran</label><small>Penawaran layanan dan promo CIKUR GO</small></div>
-                        <label class="cgo-switch" aria-label="Promo dan penawaran"><input type="checkbox" id="inputPromoUser" ${userProfile.promo !== false ? "checked" : ""}><span></span></label>
-                    </div>
-                </div>
-            </div>
-
-            <div class="cgo-profile-section cgo-security-section">
-                <div class="cgo-profile-section-title">VERIFIKASI & KEAMANAN</div>
-                <div class="cgo-security-status">
-                    <div><span>Email</span><strong>${userProfile.emailVerified ? "Terverifikasi ✓" : "Belum terverifikasi"}</strong></div>
-                    <div><span>PIN CikurPay</span><strong>${userProfile.pinConfigured || userProfile.pinHash ? "Terdaftar ✓" : "Belum diatur"}</strong></div>
-                    <div><span>Kelengkapan profil</span><strong>${calculateCustomerProfileCompletion(userProfile)}%</strong></div>
-                </div>
-                ${!userProfile.emailVerified ? '<button class="btn-pesan-form cgo-secondary-action" id="btnVerifikasiEmailProfil" type="button">Kirim Verifikasi Email</button>' : ""}
-
-                <button class="btn-pesan-form cgo-secondary-action" id="btnGantiPasswordProfil" type="button">Ganti Password</button>
-                <button class="btn-pesan-form cgo-secondary-action" id="btnAturPinProfil" type="button">Atur PIN CikurPay 🔒</button>
-            </div>
-
-            <button class="btn-pesan-form" id="btnSimpanProfil" type="button">Simpan Perubahan ✓</button>
+            <button class="btn-pesan-form cgo-profile-save" id="btnSimpanProfil" type="button">Simpan Perubahan ✓</button>
         `;
     }
 
