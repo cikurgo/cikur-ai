@@ -1110,8 +1110,12 @@
         return data.name || data.namaLengkap || data.fullName || data.nama || data.username || "Customer CIKUR";
     }
 
-    function getCustomerId(data){
-        return data.customerId || "Belum tersedia";
+    function getCustomerId(data, docId = ""){
+        const raw = String(data?.customerId || "").trim();
+        if (/^CGO-\d{4}-[A-Z0-9]{10}$/.test(raw)) return raw;
+        const uid = String(data?.uid || docId || "").trim();
+        if (uid) return `CGO-${new Date().getFullYear()}-${uid.slice(0,10).toUpperCase()}`;
+        return "Belum tersedia";
     }
 
     function getCustomerStatus(data){
@@ -1234,7 +1238,7 @@
             if(isOnline) onlineCount++; else offlineCount++;
 
             const nama = getCustomerName(data);
-            const customerId = getCustomerId(data);
+            const customerId = getCustomerId(data, docId);
             const email = data.email || "-";
             const phone = data.phone || data.nomorHP || data.kontak || "-";
             const date = formatCustomerDate(data);
@@ -1803,7 +1807,7 @@
         if(!data) return;
 
         const nama = getCustomerName(data);
-        const customerId = getCustomerId(data);
+        const customerId = getCustomerId(data, docId);
         const email = data.email || "-";
         const phone = data.phone || data.nomorHP || data.kontak || "-";
         const date = formatCustomerDate(data);
@@ -1840,6 +1844,10 @@
                     <div class="detail-row"><span class="detail-label">Email</span><span class="detail-value">${emailVerified}</span></div>
                     <div class="detail-row"><span class="detail-label">Telepon</span><span class="detail-value">${phoneVerified}</span></div>
                     <div class="detail-row"><span class="detail-label">Identitas</span><span class="detail-value">${identityVerified}</span></div>
+                    <div class="detail-row"><span class="detail-label">Pengajuan Identitas</span><span class="detail-value">${esc(data.identityVerificationStatus || "Belum diajukan")}</span></div>
+                    <div class="detail-row"><span class="detail-label">NIK</span><span class="detail-value">${esc(data.identityNIK || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Nama Identitas</span><span class="detail-value">${esc(data.identityName || "-")}</span></div>
+                    <div class="detail-row"><span class="detail-label">Tanggal Lahir Identitas</span><span class="detail-value">${esc(data.identityBirthDate || "-")}</span></div>
                     <div class="detail-row"><span class="detail-label">Profil</span><span class="detail-value">${profileStatus}</span></div>
                     <div class="detail-row"><span class="detail-label">Alamat Utama</span><span class="detail-value">${esc(address)}</span></div>
                 </div>
@@ -1855,6 +1863,14 @@
                     <div class="detail-row"><span class="detail-label">Bahasa</span><span class="detail-value">${esc(data.bahasa || "id")}</span></div>
                 </div>
             </div>
+
+            ${data.identityDocumentUrl ? `
+                <div class="detail-section">
+                    <div class="detail-section-title">Dokumen Verifikasi Identitas</div>
+                    <div class="ktp-preview-container"><img src="${esc(data.identityDocumentUrl)}" alt="Dokumen identitas Customer"></div>
+                    ${data.identityVerificationStatus === "pending" ? `<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;"><button class="btn-action btn-review" onclick="reviewCustomerIdentity('${esc(docId)}','approve')">Setujui Identitas</button><button class="btn-action btn-reject" onclick="reviewCustomerIdentity('${esc(docId)}','reject')">Tolak Identitas</button></div>` : ""}
+                </div>
+            ` : ""}
 
             <div class="detail-section">
                 <div class="detail-section-title">CIKURPAY & Aktivitas</div>
@@ -1892,6 +1908,12 @@
             console.error("Error updating status:", error);
             showToast("Gagal memperbarui status: " + error.message);
         }
+    };
+
+    window.reviewCustomerIdentity = async function(docId, action){
+        const data=cachedCustomers[docId]; if(!data) return; const nama=getCustomerName(data); const approve=action==="approve";
+        if(!confirm(`${approve?"Setujui":"Tolak"} verifikasi identitas ${nama}?`)) return;
+        try{ const nextLevel=approve?(data.phoneVerified===true?"IDENTITY_PHONE":(data.emailVerified===true?"IDENTITY_EMAIL":"IDENTITY")):(data.phoneVerified===true?"EMAIL_PHONE":(data.emailVerified===true?"EMAIL":"BASIC")); await updateDoc(doc(adminDb,"customers",docId),{identityVerified:approve,identityVerificationStatus:approve?"approved":"rejected",identityReviewedAt:serverTimestamp(),verificationLevel:nextLevel,updatedAt:serverTimestamp()}); showToast(`Verifikasi identitas ${nama} ${approve?"disetujui":"ditolak"}.`); }catch(error){console.error("Error reviewing customer identity:",error);showToast("Gagal memproses verifikasi identitas: "+error.message);}
     };
 
     window.toggleCustomerStatus = async function(docId, currentStatus){

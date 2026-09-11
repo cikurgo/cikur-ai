@@ -6,6 +6,13 @@
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 
 import {
+    getStorage,
+    ref as storageRef,
+    uploadBytes,
+    getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
+
+import {
     getFirestore,
     collection,
     addDoc,
@@ -35,7 +42,8 @@ import {
     EmailAuthProvider,
     linkWithCredential,
     fetchSignInMethodsForEmail,
-    signOut
+    signOut,
+    linkWithPhoneNumber
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 
@@ -91,6 +99,7 @@ const adminAuth = initializeAuth(adminApp, {
     popupRedirectResolver: undefined
 });
 const adminDb = getFirestore(adminApp);
+const storage = getStorage(customerApp);
 
 // Alias db dipertahankan untuk seluruh modul Customer/Mitra lama.
 // Halaman Admin wajib memakai adminDb agar Firestore dan Admin Auth berasal
@@ -267,6 +276,122 @@ window.CikurCloud = {
         );
         await sendEmailVerification(user);
         return true;
+    },
+
+    // ======================================
+    // VERIFIKASI NOMOR HP CUSTOMER — SMS OTP
+    // Firebase Auth menjadi sumber kebenaran nomor terverifikasi.
+    // ======================================
+
+    normalizeCustomerPhone(phone) {
+        const raw = String(phone || "").trim().replace(/[\s().-]/g, "");
+        if (!raw) throw new Error("PHONE_REQUIRED");
+        if (/^08\d{8,13}$/.test(raw)) return "+62" + raw.slice(1);
+        if (/^628\d{8,13}$/.test(raw)) return "+" + raw;
+        if (/^\+628\d{8,13}$/.test(raw)) return raw;
+        throw new Error("INVALID_PHONE_FORMAT");
+    },
+
+    async startCustomerPhoneVerification(phoneNumber, recaptchaContainerId) {
+        const user = auth.currentUser || await this.waitForAuth();
+        if (!user) throw new Error("NO_AUTHENTICATED_USER");
+        const e164 = this.normalizeCustomerPhone(phoneNumber);
+        if (typeof window === "undefined") throw new Error("BROWSER_REQUIRED");
+
+        const { RecaptchaVerifier } = await import(
+            "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js"
+        );
+        if (window.__cikurPhoneRecaptcha) {
+            try { window.__cikurPhoneRecaptcha.clear(); } catch (_) {}
+            window.__cikurPhoneRecaptcha = null;
+        }
+        const container = document.getElementById(recaptchaContainerId);
+        if (!container) throw new Error("RECAPTCHA_CONTAINER_NOT_FOUND");
+
+        const verifier = new RecaptchaVerifier(auth, recaptchaContainerId, {
+            size: "normal"
+        });
+        window.__cikurPhoneRecaptcha = verifier;
+        await verifier.render();
+        const confirmationResult = await linkWithPhoneNumber(user, e164, verifier);
+        window.__cikurPhoneConfirmation = confirmationResult;
+        return { sent: true, phoneNumber: e164 };
+    },
+
+    async confirmCustomerPhoneVerification(code, displayPhone = "") {
+        const confirmation = window.__cikurPhoneConfirmation;
+        if (!confirmation) throw new Error("PHONE_VERIFICATION_NOT_STARTED");
+        const normalizedCode = String(code || "").trim();
+        if (!/^\d{6}$/.test(normalizedCode)) throw new Error("INVALID_OTP");
+
+        const credentialResult = await confirmation.confirm(normalizedCode);
+        const verifiedUser = credentialResult.user;
+        await verifiedUser.reload();
+        const verifiedPhone = verifiedUser.phoneNumber || this.normalizeCustomerPhone(displayPhone);
+        await setDoc(doc(db, "customers", verifiedUser.uid), {
+            phone: displayPhone || verifiedPhone,
+            verifiedPhoneNumber: verifiedPhone,
+            phoneVerified: true,
+            phoneVerifiedAt: new Date().toISOString(),
+            updatedAt: serverTimestamp()
+        }, { merge: true });
+        try { window.__cikurPhoneRecaptcha?.clear(); } catch (_) {}
+        window.__cikurPhoneRecaptcha = null;
+        window.__cikurPhoneConfirmation = null;
+        return { phoneVerified: true, phoneNumber: verifiedPhone };
+    },
+
+    async resetCustomerPhoneVerification(userId) {
+        if (!userId) throw new Error("USER_ID_REQUIRED");
+        await setDoc(doc(db, "customers", userId), {
+            phoneVerified: false,
+            verifiedPhoneNumber: deleteField(),
+            phoneVerifiedAt: deleteField(),
+            verificationLevel: "BASIC",
+            updatedAt: serverTimestamp()
+        }, { merge: true });
+        return true;
+    },
+
+    // ======================================
+    // PENGAJUAN VERIFIKASI IDENTITAS
+    // Dokumen masuk Firebase Storage; keputusan tetap Admin.
+    // ======================================
+
+    async submitCustomerIdentityVerification(userId, payload = {}) {
+        if (!userId) throw new Error("USER_ID_REQUIRED");
+        const user = auth.currentUser || await this.waitForAuth();
+        if (!user || user.uid !== userId) throw new Error("UNAUTHORIZED_USER");
+        const fullName = String(payload.fullName || "").trim();
+        const birthDate = String(payload.birthDate || "").trim();
+        const nik = String(payload.nik || "").replace(/\D/g, "");
+        const file = payload.file;
+        if (fullName.length < 2) throw new Error("IDENTITY_NAME_REQUIRED");
+        if (!/^\d{16}$/.test(nik)) throw new Error("INVALID_NIK");
+        if (!birthDate) throw new Error("BIRTH_DATE_REQUIRED");
+        if (!(file instanceof File)) throw new Error("IDENTITY_DOCUMENT_REQUIRED");
+        if (!file.type.startsWith("image/")) throw new Error("IDENTITY_DOCUMENT_IMAGE_ONLY");
+        if (file.size > 5 * 1024 * 1024) throw new Error("IDENTITY_DOCUMENT_TOO_LARGE");
+
+        const safeExt = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+        const path = `customer-identity/${userId}/ktp-${Date.now()}.${safeExt}`;
+        const fileRef = storageRef(storage, path);
+        await uploadBytes(fileRef, file, { contentType: file.type });
+        const documentUrl = await getDownloadURL(fileRef);
+
+        await setDoc(doc(db, "customers", userId), {
+            identityVerificationStatus: "pending",
+            identityVerified: false,
+            identityName: fullName,
+            identityBirthDate: birthDate,
+            identityNIK: nik,
+            identityDocumentUrl: documentUrl,
+            identityDocumentPath: path,
+            identitySubmittedAt: serverTimestamp(),
+            identityReviewedAt: null,
+            updatedAt: serverTimestamp()
+        }, { merge: true });
+        return { status: "pending", documentUrl };
     },
 
     // ======================================
@@ -470,9 +595,12 @@ window.CikurCloud = {
 
         const existing = await this.getCustomerAccount(userId);
         const nowISO = new Date().toISOString();
-        const customerId = existing?.customerId
-            || data?.customerId
-            || `CGC-${new Date().getFullYear()}-${userId.slice(0, 10).toUpperCase()}`;
+        const existingId = String(existing?.customerId || data?.customerId || "").trim();
+        // Canonical Customer ID CIKUR GO: CGO-YYYY-XXXXXXXXXX.
+        // Migrasikan ID lama CGC-* secara deterministik, tanpa mengubah UID.
+        const customerId = /^CGO-\d{4}-[A-Z0-9]{10}$/.test(existingId)
+            ? existingId
+            : `CGO-${new Date().getFullYear()}-${userId.slice(0, 10).toUpperCase()}`;
 
         const canonical = {
             uid: userId,

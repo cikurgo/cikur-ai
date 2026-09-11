@@ -2059,7 +2059,7 @@ function bukaModalRegistrasi() {
             const nowISO = new Date().toISOString();
             const customerProfile = {
                 uid: firebaseUser.uid,
-                customerId: userProfile?.customerId || `CGC-${new Date().getFullYear()}-${firebaseUser.uid.slice(0, 10).toUpperCase()}`,
+                customerId: userProfile?.customerId || `CGO-${new Date().getFullYear()}-${firebaseUser.uid.slice(0, 10).toUpperCase()}`,
 
                 // IDENTITAS AKUN
                 name: nameVal,
@@ -2521,18 +2521,23 @@ async function loadCurrentUserProfileIndex() {
         }
 
         if (!profile) {
-            // Auth sudah ada tetapi profil aplikasi belum lengkap.
-            // Jangan membuka registrasi ulang karena email sudah terdaftar.
-            // Tampilkan form pelengkapan profil pada akun yang sama.
-            setCgoAuthGate(true);
-            hideCikurSplash();
+            // Pulihkan dari customers bila dokumen users lama hilang/tidak lengkap.
+            let customerProfile = null;
+            try { customerProfile = await window.CikurCloud.getCustomerAccount(firebaseUser.uid); }
+            catch (customerError) { console.error("[CIKUR GO] Gagal memulihkan data Customer:", customerError); }
             userProfile = {
-                ...userProfile,
-                uid: firebaseUser.uid,
-                email: firebaseUser.email || "",
-                isLoggedIn: true
+                ...userProfile, ...(customerProfile || {}), uid: firebaseUser.uid,
+                email: customerProfile?.email || firebaseUser.email || "",
+                emailVerified: !!firebaseUser.emailVerified, isLoggedIn: true
             };
-            bukaModalPengaturanProfil();
+            const ensuredFromCustomer = await window.CikurCloud.ensureCustomerAccount(firebaseUser.uid, userProfile);
+            userProfile = { ...userProfile, ...(ensuredFromCustomer || {}) };
+            await window.CikurCloud.syncCustomerAccount(firebaseUser.uid, userProfile);
+            if (!(await enforceCustomerAccountStatus(firebaseUser))) return;
+            startCustomerStatusWatcher(firebaseUser);
+            await refreshCustomerSecurityState(firebaseUser);
+            updateUIProfile();
+            setCgoAuthGate(true); hideCikurSplash(); bukaModalPengaturanProfil();
             return;
         }
 
@@ -2625,6 +2630,11 @@ function startCustomerStatusWatcher(firebaseUser) {
         firebaseUser.uid,
         async (account) => {
             if (!account || account._error) return;
+            // Admin menjadi sumber kebenaran untuk status/verifikasi.
+            // Setiap perubahan Admin dipantulkan realtime ke halaman Customer.
+            userProfile = { ...userProfile, ...account, uid: firebaseUser.uid, isLoggedIn: true };
+            updateUIProfile();
+            if (typeof updateUIAkun === "function") updateUIAkun(userProfile);
             const status = String(account.statusAkun || account.status || "active").toLowerCase();
             userProfile.statusAkun = status;
             if (status === "inactive") {
@@ -3041,14 +3051,20 @@ function calculateCustomerProfileCompletion(profile = userProfile) {
 
 async function refreshCustomerSecurityState(firebaseUser) {
     if (!firebaseUser) return;
+    try { await firebaseUser.reload(); } catch (_) {}
     const emailVerified = !!firebaseUser.emailVerified;
     userProfile = {
         ...userProfile,
         uid: firebaseUser.uid,
         email: userProfile.email || firebaseUser.email || "",
         emailVerified,
-        verificationLevel: emailVerified ? (userProfile.phoneVerified ? "EMAIL_PHONE" : "EMAIL") : "BASIC"
+        verificationLevel: userProfile.identityVerified
+            ? (userProfile.phoneVerified ? "IDENTITY_PHONE" : (emailVerified ? "IDENTITY_EMAIL" : "IDENTITY"))
+            : (emailVerified ? (userProfile.phoneVerified ? "EMAIL_PHONE" : "EMAIL") : (userProfile.phoneVerified ? "PHONE" : "BASIC"))
     };
+    // Email verification berasal dari Firebase Auth dan disalin ke customer record.
+    try { await window.CikurCloud.syncCustomerAccount(firebaseUser.uid, userProfile); }
+    catch (error) { console.warn("[CIKUR GO] Status email belum dapat disinkronkan:", error); }
 }
 
 function formatCustomerDateForProfile(value) {
@@ -3169,10 +3185,12 @@ async function bukaModalPengaturanProfil() {
                     <div class="cgo-profile-verify-grid">
                         <div class="cgo-profile-verify-item"><span>Email</span><strong>${userProfile.emailVerified ? "Terverifikasi ✓" : "Belum terverifikasi"}</strong></div>
                         <div class="cgo-profile-verify-item"><span>Nomor HP</span><strong>${userProfile.phoneVerified ? "Terverifikasi ✓" : "Belum terverifikasi"}</strong></div>
-                        <div class="cgo-profile-verify-item"><span>Identitas</span><strong>${userProfile.identityVerified ? "Terverifikasi ✓" : "Belum terverifikasi"}</strong></div>
+                        <div class="cgo-profile-verify-item"><span>Identitas</span><strong>${userProfile.identityVerified ? "Terverifikasi ✓" : (userProfile.identityVerificationStatus === "pending" ? "Menunggu pemeriksaan Admin" : "Belum terverifikasi")}</strong></div>
                         <div class="cgo-profile-verify-item"><span>PIN CikurPay</span><strong>${userProfile.pinConfigured || userProfile.pinHash ? "Terdaftar ✓" : "Belum diatur"}</strong></div>
                     </div>
                     ${!userProfile.emailVerified ? '<button class="btn-pesan-form cgo-secondary-action" id="btnVerifikasiEmailProfil" type="button" style="margin-top:9px;">Kirim Verifikasi Email</button>' : ""}
+                    ${!userProfile.phoneVerified ? '<button class="btn-pesan-form cgo-secondary-action" id="btnVerifikasiPhoneProfil" type="button">Verifikasi Nomor HP via SMS</button>' : ""}
+                    ${!userProfile.identityVerified ? `<button class="btn-pesan-form cgo-secondary-action" id="btnAjukanIdentitasProfil" type="button">${userProfile.identityVerificationStatus === "pending" ? "Lihat Status Verifikasi Identitas" : "Ajukan Verifikasi Identitas"}</button>` : ""}
                     <div class="cgo-profile-actions" style="margin-top:8px;">
                         <button class="btn-pesan-form cgo-secondary-action" id="btnGantiPasswordProfil" type="button">Ganti Password</button>
                         <button class="btn-pesan-form cgo-secondary-action" id="btnAturPinProfil" type="button">Atur PIN CikurPay 🔒</button>
@@ -3225,6 +3243,11 @@ async function bukaModalPengaturanProfil() {
             reader.readAsDataURL(file);
         });
     }
+
+    const btnVerifikasiPhoneProfil = document.getElementById("btnVerifikasiPhoneProfil");
+    if (btnVerifikasiPhoneProfil) btnVerifikasiPhoneProfil.addEventListener("click", () => bukaModalVerifikasiNomorHP());
+    const btnAjukanIdentitasProfil = document.getElementById("btnAjukanIdentitasProfil");
+    if (btnAjukanIdentitasProfil) btnAjukanIdentitasProfil.addEventListener("click", () => bukaModalVerifikasiIdentitas());
 
     const btnGantiPasswordProfil = document.getElementById("btnGantiPasswordProfil");
     if (btnGantiPasswordProfil) {
@@ -3285,6 +3308,13 @@ async function bukaModalPengaturanProfil() {
             try {
                 const firebaseUser = await window.CikurCloud?.waitForAuth?.();
                 if (!firebaseUser) throw new Error("NO_AUTHENTICATED_USER");
+
+                const verifiedPhone = String(userProfile.verifiedPhoneNumber || "").trim();
+                if (userProfile.phoneVerified && verifiedPhone && newPhone !== verifiedPhone) {
+                    await window.CikurCloud.resetCustomerPhoneVerification(firebaseUser.uid);
+                    userProfile.phoneVerified = false;
+                    delete userProfile.verifiedPhoneNumber;
+                }
 
                 await window.CikurCloud.saveProfile(firebaseUser.uid, {
                     name: newName,
@@ -3352,6 +3382,38 @@ async function bukaModalPengaturanProfil() {
             }
         });
     }
+}
+
+async function bukaModalVerifikasiNomorHP() {
+    openModal("VERIFIKASI NOMOR HP 📱");
+    if (!modalMainContent) return;
+    const phone = userProfile.phone || "";
+    modalMainContent.innerHTML = `
+        <div class="cgo-form-intro"><div class="cgo-form-intro-icon">📱</div><div class="cgo-form-intro-title">Verifikasi nomor HP</div><div class="cgo-form-intro-text">Firebase akan mengirim kode OTP melalui SMS. Nomor Indonesia harus valid.</div></div>
+        <div class="form-group"><label>Nomor HP</label><input id="verifyPhoneNumber" class="input-box" value="${String(phone).replace(/"/g, '&quot;')}" inputmode="tel" autocomplete="tel"></div>
+        <div id="phoneRecaptchaContainer" style="margin:10px 0;"></div>
+        <button class="btn-pesan-form" id="btnKirimOTP" type="button">Kirim Kode OTP</button>
+        <div id="phoneOtpArea" style="display:none;margin-top:12px;"><div class="form-group"><label>Kode OTP 6 Digit</label><input id="verifyPhoneOtp" class="input-box" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="123456"></div><button class="btn-pesan-form" id="btnKonfirmasiOTP" type="button">Konfirmasi Nomor HP ✓</button></div>
+        <p style="font-size:9px;color:#94a3b8;line-height:1.5;margin-top:10px;">SMS dapat dikenai tarif operator. Kode OTP tidak disimpan CIKUR GO.</p>`;
+    document.getElementById("btnKirimOTP")?.addEventListener("click", async () => {
+        const number = document.getElementById("verifyPhoneNumber")?.value.trim() || ""; const btn = document.getElementById("btnKirimOTP");
+        try { btn.disabled=true; btn.textContent="Menyiapkan verifikasi..."; await window.CikurCloud.startCustomerPhoneVerification(number,"phoneRecaptchaContainer"); document.getElementById("phoneOtpArea").style.display="block"; btn.textContent="Kode OTP Terkirim ✓"; alert("Kode OTP sudah dikirim ke nomor tersebut."); }
+        catch(error){ console.error("[CIKUR GO] Gagal mengirim OTP:",error); const map={INVALID_PHONE_FORMAT:"Format nomor HP tidak valid. Gunakan 08... atau +628...","auth/operation-not-allowed":"Verifikasi nomor HP belum diaktifkan pada Firebase Authentication."}; alert(map[error?.code]||map[error?.message]||"Gagal mengirim kode OTP. Periksa reCAPTCHA dan nomor HP."); btn.disabled=false; btn.textContent="Kirim Kode OTP"; }
+    });
+    document.getElementById("btnKonfirmasiOTP")?.addEventListener("click", async () => {
+        const code=document.getElementById("verifyPhoneOtp")?.value.trim()||""; const btn=document.getElementById("btnKonfirmasiOTP");
+        try { btn.disabled=true; btn.textContent="Memverifikasi..."; const result=await window.CikurCloud.confirmCustomerPhoneVerification(code,phone); const firebaseUser=await window.CikurCloud.waitForAuth(); userProfile={...userProfile,phoneVerified:true,verifiedPhoneNumber:result.phoneNumber,phone:phone||result.phoneNumber}; await refreshCustomerSecurityState(firebaseUser); updateUIProfile(); alert("Nomor HP berhasil diverifikasi ✓"); closeModal(); bukaModalPengaturanProfil(); }
+        catch(error){ console.error("[CIKUR GO] Gagal konfirmasi OTP:",error); alert(error?.code==="auth/invalid-verification-code"?"Kode OTP salah.":"Verifikasi nomor HP gagal. Silakan coba lagi."); btn.disabled=false; btn.textContent="Konfirmasi Nomor HP ✓"; }
+    });
+}
+
+async function bukaModalVerifikasiIdentitas() {
+    openModal("VERIFIKASI IDENTITAS 🪪");
+    if (!modalMainContent) return;
+    const pending=userProfile.identityVerificationStatus==="pending";
+    modalMainContent.innerHTML=pending?`<div class="cgo-form-intro"><div class="cgo-form-intro-icon">⏳</div><div class="cgo-form-intro-title">Pengajuan sedang diperiksa</div><div class="cgo-form-intro-text">Data identitas sudah masuk ke Admin. Tunggu hasil pemeriksaan.</div></div><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;font-size:10px;color:#475569;">Status: <b>MENUNGGU PEMERIKSAAN ADMIN</b></div><button class="btn-pesan-form" id="btnTutupIdentityPending" type="button" style="margin-top:12px;">Tutup</button>`:`<div class="cgo-form-intro"><div class="cgo-form-intro-icon">🪪</div><div class="cgo-form-intro-title">Ajukan verifikasi identitas</div><div class="cgo-form-intro-text">Unggah foto KTP/dokumen identitas yang jelas. Pemeriksaan akhir dilakukan Super Admin.</div></div><div class="form-group"><label>Nama sesuai identitas</label><input id="identityFullName" class="input-box" value="${String(userProfile.namaLengkap||userProfile.name||'').replace(/"/g,'&quot;')}"></div><div class="form-group"><label>NIK 16 digit</label><input id="identityNIK" class="input-box" maxlength="16" inputmode="numeric" placeholder="16 digit NIK"></div><div class="form-group"><label>Tanggal Lahir</label><input id="identityBirthDate" type="date" class="input-box" value="${userProfile.tanggalLahir||''}"></div><div class="form-group"><label>Foto KTP / Identitas</label><input id="identityDocument" type="file" accept="image/*" class="input-box cgo-file-input"></div><button class="btn-pesan-form" id="btnSubmitIdentity" type="button">Kirim Pengajuan Verifikasi</button><p style="font-size:9px;color:#94a3b8;line-height:1.5;margin-top:10px;">Dokumen identitas bersifat sensitif dan hanya untuk pemeriksaan internal.</p>`;
+    document.getElementById("btnTutupIdentityPending")?.addEventListener("click",closeModal);
+    document.getElementById("btnSubmitIdentity")?.addEventListener("click",async()=>{ const btn=document.getElementById("btnSubmitIdentity"); const file=document.getElementById("identityDocument")?.files?.[0]; try{ btn.disabled=true;btn.textContent="Mengunggah & Mengirim...";const u=await window.CikurCloud.waitForAuth();if(!u)throw new Error("NO_AUTHENTICATED_USER");await window.CikurCloud.submitCustomerIdentityVerification(u.uid,{fullName:document.getElementById("identityFullName")?.value.trim()||"",nik:document.getElementById("identityNIK")?.value.trim()||"",birthDate:document.getElementById("identityBirthDate")?.value||"",file});userProfile={...userProfile,identityVerificationStatus:"pending",identityVerified:false};updateUIProfile();alert("Pengajuan verifikasi identitas berhasil dikirim ke Admin.");closeModal();bukaModalPengaturanProfil();}catch(error){console.error("[CIKUR GO] Gagal mengirim verifikasi identitas:",error);const map={INVALID_NIK:"NIK harus tepat 16 digit.",IDENTITY_DOCUMENT_REQUIRED:"Foto KTP wajib dipilih.",IDENTITY_DOCUMENT_TOO_LARGE:"Ukuran foto maksimal 5 MB.",IDENTITY_DOCUMENT_IMAGE_ONLY:"Dokumen harus berupa gambar."};alert(map[error?.message]||"Pengajuan verifikasi identitas gagal. Periksa data dan koneksi.");btn.disabled=false;btn.textContent="Kirim Pengajuan Verifikasi";} });
 }
 
 function bukaModalGantiPassword() {
