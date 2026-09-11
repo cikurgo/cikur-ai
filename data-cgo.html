@@ -150,13 +150,13 @@
 </div>
 
 <script type="module">
-import { db } from "./cikur-config.js";
+import { adminDb, adminAuth } from "./cikur-config.js";
 import {
     collection, onSnapshot, query, orderBy, limit, doc, getDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-const auth = getAuth();
+const auth = adminAuth;
 
 /* =========================================================
    GATE ADMIN
@@ -174,7 +174,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     try {
-        const adminSnap = await getDoc(doc(db, "admin_users", user.uid));
+        const adminSnap = await getDoc(doc(adminDb, "admin_users", user.uid));
         if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
             gateMsg.textContent = "Akun ini bukan Admin terverifikasi. Akses ditolak.";
             gateLink.classList.remove('hidden');
@@ -227,27 +227,27 @@ let cache = { mitra: [], customers: [], orders: [], logs: [] };
 let currentDataset = 'mitra';
 
 function startAllListeners() {
-    onSnapshot(collection(db, "mitra_applications"), (snap) => {
+    onSnapshot(collection(adminDb, "mitra_applications"), (snap) => {
         cache.mitra = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         renderKpisMitra();
         renderFunnel();
         if (currentDataset === 'mitra') renderTable();
     }, (err) => console.error("[DATA-CGO] mitra_applications:", err));
 
-    onSnapshot(collection(db, "customers"), (snap) => {
+    onSnapshot(collection(adminDb, "customers"), (snap) => {
         cache.customers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         renderKpiOnline();
         if (currentDataset === 'customers') renderTable();
     }, (err) => console.error("[DATA-CGO] customers:", err));
 
-    onSnapshot(query(collection(db, "orders"), orderBy("timestamp", "desc"), limit(500)), (snap) => {
+    onSnapshot(query(collection(adminDb, "orders"), orderBy("timestamp", "desc"), limit(500)), (snap) => {
         cache.orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         renderKpisOrders();
         renderTrendChart();
         if (currentDataset === 'orders') renderTable();
     }, (err) => console.error("[DATA-CGO] orders:", err));
 
-    onSnapshot(query(collection(db, "system_logs"), orderBy("reportedAt", "desc"), limit(30)), (snap) => {
+    onSnapshot(query(collection(adminDb, "system_logs"), orderBy("reportedAt", "desc"), limit(30)), (snap) => {
         cache.logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         renderKpiAttention();
         renderRadarFeed();

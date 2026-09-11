@@ -1083,7 +1083,13 @@ runAutonomousEngine(state => {
     const cls = tone === 'violet' ? 'border-violet-900 bg-violet-950/20 text-violet-100' : tone === 'amber' ? 'border-amber-900 bg-amber-950/20 text-amber-100' : 'border-cyan-900 bg-cyan-950/20 text-cyan-100';
     row.className = 'border rounded-lg px-3 py-2 ' + cls;
     row.innerHTML = `<div class="flex justify-between gap-2 text-[9px] uppercase opacity-70"><span>${esc(who)}</span><span>${esc(time())}</span></div><div class="text-xs mt-1 whitespace-pre-line">${esc(text)}</div>`;
-    root.appendChild(row); root.scrollTop = root.scrollHeight;
+    root.appendChild(row);
+    // Batasi jumlah bubble tersimpan di DOM. Tanpa ini, laporan Medicine/Executor yang
+    // terus mengalir selama sistem menyala lama akan menumpuk tanpa batas dan
+    // memperlambat halaman (termasuk kinerja BCGO-CGO sendiri).
+    const MAX_BUBBLES = 80;
+    while (root.children.length > MAX_BUBBLES) root.removeChild(root.firstChild);
+    root.scrollTop = root.scrollHeight;
   }
 
   function captainGreeting(state) {
