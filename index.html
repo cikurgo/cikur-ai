@@ -397,25 +397,60 @@ body.cgo-auth-required .bottom-nav {
     pointer-events: none !important;
 }
 
-/* NAVIGASI BAWAH PERMANEN: tetap menempel viewport saat konten di-scroll */
+/* NAVIGASI BAWAH — TRUE VIEWPORT LOCK
+   Konten aplikasi yang scroll, bukan body. Nav tetap berada di viewport. */
 .bottom-nav {
     position: fixed !important;
-    left: 50% !important;
+    left: 0 !important;
+    right: 0 !important;
     bottom: 0 !important;
     top: auto !important;
-    transform: translateX(-50%) !important;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    box-sizing: border-box;
-    will-change: auto;
+    width: 100% !important;
+    max-width: 440px !important;
+    height: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
+    margin-inline: auto !important;
+    transform: none !important;
+    padding: 0 10px env(safe-area-inset-bottom, 0px) !important;
+    box-sizing: border-box !important;
+    z-index: 1200 !important;
+    overflow: hidden !important;
+    overscroll-behavior: none !important;
+    touch-action: manipulation !important;
+    will-change: auto !important;
 }
 
-/* Beri ruang konten agar tidak tertutup nav permanen */
+/* TRUE APP SCROLL CONTAINER — body tidak ikut bergerak */
+html {
+    height: 100%;
+    overflow: hidden !important;
+}
 body {
-    padding-bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden !important;
+    overscroll-behavior: none;
+    padding-bottom: 0 !important;
+}
+.container {
+    height: 100dvh;
+    min-height: 0 !important;
+    max-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)) !important;
+    scrollbar-width: none;
+}
+.container::-webkit-scrollbar { display: none; }
+@media(min-width: 480px){
+    body { padding: 24px !important; height: 100dvh; min-height: 100dvh; }
+    .container { height: calc(100dvh - 48px); max-height: calc(100dvh - 48px); }
 }
 body.cgo-auth-required {
     padding-bottom: 0 !important;
 }
+
 
 /* Auth links mengikuti tipografi form utama dan tidak berhimpitan */
 .auth-recovery-links {
@@ -1063,26 +1098,19 @@ footer{
 footer p { margin: 0; }
                    
 /* ===========================
-   FIXED BOTTOM NAVIGATION BAR
+   FIXED BOTTOM NAVIGATION BAR — VISUAL ONLY
 =========================== */
 .bottom-nav {
-    position: fixed;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 100%;
-    max-width: 440px;
-    height: 74px;
-    background-color: rgba(255, 255, 255, 0.95);
+    background-color: rgba(255, 255, 255, 0.97);
     backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
     border-top: 1px solid var(--border-color);
     display: flex;
     justify-content: space-around;
     align-items: center;
-    padding: 0 10px;
-    z-index: 1000;
     box-shadow: 0 -10px 30px rgba(0,0,0,0.06);
 }
+
 
 /* ===========================
    APP BOTTOM NAV ITEMS
@@ -1414,7 +1442,52 @@ footer p { margin: 0; }
 .cgo-switch input:checked + span{background:#16a34a;}
 .cgo-switch input:checked + span:before{transform:translateX(18px);}
 @media(max-width:480px){.cgo-form-row{grid-template-columns:1fr;gap:0;}}
+
+/* =========================================================
+   CUSTOMER PROFILE — MODERN COMPACT UI
+   Inspired by contemporary mobile account screens:
+   clear hierarchy, grouped cards, safe-area spacing.
+========================================================= */
+.cgo-profile-page{display:grid;gap:12px;padding-bottom:8px;}
+.cgo-profile-hero{position:relative;overflow:hidden;padding:18px 14px 16px;border:1px solid #e6eaf0;border-radius:22px;background:linear-gradient(145deg,#ffffff,#f8fafc);box-shadow:0 8px 24px rgba(15,23,42,.06);}
+.cgo-profile-hero::after{content:"";position:absolute;width:130px;height:130px;right:-55px;top:-55px;border-radius:50%;background:rgba(229,9,20,.07);pointer-events:none;}
+.cgo-profile-avatar-wrap{position:relative;z-index:1;display:flex;align-items:center;gap:12px;}
+.cgo-profile-page .profile-view-avatar{flex:0 0 auto;width:64px!important;height:64px!important;margin:0!important;border:3px solid #fff;box-shadow:0 7px 18px rgba(15,23,42,.12)!important;}
+.cgo-profile-hero-copy{min-width:0;text-align:left;}
+.cgo-profile-hero-name{font-size:16px;font-weight:900;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cgo-profile-hero-contact{margin-top:3px;font-size:10px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cgo-profile-id-row{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:13px;padding-top:11px;border-top:1px solid #edf0f4;}
+.cgo-profile-id{font-size:10px;font-weight:800;color:#334155;overflow-wrap:anywhere;}
+.cgo-profile-completion{font-size:10px;font-weight:900;color:var(--primary-red);white-space:nowrap;}
+.cgo-profile-card{background:#fff;border:1px solid #e7ebf0;border-radius:18px;padding:13px;box-shadow:0 4px 16px rgba(15,23,42,.035);}
+.cgo-profile-card-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;font-size:11px;font-weight:900;color:#1e293b;}
+.cgo-profile-card-title small{font-size:9px;font-weight:600;color:#94a3b8;}
+.cgo-profile-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.cgo-profile-stat{min-width:0;padding:10px;border-radius:12px;background:#f8fafc;border:1px solid #edf0f4;}
+.cgo-profile-stat span{display:block;font-size:8px;color:#94a3b8;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;}
+.cgo-profile-stat strong{display:block;font-size:10px;color:#334155;line-height:1.35;overflow-wrap:anywhere;}
+.cgo-profile-action-stack{display:grid;gap:8px;}
+.cgo-profile-action-stack .btn-pesan-form{margin:0!important;min-height:42px;border-radius:12px;}
+.cgo-profile-verify-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 7px;border-radius:999px;background:#fff7ed;color:#c2410c;font-size:8px!important;font-weight:800!important;}
+.cgo-profile-verify-pill.ok{background:#ecfdf5;color:#047857;}
+.cgo-profile-section{background:#fff;border:1px solid #e7ebf0;border-radius:18px;padding:14px;box-shadow:0 4px 16px rgba(15,23,42,.035);}
+.cgo-profile-section-title{font-size:10px!important;letter-spacing:.08em;margin-bottom:12px!important;}
+.cgo-profile-edit-head{padding:2px 2px 10px!important;}
+.cgo-profile-edit-avatar{width:82px!important;height:82px!important;border:3px solid #fff!important;box-shadow:0 8px 22px rgba(15,23,42,.12)!important;background:#f1f5f9!important;}
+.cgo-profile-edit-name{font-size:16px!important;margin-top:5px;}
+.cgo-profile-edit-sub{font-size:10px!important;color:#94a3b8!important;}
+.cgo-profile-layout{gap:10px!important;}
+.cgo-profile-section-title::before{width:3px!important;height:14px!important;}
+.cgo-profile-save{bottom:6px!important;border-radius:13px!important;}
+@media(max-width:420px){.cgo-profile-stat-grid{grid-template-columns:1fr;}.cgo-profile-id-row{align-items:flex-start;flex-direction:column;}.cgo-profile-completion{white-space:normal;}}
+
+
+/* Layering: modal must cover persistent navigation while open. */
+.assistant-screen { z-index: 5000 !important; }
+.assistant-page { overscroll-behavior: contain; }
+
 </style>
+<!-- CUSTOMER_UI_REBUILD_2026-09-11: ID verification baseline + modern profile + true app-scroll nav lock -->
 </head>
     
 <body class="cgo-booting">
@@ -1616,7 +1689,7 @@ footer p { margin: 0; }
             </div>
             <div class="cikurpay-card">
                 <div class="cikurpay-label">Saldo CikurPay</div>
-                <div class="cikurpay-balance" id="transaksiSaldoNominal">Rp 125.000</div>
+                <div class="cikurpay-balance" id="transaksiSaldoNominal">Rp 0</div>
                 <div class="cikurpay-actions">
                     <button class="cikurpay-topup" onclick="bukaModalTopUp()">+&nbsp; Top Up Saldo ⚡</button>
                     <button class="cikurpay-pin" onclick="bukaModalAturPin()">🔒 PIN</button>
@@ -1660,21 +1733,42 @@ footer p { margin: 0; }
 
     <!-- VIEW 5: PROFIL -->
     <div id="view-profil" class="tab-content-view">
-        <div style="text-align: center; padding: 14px 0; border-bottom: 1px solid var(--border-color); margin-bottom: 14px;">
-            <div class="profile-view-avatar avatar-placeholder" id="profileViewAvatar" aria-label="Foto profil" style="width:70px;height:70px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;box-shadow:0 6px 16px rgba(15,23,42,.12);overflow:hidden;">
-    <svg viewBox="0 0 24 24" aria-hidden="true" style="width:34px;height:34px;fill:currentColor;"><path d="M12 12a4.25 4.25 0 1 0 0-8.5A4.25 4.25 0 0 0 12 12Zm0 2c-4.14 0-7.5 2.12-7.5 4.75V20h15v-1.25C19.5 16.12 16.14 14 12 14Z"/></svg>
-</div>
-            <h3 style="font-size: 14px; font-weight: 800; color: var(--text-main);" id="profileViewName">CIKUR USER</h3>
-            <p style="font-size: 10px; color: var(--text-muted); margin-top: 2px;" id="profileViewPhone">08123456789</p>
-            <p style="font-size: 10px; color: var(--text-muted); margin-top: 2px;" id="profileViewEmail">-</p>
-            <p style="font-size: 10px; color: var(--text-muted); margin-top: 4px;" id="profileViewCustomerId">Customer ID: -</p>
-            <p style="font-size: 10px; color: var(--primary-red); font-weight: 800; margin-top: 4px;" id="profileViewCompletion">Profil 0% lengkap</p>
-        </div>
-        <button class="btn-pesan-form" id="btnEditProfilTab" style="margin-bottom: 8px;">Edit Pengaturan Profil</button>
-        <button class="btn-pesan-form" onclick="bukaModalAturPin()" style="background: #334155; margin-bottom: 8px;">Atur PIN Keamanan CikurPay 🔒</button>
-        <button class="btn-pesan-form" onclick="prosesLogout()" style="background: #64748b;">Keluar Akun (Logout)</button>
-    </div>
+        <div class="cgo-profile-page">
+            <section class="cgo-profile-hero">
+                <div class="cgo-profile-avatar-wrap">
+                    <div class="profile-view-avatar avatar-placeholder" id="profileViewAvatar" aria-label="Foto profil">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" style="width:34px;height:34px;fill:currentColor;"><path d="M12 12a4.25 4.25 0 1 0 0-8.5A4.25 4.25 0 0 0 12 12Zm0 2c-4.14 0-7.5 2.12-7.5 4.75V20h15v-1.25C19.5 16.12 16.14 14 12 14Z"/></svg>
+                    </div>
+                    <div class="cgo-profile-hero-copy">
+                        <div class="cgo-profile-hero-name" id="profileViewName">CIKUR USER</div>
+                        <div class="cgo-profile-hero-contact" id="profileViewPhone">Nomor HP belum tersedia</div>
+                        <div class="cgo-profile-hero-contact" id="profileViewEmail">Email belum tersedia</div>
+                    </div>
+                </div>
+                <div class="cgo-profile-id-row">
+                    <div class="cgo-profile-id" id="profileViewCustomerId">Customer ID: -</div>
+                    <div class="cgo-profile-completion" id="profileViewCompletion">Profil 0% lengkap</div>
+                </div>
+            </section>
 
+            <section class="cgo-profile-card">
+                <div class="cgo-profile-card-title"><span>Status Akun</span><small>Informasi akun Customer</small></div>
+                <div class="cgo-profile-stat-grid">
+                    <div class="cgo-profile-stat"><span>Status</span><strong id="profileViewStatus">Aktif</strong></div>
+                    <div class="cgo-profile-stat"><span>Verifikasi</span><strong id="profileViewVerification">Belum lengkap</strong></div>
+                </div>
+            </section>
+
+            <section class="cgo-profile-card">
+                <div class="cgo-profile-card-title"><span>Pengaturan Akun</span><small>Kelola data & keamanan</small></div>
+                <div class="cgo-profile-action-stack">
+                    <button class="btn-pesan-form" id="btnEditProfilTab">Edit Pengaturan Profil</button>
+                    <button class="btn-pesan-form" onclick="bukaModalAturPin()" style="background:#334155;">Atur PIN CikurPay 🔒</button>
+                    <button class="btn-pesan-form" onclick="prosesLogout()" style="background:#64748b;">Keluar Akun (Logout)</button>
+                </div>
+            </section>
+        </div>
+    </div>
 
 <!-- BOTTOM NAVIGATION BAR -->
 <nav class="bottom-nav">
@@ -1786,6 +1880,17 @@ function updateUIProfile() {
         const profileViewCompletion = document.getElementById("profileViewCompletion");
         if (profileViewCompletion) {
             profileViewCompletion.innerText = `Profil ${calculateCustomerProfileCompletion(userProfile)}% lengkap`;
+        }
+
+        const profileViewStatus = document.getElementById("profileViewStatus");
+        if (profileViewStatus) {
+            profileViewStatus.innerText = String(userProfile.statusAkun || "active") === "active" ? "Aktif" : "Nonaktif";
+        }
+
+        const profileViewVerification = document.getElementById("profileViewVerification");
+        if (profileViewVerification) {
+            const verified = [userProfile.emailVerified, userProfile.phoneVerified, userProfile.identityVerified].filter(Boolean).length;
+            profileViewVerification.innerText = verified === 3 ? "Terverifikasi penuh ✓" : `${verified}/3 terverifikasi`;
         }
     }
 
@@ -3179,6 +3284,7 @@ async function bukaModalPengaturanProfil() {
                         <div class="cgo-profile-account-item"><span>Tanggal Daftar</span><strong>${formatCustomerDateForProfile(userProfile.tanggalDaftar)}</strong></div>
                         <div class="cgo-profile-account-item"><span>Kelengkapan Profil</span><strong>${calculateCustomerProfileCompletion(userProfile)}%</strong></div>
                     </div>
+                </div>
 
                 <div class="cgo-profile-section">
                     <div class="cgo-profile-section-title">VERIFIKASI & KEAMANAN</div>
