@@ -1770,19 +1770,23 @@ function updateUIProfile() {
     }
 
     if (document.getElementById("profileViewName")) {
-    document.getElementById("profileViewName").innerText =
-        userProfile.name || "";
+        document.getElementById("profileViewName").innerText = userProfile.name || "";
 
-    document.getElementById("profileViewPhone").innerText =
-        userProfile.phone || "";
+        const profileViewPhone = document.getElementById("profileViewPhone");
+        if (profileViewPhone) profileViewPhone.innerText = userProfile.phone || "";
 
-    const profileViewEmail =
-        document.getElementById("profileViewEmail");
+        const profileViewEmail = document.getElementById("profileViewEmail");
+        if (profileViewEmail) profileViewEmail.innerText = userProfile.email || "";
 
-    if (profileViewEmail) {
-        profileViewEmail.innerText =
-            userProfile.email || "";
-    }
+        const profileViewCustomerId = document.getElementById("profileViewCustomerId");
+        if (profileViewCustomerId) {
+            profileViewCustomerId.innerText = `Customer ID: ${userProfile.customerId || "Belum tersedia"}`;
+        }
+
+        const profileViewCompletion = document.getElementById("profileViewCompletion");
+        if (profileViewCompletion) {
+            profileViewCompletion.innerText = `Profil ${calculateCustomerProfileCompletion(userProfile)}% lengkap`;
+        }
     }
 
     if (document.getElementById("transaksiSaldoNominal")) {
@@ -3047,6 +3051,17 @@ async function refreshCustomerSecurityState(firebaseUser) {
     };
 }
 
+function formatCustomerDateForProfile(value) {
+    if (!value) return "Belum tersedia";
+    let date = null;
+    if (typeof value?.toDate === "function") date = value.toDate();
+    else if (value instanceof Date) date = value;
+    else if (typeof value === "string" || typeof value === "number") date = new Date(value);
+    return date && !Number.isNaN(date.getTime())
+        ? date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+        : "Belum tersedia";
+}
+
 async function bukaModalPengaturanProfil() {
     closeHeaderDropdown();
     openModal("PENGATURAN PROFIL & FOTO AKUN");
@@ -3066,8 +3081,14 @@ async function bukaModalPengaturanProfil() {
                         ...(freshCustomer || {}),
                         uid: firebaseUser.uid,
                         email: freshProfile?.email || freshCustomer?.email || firebaseUser.email || "",
+                        emailVerified: !!firebaseUser.emailVerified,
                         isLoggedIn: true
                     };
+                    // Level verifikasi mengikuti state Customer/Admin yang sudah tersimpan;
+                    // jangan mengubah phoneVerified/identityVerified dari sisi UI.
+                    if (typeof refreshCustomerSecurityState === "function") {
+                        await refreshCustomerSecurityState(firebaseUser);
+                    }
                     updateUIProfile();
                 }
             }
@@ -3139,10 +3160,9 @@ async function bukaModalPengaturanProfil() {
                     <div class="cgo-profile-account-card">
                         <div class="cgo-profile-account-item"><span>Customer ID</span><strong>${String(userProfile.customerId || "Belum tersedia")}</strong></div>
                         <div class="cgo-profile-account-item"><span>Status Akun</span><strong class="cgo-profile-status">${String(userProfile.statusAkun || "active") === "active" ? "Aktif" : "Nonaktif"}</strong></div>
-                        <div class="cgo-profile-account-item"><span>Tanggal Daftar</span><strong>${userProfile.tanggalDaftar ? new Date(userProfile.tanggalDaftar).toLocaleDateString("id-ID") : "Belum tersedia"}</strong></div>
+                        <div class="cgo-profile-account-item"><span>Tanggal Daftar</span><strong>${formatCustomerDateForProfile(userProfile.tanggalDaftar)}</strong></div>
                         <div class="cgo-profile-account-item"><span>Kelengkapan Profil</span><strong>${calculateCustomerProfileCompletion(userProfile)}%</strong></div>
                     </div>
-                </div>
 
                 <div class="cgo-profile-section">
                     <div class="cgo-profile-section-title">VERIFIKASI & KEAMANAN</div>
