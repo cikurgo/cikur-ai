@@ -9,7 +9,7 @@
  * - This module only observes real internal state/bridge packets and emits
  *   bounded directives. Proof/Guardian/Executor remain authoritative gates.
  */
-const VERSION = "2.2.0-INTERNAL-CAPTAIN-BCGO-NEXT-PROBE";
+const VERSION = "2.3.0-CAPTAIN-CGO-CONSTRUCTION-MEDICINE-REVIEW";
 const BRIDGE = "CIKUR_GO_BCGO_MEDICINE_V1";
 const MAX_ROUNDS = 4;
 const DIRECTIVE_COOLDOWN = 12000;
@@ -324,17 +324,21 @@ export function createCaptain(options = {}) {
       requestId: raw.requestId || packet?.requestId || request.requestId || null,
       file: raw.file || request.file || packet?.file || null,
       operation: raw.operation || request.operation || null,
-      before: raw.before ?? request.before ?? null,
-      after: raw.after ?? request.after ?? null,
-      originalSource: raw.originalSource || request.originalSource || packet?.originalSource || null,
-      proposedSource: raw.proposedSource || request.proposedSource || packet?.proposedSource || null,
-      proposedSourceFingerprint: raw.proposedSourceFingerprint || request.proposedSourceFingerprint || packet?.proposedSourceFingerprint || null,
-      changedRanges: raw.changedRanges || request.changedRanges || packet?.changedRanges || [],
-      lineMap: raw.lineMap || request.lineMap || packet?.lineMap || null,
+      before: raw.before ?? raw.originalCode ?? request.before ?? request.originalCode ?? null,
+      after: raw.after ?? raw.proposedCode ?? request.after ?? request.proposedCode ?? null,
       fingerprint: raw.fingerprint || request.expectedFingerprint || packet?.sourceFingerprint || null,
       location: raw.location || null,
       evidence: raw.evidence || null,
-      sourceText: packet?.sourceText || null
+      sourceText: packet?.sourceText || raw.originalSource || null,
+      originalSource: raw.originalSource || packet?.originalSource || null,
+      proposedSource: raw.proposedSource || packet?.proposedSource || null,
+      changedRanges: raw.changedRanges || packet?.changedRanges || [],
+      lineMap: raw.lineMap || packet?.lineMap || null,
+      sovereignty: raw.sovereignty || packet?.sovereignty || null,
+      confidence: raw.confidence ?? packet?.confidence ?? null,
+      rootCause: raw.rootCause || packet?.rootCause || null,
+      evidenceIds: raw.evidenceIds || packet?.evidenceIds || [],
+      dependencies: raw.dependencies || packet?.dependencies || []
     };
   }
 
@@ -356,6 +360,26 @@ export function createCaptain(options = {}) {
     }
   }
 
+  function submitConstructedCandidate(candidate, meta = {}) {
+    const normalized = normalizeCandidatePacket({ candidate, ...meta });
+    const caseId = normalized.caseId || currentCaseId();
+    if (!caseId || !normalized.file || !normalized.operation || !normalized.before || typeof normalized.after !== "string") {
+      set({ phase:"CONSTRUCTION_BLOCKED", decision:"CANDIDATE_INCOMPLETE", nextAction:"MEDICINE_INVESTIGATE", blocker:"CGO_CANDIDATE_CONTRACT_INCOMPLETE", humanGate:false }, "CAPTAIN_CONSTRUCTION_BLOCKED");
+      return null;
+    }
+    registerCase(caseId);
+    const current = cases.get(caseId);
+    current.candidate = clone({ ...candidate, ...normalized });
+    current.awaitingEvidence = false;
+    set({ caseId, phase:"MEDICINE_REVIEW", decision:"CGO_CONSTRUCTED_CANDIDATE", nextAction:"MEDICINE_VERIFY_CANDIDATE", blocker:null, humanGate:false, candidate:clone(current.candidate) }, "CAPTAIN_CANDIDATE_CONSTRUCTED");
+    const packet = directive("CGO_VERIFY_CANDIDATE", {
+      caseId, proposalId:normalized.proposalId || null, candidate:clone(current.candidate),
+      question:"CGO telah membangun candidate dari source/evidence internal. Medicine wajib memverifikasi root cause, exact source, anchor, fingerprint, dependency impact dan kelayakan perubahan sebelum candidate diteruskan ke Executor."
+    }, { force:true });
+    emit("CAPTAIN_MEDICINE_CANDIDATE_REVIEW", { candidate:clone(current.candidate), packet:clone(packet) });
+    return packet;
+  }
+
   function handleMedicine(packet) {
     latestMedicine = clone(packet);
     const caseId = packet.caseId || packet.medicine?.caseId || state.caseId;
@@ -365,6 +389,20 @@ export function createCaptain(options = {}) {
     current.teamReports.medicine = true;
     const msg = String(packet.message || packet.medicineEvent || packet.type || "Medicine report");
     const phase = String(packet.phase || packet.medicine?.status || "").toUpperCase();
+
+    if (packet.type === "MEDICINE_CANDIDATE_VERIFIED") {
+      current.awaitingEvidence = false;
+      set({
+        phase:"HUMAN_APPROVAL",
+        decision:"CANDIDATE_READY",
+        nextAction:"HUMAN_APPROVAL",
+        blocker:null,
+        humanGate:true,
+        candidate:clone(current.candidate)
+      }, "CAPTAIN_CANDIDATE_VERIFIED_BY_MEDICINE_EXECUTOR");
+      emit("CAPTAIN_CODE_READY", { candidate:clone(current.candidate), medicine:clone(packet) });
+      return;
+    }
 
     if (packet.type === "MEDICINE_FINALIZED_FOR_EXECUTION") {
       current.awaitingEvidence = false;
@@ -593,6 +631,7 @@ export function createCaptain(options = {}) {
     assessBCGOExploration(snapshot = latestBCGO) { return assessBCGOExploration(snapshot || {}); },
     chooseNextBCGOProbe(snapshot = latestBCGO) { return chooseNextBCGOProbe(snapshot || {}); },
     dispatchNextBCGOProbe(snapshot = latestBCGO) { return dispatchNextBCGOProbe(snapshot || {}); },
+    submitConstructedCandidate(candidate, meta = {}) { return submitConstructedCandidate(candidate, meta); },
     requestUpdate() { return directive("CGO_REQUEST_UPDATE", { caseId: state.caseId }); },
     receiveHumanCommand,
     humanApprove(caseId = state.caseId) {

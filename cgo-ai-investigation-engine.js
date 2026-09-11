@@ -25,59 +25,158 @@ const escapeRegExp = v => String(v || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 const lineOf = (source, index) => String(source || "").slice(0, Math.max(0, index)).split("\n").length;
 const snippet = (source, index, radius = 120) => String(source || "").slice(Math.max(0, index - radius), Math.min(String(source || "").length, index + radius)).trim();
 
-function buildConcreteSolution(caseData, targetSource, provider) {
-  const symbol = symbolFromCase(caseData);
-  if (!symbol || !caseData?.rootCause || !caseData?.exactSource || typeof targetSource?.source !== "string") return null;
-  if (!/ReferenceError/i.test(String(caseData.symptom || ""))) return null;
-  const targetFile = normalizeFile(caseData.exactSource.file || caseData.target);
-  if (!/\.html?$/i.test(String(targetFile || ""))) return null;
-  const defs = (caseData.evidence || []).filter(e => e.type === "SYMBOL_DEFINITION" && e.status === "VERIFIED" && e.exact && String(e.metadata?.symbol || "") === symbol && normalizeFile(e.file || e.source) !== targetFile);
-  if (!defs.length) return null;
-  const providerFile = normalizeFile(defs[0].file || defs[0].source);
-  if (!providerFile || !/\.js$/i.test(providerFile)) return null;
-  const html = String(targetSource.source);
-  const alreadyLoaded = new RegExp(`<script\\b[^>]*\\bsrc\\s*=\\s*[\"'](?:[^\"']*\\/)?${escapeRegExp(providerFile)}(?:[?#][^\"']*)?[\"'][^>]*>`, "i").test(html);
-  if (alreadyLoaded) return null;
-  const anchorMatch = html.match(/<script\b[^>]*>/i);
-  if (!anchorMatch) return null;
-  const anchor = anchorMatch[0];
-  const proposed = `<script src="${providerFile}"></script>\n`;
-  const originalSource = html;
-  const proposedSource = html.replace(anchor, anchor + proposed);
-  const sourceFingerprint = targetSource.fingerprint || Core.contentFingerprint(originalSource);
-  const proposedFingerprint = Core.contentFingerprint(proposedSource);
-  const lineMap = {
-    originalLines: originalSource.split(/\r?\n/).length,
-    proposedLines: proposedSource.split(/\r?\n/).length,
-    insertedAtLine: lineOf(originalSource, html.indexOf(anchor)),
-    insertedLines: proposed.split(/\r?\n/).length - 1
-  };
-  const sovereignty = Sovereignty.assertInternalSovereignty(proposedSource, `candidate:${targetFile}`);
+function buildLineMap(originalSource, proposedSource) {
+  const originalLines = String(originalSource || "").split("\n");
+  const proposedLines = String(proposedSource || "").split("\n");
+  const first = Math.min(originalLines.length, proposedLines.length);
+  let start = 0;
+  while (start < first && originalLines[start] === proposedLines[start]) start++;
+  let endOriginal = originalLines.length - 1;
+  let endProposed = proposedLines.length - 1;
+  while (endOriginal >= start && endProposed >= start && originalLines[endOriginal] === proposedLines[endProposed]) {
+    endOriginal--; endProposed--;
+  }
+  return Object.freeze({
+    originalStartLine: start + 1,
+    originalEndLine: Math.max(start, endOriginal + 1),
+    proposedStartLine: start + 1,
+    proposedEndLine: Math.max(start, endProposed + 1)
+  });
+}
+
+function applyExactOperation(source, operation, originalCode, proposedCode) {
+  const text = String(source || "");
+  const original = String(originalCode || "");
+  const proposed = String(proposedCode || "");
+  if (!original) return null;
+  const index = text.indexOf(original);
+  if (index < 0) return null;
+  if (operation === "INSERT_EXACT") return text.slice(0, index) + proposed + text.slice(index);
+  if (operation === "REPLACE_EXACT") return text.slice(0, index) + proposed + text.slice(index + original.length);
+  if (operation === "REMOVE_EXACT") return text.slice(0, index) + text.slice(index + original.length);
+  return null;
+}
+
+function buildCandidate(caseData, targetFile, originalSource, operation, originalCode, proposedCode, metadata = {}) {
+  const original = String(originalSource || "");
+  const proposed = applyExactOperation(original, operation, originalCode, proposedCode);
+  if (!proposed || proposed === original) return null;
+  try {
+    Sovereignty.assertInternalSovereignty(proposed, `candidate:${targetFile}`);
+  } catch (error) {
+    return {
+      type:"SOURCE_BOUND_CONCRETE_SOLUTION",
+      status:"REPAIR_CANDIDATE_BLOCKED",
+      reason:"Generated candidate violates the internal sovereignty gate and must not be accepted.",
+      blocker:"EXTERNAL_DEPENDENCY_FORBIDDEN",
+      file:targetFile,
+      operation,
+      humanReviewRequired:true,
+      sovereignty:{ok:false,code:error?.code || "CGO_EXTERNAL_AI_DEPENDENCY_BLOCKED"}
+    };
+  }
+  const sourceFingerprint = Core.contentFingerprint(original);
+  const anchorFingerprint = Core.contentFingerprint(String(originalCode || ""));
+  const proposedSourceFingerprint = Core.contentFingerprint(proposed);
+  const lineMap = buildLineMap(original, proposed);
   return {
     type:"SOURCE_BOUND_CONCRETE_SOLUTION",
     status:"CANDIDATE_READY",
-    reason:`Verified symbol ${symbol} is defined by ${providerFile}, but ${targetFile} does not load that provider in its HTML script context.`,
+    reason:metadata.reason || "Deterministic source-bound transformation is supported by verified evidence.",
     file:targetFile,
-    operation:"INSERT_EXACT",
-    originalCode:anchor,
-    proposedCode:proposed,
-    originalSource,
-    proposedSource,
-    anchorFingerprint:Core.contentFingerprint(anchor),
-    fingerprint:Core.contentFingerprint(anchor),
+    operation,
+    originalCode:String(originalCode || ""),
+    proposedCode:String(proposedCode || ""),
+    originalSource:original,
+    proposedSource:proposed,
+    anchorFingerprint,
+    fingerprint:anchorFingerprint,
     sourceFingerprint,
-    proposedSourceFingerprint:proposedFingerprint,
-    changedRanges:[{line:lineMap.insertedAtLine, addedLines:lineMap.insertedLines}],
+    proposedSourceFingerprint,
+    changedRanges:[lineMap],
     lineMap,
-    providerFile,
-    symbol,
-    evidenceIds:defs.map(e=>e.id).concat((caseData.rootCause?.evidenceIds || []).filter(Boolean)).slice(0,20),
-    dependencies:[providerFile],
-    rootCause:caseData.rootCause?.statement || null,
-    confidence:Number(caseData.rootCause?.confidence ?? caseData.rootCause?.score ?? 0.8),
-    sovereignty,
-    humanReviewRequired:true
+    evidenceIds:unique(metadata.evidenceIds || []),
+    dependencies:metadata.dependencies || [],
+    rootCause:metadata.rootCause || null,
+    confidence:Number.isFinite(metadata.confidence) ? metadata.confidence : 0.95,
+    humanReviewRequired:true,
+    sovereignty:{ok:true, externalAI:false, checkedSourceFingerprint:proposedSourceFingerprint}
   };
+}
+
+function buildConcreteSolution(caseData, targetSource, provider) {
+  const symbol = symbolFromCase(caseData);
+  if (!symbol || !caseData?.rootCause || !caseData?.exactSource || typeof targetSource?.source !== "string") return null;
+  const targetFile = normalizeFile(caseData.exactSource.file || caseData.target);
+  if (!targetFile) return null;
+  const html = String(targetSource.source);
+  const defs = (caseData.evidence || []).filter(e => e.type === "SYMBOL_DEFINITION" && e.status === "VERIFIED" && e.exact && String(e.metadata?.symbol || "") === symbol && normalizeFile(e.file || e.source) !== targetFile);
+  const rootCauseStatement = String(caseData.rootCause?.statement || "");
+
+  // Construction path A: a verified provider JS file exists but the target HTML
+  // does not load it. Insert the exact missing script binding before the first
+  // script tag. This is the original supported repair, now promoted to a full
+  // source candidate with provenance and sovereignty proof.
+  if (/ReferenceError/i.test(String(caseData.symptom || "")) && /\.html?$/i.test(targetFile) && defs.length) {
+    const providerFile = normalizeFile(defs[0].file || defs[0].source);
+    if (providerFile && /\.js$/i.test(providerFile)) {
+      const alreadyLoaded = new RegExp(`<script\\b[^>]*\\bsrc\\s*=\\s*["'](?:[^"']*\\/)?${escapeRegExp(providerFile)}(?:[?#][^"']*)?["'][^>]*>`, "i").test(html);
+      const anchorMatch = html.match(/<script\b[^>]*>/i);
+      if (!alreadyLoaded && anchorMatch) {
+        const anchor = anchorMatch[0];
+        const proposed = `<script src="${providerFile}"></script>\n`;
+        return buildCandidate(caseData,targetFile,html,"INSERT_EXACT",anchor,proposed,{
+          reason:`Verified symbol ${symbol} is defined by ${providerFile}, but ${targetFile} does not load that provider in its HTML script context.`,
+          evidenceIds:defs.map(e=>e.id).concat((caseData.rootCause?.evidenceIds || []).filter(Boolean)).slice(0,20),
+          dependencies:[{from:targetFile,to:providerFile,kind:"HTML_SCRIPT_REFERENCE",symbol}],
+          rootCause:rootCauseStatement,
+          confidence:.98
+        });
+      }
+    }
+  }
+
+  // Construction path B: an inline HTML handler calls a symbol defined in a
+  // module script. When the provider has NO import/export boundary, converting
+  // only that script tag to a classic script is a deterministic, source-bound
+  // transformation that exposes top-level function declarations to the handler.
+  // If imports/exports are present, changing module semantics would be unsafe;
+  // explicitly refuse construction rather than guessing.
+  const moduleScripts = (caseData.evidence || []).filter(e =>
+    e.type === "SCRIPT_LOADING_CONTEXT" && e.status === "VERIFIED" &&
+    String(e.metadata?.type || "").toLowerCase() === "module" &&
+    normalizeFile(e.metadata?.file || e.file || e.source) === targetFile
+  );
+  const moduleProvider = defs.find(d => moduleScripts.some(m => normalizeFile(m.metadata?.src) === normalizeFile(d.file || d.source)));
+  if (moduleProvider && /\.html?$/i.test(targetFile)) {
+    const providerFile = normalizeFile(moduleProvider.file || moduleProvider.source);
+    const moduleEvidence = moduleScripts.find(m => normalizeFile(m.metadata?.src) === providerFile);
+    const boundaryEvidence = (caseData.evidence || []).filter(e => e.type === "SYMBOL_IMPORT_EXPORT" && e.status === "VERIFIED" && normalizeFile(e.metadata?.file || e.file || e.source) === providerFile);
+    if (boundaryEvidence.length) return {
+      type:"SOURCE_BOUND_CONCRETE_SOLUTION",
+      status:"CONSTRUCTION_UNSUPPORTED",
+      reason:`${providerFile} memiliki import/export yang terverifikasi; mengubah module menjadi classic script dapat mengubah semantics dan tidak dapat dibangun secara aman tanpa transformasi semantik.`,
+      blocker:"MODULE_SEMANTICS_REQUIRE_SEMANTIC_TRANSFORM",
+      file:targetFile,
+      operation:null,
+      evidenceIds:unique([...boundaryEvidence.map(e=>e.id), ...(moduleEvidence ? [moduleEvidence.id] : []), ...((caseData.rootCause?.evidenceIds)||[])]),
+      humanReviewRequired:true
+    };
+    const tagRe = new RegExp(`<script\\b(?=[^>]*\\bsrc\\s*=\\s*["'](?:[^"']*\\/)?${escapeRegExp(providerFile)}(?:[?#][^"']*)?["'])[^>]*\\btype\\s*=\\s*["']module["'][^>]*>`, "i");
+    const tag = html.match(tagRe);
+    if (tag) {
+      const classicTag = tag[0].replace(/\s+type\s*=\s*["']module["']/i, "");
+      return buildCandidate(caseData,targetFile,html,"REPLACE_EXACT",tag[0],classicTag,{
+        reason:`Verified inline-handler boundary: ${symbol} is defined by ${providerFile} and loaded as a module. No import/export boundary was found, so converting only this script tag to classic loading deterministically restores the global handler contract.`,
+        evidenceIds:unique([...(moduleEvidence ? [moduleEvidence.id] : []), ...defs.filter(d=>normalizeFile(d.file||d.source)===providerFile).map(e=>e.id), ...((caseData.rootCause?.evidenceIds)||[])]),
+        dependencies:[{from:targetFile,to:providerFile,kind:"HTML_SCRIPT_REFERENCE",symbol,fromMode:"module",toMode:"classic"}],
+        rootCause:rootCauseStatement,
+        confidence:.94
+      });
+    }
+  }
+
+  return null;
 }
 
 function symbolFromCase(caseData) {
@@ -723,15 +822,24 @@ export function createInvestigationEngine(caseData, knowledge={}, options={}) {
           nextCase.exactSource = { ...priorExactSource,
             callSite: priorExactSource.callSite || {file:priorExactSource.file, originalCode:priorExactSource.originalCode, fingerprint:priorExactSource.fingerprint},
             solution,
-            proposedCode:solution.proposedCode,
-            operation:solution.operation,
-            originalCode:solution.originalCode,
-            fingerprint:solution.anchorFingerprint,
-            contentFingerprint:solution.anchorFingerprint,
-            sourceFingerprint:solution.sourceFingerprint,
-            evidenceIds:priorExactSource.evidenceIds || []
+            proposedCode:solution.status === "CANDIDATE_READY" ? solution.proposedCode : null,
+            operation:solution.status === "CANDIDATE_READY" ? solution.operation : null,
+            originalCode:solution.status === "CANDIDATE_READY" ? solution.originalCode : priorExactSource.originalCode,
+            fingerprint:solution.status === "CANDIDATE_READY" ? solution.anchorFingerprint : priorExactSource.fingerprint,
+            contentFingerprint:solution.status === "CANDIDATE_READY" ? solution.anchorFingerprint : priorExactSource.contentFingerprint,
+            sourceFingerprint:solution.status === "CANDIDATE_READY" ? solution.sourceFingerprint : priorExactSource.sourceFingerprint,
+            originalSource:solution.status === "CANDIDATE_READY" ? solution.originalSource : priorExactSource.originalSource,
+            proposedSource:solution.status === "CANDIDATE_READY" ? solution.proposedSource : null,
+            changedRanges:solution.changedRanges || [],
+            lineMap:solution.lineMap || null,
+            dependencies:solution.dependencies || [],
+            confidence:solution.confidence || null,
+            sovereignty:solution.sovereignty || null,
+            evidenceIds:unique([...(priorExactSource.evidenceIds || []), ...(solution.evidenceIds || [])])
           };
-          try { nextCase = Core.verifyExactSource(nextCase, nextCase.exactSource); } catch {}
+          if (solution.status === "CANDIDATE_READY") {
+            try { nextCase = Core.verifyExactSource(nextCase, nextCase.exactSource); } catch {}
+          }
         }
       } catch {}
     }

@@ -12,7 +12,7 @@ import * as Memory from "./cgo-ai-memory.js";
 import { createRuntime } from "./cgo-ai-runtime-adapter.js";
 import { createCaptain } from "./cgo-ai-captain.js";
 
-const VERSION = "V5.3-BROWSER-BRIDGE-1.9.0-CONTRACT-PRECISION-GRAPH";
+const VERSION = "V5.4-BROWSER-BRIDGE-CGO-CONSTRUCTION-MEDICINE-REVIEW";
 const INTERNAL_AUTO_POLICY = Object.freeze({
   version:"CIKUR-INTERNAL-AUTO-1",
   allowAutomaticExecution:true,
@@ -367,6 +367,31 @@ async function runActiveInvestigation(caseId, state) {
         state:synced?.state || null
       });
 
+      const constructed = synced?.exactSource?.solution || out.caseData?.exactSource?.solution || null;
+      if (constructed?.status === "CANDIDATE_READY") {
+        try {
+          captain.submitConstructedCandidate({
+            ...constructed,
+            before:constructed.before ?? constructed.originalCode ?? null,
+            after:constructed.after ?? constructed.proposedCode ?? null,
+            caseId,
+            proposalId: constructed.proposalId || `CGO-${caseId}-${Date.now()}`
+          }, { caseId });
+          emitBrainEvent(caseId, "CGO_CANDIDATE_CONSTRUCTED_FOR_MEDICINE", {
+            file:constructed.file, operation:constructed.operation,
+            sourceFingerprint:constructed.sourceFingerprint,
+            proposedSourceFingerprint:constructed.proposedSourceFingerprint,
+            confidence:constructed.confidence, evidenceIds:constructed.evidenceIds || []
+          });
+        } catch (err) {
+          emitBrainEvent(caseId, "CGO_CANDIDATE_HANDOFF_FAILED", { error:String(err?.message || err) });
+        }
+      } else if (constructed?.status === "CONSTRUCTION_UNSUPPORTED" || constructed?.status === "REPAIR_CANDIDATE_BLOCKED") {
+        emitBrainEvent(caseId, "CGO_CONSTRUCTION_BLOCKED", {
+          status:constructed.status, reason:constructed.reason || null, blocker:constructed.blocker || null
+        });
+      }
+
       latest = compatibleSnapshot(caseId, "ACTIVE_INVESTIGATION");
       try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-state", {detail:latest})); } catch {}
     } catch (err) {
@@ -470,12 +495,11 @@ async function openCodeWorkbench(file, context = {}) {
     const original = await readExactSourceForWorkbench(target);
     const c = context.caseId ? runtime.getCase(context.caseId) : null;
     const exact = c?.exactSource || context.exactSource || null;
-    const proposed = exact?.proposedSource || context.proposedSource || exact?.proposedCode || exact?.after || context.proposedCode || "";
-    const proposedIsFullSource = Boolean(exact?.proposedSource || context.proposedSource);
+    const proposed = exact?.proposedSource || exact?.after || context.proposedSource || context.proposedCode || "";
     const proposedFingerprint = proposed ? Core.contentFingerprint(proposed) : null;
-    const changedRanges = proposedIsFullSource ? (exact?.changedRanges || context.changedRanges || []) : (proposed ? sourceRangeForText(proposed, context.changedCode || "") : []);
+    const changedRanges = proposed ? sourceRangeForText(proposed, context.changedCode || "") : [];
     const payload = {
-      version:"1.1.0-FULL-SOURCE-CODE-WORKBENCH",
+      version:"1.1.0-CODE-WORKBENCH-FULL-SOURCE",
       status:"SOURCE_READ",
       file:target,
       original:{
@@ -489,8 +513,7 @@ async function openCodeWorkbench(file, context = {}) {
         code:String(proposed),
         lines:numberSource(proposed).length,
         fingerprint:proposedFingerprint,
-        changedRanges,
-        fullSource:proposedIsFullSource
+        changedRanges
       } : null,
       finding:context.finding || null,
       explanation:context.explanation || null,
@@ -505,7 +528,7 @@ async function openCodeWorkbench(file, context = {}) {
     emitCodeWorkbench(payload);
     return payload;
   } catch (error) {
-    const payload={version:"1.0.0-CODE-WORKBENCH",status:"SOURCE_READ_FAILED",file:target,error:String(error?.message||error)};
+    const payload={version:"1.1.0-CODE-WORKBENCH-FULL-SOURCE",status:"SOURCE_READ_FAILED",file:target,error:String(error?.message||error)};
     emitCodeWorkbench(payload);
     return payload;
   }
