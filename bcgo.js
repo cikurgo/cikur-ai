@@ -8,7 +8,11 @@ import {
   getDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { db, auth } from "./cikur-config.js?v=20260907-0900-constitution-connectivity1";
+import { adminDb, adminAuth } from "./cikur-config.js";
+
+// BCGO adalah organ sistem/admin: gunakan namespace Admin, bukan Customer.
+const db = adminDb;
+const auth = adminAuth;
 
 /*
  * BCGO MASTER NERVE SYSTEM v2.16.5 + LIVE CONVERSATION BRAIN

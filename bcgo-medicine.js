@@ -11,7 +11,11 @@ import {
   setDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { db, auth } from "./cikur-config.js";
+import { adminDb, adminAuth } from "./cikur-config.js";
+
+// Medicine adalah organ sistem: Firestore/Auth harus memakai namespace Admin.
+const db = adminDb;
+const auth = adminAuth;
 import { Cognition as InternalCognition, Investigator as InternalInvestigator, createMasterRuntime } from "./cgo-runtime-adapter.js?v=20260907-0900-constitution-connectivity1";
 
 /*
