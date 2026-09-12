@@ -184,7 +184,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     retryCount: 0,
     cycle: 0,
     cycleMode: "BOOT",
-    metrics: { total: ORGAN_COUNT, active: 0, recovered: 0, healthy: ORGAN_COUNT, firestoreCount: 0 },
+    metrics: { total: ORGAN_COUNT, active: 0, recovered: 0, healthy: 0, standby: 0, review: 0, unknown: ORGAN_COUNT, firestoreCount: 0 },
     systemOrgans: {},
     systemLogs: [],
     recentEvents: [],
@@ -1727,12 +1727,23 @@ export function runAutonomousEngine(onCycleUpdate) {
   function buildOrgans() {
     const recent = newestLogByFile();
     const organs = {};
+    const scanStatus = String(state.sourceScan?.status || "WAITING").toUpperCase();
+    const scanComplete = state.sourceScan?.phase === "COMPLETE" && ["CLEAN", "FINDINGS", "DEGRADED"].includes(scanStatus);
 
     for (const [file, meta] of Object.entries(ORGAN_REGISTRY)) {
       const item = recent.get(file);
       const historical = latestSystemLogs.some(log => normalizeFile(log?.fileName) === file);
+      const scannedSource = state.sourceScan?.sources?.[file];
+      const nerve = state.fileNerves?.[file];
 
-      if (meta?.optional && !item && !historical) {
+      // TRUTH GATE: no Admin session or no completed source scan may ever
+      // be represented as HEALTHY. The monitor can stay visible while
+      // explicitly reporting what evidence is still missing.
+      if (!authorized) {
+        organs[file] = meta?.optional
+          ? { ...meta, status:"STANDBY", state:"STANDBY", message:"Organ standby; sesi Admin belum tersedia untuk verifikasi source." }
+          : { ...meta, status:"AUTH_REQUIRED", state:"AUTH_REQUIRED", message:"Belum dapat memverifikasi source/telemetry: sesi Admin belum tersedia." };
+      } else if (meta?.optional && !item && !historical && !scannedSource) {
         organs[file] = {
           ...meta,
           status: "STANDBY",
@@ -1749,19 +1760,28 @@ export function runAutonomousEngine(onCycleUpdate) {
           line: item.log?.line ?? item.log?.lineno ?? null,
           column: item.log?.column ?? item.log?.colno ?? null
         };
-      } else if (historical) {
+      } else if (historical && !scannedSource && scanStatus !== "SCANNING") {
         organs[file] = {
           ...meta,
           status: "RECOVERED",
           state: "RECOVERED",
-          message: "Tidak ada error aktif dalam window pemantauan; laporan sebelumnya masih tersimpan sebagai bukti historis."
+          message: "Ada bukti error historis, tetapi source aktual belum selesai diverifikasi."
         };
+      } else if (scanStatus === "SCANNING" && !scannedSource) {
+        organs[file] = { ...meta, status:"SCANNING", state:"SCANNING", message:`Source ${file} sedang menunggu/menjalani pembacaan aktual.` };
+      } else if (!scanComplete || !scannedSource) {
+        organs[file] = { ...meta, status:"UNKNOWN", state:"UNKNOWN", message:"Belum ada bukti source aktual yang lengkap untuk menyatakan file sehat." };
+      } else if (nerve?.health?.overall === "ANOMALY") {
+        organs[file] = { ...meta, status:"ANOMALY", state:"ACTIVE", evidenceType:"FILE_NERVE", line:nerve.unresolved?.[0]?.line ?? null, message:nerve.unresolved?.[0]?.evidence || nerve.runtime?.errors?.[0]?.message || `Saraf source menemukan ${nerve.findings?.high || 0} temuan HIGH.` };
+      } else if (nerve?.health?.overall === "REVIEW") {
+        organs[file] = { ...meta, status:"REVIEW", state:"REVIEW", evidenceType:"FILE_NERVE", message:`Source terbaca, tetapi dependency/contract memerlukan verifikasi (${nerve.evidenceSummary?.relations || 0} relasi, ${nerve.evidenceSummary?.sourceFindings || 0} temuan).` };
       } else {
         organs[file] = {
           ...meta,
           status: "HEALTHY",
           state: "HEALTHY",
-          message: "Belum ada laporan error aktif dari file ini."
+          evidenceType: "SOURCE_SCAN_CLEAN",
+          message: `Source aktual terbaca (${scannedSource.lines || 0} baris, hash ${scannedSource.hash || "-"}); tidak ada temuan aktif yang terbukti.`
         };
       }
     }
@@ -1770,9 +1790,6 @@ export function runAutonomousEngine(onCycleUpdate) {
       ...(Array.isArray(state.sourceScan?.findings) ? state.sourceScan.findings : []),
       ...(Array.isArray(state.sourceScan?.crossFileFindings) ? state.sourceScan.crossFileFindings : [])
     ].filter(f => f && f.severity === "HIGH");
-    // File nerves are authoritative for source-bound unresolved symbols and
-    // runtime/source correlation. They can promote a file even when the raw
-    // telemetry window alone would otherwise leave it green.
     const nerveEntries = Object.entries(state.fileNerves || {});
     for (const [file, nerve] of nerveEntries) {
       if (!organs[file]) continue;
@@ -1850,6 +1867,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       healthy: values.filter(v => v.state === "HEALTHY").length,
       standby: values.filter(v => v.state === "STANDBY").length,
       review: values.filter(v => v.state === "REVIEW").length,
+      unknown: values.filter(v => ["UNKNOWN", "AUTH_REQUIRED", "SCANNING"].includes(v.state)).length,
       logCount: latestSystemLogs.length,
       firestoreCount: firestore.count,
       sourceScanStatus: state.sourceScan?.status || "WAITING",
@@ -1911,15 +1929,17 @@ export function runAutonomousEngine(onCycleUpdate) {
   function situation() {
     const organs = buildOrgans();
     const active = Object.entries(organs).filter(([, v]) => v.state === "ACTIVE");
+    if (!authorized) return "Sesi Admin belum tersedia. Saya tidak akan menyebut organ HEALTHY sebelum source dan telemetry dapat diverifikasi.";
     if (firestore.error) return `Saya sedang menjaga koneksi Firestore. Sensor melaporkan: ${firestore.error}`;
     if (active.length) {
       const [file, info] = active[0];
       return `Saya menemukan ${active.length} anomali aktif. Fokus pertama saya ${file}: ${info.message}`;
     }
     const recovered = Object.values(organs).filter(v => v.state === "RECOVERED").length;
+    if (state.sourceScan?.phase !== "COMPLETE") return `Belum ada anomali yang dapat dipastikan, tetapi scanner source belum selesai. Saya belum mengklaim ${ORGAN_COUNT} organ sehat.`;
     return recovered
       ? `Tidak ada anomali aktif saat ini. ${recovered} organ masih memiliki bukti error historis yang saya tandai RECOVERED.`
-      : `Semua ${ORGAN_COUNT} organ belum memiliki laporan error aktif dalam telemetry yang saya terima.`;
+      : `Scanner source sudah selesai. ${Object.values(organs).filter(v => v.state === "HEALTHY").length} organ memiliki bukti source bersih; sisanya tetap ditahan pada status verifikasi masing-masing.`;
   }
 
   function findFile(question) {

@@ -564,6 +564,8 @@ function renderOrgans(organs, nerves, relations = []) {
         const review = info.state === 'REVIEW' || health.overall === 'REVIEW';
         const recovered = info.state === 'RECOVERED';
         const standby = info.state === 'STANDBY' || info.status === 'STANDBY' || info.optional === true && info.state === 'STANDBY';
+        const authRequired = info.state === 'AUTH_REQUIRED' || info.status === 'AUTH_REQUIRED';
+        const unknown = info.state === 'UNKNOWN' || info.state === 'SCANNING';
 
         const classes = active
             ? 'border-rose-800 bg-rose-950/50 text-rose-400'
@@ -573,13 +575,17 @@ function renderOrgans(organs, nerves, relations = []) {
                     ? 'border-amber-800 bg-amber-950/20 text-amber-400'
                     : standby
                         ? 'border-slate-700 bg-slate-950/70 text-slate-400'
-                        : 'border-emerald-800 bg-emerald-950/30 text-emerald-400';
+                        : authRequired
+                            ? 'border-amber-900 bg-amber-950/20 text-amber-300'
+                            : unknown
+                                ? 'border-slate-700 bg-slate-950/70 text-slate-300'
+                                : 'border-emerald-800 bg-emerald-950/30 text-emerald-400';
 
-        const label = active ? 'ANOMALY' : review ? 'REVIEW' : recovered ? 'RECOVERED' : standby ? 'STANDBY' : 'HEALTHY';
-        const runtime = standby ? 'STANDBY' : (health.runtime || (nerve.runtime?.active ? 'ANOMALY' : 'HEALTHY'));
-        const source = standby ? 'NOT_DEPLOYED' : (health.source || (nerve.source?.readable ? 'READABLE' : 'WAITING'));
-        const dependency = health.dependency || 'WAITING';
-        const contract = health.contract || 'WAITING';
+        const label = active ? 'ANOMALY' : review ? 'REVIEW' : recovered ? 'RECOVERED' : standby ? 'STANDBY' : authRequired ? 'AUTH REQUIRED' : unknown ? (info.state === 'SCANNING' ? 'SCANNING' : 'UNKNOWN') : 'HEALTHY';
+        const runtime = standby ? 'STANDBY' : authRequired ? 'AUTH_REQUIRED' : unknown ? 'WAITING' : (health.runtime || (nerve.runtime?.active ? 'ANOMALY' : 'HEALTHY'));
+        const source = standby ? 'NOT_DEPLOYED' : authRequired ? 'AUTH_REQUIRED' : unknown ? 'WAITING' : (health.source || (nerve.source?.readable ? 'READABLE' : 'WAITING'));
+        const dependency = authRequired || unknown ? 'WAITING' : (health.dependency || 'WAITING');
+        const contract = authRequired || unknown ? 'WAITING' : (health.contract || 'WAITING');
         const evidence = nerve.evidenceSummary || {};
         const unresolved = Number(evidence.unresolved || 0);
         const relationCount = Number(evidence.relations || 0);
@@ -920,7 +926,7 @@ runAutonomousEngine(state => {
     renderSourceScan(state.sourceScan);
     if (liveSpeech) liveSpeech.textContent = `> [${state.step}] ${state.message}`;
     if (targetCellId) targetCellId.textContent = state.targetCell || '-';
-    if (errorLogDesc) errorLogDesc.textContent = state.errorLog || 'Normal (tidak ada anomali aktif)';
+    if (errorLogDesc) errorLogDesc.textContent = state.errorLog || (state.sourceScan?.phase === 'COMPLETE' ? 'Tidak ada anomali aktif yang terbukti dari scan dan telemetry.' : (state.connection?.status === 'LIVE' ? 'Belum ada bukti scan lengkap; status HEALTHY belum dapat dinyatakan.' : 'Sesi Admin belum tersedia; status HEALTHY belum dapat dinyatakan.'));
 
     if (cycleNumber) cycleNumber.textContent = state.cycle ?? 0;
     if (cycleMode) cycleMode.textContent = state.cycleMode || 'NORMAL';
