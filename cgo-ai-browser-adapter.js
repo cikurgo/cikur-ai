@@ -2,17 +2,17 @@
  * Binds the V5.2 active-investigation brain to the existing BCGO / Medicine contracts.
  * No external AI/API. No source mutation. Medicine remains proof authority.
  */
-import * as Core from "./cgo-ai-core.js?v=20260912-admin-flow3";
-import * as Knowledge from "./cgo-ai-knowledge.js?v=20260912-admin-flow3";
-import * as Investigator from "./cgo-ai-investigator.js?v=20260912-admin-flow3";
-import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js?v=20260912-admin-flow3";
-import * as Cognition from "./cgo-ai-cognition.js?v=20260912-admin-flow3";
-import * as Logic from "./cgo-ai-logic.js?v=20260912-admin-flow3";
-import * as Memory from "./cgo-ai-memory.js?v=20260912-admin-flow3";
-import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260912-admin-flow3";
-import { createCaptain } from "./cgo-ai-captain.js?v=20260912-admin-flow3";
+import * as Core from "./cgo-ai-core.js?v=20260912-real-cgo-bridge2";
+import * as Knowledge from "./cgo-ai-knowledge.js?v=20260912-real-cgo-bridge2";
+import * as Investigator from "./cgo-ai-investigator.js?v=20260912-real-cgo-bridge2";
+import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js?v=20260912-real-cgo-bridge2";
+import * as Cognition from "./cgo-ai-cognition.js?v=20260912-real-cgo-bridge2";
+import * as Logic from "./cgo-ai-logic.js?v=20260912-real-cgo-bridge2";
+import * as Memory from "./cgo-ai-memory.js?v=20260912-real-cgo-bridge2";
+import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260912-real-cgo-bridge2";
+import { createCaptain } from "./cgo-ai-captain.js?v=20260912-real-cgo-bridge2";
 
-const VERSION = "V5.4-BROWSER-BRIDGE-CGO-CONSTRUCTION-MEDICINE-REVIEW";
+const VERSION = "V5.5-BROWSER-BRIDGE-CGO-CONSTRUCTION-REAL-BOOT";
 const INTERNAL_AUTO_POLICY = Object.freeze({
   version:"CIKUR-INTERNAL-AUTO-1",
   allowAutomaticExecution:true,
@@ -918,8 +918,20 @@ function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = nu
 }
 
 export function install() {
+  // HARDENED BOOT: Captain is started immediately when the browser brain is
+  // installed. Previously it only started on the first BCGO_STATE intake,
+  // which left a real race window where the human chat could see no Captain
+  // and the UI could remain at WAITING even though the brain was loaded.
+  let captainBooted = false;
+  try { captain.start(); captainBooted = !!captain.getState?.(); } catch (error) {
+    try { window.dispatchEvent(new CustomEvent("cikur-captain-boot-error", { detail: { message: String(error?.message || error) } })); } catch {}
+  }
+  try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-ready", { detail: { version: VERSION, ready: captainBooted, captain: captain.getState?.() || null } })); } catch {}
+
   return {
     version: VERSION,
+    isReady() { return captainBooted === true; },
+    captainReady() { try { const s = captain.getState?.(); return !!s && s.status !== "BOOT_ERROR"; } catch { return false; } },
     ingestBCGOState(state = {}) {
       latestBCGOState = clone(state);
       try { captain.start(); captain.ingestBCGOState(state); } catch {}

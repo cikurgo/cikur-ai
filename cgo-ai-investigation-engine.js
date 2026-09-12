@@ -5,9 +5,9 @@
  * The engine never invents source. Every conclusion must be backed by a probe result
  * produced by the injected internal probe provider.
  */
-import * as Core from "./cgo-ai-core.js?v=20260912-admin-flow3";
-import * as Investigator from "./cgo-ai-investigator.js?v=20260912-admin-flow3";
-import * as Sovereignty from "./cgo-ai-sovereignty.js?v=20260912-admin-flow3";
+import * as Core from "./cgo-ai-core.js?v=20260912-real-cgo-bridge2";
+import * as Investigator from "./cgo-ai-investigator.js?v=20260912-real-cgo-bridge2";
+import * as Sovereignty from "./cgo-ai-sovereignty.js?v=20260912-real-cgo-bridge2";
 
 const VERSION = "2.4.0-PRECISION-CODE-CONSTRUCTION-SOVEREIGN";
 const MAX_STEPS_DEFAULT = 10;

@@ -1,5 +1,5 @@
 import { doc, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { adminDb } from "./cikur-config.js?v=20260912-admin-flow3";
+import { adminDb } from "./cikur-config.js?v=20260912-real-cgo-bridge2";
 
 // Executor mengakses authorization ledger sistem melalui namespace Admin.
 const db = adminDb;

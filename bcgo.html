@@ -742,7 +742,10 @@ window.BCGOBrain = {
     getConversation() {
         try { return window.CIKURInternalAIRuntime?.getChatConversation?.() || []; } catch { return []; }
     },
-    getState() { return authoritativeBCGOState(); }
+    getState() { return authoritativeBCGOState(); },
+    getCaptain() {
+        try { return window.CIKURInternalAIRuntime?.getCaptain?.() || null; } catch { return null; }
+    }
 };
 
 let chatRequestBusy = false;
@@ -1206,6 +1209,21 @@ runAutonomousEngine(state => {
     if (d.text) bubble(captainChat, 'CGO • KAPTEN / BRAIN', d.text, d.error ? 'amber' : 'cyan');
   });
 
+  // Runtime-ready handshake: the UI can recover immediately if the Captain
+  // booted before these presentation listeners were attached. This closes the
+  // browser-script ordering gap instead of relying on a future telemetry tick.
+  window.addEventListener('cikur-internal-ai-ready', () => {
+    try {
+      const c = window.BCGOBrain?.getCaptain?.();
+      const s = c?.getState?.();
+      if (s) {
+        captainOnline.textContent = s.status === 'LIVE' ? 'ONLINE • INTERNAL' : 'READY • INTERNAL';
+        captainOnline.className = `text-[9px] code-font ${s.status === 'LIVE' ? 'text-emerald-300' : 'text-cyan-300'}`;
+        if (!greeted && latestState) captainGreeting(latestState);
+      }
+    } catch {}
+  });
+
   window.addEventListener('cikur-captain-state', e => {
     const d = e.detail || {};
     latestState = authoritativeBCGOState() || latestState;
@@ -1258,8 +1276,14 @@ runAutonomousEngine(state => {
 
   const renderState = state => {
     latestState = state;
-    captainGreeting(state);
     if (status) status.textContent = state?.connection?.status === 'LIVE' ? 'LIVE • STATE' : 'WAITING';
+    const c = window.BCGOBrain?.getCaptain?.();
+    const cs = c?.getState?.();
+    if (cs?.status === 'LIVE' || cs?.status === 'WAITING') {
+      captainOnline.textContent = cs.status === 'LIVE' ? 'ONLINE • INTERNAL' : 'READY • INTERNAL';
+      captainOnline.className = `text-[9px] code-font ${cs.status === 'LIVE' ? 'text-emerald-300' : 'text-cyan-300'}`;
+    }
+    captainGreeting(state);
   };
 
   const prior = window.BCGO_STATE;
