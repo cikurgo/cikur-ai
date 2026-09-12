@@ -456,6 +456,14 @@ export function runAutonomousEngine(onCycleUpdate) {
       state.uiError = String(uiError?.message || uiError || "UI render error").slice(0, 500);
       console.warn("BCGO UI render error (engine tetap hidup):", state.uiError);
     }
+    // Captain/CGO and the presentation layer consume the same authoritative
+    // BCGO_STATE. The old build updated window.BCGO_STATE but did not emit the
+    // event Captain was listening for, leaving Captain permanently at WAITING.
+    try {
+      window.dispatchEvent(new CustomEvent("cikur-bcgo-state", { detail: safeClone(snapshot) }));
+    } catch (eventError) {
+      console.warn("BCGO state bridge event gagal:", eventError);
+    }
   }
 
   function recordEvent(type, message, target = "SYSTEM") {
@@ -2534,6 +2542,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     getRegistry: () => ({ ...ORGAN_REGISTRY }),
     getExploration: () => safeClone(state.sourceScan?.exploration || null),
     getContractGaps: () => safeClone(state.sourceScan?.exploration?.gaps || []),
+    getCaptain: () => { try { return window.CIKURInternalAIRuntime?.getCaptain?.() || null; } catch { return null; } },
     stop() {
       stopped = true;
       ++authEpoch;

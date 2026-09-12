@@ -783,12 +783,27 @@ async function sendQuestion(question) {
     setChatBusy(true);
     addChat('user', text);
     try {
+        // One human input must reach the same CGO/KAPTEN shown above.
+        // Explicit Captain commands are handled by the Captain orchestrator;
+        // ordinary questions go to the Internal AI brain, then are mirrored
+        // into Captain Chat so the two UI surfaces cannot silently diverge.
+        const captain = window.BCGOBrain?.getCaptain?.();
+        const captainOut = captain?.receiveHumanCommand?.(text, { source:'BCGO_HUMAN_CHAT' });
+        if (captainOut?.handled) {
+            if (captainOut.message) addChat('bcgo', captainOut.message);
+            return;
+        }
         const runtime = await waitForInternalAI();
         if (!runtime?.ask) throw new Error('INTERNAL_AI_NOT_READY');
         const answer = await runtime.ask(text);
-        if (answer) addChat('bcgo', answer);
+        if (answer) {
+            addChat('bcgo', answer);
+            try { window.dispatchEvent(new CustomEvent('cgo-human-chat-response', { detail:{ text:answer, question:text, at:Date.now() } })); } catch {}
+        }
     } catch (error) {
-        addChat('bcgo', `Saya belum bisa menyelesaikan pesan ini dengan aman. Internal AI belum siap atau gagal memprosesnya: ${String(error?.message || error).slice(0, 220)}`);
+        const answer = `Saya belum bisa menyelesaikan pesan ini dengan aman. Internal AI belum siap atau gagal memprosesnya: ${String(error?.message || error).slice(0, 220)}`;
+        addChat('bcgo', answer);
+        try { window.dispatchEvent(new CustomEvent('cgo-human-chat-response', { detail:{ text:answer, question:text, error:true, at:Date.now() } })); } catch {}
     } finally {
         setChatBusy(false);
         chatInput?.focus();
@@ -1040,7 +1055,7 @@ runAutonomousEngine(state => {
  try { latestWorkbench=JSON.parse(sessionStorage.getItem(WORKBENCH_KEY)||'null'); } catch { latestWorkbench=null; }
  const saveWorkbench=()=>{ try { if(latestWorkbench) sessionStorage.setItem(WORKBENCH_KEY, JSON.stringify(latestWorkbench)); } catch {} };
  const renderLive=d=>{
-   $('cgo-live-file').textContent=d.file?`FILE AKTIF: ${d.file}`:'Belum ada file aktif';
+   const liveFile=d.file||window.BCGO_STATE?.sourceScan?.currentFile||window.BCGO_STATE?.lastTelemetryFile||null; $('cgo-live-file').textContent=liveFile?`FILE AKTIF: ${liveFile}`:'Belum ada file aktif';
    const provenanceLive=d.proposed?.fullSource?'FULL PROPOSED SOURCE • SOURCE-BOUND':'SNIPPET ONLY • FULL PROPOSED SOURCE NOT PROVEN';
    $('cgo-live-meta').textContent=d.status==='SOURCE_READ'?`ORIGINAL ${d.original?.lines||0} lines • ${d.original?.bytes||0} bytes • fingerprint ${d.original?.fingerprint||'-'} • PROPOSED ${d.proposed?.lines||0} lines • proposed fingerprint ${d.proposed?.fingerprint||'-'} • ${provenanceLive}${d.sourceIntegrity?.match===false?' • CANDIDATE ORIGINAL FINGERPRINT MISMATCH — REVIEW':''}`:`STATUS ${d.status||'UNKNOWN'} • ${d.error||''}`;
    $('cgo-live-original').textContent=d.original?.code?lineCode(d.original.code):'Belum ada source yang dibaca.';
@@ -1050,10 +1065,27 @@ runAutonomousEngine(state => {
  };
  window.addEventListener('cgo-source-scanned',e=>{
    const d=e.detail||{};
-   if(!latestWorkbench || !d.file || String(latestWorkbench.file||'')!==String(d.file)) return;
-   latestWorkbench.original={code:String(d.source||''),lines:Number(d.lines||0),bytes:Number(d.bytes||0),fingerprint:d.fingerprint||null,readAt:d.readAt||Date.now()};
-   latestWorkbench.status='SOURCE_READ'; latestWorkbench.rescanGeneration=d.generation||null;
+   if(!d.file) return;
+   // A completed scanner read becomes the active CGO workbench source even when
+   // the human has not opened the modal yet. This is the missing visual bridge
+   // that previously left the panel saying "Belum ada file aktif".
+   if(!latestWorkbench || String(latestWorkbench.file||'')!==String(d.file)){
+     latestWorkbench={file:d.file,status:'SOURCE_READ',original:{code:String(d.source||''),lines:Number(d.lines||0),bytes:Number(d.bytes||0),fingerprint:d.fingerprint||null,readAt:d.readAt||Date.now()},proposed:latestWorkbench?.proposed||null,rescanGeneration:d.generation||null};
+   } else {
+     latestWorkbench.original={code:String(d.source||''),lines:Number(d.lines||0),bytes:Number(d.bytes||0),fingerprint:d.fingerprint||null,readAt:d.readAt||Date.now()};
+     latestWorkbench.status='SOURCE_READ'; latestWorkbench.rescanGeneration=d.generation||null;
+   }
    saveWorkbench(); renderLive(latestWorkbench);
+ });
+ window.addEventListener('cgo-source-scan-lifecycle',e=>{
+   const d=e.detail||{};
+   if(d.phase==='START' && d.files?.length){
+     const current=window.BCGO_STATE?.sourceScan?.currentFile || d.files[0];
+     if(current && (!latestWorkbench || !latestWorkbench.file)){
+       latestWorkbench={file:current,status:'SCANNING',original:null,proposed:null,scannerGeneration:d.generation||null};
+       saveWorkbench(); renderLive(latestWorkbench);
+     }
+   }
  });
  window.addEventListener('cgo-source-scan-lifecycle',e=>{
    const d=e.detail||{};
@@ -1164,6 +1196,33 @@ runAutonomousEngine(state => {
       decisionStatus.textContent = proof.pass === true ? 'PROOF LENGKAP • CANDIDATE BELUM TERSEDIA' : 'PROOF BELUM LENGKAP';
       decisionText.textContent = proof.blockers?.length ? `CGO menahan perubahan. Blocker: ${proof.blockers.slice(0,3).join(', ')}` : 'CGO belum menerima proof lengkap untuk menampilkan kandidat perubahan. Source tidak disentuh.';
     }
+  });
+
+  // Captain presentation must follow the actual Captain runtime state.
+  // This closes the visual gap where the lower chat could talk to the brain
+  // while the upper Captain panel remained stuck on WAITING.
+  window.addEventListener('cgo-human-chat-response', e => {
+    const d = e.detail || {};
+    if (d.text) bubble(captainChat, 'CGO • KAPTEN / BRAIN', d.text, d.error ? 'amber' : 'cyan');
+  });
+
+  window.addEventListener('cikur-captain-state', e => {
+    const d = e.detail || {};
+    latestState = authoritativeBCGOState() || latestState;
+    const live = ['LIVE','DELEGATING','BCGO_PROBING','BCGO_PROBE_RESULT','HUMAN_APPROVAL','REINVESTIGATING','STATUS_REQUEST'].includes(String(d.status || '').toUpperCase()) || d.phase !== 'IDLE';
+    if (status) { status.textContent = live ? 'LIVE' : (d.status || 'WAITING'); status.className = `text-[9px] code-font px-2 py-1 rounded border ${live ? 'border-emerald-800 text-emerald-300' : 'border-slate-700 text-slate-400'}`; }
+    if (captainOnline) { captainOnline.textContent = live ? 'ONLINE • INTERNAL' : 'WAITING • INTERNAL'; captainOnline.className = `text-[9px] code-font ${live ? 'text-emerald-300' : 'text-slate-400'}`; }
+    if (d.decision && d.decision !== 'WAITING') {
+      const summary = [d.phase, d.decision, d.nextAction].filter(Boolean).join(' • ');
+      if (summary && captainChat && !captainChat.querySelector(`[data-captain-state="${esc(summary)}"]`)) {
+        bubble(captainChat, 'CGO • KAPTEN STATE', summary, d.blocker ? 'amber' : 'cyan');
+      }
+    }
+  });
+
+  window.addEventListener('cikur-captain-human-response', e => {
+    const d = e.detail || {};
+    if (d.message) bubble(captainChat, 'CGO • KAPTEN', d.message, d.decision && /BLOCKED|REJECT/i.test(String(d.decision)) ? 'amber' : 'cyan');
   });
 
   $('captain-approve')?.addEventListener('click', () => {
