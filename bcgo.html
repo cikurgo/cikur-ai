@@ -1214,8 +1214,19 @@ runAutonomousEngine(state => {
     if (captainOnline) { captainOnline.textContent = live ? 'ONLINE • INTERNAL' : 'WAITING • INTERNAL'; captainOnline.className = `text-[9px] code-font ${live ? 'text-emerald-300' : 'text-slate-400'}`; }
     if (d.decision && d.decision !== 'WAITING') {
       const summary = [d.phase, d.decision, d.nextAction].filter(Boolean).join(' • ');
-      if (summary && captainChat && !captainChat.querySelector(`[data-captain-state="${esc(summary)}"]`)) {
-        bubble(captainChat, 'CGO • KAPTEN STATE', summary, d.blocker ? 'amber' : 'cyan');
+      if (summary && captainChat) {
+        // Replace the single live Captain-state bubble instead of checking for
+        // an attribute that bubble() never creates. This prevents repeated
+        // state spam on every BCGO heartbeat.
+        let stateBubble = captainChat.querySelector('[data-captain-live-state="1"]');
+        if (!stateBubble) {
+          stateBubble = document.createElement('div');
+          stateBubble.dataset.captainLiveState = '1';
+          captainChat.appendChild(stateBubble);
+        }
+        stateBubble.className = `rounded-lg border px-3 py-2 text-xs ${d.blocker ? 'border-amber-800 text-amber-200 bg-amber-950/20' : 'border-cyan-900 text-cyan-200 bg-cyan-950/10'}`;
+        stateBubble.innerHTML = `<div class="text-[9px] uppercase tracking-wider opacity-70 mb-1">CGO • KAPTEN STATE</div><div>${esc(summary)}</div>`;
+        captainChat.scrollTop = captainChat.scrollHeight;
       }
     }
   });

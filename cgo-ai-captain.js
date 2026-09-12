@@ -614,8 +614,13 @@ export function createCaptain(options = {}) {
       latestAI = clone(e.detail || {});
       emit("CAPTAIN_AI_UPDATE", { ai: latestAI });
     });
-    if (typeof window !== "undefined" && window.BCGO_STATE) onBCGO(window.BCGO_STATE);
+
+    // BOOT ORDER IS AUTHORITATIVE: establish CAPTAIN_READY first, then ingest
+    // the existing live BCGO snapshot. The previous order could ingest a live
+    // state and immediately overwrite it with WAITING, creating a false
+    // "CGO menunggu BCGO_STATE" presentation.
     set({ status: "WAITING", phase: "IDLE", nextAction: "WAIT_FOR_BCGO" }, "CAPTAIN_READY");
+    if (typeof window !== "undefined" && window.BCGO_STATE) onBCGO(window.BCGO_STATE);
     recoverBridgeCaches();
     return api;
   }
