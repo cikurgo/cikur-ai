@@ -1035,7 +1035,10 @@ runAutonomousEngine(state => {
 (()=>{
  const $=id=>document.getElementById(id); const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
  const lineCode=code=>String(code??'').split(/\r?\n/).map((x,i)=>String(i+1).padStart(5,'0')+'  '+x).join('\n');
+ const WORKBENCH_KEY='CIKUR_GO_BCGO_CGO_LIVE_WORKBENCH_V2';
  let latestWorkbench=null;
+ try { latestWorkbench=JSON.parse(sessionStorage.getItem(WORKBENCH_KEY)||'null'); } catch { latestWorkbench=null; }
+ const saveWorkbench=()=>{ try { if(latestWorkbench) sessionStorage.setItem(WORKBENCH_KEY, JSON.stringify(latestWorkbench)); } catch {} };
  const renderLive=d=>{
    $('cgo-live-file').textContent=d.file?`FILE AKTIF: ${d.file}`:'Belum ada file aktif';
    const provenanceLive=d.proposed?.fullSource?'FULL PROPOSED SOURCE • SOURCE-BOUND':'SNIPPET ONLY • FULL PROPOSED SOURCE NOT PROVEN';
@@ -1045,8 +1048,22 @@ runAutonomousEngine(state => {
    const rangesLive=Array.isArray(d.proposed?.changedRanges)&&d.proposed.changedRanges.length?`<br><b class="text-cyan-300">MAPPING:</b> ${esc(JSON.stringify(d.proposed.changedRanges))}`:'';
    const fLive=d.finding?.statement||d.explanation||d.command||''; $('cgo-live-finding').innerHTML=(fLive?'<b class="text-amber-300">TEMUAN / KONTEKS</b><br>'+esc(fLive):'Belum ada temuan yang diklaim.')+rangesLive;
  };
+ window.addEventListener('cgo-source-scanned',e=>{
+   const d=e.detail||{};
+   if(!latestWorkbench || !d.file || String(latestWorkbench.file||'')!==String(d.file)) return;
+   latestWorkbench.original={code:String(d.source||''),lines:Number(d.lines||0),bytes:Number(d.bytes||0),fingerprint:d.fingerprint||null,readAt:d.readAt||Date.now()};
+   latestWorkbench.status='SOURCE_READ'; latestWorkbench.rescanGeneration=d.generation||null;
+   saveWorkbench(); renderLive(latestWorkbench);
+ });
+ window.addEventListener('cgo-source-scan-lifecycle',e=>{
+   const d=e.detail||{};
+   if(d.phase==='START' && latestWorkbench && latestWorkbench.file){ latestWorkbench.scannerStatus='RESCANNING'; latestWorkbench.scannerGeneration=d.generation||null; saveWorkbench(); renderLive(latestWorkbench); }
+   if(d.phase==='COMPLETE' && latestWorkbench){ latestWorkbench.scannerStatus='COMPLETE'; saveWorkbench(); renderLive(latestWorkbench); }
+ });
+ try { if(latestWorkbench) renderLive(latestWorkbench); } catch {}
+
  $('cgo-live-copy')?.addEventListener('click',async()=>{const code=latestWorkbench?.proposed?.code;if(!code)return;try{await navigator.clipboard.writeText(code);$('cgo-live-copy').textContent='COPIED';setTimeout(()=>{$('cgo-live-copy').textContent='COPY PROPOSED'},1200)}catch{$('cgo-live-copy').textContent='COPY GAGAL'}});
- window.addEventListener('cgo-code-workbench',e=>{const d=e.detail||{};latestWorkbench=d;renderLive(d);const box=$('cgo-code-workbench');if(!box)return;box.classList.add('open');box.setAttribute('aria-hidden','false');$('cgo-wb-file').textContent=d.file||'-';
+ window.addEventListener('cgo-code-workbench',e=>{const d=e.detail||{};latestWorkbench=d;saveWorkbench();renderLive(d);const box=$('cgo-code-workbench');if(!box)return;box.classList.add('open');box.setAttribute('aria-hidden','false');$('cgo-wb-file').textContent=d.file||'-';
    const provenance=d.proposed?.fullSource?'FULL PROPOSED SOURCE • SOURCE-BOUND':'SNIPPET ONLY • FULL PROPOSED SOURCE NOT PROVEN';
    $('cgo-wb-meta').textContent=d.status==='SOURCE_READ'?`ORIGINAL ${d.original?.lines||0} lines • ${d.original?.bytes||0} bytes • fingerprint ${d.original?.fingerprint||'-'} • PROPOSED ${d.proposed?.lines||0} lines • proposed fingerprint ${d.proposed?.fingerprint||'-'} • ${provenance}${d.sourceIntegrity?.match===false?' • CANDIDATE ORIGINAL FINGERPRINT MISMATCH — REVIEW':''}`:`STATUS ${d.status||'UNKNOWN'} • ${d.error||''}`;
    $('cgo-wb-original').textContent=d.original?.code?lineCode(d.original.code):'Source belum tersedia.';
@@ -1118,11 +1135,12 @@ runAutonomousEngine(state => {
     const msg = packet.message || packet.review?.reason || (packet.type === 'EXECUTION_INVESTIGATION_ACK' ? 'Saya menerima sesi investigasi dan sedang melakukan review deterministic.' : packet.type || 'Laporan diterima.');
     bubble(teamChat, who, msg, 'violet');
 
+    // Team reports stay in TEAM CHAT. They must not flood CGO's working conversation.
+    // Only the current decision context is updated in-place.
     if (packet.from === 'MEDICINE') {
-      bubble(captainChat, 'CGO • MENERIMA MEDICINE', `Laporan Medicine diterima: ${msg}`);
-      decisionText.textContent = 'CGO sedang menilai laporan Medicine bersama BCGO_STATE. Belum ada kandidat perubahan yang boleh ditampilkan tanpa proof.';
+      decisionText.textContent = `Laporan Medicine terbaru diterima: ${msg}`;
     } else {
-      bubble(captainChat, 'CGO • MENERIMA EXECUTOR', `Laporan Executor diterima: ${msg}`);
+      decisionText.textContent = `Laporan Executor terbaru diterima: ${msg}`;
     }
   }
 

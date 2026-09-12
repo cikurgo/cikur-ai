@@ -1798,16 +1798,18 @@ export function runAutonomousEngine(onCycleUpdate) {
     for (const file of files) fileStates[file] = { status:'QUEUED', line:null, message:'Menunggu giliran scan...' };
 
     const publishProgress = patch => {
-      state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, totalFiles:files.length, fileStates:{...fileStates}, findings:[...failures, ...Object.values(scanned).flatMap(item => item.findings || [])].slice(0,100), crossFileFindings:[], relations:[], sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,type:item.type,role:item.role,discovered:!!ORGAN_REGISTRY[name]?.discovered,discoveredFrom:ORGAN_REGISTRY[name]?.discoveredFrom || null,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])), sourceIntelligence:buildSourceIntelligence(scanned, latestSystemLogs), ...patch };
+      state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, totalFiles:files.length, fileStates:{...fileStates}, findings:[...failures, ...Object.values(scanned).flatMap(item => item.findings || [])].slice(0,100), crossFileFindings:[], relations:[], sources:Object.fromEntries(Object.entries({...preservedSources,...scanned}).map(([name,item]) => [name,{...item,file:name,type:item.type || ORGAN_REGISTRY[name]?.type || 'source',role:item.role || ORGAN_REGISTRY[name]?.role || 'customer',discovered:!!ORGAN_REGISTRY[name]?.discovered,discoveredFrom:ORGAN_REGISTRY[name]?.discoveredFrom || null}])), sourceIntelligence:buildSourceIntelligence(scanned, latestSystemLogs), ...patch };
       publishToUI(safeClone(state));
     };
 
-    state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, filesScanned:0, filesReadable:0, filesFailed:0, currentFile:null, currentIndex:0, totalFiles:files.length, phase:'QUEUE', fileStates:{...fileStates}, findings:[], crossFileFindings:[], sources:{}, relationSummary:{synchronized:0,mismatch:0,variant:0,unknown:0,linked:0}, nerveSummary:{healthy:0,standby:0,observed:0,review:0,anomaly:0,unresolved:0}, message:`Antrian scan dibuka: ${files.length} source akan dibaca dari deployment aktif.` };
+    const preservedSources = (state.sourceScan && state.sourceScan.sources && typeof state.sourceScan.sources === 'object') ? { ...state.sourceScan.sources } : {};
+    state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, filesScanned:0, filesReadable:0, filesFailed:0, currentFile:null, currentIndex:0, totalFiles:files.length, phase:'QUEUE', fileStates:{...fileStates}, findings:[], crossFileFindings:[], sources:preservedSources, previousSources:preservedSources, rescanGeneration:generation, relationSummary:{synchronized:0,mismatch:0,variant:0,unknown:0,linked:0}, nerveSummary:{healthy:0,standby:0,observed:0,review:0,anomaly:0,unresolved:0}, message:`Antrian scan dibuka: ${files.length} source akan dibaca dari deployment aktif.` };
     // Kosongkan hasil nerve/organ dari siklus sebelumnya juga, supaya kartu "STATUS TIAP FILE"
     // tidak menampilkan hasil lama yang sudah tidak sinkron dengan counter scan yang baru direset.
     state.fileNerves = {};
     recordEvent('SOURCE_SCAN', `Pemindaian source code dimulai (${reason}) — ${files.length} organ.`, 'SYS_SOURCE_SCANNER');
     publishToUI(safeClone(state));
+    try { window.dispatchEvent(new CustomEvent('cgo-source-scan-lifecycle', { detail:{ phase:'START', generation, files:files.slice(), startedAt, preservedSources:Object.keys(preservedSources) } })); } catch {}
 
     try {
       for (let index = 0; index < files.length; index++) {
@@ -1825,6 +1827,7 @@ export function runAutonomousEngine(onCycleUpdate) {
           const localFindings = item.findings || [];
           fileStates[file] = { status:localFindings.length ? 'FINDING' : 'CLEAN', line:localFindings[0]?.line ?? null, message:localFindings.length ? `${localFindings.length} temuan lokal terdeteksi; bukti disimpan.` : `Source dibaca dan dianalisis: ${item.lines} baris, hash ${item.hash}.` };
           publishProgress({ currentFile:file, currentIndex:index+1, filesScanned:index+1, filesReadable:Object.keys(scanned).length, filesFailed:failures.length, phase:'FILE_DONE', message:`Selesai ${index+1}/${files.length}: ${file} — ${localFindings.length ? localFindings.length+' temuan' : 'tidak ada temuan lokal'}.` });
+          try { window.dispatchEvent(new CustomEvent('cgo-source-scanned', { detail:{ generation, file, status:'SOURCE_READ', lines:item.lines, bytes:item.bytes, fingerprint:item.hash, source, refs:item.refs || [], findings:localFindings.slice(0,40), readAt:Date.now() } })); } catch {}
         } catch (error) {
           const message = `Source ${file} tidak dapat dibaca: ${String(error?.message || error)}`;
           if (RESERVED_OPTIONAL_ORGANS.has(file)) {
@@ -1889,6 +1892,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       window.BCGO_STATE = safeClone(state);
       publishToUI(safeClone(state));
       publishBCGOStateToMedicine(safeClone(state));
+      try { window.dispatchEvent(new CustomEvent('cgo-source-scan-lifecycle', { detail:{ phase:'COMPLETE', generation, status, filesScanned:files.length, filesReadable:Object.keys(scanned).length, completedAt:state.sourceScan.completedAt } })); } catch {}
     } finally { sourceScanBusy = false; }
   }
 
