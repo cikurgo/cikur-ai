@@ -6,8 +6,8 @@
  * authorization, execution, rollback, or validation gates.
  */
 
-export const VERSION = "1.9.0-CGO-CONSTITUTION-SOVEREIGN-CONSTRUCTION";
-export const CONSTITUTION_VERSION = "CGO-CONSTITUTION-1.9.0";
+export const VERSION = "1.9.1-CGO-CONSTITUTION-SOVEREIGN-CONSTRUCTION";
+export const CONSTITUTION_VERSION = "CGO-CONSTITUTION-1.9.1";
 
 const freeze = Object.freeze;
 const list = (items) => freeze(items.slice());
@@ -268,7 +268,12 @@ function hasAny(patterns, text) {
 export function classifyDialogue(text, session = {}) {
   const q = String(text || "").trim();
   const hasWork = !!(session?.caseId || session?.primaryFile || session?.pendingWork);
-  const explicitTechnical = !!(session?.explicitTechnicalTarget || session?.primaryFile || session?.pendingWork);
+  // A concrete local technical target establishes technical intent when the
+  // surrounding request contains an action/inspection word. A lone action
+  // verb (e.g. "cek") still remains conversationally ambiguous.
+  const explicitTechnicalTarget = /\b(?:[A-Za-z0-9._-]+\.(?:html?|js|css|json)|BCGO_STATE|system_logs|telemetry|Firestore|Firebase)\b/i.test(q);
+  const technicalAction = /\b(?:cek|periksa|check|baca|lihat|tampilkan|petakan|telusuri|jelajahi|bandingkan|cocokkan|investigasi|selidiki|perbaiki|fix|repair|patch|validasi|verifikasi)\b/i.test(q);
+  const explicitTechnical = !!(session?.explicitTechnicalTarget || session?.primaryFile || session?.pendingWork || (explicitTechnicalTarget && technicalAction));
 
   const greeting = /^(halo|hai|hello|hi|pagi|siang|sore|malam|assalamualaikum)\b/i.test(q);
   const identity = /\b(siapa kamu|kamu siapa|siapa cgo|apa itu cgo|kamu itu siapa|kamu sebagai apa|siapa anda|siapakah anda|siapakah kamu)\b/i.test(q);

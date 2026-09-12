@@ -1806,7 +1806,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     for (const file of files) fileStates[file] = { status:'QUEUED', line:null, message:'Menunggu giliran scan...' };
 
     const publishProgress = patch => {
-      state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, totalFiles:files.length, fileStates:{...fileStates}, findings:[...failures, ...Object.values(scanned).flatMap(item => item.findings || [])].slice(0,100), crossFileFindings:[], relations:[], sources:Object.fromEntries(Object.entries({...preservedSources,...scanned}).map(([name,item]) => [name,{...item,file:name,type:item.type || ORGAN_REGISTRY[name]?.type || 'source',role:item.role || ORGAN_REGISTRY[name]?.role || 'customer',discovered:!!ORGAN_REGISTRY[name]?.discovered,discoveredFrom:ORGAN_REGISTRY[name]?.discoveredFrom || null}])), sourceIntelligence:buildSourceIntelligence(scanned, latestSystemLogs), ...patch };
+      state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, totalFiles:files.length, fileStates:{...fileStates}, findings:[...failures, ...Object.values(scanned).flatMap(item => item.findings || [])].slice(0,100), crossFileFindings:[], relations:[], sources:Object.fromEntries(Object.entries({...preservedSources,...scanned}).map(([name,item]) => [name,{...item,file:name,type:item.type || ORGAN_REGISTRY[name]?.type || 'source',role:item.role || ORGAN_REGISTRY[name]?.role || 'customer',discovered:!!ORGAN_REGISTRY[name]?.discovered,discoveredFrom:ORGAN_REGISTRY[name]?.discoveredFrom || null,scanGeneration:item.scanGeneration || null}])), sourceIntelligence:buildSourceIntelligence(scanned, latestSystemLogs), ...patch };
       publishToUI(safeClone(state));
     };
 
@@ -1830,7 +1830,7 @@ export function runAutonomousEngine(onCycleUpdate) {
           if (source == null) return;
           fileStates[file] = { status:'ANALYZING', line:null, message:`Source terbaca (${source.length} karakter). Menganalisis struktur...` };
           publishProgress({ currentFile:file, currentIndex:index+1, filesScanned:index, filesReadable:Object.keys(scanned).length, filesFailed:failures.length, phase:'ANALYZE', message:`Source ${file} terbaca. Analisis struktur dan referensi dimulai...` });
-          const item = scanSourceFile(file, source);
+          const item = { ...scanSourceFile(file, source), scanGeneration:generation, readStatus:'CURRENT' };
           scanned[file] = item;
           const localFindings = item.findings || [];
           fileStates[file] = { status:localFindings.length ? 'FINDING' : 'CLEAN', line:localFindings[0]?.line ?? null, message:localFindings.length ? `${localFindings.length} temuan lokal terdeteksi; bukti disimpan.` : `Source dibaca dan dianalisis: ${item.lines} baris, hash ${item.hash}.` };
@@ -1846,6 +1846,11 @@ export function runAutonomousEngine(onCycleUpdate) {
           } else {
             const finding = { severity:'HIGH', type:'SOURCE_UNREADABLE', file, line:null, message };
             failures.push(finding);
+            // Keep the previous source for continuity/audit, but mark it STALE so
+            // the truth gate cannot treat old code as proof of the current deploy.
+            if (preservedSources[file]) {
+              preservedSources[file] = { ...preservedSources[file], readStatus:'STALE', staleAt:Date.now(), staleGeneration:generation, readError:message };
+            }
             fileStates[file] = { status:'FAILED', line:null, message:finding.message };
             publishProgress({ currentFile:file, currentIndex:index+1, filesScanned:index+1, filesReadable:Object.keys(scanned).length, filesFailed:failures.length, phase:'FILE_FAILED', message:`Gagal membaca ${file}; scanner lanjut ke file berikutnya.` });
           }
@@ -1893,7 +1898,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       const manifest = writeAdaptiveManifest(scanned);
       const status = failures.length ? 'DEGRADED' : mergedActionableWithContract.length ? 'FINDINGS' : 'CLEAN';
       state.fileNerves = nerve.fileNerves;
-      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:mergedWithContract,relations:relations.slice(0,200),relationSummary,architecture:{...architecture,manifestVersion:manifest.version},discovery:discovery,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,type:item.type,role:item.role,discovered:!!ORGAN_REGISTRY[name]?.discovered,discoveredFrom:ORGAN_REGISTRY[name]?.discoveredFrom || null,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),sourceIntelligence:nerve.intelligence,exploration:contractGap,nerveSummary:{healthy:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='HEALTHY').length,standby:Object.values(state.systemOrgans || {}).filter(n=>n.state==='STANDBY').length,observed:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='OBSERVED').length,review:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='REVIEW').length,anomaly:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='ANOMALY').length,unresolved:nerveFindings.length},message:failures.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, ${RESERVED_OPTIONAL_ORGANS.size - Object.keys(scanned).filter(f => RESERVED_OPTIONAL_ORGANS.has(f)).length} organ standby belum dideploy, dan ${failures.length} source gagal dibaca.` : mergedActionableWithContract.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca; ${mergedActionableWithContract.length} bukti/temuan membutuhkan pemeriksaan, termasuk ${contractGap.gaps?.length || 0} kandidat contract gap.` : `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, dan organ standby yang belum dideploy tetap dipisahkan dari HEALTHY.` };
+      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:mergedWithContract,relations:relations.slice(0,200),relationSummary,architecture:{...architecture,manifestVersion:manifest.version},discovery:discovery,sources:Object.fromEntries(Object.entries({...preservedSources,...scanned}).map(([name,item]) => [name,{...item,file:name,type:item.type || ORGAN_REGISTRY[name]?.type || 'source',role:item.role || ORGAN_REGISTRY[name]?.role || 'customer',discovered:!!ORGAN_REGISTRY[name]?.discovered,discoveredFrom:ORGAN_REGISTRY[name]?.discoveredFrom || null,scanGeneration:item.scanGeneration || null}])),sourceIntelligence:nerve.intelligence,exploration:contractGap,nerveSummary:{healthy:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='HEALTHY').length,standby:Object.values(state.systemOrgans || {}).filter(n=>n.state==='STANDBY').length,observed:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='OBSERVED').length,review:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='REVIEW').length,anomaly:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='ANOMALY').length,unresolved:nerveFindings.length},message:failures.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, ${RESERVED_OPTIONAL_ORGANS.size - Object.keys(scanned).filter(f => RESERVED_OPTIONAL_ORGANS.has(f)).length} organ standby belum dideploy, dan ${failures.length} source gagal dibaca.` : mergedActionableWithContract.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca; ${mergedActionableWithContract.length} bukti/temuan membutuhkan pemeriksaan, termasuk ${contractGap.gaps?.length || 0} kandidat contract gap.` : `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, dan organ standby yang belum dideploy tetap dipisahkan dari HEALTHY.` };
       recordEvent('SOURCE_SCAN_RESULT', state.sourceScan.message, actionable.length ? 'SYS_SOURCE_FINDINGS' : 'SYS_SOURCE_CLEAN');
       const aiSnapshot = ingestInternalAI(safeClone(state));
       if (aiSnapshot) state.internalAI = buildInternalAIHandoff(aiSnapshot);
@@ -1919,6 +1924,12 @@ export function runAutonomousEngine(onCycleUpdate) {
       const item = recent.get(file);
       const historical = latestSystemLogs.some(log => normalizeFile(log?.fileName) === file);
       const scannedSource = state.sourceScan?.sources?.[file];
+      // A preserved source from an earlier generation is evidence of the old
+      // deployment only. It must never make the current scan look HEALTHY while
+      // the new source is still being read (or has just failed).
+      const sourceIsCurrent = !!(scannedSource &&
+        scannedSource.readStatus !== 'STALE' &&
+        Number(scannedSource.scanGeneration || 0) === Number(state.sourceScan?.rescanGeneration || 0));
       const nerve = state.fileNerves?.[file];
 
       // TRUTH GATE: no Admin session or no completed source scan may ever
@@ -1928,7 +1939,7 @@ export function runAutonomousEngine(onCycleUpdate) {
         organs[file] = meta?.optional
           ? { ...meta, status:"STANDBY", state:"STANDBY", message:"Organ standby; sesi Admin belum tersedia untuk verifikasi source." }
           : { ...meta, status:"AUTH_REQUIRED", state:"AUTH_REQUIRED", message:"Belum dapat memverifikasi source/telemetry: sesi Admin belum tersedia." };
-      } else if (meta?.optional && !item && !historical && !scannedSource) {
+      } else if (meta?.optional && !item && !historical && !sourceIsCurrent) {
         organs[file] = {
           ...meta,
           status: "STANDBY",
@@ -1945,16 +1956,16 @@ export function runAutonomousEngine(onCycleUpdate) {
           line: item.log?.line ?? item.log?.lineno ?? null,
           column: item.log?.column ?? item.log?.colno ?? null
         };
-      } else if (historical && !scannedSource && scanStatus !== "SCANNING") {
+      } else if (historical && !sourceIsCurrent && scanStatus !== "SCANNING") {
         organs[file] = {
           ...meta,
           status: "RECOVERED",
           state: "RECOVERED",
           message: "Ada bukti error historis, tetapi source aktual belum selesai diverifikasi."
         };
-      } else if (scanStatus === "SCANNING" && !scannedSource) {
+      } else if (scanStatus === "SCANNING" && !sourceIsCurrent) {
         organs[file] = { ...meta, status:"SCANNING", state:"SCANNING", message:`Source ${file} sedang menunggu/menjalani pembacaan aktual.` };
-      } else if (!scanComplete || !scannedSource) {
+      } else if (!scanComplete || !sourceIsCurrent) {
         organs[file] = { ...meta, status:"UNKNOWN", state:"UNKNOWN", message:"Belum ada bukti source aktual yang lengkap untuk menyatakan file sehat." };
       } else if (nerve?.health?.overall === "ANOMALY") {
         organs[file] = { ...meta, status:"ANOMALY", state:"ACTIVE", evidenceType:"FILE_NERVE", line:nerve.unresolved?.[0]?.line ?? null, message:nerve.unresolved?.[0]?.evidence || nerve.runtime?.errors?.[0]?.message || `Saraf source menemukan ${nerve.findings?.high || 0} temuan HIGH.` };
@@ -2008,7 +2019,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       if (ORGAN_REGISTRY[file]?.optional && organs[file]?.state === "STANDBY") continue;
       if (state.sourceScan?.status === "SCANNING" && !state.sourceScan?.sources?.[file] && !sourceFindings.some(f => normalizeFile(f.file || f.targetFile) === file)) {
         organs[file] = { ...organs[file], status:"SCANNING", state:"SCANNING", message:`Source sedang dipindai (${state.sourceScan.currentFile || "antrian"}).` };
-      } else if (organs[file]?.state === "HEALTHY" && state.sourceScan?.sources?.[file]) {
+      } else if (organs[file]?.state === "HEALTHY" && sourceIsCurrent) {
         organs[file].message = `Source terbaca (${state.sourceScan.sources[file].lines} baris, hash ${state.sourceScan.sources[file].hash}); tidak ada temuan aktif dari scanner.`;
       }
     }

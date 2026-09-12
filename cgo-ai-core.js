@@ -2,7 +2,7 @@
  * Pure internal reasoning/orchestration primitives.
  * No external AI/API. No direct source mutation; orchestrates approved execution through an injected Executor.
  */
-const VERSION = "1.4.0";
+const VERSION = "1.4.1";
 
 function now(){ return new Date().toISOString(); }
 function id(prefix="case"){ return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`; }
@@ -120,8 +120,8 @@ function normalizeClaim(claim=""){
 function contradictionKey(claim=""){
   const c=normalizeClaim(claim);
   const prefix=/^(not |no |missing |absent |false: |does not |isn't |isnt |cannot |can't |cant )/;
-  const negSuffix=/( does not exist| does not| is not| isn't| isnt| cannot| can't| cant| missing| absent| false)$/;
-  const posSuffix=/( exists| is present| is available| true)$/;
+  const negSuffix=/( does not exist| does not| is not(?: present| available| defined| loaded)?| isn't(?: present| available| defined| loaded)?| isnt(?: present| available| defined| loaded)?| cannot| can't| cant| missing| absent| false)$/;
+  const posSuffix=/( exists| is present| is available| is defined| is loaded| true)$/;
   if(prefix.test(c)) return {atom:c.replace(prefix,"").trim(),negative:true};
   if(negSuffix.test(c)) return {atom:c.replace(negSuffix,"").trim(),negative:true};
   if(posSuffix.test(c)) return {atom:c.replace(posSuffix,"").trim(),negative:false};

@@ -6,7 +6,7 @@
 import * as Core from "./cgo-ai-core.js?v=20260912-admin-flow3";
 import * as Guardian from "./cgo-ai-guardian.js?v=20260912-admin-flow3";
 import * as Cognition from "./cgo-ai-cognition.js?v=20260912-admin-flow3";
-import * as Instruction from "./cgo-instruction.js?v=20260912-admin-flow3";
+import * as Instruction from "./cgo-instruction.js?v=20260912-phase3-constitution1";
 
 const VERSION="1.5.0-CONSTITUTION-BOUND";
 
