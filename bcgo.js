@@ -8,7 +8,7 @@ import {
   getDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { adminDb, adminAuth } from "./cikur-config.js";
+import { adminDb, adminAuth } from "./cikur-config.js?v=20260912-admin-flow3";
 
 // BCGO adalah organ sistem/admin: gunakan namespace Admin, bukan Customer.
 const db = adminDb;
@@ -57,7 +57,13 @@ const RESERVED_OPTIONAL_ORGANS = new Set(Object.entries(ORGAN_REGISTRY).filter((
 
 const SOURCE_SCAN_INTERVAL = 20000;
 const SOURCE_SCAN_FETCH_TIMEOUT = 10000;
-const SOURCE_SCAN_VERSION = "1.20.0-CAPTAIN-NEXT-PROBE";
+const ADAPTIVE_DISCOVERY_LIMIT = 60;
+const ADAPTIVE_MANIFEST_KEY = "CIKUR_GO_BCGO_ARCHITECTURE_MANIFEST_V1";
+const ADAPTIVE_ROOTS = [
+  "index.html", "assistant.html", "food.html", "ride.html", "cikurgo2in1.html",
+  "agentcgo.html", "resto.html", "driver.html"
+];
+const SOURCE_SCAN_VERSION = "1.21.0-AUTO-ARCHITECTURE-RECONCILIATION";
 
 const ACTIVE_WINDOW = 15 * 60 * 1000;
 const CLOCK_SKEW = 5 * 60 * 1000;
@@ -125,7 +131,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   async function loadInternalAI() {
     if (stopped || internalAI) return internalAI;
     try {
-      const mod = await import("./cgo-runtime-adapter.js?v=20260907-0900-constitution-connectivity1");
+      const mod = await import("./cgo-runtime-adapter.js?v=20260912-admin-flow3");
       if (typeof mod.install !== "function") throw new Error("INTERNAL_AI_ADAPTER_INVALID");
       internalAI = mod.install();
       window.CIKURInternalAIRuntime = internalAI;
@@ -139,7 +145,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       // under cgo-ai-browser-adapter.js. BCGO must never die merely because an
       // optional reasoning adapter is absent.
       try {
-        const mod = await import("./cgo-ai-browser-adapter.js?v=20260907-0900-constitution-connectivity1");
+        const mod = await import("./cgo-ai-browser-adapter.js?v=20260912-admin-flow3");
         if (typeof mod.install !== "function") throw new Error("BROWSER_BRAIN_ADAPTER_INVALID");
         internalAI = mod.install();
         window.CIKURInternalAIRuntime = internalAI;
@@ -201,7 +207,8 @@ export function runAutonomousEngine(onCycleUpdate) {
       version: SOURCE_SCAN_VERSION, status: "WAITING", startedAt: 0, completedAt: 0,
       filesScanned: 0, filesReadable: 0, filesFailed: 0, currentFile: null, currentIndex: 0,
       totalFiles: ORGAN_COUNT, phase: "WAITING", fileStates: {}, findings: [], crossFileFindings: [], relations: [], relationSummary: { synchronized:0, mismatch:0, variant:0, unknown:0 },
-      sources: {}, exploration: { version:"1.1.0-CONTRACT-PRECISION-GRAPH", status:"WAITING", generatedAt:0, nodes:[], edges:[], gaps:[], assignments:[], nextActions:[], message:"Pemetaan kontrak belum dimulai." }, message: "Pemindaian source code belum dimulai."
+      sources: {}, architecture: { version:"1.0.0-AUTO-RECONCILIATION", status:"WAITING", revision:null, added:[], changed:[], unchanged:[], removed:[], retired:[], stillReferenced:[], requiredRemoved:[], summary:{added:0,changed:0,unchanged:0,removed:0,retired:0,stillReferenced:0,requiredRemoved:0}, message:"Rekonsiliasi arsitektur belum dimulai." },
+      exploration: { version:"1.1.0-CONTRACT-PRECISION-GRAPH", status:"WAITING", generatedAt:0, nodes:[], edges:[], gaps:[], assignments:[], nextActions:[], message:"Pemetaan kontrak belum dimulai." }, message: "Pemindaian source code belum dimulai."
     },
     medicineBridge: {
       status: "DISCONNECTED",
@@ -512,6 +519,152 @@ export function runAutonomousEngine(onCycleUpdate) {
 
   function sourceUrl(file) {
     return new URL(file, window.location.href).href;
+  }
+
+  // ============================================================
+  // ADAPTIVE CUSTOMER ARCHITECTURE DISCOVERY
+  // ------------------------------------------------------------
+  // BCGO does not assume that the Customer/Mitra surface is frozen.
+  // A page may gain a new local HTML/JS dependency during an architecture
+  // change. The monitor discovers that dependency from the deployed source,
+  // adds it to the live registry, and scans it in the same reconciliation.
+  // This is intentionally observation-only: BCGO never rewrites Customer code.
+  // ============================================================
+  function isLocalArchitectureRef(raw) {
+    const value = String(raw || '').trim();
+    if (!value || /^data:|^blob:|^javascript:|^https?:\/\//i.test(value) || /^(?:\/\/)/.test(value)) return false;
+    const clean = value.split('?')[0].split('#')[0];
+    return /\.(?:html|js)$/i.test(clean) && !clean.includes('..\\');
+  }
+
+  function extractAdaptiveLocalRefs(source) {
+    const refs = new Set();
+    const text = String(source || '');
+    const patterns = [
+      /\b(?:src|href|action)\s*=\s*["'`]([^"'`]+\.(?:html|js)(?:\?[^"'`]*)?)["'`]/gi,
+      /\b(?:import\s*\(|from|fetch\s*\(|location(?:\.href)?\s*=)\s*["'`]([^"'`]+\.(?:html|js)(?:\?[^"'`]*)?)["'`]/gi
+    ];
+    for (const re of patterns) {
+      let match;
+      while ((match = re.exec(text))) {
+        const raw = String(match[1] || '').trim();
+        if (!isLocalArchitectureRef(raw)) continue;
+        const normalized = normalizeFile(raw);
+        if (normalized && normalized !== 'UNKNOWN') refs.add(normalized);
+      }
+    }
+    return [...refs];
+  }
+
+  function adaptiveMeta(sourceFile, ref) {
+    const sourceMeta = ORGAN_REGISTRY[sourceFile] || {};
+    const role = String(sourceMeta.role || '').toLowerCase();
+    if (role === 'customer' || role === 'mitra' || role === 'restaurant' || role === 'driver' || role === 'customer-dependency' || role === 'mitra-dependency') {
+      const zone = role === 'customer' || role === 'customer-dependency' ? 'customer' : 'mitra';
+      return { type: `Discovered ${zone === 'customer' ? 'Customer' : 'Mitra'} Dependency`, role: `${zone}-dependency`, zone, discovered: true, discoveredFrom: sourceFile };
+    }
+    return { type: 'Discovered Dependency', role: 'dependency', discovered: true, discoveredFrom: sourceFile };
+  }
+
+  async function discoverAdaptiveCustomerArchitecture() {
+    const queue = [...new Set(ADAPTIVE_ROOTS.filter(file => ORGAN_REGISTRY[file]))];
+    const queued = new Set(queue);
+    const discovered = new Set();
+    const edges = [];
+    let inspected = 0;
+
+    while (queue.length && inspected < ADAPTIVE_DISCOVERY_LIMIT) {
+      const file = queue.shift();
+      if (discovered.has(file)) continue;
+      discovered.add(file);
+      inspected += 1;
+
+      let source;
+      try {
+        source = await fetchSourceForScan(file, sourceScanGeneration);
+      } catch (_) {
+        continue;
+      }
+      if (!source) continue;
+
+      for (const ref of extractAdaptiveLocalRefs(source)) {
+        // Never turn a remote SDK URL or unrelated external dependency into a
+        // CIKUR GO organ. normalizeFile() alone is not enough for that decision.
+        if (!ORGAN_REGISTRY[ref]) ORGAN_REGISTRY[ref] = adaptiveMeta(file, ref);
+        edges.push({ from:file, to:ref, discovered:true });
+        if (!discovered.has(ref) && !queued.has(ref)) {
+          queued.add(ref);
+          queue.push(ref);
+        }
+      }
+    }
+
+    return {
+      roots: ADAPTIVE_ROOTS.filter(file => ORGAN_REGISTRY[file]),
+      files:[...discovered],
+      edges:[...new Map(edges.map(edge => [`${edge.from}>${edge.to}`, edge])).values()],
+      inspected,
+      limit:ADAPTIVE_DISCOVERY_LIMIT,
+      at:Date.now()
+    };
+  }
+
+  function readAdaptiveManifest() {
+    try {
+      const raw = localStorage.getItem(ADAPTIVE_MANIFEST_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (_) { return null; }
+  }
+
+  function writeAdaptiveManifest(scanned) {
+    const files = Object.fromEntries(Object.entries(scanned || {}).map(([file,item]) => [file, {
+      hash:item.hash || null,
+      lines:Number(item.lines || 0),
+      bytes:Number(item.bytes || 0),
+      refs:Array.isArray(item.refs) ? item.refs.slice(0,80) : [],
+      at:Date.now()
+    }]));
+    const manifest = { version:1, generatedAt:Date.now(), files };
+    try { localStorage.setItem(ADAPTIVE_MANIFEST_KEY, JSON.stringify(manifest)); } catch (_) {}
+    return manifest;
+  }
+
+  function reconcileAdaptiveArchitecture(previousManifest, scanned, discovery) {
+    const previous = previousManifest?.files && typeof previousManifest.files === 'object' ? previousManifest.files : {};
+    const current = scanned && typeof scanned === 'object' ? scanned : {};
+    const currentFiles = Object.keys(current);
+    const previousFiles = Object.keys(previous);
+    const initial = previousFiles.length === 0;
+    const added = initial ? [] : currentFiles.filter(file => !previous[file]);
+    const changed = initial ? [] : currentFiles.filter(file => previous[file] && previous[file].hash && current[file]?.hash && previous[file].hash !== current[file].hash);
+    const unchanged = initial ? [] : currentFiles.filter(file => previous[file] && previous[file].hash === current[file]?.hash);
+    const removed = initial ? [] : previousFiles.filter(file => !current[file]);
+    const currentRefs = new Set(Object.values(current).flatMap(item => item.refs || []));
+    const retired = removed.filter(file => !ORGAN_REGISTRY[file] || !currentRefs.has(file));
+    const stillReferenced = removed.filter(file => currentRefs.has(file));
+    const requiredRemoved = removed.filter(file => ORGAN_REGISTRY[file] && !ORGAN_REGISTRY[file]?.optional && !retired.includes(file));
+    const revisionSeed = [
+      ...currentFiles.sort().map(file => `${file}:${current[file]?.hash || ''}`),
+      ...removed.sort().map(file => `REMOVED:${file}`)
+    ].join('|');
+    const revision = sourceHash(revisionSeed || 'EMPTY_ARCHITECTURE');
+    const changedOrAdded = [...new Set([...added,...changed])];
+    const status = requiredRemoved.length || stillReferenced.length ? 'REVIEW' : changedOrAdded.length || retired.length ? 'ADAPTED' : initial ? 'INITIALIZED' : 'STABLE';
+    return {
+      version:'1.0.0-AUTO-RECONCILIATION', status, initial, revision,
+      detectedAt:Date.now(),
+      added, changed, unchanged, removed, retired, stillReferenced, requiredRemoved,
+      discovery:discovery || null,
+      summary:{added:added.length, changed:changed.length, unchanged:unchanged.length, removed:removed.length, retired:retired.length, stillReferenced:stillReferenced.length, requiredRemoved:requiredRemoved.length},
+      message: initial
+        ? `Baseline arsitektur Customer/Mitra dibuat dari ${currentFiles.length} source yang terbaca.`
+        : requiredRemoved.length || stillReferenced.length
+          ? `Perubahan arsitektur terdeteksi: ${changed.length} berubah, ${added.length} baru, ${removed.length} hilang; sebagian masih membutuhkan review.`
+          : changedOrAdded.length || retired.length
+            ? `Arsitektur menyesuaikan: ${changed.length} source berubah, ${added.length} source baru, ${retired.length} source tidak lagi terpakai.`
+            : 'Tidak ada perubahan arsitektur source sejak rekonsiliasi terakhir.'
+    };
   }
 
   function extractLocalRefs(file, source) {
@@ -1625,12 +1778,27 @@ export function runAutonomousEngine(onCycleUpdate) {
     sourceScanBusy = true;
     const generation = ++sourceScanGeneration;
     const startedAt = Date.now();
+
+    // Reconcile the deployed Customer/Mitra architecture before taking the
+    // authoritative scan snapshot. New local HTML/JS dependencies are added
+    // to ORGAN_REGISTRY here; removed/replaced files are evaluated after the
+    // scan. This makes Customer architecture evolution a monitored event, not
+    // a reason for BCGO/Medicine/Executor to become hard-stuck.
+    let discovery = null;
+    try {
+      discovery = await discoverAdaptiveCustomerArchitecture();
+    } catch (error) {
+      discovery = { roots:ADAPTIVE_ROOTS.slice(), files:[], edges:[], inspected:0, limit:ADAPTIVE_DISCOVERY_LIMIT, at:Date.now(), error:String(error?.message || error) };
+      recordEvent('ARCHITECTURE_DISCOVERY_ERROR', `Discovery arsitektur Customer gagal; scan utama tetap dilanjutkan. ${discovery.error}`, 'SYS_ARCHITECTURE_ADAPTATION');
+    }
+
+    const previousManifest = readAdaptiveManifest();
     const files = Object.keys(ORGAN_REGISTRY);
     const scanned = {}, failures = [], fileStates = {};
     for (const file of files) fileStates[file] = { status:'QUEUED', line:null, message:'Menunggu giliran scan...' };
 
     const publishProgress = patch => {
-      state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, totalFiles:files.length, fileStates:{...fileStates}, findings:[...failures, ...Object.values(scanned).flatMap(item => item.findings || [])].slice(0,100), crossFileFindings:[], relations:[], sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])), sourceIntelligence:buildSourceIntelligence(scanned, latestSystemLogs), ...patch };
+      state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, totalFiles:files.length, fileStates:{...fileStates}, findings:[...failures, ...Object.values(scanned).flatMap(item => item.findings || [])].slice(0,100), crossFileFindings:[], relations:[], sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,type:item.type,role:item.role,discovered:!!ORGAN_REGISTRY[name]?.discovered,discoveredFrom:ORGAN_REGISTRY[name]?.discoveredFrom || null,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])), sourceIntelligence:buildSourceIntelligence(scanned, latestSystemLogs), ...patch };
       publishToUI(safeClone(state));
     };
 
@@ -1707,9 +1875,14 @@ export function runAutonomousEngine(onCycleUpdate) {
       const contractGapFindings = (contractGap.gaps || []).map(g => ({...g, area:g.area || `CONTRACT:${g.type}`, evidence:{contractGap:true,proofStatus:g.proofStatus,confidence:g.confidence,nextAction:g.nextAction}}));
       const mergedWithContract = [...mergedCrossFindings,...contractGapFindings].slice(0,220);
       const mergedActionableWithContract = [...failures,...allFindings,...mergedWithContract].filter(f => f.severity !== 'INFO').slice(0,160);
+      const architecture = reconcileAdaptiveArchitecture(previousManifest, scanned, discovery);
+      if (architecture.status === 'ADAPTED' || architecture.status === 'REVIEW') {
+        recordEvent('ARCHITECTURE_RECONCILED', architecture.message, 'SYS_ARCHITECTURE_ADAPTATION');
+      }
+      const manifest = writeAdaptiveManifest(scanned);
       const status = failures.length ? 'DEGRADED' : mergedActionableWithContract.length ? 'FINDINGS' : 'CLEAN';
       state.fileNerves = nerve.fileNerves;
-      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:mergedWithContract,relations:relations.slice(0,200),relationSummary,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),sourceIntelligence:nerve.intelligence,exploration:contractGap,nerveSummary:{healthy:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='HEALTHY').length,standby:Object.values(state.systemOrgans || {}).filter(n=>n.state==='STANDBY').length,observed:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='OBSERVED').length,review:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='REVIEW').length,anomaly:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='ANOMALY').length,unresolved:nerveFindings.length},message:failures.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, ${RESERVED_OPTIONAL_ORGANS.size - Object.keys(scanned).filter(f => RESERVED_OPTIONAL_ORGANS.has(f)).length} organ standby belum dideploy, dan ${failures.length} source gagal dibaca.` : mergedActionableWithContract.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca; ${mergedActionableWithContract.length} bukti/temuan membutuhkan pemeriksaan, termasuk ${contractGap.gaps?.length || 0} kandidat contract gap.` : `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, dan organ standby yang belum dideploy tetap dipisahkan dari HEALTHY.` };
+      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:mergedWithContract,relations:relations.slice(0,200),relationSummary,architecture:{...architecture,manifestVersion:manifest.version},discovery:discovery,sources:Object.fromEntries(Object.entries(scanned).map(([name,item]) => [name,{file:name,type:item.type,role:item.role,discovered:!!ORGAN_REGISTRY[name]?.discovered,discoveredFrom:ORGAN_REGISTRY[name]?.discoveredFrom || null,lines:item.lines,bytes:item.bytes,hash:item.hash,refs:item.refs}])),sourceIntelligence:nerve.intelligence,exploration:contractGap,nerveSummary:{healthy:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='HEALTHY').length,standby:Object.values(state.systemOrgans || {}).filter(n=>n.state==='STANDBY').length,observed:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='OBSERVED').length,review:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='REVIEW').length,anomaly:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='ANOMALY').length,unresolved:nerveFindings.length},message:failures.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, ${RESERVED_OPTIONAL_ORGANS.size - Object.keys(scanned).filter(f => RESERVED_OPTIONAL_ORGANS.has(f)).length} organ standby belum dideploy, dan ${failures.length} source gagal dibaca.` : mergedActionableWithContract.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca; ${mergedActionableWithContract.length} bukti/temuan membutuhkan pemeriksaan, termasuk ${contractGap.gaps?.length || 0} kandidat contract gap.` : `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, dan organ standby yang belum dideploy tetap dipisahkan dari HEALTHY.` };
       recordEvent('SOURCE_SCAN_RESULT', state.sourceScan.message, actionable.length ? 'SYS_SOURCE_FINDINGS' : 'SYS_SOURCE_CLEAN');
       const aiSnapshot = ingestInternalAI(safeClone(state));
       if (aiSnapshot) state.internalAI = buildInternalAIHandoff(aiSnapshot);
@@ -1936,7 +2109,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       return `Saya menemukan ${active.length} anomali aktif. Fokus pertama saya ${file}: ${info.message}`;
     }
     const recovered = Object.values(organs).filter(v => v.state === "RECOVERED").length;
-    if (state.sourceScan?.phase !== "COMPLETE") return `Belum ada anomali yang dapat dipastikan, tetapi scanner source belum selesai. Saya belum mengklaim ${ORGAN_COUNT} organ sehat.`;
+    if (state.sourceScan?.phase !== "COMPLETE") return `Belum ada anomali yang dapat dipastikan, tetapi scanner source belum selesai. Saya belum mengklaim ${Object.keys(ORGAN_REGISTRY).length} organ sehat.`;
     return recovered
       ? `Tidak ada anomali aktif saat ini. ${recovered} organ masih memiliki bukti error historis yang saya tandai RECOVERED.`
       : `Scanner source sudah selesai. ${Object.values(organs).filter(v => v.state === "HEALTHY").length} organ memiliki bukti source bersih; sisanya tetap ditahan pada status verifikasi masing-masing.`;
@@ -2106,16 +2279,21 @@ export function runAutonomousEngine(onCycleUpdate) {
 
   function startSystemLogs() {
     const listenerEpoch = authEpoch;
-    if (!window.CikurCloud?.listenSystemLogs) {
-      emit("OUT", "Kanal telemetry system_logs belum tersedia dari CikurCloud. Saya tidak akan mengklaim pemantauan lintas-file aktif.", "SYS_TELEMETRY_UNAVAILABLE");
-      return;
-    }
-
     if (typeof unsubscribeSystemLogs === "function") unsubscribeSystemLogs();
     try {
-      unsubscribeSystemLogs = window.CikurCloud.listenSystemLogs(logs => {
+      // CRITICAL ADMIN BOUNDARY: never use CikurCloud.listenSystemLogs here.
+      // That helper belongs to the Customer namespace (`db = customerDb`).
+      // BCGO must read telemetry through the same Admin Firestore/Auth namespace
+      // that just passed verifyAdmin(). This was the missing server/telemetry link.
+      const q = query(
+        collection(adminDb, "system_logs"),
+        orderBy("reportedAt", "desc"),
+        limit(LOG_LIMIT)
+      );
+      unsubscribeSystemLogs = onSnapshot(q, snapshot => {
         if (stopped || !authorized || listenerEpoch !== authEpoch) return;
-        const rawLogs = Array.isArray(logs) ? logs : [];
+        const rawLogs = [];
+        snapshot.forEach(docSnap => rawLogs.push({ id: docSnap.id, ...docSnap.data() }));
         // Filter first, then apply the display limit. Otherwise a burst of internal
         // self-errors at the top of the listener payload could hide real organ telemetry.
         latestSystemLogs = rawLogs.filter(log => !isInternalTelemetry(log)).slice(0, LOG_LIMIT);
@@ -2143,9 +2321,17 @@ export function runAutonomousEngine(onCycleUpdate) {
         } else {
           publishToUI(safeClone(state));
         }
-      }, LOG_LIMIT);
+      }, error => {
+        if (stopped || listenerEpoch !== authEpoch) return;
+        const detail = error?.code ? `${error.code}: ${error?.message || "Firestore listener error"}` : (error?.message || "Firestore listener error");
+        firestore.error = detail;
+        recordEvent("SYSTEM_LOGS_ERROR", detail, "SYS_SYSTEM_LOGS_LISTENER");
+        emit("PROCESS", "Kanal telemetry system_logs Admin gagal dibuka. BCGO tidak akan mengklaim telemetry aktif.", "SYS_SYSTEM_LOGS_LISTENER", detail, { cycleMode: "ERROR" });
+      });
     } catch (error) {
-      emit("PROCESS", "Kanal telemetry lintas-file gagal dibuka.", "SYS_SYSTEM_LOGS_LISTENER", error?.message, { cycleMode: "ERROR" });
+      const detail = error?.code ? `${error.code}: ${error?.message || "Firestore listener error"}` : (error?.message || String(error));
+      firestore.error = detail;
+      emit("PROCESS", "Kanal telemetry system_logs Admin gagal disiapkan.", "SYS_SYSTEM_LOGS_LISTENER", detail, { cycleMode: "ERROR" });
     }
   }
 
@@ -2212,7 +2398,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     if (phaseIndex === 0) {
       cycleNo += 1;
       recordEvent("CYCLE", `Neural cycle #${cycleNo} dimulai.`, "SYS_NEURAL_SCAN");
-      emit("IN", `Neural cycle #${cycleNo} dimulai. Saya memindai ${ORGAN_COUNT} organ dan membaca bukti telemetry terbaru.`, "SYS_NEURAL_SCAN", null, { cycleMode: "NORMAL" });
+      emit("IN", `Neural cycle #${cycleNo} dimulai. Saya memindai ${Object.keys(ORGAN_REGISTRY).length} organ dan membaca bukti telemetry terbaru.`, "SYS_NEURAL_SCAN", null, { cycleMode: "NORMAL" });
       scheduleNext(CYCLE.IN);
       return;
     }
@@ -2256,11 +2442,13 @@ export function runAutonomousEngine(onCycleUpdate) {
       const snap = await getDoc(doc(db, "admin_users", user.uid));
       if (stopped || epoch !== authEpoch || auth.currentUser?.uid !== user.uid) return;
       const data = snap.exists() ? snap.data() : null;
-      if (data?.active !== true) {
+      const role = String(data?.role || "").toLowerCase();
+      const roleAllowed = role === "super_admin" || role === "admin";
+      if (data?.active !== true || !roleAllowed) {
         authorized = false;
         authorizedUid = null;
         cleanupRealtime();
-        emit("OUT", "Akun ini bukan Admin aktif. Akses Pusat Saraf ditolak.", "SYS_AUTH_NOT_ADMIN");
+        emit("OUT", "Akun ini belum memenuhi otorisasi Admin aktif untuk BCGO.", "SYS_AUTH_NOT_ADMIN", `active=${data?.active === true} role=${role || "(kosong)"}`);
         return;
       }
       // Auth state can change without reloading the page. Never keep an old
@@ -2289,7 +2477,8 @@ export function runAutonomousEngine(onCycleUpdate) {
       authorized = false;
       authorizedUid = null;
       cleanupRealtime();
-      emit("OUT", "Saya gagal memverifikasi status Admin.", "SYS_AUTH_CHECK_FAILED", error?.message, { cycleMode: "ERROR" });
+      const detail = error?.code ? `${error.code}: ${error?.message || "Admin verification failed"}` : (error?.message || String(error));
+      emit("OUT", "Saya gagal memverifikasi status Admin. Periksa koneksi Firebase dan Firestore Rules.", "SYS_AUTH_CHECK_FAILED", detail, { cycleMode: "ERROR" });
     }
   }
 

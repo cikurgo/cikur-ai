@@ -89,13 +89,15 @@ const customerDb = getFirestore(customerApp);
 // DEDICATED SUPER ADMIN AUTH
 // ==========================================
 // Customer/Mitra dan Super Admin masing-masing memiliki Firebase App/Auth namespace khusus.
-// Firestore tetap memakai App DEFAULT dan tetap shared.
+// Admin memakai local persistence agar sesi Super Admin tetap tersedia ketika
+// BCGO, Medicine, Executor, dan Data dibuka sebagai halaman/tab terpisah.
+// Namespace Admin tetap terisolasi dari Customer/Mitra.
 const ADMIN_APP_NAME = "CIKUR_GO_ADMIN";
 const adminApp = getApps().some(existingApp => existingApp.name === ADMIN_APP_NAME)
     ? getApp(ADMIN_APP_NAME)
     : initializeApp(firebaseConfig, ADMIN_APP_NAME);
 const adminAuth = initializeAuth(adminApp, {
-    persistence: browserSessionPersistence,
+    persistence: browserLocalPersistence,
     popupRedirectResolver: undefined
 });
 const adminDb = getFirestore(adminApp);

@@ -11,12 +11,12 @@ import {
   setDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { adminDb, adminAuth } from "./cikur-config.js";
+import { adminDb, adminAuth } from "./cikur-config.js?v=20260912-admin-flow3";
 
 // Medicine adalah organ sistem: Firestore/Auth harus memakai namespace Admin.
 const db = adminDb;
 const auth = adminAuth;
-import { Cognition as InternalCognition, Investigator as InternalInvestigator, createMasterRuntime } from "./cgo-runtime-adapter.js?v=20260907-0900-constitution-connectivity1";
+import { Cognition as InternalCognition, Investigator as InternalInvestigator, createMasterRuntime } from "./cgo-runtime-adapter.js?v=20260912-admin-flow3";
 
 /*
  * ================================================================
@@ -930,6 +930,20 @@ async function ingestBCGOScan(scan, packet = {}) {
   if (!scan || typeof scan !== "object") return null;
   const cycle = Number(packet?.state?.cycle || 0);
   const sourcesMeta = scan.sources && typeof scan.sources === "object" ? scan.sources : {};
+  // BCGO is authoritative for the live Customer/Mitra architecture. Medicine
+  // mirrors newly discovered files from the scan instead of freezing its own
+  // registry. This is metadata synchronization only; it never imports or
+  // rewrites Customer code.
+  for (const [file, meta] of Object.entries(sourcesMeta)) {
+    if (!REGISTRY[file]) {
+      REGISTRY[file] = {
+        type:meta?.type || "Discovered Dependency",
+        role:meta?.role || "dependency",
+        discovered:true,
+        discoveredFrom:meta?.discoveredFrom || null
+      };
+    }
+  }
   const names = Object.keys(sourcesMeta).filter(isDiagnosticFile);
   const findings = Array.isArray(scan.findings) ? scan.findings : [];
   const cross = Array.isArray(scan.crossFileFindings) ? scan.crossFileFindings : [];

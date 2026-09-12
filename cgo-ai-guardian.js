@@ -7,8 +7,8 @@
  * remains the mandatory gate and allows automatic execution only for the exact
  * CIKUR internal execution policy with complete proof/integrity bindings.
  */
-import { CASE_TRANSITIONS } from "./cgo-ai-core.js?v=20260907-0900-constitution-connectivity1";
-import * as Instruction from "./cgo-instruction.js";
+import { CASE_TRANSITIONS } from "./cgo-ai-core.js?v=20260912-admin-flow3";
+import * as Instruction from "./cgo-instruction.js?v=20260912-admin-flow3";
 
 const VERSION="1.7.0-CONSTITUTION-BOUND";
 const INTERNAL_AUTO_POLICY="CIKUR-INTERNAL-AUTO-1";

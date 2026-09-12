@@ -2,15 +2,15 @@
  * Binds the V5.2 active-investigation brain to the existing BCGO / Medicine contracts.
  * No external AI/API. No source mutation. Medicine remains proof authority.
  */
-import * as Core from "./cgo-ai-core.js";
-import * as Knowledge from "./cgo-ai-knowledge.js";
-import * as Investigator from "./cgo-ai-investigator.js";
-import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js";
-import * as Cognition from "./cgo-ai-cognition.js";
-import * as Logic from "./cgo-ai-logic.js";
-import * as Memory from "./cgo-ai-memory.js";
-import { createRuntime } from "./cgo-ai-runtime-adapter.js";
-import { createCaptain } from "./cgo-ai-captain.js";
+import * as Core from "./cgo-ai-core.js?v=20260912-admin-flow3";
+import * as Knowledge from "./cgo-ai-knowledge.js?v=20260912-admin-flow3";
+import * as Investigator from "./cgo-ai-investigator.js?v=20260912-admin-flow3";
+import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js?v=20260912-admin-flow3";
+import * as Cognition from "./cgo-ai-cognition.js?v=20260912-admin-flow3";
+import * as Logic from "./cgo-ai-logic.js?v=20260912-admin-flow3";
+import * as Memory from "./cgo-ai-memory.js?v=20260912-admin-flow3";
+import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260912-admin-flow3";
+import { createCaptain } from "./cgo-ai-captain.js?v=20260912-admin-flow3";
 
 const VERSION = "V5.4-BROWSER-BRIDGE-CGO-CONSTRUCTION-MEDICINE-REVIEW";
 const INTERNAL_AUTO_POLICY = Object.freeze({

@@ -1,7 +1,7 @@
 /* CIKUR GO Internal Cognition
  * Deep deliberation over supplied facts. It may say "insufficient evidence".
  */
-import * as Instruction from "./cgo-instruction.js";
+import * as Instruction from "./cgo-instruction.js?v=20260912-admin-flow3";
 
 const VERSION="1.4.0-CONVERSATIONAL-COGNITION-CONSTITUTION";
 
