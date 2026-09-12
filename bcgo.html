@@ -109,7 +109,7 @@ body{font-family:'Inter',sans-serif}
         <span id="captain-online" class="text-[9px] code-font text-slate-400">WAITING</span>
       </div>
       <div id="captain-chat" class="bg-slate-950 border border-slate-800 rounded-lg p-3 min-h-[230px] max-h-80 overflow-y-auto space-y-2">
-        <div class="text-xs text-slate-600">CGO menunggu BCGO_STATE yang hidup...</div>
+        <div data-captain-placeholder="1" class="text-xs text-slate-600">Menyiapkan koneksi CGO ke BCGO_STATE…</div>
       </div>
     </article>
 
@@ -321,9 +321,17 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=20260912-ADMIN-FLOW3';
+import { runAutonomousEngine } from './bcgo.js?v=20260912-real-cgo-bridge4';
+
+// HARD BUILD ID — visible/inspectable marker proving which BCGO HTML is running.
+window.__CIKUR_BCGO_BUILD_ID = 'RSC-04-20260912';
+window.dispatchEvent(new CustomEvent('cikur-bcgo-build', { detail: { buildId: window.__CIKUR_BCGO_BUILD_ID, at: Date.now() } }));
+
 
 const $ = id => document.getElementById(id);
+
+const buildIdCell = $('bcgo-build-id');
+if (buildIdCell) buildIdCell.textContent = window.__CIKUR_BCGO_BUILD_ID || 'UNKNOWN';
 
 const liveSpeech = $('live-speech');
 const targetCellId = $('target-cell-id');
@@ -717,7 +725,7 @@ function recoveredOrgans(state) {
     return Object.entries(state?.systemOrgans || {}).filter(([,v]) => v?.state === 'RECOVERED');
 }
 
-function authoritativeBCGOState() {
+function readLiveBCGOState() {
     try {
         if (window.BCGO_STATE && typeof window.BCGO_STATE === 'object') return window.BCGO_STATE;
     } catch {}
@@ -742,7 +750,7 @@ window.BCGOBrain = {
     getConversation() {
         try { return window.CIKURInternalAIRuntime?.getChatConversation?.() || []; } catch { return []; }
     },
-    getState() { return authoritativeBCGOState(); },
+    getState() { return readLiveBCGOState(); },
     getCaptain() {
         try { return window.CIKURInternalAIRuntime?.getCaptain?.() || null; } catch { return null; }
     }
@@ -1153,6 +1161,8 @@ runAutonomousEngine(state => {
   function captainGreeting(state) {
     if (greeted || !state) return;
     greeted = true;
+    const placeholder = captainChat?.querySelector?.('[data-captain-placeholder="1"]');
+    if (placeholder) placeholder.remove();
     status.textContent = 'LIVE'; status.className = 'text-[9px] code-font px-2 py-1 rounded border border-emerald-800 text-emerald-300';
     captainOnline.textContent = 'ONLINE • INTERNAL'; captainOnline.className = 'text-[9px] code-font text-emerald-300';
     bubble(captainChat, 'CGO • KAPTEN', 'Hallo,, BCGO, MEDICINE dan EXECUTOR,\nTolong update Kalian sedang mengerjakan apa?', 'cyan');
@@ -1216,6 +1226,8 @@ runAutonomousEngine(state => {
     try {
       const c = window.BCGOBrain?.getCaptain?.();
       const s = c?.getState?.();
+      const bootState = (window.BCGO_STATE && typeof window.BCGO_STATE === 'object') ? window.BCGO_STATE : latestState;
+      if (bootState) latestState = bootState;
       if (s) {
         captainOnline.textContent = s.status === 'LIVE' ? 'ONLINE • INTERNAL' : 'READY • INTERNAL';
         captainOnline.className = `text-[9px] code-font ${s.status === 'LIVE' ? 'text-emerald-300' : 'text-cyan-300'}`;
@@ -1226,7 +1238,7 @@ runAutonomousEngine(state => {
 
   window.addEventListener('cikur-captain-state', e => {
     const d = e.detail || {};
-    latestState = authoritativeBCGOState() || latestState;
+    latestState = (window.BCGO_STATE && typeof window.BCGO_STATE === 'object') ? window.BCGO_STATE : latestState;
     const live = ['LIVE','DELEGATING','BCGO_PROBING','BCGO_PROBE_RESULT','HUMAN_APPROVAL','REINVESTIGATING','STATUS_REQUEST'].includes(String(d.status || '').toUpperCase()) || d.phase !== 'IDLE';
     if (status) { status.textContent = live ? 'LIVE' : (d.status || 'WAITING'); status.className = `text-[9px] code-font px-2 py-1 rounded border ${live ? 'border-emerald-800 text-emerald-300' : 'border-slate-700 text-slate-400'}`; }
     if (captainOnline) { captainOnline.textContent = live ? 'ONLINE • INTERNAL' : 'WAITING • INTERNAL'; captainOnline.className = `text-[9px] code-font ${live ? 'text-emerald-300' : 'text-slate-400'}`; }
