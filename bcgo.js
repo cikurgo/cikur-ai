@@ -9,7 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { adminDb, adminAuth } from "./cikur-config.js?v=20260913-bcgo-cgo-me-exec-v2";
-import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-me6";
+import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-final-audit4";
 
 // BCGO adalah organ sistem/admin: gunakan namespace Admin, bukan Customer.
 const db = adminDb;
@@ -66,7 +66,7 @@ const ADAPTIVE_ROOTS = [
   "index.html", "assistant.html", "food.html", "ride.html", "cikurgo2in1.html",
   "agentcgo.html", "resto.html", "driver.html"
 ];
-const SOURCE_SCAN_VERSION = "1.21.0-AUTO-ARCHITECTURE-RECONCILIATION";
+const SOURCE_SCAN_VERSION = "1.22.0-AUTO-ARCHITECTURE-TRUTH-SCANNER";
 
 const ACTIVE_WINDOW = 15 * 60 * 1000;
 const CLOCK_SKEW = 5 * 60 * 1000;
@@ -276,6 +276,45 @@ export function runAutonomousEngine(onCycleUpdate) {
     } catch {}
   }
 
+  // AUTHORITATIVE TEAM RESULT: BCGO must receive a deterministic outcome, not
+  // merely display the last sentence emitted by Medicine/Executor. The result
+  // is kept in BCGO_STATE so Captain/UI can consume one concrete case outcome.
+  function receiveAuthoritativeTeamReport(packet) {
+    if (!packet || packet.bridge !== MEDICINE_BRIDGE_KEY) return;
+    const from = String(packet.from || '').toUpperCase();
+    if (from !== 'MEDICINE' && from !== 'EXECUTION') return;
+    const packetAt = Number(packet.at) || Date.now();
+    if (state.teamOutcome?.at && packetAt < Number(state.teamOutcome.at)) return;
+    const caseId = packet.caseId || packet.requestId || packet.investigationId || null;
+    const type = String(packet.type || '').toUpperCase();
+    const result = packet.result || packet.review || packet.candidate || null;
+    const status = String(packet.review?.status || packet.result?.status || packet.status || '').toUpperCase() || 'REPORTED';
+    let outcome = 'TEAM_UPDATE';
+    let nextAction = 'CONTINUE_MONITORING';
+    if (type === 'MEDICINE_EVIDENCE') { outcome = 'EVIDENCE_CONFIRMED'; nextAction = 'WAIT_MEDICINE_ROOT_CAUSE'; }
+    else if (type === 'MEDICINE_REPAIR_CANDIDATE') { outcome = 'CANDIDATE_READY_FOR_EXECUTOR'; nextAction = 'EXECUTOR_REVIEW'; }
+    else if (type === 'MEDICINE_CGO_BLOCKED') { outcome = 'MEDICINE_BLOCKED'; nextAction = 'NEW_EVIDENCE_REQUIRED'; }
+    else if (type === 'MEDICINE_HUMAN_GATE_READY') { outcome = 'EXECUTOR_VALID_HUMAN_GATE'; nextAction = 'HUMAN_APPROVAL'; }
+    else if (type === 'EXECUTION_INVESTIGATION_ACK') { outcome = 'EXECUTOR_ACKNOWLEDGED'; nextAction = 'WAIT_EXECUTOR_REVIEW'; }
+    else if (type === 'EXECUTION_REVIEW_RESULT') { outcome = status === 'VALID' ? 'EXECUTOR_VALID' : 'EXECUTOR_REJECTED'; nextAction = status === 'VALID' ? 'HUMAN_APPROVAL' : 'MEDICINE_REINVESTIGATE'; }
+    else if (type === 'EXECUTION_RESULT') { outcome = status === 'SUCCESS' ? 'EXECUTION_SUCCESS' : 'EXECUTION_FAILED'; nextAction = status === 'SUCCESS' ? 'VALIDATE_READBACK' : 'MEDICINE_REINVESTIGATE'; }
+    state.teamOutcome = {
+      from, type, status, outcome, nextAction, caseId, requestId:packet.requestId || null,
+      investigationId:packet.investigationId || null, proposalId:packet.proposalId || null,
+      target:packet.target || packet.file || packet.candidate?.file || packet.review?.file || null,
+      sourceFingerprint:packet.sourceFingerprint || packet.review?.beforeFingerprint || null,
+      candidate: packet.candidate ? safeClone(packet.candidate) : null,
+      review: packet.review ? safeClone(packet.review) : null,
+      result: packet.result ? safeClone(packet.result) : null,
+      message:String(packet.message || packet.review?.reason || packet.result?.reason || outcome).slice(0,700),
+      at:packetAt
+    };
+    state.lastTeamOutcomeAt = state.teamOutcome.at;
+    recordEvent(from, `HASIL NYATA: ${outcome} → ${nextAction}${caseId ? ` • ${caseId}` : ''}`, caseId || from);
+    window.BCGO_STATE = safeClone(state);
+    publishToUI(safeClone(state));
+  }
+
   function receiveMedicineBridge(packet) {
     if (!packet ||
         packet.bridge !== "CIKUR_GO_BCGO_CGO_BRIDGE_V1" ||
@@ -387,6 +426,10 @@ export function runAutonomousEngine(onCycleUpdate) {
     if (event.key !== "CIKUR_GO_BCGO_CGO_BRIDGE_V1_EVENT" || !event.newValue) return;
     try { receiveMedicineBridge(JSON.parse(event.newValue)); } catch {}
   });
+
+  // Consume the durable authoritative team log as well as BroadcastChannel.
+  // This is the missing return path: Medicine/Executor results become BCGO state.
+  bridge.onTeamReport(packet => receiveAuthoritativeTeamReport(packet));
 
   const EXECUTION_REVIEW_KEY = `${MEDICINE_BRIDGE_KEY}_EXECUTION_REVIEW`;
   const EXECUTION_ACK_KEY = `${MEDICINE_BRIDGE_KEY}_INVESTIGATION_ACK`;
@@ -1815,12 +1858,14 @@ export function runAutonomousEngine(onCycleUpdate) {
     for (const file of files) fileStates[file] = { status:'QUEUED', line:null, message:'Menunggu giliran scan...' };
 
     const publishProgress = patch => {
-      state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, totalFiles:files.length, fileStates:{...fileStates}, findings:[...failures, ...Object.values(scanned).flatMap(item => item.findings || [])].slice(0,100), crossFileFindings:[], relations:[], sources:Object.fromEntries(Object.entries({...preservedSources,...scanned}).map(([name,item]) => [name,{...item,file:name,type:item.type || ORGAN_REGISTRY[name]?.type || 'source',role:item.role || ORGAN_REGISTRY[name]?.role || 'customer',discovered:!!ORGAN_REGISTRY[name]?.discovered,discoveredFrom:ORGAN_REGISTRY[name]?.discoveredFrom || null,scanGeneration:item.scanGeneration || null}])), sourceIntelligence:buildSourceIntelligence(scanned, latestSystemLogs), ...patch };
+      const requiredFiles = files.filter(f => !RESERVED_OPTIONAL_ORGANS.has(f)).length;
+      const requiredScanned = files.slice(0, Number(patch.currentIndex || 0)).filter(f => !RESERVED_OPTIONAL_ORGANS.has(f)).length;
+      state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, totalFiles:files.length, requiredFiles, requiredScanned, progressPercent:requiredFiles ? Math.round((requiredScanned / requiredFiles) * 100) : 0, fileStates:{...fileStates}, findings:[...failures, ...Object.values(scanned).flatMap(item => item.findings || [])].slice(0,100), crossFileFindings:[], relations:[], sources:Object.fromEntries(Object.entries({...preservedSources,...scanned}).map(([name,item]) => [name,{...item,file:name,type:item.type || ORGAN_REGISTRY[name]?.type || 'source',role:item.role || ORGAN_REGISTRY[name]?.role || 'customer',discovered:!!ORGAN_REGISTRY[name]?.discovered,discoveredFrom:ORGAN_REGISTRY[name]?.discoveredFrom || null,scanGeneration:item.scanGeneration || null}])), sourceIntelligence:buildSourceIntelligence(scanned, latestSystemLogs), ...patch };
       publishToUI(safeClone(state));
     };
 
     const preservedSources = (state.sourceScan && state.sourceScan.sources && typeof state.sourceScan.sources === 'object') ? { ...state.sourceScan.sources } : {};
-    state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, filesScanned:0, filesReadable:0, filesFailed:0, currentFile:null, currentIndex:0, totalFiles:files.length, phase:'QUEUE', fileStates:{...fileStates}, findings:[], crossFileFindings:[], sources:preservedSources, previousSources:preservedSources, rescanGeneration:generation, relationSummary:{synchronized:0,mismatch:0,variant:0,unknown:0,linked:0}, nerveSummary:{healthy:0,standby:0,observed:0,review:0,anomaly:0,unresolved:0}, message:`Antrian scan dibuka: ${files.length} source akan dibaca dari deployment aktif.` };
+    state.sourceScan = { ...state.sourceScan, version:SOURCE_SCAN_VERSION, status:'SCANNING', startedAt, completedAt:0, filesScanned:0, filesReadable:0, filesFailed:0, currentFile:null, currentIndex:0, totalFiles:files.length, requiredFiles:files.filter(f => !RESERVED_OPTIONAL_ORGANS.has(f)).length, requiredScanned:0, phase:'QUEUE', fileStates:{...fileStates}, findings:[], crossFileFindings:[], sources:preservedSources, previousSources:preservedSources, rescanGeneration:generation, progressPercent:0, relationSummary:{synchronized:0,mismatch:0,variant:0,unknown:0,linked:0}, nerveSummary:{healthy:0,standby:0,observed:0,review:0,anomaly:0,unresolved:0}, message:`Antrian scan dibuka: ${files.length} source akan dibaca dari deployment aktif.` };
     // Kosongkan hasil nerve/organ dari siklus sebelumnya juga, supaya kartu "STATUS TIAP FILE"
     // tidak menampilkan hasil lama yang sudah tidak sinkron dengan counter scan yang baru direset.
     state.fileNerves = {};
@@ -1908,7 +1953,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       const manifest = writeAdaptiveManifest(scanned);
       const status = failures.length ? 'DEGRADED' : mergedActionableWithContract.length ? 'FINDINGS' : 'CLEAN';
       state.fileNerves = nerve.fileNerves;
-      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),filesScanned:files.length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:mergedWithContract,relations:relations.slice(0,200),relationSummary,architecture:{...architecture,manifestVersion:manifest.version},discovery:discovery,sources:Object.fromEntries(Object.entries({...preservedSources,...scanned}).map(([name,item]) => [name,{...item,file:name,type:item.type || ORGAN_REGISTRY[name]?.type || 'source',role:item.role || ORGAN_REGISTRY[name]?.role || 'customer',discovered:!!ORGAN_REGISTRY[name]?.discovered,discoveredFrom:ORGAN_REGISTRY[name]?.discoveredFrom || null,scanGeneration:item.scanGeneration || null}])),sourceIntelligence:nerve.intelligence,exploration:contractGap,nerveSummary:{healthy:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='HEALTHY').length,standby:Object.values(state.systemOrgans || {}).filter(n=>n.state==='STANDBY').length,observed:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='OBSERVED').length,review:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='REVIEW').length,anomaly:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='ANOMALY').length,unresolved:nerveFindings.length},message:failures.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, ${RESERVED_OPTIONAL_ORGANS.size - Object.keys(scanned).filter(f => RESERVED_OPTIONAL_ORGANS.has(f)).length} organ standby belum dideploy, dan ${failures.length} source gagal dibaca.` : mergedActionableWithContract.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca; ${mergedActionableWithContract.length} bukti/temuan membutuhkan pemeriksaan, termasuk ${contractGap.gaps?.length || 0} kandidat contract gap.` : `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, dan organ standby yang belum dideploy tetap dipisahkan dari HEALTHY.` };
+      state.sourceScan = { version:SOURCE_SCAN_VERSION,status,startedAt,completedAt:Date.now(),progressPercent:100,filesScanned:files.length,requiredFiles:files.filter(f => !RESERVED_OPTIONAL_ORGANS.has(f)).length,requiredScanned:files.filter(f => !RESERVED_OPTIONAL_ORGANS.has(f)).length,filesReadable:Object.keys(scanned).length,filesFailed:failures.length,currentFile:null,currentIndex:files.length,totalFiles:files.length,phase:'COMPLETE',fileStates:{...fileStates},findings:[...failures,...allFindings].slice(0,100),crossFileFindings:mergedWithContract,relations:relations.slice(0,200),relationSummary,architecture:{...architecture,manifestVersion:manifest.version},discovery:discovery,sources:Object.fromEntries(Object.entries({...preservedSources,...scanned}).map(([name,item]) => [name,{...item,file:name,type:item.type || ORGAN_REGISTRY[name]?.type || 'source',role:item.role || ORGAN_REGISTRY[name]?.role || 'customer',discovered:!!ORGAN_REGISTRY[name]?.discovered,discoveredFrom:ORGAN_REGISTRY[name]?.discoveredFrom || null,scanGeneration:item.scanGeneration || null}])),sourceIntelligence:nerve.intelligence,exploration:contractGap,nerveSummary:{healthy:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='HEALTHY').length,standby:Object.values(state.systemOrgans || {}).filter(n=>n.state==='STANDBY').length,observed:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='OBSERVED').length,review:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='REVIEW').length,anomaly:Object.values(nerve.fileNerves).filter(n=>n.health.overall==='ANOMALY').length,unresolved:nerveFindings.length},message:failures.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, ${RESERVED_OPTIONAL_ORGANS.size - Object.keys(scanned).filter(f => RESERVED_OPTIONAL_ORGANS.has(f)).length} organ standby belum dideploy, dan ${failures.length} source gagal dibaca.` : mergedActionableWithContract.length ? `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca; ${mergedActionableWithContract.length} bukti/temuan membutuhkan pemeriksaan, termasuk ${contractGap.gaps?.length || 0} kandidat contract gap.` : `Scanner selesai: ${files.length} organ diproses, ${Object.keys(scanned).length} source terbaca, dan organ standby yang belum dideploy tetap dipisahkan dari HEALTHY.` };
       recordEvent('SOURCE_SCAN_RESULT', state.sourceScan.message, actionable.length ? 'SYS_SOURCE_FINDINGS' : 'SYS_SOURCE_CLEAN');
       const aiSnapshot = ingestInternalAI(safeClone(state));
       if (aiSnapshot) state.internalAI = buildInternalAIHandoff(aiSnapshot);
@@ -2027,10 +2072,14 @@ export function runAutonomousEngine(onCycleUpdate) {
     }
     for (const file of Object.keys(ORGAN_REGISTRY)) {
       if (ORGAN_REGISTRY[file]?.optional && organs[file]?.state === "STANDBY") continue;
-      if (state.sourceScan?.status === "SCANNING" && !state.sourceScan?.sources?.[file] && !sourceFindings.some(f => normalizeFile(f.file || f.targetFile) === file)) {
+      const currentSource = state.sourceScan?.sources?.[file];
+      const currentSourceIsCurrent = !!(currentSource &&
+        currentSource.readStatus !== 'STALE' &&
+        Number(currentSource.scanGeneration || 0) === Number(state.sourceScan?.rescanGeneration || 0));
+      if (state.sourceScan?.status === "SCANNING" && !currentSourceIsCurrent && !sourceFindings.some(f => normalizeFile(f.file || f.targetFile) === file)) {
         organs[file] = { ...organs[file], status:"SCANNING", state:"SCANNING", message:`Source sedang dipindai (${state.sourceScan.currentFile || "antrian"}).` };
-      } else if (organs[file]?.state === "HEALTHY" && sourceIsCurrent) {
-        organs[file].message = `Source terbaca (${state.sourceScan.sources[file].lines} baris, hash ${state.sourceScan.sources[file].hash}); tidak ada temuan aktif dari scanner.`;
+      } else if (organs[file]?.state === "HEALTHY" && currentSourceIsCurrent) {
+        organs[file].message = `Source terbaca (${currentSource.lines || 0} baris, hash ${currentSource.hash || "-"}); tidak ada temuan aktif dari scanner.`;
       }
     }
     return organs;

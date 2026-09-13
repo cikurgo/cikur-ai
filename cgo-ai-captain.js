@@ -11,7 +11,7 @@
  */
 const VERSION = "2.3.0-CAPTAIN-CGO-CONSTRUCTION-MEDICINE-REVIEW";
 const BRIDGE = "CIKUR_GO_BCGO_CGO_BRIDGE_V1";
-import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-me6";
+import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-final-audit4";
 const BCGO_BRIDGE = BCGOCGOBridge.install();
 const MAX_ROUNDS = 4;
 const DIRECTIVE_COOLDOWN = 12000;
@@ -539,6 +539,16 @@ export function createCaptain(options = {}) {
         set({ phase: "REINVESTIGATING", decision: "EXECUTION_FAILED", nextAction: "MEDICINE_INVESTIGATE", blocker: result.reason || status || "EXECUTION_FAILED", humanGate: false }, "CAPTAIN_EXECUTION_FAILED");
       }
       emit("CAPTAIN_EXECUTION_REPORT", { packet: clone(packet) });
+      return;
+    }
+
+    if (packet.type === "EXECUTOR_RESULT") {
+      const resultStatus = String(packet.status || packet.review?.status || '').toUpperCase();
+      if (resultStatus === 'VALID') {
+        set({ phase: "HUMAN_APPROVAL", decision: "CANDIDATE_READY", nextAction: "HUMAN_APPROVAL", blocker: null, humanGate: true }, "CAPTAIN_EXECUTOR_RESULT_VALID");
+      } else if (resultStatus === 'REJECTED') {
+        set({ phase: "REINVESTIGATING", decision: "EXECUTOR_REJECTED", nextAction: "MEDICINE_INVESTIGATE", blocker: packet.review?.reason || "EXECUTOR_REJECTED", humanGate: false }, "CAPTAIN_EXECUTOR_RESULT_REJECTED");
+      }
       return;
     }
 

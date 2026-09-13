@@ -6,7 +6,7 @@ import { collection,onSnapshot,query,orderBy,limit,addDoc,serverTimestamp } from
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { doc,getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { adminDb,adminAuth } from "./cikur-config.js?v=20260913-medicine5";
-import { install as installBridge } from "./cgo-bcgo-bridge.js?v=20260913-me6";
+import { install as installBridge } from "./cgo-bcgo-bridge.js?v=20260913-final-audit4";
 
 const BRIDGE=installBridge(),db=adminDb,auth=adminAuth;
 const VERSION="5.0.0-MEDICINE-BCGO-FIRST";
@@ -25,13 +25,6 @@ function actionableFindings(file){const a=[...(S.scan?.findings||[]),...(S.scan?
 function makeCase(f){const file=norm(f?.file||f?.sourceFile||f?.targetFile);if(!file)return null;let c=S.cases.find(x=>x.file===file&&x.signature===String(f.message||f.type||""));if(!c){c={id:id("CASE"),file,signature:String(f.message||f.type||"BCGO finding"),status:"QUEUED",revision:S.scan?.rescanGeneration||0,evidence:[clone(f)],rootCause:null,candidate:null,updatedAt:now()};S.cases.unshift(c);S.cases=S.cases.slice(0,30);}else c.evidence=[...c.evidence,clone(f)].slice(-12);return c;}
 function exactRecipe(src,f){
   if(typeof f?.before==="string"&&typeof f?.after==="string"&&f.before&&src.split(f.before).length===2)return {operation:"REPLACE_EXACT",before:f.before,after:f.after,confidence:"HIGH"};
-  if(String(f?.type||"")==="UNBALANCED_HTML"){
-    const m=String(f.message||"").match(/<([a-z0-9-]+)> belum memiliki penutup/i); if(!m)return null;
-    const tag=m[1].toLowerCase(),open=(src.match(new RegExp(`<${tag}\\b`,"gi"))||[]).length,close=(src.match(new RegExp(`</${tag}>`,"gi"))||[]).length;
-    if(tag!=="div"||open!==close+1)return null;
-    const anchor=src.trimEnd().slice(-1);if(!anchor)return null;
-    return {operation:"INSERT_EXACT",before:anchor,after:`\n</div>`,confidence:"HIGH"};
-  }
   return null;
 }
 function simulate(src,r){
@@ -47,13 +40,20 @@ async function investigate(c,why="BCGO"){
   const rev=Number(S.scan?.rescanGeneration||0); if(c.lastInvestigated===rev)return false; c.lastInvestigated=rev;c.status="INVESTIGATING";c.updatedAt=now();
   team("MEDICINE_INVESTIGATION",{caseId:c.id,investigationId:id("INV"),phase:"READ_SOURCE",target:c.file,revision:rev,evidenceCount:c.evidence.length,message:`Medicine membaca source aktual ${c.file}; penyebab belum dianggap terbukti sebelum source exact diperiksa.`});
   const src=await fetchSource(c.file); if(src==null){c.status="BLOCKED";c.blocker="SOURCE_NOT_AVAILABLE";emit("INVESTIGATION_BLOCKED",{caseId:c.id,blocker:c.blocker});return false;}
-  const findings=actionableFindings(c.file); const exact=findings.find(f=>f.proofStatus==="SOURCE_EXACT")||findings[0]||c.evidence[0];
-  c.rootCause=exact?{type:exact.type||"SOURCE_FINDING",message:exact.message||"Source finding",file:c.file,proofStatus:exact.proofStatus||"OBSERVED"}:null;
-  const recipe=exactRecipe(src,exact||{}); const sim=recipe?simulate(src,recipe):null;
-  c.sourceFingerprint=fingerprint(src);c.sourceLines=src.split("\n").length;c.status="EVIDENCE_FOUND";
-  team("MEDICINE_EVIDENCE",{caseId:c.id,target:c.file,revision:rev,sourceFingerprint:c.sourceFingerprint,sourceLines:c.sourceLines,evidence:findings.slice(0,10),message:`Source aktual ${c.file} terbaca (${c.sourceLines} baris).`});
+  const findings=actionableFindings(c.file); const exact=findings.find(f=>String(f.proofStatus||'').toUpperCase()==='SOURCE_EXACT' || String(f.proofStatus||'').toUpperCase()==='SOURCE_EXACT_MATCH')||null;
+  const exactProof=!!exact;
+  c.rootCause=exactProof?{type:exact.type||"SOURCE_FINDING",message:exact.message||"Source finding",file:c.file,proofStatus:exact.proofStatus||"SOURCE_EXACT"}:null;
+  const recipe=exactProof?exactRecipe(src,exact):null; const sim=recipe?simulate(src,recipe):null;
+  c.sourceFingerprint=fingerprint(src);c.sourceLines=src.split("\n").length;c.status=exactProof?"EVIDENCE_FOUND":"EVIDENCE_FOUND";
+  if(!exactProof)c.blocker="ROOT_CAUSE_NOT_PROVEN";
+  team("MEDICINE_EVIDENCE",{caseId:c.id,target:c.file,revision:rev,sourceFingerprint:c.sourceFingerprint,sourceLines:c.sourceLines,evidence:findings.slice(0,10),proofStatus:exactProof?"SOURCE_EXACT":"OBSERVED_NOT_ROOT_CAUSE",message:`Source aktual ${c.file} terbaca (${c.sourceLines} baris). ${exactProof?'Exact proof tersedia.':'Evidence terbaca, tetapi root cause belum boleh dinyatakan terbukti.'}`});
   if(sim){c.candidate={proposalId:id("PROP"),requestId:id("REQ"),caseId:c.id,file:c.file,operation:recipe.operation,before:recipe.before,after:recipe.after,expectedFingerprint:sim.beforeFingerprint,proposedSource:sim.sourceAfter,proposedFingerprint:sim.afterFingerprint,confidence:recipe.confidence,rootCause:c.rootCause};c.status="CANDIDATE_READY";team("MEDICINE_REPAIR_CANDIDATE",{caseId:c.id,proposalId:c.candidate.proposalId,requestId:c.candidate.requestId,file:c.file,sourceText:src,candidate:c.candidate,request:c.candidate,message:"Candidate deterministic terbentuk dari source exact. Executor diminta review; belum ada eksekusi."});
-  }else{c.status="ROOT_CAUSE_FOUND";c.blocker="NO_SAFE_DETERMINISTIC_RECIPE";team("MEDICINE_CGO_BLOCKED",{caseId:c.id,target:c.file,phase:"ROOT_CAUSE_FOUND",message:"Evidence ditemukan tetapi tidak ada recipe deterministic yang cukup aman. Medicine tidak mengarang BEFORE→AFTER."});}
+  }else{
+    c.status="ROOT_CAUSE_FOUND";
+    c.blocker=exactProof?"NO_SAFE_DETERMINISTIC_RECIPE":"ROOT_CAUSE_NOT_PROVEN";
+    team("MEDICINE_CGO_BLOCKED",{caseId:c.id,target:c.file,phase:c.status,proofStatus:exactProof?"SOURCE_EXACT":"OBSERVED_NOT_ROOT_CAUSE",message:exactProof?"Evidence exact tersedia tetapi tidak ada recipe deterministic yang cukup aman. Medicine tidak mengarang BEFORE→AFTER.":"Scanner menemukan indikasi/contract gap, tetapi Medicine belum menganggapnya root cause tanpa proof exact. Evidence baru diperlukan."});
+  }
+  team("MEDICINE_INVESTIGATION_RESULT",{caseId:c.id,target:c.file,revision:rev,status:c.status,rootCause:c.rootCause,candidate:c.candidate?clone(c.candidate):null,sourceFingerprint:c.sourceFingerprint||null,sourceLines:c.sourceLines||0,blocker:c.blocker||null,nextAction:c.candidate?"EXECUTOR_REVIEW":(c.blocker||"WAIT_NEXT_EVIDENCE"),message:c.candidate?`Medicine selesai: root cause exact dan deterministic candidate terbentuk untuk ${c.file}. Executor harus review candidate.`:c.rootCause?`Medicine menemukan exact evidence pada ${c.file}, tetapi belum ada recipe deterministic yang aman.`:`Medicine selesai membaca ${c.file}, tetapi root cause belum terbukti. Evidence tambahan diperlukan.`});
   save();render();return true;
 }
 function ingest(state){
@@ -68,7 +68,18 @@ function ingest(state){
   for(const bc of active.slice(0,20)){const f=bc.evidence||bc;const c=makeCase({file:bc.target||bc.file||f.file,type:f.type||"BCGO_ACTIVE_CASE",message:f.message||bc.message||"Active BCGO case",proofStatus:f.proofStatus});if(c){c.bcgoCaseId=bc.id||null;c.evidence.push(clone(f));S.active=c;}}
   // Authorization can arrive after the BCGO snapshot. Do not require a new
   // revision just to start an investigation; hydrate first, then investigate.
-  if(S.authorized){for(const c of S.cases.slice(0,20)){if(c&&c.lastInvestigated!==rev)void investigate(c,isNewRevision?"BCGO_NEW_SCAN":"BCGO_STATE_RECOVERY");}}
+  // One case at a time. A full source scan may contain many findings, but Medicine
+  // must not launch 20 concurrent investigations and flood the meeting point.
+  // The active/highest-priority case is investigated first; other cases remain queued.
+  if(S.authorized){
+    const priority={HIGH:3,MEDIUM:2,LOW:1};
+    const activeCase=S.active||[...S.cases].sort((a,b)=>{
+      const af=priority[String(a?.evidence?.[0]?.severity||'LOW').toUpperCase()]||0;
+      const bf=priority[String(b?.evidence?.[0]?.severity||'LOW').toUpperCase()]||0;
+      return bf-af;
+    })[0];
+    if(activeCase && activeCase.lastInvestigated!==rev) void investigate(activeCase,isNewRevision?"BCGO_NEW_SCAN":"BCGO_STATE_RECOVERY");
+  }
   emit("BCGO_STATE_RECEIVED",{cycle:state.cycle,revision:rev,active:state.metrics?.active||0,total:state.metrics?.total||0,recovered:!isNewRevision});
 }
 function handleTeam(p){if(!p||p.bridge!==BRIDGE.channel)return;if(p.from==="EXECUTION"){if(p.type==="EXECUTION_INVESTIGATION_ACK"){S.executor={available:true,status:p.status||"RECEIVED"};emit("EXECUTOR_ACK",{packet:p});}if(p.type==="EXECUTION_REVIEW_RESULT"){const c=S.cases.find(x=>x.id===p.caseId);if(c){c.review=p.review||null;c.status=p.review?.status==="VALID"?"WAITING_HUMAN_APPROVAL":"BLOCKED";S.executor={available:true,status:p.review?.status||"REJECTED"};team(c.status==="WAITING_HUMAN_APPROVAL"?"MEDICINE_HUMAN_GATE_READY":"MEDICINE_CGO_BLOCKED",{caseId:c.id,message:c.status==="WAITING_HUMAN_APPROVAL"?"Executor VALID. Human approval sekarang menjadi satu-satunya gate sebelum eksekusi.":`Executor menolak candidate: ${p.review?.reason||"REVIEW_REJECTED"}.`});render();}}

@@ -150,6 +150,19 @@ body{font-family:'Inter',sans-serif}
   </div>
 </section>
 
+<section id="cgo-team-outcome" class="bg-slate-900 border border-cyan-900/70 rounded-xl p-4 space-y-2">
+  <div class="flex justify-between items-center gap-3">
+    <div class="text-xs font-semibold text-cyan-300 uppercase tracking-wider">HASIL NYATA MEDICINE → EXECUTOR → BCGO</div>
+    <span id="cgo-team-outcome-status" class="text-[9px] code-font text-slate-400">MENUNGGU HASIL</span>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-[10px] code-font">
+    <div class="bg-slate-950 border border-slate-800 rounded-lg p-2"><div class="text-slate-500">CASE / TARGET</div><div id="cgo-team-outcome-case" class="text-cyan-200 mt-1">-</div></div>
+    <div class="bg-slate-950 border border-slate-800 rounded-lg p-2"><div class="text-slate-500">HASIL</div><div id="cgo-team-outcome-result" class="text-emerald-300 mt-1">Belum ada hasil</div></div>
+    <div class="bg-slate-950 border border-slate-800 rounded-lg p-2"><div class="text-slate-500">LANGKAH BERIKUT</div><div id="cgo-team-outcome-next" class="text-amber-300 mt-1">Menunggu Medicine</div></div>
+  </div>
+  <div id="cgo-team-outcome-message" class="bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-300">BCGO akan menampilkan hasil konkret tim di sini, bukan hanya log laporan.</div>
+</section>
+
 <section id="cgo-live-code-column" class="bg-slate-900 border border-cyan-900/70 rounded-xl overflow-hidden shadow-lg">
   <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-800 bg-slate-950">
     <div>
@@ -327,7 +340,7 @@ body{font-family:'Inter',sans-serif}
 import { runAutonomousEngine } from './bcgo.js?v=20260913-bcgo-cgo-me-exec-v2';
 
 // HARD BUILD ID — visible/inspectable marker proving which BCGO HTML is running.
-window.__CIKUR_BCGO_BUILD_ID = 'BCGO-CGO-E2E-01-20260912';
+window.__CIKUR_BCGO_BUILD_ID = 'BCGO-CGO-E2E-FINAL-AUDIT-20260913';
 window.dispatchEvent(new CustomEvent('cikur-bcgo-build', { detail: { buildId: window.__CIKUR_BCGO_BUILD_ID, at: Date.now() } }));
 
 
@@ -458,7 +471,16 @@ function setHeader(step, state) {
         OUT: ['bg-emerald-950','text-emerald-400','border-emerald-800','Sistem Sinkron']
     };
 
-    const [bg,text,border,label] = styles[step] || styles.OUT;
+    let [bg,text,border,label] = styles[step] || styles.OUT;
+    const scanStatus = String(state?.sourceScan?.status || '').toUpperCase();
+    const scanPhase = String(state?.sourceScan?.phase || '').toUpperCase();
+    if (scanStatus === 'SCANNING' || scanPhase !== 'COMPLETE') {
+        [bg,text,border,label] = ['bg-cyan-950','text-cyan-300','border-cyan-800','Memindai Source'];
+    } else if (scanStatus === 'FINDINGS' || scanStatus === 'DEGRADED') {
+        [bg,text,border,label] = ['bg-rose-950','text-rose-300','border-rose-800','Temuan Perlu Tindakan'];
+    } else if (scanStatus === 'CLEAN') {
+        [bg,text,border,label] = ['bg-emerald-950','text-emerald-300','border-emerald-800','Sistem Sinkron'];
+    }
     if (badge) {
         badge.className = `px-3 py-1 rounded-md text-xs font-semibold ${bg} ${text} border ${border}`;
         badge.textContent = state.cycleMode === 'INTERRUPTED' ? '⚡ Impuls Terdeteksi' : label;
@@ -477,10 +499,12 @@ function setHeader(step, state) {
 function renderSourceScan(scan) {
     if (!scan) return;
     const total = Number(scan.totalFiles || 0);
+    const requiredTotal = Number(scan.requiredFiles || total);
     const scanned = Number(scan.filesScanned || 0);
+    const requiredScanned = Number(scan.requiredScanned || Math.min(scanned, requiredTotal));
     const readable = Number(scan.filesReadable || 0);
     const failed = Number(scan.filesFailed || 0);
-    const progress = total ? Math.min(100, Math.round((scanned / total) * 100)) : 0;
+    const progress = Number.isFinite(Number(scan.progressPercent)) ? Math.min(100, Math.max(0, Number(scan.progressPercent))) : (requiredTotal ? Math.min(100, Math.round((requiredScanned / requiredTotal) * 100)) : 0);
     const running = scan.status === 'SCANNING';
 
     if (sourceScanStatusEl) {
@@ -507,10 +531,10 @@ function renderSourceScan(scan) {
     if (sourceScanCurrentEl) {
         sourceScanCurrentEl.textContent = scan.currentFile
             ? `${scan.phase || 'SCAN'} · ${scan.currentFile}`
-            : (scan.phase === 'COMPLETE' ? 'SCAN COMPLETE · seluruh source sudah diproses' : 'Menunggu scanner...');
+            : (scan.phase === 'COMPLETE' ? `SCAN COMPLETE · ${requiredScanned}/${requiredTotal} source wajib terverifikasi` : 'Menunggu scanner...');
         sourceScanCurrentEl.className = `text-[9px] code-font ${running ? 'text-cyan-300' : scan.status === 'FINDINGS' || scan.status === 'DEGRADED' ? 'text-rose-300' : 'text-slate-500'}`;
     }
-    if (sourceScanProgressLabelEl) sourceScanProgressLabelEl.textContent = `${scanned}/${total}`;
+    if (sourceScanProgressLabelEl) sourceScanProgressLabelEl.textContent = `${requiredScanned}/${requiredTotal} wajib${total>requiredTotal ? ` • ${Math.max(0,total-requiredTotal)} standby` : ''}`;
     if (sourceScanProgressEl) {
         sourceScanProgressEl.style.width = `${progress}%`;
         sourceScanProgressEl.className = `h-full rounded-full transition-all duration-300 ${running ? 'bg-cyan-500' : scan.status === 'FINDINGS' || scan.status === 'DEGRADED' ? 'bg-rose-500' : scan.status === 'CLEAN' ? 'bg-emerald-500' : 'bg-slate-700'}`;
@@ -1187,6 +1211,25 @@ runAutonomousEngine(state => {
     } else {
       decisionText.textContent = `Laporan Executor terbaru diterima: ${msg}`;
     }
+    const outcomeStatus = document.getElementById('cgo-team-outcome-status');
+    const outcomeCase = document.getElementById('cgo-team-outcome-case');
+    const outcomeResult = document.getElementById('cgo-team-outcome-result');
+    const outcomeNext = document.getElementById('cgo-team-outcome-next');
+    const outcomeMessage = document.getElementById('cgo-team-outcome-message');
+    const type = String(packet.type || '').toUpperCase();
+    let result = packet.review?.status || packet.result?.status || packet.status || '';
+    let next = '';
+    if (type === 'MEDICINE_EVIDENCE') next = 'Medicine lanjut root cause';
+    else if (type === 'MEDICINE_REPAIR_CANDIDATE') next = 'Executor review';
+    else if (type === 'MEDICINE_CGO_BLOCKED') next = 'Evidence baru / investigasi ulang';
+    else if (type === 'MEDICINE_INVESTIGATION_RESULT') next = packet.nextAction || 'Monitor';
+    else if (type === 'EXECUTION_REVIEW_RESULT' || type === 'EXECUTOR_RESULT') next = String(result).toUpperCase()==='VALID' ? 'Human Approval' : 'Medicine investigasi ulang';
+    else if (type === 'EXECUTION_RESULT') next = String(result).toUpperCase()==='SUCCESS' ? 'Validation readback' : 'Medicine investigasi ulang';
+    if (outcomeStatus) outcomeStatus.textContent = `${packet.from} • ${type}`;
+    if (outcomeCase) outcomeCase.textContent = `${packet.caseId || '-'}${packet.file || packet.target || packet.review?.file ? ' • ' + (packet.file || packet.target || packet.review?.file) : ''}`;
+    if (outcomeResult) outcomeResult.textContent = result || (packet.candidate ? 'CANDIDATE_READY' : 'EVIDENCE_RECEIVED');
+    if (outcomeNext) outcomeNext.textContent = next || 'Monitor hasil berikutnya';
+    if (outcomeMessage) outcomeMessage.textContent = msg;
   }
 
   channel?.addEventListener('message', e => handleTeam(e.data));
@@ -1291,8 +1334,24 @@ runAutonomousEngine(state => {
     else bubble(captainChat, 'CGO • WORKBENCH', 'Belum ada target source live yang dapat dibuka. Saya tidak akan membuat Full Code dari tebakan.', 'amber');
   });
 
+  const renderTeamOutcome = state => {
+    const o = state?.teamOutcome;
+    const outcomeStatus = document.getElementById('cgo-team-outcome-status');
+    const outcomeCase = document.getElementById('cgo-team-outcome-case');
+    const outcomeResult = document.getElementById('cgo-team-outcome-result');
+    const outcomeNext = document.getElementById('cgo-team-outcome-next');
+    const outcomeMessage = document.getElementById('cgo-team-outcome-message');
+    if (!o) return;
+    if (outcomeStatus) outcomeStatus.textContent = `${o.from || '-'} • ${o.type || '-'}`;
+    if (outcomeCase) outcomeCase.textContent = `${o.caseId || '-'}${o.target ? ' • ' + o.target : ''}`;
+    if (outcomeResult) outcomeResult.textContent = o.outcome || o.status || 'REPORTED';
+    if (outcomeNext) outcomeNext.textContent = o.nextAction || 'CONTINUE_MONITORING';
+    if (outcomeMessage) outcomeMessage.textContent = o.message || 'Hasil tim diterima.';
+  };
+
   const renderState = state => {
     latestState = state;
+    renderTeamOutcome(state);
     if (status) status.textContent = state?.connection?.status === 'LIVE' ? 'LIVE • STATE' : 'WAITING';
     const c = window.BCGOBrain?.getCaptain?.();
     const cs = c?.getState?.();
