@@ -751,48 +751,99 @@ Date: 2026-09-09
 - Medicine and Executor remain present in the 25-file package and retain their bridge contracts: Medicine verifies/finalizes candidates and Executor performs authorized deterministic execution.
 - Validation: all 22 JavaScript files in package pass node --check; all 5 inline bcgo.html scripts pass node --check; package count 25/25; browser deployment E2E intentionally not claimed.
 
-======================================================================
-REAL FIX — SINGLE HUMAN → CGO CAPTAIN CONVERSATION PATH — 2026-09-13
-======================================================================
-- Human chat no longer splits ordinary questions into a second hidden
-  Internal-AI conversation path. Every message from the visible Human → CGO
-  chat is transported through the authoritative BCGO-CGO bridge to the same
-  Captain instance displayed in the Captain panel.
-- Captain now accepts ordinary conversational/status questions without
-  requiring the literal word "CGO" in the message.
-- Captain human responses are published through the authoritative BCGO-CGO
-  bridge as CGO_RESPONSE so the response can cross tabs/pages as well as
-  render in the same Captain UI.
-- Existing direct Captain response events remain for compatibility; the UI
-  deduplicates bridge/local response delivery by response timestamp/message.
-- This change does not grant source mutation authority. Investigation,
-  candidate construction, Guardian policy, human approval, and deterministic
-  Executor gates remain unchanged.
-- Medicine remains downstream and is not allowed to become a competing
-  conversational brain.
-- Validation: Captain ordinary-conversation command path PASS; package-wide
-  JavaScript syntax PASS; inline bcgo.html scripts PASS. Production browser
-  E2E remains unverified until tested in the user's deployment.
-
 
 ======================================================================
-STAGE 24 — AUTHORITATIVE BCGO-CGO TEAM CONTRACT — 2026-09-13
+STAGE 24 — UNIFIED BCGO ↔ CGO ↔ MEDICINE ↔ EXECUTOR HARD CUT — 2026-09-13
 ======================================================================
-- BCGO, CGO Captain, Medicine, and Executor now load one authoritative
-  BCGO-CGO transport module (cgo-bcgo-bridge.js) with one cache-busted
-  module identity for the release package.
-- Human conversation, Captain directives, BCGO state, BCGO probe results,
-  Medicine reports, and Executor reports can cross the same internal bridge.
-- Medicine's Captain lifecycle projection is observation-only. A rejected
-  projection can no longer deadlock Medicine's diagnostic workflow.
-- Medicine consumes Captain/BCGO probe results through the authoritative
-  bridge and continues investigation from fresh BCGO evidence rather than
-  creating a competing source-scan authority.
-- Executor consumes the same Captain authorization contract while retaining
-  deterministic fingerprint validation, durable authorization consumption,
-  and fail-closed execution.
-- Medicine remains non-writing; Executor remains the only source-writing
-  authority after the required Captain/Human authorization boundary.
-- No external AI/provider/API or Cloud Functions dependency was introduced.
-- Browser deployment E2E remains UNVERIFIED until demonstrated in the actual
-  deployed environment.
+Purpose:
+- Establish one authoritative same-origin transport boundary for the operational team.
+- Remove the obsolete Medicine-only bridge as an active integration boundary.
+- Make Captain the single orchestration point between BCGO reconnaissance, Medicine investigation, Executor review/execution, and the Human Gate.
+
+Production changes:
+- Unified bridge channel: CIKUR_GO_BCGO_CGO_BRIDGE_V1.
+- bcgo.js publishes authoritative BCGO_STATE and receives Medicine/Executor reports through the unified channel.
+- cgo-ai-captain.js listens to the unified team transport and sends bounded CGO_* directives on the same channel.
+- bcgo-medicine.js consumes authoritative BCGO_STATE/Captain directives and publishes evidence, candidate, authorization, and validation reports on the same channel.
+- bcgo-executor.js consumes Medicine candidates and Captain execution authorization from the same channel and returns review/execution results to Captain/Medicine.
+- bcgo.html, Medicine UI, and Executor UI read the same transport state; no separate Medicine-only nerve is treated as authoritative.
+- Existing deterministic Executor Core remains the exact-operation/fingerprint/readback gate; Medicine remains non-writing.
+- The legacy manual-copy dead-end is removed from the active approval path: Human approval is handed to Captain, Medicine finalizes authorization, and Executor is the only source-writing authority when a real execution target is bound.
+- Source mutation remains fail-closed when no real execution target is bound. No GitHub token, external AI, external reasoning API, Cloud Function, or third-party runtime is introduced.
+
+Required lifecycle:
+BCGO_STATE → CAPTAIN CASE → CGO_INVESTIGATE → MEDICINE EVIDENCE/ROOT CAUSE → MEDICINE_REPAIR_CANDIDATE → EXECUTOR REVIEW → VALID → HUMAN GATE → CAPTAIN_EXECUTION_AUTHORIZATION → EXECUTOR EXECUTION → MEDICINE VALIDATION → CAPTAIN CLOSE/REOPEN.
+
+Hard rules:
+- BCGO detects; it does not repair.
+- Captain owns orchestration and the human decision gate; it does not write source.
+- Medicine proves evidence/root cause and constructs exact candidate; it does not write source.
+- Executor alone performs deterministic source mutation after valid Captain authorization and exact fingerprint binding.
+- Validation must be provenance-bound to the executed case and current source.
+- A missing/failed execution target remains NOT_READY/REJECTED; it is never presented as successful repair.
+
+Validation performed for this package:
+- Full deploy JavaScript syntax sweep: PASS.
+- Unified channel literal sweep across BCGO/Captain/Medicine/Executor/UI: PASS; no active CIKUR_GO_BCGO_MEDICINE_V1 references remain.
+- Captain, Medicine, and Executor all reference the same authoritative bridge channel.
+- Executor Core deterministic fingerprint/replacement/rollback code retained.
+- No external AI/provider endpoint added.
+- Browser production E2E is still an explicit acceptance gate and is NOT claimed PASS by static validation alone.
+
+====================================================================
+STAGE 24 — MEDICINE + EXECUTOR HARD CUT / BCGO-CGO SINGLE NERVE
+Date: 2026-09-13
+====================================================================
+
+Purpose:
+Medicine and Executor were rebuilt instead of incrementally patched. The
+previous modules mixed legacy bridge contracts, cyclic waiting and execution
+responsibilities. The hard-cut boundary is now:
+
+  BCGO_STATE
+      -> CGO CAPTAIN
+      -> CGO_INVESTIGATE
+      -> MEDICINE
+      -> exact source/evidence/root-cause proof
+      -> MEDICINE_REPAIR_CANDIDATE
+      -> EXECUTOR deterministic review
+      -> EXECUTION_REVIEW_RESULT
+      -> CAPTAIN HUMAN GATE
+      -> CAPTAIN_EXECUTION_AUTHORIZATION
+      -> EXECUTOR
+      -> EXECUTION_RESULT
+      -> MEDICINE validation
+      -> CAPTAIN resolution/reinvestigation
+
+Single active transport:
+  CIKUR_GO_BCGO_CGO_BRIDGE_V1
+
+Medicine boundary:
+  - read actual deployed source
+  - correlate BCGO evidence and cross-file findings
+  - prove source fingerprint and root cause
+  - create a candidate only when a deterministic repair recipe is proven
+  - never write source
+
+Executor boundary:
+  - receive Medicine candidate
+  - deterministic fingerprint / exact-target / simulation review
+  - require Captain authorization for execution
+  - require a real local File System Access handle for source mutation
+  - verify read-back fingerprint after write
+  - fail closed when a production write target is unavailable
+
+No remote GitHub/API write path is invented. A browser page cannot mutate a
+GitHub Pages deployment without an authorized write service; this architecture
+therefore refuses to report deployment success when only IndexedDB/browser
+state changed.
+
+Anti-loop rule:
+  Executor is downstream of Medicine. Executor is never a prerequisite for
+  Medicine to begin investigation. Repeated BLOCKED status without a new
+  evidence/revision token must not recursively create another investigation.
+
+Cache contract:
+  All CIKUR GO internal modules in this milestone use the same hard-cut cache
+  revision. Mixed query-string module copies are prohibited because they can
+  create duplicate bridge/runtime instances in the same browser session.

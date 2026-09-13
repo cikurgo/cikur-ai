@@ -10,21 +10,21 @@
  * - No source mutation is performed here.
  */
 
-import * as Core from "./cgo-ai-core.js?v=20260913-bcgo-cgo-v4";
-import * as Logic from "./cgo-ai-logic.js?v=20260913-bcgo-cgo-v4";
-import * as Cognition from "./cgo-ai-cognition.js?v=20260913-bcgo-cgo-v4";
-import * as Investigator from "./cgo-ai-investigator.js?v=20260913-bcgo-cgo-v4";
-import * as InvestigationEngine from "./cgo-ai-investigation-engine.js?v=20260913-bcgo-cgo-v4";
-import * as Knowledge from "./cgo-ai-knowledge.js?v=20260913-bcgo-cgo-v4";
-import * as Guardian from "./cgo-ai-guardian.js?v=20260913-bcgo-cgo-v4";
-import * as Memory from "./cgo-ai-memory.js?v=20260913-bcgo-cgo-v4";
-import * as RuntimeAdapter from "./cgo-ai-runtime-adapter.js?v=20260913-bcgo-cgo-v4";
-import * as BrowserBridge from "./cgo-ai-browser-adapter.js?v=20260913-bcgo-cgo-v4";
-import * as Instruction from "./cgo-instruction.js?v=20260913-bcgo-cgo-v4";
-import * as Sovereignty from "./cgo-ai-sovereignty.js?v=20260913-bcgo-cgo-v4";
-import * as CaptainState from "./cgo-ai-state-machine.js?v=20260913-bcgo-cgo-v4";
-import * as EvidenceLedger from "./cgo-ai-evidence-ledger.js?v=20260913-bcgo-cgo-v4";
-import * as Captain from "./cgo-ai-captain.js?v=20260913-bcgo-cgo-v4";
+import * as Core from "./cgo-ai-core.js?v=20260913-bcgo-cgo-me-exec-v2";
+import * as Logic from "./cgo-ai-logic.js?v=20260913-bcgo-cgo-me-exec-v2";
+import * as Cognition from "./cgo-ai-cognition.js?v=20260913-bcgo-cgo-me-exec-v2";
+import * as Investigator from "./cgo-ai-investigator.js?v=20260913-bcgo-cgo-me-exec-v2";
+import * as InvestigationEngine from "./cgo-ai-investigation-engine.js?v=20260913-bcgo-cgo-me-exec-v2";
+import * as Knowledge from "./cgo-ai-knowledge.js?v=20260913-bcgo-cgo-me-exec-v2";
+import * as Guardian from "./cgo-ai-guardian.js?v=20260913-bcgo-cgo-me-exec-v2";
+import * as Memory from "./cgo-ai-memory.js?v=20260913-bcgo-cgo-me-exec-v2";
+import * as RuntimeAdapter from "./cgo-ai-runtime-adapter.js?v=20260913-bcgo-cgo-me-exec-v2";
+import * as BrowserBridge from "./cgo-ai-browser-adapter.js?v=20260913-bcgo-cgo-me-exec-v2";
+import * as Instruction from "./cgo-instruction.js?v=20260913-bcgo-cgo-me-exec-v2";
+import * as Sovereignty from "./cgo-ai-sovereignty.js?v=20260913-bcgo-cgo-me-exec-v2";
+import * as CaptainState from "./cgo-ai-state-machine.js?v=20260913-bcgo-cgo-me-exec-v2";
+import * as EvidenceLedger from "./cgo-ai-evidence-ledger.js?v=20260913-bcgo-cgo-me-exec-v2";
+import * as Captain from "./cgo-ai-captain.js?v=20260913-bcgo-cgo-me-exec-v2";
 
 export const VERSION = "V5.2.6-MASTER-RUNTIME-CONVERSATION-GATEWAY";
 export const ARCHITECTURE = "CGO_INTERNAL_BRAIN_MASTER_GATEWAY";

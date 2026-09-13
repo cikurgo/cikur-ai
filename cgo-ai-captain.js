@@ -9,9 +9,9 @@
  * - This module only observes real internal state/bridge packets and emits
  *   bounded directives. Proof/Guardian/Executor remain authoritative gates.
  */
-const VERSION = "2.4.0-CAPTAIN-AUTHORITATIVE-TEAM-BRIDGE";
-const BRIDGE = "CIKUR_GO_BCGO_MEDICINE_V1";
-import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-bcgo-cgo-v4";
+const VERSION = "2.3.0-CAPTAIN-CGO-CONSTRUCTION-MEDICINE-REVIEW";
+const BRIDGE = "CIKUR_GO_BCGO_CGO_BRIDGE_V1";
+import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-bcgo-cgo-me-exec-v2";
 const BCGO_BRIDGE = BCGOCGOBridge.install();
 const MAX_ROUNDS = 4;
 const DIRECTIVE_COOLDOWN = 12000;
@@ -71,8 +71,9 @@ export function createCaptain(options = {}) {
   }
 
   function post(type, payload = {}) {
-    const authoritative = BCGO_BRIDGE.publishDirective(type, { caseId: payload.caseId || state.caseId || null, ...payload });
-    if (type === "CGO_BCGO_EXPLORE") return authoritative;
+    if (type === "CGO_BCGO_EXPLORE") {
+      return BCGO_BRIDGE.publishDirective(type, { caseId: payload.caseId || state.caseId || null, ...payload });
+    }
     const packet = {
       id: `CAPTAIN-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
       bridge: BRIDGE,
@@ -113,7 +114,6 @@ export function createCaptain(options = {}) {
       ...meta
     };
     emit("CAPTAIN_HUMAN_RESPONSE", response);
-    try { BCGO_BRIDGE.publishResponse(response, { caseId: response.caseId || null, responseId: response.at }); } catch {}
     try { window.dispatchEvent(new CustomEvent("cikur-captain-human-response", { detail: clone(response) })); } catch {}
     return response;
   }
@@ -126,11 +126,11 @@ export function createCaptain(options = {}) {
     const raw = String(text || "").trim();
     if (!raw) return { handled: false, reason: "EMPTY_COMMAND" };
 
-    // This is the single visible Human -> CGO conversation surface.
-    // "CGO" does not need to be typed explicitly; ordinary questions must
-    // still reach the same Captain instance shown in the UI.
+    // Only direct operator commands are claimed by Captain. Other ordinary
+    // questions remain available to the existing internal BCGO conversation.
     const lower = raw.toLocaleLowerCase("id-ID");
     const addressed = /(^|[\s,.:!?])cgo([\s,.:!?]|$)/i.test(raw) || /kapten cgo/i.test(raw);
+    if (!addressed) return { handled: false, reason: "NOT_ADDRESSED_TO_CAPTAIN" };
 
     const caseId = currentCaseId();
     if (caseId) registerCase(caseId);
@@ -138,7 +138,7 @@ export function createCaptain(options = {}) {
     const isApprove = /\b(setujui|approve|saya setuju|izinkan|lanjutkan perubahan)\b/i.test(raw);
     const isReject = /\b(tolak|reject|jangan setujui|jangan lanjutkan|batalkan candidate)\b/i.test(raw);
     const isInvestigate = /\b(cek|periksa|periksa lagi|investigasi|selidiki|pengecekan|pengecekan ulang|cari tahu|telusuri|janggal|aneh|anomali|evidence|bukti)\b/i.test(raw);
-    const isUpdate = /\b(update|laporkan|laporan|status)\b/i.test(raw) || /(?:apa yang (?:sedang )?(?:kamu )?kerjakan|sedang kamu kerjakan)/i.test(raw);
+    const isUpdate = /\b(update|laporkan|laporan|status|sedang mengerjakan apa|apa yang dikerjakan)\b/i.test(raw);
 
     if (isApprove) {
       if (!state.humanGate) {
@@ -187,21 +187,7 @@ export function createCaptain(options = {}) {
         { decision: packet ? "UPDATE_DISPATCHED" : "UPDATE_BLOCKED" });
     }
 
-    // Ordinary human conversation also belongs to the same Captain surface.
-    // Do not silently route the user into a second, visually disconnected brain.
-    const bcgoState = latestBCGO || {};
-    const scan = bcgoState.sourceScan || {};
-    const medicine = latestMedicine || {};
-    const executor = latestExecutor || {};
-    const active = Number(bcgoState.metrics?.active ?? 0);
-    const total = Number(bcgoState.metrics?.total ?? 0);
-    const target = bcgoState.lastTelemetryFile || medicine.target || null;
-    const blocker = state.blocker || medicine.blocker || executor.blocker || null;
-    const progress = scan.phase === "COMPLETE"
-      ? `scan ${Number(scan.filesReadable || 0)}/${Number(scan.requiredFiles || scan.totalFiles || 0)} source wajib terbaca`
-      : `scan ${scan.phase || "WAITING"}`;
-    const message = `Saya di sini, kakak. Saat ini saya sebagai CGO/Kapten sedang memantau BCGO: ${active} anomaly aktif dari ${total} organ; ${progress}.${target ? ` Target terakhir: ${target}.` : " Belum ada target source aktif yang bisa saya pastikan."}${blocker ? ` Gerbang masih tertahan karena ${String(blocker).slice(0,180)}.` : " Belum ada izin perubahan source; saya hanya bergerak berdasarkan evidence yang terbukti."}`;
-    return captainReply(message, { decision: "CONVERSATION_STATUS" });
+    return captainReply("Saya menerima perintah kakak. Jelaskan tindakan yang diinginkan—misalnya minta tim melakukan pengecekan, minta update, atau setujui/tolak candidate yang sudah membuka gerbang manusia.", { decision: "COMMAND_NEEDS_SCOPE" });
   }
 
   function registerCase(caseId) {
@@ -322,16 +308,47 @@ export function createCaptain(options = {}) {
 
   function chooseFromState() {
     const active = Array.isArray(latestBCGO?.activeCases) ? latestBCGO.activeCases : [];
-    const primary = (state.caseId && active.find(x => (x.id || x.caseId || x.target) === state.caseId)) || active[0] || (latestBCGO?.lastTelemetryFile ? { id:`BCGO-${latestBCGO.lastTelemetryFile}`, target:latestBCGO.lastTelemetryFile } : null);
+    const severityRank = value => {
+      const s = String(value?.severity || value?.level || value?.risk || "").toUpperCase();
+      return s === "CRITICAL" ? 4 : s === "HIGH" ? 3 : s === "MEDIUM" ? 2 : 1;
+    };
+    const ordered = [...active].sort((a,b) => severityRank(b) - severityRank(a));
+    const primary = (state.caseId && active.find(x => (x.id || x.caseId || x.target) === state.caseId)) || ordered[0] || (latestBCGO?.lastTelemetryFile ? { id:`BCGO-${latestBCGO.lastTelemetryFile}`, target:latestBCGO.lastTelemetryFile } : null);
     if (!primary) {
       set({ phase: "OBSERVING", decision: "WAIT", nextAction: "WAIT_FOR_CASE", blocker: "NO_ACTIVE_CASE" }, "CAPTAIN_WAITING");
       return;
     }
-    registerCase(primary.id || primary.caseId || primary.target);
-    // A heartbeat is observation, not permission to keep dispatching work.
-    // Captain waits for the three real reports before issuing one bounded
-    // investigation directive.
-    maybePromptTeamAnalysis(state.caseId);
+    const caseId = primary.id || primary.caseId || primary.target;
+    const current = registerCase(caseId);
+    const target = primary.target || primary.source || latestBCGO?.lastTelemetryFile || null;
+
+    // IMPORTANT: Medicine investigation must start from real BCGO evidence.
+    // Executor is downstream of Medicine and therefore MUST NOT be required
+    // before the first investigation dispatch. The previous three-team gate
+    // created a circular dependency: Captain waited for Executor -> Executor
+    // waited for Medicine candidate -> Medicine waited for Captain. This is
+    // the principal reason the live UI could show all three teams without a
+    // real meeting point.
+    if (!current.investigationDispatched && !current.awaitingEvidence && target) {
+      current.investigationDispatched = true;
+      current.awaitingEvidence = true;
+      set({ caseId, phase: "MEDICINE_INVESTIGATION", decision: "BCGO_EVIDENCE_READY", nextAction: "MEDICINE_INVESTIGATE", blocker: null, humanGate: false }, "CAPTAIN_MEDICINE_DISPATCH");
+      const packet = directive("CGO_INVESTIGATE", {
+        caseId,
+        target,
+        question: "BCGO evidence sudah tersedia. Medicine, baca ulang source aktual, telusuri dependency/contract, buktikan root cause, exact source, dan susun candidate hanya bila proof lengkap."
+      }, { force: true });
+      if (!packet) {
+        current.investigationDispatched = false;
+        current.awaitingEvidence = false;
+        set({ phase: "WAITING_MEDICINE", decision: "MEDICINE_DISPATCH_RETRY", nextAction: "MEDICINE_INVESTIGATE", blocker: "CAPTAIN_DIRECTIVE_NOT_SENT" }, "CAPTAIN_MEDICINE_DISPATCH_FAILED");
+      }
+      return;
+    }
+
+    // Team analysis is a later stage. Medicine does not wait for an Executor
+    // report to begin; Executor becomes active only after a candidate exists.
+    maybePromptTeamAnalysis(caseId);
   }
 
   function normalizeCandidatePacket(packet) {
@@ -364,12 +381,15 @@ export function createCaptain(options = {}) {
   function maybePromptTeamAnalysis(caseId) {
     const current = cases.get(caseId);
     if (!current || current.analysisPrompted) return;
-    if (!current.teamReports.bcgo || !current.teamReports.medicine || !current.teamReports.executor) return;
+    // Medicine can be asked for deeper analysis after it has actually reported.
+    // Executor is downstream and cannot be a prerequisite for this stage.
+    if (!current.teamReports.bcgo || !current.teamReports.medicine) return;
+    if (current.candidate || current.awaitingEvidence) return;
     current.analysisPrompted = true;
-    set({ phase: "ANALYZING", decision: "TEAM_ANALYSIS_REQUESTED", nextAction: "MEDICINE_INVESTIGATE", blocker: null }, "CAPTAIN_TEAM_ANALYSIS_REQUEST");
+    set({ phase: "ANALYZING", decision: "MEDICINE_ANALYSIS_REQUESTED", nextAction: "MEDICINE_INVESTIGATE", blocker: null }, "CAPTAIN_TEAM_ANALYSIS_REQUEST");
     const packet = directive("CGO_INVESTIGATE", {
       caseId,
-      target: latestBCGO?.lastTelemetryFile || latestMedicine?.medicine?.target || null,
+      target: current.bcgoReport?.target || latestMedicine?.medicine?.target || null,
       question: CAPTAIN_ANALYSIS_PROMPT
     });
     if (packet) {
@@ -597,6 +617,13 @@ export function createCaptain(options = {}) {
         lastTelemetryFile: latestBCGO?.lastTelemetryFile || null,
         at: Date.now()
       };
+      try {
+        const previousTarget = state.workbenchTarget || null;
+        if (target && target !== previousTarget) {
+          state.workbenchTarget = target;
+          window.dispatchEvent(new CustomEvent("cgo-workbench-target", { detail: { file: target, caseId, source: "CAPTAIN" } }));
+        }
+      } catch {}
       set({ decision: "BCGO_REPORT_RECEIVED", nextAction: state.nextAction, blocker: null }, "CAPTAIN_BCGO_REPORT");
     }
     if (state.status === "WAITING") announceGreeting();
@@ -632,13 +659,9 @@ export function createCaptain(options = {}) {
     if (started) return api;
     started = true;
     channel?.addEventListener("message", e => handlePacket(e.data));
-    BCGO_BRIDGE.onResponse(packet => {
-      const response = packet?.response && typeof packet.response === "object" ? packet.response : packet;
-      if (response?.from === "BCGO" && response?.type === "BCGO_PROBE_RESULT") handleBCGOProbeResult(response);
-      else if (response?.from === "MEDICINE") handleMedicine(response);
-      else if (response?.from === "EXECUTION") handleExecutor(response);
-      else if (response?.from === "CAPTAIN" && response?.type === "CAPTAIN_HUMAN_RESPONSE") emit("CAPTAIN_HUMAN_RESPONSE", response);
-    });
+    // Authoritative BCGO-CGO bridge is the single team meeting point.
+    // Team reports still pass through the same deterministic Captain handlers.
+    BCGO_BRIDGE.onTeamReport(packet => handlePacket(packet));
     if (typeof window !== "undefined") window.addEventListener("storage", e => {
       if (e.key !== `${BRIDGE}_EVENT` || !e.newValue) return;
       try { handlePacket(JSON.parse(e.newValue)); } catch {}

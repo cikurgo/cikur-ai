@@ -136,8 +136,8 @@ button{background:#172554;color:#f8fafc;border:1px solid #334155}.secondary{back
 <div class="actions"><button class="success" id="saveSource">Simpan Source Internal</button><button class="secondary" id="loadSource">Muat Source</button><button class="secondary" id="importFile">Import File</button><button class="secondary" id="bindFile">Hubungkan File Lokal</button><input hidden="" id="fileInput" type="file"/></div>
 <div class="small" id="sourceInfo" style="margin-top:8px">Menunggu source nyata.</div>
 </section><section class="card advanced"><h2>Internal Sources</h2><pre id="sources">Memuat...</pre></section><section class="card advanced"><h2>Audit / Runtime History</h2><pre id="history">Belum ada audit.</pre></section></main>
-<script src="./bcgo-executor-core.js?v=CIKUR_CONFIG_SYNC_20260912"></script>
-<script type="module" src="./bcgo-executor.js?v=20260913-bcgo-cgo-v4"></script>
+<script src="./bcgo-executor-core.js?v=20260913-executor-hardcut"></script>
+<script type="module" src="./bcgo-executor.js?v=20260913-bcgo-cgo-me-exec-v2"></script>
 <script>
 (() => {
   const $ = id => document.getElementById(id);
@@ -210,7 +210,7 @@ button{background:#172554;color:#f8fafc;border:1px solid #334155}.secondary{back
     const age=n.lastAt?Date.now()-Number(n.lastAt):NaN;
     set("nerveAge",n.lastAt?ageText(age):"- "); set("nerveCycle",(n.cycle??"-")+" / "+(n.step||"-"));
     set("nerveTelemetry",n.telemetryFile||"-"); set("nerveMetrics",(n.active??0)+" / "+(n.total??0)); set("nerveSource",n.source||"NONE");
-    const ack = (()=>{try{return JSON.parse(localStorage.getItem("CIKUR_GO_BCGO_MEDICINE_V1_EVENT")||"null")}catch{return null}})();
+    const ack = (()=>{try{return JSON.parse(localStorage.getItem("CIKUR_GO_BCGO_CGO_BRIDGE_V1_EVENT")||"null")}catch{return null}})();
     const ackAge = ack?.at ? Date.now()-Number(ack.at) : Infinity;
     set("medicineAck", ack && ackAge <= 15000 ? `LIVE • ${ack.medicineEvent||"ACK"}` : "WAITING");
     $("nerveBanner").className="banner "+(live?"live":stale?"warn":"fail");

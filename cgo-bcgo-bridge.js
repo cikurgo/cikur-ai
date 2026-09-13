@@ -3,11 +3,12 @@
  * Same-tab: CustomEvent. Cross-tab: BroadcastChannel + localStorage recovery.
  * No external API, no AI provider, no source mutation.
  */
-export const VERSION = "V1.1.0-BCGO-CGO-AUTHORITATIVE-BRIDGE";
+export const VERSION = "V1.0.0-BCGO-CGO-AUTHORITATIVE-BRIDGE";
 export const CHANNEL = "CIKUR_GO_BCGO_CGO_BRIDGE_V1";
 export const STATE_EVENT = "cikur-bcgo-state";
 export const COMMAND_EVENT = "cikur-cgo-command";
 export const RESPONSE_EVENT = "cikur-cgo-response";
+export const TEAM_REPORT_EVENT = "cikur-cgo-team-report";
 
 const STATE_KEY = `${CHANNEL}_STATE`;
 const EVENT_KEY = `${CHANNEL}_EVENT`;
@@ -21,7 +22,7 @@ let latestCommand = null;
 const stateListeners = new Set();
 const commandListeners = new Set();
 const directiveListeners = new Set();
-const responseListeners = new Set();
+const teamReportListeners = new Set();
 
 function clone(value) {
   try { return typeof structuredClone === "function" ? structuredClone(value) : JSON.parse(JSON.stringify(value)); }
@@ -86,8 +87,12 @@ function route(packet, recovery = false) {
     return true;
   }
   if (packet.type === "CGO_RESPONSE") {
-    for (const fn of responseListeners) { try { fn(clone(packet)); } catch {} }
     emit(RESPONSE_EVENT, packet);
+    return true;
+  }
+  if (packet.from === "MEDICINE" || packet.from === "EXECUTION") {
+    for (const fn of teamReportListeners) { try { fn(clone(packet)); } catch {} }
+    emit(TEAM_REPORT_EVENT, packet);
     return true;
   }
   return false;
@@ -126,7 +131,6 @@ function publishResponse(response, meta = {}) {
   const packet = { id:id("RESPONSE"), bridge:CHANNEL, from:"CGO", type:"CGO_RESPONSE", at:Date.now(), ...meta, response:clone(response) };
   route(packet);
   try { ensureChannel()?.postMessage(packet); } catch {}
-  try { localStorage.setItem(EVENT_KEY, JSON.stringify(packet)); } catch {}
   return clone(packet);
 }
 
@@ -143,8 +147,8 @@ const api = Object.freeze({
   onState(fn) { if (typeof fn !== "function") return () => {}; stateListeners.add(fn); return () => stateListeners.delete(fn); },
   onCommand(fn) { if (typeof fn !== "function") return () => {}; commandListeners.add(fn); return () => commandListeners.delete(fn); },
   onDirective(fn) { if (typeof fn !== "function") return () => {}; directiveListeners.add(fn); return () => directiveListeners.delete(fn); },
-  onResponse(fn) { if (typeof fn !== "function") return () => {}; responseListeners.add(fn); return () => responseListeners.delete(fn); },
-  destroy() { try { channel?.close(); } catch {} channel = null; installed = false; stateListeners.clear(); commandListeners.clear(); directiveListeners.clear(); responseListeners.clear(); }
+  onTeamReport(fn) { if (typeof fn !== "function") return () => {}; teamReportListeners.add(fn); return () => teamReportListeners.delete(fn); },
+  destroy() { try { channel?.close(); } catch {} channel = null; installed = false; stateListeners.clear(); commandListeners.clear(); directiveListeners.clear(); teamReportListeners.clear(); }
 });
 
 if (typeof window !== "undefined") {

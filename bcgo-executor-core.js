@@ -1,291 +1,61 @@
-/* ============================================================
-   BCGO INTERNAL EXECUTOR CORE
-   Version 3.2.0 (Production Enhanced)
-   ------------------------------------------------------------
-   Pure deterministic execution engine.
-   No external network, AI API, GitHub API, Firebase Functions,
-   or third-party execution service.
-   ============================================================ */
+/* CIKUR GO — DETERMINISTIC EXECUTOR CORE v4.0
+ * Pure source transformation + proof engine. No network, AI or Firebase.
+ */
 (() => {
   "use strict";
-
-  const VERSION = "3.2.0";
-  const NAME = "BCGO_INTERNAL_EXECUTOR_CORE";
-
-  const OPS = Object.freeze({
-    REPLACE_EXACT: "REPLACE_EXACT",
-    INSERT_EXACT: "INSERT_EXACT",
-    REMOVE_EXACT: "REMOVE_EXACT"
-  });
-
-  const RESULT = Object.freeze({
-    OK: "OK",
-    REJECTED: "REJECTED",
-    FAILED: "FAILED"
-  });
-
-  function fingerprint(text) {
+  const VERSION = "4.0.0-EXECUTION-CORE-HARD-CUT";
+  const OPS = Object.freeze({ REPLACE_EXACT:"REPLACE_EXACT", INSERT_EXACT:"INSERT_EXACT", REMOVE_EXACT:"REMOVE_EXACT" });
+  const STATUS = Object.freeze({ VALID:"VALID", REJECTED:"REJECTED", COMPLETE:"COMPLETE" });
+  const fp = text => {
     if (typeof text !== "string") throw new TypeError("SOURCE_MUST_BE_STRING");
-    let h = 0x811c9dc5;
-    for (let i = 0; i < text.length; i++) {
-      h ^= text.charCodeAt(i);
-      h = Math.imul(h, 0x01000193);
-    }
-    return (h >>> 0).toString(16).padStart(8, "0");
+    let h=0x811c9dc5;
+    for(let i=0;i<text.length;i++){ h^=text.charCodeAt(i); h=Math.imul(h,0x01000193); }
+    return (h>>>0).toString(16).padStart(8,"0");
+  };
+  const equal=(a,b)=>String(a??"").toLowerCase()===String(b??"").toLowerCase();
+  const count=(source,needle)=>{
+    if(typeof source!=="string"||typeof needle!=="string"||!needle)return 0;
+    let n=0,p=0; while((p=source.indexOf(needle,p))!==-1){n++;p+=needle.length;} return n;
+  };
+  const lineColumn=(text,index)=>{const a=text.slice(0,Math.max(0,index)).split("\n");return {line:a.length,column:a[a.length-1].length+1};};
+  function diff(before,after){
+    if(typeof before!=="string"||typeof after!=="string")return {ok:false,reason:"INVALID_DIFF_INPUT"};
+    if(before===after)return {ok:false,changed:false,reason:"SOURCE_UNCHANGED",beforeFingerprint:fp(before),afterFingerprint:fp(after)};
+    let s=0; const m=Math.min(before.length,after.length); while(s<m&&before.charCodeAt(s)===after.charCodeAt(s))s++;
+    let eb=before.length-1,ea=after.length-1; while(eb>=s&&ea>=s&&before.charCodeAt(eb)===after.charCodeAt(ea)){eb--;ea--;}
+    return {ok:true,changed:true,start:s,beforeEnd:eb+1,afterEnd:ea+1,location:lineColumn(before,s),removed:before.slice(s,eb+1),added:after.slice(s,ea+1),beforeFingerprint:fp(before),afterFingerprint:fp(after)};
   }
-
-  function fingerprintsEqual(a, b) {
-    return String(a ?? "").toLowerCase() === String(b ?? "").toLowerCase();
+  function validateBefore(source,expected){
+    if(typeof source!=="string")return {ok:false,reason:"INVALID_SOURCE_TYPE"};
+    const actual=fp(source); if(!expected)return {ok:true,skipped:true,actual,reason:"NO_EXPECTED_FINGERPRINT"};
+    return {ok:equal(expected,actual),skipped:false,expected:String(expected),actual,reason:equal(expected,actual)?"FINGERPRINT_MATCH":"SOURCE_FINGERPRINT_MISMATCH"};
   }
-
-  function countExact(source, needle) {
-    if (typeof source !== "string" || typeof needle !== "string" || !needle) return 0;
-    let count = 0, pos = 0;
-    while ((pos = source.indexOf(needle, pos)) !== -1) {
-      count++;
-      pos += needle.length;
-    }
-    return count;
+  function apply(source,before,after,operation){
+    if(![source,before,after].every(v=>typeof v==="string"))return {ok:false,status:STATUS.REJECTED,reason:"INVALID_PATCH_INPUT"};
+    const op=String(operation||"").toUpperCase(); if(!Object.values(OPS).includes(op))return {ok:false,status:STATUS.REJECTED,reason:"UNSUPPORTED_OPERATION"};
+    if(!before)return {ok:false,status:STATUS.REJECTED,reason:"EMPTY_EXACT_TARGET"};
+    const matches=count(source,before); if(matches!==1)return {ok:false,status:STATUS.REJECTED,reason:matches===0?"EXACT_TARGET_NOT_FOUND":"EXACT_TARGET_NOT_UNIQUE",matches};
+    let result=op===OPS.REPLACE_EXACT?source.replace(before,after):op===OPS.INSERT_EXACT?source.replace(before,before+after):source.replace(before,"");
+    if(result===source)return {ok:false,status:STATUS.REJECTED,reason:"SOURCE_UNCHANGED",matches};
+    return {ok:true,status:STATUS.COMPLETE,operation:op,matches,result,beforeFingerprint:fp(source),afterFingerprint:fp(result),diff:diff(source,result)};
   }
-
-  function lineColumnAt(text, index) {
-    const prefix = text.slice(0, Math.max(0, index));
-    const lines = prefix.split("\n");
-    return { line: lines.length, column: lines[lines.length - 1].length + 1 };
+  function validateResult(original,result,before,after,operation){
+    const errors=[]; const op=String(operation||"").toUpperCase();
+    if(typeof original!=="string"||typeof result!=="string")errors.push("INVALID_VALIDATION_INPUT");
+    if(result===original)errors.push("SOURCE_UNCHANGED");
+    if(op===OPS.REPLACE_EXACT){if(count(result,before)!==0)errors.push("BEFORE_STILL_PRESENT");if(after&&count(result,after)<1)errors.push("AFTER_NOT_PRESENT");}
+    else if(op===OPS.INSERT_EXACT){if(count(result,before+after)<1)errors.push("INSERT_RESULT_NOT_FOUND");}
+    else if(op===OPS.REMOVE_EXACT){if(count(result,before)!==0)errors.push("REMOVE_TARGET_STILL_PRESENT");}
+    else errors.push("UNSUPPORTED_OPERATION");
+    return {ok:errors.length===0,status:errors.length===0?STATUS.VALID:STATUS.REJECTED,errors,beforeFingerprint:typeof original==="string"?fp(original):null,afterFingerprint:typeof result==="string"?fp(result):null,readBackFingerprint:typeof result==="string"?fp(result):null};
   }
-
-  function diff(before, after) {
-    if (typeof before !== "string" || typeof after !== "string") {
-      return { ok: false, reason: "INVALID_DIFF_INPUT" };
-    }
-    if (before === after) {
-      return {
-        ok: false,
-        changed: false,
-        reason: "SOURCE_UNCHANGED",
-        beforeFingerprint: fingerprint(before),
-        afterFingerprint: fingerprint(after)
-      };
-    }
-
-    let start = 0;
-    const max = Math.min(before.length, after.length);
-    while (start < max && before.charCodeAt(start) === after.charCodeAt(start)) start++;
-
-    let endBefore = before.length - 1;
-    let endAfter = after.length - 1;
-    while (
-      endBefore >= start &&
-      endAfter >= start &&
-      before.charCodeAt(endBefore) === after.charCodeAt(endAfter)
-    ) {
-      endBefore--;
-      endAfter--;
-    }
-
-    const removed = before.slice(start, endBefore + 1);
-    const added = after.slice(start, endAfter + 1);
-
-    return {
-      ok: true,
-      changed: true,
-      start,
-      beforeEnd: endBefore + 1,
-      afterEnd: endAfter + 1,
-      location: lineColumnAt(before, start),
-      removed,
-      added,
-      beforeFingerprint: fingerprint(before),
-      afterFingerprint: fingerprint(after)
-    };
+  function processPatch(input={}){
+    const gate=validateBefore(input.source,input.expectedFingerprint); if(!gate.ok)return {ok:false,stage:"FINGERPRINT",gate};
+    const patch=apply(input.source,input.before,input.after,input.operation); if(!patch.ok)return {ok:false,stage:"PATCH",patch};
+    const validation=validateResult(input.source,patch.result,input.before,input.after,input.operation);
+    if(!validation.ok)return {ok:false,stage:"VALIDATION",patch,validation};
+    return {ok:true,status:STATUS.COMPLETE,stage:"COMPLETE",sourceBefore:input.source,sourceAfter:patch.result,beforeFingerprint:patch.beforeFingerprint,afterFingerprint:patch.afterFingerprint,diff:patch.diff,validation};
   }
-
-  function validateBefore(source, expected) {
-    if (typeof source !== "string") {
-      return { ok: false, reason: "INVALID_SOURCE_TYPE" };
-    }
-
-    const actual = fingerprint(source);
-
-    if (expected == null || expected === "") {
-      return {
-        ok: true,
-        skipped: true,
-        reason: "NO_EXPECTED_FINGERPRINT",
-        actual
-      };
-    }
-
-    const ok = fingerprintsEqual(expected, actual);
-    return {
-      ok,
-      skipped: false,
-      expected: String(expected),
-      actual,
-      reason: ok ? "FINGERPRINT_MATCH" : "SOURCE_FINGERPRINT_MISMATCH"
-    };
-  }
-
-  function apply(source, before, after, operation) {
-    if (![source, before, after].every(v => typeof v === "string")) {
-      return { ok: false, status: RESULT.REJECTED, reason: "INVALID_SOURCE_OR_PATCH" };
-    }
-
-    const op = String(operation || "").toUpperCase();
-
-    if (!Object.values(OPS).includes(op)) {
-      return { ok: false, status: RESULT.REJECTED, reason: "UNSUPPORTED_OPERATION" };
-    }
-
-    if (before.length === 0) {
-      return { ok: false, status: RESULT.REJECTED, reason: "EMPTY_EXACT_TARGET" };
-    }
-
-    const matches = countExact(source, before);
-
-    if (matches !== 1) {
-      return {
-        ok: false,
-        status: RESULT.REJECTED,
-        reason: matches === 0 ? "EXACT_TARGET_NOT_FOUND" : "EXACT_TARGET_NOT_UNIQUE",
-        matches
-      };
-    }
-
-    let result;
-    if (op === OPS.REPLACE_EXACT) result = source.replace(before, after);
-    else if (op === OPS.INSERT_EXACT) result = source.replace(before, before + after);
-    else result = source.replace(before, "");
-
-    if (result === source) {
-      return { ok: false, status: RESULT.REJECTED, reason: "SOURCE_UNCHANGED", matches };
-    }
-
-    return {
-      ok: true,
-      status: RESULT.OK,
-      operation: op,
-      matches,
-      result,
-      beforeFingerprint: fingerprint(source),
-      afterFingerprint: fingerprint(result),
-      diff: diff(source, result)
-    };
-  }
-
-  function validateResult(original, result, before, after, operation) {
-    const errors = [];
-
-    if (typeof original !== "string" || typeof result !== "string") {
-      return { ok: false, status: RESULT.FAILED, errors: ["INVALID_VALIDATION_INPUT"] };
-    }
-
-    if (result === original) errors.push("SOURCE_UNCHANGED");
-
-    const op = String(operation || "").toUpperCase();
-
-    if (op === OPS.REPLACE_EXACT) {
-      if (countExact(result, before) !== 0) errors.push("BEFORE_STILL_PRESENT");
-      if (after && countExact(result, after) < 1) errors.push("AFTER_NOT_PRESENT");
-    } else if (op === OPS.INSERT_EXACT) {
-      if (countExact(result, before + after) < 1) errors.push("INSERT_RESULT_NOT_FOUND");
-    } else if (op === OPS.REMOVE_EXACT) {
-      if (countExact(result, before) !== 0) errors.push("REMOVE_TARGET_STILL_PRESENT");
-    } else {
-      errors.push("UNSUPPORTED_OPERATION");
-    }
-
-    return {
-      ok: errors.length === 0,
-      status: errors.length === 0 ? RESULT.OK : RESULT.FAILED,
-      errors,
-      beforeFingerprint: fingerprint(original),
-      afterFingerprint: fingerprint(result),
-      readBackFingerprint: fingerprint(result)
-    };
-  }
-
-  function rollback(original, current, expectedCurrentFingerprint) {
-    if (typeof original !== "string" || typeof current !== "string") {
-      return { ok: false, status: RESULT.FAILED, reason: "INVALID_ROLLBACK_INPUT" };
-    }
-
-    const actual = fingerprint(current);
-
-    if (
-      expectedCurrentFingerprint &&
-      !fingerprintsEqual(expectedCurrentFingerprint, actual)
-    ) {
-      return {
-        ok: false,
-        status: RESULT.REJECTED,
-        reason: "ROLLBACK_FINGERPRINT_MISMATCH",
-        actual
-      };
-    }
-
-    return {
-      ok: true,
-      status: RESULT.OK,
-      result: original,
-      previousFingerprint: actual,
-      restoredFingerprint: fingerprint(original)
-    };
-  }
-
-  function processPatch({ source, before, after, operation, expectedFingerprint }) {
-    const gate = validateBefore(source, expectedFingerprint);
-    if (!gate.ok) return { ok: false, stage: "FINGERPRINT", gate };
-
-    const patch = apply(source, before, after, operation);
-    if (!patch.ok) return { ok: false, stage: "PATCH", patch };
-
-    const validation = validateResult(
-      source, patch.result, before, after, operation
-    );
-
-    if (!validation.ok) {
-      const rb = rollback(source, patch.result, validation.afterFingerprint);
-      return {
-        ok: false,
-        stage: "VALIDATION",
-        patch,
-        validation,
-        rollback: rb
-      };
-    }
-
-    return {
-      ok: true,
-      status: RESULT.OK,
-      stage: "COMPLETE",
-      sourceBefore: source,
-      sourceAfter: patch.result,
-      beforeFingerprint: patch.beforeFingerprint,
-      afterFingerprint: patch.afterFingerprint,
-      diff: patch.diff,
-      validation
-    };
-  }
-
-  window.BCGOExecutorCore = Object.freeze({
-    name: NAME,
-    version: VERSION,
-    operations: OPS,
-    result: RESULT,
-    fingerprint,
-    fingerprintsEqual,
-    countExact,
-    lineColumnAt,
-    validateBefore,
-    diff,
-    apply,
-    validateResult,
-    rollback,
-    processPatch
-  });
-
-  window.dispatchEvent(new CustomEvent("bcgo-executor-core-ready", {
-    detail: { name: NAME, version: VERSION }
-  }));
+  window.BCGOExecutorCore=Object.freeze({version:VERSION,operations:OPS,status:STATUS,fingerprint:fp,fingerprintsEqual:equal,countExact:count,lineColumnAt:lineColumn,diff,validateBefore,apply,validateResult,processPatch});
+  window.dispatchEvent(new CustomEvent("bcgo-executor-core-ready",{detail:{version:VERSION}}));
 })();
