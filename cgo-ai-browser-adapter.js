@@ -11,7 +11,7 @@ import * as Logic from "./cgo-ai-logic.js?v=20260913-bcgo-cgo-me-exec-v2";
 import * as Memory from "./cgo-ai-memory.js?v=20260913-bcgo-cgo-me-exec-v2";
 import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260913-bcgo-cgo-me-exec-v2";
 import { createCaptain } from "./cgo-ai-captain.js?v=20260913-bcgo-cgo-me-exec-v2";
-import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-bcgo-cgo-me-exec-v2";
+import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-me6";
 
 const VERSION = "V5.5-BROWSER-BRIDGE-CGO-CONSTRUCTION-REAL-BOOT";
 const INTERNAL_AUTO_POLICY = Object.freeze({

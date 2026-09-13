@@ -891,3 +891,41 @@ This package supersedes the prior Medicine/Executor presentation-only revisions.
   Medicine and Executor pages were replaced, not merely cache-busted. Their old layout
   and passive status panels are no longer the primary control surface. The new pages
   expose the live handoff, evidence, candidate, review, human gate and execution result.
+
+
+STAGE 25 — CROSS-PAGE HANDSHAKE + DURABLE TEAM REPLAY — 2026-09-13
+
+Purpose:
+  Eliminate the remaining false WAITING state when Medicine or Executor opens
+  after BCGO is already running, and prevent a single localStorage EVENT slot
+  from losing the only candidate/investigation packet before the downstream page
+  joins.
+
+Authoritative transport changes:
+- cgo-bcgo-bridge.js now persists the latest BCGO_STATE and a bounded TEAM_LOG
+  under the same CIKUR_GO_BCGO_CGO_BRIDGE_V1 channel.
+- New pages replay the latest BCGO_STATE and recent Medicine/Executor team
+  packets during bridge installation. Replay is read-only and bounded to recent
+  packets; it never creates source mutations.
+- Medicine hydrates BCGO_STATE immediately from the authoritative bridge instead
+  of waiting for a future CustomEvent/BroadcastChannel delivery.
+- Executor hydrates BCGO_STATE immediately from the authoritative bridge; this
+  closes the prior boot-order hole where Executor could remain BCGO WAITING even
+  while BCGO had already published a live state.
+- Medicine re-attempts investigation after authorization even when the recovered
+  BCGO revision is unchanged; authorization timing can no longer strand a case.
+- Medicine's diagnostic command now actually resolves a named file and starts an
+  investigation instead of merely refreshing the UI.
+- Medicine and Executor team reports now use the bridge's durable team transport
+  while retaining the BroadcastChannel compatibility path.
+- The deterministic Medicine source simulation escape logic was normalized to
+  prevent malformed regular-expression construction.
+
+Resulting meeting point:
+  BCGO_STATE -> Captain/CGO -> Medicine READ/EVIDENCE -> deterministic candidate
+  -> Executor REVIEW -> Human Approval -> Executor pre-write fingerprint gate
+  -> internal write target -> readback/validation.
+
+Failure truth:
+  Missing production write target remains WAITING_DEPLOYMENT_TARGET. The system
+  never reports SUCCESS without a real write target and readback.

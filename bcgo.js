@@ -9,7 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { adminDb, adminAuth } from "./cikur-config.js?v=20260913-bcgo-cgo-me-exec-v2";
-import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-bcgo-cgo-me-exec-v2";
+import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-me6";
 
 // BCGO adalah organ sistem/admin: gunakan namespace Admin, bukan Customer.
 const db = adminDb;

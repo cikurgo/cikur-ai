@@ -13,6 +13,7 @@ export const TEAM_REPORT_EVENT = "cikur-cgo-team-report";
 const STATE_KEY = `${CHANNEL}_STATE`;
 const EVENT_KEY = `${CHANNEL}_EVENT`;
 const COMMAND_KEY = `${CHANNEL}_COMMAND`;
+const TEAM_KEY = `${CHANNEL}_TEAM_LOG`;
 const MAX_SEEN = 800;
 const seen = new Set();
 let channel = null;
@@ -59,7 +60,8 @@ export function install() {
       }
     });
   }
-  // Recovery is deliberately read-only: it restores the latest transport state.
+  // Recovery is deliberately read-only: restore the latest state plus a bounded
+  // durable team history so Medicine/Executor can join after BCGO is already live.
   try {
     const raw = localStorage.getItem(STATE_KEY);
     if (raw) route(JSON.parse(raw), true);
@@ -127,6 +129,22 @@ function publishHumanCommand(text, meta = {}) {
   return clone(packet);
 }
 
+
+function publishTeamReport(type, payload = {}) {
+  const packet = { id:id("TEAM"), bridge:CHANNEL, from:String(payload.from || "INTERNAL"), type:String(type || "TEAM_REPORT"), at:Date.now(), ...clone(payload) };
+  route(packet);
+  try {
+    const raw = localStorage.getItem(TEAM_KEY);
+    const history = raw ? JSON.parse(raw) : [];
+    const next = Array.isArray(history) ? history.filter(x => String(x?.id || "") !== String(packet.id)) : [];
+    next.push(packet);
+    localStorage.setItem(TEAM_KEY, JSON.stringify(next.slice(-120)));
+    localStorage.setItem(EVENT_KEY, JSON.stringify(packet));
+  } catch {}
+  try { ensureChannel()?.postMessage(packet); } catch {}
+  return clone(packet);
+}
+
 function publishResponse(response, meta = {}) {
   const packet = { id:id("RESPONSE"), bridge:CHANNEL, from:"CGO", type:"CGO_RESPONSE", at:Date.now(), ...meta, response:clone(response) };
   route(packet);
@@ -141,13 +159,37 @@ const api = Object.freeze({
   publishState,
   publishHumanCommand,
   publishDirective,
+  publishTeamReport,
   publishResponse,
   getState: () => clone(latestState),
   getLatestCommand: () => clone(latestCommand),
-  onState(fn) { if (typeof fn !== "function") return () => {}; stateListeners.add(fn); return () => stateListeners.delete(fn); },
+  onState(fn) {
+    if (typeof fn !== "function") return () => {};
+    stateListeners.add(fn);
+    if (latestState) {
+      const replay = () => { try { fn(clone(latestState), { bridge:CHANNEL, type:"BCGO_STATE", recovery:true }); } catch {} };
+      try { if (typeof queueMicrotask === "function") queueMicrotask(replay); else Promise.resolve().then(replay); } catch { replay(); }
+    }
+    return () => stateListeners.delete(fn);
+  },
   onCommand(fn) { if (typeof fn !== "function") return () => {}; commandListeners.add(fn); return () => commandListeners.delete(fn); },
   onDirective(fn) { if (typeof fn !== "function") return () => {}; directiveListeners.add(fn); return () => directiveListeners.delete(fn); },
-  onTeamReport(fn) { if (typeof fn !== "function") return () => {}; teamReportListeners.add(fn); return () => teamReportListeners.delete(fn); },
+  onTeamReport(fn) {
+    if (typeof fn !== "function") return () => {};
+    teamReportListeners.add(fn);
+    const replay = () => {
+      try {
+        const raw = localStorage.getItem(TEAM_KEY);
+        const history = raw ? JSON.parse(raw) : [];
+        const cutoff = Date.now() - 15 * 60 * 1000;
+        if (Array.isArray(history)) for (const packet of history.slice(-120)) {
+          if (Number(packet?.at || 0) >= cutoff) route(packet, true);
+        }
+      } catch {}
+    };
+    try { if (typeof queueMicrotask === "function") queueMicrotask(replay); else Promise.resolve().then(replay); } catch { replay(); }
+    return () => teamReportListeners.delete(fn);
+  },
   destroy() { try { channel?.close(); } catch {} channel = null; installed = false; stateListeners.clear(); commandListeners.clear(); directiveListeners.clear(); teamReportListeners.clear(); }
 });
 

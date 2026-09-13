@@ -11,7 +11,7 @@
  */
 const VERSION = "2.3.0-CAPTAIN-CGO-CONSTRUCTION-MEDICINE-REVIEW";
 const BRIDGE = "CIKUR_GO_BCGO_CGO_BRIDGE_V1";
-import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-bcgo-cgo-me-exec-v2";
+import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-me6";
 const BCGO_BRIDGE = BCGOCGOBridge.install();
 const MAX_ROUNDS = 4;
 const DIRECTIVE_COOLDOWN = 12000;
