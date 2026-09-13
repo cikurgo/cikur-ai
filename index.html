@@ -10,11 +10,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
 <script type="module" src="cikur-config.js"></script>
-<script src="cgo-customer-conversation.js"></script>
-<script src="cgo-customer-knowledge.js"></script>
-<script src="cgo-customer-discovery.js"></script>
-<script src="cgo-customer-guardian.js"></script>
-<script src="cgo-customer.js"></script>
 
     
 <style>
@@ -3900,29 +3895,57 @@ function bukaModalTopUp() {
         });
     }
 }
+    document.addEventListener("DOMContentLoaded", function () {
+    const cgoPanelMessage = document.getElementById("cgoPanelMessage");
+    if (!cgoPanelMessage) return;
     
+    const autoMessages = [
+        "Hai 👋 Ada yang bisa dibantu?",
+        "Mau pesan makanan? 🍜 CGO siap membantu.",
+        "Mau pergi hari ini? 🛵 CGO siap mencarikan perjalanan.",
+        "Butuh bantuan lainnya? ✨ Tinggal pilih layanan."
+    ];
+    let autoMessageIndex = 0;
+    setInterval(function () {
+        autoMessageIndex = (autoMessageIndex + 1) % autoMessages.length;
+        cgoPanelMessage.style.opacity = "0";
+        setTimeout(function () {
+            cgoPanelMessage.textContent = autoMessages[autoMessageIndex];
+            cgoPanelMessage.style.opacity = "1";
+        }, 180);
+    }, 4500);
+    
+    const serviceMessages = {
+        btnAssistant: "Hai 👋 Ada yang bisa dibantu untuk kebutuhan Assistant hari ini? ✨",
+        btnFood: "Lagi lapar? 😊 Yuk cari makanan yang kamu suka.",
+        btnRide: "Mau pergi ke mana hari ini? 🛵"
+    };
+    
+    Object.keys(serviceMessages).forEach(function (id) {
+        const button = document.getElementById(id);
+        if (!button) return;
+        
+        // Jangan intercept khusus tombol assistant karena diarahkan langsung ke assistant.html[cite: 2]
+        if(id === 'btnAssistant') return;
+
+        button.addEventListener("click", function (event) {
+            if (!button.dataset.cgoTapped) {
+                event.preventDefault();
+                button.dataset.cgoTapped = "true";
+                cgoPanelMessage.style.opacity = "0";
+                setTimeout(function () {
+                    cgoPanelMessage.textContent = serviceMessages[id];
+                    cgoPanelMessage.style.opacity = "1";
+                }, 180);
+                return;
+            }
+            button.dataset.cgoTapped = "false";
+        });
+    });
+});
 
 const cgoVoiceWave = document.getElementById("cgoVoiceWave");
 if (cgoVoiceWave) {
-    function escapeCGOText(value) {
-        return String(value ?? "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/\"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-    }
-
-    function appendCGOMessage(log, text, role) {
-        const bubble = document.createElement("div");
-        bubble.style.cssText = role === "user"
-            ? "align-self:flex-end; background:#e0f2fe; color:#0369a1; padding:6px 10px; border-radius:8px; font-size:11px; max-width:85%; margin-left:auto; white-space:pre-wrap;"
-            : "align-self:flex-start; background:#f1f5f9; color:var(--text-main); padding:6px 10px; border-radius:8px; font-size:11px; max-width:85%; white-space:pre-wrap;";
-        bubble.textContent = String(text ?? "");
-        log.appendChild(bubble);
-        log.scrollTop = log.scrollHeight;
-    }
-
     function bukaChatCGO() {
         openModal("CGO — Asisten CIKUR GO");
         if (!modalMainContent) return;
@@ -3930,7 +3953,7 @@ if (cgoVoiceWave) {
         modalMainContent.innerHTML = `
             <div style="display:flex; flex-direction:column; gap:10px;">
                 <div style="background:#f8fafc; border-radius:14px; padding:12px; font-size:12px; color:var(--text-main); line-height:1.5;">
-                    👋 Hai! Aku CGO. Ceritain aja kebutuhanmu, kita ngobrol dulu 😊
+                    👋 Hai! Aku CGO. Mau dibantu apa hari ini?
                 </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
                     <button class="btn-pesan-form" style="margin:0;" onclick="window.location.href='food.html'">🍜 Pesan Makanan</button>
@@ -3938,24 +3961,18 @@ if (cgoVoiceWave) {
                     <button class="btn-pesan-form" style="margin:0;" onclick="window.location.href='assistant.html'">🧑‍✈️ Sewa Assistant</button>
                     <button class="btn-pesan-form" style="margin:0; background:#334155;" onclick="closeModal(); switchTab('pesanan');">📦 Pesanan Saya</button>
                 </div>
-                <div id="cgoChatLog" style="display:flex; flex-direction:column; gap:6px; max-height:240px; overflow-y:auto;"></div>
+                <div id="cgoChatLog" style="display:flex; flex-direction:column; gap:6px; max-height:160px; overflow-y:auto;"></div>
                 <div style="display:flex; gap:6px;">
-                    <input type="text" id="cgoChatInputBox" class="input-box" style="margin:0;" placeholder="Tulis pertanyaanmu di sini..." autocomplete="off">
-                    <button id="cgoChatSendButton" class="btn-pesan-form" style="margin:0; width:auto; padding:0 16px;">Kirim</button>
+                    <input type="text" id="cgoChatInputBox" class="input-box" style="margin:0;" placeholder="Tulis pertanyaanmu di sini...">
+                    <button class="btn-pesan-form" style="margin:0; width:auto; padding:0 16px;" onclick="kirimPesanCGO()">Kirim</button>
                 </div>
             </div>
         `;
 
         const cgoInputEl = document.getElementById("cgoChatInputBox");
-        const cgoSendEl = document.getElementById("cgoChatSendButton");
-        if (cgoInputEl) cgoInputEl.focus();
-        if (cgoSendEl) cgoSendEl.addEventListener("click", kirimPesanCGO);
         if (cgoInputEl) {
             cgoInputEl.addEventListener("keydown", (e) => {
-                if (e.key === "Enter") {
-                    e.preventDefault();
-                    kirimPesanCGO();
-                }
+                if (e.key === "Enter") kirimPesanCGO();
             });
         }
     }
@@ -3963,39 +3980,25 @@ if (cgoVoiceWave) {
     function kirimPesanCGO() {
         const input = document.getElementById("cgoChatInputBox");
         const log = document.getElementById("cgoChatLog");
-        if (!input || !log) return;
+        if (!input || !input.value.trim() || !log) return;
 
         const text = input.value.trim();
-        if (!text) return;
+        const lower = text.toLowerCase();
+        let reply = "Aku catat ya! Untuk bantuan lebih detail, pilih tombol layanan di atas atau hubungi CS kami.";
 
-        appendCGOMessage(log, text, "user");
+        if (lower.includes("makan") || lower.includes("food") || lower.includes("lapar")) reply = "Yuk pesan makanan favoritmu di menu Food 🍜";
+        else if (lower.includes("ojek") || lower.includes("ride") || lower.includes("antar") || lower.includes("motor")) reply = "Mau pesan ride? Langsung ke menu Ride ya 🛵";
+        else if (lower.includes("assistant") || lower.includes("bantu") || lower.includes("temani")) reply = "Untuk kebutuhan pendamping/assistant, cek menu Assistant ya 🧑‍✈️";
+        else if (lower.includes("saldo") || lower.includes("top up") || lower.includes("cikurpay")) reply = "Kamu bisa top up & cek saldo CikurPay di tab Transaksi 💳";
+        else if (lower.includes("pesanan") || lower.includes("order") || lower.includes("status")) reply = "Cek status pesanan aktifmu di tab Pesanan ya 📦";
+
+        const safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        log.innerHTML += `<div style="align-self:flex-end; background:#e0f2fe; color:#0369a1; padding:6px 10px; border-radius:8px; font-size:11px; max-width:85%; margin-left:auto;">${safeText}</div>`;
+        log.innerHTML += `<div style="align-self:flex-start; background:#f1f5f9; color:var(--text-main); padding:6px 10px; border-radius:8px; font-size:11px; max-width:85%;">${reply}</div>`;
+        log.scrollTop = log.scrollHeight;
         input.value = "";
-
-        let reply = "Aku belum bisa menjawabnya sekarang. Coba lagi sebentar ya 😊";
-        try {
-            if (!window.CGO || typeof window.CGO.chat !== "function") {
-                throw new Error("CGO Customer Gateway belum tersedia.");
-            }
-
-            const result = window.CGO.chat(text, {
-                source: "index.html",
-                surface: "customer-home"
-            });
-
-            reply = result && typeof result.response === "string"
-                ? result.response
-                : "Aku belum mendapatkan jawaban yang valid. Aku nggak mau asal menebak ya 😊";
-        } catch (error) {
-            console.error("[INDEX CGO] Chat error:", error);
-            reply = "Aduh, CGO lagi mengalami kendala. Aku nggak mau mengarang jawaban yaaa. Coba ulangi sebentar lagi 😊";
-        }
-
-        appendCGOMessage(log, reply, "assistant");
-        input.focus();
     }
 
-    window.bukaChatCGO = bukaChatCGO;
-    window.kirimPesanCGO = kirimPesanCGO;
 
     cgoVoiceWave.addEventListener("click", bukaChatCGO);
     cgoVoiceWave.addEventListener("keydown", (event) => {
