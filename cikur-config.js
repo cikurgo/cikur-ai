@@ -109,6 +109,29 @@ const storage = getStorage(customerApp);
 // dari Firebase App namespace yang sama.
 const db = customerDb;
 
+// ==========================================
+// CUSTOMER AUTH SESSION GATE
+// ==========================================
+// Satu promise dipakai bersama untuk menunggu Firebase menyelesaikan
+// pemulihan sesi Customer. Ini mencegah halaman yang baru dibuka/di-refresh
+// membaca keadaan "null" sebelum Auth selesai direhidrasi.
+let customerAuthReadyPromise = null;
+
+function waitForCustomerAuthReady() {
+    if (auth.currentUser) return Promise.resolve(auth.currentUser);
+
+    if (!customerAuthReadyPromise) {
+        customerAuthReadyPromise = new Promise((resolve) => {
+            const unsubscribe = onAuthStateChanged(auth, (user) => {
+                unsubscribe();
+                resolve(user || null);
+            });
+        });
+    }
+
+    return customerAuthReadyPromise;
+}
+
 // Export supaya modul lain dapat memakai koneksi yang tepat.
 export { db, customerDb, adminDb, auth, adminAuth, firebaseConfig };
 
@@ -119,18 +142,12 @@ export { db, customerDb, adminDb, auth, adminAuth, firebaseConfig };
 window.CikurCloud = {
     auth,
     waitForAuth() {
-        return new Promise((resolve) => {
-            const unsubscribe = onAuthStateChanged(
-                auth,
-                (user) => {
-                    unsubscribe();
-                    console.log(
-                        "[CIKUR GO] Auth state:",
-                        user ? user.uid : "TIDAK ADA USER"
-                    );
-                    resolve(user);
-                }
+        return waitForCustomerAuthReady().then((user) => {
+            console.log(
+                "[CIKUR GO] Auth state:",
+                user ? user.uid : "TIDAK ADA USER"
             );
+            return user;
         });
     },
 
@@ -611,6 +628,7 @@ window.CikurCloud = {
             name: existing?.name || data?.name || "",
             email: existing?.email || data?.email || "",
             phone: existing?.phone || data?.phone || "",
+            // Status akun adalah keputusan Admin dan dipertahankan saat startup/refresh.
             statusAkun: existing?.statusAkun || existing?.status || "active",
             tanggalDaftar: existing?.tanggalDaftar || data?.tanggalDaftar || nowISO,
             lastLogin: data?.lastLogin || existing?.lastLogin || nowISO,

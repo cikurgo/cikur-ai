@@ -2751,6 +2751,8 @@ async function loadCurrentUserProfileIndex() {
 
         let firebaseUser = null;
         try {
+            // Tunggu Auth selesai memulihkan persistence lokal sebelum
+            // memutuskan bahwa user tidak memiliki session.
             firebaseUser = await window.CikurCloud.waitForAuth();
         } catch (authError) {
             console.error("[CIKUR GO] Gagal memulihkan session Customer/Mitra:", authError);
@@ -2863,11 +2865,7 @@ async function enforceCustomerAccountStatus(firebaseUser) {
             presenceHeartbeatInterval = null;
         }
         setCgoAuthGate(true);
-        try {
-            await window.CikurCloud.logout();
-        } catch (logoutError) {
-            console.error("[CIKUR GO] Gagal menutup sesi Customer nonaktif:", logoutError);
-        }
+        // INACTIVE hanya memblokir akses aplikasi. Jangan signOut otomatis.
         alert("Akun Customer Anda sedang nonaktif. Silakan hubungi Super Admin CIKUR GO.");
         return false;
     }
@@ -3255,6 +3253,7 @@ function bukaModalAturPin() {
 }
 
 async function prosesLogout() {
+    // Logout hanya boleh terjadi dari aksi eksplisit Customer.
     if (!confirm("Apakah Anda yakin ingin keluar dari akun?")) {
         return;
     }
