@@ -8,8 +8,8 @@ import {
   getDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { adminDb, adminAuth } from "./cikur-config.js?v=20260913-bcgo-cgo-v3";
-import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-bcgo-cgo-v3";
+import { adminDb, adminAuth } from "./cikur-config.js?v=20260913-bcgo-cgo-v4";
+import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-bcgo-cgo-v4";
 
 // BCGO adalah organ sistem/admin: gunakan namespace Admin, bukan Customer.
 const db = adminDb;
@@ -134,7 +134,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   async function loadInternalAI() {
     if (stopped || internalAI) return internalAI;
     try {
-      const mod = await import("./cgo-runtime-adapter.js?v=20260913-bcgo-cgo-v3");
+      const mod = await import("./cgo-runtime-adapter.js?v=20260913-bcgo-cgo-v4");
       if (typeof mod.install !== "function") throw new Error("INTERNAL_AI_ADAPTER_INVALID");
       internalAI = mod.install();
       window.CIKURInternalAIRuntime = internalAI;
@@ -148,7 +148,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       // under cgo-ai-browser-adapter.js. BCGO must never die merely because an
       // optional reasoning adapter is absent.
       try {
-        const mod = await import("./cgo-ai-browser-adapter.js?v=20260913-bcgo-cgo-v3");
+        const mod = await import("./cgo-ai-browser-adapter.js?v=20260913-bcgo-cgo-v4");
         if (typeof mod.install !== "function") throw new Error("BROWSER_BRAIN_ADAPTER_INVALID");
         internalAI = mod.install();
         window.CIKURInternalAIRuntime = internalAI;
@@ -364,6 +364,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       };
       try { medicineBridgeChannel?.postMessage(resultPacket); } catch {}
       try { localStorage.setItem(`${MEDICINE_BRIDGE_KEY}_EVENT`, JSON.stringify(resultPacket)); } catch {}
+      try { bridge.publishResponse(resultPacket, { responseType: "BCGO_PROBE_RESULT", caseId: resultPacket.caseId || null }); } catch {}
       recordEvent('CAPTAIN', `Probe ${probe?.type || 'SOURCE_CONTRACT_MULTI_HOP'} selesai: ${matched.length ? 'evidence ditemukan' : 'tidak ada match baru pada scan saat ini'}.`, packet.caseId || 'CAPTAIN');
     }).catch(error => {
       recordEvent('CAPTAIN', `Eksplorasi Captain gagal: ${String(error?.message || error).slice(0,220)}`, packet.caseId || 'CAPTAIN');

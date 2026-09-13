@@ -9,9 +9,9 @@
  * - This module only observes real internal state/bridge packets and emits
  *   bounded directives. Proof/Guardian/Executor remain authoritative gates.
  */
-const VERSION = "2.3.0-CAPTAIN-CGO-CONSTRUCTION-MEDICINE-REVIEW";
+const VERSION = "2.4.0-CAPTAIN-AUTHORITATIVE-TEAM-BRIDGE";
 const BRIDGE = "CIKUR_GO_BCGO_MEDICINE_V1";
-import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-bcgo-cgo-v3";
+import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-bcgo-cgo-v4";
 const BCGO_BRIDGE = BCGOCGOBridge.install();
 const MAX_ROUNDS = 4;
 const DIRECTIVE_COOLDOWN = 12000;
@@ -71,9 +71,8 @@ export function createCaptain(options = {}) {
   }
 
   function post(type, payload = {}) {
-    if (type === "CGO_BCGO_EXPLORE") {
-      return BCGO_BRIDGE.publishDirective(type, { caseId: payload.caseId || state.caseId || null, ...payload });
-    }
+    const authoritative = BCGO_BRIDGE.publishDirective(type, { caseId: payload.caseId || state.caseId || null, ...payload });
+    if (type === "CGO_BCGO_EXPLORE") return authoritative;
     const packet = {
       id: `CAPTAIN-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
       bridge: BRIDGE,
@@ -633,6 +632,13 @@ export function createCaptain(options = {}) {
     if (started) return api;
     started = true;
     channel?.addEventListener("message", e => handlePacket(e.data));
+    BCGO_BRIDGE.onResponse(packet => {
+      const response = packet?.response && typeof packet.response === "object" ? packet.response : packet;
+      if (response?.from === "BCGO" && response?.type === "BCGO_PROBE_RESULT") handleBCGOProbeResult(response);
+      else if (response?.from === "MEDICINE") handleMedicine(response);
+      else if (response?.from === "EXECUTION") handleExecutor(response);
+      else if (response?.from === "CAPTAIN" && response?.type === "CAPTAIN_HUMAN_RESPONSE") emit("CAPTAIN_HUMAN_RESPONSE", response);
+    });
     if (typeof window !== "undefined") window.addEventListener("storage", e => {
       if (e.key !== `${BRIDGE}_EVENT` || !e.newValue) return;
       try { handlePacket(JSON.parse(e.newValue)); } catch {}

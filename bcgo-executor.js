@@ -1,8 +1,10 @@
 import { doc, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { adminDb } from "./cikur-config.js?v=20260913-bcgo-cgo-v3";
+import { adminDb } from "./cikur-config.js?v=20260913-bcgo-cgo-v4";
 
 // Executor mengakses authorization ledger sistem melalui namespace Admin.
 const db = adminDb;
+import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-bcgo-cgo-v4";
+const AUTHORITATIVE_BRIDGE = BCGOCGOBridge.install();
 
 /* ============================================================
    BCGO INTERNAL EXECUTOR
@@ -15,7 +17,7 @@ const db = adminDb;
 (() => {
   "use strict";
 
-  const VERSION = "3.4.0-CAPTAIN-DURABLE-AUTH";
+  const VERSION = "4.0.0-CGO-AUTHORITATIVE-EXECUTION-GATE";
   const ENGINE = "BCGO_INTERNAL_EXECUTOR";
 
   const STATUS = Object.freeze({
@@ -295,6 +297,23 @@ function publishInvestigationAck(packet) {
     return true;
   }
 
+  function startAuthoritativeCGOBridge() {
+    if (window.__BCGO_EXECUTOR_AUTH_BRIDGE_STARTED) return;
+    window.__BCGO_EXECUTOR_AUTH_BRIDGE_STARTED = true;
+    AUTHORITATIVE_BRIDGE.onDirective(packet => {
+      if (!packet || packet.from !== "CAPTAIN") return;
+      const type = String(packet.directiveType || "").toUpperCase();
+      if (type === "CGO_REQUEST_UPDATE") {
+        publishCaptainUpdate("Executor membaca perintah Captain melalui bridge authoritative. Menunggu candidate exact atau authorization; tidak ada eksekusi otomatis dari status saja.", {caseId:packet.caseId || null});
+      }
+    });
+    AUTHORITATIVE_BRIDGE.onResponse(packet => {
+      if (packet?.from !== "BCGO" || packet?.type !== "BCGO_PROBE_RESULT") return;
+      state.nerve = { ...state.nerve, status:"LIVE", lastAt:Date.now(), lastType:"BCGO_PROBE_RESULT", cycle:packet.state?.cycle ?? state.nerve.cycle, step:packet.state?.step ?? state.nerve.step, source: "AUTHORITATIVE_BRIDGE" };
+      emit();
+    });
+  }
+
   function startCaptainDirectiveBridge() {
     try { bridgeChannel?.addEventListener("message", event => { handleCaptainDirective(event.data); }); } catch {}
     try {
@@ -500,6 +519,7 @@ function publishInvestigationAck(packet) {
         { caseId:packet.caseId||null, requestId, proposalId:packet.proposalId||null, result: { status: result.status || null, reason: result.reason || null } }
       );
       try { bridgeChannel?.postMessage(executionMessage); } catch {}
+      try { AUTHORITATIVE_BRIDGE.publishResponse(executionMessage, { responseType:"EXECUTION_RESULT", caseId:packet.caseId || null }); } catch {}
       try {
         const resultCache = `${BRIDGE_CHANNEL}_EXECUTION_RESULT`;
         // Keep a per-request cache so concurrent executions cannot overwrite each other.
@@ -1182,6 +1202,7 @@ function publishInvestigationAck(packet) {
   });
 
   function boot() {
+    startAuthoritativeCGOBridge();
     startBridgeRecovery();
     startNerveMonitor();
     startCaptainDirectiveBridge();

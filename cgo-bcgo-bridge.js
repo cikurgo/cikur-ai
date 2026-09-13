@@ -3,7 +3,7 @@
  * Same-tab: CustomEvent. Cross-tab: BroadcastChannel + localStorage recovery.
  * No external API, no AI provider, no source mutation.
  */
-export const VERSION = "V1.0.0-BCGO-CGO-AUTHORITATIVE-BRIDGE";
+export const VERSION = "V1.1.0-BCGO-CGO-AUTHORITATIVE-BRIDGE";
 export const CHANNEL = "CIKUR_GO_BCGO_CGO_BRIDGE_V1";
 export const STATE_EVENT = "cikur-bcgo-state";
 export const COMMAND_EVENT = "cikur-cgo-command";
@@ -21,6 +21,7 @@ let latestCommand = null;
 const stateListeners = new Set();
 const commandListeners = new Set();
 const directiveListeners = new Set();
+const responseListeners = new Set();
 
 function clone(value) {
   try { return typeof structuredClone === "function" ? structuredClone(value) : JSON.parse(JSON.stringify(value)); }
@@ -85,6 +86,7 @@ function route(packet, recovery = false) {
     return true;
   }
   if (packet.type === "CGO_RESPONSE") {
+    for (const fn of responseListeners) { try { fn(clone(packet)); } catch {} }
     emit(RESPONSE_EVENT, packet);
     return true;
   }
@@ -124,6 +126,7 @@ function publishResponse(response, meta = {}) {
   const packet = { id:id("RESPONSE"), bridge:CHANNEL, from:"CGO", type:"CGO_RESPONSE", at:Date.now(), ...meta, response:clone(response) };
   route(packet);
   try { ensureChannel()?.postMessage(packet); } catch {}
+  try { localStorage.setItem(EVENT_KEY, JSON.stringify(packet)); } catch {}
   return clone(packet);
 }
 
@@ -140,7 +143,8 @@ const api = Object.freeze({
   onState(fn) { if (typeof fn !== "function") return () => {}; stateListeners.add(fn); return () => stateListeners.delete(fn); },
   onCommand(fn) { if (typeof fn !== "function") return () => {}; commandListeners.add(fn); return () => commandListeners.delete(fn); },
   onDirective(fn) { if (typeof fn !== "function") return () => {}; directiveListeners.add(fn); return () => directiveListeners.delete(fn); },
-  destroy() { try { channel?.close(); } catch {} channel = null; installed = false; stateListeners.clear(); commandListeners.clear(); directiveListeners.clear(); }
+  onResponse(fn) { if (typeof fn !== "function") return () => {}; responseListeners.add(fn); return () => responseListeners.delete(fn); },
+  destroy() { try { channel?.close(); } catch {} channel = null; installed = false; stateListeners.clear(); commandListeners.clear(); directiveListeners.clear(); responseListeners.clear(); }
 });
 
 if (typeof window !== "undefined") {

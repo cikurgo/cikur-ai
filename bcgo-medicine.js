@@ -11,16 +11,16 @@ import {
   setDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { adminDb, adminAuth } from "./cikur-config.js?v=20260913-bcgo-cgo-v3";
+import { adminDb, adminAuth } from "./cikur-config.js?v=20260913-bcgo-cgo-v4";
 
 // Medicine adalah organ sistem: Firestore/Auth harus memakai namespace Admin.
 const db = adminDb;
 const auth = adminAuth;
-import { Cognition as InternalCognition, Investigator as InternalInvestigator, createMasterRuntime } from "./cgo-runtime-adapter.js?v=20260913-bcgo-cgo-v3";
+import { Cognition as InternalCognition, Investigator as InternalInvestigator, createMasterRuntime } from "./cgo-runtime-adapter.js?v=20260913-bcgo-cgo-v4";
 
 /*
  * ================================================================
- * BCGO MEDICINE v3.4.0 — PRECISION DIAGNOSTIC + INTERNAL EXECUTOR BRIDGE
+ * BCGO MEDICINE v4.0.0 — BCGO-CGO CONTRACT MEDIATOR + PRECISION DIAGNOSTIC
  * ================================================================
  * Boundary:
  *   Medicine observes, investigates, proves, proposes and validates.
@@ -68,6 +68,8 @@ const REGISTRY = { ...BASE_REGISTRY };
  * checked by the shared Core table + Guardian through CaptainState.
  */
 const CAPTAIN_RUNTIME = createMasterRuntime().runtime;
+import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-bcgo-cgo-v4";
+const AUTHORITATIVE_BRIDGE = BCGOCGOBridge.install();
 const MEDICINE_TO_CAPTAIN_STATE = Object.freeze({
   DIAGNOSED:"INVESTIGATING",
   INVESTIGATING:"INVESTIGATING",
@@ -107,51 +109,24 @@ function ensureCaptainCase(c){
 }
 
 function projectCaptainState(c,status,context={}){
+  // V4 boundary: Captain owns orchestration state. Medicine keeps only a local
+  // compatibility projection for its own UI/history; it can never block or
+  // force a Captain transition. This removes the old second state machine as
+  // an execution dependency.
   if(!c?.id) return null;
-  c.status = status;
-  const desired=MEDICINE_TO_CAPTAIN_STATE[status];
-  if(!desired) return null;
-  try {
-    let current=ensureCaptainCase(c);
-    if(!current || current.state===desired) return current;
-
-    if(desired === "INVESTIGATION_BLOCKED" && current.state !== "SOURCE_VERIFIED") {
-      const fallback = "INSUFFICIENT_EVIDENCE";
-      const decision=CAPTAIN_RUNTIME.captainState().canTransition(current.state,fallback,{source:"MEDICINE_STATUS_PROJECTION",medicineStatus:status,caseId:c.id,...context});
-      if(decision.ok) return CAPTAIN_RUNTIME.transitionCaseState(c.id,fallback,{source:"MEDICINE_STATUS_PROJECTION",medicineStatus:status,reason:"BLOCKED_BEFORE_SOURCE_VERIFICATION",...context});
-      emit("captain_state_projection_deferred",{caseId:c.id,medicineStatus:status,currentState:current.state,requestedState:desired,reason:decision.reason,nonBlocking:true});
-      return current;
-    }
-
-    const path=CAPTAIN_ADVANCE_PATHS[desired] || [desired];
-    for(const step of path){
-      current=CAPTAIN_RUNTIME.getCase(c.id) || current;
-      if(current.state===step) continue;
-      const decision=CAPTAIN_RUNTIME.captainState().canTransition(current.state,step,{source:"MEDICINE_STATUS_PROJECTION",medicineStatus:status,caseId:c.id,...context});
-      if(!decision.ok){
-        emit("captain_state_projection_deferred",{caseId:c.id,medicineStatus:status,currentState:current.state,requestedState:step,finalTarget:desired,reason:decision.reason,nonBlocking:true});
-        return current;
-      }
-      current=CAPTAIN_RUNTIME.transitionCaseState(c.id,step,{source:"MEDICINE_STATUS_PROJECTION",medicineStatus:status,finalTarget:desired,...context});
-    }
-    return current;
-  } catch(error) {
-    emit("captain_state_projection_error",{caseId:c.id,medicineStatus:status,error:String(error?.message||error)});
-    return null;
-  }
+  return CAPTAIN_RUNTIME.getCase(c.id) || null;
 }
 
 function setMedicineCaseStatus(c,status,context={}){
   if(!c) return null;
   c.status = status;
-  // Captain is the orchestration authority. This projection is compatibility-only;
-  // a rejected transition must never deadlock Medicine's proof workflow.
-  try {
-    const projected = projectCaptainState(c,status,context);
-    if(projected) c.captainProjection = { state:projected.state || null, at:now(), status:'BEST_EFFORT' };
-  } catch(error) {
-    c.captainProjection = { state:null, at:now(), status:'UNAVAILABLE', reason:String(error?.message || error) };
-  }
+  c.statusAt = now();
+  c.statusContext = context && typeof context === "object" ? { ...context } : {};
+  const captain = CAPTAIN_RUNTIME.getCase(c.id);
+  c.captainProjection = captain
+    ? { state:captain.state || null, revision:captain.revision || 0, at:now(), status:"OBSERVED_ONLY" }
+    : { state:null, revision:0, at:now(), status:"NOT_YET_BOUND" };
+  emit("medicine_status_projection", {case:c, status, captainProjection:c.captainProjection});
   return c;
 }
 
@@ -465,6 +440,7 @@ function publishCaptainResponse(type, data = {}) {
   };
   try { medicineBridgeChannel?.postMessage(message); } catch {}
   try { localStorage.setItem(MEDICINE_BRIDGE_EVENT_KEY, JSON.stringify(message)); } catch {}
+  try { AUTHORITATIVE_BRIDGE.publishResponse(message, { responseType:type, caseId:message.caseId || null }); } catch {}
   return message;
 }
 
@@ -480,6 +456,18 @@ async function handleCaptainDirective(packet, source = "BROADCAST_CHANNEL") {
   const caseId = String(packet.caseId || "").trim();
   const target = normalizeFile(packet.target || packet.file || S.activeCase?.source || "");
   try {
+    if (type === "CGO_BCGO_EXPLORE") {
+      const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase;
+      if (c) {
+        S.activeCase = c;
+        c.lastCaptainDirectiveAt = now();
+        setMedicineCaseStatus(c,"INVESTIGATING",{trigger:"CAPTAIN_BCGO_EXPLORE",probe:packet.probe?.type || null});
+        publishCaptainResponse("MEDICINE_CGO_ACK", {caseId:c.id, message:`Captain meminta pembuktian baru. Medicine mengikuti hasil probe BCGO pada ${target || c.source || "case aktif"}; tidak membuat jalur scan tandingan.`});
+        return true;
+      }
+      publishCaptainResponse("MEDICINE_CGO_ACK", {caseId, message:"Captain meminta eksplorasi BCGO. Medicine menunggu BCGO_STATE/PROBE_RESULT authoritative untuk membentuk case yang tepat."});
+      return true;
+    }
     if (type === "CGO_REQUEST_UPDATE") {
       publishCaptainResponse("MEDICINE_CGO_UPDATE", {
         caseId,
@@ -551,6 +539,42 @@ async function handleCaptainDirective(packet, source = "BROADCAST_CHANNEL") {
     return false;
   }
   return false;
+}
+
+function startAuthoritativeCGOBridge(){
+  if(window.__BCGO_MEDICINE_AUTH_BRIDGE_STARTED) return;
+  window.__BCGO_MEDICINE_AUTH_BRIDGE_STARTED = true;
+  AUTHORITATIVE_BRIDGE.onDirective(packet => {
+    if(!packet || packet.from !== "CAPTAIN") return;
+    const type = String(packet.directiveType || "").toUpperCase();
+    // The authoritative BCGO-CGO bridge is now the primary control path.
+    // Legacy Medicine packets remain only as compatibility transport.
+    if(!type.startsWith("CGO_")) return;
+    void handleCaptainDirective({
+      ...packet,
+      bridge:MEDICINE_BRIDGE_KEY,
+      from:"CAPTAIN",
+      type
+    }, "AUTHORITATIVE_BCGO_CGO_BRIDGE");
+  });
+  AUTHORITATIVE_BRIDGE.onResponse(packet => {
+    if(packet?.from !== "BCGO" || packet?.type !== "BCGO_PROBE_RESULT") return;
+    const state = packet.state || {};
+    S.bcgoSourceScan = { ...S.bcgoSourceScan, ...(state.sourceScan || {}) };
+    const caseId = packet.caseId || S.activeCase?.id || null;
+    const c = caseId ? S.cases.find(x => x.id === caseId) : S.activeCase;
+    if(!c) return;
+    c.lastProbeResult = packet.result || null;
+    c.lastEvidence = packet.result?.matchedGaps?.[0] || c.lastEvidence || c.evidence;
+    c.evidence = c.lastEvidence;
+    c.lastProbeAt = now();
+    c.lastInvestigatedEvidenceToken = null;
+    emit("bcgo_probe_result_received", {case:c, probe:packet.probe || null, result:packet.result || null});
+    if(packet.result?.status === "EVIDENCE_FOUND") {
+      setMedicineCaseStatus(c,"INVESTIGATING",{trigger:"BCGO_PROBE_RESULT",probe:packet.probe?.type || null});
+      queueAutoInvestigation(c,"bcgo_probe_evidence_received");
+    }
+  });
 }
 
 function startCaptainDirectiveBridge() {
@@ -2874,8 +2898,8 @@ function internalExecutor() {
 }
 
 function canApplyPatch(c) {
-  return false;
-  /* legacy executor path intentionally disabled; human copies source manually. */
+  /* Medicine never mutates source. This predicate is only an eligibility check
+     for the downstream Executor; actual write admission remains Captain-auth. */
   const p = c?.repairPlan;
   const v = c?.verification;
   return !!(
@@ -3507,6 +3531,7 @@ window.addEventListener("storage", event => {
   try { receiveBCGOState(JSON.parse(event.newValue)); } catch {}
 });
 startMedicineBridgePresence();
+startAuthoritativeCGOBridge();
 
 setInterval(() => {
   if (!S.bcgoSync.lastAt) return;
