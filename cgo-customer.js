@@ -1,1834 +1,1966 @@
-/*
- * ============================================================
- * CIKUR GO — CUSTOMER CGO
- * cgo-customer.js
- * ============================================================
+/* ============================================================
+ * CIKUR GO — CUSTOMER CGO MAIN GATEWAY
+ * ------------------------------------------------------------
+ * File    : cgo-customer.js
+ * Version : 1.1.0-customer-gateway
  *
- * PURPOSE
- * -------
- * Customer-facing CGO brain / conversation gateway.
+ * Peran:
+ *   Gerbang utama Customer CGO.
  *
- * IMPORTANT ARCHITECTURE RULE
- * ---------------------------
- * This file does NOT use external AI, external API, Botpress,
- * OpenAI, Gemini, or third-party reasoning service.
+ * Pipeline:
+ *   Customer Message
+ *        ↓
+ *   Conversation
+ *        ↓
+ *   Knowledge
+ *        ↓
+ *   Discovery (jika diperlukan)
+ *        ↓
+ *   Response Candidate
+ *        ↓
+ *   Guardian
+ *        ↓
+ *   Customer Response
  *
- * It is an INTERNAL CIKUR GO intelligence/conversation layer.
- *
- * PUBLIC ENTRY
- * ------------
- *   window.CGO
- *
- * Basic usage:
- *   CGO.chat("Hai CGO");
- *   CGO.chat("Aku lagi lapar");
- *   CGO.chat("Assistant itu untuk apa?");
- *
- * Runtime discovery may later be connected through:
- *   CGO.connectDiscovery(adapter)
- *
- * Service knowledge may later be extended through:
- *   CGO.registerService(...)
- *
- * ============================================================
- */
+ * Prinsip:
+ *   - Internal JavaScript gateway.
+ *   - Tidak membutuhkan external AI/API.
+ *   - Knowledge ≠ Runtime.
+ *   - Runtime harus memiliki evidence.
+ *   - Personality tidak boleh mengalahkan truth.
+ * ============================================================ */
 
-(function (global) {
-  "use strict";
+(function (window) {
+    "use strict";
 
-  const VERSION = "1.0.0-customer-foundation";
+    window.CGO_CUSTOMER = window.CGO_CUSTOMER || {};
 
-  // ----------------------------------------------------------
-  // INTERNAL STATE
-  // ----------------------------------------------------------
+    const VERSION = "1.1.0-customer-gateway";
 
-  const state = {
-    initialized: false,
+    const EVENTS = Object.freeze({
+        READY: "ready",
+        MESSAGE: "message",
+        ANALYZED: "analyzed",
+        KNOWLEDGE: "knowledge",
+        DISCOVERY_REQUIRED: "discovery_required",
+        DISCOVERY_STARTED: "discovery_started",
+        DISCOVERY_FINISHED: "discovery_finished",
+        RESPONSE_CANDIDATE: "response_candidate",
+        GUARDED: "guarded",
+        RESPONSE: "response",
+        ERROR: "error",
+        RESET: "reset"
+    });
 
-    conversationId: createId("conversation"),
+    /* =========================================================
+     * INTERNAL STATE
+     * ========================================================= */
 
-    messages: [],
+    const state = {
+        version: VERSION,
 
-    context: {
-      lastUserMessage: "",
-      lastCGOMessage: "",
-      topic: null,
-      previousTopic: null,
-      intent: null,
-      mood: "neutral",
-      userMood: "neutral",
-      needs: [],
-      mentionedServices: [],
-      pendingQuestion: null,
-      pendingDiscovery: null
-    },
+        ready: false,
 
-    preferences: {
-      language: "id-ID",
-      emoji: true,
-      style: "natural"
-    },
+        conversationId: createConversationId(),
 
-    services: {},
+        turn: 0,
 
-    adapters: {
-      discovery: null,
-      navigation: null,
-      runtime: null
-    },
+        messages: [],
 
-    listeners: []
-  };
+        lastInput: "",
 
+        lastResponse: "",
 
-  // ----------------------------------------------------------
-  // SERVICE REGISTRY
-  // ----------------------------------------------------------
+        lastAnalysis: null,
 
-  /*
-   * Only verified/declared service knowledge belongs here.
-   *
-   * Detailed commercial data such as current price, package,
-   * availability, radius, merchant status, etc. MUST NOT be
-   * invented here.
-   *
-   * Runtime data must come from the actual CIKUR GO system.
-   */
+        lastKnowledge: null,
 
-  registerBuiltInServices();
+        lastDiscovery: null,
 
+        lastGuard: null,
 
-  // ----------------------------------------------------------
-  // INITIALIZATION
-  // ----------------------------------------------------------
+        pendingDiscovery: null,
 
-  state.initialized = true;
-
-
-  // ----------------------------------------------------------
-  // PUBLIC CGO OBJECT
-  // ----------------------------------------------------------
-
-  const CGO = {
-
-    name: "CGO",
-
-    version: VERSION,
-
-    getState: function () {
-      return clone(state.context);
-    },
-
-    getConversation: function () {
-      return state.messages.map(function (message) {
-        return Object.assign({}, message);
-      });
-    },
-
-    chat: function (input, options) {
-      return handleMessage(input, options || {});
-    },
-
-    resetConversation: function () {
-      state.conversationId = createId("conversation");
-      state.messages = [];
-
-      state.context = {
-        lastUserMessage: "",
-        lastCGOMessage: "",
-        topic: null,
-        previousTopic: null,
-        intent: null,
-        mood: "neutral",
-        userMood: "neutral",
-        needs: [],
-        mentionedServices: [],
         pendingQuestion: null,
-        pendingDiscovery: null
-      };
 
-      emit("conversation:reset", {
-        conversationId: state.conversationId
-      });
+        currentTopic: "conversation",
 
-      return true;
-    },
+        currentIntent: "conversation",
 
-    registerService: function (service) {
-      return registerService(service);
-    },
+        currentMood: "neutral",
 
-    getServices: function () {
-      return clone(state.services);
-    },
+        candidateService: null,
 
-    connectDiscovery: function (adapter) {
-      if (!adapter || typeof adapter !== "object") {
-        return false;
-      }
+        combinedServiceCandidate: null,
 
-      state.adapters.discovery = adapter;
+        mentionedServices: [],
 
-      emit("adapter:discovery", {
-        connected: true
-      });
+        detectedNeeds: [],
 
-      return true;
-    },
-
-    connectNavigation: function (adapter) {
-      if (!adapter || typeof adapter !== "object") {
-        return false;
-      }
-
-      state.adapters.navigation = adapter;
-
-      return true;
-    },
-
-    connectRuntime: function (adapter) {
-      if (!adapter || typeof adapter !== "object") {
-        return false;
-      }
-
-      state.adapters.runtime = adapter;
-
-      return true;
-    },
-
-    on: function (eventName, callback) {
-      if (typeof callback !== "function") {
-        return function () {};
-      }
-
-      state.listeners.push({
-        event: eventName,
-        callback: callback
-      });
-
-      return function unsubscribe() {
-        state.listeners = state.listeners.filter(function (item) {
-          return item.callback !== callback;
-        });
-      };
-    },
-
-    isReady: function () {
-      return state.initialized === true;
-    }
-  };
-
-
-  // ----------------------------------------------------------
-  // MAIN CONVERSATION PIPELINE
-  // ----------------------------------------------------------
-
-  function handleMessage(input, options) {
-
-    const message = normalizeInput(input);
-
-    if (!message) {
-      return createResult(
-        "empty",
-        "Hmm, pesannya belum masuk nih 😅 Coba tulis lagi yaa."
-      );
-    }
-
-    const previousContext = clone(state.context);
-
-    const analysis = analyzeMessage(message);
-
-    updateContext(message, analysis);
-
-    addMessage("user", message, analysis);
-
-    emit("message:user", {
-      text: message,
-      analysis: analysis
-    });
-
-
-    // --------------------------------------------------------
-    // GUARD — NEVER INVENT
-    // --------------------------------------------------------
-
-    const guardedAnalysis = guardianAnalyze(
-      analysis,
-      previousContext
-    );
-
-
-    // --------------------------------------------------------
-    // DISCOVERY REQUEST
-    // --------------------------------------------------------
-
-    if (guardedAnalysis.requiresDiscovery) {
-
-      const discoveryResult = performDiscovery(
-        guardedAnalysis,
-        options
-      );
-
-      if (discoveryResult.pending) {
-
-        const pendingText =
-          discoveryResult.message ||
-          "Sebentar yaaa, aku cek dulu 😊";
-
-        return finalizeResponse(
-          pendingText,
-          "discovery_pending",
-          guardedAnalysis
-        );
-      }
-
-      if (discoveryResult.completed) {
-
-        return finalizeResponse(
-          buildDiscoveryResponse(
-            discoveryResult,
-            guardedAnalysis
-          ),
-          "discovery_result",
-          guardedAnalysis
-        );
-      }
-    }
-
-
-    // --------------------------------------------------------
-    // CONVERSATION / PERSONALITY
-    // --------------------------------------------------------
-
-    const response = generateResponse(
-      guardedAnalysis,
-      previousContext
-    );
-
-
-    // --------------------------------------------------------
-    // FINAL GUARD
-    // --------------------------------------------------------
-
-    const safeResponse = guardianResponse(
-      response,
-      guardedAnalysis
-    );
-
-    return finalizeResponse(
-      safeResponse.text,
-      safeResponse.type,
-      guardedAnalysis
-    );
-  }
-
-
-  // ----------------------------------------------------------
-  // MESSAGE ANALYSIS
-  // ----------------------------------------------------------
-
-  function analyzeMessage(message) {
-
-    const text = message.toLowerCase();
-
-    const analysis = {
-      original: message,
-
-      type: "conversation",
-
-      intent: "conversation",
-
-      topic: detectTopic(text),
-
-      mood: detectUserMood(text),
-
-      services: detectServices(text),
-
-      needs: detectNeeds(text),
-
-      asksServiceInformation:
-        detectServiceInformationQuestion(text),
-
-      wantsAvailability:
-        detectAvailabilityQuestion(text),
-
-      wantsAction:
-        detectActionRequest(text),
-
-      greeting:
-        detectGreeting(text),
-
-      smallTalk:
-        detectSmallTalk(text),
-
-      farewell:
-        detectFarewell(text),
-
-      requiresDiscovery: false
+        lastError: null
     };
 
+    const listeners = {};
 
-    /*
-     * Need discovery is preferred when the customer describes
-     * a real need without knowing the service name.
-     */
+    /* =========================================================
+     * UTILITIES
+     * ========================================================= */
 
-    if (
-      analysis.needs.length > 0 &&
-      analysis.services.length === 0
-    ) {
-      analysis.intent = "need_discovery";
-    }
-
-
-    if (analysis.asksServiceInformation) {
-      analysis.intent = "service_information";
-    }
-
-
-    if (analysis.wantsAvailability) {
-      analysis.intent = "availability";
-      analysis.requiresDiscovery = true;
-    }
-
-
-    if (analysis.wantsAction) {
-      analysis.intent = "service_action";
-    }
-
-
-    if (analysis.services.length > 0) {
-
-      analysis.intent =
-        analysis.intent === "conversation"
-          ? "service_conversation"
-          : analysis.intent;
-    }
-
-
-    /*
-     * Customer asking whether an Agent/Mitra is nearby.
-     */
-
-    if (
-      /\b(agent|mitra)\b/.test(text) &&
-      (
-        /\b(dekat|sekitar|sekitar aku|sekitar saya)\b/.test(text) ||
-        /\b(ada|tersedia|available)\b/.test(text)
-      )
-    ) {
-      analysis.requiresDiscovery = true;
-      analysis.intent = "local_service_discovery";
-    }
-
-
-    /*
-     * If the customer explicitly asks CGO to check.
-     */
-
-    if (
-      /\b(cek|check|carikan|cariin|lihatkan|lihat)\b/.test(text) &&
-      (
-        analysis.services.length > 0 ||
-        analysis.needs.length > 0
-      )
-    ) {
-      analysis.requiresDiscovery = true;
-    }
-
-
-    return analysis;
-  }
-
-
-  // ----------------------------------------------------------
-  // CONTEXT
-  // ----------------------------------------------------------
-
-  function updateContext(message, analysis) {
-
-    state.context.lastUserMessage = message;
-
-    state.context.previousTopic =
-      state.context.topic;
-
-    if (analysis.topic) {
-      state.context.topic = analysis.topic;
-    }
-
-    state.context.intent = analysis.intent;
-
-    state.context.userMood = analysis.mood;
-
-    if (analysis.services.length > 0) {
-
-      state.context.mentionedServices =
-        unique(
-          state.context.mentionedServices.concat(
-            analysis.services
-          )
+    function createConversationId() {
+        return (
+            "cgo-customer-" +
+            Date.now().toString(36) +
+            "-" +
+            Math.random().toString(36).slice(2, 8)
         );
     }
 
-    if (analysis.needs.length > 0) {
-
-      state.context.needs =
-        mergeNeeds(
-          state.context.needs,
-          analysis.needs
-        );
+    function now() {
+        return new Date().toISOString();
     }
 
-    if (
-      state.context.previousTopic &&
-      state.context.topic &&
-      state.context.previousTopic !== state.context.topic
-    ) {
-      emit("conversation:topic-transition", {
-        from: state.context.previousTopic,
-        to: state.context.topic
-      });
-    }
-  }
-
-
-  // ----------------------------------------------------------
-  // RESPONSE ENGINE
-  // ----------------------------------------------------------
-
-  function generateResponse(analysis, previousContext) {
-
-    // Greeting
-    if (analysis.greeting) {
-      return {
-        type: "greeting",
-        text: chooseGreeting(previousContext)
-      };
-    }
-
-
-    // Farewell
-    if (analysis.farewell) {
-      return {
-        type: "farewell",
-        text: chooseFarewell()
-      };
-    }
-
-
-    // Emotional state
-    if (
-      analysis.mood === "sad" ||
-      analysis.mood === "disappointed"
-    ) {
-      return {
-        type: "emotional_support",
-        text: chooseEmotionalResponse(
-          analysis.mood
-        )
-      };
-    }
-
-
-    if (analysis.mood === "excited") {
-      return {
-        type: "excited",
-        text: chooseExcitedResponse()
-      };
-    }
-
-
-    if (analysis.mood === "confused") {
-      return {
-        type: "confused",
-        text:
-          "Hehe, jangan bingung dulu 😅 Ceritain aja pelan-pelan kamu lagi bingung soal apa, nanti kita urai bareng."
-      };
-    }
-
-
-    // Small talk
-    if (analysis.smallTalk) {
-      return {
-        type: "small_talk",
-        text: chooseSmallTalkResponse()
-      };
-    }
-
-
-    // Service information
-    if (analysis.asksServiceInformation) {
-
-      const service =
-        findBestService(analysis.services);
-
-      if (service) {
-        return {
-          type: "service_information",
-          text: explainServiceNaturally(service)
-        };
-      }
-
-      return {
-        type: "service_information",
-        text:
-          "Bisaa 😊 Ceritain dulu layanan CIKUR GO yang kamu maksud atau kebutuhanmu seperti apa, nanti aku bantu jelaskan."
-      };
-    }
-
-
-    // Need discovery
-    if (analysis.intent === "need_discovery") {
-
-      return {
-        type: "need_discovery",
-        text:
-          "Oohh, aku mulai paham kebutuhannya 😊 Kamu sebenarnya mau dibantu untuk apa? Ceritain aja dengan cara kamu sendiri, nggak harus tahu nama layanannya."
-      };
-    }
-
-
-    // Known service
-    if (analysis.services.length > 0) {
-
-      const service =
-        findBestService(analysis.services);
-
-      if (service) {
-
-        return {
-          type: "service_conversation",
-          text:
-            buildServiceFollowUp(service, analysis)
-        };
-      }
-    }
-
-
-    // Generic conversation
-    return {
-      type: "conversation",
-      text: chooseNaturalConversationResponse(
-        previousContext
-      )
-    };
-  }
-
-
-  // ----------------------------------------------------------
-  // SERVICE KNOWLEDGE
-  // ----------------------------------------------------------
-
-  function registerBuiltInServices() {
-
-    registerService({
-      id: "food",
-      name: "CIKUR GO Food",
-      aliases: [
-        "food",
-        "makanan",
-        "makan",
-        "kuliner",
-        "pesan makanan",
-        "pesan makan"
-      ],
-      description:
-        "Layanan CIKUR GO untuk kebutuhan makanan.",
-      needs: [
-        "makanan",
-        "lapar",
-        "pesan makanan",
-        "kuliner"
-      ],
-      discoveryTypes: [
-        "merchant",
-        "food",
-        "delivery"
-      ]
-    });
-
-
-    registerService({
-      id: "ride",
-      name: "CIKUR GO Ride",
-      aliases: [
-        "ride",
-        "ojek",
-        "antar",
-        "jemput",
-        "kendaraan",
-        "perjalanan"
-      ],
-      description:
-        "Layanan CIKUR GO untuk kebutuhan perjalanan dan transportasi.",
-      needs: [
-        "perjalanan",
-        "jemput",
-        "antar",
-        "transportasi"
-      ],
-      discoveryTypes: [
-        "driver",
-        "ride"
-      ]
-    });
-
-
-    registerService({
-      id: "assistant",
-      name: "CIKUR GO Assistant",
-      aliases: [
-        "assistant",
-        "asisten",
-        "pendamping",
-        "teman",
-        "bantuan assistant"
-      ],
-      description:
-        "Layanan Assistant CIKUR GO untuk kebutuhan pendampingan dan bantuan sesuai layanan yang tersedia.",
-      needs: [
-        "pendampingan",
-        "belanja",
-        "liburan",
-        "acara keluarga",
-        "bantuan pribadi"
-      ],
-      examples: [
-        "menemani saat liburan",
-        "membantu saat belanja",
-        "menemani acara keluarga",
-        "kebutuhan pendampingan lainnya"
-      ],
-      discoveryTypes: [
-        "agent",
-        "assistant"
-      ]
-    });
-
-
-    registerService({
-      id: "cikurgo2in1",
-      name: "CIKUR GO 2in1",
-      aliases: [
-        "2in1",
-        "2 in 1",
-        "cikurgo 2in1",
-        "food assistant",
-        "food + assistant",
-        "makanan dan assistant"
-      ],
-      description:
-        "Layanan kombinasi Food dan Assistant untuk kebutuhan yang membutuhkan keduanya.",
-      needs: [
-        "food_and_assistant",
-        "makanan_dan_pendampingan"
-      ],
-      discoveryTypes: [
-        "agent",
-        "merchant",
-        "food",
-        "assistant"
-      ]
-    });
-  }
-
-
-  function registerService(service) {
-
-    if (!service || !service.id || !service.name) {
-      return false;
-    }
-
-    const normalized = Object.assign(
-      {
-        aliases: [],
-        description: "",
-        needs: [],
-        examples: [],
-        discoveryTypes: []
-      },
-      service
-    );
-
-    state.services[service.id] = normalized;
-
-    return true;
-  }
-
-
-  // ----------------------------------------------------------
-  // SERVICE EXPLANATION
-  // ----------------------------------------------------------
-
-  function explainServiceNaturally(service) {
-
-    if (service.id === "assistant") {
-
-      return (
-        "Bisaa 😊 CIKUR GO Assistant bisa membantu untuk berbagai kebutuhan " +
-        "pendampingan, misalnya menemani kamu saat liburan, membantu saat " +
-        "belanja, menemani acara keluarga, atau kebutuhan lainnya yang " +
-        "memerlukan bantuan seorang Assistant. " +
-        "Kamu sendiri kira-kira butuh Assistant untuk apa nih? 😁"
-      );
-    }
-
-
-    if (service.id === "food") {
-
-      return (
-        "Kalau CIKUR GO Food, itu untuk kebutuhan makanan 😊 " +
-        "Kalau kamu lagi lapar atau ingin pesan makanan, ceritain aja " +
-        "kamu lagi pengen makan apa. Nanti aku bantu arahkan."
-      );
-    }
-
-
-    if (service.id === "ride") {
-
-      return (
-        "CIKUR GO Ride ditujukan untuk kebutuhan perjalanan atau antar-jemput 😊 " +
-        "Kalau kamu ceritain mau pergi dari mana ke mana dan kapan, " +
-        "aku bisa bantu memahami kebutuhanmu lebih lanjut."
-      );
-    }
-
-
-    if (service.id === "cikurgo2in1") {
-
-      return (
-        "CIKUR GO 2in1 menggabungkan kebutuhan Food dan Assistant 😊 " +
-        "Jadi kalau kebutuhanmu memang melibatkan makanan sekaligus " +
-        "pendampingan atau bantuan, layanan ini bisa menjadi pilihan yang cocok."
-      );
-    }
-
-
-    return (
-      service.name +
-      " adalah salah satu layanan CIKUR GO. " +
-      service.description
-    );
-  }
-
-
-  function buildServiceFollowUp(service, analysis) {
-
-    if (service.id === "assistant") {
-
-      return (
-        "Okeee, berarti kamu sedang mempertimbangkan CIKUR GO Assistant 😊 " +
-        "Coba ceritain dulu kebutuhanmu. Kamu ingin ditemani, dibantu " +
-        "saat belanja, liburan, acara keluarga, atau ada kebutuhan lain?"
-      );
-    }
-
-
-    if (service.id === "food") {
-
-      return (
-        "Siappp 😁 Kalau Food, kamu lagi pengen makan apa? " +
-        "Biar aku bantu pahami pilihan yang kamu cari."
-      );
-    }
-
-
-    if (service.id === "ride") {
-
-      return (
-        "Siapp 😊 Kamu mau pergi atau perlu dijemput/diantar ke mana?"
-      );
-    }
-
-
-    if (service.id === "cikurgo2in1") {
-
-      return (
-        "Okeee 😁 Berarti ada kebutuhan Food sekaligus Assistant ya. " +
-        "Ceritain dulu dua kebutuhannya, nanti aku bantu lihat alur yang paling cocok."
-      );
-    }
-
-
-    return (
-      "Siapp 😊 Ceritain sedikit lagi kebutuhanmu, nanti aku bantu."
-    );
-  }
-
-
-  // ----------------------------------------------------------
-  // LOCAL SERVICE DISCOVERY
-  // ----------------------------------------------------------
-
-  function performDiscovery(analysis, options) {
-
-    const adapter =
-      state.adapters.discovery;
-
-    /*
-     * No adapter = we MUST NOT pretend discovery happened.
-     */
-
-    if (!adapter) {
-
-      state.context.pendingDiscovery = {
-        requestedAt: Date.now(),
-        reason: analysis.intent
-      };
-
-      return {
-        pending: true,
-        completed: false,
-        message:
-          "Sebentar yaaa, aku cek dulu apakah ada layanan atau Agent CIKUR GO yang sesuai di sekitar kamu 😊"
-      };
-    }
-
-
-    try {
-
-      let result;
-
-      if (typeof adapter.check === "function") {
-
-        result = adapter.check({
-          analysis: clone(analysis),
-          context: clone(state.context),
-          options: options || {}
-        });
-
-      } else if (
-        typeof adapter.findNearby === "function"
-      ) {
-
-        result = adapter.findNearby({
-          analysis: clone(analysis),
-          context: clone(state.context)
-        });
-
-      } else {
-
-        return {
-          pending: true,
-          completed: false,
-          message:
-            "Sebentar yaaa, aku cek dulu yaa 😊"
-        };
-      }
-
-
-      /*
-       * Promise support.
-       *
-       * The current synchronous chat interface deliberately
-       * does not fake an asynchronous result.
-       * The adapter can later be exposed through chatAsync().
-       */
-
-      if (
-        result &&
-        typeof result.then === "function"
-      ) {
-
-        state.context.pendingDiscovery = {
-          requestedAt: Date.now(),
-          reason: analysis.intent,
-          asynchronous: true
-        };
-
-        return {
-          pending: true,
-          completed: false,
-          asynchronous: true,
-          promise: result,
-          message:
-            "Sebentar yaaa, aku cek dulu yaa 😊"
-        };
-      }
-
-
-      return normalizeDiscoveryResult(result);
-
-    } catch (error) {
-
-      emit("discovery:error", {
-        error: safeError(error)
-      });
-
-      return {
-        pending: false,
-        completed: true,
-        success: false,
-        error: true,
-        data: null
-      };
-    }
-  }
-
-
-  function buildDiscoveryResponse(result, analysis) {
-
-    if (!result || result.success !== true) {
-
-      return (
-        "Aku belum bisa memastikan ketersediaannya saat ini 😅 " +
-        "Aku nggak mau asal bilang ada kalau memang belum ada hasil pengecekan yang valid."
-      );
-    }
-
-
-    if (
-      Array.isArray(result.items) &&
-      result.items.length > 0
-    ) {
-
-      return (
-        "Nahhh, aku sudah cek 😊 Ada " +
-        result.items.length +
-        " pilihan CIKUR GO yang cocok/tersedia berdasarkan hasil pengecekan saat ini. " +
-        "Aku bantu lanjutkan dari sini yaa."
-      );
-    }
-
-
-    return (
-      "Aku sudah cek, tapi saat ini belum menemukan Agent atau layanan " +
-      "yang sesuai dari hasil screening tadi 😔"
-    );
-  }
-
-
-  // ----------------------------------------------------------
-  // GUARDIAN
-  // ----------------------------------------------------------
-
-  function guardianAnalyze(
-    analysis,
-    previousContext
-  ) {
-
-    const result = Object.assign({}, analysis);
-
-    /*
-     * Personality never overrides truth.
-     */
-
-    if (
-      result.requiresDiscovery &&
-      !state.adapters.discovery
-    ) {
-      result.discoveryUnavailable = true;
-    }
-
-    return result;
-  }
-
-
-  function guardianResponse(response, analysis) {
-
-    if (!response || typeof response.text !== "string") {
-
-      return {
-        type: "guardian_fallback",
-        text:
-          "Hmm, aku belum yakin dengan jawabanku 😅 Coba ceritain lagi yaa."
-      };
-    }
-
-
-    let text = response.text.trim();
-
-
-    /*
-     * Prevent accidental false availability claims in the
-     * customer-facing foundation.
-     *
-     * Actual availability must be generated only from a
-     * successful discovery result.
-     */
-
-    if (
-      /\b(ada agent|agent tersedia|ada driver|driver tersedia)\b/i.test(text) &&
-      !analysis.requiresDiscovery
-    ) {
-
-      text =
-        "Sebentar yaaa, aku cek dulu apakah ada Agent CIKUR GO yang sesuai 😊";
-    }
-
-
-    return {
-      type: response.type || "conversation",
-      text: text
-    };
-  }
-
-
-  // ----------------------------------------------------------
-  // EMOTION
-  // ----------------------------------------------------------
-
-  function detectUserMood(text) {
-
-    if (
-      /\b(sedih|nangis|menangis|kecewa banget|hancur|galau)\b/.test(text)
-    ) {
-      return "sad";
-    }
-
-    if (
-      /\b(kecewa|kesal|sebel|marah|kesel|nyebelin)\b/.test(text)
-    ) {
-      return "disappointed";
-    }
-
-    if (
-      /\b(senang|bahagia|happy|gembira|seru banget)\b/.test(text)
-    ) {
-      return "happy";
-    }
-
-    if (
-      /\b(excited|antusias|nggak sabar|ga sabar|semangat banget)\b/.test(text)
-    ) {
-      return "excited";
-    }
-
-    if (
-      /\b(bingung|pusing|nggak ngerti|gak ngerti|ga ngerti)\b/.test(text)
-    ) {
-      return "confused";
-    }
-
-    if (
-      /\b(khawatir|cemas|takut)\b/.test(text)
-    ) {
-      return "worried";
-    }
-
-    return "neutral";
-  }
-
-
-  function chooseEmotionalResponse(mood) {
-
-    if (mood === "sad") {
-
-      return (
-        "Yahh… 🥺 Kalau kamu mau cerita, cerita aja pelan-pelan. " +
-        "Aku dengerin kok. Nggak harus langsung semuanya."
-      );
-    }
-
-    if (mood === "disappointed") {
-
-      return (
-        "Hmm… kedengarannya kamu lagi kecewa ya 😔 " +
-        "Kalau kamu mau, ceritain apa yang terjadi. Kita lihat pelan-pelan."
-      );
-    }
-
-    return (
-      "Aku di sini kok 😊 Ceritain aja kalau kamu butuh ditemenin ngobrol."
-    );
-  }
-
-
-  function chooseExcitedResponse() {
-
-    const responses = [
-      "WAAA 😆❤️ Ikut penasaran aku! Ceritain dong, ada apa nih?",
-      "Wihhh semangatnya sampai kerasa dari sini 😁🔥 Ada kabar seru apa?",
-      "Hahaha 😆 kayaknya ada cerita bagus nih. Ayo cerita!"
-    ];
-
-    return random(responses);
-  }
-
-
-  // ----------------------------------------------------------
-  // CONVERSATION PERSONALITY
-  // ----------------------------------------------------------
-
-  function chooseGreeting(previousContext) {
-
-    if (
-      previousContext &&
-      previousContext.lastUserMessage
-    ) {
-
-      const responses = [
-        "Haiii 😁❤️ Aku di sini. Gimana kabarmu hari ini?",
-        "Haloooo 😆 Aku masih standby kok. Kamu lagi ngapain?",
-        "Haiii kamu 😊 Ada cerita apa hari ini?"
-      ];
-
-      return random(responses);
-    }
-
-    const responses = [
-      "Haiii 😁❤️ Selamat datang di CIKUR GO! Aku CGO. Kamu lagi apa nih?",
-      "Haloooo 😆 Aku CGO, siap nemenin kamu. Mau ngobrol dulu atau ada yang mau kamu cari?",
-      "Haiii 😊 Aku di sini. Ceritain aja kamu lagi butuh apa."
-    ];
-
-    return random(responses);
-  }
-
-
-  function chooseSmallTalkResponse() {
-
-    const responses = [
-      "Aku lagi standby nemenin kamu 😁 Kalau kamu sendiri lagi ngapain?",
-      "Aku? Lagi nunggu cerita dari kamu nih 😆 Kamu lagi sibuk atau santai?",
-      "Lagi siap bantu kamu dongg 😊 Ada yang mau diceritain?",
-      "Aku di sini ajaa 😁 Kamu hari ini gimana?"
-    ];
-
-    return random(responses);
-  }
-
-
-  function chooseNaturalConversationResponse(
-    previousContext
-  ) {
-
-    if (
-      previousContext &&
-      previousContext.topic
-    ) {
-
-      return (
-        "Hehe, aku masih ngikutin obrolan kita kok 😊 " +
-        "Lanjut aja ceritanya, aku dengerin."
-      );
-    }
-
-    const responses = [
-      "Hmm, ceritain aja 😁 Aku dengerin.",
-      "Okeee 😊 Aku ikutin dulu ceritamu. Kamu mau mulai dari mana?",
-      "Boleh banget. Ceritain aja dengan cara kamu sendiri, nggak perlu dibuat formal 😄"
-    ];
-
-    return random(responses);
-  }
-
-
-  function chooseFarewell() {
-
-    const responses = [
-      "Okeee 😊 Sampai ketemu lagi yaa. Aku tetap di sini kalau kamu butuh.",
-      "Siappp 😁 Hati-hati yaa. Sampai ngobrol lagi!",
-      "Sampai nanti ❤️ Jangan lupa mampir lagi kalau butuh CGO."
-    ];
-
-    return random(responses);
-  }
-
-
-  // ----------------------------------------------------------
-  // DETECTORS
-  // ----------------------------------------------------------
-
-  function detectGreeting(text) {
-
-    return (
-      /\b(hai|halo|hello|helo|hey|hi)\b/.test(text) ||
-      /^pagi\b/.test(text) ||
-      /^siang\b/.test(text) ||
-      /^sore\b/.test(text) ||
-      /^malam\b/.test(text)
-    );
-  }
-
-
-  function detectSmallTalk(text) {
-
-    return (
-      /\blagi apa\b/.test(text) ||
-      /\bgimana kabar\b/.test(text) ||
-      /\bapa kabar\b/.test(text) ||
-      /\bkamu gimana\b/.test(text) ||
-      /\bngapain\b/.test(text) ||
-      /\bmasih di sini\b/.test(text)
-    );
-  }
-
-
-  function detectFarewell(text) {
-
-    return (
-      /\bbye\b/.test(text) ||
-      /\bdah\b/.test(text) ||
-      /\bsampai nanti\b/.test(text) ||
-      /\bsampai jumpa\b/.test(text) ||
-      /\bselamat tinggal\b/.test(text)
-    );
-  }
-
-
-  function detectTopic(text) {
-
-    if (
-      /\b(food|makanan|makan|lapar|kuliner)\b/.test(text)
-    ) {
-      return "food";
-    }
-
-    if (
-      /\b(ride|ojek|driver|jemput|antar|perjalanan)\b/.test(text)
-    ) {
-      return "ride";
-    }
-
-    if (
-      /\b(assistant|asisten|pendamping|menemani|temani)\b/.test(text)
-    ) {
-      return "assistant";
-    }
-
-    if (
-      /\b(2in1|2 in 1)\b/.test(text)
-    ) {
-      return "cikurgo2in1";
-    }
-
-    if (
-      /\b(harga|biaya|tarif|berapa)\b/.test(text)
-    ) {
-      return "pricing";
-    }
-
-    return "conversation";
-  }
-
-
-  function detectServices(text) {
-
-    const found = [];
-
-    Object.keys(state.services).forEach(function (id) {
-
-      const service =
-        state.services[id];
-
-      const terms =
-        [service.name]
-          .concat(service.aliases || [])
-          .map(normalizeText);
-
-      terms.forEach(function (term) {
-
-        if (
-          term &&
-          text.indexOf(term) !== -1
-        ) {
-          found.push(id);
+    function clone(value) {
+        try {
+            return JSON.parse(JSON.stringify(value));
+        } catch (error) {
+            return value;
         }
-      });
-    });
-
-    /*
-     * Combined need detection.
-     */
-
-    if (
-      (
-        /\b(food|makanan|makan)\b/.test(text)
-      ) &&
-      (
-        /\b(assistant|asisten|pendamping|temani|menemani)\b/.test(text)
-      )
-    ) {
-      found.push("cikurgo2in1");
     }
 
-    return unique(found);
-  }
+    function emit(eventName, payload) {
+        const callbacks = listeners[eventName] || [];
 
-
-  function detectNeeds(text) {
-
-    const needs = [];
-
-    if (
-      /\b(lapar|mau makan|ingin makan|pengen makan)\b/.test(text)
-    ) {
-      needs.push("makanan");
+        callbacks.forEach(function (callback) {
+            try {
+                callback(payload);
+            } catch (error) {
+                console.warn(
+                    "[CGO CUSTOMER] event listener error:",
+                    error
+                );
+            }
+        });
     }
 
-    if (
-      /\b(libur|liburan|wisata|jalan-jalan)\b/.test(text)
-    ) {
-      needs.push("liburan");
+    function on(eventName, callback) {
+        if (typeof callback !== "function") {
+            return function () {};
+        }
+
+        listeners[eventName] = listeners[eventName] || [];
+        listeners[eventName].push(callback);
+
+        return function unsubscribe() {
+            const list = listeners[eventName] || [];
+            const index = list.indexOf(callback);
+
+            if (index !== -1) {
+                list.splice(index, 1);
+            }
+        };
     }
 
-    if (
-      /\b(belanja|shopping|mall|pasar)\b/.test(text)
-    ) {
-      needs.push("belanja");
+    function normalizeInput(input) {
+        if (input === null || input === undefined) {
+            return "";
+        }
+
+        if (typeof input === "string") {
+            return input.trim();
+        }
+
+        if (typeof input === "object") {
+            if (typeof input.text === "string") {
+                return input.text.trim();
+            }
+
+            if (typeof input.message === "string") {
+                return input.message.trim();
+            }
+
+            if (typeof input.input === "string") {
+                return input.input.trim();
+            }
+        }
+
+        return String(input).trim();
     }
 
-    if (
-      /\b(acara keluarga|keluarga|kondangan|acara)\b/.test(text)
-    ) {
-      needs.push("acara");
+    function getConversationModule() {
+        return window.CGO_CUSTOMER.conversation || null;
     }
 
-    if (
-      /\b(temenin|temani|menemani|pendamping)\b/.test(text)
-    ) {
-      needs.push("pendampingan");
+    function getKnowledgeModule() {
+        return window.CGO_CUSTOMER.knowledge || null;
     }
 
-    if (
-      /\b(antar|jemput|pergi ke|mau ke)\b/.test(text)
-    ) {
-      needs.push("perjalanan");
+    function getDiscoveryModule() {
+        return window.CGO_CUSTOMER.discovery || null;
     }
 
-    if (
-      /\b(bantu|dibantu|butuh bantuan)\b/.test(text)
-    ) {
-      needs.push("bantuan");
+    function getGuardianModule() {
+        return window.CGO_CUSTOMER.guardian || null;
     }
 
-    return unique(needs);
-  }
+    /* =========================================================
+     * MODULE STATUS
+     * ========================================================= */
 
-
-  function detectServiceInformationQuestion(text) {
-
-    return (
-      /\b(assistant|asisten|food|ride|2in1|2 in 1)\b/.test(text) &&
-      (
-        /\b(untuk apa|buat apa|bisa apa|apa saja|ngapain|fungsinya)\b/.test(text) ||
-        /\b(jelasin|jelaskan|jelasin dong|jelaskan dong)\b/.test(text)
-      )
-    );
-  }
-
-
-  function detectAvailabilityQuestion(text) {
-
-    return (
-      /\b(ada|tersedia|available)\b/.test(text) &&
-      (
-        /\b(agent|mitra|driver|assistant)\b/.test(text)
-      )
-    );
-  }
-
-
-  function detectActionRequest(text) {
-
-    return (
-      /\b(pesan|booking|order|pesenin|carikan|bantu pesan)\b/.test(text)
-    );
-  }
-
-
-  // ----------------------------------------------------------
-  // HELPERS
-  // ----------------------------------------------------------
-
-  function findBestService(serviceIds) {
-
-    if (!Array.isArray(serviceIds)) {
-      return null;
+    function getModuleStatus() {
+        return {
+            conversation: !!getConversationModule(),
+            knowledge: !!getKnowledgeModule(),
+            discovery: !!getDiscoveryModule(),
+            guardian: !!getGuardianModule()
+        };
     }
 
-    for (let i = 0; i < serviceIds.length; i++) {
+    function isReady() {
+        const modules = getModuleStatus();
 
-      const service =
-        state.services[serviceIds[i]];
-
-      if (service) {
-        return service;
-      }
-    }
-
-    return null;
-  }
-
-
-  function addMessage(role, text, analysis) {
-
-    state.messages.push({
-      id: createId("message"),
-      role: role,
-      text: text,
-      timestamp: Date.now(),
-      analysis: analysis
-        ? clone(analysis)
-        : null
-    });
-  }
-
-
-  function finalizeResponse(
-    text,
-    type,
-    analysis
-  ) {
-
-    const response = {
-      id: createId("response"),
-      conversationId: state.conversationId,
-      type: type || "conversation",
-      text: text,
-      timestamp: Date.now(),
-      analysis: clone(analysis),
-      context: clone(state.context)
-    };
-
-    state.context.lastCGOMessage = text;
-
-    addMessage(
-      "cgo",
-      text,
-      {
-        type: type,
-        analysis: analysis
-      }
-    );
-
-    emit("message:cgo", response);
-
-    return response;
-  }
-
-
-  function createResult(type, text) {
-
-    return finalizeResponse(
-      text,
-      type,
-      {
-        intent: type
-      }
-    );
-  }
-
-
-  function normalizeDiscoveryResult(result) {
-
-    if (!result) {
-
-      return {
-        pending: false,
-        completed: true,
-        success: false,
-        items: []
-      };
-    }
-
-    if (
-      result.success === true ||
-      Array.isArray(result.items)
-    ) {
-
-      return {
-        pending: false,
-        completed: true,
-        success: result.success !== false,
-        items: Array.isArray(result.items)
-          ? result.items
-          : [],
-        data: result.data || null
-      };
-    }
-
-    return {
-      pending: false,
-      completed: true,
-      success: false,
-      items: [],
-      data: null
-    };
-  }
-
-
-  function mergeNeeds(existing, incoming) {
-
-    return unique(
-      (existing || []).concat(
-        incoming || []
-      )
-    );
-  }
-
-
-  function normalizeInput(input) {
-
-    if (typeof input === "string") {
-      return input.trim();
-    }
-
-    if (
-      input &&
-      typeof input.text === "string"
-    ) {
-      return input.text.trim();
-    }
-
-    return "";
-  }
-
-
-  function normalizeText(text) {
-
-    return String(text || "")
-      .toLowerCase()
-      .trim();
-  }
-
-
-  function unique(array) {
-
-    return Array.from(
-      new Set(array || [])
-    );
-  }
-
-
-  function random(array) {
-
-    return array[
-      Math.floor(
-        Math.random() * array.length
-      )
-    ];
-  }
-
-
-  function clone(value) {
-
-    try {
-      return JSON.parse(
-        JSON.stringify(value)
-      );
-    } catch (error) {
-      return value;
-    }
-  }
-
-
-  function createId(prefix) {
-
-    return (
-      prefix +
-      "_" +
-      Date.now().toString(36) +
-      "_" +
-      Math.random()
-        .toString(36)
-        .slice(2, 8)
-    );
-  }
-
-
-  function safeError(error) {
-
-    if (!error) {
-      return "unknown_error";
-    }
-
-    return {
-      name: error.name || "Error",
-      message: error.message || String(error)
-    };
-  }
-
-
-  function emit(eventName, payload) {
-
-    state.listeners.forEach(function (listener) {
-
-      if (
-        listener.event !== eventName &&
-        listener.event !== "*"
-      ) {
-        return;
-      }
-
-      try {
-        listener.callback(payload);
-      } catch (error) {
         /*
-         * Listener errors must never kill CGO.
+         * Conversation, Knowledge, dan Guardian merupakan
+         * fondasi utama.
+         *
+         * Discovery boleh belum terhubung karena tidak semua
+         * percakapan membutuhkan pengecekan runtime.
          */
-      }
-    });
-  }
-
-
-  // ----------------------------------------------------------
-  // OPTIONAL ASYNC CHAT
-  // ----------------------------------------------------------
-
-  /*
-   * Used later when Local Discovery becomes asynchronous.
-   *
-   * This is still INTERNAL JavaScript.
-   * It is NOT an external API.
-   */
-
-  CGO.chatAsync = async function (
-    input,
-    options
-  ) {
-
-    const message =
-      normalizeInput(input);
-
-    if (!message) {
-      return CGO.chat("");
+        return (
+            modules.conversation === true &&
+            modules.knowledge === true &&
+            modules.guardian === true
+        );
     }
 
-    const analysis =
-      analyzeMessage(message);
+    /* =========================================================
+     * MESSAGE RECORD
+     * ========================================================= */
 
-    updateContext(message, analysis);
+    function recordMessage(role, text, metadata) {
+        const message = {
+            id:
+                "msg-" +
+                Date.now().toString(36) +
+                "-" +
+                Math.random().toString(36).slice(2, 7),
 
-    addMessage(
-      "user",
-      message,
-      analysis
-    );
+            conversationId: state.conversationId,
 
-    emit("message:user", {
-      text: message,
-      analysis: analysis
-    });
+            role: role,
 
+            text: text,
 
-    const guardedAnalysis =
-      guardianAnalyze(
-        analysis,
-        state.context
-      );
+            timestamp: now(),
 
+            metadata: metadata || {}
+        };
 
-    if (
-      guardedAnalysis.requiresDiscovery &&
-      state.adapters.discovery
-    ) {
+        state.messages.push(message);
 
-      try {
+        /*
+         * Menjaga history lokal tetap masuk akal.
+         * Tidak menyimpan tanpa batas.
+         */
+        if (state.messages.length > 100) {
+            state.messages.shift();
+        }
 
-        const adapter =
-          state.adapters.discovery;
+        emit(EVENTS.MESSAGE, clone(message));
+
+        return message;
+    }
+
+    /* =========================================================
+     * CONVERSATION PROCESSING
+     * ========================================================= */
+
+    function analyzeConversation(input, options) {
+        const conversation = getConversationModule();
+
+        if (!conversation) {
+            throw new Error(
+                "CGO Customer Conversation module belum tersedia."
+            );
+        }
 
         let result = null;
 
+        if (typeof conversation.process === "function") {
+            result = conversation.process(input, {
+                conversationId: state.conversationId,
+                turn: state.turn,
+                options: options || {},
+                previousState: clone(state)
+            });
+        } else if (typeof conversation.classify === "function") {
+            result = conversation.classify(input, {
+                conversationId: state.conversationId,
+                turn: state.turn
+            });
+        } else {
+            throw new Error(
+                "Conversation module tidak memiliki process() atau classify()."
+            );
+        }
+
+        if (!result || typeof result !== "object") {
+            result = {
+                intent: "conversation",
+                topic: "conversation",
+                mood: "neutral",
+                needs: [],
+                mentionedServices: [],
+                candidateService: null,
+                combinedServiceCandidate: null
+            };
+        }
+
+        state.lastAnalysis = clone(result);
+
+        if (result.topic) {
+            state.currentTopic = result.topic;
+        }
+
+        if (result.intent) {
+            state.currentIntent = result.intent;
+        }
+
+        if (result.mood) {
+            state.currentMood = result.mood;
+        }
+
+        if (Array.isArray(result.needs)) {
+            state.detectedNeeds = clone(result.needs);
+        }
+
+        if (Array.isArray(result.mentionedServices)) {
+            state.mentionedServices = clone(
+                result.mentionedServices
+            );
+        }
+
+        if (result.candidateService) {
+            state.candidateService = result.candidateService;
+        }
+
+        if (result.combinedServiceCandidate) {
+            state.combinedServiceCandidate =
+                result.combinedServiceCandidate;
+        }
+
+        emit(EVENTS.ANALYZED, clone(result));
+
+        return result;
+    }
+
+    /* =========================================================
+     * KNOWLEDGE PROCESSING
+     * ========================================================= */
+
+    function queryKnowledge(input, analysis, options) {
+        const knowledge = getKnowledgeModule();
+
+        if (!knowledge) {
+            return {
+                status: "unknown",
+                known: false,
+                reason: "Knowledge module tidak tersedia."
+            };
+        }
+
+        let result = null;
+
+        /*
+         * Bila knowledge module memiliki interpretasi langsung,
+         * gunakan itu terlebih dahulu.
+         */
+        if (typeof knowledge.interpret === "function") {
+            result = knowledge.interpret(input, {
+                analysis: analysis,
+                state: clone(state),
+                options: options || {}
+            });
+        }
+
+        /*
+         * Jika tidak ada interpret(), gunakan query() bila tersedia.
+         */
         if (
-          typeof adapter.checkAsync === "function"
+            (!result || typeof result !== "object") &&
+            typeof knowledge.query === "function"
         ) {
-
-          result =
-            await adapter.checkAsync({
-              analysis: clone(guardedAnalysis),
-              context: clone(state.context),
-              options: options || {}
+            result = knowledge.query(input, {
+                analysis: analysis,
+                state: clone(state)
             });
-
-        } else if (
-          typeof adapter.check === "function"
-        ) {
-
-          result =
-            await adapter.check({
-              analysis: clone(guardedAnalysis),
-              context: clone(state.context),
-              options: options || {}
-            });
-
         }
 
-        if (result) {
+        /*
+         * Jika conversation sudah menentukan kandidat service,
+         * ambil knowledge service tersebut.
+         */
+        if (
+            (!result || typeof result !== "object") &&
+            analysis &&
+            analysis.candidateService &&
+            typeof knowledge.getService === "function"
+        ) {
+            const serviceId =
+                typeof analysis.candidateService === "string"
+                    ? analysis.candidateService
+                    : analysis.candidateService.id;
 
-          const discovery =
-            normalizeDiscoveryResult(result);
+            const service =
+                knowledge.getService(serviceId);
 
-          return finalizeResponse(
-            buildDiscoveryResponse(
-              discovery,
-              guardedAnalysis
-            ),
-            "discovery_result",
-            guardedAnalysis
-          );
-        }
-
-      } catch (error) {
-
-        emit("discovery:error", {
-          error: safeError(error)
-        });
-      }
-    }
-
-
-    const response =
-      generateResponse(
-        guardedAnalysis,
-        state.context
-      );
-
-    const safe =
-      guardianResponse(
-        response,
-        guardedAnalysis
-      );
-
-    return finalizeResponse(
-      safe.text,
-      safe.type,
-      guardedAnalysis
-    );
-  };
-
-
-  // ----------------------------------------------------------
-  // GLOBAL EXPOSURE
-  // ----------------------------------------------------------
-
-  /*
-   * Single public gateway.
-   *
-   * Customer pages should NOT need to know the internal modules.
-   */
-
-  global.CGO = CGO;
-
-
-  // ----------------------------------------------------------
-  // OPTIONAL DEBUG INFORMATION
-  // ----------------------------------------------------------
-
-  if (
-    typeof global.dispatchEvent === "function" &&
-    typeof global.CustomEvent === "function"
-  ) {
-
-    try {
-
-      global.dispatchEvent(
-        new CustomEvent(
-          "cgo:customer:ready",
-          {
-            detail: {
-              version: VERSION
+            if (service) {
+                result = {
+                    status: "complete",
+                    known: true,
+                    service: service,
+                    source: "service_registry"
+                };
             }
-          }
-        )
-      );
+        }
 
-    } catch (error) {
-      // Ignore browser event compatibility issues.
+        if (!result || typeof result !== "object") {
+            result = {
+                status: "unknown",
+                known: false,
+                service: null,
+                source: null
+            };
+        }
+
+        state.lastKnowledge = clone(result);
+
+        emit(EVENTS.KNOWLEDGE, clone(result));
+
+        return result;
     }
-  }
 
+    /* =========================================================
+     * DISCOVERY DECISION
+     * ========================================================= */
+
+    function needsRuntimeDiscovery(
+        input,
+        analysis,
+        knowledge,
+        options
+    ) {
+        options = options || {};
+
+        /*
+         * Caller dapat memaksa discovery secara eksplisit.
+         */
+        if (options.forceDiscovery === true) {
+            return true;
+        }
+
+        /*
+         * Jangan melakukan discovery hanya karena menyebut nama
+         * service. Discovery hanya dilakukan ketika kebutuhan
+         * memang membutuhkan kondisi aktual.
+         */
+        if (
+            analysis &&
+            analysis.intent === "availability"
+        ) {
+            return true;
+        }
+
+        if (
+            analysis &&
+            analysis.intent === "order"
+        ) {
+            return true;
+        }
+
+        if (
+            analysis &&
+            analysis.intent === "location"
+        ) {
+            return true;
+        }
+
+        if (
+            analysis &&
+            analysis.intent === "action"
+        ) {
+            return true;
+        }
+
+        /*
+         * Knowledge dapat menyatakan discovery diperlukan.
+         */
+        if (
+            knowledge &&
+            knowledge.service &&
+            knowledge.service.discovery &&
+            knowledge.service.discovery.required === true
+        ) {
+            /*
+             * Tetapi hanya ketika customer benar-benar meminta
+             * kondisi sekarang atau tindakan nyata.
+             */
+            const text = input.toLowerCase();
+
+            const runtimeWords = [
+                "sekarang",
+                "saat ini",
+                "ada nggak",
+                "ada gak",
+                "ada ga",
+                "tersedia",
+                "dekat aku",
+                "dekat saya",
+                "sekitar sini",
+                "sekitar aku",
+                "sekitar saya",
+                "bisa datang",
+                "bisa antar",
+                "bisa jemput",
+                "siapa yang tersedia"
+            ];
+
+            if (
+                runtimeWords.some(function (word) {
+                    return text.indexOf(word) !== -1;
+                })
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /* =========================================================
+     * DISCOVERY REQUEST
+     * ========================================================= */
+
+    function buildDiscoveryRequest(
+        input,
+        analysis,
+        knowledge,
+        options
+    ) {
+        options = options || {};
+
+        let serviceId = null;
+
+        if (
+            analysis &&
+            analysis.combinedServiceCandidate
+        ) {
+            serviceId =
+                typeof analysis.combinedServiceCandidate ===
+                "string"
+                    ? analysis.combinedServiceCandidate
+                    : analysis.combinedServiceCandidate.id;
+        }
+
+        if (!serviceId && analysis && analysis.candidateService) {
+            serviceId =
+                typeof analysis.candidateService === "string"
+                    ? analysis.candidateService
+                    : analysis.candidateService.id;
+        }
+
+        if (!serviceId && knowledge && knowledge.service) {
+            serviceId = knowledge.service.id || null;
+        }
+
+        const discoveryTypes =
+            knowledge &&
+            knowledge.service &&
+            knowledge.service.discovery &&
+            Array.isArray(
+                knowledge.service.discovery.types
+            )
+                ? knowledge.service.discovery.types
+                : [];
+
+        return {
+            requestId:
+                "customer-discovery-" +
+                Date.now().toString(36) +
+                "-" +
+                Math.random().toString(36).slice(2, 7),
+
+            serviceId: serviceId,
+
+            service:
+                knowledge && knowledge.service
+                    ? clone(knowledge.service)
+                    : null,
+
+            types: discoveryTypes,
+
+            query: input,
+
+            needs:
+                analysis && Array.isArray(analysis.needs)
+                    ? clone(analysis.needs)
+                    : [],
+
+            context: {
+                conversationId: state.conversationId,
+                turn: state.turn,
+                topic: state.currentTopic,
+                intent: state.currentIntent,
+                mood: state.currentMood,
+
+                location:
+                    options.location ||
+                    (
+                        analysis &&
+                        analysis.location
+                    ) ||
+                    null,
+
+                duration:
+                    analysis &&
+                    analysis.duration
+                        ? analysis.duration
+                        : null
+            }
+        };
+    }
+
+    /* =========================================================
+     * DISCOVERY EXECUTION
+     * ========================================================= */
+
+    function performDiscovery(
+        input,
+        analysis,
+        knowledge,
+        options
+    ) {
+        const discovery = getDiscoveryModule();
+
+        if (!discovery) {
+            const unknown = {
+                status: "unknown",
+                verified: false,
+                source: null,
+                reason:
+                    "Discovery module belum tersedia."
+            };
+
+            state.lastDiscovery = clone(unknown);
+
+            return unknown;
+        }
+
+        const request = buildDiscoveryRequest(
+            input,
+            analysis,
+            knowledge,
+            options
+        );
+
+        state.pendingDiscovery = clone(request);
+
+        emit(
+            EVENTS.DISCOVERY_REQUIRED,
+            clone(request)
+        );
+
+        /*
+         * Jika discovery adapter belum terhubung, module Discovery
+         * sendiri harus mengembalikan UNKNOWN.
+         *
+         * Gateway tidak boleh mengubah UNKNOWN menjadi AVAILABLE.
+         */
+        let result;
+
+        if (typeof discovery.screen === "function") {
+            result = discovery.screen(request);
+        } else if (
+            typeof discovery.findNearby === "function"
+        ) {
+            result = discovery.findNearby(request);
+        } else {
+            result = {
+                status: "unknown",
+                verified: false,
+                source: null,
+                reason:
+                    "Tidak ada metode discovery yang tersedia."
+            };
+        }
+
+        state.lastDiscovery = clone(result);
+        state.pendingDiscovery = null;
+
+        emit(
+            EVENTS.DISCOVERY_FINISHED,
+            clone(result)
+        );
+
+        return result;
+    }
+
+    async function performDiscoveryAsync(
+        input,
+        analysis,
+        knowledge,
+        options
+    ) {
+        const discovery = getDiscoveryModule();
+
+        if (!discovery) {
+            const unknown = {
+                status: "unknown",
+                verified: false,
+                source: null,
+                reason:
+                    "Discovery module belum tersedia."
+            };
+
+            state.lastDiscovery = clone(unknown);
+
+            return unknown;
+        }
+
+        const request = buildDiscoveryRequest(
+            input,
+            analysis,
+            knowledge,
+            options
+        );
+
+        state.pendingDiscovery = clone(request);
+
+        emit(
+            EVENTS.DISCOVERY_STARTED,
+            clone(request)
+        );
+
+        let result;
+
+        try {
+            if (
+                typeof discovery.screenAsync ===
+                "function"
+            ) {
+                result =
+                    await discovery.screenAsync(
+                        request
+                    );
+            } else if (
+                typeof discovery.findNearbyAsync ===
+                "function"
+            ) {
+                result =
+                    await discovery.findNearbyAsync(
+                        request
+                    );
+            } else if (
+                typeof discovery.screen ===
+                "function"
+            ) {
+                result = discovery.screen(request);
+            } else {
+                result = {
+                    status: "unknown",
+                    verified: false,
+                    source: null,
+                    reason:
+                        "Tidak ada metode discovery yang tersedia."
+                };
+            }
+        } catch (error) {
+            result = {
+                status: "error",
+                verified: false,
+                source: null,
+                error: error.message,
+                reason:
+                    "Discovery gagal dijalankan."
+            };
+        }
+
+        state.lastDiscovery = clone(result);
+        state.pendingDiscovery = null;
+
+        emit(
+            EVENTS.DISCOVERY_FINISHED,
+            clone(result)
+        );
+
+        return result;
+    }
+
+    /* =========================================================
+     * RESPONSE CANDIDATE
+     * ========================================================= */
+
+    function generateResponseCandidate(
+        input,
+        analysis,
+        knowledge,
+        discovery,
+        options
+    ) {
+        const conversation =
+            getConversationModule();
+
+        if (!conversation) {
+            return fallbackResponse(
+                "conversation_module_missing"
+            );
+        }
+
+        let response = null;
+
+        /*
+         * Response generator milik Conversation tetap menjadi
+         * sumber personality dan natural conversation.
+         */
+        if (
+            typeof conversation.generateResponse ===
+            "function"
+        ) {
+            response =
+                conversation.generateResponse(
+                    input,
+                    {
+                        analysis: analysis,
+                        knowledge: knowledge,
+                        discovery: discovery,
+                        state: clone(state),
+                        options: options || {}
+                    }
+                );
+        }
+
+        /*
+         * Beberapa versi conversation module mungkin mengembalikan
+         * object, bukan string.
+         */
+        if (
+            response &&
+            typeof response === "object"
+        ) {
+            if (typeof response.text === "string") {
+                response = response.text;
+            } else if (
+                typeof response.response === "string"
+            ) {
+                response = response.response;
+            } else if (
+                typeof response.message === "string"
+            ) {
+                response = response.message;
+            }
+        }
+
+        if (
+            typeof response !== "string" ||
+            !response.trim()
+        ) {
+            response = generateGatewayFallback(
+                input,
+                analysis,
+                knowledge,
+                discovery
+            );
+        }
+
+        response = response.trim();
+
+        emit(EVENTS.RESPONSE_CANDIDATE, {
+            input: input,
+            response: response,
+            analysis: clone(analysis),
+            knowledge: clone(knowledge),
+            discovery: clone(discovery)
+        });
+
+        return response;
+    }
+
+    /* =========================================================
+     * FALLBACK RESPONSE
+     * ========================================================= */
+
+    function fallbackResponse(reason) {
+        if (
+            reason ===
+            "conversation_module_missing"
+        ) {
+            return (
+                "Aku masih menyiapkan bagian percakapanku. " +
+                "Coba sebentar lagi yaaa 😊"
+            );
+        }
+
+        return (
+            "Aku belum punya informasi yang cukup untuk " +
+            "menjawabnya dengan tepat. Aku nggak mau asal nebak yaa 😊"
+        );
+    }
+
+    function generateGatewayFallback(
+        input,
+        analysis,
+        knowledge,
+        discovery
+    ) {
+        /*
+         * Fallback ini sengaja sederhana.
+         * Personality utama tetap berada di Conversation.
+         */
+
+        if (
+            analysis &&
+            analysis.intent === "availability"
+        ) {
+            if (
+                discovery &&
+                discovery.status === "available" &&
+                discovery.verified === true
+            ) {
+                return (
+                    "Aku sudah mendapatkan hasil pengecekan " +
+                    "yang bisa diverifikasi. Ada layanan yang " +
+                    "sesuai berdasarkan data yang tersedia 😊"
+                );
+            }
+
+            if (
+                discovery &&
+                discovery.status === "unavailable" &&
+                discovery.verified === true
+            ) {
+                return (
+                    "Aku sudah cek berdasarkan data yang tersedia, " +
+                    "dan saat ini belum ada layanan yang bisa " +
+                    "aku konfirmasi sesuai kebutuhanmu."
+                );
+            }
+
+            return (
+                "Sebentar yaaa, aku belum bisa memastikan " +
+                "ketersediaannya karena hasil runtime yang " +
+                "terverifikasi belum ada 😊"
+            );
+        }
+
+        if (
+            knowledge &&
+            knowledge.service
+        ) {
+            const service =
+                knowledge.service;
+
+            return (
+                service.name +
+                " bisa membantu " +
+                (
+                    service.description ||
+                    "sesuai kebutuhanmu."
+                )
+            );
+        }
+
+        return fallbackResponse(
+            "insufficient_response"
+        );
+    }
+
+    /* =========================================================
+     * GUARDIAN
+     * ========================================================= */
+
+    function guardResponse(
+        candidate,
+        analysis,
+        knowledge,
+        discovery,
+        options
+    ) {
+        const guardian =
+            getGuardianModule();
+
+        if (!guardian) {
+            /*
+             * Guardian merupakan fondasi wajib.
+             * Jika tidak tersedia, jangan meneruskan candidate
+             * sebagai jawaban final.
+             */
+            const blocked = {
+                safe: false,
+                status: "blocked",
+                response:
+                    "Aku belum bisa memberikan jawaban dengan aman " +
+                    "karena penjaga kebenaran CGO belum siap.",
+                original: candidate,
+                warnings: [
+                    "Guardian module tidak tersedia."
+                ]
+            };
+
+            state.lastGuard = clone(blocked);
+
+            return blocked;
+        }
+
+        const context = {
+            conversationId:
+                state.conversationId,
+
+            turn: state.turn,
+
+            knowledge: knowledge,
+
+            discovery: discovery,
+
+            evidence:
+                discovery &&
+                discovery.evidence
+                    ? discovery.evidence
+                    : discovery,
+
+            runtimeConnected:
+                !!(
+                    getDiscoveryModule() &&
+                    typeof getDiscoveryModule()
+                        .isConnected ===
+                        "function" &&
+                    getDiscoveryModule().isConnected()
+                ),
+
+            authorized:
+                options &&
+                options.authorized === true,
+
+            actionAuthorized:
+                options &&
+                options.actionAuthorized === true,
+
+            humanApproved:
+                options &&
+                options.humanApproved === true,
+
+            service:
+                analysis &&
+                analysis.candidateService
+                    ? analysis.candidateService
+                    : null,
+
+            intent:
+                analysis &&
+                analysis.intent
+                    ? analysis.intent
+                    : null,
+
+            needs:
+                analysis &&
+                Array.isArray(analysis.needs)
+                    ? analysis.needs
+                    : []
+        };
+
+        let result;
+
+        if (
+            typeof guardian.guard ===
+            "function"
+        ) {
+            result = guardian.guard(
+                candidate,
+                context
+            );
+        } else {
+            result = {
+                safe: false,
+                status: "blocked",
+                response:
+                    "Aku belum bisa memberikan jawaban dengan aman.",
+                warnings: [
+                    "Guardian guard() tidak tersedia."
+                ]
+            };
+        }
+
+        state.lastGuard = clone(result);
+
+        emit(EVENTS.GUARDED, clone(result));
+
+        return result;
+    }
+
+    /* =========================================================
+     * RESPONSE FINALIZATION
+     * ========================================================= */
+
+    function finalizeResponse(
+        input,
+        analysis,
+        knowledge,
+        discovery,
+        candidate,
+        options
+    ) {
+        const guardResult =
+            guardResponse(
+                candidate,
+                analysis,
+                knowledge,
+                discovery,
+                options
+            );
+
+        let finalResponse =
+            guardResult &&
+            typeof guardResult.response ===
+                "string"
+                ? guardResult.response
+                : "";
+
+        if (!finalResponse.trim()) {
+            finalResponse =
+                "Aku belum bisa memastikan jawabannya dengan cukup aman.";
+        }
+
+        finalResponse = finalResponse.trim();
+
+        state.lastResponse = finalResponse;
+
+        recordMessage(
+            "assistant",
+            finalResponse,
+            {
+                guardStatus:
+                    guardResult.status,
+
+                analysis:
+                    clone(analysis),
+
+                knowledge:
+                    clone(knowledge),
+
+                discovery:
+                    clone(discovery)
+            }
+        );
+
+        emit(EVENTS.RESPONSE, {
+            conversationId:
+                state.conversationId,
+
+            turn:
+                state.turn,
+
+            input:
+                input,
+
+            response:
+                finalResponse,
+
+            guard:
+                clone(guardResult)
+        });
+
+        return {
+            response: finalResponse,
+
+            guard:
+                clone(guardResult),
+
+            analysis:
+                clone(analysis),
+
+            knowledge:
+                clone(knowledge),
+
+            discovery:
+                clone(discovery)
+        };
+    }
+
+    /* =========================================================
+     * MAIN SYNC PIPELINE
+     * ========================================================= */
+
+    function chat(input, options) {
+        options = options || {};
+
+        const text = normalizeInput(input);
+
+        if (!text) {
+            return {
+                response:
+                    "Aku dengerin kok 😊 Coba ceritain pelan-pelan.",
+                status: "empty_input"
+            };
+        }
+
+        state.turn += 1;
+
+        state.lastInput = text;
+        state.lastError = null;
+
+        recordMessage(
+            "user",
+            text,
+            {
+                turn: state.turn
+            }
+        );
+
+        try {
+            /*
+             * STEP 1 — CONVERSATION
+             */
+            const analysis =
+                analyzeConversation(
+                    text,
+                    options
+                );
+
+            /*
+             * STEP 2 — KNOWLEDGE
+             */
+            const knowledge =
+                queryKnowledge(
+                    text,
+                    analysis,
+                    options
+                );
+
+            /*
+             * STEP 3 — DISCOVERY
+             */
+            let discovery = null;
+
+            if (
+                needsRuntimeDiscovery(
+                    text,
+                    analysis,
+                    knowledge,
+                    options
+                )
+            ) {
+                discovery =
+                    performDiscovery(
+                        text,
+                        analysis,
+                        knowledge,
+                        options
+                    );
+            } else {
+                discovery = {
+                    status: "not_required",
+                    verified: false,
+                    source: null
+                };
+            }
+
+            /*
+             * STEP 4 — RESPONSE CANDIDATE
+             */
+            const candidate =
+                generateResponseCandidate(
+                    text,
+                    analysis,
+                    knowledge,
+                    discovery,
+                    options
+                );
+
+            /*
+             * STEP 5 — GUARDIAN
+             */
+            const result =
+                finalizeResponse(
+                    text,
+                    analysis,
+                    knowledge,
+                    discovery,
+                    candidate,
+                    options
+                );
+
+            return result;
+        } catch (error) {
+            state.lastError = {
+                message:
+                    error.message,
+                timestamp:
+                    now()
+            };
+
+            emit(EVENTS.ERROR, {
+                error:
+                    clone(state.lastError),
+                input:
+                    text
+            });
+
+            const safeErrorResponse =
+                "Aduh, bagian dalam CGO lagi mengalami kendala. " +
+                "Aku nggak mau mengarang jawaban yaaa. " +
+                "Coba ulangi sebentar lagi 😊";
+
+            state.lastResponse =
+                safeErrorResponse;
+
+            recordMessage(
+                "assistant",
+                safeErrorResponse,
+                {
+                    error: true
+                }
+            );
+
+            return {
+                response:
+                    safeErrorResponse,
+
+                status: "error",
+
+                error:
+                    clone(state.lastError)
+            };
+        }
+    }
+
+    /* =========================================================
+     * MAIN ASYNC PIPELINE
+     * ========================================================= */
+
+    async function chatAsync(
+        input,
+        options
+    ) {
+        options = options || {};
+
+        const text =
+            normalizeInput(input);
+
+        if (!text) {
+            return {
+                response:
+                    "Aku dengerin kok 😊 Coba ceritain pelan-pelan.",
+                status: "empty_input"
+            };
+        }
+
+        state.turn += 1;
+
+        state.lastInput = text;
+        state.lastError = null;
+
+        recordMessage(
+            "user",
+            text,
+            {
+                turn: state.turn
+            }
+        );
+
+        try {
+            /*
+             * STEP 1 — CONVERSATION
+             */
+            const analysis =
+                analyzeConversation(
+                    text,
+                    options
+                );
+
+            /*
+             * STEP 2 — KNOWLEDGE
+             */
+            const knowledge =
+                queryKnowledge(
+                    text,
+                    analysis,
+                    options
+                );
+
+            /*
+             * STEP 3 — DISCOVERY ASYNC
+             */
+            let discovery = null;
+
+            if (
+                needsRuntimeDiscovery(
+                    text,
+                    analysis,
+                    knowledge,
+                    options
+                )
+            ) {
+                discovery =
+                    await performDiscoveryAsync(
+                        text,
+                        analysis,
+                        knowledge,
+                        options
+                    );
+            } else {
+                discovery = {
+                    status: "not_required",
+                    verified: false,
+                    source: null
+                };
+            }
+
+            /*
+             * STEP 4 — RESPONSE CANDIDATE
+             */
+            const candidate =
+                generateResponseCandidate(
+                    text,
+                    analysis,
+                    knowledge,
+                    discovery,
+                    options
+                );
+
+            /*
+             * STEP 5 — GUARDIAN
+             */
+            const result =
+                finalizeResponse(
+                    text,
+                    analysis,
+                    knowledge,
+                    discovery,
+                    candidate,
+                    options
+                );
+
+            return result;
+        } catch (error) {
+            state.lastError = {
+                message:
+                    error.message,
+                timestamp:
+                    now()
+            };
+
+            emit(EVENTS.ERROR, {
+                error:
+                    clone(state.lastError),
+                input:
+                    text
+            });
+
+            const safeErrorResponse =
+                "Aku lagi mengalami kendala di bagian dalam. " +
+                "Aku nggak mau asal jawab yaaa 😊";
+
+            state.lastResponse =
+                safeErrorResponse;
+
+            recordMessage(
+                "assistant",
+                safeErrorResponse,
+                {
+                    error: true
+                }
+            );
+
+            return {
+                response:
+                    safeErrorResponse,
+
+                status: "error",
+
+                error:
+                    clone(state.lastError)
+            };
+        }
+    }
+
+    /* =========================================================
+     * SERVICE API
+     * ========================================================= */
+
+    function getServices() {
+        const knowledge =
+            getKnowledgeModule();
+
+        if (
+            knowledge &&
+            typeof knowledge.getServices ===
+                "function"
+        ) {
+            return clone(
+                knowledge.getServices()
+            );
+        }
+
+        return [];
+    }
+
+    function registerService(service) {
+        const knowledge =
+            getKnowledgeModule();
+
+        if (
+            !knowledge ||
+            typeof knowledge.registerService !==
+                "function"
+        ) {
+            return {
+                success: false,
+                reason:
+                    "Knowledge module belum siap."
+            };
+        }
+
+        return knowledge.registerService(
+            service
+        );
+    }
+
+    function getService(serviceId) {
+        const knowledge =
+            getKnowledgeModule();
+
+        if (
+            knowledge &&
+            typeof knowledge.getService ===
+                "function"
+        ) {
+            return clone(
+                knowledge.getService(
+                    serviceId
+                )
+            );
+        }
+
+        return null;
+    }
+
+    /* =========================================================
+     * SERVICE HANDOFF
+     * ========================================================= */
+
+    function openService(serviceId, options) {
+        options = options || {};
+
+        const service =
+            getService(serviceId);
+
+        if (!service) {
+            return {
+                success: false,
+                reason:
+                    "Service tidak ditemukan."
+            };
+        }
+
+        const navigation =
+            window.CGO_CUSTOMER.navigation;
+
+        /*
+         * Gateway tidak melakukan navigasi palsu.
+         * Kalau adapter navigation tersedia, baru diteruskan.
+         */
+        if (
+            navigation &&
+            typeof navigation.openService ===
+                "function"
+        ) {
+            return navigation.openService(
+                service,
+                options
+            );
+        }
+
+        return {
+            success: false,
+            status: "navigation_not_connected",
+            service: clone(service),
+            reason:
+                "Navigation adapter belum terhubung."
+        };
+    }
+
+    /* =========================================================
+     * RUNTIME CONNECTION
+     * ========================================================= */
+
+    function connectDiscovery(adapter) {
+        const discovery =
+            getDiscoveryModule();
+
+        if (
+            !discovery ||
+            typeof discovery.connect !==
+                "function"
+        ) {
+            return {
+                success: false,
+                reason:
+                    "Discovery module belum tersedia."
+            };
+        }
+
+        return discovery.connect(
+            adapter
+        );
+    }
+
+    function disconnectDiscovery() {
+        const discovery =
+            getDiscoveryModule();
+
+        if (
+            discovery &&
+            typeof discovery.disconnect ===
+                "function"
+        ) {
+            return discovery.disconnect();
+        }
+
+        return {
+            success: false,
+            reason:
+                "Discovery module belum tersedia."
+        };
+    }
+
+    function connectRuntime(adapter) {
+        /*
+         * Alias semantik untuk runtime discovery.
+         *
+         * Tidak membuat external API.
+         */
+        return connectDiscovery(
+            adapter
+        );
+    }
+
+    /* =========================================================
+     * NAVIGATION CONNECTION
+     * ========================================================= */
+
+    function connectNavigation(adapter) {
+        if (
+            !adapter ||
+            typeof adapter !== "object"
+        ) {
+            return {
+                success: false,
+                reason:
+                    "Navigation adapter tidak valid."
+            };
+        }
+
+        window.CGO_CUSTOMER.navigation =
+            adapter;
+
+        return {
+            success: true,
+            connected: true
+        };
+    }
+
+    /* =========================================================
+     * CONVERSATION CONTROL
+     * ========================================================= */
+
+    function resetConversation() {
+        state.conversationId =
+            createConversationId();
+
+        state.turn = 0;
+
+        state.messages = [];
+
+        state.lastInput = "";
+
+        state.lastResponse = "";
+
+        state.lastAnalysis = null;
+
+        state.lastKnowledge = null;
+
+        state.lastDiscovery = null;
+
+        state.lastGuard = null;
+
+        state.pendingDiscovery = null;
+
+        state.pendingQuestion = null;
+
+        state.currentTopic =
+            "conversation";
+
+        state.currentIntent =
+            "conversation";
+
+        state.currentMood =
+            "neutral";
+
+        state.candidateService = null;
+
+        state.combinedServiceCandidate =
+            null;
+
+        state.mentionedServices = [];
+
+        state.detectedNeeds = [];
+
+        state.lastError = null;
+
+        const conversation =
+            getConversationModule();
+
+        if (
+            conversation &&
+            typeof conversation.reset ===
+                "function"
+        ) {
+            try {
+                conversation.reset();
+            } catch (error) {
+                console.warn(
+                    "[CGO CUSTOMER] conversation reset error:",
+                    error
+                );
+            }
+        }
+
+        emit(EVENTS.RESET, {
+            conversationId:
+                state.conversationId,
+            timestamp:
+                now()
+        });
+
+        return {
+            success: true,
+            conversationId:
+                state.conversationId
+        };
+    }
+
+    /* =========================================================
+     * CONTEXT
+     * ========================================================= */
+
+    function getConversation() {
+        return clone(
+            state.messages
+        );
+    }
+
+    function getState() {
+        const discovery =
+            getDiscoveryModule();
+
+        let discoveryConnected =
+            false;
+
+        if (
+            discovery &&
+            typeof discovery.isConnected ===
+                "function"
+        ) {
+            discoveryConnected =
+                discovery.isConnected();
+        }
+
+        return clone({
+            version:
+                state.version,
+
+            ready:
+                isReady(),
+
+            modules:
+                getModuleStatus(),
+
+            conversationId:
+                state.conversationId,
+
+            turn:
+                state.turn,
+
+            lastInput:
+                state.lastInput,
+
+            lastResponse:
+                state.lastResponse,
+
+            currentTopic:
+                state.currentTopic,
+
+            currentIntent:
+                state.currentIntent,
+
+            currentMood:
+                state.currentMood,
+
+            candidateService:
+                state.candidateService,
+
+            combinedServiceCandidate:
+                state.combinedServiceCandidate,
+
+            mentionedServices:
+                state.mentionedServices,
+
+            detectedNeeds:
+                state.detectedNeeds,
+
+            pendingDiscovery:
+                state.pendingDiscovery,
+
+            lastAnalysis:
+                state.lastAnalysis,
+
+            lastKnowledge:
+                state.lastKnowledge,
+
+            lastDiscovery:
+                state.lastDiscovery,
+
+            lastGuard:
+                state.lastGuard,
+
+            discoveryConnected:
+                discoveryConnected,
+
+            lastError:
+                state.lastError
+        });
+    }
+
+    /* =========================================================
+     * READY CHECK
+     * ========================================================= */
+
+    function refreshReadyState() {
+        const previous =
+            state.ready;
+
+        state.ready =
+            isReady();
+
+        if (
+            state.ready &&
+            previous !== true
+        ) {
+            emit(EVENTS.READY, {
+                version:
+                    VERSION,
+
+                modules:
+                    getModuleStatus(),
+
+                timestamp:
+                    now()
+            });
+        }
+
+        return state.ready;
+    }
+
+    /* =========================================================
+     * PUBLIC API
+     * ========================================================= */
+
+    const CGO = {
+
+        version:
+            VERSION,
+
+        EVENTS:
+            EVENTS,
+
+        chat:
+            chat,
+
+        chatAsync:
+            chatAsync,
+
+        resetConversation:
+            resetConversation,
+
+        getConversation:
+            getConversation,
+
+        getState:
+            getState,
+
+        isReady:
+            function () {
+                return refreshReadyState();
+            },
+
+        getModuleStatus:
+            getModuleStatus,
+
+        getServices:
+            getServices,
+
+        getService:
+            getService,
+
+        registerService:
+            registerService,
+
+        openService:
+            openService,
+
+        connectDiscovery:
+            connectDiscovery,
+
+        disconnectDiscovery:
+            disconnectDiscovery,
+
+        connectRuntime:
+            connectRuntime,
+
+        connectNavigation:
+            connectNavigation,
+
+        on:
+            on
+    };
+
+    /*
+     * PUBLIC GLOBAL GATEWAY
+     */
+    window.CGO = CGO;
+
+    /*
+     * Pastikan state readiness dihitung setelah semua object
+     * global yang sudah tersedia dibaca.
+     */
+    state.ready =
+        isReady();
+
+    emit(EVENTS.READY, {
+        version:
+            VERSION,
+
+        ready:
+            state.ready,
+
+        modules:
+            getModuleStatus(),
+
+        timestamp:
+            now()
+    });
+
+    console.log(
+        "[CGO CUSTOMER] Gateway ready:",
+        VERSION
+    );
 
 })(window);
