@@ -114,6 +114,7 @@ export function createCaptain(options = {}) {
       ...meta
     };
     emit("CAPTAIN_HUMAN_RESPONSE", response);
+    try { BCGO_BRIDGE.publishResponse(response, { caseId: response.caseId || null, responseId: response.at }); } catch {}
     try { window.dispatchEvent(new CustomEvent("cikur-captain-human-response", { detail: clone(response) })); } catch {}
     return response;
   }
@@ -126,11 +127,11 @@ export function createCaptain(options = {}) {
     const raw = String(text || "").trim();
     if (!raw) return { handled: false, reason: "EMPTY_COMMAND" };
 
-    // Only direct operator commands are claimed by Captain. Other ordinary
-    // questions remain available to the existing internal BCGO conversation.
+    // This is the single visible Human -> CGO conversation surface.
+    // "CGO" does not need to be typed explicitly; ordinary questions must
+    // still reach the same Captain instance shown in the UI.
     const lower = raw.toLocaleLowerCase("id-ID");
     const addressed = /(^|[\s,.:!?])cgo([\s,.:!?]|$)/i.test(raw) || /kapten cgo/i.test(raw);
-    if (!addressed) return { handled: false, reason: "NOT_ADDRESSED_TO_CAPTAIN" };
 
     const caseId = currentCaseId();
     if (caseId) registerCase(caseId);
@@ -138,7 +139,7 @@ export function createCaptain(options = {}) {
     const isApprove = /\b(setujui|approve|saya setuju|izinkan|lanjutkan perubahan)\b/i.test(raw);
     const isReject = /\b(tolak|reject|jangan setujui|jangan lanjutkan|batalkan candidate)\b/i.test(raw);
     const isInvestigate = /\b(cek|periksa|periksa lagi|investigasi|selidiki|pengecekan|pengecekan ulang|cari tahu|telusuri|janggal|aneh|anomali|evidence|bukti)\b/i.test(raw);
-    const isUpdate = /\b(update|laporkan|laporan|status|sedang mengerjakan apa|apa yang dikerjakan)\b/i.test(raw);
+    const isUpdate = /\b(update|laporkan|laporan|status)\b/i.test(raw) || /(?:apa yang (?:sedang )?(?:kamu )?kerjakan|sedang kamu kerjakan)/i.test(raw);
 
     if (isApprove) {
       if (!state.humanGate) {
@@ -187,7 +188,21 @@ export function createCaptain(options = {}) {
         { decision: packet ? "UPDATE_DISPATCHED" : "UPDATE_BLOCKED" });
     }
 
-    return captainReply("Saya menerima perintah kakak. Jelaskan tindakan yang diinginkan—misalnya minta tim melakukan pengecekan, minta update, atau setujui/tolak candidate yang sudah membuka gerbang manusia.", { decision: "COMMAND_NEEDS_SCOPE" });
+    // Ordinary human conversation also belongs to the same Captain surface.
+    // Do not silently route the user into a second, visually disconnected brain.
+    const bcgoState = latestBCGO || {};
+    const scan = bcgoState.sourceScan || {};
+    const medicine = latestMedicine || {};
+    const executor = latestExecutor || {};
+    const active = Number(bcgoState.metrics?.active ?? 0);
+    const total = Number(bcgoState.metrics?.total ?? 0);
+    const target = bcgoState.lastTelemetryFile || medicine.target || null;
+    const blocker = state.blocker || medicine.blocker || executor.blocker || null;
+    const progress = scan.phase === "COMPLETE"
+      ? `scan ${Number(scan.filesReadable || 0)}/${Number(scan.requiredFiles || scan.totalFiles || 0)} source wajib terbaca`
+      : `scan ${scan.phase || "WAITING"}`;
+    const message = `Saya di sini, kakak. Saat ini saya sebagai CGO/Kapten sedang memantau BCGO: ${active} anomaly aktif dari ${total} organ; ${progress}.${target ? ` Target terakhir: ${target}.` : " Belum ada target source aktif yang bisa saya pastikan."}${blocker ? ` Gerbang masih tertahan karena ${String(blocker).slice(0,180)}.` : " Belum ada izin perubahan source; saya hanya bergerak berdasarkan evidence yang terbukti."}`;
+    return captainReply(message, { decision: "CONVERSATION_STATUS" });
   }
 
   function registerCase(caseId) {

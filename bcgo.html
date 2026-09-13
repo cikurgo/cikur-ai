@@ -797,26 +797,14 @@ async function sendQuestion(question) {
     setChatBusy(true);
     addChat('user', text);
     try {
-        // One human input must reach the same CGO/KAPTEN shown above.
-        // Explicit Captain commands are handled by the Captain orchestrator;
-        // ordinary questions go to the Internal AI brain, then are mirrored
-        // into Captain Chat so the two UI surfaces cannot silently diverge.
-        const addressed = /(^|[\s,.:!?])cgo([\s,.:!?]|$)/i.test(text) || /kapten cgo/i.test(text);
-        if (addressed) {
-            const bridge = window.CIKUR_BCGO_CGO_BRIDGE;
-            if (!bridge?.publishHumanCommand) throw new Error('BCGO_CGO_BRIDGE_NOT_READY');
-            const packet = bridge.publishHumanCommand(text, { source:'BCGO_HUMAN_CHAT' });
-            if (!packet) throw new Error('CGO_COMMAND_REJECTED');
-            setChatLiveStatus('Perintah diterima Captain. Menunggu hasil dari jalur BCGO-CGO…', 'working');
-            return;
-        }
-        const runtime = await waitForInternalAI();
-        if (!runtime?.ask) throw new Error('INTERNAL_AI_NOT_READY');
-        const answer = await runtime.ask(text);
-        if (answer) {
-            addChat('bcgo', answer);
-            try { window.dispatchEvent(new CustomEvent('cgo-human-chat-response', { detail:{ text:answer, question:text, at:Date.now() } })); } catch {}
-        }
+        // SINGLE HUMAN -> CGO PATH: every human message goes to the same Captain
+        // that is visible in the upper dialog. There is no hidden second chat brain.
+        const bridge = window.CIKUR_BCGO_CGO_BRIDGE;
+        if (!bridge?.publishHumanCommand) throw new Error('BCGO_CGO_BRIDGE_NOT_READY');
+        const packet = bridge.publishHumanCommand(text, { source:'BCGO_HUMAN_CHAT' });
+        if (!packet) throw new Error('CGO_COMMAND_REJECTED');
+        setChatLiveStatus('Pesan diterima CGO/Kapten. Menunggu jawaban dari jalur BCGO-CGO…', 'working');
+        return;
     } catch (error) {
         const answer = `Saya belum bisa menyelesaikan pesan ini dengan aman. Internal AI belum siap atau gagal memprosesnya: ${String(error?.message || error).slice(0, 220)}`;
         addChat('bcgo', answer);
@@ -1270,6 +1258,20 @@ runAutonomousEngine(state => {
   window.addEventListener('cikur-captain-human-response', e => {
     const d = e.detail || {};
     if (d.message) bubble(captainChat, 'CGO • KAPTEN', d.message, d.decision && /BLOCKED|REJECT/i.test(String(d.decision)) ? 'amber' : 'cyan');
+  });
+
+  // Cross-tab response path from the same authoritative BCGO-CGO bridge.
+  // Same-tab Captain events may already have rendered the bubble, so dedupe by
+  // response timestamp/message before adding it to the visible Captain dialog.
+  let lastCaptainResponseKey = '';
+  window.addEventListener('cikur-cgo-response', e => {
+    const packet = e.detail || {};
+    const d = packet.response || packet;
+    if (!d?.message) return;
+    const key = `${d.at || packet.at || 0}|${d.message}`;
+    if (key === lastCaptainResponseKey) return;
+    lastCaptainResponseKey = key;
+    bubble(captainChat, 'CGO • KAPTEN', d.message, d.decision && /BLOCKED|REJECT/i.test(String(d.decision)) ? 'amber' : 'cyan');
   });
 
   $('captain-approve')?.addEventListener('click', () => {
