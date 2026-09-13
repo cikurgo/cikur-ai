@@ -258,8 +258,18 @@ function trackGPS() {
                 driverMarker.setLatLng([lat, lon]);
                 map.panTo([lat, lon]);
             }
+            broadcastDriverLocation(lat, lon);
         }, () => {}, { enableHighAccuracy: true });
     }
+}
+
+let lastLocationBroadcastAt = 0;
+function broadcastDriverLocation(lat, lon) {
+    if (!isOnline || !userProfile?.uid || !window.CikurCloud) return;
+    const now = Date.now();
+    if (now - lastLocationBroadcastAt < 5000) return; // throttle 5 detik
+    lastLocationBroadcastAt = now;
+    window.CikurCloud.updateDriverLiveLocation(userProfile.uid, lat, lon);
 }
 
 let userProfile = { uid: null, name: "", phone: "", isLoggedIn: false };

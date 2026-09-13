@@ -741,6 +741,37 @@ window.CikurCloud = {
     },
 
     // ======================================
+    // LOKASI LIVE DRIVER (untuk tracking peta customer)
+    // Ditulis berkala oleh driver.html selagi driver online,
+    // dibaca realtime oleh ride.html/food.html saat order diklaim.
+    // ======================================
+
+    async updateDriverLiveLocation(driverId, lat, lon) {
+        if (!driverId || !Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+        try {
+            await setDoc(
+                doc(db, "users", driverId),
+                {
+                    liveLocation: { lat, lon, updatedAt: serverTimestamp() }
+                },
+                { merge: true }
+            );
+        } catch (error) {
+            console.error("[CIKUR GO] Gagal memperbarui lokasi live driver:", error);
+        }
+    },
+
+    listenDriverLocation(driverId, callback) {
+        if (!driverId) return () => {};
+
+        return onSnapshot(doc(db, "users", driverId), (snap) => {
+            if (!snap.exists()) { callback(null); return; }
+            callback(snap.data().liveLocation || null);
+        });
+    },
+
+    // ======================================
     // PELAPORAN ERROR LINTAS FILE
     // Dipanggil dari tiap file (index.html, food.html, dst) saat
     // terjadi error JavaScript. Dibaca real-time oleh bcgo.html
@@ -839,6 +870,107 @@ window.CikurCloud = {
         return {
             id: orderReference.id,
             ...orderData
+        };
+    },
+
+    // ======================================
+    // BUNDLE 2IN1 (FOOD + ASSISTANT DINE-IN)
+    // Membuat SEPASANG order (FOOD & ASSISTANT) sekaligus,
+    // lalu menautkannya lewat satu dokumen "bundles".
+    // ======================================
+
+    async create2in1Bundle(bundleDetails) {
+        const {
+            customerName,
+            customerPhone,
+            restoId,
+            restoName,
+            items,
+            foodSubtotal,
+            foodTotal,
+            foodNotes,
+            assistantFee,
+            serviceFee,
+            grandTotal,
+            paymentMethod,
+            packageKey,
+            packageName,
+            schedule,
+            location,
+            assistantNotes
+        } = bundleDetails || {};
+
+        if (!Array.isArray(items) || !items.length) {
+            throw new Error("Data menu 2IN1 tidak lengkap.");
+        }
+
+        const firebaseUser = await this.ensureAuth();
+        if (!firebaseUser) {
+            throw new Error("Sesi Customer tidak ditemukan. Silakan login kembali.");
+        }
+
+        // 1. Buat order FOOD
+        const foodOrder = await this.createOrder("FOOD", {
+            restoId: restoId || "",
+            restoName: restoName || "Mitra Resto Cikur",
+            customerName,
+            customerPhone,
+            items,
+            subtotal: Number(foodSubtotal) || 0,
+            deliveryFee: 0,
+            total: Number(foodTotal) || 0,
+            paymentMethod,
+            notes: foodNotes || "",
+            address: location || null,
+            mode: "2IN1"
+        });
+
+        // 2. Buat order ASSISTANT (dine-in), ditautkan ke order FOOD di atas
+        const assistantOrder = await this.createOrder("ASSISTANT", {
+            service: "ASSISTANT",
+            packageKey: packageKey || "dine",
+            packageName: packageName || "DINE-IN ASSISTANT",
+            source: "CIKURGO_2IN1",
+            customer: { name: customerName, phone: customerPhone },
+            schedule: schedule || {},
+            location: location || null,
+            notes: assistantNotes || "",
+            pricing: {
+                basePrice: Number(assistantFee) || 0,
+                serviceFee: Number(serviceFee) || 0,
+                total: (Number(assistantFee) || 0) + (Number(serviceFee) || 0)
+            },
+            linkedFoodOrderId: foodOrder.id
+        });
+
+        // 3. Simpan dokumen bundle penghubung
+        const bundleRef = await addDoc(collection(db, "bundles"), {
+            type: "2IN1",
+            userId: firebaseUser.uid,
+            customerName,
+            customerPhone,
+            foodOrderId: foodOrder.id,
+            assistantOrderId: assistantOrder.id,
+            grandTotal: Number(grandTotal) || 0,
+            paymentMethod,
+            status: "PENDING",
+            timestamp: new Date()
+        });
+
+        // 4. Tautkan balik bundleId ke masing-masing order
+        await updateDoc(doc(db, "orders", foodOrder.id), {
+            bundleId: bundleRef.id,
+            linkedAssistantOrderId: assistantOrder.id
+        });
+        await updateDoc(doc(db, "orders", assistantOrder.id), {
+            bundleId: bundleRef.id,
+            linkedFoodOrderId: foodOrder.id
+        });
+
+        return {
+            bundleId: bundleRef.id,
+            foodOrder,
+            assistantOrder
         };
     },
 
@@ -958,7 +1090,7 @@ window.CikurCloud = {
             collection(db, "orders"),
             where("userId", "==", userId),
             where("type", "==", type),
-            where("status", "in", ["PENDING", "DEAL", "DEAL_CONFIRMED", "PAID"]),
+            where("status", "not-in", ["SELESAI", "DITOLAK_RESTO"]),
             orderBy("timestamp", "desc"),
             limit(1)
         );

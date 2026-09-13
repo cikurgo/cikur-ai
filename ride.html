@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CIKUR Ride - Super App Engine v3.9</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module" src="cikur-config.js"></script>
 <style>
 :root {
@@ -273,46 +275,89 @@ body{
         <div style="width: 38px;"></div>
     </div>
 
-    <!-- Simulasi Peta -->
-    <div class="map-simulation">
-        <img src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=600" alt="Map Simulation">
-        <div class="map-badge">📍 GPS Active - Menunggu Titik Jemput</div>
+    <!-- ================= BOOKING VIEW ================= -->
+    <div id="rideBookingView">
+        <!-- Simulasi Peta -->
+        <div class="map-simulation">
+            <img src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=600" alt="Map Simulation">
+            <div class="map-badge">📍 GPS Active - Menunggu Titik Jemput</div>
+        </div>
+
+        <!-- Form Titik Jemput & Tujuan -->
+        <div class="ride-form-card">
+            <div class="form-group">
+                <label>Lokasi Penjemputan</label>
+                <input type="text" id="pickupLocation" class="input-box" value="Lokasi Anda Saat Ini (GPS)">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Tujuan Perjalanan</label>
+                <input type="text" id="destLocation" class="input-box" placeholder="Mau ke mana hari ini?">
+            </div>
+        </div>
+
+        <!-- Pilihan Armada -->
+        <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase;">Pilih Jenis Armada</div>
+        <div class="fleet-options">
+            <div class="fleet-card selected" id="fleetBike" onclick="selectFleet('bike', 10000)">
+                <h4>🛵 CIKUR-Bike</h4>
+                <p>Rp 10.000</p>
+            </div>
+            <div class="fleet-card" id="fleetCar" onclick="selectFleet('car', 25000)">
+                <h4>🚗 CIKUR-Car</h4>
+                <p>Rp 25.000</p>
+            </div>
+        </div>
+
+        <!-- Kotak Pembayaran / Pemesanan -->
+        <div class="checkout-box" id="rideCartSection">
+            <div style="font-size: 11px; color: #94a3b8; font-weight: 700;">Layanan Terpilih</div>
+            <h3 id="rideTypeName" style="font-size: 14px; font-weight: 800; margin: 2px 0 6px 0;">CIKUR-Bike (Motor)</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+                <span>Tarif Perjalanan:</span>
+                <span id="rideTotalPrice" style="color: #FFD700; font-weight: 800; font-family: var(--font-mono);">Rp 10.000</span>
+            </div>
+            <button class="btn-order" onclick="prosesPesanRide()">Pesan Driver Sekarang ⚡</button>
+        </div>
     </div>
 
-    <!-- Form Titik Jemput & Tujuan -->
-    <div class="ride-form-card">
-        <div class="form-group">
-            <label>Lokasi Penjemputan</label>
-            <input type="text" id="pickupLocation" class="input-box" value="Lokasi Anda Saat Ini (GPS)">
+    <!-- ================= TRACKING VIEW (REALTIME) ================= -->
+    <div id="rideTrackingView" style="display:none;">
+        <div class="map-simulation" style="position:relative;">
+            <div id="rideTrackingMap" style="width:100%; height:100%;"></div>
+            <div id="trackingMapPlaceholder" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:var(--dark-bg); color:#fff; font-size:11px; text-align:center; padding:0 16px;">🔎 Menunggu driver mengaktifkan lokasi...</div>
+            <div class="map-badge" id="trackingStatusBadge">📍 Mencari Driver Terdekat...</div>
         </div>
-        <div class="form-group" style="margin-bottom: 0;">
-            <label>Tujuan Perjalanan</label>
-            <input type="text" id="destLocation" class="input-box" placeholder="Mau ke mana hari ini?">
-        </div>
-    </div>
 
-    <!-- Pilihan Armada -->
-    <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase;">Pilih Jenis Armada</div>
-    <div class="fleet-options">
-        <div class="fleet-card selected" id="fleetBike" onclick="selectFleet('bike', 10000)">
-            <h4>🛵 CIKUR-Bike</h4>
-            <p>Rp 10.000</p>
+        <div class="ride-form-card" style="gap:10px; display:flex; flex-direction:column;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:11px; color:var(--text-muted); font-weight:700;">Order #<span id="trackingOrderId">-</span></span>
+                <span id="trackingStatusText" style="font-size:12px; font-weight:800; color:var(--primary-red);">Menunggu Driver</span>
+            </div>
+            <div style="font-size:12px;"><b>🟢 Jemput:</b> <span id="trackingPickup">-</span></div>
+            <div style="font-size:12px;"><b>🏁 Tujuan:</b> <span id="trackingDestination">-</span></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; border-top:1px solid var(--border-color); padding-top:8px;">
+                <span>Armada &amp; Tarif:</span>
+                <span id="trackingFareText" style="color:var(--dark-bg); font-weight:800; font-family:var(--font-mono);">-</span>
+            </div>
+            <div id="trackingDriverBox" style="display:none; background:#f0fdf4; border-radius:10px; padding:8px 10px; font-size:12px;">
+                🧑‍✈️ Driver: <b id="trackingDriverName">-</b>
+            </div>
         </div>
-        <div class="fleet-card" id="fleetCar" onclick="selectFleet('car', 25000)">
-            <h4>🚗 CIKUR-Car</h4>
-            <p>Rp 25.000</p>
-        </div>
-    </div>
 
-    <!-- Kotak Pembayaran / Pemesanan -->
-    <div class="checkout-box" id="rideCartSection">
-        <div style="font-size: 11px; color: #94a3b8; font-weight: 700;">Layanan Terpilih</div>
-        <h3 id="rideTypeName" style="font-size: 14px; font-weight: 800; margin: 2px 0 6px 0;">CIKUR-Bike (Motor)</h3>
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
-            <span>Tarif Perjalanan:</span>
-            <span id="rideTotalPrice" style="color: #FFD700; font-weight: 800; font-family: var(--font-mono);">Rp 10.000</span>
+        <div class="ride-form-card" style="margin-top:10px;">
+            <div style="font-size:11px; font-weight:700; margin-bottom:6px;">💬 Chat dengan Driver</div>
+            <div id="trackingChatBox" style="display:flex; flex-direction:column; gap:6px; max-height:140px; overflow-y:auto; font-size:11px; margin-bottom:8px;">
+                <div style="color: var(--text-muted); font-size: 11px;">Belum ada pesan.</div>
+            </div>
+            <div style="display:flex; gap:6px;">
+                <input type="text" id="trackingChatInput" class="input-box" style="margin:0;" placeholder="Tulis pesan untuk driver...">
+                <button class="btn-order" style="width:auto; padding:0 16px; margin:0;" onclick="sendTrackingChat()">Kirim</button>
+            </div>
         </div>
-        <button class="btn-order" onclick="prosesPesanRide()">Pesan Driver Sekarang ⚡</button>
+
+        <div id="trackingFinishNote" style="display:none; margin-top:10px;">
+            <button class="btn-order" onclick="resetRideBookingView()">Pesan Ride Baru Lagi ⚡</button>
+        </div>
     </div>
 </div>
 
@@ -391,8 +436,7 @@ async function prosesPesanRide() {
         });
 
         if (!order?.id) throw new Error("Pesanan Ride tidak menghasilkan ID.");
-        alert(`[TERKIRIM] Pesanan ${selectedRide.type} sudah masuk ke CIKUR Cloud. Menunggu driver menerima.`);
-        window.location.href = `index.html?rideOrder=${encodeURIComponent(order.id)}`;
+        showOrderTrackingView(order.id);
     } catch (error) {
         console.error("[CIKUR RIDE] Gagal membuat order:", error);
         alert("Pesanan Ride gagal dikirim: " + (error?.message || error));
@@ -400,7 +444,129 @@ async function prosesPesanRide() {
     }
 }
 
-document.addEventListener("DOMContentLoaded", loadRideUser);
+/* =========================================================
+   TRACKING PESANAN RIDE AKTIF (realtime status + chat)
+========================================================= */
+let currentActiveRideOrderId = null;
+let unsubscribeActiveRideOrder = null;
+let unsubscribeActiveRideMessages = null;
+let unsubscribeDriverLocation = null;
+let currentTrackedDriverId = null;
+let rideTrackingMap = null;
+let rideDriverMarker = null;
+
+async function checkExistingActiveRideOrder() {
+    if (!window.CikurCloud || !userProfile.uid) return;
+    try {
+        const order = await window.CikurCloud.getActiveOrderForCustomer(userProfile.uid, "RIDE");
+        if (order?.id) showOrderTrackingView(order.id);
+    } catch (error) {
+        console.error("[CIKUR RIDE] Gagal memulihkan pesanan aktif:", error);
+    }
+}
+
+function showOrderTrackingView(orderId) {
+    currentActiveRideOrderId = orderId;
+    document.getElementById("rideBookingView").style.display = "none";
+    document.getElementById("rideTrackingView").style.display = "block";
+    if (rideTrackingMap) setTimeout(() => rideTrackingMap.invalidateSize(), 200);
+
+    if (typeof unsubscribeActiveRideOrder === "function") unsubscribeActiveRideOrder();
+    if (typeof unsubscribeActiveRideMessages === "function") unsubscribeActiveRideMessages();
+
+    const statusLabelMap = {
+        PENDING: "Mencari Driver Terdekat",
+        DIAMBIL_DRIVER: "Driver Menuju Lokasi Anda",
+        SELESAI: "Perjalanan Selesai"
+    };
+
+    unsubscribeActiveRideOrder = window.CikurCloud.listenOrder(orderId, (order) => {
+        if (!order) return;
+
+        document.getElementById("trackingOrderId").innerText = orderId.slice(-6).toUpperCase();
+        document.getElementById("trackingStatusText").innerText = statusLabelMap[order.status] || order.status;
+        document.getElementById("trackingStatusBadge").innerText = "📍 " + (statusLabelMap[order.status] || order.status);
+        document.getElementById("trackingPickup").innerText = order.pickup || "-";
+        document.getElementById("trackingDestination").innerText = order.destination || "-";
+        document.getElementById("trackingFareText").innerText = (order.vehicleName || "-") + " · Rp " + Number(order.fare || 0).toLocaleString("id-ID");
+
+        const driverBox = document.getElementById("trackingDriverBox");
+        if (order.driverId) {
+            driverBox.style.display = "block";
+            document.getElementById("trackingDriverName").innerText = order.driverName || "Driver CIKUR GO";
+            startTrackingDriverLocation(order.driverId);
+        } else {
+            driverBox.style.display = "none";
+        }
+
+        if (order.status === "SELESAI") {
+            document.getElementById("trackingFinishNote").style.display = "block";
+        }
+    });
+
+    unsubscribeActiveRideMessages = window.CikurCloud.listenOrderMessages(orderId, (messages) => {
+        const chatBox = document.getElementById("trackingChatBox");
+        if (!chatBox) return;
+        chatBox.innerHTML = (messages || []).map(m => {
+            const isMe = m.sender === "customer";
+            const label = isMe ? "Anda" : (m.sender === "driver" ? "Driver" : "Sistem");
+            const safeText = String(m.text || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            return `<div style="background: ${isMe ? '#e0f2fe' : '#f1f5f9'}; color: ${isMe ? '#0369a1' : 'var(--text-main)'}; padding: 6px 10px; border-radius: 8px; max-width: 90%; ${isMe ? 'align-self: flex-end;' : ''}"><b>${label}:</b> ${safeText}</div>`;
+        }).join("") || '<div style="color: var(--text-muted); font-size: 11px;">Belum ada pesan.</div>';
+        chatBox.scrollTop = chatBox.scrollHeight;
+    });
+}
+
+function startTrackingDriverLocation(driverId) {
+    if (currentTrackedDriverId === driverId) return; // sudah listening driver yang sama
+    currentTrackedDriverId = driverId;
+
+    if (typeof unsubscribeDriverLocation === "function") unsubscribeDriverLocation();
+    unsubscribeDriverLocation = window.CikurCloud.listenDriverLocation(driverId, (loc) => {
+        if (!loc || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lon)) return;
+
+        const placeholder = document.getElementById("trackingMapPlaceholder");
+        if (placeholder) placeholder.style.display = "none";
+
+        if (!rideTrackingMap) {
+            rideTrackingMap = L.map("rideTrackingMap").setView([loc.lat, loc.lon], 15);
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(rideTrackingMap);
+            rideDriverMarker = L.marker([loc.lat, loc.lon]).addTo(rideTrackingMap).bindPopup("Posisi Driver");
+            setTimeout(() => rideTrackingMap.invalidateSize(), 200);
+        } else {
+            rideDriverMarker.setLatLng([loc.lat, loc.lon]);
+            rideTrackingMap.panTo([loc.lat, loc.lon]);
+        }
+    });
+}
+
+async function sendTrackingChat() {
+    const input = document.getElementById("trackingChatInput");
+    if (!input || !input.value.trim() || !currentActiveRideOrderId) return;
+    try {
+        await window.CikurCloud.sendOrderMessage(currentActiveRideOrderId, "customer", input.value.trim());
+        input.value = "";
+    } catch (error) {
+        alert("Pesan gagal dikirim: " + (error?.message || error));
+    }
+}
+
+function resetRideBookingView() {
+    if (typeof unsubscribeActiveRideOrder === "function") unsubscribeActiveRideOrder();
+    if (typeof unsubscribeActiveRideMessages === "function") unsubscribeActiveRideMessages();
+    if (typeof unsubscribeDriverLocation === "function") unsubscribeDriverLocation();
+    currentActiveRideOrderId = null;
+    currentTrackedDriverId = null;
+    document.getElementById("trackingMapPlaceholder").style.display = "flex";
+    document.getElementById("trackingFinishNote").style.display = "none";
+    document.getElementById("rideTrackingView").style.display = "none";
+    document.getElementById("rideBookingView").style.display = "block";
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+    await loadRideUser();
+    checkExistingActiveRideOrder();
+});
 </script>
 
 
