@@ -25,7 +25,7 @@
     (window.CGO_CUSTOMER = {});
 
   const VERSION =
-    "1.0.0-knowledge";
+    "1.0.1-knowledge-gateway-aligned";
 
   /* ==========================================================
    * CONSTANTS
@@ -154,8 +154,13 @@
         ),
 
       status:
-        service.status ||
-        KNOWLEDGE_STATUS.COMPLETE,
+        [
+          KNOWLEDGE_STATUS.COMPLETE,
+          KNOWLEDGE_STATUS.PARTIAL,
+          KNOWLEDGE_STATUS.UNKNOWN
+        ].includes(service.status)
+          ? service.status
+          : KNOWLEDGE_STATUS.COMPLETE,
 
       aliases:
         unique(
@@ -948,6 +953,84 @@
   }
 
   /* ==========================================================
+   * GATEWAY INTERPRETATION CONTRACT
+   * ========================================================== */
+
+  function interpret(text, context) {
+    const value = cleanText(text);
+    const analysis =
+      context && context.analysis
+        ? context.analysis
+        : {};
+
+    let serviceId = null;
+
+    if (analysis.combinedServiceCandidate) {
+      serviceId =
+        typeof analysis.combinedServiceCandidate === "string"
+          ? analysis.combinedServiceCandidate
+          : analysis.combinedServiceCandidate.id;
+    }
+
+    if (!serviceId && analysis.candidateService) {
+      serviceId =
+        typeof analysis.candidateService === "string"
+          ? analysis.candidateService
+          : analysis.candidateService.id;
+    }
+
+    const understood = understand(value);
+
+    if (!serviceId && understood.combination) {
+      serviceId = understood.combination.id;
+    }
+
+    if (!serviceId) {
+      serviceId = understood.bestService;
+    }
+
+    if (!serviceId) {
+      return {
+        status: KNOWLEDGE_STATUS.UNKNOWN,
+        known: false,
+        service: null,
+        services: understood.knownServices,
+        confidence: understood.confidence,
+        source: "service_registry"
+      };
+    }
+
+    const service = getService(serviceId);
+
+    if (!service) {
+      return {
+        status: KNOWLEDGE_STATUS.UNKNOWN,
+        known: false,
+        service: null,
+        services: understood.knownServices,
+        confidence: understood.confidence,
+        source: "service_registry"
+      };
+    }
+
+    const status =
+      service.status || KNOWLEDGE_STATUS.COMPLETE;
+
+    return {
+      status,
+      known: status !== KNOWLEDGE_STATUS.UNKNOWN,
+      service,
+      services: understood.knownServices,
+      confidence: understood.confidence,
+      source: "service_registry",
+      requiresDiscovery: Boolean(
+        service.discovery &&
+        service.discovery.required
+      )
+    };
+  }
+
+  /* ==========================================================
    * SAFE ANSWER BUILDING
    * ========================================================== */
 
@@ -1027,7 +1110,9 @@
         "makan",
         "makanan",
         "kuliner",
-        "pesan"
+        "pesan",
+        "resto",
+        "restoran"
       ],
 
       description:
@@ -1097,6 +1182,8 @@
         "ojek",
         "antar",
         "jemput",
+        "driver",
+        "supir",
         "kendaraan",
         "transportasi"
       ],
@@ -1174,7 +1261,9 @@
         "pendamping",
         "teman",
         "temenin",
-        "nemenin"
+        "nemenin",
+        "agent cikur go",
+        "agent"
       ],
 
       keywords: [
@@ -1344,6 +1433,8 @@
     getServices,
 
     findServices,
+
+    interpret,
 
     findBestService,
 

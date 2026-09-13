@@ -30,7 +30,7 @@
     (window.CGO_CUSTOMER = {});
 
   const VERSION =
-    "1.0.0-discovery";
+    "1.0.1-discovery-evidence-aligned";
 
   /* ==========================================================
    * DISCOVERY STATUS
@@ -296,6 +296,12 @@
       serviceName:
         cleanText(
           input.serviceName ||
+          (
+            input.service &&
+            typeof input.service === "object"
+              ? input.service.name || ""
+              : ""
+          ) ||
           ""
         ),
 
@@ -389,14 +395,36 @@
      * A result is considered verified only when
      * the runtime explicitly supplies evidence/data.
      */
-    const verified =
+    /*
+     * Verification must match the Guardian evidence contract.
+     * Presence of source/data/items/records alone is NOT proof.
+     * Runtime must explicitly mark the result as verified and
+     * provide at least one traceable evidence anchor.
+     */
+    const explicitVerified =
+      raw.verified === true ||
+      raw.isVerified === true;
+
+    const explicitSource =
+      typeof raw.source === "string" &&
+      raw.source.trim() !== "";
+
+    const hasRuntimeId =
+      typeof raw.requestId === "string" &&
+      raw.requestId.trim() !== "";
+
+    const hasData =
       Boolean(
-        raw.verified === true ||
-        raw.source ||
-        raw.data ||
-        raw.items ||
-        raw.records
+        (raw.data &&
+          typeof raw.data === "object" &&
+          Object.keys(raw.data).length > 0) ||
+        (Array.isArray(raw.items) && raw.items.length > 0) ||
+        (Array.isArray(raw.records) && raw.records.length > 0)
       );
+
+    const verified =
+      explicitVerified &&
+      (explicitSource || hasRuntimeId || hasData);
 
     const items =
       Array.isArray(

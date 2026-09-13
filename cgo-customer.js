@@ -2,7 +2,7 @@
  * CIKUR GO — CUSTOMER CGO MAIN GATEWAY
  * ------------------------------------------------------------
  * File    : cgo-customer.js
- * Version : 1.1.0-customer-gateway
+ * Version : 1.1.1-customer-gateway-aligned
  *
  * Peran:
  *   Gerbang utama Customer CGO.
@@ -35,7 +35,7 @@
 
     window.CGO_CUSTOMER = window.CGO_CUSTOMER || {};
 
-    const VERSION = "1.1.0-customer-gateway";
+    const VERSION = "1.1.1-customer-gateway-aligned";
 
     const EVENTS = Object.freeze({
         READY: "ready",
@@ -292,6 +292,33 @@
                 options: options || {},
                 previousState: clone(state)
             });
+
+            /*
+             * Conversation.process() is the authoritative conversation
+             * pipeline. It already classifies, updates context, detects
+             * topic transitions, generates the personality response, and
+             * advances its own turn counter.
+             *
+             * Gateway hanya menormalkan hasilnya menjadi contract yang
+             * dipakai oleh Knowledge / Discovery / Guardian. Jangan
+             * menjalankan generateResponse() kedua kali.
+             */
+            if (result && result.classification) {
+                const classification = clone(result.classification);
+                result = Object.assign({}, classification, {
+                    responseText: result.text || "",
+                    responseMode: result.mode || "conversation",
+                    shouldOfferService:
+                        result.mode === "service_discovery" ||
+                        Boolean(result.response && result.response.shouldOfferService),
+                    shouldAskNeed:
+                        Boolean(result.response && result.response.mode === "service_discovery"),
+                    conversationResult: clone(result),
+                    conversationState: clone(result.state || null),
+                    transition: clone(result.transition || null),
+                    meta: clone(result.meta || null)
+                });
+            }
         } else if (typeof conversation.classify === "function") {
             result = conversation.classify(input, {
                 conversationId: state.conversationId,
@@ -316,6 +343,18 @@
         }
 
         state.lastAnalysis = clone(result);
+
+        /* Conversation adalah source of truth untuk turn. */
+        if (result.meta && Number.isFinite(result.meta.turn)) {
+            state.turn = result.meta.turn;
+        } else if (result.conversationState && Number.isFinite(result.conversationState.turn)) {
+            state.turn = result.conversationState.turn;
+        } else if (typeof conversation.getState === "function") {
+            const conversationState = conversation.getState();
+            if (conversationState && Number.isFinite(conversationState.turn)) {
+                state.turn = conversationState.turn;
+            }
+        }
 
         if (result.topic) {
             state.currentTopic = result.topic;
@@ -402,23 +441,34 @@
         if (
             (!result || typeof result !== "object") &&
             analysis &&
-            analysis.candidateService &&
+            (analysis.combinedServiceCandidate || analysis.candidateService) &&
             typeof knowledge.getService === "function"
         ) {
+            const candidate =
+                analysis.combinedServiceCandidate ||
+                analysis.candidateService;
+
             const serviceId =
-                typeof analysis.candidateService === "string"
-                    ? analysis.candidateService
-                    : analysis.candidateService.id;
+                typeof candidate === "string"
+                    ? candidate
+                    : candidate.id;
 
             const service =
                 knowledge.getService(serviceId);
 
             if (service) {
+                const status =
+                    service.status || "complete";
+
                 result = {
-                    status: "complete",
-                    known: true,
+                    status: status,
+                    known: status !== "unknown",
                     service: service,
-                    source: "service_registry"
+                    source: "service_registry",
+                    requiresDiscovery: Boolean(
+                        service.discovery &&
+                        service.discovery.required
+                    )
                 };
             }
         }
@@ -492,7 +542,43 @@
         }
 
         /*
-         * Knowledge dapat menyatakan discovery diperlukan.
+         * Runtime language must be recognized even when Conversation
+         * has not classified the sentence as availability/location yet.
+         * This keeps Discovery from depending on one upstream classifier.
+         */
+        const text = String(input || "").toLowerCase();
+        const runtimeWords = [
+            "sekarang",
+            "saat ini",
+            "ada nggak",
+            "ada gak",
+            "ada ga",
+            "ada enggak",
+            "tersedia",
+            "dekat aku",
+            "dekat saya",
+            "sekitar sini",
+            "sekitar aku",
+            "sekitar saya",
+            "di sekitar",
+            "bisa datang",
+            "bisa antar",
+            "bisa jemput",
+            "siapa yang tersedia"
+        ];
+
+        if (
+            runtimeWords.some(function (word) {
+                return text.indexOf(word) !== -1;
+            })
+        ) {
+            return true;
+        }
+
+        /*
+         * Knowledge dapat menyatakan discovery diperlukan untuk service
+         * tertentu. Pada tahap ini kita hanya membaca requirement-nya;
+         * keputusan tetap tidak boleh membuat klaim runtime.
          */
         if (
             knowledge &&
@@ -500,37 +586,7 @@
             knowledge.service.discovery &&
             knowledge.service.discovery.required === true
         ) {
-            /*
-             * Tetapi hanya ketika customer benar-benar meminta
-             * kondisi sekarang atau tindakan nyata.
-             */
-            const text = input.toLowerCase();
-
-            const runtimeWords = [
-                "sekarang",
-                "saat ini",
-                "ada nggak",
-                "ada gak",
-                "ada ga",
-                "tersedia",
-                "dekat aku",
-                "dekat saya",
-                "sekitar sini",
-                "sekitar aku",
-                "sekitar saya",
-                "bisa datang",
-                "bisa antar",
-                "bisa jemput",
-                "siapa yang tersedia"
-            ];
-
-            if (
-                runtimeWords.some(function (word) {
-                    return text.indexOf(word) !== -1;
-                })
-            ) {
-                return true;
-            }
+            return false;
         }
 
         return false;
@@ -818,24 +874,71 @@
         let response = null;
 
         /*
-         * Response generator milik Conversation tetap menjadi
-         * sumber personality dan natural conversation.
+         * Bila Discovery benar-benar dijalankan, hasil runtime harus
+         * mempengaruhi candidate. Jangan biarkan responseText Conversation
+         * menutupi UNKNOWN / VERIFIED runtime state. Personality tetap
+         * dipertahankan oleh fallback Gateway, tetapi truth tetap utama.
+         */
+        const discoveryWasPerformed = Boolean(
+            discovery &&
+            discovery.status &&
+            discovery.status !== "not_required"
+        );
+
+        if (discoveryWasPerformed) {
+            response = generateGatewayFallback(
+                input,
+                analysis,
+                knowledge,
+                discovery
+            );
+        } else if (
+            analysis &&
+            analysis.intent === "pricing_question"
+        ) {
+            /* Harga harus selalu dijawab dari data harga yang sah.
+             * Saat Knowledge belum menyediakan harga, jangan membuat angka. */
+            response = generateGatewayFallback(
+                input,
+                analysis,
+                knowledge,
+                discovery
+            );
+        } else if (shouldPreferKnowledgeResponse(analysis, knowledge)) {
+            /*
+             * Knowledge yang lebih spesifik daripada classifier Conversation
+             * harus boleh mengoreksi arah candidate tanpa menggantikan
+             * personality engine. Ini penting untuk kombinasi layanan,
+             * misalnya Food + Assistant -> CIKUR GO 2in1.
+             */
+            response = generateKnowledgeAwareResponse(
+                input,
+                analysis,
+                knowledge
+            );
+        } else if (analysis && typeof analysis.responseText === "string") {
+            /* Conversation.process() tetap menjadi sumber personality utama. */
+            response = analysis.responseText;
+        }
+
+        /*
+         * Compatibility fallback untuk conversation module lama: bila
+         * process() tidak mengembalikan responseText, kirim classification
+         * object — BUKAN raw input string.
          */
         if (
-            typeof conversation.generateResponse ===
-            "function"
+            (!response || typeof response !== "string" || !response.trim()) &&
+            typeof conversation.generateResponse === "function"
         ) {
-            response =
-                conversation.generateResponse(
-                    input,
-                    {
-                        analysis: analysis,
-                        knowledge: knowledge,
-                        discovery: discovery,
-                        state: clone(state),
-                        options: options || {}
-                    }
-                );
+            response = conversation.generateResponse(
+                analysis,
+                {
+                    knowledge: knowledge,
+                    discovery: discovery,
+                    state: clone(state),
+                    options: options || {}
+                }
+            );
         }
 
         /*
@@ -884,6 +987,75 @@
         return response;
     }
 
+    function shouldPreferKnowledgeResponse(analysis, knowledge) {
+        if (!analysis || !knowledge || !knowledge.service) {
+            return false;
+        }
+
+        const knowledgeServiceId =
+            knowledge.service.id || "";
+
+        const analysisServiceId =
+            typeof analysis.candidateService === "string"
+                ? analysis.candidateService
+                : analysis.candidateService && analysis.candidateService.id
+                    ? analysis.candidateService.id
+                    : "";
+
+        const combinedId =
+            typeof analysis.combinedServiceCandidate === "string"
+                ? analysis.combinedServiceCandidate
+                : analysis.combinedServiceCandidate && analysis.combinedServiceCandidate.id
+                    ? analysis.combinedServiceCandidate.id
+                    : "";
+
+        /* Conversation.process() is authoritative when it already produced
+         * a response. Knowledge should only fill a genuine response gap, not
+         * replace the richer conversation/personality result. */
+        if (analysis.responseText && String(analysis.responseText).trim()) {
+            return false;
+        }
+
+        /* Knowledge wins only when it has identified a concrete service
+         * and Conversation has either identified another service or no
+         * concrete service at all. */
+        if (!knowledgeServiceId) {
+            return false;
+        }
+
+        if (knowledgeServiceId === "cikurgo2in1") {
+            return combinedId !== knowledgeServiceId;
+        }
+
+        return !analysisServiceId && !combinedId;
+    }
+
+    function generateKnowledgeAwareResponse(
+        input,
+        analysis,
+        knowledge
+    ) {
+        const service =
+            knowledge && knowledge.service
+                ? knowledge.service
+                : null;
+
+        if (!service) {
+            return "";
+        }
+
+        if (service.id === "cikurgo2in1") {
+            return (
+                "Hehe, ini cocoknya CIKUR GO 2in1 😄 " +
+                "Karena kamu mau belanja sekaligus pesan makanan, " +
+                "keduanya bisa diarahkan sebagai satu kebutuhan gabungan. " +
+                "Kamu mau dibantu untuk belanjanya juga, atau ada kebutuhan lain sekalian?"
+            );
+        }
+
+        return "";
+    }
+
     /* =========================================================
      * FALLBACK RESPONSE
      * ========================================================= */
@@ -915,6 +1087,25 @@
          * Fallback ini sengaja sederhana.
          * Personality utama tetap berada di Conversation.
          */
+
+        if (
+            analysis &&
+            analysis.intent === "pricing_question"
+        ) {
+            const serviceName =
+                knowledge &&
+                knowledge.service &&
+                knowledge.service.name
+                    ? knowledge.service.name
+                    : "layanan itu";
+
+            return (
+                "Untuk harga " +
+                serviceName +
+                ", aku belum punya data harga yang terverifikasi. " +
+                "Aku nggak mau asal menyebut angka yaa 😊"
+            );
+        }
 
         if (
             analysis &&
@@ -1201,8 +1392,6 @@
             };
         }
 
-        state.turn += 1;
-
         state.lastInput = text;
         state.lastError = null;
 
@@ -1210,7 +1399,12 @@
             "user",
             text,
             {
-                turn: state.turn
+                /*
+                 * Turn final berasal dari Conversation setelah process().
+                 * Metadata user memakai next turn sebagai preview agar
+                 * urutan message tetap terbaca tanpa mengambil alih owner.
+                 */
+                turn: state.turn + 1
             }
         );
 
@@ -1352,8 +1546,6 @@
             };
         }
 
-        state.turn += 1;
-
         state.lastInput = text;
         state.lastError = null;
 
@@ -1361,7 +1553,12 @@
             "user",
             text,
             {
-                turn: state.turn
+                /*
+                 * Turn final berasal dari Conversation setelah process().
+                 * Metadata user memakai next turn sebagai preview agar
+                 * urutan message tetap terbaca tanpa mengambil alih owner.
+                 */
+                turn: state.turn + 1
             }
         );
 

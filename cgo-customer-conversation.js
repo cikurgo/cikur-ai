@@ -34,7 +34,7 @@
 
   const ROOT = window.CGO_CUSTOMER || (window.CGO_CUSTOMER = {});
 
-  const VERSION = "1.0.0-conversation";
+  const VERSION = "1.0.1-conversation-aligned";
 
   /* ==========================================================
    * INTERNAL CONSTANTS
@@ -633,7 +633,9 @@
         "sendirian",
         "butuh teman",
         "bantu belanja",
+        "belanja",
         "bantu acara",
+        "acara keluarga",
         "liburan"
       ])
     ) {
