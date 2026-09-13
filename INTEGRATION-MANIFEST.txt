@@ -847,3 +847,47 @@ Cache contract:
   All CIKUR GO internal modules in this milestone use the same hard-cut cache
   revision. Mixed query-string module copies are prohibited because they can
   create duplicate bridge/runtime instances in the same browser session.
+
+
+============================================================
+CURRENT HARD-CUT REBUILD — 2026-09-13
+============================================================
+
+This package supersedes the prior Medicine/Executor presentation-only revisions.
+
+- bcgo-medicine.js: v5.0.0-MEDICINE-BCGO-FIRST
+  - BCGO_STATE is the authoritative input.
+  - Reads the actual deployed source with cache:no-store.
+  - Automatically creates/updates investigation cases from actionable BCGO findings.
+  - Requires source evidence before root-cause status can advance.
+  - Creates a candidate only when an exact deterministic recipe is provable.
+  - Sends MEDICINE_INVESTIGATION / MEDICINE_EVIDENCE / MEDICINE_REPAIR_CANDIDATE over the internal BCGO-CGO bridge.
+  - Never writes source and never fabricates success.
+
+- bcgo-executor.js: v5.0.0-EXECUTOR-BCGO-CGO-MEETING-POINT
+  - Receives Medicine investigation and candidate packets.
+  - Re-reads the target source before review.
+  - Validates exact target + fingerprint through the deterministic core.
+  - Requires explicit Captain authorization before execution.
+  - Re-reads source again immediately before any write target call.
+  - Requires an injected internal writeIfUnchanged target for production mutation.
+  - If no internal write target exists, returns WAITING_DEPLOYMENT_TARGET instead of fake SUCCESS.
+
+- bcgo-executor-core.js: v5.0.0-EXECUTOR-DETERMINISTIC-GATE
+  - Pure deterministic fingerprint, exact-target and patch simulation engine.
+  - No network, AI provider, Cloud Function or external runtime.
+
+- Meeting-point contract:
+  BCGO_STATE -> CGO/Captain -> Medicine READ/EVIDENCE -> deterministic candidate ->
+  Executor REVIEW -> HUMAN APPROVAL -> Executor pre-write fingerprint gate ->
+  internal writeIfUnchanged target -> readback/validation.
+
+- Important production truth:
+  GitHub Pages/browser source cannot be silently treated as a writable production
+  filesystem. This rebuild therefore refuses to claim SUCCESS unless CIKUR GO supplies
+  an authorized internal writeIfUnchanged target. Review and proof can run without it.
+
+- UI truth:
+  Medicine and Executor pages were replaced, not merely cache-busted. Their old layout
+  and passive status panels are no longer the primary control surface. The new pages
+  expose the live handoff, evidence, candidate, review, human gate and execution result.
