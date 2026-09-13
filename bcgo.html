@@ -51,8 +51,11 @@ body{font-family:'Inter',sans-serif}
             <p class="text-xs text-slate-400 mt-1">Pusat Saraf Master & Pemetaan Saraf Lintas File Cikur Go</p>
         </div>
     </div>
-    <div id="system-status-badge" class="px-3 py-1 rounded-md text-xs font-semibold bg-slate-900 text-slate-400 border border-slate-700">
-        Membangunkan Saraf
+    <div class="flex flex-col items-end gap-1">
+        <div id="system-status-badge" class="px-3 py-1 rounded-md text-xs font-semibold bg-slate-900 text-slate-400 border border-slate-700">
+            Membangunkan Saraf
+        </div>
+        <div id="bcgo-build-id" class="text-[8px] text-slate-600 code-font">BUILD: -</div>
     </div>
 </header>
 
@@ -321,10 +324,10 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=20260912-real-cgo-bridge4';
+import { runAutonomousEngine } from './bcgo.js?v=20260912-bcgo-cgo-v1';
 
 // HARD BUILD ID — visible/inspectable marker proving which BCGO HTML is running.
-window.__CIKUR_BCGO_BUILD_ID = 'RSC-04-20260912';
+window.__CIKUR_BCGO_BUILD_ID = 'BCGO-CGO-E2E-01-20260912';
 window.dispatchEvent(new CustomEvent('cikur-bcgo-build', { detail: { buildId: window.__CIKUR_BCGO_BUILD_ID, at: Date.now() } }));
 
 
@@ -798,10 +801,13 @@ async function sendQuestion(question) {
         // Explicit Captain commands are handled by the Captain orchestrator;
         // ordinary questions go to the Internal AI brain, then are mirrored
         // into Captain Chat so the two UI surfaces cannot silently diverge.
-        const captain = window.BCGOBrain?.getCaptain?.();
-        const captainOut = captain?.receiveHumanCommand?.(text, { source:'BCGO_HUMAN_CHAT' });
-        if (captainOut?.handled) {
-            if (captainOut.message) addChat('bcgo', captainOut.message);
+        const addressed = /(^|[\s,.:!?])cgo([\s,.:!?]|$)/i.test(text) || /kapten cgo/i.test(text);
+        if (addressed) {
+            const bridge = window.CIKUR_BCGO_CGO_BRIDGE;
+            if (!bridge?.publishHumanCommand) throw new Error('BCGO_CGO_BRIDGE_NOT_READY');
+            const packet = bridge.publishHumanCommand(text, { source:'BCGO_HUMAN_CHAT' });
+            if (!packet) throw new Error('CGO_COMMAND_REJECTED');
+            setChatLiveStatus('Perintah diterima Captain. Menunggu hasil dari jalur BCGO-CGO…', 'working');
             return;
         }
         const runtime = await waitForInternalAI();
@@ -1076,27 +1082,20 @@ runAutonomousEngine(state => {
  };
  window.addEventListener('cgo-source-scanned',e=>{
    const d=e.detail||{};
-   if(!d.file) return;
-   // A completed scanner read becomes the active CGO workbench source even when
-   // the human has not opened the modal yet. This is the missing visual bridge
-   // that previously left the panel saying "Belum ada file aktif".
-   if(!latestWorkbench || String(latestWorkbench.file||'')!==String(d.file)){
-     latestWorkbench={file:d.file,status:'SOURCE_READ',original:{code:String(d.source||''),lines:Number(d.lines||0),bytes:Number(d.bytes||0),fingerprint:d.fingerprint||null,readAt:d.readAt||Date.now()},proposed:latestWorkbench?.proposed||null,rescanGeneration:d.generation||null};
-   } else {
-     latestWorkbench.original={code:String(d.source||''),lines:Number(d.lines||0),bytes:Number(d.bytes||0),fingerprint:d.fingerprint||null,readAt:d.readAt||Date.now()};
-     latestWorkbench.status='SOURCE_READ'; latestWorkbench.rescanGeneration=d.generation||null;
+   if(!d.file || !latestWorkbench?.file) return;
+   // Scanner is an evidence/cache process. It must never navigate the active
+   // Workbench through every file in the scan queue.
+   if(String(latestWorkbench.file)!==String(d.file)) return;
+   const previousFingerprint=latestWorkbench.original?.fingerprint||null;
+   const nextFingerprint=d.fingerprint||null;
+   const candidateFingerprint=latestWorkbench.proposed?.candidateOriginalFingerprint || latestWorkbench.proposed?.sourceFingerprint || null;
+   latestWorkbench.original={code:String(d.source||''),lines:Number(d.lines||0),bytes:Number(d.bytes||0),fingerprint:nextFingerprint,readAt:d.readAt||Date.now()};
+   latestWorkbench.status='SOURCE_READ'; latestWorkbench.rescanGeneration=d.generation||null;
+   if(previousFingerprint && nextFingerprint && previousFingerprint!==nextFingerprint && latestWorkbench.proposed && candidateFingerprint && candidateFingerprint!==nextFingerprint){
+     latestWorkbench.proposed=null;
+     latestWorkbench.status='SOURCE_CHANGED_CANDIDATE_INVALIDATED';
    }
    saveWorkbench(); renderLive(latestWorkbench);
- });
- window.addEventListener('cgo-source-scan-lifecycle',e=>{
-   const d=e.detail||{};
-   if(d.phase==='START' && d.files?.length){
-     const current=window.BCGO_STATE?.sourceScan?.currentFile || d.files[0];
-     if(current && (!latestWorkbench || !latestWorkbench.file)){
-       latestWorkbench={file:current,status:'SCANNING',original:null,proposed:null,scannerGeneration:d.generation||null};
-       saveWorkbench(); renderLive(latestWorkbench);
-     }
-   }
  });
  window.addEventListener('cgo-source-scan-lifecycle',e=>{
    const d=e.detail||{};
@@ -1261,6 +1260,11 @@ runAutonomousEngine(state => {
     }
   });
 
+  window.addEventListener('cikur-cgo-command-processed', e => {
+    const result = e.detail?.result;
+    if (result?.handled === false && result?.reason === 'NOT_ADDRESSED_TO_CAPTAIN') return;
+  });
+
   window.addEventListener('cikur-captain-human-response', e => {
     const d = e.detail || {};
     if (d.message) bubble(captainChat, 'CGO • KAPTEN', d.message, d.decision && /BLOCKED|REJECT/i.test(String(d.decision)) ? 'amber' : 'cyan');
@@ -1307,8 +1311,7 @@ runAutonomousEngine(state => {
   });
   const captainStatePoll = setInterval(() => {
     if (window.BCGO_STATE && typeof window.BCGO_STATE === 'object') renderState(window.BCGO_STATE);
-  }, 1000);
-  setTimeout(() => clearInterval(captainStatePoll), 30000);
+  }, 1500);
 })();
 </script>
 </body>

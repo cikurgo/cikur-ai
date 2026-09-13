@@ -752,31 +752,25 @@ Date: 2026-09-09
 - Validation: all 22 JavaScript files in package pass node --check; all 5 inline bcgo.html scripts pass node --check; package count 25/25; browser deployment E2E intentionally not claimed.
 
 ======================================================================
-CURRENT RECONCILIATION — 2026-09-12
+RELEASE HARDENING — 2026-09-13 — BCGO-CGO SINGLE-BRIDGE / ADAPTIVE RECONCILIATION
 ======================================================================
-- This manifest remains part of the CIKUR GO internal brain deployment contract; it is NOT replaced by the runtime adaptive localStorage manifest.
-- Browser brain boot hardening: cgo-ai-browser-adapter.js starts the internal Captain immediately during install and emits cikur-internal-ai-ready.
-- BCGO UI hardening: bcgo.html performs a runtime-ready handshake and reads the live Captain state after listener registration, closing script-order race conditions.
-- Human chat remains routed to the same Captain instance exposed by BCGOBrain.getCaptain(), then falls back to the same Internal AI gateway only when Captain does not claim the command.
-- No external AI/provider/API, Cloud Functions dependency, or direct source mutation was added.
-- Medicine and Executor contracts remain downstream; human approval and proof gates remain authoritative.
-- Production browser/Firebase E2E is still an explicit acceptance gate and is NOT claimed by static validation alone.
-
-======================================================================
-REAL CGO RUNTIME BRIDGE RECONCILIATION — 2026-09-12
-======================================================================
-- Browser Bridge now starts the single Captain instance during Internal AI installation, before advertising runtime readiness.
-- `cikur-internal-ai-ready` carries an explicit `ready` flag and the bridge exposes `isReady()` / `captainReady()` from the actual Captain state.
-- `bcgo.html` exposes the same `getCaptain()` route before and after `bcgo.js` installs the authoritative BCGOBrain object, preventing an early chat/UI timing gap.
-- BCGO continues to publish the authoritative `cikur-bcgo-state` event consumed by the same Captain instance.
-- All packaged internal imports use the `20260912-real-cgo-bridge2` cache-buster so stale browser modules are not intentionally retained.
-- `INTEGRATION-MANIFEST.txt` remains a required architecture contract; it is not replaced by the runtime adaptive manifest.
-- No external AI/API, Cloud Functions, or source mutation was introduced.
-- Production browser + Firebase E2E remains an explicit acceptance gate and is not claimed by this package.
-
-
-RUNTIME PRESENTATION SCOPE REPAIR — 2026-09-12
-- Fixed bcgo.html classic-script/module-script scope violation: presentation no longer calls module-scoped authoritativeBCGOState().
-- Fixed Captain ready-event boot race by adopting window.BCGO_STATE when the presentation listener attaches after the runtime.
-- Removed the misleading waiting placeholder once live Captain state is available.
-- Synchronized remaining Admin page cache-busters to the current real-cgo-bridge3 runtime set.
+- Canonical filename remains exactly: INTEGRATION-MANIFEST.txt.
+- The BCGO-CGO transport uses one cache identity per release so BCGO,
+  Browser Adapter, and Captain cannot silently load separate bridge module
+  instances because of mismatched query-string versions.
+- Current bridge release identity: 20260913-bcgo-cgo-v3.
+- BCGO_STATE, human CGO commands, Captain CGO_BCGO_EXPLORE directives and
+  CGO responses continue through the internal BCGO-CGO bridge only.
+- Customer/Mitra source reconciliation starts from the eight authoritative
+  Customer/Mitra roots and recursively follows local HTML/JS references.
+  Discovered nodes are rebuilt on every scan; removed discovered nodes retire.
+- Source scanner is near-real-time polling (20 seconds) with cache:no-store,
+  subject to Admin authorization. It is not filesystem push.
+- Workbench is source-selection driven, not scan-queue driven. A background
+  scan updates evidence for the selected file but does not jump the Workbench
+  through every scanned file.
+- When a selected live source fingerprint changes, any candidate bound to the
+  previous fingerprint is invalidated rather than silently applied.
+- No automatic source mutation is introduced by architecture reconciliation.
+- Browser deployment E2E remains a required release gate until demonstrated
+  against the user's actual hosted deployment.

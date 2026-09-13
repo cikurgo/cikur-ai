@@ -2,15 +2,16 @@
  * Binds the V5.2 active-investigation brain to the existing BCGO / Medicine contracts.
  * No external AI/API. No source mutation. Medicine remains proof authority.
  */
-import * as Core from "./cgo-ai-core.js?v=20260912-real-cgo-bridge2";
-import * as Knowledge from "./cgo-ai-knowledge.js?v=20260912-real-cgo-bridge2";
-import * as Investigator from "./cgo-ai-investigator.js?v=20260912-real-cgo-bridge2";
-import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js?v=20260912-real-cgo-bridge2";
-import * as Cognition from "./cgo-ai-cognition.js?v=20260912-real-cgo-bridge2";
-import * as Logic from "./cgo-ai-logic.js?v=20260912-real-cgo-bridge2";
-import * as Memory from "./cgo-ai-memory.js?v=20260912-real-cgo-bridge2";
-import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260912-real-cgo-bridge2";
-import { createCaptain } from "./cgo-ai-captain.js?v=20260912-real-cgo-bridge2";
+import * as Core from "./cgo-ai-core.js?v=20260912-bcgo-cgo-v1";
+import * as Knowledge from "./cgo-ai-knowledge.js?v=20260912-bcgo-cgo-v1";
+import * as Investigator from "./cgo-ai-investigator.js?v=20260912-bcgo-cgo-v1";
+import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js?v=20260912-bcgo-cgo-v1";
+import * as Cognition from "./cgo-ai-cognition.js?v=20260912-bcgo-cgo-v1";
+import * as Logic from "./cgo-ai-logic.js?v=20260912-bcgo-cgo-v1";
+import * as Memory from "./cgo-ai-memory.js?v=20260912-bcgo-cgo-v1";
+import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=20260912-bcgo-cgo-v1";
+import { createCaptain } from "./cgo-ai-captain.js?v=20260912-bcgo-cgo-v1";
+import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-bcgo-cgo-v3";
 
 const VERSION = "V5.5-BROWSER-BRIDGE-CGO-CONSTRUCTION-REAL-BOOT";
 const INTERNAL_AUTO_POLICY = Object.freeze({
@@ -23,6 +24,10 @@ const INTERNAL_AUTO_POLICY = Object.freeze({
 
 const runtime = createRuntime({});
 const captain = createCaptain({});
+const bcgoCgoBridge = BCGOCGOBridge.install();
+let unsubscribeHumanCommand = null;
+let stateSyncTimer = null;
+let lastBCGOStateSignature = "";
 const memory = Memory.createMemory();
 const caseIds = new Map();
 const evidenceTokens = new Map();
@@ -918,13 +923,40 @@ function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = nu
 }
 
 export function install() {
-  // HARDENED BOOT: Captain is started immediately when the browser brain is
-  // installed. Previously it only started on the first BCGO_STATE intake,
-  // which left a real race window where the human chat could see no Captain
-  // and the UI could remain at WAITING even though the brain was loaded.
+  // AUTHORITATIVE BOOT: BCGO-CGO bridge is installed before Captain so state
+  // and human commands have one transport from the first tick.
+  bcgoCgoBridge.install();
   let captainBooted = false;
   try { captain.start(); captainBooted = !!captain.getState?.(); } catch (error) {
     try { window.dispatchEvent(new CustomEvent("cikur-captain-boot-error", { detail: { message: String(error?.message || error) } })); } catch {}
+  }
+  if (!stateSyncTimer && typeof window !== "undefined") {
+    stateSyncTimer = setInterval(() => {
+      try {
+        const snapshot = window.BCGO_STATE;
+        if (!snapshot || typeof snapshot !== "object") return;
+        const signature = JSON.stringify({
+          cycle:snapshot.cycle, step:snapshot.step, lastTelemetryFile:snapshot.lastTelemetryFile,
+          scanGeneration:snapshot.sourceScan?.rescanGeneration, scanPhase:snapshot.sourceScan?.phase,
+          completedAt:snapshot.sourceScan?.completedAt, lastEventAt:snapshot.lastEventAt
+        });
+        if (signature === lastBCGOStateSignature) return;
+        lastBCGOStateSignature = signature;
+        captain.ingestBCGOState(snapshot);
+      } catch {}
+    }, 750);
+    try { stateSyncTimer.unref?.(); } catch {}
+  }
+
+  if (!unsubscribeHumanCommand) {
+    unsubscribeHumanCommand = bcgoCgoBridge.onCommand(packet => {
+      try {
+        const out = captain.receiveHumanCommand(packet?.text || "", { source: "BCGO_CGO_BRIDGE", commandId: packet?.id || null });
+        try { window.dispatchEvent(new CustomEvent("cikur-cgo-command-processed", { detail: { command: packet, result: out || null } })); } catch {}
+      } catch (error) {
+        try { window.dispatchEvent(new CustomEvent("cikur-captain-human-response", { detail: { from:"CAPTAIN", type:"CAPTAIN_HUMAN_RESPONSE", message:"Perintah diterima tetapi Captain gagal memprosesnya dengan aman.", error:String(error?.message || error), at:Date.now() } })); } catch {}
+      }
+    });
   }
   try { window.dispatchEvent(new CustomEvent("cikur-internal-ai-ready", { detail: { version: VERSION, ready: captainBooted, captain: captain.getState?.() || null } })); } catch {}
 

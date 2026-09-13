@@ -8,11 +8,13 @@ import {
   getDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { adminDb, adminAuth } from "./cikur-config.js?v=20260912-real-cgo-bridge2";
+import { adminDb, adminAuth } from "./cikur-config.js?v=20260912-bcgo-cgo-v1";
+import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-bcgo-cgo-v3";
 
 // BCGO adalah organ sistem/admin: gunakan namespace Admin, bukan Customer.
 const db = adminDb;
 const auth = adminAuth;
+const bridge = BCGOCGOBridge.install();
 
 /*
  * BCGO MASTER NERVE SYSTEM v2.16.5 + LIVE CONVERSATION BRAIN
@@ -29,7 +31,7 @@ const auth = adminAuth;
  * - Medicine bukan organ BCGO; dua file Medicine berada di diagnostic layer terpisah.
  */
 
-const ORGAN_REGISTRY = {
+const BASE_ORGAN_REGISTRY = {
   "index.html": { type: "Halaman Utama", role: "customer" },
   "assistant.html": { type: "Zona Customer", role: "customer" },
   "food.html": { type: "Zona Customer", role: "customer" },
@@ -52,8 +54,9 @@ const ORGAN_REGISTRY = {
   "new-engine.js": { type: "Sistem Engine", role: "engine", optional: true }
 };
 
-const ORGAN_COUNT = Object.keys(ORGAN_REGISTRY).length;
-const RESERVED_OPTIONAL_ORGANS = new Set(Object.entries(ORGAN_REGISTRY).filter(([,meta]) => meta?.optional).map(([file]) => file));
+const ORGAN_REGISTRY = { ...BASE_ORGAN_REGISTRY };
+const ORGAN_COUNT = Object.keys(BASE_ORGAN_REGISTRY).length;
+const RESERVED_OPTIONAL_ORGANS = new Set(Object.entries(BASE_ORGAN_REGISTRY).filter(([,meta]) => meta?.optional).map(([file]) => file));
 
 const SOURCE_SCAN_INTERVAL = 20000;
 const SOURCE_SCAN_FETCH_TIMEOUT = 10000;
@@ -131,7 +134,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   async function loadInternalAI() {
     if (stopped || internalAI) return internalAI;
     try {
-      const mod = await import("./cgo-runtime-adapter.js?v=20260912-real-cgo-bridge2");
+      const mod = await import("./cgo-runtime-adapter.js?v=20260912-bcgo-cgo-v1");
       if (typeof mod.install !== "function") throw new Error("INTERNAL_AI_ADAPTER_INVALID");
       internalAI = mod.install();
       window.CIKURInternalAIRuntime = internalAI;
@@ -145,7 +148,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       // under cgo-ai-browser-adapter.js. BCGO must never die merely because an
       // optional reasoning adapter is absent.
       try {
-        const mod = await import("./cgo-ai-browser-adapter.js?v=20260912-real-cgo-bridge2");
+        const mod = await import("./cgo-ai-browser-adapter.js?v=20260912-bcgo-cgo-v1");
         if (typeof mod.install !== "function") throw new Error("BROWSER_BRAIN_ADAPTER_INVALID");
         internalAI = mod.install();
         window.CIKURInternalAIRuntime = internalAI;
@@ -257,6 +260,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   }
 
   function publishBCGOStateToMedicine(snapshot) {
+    try { bridge.publishState(snapshot, { cycle:snapshot?.cycle ?? null, caseId:snapshot?.activeCases?.[0]?.id || null }); } catch {}
     const packet = {
       id: `BCGO-${Date.now()}-${state.cycle}-${Math.random().toString(36).slice(2,8)}`,
       bridge: "CIKUR_GO_BCGO_MEDICINE_V1",
@@ -369,6 +373,10 @@ export function runAutonomousEngine(onCycleUpdate) {
   if (medicineBridgeChannel) {
     medicineBridgeChannel.addEventListener('message', event => receiveCaptainDirective(event.data));
   }
+  bridge.onDirective(packet => {
+    if (packet?.directiveType !== 'CGO_BCGO_EXPLORE') return;
+    receiveCaptainDirective({ ...packet, bridge: MEDICINE_BRIDGE_KEY, type:'CGO_BCGO_EXPLORE', from:'CAPTAIN' });
+  });
   window.addEventListener('storage', event => {
     if (event.key !== `${MEDICINE_BRIDGE_KEY}_EVENT` || !event.newValue) return;
     try { receiveCaptainDirective(JSON.parse(event.newValue)); } catch {}
@@ -456,14 +464,10 @@ export function runAutonomousEngine(onCycleUpdate) {
       state.uiError = String(uiError?.message || uiError || "UI render error").slice(0, 500);
       console.warn("BCGO UI render error (engine tetap hidup):", state.uiError);
     }
-    // Captain/CGO and the presentation layer consume the same authoritative
-    // BCGO_STATE. The old build updated window.BCGO_STATE but did not emit the
-    // event Captain was listening for, leaving Captain permanently at WAITING.
-    try {
-      window.dispatchEvent(new CustomEvent("cikur-bcgo-state", { detail: safeClone(snapshot) }));
-    } catch (eventError) {
-      console.warn("BCGO state bridge event gagal:", eventError);
-    }
+    // SINGLE BCGO → CGO CONTRACT: the bridge owns state transport. It emits the
+    // same-tab event and persists the latest packet for cross-tab recovery.
+    try { bridge.publishState(safeClone(snapshot), { cycle: snapshot?.cycle ?? 0 }); }
+    catch (bridgeError) { console.warn("BCGO-CGO state bridge gagal:", bridgeError); }
   }
 
   function recordEvent(type, message, target = "SYSTEM") {
@@ -575,6 +579,11 @@ export function runAutonomousEngine(onCycleUpdate) {
   }
 
   async function discoverAdaptiveCustomerArchitecture() {
+    // Rebuild discovered Customer/Mitra dependencies from the CURRENT graph on every scan.
+    // Fixed system organs remain. Removed discovered files are retired rather than kept as zombies.
+    for (const [file, meta] of Object.entries(ORGAN_REGISTRY)) {
+      if (meta?.discovered === true) delete ORGAN_REGISTRY[file];
+    }
     const queue = [...new Set(ADAPTIVE_ROOTS.filter(file => ORGAN_REGISTRY[file]))];
     const queued = new Set(queue);
     const discovered = new Set();
@@ -1892,6 +1901,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       const mergedWithContract = [...mergedCrossFindings,...contractGapFindings].slice(0,220);
       const mergedActionableWithContract = [...failures,...allFindings,...mergedWithContract].filter(f => f.severity !== 'INFO').slice(0,160);
       const architecture = reconcileAdaptiveArchitecture(previousManifest, scanned, discovery);
+      try { window.dispatchEvent(new CustomEvent('cgo-architecture-reconciled', { detail: bridgeClone(architecture) })); } catch {}
       if (architecture.status === 'ADAPTED' || architecture.status === 'REVIEW') {
         recordEvent('ARCHITECTURE_RECONCILED', architecture.message, 'SYS_ARCHITECTURE_ADAPTATION');
       }

@@ -11,6 +11,8 @@
  */
 const VERSION = "2.3.0-CAPTAIN-CGO-CONSTRUCTION-MEDICINE-REVIEW";
 const BRIDGE = "CIKUR_GO_BCGO_MEDICINE_V1";
+import * as BCGOCGOBridge from "./cgo-bcgo-bridge.js?v=20260913-bcgo-cgo-v3";
+const BCGO_BRIDGE = BCGOCGOBridge.install();
 const MAX_ROUNDS = 4;
 const DIRECTIVE_COOLDOWN = 12000;
 const BLOCKER_REPEAT_COOLDOWN = 30000;
@@ -69,6 +71,9 @@ export function createCaptain(options = {}) {
   }
 
   function post(type, payload = {}) {
+    if (type === "CGO_BCGO_EXPLORE") {
+      return BCGO_BRIDGE.publishDirective(type, { caseId: payload.caseId || state.caseId || null, ...payload });
+    }
     const packet = {
       id: `CAPTAIN-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
       bridge: BRIDGE,
@@ -551,6 +556,14 @@ export function createCaptain(options = {}) {
   function onBCGO(stateSnapshot) {
     if (!stateSnapshot || typeof stateSnapshot !== "object") return;
     latestBCGO = clone(stateSnapshot);
+    const architecture = latestBCGO?.sourceScan?.architecture || null;
+    if (architecture?.revision && architecture.revision !== state.bcgoArchitectureRevision) {
+      state.bcgoArchitectureRevision = architecture.revision;
+      state.bcgoExploration = clone(architecture);
+      if (architecture.status === "ADAPTED" || architecture.status === "REVIEW") {
+        set({ phase:"ARCHITECTURE_REVIEW", decision:"CUSTOMER_ARCHITECTURE_CHANGED", nextAction:"BCGO_EXPLORE", blocker: architecture.status === "REVIEW" ? "ARCHITECTURE_REVIEW_REQUIRED" : null }, "CAPTAIN_ARCHITECTURE_CHANGED");
+      }
+    }
     const active = Array.isArray(latestBCGO?.activeCases) ? latestBCGO.activeCases : [];
     const primary = (state.caseId && active.find(x => (x.id || x.caseId || x.target) === state.caseId)) || active[0] || (latestBCGO?.lastTelemetryFile ? { id:`BCGO-${latestBCGO.lastTelemetryFile}`, target:latestBCGO.lastTelemetryFile } : null);
     if (primary) {
