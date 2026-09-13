@@ -26,7 +26,8 @@ import {
     doc,
     getDoc,
     serverTimestamp,
-    deleteField
+    deleteField,
+    runTransaction
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 import {
@@ -772,6 +773,189 @@ window.CikurCloud = {
     },
 
     // ======================================
+    // SALDO / WALLET CIKURPAY
+    // CATATAN: ini adalah wallet INTERNAL CIKUR GO (saldo tersimpan &
+    // terpotong secara konsisten di Firestore). Untuk isi saldo dari uang
+    // asli (transfer bank/QRIS/e-wallet), nanti tinggal disambungkan ke
+    // payment gateway (mis. Midtrans/Xendit) yang memanggil topUpSaldo()
+    // ini setelah pembayaran gateway dikonfirmasi sukses.
+    // Pakai runTransaction supaya aman walau tombol dipencet dobel/cepat.
+    // ======================================
+
+    async topUpSaldo(userId, amount, method = "MANUAL") {
+        if (!userId) {
+            const currentUser = await this.ensureAuth();
+            if (!currentUser) throw new Error("Sesi tidak ditemukan. Silakan login kembali.");
+            userId = currentUser.uid;
+        }
+
+        amount = Number(amount);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            throw new Error("Jumlah top up tidak valid.");
+        }
+
+        const userRef = doc(db, "users", userId);
+        const newBalance = await runTransaction(db, async (tx) => {
+            const snap = await tx.get(userRef);
+            const currentSaldo = Number(snap.data()?.saldo || 0);
+            const updated = currentSaldo + amount;
+            tx.set(userRef, { saldo: updated }, { merge: true });
+            return updated;
+        });
+
+        await addDoc(collection(db, "walletTransactions"), {
+            userId,
+            type: "TOPUP",
+            amount,
+            method,
+            balanceAfter: newBalance,
+            timestamp: serverTimestamp()
+        });
+
+        return newBalance;
+    },
+
+    async payWithSaldo(userId, amount, orderId, description = "") {
+        if (!userId) {
+            const currentUser = await this.ensureAuth();
+            if (!currentUser) throw new Error("Sesi tidak ditemukan. Silakan login kembali.");
+            userId = currentUser.uid;
+        }
+
+        amount = Number(amount);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            throw new Error("Jumlah pembayaran tidak valid.");
+        }
+
+        const userRef = doc(db, "users", userId);
+        const newBalance = await runTransaction(db, async (tx) => {
+            const snap = await tx.get(userRef);
+            const currentSaldo = Number(snap.data()?.saldo || 0);
+            if (currentSaldo < amount) {
+                throw new Error("Saldo CikurPay tidak cukup. Silakan top up terlebih dahulu.");
+            }
+            const updated = currentSaldo - amount;
+            tx.set(userRef, { saldo: updated }, { merge: true });
+            return updated;
+        });
+
+        await addDoc(collection(db, "walletTransactions"), {
+            userId,
+            type: "PAYMENT",
+            amount: -amount,
+            orderId: orderId || null,
+            description,
+            balanceAfter: newBalance,
+            timestamp: serverTimestamp()
+        });
+
+        if (orderId) {
+            await updateDoc(doc(db, "orders", orderId), {
+                paymentStatus: "PAID",
+                paidWithSaldo: true
+            }).catch(() => {});
+        }
+
+        return newBalance;
+    },
+
+    listenWalletTransactions(userId, callback, max = 20) {
+        if (!userId) return () => {};
+
+        const q = query(
+            collection(db, "walletTransactions"),
+            where("userId", "==", userId),
+            orderBy("timestamp", "desc"),
+            limit(max)
+        );
+
+        return onSnapshot(q, (snap) => {
+            callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+    },
+
+    // ======================================
+    // NOTIFIKASI / INBOX CUSTOMER
+    // Dibuat OTOMATIS oleh createOrder() & updateOrderStatus()
+    // di bawah, jadi Inbox index.html selalu sinkron dengan
+    // kejadian nyata di food.html/ride.html/driver.html/resto.html.
+    // ======================================
+
+    async createNotification(userId, title, body, meta = {}) {
+        if (!userId) return;
+        try {
+            await addDoc(collection(db, "notifications"), {
+                userId,
+                title,
+                body,
+                meta,
+                isRead: false,
+                timestamp: serverTimestamp()
+            });
+        } catch (error) {
+            console.error("[CIKUR GO] Gagal membuat notifikasi:", error);
+        }
+    },
+
+    listenNotifications(userId, callback, max = 30) {
+        if (!userId) return () => {};
+
+        const q = query(
+            collection(db, "notifications"),
+            where("userId", "==", userId),
+            orderBy("timestamp", "desc"),
+            limit(max)
+        );
+
+        return onSnapshot(q, (snap) => {
+            callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+    },
+
+    async markNotificationRead(notificationId) {
+        if (!notificationId) return;
+        try {
+            await updateDoc(doc(db, "notifications", notificationId), { isRead: true });
+        } catch (error) {
+            console.error("[CIKUR GO] Gagal menandai notifikasi:", error);
+        }
+    },
+
+    async markAllNotificationsRead(userId) {
+        if (!userId) return;
+        try {
+            const q = query(collection(db, "notifications"), where("userId", "==", userId), where("isRead", "==", false));
+            const snap = await new Promise((resolve, reject) => {
+                const unsub = onSnapshot(q, (s) => { unsub(); resolve(s); }, (e) => { unsub(); reject(e); });
+            });
+            await Promise.all(snap.docs.map(d => updateDoc(doc(db, "notifications", d.id), { isRead: true })));
+        } catch (error) {
+            console.error("[CIKUR GO] Gagal menandai semua notifikasi:", error);
+        }
+    },
+
+    // ======================================
+    // SEMUA ORDER AKTIF CUSTOMER LINTAS MODUL
+    // (FOOD + RIDE + ASSISTANT digabung, untuk tab "Pesanan")
+    // ======================================
+
+    listenAllActiveOrdersForCustomer(userId, callback) {
+        if (!userId) return () => {};
+
+        const q = query(
+            collection(db, "orders"),
+            where("userId", "==", userId),
+            where("status", "not-in", ["SELESAI", "DITOLAK_RESTO"]),
+            orderBy("timestamp", "desc"),
+            limit(20)
+        );
+
+        return onSnapshot(q, (snap) => {
+            callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+    },
+
+    // ======================================
     // PELAPORAN ERROR LINTAS FILE
     // Dipanggil dari tiap file (index.html, food.html, dst) saat
     // terjadi error JavaScript. Dibaca real-time oleh bcgo.html
@@ -866,6 +1050,14 @@ window.CikurCloud = {
             collection(db, "orders"),
             orderData
         );
+
+        const orderTypeLabelMap = { FOOD: "CIKUR Food", RIDE: "CIKUR Ride", ASSISTANT: "CIKUR Assistant" };
+        this.createNotification(
+            firebaseUser.uid,
+            "Pesanan Dibuat",
+            `Pesanan ${orderTypeLabelMap[type] || type} kamu berhasil dibuat dan sedang diproses.`,
+            { orderId: orderReference.id, type, status: "PENDING" }
+        ).catch(() => {});
 
         return {
             id: orderReference.id,
@@ -1074,6 +1266,33 @@ window.CikurCloud = {
                 updatedAt: serverTimestamp()
             }
         );
+
+        if (updateData?.status) {
+            try {
+                const orderSnap = await getDoc(doc(db, "orders", orderId));
+                if (orderSnap.exists()) {
+                    const orderData = orderSnap.data();
+                    const orderTypeLabelMap = { FOOD: "CIKUR Food", RIDE: "CIKUR Ride", ASSISTANT: "CIKUR Assistant" };
+                    const statusTextMap = {
+                        DIAMBIL_DRIVER: "driver sudah menuju lokasi kamu",
+                        DIMASAK: "sedang disiapkan resto",
+                        SIAP_DIAMBIL: "siap diambil driver",
+                        DIANTAR: "sedang diantar ke lokasi kamu",
+                        SELESAI: "telah selesai",
+                        DITOLAK_RESTO: "ditolak oleh resto"
+                    };
+                    const statusText = statusTextMap[updateData.status] || updateData.status;
+                    this.createNotification(
+                        orderData.userId,
+                        (orderTypeLabelMap[orderData.type] || orderData.type) + " — Update Status",
+                        `Pesanan kamu ${statusText}.`,
+                        { orderId, type: orderData.type, status: updateData.status }
+                    ).catch(() => {});
+                }
+            } catch (notifyError) {
+                console.error("[CIKUR GO] Gagal membuat notifikasi status order:", notifyError);
+            }
+        }
 
         return true;
     },

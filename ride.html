@@ -312,10 +312,14 @@ body{
         <div class="checkout-box" id="rideCartSection">
             <div style="font-size: 11px; color: #94a3b8; font-weight: 700;">Layanan Terpilih</div>
             <h3 id="rideTypeName" style="font-size: 14px; font-weight: 800; margin: 2px 0 6px 0;">CIKUR-Bike (Motor)</h3>
-            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 8px;">
                 <span>Tarif Perjalanan:</span>
                 <span id="rideTotalPrice" style="color: #FFD700; font-weight: 800; font-family: var(--font-mono);">Rp 10.000</span>
             </div>
+            <select id="ridePaymentMethodSelect" class="input-box" style="margin:0 0 8px 0; color:#0f172a;">
+                <option value="Tunai / COD (Bayar di Tempat)">💵 Tunai / COD (Bayar ke Driver)</option>
+                <option value="CikurPay Saldo Digital">💳 CikurPay Saldo Digital</option>
+            </select>
             <button class="btn-order" onclick="prosesPesanRide()">Pesan Driver Sekarang ⚡</button>
         </div>
     </div>
@@ -391,7 +395,8 @@ async function loadRideUser() {
         userProfile = {
             uid: firebaseUser.uid,
             name: profile?.name || "Customer",
-            phone: profile?.phone || ""
+            phone: profile?.phone || "",
+            saldo: Number(profile?.saldo || 0)
         };
     } catch (error) {
         console.error("[CIKUR RIDE] Gagal memuat profil:", error);
@@ -421,6 +426,15 @@ async function prosesPesanRide() {
 
     try {
         if (!userProfile.uid) await loadRideUser();
+
+        const chosenPaymentMethod = document.getElementById("ridePaymentMethodSelect").value;
+
+        if (chosenPaymentMethod === "CikurPay Saldo Digital" && Number(userProfile.saldo || 0) < selectedRide.price) {
+            alert("Saldo CikurPay kamu tidak cukup (Rp " + Number(userProfile.saldo || 0).toLocaleString("id-ID") + "). Silakan top up dulu di menu Profil, atau pilih Tunai.");
+            if (button) { button.disabled = false; button.textContent = "Pesan Driver Sekarang ⚡"; }
+            return;
+        }
+
         const order = await window.CikurCloud.createOrder("RIDE", {
             service: "RIDE",
             vehicleType: selectedRide.vehicleType,
@@ -430,12 +444,22 @@ async function prosesPesanRide() {
             destination,
             customerName: userProfile.name || "Customer",
             customerPhone: userProfile.phone || "",
-            paymentMethod: "CIKURPAY",
+            paymentMethod: chosenPaymentMethod,
             paymentStatus: "PENDING",
             mode: "REGULAR"
         });
 
         if (!order?.id) throw new Error("Pesanan Ride tidak menghasilkan ID.");
+
+        if (chosenPaymentMethod === "CikurPay Saldo Digital") {
+            try {
+                const newBalance = await window.CikurCloud.payWithSaldo(userProfile.uid, selectedRide.price, order.id, "Bayar CIKUR Ride #" + order.id.slice(-6));
+                userProfile.saldo = newBalance;
+            } catch (payError) {
+                alert("Pembayaran saldo gagal: " + (payError?.message || payError) + "\n\nPesanan tetap dibuat, silakan bayar Tunai ke driver.");
+            }
+        }
+
         showOrderTrackingView(order.id);
     } catch (error) {
         console.error("[CIKUR RIDE] Gagal membuat order:", error);

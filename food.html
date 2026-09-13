@@ -588,6 +588,7 @@ async function loadCurrentCustomerAuthGate() {
         uid: firebaseUser.uid,
         name: profile?.name || "",
         phone: profile?.phone || "",
+        saldo: Number(profile?.saldo || 0),
         isLoggedIn: true
     };
 
@@ -971,6 +972,13 @@ async function finalizeAndExecuteOrder() {
 
     let deliveryFee = 10000;
     let notesText = activeChatMessages.map(m => m.text).join(' | ') || '';
+    let chosenPaymentMethod = document.getElementById("paymentMethodSelect").value;
+    let grandTotalFood = subtotal + deliveryFee;
+
+    if (chosenPaymentMethod === "CikurPay Saldo Digital" && Number(userProfile.saldo || 0) < grandTotalFood) {
+        alert("Saldo CikurPay kamu tidak cukup (Rp " + Number(userProfile.saldo || 0).toLocaleString("id-ID") + "). Silakan top up dulu di menu Profil, atau pilih metode bayar lain.");
+        return;
+    }
 
     let orderPayload = {
         restoId: targetRestoId,
@@ -980,8 +988,8 @@ async function finalizeAndExecuteOrder() {
         items: structuredItems,
         subtotal: subtotal,
         deliveryFee: deliveryFee,
-        total: subtotal + deliveryFee,
-        paymentMethod: document.getElementById("paymentMethodSelect").value,
+        total: grandTotalFood,
+        paymentMethod: chosenPaymentMethod,
         notes: notesText,
         address: {
             text: finalAddress,
@@ -996,6 +1004,16 @@ async function finalizeAndExecuteOrder() {
     try {
         const order = await window.CikurCloud.createOrder("FOOD", orderPayload);
         if (!order?.id) throw new Error("Pesanan gagal dibuat.");
+
+        if (chosenPaymentMethod === "CikurPay Saldo Digital") {
+            try {
+                const newBalance = await window.CikurCloud.payWithSaldo(userProfile.uid, grandTotalFood, order.id, "Bayar CIKUR Food #" + order.id.slice(-6));
+                userProfile.saldo = newBalance;
+            } catch (payError) {
+                alert("Pembayaran saldo gagal: " + (payError?.message || payError) + "\n\nPesanan tetap dibuat, silakan bayar Tunai/QRIS ke driver.");
+            }
+        }
+
         closePaymentModal();
         showOrderTrackingView(order.id);
     } catch (error) {
