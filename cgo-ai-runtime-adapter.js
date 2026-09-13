@@ -3,15 +3,15 @@
  * Orchestrates approved repair/execution through an injected deterministic Executor.
  * The brain never writes source directly; it can trigger Executor execution when policy permits.
  */
-import * as Core from "./cgo-ai-core.js?v=20260912-bcgo-cgo-v1";
-import * as Knowledge from "./cgo-ai-knowledge.js?v=20260912-bcgo-cgo-v1";
-import * as Investigator from "./cgo-ai-investigator.js?v=20260912-bcgo-cgo-v1";
-import * as Memory from "./cgo-ai-memory.js?v=20260912-bcgo-cgo-v1";
-import * as Cognition from "./cgo-ai-cognition.js?v=20260912-bcgo-cgo-v1";
-import * as Guardian from "./cgo-ai-guardian.js?v=20260912-bcgo-cgo-v1";
-import * as Logic from "./cgo-ai-logic.js?v=20260912-bcgo-cgo-v1";
-import * as CaptainState from "./cgo-ai-state-machine.js?v=20260912-bcgo-cgo-v1";
-import * as EvidenceLedger from "./cgo-ai-evidence-ledger.js?v=20260912-bcgo-cgo-v1";
+import * as Core from "./cgo-ai-core.js?v=20260913-bcgo-cgo-v3";
+import * as Knowledge from "./cgo-ai-knowledge.js?v=20260913-bcgo-cgo-v3";
+import * as Investigator from "./cgo-ai-investigator.js?v=20260913-bcgo-cgo-v3";
+import * as Memory from "./cgo-ai-memory.js?v=20260913-bcgo-cgo-v3";
+import * as Cognition from "./cgo-ai-cognition.js?v=20260913-bcgo-cgo-v3";
+import * as Guardian from "./cgo-ai-guardian.js?v=20260913-bcgo-cgo-v3";
+import * as Logic from "./cgo-ai-logic.js?v=20260913-bcgo-cgo-v3";
+import * as CaptainState from "./cgo-ai-state-machine.js?v=20260913-bcgo-cgo-v3";
+import * as EvidenceLedger from "./cgo-ai-evidence-ledger.js?v=20260913-bcgo-cgo-v3";
 
 const VERSION="1.13.0";
 const EXECUTOR_CONTRACT_VERSION="1.2.0";

@@ -11,12 +11,12 @@ import {
   setDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { adminDb, adminAuth } from "./cikur-config.js?v=20260912-bcgo-cgo-v1";
+import { adminDb, adminAuth } from "./cikur-config.js?v=20260913-bcgo-cgo-v3";
 
 // Medicine adalah organ sistem: Firestore/Auth harus memakai namespace Admin.
 const db = adminDb;
 const auth = adminAuth;
-import { Cognition as InternalCognition, Investigator as InternalInvestigator, createMasterRuntime } from "./cgo-runtime-adapter.js?v=20260912-bcgo-cgo-v1";
+import { Cognition as InternalCognition, Investigator as InternalInvestigator, createMasterRuntime } from "./cgo-runtime-adapter.js?v=20260913-bcgo-cgo-v3";
 
 /*
  * ================================================================
@@ -119,7 +119,7 @@ function projectCaptainState(c,status,context={}){
       const fallback = "INSUFFICIENT_EVIDENCE";
       const decision=CAPTAIN_RUNTIME.captainState().canTransition(current.state,fallback,{source:"MEDICINE_STATUS_PROJECTION",medicineStatus:status,caseId:c.id,...context});
       if(decision.ok) return CAPTAIN_RUNTIME.transitionCaseState(c.id,fallback,{source:"MEDICINE_STATUS_PROJECTION",medicineStatus:status,reason:"BLOCKED_BEFORE_SOURCE_VERIFICATION",...context});
-      emit("captain_state_projection_blocked",{caseId:c.id,medicineStatus:status,currentState:current.state,requestedState:desired,reason:decision.reason});
+      emit("captain_state_projection_deferred",{caseId:c.id,medicineStatus:status,currentState:current.state,requestedState:desired,reason:decision.reason,nonBlocking:true});
       return current;
     }
 
@@ -129,7 +129,7 @@ function projectCaptainState(c,status,context={}){
       if(current.state===step) continue;
       const decision=CAPTAIN_RUNTIME.captainState().canTransition(current.state,step,{source:"MEDICINE_STATUS_PROJECTION",medicineStatus:status,caseId:c.id,...context});
       if(!decision.ok){
-        emit("captain_state_projection_blocked",{caseId:c.id,medicineStatus:status,currentState:current.state,requestedState:step,finalTarget:desired,reason:decision.reason});
+        emit("captain_state_projection_deferred",{caseId:c.id,medicineStatus:status,currentState:current.state,requestedState:step,finalTarget:desired,reason:decision.reason,nonBlocking:true});
         return current;
       }
       current=CAPTAIN_RUNTIME.transitionCaseState(c.id,step,{source:"MEDICINE_STATUS_PROJECTION",medicineStatus:status,finalTarget:desired,...context});
@@ -142,7 +142,17 @@ function projectCaptainState(c,status,context={}){
 }
 
 function setMedicineCaseStatus(c,status,context={}){
-  return projectCaptainState(c,status,context);
+  if(!c) return null;
+  c.status = status;
+  // Captain is the orchestration authority. This projection is compatibility-only;
+  // a rejected transition must never deadlock Medicine's proof workflow.
+  try {
+    const projected = projectCaptainState(c,status,context);
+    if(projected) c.captainProjection = { state:projected.state || null, at:now(), status:'BEST_EFFORT' };
+  } catch(error) {
+    c.captainProjection = { state:null, at:now(), status:'UNAVAILABLE', reason:String(error?.message || error) };
+  }
+  return c;
 }
 
 // Medicine is the examiner, not the patient. Its own UI/engine files are

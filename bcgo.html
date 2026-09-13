@@ -324,7 +324,7 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=20260912-bcgo-cgo-v1';
+import { runAutonomousEngine } from './bcgo.js?v=20260913-bcgo-cgo-v3';
 
 // HARD BUILD ID — visible/inspectable marker proving which BCGO HTML is running.
 window.__CIKUR_BCGO_BUILD_ID = 'BCGO-CGO-E2E-01-20260912';
@@ -507,10 +507,10 @@ function renderSourceScan(scan) {
     if (sourceScanCurrentEl) {
         sourceScanCurrentEl.textContent = scan.currentFile
             ? `${scan.phase || 'SCAN'} · ${scan.currentFile}`
-            : (scan.phase === 'COMPLETE' ? 'SCAN COMPLETE · seluruh source sudah diproses' : 'Menunggu scanner...');
+            : (scan.phase === 'COMPLETE' ? (scan.sourceReadComplete === false ? `SCAN DEGRADED · ${scan.requiredReadable || 0}/${scan.requiredFiles || 0} source wajib terbaca` : `SCAN COMPLETE · ${scan.requiredReadable || readable}/${scan.requiredFiles || total} source wajib terbaca${scan.optionalStandby ? ` · ${scan.optionalStandby} standby` : ''}`) : 'Menunggu scanner...');
         sourceScanCurrentEl.className = `text-[9px] code-font ${running ? 'text-cyan-300' : scan.status === 'FINDINGS' || scan.status === 'DEGRADED' ? 'text-rose-300' : 'text-slate-500'}`;
     }
-    if (sourceScanProgressLabelEl) sourceScanProgressLabelEl.textContent = `${scanned}/${total}`;
+    if (sourceScanProgressLabelEl) sourceScanProgressLabelEl.textContent = scan.phase === 'COMPLETE' && scan.requiredFiles ? `${scan.requiredReadable || 0}/${scan.requiredFiles} wajib` : `${scanned}/${total}`;
     if (sourceScanProgressEl) {
         sourceScanProgressEl.style.width = `${progress}%`;
         sourceScanProgressEl.className = `h-full rounded-full transition-all duration-300 ${running ? 'bg-cyan-500' : scan.status === 'FINDINGS' || scan.status === 'DEGRADED' ? 'bg-rose-500' : scan.status === 'CLEAN' ? 'bg-emerald-500' : 'bg-slate-700'}`;
@@ -1103,9 +1103,11 @@ runAutonomousEngine(state => {
    if(d.phase==='COMPLETE' && latestWorkbench){ latestWorkbench.scannerStatus='COMPLETE'; saveWorkbench(); renderLive(latestWorkbench); }
  });
  try { if(latestWorkbench) renderLive(latestWorkbench); } catch {}
+ const syncCopyButtons=()=>{const has=!!latestWorkbench?.proposed?.code; ['cgo-live-copy','cgo-wb-copy'].forEach(id=>{const b=$(id); if(b){b.disabled=!has; b.classList.toggle('opacity-40',!has); b.classList.toggle('cursor-not-allowed',!has);}})};
+ try { syncCopyButtons(); } catch {}
 
  $('cgo-live-copy')?.addEventListener('click',async()=>{const code=latestWorkbench?.proposed?.code;if(!code)return;try{await navigator.clipboard.writeText(code);$('cgo-live-copy').textContent='COPIED';setTimeout(()=>{$('cgo-live-copy').textContent='COPY PROPOSED'},1200)}catch{$('cgo-live-copy').textContent='COPY GAGAL'}});
- window.addEventListener('cgo-code-workbench',e=>{const d=e.detail||{};latestWorkbench=d;saveWorkbench();renderLive(d);const box=$('cgo-code-workbench');if(!box)return;box.classList.add('open');box.setAttribute('aria-hidden','false');$('cgo-wb-file').textContent=d.file||'-';
+ window.addEventListener('cgo-code-workbench',e=>{const d=e.detail||{};latestWorkbench=d;saveWorkbench();renderLive(d);syncCopyButtons();const box=$('cgo-code-workbench');if(!box)return;box.classList.add('open');box.setAttribute('aria-hidden','false');$('cgo-wb-file').textContent=d.file||'-';
    const provenance=d.proposed?.fullSource?'FULL PROPOSED SOURCE • SOURCE-BOUND':'SNIPPET ONLY • FULL PROPOSED SOURCE NOT PROVEN';
    $('cgo-wb-meta').textContent=d.status==='SOURCE_READ'?`ORIGINAL ${d.original?.lines||0} lines • ${d.original?.bytes||0} bytes • fingerprint ${d.original?.fingerprint||'-'} • PROPOSED ${d.proposed?.lines||0} lines • proposed fingerprint ${d.proposed?.fingerprint||'-'} • ${provenance}${d.sourceIntegrity?.match===false?' • CANDIDATE ORIGINAL FINGERPRINT MISMATCH — REVIEW':''}`:`STATUS ${d.status||'UNKNOWN'} • ${d.error||''}`;
    $('cgo-wb-original').textContent=d.original?.code?lineCode(d.original.code):'Source belum tersedia.';
