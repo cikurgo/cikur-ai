@@ -2145,7 +2145,7 @@ function bukaModalRegistrasi() {
 
     modalMainContent.innerHTML = `
         <div style="text-align:center; margin-bottom:18px;">
-            <img src="cikurgoicon.png" alt="CIKUR GO" style="width:64px; height:64px; border-radius:18px; margin:0 auto 10px; display:block; object-fit:cover; box-shadow:0 6px 16px rgba(229,9,20,0.15);">
+            <img src="cikurgoicon.png" alt="CIKUR GO" style="width:88px; height:auto; margin:0 auto 12px; display:block;">
             <h3 style="font-size:17px; font-weight:800; color:#0f172a;">Selamat Datang di CIKUR GO</h3>
             <p style="font-size:11px; color:#64748b; margin-top:4px;">Semua kebutuhanmu, dalam satu aplikasi.</p>
         </div>
@@ -2161,17 +2161,7 @@ function bukaModalRegistrasi() {
             <div style="flex:1; height:1px; background:#e2e8f0;"></div>
         </div>
 
-        <!-- NAMA -->
-        <div class="form-group">
-            <label>Nama Lengkap / Panggilan</label>
-            <input
-                type="text"
-                id="regName"
-                class="input-box"
-                placeholder="Masukkan nama Anda"
-                autocomplete="name"
-            >
-        </div>
+        <div style="font-size:10px; font-weight:800; color:var(--primary-red); letter-spacing:0.05em; margin-bottom:10px;">LANGKAH 1 DARI 2 — AKUN</div>
 
         <!-- EMAIL -->
         <div class="form-group">
@@ -2186,19 +2176,6 @@ function bukaModalRegistrasi() {
             >
         </div>
 
-        <!-- WHATSAPP -->
-        <div class="form-group">
-            <label>Nomor WhatsApp / HP</label>
-            <input
-                type="tel"
-                id="regPhone"
-                class="input-box"
-                placeholder="08xxxxxxxxxx"
-                autocomplete="tel"
-                inputmode="tel"
-            >
-        </div>
-
         <!-- PASSWORD AKUN -->
         <div class="form-group">
             <label>Buat Password Akun (min. 8 karakter)</label>
@@ -2209,37 +2186,17 @@ function bukaModalRegistrasi() {
                 placeholder="Minimal 8 karakter"
                 autocomplete="new-password"
             >
-        </div>
-
-        <!-- PIN -->
-        <div class="form-group">
-            <label>Buat 6-Digit PIN CikurPay</label>
-            <input
-                type="password"
-                id="regPin"
-                maxlength="6"
-                class="input-box"
-                placeholder="6 digit angka"
-                inputmode="numeric"
-                autocomplete="new-password"
-            >
-        </div>
-
-        <div style="
-            font-size:10px;
-            color:#94a3b8;
-            line-height:1.5;
-            margin:8px 2px 12px;
-        ">
-            Email akan menjadi bagian dari identitas akun customer
-            dan ikut tersinkron ke layanan CIKUR GO lainnya.
+            <div style="height:5px; border-radius:99px; background:#e2e8f0; overflow:hidden; margin-top:7px;">
+                <div id="regPasswordStrengthFill" style="height:100%; width:0%; background:#e2e8f0; transition:width 0.2s, background 0.2s;"></div>
+            </div>
+            <div id="regPasswordStrengthLabel" style="font-size:10px; color:#94a3b8; margin-top:4px; font-weight:700;">Minimal 8 karakter</div>
         </div>
 
         <button
             class="btn-pesan-form"
-            id="btnSimpanReg"
+            id="btnLanjutReg"
         >
-            Mulai Sekarang ✓
+            Lanjutkan →
         </button>
 
         <p style="text-align:center; font-size:11px; color:#64748b; margin-top:12px;">
@@ -2253,69 +2210,175 @@ function bukaModalRegistrasi() {
         btnGoogleRegister.addEventListener("click", () => prosesLoginGoogleFlow(btnGoogleRegister));
     }
 
-    const btnSimpanReg =
-        document.getElementById("btnSimpanReg");
+    const regPasswordEl = document.getElementById("regPassword");
+    if (regPasswordEl) {
+        regPasswordEl.addEventListener("input", (e) => {
+            updatePasswordStrengthMeter(e.target.value, "regPasswordStrengthFill", "regPasswordStrengthLabel");
+        });
+    }
 
-    if (!btnSimpanReg) return;
+    const linkBukaLoginEl = document.getElementById("linkBukaLogin");
+    if (linkBukaLoginEl) {
+        linkBukaLoginEl.addEventListener("click", (e) => {
+            e.preventDefault();
+            bukaModalLogin();
+        });
+    }
 
-    btnSimpanReg.addEventListener("click", async () => {
+    const btnLanjutReg = document.getElementById("btnLanjutReg");
+    if (!btnLanjutReg) return;
 
-        const nameVal =
-            document.getElementById("regName")?.value.trim() || "";
+    btnLanjutReg.addEventListener("click", async () => {
+        const emailVal = document.getElementById("regEmail")?.value.trim().toLowerCase() || "";
+        const passwordVal = document.getElementById("regPassword")?.value || "";
 
-        const emailVal =
-            document.getElementById("regEmail")?.value.trim().toLowerCase() || "";
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailVal || !emailPattern.test(emailVal)) {
+            alert("Mohon isi alamat email yang valid.");
+            return;
+        }
 
-        const phoneVal =
-            document.getElementById("regPhone")?.value.trim() || "";
+        if (passwordVal.length < 8) {
+            alert("Password akun minimal 8 karakter.");
+            return;
+        }
 
-        const passwordVal =
-            document.getElementById("regPassword")?.value || "";
+        if (!window.CikurCloud) {
+            alert("CIKUR Cloud belum tersedia. Silakan refresh halaman.");
+            return;
+        }
 
-        const pinVal =
-            document.getElementById("regPin")?.value.trim() || "";
+        btnLanjutReg.disabled = true;
+        btnLanjutReg.textContent = "Membuat Akun...";
 
+        try {
+            const firebaseUser = await window.CikurCloud.registerWithEmail(emailVal, passwordVal);
+            if (!firebaseUser) throw new Error("Firebase User tidak tersedia.");
+            bukaLangkahLengkapiProfilRegistrasi(firebaseUser, emailVal);
+        } catch (error) {
+            console.error("[CIKUR GO] Gagal membuat akun:", error);
+            if (error?.code === "auth/email-already-in-use") {
+                alert("Email ini sudah terdaftar. Silakan gunakan menu Login untuk masuk ke akun Anda.");
+            } else {
+                const errorCode = error?.code ? ` (${error.code})` : "";
+                alert(`Pendaftaran gagal disimpan${errorCode}: ${error?.message || error}`);
+            }
+            btnLanjutReg.disabled = false;
+            btnLanjutReg.textContent = "Lanjutkan →";
+        }
+    });
+}
 
-        // ==========================
-        // VALIDASI
-        // ==========================
+function updatePasswordStrengthMeter(password, fillId, labelId) {
+    const fillEl = document.getElementById(fillId);
+    const labelEl = document.getElementById(labelId);
+    if (!fillEl || !labelEl) return;
+
+    if (!password) {
+        fillEl.style.width = "0%";
+        fillEl.style.background = "#e2e8f0";
+        labelEl.textContent = "Minimal 8 karakter";
+        labelEl.style.color = "#94a3b8";
+        return;
+    }
+
+    let score = 0;
+    if (password.length >= 8) score++;
+    if (password.length >= 12) score++;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+    if (/\d/.test(password)) score++;
+    if (/[^a-zA-Z0-9]/.test(password)) score++;
+
+    let width, color, label, labelColor;
+    if (password.length < 8) {
+        width = "20%"; color = "#ef4444"; label = "Terlalu pendek (min. 8 karakter)"; labelColor = "#ef4444";
+    } else if (score <= 2) {
+        width = "40%"; color = "#ef4444"; label = "Lemah"; labelColor = "#ef4444";
+    } else if (score <= 3) {
+        width = "70%"; color = "#f59e0b"; label = "Sedang"; labelColor = "#b45309";
+    } else {
+        width = "100%"; color = "#22c55e"; label = "Kuat"; labelColor = "#15803d";
+    }
+
+    fillEl.style.width = width;
+    fillEl.style.background = color;
+    labelEl.textContent = label;
+    labelEl.style.color = labelColor;
+}
+
+function bukaLangkahLengkapiProfilRegistrasi(firebaseUser, emailVal) {
+    openModal("CIKUR GO");
+
+    modalMainContent.innerHTML = `
+        <div style="text-align:center; margin-bottom:16px;">
+            <div style="font-size:10px; font-weight:800; color:var(--primary-red); letter-spacing:0.05em; margin-bottom:4px;">LANGKAH 2 DARI 2 — PROFIL</div>
+            <h3 style="font-size:16px; font-weight:800; color:#0f172a;">Lengkapi Profil Kamu</h3>
+            <p style="font-size:11px; color:#64748b; margin-top:4px;">Data ini dipakai untuk pesanan &amp; keamanan akun.</p>
+        </div>
+
+        <!-- NAMA -->
+        <div class="form-group">
+            <label>Nama Lengkap / Panggilan</label>
+            <input
+                type="text"
+                id="regName2"
+                class="input-box"
+                placeholder="Masukkan nama Anda"
+                autocomplete="name"
+            >
+        </div>
+
+        <!-- WHATSAPP -->
+        <div class="form-group">
+            <label>Nomor WhatsApp / HP</label>
+            <input
+                type="tel"
+                id="regPhone2"
+                class="input-box"
+                placeholder="08xxxxxxxxxx"
+                autocomplete="tel"
+                inputmode="tel"
+            >
+        </div>
+
+        <!-- PIN -->
+        <div class="form-group">
+            <label>Buat 6-Digit PIN CikurPay</label>
+            <input
+                type="password"
+                id="regPin2"
+                maxlength="6"
+                class="input-box"
+                placeholder="6 digit angka"
+                inputmode="numeric"
+                autocomplete="new-password"
+            >
+        </div>
+
+        <button
+            class="btn-pesan-form"
+            id="btnSelesaiReg"
+        >
+            Selesai &amp; Mulai ✓
+        </button>
+    `;
+
+    const btnSelesaiReg = document.getElementById("btnSelesaiReg");
+    if (!btnSelesaiReg) return;
+
+    btnSelesaiReg.addEventListener("click", async () => {
+        const nameVal = document.getElementById("regName2")?.value.trim() || "";
+        const phoneVal = document.getElementById("regPhone2")?.value.trim() || "";
+        const pinVal = document.getElementById("regPin2")?.value.trim() || "";
 
         if (!nameVal) {
             alert("Mohon isi nama Anda.");
             return;
         }
 
-        const emailPattern =
-            /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-        if (!emailVal) {
-            alert("Mohon isi alamat email Anda.");
-            return;
-        }
-
-        if (!emailPattern.test(emailVal)) {
-            alert("Format email tidak valid.");
-            return;
-        }
-
-        if (!phoneVal) {
-            alert("Mohon isi nomor WhatsApp / HP Anda.");
-            return;
-        }
-
-        const phoneDigits =
-            phoneVal.replace(/\D/g, "");
-
-        if (
-            phoneDigits.length < 10 ||
-            phoneDigits.length > 15
-        ) {
+        const phoneDigits = phoneVal.replace(/\D/g, "");
+        if (!phoneVal || phoneDigits.length < 10 || phoneDigits.length > 15) {
             alert("Nomor WhatsApp / HP tidak valid.");
-            return;
-        }
-
-        if (passwordVal.length < 8) {
-            alert("Password akun minimal 8 karakter.");
             return;
         }
 
@@ -2325,46 +2388,19 @@ function bukaModalRegistrasi() {
         }
 
         if (!window.CikurCloud) {
-            alert(
-                "CIKUR Cloud belum tersedia. Silakan refresh halaman."
-            );
+            alert("CIKUR Cloud belum tersedia. Silakan refresh halaman.");
             return;
         }
 
-
-        btnSimpanReg.disabled = true;
-        btnSimpanReg.textContent =
-            "Menyimpan Data Akun...";
-
+        btnSelesaiReg.disabled = true;
+        btnSelesaiReg.textContent = "Menyimpan Data Akun...";
 
         try {
-
-            // ==========================
-            // FIREBASE AUTH - AKUN PERMANEN
-            // (otomatis migrasi dari anonymous jika ada,
-            //  supaya data lama tidak hilang)
-            // ==========================
-
-            const firebaseUser =
-                await window.CikurCloud.registerWithEmail(emailVal, passwordVal);
-
-            if (!firebaseUser) {
-                throw new Error(
-                    "Firebase User tidak tersedia."
-                );
-            }
-
-
-            // ==========================
-            // DATA CUSTOMER
-            // ==========================
-
             const nowISO = new Date().toISOString();
             const customerProfile = {
                 uid: firebaseUser.uid,
                 customerId: userProfile?.customerId || `CGO-${new Date().getFullYear()}-${firebaseUser.uid.slice(0, 10).toUpperCase()}`,
 
-                // IDENTITAS AKUN
                 name: nameVal,
                 email: emailVal,
                 phone: phoneVal,
@@ -2372,62 +2408,43 @@ function bukaModalRegistrasi() {
                 tanggalDaftar: userProfile?.tanggalDaftar || nowISO,
                 lastLogin: nowISO,
 
-                // VERIFIKASI
                 emailVerified: !!firebaseUser.emailVerified,
                 phoneVerified: false,
                 identityVerified: false,
                 verificationLevel: firebaseUser.emailVerified ? "EMAIL" : "BASIC",
 
-                // PROFIL — sisanya dilengkapi setelah registrasi
                 namaLengkap: nameVal,
                 namaPanggilan: userProfile?.namaPanggilan || "",
                 jenisKelamin: userProfile?.jenisKelamin || "",
                 tanggalLahir: userProfile?.tanggalLahir || "",
                 alamatUtama: userProfile?.alamatUtama || "",
 
-                // KEAMANAN
                 pinConfigured: true,
                 securityLevel: "PIN_CONFIGURED",
 
-                // PREFERENSI
                 bahasa: userProfile?.bahasa || "id",
                 notifikasi: userProfile?.notifikasi !== false,
                 promo: userProfile?.promo !== false,
 
-                // CIKURPAY
                 walletStatus: userProfile?.walletStatus || "active",
                 saldo: Number(userProfile?.saldo || 0),
 
                 avatar: userProfile?.avatar || "",
-                profileCompleted: false,
+                profileCompleted: true,
                 profileCompletionVersion: 1,
                 isLoggedIn: true,
                 createdAt: userProfile?.createdAt || nowISO,
                 updatedAt: nowISO
             };
 
-
-            // ==========================
-            // SIMPAN KE FIRESTORE
-            // ==========================
-
-            await window.CikurCloud.saveProfile(
-                firebaseUser.uid,
-                customerProfile
-            );
+            await window.CikurCloud.saveProfile(firebaseUser.uid, customerProfile);
             const ensuredRegistrationAccount = await window.CikurCloud.ensureCustomerAccount(firebaseUser.uid, customerProfile);
             await window.CikurCloud.syncCustomerAccount(firebaseUser.uid, {
                 ...customerProfile,
                 ...(ensuredRegistrationAccount || {})
             });
 
-            // PIN tidak disimpan sebagai teks biasa. Simpan hash + status saja.
             await window.CikurCloud.setCustomerPin(firebaseUser.uid, pinVal);
-
-
-            // ==========================
-            // UPDATE STATE
-            // ==========================
 
             userProfile = {
                 ...userProfile,
@@ -2436,84 +2453,23 @@ function bukaModalRegistrasi() {
                 pinConfigured: true
             };
 
-
-            // ==========================
-            // UPDATE UI
-            // ==========================
-
-            if (
-                typeof updateUIProfile === "function"
-            ) {
-                updateUIProfile();
-            }
-
-            if (
-                typeof updateUIAkun === "function"
-            ) {
-                updateUIAkun(customerProfile);
-            }
-
-            if (
-                typeof startCustomerPresenceHeartbeat === "function"
-            ) {
-                startCustomerPresenceHeartbeat();
-            }
-
+            if (typeof updateUIProfile === "function") updateUIProfile();
+            if (typeof updateUIAkun === "function") updateUIAkun(customerProfile);
+            if (typeof startCustomerPresenceHeartbeat === "function") startCustomerPresenceHeartbeat();
 
             setCgoAuthGate(false);
-
-            alert(
-                "Registrasi CIKUR GO berhasil!"
-            );
-
-            if (
-                typeof assistantScreen !== "undefined" &&
-                assistantScreen
-            ) {
-                assistantScreen.style.display = "none";
-            }
+            alert("Registrasi CIKUR GO berhasil!");
+            if (assistantScreen) assistantScreen.style.display = "none";
 
         } catch (error) {
-
-    console.error(
-        "[CIKUR GO] Gagal menyimpan registrasi:",
-        error
-    );
-
-    if (error?.code === "auth/email-already-in-use") {
-        alert(
-            "Email ini sudah terdaftar. Silakan gunakan menu Login untuk masuk ke akun Anda."
-        );
-        btnSimpanReg.disabled = false;
-        btnSimpanReg.textContent = "Mulai Sekarang ✓";
-        return;
-    }
-
-    // DEBUG: tampilkan kode & pesan error asli dari
-    // Firebase (auth/... atau permission-denied dsb)
-    // supaya penyebab pastinya langsung terlihat.
-    const errorCode = error?.code ? ` (${error.code})` : "";
-    const errorDetail = error?.message || String(error);
-
-    alert(
-        `Registrasi gagal disimpan${errorCode}: ${errorDetail}`
-    );
-
-} finally {
-            btnSimpanReg.disabled = false;
-
-            btnSimpanReg.textContent =
-                "Mulai Sekarang ✓";
+            console.error("[CIKUR GO] Gagal menyimpan registrasi:", error);
+            const errorCode = error?.code ? ` (${error.code})` : "";
+            alert(`Data gagal disimpan${errorCode}: ${error?.message || error}`);
+        } finally {
+            btnSelesaiReg.disabled = false;
+            btnSelesaiReg.textContent = "Selesai & Mulai ✓";
         }
     });
-
-    const linkBukaLogin = document.getElementById("linkBukaLogin");
-    if (linkBukaLogin) {
-        linkBukaLogin.addEventListener("click", (e) => {
-            e.preventDefault();
-            bukaModalLogin();
-        });
-    }
 }
 
 // ======================================
@@ -2604,7 +2560,7 @@ function bukaModalLogin() {
 
     modalMainContent.innerHTML = `
         <div style="text-align:center; margin-bottom:18px;">
-            <img src="cikurgoicon.png" alt="CIKUR GO" style="width:64px; height:64px; border-radius:18px; margin:0 auto 10px; display:block; object-fit:cover; box-shadow:0 6px 16px rgba(229,9,20,0.15);">
+            <img src="cikurgoicon.png" alt="CIKUR GO" style="width:88px; height:auto; margin:0 auto 12px; display:block;">
             <h3 style="font-size:17px; font-weight:800; color:#0f172a;">Selamat Datang Kembali!</h3>
             <p style="font-size:11px; color:#64748b; margin-top:4px;">Masuk dengan akun CIKUR GO Anda.</p>
         </div>

@@ -34,6 +34,7 @@ import {
     initializeAuth,
     browserLocalPersistence,
     browserSessionPersistence,
+    browserPopupRedirectResolver,
     onAuthStateChanged,
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
@@ -84,7 +85,7 @@ const customerApp = getApps().some(existingApp => existingApp.name === CUSTOMER_
     : initializeApp(firebaseConfig, CUSTOMER_APP_NAME);
 const auth = initializeAuth(customerApp, {
     persistence: browserLocalPersistence,
-    popupRedirectResolver: undefined
+    popupRedirectResolver: browserPopupRedirectResolver
 });
 const customerDb = getFirestore(customerApp);
 
