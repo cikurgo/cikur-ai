@@ -6,13 +6,6 @@
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 
 import {
-    getStorage,
-    ref as storageRef,
-    uploadBytes,
-    getDownloadURL
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
-
-import {
     getFirestore,
     collection,
     addDoc,
@@ -93,8 +86,8 @@ const customerDb = getFirestore(customerApp);
 // DEDICATED SUPER ADMIN AUTH
 // ==========================================
 // Customer/Mitra dan Super Admin masing-masing memiliki Firebase App/Auth namespace khusus.
-// Admin memakai local persistence agar sesi Super Admin tetap tersedia ketika
-// BCGO, Medicine, Executor, dan Data dibuka sebagai halaman/tab terpisah.
+// Admin memakai local persistence agar sesi Super Admin tetap tersedia
+// ketika BCGO Admin & Data dibuka sebagai halaman/tab terpisah.
 // Namespace Admin tetap terisolasi dari Customer/Mitra.
 const ADMIN_APP_NAME = "CIKUR_GO_ADMIN";
 const adminApp = getApps().some(existingApp => existingApp.name === ADMIN_APP_NAME)
@@ -105,7 +98,6 @@ const adminAuth = initializeAuth(adminApp, {
     popupRedirectResolver: undefined
 });
 const adminDb = getFirestore(adminApp);
-const storage = getStorage(customerApp);
 
 // Alias db dipertahankan untuk seluruh modul Customer/Mitra lama.
 // Halaman Admin wajib memakai adminDb agar Firestore dan Admin Auth berasal
@@ -367,8 +359,73 @@ window.CikurCloud = {
     },
 
     // ======================================
-    // PENGAJUAN VERIFIKASI IDENTITAS
-    // Dokumen masuk Firebase Storage; keputusan tetap Admin.
+    // ======================================
+    // KOMPRESI GAMBAR → BASE64 (Firestore only, tanpa Storage)
+    // Max ~900px, quality 0.65 agar dokumen < 1MB
+    // ======================================
+
+    async fileToCompressedDataUrl(file, maxWidth = 900, quality = 0.65) {
+        if (!(file instanceof File)) throw new Error("FILE_REQUIRED");
+        if (!file.type.startsWith("image/")) throw new Error("IMAGE_ONLY");
+        if (file.size > 8 * 1024 * 1024) throw new Error("FILE_TOO_LARGE");
+
+        const dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error("READ_FAILED"));
+            reader.readAsDataURL(file);
+        });
+
+        // Kompres lewat canvas
+        const img = await new Promise((resolve, reject) => {
+            const image = new Image();
+            image.onload = () => resolve(image);
+            image.onerror = () => reject(new Error("IMAGE_LOAD_FAILED"));
+            image.src = dataUrl;
+        });
+
+        let { width, height } = img;
+        if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressed = canvas.toDataURL("image/jpeg", quality);
+
+        // Guard ukuran string (~750KB aman untuk beberapa foto per dokumen)
+        if (compressed.length > 900000) {
+            const tighter = canvas.toDataURL("image/jpeg", 0.45);
+            if (tighter.length > 900000) throw new Error("IMAGE_STILL_TOO_LARGE");
+            return tighter;
+        }
+        return compressed;
+    },
+
+    // Kompatibel dengan pemanggilan lama uploadMitraDocument → { url, path }
+    // url = data URL base64; path = null (tidak pakai Storage)
+    async uploadMitraDocument(userId, file, docType = "ktp") {
+        if (!userId) throw new Error("USER_ID_REQUIRED");
+        const url = await this.fileToCompressedDataUrl(file);
+        return { url, path: null, storage: "firestore-base64", docType };
+    },
+
+    async uploadMitraDocuments(userId, filesMap = {}) {
+        if (!userId) throw new Error("USER_ID_REQUIRED");
+        const result = { _paths: {} };
+        const entries = Object.entries(filesMap).filter(([, f]) => f instanceof File);
+        for (const [key, file] of entries) {
+            const uploaded = await this.uploadMitraDocument(userId, file, key);
+            result[key] = uploaded.url;
+            result._paths[key] = null;
+        }
+        return result;
+    },
+
+    // PENGAJUAN VERIFIKASI IDENTITAS (base64 di Firestore, tanpa Storage)
     // ======================================
 
     async submitCustomerIdentityVerification(userId, payload = {}) {
@@ -384,13 +441,9 @@ window.CikurCloud = {
         if (!birthDate) throw new Error("BIRTH_DATE_REQUIRED");
         if (!(file instanceof File)) throw new Error("IDENTITY_DOCUMENT_REQUIRED");
         if (!file.type.startsWith("image/")) throw new Error("IDENTITY_DOCUMENT_IMAGE_ONLY");
-        if (file.size > 5 * 1024 * 1024) throw new Error("IDENTITY_DOCUMENT_TOO_LARGE");
+        if (file.size > 8 * 1024 * 1024) throw new Error("IDENTITY_DOCUMENT_TOO_LARGE");
 
-        const safeExt = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-        const path = `customer-identity/${userId}/ktp-${Date.now()}.${safeExt}`;
-        const fileRef = storageRef(storage, path);
-        await uploadBytes(fileRef, file, { contentType: file.type });
-        const documentUrl = await getDownloadURL(fileRef);
+        const documentUrl = await this.fileToCompressedDataUrl(file, 900, 0.65);
 
         await setDoc(doc(db, "customers", userId), {
             identityVerificationStatus: "pending",
@@ -399,50 +452,13 @@ window.CikurCloud = {
             identityBirthDate: birthDate,
             identityNIK: nik,
             identityDocumentUrl: documentUrl,
-            identityDocumentPath: path,
+            identityDocumentPath: null,
+            identityStorage: "firestore-base64",
             identitySubmittedAt: serverTimestamp(),
             identityReviewedAt: null,
             updatedAt: serverTimestamp()
         }, { merge: true });
         return { status: "pending", documentUrl };
-    },
-
-    // ======================================
-    // UPLOAD DOKUMEN MITRA KE FIREBASE STORAGE
-    // Menggantikan penyimpanan base64 di Firestore.
-    // Mengembalikan { url, path }.
-    // ======================================
-
-    async uploadMitraDocument(userId, file, docType = "ktp") {
-        if (!userId) throw new Error("USER_ID_REQUIRED");
-        if (!(file instanceof File)) throw new Error("FILE_REQUIRED");
-        if (!file.type.startsWith("image/")) throw new Error("IMAGE_ONLY");
-        if (file.size > 5 * 1024 * 1024) throw new Error("FILE_TOO_LARGE");
-
-        const safeType = String(docType || "doc").replace(/[^a-z0-9_-]/gi, "").toLowerCase() || "doc";
-        const safeExt = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-        const path = `mitra-docs/${userId}/${safeType}-${Date.now()}.${safeExt}`;
-        const fileRef = storageRef(storage, path);
-        await uploadBytes(fileRef, file, { contentType: file.type || "image/jpeg" });
-        const url = await getDownloadURL(fileRef);
-        return { url, path };
-    },
-
-    /**
-     * Upload beberapa file sekaligus.
-     * filesMap: { fotoKtp: File, fotoSim: File, ... }
-     * return: { fotoKtp: url, fotoSim: url, ... , _paths: { fotoKtp: path, ... } }
-     */
-    async uploadMitraDocuments(userId, filesMap = {}) {
-        if (!userId) throw new Error("USER_ID_REQUIRED");
-        const result = { _paths: {} };
-        const entries = Object.entries(filesMap).filter(([, f]) => f instanceof File);
-        await Promise.all(entries.map(async ([key, file]) => {
-            const uploaded = await this.uploadMitraDocument(userId, file, key);
-            result[key] = uploaded.url;
-            result._paths[key] = uploaded.path;
-        }));
-        return result;
     },
 
     // ======================================
