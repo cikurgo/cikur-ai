@@ -408,6 +408,44 @@ window.CikurCloud = {
     },
 
     // ======================================
+    // UPLOAD DOKUMEN MITRA KE FIREBASE STORAGE
+    // Menggantikan penyimpanan base64 di Firestore.
+    // Mengembalikan { url, path }.
+    // ======================================
+
+    async uploadMitraDocument(userId, file, docType = "ktp") {
+        if (!userId) throw new Error("USER_ID_REQUIRED");
+        if (!(file instanceof File)) throw new Error("FILE_REQUIRED");
+        if (!file.type.startsWith("image/")) throw new Error("IMAGE_ONLY");
+        if (file.size > 5 * 1024 * 1024) throw new Error("FILE_TOO_LARGE");
+
+        const safeType = String(docType || "doc").replace(/[^a-z0-9_-]/gi, "").toLowerCase() || "doc";
+        const safeExt = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+        const path = `mitra-docs/${userId}/${safeType}-${Date.now()}.${safeExt}`;
+        const fileRef = storageRef(storage, path);
+        await uploadBytes(fileRef, file, { contentType: file.type || "image/jpeg" });
+        const url = await getDownloadURL(fileRef);
+        return { url, path };
+    },
+
+    /**
+     * Upload beberapa file sekaligus.
+     * filesMap: { fotoKtp: File, fotoSim: File, ... }
+     * return: { fotoKtp: url, fotoSim: url, ... , _paths: { fotoKtp: path, ... } }
+     */
+    async uploadMitraDocuments(userId, filesMap = {}) {
+        if (!userId) throw new Error("USER_ID_REQUIRED");
+        const result = { _paths: {} };
+        const entries = Object.entries(filesMap).filter(([, f]) => f instanceof File);
+        await Promise.all(entries.map(async ([key, file]) => {
+            const uploaded = await this.uploadMitraDocument(userId, file, key);
+            result[key] = uploaded.url;
+            result._paths[key] = uploaded.path;
+        }));
+        return result;
+    },
+
+    // ======================================
     // PIN CIKURPAY — TIDAK DISIMPAN PLAINTEXT
     // ======================================
 
