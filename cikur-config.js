@@ -44,7 +44,9 @@ import {
     linkWithCredential,
     fetchSignInMethodsForEmail,
     signOut,
-    linkWithPhoneNumber
+    linkWithPhoneNumber,
+    GoogleAuthProvider,
+    signInWithPopup
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 
@@ -221,6 +223,13 @@ window.CikurCloud = {
     async loginWithEmail(email, password) {
         const result = await signInWithEmailAndPassword(auth, email, password);
         console.log("[CIKUR GO] Login berhasil:", result.user.uid);
+        return result.user;
+    },
+
+    async loginWithGoogle() {
+        const provider = new GoogleAuthProvider();
+        const result = await signInWithPopup(auth, provider);
+        console.log("[CIKUR GO] Login Google berhasil:", result.user.uid);
         return result.user;
     },
 

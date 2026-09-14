@@ -2078,41 +2078,87 @@ function updateUIProfile() {
     }
 }  
     
+async function prosesLoginGoogleFlow(triggerButton) {
+    if (!window.CikurCloud) {
+        alert("CIKUR Cloud belum tersedia. Silakan refresh halaman.");
+        return;
+    }
+
+    if (triggerButton) { triggerButton.disabled = true; triggerButton.textContent = "Menghubungkan ke Google..."; }
+
+    try {
+        const firebaseUser = await window.CikurCloud.loginWithGoogle();
+
+        let profile = await window.CikurCloud.getProfile(firebaseUser.uid);
+
+        userProfile = {
+            ...userProfile,
+            ...(profile || {}),
+            uid: firebaseUser.uid,
+            name: profile?.name || firebaseUser.displayName || "",
+            email: profile?.email || firebaseUser.email || "",
+            avatar: profile?.avatar || "",
+            emailVerified: !!firebaseUser.emailVerified,
+            lastLogin: new Date().toISOString(),
+            isLoggedIn: true
+        };
+
+        const ensuredAccount = await window.CikurCloud.ensureCustomerAccount(firebaseUser.uid, userProfile);
+        userProfile = {
+            ...userProfile,
+            ...(ensuredAccount || {}),
+            uid: firebaseUser.uid,
+            email: userProfile.email || ensuredAccount?.email || firebaseUser.email || "",
+            isLoggedIn: true
+        };
+
+        await window.CikurCloud.syncCustomerAccount(firebaseUser.uid, userProfile);
+        if (!(await enforceCustomerAccountStatus(firebaseUser))) return;
+        startCustomerStatusWatcher(firebaseUser);
+        if (typeof updateUIProfile === "function") updateUIProfile();
+        if (typeof updateUIAkun === "function") updateUIAkun(userProfile);
+        if (typeof startCustomerPresenceHeartbeat === "function") startCustomerPresenceHeartbeat();
+
+        // Akun Google baru mungkin belum punya nomor HP/PIN CikurPay.
+        if (!String(userProfile.name || "").trim() || !String(userProfile.phone || "").trim()) {
+            setCgoAuthGate(true);
+            bukaModalPengaturanProfil();
+            return;
+        }
+
+        setCgoAuthGate(false);
+        if (assistantScreen) assistantScreen.style.display = "none";
+
+    } catch (error) {
+        console.error("[CIKUR GO] Gagal login Google:", error);
+        let pesanError = "Login Google gagal. Silakan coba lagi.";
+        if (error?.code === "auth/popup-closed-by-user") pesanError = "Jendela login Google ditutup sebelum selesai.";
+        else if (error?.code === "auth/popup-blocked") pesanError = "Popup login Google diblokir browser. Izinkan popup lalu coba lagi.";
+        alert(pesanError);
+    } finally {
+        if (triggerButton) { triggerButton.disabled = false; triggerButton.textContent = "Lanjutkan dengan Google"; }
+    }
+}
+
 function bukaModalRegistrasi() {
-    openModal("AKTIVASI & REGISTRASI AKUN CIKUR GO");
+    openModal("CIKUR GO");
 
     modalMainContent.innerHTML = `
-        <div style="text-align:center; margin-bottom:14px;">
-            <div style="
-                width:56px;
-                height:56px;
-                border-radius:50%;
-                background:#f1f3f5;
-                border:1px solid #d7dce2;
-                color:#a3aab5;
-                font-size:18px;
-                font-weight:800;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                margin:0 auto 8px;
-            "><svg class="avatar-empty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.2 4.2 0 1 0 0-8.4A4.2 4.2 0 0 0 12 12Zm0 2c-4.4 0-8 2.3-8 5.2 0 .6.4 1 1 1h14c.6 0 1-.4 1-1 0-2.9-3.6-5.2-8-5.2Z"/></svg></div>
+        <div style="text-align:center; margin-bottom:18px;">
+            <img src="cikurgoicon.png" alt="CIKUR GO" style="width:64px; height:64px; border-radius:18px; margin:0 auto 10px; display:block; object-fit:cover; box-shadow:0 6px 16px rgba(229,9,20,0.15);">
+            <h3 style="font-size:17px; font-weight:800; color:#0f172a;">Selamat Datang di CIKUR GO</h3>
+            <p style="font-size:11px; color:#64748b; margin-top:4px;">Semua kebutuhanmu, dalam satu aplikasi.</p>
+        </div>
 
-            <h3 style="
-                font-size:15px;
-                font-weight:800;
-                color:#0f172a;
-            ">
-                Selamat Datang di CikurGo!
-            </h3>
+        <button type="button" id="btnGoogleRegister" style="width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:11px; border-radius:12px; border:1px solid #e2e8f0; background:#fff; font-size:12px; font-weight:700; color:#334155; margin-bottom:14px; cursor:pointer;">
+            <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.5 6.1 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5Z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 16 19 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34.5 6.1 29.5 4 24 4 16.1 4 9.3 8.5 6.3 14.7Z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.4 26.7 36 24 36c-5.2 0-9.6-3.3-11.2-7.9l-6.5 5C9.2 39.4 16 44 24 44Z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.6l6.2 5.2C40.5 36.4 44 30.8 44 24c0-1.3-.1-2.7-.4-3.5Z"/></svg>
+            Lanjutkan dengan Google
+        </button>
 
-            <p style="
-                font-size:10px;
-                color:#64748b;
-                margin-top:2px;
-            ">
-                Masukkan identitas Anda untuk mengaktifkan seluruh layanan.
-            </p>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+            <div style="flex:1; height:1px; background:#e2e8f0;"></div>
+            <span style="font-size:10px; color:#94a3b8; font-weight:700;">ATAU DAFTAR DENGAN EMAIL</span>
+            <div style="flex:1; height:1px; background:#e2e8f0;"></div>
         </div>
 
         <!-- NAMA -->
@@ -2201,6 +2247,11 @@ function bukaModalRegistrasi() {
             <a href="#" id="linkBukaLogin" style="color:#E50914; font-weight:700; text-decoration:none;">Login di sini</a>
         </p>
     `;
+
+    const btnGoogleRegister = document.getElementById("btnGoogleRegister");
+    if (btnGoogleRegister) {
+        btnGoogleRegister.addEventListener("click", () => prosesLoginGoogleFlow(btnGoogleRegister));
+    }
 
     const btnSimpanReg =
         document.getElementById("btnSimpanReg");
@@ -2549,32 +2600,24 @@ function bukaModalLupaPin() {
 // ======================================
 
 function bukaModalLogin() {
-    openModal("LOGIN AKUN CIKUR GO");
+    openModal("CIKUR GO");
 
     modalMainContent.innerHTML = `
-        <div style="text-align:center; margin-bottom:14px;">
-            <div style="
-                width:56px;
-                height:56px;
-                border-radius:50%;
-                background:#f1f3f5;
-                border:1px solid #d7dce2;
-                color:#a3aab5;
-                font-size:18px;
-                font-weight:800;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                margin:0 auto 8px;
-            "><svg class="avatar-empty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.2 4.2 0 1 0 0-8.4A4.2 4.2 0 0 0 12 12Zm0 2c-4.4 0-8 2.3-8 5.2 0 .6.4 1 1 1h14c.6 0 1-.4 1-1 0-2.9-3.6-5.2-8-5.2Z"/></svg></div>
+        <div style="text-align:center; margin-bottom:18px;">
+            <img src="cikurgoicon.png" alt="CIKUR GO" style="width:64px; height:64px; border-radius:18px; margin:0 auto 10px; display:block; object-fit:cover; box-shadow:0 6px 16px rgba(229,9,20,0.15);">
+            <h3 style="font-size:17px; font-weight:800; color:#0f172a;">Selamat Datang Kembali!</h3>
+            <p style="font-size:11px; color:#64748b; margin-top:4px;">Masuk dengan akun CIKUR GO Anda.</p>
+        </div>
 
-            <h3 style="font-size:15px; font-weight:800; color:#0f172a;">
-                Selamat Datang Kembali!
-            </h3>
+        <button type="button" id="btnGoogleLogin" style="width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:11px; border-radius:12px; border:1px solid #e2e8f0; background:#fff; font-size:12px; font-weight:700; color:#334155; margin-bottom:14px; cursor:pointer;">
+            <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.5 6.1 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5Z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 16 19 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34.5 6.1 29.5 4 24 4 16.1 4 9.3 8.5 6.3 14.7Z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.4 26.7 36 24 36c-5.2 0-9.6-3.3-11.2-7.9l-6.5 5C9.2 39.4 16 44 24 44Z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.6l6.2 5.2C40.5 36.4 44 30.8 44 24c0-1.3-.1-2.7-.4-3.5Z"/></svg>
+            Lanjutkan dengan Google
+        </button>
 
-            <p style="font-size:10px; color:#64748b; margin-top:2px;">
-                Masuk dengan akun CIKUR GO Anda.
-            </p>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+            <div style="flex:1; height:1px; background:#e2e8f0;"></div>
+            <span style="font-size:10px; color:#94a3b8; font-weight:700;">ATAU MASUK DENGAN EMAIL</span>
+            <div style="flex:1; height:1px; background:#e2e8f0;"></div>
         </div>
 
         <div class="form-group">
@@ -2614,6 +2657,11 @@ function bukaModalLogin() {
             <a href="#" id="linkBukaRegistrasi" style="color:#E50914; font-weight:700; text-decoration:none;">Daftar di sini</a>
         </p>
     `;
+
+    const btnGoogleLogin = document.getElementById("btnGoogleLogin");
+    if (btnGoogleLogin) {
+        btnGoogleLogin.addEventListener("click", () => prosesLoginGoogleFlow(btnGoogleLogin));
+    }
 
     const btnProsesLogin = document.getElementById("btnProsesLogin");
     if (btnProsesLogin) {
@@ -2751,8 +2799,6 @@ async function loadCurrentUserProfileIndex() {
 
         let firebaseUser = null;
         try {
-            // Tunggu Auth selesai memulihkan persistence lokal sebelum
-            // memutuskan bahwa user tidak memiliki session.
             firebaseUser = await window.CikurCloud.waitForAuth();
         } catch (authError) {
             console.error("[CIKUR GO] Gagal memulihkan session Customer/Mitra:", authError);
@@ -2865,7 +2911,11 @@ async function enforceCustomerAccountStatus(firebaseUser) {
             presenceHeartbeatInterval = null;
         }
         setCgoAuthGate(true);
-        // INACTIVE hanya memblokir akses aplikasi. Jangan signOut otomatis.
+        try {
+            await window.CikurCloud.logout();
+        } catch (logoutError) {
+            console.error("[CIKUR GO] Gagal menutup sesi Customer nonaktif:", logoutError);
+        }
         alert("Akun Customer Anda sedang nonaktif. Silakan hubungi Super Admin CIKUR GO.");
         return false;
     }
@@ -3253,7 +3303,6 @@ function bukaModalAturPin() {
 }
 
 async function prosesLogout() {
-    // Logout hanya boleh terjadi dari aksi eksplisit Customer.
     if (!confirm("Apakah Anda yakin ingin keluar dari akun?")) {
         return;
     }
