@@ -111,10 +111,7 @@ export { db, customerDb, adminDb, auth, adminAuth, firebaseConfig };
 // CIKUR CLOUD GLOBAL ENGINE
 // ==========================================
 
-const CIKUR_AUTH_BUILD = "AUTH-SESSION-V2";
-
 window.CikurCloud = {
-    authBuild: CIKUR_AUTH_BUILD,
     auth,
     waitForAuth() {
         return new Promise((resolve) => {
