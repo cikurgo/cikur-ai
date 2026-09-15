@@ -18,6 +18,7 @@ import {
     updateDoc,
     doc,
     getDoc,
+    getDocs,
     serverTimestamp,
     deleteField,
     runTransaction
@@ -73,24 +74,27 @@ const firebaseConfig = {
 // Jangan gunakan DEFAULT Firebase Auth untuk Customer/Mitra.
 // Auth Customer/Mitra memakai App bernama khusus agar sesi mereka
 // benar-benar memiliki namespace persistence sendiri, terpisah dari Admin.
+function createOrGetAuth(app, options) {
+    try {
+        return initializeAuth(app, options);
+    } catch (error) {
+        if (error?.code === "auth/already-initialized") {
+            // Same ES-module runtime may have initialized this named App/Auth already.
+            // Reuse the existing Auth instance instead of breaking navigation.
+            return getAuth(app);
+        }
+        throw error;
+    }
+}
+
 const CUSTOMER_APP_NAME = "CIKUR_GO_CUSTOMER";
 const customerApp = getApps().some(existingApp => existingApp.name === CUSTOMER_APP_NAME)
     ? getApp(CUSTOMER_APP_NAME)
     : initializeApp(firebaseConfig, CUSTOMER_APP_NAME);
-
-// initializeAuth hanya boleh dipanggil sekali per app instance.
-// Fallback ke getAuth agar sesi IndexedDB tidak rusak saat modul dimuat ulang
-// antar halaman (index ↔ agentcgo/resto/driver) atau saat refresh.
-let auth;
-try {
-    auth = initializeAuth(customerApp, {
-        persistence: browserLocalPersistence,
-        popupRedirectResolver: browserPopupRedirectResolver
-    });
-} catch (authInitError) {
-    console.warn("[CIKUR GO] Customer Auth sudah ada, memakai getAuth:", authInitError?.code || authInitError?.message || authInitError);
-    auth = getAuth(customerApp);
-}
+const auth = createOrGetAuth(customerApp, {
+    persistence: browserLocalPersistence,
+    popupRedirectResolver: browserPopupRedirectResolver
+});
 const customerDb = getFirestore(customerApp);
 
 // ==========================================
@@ -104,17 +108,10 @@ const ADMIN_APP_NAME = "CIKUR_GO_ADMIN";
 const adminApp = getApps().some(existingApp => existingApp.name === ADMIN_APP_NAME)
     ? getApp(ADMIN_APP_NAME)
     : initializeApp(firebaseConfig, ADMIN_APP_NAME);
-
-let adminAuth;
-try {
-    adminAuth = initializeAuth(adminApp, {
-        persistence: browserLocalPersistence,
-        popupRedirectResolver: undefined
-    });
-} catch (adminAuthInitError) {
-    console.warn("[CIKUR GO] Admin Auth sudah ada, memakai getAuth:", adminAuthInitError?.code || adminAuthInitError?.message || adminAuthInitError);
-    adminAuth = getAuth(adminApp);
-}
+const adminAuth = createOrGetAuth(adminApp, {
+    persistence: browserLocalPersistence,
+    popupRedirectResolver: undefined
+});
 const adminDb = getFirestore(adminApp);
 
 // Alias db dipertahankan untuk seluruh modul Customer/Mitra lama.
@@ -126,44 +123,79 @@ const db = customerDb;
 export { db, customerDb, adminDb, auth, adminAuth, firebaseConfig };
 
 // ==========================================
+// AGENT CGO PRESENCE GEO — CUSTOMER SCOPED
+// ==========================================
+const PRESENCE_CELL_DEG = 0.05;
+const PRESENCE_MAX_CELLS = 25;
+const PRESENCE_MAX_RESULTS = 50;
+const PRESENCE_MAX_ACCURACY_M = 1000;
+const PRESENCE_MAX_RADIUS_KM = 10;
+const PRESENCE_MAX_AGE_MS = 180000;
+
+function presenceCell(lat, lng) {
+    const la = Number(lat);
+    const lo = Number(lng);
+    if (!Number.isFinite(la) || !Number.isFinite(lo)) return null;
+    return `${Math.floor(la / PRESENCE_CELL_DEG)}:${Math.floor(lo / PRESENCE_CELL_DEG)}`;
+}
+
+function nearbyPresenceCells(lat, lng, radiusKm) {
+    const r = Math.min(Math.max(Number(radiusKm) || 5, 0.5), PRESENCE_MAX_RADIUS_KM);
+    const latDelta = r / 111.32;
+    const cosLat = Math.max(0.15, Math.abs(Math.cos(Number(lat) * Math.PI / 180)));
+    const lngDelta = r / (111.32 * cosLat);
+    const minLat = Math.floor((Number(lat) - latDelta) / PRESENCE_CELL_DEG);
+    const maxLat = Math.floor((Number(lat) + latDelta) / PRESENCE_CELL_DEG);
+    const minLng = Math.floor((Number(lng) - lngDelta) / PRESENCE_CELL_DEG);
+    const maxLng = Math.floor((Number(lng) + lngDelta) / PRESENCE_CELL_DEG);
+    const cells = [];
+    for (let la = minLat; la <= maxLat; la++) {
+        for (let lo = minLng; lo <= maxLng; lo++) {
+            cells.push(`${la}:${lo}`);
+            if (cells.length >= PRESENCE_MAX_CELLS) return cells;
+        }
+    }
+    return cells;
+}
+
+function presenceDistanceKm(a, b) {
+    const earth = 6371;
+    const lat1 = Number(a.lat) * Math.PI / 180;
+    const lat2 = Number(b.lat) * Math.PI / 180;
+    const dLat = (Number(b.lat) - Number(a.lat)) * Math.PI / 180;
+    const dLng = (Number(b.lng) - Number(a.lng)) * Math.PI / 180;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    return earth * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+// ==========================================
 // CIKUR CLOUD GLOBAL ENGINE
 // ==========================================
 
 window.CikurCloud = {
     auth,
-    /**
-     * Menunggu state auth awal dari Firebase (termasuk restore dari IndexedDB).
-     * Jangan resolve null terlalu cepat — biarkan persistence sempat dibaca.
-     */
-    waitForAuth(timeoutMs = 8000) {
-        return new Promise((resolve) => {
-            if (auth.currentUser) {
-                console.log("[CIKUR GO] Auth state (currentUser):", auth.currentUser.uid);
-                resolve(auth.currentUser);
-                return;
-            }
+    waitForAuth() {
+        if (auth.currentUser) return Promise.resolve(auth.currentUser);
 
-            let settled = false;
-            const finish = (user) => {
-                if (settled) return;
-                settled = true;
-                try { unsubscribe(); } catch (_) {}
-                clearTimeout(safetyTimer);
-                console.log(
-                    "[CIKUR GO] Auth state:",
-                    user ? user.uid : "TIDAK ADA USER"
-                );
-                resolve(user || null);
-            };
-
-            const unsubscribe = onAuthStateChanged(auth, (user) => {
-                finish(user);
+        // Satu promise per page: seluruh halaman menunggu proses restore
+        // Firebase yang sama, bukan membuat banyak listener yang berlomba.
+        if (!this._authReadyPromise) {
+            this._authReadyPromise = new Promise((resolve) => {
+                let settled = false;
+                const finish = (user) => {
+                    if (settled) return;
+                    settled = true;
+                    try { unsubscribe(); } catch (_) {}
+                    console.log(
+                        "[CIKUR GO] Auth state:",
+                        user ? user.uid : "TIDAK ADA USER"
+                    );
+                    resolve(user || null);
+                };
+                const unsubscribe = onAuthStateChanged(auth, finish, () => finish(null));
             });
-
-            const safetyTimer = setTimeout(() => {
-                finish(auth.currentUser);
-            }, Math.max(1500, Number(timeoutMs) || 8000));
-        });
+        }
+        return this._authReadyPromise.then((user) => auth.currentUser || user || null);
     },
 
     async ensureAuth() {
@@ -209,37 +241,10 @@ window.CikurCloud = {
 
     // ======================================
     // REGISTRASI AKUN PERMANEN (EMAIL + PASSWORD)
-    // Jika user sedang anonymous (punya data sementara),
-    // otomatis di-LINK supaya data lama tidak hilang.
     // ======================================
 
     async registerWithEmail(email, password) {
-        const currentUser = auth.currentUser;
-
-        // Kasus 1: sedang anonymous -> upgrade/link ke email+password
-        // supaya UID & data yang sudah ada tetap sama, tidak hilang.
-        if (currentUser && currentUser.isAnonymous) {
-            const credential = EmailAuthProvider.credential(email, password);
-
-            try {
-                const linkedResult = await linkWithCredential(currentUser, credential);
-                console.log(
-                    "[CIKUR GO] Akun anonymous berhasil di-upgrade ke Email:",
-                    linkedResult.user.uid
-                );
-                return linkedResult.user;
-            } catch (linkError) {
-                // Kalau email sudah dipakai akun lain, tidak bisa di-link,
-                // fallback ke pembuatan akun baru biasa.
-                if (linkError.code === "auth/email-already-in-use" || linkError.code === "auth/credential-already-in-use") {
-                    console.warn("[CIKUR GO] Email sudah terdaftar, tidak bisa link. Membuat akun baru biasa.");
-                } else {
-                    throw linkError;
-                }
-            }
-        }
-
-        // Kasus 2: belum ada sesi sama sekali -> daftar akun baru biasa
+        // Selalu membuat akun permanen. Tidak ada Anonymous Auth otomatis.
         const result = await createUserWithEmailAndPassword(auth, email, password);
         console.log("[CIKUR GO] Akun Email baru dibuat:", result.user.uid);
         return result.user;
@@ -570,6 +575,92 @@ window.CikurCloud = {
             console.error("[CIKUR GO] Gagal memuat daftar resto:", error);
             if (typeof callback === "function") callback([]);
         });
+    },
+
+    // ======================================
+    // AGENT CGO PRESENCE GEO
+    // Satu dokumen = satu Agent approved. Customer hanya menerima
+    // hasil terverifikasi + jarak; koordinat Agent tidak pernah keluar.
+    // ======================================
+    async updateAgentPresence(userId, data = {}) {
+        if (!userId) throw new Error("USER_ID_REQUIRED");
+        const lat = Number(data?.location?.lat ?? data?.lat ?? data?.latitude);
+        const lng = Number(data?.location?.lng ?? data?.lng ?? data?.longitude);
+        const rawAccuracy = Number(data?.location?.accuracy ?? data?.accuracy);
+        const hasGeo = Number.isFinite(lat) && Number.isFinite(lng) &&
+            lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+        const accuracy = Number.isFinite(rawAccuracy) ? rawAccuracy : null;
+        if (accuracy !== null && accuracy > PRESENCE_MAX_ACCURACY_M) {
+            throw new Error("LOCATION_ACCURACY_TOO_LOW");
+        }
+        const cell = hasGeo ? presenceCell(lat, lng) : null;
+        const presence = {
+            active: data.active === true,
+            available: data.available !== false,
+            ...(hasGeo ? { location: { lat, lng, accuracy } } : {}),
+            ...(cell ? { cell } : {}),
+            updatedAt: serverTimestamp(),
+            source: "AGENT_CGO_BROWSER"
+        };
+        await setDoc(doc(db, "mitra_applications", `${userId}_agent`), { presence }, { merge: true });
+        return { ok: true, cell, geo: hasGeo };
+    },
+
+    async findNearbyAgentPresence(request = {}) {
+        const lat = Number(request?.location?.lat ?? request?.location?.latitude);
+        const lng = Number(request?.location?.lng ?? request?.location?.longitude);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error("CUSTOMER_LOCATION_REQUIRED");
+        const radiusKm = Math.min(Math.max(Number(request.radiusKm) || 5, 0.5), PRESENCE_MAX_RADIUS_KM);
+        const cells = nearbyPresenceCells(lat, lng, radiusKm);
+        if (!cells.length) return { ok: true, verified: true, items: [], count: 0, requestId: request.requestId || null, scope: "CUSTOMER_GEO_SCOPED" };
+
+        const q = query(collection(db, "mitra_applications"), where("presence.cell", "in", cells));
+        const snap = await getDocs(q);
+        const nowMs = Date.now();
+        const requestedTypes = Array.isArray(request.types) && request.types.length
+            ? request.types.map(String) : ["agent"];
+        const requestedMax = Math.min(Math.max(Number(request.maxResults) || 20, 1), PRESENCE_MAX_RESULTS);
+        const items = [];
+
+        snap.forEach((docSnap) => {
+            const data = docSnap.data() || {};
+            if (data.status !== "approved" || data.jenis !== "agent") return;
+            const presence = data.presence || {};
+            if (presence.active !== true || presence.available === false) return;
+            const loc = presence.location || {};
+            const aLat = Number(loc.lat);
+            const aLng = Number(loc.lng);
+            if (!Number.isFinite(aLat) || !Number.isFinite(aLng)) return;
+            const accuracy = Number(loc.accuracy);
+            if (Number.isFinite(accuracy) && accuracy > PRESENCE_MAX_ACCURACY_M) return;
+            const updatedAt = presence.updatedAt;
+            const updatedMs = updatedAt?.toMillis ? updatedAt.toMillis() : Date.parse(updatedAt || "");
+            if (!Number.isFinite(updatedMs) || Math.abs(nowMs - updatedMs) > PRESENCE_MAX_AGE_MS) return;
+            const type = String(data.jenis || "agent").toLowerCase();
+            if (!requestedTypes.includes(type) && !requestedTypes.includes("agent")) return;
+            const distanceKm = presenceDistanceKm({ lat, lng }, { lat: aLat, lng: aLng });
+            if (distanceKm > radiusKm) return;
+            items.push({
+                id: docSnap.id,
+                agentId: String(data.uid || docSnap.id.replace(/_agent$/, "")),
+                name: String(data.namaPanggilan || data.name || data.agentName || "Agent CGO"),
+                type, status: "active", active: true, available: true,
+                distanceKm: Number(distanceKm.toFixed(3)),
+                updatedAt: updatedAt || null,
+                presenceVerified: true,
+                source: "CIKUR_GO_GEO_SCOPED_FIRESTORE"
+            });
+        });
+
+        items.sort((a, b) => a.distanceKm - b.distanceKm);
+        const safeItems = items.slice(0, requestedMax);
+        return {
+            ok: true, verified: true, status: safeItems.length ? "available" : "unavailable",
+            items: safeItems, count: safeItems.length,
+            requestId: request.requestId || null,
+            scope: "CUSTOMER_GEO_SCOPED", cellsChecked: cells.length,
+            source: "CIKUR_GO_GEO_SCOPED_FIRESTORE"
+        };
     },
 
     // ======================================
