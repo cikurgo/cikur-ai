@@ -9,7 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
-<script type="module" src="cikur-config.js"></script>
+<script type="module" src="cikur-config.js?v=AUTH-SESSION-V2"></script>
 
     
 <style>
@@ -1679,15 +1679,15 @@ footer p { margin: 0; }
                 <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
                 <span>Keamanan PIN CikurPay</span>
             </button>
-            <button class="dropdown-item" onclick="window.location.href='agentcgo.html'; closeHeaderDropdown();">
+            <button class="dropdown-item" onclick="openMitraPage('agentcgo.html'); closeHeaderDropdown();">
                 <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A1.5 1.5 0 0 0 6 14.5A1.5 1.5 0 0 0 7.5 16A1.5 1.5 0 0 0 9 14.5A1.5 1.5 0 0 0 7.5 13m9 0a1.5 1.5 0 0 0-1.5 1.5a1.5 1.5 0 0 0 1.5 1.5a1.5 1.5 0 0 0 1.5-1.5a1.5 1.5 0 0 0-1.5-1.5Z"/></svg>
                 <span>Agent CGO</span>
             </button>
-            <button class="dropdown-item" onclick="window.location.href='resto.html'; closeHeaderDropdown();">
+            <button class="dropdown-item" onclick="openMitraPage('resto.html'); closeHeaderDropdown();">
                 <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4Z"/></svg>
                 <span>Resto</span>
             </button>
-            <button class="dropdown-item" onclick="window.location.href='driver.html'; closeHeaderDropdown();">
+            <button class="dropdown-item" onclick="openMitraPage('driver.html'); closeHeaderDropdown();">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                     <path d="M5 13c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3zm7-8-2 3H7c-.55 0-1 .45-1 1s.45 1 1 1h2.15l1.63-2.45L15.35 12H19c.55 0 1-.45 1-1s-.45-1-1-1h-2.15l-1.92-2.88c-.3-.45-.81-.72-1.35-.72H12zm7 8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3 z"/>
                 </svg>
@@ -3047,6 +3047,28 @@ function tandaiNotifikasiTerbaca(notificationId) {
 
 function tandaiSemuaNotifikasiTerbaca() {
     if (userProfile?.uid) window.CikurCloud.markAllNotificationsRead(userProfile.uid);
+}
+
+async function openMitraPage(target) {
+    const allowedTargets = ["agentcgo.html", "resto.html", "driver.html"];
+    if (!allowedTargets.includes(target)) return;
+
+    if (!window.CikurCloud) {
+        alert("CIKUR Cloud belum tersedia. Silakan refresh halaman.");
+        return;
+    }
+
+    try {
+        const firebaseUser = await window.CikurCloud.waitForAuth();
+        if (!firebaseUser) {
+            alert("Sesi login tidak ditemukan. Silakan login kembali.");
+            return;
+        }
+        window.location.href = target;
+    } catch (error) {
+        console.error("[CIKUR GO] Gagal memvalidasi sesi sebelum ke halaman Mitra:", error);
+        alert("Gagal memeriksa sesi login. Silakan coba lagi.");
+    }
 }
 
 function switchTab(tabName) {
