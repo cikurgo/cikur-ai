@@ -2757,7 +2757,11 @@ async function loadCurrentUserProfileIndex() {
 
         let firebaseUser = null;
         try {
-            firebaseUser = await window.CikurCloud.waitForAuth();
+            // ensureAuth + timeout lebih panjang agar IndexedDB sempat restore saat refresh.
+            firebaseUser = await window.CikurCloud.ensureAuth();
+            if (!firebaseUser) {
+                firebaseUser = await window.CikurCloud.waitForAuth(10000);
+            }
         } catch (authError) {
             console.error("[CIKUR GO] Gagal memulihkan session Customer/Mitra:", authError);
         }

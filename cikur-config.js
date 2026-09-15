@@ -25,6 +25,7 @@ import {
 
 import {
     initializeAuth,
+    getAuth,
     browserLocalPersistence,
     browserSessionPersistence,
     browserPopupRedirectResolver,
@@ -76,10 +77,20 @@ const CUSTOMER_APP_NAME = "CIKUR_GO_CUSTOMER";
 const customerApp = getApps().some(existingApp => existingApp.name === CUSTOMER_APP_NAME)
     ? getApp(CUSTOMER_APP_NAME)
     : initializeApp(firebaseConfig, CUSTOMER_APP_NAME);
-const auth = initializeAuth(customerApp, {
-    persistence: browserLocalPersistence,
-    popupRedirectResolver: browserPopupRedirectResolver
-});
+
+// initializeAuth hanya boleh dipanggil sekali per app instance.
+// Fallback ke getAuth agar sesi IndexedDB tidak rusak saat modul dimuat ulang
+// antar halaman (index ↔ agentcgo/resto/driver) atau saat refresh.
+let auth;
+try {
+    auth = initializeAuth(customerApp, {
+        persistence: browserLocalPersistence,
+        popupRedirectResolver: browserPopupRedirectResolver
+    });
+} catch (authInitError) {
+    console.warn("[CIKUR GO] Customer Auth sudah ada, memakai getAuth:", authInitError?.code || authInitError?.message || authInitError);
+    auth = getAuth(customerApp);
+}
 const customerDb = getFirestore(customerApp);
 
 // ==========================================
@@ -93,10 +104,17 @@ const ADMIN_APP_NAME = "CIKUR_GO_ADMIN";
 const adminApp = getApps().some(existingApp => existingApp.name === ADMIN_APP_NAME)
     ? getApp(ADMIN_APP_NAME)
     : initializeApp(firebaseConfig, ADMIN_APP_NAME);
-const adminAuth = initializeAuth(adminApp, {
-    persistence: browserLocalPersistence,
-    popupRedirectResolver: undefined
-});
+
+let adminAuth;
+try {
+    adminAuth = initializeAuth(adminApp, {
+        persistence: browserLocalPersistence,
+        popupRedirectResolver: undefined
+    });
+} catch (adminAuthInitError) {
+    console.warn("[CIKUR GO] Admin Auth sudah ada, memakai getAuth:", adminAuthInitError?.code || adminAuthInitError?.message || adminAuthInitError);
+    adminAuth = getAuth(adminApp);
+}
 const adminDb = getFirestore(adminApp);
 
 // Alias db dipertahankan untuk seluruh modul Customer/Mitra lama.
@@ -113,19 +131,38 @@ export { db, customerDb, adminDb, auth, adminAuth, firebaseConfig };
 
 window.CikurCloud = {
     auth,
-    waitForAuth() {
+    /**
+     * Menunggu state auth awal dari Firebase (termasuk restore dari IndexedDB).
+     * Jangan resolve null terlalu cepat — biarkan persistence sempat dibaca.
+     */
+    waitForAuth(timeoutMs = 8000) {
         return new Promise((resolve) => {
-            const unsubscribe = onAuthStateChanged(
-                auth,
-                (user) => {
-                    unsubscribe();
-                    console.log(
-                        "[CIKUR GO] Auth state:",
-                        user ? user.uid : "TIDAK ADA USER"
-                    );
-                    resolve(user);
-                }
-            );
+            if (auth.currentUser) {
+                console.log("[CIKUR GO] Auth state (currentUser):", auth.currentUser.uid);
+                resolve(auth.currentUser);
+                return;
+            }
+
+            let settled = false;
+            const finish = (user) => {
+                if (settled) return;
+                settled = true;
+                try { unsubscribe(); } catch (_) {}
+                clearTimeout(safetyTimer);
+                console.log(
+                    "[CIKUR GO] Auth state:",
+                    user ? user.uid : "TIDAK ADA USER"
+                );
+                resolve(user || null);
+            };
+
+            const unsubscribe = onAuthStateChanged(auth, (user) => {
+                finish(user);
+            });
+
+            const safetyTimer = setTimeout(() => {
+                finish(auth.currentUser);
+            }, Math.max(1500, Number(timeoutMs) || 8000));
         });
     },
 

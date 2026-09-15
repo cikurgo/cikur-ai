@@ -269,8 +269,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function loadCurrentDriverAuthGate() {
     let retries = 0;
-    while (!window.CikurCloud && retries < 30) {
-        await new Promise(resolve => setTimeout(resolve, 200));
+    while (!window.CikurCloud && retries < 40) {
+        await new Promise(resolve => setTimeout(resolve, 150));
         retries++;
     }
 
@@ -280,10 +280,15 @@ async function loadCurrentDriverAuthGate() {
         return;
     }
 
+    // Tunggu restore sesi dari IndexedDB — jangan anggap logout terlalu cepat.
     let firebaseUser = null;
     try {
-        firebaseUser = await window.CikurCloud.waitForAuth();
+        firebaseUser = await window.CikurCloud.ensureAuth();
+        if (!firebaseUser) {
+            firebaseUser = await window.CikurCloud.waitForAuth(10000);
+        }
     } catch (e) {
+        console.error("[DRIVER] Gagal memulihkan sesi:", e);
         firebaseUser = null;
     }
 
@@ -395,7 +400,7 @@ async function saveDriverOperationalStatus(nextStatus) {
         throw new Error("Fungsi pembaruan profil mitra belum tersedia.");
     }
 
-    await window.CikurCloud.updateMitraProfile(userProfile.uid, {
+    await window.CikurCloud.updateMitraProfile(userProfile.uid, "driver", {
         isOnline: nextStatus,
         operationalStatus: nextStatus ? "online" : "offline",
         operationalStatusUpdatedAt: new Date().toISOString()

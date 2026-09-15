@@ -714,8 +714,8 @@
 
         async function loadCurrentAgentProfile() {
             let retries = 0;
-            while (!window.CikurCloud && retries < 30) {
-                await new Promise(resolve => setTimeout(resolve, 200));
+            while (!window.CikurCloud && retries < 40) {
+                await new Promise(resolve => setTimeout(resolve, 150));
                 retries++;
             }
 
@@ -725,10 +725,15 @@
                 return;
             }
 
+            // Tunggu restore sesi dari IndexedDB — jangan anggap logout terlalu cepat.
             let firebaseUser = null;
             try {
-                firebaseUser = await window.CikurCloud.waitForAuth();
+                firebaseUser = await window.CikurCloud.ensureAuth();
+                if (!firebaseUser) {
+                    firebaseUser = await window.CikurCloud.waitForAuth(10000);
+                }
             } catch (e) {
+                console.error("[AGENT CGO] Gagal memulihkan sesi:", e);
                 firebaseUser = null;
             }
 
