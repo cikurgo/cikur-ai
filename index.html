@@ -1940,7 +1940,7 @@ footer p { margin: 0; }
 <!-- MODAL UMUM -->
 <div id="assistantScreen" class="assistant-screen">
     <div class="assistant-page">
-        <div class="assistant-top">
+        <div class="assistant-top" id="assistantTopBar">
             <span id="modalTitle">Modal Title</span>
             <button id="closeAssistant">×</button>
         </div>
@@ -2130,10 +2130,12 @@ async function prosesLoginGoogleFlow(triggerButton) {
         if (assistantScreen) assistantScreen.style.display = "none";
 
     } catch (error) {
-        console.error("[CIKUR GO] Gagal login Google:", error);
+        console.error("[CIKUR GO] Gagal login Google:", error, "| domain saat ini:", window.location.hostname);
         let pesanError = "Login Google gagal. Silakan coba lagi.";
         if (error?.code === "auth/popup-closed-by-user") pesanError = "Jendela login Google ditutup sebelum selesai.";
         else if (error?.code === "auth/popup-blocked") pesanError = "Popup login Google diblokir browser. Izinkan popup lalu coba lagi.";
+        else if (error?.code === "auth/unauthorized-domain") pesanError = `Domain "${window.location.hostname}" belum diizinkan untuk Login Google. Tambahkan domain ini di Firebase Console → Authentication → Settings → Authorized domains.`;
+        else if (error?.code === "auth/operation-not-allowed") pesanError = "Login Google belum diaktifkan di Firebase Console → Authentication → Sign-in method.";
         alert(pesanError);
     } finally {
         if (triggerButton) { triggerButton.disabled = false; triggerButton.textContent = "Lanjutkan dengan Google"; }
@@ -2141,10 +2143,10 @@ async function prosesLoginGoogleFlow(triggerButton) {
 }
 
 function bukaModalRegistrasi() {
-    openModal("CIKUR GO");
+    openModal("CIKUR GO", true);
 
     modalMainContent.innerHTML = `
-        <div style="text-align:center; margin-bottom:18px;">
+        <div style="text-align:center; margin-bottom:18px; padding-top:28px;">
             <img src="cikurgoicon.png" alt="CIKUR GO" style="width:88px; height:auto; margin:0 auto 12px; display:block;">
             <h3 style="font-size:17px; font-weight:800; color:#0f172a;">Selamat Datang di CIKUR GO</h3>
             <p style="font-size:11px; color:#64748b; margin-top:4px;">Semua kebutuhanmu, dalam satu aplikasi.</p>
@@ -2307,10 +2309,10 @@ function updatePasswordStrengthMeter(password, fillId, labelId) {
 }
 
 function bukaLangkahLengkapiProfilRegistrasi(firebaseUser, emailVal) {
-    openModal("CIKUR GO");
+    openModal("CIKUR GO", true);
 
     modalMainContent.innerHTML = `
-        <div style="text-align:center; margin-bottom:16px;">
+        <div style="text-align:center; margin-bottom:16px; padding-top:28px;">
             <div style="font-size:10px; font-weight:800; color:var(--primary-red); letter-spacing:0.05em; margin-bottom:4px;">LANGKAH 2 DARI 2 — PROFIL</div>
             <h3 style="font-size:16px; font-weight:800; color:#0f172a;">Lengkapi Profil Kamu</h3>
             <p style="font-size:11px; color:#64748b; margin-top:4px;">Data ini dipakai untuk pesanan &amp; keamanan akun.</p>
@@ -2556,10 +2558,10 @@ function bukaModalLupaPin() {
 // ======================================
 
 function bukaModalLogin() {
-    openModal("CIKUR GO");
+    openModal("CIKUR GO", true);
 
     modalMainContent.innerHTML = `
-        <div style="text-align:center; margin-bottom:18px;">
+        <div style="text-align:center; margin-bottom:18px; padding-top:28px;">
             <img src="cikurgoicon.png" alt="CIKUR GO" style="width:88px; height:auto; margin:0 auto 12px; display:block;">
             <h3 style="font-size:17px; font-weight:800; color:#0f172a;">Selamat Datang Kembali!</h3>
             <p style="font-size:11px; color:#64748b; margin-top:4px;">Masuk dengan akun CIKUR GO Anda.</p>
@@ -3351,8 +3353,10 @@ const closeAssistant = document.getElementById("closeAssistant");
 const modalTitle = document.getElementById("modalTitle");
 const modalMainContent = document.getElementById("modalMainContent");
 
-function openModal(titleHTML) {
+function openModal(titleHTML, hideTopBar = false) {
     if (modalTitle) modalTitle.innerHTML = titleHTML;
+    const topBar = document.getElementById("assistantTopBar");
+    if (topBar) topBar.style.display = hideTopBar ? "none" : "flex";
     if (assistantScreen) assistantScreen.style.display = "block";
 }
 
