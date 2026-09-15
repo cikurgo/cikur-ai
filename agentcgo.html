@@ -564,6 +564,94 @@
             }
         }
 
+        function agentRegistrationSubmit() {
+            const btn = document.getElementById("agentSubmitBtn");
+            if (!btn || btn.disabled) return;
+
+            const ktpFile = document.getElementById("agentKtpFile")?.files?.[0] || null;
+            const selfieFile = document.getElementById("agentSelfieFile")?.files?.[0] || null;
+
+            if (!ktpFile || !selfieFile) {
+                alert("Mohon upload foto KTP dan selfie terlebih dahulu.");
+                return;
+            }
+            if (!window.CikurCloud?.fileToCompressedDataUrl) {
+                alert("Fitur upload dokumen belum siap. Refresh halaman.");
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = "Mengunggah dokumen...";
+
+            (async () => {
+                try {
+                    // Kompresi lebih ketat (640px/0.55) karena 2 foto digabung dalam
+                    // 1 dokumen Firestore, yang punya batas keras 1MB per dokumen.
+                    const [ktpDataUrl, selfieDataUrl] = await Promise.all([
+                        window.CikurCloud.fileToCompressedDataUrl(ktpFile, 640, 0.55),
+                        window.CikurCloud.fileToCompressedDataUrl(selfieFile, 640, 0.55)
+                    ]);
+
+                    btn.textContent = "Mengirim Pendaftaran...";
+
+                    let bcgoResult = null;
+                    if (window.BCGO) {
+                        try {
+                            bcgoResult = window.BCGO.evaluatePartner({
+                                partnerType: "assistant",
+                                name: agentValue("agentName"),
+                                phone: agentValue("agentPhone"),
+                                address: agentValue("mitraAlamat"),
+                                serviceType: "Agent CGO"
+                            });
+                        } catch (bcgoError) {
+                            console.error("[BCGO] Gagal menjalankan evaluasi:", bcgoError);
+                        }
+                    }
+
+                    await window.CikurCloud.submitMitraApplication(userProfile.uid, "agent", {
+                        name: agentValue("agentName"),
+                        phone: agentValue("agentPhone"),
+                        email: agentValue("agentEmail"),
+                        socialMedia: agentValue("agentSocialMedia"),
+                        ktp: agentValue("mitraKtp"),
+                        fotoKtp: ktpDataUrl,
+                        selfie: selfieDataUrl,
+                        alamat: agentValue("mitraAlamat"),
+                        kecamatan: agentValue("agentKecamatan"),
+                        kabupaten: agentValue("agentKabupaten"),
+                        provinsi: agentValue("agentProvinsi"),
+                        kodePos: agentValue("agentKodePos"),
+                        area: agentValue("mitraArea"),
+                        radius: agentValue("agentRadius"),
+                        availability: agentValue("agentAvailability"),
+                        experience: agentValue("agentExperience"),
+                        skills: agentValue("agentSkills"),
+                        languages: agentValue("agentLanguages"),
+                        bcgoScore: bcgoResult?.score ?? null,
+                        bcgoRisk: bcgoResult?.risk ?? null,
+                        bcgoRecommendation: bcgoResult?.status ?? null,
+                        bcgoReasons: bcgoResult?.reasons ?? []
+                    });
+
+                    alert("Pendaftaran Mitra Agent CGO berhasil dikirim! Silakan tunggu verifikasi Admin.");
+                    window.location.reload();
+
+                } catch (error) {
+                    console.error("[CIKUR GO] Gagal mengirim pendaftaran Agent:", error);
+                    const map = {
+                        FILE_TOO_LARGE: "Ukuran foto maksimal 8 MB.",
+                        IMAGE_ONLY: "File harus berupa gambar.",
+                        FILE_REQUIRED: "Foto wajib diunggah.",
+                        IMAGE_STILL_TOO_LARGE: "Foto masih terlalu besar walau sudah dikompres. Coba foto lain."
+                    };
+                    alert("Gagal mengirim pendaftaran: " + (map[error?.message] || error?.message || error));
+                    btn.disabled = false;
+                    btn.textContent = "Kirim Pendaftaran";
+                }
+            })();
+        }
+
         window.agentKtpReady = false;
         window.agentSelfieReady = false;
 
