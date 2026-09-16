@@ -1934,8 +1934,6 @@ footer p { margin: 0; }
                 <div class="cgo-profile-card-title"><span>Pengaturan Akun</span><small>Kelola data & keamanan</small></div>
                 <div class="cgo-profile-action-stack">
                     <button class="btn-pesan-form" id="btnEditProfilTab">Edit Pengaturan Profil</button>
-                    <button class="btn-pesan-form" onclick="bukaModalAturPin()" style="background:#334155;">Atur PIN CikurPay 🔒</button>
-                    <button class="btn-pesan-form" onclick="prosesLogout()" style="background:#64748b;">Keluar Akun (Logout)</button>
                 </div>
             </section>
         </div>
@@ -2113,15 +2111,16 @@ function updateUIProfile() {
                     alt="Foto Profil"
                     style="width:100%;height:100%;object-fit:cover;border-radius:50%;"
                 >
-                <span class="avatar-camera-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 4.5 10.2 3h3.6L15 4.5H18A2 2 0 0 1 20 6.5v10A2 2 0 0 1 18 18.5H6a2 2 0 0 1-2-2v-10a2 2 0 0 1 2-2h3ZM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0-1.7a2.3 2.3 0 1 1 0-4.6 2.3 2.3 0 0 1 0 4.6Z"/></svg></span>
             `;
         }
     } else {
         const placeholder = `
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.25 4.25 0 1 0 0-8.5A4.25 4.25 0 0 0 12 12Zm0 2c-4.14 0-7.5 2.12-7.5 4.75V20h15v-1.25C19.5 16.12 16.14 14 12 14Z"/></svg>
             <span class="avatar-camera-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 4.5 10.2 3h3.6L15 4.5H18A2 2 0 0 1 20 6.5v10A2 2 0 0 1 18 18.5H6a2 2 0 0 1-2-2v-10a2 2 0 0 1 2-2h3ZM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0-1.7a2.3 2.3 0 1 1 0-4.6 2.3 2.3 0 0 1 0 4.6Z"/></svg></span>`;
+        const placeholderNoBadge = `
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.25 4.25 0 1 0 0-8.5A4.25 4.25 0 0 0 12 12Zm0 2c-4.14 0-7.5 2.12-7.5 4.75V20h15v-1.25C19.5 16.12 16.14 14 12 14Z"/></svg>`;
         if (avatarContainer) { avatarContainer.classList.add("avatar-placeholder"); avatarContainer.innerHTML = placeholder; }
-        if (profileViewAvatar) { profileViewAvatar.classList.add("avatar-placeholder"); profileViewAvatar.innerHTML = placeholder; }
+        if (profileViewAvatar) { profileViewAvatar.classList.add("avatar-placeholder"); profileViewAvatar.innerHTML = placeholderNoBadge; }
     }
 }  
     
@@ -3454,7 +3453,7 @@ async function bukaModalPengaturanProfil() {
             <div class="cgo-profile-edit-head">
                 <div class="cgo-profile-edit-avatar" id="modalAvatarPreviewBox">${avatarPreviewHTML}</div>
                 <div class="cgo-profile-edit-name">${safeName || "Lengkapi Profil"}</div>
-                <div class="cgo-profile-edit-sub">Data akun tersimpan di CIKUR GO Cloud</div>
+                <div class="cgo-profile-edit-sub">Kelola data & keamanan akun kamu</div>
             </div>
 
             <div class="cgo-profile-layout">
@@ -3548,12 +3547,16 @@ async function bukaModalPengaturanProfil() {
 
     // Tandai status verifikasi secara visual agar yang sudah selesai terasa "hidup".
     document.querySelectorAll(".cgo-profile-verify-item").forEach((item) => {
-        const label = item.querySelector("span")?.innerText?.trim().toLowerCase() || "";
         const strong = item.querySelector("strong");
         const text = strong?.innerText?.trim().toLowerCase() || "";
         item.classList.remove("is-verified", "is-pending");
-        if (text.includes("terverifikasi") || text.includes("terdaftar")) item.classList.add("is-verified");
-        else if (text.includes("menunggu")) item.classList.add("is-pending");
+        if (text.includes("belum")) {
+            // status belum lengkap: biarkan gaya netral (tanpa hijau/kuning)
+        } else if (text.includes("menunggu")) {
+            item.classList.add("is-pending");
+        } else if (text.includes("terverifikasi") || text.includes("terdaftar")) {
+            item.classList.add("is-verified");
+        }
     });
 
     let temporaryAvatar = userProfile.avatar || "";
