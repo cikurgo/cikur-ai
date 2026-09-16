@@ -1421,6 +1421,8 @@ footer p { margin: 0; }
 .cgo-security-section{ background:#fff; }
 .cgo-form-intro{ text-align:center; margin:2px 0 16px; }
 .cgo-form-intro-icon{ font-size:25px; margin-bottom:4px; }
+.cgo-form-intro-icon.cgo-icon-circle{ width:56px; height:56px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 10px; }
+.cgo-form-intro-icon.cgo-icon-circle svg{ width:26px; height:26px; }
 .cgo-form-intro-title{ font-size:14px; font-weight:800; color:#0f172a; }
 .cgo-form-intro-text{ font-size:10px; color:#64748b; line-height:1.5; margin-top:4px; }
 .cgo-password-wrap{ position:relative; width:100%; }
@@ -2272,7 +2274,7 @@ function bukaModalRegistrasi() {
 
         try {
             const firebaseUser = await window.CikurCloud.registerWithEmail(emailVal, passwordVal);
-            if (!firebaseUser) throw new Error("Firebase User tidak tersedia.");
+            if (!firebaseUser) throw new Error("Akun tidak ditemukan. Silakan coba lagi.");
             bukaLangkahLengkapiProfilRegistrasi(firebaseUser, emailVal);
         } catch (error) {
             console.error("[CIKUR GO] Gagal membuat akun:", error);
@@ -2832,7 +2834,7 @@ async function enforceCustomerAccountStatus(firebaseUser) {
         } catch (logoutError) {
             console.error("[CIKUR GO] Gagal menutup sesi Customer nonaktif:", logoutError);
         }
-        alert("Akun Customer Anda sedang nonaktif. Silakan hubungi Super Admin CIKUR GO.");
+        alert("Akun Customer Anda sedang nonaktif. Silakan hubungi tim CIKUR GO.");
         return false;
     }
 
@@ -3182,7 +3184,7 @@ function bukaModalAturPin() {
         try {
             const firebaseUser = await window.CikurCloud.ensureAuth();
             if (!firebaseUser) {
-                throw new Error("Firebase User tidak tersedia.");
+                throw new Error("Akun tidak ditemukan. Silakan coba lagi.");
             }
 
             if (userProfile.pinConfigured || userProfile.pinHash || userProfile.pin) {
@@ -3728,11 +3730,11 @@ async function bukaModalPengaturanProfil() {
 }
 
 async function bukaModalVerifikasiNomorHP() {
-    openModal("VERIFIKASI NOMOR HP 📱");
+    openModal("Verifikasi Nomor HP");
     if (!modalMainContent) return;
     const phone = userProfile.phone || "";
     modalMainContent.innerHTML = `
-        <div class="cgo-form-intro"><div class="cgo-form-intro-icon">📱</div><div class="cgo-form-intro-title">Verifikasi nomor HP</div><div class="cgo-form-intro-text">Firebase akan mengirim kode OTP melalui SMS. Nomor Indonesia harus valid.</div></div>
+        <div class="cgo-form-intro"><div class="cgo-form-intro-icon cgo-icon-circle" style="background:#eff6ff;color:#0284c7;"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.02-.24c1.12.37 2.33.57 3.57.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.61 21 3 13.39 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.24.2 2.45.57 3.57a1 1 0 0 1-.25 1.02l-2.2 2.2Z"/></svg></div><div class="cgo-form-intro-title">Verifikasi nomor HP</div><div class="cgo-form-intro-text">Kami akan mengirim kode OTP ke nomor ini lewat SMS. Pastikan nomornya aktif ya.</div></div>
         <div class="form-group"><label>Nomor HP</label><input id="verifyPhoneNumber" class="input-box" value="${String(phone).replace(/"/g, '&quot;')}" inputmode="tel" autocomplete="tel"></div>
         <div id="phoneRecaptchaContainer" style="margin:10px 0;"></div>
         <button class="btn-pesan-form" id="btnKirimOTP" type="button">Kirim Kode OTP</button>
@@ -3741,7 +3743,7 @@ async function bukaModalVerifikasiNomorHP() {
     document.getElementById("btnKirimOTP")?.addEventListener("click", async () => {
         const number = document.getElementById("verifyPhoneNumber")?.value.trim() || ""; const btn = document.getElementById("btnKirimOTP");
         try { btn.disabled=true; btn.textContent="Menyiapkan verifikasi..."; await window.CikurCloud.startCustomerPhoneVerification(number,"phoneRecaptchaContainer"); document.getElementById("phoneOtpArea").style.display="block"; btn.textContent="Kode OTP Terkirim ✓"; alert("Kode OTP sudah dikirim ke nomor tersebut."); }
-        catch(error){ console.error("[CIKUR GO] Gagal mengirim OTP:",error); const map={INVALID_PHONE_FORMAT:"Format nomor HP tidak valid. Gunakan 08... atau +628...","auth/operation-not-allowed":"Verifikasi nomor HP belum diaktifkan pada Firebase Authentication."}; alert(map[error?.code]||map[error?.message]||"Gagal mengirim kode OTP. Periksa reCAPTCHA dan nomor HP."); btn.disabled=false; btn.textContent="Kirim Kode OTP"; }
+        catch(error){ console.error("[CIKUR GO] Gagal mengirim OTP:",error); const map={INVALID_PHONE_FORMAT:"Format nomor HP tidak valid. Gunakan 08... atau +628...","auth/operation-not-allowed":"Verifikasi nomor HP belum tersedia saat ini. Silakan coba lagi nanti."}; alert(map[error?.code]||map[error?.message]||"Gagal mengirim kode OTP. Periksa reCAPTCHA dan nomor HP."); btn.disabled=false; btn.textContent="Kirim Kode OTP"; }
     });
     document.getElementById("btnKonfirmasiOTP")?.addEventListener("click", async () => {
         const code=document.getElementById("verifyPhoneOtp")?.value.trim()||""; const btn=document.getElementById("btnKonfirmasiOTP");
@@ -3751,22 +3753,22 @@ async function bukaModalVerifikasiNomorHP() {
 }
 
 async function bukaModalVerifikasiIdentitas() {
-    openModal("VERIFIKASI IDENTITAS 🪪");
+    openModal("Verifikasi Identitas");
     if (!modalMainContent) return;
     const pending=userProfile.identityVerificationStatus==="pending";
-    modalMainContent.innerHTML=pending?`<div class="cgo-form-intro"><div class="cgo-form-intro-icon">⏳</div><div class="cgo-form-intro-title">Pengajuan sedang diperiksa</div><div class="cgo-form-intro-text">Data identitas sudah masuk ke Admin. Tunggu hasil pemeriksaan.</div></div><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;font-size:10px;color:#475569;">Status: <b>MENUNGGU PEMERIKSAAN ADMIN</b></div><button class="btn-pesan-form" id="btnTutupIdentityPending" type="button" style="margin-top:12px;">Tutup</button>`:`<div class="cgo-form-intro"><div class="cgo-form-intro-icon">🪪</div><div class="cgo-form-intro-title">Ajukan verifikasi identitas</div><div class="cgo-form-intro-text">Unggah foto KTP/dokumen identitas yang jelas. Pemeriksaan akhir dilakukan Super Admin.</div></div><div class="form-group"><label>Nama sesuai identitas</label><input id="identityFullName" class="input-box" value="${String(userProfile.namaLengkap||userProfile.name||'').replace(/"/g,'&quot;')}"></div><div class="form-group"><label>NIK 16 digit</label><input id="identityNIK" class="input-box" maxlength="16" inputmode="numeric" placeholder="16 digit NIK"></div><div class="form-group"><label>Tanggal Lahir</label><input id="identityBirthDate" type="date" class="input-box" value="${userProfile.tanggalLahir||''}"></div><div class="form-group"><label>Foto KTP / Identitas</label><input id="identityDocument" type="file" accept="image/*" class="input-box cgo-file-input"></div><button class="btn-pesan-form" id="btnSubmitIdentity" type="button">Kirim Pengajuan Verifikasi</button><p style="font-size:10px;color:#94a3b8;line-height:1.5;margin-top:10px;">Dokumen identitas bersifat sensitif dan hanya untuk pemeriksaan internal.</p>`;
+    modalMainContent.innerHTML=pending?`<div class="cgo-form-intro"><div class="cgo-form-intro-icon cgo-icon-circle" style="background:#fffbeb;color:#b45309;"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm0-4h-2V7h2v6Z"/></svg></div><div class="cgo-form-intro-title">Pengajuan sedang diperiksa</div><div class="cgo-form-intro-text">Data identitas kamu sudah kami terima. Tunggu hasil pemeriksaannya, ya.</div></div><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;font-size:10px;color:#475569;">Status: <b>MENUNGGU PEMERIKSAAN</b></div><button class="btn-pesan-form" id="btnTutupIdentityPending" type="button" style="margin-top:12px;">Tutup</button>`:`<div class="cgo-form-intro"><div class="cgo-form-intro-icon cgo-icon-circle" style="background:#eff6ff;color:#0284c7;"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm-11 4a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Zm4 9H5v-.5C5 15 8 14 9 14s4 1 4 2.5v.5Zm7-2h-5v-1.5h5V15Zm0-3h-5v-1.5h5V12Z"/></svg></div><div class="cgo-form-intro-title">Ajukan verifikasi identitas</div><div class="cgo-form-intro-text">Unggah foto KTP/dokumen identitas yang jelas. Pengajuan kamu akan diperiksa oleh tim CIKUR GO.</div></div><div class="form-group"><label>Nama sesuai identitas</label><input id="identityFullName" class="input-box" value="${String(userProfile.namaLengkap||userProfile.name||'').replace(/"/g,'&quot;')}"></div><div class="form-group"><label>NIK 16 digit</label><input id="identityNIK" class="input-box" maxlength="16" inputmode="numeric" placeholder="16 digit NIK"></div><div class="form-group"><label>Tanggal Lahir</label><input id="identityBirthDate" type="date" class="input-box" value="${userProfile.tanggalLahir||''}"></div><div class="form-group"><label>Foto KTP / Identitas</label><input id="identityDocument" type="file" accept="image/*" class="input-box cgo-file-input"></div><button class="btn-pesan-form" id="btnSubmitIdentity" type="button">Kirim Pengajuan Verifikasi</button><p style="font-size:10px;color:#94a3b8;line-height:1.5;margin-top:10px;">Dokumen identitas bersifat sensitif dan hanya untuk pemeriksaan internal.</p>`;
     document.getElementById("btnTutupIdentityPending")?.addEventListener("click",closeModal);
     document.getElementById("btnSubmitIdentity")?.addEventListener("click",async()=>{ const btn=document.getElementById("btnSubmitIdentity"); const file=document.getElementById("identityDocument")?.files?.[0]; try{ btn.disabled=true;btn.textContent="Mengunggah & Mengirim...";const u=await window.CikurCloud.waitForAuth();if(!u)throw new Error("NO_AUTHENTICATED_USER");await window.CikurCloud.submitCustomerIdentityVerification(u.uid,{fullName:document.getElementById("identityFullName")?.value.trim()||"",nik:document.getElementById("identityNIK")?.value.trim()||"",birthDate:document.getElementById("identityBirthDate")?.value||"",file});userProfile={...userProfile,identityVerificationStatus:"pending",identityVerified:false};updateUIProfile();alert("Pengajuan verifikasi identitas berhasil dikirim ke Admin.");closeModal();bukaModalPengaturanProfil();}catch(error){console.error("[CIKUR GO] Gagal mengirim verifikasi identitas:",error);const map={INVALID_NIK:"NIK harus tepat 16 digit.",IDENTITY_DOCUMENT_REQUIRED:"Foto KTP wajib dipilih.",IDENTITY_DOCUMENT_TOO_LARGE:"Ukuran foto maksimal 5 MB.",IDENTITY_DOCUMENT_IMAGE_ONLY:"Dokumen harus berupa gambar."};alert(map[error?.message]||"Pengajuan verifikasi identitas gagal. Periksa data dan koneksi.");btn.disabled=false;btn.textContent="Kirim Pengajuan Verifikasi";} });
 }
 
 function bukaModalGantiPassword() {
-    openModal("GANTI PASSWORD AKUN");
+    openModal("Ganti Password Akun");
     if (!modalMainContent) return;
     modalMainContent.innerHTML = `
         <div class="cgo-form-intro">
-            <div class="cgo-form-intro-icon">🔐</div>
+            <div class="cgo-form-intro-icon cgo-icon-circle" style="background:#eff6ff;color:#0284c7;"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2Zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2Zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2Z"/></svg></div>
             <div class="cgo-form-intro-title">Amankan akun CIKUR GO</div>
-            <div class="cgo-form-intro-text">Masukkan password saat ini, lalu buat password baru. Perubahan akan diverifikasi langsung oleh Firebase Auth.</div>
+            <div class="cgo-form-intro-text">Masukkan password saat ini, lalu buat password baru. Kami akan mengecek dulu password lama kamu sebelum menyimpan yang baru.</div>
         </div>
         <div class="form-group">
             <label>Password Saat Ini</label>
