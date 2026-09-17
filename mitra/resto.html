@@ -1,0 +1,2016 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Resto Partner - CIKUR GO Super App Engine v4.7</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="../shared/bcgo-engine.js"></script>
+<script type="module" src="../cikur-config.js"></script>
+<style>
+:root {
+    --primary-red: #e60000;
+    --primary-red-hover: #b80710;
+    --accent-yellow: #ffd700;
+    --dark-bg: #0f172a;
+    --dark-card: #1e293b;
+    --body-bg: #f1f5f9;
+    --container-bg: #f8fafc;
+    --border-color: #e2e8f0;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --font-main: 'Plus Jakarta Sans', sans-serif;
+}
+*{ margin: 0; padding: 0; box-sizing: border-box; font-family: var(--font-main); }
+body{ background: var(--body-bg); color: var(--text-main); min-height: 100vh; display: flex; justify-content: center; align-items: center; }
+@media(min-width: 480px){ body { padding: 20px; } }
+.container{ width: 100%; max-width: 440px; min-height: 100vh; margin: 0 auto; padding: 85px 16px 100px 16px; display: flex; flex-direction: column; background: var(--container-bg); box-shadow: 0 10px 30px rgba(0,0,0,0.08); position: relative; overflow-x: hidden; }
+@media(min-width: 480px){ .container { min-height: 850px; border-radius: 36px; border: 1px solid var(--border-color); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15); } }
+
+/* HEADER & DROPDOWN */
+.app-header { position: fixed; top: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 440px; display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(248, 250, 252, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border-color); z-index: 999; }
+.user-greeting { display: flex; align-items: center; gap: 10px; cursor: pointer; transition: 0.2s; padding: 4px; border-radius: 12px; }
+.user-avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(145deg,#f5f6f8,#e5e7eb); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--border-color); display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--primary-red); font-size: 14px; overflow: hidden; flex-shrink: 0; }
+.user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .avatar-empty-icon { width: 20px; height: 20px; display:block; fill:#a3aab5; }
+.user-info h4 { font-size: 10px; color: var(--text-muted); font-weight: 500; }
+.user-info h2 { font-size: 13px; color: var(--text-main); font-weight: 800; line-height: 1.2; }
+.assistant-offer-text { font-size: 10px; color: var(--primary-red); font-weight: 700; margin-top: 1px; }
+.header-profile-wrapper { position: relative; }
+.header-dropdown-menu { position: absolute; top: calc(100% + 8px); left: 0; width: 220px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: none; flex-direction: column; padding: 6px; z-index: 1001; }
+.header-dropdown-menu.show { display: flex; }
+.dropdown-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-size: 12px; font-weight: 700; color: var(--text-main); text-decoration: none; border-radius: 10px; transition: background 0.2s; cursor: pointer; background: transparent; border: none; width: 100%; text-align: left; }
+.dropdown-item svg { width: 16px; height: 16px; fill: var(--primary-red); }
+.dropdown-item:hover { background: #fff5f5; color: var(--primary-red); }
+
+/* BOTTOM NAV */
+.bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 440px; height: 70px; background-color: #ffffff; border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; align-items: center; padding: 0 10px; z-index: 1000; box-shadow: 0 -4px 16px rgba(0,0,0,0.06); }
+.nav-item { background: none; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; cursor: pointer; color: var(--text-muted); transition: color 0.2s ease; position: relative; height: 100%; text-decoration: none; }
+.nav-item svg { width: 22px; height: 22px; margin-bottom: 4px; fill: currentColor; }
+.nav-item span { font-size: 11px; font-weight: 600; }
+.nav-item.active { color: var(--primary-red); }
+
+/* CONTENT STYLES & ACCORDION */
+.resto-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 20px; padding: 16px; margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+.accordion-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+.accordion-title-wrapper { display: flex; align-items: center; gap: 8px; }
+.accordion-title-wrapper svg.section-icon { width: 18px; height: 18px; fill: var(--primary-red); }
+.accordion-header h3 { font-size: 13px; font-weight: 800; color: var(--text-main); margin: 0; }
+.accordion-icon { width: 18px; height: 18px; fill: var(--text-muted); transition: transform 0.3s ease; }
+.accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
+.resto-card.active .accordion-content { max-height: 2500px; margin-top: 14px; }
+.resto-card.active .accordion-icon { transform: rotate(180deg); fill: var(--primary-red); }
+
+.form-group { margin-number: 12px; margin-bottom: 12px; }
+.form-row { display: flex; gap: 8px; align-items: center; }
+.form-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; }
+.form-label svg { width: 14px; height: 14px; fill: var(--primary-red); flex-shrink: 0; }
+
+/* SEBELUM DIKLIK / DEFAULT BORDER MERAH, SAAT DICENTANG ATAU FOKUS MENJADI HIJAU */
+.form-input, .form-select, .form-textarea { width: 100%; padding: 10px 12px; font-size: 12px; border: 1.5px solid var(--primary-red); border-radius: 10px; background: #fff; color: var(--text-main); outline: none !important; transition: border-color 0.2s, box-shadow 0.2s; }
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: #16a34a !important; box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.2) !important; }
+
+/* KHUSUS CHECKBOX / RADIO JIKA ADA AGAR BISA BERUBAH HIJAU KETIKA DICENTANG */
+input[type="checkbox"], input[type="radio"] { accent-color: #16a34a; }
+input[type="checkbox"]:checked, input[type="radio"]:checked { border-color: #16a34a !important; }
+
+.btn-action { width: 100%; height: 42px; border: none; border-radius: 10px; background: var(--primary-red); color: #fff; font-size: 13px; font-weight: 800; cursor: pointer; transition: 0.2s; margin-top: 6px; }
+.btn-action:hover { background: var(--primary-red-hover); }
+
+/* STATUS OPERASIONAL DINAMIS */
+.status-box { text-align: center; border-radius: 16px; padding: 14px; margin-bottom: 14px; border: 1px solid var(--border-color); transition: 0.3s; }
+.status-box.open { background: #f0fdf4; border-color: #bbf7d0; }
+.status-box.closed { background: #fef2f2; border-color: #fecaca; }
+.status-title { font-size: 13px; font-weight: 800; margin-bottom: 4px; color: var(--text-main); }
+.status-indicator { font-size: 11px; font-weight: 700; margin-bottom: 8px; }
+.status-box.open .status-indicator { color: #16a34a; }
+.status-box.closed .status-indicator { color: #dc2626; }
+.btn-status { width: 100%; height: 38px; border: none; border-radius: 10px; font-size: 12px; font-weight: 800; cursor: pointer; color: #fff; transition: 0.2s; margin-top: 8px; }
+.status-box.open .btn-status { background: #dc2626; }
+.status-box.closed .btn-status { background: #16a34a; }
+
+.menu-item-card { display: flex; justify-content: space-between; align-items: center; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 8px; background: #fafafa; }
+.menu-info h4 { font-size: 12px; font-weight: 700; color: var(--text-main); }
+.menu-info p { font-size: 11px; color: var(--text-muted); }
+.price-tag { display: flex; gap: 6px; align-items: center; margin-top: 2px; }
+.original-price { font-size: 11px; color: #94a3b8; text-decoration: line-through; }
+.discount-price { font-size: 12px; font-weight: 800; color: var(--primary-red); }
+
+footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(--text-muted); font-size: 11px; }
+</style>
+
+<style id="cgo-modern-toast-style">
+.cgo-modern-toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,18px);width:min(390px,calc(100% - 24px));z-index:2147483646;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .22s ease,transform .3s cubic-bezier(.16,1,.3,1),visibility .22s ease;font-family:inherit;}
+.cgo-modern-toast.show{opacity:1;visibility:visible;transform:translate(-50%,0);}
+.cgo-modern-toast-card{position:relative;display:flex;align-items:center;gap:11px;padding:12px 38px 12px 12px;background:rgba(255,255,255,.98);border:1px solid rgba(15,23,42,.08);border-radius:17px;box-shadow:0 16px 38px rgba(15,23,42,.18),0 5px 14px rgba(15,23,42,.08);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);overflow:hidden;}
+.cgo-modern-toast-icon{width:38px;height:38px;flex:0 0 38px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#dcfce7;color:#16a34a;font-size:18px;font-weight:900;}
+.cgo-modern-toast-title{font-size:12px;font-weight:800;color:#0f172a;margin-bottom:2px;}
+.cgo-modern-toast-message{font-size:10.5px;line-height:1.4;font-weight:600;color:#64748b;}
+.cgo-modern-toast-close{position:absolute;right:8px;top:8px;width:24px;height:24px;border:0;border-radius:50%;background:#f1f5f9;color:#64748b;font-size:16px;line-height:1;cursor:pointer;}
+.cgo-modern-toast.warning .cgo-modern-toast-icon{background:#fef3c7;color:#d97706;}
+.cgo-modern-toast.error .cgo-modern-toast-icon{background:#fee2e2;color:#e50914;}
+@media(max-width:440px){.cgo-modern-toast{width:calc(100% - 20px);bottom:calc(14px + env(safe-area-inset-bottom,0px));}}
+</style>
+
+</head>
+<body>
+
+<div class="container">
+    <!-- STICKY HEADER -->
+    <div class="app-header">
+        <div class="header-profile-wrapper">
+            <div class="user-greeting" id="btnOpenProfileDropdown">
+                <div class="user-avatar" id="headerAvatar"><svg class="avatar-empty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.2 4.2 0 1 0 0-8.4A4.2 4.2 0 0 0 12 12Zm0 2c-4.4 0-8 2.3-8 5.2 0 .6.4 1 1 1h14c.6 0 1-.4 1-1 0-2.9-3.6-5.2-8-5.2Z"/></svg></div>
+                <div class="user-info">
+                    <h4>Selamat Datang,</h4>
+                    <h2 id="headerNamaUser">CIKUR USER</h2>
+                    <div class="assistant-offer-text">Resto Partner Active</div>
+                </div>
+            </div>
+            <!-- DROPDOWN MENU UTAMA -->
+            <div class="header-dropdown-menu" id="headerDropdownMenu">
+                <button class="dropdown-item" onclick="window.location.href='../index.html';">
+                    <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8Z"/></svg>
+                    <span>Beranda Utama</span>
+                </button>
+                <button class="dropdown-item" onclick="window.location.href='food.html';">
+                    <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4Z"/></svg>
+                    <span>Halaman Menu Pembeli</span>
+                </button>
+                <button class="dropdown-item" onclick="window.location.href='agentcgo.html';">
+                    <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2Z"/></svg>
+                    <span>Agent CGO</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN VIEW RESTO -->
+    <div style="margin-top: 10px;">
+        <!-- Banner Info dengan Link Langsung ke food.html -->
+        <div class="resto-card" style="background: linear-gradient(135deg, var(--dark-bg), var(--dark-card)); color: #fff;">
+            <h2 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">🍜 CIKUR Food & Resto Partner</h2>
+            <p style="font-size: 11px; color: #94a3b8; line-height: 1.4;">Kelola profil restoran, jam operasional, dan upload menu makanan Anda agar tampil di <a href="../customer/food.html" style="color: var(--accent-yellow); text-decoration: underline; font-weight: 700;">Halaman Menu Pembeli</a>.</p>
+        </div>
+
+        <!-- STATUS PENDAFTARAN MITRA -->
+        <div id="mitraStatusBanner" style="background: #f1f5f9; border: 1px solid var(--border-color); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; font-size: 11px; font-weight: 700; color: var(--text-muted);">
+            Memeriksa status pendaftaran Mitra...
+        </div>
+
+        <!-- STATUS BUKA/TUTUP & JAM OPERASIONAL DINAMIS -->
+        <div id="statusBoxContainer" class="status-box open">
+            <h3 class="status-title">Status Operasional Resto</h3>
+            <p id="statusRestoText" class="status-indicator">Status: Buka & Siap Menerima Order (Online)</p>
+            
+            <div style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-bottom: 10px; background: rgba(255,255,255,0.7); padding: 8px; border-radius: 10px;">
+                <div style="text-align: left; flex: 1;">
+                    <label style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block;">Jam Buka</label>
+                    <input type="time" id="openTimeInput" class="form-input" value="08:00" style="padding: 6px; font-size: 11px;">
+                </div>
+                <span style="font-weight: 800; margin-top: 14px; color: var(--text-muted);">s/d</span>
+                <div style="text-align: left; flex: 1;">
+                    <label style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block;">Jam Tutup</label>
+                    <input type="time" id="closeTimeInput" class="form-input" value="21:00" style="padding: 6px; font-size: 11px;">
+                </div>
+            </div>
+
+            <button class="btn-status" id="btnToggleStatus">Ubah ke Tutup</button>
+        </div>
+
+        <!-- PESANAN MASUK & CHAT TERINTEGRASI -->
+        <div class="resto-card active" id="cardSectionOrders">
+            <div class="accordion-header" onclick="toggleAccordion('cardSectionOrders')">
+                <div class="accordion-title-wrapper">
+                    <svg class="section-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+                    <h3>Pesanan Masuk & Chat Terintegrasi</h3>
+                </div>
+                <svg class="accordion-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
+            </div>
+            <div class="accordion-content">
+                <div style="padding-top: 8px;">
+                    <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Kelola pesanan dari pembeli di <a href="../customer/food.html" style="color: var(--primary-red); font-weight:700; text-decoration: underline;">Halaman Menu Pembeli</a> dan koordinasi dengan driver.</p>
+                    <div id="incomingOrdersContainer">
+                        <p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada pesanan masuk.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DATA & PROFIL RESTORAN -->
+<div class="resto-card" id="cardSectionProfile">
+
+    <div class="accordion-header" onclick="toggleAccordion('cardSectionProfile')">
+        <div class="accordion-title-wrapper">
+            <svg class="section-icon" viewBox="0 0 24 24">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+            <h3>Data & Profil Restoran</h3>
+        </div>
+
+        <svg class="accordion-icon" viewBox="0 0 24 24">
+            <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/>
+        </svg>
+    </div>
+
+    <div class="accordion-content">
+
+        <form id="formRestoProfile" style="padding-top: 8px;">
+
+            <!-- =========================================
+                 1. IDENTITAS RESTORAN
+            ========================================== -->
+
+            <div class="form-group">
+                <label class="form-label">Nama Restoran</label>
+
+                <input
+                    type="text"
+                    id="restoNameInput"
+                    class="form-input"
+                    placeholder="Contoh: Kedai Cikur Enak"
+                    autocomplete="organization"
+                    required
+                >
+            </div>
+
+
+            <div class="form-group">
+                <label class="form-label">Jenis Usaha</label>
+
+                <select
+                    id="restoBusinessTypeInput"
+                    class="form-select"
+                    required
+                >
+                    <option value="">Pilih jenis usaha</option>
+                    <option value="Restoran">Restoran</option>
+                    <option value="Rumah Makan">Rumah Makan</option>
+                    <option value="Warung">Warung</option>
+                    <option value="Kedai">Kedai</option>
+                    <option value="Cafe">Cafe</option>
+                    <option value="Coffee Shop">Coffee Shop</option>
+                    <option value="Food Stall">Food Stall</option>
+                    <option value="Usaha Rumahan">Usaha Rumahan</option>
+                    <option value="Lainnya">Lainnya</option>
+                </select>
+            </div>
+
+
+            <div class="form-group">
+                <label class="form-label">Deskripsi Singkat Restoran</label>
+
+                <textarea
+                    id="restoDescriptionInput"
+                    class="form-textarea"
+                    rows="3"
+                    placeholder="Ceritakan singkat tentang restoran atau usaha makanan Anda..."
+                ></textarea>
+            </div>
+
+
+            <!-- =========================================
+                 2. PENANGGUNG JAWAB
+            ========================================== -->
+
+            <div class="form-group">
+                <label class="form-label">Nama Penanggung Jawab</label>
+
+                <div class="form-row">
+
+                    <input
+                        type="text"
+                        id="ownerNameInput"
+                        class="form-input"
+                        placeholder="Nama lengkap pemilik / pengelola"
+                        autocomplete="name"
+                        style="flex: 2;"
+                        required
+                    >
+
+                    <select
+                        id="restoRoleInput"
+                        class="form-select"
+                        style="flex: 1;"
+                        required
+                    >
+                        <option value="Pemilik Resto">Pemilik Resto</option>
+                        <option value="Pengelola Resto">Pengelola Resto</option>
+                    </select>
+
+                </div>
+            </div>
+
+
+            <div class="form-group">
+                <label class="form-label">Nomor HP Penanggung Jawab</label>
+
+                <input
+                    type="tel"
+                    id="ownerPhoneInput"
+                    class="form-input"
+                    placeholder="Contoh: 081234567891"
+                    inputmode="tel"
+                    autocomplete="tel"
+                    required
+                >
+            </div>
+
+
+            <div class="form-group">
+                <label class="form-label">Nomor Telepon Restoran</label>
+
+                <input
+                    type="tel"
+                    id="restoPhoneInput"
+                    class="form-input"
+                    placeholder="Opsional / telepon restoran"
+                    inputmode="tel"
+                >
+            </div>
+
+
+            <!-- =========================================
+                 3. LOKASI RESTORAN
+            ========================================== -->
+
+            <div class="form-group">
+
+                <label class="form-label">Alamat Lengkap Restoran</label>
+
+                <textarea
+                    id="restoAddressInput"
+                    class="form-textarea"
+                    rows="3"
+                    placeholder="Masukkan alamat lengkap restoran..."
+                    required
+                ></textarea>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Kelurahan / Desa</label>
+
+                <input
+                    type="text"
+                    id="restoVillageInput"
+                    class="form-input"
+                    placeholder="Contoh: Desa Sukaratu"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Kecamatan</label>
+
+                <input
+                    type="text"
+                    id="restoDistrictInput"
+                    class="form-input"
+                    placeholder="Contoh: Kecamatan Pandeglang"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Kabupaten / Kota</label>
+
+                <input
+                    type="text"
+                    id="restoCityInput"
+                    class="form-input"
+                    placeholder="Contoh: Pandeglang"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Provinsi</label>
+
+                <input
+                    type="text"
+                    id="restoProvinceInput"
+                    class="form-input"
+                    placeholder="Contoh: Banten"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Kode Pos</label>
+
+                <input
+                    type="text"
+                    id="restoPostalCodeInput"
+                    class="form-input"
+                    placeholder="Contoh: 42211"
+                    inputmode="numeric"
+                    maxlength="5"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Patokan Lokasi</label>
+
+                <input
+                    type="text"
+                    id="restoLocationNoteInput"
+                    class="form-input"
+                    placeholder="Contoh: Sebelah minimarket / dekat masjid..."
+                >
+
+            </div>
+
+
+            <!-- =========================================
+                 4. LOKASI GPS
+                 Nanti dihubungkan ke sistem lokasi / maps
+            ========================================== -->
+
+            <div class="form-group">
+
+                <label class="form-label">Lokasi GPS Restoran</label>
+
+                <div class="form-row">
+
+                    <input
+                        type="text"
+                        id="restoLatitudeInput"
+                        class="form-input"
+                        placeholder="Latitude"
+                        readonly
+                        style="flex: 1;"
+                    >
+
+                    <input
+                        type="text"
+                        id="restoLongitudeInput"
+                        class="form-input"
+                        placeholder="Longitude"
+                        readonly
+                        style="flex: 1;"
+                    >
+
+                </div>
+
+                <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 4px;">
+                    Lokasi GPS akan digunakan untuk membantu menentukan posisi restoran.
+                </small>
+
+            </div>
+
+
+            <!-- =========================================
+                 5. DATA OPERASIONAL
+            ========================================== -->
+
+            <div class="form-group">
+
+                <label class="form-label">Jam Operasional</label>
+
+                <div class="form-row">
+
+                    <input
+                        type="time"
+                        id="restoOpenTimeInput"
+                        class="form-input"
+                        style="flex: 1;"
+                    >
+
+                    <input
+                        type="time"
+                        id="restoCloseTimeInput"
+                        class="form-input"
+                        style="flex: 1;"
+                    >
+
+                </div>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Hari Operasional</label>
+
+                <div class="form-row">
+
+                    <select
+                        id="restoOperationalDaysInput"
+                        class="form-select"
+                        required
+                    >
+                        <option value="Setiap Hari">Setiap Hari</option>
+                        <option value="Senin-Sabtu">Senin - Sabtu</option>
+                        <option value="Senin-Jumat">Senin - Jumat</option>
+                        <option value="Hari Tertentu">Hari Tertentu</option>
+                    </select>
+
+                </div>
+
+            </div>
+
+
+            <!-- =========================================
+                 6. LEGALITAS & IDENTITAS
+            ========================================== -->
+
+            <div class="form-group">
+
+                <label class="form-label">Nomor KTP Penanggung Jawab</label>
+
+                <input
+                    type="text"
+                    id="restoKtpInput"
+                    class="form-input"
+                    placeholder="16 digit NIK"
+                    inputmode="numeric"
+                    maxlength="16"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Upload Foto KTP</label>
+
+                <input
+                    type="file"
+                    id="restoFotoKtpInput"
+                    class="form-input"
+                    accept="image/*"
+                    style="padding: 6px; font-size: 11px;"
+                    required
+                >
+
+                <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 3px;">
+                    Dokumen digunakan untuk proses verifikasi identitas Mitra.
+                </small>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Status Legalitas Usaha</label>
+
+                <select
+                    id="restoLegalStatusInput"
+                    class="form-select"
+                    required
+                >
+                    <option value="">Pilih status legalitas</option>
+                    <option value="Sudah Memiliki NIB">Sudah Memiliki NIB</option>
+                    <option value="Belum Memiliki NIB">Belum Memiliki NIB</option>
+                    <option value="Dalam Proses">Dalam Proses</option>
+                </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label class="form-label">Nomor NIB</label>
+
+                <input
+                    type="text"
+                    id="restoNibInput"
+                    class="form-input"
+                    placeholder="Masukkan NIB jika sudah memiliki"
+                    inputmode="numeric"
+                >
+
+            </div>
+
+
+            <!-- =========================================
+                 7. DATA PENCAIRAN
+            ========================================== -->
+
+            <div class="form-group">
+
+                <label class="form-label">Data Pencairan Dana</label>
+
+                <div class="form-row" style="margin-bottom: 6px;">
+
+                    <select
+                        id="restoBankNameInput"
+                        class="form-select"
+                        style="flex: 1;"
+                        required
+                    >
+                        <option value="">Pilih metode</option>
+                        <option value="BCA">BCA</option>
+                        <option value="Mandiri">Mandiri</option>
+                        <option value="BNI">BNI</option>
+                        <option value="BRI">BRI</option>
+                        <option value="BSI">BSI</option>
+                        <option value="DANA">DANA</option>
+                        <option value="OVO">OVO</option>
+                        <option value="GoPay">GoPay</option>
+                        <option value="ShopeePay">ShopeePay</option>
+                    </select>
+
+                    <input
+                        type="text"
+                        id="restoAccountNameInput"
+                        class="form-input"
+                        placeholder="Nama pemilik rekening"
+                        style="flex: 2;"
+                        required
+                    >
+
+                </div>
+
+                <input
+                    type="text"
+                    id="restoAccountNumberInput"
+                    class="form-input"
+                    placeholder="Nomor rekening / nomor akun"
+                    inputmode="numeric"
+                    required
+                >
+
+            </div>
+
+
+            <!-- =========================================
+                 8. FOTO RESTORAN
+            ========================================== -->
+
+            <div class="form-group">
+
+                <label class="form-label">Foto Tampilan Restoran</label>
+
+                <div style="margin-bottom: 8px;">
+
+                    <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 3px;">
+                        1. Foto Tampak Depan Restoran
+                    </label>
+
+                    <input
+                        type="file"
+                        id="restoPhotoFrontInput"
+                        class="form-input"
+                        accept="image/*"
+                        style="padding: 6px; font-size: 11px;"
+                        required
+                    >
+
+                </div>
+
+
+                <div>
+
+                    <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 3px;">
+                        2. Foto Area Indoor Restoran
+                    </label>
+
+                    <input
+                        type="file"
+                        id="restoPhotoIndoorInput"
+                        class="form-input"
+                        accept="image/*"
+                        style="padding: 6px; font-size: 11px;"
+                    >
+
+                </div>
+
+
+                <small style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 4px;">
+                    Gunakan foto asli dan jelas. Ukuran file maksimal mengikuti kebijakan sistem.
+                </small>
+
+            </div>
+
+
+            <!-- =========================================
+                 9. PERSETUJUAN
+            ========================================== -->
+
+            <div class="form-group">
+
+                <label
+                    style="
+                        display: flex;
+                        align-items: flex-start;
+                        gap: 8px;
+                        font-size: 11px;
+                        line-height: 1.5;
+                        color: var(--text-muted);
+                    "
+                >
+
+                    <input
+                        type="checkbox"
+                        id="restoAgreementInput"
+                        required
+                        style="margin-top: 2px;"
+                    >
+
+                    <span>
+                        Saya menyatakan bahwa data dan dokumen yang saya berikan
+                        adalah benar dan dapat digunakan oleh CIKUR GO untuk
+                        proses verifikasi pendaftaran Mitra.
+                    </span>
+
+                </label>
+
+            </div>
+
+
+            <!-- =========================================
+                 10. STATUS PENDAFTARAN
+            ========================================== -->
+
+            <div
+                id="restoRegistrationStatus"
+                class="assistant-location-status"
+                style="margin-bottom: 12px;"
+            >
+                <span
+                    class="assistant-status-dot"
+                    style="background: #cbd5e1;"
+                ></span>
+
+                <span>
+                    Data belum dikirim
+                </span>
+            </div>
+
+
+            <!-- =========================================
+                 11. SUBMIT
+            ========================================== -->
+
+            <button
+                type="submit"
+                class="btn-action"
+                id="btnSubmitRestoProfile"
+            >
+                Ajukan Pendaftaran Mitra Resto
+            </button>
+
+        </form>
+
+    </div>
+</div>
+
+        <!-- UPLOAD & KELOLA MENU MAKANAN -->
+        <div class="resto-card" id="cardSectionMenu">
+            <div class="accordion-header" onclick="toggleAccordion('cardSectionMenu')">
+                <div class="accordion-title-wrapper">
+                    <svg class="section-icon" viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4Z"/></svg>
+                    <h3>Upload & Kelola Menu Makanan</h3>
+                </div>
+                <svg class="accordion-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></svg>
+            </div>
+            <div class="accordion-content">
+                <div style="padding-top: 8px;">
+                    <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 12px;">Atur menu, kategori, harga spesial/diskon otomatis, dan stok agar tampil otomatis di <a href="../customer/food.html" style="color:var(--primary-red); font-weight:700; text-decoration: underline;">Halaman Menu Pembeli</a>.</p>
+                    <form id="formAddMenu">
+                        <div class="form-group">
+                            <label class="form-label">Nama Menu Makanan</label>
+                            <input type="text" id="menuNameInput" class="form-input" placeholder="Contoh: Nasi Bakar Cikur Spesial" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Kategori Menu (Dropdown)</label>
+                            <select id="menuCategoryInput" class="form-select" required>
+                                <option value="Makanan Berat">Makanan Berat</option>
+                                <option value="Minuman">Minuman</option>
+                                <option value="Cemilan / Snack">Cemilan / Snack</option>
+                                <option value="Paket Hemat">Paket Hemat</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Harga Normal (Rp)</label>
+                            <input type="number" id="menuPriceInput" class="form-input" placeholder="Contoh: 25000" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Harga Diskon / Promo (Opsional)</label>
+                            <input type="number" id="menuDiscountPriceInput" class="form-input" placeholder="Potongan harga otomatis (Contoh: 20000)">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Upload Foto Makanan</label>
+                            <input type="file" id="menuPhotoInput" class="form-input" accept="image/*" style="padding: 6px; font-size: 11px;">
+                            <small style="font-size: 10px; color: var(--text-muted); margin-top: 4px; display: block;">Format: JPG, PNG. Maksimal ukuran file 2MB.</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Status Ketersediaan Menu</label>
+                            <select id="menuStatusInput" class="form-select" required>
+                                <option value="Tersedia">Tersedia (Ready)</option>
+                                <option value="Habis">Habis (Sold Out)</option>
+                            </select>
+                        </div>
+                        <button type="submit" id="btnSubmitMenu" class="btn-action" style="background: #0f172a;">Simpan Menu</button>
+                    </form>
+
+                    <div style="margin-top: 16px;">
+                        <h4 style="font-size: 12px; font-weight: 700; margin-bottom: 8px;">Daftar Menu Aktif Anda:</h4>
+                        <div id="listMenuContainer">
+                            <p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada menu yang di-upload.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM NAV -->
+    <nav class="bottom-nav">
+        <a href="../index.html" class="nav-item">
+            <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8Z"/></svg>
+            <span>Beranda</span>
+        </a>
+        <a href="resto.html" class="nav-item active">
+            <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4Z"/></svg>
+            <span>Resto</span>
+        </a>
+        <a href="../customer/food.html" class="nav-item">
+            <svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1Zm-9 8a6 6 0 1 1 6-6 6 6 0 0 1-6 6Z"/></svg>
+            <span>Food</span>
+        </a>
+        <a href="agentcgo.html" class="nav-item">
+            <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2Z"/></svg>
+            <span>Agent CGO</span>
+        </a>
+    </nav>
+    <footer><p>© 2026 CIKUR GO • Resto Partner Engine v4.7</p></footer>
+</div>
+
+<script>
+let userProfile = { uid: null, name: "", phone: "", avatar: "", isLoggedIn: false };
+let currentRestoId = null;
+let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
+let currentResto = {
+    name: "",
+    category: "",
+    businessType: "",
+
+    ownerName: "",
+    role: "Pemilik Resto",
+    ownerPhone: "",
+    restoPhone: "",
+
+    establishedYear: "",
+    employeeCount: "",
+
+    address: "",
+    area: "",
+    deliveryRadius: "",
+
+    ktp: "",
+    fotoKtp: "",
+
+    bankName: "BCA",
+    accountName: "",
+    accountNumber: "",
+
+    photoFront: "",
+    photoIndoor: "",
+
+    isOpen: true,
+    openTime: "08:00",
+    closeTime: "21:00",
+
+    menuList: []
+};let currentMitraApplication = null;
+
+/* =========================================================
+   AUTH GUARD + STATUS PENDAFTARAN MITRA RESTO
+========================================================= */
+async function loadCurrentRestoAuthGate() {
+    let retries = 0;
+    while (!window.CikurCloud && retries < 30) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+        retries++;
+    }
+
+    if (!window.CikurCloud) {
+        alert("CIKUR Cloud belum tersedia. Silakan refresh halaman.");
+        window.location.href = "../index.html";
+        return;
+    }
+
+    let firebaseUser = null;
+    try {
+        firebaseUser = await window.CikurCloud.waitForAuth();
+    } catch (e) {
+        firebaseUser = null;
+    }
+
+    if (!firebaseUser) {
+        alert("Silakan login terlebih dahulu untuk mengakses halaman Resto.");
+        window.location.href = "../index.html";
+        return;
+    }
+
+    let profile = null;
+    try {
+        profile = await window.CikurCloud.getProfile(firebaseUser.uid);
+    } catch (e) {
+        profile = null;
+    }
+
+    userProfile = {
+        uid: firebaseUser.uid,
+        name: profile?.name || "",
+        phone: profile?.phone || "",
+        avatar: profile?.avatar || "",
+        isLoggedIn: true
+    };
+
+    currentRestoId = firebaseUser.uid;
+
+    updateUIProfile();
+
+    window.CikurCloud.listenMitraApplication(firebaseUser.uid, "resto", (application) => {
+        currentMitraApplication = application;
+        renderMitraStatusBanner(application);
+    });
+}
+
+function renderMitraStatusBanner(application) {
+    const banner = document.getElementById("mitraStatusBanner");
+    if (!banner) return;
+
+    const ordersContainer = document.getElementById("incomingOrdersContainer");
+
+    if (application && application._error) {
+        banner.style.background = "#fee2e2";
+        banner.style.color = "var(--primary-red)";
+        banner.innerHTML = `⚠️ Gagal memuat status pendaftaran. <a href="#" onclick="window.location.reload(); return false;" style="color:var(--primary-red); text-decoration:underline;">Coba lagi</a>`;
+        return;
+    }
+
+    if (!application) {
+        banner.style.background = "#f1f5f9";
+        banner.style.color = "var(--text-muted)";
+        banner.innerHTML = "📋 Anda belum terdaftar sebagai Mitra Resto. Lengkapi & simpan <strong>Data & Profil Restoran</strong> di bawah untuk mengajukan pendaftaran.";
+        if (ordersContainer) ordersContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Selesaikan pendaftaran Mitra terlebih dahulu untuk menerima pesanan.</p>`;
+        return;
+    }
+
+    // Pre-fill data dari pendaftaran sebelumnya ke currentResto & form
+    currentResto = {
+        ...currentResto,
+        name: application.namaUsaha || currentResto.name,
+        ownerName: application.ownerName || currentResto.ownerName,
+        ownerPhone: application.phone || currentResto.ownerPhone,
+        address: application.alamat || currentResto.address,
+        ktp: application.ktp || currentResto.ktp,
+        fotoKtp: application.fotoKtp || currentResto.fotoKtp,
+        bankName: application.bankName || currentResto.bankName,
+        accountName: application.accountName || currentResto.accountName,
+        accountNumber: application.accountNumber || currentResto.accountNumber,
+        photoFront: application.photoFront || currentResto.photoFront,
+        photoIndoor: application.photoIndoor || currentResto.photoIndoor
+    };
+    updateUIProfile();
+
+    if (application.status === "pending") {
+        banner.style.background = "#fef3c7";
+        banner.style.color = "#92400e";
+        banner.innerHTML = "⏳ Pendaftaran Mitra Resto Anda sedang <strong>menunggu verifikasi</strong> dari tim CIKUR GO.";
+        if (ordersContainer) ordersContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Menunggu verifikasi Admin sebelum dapat menerima pesanan.</p>`;
+        publishRestoProfileToCloud();
+        return;
+    }
+
+    if (application.status === "rejected") {
+        banner.style.background = "#fee2e2";
+        banner.style.color = "var(--primary-red)";
+        banner.innerHTML = `✕ Pendaftaran ditolak: ${application.catatanAdmin || 'Silakan lengkapi ulang data dan simpan kembali.'}`;
+        if (ordersContainer) ordersContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Perbaiki data profil dan simpan ulang untuk mengajukan kembali.</p>`;
+        publishRestoProfileToCloud();
+        return;
+    }
+
+    // approved
+    banner.style.background = "#dcfce7";
+    banner.style.color = "#16a34a";
+    banner.innerHTML = "✓ Mitra Resto <strong>Aktif</strong> - Siap menerima pesanan.";
+    publishRestoProfileToCloud();
+    startListeningFoodOrders();
+}
+
+function toggleAccordion(cardId) {
+    let card = document.getElementById(cardId);
+    card.classList.toggle('active');
+}
+
+function updateUIProfile() {
+    document.getElementById("headerNamaUser").innerText = userProfile.name;
+    let avatarContainer = document.getElementById("headerAvatar");
+    if(userProfile.avatar && userProfile.avatar.startsWith("data:image")) {
+        avatarContainer.innerHTML = `<img src="${userProfile.avatar}" alt="Foto Profil">`;
+    } else {
+        avatarContainer.innerHTML = `<svg class="avatar-empty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.2 4.2 0 1 0 0-8.4A4.2 4.2 0 0 0 12 12Zm0 2c-4.4 0-8 2.3-8 5.2 0 .6.4 1 1 1h14c.6 0 1-.4 1-1 0-2.9-3.6-5.2-8-5.2Z"/></svg>`;
+    }
+
+    if(currentResto.name) {
+        document.getElementById("restoNameInput").value = currentResto.name || "";
+        document.getElementById("ownerNameInput").value = currentResto.ownerName || "";
+        document.getElementById("restoRoleInput").value = currentResto.role || "Pemilik Resto";
+        document.getElementById("ownerPhoneInput").value = currentResto.ownerPhone || "";
+        document.getElementById("restoPhoneInput").value = currentResto.restoPhone || "";
+        document.getElementById("restoAddressInput").value = currentResto.address || "";
+        document.getElementById("restoKtpInput").value = currentResto.ktp || "";
+        document.getElementById("restoBankNameInput").value = currentResto.bankName || "BCA";
+        document.getElementById("restoAccountNameInput").value = currentResto.accountName || "";
+        document.getElementById("restoAccountNumberInput").value = currentResto.accountNumber || "";
+    } else {
+        document.getElementById("ownerPhoneInput").value = userProfile.phone || "";
+    }
+
+    if(currentResto.openTime) document.getElementById("openTimeInput").value = currentResto.openTime;
+    if(currentResto.closeTime) document.getElementById("closeTimeInput").value = currentResto.closeTime;
+    
+    updateStatusUI();
+    renderMenuList();
+}
+
+function saveRestoToStorage() {
+    currentResto.id = currentRestoId;
+    let index = allRestos.findIndex(r => r.id === currentRestoId);
+    if(index !== -1) {
+        allRestos[index] = currentResto;
+    } else {
+        allRestos.push(currentResto);
+    }
+    localStorage.setItem('cikur_all_restos', JSON.stringify(allRestos));
+    publishRestoProfileToCloud();
+}
+
+async function publishRestoProfileToCloud() {
+    if (!window.CikurCloud || !currentRestoId) return;
+    try {
+        await window.CikurCloud.saveRestoProfile(currentRestoId, {
+            name: currentResto.name,
+            address: currentResto.address,
+            photoFront: currentResto.photoFront,
+            isOpen: currentResto.isOpen,
+            openTime: currentResto.openTime,
+            closeTime: currentResto.closeTime,
+            menuList: currentResto.menuList || [],
+            approved: !!(currentMitraApplication && currentMitraApplication.status === "approved")
+        });
+    } catch (error) {
+        console.error("[CIKUR GO] Gagal mempublikasikan profil resto:", error);
+    }
+}
+
+function updateStatusUI() {
+    let statusBox = document.getElementById("statusBoxContainer");
+    let statusText = document.getElementById("statusRestoText");
+    let btnToggle = document.getElementById("btnToggleStatus");
+
+    if(currentResto.isOpen) {
+        statusBox.className = "status-box open";
+        statusText.innerText = `Status: Buka & Siap Menerima Order (${currentResto.openTime || '08:00'} - ${currentResto.closeTime || '21:00'})`;
+        btnToggle.innerText = "Ubah ke Tutup";
+    } else {
+        statusBox.className = "status-box closed";
+        statusText.innerText = `Status: Tutup (Jadwal: ${currentResto.openTime || '08:00'} - ${currentResto.closeTime || '21:00'})`;
+        btnToggle.innerText = "Ubah ke Buka";
+    }
+}
+
+document.getElementById("openTimeInput").addEventListener("change", (e) => {
+    currentResto.openTime = e.target.value;
+    saveRestoToStorage();
+    updateStatusUI();
+});
+
+document.getElementById("closeTimeInput").addEventListener("change", (e) => {
+    currentResto.closeTime = e.target.value;
+    saveRestoToStorage();
+    updateStatusUI();
+});
+
+document.getElementById("formRestoProfile")?.addEventListener("submit", function(e) {
+    e.preventDefault();
+
+    if (!userProfile || !userProfile.uid) {
+        alert("Sesi Anda belum siap. Silakan refresh halaman.");
+        return;
+    }
+
+    /* =========================================================
+       HELPER AMBIL NILAI FIELD
+       Aman jika suatu field tidak tersedia.
+    ========================================================= */
+
+    function getFieldValue(id, trim = true) {
+        const el = document.getElementById(id);
+        if (!el) return "";
+        const value = el.value ?? "";
+        return trim ? String(value).trim() : String(value);
+    }
+
+    /* =========================================================
+       VALIDASI NIK / KTP
+    ========================================================= */
+
+    const ktpVal = getFieldValue("restoKtpInput");
+
+    if (!/^\d{16}$/.test(ktpVal)) {
+        alert("Nomor KTP harus tepat 16 digit angka.");
+        return;
+    }
+
+    /* =========================================================
+       1. AMBIL SELURUH DATA PROFIL RESTORAN
+    ========================================================= */
+
+    currentResto.name =
+        getFieldValue("restoNameInput");
+
+    currentResto.category =
+        getFieldValue("restoCategoryInput", false);
+
+    currentResto.businessType =
+        getFieldValue("restoBusinessTypeInput", false);
+
+    currentResto.description =
+        getFieldValue("restoDescriptionInput");
+
+    /* =========================================================
+       2. DATA PENANGGUNG JAWAB
+    ========================================================= */
+
+    currentResto.ownerName =
+        getFieldValue("ownerNameInput");
+
+    currentResto.role =
+        getFieldValue("restoRoleInput", false);
+
+    currentResto.ownerPhone =
+        getFieldValue("ownerPhoneInput");
+
+    currentResto.restoPhone =
+        getFieldValue("restoPhoneInput");
+
+    /* =========================================================
+       3. DATA USAHA
+    ========================================================= */
+
+    currentResto.establishedYear =
+        getFieldValue("restoEstablishedYearInput");
+
+    currentResto.employeeCount =
+        getFieldValue("restoEmployeeCountInput", false);
+
+    /* =========================================================
+       4. ALAMAT LENGKAP
+    ========================================================= */
+
+    currentResto.address =
+        getFieldValue("restoAddressInput");
+
+    currentResto.village =
+        getFieldValue("restoVillageInput");
+
+    currentResto.district =
+        getFieldValue("restoDistrictInput");
+
+    currentResto.city =
+        getFieldValue("restoCityInput");
+
+    currentResto.province =
+        getFieldValue("restoProvinceInput");
+
+    currentResto.postalCode =
+        getFieldValue("restoPostalCodeInput");
+
+    currentResto.locationNote =
+        getFieldValue("restoLocationNoteInput");
+
+    /* =========================================================
+       5. LOKASI GPS
+    ========================================================= */
+
+    currentResto.latitude =
+        getFieldValue("restoLatitudeInput");
+
+    currentResto.longitude =
+        getFieldValue("restoLongitudeInput");
+
+    /* =========================================================
+       6. DATA OPERASIONAL
+    ========================================================= */
+
+    currentResto.openTime =
+        getFieldValue("restoOpenTimeInput") ||
+        getFieldValue("openTimeInput");
+
+    currentResto.closeTime =
+        getFieldValue("restoCloseTimeInput") ||
+        getFieldValue("closeTimeInput");
+
+    currentResto.operationalDays =
+        getFieldValue("restoOperationalDaysInput", false);
+
+    currentResto.deliveryRadius =
+        getFieldValue("restoDeliveryRadiusInput", false);
+
+    /* =========================================================
+       7. LEGALITAS USAHA
+    ========================================================= */
+
+    currentResto.legalStatus =
+        getFieldValue("restoLegalStatusInput", false);
+
+    currentResto.nib =
+        getFieldValue("restoNibInput");
+
+    /* =========================================================
+       8. DATA IDENTITAS
+    ========================================================= */
+
+    currentResto.ktp =
+        ktpVal;
+
+    /* =========================================================
+       9. DATA PENCAIRAN DANA
+    ========================================================= */
+
+    currentResto.bankName =
+        getFieldValue("restoBankNameInput", false);
+
+    currentResto.accountName =
+        getFieldValue("restoAccountNameInput");
+
+    currentResto.accountNumber =
+        getFieldValue("restoAccountNumberInput");
+
+    /* =========================================================
+       10. FILE FOTO
+    ========================================================= */
+
+    const photoFrontInput =
+        document.getElementById("restoPhotoFrontInput");
+
+    const photoIndoorInput =
+        document.getElementById("restoPhotoIndoorInput");
+
+    const fotoKtpInput =
+        document.getElementById("restoFotoKtpInput");
+
+    let totalPhotosToProcess = 0;
+    let processedCount = 0;
+
+    if (
+        photoFrontInput &&
+        photoFrontInput.files &&
+        photoFrontInput.files[0]
+    ) {
+        totalPhotosToProcess++;
+    }
+
+    if (
+        photoIndoorInput &&
+        photoIndoorInput.files &&
+        photoIndoorInput.files[0]
+    ) {
+        totalPhotosToProcess++;
+    }
+
+    if (
+        fotoKtpInput &&
+        fotoKtpInput.files &&
+        fotoKtpInput.files[0]
+    ) {
+        totalPhotosToProcess++;
+    }
+
+    /* =========================================================
+       11. KIRIM KE FIRESTORE
+    ========================================================= */
+
+    async function submitToFirestore() {
+
+        saveRestoToStorage();
+
+        /* =====================================================
+           JIKA MITRA SUDAH APPROVED
+
+           Tetap sinkronkan profil lengkap tanpa membuat
+           proses BCGO baru.
+        ===================================================== */
+
+        if (
+            currentMitraApplication &&
+            currentMitraApplication.status === "approved"
+        ) {
+            try {
+
+                await window.CikurCloud.submitMitraApplication(
+                    userProfile.uid,
+                    "resto",
+                    {
+
+                        /* IDENTITAS USAHA */
+                        namaUsaha: currentResto.name,
+                        category: currentResto.category,
+                        businessType: currentResto.businessType,
+                        description: currentResto.description,
+
+                        /* PENANGGUNG JAWAB */
+                        ownerName: currentResto.ownerName,
+                        role: currentResto.role,
+                        phone: currentResto.ownerPhone,
+                        restoPhone: currentResto.restoPhone,
+
+                        /* DATA USAHA */
+                        establishedYear: currentResto.establishedYear,
+                        employeeCount: currentResto.employeeCount,
+
+                        /* ALAMAT */
+                        alamat: currentResto.address,
+                        village: currentResto.village,
+                        district: currentResto.district,
+                        city: currentResto.city,
+                        province: currentResto.province,
+                        postalCode: currentResto.postalCode,
+                        locationNote: currentResto.locationNote,
+
+                        /* GPS */
+                        latitude: currentResto.latitude,
+                        longitude: currentResto.longitude,
+
+                        /* OPERASIONAL */
+                        openTime: currentResto.openTime,
+                        closeTime: currentResto.closeTime,
+                        operationalDays: currentResto.operationalDays,
+                        deliveryRadius: currentResto.deliveryRadius,
+
+                        /* LEGALITAS */
+                        legalStatus: currentResto.legalStatus,
+                        nib: currentResto.nib,
+
+                        /* IDENTITAS */
+                        ktp: currentResto.ktp,
+                        fotoKtp: currentResto.fotoKtp,
+
+                        /* PENCAIRAN */
+                        bankName: currentResto.bankName,
+                        accountName: currentResto.accountName,
+                        accountNumber: currentResto.accountNumber,
+
+                        /* FOTO RESTORAN */
+                        photoFront: currentResto.photoFront,
+                        photoIndoor: currentResto.photoIndoor,
+
+                        /* STATUS */
+                        status: "approved"
+                    }
+                );
+
+                alert("Data & Profil Resto berhasil diperbarui!");
+
+            } catch (error) {
+
+                console.error(
+                    "[RESTO] Gagal sinkronisasi profil:",
+                    error
+                );
+
+                alert(
+                    "Gagal menyimpan ke Cloud: " +
+                    (error?.message || error)
+                );
+            }
+
+            return;
+        }
+
+        /* =====================================================
+           12. JALANKAN BCGO
+        ===================================================== */
+
+        let bcgoResult = null;
+
+        if (window.BCGO) {
+
+            try {
+
+                bcgoResult =
+                    window.BCGO.evaluatePartner({
+
+                        partnerType: "restaurant",
+
+                        /* FIELD WAJIB BCGO */
+                        name: currentResto.ownerName,
+                        phone: currentResto.ownerPhone,
+                        address: currentResto.address,
+                        businessName: currentResto.name
+
+                    });
+
+                console.log(
+                    "[BCGO] Hasil evaluasi Resto:",
+                    bcgoResult
+                );
+
+            } catch (bcgoError) {
+
+                console.error(
+                    "[BCGO] Gagal menjalankan evaluasi:",
+                    bcgoError
+                );
+            }
+
+        } else {
+
+            console.warn(
+                "[BCGO] Engine BCGO belum tersedia."
+            );
+        }
+
+        /* =====================================================
+           13. OBJECT DATA MITRA RESTO
+
+           Semua data form dikumpulkan di sini sebelum
+           diberikan kepada CikurCloud.
+        ===================================================== */
+
+        const formData = {
+
+            /* IDENTITAS USAHA */
+            namaUsaha: currentResto.name,
+            category: currentResto.category,
+            businessType: currentResto.businessType,
+            description: currentResto.description,
+
+            /* PENANGGUNG JAWAB */
+            ownerName: currentResto.ownerName,
+            role: currentResto.role,
+            phone: currentResto.ownerPhone,
+            restoPhone: currentResto.restoPhone,
+
+            /* DATA USAHA */
+            establishedYear: currentResto.establishedYear,
+            employeeCount: currentResto.employeeCount,
+
+            /* ALAMAT */
+            alamat: currentResto.address,
+            village: currentResto.village,
+            district: currentResto.district,
+            city: currentResto.city,
+            province: currentResto.province,
+            postalCode: currentResto.postalCode,
+            locationNote: currentResto.locationNote,
+
+            /* GPS */
+            latitude: currentResto.latitude,
+            longitude: currentResto.longitude,
+
+            /* OPERASIONAL */
+            openTime: currentResto.openTime,
+            closeTime: currentResto.closeTime,
+            operationalDays: currentResto.operationalDays,
+            deliveryRadius: currentResto.deliveryRadius,
+
+            /* LEGALITAS */
+            legalStatus: currentResto.legalStatus,
+            nib: currentResto.nib,
+
+            /* IDENTITAS */
+            ktp: currentResto.ktp,
+            fotoKtp: currentResto.fotoKtp,
+
+            /* PENCAIRAN */
+            bankName: currentResto.bankName,
+            accountName: currentResto.accountName,
+            accountNumber: currentResto.accountNumber,
+
+            /* FOTO */
+            photoFront: currentResto.photoFront,
+            photoIndoor: currentResto.photoIndoor,
+
+            /* =================================================
+               HASIL BCGO
+            ================================================= */
+
+            bcgoVersion:
+                bcgoResult?.bcgoVersion ?? null,
+
+            bcgoScore:
+                bcgoResult?.score ?? null,
+
+            bcgoRisk:
+                bcgoResult?.risk ?? null,
+
+            bcgoRecommendation:
+                bcgoResult?.status ?? null,
+
+            bcgoReasons:
+                Array.isArray(bcgoResult?.reasons)
+                    ? bcgoResult.reasons
+                    : [],
+
+            /* Status awal pendaftaran */
+            status: "pending"
+        };
+
+        /* =====================================================
+           14. KIRIM OBJECT LENGKAP KE CIKUR CLOUD
+        ===================================================== */
+
+        try {
+
+            console.log(
+                "[RESTO] Data pendaftaran sebelum dikirim:",
+                formData
+            );
+
+            await window.CikurCloud.submitMitraApplication(
+                userProfile.uid,
+                "resto",
+                formData
+            );
+
+            alert(
+                "Pendaftaran Mitra Resto berhasil dikirim! " +
+                "Menunggu verifikasi Admin."
+            );
+
+        } catch (error) {
+
+            console.error(
+                "[RESTO] Gagal mengirim pendaftaran:",
+                error
+            );
+
+            alert(
+                "Gagal mengirim pendaftaran ke Cloud: " +
+                (error?.message || error)
+            );
+        }
+    }
+
+    /* =========================================================
+       15. MENUNGGU SEMUA FOTO SELESAI DIBACA
+    ========================================================= */
+
+    function checkFinish() {
+
+        processedCount++;
+
+        if (
+            processedCount >=
+            totalPhotosToProcess
+        ) {
+            submitToFirestore();
+        }
+    }
+
+    /* =========================================================
+       16. TIDAK ADA FOTO
+    ========================================================= */
+
+    if (totalPhotosToProcess === 0) {
+
+        submitToFirestore();
+        return;
+    }
+
+    /* =========================================================
+       17. FOTO DEPAN RESTORAN
+    ========================================================= */
+
+    if (
+        photoFrontInput &&
+        photoFrontInput.files &&
+        photoFrontInput.files[0]
+    ) {
+
+        if (
+            photoFrontInput.files[0].size >
+            2 * 1024 * 1024
+        ) {
+
+            alert(
+                "Ukuran Foto Tampak Depan terlalu besar! " +
+                "Maksimal 2MB."
+            );
+
+            return;
+        }
+
+        const reader = new FileReader();
+
+        reader.onload = function(event) {
+
+            currentResto.photoFront =
+                event.target.result;
+
+            checkFinish();
+        };
+
+        reader.readAsDataURL(
+            photoFrontInput.files[0]
+        );
+    }
+
+    /* =========================================================
+       18. FOTO AREA INDOOR
+    ========================================================= */
+
+    if (
+        photoIndoorInput &&
+        photoIndoorInput.files &&
+        photoIndoorInput.files[0]
+    ) {
+
+        if (
+            photoIndoorInput.files[0].size >
+            2 * 1024 * 1024
+        ) {
+
+            alert(
+                "Ukuran Foto Area Indoor terlalu besar! " +
+                "Maksimal 2MB."
+            );
+
+            return;
+        }
+
+        const reader = new FileReader();
+
+        reader.onload = function(event) {
+
+            currentResto.photoIndoor =
+                event.target.result;
+
+            checkFinish();
+        };
+
+        reader.readAsDataURL(
+            photoIndoorInput.files[0]
+        );
+    }
+
+    /* =========================================================
+       19. FOTO KTP
+    ========================================================= */
+
+    if (
+        fotoKtpInput &&
+        fotoKtpInput.files &&
+        fotoKtpInput.files[0]
+    ) {
+
+        if (
+            fotoKtpInput.files[0].size >
+            2 * 1024 * 1024
+        ) {
+
+            alert(
+                "Ukuran Foto KTP terlalu besar! " +
+                "Maksimal 2MB."
+            );
+
+            return;
+        }
+
+        const reader = new FileReader();
+
+        reader.onload = function(event) {
+
+            currentResto.fotoKtp =
+                event.target.result;
+
+            checkFinish();
+        };
+
+        reader.readAsDataURL(
+            fotoKtpInput.files[0]
+        );
+    }
+
+});
+    
+let editingMenuIndex = null;
+document.getElementById("formAddMenu").addEventListener("submit", function(e) {
+    e.preventDefault();
+    let name = document.getElementById("menuNameInput").value;
+    let category = document.getElementById("menuCategoryInput").value;
+    let price = Number(document.getElementById("menuPriceInput").value);
+    let discountPriceInput = document.getElementById("menuDiscountPriceInput").value;
+    let discountPrice = discountPriceInput ? Number(discountPriceInput) : null;
+    
+    let status = document.getElementById("menuStatusInput").value;
+    let photoInput = document.getElementById("menuPhotoInput");
+
+    if(photoInput && photoInput.files && photoInput.files[0]) {
+        if(photoInput.files[0].size > 2 * 1024 * 1024) {
+            alert("Ukuran foto terlalu besar! Maksimal ukuran file adalah 2MB.");
+            return;
+        }
+        let reader = new FileReader();
+        reader.onload = function(event) {
+            saveOrUpdateMenu(event.target.result);
+        };
+        reader.readAsDataURL(photoInput.files[0]);
+    } else {
+        let existingPhoto = "";
+        if(editingMenuIndex !== null && currentResto.menuList[editingMenuIndex]) {
+            existingPhoto = currentResto.menuList[editingMenuIndex].photo;
+        }
+        saveOrUpdateMenu(existingPhoto);
+    }
+    function saveOrUpdateMenu(photoUrl) {
+        let menuData = { 
+            id: editingMenuIndex !== null ? currentResto.menuList[editingMenuIndex].id : 'm_' + Date.now(),
+            name: name,
+            category: category,
+            price: price, 
+            discountPrice: discountPrice, 
+            status: status,
+            photo: photoUrl
+        };
+        if(editingMenuIndex !== null) {
+            currentResto.menuList[editingMenuIndex] = menuData;
+            editingMenuIndex = null;
+            document.getElementById("btnSubmitMenu").innerText = "Simpan Menu";
+            alert("Perubahan menu berhasil disimpan!");
+        } else {
+            currentResto.menuList.push(menuData);
+            alert("Menu baru berhasil ditambahkan!");
+        }
+        saveRestoToStorage();
+        document.getElementById("formAddMenu").reset();
+        renderMenuList();
+    }
+});
+    
+function renderMenuList() {
+    let container = document.getElementById("listMenuContainer");
+    if(!currentResto.menuList || currentResto.menuList.length === 0) {
+        container.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Belum ada menu yang di-upload.</p>`;
+        return;
+    }
+    let groupedMenu = {};
+    currentResto.menuList.forEach((item, index) => {
+        let cat = item.category || 'Umum';
+        if(!groupedMenu[cat]) {
+            groupedMenu[cat] = [];
+        }
+        groupedMenu[cat].push({ item, index });
+    });
+    let html = "";
+    for(let cat in groupedMenu) {
+        html += `<div style="font-size: 13px; font-weight: 800; color: #0f172a; margin: 12px 0 6px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 2px;">${cat}</div>`;
+        
+        groupedMenu[cat].forEach(({ item, index }) => {
+            let priceDisplay = "";
+            if(item.discountPrice && item.discountPrice < item.price) {
+                priceDisplay = `
+                    <div class="price-tag">
+                        <span class="original-price">Rp ${item.price.toLocaleString('id-ID')}</span>
+                        <span class="discount-price">Rp ${item.discountPrice.toLocaleString('id-ID')}</span>
+                    </div>
+                `;
+            } else {
+                priceDisplay = `<div class="discount-price">Rp ${item.price.toLocaleString('id-ID')}</div>`;
+            }
+            let statusBadgeColor = item.status === 'Habis' ? '#fee2e2' : '#f0fdf4';
+            let statusBadgeText = item.status === 'Habis' ? '#dc2626' : '#16a34a';
+            let statusText = item.status || 'Tersedia';
+            let photoTag = item.photo ? `<img src="${item.photo}" style="width: 45px; height: 45px; object-fit: cover; border-radius: 8px; flex-shrink: 0;">` : `<div style="width: 45px; height: 45px; background: #e2e8f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #64748b; flex-shrink: 0;">No Foto</div>`;
+            html += `
+            <div class="menu-item-card" style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px; padding: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;">
+                ${photoTag}
+                <div class="menu-info" style="flex: 1;">
+                    <h4 style="font-size: 12px; margin: 0 0 2px 0;">${item.name}</h4>
+                    ${priceDisplay}
+                    <div style="display: flex; gap: 6px; margin-top: 4px; align-items: center;">
+                        <span style="font-size: 9px; font-weight: 700; padding: 2px 6px; background: ${statusBadgeColor}; color: ${statusBadgeText}; border-radius: 4px;">${statusText}</span>
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <button type="button" onclick="editMenu(${index})" style="background: none; border: none; color: #2563eb; font-size: 11px; font-weight: 700; cursor: pointer; text-align: right;">Edit</button>
+                    <button type="button" onclick="deleteMenu(${index})" style="background: none; border: none; color: var(--primary-red); font-size: 11px; font-weight: 700; cursor: pointer; text-align: right;">Hapus</button>
+                </div>
+            </div>`;
+        });
+    }
+    container.innerHTML = html;
+}
+
+function editMenu(index) {
+    let item = currentResto.menuList[index];
+    editingMenuIndex = index;
+    
+    document.getElementById("menuNameInput").value = item.name;
+    document.getElementById("menuCategoryInput").value = item.category || "Makanan Berat";
+    document.getElementById("menuPriceInput").value = item.price;
+    document.getElementById("menuDiscountPriceInput").value = item.discountPrice || "";
+    document.getElementById("menuStatusInput").value = item.status || "Tersedia";
+
+    document.getElementById("btnSubmitMenu").innerText = "Simpan Perubahan";
+    document.getElementById("formAddMenu").scrollIntoView({ behavior: 'smooth' });
+}
+
+function deleteMenu(index) {
+    currentResto.menuList.splice(index, 1);
+    saveRestoToStorage();
+    renderMenuList();
+}
+
+let unsubscribeFoodOrders = null;
+let foodOrderMessageUnsubscribers = {};
+let latestFoodOrderMessages = {};
+let latestFoodOrdersCache = [];
+
+function startListeningFoodOrders() {
+    if (typeof unsubscribeFoodOrders === "function") unsubscribeFoodOrders();
+
+    unsubscribeFoodOrders = window.CikurCloud.listenOrders("FOOD", (orders) => {
+        latestFoodOrdersCache = orders.filter(o =>
+            o.restoId === currentRestoId &&
+            ["PENDING", "DIMASAK", "SIAP_DIAMBIL", "DIAMBIL_DRIVER", "DIANTAR"].includes(o.status)
+        );
+        renderIncomingOrders(latestFoodOrdersCache);
+    });
+}
+
+function renderIncomingOrders(orders) {
+    let container = document.getElementById("incomingOrdersContainer");
+    if (!container) return;
+
+    if (!orders || orders.length === 0) {
+        container.innerHTML = '<p style="font-size: 11px; color: var(--text-muted);">Belum ada pesanan masuk.</p>';
+        return;
+    }
+
+    let statusLabelMap = {
+        PENDING: "Menunggu Konfirmasi",
+        DIMASAK: "Sedang Dimasak",
+        SIAP_DIAMBIL: "Menunggu Driver",
+        DIAMBIL_DRIVER: "Diambil Driver",
+        DIANTAR: "Dalam Pengantaran"
+    };
+
+    let html = "";
+    orders.forEach((order) => {
+        let itemsListHtml = (order.items || []).map(i =>
+            `<div style="font-size: 11px; color: var(--text-main); margin-bottom: 4px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 2px;">- <b>${i.name}</b> (${i.quantity}x) <span style="color:#64748b;">(Rp ${(i.price * i.quantity).toLocaleString('id-ID')})</span></div>`
+        ).join('') || '<div style="font-size: 11px; color: var(--text-muted);">Detail menu tidak tersedia.</div>';
+
+        let messages = latestFoodOrderMessages[order.id] || [];
+        let chatHtml = messages.map(m => {
+            let align = m.sender === 'resto' ? 'text-align:right;' : '';
+            let bg = m.sender === 'resto' ? 'background:#e2e8f0;' : 'background:#fff; border:1px solid #e2e8f0;';
+            return `<div style="${bg} ${align} padding: 4px 8px; border-radius: 6px; margin: 2px 0; max-width: 90%; ${m.sender === 'resto' ? 'align-self:flex-end;' : ''}"><b>${m.sender === 'resto' ? 'Anda' : (m.sender === 'customer' ? 'Customer' : 'Driver')}:</b> ${m.text}</div>`;
+        }).join('') || '<i style="color: #94a3b8; font-size: 10px;">Belum ada pesan chat.</i>';
+
+        let actionButtons = "";
+        if (order.status === "PENDING") {
+            actionButtons = `
+                <button type="button" onclick="updateFoodOrderStatus('${order.id}', 'DIMASAK')" class="btn-action">Terima & Masak</button>
+                <button type="button" onclick="updateFoodOrderStatus('${order.id}', 'DITOLAK_RESTO')" class="btn-action">Tolak Pesanan</button>
+            `;
+        } else if (order.status === "DIMASAK") {
+            actionButtons = `<button type="button" onclick="updateFoodOrderStatus('${order.id}', 'SIAP_DIAMBIL')" class="btn-action">Menu Siap, Panggil Driver</button>`;
+        } else {
+            actionButtons = `<span style="font-size: 10px; color: var(--text-muted); font-style: italic;">Menunggu driver mengambil/mengantar.</span>`;
+        }
+
+        html += `
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px; margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 11px; font-weight: 800; color: #0f172a;">Order #${order.id.slice(-6).toUpperCase()}</span>
+                <span style="font-size: 10px; font-weight: 700; color: #16a34a;">${statusLabelMap[order.status] || order.status}</span>
+            </div>
+            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Pemesan: ${order.customerName || 'Pelanggan'} (${order.customerPhone || '-'})</p>
+
+            <div style="margin-bottom: 8px; background: rgba(255,255,255,0.8); padding: 8px; border-radius: 6px;">
+                <span style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Detail Menu Pesanan:</span>
+                ${itemsListHtml}
+                <div style="margin-top: 6px; font-size: 11px; border-top: 1px solid #cbd5e1; padding-top: 6px;">
+                    <div style="margin-bottom: 2px;"><span style="color: #475569;"><b>Catatan:</b> ${order.notes || '-'}</span></div>
+                    <div><span style="color: #475569;"><b>Pembayaran:</b> <span style="color: #2563eb; font-weight: 700; text-transform: uppercase;">${order.paymentMethod || '-'}</span></span></div>
+                </div>
+
+                <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px; margin-top: 8px;">
+                    <span style="font-size: 10px; font-weight: 700; color: #64748b; display: block; margin-bottom: 2px;">Chat dengan Customer:</span>
+                    <div style="max-height: 90px; overflow-y: auto; font-size: 11px; display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px;">${chatHtml}</div>
+                    <div style="display: flex; gap: 4px;">
+                        <input type="text" id="replyInput_${order.id}" placeholder="Balas chat..." style="flex: 1; font-size: 10px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                        <button type="button" onclick="sendRestoReply('${order.id}')" style="font-size: 10px; background: #0f172a; color: #fff; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Kirim</button>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; background: #fff; padding: 6px 8px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                <span style="font-size: 11px; font-weight: 700; color: #334155;">Total Pembayaran:</span>
+                <span style="color: var(--primary-red); font-size: 13px; font-weight: 800;">Rp ${Number(order.total || 0).toLocaleString('id-ID')}</span>
+            </div>
+
+            <div style="display: flex; gap: 6px; margin-top: 8px;">${actionButtons}</div>
+        </div>`;
+
+        if (!foodOrderMessageUnsubscribers[order.id]) {
+            foodOrderMessageUnsubscribers[order.id] = window.CikurCloud.listenOrderMessages(order.id, (messages) => {
+                latestFoodOrderMessages[order.id] = messages;
+                renderIncomingOrders(latestFoodOrdersCache);
+            });
+        }
+    });
+    container.innerHTML = html;
+}
+
+async function sendRestoReply(orderId) {
+    let inputEl = document.getElementById(`replyInput_${orderId}`);
+    if (!inputEl || !inputEl.value.trim()) return;
+
+    try {
+        await window.CikurCloud.sendOrderMessage(orderId, "resto", inputEl.value.trim());
+        inputEl.value = "";
+    } catch (error) {
+        alert("Pesan gagal dikirim: " + (error?.message || error));
+    }
+}
+
+async function updateFoodOrderStatus(orderId, newStatus) {
+    try {
+        await window.CikurCloud.updateOrderStatus(orderId, { status: newStatus });
+        if (newStatus === "DITOLAK_RESTO") {
+            await window.CikurCloud.sendOrderMessage(orderId, "system", "Mohon maaf, pesanan Anda ditolak oleh Resto.");
+        } else if (newStatus === "DIMASAK") {
+            await window.CikurCloud.sendOrderMessage(orderId, "system", "Pesanan Anda diterima dan sedang dimasak.");
+        } else if (newStatus === "SIAP_DIAMBIL") {
+            await window.CikurCloud.sendOrderMessage(orderId, "system", "Pesanan sudah siap, menunggu driver mengambil.");
+        }
+    } catch (error) {
+        alert("Gagal memperbarui status pesanan: " + (error?.message || error));
+    }
+}
+
+const btnToggleStatus = document.getElementById("btnToggleStatus");
+btnToggleStatus.addEventListener("click", () => {
+    currentResto.isOpen = !currentResto.isOpen;
+    saveRestoToStorage();
+    updateStatusUI();
+});
+
+window.addEventListener("DOMContentLoaded", () => {
+    loadCurrentRestoAuthGate();
+});
+
+const btnOpenProfileDropdown = document.getElementById("btnOpenProfileDropdown");
+const headerDropdownMenu = document.getElementById("headerDropdownMenu");
+btnOpenProfileDropdown.addEventListener("click", (e) => {
+    e.stopPropagation();
+    headerDropdownMenu.classList.toggle("show");
+});
+document.addEventListener("click", () => headerDropdownMenu.classList.remove('show'));
+</script>
+
+<div id="cgoModernToast" class="cgo-modern-toast" aria-hidden="true">
+ <div class="cgo-modern-toast-card">
+  <div id="cgoModernToastIcon" class="cgo-modern-toast-icon">✓</div>
+  <div style="min-width:0;">
+   <div id="cgoModernToastTitle" class="cgo-modern-toast-title">CIKUR GO</div>
+   <div id="cgoModernToastMessage" class="cgo-modern-toast-message"></div>
+  </div>
+  <button id="cgoModernToastClose" class="cgo-modern-toast-close" type="button" aria-label="Tutup">×</button>
+ </div>
+</div>
+<script>
+(function(){
+ const box=document.getElementById('cgoModernToast'), icon=document.getElementById('cgoModernToastIcon'), title=document.getElementById('cgoModernToastTitle'), msg=document.getElementById('cgoModernToastMessage'), close=document.getElementById('cgoModernToastClose');
+ if(!box||!icon||!title||!msg) return;
+ let timer=null;
+ function hide(){clearTimeout(timer);box.classList.remove('show');box.setAttribute('aria-hidden','true');}
+ window.showCGOModernNotification=function(type='success',t='CIKUR GO',m=''){clearTimeout(timer);box.classList.remove('success','warning','error');box.classList.add(type);icon.textContent=type==='error'?'×':type==='warning'?'!':'✓';title.textContent=t;msg.textContent=String(m||'');box.classList.add('show');box.setAttribute('aria-hidden','false');timer=setTimeout(hide,3600);};
+ window.closeCGOModernNotification=hide;
+ if(close) close.addEventListener('click',hide);
+ window.alert=function(text){const s=String(text||'');let type='success',t='Berhasil';if(/gagal|error|salah|ditolak|tidak berhasil/i.test(s)){type='error';t='Terjadi Kesalahan';}else if(/harus|belum|tidak cocok|wajib|silakan|perhatian/i.test(s)){type='warning';t='Perhatian';}showCGOModernNotification(type,t,s);};
+})();
+</script>
+
+</body>
+</html>
