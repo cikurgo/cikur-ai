@@ -1,0 +1,76 @@
+CIKUR GO — STRUCTURE AUDIT
+Date: 2026-09-17
+Status: STRUCTURE CANDIDATE — NOT FIREBASE HOSTING ACCEPTED
+
+ARCHITECTURE BOUNDARY
+CIKUR GO is one application. Customer and Mitra are operational zones within the same application. Internal Monitoring is a separate functional zone inside the same repository/application.
+
+ZONES
+1. ROOT / APPLICATION GATE
+   - index.html
+   - cgo-app-bootstrap.js
+   - cikur-config.js
+
+2. CUSTOMER
+   Pages:
+   - customer/assistant.html
+   - customer/food.html
+   - customer/ride.html
+   - customer/cikurgo2in1.html
+   CGO customer engine:
+   - customer/cgo-customer.js
+   - customer/cgo-customer-boundary.js
+   - customer/cgo-customer-composer.js
+   - customer/cgo-customer-conversation.js
+   - customer/cgo-customer-discovery.js
+   - customer/cgo-customer-guardian.js
+   - customer/cgo-customer-knowledge.js
+   - customer/cgo-customer-memory.js
+   - customer/cgo-customer-meta.js
+   - customer/cgo-customer-planner.js
+   - customer/cgo-customer-reasoning.js
+
+3. MITRA
+   - mitra/agentcgo.html
+   - mitra/resto.html
+   - mitra/driver.html
+
+4. INTERNAL MONITORING — ONLY THESE THREE PAGES
+   - internal/bcgo.html
+   - internal/bcgo-admin.html
+   - internal/data-cgo.html
+   Supporting BCGO monitor engine:
+   - internal/bcgo.js
+
+5. INTERNAL CGO BRAIN
+   - brain/*.js
+   Brain is an internal engine layer, not a page/application zone.
+
+6. SHARED
+   - shared/bcgo-engine.js
+   - shared/cgo-toast.js
+   Shared support code is not itself a user-facing zone.
+
+7. DOCS
+   - docs/*
+
+CRITICAL DEPENDENCY INTENT
+- index.html -> customer CGO runtime + bootstrap.
+- Customer runtime -> internal brain/runtime/discovery as required.
+- Mitra pages remain in the same CIKUR GO application and use shared/system services as required.
+- Internal Monitoring pages remain separate from Customer/Mitra page navigation semantics.
+- BCGO reads/monitors the declared application organs; BCGO must not become a telemetry organ of itself.
+- Firebase config is infrastructure for auth/data/realtime, not the CGO reasoning brain.
+
+THIS AUDIT DOES NOT CLAIM
+- Firebase Hosting readiness.
+- Browser E2E PASS.
+- Live Firebase connectivity PASS.
+- Live Agent Presence/Radar PASS.
+- Asset packaging completeness; presentation assets are intentionally not part of this structural pass.
+
+NEXT GATE
+1. Full dependency graph audit (imports, script src, dynamic imports, navigation paths, globals/events).
+2. Remove/neutralize any obsolete runtime dependency that is outside the active architecture.
+3. Browser E2E on the exact candidate structure.
+4. Only after those gates: prepare Firebase Hosting layout.
