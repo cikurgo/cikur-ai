@@ -73,11 +73,14 @@ const firebaseConfig = {
 // Auth Customer/Mitra memakai App bernama khusus agar sesi mereka
 // benar-benar memiliki namespace persistence sendiri, terpisah dari Admin.
 const CUSTOMER_APP_NAME = "CIKUR_GO_CUSTOMER";
+// Local persistence is preferred; session persistence is the browser-level
+// fallback if the environment refuses the local storage mechanism.
+// Both still belong exclusively to the Customer Auth namespace.
 const customerApp = getApps().some(existingApp => existingApp.name === CUSTOMER_APP_NAME)
     ? getApp(CUSTOMER_APP_NAME)
     : initializeApp(firebaseConfig, CUSTOMER_APP_NAME);
 const auth = initializeAuth(customerApp, {
-    persistence: browserLocalPersistence,
+    persistence: [browserLocalPersistence, browserSessionPersistence],
     popupRedirectResolver: browserPopupRedirectResolver
 });
 const customerDb = getFirestore(customerApp);
@@ -90,11 +93,14 @@ const customerDb = getFirestore(customerApp);
 // ketika BCGO Admin & Data dibuka sebagai halaman/tab terpisah.
 // Namespace Admin tetap terisolasi dari Customer/Mitra.
 const ADMIN_APP_NAME = "CIKUR_GO_ADMIN";
+// Local persistence is preferred; session persistence is the browser-level
+// fallback if the environment refuses the local storage mechanism.
+// Admin remains isolated from Customer Auth.
 const adminApp = getApps().some(existingApp => existingApp.name === ADMIN_APP_NAME)
     ? getApp(ADMIN_APP_NAME)
     : initializeApp(firebaseConfig, ADMIN_APP_NAME);
 const adminAuth = initializeAuth(adminApp, {
-    persistence: browserLocalPersistence,
+    persistence: [browserLocalPersistence, browserSessionPersistence],
     popupRedirectResolver: undefined
 });
 const adminDb = getFirestore(adminApp);
@@ -113,47 +119,92 @@ export { db, customerDb, adminDb, auth, adminAuth, firebaseConfig };
 
 window.CikurCloud = {
     auth,
-    waitForAuth() {
+    adminAuth,
+
+    /**
+     * Menunggu auth Customer/Mitra settled setelah refresh.
+     * - Jika currentUser sudah ada, langsung pakai (hindari race restore).
+     * - Jika belum, tunggu event pertama onAuthStateChanged.
+     * - Timeout aman agar UI tidak menggantung selamanya.
+     */
+    waitForAuth(timeoutMs = 8000) {
+        if (auth.currentUser) {
+            console.log("[CIKUR GO] Auth state (current):", auth.currentUser.uid);
+            return Promise.resolve(auth.currentUser);
+        }
         return new Promise((resolve) => {
-            const unsubscribe = onAuthStateChanged(
-                auth,
-                (user) => {
-                    unsubscribe();
-                    console.log(
-                        "[CIKUR GO] Auth state:",
-                        user ? user.uid : "TIDAK ADA USER"
-                    );
-                    resolve(user);
-                }
-            );
+            let done = false;
+            const finish = (user) => {
+                if (done) return;
+                done = true;
+                try { unsubscribe(); } catch (_) {}
+                clearTimeout(timer);
+                console.log(
+                    "[CIKUR GO] Auth state:",
+                    user ? user.uid : "TIDAK ADA USER"
+                );
+                resolve(user || null);
+            };
+            const unsubscribe = onAuthStateChanged(auth, (user) => finish(user));
+            const timer = setTimeout(() => {
+                // Setelah timeout, percaya currentUser (bisa sudah ter-restore).
+                finish(auth.currentUser || null);
+            }, Math.max(1500, Number(timeoutMs) || 8000));
+        });
+    },
+
+    /**
+     * Sama seperti waitForAuth, tapi untuk namespace Admin (CIKUR_GO_ADMIN).
+     * Dipakai bcgo-admin / data-cgo / bcgo monitor.
+     */
+    waitForAdminAuth(timeoutMs = 8000) {
+        if (adminAuth.currentUser) {
+            console.log("[CIKUR GO] Admin auth state (current):", adminAuth.currentUser.uid);
+            return Promise.resolve(adminAuth.currentUser);
+        }
+        return new Promise((resolve) => {
+            let done = false;
+            const finish = (user) => {
+                if (done) return;
+                done = true;
+                try { unsubscribe(); } catch (_) {}
+                clearTimeout(timer);
+                console.log(
+                    "[CIKUR GO] Admin auth state:",
+                    user ? user.uid : "TIDAK ADA ADMIN"
+                );
+                resolve(user || null);
+            };
+            const unsubscribe = onAuthStateChanged(adminAuth, (user) => finish(user));
+            const timer = setTimeout(() => {
+                finish(adminAuth.currentUser || null);
+            }, Math.max(1500, Number(timeoutMs) || 8000));
         });
     },
 
     async ensureAuth() {
         let user = auth.currentUser;
         if (user) {
-            console.log(
-                "[CIKUR GO] User aktif:",
-                user.uid
-            );
+            console.log("[CIKUR GO] User aktif:", user.uid);
             return user;
         }
 
         user = await this.waitForAuth();
         if (user) {
-            console.log(
-                "[CIKUR GO] Session dipulihkan:",
-                user.uid
-            );
+            console.log("[CIKUR GO] Session dipulihkan:", user.uid);
             return user;
         }
 
         // Tidak membuat Anonymous User secara diam-diam.
-        // Seluruh transaksi Customer/Mitra harus berasal dari akun nyata.
-        console.log(
-            "[CIKUR GO] Tidak ada session Customer/Mitra aktif."
-        );
+        console.log("[CIKUR GO] Tidak ada session Customer/Mitra aktif.");
         return null;
+    },
+
+    async ensureAdminAuth() {
+        let user = adminAuth.currentUser;
+        if (user) return user;
+        user = await this.waitForAdminAuth();
+        return user || null;
     },
 
     // ======================================
@@ -510,30 +561,6 @@ window.CikurCloud = {
     // Status: pending -> approved / rejected
     // Dokumen id: mitra_applications/{uid}_{jenis}
     // ======================================
-
-    // ======================================
-    // DAFTAR RESTO YANG SUDAH DISETUJUI
-    // (dipakai food.html untuk menampilkan resto & menu asli)
-    // ======================================
-
-    listenApprovedRestos(callback) {
-        const q = query(
-            collection(db, "mitra_applications"),
-            where("jenis", "==", "resto"),
-            where("status", "==", "approved")
-        );
-
-        return onSnapshot(q, (snapshot) => {
-            const restos = [];
-            snapshot.forEach((docSnap) => {
-                restos.push({ id: docSnap.id, uid: docSnap.data().uid, ...docSnap.data() });
-            });
-            if (typeof callback === "function") callback(restos);
-        }, (error) => {
-            console.error("[CIKUR GO] Gagal memuat daftar resto:", error);
-            if (typeof callback === "function") callback([]);
-        });
-    },
 
     // ======================================
     // UPDATE PROFIL MITRA SETELAH APPROVED
@@ -1525,6 +1552,52 @@ window.CikurCloud = {
             if (typeof callback === "function") {
                 callback(orders);
             }
+        });
+    },
+
+    // ======================================
+    // ORDER RIDE YANG MENUNGGU DRIVER (PENDING, belum ada driverId)
+    // ======================================
+
+    listenAvailableRideOrders(callback) {
+        const q = query(
+            collection(db, "orders"),
+            where("type", "==", "RIDE"),
+            where("status", "==", "PENDING")
+        );
+
+        return onSnapshot(q, (snapshot) => {
+            const orders = [];
+            snapshot.forEach((docSnap) => {
+                const data = docSnap.data();
+                if (!data.driverId) {
+                    orders.push({ id: docSnap.id, ...data });
+                }
+            });
+            if (typeof callback === "function") callback(orders);
+        });
+    },
+
+    // ======================================
+    // ORDER RIDE YANG SEDANG DITANGANI DRIVER TERTENTU
+    // ======================================
+
+    listenDriverActiveRideOrders(driverId, callback) {
+        if (!driverId) return () => {};
+
+        const q = query(
+            collection(db, "orders"),
+            where("type", "==", "RIDE"),
+            where("driverId", "==", driverId),
+            where("status", "in", ["DIAMBIL_DRIVER", "DIANTAR"])
+        );
+
+        return onSnapshot(q, (snapshot) => {
+            const orders = [];
+            snapshot.forEach((docSnap) => {
+                orders.push({ id: docSnap.id, ...docSnap.data() });
+            });
+            if (typeof callback === "function") callback(orders);
         });
     },
 
