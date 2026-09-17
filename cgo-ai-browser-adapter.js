@@ -606,6 +606,21 @@ function isSystemChatRequest(raw, analysis = {}) {
   return /\b(cgo|bcgo|cikur go|sistem|file|berkas|kode|source|dependency|dependensi|relasi|hubungan|telemetry|anomaly|anomali|investigasi|root cause|error|bug|status sistem|perbaiki|perbaikan|patch|radar|agent cgo|agentcg[o]?|mitra)\b/.test(q);
 }
 
+
+function repairChatCase(targetFile, state, rawQuestion = "") {
+  // Conservative: do not mutate source from chat. Open investigation + explain gates.
+  const file = normalizeFile(targetFile);
+  if (!file) return { text: "Target perbaikan belum jelas. Sebutkan file yang dimaksud." };
+  const c = scheduleChatInvestigation(file, state, rawQuestion, lastChatContext);
+  const caseId = c?.caseId || lastChatCaseId;
+  const snap = caseId ? compatibleSnapshot(caseId, "REPAIR_REQUEST") : null;
+  const blockers = snap?.reasoning?.precisionGate?.blockers || ["PROOF_CHAIN_INCOMPLETE"];
+  return {
+    caseId,
+    text: `Baik. Perintah perbaikan untuk ${file} diterima. Saya tidak mengubah source dari chat. Saat ini gate: ${blockers.slice(0,4).join(", ")}. Setelah proof root cause + exact source lengkap, kandidat perbaikan bisa ditinjau manual.`
+  };
+}
+
 function reasonChat(question = {}, options = {}) {
   const raw = typeof question === "string" ? question : String(question?.text || question?.question || "");
   const analysis = question?.analysis || options?.analysis || {};

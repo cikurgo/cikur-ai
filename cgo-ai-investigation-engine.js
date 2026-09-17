@@ -5,8 +5,8 @@
  * The engine never invents source. Every conclusion must be backed by a probe result
  * produced by the injected internal probe provider.
  */
-import * as Core from "./cgo-ai-core.js?v=20260907-0900-constitution-connectivity1";
-import * as Investigator from "./cgo-ai-investigator.js?v=20260907-0900-constitution-connectivity1";
+import * as Core from "./cgo-ai-core.js";
+import * as Investigator from "./cgo-ai-investigator.js";
 import * as Sovereignty from "./cgo-ai-sovereignty.js";
 
 const VERSION = "2.4.0-PRECISION-CODE-CONSTRUCTION-SOVEREIGN";
