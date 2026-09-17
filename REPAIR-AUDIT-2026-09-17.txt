@@ -1,0 +1,29 @@
+CIKUR GO — REAL REPAIR AUDIT
+2026-09-17
+
+PURPOSE
+Restore the active CIKUR GO application so index.html can use the internal CGO brain as its system reader, without changing Customer/Admin authentication separation and without reviving retired Medicine/Executor/Captain application paths.
+
+ROOT CAUSES FOUND
+1. brain/cgo-ai-browser-adapter.js exposed async ask() that called liveChat(), while Customer CGO calls brain.ask() from inside its own chat pipeline. This created a Customer -> Brain -> Customer recursion/Promise mismatch. The Customer gateway expected a synchronous answer and therefore could fall back to generic responses.
+2. cgo-app-bootstrap.js installed the browser brain but did not explicitly connect it to window.CGO or dispatch cgo-brain-ready. The Customer gateway therefore could remain disconnected from the internal brain.
+3. BCGO_STATE was only held in the BCGO page window. index.html in another tab could not see live BCGO telemetry unless a separate bridge was provided.
+4. Radar UI boot could execute before document.body existed because bootstrap ran from the head.
+
+REPAIRS
+- browser adapter ask() is now synchronous and reads the latest internal BCGO snapshot/evidence through chatAnswer(). It no longer calls CGO.chatAsync().
+- bootstrap explicitly connects the installed browser brain through CGO.connectBrain() and dispatches cgo-brain-ready.
+- BCGO state is mirrored through BroadcastChannel + localStorage under CIKUR_GO_BCGO_STATE_V1. The application bootstrap consumes that state and feeds it into the internal brain.
+- bootstrap waits for DOMContentLoaded before creating the Radar panel.
+- Existing Customer/Admin Firebase separation is preserved. cikur-config.js was not rewritten.
+- Retired Medicine/Executor/Captain files are not restored to the active application package.
+
+VALIDATION
+- node --check passed for browser adapter, application bootstrap, BCGO engine, Customer gateway, and cikur-config.js.
+- ZIP integrity test passed.
+- Static runtime test passed: browser brain installs, ingests BCGO state, and returns a system-reader answer.
+- Customer gateway integration test passed: CGO reports ready with conversation/knowledge/discovery/guardian/brain connected and chatAsync returns a brain-backed system response.
+- Browser Firebase live login was not executed because a user account/session is required; this is not represented as a PASS.
+
+KNOWN PACKAGE NOTE
+The GitHub repository already contains root-level visual assets referenced by nested pages. The repaired code keeps those relative paths; this package is code/application source, not a replacement for the existing repository asset set.

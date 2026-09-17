@@ -1,0 +1,24 @@
+CIKUR GO — CHAT GATEWAY TIMEOUT FIX
+Date: 2026-09-17
+
+Changed files:
+- customer/cgo-customer.js
+- customer/cgo-customer-discovery.js
+
+Purpose:
+Prevent Customer CGO chatAsync() from waiting indefinitely when live discovery/runtime does not resolve.
+
+Contract:
+- Discovery/runtime wait is bounded to 15 seconds.
+- Timeout returns UNKNOWN with verified=false.
+- pendingDiscovery is cleared by the gateway completion path.
+- No timeout is converted into AVAILABLE.
+- Existing discovery events remain intact.
+- No external AI/API was introduced.
+
+Validation performed after edit:
+- JavaScript syntax check with Node.js.
+- Targeted source inspection for timeout and UNKNOWN contract.
+- ZIP integrity check.
+
+Browser end-to-end validation remains a separate step and is not claimed here.
