@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BCGO Intelligent Control Center - Cikur Go</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module" src="../cikur-config.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .bar-track { display: flex; align-items: flex-end; gap: 4px; height: 120px; }
+        .bar { flex: 1; background: linear-gradient(180deg, #6366f1, #4338ca); border-radius: 4px 4px 0 0; min-height: 2px; transition: height 0.3s ease; }
+        .funnel-bar { transition: width 0.4s ease; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+
+<!-- LOGIN GATE -->
+<div id="loginGate" class="fixed inset-0 bg-slate-950 flex items-center justify-center z-50">
+    <div class="bg-white rounded-2xl p-8 max-w-sm w-full mx-4 text-center">
+        <div class="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center font-bold text-white text-xl mx-auto mb-4">C</div>
+        <h2 class="font-bold text-lg mb-2">Akses Admin Diperlukan</h2>
+        <p id="gateMessage" class="text-sm text-slate-500">Memeriksa sesi login...</p>
+        <a href="bcgo-admin.html" id="gateLoginLink" class="hidden mt-4 inline-block bg-indigo-600 text-white text-sm font-semibold px-4 py-2 rounded-lg">Login lewat bcgo-admin.html</a>
+    </div>
+</div>
+
+<div id="mainApp" class="hidden">
+    <div class="flex h-screen overflow-hidden">
+
+        <!-- SIDEBAR -->
+        <aside class="w-64 bg-slate-900 text-slate-300 hidden md:flex flex-col justify-between border-r border-slate-800">
+            <div class="p-5">
+                <div class="flex items-center gap-3 mb-8">
+                    <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-white shadow-md">C</div>
+                    <span class="text-lg font-bold text-white tracking-wide">CIKUR GO</span>
+                </div>
+                <nav class="space-y-1">
+                    <a href="#overview" class="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-indigo-600 text-white font-medium text-sm">Overview</a>
+                    <a href="#pull" onclick="setDataset('mitra')" class="flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition text-sm">Manajemen Mitra</a>
+                    <a href="#pull" onclick="setDataset('customers')" class="flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition text-sm">Manajemen Customer</a>
+                    <a href="#radar" class="flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition text-sm">Risk Radar</a>
+                </nav>
+            </div>
+            <div class="p-4 border-t border-slate-800 text-xs text-slate-500 flex justify-between items-center">
+                <span>BCGO Engine</span>
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" id="engine-status-dot"></span>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT AREA -->
+        <div class="flex-1 flex flex-col overflow-y-auto">
+
+            <!-- TOPBAR -->
+            <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-10">
+                <h1 class="text-base font-semibold text-slate-800">Intelligent Control Center</h1>
+                <div class="flex items-center gap-3">
+                    <span id="user-status-badge" class="text-xs px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 font-medium border border-emerald-200">Sistem Online</span>
+                </div>
+            </header>
+
+            <main class="p-6 space-y-6" id="overview">
+                <!-- KPI GRID -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <p class="text-xs font-medium text-slate-500">Pending Mitra</p>
+                        <h3 id="kpi-pending" class="text-2xl font-bold text-slate-900 mt-1">-</h3>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <p class="text-xs font-medium text-slate-500">Active Partners</p>
+                        <h3 id="kpi-active" class="text-2xl font-bold text-slate-900 mt-1">-</h3>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <p class="text-xs font-medium text-slate-500">Customer Online</p>
+                        <h3 id="kpi-online" class="text-2xl font-bold text-slate-900 mt-1">-</h3>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <p class="text-xs font-medium text-slate-500">Pesanan Hari Ini</p>
+                        <h3 id="kpi-orders-today" class="text-2xl font-bold text-slate-900 mt-1">-</h3>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <p class="text-xs font-medium text-slate-500">Estimasi Omzet Hari Ini</p>
+                        <h3 id="kpi-omzet" class="text-lg font-bold text-slate-900 mt-1">-</h3>
+                        <p class="text-[10px] text-slate-400 mt-0.5">berdasarkan order berstatus lunas</p>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <p class="text-xs font-medium text-slate-500">BCGO Attention</p>
+                        <h3 id="kpi-attention" class="text-2xl font-bold mt-1">-</h3>
+                        <p class="text-[10px] text-slate-400 mt-0.5">laporan error 10 menit terakhir</p>
+                    </div>
+                </div>
+
+                <!-- TREN PESANAN -->
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="font-semibold text-slate-800 text-sm">Tren Pesanan (14 Hari Terakhir)</div>
+                        <div id="trend-legend" class="flex gap-3 text-[10px] text-slate-500"></div>
+                    </div>
+                    <div class="bar-track" id="trend-chart"></div>
+                    <div class="flex gap-1 mt-2" id="trend-labels"></div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- FUNNEL MITRA -->
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                        <div class="font-semibold text-slate-800 text-sm mb-4">Funnel Pendaftaran Mitra</div>
+                        <div id="funnel-container" class="space-y-3"></div>
+                    </div>
+
+                    <!-- RISK RADAR -->
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5" id="radar">
+                        <div class="flex justify-between items-center mb-3">
+                            <div class="font-semibold text-slate-800 text-sm">Risk Radar — Laporan Error Terbaru</div>
+                        </div>
+                        <div id="radar-feed" class="space-y-2 max-h-64 overflow-y-auto text-xs">
+                            <div class="text-slate-400">Memuat...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DATA PULL & EXPORT -->
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" id="pull">
+                    <div class="p-5 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
+                        <div class="font-semibold text-slate-800 text-sm">Tarik Data untuk Evaluasi</div>
+                        <div class="flex items-center gap-2">
+                            <select id="datasetSelect" onchange="setDataset(this.value)" class="text-xs border border-slate-300 rounded-lg px-3 py-2">
+                                <option value="mitra">Pendaftaran Mitra</option>
+                                <option value="customers">Customer</option>
+                                <option value="orders">Pesanan (Orders)</option>
+                            </select>
+                            <button onclick="exportCurrentDataset()" class="text-xs font-semibold bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">⬇ Download CSV</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr id="table-head" class="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs"></tr>
+                            </thead>
+                            <tbody id="data-table-body" class="divide-y divide-slate-100 text-slate-600">
+                                <tr><td class="p-6 text-center text-slate-400">Memuat data dari Firestore...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="p-3 text-[10px] text-slate-400 border-t border-slate-100">Menampilkan hingga 500 data terbaru per kategori.</div>
+                </div>
+            </main>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+import { adminDb, adminAuth } from "../cikur-config.js";
+import {
+    collection, onSnapshot, query, orderBy, limit, doc, getDoc
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+const auth = adminAuth;
+
+/* =========================================================
+   GATE ADMIN
+========================================================= */
+onAuthStateChanged(auth, async (user) => {
+    const gate = document.getElementById('loginGate');
+    const gateMsg = document.getElementById('gateMessage');
+    const gateLink = document.getElementById('gateLoginLink');
+    const mainApp = document.getElementById('mainApp');
+
+    if (!user) {
+        gateMsg.textContent = "Anda belum login. Silakan login sebagai Admin terlebih dahulu.";
+        gateLink.classList.remove('hidden');
+        return;
+    }
+
+    try {
+        const adminSnap = await getDoc(doc(adminDb, "admin_users", user.uid));
+        if (!adminSnap.exists() || adminSnap.data()?.active !== true) {
+            gateMsg.textContent = "Akun ini bukan Admin terverifikasi. Akses ditolak.";
+            gateLink.classList.remove('hidden');
+            return;
+        }
+    } catch (e) {
+        gateMsg.textContent = "Gagal memverifikasi status Admin: " + e.message;
+        return;
+    }
+
+    gate.classList.add('hidden');
+    mainApp.classList.remove('hidden');
+    startAllListeners();
+});
+
+/* =========================================================
+   HELPER EKSTRAKSI DATA (defensif terhadap perbedaan skema
+   antar layanan - Assistant pakai customer.name/pricing.total,
+   Food pakai customerName/total langsung di root)
+========================================================= */
+function getOrderCustomerName(o) {
+    return o.customerName || o.customer?.name || '-';
+}
+function getOrderTotal(o) {
+    return Number(o.total ?? o.pricing?.total ?? 0);
+}
+function getMitraName(d) {
+    return d.name || d.namaUsaha || d.ownerName || d.fullName || '-';
+}
+function toMillis(ts) {
+    if (!ts) return 0;
+    if (typeof ts.toMillis === 'function') return ts.toMillis();
+    if (typeof ts.toDate === 'function') return ts.toDate().getTime();
+    return 0;
+}
+function toDateLabel(ts) {
+    const ms = toMillis(ts);
+    if (!ms) return '-';
+    return new Date(ms).toLocaleString('id-ID');
+}
+function isSameDay(ms, refDate) {
+    const d = new Date(ms);
+    return d.getFullYear() === refDate.getFullYear() && d.getMonth() === refDate.getMonth() && d.getDate() === refDate.getDate();
+}
+
+/* =========================================================
+   STATE
+========================================================= */
+let cache = { mitra: [], customers: [], orders: [], logs: [] };
+let currentDataset = 'mitra';
+
+function startAllListeners() {
+    onSnapshot(collection(adminDb, "mitra_applications"), (snap) => {
+        cache.mitra = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderKpisMitra();
+        renderFunnel();
+        if (currentDataset === 'mitra') renderTable();
+    }, (err) => console.error("[DATA-CGO] mitra_applications:", err));
+
+    onSnapshot(collection(adminDb, "customers"), (snap) => {
+        cache.customers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderKpiOnline();
+        if (currentDataset === 'customers') renderTable();
+    }, (err) => console.error("[DATA-CGO] customers:", err));
+
+    onSnapshot(query(collection(adminDb, "orders"), orderBy("timestamp", "desc"), limit(500)), (snap) => {
+        cache.orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderKpisOrders();
+        renderTrendChart();
+        if (currentDataset === 'orders') renderTable();
+    }, (err) => console.error("[DATA-CGO] orders:", err));
+
+    onSnapshot(query(collection(adminDb, "system_logs"), orderBy("reportedAt", "desc"), limit(30)), (snap) => {
+        cache.logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderKpiAttention();
+        renderRadarFeed();
+    }, (err) => console.error("[DATA-CGO] system_logs:", err));
+
+    renderTable();
+    setInterval(() => { renderKpiOnline(); renderKpiAttention(); }, 30000);
+}
+
+/* =========================================================
+   KPI: MITRA
+========================================================= */
+function renderKpisMitra() {
+    const pending = cache.mitra.filter(m => m.status === 'pending').length;
+    const active = cache.mitra.filter(m => m.status === 'approved').length;
+    document.getElementById('kpi-pending').textContent = pending;
+    document.getElementById('kpi-active').textContent = active;
+}
+
+function renderFunnel() {
+    const total = cache.mitra.length || 1;
+    const pending = cache.mitra.filter(m => m.status === 'pending').length;
+    const approved = cache.mitra.filter(m => m.status === 'approved').length;
+    const rejected = cache.mitra.filter(m => m.status === 'rejected').length;
+
+    const rows = [
+        { label: 'Total Daftar', count: cache.mitra.length, color: 'bg-slate-400' },
+        { label: 'Menunggu Verifikasi', count: pending, color: 'bg-amber-400' },
+        { label: 'Disetujui (Aktif)', count: approved, color: 'bg-emerald-500' },
+        { label: 'Ditolak', count: rejected, color: 'bg-rose-400' }
+    ];
+
+    document.getElementById('funnel-container').innerHTML = rows.map(r => `
+        <div>
+            <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">${r.label}</span><b>${r.count}</b></div>
+            <div class="w-full bg-slate-100 rounded-full h-3">
+                <div class="funnel-bar ${r.color} h-3 rounded-full" style="width:${Math.round((r.count / total) * 100)}%"></div>
+            </div>
+        </div>
+    `).join('');
+}
+
+/* =========================================================
+   KPI: CUSTOMER ONLINE
+========================================================= */
+function renderKpiOnline() {
+    const fiveMinAgo = Date.now() - (5 * 60 * 1000);
+    const online = cache.customers.filter(c => toMillis(c.lastSeen) > fiveMinAgo).length;
+    document.getElementById('kpi-online').textContent = online;
+}
+
+/* =========================================================
+   KPI: ORDERS HARI INI + OMZET
+========================================================= */
+function renderKpisOrders() {
+    const today = new Date();
+    const todayOrders = cache.orders.filter(o => isSameDay(toMillis(o.timestamp), today));
+    document.getElementById('kpi-orders-today').textContent = todayOrders.length;
+
+    const paidStatuses = ['PAID', 'SELESAI', 'DIANTAR'];
+    const omzet = todayOrders
+        .filter(o => paidStatuses.includes(o.status))
+        .reduce((sum, o) => sum + getOrderTotal(o), 0);
+    document.getElementById('kpi-omzet').textContent = 'Rp ' + omzet.toLocaleString('id-ID');
+}
+
+function renderTrendChart() {
+    const days = [];
+    for (let i = 13; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        days.push(d);
+    }
+
+    const counts = days.map(d => cache.orders.filter(o => isSameDay(toMillis(o.timestamp), d)).length);
+    const max = Math.max(...counts, 1);
+
+    document.getElementById('trend-chart').innerHTML = counts.map(c =>
+        `<div class="bar" style="height:${Math.max((c / max) * 100, 2)}%" title="${c} pesanan"></div>`
+    ).join('');
+
+    document.getElementById('trend-labels').innerHTML = days.map(d =>
+        `<div class="flex-1 text-center text-[8px] text-slate-400">${d.getDate()}/${d.getMonth() + 1}</div>`
+    ).join('');
+}
+
+/* =========================================================
+   KPI: BCGO ATTENTION + RADAR FEED
+========================================================= */
+function renderKpiAttention() {
+    const tenMinAgo = Date.now() - (10 * 60 * 1000);
+    const recent = cache.logs.filter(l => toMillis(l.reportedAt) > tenMinAgo).length;
+    const el = document.getElementById('kpi-attention');
+    el.textContent = recent;
+    el.className = 'text-2xl font-bold mt-1 ' + (recent > 0 ? 'text-rose-600' : 'text-emerald-600');
+}
+
+function renderRadarFeed() {
+    const feed = document.getElementById('radar-feed');
+    if (cache.logs.length === 0) {
+        feed.innerHTML = '<div class="text-slate-400">Belum ada laporan error.</div>';
+        return;
+    }
+    feed.innerHTML = cache.logs.slice(0, 15).map(l => `
+        <div class="border border-rose-100 bg-rose-50 rounded-lg px-3 py-2">
+            <div class="flex justify-between text-[10px]"><b class="text-rose-600">${l.fileName || 'UNKNOWN'}</b><span class="text-slate-400">${toDateLabel(l.reportedAt)}</span></div>
+            <div class="text-slate-600 mt-0.5">${l.message || '-'}</div>
+        </div>
+    `).join('');
+}
+
+/* =========================================================
+   DATA PULL & EXPORT
+========================================================= */
+window.setDataset = function(name) {
+    currentDataset = name;
+    document.getElementById('datasetSelect').value = name;
+    renderTable();
+};
+
+const TABLE_CONFIGS = {
+    mitra: {
+        columns: [
+            { label: 'Nama / Entitas', get: getMitraName },
+            { label: 'Jenis', get: d => d.jenis || '-' },
+            { label: 'Status', get: d => d.status || 'pending' },
+            { label: 'Skor BCGO', get: d => d.bcgoScore ?? '-' },
+            { label: 'Waktu Daftar', get: d => toDateLabel(d.submittedAt) }
+        ]
+    },
+    customers: {
+        columns: [
+            { label: 'Nama', get: d => d.name || '-' },
+            { label: 'Email', get: d => d.email || '-' },
+            { label: 'No. HP', get: d => d.phone || '-' },
+            { label: 'Status', get: d => (toMillis(d.lastSeen) > Date.now() - 5 * 60000) ? 'Online' : 'Offline' },
+            { label: 'Terakhir Aktif', get: d => toDateLabel(d.lastSeen) }
+        ]
+    },
+    orders: {
+        columns: [
+            { label: 'ID Pesanan', get: d => d.id.slice(-8).toUpperCase() },
+            { label: 'Jenis', get: d => d.type || '-' },
+            { label: 'Customer', get: getOrderCustomerName },
+            { label: 'Total', get: d => 'Rp ' + getOrderTotal(d).toLocaleString('id-ID') },
+            { label: 'Status', get: d => d.status || '-' },
+            { label: 'Waktu', get: d => toDateLabel(d.timestamp) }
+        ]
+    }
+};
+
+function renderTable() {
+    const config = TABLE_CONFIGS[currentDataset];
+    const rows = cache[currentDataset] || [];
+
+    document.getElementById('table-head').innerHTML = config.columns.map(c =>
+        `<th class="p-4 font-medium">${c.label}</th>`
+    ).join('');
+
+    const tbody = document.getElementById('data-table-body');
+    if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${config.columns.length}" class="p-6 text-center text-slate-400">Belum ada data.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = rows.map(row => `
+        <tr class="hover:bg-slate-50 transition">
+            ${config.columns.map(c => `<td class="p-4">${escapeHtml(String(c.get(row)))}</td>`).join('')}
+        </tr>
+    `).join('');
+}
+
+function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+window.exportCurrentDataset = function() {
+    const config = TABLE_CONFIGS[currentDataset];
+    const rows = cache[currentDataset] || [];
+
+    if (rows.length === 0) {
+        alert("Tidak ada data untuk diekspor.");
+        return;
+    }
+
+    const header = config.columns.map(c => `"${c.label}"`).join(',');
+    const body = rows.map(row =>
+        config.columns.map(c => `"${String(c.get(row)).replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+
+    const csv = header + '\n' + body;
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cikurgo_${currentDataset}_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+};
+</script>
+</body>
+</html>
