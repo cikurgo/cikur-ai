@@ -10,7 +10,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { adminDb, adminAuth } from "../cikur-config.js";
-import { createRadarEngine } from "../brain/cgo-ai-radar.js";
+import { createRadarEngine } from "../cgo-ai-radar.js";
 
 /*
  * BCGO MASTER NERVE SYSTEM v4.2.0-CLEAN-AGENT-RADAR
@@ -44,12 +44,12 @@ const ORGAN_REGISTRY = {
 const ORGAN_COUNT = Object.keys(ORGAN_REGISTRY).length;
 
 const INTERNAL_SOURCE_SCAN = [
-  { file: "internal/bcgo.html", path: "internal/bcgo.html", role: "BCGO Monitor" },
-  { file: "internal/bcgo.js", path: "internal/bcgo.js", role: "BCGO Engine" },
-  { file: "internal/bcgo-admin.html", path: "internal/bcgo-admin.html", role: "Admin Control" },
-  { file: "internal/data-cgo.html", path: "internal/data-cgo.html", role: "Data Console" },
-  { file: "cikur-config.js", path: "cikur-config.js", role: "Auth / Config" },
-  { file: "shared/bcgo-engine.js", path: "shared/bcgo-engine.js", role: "Shared Engine" }
+  { file: "admin/bcgo.html", path: "bcgo.html", role: "BCGO Monitor" },
+  { file: "admin/bcgo.js", path: "bcgo.js", role: "BCGO Engine" },
+  { file: "admin/bcgo-admin.html", path: "bcgo-admin.html", role: "Admin Control" },
+  { file: "admin/data-cgo.html", path: "data-cgo.html", role: "Data Console" },
+  { file: "cikur-config.js", path: "../cikur-config.js", role: "Auth / Config" },
+  { file: "bcgo-engine.js", path: "../bcgo-engine.js", role: "Shared Engine" }
 ];
 
 function makeInitialSourceScan() {
@@ -607,18 +607,22 @@ export function runAutonomousEngine(onCycleUpdate) {
 
   function startSystemLogs() {
     const listenerEpoch = authEpoch;
-    if (!window.CikurCloud?.listenSystemLogs) {
-      emit("OUT", "Kanal telemetry system_logs belum tersedia dari CikurCloud. Saya tidak akan mengklaim pemantauan lintas-file aktif.", "SYS_TELEMETRY_UNAVAILABLE");
-      return;
-    }
-
+    // PENTING: pakai adminDb + adminAuth, bukan CikurCloud.listenSystemLogs
+    // (yang memakai customerDb tanpa token Super Admin → permission denied / sensor mati).
     if (typeof unsubscribeSystemLogs === "function") unsubscribeSystemLogs();
     try {
-      unsubscribeSystemLogs = window.CikurCloud.listenSystemLogs(logs => {
+      const q = query(
+        collection(adminDb, "system_logs"),
+        orderBy("reportedAt", "desc"),
+        limit(LOG_LIMIT)
+      );
+      unsubscribeSystemLogs = onSnapshot(q, snapshot => {
         if (stopped || !authorized || listenerEpoch !== authEpoch) return;
-        const rawLogs = Array.isArray(logs) ? logs : [];
-        // Filter first, then apply the display limit. Otherwise a burst of internal
-        // self-errors at the top of the listener payload could hide real organ telemetry.
+        const rawLogs = [];
+        snapshot.forEach(docSnap => {
+          rawLogs.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        // Filter internal self-noise dulu, baru potong ke LOG_LIMIT.
         latestSystemLogs = rawLogs.filter(log => !isInternalTelemetry(log)).slice(0, LOG_LIMIT);
         const top = latestSystemLogs[0];
         const topAt = timestamp(top?.reportedAt);
@@ -639,7 +643,10 @@ export function runAutonomousEngine(onCycleUpdate) {
         } else {
           publishToUI(safeClone(state));
         }
-      }, LOG_LIMIT);
+      }, error => {
+        if (stopped || !authorized || listenerEpoch !== authEpoch) return;
+        emit("PROCESS", "Kanal telemetry system_logs gagal (adminDb).", "SYS_SYSTEM_LOGS_LISTENER", error?.message, { cycleMode: "ERROR" });
+      });
     } catch (error) {
       emit("PROCESS", "Kanal telemetry lintas-file gagal dibuka.", "SYS_SYSTEM_LOGS_LISTENER", error?.message, { cycleMode: "ERROR" });
     }
@@ -712,7 +719,13 @@ export function runAutonomousEngine(onCycleUpdate) {
 
     scan.phase = "ANALYZING";
     const relations = [];
-    const rootUrl = location.href.split("/internal/")[0] + "/";
+    // App root: naik dari /admin/*.html ke folder repo
+    let rootUrl = location.href;
+    if (/\/admin\/[^/]+$/.test(rootUrl)) {
+      rootUrl = rootUrl.replace(/\/admin\/[^/]+$/, "/");
+    } else {
+      rootUrl = rootUrl.replace(/\/[^/]+$/, "/");
+    }
     for (const item of INTERNAL_SOURCE_SCAN) {
       const text = contents.get(item.file);
       if (!text) continue;
@@ -732,14 +745,14 @@ export function runAutonomousEngine(onCycleUpdate) {
     }
     // Explicit internal contracts that must remain wired.
     const contracts = [
-      ["internal/bcgo.html", "internal/bcgo.js", "BCGO_ENGINE_IMPORT"],
-      ["internal/bcgo.js", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
-      ["internal/bcgo-admin.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
-      ["internal/data-cgo.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"]
+      ["admin/bcgo.html", "admin/bcgo.js", "BCGO_ENGINE_IMPORT"],
+      ["admin/bcgo.js", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
+      ["admin/bcgo-admin.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
+      ["admin/data-cgo.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"]
     ];
     for (const [a,b,key] of contracts) {
       const text=contents.get(a)||"";
-      const ok = text.includes(b.split('/').pop()) || (b === "cikur-config.js" && text.includes("../cikur-config.js")) || (b === "internal/bcgo.js" && text.includes("./bcgo.js"));
+      const ok = text.includes(b.split('/').pop()) || (b === "cikur-config.js" && (text.includes("../cikur-config.js") || text.includes("cikur-config.js"))) || (b === "admin/bcgo.js" && text.includes("./bcgo.js"));
       relations.push({ type:"CROSS_FILE_CONTRACT", status: ok ? "LINKED" : "MISMATCH", confidence: ok ? "VERIFIED" : "HIGH", sourceFile:a, targetFile:b, key, evidence:{ missingSemantic: ok ? [] : [key] } });
     }
     scan.relations = relations;
@@ -832,7 +845,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       authorized = false;
       authorizedUid = null;
       cleanupRealtime();
-      emit("OUT", "Sesi Admin belum tersedia. Silakan login sebagai Admin.", "SYS_AUTH_REQUIRED");
+      emit("OUT", "Sesi Admin belum tersedia. Login dulu di bcgo-admin.html, lalu buka lagi monitor ini.", "SYS_AUTH_REQUIRED");
       return;
     }
 

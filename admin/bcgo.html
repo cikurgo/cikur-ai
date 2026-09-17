@@ -38,6 +38,12 @@ body{font-family:'Inter',sans-serif}
 </div>
 <script>if(location.protocol==='file:'){var b=document.getElementById('cgo-file-protocol-warning');if(b)b.style.display='block';}</script>
 
+<div id="bcgo-auth-banner" class="hidden max-w-5xl mx-auto mb-4 rounded-xl border border-amber-700/60 bg-amber-950/40 px-4 py-3 text-sm text-amber-100">
+  <div class="font-semibold">Sesi Super Admin diperlukan</div>
+  <div class="text-xs text-amber-200/90 mt-1">Monitor BCGO memakai namespace Admin terpisah dari Customer. Login dulu, lalu halaman ini akan hidup otomatis.</div>
+  <a href="bcgo-admin.html?return=bcgo.html" class="inline-block mt-2 text-xs font-bold px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500">Login di bcgo-admin.html</a>
+</div>
+
 <div class="max-w-5xl mx-auto w-full space-y-5">
 
 <header class="flex justify-between items-center border-b border-slate-800 pb-4 gap-3">
@@ -259,6 +265,18 @@ body{font-family:'Inter',sans-serif}
 
 <script type="module">
 import { runAutonomousEngine } from './bcgo.js?v=4.3.0-INTERNAL-SOURCE-SCAN-20260917';
+import { install as installInternalBrain } from '../cgo-ai-browser-adapter.js';
+
+// Bridge internal CGO brain ke BCGO_STATE (tanpa AI eksternal)
+let internalBrain = null;
+try {
+  internalBrain = installInternalBrain();
+  window.CGOInternalBrain = internalBrain;
+  console.log('[BCGO] Internal CGO brain terpasang:', internalBrain?.version);
+} catch (err) {
+  console.warn('[BCGO] Internal brain gagal dimuat (monitor tetap jalan):', err);
+}
+
 
 const $ = id => document.getElementById(id);
 
@@ -770,6 +788,13 @@ try {
 runAutonomousEngine(state => {
     liveState = state;
     window.BCGO_STATE = state;
+    try {
+      if (internalBrain && typeof internalBrain.ingestBCGOState === 'function') {
+        internalBrain.ingestBCGOState(state);
+      }
+    } catch (bridgeErr) {
+      console.warn('[BCGO] brain ingest error:', bridgeErr);
+    }
     renderConnection(state);
     renderAgentPresence(state);
     renderNeuralEvents(state.recentEvents);
@@ -794,6 +819,12 @@ runAutonomousEngine(state => {
     setHeader(state.step, state);
     renderOrgans(state.systemOrgans, state.fileNerves, state.sourceScan?.relations || []);
     renderLogs(state.systemLogs);
+    // Banner login jika sesi Super Admin belum ada
+    const authBanner = document.getElementById('bcgo-auth-banner');
+    if (authBanner) {
+      const needAuth = state?.targetCell === 'SYS_AUTH_REQUIRED' || state?.targetCell === 'SYS_AUTH_NOT_ADMIN' || /Sesi Admin belum|bukan Super Admin/i.test(String(state?.message || ''));
+      authBanner.classList.toggle('hidden', !needAuth);
+    }
 
     if (!chatFeed.dataset.ready) {
         chatFeed.dataset.ready = '1';

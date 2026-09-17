@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#0b1220">
     <title>BCGO Intelligent Control Center - CIKUR GO</title>
 
-    <script src="../shared/bcgo-engine.js"></script>
+    <script src="../bcgo-engine.js"></script>
 
     <style>
         :root{
@@ -963,6 +963,13 @@
         document.getElementById("userEmail").textContent = user.email || "Admin";
         loadAdminData("agent");
         loadCustomerData();
+        // Jika datang dari data-cgo / bcgo dengan ?return=, arahkan kembali setelah login OK
+        try {
+            const ret = new URLSearchParams(location.search).get("return");
+            if (ret && /^[a-zA-Z0-9._-]+\.html$/.test(ret)) {
+                setTimeout(() => { location.href = ret; }, 600);
+            }
+        } catch (_) {}
     }
 
     function lockPending(user, result={}){
