@@ -11,6 +11,20 @@
 
 <script type="module" src="cikur-config.js?v=AUTH-SESSION-V2"></script>
 
+<!-- CGO CUSTOMER ENGINE (mesin chat internal, tanpa AI eksternal) -->
+<!-- Urutan pipeline: Conversation -> Memory -> Reasoning -> Planner -> Knowledge -> Discovery -> Meta -> Boundary -> Guardian -> Composer -> Gateway -->
+<script src="cgo-customer-conversation.js"></script>
+<script src="cgo-customer-memory.js"></script>
+<script src="cgo-customer-reasoning.js"></script>
+<script src="cgo-customer-planner.js"></script>
+<script src="cgo-customer-knowledge.js"></script>
+<script src="cgo-customer-discovery.js"></script>
+<script src="cgo-customer-meta.js"></script>
+<script src="cgo-customer-boundary.js"></script>
+<script src="cgo-customer-guardian.js"></script>
+<script src="cgo-customer-composer.js"></script>
+<script src="cgo-customer.js"></script>
+
     
 <style>
 :root {
@@ -3939,61 +3953,82 @@ function bukaModalTopUp() {
 });
 
 const cgoVoiceWave = document.getElementById("cgoVoiceWave");
-if (cgoVoiceWave) {
-    function bukaChatCGO() {
-        openModal("CGO — Asisten CIKUR GO");
-        if (!modalMainContent) return;
 
-        modalMainContent.innerHTML = `
-            <div style="display:flex; flex-direction:column; gap:10px;">
-                <div style="background:#f8fafc; border-radius:14px; padding:12px; font-size:12px; color:var(--text-main); line-height:1.5;">
-                    👋 Hai! Aku CGO. Mau dibantu apa hari ini?
-                </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                    <button class="btn-pesan-form" style="margin:0;" onclick="window.location.href='food.html'">🍜 Pesan Makanan</button>
-                    <button class="btn-pesan-form" style="margin:0;" onclick="window.location.href='ride.html'">🛵 Pesan Ride</button>
-                    <button class="btn-pesan-form" style="margin:0;" onclick="window.location.href='assistant.html'">🧑‍✈️ Sewa Assistant</button>
-                    <button class="btn-pesan-form" style="margin:0; background:#334155;" onclick="closeModal(); switchTab('pesanan');">📦 Pesanan Saya</button>
-                </div>
-                <div id="cgoChatLog" style="display:flex; flex-direction:column; gap:6px; max-height:160px; overflow-y:auto;"></div>
-                <div style="display:flex; gap:6px;">
-                    <input type="text" id="cgoChatInputBox" class="input-box" style="margin:0;" placeholder="Tulis pertanyaanmu di sini...">
-                    <button class="btn-pesan-form" style="margin:0; width:auto; padding:0 16px;" onclick="kirimPesanCGO()">Kirim</button>
-                </div>
+function bukaChatCGO() {
+    openModal("CGO — Asisten CIKUR GO");
+    if (!modalMainContent) return;
+
+    modalMainContent.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <div style="background:#f8fafc; border-radius:14px; padding:12px; font-size:12px; color:var(--text-main); line-height:1.5;">
+                👋 Hai! Aku CGO. Mau dibantu apa hari ini?
             </div>
-        `;
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                <button class="btn-pesan-form" style="margin:0;" onclick="window.location.href='food.html'">🍜 Pesan Makanan</button>
+                <button class="btn-pesan-form" style="margin:0;" onclick="window.location.href='ride.html'">🛵 Pesan Ride</button>
+                <button class="btn-pesan-form" style="margin:0;" onclick="window.location.href='assistant.html'">🧑‍✈️ Sewa Assistant</button>
+                <button class="btn-pesan-form" style="margin:0; background:#334155;" onclick="closeModal(); switchTab('pesanan');">📦 Pesanan Saya</button>
+            </div>
+            <div id="cgoChatLog" style="display:flex; flex-direction:column; gap:6px; max-height:160px; overflow-y:auto;"></div>
+            <div style="display:flex; gap:6px;">
+                <input type="text" id="cgoChatInputBox" class="input-box" style="margin:0;" placeholder="Tulis pertanyaanmu di sini...">
+                <button class="btn-pesan-form" style="margin:0; width:auto; padding:0 16px;" onclick="kirimPesanCGO()">Kirim</button>
+            </div>
+        </div>
+    `;
 
-        const cgoInputEl = document.getElementById("cgoChatInputBox");
-        if (cgoInputEl) {
-            cgoInputEl.addEventListener("keydown", (e) => {
-                if (e.key === "Enter") kirimPesanCGO();
-            });
+    const cgoInputEl = document.getElementById("cgoChatInputBox");
+    if (cgoInputEl) {
+        cgoInputEl.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") kirimPesanCGO();
+        });
+        cgoInputEl.focus();
+    }
+}
+
+function kirimPesanCGO() {
+    const input = document.getElementById("cgoChatInputBox");
+    const log = document.getElementById("cgoChatLog");
+    if (!input || !input.value.trim() || !log) return;
+
+    const text = input.value.trim();
+    const safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    log.innerHTML += `<div style="align-self:flex-end; background:#e0f2fe; color:#0369a1; padding:6px 10px; border-radius:8px; font-size:11px; max-width:85%; margin-left:auto;">${safeText}</div>`;
+    input.value = "";
+    log.scrollTop = log.scrollHeight;
+
+    let reply;
+    if (window.CGO && typeof window.CGO.chat === "function") {
+        // Mesin CGO Customer Engine (deterministik, tanpa AI eksternal).
+        try {
+            const result = window.CGO.chat(text);
+            reply = (result && result.response) || "Aku catat ya! Coba pilih tombol layanan di atas kalau perlu bantuan cepat.";
+        } catch (err) {
+            console.error("[CIKUR GO] Mesin CGO gagal memproses pesan:", err);
+            reply = kirimPesanCGOFallback(text);
         }
+    } else {
+        reply = kirimPesanCGOFallback(text);
     }
 
-    function kirimPesanCGO() {
-        const input = document.getElementById("cgoChatInputBox");
-        const log = document.getElementById("cgoChatLog");
-        if (!input || !input.value.trim() || !log) return;
+    const safeReply = String(reply).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    log.innerHTML += `<div style="align-self:flex-start; background:#f1f5f9; color:var(--text-main); padding:6px 10px; border-radius:8px; font-size:11px; max-width:85%;">${safeReply}</div>`;
+    log.scrollTop = log.scrollHeight;
+}
 
-        const text = input.value.trim();
-        const lower = text.toLowerCase();
-        let reply = "Aku catat ya! Untuk bantuan lebih detail, pilih tombol layanan di atas atau hubungi CS kami.";
+// Cadangan sederhana kalau mesin CGO Customer Engine belum termuat.
+function kirimPesanCGOFallback(text) {
+    const lower = text.toLowerCase();
+    let reply = "Aku catat ya! Untuk bantuan lebih detail, pilih tombol layanan di atas atau hubungi CS kami.";
+    if (lower.includes("makan") || lower.includes("food") || lower.includes("lapar")) reply = "Yuk pesan makanan favoritmu di menu Food 🍜";
+    else if (lower.includes("ojek") || lower.includes("ride") || lower.includes("antar") || lower.includes("motor")) reply = "Mau pesan ride? Langsung ke menu Ride ya 🛵";
+    else if (lower.includes("assistant") || lower.includes("bantu") || lower.includes("temani")) reply = "Untuk kebutuhan pendamping/assistant, cek menu Assistant ya 🧑‍✈️";
+    else if (lower.includes("saldo") || lower.includes("top up") || lower.includes("cikurpay")) reply = "Kamu bisa top up & cek saldo CikurPay di tab Transaksi 💳";
+    else if (lower.includes("pesanan") || lower.includes("order") || lower.includes("status")) reply = "Cek status pesanan aktifmu di tab Pesanan ya 📦";
+    return reply;
+}
 
-        if (lower.includes("makan") || lower.includes("food") || lower.includes("lapar")) reply = "Yuk pesan makanan favoritmu di menu Food 🍜";
-        else if (lower.includes("ojek") || lower.includes("ride") || lower.includes("antar") || lower.includes("motor")) reply = "Mau pesan ride? Langsung ke menu Ride ya 🛵";
-        else if (lower.includes("assistant") || lower.includes("bantu") || lower.includes("temani")) reply = "Untuk kebutuhan pendamping/assistant, cek menu Assistant ya 🧑‍✈️";
-        else if (lower.includes("saldo") || lower.includes("top up") || lower.includes("cikurpay")) reply = "Kamu bisa top up & cek saldo CikurPay di tab Transaksi 💳";
-        else if (lower.includes("pesanan") || lower.includes("order") || lower.includes("status")) reply = "Cek status pesanan aktifmu di tab Pesanan ya 📦";
-
-        const safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        log.innerHTML += `<div style="align-self:flex-end; background:#e0f2fe; color:#0369a1; padding:6px 10px; border-radius:8px; font-size:11px; max-width:85%; margin-left:auto;">${safeText}</div>`;
-        log.innerHTML += `<div style="align-self:flex-start; background:#f1f5f9; color:var(--text-main); padding:6px 10px; border-radius:8px; font-size:11px; max-width:85%;">${reply}</div>`;
-        log.scrollTop = log.scrollHeight;
-        input.value = "";
-    }
-
-
+if (cgoVoiceWave) {
     cgoVoiceWave.addEventListener("click", bukaChatCGO);
     cgoVoiceWave.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
