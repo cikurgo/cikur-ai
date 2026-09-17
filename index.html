@@ -1804,24 +1804,6 @@ footer p { margin: 0; }
         </div>
     </div>
 
-    <!-- LAYANAN MITRA — tetap satu aplikasi CIKUR GO, jalur akses Mitra terpisah -->
-    <div class="services-section" id="mitra-services-section" style="margin-bottom: 12px;">
-        <div class="services-title">Layanan Mitra</div>
-        <div class="menu-grid" style="margin-bottom: 0; gap: 8px;">
-            <button type="button" class="menu-item" onclick="openMitraPage('mitra/agentcgo.html')" aria-label="Buka Agent CGO">
-                <div class="menu-icon-box"><span style="font-size:34px;line-height:1;">🤖</span></div>
-                <span class="menu-label" style="margin-top: 2px;">Agent CGO</span>
-            </button>
-            <button type="button" class="menu-item" onclick="openMitraPage('mitra/resto.html')" aria-label="Buka Resto Mitra">
-                <div class="menu-icon-box"><span style="font-size:34px;line-height:1;">🍽️</span></div>
-                <span class="menu-label" style="margin-top: 2px;">Resto</span>
-            </button>
-            <button type="button" class="menu-item" onclick="openMitraPage('mitra/driver.html')" aria-label="Buka Driver Mitra">
-                <div class="menu-icon-box"><span style="font-size:34px;line-height:1;">🛵</span></div>
-                <span class="menu-label" style="margin-top: 2px;">Driver</span>
-            </button>
-        </div>
-    </div>
 
     <!-- FEATURED HIGHLIGHTS -->
     <div class="hero-frame">
@@ -2740,8 +2722,8 @@ async function loadCurrentUserProfileIndex() {
     try {
         let retries = 0;
 
-        while (!window.CikurCloud && retries < 30) {
-            await new Promise(resolve => setTimeout(resolve, 200));
+        while (!window.CikurCloud && retries < 40) {
+            await new Promise(resolve => setTimeout(resolve, 150));
             retries++;
         }
 
@@ -2749,15 +2731,17 @@ async function loadCurrentUserProfileIndex() {
             throw new Error("CIKUR Cloud belum tersedia.");
         }
 
+        // ensureAuth: currentUser dulu, lalu restore dari local persistence.
+        // Hindari race refresh yang sempat null lalu memaksa login ulang.
         let firebaseUser = null;
         try {
-            firebaseUser = await window.CikurCloud.waitForAuth();
+            firebaseUser = await window.CikurCloud.ensureAuth();
         } catch (authError) {
             console.error("[CIKUR GO] Gagal memulihkan session Customer/Mitra:", authError);
+            firebaseUser = null;
         }
 
-        // Tidak ada session = gerbang registrasi/login.
-        // Guest Mode tidak lagi digunakan sebagai jalur masuk utama.
+        // Tidak ada session = gerbang login (bukan registrasi paksa).
         if (!firebaseUser) {
             setCgoAuthGate(true);
             hideCikurSplash();
@@ -2836,9 +2820,18 @@ async function loadCurrentUserProfileIndex() {
 
     } catch (error) {
         console.error("[CIKUR GO] Gagal memuat profil saat startup:", error);
-        setCgoAuthGate(true);
+        // Jangan paksa registrasi jika sesi Auth masih hidup — biarkan user tetap di app
+        // dan lengkapi profil nanti. Hanya buka login jika benar-benar tidak ada user.
+        const stillUser = window.CikurCloud?.auth?.currentUser || null;
         hideCikurSplash();
-        bukaModalRegistrasi();
+        if (!stillUser) {
+            setCgoAuthGate(true);
+            bukaModalLogin();
+        } else {
+            setCgoAuthGate(false);
+            userProfile = { ...userProfile, uid: stillUser.uid, email: stillUser.email || "", isLoggedIn: true };
+            try { updateUIProfile(); } catch (_) {}
+        }
     }
 }
 
@@ -3259,7 +3252,17 @@ async function prosesLogout() {
         return;
     }
     try {
-        if (window.CikurCloud && window.CikurCloud.auth) {
+        if (presenceHeartbeatInterval) {
+            clearInterval(presenceHeartbeatInterval);
+            presenceHeartbeatInterval = null;
+        }
+        if (typeof customerStatusUnsubscribe === "function") {
+            try { customerStatusUnsubscribe(); } catch (_) {}
+            customerStatusUnsubscribe = null;
+        }
+        if (window.CikurCloud?.logout) {
+            await window.CikurCloud.logout();
+        } else if (window.CikurCloud?.auth) {
             const { signOut } = await import(
                 "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js"
             );
@@ -3270,10 +3273,13 @@ async function prosesLogout() {
             email: "",
             phone: "",
             saldo: 0,
-            avatar: ""
+            avatar: "",
+            uid: "",
+            isLoggedIn: false
         };
         updateUIProfile();
-        bukaModalRegistrasi();
+        setCgoAuthGate(true);
+        bukaModalLogin();
     } catch (error) {
         console.error("[CIKUR GO] Gagal logout:", error);
         alert("Gagal keluar dari akun CIKUR GO.");
@@ -3376,9 +3382,15 @@ async function openMitraPage(target) {
     }
 
     try {
-        const firebaseUser = await window.CikurCloud.waitForAuth();
+        // Jalur cepat: currentUser sudah ada → langsung navigasi.
+        let firebaseUser = window.CikurCloud.auth?.currentUser || null;
+        if (!firebaseUser) {
+            firebaseUser = await window.CikurCloud.ensureAuth();
+        }
         if (!firebaseUser) {
             alert("Sesi login tidak ditemukan. Silakan login kembali.");
+            setCgoAuthGate(true);
+            bukaModalLogin();
             return;
         }
         window.location.href = target;
@@ -3949,25 +3961,18 @@ function bukaModalTopUp() {
         btnRide: "Mau pergi ke mana hari ini? 🛵"
     };
     
+    // Update teks panel saja — JANGAN preventDefault.
+    // Klik pertama harus langsung navigasi ke customer/*.html.
     Object.keys(serviceMessages).forEach(function (id) {
         const button = document.getElementById(id);
         if (!button) return;
-        
-        // Jangan intercept khusus tombol assistant karena diarahkan langsung ke customer/assistant.html[cite: 2]
-        if(id === 'btnAssistant') return;
-
-        button.addEventListener("click", function (event) {
-            if (!button.dataset.cgoTapped) {
-                event.preventDefault();
-                button.dataset.cgoTapped = "true";
-                cgoPanelMessage.style.opacity = "0";
-                setTimeout(function () {
-                    cgoPanelMessage.textContent = serviceMessages[id];
-                    cgoPanelMessage.style.opacity = "1";
-                }, 180);
-                return;
-            }
-            button.dataset.cgoTapped = "false";
+        button.addEventListener("click", function () {
+            if (!cgoPanelMessage) return;
+            cgoPanelMessage.style.opacity = "0";
+            setTimeout(function () {
+                cgoPanelMessage.textContent = serviceMessages[id];
+                cgoPanelMessage.style.opacity = "1";
+            }, 120);
         });
     });
 });
