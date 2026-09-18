@@ -917,8 +917,11 @@ function renderAgentPresence(state) {
         return;
     }
     // Sort: in-radius first, then by distance
+    // Satu perhitungan jarak (hindari duplikat Haversine yang bisa beda float)
     const ranked = items.map(item => {
-        const dist = item.location ? haversineKm(radarCenter, item.location) : null;
+        const dist = (Number.isFinite(item._distanceKm)
+          ? item._distanceKm
+          : (item.location ? haversineKm(radarCenter, item.location) : null));
         return { ...item, _dist: dist, _in: dist != null && dist <= radarRadiusKm };
     }).sort((a,b) => {
         if (a._in !== b._in) return a._in ? -1 : 1;

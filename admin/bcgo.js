@@ -50,11 +50,16 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "admin/data-cgo.html", path: "data-cgo.html", role: "Data Console" },
   { file: "cikur-config.js", path: "../cikur-config.js", role: "Auth / Config" },
   { file: "bcgo-engine.js", path: "../bcgo-engine.js", role: "Shared Engine" },
+  { file: "cgo-ai-radar.js", path: "../cgo-ai-radar.js", role: "Radar Engine" },
+  { file: "cgo-app-bootstrap.js", path: "../cgo-app-bootstrap.js", role: "Customer Bootstrap" },
   { file: "index.html", path: "../index.html", role: "Customer Home" },
   { file: "customer/food.html", path: "../customer/food.html", role: "Customer Food" },
   { file: "customer/ride.html", path: "../customer/ride.html", role: "Customer Ride" },
   { file: "customer/assistant.html", path: "../customer/assistant.html", role: "Customer Assistant" },
   { file: "customer/cikurgo2in1.html", path: "../customer/cikurgo2in1.html", role: "Customer 2in1" },
+  { file: "customer/cgo-customer.js", path: "../customer/cgo-customer.js", role: "Customer Gateway" },
+  { file: "customer/cgo-customer-conversation.js", path: "../customer/cgo-customer-conversation.js", role: "Customer Conversation" },
+  { file: "customer/cgo-customer-reasoning.js", path: "../customer/cgo-customer-reasoning.js", role: "Customer Reasoning" },
   { file: "mitra/agentcgo.html", path: "../mitra/agentcgo.html", role: "Mitra Agent" },
   { file: "mitra/resto.html", path: "../mitra/resto.html", role: "Mitra Resto" },
   { file: "mitra/driver.html", path: "../mitra/driver.html", role: "Mitra Driver" }
@@ -664,6 +669,20 @@ export function runAutonomousEngine(onCycleUpdate) {
           const item = normalizeAgentPresenceRecord(docSnap);
           if (item) items.push(item);
         });
+        // Dedup by agentId — ambil yang paling fresh (hindari double jarak / double blip)
+        {
+          const byId = new Map();
+          for (const it of items) {
+            const key = String(it.agentId || it.id || "");
+            if (!key) continue;
+            const prev = byId.get(key);
+            if (!prev || (Number(it.ageMs) || Infinity) < (Number(prev.ageMs) || Infinity)) {
+              byId.set(key, it);
+            }
+          }
+          items.length = 0;
+          items.push(...byId.values());
+        }
         items.sort((a,b) => a.agentId.localeCompare(b.agentId));
         const withGeo = items.filter(item => item.location && Number.isFinite(item.location.lat));
         const freshCount = items.filter(item => item.status === "READY" || item.status === "BUSY").length;
@@ -934,6 +953,8 @@ export function runAutonomousEngine(onCycleUpdate) {
       ["admin/bcgo-admin.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
       ["admin/data-cgo.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
       ["admin/bcgo.js", "cgo-ai-radar.js", "RADAR_ENGINE"],
+      ["index.html", "customer/cgo-customer.js", "CUSTOMER_GATEWAY"],
+      ["index.html", "cgo-app-bootstrap.js", "CUSTOMER_BOOTSTRAP"],
       ["index.html", "cikur-config.js", "CUSTOMER_CONFIG"],
       ["customer/food.html", "cikur-config.js", "CUSTOMER_CONFIG"],
       ["customer/ride.html", "cikur-config.js", "CUSTOMER_CONFIG"],
@@ -950,6 +971,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     scan.relationSummary.linked = relations.filter(r=>r.status === "LINKED").length;
     scan.relationSummary.mismatch = relations.filter(r=>r.status === "MISMATCH").length;
     scan.relationSummary.unknown = relations.filter(r=>r.status === "UNKNOWN").length;
+    scan.relationSummary.variant = relations.filter(r=>r.status === "VARIANT").length;
     // SYNCHRONIZED hanya berarti source terbaca dan tidak memiliki kontrak
     // mismatch/unknown yang terkait. READABLE != SYNCHRONIZED.
     scan.relationSummary.synchronized = INTERNAL_SOURCE_SCAN.filter(item => {
