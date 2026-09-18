@@ -860,7 +860,51 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
 <script>
 let userProfile = { uid: null, name: "", phone: "", avatar: "", isLoggedIn: false };
 let currentRestoId = null;
-let allRestos = JSON.parse(localStorage.getItem('cikur_all_restos')) || [];
+function safeParseRestos() {
+    try {
+        const raw = localStorage.getItem('cikur_all_restos');
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        console.warn('[RESTO] localStorage cikur_all_restos corrupt, reset.', e);
+        try { localStorage.removeItem('cikur_all_restos'); } catch (_) {}
+        return [];
+    }
+}
+let allRestos = safeParseRestos();
+// Bersihkan foto base64 raksasa dari cache lama (jika masih ada)
+try {
+    let dirty = false;
+    allRestos = allRestos.map(r => {
+        if (!r || typeof r !== 'object') return r;
+        const n = { ...r };
+        if (n.photoFront && String(n.photoFront).startsWith('data:') && String(n.photoFront).length > 8000) {
+            n.photoFront = '[cloud-only]'; dirty = true;
+        }
+        if (n.photoIndoor && String(n.photoIndoor).startsWith('data:') && String(n.photoIndoor).length > 8000) {
+            n.photoIndoor = '[cloud-only]'; dirty = true;
+        }
+        if (Array.isArray(n.menuList)) {
+            n.menuList = n.menuList.map(m => {
+                if (m && m.photo && String(m.photo).startsWith('data:') && String(m.photo).length > 4000) {
+                    dirty = true;
+                    return { ...m, photo: '[cloud-only]' };
+                }
+                return m;
+            });
+        }
+        return n;
+    });
+    if (dirty) {
+        localStorage.setItem('cikur_all_restos', JSON.stringify(allRestos));
+        console.info('[RESTO] Cache local dibersihkan dari foto base64 besar.');
+    }
+} catch (e) {
+    console.warn('[RESTO] cleanup cache:', e);
+    try { localStorage.removeItem('cikur_all_restos'); allRestos = []; } catch (_) {}
+}
+
 let currentResto = {
     name: "",
     category: "",
@@ -1049,15 +1093,65 @@ function updateUIProfile() {
     renderMenuList();
 }
 
+function slimRestoForLocal(resto) {
+    // Jangan simpan base64 besar di localStorage (penyebab QuotaExceededError)
+    const slim = { ...resto };
+    if (slim.photoFront && String(slim.photoFront).length > 8000) {
+        slim.photoFront = '[cloud-only]';
+    }
+    if (slim.photoIndoor && String(slim.photoIndoor).length > 8000) {
+        slim.photoIndoor = '[cloud-only]';
+    }
+    if (Array.isArray(slim.menuList)) {
+        slim.menuList = slim.menuList.map(m => {
+            const mm = { ...m };
+            if (mm.photo && String(mm.photo).length > 4000) mm.photo = '[cloud-only]';
+            return mm;
+        });
+    }
+    // batasi jumlah resto di cache lokal
+    return slim;
+}
+
 function saveRestoToStorage() {
     currentResto.id = currentRestoId;
     let index = allRestos.findIndex(r => r.id === currentRestoId);
-    if(index !== -1) {
+    if (index !== -1) {
         allRestos[index] = currentResto;
     } else {
         allRestos.push(currentResto);
     }
-    localStorage.setItem('cikur_all_restos', JSON.stringify(allRestos));
+    // max 20 resto di local cache
+    if (allRestos.length > 20) allRestos = allRestos.slice(-20);
+
+    const slimList = allRestos.map(slimRestoForLocal);
+    try {
+        localStorage.setItem('cikur_all_restos', JSON.stringify(slimList));
+    } catch (err) {
+        const msg = String(err && err.name || err);
+        console.warn('[RESTO] localStorage penuh, membersihkan cache...', msg);
+        try {
+            // Bersihkan kunci berat, simpan hanya resto aktif tanpa foto
+            localStorage.removeItem('cikur_all_restos');
+            const minimal = [{
+                id: currentRestoId,
+                name: currentResto.name || '',
+                address: currentResto.address || '',
+                isOpen: !!currentResto.isOpen,
+                openTime: currentResto.openTime || '',
+                closeTime: currentResto.closeTime || '',
+                menuList: (currentResto.menuList || []).map(m => ({
+                    id: m.id, name: m.name, price: m.price, category: m.category, status: m.status
+                }))
+            }];
+            localStorage.setItem('cikur_all_restos', JSON.stringify(minimal));
+            allRestos = minimal;
+        } catch (err2) {
+            console.warn('[RESTO] Gagal menulis localStorage, lanjut pakai cloud saja.', err2);
+            try { localStorage.removeItem('cikur_all_restos'); } catch (_) {}
+        }
+        // Jangan biarkan QuotaExceeded meledak ke window.onerror / system_logs
+    }
     publishRestoProfileToCloud();
 }
 
