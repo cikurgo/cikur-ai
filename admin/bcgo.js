@@ -469,7 +469,47 @@ export function runAutonomousEngine(onCycleUpdate) {
       return `Saya bisa menjelaskan berdasarkan bukti. Saat ini: ${metrics.active} anomali aktif, ${metrics.recovered} recovered, Firestore ${firestore.connected ? "LIVE" : "belum LIVE"}, target ${state.targetCell}. Untuk detail akar masalah, saya perlu kasus/file yang spesifik.`;
     }
 
-    return `Saya menangkap pertanyaanmu: “${raw}”. Saya belum punya bukti telemetry yang cukup untuk menjawab secara spesifik. Saya tidak akan mengarang. Kamu bisa bertanya tentang status, error, file tertentu, telemetry terakhir, cycle, atau meminta saya menjelaskan bukti telemetry yang tersedia.`;
+    // Radar / agent terdekat
+    if (/agent|radar|terdekat|nearby|radius|gps|lokasi agent/.test(q)) {
+      const ap = state.agentPresence || {};
+      const items = Array.isArray(ap.items) ? ap.items : [];
+      const withGeo = items.filter(i => i.location && Number.isFinite(i.location.lat));
+      if (!items.length) {
+        return `Radar LIVE, tetapi belum ada Agent approved yang online. Minta Agent buka mitra/agentcgo.html → AKTIFKAN + izinkan lokasi. Saat ini TOTAL=${ap.count||0}, READY=${ap.freshCount||0}, GEO=${ap.geoCount||0}.`;
+      }
+      const lines = items.slice(0, 8).map(i => {
+        const loc = i.location;
+        const dist = loc ? "ada GPS" : "tanpa GPS";
+        return `· ${i.name || "Agent"} [${i.status}] ${dist}`;
+      });
+      return `Radar Agent CGO: TOTAL ${items.length}, READY ${ap.freshCount||0}, GEO ${withGeo.length}, STALE ${ap.staleCount||0}.\n${lines.join("\n")}\nStatus sensor: ${ap.status || "-"}.`;
+    }
+
+    // Scanner / source integrity
+    if (/scan|scanner|source|integrity|file sehat|kode|source code/.test(q)) {
+      const sc = state.sourceScan || {};
+      const states = sc.fileStates || {};
+      const clean = Object.values(states).filter(s => s?.status === "CLEAN").length;
+      const review = Object.values(states).filter(s => s?.status === "REVIEW").length;
+      const failed = Object.values(states).filter(s => s?.status === "FAILED").length;
+      const changed = Object.entries(states).filter(([,s]) => String(s?.message||"").includes("DIROMBAK")).map(([f]) => f);
+      return `Scanner: status ${sc.status||"-"}, fase ${sc.phase||"-"}, terbaca ${sc.filesReadable||0}/${sc.totalFiles||0}, gagal ${failed}, review ${review}, bersih ${clean}. Relasi linked ${sc.relationSummary?.linked||0}. ${changed.length ? "File dirombak terdeteksi: " + changed.join(", ") + "." : "Belum ada file yang berubah sejak scan sebelumnya."} Scanner ulang otomatis tiap ~75 detik.`;
+    }
+
+    // Saraf / nerve per file
+    if (/saraf|nerve|organ|kesehatan file|status file/.test(q)) {
+      const nerves = state.fileNerves || {};
+      const organs = buildOrgans();
+      const lines = Object.keys(ORGAN_REGISTRY).map(f => {
+        const n = nerves[f];
+        const o = organs[f];
+        const h = n?.health?.overall || o?.state || "UNKNOWN";
+        return `· ${f}: ${h}`;
+      });
+      return `Peta saraf (basename organ):\n${lines.join("\n")}\nAnomali aktif dari telemetry: ${Object.values(organs).filter(o=>o.state==="ACTIVE").length}.`;
+    }
+
+    return `Saya menangkap pertanyaanmu: “${raw}”. Saya belum punya bukti spesifik. Tanyakan: status sistem, error, file tertentu, scanner, radar/agent terdekat, saraf/organ, telemetry terakhir, atau cycle.`;
   }
 
   function interruptForTelemetry(fileName, message, log) {
@@ -759,23 +799,45 @@ export function runAutonomousEngine(onCycleUpdate) {
         contents.set(item.file, text);
         scan.filesReadable++;
         scan.filesScanned++;
-        // Pemeriksaan isi ringan (lampu status)
+        // Pemeriksaan isi — hanya isu nyata, jangan false-positive massal
         const issues = [];
-        if (/\bTODO\b|\bFIXME\b|\bXXX\b/.test(text)) issues.push("TODO/FIXME");
-        if (/console\.(error|warn)\s*\(/.test(text) && /throw new Error|ERROR:/.test(text)) issues.push("error-markers");
-        // HTML balance rough
+        // Path legacy yang benar-benar masih di-import (bukan string di komentar panjang)
+        if (/(?:src|href|from|import)\s*[=:(\s]*["'][^"']*(?:\/brain\/|\/shared\/)[^"']*["']/.test(text)) {
+          issues.push("legacy-path");
+        }
         if (/\.html$/i.test(item.file)) {
           const opens = (text.match(/<(?:div|section|main|article)\b/gi) || []).length;
           const closes = (text.match(/<\/(?:div|section|main|article)>/gi) || []).length;
-          if (opens > closes + 5) issues.push("html-unbalanced");
+          if (opens > closes + 12) issues.push("html-unbalanced");
         }
-        // JS: unfinished placeholder paths
-        if (/brain\/|shared\//.test(text) && !/node_modules/.test(text)) issues.push("legacy-path");
+        // Hash konten untuk deteksi rombak file
+        let hash = 0;
+        for (let h = 0; h < text.length; h++) hash = ((hash << 5) - hash + text.charCodeAt(h)) | 0;
+        const contentHash = String(hash);
+        const prevHash = state.sourceScan?.fileStates?.[item.file]?.contentHash;
+        const changed = prevHash && prevHash !== contentHash;
+        if (changed) {
+          recordEvent("SOURCE_CHANGED", `Source ${item.file} berubah — saraf disesuaikan ulang.`, item.file.split("/").pop());
+        }
         if (issues.length) {
-          scan.fileStates[item.file] = { status: "REVIEW", message: `${text.length.toLocaleString("id-ID")} karakter · pantau: ${issues.join(", ")}`, issues };
-          scan.findings.push({ type: "SOURCE_REVIEW", severity: "LOW", sourceFile: item.file, message: `Source terbaca, perlu pantau: ${issues.join(", ")}` });
+          scan.fileStates[item.file] = {
+            status: "REVIEW",
+            message: `${text.length.toLocaleString("id-ID")} karakter · pantau: ${issues.join(", ")}${changed ? " · DIROMBAK" : ""}`,
+            issues,
+            contentHash
+          };
+          scan.findings.push({
+            type: "SOURCE_REVIEW",
+            severity: "LOW",
+            sourceFile: item.file,
+            message: `Source terbaca, perlu pantau: ${issues.join(", ")}`
+          });
         } else {
-          scan.fileStates[item.file] = { status: "CLEAN", message: `${text.length.toLocaleString("id-ID")} karakter terbaca · sehat.` };
+          scan.fileStates[item.file] = {
+            status: "CLEAN",
+            message: `${text.length.toLocaleString("id-ID")} karakter · sehat${changed ? " · DIROMBAK & sinkron" : ""}`,
+            contentHash
+          };
         }
       } catch (error) {
         scan.filesFailed++;
@@ -849,12 +911,27 @@ export function runAutonomousEngine(onCycleUpdate) {
     const nerves = {};
     for (const item of INTERNAL_SOURCE_SCAN) {
       const fs = scan.fileStates[item.file];
-      nerves[item.file] = {
-        health: { overall: fs?.status === "FAILED" ? "ANOMALY" : fs?.status === "CLEAN" ? "HEALTHY" : "REVIEW", source: fs?.status === "CLEAN" ? "READABLE" : "WAITING", runtime: "HEALTHY", dependency: "VERIFIED", contract: "VERIFIED" },
-        source: { readable: fs?.status === "CLEAN" },
+      const organKey = item.file.split("/").pop(); // sinkron ke ORGAN_REGISTRY (basename)
+      const overall = fs?.status === "FAILED" ? "ANOMALY" : fs?.status === "REVIEW" ? "REVIEW" : "HEALTHY";
+      nerves[organKey] = {
+        health: {
+          overall,
+          source: fs?.status === "FAILED" ? "UNREADABLE" : "READABLE",
+          runtime: "HEALTHY",
+          dependency: "VERIFIED",
+          contract: "VERIFIED"
+        },
+        source: { readable: fs?.status !== "FAILED", status: fs?.status || "UNKNOWN", message: fs?.message || "" },
         runtime: { active: false },
-        evidenceSummary: { relations: relations.filter(r=>r.sourceFile===item.file || r.targetFile===item.file).length, unresolved: 0 }
+        evidenceSummary: {
+          relations: relations.filter(r => r.sourceFile === item.file || r.targetFile === item.file || r.sourceFile === organKey || r.targetFile === organKey).length,
+          unresolved: 0
+        },
+        contentHash: fs?.contentHash || null,
+        changed: !!(fs?.message && String(fs.message).includes("DIROMBAK"))
       };
+      // juga simpan path penuh untuk scanner UI
+      nerves[item.file] = nerves[organKey];
     }
     scan.nerveSummary.healthy = Object.values(nerves).filter(n=>n.health.overall === "HEALTHY").length;
     scan.nerveSummary.anomaly = Object.values(nerves).filter(n=>n.health.overall === "ANOMALY").length;
@@ -1037,6 +1114,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       ++authEpoch;
       clearTimeout(cycleTimer);
       clearInterval(refreshTimer);
+      if (sourceScanTimer) { clearInterval(sourceScanTimer); sourceScanTimer = null; }
       if (typeof unsubscribeAuth === "function") unsubscribeAuth();
       cleanupRealtime();
     }

@@ -277,7 +277,7 @@ body{font-family:'Inter',sans-serif}
         <div class="flex justify-between items-center">
             <div>
                 <div class="text-xs font-semibold text-indigo-300 uppercase tracking-wider">Komunikasi dengan CGO</div>
-                <div class="text-[10px] text-slate-500 mt-1">CGO membaca BCGO_STATE melalui jalur internal dan tetap tunduk pada bukti telemetry aktual.</div>
+                <div class="text-[10px] text-slate-500 mt-1">Chat operator BCGO: tanya status sistem, scanner, saraf file, radar/agent terdekat, error, cycle. Jawaban dari telemetry + source scan live — tidak mengarang.</div>
             </div>
             <span class="text-[10px] code-font text-indigo-400">CGO::CHAT • BCGO</span>
         </div>
@@ -728,10 +728,26 @@ async function sendQuestion(question) {
     setChatBusy(true);
     addChat('user', text);
     try {
+        let answer = null;
+        // 1) BCGO engine (telemetry + scanner + radar)
         const brain = window.BCGOBrain;
-        if (!brain?.ask) throw new Error('BCGO_BRAIN_NOT_READY');
-        const answer = await Promise.resolve(brain.ask(text));
-        if (answer) addChat('bcgo', answer);
+        if (brain?.ask) {
+            answer = await Promise.resolve(brain.ask(text));
+        }
+        // 2) Internal CGO brain (investigation) jika jawaban generik / kosong
+        const internal = window.CGOInternalBrain || internalBrain;
+        const needsDeep = !answer || /belum punya bukti|belum bisa/i.test(String(answer));
+        if (needsDeep && internal && typeof internal.chatAnswer === 'function') {
+            try {
+                const deep = await Promise.resolve(internal.chatAnswer(text));
+                if (deep && String(deep).trim()) answer = deep;
+            } catch (_) {}
+        }
+        if (internal && typeof internal.ingestBCGOState === 'function' && liveState) {
+            try { internal.ingestBCGOState(liveState); } catch (_) {}
+        }
+        if (!answer) throw new Error('BCGO_BRAIN_NOT_READY');
+        addChat('bcgo', answer);
     } catch (error) {
         addChat('bcgo', `Saya belum bisa menjawab dengan aman karena BCGO belum siap: ${String(error?.message || error).slice(0, 220)}`);
     } finally {
