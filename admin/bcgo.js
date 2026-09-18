@@ -112,10 +112,12 @@ const normalizeFile = value => {
 
 /** Error noise lokal (storage browser, dll) — bukan kerusakan code organ. */
 function isNoiseTelemetry(log) {
-  const msg = String(log?.message || log?.error || log || "");
+  const msg = String(log?.message || log?.error || log || "").trim();
   if (/QuotaExceededError|exceeded the quota|Setting the value of ['"]cikur_/i.test(msg)) return true;
   if (/Failed to execute ['"]setItem['"] on ['"]Storage['"]/i.test(msg)) return true;
   if (/NS_ERROR_DOM_QUOTA_REACHED|QUOTA_EXCEEDED_ERR/i.test(msg)) return true;
+  // Browser cross-origin sanitized error — tidak ada detail berguna
+  if (msg === "Script error." || msg === "Script error") return true;
   // noise internal BCGO mirror
   if (/BCGO cross-tab state mirror|CIKUR_GO_BCGO_STATE/i.test(msg)) return true;
   return false;
@@ -912,7 +914,16 @@ export function runAutonomousEngine(onCycleUpdate) {
         const matched = INTERNAL_SOURCE_SCAN.find(x => x.path === target || x.file === target || x.file.endsWith("/" + base) || x.file === base || x.path.endsWith("/" + base));
         if (matched) relations.push({ type: "CROSS_FILE_SURFACE", status: "LINKED", confidence: "VERIFIED", sourceFile: item.file, targetFile: matched.file, key: ref });
         else if (/\.(?:html|js)$/i.test(target) && !/tailwind|leaflet|firebase|googleapis|cdn\./i.test(target)) {
-          relations.push({ type: "CROSS_FILE_SURFACE", status: "UNKNOWN", confidence: "UNKNOWN", sourceFile: item.file, targetFile: target, key: ref });
+          // Modul customer AI opsional — UNKNOWN informatif, bukan mismatch organ
+          const optional = /cgo-customer|cgo-app-bootstrap/i.test(target);
+          relations.push({
+            type: "CROSS_FILE_SURFACE",
+            status: optional ? "VARIANT" : "UNKNOWN",
+            confidence: optional ? "OPTIONAL" : "UNKNOWN",
+            sourceFile: item.file,
+            targetFile: target,
+            key: ref
+          });
         }
       }
     }
