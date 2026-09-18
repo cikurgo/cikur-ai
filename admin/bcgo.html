@@ -186,7 +186,7 @@ body{font-family:'Inter',sans-serif}
             <option value="100">100 km</option>
             <option value="200">200 km</option>
         </select>
-        <span class="text-slate-600">Pusat: lokasi admin / default Banten</span>
+        <span id="radar-center-status" class="text-slate-600">Pusat: menunggu verifikasi lokasi admin</span>
     </div>
     <div class="flex flex-col items-center gap-3">
         <div class="radar-wrap" id="agent-radar-disk" aria-label="Radar Agent CGO">
@@ -811,14 +811,50 @@ function renderNeuralEvents(events) {
         </div>`).join('');
 }
 
-// Pusat radar default (Banten / Serang area) — diganti geolocation admin jika ada
+// Pusat radar: GPS admin yang terverifikasi menjadi sumber utama.
+// Default hanya fallback visual; UI tidak boleh menyebutnya sebagai lokasi admin nyata.
 let radarCenter = { lat: -6.12, lng: 106.15 };
+let radarCenterSource = 'DEFAULT_UNVERIFIED';
 let radarRadiusKm = 50;
+
+function updateRadarCenterLabel() {
+  const el = document.getElementById('radar-center-status');
+  if (!el) return;
+  if (radarCenterSource === 'GPS_VERIFIED') {
+    el.textContent = 'Pusat: GPS admin terverifikasi';
+    el.className = 'text-emerald-500';
+  } else if (radarCenterSource === 'GPS_UNAVAILABLE') {
+    el.textContent = 'Pusat: default fallback — GPS admin tidak tersedia';
+    el.className = 'text-amber-500';
+  } else {
+    el.textContent = 'Pusat: menunggu verifikasi lokasi admin';
+    el.className = 'text-slate-600';
+  }
+}
+
+function rerenderRadarFromCurrentState() {
+  if (liveState) renderAgentPresence(liveState);
+}
+
+updateRadarCenterLabel();
 try {
   navigator.geolocation?.getCurrentPosition(pos => {
-    radarCenter = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-  }, () => {}, { maximumAge: 600000, timeout: 8000 });
-} catch {}
+    const lat = Number(pos?.coords?.latitude);
+    const lng = Number(pos?.coords?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    radarCenter = { lat, lng };
+    radarCenterSource = 'GPS_VERIFIED';
+    updateRadarCenterLabel();
+    rerenderRadarFromCurrentState();
+  }, () => {
+    radarCenterSource = 'GPS_UNAVAILABLE';
+    updateRadarCenterLabel();
+    rerenderRadarFromCurrentState();
+  }, { maximumAge: 600000, timeout: 8000, enableHighAccuracy: true });
+} catch {
+  radarCenterSource = 'GPS_UNAVAILABLE';
+  updateRadarCenterLabel();
+}
 
 document.getElementById('radar-radius-km')?.addEventListener('change', e => {
   radarRadiusKm = Math.max(5, Number(e.target.value) || 50);
@@ -827,6 +863,7 @@ document.getElementById('radar-radius-km')?.addEventListener('change', e => {
 
 function haversineKm(a, b) {
   if (!a || !b) return null;
+  if (![a.lat, a.lng, b.lat, b.lng].every(Number.isFinite)) return null;
   const R = 6371;
   const p1 = a.lat * Math.PI / 180, p2 = b.lat * Math.PI / 180;
   const dlat = (b.lat - a.lat) * Math.PI / 180;

@@ -237,12 +237,15 @@ export function runAutonomousEngine(onCycleUpdate) {
   function newestLogByFile() {
     const map = new Map();
     for (const log of latestSystemLogs) {
-      const file = normalizeFile(log?.fileName);
-      if (!ORGAN_REGISTRY[file]) continue;
+      const candidates = telemetrySourceCandidates(log);
+      const files = candidates.length ? candidates : [normalizeFile(log?.fileName)];
       const t = timestamp(log?.reportedAt);
-      const candidate = { log, time: t };
-      const previous = map.get(file);
-      if (!previous || candidate.time >= previous.time) map.set(file, candidate);
+      for (const file of files) {
+        if (!ORGAN_REGISTRY[file]) continue;
+        const candidate = { log, time: t };
+        const previous = map.get(file);
+        if (!previous || candidate.time >= previous.time) map.set(file, candidate);
+      }
     }
     return map;
   }
@@ -428,6 +431,34 @@ export function runAutonomousEngine(onCycleUpdate) {
       return `Saya sedang berada di tahap ${state.step}, cycle #${cycleNo}. ${state.message} ${situation()}`;
     }
 
+    // Radar / agent terdekat
+    if (/agent|radar|terdekat|nearby|radius|gps|lokasi agent/.test(q)) {
+      const ap = state.agentPresence || {};
+      const items = Array.isArray(ap.items) ? ap.items : [];
+      const withGeo = items.filter(i => i.location && Number.isFinite(i.location.lat));
+      if (!items.length) {
+        return `Radar LIVE, tetapi belum ada Agent approved yang online. Minta Agent buka mitra/agentcgo.html → AKTIFKAN + izinkan lokasi. Saat ini TOTAL=${ap.count||0}, READY=${ap.freshCount||0}, GEO=${ap.geoCount||0}.`;
+      }
+      const lines = items.slice(0, 8).map(i => {
+        const loc = i.location;
+        const dist = loc ? "ada GPS" : "tanpa GPS";
+        return `· ${i.name || "Agent"} [${i.status}] ${dist}`;
+      });
+      return `Radar Agent CGO: TOTAL ${items.length}, READY ${ap.freshCount||0}, GEO ${withGeo.length}, STALE ${ap.staleCount||0}.\n${lines.join("\n")}\nStatus sensor: ${ap.status || "-"}.`;
+    }
+
+    // Scanner / source integrity
+    if (/scan|scanner|source|integrity|file sehat|kode|source code/.test(q)) {
+      const sc = state.sourceScan || {};
+      const states = sc.fileStates || {};
+      const clean = Object.values(states).filter(s => s?.status === "CLEAN").length;
+      const review = Object.values(states).filter(s => s?.status === "REVIEW").length;
+      const failed = Object.values(states).filter(s => s?.status === "FAILED").length;
+      const changed = Object.entries(states).filter(([,s]) => String(s?.message||"").includes("DIROMBAK")).map(([f]) => f);
+      return `Scanner: status ${sc.status||"-"}, fase ${sc.phase||"-"}, terbaca ${sc.filesReadable||0}/${sc.totalFiles||0}, gagal ${failed}, review ${review}, bersih ${clean}. Relasi linked ${sc.relationSummary?.linked||0}. ${changed.length ? "File dirombak terdeteksi: " + changed.join(", ") + "." : "Belum ada file yang berubah sejak scan sebelumnya."} Scanner ulang otomatis tiap ~75 detik.`;
+    }
+
+
     if (/status|kondisi|sehat|aman/.test(q)) {
       if (firestore.error) return `Belum bisa saya sebut aman. Firestore sedang bermasalah: ${firestore.error}`;
       return `Status sekarang: ${metrics.active} anomali aktif, ${metrics.recovered} recovered, ${metrics.healthy} stabil dari ${metrics.total} organ. Firestore ${firestore.connected ? "LIVE" : "belum terhubung penuh"} dan probe membaca ${metrics.firestoreCount} data.`;
@@ -467,33 +498,6 @@ export function runAutonomousEngine(onCycleUpdate) {
 
     if (/jelaskan|detail|rincian/.test(q)) {
       return `Saya bisa menjelaskan berdasarkan bukti. Saat ini: ${metrics.active} anomali aktif, ${metrics.recovered} recovered, Firestore ${firestore.connected ? "LIVE" : "belum LIVE"}, target ${state.targetCell}. Untuk detail akar masalah, saya perlu kasus/file yang spesifik.`;
-    }
-
-    // Radar / agent terdekat
-    if (/agent|radar|terdekat|nearby|radius|gps|lokasi agent/.test(q)) {
-      const ap = state.agentPresence || {};
-      const items = Array.isArray(ap.items) ? ap.items : [];
-      const withGeo = items.filter(i => i.location && Number.isFinite(i.location.lat));
-      if (!items.length) {
-        return `Radar LIVE, tetapi belum ada Agent approved yang online. Minta Agent buka mitra/agentcgo.html → AKTIFKAN + izinkan lokasi. Saat ini TOTAL=${ap.count||0}, READY=${ap.freshCount||0}, GEO=${ap.geoCount||0}.`;
-      }
-      const lines = items.slice(0, 8).map(i => {
-        const loc = i.location;
-        const dist = loc ? "ada GPS" : "tanpa GPS";
-        return `· ${i.name || "Agent"} [${i.status}] ${dist}`;
-      });
-      return `Radar Agent CGO: TOTAL ${items.length}, READY ${ap.freshCount||0}, GEO ${withGeo.length}, STALE ${ap.staleCount||0}.\n${lines.join("\n")}\nStatus sensor: ${ap.status || "-"}.`;
-    }
-
-    // Scanner / source integrity
-    if (/scan|scanner|source|integrity|file sehat|kode|source code/.test(q)) {
-      const sc = state.sourceScan || {};
-      const states = sc.fileStates || {};
-      const clean = Object.values(states).filter(s => s?.status === "CLEAN").length;
-      const review = Object.values(states).filter(s => s?.status === "REVIEW").length;
-      const failed = Object.values(states).filter(s => s?.status === "FAILED").length;
-      const changed = Object.entries(states).filter(([,s]) => String(s?.message||"").includes("DIROMBAK")).map(([f]) => f);
-      return `Scanner: status ${sc.status||"-"}, fase ${sc.phase||"-"}, terbaca ${sc.filesReadable||0}/${sc.totalFiles||0}, gagal ${failed}, review ${review}, bersih ${clean}. Relasi linked ${sc.relationSummary?.linked||0}. ${changed.length ? "File dirombak terdeteksi: " + changed.join(", ") + "." : "Belum ada file yang berubah sejak scan sebelumnya."} Scanner ulang otomatis tiap ~75 detik.`;
     }
 
     // Saraf / nerve per file
@@ -721,13 +725,14 @@ export function runAutonomousEngine(onCycleUpdate) {
         state.metrics = makeMetrics(organs);
         state.activeCases = makeCases(organs);
         state.systemLogs = latestSystemLogs.slice();
-        state.lastTelemetryFile = top ? normalizeFile(top.fileName) : state.lastTelemetryFile;
+        state.lastTelemetryFile = top ? (telemetrySourceCandidates(top)[0] || normalizeFile(top.fileName)) : state.lastTelemetryFile;
         state.lastTelemetryAt = topAt || state.lastTelemetryAt;
         state.lastTelemetryMessage = top?.message || state.lastTelemetryMessage;
         window.BCGO_STATE = safeClone(state);
 
-        if (top && `${normalizeFile(top.fileName)}|${String(top.message || "")}|${topAt}` !== previousTop) {
-          interruptForTelemetry(top.fileName, top.message, top);
+        const topFile = top ? (telemetrySourceCandidates(top)[0] || normalizeFile(top.fileName)) : null;
+        if (top && `${topFile}|${String(top.message || "")}|${topAt}` !== previousTop) {
+          interruptForTelemetry(topFile, top.message, top);
         } else {
           publishToUI(safeClone(state));
         }
@@ -777,6 +782,11 @@ export function runAutonomousEngine(onCycleUpdate) {
   async function runInternalSourceScan() {
     if (stopped || !authorized || sourceScanInFlight) return;
     sourceScanInFlight = true;
+    // Simpan snapshot scan sebelumnya sebelum state.sourceScan diganti.
+    // Ini adalah sumber kebenaran untuk deteksi DIROMBAK pada scan berikutnya.
+    const previousScan = state.sourceScan && typeof state.sourceScan === "object"
+      ? safeClone(state.sourceScan)
+      : makeInitialSourceScan();
     const scan = makeInitialSourceScan();
     scan.status = "SCANNING";
     scan.phase = "READING";
@@ -814,8 +824,8 @@ export function runAutonomousEngine(onCycleUpdate) {
         let hash = 0;
         for (let h = 0; h < text.length; h++) hash = ((hash << 5) - hash + text.charCodeAt(h)) | 0;
         const contentHash = String(hash);
-        const prevHash = state.sourceScan?.fileStates?.[item.file]?.contentHash;
-        const changed = prevHash && prevHash !== contentHash;
+        const prevHash = previousScan?.fileStates?.[item.file]?.contentHash;
+        const changed = Boolean(prevHash && prevHash !== contentHash);
         if (changed) {
           recordEvent("SOURCE_CHANGED", `Source ${item.file} berubah — saraf disesuaikan ulang.`, item.file.split("/").pop());
         }
@@ -900,7 +910,14 @@ export function runAutonomousEngine(onCycleUpdate) {
     scan.relationSummary.linked = relations.filter(r=>r.status === "LINKED").length;
     scan.relationSummary.mismatch = relations.filter(r=>r.status === "MISMATCH").length;
     scan.relationSummary.unknown = relations.filter(r=>r.status === "UNKNOWN").length;
-    scan.relationSummary.synchronized = scan.filesReadable;
+    // SYNCHRONIZED hanya berarti source terbaca dan tidak memiliki kontrak
+    // mismatch/unknown yang terkait. READABLE != SYNCHRONIZED.
+    scan.relationSummary.synchronized = INTERNAL_SOURCE_SCAN.filter(item => {
+      const fs = scan.fileStates[item.file];
+      if (!fs || fs.status === "FAILED") return false;
+      const related = relations.filter(r => r.sourceFile === item.file || r.targetFile === item.file);
+      return !related.some(r => r.status === "MISMATCH" || r.status === "UNKNOWN");
+    }).length;
     scan.crossFileFindings = relations.filter(r=>r.status === "MISMATCH");
     scan.status = scan.filesFailed || scan.relationSummary.mismatch ? "DEGRADED" : "CLEAN";
     scan.phase = "COMPLETE";
@@ -911,30 +928,36 @@ export function runAutonomousEngine(onCycleUpdate) {
     const nerves = {};
     for (const item of INTERNAL_SOURCE_SCAN) {
       const fs = scan.fileStates[item.file];
-      const organKey = item.file.split("/").pop(); // sinkron ke ORGAN_REGISTRY (basename)
-      const overall = fs?.status === "FAILED" ? "ANOMALY" : fs?.status === "REVIEW" ? "REVIEW" : "HEALTHY";
+      const organKey = item.file.split("/").pop();
+      const related = relations.filter(r => r.sourceFile === item.file || r.targetFile === item.file);
+      const hasMismatch = related.some(r => r.status === "MISMATCH");
+      const hasUnknown = related.some(r => r.status === "UNKNOWN");
+      const overall = fs?.status === "FAILED" || hasMismatch ? "ANOMALY" : fs?.status === "REVIEW" || hasUnknown ? "REVIEW" : "HEALTHY";
+      const dependency = fs?.status === "FAILED" ? "UNREADABLE" : hasUnknown ? "UNKNOWN" : "OBSERVED";
+      const contract = hasMismatch ? "MISMATCH" : hasUnknown ? "UNKNOWN" : related.length ? "LINKED" : "UNOBSERVED";
       nerves[organKey] = {
         health: {
           overall,
-          source: fs?.status === "FAILED" ? "UNREADABLE" : "READABLE",
-          runtime: "HEALTHY",
-          dependency: "VERIFIED",
-          contract: "VERIFIED"
+          source: fs?.status === "FAILED" ? "UNREADABLE" : fs?.status || "UNKNOWN",
+          runtime: "NOT_OBSERVED",
+          dependency,
+          contract
         },
         source: { readable: fs?.status !== "FAILED", status: fs?.status || "UNKNOWN", message: fs?.message || "" },
-        runtime: { active: false },
+        runtime: { active: false, observed: false },
         evidenceSummary: {
-          relations: relations.filter(r => r.sourceFile === item.file || r.targetFile === item.file || r.sourceFile === organKey || r.targetFile === organKey).length,
-          unresolved: 0
+          relations: related.length,
+          unresolved: related.filter(r => r.status === "UNKNOWN" || r.status === "MISMATCH").length
         },
         contentHash: fs?.contentHash || null,
-        changed: !!(fs?.message && String(fs.message).includes("DIROMBAK"))
+        changed: Boolean(fs?.contentHash && previousScan?.fileStates?.[item.file]?.contentHash && fs.contentHash !== previousScan.fileStates[item.file].contentHash)
       };
-      // juga simpan path penuh untuk scanner UI
-      nerves[item.file] = nerves[organKey];
     }
-    scan.nerveSummary.healthy = Object.values(nerves).filter(n=>n.health.overall === "HEALTHY").length;
-    scan.nerveSummary.anomaly = Object.values(nerves).filter(n=>n.health.overall === "ANOMALY").length;
+    const uniqueNerves = Object.values(nerves);
+    scan.nerveSummary.healthy = uniqueNerves.filter(n=>n.health.overall === "HEALTHY").length;
+    scan.nerveSummary.anomaly = uniqueNerves.filter(n=>n.health.overall === "ANOMALY").length;
+    scan.nerveSummary.review = uniqueNerves.filter(n=>n.health.overall === "REVIEW").length;
+    scan.nerveSummary.unresolved = uniqueNerves.filter(n=>Number(n.evidenceSummary?.unresolved) > 0).length;
     state.fileNerves = nerves;
     state.sourceScan = scan;
     publishToUI(safeClone(state));
