@@ -110,6 +110,22 @@ const normalizeFile = value => {
   return clean.substring(clean.lastIndexOf("/") + 1) || raw;
 };
 
+/** Error noise lokal (storage browser, dll) — bukan kerusakan code organ. */
+function isNoiseTelemetry(log) {
+  const msg = String(log?.message || log?.error || log || "");
+  if (/QuotaExceededError|exceeded the quota|Setting the value of ['"]cikur_/i.test(msg)) return true;
+  if (/Failed to execute ['"]setItem['"] on ['"]Storage['"]/i.test(msg)) return true;
+  if (/NS_ERROR_DOM_QUOTA_REACHED|QUOTA_EXCEEDED_ERR/i.test(msg)) return true;
+  // noise internal BCGO mirror
+  if (/BCGO cross-tab state mirror|CIKUR_GO_BCGO_STATE/i.test(msg)) return true;
+  return false;
+}
+
+function isActionableTelemetry(log) {
+  return !isNoiseTelemetry(log) && !isInternalTelemetry(log);
+}
+
+
 export function runAutonomousEngine(onCycleUpdate) {
   if (typeof onCycleUpdate !== "function") {
     throw new TypeError("BCGO membutuhkan callback UI.");
@@ -237,12 +253,14 @@ export function runAutonomousEngine(onCycleUpdate) {
   function newestLogByFile() {
     const map = new Map();
     for (const log of latestSystemLogs) {
+      // Noise storage tidak mengisi peta organ (resto stuck QuotaExceeded)
+      if (isNoiseTelemetry(log)) continue;
       const candidates = telemetrySourceCandidates(log);
       const files = candidates.length ? candidates : [normalizeFile(log?.fileName)];
-      const t = timestamp(log?.reportedAt);
+      const tMs = timestamp(log?.reportedAt);
       for (const file of files) {
         if (!ORGAN_REGISTRY[file]) continue;
-        const candidate = { log, time: t };
+        const candidate = { log, time: tMs };
         const previous = map.get(file);
         if (!previous || candidate.time >= previous.time) map.set(file, candidate);
       }
@@ -256,9 +274,12 @@ export function runAutonomousEngine(onCycleUpdate) {
 
     for (const [file, meta] of Object.entries(ORGAN_REGISTRY)) {
       const item = recent.get(file);
-      const historical = latestSystemLogs.some(log => normalizeFile(log?.fileName) === file);
+      // Historis hanya dari log actionable (bukan QuotaExceeded / storage noise)
+      const historical = latestSystemLogs.some(log =>
+        normalizeFile(log?.fileName) === file && isActionableTelemetry(log)
+      );
 
-      if (item && isRecent(item.time)) {
+      if (item && isRecent(item.time) && item.log && isActionableTelemetry(item.log)) {
         organs[file] = {
           ...meta,
           status: "ANOMALY",
@@ -518,6 +539,7 @@ export function runAutonomousEngine(onCycleUpdate) {
 
   function interruptForTelemetry(fileName, message, log) {
     if (stopped || !authorized) return;
+    if (isNoiseTelemetry(log) || isNoiseTelemetry(message)) return;
     const file = normalizeFile(fileName);
     const text = String(message || "Sinyal telemetry baru diterima.").slice(0, 900);
     const at = timestamp(log?.reportedAt) || Date.now();
@@ -714,9 +736,12 @@ export function runAutonomousEngine(onCycleUpdate) {
         snapshot.forEach(docSnap => {
           rawLogs.push({ id: docSnap.id, ...docSnap.data() });
         });
-        // Filter internal self-noise dulu, baru potong ke LOG_LIMIT.
-        latestSystemLogs = rawLogs.filter(log => !isInternalTelemetry(log)).slice(0, LOG_LIMIT);
-        const top = latestSystemLogs[0];
+        // Filter: internal BCGO + noise storage (QuotaExceeded) jangan menguasai sensor.
+        latestSystemLogs = rawLogs
+          .filter(log => !isInternalTelemetry(log) && !isNoiseTelemetry(log))
+          .slice(0, LOG_LIMIT);
+        // Untuk tampilan "Telemetry: xxx" pilih log actionable terbaru, bukan noise resto.
+        const top = latestSystemLogs[0] || null;
         const topAt = timestamp(top?.reportedAt);
         const previousTop = previousTopSignature;
 
@@ -724,14 +749,18 @@ export function runAutonomousEngine(onCycleUpdate) {
         state.systemOrgans = organs;
         state.metrics = makeMetrics(organs);
         state.activeCases = makeCases(organs);
+        // Panel error: tampilkan actionable; noise tetap bisa di-debug di console saja
         state.systemLogs = latestSystemLogs.slice();
-        state.lastTelemetryFile = top ? (telemetrySourceCandidates(top)[0] || normalizeFile(top.fileName)) : state.lastTelemetryFile;
-        state.lastTelemetryAt = topAt || state.lastTelemetryAt;
-        state.lastTelemetryMessage = top?.message || state.lastTelemetryMessage;
+        if (top) {
+          state.lastTelemetryFile = telemetrySourceCandidates(top)[0] || normalizeFile(top.fileName);
+          state.lastTelemetryAt = topAt || state.lastTelemetryAt;
+          state.lastTelemetryMessage = top?.message || state.lastTelemetryMessage;
+        }
         window.BCGO_STATE = safeClone(state);
 
         const topFile = top ? (telemetrySourceCandidates(top)[0] || normalizeFile(top.fileName)) : null;
-        if (top && `${topFile}|${String(top.message || "")}|${topAt}` !== previousTop) {
+        // Interrupt cycle hanya untuk sinyal actionable — jangan stuck di QuotaExceeded resto
+        if (top && topFile && `${topFile}|${String(top.message || "")}|${topAt}` !== previousTop) {
           interruptForTelemetry(topFile, top.message, top);
         } else {
           publishToUI(safeClone(state));
