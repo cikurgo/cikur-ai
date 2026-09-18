@@ -49,7 +49,15 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "admin/bcgo-admin.html", path: "bcgo-admin.html", role: "Admin Control" },
   { file: "admin/data-cgo.html", path: "data-cgo.html", role: "Data Console" },
   { file: "cikur-config.js", path: "../cikur-config.js", role: "Auth / Config" },
-  { file: "bcgo-engine.js", path: "../bcgo-engine.js", role: "Shared Engine" }
+  { file: "bcgo-engine.js", path: "../bcgo-engine.js", role: "Shared Engine" },
+  { file: "index.html", path: "../index.html", role: "Customer Home" },
+  { file: "customer/food.html", path: "../customer/food.html", role: "Customer Food" },
+  { file: "customer/ride.html", path: "../customer/ride.html", role: "Customer Ride" },
+  { file: "customer/assistant.html", path: "../customer/assistant.html", role: "Customer Assistant" },
+  { file: "customer/cikurgo2in1.html", path: "../customer/cikurgo2in1.html", role: "Customer 2in1" },
+  { file: "mitra/agentcgo.html", path: "../mitra/agentcgo.html", role: "Mitra Agent" },
+  { file: "mitra/resto.html", path: "../mitra/resto.html", role: "Mitra Resto" },
+  { file: "mitra/driver.html", path: "../mitra/driver.html", role: "Mitra Driver" }
 ];
 
 function makeInitialSourceScan() {
@@ -338,11 +346,29 @@ export function runAutonomousEngine(onCycleUpdate) {
     state.firestore = { ...firestore };
     if (state.agentPresence?.items?.length) {
       const nowMs = Date.now();
-      const fresh = state.agentPresence.items.filter(item => nowMs - presenceTimestamp(item.updatedAt) <= AGENT_PRESENCE_MAX_AGE_MS);
-      state.agentPresence.items = fresh.map(item => ({ ...item, ageMs: Math.max(0, nowMs - presenceTimestamp(item.updatedAt)) }));
-      state.agentPresence.freshCount = state.agentPresence.items.length;
-      state.agentPresence.count = state.agentPresence.items.length;
-      state.agentPresence.radar = radar.ingest(state.agentPresence.items, { updatedAt: new Date().toISOString(), reason: "AGE_REFRESH" });
+      // Hanya refresh ageMs & status — JANGAN drop STANDBY/STALE di tiap cycle
+      const refreshed = state.agentPresence.items.map(item => {
+        const ageMs = item.updatedAt ? Math.max(0, nowMs - presenceTimestamp(item.updatedAt)) : item.ageMs;
+        let status = item.status;
+        const hasGeo = !!(item.location && Number.isFinite(item.location.lat));
+        if (hasGeo && Number.isFinite(ageMs)) {
+          if (ageMs <= AGENT_PRESENCE_MAX_AGE_MS) status = item.available === false ? "BUSY" : "READY";
+          else if (ageMs <= AGENT_PRESENCE_MAX_AGE_MS * 2) status = "STALE";
+          else status = "STANDBY";
+        }
+        return { ...item, ageMs, status };
+      });
+      const withGeo = refreshed.filter(item => item.location && Number.isFinite(item.location.lat));
+      state.agentPresence = {
+        ...state.agentPresence,
+        items: refreshed,
+        count: refreshed.length,
+        freshCount: refreshed.filter(i => i.status === "READY" || i.status === "BUSY").length,
+        staleCount: refreshed.filter(i => i.status === "STALE").length,
+        standbyCount: refreshed.filter(i => i.status === "STANDBY").length,
+        geoCount: withGeo.length,
+        radar: radar.ingest(withGeo, { updatedAt: new Date().toISOString(), reason: "AGE_REFRESH" })
+      };
     }
     state.connection = deriveConnection();
     state.activeCases = cases;
@@ -519,23 +545,36 @@ export function runAutonomousEngine(onCycleUpdate) {
     const location = presence.location || data.liveLocation || null;
     const lat = Number(location?.lat ?? location?.latitude);
     const lng = Number(location?.lng ?? location?.longitude ?? location?.lon);
-    if (presence.active !== true || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const hasGeo = Number.isFinite(lat) && Number.isFinite(lng);
     const accuracy = Number(location?.accuracy);
-    if (Number.isFinite(accuracy) && accuracy > AGENT_PRESENCE_MAX_ACCURACY_M) return null;
-    const updatedMs = presenceTimestamp(presence.updatedAt || data.updatedAt);
+    if (hasGeo && Number.isFinite(accuracy) && accuracy > AGENT_PRESENCE_MAX_ACCURACY_M) return null;
+    const updatedMs = presenceTimestamp(presence.updatedAt || data.updatedAt || data.lastStatusChangeAt);
     const age = updatedMs ? Math.max(0, Date.now() - updatedMs) : Infinity;
-    if (age > AGENT_PRESENCE_MAX_AGE_MS) return null;
+    const isOnlineFlag = data.isOnline === true || data.operationalStatus === "online" || presence.active === true;
+    // Live GPS dalam window fresh → READY/BUSY; online tanpa GPS → STANDBY; offline lama → skip
+    if (!isOnlineFlag && !hasGeo) return null;
+    if (hasGeo && age > AGENT_PRESENCE_MAX_AGE_MS * 4 && !isOnlineFlag) return null;
+    let status = "STANDBY";
+    if (hasGeo && age <= AGENT_PRESENCE_MAX_AGE_MS) {
+      status = presence.available === false ? "BUSY" : "READY";
+    } else if (hasGeo && age <= AGENT_PRESENCE_MAX_AGE_MS * 2) {
+      status = "STALE";
+    } else if (isOnlineFlag) {
+      status = "STANDBY"; // online, belum ada koordinat live
+    } else {
+      return null;
+    }
     return {
       id: docSnap.id,
       agentId: String(data.uid || docSnap.id.replace(/_agent$/, "")),
       name: String(data.namaPanggilan || data.name || data.agentName || "Agent CGO"),
       type: "agent",
-      status: "active",
-      active: true,
-      available: presence.available !== false,
-      location: { lat, lng, accuracy: Number.isFinite(Number(location?.accuracy)) ? Number(location.accuracy) : null },
-      updatedAt: presence.updatedAt || data.updatedAt || null,
-      ageMs: age,
+      status,
+      active: status === "READY" || status === "BUSY" || status === "STALE" || status === "STANDBY",
+      available: presence.available !== false && data.isOnline !== false,
+      location: hasGeo ? { lat, lng, accuracy: Number.isFinite(accuracy) ? accuracy : null } : null,
+      updatedAt: presence.updatedAt || data.updatedAt || data.lastStatusChangeAt || null,
+      ageMs: Number.isFinite(age) ? age : null,
       source: "BCGO_AGENT_PRESENCE_REALTIME"
     };
   }
@@ -558,18 +597,27 @@ export function runAutonomousEngine(onCycleUpdate) {
           if (item) items.push(item);
         });
         items.sort((a,b) => a.agentId.localeCompare(b.agentId));
-        const freshCount = items.filter(item => item.ageMs <= AGENT_PRESENCE_MAX_AGE_MS).length;
+        const withGeo = items.filter(item => item.location && Number.isFinite(item.location.lat));
+        const freshCount = items.filter(item => item.status === "READY" || item.status === "BUSY").length;
+        const staleCount = items.filter(item => item.status === "STALE").length;
+        const standbyCount = items.filter(item => item.status === "STANDBY").length;
         state.agentPresence = {
           status: "LIVE",
           connected: true,
           count: items.length,
           freshCount,
-          staleCount: Math.max(0, snapshot.size - items.length),
+          staleCount,
+          standbyCount,
+          geoCount: withGeo.length,
           lastServerAt: Date.now(),
           items: items.slice(0, AGENT_PRESENCE_LIMIT)
         };
-        state.agentPresence.items = state.agentPresence.items.map(item => ({ ...item, ageMs: Math.max(0, Date.now() - presenceTimestamp(item.updatedAt)) }));
-        state.agentPresence.radar = radar.ingest(state.agentPresence.items, { updatedAt: new Date().toISOString(), reason: "FIRESTORE_SNAPSHOT" });
+        state.agentPresence.items = state.agentPresence.items.map(item => ({
+          ...item,
+          ageMs: item.updatedAt ? Math.max(0, Date.now() - presenceTimestamp(item.updatedAt)) : item.ageMs
+        }));
+        // Radar engine hanya ingest yang punya koordinat
+        state.agentPresence.radar = radar.ingest(withGeo, { updatedAt: new Date().toISOString(), reason: "FIRESTORE_SNAPSHOT" });
         state.agentPresence.radarEvents = radar.getRecentEvents(24);
         window.BCGO_STATE = safeClone(state);
         publishToUI(safeClone(state));

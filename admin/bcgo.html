@@ -22,6 +22,17 @@ body{font-family:'Inter',sans-serif}
 .neural-event{border-left:2px solid #334155;padding-left:10px}
 .neural-event-live{border-left-color:#22c55e}
 .chat-thinking{animation:breathe 1s ease-in-out infinite}
+.radar-wrap{position:relative;width:min(100%,320px);aspect-ratio:1;margin:0 auto;border-radius:50%;background:radial-gradient(circle at center,#0b1220 0%,#020617 70%);border:1px solid #1e293b;overflow:hidden;box-shadow:inset 0 0 40px rgba(34,211,238,.08)}
+.radar-ring{position:absolute;inset:0;margin:auto;border-radius:50%;border:1px solid rgba(34,211,238,.18);pointer-events:none}
+.radar-ring.r1{width:25%;height:25%}.radar-ring.r2{width:50%;height:50%}.radar-ring.r3{width:75%;height:75%}.radar-ring.r4{width:96%;height:96%}
+.radar-sweep{position:absolute;inset:0;margin:auto;width:50%;height:50%;transform-origin:100% 100%;left:0;top:0;background:conic-gradient(from 0deg,transparent 0deg,rgba(34,211,238,.35) 40deg,transparent 70deg);animation:radar-spin 3.2s linear infinite;border-radius:100% 0 0 0}
+@keyframes radar-spin{to{transform:rotate(360deg)}}
+.radar-center-dot{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px;border-radius:50%;background:#22d3ee;box-shadow:0 0 12px #22d3ee;z-index:3}
+.radar-blip{position:absolute;width:10px;height:10px;margin:-5px;border-radius:50%;background:#34d399;box-shadow:0 0 10px #34d399;z-index:2;transition:left .6s ease,top .6s ease}
+.radar-blip.busy{background:#fbbf24;box-shadow:0 0 10px #fbbf24}
+.radar-blip.stale{background:#94a3b8;box-shadow:none}
+.radar-blip.standby{background:#6366f1;box-shadow:0 0 8px #6366f1}
+.radar-label{position:absolute;font-size:8px;color:#64748b;}
 </style>
 </head>
 
@@ -150,19 +161,42 @@ body{font-family:'Inter',sans-serif}
 <section class="bg-slate-900 border border-cyan-900/60 rounded-xl p-5 space-y-3">
     <div class="flex justify-between items-center gap-3">
         <div>
-            <div class="text-xs font-semibold text-cyan-300 uppercase tracking-wider">Agent CGO — Live Presence</div>
-            <div class="text-[10px] text-slate-500 mt-1">Sensor internal BCGO untuk membaca Agent CGO yang benar-benar aktif dan memiliki lokasi live. Ini fondasi radar; bukan radar visual final.</div>
+            <div class="text-xs font-semibold text-cyan-300 uppercase tracking-wider">Agent CGO — Live Radar</div>
+            <div class="text-[10px] text-slate-500 mt-1">Radius pencarian Agent aktif (GPS live). Dipakai fondasi Chat CGO: “ada agent terdekat?”. Offline tanpa koordinat = STANDBY.</div>
         </div>
         <span id="agent-presence-status" class="text-[10px] code-font text-slate-400">CONNECTING</span>
     </div>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px]">
-        <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">AKTIF <span id="agent-presence-active" class="font-bold text-emerald-400">0</span></div>
-        <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">FRESH <span id="agent-presence-fresh" class="font-bold text-cyan-400">0</span></div>
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-[10px]">
+        <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">TOTAL <span id="agent-presence-active" class="font-bold text-emerald-400">0</span></div>
+        <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">READY <span id="agent-presence-fresh" class="font-bold text-cyan-400">0</span></div>
         <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">STALE <span id="agent-presence-stale" class="font-bold text-amber-400">0</span></div>
+        <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">GEO <span id="agent-presence-geo" class="font-bold text-indigo-300">0</span></div>
         <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">SYNC <span id="agent-presence-sync" class="font-bold text-slate-300">-</span></div>
     </div>
-    <div id="agent-presence-feed" class="space-y-1 max-h-48 overflow-y-auto">
-        <div class="text-[10px] text-slate-500">Menunggu snapshot presence Agent CGO...</div>
+    <div class="flex flex-wrap items-center gap-2 text-[10px]">
+        <span class="text-slate-500">Radius:</span>
+        <select id="radar-radius-km" class="bg-slate-950 border border-slate-700 rounded-md px-2 py-1 text-cyan-300 code-font">
+            <option value="10">10 km</option>
+            <option value="25">25 km</option>
+            <option value="50" selected>50 km</option>
+            <option value="100">100 km</option>
+            <option value="200">200 km</option>
+        </select>
+        <span class="text-slate-600">Pusat: lokasi admin / default Banten</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+        <div class="radar-wrap" id="agent-radar-disk" aria-label="Radar Agent CGO">
+            <div class="radar-ring r1"></div>
+            <div class="radar-ring r2"></div>
+            <div class="radar-ring r3"></div>
+            <div class="radar-ring r4"></div>
+            <div class="radar-sweep"></div>
+            <div class="radar-center-dot" title="Pusat pencarian"></div>
+            <div id="agent-radar-blips"></div>
+        </div>
+        <div id="agent-presence-feed" class="space-y-1 max-h-64 overflow-y-auto">
+            <div class="text-[10px] text-slate-500">Menunggu snapshot presence Agent CGO...</div>
+        </div>
     </div>
 </section>
 
@@ -728,6 +762,54 @@ function renderNeuralEvents(events) {
         </div>`).join('');
 }
 
+// Pusat radar default (Banten / Serang area) — diganti geolocation admin jika ada
+let radarCenter = { lat: -6.12, lng: 106.15 };
+let radarRadiusKm = 50;
+try {
+  navigator.geolocation?.getCurrentPosition(pos => {
+    radarCenter = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+  }, () => {}, { maximumAge: 600000, timeout: 8000 });
+} catch {}
+
+document.getElementById('radar-radius-km')?.addEventListener('change', e => {
+  radarRadiusKm = Math.max(5, Number(e.target.value) || 50);
+  if (liveState) renderAgentPresence(liveState);
+});
+
+function haversineKm(a, b) {
+  if (!a || !b) return null;
+  const R = 6371;
+  const p1 = a.lat * Math.PI / 180, p2 = b.lat * Math.PI / 180;
+  const dlat = (b.lat - a.lat) * Math.PI / 180;
+  const dlng = (b.lng - a.lng) * Math.PI / 180;
+  const h = Math.sin(dlat/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dlng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1-h));
+}
+
+function renderRadarBlips(items) {
+  const host = document.getElementById('agent-radar-blips');
+  if (!host) return;
+  const inRange = items.filter(it => {
+    if (!it.location) return false;
+    const d = haversineKm(radarCenter, it.location);
+    it._distanceKm = d;
+    return d != null && d <= radarRadiusKm;
+  });
+  host.innerHTML = inRange.map(it => {
+    const d = it._distanceKm || 0;
+    const bearing = Math.atan2(
+      (it.location.lng - radarCenter.lng) * Math.cos((it.location.lat+radarCenter.lat)*Math.PI/360),
+      (it.location.lat - radarCenter.lat)
+    );
+    // map distance to 8%..46% radius of disk
+    const r = 8 + Math.min(1, d / radarRadiusKm) * 38;
+    const x = 50 + r * Math.sin(bearing);
+    const y = 50 - r * Math.cos(bearing);
+    const cls = it.status === 'BUSY' ? 'busy' : it.status === 'STALE' ? 'stale' : it.status === 'STANDBY' ? 'standby' : '';
+    return `<div class="radar-blip ${cls}" style="left:${x}%;top:${y}%" title="${esc(it.name)} · ${d.toFixed(1)} km · ${esc(it.status)}"></div>`;
+  }).join('');
+}
+
 function renderAgentPresence(state) {
     const presence = state?.agentPresence || {};
     if (agentPresenceStatusEl) {
@@ -738,18 +820,24 @@ function renderAgentPresence(state) {
     if (agentPresenceActiveEl) agentPresenceActiveEl.textContent = presence.count ?? 0;
     if (agentPresenceFreshEl) agentPresenceFreshEl.textContent = presence.freshCount ?? 0;
     if (agentPresenceStaleEl) agentPresenceStaleEl.textContent = presence.staleCount ?? 0;
+    const geoEl = document.getElementById('agent-presence-geo');
+    if (geoEl) geoEl.textContent = presence.geoCount ?? 0;
     if (agentPresenceSyncEl) agentPresenceSyncEl.textContent = presence.lastServerAt ? formatTime(presence.lastServerAt) : '-';
-    if (!agentPresenceFeedEl) return;
     const items = Array.isArray(presence.items) ? presence.items : [];
+    renderRadarBlips(items);
+    if (!agentPresenceFeedEl) return;
     if (!items.length) {
-        agentPresenceFeedEl.innerHTML = `<div class="text-[10px] text-slate-500">Belum ada Agent CGO aktif dengan presence live yang terverifikasi.</div>`;
+        agentPresenceFeedEl.innerHTML = `<div class="text-[10px] text-slate-500">Belum ada Agent approved yang online / punya GPS live. Agent harus ON di agentcgo.html agar muncul di radar.</div>`;
         return;
     }
-    agentPresenceFeedEl.innerHTML = items.slice(0, 30).map(item => {
+    agentPresenceFeedEl.innerHTML = items.slice(0, 40).map(item => {
         const age = Number.isFinite(Number(item.ageMs)) ? Math.max(0, Math.round(Number(item.ageMs) / 1000)) : null;
+        const dist = item.location ? haversineKm(radarCenter, item.location) : null;
+        const st = item.status || (item.available === false ? 'BUSY' : 'READY');
+        const color = st === 'READY' ? 'text-emerald-400' : st === 'BUSY' ? 'text-amber-400' : st === 'STALE' ? 'text-slate-400' : 'text-indigo-300';
         return `<div class="flex justify-between items-center gap-3 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-[10px]">
-            <div class="min-w-0"><div class="font-semibold text-slate-200 truncate">${esc(item.name || 'Agent CGO')}</div><div class="text-slate-500 code-font">${esc(item.agentId || item.id || '-')}</div></div>
-            <div class="text-right shrink-0"><div class="text-emerald-400 font-bold">${item.available === false ? 'BUSY' : 'READY'}</div><div class="text-slate-600">${age == null ? '-' : age + 's'}</div></div>
+            <div class="min-w-0"><div class="font-semibold text-slate-200 truncate">${esc(item.name || 'Agent CGO')}</div><div class="text-slate-500 code-font">${esc(item.agentId || item.id || '-')}${dist != null ? ' · ' + dist.toFixed(1) + ' km' : ' · no GPS'}</div></div>
+            <div class="text-right shrink-0"><div class="${color} font-bold">${esc(st)}</div><div class="text-slate-600">${age == null ? '-' : age + 's'}</div></div>
         </div>`;
     }).join('');
 }
