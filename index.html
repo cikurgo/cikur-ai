@@ -12,9 +12,9 @@
 <script type="module" src="./cikur-config.js?v=AUTH-SESSION-V3-REAL-REPAIR-20260917"></script>
 
 <!-- CGO CUSTOMER ENGINE (mesin chat internal, tanpa AI eksternal) -->
-<!-- Urutan pipeline: Conversation -> Memory -> Reasoning -> Planner -> Knowledge -> Discovery -> Meta -> Boundary -> Guardian -> Composer -> Gateway -->
-<script src="./customer/cgo-customer-conversation.js"></script>
+<!-- Urutan: Memory/Conversation/Reasoning/Planner/Knowledge/Discovery/Meta/Boundary/Guardian/Composer → Gateway → Bootstrap -->
 <script src="./customer/cgo-customer-memory.js"></script>
+<script src="./customer/cgo-customer-conversation.js"></script>
 <script src="./customer/cgo-customer-reasoning.js"></script>
 <script src="./customer/cgo-customer-planner.js"></script>
 <script src="./customer/cgo-customer-knowledge.js"></script>
@@ -24,7 +24,7 @@
 <script src="./customer/cgo-customer-guardian.js"></script>
 <script src="./customer/cgo-customer-composer.js"></script>
 <script src="./customer/cgo-customer.js"></script>
-<script type="module" src="./cgo-app-bootstrap.js"></script>
+<script src="./cgo-app-bootstrap.js"></script>
 
     
 <style>
@@ -4185,9 +4185,11 @@ if (cgoVoiceWave) {
 })();
 
     window.addEventListener("error", (e) => {
-    if (window.CikurCloud) {
-        window.CikurCloud.reportSystemError("index.html", e.message);
-    }
+    if (!window.CikurCloud) return;
+    const msg = String(e?.message || "");
+    // Browser sanitizes cross-origin errors menjadi "Script error." — tidak berguna untuk diagnosis
+    if (!msg || msg === "Script error." || msg === "Script error") return;
+    window.CikurCloud.reportSystemError("index.html", msg);
 });
     
 </script>
