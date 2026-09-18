@@ -22,17 +22,21 @@ body{font-family:'Inter',sans-serif}
 .neural-event{border-left:2px solid #334155;padding-left:10px}
 .neural-event-live{border-left-color:#22c55e}
 .chat-thinking{animation:breathe 1s ease-in-out infinite}
-.radar-wrap{position:relative;width:min(100%,320px);aspect-ratio:1;margin:0 auto;border-radius:50%;background:radial-gradient(circle at center,#0b1220 0%,#020617 70%);border:1px solid #1e293b;overflow:hidden;box-shadow:inset 0 0 40px rgba(34,211,238,.08)}
-.radar-ring{position:absolute;inset:0;margin:auto;border-radius:50%;border:1px solid rgba(34,211,238,.18);pointer-events:none}
+.radar-wrap{position:relative;width:min(92vw,420px);aspect-ratio:1;margin:12px auto;border-radius:50%;background:radial-gradient(circle at center,#0b1220 0%,#020617 72%);border:1px solid #1e293b;overflow:hidden;box-shadow:inset 0 0 50px rgba(34,211,238,.1),0 0 30px rgba(34,211,238,.06)}
+.radar-ring{position:absolute;inset:0;margin:auto;border-radius:50%;border:1px solid rgba(34,211,238,.2);pointer-events:none}
 .radar-ring.r1{width:25%;height:25%}.radar-ring.r2{width:50%;height:50%}.radar-ring.r3{width:75%;height:75%}.radar-ring.r4{width:96%;height:96%}
-.radar-sweep{position:absolute;inset:0;margin:auto;width:50%;height:50%;transform-origin:100% 100%;left:0;top:0;background:conic-gradient(from 0deg,transparent 0deg,rgba(34,211,238,.35) 40deg,transparent 70deg);animation:radar-spin 3.2s linear infinite;border-radius:100% 0 0 0}
-@keyframes radar-spin{to{transform:rotate(360deg)}}
-.radar-center-dot{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px;border-radius:50%;background:#22d3ee;box-shadow:0 0 12px #22d3ee;z-index:3}
-.radar-blip{position:absolute;width:10px;height:10px;margin:-5px;border-radius:50%;background:#34d399;box-shadow:0 0 10px #34d399;z-index:2;transition:left .6s ease,top .6s ease}
-.radar-blip.busy{background:#fbbf24;box-shadow:0 0 10px #fbbf24}
+.radar-sweep{position:absolute;inset:0;width:100%;height:100%;left:0;top:0;border-radius:50%;transform-origin:50% 50%;background:conic-gradient(from 0deg,rgba(34,211,238,.45) 0deg,rgba(34,211,238,.12) 28deg,transparent 55deg,transparent 360deg);animation:radar-spin 2.6s linear infinite;pointer-events:none;-webkit-mask-image:radial-gradient(circle,black 0%,black 49%,transparent 50%);mask-image:radial-gradient(circle,black 0%,black 49%,transparent 50%)}
+@keyframes radar-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.radar-center-dot{position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px;border-radius:50%;background:#22d3ee;box-shadow:0 0 16px #22d3ee;z-index:3}
+.radar-blip{position:absolute;width:12px;height:12px;margin:-6px;border-radius:50%;background:#34d399;box-shadow:0 0 12px #34d399;z-index:2;transition:left .6s ease,top .6s ease}
+.radar-blip.busy{background:#fbbf24;box-shadow:0 0 12px #fbbf24}
 .radar-blip.stale{background:#94a3b8;box-shadow:none}
 .radar-blip.standby{background:#6366f1;box-shadow:0 0 8px #6366f1}
-.radar-label{position:absolute;font-size:8px;color:#64748b;}
+.scan-lamp{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0}
+.scan-lamp.green{background:#22c55e;box-shadow:0 0 8px #22c55e}
+.scan-lamp.orange{background:#f59e0b;box-shadow:0 0 8px #f59e0b;animation:breathe 1.2s ease-in-out infinite}
+.scan-lamp.red{background:#ef4444;box-shadow:0 0 10px #ef4444}
+.scan-lamp.gray{background:#475569}
 </style>
 </head>
 
@@ -184,7 +188,7 @@ body{font-family:'Inter',sans-serif}
         </select>
         <span class="text-slate-600">Pusat: lokasi admin / default Banten</span>
     </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+    <div class="flex flex-col items-center gap-3">
         <div class="radar-wrap" id="agent-radar-disk" aria-label="Radar Agent CGO">
             <div class="radar-ring r1"></div>
             <div class="radar-ring r2"></div>
@@ -194,8 +198,9 @@ body{font-family:'Inter',sans-serif}
             <div class="radar-center-dot" title="Pusat pencarian"></div>
             <div id="agent-radar-blips"></div>
         </div>
-        <div id="agent-presence-feed" class="space-y-1 max-h-64 overflow-y-auto">
-            <div class="text-[10px] text-slate-500">Menunggu snapshot presence Agent CGO...</div>
+        <div class="w-full text-[9px] text-slate-600 text-center code-font">Titik pusat = lokasi admin · Blip = agent dalam radius</div>
+        <div id="agent-presence-feed" class="w-full space-y-2 max-h-72 overflow-y-auto">
+            <div class="text-[10px] text-slate-500 text-center">Menunggu snapshot presence Agent CGO...</div>
         </div>
     </div>
 </section>
@@ -504,19 +509,23 @@ function renderSourceScan(scan) {
         const states = scan.fileStates || {};
         const entries = Object.entries(states);
         const stateMeta = {
-            QUEUED: ['text-slate-500','border-slate-800','○'],
-            READING: ['text-cyan-300','border-cyan-800','◉'],
-            ANALYZING: ['text-amber-300','border-amber-800','◌'],
-            CLEAN: ['text-emerald-300','border-emerald-800','✓'],
-            FINDING: ['text-rose-300','border-rose-800','!'],
-            FAILED: ['text-rose-300','border-rose-800','×'],
-            NOT_DEPLOYED: ['text-slate-400','border-slate-700','○']
+            QUEUED:   { text:'text-slate-500', border:'border-slate-800', lamp:'gray',   mark:'○' },
+            READING:  { text:'text-cyan-300',  border:'border-cyan-700',  lamp:'orange', mark:'◉' },
+            ANALYZING:{ text:'text-amber-300', border:'border-amber-700', lamp:'orange', mark:'◌' },
+            CLEAN:    { text:'text-emerald-300',border:'border-emerald-800',lamp:'green', mark:'✓' },
+            REVIEW:   { text:'text-amber-300', border:'border-amber-800', lamp:'orange', mark:'!' },
+            FINDING:  { text:'text-rose-300',  border:'border-rose-800',  lamp:'red',    mark:'!' },
+            FAILED:   { text:'text-rose-300',  border:'border-rose-800',  lamp:'red',    mark:'×' },
+            NOT_DEPLOYED: { text:'text-slate-400', border:'border-slate-700', lamp:'gray', mark:'○' }
         };
         sourceScanFilesEl.innerHTML = entries.map(([file, info]) => {
             const meta = stateMeta[info?.status] || stateMeta.QUEUED;
             const active = ['READING','ANALYZING'].includes(info?.status);
-            return `<div class="rounded-md border ${meta[1]} bg-slate-950/80 px-2 py-1.5 ${active ? 'ring-1 ring-cyan-900/60' : ''}">
-                <div class="flex items-center gap-1.5 text-[9px] code-font ${meta[0]}"><span class="${active ? 'animate-pulse' : ''}">${meta[2]}</span><span class="truncate">${esc(file)}</span></div>
+            return `<div class="rounded-md border ${meta.border} bg-slate-950/80 px-2 py-1.5 ${active ? 'ring-1 ring-amber-700/50' : ''}">
+                <div class="flex items-center gap-1.5 text-[9px] code-font ${meta.text}">
+                  <span class="scan-lamp ${meta.lamp}" title="${esc(info?.status || '')}"></span>
+                  <span class="truncate">${esc(file)}</span>
+                </div>
                 <div class="text-[8px] text-slate-600 mt-0.5 truncate">${esc(info?.message || '')}</div>
             </div>`;
         }).join('');
@@ -827,17 +836,44 @@ function renderAgentPresence(state) {
     renderRadarBlips(items);
     if (!agentPresenceFeedEl) return;
     if (!items.length) {
-        agentPresenceFeedEl.innerHTML = `<div class="text-[10px] text-slate-500">Belum ada Agent approved yang online / punya GPS live. Agent harus ON di agentcgo.html agar muncul di radar.</div>`;
+        agentPresenceFeedEl.innerHTML = `<div class="text-[10px] text-slate-500 text-center py-3">Belum ada Agent approved yang online / punya GPS live.<br/>Buka <span class="text-cyan-400">mitra/agentcgo.html</span> → AKTIFKAN + izinkan lokasi.</div>`;
         return;
     }
-    agentPresenceFeedEl.innerHTML = items.slice(0, 40).map(item => {
-        const age = Number.isFinite(Number(item.ageMs)) ? Math.max(0, Math.round(Number(item.ageMs) / 1000)) : null;
+    // Sort: in-radius first, then by distance
+    const ranked = items.map(item => {
         const dist = item.location ? haversineKm(radarCenter, item.location) : null;
+        return { ...item, _dist: dist, _in: dist != null && dist <= radarRadiusKm };
+    }).sort((a,b) => {
+        if (a._in !== b._in) return a._in ? -1 : 1;
+        if (a._dist == null && b._dist == null) return 0;
+        if (a._dist == null) return 1;
+        if (b._dist == null) return -1;
+        return a._dist - b._dist;
+    });
+    agentPresenceFeedEl.innerHTML = ranked.slice(0, 40).map(item => {
+        const age = Number.isFinite(Number(item.ageMs)) ? Math.max(0, Math.round(Number(item.ageMs) / 1000)) : null;
+        const dist = item._dist;
         const st = item.status || (item.available === false ? 'BUSY' : 'READY');
         const color = st === 'READY' ? 'text-emerald-400' : st === 'BUSY' ? 'text-amber-400' : st === 'STALE' ? 'text-slate-400' : 'text-indigo-300';
-        return `<div class="flex justify-between items-center gap-3 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-[10px]">
-            <div class="min-w-0"><div class="font-semibold text-slate-200 truncate">${esc(item.name || 'Agent CGO')}</div><div class="text-slate-500 code-font">${esc(item.agentId || item.id || '-')}${dist != null ? ' · ' + dist.toFixed(1) + ' km' : ' · no GPS'}</div></div>
-            <div class="text-right shrink-0"><div class="${color} font-bold">${esc(st)}</div><div class="text-slate-600">${age == null ? '-' : age + 's'}</div></div>
+        const lat = item.location?.lat, lng = item.location?.lng;
+        const coord = (Number.isFinite(lat) && Number.isFinite(lng)) ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : 'koordinat belum ada';
+        const rangeBadge = item._in ? `<span class="text-emerald-500">dalam radius</span>` : (dist != null ? `<span class="text-slate-500">di luar radius</span>` : `<span class="text-indigo-400">STANDBY</span>`);
+        return `<div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 text-[10px]">
+            <div class="flex justify-between items-start gap-3">
+              <div class="min-w-0">
+                <div class="font-semibold text-slate-100 truncate">${esc(item.name || 'Agent CGO')}</div>
+                <div class="text-slate-500 code-font mt-0.5">${esc(item.agentId || item.id || '-')}</div>
+              </div>
+              <div class="text-right shrink-0">
+                <div class="${color} font-bold">${esc(st)}</div>
+                <div class="text-slate-600">${age == null ? '-' : age + 's lalu'}</div>
+              </div>
+            </div>
+            <div class="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-slate-400 code-font">
+              <span>📍 ${dist != null ? dist.toFixed(2) + ' km' : '— km'}</span>
+              <span>${rangeBadge}</span>
+              <span class="text-slate-600">${esc(coord)}</span>
+            </div>
         </div>`;
     }).join('');
 }

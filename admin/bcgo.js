@@ -731,8 +731,12 @@ export function runAutonomousEngine(onCycleUpdate) {
     }
   }
 
+  let sourceScanInFlight = false;
+  let sourceScanTimer = null;
+
   async function runInternalSourceScan() {
-    if (stopped || !authorized) return;
+    if (stopped || !authorized || sourceScanInFlight) return;
+    sourceScanInFlight = true;
     const scan = makeInitialSourceScan();
     scan.status = "SCANNING";
     scan.phase = "READING";
@@ -741,7 +745,7 @@ export function runAutonomousEngine(onCycleUpdate) {
 
     const contents = new Map();
     for (let i = 0; i < INTERNAL_SOURCE_SCAN.length; i++) {
-      if (stopped || !authorized) return;
+      if (stopped || !authorized) { sourceScanInFlight = false; return; }
       const item = INTERNAL_SOURCE_SCAN[i];
       scan.currentFile = item.file;
       scan.phase = "READING";
@@ -755,7 +759,24 @@ export function runAutonomousEngine(onCycleUpdate) {
         contents.set(item.file, text);
         scan.filesReadable++;
         scan.filesScanned++;
-        scan.fileStates[item.file] = { status: "CLEAN", message: `${text.length.toLocaleString("id-ID")} karakter terbaca.` };
+        // Pemeriksaan isi ringan (lampu status)
+        const issues = [];
+        if (/\bTODO\b|\bFIXME\b|\bXXX\b/.test(text)) issues.push("TODO/FIXME");
+        if (/console\.(error|warn)\s*\(/.test(text) && /throw new Error|ERROR:/.test(text)) issues.push("error-markers");
+        // HTML balance rough
+        if (/\.html$/i.test(item.file)) {
+          const opens = (text.match(/<(?:div|section|main|article)\b/gi) || []).length;
+          const closes = (text.match(/<\/(?:div|section|main|article)>/gi) || []).length;
+          if (opens > closes + 5) issues.push("html-unbalanced");
+        }
+        // JS: unfinished placeholder paths
+        if (/brain\/|shared\//.test(text) && !/node_modules/.test(text)) issues.push("legacy-path");
+        if (issues.length) {
+          scan.fileStates[item.file] = { status: "REVIEW", message: `${text.length.toLocaleString("id-ID")} karakter · pantau: ${issues.join(", ")}`, issues };
+          scan.findings.push({ type: "SOURCE_REVIEW", severity: "LOW", sourceFile: item.file, message: `Source terbaca, perlu pantau: ${issues.join(", ")}` });
+        } else {
+          scan.fileStates[item.file] = { status: "CLEAN", message: `${text.length.toLocaleString("id-ID")} karakter terbaca · sehat.` };
+        }
       } catch (error) {
         scan.filesFailed++;
         scan.filesScanned++;
@@ -786,9 +807,12 @@ export function runAutonomousEngine(onCycleUpdate) {
         let target;
         try { target = new URL(ref, new URL(item.path, rootUrl)).pathname.replace(/^\//, ""); } catch { continue; }
         if (target.startsWith("cikur-ai/")) target = target.slice("cikur-ai/".length);
-        const known = INTERNAL_SOURCE_SCAN.some(x => x.path === target);
-        if (known) relations.push({ type: "CROSS_FILE_SURFACE", status: "LINKED", confidence: "VERIFIED", sourceFile: item.file, targetFile: target, key: ref });
-        else if (/\.(?:html|js)$/i.test(target)) relations.push({ type: "CROSS_FILE_SURFACE", status: "UNKNOWN", confidence: "UNKNOWN", sourceFile: item.file, targetFile: target, key: ref });
+        const base = target.split("/").pop();
+        const matched = INTERNAL_SOURCE_SCAN.find(x => x.path === target || x.file === target || x.file.endsWith("/" + base) || x.file === base || x.path.endsWith("/" + base));
+        if (matched) relations.push({ type: "CROSS_FILE_SURFACE", status: "LINKED", confidence: "VERIFIED", sourceFile: item.file, targetFile: matched.file, key: ref });
+        else if (/\.(?:html|js)$/i.test(target) && !/tailwind|leaflet|firebase|googleapis|cdn\./i.test(target)) {
+          relations.push({ type: "CROSS_FILE_SURFACE", status: "UNKNOWN", confidence: "UNKNOWN", sourceFile: item.file, targetFile: target, key: ref });
+        }
       }
     }
     // Explicit internal contracts that must remain wired.
@@ -796,7 +820,14 @@ export function runAutonomousEngine(onCycleUpdate) {
       ["admin/bcgo.html", "admin/bcgo.js", "BCGO_ENGINE_IMPORT"],
       ["admin/bcgo.js", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
       ["admin/bcgo-admin.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
-      ["admin/data-cgo.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"]
+      ["admin/data-cgo.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
+      ["admin/bcgo.js", "cgo-ai-radar.js", "RADAR_ENGINE"],
+      ["index.html", "cikur-config.js", "CUSTOMER_CONFIG"],
+      ["customer/food.html", "cikur-config.js", "CUSTOMER_CONFIG"],
+      ["customer/ride.html", "cikur-config.js", "CUSTOMER_CONFIG"],
+      ["mitra/agentcgo.html", "cikur-config.js", "MITRA_CONFIG"],
+      ["mitra/driver.html", "cikur-config.js", "MITRA_CONFIG"],
+      ["mitra/resto.html", "cikur-config.js", "MITRA_CONFIG"]
     ];
     for (const [a,b,key] of contracts) {
       const text=contents.get(a)||"";
@@ -830,6 +861,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     state.fileNerves = nerves;
     state.sourceScan = scan;
     publishToUI(safeClone(state));
+    sourceScanInFlight = false;
   }
 
   function refreshState() {
@@ -945,10 +977,20 @@ export function runAutonomousEngine(onCycleUpdate) {
     startSystemLogs();
     startFirestoreProbe();
     startAgentPresence();
-    runInternalSourceScan().catch(error => {
-      state.sourceScan = { ...makeInitialSourceScan(), status: "DEGRADED", phase: "COMPLETE", message: String(error?.message || error) };
-      publishToUI(safeClone(state));
-    });
+    const kickSourceScan = () => {
+      runInternalSourceScan().catch(error => {
+        sourceScanInFlight = false;
+        state.sourceScan = { ...makeInitialSourceScan(), status: "DEGRADED", phase: "COMPLETE", message: String(error?.message || error) };
+        publishToUI(safeClone(state));
+      });
+    };
+    kickSourceScan();
+    // Rescan berkala agar pembacaan file tetap presisi (bukan sekali saja)
+    if (sourceScanTimer) clearInterval(sourceScanTimer);
+    sourceScanTimer = setInterval(() => {
+      if (stopped || !authorized) return;
+      kickSourceScan();
+    }, 75000);
     refreshTimer = setInterval(refreshState, 15000);
     phaseIndex = -1;
     cycleNo = 0;
