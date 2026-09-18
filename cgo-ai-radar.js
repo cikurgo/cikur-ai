@@ -75,8 +75,12 @@ function normalizeAgent(raw, nowMs) {
   const active = item.active === true;
   const available = item.available !== false;
 
+  // Hormati status dari BCGO bila sudah dihitung (hindari double reclassify / jarak salah)
+  const upstream = String(item.status || "").toUpperCase();
   let status = "OFFLINE";
-  if (active && geoUsable && ageMs <= R.freshnessMs) {
+  if (["READY", "BUSY", "STALE", "STANDBY"].includes(upstream)) {
+    status = upstream;
+  } else if (active && geoUsable && ageMs <= R.freshnessMs) {
     status = available ? "READY" : "BUSY";
   } else if (active && ageMs <= R.offlineAfterMs) {
     status = "STALE";
