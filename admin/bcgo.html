@@ -304,16 +304,18 @@ body{font-family:'Inter',sans-serif}
 
 <script type="module">
 import { runAutonomousEngine } from './bcgo.js?v=4.3.0-INTERNAL-SOURCE-SCAN-20260917';
-import { install as installInternalBrain } from '../cgo-ai-browser-adapter.js';
 
 // Bridge internal CGO brain ke BCGO_STATE (tanpa AI eksternal)
 let internalBrain = null;
 try {
-  internalBrain = installInternalBrain();
-  window.CGOInternalBrain = internalBrain;
-  console.log('[BCGO] Internal CGO brain terpasang:', internalBrain?.version);
+  const adapter = await import('../cgo-ai-browser-adapter.js');
+  if (typeof adapter.install === 'function') {
+    internalBrain = adapter.install();
+    window.CGOInternalBrain = internalBrain;
+    console.log('[BCGO] Internal CGO brain terpasang:', internalBrain?.version);
+  }
 } catch (err) {
-  console.warn('[BCGO] Internal brain gagal dimuat (monitor tetap jalan):', err);
+  console.warn('[BCGO] Internal brain tidak tersedia; BCGO monitor tetap berjalan:', err);
 }
 
 
@@ -388,6 +390,7 @@ const agentPresenceSyncEl = $('agent-presence-sync');
 const agentPresenceFeedEl = $('agent-presence-feed');
 
 let liveState = null;
+let chatRequestBusy = false;
 
 function esc(value) {
     return String(value ?? '-')
@@ -700,6 +703,24 @@ function setChatLiveStatus(text, kind = 'working') {
     chatFeed.scrollTop = chatFeed.scrollHeight;
 }
 
+function setChatBusy(busy) {
+    chatRequestBusy = !!busy;
+    if (chatInput) {
+        chatInput.disabled = chatRequestBusy;
+        chatInput.setAttribute('aria-busy', String(chatRequestBusy));
+    }
+    const submit = chatForm?.querySelector('button[type=submit], button:not(.quick-q)');
+    if (submit) {
+        submit.disabled = chatRequestBusy;
+        submit.classList.toggle('opacity-50', chatRequestBusy);
+        submit.classList.toggle('cursor-not-allowed', chatRequestBusy);
+    }
+    document.querySelectorAll('.quick-q').forEach(button => {
+        button.disabled = chatRequestBusy;
+        button.classList.toggle('opacity-50', chatRequestBusy);
+    });
+}
+
 function getStateAgeText(state) {
     const t = state?.connection?.lastServerAt ? new Date(state.connection.lastServerAt).getTime() : 0;
     if (!t) return 'belum ada sinyal server';
@@ -727,16 +748,19 @@ async function sendQuestion(question) {
     if (!text || chatRequestBusy) return;
     setChatBusy(true);
     addChat('user', text);
+    setChatLiveStatus('Memahami permintaan dan membaca state BCGO yang sedang hidup…', 'working');
     try {
         let answer = null;
         // 1) BCGO engine (telemetry + scanner + radar)
         const brain = window.BCGOBrain;
         if (brain?.ask) {
+            setChatLiveStatus('BCGO sedang memeriksa telemetry, scanner, dan state live…', 'working');
             answer = await Promise.resolve(brain.ask(text));
         }
         // 2) Internal CGO brain (investigation) jika jawaban generik / kosong
         const internal = window.CGOInternalBrain || internalBrain;
         const needsDeep = !answer || /belum punya bukti|belum bisa/i.test(String(answer));
+        if (needsDeep) setChatLiveStatus('Memeriksa konteks internal CGO tanpa membuat bukti baru…', 'working');
         if (needsDeep && internal && typeof internal.chatAnswer === 'function') {
             try {
                 const deep = await Promise.resolve(internal.chatAnswer(text));
@@ -968,7 +992,8 @@ runAutonomousEngine(state => {
 
     if (!chatFeed.dataset.ready) {
         chatFeed.dataset.ready = '1';
-        chatFeed.innerHTML = '';
+        const placeholder = chatFeed.querySelector(':scope > .text-xs.text-slate-500');
+        if (placeholder && chatFeed.children.length === 1) placeholder.remove();
     }
 });
 } catch (error) {
