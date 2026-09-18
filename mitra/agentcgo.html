@@ -857,6 +857,8 @@
             if (!el) return;
 
             agentOperationalOnline = application?.isOnline === true;
+            if (agentOperationalOnline) startAgentPresenceHeartbeat();
+            else stopAgentPresenceHeartbeat();
 
             el.innerHTML = `
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
@@ -891,9 +893,14 @@
                 await window.CikurCloud.updateMitraProfile(userProfile.uid, "agent", {
                     isOnline: nextStatus,
                     operationalStatus: nextStatus ? "online" : "offline",
-                    lastStatusChangeAt: new Date()
+                    lastStatusChangeAt: new Date(),
+                    presence: nextStatus
+                        ? { active: true, available: true, updatedAt: new Date().toISOString() }
+                        : { active: false, available: false, updatedAt: new Date().toISOString() }
                 });
                 agentOperationalOnline = nextStatus;
+                if (nextStatus) startAgentPresenceHeartbeat();
+                else stopAgentPresenceHeartbeat();
             } catch (error) {
                 console.error("[AGENT CGO] Gagal mengubah status operasional:", error);
                 alert("Status Agent gagal diperbarui. Silakan coba lagi.");
@@ -923,6 +930,62 @@
             `;
             renderAgentOperationalStatus(application);
             startListeningAgentOrders();
+        }
+
+
+        let agentPresenceWatchId = null;
+        let agentPresenceInterval = null;
+
+        function stopAgentPresenceHeartbeat() {
+            try { if (agentPresenceWatchId != null && navigator.geolocation) navigator.geolocation.clearWatch(agentPresenceWatchId); } catch (_) {}
+            agentPresenceWatchId = null;
+            if (agentPresenceInterval) { clearInterval(agentPresenceInterval); agentPresenceInterval = null; }
+        }
+
+        async function publishAgentPresence(coords) {
+            if (!userProfile?.uid || !window.CikurCloud?.updateMitraProfile) return;
+            const lat = Number(coords?.latitude ?? coords?.lat);
+            const lng = Number(coords?.longitude ?? coords?.lng ?? coords?.lon);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+            try {
+                await window.CikurCloud.updateMitraProfile(userProfile.uid, "agent", {
+                    isOnline: true,
+                    operationalStatus: "online",
+                    liveLocation: { lat, lng, accuracy: coords?.accuracy ?? null, updatedAt: new Date().toISOString() },
+                    presence: {
+                        active: true,
+                        available: true,
+                        updatedAt: new Date().toISOString(),
+                        location: { lat, lng, accuracy: coords?.accuracy ?? null }
+                    }
+                });
+            } catch (err) {
+                console.warn("[AGENT CGO] presence publish:", err);
+            }
+        }
+
+        function startAgentPresenceHeartbeat() {
+            stopAgentPresenceHeartbeat();
+            if (!navigator.geolocation) {
+                console.warn("[AGENT CGO] Geolocation tidak tersedia — radar BCGO hanya melihat status online tanpa GPS.");
+                return;
+            }
+            const push = () => {
+                navigator.geolocation.getCurrentPosition(
+                    pos => publishAgentPresence(pos.coords),
+                    err => console.warn("[AGENT CGO] GPS:", err?.message || err),
+                    { enableHighAccuracy: true, maximumAge: 30000, timeout: 15000 }
+                );
+            };
+            push();
+            agentPresenceInterval = setInterval(push, 45000);
+            try {
+                agentPresenceWatchId = navigator.geolocation.watchPosition(
+                    pos => publishAgentPresence(pos.coords),
+                    () => {},
+                    { enableHighAccuracy: true, maximumAge: 20000, timeout: 20000 }
+                );
+            } catch (_) {}
         }
 
         window.addEventListener("DOMContentLoaded", () => {
