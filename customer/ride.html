@@ -109,16 +109,19 @@ body{
 =========================== */
 .map-simulation {
     width: 100%;
-    height: 160px;
+    height: 220px;
     background: #cbd5e1;
     border-radius: 16px;
     margin-bottom: 16px;
     position: relative;
     overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     border: 1px solid var(--border-color);
+}
+.map-simulation .leaflet-container {
+    width: 100%;
+    height: 100%;
+    border-radius: 16px;
+    z-index: 1;
 }
 
 .map-simulation img {
@@ -277,21 +280,25 @@ body{
 
     <!-- ================= BOOKING VIEW ================= -->
     <div id="rideBookingView">
-        <!-- Simulasi Peta -->
-        <div class="map-simulation">
-            <img src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=600" alt="Map Simulation">
-            <div class="map-badge">📍 GPS Active - Menunggu Titik Jemput</div>
+        <!-- Peta Live (Leaflet) -->
+        <div class="map-simulation" style="position:relative; height:220px; padding:0; overflow:hidden;">
+            <div id="rideBookingMap" style="width:100%;height:220px;border-radius:16px;"></div>
+            <div class="map-badge" id="rideMapBadge">📍 Menunggu GPS…</div>
         </div>
 
         <!-- Form Titik Jemput & Tujuan -->
         <div class="ride-form-card">
             <div class="form-group">
                 <label>Lokasi Penjemputan</label>
-                <input type="text" id="pickupLocation" class="input-box" value="Lokasi Anda Saat Ini (GPS)">
+                <div style="display:flex;gap:6px;">
+                  <input type="text" id="pickupLocation" class="input-box" style="flex:1;margin:0;" value="" placeholder="Ambil dari GPS atau ketuk peta">
+                  <button type="button" class="btn-order" style="width:auto;padding:0 12px;margin:0;font-size:11px;white-space:nowrap;" onclick="useMyGPSPickup()">GPS</button>
+                </div>
             </div>
             <div class="form-group" style="margin-bottom: 0;">
                 <label>Tujuan Perjalanan</label>
-                <input type="text" id="destLocation" class="input-box" placeholder="Mau ke mana hari ini?">
+                <input type="text" id="destLocation" class="input-box" placeholder="Ketik alamat atau ketuk peta (tahan = tujuan)">
+                <p style="font-size:10px;color:#94a3b8;margin:4px 0 0;">Ketuk peta = jemput · Tahan lama di peta = tujuan</p>
             </div>
         </div>
 
@@ -387,6 +394,123 @@ function selectFleet(type, price) {
     document.getElementById("rideTotalPrice").innerText = "Rp " + selectedRide.price.toLocaleString('id-ID');
 }
 
+
+/* ===== BOOKING MAP (Leaflet) ===== */
+let rideBookingMap = null;
+let pickupMarker = null;
+let destMarker = null;
+let pickupCoords = null;
+let destCoords = null;
+let longPressTimer = null;
+
+function setRideMapBadge(text) {
+    const el = document.getElementById('rideMapBadge');
+    if (el) el.textContent = text;
+}
+
+function initRideBookingMap(lat = -6.3245, lon = 106.1524) {
+    const el = document.getElementById('rideBookingMap');
+    if (!el || typeof L === 'undefined') return;
+    if (rideBookingMap) {
+        try {
+            rideBookingMap.setView([lat, lon], 15);
+            rideBookingMap.invalidateSize();
+        } catch (_) {}
+        return;
+    }
+    rideBookingMap = L.map('rideBookingMap').setView([lat, lon], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap'
+    }).addTo(rideBookingMap);
+
+    rideBookingMap.on('click', (e) => {
+        setPickup(e.latlng.lat, e.latlng.lng, true);
+    });
+
+    const mapEl = rideBookingMap.getContainer();
+    const clearPress = () => { if (longPressTimer) clearTimeout(longPressTimer); longPressTimer = null; };
+    mapEl.addEventListener('contextmenu', (ev) => {
+        ev.preventDefault();
+        const rect = mapEl.getBoundingClientRect();
+        const point = L.point(ev.clientX - rect.left, ev.clientY - rect.top);
+        const latlng = rideBookingMap.containerPointToLatLng(point);
+        setDestination(latlng.lat, latlng.lng, true);
+    });
+    mapEl.addEventListener('touchstart', (ev) => {
+        if (ev.touches.length !== 1) return;
+        const tch = ev.touches[0];
+        longPressTimer = setTimeout(() => {
+            const rect = mapEl.getBoundingClientRect();
+            const point = L.point(tch.clientX - rect.left, tch.clientY - rect.top);
+            const latlng = rideBookingMap.containerPointToLatLng(point);
+            setDestination(latlng.lat, latlng.lng, true);
+        }, 650);
+    }, { passive: true });
+    mapEl.addEventListener('touchend', clearPress);
+    mapEl.addEventListener('touchmove', clearPress);
+
+    setTimeout(() => { try { rideBookingMap.invalidateSize(); } catch (_) {} }, 300);
+}
+
+function setPickup(lat, lng, fromMap) {
+    pickupCoords = { lat: Number(lat), lng: Number(lng) };
+    if (!rideBookingMap) initRideBookingMap(lat, lng);
+    if (pickupMarker) pickupMarker.setLatLng([lat, lng]);
+    else pickupMarker = L.marker([lat, lng]).addTo(rideBookingMap).bindPopup('Titik jemput');
+    rideBookingMap.panTo([lat, lng]);
+    const input = document.getElementById('pickupLocation');
+    if (input && fromMap) input.value = Number(lat).toFixed(5) + ', ' + Number(lng).toFixed(5);
+    setRideMapBadge('📍 Jemput diset · Tahan lama / klik kanan = tujuan');
+    fitRideBounds();
+}
+
+function setDestination(lat, lng, fromMap) {
+    destCoords = { lat: Number(lat), lng: Number(lng) };
+    if (!rideBookingMap) initRideBookingMap(lat, lng);
+    if (destMarker) destMarker.setLatLng([lat, lng]);
+    else destMarker = L.circleMarker([lat, lng], { radius: 9, color: '#dc2626', fillColor: '#ef4444', fillOpacity: 0.9 }).addTo(rideBookingMap).bindPopup('Tujuan');
+    const input = document.getElementById('destLocation');
+    if (input && fromMap) input.value = Number(lat).toFixed(5) + ', ' + Number(lng).toFixed(5);
+    setRideMapBadge('📍 Jemput + Tujuan siap');
+    fitRideBounds();
+}
+
+function fitRideBounds() {
+    if (!rideBookingMap || !pickupCoords) return;
+    if (destCoords) {
+        const b = L.latLngBounds([
+            [pickupCoords.lat, pickupCoords.lng],
+            [destCoords.lat, destCoords.lng]
+        ]);
+        rideBookingMap.fitBounds(b.pad(0.3));
+    }
+}
+
+window.useMyGPSPickup = function useMyGPSPickup() {
+    if (!navigator.geolocation) {
+        alert('GPS tidak tersedia di perangkat ini.');
+        return;
+    }
+    setRideMapBadge('📍 Mengambil GPS…');
+    navigator.geolocation.getCurrentPosition(
+        (pos) => {
+            setPickup(pos.coords.latitude, pos.coords.longitude, true);
+            setRideMapBadge('📍 GPS aktif — titik jemput dari lokasi Anda');
+        },
+        () => setRideMapBadge('📍 GPS gagal — ketuk peta untuk jemput'),
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
+    );
+};
+
+function bootRideBookingMap() {
+    initRideBookingMap();
+    useMyGPSPickup();
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootRideBookingMap);
+else bootRideBookingMap();
+
+
 async function loadRideUser() {
     if (!window.CikurCloud) return;
     try {
@@ -412,9 +536,13 @@ async function prosesPesanRide() {
         alert("[!] Mohon masukkan tujuan perjalanan terlebih dahulu.");
         return;
     }
-    if (!pickup || pickup === "Lokasi Anda Saat Ini (GPS)") {
-        alert("[!] Mohon tentukan lokasi penjemputan terlebih dahulu.");
+    if (!pickup) {
+        alert("[!] Mohon tentukan lokasi penjemputan (tombol GPS atau ketuk peta).");
         return;
+    }
+    if (!pickupCoords && /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(pickup)) {
+        const parts = pickup.split(',').map(s => Number(s.trim()));
+        if (parts.length === 2 && parts.every(Number.isFinite)) pickupCoords = { lat: parts[0], lng: parts[1] };
     }
     if (!window.CikurCloud) {
         alert("[!] CIKUR Cloud belum siap. Silakan coba lagi.");
@@ -442,6 +570,10 @@ async function prosesPesanRide() {
             fare: selectedRide.price,
             pickup,
             destination,
+            pickupLat: pickupCoords ? pickupCoords.lat : null,
+            pickupLng: pickupCoords ? pickupCoords.lng : null,
+            destLat: destCoords ? destCoords.lat : null,
+            destLng: destCoords ? destCoords.lng : null,
             customerName: userProfile.name || "Customer",
             customerPhone: userProfile.phone || "",
             paymentMethod: chosenPaymentMethod,
