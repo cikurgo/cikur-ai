@@ -1944,7 +1944,7 @@ function startListeningFoodOrders() {
     unsubscribeFoodOrders = window.CikurCloud.listenOrders("FOOD", (orders) => {
         latestFoodOrdersCache = orders.filter(o =>
             o.restoId === currentRestoId &&
-            ["PENDING", "DIMASAK", "SIAP_DIAMBIL", "DIAMBIL_DRIVER", "DIANTAR"].includes(o.status)
+            ["PENDING", "DIMASAK", "SIAP_DIAMBIL", "DIAMBIL_DRIVER", "DIANTAR", "DIBATALKAN_CUSTOMER"].includes(o.status)
         );
         renderIncomingOrders(latestFoodOrdersCache);
     });
@@ -1964,7 +1964,8 @@ function renderIncomingOrders(orders) {
         DIMASAK: "Sedang Dimasak",
         SIAP_DIAMBIL: "Menunggu Driver",
         DIAMBIL_DRIVER: "Diambil Driver",
-        DIANTAR: "Dalam Pengantaran"
+        DIANTAR: "Dalam Pengantaran",
+        DIBATALKAN_CUSTOMER: "Dibatalkan Customer"
     };
 
     let html = "";
@@ -1981,7 +1982,9 @@ function renderIncomingOrders(orders) {
         }).join('') || '<i style="color: #94a3b8; font-size: 10px;">Belum ada pesan chat.</i>';
 
         let actionButtons = "";
-        if (order.status === "PENDING") {
+        if (order.status === "DIBATALKAN_CUSTOMER" || order.status === "DIBATALKAN") {
+            actionButtons = `<span style="font-size:11px;color:#b91c1c;font-weight:700;">Customer membatalkan pesanan.</span>`;
+        } else if (order.status === "PENDING") {
             actionButtons = `
                 <button type="button" onclick="updateFoodOrderStatus('${order.id}', 'DIMASAK')" class="btn-action">Terima & Masak</button>
                 <button type="button" onclick="updateFoodOrderStatus('${order.id}', 'DITOLAK_RESTO')" class="btn-action">Tolak Pesanan</button>
