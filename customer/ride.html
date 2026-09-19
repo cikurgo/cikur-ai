@@ -639,6 +639,49 @@ body{
     cursor: pointer;
 }
 
+
+/* ===== Alur ride: cari driver, batal, selesai & rating ===== */
+.search-box{display:flex;align-items:center;gap:14px;background:#fff7ed;border:1px solid #fed7aa;border-radius:16px;padding:14px;margin-bottom:12px}
+.search-box b{font-size:13px;font-weight:800}
+.search-box small{display:block;font-size:11px;color:#9a3412;font-weight:600;margin-top:2px}
+.radar{width:34px;height:34px;flex:0 0 34px;border-radius:50%;background:var(--primary-red);position:relative}
+.radar::after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid var(--primary-red);animation:radar 1.4s ease-out infinite}
+@keyframes radar{from{transform:scale(1);opacity:.8}to{transform:scale(2.3);opacity:0}}
+.btn-cancel{width:100%;height:44px;margin-top:12px;background:#fff;color:var(--primary-red);border:1.5px solid #fecaca;border-radius:12px;font-weight:800;font-size:13px;cursor:pointer}
+.finish-card{text-align:center;padding-top:4px}
+.finish-title{font-size:17px;font-weight:800}
+.finish-fare{font-size:13px;color:var(--text-muted);font-weight:600;margin:4px 0 12px}
+.stars{display:flex;justify-content:center;gap:6px;font-size:34px;margin-bottom:12px}
+.stars span{color:#e2e8f0;cursor:pointer;line-height:1}
+.stars span.on{color:#f59e0b}
+.btn-ghost{background:#f1f5f9;color:var(--text-main);margin-top:8px}
+
+/* ===== Kartu driver & chat interaktif ===== */
+.driver-avatar{width:56px;height:56px;overflow:hidden;flex:0 0 56px}
+.driver-avatar img{width:100%;height:100%;object-fit:cover}
+.driver-vehicle{font-size:12px;font-weight:700;color:#166534;margin-top:1px}
+.driver-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.plate{font-family:var(--font-mono);font-weight:700;font-size:13px;letter-spacing:.5px;background:#fff;color:#0f172a;border:2px solid #0f172a;border-radius:8px;padding:3px 8px;white-space:nowrap}
+.call-btn{width:36px;height:36px;border-radius:50%;background:#16a34a;color:#fff;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:16px}
+.chat-box{max-height:220px;min-height:90px;background:#f8fafc;border-radius:12px;padding:8px;gap:4px}
+.bubble{max-width:82%;padding:8px 11px;border-radius:14px;font-size:12px;font-weight:600;line-height:1.4;word-break:break-word}
+.bubble small{display:block;font-size:9px;font-weight:600;opacity:.65;margin-top:3px;text-align:right}
+.bubble.me{align-self:flex-end;background:var(--primary-red);color:#fff;border-bottom-right-radius:4px}
+.bubble.them{align-self:flex-start;background:#fff;color:#0f172a;border:1px solid var(--border-color);border-bottom-left-radius:4px}
+.bubble.sys{align-self:center;background:#e2e8f0;color:#475569;font-size:10px;border-radius:999px;padding:4px 10px;text-align:center}
+.quick-row{display:flex;gap:6px;overflow-x:auto;margin-bottom:8px;padding-bottom:2px}
+.quick-row button{flex:0 0 auto;border:1px solid var(--border-color);background:#fff;border-radius:999px;padding:6px 11px;font-size:11px;font-weight:700;color:#334155;cursor:pointer}
+.ride-sheet .checkout-box{position:sticky;bottom:0;z-index:5}
+
+/* ===== Alasan batal, timeout cari driver ===== */
+.sheet-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:100;display:none;align-items:flex-end;justify-content:center}
+.sheet-overlay.show{display:flex}
+.sheet-modal{width:100%;max-width:440px;background:#fff;border-radius:22px 22px 0 0;padding:14px 16px 20px}
+.sheet-modal h3{font-size:15px;font-weight:800;margin:2px 0 2px}
+.sheet-modal p{font-size:12px;color:var(--text-muted);font-weight:600}
+.reason-btn{display:block;width:100%;text-align:left;padding:12px;border:1.5px solid var(--border-color);border-radius:12px;background:#fff;font-weight:700;font-size:13px;margin-top:8px;cursor:pointer;color:var(--text-main)}
+.reason-btn.on{border-color:var(--primary-red);background:#fff5f5}
+.btn-mini{margin-top:8px;border:0;background:var(--primary-red);color:#fff;font-weight:800;font-size:12px;border-radius:10px;padding:8px 14px;cursor:pointer}
 </style>
 
 <style id="cgo-modern-toast-style">
@@ -766,15 +809,19 @@ body{
                 <span class="order-id-chip">#<span id="trackingOrderId">-</span></span>
             </div>
 
+            <div id="trackingSearching" class="search-box"><div class="radar"></div><div><b id="searchTitle">Mencari driver terdekat…</b><small id="searchSub">Biasanya kurang dari 1 menit</small><button type="button" id="btnSearchRetry" class="btn-mini" style="display:none;" onclick="retrySearch()">Tunggu lagi</button></div></div>
+
             <!-- Driver card (muncul saat driver menerima) -->
             <div id="trackingDriverBox" class="driver-card" style="display:none;">
-                <div class="driver-avatar">🧑‍✈️</div>
+                <div class="driver-avatar"><img id="trackingDriverPhoto" alt="Foto driver" style="display:none;"><span id="trackingDriverEmoji">🧑‍✈️</span></div>
                 <div class="driver-info">
                     <div class="driver-name" id="trackingDriverName">Driver CIKUR GO</div>
-                    <div class="driver-sub">Menuju lokasi penjemputan</div>
+                    <div class="driver-vehicle" id="trackingDriverVehicle">-</div>
+                    <div class="driver-sub" id="trackingDriverSub">Menuju lokasi penjemputan</div>
                 </div>
-                <div class="driver-actions">
-                    <span class="driver-live">LIVE</span>
+                <div class="driver-side">
+                    <div class="plate" id="trackingDriverPlate">-</div>
+                    <a id="trackingDriverCall" class="call-btn" href="#" style="display:none;" aria-label="Telepon driver">📞</a>
                 </div>
             </div>
 
@@ -784,19 +831,36 @@ body{
                 <div class="trip-fare" id="trackingFareText">-</div>
             </div>
 
-            <div class="chat-panel">
+            <div class="chat-panel" id="trackingChatPanel" style="display:none;">
                 <div class="chat-title">Chat dengan driver</div>
                 <div id="trackingChatBox" class="chat-box">
                     <div class="chat-empty">Belum ada pesan.</div>
                 </div>
+                <div class="quick-row">
+                    <button type="button" onclick="quickChat('Saya sudah di titik jemput')">Saya sudah di titik jemput</button>
+                    <button type="button" onclick="quickChat('Mohon tunggu sebentar ya')">Mohon tunggu sebentar</button>
+                    <button type="button" onclick="quickChat('Oke, terima kasih')">Oke, terima kasih</button>
+                </div>
                 <div class="chat-compose">
-                    <input type="text" id="trackingChatInput" placeholder="Tulis pesan…">
+                    <input type="text" id="trackingChatInput" placeholder="Tulis pesan…" autocomplete="off" onkeydown="if(event.key==='Enter'){sendTrackingChat();}">
                     <button type="button" onclick="sendTrackingChat()">Kirim</button>
                 </div>
             </div>
 
+            <button type="button" id="btnCancelRideOrder" class="btn-cancel" onclick="openCancelSheet()">Batalkan Ride</button>
+
             <div id="trackingFinishNote" style="display:none;">
-                <button class="btn-order" onclick="resetRideBookingView()">Pesan Ride Baru</button>
+                <div class="finish-card">
+                    <div class="finish-title" id="finishTitle">Perjalanan selesai</div>
+                    <div class="finish-fare" id="finishFare">-</div>
+                    <div id="ratingBlock">
+                        <div class="stars" id="starRow">
+                            <span onclick="setRideRating(1)">★</span><span onclick="setRideRating(2)">★</span><span onclick="setRideRating(3)">★</span><span onclick="setRideRating(4)">★</span><span onclick="setRideRating(5)">★</span>
+                        </div>
+                        <button class="btn-order" onclick="submitRideRating()">Kirim Penilaian</button>
+                    </div>
+                    <button class="btn-order btn-ghost" onclick="resetRideBookingView()">Pesan Ride Baru</button>
+                </div>
             </div>
         </div>
     </div>
@@ -1050,7 +1114,8 @@ async function searchAddress(query, listEl, mode) {
         if (!res.ok) throw new Error('search failed');
         const data = await res.json();
         if (!Array.isArray(data) || !data.length) {
-            listEl.innerHTML = '<div class="suggest-item">Alamat tidak ditemukan</div>';
+            listEl.innerHTML = '<div class="suggest-item" style="color:#94a3b8;cursor:default;">Alamat tidak ditemukan. Coba nama jalan atau tempat lain.</div>';
+            setTimeout(() => { listEl.hidden = true; }, 2500);
             return;
         }
         listEl.innerHTML = data.map((item, i) => {
@@ -1239,11 +1304,13 @@ function showOrderTrackingView(orderId) {
         document.getElementById("trackingDestination").innerText = order.destination || "-";
         document.getElementById("trackingFareText").innerText = (order.vehicleName || "-") + " · Rp " + Number(order.fare || 0).toLocaleString("id-ID");
         setTrackingRouteMarkers(order);
+        applyRideStage(order);
 
         const driverBox = document.getElementById("trackingDriverBox");
         if (order.driverId) {
-            driverBox.style.display = "block";
+            driverBox.style.display = "flex";
             document.getElementById("trackingDriverName").innerText = order.driverName || "Driver CIKUR GO";
+            fillDriverCard(order);
             startTrackingDriverLocation(order.driverId);
         } else {
             driverBox.style.display = "none";
@@ -1262,12 +1329,7 @@ function showOrderTrackingView(orderId) {
     unsubscribeActiveRideMessages = window.CikurCloud.listenOrderMessages(orderId, (messages) => {
         const chatBox = document.getElementById("trackingChatBox");
         if (!chatBox) return;
-        chatBox.innerHTML = (messages || []).map(m => {
-            const isMe = m.sender === "customer";
-            const label = isMe ? "Anda" : (m.sender === "driver" ? "Driver" : "Sistem");
-            const safeText = String(m.text || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            return `<div style="background: ${isMe ? '#e0f2fe' : '#f1f5f9'}; color: ${isMe ? '#0369a1' : 'var(--text-main)'}; padding: 6px 10px; border-radius: 8px; max-width: 90%; ${isMe ? 'align-self: flex-end;' : ''}"><b>${label}:</b> ${safeText}</div>`;
-        }).join("") || '<div style="color: var(--text-muted); font-size: 11px;">Belum ada pesan.</div>';
+        chatBox.innerHTML = renderChatBubbles(messages);
         chatBox.scrollTop = chatBox.scrollHeight;
     });
 }
@@ -1353,13 +1415,12 @@ function startTrackingDriverLocation(driverId) {
 
 
 
-async function cancelActiveRideOrder() {
+async function cancelActiveRideOrder(reason) {
     if (!currentActiveRideOrderId || !userProfile.uid) return;
-    if (!confirm("Batalkan ride ini? Hanya bisa sebelum driver menerima.")) return;
-    const btn = document.getElementById("btnCancelRideOrder");
+        const btn = document.getElementById("btnCancelRideOrder");
     if (btn) { btn.disabled = true; btn.textContent = "Membatalkan…"; }
     try {
-        const result = await window.CikurCloud.cancelOrderByCustomer(currentActiveRideOrderId, userProfile.uid, "Dibatalkan customer");
+        const result = await window.CikurCloud.cancelOrderByCustomer(currentActiveRideOrderId, userProfile.uid, reason || "Dibatalkan customer");
         if (result && result.refunded) {
             alert("Ride dibatalkan. Refund Rp " + Number(result.refundAmount || 0).toLocaleString("id-ID") + " masuk CikurPay.");
         } else {
@@ -1382,12 +1443,123 @@ async function sendTrackingChat() {
     }
 }
 
+let cancelReason = "";
+function openCancelSheet() {
+    cancelReason = "";
+    document.querySelectorAll(".reason-btn").forEach((b) => b.classList.remove("on"));
+    document.getElementById("cancelSheet").classList.add("show");
+}
+function closeCancelSheet() { document.getElementById("cancelSheet").classList.remove("show"); }
+function pickCancelReason(btn) {
+    cancelReason = btn.dataset.r;
+    document.querySelectorAll(".reason-btn").forEach((b) => b.classList.toggle("on", b === btn));
+}
+function confirmCancelRide() {
+    if (!cancelReason) { alert("Silakan pilih alasan pembatalan dulu."); return; }
+    closeCancelSheet();
+    cancelActiveRideOrder(cancelReason);
+}
+
+let searchTimerId = null, searchBase = 0;
+function updateSearchBox(order) {
+    clearInterval(searchTimerId);
+    if (order.status !== "PENDING") { searchBase = 0; return; }
+    if (!searchBase) searchBase = (order.timestamp && order.timestamp.toMillis) ? order.timestamp.toMillis() : Date.now();
+    const tick = () => {
+        const sec = Math.max(0, Math.floor((Date.now() - searchBase) / 1000));
+        const late = sec >= 120;
+        document.getElementById("searchTitle").innerText = late ? "Driver belum ditemukan" : "Mencari driver terdekat…";
+        document.getElementById("searchSub").innerText = late
+            ? "Driver sekitar mungkin sedang sibuk. Tunggu lagi atau batalkan."
+            : "Sudah menunggu " + Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
+        document.getElementById("btnSearchRetry").style.display = late ? "inline-block" : "none";
+    };
+    tick();
+    searchTimerId = setInterval(tick, 1000);
+}
+function retrySearch() { searchBase = Date.now(); }
+
+function fillDriverCard(order) {
+    const img = document.getElementById("trackingDriverPhoto");
+    const emoji = document.getElementById("trackingDriverEmoji");
+    if (order.driverPhoto) { img.src = order.driverPhoto; img.style.display = "block"; emoji.style.display = "none"; }
+    else { img.style.display = "none"; emoji.style.display = "inline"; }
+    document.getElementById("trackingDriverPlate").innerText = order.driverPlate || "-";
+    document.getElementById("trackingDriverVehicle").innerText =
+        [order.driverVehicleType, order.driverVehicleModel].filter(Boolean).join(" · ") || order.vehicleName || "-";
+    const call = document.getElementById("trackingDriverCall");
+    const digits = String(order.driverPhone || "").replace(/\D/g, "");
+    if (digits.length >= 8) {
+        call.href = "tel:" + (digits.startsWith("0") ? "+62" + digits.slice(1) : "+" + digits);
+        call.style.display = "flex";
+    } else { call.style.display = "none"; }
+}
+
+function renderChatBubbles(messages) {
+    const esc = (t) => String(t || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const list = messages || [];
+    if (!list.length) return '<div class="chat-empty">Belum ada pesan. Sapa driver kamu 👋</div>';
+    return list.map((m) => {
+        if (m.sender === "system") return '<div class="bubble sys">' + esc(m.text) + '</div>';
+        const me = m.sender === "customer";
+        let t = "";
+        try { const d = m.timestamp && m.timestamp.toDate ? m.timestamp.toDate() : null; if (d) t = d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }); } catch (_) {}
+        return '<div class="bubble ' + (me ? "me" : "them") + '">' + esc(m.text) + (t ? '<small>' + t + '</small>' : '') + '</div>';
+    }).join("");
+}
+
+async function quickChat(text) {
+    if (!currentActiveRideOrderId) return;
+    try { await window.CikurCloud.sendOrderMessage(currentActiveRideOrderId, "customer", text); }
+    catch (error) { alert("Pesan gagal dikirim: " + (error?.message || error)); }
+}
+
+let rideRatingValue = 0;
+
+function applyRideStage(order) {
+    const s = order.status, arrived = !!order.driverArrived;
+    const cancelled = s === "DIBATALKAN_CUSTOMER" || s === "DIBATALKAN";
+    const text = s === "PENDING" ? "Mencari driver terdekat"
+        : s === "DIAMBIL_DRIVER" ? (arrived ? "Driver sudah tiba" : "Driver menuju lokasimu")
+        : s === "DIANTAR" ? "Dalam perjalanan"
+        : s === "SELESAI" ? "Perjalanan selesai" : "Ride dibatalkan";
+    document.getElementById("trackingStatusText").innerText = text;
+    document.getElementById("trackingStatusBadge").innerText = text;
+    document.getElementById("trackingSearching").style.display = s === "PENDING" ? "flex" : "none";
+    updateSearchBox(order);
+    document.getElementById("trackingChatPanel").style.display = (order.driverId && (s === "DIAMBIL_DRIVER" || s === "DIANTAR")) ? "block" : "none";
+    document.getElementById("trackingDriverSub").innerText = s === "DIANTAR" ? "Mengantar kamu ke tujuan"
+        : arrived ? "Sudah di titik jemput, segera temui driver" : "Menuju lokasi penjemputan";
+    if (s === "SELESAI" || cancelled) {
+        const cash = /tunai|cod/i.test(String(order.paymentMethod || "")) && order.paymentStatus !== "PAID";
+        const fare = "Rp " + Number(order.fare || 0).toLocaleString("id-ID");
+        document.getElementById("finishTitle").innerText = cancelled ? "Ride dibatalkan" : "Perjalanan selesai";
+        document.getElementById("finishFare").innerText = cancelled ? "Semoga kita bisa berjumpa lagi." : (cash ? "Bayar tunai ke driver: " + fare : "Total " + fare + " · " + (order.paymentMethod || ""));
+        document.getElementById("ratingBlock").style.display = (s === "SELESAI" && !order.rating) ? "block" : "none";
+    }
+}
+
+function setRideRating(v) {
+    rideRatingValue = v;
+    document.querySelectorAll("#starRow span").forEach((el, i) => el.classList.toggle("on", i < v));
+}
+
+async function submitRideRating() {
+    if (!rideRatingValue) { alert("Silakan pilih bintang dulu."); return; }
+    try {
+        await window.CikurCloud.updateOrderStatus(currentActiveRideOrderId, { rating: rideRatingValue });
+    } catch (e) { console.error("[CIKUR RIDE] Rating gagal:", e); }
+    document.getElementById("ratingBlock").style.display = "none";
+    alert("Terima kasih atas penilaianmu!");
+}
+
 function resetRideBookingView() {
     if (typeof unsubscribeActiveRideOrder === "function") unsubscribeActiveRideOrder();
     if (typeof unsubscribeActiveRideMessages === "function") unsubscribeActiveRideMessages();
     if (typeof unsubscribeDriverLocation === "function") unsubscribeDriverLocation();
     currentActiveRideOrderId = null;
     currentTrackedDriverId = null;
+    clearInterval(searchTimerId); searchBase = 0;
     /* placeholder removed in UI v2 */
     document.getElementById("trackingFinishNote").style.display = "none";
     document.getElementById("rideTrackingView").style.display = "none";
@@ -1400,6 +1572,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 </script>
 
+
+<div id="cancelSheet" class="sheet-overlay" onclick="if(event.target===this)closeCancelSheet()">
+    <div class="sheet-modal">
+        <h3>Kenapa kamu membatalkan?</h3>
+        <p>Pilih alasan supaya kami bisa memperbaiki layanan.</p>
+        <button type="button" class="reason-btn" data-r="Salah alamat jemput/tujuan" onclick="pickCancelReason(this)">Salah alamat jemput/tujuan</button>
+        <button type="button" class="reason-btn" data-r="Terlalu lama menunggu" onclick="pickCancelReason(this)">Terlalu lama menunggu</button>
+        <button type="button" class="reason-btn" data-r="Ingin ganti metode pembayaran" onclick="pickCancelReason(this)">Ingin ganti metode pembayaran</button>
+        <button type="button" class="reason-btn" data-r="Berubah pikiran" onclick="pickCancelReason(this)">Berubah pikiran</button>
+        <button type="button" class="btn-order" onclick="confirmCancelRide()">Batalkan Ride</button>
+        <button type="button" class="btn-order btn-ghost" onclick="closeCancelSheet()">Kembali</button>
+    </div>
+</div>
 
 <div id="cgoModernToast" class="cgo-modern-toast" aria-hidden="true">
  <div class="cgo-modern-toast-card">
