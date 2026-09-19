@@ -60,6 +60,14 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "customer/cgo-customer.js", path: "../customer/cgo-customer.js", role: "Customer Gateway" },
   { file: "customer/cgo-customer-conversation.js", path: "../customer/cgo-customer-conversation.js", role: "Customer Conversation" },
   { file: "customer/cgo-customer-reasoning.js", path: "../customer/cgo-customer-reasoning.js", role: "Customer Reasoning" },
+  { file: "customer/cgo-customer-memory.js", path: "../customer/cgo-customer-memory.js", role: "Customer Memory" },
+  { file: "customer/cgo-customer-planner.js", path: "../customer/cgo-customer-planner.js", role: "Customer Planner" },
+  { file: "customer/cgo-customer-knowledge.js", path: "../customer/cgo-customer-knowledge.js", role: "Customer Knowledge" },
+  { file: "customer/cgo-customer-discovery.js", path: "../customer/cgo-customer-discovery.js", role: "Customer Discovery" },
+  { file: "customer/cgo-customer-meta.js", path: "../customer/cgo-customer-meta.js", role: "Customer Meta" },
+  { file: "customer/cgo-customer-boundary.js", path: "../customer/cgo-customer-boundary.js", role: "Customer Boundary" },
+  { file: "customer/cgo-customer-guardian.js", path: "../customer/cgo-customer-guardian.js", role: "Customer Guardian" },
+  { file: "customer/cgo-customer-composer.js", path: "../customer/cgo-customer-composer.js", role: "Customer Composer" },
   { file: "mitra/agentcgo.html", path: "../mitra/agentcgo.html", role: "Mitra Agent" },
   { file: "mitra/resto.html", path: "../mitra/resto.html", role: "Mitra Resto" },
   { file: "mitra/driver.html", path: "../mitra/driver.html", role: "Mitra Driver" }
@@ -524,8 +532,22 @@ export function runAutonomousEngine(onCycleUpdate) {
       return `Saya berada di ${state.step} karena mesin sedang menjalankan: ${state.message} Target: ${state.targetCell}. Jika yang Anda tanyakan adalah penyebab error tertentu, sebutkan file atau error-nya agar saya tidak menebak.`;
     }
 
+    // Keyword umum "jelaskan/detail" jangan menelan objek spesifik (radar/scanner/saraf)
     if (/jelaskan|detail|rincian/.test(q)) {
-      return `Saya bisa menjelaskan berdasarkan bukti. Saat ini: ${metrics.active} anomali aktif, ${metrics.recovered} recovered, Firestore ${firestore.connected ? "LIVE" : "belum LIVE"}, target ${state.targetCell}. Untuk detail akar masalah, saya perlu kasus/file yang spesifik.`;
+      if (/radar|agent|gps|radius|terdekat/.test(q)) {
+        const ap = state.agentPresence || {};
+        return `Radar Agent CGO: TOTAL ${ap.count||0}, READY ${ap.freshCount||0}, GEO ${ap.geoCount||0}, STALE ${ap.staleCount||0}. Sensor: ${ap.status||"-"}. Pusat GPS admin harus terverifikasi; TOTAL ≠ otomatis dalam radius.`;
+      }
+      if (/scan|scanner|source|integrity/.test(q)) {
+        const sc = state.sourceScan || {};
+        return `Scanner source: status ${sc.status||"-"}, fase ${sc.phase||"-"}, terbaca ${sc.filesReadable||0}/${sc.totalFiles||0}, synchronized ${sc.relationSummary?.synchronized||0}, linked ${sc.relationSummary?.linked||0}, mismatch ${sc.relationSummary?.mismatch||0}. READABLE ≠ SYNCHRONIZED.`;
+      }
+      if (/saraf|nerve|organ/.test(q)) {
+        const nerves = state.fileNerves || {};
+        const lines = Object.keys(ORGAN_REGISTRY).slice(0, 12).map(f => `· ${f}: ${nerves[f]?.health?.overall || "UNKNOWN"}`);
+        return `Peta saraf:\n${lines.join("\n")}`;
+      }
+      return `Saya bisa menjelaskan berdasarkan bukti. Saat ini: ${metrics.active} anomali aktif, ${metrics.recovered} recovered, Firestore ${firestore.connected ? "LIVE" : "belum LIVE"}, target ${state.targetCell}. Untuk detail, sebutkan objek: radar, scanner, saraf, file, atau telemetry.`;
     }
 
     // Saraf / nerve per file
@@ -974,11 +996,14 @@ export function runAutonomousEngine(onCycleUpdate) {
     scan.relationSummary.variant = relations.filter(r=>r.status === "VARIANT").length;
     // SYNCHRONIZED hanya berarti source terbaca dan tidak memiliki kontrak
     // mismatch/unknown yang terkait. READABLE != SYNCHRONIZED.
+    // READABLE ≠ SYNCHRONIZED: butuh minimal 1 relasi LINKED + tanpa MISMATCH/UNKNOWN
     scan.relationSummary.synchronized = INTERNAL_SOURCE_SCAN.filter(item => {
       const fs = scan.fileStates[item.file];
       if (!fs || fs.status === "FAILED") return false;
       const related = relations.filter(r => r.sourceFile === item.file || r.targetFile === item.file);
-      return !related.some(r => r.status === "MISMATCH" || r.status === "UNKNOWN");
+      if (!related.length) return false; // terbaca saja ≠ tersinkron
+      if (related.some(r => r.status === "MISMATCH" || r.status === "UNKNOWN")) return false;
+      return related.some(r => r.status === "LINKED");
     }).length;
     scan.crossFileFindings = relations.filter(r=>r.status === "MISMATCH");
     scan.status = scan.filesFailed || scan.relationSummary.mismatch ? "DEGRADED" : "CLEAN";
@@ -995,8 +1020,17 @@ export function runAutonomousEngine(onCycleUpdate) {
       const hasMismatch = related.some(r => r.status === "MISMATCH");
       const hasUnknown = related.some(r => r.status === "UNKNOWN");
       const overall = fs?.status === "FAILED" || hasMismatch ? "ANOMALY" : fs?.status === "REVIEW" || hasUnknown ? "REVIEW" : "HEALTHY";
-      const dependency = fs?.status === "FAILED" ? "UNREADABLE" : hasUnknown ? "UNKNOWN" : "OBSERVED";
-      const contract = hasMismatch ? "MISMATCH" : hasUnknown ? "UNKNOWN" : related.length ? "LINKED" : "UNOBSERVED";
+      // DEP/CTR berbasis evidence saja — tidak pernah label "VERIFIED" palsu
+      const hasLinked = related.some(r => r.status === "LINKED");
+      const dependency = fs?.status === "FAILED" ? "UNREADABLE"
+        : hasUnknown ? "UNKNOWN"
+        : hasLinked ? "OBSERVED"
+        : related.length ? "PARTIAL"
+        : "UNOBSERVED";
+      const contract = hasMismatch ? "MISMATCH"
+        : hasUnknown ? "UNKNOWN"
+        : hasLinked ? "LINKED"
+        : "UNOBSERVED";
       nerves[organKey] = {
         health: {
           overall,

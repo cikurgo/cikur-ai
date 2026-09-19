@@ -170,11 +170,12 @@ body{font-family:'Inter',sans-serif}
         </div>
         <span id="agent-presence-status" class="text-[10px] code-font text-slate-400">CONNECTING</span>
     </div>
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-[10px]">
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-2 text-[10px]">
         <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">TOTAL <span id="agent-presence-active" class="font-bold text-emerald-400">0</span></div>
         <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">READY <span id="agent-presence-fresh" class="font-bold text-cyan-400">0</span></div>
         <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">STALE <span id="agent-presence-stale" class="font-bold text-amber-400">0</span></div>
         <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">GEO <span id="agent-presence-geo" class="font-bold text-indigo-300">0</span></div>
+        <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">IN RADIUS <span id="agent-presence-inradius" class="font-bold text-cyan-300">0</span></div>
         <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">SYNC <span id="agent-presence-sync" class="font-bold text-slate-300">-</span></div>
     </div>
     <div class="flex flex-wrap items-center gap-2 text-[10px]">
@@ -908,6 +909,14 @@ function renderAgentPresence(state) {
     if (agentPresenceStaleEl) agentPresenceStaleEl.textContent = presence.staleCount ?? 0;
     const geoEl = document.getElementById('agent-presence-geo');
     if (geoEl) geoEl.textContent = presence.geoCount ?? 0;
+    const itemsForRadius = Array.isArray(presence.items) ? presence.items : [];
+    const inRadiusCount = itemsForRadius.filter(it => {
+      if (!it.location) return false;
+      const d = haversineKm(radarCenter, it.location);
+      return d != null && d <= radarRadiusKm;
+    }).length;
+    const inEl = document.getElementById('agent-presence-inradius');
+    if (inEl) inEl.textContent = inRadiusCount;
     if (agentPresenceSyncEl) agentPresenceSyncEl.textContent = presence.lastServerAt ? formatTime(presence.lastServerAt) : '-';
     const items = Array.isArray(presence.items) ? presence.items : [];
     renderRadarBlips(items);
