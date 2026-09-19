@@ -84,6 +84,7 @@
         .chat-box { max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
         .chat-msg { font-size: 11px; padding: 6px 10px; border-radius: 8px; max-width: 85%; }
         .chat-msg.driver { background: #e0f2fe; color: #0369a1; align-self: flex-end; }
+        .chat-msg.sys { background: #f1f5f9; color: #64748b; align-self: center; font-size: 10px; border-radius: 999px; }
         .chat-msg.other { background: #e2e8f0; color: var(--text-main); align-self: flex-start; }
         .chat-input-group { display: flex; gap: 6px; margin-top: 4px; }
     </style>
@@ -124,6 +125,10 @@
                     <option value="Motor">Motor</option>
                     <option value="Mobil">Mobil</option>
                 </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Merek &amp; Tipe Kendaraan</label>
+                <input type="text" id="regVehicleModel" class="form-input" placeholder="Contoh: Honda Beat Hitam">
             </div>
             <div class="form-group">
                 <label class="form-label">Alamat Domisili</label>
@@ -501,6 +506,7 @@ async function saveDriverRegistration() {
             phone,
             vehicle,
             vehicleType,
+            vehicleModel: (document.getElementById("regVehicleModel") ? document.getElementById("regVehicleModel").value.trim() : ""),
             address,
             ktp,
             sim,
@@ -539,6 +545,7 @@ function openEditProfile() {
         document.getElementById("regName").value = currentMitraApplication.name || "";
         document.getElementById("regPhone").value = currentMitraApplication.phone || "";
         document.getElementById("regVehicle").value = currentMitraApplication.vehicle || "";
+        document.getElementById("regVehicleModel").value = currentMitraApplication.vehicleModel || "";
         document.getElementById("regAddress").value = currentMitraApplication.address || "";
         document.getElementById("regKtp").value = currentMitraApplication.ktp || "";
         document.getElementById("regSim").value = currentMitraApplication.sim || "";
@@ -795,7 +802,13 @@ function renderRideOrderList() {
     availableRideOrdersCache.forEach((ord) => {
         html += renderAvailableRideCard(ord);
     });
+    const saved = {};
+    const focusId = document.activeElement && document.activeElement.id;
+    container.querySelectorAll('input[id^="inputRideChat_"]').forEach((i) => { saved[i.id] = i.value; });
     container.innerHTML = html;
+    Object.keys(saved).forEach((id) => { const el = document.getElementById(id); if (el) el.value = saved[id]; });
+    if (focusId && document.getElementById(focusId)) document.getElementById(focusId).focus();
+    container.querySelectorAll(".chat-box").forEach((b) => { b.scrollTop = b.scrollHeight; });
 }
 
 function renderAvailableRideCard(ord) {
@@ -821,14 +834,19 @@ function renderAvailableRideCard(ord) {
 
 function renderMyActiveRideCard(ord) {
     const fare = Number(ord.fare || 0).toLocaleString("id-ID");
-    const status = ord.status === "DIAMBIL_DRIVER" ? "Menuju penumpang" : escText(ord.status || "Aktif");
+    const status = ord.status === "DIANTAR" ? "Sedang mengantar" : (ord.driverArrived ? "Menunggu penumpang" : "Menuju penumpang");
     const msgs = driverRideMessagesCache[ord.id] || [];
     const chatHtml = msgs.map((m) => {
         const isMe = m.sender === "driver";
         const label = isMe ? "Anda" : (m.sender === "customer" ? "Penumpang" : "Sistem");
-        return `<div class="chat-msg ${isMe ? "driver" : ""}" style="${isMe ? "background:#dbeafe;color:#1e40af;" : ""}"><b>${label}:</b> ${escText(m.text)}</div>`;
+        return `<div class="chat-msg ${isMe ? "driver" : (m.sender === "system" ? "sys" : "other")}">${escText(m.text)}</div>`;
     }).join("") || `<div style="color:var(--text-muted);font-size:10px;">Belum ada chat.</div>`;
-    const destQ = encodeURIComponent(ord.destination || ord.pickup || "");
+    const destQ = encodeURIComponent((ord.status === "DIANTAR" ? ord.destination : ord.pickup) || "");
+    const actionBtn = ord.status === "DIANTAR"
+        ? `<button type="button" class="btn-primary" style="flex:1;background:#16a34a;" onclick="completeRideOrder('${ord.id}')">Selesai ✓</button>`
+        : (ord.driverArrived
+            ? `<button type="button" class="btn-primary" style="flex:1;background:#7c3aed;" onclick="rideStart('${ord.id}')">Mulai Perjalanan</button>`
+            : `<button type="button" class="btn-primary" style="flex:1;background:#f59e0b;" onclick="rideArrived('${ord.id}')">Sudah Sampai di Titik Jemput</button>`);
     return `
       <div class="order-card" style="border-color:#86efac;background:#f0fdf4;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -837,26 +855,50 @@ function renderMyActiveRideCard(ord) {
         </div>
         <div style="font-size:12px;font-weight:800;">🟢 ${escText(ord.pickup || "-")}</div>
         <div style="font-size:12px;font-weight:700;">🏁 ${escText(ord.destination || "-")}</div>
-        <div style="font-size:13px;font-weight:800;color:#0284c7;">Tarif: Rp ${fare}</div>
+        <div style="font-size:13px;font-weight:800;color:#0284c7;">Tarif: Rp ${fare} · ${escText(ord.paymentMethod || "-")}</div>
         <div style="font-size:11px;font-weight:700;margin-top:6px;">💬 Chat</div>
         <div class="chat-container">
           <div class="chat-box" id="chatRideBox_${ord.id}">${chatHtml}</div>
           <div class="chat-input-group">
-            <input type="text" id="inputRideChat_${ord.id}" class="form-input" style="flex:1;" placeholder="Balas penumpang...">
+            <input type="text" id="inputRideChat_${ord.id}" class="form-input" style="flex:1;" placeholder="Balas penumpang..." onkeydown="if(event.key==='Enter'){sendRideChat('${ord.id}')}">
             <button type="button" class="btn-primary" style="padding:6px 12px;font-size:10px;background:#0284c7;" onclick="sendRideChat('${ord.id}')">Kirim</button>
           </div>
         </div>
         <div style="display:flex;gap:8px;margin-top:8px;">
           <a href="https://www.google.com/maps/dir/?api=1&destination=${destQ}" target="_blank" class="form-input" style="background:#0ea5e9;color:#fff;text-align:center;text-decoration:none;font-weight:700;display:flex;align-items:center;justify-content:center;">🗺️ Navigasi</a>
-          <button type="button" class="btn-primary" style="flex:1;background:#16a34a;" onclick="completeRideOrder('${ord.id}')">Selesai ✓</button>
+          ${actionBtn}
         </div>
       </div>`;
+}
+
+function makeDriverThumb(dataUrl, size) {
+    return new Promise((resolve) => {
+        if (!dataUrl) { resolve(""); return; }
+        const img = new Image();
+        img.onload = () => {
+            const c = document.createElement("canvas");
+            const s = Math.min(img.width, img.height);
+            c.width = c.height = size;
+            c.getContext("2d").drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size);
+            resolve(c.toDataURL("image/jpeg", 0.6));
+        };
+        img.onerror = () => resolve("");
+        img.src = dataUrl;
+    });
 }
 
 async function claimThisRideOrder(orderId) {
     try {
         await window.CikurCloud.claimRideOrder(orderId, userProfile.uid, userProfile.name || "Driver CIKUR");
         await window.CikurCloud.sendOrderMessage(orderId, "system", "Driver menerima order dan sedang menuju titik jemput.");
+        const app = currentMitraApplication || {};
+        window.CikurCloud.updateOrderStatus(orderId, {
+            driverPhoto: await makeDriverThumb(app.photo, 160),
+            driverPlate: app.vehicle || "",
+            driverVehicleType: app.vehicleType || "",
+            driverVehicleModel: app.vehicleModel || "",
+            driverPhone: app.phone || userProfile.phone || ""
+        }).catch((e) => console.error("[CIKUR DRIVER] Gagal simpan info driver:", e));
         // Push lokasi segera agar marker customer bergerak
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition((pos) => {
@@ -881,8 +923,24 @@ async function sendRideChat(orderId) {
     }
 }
 
+async function rideArrived(orderId) {
+    try {
+        await window.CikurCloud.updateOrderStatus(orderId, { driverArrived: true });
+        await window.CikurCloud.sendOrderMessage(orderId, "system", "Driver sudah tiba di titik jemput.");
+    } catch (error) { alert("Gagal: " + (error && error.message || error)); }
+}
+
+async function rideStart(orderId) {
+    try {
+        await window.CikurCloud.updateOrderStatus(orderId, { status: "DIANTAR" });
+        await window.CikurCloud.sendOrderMessage(orderId, "system", "Perjalanan dimulai.");
+    } catch (error) { alert("Gagal: " + (error && error.message || error)); }
+}
+
 async function completeRideOrder(orderId) {
-    if (!confirm("Selesaikan perjalanan CIKUR Ride ini?")) return;
+    const o = myActiveRideOrdersCache.find((x) => x.id === orderId) || {};
+    const cash = /tunai|cod/i.test(String(o.paymentMethod || "")) && o.paymentStatus !== "PAID";
+    if (!confirm(cash ? "Sudah terima tunai Rp " + Number(o.fare || 0).toLocaleString("id-ID") + " dari penumpang? Selesaikan ride?" : "Selesaikan perjalanan CIKUR Ride ini?")) return;
     try {
         await window.CikurCloud.updateOrderStatus(orderId, { status: "SELESAI" });
         await window.CikurCloud.sendOrderMessage(orderId, "system", "Perjalanan selesai. Terima kasih telah memakai CIKUR Ride!");
