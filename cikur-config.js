@@ -1037,7 +1037,7 @@ window.CikurCloud = {
         const q = query(
             collection(db, "orders"),
             where("userId", "==", userId),
-            where("status", "not-in", ["SELESAI", "DITOLAK_RESTO"]),
+            where("status", "not-in", ["SELESAI", "DITOLAK_RESTO", "DIBATALKAN_CUSTOMER", "DIBATALKAN"]),
             orderBy("timestamp", "desc"),
             limit(20)
         );
@@ -1371,7 +1371,9 @@ window.CikurCloud = {
                         SIAP_DIAMBIL: "siap diambil driver",
                         DIANTAR: "sedang diantar ke lokasi kamu",
                         SELESAI: "telah selesai",
-                        DITOLAK_RESTO: "ditolak oleh resto"
+                        DITOLAK_RESTO: "ditolak oleh resto",
+                        DIBATALKAN_CUSTOMER: "dibatalkan oleh customer",
+                        DIBATALKAN: "dibatalkan"
                     };
                     const statusText = statusTextMap[updateData.status] || updateData.status;
                     this.createNotification(
@@ -1389,6 +1391,91 @@ window.CikurCloud = {
         return true;
     },
 
+    /**
+     * Batalkan order oleh customer (Gojek-style early cancel).
+     * FOOD: boleh saat PENDING / DIMASAK
+     * RIDE: boleh saat PENDING (belum di-claim driver)
+     * Mengembalikan objek { refunded, refundAmount } bila CikurPay.
+     */
+    async cancelOrderByCustomer(orderId, userId, reason = "") {
+        if (!orderId || !userId) throw new Error("Data pembatalan tidak lengkap.");
+
+        const orderRef = doc(db, "orders", orderId);
+        const snap = await getDoc(orderRef);
+        if (!snap.exists()) throw new Error("Pesanan tidak ditemukan.");
+
+        const data = snap.data() || {};
+        if (data.userId !== userId) throw new Error("Pesanan ini bukan milik akun kamu.");
+
+        const status = data.status;
+        const type = data.type;
+        const allowedFood = ["PENDING", "DIMASAK"];
+        const allowedRide = ["PENDING"];
+        const allowed = type === "FOOD" ? allowedFood : type === "RIDE" ? allowedRide : ["PENDING"];
+
+        if (!allowed.includes(status)) {
+            throw new Error(
+                type === "RIDE"
+                    ? "Ride hanya bisa dibatalkan sebelum driver menerima order."
+                    : "Pesanan food hanya bisa dibatalkan sebelum siap diambil driver."
+            );
+        }
+
+        await updateDoc(orderRef, {
+            status: "DIBATALKAN_CUSTOMER",
+            cancelledAt: serverTimestamp(),
+            cancelReason: String(reason || "").slice(0, 200),
+            updatedAt: serverTimestamp()
+        });
+
+        let refunded = false;
+        let refundAmount = 0;
+        const pay = String(data.paymentMethod || "");
+        const alreadyPaid = data.paymentStatus === "PAID" || /cikurpay|saldo/i.test(pay);
+        const amount = Number(data.fare || data.total || 0);
+
+        if (alreadyPaid && amount > 0 && data.userId) {
+            try {
+                // topUpSaldo sebagai pengembalian (internal wallet)
+                if (typeof this.topUpSaldo === "function") {
+                    await this.topUpSaldo(data.userId, amount, "REFUND_CANCEL");
+                    refunded = true;
+                    refundAmount = amount;
+                    await updateDoc(orderRef, {
+                        paymentStatus: "REFUNDED",
+                        refundAmount: amount,
+                        updatedAt: serverTimestamp()
+                    });
+                }
+            } catch (refundErr) {
+                console.error("[CIKUR GO] Refund gagal:", refundErr);
+            }
+        }
+
+        try {
+            await this.sendOrderMessage(
+                orderId,
+                "system",
+                refunded
+                    ? `Pesanan dibatalkan customer. Saldo Rp ${refundAmount.toLocaleString("id-ID")} dikembalikan.`
+                    : "Pesanan dibatalkan oleh customer."
+            );
+        } catch (_) {}
+
+        try {
+            await this.createNotification(
+                data.userId,
+                "Pesanan dibatalkan",
+                refunded
+                    ? `Pembatalan berhasil. Refund Rp ${refundAmount.toLocaleString("id-ID")} masuk CikurPay.`
+                    : "Pembatalan berhasil.",
+                { orderId, type, status: "DIBATALKAN_CUSTOMER" }
+            );
+        } catch (_) {}
+
+        return { ok: true, refunded, refundAmount };
+    },
+
     // ======================================
     // CARI ORDER AKTIF CUSTOMER (untuk pemulihan
     // sesi saat halaman dibuka/refresh)
@@ -1401,7 +1488,7 @@ window.CikurCloud = {
             collection(db, "orders"),
             where("userId", "==", userId),
             where("type", "==", type),
-            where("status", "not-in", ["SELESAI", "DITOLAK_RESTO"]),
+            where("status", "not-in", ["SELESAI", "DITOLAK_RESTO", "DIBATALKAN_CUSTOMER", "DIBATALKAN"]),
             orderBy("timestamp", "desc"),
             limit(1)
         );
