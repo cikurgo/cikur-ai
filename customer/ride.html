@@ -252,6 +252,393 @@ body{
 .btn-order:hover {
     background: var(--primary-red-hover);
 }
+
+/* ===== RIDE UI v2 (Grab-like sheet) ===== */
+.container {
+    padding: 0 0 0 0 !important;
+    overflow: hidden;
+}
+.app-header {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    z-index: 20;
+    margin: 0;
+    padding: 12px 14px;
+    border: none;
+    background: linear-gradient(180deg, rgba(248,250,252,.95), rgba(248,250,252,0));
+    pointer-events: none;
+}
+.app-header a, .app-header h2 { pointer-events: auto; }
+.ride-stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    position: relative;
+}
+.ride-map-wrap {
+    flex: 1;
+    min-height: 42vh;
+    position: relative;
+    background: #e2e8f0;
+}
+.ride-map {
+    width: 100%;
+    height: 100%;
+    min-height: 280px;
+}
+.ride-map-wrap .leaflet-container {
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+.map-fab-col {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
+}
+.map-fab {
+    border: none;
+    background: #fff;
+    color: #0f172a;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 8px 12px;
+    border-radius: 999px;
+    box-shadow: 0 6px 18px rgba(15,23,42,.15);
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.map-fab-primary {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary-red);
+    cursor: pointer;
+}
+.ride-sheet {
+    background: #fff;
+    border-radius: 22px 22px 0 0;
+    box-shadow: 0 -8px 30px rgba(15,23,42,.12);
+    padding: 8px 16px 20px;
+    z-index: 10;
+    max-height: 58vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.sheet-handle {
+    width: 40px;
+    height: 4px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    margin: 4px auto 12px;
+}
+.route-card {
+    display: flex;
+    gap: 12px;
+    background: #f8fafc;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 12px;
+}
+.route-rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 18px;
+    width: 14px;
+}
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.dot-pick { background: #16a34a; box-shadow: 0 0 0 3px #dcfce7; }
+.dot-dest { background: #e50914; box-shadow: 0 0 0 3px #fee2e2; }
+.rail-line {
+    width: 2px;
+    flex: 1;
+    min-height: 28px;
+    background: linear-gradient(#16a34a, #e50914);
+    margin: 4px 0;
+    border-radius: 2px;
+}
+.route-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.field-block { position: relative; }
+.field-block label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+.field-row { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+.route-input {
+    width: 100%;
+    height: 42px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 600;
+    background: #fff;
+    color: var(--text-main);
+}
+.route-input:focus {
+    outline: none;
+    border-color: #94a3b8;
+    box-shadow: 0 0 0 3px rgba(148,163,184,.25);
+}
+.chip-gps {
+    height: 42px;
+    padding: 0 12px;
+    border: none;
+    border-radius: 12px;
+    background: #0f172a;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.suggest-list {
+    position: absolute;
+    left: 0; right: 0; top: 100%;
+    z-index: 30;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    margin-top: 4px;
+    max-height: 180px;
+    overflow-y: auto;
+    box-shadow: 0 12px 28px rgba(15,23,42,.14);
+}
+.suggest-item {
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #334155;
+    border-bottom: 1px solid #f1f5f9;
+    cursor: pointer;
+}
+.suggest-item:last-child { border-bottom: none; }
+.suggest-item:hover, .suggest-item:active { background: #f8fafc; }
+.suggest-item small { display: block; font-weight: 500; color: #94a3b8; font-size: 10px; margin-top: 2px; }
+.section-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin: 14px 0 8px;
+}
+.fleet-options { display: flex; gap: 10px; }
+.fleet-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 12px;
+    border-radius: 14px;
+    border: 1.5px solid var(--border-color);
+    background: #fff;
+    cursor: pointer;
+    transition: .15s;
+}
+.fleet-card.selected {
+    border-color: var(--primary-red);
+    background: #fff5f5;
+    box-shadow: 0 0 0 3px rgba(229,9,20,.12);
+}
+.fleet-icon { font-size: 22px; }
+.fleet-meta h4 { font-size: 13px; font-weight: 800; margin: 0; }
+.fleet-sub { font-size: 10px; color: var(--text-muted); font-weight: 600; }
+.fleet-price {
+    margin-top: 6px;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--primary-red);
+    font-family: var(--font-mono);
+}
+.checkout-box {
+    margin-top: 14px;
+    background: var(--dark-bg);
+    color: #fff;
+    border-radius: 16px;
+    padding: 14px;
+}
+.checkout-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+.checkout-label { font-size: 10px; color: #94a3b8; font-weight: 700; }
+.checkout-box h3 { font-size: 14px; font-weight: 800; margin: 2px 0 0; }
+.checkout-fare span {
+    font-size: 15px;
+    font-weight: 800;
+    color: #fbbf24;
+    font-family: var(--font-mono);
+}
+.pay-select {
+    width: 100%;
+    height: 42px;
+    border-radius: 12px;
+    border: none;
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 700;
+    background: #1e293b;
+    color: #fff;
+    margin-bottom: 10px;
+}
+.btn-order {
+    width: 100%;
+    height: 48px;
+    background: var(--primary-red);
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    font-weight: 800;
+    font-size: 14px;
+    cursor: pointer;
+}
+.btn-order:active { transform: scale(.98); }
+
+/* Tracking */
+.status-pill-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+.status-pill {
+    font-size: 12px;
+    font-weight: 800;
+    color: #0f172a;
+    background: #fef3c7;
+    padding: 6px 12px;
+    border-radius: 999px;
+}
+.order-id-chip {
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    font-family: var(--font-mono);
+}
+.driver-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+    border: 1px solid #bbf7d0;
+    border-radius: 16px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+.driver-avatar {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    box-shadow: 0 4px 12px rgba(22,163,74,.15);
+}
+.driver-info { flex: 1; min-width: 0; }
+.driver-name { font-size: 14px; font-weight: 800; color: #14532d; }
+.driver-sub { font-size: 11px; color: #166534; font-weight: 600; margin-top: 2px; }
+.driver-live {
+    font-size: 10px;
+    font-weight: 800;
+    color: #fff;
+    background: #16a34a;
+    padding: 4px 8px;
+    border-radius: 999px;
+    animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .7; }
+}
+.trip-summary {
+    background: #f8fafc;
+    border-radius: 14px;
+    padding: 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border-color);
+}
+.trip-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #334155;
+    margin-bottom: 8px;
+}
+.trip-line .dot { margin-top: 4px; }
+.trip-fare {
+    font-size: 13px;
+    font-weight: 800;
+    font-family: var(--font-mono);
+    color: var(--dark-bg);
+    padding-top: 6px;
+    border-top: 1px dashed #e2e8f0;
+}
+.chat-panel {
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 10px;
+    background: #fff;
+}
+.chat-title { font-size: 11px; font-weight: 800; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; }
+.chat-box {
+    max-height: 120px;
+    overflow-y: auto;
+    font-size: 12px;
+    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.chat-empty { color: #94a3b8; font-size: 11px; text-align: center; padding: 8px; }
+.chat-compose { display: flex; gap: 6px; }
+.chat-compose input {
+    flex: 1;
+    height: 40px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.chat-compose button {
+    height: 40px;
+    padding: 0 14px;
+    border: none;
+    border-radius: 10px;
+    background: var(--primary-red);
+    color: #fff;
+    font-weight: 800;
+    font-size: 12px;
+    cursor: pointer;
+}
+
 </style>
 
 <style id="cgo-modern-toast-style">
@@ -278,120 +665,217 @@ body{
         <div style="width: 38px;"></div>
     </div>
 
+
     <!-- ================= BOOKING VIEW ================= -->
-    <div id="rideBookingView">
-        <!-- Peta Live (Leaflet) -->
-        <div class="map-simulation" style="position:relative; height:220px; padding:0; overflow:hidden;">
-            <div id="rideBookingMap" style="width:100%;height:220px;border-radius:16px;"></div>
-            <div class="map-badge" id="rideMapBadge">📍 Menunggu GPS…</div>
+    <div id="rideBookingView" class="ride-stage">
+        <!-- Full map -->
+        <div class="ride-map-wrap">
+            <div id="rideBookingMap" class="ride-map"></div>
+            <div class="map-fab-col">
+                <button type="button" class="map-fab" id="rideMapBadge" title="Status peta">📍 GPS…</button>
+                <button type="button" class="map-fab map-fab-primary" onclick="useMyGPSPickup()" title="Lokasi saya">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+                </button>
+            </div>
         </div>
 
-        <!-- Form Titik Jemput & Tujuan -->
-        <div class="ride-form-card">
-            <div class="form-group">
-                <label>Lokasi Penjemputan</label>
-                <div style="display:flex;gap:6px;">
-                  <input type="text" id="pickupLocation" class="input-box" style="flex:1;margin:0;" value="" placeholder="Ambil dari GPS atau ketuk peta">
-                  <button type="button" class="btn-order" style="width:auto;padding:0 12px;margin:0;font-size:11px;white-space:nowrap;" onclick="useMyGPSPickup()">GPS</button>
+        <!-- Bottom sheet -->
+        <div class="ride-sheet">
+            <div class="sheet-handle"></div>
+
+            <!-- Route inputs -->
+            <div class="route-card">
+                <div class="route-rail">
+                    <span class="dot dot-pick"></span>
+                    <span class="rail-line"></span>
+                    <span class="dot dot-dest"></span>
+                </div>
+                <div class="route-fields">
+                    <div class="field-block">
+                        <label>Penjemputan</label>
+                        <div class="field-row">
+                            <input type="text" id="pickupLocation" class="route-input" placeholder="Cari alamat jemput…" autocomplete="off">
+                            <button type="button" class="chip-gps" onclick="useMyGPSPickup()">GPS</button>
+                        </div>
+                        <div id="pickupSuggest" class="suggest-list" hidden></div>
+                    </div>
+                    <div class="field-block">
+                        <label>Tujuan</label>
+                        <input type="text" id="destLocation" class="route-input" placeholder="Mau ke mana?" autocomplete="off">
+                        <div id="destSuggest" class="suggest-list" hidden></div>
+                    </div>
                 </div>
             </div>
-            <div class="form-group" style="margin-bottom: 0;">
-                <label>Tujuan Perjalanan</label>
-                <input type="text" id="destLocation" class="input-box" placeholder="Ketik alamat atau ketuk peta (tahan = tujuan)">
-                <p style="font-size:10px;color:#94a3b8;margin:4px 0 0;">Ketuk peta = jemput · Tahan lama di peta = tujuan</p>
-            </div>
-        </div>
 
-        <!-- Pilihan Armada -->
-        <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase;">Pilih Jenis Armada</div>
-        <div class="fleet-options">
-            <div class="fleet-card selected" id="fleetBike" onclick="selectFleet('bike', 10000)">
-                <h4>🛵 CIKUR-Bike</h4>
-                <p>Rp 10.000</p>
+            <!-- Fleet -->
+            <p class="section-label">Pilih armada</p>
+            <div class="fleet-options">
+                <div class="fleet-card selected" id="fleetBike" onclick="selectFleet('bike', 10000)">
+                    <div class="fleet-icon">🛵</div>
+                    <div class="fleet-meta">
+                        <h4>CIKUR-Bike</h4>
+                        <span class="fleet-sub">Motor · cepat</span>
+                    </div>
+                    <p class="fleet-price">Rp 10.000</p>
+                </div>
+                <div class="fleet-card" id="fleetCar" onclick="selectFleet('car', 25000)">
+                    <div class="fleet-icon">🚗</div>
+                    <div class="fleet-meta">
+                        <h4>CIKUR-Car</h4>
+                        <span class="fleet-sub">Mobil · nyaman</span>
+                    </div>
+                    <p class="fleet-price">Rp 25.000</p>
+                </div>
             </div>
-            <div class="fleet-card" id="fleetCar" onclick="selectFleet('car', 25000)">
-                <h4>🚗 CIKUR-Car</h4>
-                <p>Rp 25.000</p>
-            </div>
-        </div>
 
-        <!-- Kotak Pembayaran / Pemesanan -->
-        <div class="checkout-box" id="rideCartSection">
-            <div style="font-size: 11px; color: #94a3b8; font-weight: 700;">Layanan Terpilih</div>
-            <h3 id="rideTypeName" style="font-size: 14px; font-weight: 800; margin: 2px 0 6px 0;">CIKUR-Bike (Motor)</h3>
-            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 8px;">
-                <span>Tarif Perjalanan:</span>
-                <span id="rideTotalPrice" style="color: #FFD700; font-weight: 800; font-family: var(--font-mono);">Rp 10.000</span>
+            <!-- Checkout -->
+            <div class="checkout-box" id="rideCartSection">
+                <div class="checkout-row">
+                    <div>
+                        <div class="checkout-label">Layanan</div>
+                        <h3 id="rideTypeName">CIKUR-Bike (Motor)</h3>
+                    </div>
+                    <div class="checkout-fare">
+                        <div class="checkout-label">Tarif</div>
+                        <span id="rideTotalPrice">Rp 10.000</span>
+                    </div>
+                </div>
+                <select id="ridePaymentMethodSelect" class="pay-select">
+                    <option value="Tunai / COD (Bayar ke Driver)">💵 Tunai / COD (Bayar ke Driver)</option>
+                    <option value="CikurPay Saldo Digital">💳 CikurPay Saldo Digital</option>
+                </select>
+                <button class="btn-order" onclick="prosesPesanRide()">Pesan Driver Sekarang</button>
             </div>
-            <select id="ridePaymentMethodSelect" class="input-box" style="margin:0 0 8px 0; color:#0f172a;">
-                <option value="Tunai / COD (Bayar di Tempat)">💵 Tunai / COD (Bayar ke Driver)</option>
-                <option value="CikurPay Saldo Digital">💳 CikurPay Saldo Digital</option>
-            </select>
-            <button class="btn-order" onclick="prosesPesanRide()">Pesan Driver Sekarang ⚡</button>
         </div>
     </div>
 
-    <!-- ================= TRACKING VIEW (REALTIME) ================= -->
-    <div id="rideTrackingView" style="display:none;">
-        <div class="map-simulation" style="position:relative;">
-            <div id="rideTrackingMap" style="width:100%; height:100%;"></div>
-            <div id="trackingMapPlaceholder" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:var(--dark-bg); color:#fff; font-size:11px; text-align:center; padding:0 16px;">🔎 Menunggu driver mengaktifkan lokasi...</div>
-            <div class="map-badge" id="trackingStatusBadge">📍 Mencari Driver Terdekat...</div>
-        </div>
-
-        <div class="ride-form-card" style="gap:10px; display:flex; flex-direction:column;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size:11px; color:var(--text-muted); font-weight:700;">Order #<span id="trackingOrderId">-</span></span>
-                <span id="trackingStatusText" style="font-size:12px; font-weight:800; color:var(--primary-red);">Menunggu Driver</span>
-            </div>
-            <div style="font-size:12px;"><b>🟢 Jemput:</b> <span id="trackingPickup">-</span></div>
-            <div style="font-size:12px;"><b>🏁 Tujuan:</b> <span id="trackingDestination">-</span></div>
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; border-top:1px solid var(--border-color); padding-top:8px;">
-                <span>Armada &amp; Tarif:</span>
-                <span id="trackingFareText" style="color:var(--dark-bg); font-weight:800; font-family:var(--font-mono);">-</span>
-            </div>
-            <div id="trackingDriverBox" style="display:none; background:#f0fdf4; border-radius:10px; padding:8px 10px; font-size:12px;">
-                🧑‍✈️ Driver: <b id="trackingDriverName">-</b>
+    <!-- ================= TRACKING VIEW ================= -->
+    <div id="rideTrackingView" class="ride-stage" style="display:none;">
+        <div class="ride-map-wrap">
+            <div id="rideTrackingMap" class="ride-map"></div>
+            <div class="map-fab-col">
+                <button type="button" class="map-fab" id="trackingStatusBadge">Mencari driver…</button>
             </div>
         </div>
 
-        <div class="ride-form-card" style="margin-top:10px;">
-            <div style="font-size:11px; font-weight:700; margin-bottom:6px;">💬 Chat dengan Driver</div>
-            <div id="trackingChatBox" style="display:flex; flex-direction:column; gap:6px; max-height:140px; overflow-y:auto; font-size:11px; margin-bottom:8px;">
-                <div style="color: var(--text-muted); font-size: 11px;">Belum ada pesan.</div>
-            </div>
-            <div style="display:flex; gap:6px;">
-                <input type="text" id="trackingChatInput" class="input-box" style="margin:0;" placeholder="Tulis pesan untuk driver...">
-                <button class="btn-order" style="width:auto; padding:0 16px; margin:0;" onclick="sendTrackingChat()">Kirim</button>
-            </div>
-        </div>
+        <div class="ride-sheet tracking-sheet">
+            <div class="sheet-handle"></div>
 
-        <div id="trackingFinishNote" style="display:none; margin-top:10px;">
-            <button class="btn-order" onclick="resetRideBookingView()">Pesan Ride Baru Lagi ⚡</button>
+            <div class="status-pill-row">
+                <span class="status-pill" id="trackingStatusText">Mencari Driver Terdekat</span>
+                <span class="order-id-chip">#<span id="trackingOrderId">-</span></span>
+            </div>
+
+            <!-- Driver card (muncul saat driver menerima) -->
+            <div id="trackingDriverBox" class="driver-card" style="display:none;">
+                <div class="driver-avatar">🧑‍✈️</div>
+                <div class="driver-info">
+                    <div class="driver-name" id="trackingDriverName">Driver CIKUR GO</div>
+                    <div class="driver-sub">Menuju lokasi penjemputan</div>
+                </div>
+                <div class="driver-actions">
+                    <span class="driver-live">LIVE</span>
+                </div>
+            </div>
+
+            <div class="trip-summary">
+                <div class="trip-line"><span class="dot dot-pick"></span><span id="trackingPickup">-</span></div>
+                <div class="trip-line"><span class="dot dot-dest"></span><span id="trackingDestination">-</span></div>
+                <div class="trip-fare" id="trackingFareText">-</div>
+            </div>
+
+            <div class="chat-panel">
+                <div class="chat-title">Chat dengan driver</div>
+                <div id="trackingChatBox" class="chat-box">
+                    <div class="chat-empty">Belum ada pesan.</div>
+                </div>
+                <div class="chat-compose">
+                    <input type="text" id="trackingChatInput" placeholder="Tulis pesan…">
+                    <button type="button" onclick="sendTrackingChat()">Kirim</button>
+                </div>
+            </div>
+
+            <div id="trackingFinishNote" style="display:none;">
+                <button class="btn-order" onclick="resetRideBookingView()">Pesan Ride Baru</button>
+            </div>
         </div>
     </div>
-</div>
 
 <script>
 let userProfile = {};
-let selectedRide = { type: "CIKUR-Bike (Motor)", vehicleType: "bike", price: 10000 };
+let selectedRide = { type: "CIKUR-Bike (Motor)", vehicleType: "bike", price: 8000, distanceKm: null };
+let selectedFleetKey = "bike";
+
+const RIDE_RATES = {
+  bike: { base: 5000, perKm: 2500, min: 8000, label: "CIKUR-Bike (Motor)", vehicleType: "bike" },
+  car:  { base: 10000, perKm: 4500, min: 20000, label: "CIKUR-Car (Mobil)", vehicleType: "car" }
+};
+
+function haversineKm(a, b) {
+  if (!a || !b) return null;
+  if (![a.lat, a.lng, b.lat, b.lng].every(Number.isFinite)) return null;
+  const R = 6371;
+  const toRad = (d) => d * Math.PI / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
+  const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1-h));
+}
+
+function calcRideFare(fleetKey, distanceKm) {
+  const rate = RIDE_RATES[fleetKey] || RIDE_RATES.bike;
+  if (distanceKm == null || !Number.isFinite(distanceKm)) {
+    return { fare: rate.min, distanceKm: null };
+  }
+  const raw = rate.base + distanceKm * rate.perKm;
+  const fare = Math.max(rate.min, Math.round(raw / 500) * 500);
+  return { fare, distanceKm: Number(distanceKm.toFixed(2)) };
+}
+
+function refreshRideFareUI() {
+  const rate = RIDE_RATES[selectedFleetKey] || RIDE_RATES.bike;
+  let dist = null;
+  if (typeof pickupCoords !== "undefined" && pickupCoords && typeof destCoords !== "undefined" && destCoords) {
+    dist = haversineKm(pickupCoords, destCoords);
+  }
+  const calc = calcRideFare(selectedFleetKey, dist);
+  selectedRide = { type: rate.label, vehicleType: rate.vehicleType, price: calc.fare, distanceKm: calc.distanceKm };
+  const nameEl = document.getElementById("rideTypeName");
+  const priceEl = document.getElementById("rideTotalPrice");
+  if (nameEl) nameEl.textContent = rate.label;
+  if (priceEl) {
+    if (calc.distanceKm != null) {
+      priceEl.innerHTML = "Rp " + calc.fare.toLocaleString("id-ID") +
+        '<div style="font-size:10px;color:#94a3b8;font-weight:600;margin-top:2px;">± ' + calc.distanceKm + " km</div>";
+    } else {
+      priceEl.textContent = "Rp " + calc.fare.toLocaleString("id-ID");
+    }
+  }
+  const bikeP = document.querySelector("#fleetBike .fleet-price");
+  const carP = document.querySelector("#fleetCar .fleet-price");
+  if (bikeP) {
+    const c = calcRideFare("bike", dist);
+    bikeP.textContent = dist != null ? ("Rp " + c.fare.toLocaleString("id-ID")) : "dari Rp 8.000";
+  }
+  if (carP) {
+    const c = calcRideFare("car", dist);
+    carP.textContent = dist != null ? ("Rp " + c.fare.toLocaleString("id-ID")) : "dari Rp 20.000";
+  }
+}
 
 function selectFleet(type, price) {
+    selectedFleetKey = type === "car" ? "car" : "bike";
     const cardBike = document.getElementById("fleetBike");
     const cardCar = document.getElementById("fleetCar");
-
-    if (type === 'bike') {
+    if (selectedFleetKey === "bike") {
         cardBike.classList.add("selected");
         cardCar.classList.remove("selected");
-        selectedRide = { type: "CIKUR-Bike (Motor)", vehicleType: "bike", price: 10000 };
     } else {
         cardCar.classList.add("selected");
         cardBike.classList.remove("selected");
-        selectedRide = { type: "CIKUR-Car (Mobil)", vehicleType: "car", price: 25000 };
     }
-
-    document.getElementById("rideTypeName").innerText = selectedRide.type;
-    document.getElementById("rideTotalPrice").innerText = "Rp " + selectedRide.price.toLocaleString('id-ID');
+    refreshRideFareUI();
 }
 
 
@@ -451,6 +935,7 @@ function initRideBookingMap(lat = -6.3245, lon = 106.1524) {
     mapEl.addEventListener('touchmove', clearPress);
 
     setTimeout(() => { try { rideBookingMap.invalidateSize(); } catch (_) {} }, 300);
+    setTimeout(() => { try { rideBookingMap.invalidateSize(); } catch (_) {} }, 800);
 }
 
 function setPickup(lat, lng, fromMap) {
@@ -460,9 +945,15 @@ function setPickup(lat, lng, fromMap) {
     else pickupMarker = L.marker([lat, lng]).addTo(rideBookingMap).bindPopup('Titik jemput');
     rideBookingMap.panTo([lat, lng]);
     const input = document.getElementById('pickupLocation');
-    if (input && fromMap) input.value = Number(lat).toFixed(5) + ', ' + Number(lng).toFixed(5);
-    setRideMapBadge('📍 Jemput diset · Tahan lama / klik kanan = tujuan');
+    if (input && fromMap) {
+        input.value = Number(lat).toFixed(5) + ', ' + Number(lng).toFixed(5);
+        reverseGeocode(lat, lng).then(label => {
+            if (label && input) input.value = label;
+        });
+    }
+    setRideMapBadge('📍 Jemput diset');
     fitRideBounds();
+    try { refreshRideFareUI(); } catch (_) {}
 }
 
 function setDestination(lat, lng, fromMap) {
@@ -471,9 +962,26 @@ function setDestination(lat, lng, fromMap) {
     if (destMarker) destMarker.setLatLng([lat, lng]);
     else destMarker = L.circleMarker([lat, lng], { radius: 9, color: '#dc2626', fillColor: '#ef4444', fillOpacity: 0.9 }).addTo(rideBookingMap).bindPopup('Tujuan');
     const input = document.getElementById('destLocation');
-    if (input && fromMap) input.value = Number(lat).toFixed(5) + ', ' + Number(lng).toFixed(5);
-    setRideMapBadge('📍 Jemput + Tujuan siap');
+    if (input && fromMap) {
+        input.value = Number(lat).toFixed(5) + ', ' + Number(lng).toFixed(5);
+        reverseGeocode(lat, lng).then(label => {
+            if (label && input) input.value = label;
+        });
+    }
+    setRideMapBadge('📍 Rute siap');
     fitRideBounds();
+    try { refreshRideFareUI(); } catch (_) {}
+}
+
+async function reverseGeocode(lat, lng) {
+    try {
+        const url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng + '&zoom=17&addressdetails=1';
+        const res = await fetch(url, { headers: { 'Accept-Language': 'id' } });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data || !data.display_name) return null;
+        return data.display_name.split(',').slice(0, 4).join(',').trim();
+    } catch (_) { return null; }
 }
 
 function fitRideBounds() {
@@ -503,9 +1011,89 @@ window.useMyGPSPickup = function useMyGPSPickup() {
     );
 };
 
+
+/* ===== Address search (Nominatim OSM — gratis, rate-limit santai) ===== */
+let searchTimers = { pickup: null, dest: null };
+
+function bindAddressSearch(inputId, listId, mode) {
+    const input = document.getElementById(inputId);
+    const list = document.getElementById(listId);
+    if (!input || !list) return;
+
+    input.addEventListener('input', () => {
+        const q = input.value.trim();
+        clearTimeout(searchTimers[mode]);
+        if (q.length < 3) {
+            list.hidden = true;
+            list.innerHTML = '';
+            return;
+        }
+        searchTimers[mode] = setTimeout(() => searchAddress(q, list, mode), 450);
+    });
+
+    input.addEventListener('blur', () => {
+        setTimeout(() => { list.hidden = true; }, 200);
+    });
+    input.addEventListener('focus', () => {
+        if (list.innerHTML) list.hidden = false;
+    });
+}
+
+async function searchAddress(query, listEl, mode) {
+    listEl.hidden = false;
+    listEl.innerHTML = '<div class="suggest-item">Mencari alamat…</div>';
+    try {
+        const url = 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=id&q=' + encodeURIComponent(query);
+        const res = await fetch(url, {
+            headers: { 'Accept': 'application/json', 'Accept-Language': 'id' }
+        });
+        if (!res.ok) throw new Error('search failed');
+        const data = await res.json();
+        if (!Array.isArray(data) || !data.length) {
+            listEl.innerHTML = '<div class="suggest-item">Alamat tidak ditemukan</div>';
+            return;
+        }
+        listEl.innerHTML = data.map((item, i) => {
+            const main = item.display_name.split(',').slice(0, 3).join(',').trim();
+            const rest = item.display_name.split(',').slice(3, 5).join(',').trim();
+            return `<div class="suggest-item" data-i="${i}">${main}<small>${rest || item.type || ''}</small></div>`;
+        }).join('');
+        listEl.querySelectorAll('.suggest-item[data-i]').forEach((el, i) => {
+            el.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                const item = data[i];
+                const lat = Number(item.lat);
+                const lon = Number(item.lon);
+                const label = item.display_name.split(',').slice(0, 4).join(',').trim();
+                if (mode === 'pickup') {
+                    document.getElementById('pickupLocation').value = label;
+                    setPickup(lat, lon, false);
+                    if (pickupMarker) pickupMarker.bindPopup(label).openPopup();
+                } else {
+                    document.getElementById('destLocation').value = label;
+                    setDestination(lat, lon, false);
+                    if (destMarker) destMarker.bindPopup(label);
+                }
+                listEl.hidden = true;
+                listEl.innerHTML = '';
+            });
+        });
+    } catch (err) {
+        console.warn('[RIDE] search', err);
+        listEl.innerHTML = '<div class="suggest-item">Pencarian gagal. Ketuk peta saja.</div>';
+    }
+}
+
+function bootAddressSearch() {
+    bindAddressSearch('pickupLocation', 'pickupSuggest', 'pickup');
+    bindAddressSearch('destLocation', 'destSuggest', 'dest');
+}
+
 function bootRideBookingMap() {
     initRideBookingMap();
     useMyGPSPickup();
+    bootAddressSearch();
+    try { refreshRideFareUI(); } catch (_) {}
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootRideBookingMap);
 else bootRideBookingMap();
@@ -568,6 +1156,7 @@ async function prosesPesanRide() {
             vehicleType: selectedRide.vehicleType,
             vehicleName: selectedRide.type,
             fare: selectedRide.price,
+            distanceKm: selectedRide.distanceKm != null ? selectedRide.distanceKm : null,
             pickup,
             destination,
             pickupLat: pickupCoords ? pickupCoords.lat : null,
@@ -610,6 +1199,8 @@ let unsubscribeDriverLocation = null;
 let currentTrackedDriverId = null;
 let rideTrackingMap = null;
 let rideDriverMarker = null;
+let ridePickupMarker = null;
+let rideDestMarker = null;
 
 async function checkExistingActiveRideOrder() {
     if (!window.CikurCloud || !userProfile.uid) return;
@@ -633,7 +1224,9 @@ function showOrderTrackingView(orderId) {
     const statusLabelMap = {
         PENDING: "Mencari Driver Terdekat",
         DIAMBIL_DRIVER: "Driver Menuju Lokasi Anda",
-        SELESAI: "Perjalanan Selesai"
+        SELESAI: "Perjalanan Selesai",
+        DIBATALKAN_CUSTOMER: "Ride Dibatalkan",
+        DIBATALKAN: "Ride Dibatalkan"
     };
 
     unsubscribeActiveRideOrder = window.CikurCloud.listenOrder(orderId, (order) => {
@@ -645,6 +1238,7 @@ function showOrderTrackingView(orderId) {
         document.getElementById("trackingPickup").innerText = order.pickup || "-";
         document.getElementById("trackingDestination").innerText = order.destination || "-";
         document.getElementById("trackingFareText").innerText = (order.vehicleName || "-") + " · Rp " + Number(order.fare || 0).toLocaleString("id-ID");
+        setTrackingRouteMarkers(order);
 
         const driverBox = document.getElementById("trackingDriverBox");
         if (order.driverId) {
@@ -655,8 +1249,13 @@ function showOrderTrackingView(orderId) {
             driverBox.style.display = "none";
         }
 
-        if (order.status === "SELESAI") {
+        const cancelBtn = document.getElementById("btnCancelRideOrder");
+        if (cancelBtn) {
+            cancelBtn.style.display = order.status === "PENDING" ? "block" : "none";
+        }
+        if (order.status === "SELESAI" || order.status === "DIBATALKAN_CUSTOMER" || order.status === "DIBATALKAN") {
             document.getElementById("trackingFinishNote").style.display = "block";
+            if (cancelBtn) cancelBtn.style.display = "none";
         }
     });
 
@@ -673,27 +1272,103 @@ function showOrderTrackingView(orderId) {
     });
 }
 
+function ensureTrackingMap(centerLat, centerLon) {
+    if (rideTrackingMap) {
+        try { rideTrackingMap.invalidateSize(); } catch (_) {}
+        return;
+    }
+    const el = document.getElementById("rideTrackingMap");
+    if (!el || typeof L === "undefined") return;
+    rideTrackingMap = L.map("rideTrackingMap").setView([centerLat, centerLon], 14);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(rideTrackingMap);
+    setTimeout(() => { try { rideTrackingMap.invalidateSize(); } catch (_) {} }, 250);
+}
+
+function setTrackingRouteMarkers(order) {
+    if (!order) return;
+    const plat = Number(order.pickupLat);
+    const plng = Number(order.pickupLng);
+    const dlat = Number(order.destLat);
+    const dlng = Number(order.destLng);
+    const hasPick = Number.isFinite(plat) && Number.isFinite(plng);
+    const hasDest = Number.isFinite(dlat) && Number.isFinite(dlng);
+    if (!hasPick && !hasDest) return;
+    const cLat = hasPick ? plat : dlat;
+    const cLng = hasPick ? plng : dlng;
+    ensureTrackingMap(cLat, cLng);
+    if (!rideTrackingMap) return;
+    if (hasPick) {
+        if (ridePickupMarker) ridePickupMarker.setLatLng([plat, plng]);
+        else ridePickupMarker = L.circleMarker([plat, plng], { radius: 8, color: "#16a34a", fillColor: "#22c55e", fillOpacity: 0.95 }).addTo(rideTrackingMap).bindPopup("Jemput");
+    }
+    if (hasDest) {
+        if (rideDestMarker) rideDestMarker.setLatLng([dlat, dlng]);
+        else rideDestMarker = L.circleMarker([dlat, dlng], { radius: 8, color: "#e50914", fillColor: "#ef4444", fillOpacity: 0.95 }).addTo(rideTrackingMap).bindPopup("Tujuan");
+    }
+    try {
+        const pts = [];
+        if (hasPick) pts.push([plat, plng]);
+        if (hasDest) pts.push([dlat, dlng]);
+        if (rideDriverMarker) pts.push(rideDriverMarker.getLatLng());
+        if (pts.length >= 2) rideTrackingMap.fitBounds(L.latLngBounds(pts).pad(0.25));
+    } catch (_) {}
+}
+
 function startTrackingDriverLocation(driverId) {
-    if (currentTrackedDriverId === driverId) return; // sudah listening driver yang sama
+    if (currentTrackedDriverId === driverId) return;
     currentTrackedDriverId = driverId;
 
     if (typeof unsubscribeDriverLocation === "function") unsubscribeDriverLocation();
     unsubscribeDriverLocation = window.CikurCloud.listenDriverLocation(driverId, (loc) => {
-        if (!loc || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lon)) return;
+        if (!loc) return;
+        const lat = Number(loc.lat);
+        const lon = Number(loc.lon != null ? loc.lon : loc.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
 
-        const placeholder = document.getElementById("trackingMapPlaceholder");
-        if (placeholder) placeholder.style.display = "none";
+        ensureTrackingMap(lat, lon);
+        if (!rideTrackingMap) return;
 
-        if (!rideTrackingMap) {
-            rideTrackingMap = L.map("rideTrackingMap").setView([loc.lat, loc.lon], 15);
-            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(rideTrackingMap);
-            rideDriverMarker = L.marker([loc.lat, loc.lon]).addTo(rideTrackingMap).bindPopup("Posisi Driver");
-            setTimeout(() => rideTrackingMap.invalidateSize(), 200);
+        if (!rideDriverMarker) {
+            const icon = L.divIcon({
+                className: "driver-live-icon",
+                html: '<div style="width:36px;height:36px;border-radius:50%;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 4px 12px rgba(0,0,0,.3);border:2px solid #fff;">🛵</div>',
+                iconSize: [36, 36],
+                iconAnchor: [18, 18]
+            });
+            rideDriverMarker = L.marker([lat, lon], { icon, zIndexOffset: 1000 }).addTo(rideTrackingMap).bindPopup("Driver");
         } else {
-            rideDriverMarker.setLatLng([loc.lat, loc.lon]);
-            rideTrackingMap.panTo([loc.lat, loc.lon]);
+            rideDriverMarker.setLatLng([lat, lon]);
+        }
+        try {
+            const pts = [rideDriverMarker.getLatLng()];
+            if (ridePickupMarker) pts.push(ridePickupMarker.getLatLng());
+            if (rideDestMarker) pts.push(rideDestMarker.getLatLng());
+            if (pts.length >= 2) rideTrackingMap.fitBounds(L.latLngBounds(pts).pad(0.2));
+            else rideTrackingMap.panTo([lat, lon]);
+        } catch (_) {
+            rideTrackingMap.panTo([lat, lon]);
         }
     });
+}
+
+
+
+async function cancelActiveRideOrder() {
+    if (!currentActiveRideOrderId || !userProfile.uid) return;
+    if (!confirm("Batalkan ride ini? Hanya bisa sebelum driver menerima.")) return;
+    const btn = document.getElementById("btnCancelRideOrder");
+    if (btn) { btn.disabled = true; btn.textContent = "Membatalkan…"; }
+    try {
+        const result = await window.CikurCloud.cancelOrderByCustomer(currentActiveRideOrderId, userProfile.uid, "Dibatalkan customer");
+        if (result && result.refunded) {
+            alert("Ride dibatalkan. Refund Rp " + Number(result.refundAmount || 0).toLocaleString("id-ID") + " masuk CikurPay.");
+        } else {
+            alert("Ride berhasil dibatalkan.");
+        }
+    } catch (error) {
+        alert("Gagal batalkan: " + (error && error.message || error));
+        if (btn) { btn.disabled = false; btn.textContent = "Batalkan Ride"; }
+    }
 }
 
 async function sendTrackingChat() {
@@ -713,7 +1388,7 @@ function resetRideBookingView() {
     if (typeof unsubscribeDriverLocation === "function") unsubscribeDriverLocation();
     currentActiveRideOrderId = null;
     currentTrackedDriverId = null;
-    document.getElementById("trackingMapPlaceholder").style.display = "flex";
+    /* placeholder removed in UI v2 */
     document.getElementById("trackingFinishNote").style.display = "none";
     document.getElementById("rideTrackingView").style.display = "none";
     document.getElementById("rideBookingView").style.display = "block";

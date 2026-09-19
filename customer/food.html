@@ -402,42 +402,59 @@
         <button class="btn-main btn-checkout" onclick="openPaymentSummary()">Lanjut Pembayaran</button>
     </div>
 
-    <!-- VIEW TRACKING PESANAN AKTIF (muncul setelah checkout) -->
-    <div id="orderTrackingView" style="display: none; padding: 16px;">
-        <div style="background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-md); padding: 16px; box-shadow: var(--shadow-soft); margin-bottom: 14px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <h3 style="font-size: 14px; font-weight: 800; color: var(--text-main);">Pesanan Aktif</h3>
-                <span id="trackingOrderId" style="font-family: monospace; font-size: 11px; font-weight: 800; color: var(--primary);">-</span>
+    <!-- VIEW TRACKING PESANAN AKTIF (map + sheet, ala Ride) -->
+    <div id="orderTrackingView" class="food-track-stage" style="display: none;">
+        <div class="food-track-map-wrap">
+            <div id="foodTrackingMap" class="food-track-map"></div>
+            <div class="food-track-fabs">
+                <button type="button" class="food-track-fab" id="trackingStatusBadge">Memuat status…</button>
             </div>
-            <div style="background: var(--background); padding: 10px; border-radius: var(--radius-sm); margin-bottom: 10px;">
-                <div style="font-size: 10px; color: var(--text-muted); font-weight: 700;">STATUS PESANAN</div>
-                <div id="trackingStatusText" style="font-size: 13px; font-weight: 800; color: var(--primary); margin-top: 2px;">Memuat...</div>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
-                <span style="color: var(--text-muted);">Resto:</span>
-                <span id="trackingRestoName" style="font-weight: 700;">-</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 12px;">
-                <span style="color: var(--text-muted);">Total Pembayaran:</span>
-                <span id="trackingTotal" style="font-weight: 800; color: var(--primary);">-</span>
-            </div>
-            <div id="trackingFinishNote" style="display: none; margin-top: 10px; padding: 8px; background: #f0fdf4; border-radius: 8px; font-size: 11px; color: #16a34a; font-weight: 700; text-align: center;">
-                Pesanan ini sudah selesai/berakhir.
-            </div>
+            <button type="button" class="food-track-back" onclick="hideFoodTrackingView()" aria-label="Kembali">←</button>
         </div>
 
-        <div style="background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-md); padding: 16px; box-shadow: var(--shadow-soft);">
-            <div style="font-size: 12px; font-weight: 800; color: var(--text-main); margin-bottom: 8px;">💬 Chat dengan Resto/Driver</div>
-            <div id="trackingChatBox" style="background: var(--background); border-radius: 8px; padding: 8px; max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; font-size: 11px; margin-bottom: 8px;">
-                <div style="color: var(--text-muted);">Belum ada pesan.</div>
+        <div class="food-track-sheet">
+            <div class="food-track-handle"></div>
+
+            <div class="food-track-status-row">
+                <span class="food-track-pill" id="trackingStatusText">Memuat...</span>
+                <span class="food-track-oid">#<span id="trackingOrderId">-</span></span>
             </div>
-            <div style="display: flex; gap: 6px;">
-                <input type="text" id="trackingChatInput" class="input-field" placeholder="Ketik pesan..." style="padding: 8px 12px; font-size: 11px;" onkeypress="if(event.key === 'Enter') sendTrackingChat()">
-                <button type="button" onclick="sendTrackingChat()" style="background: var(--primary-gradient); color: #fff; border: none; padding: 8px 12px; border-radius: 8px; font-weight: 800; font-size: 11px; cursor: pointer; flex-shrink: 0;">Kirim</button>
+
+            <div id="trackingDriverBox" class="food-driver-card" style="display:none;">
+                <div class="food-driver-avatar">🛵</div>
+                <div class="food-driver-info">
+                    <div class="food-driver-name" id="trackingDriverName">Driver CIKUR GO</div>
+                    <div class="food-driver-sub" id="trackingDriverSub">Menuju lokasi pengantaran</div>
+                </div>
+                <span class="food-driver-live">LIVE</span>
+            </div>
+
+            <div class="food-trip-card">
+                <div class="food-trip-line"><span class="food-dot food-dot-resto"></span><span id="trackingRestoName">-</span></div>
+                <div class="food-trip-line"><span class="food-dot food-dot-cust"></span><span id="trackingAddressText">Alamat pengiriman</span></div>
+                <div class="food-trip-fare" id="trackingTotal">-</div>
+            </div>
+
+            <div class="food-chat-panel">
+                <div class="food-chat-title">Chat resto / driver</div>
+                <div id="trackingChatBox" class="food-chat-box">
+                    <div style="color:#94a3b8;font-size:11px;text-align:center;padding:8px;">Belum ada pesan.</div>
+                </div>
+                <div class="food-chat-compose">
+                    <input type="text" id="trackingChatInput" placeholder="Tulis pesan…" onkeypress="if(event.key==='Enter')sendTrackingChat()">
+                    <button type="button" onclick="sendTrackingChat()">Kirim</button>
+                </div>
+            </div>
+
+            <button type="button" id="btnCancelFoodOrder" onclick="cancelActiveFoodOrder()" class="food-btn-cancel" style="display:none;">
+                Batalkan Pesanan
+            </button>
+            <div id="trackingFinishNote" class="food-finish-note" style="display:none;">
+                Pesanan ini sudah selesai/berakhir.
+                <button type="button" class="food-btn-new" onclick="hideFoodTrackingView()">Kembali ke Menu</button>
             </div>
         </div>
     </div>
-</div>
 
 <!-- MODAL ASSISTANT -->
 <div id="assistantModal">
@@ -1038,46 +1055,202 @@ async function checkExistingActiveOrder() {
 
 function showOrderTrackingView(orderId) {
     currentActiveOrderId = orderId;
-    document.querySelector('.content-body').style.display = 'none';
-    document.querySelector('.footer-action').style.display = 'none';
-    document.getElementById('orderTrackingView').style.display = 'block';
+    const view = document.getElementById('orderTrackingView');
+    if (view) view.style.display = 'flex';
 
-    if (typeof unsubscribeActiveOrder === "function") unsubscribeActiveOrder();
-    if (typeof unsubscribeActiveOrderMessages === "function") unsubscribeActiveOrderMessages();
+    if (typeof unsubscribeActiveOrder === 'function') unsubscribeActiveOrder();
+    if (typeof unsubscribeActiveOrderMessages === 'function') unsubscribeActiveOrderMessages();
+    if (typeof unsubscribeFoodDriverLocation === 'function') unsubscribeFoodDriverLocation();
+    currentTrackedFoodDriverId = null;
 
-    let statusLabelMap = {
+    const statusLabelMap = {
         PENDING: "Menunggu Konfirmasi Resto",
-        DIMASAK: "Resto Sedang Memasak Pesanan",
+        DIMASAK: "Resto Sedang Memasak",
         SIAP_DIAMBIL: "Menunggu Driver Mengambil",
         DIAMBIL_DRIVER: "Driver Menuju Lokasi Anda",
         DIANTAR: "Pesanan Sedang Diantar",
         SELESAI: "Pesanan Selesai",
-        DITOLAK_RESTO: "Pesanan Ditolak Resto"
+        DITOLAK_RESTO: "Pesanan Ditolak Resto",
+        DIBATALKAN_CUSTOMER: "Dibatalkan",
+        DIBATALKAN: "Dibatalkan"
     };
 
     unsubscribeActiveOrder = window.CikurCloud.listenOrder(orderId, (order) => {
         if (!order) return;
 
-        document.getElementById('trackingOrderId').innerText = '#' + orderId.slice(-6).toUpperCase();
-        document.getElementById('trackingStatusText').innerText = statusLabelMap[order.status] || order.status;
-        document.getElementById('trackingRestoName').innerText = order.restoName || '-';
-        document.getElementById('trackingTotal').innerText = 'Rp ' + Number(order.total || 0).toLocaleString('id-ID');
+        const oid = document.getElementById('trackingOrderId');
+        if (oid) oid.innerText = orderId.slice(-6).toUpperCase();
+        const st = statusLabelMap[order.status] || order.status;
+        const stEl = document.getElementById('trackingStatusText');
+        if (stEl) stEl.innerText = st;
+        const badge = document.getElementById('trackingStatusBadge');
+        if (badge) badge.textContent = '📍 ' + st;
+        const rn = document.getElementById('trackingRestoName');
+        if (rn) rn.innerText = order.restoName || '-';
+        const tot = document.getElementById('trackingTotal');
+        if (tot) tot.innerText = 'Rp ' + Number(order.total || 0).toLocaleString('id-ID');
+        const addr = document.getElementById('trackingAddressText');
+        if (addr) {
+            addr.innerText = (order.address && order.address.text) ? order.address.text : (order.destination || 'Alamat pengiriman');
+        }
 
-        if (order.status === "SELESAI" || order.status === "DITOLAK_RESTO") {
-            document.getElementById('trackingFinishNote').style.display = 'block';
+        setFoodTrackingRouteMarkers(order);
+
+        const driverBox = document.getElementById('trackingDriverBox');
+        if (order.driverId) {
+            if (driverBox) driverBox.style.display = 'flex';
+            const dn = document.getElementById('trackingDriverName');
+            if (dn) dn.innerText = order.driverName || 'Driver CIKUR GO';
+            const sub = document.getElementById('trackingDriverSub');
+            if (sub) {
+                sub.innerText = order.status === 'DIANTAR' ? 'Sedang mengantar pesanan' : 'Menuju lokasi pengantaran';
+            }
+            startFoodDriverLocationTracking(order.driverId);
+        } else if (driverBox) {
+            driverBox.style.display = 'none';
+        }
+
+        const cancelBtn = document.getElementById('btnCancelFoodOrder');
+        if (cancelBtn) {
+            const canCancel = order.status === 'PENDING' || order.status === 'DIMASAK';
+            cancelBtn.style.display = canCancel ? 'block' : 'none';
+        }
+        const finish = document.getElementById('trackingFinishNote');
+        if (order.status === 'SELESAI' || order.status === 'DITOLAK_RESTO' || order.status === 'DIBATALKAN_CUSTOMER' || order.status === 'DIBATALKAN') {
+            if (finish) {
+                finish.style.display = 'block';
+                if (order.status === 'DIBATALKAN_CUSTOMER' || order.status === 'DIBATALKAN') {
+                    finish.style.background = '#fef2f2';
+                    finish.style.color = '#b91c1c';
+                    finish.innerHTML = 'Pesanan dibatalkan.<button type="button" class="food-btn-new" onclick="hideFoodTrackingView()">Kembali ke Menu</button>';
+                } else if (order.status === 'DITOLAK_RESTO') {
+                    finish.style.background = '#fef2f2';
+                    finish.style.color = '#b91c1c';
+                    finish.innerHTML = 'Pesanan ditolak resto.<button type="button" class="food-btn-new" onclick="hideFoodTrackingView()">Kembali ke Menu</button>';
+                } else {
+                    finish.style.background = '#f0fdf4';
+                    finish.style.color = '#16a34a';
+                    finish.innerHTML = 'Pesanan selesai. Terima kasih!<button type="button" class="food-btn-new" onclick="hideFoodTrackingView()">Kembali ke Menu</button>';
+                }
+            }
+            if (cancelBtn) cancelBtn.style.display = 'none';
         }
     });
 
     unsubscribeActiveOrderMessages = window.CikurCloud.listenOrderMessages(orderId, (messages) => {
-        let chatBox = document.getElementById('trackingChatBox');
+        const chatBox = document.getElementById('trackingChatBox');
         if (!chatBox) return;
-        chatBox.innerHTML = messages.map(m => {
-            let isMe = m.sender === 'customer';
-            let label = isMe ? 'Anda' : (m.sender === 'resto' ? 'Resto' : (m.sender === 'driver' ? 'Driver' : 'Sistem'));
-            return `<div style="background: ${isMe ? '#e0f2fe' : '#f1f5f9'}; color: ${isMe ? '#0369a1' : 'var(--text-main)'}; padding: 6px 10px; border-radius: 8px; max-width: 90%; ${isMe ? 'align-self: flex-end;' : ''}"><b>${label}:</b> ${m.text}</div>`;
-        }).join('') || '<div style="color: var(--text-muted); font-size: 11px;">Belum ada pesan.</div>';
+        chatBox.innerHTML = (messages || []).map(m => {
+            const isMe = m.sender === 'customer';
+            const label = isMe ? 'Anda' : (m.sender === 'resto' ? 'Resto' : (m.sender === 'driver' ? 'Driver' : 'Sistem'));
+            const safe = String(m.text || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            return `<div style="background:${isMe?'#e0f2fe':'#f1f5f9'};color:${isMe?'#0369a1':'#0f172a'};padding:6px 10px;border-radius:8px;max-width:90%;${isMe?'align-self:flex-end;':''}"><b>${label}:</b> ${safe}</div>`;
+        }).join('') || '<div style="color:#94a3b8;font-size:11px;text-align:center;padding:8px;">Belum ada pesan.</div>';
         chatBox.scrollTop = chatBox.scrollHeight;
     });
+}
+
+let foodTrackingMap = null;
+let foodDriverMarker = null;
+let foodDestMarker = null;
+let foodRestoMarker = null;
+let unsubscribeFoodDriverLocation = null;
+let currentTrackedFoodDriverId = null;
+
+function hideFoodTrackingView() {
+    if (typeof unsubscribeActiveOrder === 'function') unsubscribeActiveOrder();
+    if (typeof unsubscribeActiveOrderMessages === 'function') unsubscribeActiveOrderMessages();
+    if (typeof unsubscribeFoodDriverLocation === 'function') unsubscribeFoodDriverLocation();
+    currentActiveOrderId = null;
+    currentTrackedFoodDriverId = null;
+    const view = document.getElementById('orderTrackingView');
+    if (view) view.style.display = 'none';
+}
+
+function ensureFoodTrackingMap(lat, lng) {
+    const el = document.getElementById('foodTrackingMap');
+    if (!el || typeof L === 'undefined') return;
+    if (foodTrackingMap) {
+        try { foodTrackingMap.invalidateSize(); } catch (_) {}
+        return;
+    }
+    foodTrackingMap = L.map('foodTrackingMap').setView([lat, lng], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(foodTrackingMap);
+    setTimeout(() => { try { foodTrackingMap.invalidateSize(); } catch (_) {} }, 300);
+}
+
+function setFoodTrackingRouteMarkers(order) {
+    if (!order) return;
+    const dlat = Number(order.address && order.address.latitude);
+    const dlng = Number(order.address && order.address.longitude);
+    const hasDest = Number.isFinite(dlat) && Number.isFinite(dlng);
+    if (!hasDest) {
+        ensureFoodTrackingMap(-6.2, 106.8);
+        return;
+    }
+    ensureFoodTrackingMap(dlat, dlng);
+    if (!foodTrackingMap) return;
+    if (foodDestMarker) foodDestMarker.setLatLng([dlat, dlng]);
+    else foodDestMarker = L.circleMarker([dlat, dlng], { radius: 9, color: '#e50914', fillColor: '#ef4444', fillOpacity: 0.95 }).addTo(foodTrackingMap).bindPopup('Tujuan pengiriman');
+    try {
+        const pts = [[dlat, dlng]];
+        if (foodDriverMarker) pts.push(foodDriverMarker.getLatLng());
+        if (pts.length >= 2) foodTrackingMap.fitBounds(L.latLngBounds(pts).pad(0.25));
+        else foodTrackingMap.setView([dlat, dlng], 15);
+    } catch (_) {}
+}
+
+function startFoodDriverLocationTracking(driverId) {
+    if (!driverId || currentTrackedFoodDriverId === driverId) return;
+    currentTrackedFoodDriverId = driverId;
+    if (typeof unsubscribeFoodDriverLocation === 'function') unsubscribeFoodDriverLocation();
+    if (!window.CikurCloud || typeof window.CikurCloud.listenDriverLocation !== 'function') return;
+
+    unsubscribeFoodDriverLocation = window.CikurCloud.listenDriverLocation(driverId, (loc) => {
+        if (!loc) return;
+        const lat = Number(loc.lat);
+        const lon = Number(loc.lon != null ? loc.lon : loc.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+        ensureFoodTrackingMap(lat, lon);
+        if (!foodTrackingMap) return;
+        if (!foodDriverMarker) {
+            const icon = L.divIcon({
+                className: 'food-driver-live-icon',
+                html: '<div style="width:36px;height:36px;border-radius:50%;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 4px 12px rgba(0,0,0,.3);border:2px solid #fff;">🛵</div>',
+                iconSize: [36, 36],
+                iconAnchor: [18, 18]
+            });
+            foodDriverMarker = L.marker([lat, lon], { icon, zIndexOffset: 1000 }).addTo(foodTrackingMap).bindPopup('Driver');
+        } else {
+            foodDriverMarker.setLatLng([lat, lon]);
+        }
+        try {
+            const pts = [foodDriverMarker.getLatLng()];
+            if (foodDestMarker) pts.push(foodDestMarker.getLatLng());
+            if (pts.length >= 2) foodTrackingMap.fitBounds(L.latLngBounds(pts).pad(0.2));
+            else foodTrackingMap.panTo([lat, lon]);
+        } catch (_) {
+            foodTrackingMap.panTo([lat, lon]);
+        }
+    });
+}
+
+async function cancelActiveFoodOrder() {
+    if (!currentActiveOrderId || !userProfile.uid) return;
+    if (!confirm("Batalkan pesanan food ini? Jika sudah bayar CikurPay, saldo akan dikembalikan.")) return;
+    const btn = document.getElementById("btnCancelFoodOrder");
+    if (btn) { btn.disabled = true; btn.textContent = "Membatalkan…"; }
+    try {
+        const result = await window.CikurCloud.cancelOrderByCustomer(currentActiveOrderId, userProfile.uid, "Dibatalkan customer");
+        if (result && result.refunded) {
+            alert("Pesanan dibatalkan. Refund Rp " + Number(result.refundAmount || 0).toLocaleString("id-ID") + " masuk CikurPay.");
+        } else {
+            alert("Pesanan berhasil dibatalkan.");
+        }
+    } catch (error) {
+        alert("Gagal batalkan: " + (error && error.message || error));
+        if (btn) { btn.disabled = false; btn.textContent = "Batalkan Pesanan"; }
+    }
 }
 
 async function sendTrackingChat() {
