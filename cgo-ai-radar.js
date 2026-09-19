@@ -8,7 +8,7 @@ export const RADAR_VERSION = "1.0.0-INTERNAL-GEO-RADAR";
 export const RADAR_CONTRACT = Object.freeze({
   version: RADAR_VERSION,
   scope: "BCGO_ADMIN_RADAR",
-  ringsKm: Object.freeze([1, 3, 5, 10]),
+  ringsKm: Object.freeze([1, 3, 5, 10, 25, 50, 100, 200]),
   maxAgents: 500,
   freshnessMs: 180000,
   staleAfterMs: 180000,

@@ -18,6 +18,7 @@ import {
     updateDoc,
     doc,
     getDoc,
+    getDocs,
     serverTimestamp,
     deleteField,
     runTransaction
@@ -1500,6 +1501,67 @@ window.CikurCloud = {
                 callback(restos);
             }
         });
+    },
+
+    /**
+     * Snapshot sekali: resto approved (untuk otak CGO discovery).
+     * Tidak mengarang — hanya data Firestore yang terbaca.
+     */
+    async listApprovedRestosOnce() {
+        const q = query(
+            collection(db, "resto_profiles"),
+            where("approved", "==", true)
+        );
+        const snap = await getDocs(q);
+        const restos = [];
+        snap.forEach((docSnap) => {
+            restos.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        return restos;
+    },
+
+    /**
+     * Agent CGO approved + online (untuk radar / discovery customer).
+     * Field presence.location atau liveLocation dipakai untuk jarak.
+     * Jika rules menolak, lempar error — adapter discovery menangani sebagai UNKNOWN.
+     */
+    async listOnlineAgentsOnce() {
+        const q = query(
+            collection(db, "mitra_applications"),
+            where("jenis", "==", "agent"),
+            where("status", "==", "approved")
+        );
+        const snap = await getDocs(q);
+        const agents = [];
+        const now = Date.now();
+        snap.forEach((docSnap) => {
+            const d = docSnap.data() || {};
+            const online = d.isOnline === true || d.operationalStatus === "online" || (d.presence && d.presence.active === true);
+            if (!online) return;
+            const loc = (d.presence && d.presence.location) || d.liveLocation || null;
+            const lat = Number(loc && (loc.lat ?? loc.latitude));
+            const lng = Number(loc && (loc.lng ?? loc.longitude ?? loc.lon));
+            const hasGeo = Number.isFinite(lat) && Number.isFinite(lng);
+            let updatedMs = 0;
+            const rawTs = (d.presence && d.presence.updatedAt) || (loc && loc.updatedAt) || d.updatedAt;
+            try {
+                if (rawTs && typeof rawTs.toMillis === "function") updatedMs = rawTs.toMillis();
+                else if (rawTs) updatedMs = Date.parse(rawTs) || 0;
+            } catch (_) {}
+            const ageMs = updatedMs ? Math.max(0, now - updatedMs) : null;
+            agents.push({
+                id: docSnap.id,
+                agentId: String(d.uid || docSnap.id.replace(/_agent$/, "")),
+                name: String(d.namaPanggilan || d.name || d.agentName || "Agent CGO"),
+                type: "agent",
+                isOnline: true,
+                available: d.presence?.available !== false,
+                location: hasGeo ? { lat, lng, accuracy: loc?.accuracy ?? null } : null,
+                ageMs,
+                updatedAt: rawTs || null
+            });
+        });
+        return agents;
     },
 
     // ======================================
