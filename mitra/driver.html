@@ -317,10 +317,20 @@ function renderByMitraStatus(application) {
     const navBadge = document.getElementById("navStatusBadge");
 
     if (application && application._error) {
-        registrationSection.style.display = "none";
-        dashboardSection.style.display = "none";
-        alert("Gagal memuat status pendaftaran: " + (application.message || "Terjadi kesalahan."));
-        return;
+        // permission-denied saat dokumen belum ada = anggap belum terdaftar
+        const msg = String(application.message || application.code || "");
+        const isPerm = /permission|insufficient|Missing or insufficient/i.test(msg);
+        if (isPerm) {
+            application = null;
+        } else {
+            registrationSection.style.display = "flex";
+            dashboardSection.style.display = "none";
+            banner.style.display = "block";
+            banner.style.background = "#fef2f2";
+            banner.style.color = "#991b1b";
+            banner.innerHTML = "⚠️ Gagal memuat status: " + (application.message || "error") + ". Coba refresh. Pastikan Firestore rules mengizinkan baca path mitra milik sendiri.";
+            return;
+        }
     }
 
     if (!application) {
