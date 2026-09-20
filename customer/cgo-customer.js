@@ -35,7 +35,7 @@
 
     window.CGO_CUSTOMER = window.CGO_CUSTOMER || {};
 
-    const VERSION = "1.1.2-customer-gateway";
+    const VERSION = "1.3.0-customer-knowledge-first";
 
     const EVENTS = Object.freeze({
         READY: "ready",
@@ -526,6 +526,42 @@
         return result;
     }
 
+    /**
+     * Knowledge + semantic (async). Dipakai di chatAsync.
+     * Bila CGOSemantic siap → matching makna; else sama dengan queryKnowledge.
+     */
+    async function queryKnowledgeAsync(input, analysis, options) {
+        const knowledge = getKnowledgeModule();
+        if (!knowledge) {
+            return {
+                status: "unknown",
+                known: false,
+                reason: "Knowledge module tidak tersedia."
+            };
+        }
+
+        let result = null;
+        try {
+            if (typeof knowledge.interpretAsync === "function") {
+                result = await knowledge.interpretAsync(input, {
+                    analysis: analysis,
+                    state: clone(state),
+                    options: options || {}
+                });
+            }
+        } catch (_e) {
+            result = null;
+        }
+
+        if (!result || typeof result !== "object") {
+            result = queryKnowledge(input, analysis, options);
+        } else {
+            state.lastKnowledge = clone(result);
+            emit(EVENTS.KNOWLEDGE, clone(result));
+        }
+        return result;
+    }
+
     /* =========================================================
      * DISCOVERY DECISION
      * ========================================================= */
@@ -983,6 +1019,44 @@
             }
         }
 
+        /*
+         * Otak knowledge-first: jika registry punya jawaban solid,
+         * dan respons percakapan masih generik/lemah → pakai knowledge.
+         * Ini jalur "ABC mengunyah + knowledge menjawab", bukan settingan frase.
+         */
+        const knowledgeText =
+            knowledge &&
+            (knowledge.answer || knowledge.text) &&
+            (knowledge.known === true ||
+                knowledge.status === "complete" ||
+                (knowledge.status === "partial" &&
+                    (knowledge.confidence || 0) >= 0.5))
+                ? String(knowledge.answer || knowledge.text).trim()
+                : "";
+
+        const weakGeneric =
+            typeof response === "string" &&
+            (/lanjut cerit|cerita lebih lanjut|ceritain aja|aku dengerin kok|menarik|nangkep arahnya|mau bahas apa — makanan/i.test(
+                response
+            ) ||
+                response.length < 12);
+
+        if (knowledgeText) {
+            const mode =
+                (analysis &&
+                    analysis.conversationResult &&
+                    analysis.conversationResult.mode) ||
+                "";
+            // Jangan timpa greeting / identity / math / capability yang sudah natural
+            const protect =
+                /greeting|identity|natural_identity|natural_capability|natural_whatdoing|math|farewell|thanks|reasoning_recall/i.test(
+                    String(mode)
+                );
+            if (!protect && (weakGeneric || !response || !String(response).trim())) {
+                response = knowledgeText;
+            }
+        }
+
         if (
             typeof response !== "string" ||
             !response.trim()
@@ -1075,6 +1149,10 @@
             );
         }
 
+        if (knowledge && (knowledge.answer || knowledge.text)) {
+            return String(knowledge.answer || knowledge.text);
+        }
+
         if (
             knowledge &&
             knowledge.service
@@ -1083,17 +1161,24 @@
                 knowledge.service;
 
             return (
-                service.name +
-                " bisa membantu " +
+                (service.shortName || service.name) +
+                " — " +
                 (
                     service.description ||
-                    "sesuai kebutuhanmu."
-                )
+                    "bisa bantu sesuai kebutuhanmu."
+                ) +
+                " Mau lanjut dari situ?"
             );
         }
 
-        return fallbackResponse(
-            "insufficient_response"
+        // Jujur soal domain — bukan filler "cerita lebih lanjut"
+        if (knowledge && knowledge.domainHint) {
+            return knowledge.domainHint;
+        }
+
+        return (
+            "Hmm, aku belum nemu jawaban pas di knowledge-ku 😊 " +
+            "Soal Food, Ride, Assistant, atau 2in1 di CIKUR GO — aku bisa bantu. Mau coba dari situ?"
         );
     }
 
@@ -1504,6 +1589,52 @@
                 );
 
             /*
+             * STEP 1b — MESIN ABC (sync, ringan)
+             */
+            try {
+                if (shouldUseMachineAbc(text, options) || isContextRecallQuery(text)) {
+                    const abcResult = runMachineAbc(text, options);
+                    if (abcResult && analysis && typeof analysis === "object") {
+                        analysis.machineAbc = {
+                            ok: !!abcResult.ok,
+                            status: abcResult.status || null,
+                            confidence: abcResult.confidence ?? null,
+                            summary: abcResult.summary || null,
+                            findingsCount: (abcResult.findings || []).length,
+                            error: abcResult.error || null
+                        };
+                    }
+                }
+                if (isContextRecallQuery(text) && window.CGOAbcCognition &&
+                    typeof window.CGOAbcCognition.analyzeConversationHistory === "function") {
+                    try {
+                        const convState = (window.CGO_CUSTOMER && window.CGO_CUSTOMER.conversation &&
+                            typeof window.CGO_CUSTOMER.conversation.getState === "function")
+                            ? window.CGO_CUSTOMER.conversation.getState()
+                            : null;
+                        const recent = (convState && convState.context && Array.isArray(convState.context.recentMessages))
+                            ? convState.context.recentMessages
+                            : [];
+                        if (recent.length) {
+                            const abcHistory = window.CGOAbcCognition.analyzeConversationHistory(recent, { force: true });
+                            if (abcHistory && abcHistory.ok && analysis) {
+                                analysis.abcHistory = {
+                                    ok: true,
+                                    topics: abcHistory.topics || [],
+                                    summary: abcHistory.summary || null,
+                                    confidence: abcHistory.confidence ?? null
+                                };
+                                if (abcHistory.topics && abcHistory.topics.length &&
+                                    (!analysis.topic || analysis.topic === "conversation")) {
+                                    analysis.topic = abcHistory.topics[0];
+                                }
+                            }
+                        }
+                    } catch (_h) {}
+                }
+            } catch (_abcSync) {}
+
+            /*
              * STEP 2 — KNOWLEDGE
              */
             const knowledge =
@@ -1544,7 +1675,7 @@
             /*
              * STEP 4 — RESPONSE CANDIDATE
              */
-            const candidate =
+            let candidate =
                 generateResponseCandidate(
                     text,
                     analysis,
@@ -1552,6 +1683,44 @@
                     discovery,
                     options
                 );
+
+            /*
+             * STEP 4b — ABC / context-recall override (natural)
+             * Jika user tanya "tadi kita bahas apa" dan ABC/history
+             * menemukan topik, ganti jawaban generik dengan recall natural.
+             */
+            try {
+                if (isContextRecallQuery(text)) {
+                    const topics = (analysis.abcHistory && analysis.abcHistory.topics) || [];
+                    const topicLabels = {
+                        food: "Food / pesan makanan",
+                        ride: "Ride / perjalanan",
+                        assistant: "Assistant / sewa asisten",
+                        cikurgo2in1: "layanan 2in1",
+                        cikur_go: "CIKUR GO",
+                        pricing: "harga / tarif"
+                    };
+                    let labels = topics.slice(0, 3).map(function (t) {
+                        return topicLabels[t] || t;
+                    });
+                    if (!labels.length && analysis.topic && analysis.topic !== "conversation") {
+                        labels = [topicLabels[analysis.topic] || analysis.topic];
+                    }
+                    if (labels.length) {
+                        const joined = labels.join(" dan ");
+                        const recallText = "Tadi kita bahas soal " + joined + ". Mau lanjut dari situ, atau pindah topik lain?";
+                        if (typeof candidate === "string") {
+                            candidate = recallText;
+                        } else if (candidate && typeof candidate === "object") {
+                            if (typeof candidate.text === "string") candidate.text = recallText;
+                            else if (typeof candidate.response === "string") candidate.response = recallText;
+                            else candidate = { text: recallText, mode: "reasoning_recall" };
+                        } else {
+                            candidate = { text: recallText, mode: "reasoning_recall" };
+                        }
+                    }
+                }
+            } catch (_ovr) {}
 
             /*
              * STEP 5 — GUARDIAN
@@ -1642,28 +1811,35 @@
 
 
     /* =========================================================
-     * MESIN ABC — formal structure pass (opsional, non-blocking)
-     * Tidak mengganti kepribadian chat; hanya memperkuat bukti
-     * saat input butuh verifikasi / struktur.
+     * MESIN ABC — formal + cognitive assist (opsional, non-blocking)
+     * Versi 1.1: membantu otak CGO lebih pintar (struktur, konteks,
+     * penjelasan layanan). Tidak mengganti kepribadian natural.
      * ========================================================= */
     function shouldUseMachineAbc(text, options) {
         options = options || {};
         // Prefer lapisan kognisi terpusat (sistem + customer)
         try {
             if (window.CGOAbcCognition && typeof window.CGOAbcCognition.shouldEnrich === "function") {
-                return window.CGOAbcCognition.shouldEnrich(text, options);
+                // light mode default agar lebih sering membantu otak
+                return window.CGOAbcCognition.shouldEnrich(text, Object.assign({ light: true }, options));
             }
         } catch (_e) {}
         if (options.forceAbc === true) return true;
         if (options.skipAbc === true) return false;
         const s = String(text || "");
-        if (s.length < 6) return false;
-        if (/\b(verifikasi|audit|mesin\s*abc|self-?test|cek struktur|format json|periksa html|analisis (kode|struktur|sistem)|bcgo|telemetry|kontrak)\b/i.test(s)) return true;
+        if (s.length < 4) return false;
+        if (/\b(verifikasi|audit|mesin\s*abc|self-?test|cek struktur|format json|periksa html|analisis (kode|struktur|sistem)|bcgo|telemetry|kontrak|jelaskan|jelasin|apa\s+itu|tadi|sebelumnya|bahas\s+apa|cikur\s*go|layanan)\b/i.test(s)) return true;
         const trimmed = s.trim();
-        if (trimmed.length >= 20 && ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]")))) return true;
-        if (trimmed.length >= 60 && /<\s*(html|div|script|style)\b/i.test(s)) return true;
-        if (trimmed.length >= 80 && /\b(function\s+|export\s+|import\s+)/.test(s)) return true;
+        if (trimmed.length >= 18 && ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]")))) return true;
+        if (trimmed.length >= 50 && /<\s*(html|div|script|style)\b/i.test(s)) return true;
+        if (trimmed.length >= 28 && (/\?$/.test(trimmed) || /^(apa|bagaimana|gimana|siapa|kenapa|mau|bisa|tolong)\b/i.test(trimmed))) return true;
         return false;
+    }
+
+    function isContextRecallQuery(text) {
+        const s = String(text || "").toLowerCase();
+        return /\b(tadi\s+kita\s+bahas|kita\s+bahas\s+apa|bahas\s+apa\s+tadi|topik\s+terakhir|apa\s+yang\s+kita\s+(bahas|bicarakan)|what\s+did\s+we\s+(talk|discuss)|previous\s+topic|yang\s+tadi\s+apa)\b/i.test(s)
+            || (/\b(tadi|sebelumnya|barusan)\b/.test(s) && /\b(bahas|bicarakan|ngomongin|topik|cerita)\b/.test(s));
     }
 
     function runMachineAbc(text, options) {
@@ -1794,38 +1970,95 @@
                 );
 
             /*
-             * STEP 1b — MESIN ABC (opsional)
-             * Hanya jika input butuh cek struktur/verifikasi.
-             * Gagal / absen → chat tetap jalan normal.
+             * STEP 1b — MESIN ABC (opsional, cognitive assist)
+             * Membantu struktur, penjelasan, dan recall konteks.
+             * Gagal / absen → chat tetap jalan natural.
              */
             let abcResult = null;
+            let abcHistory = null;
             try {
-                if (shouldUseMachineAbc(text, options)) {
-                    abcResult = await runMachineAbcWithTimeout(text, options, 90);
+                const needAbc = shouldUseMachineAbc(text, options) || isContextRecallQuery(text);
+                if (needAbc) {
+                    abcResult = await runMachineAbcWithTimeout(text, options, 120);
                     if (abcResult && abcResult.timeout) {
                         abcResult = { ok: false, timeout: true };
                     }
-                    if (abcResult && analysis && typeof analysis === "object") {
+                }
+
+                // Khusus pertanyaan "tadi kita bahas apa?" → analisa history via ABC
+                if (isContextRecallQuery(text) && window.CGOAbcCognition &&
+                    typeof window.CGOAbcCognition.analyzeConversationHistory === "function") {
+                    try {
+                        const convState = (window.CGO_CUSTOMER && window.CGO_CUSTOMER.conversation &&
+                            typeof window.CGO_CUSTOMER.conversation.getState === "function")
+                            ? window.CGO_CUSTOMER.conversation.getState()
+                            : null;
+                        const recent = (convState && convState.context && Array.isArray(convState.context.recentMessages))
+                            ? convState.context.recentMessages
+                            : (state && state.history) || [];
+                        if (recent && recent.length) {
+                            abcHistory = window.CGOAbcCognition.analyzeConversationHistory(recent, { force: true });
+                        }
+                    } catch (_histErr) {
+                        abcHistory = null;
+                    }
+                }
+
+                if (analysis && typeof analysis === "object") {
+                    if (abcResult) {
                         analysis.machineAbc = {
                             ok: !!abcResult.ok,
                             status: abcResult.status || null,
                             confidence: abcResult.confidence ?? null,
-                            audit: abcResult.audit?.status || null,
+                            summary: abcResult.summary || null,
+                            audit: abcResult.audit?.status || (abcResult.audit || null),
                             findingsCount: (abcResult.findings || []).length,
+                            findings: Array.isArray(abcResult.findings) ? abcResult.findings.slice(0, 8) : [],
                             error: abcResult.error || null,
                             timeout: !!abcResult.timeout
                         };
+                        // Soft boost topic/intent jika ABC menemukan sinyal layanan
+                        if (abcResult.ok && abcResult.summary) {
+                            const sum = String(abcResult.summary).toLowerCase();
+                            if (!analysis.topic || analysis.topic === "conversation") {
+                                if (/\b(food|makanan)\b/.test(sum)) analysis.topic = "food";
+                                else if (/\b(ride|perjalanan|driver)\b/.test(sum)) analysis.topic = "ride";
+                                else if (/\b(assistant|asisten)\b/.test(sum)) analysis.topic = "assistant";
+                                else if (/\b(2in1|gabungan)\b/.test(sum)) analysis.topic = "cikurgo2in1";
+                                else if (/\b(cikur\s*go|platform|layanan)\b/.test(sum)) analysis.topic = "cikur_go";
+                            }
+                        }
+                    }
+                    if (abcHistory && abcHistory.ok) {
+                        analysis.abcHistory = {
+                            ok: true,
+                            topics: abcHistory.topics || [],
+                            summary: abcHistory.summary || null,
+                            confidence: abcHistory.confidence ?? null
+                        };
+                        // Isi unresolvedTopic / serviceCandidate dari history jika kosong
+                        if (abcHistory.topics && abcHistory.topics.length) {
+                            if (!analysis.topic || analysis.topic === "conversation") {
+                                analysis.topic = abcHistory.topics[0];
+                            }
+                            if (analysis.context) {
+                                if (!analysis.context.unresolvedTopic) {
+                                    analysis.context.unresolvedTopic = abcHistory.topics[0];
+                                }
+                            }
+                        }
                     }
                 }
             } catch (_abcErr) {
                 abcResult = null;
+                abcHistory = null;
             }
 
             /*
-             * STEP 2 — KNOWLEDGE
+             * STEP 2 — KNOWLEDGE (+ semantic bila CGOSemantic siap)
              */
             const knowledge =
-                queryKnowledge(
+                await queryKnowledgeAsync(
                     text,
                     analysis,
                     options
@@ -1862,7 +2095,7 @@
             /*
              * STEP 4 — RESPONSE CANDIDATE
              */
-            const candidate =
+            let candidate =
                 generateResponseCandidate(
                     text,
                     analysis,
@@ -1870,6 +2103,44 @@
                     discovery,
                     options
                 );
+
+            /*
+             * STEP 4b — ABC / context-recall override (natural)
+             * Jika user tanya "tadi kita bahas apa" dan ABC/history
+             * menemukan topik, ganti jawaban generik dengan recall natural.
+             */
+            try {
+                if (isContextRecallQuery(text)) {
+                    const topics = (analysis.abcHistory && analysis.abcHistory.topics) || [];
+                    const topicLabels = {
+                        food: "Food / pesan makanan",
+                        ride: "Ride / perjalanan",
+                        assistant: "Assistant / sewa asisten",
+                        cikurgo2in1: "layanan 2in1",
+                        cikur_go: "CIKUR GO",
+                        pricing: "harga / tarif"
+                    };
+                    let labels = topics.slice(0, 3).map(function (t) {
+                        return topicLabels[t] || t;
+                    });
+                    if (!labels.length && analysis.topic && analysis.topic !== "conversation") {
+                        labels = [topicLabels[analysis.topic] || analysis.topic];
+                    }
+                    if (labels.length) {
+                        const joined = labels.join(" dan ");
+                        const recallText = "Tadi kita bahas soal " + joined + ". Mau lanjut dari situ, atau pindah topik lain?";
+                        if (typeof candidate === "string") {
+                            candidate = recallText;
+                        } else if (candidate && typeof candidate === "object") {
+                            if (typeof candidate.text === "string") candidate.text = recallText;
+                            else if (typeof candidate.response === "string") candidate.response = recallText;
+                            else candidate = { text: recallText, mode: "reasoning_recall" };
+                        } else {
+                            candidate = { text: recallText, mode: "reasoning_recall" };
+                        }
+                    }
+                }
+            } catch (_ovr) {}
 
             /*
              * STEP 5 — GUARDIAN

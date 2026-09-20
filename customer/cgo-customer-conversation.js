@@ -609,8 +609,8 @@
 
     // Weighted phrase scoring (higher = stronger signal)
     const rules = [
-      { intent: "greeting", weight: 6, phrases: ["hai", "halo", "hello", "hei", "heii", "hii", "hallo", "hi cgo", "pagi", "siang", "sore", "malam"] },
-      { intent: "small_talk", weight: 5, phrases: ["lagi apa", "apa kabar", "gimana kabar", "ngapain", "how are you"] },
+      { intent: "greeting", weight: 6, phrases: ["hai", "halo", "hello", "hei", "heii", "hii", "hallo", "hi cgo", "hai cgo", "pagi", "siang", "sore", "malam", "cgo??", "cgo?", "halo cgo", "haii", "haiii"] },
+      { intent: "small_talk", weight: 5, phrases: ["lagi apa", "apa kabar", "gimana kabar", "ngapain", "how are you", "sedang apa", "lagi ngapain", "lagi sibuk", "lagi apa cgo", "sedang apa cgo"] },
       { intent: "farewell", weight: 6, phrases: ["dadah", "bye", "sampai nanti", "sampai jumpa", "aku pergi dulu", "see you", "goodbye"] },
       { intent: "need_discovery", weight: 5, phrases: ["aku butuh", "saya butuh", "aku mau", "saya mau", "pengen", "pengin", "ingin", "lagi cari", "butuh bantuan", "i need", "i want"] },
       { intent: "availability", weight: 7, phrases: [
@@ -635,6 +635,12 @@
 
     if (value.endsWith("?")) {
       bump("question", 1.5);
+    }
+
+    // Pure short call-out to CGO → greeting (hindari jawaban ngaco)
+    const pureCall = value.replace(/[?!.,\s]+/g, "");
+    if (pureCall === "cgo" || pureCall === "cikurgo" || pureCall === "haicgo" || pureCall === "halocgo") {
+      bump("greeting", 8);
     }
 
     // Pure arithmetic / sisa uang → treat as light question, not pricing service
@@ -1346,18 +1352,39 @@
    * ========================================================== */
 
   function greetingResponse() {
-    const greetings = [
-      "Haiii 😊❤️",
-      "Haiii, akhirnya muncul juga 😄",
-      "Halo kamu 👋😊",
-      "Haaaiii 😄 Aku di sini.",
-      "Haiii! Senang ketemu kamu lagi ❤️"
-    ];
+    // Natural & konteks: bedakan sapaan pertama vs kembali, dan panggilan "CGO"
+    const turn = state.turn || 0;
+    const lastTopic = state.topic && state.topic !== "conversation" ? state.topic : null;
+    const topicHint = {
+      food: "makanan",
+      ride: "perjalanan",
+      assistant: "asisten",
+      cikurgo2in1: "2in1",
+      cikur_go: "CIKUR GO"
+    };
+
+    let greetings;
+    if (turn <= 1) {
+      greetings = [
+        "Hai! Aku CGO 😊 Mau dibantu apa hari ini?",
+        "Haiii 👋 Aku CGO, siap bantu Food, Ride, Assistant, atau sekadar ngobrol.",
+        "Halo! Senang ketemu 😄 Ada yang bisa aku bantu?"
+      ];
+    } else if (lastTopic && topicHint[lastTopic]) {
+      greetings = [
+        "Hai lagi 😊 Tadi kita sempat bahas " + topicHint[lastTopic] + ". Mau lanjut atau ganti topik?",
+        "Haiii 😄 Masih soal " + topicHint[lastTopic] + " atau ada kebutuhan lain?"
+      ];
+    } else {
+      greetings = [
+        "Hai lagi 😊 Ada yang mau dilanjut?",
+        "Haiii! Senang ketemu kamu lagi ❤️",
+        "Halo kamu 👋 Aku masih di sini."
+      ];
+    }
 
     const response = randomItem(greetings);
-
     clearPendingQuestion();
-
     return response;
   }
 
@@ -1371,16 +1398,18 @@
     if (
       includesAny(value, [
         "lagi apa",
-        "ngapain"
+        "ngapain",
+        "sedang apa",
+        "lagi ngapain",
+        "lagi sibuk"
       ])
     ) {
       clearPendingQuestion();
 
       return randomItem([
-        "Aku? Lagi standby nemenin kamu 😄",
-        "Lagi di sini dong, nemenin kamu ngobrol 😊",
-        "Aku lagi standby. Belum ke mana-mana kok 😆",
-        "Lagi santai sambil nunggu kamu cerita. Hehe 😄"
+        "Lagi nemenin kamu di sini 😄 Kamu sendiri lagi apa?",
+        "Aku di sini aja, standby 😊 Ada yang mau dibahas?",
+        "Lagi santai nemenin kamu 😆 Kamu gimana?"
       ]);
     }
 
@@ -1393,18 +1422,18 @@
       clearPendingQuestion();
 
       return randomItem([
-        "Aku baik 😊 Apalagi kalau diajak ngobrol begini.",
-        "Baik donggg 😄 Kamu sendiri gimana?",
-        "Aku aman dan standby ❤️ Kalau kamu gimana hari ini?"
+        "Baik 😊 Apalagi kalau diajak ngobrol. Kamu sendiri gimana?",
+        "Aman dong 😄 Kamu hari ini oke?",
+        "Baik-baik aja ❤️ Kamu gimana kabarnya?"
       ]);
     }
 
     clearPendingQuestion();
 
     return randomItem([
-      "Hehe 😄 lanjut cerita aja, aku dengerin.",
-      "Aku masih di sini kok 😊 Ceritain aja.",
-      "Hmmmm 😄 aku penasaran, terus gimana?"
+      "Hehe 😄 cerita aja, aku dengerin.",
+      "Aku masih di sini 😊 Mau ngobrol apa?",
+      "Siap 😄 Ada yang lagi di pikiranmu?"
     ]);
   }
 
@@ -1666,19 +1695,45 @@
   function genericConversationResponse() {
     clearPendingQuestion();
 
+    // Hindari jawaban generik berulang — manfaatkan topik / kebutuhan yang ada
+    const topic = state.topic && state.topic !== "conversation" ? state.topic : null;
+    const needs = (state.context && state.context.detectedNeeds) || [];
+    const topicLabels = {
+      food: "makanan",
+      ride: "perjalanan",
+      assistant: "asisten",
+      cikurgo2in1: "layanan 2in1",
+      cikur_go: "CIKUR GO",
+      pricing: "harga"
+    };
+
+    if (topic && topicLabels[topic]) {
+      return randomItem([
+        "Oke, soal " + topicLabels[topic] + " ya 😊 Bagian mana yang mau kita dalami?",
+        "Masih di jalur " + topicLabels[topic] + ". Kamu mau tahu apa lagi, atau pindah topik?",
+        "Siap 😊 Mau lanjut detail " + topicLabels[topic] + " atau ada kebutuhan lain?"
+      ]);
+    }
+
+    if (needs.length) {
+      const n = needs.slice(0, 2).join(" & ");
+      return randomItem([
+        "Tadi sempat muncul kebutuhan seputar " + n + " 😊 Mau dilanjut dari situ?",
+        "Oke, aku catat ada sinyal " + n + ". Mau kita fokus ke situ?"
+      ]);
+    }
+
     if (state.turn <= 1) {
       return randomItem([
-        "Hehe 😊 aku dengerin kok. Cerita aja.",
-        "Iyaaa 😄 lanjut aja ceritanya.",
-        "Hmm, aku di sini. Ceritain aja pelan-pelan."
+        "Hehe 😊 aku dengerin. Cerita aja, atau bilang aja layanan yang kamu butuh.",
+        "Aku di sini 😄 Mau ngobrol santai, atau langsung pesan Food / Ride / Assistant?"
       ]);
     }
 
     return randomItem([
-      "Hmm, aku ngerti 😊 lanjut ceritain aja.",
-      "Okeee, aku nangkep arahnya 😄 Terus gimana?",
-      "Aku masih ngikutin ceritamu kok. Lanjut aja 😊",
-      "Hmmmm... menarik 😄 Cerita lebih lanjut boleh."
+      "Oke, aku ikut 😊 Mau lanjut cerita, atau ada layanan CIKUR GO yang bisa aku bantu?",
+      "Siap 😄 Kamu mau bahas apa — makanan, perjalanan, asisten, atau yang lain?",
+      "Hmm, arahnya masih terbuka. Bilang aja yang kamu butuhkan, aku bantu."
     ]);
   }
 
