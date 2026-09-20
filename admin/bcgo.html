@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO Universal Neural Monitor v4.0.0 — Clean System Monitor</title>
+<title>BCGO Universal Neural Monitor · <a href="cgo-machine-abc.html" style="color:#7dd3fc;font-size:12px;font-weight:600;">Mesin ABC ↗</a> v4.0.0 — Clean System Monitor</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -303,6 +303,8 @@ body{font-family:'Inter',sans-serif}
 </section>
 </div>
 
+<script src="../cgo-machine-abc.js"></script>
+<script src="../cgo-machine-abc-bridge.js"></script>
 <script type="module">
 import { runAutonomousEngine } from './bcgo.js?v=4.3.0-INTERNAL-SOURCE-SCAN-20260917';
 
@@ -314,6 +316,20 @@ try {
     internalBrain = adapter.install();
     window.CGOInternalBrain = internalBrain;
     console.log('[BCGO] Internal CGO brain terpasang:', internalBrain?.version);
+  if (window.CGOMachineABCBridge) {
+    window.CGOMachineABCBridge.observe((packet) => {
+      try {
+        const st = packet?.result?.status || packet?.finalResult?.status;
+        if (st && window.BCGO_STATE) {
+          window.BCGO_STATE.lastAbcStatus = st;
+          window.BCGO_STATE.lastAbcAt = Date.now();
+        }
+      } catch (_) {}
+    });
+    console.log('[BCGO] Mesin ABC terhubung:', window.CGOMachineABCBridge.engineVersion);
+  } else {
+    console.warn('[BCGO] Mesin ABC belum termuat (cgo-machine-abc.js)');
+  }
   }
 } catch (err) {
   console.warn('[BCGO] Internal brain tidak tersedia; BCGO monitor tetap berjalan:', err);
@@ -757,6 +773,22 @@ async function sendQuestion(question) {
         if (brain?.ask) {
             setChatLiveStatus('BCGO sedang memeriksa telemetry, scanner, dan state live…', 'working');
             answer = await Promise.resolve(brain.ask(text));
+        }
+        // 1b) Mesin ABC — analisis struktur / bukti formal (tanpa AI eksternal)
+        if (window.CGOMachineABCBridge && /analisis|struktur|audit|verifikasi|bukti|mesin abc|pipeline|self-?test/i.test(text)) {
+            try {
+                setChatLiveStatus('Mesin ABC memproses A→B→C→D…', 'working');
+                const abc = window.CGOMachineABCBridge.analyze(text, { maxCycles: 1 });
+                if (abc.ok) {
+                    const conf = abc.confidence != null ? Math.round(Number(abc.confidence) * 100) + '%' : '–';
+                    const nFind = (abc.findings || []).length;
+                    const auditSt = abc.audit?.status || '–';
+                    const abcLine = `[Mesin ABC ${abc.version}] status ${abc.status || '–'} · keyakinan ${conf} · temuan ${nFind} · audit ${auditSt}`;
+                    answer = answer ? (String(answer) + '\n\n' + abcLine) : abcLine;
+                }
+            } catch (abcErr) {
+                console.warn('[BCGO] ABC analyze:', abcErr);
+            }
         }
         // 2) Internal CGO brain (investigation) jika jawaban generik / kosong
         const internal = window.CGOInternalBrain || internalBrain;
