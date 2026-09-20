@@ -283,9 +283,12 @@
     console.info("[CGO Bootstrap] ready=", ready, "modules=", modules, "discovery=live-cloud");
     try {
       try {
-        const abcOk = !!(window.CGOMachineABC || window.CGOMachineABCBridge);
-        if (modules && typeof modules === "object") modules.machineAbc = abcOk;
-        if (abcOk) console.log("[CGO BOOT] Mesin ABC siap untuk Chat CGO");
+        const abcOk = !!(window.CGOAbcCognition?.isReady?.() || window.CGOMachineABC || window.CGOMachineABCBridge);
+        if (modules && typeof modules === "object") {
+          modules.machineAbc = abcOk;
+          modules.abcCognition = !!(window.CGOAbcCognition);
+        }
+        if (abcOk) console.log("[CGO BOOT] Mesin ABC + kognisi formal siap untuk Chat CGO");
         else console.warn("[CGO BOOT] Mesin ABC tidak terdeteksi (chat tetap normal)");
       } catch (_abc) {}
       window.dispatchEvent(new CustomEvent("cgo-customer-ready", { detail: { ready, modules } }));

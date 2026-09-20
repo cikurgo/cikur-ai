@@ -625,9 +625,24 @@ function reasonChat(question = {}, options = {}) {
   const raw = typeof question === "string" ? question : String(question?.text || question?.question || "");
   const analysis = question?.analysis || options?.analysis || {};
   if (!isSystemChatRequest(raw, analysis)) return { handled:false, text:null, reason:"BRAIN_PRESERVES_CUSTOMER_CONVERSATION_ENGINE" };
-  const answer = chatAnswer(question);
+  let answer = chatAnswer(question);
   if (!answer || !String(answer).trim()) return { handled:false, text:null, reason:"NO_INTERNAL_EVIDENCE" };
-  return { handled:true, text:String(answer).trim(), response:String(answer).trim(), engine:"CGO_INTERNAL_BRAIN", evidenceBound:true, version:VERSION };
+  // Formal pass Mesin ABC (sistem) — non-blocking, tidak mengganti jawaban bukti
+  try {
+    const cog = typeof window !== "undefined" ? window.CGOAbcCognition : null;
+    if (cog && typeof cog.enrich === "function" && cog.shouldEnrich(raw, options)) {
+      const en = cog.enrich(raw, { ...options, style: "compact" });
+      if (en.used && en.abc && en.abc.ok && en.hint) {
+        const base = String(answer).trim();
+        if (!/Mesin ABC/i.test(base)) answer = base + "\n\n" + en.hint;
+        if (analysis && typeof analysis === "object") analysis.machineAbc = {
+          ok: true, status: en.abc.status, confidence: en.abc.confidence,
+          audit: en.abc.audit?.status || en.abc.audit || null
+        };
+      }
+    }
+  } catch (_abc) {}
+  return { handled:true, text:String(answer).trim(), response:String(answer).trim(), engine:"CGO_INTERNAL_BRAIN", evidenceBound:true, version:VERSION, machineAbc: analysis?.machineAbc || null };
 }
 
 function setPresenceQueryResolver(resolver) {
@@ -967,7 +982,7 @@ export function install() {
     findNearbyAgents,
     getPresenceContract,
     capabilities() {
-      return Object.freeze({ chatReasoning:true, systemReasoning:true, radar:true, evidenceBound:true, externalAI:false, automaticSourceMutation:false });
+      return Object.freeze({ chatReasoning:true, systemReasoning:true, radar:true, evidenceBound:true, machineAbc: !!(typeof window !== "undefined" && (window.CGOAbcCognition?.isReady?.() || window.CGOMachineABC || window.CGOMachineABCBridge)), externalAI:false, automaticSourceMutation:false });
     },
     liveChat,
     async openCodeWorkbench(file, context = {}) { return openCodeWorkbench(file, context); },
