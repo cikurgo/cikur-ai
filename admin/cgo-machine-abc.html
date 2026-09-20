@@ -104,6 +104,7 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
     <span id="audit" class="chip">Audit D –</span>
     <span id="ind" class="chip">Independensi …</span>
     <span id="degraded" class="chip">Degraded 0</span>
+    <span id="bus" class="chip">Bus …</span>
   </div>
 </header>
 
@@ -128,6 +129,7 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
     <div class="controls">
       <button id="pause" type="button" aria-pressed="false">Jeda</button>
       <button id="reset" type="button">Reset</button>
+      <button id="smoke" type="button" title="Uji mesin dengan input sample">Uji</button>
       <button id="devBtn" type="button" aria-expanded="false" aria-controls="dev">DEV</button>
     </div>
   </div>
@@ -165,7 +167,7 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
     <div class="row"><span>Input diabaikan saat jeda</span><strong id="skipDetail">0</strong></div>
     <div class="row"><span>Pesan ditolak (origin asing)</span><strong id="rejectDetail">0</strong></div>
     <div class="row"><span>Error terakhir</span><strong id="errorDetail">-</strong></div>
-    <p class="footer">Halaman ini tidak menjalankan A/B/C sendiri; ia hanya mengamati engine. Input produksi dikirim lewat <code>dispatchEvent(new CustomEvent("cgo:input",{detail:{payload,options}}))</code> atau <code>postMessage({type:"CGO_INPUT",payload,options})</code>. Pesan dari origin lain hanya diterima jika terdaftar di <code>window.CGO_ALLOWED_ORIGINS</code>. Panel DEV muncul dengan <code>?dev=1</code>.</p>
+    <p class="footer">Halaman ini tidak menjalankan A/B/C sendiri; ia hanya mengamati engine. Input produksi dikirim lewat <code>dispatchEvent(new CustomEvent("cgo:input",{detail:{payload,options}}))</code> atau <code>postMessage({type:"CGO_INPUT",payload,options})</code>. Pesan dari origin lain hanya diterima jika terdaftar di <code>window.CGO_ALLOWED_ORIGINS</code>. Tombol <b>Uji</b> memproses sample lokal. Siklus dari Chat CGO / BCGO masuk lewat <code>BroadcastChannel("cgo-machine-abc-bus")</code>. Panel DEV lengkap: <code>?dev=1</code>.</p>
   </div>
 </section>
 </div>
@@ -332,6 +334,65 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
   health();            // self-test berjalan sebelum observer dipasang dan tidak meninggalkan jejak
   E.observe(onPayload);
   refresh();
+
+  /* ===== Bus lintas-tab: terima siklus dari index.html / BCGO / Chat CGO ===== */
+  const BUS_NAME = "cgo-machine-abc-bus";
+  let busLinked = false;
+  function markBus(ok, detail) {
+    busLinked = !!ok;
+    chip($("#bus"), ok ? ("Bus ON" + (detail ? " · " + detail : "")) : "Bus OFF", ok ? "ok" : "warn");
+  }
+  markBus(false, "");
+
+  function ingestRemote(msg) {
+    if (!msg || msg.type !== "CGO_ABC_BUS") return;
+    if (msg.kind === "ready") {
+      markBus(true, "siap");
+      return;
+    }
+    if (msg.kind !== "cycle" || !msg.data) return;
+    markBus(true, "live");
+    // Bentuk paket seperti hasil observe lokal
+    const data = msg.data;
+    const packet = {
+      result: data.result,
+      cycles: data.cycles || (data.result ? [data.result] : []),
+      stopReason: data.stopReason || null,
+      remote: true,
+      source: msg.source
+    };
+    onPayload(packet);
+  }
+
+  try {
+    if (typeof BroadcastChannel !== "undefined") {
+      const ch = new BroadcastChannel(BUS_NAME);
+      ch.onmessage = (ev) => ingestRemote(ev.data);
+      markBus(true, "listen");
+    } else {
+      window.addEventListener("storage", (ev) => {
+        if (ev.key !== "cgo-abc-bus-ping") return;
+        markBus(true, "storage");
+      });
+    }
+  } catch (err) {
+    markBus(false, "error");
+  }
+
+  /* Tombol Uji — tanpa ?dev=1 */
+  const smokeBtn = $("#smoke");
+  if (smokeBtn) {
+    smokeBtn.onclick = () => {
+      submit({
+        hello: "cikur-go",
+        ts: new Date().toISOString(),
+        note: "smoke-test dari monitor ABC"
+      }, { fast: true, skipAudit: true });
+    };
+  }
+
+  /* DEV selalu bisa dibuka (tetap default hidden panel) */
+  if ($("#devBtn")) $("#devBtn").hidden = false;
 })();
 </script>
 </body>
