@@ -63,7 +63,7 @@ body{font-family:'Inter',sans-serif}
 
 <header class="flex justify-between items-center border-b border-slate-800 pb-4 gap-3">
     <div class="flex items-center gap-3 min-w-0">
-        <img class="brand-logo w-12 h-12 md:w-14 md:h-14 object-contain rounded-xl bg-white p-1 shrink-0" src="../cikurgoicon.png" alt="CIKUR GO" width="56" height="56" decoding="async">
+        <img class="brand-logo w-12 h-12 md:w-14 md:h-14 object-contain rounded-xl bg-white p-1 shrink-0" src="../cikurgoicon.png" alt="CIKUR GO" onerror="this.style.display='none'" width="56" height="56" decoding="async">
         <div class="min-w-0">
             <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
                 <span id="pulse-dot" class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></span>
@@ -303,6 +303,8 @@ body{font-family:'Inter',sans-serif}
             <button class="quick-q text-[10px] px-2 py-1 rounded-md border border-slate-700 text-slate-400" data-q="Hai BCGO, apa yang sedang kamu kerjakan?">Apa yang kamu kerjakan?</button>
             <button class="quick-q text-[10px] px-2 py-1 rounded-md border border-slate-700 text-slate-400" data-q="Bagaimana status sistem sekarang?">Status sistem?</button>
             <button class="quick-q text-[10px] px-2 py-1 rounded-md border border-slate-700 text-slate-400" data-q="Ada masalah atau error?">Ada masalah?</button>
+            <button class="quick-q text-[10px] px-2 py-1 rounded-md border border-sky-800 text-sky-300" data-q="mesin abc self-test">Mesin ABC self-test</button>
+            <button class="quick-q text-[10px] px-2 py-1 rounded-md border border-sky-800 text-sky-300" data-q="analisis struktur sistem BCGO">Analisis ABC</button>
         </div>
     </div>
 
@@ -311,6 +313,7 @@ body{font-family:'Inter',sans-serif}
 
 <script src="../cgo-machine-abc.js"></script>
 <script src="../cgo-machine-abc-bridge.js"></script>
+<script src="../cgo-abc-cognition.js"></script>
 <script type="module">
 import { runAutonomousEngine } from './bcgo.js?v=4.3.0-INTERNAL-SOURCE-SCAN-20260917';
 
@@ -810,8 +813,9 @@ async function sendQuestion(question) {
             answer = await Promise.resolve(brain.ask(text));
         }
         // 1b) Mesin ABC — analisis formal A→B→C→D (tanpa AI eksternal)
-        const wantAbc = /analisis|struktur|audit|verifikasi|bukti|mesin\s*abc|pipeline|self-?test|abc\b|formal|well[_\s-]?formed/i.test(text);
-        if (window.CGOMachineABCBridge && wantAbc) {
+        const wantAbc = (window.CGOAbcCognition && window.CGOAbcCognition.shouldEnrich(text, { forceAbc: /mesin\s*abc|self-?test/i.test(text) }))
+          || /analisis|struktur|audit|verifikasi|bukti|mesin\s*abc|pipeline|self-?test|abc\b|formal|well[_\s-]?formed/i.test(text);
+        if ((window.CGOAbcCognition || window.CGOMachineABCBridge) && wantAbc) {
             try {
                 setChatLiveStatus('Mesin ABC memproses A→B→C→D…', 'working');
                 let abc;
@@ -828,6 +832,12 @@ async function sendQuestion(question) {
                     const abcLine = `[Mesin ABC ${abc.version}] self-test ${h.selfTest?.passed}/${h.selfTest?.total} · independensi ${h.independence?.verified ? 'OK' : 'CEK'} · metrics total=${h.metrics?.totalProcessed ?? 0}`;
                     answer = answer ? (String(answer) + '\n\n' + abcLine) : abcLine;
                     updateAbcChip('ABC: self-test', h.selfTest?.verified);
+                } else if (window.CGOAbcCognition && typeof window.CGOAbcCognition.enrich === 'function') {
+                    const en = window.CGOAbcCognition.enrich(text, { forceAbc: true, style: 'compact' });
+                    abc = en.abc || { ok: false, error: 'enrich_empty' };
+                    if (en.hint && abc.ok) {
+                        /* hint dipakai di bawah via abc fields */
+                    }
                 } else {
                     abc = window.CGOMachineABCBridge.analyze(text, { maxCycles: 1 });
                     if (abc.ok) {
@@ -1080,7 +1090,8 @@ function renderConnection(state) {
     connectionStateEl.innerHTML = `<span class="connection-dot ${dot}"></span>${label}`;
     connectionAgeEl.textContent = getStateAgeText(state);
     telemetrySourceEl.textContent = state.lastTelemetryFile || 'system_logs aktif';
-    const aiCycle = Number(window.BCGOBrain?.getBCGOState?.()?.cycle);
+    const brainState = window.BCGOBrain?.getBCGOState?.() || window.BCGOBrain?.getState?.() || null;
+    const aiCycle = Number(brainState?.cycle);
     stateIntegrityEl.textContent = Number.isFinite(aiCycle) && aiCycle === Number(state.cycle) ? 'SYNC' : 'UPDATING';
 }
 

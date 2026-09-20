@@ -52,6 +52,7 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "bcgo-engine.js", path: "../bcgo-engine.js", role: "Shared Engine" },
   { file: "cgo-machine-abc.js", path: "../cgo-machine-abc.js", role: "Mesin ABC Core" },
   { file: "cgo-machine-abc-bridge.js", path: "../cgo-machine-abc-bridge.js", role: "Mesin ABC Bridge" },
+  { file: "cgo-abc-cognition.js", path: "../cgo-abc-cognition.js", role: "ABC Cognition Layer" },
   { file: "admin/cgo-machine-abc.html", path: "cgo-machine-abc.html", role: "Mesin ABC Monitor" },
   { file: "cgo-ai-radar.js", path: "../cgo-ai-radar.js", role: "Radar Engine" },
   { file: "cgo-app-bootstrap.js", path: "../cgo-app-bootstrap.js", role: "Customer Bootstrap" },
@@ -985,7 +986,11 @@ export function runAutonomousEngine(onCycleUpdate) {
       ["customer/ride.html", "cikur-config.js", "CUSTOMER_CONFIG"],
       ["mitra/agentcgo.html", "cikur-config.js", "MITRA_CONFIG"],
       ["mitra/driver.html", "cikur-config.js", "MITRA_CONFIG"],
-      ["mitra/resto.html", "cikur-config.js", "MITRA_CONFIG"]
+      ["mitra/resto.html", "cikur-config.js", "MITRA_CONFIG"],
+      ["admin/bcgo.html", "cgo-machine-abc.js", "MESIN_ABC_ENGINE"],
+      ["admin/bcgo.html", "cgo-machine-abc-bridge.js", "MESIN_ABC_BRIDGE"],
+      ["admin/cgo-machine-abc.html", "cgo-machine-abc.js", "MESIN_ABC_MONITOR"],
+      ["index.html", "cgo-machine-abc.js", "MESIN_ABC_CUSTOMER"]
     ];
     for (const [a,b,key] of contracts) {
       const text=contents.get(a)||"";
@@ -1227,7 +1232,11 @@ export function runAutonomousEngine(onCycleUpdate) {
       state.systemOrgans = organs;
       state.metrics = makeMetrics(organs);
       state.activeCases = makeCases(organs);
-        return safeClone(state);
+      return safeClone(state);
+    },
+    // Alias — HTML integrity check memakai getBCGOState
+    getBCGOState() {
+      return brain.getState();
     },
     getSituation: situation,
     getRegistry: () => ({ ...ORGAN_REGISTRY }),
