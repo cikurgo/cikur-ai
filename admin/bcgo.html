@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO Universal Neural Monitor · Mesin ABC ↗ v4.0.0 — Clean System Monitor</title>
+<title>BCGO Universal Neural Monitor · <a href="cgo-machine-abc.html" style="color:#7dd3fc;font-size:12px;font-weight:600;">Mesin ABC ↗</a> v4.0.0 — Clean System Monitor</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -494,7 +494,7 @@ function renderSourceScan(scan) {
 
     if (sourceScanStatusEl) {
         sourceScanStatusEl.textContent = running ? `SCANNING ${progress}%` : (scan.status || 'WAITING');
-        sourceScanStatusEl.className = `text-[10px] code-font ${scan.status === 'FINDINGS' || scan.status === 'DEGRADED' ? 'text-rose-400' : scan.status === 'CLEAN' ? 'text-emerald-400' : 'text-amber-400'}`;
+        sourceScanStatusEl.className = `text-[10px] code-font ${scan.status === 'FINDINGS' || scan.status === 'DEGRADED' || scan.status === 'SCANNER_UNAVAILABLE' ? 'text-rose-400' : scan.status === 'CLEAN' ? 'text-emerald-400' : 'text-amber-400'}`;
     }
     if (sourceScanCountEl) sourceScanCountEl.textContent = scanned;
     if (sourceScanReadableEl) sourceScanReadableEl.textContent = readable;
@@ -517,12 +517,12 @@ function renderSourceScan(scan) {
         sourceScanCurrentEl.textContent = scan.currentFile
             ? `${scan.phase || 'SCAN'} · ${scan.currentFile}`
             : (scan.phase === 'COMPLETE' ? 'SCAN COMPLETE · seluruh source sudah diproses' : 'Menunggu scanner...');
-        sourceScanCurrentEl.className = `text-[9px] code-font ${running ? 'text-cyan-300' : scan.status === 'FINDINGS' || scan.status === 'DEGRADED' ? 'text-rose-300' : 'text-slate-500'}`;
+        sourceScanCurrentEl.className = `text-[9px] code-font ${running ? 'text-cyan-300' : scan.status === 'FINDINGS' || scan.status === 'DEGRADED' || scan.status === 'SCANNER_UNAVAILABLE' ? 'text-rose-300' : 'text-slate-500'}`;
     }
     if (sourceScanProgressLabelEl) sourceScanProgressLabelEl.textContent = `${scanned}/${total}`;
     if (sourceScanProgressEl) {
         sourceScanProgressEl.style.width = `${progress}%`;
-        sourceScanProgressEl.className = `h-full rounded-full transition-all duration-300 ${running ? 'bg-cyan-500' : scan.status === 'FINDINGS' || scan.status === 'DEGRADED' ? 'bg-rose-500' : scan.status === 'CLEAN' ? 'bg-emerald-500' : 'bg-slate-700'}`;
+        sourceScanProgressEl.className = `h-full rounded-full transition-all duration-300 ${running ? 'bg-cyan-500' : scan.status === 'FINDINGS' || scan.status === 'DEGRADED' || scan.status === 'SCANNER_UNAVAILABLE' ? 'bg-rose-500' : scan.status === 'CLEAN' ? 'bg-emerald-500' : 'bg-slate-700'}`;
     }
 
     if (sourceScanFilesEl) {
@@ -541,10 +541,11 @@ function renderSourceScan(scan) {
         sourceScanFilesEl.innerHTML = entries.map(([file, info]) => {
             const meta = stateMeta[info?.status] || stateMeta.QUEUED;
             const active = ['READING','ANALYZING'].includes(info?.status);
+            const changedBadge = info?.changed ? '<span class="ml-1 rounded border border-amber-700/60 bg-amber-950/40 px-1 text-[7px] text-amber-300">DIROMBAK</span>' : '';
             return `<div class="rounded-md border ${meta.border} bg-slate-950/80 px-2 py-1.5 ${active ? 'ring-1 ring-amber-700/50' : ''}">
                 <div class="flex items-center gap-1.5 text-[9px] code-font ${meta.text}">
                   <span class="scan-lamp ${meta.lamp}" title="${esc(info?.status || '')}"></span>
-                  <span class="truncate">${esc(file)}</span>
+                  <span class="truncate">${esc(file)}</span>${changedBadge}
                 </div>
                 <div class="text-[8px] text-slate-600 mt-0.5 truncate">${esc(info?.message || '')}</div>
             </div>`;
@@ -846,7 +847,7 @@ function renderNeuralEvents(events) {
 
 // Pusat radar: GPS admin yang terverifikasi menjadi sumber utama.
 // Default hanya fallback visual; UI tidak boleh menyebutnya sebagai lokasi admin nyata.
-let radarCenter = { lat: -6.12, lng: 106.15 };
+let radarCenter = null;
 let radarCenterSource = 'DEFAULT_UNVERIFIED';
 let radarRadiusKm = 50;
 
@@ -857,7 +858,7 @@ function updateRadarCenterLabel() {
     el.textContent = 'Pusat: GPS admin terverifikasi';
     el.className = 'text-emerald-500';
   } else if (radarCenterSource === 'GPS_UNAVAILABLE') {
-    el.textContent = 'Pusat: default fallback — GPS admin tidak tersedia';
+    el.textContent = 'Pusat radar belum terverifikasi — GPS admin tidak tersedia.';
     el.className = 'text-amber-500';
   } else {
     el.textContent = 'Pusat: menunggu verifikasi lokasi admin';
@@ -908,6 +909,10 @@ function haversineKm(a, b) {
 function renderRadarBlips(items) {
   const host = document.getElementById('agent-radar-blips');
   if (!host) return;
+  if (radarCenterSource !== 'GPS_VERIFIED' || !radarCenter) {
+    host.innerHTML = '';
+    return;
+  }
   const inRange = items.filter(it => {
     if (!it.location) return false;
     const d = haversineKm(radarCenter, it.location);
@@ -942,11 +947,13 @@ function renderAgentPresence(state) {
     const geoEl = document.getElementById('agent-presence-geo');
     if (geoEl) geoEl.textContent = presence.geoCount ?? 0;
     const itemsForRadius = Array.isArray(presence.items) ? presence.items : [];
-    const inRadiusCount = itemsForRadius.filter(it => {
-      if (!it.location) return false;
-      const d = haversineKm(radarCenter, it.location);
-      return d != null && d <= radarRadiusKm;
-    }).length;
+    const inRadiusCount = radarCenterSource === 'GPS_VERIFIED' && radarCenter
+      ? itemsForRadius.filter(it => {
+          if (!it.location) return false;
+          const d = haversineKm(radarCenter, it.location);
+          return d != null && d <= radarRadiusKm;
+        }).length
+      : 0;
     const inEl = document.getElementById('agent-presence-inradius');
     if (inEl) inEl.textContent = inRadiusCount;
     if (agentPresenceSyncEl) agentPresenceSyncEl.textContent = presence.lastServerAt ? formatTime(presence.lastServerAt) : '-';
@@ -1014,7 +1021,7 @@ function renderConnection(state) {
     connectionStateEl.innerHTML = `<span class="connection-dot ${dot}"></span>${label}`;
     connectionAgeEl.textContent = getStateAgeText(state);
     telemetrySourceEl.textContent = state.lastTelemetryFile || 'system_logs aktif';
-    const aiCycle = Number(window.BCGOBrain?.getState?.()?.cycle);
+    const aiCycle = Number(window.BCGOBrain?.getBCGOState?.()?.cycle);
     stateIntegrityEl.textContent = Number.isFinite(aiCycle) && aiCycle === Number(state.cycle) ? 'SYNC' : 'UPDATING';
 }
 

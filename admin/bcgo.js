@@ -13,7 +13,7 @@ import { adminDb, adminAuth } from "../cikur-config.js";
 import { createRadarEngine } from "../cgo-ai-radar.js";
 
 /*
- * BCGO MASTER NERVE SYSTEM v4.2.0-CLEAN-AGENT-RADAR
+ * BCGO MASTER NERVE SYSTEM v4.3.0-INTERNAL-SOURCE-SCAN
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -96,11 +96,11 @@ const PROBE_LIMIT = 5;
 const EVENT_LIMIT = 24;
 const AGENT_PRESENCE_MAX_AGE_MS = 180000;
 const AGENT_PRESENCE_LIMIT = 500;
-const AGENT_PRESENCE_MAX_ACCURACY_M = 1000;
+const AGENT_PRESENCE_MAX_ACCURACY_M = 500;
 const radar = createRadarEngine({ maxAgents: AGENT_PRESENCE_LIMIT });
 
 const INTERNAL_TELEMETRY_SOURCES = new Set([
-  "bcgo.html", "bcgo.js",
+  "bcgo.html", "bcgo.js", "bcgo-admin.html", "data-cgo.html",
   "unhandledrejection", "error", "window.error", "runtime", "unknown"
 ]);
 
@@ -748,6 +748,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   function cleanupRealtime() {
     ++interruptGeneration;
     previousTopSignature = "";
+    if (sourceScanController) { try { sourceScanController.abort(); } catch (_) {} sourceScanController = null; }
     clearTimeout(cycleTimer);
     clearTimeout(interruptTimerProcess);
     clearTimeout(interruptTimerReview);
@@ -853,10 +854,14 @@ export function runAutonomousEngine(onCycleUpdate) {
 
   let sourceScanInFlight = false;
   let sourceScanTimer = null;
+  let sourceScanController = null;
 
   async function runInternalSourceScan() {
     if (stopped || !authorized || sourceScanInFlight) return;
     sourceScanInFlight = true;
+    if (sourceScanController) { try { sourceScanController.abort(); } catch (_) {} }
+    sourceScanController = new AbortController();
+    const scanSignal = sourceScanController.signal;
     // Simpan snapshot scan sebelumnya sebelum state.sourceScan diganti.
     // Ini adalah sumber kebenaran untuk deteksi DIROMBAK pada scan berikutnya.
     const previousScan = state.sourceScan && typeof state.sourceScan === "object"
@@ -877,7 +882,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       scan.fileStates[item.file] = { status: "READING", message: "Membaca source live dari origin aplikasi." };
       publishToUI(safeClone(state));
       try {
-        const response = await fetch(new URL(item.path, location.href).href, { cache: "no-store" });
+        const response = await fetch(new URL(item.path, location.href).href, { cache: "no-store", signal: scanSignal });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const text = await response.text();
         if (!text.trim()) throw new Error("SOURCE_EMPTY");
@@ -909,7 +914,8 @@ export function runAutonomousEngine(onCycleUpdate) {
             status: "REVIEW",
             message: `${text.length.toLocaleString("id-ID")} karakter · pantau: ${issues.join(", ")}${changed ? " · DIROMBAK" : ""}`,
             issues,
-            contentHash
+            contentHash,
+            changed
           };
           scan.findings.push({
             type: "SOURCE_REVIEW",
@@ -921,10 +927,16 @@ export function runAutonomousEngine(onCycleUpdate) {
           scan.fileStates[item.file] = {
             status: "CLEAN",
             message: `${text.length.toLocaleString("id-ID")} karakter · sehat${changed ? " · DIROMBAK & sinkron" : ""}`,
-            contentHash
+            contentHash,
+            changed
           };
         }
       } catch (error) {
+        if (error?.name === "AbortError") {
+          sourceScanInFlight = false;
+          sourceScanController = null;
+          return;
+        }
         scan.filesFailed++;
         scan.filesScanned++;
         scan.fileStates[item.file] = { status: "FAILED", message: String(error?.message || error).slice(0,180) };
@@ -935,9 +947,13 @@ export function runAutonomousEngine(onCycleUpdate) {
 
     scan.phase = "ANALYZING";
     const relations = [];
-    // Resolve relation URLs exactly like the source-fetch stage:
-    // item.path is authored relative to the current admin page, not repo root.
-    // Using repo-root as the base breaks every "../..." surface relation.
+    // App root: naik dari /admin/*.html ke folder repo
+    let rootUrl = location.href;
+    if (/\/admin\/[^/]+$/.test(rootUrl)) {
+      rootUrl = rootUrl.replace(/\/admin\/[^/]+$/, "/");
+    } else {
+      rootUrl = rootUrl.replace(/\/[^/]+$/, "/");
+    }
     for (const item of INTERNAL_SOURCE_SCAN) {
       const text = contents.get(item.file);
       if (!text) continue;
@@ -948,11 +964,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       for (const ref of refs) {
         if (!ref || /^(https?:|data:|#|javascript:)/i.test(ref)) continue;
         let target;
-        try {
-          target = new URL(ref, new URL(item.path, location.href)).pathname.replace(/^\//, "");
-        } catch {
-          continue;
-        }
+        try { target = new URL(ref, new URL(item.path, rootUrl)).pathname.replace(/^\//, ""); } catch { continue; }
         if (target.startsWith("cikur-ai/")) target = target.slice("cikur-ai/".length);
         const base = target.split("/").pop();
         const matched = INTERNAL_SOURCE_SCAN.find(x => x.path === target || x.file === target || x.file.endsWith("/" + base) || x.file === base || x.path.endsWith("/" + base));
@@ -1009,12 +1021,15 @@ export function runAutonomousEngine(onCycleUpdate) {
       return related.some(r => r.status === "LINKED");
     }).length;
     scan.crossFileFindings = relations.filter(r=>r.status === "MISMATCH");
-    scan.status = scan.filesFailed || scan.relationSummary.mismatch ? "DEGRADED" : "CLEAN";
+    const allFetchFailed = scan.filesReadable === 0 && scan.filesFailed === scan.totalFiles;
+    scan.status = allFetchFailed ? "SCANNER_UNAVAILABLE" : (scan.filesFailed || scan.relationSummary.mismatch ? "DEGRADED" : "CLEAN");
     scan.phase = "COMPLETE";
     scan.currentFile = null;
-    scan.message = scan.status === "CLEAN"
-      ? `Source internal live selesai dibaca: ${scan.filesReadable}/${scan.totalFiles} file dan ${scan.relationSummary.linked} relasi terverifikasi.`
-      : `Source internal selesai dengan ${scan.filesFailed} file gagal dibaca dan ${scan.relationSummary.mismatch} kontrak mismatch.`;
+    scan.message = allFetchFailed
+      ? "Scanner source tidak tersedia — BCGO source scanner membutuhkan HTTP(S) server, bukan file://."
+      : scan.status === "CLEAN"
+        ? `Source internal live selesai dibaca: ${scan.filesReadable}/${scan.totalFiles} file dan ${scan.relationSummary.linked} relasi terverifikasi.`
+        : `Source internal selesai dengan ${scan.filesFailed} file gagal dibaca dan ${scan.relationSummary.mismatch} kontrak mismatch.`;
     const nerves = {};
     for (const item of INTERNAL_SOURCE_SCAN) {
       const fs = scan.fileStates[item.file];
@@ -1061,6 +1076,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     state.sourceScan = scan;
     publishToUI(safeClone(state));
     sourceScanInFlight = false;
+    sourceScanController = null;
   }
 
   function refreshState() {
@@ -1237,6 +1253,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       clearTimeout(cycleTimer);
       clearInterval(refreshTimer);
       if (sourceScanTimer) { clearInterval(sourceScanTimer); sourceScanTimer = null; }
+      if (sourceScanController) { try { sourceScanController.abort(); } catch (_) {} sourceScanController = null; }
       if (typeof unsubscribeAuth === "function") unsubscribeAuth();
       cleanupRealtime();
     }
