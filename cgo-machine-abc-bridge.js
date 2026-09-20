@@ -1,9 +1,10 @@
 /**
  * CGO MACHINE ABC — Bridge ke Otak CGO / BCGO
- * Mesin ABC murni (zero network). Bridge ini hanya:
+ * Mesin ABC murni (zero network, zero storage).
+ * Bridge ini hanya:
  *  - memastikan engine terpasang di window
  *  - meneruskan hasil observasi ke event CGO/BCGO
- *  - API ringkas untuk analisis struktur teks/HTML/JS
+ *  - menyediakan API resmi untuk analisis payload
  */
 (function (global) {
   "use strict";
@@ -14,18 +15,18 @@
     return;
   }
 
-  const VERSION = "1.0.0-ABC-BRIDGE";
+  const VERSION = "1.2.0-ABC-BRIDGE";
   const listeners = new Set();
   let lastPacket = null;
 
   function emit(name, detail) {
     try {
-      global.dispatchEvent(new CustomEvent(name, { detail }));
+      if (typeof global.dispatchEvent === "function" &&
+          typeof global.CustomEvent === "function") {
+        global.dispatchEvent(new CustomEvent(name, { detail }));
+      }
     } catch (_) {}
   }
-
-  let bc = null;
-  try { bc = new BroadcastChannel("CGO_MACHINE_ABC_MONITOR"); } catch (_) {}
 
   function onPacket(packet) {
     lastPacket = packet;
@@ -38,82 +39,117 @@
       stopReason: packet?.stopReason || null,
       timestamp: packet?.timestamp || new Date().toISOString()
     });
-    // Kirim ke tab monitor Mesin ABC (jika terbuka)
-    try { bc && bc.postMessage({ type: "ABC_PACKET", packet }); } catch (_) {}
+
     for (const fn of [...listeners]) {
       try { fn(packet); } catch (_) {}
     }
   }
 
-  // Satu observer global — tidak dobel jika bridge dipanggil ulang
+  // Satu observer global — tidak dobel jika bridge dimuat ulang.
   if (!global.__CGO_ABC_BRIDGE_OBSERVER__) {
     global.__CGO_ABC_BRIDGE_OBSERVER__ = true;
-    E.observe(onPacket);
+    if (typeof E.observe === "function") E.observe(onPacket);
   }
 
   /**
-   * Analisis payload (teks / objek / HTML / JSON) lewat pipeline A→B→C→D.
-   * Aman dipanggil dari BCGO chat / scanner.
+   * API input resmi bridge.
+   * Payload diteruskan ke E.process() tanpa fetch/XHR/WebSocket,
+   * tanpa BroadcastChannel dan tanpa localStorage.
    */
   function analyze(input, options = {}) {
-    if (E.isPaused()) {
+    if (typeof E.process !== "function") {
+      return { ok: false, error: "CGOMachineABC.process tidak tersedia." };
+    }
+
+    if (typeof E.isPaused === "function" && E.isPaused()) {
       return { ok: false, paused: true, message: "Mesin ABC sedang dijeda." };
     }
+
     try {
-      // Default cepat: 1 siklus, skip audit D (kecuali options.fullAudit)
-      const fast = options.fast !== false && !options.fullAudit && !options.autoReflect;
-      const out = E.process(input, {
-        maxCycles: options.maxCycles ?? 1,
-        autoReflect: !!options.autoReflect,
-        fast: fast,
-        skipAudit: fast,
-        ...options
-      });
-      const status = out?.result?.status || out?.finalResult?.status || null;
-      const packet = {
+      const opts = (options && typeof options === "object" && !Array.isArray(options))
+        ? { ...options }
+        : {};
+
+      // Default bridge: satu siklus dan audit D dilewati hanya untuk jalur cepat.
+      const fast = opts.fast !== false && !opts.fullAudit && !opts.autoReflect;
+
+      if (opts.maxCycles == null) opts.maxCycles = 1;
+      if (opts.autoReflect == null) opts.autoReflect = false;
+      if (opts.fast == null) opts.fast = fast;
+      if (opts.skipAudit == null) opts.skipAudit = fast;
+
+      const out = E.process(input, opts);
+      const result = out?.result || out?.finalResult || null;
+      const lastCycle = Array.isArray(out?.cycles) && out.cycles.length
+        ? out.cycles[out.cycles.length - 1]
+        : null;
+
+      return {
         ok: true,
         engine: "CGO_MACHINE_ABC",
         version: E.version,
-        status,
-        confidence: out?.result?.decision?.confidence ?? out?.finalResult?.decision?.confidence ?? null,
-        summary: out?.result?.summary || null,
-        findings: out?.result?.findings || [],
-        audit: out?.audit || out?.cycles?.at?.(-1)?.audit || null,
+        status: result?.status ?? null,
+        confidence: result?.decision?.confidence ?? null,
+        summary: result?.summary ?? null,
+        findings: Array.isArray(result?.findings) ? result.findings : [],
+        audit: out?.audit || lastCycle?.audit || null,
         packet: out
       };
-      try {
-        const ch = new BroadcastChannel("CGO_MACHINE_ABC_BUS");
-        ch.postMessage({ type: "abc-result", status, source: "bridge-analyze", version: E.version, at: Date.now() });
-        ch.close();
-      } catch (_) {}
-      return packet;
     } catch (err) {
-      return { ok: false, error: String(err?.message || err) };
+      return {
+        ok: false,
+        error: String(err?.message || err),
+        name: err?.name || "Error"
+      };
     }
   }
 
-  /** Ringkas status engine untuk panel kesehatan BCGO */
+  /** Ringkas status engine untuk panel kesehatan BCGO. */
   let _healthCache = null;
   let _healthCacheAt = 0;
   const HEALTH_TTL_MS = 120000;
 
-  function healthSnapshot(force) {
+  function healthSnapshot(force = false) {
     const nowMs = Date.now();
+
+    let metrics = null;
+    try {
+      metrics = typeof E.getMetrics === "function" ? E.getMetrics() : null;
+    } catch (_) {}
+
+    const paused = typeof E.isPaused === "function" ? E.isPaused() : false;
+
     if (!force && _healthCache && (nowMs - _healthCacheAt) < HEALTH_TTL_MS) {
-      return { ..._healthCache, cached: true, metrics: E.getMetrics(), paused: E.isPaused() };
+      return { ..._healthCache, cached: true, metrics, paused };
     }
-    const st = E.selfTest();
-    const m = E.getMetrics();
-    const ind = E.auditIndependence();
+
+    let st = { passed: false, total: 0, verified: false };
+    let ind = { verified: false, scannedFunctions: 0 };
+
+    try {
+      if (typeof E.selfTest === "function") st = E.selfTest() || st;
+    } catch (_) {}
+
+    try {
+      if (typeof E.auditIndependence === "function") ind = E.auditIndependence() || ind;
+    } catch (_) {}
+
     _healthCache = {
       engine: "CGO_MACHINE_ABC",
       version: E.version,
       bridge: VERSION,
-      selfTest: { passed: st.passed, total: st.total, verified: st.verified },
-      independence: { verified: ind.verified, scanned: ind.scannedFunctions },
-      metrics: m,
-      paused: E.isPaused(),
-      lastStatus: lastPacket?.result?.status || m.lastStatus || null,
+      selfTest: {
+        passed: !!st.passed,
+        total: Number(st.total) || 0,
+        verified: !!st.verified
+      },
+      independence: {
+        verified: !!ind.verified,
+        scanned: Number(ind.scannedFunctions) || 0
+      },
+      metrics,
+      paused,
+      lastStatus: lastPacket?.result?.status || metrics?.lastStatus || null,
       cached: false
     };
     _healthCacheAt = nowMs;
@@ -128,20 +164,24 @@
     healthSnapshot,
     process: (input, opt) => E.process(input, opt || {}),
     observe: (fn) => {
-      if (typeof fn === "function") listeners.add(fn);
+      if (typeof fn !== "function") return () => {};
+      listeners.add(fn);
       return () => listeners.delete(fn);
     },
     getLastPacket: () => lastPacket,
-    pause: () => E.pause(),
-    resume: () => E.resume(),
-    isPaused: () => E.isPaused()
+    pause: () => typeof E.pause === "function" && E.pause(),
+    resume: () => typeof E.resume === "function" && E.resume(),
+    isPaused: () => typeof E.isPaused === "function" ? E.isPaused() : false
   });
 
   global.CGOMachineABCBridge = API;
   global.CGO_MACHINE_ABC = E;
-  // Alias singkat untuk Otak CGO
+
+  // Alias singkat untuk Otak CGO.
   if (!global.CGOCoreMachine) global.CGOCoreMachine = E;
 
+  emit("cgo-machine-abc-ready", { version: VERSION, engine: E.version });
   emit("cgo:machine-abc-ready", { version: VERSION, engine: E.version });
+
   console.log("[CGO-ABC-BRIDGE] Siap · engine", E.version, "· bridge", VERSION);
 })(typeof globalThis !== "undefined" ? globalThis : window);
