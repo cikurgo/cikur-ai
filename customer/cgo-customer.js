@@ -1566,6 +1566,32 @@
                     options
                 );
 
+            /* Lampirkan jejak ABC ke metadata (tidak mengubah jawaban alami kecuali diminta formal) */
+            if (result && typeof result === "object" && abcResult) {
+                result.machineAbc = {
+                    ok: !!abcResult.ok,
+                    status: abcResult.status || null,
+                    confidence: abcResult.confidence ?? null,
+                    audit: abcResult.audit?.status || null,
+                    engine: abcResult.version || abcResult.engine || null
+                };
+                if (
+                    abcResult.ok &&
+                    options &&
+                    (options.includeAbcHint === true ||
+                        /mesin abc|hasil audit|laporan formal/i.test(text))
+                ) {
+                    const hint = formatAbcHint(abcResult);
+                    if (hint) {
+                        if (typeof result.response === "string") {
+                            result.response = result.response + hint;
+                        } else if (typeof result.text === "string") {
+                            result.text = result.text + hint;
+                        }
+                    }
+                }
+            }
+
             return result;
         } catch (error) {
             state.lastError = {
@@ -1614,6 +1640,106 @@
      * MAIN ASYNC PIPELINE
      * ========================================================= */
 
+
+    /* =========================================================
+     * MESIN ABC — formal structure pass (opsional, non-blocking)
+     * Tidak mengganti kepribadian chat; hanya memperkuat bukti
+     * saat input butuh verifikasi / struktur.
+     * ========================================================= */
+    function shouldUseMachineAbc(text, options) {
+        options = options || {};
+        if (options.forceAbc === true) return true;
+        if (options.skipAbc === true) return false;
+        const s = String(text || "");
+        if (s.length < 8) return false;
+        // Sinyal formal kuat saja — chat santai tidak kena delay
+        if (/\b(verifikasi|audit formal|mesin abc|self-?test|cek struktur|format json|periksa html|analisis kode)\b/i.test(s)) return true;
+        const trimmed = s.trim();
+        if (trimmed.length >= 24 && ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]")))) return true;
+        if (trimmed.length >= 80 && /<\s*(html|div|script|style)\b/i.test(s)) return true;
+        if (trimmed.length >= 100 && /\b(function\s+|export\s+|import\s+)/.test(s)) return true;
+        return false;
+    }
+
+    function runMachineAbc(text, options) {
+        options = options || {};
+        try {
+            const bridge = window.CGOMachineABCBridge;
+            if (bridge && typeof bridge.analyze === "function") {
+                return bridge.analyze(text, {
+                    maxCycles: 1,
+                    autoReflect: false,
+                    fast: true,
+                    skipAudit: true
+                });
+            }
+            const eng = window.CGOMachineABC || window.CGO_MACHINE_ABC || window.CGOCoreMachine;
+            if (eng && typeof eng.process === "function" && !eng.isPaused()) {
+                const out = eng.process(text, { maxCycles: 1, fast: true, skipAudit: true });
+                return {
+                    ok: true,
+                    engine: "CGO_MACHINE_ABC",
+                    version: eng.version,
+                    status: out?.result?.status || null,
+                    confidence: out?.result?.decision?.confidence ?? null,
+                    summary: out?.result?.summary || null,
+                    findings: out?.result?.findings || [],
+                    audit: out?.audit || null,
+                    packet: out
+                };
+            }
+        } catch (err) {
+            return { ok: false, error: String(err && err.message || err) };
+        }
+        return null;
+    }
+
+    function runMachineAbcWithTimeout(text, options, ms) {
+        ms = typeof ms === "number" ? ms : 90;
+        return new Promise(function (resolve) {
+            var done = false;
+            var timer = setTimeout(function () {
+                if (done) return;
+                done = true;
+                resolve({ ok: false, timeout: true, error: "abc_timeout" });
+            }, ms);
+            try {
+                var result = runMachineAbc(text, options);
+                if (!done) {
+                    done = true;
+                    clearTimeout(timer);
+                    resolve(result);
+                }
+            } catch (e) {
+                if (!done) {
+                    done = true;
+                    clearTimeout(timer);
+                    resolve({ ok: false, error: String(e && e.message || e) });
+                }
+            }
+        });
+    }
+
+    function formatAbcHint(abc) {
+        if (!abc || !abc.ok) return "";
+        const conf = abc.confidence != null
+            ? Math.round(Number(abc.confidence) * 100) + "%"
+            : "–";
+        const n = (abc.findings && abc.findings.length) || 0;
+        const audit = (abc.audit && abc.audit.status) || "–";
+        return (
+            "\n\n〔Mesin ABC〕 status " +
+            (abc.status || "–") +
+            " · keyakinan " +
+            conf +
+            " · temuan " +
+            n +
+            " · audit " +
+            audit
+        );
+    }
+
+
     async function chatAsync(
         input,
         options
@@ -1653,6 +1779,34 @@
                     text,
                     options
                 );
+
+            /*
+             * STEP 1b — MESIN ABC (opsional)
+             * Hanya jika input butuh cek struktur/verifikasi.
+             * Gagal / absen → chat tetap jalan normal.
+             */
+            let abcResult = null;
+            try {
+                if (shouldUseMachineAbc(text, options)) {
+                    abcResult = await runMachineAbcWithTimeout(text, options, 90);
+                    if (abcResult && abcResult.timeout) {
+                        abcResult = { ok: false, timeout: true };
+                    }
+                    if (abcResult && analysis && typeof analysis === "object") {
+                        analysis.machineAbc = {
+                            ok: !!abcResult.ok,
+                            status: abcResult.status || null,
+                            confidence: abcResult.confidence ?? null,
+                            audit: abcResult.audit?.status || null,
+                            findingsCount: (abcResult.findings || []).length,
+                            error: abcResult.error || null,
+                            timeout: !!abcResult.timeout
+                        };
+                    }
+                }
+            } catch (_abcErr) {
+                abcResult = null;
+            }
 
             /*
              * STEP 2 — KNOWLEDGE
