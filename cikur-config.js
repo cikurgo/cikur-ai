@@ -1508,6 +1508,84 @@ window.CikurCloud = {
     },
 
     // ======================================
+    // SETTLEMENT RIDE (dipanggil driver saat menyelesaikan ride)
+    //  - Tunai    : saldo driver dipotong sebesar komisi aplikator (platformFee)
+    //  - CikurPay : saldo driver ditambah pendapatan driver (driverEarning)
+    // Aman dipanggil berulang: order yang sudah settled dilewati.
+    // ======================================
+
+    async settleRideOrder(orderId, driverId) {
+        if (!orderId || !driverId) throw new Error("Data order/driver tidak lengkap.");
+        await this.ensureAuth();
+
+        const orderRef = doc(db, "orders", orderId);
+        const userRef = doc(db, "users", driverId);
+
+        const result = await runTransaction(db, async (tx) => {
+            const orderSnap = await tx.get(orderRef);
+            if (!orderSnap.exists()) throw new Error("Order tidak ditemukan.");
+            const o = orderSnap.data();
+            if (o.driverId !== driverId) throw new Error("Order ini bukan milik kamu.");
+            if (o.settled) return { skipped: true, reason: "already" };
+
+            const earning = Number(o.driverEarning);
+            const fee = Number(o.platformFee);
+            if (!Number.isFinite(earning) || !Number.isFinite(fee)) return { skipped: true, reason: "nosplit" };
+
+            const isCash = o.paymentStatus !== "PAID" && !/cikurpay|saldo/i.test(String(o.paymentMethod || ""));
+            const userSnap = await tx.get(userRef);
+            const saldo = Number(userSnap.data()?.saldo || 0);
+            const delta = isCash ? -fee : earning;
+            const newSaldo = saldo + delta;
+
+            tx.set(userRef, { saldo: newSaldo }, { merge: true });
+            tx.update(orderRef, { settled: true, settledAt: new Date() });
+            return { skipped: false, isCash, delta, newSaldo };
+        });
+
+        if (!result.skipped) {
+            await addDoc(collection(db, "walletTransactions"), {
+                userId: driverId,
+                type: result.isCash ? "COMMISSION" : "RIDE_EARNING",
+                amount: result.delta,
+                orderId,
+                description: result.isCash ? "Komisi aplikator order tunai" : "Pendapatan ride (CikurPay)",
+                balanceAfter: result.newSaldo,
+                timestamp: serverTimestamp()
+            }).catch(() => {});
+        }
+        return result;
+    },
+
+    // ======================================
+    // RIWAYAT ORDER CUSTOMER (semua status, terbaru dulu)
+    // Sengaja hanya pakai 2 filter "==" supaya tidak butuh index gabungan;
+    // pengurutan dilakukan di sisi klien.
+    // ======================================
+
+    async listOrderHistory(userId, type, maxResults = 30) {
+        if (!userId) return [];
+
+        const q = query(
+            collection(db, "orders"),
+            where("userId", "==", userId),
+            where("type", "==", type || "RIDE")
+        );
+
+        const snapshot = await new Promise((resolve, reject) => {
+            const unsubscribe = onSnapshot(
+                q,
+                (snap) => { unsubscribe(); resolve(snap); },
+                (err) => { unsubscribe(); reject(err); }
+            );
+        });
+
+        const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const ms = (o) => (o.timestamp && o.timestamp.toMillis ? o.timestamp.toMillis() : 0);
+        return list.sort((a, b) => ms(b) - ms(a)).slice(0, maxResults);
+    },
+
+    // ======================================
     // CHAT PER ORDER (sub-collection orders/{id}/messages)
     // ======================================
 
