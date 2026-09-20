@@ -1508,34 +1508,6 @@ window.CikurCloud = {
     },
 
     // ======================================
-    // RIWAYAT ORDER CUSTOMER (semua status, terbaru dulu)
-    // Sengaja hanya pakai 2 filter "==" supaya tidak butuh index gabungan;
-    // pengurutan dilakukan di sisi klien.
-    // ======================================
-
-    async listOrderHistory(userId, type, maxResults = 30) {
-        if (!userId) return [];
-
-        const q = query(
-            collection(db, "orders"),
-            where("userId", "==", userId),
-            where("type", "==", type || "RIDE")
-        );
-
-        const snapshot = await new Promise((resolve, reject) => {
-            const unsubscribe = onSnapshot(
-                q,
-                (snap) => { unsubscribe(); resolve(snap); },
-                (err) => { unsubscribe(); reject(err); }
-            );
-        });
-
-        const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-        const ms = (o) => (o.timestamp && o.timestamp.toMillis ? o.timestamp.toMillis() : 0);
-        return list.sort((a, b) => ms(b) - ms(a)).slice(0, maxResults);
-    },
-
-    // ======================================
     // CHAT PER ORDER (sub-collection orders/{id}/messages)
     // ======================================
 

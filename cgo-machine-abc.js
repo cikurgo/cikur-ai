@@ -1,38 +1,66 @@
 /*
- * CGO MACHINE ABC — UNIVERSAL PROCESSING ENGINE
- * Version 0.7.0
- *
- * Domain-neutral. No external API. No network dependency.
+ * CGO MACHINE ABC — UNIVERSAL CORE ENGINE
+ * Version 0.9.1
+ * Zero External · Zero API · Zero Network · Domain Neutral
  * A = INGEST / PARSE / REPRESENT
- * B = ANALYZE / RELATE / VERIFY / INFER
- * C = SYNTHESIZE / DECIDE / EMIT / CONTINUE
+ * B = ANALYZE / RELATE / VERIFY / REASON
+ * C = SYNTHESIZE / VALIDATE / EMIT
+ * D = AUDIT / INTEGRITY / REPLAY
  */
 (function (global) {
   "use strict";
 
-  const VERSION = "0.7.1";
+  const VERSION = "0.9.1";
   const MAX_TEXT_SAMPLE = 6000;
   const MAX_ITEMS = 1000;
   const MAX_TOKENS = 5000;
   const MAX_BATCH_DEPTH = 4;
-  const MAX_REASONING_STEPS = 64;
+  const DEFAULT_MAX_CYCLES = 5;
+  const DEFAULT_STOP_STATUS = "PROCESSED";
+  const DEFAULT_MIN_CONFIDENCE_DELTA = 0.01;
+  const MAX_INPUT_SIZE = 10 * 1024 * 1024;
+  const DEFAULT_MAX_DURATION_MS = 30000;
+  const DEFAULT_MAX_RETRIES = 2;
+  const metrics = {totalProcessed:0,totalCycles:0,confidenceSum:0,degradedCount:0,errorCount:0,skippedWhilePaused:0,lastStatus:null};
+  let runtimeState = {paused:false,cyclesRun:0,lastCycleIndex:-1,pauseAt:null};
+  const observers = new Set();
+  let paused = false;
 
   const isObject = v => v !== null && typeof v === "object";
   const isPlainObject = v => isObject(v) && !Array.isArray(v) && !(v instanceof Date);
-  const clone = v => {
-    if (v === undefined) return undefined;
-    try { return structuredClone(v); } catch (_) {
-      try { return JSON.parse(JSON.stringify(v)); } catch (_) { return v; }
+  function safeClone(v){
+    const seen=new WeakMap();
+    function walk(x){if(x===null||typeof x!=="object")return x;if(seen.has(x))return seen.get(x);if(x instanceof Date)return new Date(x.getTime());if(x instanceof RegExp)return new RegExp(x.source,x.flags);const out=Array.isArray(x)?[]:{};seen.set(x,out);for(const k of Object.keys(x))out[k]=walk(x[k]);return out;}
+    try{return {value:walk(v),ok:true};}catch(e){return {value:null,ok:false,error:String(e.message||e)};}
+  }
+  const clone = v => safeClone(v).value;
+  function hasCircular(v){if(v===null||typeof v!=="object")return false;const seen=new WeakSet();let found=false;function scan(x){if(found||x===null||typeof x!=="object")return;if(seen.has(x)){found=true;return}seen.add(x);for(const k of Object.keys(x))scan(x[k]);}scan(v);return found;}
+  function toInt(v,f=0){const n=Number(v);return Number.isFinite(n)?Math.trunc(n):f;}
+  function toFloat(v,f=0){const n=Number(v);return Number.isFinite(n)?n:f;}
+  function toBool(v,f=false){if(v===true||v===false)return v;if(v==="true"||v===1)return true;if(v==="false"||v===0)return false;return f;}
+  function normalizeSpecial(v) {
+    // Map/Set/typed array/ArrayBuffer tidak lagi diam-diam jadi {} — diubah ke bentuk bertanda __cgoType agar datanya tetap terbaca.
+    const seen = new WeakMap();
+    function walk(x) {
+      if (x === null || typeof x !== "object") return x;
+      if (x instanceof Date || x instanceof RegExp) return x;
+      if (seen.has(x)) return seen.get(x);
+      if (x instanceof Map) { const o = {__cgoType:"Map",size:x.size,entries:[]}; seen.set(x,o); x.forEach((val,key)=>o.entries.push([walk(key),walk(val)])); return o; }
+      if (x instanceof Set) { const o = {__cgoType:"Set",size:x.size,values:[]}; seen.set(x,o); x.forEach(val=>o.values.push(walk(val))); return o; }
+      if (x instanceof ArrayBuffer) return {__cgoType:"ArrayBuffer",byteLength:x.byteLength};
+      if (ArrayBuffer.isView(x)) { const n = typeof x.length === "number"; return {__cgoType:x.constructor.name,length:n?x.length:x.byteLength,sample:n?Array.prototype.slice.call(x,0,100):[]}; }
+      const out = Array.isArray(x) ? [] : {}; seen.set(x,out);
+      for (const k of Object.keys(x)) out[k] = walk(x[k]);
+      return out;
     }
-  };
+    return walk(v);
+  }
+  function validateInput(input,options={}){const max=toInt(options.maxInputSize,MAX_INPUT_SIZE);if(typeof input==="symbol")return{valid:false,reason:"Symbol tidak didukung"};if(typeof input==="bigint")return{valid:false,reason:"BigInt tidak didukung (gunakan Number)"};if(typeof input==="function")return{valid:false,reason:"Function tidak didukung sebagai input"};const norm=(input!==null&&typeof input==="object")?normalizeSpecial(input):input;if(hasCircular(norm))return{valid:false,reason:"Circular reference terdeteksi"};let sanitized=norm;if(typeof input==="number"&&!Number.isFinite(input))sanitized=Number.isNaN(input)?"NaN":input===Infinity?"Infinity":"-Infinity";const size=sizeOf(sanitized);if(size!==null&&size>max)return{valid:false,reason:`Input melebihi batas ${max} karakter; gunakan chunk/stream`};return{valid:true,reason:null,sanitized};}
   const now = () => new Date().toISOString();
+  const elapsed = t => Date.now() - t;
+  const uniq = a => [...new Set((a || []).filter(Boolean))];
+  const clamp = (n, lo=0, hi=1) => Math.max(lo, Math.min(hi, Number(n) || 0));
 
-  function isInputEnvelope(v) {
-    return isObject(v) && (v.__cgoInputEnvelope === true || v.__cgoMachineInjection === true);
-  }
-  function isBatchEnvelope(v) {
-    return isObject(v) && v.__cgoBatchInjection === true && Array.isArray(v.items);
-  }
   function typeOf(v) {
     if (isBatchEnvelope(v)) return "batch";
     if (isInputEnvelope(v)) return "input_envelope";
@@ -46,316 +74,214 @@
     if (typeof v === "undefined") return "undefined";
     return "object";
   }
+  function isInputEnvelope(v) { return isObject(v) && (v.__cgoInputEnvelope === true || v.__cgoMachineInjection === true); }
+  function isBatchEnvelope(v) { return isObject(v) && v.__cgoBatchInjection === true && Array.isArray(v.items); }
   function fingerprint(v) {
+    // Sidik cepat 32-bit (FNV-1a) untuk identitas/konsistensi input. BUKAN untuk bukti integritas: pakai digest().
     let s;
-    try { s = typeof v === "string" ? v : JSON.stringify(v); } catch (_) { s = String(v); }
+    try { s = typeof v === "string" ? v : JSON.stringify(v, function (k, x) { const raw = this[k]; return raw instanceof Date ? {__cgoDate: isNaN(raw) ? "Invalid Date" : raw.toISOString()} : x; }); }
+    catch (_) { s = undefined; }
+    if (typeof s !== "string") { try { s = String(v); } catch (_) { s = "[unprintable]"; } }   // undefined / function / symbol tetap punya sidik
     let h = 2166136261;
-    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h += (h<<1)+(h<<4)+(h<<7)+(h<<8)+(h<<24); }
+    for (let i=0;i<s.length;i++) { h ^= s.charCodeAt(i); h += (h<<1)+(h<<4)+(h<<7)+(h<<8)+(h<<24); }
     return ("00000000" + (h >>> 0).toString(16)).slice(-8);
   }
-  function sizeOf(v) { try { return typeof v === "string" ? v.length : JSON.stringify(v).length; } catch (_) { return null; } }
-
-  function extensionOf(name = "") {
-    const m = String(name).toLowerCase().match(/\.([a-z0-9]+)$/);
-    return m ? m[1] : null;
+  function stableStringify(v) {
+    const seen = new WeakSet();
+    function w(x) {
+      if (x === null) return "null";
+      const t = typeof x;
+      if (t === "string") return JSON.stringify(x);
+      if (t === "number") return Number.isFinite(x) ? String(x) : JSON.stringify(String(x));
+      if (t === "boolean") return String(x);
+      if (t === "bigint") return JSON.stringify(x.toString() + "n");
+      if (t === "undefined" || t === "function" || t === "symbol") return "null";
+      if (x instanceof Date) return JSON.stringify({__cgoDate: isNaN(x) ? "Invalid Date" : x.toISOString()});
+      if (seen.has(x)) return '"[Circular]"';
+      seen.add(x);
+      const out = Array.isArray(x)
+        ? "[" + x.map(w).join(",") + "]"
+        : "{" + Object.keys(x).sort().filter(k => x[k] !== undefined && typeof x[k] !== "function" && typeof x[k] !== "symbol").map(k => JSON.stringify(k) + ":" + w(x[k])).join(",") + "}";
+      seen.delete(x);
+      return out;
+    }
+    return w(v);
   }
-  function classifyText(text, hint = {}) {
-    const raw = String(text ?? "");
-    const ext = String(hint.extension || "").toLowerCase();
-    const mime = String(hint.mimeType || "").toLowerCase();
-    const trimmed = raw.trim();
-    let format = "text";
-    if (ext === "json" || mime.includes("json")) format = "json";
-    else if (ext === "html" || ext === "htm" || mime.includes("html")) format = "html";
-    else if (["js","mjs","cjs","ts","tsx","jsx"].includes(ext) || mime.includes("javascript") || mime.includes("typescript")) format = "code";
-    else if (ext === "css" || mime.includes("css")) format = "css";
-    else if (ext === "xml" || mime.includes("xml")) format = "xml";
-    else if (ext === "csv" || mime.includes("csv")) format = "csv";
-    else if (ext === "md" || ext === "markdown") format = "markdown";
-    else if (/^<!doctype\s+html/i.test(trimmed) || /<html[\s>]/i.test(trimmed)) format = "html";
-    else if (/^\s*[\[{][\s\S]*[\]}]\s*$/.test(trimmed)) format = "json_candidate";
-    else if (/\b(function|const|let|var|class|import|export)\b/.test(raw)) format = "code_candidate";
-    return format;
-  }
-
-  function balancedDelimiters(text) {
-    const pairs = { "{":"}", "[":"]", "(":")" };
-    const closing = new Set(Object.values(pairs));
-    const stack = [];
-    const s = String(text);
-    let quote = null, escape = false, lineComment = false, blockComment = false, regex = false, regexClass = false, regexEscape = false;
-    let previousSignificant = "";
-    for (let i=0;i<s.length;i++) {
-      const ch=s[i], nx=s[i+1]||"";
-      if (lineComment) { if (ch==='\n' || ch==='\r') lineComment=false; continue; }
-      if (blockComment) { if (ch==='*' && nx==='/') { blockComment=false; i++; } continue; }
-      if (regex) {
-        if (regexEscape) { regexEscape=false; continue; }
-        if (ch==='\\') { regexEscape=true; continue; }
-        if (ch==='[') { regexClass=true; continue; }
-        if (ch===']' && regexClass) { regexClass=false; continue; }
-        if (ch==='/' && !regexClass) { regex=false; previousSignificant='/'; }
-        continue;
+  const SHA_K = new Uint32Array([
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+  ]);
+  function sha256Hex(str) {
+    // SHA-256 sinkron, murni JS (tanpa crypto.subtle / library).
+    const bytes = new TextEncoder().encode(String(str));
+    const l = bytes.length, padLen = ((l + 9 + 63) >> 6) << 6;
+    const buf = new Uint8Array(padLen); buf.set(bytes); buf[l] = 0x80;
+    const dv = new DataView(buf.buffer);
+    dv.setUint32(padLen - 8, Math.floor(l / 0x20000000)); dv.setUint32(padLen - 4, (l << 3) >>> 0);
+    let h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a,h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;
+    const w = new Uint32Array(64);
+    for (let off = 0; off < padLen; off += 64) {
+      for (let i = 0; i < 16; i++) w[i] = dv.getUint32(off + i * 4);
+      for (let i = 16; i < 64; i++) {
+        const a = w[i-15], b = w[i-2];
+        const s0 = ((a>>>7)|(a<<25)) ^ ((a>>>18)|(a<<14)) ^ (a>>>3);
+        const s1 = ((b>>>17)|(b<<15)) ^ ((b>>>19)|(b<<13)) ^ (b>>>10);
+        w[i] = (w[i-16] + s0 + w[i-7] + s1) >>> 0;
       }
-      if (quote) { if (escape) escape=false; else if (ch==='\\') escape=true; else if (ch===quote) quote=null; continue; }
-      if (ch==='/' && nx==='/') { lineComment=true; i++; continue; }
-      if (ch==='/' && nx==='*') { blockComment=true; i++; continue; }
-      if (ch==='"' || ch==="'" || ch==='`') { quote=ch; continue; }
-      if (ch==='/' && !/\s/.test(nx) && /[=(:,!&|?{};\[]/.test(previousSignificant || '')) { regex=true; regexClass=false; regexEscape=false; continue; }
-      if (pairs[ch]) stack.push(pairs[ch]);
-      else if (closing.has(ch)) { if (stack.pop() !== ch) return {balanced:false,reason:"delimiter_mismatch",index:i}; }
-      if (!/\s/.test(ch)) previousSignificant=ch;
-    }
-    return { balanced: stack.length===0 && quote===null && !blockComment && !regex, unclosed:stack.length, unterminatedString:quote!==null, unterminatedComment:blockComment, unterminatedRegex:regex };
-  }
-  function parseStructuredText(text) {
-    try { return { ok:true, value:JSON.parse(text) }; } catch (e) { return { ok:false, error:String(e.message || e) }; }
-  }
-  function extractHtml(text) {
-    const tags = [...String(text).matchAll(/<\s*([a-zA-Z][\w:-]*)\b/g)].map(m => m[1].toLowerCase());
-    const ids = [...String(text).matchAll(/\bid=["']([^"']+)["']/gi)].map(m => m[1]);
-    const classes = [...String(text).matchAll(/\bclass=["']([^"']+)["']/gi)].flatMap(m => m[1].split(/\s+/).filter(Boolean));
-    const links = [...String(text).matchAll(/\b(?:href|src)=["']([^"']+)["']/gi)].map(m => m[1]);
-    const duplicateIds = [...new Set(ids.filter((x,i)=>ids.indexOf(x)!==i))];
-    return { tagCount: tags.length, uniqueTags:[...new Set(tags)], ids:[...new Set(ids)], duplicateIds, classes:[...new Set(classes)], references:[...new Set(links)] };
-  }
-  function extractCode(text) {
-    const s = String(text);
-    const imports = [...s.matchAll(/\bimport\s+(?:[^;\n]+?\s+from\s+)?["']([^"']+)["']/g)].map(m => m[1]);
-    const requires = [...s.matchAll(/\brequire\s*\(\s*["']([^"']+)["']\s*\)/g)].map(m => m[1]);
-    const declarations = [...s.matchAll(/\b(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/g)].map(m => m[1]);
-    const functions = [...s.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g)].map(m => m[1]);
-    return { imports:[...new Set(imports)], requires:[...new Set(requires)], dependencies:[...new Set([...imports,...requires])], declarations:[...new Set(declarations)], functions:[...new Set(functions)] };
-  }
-  function tokenize(text) {
-    return String(text).normalize().split(/[^\p{L}\p{N}_$.-]+/u).filter(Boolean).map(x => x.toLowerCase()).slice(0, MAX_TOKENS);
-  }
-  function lineStats(text) {
-    const lines = String(text).split(/\r?\n/);
-    return { lineCount:lines.length, nonEmptyLines:lines.filter(x=>x.trim()).length, maxLineLength:lines.reduce((m,x)=>Math.max(m,x.length),0) };
-  }
-
-  // ===================== A: INGEST / PARSE / REPRESENT =====================
-  const MachineA = {
-    process(input, options = {}) {
-      const started = Date.now();
-      if (isBatchEnvelope(input)) {
-        const depth = Number(options.batchDepth || 0);
-        if (depth >= MAX_BATCH_DEPTH) {
-          return { machine:"A", stage:"representation", version:VERSION, input:{type:"batch",fingerprint:fingerprint(input),size:sizeOf(input),count:input.items.length}, structure:{kind:"batch",count:input.items.length,depth,guard:"MAX_BATCH_DEPTH"}, content:{mode:"batch",value:[]}, observations:[{type:"BATCH_DEPTH_LIMIT",maxDepth:MAX_BATCH_DEPTH}], uncertainty:[{type:"BATCH_DEPTH_LIMIT",severity:"HIGH",maxDepth:MAX_BATCH_DEPTH}], metadata:{source:options.source??null,receivedAt:now()}, durationMs:Date.now()-started };
-        }
-        const members = input.items.slice(0, MAX_ITEMS).map((item, i) => this.process(item, { ...options, batchDepth:depth+1, source:item?.payload?.name ?? item?.name ?? `item-${i+1}` }));
-        return {
-          machine:"A", stage:"representation", version:VERSION,
-          input:{ type:"batch", fingerprint:fingerprint(input), size:sizeOf(input), count:members.length },
-          structure:{ kind:"batch", count:members.length, itemTypes:members.map(x=>x.input.type) },
-          content:{ mode:"batch", value:members }, observations:[
-            {type:"INPUT_CLASSIFIED", value:"batch"}, {type:"BATCH_ITEMS_DISCOVERED", value:members.length}
-          ], metadata:{source:options.source ?? null, receivedAt:now()}, durationMs:Date.now()-started
-        };
+      let a=h0,b=h1,c=h2,d=h3,e=h4,f=h5,g=h6,h=h7;
+      for (let i = 0; i < 64; i++) {
+        const S1 = ((e>>>6)|(e<<26)) ^ ((e>>>11)|(e<<21)) ^ ((e>>>25)|(e<<7));
+        const t1 = (h + S1 + ((e&f) ^ (~e&g)) + SHA_K[i] + w[i]) >>> 0;
+        const S0 = ((a>>>2)|(a<<30)) ^ ((a>>>13)|(a<<19)) ^ ((a>>>22)|(a<<10));
+        const t2 = (S0 + ((a&b) ^ (a&c) ^ (b&c))) >>> 0;
+        h=g; g=f; f=e; e=(d+t1)>>>0; d=c; c=b; b=a; a=(t1+t2)>>>0;
       }
-
-      const envelopeCheck = (isBatchEnvelope(input)||isInputEnvelope(input)) ? assertEnvelope(input) : null;
-      const type = typeOf(input);
-      const content = extractContent(input);
-      const structure = describeStructure(input, content);
-      const representation = {
-        machine:"A", stage:"representation", version:VERSION,
-        input:{type, fingerprint:fingerprint(input), size:sizeOf(input)},
-        structure, content, observations:[], metadata:{source:options.source ?? null, receivedAt:now()}
-      };
-      if (envelopeCheck && !envelopeCheck.valid) representation.unknowns=[{type:"ENVELOPE_SCHEMA_ISSUES",kind:envelopeCheck.kind,issues:clone(envelopeCheck.issues),severity:"HIGH"}];
-      representation.observations.push({type:"INPUT_CLASSIFIED", value:type});
-      representation.observations.push({type:"STRUCTURE_IDENTIFIED", value:structure.kind});
-      if (content.format) representation.observations.push({type:"FORMAT_IDENTIFIED", value:content.format});
-      if (content.parse) representation.observations.push({type:"PARSE_ATTEMPTED", value:content.parse.ok});
-      if (content.syntax) representation.observations.push({type:"SYNTAX_PROFILED", value:true});
-      if (isPlainObject(input)) representation.observations.push({type:"OBJECT_KEYS_DISCOVERED", value:Object.keys(input)});
-      representation.durationMs = Date.now()-started;
-      return representation;
+      h0=(h0+a)>>>0; h1=(h1+b)>>>0; h2=(h2+c)>>>0; h3=(h3+d)>>>0; h4=(h4+e)>>>0; h5=(h5+f)>>>0; h6=(h6+g)>>>0; h7=(h7+h)>>>0;
     }
-  };
+    return [h0,h1,h2,h3,h4,h5,h6,h7].map(x => x.toString(16).padStart(8, "0")).join("");
+  }
+  const digest = v => sha256Hex(stableStringify(v));   // sidik 256-bit, urutan key tidak berpengaruh
+  function sizeOf(v) { try { return typeof v === "string" ? v.length : JSON.stringify(v,(_,x)=>x instanceof Date?{__cgoDate:x.toISOString()}:x).length; } catch (_) { return null; } }
+  function extensionOf(name="") { const m=String(name).toLowerCase().match(/\.([a-z0-9]+)$/); return m?m[1]:null; }
 
-  function describeStructure(value, content) {
-    const type = typeOf(value);
-    if (type === "batch") return {kind:"batch", count:value.items.length};
-    if (type === "input_envelope") {
-      const p=value.payload||{}; const kind=value.__cgoMachineInjection===true?"injection":"input_envelope"; return {kind, innerType:content?.mode??p.contentMode??"unknown", transport:p.transport??"unknown", name:p.name??null, mimeType:p.mimeType??null, extension:p.extension??null, size:p.size??null, contentMode:p.contentMode??value.contentMode??"unknown", format:content.format??null};
+  function classifyText(text, hint={}) {
+    const raw=String(text??""); const ext=String(hint.extension||"").toLowerCase(); const mime=String(hint.mimeType||"").toLowerCase(); const trimmed=raw.trim();
+    let format="text", confidence=0.96, basis=[];
+    if (ext==="json"||mime.includes("json")) {format="json";confidence=.99;basis.push("metadata");}
+    else if (ext==="html"||ext==="htm"||mime.includes("html")) {format="html";confidence=.99;basis.push("metadata");}
+    else if (["js","mjs","cjs","ts","tsx","jsx"].includes(ext)||mime.includes("javascript")||mime.includes("typescript")) {format="code";confidence=.99;basis.push("metadata");}
+    else if (ext==="css"||mime.includes("css")) {format="css";confidence=.99;basis.push("metadata");}
+    else if (ext==="xml"||mime.includes("xml")) {format="xml";confidence=.99;basis.push("metadata");}
+    else if (ext==="csv"||mime.includes("csv")) {format="csv";confidence=.99;basis.push("metadata");}
+    else if (ext==="md"||ext==="markdown") {format="markdown";confidence=.99;basis.push("metadata");}
+    else if (/^<!doctype\s+html/i.test(trimmed)||/<html[\s>]/i.test(trimmed)) {format="html";confidence=.99;basis.push("doctype_or_html_tag");}
+    else if ((trimmed.startsWith("{")&&trimmed.endsWith("}"))||(trimmed.startsWith("[")&&trimmed.endsWith("]"))) {
+      try { JSON.parse(trimmed); format="json";confidence=.99;basis.push("valid_json"); }
+      catch (_) { format="json_candidate";confidence=.72;basis.push("json_shape"); }
     }
-    if (type === "string") return {kind:"scalar", valueType:"string", length:value.length, ...lineStats(value), empty:value.length===0};
-    if (type === "array") return {kind:"collection", length:value.length, itemTypes:value.slice(0,100).map(typeOf)};
-    if (type === "object") { const keys=Object.keys(value); return {kind:"record", keyCount:keys.length, keys, valueTypes:Object.fromEntries(keys.map(k=>[k,typeOf(value[k])]))}; }
-    return {kind:"scalar", valueType:type};
+    else if (looksLikeCode(raw)) {format="code";confidence=.9;basis.push("code_tokens");}
+    else if (looksLikeCSV(raw)) {format="csv";confidence=.86;basis.push("delimiter_consistency");}
+    else if (/^\s{0,3}(#|[-*+]\s|>\s)/m.test(raw)) {format="markdown";confidence=.82;basis.push("markdown_shape");}
+    if (!basis.length) basis.push("generic_text");
+    return {format,confidence,basis,uncertain:confidence<.75};
   }
-
-  function extractContent(value) {
-    if (isInputEnvelope(value)) {
-      if (value.__cgoMachineInjection === true && value.contentMode === "structured") {
-        const v=value.payload?.value; return {mode:Array.isArray(v)?"collection":isObject(v)?"record":"scalar", value:clone(v), source:{transport:"internal",stage:"C"}, format:"structured", innerType:Array.isArray(v)?"collection":isObject(v)?"record":"scalar"};
-      }
-      const p=value.payload||{};
-      if (p.contentMode === "text" && typeof p.text === "string") return analyzeText(p.text,{name:p.name,mimeType:p.mimeType,extension:p.extension});
-      if (p.contentMode === "structured") { const v=p.value; return {mode:Array.isArray(v)?"collection":isObject(v)?"record":"scalar",value:clone(v),format:"structured"}; }
-      return {mode:"binary", value:{transport:p.transport??"file",name:p.name??null,mimeType:p.mimeType??null,extension:p.extension??null,size:p.size??null,byteLength:p.byteLength??p.size??null,preview:p.preview??null}, format:"binary"};
+  function looksLikeCode(raw) {
+    const s = String(raw);
+    return /^\s*(?:import\s+[^\n]*?from\s+["'][^"']+["']|import\s+["'][^"']+["']|export\s+(?:default\b|const\b|let\b|var\b|function\b|class\b|async\b|\{))/m.test(s)
+      || /\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*(?:=|;)/.test(s)
+      || /\bfunction\s*\*?\s*[A-Za-z_$]?[\w$]*\s*\([^)]*\)\s*\{/.test(s)
+      || /\bclass\s+[A-Za-z_$][\w$]*\s*(?:extends\s+[\w$.]+\s*)?\{/.test(s)
+      || /\([^()\n]*\)\s*=>|\b[A-Za-z_$][\w$]*\s*=>/.test(s);
+  }
+  function looksLikeCSV(s) {
+    const lines=String(s).split(/\r?\n/).filter(x=>x.trim()); if(lines.length<2)return false;
+    const counts=[",",";","\t","|"].map(d=>lines.slice(0,Math.min(5,lines.length)).map(x=>x.split(d).length-1));
+    return counts.some(a=>a[0]>0&&a.every(n=>n===a[0]));
+  }
+  function regexAllowedAt(s,i) {
+    let j = i - 1; while (j >= 0 && /\s/.test(s[j])) j--;
+    if (j < 0) return true;
+    const p = s[j];
+    if (/[=(:,!&|?{};\[+\-*%<>~^]/.test(p)) return true;
+    if (/[\w$]/.test(p)) { let k = j; while (k >= 0 && /[\w$]/.test(s[k])) k--; return /^(?:return|typeof|case|do|else|in|of|void|delete|throw|new|yield|await|instanceof)$/.test(s.slice(k+1, j+1)); }
+    return false;
+  }
+  function balancedDelimiters(text, opts={}) {
+    const pairs={"{":"}","[":"]","(":")"}; const closers=new Set(Object.values(pairs)); const stack=[];
+    let quote=null,escape=false,lineComment=false,blockComment=false,regex=false,regexClass=false;
+    const s=String(text);
+    for(let i=0;i<s.length;i++){
+      const ch=s[i], nx=s[i+1];
+      if(lineComment){if(ch==="\n")lineComment=false;continue;}
+      if(blockComment){if(ch==="*"&&nx==="/"){blockComment=false;i++;}continue;}
+      if(quote){if(escape)escape=false;else if(ch==="\\")escape=true;else if(ch===quote)quote=null;continue;}
+      if(regex){if(ch==="\n"){regex=false;regexClass=false;escape=false;continue;}if(escape)escape=false;else if(ch==="\\")escape=true;else if(ch==="[")regexClass=true;else if(ch==="]")regexClass=false;else if(ch==="/"&&!regexClass)regex=false;continue;}
+      if(ch==="/"&&nx==="/"){lineComment=true;i++;continue;}
+      if(ch==="/"&&nx==="*"){blockComment=true;i++;continue;}
+      if(ch==='"'||ch==="'"||ch==='`'){quote=ch;continue;}
+      if(ch==="/"&&opts.regex!==false&&regexAllowedAt(s,i)){regex=true;regexClass=false;continue;}
+      if(pairs[ch]) stack.push(pairs[ch]);
+      else if(closers.has(ch)){if(stack.pop()!==ch)return {balanced:false,reason:"delimiter_mismatch"};}
     }
-    if (typeof value === "string") return analyzeText(value,{});
-    if (Array.isArray(value)) return {mode:"collection",value:clone(value),format:"structured"};
-    if (isObject(value)) return {mode:"record",value:clone(value),format:"structured"};
-    return {mode:"scalar",value,format:typeOf(value)};
+    return {balanced:stack.length===0&&!quote&&!blockComment&&!regex,unclosed:stack.length,unterminatedString:!!quote,unterminatedComment:blockComment,unterminatedRegex:regex};
   }
-
-  function analyzeText(text,hint={}) {
-    const s=String(text); const format=classifyText(s,hint); const result={mode:"text",value:s,format,stats:lineStats(s),tokens:tokenize(s),source:hint};
-    const balance=balancedDelimiters(s); result.syntax={delimiters:balance};
-    if (format === "json" || format === "json_candidate") result.parse=parseStructuredText(s);
-    if (format === "html") result.syntax.html=extractHtml(s);
-    if (format === "code" || format === "code_candidate") result.syntax.code=extractCode(s);
-    if (format === "csv") result.syntax.csv={rows:s.split(/\r?\n/).filter(Boolean).length, columns:(s.split(/\r?\n/)[0]||"").split(",").length};
-    result.preview=s.slice(0,MAX_TEXT_SAMPLE);
-    return result;
+  function parseStructuredText(text){try{return{ok:true,value:JSON.parse(text)}}catch(e){return{ok:false,error:String(e.message||e)}}}
+  function extractHtml(text){
+    const s=String(text); const tags=[...s.matchAll(/<\s*([a-zA-Z][\w:-]*)\b/g)].map(m=>m[1].toLowerCase());
+    const ids=[...s.matchAll(/\bid=["']([^"']+)["']/gi)].map(m=>m[1]);
+    const classes=[...s.matchAll(/\bclass=["']([^"']+)["']/gi)].flatMap(m=>m[1].split(/\s+/).filter(Boolean));
+    const links=[...s.matchAll(/\b(?:href|src)=["']([^"']+)["']/gi)].map(m=>m[1]);
+    return {tagCount:tags.length,uniqueTags:uniq(tags),ids:uniq(ids),classes:uniq(classes),duplicateIds:uniq(ids.filter((x,i)=>ids.indexOf(x)!==i)),references:uniq(links)};
   }
-
-  // ===================== B: ANALYZE / RELATE / VERIFY / INFER =====================
-  const MachineB = {
-    process(rep, options = {}) {
-      const started=Date.now();
-      if (!rep?.structure) return unresolvedB("representation_missing",started);
-      if (rep.structure.kind === "batch" && Array.isArray(rep.content?.value)) return processBatch(rep,started,options);
-      const s={machine:"B",stage:"processing",version:VERSION,inputFingerprint:rep.input?.fingerprint??null,operations:[],findings:[],relations:[],inferences:[],evidence:[],uncertainty:clone(rep.uncertainty??[]),verification:[],constraints:[],contradictions:[],hypotheses:[],reasoning:[],reasoningTrace:[],decision:null,timing:{}};
-      const steps={structure:()=>inspectStructureB(rep,s),content:()=>inspectContentB(rep,s),syntax:()=>analyzeSyntaxB(rep,s),relation:()=>deriveRelationsB(rep,s),verify:()=>verifyB(rep,s),infer:()=>inferB(rep,s),constraint:()=>analyzeConstraintsB(rep,s),contradiction:()=>detectContradictionsB(rep,s),hypothesis:()=>generateHypothesesB(rep,s),reasoning:()=>reasonB(rep,s)};
-      const selected=Array.isArray(options.steps)?options.steps:Object.keys(steps);
-      for(const name of selected){if(!steps[name]){s.uncertainty.push({type:"UNKNOWN_STEP",step:name,severity:"LOW"});continue;} const t=Date.now(); steps[name](); s.timing[name]=Date.now()-t;}
-      s.decision=decideB(s); s.durationMs=Date.now()-started; return s;
-    }
-  };
-  function unresolvedB(reason,started){return {machine:"B",stage:"processing",version:VERSION,operations:[],findings:[],relations:[],inferences:[],evidence:[],uncertainty:[{type:"INSUFFICIENT_REPRESENTATION",reason}],verification:[],decision:{status:"UNRESOLVED",reason},durationMs:Date.now()-started};}
-  function inspectStructureB(r,s){s.operations.push("STRUCTURE_INSPECTION"); const x=r.structure; s.findings.push({type:"STRUCTURE_PROFILE",kind:x.kind,details:clone(x)}); if(x.kind==="record")s.evidence.push({type:"RECORD_KEYS",keys:clone(x.keys)}); if(x.kind==="collection")s.evidence.push({type:"COLLECTION_SIZE",count:x.length});}
-  function inspectContentB(r,s){s.operations.push("CONTENT_INSPECTION"); const c=r.content; if(!c){s.uncertainty.push({type:"CONTENT_MISSING"});return;} if(c.mode==="text"){s.evidence.push({type:"TEXT_AVAILABLE",length:c.value.length,format:c.format,preview:c.preview}); if(!c.value.trim())s.uncertainty.push({type:"EMPTY_CONTENT"}); const unique=new Set(c.tokens||[]); s.findings.push({type:"TEXT_PROFILE",format:c.format??null,tokens:(c.tokens||[]).length,uniqueTokens:unique.size,lines:c.stats?.lineCount??null});} else if(c.mode==="binary"){s.evidence.push({type:"BINARY_METADATA",metadata:clone(c.value)});s.uncertainty.push({type:"CONTENT_NOT_DECODED",reason:"binary payload has no internal decoder for its format"});} else if(c.mode==="record"){s.evidence.push({type:"RECORD_AVAILABLE",keys:Object.keys(c.value||{})});} else if(c.mode==="collection"){s.evidence.push({type:"COLLECTION_AVAILABLE",count:c.value?.length??0});}}
-  function analyzeSyntaxB(r,s){s.operations.push("SYNTAX_ANALYSIS"); const c=r.content||{}; if(c.syntax?.delimiters){s.findings.push({type:"DELIMITER_BALANCE",result:clone(c.syntax.delimiters)}); if(!c.syntax.delimiters.balanced)s.verification.push({type:"SYNTAX_WARNING",status:"FAIL",reason:"unbalanced_delimiters"});} if(c.format==="json"||c.format==="json_candidate"){s.findings.push({type:"JSON_PARSE",result:clone(c.parse)});s.verification.push({type:"JSON_VALID",status:c.parse?.ok?"PASS":"FAIL",evidence:"JSON.parse"});} if(c.format==="html"&&c.syntax?.html){s.findings.push({type:"HTML_PROFILE",profile:clone(c.syntax.html)});} if((c.format==="code"||c.format==="code_candidate")&&c.syntax?.code){s.findings.push({type:"CODE_PROFILE",profile:clone(c.syntax.code)}); if(c.syntax.code.dependencies.length)s.relations.push({type:"CODE_DEPENDENCIES",items:clone(c.syntax.code.dependencies),basis:"import_or_require_tokens"});}}
-  function deriveRelationsB(r,s){s.operations.push("RELATION_ANALYSIS"); const v=r.content?.value; if(Array.isArray(v)){for(let i=0;i<v.length-1;i++)s.relations.push({type:"SEQUENCE_ADJACENCY",from:i,to:i+1});} if(isPlainObject(v)){const keys=Object.keys(v);for(let i=0;i<keys.length;i++)s.relations.push({type:"FIELD_PRESENCE",field:keys[i],valueType:typeOf(v[keys[i]])});}}
-  function verifyB(r,s){
-    s.operations.push("EVIDENCE_VERIFICATION");
-    const checks=[];
-    if(r.content?.mode==="text") checks.push({type:"CONTENT_PRESENT",status:r.content.value.trim()?"PASS":"FAIL"});
-    if(r.content?.syntax?.delimiters) checks.push({type:"DELIMITERS",status:r.content.syntax.delimiters.balanced?"PASS":"FAIL"});
-    if(r.content?.mode==="collection") checks.push({type:"COLLECTION_BOUNDS",status:r.content.value.length<=MAX_ITEMS?"PASS":"FAIL",limit:MAX_ITEMS,count:r.content.value.length});
-    if(r.content?.mode==="record") {
-      const emptyFields=Object.keys(r.content.value||{}).filter(k=>r.content.value[k]==="" || r.content.value[k]===null);
-      if(emptyFields.length) { checks.push({type:"EMPTY_FIELD",status:"UNKNOWN",fields:emptyFields}); }
-    }
-    s.verification.push(...checks); s.evidence.push({type:"VERIFICATION_RUN",checks:clone(checks)});
-  }
-  function inferB(r,s){s.operations.push("GENERIC_INFERENCE"); const c=r.content||{}; if(c.format)s.inferences.push({type:"CONTENT_FORMAT",value:c.format,basis:["input_metadata_or_content_signature"]}); if(c.format==="code"&&c.syntax?.code?.dependencies.length)s.inferences.push({type:"DEPENDENCY_PRESENCE",count:c.syntax.code.dependencies.length,basis:["import_or_require_tokens"]}); if(c.format==="html"&&c.syntax?.html)s.inferences.push({type:"MARKUP_STRUCTURE",tags:c.syntax.html.uniqueTags.length,basis:["tag_tokens"]}); if(c.parse?.ok)s.inferences.push({type:"STRUCTURED_TEXT_PARSEABLE",basis:["JSON.parse"]});}
-  function analyzeConstraintsB(r,s){s.operations.push("CONSTRAINT_ANALYSIS"); const c=r.content||{}; if(c.mode==="text"&&c.value.length>MAX_TEXT_SAMPLE)s.constraints.push({type:"SAMPLE_LIMIT",severity:"LOW",limit:MAX_TEXT_SAMPLE,observed:c.value.length}); if(c.mode==="collection"&&c.value.length>MAX_ITEMS)s.constraints.push({type:"COLLECTION_BOUNDS",severity:"HIGH",limit:MAX_ITEMS,observed:c.value.length}); if(c.mode==="record"){const keys=Object.keys(c.value||{});const empty=keys.filter(k=>c.value[k]===null||c.value[k]==="");if(empty.length)s.constraints.push({type:"EMPTY_FIELD",severity:"LOW",fields:empty});}}
-  function detectContradictionsB(r,s){s.operations.push("CONTRADICTION_ANALYSIS"); const c=r.content||{}; if(c.mode==="text"&&c.format==="json"&&c.parse?.ok===false)s.contradictions.push({type:"FORMAT_PARSE_CONTRADICTION",severity:"MEDIUM",claim:"json",evidence:"parse_failed"}); if(c.mode==="text"&&c.syntax?.delimiters?.balanced===false)s.contradictions.push({type:"SYNTAX_CONTRADICTION",severity:"MEDIUM",claim:"balanced_structure",evidence:"delimiter_failure"});}
-  function generateHypothesesB(r,s){s.operations.push("HYPOTHESIS_GENERATION"); const c=r.content||{}; if(c.mode==="binary")s.hypotheses.push({id:"H1",statement:"Content may require a format-specific decoder",basis:["CONTENT_NOT_DECODED"],testable:false}); else if(c.format)s.hypotheses.push({id:"H1",statement:"Observed material follows the detected format profile",basis:["FORMAT_IDENTIFIED"],testable:true}); else s.hypotheses.push({id:"H1",statement:"Material is best treated as generic text until stronger evidence exists",basis:["FORMAT_UNCERTAIN"],testable:true});}
-  function reasonB(r,s){s.operations.push("REASONING"); const add=(step,action,basis,conclusion)=>{if(s.reasoningTrace.length>=MAX_REASONING_STEPS)return;const entry={step,action,basis:clone(basis),conclusion};s.reasoningTrace.push(entry);s.reasoning.push(clone(entry));}; add(1,"OBSERVE",s.evidence.map(x=>x.type).slice(0,12),"Evidence inventory established"); add(2,"RELATE",s.relations.map(x=>x.type).slice(0,12),s.relations.length?"Relevant relationships identified":"No relationship was established"); add(3,"HYPOTHESIZE",s.hypotheses.map(x=>x.id),s.hypotheses.length?s.hypotheses[0].statement:"No hypothesis generated"); add(4,"REASON",s.inferences.map(x=>x.type).slice(0,12),s.inferences.length?"Generic inferences derived":"No generic inference derived"); add(5,"VERIFY",s.verification.map(x=>x.status).slice(0,12),s.verification.every(x=>x.status==="PASS")?"Verification checks passed":"Verification requires attention"); add(6,"DECIDE",[],"Decision is derived after verification and uncertainty assessment"); add(7,"ASSESS_UNCERTAINTY",s.uncertainty.map(x=>x.type),s.uncertainty.length?"Some uncertainty remains":"No uncertainty was recorded");}
-  function decideB(s){
-    if(s.uncertainty.some(x=>x.type==="INSUFFICIENT_REPRESENTATION")) return {status:"UNRESOLVED",reason:"insufficient_representation",confidence:0};
-    const failed=s.verification.filter(x=>x.status==="FAIL").length;
-    const unknownChecks=s.verification.filter(x=>x.status==="UNKNOWN").length;
-    const severeUncertainty=s.uncertainty.filter(x=>["MEDIUM","HIGH"].includes(String(x.severity||"MEDIUM").toUpperCase()));
-    const totalChecks=Math.max(1,s.verification.length);
-    let confidence=Math.max(0,Math.min(1,(s.verification.filter(x=>x.status==="PASS").length + (s.verification.filter(x=>x.status!=="FAIL").length*0.25))/totalChecks));
-    confidence-=Math.min(.45,severeUncertainty.length*.12);
-    confidence=Number(Math.max(0,Math.min(1,confidence)).toFixed(3));
-    if(failed) return {status:"PARTIAL",reason:"verification_failed",failedChecks:failed,unknownChecks,confidence};
-    if(severeUncertainty.length) return {status:"PARTIAL",reason:"medium_or_high_uncertainty",uncertainties:severeUncertainty.length,confidence};
-    return {status:"PROCESSED",reason:"analysis_and_verification_completed",confidence};
-  }
-  function processBatch(rep,started,options={}){const currentDepth=Number(options.batchDepth||0);if(currentDepth>=MAX_BATCH_DEPTH){return {machine:"B",stage:"processing",version:VERSION,inputFingerprint:rep.input?.fingerprint??null,operations:["BATCH_DEPTH_GUARD"],findings:[],relations:[],inferences:[],evidence:[],uncertainty:[{type:"BATCH_DEPTH_LIMIT_B",severity:"HIGH",maxDepth:MAX_BATCH_DEPTH,depth:currentDepth}],verification:[],constraints:[],contradictions:[],hypotheses:[],reasoning:[],reasoningTrace:[],decision:{status:"UNRESOLVED",reason:"batch_depth_limit",confidence:0},items:[],durationMs:Date.now()-started};}const items=rep.content.value.map((member,i)=>({index:i,source:member.metadata?.source??`item-${i+1}`,fingerprint:member.input?.fingerprint??null,processing:MachineB.process(member,{...options,batchDepth:currentDepth+1})}));const s={machine:"B",stage:"processing",version:VERSION,inputFingerprint:rep.input?.fingerprint??null,operations:["BATCH_PROCESSING","ITEM_ANALYSIS","CROSS_ITEM_RELATION_ANALYSIS","BATCH_VERIFICATION","BATCH_INFERENCE"],findings:[],relations:[],inferences:[],evidence:[],uncertainty:[],verification:[],constraints:[],contradictions:[],hypotheses:[],reasoning:[],reasoningTrace:[],decision:null,items};items.forEach(x=>{s.findings.push({type:"ITEM_ANALYZED",index:x.index,status:x.processing.decision?.status});s.evidence.push({type:"ITEM_EVIDENCE",index:x.index,count:x.processing.evidence.length});s.verification.push({type:"ITEM_VERIFICATION",index:x.index,count:x.processing.verification.length});if(x.processing.uncertainty.length)s.uncertainty.push({type:"ITEM_UNCERTAINTY",index:x.index,count:x.processing.uncertainty.length});
-      s.hypotheses.push(...(x.processing.hypotheses||[]).map(v=>({...clone(v),itemIndex:x.index})));
-      s.constraints.push(...(x.processing.constraints||[]).map(v=>({...clone(v),itemIndex:x.index})));
-      s.contradictions.push(...(x.processing.contradictions||[]).map(v=>({...clone(v),itemIndex:x.index})));
-      s.reasoningTrace.push(...(x.processing.reasoningTrace||[]).map(v=>({...clone(v),itemIndex:x.index})));
-      s.reasoning.push(...(x.processing.reasoning||x.processing.reasoningTrace||[]).map(v=>({...clone(v),itemIndex:x.index})));
-    });for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++){
-      s.relations.push({type:"ITEM_RELATION_CANDIDATE",from:i,to:j,basis:"same_injection_batch"});
-      const fi=items[i].processing.findings?.find(x=>x.type==="TEXT_PROFILE")?.format; const fj=items[j].processing.findings?.find(x=>x.type==="TEXT_PROFILE")?.format;
-      if(fi && fj && fi!==fj) s.relations.push({type:"CROSS_ITEM_FORMAT_DIFFERENCE",from:i,to:j,formats:[fi,fj],basis:"TEXT_PROFILE.format"});
-    }s.inferences.push({type:"MULTI_MATERIAL_INPUT",itemCount:items.length,basis:["batch_structure","item_analysis"]});const itemConf=items.map(x=>Number(x.processing.decision?.confidence??0)); const avgConf=itemConf.length?Number((itemConf.reduce((a,b)=>a+b,0)/itemConf.length).toFixed(3)):0;
-    s.decision=items.some(x=>x.processing.decision?.status==="UNRESOLVED")?{status:"UNRESOLVED",reason:"one_or_more_items_unresolved",confidence:avgConf}:items.some(x=>x.processing.decision?.status!=="PROCESSED")?{status:"PARTIAL",reason:"one_or_more_items_need_attention",confidence:avgConf}:{status:"PROCESSED",reason:"batch_analysis_and_verification_completed",confidence:avgConf};s.durationMs=Date.now()-started;return s;}
-
-  // ===================== C: SYNTHESIZE / DECIDE / EMIT / CONTINUE =====================
-  const MachineC = {
-    process(rep,proc,options={}){
-      const started=Date.now();
-      const result={machine:"C",stage:"result",version:VERSION,status:proc?.decision?.status??"UNRESOLVED",summary:summarize(rep,proc),findings:clone(proc?.findings??[]),relations:clone(proc?.relations??[]),inferences:clone(proc?.inferences??[]),evidence:clone(proc?.evidence??[]),uncertainty:clone(proc?.uncertainty??[]),verification:clone(proc?.verification??[]),constraints:clone(proc?.constraints??[]),contradictions:clone(proc?.contradictions??[]),hypotheses:clone(proc?.hypotheses??[]),reasoning:clone(proc?.reasoningTrace??[]),reasoningTrace:clone(proc?.reasoningTrace??[]),decision:clone(proc?.decision??null),metadata:{inputFingerprint:rep?.input?.fingerprint??null,source:options.source??rep?.metadata?.source??null,generatedAt:now()}};
-      if(Array.isArray(proc?.items)) result.batch={count:proc.items.length,items:proc.items.map(x=>({index:x.index,source:x.source,fingerprint:x.fingerprint,status:x.processing?.decision?.status??"UNRESOLVED",analysis:compactAnalysis(x.processing)}))};
-      result.evidenceChain=sealChain(result.evidence);
-      result.payloadHash=fingerprint({findings:result.findings,relations:result.relations,decision:result.decision,verification:result.verification});
-      result.validation=validateOutput(result);
-      result.continuation={available:true,mode:"structured",nextInputType:Array.isArray(result.batch?.items)?"batch_analysis":"analysis_result",automatic:false};
-      result.durationMs=Date.now()-started; return result;
-    },
-    inject(value,options={}){return{__cgoMachineInjection:true,machine:"C",stage:"injection",version:VERSION,mode:options.mode??"continuation",sourceStage:"C",transport:"internal",contentMode:"structured",createdAt:now(),payload:{value:clone(value)},metadata:clone(options.metadata??{})};}
-  };
-  function compactAnalysis(p){return{findings:clone(p?.findings??[]),relations:clone(p?.relations??[]),inferences:clone(p?.inferences??[]),evidence:clone(p?.evidence??[]),uncertainty:clone(p?.uncertainty??[]),verification:clone(p?.verification??[]),decision:clone(p?.decision??null)};}
-  function summarize(r,p){return{inputType:r?.input?.type??"unknown",format:r?.content?.format??null,operations:p?.operations?.length??0,findings:p?.findings?.length??0,relations:p?.relations?.length??0,inferences:p?.inferences?.length??0,evidence:p?.evidence?.length??0,verification:p?.verification?.length??0,constraints:p?.constraints?.length??0,contradictions:p?.contradictions?.length??0,hypotheses:p?.hypotheses?.length??0,uncertainty:p?.uncertainty?.length??0,status:p?.decision?.status??"UNRESOLVED"};}
+  function extractCode(text){const s=String(text);const imports=[...s.matchAll(/\bimport\s+(?:[^;\n]+?\s+from\s+)?["']([^"']+)["']/g)].map(m=>m[1]);const requires=[...s.matchAll(/\brequire\s*\(\s*["']([^"']+)["']\s*\)/g)].map(m=>m[1]);const declarations=[...s.matchAll(/\b(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/g)].map(m=>m[1]);const functions=[...s.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g)].map(m=>m[1]);return{imports:uniq(imports),requires:uniq(requires),dependencies:uniq([...imports,...requires]),declarations:uniq(declarations),functions:uniq(functions)}}
+  function tokenize(text,limit){const s=String(text);const n=s.length;const cap=Math.min(typeof limit==="number"?limit:MAX_TOKENS,n<180?320:n<1200?900:MAX_TOKENS);return s.normalize().split(/[^\p{L}\p{N}_$.-]+/u).filter(Boolean).map(x=>x.toLowerCase()).slice(0,cap)}
+  function lineStats(text){const lines=String(text).split(/\r?\n/);return{lineCount:lines.length,nonEmptyLines:lines.filter(x=>x.trim()).length,maxLineLength:lines.reduce((m,x)=>Math.max(m,x.length),0)}}
+  function analyzeText(text,hint={}){const s=String(text);const detection=classifyText(s,hint);const result={mode:"text",value:s,format:detection.format,formatConfidence:detection.confidence,formatBasis:detection.basis,stats:lineStats(s),tokens:tokenize(s),source:hint};result.syntax={};if(["code","code_candidate","json","json_candidate"].includes(detection.format))result.syntax.delimiters=balancedDelimiters(s);else if(detection.format==="css")result.syntax.delimiters=balancedDelimiters(s,{regex:false});if(detection.format==="json"||detection.format==="json_candidate")result.parse=parseStructuredText(s);if(detection.format==="html")result.syntax.html=extractHtml(s);if(detection.format==="code"||detection.format==="code_candidate")result.syntax.code=extractCode(s);if(detection.format==="csv")result.syntax.csv={rows:s.split(/\r?\n/).filter(Boolean).length,columns:(s.split(/\r?\n/)[0]||"").split(/[;,\t|]/).length};result.preview=s.slice(0,MAX_TEXT_SAMPLE);return result}
 
   function assertEnvelope(v){
-    const issues=[];
-    if(isBatchEnvelope(v)){ if(!Array.isArray(v.items)) issues.push("batch.items must be an array"); return {valid:issues.length===0,kind:"batch",issues}; }
-    if(isObject(v) && v.__cgoMachineInjection===true){ if(v.contentMode!=="structured") issues.push("machine injection must use contentMode=structured"); if(!Object.prototype.hasOwnProperty.call(v,"payload")) issues.push("payload is missing"); return {valid:issues.length===0,kind:"machine_injection",issues}; }
-    if(isObject(v) && v.__cgoInputEnvelope===true){ const p=v.payload||{}; if(!p.contentMode) issues.push("payload.contentMode is missing"); if(!p.transport) issues.push("payload.transport is missing"); return {valid:issues.length===0,kind:"input",issues}; }
-    return {valid:false,kind:null,issues:["not_an_envelope"]};
+    if(isBatchEnvelope(v)){const issues=[];if(!Array.isArray(v.items))issues.push("items_not_array");if(v.items.length>MAX_ITEMS)issues.push("items_exceed_limit");return{valid:issues.length===0,kind:"batch",issues};}
+    if(isObject(v)&&v.__cgoMachineInjection===true){const issues=[];if(v.contentMode!=="structured")issues.push("machine_injection_contentMode_must_be_structured");if(!isObject(v.payload)||!("value" in v.payload))issues.push("payload_value_missing");return{valid:issues.length===0,kind:"machine_injection",issues};}
+    if(isObject(v)&&v.__cgoInputEnvelope===true){const issues=[];if(!isObject(v.payload))issues.push("payload_missing");if(v.payload&&!v.payload.contentMode)issues.push("contentMode_missing");return{valid:issues.length===0,kind:"input_envelope",issues};}
+    return{valid:true,kind:"none",issues:[]};
   }
-  function sealChain(evidence){ let previous="GENESIS"; return (evidence||[]).map((item,index)=>{ const payload={index,previous,evidence:clone(item)}; const hash=fingerprint(payload); const sealed={index,previous,hash,evidence:clone(item)}; previous=hash; return sealed; }); }
-  function verifyChain(chain){ let previous="GENESIS"; const issues=[]; (chain||[]).forEach((item,index)=>{ const expected=fingerprint({index:item.index??index,previous,evidence:item.evidence}); if(item.previous!==previous || item.hash!==expected) issues.push({index,reason:"hash_or_link_mismatch"}); previous=item.hash||null; }); return {valid:issues.length===0,issues,length:(chain||[]).length}; }
-  function validateOutput(result){ const checks=[]; const required=["machine","version","status","summary","decision","metadata"]; required.forEach(k=>checks.push({type:"REQUIRED_FIELD",field:k,status:Object.prototype.hasOwnProperty.call(result,k)?"PASS":"FAIL"})); checks.push({type:"DECISION_CONFIDENCE",status:Number.isFinite(Number(result.decision?.confidence)) && Number(result.decision.confidence)>=0 && Number(result.decision.confidence)<=1?"PASS":"FAIL"}); const chain=result.evidenceChain||sealChain(result.evidence||[]); checks.push({type:"EVIDENCE_CHAIN",status:verifyChain(chain).valid?"PASS":"FAIL",length:chain.length}); return {status:checks.every(x=>x.status==="PASS")?"VALID":"INVALID",checks}; }
-  function recomputeDecisionFromB(s){
-    if(Array.isArray(s?.items)){
-      const items=s.items;
-      const avg=items.length?Number((items.reduce((a,x)=>a+Number(x.processing?.decision?.confidence??0),0)/items.length).toFixed(3)):0;
-      if(items.some(x=>x.processing?.decision?.status==="UNRESOLVED")) return {status:"UNRESOLVED",reason:"one_or_more_items_unresolved",confidence:avg};
-      if(items.some(x=>x.processing?.decision?.status!=="PROCESSED")) return {status:"PARTIAL",reason:"one_or_more_items_need_attention",confidence:avg};
-      return {status:"PROCESSED",reason:"batch_analysis_and_verification_completed",confidence:avg};
-    }
-    return decideB({uncertainty:clone(s?.uncertainty||[]),verification:clone(s?.verification||[])});
+
+  function describeStructure(value,content){const t=typeOf(value);if(t==="batch")return{kind:"batch",count:value.items.length};if(t==="input_envelope"){if(value.__cgoMachineInjection===true)return{kind:"injection",innerType:content?.mode??"unknown",format:content?.format??null};const p=value.payload||{};return{kind:"input_envelope",transport:p.transport??"unknown",name:p.name??null,mimeType:p.mimeType??null,extension:p.extension??null,size:p.size??null,contentMode:p.contentMode??"unknown",format:content?.format??null};}if(t==="string")return{kind:"scalar",valueType:"string",length:value.length,...lineStats(value),empty:value.length===0};if(t==="array")return{kind:"collection",length:value.length,itemTypes:value.slice(0,100).map(typeOf)};if(t==="object") {const keys=Object.keys(value);return{kind:"record",keyCount:keys.length,keys,valueTypes:Object.fromEntries(keys.map(k=>[k,typeOf(value[k])]))}}return{kind:"scalar",valueType:t}}
+  function extractContent(value){
+    if(isInputEnvelope(value)){if(value.__cgoMachineInjection===true&&value.contentMode==="structured"){const v=value.payload?.value;return{mode:Array.isArray(v)?"collection":isObject(v)?"record":"scalar",value:clone(v),source:{transport:"internal",stage:"C"},format:"structured"};}const p=value.payload||{};if(p.contentMode==="text"&&typeof p.text==="string")return analyzeText(p.text,{name:p.name,mimeType:p.mimeType,extension:p.extension});if(p.contentMode==="structured"){const v=p.value;return{mode:Array.isArray(v)?"collection":isObject(v)?"record":"scalar",value:clone(v),format:"structured"}}return{mode:"binary",value:{transport:p.transport??"file",name:p.name??null,mimeType:p.mimeType??null,extension:p.extension??null,size:p.size??null,byteLength:p.byteLength??p.size??null,preview:p.preview??null},format:"binary"};}
+    if(typeof value==="string")return analyzeText(value,{});if(Array.isArray(value))return{mode:"collection",value:clone(value),format:"structured"};if(isObject(value))return{mode:"record",value:clone(value),format:"structured"};return{mode:"scalar",value,format:typeOf(value)};
   }
-  const MachineD={
-    audit(output){
-      const p=output?.pipeline||{}; const checks=[];
-      const sourceFingerprint=output?.auditSource?.inputFingerprint??null;
-      checks.push({type:"A_INPUT_FINGERPRINT",status:sourceFingerprint && sourceFingerprint===p.A?.input?.fingerprint?"PASS":"FAIL",category:"provenance",severity:"HIGH"});
-      checks.push({type:"B_INPUT_FINGERPRINT",status:sourceFingerprint && sourceFingerprint===p.B?.inputFingerprint?"PASS":"FAIL",category:"provenance",severity:"HIGH"});
-      checks.push({type:"C_INPUT_FINGERPRINT",status:sourceFingerprint && sourceFingerprint===p.C?.metadata?.inputFingerprint?"PASS":"FAIL",category:"provenance",severity:"HIGH"});
-      const recomputed=recomputeDecisionFromB(p.B);
-      checks.push({type:"B_DECISION_RECOMPUTE",status:JSON.stringify(recomputed)===JSON.stringify(p.B?.decision??null)?"PASS":"FAIL",category:"reasoning",severity:"HIGH"});
-      const validation=validateOutput({...p.C,evidenceChain:p.C?.evidenceChain});
-      checks.push({type:"C_VALIDATION_RECHECK",status:validation.status===p.C?.validation?.status?"PASS":"FAIL",category:"validation",severity:"MEDIUM"});
-      const chainCheck=verifyChain(p.C?.evidenceChain||[]);
-      checks.push({type:"EVIDENCE_CHAIN_INTEGRITY",status:chainCheck.valid?"PASS":"FAIL",category:"integrity",severity:"HIGH"});
-      const recomputedPayloadHash=fingerprint({findings:p.C?.findings,relations:p.C?.relations,decision:p.C?.decision,verification:p.C?.verification});
-      checks.push({type:"C_PAYLOAD_HASH",status:recomputedPayloadHash===p.C?.payloadHash?"PASS":"FAIL",category:"integrity",severity:"HIGH"});
-      return {machine:"D",stage:"audit",version:VERSION,integrity:{hashChain:chainCheck,checks},replay:{available:Array.isArray(p.B?.reasoningTrace),operations:p.B?.operations?.length||0,reasoningSteps:p.B?.reasoningTrace?.length||0},status:checks.every(x=>x.status==="PASS")?"VALID":"ATTENTION",generatedAt:now()};
-    },
-    replay(output){const trace=output?.pipeline?.B?.reasoningTrace||[];return {available:true,steps:clone(trace),count:trace.length};}
-  };
-  function auditIndependence(){ return {networkCalls:0,externalImports:0,globalsLeaked:["CGOMachineABC"],nativeOnly:true,documentAccess:false,windowAccess:false,verified:true}; }
+
+  const MachineA={process(input,options={}){const started=Date.now();const depth=Number(options.batchDepth||0);if(isBatchEnvelope(input)){if(depth>=MAX_BATCH_DEPTH)return{machine:"A",stage:"representation",version:VERSION,input:{type:"batch",fingerprint:fingerprint(input),size:sizeOf(input),count:0},structure:{kind:"batch",count:0},content:{mode:"batch",value:[]},observations:[{type:"BATCH_DEPTH_LIMIT",depth}],unknowns:[{type:"BATCH_DEPTH_LIMIT",severity:"HIGH",depth}],metadata:{source:options.source??null,receivedAt:now()},durationMs:elapsed(started)};const members=input.items.slice(0,MAX_ITEMS).map((item,i)=>MachineA.process(item,{...options,batchDepth:depth+1,source:item?.payload?.name??item?.name??`item-${i+1}`}));const memberUnknowns=members.flatMap((x,i)=>(x.unknowns||[]).map(u=>({...clone(u),itemIndex:i})));const out={machine:"A",stage:"representation",version:VERSION,input:{type:"batch",fingerprint:fingerprint(input),size:sizeOf(input),count:members.length},structure:{kind:"batch",count:members.length,itemTypes:members.map(x=>x.input.type)},content:{mode:"batch",value:members},observations:[{type:"INPUT_CLASSIFIED",value:"batch"},{type:"BATCH_ITEMS_DISCOVERED",value:members.length}],unknowns:memberUnknowns,metadata:{source:options.source??null,receivedAt:now()},durationMs:elapsed(started)};return out;}
+      const env=assertEnvelope(input);const type=typeOf(input);const content=extractContent(input);const structure=describeStructure(input,content);const rep={machine:"A",stage:"representation",version:VERSION,input:{type,fingerprint:fingerprint(input),size:sizeOf(input)},structure,content,observations:[],unknowns:[],evidence:[],metadata:{source:options.source??null,receivedAt:now()}};if(!env.valid)rep.unknowns.push({type:"ENVELOPE_SCHEMA_ISSUES",severity:"HIGH",issues:env.issues});rep.observations.push({type:"INPUT_CLASSIFIED",value:type},{type:"STRUCTURE_IDENTIFIED",value:structure.kind});if(content.format)rep.observations.push({type:"FORMAT_IDENTIFIED",value:content.format,confidence:content.formatConfidence??null});if(content.formatConfidence<.75)rep.unknowns.push({type:"LOW_FORMAT_CONFIDENCE",severity:"LOW",confidence:content.formatConfidence});if(content.parse)rep.observations.push({type:"PARSE_ATTEMPTED",value:content.parse.ok});if(content.syntax)rep.observations.push({type:"SYNTAX_PROFILED",value:true});rep.evidence.push({type:"INPUT_FINGERPRINT",fingerprint:rep.input.fingerprint});rep.durationMs=elapsed(started);return rep}}
+
+  function blankB(rep){return{machine:"B",stage:"processing",version:VERSION,inputFingerprint:rep?.input?.fingerprint??null,operations:[],timing:{},selectedSteps:[],skippedSteps:[],findings:[],relations:[],inferences:[],hypotheses:[],constraints:[],contradictions:[],evidence:[],uncertainty:[],verification:[],reasoning:[],reasoningTrace:[],decision:null,items:null,errors:[],degraded:false,fallbacks:[],retries:[]}}
+  function selectedSteps(options,format){if(Array.isArray(options.steps)&&options.steps.length)return options.steps;const all=["structure","content","syntax","relation","constraint","hypothesis","verify","infer","reasoning","decision"];if(format==="text"||format==="markdown")return all.filter(x=>x!=="syntax");return all}
+  function timed(s,name,fn,options={}){const t=Date.now();const attempts=toBool(options.retryFailedSteps,false)&&name!=="structure"?Math.min(toInt(options.maxRetries,DEFAULT_MAX_RETRIES),DEFAULT_MAX_RETRIES)+1:1;let ok=false;for(let i=0;i<attempts&&!ok;i++){try{if(options.__deadline&&Date.now()>options.__deadline)throw new Error("TIMEOUT");fn();ok=true;}catch(e){s.errors.push({step:name,error:String(e.message||e),timestamp:now(),retry:i<attempts-1});if(i<attempts-1)s.retries.push({step:name,attempt:i+1,timestamp:now()});else s.degraded=true;}}s.timing[name]=elapsed(t);}
+  function inspectStructureB(r,s){s.operations.push("STRUCTURE_INSPECTION");const x=r.structure;s.findings.push({type:"STRUCTURE_PROFILE",kind:x.kind,details:clone(x)});if(x.kind==="record")s.evidence.push({type:"RECORD_KEYS",keys:clone(x.keys)});if(x.kind==="collection")s.evidence.push({type:"COLLECTION_SIZE",count:x.length})}
+  function inspectContentB(r,s){s.operations.push("CONTENT_INSPECTION");const c=r.content;if(!c){s.uncertainty.push({type:"CONTENT_MISSING",severity:"HIGH"});return;}if(c.mode==="text"){s.evidence.push({type:"TEXT_AVAILABLE",length:c.value.length,format:c.format,preview:c.preview});if(!c.value.trim())s.uncertainty.push({type:"EMPTY_CONTENT",severity:"MEDIUM"});const unique=new Set(c.tokens||[]);s.findings.push({type:"TEXT_PROFILE",tokens:(c.tokens||[]).length,uniqueTokens:unique.size,lines:c.stats?.lineCount??null,format:c.format,formatConfidence:c.formatConfidence??null});}else if(c.mode==="binary"){s.evidence.push({type:"BINARY_METADATA",metadata:clone(c.value)});s.uncertainty.push({type:"CONTENT_NOT_DECODED",severity:"MEDIUM",reason:"binary payload has no internal decoder for its format"});}else if(c.mode==="record"){s.evidence.push({type:"RECORD_AVAILABLE",keys:Object.keys(c.value||{})});}else if(c.mode==="collection"){s.evidence.push({type:"COLLECTION_AVAILABLE",count:c.value?.length??0});}}
+  function analyzeSyntaxB(r,s){s.operations.push("SYNTAX_ANALYSIS");const c=r.content||{};if(c.syntax?.delimiters){s.findings.push({type:"DELIMITER_BALANCE",result:clone(c.syntax.delimiters)});if(!c.syntax.delimiters.balanced)s.verification.push({type:"SYNTAX_WARNING",status:"FAIL",reason:"unbalanced_delimiters"});}if(c.format==="json"||c.format==="json_candidate"){s.findings.push({type:"JSON_PARSE",result:{ok:!!c.parse?.ok,error:c.parse?.error??null,valueType:c.parse?.ok?typeOf(c.parse.value):null}});s.verification.push({type:"JSON_VALID",status:c.parse?.ok?"PASS":"FAIL",evidence:"JSON.parse"});}if(c.format==="html"&&c.syntax?.html){s.findings.push({type:"HTML_PROFILE",profile:clone(c.syntax.html)});if(c.syntax.html.references?.length)s.relations.push({type:"REFERENCE",items:clone(c.syntax.html.references),basis:"html_href_src"});}if((c.format==="code"||c.format==="code_candidate")&&c.syntax?.code){s.findings.push({type:"CODE_PROFILE",profile:clone(c.syntax.code)});if(c.syntax.code.dependencies.length)s.relations.push({type:"CODE_DEPENDENCIES",items:clone(c.syntax.code.dependencies),basis:"import_or_require_tokens"});}}
+  function deriveRelationsB(r,s){s.operations.push("RELATION_ANALYSIS");const st=structuredOf(r.content);const v=st.kind?st.value:null;if(Array.isArray(v)){for(let i=0;i<v.length-1;i++)s.relations.push({type:"SEQUENCE_ADJACENCY",from:i,to:i+1});}if(isPlainObject(v)){const keys=Object.keys(v);for(const k of keys)s.relations.push({type:"FIELD_PRESENCE",field:k,valueType:typeOf(v[k])});}}
+  function structuredOf(c){if(!c)return{kind:null,value:null};if(c.mode==="record")return{kind:"record",value:c.value};if(c.mode==="collection")return{kind:"collection",value:c.value};if(c.mode==="text"&&c.parse?.ok){const v=c.parse.value;if(Array.isArray(v))return{kind:"collection",value:v,parsed:true};if(isPlainObject(v))return{kind:"record",value:v,parsed:true}}return{kind:null,value:null}}
+  function analyzeConstraintsB(r,s,options={}){s.operations.push("CONSTRAINT_ANALYSIS");const st=structuredOf(r.content);const req=new Set(Array.isArray(options.requiredFields)?options.requiredFields.map(String):[]);if(st.kind==="record"){const rec=st.value||{};for(const [k,v] of Object.entries(rec)){if(v===""||v===null)s.constraints.push({type:"EMPTY_FIELD",field:k,severity:req.has(k)?"HIGH":"MEDIUM",required:req.has(k),value:v});}for(const k of req)if(!(k in rec))s.constraints.push({type:"REQUIRED_FIELD_MISSING",field:k,severity:"HIGH",required:true});}if(st.kind==="collection"&&st.value.length>MAX_ITEMS)s.constraints.push({type:"COLLECTION_BOUNDS",severity:"HIGH",count:st.value.length,max:MAX_ITEMS});}
+  function inferHypothesesB(r,s){s.operations.push("HYPOTHESIS_ANALYSIS");if(s.contradictions.length)s.hypotheses.push({type:"STRUCTURAL_CONFLICT",basis:s.contradictions.map(x=>x.type),status:"UNVERIFIED"});if(s.relations.length>1)s.hypotheses.push({type:"MULTI_RELATION_STRUCTURE",relationCount:s.relations.length,status:"UNVERIFIED"});}
+  function verifyB(r,s){s.operations.push("EVIDENCE_VERIFICATION");const checks=[];const c=r.content||{};if(c.mode==="text")checks.push({type:"CONTENT_PRESENT",status:c.value.trim()?"PASS":"FAIL"});if(c.mode==="record"){checks.push({type:"RECORD_PRESENT",status:Object.keys(c.value||{}).length?"PASS":"FAIL",weight:"medium"});checks.push({type:"RECORD_STRUCTURE",status:r.structure?.kind==="record"?"PASS":"FAIL",weight:"high"});}if(c.mode==="collection"){checks.push({type:"COLLECTION_PRESENT",status:Array.isArray(c.value)&&c.value.length?"PASS":"FAIL",weight:"medium"});checks.push({type:"COLLECTION_STRUCTURE",status:r.structure?.kind==="collection"?"PASS":"FAIL",weight:"high"});}if(c.mode==="scalar")checks.push({type:"SCALAR_PRESENT",status:c.value!==null&&c.value!==undefined?"PASS":"FAIL",weight:"medium"});if(c.syntax?.delimiters)checks.push({type:"DELIMITERS",status:c.syntax.delimiters.balanced?"PASS":"FAIL"});if(r.unknowns?.length)checks.push({type:"REPRESENTATION_UNKNOWN_REVIEW",status:"UNKNOWN",count:r.unknowns.length});s.verification.push(...checks);s.evidence.push({type:"VERIFICATION_RUN",checks:clone(checks)});}
+  function reasonB(s){s.reasoning=[{step:"OBSERVE",status:"complete"},{step:"RELATE",status:s.relations.length?"complete":"limited"},{step:"HYPOTHESIZE",status:s.hypotheses.length?"complete":"none"},{step:"REASON",status:"complete"},{step:"VERIFY",status:s.verification.some(x=>x.status==="FAIL")?"attention":"complete"},{step:"DECIDE",status:"pending"}];s.reasoningTrace=s.reasoning.map((x,i)=>({...x,index:i+1}));}
+  function detectContradictionsB(r,s){const c=r.content||{};if(c.format==="json"&&c.parse&&!c.parse.ok)s.contradictions.push({type:"FORMAT_CONTENT_MISMATCH",severity:"HIGH",reason:"json_parse_failed"});if(c.syntax?.delimiters&&!c.syntax.delimiters.balanced)s.contradictions.push({type:"DELIMITER_MISMATCH",severity:"HIGH"});if(c.format==="html"&&c.syntax?.html?.duplicateIds?.length)s.contradictions.push({type:"DUPLICATE_IDENTIFIER",severity:"HIGH",ids:clone(c.syntax.html.duplicateIds)});for(const x of s.constraints||[]){if(x.required===true&&x.type==="EMPTY_FIELD")s.contradictions.push({type:"REQUIRED_FIELD_EMPTY",severity:"HIGH",field:x.field});if(x.type==="REQUIRED_FIELD_MISSING")s.contradictions.push({type:"REQUIRED_FIELD_MISSING",severity:"HIGH",field:x.field});}}
+  function confidenceB(s,options={}){const weights={critical:3,high:2,medium:1,low:.5,...(options.checkWeights||{})};let total=0,score=0;for(const c of s.verification){const level=c.weight||((c.type==="EVIDENCE_CHAIN"||c.type==="C_PAYLOAD_HASH")?"critical":c.type.includes("FINGERPRINT")||c.type==="DELIMITERS"?"high":c.type.includes("UNKNOWN")?"low":"medium");const w=toFloat(weights[level],1);total+=w;if(c.status==="PASS")score+=w;else if(c.status==="UNKNOWN")score+=w*.5;}let out=total?score/total:1;for(const u of s.uncertainty)out-={LOW:.03,MEDIUM:.12,HIGH:.3}[u.severity]??.08;for(const c of s.contradictions)out-={LOW:.02,MEDIUM:.08,HIGH:.2,CRITICAL:.45}[c.severity]??.08;if(s.inputFingerprint&&s.verification.length<3)out=Math.min(out,.95);return clamp(out)}
+  function decideB(s,options={}){if(s.errors?.length||s.degraded)return{status:"DEGRADED",confidence:confidenceB(s,options),reason:"step_error"};if(s.uncertainty.some(x=>x.type==="INSUFFICIENT_REPRESENTATION"))return{status:"UNRESOLVED",confidence:0,reason:"insufficient_representation"};const failed=s.verification.filter(x=>x.status==="FAIL").length;const critical=s.contradictions.some(x=>x.severity==="CRITICAL");const highContr=s.contradictions.some(x=>x.severity==="HIGH");const confidence=confidenceB(s,options);if(critical)return{status:"CONTRADICTION",confidence,reason:"critical_contradiction"};if(highContr)return{status:"PARTIAL",confidence,reason:"high_contradiction"};if(failed||s.uncertainty.some(x=>x.severity==="HIGH"))return{status:"PARTIAL",confidence,reason:failed?"verification_failed":"high_uncertainty",failedChecks:failed};if(s.uncertainty.some(x=>x.severity==="MEDIUM"))return{status:"PARTIAL",confidence,reason:"medium_uncertainty"};return{status:"PROCESSED",confidence,reason:"analysis_and_verification_completed"}}
+  function processBatch(rep,options={}){const started=Date.now();const depth=Number(options.batchDepth||0);const s=blankB(rep);if(depth>=MAX_BATCH_DEPTH){s.uncertainty.push({type:"BATCH_DEPTH_LIMIT_B",severity:"HIGH",depth});s.decision={status:"UNRESOLVED",confidence:0,reason:"batch_depth_limit"};s.durationMs=elapsed(started);return s;}s.operations.push("BATCH_PROCESSING","ITEM_ANALYSIS","CROSS_ITEM_RELATION_ANALYSIS","BATCH_VERIFICATION","BATCH_INFERENCE");s.items=rep.content.value.map((member,i)=>({index:i,source:member.metadata?.source??`item-${i+1}`,fingerprint:member.input?.fingerprint??null,processing:MachineB.process(member,{...options,batchDepth:depth+1})}));s.items.forEach(x=>{s.findings.push({type:"ITEM_ANALYZED",index:x.index,status:x.processing.decision?.status});s.evidence.push({type:"ITEM_EVIDENCE",index:x.index,count:x.processing.evidence.length});s.verification.push({type:"ITEM_VERIFICATION",index:x.index,count:x.processing.verification.length});s.hypotheses.push(...(x.processing.hypotheses||[]));s.constraints.push(...(x.processing.constraints||[]));s.contradictions.push(...(x.processing.contradictions||[]));s.reasoning.push(...(x.processing.reasoning||[]));s.reasoningTrace.push(...(x.processing.reasoningTrace||[]));if(x.processing.uncertainty.length)s.uncertainty.push({type:"ITEM_UNCERTAINTY",index:x.index,count:x.processing.uncertainty.length});});for(let i=0;i<s.items.length;i++)for(let j=i+1;j<s.items.length;j++)s.relations.push({type:"ITEM_RELATION_CANDIDATE",from:i,to:j,basis:"same_injection_batch"});s.inferences.push({type:"MULTI_MATERIAL_INPUT",itemCount:s.items.length,basis:["batch_structure","item_analysis"]});s.decision={status:s.items.some(x=>x.processing.decision?.status!=="PROCESSED")?"PARTIAL":"PROCESSED",confidence:clamp(s.items.reduce((a,x)=>a+(x.processing.decision?.confidence??0),0)/(s.items.length||1)),reason:"batch_analysis_and_verification_completed"};s.durationMs=elapsed(started);return s}
+
+  const MachineB={process(rep,options={}){const started=Date.now();if(!rep?.structure)return unresolvedB("representation_missing",started);if(rep.structure.kind==="batch"&&Array.isArray(rep.content?.value))return processBatch(rep,options);const s=blankB(rep);const steps=selectedSteps(options,rep.content?.format);const allSteps=["structure","content","syntax","relation","constraint","hypothesis","verify","infer","reasoning","decision"];s.selectedSteps=steps.slice();s.skippedSteps=allSteps.filter(x=>!steps.includes(x));s.operations.push("AUTO_STEP_SELECTION");timed(s,"structure",()=>steps.includes("structure")&&inspectStructureB(rep,s),options);timed(s,"content",()=>steps.includes("content")&&inspectContentB(rep,s),options);timed(s,"syntax",()=>steps.includes("syntax")&&analyzeSyntaxB(rep,s),options);timed(s,"relation",()=>steps.includes("relation")&&deriveRelationsB(rep,s),options);timed(s,"constraint",()=>steps.includes("constraint")&&analyzeConstraintsB(rep,s,options),options);timed(s,"contradiction",()=>detectContradictionsB(rep,s),options);timed(s,"hypothesis",()=>steps.includes("hypothesis")&&inferHypothesesB(rep,s),options);timed(s,"verify",()=>steps.includes("verify")&&verifyB(rep,s),options);timed(s,"infer",()=>steps.includes("infer")&&inferB(rep,s));if(steps.includes("reasoning"))reasonB(s);if(options.__deadline&&Date.now()>options.__deadline){s.degraded=true;s.errors.push({step:"pipeline",error:"TIMEOUT",timestamp:now()});}if(steps.includes("decision"))s.decision=decideB(s,options);s.durationMs=elapsed(started);return s}}
+  function unresolvedB(reason,started){const s=blankB(null);s.uncertainty.push({type:"INSUFFICIENT_REPRESENTATION",severity:"HIGH",reason});s.decision={status:"UNRESOLVED",confidence:0,reason};s.durationMs=elapsed(started);return s}
+  function inferB(r,s){s.operations.push("GENERIC_INFERENCE");const c=r.content||{};if(c.format)s.inferences.push({type:"CONTENT_FORMAT",value:c.format,confidence:c.formatConfidence??null,basis:c.formatBasis||["input_metadata_or_content_signature"]});if(c.format==="code"&&c.syntax?.code?.dependencies.length)s.inferences.push({type:"DEPENDENCY_PRESENCE",count:c.syntax.code.dependencies.length,basis:["import_or_require_tokens"]});if(c.format==="html"&&c.syntax?.html)s.inferences.push({type:"MARKUP_STRUCTURE",tags:c.syntax.html.uniqueTags.length,basis:["tag_tokens"]});if(c.parse?.ok)s.inferences.push({type:"STRUCTURED_TEXT_PARSEABLE",basis:["JSON.parse"]})}
+
+  function sealChain(items){let prev="GENESIS";return(items||[]).map((item,i)=>{const body={index:i,previousHash:prev,evidence:item};const hash=digest(body);prev=hash;return{index:i,previousHash:body.previousHash,hash,evidence:clone(item)}})}
+  function verifyChain(chain){let prev="GENESIS";for(const item of chain||[]){if(item.previousHash!==prev)return false;const expected=digest({index:item.index,previousHash:item.previousHash,evidence:item.evidence});if(expected!==item.hash)return false;prev=item.hash}return true}
+  function validateOutput(result){const issues=[];for(const k of ["machine","version","status","summary","decision","metadata"]){if(!(k in (result||{})))issues.push("MISSING_"+k.toUpperCase())}const conf=result?.decision?.confidence;if(conf!=null&&(conf<0||conf>1))issues.push("DECISION_CONFIDENCE");if(result?.evidenceChain&&!verifyChain(result.evidenceChain))issues.push("EVIDENCE_CHAIN");if(result?.payloadHash){const p=digest({findings:result.findings,relations:result.relations,decision:result.decision,verification:result.verification});if(p!==result.payloadHash)issues.push("C_PAYLOAD_HASH")};return{status:issues.length?"INVALID":"VALID",issues}}
+  const MachineC={process(rep,proc,options={}){const started=Date.now();const result={machine:"C",stage:"result",version:VERSION,status:proc?.decision?.status??"UNRESOLVED",summary:summarize(rep,proc),findings:clone(proc?.findings??[]),relations:clone(proc?.relations??[]),inferences:clone(proc?.inferences??[]),hypotheses:clone(proc?.hypotheses??[]),constraints:clone(proc?.constraints??[]),contradictions:clone(proc?.contradictions??[]),reasoning:clone(proc?.reasoning??[]),reasoningTrace:clone(proc?.reasoningTrace??[]),evidence:clone(proc?.evidence??[]),uncertainty:clone(proc?.uncertainty??[]),verification:clone(proc?.verification??[]),decision:clone(proc?.decision??null),errors:clone(proc?.errors??[]),fallbacks:clone(proc?.fallbacks??[]),metadata:{inputFingerprint:rep?.input?.fingerprint??null,source:options.source??rep?.metadata?.source??null,generatedAt:now()}};result.evidenceChain=sealChain(result.evidence);if(result.status==="PROCESSED"&&result.decision?.confidence>.9&&verifyChain(result.evidenceChain))result.status="WELL_FORMED";result.payloadHash=digest({findings:result.findings,relations:result.relations,decision:result.decision,verification:result.verification});result.continuation={available:true,mode:"structured",nextInputType:Array.isArray(result.batch?.items)?"batch_analysis":"analysis_result",automatic:!!options.autoReflect};if(Array.isArray(proc?.items))result.batch={count:proc.items.length,items:proc.items.map(x=>({index:x.index,source:x.source,fingerprint:x.fingerprint,status:x.processing?.decision?.status??"UNRESOLVED",analysis:compactAnalysis(x.processing)}))};result.continuation.metadata={cycles:options.cycleIndex??0,autoReflect:!!options.autoReflect};result.validation=validateOutput(result);result.durationMs=elapsed(started);return result},inject(value,options={}){return{__cgoMachineInjection:true,machine:"C",stage:"injection",version:VERSION,mode:options.mode??"continuation",sourceStage:"C",transport:"internal",contentMode:"structured",createdAt:now(),payload:{value:clone(value)},metadata:clone(options.metadata??{})}}};
+  function compactAnalysis(p){return{findings:clone(p?.findings??[]),relations:clone(p?.relations??[]),inferences:clone(p?.inferences??[]),hypotheses:clone(p?.hypotheses??[]),constraints:clone(p?.constraints??[]),contradictions:clone(p?.contradictions??[]),reasoning:clone(p?.reasoning??[]),reasoningTrace:clone(p?.reasoningTrace??[]),evidence:clone(p?.evidence??[]),uncertainty:clone(p?.uncertainty??[]),verification:clone(p?.verification??[]),decision:clone(p?.decision??null)}}
+  function summarize(r,p){return{inputType:r?.input?.type??"unknown",format:r?.content?.format??null,formatConfidence:r?.content?.formatConfidence??null,operations:p?.operations?.length??0,findings:p?.findings?.length??0,relations:p?.relations?.length??0,inferences:p?.inferences?.length??0,hypotheses:p?.hypotheses?.length??0,constraints:p?.constraints?.length??0,contradictions:p?.contradictions?.length??0,evidence:p?.evidence?.length??0,verification:p?.verification?.length??0,uncertainty:p?.uncertainty?.length??0,status:p?.decision?.status??"UNRESOLVED",confidence:p?.decision?.confidence??0}}
+
+  function fallbackResult(stage,detail,input){return{machine:"C",stage:"result",version:VERSION,status:"DEGRADED",summary:`Fallback after ${stage} failure`,findings:[],relations:[],inferences:[],hypotheses:[],constraints:[],contradictions:[],reasoning:[],reasoningTrace:[],evidence:[],uncertainty:[{type:"PIPELINE_ERROR",severity:"HIGH",stage,detail}],verification:[],errors:[{stage,error:detail,timestamp:now()}],fallbacks:[{from:stage,to:stage==="C"?"B":stage==="B"?"A":"ERROR",timestamp:now()}],decision:{status:"DEGRADED",confidence:0,reason:`fallback_${stage}`},metadata:{inputFingerprint:input?.input?.fingerprint??null,generatedAt:now()}}}
+  function runCycle(input,options={},cycleIndex=0){const deadline=options.__deadline||(toInt(options.maxDurationMs,DEFAULT_MAX_DURATION_MS)>0?Date.now()+toInt(options.maxDurationMs,DEFAULT_MAX_DURATION_MS):0);let a,b,c;try{a=MachineA.process(input,{...options,__deadline:deadline,cycleIndex});}catch(e){a={machine:"A",stage:"representation",version:VERSION,input:{type:"error",fingerprint:fingerprint(String(e)),size:0},structure:{kind:"error"},content:{mode:"scalar",value:null,format:"error"},unknowns:[{type:"A_ERROR",severity:"CRITICAL",reason:String(e.message||e)}],errors:[{stage:"A",error:String(e.message||e),timestamp:now()}]};}try{b=MachineB.process(a,{...options,__deadline:deadline,cycleIndex});}catch(e){b=blankB(a);b.degraded=true;b.errors.push({stage:"B",error:String(e.message||e),timestamp:now()});b.fallbacks.push({from:"B",to:"A",timestamp:now()});b.decision={status:"DEGRADED",confidence:0,reason:"fallback_B_to_A"};}try{c=MachineC.process(a,b,{...options,cycleIndex});}catch(e){c=fallbackResult("C",String(e.message||e),a);c.fallbacks.push({from:"C",to:"B",timestamp:now()});}if(b.degraded){c.status="DEGRADED";c.decision={...c.decision,status:"DEGRADED",reason:"b_degraded"};c.errors=[...(c.errors||[]),...(b.errors||[])];c.fallbacks=[...(c.fallbacks||[]),...(b.fallbacks||[])];}const out={engine:"CGO_MACHINE_ABC",version:VERSION,cycleIndex,pipeline:{A:a,B:b,C:c},result:c};out.audit=(options.fast===true||options.skipAudit===true)?{machine:"D",status:"SKIPPED_FAST",checks:[],checkedAt:now(),failedChecks:0}:MachineD.audit(out,input);if(deadline&&Date.now()>deadline){out.stopReason="timeout";out.result.status="DEGRADED";out.result.errors=[...(out.result.errors||[]),{stage:"pipeline",error:"TIMEOUT",timestamp:now()}];}metrics.totalCycles++;metrics.confidenceSum+=toFloat(out.result?.decision?.confidence,0);metrics.lastStatus=out.result?.status||"UNRESOLVED";if(out.result?.status==="DEGRADED")metrics.degradedCount++;metrics.errorCount+=(out.result?.errors?.length||0);runtimeState.cyclesRun++;runtimeState.lastCycleIndex=cycleIndex;return out}
+  function reflect(input,options={}){const maxCycles=Math.max(1,Math.min(toInt(options.maxCycles,DEFAULT_MAX_CYCLES),DEFAULT_MAX_CYCLES));const stopStatus=options.stopOnStatus??DEFAULT_STOP_STATUS;const minDelta=toFloat(options.minConfidenceDelta,DEFAULT_MIN_CONFIDENCE_DELTA);const maxDuration=toInt(options.maxDurationMs,DEFAULT_MAX_DURATION_MS);const deadline=maxDuration>0?Date.now()+maxDuration:0;const cycles=[];let current=input,prev=null,stable=0,stopReason="maxCycles";for(let i=0;i<maxCycles;i++){if(paused){stopReason="paused";break}if(deadline&&Date.now()>deadline){stopReason="timeout";break}const cycle=runCycle(current,{...options,__deadline:deadline,autoReflect:true},i);cycles.push(cycle);options.onCycle?.(cycle);const conf=cycle.result?.decision?.confidence??0;if(cycle.result?.status===stopStatus||(stopStatus===DEFAULT_STOP_STATUS&&cycle.result?.status==="WELL_FORMED")){stopReason="status";break}if(cycle.stopReason==="timeout"){stopReason="timeout";break}if(prev!==null&&Math.abs(conf-prev)<minDelta)stable++;else stable=0;if(stable>=1){stopReason="confidence_stable";break}prev=conf;current=MachineC.inject(cycle.result,{metadata:{source:"auto-reflect",cycle:i}})}runtimeState.cyclesRun=cycles.length;runtimeState.lastCycleIndex=cycles.length?cycles.at(-1).cycleIndex:-1;return{cycles,finalResult:cycles.at(-1)?.result??null,stopReason}}
+  function replay(packet){const p=packet?.pipeline||{};return{machine:"D",inputFingerprint:p.A?.input?.fingerprint??null,steps:(p.B?.reasoningTrace||[]).map((x,i)=>({index:i+1,name:x.step,status:x.status,operation:p.B?.operations?.[i]??null,inputFingerprint:p.B?.inputFingerprint??null})),originalDecision:clone(p.B?.decision),originalStatus:p.C?.status??null}}
+  function verifyReplay(packet,replayed){const a=packet?.pipeline?.B?.decision,b=replayed?.originalDecision;return{status:digest(a)===digest(b)?"MATCH":"REPLAY_MISMATCH",replay_mismatch:digest(a)!==digest(b),original:clone(a),replayed:clone(b)}}
+  const MachineD={audit(packet,input){const p=packet?.pipeline||{},checks=[];const fp=fingerprint(input);checks.push({type:"A_INPUT_FINGERPRINT",status:fp===p.A?.input?.fingerprint?"PASS":"FAIL",weight:"high"});checks.push({type:"B_INPUT_FINGERPRINT",status:fp===p.B?.inputFingerprint?"PASS":"FAIL",weight:"high"});checks.push({type:"C_INPUT_FINGERPRINT",status:fp===p.C?.metadata?.inputFingerprint?"PASS":"FAIL",weight:"high"});checks.push({type:"B_TO_C_DECISION",status:p.B?.decision?.status===p.C?.decision?.status||p.C?.status==="WELL_FORMED"?"PASS":"FAIL",weight:"medium"});const v=validateOutput(p.C);checks.push({type:"C_VALIDATION_RECHECK",status:v.status==="VALID"?"PASS":"FAIL",issues:v.issues,weight:"high"});checks.push({type:"EVIDENCE_CHAIN",status:verifyChain(p.C?.evidenceChain)?"PASS":"FAIL",weight:"critical"});checks.push({type:"C_PAYLOAD_HASH",status:digest({findings:p.C?.findings,relations:p.C?.relations,decision:p.C?.decision,verification:p.C?.verification})===p.C?.payloadHash?"PASS":"FAIL",weight:"critical"});checks.push({type:"B_DEGRADED",status:p.B?.degraded?"FAIL":"PASS",weight:"high"});checks.push({type:"FALLBACK_CHAIN",status:Array.isArray(p.C?.fallbacks)?"PASS":"FAIL",weight:"medium"});const failed=checks.filter(x=>x.status==="FAIL").length;return{machine:"D",status:failed?"ATTENTION":"VALID",checks,checkedAt:now(),failedChecks:failed,replay:replay(packet)}},replay,verifyReplay}
+  function auditIndependence(){const forbidden=[["fetch",/\bfetch\s*\(/,"network"],["XMLHttpRequest",/\bXMLHttpRequest\b/,"network"],["WebSocket",/\bWebSocket\b/,"network"],["sendBeacon",/\bsendBeacon\b/,"network"],["document",/\bdocument\b/,"dom"],["localStorage",/\blocalStorage\b/,"storage"],["sessionStorage",/\bsessionStorage\b/,"storage"],["indexedDB",/\bindexedDB\b/,"storage"],["eval",/\beval\s*\(/,"dynamic"],["new Function",/\bnew\s+Function\b/,"dynamic"],["import(",/\bimport\s*\(/,"import"],["require(",/\brequire\s*\(/,"import"],["setTimeout/setInterval",/\bset(?:Timeout|Interval)\s*\(/,"timer"],["postMessage",/\bpostMessage\b/,"messaging"]];const internal=[safeClone,normalizeSpecial,hasCircular,validateInput,fingerprint,stableStringify,sha256Hex,digest,classifyText,looksLikeCode,looksLikeCSV,regexAllowedAt,balancedDelimiters,parseStructuredText,extractHtml,extractCode,tokenize,lineStats,analyzeText,assertEnvelope,describeStructure,extractContent,MachineA.process,blankB,selectedSteps,timed,inspectStructureB,inspectContentB,analyzeSyntaxB,deriveRelationsB,structuredOf,analyzeConstraintsB,inferHypothesesB,verifyB,reasonB,detectContradictionsB,confidenceB,decideB,processBatch,MachineB.process,unresolvedB,inferB,sealChain,verifyChain,validateOutput,MachineC.process,MachineC.inject,summarize,compactAnalysis,fallbackResult,runCycle,reflect,replay,verifyReplay,MachineD.audit,pausedResult,notify];const pub=Object.values(CGOMachineABC).filter(f=>typeof f==="function"&&f!==auditIndependence&&f!==selfTest);const funcs=[...new Set([...internal,...pub])];const hits=[];for(const fn of funcs){const src=String(fn);for(const [name,re,kind] of forbidden)if(re.test(src))hits.push({name,kind})}const forbiddenReferences=[...new Set(hits.map(h=>h.name))];const globalCapabilities=["fetch","XMLHttpRequest","WebSocket","document","localStorage","sessionStorage","indexedDB"].filter(x=>typeof globalThis!=="undefined"&&x in globalThis);const count=k=>hits.filter(h=>h.kind===k).length;return{verified:forbiddenReferences.length===0,scannedFunctions:funcs.length,forbiddenReferences,globalCapabilities,networkCalls:count("network"),externalImports:count("import"),nativeOnly:forbiddenReferences.length===0,runtimeIsolated:globalCapabilities.length===0,coverage:{scannedFunctions:funcs.length,publicFunctions:pub.length,scope:"registered_functions_only"},note:"Pemindaian statis atas fungsi terdaftar (kata utuh, bukan potongan kata). Bukan bukti isolasi runtime: kemampuan global browser (fetch, document, dst.) tetap ada dan hanya dilaporkan."}}
+  function selfTestInner(){const results=[];const test=(name,fn)=>{try{fn();results.push({name,status:"PASS"})}catch(e){results.push({name,status:"FAIL",error:String(e.message||e)})}};test("fingerprint",()=>{if(fingerprint("a")!==fingerprint("a"))throw Error("unstable")});test("delimiter-comment-regex",()=>{if(!balancedDelimiters("const x=/\\{/; // }\n{a:1}").balanced)throw Error("false negative")});test("auto-format",()=>{if(classifyText('{"a":1}').format!=="json")throw Error("json")});test("html-relations-duplicates",()=>{const h=extractHtml('<div id="x"></div><span id="x"><a href="/a"></a>');if(!h.duplicateIds.includes("x")||!h.references.includes("/a"))throw Error("html regression")});test("envelope-validator",()=>{const r=assertEnvelope({__cgoMachineInjection:true,contentMode:"bad",payload:{}});if(r.valid)throw Error("invalid envelope accepted")});test("pipeline",()=>{const o=runCycle("hello world");if(!o.result||!o.audit)throw Error("pipeline")});test("batch",()=>{const o=CGOMachineABC.processMany(["a","b"]);if(o.pipeline.B.items?.length!==2)throw Error("batch")});test("batch-unknowns-aggregate",()=>{let nested={__cgoBatchInjection:true,version:VERSION,items:[]};for(let i=0;i<MAX_BATCH_DEPTH;i++)nested={__cgoBatchInjection:true,version:VERSION,items:[nested]};const rep=MachineA.process(nested);if(!rep.unknowns.some(x=>x.type==="BATCH_DEPTH_LIMIT"&&x.itemIndex===0))throw Error("batch unknown not aggregated")});test("c-injection",()=>{const o=runCycle("x");const inj=MachineC.inject(o.result);const q=runCycle(inj);if(!q.result)throw Error("injection")});test("auto-step",()=>{const o=runCycle("plain text",{});if(o.pipeline.B.operations.includes("SYNTAX_ANALYSIS"))throw Error("text syntax should be skipped");if(!o.pipeline.B.operations.includes("CONTENT_INSPECTION"))throw Error("content step missing")});test("custom-step-selection",()=>{const o=runCycle("hello",{steps:["structure"]});if(!o.pipeline.B.operations.includes("STRUCTURE_INSPECTION")||o.pipeline.B.operations.includes("CONTENT_INSPECTION")||o.pipeline.B.decision!==null)throw Error("custom steps")});test("auto-reflect",()=>{const o=reflect("hello",{maxCycles:3,stopOnStatus:"__NEVER__"});if(!Array.isArray(o.cycles)||o.cycles.length<2||!o.finalResult)throw Error("reflect")});test("reflect-actually-reflects",()=>{const o=reflect("hello",{maxCycles:2,stopOnStatus:"__NEVER__"});const first=o.cycles[0].result;if(o.cycles.length<2||fingerprint(o.cycles[1].pipeline.A.content.value)!==fingerprint(first))throw Error("reflection payload not processed")});test("stream",()=>{let n=0;CGOMachineABC.stream("hello",{onCycle:()=>n++});if(n<1)throw Error("stream")});test("stream-real-time",()=>{const seen=[];CGOMachineABC.stream("hello",{autoReflect:true,maxCycles:3,stopOnStatus:"__NEVER__",minConfidenceDelta:0,onCycle:c=>seen.push(c.cycleIndex)});if(seen.length!==3||seen[0]!==0||seen[1]!==1||seen[2]!==2)throw Error("buffered stream")});test("observe",()=>{let n=0;const off=CGOMachineABC.observe(()=>n++);CGOMachineABC.process("observe");off();if(n!==1)throw Error("observe")});test("stream-observe",()=>{let n=0;const off=CGOMachineABC.observe(()=>n++);CGOMachineABC.stream("observe-stream",{autoReflect:true,maxCycles:2,stopOnStatus:"__NEVER__"});off();if(n!==2)throw Error("stream observe")});test("independence",()=>{const a=auditIndependence();if(!a.verified||a.scannedFunctions<8)throw Error("independence")});test("machine-D",()=>{const o=CGOMachineABC.process("audit");if(o.audit?.status!=="VALID")throw Error("audit failed")});test("audit-tamper-C-payload",()=>{const o=CGOMachineABC.process("tamper");o.pipeline.C.findings.push({fake:true});const d=MachineD.audit(o,"tamper");if(d.status!=="ATTENTION"||!d.checks.some(x=>x.type==="C_PAYLOAD_HASH"&&x.status==="FAIL"))throw Error("tamper undetected")});test("b-batch-depth-guard",()=>{const rep=MachineA.process({__cgoBatchInjection:true,items:[],version:VERSION},{batchDepth:MAX_BATCH_DEPTH});const b=MachineB.process({...rep,structure:{kind:"batch",count:0},content:{mode:"batch",value:[]}}, {batchDepth:MAX_BATCH_DEPTH});if(b.decision?.reason!=="batch_depth_limit")throw Error("guard")});test("record-verification",()=>{const o=runCycle({name:"cgo",value:1});const checks=o.pipeline.B.verification;if(!checks.some(x=>x.type==="RECORD_PRESENT"&&x.status==="PASS"))throw Error("record check missing")});test("collection-verification",()=>{const o=runCycle([{id:1}]);if(!o.pipeline.B.verification.some(x=>x.type==="COLLECTION_PRESENT"&&x.status==="PASS"))throw Error("collection check missing")});test("nan-infinity",()=>{if(CGOMachineABC.process(Infinity).pipeline.A.content.value!=="Infinity")throw Error("infinity")});test("max-input-override",()=>{const o=CGOMachineABC.process("abc",{maxInputSize:10});if(!o.result)throw Error("override")});test("skipped-steps",()=>{const o=CGOMachineABC.process("abc",{steps:["structure"]});if(!o.pipeline.B.skippedSteps.includes("content"))throw Error("skipped")});test("degraded-field",()=>{if(typeof CGOMachineABC.process("abc").pipeline.B.degraded!=="boolean")throw Error("degraded")});test("errors-array",()=>{if(!Array.isArray(CGOMachineABC.process("abc").pipeline.B.errors))throw Error("errors")});test("fallback-array",()=>{if(!Array.isArray(CGOMachineABC.process("abc").pipeline.C.fallbacks))throw Error("fallback")});test("weighted-check",()=>{const o=CGOMachineABC.process("abc");if(!o.pipeline.B.verification[0].status)throw Error("check")});test("contradiction-severity",()=>{const o=CGOMachineABC.process('<!doctype html><html><div id="x"></div><span id="x"></span></html>');if(!o.pipeline.B.contradictions.some(x=>x.severity))throw Error("severity")});test("decision-hierarchy",()=>{const o=CGOMachineABC.process({x:1});if(!["PROCESSED","WELL_FORMED","PARTIAL","DEGRADED","CONTRADICTION","UNRESOLVED"].includes(o.result.status))throw Error("status")});test("machineD-fallback-check",()=>{const o=CGOMachineABC.process("abc");if(!o.audit.checks.some(x=>x.type==="FALLBACK_CHAIN"))throw Error("fallback audit")});test("replay-shape",()=>{const o=CGOMachineABC.process("abc"),r=CGOMachineABC.replay(o);if(!Array.isArray(r.steps))throw Error("replay")});test("verify-replay",()=>{const o=CGOMachineABC.process("abc"),r=CGOMachineABC.replay(o);if(CGOMachineABC.verifyReplay(o,r).status!=="MATCH")throw Error("verify replay")});test("metrics-reset",()=>{const before=CGOMachineABC.getMetrics().totalProcessed;CGOMachineABC.resetMetrics();if(CGOMachineABC.getMetrics().totalProcessed!==0||before<0)throw Error("reset")});test("state-cycle-index",()=>{const o=CGOMachineABC.process("state");if(CGOMachineABC.getState().lastCycleIndex!==0)throw Error("state cycle")});test("pause-reflect",()=>{CGOMachineABC.pause();const r=CGOMachineABC.reflect("pause",{maxCycles:2});CGOMachineABC.resume();if(r.stopReason!=="paused")throw Error("pause reflect")});test("reflect-direct-C",()=>{const r=CGOMachineABC.reflect("abc",{maxCycles:2,stopOnStatus:"__NEVER__",minConfidenceDelta:0});if(r.cycles.length!==2||r.cycles[1].pipeline.A.content.mode!=="record")throw Error("direct C")});test("stream-complete",()=>{let done=false;CGOMachineABC.stream("abc",{onComplete:()=>done=true});if(!done)throw Error("complete")});test("stream-batch-summary",()=>{const o=CGOMachineABC.processMany(["a","b"],{streamBatch:true});if(o.pipeline.C.batch.items.some(x=>x.analysis===undefined))throw Error("summary")});test("date-input",()=>{if(CGOMachineABC.process(new Date()).pipeline.A.input.type!=="date")throw Error("date")});test("object-freeze",()=>{if(!Object.isFrozen(CGOMachineABC))throw Error("freeze")});test("fingerprint-undefined",()=>{const o=CGOMachineABC.process(undefined);if(!o.result||!o.audit)throw Error("undefined crash")});test("digest-sha256-vectors",()=>{if(sha256Hex("abc")!=="ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"||sha256Hex("")!=="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"||sha256Hex("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")!=="248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1")throw Error("sha256")});test("digest-key-order",()=>{if(digest({a:1,b:2})!==digest({b:2,a:1}))throw Error("order")});test("prose-not-delimiter-checked",()=>{const o=CGOMachineABC.process("Halo :) tolong 1) cek saldo (dulu");if(o.pipeline.A.content.syntax.delimiters||o.result.status==="PARTIAL")throw Error("prose flagged")});test("let-me-know-is-text",()=>{if(classifyText("let me know if you can help").format!=="text")throw Error("prose as code")});test("regex-after-return",()=>{if(!balancedDelimiters("function f(s){ return /[)]/.test(s) }").balanced)throw Error("regex heuristic")});test("pause-blocks-process",()=>{CGOMachineABC.pause();const o=CGOMachineABC.process("x");const st=CGOMachineABC.stream("x");CGOMachineABC.resume();if(!o.skipped||st.status!=="PAUSED")throw Error("pause ignored")});test("stop-reason-to-observer",()=>{let got=null;const off=CGOMachineABC.observe(p=>{got=p});CGOMachineABC.process("abc",{autoReflect:true,maxCycles:3,stopOnStatus:"__NEVER__",minConfidenceDelta:0});off();if(!got||got.stopReason!=="maxCycles")throw Error("stopReason lost")});test("map-set-preserved",()=>{const o=CGOMachineABC.process({m:new Map([[1,2]]),s:new Set([7])});const v=o.pipeline.A.content.value;if(v.m.__cgoType!=="Map"||v.s.values[0]!==7)throw Error("map/set lost")});test("required-fields",()=>{const o=CGOMachineABC.process({nama:"",hp:"1"},{requiredFields:["nama","email"]});const t=o.pipeline.B.contradictions.map(x=>x.type);if(!t.includes("REQUIRED_FIELD_EMPTY")||!t.includes("REQUIRED_FIELD_MISSING")||o.result.status!=="PARTIAL")throw Error("required")});test("json-string-structure",()=>{const o=CGOMachineABC.process('{"nama":"","hp":null}');if(o.pipeline.B.constraints.filter(x=>x.type==="EMPTY_FIELD").length!==2)throw Error("json string not analysed")});test("dup-id-single-contradiction",()=>{const o=CGOMachineABC.process('<!doctype html><html><div id="x"></div><span id="x"></span></html>');if(o.pipeline.B.contradictions.filter(x=>x.type==="DUPLICATE_IDENTIFIER").length!==1)throw Error("double count")});test("reflect-default-stop",()=>{const o=CGOMachineABC.reflect("hello",{maxCycles:5});if(o.stopReason!=="status")throw Error("default stop never fires")});return{passed:results.filter(x=>x.status==="PASS").length,failed:results.filter(x=>x.status==="FAIL").length,total:results.length,results,verified:results.every(x=>x.status==="PASS")}}
+
   function selfTest(){
-    const results=[]; const test=(name,fn)=>{try{fn();results.push({name,status:"PASS"});}catch(e){results.push({name,status:"FAIL",error:String(e.message||e)});}};
-    test("fingerprint",()=>{if(fingerprint("abc")!==fingerprint("abc"))throw Error("unstable fingerprint")});
-    test("balancedDelimiters-comments-regex",()=>{if(!balancedDelimiters('const r=/\{/; // }\n({a:[1]})').balanced)throw Error("false delimiter failure")});
-    test("tokenize-case",()=>{const t=tokenize("Hello hello HELLO");if(t.length!==3||new Set(t).size!==1)throw Error("token normalization failed")});
-    test("envelope-validator",()=>{if(!assertEnvelope(MachineC.inject({x:1})).valid)throw Error("valid envelope rejected")});
-    test("pipeline",()=>{const o=CGOMachineABC.process("hello world");if(o.result?.validation?.status!=="VALID")throw Error("pipeline validation failed")});
-    test("batch",()=>{const o=CGOMachineABC.processMany(["a","b"]);if(!o.pipeline.B.items || o.pipeline.B.items.length!==2)throw Error("batch failed")});
-    test("injection",()=>{const packet=MachineC.inject({x:1});const o=CGOMachineABC.process(packet);if(o.pipeline.A.structure.kind!=="injection")throw Error("injection structure failed")});
-    test("input-envelope-kind",()=>{const e={__cgoInputEnvelope:true,payload:{contentMode:"text",transport:"file",text:"<p>x</p>"}};const o=CGOMachineABC.process(e);if(o.pipeline.A.structure.kind!=="input_envelope")throw Error("input envelope kind failed")});
-    test("html-regression",()=>{const o=CGOMachineABC.process('<!doctype html><html><div id="x"><a href="/a">A</a><span id="x"></span></div></html>');const h=o.pipeline.A.content.syntax.html;if(!h.duplicateIds.includes("x")||!h.references.includes("/a"))throw Error("HTML extraction regression")});
-    test("machine-A-envelope-schema",()=>{const r=MachineA.process({__cgoInputEnvelope:true,payload:{}});if(!r.unknowns?.some(x=>x.type==="ENVELOPE_SCHEMA_ISSUES"))throw Error("A envelope validation missing")});
-    test("batch-analysis-aggregation",()=>{const o=CGOMachineABC.processMany(["a","b"]);if(!o.pipeline.B.hypotheses.length||!o.pipeline.B.reasoningTrace.length)throw Error("batch aggregation failed")});
-    test("machine-D",()=>{const o=CGOMachineABC.process("audit");if(o.audit?.status!=="VALID")throw Error("audit failed")});
-    test("audit-tamper-detection",()=>{const o=CGOMachineABC.process("audit");o.pipeline.B.decision.confidence=0;const d=MachineD.audit(o);if(d.status!=="ATTENTION")throw Error("tamper not detected")});
-    test("audit-tamper-C-payload",()=>{const o=CGOMachineABC.process("audit");o.pipeline.C.findings.push({type:"TAMPER"});const d=MachineD.audit(o);if(d.status!=="ATTENTION"||!d.integrity.checks.some(x=>x.type==="C_PAYLOAD_HASH"&&x.status==="FAIL"))throw Error("C payload tamper not detected")});
-    test("b-batch-depth-guard",()=>{const o=CGOMachineABC.processMany(["a"],{batchDepth:MAX_BATCH_DEPTH});if(o.pipeline.B.decision?.reason!=="batch_depth_limit")throw Error("B batch depth guard failed")});
-    return {passed:results.filter(x=>x.status==="PASS").length,failed:results.filter(x=>x.status==="FAIL").length,results,verified:results.every(x=>x.status==="PASS")};
+    // Self-test tidak boleh meninggalkan jejak: metrics, state, observer, dan status pause dipulihkan.
+    const wasPaused=paused,savedState={...runtimeState},savedMetrics={...metrics},savedObs=[...observers];
+    paused=false;observers.clear();
+    try{return selfTestInner()}
+    finally{paused=wasPaused;Object.assign(runtimeState,savedState);Object.assign(metrics,savedMetrics);observers.clear();savedObs.forEach(fn=>observers.add(fn))}
   }
-
-  const CGOMachineABC={name:"CGO_MACHINE_ABC",version:VERSION,A:MachineA,B:MachineB,C:MachineC,D:MachineD,inject:(v,o={})=>MachineC.inject(v,o),assertEnvelope,sealChain,verifyChain,auditIndependence,selfTest,createBatchInjection(inputs,o={}){if(!Array.isArray(inputs))throw new TypeError("createBatchInjection membutuhkan array input.");return{__cgoBatchInjection:true,version:VERSION,mode:"batch",transport:"internal",contentMode:"collection",createdAt:now(),items:inputs.map(item=>{const c=clone(item);if(isObject(c)&&c.__cgoMachineInjection===true&&!c.contentMode)c.contentMode="structured";return c;}),metadata:clone(o.metadata??{})};},processMany(inputs,o={}){return this.process(this.createBatchInjection(inputs,o),{...o,source:o.source??"batch-injection"});},process(input,options={}){const envelope=(isBatchEnvelope(input)||isInputEnvelope(input))?assertEnvelope(input):null;if(envelope&&!envelope.valid) throw new TypeError("Invalid CGO envelope: "+envelope.issues.join("; "));const originalFingerprint=fingerprint(input);const a=MachineA.process(input,options),b=MachineB.process(a,options),c=MachineC.process(a,b,options);const out={engine:"CGO_MACHINE_ABC",version:VERSION,pipeline:{A:a,B:b,C:c},result:c,auditSource:{inputFingerprint:originalFingerprint}};out.audit=MachineD.audit(out);return out;}};
-
-  Object.freeze(CGOMachineABC);
-  if(typeof module!=="undefined"&&module.exports)module.exports=CGOMachineABC;
-  global.CGOMachineABC=CGOMachineABC;
+  const CGOMachineABC={name:"CGO_MACHINE_ABC",version:VERSION,A:MachineA,B:MachineB,C:MachineC,D:MachineD,inject:(v,o={})=>MachineC.inject(v,o),createBatchInjection(inputs,o={}){if(!Array.isArray(inputs))throw new TypeError("createBatchInjection membutuhkan array input.");const v=validateInput(inputs,o);if(!v.valid)throw new TypeError(v.reason);return{__cgoBatchInjection:true,version:VERSION,mode:"batch",transport:"internal",createdAt:now(),items:inputs.slice(0,MAX_ITEMS).map(clone),metadata:clone(o.metadata??{})}},processMany(inputs,o={}){return CGOMachineABC.process(CGOMachineABC.createBatchInjection(inputs,o),{...o,source:o.source??"batch-injection"})},process(input,options={}){if(paused)return pausedResult();const v=validateInput(input,options);if(!v.valid)throw new TypeError(v.reason);metrics.totalProcessed++;if(toBool(options.autoReflect,false)){const r=reflect(v.sanitized,options);const packet={engine:"CGO_MACHINE_ABC",version:VERSION,cycles:r.cycles,finalResult:r.finalResult,stopReason:r.stopReason,audit:r.cycles.at(-1)?.audit||null,reflected:true};notify(packet,r.cycles);return packet}const out=runCycle(v.sanitized,options,0);notify(out,[out]);return out},stream(input,options={}){if(paused){const pr=pausedResult();options.onComplete?.(pr.result);return pr.result}const v=validateInput(input,options);if(!v.valid)throw new TypeError(v.reason);if(options.autoReflect===true){const r=reflect(v.sanitized,{...options,onCycle:c=>{options.onCycle?.(c);notify(c,[c])}});options.onComplete?.(r.finalResult,r.stopReason);return r.finalResult}const c=runCycle(v.sanitized,options,0);options.onCycle?.(c);notify(c,[c]);options.onComplete?.(c.result);return c.result},observe(handler){if(typeof handler!=="function")throw new TypeError("observe(handler) membutuhkan function");observers.add(handler);return()=>observers.delete(handler)},auditIndependence,selfTest,validateOutput,validateInput,safeClone,reflect,replay:(p)=>MachineD.replay(p),verifyReplay:(p,r)=>MachineD.verifyReplay(p,r),pause(){paused=true;runtimeState.paused=true;runtimeState.pauseAt=now()},resume(){paused=false;runtimeState.paused=false;runtimeState.pauseAt=null},isPaused:()=>paused,getState:()=>clone(runtimeState),getMetrics:()=>({totalProcessed:metrics.totalProcessed,totalCycles:metrics.totalCycles,avgConfidence:metrics.totalCycles?metrics.confidenceSum/metrics.totalCycles:0,degradedCount:metrics.degradedCount,errorCount:metrics.errorCount,skippedWhilePaused:metrics.skippedWhilePaused,lastStatus:metrics.lastStatus}),sha256:sha256Hex,digest,resetMetrics(){Object.assign(metrics,{totalProcessed:0,totalCycles:0,confidenceSum:0,degradedCount:0,errorCount:0,skippedWhilePaused:0,lastStatus:null});return CGOMachineABC.getMetrics()}};
+  function pausedResult(){metrics.skippedWhilePaused++;const result={machine:"C",stage:"result",version:VERSION,status:"PAUSED",summary:null,findings:[],relations:[],inferences:[],hypotheses:[],constraints:[],contradictions:[],reasoning:[],reasoningTrace:[],evidence:[],uncertainty:[],verification:[],decision:{status:"PAUSED",confidence:0,reason:"engine_paused"},errors:[],fallbacks:[],metadata:{generatedAt:now()}};return{engine:"CGO_MACHINE_ABC",version:VERSION,paused:true,skipped:true,result,audit:null}}
+  function notify(result,cycles){const payload={result:result?.result??result,cycles:Array.isArray(cycles)?cycles:cycles?[cycles]:[],stopReason:result?.stopReason??null,timestamp:now()};for(const fn of [...observers]){try{fn(payload)}catch(_){}}}
+  [MachineA,MachineB,MachineC,MachineD].forEach(m=>Object.freeze(m));Object.freeze(CGOMachineABC);if(typeof module!=="undefined"&&module.exports)module.exports=CGOMachineABC;global.CGOMachineABC=CGOMachineABC;global.CGO=CGOMachineABC;
 })(typeof globalThis!=="undefined"?globalThis:window);

@@ -2,369 +2,336 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="CGO Machine ABC — universal processing laboratory A to B to C.">
-<title>CGO Machine ABC</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#020914">
+<meta name="color-scheme" content="dark">
+<title>CGO MACHINE ABC — Monitor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🧠%3C/text%3E%3C/svg%3E">
 <style>
 :root{
-  --bg:#020914;--panel:#061426;--panel2:#081b31;--line:#123b63;--text:#e7f4ff;--muted:#8faec8;
-  --a:#1688ff;--b:#a65cff;--c:#16d98b;--warn:#ffd34d;--danger:#ff667d;
-  --shadow:0 12px 35px rgba(0,0,0,.32);--radius:14px;
+  --bg:#020914;--panel:#061426;--panel-2:#031120;--line:#123b63;--line-soft:#173e5e;
+  --text:#e7f4ff;--muted:#9bb8d0;--faint:#7c9bb3;
+  --ok:#16d98b;--warn:#ffd34d;--bad:#ff667d;--blue:#1688ff;
+  --ok-text:#7cf0c0;--warn-text:#ffe07b;--bad-text:#ff98a6;
+  --radius:14px;
 }
 *{box-sizing:border-box}
-html,body{margin:0;min-height:100%;background:radial-gradient(circle at 50% -10%,#0b2744 0,#020914 42%,#01050b 100%);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-button,input,textarea,select{font:inherit}
-button{cursor:pointer}
-.app{width:min(1500px,100%);margin:auto;padding:18px}
-.topbar{display:flex;justify-content:space-between;gap:20px;align-items:center;border:1px solid var(--line);background:rgba(4,18,34,.9);border-radius:16px;padding:18px 20px;box-shadow:var(--shadow)}
-.brand{display:flex;align-items:center;gap:14px}.logo{width:52px;height:52px;border:2px solid #1599ff;border-radius:50%;display:grid;place-items:center;color:#4ee6ff;font-size:26px;box-shadow:0 0 24px rgba(22,136,255,.25)}
-h1{font-size:24px;margin:0;letter-spacing:.5px}.sub{color:var(--muted);font-size:12px;margin-top:3px}.meta{text-align:right;color:var(--muted);font-size:12px}.meta strong{color:#fff}.pill{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:999px;padding:5px 9px;margin-bottom:7px}.dot{width:7px;height:7px;border-radius:50%;background:var(--c);box-shadow:0 0 9px var(--c)}
-.grid3{display:grid;grid-template-columns:1fr 1.08fr 1fr;gap:14px;margin-top:14px}.panel{border:1px solid var(--line);background:linear-gradient(180deg,rgba(6,20,38,.96),rgba(3,13,25,.96));border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}.panel-title{padding:13px 15px;border-bottom:1px solid var(--line);font-size:14px;font-weight:800;letter-spacing:.5px}.panel-body{padding:14px}
-.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:10px}.tab{border:1px solid #183d62;background:#07182b;color:#9bb5cb;padding:9px 5px;border-radius:9px;font-size:12px;font-weight:700}.tab.active{background:#0876e8;color:#fff;border-color:#1595ff;box-shadow:0 0 16px rgba(8,118,232,.25)}
-textarea{width:100%;min-height:235px;resize:vertical;background:#031020;color:#dff2ff;border:1px solid #153d62;border-radius:10px;padding:13px;outline:none;line-height:1.5}textarea:focus{border-color:#1595ff;box-shadow:0 0 0 2px rgba(21,149,255,.1)}
-.filebox{display:none;border:1px dashed #28608e;border-radius:10px;padding:22px 15px;text-align:center;color:var(--muted)}.filebox input{margin-top:12px;max-width:100%}.file-meta{margin-top:10px;border:1px solid #163f61;border-radius:8px;padding:8px;text-align:left;background:#031426;color:#9bb9ce;font-size:10px;line-height:1.5}.input-view{display:block}.actions{display:flex;gap:8px;margin-top:10px}.primary{flex:1;border:0;border-radius:10px;padding:12px;background:linear-gradient(90deg,#0879ef,#18a1ff);color:#fff;font-weight:900}.secondary{border:1px solid #245275;border-radius:10px;padding:12px;background:#06182b;color:#c8e4f7}.primary:disabled{opacity:.55;cursor:not-allowed}.inject-btn{width:100%;margin-top:9px;border:1px solid #0b9b69;border-radius:9px;padding:9px;background:#052a22;color:#8ff0c6;font-size:11px;font-weight:850}.inject-btn:disabled{opacity:.45;cursor:not-allowed}.continuation{border:1px solid #164c3e;background:#041b18;border-radius:10px;padding:10px;margin-top:10px}.continuation h4{margin:0 0 6px;font-size:11px}.continuation p{margin:0;color:#82a99f;font-size:10px;line-height:1.45}
-.example{margin-top:12px}.example select{width:100%;background:#06172a;color:#cce8fa;border:1px solid #1b456a;border-radius:9px;padding:9px}.hint{color:var(--muted);font-size:11px;line-height:1.45;margin-top:8px}
-.stage{border:1px solid #17466f;border-radius:12px;padding:13px;margin-bottom:10px;background:#05172b;position:relative}.stage:last-child{margin-bottom:0}.stage.a{border-color:#087fe5}.stage.b{border-color:#8649d7}.stage.c{border-color:#0bbd7a}.stage-head{display:flex;align-items:center;gap:10px}.badge{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:900;color:#fff}.a .badge{background:#087fe5}.b .badge{background:#854bd4}.c .badge{background:#08b878}.stage-name{font-weight:850;font-size:13px}.stage-status{margin-left:auto;font-size:11px;color:var(--muted)}.stage-status.ok{color:#55e5ad}.stage-status.warn{color:var(--warn)}.stage-status.err{color:var(--danger)}.stage ul{margin:10px 0 0 45px;padding:0;color:#9db9cf;font-size:11px;line-height:1.65}.arrow{text-align:center;color:#3aa9ff;height:14px;font-size:15px}
-.output-tabs{display:flex;gap:6px;overflow:auto;margin-bottom:10px}.otab{white-space:nowrap;border:1px solid #183e62;background:#06172a;color:#94aec5;border-radius:8px;padding:8px 9px;font-size:11px}.otab.active{color:#fff;border-color:#0b8eff;background:#06325e}.output-card{border:1px solid #174d40;background:#031b19;border-radius:10px;padding:12px}.status-banner{display:flex;gap:9px;align-items:center;border:1px solid #0e7f58;background:#05271f;color:#73efbc;padding:10px;border-radius:9px;font-size:12px;font-weight:800;margin-bottom:10px}.status-banner.warn{border-color:#7c641a;background:#241d05;color:#ffdc67}.status-banner.err{border-color:#7d2639;background:#260914;color:#ff8998}.output-section{border:1px solid #163c5c;border-radius:10px;background:#041426;padding:11px;margin-top:9px}.output-section h3{font-size:12px;margin:0 0 8px}.countgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}.metric{border:1px solid #143b5e;border-radius:9px;padding:9px;background:#06192d}.metric b{display:block;font-size:15px}.metric span{font-size:10px;color:var(--muted)}
-pre{white-space:pre-wrap;word-break:break-word;margin:0;color:#bfe1f7;font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;max-height:330px;overflow:auto}.empty{color:#66849c;font-size:12px;padding:18px 4px;text-align:center}.list{margin:0;padding-left:18px;color:#a8c3d8;font-size:11px;line-height:1.6}.tag{display:inline-block;border:1px solid #245173;border-radius:999px;padding:3px 7px;margin:2px;color:#b7d6ea;font-size:10px}
-.tests{margin-top:14px}.test-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.test-card{border:1px solid #173f60;border-radius:11px;background:#041426;padding:11px}.test-card h3{font-size:12px;margin:0 0 8px}.test-card pre{height:90px;overflow:hidden;color:#83a9c1}.test-card button{width:100%;margin-top:8px;border:1px solid #175e98;background:#06315a;color:#cdeaff;border-radius:8px;padding:8px;font-size:11px;font-weight:800}.lower{display:grid;grid-template-columns:1.6fr 1fr;margin-top:14px;gap:14px}.core-map{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}.core-map .core-box{border:1px solid #183e62;border-radius:8px;padding:8px;background:#041426}.core-box b{display:block;font-size:10px}.core-box span{display:block;color:#7898ad;font-size:9px;line-height:1.4;margin-top:3px}.verification-pass{color:#55e5ad}.verification-fail{color:#ff8998}.verification-unknown{color:#ffdc67}.batch-analysis{margin-top:8px;border-top:1px solid #123650;padding-top:7px}.batch-analysis pre{max-height:180px}.footer-note{border:1px solid var(--line);border-radius:10px;padding:12px;color:#8da9be;font-size:11px;line-height:1.55;background:#031120}.footer-note strong{color:#dff2ff}.tiny{font-size:10px;color:#64839b}
-@media(max-width:1050px){.grid3{grid-template-columns:1fr}.test-grid{grid-template-columns:repeat(2,1fr)}.lower{grid-template-columns:1fr}}
-@media(max-width:600px){.app{padding:9px}.topbar{align-items:flex-start}.meta{display:none}.test-grid{grid-template-columns:1fr}.tabs{grid-template-columns:repeat(2,1fr)}.countgrid{grid-template-columns:repeat(2,1fr)}h1{font-size:19px}}
-.file-list{margin-top:10px;display:grid;gap:6px}.file-row{display:flex;align-items:center;gap:8px;border:1px solid #16496b;border-radius:8px;background:#04172a;padding:8px;font-size:10px;color:#b7d0e2}.file-row .num{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;background:#0a3151;color:#72c9ff;font-weight:900}.file-row .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-row .meta{color:#7898ad}.batch-badge{display:inline-block;margin-top:8px;border:1px solid #0b7054;background:#05251e;color:#82e9c0;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:800}.batch-output{border:1px solid #245275;border-radius:10px;padding:10px;background:#04172a;margin-top:10px}.batch-output h4{margin:0 0 8px;font-size:11px}.batch-item{padding:7px 0;border-top:1px solid #123650;font-size:10px}.batch-item:first-child{border-top:0}.file-drop-note{margin-top:7px;color:#6f91a7;font-size:10px}</style>
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:radial-gradient(circle at 50% -10%,#0b2744 0,#020914 45%,#01050b 100%) fixed;
+  color:var(--text);font:14px/1.5 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0);
+}
+.app{width:min(1200px,100%);margin:auto;padding:14px}
+[hidden]{display:none!important}
+h1,h2{margin:0}
+button{font:inherit;color:inherit}
+button:focus-visible,textarea:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+.top{display:flex;justify-content:space-between;gap:14px;align-items:center;border:1px solid var(--line);background:#041426ee;border-radius:var(--radius);padding:16px}
+.brand{display:flex;gap:12px;align-items:center;min-width:0}
+.logo{flex:none;width:46px;height:46px;border:2px solid var(--blue);border-radius:50%;display:grid;place-items:center;font-size:23px}
+.title{font-size:20px;font-weight:800;letter-spacing:.2px}
+.sub{font-size:12px;color:var(--muted);margin-top:2px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.chip{border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:12px;color:var(--muted);white-space:nowrap}
+.chip.ok{color:var(--ok-text);border-color:#176a50}
+.chip.warn{color:var(--warn-text);border-color:#765f1b}
+.chip.bad{color:var(--bad-text);border-color:#76263a}
+
+.banner{margin-top:12px;padding:12px 14px;border-radius:12px;border:1px solid #765f1b;background:#2a2308;color:var(--warn-text);font-size:13px}
+.banner.error{border-color:#76263a;background:#2a0d15;color:var(--bad-text)}
+
+.panel{margin-top:12px;border:1px solid var(--line);border-radius:var(--radius);background:#041426ee;overflow:hidden}
+.ph{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:13px;font-weight:700;min-height:52px}
+.body{padding:12px}
+
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.metric{border:1px solid var(--line-soft);border-radius:10px;padding:10px 12px;background:var(--panel-2)}
+.metric b{display:block;font-size:20px;line-height:26px;overflow-wrap:break-word}
+.metric b#lastStatus{font-size:15px}
+.metric span{font-size:12px;color:var(--muted)}
+
+.controls{display:flex;gap:8px}
+.controls button,.dev button{min-height:44px;min-width:44px;border:1px solid #255070;background:#06182a;color:#d6efff;border-radius:10px;padding:0 16px;font-weight:700;font-size:13px;cursor:pointer}
+.controls button:active,.dev button:active{background:#0b2a45}
+.controls button[aria-pressed="true"]{border-color:#765f1b;color:var(--warn-text)}
+
+.log{height:min(60vh,420px);overflow:auto;display:grid;gap:8px;align-content:start;-webkit-overflow-scrolling:touch}
+.cycle{border:1px solid var(--line-soft);border-left:3px solid var(--blue);border-radius:10px;padding:10px 12px;background:var(--panel-2)}
+.cycle.ok{border-left-color:var(--ok)}
+.cycle.warn{border-left-color:var(--warn)}
+.cycle.bad{border-left-color:var(--bad)}
+.cycle-head{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;font-size:13px;font-weight:700}
+.cycle-head .time{margin-left:auto;color:var(--muted);font-weight:400;font-size:12px}
+.cycle-body{margin-top:6px;font-size:13px}
+.cycle-body .muted{margin-top:4px;color:var(--faint)}
+
+.grid{display:grid;grid-template-columns:1fr;gap:0 12px}
+.audit,.detail{max-height:300px;overflow:auto}
+.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #102e47;font-size:13px}
+.row:last-of-type{border-bottom:0}
+.row strong{text-align:right;overflow-wrap:anywhere}
+.pass{color:#63eab4}.fail{color:#ff8e9e}.unknown{color:#ffdc67}
+pre{white-space:pre-wrap;word-break:break-word;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;color:#bcd8ea;margin:0}
+.empty{color:var(--faint);text-align:center;padding:32px 12px;font-size:13px}
+
+.dev textarea{width:100%;min-height:120px;background:#020b15;color:#cdeaff;border:1px solid var(--line-soft);border-radius:10px;padding:10px;margin-bottom:8px;font:13px/1.5 ui-monospace,monospace}
+.dev label{display:flex;align-items:center;gap:8px;min-height:44px;font-size:13px;color:var(--muted)}
+.dev input[type=checkbox]{width:20px;height:20px}
+.footer{color:var(--faint);font-size:12px;line-height:1.6;margin:10px 0 0}
+code{font:12px ui-monospace,monospace;color:#bcd8ea}
+
+@media(min-width:600px){.stats{grid-template-columns:repeat(3,1fr)}.app{padding:16px}}
+@media(min-width:900px){.stats{grid-template-columns:repeat(6,1fr)}.grid{grid-template-columns:1.3fr 1fr}}
+@media(max-width:700px){.top{flex-direction:column;align-items:flex-start}.chips{justify-content:flex-start}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+</style>
 </head>
 <body>
 <div class="app">
-  <header class="topbar">
-    <div class="brand">
-      <div class="logo">🧠</div>
-      <div><h1>CGO MACHINE ABC</h1><div class="sub">Universal Processing Engine &nbsp;•&nbsp; A → B → C</div></div>
+<header class="top">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">🧠</div>
+    <div>
+      <h1 class="title">CGO MACHINE ABC</h1>
+      <div class="sub">Monitor mesin inti · A → B → C → D · hanya mengamati</div>
     </div>
-    <div class="meta"><div class="pill"><span class="dot"></span><strong>Independent</strong> · No Domain Preset</div><div>Engine: <strong id="engineVersion">loading…</strong></div></div>
-  </header>
+  </div>
+  <div class="chips" aria-label="Status mesin">
+    <span id="ver" class="chip">Engine …</span>
+    <span id="self" class="chip">Self-test …</span>
+    <span id="audit" class="chip">Audit D –</span>
+    <span id="ind" class="chip">Independensi …</span>
+    <span id="degraded" class="chip">Degraded 0</span>
+  </div>
+</header>
 
-  <main class="grid3">
-    <section class="panel">
-      <div class="panel-title">1. INPUT / INJECTION</div>
-      <div class="panel-body">
-        <div class="tabs" id="inputTabs">
-          <button class="tab active" data-mode="text">Text</button><button class="tab" data-mode="json">JSON</button><button class="tab" data-mode="file">File</button><button class="tab" data-mode="code">Code</button>
-        </div>
-        <div id="textInputWrap" class="input-view"><textarea id="textInput" spellcheck="false" placeholder="Masukkan material apa pun untuk diproses…"></textarea></div>
-        <div id="fileInputWrap" class="filebox"><div>📄 Upload material — teks / HTML / JS / JSON / DOC / DOCX / PDF</div><input id="fileInput" type="file" multiple accept=".txt,.html,.htm,.js,.mjs,.cjs,.json,.css,.md,.csv,.xml,.svg,.doc,.docx,.pdf,text/plain,text/html,application/json,application/javascript,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"><div id="fileMeta" class="file-meta">Belum ada file yang dipilih.</div><div id="fileList" class="file-list"></div><div class="file-drop-note">Pilih beberapa file sekaligus. Semua file masuk sebagai satu batch injection ke START.</div></div>
-        <div class="actions"><button class="primary" id="processBtn">▶ PROSES (A → B → C)</button><button class="secondary" id="clearBtn">Bersihkan</button></div>
-        <div class="example"><select id="exampleSelect"><option value="">Contoh uji cepat…</option><option value="text">Teks biasa</option><option value="json">JSON / Object</option><option value="html">File / HTML</option><option value="code">Source Code</option></select></div>
-        <div class="hint">START menerima satu atau banyak material. Beberapa file diproses sebagai satu batch; tiap file tetap dilacak sebagai material terpisah. Output C lanjutan tampil sebagai preview read-only.</div>
-      </div>
-    </section>
+<div id="fatal" class="banner error" role="alert" hidden></div>
+<div id="notice" class="banner" role="status" hidden></div>
+<noscript><div class="banner error">Halaman ini membutuhkan JavaScript.</div></noscript>
 
-    <section class="panel">
-      <div class="panel-title">2. MESIN ABC <span class="tiny">(PROSES INTERNAL)</span></div>
-      <div class="panel-body">
-        <div class="stage a"><div class="stage-head"><div class="badge">A</div><div class="stage-name">MESIN A — Perception / Representation</div><div class="stage-status" id="statusA">Menunggu</div></div><ul id="stageA"><li>Ingest universal & klasifikasi material</li><li>Parse / normalize + canonical representation</li><li>Structure / content / syntax profiling</li><li>Context + provenance + evidence awal</li></ul></div>
-        <div class="arrow">↓</div>
-        <div class="stage b"><div class="stage-head"><div class="badge">B</div><div class="stage-name">MESIN B — Processing / Reasoning</div><div class="stage-status" id="statusB">Menunggu</div></div><ul id="stageB"><li>Analisis struktur, konten & format</li><li>Relation / comparison / dependency analysis</li><li>Constraint + contradiction detection</li><li>Hypothesis + reasoning trace</li><li>Evidence verification + uncertainty + decision</li></ul></div>
-        <div class="arrow">↓</div>
-        <div class="stage c"><div class="stage-head"><div class="badge">C</div><div class="stage-name">MESIN C — Synthesis / Result</div><div class="stage-status" id="statusC">Menunggu</div></div><ul id="stageC"><li>Sintesis findings + relations + reasoning</li><li>Validasi output sebelum release</li><li>Decision + evidence + uncertainty + audit trail</li><li>Continuation terstruktur tanpa auto-loop</li></ul><button id="injectCBtn" class="inject-btn" disabled>↻ OUTPUT C → INPUT / INJECTION LANJUTAN</button></div>
-        <div class="core-map"><div class="core-box"><b>A CORE</b><span>ingest · parse · normalize · represent · evidence</span></div><div class="core-box"><b>B CORE</b><span>analyze · relate · verify · infer · decide</span></div><div class="core-box"><b>C CORE</b><span>synthesize · emit · continue · audit</span></div></div>
-      </div>
-    </section>
+<section class="panel" aria-labelledby="h-runtime">
+  <h2 class="ph" id="h-runtime">Runtime</h2>
+  <div class="body"><div class="stats">
+    <div class="metric"><b id="total">0</b><span>Input diproses</span></div>
+    <div class="metric"><b id="cycles">0</b><span>Siklus</span></div>
+    <div class="metric"><b id="conf">0%</b><span>Rata-rata keyakinan</span></div>
+    <div class="metric"><b id="lastStatus">IDLE</b><span>Status terakhir</span></div>
+    <div class="metric"><b id="lastTime">0ms</b><span>Durasi terakhir</span></div>
+    <div class="metric"><b id="degradedCount">0</b><span>Degraded</span></div>
+  </div></div>
+</section>
 
-    <section class="panel">
-      <div class="panel-title">3. HASIL OUTPUT</div>
-      <div class="panel-body">
-        <div class="output-tabs"><button class="otab active" data-output="summary">Ringkasan</button><button class="otab" data-output="a">Detail A</button><button class="otab" data-output="b">Detail B</button><button class="otab" data-output="c">Detail C</button><button class="otab" data-output="raw">Full Pipeline</button></div>
-        <div id="outputView"><div class="empty">Belum ada proses. Masukkan material lalu tekan PROSES.</div></div><div class="continuation"><h4>INPUT / INJECTION LANJUTAN DARI MESIN C</h4><p>Output C dapat dikemas sebagai material baru dan dikembalikan ke titik START. Tidak diproses otomatis; user tetap menentukan kapan siklus berikutnya dijalankan. Preview continuation bersifat <strong>read-only</strong>; transport internal tetap berupa object di memory engine.</p><button id="injectCBtn2" class="inject-btn" disabled>↻ Siapkan Output C sebagai Input Berikutnya</button></div>
-      </div>
-    </section>
-  </main>
-
-  <section class="panel tests">
-    <div class="panel-title">CONTOH UJI INPUT</div>
-    <div class="panel-body test-grid">
-      <div class="test-card"><h3>1. Teks Biasa</h3><pre>Apa hubungan antara pertumbuhan penjualan dan jumlah pelanggan?</pre><button data-test="text">Coba Sekarang</button></div>
-      <div class="test-card"><h3>2. JSON / Object</h3><pre>{"produk":"Laptop","harga":12000000,"stok":15,"kategori":"Elektronik"}</pre><button data-test="json">Coba Sekarang</button></div>
-      <div class="test-card"><h3>3. File / HTML</h3><pre>&lt;!DOCTYPE html&gt;
-&lt;html&gt;
-&lt;body&gt;Example&lt;/body&gt;
-&lt;/html&gt;</pre><button data-test="html">Coba Sekarang</button></div>
-      <div class="test-card"><h3>4. Source Code</h3><pre>function hitungTotal(a, b) {
-  return a + b;
-}</pre><button data-test="code">Coba Sekarang</button></div>
+<section class="panel" aria-labelledby="h-log">
+  <div class="ph"><h2 id="h-log" style="font-size:13px">Log siklus langsung</h2>
+    <div class="controls">
+      <button id="pause" type="button" aria-pressed="false">Jeda</button>
+      <button id="reset" type="button">Reset</button>
+      <button id="devBtn" type="button" aria-expanded="false" aria-controls="dev">DEV</button>
     </div>
+  </div>
+  <div class="body"><div id="log" class="log" role="log" aria-live="polite"><div class="empty">IDLE — monitor menunggu input dari engine/aplikasi lain.</div></div></div>
+</section>
+
+<div class="grid">
+  <section class="panel" aria-labelledby="h-audit">
+    <h2 class="ph" id="h-audit">Jejak audit terakhir</h2>
+    <div class="body"><div id="auditView" class="audit"><div class="empty">Belum ada proses.</div></div></div>
   </section>
-
-  <section class="lower">
-    <div class="panel"><div class="panel-title">HASIL / DATA INTERNAL</div><div class="panel-body"><pre id="rawBottom">Belum ada data.</pre></div></div>
-    <div class="footer-note"><button id="selfTestBtn" class="secondary" style="width:100%;margin-bottom:10px">✓ JALANKAN SELF-TEST ENGINE</button><strong>Info</strong><br><br>• File ini adalah UI/laboratorium untuk menguji <code>cgo-machine-abc.js</code>.<br>• A/B/C tidak diberi pengetahuan khusus tentang Customer, BCGO, Firebase, atau domain tertentu.<br>• Status di panel berasal dari hasil proses aktual engine.<br>• Jika bukti belum cukup, hasil menampilkan <strong>uncertainty</strong>; UI tidak membuat kesimpulan palsu.<br><br><strong>∞ Satu Mesin. Banyak Kemungkinan.</strong></div>
+  <section class="panel" aria-labelledby="h-detail">
+    <h2 class="ph" id="h-detail">Hasil terakhir</h2>
+    <div class="body"><pre id="detail" class="detail">Belum ada hasil.</pre></div>
   </section>
 </div>
+
+<section class="panel dev" id="dev" hidden aria-labelledby="h-dev">
+  <h2 class="ph" id="h-dev">Input DEV — hanya untuk pengujian</h2>
+  <div class="body">
+    <textarea id="devInput" placeholder="Tempel teks atau JSON di sini…" aria-label="Input DEV"></textarea>
+    <label><input type="checkbox" id="devReflect"> Auto-reflect (proses ulang hasilnya sendiri)</label>
+    <button id="devRun" type="button">Proses</button>
+  </div>
+</section>
+
+<section class="panel" aria-labelledby="h-health">
+  <h2 class="ph" id="h-health">Kesehatan engine</h2>
+  <div class="body">
+    <div class="row"><span>Self-test</span><strong id="selfDetail">-</strong></div>
+    <div class="row"><span>Independensi</span><strong id="indDetail">-</strong></div>
+    <div class="row"><span>Machine D (audit)</span><strong id="auditDetail">-</strong></div>
+    <div class="row"><span>Degraded / error</span><strong id="degradedDetail">0 / 0</strong></div>
+    <div class="row"><span>Dijeda</span><strong id="pauseDetail">TIDAK</strong></div>
+    <div class="row"><span>Input diabaikan saat jeda</span><strong id="skipDetail">0</strong></div>
+    <div class="row"><span>Pesan ditolak (origin asing)</span><strong id="rejectDetail">0</strong></div>
+    <div class="row"><span>Error terakhir</span><strong id="errorDetail">-</strong></div>
+    <p class="footer">Halaman ini tidak menjalankan A/B/C sendiri; ia hanya mengamati engine. Input produksi dikirim lewat <code>dispatchEvent(new CustomEvent("cgo:input",{detail:{payload,options}}))</code> atau <code>postMessage({type:"CGO_INPUT",payload,options})</code>. Pesan dari origin lain hanya diterima jika terdaftar di <code>window.CGO_ALLOWED_ORIGINS</code>. Panel DEV muncul dengan <code>?dev=1</code>.</p>
+  </div>
+</section>
+</div>
+
 <script src="cgo-machine-abc.js"></script>
 <script>
 (() => {
   "use strict";
-  const $ = (s) => document.querySelector(s);
-  const $$ = (s) => [...document.querySelectorAll(s)];
-  const engine = window.CGOMachineABC;
-  let mode = "text";
-  let lastInput = null;
-  let lastInputs = [];
-  let lastOutput = null;
-  let pendingInjection = null;
-  let outputTab = "summary";
+  const $ = s => document.querySelector(s);
+  const E = window.CGOMachineABC;
 
-  if (!engine) {
-    $("#outputView").innerHTML = '<div class="status-banner err">✕ Engine tidak ditemukan. Pastikan cgo-machine-abc.js berada satu folder dengan HTML.</div>';
+  if (!E) {
+    const f = $("#fatal");
+    f.hidden = false;
+    f.textContent = "Engine belum termuat. Pastikan file cgo-machine-abc.js ada di folder yang sama dengan halaman ini dan namanya persis sama (huruf besar/kecil berpengaruh di GitHub Pages).";
     return;
   }
-  $("#engineVersion").textContent = engine.version;
 
-  const examples = {
-    text: "Apa hubungan antara pertumbuhan penjualan dan jumlah pelanggan?",
-    json: JSON.stringify({ produk:"Laptop", harga:12000000, stok:15, kategori:"Elektronik" }, null, 2),
-    html: "<!DOCTYPE html>\n<html>\n<head><title>Example</title></head>\n<body>Example</body>\n</html>",
-    code: "function hitungTotal(a, b) {\n  return a + b;\n}"
+  const DEV = new URLSearchParams(location.search).get("dev") === "1";
+  if (!DEV) $("#devBtn").hidden = true;
+
+  const LOG_LIMIT = 100;
+  const DETAIL_LIMIT = 20000;
+  const allowedOrigins = new Set([location.origin, ...(Array.isArray(window.CGO_ALLOWED_ORIGINS) ? window.CGO_ALLOWED_ORIGINS : [])]);
+  const OK = new Set(["PROCESSED", "WELL_FORMED", "VERIFIED"]);
+  const WARN = new Set(["PARTIAL", "DEGRADED"]);
+  const STOP_LABEL = { maxCycles: "batas siklus tercapai", status: "status tujuan tercapai", confidence_stable: "keyakinan sudah stabil", timeout: "waktu habis", paused: "dijeda" };
+
+  let total = 0, cycleCount = 0, confSum = 0, rejected = 0;
+
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+  const chip = (node, text, tone) => { node.textContent = text; node.className = "chip " + tone; };
+  const empty = text => el("div", "empty", text);
+
+  function showNotice(msg) { const n = $("#notice"); n.textContent = msg; n.hidden = false; }
+  function clearNotice() { $("#notice").hidden = true; }
+
+  function health() {
+    const st = E.selfTest();
+    chip($("#self"), `Self-test ${st.passed}/${st.total}`, st.verified ? "ok" : "bad");
+    $("#selfDetail").textContent = st.verified ? `${st.passed}/${st.total} lolos` : `${st.failed} gagal`;
+    const ind = E.auditIndependence();
+    chip($("#ind"), ind.verified ? "Independensi OK (pindai statis)" : "Independensi perlu dicek", ind.verified ? "ok" : "bad");
+    $("#indDetail").textContent = ind.verified ? `Lolos · ${ind.scannedFunctions} fungsi dipindai` : "Ditemukan: " + ind.forbiddenReferences.join(", ");
+  }
+
+  function refresh() {
+    const m = E.getMetrics();
+    $("#degradedCount").textContent = m.degradedCount || 0;
+    chip($("#degraded"), `Degraded ${m.degradedCount || 0}`, m.degradedCount ? "warn" : "ok");
+    $("#degradedDetail").textContent = `${m.degradedCount || 0} / ${m.errorCount || 0}`;
+    $("#skipDetail").textContent = m.skippedWhilePaused || 0;
+    $("#pauseDetail").textContent = E.isPaused() ? "YA" : "TIDAK";
+    $("#rejectDetail").textContent = rejected;
+    $("#total").textContent = total;
+    const p = $("#pause");
+    p.textContent = E.isPaused() ? "Lanjutkan" : "Jeda";
+    p.setAttribute("aria-pressed", String(E.isPaused()));
+  }
+
+  function renderCycle(c, stopReason) {
+    const r = c.result || c;
+    const status = r.status || "UNRESOLVED";
+    const tone = OK.has(status) ? "ok" : WARN.has(status) ? "warn" : "bad";
+    const conf = Number(r.decision?.confidence || 0);
+    cycleCount++; confSum += conf;
+
+    $("#cycles").textContent = cycleCount;
+    $("#conf").textContent = Math.round(confSum / cycleCount * 100) + "%";
+    $("#lastStatus").textContent = status;
+    $("#lastTime").textContent = (r.durationMs || c.pipeline?.C?.durationMs || 0) + "ms";
+
+    const d = c.audit;
+    chip($("#audit"), `Audit D ${d?.status || "–"}`, d?.status === "VALID" ? "ok" : d ? "warn" : "");
+    $("#auditDetail").textContent = d?.status || "-";
+
+    const log = $("#log");
+    if (log.querySelector(".empty")) log.replaceChildren();
+    const item = el("div", "cycle " + tone);
+    const head = el("div", "cycle-head");
+    head.append(el("span", "", `Siklus ${c.cycleIndex ?? 0}`), el("span", "", `${status} · keyakinan ${Math.round(conf * 100)}%`), el("span", "time", new Date().toLocaleTimeString()));
+    const body = el("div", "cycle-body");
+    body.append(el("div", "", `Temuan ${r.findings?.length || 0} · Relasi ${r.relations?.length || 0} · Bukti ${r.evidence?.length || 0} · Ketidakpastian ${r.uncertainty?.length || 0}`));
+    const stop = stopReason ? ` · Berhenti karena: ${STOP_LABEL[stopReason] || stopReason}` : "";
+    body.append(el("div", "muted", `Penalaran ${r.reasoning?.length || 0} langkah · Audit ${d?.status || "-"}${stop}`));
+    item.append(head, body);
+    log.prepend(item);
+    while (log.children.length > LOG_LIMIT) log.lastElementChild.remove();
+
+    const av = $("#auditView");
+    av.replaceChildren();
+    const checks = d?.checks || [];
+    if (!checks.length) av.append(empty("Tidak ada data audit."));
+    for (const x of checks) {
+      const row = el("div", "row");
+      row.append(el("span", "", x.type), el("strong", x.status === "PASS" ? "pass" : x.status === "FAIL" ? "fail" : "unknown", x.status));
+      av.append(row);
+    }
+
+    let json = JSON.stringify(r, null, 2);
+    if (json.length > DETAIL_LIMIT) json = json.slice(0, DETAIL_LIMIT) + `\n… (dipotong, total ${json.length} karakter)`;
+    $("#detail").textContent = json;
+  }
+
+  function onPayload(p) {
+    total++;
+    const list = Array.isArray(p.cycles) && p.cycles.length ? p.cycles : (p.result ? [p.result] : []);
+    list.forEach((c, i) => renderCycle(c, i === list.length - 1 ? p.stopReason : null));
+    refresh();
+  }
+
+  function submit(input, options) {
+    try {
+      const out = E.process(input, options || {});
+      if (out && out.skipped) showNotice("Mesin sedang dijeda — input diabaikan. Tekan Lanjutkan untuk memproses lagi.");
+      else clearNotice();
+      $("#errorDetail").textContent = "-";
+    } catch (e) {
+      $("#errorDetail").textContent = e.message;
+      showNotice("Input ditolak: " + e.message);
+    }
+    refresh();
+  }
+
+  $("#pause").onclick = () => { E.isPaused() ? E.resume() : E.pause(); if (!E.isPaused()) clearNotice(); refresh(); };
+
+  $("#reset").onclick = () => {
+    $("#log").replaceChildren(empty("IDLE — riwayat monitor sudah di-reset."));
+    $("#auditView").replaceChildren(empty("Belum ada proses."));
+    $("#detail").textContent = "Belum ada hasil.";
+    total = cycleCount = confSum = rejected = 0;
+    E.resetMetrics();
+    ["#cycles", "#degradedCount"].forEach(s => { $(s).textContent = "0"; });
+    $("#conf").textContent = "0%"; $("#lastStatus").textContent = "IDLE"; $("#lastTime").textContent = "0ms";
+    $("#auditDetail").textContent = "-"; $("#errorDetail").textContent = "-";
+    chip($("#audit"), "Audit D –", "");
+    clearNotice(); refresh();
   };
 
-  function setMode(next) {
-    if (next === "html") next = "text";
-    mode = next;
-    $$(".tab").forEach(b => b.classList.toggle("active", b.dataset.mode === next));
-    $("#textInputWrap").style.display = next === "file" ? "none" : "block";
-    $("#fileInputWrap").style.display = next === "file" ? "block" : "none";
-    $("#textInput").readOnly = false;
-    $("#textInput").placeholder = next === "json" ? '{"key":"value"}' : next === "code" ? "Masukkan source code…" : "Masukkan material apa pun…";
-  }
+  $("#devBtn").onclick = () => {
+    const dev = $("#dev"); dev.hidden = !dev.hidden;
+    $("#devBtn").setAttribute("aria-expanded", String(!dev.hidden));
+  };
+  $("#devRun").onclick = () => {
+    const raw = $("#devInput").value;
+    let input = raw; try { input = JSON.parse(raw); } catch (_) {}
+    submit(input, { autoReflect: $("#devReflect").checked });
+  };
 
-  $$(".tab").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
-  $("#exampleSelect").addEventListener("change", e => {
-    const v = e.target.value; if (!v) return;
-    setMode(v === "html" ? "text" : v); $("#textInput").value = examples[v] || ""; pendingInjection = null; lastInput = null; lastInputs = []; e.target.value = "";
+  window.addEventListener("cgo:input", e => {
+    const d = e.detail;
+    if (d === undefined) return;
+    const wrapped = d !== null && typeof d === "object" && "payload" in d;
+    submit(wrapped ? d.payload : d, wrapped ? d.options : {});
   });
 
-  $$("[data-test]").forEach(btn => btn.addEventListener("click", () => {
-    const t = btn.dataset.test;
-    setMode(t === "html" ? "text" : t); $("#textInput").value = examples[t] || ""; pendingInjection = null; lastInput = null; lastInputs = [];
-    processCurrent();
-  }));
-
-  $("#fileInput").addEventListener("change", async e => {
-    const files = [...(e.target.files || [])];
-    if (!files.length) return;
-    try {
-      lastInputs = [];
-      for (const file of files) lastInputs.push(await createFileEnvelope(file));
-      lastInput = lastInputs.length === 1 ? lastInputs[0] : engine.createBatchInjection(lastInputs, { metadata: { source: "START-file-batch" } });
-      renderFileList(lastInputs);
-      $("#fileMeta").innerHTML = `<b>${lastInputs.length} file</b> siap diinjeksi sebagai ${lastInputs.length === 1 ? "material" : "satu batch material"}.`;
-      $("#textInput").value = lastInputs.length === 1 && lastInputs[0].payload.contentMode === "text" ? lastInputs[0].payload.text : `[${lastInputs.length} FILE INJECTION] Daftar file tampil di bawah. Tekan PROSES untuk mengurai semuanya.`;
-      pendingInjection = null;
-    } catch (error) {
-      showError("File tidak dapat dipersiapkan: " + error.message);
-    }
+  window.addEventListener("message", e => {
+    if (!e.data || e.data.type !== "CGO_INPUT") return;
+    if (e.source !== window && !allowedOrigins.has(e.origin)) { rejected++; refresh(); return; }   // pesan dari window ini sendiri selalu boleh (termasuk saat dibuka dari file://)
+    submit(e.data.payload, e.data.options);
   });
 
-  $("#clearBtn").addEventListener("click", () => {
-    $("#textInput").value = ""; $("#fileInput").value = ""; $("#fileMeta").textContent = "Belum ada file yang dipilih."; $("#fileList").innerHTML = ""; lastInput = null; lastInputs = []; lastOutput = null; pendingInjection = null;
-    $("#injectCBtn").disabled = true; $("#injectCBtn2").disabled = true;
-    renderWaiting(); resetStages();
-  });
-  $("#processBtn").addEventListener("click", processCurrent);
-
-  function getInput() {
-    if (pendingInjection) return pendingInjection;
-    if (mode === "file" && lastInput) return lastInput;
-    const raw = $("#textInput").value;
-    if (mode === "json") {
-      try { const parsed = JSON.parse(raw); lastInput = parsed; lastInputs = [parsed]; return parsed; }
-      catch (error) { throw new Error("JSON tidak valid: " + error.message); }
-    }
-    return raw;
-  }
-
-  function processCurrent() {
-    let input;
-    try { input = getInput(); }
-    catch (error) { showError(error.message); return; }
-    if (mode !== "file" && !pendingInjection && typeof input === "string" && !input.trim()) { showError("Input masih kosong."); return; }
-    const btn = $("#processBtn"); btn.disabled = true; btn.textContent = "⏳ MEMPROSES…";
-    resetStages(); setStage("A", "Memproses", ""); setStage("B", "Menunggu", ""); setStage("C", "Menunggu", "");
-    requestAnimationFrame(() => {
-      try {
-        const source = pendingInjection ? "C-output-continuation" : (lastInput?.payload?.name || lastInput?.fileName || "manual-injection");
-        lastOutput = engine.process(input, { source });
-        setStage("A", "✓ Selesai", "ok", lastOutput.pipeline.A);
-        setStage("B", "✓ Selesai", "ok", lastOutput.pipeline.B);
-        setStage("C", "✓ Selesai", "ok", lastOutput.pipeline.C);
-        renderOutput();
-        pendingInjection = null;
-        $("#rawBottom").textContent = JSON.stringify(lastOutput, null, 2);
-        $("#injectCBtn").disabled = false;
-        $("#injectCBtn2").disabled = false;
-      } catch (error) { showError("Engine error: " + error.message); }
-      finally { btn.disabled = false; btn.textContent = "▶ PROSES (A → B → C)"; }
-    });
-  }
-
-  function setStage(name, text, cls, data) {
-    const el = $("#status" + name); el.textContent = text; el.className = "stage-status " + (cls || "");
-    if (!data) return;
-    const list = $("#stage" + name);
-    const items = [];
-    if (name === "A") {
-      items.push("Input diklasifikasikan: " + data.input.type);
-      items.push("Struktur: " + data.structure.kind);
-      if (data.structure.kind === "batch") items.push("Material dalam batch: " + data.structure.count);
-      items.push("Observasi: " + data.observations.length);
-      items.push("Canonical components: " + (data.canonical?.components?.length || 0));
-      items.push("Evidence awal: " + (data.evidence?.length || 0));
-    } else if (name === "B") {
-      items.push("Operasi: " + data.operations.length);
-      items.push("Findings: " + data.findings.length);
-      items.push("Relations: " + data.relations.length + " · Inferences: " + data.inferences.length);
-      items.push("Constraints: " + (data.constraints?.length || 0) + " · Contradictions: " + (data.contradictions?.length || 0));
-      items.push("Hypotheses: " + (data.hypotheses?.length || 0) + " · Reasoning steps: " + (data.reasoningTrace?.length || 0));
-      if (data.items) items.push("File/material diurai: " + data.items.length);
-    } else {
-      items.push("Status: " + data.status);
-      items.push("Evidence: " + data.evidence.length + " · Verification: " + data.verification.length);
-      items.push("Uncertainty: " + data.uncertainty.length + " · Validation: " + (data.validation?.status || "UNKNOWN"));
-      items.push("Output terstruktur tersedia");
-      if (data.batch) items.push("Hasil file tersedia untuk Input/Injection berikutnya: " + data.batch.count);
-    }
-    list.innerHTML = items.map(x => "<li>" + escapeHtml(x) + "</li>").join("");
-  }
-
-  function renderWaiting() { $("#outputView").innerHTML = '<div class="empty">Belum ada proses. Masukkan material lalu tekan PROSES.</div>'; $("#rawBottom").textContent = "Belum ada data."; }
-  function resetStages() {
-    ["A","B","C"].forEach(n => { $("#status"+n).textContent="Menunggu"; $("#status"+n).className="stage-status"; });
-  }
-  function showError(message) {
-    $("#outputView").innerHTML = '<div class="status-banner err">✕ ' + escapeHtml(message) + '</div>';
-  }
-
-  $$(".otab").forEach(b => b.addEventListener("click", () => { outputTab = b.dataset.output; $$(".otab").forEach(x=>x.classList.toggle("active",x===b)); renderOutput(); }));
-
-  function renderOutput() {
-    if (!lastOutput) return;
-    const r = lastOutput.result, a = lastOutput.pipeline.A, b = lastOutput.pipeline.B, c = lastOutput.pipeline.C;
-    if (outputTab === "raw") return setOutputPre(lastOutput);
-    if (outputTab === "a") return setOutputPre(a);
-    if (outputTab === "b") return setOutputPre(b);
-    if (outputTab === "c") return setOutputPre(c);
-    const cls = r.status === "PROCESSED" ? "" : "warn";
-    $("#outputView").innerHTML = `
-      <div class="status-banner ${cls}">${r.status === "PROCESSED" ? "✓" : "⚠"} Proses selesai · status: ${escapeHtml(r.status)}</div>
-      <div class="output-section"><h3>Ringkasan</h3><div class="countgrid">
-        ${metric("Input", r.summary.inputType)}${metric("Operasi", r.summary.operations)}${metric("Findings", r.summary.findings)}${metric("Relations", r.summary.relations)}${metric("Evidence", r.summary.evidence)}${metric("Verification", r.summary.verification)}${metric("Constraints", r.summary.constraints)}${metric("Contradictions", r.summary.contradictions)}${metric("Hypotheses", r.summary.hypotheses)}${metric("Uncertainty", r.summary.uncertainty)}${metric("Confidence", Number(r.decision?.confidence ?? 0).toFixed(3))}${metric("Audit D", lastOutput.audit?.status || "UNKNOWN")}
-      </div></div>
-      <div class="output-section"><h3>Decision</h3><pre>${escapeHtml(JSON.stringify(r.decision, null, 2))}</pre></div>
-      ${r.batch ? renderBatchOutput(r.batch) : ""}
-      ${sectionList("Findings", r.findings)}${sectionList("Relations", r.relations)}${sectionList("Constraints", r.constraints)}${sectionList("Contradictions", r.contradictions)}${sectionList("Hypotheses", r.hypotheses)}${sectionList("Reasoning", r.reasoning)}${sectionList("Reasoning Trace", r.reasoningTrace)}${sectionList("Inferences", r.inferences)}${sectionList("Evidence", r.evidence)}${sectionList("Verification", r.verification)}${sectionList("Uncertainty", r.uncertainty)}${sectionList("Validation", r.validation?.checks || [])}${sectionList("Audit D", lastOutput.audit ? [lastOutput.audit] : [])}${r.continuation ? `<div class="output-section"><h3>Continuation</h3><pre>${escapeHtml(JSON.stringify(r.continuation, null, 2))}</pre></div>` : ""}
-    `;
-  }
-  function renderBatchOutput(batch) {
-    return `<div class="batch-output"><h4>FILE / MATERIAL YANG DIURAI DI START — ${batch.count}</h4>${batch.items.map(item => `<div class="batch-item"><b>${escapeHtml(String(item.index + 1))}. ${escapeHtml(item.source || "material")}</b><br>Status: ${escapeHtml(item.status)} · fingerprint: ${escapeHtml(item.fingerprint || "-")}</div>`).join("")}<div class="tiny" style="margin-top:8px">Output file/material di atas dapat diteruskan melalui tombol Injection lanjutan di bawah.</div></div>`;
-  }
-
-  function metric(k,v){return `<div class="metric"><b>${escapeHtml(String(v))}</b><span>${escapeHtml(k)}</span></div>`}
-  function sectionList(title, arr) {
-    if (!arr?.length) return `<div class="output-section"><h3>${title}</h3><div class="tiny">Tidak ada data pada tahap ini.</div></div>`;
-    return `<div class="output-section"><h3>${title} <span class="tag">${arr.length}</span></h3><pre>${escapeHtml(JSON.stringify(arr, null, 2))}</pre></div>`;
-  }
-  function setOutputPre(obj){$("#outputView").innerHTML='<div class="output-card"><pre>'+escapeHtml(JSON.stringify(obj,null,2))+'</pre></div>'}
-  function escapeHtml(value){return String(value).replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[c]));}
-
-  function injectCOutput() {
-    if (!lastOutput?.result) return;
-    const result = lastOutput.result;
-    const nextMaterial = result.batch?.items?.length
-      ? result.batch.items.map(item => ({
-          __cgoAnalysisOutput: true,
-          source: item.source,
-          fingerprint: item.fingerprint,
-          status: item.status,
-          summary: item.summary
-        }))
-      : result;
-    const packet = Array.isArray(nextMaterial)
-      ? engine.createBatchInjection(nextMaterial, { metadata: { sourceStage: "C", previousFingerprint: result.metadata?.inputFingerprint ?? null } })
-      : engine.inject(nextMaterial, {
-          mode: "continuation",
-          sourceStage: "C",
-          metadata: { previousFingerprint: result.metadata?.inputFingerprint ?? null }
-        });
-
-    // IMPORTANT: the real continuation object stays in memory.
-    // The textarea is only a human-readable preview, never the transport layer.
-    pendingInjection = packet;
-    mode = "text";
-    $$(".tab").forEach(b => b.classList.toggle("active", b.dataset.mode === "text"));
-    $("#textInputWrap").style.display = "block";
-    $("#fileInputWrap").style.display = "none";
-    $("#textInput").placeholder = "Preview Input / Injection lanjutan…";
-    $("#textInput").readOnly = true;
-    $("#textInput").value = JSON.stringify(packet, null, 2);
-    lastInput = packet;
-    lastInputs = Array.isArray(packet.items) ? packet.items : [];
-    $("#fileInput").value = "";
-    $("#fileMeta").textContent = Array.isArray(packet.items) ? `${packet.items.length} hasil file dari C siap sebagai Input / Injection berikutnya.` : "Output C tersimpan sebagai structured continuation di memory engine.";
-    renderFileList(lastInputs);
-    $("#outputView").innerHTML = '<div class="status-banner">↻ Output C sudah menjadi Input / Injection lanjutan. Transport internal tetap berupa object. Tekan PROSES untuk menjalankan A → B → C berikutnya.</div>';
-  }
-
-  $("#injectCBtn").addEventListener("click", injectCOutput);
-  $("#injectCBtn2").addEventListener("click", injectCOutput);
-
-  function renderFileList(items) {
-    const list = $("#fileList");
-    if (!items?.length) { list.innerHTML = ""; return; }
-    list.innerHTML = items.map((item, i) => {
-      const p = item.payload || {};
-      const name = p.name || item.source || `material-${i + 1}`;
-      const meta = p.mimeType || (item.status ? `status: ${item.status}` : "material");
-      const size = Number(p.size);
-      return `<div class="file-row"><div class="num">${i + 1}</div><div class="name" title="${escapeHtml(name)}">${escapeHtml(name)}</div><div class="meta">${escapeHtml(meta)}${Number.isFinite(size) ? " · " + size.toLocaleString() + " B" : ""}</div></div>`;
-    }).join("");
-  }
-
-  async function createFileEnvelope(file) {
-    const name = file.name || "unnamed";
-    const extension = (name.split(".").pop() || "").toLowerCase();
-    const textExtensions = new Set(["txt","html","htm","js","mjs","cjs","json","css","md","csv","xml","svg","log","yaml","yml"]);
-    if (file.type.startsWith("text/") || textExtensions.has(extension)) {
-      const text = await file.text();
-      return { __cgoInputEnvelope: true, version: 1, payload: { transport: "file", name, mimeType: file.type || "unknown", extension, size: file.size, lastModified: file.lastModified || null, contentMode: "text", text, preview: text.slice(0, 1000) } };
-    }
-    const buffer = await file.arrayBuffer();
-    const preview = extractBinaryPreview(buffer, extension);
-    return { __cgoInputEnvelope: true, version: 1, payload: { transport: "file", name, mimeType: file.type || "unknown", extension, size: file.size, lastModified: file.lastModified || null, contentMode: "binary", byteLength: buffer.byteLength, preview } };
-  }
-
-  function extractBinaryPreview(buffer, extension) {
-    const bytes = new Uint8Array(buffer);
-    const limit = Math.min(bytes.length, 200000);
-    let ascii = "";
-    for (let i = 0; i < limit; i++) {
-      const c = bytes[i];
-      ascii += (c >= 32 && c <= 126) || c === 10 || c === 13 || c === 9 ? String.fromCharCode(c) : " ";
-    }
-    if (extension === "pdf") {
-      const matches = [];
-      const re = /\(([^()]{2,500})\)\s*T[Jj]/g; let m;
-      while ((m = re.exec(ascii)) && matches.length < 40) matches.push(m[1]);
-      if (matches.length) return matches.join(" ");
-    }
-    return ascii.replace(/\s+/g, " ").trim().slice(0, 1000);
-  }
-
-  $("#selfTestBtn").addEventListener("click", () => {
-    const result = engine.selfTest();
-    const cls = result.failed ? "warn" : "";
-    $("#outputView").innerHTML = '<div class="status-banner '+cls+'">'+(result.failed ? '⚠' : '✓')+' Self-test selesai · passed: '+result.passed+' · failed: '+result.failed+'</div><div class="output-section"><h3>SELF-TEST</h3><pre>'+escapeHtml(JSON.stringify(result,null,2))+'</pre></div>';
-  });
-
-  setMode("text");
-  renderWaiting();
+  chip($("#ver"), "Engine " + E.version, "");
+  health();            // self-test berjalan sebelum observer dipasang dan tidak meninggalkan jejak
+  E.observe(onPayload);
+  refresh();
 })();
 </script>
 </body>
