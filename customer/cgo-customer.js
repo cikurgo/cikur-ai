@@ -1648,22 +1648,30 @@
      * ========================================================= */
     function shouldUseMachineAbc(text, options) {
         options = options || {};
+        // Prefer lapisan kognisi terpusat (sistem + customer)
+        try {
+            if (window.CGOAbcCognition && typeof window.CGOAbcCognition.shouldEnrich === "function") {
+                return window.CGOAbcCognition.shouldEnrich(text, options);
+            }
+        } catch (_e) {}
         if (options.forceAbc === true) return true;
         if (options.skipAbc === true) return false;
         const s = String(text || "");
-        if (s.length < 8) return false;
-        // Sinyal formal kuat saja — chat santai tidak kena delay
-        if (/\b(verifikasi|audit formal|mesin abc|self-?test|cek struktur|format json|periksa html|analisis kode)\b/i.test(s)) return true;
+        if (s.length < 6) return false;
+        if (/\b(verifikasi|audit|mesin\s*abc|self-?test|cek struktur|format json|periksa html|analisis (kode|struktur|sistem)|bcgo|telemetry|kontrak)\b/i.test(s)) return true;
         const trimmed = s.trim();
-        if (trimmed.length >= 24 && ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]")))) return true;
-        if (trimmed.length >= 80 && /<\s*(html|div|script|style)\b/i.test(s)) return true;
-        if (trimmed.length >= 100 && /\b(function\s+|export\s+|import\s+)/.test(s)) return true;
+        if (trimmed.length >= 20 && ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]")))) return true;
+        if (trimmed.length >= 60 && /<\s*(html|div|script|style)\b/i.test(s)) return true;
+        if (trimmed.length >= 80 && /\b(function\s+|export\s+|import\s+)/.test(s)) return true;
         return false;
     }
 
     function runMachineAbc(text, options) {
         options = options || {};
         try {
+            if (window.CGOAbcCognition && typeof window.CGOAbcCognition.analyze === "function") {
+                return window.CGOAbcCognition.analyze(text, options);
+            }
             const bridge = window.CGOMachineABCBridge;
             if (bridge && typeof bridge.analyze === "function") {
                 return bridge.analyze(text, {
@@ -1722,6 +1730,11 @@
 
     function formatAbcHint(abc) {
         if (!abc || !abc.ok) return "";
+        try {
+            if (window.CGOAbcCognition && typeof window.CGOAbcCognition.formatHint === "function") {
+                return window.CGOAbcCognition.formatHint(abc, "customer");
+            }
+        } catch (_f) {}
         const conf = abc.confidence != null
             ? Math.round(Number(abc.confidence) * 100) + "%"
             : "–";
