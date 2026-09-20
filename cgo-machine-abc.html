@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#020914">
+<meta name="color-scheme" content="dark">
+<title>CGO MACHINE ABC — Monitor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🧠%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#020914;--panel:#061426;--panel-2:#031120;--line:#123b63;--line-soft:#173e5e;
+  --text:#e7f4ff;--muted:#9bb8d0;--faint:#7c9bb3;
+  --ok:#16d98b;--warn:#ffd34d;--bad:#ff667d;--blue:#1688ff;
+  --ok-text:#7cf0c0;--warn-text:#ffe07b;--bad-text:#ff98a6;
+  --radius:14px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:radial-gradient(circle at 50% -10%,#0b2744 0,#020914 45%,#01050b 100%) fixed;
+  color:var(--text);font:14px/1.5 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0);
+}
+.app{width:min(1200px,100%);margin:auto;padding:14px}
+[hidden]{display:none!important}
+h1,h2{margin:0}
+button{font:inherit;color:inherit}
+button:focus-visible,textarea:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+.top{display:flex;justify-content:space-between;gap:14px;align-items:center;border:1px solid var(--line);background:#041426ee;border-radius:var(--radius);padding:16px}
+.brand{display:flex;gap:12px;align-items:center;min-width:0}
+.logo{flex:none;width:46px;height:46px;border:2px solid var(--blue);border-radius:50%;display:grid;place-items:center;font-size:23px}
+.title{font-size:20px;font-weight:800;letter-spacing:.2px}
+.sub{font-size:12px;color:var(--muted);margin-top:2px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.chip{border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:12px;color:var(--muted);white-space:nowrap}
+.chip.ok{color:var(--ok-text);border-color:#176a50}
+.chip.warn{color:var(--warn-text);border-color:#765f1b}
+.chip.bad{color:var(--bad-text);border-color:#76263a}
+
+.banner{margin-top:12px;padding:12px 14px;border-radius:12px;border:1px solid #765f1b;background:#2a2308;color:var(--warn-text);font-size:13px}
+.banner.error{border-color:#76263a;background:#2a0d15;color:var(--bad-text)}
+
+.panel{margin-top:12px;border:1px solid var(--line);border-radius:var(--radius);background:#041426ee;overflow:hidden}
+.ph{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:13px;font-weight:700;min-height:52px}
+.body{padding:12px}
+
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.metric{border:1px solid var(--line-soft);border-radius:10px;padding:10px 12px;background:var(--panel-2)}
+.metric b{display:block;font-size:20px;line-height:26px;overflow-wrap:break-word}
+.metric b#lastStatus{font-size:15px}
+.metric span{font-size:12px;color:var(--muted)}
+
+.controls{display:flex;gap:8px}
+.controls button,.dev button{min-height:44px;min-width:44px;border:1px solid #255070;background:#06182a;color:#d6efff;border-radius:10px;padding:0 16px;font-weight:700;font-size:13px;cursor:pointer}
+.controls button:active,.dev button:active{background:#0b2a45}
+.controls button[aria-pressed="true"]{border-color:#765f1b;color:var(--warn-text)}
+
+.log{height:min(60vh,420px);overflow:auto;display:grid;gap:8px;align-content:start;-webkit-overflow-scrolling:touch}
+.cycle{border:1px solid var(--line-soft);border-left:3px solid var(--blue);border-radius:10px;padding:10px 12px;background:var(--panel-2)}
+.cycle.ok{border-left-color:var(--ok)}
+.cycle.warn{border-left-color:var(--warn)}
+.cycle.bad{border-left-color:var(--bad)}
+.cycle-head{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;font-size:13px;font-weight:700}
+.cycle-head .time{margin-left:auto;color:var(--muted);font-weight:400;font-size:12px}
+.cycle-body{margin-top:6px;font-size:13px}
+.cycle-body .muted{margin-top:4px;color:var(--faint)}
+
+.grid{display:grid;grid-template-columns:1fr;gap:0 12px}
+.audit,.detail{max-height:300px;overflow:auto}
+.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #102e47;font-size:13px}
+.row:last-of-type{border-bottom:0}
+.row strong{text-align:right;overflow-wrap:anywhere}
+.pass{color:#63eab4}.fail{color:#ff8e9e}.unknown{color:#ffdc67}
+pre{white-space:pre-wrap;word-break:break-word;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;color:#bcd8ea;margin:0}
+.empty{color:var(--faint);text-align:center;padding:32px 12px;font-size:13px}
+
+.dev textarea{width:100%;min-height:120px;background:#020b15;color:#cdeaff;border:1px solid var(--line-soft);border-radius:10px;padding:10px;margin-bottom:8px;font:13px/1.5 ui-monospace,monospace}
+.dev label{display:flex;align-items:center;gap:8px;min-height:44px;font-size:13px;color:var(--muted)}
+.dev input[type=checkbox]{width:20px;height:20px}
+.footer{color:var(--faint);font-size:12px;line-height:1.6;margin:10px 0 0}
+code{font:12px ui-monospace,monospace;color:#bcd8ea}
+
+@media(min-width:600px){.stats{grid-template-columns:repeat(3,1fr)}.app{padding:16px}}
+@media(min-width:900px){.stats{grid-template-columns:repeat(6,1fr)}.grid{grid-template-columns:1.3fr 1fr}}
+@media(max-width:700px){.top{flex-direction:column;align-items:flex-start}.chips{justify-content:flex-start}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="top">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">🧠</div>
+    <div>
+      <h1 class="title">CGO MACHINE ABC</h1>
+      <div class="sub">Monitor mesin inti · A → B → C → D · hanya mengamati</div>
+    </div>
+  </div>
+  <div class="chips" aria-label="Status mesin">
+    <span id="ver" class="chip">Engine …</span>
+    <span id="self" class="chip">Self-test …</span>
+    <span id="audit" class="chip">Audit D –</span>
+    <span id="ind" class="chip">Independensi …</span>
+    <span id="degraded" class="chip">Degraded 0</span>
+  </div>
+</header>
+
+<div id="fatal" class="banner error" role="alert" hidden></div>
+<div id="notice" class="banner" role="status" hidden></div>
+<noscript><div class="banner error">Halaman ini membutuhkan JavaScript.</div></noscript>
+
+<section class="panel" aria-labelledby="h-runtime">
+  <h2 class="ph" id="h-runtime">Runtime</h2>
+  <div class="body"><div class="stats">
+    <div class="metric"><b id="total">0</b><span>Input diproses</span></div>
+    <div class="metric"><b id="cycles">0</b><span>Siklus</span></div>
+    <div class="metric"><b id="conf">0%</b><span>Rata-rata keyakinan</span></div>
+    <div class="metric"><b id="lastStatus">IDLE</b><span>Status terakhir</span></div>
+    <div class="metric"><b id="lastTime">0ms</b><span>Durasi terakhir</span></div>
+    <div class="metric"><b id="degradedCount">0</b><span>Degraded</span></div>
+  </div></div>
+</section>
+
+<section class="panel" aria-labelledby="h-log">
+  <div class="ph"><h2 id="h-log" style="font-size:13px">Log siklus langsung</h2>
+    <div class="controls">
+      <button id="pause" type="button" aria-pressed="false">Jeda</button>
+      <button id="reset" type="button">Reset</button>
+      <button id="devBtn" type="button" aria-expanded="false" aria-controls="dev">DEV</button>
+    </div>
+  </div>
+  <div class="body"><div id="log" class="log" role="log" aria-live="polite"><div class="empty">IDLE — monitor menunggu input dari engine/aplikasi lain.</div></div></div>
+</section>
+
+<div class="grid">
+  <section class="panel" aria-labelledby="h-audit">
+    <h2 class="ph" id="h-audit">Jejak audit terakhir</h2>
+    <div class="body"><div id="auditView" class="audit"><div class="empty">Belum ada proses.</div></div></div>
+  </section>
+  <section class="panel" aria-labelledby="h-detail">
+    <h2 class="ph" id="h-detail">Hasil terakhir</h2>
+    <div class="body"><pre id="detail" class="detail">Belum ada hasil.</pre></div>
+  </section>
+</div>
+
+<section class="panel dev" id="dev" hidden aria-labelledby="h-dev">
+  <h2 class="ph" id="h-dev">Input DEV — hanya untuk pengujian</h2>
+  <div class="body">
+    <textarea id="devInput" placeholder="Tempel teks atau JSON di sini…" aria-label="Input DEV"></textarea>
+    <label><input type="checkbox" id="devReflect"> Auto-reflect (proses ulang hasilnya sendiri)</label>
+    <button id="devRun" type="button">Proses</button>
+  </div>
+</section>
+
+<section class="panel" aria-labelledby="h-health">
+  <h2 class="ph" id="h-health">Kesehatan engine</h2>
+  <div class="body">
+    <div class="row"><span>Self-test</span><strong id="selfDetail">-</strong></div>
+    <div class="row"><span>Independensi</span><strong id="indDetail">-</strong></div>
+    <div class="row"><span>Machine D (audit)</span><strong id="auditDetail">-</strong></div>
+    <div class="row"><span>Degraded / error</span><strong id="degradedDetail">0 / 0</strong></div>
+    <div class="row"><span>Dijeda</span><strong id="pauseDetail">TIDAK</strong></div>
+    <div class="row"><span>Input diabaikan saat jeda</span><strong id="skipDetail">0</strong></div>
+    <div class="row"><span>Pesan ditolak (origin asing)</span><strong id="rejectDetail">0</strong></div>
+    <div class="row"><span>Error terakhir</span><strong id="errorDetail">-</strong></div>
+    <p class="footer">Halaman ini tidak menjalankan A/B/C sendiri; ia hanya mengamati engine. Input produksi dikirim lewat <code>dispatchEvent(new CustomEvent("cgo:input",{detail:{payload,options}}))</code> atau <code>postMessage({type:"CGO_INPUT",payload,options})</code>. Pesan dari origin lain hanya diterima jika terdaftar di <code>window.CGO_ALLOWED_ORIGINS</code>. Panel DEV muncul dengan <code>?dev=1</code>.</p>
+  </div>
+</section>
+</div>
+
+<script src="cgo-machine-abc.js"></script>
+<script>
+(() => {
+  "use strict";
+  const $ = s => document.querySelector(s);
+  const E = window.CGOMachineABC;
+
+  if (!E) {
+    const f = $("#fatal");
+    f.hidden = false;
+    f.textContent = "Engine belum termuat. Pastikan file cgo-machine-abc.js ada di folder yang sama dengan halaman ini dan namanya persis sama (huruf besar/kecil berpengaruh di GitHub Pages).";
+    return;
+  }
+
+  const DEV = new URLSearchParams(location.search).get("dev") === "1";
+  if (!DEV) $("#devBtn").hidden = true;
+
+  const LOG_LIMIT = 100;
+  const DETAIL_LIMIT = 20000;
+  const allowedOrigins = new Set([location.origin, ...(Array.isArray(window.CGO_ALLOWED_ORIGINS) ? window.CGO_ALLOWED_ORIGINS : [])]);
+  const OK = new Set(["PROCESSED", "WELL_FORMED", "VERIFIED"]);
+  const WARN = new Set(["PARTIAL", "DEGRADED"]);
+  const STOP_LABEL = { maxCycles: "batas siklus tercapai", status: "status tujuan tercapai", confidence_stable: "keyakinan sudah stabil", timeout: "waktu habis", paused: "dijeda" };
+
+  let total = 0, cycleCount = 0, confSum = 0, rejected = 0;
+
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+  const chip = (node, text, tone) => { node.textContent = text; node.className = "chip " + tone; };
+  const empty = text => el("div", "empty", text);
+
+  function showNotice(msg) { const n = $("#notice"); n.textContent = msg; n.hidden = false; }
+  function clearNotice() { $("#notice").hidden = true; }
+
+  function health() {
+    const st = E.selfTest();
+    chip($("#self"), `Self-test ${st.passed}/${st.total}`, st.verified ? "ok" : "bad");
+    $("#selfDetail").textContent = st.verified ? `${st.passed}/${st.total} lolos` : `${st.failed} gagal`;
+    const ind = E.auditIndependence();
+    chip($("#ind"), ind.verified ? "Independensi OK (pindai statis)" : "Independensi perlu dicek", ind.verified ? "ok" : "bad");
+    $("#indDetail").textContent = ind.verified ? `Lolos · ${ind.scannedFunctions} fungsi dipindai` : "Ditemukan: " + ind.forbiddenReferences.join(", ");
+  }
+
+  function refresh() {
+    const m = E.getMetrics();
+    $("#degradedCount").textContent = m.degradedCount || 0;
+    chip($("#degraded"), `Degraded ${m.degradedCount || 0}`, m.degradedCount ? "warn" : "ok");
+    $("#degradedDetail").textContent = `${m.degradedCount || 0} / ${m.errorCount || 0}`;
+    $("#skipDetail").textContent = m.skippedWhilePaused || 0;
+    $("#pauseDetail").textContent = E.isPaused() ? "YA" : "TIDAK";
+    $("#rejectDetail").textContent = rejected;
+    $("#total").textContent = total;
+    const p = $("#pause");
+    p.textContent = E.isPaused() ? "Lanjutkan" : "Jeda";
+    p.setAttribute("aria-pressed", String(E.isPaused()));
+  }
+
+  function renderCycle(c, stopReason) {
+    const r = c.result || c;
+    const status = r.status || "UNRESOLVED";
+    const tone = OK.has(status) ? "ok" : WARN.has(status) ? "warn" : "bad";
+    const conf = Number(r.decision?.confidence || 0);
+    cycleCount++; confSum += conf;
+
+    $("#cycles").textContent = cycleCount;
+    $("#conf").textContent = Math.round(confSum / cycleCount * 100) + "%";
+    $("#lastStatus").textContent = status;
+    $("#lastTime").textContent = (r.durationMs || c.pipeline?.C?.durationMs || 0) + "ms";
+
+    const d = c.audit;
+    chip($("#audit"), `Audit D ${d?.status || "–"}`, d?.status === "VALID" ? "ok" : d ? "warn" : "");
+    $("#auditDetail").textContent = d?.status || "-";
+
+    const log = $("#log");
+    if (log.querySelector(".empty")) log.replaceChildren();
+    const item = el("div", "cycle " + tone);
+    const head = el("div", "cycle-head");
+    head.append(el("span", "", `Siklus ${c.cycleIndex ?? 0}`), el("span", "", `${status} · keyakinan ${Math.round(conf * 100)}%`), el("span", "time", new Date().toLocaleTimeString()));
+    const body = el("div", "cycle-body");
+    body.append(el("div", "", `Temuan ${r.findings?.length || 0} · Relasi ${r.relations?.length || 0} · Bukti ${r.evidence?.length || 0} · Ketidakpastian ${r.uncertainty?.length || 0}`));
+    const stop = stopReason ? ` · Berhenti karena: ${STOP_LABEL[stopReason] || stopReason}` : "";
+    body.append(el("div", "muted", `Penalaran ${r.reasoning?.length || 0} langkah · Audit ${d?.status || "-"}${stop}`));
+    item.append(head, body);
+    log.prepend(item);
+    while (log.children.length > LOG_LIMIT) log.lastElementChild.remove();
+
+    const av = $("#auditView");
+    av.replaceChildren();
+    const checks = d?.checks || [];
+    if (!checks.length) av.append(empty("Tidak ada data audit."));
+    for (const x of checks) {
+      const row = el("div", "row");
+      row.append(el("span", "", x.type), el("strong", x.status === "PASS" ? "pass" : x.status === "FAIL" ? "fail" : "unknown", x.status));
+      av.append(row);
+    }
+
+    let json = JSON.stringify(r, null, 2);
+    if (json.length > DETAIL_LIMIT) json = json.slice(0, DETAIL_LIMIT) + `\n… (dipotong, total ${json.length} karakter)`;
+    $("#detail").textContent = json;
+  }
+
+  function onPayload(p) {
+    total++;
+    const list = Array.isArray(p.cycles) && p.cycles.length ? p.cycles : (p.result ? [p.result] : []);
+    list.forEach((c, i) => renderCycle(c, i === list.length - 1 ? p.stopReason : null));
+    refresh();
+  }
+
+  function submit(input, options) {
+    try {
+      const out = E.process(input, options || {});
+      if (out && out.skipped) showNotice("Mesin sedang dijeda — input diabaikan. Tekan Lanjutkan untuk memproses lagi.");
+      else clearNotice();
+      $("#errorDetail").textContent = "-";
+    } catch (e) {
+      $("#errorDetail").textContent = e.message;
+      showNotice("Input ditolak: " + e.message);
+    }
+    refresh();
+  }
+
+  $("#pause").onclick = () => { E.isPaused() ? E.resume() : E.pause(); if (!E.isPaused()) clearNotice(); refresh(); };
+
+  $("#reset").onclick = () => {
+    $("#log").replaceChildren(empty("IDLE — riwayat monitor sudah di-reset."));
+    $("#auditView").replaceChildren(empty("Belum ada proses."));
+    $("#detail").textContent = "Belum ada hasil.";
+    total = cycleCount = confSum = rejected = 0;
+    E.resetMetrics();
+    ["#cycles", "#degradedCount"].forEach(s => { $(s).textContent = "0"; });
+    $("#conf").textContent = "0%"; $("#lastStatus").textContent = "IDLE"; $("#lastTime").textContent = "0ms";
+    $("#auditDetail").textContent = "-"; $("#errorDetail").textContent = "-";
+    chip($("#audit"), "Audit D –", "");
+    clearNotice(); refresh();
+  };
+
+  $("#devBtn").onclick = () => {
+    const dev = $("#dev"); dev.hidden = !dev.hidden;
+    $("#devBtn").setAttribute("aria-expanded", String(!dev.hidden));
+  };
+  $("#devRun").onclick = () => {
+    const raw = $("#devInput").value;
+    let input = raw; try { input = JSON.parse(raw); } catch (_) {}
+    submit(input, { autoReflect: $("#devReflect").checked });
+  };
+
+  window.addEventListener("cgo:input", e => {
+    const d = e.detail;
+    if (d === undefined) return;
+    const wrapped = d !== null && typeof d === "object" && "payload" in d;
+    submit(wrapped ? d.payload : d, wrapped ? d.options : {});
+  });
+
+  window.addEventListener("message", e => {
+    if (!e.data || e.data.type !== "CGO_INPUT") return;
+    if (e.source !== window && !allowedOrigins.has(e.origin)) { rejected++; refresh(); return; }   // pesan dari window ini sendiri selalu boleh (termasuk saat dibuka dari file://)
+    submit(e.data.payload, e.data.options);
+  });
+
+  chip($("#ver"), "Engine " + E.version, "");
+  health();            // self-test berjalan sebelum observer dipasang dan tidak meninggalkan jejak
+  E.observe(onPayload);
+  refresh();
+})();
+</script>
+</body>
+</html>
