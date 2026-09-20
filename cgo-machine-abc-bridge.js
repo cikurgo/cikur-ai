@@ -14,37 +14,18 @@
     return;
   }
 
-  const VERSION = "1.1.0-ABC-BRIDGE-BUS";
-  const BUS_NAME = "cgo-machine-abc-bus";
+  const VERSION = "1.0.0-ABC-BRIDGE";
   const listeners = new Set();
   let lastPacket = null;
-  let bus = null;
-  try {
-    if (typeof BroadcastChannel !== "undefined") bus = new BroadcastChannel(BUS_NAME);
-  } catch (_) { bus = null; }
-
-  function publishBus(kind, data) {
-    const msg = {
-      type: "CGO_ABC_BUS",
-      kind: kind,
-      source: (typeof location !== "undefined" && location.pathname) || "unknown",
-      at: new Date().toISOString(),
-      data: data
-    };
-    try { if (bus) bus.postMessage(msg); } catch (_) {}
-    try {
-      // fallback lintas-tab untuk browser tanpa BroadcastChannel
-      localStorage.setItem("cgo-abc-bus-ping", JSON.stringify({ t: Date.now(), kind: kind }));
-    } catch (_) {}
-    return msg;
-  }
-
 
   function emit(name, detail) {
     try {
       global.dispatchEvent(new CustomEvent(name, { detail }));
     } catch (_) {}
   }
+
+  let bc = null;
+  try { bc = new BroadcastChannel("CGO_MACHINE_ABC_MONITOR"); } catch (_) {}
 
   function onPacket(packet) {
     lastPacket = packet;
@@ -57,35 +38,8 @@
       stopReason: packet?.stopReason || null,
       timestamp: packet?.timestamp || new Date().toISOString()
     });
-    // Siaran lintas-tab → monitor ABC / tab BCGO lain bisa melihat siklus
-    try {
-      const cycles = packet?.cycles || [];
-      const compact = (Array.isArray(cycles) ? cycles : []).map((c, i) => {
-        const r = c && (c.result || c);
-        return {
-          cycleIndex: c?.cycleIndex ?? i,
-          result: r ? {
-            status: r.status,
-            durationMs: r.durationMs || c?.pipeline?.C?.durationMs || 0,
-            decision: r.decision || null,
-            findings: r.findings || [],
-            relations: r.relations || [],
-            evidence: r.evidence || [],
-            uncertainty: r.uncertainty || [],
-            reasoning: r.reasoning || [],
-            summary: r.summary || null
-          } : null,
-          audit: c?.audit || null,
-          pipeline: c?.pipeline ? { A: !!c.pipeline.A, B: !!c.pipeline.B, C: !!c.pipeline.C } : null
-        };
-      });
-      publishBus("cycle", {
-        result: compact[0]?.result || packet?.result || null,
-        cycles: compact,
-        stopReason: packet?.stopReason || null,
-        timestamp: packet?.timestamp || null
-      });
-    } catch (_) {}
+    // Kirim ke tab monitor Mesin ABC (jika terbuka)
+    try { bc && bc.postMessage({ type: "ABC_PACKET", packet }); } catch (_) {}
     for (const fn of [...listeners]) {
       try { fn(packet); } catch (_) {}
     }
@@ -115,17 +69,24 @@
         skipAudit: fast,
         ...options
       });
-      return {
+      const status = out?.result?.status || out?.finalResult?.status || null;
+      const packet = {
         ok: true,
         engine: "CGO_MACHINE_ABC",
         version: E.version,
-        status: out?.result?.status || out?.finalResult?.status || null,
+        status,
         confidence: out?.result?.decision?.confidence ?? out?.finalResult?.decision?.confidence ?? null,
         summary: out?.result?.summary || null,
         findings: out?.result?.findings || [],
         audit: out?.audit || out?.cycles?.at?.(-1)?.audit || null,
         packet: out
       };
+      try {
+        const ch = new BroadcastChannel("CGO_MACHINE_ABC_BUS");
+        ch.postMessage({ type: "abc-result", status, source: "bridge-analyze", version: E.version, at: Date.now() });
+        ch.close();
+      } catch (_) {}
+      return packet;
     } catch (err) {
       return { ok: false, error: String(err?.message || err) };
     }
@@ -171,8 +132,6 @@
       return () => listeners.delete(fn);
     },
     getLastPacket: () => lastPacket,
-    publishBus,
-    BUS_NAME,
     pause: () => E.pause(),
     resume: () => E.resume(),
     isPaused: () => E.isPaused()
@@ -183,8 +142,6 @@
   // Alias singkat untuk Otak CGO
   if (!global.CGOCoreMachine) global.CGOCoreMachine = E;
 
-  emit("cgo-machine-abc-ready", { version: VERSION, engine: E.version });
   emit("cgo:machine-abc-ready", { version: VERSION, engine: E.version });
-  try { publishBus("ready", { version: VERSION, engine: E.version }); } catch (_) {}
   console.log("[CGO-ABC-BRIDGE] Siap · engine", E.version, "· bridge", VERSION);
 })(typeof globalThis !== "undefined" ? globalThis : window);
