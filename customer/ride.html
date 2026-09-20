@@ -7,6 +7,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
+
 <script type="module" src="../cikur-config.js"></script>
 <style>
 :root {
@@ -826,6 +830,28 @@ body{background:#eef1f5}
 .stars span .ic{width:36px;height:36px;fill:none}
 .stars span.on{color:#f59e0b}
 .stars span.on .ic{fill:#f59e0b}
+
+/* ===== Ikon 3D & peta ===== */
+.i3d{width:18px;height:18px;object-fit:contain;vertical-align:-4px;display:inline-block}
+.i3d-fb{display:inline-flex;vertical-align:middle}
+.leaflet-container{background:#f3f5f7}
+.leaflet-control-attribution{font-size:9px!important;background:rgba(255,255,255,.78)!important;border-radius:8px 0 0 0}
+.brand-badge{width:48px;height:48px;border-radius:16px;background:#fff1f2}
+.brand-badge .i3d{width:36px;height:36px;vertical-align:0}
+.service-ic{width:58px;height:58px;border-radius:18px}
+.service-ic .i3d{width:44px;height:44px;vertical-align:0}
+.pay-chip .i3d{width:22px;height:22px;vertical-align:0}
+.hist-ic .i3d{width:28px;height:28px;vertical-align:0}
+.stars span .i3d{width:38px;height:38px;vertical-align:0;filter:grayscale(1) opacity(.3);transition:.15s}
+.stars span.on .i3d{filter:none}
+.finish-hero{text-align:center;margin-bottom:4px}
+.finish-hero .i3d{width:64px;height:64px;vertical-align:0}
+.trip-note .i3d{width:20px;height:20px;flex:0 0 20px;vertical-align:0}
+.chat-title .i3d{width:18px;height:18px;vertical-align:-4px}
+.sheet-head h3 .i3d{width:24px;height:24px;margin-right:6px;vertical-align:-6px}
+.mk-driver{width:44px;height:44px;border-radius:50%;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.3);display:flex;align-items:center;justify-content:center}
+.mk-driver .i3d{width:32px;height:32px;vertical-align:0}
+.ride-map-wrap .leaflet-bottom.leaflet-right{top:auto;bottom:30px}
 </style>
 
 <style id="cgo-modern-toast-style">
@@ -872,7 +898,7 @@ body{background:#eef1f5}
         <div class="ride-sheet">
             <div class="sheet-handle"></div>
             <div class="sheet-scroll">
-            <div class="brand-row"><span class="brand-badge"><svg class="ic"><use href="#i-bike"/></svg></span><div><b>CIKUR GO RIDE</b><small>Ojek motor antar-jemput</small></div></div>
+            <div class="brand-row"><span class="brand-badge"><img class="i3d" data-3d="motor" alt=""></span><div><b>CIKUR GO RIDE</b><small>Ojek motor antar-jemput</small></div></div>
             <!-- Route inputs -->
             <div class="route-card">
                 <div class="route-rail">
@@ -898,7 +924,7 @@ body{background:#eef1f5}
             </div>
 
             <div class="service-card">
-                <div class="service-ic"><svg class="ic"><use href="#i-bike"/></svg></div>
+                <div class="service-ic"><img class="i3d" data-3d="motor" alt=""></div>
                 <div class="service-meta"><b>CIKUR GO RIDE</b><small id="serviceMeta">Isi tujuan untuk melihat tarif</small></div>
                 <div class="service-price" id="serviceFare"><small>dari</small>Rp 12.000</div>
             </div>
@@ -906,14 +932,14 @@ body{background:#eef1f5}
 
             <div class="sheet-footer" id="rideCartSection">
                 <div class="pay-chips">
-                    <button type="button" class="pay-chip on" data-pay="Tunai / COD (Bayar ke Driver)" onclick="pickPay(this)"><svg class="ic"><use href="#i-cash"/></svg>Tunai</button>
-                    <button type="button" class="pay-chip" data-pay="CikurPay Saldo Digital" onclick="pickPay(this)"><svg class="ic"><use href="#i-wallet"/></svg>CikurPay</button>
+                    <button type="button" class="pay-chip on" data-pay="Tunai / COD (Bayar ke Driver)" onclick="pickPay(this)"><img class="i3d" data-3d="coin" alt="">Tunai</button>
+                    <button type="button" class="pay-chip" data-pay="CikurPay Saldo Digital" onclick="pickPay(this)"><img class="i3d" data-3d="card" alt="">CikurPay</button>
                 </div>
                 <select id="ridePaymentMethodSelect" hidden>
                     <option value="Tunai / COD (Bayar ke Driver)">Tunai</option>
                     <option value="CikurPay Saldo Digital">CikurPay</option>
                 </select>
-                <div id="longTripNote" class="trip-note" style="display:none;"></div>
+                <div id="longTripNote" class="trip-note" style="display:none;"><img class="i3d" data-3d="warning" alt=""><span id="longTripText"></span></div>
                 <span id="rideTypeName" hidden></span><span id="rideTotalPrice" hidden></span>
                 <button class="btn-order" id="btnRideOrder" onclick="prosesPesanRide()">Pesan Sekarang</button>
             </div>
@@ -961,7 +987,7 @@ body{background:#eef1f5}
             </div>
 
             <div class="chat-panel" id="trackingChatPanel" style="display:none;">
-                <div class="chat-title">Chat dengan driver</div>
+                <div class="chat-title"><img class="i3d" data-3d="chat" alt=""> Chat dengan driver</div>
                 <div id="trackingChatBox" class="chat-box">
                     <div class="chat-empty">Belum ada pesan.</div>
                 </div>
@@ -980,11 +1006,12 @@ body{background:#eef1f5}
 
             <div id="trackingFinishNote" style="display:none;">
                 <div class="finish-card">
+                    <div class="finish-hero" id="finishHero"><img class="i3d" data-3d="party" alt=""></div>
                     <div class="finish-title" id="finishTitle">Perjalanan selesai</div>
                     <div class="finish-fare" id="finishFare">-</div>
                     <div id="ratingBlock">
                         <div class="stars" id="starRow">
-                            <span onclick="setRideRating(1)"><svg class="ic"><use href="#i-star"/></svg></span><span onclick="setRideRating(2)"><svg class="ic"><use href="#i-star"/></svg></span><span onclick="setRideRating(3)"><svg class="ic"><use href="#i-star"/></svg></span><span onclick="setRideRating(4)"><svg class="ic"><use href="#i-star"/></svg></span><span onclick="setRideRating(5)"><svg class="ic"><use href="#i-star"/></svg></span>
+                            <span onclick="setRideRating(1)"><img class="i3d" data-3d="star" alt=""></span><span onclick="setRideRating(2)"><img class="i3d" data-3d="star" alt=""></span><span onclick="setRideRating(3)"><img class="i3d" data-3d="star" alt=""></span><span onclick="setRideRating(4)"><img class="i3d" data-3d="star" alt=""></span><span onclick="setRideRating(5)"><img class="i3d" data-3d="star" alt=""></span>
                         </div>
                         <button class="btn-order" onclick="submitRideRating()">Kirim Penilaian</button>
                     </div>
@@ -995,6 +1022,60 @@ body{background:#eef1f5}
     </div>
 
 <script>
+// ===== Ikon 3D: Microsoft Fluent Emoji (lisensi MIT), dimuat dari GitHub =====
+// Supaya lebih stabil: unduh PNG-nya ke folder assets/3d/ (nama file = kunci + ".png", mis. motor.png)
+// lalu isi ICON3D_LOCAL = "../assets/3d/". Kalau gambar gagal dimuat, otomatis diganti ikon garis.
+const ICON3D_BASE = "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/";
+const ICON3D_LOCAL = "";
+const ICON3D = { motor: "Motor scooter/3D/motor_scooter_3d.png", pin: "Round pushpin/3D/round_pushpin_3d.png", flag: "Chequered flag/3D/chequered_flag_3d.png", chat: "Speech balloon/3D/speech_balloon_3d.png", cart: "Shopping cart/3D/shopping_cart_3d.png", food: "Pot of food/3D/pot_of_food_3d.png", memo: "Memo/3D/memo_3d.png", gear: "Gear/3D/gear_3d.png", compass: "Compass/3D/compass_3d.png", worldmap: "World map/3D/world_map_3d.png", warning: "Warning/3D/warning_3d.png", coin: "Coin/3D/coin_3d.png", card: "Credit card/3D/credit_card_3d.png", star: "Star/3D/star_3d.png", receipt: "Receipt/3D/receipt_3d.png", party: "Party popper/3D/party_popper_3d.png" };
+const ICON3D_FB = { motor: "bike", pin: "pin", flag: "flag", chat: "chat", cart: "cart", food: "food", memo: "doc", gear: "gear", compass: "nav", worldmap: "map", warning: "warn", coin: "cash", card: "wallet", star: "star", receipt: "receipt", party: "check" };
+function icon3dSrc(k) { return ICON3D_LOCAL ? ICON3D_LOCAL + k + ".png" : ICON3D_BASE + encodeURI(ICON3D[k]); }
+function ic3Fail(img) {
+  const s = document.createElement("span");
+  s.className = "i3d-fb";
+  s.innerHTML = '<svg class="ic"><use href="#i-' + (img.dataset.fb || "pin") + '"/></svg>';
+  img.replaceWith(s);
+}
+function ic3(k, cls) {
+  return '<img class="i3d ' + (cls || "") + '" alt="" decoding="async" src="' + icon3dSrc(k) + '" data-fb="' + (ICON3D_FB[k] || "pin") + '" onerror="ic3Fail(this)">';
+}
+function hydrate3d(root) {
+  (root || document).querySelectorAll("img[data-3d]").forEach((img) => {
+    const k = img.dataset["3d"];
+    if (!ICON3D[k]) return;
+    img.dataset.fb = ICON3D_FB[k] || "pin";
+    img.onerror = () => ic3Fail(img);
+    img.src = icon3dSrc(k);
+    img.removeAttribute("data-3d");
+  });
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => hydrate3d()); else hydrate3d();
+
+// ===== Peta dasar gratis tanpa API key: OpenFreeMap (Positron) lewat MapLibre; cadangan: OpenStreetMap =====
+function addBaseMap(map) {
+  try { map.setMaxZoom(19); map.setMinZoom(3); } catch (_) {}
+  let gl = null, ok = false, fell = false;
+  const fallback = () => {
+    if (fell || ok) return;
+    fell = true;
+    try { if (gl) map.removeLayer(gl); } catch (_) {}
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap contributors" }).addTo(map);
+  };
+  try {
+    if (window.maplibregl && L.maplibreGL) {
+      gl = L.maplibreGL({
+        style: "https://tiles.openfreemap.org/styles/positron",
+        attribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+      }).addTo(map);
+      const m = gl.getMaplibreMap && gl.getMaplibreMap();
+      if (m) { m.on("load", () => { ok = true; }); m.on("error", () => { if (!ok) fallback(); }); }
+      setTimeout(fallback, 9000);
+      return;
+    }
+  } catch (e) { console.warn("[CIKUR] MapLibre gagal, pakai OSM:", e && e.message); }
+  fallback();
+}
+
 let userProfile = {};
 let selectedRide = { type: "CIKUR GO RIDE", vehicleType: "bike", price: 12000, distanceKm: null, driverEarning: 10000, platformFee: 2000 };
 let selectedFleetKey = "bike";
@@ -1089,7 +1170,7 @@ function refreshRideFareUI() {
   if (ln) {
     const far = calc.distanceKm != null && calc.distanceKm > LONG_TRIP_KM;
     ln.style.display = far ? "flex" : "none";
-    if (far) ln.textContent = "Perjalanan jauh ± " + calc.distanceKm + " km. Pastikan titik tujuan sudah tepat; driver akan mengonfirmasi lewat chat.";
+    if (far) document.getElementById("longTripText").textContent = "Perjalanan jauh ± " + calc.distanceKm + " km. Pastikan titik tujuan sudah tepat; driver akan mengonfirmasi lewat chat.";
   }
   selectedRide = { type: rate.label, vehicleType: rate.vehicleType, price: calc.fare, distanceKm: calc.distanceKm, driverEarning: calc.driverEarning, platformFee: calc.platformFee };
   const nameEl = document.getElementById("rideTypeName");
@@ -1113,6 +1194,8 @@ function refreshRideFareUI() {
 
 
 /* ===== BOOKING MAP (Leaflet) ===== */
+
+
 const MK_PICK = typeof L === "undefined" ? null : L.divIcon({ className: "mk", html: '<div class="mk-pick"></div>', iconSize: [22, 22], iconAnchor: [11, 11] });
 const MK_DEST = typeof L === "undefined" ? null : L.divIcon({ className: "mk", html: '<svg width="30" height="38" viewBox="0 0 30 38"><path d="M15 37S27 24 27 14a12 12 0 1 0-24 0c0 10 12 23 12 23z" fill="#E50914" stroke="#fff" stroke-width="2.5"/><circle cx="15" cy="14" r="4.5" fill="#fff"/></svg>', iconSize: [30, 38], iconAnchor: [15, 37] });
 let rideBookingMap = null;
@@ -1138,11 +1221,7 @@ function initRideBookingMap(lat = -6.3245, lon = 106.1524) {
         return;
     }
     rideBookingMap = L.map('rideBookingMap').setView([lat, lon], 15);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19,
-        subdomains: 'abcd',
-        attribution: '© OpenStreetMap · © CARTO'
-    }).addTo(rideBookingMap);
+    addBaseMap(rideBookingMap);
 
     rideBookingMap.on('click', (e) => {
         setPickup(e.latlng.lat, e.latlng.lng, true);
@@ -1381,7 +1460,7 @@ async function prosesPesanRide() {
         return;
     }
 
-    const button = document.querySelector('.btn-order');
+    const button = document.getElementById("btnRideOrder");
     if (button) { button.disabled = true; button.textContent = "Mengirim pesanan..."; }
 
     try {
@@ -1400,7 +1479,6 @@ async function prosesPesanRide() {
             vehicleType: selectedRide.vehicleType,
             vehicleName: selectedRide.type,
             fare: selectedRide.price,
-            distanceKm: selectedRide.distanceKm,
             driverEarning: selectedRide.driverEarning,
             platformFee: selectedRide.platformFee,
             platformFeePercent: RIDE_PRICING.feePercent,
@@ -1425,6 +1503,7 @@ async function prosesPesanRide() {
                 const newBalance = await window.CikurCloud.payWithSaldo(userProfile.uid, selectedRide.price, order.id, "Bayar CIKUR Ride #" + order.id.slice(-6));
                 userProfile.saldo = newBalance;
             } catch (payError) {
+                try { await window.CikurCloud.updateOrderStatus(order.id, { paymentMethod: "Tunai / COD (Bayar ke Driver)", paymentStatus: "PENDING" }); } catch (_) {}
                 alert("Pembayaran saldo gagal: " + (payError?.message || payError) + "\n\nPesanan tetap dibuat, silakan bayar Tunai ke driver.");
             }
         }
@@ -1525,7 +1604,7 @@ function ensureTrackingMap(centerLat, centerLon) {
     const el = document.getElementById("rideTrackingMap");
     if (!el || typeof L === "undefined") return;
     rideTrackingMap = L.map("rideTrackingMap").setView([centerLat, centerLon], 14);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 19, subdomains: "abcd", attribution: "© OpenStreetMap · © CARTO" }).addTo(rideTrackingMap);
+    addBaseMap(rideTrackingMap);
     setTimeout(() => { try { rideTrackingMap.invalidateSize(); } catch (_) {} }, 250);
 }
 
@@ -1586,7 +1665,7 @@ function startTrackingDriverLocation(driverId) {
         if (!rideDriverMarker) {
             const icon = L.divIcon({
                 className: "driver-live-icon",
-                html: '<div style="width:36px;height:36px;border-radius:50%;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 4px 12px rgba(0,0,0,.3);border:2px solid #fff;"><svg class=\"ic\" style=\"width:20px;height:20px\"><use href=\"#i-bike\"/></svg></div>',
+                html: '<div class="mk-driver">' + ic3('motor') + '</div>',
                 iconSize: [36, 36],
                 iconAnchor: [18, 18]
             });
@@ -1663,7 +1742,7 @@ async function openHistory() {
             const st = orderStatusInfo(o.status);
             const icon = "bike";
             return '<button type="button" class="hist-row" onclick="openReceipt(' + i + ')">' +
-                '<div class="hist-ic"><svg class="ic"><use href="#i-' + icon + '"/></svg></div>' +
+                '<div class="hist-ic">' + ic3('motor') + '</div>' +
                 '<div class="hist-main"><b>' + escHtml(o.destination || "-") + '</b><small>' + escHtml(orderDateText(o)) + '</small></div>' +
                 '<div class="hist-fare">Rp ' + Number(o.fare || 0).toLocaleString("id-ID") + '<br><span class="chip-status ' + st.c + '">' + st.t + '</span></div></button>';
         }).join("") : '<div class="chat-empty">Belum ada riwayat perjalanan.</div>';
@@ -1817,6 +1896,7 @@ function applyRideStage(order) {
         const cash = /tunai|cod/i.test(String(order.paymentMethod || "")) && order.paymentStatus !== "PAID";
         const fare = "Rp " + Number(order.fare || 0).toLocaleString("id-ID");
         document.getElementById("finishTitle").innerText = cancelled ? "Ride dibatalkan" : "Perjalanan selesai";
+        document.getElementById("finishHero").style.display = cancelled ? "none" : "block";
         document.getElementById("finishFare").innerText = cancelled ? "Semoga kita bisa berjumpa lagi." : (cash ? "Bayar tunai ke driver: " + fare : "Total " + fare + " · " + (order.paymentMethod || ""));
         document.getElementById("ratingBlock").style.display = (s === "SELESAI" && !order.rating) ? "block" : "none";
     }
@@ -1843,6 +1923,8 @@ function resetRideBookingView() {
     currentActiveRideOrderId = null;
     currentTrackedDriverId = null;
     clearInterval(searchTimerId); searchBase = 0;
+    rideRatingValue = 0;
+    document.querySelectorAll("#starRow span").forEach((el) => el.classList.remove("on"));
     /* placeholder removed in UI v2 */
     document.getElementById("trackingFinishNote").style.display = "none";
     document.getElementById("rideTrackingView").style.display = "none";
@@ -1871,14 +1953,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 <div id="historySheet" class="sheet-overlay" onclick="if(event.target===this)closeHistory()">
     <div class="sheet-modal">
-        <div class="sheet-head"><h3>Riwayat perjalanan</h3><button type="button" class="x-btn" onclick="closeHistory()" aria-label="Tutup"><svg class="ic"><use href="#i-close"/></svg></button></div>
+        <div class="sheet-head"><h3><img class="i3d" data-3d="motor" alt="">Riwayat perjalanan</h3><button type="button" class="x-btn" onclick="closeHistory()" aria-label="Tutup"><svg class="ic"><use href="#i-close"/></svg></button></div>
         <div id="historyList" class="hist-list"></div>
     </div>
 </div>
 
 <div id="receiptSheet" class="sheet-overlay" onclick="if(event.target===this)closeReceipt()">
     <div class="sheet-modal">
-        <div class="sheet-head"><h3>Struk perjalanan</h3><button type="button" class="x-btn" onclick="closeReceipt()" aria-label="Tutup"><svg class="ic"><use href="#i-close"/></svg></button></div>
+        <div class="sheet-head"><h3><img class="i3d" data-3d="receipt" alt="">Struk perjalanan</h3><button type="button" class="x-btn" onclick="closeReceipt()" aria-label="Tutup"><svg class="ic"><use href="#i-close"/></svg></button></div>
         <div id="receiptBody" class="receipt"></div>
         <button type="button" class="btn-order" style="margin-top:12px;" onclick="shareReceipt()"><svg class="ic" style="margin-right:6px"><use href="#i-share"/></svg>Bagikan struk</button>
     </div>
