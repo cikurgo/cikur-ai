@@ -7,6 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" rel="stylesheet" />
     <script src="../bcgo-engine.js"></script>
     <script type="module" src="../cikur-config.js"></script>
     <style>
@@ -113,6 +114,16 @@
         .saldo-card { display: flex; flex-direction: column; gap: 4px; background: #0f172a; color: #fff; border-radius: 16px; padding: 12px 14px; margin-bottom: 10px; }
         .saldo-card small { font-size: 10px; color: #94a3b8; font-weight: 600; }
         .saldo-card b { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+        /* ===== Ikon 3D & peta ===== */
+        .i3d{width:18px;height:18px;object-fit:contain;vertical-align:-4px;display:inline-block}
+        .i3d-fb{display:inline-flex;vertical-align:middle}
+        .leaflet-container{background:#f3f5f7}
+        .leaflet-control-attribution{font-size:9px!important;background:rgba(255,255,255,.78)!important;border-radius:8px 0 0 0}
+        
+        .driver-tab .i3d { width: 20px; height: 20px; vertical-align: -5px; }
+        .form-input .i3d { width: 20px; height: 20px; }
+        #driverPhoto, .driver-photo { background: #334155; color: transparent; }
     </style>
 </head>
 <body>
@@ -130,7 +141,7 @@
         
         <!-- 1. REGISTRASI & REKENING -->
         <div id="registrationSection" class="card-box" style="display: none;">
-            <h3 style="font-size: 13px; font-weight: 800;"><svg class='ic'><use href='#i-doc'/></svg> Pendaftaran Driver</h3>
+            <h3 style="font-size: 13px; font-weight: 800;"><img class="i3d" data-3d="memo" alt=""> Pendaftaran Driver</h3>
             
             <div class="form-group">
                 <label class="form-label">Foto Profil Driver</label>
@@ -150,7 +161,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Jenis Kendaraan</label>
-                <div class="form-input" style="display:flex;align-items:center;gap:8px;background:#f8fafc;font-weight:700;"><svg class='ic'><use href='#i-bike'/></svg> Sepeda motor (khusus CIKUR GO RIDE)</div>
+                <div class="form-input" style="display:flex;align-items:center;gap:8px;background:#f8fafc;font-weight:700;"><img class="i3d" data-3d="motor" alt=""> Sepeda motor (khusus CIKUR GO RIDE)</div>
                 <input type="hidden" id="regVehicleType" value="Motor">
             </div>
             <div class="form-group">
@@ -215,7 +226,7 @@
             
             <div class="driver-status-card">
                 <div style="display: flex; gap: 12px; align-items: center;">
-                    <img id="profilePhotoDisplay" src="https://via.placeholder.com/60" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid #fff;" alt="Foto Driver">
+                    <img id="profilePhotoDisplay" src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2060%2060%22%3E%3Crect%20width%3D%2260%22%20height%3D%2260%22%20fill%3D%22%23334155%22/%3E%3Ccircle%20cx%3D%2230%22%20cy%3D%2223%22%20r%3D%2210%22%20fill%3D%22%2394a3b8%22/%3E%3Cpath%20d%3D%22M10%2054c2-12%2010-18%2020-18s18%206%2020%2018z%22%20fill%3D%22%2394a3b8%22/%3E%3C/svg%3E" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid #fff;" alt="">
                     <div style="flex: 1;">
                         <h3 id="profileNameDisplay" style="font-size: 13px; font-weight: 800;">-</h3>
                         <p id="profileMetaDisplay" style="font-size: 10px; opacity: 0.8; margin-top: 2px;">-</p>
@@ -223,19 +234,19 @@
                     </div>
                     <button type="button" onclick="toggleDriverStatus()" id="statusBtn" class="status-toggle-btn offline">OFFLINE</button>
                 </div>
-                <button type="button" onclick="openEditProfile()" style="background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer;"><svg class='ic'><use href='#i-gear'/></svg> Ubah Profil / Data Rekening</button>
+                <button type="button" onclick="openEditProfile()" style="background: rgba(255,255,255,0.1); border: none; color: #fff; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer;"><img class="i3d" data-3d="gear" alt=""> Ubah Profil / Data Rekening</button>
             </div>
 
             <!-- TAB NAVIGASI -->
             <div class="driver-tabs">
-                <div class="driver-tab active" id="tabFoodBtn" onclick="switchDriverTab('food')"><svg class='ic'><use href='#i-food'/></svg> Cikur Food (Resto)</div>
-                <div class="driver-tab" id="tabRideBtn" onclick="switchDriverTab('ride')"><svg class='ic'><use href='#i-bike'/></svg> CIKUR GO RIDE (Reguler)</div>
+                <div class="driver-tab active" id="tabFoodBtn" onclick="switchDriverTab('food')"><img class="i3d" data-3d="food" alt=""> Cikur Food (Resto)</div>
+                <div class="driver-tab" id="tabRideBtn" onclick="switchDriverTab('ride')"><img class="i3d" data-3d="motor" alt=""> CIKUR GO RIDE</div>
             </div>
 
             <!-- PETA REAL-TIME GPS -->
             <div class="card-box">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h4 style="font-size: 12px; font-weight: 800;"><svg class='ic'><use href='#i-nav'/></svg> Peta Navigasi Live Driver</h4>
+                    <h4 style="font-size: 12px; font-weight: 800;"><img class="i3d" data-3d="compass" alt=""> Peta Navigasi Live Driver</h4>
                     <span id="gpsStatus" style="font-size: 10px; color: #10b981; font-weight: 700;">● GPS Aktif</span>
                 </div>
                 <div id="map"></div>
@@ -251,7 +262,63 @@
 
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
 <script>
+// ===== Ikon 3D: Microsoft Fluent Emoji (lisensi MIT), dimuat dari GitHub =====
+// Supaya lebih stabil: unduh PNG-nya ke folder assets/3d/ (nama file = kunci + ".png", mis. motor.png)
+// lalu isi ICON3D_LOCAL = "../assets/3d/". Kalau gambar gagal dimuat, otomatis diganti ikon garis.
+const ICON3D_BASE = "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/";
+const ICON3D_LOCAL = "";
+const ICON3D = { motor: "Motor scooter/3D/motor_scooter_3d.png", pin: "Round pushpin/3D/round_pushpin_3d.png", flag: "Chequered flag/3D/chequered_flag_3d.png", chat: "Speech balloon/3D/speech_balloon_3d.png", cart: "Shopping cart/3D/shopping_cart_3d.png", food: "Pot of food/3D/pot_of_food_3d.png", memo: "Memo/3D/memo_3d.png", gear: "Gear/3D/gear_3d.png", compass: "Compass/3D/compass_3d.png", worldmap: "World map/3D/world_map_3d.png", warning: "Warning/3D/warning_3d.png", coin: "Coin/3D/coin_3d.png", card: "Credit card/3D/credit_card_3d.png", star: "Star/3D/star_3d.png", receipt: "Receipt/3D/receipt_3d.png", party: "Party popper/3D/party_popper_3d.png" };
+const ICON3D_FB = { motor: "bike", pin: "pin", flag: "flag", chat: "chat", cart: "cart", food: "food", memo: "doc", gear: "gear", compass: "nav", worldmap: "map", warning: "warn", coin: "cash", card: "wallet", star: "star", receipt: "receipt", party: "check" };
+function icon3dSrc(k) { return ICON3D_LOCAL ? ICON3D_LOCAL + k + ".png" : ICON3D_BASE + encodeURI(ICON3D[k]); }
+function ic3Fail(img) {
+  const s = document.createElement("span");
+  s.className = "i3d-fb";
+  s.innerHTML = '<svg class="ic"><use href="#i-' + (img.dataset.fb || "pin") + '"/></svg>';
+  img.replaceWith(s);
+}
+function ic3(k, cls) {
+  return '<img class="i3d ' + (cls || "") + '" alt="" decoding="async" src="' + icon3dSrc(k) + '" data-fb="' + (ICON3D_FB[k] || "pin") + '" onerror="ic3Fail(this)">';
+}
+function hydrate3d(root) {
+  (root || document).querySelectorAll("img[data-3d]").forEach((img) => {
+    const k = img.dataset["3d"];
+    if (!ICON3D[k]) return;
+    img.dataset.fb = ICON3D_FB[k] || "pin";
+    img.onerror = () => ic3Fail(img);
+    img.src = icon3dSrc(k);
+    img.removeAttribute("data-3d");
+  });
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => hydrate3d()); else hydrate3d();
+
+// ===== Peta dasar gratis tanpa API key: OpenFreeMap (Positron) lewat MapLibre; cadangan: OpenStreetMap =====
+function addBaseMap(map) {
+  try { map.setMaxZoom(19); map.setMinZoom(3); } catch (_) {}
+  let gl = null, ok = false, fell = false;
+  const fallback = () => {
+    if (fell || ok) return;
+    fell = true;
+    try { if (gl) map.removeLayer(gl); } catch (_) {}
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap contributors" }).addTo(map);
+  };
+  try {
+    if (window.maplibregl && L.maplibreGL) {
+      gl = L.maplibreGL({
+        style: "https://tiles.openfreemap.org/styles/positron",
+        attribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+      }).addTo(map);
+      const m = gl.getMaplibreMap && gl.getMaplibreMap();
+      if (m) { m.on("load", () => { ok = true; }); m.on("error", () => { if (!ok) fallback(); }); }
+      setTimeout(fallback, 9000);
+      return;
+    }
+  } catch (e) { console.warn("[CIKUR] MapLibre gagal, pakai OSM:", e && e.message); }
+  fallback();
+}
+
 let isOnline = false;
 let currentTab = 'food';
 let map, driverMarker;
@@ -259,7 +326,7 @@ let map, driverMarker;
 function initMap(lat = -6.3245, lon = 106.1524) {
     if(!map) {
         map = L.map('map').setView([lat, lon], 15);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, subdomains: 'abcd', attribution: '© OpenStreetMap · © CARTO' }).addTo(map);
+        addBaseMap(map);
         driverMarker = L.marker([lat, lon]).addTo(map).bindPopup("<b>Posisi Live Anda</b>").openPopup();
     } else {
         map.setView([lat, lon], 15);
@@ -703,9 +770,9 @@ function renderAvailableFoodOrderCard(ord) {
                 <span class="badge-type badge-food">CIKUR FOOD - Resto: ${ord.restoName || 'Mitra Resto'}</span>
                 <span style="font-size: 10px; color: #d97706; font-weight:700;">Menunggu Diambil</span>
             </div>
-            <div style="font-size: 11px; font-weight: 700;"><svg class='ic'><use href='#i-pin'/></svg> Tujuan Customer: ${ord.address?.text || '-'}</div>
+            <div style="font-size: 11px; font-weight: 700;">${ic3('pin')} Tujuan Customer: ${ord.address?.text || '-'}</div>
             <div style="font-size: 11px; color: var(--text-muted); background: var(--background); padding: 8px; border-radius: 8px;">
-                <svg class='ic'><use href='#i-cart'/></svg> <b>Menu:</b> ${itemsText}
+                ${ic3('cart')} <b>Menu:</b> ${itemsText}
             </div>
             <div style="font-size: 12px; font-weight: 800; color: var(--primary);">
                 Total Pesanan: Rp ${Number(ord.total || 0).toLocaleString('id-ID')} (${ord.paymentMethod || '-'})
@@ -730,15 +797,15 @@ function renderMyActiveFoodOrderCard(ord) {
                 <span class="badge-type badge-food">CIKUR FOOD - Resto: ${ord.restoName || 'Mitra Resto'}</span>
                 <span style="font-size: 10px; color: #16a34a; font-weight:700;"><svg class='ic'><use href='#i-check'/></svg> ${statusLabel}</span>
             </div>
-            <div style="font-size: 11px; font-weight: 700;"><svg class='ic'><use href='#i-pin'/></svg> Tujuan Customer: ${ord.address?.text || '-'}</div>
+            <div style="font-size: 11px; font-weight: 700;">${ic3('pin')} Tujuan Customer: ${ord.address?.text || '-'}</div>
             <div style="font-size: 11px; color: var(--text-muted); background: var(--background); padding: 8px; border-radius: 8px;">
-                <svg class='ic'><use href='#i-cart'/></svg> <b>Menu:</b> ${itemsText}
+                ${ic3('cart')} <b>Menu:</b> ${itemsText}
             </div>
             <div style="font-size: 12px; font-weight: 800; color: var(--primary);">
                 Total Pembayaran: Rp ${Number(ord.total || 0).toLocaleString('id-ID')} (${ord.paymentMethod || '-'})
             </div>
 
-            <div style="font-size: 11px; font-weight: 700; margin-top: 4px;"><svg class='ic'><use href='#i-chat'/></svg> Chat Koordinasi:</div>
+            <div style="font-size: 11px; font-weight: 700; margin-top: 4px;">${ic3('chat')} Chat Koordinasi:</div>
             <div class="chat-container">
                 <div class="chat-box" id="chatFoodBox_${ord.id}">${chatHtml}</div>
                 <div class="chat-input-group">
@@ -748,7 +815,7 @@ function renderMyActiveFoodOrderCard(ord) {
             </div>
 
             <div style="display: flex; gap: 8px; margin-top: 4px;">
-                <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ord.address?.text || '')}" target="_blank" class="form-input" style="background:#0284c7; color:#fff; text-align:center; text-decoration:none; font-weight:700; display:flex; align-items:center; justify-content:center;"><svg class='ic'><use href='#i-map'/></svg> Peta Navigasi</a>
+                <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ord.address?.text || '')}" target="_blank" class="form-input" style="background:#0284c7; color:#fff; text-align:center; text-decoration:none; font-weight:700; display:flex; align-items:center; justify-content:center;">${ic3('worldmap')} Peta Navigasi</a>
                 <button type="button" class="btn-primary" style="flex:1;" onclick="completeFoodOrder('${ord.id}')">Selesaikan Antaran <svg class='ic'><use href='#i-check'/></svg> </button>
             </div>
         </div>
@@ -786,7 +853,9 @@ function stopRideOrderListeners() {
     driverRideMessageUnsubscribers = {};
 }
 
-const REQUIRE_SALDO_FOR_CASH = true; // true: order tunai hanya bisa diterima jika saldo >= komisi. false: saldo boleh minus.
+
+
+const REQUIRE_SALDO_FOR_CASH = false; // true: order tunai hanya bisa diterima jika saldo >= komisi. false (default): saldo boleh minus, komisi dicatat sebagai utang ke aplikator.
 let driverSaldo = null;
 
 async function refreshDriverSaldo() {
@@ -880,11 +949,11 @@ function renderAvailableRideCard(ord) {
           <span style="font-size:10px;color:#0284c7;font-weight:800;">BARU</span>
         </div>
         <div style="font-size:12px;font-weight:800;margin-top:4px;"><span class='dot-g'></span> ${escText(ord.pickup || "-")}</div>
-        <div style="font-size:12px;font-weight:700;"><svg class='ic'><use href='#i-flag'/></svg> ${escText(ord.destination || "-")}</div>
+        <div style="font-size:12px;font-weight:700;">${ic3('flag')} ${escText(ord.destination || "-")}</div>
         <div style="font-size:11px;color:var(--text-muted);">Penumpang: <b>${escText(ord.customerName || "Customer")}</b>${dist}</div>
         ${rideSplitHtml(ord) || `<div style="font-size:13px;font-weight:800;color:#0284c7;">Tarif: Rp ${fare}</div>`}
         <div style="display:flex;gap:8px;margin-top:8px;">
-          <a href="https://www.google.com/maps/search/?api=1&query=${mapsQ}" target="_blank" class="form-input" style="background:#0ea5e9;color:#fff;text-align:center;text-decoration:none;font-weight:700;display:flex;align-items:center;justify-content:center;"><svg class='ic'><use href='#i-map'/></svg> Jemput</a>
+          <a href="https://www.google.com/maps/search/?api=1&query=${mapsQ}" target="_blank" class="form-input" style="background:#0ea5e9;color:#fff;text-align:center;text-decoration:none;font-weight:700;display:flex;align-items:center;justify-content:center;">${ic3('worldmap')} Jemput</a>
           <button type="button" class="btn-primary" style="flex:1;background:#0284c7;" onclick="claimThisRideOrder('${ord.id}')">Terima Order</button>
         </div>
       </div>`;
@@ -912,9 +981,9 @@ function renderMyActiveRideCard(ord) {
           <span style="font-size:10px;color:#16a34a;font-weight:800;">${status}</span>
         </div>
         <div style="font-size:12px;font-weight:800;"><span class='dot-g'></span> ${escText(ord.pickup || "-")}</div>
-        <div style="font-size:12px;font-weight:700;"><svg class='ic'><use href='#i-flag'/></svg> ${escText(ord.destination || "-")}</div>
+        <div style="font-size:12px;font-weight:700;">${ic3('flag')} ${escText(ord.destination || "-")}</div>
         ${rideSplitHtml(ord) || `<div style="font-size:13px;font-weight:800;color:#0284c7;">Tarif: Rp ${fare} · ${escText(ord.paymentMethod || "-")}</div>`}
-        <div style="font-size:11px;font-weight:700;margin-top:6px;"><svg class='ic'><use href='#i-chat'/></svg> Chat</div>
+        <div style="font-size:11px;font-weight:700;margin-top:6px;">${ic3('chat')} Chat</div>
         <div class="chat-container">
           <div class="chat-box" id="chatRideBox_${ord.id}">${chatHtml}</div>
           <div class="chat-input-group">
@@ -923,7 +992,7 @@ function renderMyActiveRideCard(ord) {
           </div>
         </div>
         <div style="display:flex;gap:8px;margin-top:8px;">
-          <a href="https://www.google.com/maps/dir/?api=1&destination=${destQ}" target="_blank" class="form-input" style="background:#0ea5e9;color:#fff;text-align:center;text-decoration:none;font-weight:700;display:flex;align-items:center;justify-content:center;"><svg class='ic'><use href='#i-map'/></svg> Navigasi</a>
+          <a href="https://www.google.com/maps/dir/?api=1&destination=${destQ}" target="_blank" class="form-input" style="background:#0ea5e9;color:#fff;text-align:center;text-decoration:none;font-weight:700;display:flex;align-items:center;justify-content:center;">${ic3('worldmap')} Navigasi</a>
           ${actionBtn}
         </div>
       </div>`;
