@@ -291,6 +291,20 @@
         if (abcOk) console.log("[CGO BOOT] Mesin ABC + kognisi formal siap untuk Chat CGO");
         else console.warn("[CGO BOOT] Mesin ABC tidak terdeteksi (chat tetap normal)");
       } catch (_abc) {}
+      // Pre-warm semantic embedding (gratis, non-blocking) — bantu knowledge matching
+      try {
+        if (window.CGOSemantic && typeof window.CGOSemantic.ensureReady === "function") {
+          window.CGOSemantic.ensureReady().then(function (ok) {
+            if (ok && window.CGO_CUSTOMER && window.CGO_CUSTOMER.knowledge &&
+                typeof window.CGO_CUSTOMER.knowledge.ensureSemanticIndex === "function") {
+              return window.CGO_CUSTOMER.knowledge.ensureSemanticIndex();
+            }
+          }).then(function (idx) {
+            if (idx && idx.ok) console.log("[CGO BOOT] Semantic index siap · docs", idx.indexed);
+            else if (window.CGOSemantic && window.CGOSemantic.isReady()) console.log("[CGO BOOT] Semantic engine siap (index menyusul)");
+          }).catch(function () {});
+        }
+      } catch (_sem) {}
       window.dispatchEvent(new CustomEvent("cgo-customer-ready", { detail: { ready, modules } }));
     } catch (_) {}
   }

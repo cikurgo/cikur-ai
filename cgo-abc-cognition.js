@@ -8,7 +8,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "1.0.0-CGO-ABC-COGNITION";
+  const VERSION = "1.1.0-CGO-ABC-COGNITION";
 
   function engine() {
     return global.CGOMachineABC || global.CGO_MACHINE_ABC || global.CGOCoreMachine || null;
@@ -24,35 +24,150 @@
 
   /**
    * Kapan formal pass berguna (sistem + customer).
-   * Chat santai pendek → false. Struktur / audit / kode / JSON / sistem → true.
+   * Chat santai sangat pendek → false.
+   * Struktur / audit / kode / JSON / sistem / penjelasan / konteks / layanan → true.
+   * Versi 1.1: lebih agresif membantu otak CGO (bukan hanya formal).
    */
   function shouldEnrich(text, options) {
     options = options || {};
     if (options.forceAbc === true || options.force === true) return true;
     if (options.skipAbc === true || options.skip === true) return false;
     const s = String(text || "");
-    if (s.length < 6) return false;
+    if (s.length < 4) return false;
 
-    // Eksplisit formal / audit
+    const t = s.trim();
+    const lower = t.toLowerCase();
+
+    // 1) Eksplisit formal / audit / mesin
     if (/\b(verifikasi|audit|mesin\s*abc|self-?test|cek struktur|analisis (struktur|kode|sistem)|bukti formal|well[_\s-]?formed|pipeline\s*a\s*[→\->]\s*b)\b/i.test(s)) {
       return true;
     }
 
-    // JSON / kode / HTML cukup panjang
-    const t = s.trim();
-    if (t.length >= 20 && ((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]")))) return true;
-    if (t.length >= 60 && /<\s*(html|div|script|style|body|form)\b/i.test(s)) return true;
-    if (t.length >= 80 && /\b(function\s+|export\s+|import\s+|const\s+\w+\s*=)/.test(s)) return true;
+    // 2) JSON / kode / HTML cukup panjang
+    if (t.length >= 18 && ((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]")))) return true;
+    if (t.length >= 50 && /<\s*(html|div|script|style|body|form)\b/i.test(s)) return true;
+    if (t.length >= 60 && /\b(function\s+|export\s+|import\s+|const\s+\w+\s*=)/.test(s)) return true;
 
-    // Pertanyaan sistem / diagnostik CGO
-    if (/\b(bcgo|source\s*scan|kontrak|contract\s*gap|telemetry|organ saraf|anomali|integritas|fingerprint)\b/i.test(s) && s.length >= 12) {
+    // 3) Diagnostik sistem / BCGO
+    if (/\b(bcgo|source\s*scan|kontrak|contract\s*gap|telemetry|organ saraf|anomali|integritas|fingerprint)\b/i.test(s) && s.length >= 10) {
       return true;
     }
 
-    // Perintah analisis umum (bukan basa-basi)
-    if (/\b(analisis|analisa|periksa struktur|validasi format)\b/i.test(s) && s.length >= 16) return true;
+    // 4) Perintah analisis umum
+    if (/\b(analisis|analisa|periksa struktur|validasi format)\b/i.test(s) && s.length >= 12) return true;
+
+    // 5) BARU — pertanyaan penjelasan / definisi (membantu otak menjawab lebih cerdas)
+    if (/\b(apa\s+itu|apa\s+sih|jelaskan|jelasin|ceritakan|ceritain|maksudnya|bagaimana\s+cara|gimana\s+cara|bagaimana\s+cara\s+kerja|what\s+is|what\s+does|explain|tell\s+me\s+about)\b/i.test(s) && s.length >= 8) {
+      return true;
+    }
+
+    // 6) BARU — referensi konteks / memori percakapan
+    if (/\b(tadi|sebelumnya|barusan|yang\s+tadi|kita\s+bahas|bahas\s+apa|topik\s+terakhir|lanjutkan|lanjut\s+yang|previous|earlier|what\s+did\s+we)\b/i.test(s) && s.length >= 8) {
+      return true;
+    }
+
+    // 7) BARU — pertanyaan tentang layanan CIKUR GO / Mitra
+    if (/\b(cikur\s*go|cikurgo|layanan|food|ride|assistant|2in1|mitra|driver|resto|pesan\s+makanan|pesan\s+ride|sewa\s+assistant)\b/i.test(s) && s.length >= 10) {
+      return true;
+    }
+
+    // 8) BARU — pertanyaan cukup panjang / multi-kata yang tampak butuh pemahaman
+    if (t.length >= 28 && (/\?$/.test(t) || /^(siapa|apa|bagaimana|gimana|kenapa|mengapa|kapan|dimana|di\s*mana|berapa|bisa|mau|inginin|tolong)\b/i.test(t))) {
+      return true;
+    }
+
+    // 9) Mode light: pesan sedang + mengandung kata kerja permintaan
+    if (options.light === true && t.length >= 16 && /\b(mau|inginin|tolong|bisa|ingin|butuh|cari|pesan|order)\b/i.test(s)) {
+      return true;
+    }
 
     return false;
+  }
+
+  /**
+   * Analisis ringan riwayat percakapan (recentMessages) untuk bantu recall topik.
+   * Input: array [{role, text}] atau string gabungan.
+   * Output: {ok, topics, lastUserTopics, summary, confidence}
+   */
+  function analyzeConversationHistory(messages, options) {
+    options = options || {};
+    if (!isReady()) {
+      return { ok: false, error: "MESIN_ABC_NOT_LOADED", topics: [], summary: null };
+    }
+
+    let payload = messages;
+    if (Array.isArray(messages)) {
+      // Bentuk ringkas yang mudah diparse mesin ABC
+      payload = {
+        type: "conversation_history",
+        turns: messages.slice(-10).map(function (m, i) {
+          return {
+            i: i,
+            role: (m && m.role) || "unknown",
+            text: String((m && (m.text || m.content || m.message)) || "").slice(0, 400)
+          };
+        })
+      };
+    }
+
+    const abc = analyze(payload, {
+      maxCycles: 1,
+      fast: true,
+      skipAudit: true,
+      force: true
+    });
+
+    if (!abc || !abc.ok) {
+      return {
+        ok: false,
+        error: (abc && abc.error) || "ANALYZE_FAIL",
+        topics: [],
+        summary: null,
+        abc: abc
+      };
+    }
+
+    // Ekstrak topik kasar dari findings + summary (domain-neutral, lalu mapping layanan)
+    const findings = Array.isArray(abc.findings) ? abc.findings : [];
+    const summaryText = String(abc.summary || "");
+    const joined = (findings.map(function (f) {
+      return typeof f === "string" ? f : (f && (f.text || f.message || f.summary || JSON.stringify(f))) || "";
+    }).join(" ") + " " + summaryText).toLowerCase();
+
+    const topicMap = [
+      { key: "food", re: /\b(food|makanan|makan|resto|restaurant|kuliner)\b/ },
+      { key: "ride", re: /\b(ride|perjalanan|ojek|driver|antar|transport)\b/ },
+      { key: "assistant", re: /\b(assistant|asisten|pendamping|bantuan)\b/ },
+      { key: "cikurgo2in1", re: /\b(2in1|dua\s*in\s*satu|gabungan)\b/ },
+      { key: "cikur_go", re: /\b(cikur\s*go|cikurgo|platform|layanan)\b/ },
+      { key: "pricing", re: /\b(harga|biaya|tarif|price|cost)\b/ }
+    ];
+
+    const topics = [];
+    topicMap.forEach(function (tm) {
+      if (tm.re.test(joined)) topics.push(tm.key);
+    });
+
+    // Fallback: scan teks mentah messages jika findings kosong
+    if (!topics.length && Array.isArray(messages)) {
+      const raw = messages.map(function (m) {
+        return String((m && (m.text || m.content)) || "").toLowerCase();
+      }).join(" ");
+      topicMap.forEach(function (tm) {
+        if (tm.re.test(raw)) topics.push(tm.key);
+      });
+    }
+
+    return {
+      ok: true,
+      topics: topics,
+      lastUserTopics: topics.slice(0, 3),
+      summary: abc.summary || (topics.length ? "Topik terdeteksi: " + topics.join(", ") : null),
+      confidence: abc.confidence != null ? abc.confidence : (topics.length ? 0.7 : 0.3),
+      status: abc.status,
+      findingsCount: findings.length,
+      abc: abc
+    };
   }
 
   function analyze(input, options) {
@@ -208,6 +323,7 @@
     isReady,
     shouldEnrich,
     analyze,
+    analyzeConversationHistory,
     health,
     formatHint,
     appendHint,

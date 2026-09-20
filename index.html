@@ -15,6 +15,8 @@
 <script src="./cgo-machine-abc.js"></script>
 <script src="./cgo-machine-abc-bridge.js"></script>
 <script src="./cgo-abc-cognition.js"></script>
+<!-- Semantic bridge: embedding gratis di browser (Transformers.js) — bantu matching knowledge -->
+<script src="./cgo-semantic-bridge.js"></script>
 
 <!-- CGO CUSTOMER ENGINE (mesin chat internal, tanpa AI eksternal) -->
 <!-- Urutan: Memory/Conversation/Reasoning/Planner/Knowledge/Discovery/Meta/Boundary/Guardian/Composer → Gateway → Bootstrap -->
@@ -4035,10 +4037,11 @@ async function kirimPesanCGO() {
     if (window.CGO && typeof window.CGO.chatAsync === "function") {
         // Jalur aplikasi utama: pipeline async Conversation → Knowledge → Discovery → Guardian.
         try {
+            // 18s: pipeline normal. Model semantic tidak boleh blokir (lihat interpretAsync).
             const timeout = new Promise(resolve => setTimeout(() => resolve({
                 response: "Aku masih memeriksa bagian dalam sebentar yaaa 😊 Aku belum mau asal jawab.",
                 status: "ui_timeout"
-            }), 10000));
+            }), 18000));
             const result = await Promise.race([
                 window.CGO.chatAsync(text, { source: "CIKUR_GO_APP" }),
                 timeout
