@@ -52,7 +52,6 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "bcgo-engine.js", path: "../bcgo-engine.js", role: "Shared Engine" },
   { file: "cgo-machine-abc.js", path: "../cgo-machine-abc.js", role: "Mesin ABC Core" },
   { file: "cgo-machine-abc-bridge.js", path: "../cgo-machine-abc-bridge.js", role: "Mesin ABC Bridge" },
-  { file: "cgo-abc-cognition.js", path: "../cgo-abc-cognition.js", role: "ABC Cognition Layer" },
   { file: "admin/cgo-machine-abc.html", path: "cgo-machine-abc.html", role: "Mesin ABC Monitor" },
   { file: "cgo-ai-radar.js", path: "../cgo-ai-radar.js", role: "Radar Engine" },
   { file: "cgo-app-bootstrap.js", path: "../cgo-app-bootstrap.js", role: "Customer Bootstrap" },
@@ -936,13 +935,9 @@ export function runAutonomousEngine(onCycleUpdate) {
 
     scan.phase = "ANALYZING";
     const relations = [];
-    // App root: naik dari /admin/*.html ke folder repo
-    let rootUrl = location.href;
-    if (/\/admin\/[^/]+$/.test(rootUrl)) {
-      rootUrl = rootUrl.replace(/\/admin\/[^/]+$/, "/");
-    } else {
-      rootUrl = rootUrl.replace(/\/[^/]+$/, "/");
-    }
+    // Resolve relation URLs exactly like the source-fetch stage:
+    // item.path is authored relative to the current admin page, not repo root.
+    // Using repo-root as the base breaks every "../..." surface relation.
     for (const item of INTERNAL_SOURCE_SCAN) {
       const text = contents.get(item.file);
       if (!text) continue;
@@ -953,7 +948,11 @@ export function runAutonomousEngine(onCycleUpdate) {
       for (const ref of refs) {
         if (!ref || /^(https?:|data:|#|javascript:)/i.test(ref)) continue;
         let target;
-        try { target = new URL(ref, new URL(item.path, rootUrl)).pathname.replace(/^\//, ""); } catch { continue; }
+        try {
+          target = new URL(ref, new URL(item.path, location.href)).pathname.replace(/^\//, "");
+        } catch {
+          continue;
+        }
         if (target.startsWith("cikur-ai/")) target = target.slice("cikur-ai/".length);
         const base = target.split("/").pop();
         const matched = INTERNAL_SOURCE_SCAN.find(x => x.path === target || x.file === target || x.file.endsWith("/" + base) || x.file === base || x.path.endsWith("/" + base));
@@ -986,11 +985,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       ["customer/ride.html", "cikur-config.js", "CUSTOMER_CONFIG"],
       ["mitra/agentcgo.html", "cikur-config.js", "MITRA_CONFIG"],
       ["mitra/driver.html", "cikur-config.js", "MITRA_CONFIG"],
-      ["mitra/resto.html", "cikur-config.js", "MITRA_CONFIG"],
-      ["admin/bcgo.html", "cgo-machine-abc.js", "MESIN_ABC_ENGINE"],
-      ["admin/bcgo.html", "cgo-machine-abc-bridge.js", "MESIN_ABC_BRIDGE"],
-      ["admin/cgo-machine-abc.html", "cgo-machine-abc.js", "MESIN_ABC_MONITOR"],
-      ["index.html", "cgo-machine-abc.js", "MESIN_ABC_CUSTOMER"]
+      ["mitra/resto.html", "cikur-config.js", "MITRA_CONFIG"]
     ];
     for (const [a,b,key] of contracts) {
       const text=contents.get(a)||"";
@@ -1232,11 +1227,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       state.systemOrgans = organs;
       state.metrics = makeMetrics(organs);
       state.activeCases = makeCases(organs);
-      return safeClone(state);
-    },
-    // Alias — HTML integrity check memakai getBCGOState
-    getBCGOState() {
-      return brain.getState();
+        return safeClone(state);
     },
     getSituation: situation,
     getRegistry: () => ({ ...ORGAN_REGISTRY }),
