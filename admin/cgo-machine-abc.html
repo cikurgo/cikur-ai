@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#020914">
 <meta name="color-scheme" content="dark">
-<title>CGO MACHINE ABC — Monitor</title>
+<title>CGO MACHINE ABC — Monitor Live</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🧠%3C/text%3E%3C/svg%3E">
 <style>
 :root{
@@ -25,14 +25,17 @@ body{
 .app{width:min(1200px,100%);margin:auto;padding:14px}
 [hidden]{display:none!important}
 h1,h2{margin:0}
-button{font:inherit;color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
 button:focus-visible,textarea:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 
-.top{display:flex;justify-content:space-between;gap:14px;align-items:center;border:1px solid var(--line);background:#041426ee;border-radius:var(--radius);padding:16px}
+.top{display:flex;justify-content:space-between;gap:14px;align-items:center;border:1px solid var(--line);background:#041426ee;border-radius:var(--radius);padding:16px;flex-wrap:wrap}
 .brand{display:flex;gap:12px;align-items:center;min-width:0}
-.logo{flex:none;width:46px;height:46px;border:2px solid var(--blue);border-radius:50%;display:grid;place-items:center;font-size:23px}
+.logo{flex:none;width:46px;height:46px;border:2px solid var(--blue);border-radius:50%;display:grid;place-items:center;font-size:23px;transition:box-shadow .3s,border-color .3s}
+.logo.live{border-color:var(--ok);box-shadow:0 0 18px #16d98b55;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 8px #16d98b33}50%{box-shadow:0 0 22px #16d98b88}}
 .title{font-size:20px;font-weight:800;letter-spacing:.2px}
 .sub{font-size:12px;color:var(--muted);margin-top:2px}
+.sub a{color:#7dd3fc;text-decoration:none}
 .chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .chip{border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:12px;color:var(--muted);white-space:nowrap}
 .chip.ok{color:var(--ok-text);border-color:#176a50}
@@ -41,177 +44,198 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--blue);outlin
 
 .banner{margin-top:12px;padding:12px 14px;border-radius:12px;border:1px solid #765f1b;background:#2a2308;color:var(--warn-text);font-size:13px}
 .banner.error{border-color:#76263a;background:#2a0d15;color:var(--bad-text)}
+.banner.ok{border-color:#176a50;background:#062a1c;color:var(--ok-text)}
 
-.panel{margin-top:12px;border:1px solid var(--line);border-radius:var(--radius);background:#041426ee;overflow:hidden}
-.ph{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:13px;font-weight:700;min-height:52px}
-.body{padding:12px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.actions button,.ph button,#devRun{
+  border:1px solid var(--line);background:#0a2038;border-radius:10px;padding:8px 14px;font-weight:600
+}
+.actions button.primary{background:#0b3d7a;border-color:#1a6fcc;color:#dff0ff}
+.actions button.primary:hover{background:#0d4a94}
+.actions button:active{transform:scale(.98)}
 
-.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-.metric{border:1px solid var(--line-soft);border-radius:10px;padding:10px 12px;background:var(--panel-2)}
-.metric b{display:block;font-size:20px;line-height:26px;overflow-wrap:break-word}
-.metric b#lastStatus{font-size:15px}
-.metric span{font-size:12px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
+@media(max-width:720px){.grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr!important}}
+.stat{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:12px}
+.stat .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.stat .v{font-size:22px;font-weight:800;margin-top:4px;font-variant-numeric:tabular-nums}
 
-.controls{display:flex;gap:8px}
-.controls button,.dev button{min-height:44px;min-width:44px;border:1px solid #255070;background:#06182a;color:#d6efff;border-radius:10px;padding:0 16px;font-weight:700;font-size:13px;cursor:pointer}
-.controls button:active,.dev button:active{background:#0b2a45}
-.controls button[aria-pressed="true"]{border-color:#765f1b;color:var(--warn-text)}
-
+.panel{margin-top:12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+.ph{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line-soft);font-size:14px;font-weight:700}
+.ph .muted{font-weight:400;color:var(--muted);font-size:12px}
+.body{padding:12px 14px}
 .log{height:min(60vh,420px);overflow:auto;display:grid;gap:8px;align-content:start;-webkit-overflow-scrolling:touch}
-.cycle{border:1px solid var(--line-soft);border-left:3px solid var(--blue);border-radius:10px;padding:10px 12px;background:var(--panel-2)}
-.cycle.ok{border-left-color:var(--ok)}
-.cycle.warn{border-left-color:var(--warn)}
-.cycle.bad{border-left-color:var(--bad)}
-.cycle-head{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;font-size:13px;font-weight:700}
+.cycle{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel-2);font-size:13px}
+.cycle.ok{border-color:#176a50}
+.cycle.warn{border-color:#765f1b}
+.cycle.bad{border-color:#76263a}
+.cycle-head{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-weight:700}
 .cycle-head .time{margin-left:auto;color:var(--muted);font-weight:400;font-size:12px}
-.cycle-body{margin-top:6px;font-size:13px}
-.cycle-body .muted{margin-top:4px;color:var(--faint)}
-
-.grid{display:grid;grid-template-columns:1fr;gap:0 12px}
+.cycle .meta{color:var(--muted);font-size:12px;margin-top:4px}
+.empty{color:var(--faint);font-size:13px;padding:8px 0}
+.row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line-soft);font-size:13px}
+.row:last-child{border-bottom:0}
+.row strong.pass{color:var(--ok-text)}
+.row strong.fail{color:var(--bad-text)}
 .audit,.detail{max-height:300px;overflow:auto}
-.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #102e47;font-size:13px}
-.row:last-of-type{border-bottom:0}
-.row strong{text-align:right;overflow-wrap:anywhere}
-.pass{color:#63eab4}.fail{color:#ff8e9e}.unknown{color:#ffdc67}
-pre{white-space:pre-wrap;word-break:break-word;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;color:#bcd8ea;margin:0}
-.empty{color:var(--faint);text-align:center;padding:32px 12px;font-size:13px}
-
-.dev textarea{width:100%;min-height:120px;background:#020b15;color:#cdeaff;border:1px solid var(--line-soft);border-radius:10px;padding:10px;margin-bottom:8px;font:13px/1.5 ui-monospace,monospace}
-.dev label{display:flex;align-items:center;gap:8px;min-height:44px;font-size:13px;color:var(--muted)}
-.dev input[type=checkbox]{width:20px;height:20px}
-.footer{color:var(--faint);font-size:12px;line-height:1.6;margin:10px 0 0}
-code{font:12px ui-monospace,monospace;color:#bcd8ea}
-
-@media(min-width:600px){.stats{grid-template-columns:repeat(3,1fr)}.app{padding:16px}}
-@media(min-width:900px){.stats{grid-template-columns:repeat(6,1fr)}.grid{grid-template-columns:1.3fr 1fr}}
-@media(max-width:700px){.top{flex-direction:column;align-items:flex-start}.chips{justify-content:flex-start}}
+.detail{margin:0;white-space:pre-wrap;word-break:break-word;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#cfe6ff}
+textarea{width:100%;min-height:100px;border:1px solid var(--line);background:#020a14;color:var(--text);border-radius:10px;padding:10px;resize:vertical}
+label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color:var(--muted)}
+.pipeline{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.stage{padding:4px 10px;border-radius:999px;border:1px solid var(--line);font-size:11px;font-weight:700;color:var(--muted)}
+.stage.on{color:var(--ok-text);border-color:#176a50;background:#062a1c}
+.stage.run{color:var(--warn-text);border-color:#765f1b;background:#2a2308;animation:pulse 1s infinite}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
 <div class="app">
-<header class="top">
-  <div class="brand">
-    <div class="logo" aria-hidden="true">🧠</div>
-    <div>
-      <h1 class="title">CGO MACHINE ABC</h1>
-      <div class="sub">Monitor mesin inti · A → B → C → D · hanya mengamati · <a href="bcgo.html" style="color:#7cc4ff">← BCGO Monitor</a></div>
+  <header class="top">
+    <div class="brand">
+      <div class="logo" id="logo" aria-hidden="true">🧠</div>
+      <div>
+        <h1 class="title">CGO MACHINE ABC</h1>
+        <div class="sub">Monitor mesin inti · A → B → C → D · <strong>live</strong> · <a href="bcgo.html">← BCGO</a></div>
+      </div>
     </div>
-  </div>
-  <div class="chips" aria-label="Status mesin">
-    <span id="ver" class="chip">Engine …</span>
-    <span id="self" class="chip">Self-test …</span>
-    <span id="audit" class="chip">Audit D –</span>
-    <span id="ind" class="chip">Independensi …</span>
-    <span id="degraded" class="chip">Degraded 0</span>
-    <span id="bus" class="chip">Bus …</span>
-  </div>
-</header>
-
-<div id="fatal" class="banner error" role="alert" hidden></div>
-<div id="notice" class="banner" role="status" hidden></div>
-<noscript><div class="banner error">Halaman ini membutuhkan JavaScript.</div></noscript>
-
-<section class="panel" aria-labelledby="h-runtime">
-  <h2 class="ph" id="h-runtime">Runtime</h2>
-  <div class="body"><div class="stats">
-    <div class="metric"><b id="total">0</b><span>Input diproses</span></div>
-    <div class="metric"><b id="cycles">0</b><span>Siklus</span></div>
-    <div class="metric"><b id="conf">0%</b><span>Rata-rata keyakinan</span></div>
-    <div class="metric"><b id="lastStatus">IDLE</b><span>Status terakhir</span></div>
-    <div class="metric"><b id="lastTime">0ms</b><span>Durasi terakhir</span></div>
-    <div class="metric"><b id="degradedCount">0</b><span>Degraded</span></div>
-  </div></div>
-</section>
-
-<section class="panel" aria-labelledby="h-log">
-  <div class="ph"><h2 id="h-log" style="font-size:13px">Log siklus langsung</h2>
-    <div class="controls">
-      <button id="pause" type="button" aria-pressed="false">Jeda</button>
-      <button id="reset" type="button">Reset</button>
-      <button id="smoke" type="button" title="Uji mesin dengan input sample">Uji</button>
-      <button id="devBtn" type="button" aria-expanded="false" aria-controls="dev">DEV</button>
+    <div class="chips" aria-label="Status mesin">
+      <span class="chip" id="ver">Engine –</span>
+      <span class="chip" id="self">Self-test –</span>
+      <span class="chip" id="ind">Independensi –</span>
+      <span class="chip" id="audit">Audit D –</span>
+      <span class="chip" id="degraded">Degraded 0</span>
+      <span class="chip" id="liveChip">Status BOOT</span>
     </div>
-  </div>
-  <div class="body"><div id="log" class="log" role="log" aria-live="polite"><div class="empty">IDLE — monitor menunggu input dari engine/aplikasi lain.</div></div></div>
-</section>
+  </header>
 
-<div class="grid">
-  <section class="panel" aria-labelledby="h-audit">
-    <h2 class="ph" id="h-audit">Jejak audit terakhir</h2>
-    <div class="body"><div id="auditView" class="audit"><div class="empty">Belum ada proses.</div></div></div>
+  <div id="fatal" class="banner error" hidden></div>
+  <div id="notice" class="banner" hidden></div>
+  <div id="bootBanner" class="banner ok">Menyalakan Mesin ABC… memuat engine & menjalankan self-test…</div>
+
+  <div class="actions">
+    <button type="button" class="primary" id="btnDemo">▶ Jalankan Demo A→B→C→D</button>
+    <button type="button" id="btnSelfTest">Self-test ulang</button>
+    <button type="button" id="btnPulse">Pulse metrics</button>
+    <button type="button" id="pause">Jeda</button>
+    <button type="button" id="reset">Reset log</button>
+  </div>
+
+  <div class="pipeline" id="pipelineBar" aria-label="Pipeline">
+    <span class="stage" id="stA">A Representasi</span>
+    <span class="stage" id="stB">B Proses</span>
+    <span class="stage" id="stC">C Hasil</span>
+    <span class="stage" id="stD">D Audit</span>
+  </div>
+
+  <div class="grid">
+    <div class="stat"><div class="k">Total paket</div><div class="v" id="total">0</div></div>
+    <div class="stat"><div class="k">Siklus</div><div class="v" id="cycles">0</div></div>
+    <div class="stat"><div class="k">Keyakinan rata-rata</div><div class="v" id="conf">0%</div></div>
+    <div class="stat"><div class="k">Status terakhir</div><div class="v" id="lastStatus">IDLE</div></div>
+  </div>
+  <div class="grid" style="grid-template-columns:repeat(2,1fr)">
+    <div class="stat"><div class="k">Durasi terakhir</div><div class="v" id="lastTime">0ms</div></div>
+    <div class="stat"><div class="k">Degraded count</div><div class="v" id="degradedCount">0</div></div>
+  </div>
+
+  <section class="panel" aria-labelledby="h-log">
+    <div class="ph"><h2 id="h-log">Log siklus langsung</h2>
+      <span class="muted" id="logHint">menunggu aktivitas…</span>
+    </div>
+    <div class="body"><div id="log" class="log" role="log" aria-live="polite"><div class="empty">BOOT — menyiapkan observer…</div></div></div>
   </section>
+
+  <div style="display:grid;gap:12px;grid-template-columns:1fr 1fr" class="two">
+    <section class="panel" aria-labelledby="h-audit">
+      <h2 class="ph" id="h-audit">Jejak audit terakhir</h2>
+      <div class="body"><div id="auditView" class="audit"><div class="empty">Belum ada proses.</div></div></div>
+    </section>
+    <section class="panel" aria-labelledby="h-health">
+      <h2 class="ph" id="h-health">Kesehatan runtime</h2>
+      <div class="body">
+        <div class="row"><span>Self-test</span><strong id="selfDetail">-</strong></div>
+        <div class="row"><span>Independensi</span><strong id="indDetail">-</strong></div>
+        <div class="row"><span>Machine D (audit)</span><strong id="auditDetail">-</strong></div>
+        <div class="row"><span>Degraded / error</span><strong id="degradedDetail">0 / 0</strong></div>
+        <div class="row"><span>Dijeda</span><strong id="pauseDetail">TIDAK</strong></div>
+        <div class="row"><span>Input diabaikan saat jeda</span><strong id="skipDetail">0</strong></div>
+        <div class="row"><span>Pesan ditolak (origin asing)</span><strong id="rejectDetail">0</strong></div>
+        <div class="row"><span>Error terakhir</span><strong id="errorDetail">-</strong></div>
+      </div>
+    </section>
+  </div>
+
   <section class="panel" aria-labelledby="h-detail">
-    <h2 class="ph" id="h-detail">Hasil terakhir</h2>
+    <h2 class="ph" id="h-detail">Hasil terakhir (JSON)</h2>
     <div class="body"><pre id="detail" class="detail">Belum ada hasil.</pre></div>
   </section>
-</div>
 
-<section class="panel dev" id="dev" hidden aria-labelledby="h-dev">
-  <h2 class="ph" id="h-dev">Input DEV — hanya untuk pengujian</h2>
-  <div class="body">
-    <textarea id="devInput" placeholder="Tempel teks atau JSON di sini…" aria-label="Input DEV"></textarea>
-    <label><input type="checkbox" id="devReflect"> Auto-reflect (proses ulang hasilnya sendiri)</label>
-    <button id="devRun" type="button">Proses</button>
-  </div>
-</section>
-
-<section class="panel" aria-labelledby="h-health">
-  <h2 class="ph" id="h-health">Kesehatan engine</h2>
-  <div class="body">
-    <div class="row"><span>Self-test</span><strong id="selfDetail">-</strong></div>
-    <div class="row"><span>Independensi</span><strong id="indDetail">-</strong></div>
-    <div class="row"><span>Machine D (audit)</span><strong id="auditDetail">-</strong></div>
-    <div class="row"><span>Degraded / error</span><strong id="degradedDetail">0 / 0</strong></div>
-    <div class="row"><span>Dijeda</span><strong id="pauseDetail">TIDAK</strong></div>
-    <div class="row"><span>Input diabaikan saat jeda</span><strong id="skipDetail">0</strong></div>
-    <div class="row"><span>Pesan ditolak (origin asing)</span><strong id="rejectDetail">0</strong></div>
-    <div class="row"><span>Error terakhir</span><strong id="errorDetail">-</strong></div>
-    <p class="footer">Halaman ini tidak menjalankan A/B/C sendiri; ia hanya mengamati engine. Input produksi dikirim lewat <code>dispatchEvent(new CustomEvent("cgo:input",{detail:{payload,options}}))</code> atau <code>postMessage({type:"CGO_INPUT",payload,options})</code>. Pesan dari origin lain hanya diterima jika terdaftar di <code>window.CGO_ALLOWED_ORIGINS</code>. Tombol <b>Uji</b> memproses sample lokal. Siklus dari Chat CGO / BCGO masuk lewat <code>BroadcastChannel("cgo-machine-abc-bus")</code>. Panel DEV lengkap: <code>?dev=1</code>.</p>
-  </div>
-</section>
+  <section class="panel" id="dev" aria-labelledby="h-dev">
+    <h2 class="ph" id="h-dev">Input uji — proses manual</h2>
+    <div class="body">
+      <textarea id="devInput" placeholder="Tempel teks atau JSON…">analisis struktur pipeline Mesin ABC — uji monitor live</textarea>
+      <label><input type="checkbox" id="devReflect"> Auto-reflect (proses ulang hasilnya sendiri)</label>
+      <button id="devRun" type="button">Proses input</button>
+    </div>
+  </section>
 </div>
 
 <script src="../cgo-machine-abc.js"></script>
+<script src="../cgo-machine-abc-bridge.js"></script>
 <script>
 (() => {
   "use strict";
   const $ = s => document.querySelector(s);
   const E = window.CGOMachineABC;
+  const bootBanner = $("#bootBanner");
+  const logo = $("#logo");
 
   if (!E) {
     const f = $("#fatal");
     f.hidden = false;
-    f.textContent = "Engine belum termuat. Pastikan file cgo-machine-abc.js ada di folder yang sama dengan halaman ini dan namanya persis sama (huruf besar/kecil berpengaruh di GitHub Pages).";
+    f.textContent = "Engine belum termuat. Pastikan file cgo-machine-abc.js ada di ROOT repo (sejajar index.html). Path script halaman ini: ../cgo-machine-abc.js — case-sensitive di GitHub Pages.";
+    if (bootBanner) bootBanner.hidden = true;
     return;
   }
 
-  const DEV = new URLSearchParams(location.search).get("dev") === "1";
-  if (!DEV) $("#devBtn").hidden = true;
-
-  const LOG_LIMIT = 100;
+  const LOG_LIMIT = 80;
   const DETAIL_LIMIT = 20000;
   const allowedOrigins = new Set([location.origin, ...(Array.isArray(window.CGO_ALLOWED_ORIGINS) ? window.CGO_ALLOWED_ORIGINS : [])]);
   const OK = new Set(["PROCESSED", "WELL_FORMED", "VERIFIED"]);
   const WARN = new Set(["PARTIAL", "DEGRADED"]);
-  const STOP_LABEL = { maxCycles: "batas siklus tercapai", status: "status tujuan tercapai", confidence_stable: "keyakinan sudah stabil", timeout: "waktu habis", paused: "dijeda" };
 
-  let total = 0, cycleCount = 0, confSum = 0, rejected = 0;
+  let total = 0, cycleCount = 0, confSum = 0, rejected = 0, pulseTimer = null;
 
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
-  const chip = (node, text, tone) => { node.textContent = text; node.className = "chip " + tone; };
+  const chip = (node, text, tone) => { if (!node) return; node.textContent = text; node.className = "chip " + (tone || ""); };
   const empty = text => el("div", "empty", text);
+  const setLive = (text, tone) => { chip($("#liveChip"), text, tone); if (tone === "ok") logo.classList.add("live"); else if (tone === "bad") logo.classList.remove("live"); };
 
-  function showNotice(msg) { const n = $("#notice"); n.textContent = msg; n.hidden = false; }
+  function setStages(phase) {
+    ["stA","stB","stC","stD"].forEach(id => { const n = $("#"+id); if (n) n.className = "stage"; });
+    const order = ["stA","stB","stC","stD"];
+    const idx = { A:0, B:1, C:2, D:3 }[phase];
+    if (idx == null) return;
+    for (let i = 0; i < idx; i++) { const n = $("#"+order[i]); if (n) n.className = "stage on"; }
+    const cur = $("#"+order[idx]); if (cur) cur.className = "stage run";
+  }
+
+  function showNotice(msg, kind) {
+    const n = $("#notice");
+    n.textContent = msg;
+    n.className = "banner" + (kind === "error" ? " error" : kind === "ok" ? " ok" : "");
+    n.hidden = false;
+  }
   function clearNotice() { $("#notice").hidden = true; }
 
   function health() {
     const st = E.selfTest();
     chip($("#self"), `Self-test ${st.passed}/${st.total}`, st.verified ? "ok" : "bad");
-    $("#selfDetail").textContent = st.verified ? `${st.passed}/${st.total} lolos` : `${st.failed} gagal`;
+    $("#selfDetail").textContent = st.verified ? `${st.passed}/${st.total} lolos` : `${st.failed} gagal / ${st.total}`;
     const ind = E.auditIndependence();
-    chip($("#ind"), ind.verified ? "Independensi OK (pindai statis)" : "Independensi perlu dicek", ind.verified ? "ok" : "bad");
-    $("#indDetail").textContent = ind.verified ? `Lolos · ${ind.scannedFunctions} fungsi dipindai` : "Ditemukan: " + ind.forbiddenReferences.join(", ");
+    chip($("#ind"), ind.verified ? "Independensi OK" : "Independensi perlu dicek", ind.verified ? "ok" : "bad");
+    $("#indDetail").textContent = ind.verified ? `Lolos · ${ind.scannedFunctions} fungsi dipindai` : "Ditemukan: " + (ind.forbiddenReferences || []).join(", ");
+    return st;
   }
 
   function refresh() {
@@ -221,11 +245,9 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
     $("#degradedDetail").textContent = `${m.degradedCount || 0} / ${m.errorCount || 0}`;
     $("#skipDetail").textContent = m.skippedWhilePaused || 0;
     $("#pauseDetail").textContent = E.isPaused() ? "YA" : "TIDAK";
-    $("#rejectDetail").textContent = rejected;
+    $("#pause").textContent = E.isPaused() ? "Lanjutkan" : "Jeda";
     $("#total").textContent = total;
-    const p = $("#pause");
-    p.textContent = E.isPaused() ? "Lanjutkan" : "Jeda";
-    p.setAttribute("aria-pressed", String(E.isPaused()));
+    $("#rejectDetail").textContent = rejected;
   }
 
   function renderCycle(c, stopReason) {
@@ -236,63 +258,110 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
     cycleCount++; confSum += conf;
 
     $("#cycles").textContent = cycleCount;
-    $("#conf").textContent = Math.round(confSum / cycleCount * 100) + "%";
+    $("#conf").textContent = Math.round((confSum / cycleCount) * 100) + "%";
     $("#lastStatus").textContent = status;
-    $("#lastTime").textContent = (r.durationMs || c.pipeline?.C?.durationMs || 0) + "ms";
+    const dur = r.durationMs || c.pipeline?.C?.durationMs || c.durationMs || 0;
+    $("#lastTime").textContent = dur + "ms";
 
-    const d = c.audit;
-    chip($("#audit"), `Audit D ${d?.status || "–"}`, d?.status === "VALID" ? "ok" : d ? "warn" : "");
-    $("#auditDetail").textContent = d?.status || "-";
+    setStages("D");
+    ["stA","stB","stC","stD"].forEach(id => { const n = $("#"+id); if (n) n.className = "stage on"; });
 
     const log = $("#log");
     if (log.querySelector(".empty")) log.replaceChildren();
-    const item = el("div", "cycle " + tone);
+    const box = el("div", "cycle " + tone);
     const head = el("div", "cycle-head");
-    head.append(el("span", "", `Siklus ${c.cycleIndex ?? 0}`), el("span", "", `${status} · keyakinan ${Math.round(conf * 100)}%`), el("span", "time", new Date().toLocaleTimeString()));
-    const body = el("div", "cycle-body");
-    body.append(el("div", "", `Temuan ${r.findings?.length || 0} · Relasi ${r.relations?.length || 0} · Bukti ${r.evidence?.length || 0} · Ketidakpastian ${r.uncertainty?.length || 0}`));
-    const stop = stopReason ? ` · Berhenti karena: ${STOP_LABEL[stopReason] || stopReason}` : "";
-    body.append(el("div", "muted", `Penalaran ${r.reasoning?.length || 0} langkah · Audit ${d?.status || "-"}${stop}`));
-    item.append(head, body);
-    log.prepend(item);
-    while (log.children.length > LOG_LIMIT) log.lastElementChild.remove();
+    head.append(el("span", "", "Siklus #" + cycleCount));
+    head.append(el("span", "", status));
+    head.append(el("span", "", "conf " + Math.round(conf * 100) + "%"));
+    head.append(el("span", "time", new Date().toLocaleTimeString()));
+    box.append(head);
+    const findings = (r.findings || []).length;
+    const rel = (r.relations || []).length;
+    box.append(el("div", "meta", `temuan ${findings} · relasi ${rel} · audit ${c.audit?.status || r.validation?.status || "–"}${stopReason ? " · stop: " + stopReason : ""}`));
+    log.prepend(box);
+    while (log.children.length > LOG_LIMIT) log.removeChild(log.lastChild);
 
+    const d = c.audit || null;
+    $("#auditDetail").textContent = d?.status || r.validation?.status || "–";
+    chip($("#audit"), "Audit D " + (d?.status || r.validation?.status || "–"), (d?.status === "PASS" || r.validation?.status === "VALID") ? "ok" : "warn");
     const av = $("#auditView");
     av.replaceChildren();
     const checks = d?.checks || [];
-    if (!checks.length) av.append(empty("Tidak ada data audit."));
+    if (!checks.length) av.append(empty(d ? ("Status audit: " + (d.status || "–")) : "Tidak ada data audit terpisah — lihat validation di JSON."));
     for (const x of checks) {
       const row = el("div", "row");
-      row.append(el("span", "", x.type), el("strong", x.status === "PASS" ? "pass" : x.status === "FAIL" ? "fail" : "unknown", x.status));
+      row.append(el("span", "", x.type || x.name || "check"), el("strong", x.status === "PASS" ? "pass" : x.status === "FAIL" ? "fail" : "", x.status || "–"));
       av.append(row);
     }
 
     let json = JSON.stringify(r, null, 2);
-    if (json.length > DETAIL_LIMIT) json = json.slice(0, DETAIL_LIMIT) + `\n… (dipotong, total ${json.length} karakter)`;
+    if (json.length > DETAIL_LIMIT) json = json.slice(0, DETAIL_LIMIT) + "\n… (dipotong)";
     $("#detail").textContent = json;
+    setLive("HIDUP · " + status, OK.has(status) ? "ok" : WARN.has(status) ? "warn" : "bad");
+    $("#logHint").textContent = "update " + new Date().toLocaleTimeString();
   }
 
   function onPayload(p) {
     total++;
-    const list = Array.isArray(p.cycles) && p.cycles.length ? p.cycles : (p.result ? [p.result] : []);
-    list.forEach((c, i) => renderCycle(c, i === list.length - 1 ? p.stopReason : null));
+    const list = Array.isArray(p.cycles) && p.cycles.length ? p.cycles : (p.result ? [p] : []);
+    if (!list.length) {
+      const log = $("#log");
+      if (log.querySelector(".empty")) log.replaceChildren();
+      log.prepend(el("div", "cycle", "Paket diterima · " + new Date().toLocaleTimeString()));
+    } else {
+      list.forEach((c, i) => renderCycle(c, i === list.length - 1 ? p.stopReason : null));
+    }
     refresh();
   }
 
   function submit(input, options) {
     try {
+      setLive("MEMPROSES…", "warn");
+      setStages("A");
+      setTimeout(() => setStages("B"), 40);
       const out = E.process(input, options || {});
-      if (out && out.skipped) showNotice("Mesin sedang dijeda — input diabaikan. Tekan Lanjutkan untuk memproses lagi.");
+      if (out && out.skipped) showNotice("Mesin sedang dijeda — input diabaikan. Tekan Lanjutkan.", "error");
       else clearNotice();
       $("#errorDetail").textContent = "-";
+      // Observer sudah terdaftar; jika total belum naik (edge case), render manual
+      if (out && out.result && total === 0) {
+        onPayload({ result: out.result, cycles: [out], stopReason: out.stopReason || null });
+      } else if (out && out.result) {
+        // pastikan stages & detail tetap update (observe mungkin sudah jalan)
+        try {
+          const ch = new BroadcastChannel('CGO_MACHINE_ABC_BUS');
+          ch.postMessage({ type: 'abc-result', status: out.result.status, source: 'monitor-demo', at: Date.now() });
+          ch.close();
+        } catch (_) {}
+      }
+      return out;
     } catch (e) {
       $("#errorDetail").textContent = e.message;
-      showNotice("Input ditolak: " + e.message);
+      showNotice("Input ditolak: " + e.message, "error");
+      setLive("ERROR", "bad");
+      return null;
+    } finally {
+      refresh();
     }
-    refresh();
   }
 
-  $("#pause").onclick = () => { E.isPaused() ? E.resume() : E.pause(); if (!E.isPaused()) clearNotice(); refresh(); };
+  function runDemo() {
+    const sample = {
+      __cgoDemo: true,
+      text: "Demo monitor Mesin ABC — analisis struktur order, verifikasi pipeline A→B→C→D.",
+      items: ["order#1001", "driver:D12", "status:pending"],
+      ts: new Date().toISOString()
+    };
+    showNotice("Menjalankan demo pipeline A→B→C→D…", "ok");
+    submit(sample, { maxCycles: 1 });
+  }
+
+  $("#pause").onclick = () => {
+    E.isPaused() ? E.resume() : E.pause();
+    if (!E.isPaused()) clearNotice();
+    refresh();
+    setLive(E.isPaused() ? "JEDA" : "HIDUP", E.isPaused() ? "warn" : "ok");
+  };
 
   $("#reset").onclick = () => {
     $("#log").replaceChildren(empty("IDLE — riwayat monitor sudah di-reset."));
@@ -300,99 +369,90 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
     $("#detail").textContent = "Belum ada hasil.";
     total = cycleCount = confSum = rejected = 0;
     E.resetMetrics();
-    ["#cycles", "#degradedCount"].forEach(s => { $(s).textContent = "0"; });
-    $("#conf").textContent = "0%"; $("#lastStatus").textContent = "IDLE"; $("#lastTime").textContent = "0ms";
-    $("#auditDetail").textContent = "-"; $("#errorDetail").textContent = "-";
+    $("#cycles").textContent = "0";
+    $("#degradedCount").textContent = "0";
+    $("#total").textContent = "0";
+    $("#conf").textContent = "0%";
+    $("#lastStatus").textContent = "IDLE";
+    $("#lastTime").textContent = "0ms";
+    $("#auditDetail").textContent = "-";
+    $("#errorDetail").textContent = "-";
     chip($("#audit"), "Audit D –", "");
+    ["stA","stB","stC","stD"].forEach(id => { const n = $("#"+id); if (n) n.className = "stage"; });
     clearNotice(); refresh();
+    setLive("IDLE", "");
   };
 
-  $("#devBtn").onclick = () => {
-    const dev = $("#dev"); dev.hidden = !dev.hidden;
-    $("#devBtn").setAttribute("aria-expanded", String(!dev.hidden));
+  $("#btnDemo").onclick = () => runDemo();
+  $("#btnSelfTest").onclick = () => {
+    const st = health();
+    showNotice(st.verified ? `Self-test lolos ${st.passed}/${st.total}` : `Self-test gagal ${st.failed}/${st.total}`, st.verified ? "ok" : "error");
+    setLive(st.verified ? "SELF-TEST OK" : "SELF-TEST FAIL", st.verified ? "ok" : "bad");
   };
+  $("#btnPulse").onclick = () => { refresh(); showNotice("Metrics di-refresh · totalProcessed=" + (E.getMetrics().totalProcessed || 0), "ok"); };
   $("#devRun").onclick = () => {
     const raw = $("#devInput").value;
-    let input = raw; try { input = JSON.parse(raw); } catch (_) {}
+    let input = raw;
+    try { input = JSON.parse(raw); } catch (_) {}
     submit(input, { autoReflect: $("#devReflect").checked });
   };
 
   window.addEventListener("cgo:input", e => {
     const d = e.detail;
     if (d === undefined) return;
-    const wrapped = d !== null && typeof d === "object" && "payload" in d;
-    submit(wrapped ? d.payload : d, wrapped ? d.options : {});
+    submit(d.payload !== undefined ? d.payload : d, d.options || {});
   });
-
   window.addEventListener("message", e => {
-    if (!e.data || e.data.type !== "CGO_INPUT") return;
-    if (e.source !== window && !allowedOrigins.has(e.origin)) { rejected++; refresh(); return; }   // pesan dari window ini sendiri selalu boleh (termasuk saat dibuka dari file://)
-    submit(e.data.payload, e.data.options);
+    if (!allowedOrigins.has(e.origin)) { rejected++; refresh(); return; }
+    const data = e.data;
+    if (!data || data.type !== "CGO_INPUT") return;
+    submit(data.payload, data.options || {});
   });
 
-  chip($("#ver"), "Engine " + E.version, "");
-  health();            // self-test berjalan sebelum observer dipasang dan tidak meninggalkan jejak
-  E.observe(onPayload);
-  refresh();
-
-  /* ===== Bus lintas-tab: terima siklus dari index.html / BCGO / Chat CGO ===== */
-  const BUS_NAME = "cgo-machine-abc-bus";
-  let busLinked = false;
-  function markBus(ok, detail) {
-    busLinked = !!ok;
-    chip($("#bus"), ok ? ("Bus ON" + (detail ? " · " + detail : "")) : "Bus OFF", ok ? "ok" : "warn");
-  }
-  markBus(false, "");
-
-  function ingestRemote(msg) {
-    if (!msg || msg.type !== "CGO_ABC_BUS") return;
-    if (msg.kind === "ready") {
-      markBus(true, "siap");
-      return;
-    }
-    if (msg.kind !== "cycle" || !msg.data) return;
-    markBus(true, "live");
-    // Bentuk paket seperti hasil observe lokal
-    const data = msg.data;
-    const packet = {
-      result: data.result,
-      cycles: data.cycles || (data.result ? [data.result] : []),
-      stopReason: data.stopReason || null,
-      remote: true,
-      source: msg.source
-    };
-    onPayload(packet);
-  }
-
+  // Bridge global untuk BCGO / halaman lain
   try {
-    if (typeof BroadcastChannel !== "undefined") {
-      const ch = new BroadcastChannel(BUS_NAME);
-      ch.onmessage = (ev) => ingestRemote(ev.data);
-      markBus(true, "listen");
-    } else {
-      window.addEventListener("storage", (ev) => {
-        if (ev.key !== "cgo-abc-bus-ping") return;
-        markBus(true, "storage");
-      });
-    }
-  } catch (err) {
-    markBus(false, "error");
-  }
+    window.CGO_ABC_MONITOR = { submit, runDemo, health, engine: E };
+  } catch (_) {}
 
-  /* Tombol Uji — tanpa ?dev=1 */
-  const smokeBtn = $("#smoke");
-  if (smokeBtn) {
-    smokeBtn.onclick = () => {
-      submit({
-        hello: "cikur-go",
-        ts: new Date().toISOString(),
-        note: "smoke-test dari monitor ABC"
-      }, { fast: true, skipAudit: true });
+  chip($("#ver"), "Engine " + E.version, "ok");
+  const st = health();
+  // observer (untuk event eksternal)
+  E.observe(onPayload);
+  // Sinkron dengan BCGO / tab lain
+  try {
+    const bus = new BroadcastChannel('CGO_MACHINE_ABC_BUS');
+    bus.onmessage = (ev) => {
+      const d = ev?.data;
+      if (!d || d.source === 'monitor-demo') return;
+      if (d.type === 'abc-result' && d.status) {
+        showNotice('Sinyal dari ' + (d.source || 'bus') + ': ' + d.status, 'ok');
+        setLive('BUS · ' + d.status, 'ok');
+      }
     };
+  } catch (_) {}
+  refresh();
+  setLive("SIAP", "ok");
+  if (bootBanner) {
+    bootBanner.textContent = `Mesin ABC ${E.version} siap · self-test ${st.passed}/${st.total} · menjalankan demo otomatis…`;
+    bootBanner.className = "banner ok";
   }
 
-  /* DEV selalu bisa dibuka (tetap default hidden panel) */
-  if ($("#devBtn")) $("#devBtn").hidden = false;
+  // AUTO-DEMO — monitor tidak boleh diam saat dibuka
+  setTimeout(() => {
+    try { runDemo(); }
+    catch (err) {
+      showNotice("Auto-demo gagal: " + (err && err.message || err), "error");
+      setLive("ERROR", "bad");
+    }
+  }, 300);
+
+  // heartbeat pelan
+  pulseTimer = setInterval(() => {
+    if (E.isPaused()) return;
+    const m = E.getMetrics();
+    $("#degradedCount").textContent = m.degradedCount || 0;
+    if (logo && !logo.classList.contains("live") && (m.totalProcessed || 0) > 0) logo.classList.add("live");
+  }, 3000);
 })();
 </script>
 </body>

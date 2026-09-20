@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO Universal Neural Monitor · <a href="cgo-machine-abc.html" style="color:#7dd3fc;font-size:12px;font-weight:600;">Mesin ABC ↗</a> v4.0.0 — Clean System Monitor</title>
+<title>BCGO Universal Neural Monitor · Mesin ABC · v4.0.0</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -72,8 +72,14 @@ body{font-family:'Inter',sans-serif}
             <p class="text-xs text-slate-400 mt-1">Pusat Saraf Master & Pemetaan Saraf Lintas File Cikur Go</p>
         </div>
     </div>
-    <div id="system-status-badge" class="px-3 py-1 rounded-md text-xs font-semibold bg-slate-900 text-slate-400 border border-slate-700">
-        Membangunkan Saraf
+    <div class="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+        <a href="cgo-machine-abc.html" id="link-mesin-abc"
+           class="px-3 py-1.5 rounded-md text-xs font-semibold bg-sky-950 text-sky-300 border border-sky-700 hover:bg-sky-900 transition"
+           title="Buka monitor Mesin ABC (A→B→C→D)">🧠 Mesin ABC ↗</a>
+        <span id="abc-status-chip" class="px-2 py-1 rounded-md text-[10px] font-semibold bg-slate-900 text-slate-500 border border-slate-700">ABC: –</span>
+        <div id="system-status-badge" class="px-3 py-1 rounded-md text-xs font-semibold bg-slate-900 text-slate-400 border border-slate-700">
+            Membangunkan Saraf
+        </div>
     </div>
 </header>
 
@@ -316,23 +322,52 @@ try {
     internalBrain = adapter.install();
     window.CGOInternalBrain = internalBrain;
     console.log('[BCGO] Internal CGO brain terpasang:', internalBrain?.version);
-  if (window.CGOMachineABCBridge) {
-    window.CGOMachineABCBridge.observe((packet) => {
-      try {
-        const st = packet?.result?.status || packet?.finalResult?.status;
-        if (st && window.BCGO_STATE) {
-          window.BCGO_STATE.lastAbcStatus = st;
-          window.BCGO_STATE.lastAbcAt = Date.now();
-        }
-      } catch (_) {}
-    });
-    console.log('[BCGO] Mesin ABC terhubung:', window.CGOMachineABCBridge.engineVersion);
-  } else {
-    console.warn('[BCGO] Mesin ABC belum termuat (cgo-machine-abc.js)');
-  }
   }
 } catch (err) {
   console.warn('[BCGO] Internal brain tidak tersedia; BCGO monitor tetap berjalan:', err);
+}
+
+// Mesin ABC — independent dari internal brain (harus di luar try/if di atas)
+function updateAbcChip(text, ok) {
+  const chip = document.getElementById('abc-status-chip');
+  if (!chip) return;
+  chip.textContent = text;
+  chip.className = 'px-2 py-1 rounded-md text-[10px] font-semibold border ' +
+    (ok === true ? 'bg-emerald-950 text-emerald-300 border-emerald-700' :
+     ok === false ? 'bg-rose-950 text-rose-300 border-rose-700' :
+     'bg-slate-900 text-slate-500 border-slate-700');
+}
+if (window.CGOMachineABCBridge) {
+  window.CGOMachineABCBridge.observe((packet) => {
+    try {
+      const st = packet?.result?.status || packet?.finalResult?.status;
+      if (st && window.BCGO_STATE) {
+        window.BCGO_STATE.lastAbcStatus = st;
+        window.BCGO_STATE.lastAbcAt = Date.now();
+      }
+      if (st) updateAbcChip('ABC: ' + st, /WELL_FORMED|VERIFIED|PROCESSED/i.test(String(st)));
+    } catch (_) {}
+  });
+  const ver = window.CGOMachineABCBridge.engineVersion || window.CGOMachineABC?.version || '?';
+  updateAbcChip('ABC: v' + ver + ' siap', true);
+  console.log('[BCGO] Mesin ABC terhubung:', ver);
+  // Dengarkan monitor di tab lain
+  try {
+    const ch = new BroadcastChannel('CGO_MACHINE_ABC_BUS');
+    ch.onmessage = (ev) => {
+      const d = ev?.data;
+      if (d?.type === 'abc-result' && d.status) {
+        updateAbcChip('ABC: ' + d.status, true);
+        if (window.BCGO_STATE) {
+          window.BCGO_STATE.lastAbcStatus = d.status;
+          window.BCGO_STATE.lastAbcAt = Date.now();
+        }
+      }
+    };
+  } catch (_) {}
+} else {
+  updateAbcChip('ABC: tidak termuat', false);
+  console.warn('[BCGO] Mesin ABC belum termuat (cgo-machine-abc.js + bridge di ROOT)');
 }
 
 
@@ -774,21 +809,52 @@ async function sendQuestion(question) {
             setChatLiveStatus('BCGO sedang memeriksa telemetry, scanner, dan state live…', 'working');
             answer = await Promise.resolve(brain.ask(text));
         }
-        // 1b) Mesin ABC — analisis struktur / bukti formal (tanpa AI eksternal)
-        if (window.CGOMachineABCBridge && /analisis|struktur|audit|verifikasi|bukti|mesin abc|pipeline|self-?test/i.test(text)) {
+        // 1b) Mesin ABC — analisis formal A→B→C→D (tanpa AI eksternal)
+        const wantAbc = /analisis|struktur|audit|verifikasi|bukti|mesin\s*abc|pipeline|self-?test|abc\b|formal|well[_\s-]?formed/i.test(text);
+        if (window.CGOMachineABCBridge && wantAbc) {
             try {
                 setChatLiveStatus('Mesin ABC memproses A→B→C→D…', 'working');
-                const abc = window.CGOMachineABCBridge.analyze(text, { maxCycles: 1 });
-                if (abc.ok) {
-                    const conf = abc.confidence != null ? Math.round(Number(abc.confidence) * 100) + '%' : '–';
-                    const nFind = (abc.findings || []).length;
-                    const auditSt = abc.audit?.status || '–';
-                    const abcLine = `[Mesin ABC ${abc.version}] status ${abc.status || '–'} · keyakinan ${conf} · temuan ${nFind} · audit ${auditSt}`;
+                let abc;
+                if (/self-?test/i.test(text) && window.CGOMachineABCBridge.healthSnapshot) {
+                    const h = window.CGOMachineABCBridge.healthSnapshot(true);
+                    abc = {
+                        ok: true,
+                        version: h.engineVersion || h.version || window.CGOMachineABCBridge.engineVersion,
+                        status: h.selfTest?.verified ? 'SELF_TEST_OK' : 'SELF_TEST_FAIL',
+                        confidence: h.selfTest?.verified ? 1 : 0,
+                        findings: [],
+                        audit: { status: h.independence?.verified ? 'PASS' : 'CHECK' }
+                    };
+                    const abcLine = `[Mesin ABC ${abc.version}] self-test ${h.selfTest?.passed}/${h.selfTest?.total} · independensi ${h.independence?.verified ? 'OK' : 'CEK'} · metrics total=${h.metrics?.totalProcessed ?? 0}`;
                     answer = answer ? (String(answer) + '\n\n' + abcLine) : abcLine;
+                    updateAbcChip('ABC: self-test', h.selfTest?.verified);
+                } else {
+                    abc = window.CGOMachineABCBridge.analyze(text, { maxCycles: 1 });
+                    if (abc.ok) {
+                        const conf = abc.confidence != null ? Math.round(Number(abc.confidence) * 100) + '%' : '–';
+                        const nFind = (abc.findings || []).length;
+                        const auditSt = abc.audit?.status || '–';
+                        const abcLine = `[Mesin ABC ${abc.version}] status ${abc.status || '–'} · keyakinan ${conf} · temuan ${nFind} · audit ${auditSt}`;
+                        answer = answer ? (String(answer) + '\n\n' + abcLine) : abcLine;
+                        updateAbcChip('ABC: ' + (abc.status || 'OK'), true);
+                        try {
+                            const ch = new BroadcastChannel('CGO_MACHINE_ABC_BUS');
+                            ch.postMessage({ type: 'abc-result', status: abc.status, source: 'bcgo-chat' });
+                            ch.close();
+                        } catch (_) {}
+                    } else {
+                        const abcLine = `[Mesin ABC] gagal: ${abc.error || 'unknown'}`;
+                        answer = answer ? (String(answer) + '\n\n' + abcLine) : abcLine;
+                        updateAbcChip('ABC: error', false);
+                    }
                 }
             } catch (abcErr) {
                 console.warn('[BCGO] ABC analyze:', abcErr);
             }
+        } else if (wantAbc && !window.CGOMachineABCBridge) {
+            const miss = '[Mesin ABC] Bridge tidak termuat. Pastikan cgo-machine-abc.js + cgo-machine-abc-bridge.js ada di ROOT repo.';
+            answer = answer ? (String(answer) + '\n\n' + miss) : miss;
+            updateAbcChip('ABC: tidak termuat', false);
         }
         // 2) Internal CGO brain (investigation) jika jawaban generik / kosong
         const internal = window.CGOInternalBrain || internalBrain;
