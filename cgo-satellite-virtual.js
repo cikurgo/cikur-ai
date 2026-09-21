@@ -22,7 +22,6 @@
 // ============================================================================
 // KONSTANTA FISIKA — DENGAN SITASI
 // ============================================================================
-
 const SAT_CONSTANTS = Object.freeze({
   // --- IDENTITAS LINK ---
   // [1] Iridium 9602 SBD: uplink L-band, SBD only
@@ -105,7 +104,6 @@ const SAT_CONSTANTS = Object.freeze({
 // ============================================================================
 // PHYSICS MODE
 // ============================================================================
-
 const PHYSICS_MODE = Object.freeze({
   IDEAL: 'ideal',           // hanya geometri, tanpa noise/scint
   REALISTIC: 'realistic',   // geometri + atmosfer + scintillation
@@ -201,7 +199,6 @@ function getPER(ber, bits = SAT_CONSTANTS.PACKET_BITS) {
 // ============================================================================
 // LAYER 1: FISIKA — PURE FUNCTIONS
 // ============================================================================
-
 /**
  * Hitung geometri satelit pada waktu t dalam 1 pass.
  * Model: parabola sederhana (approximation untuk LEO).
@@ -336,7 +333,6 @@ function computeScintillation(now, elevationDeg, deltaMs, mode) {
 // ============================================================================
 // LAYER 2: LQM — DERIVED METRIC
 // ============================================================================
-
 /**
  * Hitung LQM = Eb/N0 efektif setelah semua penalti.
  * 
