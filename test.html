@@ -649,6 +649,41 @@
           </div>
         </div>
 
+        <!-- BASE PTT (pusat) -->
+        <div class="panel-section">
+          <h3 class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+              <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/>
+            </svg>
+            Base PTT
+          </h3>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+            <label for="sel-channel" style="font-family:var(--mono);font-size:11px;color:var(--text-dim);">CH</label>
+            <select id="sel-channel" style="flex:1;background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--mono);font-size:12px;">
+              <option value="0">CH-00</option>
+              <option value="1">CH-01</option>
+              <option value="2">CH-02</option>
+              <option value="3">CH-03</option>
+              <option value="4">CH-04</option>
+              <option value="5">CH-05</option>
+              <option value="6">CH-06</option>
+              <option value="7">CH-07</option>
+            </select>
+          </div>
+          <button class="btn btn-full" id="btn-base-ptt" type="button"
+            style="min-height:48px;font-size:13px;user-select:none;touch-action:none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+              <path d="M19 10v2a7 7 0 01-14 0v-2"/>
+            </svg>
+            <span id="btn-base-ptt-label">Hold to Talk (BASE)</span>
+          </button>
+          <div id="base-ptt-status" style="margin-top:6px;font-family:var(--mono);font-size:10px;color:var(--text-dim);text-align:center;">
+            STANDBY
+          </div>
+        </div>
+
         <!-- Stress Test -->
         <div class="panel-section">
           <h3 class="panel-title">
@@ -694,6 +729,9 @@
             <span class="label">Collisions</span> <span class="value warn" id="stat-coll">0</span>
             <span class="label">Dropped</span>    <span class="value" id="stat-drop">0</span>
             <span class="label">Gaps</span>       <span class="value" id="stat-gap">0</span>
+            <span class="label">Outbox</span>     <span class="value" id="stat-outbox">0</span>
+            <span class="label">SAT State</span>  <span class="value" id="stat-sat">--</span>
+            <span class="label">SAT LQM</span>    <span class="value" id="stat-lqm">--</span>
             <span class="label">Uptime</span>     <span class="value" id="stat-uptime">0s</span>
           </div>
         </div>
@@ -730,6 +768,9 @@
       getRadarLayer
     } from './ht-radar-layer.js';
     import { StressTest } from './stress-test-ht.js';
+    import { createBridgedSimulator } from './cgo-ht-bridge.js';
+    import { getBasePTT } from './cgo-base-ptt.js';
+    import { getTransport } from './cgo-transport.js';
 
     // ---------------------------------------------------
     // GLOBAL STATE
@@ -739,6 +780,9 @@
       gateway: null,
       radarLayer: null,
       stressTest: null,
+      bridge: null,
+      transport: null,
+      basePtt: null,
       running: false,
       audioReady: false,
       camera: { x: 0, y: 0, zoom: 1 }
@@ -791,7 +835,15 @@
     const statColl   = $('stat-coll');
     const statDrop   = $('stat-drop');
     const statGap    = $('stat-gap');
+    const statOutbox = $('stat-outbox');
+    const statSat    = $('stat-sat');
+    const statLqm    = $('stat-lqm');
     const statUptime = $('stat-uptime');
+
+    const selChannel     = $('sel-channel');
+    const btnBasePtt     = $('btn-base-ptt');
+    const btnBasePttLabel = $('btn-base-ptt-label');
+    const basePttStatus  = $('base-ptt-status');
 
     const stressProgress = $('stress-progress');
     const stressBarFill  = $('stress-bar-fill');
@@ -1104,37 +1156,55 @@
     function startSimulator() {
       if (globalState.running) return;
 
-      globalState.gateway = getGateway({
-        state: globalThis.BCGO_STATE,
-        chat: globalThis.cgoChat,
-        verbose: false
-      });
-
-      globalState.sim = createSimulator({
+      // Bridged: agent → transport (sat/outbox) → gateway
+      globalState.bridge = createBridgedSimulator({
         count: 12,
         channels: 8,
-        profiles: ['patrol', 'static', 'emergency'],
-        weights: [0.6, 0.3, 0.1],
-        onTransmit: (channel, payload) => {
-          txCount++;
-          globalState.gateway.receive(channel, payload);
-        },
+        path: 'auto',
+        constellation: true,
+        satMode: 'realistic',
         onStateChange: () => {},
         onError: (err) => console.error('[Sim]', err)
       });
 
-      globalState.sim.startAll();
+      globalState.sim = globalState.bridge.simulator;
+      globalState.gateway = globalState.bridge.gateway;
+      globalState.transport = globalState.bridge.transport;
+
+      // BASE PTT share same transport
+      globalState.basePtt = getBasePTT({ transport: globalState.transport });
+      globalState.basePtt.setTransport(globalState.transport);
+      globalState.basePtt.onStateChange = (st) => {
+        if (st.active) {
+          btnBasePtt.classList.add('danger');
+          btnBasePttLabel.textContent = `ON AIR · CH-${String(st.channel).padStart(2, '0')}`;
+          basePttStatus.textContent = `BASE TALKING · CH-${String(st.channel).padStart(2, '0')}`;
+          basePttStatus.style.color = 'var(--danger)';
+        } else {
+          btnBasePtt.classList.remove('danger');
+          btnBasePttLabel.textContent = 'Hold to Talk (BASE)';
+          basePttStatus.textContent = `STANDBY · CH-${String(st.channel).padStart(2, '0')}`;
+          basePttStatus.style.color = 'var(--text-dim)';
+        }
+      };
+
+      // Count TX via transport ack
+      const prevAck = globalState.transport.onAck;
+      globalState.transport.onAck = (item, path) => {
+        txCount++;
+        if (typeof prevAck === 'function') prevAck(item, path);
+      };
+
+      globalState.bridge.start();
       globalState.running = true;
 
       btnStart.disabled = true;
       btnStop.disabled = false;
       statusSim.className = 'status-dot on';
-      toast('Simulator started — 12 agents', 'success');
+      toast('Simulator + SAT transport started — 12 agents', 'success');
 
-      // Wait for first packets then frame the agents on radar
       setTimeout(() => {
         fitToAgents();
-        // Second pass after more packets arrive
         setTimeout(fitToAgents, 1500);
       }, 800);
     }
@@ -1142,11 +1212,20 @@
     function stopSimulator() {
       if (!globalState.running && !globalState.sim) return;
 
-      if (globalState.sim) {
+      if (globalState.basePtt) {
+        globalState.basePtt.stopPTT();
+      }
+
+      if (globalState.bridge) {
+        globalState.bridge.dispose();
+        globalState.bridge = null;
+      } else if (globalState.sim) {
         globalState.sim.stopAll();
         globalState.sim.disposeAll();
-        globalState.sim = null;
       }
+
+      globalState.sim = null;
+      globalState.transport = null;
 
       if (globalState.gateway) {
         globalState.gateway.reset();
@@ -1185,6 +1264,48 @@
       globalState.sim.triggerEmergencyAll();
       toast('Emergency triggered on all agents', 'error');
     });
+
+    // ---------------------------------------------------
+    // BASE PTT (press & hold)
+    // ---------------------------------------------------
+    selChannel?.addEventListener('change', () => {
+      const ch = Number(selChannel.value) || 0;
+      if (!globalState.basePtt) {
+        globalState.basePtt = getBasePTT();
+      }
+      globalState.basePtt.setChannel(ch);
+      basePttStatus.textContent = `STANDBY · CH-${String(ch).padStart(2, '0')}`;
+    });
+
+    function bindBasePtt() {
+      const start = async (e) => {
+        e.preventDefault();
+        if (!globalState.running) {
+          toast('Start simulator first', 'warn');
+          return;
+        }
+        if (!globalState.basePtt) {
+          globalState.basePtt = getBasePTT({ transport: globalState.transport });
+        }
+        if (globalState.transport) {
+          globalState.basePtt.setTransport(globalState.transport);
+        }
+        globalState.basePtt.setChannel(Number(selChannel?.value) || 0);
+        await globalState.basePtt.startPTT();
+      };
+      const stop = (e) => {
+        e.preventDefault();
+        globalState.basePtt?.stopPTT();
+      };
+
+      btnBasePtt.addEventListener('mousedown', start);
+      btnBasePtt.addEventListener('mouseup', stop);
+      btnBasePtt.addEventListener('mouseleave', stop);
+      btnBasePtt.addEventListener('touchstart', start, { passive: false });
+      btnBasePtt.addEventListener('touchend', stop);
+      btnBasePtt.addEventListener('touchcancel', stop);
+    }
+    bindBasePtt();
 
     // ---------------------------------------------------
     // AUDIO
@@ -1309,6 +1430,25 @@
       statColl.textContent = g.totalCollisions.toLocaleString();
       statDrop.textContent = g.totalDropped.toLocaleString();
       statGap.textContent = g.totalGaps.toLocaleString();
+
+      // Transport / satellite
+      const t = globalState.transport || (typeof getTransport === 'function' ? getTransport() : null);
+      if (t) {
+        const ts = t.getStats();
+        if (statOutbox) statOutbox.textContent = String(ts.outbox ?? 0);
+        const sat = ts.satellite;
+        if (statSat) {
+          statSat.textContent = sat?.state || '--';
+          statSat.className = 'value ' + (
+            sat?.state === 'TRACKING' ? 'good' :
+            sat?.state === 'DEGRADED' ? 'warn' :
+            sat?.state ? 'bad' : ''
+          );
+        }
+        if (statLqm) {
+          statLqm.textContent = sat?.lqm != null ? Number(sat.lqm).toFixed(1) : '--';
+        }
+      }
 
       const uptimeSec = Math.floor(g.uptimeMs / 1000);
       statUptime.textContent = uptimeSec < 60

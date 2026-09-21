@@ -98,6 +98,8 @@ const SAT_CONSTANTS = Object.freeze({
   MAX_DELTA_MS: 1000,              // clamp untuk safety
   HISTORY_SIZE: 20,                // ~2s @100ms
   SUSTAINED_SAMPLES: 10,           // ~1s sustained check
+  // Doppler rate → LQM penalty (~0.7 dB at max 280 Hz/s)
+  DOPPLER_WEIGHT: 1 / 400,
 });
 
 // ============================================================================
@@ -371,9 +373,6 @@ function calculateLQM({ snrDb, dopplerRateHzPerSec, elevationDeg, scintFadeDb = 
   // LQM final
   return ebn0 - atmPenalty - dopplerPenalty + scintFadeDb;
 }
-
-// Tambah DOPPLER_WEIGHT ke konstanta (kalau belum)
-SAT_CONSTANTS.DOPPLER_WEIGHT = SAT_CONSTANTS.DOPPLER_WEIGHT || (1 / 400);
 
 // ============================================================================
 // LAYER 3: CHANNEL SIMULATOR

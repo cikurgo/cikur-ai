@@ -92,7 +92,9 @@ function formatRadioTransmission(state) {
   }
 
   const ch = String(Number(state.channel) || 0).padStart(2, '0');
-  const id = String(Number(state.agentId) || 0).padStart(4, '0');
+  const agentId = Number(state.agentId) || 0;
+  const isBase = agentId === 0 || state.source === 'base' || state.callsign === 'BASE';
+  const idLabel = isBase ? 'BASE' : `AGT-${String(agentId).padStart(4, '0')}`;
   const emoji = resolveStatusEmoji(state);
   const statusLabel = resolveStatusLabel(state);
   const bars = getSignalBars(state.signalQuality);
@@ -103,7 +105,11 @@ function formatRadioTransmission(state) {
       ? '--%'
       : `${Math.round(state.battery)}%`;
 
-  return `[CH-${ch}] AGT-${id} • ${emoji} ${statusLabel} • SIG ${bars} ${sig}% • BATT ${batt} • OVER`;
+  if (isBase) {
+    return `[CH-${ch}] ${idLabel} • ${emoji} ${statusLabel} • SIG ${bars} ${sig}% • OVER`;
+  }
+
+  return `[CH-${ch}] ${idLabel} • ${emoji} ${statusLabel} • SIG ${bars} ${sig}% • BATT ${batt} • OVER`;
 }
 
 /**

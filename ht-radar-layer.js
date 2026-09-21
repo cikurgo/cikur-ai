@@ -231,6 +231,7 @@ class HTRadioRadarLayer {
 
       const state = satellite[agentId];
       if (!state || state.source !== 'virtual_ht') continue;
+      if (Number(state.agentId) === 0) continue; // BASE — bukan unit lapangan
 
       this._renderAgent(ctx, state, worldToScreen, viewInfo);
       this.redrawBudget--;
