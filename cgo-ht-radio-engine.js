@@ -326,11 +326,10 @@ class VirtualRadioGateway {
 let _gatewayInstance = null;
 
 function getGateway(options) {
-  if (options !== undefined) {
-    _gatewayInstance = options;
-    return _gatewayInstance;
+  // Singleton — options only applied on first create
+  if (!_gatewayInstance) {
+    _gatewayInstance = new VirtualRadioGateway(options || {});
   }
-  if (!_gatewayInstance) _gatewayInstance = new VirtualRadioGateway();
   return _gatewayInstance;
 }
 
