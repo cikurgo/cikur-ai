@@ -133,11 +133,29 @@ class HTAgentSimulator {
     this.profile = BEHAVIOR_PROFILES[behaviorProfile];
     this.profileName = behaviorProfile;
 
-    // Position
-    const initial = options.initialPosition ?? {
-      lat: -6.2088 + (Math.random() - 0.5) * 0.1,
-      lon: 106.8456 + (Math.random() - 0.5) * 0.1
-    };
+    // Position — spread across western Indonesia so markers are visible on radar
+    // (previously all agents stacked on Jakarta ≈ one pixel)
+    const initial = options.initialPosition ?? (() => {
+      const seeds = [
+        { lat: -6.2088, lon: 106.8456 }, // Jakarta
+        { lat: -6.9175, lon: 107.6191 }, // Bandung
+        { lat: -7.2575, lon: 112.7521 }, // Surabaya
+        { lat: -6.9667, lon: 110.4167 }, // Semarang
+        { lat: -7.7956, lon: 110.3695 }, // Yogyakarta
+        { lat: -6.1783, lon: 106.6319 }, // Tangerang
+        { lat: -6.2383, lon: 106.9756 }, // Bekasi
+        { lat: -6.5971, lon: 106.7990 }, // Bogor
+        { lat: -6.4025, lon: 106.7942 }, // Depok
+        { lat: -7.0167, lon: 110.4167 }, // near Semarang
+        { lat: -8.4095, lon: 115.1889 }, // Bali
+        { lat: -7.8014, lon: 110.3647 }  // near Yogya
+      ];
+      const seed = seeds[(agentId - 1) % seeds.length];
+      return {
+        lat: seed.lat + (Math.random() - 0.5) * 0.06,
+        lon: seed.lon + (Math.random() - 0.5) * 0.06
+      };
+    })();
     this.latitude = initial.lat;
     this.longitude = initial.lon;
     this.lastTxLat = this.latitude;

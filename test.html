@@ -928,28 +928,87 @@
     let currentFps = 0;
 
     function renderLoop() {
-      if (canvasW === 0) resizeCanvas();
+      try {
+        if (canvasW === 0) resizeCanvas();
 
-      fpsFrameCount++;
-      const now = performance.now();
-      if (now - lastFpsSample >= 1000) {
-        currentFps = fpsFrameCount / ((now - lastFpsSample) / 1000);
-        fpsFrameCount = 0;
-        lastFpsSample = now;
-        if (globalState.stressTest) {
-          globalState.stressTest.tickFrame?.();
+        fpsFrameCount++;
+        const now = performance.now();
+        if (now - lastFpsSample >= 1000) {
+          currentFps = fpsFrameCount / ((now - lastFpsSample) / 1000);
+          fpsFrameCount = 0;
+          lastFpsSample = now;
+          if (globalState.stressTest) {
+            globalState.stressTest.tickFrame?.();
+          }
         }
+
+        ctx.fillStyle = '#05080d';
+        ctx.fillRect(0, 0, canvasW, canvasH);
+        drawGrid();
+
+        if (globalState.radarLayer && globalState.radarLayer.active) {
+          globalState.radarLayer.render(ctx, worldToScreen, {
+            agentRadius: 11,
+            canvasW,
+            canvasH
+          });
+        }
+      } catch (err) {
+        console.error('[Render]', err);
       }
-
-      ctx.fillStyle = '#05080d';
-      ctx.fillRect(0, 0, canvasW, canvasH);
-      drawGrid();
-
-      if (globalState.radarLayer && globalState.radarLayer.active) {
-        globalState.radarLayer.render(ctx, worldToScreen, { agentRadius: 8 });
-      }
-
       requestAnimationFrame(renderLoop);
+    }
+
+    /** Center + zoom camera so all known agents are visible */
+    function fitToAgents() {
+      const sat = globalThis.BCGO_STATE?.satellite;
+      if (!sat) return;
+
+      const points = [];
+      for (const id in sat) {
+        const s = sat[id];
+        if (!s || !Number.isFinite(s.latitude) || !Number.isFinite(s.longitude)) continue;
+        points.push(worldToScreen(s.latitude, s.longitude));
+      }
+      if (points.length === 0) return;
+
+      // Use geo bounds instead of screen for more stable fit
+      let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+      for (const id in sat) {
+        const s = sat[id];
+        if (!s || !Number.isFinite(s.latitude) || !Number.isFinite(s.longitude)) continue;
+        minLat = Math.min(minLat, s.latitude);
+        maxLat = Math.max(maxLat, s.latitude);
+        minLon = Math.min(minLon, s.longitude);
+        maxLon = Math.max(maxLon, s.longitude);
+      }
+      if (!Number.isFinite(minLat)) return;
+
+      // Pad bounds
+      const padLat = Math.max(0.5, (maxLat - minLat) * 0.35);
+      const padLon = Math.max(0.5, (maxLon - minLon) * 0.35);
+      minLat -= padLat; maxLat += padLat;
+      minLon -= padLon; maxLon += padLon;
+
+      const LAT_MIN = -12, LAT_MAX = 8, LON_MIN = 94, LON_MAX = 142;
+      const midLat = (minLat + maxLat) / 2;
+      const midLon = (minLon + maxLon) / 2;
+
+      // Target zoom so the geo window fills most of the canvas
+      const geoW = (maxLon - minLon) / (LON_MAX - LON_MIN);
+      const geoH = (maxLat - minLat) / (LAT_MAX - LAT_MIN);
+      const zoom = Math.max(0.8, Math.min(4, 0.7 / Math.max(geoW, geoH, 0.05)));
+
+      // Screen position of mid without camera offset
+      const nx = (midLon - LON_MIN) / (LON_MAX - LON_MIN);
+      const ny = 1 - (midLat - LAT_MIN) / (LAT_MAX - LAT_MIN);
+      const baseX = nx * canvasW;
+      const baseY = ny * canvasH;
+
+      // Camera so that mid lands at canvas center
+      globalState.camera.zoom = zoom;
+      globalState.camera.x = (canvasW / 2 - baseX) * zoom;
+      globalState.camera.y = (canvasH / 2 - baseY) * zoom;
     }
 
     // ---------------------------------------------------
@@ -1071,6 +1130,13 @@
       btnStop.disabled = false;
       statusSim.className = 'status-dot on';
       toast('Simulator started — 12 agents', 'success');
+
+      // Wait for first packets then frame the agents on radar
+      setTimeout(() => {
+        fitToAgents();
+        // Second pass after more packets arrive
+        setTimeout(fitToAgents, 1500);
+      }, 800);
     }
 
     function stopSimulator() {

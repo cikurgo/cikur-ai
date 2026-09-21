@@ -242,41 +242,67 @@ class HTRadioRadarLayer {
   }
 
   _renderAgent(ctx, state, worldToScreen, viewInfo) {
-    const pos = worldToScreen(state.latitude, state.longitude);
+    // Fallback coords if missing (prevent silent skip)
+    let lat = Number(state.latitude);
+    let lon = Number(state.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      // Deterministic fallback so agent still appears
+      const id = Number(state.agentId) || 0;
+      lat = -6.2 + ((id * 17) % 50) / 50 * 4 - 2;
+      lon = 106.8 + ((id * 31) % 50) / 50 * 8 - 4;
+    }
+
+    const pos = worldToScreen(lat, lon);
     if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return;
 
-    const { x, y } = pos;
-    const baseR = viewInfo.agentRadius ?? 8;
+    // Cull if far outside canvas (with margin)
+    const margin = 40;
+    if (pos.x < -margin || pos.y < -margin ||
+        pos.x > (viewInfo.canvasW ?? 9999) + margin ||
+        pos.y > (viewInfo.canvasH ?? 9999) + margin) {
+      return;
+    }
 
-    const pttActive = (state.status & STATUS_FLAGS.PTT_ACTIVE) !== 0;
-    const emergency = (state.status & STATUS_FLAGS.EMERGENCY) !== 0;
-    const warn = (state.status & STATUS_FLAGS.WARN) !== 0;
+    const { x, y } = pos;
+    const baseR = viewInfo.agentRadius ?? 10;
+
+    const pttActive = (state.status & STATUS_FLAGS.PTT_ACTIVE) !== 0 || state.pttActive === true;
+    const emergency = (state.status & STATUS_FLAGS.EMERGENCY) !== 0 || state.emergency === true;
+    const warn = (state.status & STATUS_FLAGS.WARN) !== 0 || state.warn === true;
     const signal = Math.max(0, Math.min(100, state.signalQuality ?? 0));
 
     this._drawSignalArc(ctx, x, y, baseR, signal);
 
     if (pttActive && this.blinkPhase === 0) {
-      this._drawRing(ctx, x, y, baseR + 4, COLOR_PTT, 2);
+      this._drawRing(ctx, x, y, baseR + 5, COLOR_PTT, 2.5);
     }
 
     if (emergency) {
       const pulse = 1 + Math.sin(this.lastFrameTime / 200) * 0.5;
-      this._drawRing(ctx, x, y, baseR + 6 + pulse * EMERGENCY_PULSE_RADIUS, COLOR_EMERGENCY, 2);
-      this._drawRing(ctx, x, y, baseR + 10 + pulse * EMERGENCY_PULSE_RADIUS, COLOR_EMERGENCY, 1.5);
+      this._drawRing(ctx, x, y, baseR + 7 + pulse * EMERGENCY_PULSE_RADIUS, COLOR_EMERGENCY, 2.5);
+      this._drawRing(ctx, x, y, baseR + 12 + pulse * EMERGENCY_PULSE_RADIUS, COLOR_EMERGENCY, 1.5);
     }
 
     if (warn && !emergency) {
       ctx.fillStyle = COLOR_WARN;
       ctx.beginPath();
-      ctx.arc(x + baseR + 3, y - baseR - 3, 2.5, 0, Math.PI * 2);
+      ctx.arc(x + baseR + 3, y - baseR - 3, 3, 0, Math.PI * 2);
       ctx.fill();
     }
 
     this._drawChannelBadge(ctx, x, y, baseR, state.channel);
 
-    ctx.fillStyle = emergency ? COLOR_EMERGENCY : '#e5e7eb';
+    // Outer ring for visibility on dark bg
+    ctx.strokeStyle = emergency ? COLOR_EMERGENCY : 'rgba(229,231,235,0.5)';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.arc(x, y, baseR * 0.5, 0, Math.PI * 2);
+    ctx.arc(x, y, baseR * 0.7, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Core dot — larger & brighter
+    ctx.fillStyle = emergency ? COLOR_EMERGENCY : (pttActive ? COLOR_PTT : '#e5e7eb');
+    ctx.beginPath();
+    ctx.arc(x, y, baseR * 0.55, 0, Math.PI * 2);
     ctx.fill();
   }
 
