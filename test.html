@@ -25,243 +25,571 @@
       --sans:      system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     }
 
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
 
     html, body {
-      margin: 0; padding: 0; height: 100%;
-      background: var(--bg); color: var(--text);
-      font-family: var(--sans); font-size: 14px;
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
       overflow: hidden;
     }
 
-    .app { display: grid; grid-template-rows: auto 1fr; height: 100vh; height: 100dvh; }
-
-    /* ICON BASE */
-    .ico {
-      width: 14px;
-      height: 14px;
-      flex-shrink: 0;
-      stroke: currentColor;
-      fill: none;
-      stroke-width: 2;
-      stroke-linecap: round;
-      stroke-linejoin: round;
+    /* =====================================================
+       LAYOUT
+    ===================================================== */
+    .app {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      grid-template-columns: 1fr;
+      height: 100vh;
+      height: 100dvh;
     }
-    .ico-lg { width: 16px; height: 16px; }
 
-    /* HEADER */
+    /* =====================================================
+       HEADER
+    ===================================================== */
     .header {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 14px; background: var(--bg-panel);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--bg-panel);
       border-bottom: 1px solid var(--border);
-      user-select: none; z-index: 100;
+      user-select: none;
+      z-index: 100;
     }
+
     .header-logo {
-      width: 32px; height: 32px; border-radius: 6px;
-      object-fit: contain; flex-shrink: 0; background: #0d1117;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      object-fit: contain;
+      flex-shrink: 0;
+      background: #0d1117;
     }
-    .header-title { display: flex; flex-direction: column; line-height: 1.1; flex: 1; min-width: 0; }
+
+    .header-title {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.1;
+      flex: 1;
+      min-width: 0;
+    }
+
     .header-title h1 {
-      margin: 0; font-size: 14px; font-weight: 600;
-      letter-spacing: 0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .header-title small { font-size: 10px; color: var(--text-dim); font-family: var(--mono); }
-    .header-status { display: flex; align-items: center; gap: 6px; }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; transition: background 0.2s; }
+
+    .header-title small {
+      font-size: 10px;
+      color: var(--text-dim);
+      font-family: var(--mono);
+    }
+
+    .header-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #6b7280;
+      transition: background 0.2s;
+    }
+
     .status-dot.on   { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
     .status-dot.warn { background: var(--warn);   box-shadow: 0 0 6px var(--warn); }
     .status-dot.err  { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
 
-    /* MAIN */
+    /* =====================================================
+       MAIN GRID
+    ===================================================== */
     .main {
-      display: grid; grid-template-columns: 1fr 340px;
-      overflow: hidden; min-height: 0;
-    }
-    @media (max-width: 860px) {
-      .main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      overflow: hidden;
     }
 
-    /* RADAR */
+    @media (max-width: 860px) {
+      .main {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto;
+      }
+    }
+
+    /* =====================================================
+       RADAR PANEL
+    ===================================================== */
     .radar-wrap {
       position: relative;
-      background: radial-gradient(circle at 50% 50%, #0d1420 0%, #05080d 100%);
-      overflow: hidden; min-height: 0;
+      background:
+        radial-gradient(circle at 50% 50%, #0d1420 0%, #05080d 100%);
+      overflow: hidden;
     }
-    #radar-canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
-    #radar-canvas:active { cursor: grabbing; }
 
-    .radar-overlay { position: absolute; top: 10px; left: 10px; pointer-events: none; }
+    #radar-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+      cursor: grab;
+    }
+
+    #radar-canvas:active {
+      cursor: grabbing;
+    }
+
+    .radar-overlay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      pointer-events: none;
+    }
+
+    .radar-overlay > * {
+      pointer-events: auto;
+    }
+
     .radar-legend {
       background: rgba(10, 14, 20, 0.85);
-      border: 1px solid var(--border); border-radius: 6px;
-      padding: 6px 10px; font-family: var(--mono); font-size: 10px;
-      color: var(--text-dim); backdrop-filter: blur(6px);
-      line-height: 1.6; max-width: 240px;
-    }
-    .radar-legend strong { color: var(--text); }
-    .radar-controls {
-      position: absolute; top: 10px; right: 10px;
-      display: flex; flex-direction: column; gap: 6px; z-index: 50;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      backdrop-filter: blur(6px);
+      line-height: 1.6;
     }
 
-    /* SIDE */
+    .radar-legend strong {
+      color: var(--text);
+    }
+
+    .radar-controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 50;
+    }
+
+    /* =====================================================
+       SIDE PANEL
+    ===================================================== */
     .side {
       background: var(--bg-panel);
       border-left: 1px solid var(--border);
-      display: grid; grid-template-rows: auto auto auto 1fr;
-      overflow: hidden; min-height: 0;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      overflow: hidden;
     }
+
     @media (max-width: 860px) {
-      .side { border-left: none; border-top: 1px solid var(--border); max-height: 55vh; }
+      .side {
+        border-left: none;
+        border-top: 1px solid var(--border);
+        max-height: 55vh;
+      }
     }
 
-    .panel-section { border-bottom: 1px solid var(--border); padding: 10px 12px; }
-    .panel-section:last-child { border-bottom: none; }
+    .panel-section {
+      border-bottom: 1px solid var(--border);
+      padding: 10px 12px;
+    }
+
+    .panel-section:last-child {
+      border-bottom: none;
+    }
+
     .panel-title {
-      font-size: 10px; color: var(--text-dim);
-      text-transform: uppercase; letter-spacing: 0.8px;
-      margin: 0 0 8px 0; font-weight: 600;
-      display: flex; align-items: center; gap: 5px;
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin: 0 0 8px 0;
+      font-weight: 600;
     }
 
-    /* BUTTONS */
-    .btn-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+    /* =====================================================
+       BUTTONS
+    ===================================================== */
+    .btn-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+    }
+
     .btn {
-      display: flex; align-items: center; justify-content: center; gap: 6px;
-      padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px;
-      background: var(--bg-card); color: var(--text);
-      font-family: var(--mono); font-size: 11px; font-weight: 500;
-      cursor: pointer; transition: all 0.15s; user-select: none; white-space: nowrap;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-card);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+      white-space: nowrap;
     }
-    .btn:hover  { background: #222d3d; border-color: #3a4657; }
-    .btn:active { transform: scale(0.97); }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn.primary { background: var(--accent); border-color: var(--accent); color: #04130a; }
-    .btn.primary:hover { background: #16a34a; }
-    .btn.danger  { background: var(--danger); border-color: var(--danger); color: #fff; }
-    .btn.danger:hover  { background: #dc2626; }
-    .btn.warn    { background: var(--warn); border-color: var(--warn); color: #1a1103; }
-    .btn.warn:hover    { background: #d97706; }
-    .btn.active  { background: var(--accent); border-color: var(--accent); color: #04130a; }
-    .btn-full { grid-column: span 2; }
 
-    /* STATS */
-    .stats-grid {
-      display: grid; grid-template-columns: 1fr auto;
-      gap: 3px 10px; font-family: var(--mono); font-size: 11px;
+    .btn:hover {
+      background: #222d3d;
+      border-color: #3a4657;
     }
-    .stats-grid .label { color: var(--text-dim); }
-    .stats-grid .value { color: var(--text); text-align: right; font-weight: 500; }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #04130a;
+    }
+
+    .btn.primary:hover {
+      background: #16a34a;
+    }
+
+    .btn.danger {
+      background: var(--danger);
+      border-color: var(--danger);
+      color: #fff;
+    }
+
+    .btn.danger:hover {
+      background: #dc2626;
+    }
+
+    .btn.warn {
+      background: var(--warn);
+      border-color: var(--warn);
+      color: #1a1103;
+    }
+
+    .btn.warn:hover {
+      background: #d97706;
+    }
+
+    .btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #04130a;
+    }
+
+    .btn-full {
+      grid-column: span 2;
+    }
+
+    /* =====================================================
+       STATS
+    ===================================================== */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 3px 10px;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .stats-grid .label {
+      color: var(--text-dim);
+    }
+
+    .stats-grid .value {
+      color: var(--text);
+      text-align: right;
+      font-weight: 500;
+    }
+
     .stats-grid .value.good { color: var(--accent); }
     .stats-grid .value.warn { color: var(--warn); }
     .stats-grid .value.bad  { color: var(--danger); }
 
-    /* CHAT */
-    .chat-wrap { display: flex; flex-direction: column; overflow: hidden; min-height: 0; position: relative; }
+    /* =====================================================
+       CHAT LOG
+    ===================================================== */
+    .chat-wrap {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
     .chat-header {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 8px 12px; border-bottom: 1px solid var(--border);
-      font-size: 10px; color: var(--text-dim);
-      text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      font-weight: 600;
     }
-    .chat-header span { display: flex; align-items: center; gap: 5px; }
+
     .chat-header button {
-      background: transparent; border: 1px solid var(--border);
-      color: var(--text-dim); font-family: var(--mono);
-      font-size: 10px; padding: 3px 8px; border-radius: 4px;
-      cursor: pointer; transition: all 0.15s;
-      display: flex; align-items: center; gap: 4px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
     }
-    .chat-header button:hover { color: var(--text); border-color: #3a4657; }
+
+    .chat-header button:hover {
+      color: var(--text);
+      border-color: #3a4657;
+    }
 
     .chat-log {
-      flex: 1; overflow-y: auto; padding: 6px 8px;
-      display: flex; flex-direction: column; gap: 2px;
-      font-family: var(--mono); font-size: 11px; overscroll-behavior: contain;
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-family: var(--mono);
+      font-size: 11px;
+      scroll-behavior: smooth;
+      overscroll-behavior: contain;
     }
-    .chat-log::-webkit-scrollbar { width: 6px; }
-    .chat-log::-webkit-scrollbar-thumb { background: #2a3646; border-radius: 3px; }
 
+    .chat-log::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .chat-log::-webkit-scrollbar-thumb {
+      background: #2a3646;
+      border-radius: 3px;
+    }
+
+    /* Radio message style — sinkron dengan chat-radio-formatter.js */
     .msg-radio {
       font-family: var(--mono);
       background: rgba(0, 0, 0, 0.3);
       border-left: 3px solid var(--accent);
-      padding: 3px 8px; font-size: 11px; line-height: 1.4;
-      color: var(--text); white-space: pre-wrap; word-break: break-word;
+      padding: 3px 8px;
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
       border-radius: 0 4px 4px 0;
     }
+
     .msg-radio.msg-radio-emergency {
       border-left-color: var(--danger);
       background: rgba(239, 68, 68, 0.15);
       animation: radio-pulse 1.2s ease-in-out infinite;
     }
+
+    .msg-radio.msg-radio-collision,
     .msg-radio.msg-radio-alert {
       border-left-color: var(--warn);
       background: rgba(245, 158, 11, 0.1);
     }
-    @keyframes radio-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+    @keyframes radio-pulse {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0.6; }
+    }
 
     .new-msg-badge {
-      position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
-      background: var(--accent); color: #04130a;
-      font-family: var(--mono); font-size: 10px; font-weight: 600;
-      padding: 5px 12px; border-radius: 12px; cursor: pointer;
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent);
+      color: #04130a;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 12px;
+      cursor: pointer;
       box-shadow: 0 2px 12px rgba(34, 197, 94, 0.5);
-      z-index: 10; display: none; animation: badge-in 0.2s ease-out;
-      align-items: center; gap: 4px;
+      z-index: 10;
+      display: none;
+      animation: badge-in 0.2s ease-out;
     }
-    .new-msg-badge.show { display: flex; }
+
+    .new-msg-badge.show {
+      display: block;
+    }
+
     @keyframes badge-in {
       from { opacity: 0; transform: translateX(-50%) translateY(8px); }
       to   { opacity: 1; transform: translateX(-50%) translateY(0); }
     }
 
-    /* TOAST */
+    /* =====================================================
+       TOAST
+    ===================================================== */
     .toast-wrap {
-      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-      display: flex; flex-direction: column; gap: 6px;
-      z-index: 9999; pointer-events: none;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 9999;
+      pointer-events: none;
     }
+
     .toast {
       background: rgba(10, 14, 20, 0.95);
-      border: 1px solid var(--border); border-radius: 8px;
-      padding: 10px 16px; font-family: var(--mono); font-size: 12px;
-      color: var(--text); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(10px); animation: toast-in 0.25s ease-out;
-      max-width: 90vw; pointer-events: auto;
-      display: flex; align-items: center; gap: 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(10px);
+      animation: toast-in 0.25s ease-out;
+      max-width: 90vw;
+      pointer-events: auto;
     }
+
     .toast.success { border-color: var(--accent); }
     .toast.error   { border-color: var(--danger); }
     .toast.warn    { border-color: var(--warn); }
+
     @keyframes toast-in {
       from { opacity: 0; transform: translateY(12px); }
       to   { opacity: 1; transform: translateY(0); }
     }
 
-    /* STRESS */
-    .stress-progress { margin-top: 6px; display: none; }
-    .stress-progress.show { display: block; }
-    .stress-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
-    .stress-bar-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.5s linear; }
-    .stress-label {
-      font-family: var(--mono); font-size: 10px;
-      color: var(--text-dim); margin-top: 4px;
-      display: flex; justify-content: space-between;
+    /* =====================================================
+       TOOLTIP (HT Radio Agent)
+    ===================================================== */
+    .ht-radio-tooltip {
+      position: fixed;
+      padding: 6px 10px;
+      background: rgba(0, 0, 0, 0.9);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.5;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      pointer-events: none;
+      z-index: 9999;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      white-space: nowrap;
     }
 
-    /* SPLASH */
+    /* =====================================================
+       STRESS TEST PROGRESS
+    ===================================================== */
+    .stress-progress {
+      margin-top: 6px;
+      display: none;
+    }
+
+    .stress-progress.show {
+      display: block;
+    }
+
+    .stress-bar {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .stress-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 0.5s linear;
+    }
+
+    .stress-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* =====================================================
+       LOADING SPLASH
+    ===================================================== */
     .splash {
-      position: fixed; inset: 0; background: var(--bg);
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 16px; z-index: 10000; transition: opacity 0.4s;
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 10000;
+      transition: opacity 0.4s;
     }
-    .splash.hide { opacity: 0; pointer-events: none; }
-    .splash img { width: 72px; height: 72px; animation: splash-pulse 1.5s ease-in-out infinite; }
+
+    .splash.hide {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .splash img {
+      width: 72px;
+      height: 72px;
+      animation: splash-pulse 1.5s ease-in-out infinite;
+    }
+
     .splash-text {
-      font-family: var(--mono); font-size: 12px;
-      color: var(--text-dim); letter-spacing: 1px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 1px;
     }
+
     @keyframes splash-pulse {
       0%, 100% { transform: scale(1); opacity: 1; }
       50%      { transform: scale(1.08); opacity: 0.85; }
@@ -270,41 +598,25 @@
 </head>
 <body>
 
-  <!-- SVG ICON LIBRARY (hidden) -->
-  <svg width="0" height="0" style="position:absolute">
-    <defs>
-      <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3" fill="currentColor" stroke="none"/></symbol>
-      <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1" fill="currentColor" stroke="none"/></symbol>
-      <symbol id="i-emergency" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16.5" r="0.8" fill="currentColor"/></symbol>
-      <symbol id="i-volume-off" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></symbol>
-      <symbol id="i-volume-on" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></symbol>
-      <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
-      <symbol id="i-fire" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
-      <symbol id="i-radio" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="m7 3 5 4 5-4"/><circle cx="8" cy="14" r="2"/><line x1="14" y1="11" x2="19" y2="11"/><line x1="14" y1="14" x2="19" y2="14"/><line x1="14" y1="17" x2="17" y2="17"/></symbol>
-      <symbol id="i-sliders" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></symbol>
-      <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3h6v6l5.5 9.5A2 2 0 0 1 18.77 21H5.23a2 2 0 0 1-1.73-3L9 9V3z"/><line x1="9" y1="3" x2="15" y2="3"/><path d="M6.5 15h11"/></symbol>
-      <symbol id="i-chart" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></symbol>
-      <symbol id="i-signal" viewBox="0 0 24 24"><path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/><path d="M22 4v16"/></symbol>
-      <symbol id="i-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
-      <symbol id="i-arrow-down" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></symbol>
-      <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
-      <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
-      <symbol id="i-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
-    </defs>
-  </svg>
-
+  <!-- =====================================================
+       SPLASH SCREEN
+  ===================================================== -->
   <div class="splash" id="splash">
     <img src="cikurgoicon.png" alt="Cikurgo">
     <div class="splash-text">BCGO HT RADIO — LOADING</div>
   </div>
 
+  <!-- =====================================================
+       APP
+  ===================================================== -->
   <div class="app">
 
+    <!-- HEADER -->
     <header class="header">
       <img class="header-logo" src="cikurgoicon.png" alt="Cikurgo">
       <div class="header-title">
         <h1>BCGO Virtual HT Radio</h1>
-        <small>test bench • v3</small>
+        <small>test bench • v2</small>
       </div>
       <div class="header-status">
         <span class="status-dot" id="status-audio" title="Audio"></span>
@@ -313,62 +625,49 @@
       </div>
     </header>
 
+    <!-- MAIN -->
     <div class="main">
 
+      <!-- RADAR -->
       <div class="radar-wrap">
         <canvas id="radar-canvas"></canvas>
+
         <div class="radar-overlay">
           <div class="radar-legend">
             <div><strong>📻 HT Radio Layer</strong></div>
             <div>🟢 PTT aktif &nbsp;|&nbsp; 🔴 Emergency</div>
             <div>Arc sinyal: <span style="color:#22c55e">HI</span> / <span style="color:#eab308">MID</span> / <span style="color:#ef4444">LO</span></div>
-            <div style="margin-top:4px">Tap agent untuk info • Scroll untuk zoom</div>
+            <div style="margin-top:4px">Tap agent untuk info • Pinch untuk zoom</div>
           </div>
         </div>
-        <div class="radar-controls" id="radar-controls"></div>
+
+        <div class="radar-controls" id="radar-controls">
+          <button class="btn" id="btn-ht-layer" type="button">
+            📻 HT Radio
+          </button>
+        </div>
       </div>
 
+      <!-- SIDE PANEL -->
       <aside class="side">
 
+        <!-- CONTROLS -->
         <div class="panel-section">
-          <h3 class="panel-title">
-            <svg class="ico"><use href="#i-sliders"/></svg>
-            Control
-          </h3>
+          <h3 class="panel-title">🎛️ Control</h3>
           <div class="btn-grid">
-            <button class="btn primary" id="btn-start" type="button">
-              <svg class="ico"><use href="#i-play"/></svg>
-              Start
-            </button>
-            <button class="btn danger" id="btn-stop" type="button" disabled>
-              <svg class="ico"><use href="#i-stop"/></svg>
-              Stop
-            </button>
-            <button class="btn warn btn-full" id="btn-emergency" type="button">
-              <svg class="ico"><use href="#i-emergency"/></svg>
-              Emergency All
-            </button>
-            <button class="btn btn-full" id="btn-audio" type="button">
-              <svg class="ico"><use href="#i-volume-off"/></svg>
-              <span id="audio-label">Audio OFF</span>
-            </button>
+            <button class="btn primary" id="btn-start" type="button">▶️ Start</button>
+            <button class="btn danger"  id="btn-stop"  type="button" disabled>⏹️ Stop</button>
+            <button class="btn warn btn-full" id="btn-emergency" type="button">🔴 Emergency All</button>
+            <button class="btn btn-full" id="btn-audio" type="button">🔊 Audio OFF</button>
           </div>
         </div>
 
+        <!-- STRESS TEST -->
         <div class="panel-section">
-          <h3 class="panel-title">
-            <svg class="ico"><use href="#i-flask"/></svg>
-            Stress Test
-          </h3>
+          <h3 class="panel-title">🧪 Stress Test</h3>
           <div class="btn-grid">
-            <button class="btn" id="btn-stress" type="button">
-              <svg class="ico"><use href="#i-rocket"/></svg>
-              60s
-            </button>
-            <button class="btn" id="btn-stress-long" type="button">
-              <svg class="ico"><use href="#i-fire"/></svg>
-              300s
-            </button>
+            <button class="btn" id="btn-stress" type="button">🚀 Run 60s</button>
+            <button class="btn" id="btn-stress-long" type="button">🔥 Run 300s</button>
           </div>
           <div class="stress-progress" id="stress-progress">
             <div class="stress-bar">
@@ -381,11 +680,9 @@
           </div>
         </div>
 
+        <!-- STATS -->
         <div class="panel-section">
-          <h3 class="panel-title">
-            <svg class="ico"><use href="#i-chart"/></svg>
-            Live Stats
-          </h3>
+          <h3 class="panel-title">📊 Live Stats</h3>
           <div class="stats-grid">
             <span class="label">Agents</span>       <span class="value" id="stat-agents">0</span>
             <span class="label">FPS</span>          <span class="value good" id="stat-fps">--</span>
@@ -400,40 +697,50 @@
           </div>
         </div>
 
+        <!-- CHAT LOG -->
         <div class="chat-wrap">
           <div class="chat-header">
-            <span>
-              <svg class="ico"><use href="#i-radio"/></svg>
-              Radio Log
-            </span>
-            <button id="btn-clear-log" type="button">
-              <svg class="ico" style="width:10px;height:10px"><use href="#i-trash"/></svg>
-              Clear
-            </button>
+            <span>📡 Radio Log</span>
+            <button id="btn-clear-log" type="button">Clear</button>
           </div>
           <div class="chat-log" id="chat-log"></div>
-          <div class="new-msg-badge" id="new-msg-badge">
-            <svg class="ico" style="width:10px;height:10px"><use href="#i-arrow-down"/></svg>
-            pesan baru
-          </div>
+          <div class="new-msg-badge" id="new-msg-badge">↓ pesan baru</div>
         </div>
 
       </aside>
     </div>
   </div>
 
+  <!-- TOAST CONTAINER -->
   <div class="toast-wrap" id="toast-wrap"></div>
 
+  <!-- =====================================================
+       MAIN SCRIPT
+  ===================================================== -->
   <script type="module">
     // ---------------------------------------------------
     // IMPORTS
     // ---------------------------------------------------
-    import { PACKET_SIZE, STATUS_FLAGS } from './ht-protocol.js';
+    import {
+      PACKET_SIZE, STATUS_FLAGS, decodeHTPacket
+    } from './ht-protocol.js';
+
     import { htAudioSynth } from './ht-audio-synth.js';
+
     import { createSimulator, HTAgentSimulator } from './ht-ptt-simulator.js';
+
     import { getGateway } from './cgo-ht-radio-engine.js';
-    import { shouldAutoScroll, injectRadioStyles } from './chat-radio-formatter.js';
-    import { initRadarLayer, getRadarLayer } from './ht-radar-layer.js';
+
+    import {
+      formatRadioAlert,
+      injectRadioStyles,
+      shouldAutoScroll
+    } from './chat-radio-formatter.js';
+
+    import {
+      initRadarLayer, getRadarLayer
+    } from './cgo-ai-radar.js';
+
     import { StressTest } from './stress-test-ht.js';
 
     // ---------------------------------------------------
@@ -446,41 +753,51 @@
       stressTest: null,
       running: false,
       audioReady: false,
-      camera: { x: 0, y: 0, zoom: 1 },
-      startTime: 0
+      agentPositions: {},   // agentId -> {x, y} di world coords
+      camera: { x: 0, y: 0, zoom: 1 }
     };
 
+    // Setup BCGO_STATE global
     globalThis.BCGO_STATE = globalThis.BCGO_STATE ?? {
       satellite: {},
       satelliteUpdates: new EventTarget()
     };
-    if (!globalThis.BCGO_STATE.satellite) globalThis.BCGO_STATE.satellite = {};
-    if (!globalThis.BCGO_STATE.satelliteUpdates) {
-      try { globalThis.BCGO_STATE.satelliteUpdates = new EventTarget(); }
-      catch { globalThis.BCGO_STATE.satelliteUpdates = null; }
-    }
+
+    globalThis.BCGO_STATE.satellite = globalThis.BCGO_STATE.satellite ?? {};
+    globalThis.BCGO_STATE.satelliteUpdates =
+      globalThis.BCGO_STATE.satelliteUpdates ?? new EventTarget();
+
+    // Setup cgoChat stub
+    globalThis.cgoChat = globalThis.cgoChat ?? {
+      logRadioMessage(text, meta) {
+        appendChatMessage(text, meta);
+      }
+    };
 
     // ---------------------------------------------------
     // DOM REFS
     // ---------------------------------------------------
     const $ = (id) => document.getElementById(id);
-    const splash         = $('splash');
-    const canvas         = $('radar-canvas');
-    const ctx            = canvas.getContext('2d');
-    const chatLog        = $('chat-log');
-    const newMsgBadge    = $('new-msg-badge');
-    const toastWrap      = $('toast-wrap');
-    const statusAudio    = $('status-audio');
-    const statusSim      = $('status-sim');
-    const statusNet      = $('status-net');
-    const btnStart       = $('btn-start');
-    const btnStop        = $('btn-stop');
-    const btnEmergency   = $('btn-emergency');
-    const btnAudio       = $('btn-audio');
-    const audioLabel     = $('audio-label');
-    const btnStress      = $('btn-stress');
-    const btnStressLong  = $('btn-stress-long');
-    const btnClearLog    = $('btn-clear-log');
+
+    const splash        = $('splash');
+    const canvas        = $('radar-canvas');
+    const ctx           = canvas.getContext('2d');
+    const chatLog       = $('chat-log');
+    const newMsgBadge   = $('new-msg-badge');
+    const toastWrap     = $('toast-wrap');
+    const statusAudio   = $('status-audio');
+    const statusSim     = $('status-sim');
+    const statusNet     = $('status-net');
+
+    const btnStart      = $('btn-start');
+    const btnStop       = $('btn-stop');
+    const btnEmergency  = $('btn-emergency');
+    const btnAudio      = $('btn-audio');
+    const btnStress     = $('btn-stress');
+    const btnStressLong = $('btn-stress-long');
+    const btnClearLog   = $('btn-clear-log');
+    const btnHtLayer    = $('btn-ht-layer');
+
     const statAgents = $('stat-agents');
     const statFps    = $('stat-fps');
     const statMem    = $('stat-mem');
@@ -491,6 +808,7 @@
     const statDrop   = $('stat-drop');
     const statGap    = $('stat-gap');
     const statUptime = $('stat-uptime');
+
     const stressProgress = $('stress-progress');
     const stressBarFill  = $('stress-bar-fill');
     const stressTime     = $('stress-time');
@@ -502,18 +820,12 @@
     function toast(message, type = 'info', duration = 2500) {
       const el = document.createElement('div');
       el.className = `toast ${type}`;
-
-      const iconId = type === 'success' ? 'i-check'
-                    : type === 'error'   ? 'i-alert'
-                    : type === 'warn'    ? 'i-alert'
-                    : 'i-radio';
-      el.innerHTML = `<svg class="ico"><use href="#${iconId}"/></svg><span></span>`;
-      el.querySelector('span').textContent = message;
-
+      el.textContent = message;
       toastWrap.appendChild(el);
+
       setTimeout(() => {
-        el.style.transition = 'opacity 0.3s';
         el.style.opacity = '0';
+        el.style.transition = 'opacity 0.3s';
         setTimeout(() => el.remove(), 300);
       }, duration);
     }
@@ -521,24 +833,37 @@
     // ---------------------------------------------------
     // CHAT
     // ---------------------------------------------------
+    let chatAutoScroll = true;
+
     function appendChatMessage(text, meta = {}) {
+      // Batasi jumlah node
       const MAX_NODES = 500;
       while (chatLog.children.length >= MAX_NODES) {
         chatLog.removeChild(chatLog.firstChild);
       }
+
       const el = document.createElement('div');
       el.className = 'msg-radio';
-      if (meta.isAlert) el.classList.add('msg-radio-alert');
-      if (meta.emergency) el.classList.add('msg-radio-emergency');
+
+      if (meta.isAlert) {
+        el.classList.add('msg-radio-alert');
+      }
+      if (meta.emergency) {
+        el.classList.add('msg-radio-emergency');
+      }
+
+      // Warna channel
       if (typeof meta.channel === 'number') {
         const hue = (meta.channel * 360 / 16) % 360;
         el.style.setProperty('--channel-color', `hsl(${hue}, 70%, 55%)`);
-        el.style.borderLeftColor = `hsl(${hue}, 70%, 55%)`;
       }
+
       el.textContent = text;
       chatLog.appendChild(el);
 
+      // Auto-scroll logic
       const nearBottom = shouldAutoScroll(chatLog, meta.emergency === true);
+
       if (nearBottom) {
         chatLog.scrollTop = chatLog.scrollHeight;
         newMsgBadge.classList.remove('show');
@@ -547,18 +872,18 @@
       }
     }
 
-    globalThis.cgoChat = globalThis.cgoChat ?? {
-      logRadioMessage(text, meta) { appendChatMessage(text, meta); }
-    };
-
     newMsgBadge.addEventListener('click', () => {
       chatLog.scrollTop = chatLog.scrollHeight;
       newMsgBadge.classList.remove('show');
     });
 
     chatLog.addEventListener('scroll', () => {
-      const nearBottom = chatLog.scrollHeight - chatLog.scrollTop - chatLog.clientHeight < 30;
-      if (nearBottom) newMsgBadge.classList.remove('show');
+      const nearBottom =
+        chatLog.scrollHeight - chatLog.scrollTop - chatLog.clientHeight < 30;
+
+      if (nearBottom) {
+        newMsgBadge.classList.remove('show');
+      }
     });
 
     btnClearLog.addEventListener('click', () => {
@@ -568,61 +893,89 @@
     });
 
     // ---------------------------------------------------
-    // INIT GATEWAY
-    // ---------------------------------------------------
-    globalState.gateway = getGateway();
-    globalState.gateway.onLog = (channelId, text, meta) => {
-      appendChatMessage(text, meta);
-    };
-
-    // ---------------------------------------------------
-    // RADAR — CANVAS
+    // RADAR — CANVAS RENDER LOOP
     // ---------------------------------------------------
     let canvasW = 0, canvasH = 0, dpr = 1;
 
     function resizeCanvas() {
       const rect = canvas.getBoundingClientRect();
       dpr = window.devicePixelRatio || 1;
+
       canvasW = rect.width;
       canvasH = rect.height;
+
       canvas.width  = Math.floor(canvasW * dpr);
       canvas.height = Math.floor(canvasH * dpr);
+
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
+    /**
+     * World coords → screen coords.
+     * World = normalized 0..1 range (kita proyeksi koordinat geografis).
+     */
     function worldToScreen(lat, lon) {
       const cam = globalState.camera;
+
+      // Range Indonesia (biar visualnya pas)
       const LAT_MIN = -12, LAT_MAX = 8;
       const LON_MIN = 94,  LON_MAX = 142;
+
       const nx = (lon - LON_MIN) / (LON_MAX - LON_MIN);
       const ny = 1 - (lat - LAT_MIN) / (LAT_MAX - LAT_MIN);
+
+      // Center-based
       const baseX = nx * canvasW;
       const baseY = ny * canvasH;
+
       const cx = canvasW / 2 + cam.x;
       const cy = canvasH / 2 + cam.y;
+
       return {
         x: cx + (baseX - canvasW / 2) * cam.zoom,
         y: cy + (baseY - canvasH / 2) * cam.zoom
       };
     }
 
+    function screenToWorldDelta(screenDx, screenDy) {
+      // Untuk hit-test, kita inverse saja tanpa perlu exact.
+      const cam = globalState.camera;
+      return {
+        dx: screenDx / cam.zoom,
+        dy: screenDy / cam.zoom
+      };
+    }
+
     function drawGrid() {
       ctx.strokeStyle = 'rgba(42, 54, 70, 0.35)';
       ctx.lineWidth = 1;
+
       const step = 40 * globalState.camera.zoom;
       const cam = globalState.camera;
       const offsetX = (cam.x % step);
       const offsetY = (cam.y % step);
+
       for (let x = offsetX; x < canvasW; x += step) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvasH); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvasH);
+        ctx.stroke();
       }
+
       for (let y = offsetY; y < canvasH; y += step) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvasW, y); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvasW, y);
+        ctx.stroke();
       }
+
+      // Center cross
       ctx.strokeStyle = 'rgba(42, 54, 70, 0.6)';
       ctx.beginPath();
-      ctx.moveTo(canvasW / 2, 0); ctx.lineTo(canvasW / 2, canvasH);
-      ctx.moveTo(0, canvasH / 2); ctx.lineTo(canvasW, canvasH / 2);
+      ctx.moveTo(canvasW / 2, 0);
+      ctx.lineTo(canvasW / 2, canvasH);
+      ctx.moveTo(0, canvasH / 2);
+      ctx.lineTo(canvasW, canvasH / 2);
       ctx.stroke();
     }
 
@@ -631,43 +984,62 @@
     let currentFps = 0;
 
     function renderLoop() {
-      if (canvasW === 0 || canvasH === 0) resizeCanvas();
+      if (canvasW === 0) resizeCanvas();
+
+      // FPS
       fpsFrameCount++;
       const now = performance.now();
       if (now - lastFpsSample >= 1000) {
         currentFps = fpsFrameCount / ((now - lastFpsSample) / 1000);
         fpsFrameCount = 0;
         lastFpsSample = now;
-        if (globalState.stressTest) globalState.stressTest.tickFrame?.();
+
+        // Manual tick ke stress test juga
+        if (globalState.stressTest) {
+          globalState.stressTest.tickFrame?.();
+        }
       }
+
+      // Clear
       ctx.fillStyle = '#05080d';
       ctx.fillRect(0, 0, canvasW, canvasH);
+
+      // Grid
       drawGrid();
-      const layer = getRadarLayer();
-      if (layer && layer.active) {
-        layer.render(ctx, worldToScreen, { agentRadius: 8 });
+
+      // Render agent HT via layer
+      if (globalState.radarLayer && globalState.radarLayer.active) {
+        globalState.radarLayer.render(ctx, worldToScreen, { agentRadius: 8 });
       }
+
       requestAnimationFrame(renderLoop);
     }
 
     // ---------------------------------------------------
-    // CAMERA INTERACTION
+    // ZOOM & PAN
     // ---------------------------------------------------
     let isDragging = false;
     let dragStart = null;
+    let pinchStartDist = 0;
+    let pinchStartZoom = 1;
 
     canvas.addEventListener('pointerdown', (e) => {
-      if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
+      if (e.pointerType === 'touch' && e.isPrimary === false) return;
+
       isDragging = true;
       dragStart = {
-        x: e.clientX, y: e.clientY,
-        camX: globalState.camera.x, camY: globalState.camera.y
+        x: e.clientX,
+        y: e.clientY,
+        camX: globalState.camera.x,
+        camY: globalState.camera.y
       };
-      try { canvas.setPointerCapture(e.pointerId); } catch {}
+
+      canvas.setPointerCapture(e.pointerId);
     });
 
     canvas.addEventListener('pointermove', (e) => {
       if (!isDragging || !dragStart) return;
+
       globalState.camera.x = dragStart.camX + (e.clientX - dragStart.x);
       globalState.camera.y = dragStart.camY + (e.clientY - dragStart.y);
     });
@@ -676,10 +1048,18 @@
       const wasDrag = dragStart &&
         (Math.abs(e.clientX - dragStart.x) > 4 ||
          Math.abs(e.clientY - dragStart.y) > 4);
+
       isDragging = false;
       dragStart = null;
-      try { canvas.releasePointerCapture(e.pointerId); } catch {}
-      if (!wasDrag) handleTap(e.clientX, e.clientY);
+
+      if (canvas.hasPointerCapture?.(e.pointerId)) {
+        canvas.releasePointerCapture(e.pointerId);
+      }
+
+      // Kalau bukan drag → hit-test tap
+      if (!wasDrag) {
+        handleTap(e.clientX, e.clientY);
+      }
     });
 
     canvas.addEventListener('pointercancel', () => {
@@ -687,298 +1067,10 @@
       dragStart = null;
     });
 
+    // Wheel zoom
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       const delta = -e.deltaY * 0.001;
       const oldZoom = globalState.camera.zoom;
       globalState.camera.zoom = Math.max(0.5, Math.min(5, oldZoom * (1 + delta)));
-    }, { passive: false });
-
-    let pinchStartDist = 0;
-    let pinchStartZoom = 1;
-
-    canvas.addEventListener('touchstart', (e) => {
-      if (e.touches.length === 2) {
-        const [t1, t2] = e.touches;
-        pinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-        pinchStartZoom = globalState.camera.zoom;
-      }
-    }, { passive: true });
-
-    canvas.addEventListener('touchmove', (e) => {
-      if (e.touches.length === 2 && pinchStartDist > 0) {
-        e.preventDefault();
-        const [t1, t2] = e.touches;
-        const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-        const scale = dist / pinchStartDist;
-        globalState.camera.zoom = Math.max(0.5, Math.min(5, pinchStartZoom * scale));
-      }
-    }, { passive: false });
-
-    canvas.addEventListener('touchend', () => { pinchStartDist = 0; });
-
-    function handleTap(clientX, clientY) {
-      const rect = canvas.getBoundingClientRect();
-      const x = clientX - rect.left;
-      const y = clientY - rect.top;
-      const layer = getRadarLayer();
-      if (layer && layer.active) {
-        const agent = layer.hitTest(x, y, worldToScreen, { agentRadius: 8 });
-        if (agent) layer.showTooltip(agent, clientX, clientY);
-      }
-    }
-
-    // ---------------------------------------------------
-    // INIT RADAR LAYER
-    // ---------------------------------------------------
-    globalState.radarLayer = initRadarLayer(
-      { canvas, requestRedraw: () => {} },
-      {
-        canvas,
-        controlPanel: $('radar-controls'),
-        autoInjectButton: true
-      }
-    );
-
-    // ---------------------------------------------------
-    // START / STOP
-    // ---------------------------------------------------
-    function setStatusDot(el, state) {
-      el.classList.remove('on', 'warn', 'err');
-      if (state) el.classList.add(state);
-    }
-
-    function startSimulator() {
-      if (globalState.running) return;
-      const AGENT_COUNT = 12;
-      const CHANNEL_COUNT = 6;
-
-      globalState.sim = createSimulator({
-        count: AGENT_COUNT,
-        channels: CHANNEL_COUNT,
-        profiles: ['patrol', 'static', 'emergency'],
-        weights: [0.7, 0.2, 0.1],
-        onTransmit: (channel, payload) => {
-          globalState.gateway.receive(channel, payload);
-        },
-        onStateChange: () => {},
-        onError: (err) => console.error('[Sim]', err)
-      });
-
-      globalState.sim.startAll();
-      globalState.running = true;
-      globalState.startTime = Date.now();
-
-      btnStart.disabled = true;
-      btnStop.disabled = false;
-      setStatusDot(statusSim, 'on');
-
-      toast(`Simulator started — ${AGENT_COUNT} agents / ${CHANNEL_COUNT} channels`, 'success');
-      appendChatMessage(`📡 SIMULATOR STARTED — ${AGENT_COUNT} agents`, { isAlert: true });
-    }
-
-    function stopSimulator() {
-      if (!globalState.running) return;
-      if (globalState.sim) {
-        globalState.sim.stopAll();
-        globalState.sim.disposeAll();
-        globalState.sim = null;
-      }
-      globalState.running = false;
-      btnStart.disabled = false;
-      btnStop.disabled = true;
-      setStatusDot(statusSim, null);
-      toast('Simulator stopped', 'warn');
-      appendChatMessage('📡 SIMULATOR STOPPED', { isAlert: true });
-    }
-
-    btnStart.addEventListener('click', startSimulator);
-    btnStop.addEventListener('click', stopSimulator);
-
-    btnEmergency.addEventListener('click', () => {
-      if (globalState.sim) {
-        globalState.sim.triggerEmergencyAll();
-        toast('Emergency triggered', 'error');
-      } else {
-        toast('Simulator belum jalan', 'warn');
-      }
-    });
-
-    // ---------------------------------------------------
-    // AUDIO TOGGLE
-    // ---------------------------------------------------
-    btnAudio.addEventListener('click', async () => {
-      if (globalState.audioReady) {
-        htAudioSynth.dispose();
-        globalState.audioReady = false;
-        btnAudio.innerHTML = '<svg class="ico"><use href="#i-volume-off"/></svg><span id="audio-label">Audio OFF</span>';
-        btnAudio.classList.remove('active');
-        setStatusDot(statusAudio, null);
-        toast('Audio OFF', 'warn');
-        return;
-      }
-      const ok = await htAudioSynth.init();
-      if (ok) {
-        globalState.audioReady = true;
-        btnAudio.innerHTML = '<svg class="ico"><use href="#i-volume-on"/></svg><span id="audio-label">Audio ON</span>';
-        btnAudio.classList.add('active');
-        setStatusDot(statusAudio, 'on');
-        toast('Audio ON', 'success');
-      } else {
-        toast('Tap lagi untuk aktifkan audio', 'warn');
-        setStatusDot(statusAudio, 'err');
-      }
-    });
-
-    // ---------------------------------------------------
-    // STRESS TEST
-    // ---------------------------------------------------
-    let stressTimerInterval = null;
-
-    async function runStress(durationSec) {
-      if (globalState.stressTest) {
-        toast('Stress test sedang jalan', 'warn');
-        return;
-      }
-      if (globalState.running) stopSimulator();
-
-      if (!globalState.audioReady) {
-        const ok = await htAudioSynth.init();
-        if (ok) {
-          globalState.audioReady = true;
-          btnAudio.innerHTML = '<svg class="ico"><use href="#i-volume-on"/></svg><span id="audio-label">Audio ON</span>';
-          btnAudio.classList.add('active');
-          setStatusDot(statusAudio, 'on');
-        }
-      }
-
-      const test = new StressTest({
-        agents: 50, durationSec, channels: 8,
-        corruptRate: 0.05, randomRate: 0.02, verbose: false
-      });
-      test.wrapAudioLatency();
-      globalState.stressTest = test;
-
-      stressProgress.classList.add('show');
-      stressBarFill.style.width = '0%';
-      stressTime.textContent = `0s / ${durationSec}s`;
-
-      const startTime = Date.now();
-      stressTimerInterval = setInterval(() => {
-        const elapsed = (Date.now() - startTime) / 1000;
-        const pct = Math.min(100, (elapsed / durationSec) * 100);
-        stressBarFill.style.width = `${pct}%`;
-        stressTime.textContent = `${Math.round(elapsed)}s / ${durationSec}s`;
-        stressFps.textContent = `${currentFps.toFixed(0)} fps`;
-      }, 500);
-
-      btnStress.disabled = true;
-      btnStressLong.disabled = true;
-      setStatusDot(statusNet, 'warn');
-      toast(`Stress test ${durationSec}s dimulai`, 'success');
-
-      try {
-        await test.start();
-        await new Promise((resolve) => {
-          const check = setInterval(() => {
-            if (!test.running) { clearInterval(check); resolve(); }
-          }, 500);
-        });
-      } catch (err) {
-        console.error('[Stress] error:', err);
-        toast('Stress test error: ' + err.message, 'error', 4000);
-      } finally {
-        if (stressTimerInterval) { clearInterval(stressTimerInterval); stressTimerInterval = null; }
-        stressProgress.classList.remove('show');
-        btnStress.disabled = false;
-        btnStressLong.disabled = false;
-        globalState.stressTest = null;
-        setStatusDot(statusNet, null);
-        toast('Stress test selesai — cek console', 'success', 4000);
-        globalState.audioReady = false;
-        btnAudio.innerHTML = '<svg class="ico"><use href="#i-volume-off"/></svg><span id="audio-label">Audio OFF</span>';
-        btnAudio.classList.remove('active');
-        setStatusDot(statusAudio, null);
-      }
-    }
-
-    btnStress.addEventListener('click', () => runStress(60));
-    btnStressLong.addEventListener('click', () => runStress(300));
-
-    // ---------------------------------------------------
-    // LIVE STATS
-    // ---------------------------------------------------
-    function updateStats() {
-      const gw = globalState.gateway;
-      if (!gw) return;
-      const global = gw.getGlobalStats();
-      const satellite = globalThis.BCGO_STATE?.satellite ?? {};
-      let agentCount = 0;
-      for (const id in satellite) {
-        if (satellite[id]?.source === 'virtual_ht') agentCount++;
-      }
-      statAgents.textContent = agentCount;
-      statRx.textContent = global.totalReceived.toLocaleString();
-      statTx.textContent = global.totalValid.toLocaleString();
-      statCrc.textContent = global.totalCrcFail.toLocaleString();
-      statColl.textContent = global.totalCollisions.toLocaleString();
-      statDrop.textContent = global.totalDropped.toLocaleString();
-      statGap.textContent = global.totalGaps.toLocaleString();
-      statFps.textContent = currentFps.toFixed(0);
-      statFps.classList.remove('good', 'warn', 'bad');
-      if (currentFps >= 50) statFps.classList.add('good');
-      else if (currentFps >= 30) statFps.classList.add('warn');
-      else statFps.classList.add('bad');
-      if (typeof performance !== 'undefined' && performance.memory) {
-        const mb = performance.memory.usedJSHeapSize / 1024 / 1024;
-        statMem.textContent = `${mb.toFixed(1)} MB`;
-      } else {
-        statMem.textContent = 'n/a';
-      }
-      if (globalState.startTime > 0) {
-        const sec = Math.floor((Date.now() - globalState.startTime) / 1000);
-        const m = Math.floor(sec / 60);
-        const s = sec % 60;
-        statUptime.textContent = `${m}m ${String(s).padStart(2, '0')}s`;
-      } else {
-        statUptime.textContent = '0s';
-      }
-      if (global.totalCrcFail > 0 || global.totalCollisions > 0) {
-        setStatusDot(statusNet, 'warn');
-      }
-    }
-    setInterval(updateStats, 500);
-
-    // ---------------------------------------------------
-    // BOOT
-    // ---------------------------------------------------
-    function boot() {
-      resizeCanvas();
-      window.addEventListener('resize', resizeCanvas);
-      injectRadioStyles();
-
-      setTimeout(() => {
-        splash.classList.add('hide');
-        setTimeout(() => splash.remove(), 500);
-      }, 600);
-
-      requestAnimationFrame(renderLoop);
-
-      appendChatMessage('📻 BCGO Virtual HT Radio — Test Bench ready', { isAlert: true });
-      appendChatMessage('Tap Start untuk menjalankan simulator', { isAlert: true });
-
-      console.log('[BCGO] Test bench ready');
-    }
-
-    boot();
-
-    // Cleanup
-    window.addEventListener('beforeunload', () => {
-      if (globalState.sim) globalState.sim.disposeAll();
-      if (globalState.radarLayer) globalState.radarLayer.dispose();
-      if (globalState.stressTest) globalState.stressTest.stop();
-      htAudioSynth.dispose();
-    });
-  </script>
-</body>
-</html>
+    }, {
