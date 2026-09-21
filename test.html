@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a0e14">
+  <title>BCGO Virtual HT Radio — Test Bench</title>
+
+  <link rel="icon" type="image/png" href="cikurgoicon.png">
+  <link rel="apple-touch-icon" href="cikurgoicon.png">
+
+  <style>
+    :root {
+      --bg:        #0a0e14;
+      --bg-panel:  #131a24;
+      --bg-card:   #1a2330;
+      --border:    #2a3646;
+      --text:      #e5e7eb;
+      --text-dim:  #8a94a6;
+      --accent:    #22c55e;
+      --accent-2:  #3b82f6;
+      --warn:      #f59e0b;
+      --danger:    #ef4444;
+      --mono:      ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+      --sans:      system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      overflow: hidden;
+    }
+
+    /* LAYOUT */
+    .app {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+      height: 100dvh;
+    }
+
+    /* HEADER */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+      z-index: 100;
+    }
+
+    .header-logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      object-fit: contain;
+      flex-shrink: 0;
+      background: #0d1117;
+    }
+
+    .header-title {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.1;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .header-title h1 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .header-title small {
+      font-size: 10px;
+      color: var(--text-dim);
+      font-family: var(--mono);
+    }
+
+    .header-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #6b7280;
+      transition: background 0.2s;
+    }
+
+    .status-dot.on   { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+    .status-dot.warn { background: var(--warn);   box-shadow: 0 0 6px var(--warn); }
+    .status-dot.err  { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+
+    /* MAIN */
+    .main {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    @media (max-width: 860px) {
+      .main {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto;
+      }
+    }
+
+    /* RADAR */
+    .radar-wrap {
+      position: relative;
+      background: radial-gradient(circle at 50% 50%, #0d1420 0%, #05080d 100%);
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    #radar-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+      cursor: grab;
+    }
+
+    #radar-canvas:active { cursor: grabbing; }
+
+    .radar-overlay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      pointer-events: none;
+    }
+
+    .radar-legend {
+      background: rgba(10, 14, 20, 0.85);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      backdrop-filter: blur(6px);
+      line-height: 1.6;
+      max-width: 240px;
+    }
+
+    .radar-legend strong { color: var(--text); }
+
+    .radar-controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 50;
+    }
+
+    /* SIDE PANEL */
+    .side {
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border);
+      display: grid;
+      grid-template-rows: auto auto auto 1fr;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    @media (max-width: 860px) {
+      .side {
+        border-left: none;
+        border-top: 1px solid var(--border);
+        max-height: 55vh;
+      }
+    }
+
+    .panel-section {
+      border-bottom: 1px solid var(--border);
+      padding: 10px 12px;
+    }
+
+    .panel-section:last-child { border-bottom: none; }
+
+    .panel-title {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin: 0 0 8px 0;
+      font-weight: 600;
+    }
+
+    /* BUTTONS */
+    .btn-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-card);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .btn:hover  { background: #222d3d; border-color: #3a4657; }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #04130a; }
+    .btn.primary:hover { background: #16a34a; }
+
+    .btn.danger  { background: var(--danger); border-color: var(--danger); color: #fff; }
+    .btn.danger:hover  { background: #dc2626; }
+
+    .btn.warn    { background: var(--warn); border-color: var(--warn); color: #1a1103; }
+    .btn.warn:hover    { background: #d97706; }
+
+    .btn.active  { background: var(--accent); border-color: var(--accent); color: #04130a; }
+
+    .btn-full { grid-column: span 2; }
+
+    /* STATS */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 3px 10px;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .stats-grid .label { color: var(--text-dim); }
+    .stats-grid .value { color: var(--text); text-align: right; font-weight: 500; }
+    .stats-grid .value.good { color: var(--accent); }
+    .stats-grid .value.warn { color: var(--warn); }
+    .stats-grid .value.bad  { color: var(--danger); }
+
+    /* CHAT */
+    .chat-wrap {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+      position: relative;
+    }
+
+    .chat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      font-weight: 600;
+    }
+
+    .chat-header button {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .chat-header button:hover { color: var(--text); border-color: #3a4657; }
+
+    .chat-log {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-family: var(--mono);
+      font-size: 11px;
+      overscroll-behavior: contain;
+    }
+
+    .chat-log::-webkit-scrollbar { width: 6px; }
+    .chat-log::-webkit-scrollbar-thumb { background: #2a3646; border-radius: 3px; }
+
+    .msg-radio {
+      font-family: var(--mono);
+      background: rgba(0, 0, 0, 0.3);
+      border-left: 3px solid var(--accent);
+      padding: 3px 8px;
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+      border-radius: 0 4px 4px 0;
+    }
+
+    .msg-radio.msg-radio-emergency {
+      border-left-color: var(--danger);
+      background: rgba(239, 68, 68, 0.15);
+      animation: radio-pulse 1.2s ease-in-out infinite;
+    }
+
+    .msg-radio.msg-radio-alert {
+      border-left-color: var(--warn);
+      background: rgba(245, 158, 11, 0.1);
+    }
+
+    @keyframes radio-pulse {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0.6; }
+    }
+
+    .new-msg-badge {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent);
+      color: #04130a;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 0 2px 12px rgba(34, 197, 94, 0.5);
+      z-index: 10;
+      display: none;
+      animation: badge-in 0.2s ease-out;
+    }
+
+    .new-msg-badge.show { display: block; }
+
+    @keyframes badge-in {
+      from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    /* TOAST */
+    .toast-wrap {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 9999;
+      pointer-events: none;
+    }
+
+    .toast {
+      background: rgba(10, 14, 20, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(10px);
+      animation: toast-in 0.25s ease-out;
+      max-width: 90vw;
+      pointer-events: auto;
+    }
+
+    .toast.success { border-color: var(--accent); }
+    .toast.error   { border-color: var(--danger); }
+    .toast.warn    { border-color: var(--warn); }
+
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* STRESS TEST PROGRESS */
+    .stress-progress {
+      margin-top: 6px;
+      display: none;
+    }
+
+    .stress-progress.show { display: block; }
+
+    .stress-bar {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .stress-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 0.5s linear;
+    }
+
+    .stress-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* SPLASH */
+    .splash {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 10000;
+      transition: opacity 0.4s;
+    }
+
+    .splash.hide { opacity: 0; pointer-events: none; }
+
+    .splash img {
+      width: 72px;
+      height: 72px;
+      animation: splash-pulse 1.5s ease-in-out infinite;
+    }
+
+    .splash-text {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 1px;
+    }
+
+    @keyframes splash-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50%      { transform: scale(1.08); opacity: 0.85; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SPLASH -->
+  <div class="splash" id="splash">
+    <img src="cikurgoicon.png" alt="Cikurgo">
+    <div class="splash-text">BCGO HT RADIO — LOADING</div>
+  </div>
+
+  <!-- APP -->
+  <div class="app">
+
+    <header class="header">
+      <img class="header-logo" src="cikurgoicon.png" alt="Cikurgo">
+      <div class="header-title">
+        <h1>BCGO Virtual HT Radio</h1>
+        <small>test bench • v2</small>
+      </div>
+      <div class="header-status">
+        <span class="status-dot" id="status-audio" title="Audio"></span>
+        <span class="status-dot" id="status-sim"   title="Simulator"></span>
+        <span class="status-dot" id="status-net"   title="Network"></span>
+      </div>
+    </header>
+
+    <div class="main">
+
+      <div class="radar-wrap">
+        <canvas id="radar-canvas"></canvas>
+
+        <div class="radar-overlay">
+          <div class="radar-legend">
+            <div><strong>📻 HT Radio Layer</strong></div>
+            <div>🟢 PTT aktif &nbsp;|&nbsp; 🔴 Emergency</div>
+            <div>Arc sinyal: <span style="color:#22c55e">HI</span> / <span style="color:#eab308">MID</span> / <span style="color:#ef4444">LO</span></div>
+            <div style="margin-top:4px">Tap agent untuk info • Scroll untuk zoom</div>
+          </div>
+        </div>
+
+        <div class="radar-controls" id="radar-controls">
+          <!-- Layer HT Radio button di-inject otomatis -->
+        </div>
+      </div>
+
+      <aside class="side">
+
+        <div class="panel-section">
+          <h3 class="panel-title">🎛️ Control</h3>
+          <div class="btn-grid">
+            <button class="btn primary" id="btn-start" type
