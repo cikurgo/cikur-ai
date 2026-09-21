@@ -526,4 +526,784 @@
         <div class="panel-section">
           <h3 class="panel-title">🎛️ Control</h3>
           <div class="btn-grid">
-            <button class="btn primary" id="btn-start" type
+            <button class="btn primary" id="btn-start" type="button">▶️ Start</button>
+            <button class="btn danger"  id="btn-stop"  type="button" disabled>⏹️ Stop</button>
+            <button class="btn warn btn-full" id="btn-emergency" type="button">🔴 Emergency All</button>
+            <button class="btn btn-full" id="btn-audio" type="button">🔊 Audio OFF</button>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <h3 class="panel-title">🧪 Stress Test</h3>
+          <div class="btn-grid">
+            <button class="btn" id="btn-stress"      type="button">🚀 60s</button>
+            <button class="btn" id="btn-stress-long" type="button">🔥 300s</button>
+          </div>
+          <div class="stress-progress" id="stress-progress">
+            <div class="stress-bar">
+              <div class="stress-bar-fill" id="stress-bar-fill"></div>
+            </div>
+            <div class="stress-label">
+              <span id="stress-time">0s / 60s</span>
+              <span id="stress-fps">-- fps</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <h3 class="panel-title">📊 Live Stats</h3>
+          <div class="stats-grid">
+            <span class="label">Agents</span>       <span class="value" id="stat-agents">0</span>
+            <span class="label">FPS</span>          <span class="value good" id="stat-fps">--</span>
+            <span class="label">Memory</span>       <span class="value" id="stat-mem">--</span>
+            <span class="label">Packets Rx</span>   <span class="value" id="stat-rx">0</span>
+            <span class="label">Packets Tx</span>   <span class="value" id="stat-tx">0</span>
+            <span class="label">CRC Fail</span>     <span class="value bad" id="stat-crc">0</span>
+            <span class="label">Collisions</span>   <span class="value warn" id="stat-coll">0</span>
+            <span class="label">Dropped</span>      <span class="value" id="stat-drop">0</span>
+            <span class="label">Gaps</span>         <span class="value" id="stat-gap">0</span>
+            <span class="label">Uptime</span>       <span class="value" id="stat-uptime">0s</span>
+          </div>
+        </div>
+
+        <div class="chat-wrap">
+          <div class="chat-header">
+            <span>📡 Radio Log</span>
+            <button id="btn-clear-log" type="button">Clear</button>
+          </div>
+          <div class="chat-log" id="chat-log"></div>
+          <div class="new-msg-badge" id="new-msg-badge">↓ pesan baru</div>
+        </div>
+
+      </aside>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toast-wrap"></div>
+
+  <!-- =====================================================
+       MAIN SCRIPT
+  ===================================================== -->
+  <script type="module">
+    // ---------------------------------------------------
+    // IMPORTS
+    // ---------------------------------------------------
+    import { PACKET_SIZE, STATUS_FLAGS } from './ht-protocol.js';
+    import { htAudioSynth } from './ht-audio-synth.js';
+    import { createSimulator, HTAgentSimulator } from './ht-ptt-simulator.js';
+    import { getGateway } from './cgo-ht-radio-engine.js';
+    import { shouldAutoScroll, injectRadioStyles } from './chat-radio-formatter.js';
+    import { initRadarLayer, getRadarLayer } from './ht-radar-layer.js';
+    import { StressTest } from './stress-test-ht.js';
+
+    // ---------------------------------------------------
+    // GLOBAL STATE
+    // ---------------------------------------------------
+    const globalState = {
+      sim: null,
+      gateway: null,
+      radarLayer: null,
+      stressTest: null,
+      running: false,
+      audioReady: false,
+      camera: { x: 0, y: 0, zoom: 1 },
+      startTime: 0
+    };
+
+    // Bootstrap BCGO_STATE
+    globalThis.BCGO_STATE = globalThis.BCGO_STATE ?? {
+      satellite: {},
+      satelliteUpdates: new EventTarget()
+    };
+
+    if (!globalThis.BCGO_STATE.satellite) {
+      globalThis.BCGO_STATE.satellite = {};
+    }
+    if (!globalThis.BCGO_STATE.satelliteUpdates) {
+      try {
+        globalThis.BCGO_STATE.satelliteUpdates = new EventTarget();
+      } catch {
+        globalThis.BCGO_STATE.satelliteUpdates = null;
+      }
+    }
+
+    // ---------------------------------------------------
+    // DOM REFS
+    // ---------------------------------------------------
+    const $ = (id) => document.getElementById(id);
+
+    const splash         = $('splash');
+    const canvas         = $('radar-canvas');
+    const ctx            = canvas.getContext('2d');
+    const chatLog        = $('chat-log');
+    const newMsgBadge    = $('new-msg-badge');
+    const toastWrap      = $('toast-wrap');
+    const statusAudio    = $('status-audio');
+    const statusSim      = $('status-sim');
+    const statusNet      = $('status-net');
+
+    const btnStart       = $('btn-start');
+    const btnStop        = $('btn-stop');
+    const btnEmergency   = $('btn-emergency');
+    const btnAudio       = $('btn-audio');
+    const btnStress      = $('btn-stress');
+    const btnStressLong  = $('btn-stress-long');
+    const btnClearLog    = $('btn-clear-log');
+
+    const statAgents = $('stat-agents');
+    const statFps    = $('stat-fps');
+    const statMem    = $('stat-mem');
+    const statRx     = $('stat-rx');
+    const statTx     = $('stat-tx');
+    const statCrc    = $('stat-crc');
+    const statColl   = $('stat-coll');
+    const statDrop   = $('stat-drop');
+    const statGap    = $('stat-gap');
+    const statUptime = $('stat-uptime');
+
+    const stressProgress = $('stress-progress');
+    const stressBarFill  = $('stress-bar-fill');
+    const stressTime     = $('stress-time');
+    const stressFps      = $('stress-fps');
+
+    // ---------------------------------------------------
+    // TOAST
+    // ---------------------------------------------------
+    function toast(message, type = 'info', duration = 2500) {
+      const el = document.createElement('div');
+      el.className = `toast ${type}`;
+      el.textContent = message;
+      toastWrap.appendChild(el);
+
+      setTimeout(() => {
+        el.style.transition = 'opacity 0.3s';
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 300);
+      }, duration);
+    }
+
+    // ---------------------------------------------------
+    // CHAT
+    // ---------------------------------------------------
+    function appendChatMessage(text, meta = {}) {
+      const MAX_NODES = 500;
+      while (chatLog.children.length >= MAX_NODES) {
+        chatLog.removeChild(chatLog.firstChild);
+      }
+
+      const el = document.createElement('div');
+      el.className = 'msg-radio';
+
+      if (meta.isAlert) {
+        el.classList.add('msg-radio-alert');
+      }
+      if (meta.emergency) {
+        el.classList.add('msg-radio-emergency');
+      }
+
+      if (typeof meta.channel === 'number') {
+        const hue = (meta.channel * 360 / 16) % 360;
+        el.style.setProperty('--channel-color', `hsl(${hue}, 70%, 55%)`);
+        el.style.borderLeftColor = `hsl(${hue}, 70%, 55%)`;
+      }
+
+      el.textContent = text;
+      chatLog.appendChild(el);
+
+      const nearBottom = shouldAutoScroll(chatLog, meta.emergency === true);
+
+      if (nearBottom) {
+        chatLog.scrollTop = chatLog.scrollHeight;
+        newMsgBadge.classList.remove('show');
+      } else {
+        newMsgBadge.classList.add('show');
+      }
+    }
+
+    // cgoChat stub
+    globalThis.cgoChat = globalThis.cgoChat ?? {
+      logRadioMessage(text, meta) {
+        appendChatMessage(text, meta);
+      }
+    };
+
+    newMsgBadge.addEventListener('click', () => {
+      chatLog.scrollTop = chatLog.scrollHeight;
+      newMsgBadge.classList.remove('show');
+    });
+
+    chatLog.addEventListener('scroll', () => {
+      const nearBottom =
+        chatLog.scrollHeight - chatLog.scrollTop - chatLog.clientHeight < 30;
+      if (nearBottom) newMsgBadge.classList.remove('show');
+    });
+
+    btnClearLog.addEventListener('click', () => {
+      chatLog.innerHTML = '';
+      newMsgBadge.classList.remove('show');
+      toast('Log dibersihkan', 'success');
+    });
+
+    // ---------------------------------------------------
+    // INIT GATEWAY
+    // ---------------------------------------------------
+    globalState.gateway = getGateway();
+
+    // Override onLog supaya masuk ke chat DOM
+    globalState.gateway.onLog = (channelId, text, meta) => {
+      appendChatMessage(text, meta);
+    };
+
+    // ---------------------------------------------------
+    // RADAR — CANVAS
+    // ---------------------------------------------------
+    let canvasW = 0, canvasH = 0, dpr = 1;
+
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      dpr = window.devicePixelRatio || 1;
+      canvasW = rect.width;
+      canvasH = rect.height;
+      canvas.width  = Math.floor(canvasW * dpr);
+      canvas.height = Math.floor(canvasH * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function worldToScreen(lat, lon) {
+      const cam = globalState.camera;
+
+      // Range Indonesia
+      const LAT_MIN = -12, LAT_MAX = 8;
+      const LON_MIN = 94,  LON_MAX = 142;
+
+      const nx = (lon - LON_MIN) / (LON_MAX - LON_MIN);
+      const ny = 1 - (lat - LAT_MIN) / (LAT_MAX - LAT_MIN);
+
+      const baseX = nx * canvasW;
+      const baseY = ny * canvasH;
+
+      const cx = canvasW / 2 + cam.x;
+      const cy = canvasH / 2 + cam.y;
+
+      return {
+        x: cx + (baseX - canvasW / 2) * cam.zoom,
+        y: cy + (baseY - canvasH / 2) * cam.zoom
+      };
+    }
+
+    function drawGrid() {
+      ctx.strokeStyle = 'rgba(42, 54, 70, 0.35)';
+      ctx.lineWidth = 1;
+
+      const step = 40 * globalState.camera.zoom;
+      const cam = globalState.camera;
+      const offsetX = (cam.x % step);
+      const offsetY = (cam.y % step);
+
+      for (let x = offsetX; x < canvasW; x += step) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvasH);
+        ctx.stroke();
+      }
+
+      for (let y = offsetY; y < canvasH; y += step) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvasW, y);
+        ctx.stroke();
+      }
+
+      // Center cross
+      ctx.strokeStyle = 'rgba(42, 54, 70, 0.6)';
+      ctx.beginPath();
+      ctx.moveTo(canvasW / 2, 0);
+      ctx.lineTo(canvasW / 2, canvasH);
+      ctx.moveTo(0, canvasH / 2);
+      ctx.lineTo(canvasW, canvasH / 2);
+      ctx.stroke();
+    }
+
+    // FPS tracking internal
+    let lastFpsSample = performance.now();
+    let fpsFrameCount = 0;
+    let currentFps = 0;
+
+    function renderLoop() {
+      if (canvasW === 0 || canvasH === 0) resizeCanvas();
+
+      // FPS sample
+      fpsFrameCount++;
+      const now = performance.now();
+      if (now - lastFpsSample >= 1000) {
+        currentFps = fpsFrameCount / ((now - lastFpsSample) / 1000);
+        fpsFrameCount = 0;
+        lastFpsSample = now;
+
+        if (globalState.stressTest) {
+          globalState.stressTest.tickFrame?.();
+        }
+      }
+
+      // Clear
+      ctx.fillStyle = '#05080d';
+      ctx.fillRect(0, 0, canvasW, canvasH);
+
+      // Grid
+      drawGrid();
+
+      // Render HT layer
+      const layer = getRadarLayer();
+      if (layer && layer.active) {
+        layer.render(ctx, worldToScreen, { agentRadius: 8 });
+      }
+
+      requestAnimationFrame(renderLoop);
+    }
+
+    // ---------------------------------------------------
+    // CAMERA INTERACTION
+    // ---------------------------------------------------
+    let isDragging = false;
+    let dragStart = null;
+
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
+
+      isDragging = true;
+      dragStart = {
+        x: e.clientX,
+        y: e.clientY,
+        camX: globalState.camera.x,
+        camY: globalState.camera.y
+      };
+
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* noop */ }
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!isDragging || !dragStart) return;
+
+      globalState.camera.x = dragStart.camX + (e.clientX - dragStart.x);
+      globalState.camera.y = dragStart.camY + (e.clientY - dragStart.y);
+    });
+
+    canvas.addEventListener('pointerup', (e) => {
+      const wasDrag = dragStart &&
+        (Math.abs(e.clientX - dragStart.x) > 4 ||
+         Math.abs(e.clientY - dragStart.y) > 4);
+
+      isDragging = false;
+      dragStart = null;
+
+      try { canvas.releasePointerCapture(e.pointerId); } catch { /* noop */ }
+
+      if (!wasDrag) {
+        handleTap(e.clientX, e.clientY);
+      }
+    });
+
+    canvas.addEventListener('pointercancel', () => {
+      isDragging = false;
+      dragStart = null;
+    });
+
+    // Wheel zoom
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const delta = -e.deltaY * 0.001;
+      const oldZoom = globalState.camera.zoom;
+      const newZoom = Math.max(0.5, Math.min(5, oldZoom * (1 + delta)));
+      globalState.camera.zoom = newZoom;
+    }, { passive: false });
+
+    // Pinch zoom (mobile)
+    let pinchStartDist = 0;
+    let pinchStartZoom = 1;
+    const activePointers = new Map();
+
+    canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        const [t1, t2] = e.touches;
+        pinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        pinchStartZoom = globalState.camera.zoom;
+      }
+    }, { passive: true });
+
+    canvas.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2 && pinchStartDist > 0) {
+        e.preventDefault();
+        const [t1, t2] = e.touches;
+        const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        const scale = dist / pinchStartDist;
+        globalState.camera.zoom = Math.max(0.5, Math.min(5, pinchStartZoom * scale));
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', () => {
+      if (activePointers.size < 2) pinchStartDist = 0;
+    });
+
+    // ---------------------------------------------------
+    // TAP HANDLER
+    // ---------------------------------------------------
+    function handleTap(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
+
+      const layer = getRadarLayer();
+      if (layer && layer.active) {
+        const agent = layer.hitTest(x, y, worldToScreen, { agentRadius: 8 });
+        if (agent) {
+          layer.showTooltip(agent, clientX, clientY);
+        }
+      }
+    }
+
+    // ---------------------------------------------------
+    // INIT RADAR LAYER
+    // ---------------------------------------------------
+    globalState.radarLayer = initRadarLayer(
+      { canvas, requestRedraw: () => {} },
+      {
+        canvas,
+        controlPanel: $('radar-controls'),
+        autoInjectButton: true
+      }
+    );
+
+    // Sync state tombol jika layer di-toggle dari layer sendiri
+    const layerBtnObserver = setInterval(() => {
+      const layer = getRadarLayer();
+      if (!layer) return;
+      const btn = document.getElementById('ht-radio-layer-btn');
+      if (btn) {
+        btn.classList.toggle('active', layer.active);
+      }
+    }, 500);
+
+    // ---------------------------------------------------
+    // START / STOP SIMULATOR
+    // ---------------------------------------------------
+    function setStatusDot(el, state) {
+      el.classList.remove('on', 'warn', 'err');
+      if (state) el.classList.add(state);
+    }
+
+    function startSimulator() {
+      if (globalState.running) return;
+
+      // Konfigurasi simulator
+      const AGENT_COUNT = 12;
+      const CHANNEL_COUNT = 6;
+
+      globalState.sim = createSimulator({
+        count: AGENT_COUNT,
+        channels: CHANNEL_COUNT,
+        profiles: ['patrol', 'static', 'emergency'],
+        weights: [0.7, 0.2, 0.1],
+        onTransmit: (channel, payload) => {
+          globalState.gateway.receive(channel, payload);
+        },
+        onStateChange: () => {},
+        onError: (err) => console.error('[Sim]', err)
+      });
+
+      globalState.sim.startAll();
+      globalState.running = true;
+      globalState.startTime = Date.now();
+
+      btnStart.disabled = true;
+      btnStop.disabled = false;
+
+      setStatusDot(statusSim, 'on');
+
+      toast(`Simulator started — ${AGENT_COUNT} agents / ${CHANNEL_COUNT} channels`, 'success');
+      appendChatMessage(`📡 SIMULATOR STARTED — ${AGENT_COUNT} agents`, { isAlert: true });
+    }
+
+    function stopSimulator() {
+      if (!globalState.running) return;
+
+      if (globalState.sim) {
+        globalState.sim.stopAll();
+        globalState.sim.disposeAll();
+        globalState.sim = null;
+      }
+
+      globalState.running = false;
+
+      btnStart.disabled = false;
+      btnStop.disabled = true;
+
+      setStatusDot(statusSim, null);
+
+      toast('Simulator stopped', 'warn');
+      appendChatMessage('📡 SIMULATOR STOPPED', { isAlert: true });
+    }
+
+    btnStart.addEventListener('click', startSimulator);
+    btnStop.addEventListener('click', stopSimulator);
+
+    btnEmergency.addEventListener('click', () => {
+      if (globalState.sim) {
+        globalState.sim.triggerEmergencyAll();
+        toast('🔴 Emergency triggered', 'error');
+      } else {
+        toast('Simulator belum jalan', 'warn');
+      }
+    });
+
+    // ---------------------------------------------------
+    // AUDIO TOGGLE
+    // ---------------------------------------------------
+    btnAudio.addEventListener('click', async () => {
+      if (globalState.audioReady) {
+        htAudioSynth.dispose();
+        globalState.audioReady = false;
+        btnAudio.textContent = '🔊 Audio OFF';
+        btnAudio.classList.remove('active');
+        setStatusDot(statusAudio, null);
+        toast('Audio OFF', 'warn');
+        return;
+      }
+
+      const ok = await htAudioSynth.init();
+
+      if (ok) {
+        globalState.audioReady = true;
+        btnAudio.textContent = '🔇 Audio ON';
+        btnAudio.classList.add('active');
+        setStatusDot(statusAudio, 'on');
+        toast('Audio ON', 'success');
+      } else {
+        toast('Tap lagi untuk aktifkan audio', 'warn');
+        setStatusDot(statusAudio, 'err');
+      }
+    });
+
+    // ---------------------------------------------------
+    // STRESS TEST
+    // ---------------------------------------------------
+    let stressTimerInterval = null;
+
+    async function runStress(durationSec) {
+      if (globalState.stressTest) {
+        toast('Stress test sedang jalan', 'warn');
+        return;
+      }
+
+      // Stop simulator biasa dulu
+      if (globalState.running) stopSimulator();
+
+      // Pastikan audio siap
+      if (!globalState.audioReady) {
+        const ok = await htAudioSynth.init();
+        if (ok) {
+          globalState.audioReady = true;
+          btnAudio.textContent = '🔇 Audio ON';
+          btnAudio.classList.add('active');
+          setStatusDot(statusAudio, 'on');
+        }
+      }
+
+      const test = new StressTest({
+        agents: 50,
+        durationSec,
+        channels: 8,
+        corruptRate: 0.05,
+        randomRate: 0.02,
+        verbose: false
+      });
+
+      // Wrap audio latency
+      test.wrapAudioLatency();
+
+      globalState.stressTest = test;
+
+      // UI progress
+      stressProgress.classList.add('show');
+      stressBarFill.style.width = '0%';
+      stressTime.textContent = `0s / ${durationSec}s`;
+
+      const startTime = Date.now();
+
+      stressTimerInterval = setInterval(() => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        const pct = Math.min(100, (elapsed / durationSec) * 100);
+        stressBarFill.style.width = `${pct}%`;
+        stressTime.textContent = `${Math.round(elapsed)}s / ${durationSec}s`;
+        stressFps.textContent = `${currentFps.toFixed(0)} fps`;
+      }, 500);
+
+      btnStress.disabled = true;
+      btnStressLong.disabled = true;
+
+      setStatusDot(statusNet, 'warn');
+
+      toast(`🧪 Stress test ${durationSec}s dimulai`, 'success');
+
+      try {
+        await test.start();
+
+        // Tunggu selesai
+        await new Promise((resolve) => {
+          const check = setInterval(() => {
+            if (!test.running) {
+              clearInterval(check);
+              resolve();
+            }
+          }, 500);
+        });
+      } catch (err) {
+        console.error('[Stress] error:', err);
+        toast('Stress test error: ' + err.message, 'error', 4000);
+      } finally {
+        if (stressTimerInterval) {
+          clearInterval(stressTimerInterval);
+          stressTimerInterval = null;
+        }
+
+        stressProgress.classList.remove('show');
+        btnStress.disabled = false;
+        btnStressLong.disabled = false;
+
+        globalState.stressTest = null;
+
+        setStatusDot(statusNet, null);
+
+        toast('✅ Stress test selesai — cek console', 'success', 4000);
+
+        // Reset audio state karena StressTest memanggil dispose()
+        globalState.audioReady = false;
+        btnAudio.textContent = '🔊 Audio OFF';
+        btnAudio.classList.remove('active');
+        setStatusDot(statusAudio, null);
+      }
+    }
+
+    btnStress.addEventListener('click', () => runStress(60));
+    btnStressLong.addEventListener('click', () => runStress(300));
+
+    // ---------------------------------------------------
+    // LIVE STATS UPDATER
+    // ---------------------------------------------------
+    function updateStats() {
+      const gw = globalState.gateway;
+      if (!gw) return;
+
+      const global = gw.getGlobalStats();
+      const satellite = globalThis.BCGO_STATE?.satellite ?? {};
+
+      // Count agent HT
+      let agentCount = 0;
+      for (const id in satellite) {
+        if (satellite[id]?.source === 'virtual_ht') agentCount++;
+      }
+
+      statAgents.textContent = agentCount;
+      statRx.textContent = global.totalReceived.toLocaleString();
+      statTx.textContent = global.totalValid.toLocaleString();
+      statCrc.textContent = global.totalCrcFail.toLocaleString();
+      statColl.textContent = global.totalCollisions.toLocaleString();
+      statDrop.textContent = global.totalDropped.toLocaleString();
+      statGap.textContent = global.totalGaps.toLocaleString();
+
+      // FPS
+      statFps.textContent = currentFps.toFixed(0);
+      statFps.classList.remove('good', 'warn', 'bad');
+      if (currentFps >= 50) statFps.classList.add('good');
+      else if (currentFps >= 30) statFps.classList.add('warn');
+      else statFps.classList.add('bad');
+
+      // Memory
+      if (typeof performance !== 'undefined' && performance.memory) {
+        const mb = performance.memory.usedJSHeapSize / 1024 / 1024;
+        statMem.textContent = `${mb.toFixed(1)} MB`;
+      } else {
+        statMem.textContent = 'n/a';
+      }
+
+      // Uptime
+      if (globalState.startTime > 0) {
+        const sec = Math.floor((Date.now() - globalState.startTime) / 1000);
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        statUptime.textContent = `${m}m ${String(s).padStart(2, '0')}s`;
+      } else {
+        statUptime.textContent = '0s';
+      }
+
+      // Status dot net
+      if (global.totalCrcFail > 0 || global.totalCollisions > 0) {
+        setStatusDot(statusNet, 'warn');
+      }
+    }
+
+    setInterval(updateStats, 500);
+
+    // ---------------------------------------------------
+    // KICK OFF
+    // ---------------------------------------------------
+    function boot() {
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+
+      // Inject radio CSS (idempotent)
+      injectRadioStyles();
+
+      // Hide splash
+      setTimeout(() => {
+        splash.classList.add('hide');
+        setTimeout(() => splash.remove(), 500);
+      }, 600);
+
+      // Start render loop
+      requestAnimationFrame(renderLoop);
+
+      // Welcome message
+      appendChatMessage('📻 BCGO Virtual HT Radio — Test Bench ready', { isAlert: true });
+      appendChatMessage('Tap ▶️ Start untuk menjalankan simulator', { isAlert: true });
+
+      console.log('[BCGO] Test bench ready');
+      console.log('[BCGO] Framework: ES Modules, zero-deps');
+      console.log('[BCGO] Files loaded: 7 modules + test.html');
+    }
+
+    // Tunggu logo load (atau timeout)
+    const logoImg = document.querySelector('.splash img');
+    let logoDone = false;
+    const logoFallback = setTimeout(() => {
+      if (!logoDone) {
+        logoDone = true;
+        boot();
+      }
+    }, 1500);
+
+    logoImg?.addEventListener('load', () => {
+      if (logoDone) return;
+      logoDone = true;
+      clearTimeout(logoFallback);
+      boot();
+    });
+
+    logoImg?.addEventListener('error', () => {
+      if (logoDone) return;
+      logoDone = true;
+      clearTimeout(logoFallback);
+      console.warn('[BCGO] cikurgoicon.png tidak ditemukan — lanjut boot');
+      boot();
+    });
+
+    // Cleanup saat unload
+    window.addEventListener('beforeunload', () => {
+      if (globalState.sim) globalState.sim.disposeAll();
+      if (globalState.radarLayer) globalState.radarLayer.dispose();
+      if (globalState.stressTest) globalState.stressTest.stop();
+      htAudioSynth.dispose();
+      if (layerBtnObserver) clearInterval(layerBtnObserver);
+    });
+  </script>
+</body>
+</html>
