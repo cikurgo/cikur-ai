@@ -36,6 +36,19 @@
 
     .app { display: grid; grid-template-rows: auto 1fr; height: 100vh; height: 100dvh; }
 
+    /* ICON BASE */
+    .ico {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .ico-lg { width: 16px; height: 16px; }
+
     /* HEADER */
     .header {
       display: flex; align-items: center; gap: 10px;
@@ -108,6 +121,7 @@
       font-size: 10px; color: var(--text-dim);
       text-transform: uppercase; letter-spacing: 0.8px;
       margin: 0 0 8px 0; font-weight: 600;
+      display: flex; align-items: center; gap: 5px;
     }
 
     /* BUTTONS */
@@ -150,11 +164,13 @@
       font-size: 10px; color: var(--text-dim);
       text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600;
     }
+    .chat-header span { display: flex; align-items: center; gap: 5px; }
     .chat-header button {
       background: transparent; border: 1px solid var(--border);
       color: var(--text-dim); font-family: var(--mono);
       font-size: 10px; padding: 3px 8px; border-radius: 4px;
       cursor: pointer; transition: all 0.15s;
+      display: flex; align-items: center; gap: 4px;
     }
     .chat-header button:hover { color: var(--text); border-color: #3a4657; }
 
@@ -192,8 +208,9 @@
       padding: 5px 12px; border-radius: 12px; cursor: pointer;
       box-shadow: 0 2px 12px rgba(34, 197, 94, 0.5);
       z-index: 10; display: none; animation: badge-in 0.2s ease-out;
+      align-items: center; gap: 4px;
     }
-    .new-msg-badge.show { display: block; }
+    .new-msg-badge.show { display: flex; }
     @keyframes badge-in {
       from { opacity: 0; transform: translateX(-50%) translateY(8px); }
       to   { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -212,6 +229,7 @@
       color: var(--text); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
       backdrop-filter: blur(10px); animation: toast-in 0.25s ease-out;
       max-width: 90vw; pointer-events: auto;
+      display: flex; align-items: center; gap: 8px;
     }
     .toast.success { border-color: var(--accent); }
     .toast.error   { border-color: var(--danger); }
@@ -248,32 +266,37 @@
       0%, 100% { transform: scale(1); opacity: 1; }
       50%      { transform: scale(1.08); opacity: 0.85; }
     }
-
-    /* DEBUG ERROR BOX */
-    #debug-error {
-      position: fixed;
-      top: 60px; left: 10px; right: 10px;
-      background: #ef4444; color: #fff;
-      font-family: var(--mono); font-size: 11px;
-      padding: 12px; border-radius: 8px;
-      z-index: 99999; max-height: 60vh; overflow: auto;
-      white-space: pre-wrap; word-break: break-word;
-      line-height: 1.5; display: none;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-    }
-    #debug-error.show { display: block; }
-    #debug-error.success { background: #22c55e; color: #04130a; }
-    #debug-error.warn    { background: #f59e0b; color: #1a1103; }
   </style>
 </head>
 <body>
+
+  <!-- SVG ICON LIBRARY (hidden) -->
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-emergency" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16.5" r="0.8" fill="currentColor"/></symbol>
+      <symbol id="i-volume-off" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></symbol>
+      <symbol id="i-volume-on" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></symbol>
+      <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
+      <symbol id="i-fire" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+      <symbol id="i-radio" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="m7 3 5 4 5-4"/><circle cx="8" cy="14" r="2"/><line x1="14" y1="11" x2="19" y2="11"/><line x1="14" y1="14" x2="19" y2="14"/><line x1="14" y1="17" x2="17" y2="17"/></symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></symbol>
+      <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3h6v6l5.5 9.5A2 2 0 0 1 18.77 21H5.23a2 2 0 0 1-1.73-3L9 9V3z"/><line x1="9" y1="3" x2="15" y2="3"/><path d="M6.5 15h11"/></symbol>
+      <symbol id="i-chart" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></symbol>
+      <symbol id="i-signal" viewBox="0 0 24 24"><path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/><path d="M22 4v16"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+      <symbol id="i-arrow-down" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+    </defs>
+  </svg>
 
   <div class="splash" id="splash">
     <img src="cikurgoicon.png" alt="Cikurgo">
     <div class="splash-text">BCGO HT RADIO — LOADING</div>
   </div>
-
-  <div id="debug-error"></div>
 
   <div class="app">
 
@@ -281,7 +304,7 @@
       <img class="header-logo" src="cikurgoicon.png" alt="Cikurgo">
       <div class="header-title">
         <h1>BCGO Virtual HT Radio</h1>
-        <small>test bench • v2</small>
+        <small>test bench • v3</small>
       </div>
       <div class="header-status">
         <span class="status-dot" id="status-audio" title="Audio"></span>
@@ -308,20 +331,44 @@
       <aside class="side">
 
         <div class="panel-section">
-          <h3 class="panel-title">🎛️ Control</h3>
+          <h3 class="panel-title">
+            <svg class="ico"><use href="#i-sliders"/></svg>
+            Control
+          </h3>
           <div class="btn-grid">
-            <button class="btn primary" id="btn-start" type="button">▶️ Start</button>
-            <button class="btn danger"  id="btn-stop"  type="button" disabled>⏹️ Stop</button>
-            <button class="btn warn btn-full" id="btn-emergency" type="button">🔴 Emergency All</button>
-            <button class="btn btn-full" id="btn-audio" type="button">🔊 Audio OFF</button>
+            <button class="btn primary" id="btn-start" type="button">
+              <svg class="ico"><use href="#i-play"/></svg>
+              Start
+            </button>
+            <button class="btn danger" id="btn-stop" type="button" disabled>
+              <svg class="ico"><use href="#i-stop"/></svg>
+              Stop
+            </button>
+            <button class="btn warn btn-full" id="btn-emergency" type="button">
+              <svg class="ico"><use href="#i-emergency"/></svg>
+              Emergency All
+            </button>
+            <button class="btn btn-full" id="btn-audio" type="button">
+              <svg class="ico"><use href="#i-volume-off"/></svg>
+              <span id="audio-label">Audio OFF</span>
+            </button>
           </div>
         </div>
 
         <div class="panel-section">
-          <h3 class="panel-title">🧪 Stress Test</h3>
+          <h3 class="panel-title">
+            <svg class="ico"><use href="#i-flask"/></svg>
+            Stress Test
+          </h3>
           <div class="btn-grid">
-            <button class="btn" id="btn-stress"      type="button">🚀 60s</button>
-            <button class="btn" id="btn-stress-long" type="button">🔥 300s</button>
+            <button class="btn" id="btn-stress" type="button">
+              <svg class="ico"><use href="#i-rocket"/></svg>
+              60s
+            </button>
+            <button class="btn" id="btn-stress-long" type="button">
+              <svg class="ico"><use href="#i-fire"/></svg>
+              300s
+            </button>
           </div>
           <div class="stress-progress" id="stress-progress">
             <div class="stress-bar">
@@ -335,7 +382,10 @@
         </div>
 
         <div class="panel-section">
-          <h3 class="panel-title">📊 Live Stats</h3>
+          <h3 class="panel-title">
+            <svg class="ico"><use href="#i-chart"/></svg>
+            Live Stats
+          </h3>
           <div class="stats-grid">
             <span class="label">Agents</span>       <span class="value" id="stat-agents">0</span>
             <span class="label">FPS</span>          <span class="value good" id="stat-fps">--</span>
@@ -352,11 +402,20 @@
 
         <div class="chat-wrap">
           <div class="chat-header">
-            <span>📡 Radio Log</span>
-            <button id="btn-clear-log" type="button">Clear</button>
+            <span>
+              <svg class="ico"><use href="#i-radio"/></svg>
+              Radio Log
+            </span>
+            <button id="btn-clear-log" type="button">
+              <svg class="ico" style="width:10px;height:10px"><use href="#i-trash"/></svg>
+              Clear
+            </button>
           </div>
           <div class="chat-log" id="chat-log"></div>
-          <div class="new-msg-badge" id="new-msg-badge">↓ pesan baru</div>
+          <div class="new-msg-badge" id="new-msg-badge">
+            <svg class="ico" style="width:10px;height:10px"><use href="#i-arrow-down"/></svg>
+            pesan baru
+          </div>
         </div>
 
       </aside>
@@ -367,109 +426,15 @@
 
   <script type="module">
     // ---------------------------------------------------
-    // DEBUG ERROR CATCHER
-    // ---------------------------------------------------
-    const debugBox = document.getElementById('debug-error');
-    let debugMsgCount = 0;
-
-    function showDebug(msg, type = 'error') {
-      debugMsgCount++;
-      debugBox.className = 'show ' + (type === 'success' ? 'success' : type === 'warn' ? 'warn' : '');
-      debugBox.textContent += `[${debugMsgCount}] ${msg}\n\n`;
-      debugBox.scrollTop = debugBox.scrollHeight;
-    }
-
-    window.addEventListener('error', (e) => {
-      showDebug('❌ ERROR: ' + (e.message || 'unknown') +
-        '\n📍 ' + (e.filename || '?') + ':' + (e.lineno || '?'));
-    });
-
-    window.addEventListener('unhandledrejection', (e) => {
-      showDebug('❌ PROMISE: ' + (e.reason?.message || String(e.reason)));
-    });
-
-    // Tandai setiap tahap boot
-    showDebug('✅ HTML loaded', 'success');
-
-    // ---------------------------------------------------
     // IMPORTS
     // ---------------------------------------------------
-    let PACKET_SIZE, STATUS_FLAGS;
-    let htAudioSynth;
-    let createSimulator, HTAgentSimulator;
-    let getGateway;
-    let shouldAutoScroll, injectRadioStyles;
-    let initRadarLayer, getRadarLayer;
-    let StressTest;
-
-    try {
-      const mod1 = await import('./ht-protocol.js');
-      PACKET_SIZE = mod1.PACKET_SIZE;
-      STATUS_FLAGS = mod1.STATUS_FLAGS;
-      showDebug('✅ ht-protocol.js loaded', 'success');
-    } catch (err) {
-      showDebug('❌ Gagal import ht-protocol.js: ' + err.message);
-      throw err;
-    }
-
-    try {
-      const mod2 = await import('./ht-audio-synth.js');
-      htAudioSynth = mod2.htAudioSynth;
-      showDebug('✅ ht-audio-synth.js loaded', 'success');
-    } catch (err) {
-      showDebug('❌ Gagal import ht-audio-synth.js: ' + err.message);
-      throw err;
-    }
-
-    try {
-      const mod3 = await import('./ht-ptt-simulator.js');
-      createSimulator = mod3.createSimulator;
-      HTAgentSimulator = mod3.HTAgentSimulator;
-      showDebug('✅ ht-ptt-simulator.js loaded', 'success');
-    } catch (err) {
-      showDebug('❌ Gagal import ht-ptt-simulator.js: ' + err.message);
-      throw err;
-    }
-
-    try {
-      const mod4 = await import('./cgo-ht-radio-engine.js');
-      getGateway = mod4.getGateway;
-      showDebug('✅ cgo-ht-radio-engine.js loaded', 'success');
-    } catch (err) {
-      showDebug('❌ Gagal import cgo-ht-radio-engine.js: ' + err.message);
-      throw err;
-    }
-
-    try {
-      const mod5 = await import('./chat-radio-formatter.js');
-      shouldAutoScroll = mod5.shouldAutoScroll;
-      injectRadioStyles = mod5.injectRadioStyles;
-      showDebug('✅ chat-radio-formatter.js loaded', 'success');
-    } catch (err) {
-      showDebug('❌ Gagal import chat-radio-formatter.js: ' + err.message);
-      throw err;
-    }
-
-    try {
-      const mod6 = await import('./ht-radar-layer.js');
-      initRadarLayer = mod6.initRadarLayer;
-      getRadarLayer = mod6.getRadarLayer;
-      showDebug('✅ ht-radar-layer.js loaded', 'success');
-    } catch (err) {
-      showDebug('❌ Gagal import ht-radar-layer.js: ' + err.message);
-      throw err;
-    }
-
-    try {
-      const mod7 = await import('./stress-test-ht.js');
-      StressTest = mod7.StressTest;
-      showDebug('✅ stress-test-ht.js loaded', 'success');
-    } catch (err) {
-      showDebug('❌ Gagal import stress-test-ht.js: ' + err.message);
-      throw err;
-    }
-
-    showDebug('🎉 SEMUA MODULE BERHASIL DI-LOAD!', 'success');
+    import { PACKET_SIZE, STATUS_FLAGS } from './ht-protocol.js';
+    import { htAudioSynth } from './ht-audio-synth.js';
+    import { createSimulator, HTAgentSimulator } from './ht-ptt-simulator.js';
+    import { getGateway } from './cgo-ht-radio-engine.js';
+    import { shouldAutoScroll, injectRadioStyles } from './chat-radio-formatter.js';
+    import { initRadarLayer, getRadarLayer } from './ht-radar-layer.js';
+    import { StressTest } from './stress-test-ht.js';
 
     // ---------------------------------------------------
     // GLOBAL STATE
@@ -512,6 +477,7 @@
     const btnStop        = $('btn-stop');
     const btnEmergency   = $('btn-emergency');
     const btnAudio       = $('btn-audio');
+    const audioLabel     = $('audio-label');
     const btnStress      = $('btn-stress');
     const btnStressLong  = $('btn-stress-long');
     const btnClearLog    = $('btn-clear-log');
@@ -536,7 +502,14 @@
     function toast(message, type = 'info', duration = 2500) {
       const el = document.createElement('div');
       el.className = `toast ${type}`;
-      el.textContent = message;
+
+      const iconId = type === 'success' ? 'i-check'
+                    : type === 'error'   ? 'i-alert'
+                    : type === 'warn'    ? 'i-alert'
+                    : 'i-radio';
+      el.innerHTML = `<svg class="ico"><use href="#${iconId}"/></svg><span></span>`;
+      el.querySelector('span').textContent = message;
+
       toastWrap.appendChild(el);
       setTimeout(() => {
         el.style.transition = 'opacity 0.3s';
@@ -564,6 +537,7 @@
       }
       el.textContent = text;
       chatLog.appendChild(el);
+
       const nearBottom = shouldAutoScroll(chatLog, meta.emergency === true);
       if (nearBottom) {
         chatLog.scrollTop = chatLog.scrollHeight;
@@ -741,9 +715,7 @@
       }
     }, { passive: false });
 
-    canvas.addEventListener('touchend', () => {
-      pinchStartDist = 0;
-    });
+    canvas.addEventListener('touchend', () => { pinchStartDist = 0; });
 
     function handleTap(clientX, clientY) {
       const rect = canvas.getBoundingClientRect();
@@ -826,7 +798,7 @@
     btnEmergency.addEventListener('click', () => {
       if (globalState.sim) {
         globalState.sim.triggerEmergencyAll();
-        toast('🔴 Emergency triggered', 'error');
+        toast('Emergency triggered', 'error');
       } else {
         toast('Simulator belum jalan', 'warn');
       }
@@ -839,7 +811,7 @@
       if (globalState.audioReady) {
         htAudioSynth.dispose();
         globalState.audioReady = false;
-        btnAudio.textContent = '🔊 Audio OFF';
+        btnAudio.innerHTML = '<svg class="ico"><use href="#i-volume-off"/></svg><span id="audio-label">Audio OFF</span>';
         btnAudio.classList.remove('active');
         setStatusDot(statusAudio, null);
         toast('Audio OFF', 'warn');
@@ -848,7 +820,7 @@
       const ok = await htAudioSynth.init();
       if (ok) {
         globalState.audioReady = true;
-        btnAudio.textContent = '🔇 Audio ON';
+        btnAudio.innerHTML = '<svg class="ico"><use href="#i-volume-on"/></svg><span id="audio-label">Audio ON</span>';
         btnAudio.classList.add('active');
         setStatusDot(statusAudio, 'on');
         toast('Audio ON', 'success');
@@ -874,7 +846,7 @@
         const ok = await htAudioSynth.init();
         if (ok) {
           globalState.audioReady = true;
-          btnAudio.textContent = '🔇 Audio ON';
+          btnAudio.innerHTML = '<svg class="ico"><use href="#i-volume-on"/></svg><span id="audio-label">Audio ON</span>';
           btnAudio.classList.add('active');
           setStatusDot(statusAudio, 'on');
         }
@@ -903,7 +875,7 @@
       btnStress.disabled = true;
       btnStressLong.disabled = true;
       setStatusDot(statusNet, 'warn');
-      toast(`🧪 Stress test ${durationSec}s dimulai`, 'success');
+      toast(`Stress test ${durationSec}s dimulai`, 'success');
 
       try {
         await test.start();
@@ -922,9 +894,9 @@
         btnStressLong.disabled = false;
         globalState.stressTest = null;
         setStatusDot(statusNet, null);
-        toast('✅ Stress test selesai — cek console', 'success', 4000);
+        toast('Stress test selesai — cek console', 'success', 4000);
         globalState.audioReady = false;
-        btnAudio.textContent = '🔊 Audio OFF';
+        btnAudio.innerHTML = '<svg class="ico"><use href="#i-volume-off"/></svg><span id="audio-label">Audio OFF</span>';
         btnAudio.classList.remove('active');
         setStatusDot(statusAudio, null);
       }
@@ -993,7 +965,7 @@
       requestAnimationFrame(renderLoop);
 
       appendChatMessage('📻 BCGO Virtual HT Radio — Test Bench ready', { isAlert: true });
-      appendChatMessage('Tap ▶️ Start untuk menjalankan simulator', { isAlert: true });
+      appendChatMessage('Tap Start untuk menjalankan simulator', { isAlert: true });
 
       console.log('[BCGO] Test bench ready');
     }
