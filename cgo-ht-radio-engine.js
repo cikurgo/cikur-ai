@@ -1,4 +1,4 @@
-// FILE: cgo-ht-radio-engine.js | DEPS: ht-protocol, ht-audio-synth, chat-radio-formatter | EXPORTS: VirtualRadioGateway, radioGateway
+// FILE: cgo-ht-radio-engine.js | DEPS: ht-protocol, ht-audio-synth, chat-radio-formatter | EXPORTS: VirtualRadioGateway, getGateway, radioGateway
 
 import {
   decodeHTPacket,
@@ -20,8 +20,8 @@ import {
 
 const COLLISION_WINDOW_MS = 50;
 const MAX_BUFFER_SIZE = 10;
-const YIELD_EVERY = 5;                    // yield tiap 5 paket
-const EMERGENCY_ALERT_COOLDOWN = 10_000;  // 10s per agent
+const YIELD_EVERY = 5;
+const EMERGENCY_ALERT_COOLDOWN = 10_000;
 const WEAK_SIGNAL_THRESHOLD = 30;
 const LOW_BATTERY_THRESHOLD = 15;
 
@@ -48,32 +48,20 @@ function createChannelSlot() {
 // ============================================================
 
 class VirtualRadioGateway {
-  /**
-   * @param {object} [options]
-   * @param {object} [options.state]       Objek BCGO_STATE (default window.BCGO_STATE)
-   * @param {object} [options.chat]        Objek chat (default window.cgoChat)
-   * @param {object} [options.audio]       Audio synth (default htAudioSynth singleton)
-   * @param {Function} [options.onLog]     Callback custom log (channel, text, meta)
-   * @param {boolean}  [options.verbose]   Log debug verbose
-   */
   constructor(options = {}) {
-    // Channel slots
     this.channels = Array.from({ length: CHANNEL_COUNT }, createChannelSlot);
 
-    // Dependencies
     this.state = options.state ?? (typeof globalThis !== 'undefined' ? globalThis.BCGO_STATE : null);
     this.chat = options.chat ?? (typeof globalThis !== 'undefined' ? globalThis.cgoChat : null);
     this.audio = options.audio ?? htAudioSynth;
     this.onLog = options.onLog ?? null;
     this.verbose = options.verbose === true;
 
-    // Runtime
     this.running = true;
-    this._emergencyCooldown = new Map();  // agentId -> last alert ms
-    this._recentGpsInvalid = new Map();   // agentId -> last alert ms
-    this._recentBatteryLow = new Map();   // agentId -> last alert ms
+    this._emergencyCooldown = new Map();
+    this._recentGpsInvalid = new Map();
+    this._recentBatteryLow = new Map();
 
-    // Stats global
     this.stats = {
       totalReceived: 0,
       totalValid: 0,
@@ -85,12 +73,10 @@ class VirtualRadioGateway {
       startedAt: Date.now()
     };
 
-    // Pastikan BCGO_STATE.satellite ada
     if (this.state && !this.state.satellite) {
       this.state.satellite = {};
     }
 
-    // Pastikan satelliteUpdates EventTarget
     if (this.state && !this.state.satelliteUpdates) {
       try {
         this.state.satelliteUpdates = new EventTarget();
@@ -104,12 +90,6 @@ class VirtualRadioGateway {
   // RECEIVE
   // ----------------------------------------------------------
 
-  /**
-   * Terima 1 paket biner dari channel tertentu.
-   * @param {number} channelId 0-15
-   * @param {Uint8Array} payload
-   * @returns {boolean} true kalau paket diterima (belum tentu valid decode)
-   */
   receive(channelId, payload) {
     if (!this.running) return false;
 
@@ -124,21 +104,16 @@ class VirtualRadioGateway {
     const slot = this.channels[channelId];
     this.stats.totalReceived++;
 
-    // 1. Validasi magic byte
     if (payload[0] !== MAGIC_BYTE) {
       this.stats.totalMagicFail++;
       slot.droppedCount++;
       return false;
     }
 
-    // 2. Ambil seq (byte 1) untuk decision selanjutnya
     const incomingSeq = payload[1];
-
-    // 3. Cek CRC dulu (decode penuh tapi buang data)
     const decoded = decodeHTPacket(payload);
 
     if (!decoded.valid) {
-      // CRC mismatch dll → collision count
       slot.collisionCount++;
       this.stats.totalCrcFail++;
 
@@ -146,17 +121,14 @@ class VirtualRadioGateway {
         console.debug(`[Gateway] CH-${channelId} discard: ${decoded.error}`);
       }
 
-      // Trigger collision alert suara (rate-limited di audio)
       this.audio.playCollisionAlert?.();
       return false;
     }
 
-    // 4. Sequence gap detection
     if (slot.lastSeq !== null) {
       const delta = (incomingSeq - slot.lastSeq + 256) % 256;
 
       if (delta > 1 && delta < 128) {
-        // Gap wajar (maju), bukan wrap
         slot.gapCount++;
         this.stats.totalGaps++;
 
@@ -166,7 +138,6 @@ class VirtualRadioGateway {
       }
     }
 
-    // 5. Collision check (deterministik)
     const now = Date.now();
     const timeSinceLast = now - slot.lastActivity;
 
@@ -174,12 +145,10 @@ class VirtualRadioGateway {
       slot.collisionCount++;
       this.stats.totalCollisions++;
 
-      // Policy: keep paket dengan SEQ lebih tinggi (state paling baru)
       const lastQueued = slot.buffer[slot.buffer.length - 1];
       const lastQueuedSeq = lastQueued ? lastQueued[1] : -1;
 
       if (incomingSeq <= lastQueuedSeq) {
-        // Drop paket baru
         slot.droppedCount++;
         this.stats.totalDropped++;
 
@@ -188,7 +157,6 @@ class VirtualRadioGateway {
         }
         return false;
       } else {
-        // Evict paket lama, keep yang baru
         const evicted = slot.buffer.pop();
         slot.droppedCount++;
         this.stats.totalDropped++;
@@ -199,7 +167,6 @@ class VirtualRadioGateway {
       }
     }
 
-    // 6. Backpressure (FIFO drop oldest)
     if (slot.buffer.length >= MAX_BUFFER_SIZE) {
       slot.buffer.shift();
       slot.droppedCount++;
@@ -210,7 +177,6 @@ class VirtualRadioGateway {
       }
     }
 
-    // 7. Push ke buffer (defensive copy)
     const copy = new Uint8Array(payload.byteLength);
     copy.set(payload);
 
@@ -220,7 +186,13 @@ class VirtualRadioGateway {
     slot.totalReceived++;
     this.stats.totalValid++;
 
-    // 8. Trigger process queue (async, non-blocking)
+    if (slot._recentSignals.length >= 20) {
+      slot._recentSignals.shift();
+    }
+    if (decoded.data?.signalQuality != null) {
+      slot._recentSignals.push(decoded.data.signalQuality);
+    }
+
     if (!slot._processing) {
       void this._processQueue(channelId);
     }
@@ -246,16 +218,13 @@ class VirtualRadioGateway {
         const result = decodeHTPacket(packet);
 
         if (!result.valid) {
-          // Sudah dicek di receive(), tapi defensive
           slot.droppedCount++;
           continue;
         }
 
         this._handlePacket(channelId, result.data);
-
         count++;
 
-        // Yield ke event loop
         if (count % YIELD_EVERY === 0) {
           await Promise.resolve();
         }
@@ -274,7 +243,6 @@ class VirtualRadioGateway {
   _handlePacket(channelId, data) {
     const { agentId, signalQuality, battery, status } = data;
 
-    // 1. Update BCGO_STATE.satellite (merge, bukan replace)
     if (this.state) {
       const existing = this.state.satellite[agentId] ?? {};
 
@@ -288,22 +256,16 @@ class VirtualRadioGateway {
       };
 
       this.state.satellite[agentId] = merged;
-
-      // 2. Emit event
       this._emitUpdate(merged);
     }
 
-    // 3. Audio feedback
     if ((status & STATUS_FLAGS.PTT_ACTIVE) !== 0) {
       this.audio.playValidBeep?.(signalQuality, {
         emergency: (status & STATUS_FLAGS.EMERGENCY) !== 0
       });
     }
 
-    // 4. Chat log
     this._logTransmission(channelId, data);
-
-    // 5. Alert khusus
     this._checkSpecialAlerts(channelId, data);
   }
 
@@ -329,7 +291,6 @@ class VirtualRadioGateway {
       return;
     }
 
-    // Fallback ke cgoChat global
     if (this.chat && typeof this.chat.logRadioMessage === 'function') {
       try {
         this.chat.logRadioMessage(text, meta);
@@ -348,7 +309,6 @@ class VirtualRadioGateway {
     const { agentId, status, battery, signalQuality } = data;
     const now = Date.now();
 
-    // Emergency alert
     if ((status & STATUS_FLAGS.EMERGENCY) !== 0) {
       const last = this._emergencyCooldown.get(agentId) ?? 0;
 
@@ -359,7 +319,6 @@ class VirtualRadioGateway {
       }
     }
 
-    // Weak signal
     if (signalQuality < WEAK_SIGNAL_THRESHOLD) {
       const last = this._recentGpsInvalid.get(agentId) ?? 0;
 
@@ -372,7 +331,6 @@ class VirtualRadioGateway {
       }
     }
 
-    // Low battery
     if (battery != null && battery < LOW_BATTERY_THRESHOLD) {
       const last = this._recentBatteryLow.get(agentId) ?? 0;
 
@@ -385,7 +343,6 @@ class VirtualRadioGateway {
       }
     }
 
-    // GPS invalid
     if ((status & STATUS_FLAGS.GPS_INVALID) !== 0) {
       const last = this._recentGpsInvalid.get(`gps_${agentId}`) ?? 0;
 
@@ -462,7 +419,6 @@ class VirtualRadioGateway {
       const slot = this.channels[ch];
       const total = slot.totalReceived || 1;
 
-      // Rolling avg signal (max 20 terakhir)
       const signals = slot._recentSignals;
       const avgSignal = signals.length > 0
         ? signals.reduce((a, b) => a + b, 0) / signals.length
@@ -534,31 +490,25 @@ class VirtualRadioGateway {
 }
 
 // ============================================================
-// SINGLETON GLOBAL
+// SINGLETON — FIXED (tidak ada double declaration)
 // ============================================================
 
-let radioGateway = null;
+let _gatewayInstance = null;
 
-/**
- * Get/set singleton gateway.
- * Tanpa argumen → ambil instance (bikin kalau belum ada).
- * Dengan argumen → set instance.
- */
 function getGateway(options) {
   if (options !== undefined) {
-    radioGateway = options;
-    return radioGateway;
+    _gatewayInstance = options;
+    return _gatewayInstance;
   }
 
-  if (!radioGateway) {
-    radioGateway = new VirtualRadioGateway();
+  if (!_gatewayInstance) {
+    _gatewayInstance = new VirtualRadioGateway();
   }
 
-  return radioGateway;
+  return _gatewayInstance;
 }
 
-// Ekspor sebagai proxy yang bisa dipanggil sebagai fungsi (getGateway)
-// atau diakses properti (VirtualRadioGateway)
+// Proxy agar bisa dipakai sebagai `radioGateway.receive(...)` atau `getGateway().receive(...)`
 const radioGateway = new Proxy({}, {
   get(_, prop) {
     if (prop === 'VirtualRadioGateway') return VirtualRadioGateway;
