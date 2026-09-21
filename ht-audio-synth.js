@@ -197,63 +197,110 @@ class HTAudioSynth {
     return cleanup;
   }
 
+  /**
+   * Nada pendek "klik radio" saat paket valid (bukan beep keras).
+   * Nada lebih rendah + noise-ish → terasa seperti squelch/tail.
+   */
   playValidBeep(signalQuality = 0, options = {}) {
     if (!this.isReady()) {
       if (this.audioContext?.state === "suspended") {
         this.state = AudioState.SUSPENDED;
         console.warn("[HTAudio] Tap lagi untuk aktifkan audio.");
       }
-
       return false;
     }
 
     const emergency = options?.emergency === true;
     const multiplier = this.getGainMultiplier(emergency);
-
-    if (multiplier <= 0) {
-      return false;
-    }
+    if (multiplier <= 0) return false;
 
     const now = this.audioContext.currentTime;
-    const signal = Math.max(
-      0,
-      Math.min(100, Number(signalQuality) || 0)
-    );
+    const signal = Math.max(0, Math.min(100, Number(signalQuality) || 0));
+    // 420–620 Hz: nada radio klasik, lebih rendah dari beep lama
+    const frequency = 420 + (signal / 100) * 200;
 
-    const frequency = 800 + (signal / 100) * 400;
-    const oscillator = this.audioContext.createOscillator();
+    const osc = this.audioContext.createOscillator();
     const gain = this.audioContext.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(frequency, now);
 
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(frequency, now);
-
-    const peakGain = 0.3 * multiplier;
-    // FIX #5: exponential ramp tidak boleh dari/ke 0.
-    // Gunakan nilai minimum 0.0001, dan pastikan peakGain > 0.0001.
-    const safePeak = Math.max(0.0002, peakGain);
-
+    const safePeak = Math.max(0.0002, 0.12 * multiplier);
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.linearRampToValueAtTime(safePeak, now + 0.005);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+    gain.gain.linearRampToValueAtTime(safePeak, now + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
 
-    oscillator.connect(gain);
+    osc.connect(gain);
     gain.connect(this.audioContext.destination);
-
-    const cleanup = this.trackNode(oscillator);
-
-    oscillator.addEventListener?.("ended", () => {
+    const cleanup = this.trackNode(osc);
+    osc.addEventListener?.("ended", () => {
       cleanup();
-
-      try {
-        gain.disconnect();
-      } catch {
-        // Gain sudah terputus.
-      }
+      try { gain.disconnect(); } catch { /* */ }
     }, { once: true });
 
-    oscillator.start(now);
-    oscillator.stop(now + 0.08);
+    osc.start(now);
+    osc.stop(now + 0.055);
+    return true;
+  }
 
+  /** Roger beep — dua nada pendek saat lepas PTT (BASE OVER) */
+  playRogerBeep() {
+    if (!this.isReady()) return false;
+    const mult = this.getGainMultiplier(false);
+    if (mult <= 0) return false;
+
+    const ctx = this.audioContext;
+    const now = ctx.currentTime;
+    const tones = [880, 660]; // high → low
+
+    tones.forEach((freq, i) => {
+      const t0 = now + i * 0.09;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, t0);
+      const peak = Math.max(0.0002, 0.18 * mult);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.linearRampToValueAtTime(peak, t0 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.07);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const cleanup = this.trackNode(osc);
+      osc.addEventListener?.("ended", () => {
+        cleanup();
+        try { gain.disconnect(); } catch { /* */ }
+      }, { once: true });
+      osc.start(t0);
+      osc.stop(t0 + 0.07);
+    });
+    return true;
+  }
+
+  /** Squelch open — saat BASE mulai PTT */
+  playSquelchOpen() {
+    if (!this.isReady()) return false;
+    const mult = this.getGainMultiplier(false);
+    if (mult <= 0) return false;
+
+    const ctx = this.audioContext;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(180, now);
+    osc.frequency.exponentialRampToValueAtTime(90, now + 0.12);
+    const peak = Math.max(0.0002, 0.08 * mult);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(peak, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    const cleanup = this.trackNode(osc);
+    osc.addEventListener?.("ended", () => {
+      cleanup();
+      try { gain.disconnect(); } catch { /* */ }
+    }, { once: true });
+    osc.start(now);
+    osc.stop(now + 0.14);
     return true;
   }
 
@@ -378,6 +425,19 @@ const htAudioSynth = {
     return getSingleton().playCollisionAlert();
   },
 
+  playRogerBeep() {
+    return getSingleton().playRogerBeep();
+  },
+
+  playSquelchOpen() {
+    return getSingleton().playSquelchOpen();
+  },
+
+  /** AudioContext instance (untuk sidetone mic) */
+  getContext() {
+    return getSingleton().audioContext;
+  },
+
   dispose() {
     if (singleton) {
       singleton.dispose();
@@ -388,7 +448,6 @@ const htAudioSynth = {
     return singleton?.isReady() === true;
   },
 
-  // FIX #12: expose state untuk UI toggle
   getState() {
     return singleton?.state ?? AudioState.OFF;
   }

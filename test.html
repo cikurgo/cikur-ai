@@ -24,10 +24,12 @@
       --mono:      ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
       --sans:      system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     }
+
     * {
       box-sizing: border-box;
       -webkit-tap-highlight-color: transparent;
     }
+
     html, body {
       margin: 0;
       padding: 0;
@@ -38,12 +40,14 @@
       font-size: 14px;
       overflow: hidden;
     }
+
     .app {
       display: grid;
       grid-template-rows: auto 1fr;
       height: 100vh;
       height: 100dvh;
     }
+
     /* Header */
     .header {
       display: flex;
@@ -55,11 +59,13 @@
       user-select: none;
       z-index: 100;
     }
+
     .header-logo {
       width: 32px;
       height: 32px;
       flex-shrink: 0;
     }
+
     .header-title {
       display: flex;
       flex-direction: column;
@@ -67,6 +73,7 @@
       flex: 1;
       min-width: 0;
     }
+
     .header-title h1 {
       margin: 0;
       font-size: 14px;
@@ -91,6 +98,7 @@
       font-size: 10px;
       color: var(--text-dim);
     }
+
     .status-dot {
       width: 8px;
       height: 8px;
@@ -98,6 +106,7 @@
       background: #6b7280;
       transition: background 0.2s, box-shadow 0.2s;
     }
+
     .status-dot.on   { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
     .status-dot.warn { background: var(--warn);   box-shadow: 0 0 6px var(--warn); }
     .status-dot.err  { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
@@ -108,6 +117,7 @@
       grid-template-columns: 1fr 340px;
       overflow: hidden;
     }
+
     @media (max-width: 860px) {
       .main {
         grid-template-columns: 1fr;
@@ -649,17 +659,10 @@
             Base PTT
           </h3>
           <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
-            <label for="sel-channel" style="font-family:var(--mono);font-size:11px;color:var(--text-dim);">CH</label>
-            <select id="sel-channel" style="flex:1;background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--mono);font-size:12px;">
-              <option value="0">CH-00</option>
-              <option value="1">CH-01</option>
-              <option value="2">CH-02</option>
-              <option value="3">CH-03</option>
-              <option value="4">CH-04</option>
-              <option value="5">CH-05</option>
-              <option value="6">CH-06</option>
-              <option value="7">CH-07</option>
-            </select>
+            <label for="inp-channel" style="font-family:var(--mono);font-size:11px;color:var(--text-dim);">CH</label>
+            <input id="inp-channel" type="number" min="0" max="255" value="0" placeholder="0–255"
+              style="flex:1;background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--mono);font-size:12px;"
+              title="Ketik channel tujuan HT (0–255)" />
           </div>
           <button class="btn btn-full" id="btn-base-ptt" type="button"
             style="min-height:48px;font-size:13px;user-select:none;touch-action:none;">
@@ -670,7 +673,7 @@
             <span id="btn-base-ptt-label">Hold to Talk (BASE)</span>
           </button>
           <div id="base-ptt-status" style="margin-top:6px;font-family:var(--mono);font-size:10px;color:var(--text-dim);text-align:center;">
-            STANDBY
+            STANDBY · mic + sidetone
           </div>
         </div>
 
@@ -830,7 +833,7 @@
     const statLqm    = $('stat-lqm');
     const statUptime = $('stat-uptime');
 
-    const selChannel     = $('sel-channel');
+    const inpChannel     = $('inp-channel');
     const btnBasePtt     = $('btn-base-ptt');
     const btnBasePttLabel = $('btn-base-ptt-label');
     const basePttStatus  = $('base-ptt-status');
@@ -1258,13 +1261,21 @@
     // ---------------------------------------------------
     // BASE PTT (press & hold)
     // ---------------------------------------------------
-    selChannel?.addEventListener('change', () => {
-      const ch = Number(selChannel.value) || 0;
+    function readChannelInput() {
+      let ch = Number(inpChannel?.value);
+      if (!Number.isFinite(ch)) ch = 0;
+      ch = Math.max(0, Math.min(255, Math.floor(ch)));
+      if (inpChannel && Number(inpChannel.value) !== ch) inpChannel.value = String(ch);
+      return ch;
+    }
+
+    inpChannel?.addEventListener('change', () => {
+      const ch = readChannelInput();
       if (!globalState.basePtt) {
         globalState.basePtt = getBasePTT();
       }
       globalState.basePtt.setChannel(ch);
-      basePttStatus.textContent = `STANDBY · CH-${String(ch).padStart(2, '0')}`;
+      basePttStatus.textContent = `STANDBY · CH-${String(ch).padStart(2, '0')} · mic + sidetone`;
     });
 
     function bindBasePtt() {
@@ -1280,7 +1291,7 @@
         if (globalState.transport) {
           globalState.basePtt.setTransport(globalState.transport);
         }
-        globalState.basePtt.setChannel(Number(selChannel?.value) || 0);
+        globalState.basePtt.setChannel(readChannelInput());
         await globalState.basePtt.startPTT();
       };
       const stop = (e) => {

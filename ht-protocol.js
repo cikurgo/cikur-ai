@@ -2,7 +2,8 @@
 
 const MAGIC_BYTE = 0xB7;
 const PACKET_SIZE = 32;
-const CHANNEL_COUNT = 16;
+/** Channel code 0–255 (full byte) — siap lintas region / custom HT */
+const CHANNEL_COUNT = 256;
 const PROTOCOL_VER = 0x02;
 
 const STATUS_FLAGS = Object.freeze({
@@ -319,8 +320,8 @@ function decodeHTPacket(buffer) {
       battery: bytes[13] === 0xFF ? null : bytes[13],
       timestampModulo: view.getUint16(14, false),
       signalQuality: bytes[16],
-      // FIX #4: mask channel ke 0-15 untuk cegah nilai invalid dari paket corrupt
-      channel: bytes[17] & 0x0F,
+      // Channel full byte 0–255 (custom / lintas dunia)
+      channel: bytes[17] & 0xFF,
       crc: expectedCrc,
       authTag: authTagView,
       nicknameHash: view.getUint32(24, false),

@@ -91,7 +91,7 @@ function formatRadioTransmission(state) {
     return '[CH-??] AGT-???? • INVALID • OVER';
   }
 
-  const ch = String(Number(state.channel) || 0).padStart(2, '0');
+  const ch = String(Number(state.channel) || 0).padStart(3, '0');
   const agentId = Number(state.agentId) || 0;
   const isBase = agentId === 0 || state.source === 'base' || state.callsign === 'BASE';
   const idLabel = isBase ? 'BASE' : `AGT-${String(agentId).padStart(4, '0')}`;
@@ -122,7 +122,7 @@ function formatRadioTransmission(state) {
 function formatRadioAlert(type, channel, meta = {}) {
   const prefix = ALERT_PREFIXES[type] ?? '📻';
   const label = ALERT_LABELS[type] ?? 'ALERT';
-  const ch = String(Number(channel) || 0).padStart(2, '0');
+  const ch = String(Number(channel) || 0).padStart(3, '0');
 
   let suffix = '';
 
