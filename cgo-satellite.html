@@ -673,36 +673,39 @@
 
     .sky-hud span { background: rgba(0,0,0,0.35); padding: 2px 5px; border-radius: 3px; }
 
-    /* Live space window (ISS Earth feed — public) */
-    .space-live-wrap {
-      display: none;
+    /* Live Iridium Map — peta dunia equirectangular, satelit real-time dari TLE */
+    .live-map-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 2 / 1;
       margin-bottom: 8px;
       border-radius: 8px;
       overflow: hidden;
+      background: linear-gradient(180deg, #061020 0%, #030810 60%, #020509 100%);
       border: 1px solid var(--border);
-      background: #000;
-      aspect-ratio: 16/9;
-      position: relative;
+      box-shadow: inset 0 0 30px rgba(0,0,0,0.6);
     }
 
-    .space-live-wrap.show { display: block; }
-
-    .space-live-wrap iframe {
+    #live-map-canvas {
+      display: block;
       width: 100%;
       height: 100%;
-      border: 0;
-      display: block;
+      cursor: crosshair;
     }
 
-    .space-live-caption {
+    .live-map-tooltip {
       position: absolute;
-      bottom: 0; left: 0; right: 0;
-      background: linear-gradient(transparent, rgba(0,0,0,0.85));
-      padding: 8px 10px 6px;
+      pointer-events: none;
+      background: rgba(0,0,0,0.85);
+      border: 1px solid #2a3646;
+      border-radius: 4px;
+      padding: 4px 7px;
       font-family: var(--mono);
       font-size: 9px;
-      color: var(--text-dim);
-      pointer-events: none;
+      color: var(--text);
+      white-space: nowrap;
+      transform: translate(-50%, -110%);
+      z-index: 5;
     }
 
     /* Orbit / path info card */
@@ -854,6 +857,8 @@
       font-weight: 700;
     }
   </style>
+  <!-- SGP4 propagator untuk Live Iridium Map (posisi satelit asli dari data TLE) -->
+  <script src="https://cdn.jsdelivr.net/npm/satellite.js@6.0.0/dist/satellite.min.js"></script>
 </head>
 <body>
 
@@ -964,8 +969,6 @@
           <!-- Mata: sky tools + large dome -->
           <div class="sky-toolbar">
             <button class="btn active" id="btn-sky-dome" type="button" title="Kubah langit">Dome</button>
-            <button class="btn" id="btn-sky-stars" type="button" title="Toggle bintang">Stars</button>
-            <button class="btn" id="btn-sky-iss" type="button" title="Jendela antariksa ISS (live Earth)">ISS Live</button>
           </div>
 
           <div class="sky-wrap" id="sky-wrap" title="Tap untuk baca az/el · geser trail">
@@ -975,20 +978,6 @@
             </div>
             <canvas id="sky-canvas"></canvas>
             <div class="sky-label" id="sky-label">SKY VIEW · menunggu pass</div>
-          </div>
-
-          <!-- Optional: public ISS Earth-viewing stream (bukan satelit Iridium spesifik) -->
-          <div class="space-live-wrap" id="space-live-wrap">
-            <iframe id="space-live-frame"
-              title="ISS Live Earth"
-              allow="autoplay; encrypted-media; picture-in-picture"
-              allowfullscreen
-              loading="lazy"
-              referrerpolicy="no-referrer-when-downgrade"
-              src=""></iframe>
-            <div class="space-live-caption">
-              NASA / ISS HD Earth viewing · bukan feed Iridium spesifik · untuk “rasa antariksa”
-            </div>
           </div>
 
           <!-- Orbit / satellite path info -->
@@ -1053,6 +1042,28 @@
             <button class="btn" id="btn-phys-ideal" type="button" title="Hanya geometri">Ideal</button>
             <button class="btn active" id="btn-phys-realistic" type="button" title="Atmosfer + scintillation">Realistic</button>
             <button class="btn" id="btn-phys-stress" type="button" title="Forced fade 30%">Stress</button>
+          </div>
+        </div>
+
+        <!-- LIVE IRIDIUM MAP — data orbit ASLI (TLE dari CelesTrak + SGP4), bukan simulasi -->
+        <div class="panel-section">
+          <h3 class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 010 20 15.3 15.3 0 010-20z"/>
+            </svg>
+            Live Iridium Map
+            <span class="otonom-badge" id="live-map-badge" style="margin-left:auto;">OFF</span>
+          </h3>
+          <div style="display:flex;gap:6px;margin-bottom:8px;">
+            <button class="btn btn-full" id="btn-live-map-toggle" type="button">Aktifkan Peta Live</button>
+            <button class="btn" id="btn-live-map-refresh" type="button" title="Paksa ambil ulang TLE dari CelesTrak" disabled>↻</button>
+          </div>
+          <div class="live-map-wrap" id="live-map-wrap" style="display:none;">
+            <canvas id="live-map-canvas"></canvas>
+            <div class="live-map-tooltip" id="live-map-tooltip" style="display:none;"></div>
+          </div>
+          <div id="live-map-status" style="margin-top:6px;font-family:var(--mono);font-size:9.5px;color:var(--text-dim);line-height:1.5;">
+            Data orbit asli (TLE) dari CelesTrak, dihitung pakai SGP4 · belum aktif
           </div>
         </div>
 
@@ -1179,6 +1190,10 @@
       SAT_STATE,
       SAT_CONSTANTS
     } from './cgo-satellite-virtual.js';
+    import {
+      LiveConstellation,
+      DEFAULT_OBSERVER
+    } from './cgo-satellite-live-tle.js';
 
     // ---------------------------------------------------
     // GLOBAL STATE
@@ -1288,10 +1303,15 @@
     const skyHudLeft  = $('sky-hud-left');
     const skyHudRight = $('sky-hud-right');
     const btnSkyDome  = $('btn-sky-dome');
-    const btnSkyStars = $('btn-sky-stars');
-    const btnSkyIss   = $('btn-sky-iss');
-    const spaceLiveWrap = $('space-live-wrap');
-    const spaceLiveFrame = $('space-live-frame');
+
+    // Live Iridium Map refs
+    const liveMapBadge    = $('live-map-badge');
+    const btnLiveMapToggle = $('btn-live-map-toggle');
+    const btnLiveMapRefresh = $('btn-live-map-refresh');
+    const liveMapWrap      = $('live-map-wrap');
+    const liveMapCanvas    = $('live-map-canvas');
+    const liveMapTooltip   = $('live-map-tooltip');
+    const liveMapStatus    = $('live-map-status');
 
     // Mode Otonom state
     let currentPhysMode = PHYSICS_MODE.REALISTIC;
@@ -1303,24 +1323,7 @@
     let passSerial = 0;
     let lastPassPhase = '';
     const passEventLog = []; // {t, text}
-    let skyShowStars = true;
     let skyProbe = null; // {az, el} from tap
-    let issLiveOn = false;
-
-    // Deterministic star field (once)
-    const STAR_FIELD = Array.from({ length: 60 }, (_, i) => {
-      const s = Math.sin(i * 12.9898) * 43758.5453;
-      const f = s - Math.floor(s);
-      const s2 = Math.sin(i * 78.233) * 43758.5453;
-      const f2 = s2 - Math.floor(s2);
-      return { u: f, v: f2, b: 0.35 + (f * f2) * 0.65 };
-    });
-
-    // Public ISS Earth-viewing style streams (rotate if one fails)
-    const ISS_STREAMS = [
-      'https://www.youtube.com/embed/xRPjKQtRX4c?autoplay=1&mute=1&controls=1&rel=0',
-      'https://www.youtube.com/embed/EEIk7gwdyw0?autoplay=1&mute=1&controls=1&rel=0'
-    ];
 
     function azToCardinal(az) {
       const a = ((az % 360) + 360) % 360;
@@ -1955,22 +1958,6 @@
       skyCtx.fillStyle = grad;
       skyCtx.fill();
 
-      // Stars
-      if (skyShowStars) {
-        for (const st of STAR_FIELD) {
-          const ang = st.u * Math.PI * 2;
-          const rr = st.v * R * 0.92;
-          const x = cx + Math.cos(ang) * rr;
-          const y = cy + Math.sin(ang) * rr;
-          const dx = x - cx, dy = y - cy;
-          if (dx * dx + dy * dy > R * R) continue;
-          skyCtx.beginPath();
-          skyCtx.arc(x, y, 0.6 + st.b * 1.1, 0, Math.PI * 2);
-          skyCtx.fillStyle = `rgba(220,230,255,${0.25 + st.b * 0.55})`;
-          skyCtx.fill();
-        }
-      }
-
       // Horizon ring
       skyCtx.beginPath();
       skyCtx.arc(cx, cy, R, 0, Math.PI * 2);
@@ -2408,31 +2395,217 @@
     btnPhysStress?.addEventListener('click', () => setPhysicsMode(PHYSICS_MODE.STRESS));
 
     // Sky tools
-    btnSkyStars?.addEventListener('click', () => {
-      skyShowStars = !skyShowStars;
-      btnSkyStars.classList.toggle('active', skyShowStars);
-      toast(skyShowStars ? 'Stars ON' : 'Stars OFF', 'info');
-    });
-
-    btnSkyIss?.addEventListener('click', () => {
-      issLiveOn = !issLiveOn;
-      btnSkyIss.classList.toggle('active', issLiveOn);
-      if (spaceLiveWrap) spaceLiveWrap.classList.toggle('show', issLiveOn);
-      if (issLiveOn && spaceLiveFrame) {
-        // Public ISS Earth-viewing style stream (bukan kamera Iridium)
-        spaceLiveFrame.src = ISS_STREAMS[0];
-        toast('ISS Live Earth dibuka (bukan feed Iridium)', 'info');
-      } else if (spaceLiveFrame) {
-        spaceLiveFrame.src = '';
-        toast('ISS Live ditutup', 'info');
-      }
-    });
-
     btnSkyDome?.addEventListener('click', () => {
       btnSkyDome.classList.add('active');
       // Focus: scroll sky into view on mobile
       skyWrap?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       resizeSkyCanvas();
+    });
+
+    // ---------------------------------------------------
+    // LIVE IRIDIUM MAP — data orbit ASLI (TLE + SGP4), bukan simulasi
+    // ---------------------------------------------------
+    let liveConstellation = null;
+    let liveMapCtx = null;
+    let latestSnapshot = [];
+    let liveMapHoverName = null;
+
+    function resizeLiveMapCanvas() {
+      if (!liveMapCanvas || !liveMapWrap) return;
+      const rect = liveMapWrap.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      liveMapCanvas.width = Math.max(1, Math.round(rect.width * dpr));
+      liveMapCanvas.height = Math.max(1, Math.round(rect.height * dpr));
+      liveMapCanvas._cssW = rect.width;
+      liveMapCanvas._cssH = rect.height;
+      liveMapCtx = liveMapCanvas.getContext('2d');
+      liveMapCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    // Proyeksi equirectangular sederhana: lon -180..180 -> x, lat 90..-90 -> y
+    function geoToXY(latDeg, lonDeg, w, h) {
+      const x = ((lonDeg + 180) / 360) * w;
+      const y = ((90 - latDeg) / 180) * h;
+      return { x, y };
+    }
+
+    function drawLiveMap() {
+      if (!liveMapCtx || !liveMapCanvas) return;
+      const w = liveMapCanvas._cssW || 280;
+      const h = liveMapCanvas._cssH || 140;
+
+      liveMapCtx.clearRect(0, 0, w, h);
+
+      // Graticule (garis lintang/bujur tiap 30°)
+      liveMapCtx.strokeStyle = 'rgba(59,130,246,0.14)';
+      liveMapCtx.lineWidth = 1;
+      for (let lon = -180; lon <= 180; lon += 30) {
+        const { x } = geoToXY(0, lon, w, h);
+        liveMapCtx.beginPath();
+        liveMapCtx.moveTo(x, 0);
+        liveMapCtx.lineTo(x, h);
+        liveMapCtx.stroke();
+      }
+      for (let lat = -60; lat <= 60; lat += 30) {
+        const { y } = geoToXY(lat, 0, w, h);
+        liveMapCtx.beginPath();
+        liveMapCtx.moveTo(0, y);
+        liveMapCtx.lineTo(w, y);
+        liveMapCtx.stroke();
+      }
+
+      // Equator ditebalkan
+      const eq = geoToXY(0, 0, w, h);
+      liveMapCtx.strokeStyle = 'rgba(59,130,246,0.35)';
+      liveMapCtx.beginPath();
+      liveMapCtx.moveTo(0, eq.y);
+      liveMapCtx.lineTo(w, eq.y);
+      liveMapCtx.stroke();
+
+      // Titik pengamat (Jakarta)
+      const obs = geoToXY(DEFAULT_OBSERVER.latitudeDeg, DEFAULT_OBSERVER.longitudeDeg, w, h);
+      liveMapCtx.fillStyle = '#f59e0b';
+      liveMapCtx.beginPath();
+      liveMapCtx.arc(obs.x, obs.y, 3, 0, Math.PI * 2);
+      liveMapCtx.fill();
+      liveMapCtx.strokeStyle = 'rgba(245,158,11,0.4)';
+      liveMapCtx.beginPath();
+      liveMapCtx.arc(obs.x, obs.y, 7, 0, Math.PI * 2);
+      liveMapCtx.stroke();
+
+      // Satelit
+      for (const sat of latestSnapshot) {
+        const p = geoToXY(sat.latDeg, sat.lonDeg, w, h);
+        const isHover = sat.name === liveMapHoverName;
+        const isVisible = sat.aboveHorizon;
+
+        liveMapCtx.fillStyle = isVisible ? '#22c55e' : (isHover ? '#e5e7eb' : 'rgba(148,163,184,0.85)');
+        liveMapCtx.beginPath();
+        liveMapCtx.arc(p.x, p.y, isHover ? 3.2 : 1.8, 0, Math.PI * 2);
+        liveMapCtx.fill();
+
+        if (isHover) {
+          liveMapCtx.strokeStyle = 'rgba(229,231,235,0.6)';
+          liveMapCtx.lineWidth = 1;
+          liveMapCtx.beginPath();
+          liveMapCtx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+          liveMapCtx.stroke();
+        }
+      }
+    }
+
+    function findNearestSat(clientX, clientY) {
+      if (!liveMapCanvas) return null;
+      const rect = liveMapCanvas.getBoundingClientRect();
+      const w = liveMapCanvas._cssW || rect.width;
+      const h = liveMapCanvas._cssH || rect.height;
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
+
+      let best = null;
+      let bestDist = 14; // radius toleransi tap, px
+      for (const sat of latestSnapshot) {
+        const p = geoToXY(sat.latDeg, sat.lonDeg, w, h);
+        const d = Math.hypot(p.x - x, p.y - y);
+        if (d < bestDist) {
+          bestDist = d;
+          best = sat;
+        }
+      }
+      return best;
+    }
+
+    liveMapCanvas?.addEventListener('pointermove', (e) => {
+      const sat = findNearestSat(e.clientX, e.clientY);
+      liveMapHoverName = sat?.name ?? null;
+
+      if (sat && liveMapTooltip && liveMapWrap) {
+        const rect = liveMapWrap.getBoundingClientRect();
+        liveMapTooltip.style.left = `${e.clientX - rect.left}px`;
+        liveMapTooltip.style.top = `${e.clientY - rect.top}px`;
+        liveMapTooltip.textContent =
+          `${sat.name} · ${sat.latDeg.toFixed(1)}°,${sat.lonDeg.toFixed(1)}° · ${sat.altKm.toFixed(0)}km · ${sat.speedKmS ? sat.speedKmS.toFixed(2) + 'km/s' : ''}`;
+        liveMapTooltip.style.display = 'block';
+      } else if (liveMapTooltip) {
+        liveMapTooltip.style.display = 'none';
+      }
+      drawLiveMap();
+    });
+
+    liveMapCanvas?.addEventListener('pointerleave', () => {
+      liveMapHoverName = null;
+      if (liveMapTooltip) liveMapTooltip.style.display = 'none';
+      drawLiveMap();
+    });
+
+    function formatLiveMapStatus(meta) {
+      if (!meta || !meta.satCount) {
+        return meta?.lastError
+          ? `Gagal ambil TLE: ${meta.lastError}`
+          : 'Mengambil data TLE dari CelesTrak…';
+      }
+      const ago = meta.fetchedAt ? Math.round((Date.now() - meta.fetchedAt) / 60000) : null;
+      const sourceLabel = { network: 'baru diambil', cache: 'cache', 'stale-cache': 'cache lama (fetch gagal)' }[meta.source] || meta.source;
+      const skippedNote = meta.skippedCount ? ` · ${meta.skippedCount} dilewati` : '';
+      return `${meta.satCount} satelit Iridium · TLE ${sourceLabel}${ago !== null ? ` (${ago} menit lalu)` : ''}${skippedNote}`;
+    }
+
+    async function startLiveMap() {
+      if (typeof globalThis.satellite === 'undefined') {
+        toast('satellite.js gagal dimuat (cek koneksi/CDN)', 'error');
+        if (liveMapStatus) liveMapStatus.textContent = 'satellite.js gagal dimuat — cek koneksi internet atau CDN';
+        return;
+      }
+
+      liveMapWrap.style.display = 'block';
+      resizeLiveMapCanvas();
+      btnLiveMapToggle.textContent = 'Matikan Peta Live';
+      liveMapBadge.textContent = 'LOADING';
+      liveMapBadge.classList.remove('live', 'lost');
+      btnLiveMapRefresh.disabled = false;
+
+      liveConstellation = new LiveConstellation({
+        tickMs: 1000,
+        onUpdate: (snapshot) => {
+          latestSnapshot = snapshot;
+          drawLiveMap();
+        },
+        onStatus: (meta) => {
+          if (liveMapStatus) liveMapStatus.textContent = formatLiveMapStatus(meta);
+          liveMapBadge.textContent = meta.satCount ? 'LIVE' : (meta.lastError ? 'ERROR' : 'LOADING');
+          liveMapBadge.classList.toggle('live', !!meta.satCount);
+          liveMapBadge.classList.toggle('lost', !meta.satCount && !!meta.lastError);
+        }
+      });
+
+      await liveConstellation.start();
+    }
+
+    function stopLiveMap() {
+      liveConstellation?.dispose();
+      liveConstellation = null;
+      latestSnapshot = [];
+      liveMapWrap.style.display = 'none';
+      btnLiveMapToggle.textContent = 'Aktifkan Peta Live';
+      liveMapBadge.textContent = 'OFF';
+      liveMapBadge.classList.remove('live', 'lost');
+      btnLiveMapRefresh.disabled = true;
+      if (liveMapStatus) liveMapStatus.textContent = 'Data orbit asli (TLE) dari CelesTrak, dihitung pakai SGP4 · belum aktif';
+    }
+
+    btnLiveMapToggle?.addEventListener('click', () => {
+      if (liveConstellation) stopLiveMap();
+      else startLiveMap();
+    });
+
+    btnLiveMapRefresh?.addEventListener('click', async () => {
+      if (!liveConstellation) return;
+      toast('Mengambil ulang TLE dari CelesTrak…', 'info');
+      await liveConstellation._loadTLE(true);
+    });
+
+    window.addEventListener('resize', () => {
+      if (liveConstellation) resizeLiveMapCanvas();
     });
 
     // Tap sky → baca az/el di titik itu
