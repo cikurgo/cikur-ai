@@ -800,6 +800,53 @@
     .section-divider.sat { color: var(--accent-2); }
     .section-divider.ht { color: var(--accent); }
 
+    /* RF / Video live (SDR WebUSB + virtual link view) */
+    .rf-video-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      margin: 6px 0 8px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #02060c;
+      border: 1px solid var(--border);
+      box-shadow: inset 0 0 24px rgba(0,0,0,0.7);
+    }
+
+    #rf-video-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .rf-video-overlay {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      padding: 8px 10px;
+      background: linear-gradient(transparent, rgba(0,0,0,0.85));
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text-dim);
+      pointer-events: none;
+      line-height: 1.4;
+    }
+
+    .rf-video-overlay strong { color: var(--accent-2); }
+
+    .rf-status-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 10px;
+      margin-top: 4px;
+      font-family: var(--mono);
+      font-size: 9.5px;
+      color: var(--text-dim);
+    }
+
+    .rf-status-row .ok { color: var(--accent); }
+    .rf-status-row .warn { color: var(--warn); }
+    .rf-status-row .bad { color: var(--danger); }
+
     .ops-grid .btn.acting {
       animation: ops-pulse 0.6s ease-in-out 2;
       background: rgba(59, 130, 246, 0.25);
@@ -1253,6 +1300,42 @@
           </div>
         </div>
 
+        <!-- RF / VIDEO LIVE — WebUSB SDR + view dari virtual.js -->
+        <div class="panel-section" id="rf-video-panel">
+          <h3 class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/>
+            </svg>
+            RF / Video Live
+            <span class="otonom-badge" id="rf-badge" style="margin-left:auto;">OFF</span>
+          </h3>
+          <div style="display:flex;gap:6px;margin-bottom:6px;">
+            <button class="btn btn-full" id="btn-rf-open" type="button" title="WebUSB RTL-SDR (butuh hardware + izin)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M1.42 9a16 16 0 0121.16 0"/><path d="M8.53 16.11a6 6 0 016.95 0"/><circle cx="12" cy="20" r="1.5" fill="currentColor"/></svg>
+              Buka RF (SDR)
+            </button>
+            <button class="btn" id="btn-rf-close" type="button" disabled title="Tutup stream USB">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="rf-video-wrap">
+            <canvas id="rf-video-canvas"></canvas>
+            <div class="rf-video-overlay" id="rf-video-overlay">
+              <strong>Link view</strong> · disetir fisika virtual.js · RF hardware opsional
+            </div>
+          </div>
+          <div class="rf-status-row" id="rf-status-row">
+            <span id="rf-st-usb">WebUSB: —</span>
+            <span id="rf-st-dev">Device: —</span>
+            <span id="rf-st-iq">IQ: —</span>
+            <span id="rf-st-dop">Doppler: —</span>
+          </div>
+          <div id="rf-hint" style="margin-top:6px;font-family:var(--mono);font-size:9px;color:var(--text-dim);line-height:1.45;">
+            Tanpa RTL-SDR: canvas menampilkan spektrum link dari LQM/SNR/Doppler (cgo-satellite-virtual.js).
+            Dengan SDR + Wasm decoder: IQ nyata → decode → frame (cgo-satellite.real-connection.js).
+          </div>
+        </div>
+
         <!-- ════════ HT RADIO ════════ -->
         <div class="section-divider ht">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
@@ -1419,6 +1502,12 @@
       DEFAULT_OBSERVER
     } from './cgo-satellite-live-tle.js';
     import { Manifold } from './cgo-verify-all.js';
+    import {
+      initPhysicalConnection,
+      startRawIQStream,
+      calculateDopplerHz,
+      DEFAULTS as RF_DEFAULTS
+    } from './cgo-satellite.real-connection.js';
 
     // ---------------------------------------------------
     // GLOBAL STATE
@@ -1432,6 +1521,8 @@
       transport: null,
       basePtt: null,
       running: false,
+      rfConnection: null,
+      rfStream: null,
       audioReady: false,
       camera: { x: 0, y: 0, zoom: 1 }
     };
@@ -2821,6 +2912,275 @@
     btnActNext?.addEventListener('click', () => { actNext(); });
     btnActLos?.addEventListener('click', () => { actLos(); });
 
+    // ---------------------------------------------------
+    // RF / VIDEO LIVE — real-connection.js + virtual.js link view
+    // ---------------------------------------------------
+    const rfCanvas = $('rf-video-canvas');
+    const rfCtx = rfCanvas?.getContext('2d');
+    const rfBadge = $('rf-badge');
+    const rfOverlay = $('rf-video-overlay');
+    const rfStUsb = $('rf-st-usb');
+    const rfStDev = $('rf-st-dev');
+    const rfStIq = $('rf-st-iq');
+    const rfStDop = $('rf-st-dop');
+    const btnRfOpen = $('btn-rf-open');
+    const btnRfClose = $('btn-rf-close');
+
+    let rfIqBytes = 0;
+    let rfIqChunks = 0;
+    let rfSpectrum = new Float32Array(64);
+    let rfMode = 'virtual'; // virtual | usb | usb+wasm
+
+    function resizeRfCanvas() {
+      if (!rfCanvas || !rfCtx) return;
+      const wrap = rfCanvas.parentElement;
+      if (!wrap) return;
+      const rect = wrap.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      rfCanvas.width = Math.max(1, Math.round(rect.width * dpr));
+      rfCanvas.height = Math.max(1, Math.round(rect.height * dpr));
+      rfCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      rfCanvas._cssW = rect.width;
+      rfCanvas._cssH = rect.height;
+    }
+
+    /** Spektrum link dari fisika virtual (selalu jalan, offline-capable) */
+    function drawRfLinkView() {
+      if (!rfCtx || !rfCanvas) return;
+      const w = rfCanvas._cssW || 280;
+      const h = rfCanvas._cssH || 160;
+      rfCtx.clearRect(0, 0, w, h);
+
+      // Background
+      const g = rfCtx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, '#041018');
+      g.addColorStop(1, '#01050a');
+      rfCtx.fillStyle = g;
+      rfCtx.fillRect(0, 0, w, h);
+
+      const r = lastSatResult;
+      const m = r?.metrics || {};
+      const lqm = r?.lqm === -Infinity || r?.lqm == null ? -10 : r.lqm;
+      const snr = Number.isFinite(m.snrDb) ? m.snrDb : -5;
+      const elev = m.elevationDeg ?? 0;
+      const dopRate = m.dopplerRateHzPerSec ?? 0;
+      const inPass = !!m.inPass;
+
+      // Carrier offset: prioritaskan dopplerShiftHz (real-connection formula via range-rate)
+      let dopShift = m.dopplerShiftHz;
+      if (!Number.isFinite(dopShift) && Number.isFinite(liveTarget?.rangeRateKmS)) {
+        try {
+          dopShift = calculateDopplerHz(liveTarget.rangeRateKmS * 1000, SAT_CONSTANTS.FREQ_MHZ * 1e6);
+        } catch { dopShift = 0; }
+      }
+      if (!Number.isFinite(dopShift)) dopShift = 0;
+
+      // USB mode: spektrum sudah diisi IQ meter; virtual mode: bangun dari LQM
+      if (rfMode !== 'usb' || !rfIqChunks) {
+        const center = 32 + Math.max(-24, Math.min(24, dopShift / 2000));
+        const peak = inPass ? Math.max(0.15, Math.min(1, (lqm + 5) / 40)) : 0.08;
+        for (let i = 0; i < 64; i++) {
+          const dist = Math.abs(i - center);
+          const lobe = Math.exp(-dist * dist / 40) * peak;
+          const noise = 0.02 + Math.random() * 0.04 * (inPass ? 1 : 0.5);
+          rfSpectrum[i] = rfSpectrum[i] * 0.75 + (lobe + noise) * 0.25;
+        }
+      }
+      const center = 32 + Math.max(-24, Math.min(24, dopShift / 2000));
+      const dop = dopRate;
+
+      // Waterfall-ish bars
+      const barW = w / 64;
+      for (let i = 0; i < 64; i++) {
+        const v = rfSpectrum[i];
+        const bh = v * (h - 20);
+        const x = i * barW;
+        const y = h - 8 - bh;
+        const hue = inPass ? 140 - v * 40 : 210;
+        rfCtx.fillStyle = `hsla(${hue}, 70%, ${30 + v * 40}%, 0.9)`;
+        rfCtx.fillRect(x + 0.5, y, Math.max(1, barW - 1), bh);
+      }
+
+      // Baseline
+      rfCtx.strokeStyle = 'rgba(42,54,70,0.8)';
+      rfCtx.beginPath();
+      rfCtx.moveTo(0, h - 8);
+      rfCtx.lineTo(w, h - 8);
+      rfCtx.stroke();
+
+      // Center marker (carrier)
+      const cx = (center / 64) * w;
+      rfCtx.strokeStyle = 'rgba(59,130,246,0.5)';
+      rfCtx.setLineDash([3, 3]);
+      rfCtx.beginPath();
+      rfCtx.moveTo(cx, 4);
+      rfCtx.lineTo(cx, h - 8);
+      rfCtx.stroke();
+      rfCtx.setLineDash([]);
+
+      // HUD text
+      rfCtx.fillStyle = 'rgba(229,231,235,0.75)';
+      rfCtx.font = '10px ui-monospace, monospace';
+      rfCtx.fillText(
+        `${rfMode === 'usb' ? 'USB IQ' : 'VIRTUAL RF'} · LQM ${lqm.toFixed?.(1) ?? lqm} · el ${Number(elev).toFixed(0)}° · SNR ${Number(snr).toFixed?.(1) ?? snr}`,
+        8, 14
+      );
+
+      if (rfOverlay) {
+        const name = liveTarget?.name || m.name || '—';
+        rfOverlay.innerHTML = `<strong>${name}</strong> · ${r?.state || '—'} · Doppler rate ${Number(dop).toFixed(0)} Hz/s · sumber ${m.source || 'sim'}`;
+      }
+
+      // Doppler from virtual range-rate approx for status
+      if (rfStDop) {
+        try {
+          // range rate proxy: doppler rate not radial; show calculated if we have rangeRate
+          const rr = liveTarget?.rangeRateKmS;
+          if (Number.isFinite(rr)) {
+            const fd = calculateDopplerHz(rr * 1000, SAT_CONSTANTS.FREQ_MHZ * 1e6);
+            rfStDop.textContent = `Doppler: ${(fd / 1000).toFixed(1)} kHz`;
+            rfStDop.className = 'ok';
+          } else {
+            rfStDop.textContent = `Doppler rate: ${Number(dop).toFixed(0)} Hz/s`;
+            rfStDop.className = inPass ? 'ok' : '';
+          }
+        } catch {
+          rfStDop.textContent = 'Doppler: —';
+        }
+      }
+    }
+
+    function updateRfUsbStatus() {
+      const hasUsb = !!(globalThis.navigator && globalThis.navigator.usb);
+      if (rfStUsb) {
+        rfStUsb.textContent = hasUsb ? 'WebUSB: ya' : 'WebUSB: tidak';
+        rfStUsb.className = hasUsb ? 'ok' : 'warn';
+      }
+      if (rfStDev) {
+        const open = !!globalState.rfConnection?.device?.opened;
+        rfStDev.textContent = open ? `Device: RTL ${RF_DEFAULTS.productId.toString(16)}` : 'Device: —';
+        rfStDev.className = open ? 'ok' : '';
+      }
+      if (rfStIq) {
+        rfStIq.textContent = rfIqChunks
+          ? `IQ: ${(rfIqBytes / 1024).toFixed(0)} KB · ${rfIqChunks} chunk`
+          : 'IQ: —';
+        rfStIq.className = rfIqChunks ? 'ok' : '';
+      }
+      if (rfBadge) {
+        if (globalState.rfStream?.running) {
+          rfBadge.textContent = 'USB LIVE';
+          rfBadge.classList.add('live');
+        } else if (linkConnected || lastSatResult?.metrics?.inPass) {
+          rfBadge.textContent = 'VIRTUAL';
+          rfBadge.classList.add('live');
+        } else {
+          rfBadge.textContent = 'OFF';
+          rfBadge.classList.remove('live');
+        }
+      }
+    }
+
+    /**
+     * IQ meter loop tanpa Wasm (kontrak startRawIQStream butuh processIQChunk).
+     * Tetap memakai device + transferIn dari real-connection / initPhysicalConnection.
+     * Saat Wasm decoder tersedia, ganti ke startRawIQStream + SatelliteDisplay.
+     */
+    function startIqMeterStream(connection) {
+      const { device, config } = connection;
+      let running = true;
+      const stop = () => { running = false; };
+
+      (async () => {
+        let failures = 0;
+        while (running) {
+          try {
+            if (!device.opened) throw new Error('USB device tertutup');
+            const result = await device.transferIn(config.endpointNumber, config.transferSize);
+            failures = 0;
+            if (!result || result.status !== 'ok' || !result.data?.byteLength) continue;
+
+            const len = result.data.byteLength;
+            rfIqBytes += len;
+            rfIqChunks++;
+
+            // Estimasi energi kasar dari sampel 8-bit IQ → dorong spektrum RF
+            const bytes = new Uint8Array(result.data.buffer, result.data.byteOffset, len);
+            let acc = 0;
+            const step = Math.max(1, Math.floor(len / 64));
+            for (let b = 0; b < 64; b++) {
+              const i = Math.min(len - 2, b * step);
+              const i8 = bytes[i] - 128;
+              const q8 = bytes[i + 1] - 128;
+              const mag = Math.sqrt(i8 * i8 + q8 * q8) / 128;
+              acc += mag;
+              rfSpectrum[b] = rfSpectrum[b] * 0.85 + mag * 0.15;
+            }
+          } catch (error) {
+            failures++;
+            if (failures > (config.maxReconnectAttempts || 5)) {
+              running = false;
+              toast('IQ stream putus: ' + (error.message || error), 'error');
+              break;
+            }
+            await new Promise((r) => setTimeout(r, config.reconnectDelayMs || 1000));
+          }
+        }
+        running = false;
+      })();
+
+      return { stop, get running() { return running; } };
+    }
+
+    async function openRfHardware() {
+      try {
+        if (!navigator.usb) {
+          toast('WebUSB tidak tersedia di browser ini', 'error');
+          return;
+        }
+        toast('Pilih perangkat RTL-SDR…', 'info');
+        const connection = await initPhysicalConnection();
+        globalState.rfConnection = connection;
+
+        // IQ live meter (tanpa Wasm). Path penuh: startRawIQStream + SatelliteDisplay.
+        globalState.rfStream = startIqMeterStream(connection);
+        rfMode = 'usb';
+        btnRfClose.disabled = false;
+        btnRfOpen.classList.add('connected');
+
+        toast('USB IQ live · spektrum dari sampel mentah · video decode butuh Wasm', 'success');
+        pushPassEvent('RF USB IQ STREAM · meter aktif');
+        updateRfUsbStatus();
+      } catch (err) {
+        toast('RF USB: ' + (err.message || err), 'error');
+        updateRfUsbStatus();
+      }
+    }
+
+    function closeRfHardware() {
+      try { globalState.rfStream?.stop?.(); } catch { /* */ }
+      globalState.rfStream = null;
+      try { globalState.rfConnection?.device?.close?.(); } catch { /* */ }
+      globalState.rfConnection = null;
+      rfIqBytes = 0;
+      rfIqChunks = 0;
+      rfMode = 'virtual';
+      btnRfClose.disabled = true;
+      btnRfOpen.classList.remove('connected');
+      toast('RF USB ditutup · kembali ke virtual link view', 'info');
+      updateRfUsbStatus();
+    }
+
+    btnRfOpen?.addEventListener('click', () => { openRfHardware(); });
+    btnRfClose?.addEventListener('click', () => { closeRfHardware(); });
+
+    // RF canvas loop (virtual spectrum always)
+    function rfAnimLoop() {
+      drawRfLinkView();
+      updateRfUsbStatus();
+      requestAnimationFrame(rfAnimLoop);
+    }
+
     // Sky tools
     btnSkyDome?.addEventListener('click', () => {
       btnSkyDome.classList.add('active');
@@ -2842,11 +3202,14 @@
     const chEmptyEl = $('ch-empty');
 
     /** Range rate (km/s) → rough Doppler shift (Hz) @ L-band */
+    /** Doppler carrier shift — pakai rumus resmi real-connection.js */
     function rangeRateToDopplerHz(rangeRateKmS) {
       if (!Number.isFinite(rangeRateKmS)) return 0;
-      // f_d = -(ṙ/c) * f_c ; ṙ in m/s
-      const c = 299792.458; // km/s
-      return -(rangeRateKmS / c) * SAT_CONSTANTS.FREQ_MHZ * 1e6;
+      try {
+        return calculateDopplerHz(rangeRateKmS * 1000, SAT_CONSTANTS.FREQ_MHZ * 1e6);
+      } catch {
+        return 0;
+      }
     }
 
     function enrichSnapshotWithDoppler(snapshot) {
@@ -3273,10 +3636,15 @@
       injectRadioStyles();
       resizeCanvas();
       resizeSkyCanvas();
+      resizeRfCanvas();
       window.addEventListener('resize', () => {
         resizeCanvas();
         resizeSkyCanvas();
+        resizeRfCanvas();
+        if (liveConstellation) resizeLiveMapCanvas();
       });
+      updateRfUsbStatus();
+      requestAnimationFrame(rfAnimLoop);
 
       globalState.radarLayer = initRadarLayer(null, {
         canvas,
