@@ -605,20 +605,37 @@
       color: var(--danger);
     }
 
-    /* Sky view (Mata) */
+    /* Sky view (Mata) — large interactive dome */
+    .sky-toolbar {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+
+    .sky-toolbar .btn {
+      padding: 5px 8px;
+      font-size: 9px;
+      flex: 1;
+      min-width: 0;
+    }
+
     .sky-wrap {
       position: relative;
-      width: 148px;
-      height: 148px;
-      margin: 8px auto 10px;
+      width: 100%;
+      max-width: 280px;
+      aspect-ratio: 1;
+      margin: 0 auto 8px;
       border-radius: 50%;
       overflow: hidden;
-      background: radial-gradient(circle at 50% 48%, #0c1a2e 0%, #050a12 72%);
+      background: radial-gradient(circle at 50% 45%, #0e1c32 0%, #060b14 55%, #03060c 100%);
       border: 2px solid #2a3646;
       box-shadow:
-        inset 0 0 24px rgba(0,0,0,0.65),
-        0 0 0 1px rgba(34, 197, 94, 0.08);
+        inset 0 0 40px rgba(0,0,0,0.7),
+        0 0 12px rgba(59, 130, 246, 0.12);
       flex-shrink: 0;
+      touch-action: none;
+      cursor: crosshair;
     }
 
     #sky-canvas {
@@ -629,15 +646,63 @@
 
     .sky-label {
       position: absolute;
-      bottom: 8px;
-      left: 4px; right: 4px;
+      bottom: 10px;
+      left: 8px; right: 8px;
       text-align: center;
       font-family: var(--mono);
-      font-size: 8px;
-      color: rgba(229,231,235,0.75);
+      font-size: 9px;
+      color: rgba(229,231,235,0.85);
       pointer-events: none;
       text-shadow: 0 1px 4px #000;
-      line-height: 1.25;
+      line-height: 1.3;
+    }
+
+    .sky-hud {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      display: flex;
+      justify-content: space-between;
+      pointer-events: none;
+      font-family: var(--mono);
+      font-size: 8px;
+      color: rgba(138,148,166,0.9);
+      text-shadow: 0 1px 3px #000;
+    }
+
+    .sky-hud span { background: rgba(0,0,0,0.35); padding: 2px 5px; border-radius: 3px; }
+
+    /* Live space window (ISS Earth feed — public) */
+    .space-live-wrap {
+      display: none;
+      margin-bottom: 8px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: #000;
+      aspect-ratio: 16/9;
+      position: relative;
+    }
+
+    .space-live-wrap.show { display: block; }
+
+    .space-live-wrap iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+    }
+
+    .space-live-caption {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      background: linear-gradient(transparent, rgba(0,0,0,0.85));
+      padding: 8px 10px 6px;
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text-dim);
+      pointer-events: none;
     }
 
     /* Orbit / path info card */
@@ -896,10 +961,34 @@
             <span class="otonom-badge" id="otonom-badge">STANDBY</span>
           </div>
 
-          <!-- Mata: sky dome -->
-          <div class="sky-wrap" title="Posisi satelit di langit (elevasi &amp; azimuth)">
+          <!-- Mata: sky tools + large dome -->
+          <div class="sky-toolbar">
+            <button class="btn active" id="btn-sky-dome" type="button" title="Kubah langit">Dome</button>
+            <button class="btn" id="btn-sky-stars" type="button" title="Toggle bintang">Stars</button>
+            <button class="btn" id="btn-sky-iss" type="button" title="Jendela antariksa ISS (live Earth)">ISS Live</button>
+          </div>
+
+          <div class="sky-wrap" id="sky-wrap" title="Tap untuk baca az/el · geser trail">
+            <div class="sky-hud">
+              <span id="sky-hud-left">AOS →</span>
+              <span id="sky-hud-right">← LOS</span>
+            </div>
             <canvas id="sky-canvas"></canvas>
             <div class="sky-label" id="sky-label">SKY VIEW · menunggu pass</div>
+          </div>
+
+          <!-- Optional: public ISS Earth-viewing stream (bukan satelit Iridium spesifik) -->
+          <div class="space-live-wrap" id="space-live-wrap">
+            <iframe id="space-live-frame"
+              title="ISS Live Earth"
+              allow="autoplay; encrypted-media; picture-in-picture"
+              allowfullscreen
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"
+              src=""></iframe>
+            <div class="space-live-caption">
+              NASA / ISS HD Earth viewing · bukan feed Iridium spesifik · untuk “rasa antariksa”
+            </div>
           </div>
 
           <!-- Orbit / satellite path info -->
@@ -1195,6 +1284,14 @@
     const oiPhase     = $('oi-phase');
     const oiNarrative = $('oi-narrative');
     const oiPassLog   = $('oi-pass-log');
+    const skyWrap     = $('sky-wrap');
+    const skyHudLeft  = $('sky-hud-left');
+    const skyHudRight = $('sky-hud-right');
+    const btnSkyDome  = $('btn-sky-dome');
+    const btnSkyStars = $('btn-sky-stars');
+    const btnSkyIss   = $('btn-sky-iss');
+    const spaceLiveWrap = $('space-live-wrap');
+    const spaceLiveFrame = $('space-live-frame');
 
     // Mode Otonom state
     let currentPhysMode = PHYSICS_MODE.REALISTIC;
@@ -1206,6 +1303,24 @@
     let passSerial = 0;
     let lastPassPhase = '';
     const passEventLog = []; // {t, text}
+    let skyShowStars = true;
+    let skyProbe = null; // {az, el} from tap
+    let issLiveOn = false;
+
+    // Deterministic star field (once)
+    const STAR_FIELD = Array.from({ length: 60 }, (_, i) => {
+      const s = Math.sin(i * 12.9898) * 43758.5453;
+      const f = s - Math.floor(s);
+      const s2 = Math.sin(i * 78.233) * 43758.5453;
+      const f2 = s2 - Math.floor(s2);
+      return { u: f, v: f2, b: 0.35 + (f * f2) * 0.65 };
+    });
+
+    // Public ISS Earth-viewing style streams (rotate if one fails)
+    const ISS_STREAMS = [
+      'https://www.youtube.com/embed/xRPjKQtRX4c?autoplay=1&mute=1&controls=1&rel=0',
+      'https://www.youtube.com/embed/EEIk7gwdyw0?autoplay=1&mute=1&controls=1&rel=0'
+    ];
 
     function azToCardinal(az) {
       const a = ((az % 360) + 360) % 360;
@@ -1798,112 +1913,170 @@
     // ---------------------------------------------------
 
     function resizeSkyCanvas() {
-      if (!skyCanvas || !skyCtx) return;
-      const rect = skyCanvas.parentElement.getBoundingClientRect();
-      const d = window.devicePixelRatio || 1;
-      const size = Math.min(rect.width, rect.height) || 140;
+      if (!skyCanvas || !skyCtx || !skyWrap) return;
+      const rect = skyWrap.getBoundingClientRect();
+      const d = Math.min(window.devicePixelRatio || 1, 2.5);
+      const size = Math.max(160, Math.min(rect.width, rect.height) || 220);
       skyCanvas.width  = Math.floor(size * d);
       skyCanvas.height = Math.floor(size * d);
       skyCtx.setTransform(d, 0, 0, d, 0, 0);
       skyCanvas._cssSize = size;
     }
 
+    function skyPolarToXY(cx, cy, R, azDeg, elDeg) {
+      const elev = Math.max(0, Math.min(90, elDeg));
+      const rNorm = 1 - elev / 90;
+      const azRad = (azDeg * Math.PI) / 180;
+      return {
+        x: cx + R * rNorm * Math.sin(azRad),
+        y: cy - R * rNorm * Math.cos(azRad)
+      };
+    }
+
     /**
-     * Kubah langit: zenith pusat, horizon tepi.
-     * Trail = jalur yang baru dilewati; panah = arah menuju.
+     * Kubah langit besar: bintang, path prediksi, trail, AOS/LOS, probe tap.
      */
     function drawSkyView(metrics, state) {
       if (!skyCtx || !skyCanvas) return;
-      const size = skyCanvas._cssSize || 148;
+      const size = skyCanvas._cssSize || 220;
       const cx = size / 2;
       const cy = size / 2;
-      const R = size / 2 - 3;
+      const R = size / 2 - 4;
 
       skyCtx.clearRect(0, 0, size, size);
 
-      // Outer ring (horizon)
+      // Disk + subtle limb glow
       skyCtx.beginPath();
       skyCtx.arc(cx, cy, R, 0, Math.PI * 2);
-      skyCtx.fillStyle = '#071018';
+      const grad = skyCtx.createRadialGradient(cx, cy - R * 0.15, R * 0.1, cx, cy, R);
+      grad.addColorStop(0, '#0f2138');
+      grad.addColorStop(0.55, '#081220');
+      grad.addColorStop(1, '#04080e');
+      skyCtx.fillStyle = grad;
       skyCtx.fill();
-      skyCtx.strokeStyle = 'rgba(42,54,70,0.9)';
-      skyCtx.lineWidth = 1.5;
+
+      // Stars
+      if (skyShowStars) {
+        for (const st of STAR_FIELD) {
+          const ang = st.u * Math.PI * 2;
+          const rr = st.v * R * 0.92;
+          const x = cx + Math.cos(ang) * rr;
+          const y = cy + Math.sin(ang) * rr;
+          const dx = x - cx, dy = y - cy;
+          if (dx * dx + dy * dy > R * R) continue;
+          skyCtx.beginPath();
+          skyCtx.arc(x, y, 0.6 + st.b * 1.1, 0, Math.PI * 2);
+          skyCtx.fillStyle = `rgba(220,230,255,${0.25 + st.b * 0.55})`;
+          skyCtx.fill();
+        }
+      }
+
+      // Horizon ring
+      skyCtx.beginPath();
+      skyCtx.arc(cx, cy, R, 0, Math.PI * 2);
+      skyCtx.strokeStyle = 'rgba(90,120,160,0.55)';
+      skyCtx.lineWidth = 2;
       skyCtx.stroke();
 
-      // Elevation rings 30° / 60° + labels
-      skyCtx.font = '7px ui-monospace, monospace';
+      // Elevation rings
+      skyCtx.font = `${Math.max(8, size * 0.035)}px ui-monospace, monospace`;
       skyCtx.textAlign = 'left';
       skyCtx.textBaseline = 'middle';
-      for (const el of [30, 60]) {
+      for (const el of [15, 30, 60]) {
         const r = R * (1 - el / 90);
         skyCtx.beginPath();
         skyCtx.arc(cx, cy, r, 0, Math.PI * 2);
-        skyCtx.strokeStyle = 'rgba(42,54,70,0.45)';
-        skyCtx.lineWidth = 0.8;
+        skyCtx.strokeStyle = el === 30 ? 'rgba(42,54,70,0.7)' : 'rgba(42,54,70,0.35)';
+        skyCtx.lineWidth = 0.9;
         skyCtx.stroke();
-        skyCtx.fillStyle = 'rgba(138,148,166,0.45)';
-        skyCtx.fillText(el + '°', cx + 3, cy - r);
+        skyCtx.fillStyle = 'rgba(138,148,166,0.5)';
+        skyCtx.fillText(el + '°', cx + 4, cy - r);
       }
 
-      // Zenith mark
+      // Zenith
       skyCtx.beginPath();
-      skyCtx.arc(cx, cy, 2, 0, Math.PI * 2);
-      skyCtx.fillStyle = 'rgba(138,148,166,0.5)';
+      skyCtx.arc(cx, cy, 2.2, 0, Math.PI * 2);
+      skyCtx.fillStyle = 'rgba(180,200,220,0.55)';
       skyCtx.fill();
 
       // Cardinals
-      skyCtx.fillStyle = 'rgba(138,148,166,0.75)';
-      skyCtx.font = 'bold 8px ui-monospace, monospace';
+      const fSize = Math.max(9, size * 0.04);
+      skyCtx.fillStyle = 'rgba(200,210,230,0.85)';
+      skyCtx.font = `bold ${fSize}px ui-monospace, monospace`;
       skyCtx.textAlign = 'center';
       skyCtx.textBaseline = 'middle';
-      skyCtx.fillText('N', cx, cy - R + 9);
-      skyCtx.fillText('S', cx, cy + R - 9);
-      skyCtx.fillText('E', cx + R - 9, cy);
-      skyCtx.fillText('W', cx - R + 9, cy);
+      skyCtx.fillText('N', cx, cy - R + fSize + 2);
+      skyCtx.fillText('S', cx, cy + R - fSize - 2);
+      skyCtx.fillText('E', cx + R - fSize - 2, cy);
+      skyCtx.fillText('W', cx - R + fSize + 2, cy);
 
-      const inPass = metrics?.inPass && metrics.elevationDeg > 0;
-      if (!inPass) {
-        skyCtx.fillStyle = 'rgba(138,148,166,0.25)';
-        skyCtx.font = '8px ui-monospace, monospace';
-        skyCtx.fillText('no pass', cx, cy + 12);
-        return;
-      }
-
-      const elev = Math.max(0, Math.min(90, metrics.elevationDeg));
-      const azRad = (satAzimuth * Math.PI) / 180;
-      const rNorm = 1 - elev / 90;
-      const sx = cx + R * rNorm * Math.sin(azRad);
-      const sy = cy - R * rNorm * Math.cos(azRad);
-
-      if (!drawSkyView._trail) drawSkyView._trail = [];
-      drawSkyView._trail.push({ x: sx, y: sy, az: satAzimuth });
-      if (drawSkyView._trail.length > 48) drawSkyView._trail.shift();
-
-      // Full predicted arc E→W (ghost path)
+      // Predicted arc + AOS/LOS markers
+      const maxEl = SAT_CONSTANTS.MAX_ELEVATION_DEG || 75;
       skyCtx.beginPath();
-      skyCtx.strokeStyle = 'rgba(59,130,246,0.18)';
-      skyCtx.lineWidth = 1.2;
-      skyCtx.setLineDash([3, 3]);
+      skyCtx.strokeStyle = 'rgba(59,130,246,0.28)';
+      skyCtx.lineWidth = 1.6;
+      skyCtx.setLineDash([4, 4]);
       let first = true;
-      for (let t = 0; t <= 1.001; t += 0.04) {
+      let aosPt = null, losPt = null, zenPt = null;
+      for (let t = 0; t <= 1.001; t += 0.025) {
         const normT = t - 0.5;
-        const elPred = 75 * (1 - 4 * normT * normT);
+        const elPred = maxEl * (1 - 4 * normT * normT);
         if (elPred < 0) continue;
         const azPred = 90 + t * 180;
-        const rn = 1 - Math.max(0, Math.min(90, elPred)) / 90;
-        const px = cx + R * rn * Math.sin((azPred * Math.PI) / 180);
-        const py = cy - R * rn * Math.cos((azPred * Math.PI) / 180);
-        if (first) { skyCtx.moveTo(px, py); first = false; }
-        else skyCtx.lineTo(px, py);
+        const p = skyPolarToXY(cx, cy, R, azPred, elPred);
+        if (first) { skyCtx.moveTo(p.x, p.y); first = false; aosPt = p; }
+        else skyCtx.lineTo(p.x, p.y);
+        losPt = p;
+        if (!zenPt || elPred >= maxEl - 0.5) zenPt = p;
       }
       skyCtx.stroke();
       skyCtx.setLineDash([]);
 
+      // AOS / LOS ticks
+      const mark = (pt, label, color) => {
+        if (!pt) return;
+        skyCtx.beginPath();
+        skyCtx.arc(pt.x, pt.y, 3.5, 0, Math.PI * 2);
+        skyCtx.fillStyle = color;
+        skyCtx.fill();
+        skyCtx.fillStyle = color;
+        skyCtx.font = `bold ${Math.max(8, size * 0.032)}px ui-monospace, monospace`;
+        skyCtx.textAlign = 'center';
+        skyCtx.fillText(label, pt.x, pt.y - 8);
+      };
+      mark(aosPt, 'AOS', '#3b82f6');
+      mark(losPt, 'LOS', '#ef4444');
+      if (zenPt) mark(zenPt, 'MAX', '#22c55e');
+
+      const inPass = metrics?.inPass && metrics.elevationDeg > 0;
+      if (!inPass) {
+        skyCtx.fillStyle = 'rgba(138,148,166,0.4)';
+        skyCtx.font = `${Math.max(9, size * 0.038)}px ui-monospace, monospace`;
+        skyCtx.textAlign = 'center';
+        skyCtx.fillText('menunggu AOS…', cx, cy + 14);
+        if (skyProbe) {
+          const pp = skyPolarToXY(cx, cy, R, skyProbe.az, skyProbe.el);
+          skyCtx.beginPath();
+          skyCtx.arc(pp.x, pp.y, 4, 0, Math.PI * 2);
+          skyCtx.strokeStyle = '#f59e0b';
+          skyCtx.lineWidth = 1.2;
+          skyCtx.stroke();
+        }
+        return;
+      }
+
+      const elev = Math.max(0, Math.min(90, metrics.elevationDeg));
+      const { x: sx, y: sy } = skyPolarToXY(cx, cy, R, satAzimuth, elev);
+
+      if (!drawSkyView._trail) drawSkyView._trail = [];
+      drawSkyView._trail.push({ x: sx, y: sy, az: satAzimuth, el: elev });
+      if (drawSkyView._trail.length > 64) drawSkyView._trail.shift();
+
       // Traveled trail
       if (drawSkyView._trail.length > 1) {
         skyCtx.beginPath();
-        skyCtx.strokeStyle = 'rgba(59,130,246,0.55)';
-        skyCtx.lineWidth = 2;
+        skyCtx.strokeStyle = 'rgba(59,130,246,0.7)';
+        skyCtx.lineWidth = 2.4;
         skyCtx.moveTo(drawSkyView._trail[0].x, drawSkyView._trail[0].y);
         for (let i = 1; i < drawSkyView._trail.length; i++) {
           skyCtx.lineTo(drawSkyView._trail[i].x, drawSkyView._trail[i].y);
@@ -1915,30 +2088,48 @@
       const isDegraded = state === SAT_STATE.DEGRADED;
       const color = isTracking ? '#22c55e' : isDegraded ? '#f59e0b' : '#3b82f6';
 
-      // Glow + core
-      skyCtx.beginPath();
-      skyCtx.arc(sx, sy, 9, 0, Math.PI * 2);
-      skyCtx.fillStyle = color + '28';
-      skyCtx.fill();
-      skyCtx.beginPath();
-      skyCtx.arc(sx, sy, 4.5, 0, Math.PI * 2);
+      // Satellite body + solar panel wings (simple icon)
+      skyCtx.save();
+      skyCtx.translate(sx, sy);
+      skyCtx.rotate((satAzimuth * Math.PI) / 180);
+      skyCtx.fillStyle = color + '40';
+      skyCtx.fillRect(-10, -3, 20, 6);
       skyCtx.fillStyle = color;
-      skyCtx.fill();
+      skyCtx.fillRect(-4, -4, 8, 8);
       skyCtx.strokeStyle = '#fff';
       skyCtx.lineWidth = 1;
-      skyCtx.stroke();
+      skyCtx.strokeRect(-4, -4, 8, 8);
+      skyCtx.restore();
 
-      // Direction tick (toward next azimuth)
-      const nextAz = satAzimuth + 8;
-      const nextRn = rNorm;
-      const nx = cx + R * nextRn * Math.sin((nextAz * Math.PI) / 180);
-      const ny = cy - R * nextRn * Math.cos((nextAz * Math.PI) / 180);
+      // Outer pulse
       skyCtx.beginPath();
-      skyCtx.moveTo(sx, sy);
-      skyCtx.lineTo(nx, ny);
-      skyCtx.strokeStyle = color;
+      skyCtx.arc(sx, sy, 12, 0, Math.PI * 2);
+      skyCtx.strokeStyle = color + '55';
       skyCtx.lineWidth = 1.5;
       skyCtx.stroke();
+
+      // Direction arrow
+      const tip = skyPolarToXY(cx, cy, R, satAzimuth + 10, elev);
+      skyCtx.beginPath();
+      skyCtx.moveTo(sx, sy);
+      skyCtx.lineTo(tip.x, tip.y);
+      skyCtx.strokeStyle = color;
+      skyCtx.lineWidth = 2;
+      skyCtx.stroke();
+
+      // Tap probe
+      if (skyProbe) {
+        const pp = skyPolarToXY(cx, cy, R, skyProbe.az, skyProbe.el);
+        skyCtx.beginPath();
+        skyCtx.arc(pp.x, pp.y, 5, 0, Math.PI * 2);
+        skyCtx.strokeStyle = '#f59e0b';
+        skyCtx.lineWidth = 1.4;
+        skyCtx.stroke();
+        skyCtx.fillStyle = '#f59e0b';
+        skyCtx.font = `bold ${Math.max(8, size * 0.032)}px ui-monospace, monospace`;
+        skyCtx.textAlign = 'center';
+        skyCtx.fillText(`az ${skyProbe.az.toFixed(0)}° el ${skyProbe.el.toFixed(0)}°`, pp.x, pp.y - 10);
+      }
     }
 
     function updateOtonomUI() {
@@ -2157,14 +2348,22 @@
         }
       }
 
-      // Sky label
+      // Sky HUD + label
+      if (skyHudLeft) skyHudLeft.textContent = inPass ? `AOS ✓ · ${satLabel}` : 'AOS →';
+      if (skyHudRight) {
+        skyHudRight.textContent = inPass
+          ? `el ${elev?.toFixed(0) ?? '--'}° · ${azToCardinal(satAzimuth)}`
+          : (interSec > 0 ? `next ${interSec.toFixed(0)}s` : '← LOS');
+      }
       if (skyLabel) {
-        if (inPass) {
-          skyLabel.textContent = `${satLabel} · EL ${elev?.toFixed(0) ?? '--'}° · ${azToCardinal(satAzimuth)}`;
+        if (skyProbe) {
+          skyLabel.textContent = `Probe AZ ${skyProbe.az.toFixed(0)}° · EL ${skyProbe.el.toFixed(0)}° · ${azToCardinal(skyProbe.az)}`;
+        } else if (inPass) {
+          skyLabel.textContent = `${satLabel} · EL ${elev?.toFixed(0) ?? '--'}° · AZ ${satAzimuth.toFixed(0)}° · ${azToCardinal(satAzimuth)}`;
         } else {
           skyLabel.textContent = interSec > 0
-            ? `next pass ~${interSec.toFixed(0)}s`
-            : 'SKY VIEW · menunggu pass';
+            ? `next pass ~${interSec.toFixed(0)}s · path E→W`
+            : 'SKY VIEW · tap untuk probe az/el';
           if (!inPass) drawSkyView._trail = [];
         }
       }
@@ -2207,6 +2406,64 @@
     btnPhysIdeal?.addEventListener('click', () => setPhysicsMode(PHYSICS_MODE.IDEAL));
     btnPhysRealistic?.addEventListener('click', () => setPhysicsMode(PHYSICS_MODE.REALISTIC));
     btnPhysStress?.addEventListener('click', () => setPhysicsMode(PHYSICS_MODE.STRESS));
+
+    // Sky tools
+    btnSkyStars?.addEventListener('click', () => {
+      skyShowStars = !skyShowStars;
+      btnSkyStars.classList.toggle('active', skyShowStars);
+      toast(skyShowStars ? 'Stars ON' : 'Stars OFF', 'info');
+    });
+
+    btnSkyIss?.addEventListener('click', () => {
+      issLiveOn = !issLiveOn;
+      btnSkyIss.classList.toggle('active', issLiveOn);
+      if (spaceLiveWrap) spaceLiveWrap.classList.toggle('show', issLiveOn);
+      if (issLiveOn && spaceLiveFrame) {
+        // Public ISS Earth-viewing style stream (bukan kamera Iridium)
+        spaceLiveFrame.src = ISS_STREAMS[0];
+        toast('ISS Live Earth dibuka (bukan feed Iridium)', 'info');
+      } else if (spaceLiveFrame) {
+        spaceLiveFrame.src = '';
+        toast('ISS Live ditutup', 'info');
+      }
+    });
+
+    btnSkyDome?.addEventListener('click', () => {
+      btnSkyDome.classList.add('active');
+      // Focus: scroll sky into view on mobile
+      skyWrap?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      resizeSkyCanvas();
+    });
+
+    // Tap sky → baca az/el di titik itu
+    function skyPointerToAzEl(clientX, clientY) {
+      if (!skyWrap || !skyCanvas) return null;
+      const rect = skyWrap.getBoundingClientRect();
+      const size = skyCanvas._cssSize || rect.width;
+      const cx = size / 2;
+      const cy = size / 2;
+      const R = size / 2 - 4;
+      const x = ((clientX - rect.left) / rect.width) * size;
+      const y = ((clientY - rect.top) / rect.height) * size;
+      const dx = x - cx;
+      const dy = y - cy;
+      const dist = Math.hypot(dx, dy);
+      if (dist > R) return null;
+      const rNorm = dist / R;
+      const el = Math.max(0, 90 * (1 - rNorm));
+      let az = (Math.atan2(dx, -dy) * 180) / Math.PI;
+      if (az < 0) az += 360;
+      return { az, el };
+    }
+
+    skyWrap?.addEventListener('pointerdown', (e) => {
+      const p = skyPointerToAzEl(e.clientX, e.clientY);
+      if (!p) return;
+      skyProbe = p;
+      if (skyLabel) {
+        skyLabel.textContent = `Probe AZ ${p.az.toFixed(0)}° · EL ${p.el.toFixed(0)}° · ${azToCardinal(p.az)}`;
+      }
+    });
 
     // ---------------------------------------------------
     // STATS
