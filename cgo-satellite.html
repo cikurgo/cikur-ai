@@ -708,6 +708,51 @@
       z-index: 5;
     }
 
+    /* Real-time channel list (visible sats above horizon) */
+    .ch-list {
+      max-height: 140px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      margin-top: 6px;
+    }
+
+    .ch-item {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 6px;
+      align-items: center;
+      padding: 5px 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      font-family: var(--mono);
+      font-size: 10px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .ch-item:hover, .ch-item.active {
+      border-color: var(--accent);
+      background: rgba(34, 197, 94, 0.08);
+    }
+
+    .ch-item .ch-name { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ch-item .ch-el { color: var(--accent); }
+    .ch-item .ch-lqm { color: var(--text-dim); }
+    .ch-item .ch-lqm.good { color: var(--accent); }
+    .ch-item .ch-lqm.warn { color: var(--warn); }
+    .ch-item .ch-lqm.bad { color: var(--danger); }
+
+    .ch-empty {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      padding: 8px;
+      text-align: center;
+    }
+
     /* Orbit / path info card */
     .orbit-info {
       background: rgba(0,0,0,0.28);
@@ -1065,6 +1110,12 @@
           <div id="live-map-status" style="margin-top:6px;font-family:var(--mono);font-size:9.5px;color:var(--text-dim);line-height:1.5;">
             Data orbit asli (TLE) dari CelesTrak, dihitung pakai SGP4 · belum aktif
           </div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:8px;text-transform:uppercase;letter-spacing:0.5px;">
+            Channel real-time · el ≥ 10°
+          </div>
+          <div class="ch-list" id="ch-list">
+            <div class="ch-empty" id="ch-empty">Aktifkan peta live untuk melihat channel</div>
+          </div>
         </div>
 
         <!-- BASE PTT (pusat) -->
@@ -1186,6 +1237,7 @@
       updateSatelliteLink,
       getSatelliteLink,
       resetSatelliteLink,
+      evaluateLinkFromGeo,
       PHYSICS_MODE,
       SAT_STATE,
       SAT_CONSTANTS
@@ -2120,43 +2172,54 @@
     }
 
     function updateOtonomUI() {
-      // Prefer live result from transport, else tick ourselves
-      let result = null;
-      const t = globalState.transport;
-      if (t && typeof t.getSatelliteStatus === 'function') {
-        const st = t.getSatelliteStatus();
-        if (st) {
-          // Rebuild a partial result shape from transport status
-          result = {
-            state: st.state,
-            lqm: st.lqm,
-            packetValid: st.packetValid,
-            per: st.per,
-            metrics: {
-              inPass: st.inPass,
-              elevationDeg: st.elevation,
-              snrDb: null,
-              dopplerRateHzPerSec: null,
-              scintFadeDb: 0,
-              distanceKm: null
-            }
-          };
-        }
+      let result = lastSatResult;
+
+      // Jika live TLE aktif, physics sudah di-feed dari onUpdate — jangan overwrite dengan sim
+      if (!liveConstellation) {
+        try {
+          lastSatResult = updateSatelliteLink(100);
+          result = lastSatResult;
+        } catch { /* keep previous */ }
       }
 
-      // Always tick virtual link for rich metrics + sky animation
-      try {
-        lastSatResult = updateSatelliteLink(100);
-        result = lastSatResult;
-      } catch { /* keep previous */ }
+      // Transport status sebagai fallback tambahan
+      if (!result) {
+        const t = globalState.transport;
+        if (t && typeof t.getSatelliteStatus === 'function') {
+          const st = t.getSatelliteStatus();
+          if (st) {
+            result = {
+              state: st.state,
+              lqm: st.lqm,
+              packetValid: st.packetValid,
+              per: st.per,
+              metrics: {
+                inPass: st.inPass,
+                elevationDeg: st.elevation,
+                snrDb: null,
+                dopplerRateHzPerSec: null,
+                scintFadeDb: 0,
+                distanceKm: null
+              }
+            };
+          }
+        }
+      }
 
       if (!result) return;
 
       const state = result.state || '--';
       const m = result.metrics || {};
-      const elev = m.elevationDeg;
+      const elev = liveTarget ? liveTarget.elDeg : m.elevationDeg;
       const lqm = result.lqm === -Infinity ? null : result.lqm;
-      const inPass = !!m.inPass && elev > 0;
+      const inPass = liveTarget
+        ? (liveTarget.elDeg >= SAT_CONSTANTS.MIN_ELEVATION_DEG)
+        : (!!m.inPass && elev > 0);
+
+      // Azimuth nyata dari TLE
+      if (liveTarget && Number.isFinite(liveTarget.azDeg)) {
+        satAzimuth = liveTarget.azDeg;
+      }
 
       // Badge
       if (otonomBadge) {
@@ -2213,7 +2276,7 @@
         );
       }
       if (satDist) {
-        const d = m.distanceKm;
+        const d = liveTarget?.rangeKm ?? m.distanceKm;
         satDist.textContent = d != null && Number.isFinite(d) && d < 1e6 ? Math.round(d) + ' km' : '-- km';
       }
       if (satInpass) {
@@ -2224,114 +2287,114 @@
       // Pass progress + orbit identity
       let interSec = 0;
       try {
-        const { channel } = getSatelliteLink();
-        const dur = channel.passDuration || SAT_CONSTANTS.PASS_DURATION_SEC;
-        const el = channel.elapsed || 0;
-        satPassElapsed = el;
-        interSec = channel.inPass ? 0 : Math.max(0, (channel.interPassRemaining || 0) / 1000);
-        const pct = inPass ? Math.min(100, (el / dur) * 100) : 0;
-        if (passBarFill) passBarFill.style.width = pct.toFixed(1) + '%';
-        if (passPct) passPct.textContent = pct.toFixed(0) + '%';
-        if (passLabel) {
-          passLabel.textContent = inPass
-            ? `Pass ${el.toFixed(0)}s / ${dur}s`
-            : (interSec > 0
-              ? `Gap ${interSec.toFixed(0)}s → next`
-              : 'Menunggu pass');
+        if (liveTarget && inPass) {
+          // Live: progress ≈ elevasi relatif max (proxy kasar)
+          const pct = Math.min(100, Math.max(0, (elev / 90) * 100));
+          if (passBarFill) passBarFill.style.width = pct.toFixed(1) + '%';
+          if (passPct) passPct.textContent = pct.toFixed(0) + '%';
+          if (passLabel) {
+            passLabel.textContent = `Live · el ${Number(elev).toFixed(1)}° · ${liveTarget.name}`;
+          }
+        } else {
+          const { channel } = getSatelliteLink();
+          const dur = channel.passDuration || SAT_CONSTANTS.PASS_DURATION_SEC;
+          const el = channel.elapsed || 0;
+          satPassElapsed = el;
+          interSec = channel.inPass ? 0 : Math.max(0, (channel.interPassRemaining || 0) / 1000);
+          const pct = inPass ? Math.min(100, (el / dur) * 100) : 0;
+          if (passBarFill) passBarFill.style.width = pct.toFixed(1) + '%';
+          if (passPct) passPct.textContent = pct.toFixed(0) + '%';
+          if (passLabel) {
+            passLabel.textContent = inPass
+              ? `SIM pass ${el.toFixed(0)}s / ${dur}s`
+              : (interSec > 0
+                ? `Gap ${interSec.toFixed(0)}s → next`
+                : (liveConstellation ? 'Menunggu AOS live' : 'Menunggu pass'));
+          }
+          if (!liveTarget) {
+            const normT = (el / dur) - 0.5;
+            satAzimuth = 90 + (normT + 0.5) * 180;
+          }
         }
-        // Azimuth: rise Timur (90°) → zenith → set Barat (270°)
-        const normT = (el / dur) - 0.5;
-        satAzimuth = 90 + (normT + 0.5) * 180;
-
-        // Assign sat identity when a new pass starts
+        // AOS / LOS events (live or sim)
         const wasInPass = drawSkyView._wasInPass === true;
+        const eventName = liveTarget?.name || m.name || 'SAT';
         if (inPass && !wasInPass) {
-          passSerial++;
-          // Iridium-like: 6 planes × 11 sats
-          currentPlane = ((passSerial - 1) % 6) + 1;
-          const slot = ((passSerial - 1) % 11) + 1;
-          currentSatId = (currentPlane - 1) * 11 + slot;
           drawSkyView._trail = [];
-          pushPassEvent(`AOS · IRIDIUM-${String(currentSatId).padStart(2, '0')} plane ${currentPlane}`);
+          pushPassEvent(`AOS · ${eventName} · el ${Number(elev).toFixed(0)}°`);
           lastPassPhase = 'AOS';
         }
         if (!inPass && wasInPass) {
-          pushPassEvent(`LOS · IRIDIUM-${String(currentSatId).padStart(2, '0')} keluar horizon`);
+          pushPassEvent(`LOS · ${eventName}`);
           lastPassPhase = 'LOS';
         }
         drawSkyView._wasInPass = inPass;
 
-        // Phase milestones during pass
         if (inPass) {
-          let phase = 'ASCEND';
-          if (pct < 8) phase = 'AOS';
-          else if (pct < 40) phase = 'ASCEND';
-          else if (pct < 60) phase = 'ZENITH';
-          else if (pct < 92) phase = 'DESCEND';
-          else phase = 'LOS';
+          let phase = 'TRACK';
+          if (elev >= 55) phase = 'ZENITH';
+          else if (elev >= 30) phase = 'HIGH';
+          else if (elev >= 10) phase = 'LOW';
+          else phase = 'AOS';
 
-          if (phase !== lastPassPhase) {
-            if (phase === 'ZENITH') {
-              pushPassEvent(`Zenith · el ${elev?.toFixed(0) ?? '--'}° · puncak pass`);
-            } else if (phase === 'DESCEND' && lastPassPhase === 'ZENITH') {
-              pushPassEvent(`Turun · menuju horizon ${azToCardinal(270)}`);
-            } else if (phase === 'ASCEND' && lastPassPhase === 'AOS') {
-              pushPassEvent(`Naik dari ${azToCardinal(90)} · el ${elev?.toFixed(0) ?? '--'}°`);
-            }
-            lastPassPhase = phase;
+          if (phase !== lastPassPhase && phase === 'ZENITH') {
+            pushPassEvent(`Zenith · ${eventName} · el ${Number(elev).toFixed(0)}°`);
           }
+          lastPassPhase = phase;
 
           if (oiPhase) {
             oiPhase.textContent = phase;
-            oiPhase.className = 'oi-v' + (phase === 'ZENITH' ? ' accent' : phase === 'LOS' ? ' warn' : '');
+            oiPhase.className = 'oi-v' + (phase === 'ZENITH' ? ' accent' : phase === 'LOW' ? ' warn' : '');
           }
         } else if (oiPhase) {
-          oiPhase.textContent = interSec > 0 ? `GAP ${interSec.toFixed(0)}s` : 'STANDBY';
+          oiPhase.textContent = liveConstellation ? 'WAIT' : (interSec > 0 ? `GAP ${interSec.toFixed(0)}s` : 'STANDBY');
           oiPhase.className = 'oi-v';
         }
       } catch { /* */ }
 
-      // Orbit info panel
-      const satLabel = currentSatId > 0
-        ? `IRIDIUM-${String(currentSatId).padStart(2, '0')}`
-        : 'IRIDIUM-??';
+      // Orbit info panel — prioritaskan nama TLE asli
+      const satLabel = liveTarget?.name
+        || m.name
+        || (currentSatId > 0 ? `IRIDIUM-${String(currentSatId).padStart(2, '0')}` : '—');
       if (oiSat) oiSat.textContent = satLabel;
       if (oiPlane) {
-        oiPlane.textContent = currentPlane > 0
-          ? `Plane ${currentPlane}/6 · LEO 780 km`
-          : 'LEO 780 km · 66 sat';
+        const alt = liveTarget?.altKm != null
+          ? `${liveTarget.altKm.toFixed(0)} km`
+          : 'LEO ~780 km';
+        const src = m.source === 'tle' || liveConstellation ? 'TLE+SGP4' : 'SIM';
+        oiPlane.textContent = `${alt} · ${src}`;
       }
       if (oiHeading) {
-        if (inPass) {
-          const from = azToCardinal(satAzimuth - 15);
-          const to = azToCardinal(satAzimuth + 15);
-          oiHeading.textContent = `${from} → ${to}`;
+        if (inPass && Number.isFinite(satAzimuth)) {
+          oiHeading.textContent = `${azToCardinal(satAzimuth)} · az ${satAzimuth.toFixed(0)}°`;
         } else {
-          oiHeading.textContent = interSec > 0 ? `next ≈ ${interSec.toFixed(0)}s` : '--';
+          oiHeading.textContent = liveConstellation ? 'menunggu AOS' : (interSec > 0 ? `next ≈ ${interSec.toFixed(0)}s` : '--');
         }
       }
 
-      // Human narrative
+      // Human narrative dari data live
       if (oiNarrative) {
-        if (inPass) {
+        if (inPass && liveTarget) {
           const card = azToCardinal(satAzimuth);
-          const elevStr = elev != null ? elev.toFixed(0) : '--';
-          let story = '';
-          if (elev >= 55) {
-            story = `<strong>${satLabel}</strong> hampir di zenith (el ${elevStr}°). Path lewat puncak langit, sinyal optimal.`;
-          } else if (satAzimuth < 160) {
-            story = `<strong>${satLabel}</strong> baru naik dari <strong>Timur</strong>, sekarang di ${card} (el ${elevStr}°). Menuju zenith.`;
-          } else if (satAzimuth < 200) {
-            story = `<strong>${satLabel}</strong> di puncak path. Baru saja lewat zenith, mulai turun ke <strong>Barat</strong>.`;
-          } else {
-            story = `<strong>${satLabel}</strong> turun menuju horizon <strong>Barat</strong> (el ${elevStr}°). Sebentar lagi LOS.`;
-          }
+          const elevStr = elev != null ? Number(elev).toFixed(0) : '--';
+          const rng = liveTarget.rangeKm != null ? `${Math.round(liveTarget.rangeKm)} km` : '';
+          const spd = liveTarget.speedKmS != null ? `${liveTarget.speedKmS.toFixed(2)} km/s` : '';
+          let story = `<strong>${satLabel}</strong> el ${elevStr}° · ${card}`;
+          if (rng) story += ` · slant ${rng}`;
+          if (spd) story += ` · ${spd}`;
+          if (elev >= 55) story += '. Dekat zenith — link optimal.';
+          else if (elev >= 30) story += '. Elevasi baik untuk SBD.';
+          else story += '. Elevasi rendah — margin tipis.';
           oiNarrative.innerHTML = story;
+        } else if (liveConstellation) {
+          const vis = latestSnapshot.filter((s) => s.aboveHorizon).length;
+          oiNarrative.textContent = vis
+            ? `${vis} satelit di atas horizon, belum ada yang el ≥ 10°.`
+            : 'Menunggu satelit masuk horizon (AOS)…';
         } else if (interSec > 0) {
-          const nextId = ((currentSatId % 66) || 0) + 1;
-          oiNarrative.innerHTML = `Gap antar-pass · satelit berikutnya ≈ <strong>IRIDIUM-${String(nextId).padStart(2, '0')}</strong> dalam ${interSec.toFixed(0)}s.`;
+          oiNarrative.innerHTML = `Mode SIM · gap ${interSec.toFixed(0)}s — aktifkan <strong>Peta Live</strong> untuk orbit asli.`;
         } else {
-          oiNarrative.textContent = 'Menunggu satelit masuk horizon (AOS)…';
+          oiNarrative.textContent = 'Aktifkan Peta Live untuk tracking TLE real-time.';
         }
       }
 
@@ -2403,12 +2466,134 @@
     });
 
     // ---------------------------------------------------
-    // LIVE IRIDIUM MAP — data orbit ASLI (TLE + SGP4), bukan simulasi
+    // LIVE IRIDIUM MAP + CHANNEL + bridge ke fisika virtual
     // ---------------------------------------------------
     let liveConstellation = null;
     let liveMapCtx = null;
     let latestSnapshot = [];
     let liveMapHoverName = null;
+    let selectedSatName = null;       // user-picked channel
+    let liveTarget = null;            // best / selected sat object
+    let prevRangeByName = new Map();  // for range-rate → Doppler
+    const chListEl = $('ch-list');
+    const chEmptyEl = $('ch-empty');
+
+    /** Range rate (km/s) → rough Doppler shift (Hz) @ L-band */
+    function rangeRateToDopplerHz(rangeRateKmS) {
+      if (!Number.isFinite(rangeRateKmS)) return 0;
+      // f_d = -(ṙ/c) * f_c ; ṙ in m/s
+      const c = 299792.458; // km/s
+      return -(rangeRateKmS / c) * SAT_CONSTANTS.FREQ_MHZ * 1e6;
+    }
+
+    function enrichSnapshotWithDoppler(snapshot) {
+      const next = new Map();
+      for (const sat of snapshot) {
+        const prev = prevRangeByName.get(sat.name);
+        let rangeRateKmS = null;
+        if (prev && Number.isFinite(prev.range) && Number.isFinite(sat.rangeKm)) {
+          const dt = (Date.now() - prev.t) / 1000;
+          if (dt > 0.2 && dt < 5) {
+            rangeRateKmS = (sat.rangeKm - prev.range) / dt;
+          }
+        }
+        next.set(sat.name, { range: sat.rangeKm, t: Date.now() });
+        sat.rangeRateKmS = rangeRateKmS;
+        sat.dopplerShiftHz = rangeRateToDopplerHz(rangeRateKmS ?? 0);
+        // rate of Doppler ≈ change of shift; use range accel proxy later
+        sat.dopplerRateHzPerSec = 0;
+        if (prev?.doppler != null && Number.isFinite(sat.dopplerShiftHz)) {
+          const dt = (Date.now() - prev.t) / 1000;
+          if (dt > 0.2 && dt < 5) {
+            sat.dopplerRateHzPerSec = (sat.dopplerShiftHz - prev.doppler) / dt;
+          }
+        }
+        next.set(sat.name, {
+          range: sat.rangeKm,
+          t: Date.now(),
+          doppler: sat.dopplerShiftHz
+        });
+      }
+      prevRangeByName = next;
+      return snapshot;
+    }
+
+    function pickLiveTarget(snapshot) {
+      const visible = snapshot
+        .filter((s) => s.aboveHorizon && s.elDeg >= SAT_CONSTANTS.MIN_ELEVATION_DEG)
+        .sort((a, b) => b.elDeg - a.elDeg);
+
+      if (selectedSatName) {
+        const sel = visible.find((s) => s.name === selectedSatName);
+        if (sel) return sel;
+        // selected dropped below floor — clear
+        selectedSatName = null;
+      }
+      return visible[0] ?? null;
+    }
+
+    function renderChannelList(snapshot) {
+      if (!chListEl) return;
+      const visible = snapshot
+        .filter((s) => s.aboveHorizon && s.elDeg >= SAT_CONSTANTS.MIN_ELEVATION_DEG)
+        .sort((a, b) => b.elDeg - a.elDeg)
+        .slice(0, 12);
+
+      if (visible.length === 0) {
+        chListEl.innerHTML = '<div class="ch-empty">Tidak ada satelit el ≥ 10° saat ini</div>';
+        return;
+      }
+
+      chListEl.innerHTML = visible.map((s) => {
+        const link = evaluateLinkFromGeo({
+          elevationDeg: s.elDeg,
+          distanceKm: s.rangeKm,
+          dopplerRateHzPerSec: s.dopplerRateHzPerSec ?? 0
+        }, currentPhysMode);
+        const lqm = link.lqm === -Infinity ? null : link.lqm;
+        const lqmCls = lqm == null ? '' : lqm >= 6 ? 'good' : lqm >= 4 ? 'warn' : 'bad';
+        const active = (liveTarget && s.name === liveTarget.name) ? ' active' : '';
+        const short = s.name.replace(/^IRIDIUM\s+/i, 'IR-');
+        return `<div class="ch-item${active}" data-name="${s.name.replace(/"/g, '')}">
+          <span class="ch-name">${short}</span>
+          <span class="ch-el">${s.elDeg.toFixed(0)}°</span>
+          <span class="ch-lqm ${lqmCls}">${lqm != null ? lqm.toFixed(0) + 'dB' : '--'}</span>
+        </div>`;
+      }).join('');
+
+      chListEl.querySelectorAll('.ch-item').forEach((el) => {
+        el.addEventListener('click', () => {
+          selectedSatName = el.dataset.name;
+          liveTarget = latestSnapshot.find((s) => s.name === selectedSatName) || liveTarget;
+          renderChannelList(latestSnapshot);
+          toast(`Channel: ${selectedSatName}`, 'info');
+        });
+      });
+    }
+
+    /** Suap geometri TLE ke state machine + LQM fisika virtual */
+    function feedPhysicsFromLive(target) {
+      if (!target) {
+        // no visible sat — tick without external geo (sim gap) or force out of pass
+        lastSatResult = updateSatelliteLink(1000, {
+          externalGeo: {
+            elevationDeg: 0,
+            distanceKm: Infinity,
+            name: null
+          }
+        });
+        return lastSatResult;
+      }
+      const externalGeo = {
+        elevationDeg: target.elDeg,
+        distanceKm: target.rangeKm,
+        dopplerShiftHz: target.dopplerShiftHz ?? 0,
+        dopplerRateHzPerSec: target.dopplerRateHzPerSec ?? 0,
+        name: target.name
+      };
+      lastSatResult = updateSatelliteLink(1000, { externalGeo });
+      return lastSatResult;
+    }
 
     function resizeLiveMapCanvas() {
       if (!liveMapCanvas || !liveMapWrap) return;
@@ -2477,20 +2662,31 @@
       for (const sat of latestSnapshot) {
         const p = geoToXY(sat.latDeg, sat.lonDeg, w, h);
         const isHover = sat.name === liveMapHoverName;
-        const isVisible = sat.aboveHorizon;
+        const isTarget = liveTarget && sat.name === liveTarget.name;
+        const isVisible = sat.aboveHorizon && sat.elDeg >= SAT_CONSTANTS.MIN_ELEVATION_DEG;
 
-        liveMapCtx.fillStyle = isVisible ? '#22c55e' : (isHover ? '#e5e7eb' : 'rgba(148,163,184,0.85)');
-        liveMapCtx.beginPath();
-        liveMapCtx.arc(p.x, p.y, isHover ? 3.2 : 1.8, 0, Math.PI * 2);
-        liveMapCtx.fill();
-
-        if (isHover) {
-          liveMapCtx.strokeStyle = 'rgba(229,231,235,0.6)';
-          liveMapCtx.lineWidth = 1;
+        if (isTarget) {
+          liveMapCtx.strokeStyle = 'rgba(34,197,94,0.7)';
+          liveMapCtx.lineWidth = 1.5;
           liveMapCtx.beginPath();
-          liveMapCtx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+          liveMapCtx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+          liveMapCtx.stroke();
+          // line to observer
+          liveMapCtx.beginPath();
+          liveMapCtx.moveTo(obs.x, obs.y);
+          liveMapCtx.lineTo(p.x, p.y);
+          liveMapCtx.strokeStyle = 'rgba(34,197,94,0.35)';
+          liveMapCtx.lineWidth = 1;
           liveMapCtx.stroke();
         }
+
+        liveMapCtx.fillStyle = isTarget ? '#22c55e'
+          : isVisible ? '#4ade80'
+          : sat.aboveHorizon ? '#eab308'
+          : (isHover ? '#e5e7eb' : 'rgba(100,116,139,0.75)');
+        liveMapCtx.beginPath();
+        liveMapCtx.arc(p.x, p.y, isTarget || isHover ? 3.4 : 1.7, 0, Math.PI * 2);
+        liveMapCtx.fill();
       }
     }
 
@@ -2567,11 +2763,19 @@
       liveConstellation = new LiveConstellation({
         tickMs: 1000,
         onUpdate: (snapshot) => {
-          latestSnapshot = snapshot;
+          latestSnapshot = enrichSnapshotWithDoppler(snapshot);
+          liveTarget = pickLiveTarget(latestSnapshot);
+          feedPhysicsFromLive(liveTarget);
+          renderChannelList(latestSnapshot);
           drawLiveMap();
+          // Mode Otonom akan baca lastSatResult + liveTarget di updateStats
         },
         onStatus: (meta) => {
-          if (liveMapStatus) liveMapStatus.textContent = formatLiveMapStatus(meta);
+          if (liveMapStatus) {
+            const vis = latestSnapshot.filter((s) => s.aboveHorizon && s.elDeg >= 10).length;
+            liveMapStatus.textContent = formatLiveMapStatus(meta) +
+              (meta.satCount ? ` · ${vis} di atas horizon` : '');
+          }
           liveMapBadge.textContent = meta.satCount ? 'LIVE' : (meta.lastError ? 'ERROR' : 'LOADING');
           liveMapBadge.classList.toggle('live', !!meta.satCount);
           liveMapBadge.classList.toggle('lost', !meta.satCount && !!meta.lastError);
@@ -2579,6 +2783,7 @@
       });
 
       await liveConstellation.start();
+      toast('Peta live + channel real-time aktif', 'success');
     }
 
     function stopLiveMap() {

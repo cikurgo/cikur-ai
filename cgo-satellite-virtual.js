@@ -400,12 +400,59 @@ class SatelliteChannelSimulator {
    * Tick channel simulator.
    * @param {number} deltaMs
    * @param {Date} [now]
+   * @param {object|null} [externalGeo] - geometri dari TLE/SGP4 (opsional)
+   *   { elevationDeg, distanceKm, dopplerShiftHz?, dopplerRateHzPerSec?, name? }
    * @returns {object} metrics
    */
-  tick(deltaMs, now = new Date()) {
+  tick(deltaMs, now = new Date(), externalGeo = null) {
     this.tickCount++;
 
-    // Handle inter-pass gap
+    // ── Jalur LIVE: geometri dari TLE (bukan parabola internal) ──
+    if (externalGeo && Number.isFinite(externalGeo.elevationDeg)) {
+      const elevationDeg = externalGeo.elevationDeg;
+      const distanceKm = Number.isFinite(externalGeo.distanceKm)
+        ? externalGeo.distanceKm
+        : Infinity;
+      const inPass = elevationDeg >= SAT_CONSTANTS.MIN_ELEVATION_DEG
+        && Number.isFinite(distanceKm)
+        && distanceKm < 1e6;
+
+      if (!inPass) {
+        this.lastScintFade = 0;
+        return {
+          elevationDeg: Math.max(0, elevationDeg),
+          distanceKm,
+          snrDb: -Infinity,
+          dopplerShiftHz: externalGeo.dopplerShiftHz ?? 0,
+          dopplerRateHzPerSec: externalGeo.dopplerRateHzPerSec ?? 0,
+          atmPenalty: 99,
+          scintFadeDb: 0,
+          inPass: false,
+          source: 'tle',
+          name: externalGeo.name ?? null
+        };
+      }
+
+      const snrDb = computeSNR(distanceKm);
+      const atmPenalty = computeAtmPenalty(elevationDeg);
+      const scintFadeDb = computeScintillation(now, elevationDeg, deltaMs, this.mode);
+      this.lastScintFade = scintFadeDb;
+
+      return {
+        elevationDeg,
+        distanceKm,
+        snrDb,
+        dopplerShiftHz: externalGeo.dopplerShiftHz ?? 0,
+        dopplerRateHzPerSec: externalGeo.dopplerRateHzPerSec ?? 0,
+        atmPenalty,
+        scintFadeDb,
+        inPass: true,
+        source: 'tle',
+        name: externalGeo.name ?? null
+      };
+    }
+
+    // ── Jalur SIM: parabola internal (fallback offline) ──
     if (!this.inPass) {
       this.interPassRemaining -= deltaMs;
       if (this.interPassRemaining <= 0) {
@@ -413,7 +460,6 @@ class SatelliteChannelSimulator {
         this.elapsed = 0;
         this.interPassRemaining = 0;
       } else {
-        // Di luar pass — elevasi 0, tidak ada sinyal
         return {
           elevationDeg: 0,
           distanceKm: Infinity,
@@ -422,15 +468,14 @@ class SatelliteChannelSimulator {
           dopplerRateHzPerSec: 0,
           atmPenalty: 99,
           scintFadeDb: 0,
-          inPass: false
+          inPass: false,
+          source: 'sim'
         };
       }
     }
 
-    // Advance time
     this.elapsed += deltaMs / 1000;
 
-    // Kalau pass selesai
     if (this.elapsed > this.passDuration) {
       this.inPass = false;
       this.interPassRemaining =
@@ -446,20 +491,14 @@ class SatelliteChannelSimulator {
         dopplerRateHzPerSec: 0,
         atmPenalty: 99,
         scintFadeDb: 0,
-        inPass: false
+        inPass: false,
+        source: 'sim'
       };
     }
 
-    // Compute geometry
     const geo = computeGeometry(this.elapsed, this.passDuration);
-
-    // Compute link budget
     const snrDb = computeSNR(geo.distanceKm);
-
-    // Compute atmospheric
     const atmPenalty = computeAtmPenalty(geo.elevationDeg);
-
-    // Compute scintillation
     const scintFadeDb = computeScintillation(now, geo.elevationDeg, deltaMs, this.mode);
     this.lastScintFade = scintFadeDb;
 
@@ -471,7 +510,8 @@ class SatelliteChannelSimulator {
       dopplerRateHzPerSec: geo.dopplerRateHzPerSec,
       atmPenalty,
       scintFadeDb,
-      inPass: true
+      inPass: true,
+      source: 'sim'
     };
   }
 
@@ -522,9 +562,10 @@ class SatelliteStateMachine {
    * Update state machine.
    * @param {number} deltaMs
    * @param {Date} [now]
+   * @param {object|null} [externalGeo] - geometri TLE opsional
    * @returns {object} result
    */
-  update(deltaMs, now = new Date()) {
+  update(deltaMs, now = new Date(), externalGeo = null) {
     // Validate deltaMs
     if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
       return this.lastResult ?? {
@@ -534,7 +575,7 @@ class SatelliteStateMachine {
     const dt = Math.min(deltaMs, SAT_CONSTANTS.MAX_DELTA_MS);
 
     this.stateTimer += dt;
-    const metrics = this.channel.tick(dt, now);
+    const metrics = this.channel.tick(dt, now, externalGeo);
 
     // Hitung LQM
     let lqm;
@@ -707,12 +748,17 @@ function resetSatelliteLink(options) {
 /**
  * Update satellite link state.
  * @param {number} deltaMs
- * @param {object} [options] { now }
+ * @param {object} [options] { now, externalGeo }
+ *   externalGeo: { elevationDeg, distanceKm, dopplerShiftHz?, dopplerRateHzPerSec?, name? }
  * @returns {object} result
  */
 function updateSatelliteLink(deltaMs, options = {}) {
   const { sm } = getSatelliteLink();
-  const result = sm.update(deltaMs, options.now ?? new Date());
+  const result = sm.update(
+    deltaMs,
+    options.now ?? new Date(),
+    options.externalGeo ?? null
+  );
 
   // Update BCGO_STATE (portable)
   const g = typeof globalThis !== 'undefined' ? globalThis : null;
@@ -728,11 +774,65 @@ function updateSatelliteLink(deltaMs, options = {}) {
       inPass: result.metrics ? result.metrics.inPass : false,
       per: result.per != null ? Number(result.per.toFixed(4)) : null,
       packetValid: result.packetValid,
+      source: result.metrics?.source ?? null,
+      name: result.metrics?.name ?? null,
       timestamp: Date.now()
     };
   }
 
   return result;
+}
+
+/**
+ * Evaluasi link budget murni dari geometri eksternal (TLE), tanpa state machine.
+ * Berguna untuk ranking multi-satelit / channel list.
+ * @param {object} geo { elevationDeg, distanceKm, dopplerRateHzPerSec?, scintFadeDb? }
+ * @param {string} [mode]
+ * @param {Date} [now]
+ */
+function evaluateLinkFromGeo(geo, mode = PHYSICS_MODE.REALISTIC, now = new Date()) {
+  const elevationDeg = geo?.elevationDeg ?? 0;
+  const distanceKm = geo?.distanceKm ?? Infinity;
+  if (elevationDeg < SAT_CONSTANTS.MIN_ELEVATION_DEG || !Number.isFinite(distanceKm)) {
+    return {
+      elevationDeg,
+      distanceKm,
+      snrDb: -Infinity,
+      lqm: -Infinity,
+      atmPenalty: 99,
+      scintFadeDb: 0,
+      ber: 0.5,
+      per: 1,
+      usable: false
+    };
+  }
+  const snrDb = computeSNR(distanceKm);
+  const atmPenalty = computeAtmPenalty(elevationDeg);
+  const scintFadeDb = geo.scintFadeDb != null
+    ? geo.scintFadeDb
+    : computeScintillation(now, elevationDeg, 1000, mode);
+  const dopplerRateHzPerSec = geo.dopplerRateHzPerSec ?? 0;
+  const lqm = calculateLQM({
+    snrDb,
+    dopplerRateHzPerSec,
+    elevationDeg,
+    scintFadeDb
+  });
+  const ebn0 = snrDb + SAT_CONSTANTS.PROCESSING_GAIN_DB;
+  const ber = getBER(ebn0, elevationDeg);
+  const per = getPER(ber);
+  return {
+    elevationDeg,
+    distanceKm,
+    snrDb,
+    atmPenalty,
+    scintFadeDb,
+    dopplerRateHzPerSec,
+    lqm,
+    ber,
+    per,
+    usable: lqm >= SAT_CONSTANTS.LQM_THRESHOLD_DEGRADED_DB
+  };
 }
 
 // ============================================================================
@@ -876,6 +976,7 @@ export {
   getSatelliteLink,
   resetSatelliteLink,
   updateSatelliteLink,
+  evaluateLinkFromGeo,
   // Pure functions untuk testing
   computeGeometry,
   computeFSPL,
