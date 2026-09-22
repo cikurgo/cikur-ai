@@ -1,0 +1,2101 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a0e14">
+  <title>BCGO Satellite — Digital Twin + Mode Otonom</title>
+
+  <!-- Inline SVG favicon (no external asset needed) -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a0e14'/%3E%3Cpath d='M8 22V10l4 3 4-5 4 5 4-3v12' stroke='%2322c55e' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='22' r='2' fill='%2322c55e'/%3E%3C/svg%3E">
+
+  <style>
+    :root {
+      --bg:        #0a0e14;
+      --bg-panel:  #131a24;
+      --bg-card:   #1a2330;
+      --border:    #2a3646;
+      --text:      #e5e7eb;
+      --text-dim:  #8a94a6;
+      --accent:    #22c55e;
+      --accent-2:  #3b82f6;
+      --warn:      #f59e0b;
+      --danger:    #ef4444;
+      --mono:      ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+      --sans:      system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      overflow: hidden;
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+      height: 100dvh;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+      z-index: 100;
+    }
+
+    .header-logo {
+      width: 32px;
+      height: 32px;
+      flex-shrink: 0;
+    }
+
+    .header-title {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.1;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .header-title h1 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .header-title small {
+      font-size: 10px;
+      color: var(--text-dim);
+      font-family: var(--mono);
+    }
+
+    .header-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #6b7280;
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+
+    .status-dot.on   { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+    .status-dot.warn { background: var(--warn);   box-shadow: 0 0 6px var(--warn); }
+    .status-dot.err  { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+
+    /* Main layout */
+    .main {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      overflow: hidden;
+    }
+
+    @media (max-width: 860px) {
+      .main {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto;
+      }
+    }
+
+    /* Radar */
+    .radar-wrap {
+      position: relative;
+      background: radial-gradient(circle at 50% 50%, #0d1420 0%, #05080d 100%);
+      overflow: hidden;
+    }
+
+    #radar-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+      cursor: grab;
+    }
+
+    #radar-canvas:active { cursor: grabbing; }
+
+    .radar-overlay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      pointer-events: none;
+    }
+
+    .radar-overlay > * { pointer-events: auto; }
+
+    .radar-legend {
+      background: rgba(10, 14, 20, 0.85);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      backdrop-filter: blur(6px);
+      line-height: 1.6;
+    }
+
+    .radar-legend strong { color: var(--text); }
+
+    .radar-controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 50;
+    }
+
+    /* Side panel */
+    .side {
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      overflow-x: hidden;
+      overscroll-behavior: contain;
+    }
+
+    .side .chat-wrap {
+      flex: 1;
+      min-height: 120px;
+    }
+
+    @media (max-width: 860px) {
+      .side {
+        border-left: none;
+        border-top: 1px solid var(--border);
+        max-height: 55vh;
+      }
+    }
+
+    .panel-section {
+      border-bottom: 1px solid var(--border);
+      padding: 10px 12px;
+    }
+
+    .panel-section:last-child { border-bottom: none; }
+
+    .panel-title {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin: 0 0 8px 0;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .panel-title svg {
+      width: 12px;
+      height: 12px;
+      opacity: 0.7;
+    }
+
+    /* Buttons */
+    .btn-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-card);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .btn svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+    }
+
+    .btn:hover {
+      background: #222d3d;
+      border-color: #3a4657;
+    }
+
+    .btn:active { transform: scale(0.97); }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #04130a;
+    }
+
+    .btn.primary:hover { background: #16a34a; }
+
+    .btn.danger {
+      background: var(--danger);
+      border-color: var(--danger);
+      color: #fff;
+    }
+
+    .btn.danger:hover { background: #dc2626; }
+
+    .btn.warn {
+      background: var(--warn);
+      border-color: var(--warn);
+      color: #1a1103;
+    }
+
+    .btn.warn:hover { background: #d97706; }
+
+    .btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #04130a;
+    }
+
+    .btn-full { grid-column: span 2; }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 3px 10px;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .stats-grid .label { color: var(--text-dim); }
+    .stats-grid .value { color: var(--text); text-align: right; font-weight: 500; }
+    .stats-grid .value.good { color: var(--accent); }
+    .stats-grid .value.warn { color: var(--warn); }
+    .stats-grid .value.bad  { color: var(--danger); }
+
+    /* Chat */
+    .chat-wrap {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .chat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      font-weight: 600;
+    }
+
+    .chat-header button {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .chat-header button svg {
+      width: 11px;
+      height: 11px;
+    }
+
+    .chat-header button:hover {
+      color: var(--text);
+      border-color: #3a4657;
+    }
+
+    .chat-log {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-family: var(--mono);
+      font-size: 11px;
+      scroll-behavior: smooth;
+      overscroll-behavior: contain;
+    }
+
+    .chat-log::-webkit-scrollbar { width: 6px; }
+    .chat-log::-webkit-scrollbar-thumb {
+      background: #2a3646;
+      border-radius: 3px;
+    }
+
+    .msg-radio {
+      font-family: var(--mono);
+      background: rgba(0, 0, 0, 0.3);
+      border-left: 3px solid var(--accent);
+      padding: 3px 8px;
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+      border-radius: 0 4px 4px 0;
+    }
+
+    .msg-radio.msg-radio-emergency {
+      border-left-color: var(--danger);
+      background: rgba(239, 68, 68, 0.15);
+      animation: radio-pulse 1.2s ease-in-out infinite;
+    }
+
+    .msg-radio.msg-radio-collision,
+    .msg-radio.msg-radio-alert {
+      border-left-color: var(--warn);
+      background: rgba(245, 158, 11, 0.1);
+    }
+
+    @keyframes radio-pulse {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0.6; }
+    }
+
+    .new-msg-badge {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent);
+      color: #04130a;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 0 2px 12px rgba(34, 197, 94, 0.5);
+      z-index: 10;
+      display: none;
+      animation: badge-in 0.2s ease-out;
+    }
+
+    .new-msg-badge.show { display: block; }
+
+    @keyframes badge-in {
+      from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    /* Toast */
+    .toast-wrap {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 9999;
+      pointer-events: none;
+    }
+
+    .toast {
+      background: rgba(10, 14, 20, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(10px);
+      animation: toast-in 0.25s ease-out;
+      max-width: 90vw;
+      pointer-events: auto;
+    }
+
+    .toast.success { border-color: var(--accent); }
+    .toast.error   { border-color: var(--danger); }
+    .toast.warn    { border-color: var(--warn); }
+
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Tooltip */
+    .ht-radio-tooltip {
+      position: fixed;
+      padding: 6px 10px;
+      background: rgba(0, 0, 0, 0.9);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.5;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      pointer-events: none;
+      z-index: 9999;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      white-space: nowrap;
+    }
+
+    /* Stress progress */
+    .stress-progress {
+      margin-top: 6px;
+      display: none;
+    }
+
+    .stress-progress.show { display: block; }
+
+    .stress-bar {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .stress-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 0.5s linear;
+    }
+
+    .stress-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Splash */
+    .splash {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 10000;
+      transition: opacity 0.4s;
+    }
+
+    .splash.hide {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .splash-logo {
+      width: 72px;
+      height: 72px;
+      animation: splash-pulse 1.5s ease-in-out infinite;
+    }
+
+    .splash-text {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 1px;
+    }
+
+    @keyframes splash-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50%      { transform: scale(1.08); opacity: 0.85; }
+    }
+
+    /* ── Mode Otonom ── */
+    .otonom-panel {
+      background: linear-gradient(160deg, #0d1520 0%, #131a24 100%);
+    }
+
+    .otonom-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .otonom-badge {
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: #1a2330;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      transition: all 0.25s;
+    }
+
+    .otonom-badge.live {
+      background: rgba(34, 197, 94, 0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
+    }
+
+    .otonom-badge.degraded {
+      background: rgba(245, 158, 11, 0.15);
+      border-color: var(--warn);
+      color: var(--warn);
+    }
+
+    .otonom-badge.lost {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    /* Sky view (Mata) */
+    .sky-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      max-height: 160px;
+      margin: 0 auto 10px;
+      border-radius: 50%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 55%, #0a1628 0%, #050a12 70%);
+      border: 1px solid var(--border);
+      box-shadow: inset 0 0 30px rgba(0,0,0,0.5);
+    }
+
+    #sky-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .sky-label {
+      position: absolute;
+      bottom: 6px;
+      left: 0; right: 0;
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text-dim);
+      pointer-events: none;
+      text-shadow: 0 1px 3px #000;
+    }
+
+    /* Metrics grid for satellite */
+    .sat-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 8px;
+      font-family: var(--mono);
+      font-size: 10px;
+      margin-bottom: 8px;
+    }
+
+    .sat-metrics .m-label { color: var(--text-dim); }
+    .sat-metrics .m-value { text-align: right; font-weight: 600; color: var(--text); }
+    .sat-metrics .m-value.good { color: var(--accent); }
+    .sat-metrics .m-value.warn { color: var(--warn); }
+    .sat-metrics .m-value.bad  { color: var(--danger); }
+
+    /* Pass progress bar */
+    .pass-bar-wrap {
+      margin-bottom: 8px;
+    }
+
+    .pass-bar {
+      height: 5px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .pass-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent-2), var(--accent));
+      border-radius: 3px;
+      transition: width 0.3s linear;
+    }
+
+    .pass-bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text-dim);
+      margin-top: 3px;
+    }
+
+    /* Physics mode buttons */
+    .phys-mode-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      margin-top: 6px;
+    }
+
+    .phys-mode-grid .btn {
+      padding: 6px 4px;
+      font-size: 10px;
+    }
+
+    .phys-mode-grid .btn.active {
+      background: var(--accent-2);
+      border-color: var(--accent-2);
+      color: #fff;
+    }
+
+    /* State machine pills */
+    .state-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      margin-bottom: 8px;
+    }
+
+    .state-pill {
+      font-family: var(--mono);
+      font-size: 8px;
+      padding: 2px 5px;
+      border-radius: 3px;
+      background: #1a2330;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      transition: all 0.2s;
+    }
+
+    .state-pill.on {
+      background: rgba(34, 197, 94, 0.2);
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .state-pill.warn-on {
+      background: rgba(245, 158, 11, 0.2);
+      border-color: var(--warn);
+      color: var(--warn);
+      font-weight: 700;
+    }
+
+    .state-pill.bad-on {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: var(--danger);
+      color: var(--danger);
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Splash -->
+  <div class="splash" id="splash">
+    <svg class="splash-logo" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="64" height="64" rx="12" fill="#131a24"/>
+      <path d="M16 44V20l8 6 8-10 8 10 8-6v24" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="32" cy="44" r="4" fill="#22c55e"/>
+      <path d="M28 28c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="#22c55e" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <div class="splash-text">BCGO SATELLITE — MODE OTONOM</div>
+  </div>
+
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <svg class="header-logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="32" height="32" rx="6" fill="#0d1117"/>
+        <path d="M8 22V10l4 3 4-5 4 5 4-3v12" stroke="#22c55e" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="16" cy="22" r="2" fill="#22c55e"/>
+      </svg>
+      <div class="header-title">
+        <h1>BCGO Satellite Digital Twin</h1>
+        <small>mode otonom • LEO physics • v2</small>
+      </div>
+      <div class="header-status">
+        <span class="status-dot" id="status-audio" title="Audio"></span>
+        <span class="status-dot" id="status-sim"   title="Simulator"></span>
+        <span class="status-dot" id="status-net"   title="Network"></span>
+      </div>
+    </header>
+
+    <div class="main">
+      <!-- Radar -->
+      <div class="radar-wrap">
+        <canvas id="radar-canvas"></canvas>
+
+        <div class="radar-overlay">
+          <div class="radar-legend">
+            <div><strong>HT Radio Layer</strong></div>
+            <div>Green = PTT active &nbsp;|&nbsp; Red = Emergency</div>
+            <div>Signal arc: <span style="color:#22c55e">HI</span> / <span style="color:#eab308">MID</span> / <span style="color:#ef4444">LO</span></div>
+            <div style="margin-top:4px">Tap agent for info • Pinch to zoom</div>
+          </div>
+        </div>
+
+        <div class="radar-controls" id="radar-controls">
+          <button class="btn" id="btn-ht-layer" type="button" title="Toggle HT Radio layer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/>
+              <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/>
+              <circle cx="12" cy="12" r="2"/>
+              <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/>
+              <path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/>
+            </svg>
+            HT Radio
+          </button>
+        </div>
+      </div>
+
+      <!-- Side panel -->
+      <aside class="side">
+        <!-- Controls -->
+        <div class="panel-section">
+          <h3 class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
+            Control
+          </h3>
+          <div class="btn-grid">
+            <button class="btn primary" id="btn-start" type="button">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              Start
+            </button>
+            <button class="btn danger" id="btn-stop" type="button" disabled>
+              <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+              Stop
+            </button>
+            <button class="btn warn btn-full" id="btn-emergency" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              Emergency All
+            </button>
+            <button class="btn btn-full" id="btn-audio" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
+              </svg>
+              Audio OFF
+            </button>
+          </div>
+        </div>
+
+        <!-- ═══ MODE OTONOM ═══ -->
+        <div class="panel-section otonom-panel" id="otonom-panel">
+          <div class="otonom-header">
+            <h3 class="panel-title" style="margin:0">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 000 20 14.5 14.5 0 000-20"/><path d="M2 12h20"/>
+              </svg>
+              Mode Otonom
+            </h3>
+            <span class="otonom-badge" id="otonom-badge">STANDBY</span>
+          </div>
+
+          <!-- Mata: sky dome -->
+          <div class="sky-wrap" title="Posisi satelit di langit (elevasi &amp; azimuth)">
+            <canvas id="sky-canvas"></canvas>
+            <div class="sky-label" id="sky-label">SKY VIEW · menunggu pass</div>
+          </div>
+
+          <!-- State machine pills -->
+          <div class="state-pills" id="state-pills">
+            <span class="state-pill" data-state="COLD_START">COLD</span>
+            <span class="state-pill" data-state="SCANNING">SCAN</span>
+            <span class="state-pill" data-state="ACQUIRING">ACQ</span>
+            <span class="state-pill" data-state="TRACKING">TRACK</span>
+            <span class="state-pill" data-state="DEGRADED">DEGR</span>
+            <span class="state-pill" data-state="LOSING_LOCK">LOSS</span>
+            <span class="state-pill" data-state="RE_ACQUIRING">RE-ACQ</span>
+          </div>
+
+          <!-- Metrics -->
+          <div class="sat-metrics">
+            <span class="m-label">Elevasi</span>  <span class="m-value" id="sat-elev">--°</span>
+            <span class="m-label">LQM</span>      <span class="m-value" id="sat-lqm-val">-- dB</span>
+            <span class="m-label">SNR</span>      <span class="m-value" id="sat-snr">-- dB</span>
+            <span class="m-label">Doppler</span>  <span class="m-value" id="sat-doppler">-- Hz/s</span>
+            <span class="m-label">Scint</span>    <span class="m-value" id="sat-scint">0 dB</span>
+            <span class="m-label">PER</span>      <span class="m-value" id="sat-per">--</span>
+            <span class="m-label">Jarak</span>    <span class="m-value" id="sat-dist">-- km</span>
+            <span class="m-label">In Pass</span>  <span class="m-value" id="sat-inpass">NO</span>
+          </div>
+
+          <!-- Pass progress -->
+          <div class="pass-bar-wrap">
+            <div class="pass-bar"><div class="pass-bar-fill" id="pass-bar-fill"></div></div>
+            <div class="pass-bar-label">
+              <span id="pass-label">Pass progress</span>
+              <span id="pass-pct">0%</span>
+            </div>
+          </div>
+
+          <!-- Physics mode (Tangan) -->
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.6px;">Physics Mode</div>
+          <div class="phys-mode-grid">
+            <button class="btn" id="btn-phys-ideal" type="button" title="Hanya geometri">Ideal</button>
+            <button class="btn active" id="btn-phys-realistic" type="button" title="Atmosfer + scintillation">Realistic</button>
+            <button class="btn" id="btn-phys-stress" type="button" title="Forced fade 30%">Stress</button>
+          </div>
+        </div>
+
+        <!-- BASE PTT (pusat) -->
+        <div class="panel-section">
+          <h3 class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+              <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/>
+            </svg>
+            Base PTT
+          </h3>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+            <label for="inp-channel" style="font-family:var(--mono);font-size:11px;color:var(--text-dim);">CH</label>
+            <input id="inp-channel" type="number" min="0" max="255" value="0" placeholder="0–255"
+              style="flex:1;background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--mono);font-size:12px;"
+              title="Ketik channel tujuan HT (0–255)" />
+          </div>
+          <button class="btn btn-full" id="btn-base-ptt" type="button"
+            style="min-height:48px;font-size:13px;user-select:none;touch-action:none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+              <path d="M19 10v2a7 7 0 01-14 0v-2"/>
+            </svg>
+            <span id="btn-base-ptt-label">Hold to Talk (BASE)</span>
+          </button>
+          <div id="base-ptt-status" style="margin-top:6px;font-family:var(--mono);font-size:10px;color:var(--text-dim);text-align:center;">
+            STANDBY · mic + sidetone
+          </div>
+        </div>
+
+        <!-- Stress Test -->
+        <div class="panel-section">
+          <h3 class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Stress Test
+          </h3>
+          <div class="btn-grid">
+            <button class="btn" id="btn-stress" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 01-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+              Run 60s
+            </button>
+            <button class="btn" id="btn-stress-long" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/>
+              </svg>
+              Run 300s
+            </button>
+          </div>
+          <div class="stress-progress" id="stress-progress">
+            <div class="stress-bar">
+              <div class="stress-bar-fill" id="stress-bar-fill"></div>
+            </div>
+            <div class="stress-label">
+              <span id="stress-time">0s / 60s</span>
+              <span id="stress-fps">-- fps</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="panel-section">
+          <h3 class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+            Live Stats
+          </h3>
+          <div class="stats-grid">
+            <span class="label">Agents</span>     <span class="value" id="stat-agents">0</span>
+            <span class="label">FPS</span>        <span class="value good" id="stat-fps">--</span>
+            <span class="label">Memory</span>     <span class="value" id="stat-mem">--</span>
+            <span class="label">Packets Rx</span> <span class="value" id="stat-rx">0</span>
+            <span class="label">Packets Tx</span> <span class="value" id="stat-tx">0</span>
+            <span class="label">CRC Fail</span>   <span class="value bad" id="stat-crc">0</span>
+            <span class="label">Collisions</span> <span class="value warn" id="stat-coll">0</span>
+            <span class="label">Dropped</span>    <span class="value" id="stat-drop">0</span>
+            <span class="label">Gaps</span>       <span class="value" id="stat-gap">0</span>
+            <span class="label">Outbox</span>     <span class="value" id="stat-outbox">0</span>
+            <span class="label">SAT State</span>  <span class="value" id="stat-sat">--</span>
+            <span class="label">SAT LQM</span>    <span class="value" id="stat-lqm">--</span>
+            <span class="label">Uptime</span>     <span class="value" id="stat-uptime">0s</span>
+          </div>
+        </div>
+
+        <!-- Chat log -->
+        <div class="chat-wrap">
+          <div class="chat-header">
+            <span>Radio Log</span>
+            <button id="btn-clear-log" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+              Clear
+            </button>
+          </div>
+          <div class="chat-log" id="chat-log"></div>
+          <div class="new-msg-badge" id="new-msg-badge">↓ new messages</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toast-wrap"></div>
+
+  <script type="module">
+    import { STATUS_FLAGS } from './ht-protocol.js';
+    import { htAudioSynth } from './ht-audio-synth.js';
+    import { createSimulator } from './ht-ptt-simulator.js';
+    import { getGateway } from './cgo-ht-radio-engine.js';
+    import {
+      injectRadioStyles,
+      shouldAutoScroll
+    } from './chat-radio-formatter.js';
+    import {
+      initRadarLayer,
+      getRadarLayer
+    } from './ht-radar-layer.js';
+    import { StressTest } from './stress-test-ht.js';
+    import { createBridgedSimulator } from './cgo-ht-bridge.js';
+    import { getBasePTT } from './cgo-base-ptt.js';
+    import { getTransport } from './cgo-transport.js';
+    import {
+      updateSatelliteLink,
+      getSatelliteLink,
+      resetSatelliteLink,
+      PHYSICS_MODE,
+      SAT_STATE,
+      SAT_CONSTANTS
+    } from './cgo-satellite-virtual.js';
+
+    // ---------------------------------------------------
+    // GLOBAL STATE
+    // ---------------------------------------------------
+    const globalState = {
+      sim: null,
+      gateway: null,
+      radarLayer: null,
+      stressTest: null,
+      bridge: null,
+      transport: null,
+      basePtt: null,
+      running: false,
+      audioReady: false,
+      camera: { x: 0, y: 0, zoom: 1 }
+    };
+
+    globalThis.BCGO_STATE = globalThis.BCGO_STATE ?? {
+      satellite: {},
+      satelliteUpdates: new EventTarget()
+    };
+    globalThis.BCGO_STATE.satellite = globalThis.BCGO_STATE.satellite ?? {};
+    globalThis.BCGO_STATE.satelliteUpdates =
+      globalThis.BCGO_STATE.satelliteUpdates ?? new EventTarget();
+
+    globalThis.cgoChat = globalThis.cgoChat ?? {
+      logRadioMessage(text, meta) {
+        appendChatMessage(text, meta);
+      }
+    };
+
+    // ---------------------------------------------------
+    // DOM
+    // ---------------------------------------------------
+    const $ = (id) => document.getElementById(id);
+
+    const splash        = $('splash');
+    const canvas        = $('radar-canvas');
+    const ctx           = canvas.getContext('2d');
+    const chatLog       = $('chat-log');
+    const newMsgBadge   = $('new-msg-badge');
+    const toastWrap     = $('toast-wrap');
+    const statusAudio   = $('status-audio');
+    const statusSim     = $('status-sim');
+    const statusNet     = $('status-net');
+
+    const btnStart      = $('btn-start');
+    const btnStop       = $('btn-stop');
+    const btnEmergency  = $('btn-emergency');
+    const btnAudio      = $('btn-audio');
+    const btnStress     = $('btn-stress');
+    const btnStressLong = $('btn-stress-long');
+    const btnClearLog   = $('btn-clear-log');
+    const btnHtLayer    = $('btn-ht-layer');
+
+    const statAgents = $('stat-agents');
+    const statFps    = $('stat-fps');
+    const statMem    = $('stat-mem');
+    const statRx     = $('stat-rx');
+    const statTx     = $('stat-tx');
+    const statCrc    = $('stat-crc');
+    const statColl   = $('stat-coll');
+    const statDrop   = $('stat-drop');
+    const statGap    = $('stat-gap');
+    const statOutbox = $('stat-outbox');
+    const statSat    = $('stat-sat');
+    const statLqm    = $('stat-lqm');
+    const statUptime = $('stat-uptime');
+
+    const inpChannel     = $('inp-channel');
+    const btnBasePtt     = $('btn-base-ptt');
+    const btnBasePttLabel = $('btn-base-ptt-label');
+    const basePttStatus  = $('base-ptt-status');
+
+    const stressProgress = $('stress-progress');
+    const stressBarFill  = $('stress-bar-fill');
+    const stressTime     = $('stress-time');
+    const stressFps      = $('stress-fps');
+
+    // Mode Otonom DOM
+    const otonomBadge  = $('otonom-badge');
+    const skyCanvas    = $('sky-canvas');
+    const skyCtx       = skyCanvas ? skyCanvas.getContext('2d') : null;
+    const skyLabel     = $('sky-label');
+    const statePills   = $('state-pills');
+    const satElev      = $('sat-elev');
+    const satLqmVal    = $('sat-lqm-val');
+    const satSnr       = $('sat-snr');
+    const satDoppler   = $('sat-doppler');
+    const satScint     = $('sat-scint');
+    const satPer       = $('sat-per');
+    const satDist      = $('sat-dist');
+    const satInpass    = $('sat-inpass');
+    const passBarFill  = $('pass-bar-fill');
+    const passLabel    = $('pass-label');
+    const passPct      = $('pass-pct');
+    const btnPhysIdeal     = $('btn-phys-ideal');
+    const btnPhysRealistic = $('btn-phys-realistic');
+    const btnPhysStress    = $('btn-phys-stress');
+
+    // Mode Otonom state
+    let currentPhysMode = PHYSICS_MODE.REALISTIC;
+    let lastSatResult = null;
+    let satPassElapsed = 0;
+    let satAzimuth = 0; // simulated azimuth for sky view (deg)
+
+    // ---------------------------------------------------
+    // TOAST
+    // ---------------------------------------------------
+    function toast(message, type = 'info', duration = 2500) {
+      const el = document.createElement('div');
+      el.className = `toast ${type}`;
+      el.textContent = message;
+      toastWrap.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transition = 'opacity 0.3s';
+        setTimeout(() => el.remove(), 300);
+      }, duration);
+    }
+
+    // ---------------------------------------------------
+    // CHAT
+    // ---------------------------------------------------
+    function appendChatMessage(text, meta = {}) {
+      const MAX_NODES = 500;
+      while (chatLog.children.length >= MAX_NODES) {
+        chatLog.removeChild(chatLog.firstChild);
+      }
+
+      const el = document.createElement('div');
+      el.className = 'msg-radio';
+      if (meta.isAlert) el.classList.add('msg-radio-alert');
+      if (meta.emergency) el.classList.add('msg-radio-emergency');
+
+      if (typeof meta.channel === 'number') {
+        const hue = (meta.channel * 360 / 16) % 360;
+        el.style.setProperty('--channel-color', `hsl(${hue}, 70%, 55%)`);
+        el.style.borderLeftColor = `hsl(${hue}, 70%, 55%)`;
+      }
+
+      el.textContent = text;
+      chatLog.appendChild(el);
+
+      const nearBottom = shouldAutoScroll(chatLog, meta.emergency === true);
+      if (nearBottom) {
+        chatLog.scrollTop = chatLog.scrollHeight;
+        newMsgBadge.classList.remove('show');
+      } else {
+        newMsgBadge.classList.add('show');
+      }
+    }
+
+    newMsgBadge.addEventListener('click', () => {
+      chatLog.scrollTop = chatLog.scrollHeight;
+      newMsgBadge.classList.remove('show');
+    });
+
+    chatLog.addEventListener('scroll', () => {
+      const nearBottom =
+        chatLog.scrollHeight - chatLog.scrollTop - chatLog.clientHeight < 30;
+      if (nearBottom) newMsgBadge.classList.remove('show');
+    });
+
+    btnClearLog.addEventListener('click', () => {
+      chatLog.innerHTML = '';
+      newMsgBadge.classList.remove('show');
+      toast('Log cleared', 'success');
+    });
+
+    // ---------------------------------------------------
+    // RADAR RENDER
+    // ---------------------------------------------------
+    let canvasW = 0, canvasH = 0, dpr = 1;
+
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      dpr = window.devicePixelRatio || 1;
+      canvasW = rect.width;
+      canvasH = rect.height;
+      canvas.width  = Math.floor(canvasW * dpr);
+      canvas.height = Math.floor(canvasH * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function worldToScreen(lat, lon) {
+      const cam = globalState.camera;
+      const LAT_MIN = -12, LAT_MAX = 8;
+      const LON_MIN = 94,  LON_MAX = 142;
+      const nx = (lon - LON_MIN) / (LON_MAX - LON_MIN);
+      const ny = 1 - (lat - LAT_MIN) / (LAT_MAX - LAT_MIN);
+      const baseX = nx * canvasW;
+      const baseY = ny * canvasH;
+      const cx = canvasW / 2 + cam.x;
+      const cy = canvasH / 2 + cam.y;
+      return {
+        x: cx + (baseX - canvasW / 2) * cam.zoom,
+        y: cy + (baseY - canvasH / 2) * cam.zoom
+      };
+    }
+
+    function drawGrid() {
+      ctx.strokeStyle = 'rgba(42, 54, 70, 0.35)';
+      ctx.lineWidth = 1;
+      const step = 40 * globalState.camera.zoom;
+      const cam = globalState.camera;
+      const offsetX = (cam.x % step);
+      const offsetY = (cam.y % step);
+
+      for (let x = offsetX; x < canvasW; x += step) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvasH);
+        ctx.stroke();
+      }
+      for (let y = offsetY; y < canvasH; y += step) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvasW, y);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = 'rgba(42, 54, 70, 0.6)';
+      ctx.beginPath();
+      ctx.moveTo(canvasW / 2, 0);
+      ctx.lineTo(canvasW / 2, canvasH);
+      ctx.moveTo(0, canvasH / 2);
+      ctx.lineTo(canvasW, canvasH / 2);
+      ctx.stroke();
+    }
+
+    let lastFpsSample = performance.now();
+    let fpsFrameCount = 0;
+    let currentFps = 0;
+
+    function renderLoop() {
+      try {
+        if (canvasW === 0) resizeCanvas();
+
+        fpsFrameCount++;
+        const now = performance.now();
+        if (now - lastFpsSample >= 1000) {
+          currentFps = fpsFrameCount / ((now - lastFpsSample) / 1000);
+          fpsFrameCount = 0;
+          lastFpsSample = now;
+          if (globalState.stressTest) {
+            globalState.stressTest.tickFrame?.();
+          }
+        }
+
+        ctx.fillStyle = '#05080d';
+        ctx.fillRect(0, 0, canvasW, canvasH);
+        drawGrid();
+
+        if (globalState.radarLayer && globalState.radarLayer.active) {
+          globalState.radarLayer.render(ctx, worldToScreen, {
+            agentRadius: 11,
+            canvasW,
+            canvasH
+          });
+        }
+      } catch (err) {
+        console.error('[Render]', err);
+      }
+      requestAnimationFrame(renderLoop);
+    }
+
+    /** Center + zoom camera so all known agents are visible */
+    function fitToAgents() {
+      const sat = globalThis.BCGO_STATE?.satellite;
+      if (!sat) return;
+
+      const points = [];
+      for (const id in sat) {
+        const s = sat[id];
+        if (!s || !Number.isFinite(s.latitude) || !Number.isFinite(s.longitude)) continue;
+        points.push(worldToScreen(s.latitude, s.longitude));
+      }
+      if (points.length === 0) return;
+
+      // Use geo bounds instead of screen for more stable fit
+      let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+      for (const id in sat) {
+        const s = sat[id];
+        if (!s || !Number.isFinite(s.latitude) || !Number.isFinite(s.longitude)) continue;
+        minLat = Math.min(minLat, s.latitude);
+        maxLat = Math.max(maxLat, s.latitude);
+        minLon = Math.min(minLon, s.longitude);
+        maxLon = Math.max(maxLon, s.longitude);
+      }
+      if (!Number.isFinite(minLat)) return;
+
+      // Pad bounds
+      const padLat = Math.max(0.5, (maxLat - minLat) * 0.35);
+      const padLon = Math.max(0.5, (maxLon - minLon) * 0.35);
+      minLat -= padLat; maxLat += padLat;
+      minLon -= padLon; maxLon += padLon;
+
+      const LAT_MIN = -12, LAT_MAX = 8, LON_MIN = 94, LON_MAX = 142;
+      const midLat = (minLat + maxLat) / 2;
+      const midLon = (minLon + maxLon) / 2;
+
+      // Target zoom so the geo window fills most of the canvas
+      const geoW = (maxLon - minLon) / (LON_MAX - LON_MIN);
+      const geoH = (maxLat - minLat) / (LAT_MAX - LAT_MIN);
+      const zoom = Math.max(0.8, Math.min(4, 0.7 / Math.max(geoW, geoH, 0.05)));
+
+      // Screen position of mid without camera offset
+      const nx = (midLon - LON_MIN) / (LON_MAX - LON_MIN);
+      const ny = 1 - (midLat - LAT_MIN) / (LAT_MAX - LAT_MIN);
+      const baseX = nx * canvasW;
+      const baseY = ny * canvasH;
+
+      // Camera so that mid lands at canvas center
+      globalState.camera.zoom = zoom;
+      globalState.camera.x = (canvasW / 2 - baseX) * zoom;
+      globalState.camera.y = (canvasH / 2 - baseY) * zoom;
+    }
+
+    // ---------------------------------------------------
+    // ZOOM / PAN
+    // ---------------------------------------------------
+    let isDragging = false;
+    let dragStart = null;
+    let pinchStartDist = 0;
+    let pinchStartZoom = 1;
+
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch' && e.isPrimary === false) return;
+      isDragging = true;
+      dragStart = {
+        x: e.clientX,
+        y: e.clientY,
+        camX: globalState.camera.x,
+        camY: globalState.camera.y
+      };
+      canvas.setPointerCapture(e.pointerId);
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!isDragging || !dragStart) return;
+      globalState.camera.x = dragStart.camX + (e.clientX - dragStart.x);
+      globalState.camera.y = dragStart.camY + (e.clientY - dragStart.y);
+    });
+
+    canvas.addEventListener('pointerup', (e) => {
+      const wasDrag = dragStart &&
+        (Math.abs(e.clientX - dragStart.x) > 4 ||
+         Math.abs(e.clientY - dragStart.y) > 4);
+      isDragging = false;
+      dragStart = null;
+      if (canvas.hasPointerCapture?.(e.pointerId)) {
+        canvas.releasePointerCapture(e.pointerId);
+      }
+      if (!wasDrag) handleTap(e.clientX, e.clientY);
+    });
+
+    canvas.addEventListener('pointercancel', () => {
+      isDragging = false;
+      dragStart = null;
+    });
+
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const delta = -e.deltaY * 0.001;
+      const oldZoom = globalState.camera.zoom;
+      globalState.camera.zoom = Math.max(0.5, Math.min(5, oldZoom * (1 + delta)));
+    }, { passive: false });
+
+    canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        pinchStartDist = Math.hypot(dx, dy);
+        pinchStartZoom = globalState.camera.zoom;
+      }
+    }, { passive: true });
+
+    canvas.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2 && pinchStartDist > 0) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.hypot(dx, dy);
+        globalState.camera.zoom = Math.max(0.5, Math.min(5, pinchStartZoom * (dist / pinchStartDist)));
+      }
+    }, { passive: false });
+
+    // ---------------------------------------------------
+    // HIT TEST
+    // ---------------------------------------------------
+    function handleTap(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const screenX = clientX - rect.left;
+      const screenY = clientY - rect.top;
+      if (!globalState.radarLayer) return;
+      const hit = globalState.radarLayer.hitTest(screenX, screenY, worldToScreen, { agentRadius: 8 });
+      if (hit) {
+        globalState.radarLayer.showTooltip(hit, clientX, clientY);
+      } else {
+        globalState.radarLayer._hideTooltip?.();
+      }
+    }
+
+    // ---------------------------------------------------
+    // SIMULATOR
+    // ---------------------------------------------------
+    let txCount = 0;
+
+    function startSimulator() {
+      if (globalState.running) return;
+
+      // Bridged: agent → transport (sat/outbox) → gateway
+      globalState.bridge = createBridgedSimulator({
+        count: 12,
+        channels: 8,
+        path: 'auto',
+        constellation: true,
+        satMode: currentPhysMode,
+        onStateChange: () => {},
+        onError: (err) => console.error('[Sim]', err)
+      });
+
+      globalState.sim = globalState.bridge.simulator;
+      globalState.gateway = globalState.bridge.gateway;
+      globalState.transport = globalState.bridge.transport;
+
+      // BASE PTT share same transport
+      globalState.basePtt = getBasePTT({ transport: globalState.transport });
+      globalState.basePtt.setTransport(globalState.transport);
+      globalState.basePtt.onStateChange = (st) => {
+        if (st.active) {
+          btnBasePtt.classList.add('danger');
+          btnBasePttLabel.textContent = `ON AIR · CH-${String(st.channel).padStart(2, '0')}`;
+          basePttStatus.textContent = `BASE TALKING · CH-${String(st.channel).padStart(2, '0')}`;
+          basePttStatus.style.color = 'var(--danger)';
+        } else {
+          btnBasePtt.classList.remove('danger');
+          btnBasePttLabel.textContent = 'Hold to Talk (BASE)';
+          basePttStatus.textContent = `STANDBY · CH-${String(st.channel).padStart(2, '0')}`;
+          basePttStatus.style.color = 'var(--text-dim)';
+        }
+      };
+
+      // Count TX via transport ack
+      const prevAck = globalState.transport.onAck;
+      globalState.transport.onAck = (item, path) => {
+        txCount++;
+        if (typeof prevAck === 'function') prevAck(item, path);
+      };
+
+      globalState.bridge.start();
+      globalState.running = true;
+
+      btnStart.disabled = true;
+      btnStop.disabled = false;
+      statusSim.className = 'status-dot on';
+      toast(`Simulator + Mode Otonom (${currentPhysMode}) — 12 agents`, 'success');
+
+      setTimeout(() => {
+        fitToAgents();
+        setTimeout(fitToAgents, 1500);
+      }, 800);
+    }
+
+    function stopSimulator() {
+      if (!globalState.running && !globalState.sim) return;
+
+      if (globalState.basePtt) {
+        globalState.basePtt.stopPTT();
+      }
+
+      if (globalState.bridge) {
+        globalState.bridge.dispose();
+        globalState.bridge = null;
+      } else if (globalState.sim) {
+        globalState.sim.stopAll();
+        globalState.sim.disposeAll();
+      }
+
+      globalState.sim = null;
+      globalState.transport = null;
+
+      if (globalState.gateway) {
+        globalState.gateway.reset();
+      }
+
+      if (globalThis.BCGO_STATE?.satellite) {
+        for (const k of Object.keys(globalThis.BCGO_STATE.satellite)) {
+          delete globalThis.BCGO_STATE.satellite[k];
+        }
+      }
+
+      globalState.running = false;
+      txCount = 0;
+
+      btnStart.disabled = false;
+      btnStop.disabled = true;
+      statusSim.className = 'status-dot';
+      toast('Simulator stopped', 'info');
+    }
+
+    btnStart.addEventListener('click', async () => {
+      if (!globalState.audioReady) {
+        await htAudioSynth.init();
+        updateAudioUI();
+      }
+      startSimulator();
+    });
+
+    btnStop.addEventListener('click', stopSimulator);
+
+    btnEmergency.addEventListener('click', () => {
+      if (!globalState.sim) {
+        toast('Start simulator first', 'warn');
+        return;
+      }
+      globalState.sim.triggerEmergencyAll();
+      toast('Emergency triggered on all agents', 'error');
+    });
+
+    // ---------------------------------------------------
+    // BASE PTT (press & hold)
+    // ---------------------------------------------------
+    function readChannelInput() {
+      let ch = Number(inpChannel?.value);
+      if (!Number.isFinite(ch)) ch = 0;
+      ch = Math.max(0, Math.min(255, Math.floor(ch)));
+      if (inpChannel && Number(inpChannel.value) !== ch) inpChannel.value = String(ch);
+      return ch;
+    }
+
+    inpChannel?.addEventListener('change', () => {
+      const ch = readChannelInput();
+      if (!globalState.basePtt) {
+        globalState.basePtt = getBasePTT();
+      }
+      globalState.basePtt.setChannel(ch);
+      basePttStatus.textContent = `STANDBY · CH-${String(ch).padStart(2, '0')} · mic + sidetone`;
+    });
+
+    function bindBasePtt() {
+      const start = async (e) => {
+        e.preventDefault();
+        if (!globalState.running) {
+          toast('Start simulator first', 'warn');
+          return;
+        }
+        if (!globalState.basePtt) {
+          globalState.basePtt = getBasePTT({ transport: globalState.transport });
+        }
+        if (globalState.transport) {
+          globalState.basePtt.setTransport(globalState.transport);
+        }
+        globalState.basePtt.setChannel(readChannelInput());
+        await globalState.basePtt.startPTT();
+      };
+      const stop = (e) => {
+        e.preventDefault();
+        globalState.basePtt?.stopPTT();
+      };
+
+      btnBasePtt.addEventListener('mousedown', start);
+      btnBasePtt.addEventListener('mouseup', stop);
+      btnBasePtt.addEventListener('mouseleave', stop);
+      btnBasePtt.addEventListener('touchstart', start, { passive: false });
+      btnBasePtt.addEventListener('touchend', stop);
+      btnBasePtt.addEventListener('touchcancel', stop);
+    }
+    bindBasePtt();
+
+    // ---------------------------------------------------
+    // AUDIO
+    // ---------------------------------------------------
+    const SVG_SPEAKER_ON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg>`;
+    const SVG_SPEAKER_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`;
+
+    function updateAudioUI() {
+      const ready = htAudioSynth.isReady();
+      globalState.audioReady = ready;
+      btnAudio.innerHTML = (ready ? SVG_SPEAKER_ON : SVG_SPEAKER_OFF) + (ready ? ' Audio ON' : ' Audio OFF');
+      btnAudio.classList.toggle('active', ready);
+      statusAudio.className = ready ? 'status-dot on' : 'status-dot';
+    }
+
+    btnAudio.addEventListener('click', async () => {
+      if (htAudioSynth.isReady()) {
+        htAudioSynth.dispose();
+        updateAudioUI();
+        toast('Audio off', 'info');
+      } else {
+        let ok = await htAudioSynth.init();
+        if (!ok) await htAudioSynth.resume();
+        updateAudioUI();
+        if (htAudioSynth.isReady()) {
+          toast('Audio on', 'success');
+        } else {
+          toast('Tap again to enable audio (browser policy)', 'warn');
+        }
+      }
+    });
+
+    // ---------------------------------------------------
+    // HT LAYER
+    // ---------------------------------------------------
+    btnHtLayer.addEventListener('click', () => {
+      if (!globalState.radarLayer) return;
+      globalState.radarLayer.toggle();
+      btnHtLayer.classList.toggle('active', globalState.radarLayer.active);
+      toast(globalState.radarLayer.active ? 'HT Radio layer ON' : 'HT Radio layer OFF', 'info');
+    });
+
+    // ---------------------------------------------------
+    // STRESS TEST
+    // ---------------------------------------------------
+    async function runStress(durationSec) {
+      if (globalState.stressTest?.running) {
+        toast('Stress test already running', 'warn');
+        return;
+      }
+
+      stopSimulator();
+      await htAudioSynth.init();
+      updateAudioUI();
+
+      globalState.stressTest = new StressTest({
+        agents: 30,
+        durationSec,
+        channels: 8,
+        corruptRate: 0.05,
+        randomRate: 0.02,
+        verbose: false
+      });
+
+      globalState.stressTest.wrapAudioLatency?.();
+
+      stressProgress.classList.add('show');
+      stressBarFill.style.width = '0%';
+      stressTime.textContent = `0s / ${durationSec}s`;
+
+      const startTs = Date.now();
+      const progressTimer = setInterval(() => {
+        if (!globalState.stressTest?.running) {
+          clearInterval(progressTimer);
+          return;
+        }
+        const elapsed = Math.floor((Date.now() - startTs) / 1000);
+        const pct = Math.min(100, (elapsed / durationSec) * 100);
+        stressBarFill.style.width = `${pct}%`;
+        stressTime.textContent = `${elapsed}s / ${durationSec}s`;
+        stressFps.textContent = `${currentFps.toFixed(0)} fps`;
+      }, 500);
+
+      window.addEventListener('stressTestComplete', (ev) => {
+        clearInterval(progressTimer);
+        stressProgress.classList.remove('show');
+        globalState.stressTest = null;
+        toast(`Stress test done (${durationSec}s)`, 'success');
+        console.log('[Stress] Report:', ev.detail);
+      }, { once: true });
+
+      await globalState.stressTest.start();
+      toast(`Stress test ${durationSec}s started`, 'info');
+    }
+
+    btnStress.addEventListener('click', () => runStress(60));
+    btnStressLong.addEventListener('click', () => runStress(300));
+
+    // ---------------------------------------------------
+    // MODE OTONOM — Mata (sky) + metrics + physics control
+    // ---------------------------------------------------
+
+    function resizeSkyCanvas() {
+      if (!skyCanvas || !skyCtx) return;
+      const rect = skyCanvas.parentElement.getBoundingClientRect();
+      const d = window.devicePixelRatio || 1;
+      const size = Math.min(rect.width, rect.height) || 140;
+      skyCanvas.width  = Math.floor(size * d);
+      skyCanvas.height = Math.floor(size * d);
+      skyCtx.setTransform(d, 0, 0, d, 0, 0);
+      skyCanvas._cssSize = size;
+    }
+
+    /**
+     * Gambar kubah langit: zenith di pusat, horizon di tepi.
+     * Satelit digambar berdasarkan elevasi + azimuth simulasi.
+     */
+    function drawSkyView(metrics, state) {
+      if (!skyCtx || !skyCanvas) return;
+      const size = skyCanvas._cssSize || 140;
+      const cx = size / 2;
+      const cy = size / 2;
+      const R = size / 2 - 4;
+
+      skyCtx.clearRect(0, 0, size, size);
+
+      // Background disk
+      skyCtx.beginPath();
+      skyCtx.arc(cx, cy, R, 0, Math.PI * 2);
+      skyCtx.fillStyle = '#060c16';
+      skyCtx.fill();
+
+      // Elevation rings: 0°, 30°, 60°
+      for (const el of [0, 30, 60]) {
+        const r = R * (1 - el / 90);
+        skyCtx.beginPath();
+        skyCtx.arc(cx, cy, r, 0, Math.PI * 2);
+        skyCtx.strokeStyle = el === 0 ? 'rgba(42,54,70,0.8)' : 'rgba(42,54,70,0.35)';
+        skyCtx.lineWidth = el === 0 ? 1.5 : 0.8;
+        skyCtx.stroke();
+      }
+
+      // Cardinal directions
+      skyCtx.fillStyle = 'rgba(138,148,166,0.6)';
+      skyCtx.font = '8px ui-monospace, monospace';
+      skyCtx.textAlign = 'center';
+      skyCtx.textBaseline = 'middle';
+      skyCtx.fillText('N', cx, cy - R + 8);
+      skyCtx.fillText('S', cx, cy + R - 8);
+      skyCtx.fillText('E', cx + R - 8, cy);
+      skyCtx.fillText('W', cx - R + 8, cy);
+
+      // Crosshair
+      skyCtx.strokeStyle = 'rgba(42,54,70,0.4)';
+      skyCtx.lineWidth = 0.6;
+      skyCtx.beginPath();
+      skyCtx.moveTo(cx - R, cy); skyCtx.lineTo(cx + R, cy);
+      skyCtx.moveTo(cx, cy - R); skyCtx.lineTo(cx, cy + R);
+      skyCtx.stroke();
+
+      const inPass = metrics?.inPass && metrics.elevationDeg > 0;
+      if (!inPass) {
+        // Dim center when no pass
+        skyCtx.beginPath();
+        skyCtx.arc(cx, cy, 3, 0, Math.PI * 2);
+        skyCtx.fillStyle = 'rgba(138,148,166,0.3)';
+        skyCtx.fill();
+        return;
+      }
+
+      const elev = Math.max(0, Math.min(90, metrics.elevationDeg));
+      // Azimuth advances with pass progress (simple model: rises in east, sets west)
+      const azRad = (satAzimuth * Math.PI) / 180;
+      const rNorm = 1 - elev / 90; // 0 at zenith, 1 at horizon
+      const sx = cx + R * rNorm * Math.sin(azRad);
+      const sy = cy - R * rNorm * Math.cos(azRad);
+
+      // Trail arc (previous positions)
+      if (!drawSkyView._trail) drawSkyView._trail = [];
+      drawSkyView._trail.push({ x: sx, y: sy });
+      if (drawSkyView._trail.length > 40) drawSkyView._trail.shift();
+
+      if (drawSkyView._trail.length > 1) {
+        skyCtx.beginPath();
+        skyCtx.strokeStyle = 'rgba(59,130,246,0.35)';
+        skyCtx.lineWidth = 1.5;
+        skyCtx.moveTo(drawSkyView._trail[0].x, drawSkyView._trail[0].y);
+        for (let i = 1; i < drawSkyView._trail.length; i++) {
+          skyCtx.lineTo(drawSkyView._trail[i].x, drawSkyView._trail[i].y);
+        }
+        skyCtx.stroke();
+      }
+
+      // Satellite marker
+      const isTracking = state === SAT_STATE.TRACKING;
+      const isDegraded = state === SAT_STATE.DEGRADED;
+      const color = isTracking ? '#22c55e' : isDegraded ? '#f59e0b' : '#3b82f6';
+
+      // Glow
+      skyCtx.beginPath();
+      skyCtx.arc(sx, sy, 8, 0, Math.PI * 2);
+      skyCtx.fillStyle = color + '33';
+      skyCtx.fill();
+
+      // Core
+      skyCtx.beginPath();
+      skyCtx.arc(sx, sy, 4, 0, Math.PI * 2);
+      skyCtx.fillStyle = color;
+      skyCtx.fill();
+
+      // Beam line to zenith (optional visual)
+      skyCtx.beginPath();
+      skyCtx.moveTo(cx, cy);
+      skyCtx.lineTo(sx, sy);
+      skyCtx.strokeStyle = color + '44';
+      skyCtx.lineWidth = 1;
+      skyCtx.stroke();
+    }
+
+    function updateOtonomUI() {
+      // Prefer live result from transport, else tick ourselves
+      let result = null;
+      const t = globalState.transport;
+      if (t && typeof t.getSatelliteStatus === 'function') {
+        const st = t.getSatelliteStatus();
+        if (st) {
+          // Rebuild a partial result shape from transport status
+          result = {
+            state: st.state,
+            lqm: st.lqm,
+            packetValid: st.packetValid,
+            per: st.per,
+            metrics: {
+              inPass: st.inPass,
+              elevationDeg: st.elevation,
+              snrDb: null,
+              dopplerRateHzPerSec: null,
+              scintFadeDb: 0,
+              distanceKm: null
+            }
+          };
+        }
+      }
+
+      // Always tick virtual link for rich metrics + sky animation
+      try {
+        lastSatResult = updateSatelliteLink(100);
+        result = lastSatResult;
+      } catch { /* keep previous */ }
+
+      if (!result) return;
+
+      const state = result.state || '--';
+      const m = result.metrics || {};
+      const elev = m.elevationDeg;
+      const lqm = result.lqm === -Infinity ? null : result.lqm;
+      const inPass = !!m.inPass && elev > 0;
+
+      // Badge
+      if (otonomBadge) {
+        otonomBadge.textContent = state;
+        otonomBadge.className = 'otonom-badge' + (
+          state === SAT_STATE.TRACKING ? ' live' :
+          state === SAT_STATE.DEGRADED ? ' degraded' :
+          (state === SAT_STATE.LOSING_LOCK || state === SAT_STATE.COLD_START) ? ' lost' : ''
+        );
+      }
+
+      // State pills
+      if (statePills) {
+        for (const pill of statePills.querySelectorAll('.state-pill')) {
+          const s = pill.dataset.state;
+          pill.classList.remove('on', 'warn-on', 'bad-on');
+          if (s === state) {
+            if (s === 'TRACKING') pill.classList.add('on');
+            else if (s === 'DEGRADED' || s === 'ACQUIRING' || s === 'RE_ACQUIRING') pill.classList.add('warn-on');
+            else pill.classList.add('bad-on');
+          }
+        }
+      }
+
+      // Metrics
+      if (satElev) {
+        satElev.textContent = elev != null && Number.isFinite(elev) ? elev.toFixed(1) + '°' : '--°';
+        satElev.className = 'm-value' + (elev >= 30 ? ' good' : elev >= 10 ? ' warn' : elev > 0 ? ' bad' : '');
+      }
+      if (satLqmVal) {
+        satLqmVal.textContent = lqm != null ? lqm.toFixed(1) + ' dB' : '-- dB';
+        satLqmVal.className = 'm-value' + (
+          lqm != null && lqm >= 6 ? ' good' : lqm != null && lqm >= 4 ? ' warn' : lqm != null ? ' bad' : ''
+        );
+      }
+      if (satSnr) {
+        const snr = m.snrDb;
+        satSnr.textContent = snr != null && Number.isFinite(snr) ? snr.toFixed(1) + ' dB' : '-- dB';
+      }
+      if (satDoppler) {
+        const dr = m.dopplerRateHzPerSec;
+        satDoppler.textContent = dr != null && Number.isFinite(dr) ? Math.round(dr) + ' Hz/s' : '-- Hz/s';
+      }
+      if (satScint) {
+        const sc = m.scintFadeDb ?? 0;
+        satScint.textContent = sc.toFixed(1) + ' dB';
+        satScint.className = 'm-value' + (sc < -3 ? ' warn' : sc < -8 ? ' bad' : '');
+      }
+      if (satPer) {
+        const per = result.per;
+        satPer.textContent = per != null ? (per * 100).toFixed(2) + '%' : '--';
+        satPer.className = 'm-value' + (
+          per != null && per < 0.01 ? ' good' : per != null && per < 0.1 ? ' warn' : per != null ? ' bad' : ''
+        );
+      }
+      if (satDist) {
+        const d = m.distanceKm;
+        satDist.textContent = d != null && Number.isFinite(d) && d < 1e6 ? Math.round(d) + ' km' : '-- km';
+      }
+      if (satInpass) {
+        satInpass.textContent = inPass ? 'YES' : 'NO';
+        satInpass.className = 'm-value' + (inPass ? ' good' : '');
+      }
+
+      // Pass progress from channel elapsed
+      try {
+        const { channel } = getSatelliteLink();
+        const dur = channel.passDuration || SAT_CONSTANTS.PASS_DURATION_SEC;
+        const el = channel.elapsed || 0;
+        satPassElapsed = el;
+        const pct = inPass ? Math.min(100, (el / dur) * 100) : 0;
+        if (passBarFill) passBarFill.style.width = pct.toFixed(1) + '%';
+        if (passPct) passPct.textContent = pct.toFixed(0) + '%';
+        if (passLabel) {
+          passLabel.textContent = inPass
+            ? `Pass ${el.toFixed(0)}s / ${dur}s`
+            : (channel.interPassRemaining > 0
+              ? `Inter-pass ${(channel.interPassRemaining / 1000).toFixed(0)}s`
+              : 'Menunggu pass');
+        }
+        // Azimuth: rise east (90°) → zenith mid → set west (270°)
+        const normT = (el / dur) - 0.5; // -0.5 .. 0.5
+        satAzimuth = 90 + (normT + 0.5) * 180; // 90 → 270
+      } catch { /* */ }
+
+      // Sky label
+      if (skyLabel) {
+        if (inPass) {
+          skyLabel.textContent = `EL ${elev?.toFixed(0) ?? '--'}° · AZ ${satAzimuth.toFixed(0)}° · ${state}`;
+        } else {
+          skyLabel.textContent = 'SKY VIEW · menunggu pass';
+          drawSkyView._trail = [];
+        }
+      }
+
+      drawSkyView(m, state);
+
+      // Sync side-panel stats
+      if (statSat) {
+        statSat.textContent = state;
+        statSat.className = 'value ' + (
+          state === SAT_STATE.TRACKING ? 'good' :
+          state === SAT_STATE.DEGRADED ? 'warn' :
+          state && state !== '--' ? 'bad' : ''
+        );
+      }
+      if (statLqm) {
+        statLqm.textContent = lqm != null ? Number(lqm).toFixed(1) : '--';
+      }
+    }
+
+    // Physics mode switcher (Tangan)
+    function setPhysicsMode(mode) {
+      currentPhysMode = mode;
+      try {
+        resetSatelliteLink({ mode, passDurationSec: SAT_CONSTANTS.PASS_DURATION_SEC });
+        // Re-apply constellation short gaps if transport exists
+        if (globalState.transport) {
+          globalState.transport.opts.satMode = mode;
+          globalState.transport._initSatellite?.();
+        }
+      } catch (err) {
+        console.warn('[Otonom] setPhysicsMode:', err);
+      }
+      btnPhysIdeal?.classList.toggle('active', mode === PHYSICS_MODE.IDEAL);
+      btnPhysRealistic?.classList.toggle('active', mode === PHYSICS_MODE.REALISTIC);
+      btnPhysStress?.classList.toggle('active', mode === PHYSICS_MODE.STRESS);
+      toast(`Physics: ${mode}`, 'info');
+    }
+
+    btnPhysIdeal?.addEventListener('click', () => setPhysicsMode(PHYSICS_MODE.IDEAL));
+    btnPhysRealistic?.addEventListener('click', () => setPhysicsMode(PHYSICS_MODE.REALISTIC));
+    btnPhysStress?.addEventListener('click', () => setPhysicsMode(PHYSICS_MODE.STRESS));
+
+    // ---------------------------------------------------
+    // STATS
+    // ---------------------------------------------------
+    function updateStats() {
+      const gw = globalState.gateway || getGateway();
+      const g = gw.getGlobalStats();
+      const sat = globalThis.BCGO_STATE?.satellite || {};
+      const agentCount = Object.keys(sat).length;
+
+      statAgents.textContent = agentCount;
+      statFps.textContent = currentFps > 0 ? currentFps.toFixed(0) : '--';
+      statFps.className = 'value ' + (currentFps >= 50 ? 'good' : currentFps >= 30 ? 'warn' : 'bad');
+
+      if (performance.memory) {
+        const mb = performance.memory.usedJSHeapSize / 1024 / 1024;
+        statMem.textContent = `${mb.toFixed(1)} MB`;
+      } else {
+        statMem.textContent = 'n/a';
+      }
+
+      statRx.textContent = g.totalReceived.toLocaleString();
+      statTx.textContent = txCount.toLocaleString();
+      statCrc.textContent = g.totalCrcFail.toLocaleString();
+      statColl.textContent = g.totalCollisions.toLocaleString();
+      statDrop.textContent = g.totalDropped.toLocaleString();
+      statGap.textContent = g.totalGaps.toLocaleString();
+
+      // Transport / satellite
+      const t = globalState.transport || (typeof getTransport === 'function' ? getTransport() : null);
+      if (t) {
+        const ts = t.getStats();
+        if (statOutbox) statOutbox.textContent = String(ts.outbox ?? 0);
+        const sat = ts.satellite;
+        if (statSat) {
+          statSat.textContent = sat?.state || '--';
+          statSat.className = 'value ' + (
+            sat?.state === 'TRACKING' ? 'good' :
+            sat?.state === 'DEGRADED' ? 'warn' :
+            sat?.state ? 'bad' : ''
+          );
+        }
+        if (statLqm) {
+          statLqm.textContent = sat?.lqm != null ? Number(sat.lqm).toFixed(1) : '--';
+        }
+      }
+
+      const uptimeSec = Math.floor(g.uptimeMs / 1000);
+      statUptime.textContent = uptimeSec < 60
+        ? `${uptimeSec}s`
+        : `${Math.floor(uptimeSec / 60)}m ${uptimeSec % 60}s`;
+
+      statusNet.className = 'status-dot on';
+
+      // Mode Otonom live refresh
+      updateOtonomUI();
+    }
+
+    setInterval(updateStats, 500);
+
+    // ---------------------------------------------------
+    // INIT
+    // ---------------------------------------------------
+    function init() {
+      injectRadioStyles();
+      resizeCanvas();
+      resizeSkyCanvas();
+      window.addEventListener('resize', () => {
+        resizeCanvas();
+        resizeSkyCanvas();
+      });
+
+      globalState.radarLayer = initRadarLayer(null, {
+        canvas,
+        controlPanel: document.getElementById('radar-controls'),
+        autoInjectButton: false
+      });
+
+      if (globalState.radarLayer && !globalState.radarLayer.active) {
+        globalState.radarLayer.setActive(true);
+      }
+      btnHtLayer.classList.add('active');
+
+      // Pre-create gateway so state is ready
+      globalState.gateway = getGateway({
+        state: globalThis.BCGO_STATE,
+        chat: globalThis.cgoChat,
+        verbose: false
+      });
+
+      // Init satellite virtual link (Mode Otonom siap dari awal)
+      try {
+        resetSatelliteLink({
+          mode: currentPhysMode,
+          passDurationSec: SAT_CONSTANTS.PASS_DURATION_SEC
+        });
+      } catch (err) {
+        console.warn('[Init] satellite link:', err);
+      }
+
+      requestAnimationFrame(renderLoop);
+
+      setTimeout(() => {
+        splash.classList.add('hide');
+        setTimeout(() => splash.remove(), 500);
+      }, 600);
+
+      toast('BCGO Satellite · Mode Otonom siap', 'success');
+      updateAudioUI();
+      updateStats();
+      updateOtonomUI();
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</body>
+</html>
