@@ -763,18 +763,42 @@
 
     .ops-grid .btn {
       flex-direction: column;
-      gap: 2px;
+      gap: 4px;
       padding: 10px 6px;
-      min-height: 52px;
+      min-height: 56px;
       font-size: 10px;
     }
 
-    .ops-grid .btn .ops-ico { font-size: 14px; line-height: 1; }
+    .ops-grid .btn svg {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+
     .ops-grid .btn.connected {
       background: rgba(34, 197, 94, 0.15);
       border-color: var(--accent);
       color: var(--accent);
     }
+
+    .section-divider {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px 4px;
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      background: rgba(0,0,0,0.2);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-divider svg { width: 12px; height: 12px; opacity: 0.7; }
+    .section-divider.sat { color: var(--accent-2); }
+    .section-divider.ht { color: var(--accent); }
 
     .ops-grid .btn.acting {
       animation: ops-pulse 0.6s ease-in-out 2;
@@ -1054,36 +1078,11 @@
 
       <!-- Side panel -->
       <aside class="side">
-        <!-- Controls -->
-        <div class="panel-section">
-          <h3 class="panel-title">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
-            Control
-          </h3>
-          <div class="btn-grid">
-            <button class="btn primary" id="btn-start" type="button">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-              Start
-            </button>
-            <button class="btn danger" id="btn-stop" type="button" disabled>
-              <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
-              Stop
-            </button>
-            <button class="btn warn btn-full" id="btn-emergency" type="button">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-              </svg>
-              Emergency All
-            </button>
-            <button class="btn btn-full" id="btn-audio" type="button">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                <path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
-              </svg>
-              Audio OFF
-            </button>
-          </div>
+
+        <!-- ════════ SATELIT (langit) ════════ -->
+        <div class="section-divider sat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 000 20 14.5 14.5 0 000-20"/><path d="M2 12h20"/></svg>
+          Satelit · Langit
         </div>
 
         <!-- ═══ MODE OTONOM ═══ -->
@@ -1175,21 +1174,24 @@
             <span id="psi-val">--</span>
           </div>
 
-          <!-- CONNECT · BACA · ACTION — dipetakan ke virtual.js -->
+          <!-- CONNECT · BACA · ACTION — proses langit (virtual.js + TLE) -->
           <div class="ops-grid">
-            <button class="btn" id="btn-ops-connect" type="button" title="Kunci satelit + buka path (SIM atau TLE)">
-              <span class="ops-ico">🔌</span>Connect
+            <button class="btn" id="btn-ops-connect" type="button" title="Sambung ke konstelasi / buka tracking langit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M1.42 9a16 16 0 0121.16 0"/><path d="M8.53 16.11a6 6 0 016.95 0"/><circle cx="12" cy="20" r="1.5" fill="currentColor"/></svg>
+              Connect
             </button>
-            <button class="btn" id="btn-ops-read" type="button" title="Baca geometri + LQM dari virtual.js">
-              <span class="ops-ico">📡</span>Baca
+            <button class="btn" id="btn-ops-read" type="button" title="Baca posisi satelit di langit + LQM">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+              Baca
             </button>
-            <button class="btn" id="btn-ops-action" type="button" title="Gerak nyata di link: TX / Ping / Emergency">
-              <span class="ops-ico">⚡</span>Action
+            <button class="btn" id="btn-ops-action" type="button" title="Aksi langit: kunci / ganti / LOS">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Action
             </button>
           </div>
 
           <div class="read-card" id="read-card">
-            <div class="rc-title" id="rc-title">READ</div>
+            <div class="rc-title" id="rc-title">READ · LANGIT</div>
             <div class="rc-row"><span class="rc-k">State</span><span class="rc-v" id="rc-state">--</span></div>
             <div class="rc-row"><span class="rc-k">Satelit</span><span class="rc-v" id="rc-sat">--</span></div>
             <div class="rc-row"><span class="rc-k">El / Az</span><span class="rc-v" id="rc-elaz">--</span></div>
@@ -1200,9 +1202,18 @@
           </div>
 
           <div class="action-sheet" id="action-sheet">
-            <button class="btn" id="btn-act-tx" type="button" title="PTT singkat via link">TX</button>
-            <button class="btn" id="btn-act-ping" type="button" title="Uji paket + PER">Ping</button>
-            <button class="btn warn" id="btn-act-emer" type="button" title="Emergency flag">EMER</button>
+            <button class="btn" id="btn-act-lock" type="button" title="Kunci satelit target di langit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+              Lock
+            </button>
+            <button class="btn" id="btn-act-next" type="button" title="Ganti ke satelit berikutnya (el lebih rendah)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="9 18 15 12 9 6"/></svg>
+              Next
+            </button>
+            <button class="btn warn" id="btn-act-los" type="button" title="Lepas kunci / tunggu LOS / re-scan">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+              LOS
+            </button>
           </div>
 
           <!-- Physics mode -->
@@ -1239,6 +1250,43 @@
           </div>
           <div class="ch-list" id="ch-list">
             <div class="ch-empty" id="ch-empty">Aktifkan peta live untuk melihat channel</div>
+          </div>
+        </div>
+
+        <!-- ════════ HT RADIO ════════ -->
+        <div class="section-divider ht">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
+          HT Radio
+        </div>
+
+        <div class="panel-section">
+          <h3 class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
+            Control HT
+          </h3>
+          <div class="btn-grid">
+            <button class="btn primary" id="btn-start" type="button">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              Start
+            </button>
+            <button class="btn danger" id="btn-stop" type="button" disabled>
+              <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+              Stop
+            </button>
+            <button class="btn warn btn-full" id="btn-emergency" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              Emergency All
+            </button>
+            <button class="btn btn-full" id="btn-audio" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/>
+              </svg>
+              Audio OFF
+            </button>
           </div>
         </div>
 
@@ -1477,9 +1525,9 @@
     const actionSheet   = $('action-sheet');
     const psiBarFill    = $('psi-bar-fill');
     const psiValEl      = $('psi-val');
-    const btnActTx      = $('btn-act-tx');
-    const btnActPing    = $('btn-act-ping');
-    const btnActEmer    = $('btn-act-emer');
+    const btnActLock    = $('btn-act-lock');
+    const btnActNext    = $('btn-act-next');
+    const btnActLos     = $('btn-act-los');
     const oiSat       = $('oi-sat');
     const oiPlane     = $('oi-plane');
     const oiHeading   = $('oi-heading');
@@ -2694,92 +2742,84 @@
       pushPassEvent(`READ · ${name} · el ${elev != null ? Number(elev).toFixed(0) : '--'}°`);
     }
 
-    /** ACTION — gerak nyata: buka sheet TX / Ping / Emergency */
+    /** ACTION — aksi langit: buka sheet Lock / Next / LOS */
     function opsAction() {
       actionSheet?.classList.toggle('show');
       btnOpsAction?.classList.add('acting');
       setTimeout(() => btnOpsAction?.classList.remove('acting'), 700);
     }
 
-    async function actTx() {
-      const gate = getLinkGate();
-      if (!gate.ok && gate.lqm != null && gate.lqm < SAT_CONSTANTS.LQM_THRESHOLD_DEGRADED_DB) {
-        toast(`TX ditolak · LQM ${gate.lqm?.toFixed?.(1) ?? '--'} (butuh ≥ ${SAT_CONSTANTS.LQM_THRESHOLD_DEGRADED_DB} dB)`, 'error');
+    /** LOCK — kunci satelit target di langit (selectedSatName) */
+    function actLock() {
+      btnOpsAction?.classList.add('acting');
+      const target = liveTarget || pickLiveTarget(latestSnapshot);
+      if (!target) {
+        toast('Lock gagal · tidak ada satelit el ≥ 10°', 'warn');
+        setTimeout(() => btnOpsAction?.classList.remove('acting'), 700);
         return;
       }
-      btnOpsAction?.classList.add('acting');
-      try {
-        if (!globalState.running) {
-          try { startSimulator(); } catch { /* */ }
-        }
-        if (globalState.basePtt && typeof globalState.basePtt.start === 'function') {
-          globalState.basePtt.start();
-          setTimeout(() => globalState.basePtt?.stop?.(), 900);
-        } else if (globalState.transport && typeof globalState.transport.enqueue === 'function') {
-          globalState.transport.enqueue({
-            type: 'PTT',
-            priority: 'PTT',
-            channel: Number($('inp-channel')?.value || 0),
-            ts: Date.now()
-          });
-          globalState.transport.flush?.();
-        }
-        try { htAudioSynth.playRogerBeep?.(); } catch { /* */ }
-        toast('ACTION TX · burst gerak via link', 'success');
-        pushPassEvent(`ACTION TX · state ${gate.state || '--'}`);
-      } catch (err) {
-        toast('TX gagal: ' + (err.message || err), 'error');
-      }
+      selectedSatName = target.name;
+      liveTarget = target;
+      feedPhysicsFromLive(target);
+      renderChannelList(latestSnapshot);
+      drawLiveMap();
+      toast(`LOCK · ${target.name} · el ${target.elDeg.toFixed(1)}°`, 'success');
+      pushPassEvent(`LOCK · ${target.name}`);
       setTimeout(() => btnOpsAction?.classList.remove('acting'), 700);
     }
 
-    function actPing() {
-      const gate = getLinkGate();
-      const r = gate.result;
-      const valid = r?.packetValid;
-      // Satu tick fisika = prediksi PER
+    /** NEXT — pindah ke satelit visible berikutnya (gerak target di langit) */
+    function actNext() {
+      btnOpsAction?.classList.add('acting');
+      const visible = latestSnapshot
+        .filter((s) => s.aboveHorizon && s.elDeg >= SAT_CONSTANTS.MIN_ELEVATION_DEG)
+        .sort((a, b) => b.elDeg - a.elDeg);
+      if (visible.length === 0) {
+        toast('Next · tidak ada satelit di atas horizon', 'warn');
+        setTimeout(() => btnOpsAction?.classList.remove('acting'), 700);
+        return;
+      }
+      let idx = selectedSatName
+        ? visible.findIndex((s) => s.name === selectedSatName)
+        : (liveTarget ? visible.findIndex((s) => s.name === liveTarget.name) : -1);
+      idx = (idx + 1) % visible.length;
+      const next = visible[idx];
+      selectedSatName = next.name;
+      liveTarget = next;
+      feedPhysicsFromLive(next);
+      renderChannelList(latestSnapshot);
+      drawLiveMap();
+      toast(`NEXT · ${next.name} · el ${next.elDeg.toFixed(1)}°`, 'info');
+      pushPassEvent(`NEXT · ${next.name}`);
+      setTimeout(() => btnOpsAction?.classList.remove('acting'), 700);
+    }
+
+    /** LOS — lepas kunci, clear target, biarkan re-scan langit */
+    function actLos() {
+      btnOpsAction?.classList.add('acting');
+      const was = selectedSatName || liveTarget?.name || '—';
+      selectedSatName = null;
+      liveTarget = null;
+      drawSkyView._trail = [];
       try {
-        if (liveTarget) feedPhysicsFromLive(liveTarget);
-        else lastSatResult = updateSatelliteLink(100);
+        // Paksa tick tanpa satelit → state machine ke gap / scan
+        lastSatResult = updateSatelliteLink(1000, {
+          externalGeo: { elevationDeg: 0, distanceKm: Infinity, name: null }
+        });
       } catch { /* */ }
-      const per = lastSatResult?.per;
-      const ok = lastSatResult?.packetValid;
-      toast(
-        ok ? `Ping OK · PER ${per != null ? (per * 100).toFixed(2) : '--'}%` : `Ping LOSS · PER ${per != null ? (per * 100).toFixed(2) : '--'}%`,
-        ok ? 'success' : 'warn'
-      );
-      pushPassEvent(`PING · ${ok ? 'OK' : 'LOSS'} · PER ${per != null ? (per * 100).toFixed(2) : '--'}%`);
-      btnOpsAction?.classList.add('acting');
-      setTimeout(() => btnOpsAction?.classList.remove('acting'), 700);
-    }
-
-    function actEmergency() {
-      btnOpsAction?.classList.add('acting');
-      try {
-        // Emergency selalu diizinkan (priority), tetap lewat virtual gate untuk log
-        if (globalState.sim && typeof globalState.sim.triggerEmergencyAll === 'function') {
-          globalState.sim.triggerEmergencyAll();
-        } else if (btnEmergency) {
-          btnEmergency.click();
-        } else if (globalState.transport?.enqueue) {
-          globalState.transport.enqueue({ type: 'EMERGENCY', priority: 'EMERGENCY', ts: Date.now() });
-          globalState.transport.flush?.();
-        }
-        try { htAudioSynth.playCollisionAlert?.(); } catch { /* */ }
-        toast('ACTION EMERGENCY · broadcast', 'warn');
-        pushPassEvent('ACTION EMERGENCY');
-      } catch (err) {
-        toast('Emergency: ' + (err.message || err), 'error');
-      }
+      renderChannelList(latestSnapshot);
+      drawLiveMap();
+      toast(`LOS · lepas ${was} · re-scan langit`, 'warn');
+      pushPassEvent(`LOS · ${was}`);
       setTimeout(() => btnOpsAction?.classList.remove('acting'), 700);
     }
 
     btnOpsConnect?.addEventListener('click', () => { opsConnect(); });
     btnOpsRead?.addEventListener('click', () => { opsRead(); });
     btnOpsAction?.addEventListener('click', () => { opsAction(); });
-    btnActTx?.addEventListener('click', () => { actTx(); });
-    btnActPing?.addEventListener('click', () => { actPing(); });
-    btnActEmer?.addEventListener('click', () => { actEmergency(); });
+    btnActLock?.addEventListener('click', () => { actLock(); });
+    btnActNext?.addEventListener('click', () => { actNext(); });
+    btnActLos?.addEventListener('click', () => { actLos(); });
 
     // Sky tools
     btnSkyDome?.addEventListener('click', () => {
