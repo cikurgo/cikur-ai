@@ -77,7 +77,6 @@ class VirtualRadioGateway {
     const decoded = decodeHTPacket(payload);
 
     if (!decoded.valid) {
-      slot.collisionCount++;
       this.stats.totalCrcFail++;
       if (this.verbose) console.debug(`[Gateway] CH-${channelId} discard: ${decoded.error}`);
       this.audio.playCollisionAlert?.();

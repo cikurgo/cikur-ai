@@ -213,7 +213,10 @@ class BasePTT {
 
     const transport = this.transport || null;
     if (transport && typeof transport.send === 'function') {
-      transport.send(this.channel, payload, meta);
+      void transport.send(this.channel, payload, meta).catch(err => {
+        console.error('[BasePTT] transport error:', err);
+        this.onError?.(err);
+      });
     } else if (typeof this.onTransmit === 'function') {
       this.onTransmit(this.channel, payload, meta);
     }

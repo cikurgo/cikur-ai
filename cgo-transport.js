@@ -23,6 +23,7 @@ import {
   PHYSICS_MODE,
   SAT_STATE
 } from './cgo-satellite-virtual.js';
+import { getPhysicalSatellite } from './cgo-satellite-physical.js';
 
 // Lazy gateway import agar tetap portable jika engine belum ada
 function resolveGateway() {
@@ -42,7 +43,8 @@ function resolveGateway() {
 const PATH = Object.freeze({
   LOCAL: 'local',
   SAT: 'sat',
-  AUTO: 'auto'
+  AUTO: 'auto',
+  PHYSICAL: 'physical'
 });
 
 const PRIORITY = Object.freeze({
@@ -67,7 +69,8 @@ const DEFAULTS = Object.freeze({
    */
   constellation: true,
   constellationInterPassMinMs: 5_000,
-  constellationInterPassMaxMs: 25_000
+  constellationInterPassMaxMs: 25_000,
+  physicalSatellite: null
 });
 
 // ============================================================
@@ -128,7 +131,10 @@ class CgoTransport {
       dropped: 0,
       satOk: 0,
       satFail: 0,
-      localOk: 0
+      localOk: 0,
+      sinkMissing: 0,
+      physicalOk: 0,
+      physicalFail: 0
     };
 
     this.onDeliver = options.onDeliver ?? null;
@@ -136,6 +142,7 @@ class CgoTransport {
     this.onDrop = options.onDrop ?? null;
     this.onAck = options.onAck ?? null;
     this.gateway = options.gateway ?? null;
+    this.physicalSatellite = options.physicalSatellite ?? this.opts.physicalSatellite ?? null;
 
     // Init satellite link (constellation → gap pendek)
     this._initSatellite();
@@ -191,7 +198,7 @@ class CgoTransport {
     }, this.opts.satTickMs);
 
     this._flushTimer = setInterval(() => {
-      this.flush();
+      void this.flush().catch(err => console.error('[Transport] flush:', err));
     }, this.opts.flushIntervalMs);
   }
 
@@ -215,7 +222,10 @@ class CgoTransport {
       dropped: 0,
       satOk: 0,
       satFail: 0,
-      localOk: 0
+      localOk: 0,
+      sinkMissing: 0,
+      physicalOk: 0,
+      physicalFail: 0
     };
     this._initSatellite();
   }
@@ -236,14 +246,22 @@ class CgoTransport {
    * @param {string} [meta.path]  override path untuk item ini
    * @returns {{ id: string, queued: boolean, delivered: boolean }}
    */
-  send(channel, payload, meta = {}) {
+  async send(channel, payload, meta = {}) {
+    const normalizedChannel = Number(channel);
+    if (!Number.isInteger(normalizedChannel) || normalizedChannel < 0 || normalizedChannel >= 256) {
+      throw new RangeError('[Transport] channel harus integer 0..255');
+    }
+    if (!(payload instanceof Uint8Array) || payload.byteLength !== 32) {
+      throw new TypeError('[Transport] payload harus Uint8Array 32-byte');
+    }
+
     let priority = meta.priority ?? PRIORITY.NORMAL;
     if (meta.emergency) priority = Math.max(priority, PRIORITY.EMERGENCY);
     if (meta.ptt) priority = Math.max(priority, PRIORITY.PTT);
 
     const item = {
       id: makeId(),
-      channel: Number(channel) || 0,
+      channel: normalizedChannel,
       payload: copyPayload(payload),
       priority,
       attempts: 0,
@@ -253,7 +271,7 @@ class CgoTransport {
     };
 
     // Coba langsung
-    const delivered = this._tryDeliver(item);
+    const delivered = await this._tryDeliver(item);
     if (delivered) {
       this.stats.delivered++;
       this.onAck?.(item, item._lastPath || this.opts.path);
@@ -298,7 +316,7 @@ class CgoTransport {
    * Coba kirim semua yang sudah waktunya.
    * @returns {number} jumlah berhasil
    */
-  flush() {
+  async flush() {
     if (!this.outbox.length) return 0;
 
     const now = Date.now();
@@ -311,7 +329,7 @@ class CgoTransport {
         continue;
       }
 
-      const delivered = this._tryDeliver(item);
+      const delivered = await this._tryDeliver(item);
       if (delivered) {
         ok++;
         this.stats.delivered++;
@@ -348,7 +366,7 @@ class CgoTransport {
    * @param {OutboxItem} item
    * @returns {boolean}
    */
-  _tryDeliver(item) {
+  async _tryDeliver(item) {
     const path = item.meta?.path || this.opts.path;
 
     if (path === PATH.LOCAL) {
@@ -357,9 +375,17 @@ class CgoTransport {
     if (path === PATH.SAT) {
       return this._deliverSat(item);
     }
+    if (path === PATH.PHYSICAL) {
+      return await this._deliverPhysical(item);
+    }
     // AUTO: sat dulu jika bagus, else local (sim), else fail → queue
     if (this._satIsGood()) {
       if (this._deliverSat(item)) return true;
+    }
+    // AUTO tidak diam-diam menganggap physical tersedia. Jika adapter terhubung,
+    // physical menjadi jalur nyata yang boleh dicoba setelah virtual SAT gagal.
+    if (this.physicalSatellite?.isConnected?.()) {
+      if (await this._deliverPhysical(item)) return true;
     }
     // Fallback local (berguna di test bench / near base)
     if (this._deliverLocal(item)) return true;
@@ -410,6 +436,36 @@ class CgoTransport {
     return ok;
   }
 
+
+  async _deliverPhysical(item) {
+    const sat = this.physicalSatellite || getPhysicalSatellite();
+    if (!sat || typeof sat.sendPacket !== 'function' || !sat.isConnected?.()) {
+      this.stats.satFail++;
+      return false;
+    }
+    try {
+      const result = await sat.sendPacket(item.payload, {
+        channel: item.channel,
+        priority: item.priority,
+        emergency: item.meta?.emergency === true,
+        ptt: item.meta?.ptt === true,
+        agentId: item.meta?.agentId ?? null,
+        callsign: item.meta?.callsign ?? null
+      });
+      if (result === true || result?.delivered === true || result?.success === true) {
+        this.stats.physicalOk = (this.stats.physicalOk || 0) + 1;
+        item._lastPath = PATH.PHYSICAL;
+        return true;
+      }
+      this.stats.physicalFail = (this.stats.physicalFail || 0) + 1;
+      return false;
+    } catch (err) {
+      this.stats.physicalFail = (this.stats.physicalFail || 0) + 1;
+      this.onDrop?.(item, 'physical_error');
+      return false;
+    }
+  }
+
   _deliverLocal(item) {
     const ok = this._handToGateway(item, 'local');
     if (ok) this.stats.localOk++;
@@ -446,11 +502,13 @@ class CgoTransport {
       }
     }
 
-    // 3) Tidak ada sink — anggap sukses di dry-run (dev)
+    // 3) Tidak ada sink bukan delivery sukses.
+    // Paket tetap berada di outbox agar tidak ada ACK palsu.
+    this.stats.sinkMissing++;
     if (typeof console !== 'undefined' && console.debug) {
-      console.debug('[Transport] dry-run deliver', pathUsed, item.channel, item.id);
+      console.debug('[Transport] no delivery sink', pathUsed, item.channel, item.id);
     }
-    return true;
+    return false;
   }
 
   // ----------------------------------------------------------
@@ -480,6 +538,7 @@ class CgoTransport {
       outbox: this.outbox.length,
       path: this.opts.path,
       constellation: this.opts.constellation,
+      physicalConnected: !!this.physicalSatellite?.isConnected?.(),
       satellite: this.getSatelliteStatus()
     };
   }

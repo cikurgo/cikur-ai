@@ -17,6 +17,8 @@ import { getGateway } from './cgo-ht-radio-engine.js';
 import { getTransport, resetTransport, PATH, PRIORITY } from './cgo-transport.js';
 import { STATUS_FLAGS } from './ht-protocol.js';
 
+const BRIDGE_WRAP = Symbol('cgoHtBridgeWrapped');
+
 /**
  * Hubungkan onTransmit simulator ke transport.
  *
@@ -47,27 +49,31 @@ function wireSimulatorToTransport(simulator, options = {}) {
   });
 
   transport.gateway = gateway;
+  if (options.physicalSatellite) transport.physicalSatellite = options.physicalSatellite;
   transport.start();
 
   // Override tiap agent onTransmit
   for (const agent of simulator.agents || []) {
+    if (agent[BRIDGE_WRAP]) continue;
     const original = agent.onTransmit;
-    agent.onTransmit = (channel, payload) => {
+    const wrapped = (channel, payload) => {
       const emergency = (agent.status & STATUS_FLAGS.EMERGENCY) !== 0;
       const ptt = (agent.status & STATUS_FLAGS.PTT_ACTIVE) !== 0;
 
-      transport.send(channel, payload, {
+      void transport.send(channel, payload, {
         emergency,
         ptt,
         agentId: agent.agentId,
         callsign: agent.callsign
-      });
+      }).catch(err => options.onError?.(err));
 
       // optional: tetap panggil original (mis. counter lokal)
       if (typeof original === 'function') {
         try { original(channel, payload); } catch { /* noop */ }
       }
     };
+    Object.defineProperty(wrapped, BRIDGE_WRAP, { value: true });
+    agent.onTransmit = wrapped;
   }
 
   return { transport, gateway };
@@ -91,7 +97,8 @@ function createBridgedSimulator(config = {}) {
     path: config.path || PATH.AUTO,
     gateway,
     constellation: config.constellation !== false,
-    satMode: config.satMode || 'realistic'
+    satMode: config.satMode || 'realistic',
+    physicalSatellite: config.physicalSatellite || null
   });
   transport.start();
 
@@ -102,13 +109,17 @@ function createBridgedSimulator(config = {}) {
     weights: config.weights,
     onTransmit: (channel, payload) => {
       // akan di-override per-agent di wire; fallback:
-      transport.send(channel, payload, {});
+      void transport.send(channel, payload, {}).catch(err => config.onError?.(err));
     },
     onStateChange: config.onStateChange,
     onError: config.onError
   });
 
-  wireSimulatorToTransport(simulator, { transport, gateway, path: config.path });
+  wireSimulatorToTransport(simulator, {
+    transport, gateway, path: config.path,
+    physicalSatellite: config.physicalSatellite || null,
+    onError: config.onError
+  });
 
   return {
     simulator,
