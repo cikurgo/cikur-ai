@@ -753,6 +753,93 @@
       text-align: center;
     }
 
+    /* Ops: Connect · Baca · Action (gerak) */
+    .ops-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+      margin: 8px 0;
+    }
+
+    .ops-grid .btn {
+      flex-direction: column;
+      gap: 2px;
+      padding: 10px 6px;
+      min-height: 52px;
+      font-size: 10px;
+    }
+
+    .ops-grid .btn .ops-ico { font-size: 14px; line-height: 1; }
+    .ops-grid .btn.connected {
+      background: rgba(34, 197, 94, 0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .ops-grid .btn.acting {
+      animation: ops-pulse 0.6s ease-in-out 2;
+      background: rgba(59, 130, 246, 0.25);
+      border-color: var(--accent-2);
+    }
+
+    @keyframes ops-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(0.94); box-shadow: 0 0 12px rgba(59, 130, 246, 0.5); }
+    }
+
+    .read-card {
+      display: none;
+      background: rgba(0,0,0,0.35);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      font-family: var(--mono);
+      font-size: 10px;
+      line-height: 1.55;
+    }
+
+    .read-card.show { display: block; }
+    .read-card .rc-title { color: var(--accent-2); font-weight: 700; margin-bottom: 4px; }
+    .read-card .rc-row { display: flex; justify-content: space-between; gap: 8px; }
+    .read-card .rc-k { color: var(--text-dim); }
+    .read-card .rc-v { color: var(--text); font-weight: 600; }
+
+    .psi-bar-wrap {
+      margin: 6px 0 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text-dim);
+    }
+
+    .psi-bar {
+      flex: 1;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .psi-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent-2), var(--accent));
+      transition: width 0.35s ease;
+    }
+
+    .action-sheet {
+      display: none;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+
+    .action-sheet.show { display: grid; }
+    .action-sheet .btn { padding: 8px 4px; font-size: 9px; }
+
     /* Orbit / path info card */
     .orbit-info {
       background: rgba(0,0,0,0.28);
@@ -1081,7 +1168,44 @@
             </div>
           </div>
 
-          <!-- Physics mode (Tangan) -->
+          <!-- Ψ order parameter (Kesadaran / Manifold) -->
+          <div class="psi-bar-wrap" title="Order parameter dari manifold (el, LQM, Doppler)">
+            <span>Ψ</span>
+            <div class="psi-bar"><div class="psi-bar-fill" id="psi-bar-fill"></div></div>
+            <span id="psi-val">--</span>
+          </div>
+
+          <!-- CONNECT · BACA · ACTION — dipetakan ke virtual.js -->
+          <div class="ops-grid">
+            <button class="btn" id="btn-ops-connect" type="button" title="Kunci satelit + buka path (SIM atau TLE)">
+              <span class="ops-ico">🔌</span>Connect
+            </button>
+            <button class="btn" id="btn-ops-read" type="button" title="Baca geometri + LQM dari virtual.js">
+              <span class="ops-ico">📡</span>Baca
+            </button>
+            <button class="btn" id="btn-ops-action" type="button" title="Gerak nyata di link: TX / Ping / Emergency">
+              <span class="ops-ico">⚡</span>Action
+            </button>
+          </div>
+
+          <div class="read-card" id="read-card">
+            <div class="rc-title" id="rc-title">READ</div>
+            <div class="rc-row"><span class="rc-k">State</span><span class="rc-v" id="rc-state">--</span></div>
+            <div class="rc-row"><span class="rc-k">Satelit</span><span class="rc-v" id="rc-sat">--</span></div>
+            <div class="rc-row"><span class="rc-k">El / Az</span><span class="rc-v" id="rc-elaz">--</span></div>
+            <div class="rc-row"><span class="rc-k">LQM / PER</span><span class="rc-v" id="rc-lqm">--</span></div>
+            <div class="rc-row"><span class="rc-k">Jarak</span><span class="rc-v" id="rc-dist">--</span></div>
+            <div class="rc-row"><span class="rc-k">Sumber</span><span class="rc-v" id="rc-src">--</span></div>
+            <div class="rc-row"><span class="rc-k">Ψ</span><span class="rc-v" id="rc-psi">--</span></div>
+          </div>
+
+          <div class="action-sheet" id="action-sheet">
+            <button class="btn" id="btn-act-tx" type="button" title="PTT singkat via link">TX</button>
+            <button class="btn" id="btn-act-ping" type="button" title="Uji paket + PER">Ping</button>
+            <button class="btn warn" id="btn-act-emer" type="button" title="Emergency flag">EMER</button>
+          </div>
+
+          <!-- Physics mode -->
           <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.6px;">Physics Mode</div>
           <div class="phys-mode-grid">
             <button class="btn" id="btn-phys-ideal" type="button" title="Hanya geometri">Ideal</button>
@@ -1246,6 +1370,7 @@
       LiveConstellation,
       DEFAULT_OBSERVER
     } from './cgo-satellite-live-tle.js';
+    import { Manifold } from './cgo-verify-all.js';
 
     // ---------------------------------------------------
     // GLOBAL STATE
@@ -1345,6 +1470,16 @@
     const btnPhysIdeal     = $('btn-phys-ideal');
     const btnPhysRealistic = $('btn-phys-realistic');
     const btnPhysStress    = $('btn-phys-stress');
+    const btnOpsConnect = $('btn-ops-connect');
+    const btnOpsRead    = $('btn-ops-read');
+    const btnOpsAction  = $('btn-ops-action');
+    const readCard      = $('read-card');
+    const actionSheet   = $('action-sheet');
+    const psiBarFill    = $('psi-bar-fill');
+    const psiValEl      = $('psi-val');
+    const btnActTx      = $('btn-act-tx');
+    const btnActPing    = $('btn-act-ping');
+    const btnActEmer    = $('btn-act-emer');
     const oiSat       = $('oi-sat');
     const oiPlane     = $('oi-plane');
     const oiHeading   = $('oi-heading');
@@ -2457,10 +2592,198 @@
     btnPhysRealistic?.addEventListener('click', () => setPhysicsMode(PHYSICS_MODE.REALISTIC));
     btnPhysStress?.addEventListener('click', () => setPhysicsMode(PHYSICS_MODE.STRESS));
 
+    // ---------------------------------------------------
+    // OPS: Connect · Baca · Action — sumber: cgo-satellite-virtual.js
+    // ---------------------------------------------------
+    let linkConnected = false;
+    const linkManifold = new Manifold(32);
+
+    function pushManifoldSample(result) {
+      if (!result?.metrics) return;
+      const el = result.metrics.elevationDeg ?? 0;
+      const lqm = result.lqm === -Infinity || result.lqm == null ? -20 : result.lqm;
+      const dr = result.metrics.dopplerRateHzPerSec ?? 0;
+      try {
+        linkManifold.push(el, lqm, dr / 100);
+      } catch { /* ignore non-finite */ }
+      const psi = linkManifold.orderParameter();
+      if (psiBarFill) psiBarFill.style.width = (psi * 100).toFixed(0) + '%';
+      if (psiValEl) psiValEl.textContent = Number.isFinite(psi) ? psi.toFixed(2) : '--';
+      return psi;
+    }
+
+    function getLinkGate() {
+      const r = lastSatResult;
+      const state = r?.state;
+      const lqm = r?.lqm === -Infinity ? null : r?.lqm;
+      const inPass = r?.metrics?.inPass;
+      const ok = inPass && lqm != null && lqm >= SAT_CONSTANTS.LQM_THRESHOLD_DEGRADED_DB
+        && (state === SAT_STATE.TRACKING || state === SAT_STATE.DEGRADED || state === SAT_STATE.ACQUIRING);
+      return { ok, state, lqm, inPass, result: r };
+    }
+
+    /** CONNECT — kunci path satelit: buka peta live bila online, SIM offline */
+    async function opsConnect() {
+      if (linkConnected) {
+        linkConnected = false;
+        btnOpsConnect?.classList.remove('connected');
+        if (liveConstellation) stopLiveMap();
+        toast('Disconnect — path ditutup (SIM idle)', 'info');
+        pushPassEvent('DISCONNECT');
+        return;
+      }
+
+      linkConnected = true;
+      btnOpsConnect?.classList.add('connected');
+
+      // Coba TLE live (peta nyata); gagal → tetap SIM via virtual.js
+      try {
+        if (!liveConstellation) {
+          await startLiveMap();
+        }
+        if (liveMapWrap) {
+          liveMapWrap.style.display = 'block';
+          liveMapWrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          resizeLiveMapCanvas();
+        }
+        toast('CONNECT · path LIVE/TLE atau SIM aktif', 'success');
+        pushPassEvent('CONNECT · path terbuka');
+      } catch (err) {
+        toast('CONNECT · SIM offline (TLE gagal): ' + (err.message || err), 'warn');
+        pushPassEvent('CONNECT · SIM only');
+      }
+
+      // Pastikan state machine tick
+      try {
+        if (liveTarget) feedPhysicsFromLive(liveTarget);
+        else updateSatelliteLink(100);
+      } catch { /* */ }
+    }
+
+    /** BACA — satu snapshot penuh dari virtual.js (+ TLE jika ada) */
+    function opsRead() {
+      // Refresh fisika sekali
+      try {
+        if (liveTarget) feedPhysicsFromLive(liveTarget);
+        else lastSatResult = updateSatelliteLink(100);
+      } catch { /* */ }
+
+      const r = lastSatResult;
+      const m = r?.metrics || {};
+      const psi = pushManifoldSample(r) ?? linkManifold.orderParameter();
+      const name = liveTarget?.name || m.name || '—';
+      const elev = liveTarget?.elDeg ?? m.elevationDeg;
+      const az = liveTarget?.azDeg ?? satAzimuth;
+      const dist = liveTarget?.rangeKm ?? m.distanceKm;
+      const lqm = r?.lqm === -Infinity ? null : r?.lqm;
+      const per = r?.per;
+      const src = m.source === 'tle' || liveConstellation ? 'TLE+SGP4→virtual' : 'virtual.js SIM';
+
+      if (readCard) readCard.classList.add('show');
+      const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+      set('rc-title', 'READ · ' + (r?.state || '--'));
+      set('rc-state', r?.state || '--');
+      set('rc-sat', name);
+      set('rc-elaz', `${elev != null ? Number(elev).toFixed(1) + '°' : '--'} / ${Number.isFinite(az) ? az.toFixed(0) + '°' : '--'}`);
+      set('rc-lqm', `${lqm != null ? lqm.toFixed(1) + ' dB' : '--'} / ${per != null ? (per * 100).toFixed(2) + '%' : '--'}`);
+      set('rc-dist', dist != null && Number.isFinite(dist) && dist < 1e6 ? Math.round(dist) + ' km' : '--');
+      set('rc-src', src);
+      set('rc-psi', Number.isFinite(psi) ? psi.toFixed(3) : '--');
+
+      toast(`Baca · ${name} · LQM ${lqm != null ? lqm.toFixed(1) : '--'}`, 'info');
+      pushPassEvent(`READ · ${name} · el ${elev != null ? Number(elev).toFixed(0) : '--'}°`);
+    }
+
+    /** ACTION — gerak nyata: buka sheet TX / Ping / Emergency */
+    function opsAction() {
+      actionSheet?.classList.toggle('show');
+      btnOpsAction?.classList.add('acting');
+      setTimeout(() => btnOpsAction?.classList.remove('acting'), 700);
+    }
+
+    async function actTx() {
+      const gate = getLinkGate();
+      if (!gate.ok && gate.lqm != null && gate.lqm < SAT_CONSTANTS.LQM_THRESHOLD_DEGRADED_DB) {
+        toast(`TX ditolak · LQM ${gate.lqm?.toFixed?.(1) ?? '--'} (butuh ≥ ${SAT_CONSTANTS.LQM_THRESHOLD_DEGRADED_DB} dB)`, 'error');
+        return;
+      }
+      btnOpsAction?.classList.add('acting');
+      try {
+        if (!globalState.running) {
+          try { startSimulator(); } catch { /* */ }
+        }
+        if (globalState.basePtt && typeof globalState.basePtt.start === 'function') {
+          globalState.basePtt.start();
+          setTimeout(() => globalState.basePtt?.stop?.(), 900);
+        } else if (globalState.transport && typeof globalState.transport.enqueue === 'function') {
+          globalState.transport.enqueue({
+            type: 'PTT',
+            priority: 'PTT',
+            channel: Number($('inp-channel')?.value || 0),
+            ts: Date.now()
+          });
+          globalState.transport.flush?.();
+        }
+        try { htAudioSynth.playRogerBeep?.(); } catch { /* */ }
+        toast('ACTION TX · burst gerak via link', 'success');
+        pushPassEvent(`ACTION TX · state ${gate.state || '--'}`);
+      } catch (err) {
+        toast('TX gagal: ' + (err.message || err), 'error');
+      }
+      setTimeout(() => btnOpsAction?.classList.remove('acting'), 700);
+    }
+
+    function actPing() {
+      const gate = getLinkGate();
+      const r = gate.result;
+      const valid = r?.packetValid;
+      // Satu tick fisika = prediksi PER
+      try {
+        if (liveTarget) feedPhysicsFromLive(liveTarget);
+        else lastSatResult = updateSatelliteLink(100);
+      } catch { /* */ }
+      const per = lastSatResult?.per;
+      const ok = lastSatResult?.packetValid;
+      toast(
+        ok ? `Ping OK · PER ${per != null ? (per * 100).toFixed(2) : '--'}%` : `Ping LOSS · PER ${per != null ? (per * 100).toFixed(2) : '--'}%`,
+        ok ? 'success' : 'warn'
+      );
+      pushPassEvent(`PING · ${ok ? 'OK' : 'LOSS'} · PER ${per != null ? (per * 100).toFixed(2) : '--'}%`);
+      btnOpsAction?.classList.add('acting');
+      setTimeout(() => btnOpsAction?.classList.remove('acting'), 700);
+    }
+
+    function actEmergency() {
+      btnOpsAction?.classList.add('acting');
+      try {
+        // Emergency selalu diizinkan (priority), tetap lewat virtual gate untuk log
+        if (globalState.sim && typeof globalState.sim.triggerEmergencyAll === 'function') {
+          globalState.sim.triggerEmergencyAll();
+        } else if (btnEmergency) {
+          btnEmergency.click();
+        } else if (globalState.transport?.enqueue) {
+          globalState.transport.enqueue({ type: 'EMERGENCY', priority: 'EMERGENCY', ts: Date.now() });
+          globalState.transport.flush?.();
+        }
+        try { htAudioSynth.playCollisionAlert?.(); } catch { /* */ }
+        toast('ACTION EMERGENCY · broadcast', 'warn');
+        pushPassEvent('ACTION EMERGENCY');
+      } catch (err) {
+        toast('Emergency: ' + (err.message || err), 'error');
+      }
+      setTimeout(() => btnOpsAction?.classList.remove('acting'), 700);
+    }
+
+    btnOpsConnect?.addEventListener('click', () => { opsConnect(); });
+    btnOpsRead?.addEventListener('click', () => { opsRead(); });
+    btnOpsAction?.addEventListener('click', () => { opsAction(); });
+    btnActTx?.addEventListener('click', () => { actTx(); });
+    btnActPing?.addEventListener('click', () => { actPing(); });
+    btnActEmer?.addEventListener('click', () => { actEmergency(); });
+
     // Sky tools
     btnSkyDome?.addEventListener('click', () => {
       btnSkyDome.classList.add('active');
-      // Focus: scroll sky into view on mobile
       skyWrap?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       resizeSkyCanvas();
     });
@@ -2592,6 +2915,7 @@
         name: target.name
       };
       lastSatResult = updateSatelliteLink(1000, { externalGeo });
+      pushManifoldSample(lastSatResult);
       return lastSatResult;
     }
 
