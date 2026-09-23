@@ -82,7 +82,8 @@ const CONSTELLATION_REGISTRY = Object.freeze({
     function: FUNCTION.COMMUNICATION, orbit: ORBIT_TYPE.LEO,
     count: 80, active: true,
     band: 'L', frequency: 1621.25e6,
-    celestrakGroup: 'iridium',
+    // Original Iridium deorbit; aktif = iridium-NEXT (selaras cgo-satellite-live-tle.js)
+    celestrakGroup: 'iridium-NEXT',
     source: SOURCE.CELESTRAK, priority: 1,
   },
   globalstar: {

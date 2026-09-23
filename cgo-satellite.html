@@ -847,6 +847,98 @@
     .rf-status-row .warn { color: var(--warn); }
     .rf-status-row .bad { color: var(--danger); }
 
+    /* Multi-constellation discovery */
+    .mc-modes {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+
+    .mc-modes .btn {
+      padding: 8px 4px;
+      font-size: 9px;
+      flex-direction: column;
+      gap: 3px;
+      min-height: 48px;
+    }
+
+    .mc-modes .btn svg { width: 14px; height: 14px; }
+    .mc-modes .btn.active {
+      background: rgba(59, 130, 246, 0.2);
+      border-color: var(--accent-2);
+      color: var(--accent-2);
+    }
+
+    .mc-scan-log {
+      max-height: 100px;
+      overflow-y: auto;
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text-dim);
+      background: rgba(0,0,0,0.25);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 8px;
+      margin-bottom: 8px;
+      line-height: 1.45;
+    }
+
+    .mc-scan-log .hit { color: var(--accent); }
+    .mc-scan-log .info { color: var(--accent-2); }
+
+    .mc-touch-card {
+      background: rgba(0,0,0,0.35);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      font-family: var(--mono);
+      font-size: 10px;
+      line-height: 1.5;
+      margin-bottom: 6px;
+    }
+
+    .mc-touch-card .mc-name {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .mc-touch-card .mc-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .mc-touch-card .mc-k { color: var(--text-dim); }
+    .mc-touch-card .mc-v { color: var(--text); font-weight: 600; text-align: right; }
+    .mc-touch-card .mc-summary {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(42,54,70,0.7);
+      color: var(--text);
+      font-size: 10px;
+      line-height: 1.45;
+    }
+
+    .mc-touch-card .mc-summary strong { color: var(--accent-2); }
+
+    .mc-progress {
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+
+    .mc-progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent-2), var(--accent));
+      transition: width 0.25s ease;
+    }
+
     .ops-grid .btn.acting {
       animation: ops-pulse 0.6s ease-in-out 2;
       background: rgba(59, 130, 246, 0.25);
@@ -1300,6 +1392,69 @@
           </div>
         </div>
 
+        <!-- MULTI-CONSTELLATION DISCOVERY — BCGO menjamah satelit -->
+        <div class="panel-section" id="mc-panel">
+          <h3 class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+            </svg>
+            BCGO Discovery
+            <span class="otonom-badge" id="mc-badge" style="margin-left:auto;">IDLE</span>
+          </h3>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:6px;">
+            Mode pencarian · ~<span id="mc-registry-total">17000</span> satelit di registry
+          </div>
+          <div class="mc-modes" id="mc-modes">
+            <button class="btn active" data-mode="radio" type="button" title="HT / radio LEO">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
+              Radio HT
+            </button>
+            <button class="btn" data-mode="internet" type="button" title="Broadband LEO">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 010 20"/></svg>
+              Internet
+            </button>
+            <button class="btn" data-mode="nav" type="button" title="GNSS">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+              Navigasi
+            </button>
+            <button class="btn" data-mode="weather" type="button" title="Cuaca / observasi">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
+              Cuaca
+            </button>
+            <button class="btn" data-mode="amateur" type="button" title="Amatir / ISS">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2"/></svg>
+              Amatir
+            </button>
+            <button class="btn" data-mode="all" type="button" title="Semua prioritas tinggi">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+              Semua
+            </button>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:8px;">
+            <button class="btn btn-full primary" id="btn-mc-scan" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              Mulai Scan
+            </button>
+            <button class="btn" id="btn-mc-next" type="button" title="Sentuh satelit berikutnya" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="9 18 15 12 9 6"/></svg>
+              Next
+            </button>
+          </div>
+          <div class="mc-progress"><div class="mc-progress-fill" id="mc-progress-fill"></div></div>
+          <div class="mc-scan-log" id="mc-scan-log">Siap scan konstelasi…</div>
+          <div class="mc-touch-card" id="mc-touch-card">
+            <div class="mc-name" id="mc-touch-name">— belum menyentuh satelit —</div>
+            <div class="mc-row"><span class="mc-k">Konstelasi</span><span class="mc-v" id="mc-touch-const">—</span></div>
+            <div class="mc-row"><span class="mc-k">Fungsi</span><span class="mc-v" id="mc-touch-fn">—</span></div>
+            <div class="mc-row"><span class="mc-k">Orbit</span><span class="mc-v" id="mc-touch-orbit">—</span></div>
+            <div class="mc-row"><span class="mc-k">Band / freq</span><span class="mc-v" id="mc-touch-band">—</span></div>
+            <div class="mc-row"><span class="mc-k">Sumber TLE</span><span class="mc-v" id="mc-touch-src">—</span></div>
+            <div class="mc-row"><span class="mc-k">LQM / PER</span><span class="mc-v" id="mc-touch-lqm">—</span></div>
+            <div class="mc-row"><span class="mc-k">Link usable</span><span class="mc-v" id="mc-touch-usable">—</span></div>
+            <div class="mc-summary" id="mc-touch-summary">Pilih mode lalu <strong>Mulai Scan</strong>. BCGO akan berkeliling menyentuh satelit yang relevan.</div>
+          </div>
+        </div>
+
         <!-- RF / VIDEO LIVE — WebUSB SDR + view dari virtual.js -->
         <div class="panel-section" id="rf-video-panel">
           <h3 class="panel-title">
@@ -1508,6 +1663,18 @@
       calculateDopplerHz,
       DEFAULTS as RF_DEFAULTS
     } from './cgo-satellite.real-connection.js';
+    import {
+      CONSTELLATION_REGISTRY,
+      FUNCTION,
+      ORBIT_TYPE,
+      SOURCE,
+      getRegistryTotal,
+      createManager,
+      classifyFunction,
+      classifyOrbit,
+      isRelevantForHT,
+      runSelfTest as runMcSelfTest
+    } from './cgo-multi-constellation.js';
 
     // ---------------------------------------------------
     // GLOBAL STATE
@@ -2911,6 +3078,346 @@
     btnActLock?.addEventListener('click', () => { actLock(); });
     btnActNext?.addEventListener('click', () => { actNext(); });
     btnActLos?.addEventListener('click', () => { actLos(); });
+
+    // ---------------------------------------------------
+    // MULTI-CONSTELLATION DISCOVERY — registry + loadConstellation + classify + virtual
+    // ---------------------------------------------------
+    const mcBadge = $('mc-badge');
+    const mcScanLog = $('mc-scan-log');
+    const mcProgressFill = $('mc-progress-fill');
+    const btnMcScan = $('btn-mc-scan');
+    const btnMcNext = $('btn-mc-next');
+    const mcRegistryTotal = $('mc-registry-total');
+
+    const MC_MODE_MAP = {
+      radio:    { ids: ['iridium', 'globalstar', 'orbcomm'], label: 'Radio HT', profile: 'ht_primary' },
+      internet: { ids: ['starlink', 'oneweb'], label: 'Internet', profile: 'all' },
+      nav:      { ids: ['gps', 'galileo', 'glonass', 'beidou'], label: 'Navigasi', profile: 'all' },
+      weather:  { ids: ['weather', 'noaa', 'goes', 'spire'], label: 'Cuaca', profile: 'all' },
+      amateur:  { ids: ['amateur', 'stations'], label: 'Amatir', profile: 'ht_primary' },
+      all:      { ids: null, label: 'Semua', profile: 'ht_full' }
+    };
+
+    const USE_BY_FUNCTION = {
+      [FUNCTION.COMMUNICATION]: 'Komunikasi satelit (data/suara/pesan, tergantung band).',
+      [FUNCTION.NAVIGATION]: 'Navigasi GNSS — posisi, waktu, navigasi.',
+      [FUNCTION.WEATHER]: 'Cuaca & iklim — sensor/citra meteorologi.',
+      [FUNCTION.EARTH_OBS]: 'Observasi bumi — citra optik/SAR.',
+      [FUNCTION.AMATEUR]: 'Radio amatir / stasiun luar angkasa.',
+      [FUNCTION.SCIENCE]: 'Sains & riset.',
+      [FUNCTION.MILITARY]: 'Militer — TLE publik biasanya tidak tersedia.',
+      [FUNCTION.DEBRIS]: 'Debris — bukan aset operasional.',
+      [FUNCTION.UNKNOWN]: 'Belum diklasifikasi dari nama TLE.'
+    };
+
+    /** Fetcher resmi MultiConstellationManager — browser fetch lokal, bukan API cloud berbayar */
+    async function mcFetcher(url) {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 15000);
+      try {
+        const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.text();
+      } finally {
+        clearTimeout(t);
+      }
+    }
+
+    let mcMode = 'radio';
+    /** @type {{ meta: object, tles: object[], loadSource: string }[]} */
+    let mcQueue = [];
+    let mcTouchList = []; // satelit individu setelah load (TLE nyata atau meta)
+    let mcIndex = 0;
+    let mcScanning = false;
+
+    const mcManager = createManager({
+      filterProfile: 'ht_full',
+      verbose: false,
+      fetcher: mcFetcher,
+      cacheTTLMs: 2 * 3600 * 1000
+    });
+
+    try {
+      const reg = getRegistryTotal();
+      if (mcRegistryTotal) mcRegistryTotal.textContent = String(reg.total);
+    } catch { /* */ }
+
+    function mcLog(html) {
+      if (!mcScanLog) return;
+      const line = document.createElement('div');
+      line.innerHTML = html;
+      mcScanLog.prepend(line);
+      while (mcScanLog.children.length > 50) mcScanLog.removeChild(mcScanLog.lastChild);
+    }
+
+    function buildMcIdList(mode) {
+      const cfg = MC_MODE_MAP[mode] || MC_MODE_MAP.radio;
+      if (cfg.ids) return cfg.ids.slice();
+      return Object.keys(CONSTELLATION_REGISTRY)
+        .filter((id) => {
+          const m = CONSTELLATION_REGISTRY[id];
+          return m.active && m.source !== SOURCE.UNAVAILABLE && m.priority <= 6;
+        })
+        .sort((a, b) => CONSTELLATION_REGISTRY[a].priority - CONSTELLATION_REGISTRY[b].priority);
+    }
+
+    function formatBand(meta) {
+      if (!meta.band && !meta.frequency) return '—';
+      let f = '';
+      if (Number.isFinite(meta.frequency)) {
+        f = meta.frequency >= 1e9
+          ? ` · ${(meta.frequency / 1e9).toFixed(2)} GHz`
+          : ` · ${(meta.frequency / 1e6).toFixed(2)} MHz`;
+      }
+      return (meta.band || 'freq') + f;
+    }
+
+    /**
+     * Cari geometri live (SGP4 snapshot) yang cocok dengan nama TLE / konstelasi.
+     * Lalu evaluasi lewat virtual.js evaluateLinkFromGeo — sumber LQM/PER presisi.
+     */
+    function mcMatchLiveGeo(name, meta) {
+      const snap = (typeof latestSnapshot !== 'undefined' && Array.isArray(latestSnapshot))
+        ? latestSnapshot : [];
+      if (!snap.length) return null;
+      if (name) {
+        const exact = snap.find((s) => s.name && s.name.toUpperCase() === String(name).toUpperCase());
+        if (exact && Number.isFinite(exact.elDeg)) return exact;
+      }
+      // Fallback: satelit visible terbaik di konstelasi yang sama (nama mengandung id)
+      const key = (meta?.id || meta?.name || '').toUpperCase();
+      if (!key) return null;
+      const candidates = snap
+        .filter((s) => s.aboveHorizon && s.name && s.name.toUpperCase().includes(
+          key === 'IRIDIUM' ? 'IRIDIUM' : key.slice(0, 6)
+        ))
+        .sort((a, b) => b.elDeg - a.elDeg);
+      return candidates[0] || null;
+    }
+
+    /**
+     * Tampilkan satu “sentuhan” BCGO:
+     * registry + TLE (multi-constellation) + LQM/PER (virtual.js) + opsional feed state machine
+     */
+    function showMcTouchEntry(entry) {
+      const meta = entry.meta;
+      const tle = entry.tle || null;
+      const fn = tle ? classifyFunction(tle) : meta.function;
+      const orbit = tle ? classifyOrbit(tle) : meta.orbit;
+      const name = tle?.name || meta.name;
+      const loadSrc = entry.loadSource || 'registry';
+      const nTle = entry.tlesCount ?? 0;
+      const relevant = tle
+        ? isRelevantForHT(tle, MC_MODE_MAP[mcMode]?.profile || 'ht_full')
+        : (fn === FUNCTION.COMMUNICATION || fn === FUNCTION.AMATEUR);
+
+      const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+      set('mc-touch-name', name);
+      set('mc-touch-const', `${meta.id}${nTle ? ` · ${nTle} TLE` : ''}`);
+      set('mc-touch-fn', fn);
+      set('mc-touch-orbit', String(orbit || '').toUpperCase());
+      set('mc-touch-band', formatBand(meta));
+      set('mc-touch-src', loadSrc === 'network' ? 'CelesTrak (live)'
+        : loadSrc === 'cache' ? 'cache manager'
+        : loadSrc === 'unavailable' ? 'TLE tidak publik'
+        : loadSrc === 'empty' ? 'registry (TLE kosong/offline)'
+        : loadSrc);
+
+      // ── virtual.js: LQM/PER dari geometri live bila ada ──
+      let linkEval = null;
+      const liveGeo = mcMatchLiveGeo(tle?.name, meta);
+      if (liveGeo && Number.isFinite(liveGeo.elDeg) && Number.isFinite(liveGeo.rangeKm)) {
+        linkEval = evaluateLinkFromGeo({
+          elevationDeg: liveGeo.elDeg,
+          distanceKm: liveGeo.rangeKm,
+          dopplerRateHzPerSec: liveGeo.dopplerRateHzPerSec ?? 0
+        }, currentPhysMode);
+      } else if (meta.id === 'iridium' || meta.frequency === SAT_CONSTANTS.FREQ_MHZ * 1e6) {
+        // Offline / belum ada SGP4: evaluasi di elevasi tipikal mid-pass (presisi model, bukan posisi live)
+        const tipikalElev = 45;
+        const tipikalDist = 1200; // km, LEO slant mid
+        linkEval = evaluateLinkFromGeo({
+          elevationDeg: tipikalElev,
+          distanceKm: tipikalDist,
+          dopplerRateHzPerSec: 0
+        }, currentPhysMode);
+      }
+
+      if (linkEval && Number.isFinite(linkEval.lqm) && linkEval.lqm !== -Infinity) {
+        set('mc-touch-lqm', `${linkEval.lqm.toFixed(1)} dB / PER ${(linkEval.per * 100).toFixed(2)}%`);
+        set('mc-touch-usable', linkEval.usable ? 'YA · virtual.js' : 'TIDAK (LQM rendah)');
+      } else {
+        set('mc-touch-lqm', '— (butuh geometri / el≥10°)');
+        set('mc-touch-usable', '—');
+      }
+
+      const use = USE_BY_FUNCTION[fn] || USE_BY_FUNCTION[FUNCTION.UNKNOWN];
+      const cat = tle?.catalogNumber ? ` NORAD ${tle.catalogNumber}.` : '';
+      const sum = $('mc-touch-summary');
+      if (sum) {
+        const physNote = linkEval && Number.isFinite(linkEval.lqm) && linkEval.lqm !== -Infinity
+          ? ` LQM ${linkEval.lqm.toFixed(1)} dB (cgo-satellite-virtual.js${liveGeo ? ' + SGP4 live' : ' model tipikal'}).`
+          : '';
+        sum.innerHTML =
+          `<strong>BCGO menyentuh ${name}</strong>.${cat} ` +
+          `Dari konstelasi <strong>${meta.name}</strong> (id <strong>${meta.id}</strong>). ` +
+          `Orbit ${String(orbit).toUpperCase()}. ${use}${physNote} ` +
+          (relevant
+            ? `<strong>Cocok mode ${MC_MODE_MAP[mcMode]?.label || mcMode}.</strong>`
+            : `Tidak prioritas untuk mode ${MC_MODE_MAP[mcMode]?.label || mcMode}.`);
+      }
+
+      // Bridge ke state machine virtual.js bila ada geometri live & mode radio/HT
+      if (liveGeo && (meta.id === 'iridium' || relevant) && typeof feedPhysicsFromLive === 'function') {
+        try {
+          selectedSatName = liveGeo.name;
+          liveTarget = liveGeo;
+          feedPhysicsFromLive(liveGeo);
+          mcLog(`<span class="hit">→ virtual.js TRACK path · ${liveGeo.name} el ${liveGeo.elDeg.toFixed(1)}°</span>`);
+        } catch { /* */ }
+      } else if (meta.id === 'iridium' || meta.frequency === SAT_CONSTANTS.FREQ_MHZ * 1e6) {
+        mcLog(`<span class="hit">→ virtual.js L-band · FREQ ${SAT_CONSTANTS.FREQ_MHZ} MHz · evaluateLinkFromGeo</span>`);
+      }
+      try { pushPassEvent(`TOUCH · ${name}`); } catch { /* */ }
+    }
+
+    /** Load satu konstelasi lewat MultiConstellationManager.loadConstellation */
+    async function mcLoadOne(constellId) {
+      const meta = CONSTELLATION_REGISTRY[constellId];
+      if (!meta) return null;
+
+      if (meta.source === SOURCE.UNAVAILABLE) {
+        mcManager.injectTLE(constellId, []);
+        return { meta, tles: [], loadSource: 'unavailable' };
+      }
+
+      let tles = [];
+      let loadSource = 'empty';
+      try {
+        tles = await mcManager.loadConstellation(constellId);
+        const entry = mcManager.loaded.get(constellId);
+        loadSource = entry?.fromCache ? 'cache' : (entry?.source || (tles.length ? 'network' : 'empty'));
+      } catch (e) {
+        mcLog(`<span class="info">load ${constellId} gagal: ${e.message || e}</span>`);
+        loadSource = 'empty';
+      }
+      return { meta, tles, loadSource };
+    }
+
+    async function mcStartScan() {
+      if (mcScanning) return;
+      mcScanning = true;
+      mcTouchList = [];
+      mcIndex = 0;
+      btnMcScan.disabled = true;
+      btnMcNext.disabled = true;
+      if (mcBadge) {
+        mcBadge.textContent = 'SCAN';
+        mcBadge.classList.add('live');
+      }
+
+      const ids = buildMcIdList(mcMode);
+      mcLog(`<span class="info">Mode ${MC_MODE_MAP[mcMode]?.label} · load ${ids.length} konstelasi (fetcher + cache)</span>`);
+
+      for (let i = 0; i < ids.length; i++) {
+        if (!mcScanning) break;
+        const id = ids[i];
+        if (mcProgressFill) mcProgressFill.style.width = (((i + 1) / ids.length) * 100).toFixed(0) + '%';
+
+        const loaded = await mcLoadOne(id);
+        if (!loaded) continue;
+
+        const { meta, tles, loadSource } = loaded;
+        mcLog(
+          `<span class="hit">load</span> ${meta.name} · ${tles.length} TLE · ${loadSource}` +
+          (meta.celestrakGroup ? ` · group=${meta.celestrakGroup}` : '')
+        );
+
+        // Antrian sentuh: hingga 3 satelit nyata per konstelasi, atau 1 kartu meta
+        if (tles.length > 0) {
+          const sample = tles.slice(0, 3);
+          for (const tle of sample) {
+            mcTouchList.push({
+              meta,
+              tle,
+              tlesCount: tles.length,
+              loadSource
+            });
+          }
+          showMcTouchEntry(mcTouchList[mcTouchList.length - 1]);
+        } else {
+          const card = { meta, tle: null, tlesCount: 0, loadSource };
+          mcTouchList.push(card);
+          showMcTouchEntry(card);
+        }
+
+        // Jeda singkat biar UI terbaca (bukan animasi palsu — load sudah async)
+        await new Promise((r) => setTimeout(r, 180));
+      }
+
+      const cov = mcManager.getCoverage();
+      mcLog(
+        `<span class="info">coverage · ${cov.constellationsLoaded} konstelasi · ${cov.totalSatellites} TLE di manager</span>`
+      );
+
+      mcScanning = false;
+      btnMcScan.disabled = false;
+      btnMcNext.disabled = mcTouchList.length === 0;
+      mcIndex = Math.max(0, mcTouchList.length - 1);
+      if (mcBadge) mcBadge.textContent = cov.totalSatellites > 0 ? 'LIVE TLE' : 'REGISTRY';
+      toast(
+        `Discovery: ${cov.totalSatellites} TLE · ${cov.constellationsLoaded} konstelasi`,
+        cov.totalSatellites > 0 ? 'success' : 'warn'
+      );
+    }
+
+    function mcNextTouch() {
+      if (!mcTouchList.length) {
+        toast('Scan dulu agar ada daftar sentuh', 'info');
+        return;
+      }
+      mcIndex = (mcIndex + 1) % mcTouchList.length;
+      if (mcProgressFill) {
+        mcProgressFill.style.width = (((mcIndex + 1) / mcTouchList.length) * 100).toFixed(0) + '%';
+      }
+      showMcTouchEntry(mcTouchList[mcIndex]);
+      mcLog(`<span class="hit">next</span> ${mcTouchList[mcIndex].tle?.name || mcTouchList[mcIndex].meta.name}`);
+    }
+
+    function setMcMode(mode) {
+      mcMode = mode;
+      mcManager.filterProfile = MC_MODE_MAP[mode]?.profile || 'ht_full';
+      document.querySelectorAll('#mc-modes .btn').forEach((b) => {
+        b.classList.toggle('active', b.dataset.mode === mode);
+      });
+      mcTouchList = [];
+      mcIndex = 0;
+      const ids = buildMcIdList(mode);
+      mcLog(`<span class="info">Mode → ${MC_MODE_MAP[mode]?.label} · antrian: ${ids.join(', ')}</span>`);
+      const first = CONSTELLATION_REGISTRY[ids[0]];
+      if (first) {
+        showMcTouchEntry({ meta: first, tle: null, tlesCount: 0, loadSource: 'registry' });
+      }
+      btnMcNext.disabled = true;
+      if (mcBadge) {
+        mcBadge.textContent = mode.toUpperCase();
+        mcBadge.classList.add('live');
+      }
+    }
+
+    document.querySelectorAll('#mc-modes .btn').forEach((btn) => {
+      btn.addEventListener('click', () => setMcMode(btn.dataset.mode));
+    });
+    btnMcScan?.addEventListener('click', () => { mcStartScan(); });
+    btnMcNext?.addEventListener('click', () => { mcNextTouch(); });
+
+    try {
+      const tr = runMcSelfTest();
+      if (!tr.verified) console.warn('[MC] self-test fail', tr.results.filter((x) => !x.pass));
+      else mcLog(`<span class="info">self-test MC ${tr.pass}/${tr.total} OK · registry ${tr.registry?.total}</span>`);
+    } catch (e) {
+      console.warn('[MC] self-test', e);
+    }
 
     // ---------------------------------------------------
     // RF / VIDEO LIVE — real-connection.js + virtual.js link view
