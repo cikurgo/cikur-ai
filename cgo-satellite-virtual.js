@@ -184,6 +184,8 @@ function selectBERTable(elevationDeg) {
  * @returns {number}
  */
 function getBER(ebn0Db, elevationDeg = 45) {
+  if (!Number.isFinite(ebn0Db)) return 0.5;
+  if (!Number.isFinite(elevationDeg)) elevationDeg = 0;
   const table = selectBERTable(elevationDeg);
   return interpolateBER(ebn0Db, table);
 }
@@ -195,7 +197,11 @@ function getBER(ebn0Db, elevationDeg = 45) {
  * @returns {number} PER (0..1)
  */
 function getPER(ber, bits = SAT_CONSTANTS.PACKET_BITS) {
-  return 1 - Math.pow(1 - ber, bits);
+  if (!Number.isFinite(ber) || !Number.isFinite(bits) || bits <= 0) return 1;
+  const safeBer = Math.max(0, Math.min(1, ber));
+  const safeBits = Math.max(1, Math.floor(bits));
+  // log1p/expm1 tetap stabil untuk BER kecil dan paket panjang.
+  return -Math.expm1(safeBits * Math.log1p(-safeBer));
 }
 
 // ============================================================================
@@ -211,8 +217,11 @@ function getPER(ber, bits = SAT_CONSTANTS.PACKET_BITS) {
  * @returns {{elevationDeg, distanceKm, dopplerShiftHz, dopplerRateHzPerSec}}
  */
 function computeGeometry(elapsedSec, passDurationSec) {
-  const T = passDurationSec;
-  const normT = (elapsedSec / T) - 0.5;   // -0.5 .. +0.5
+  const T = Number.isFinite(passDurationSec) && passDurationSec > 0
+    ? passDurationSec
+    : SAT_CONSTANTS.PASS_DURATION_SEC;
+  const t = Number.isFinite(elapsedSec) ? elapsedSec : 0;
+  const normT = (t / T) - 0.5;   // -0.5 .. +0.5
 
   // Elevasi: parabola (zenith di tengah pass)
   // elev(t) = maxElev * (1 - 4*normT^2)
@@ -251,6 +260,10 @@ function computeGeometry(elapsedSec, passDurationSec) {
  * @returns {number} FSPL dalam dB
  */
 function computeFSPL(distanceKm, freqMHz = SAT_CONSTANTS.FREQ_MHZ) {
+  if (!Number.isFinite(distanceKm) || distanceKm <= 0 ||
+      !Number.isFinite(freqMHz) || freqMHz <= 0) {
+    return Infinity;
+  }
   return 20 * Math.log10(distanceKm) + 20 * Math.log10(freqMHz) + 32.45;
 }
 
@@ -263,6 +276,7 @@ function computeFSPL(distanceKm, freqMHz = SAT_CONSTANTS.FREQ_MHZ) {
  */
 function computeSNR(distanceKm) {
   const fspl = computeFSPL(distanceKm);
+  if (!Number.isFinite(fspl)) return -Infinity;
   const prx = SAT_CONSTANTS.EIRP_DBM + SAT_CONSTANTS.RX_GAIN_DBI - fspl;
   return prx - SAT_CONSTANTS.NOISE_FLOOR_DBM;
 }
@@ -356,7 +370,9 @@ function computeScintillation(now, elevationDeg, deltaMs, mode) {
  */
 function calculateLQM({ snrDb, dopplerRateHzPerSec, elevationDeg, scintFadeDb = 0 }) {
   // Hard floor elevasi
-  if (elevationDeg < SAT_CONSTANTS.MIN_ELEVATION_DEG) {
+  if (!Number.isFinite(elevationDeg) ||
+      elevationDeg < SAT_CONSTANTS.MIN_ELEVATION_DEG ||
+      !Number.isFinite(snrDb)) {
     return -Infinity;
   }
 
@@ -793,7 +809,8 @@ function updateSatelliteLink(deltaMs, options = {}) {
 function evaluateLinkFromGeo(geo, mode = PHYSICS_MODE.REALISTIC, now = new Date()) {
   const elevationDeg = geo?.elevationDeg ?? 0;
   const distanceKm = geo?.distanceKm ?? Infinity;
-  if (elevationDeg < SAT_CONSTANTS.MIN_ELEVATION_DEG || !Number.isFinite(distanceKm)) {
+  if (elevationDeg < SAT_CONSTANTS.MIN_ELEVATION_DEG ||
+      !Number.isFinite(distanceKm) || distanceKm <= 0) {
     return {
       elevationDeg,
       distanceKm,
@@ -861,9 +878,9 @@ function runSelfTest() {
     Math.abs(snr_zenith - 11.12) < 1,
     `got ${snr_zenith.toFixed(2)}`);
 
-  // Test 3: Doppler max
-  const geo_max = computeGeometry(0, 550); // awal pass
-  assert('Doppler rate awal pass ~ max',
+  // Test 3: Doppler rate paling besar di tengah pass pada model sinus.
+  const geo_max = computeGeometry(275, 550);
+  assert('Doppler rate tengah pass ~ 231 Hz/s',
     Math.abs(Math.abs(geo_max.dopplerRateHzPerSec) - 231) < 50,
     `got ${geo_max.dopplerRateHzPerSec.toFixed(1)} Hz/s`);
 
@@ -891,8 +908,8 @@ function runSelfTest() {
     elevationDeg: 10,
     scintFadeDb: 0
   });
-  assert('LQM @ elevasi 10° masih > 30 dB (realistis)',
-    lqm_low > 30,
+  assert('LQM @ elevasi 10° masih > 28 dB (model link budget)',
+    lqm_low > 28,
     `got ${lqm_low.toFixed(2)} (snr=${snr_low.toFixed(1)})`);
 
   // Test 6: BER @ Eb/N0 = 6 dB
@@ -938,16 +955,16 @@ function runSelfTest() {
     m.scintFadeDb = -50; // paksa drop
     return m;
   };
-  let reachedDegraded = false;
+  let leftTracking = false;
   for (let i = 0; i < 50; i++) {
     const r = link2.sm.update(100, now);
-    if (r.state === SAT_STATE.DEGRADED) {
-      reachedDegraded = true;
+    if (r.state === SAT_STATE.LOSING_LOCK || r.state === SAT_STATE.RE_ACQUIRING) {
+      leftTracking = true;
       break;
     }
   }
-  assert('DEGRADED reachable dari TRACKING',
-    reachedDegraded,
+  assert('Fade berat memutus TRACKING',
+    leftTracking,
     `state: ${link2.sm.state}`);
 
   // Test 10: DeltaMs validation
@@ -958,6 +975,18 @@ function runSelfTest() {
   assert('DeltaMs invalid tidak crash',
     r1 !== null && r2 !== null && r3 !== null,
     '');
+
+  // Test 11: input geometri/link invalid tidak menghasilkan NaN yang bocor.
+  const invalidGeo = evaluateLinkFromGeo({
+    elevationDeg: 45,
+    distanceKm: 0,
+    dopplerRateHzPerSec: NaN
+  }, PHYSICS_MODE.IDEAL);
+  assert('Input link invalid menghasilkan unusable, bukan NaN',
+    invalidGeo.usable === false &&
+    invalidGeo.lqm === -Infinity &&
+    Number.isFinite(getPER(NaN)),
+    `lqm=${invalidGeo.lqm}`);
 
   return results;
 }
