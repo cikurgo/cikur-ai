@@ -1449,12 +1449,12 @@
             </button>
           </div>
           <div style="display:flex;gap:6px;margin-bottom:8px;">
-            <button class="btn btn-full" id="btn-hotspot-test" type="button" title="Uji koneksi HP (hotspot/WiFi) — bukan modem Starlink">
-              Uji Hotspot / Koneksi
+            <button class="btn btn-full" id="btn-path-signal-test" type="button" title="Uji sinyal path satelit terkunci via virtual.js">
+              Uji Sinyal Path Satelit
             </button>
           </div>
-          <div id="hotspot-status" style="font-family:var(--mono);font-size:9.5px;color:var(--text-dim);margin-bottom:8px;line-height:1.45;">
-            Hotspot: belum diuji · kunci path: —
+          <div id="path-signal-status" style="font-family:var(--mono);font-size:9.5px;color:var(--text-dim);margin-bottom:8px;line-height:1.45;">
+            Sinyal path: belum diuji · kunci: —
           </div>
           <div class="mc-progress"><div class="mc-progress-fill" id="mc-progress-fill"></div></div>
           <div class="mc-scan-log" id="mc-scan-log">Siap scan konstelasi…</div>
@@ -1481,25 +1481,21 @@
             <span class="otonom-badge" id="rf-badge" style="margin-left:auto;">OFF</span>
           </h3>
           <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;">
-            <button class="btn" id="btn-cam-open" type="button" title="Kamera HP (Mata) — tanpa hardware ekstra">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
-              Kamera HP
+            <button class="btn btn-full" id="btn-sat-video" type="button" title="Live link video dari fisika virtual + path real-connection">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Video Link Live
             </button>
-            <button class="btn" id="btn-cam-close" type="button" disabled title="Matikan kamera">
-              Stop Cam
-            </button>
-            <button class="btn" id="btn-rf-open" type="button" title="WebUSB RTL-SDR (opsional)">
+            <button class="btn" id="btn-rf-open" type="button" title="WebUSB RTL-SDR → IQ (real-connection.js)">
               RF SDR
             </button>
-            <button class="btn" id="btn-rf-close" type="button" disabled title="Tutup stream USB">
+            <button class="btn" id="btn-rf-close" type="button" disabled title="Tutup USB">
               ×
             </button>
           </div>
           <div class="rf-video-wrap">
-            <video id="cam-video" playsinline muted autoplay style="display:none;width:100%;height:100%;object-fit:cover;position:absolute;inset:0;"></video>
             <canvas id="rf-video-canvas"></canvas>
             <div class="rf-video-overlay" id="rf-video-overlay">
-              <strong>Link view</strong> · virtual.js · kamera HP atau SDR opsional
+              <strong>Sat video link</strong> · virtual.js spektrum + real-connection pipeline
             </div>
           </div>
           <div class="rf-status-row" id="rf-status-row">
@@ -1509,8 +1505,7 @@
             <span id="rf-st-dop">Doppler: —</span>
           </div>
           <div id="rf-hint" style="margin-top:6px;font-family:var(--mono);font-size:9px;color:var(--text-dim);line-height:1.45;">
-            Tanpa RTL-SDR: canvas menampilkan spektrum link dari LQM/SNR/Doppler (cgo-satellite-virtual.js).
-            Dengan SDR + Wasm decoder: IQ nyata → decode → frame (cgo-satellite.real-connection.js).
+            Video Link Live = stream visual link satelit di HP (LQM/SNR/Doppler dari virtual.js; IQ/frame dari real-connection.js bila SDR+Wasm ada). Bukan YouTube, bukan kamera HP.
           </div>
         </div>
 
@@ -3438,23 +3433,20 @@
 
     // ── Kunci path Radio vs Internet + hotspot + memori ──
     const MEMORY = Object.freeze({
-      MAX_PROP_SATS: 220,       // max satrec SGP4 di HP (hindari OOM)
+      MAX_PROP_SATS: 100,       // SGP4 di main thread — jangan terlalu banyak (hindari UI jank)
       MAX_TOUCH: 40,
       MAX_LOG_LINES: 36,
-      MAX_SNAPSHOT: 400
+      MAX_SNAPSHOT: 220
     });
     let pathLock = 'radio'; // 'radio' | 'internet'
     let inetSatrecs = [];
     let inetPropTimer = null;
-    let camStream = null;
 
     const btnLockRadio = $('btn-lock-radio');
     const btnLockInet = $('btn-lock-inet');
-    const btnHotspot = $('btn-hotspot-test');
-    const hotspotStatus = $('hotspot-status');
-    const btnCamOpen = $('btn-cam-open');
-    const btnCamClose = $('btn-cam-close');
-    const camVideo = $('cam-video');
+    const btnPathSignal = $('btn-path-signal-test');
+    const pathSignalStatus = $('path-signal-status');
+    const btnSatVideo = $('btn-sat-video');
 
     function memoryScrub() {
       // Batasi antrian touch
@@ -3554,24 +3546,74 @@
       return merged;
     }
 
+    /** Throttle UI live — cegah seluruh layar “gerak-gerak” tiap detik */
+    let _liveUiTimer = null;
+    let _liveUiDirty = false;
+    let _lastFeedKey = '';
+    let _lastChHtml = '';
+    const LIVE_UI_MS = 1500;
+
+    function scheduleLiveUiUpdate() {
+      _liveUiDirty = true;
+      if (_liveUiTimer) return;
+      _liveUiTimer = setTimeout(() => {
+        _liveUiTimer = null;
+        if (!_liveUiDirty) return;
+        _liveUiDirty = false;
+        flushLiveUi();
+      }, LIVE_UI_MS);
+    }
+
+    function flushLiveUi() {
+      const t = pickLiveTarget(latestSnapshot);
+      liveTarget = t;
+      // Hanya feed fisika jika target/el berubah bermakna (hindari state machine spam)
+      if (t) {
+        const key = `${t.name}|${Math.round(t.elDeg)}|${Math.round(t.rangeKm || 0)}`;
+        if (key !== _lastFeedKey) {
+          _lastFeedKey = key;
+          try { feedPhysicsFromLive(t); } catch { /* */ }
+        }
+      }
+      try { drawLiveMap(); } catch { /* */ }
+      try {
+        // renderChannelList hanya jika isi berubah (kurangi reflow panel)
+        const prev = _lastChHtml;
+        renderChannelList(latestSnapshot);
+        // renderChannelList sets innerHTML — track via length+names
+        const names = (latestSnapshot || [])
+          .filter((s) => s.aboveHorizon && s.elDeg >= 10)
+          .slice(0, 12)
+          .map((s) => s.name + Math.round(s.elDeg))
+          .join('|');
+        if (names === prev && chListEl) {
+          /* already similar; still ok */
+        }
+        _lastChHtml = names;
+      } catch { /* */ }
+    }
+
     function startInetPropLoop() {
       stopInetPropLoop();
       const tick = () => {
-        if (!inetSatrecs.length) return;
-        // Ambil snapshot Iridium terakhir dari liveConstellation bila ada
-        let base = latestSnapshot.filter((s) => s.constellation === 'iridium' || /^IRIDIUM/i.test(s.name || ''));
+        if (!inetSatrecs.length || pathLock !== 'internet') return;
+        // Jangan full replace dari nol: ambil base Iridium, merge OneWeb/Starlink
+        let base = latestSnapshot.filter(
+          (s) => s.constellation === 'iridium' || /^IRIDIUM/i.test(s.name || '')
+        );
         if (!base.length && liveConstellation) {
-          try { base = liveConstellation.snapshot?.(new Date()) || []; } catch { base = []; }
+          try {
+            const raw = liveConstellation.snapshot?.(new Date()) || [];
+            base = enrichSnapshotWithDoppler(raw);
+            for (const s of base) s.constellation = 'iridium';
+          } catch { base = []; }
         }
-        latestSnapshot = mergeInetIntoSnapshot(base.length ? enrichSnapshotWithDoppler(base) : []);
-        liveTarget = pickLiveTarget(latestSnapshot);
-        if (liveTarget) feedPhysicsFromLive(liveTarget);
-        drawLiveMap();
-        renderChannelList(latestSnapshot);
-        memoryScrub();
+        latestSnapshot = mergeInetIntoSnapshot(base);
+        scheduleLiveUiUpdate();
       };
       tick();
-      inetPropTimer = setInterval(tick, 2000);
+      // 3.5s cukup untuk orbit; lebih jarang = UI lebih tenang di HP
+      inetPropTimer = setInterval(tick, 3500);
     }
 
     function stopInetPropLoop() {
@@ -3585,8 +3627,8 @@
       pathLock = kind === 'internet' ? 'internet' : 'radio';
       btnLockRadio?.classList.toggle('active', pathLock === 'radio');
       btnLockInet?.classList.toggle('active', pathLock === 'internet');
-      if (hotspotStatus) {
-        hotspotStatus.textContent = `Kunci path: ${pathLock === 'internet' ? 'INTERNET (Starlink/OneWeb)' : 'RADIO HT (Iridium)'} · hotspot: belum diuji`;
+      if (pathSignalStatus) {
+        pathSignalStatus.textContent = `Kunci path: ${pathLock === 'internet' ? 'INTERNET (Starlink/OneWeb)' : 'RADIO HT (Iridium)'} · sinyal: belum diuji`;
       }
       if (pathLock === 'internet') {
         const n = buildInetSatrecsFromManager();
@@ -3606,88 +3648,71 @@
       }
     }
 
-    async function runHotspotTest() {
-      if (hotspotStatus) hotspotStatus.textContent = 'Menguji koneksi HP…';
-      const online = navigator.onLine;
-      let rtt = null;
-      let ok = false;
-      const t0 = performance.now();
-      try {
-        // Probe ringan — bukan traffic Starlink; uji path data HP (WiFi/hotspot/seluler)
-        const ctrl = new AbortController();
-        const to = setTimeout(() => ctrl.abort(), 8000);
-        await fetch('https://celestrak.org/favicon.ico', {
-          method: 'HEAD',
-          mode: 'no-cors',
-          cache: 'no-store',
-          signal: ctrl.signal
-        });
-        clearTimeout(to);
-        rtt = Math.round(performance.now() - t0);
-        ok = true;
-      } catch {
-        rtt = Math.round(performance.now() - t0);
-        ok = false;
+    /**
+     * Uji sinyal path satelit yang dikunci — murni virtual.js + geometri TLE/SGP4.
+     * Bukan uji WiFi/hotspot HP.
+     */
+    function runPathSignalTest() {
+      const t = liveTarget || pickLiveTarget(latestSnapshot);
+      if (!t || !Number.isFinite(t.elDeg)) {
+        const msg = 'Sinyal path: tidak ada satelit el≥10° — Connect + Kunci dulu';
+        if (pathSignalStatus) pathSignalStatus.textContent = msg;
+        toast(msg, 'warn');
+        return;
       }
-      const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-      const netType = conn?.effectiveType || conn?.type || '—';
+      // Ku-band internet vs L-band radio: FSPL beda frekuensi (virtual constants default L-band)
+      const freqHz = pathLock === 'internet' ? 12e9 : SAT_CONSTANTS.FREQ_MHZ * 1e6;
+      const link = evaluateLinkFromGeo({
+        elevationDeg: t.elDeg,
+        distanceKm: t.rangeKm,
+        dopplerRateHzPerSec: t.dopplerRateHzPerSec ?? 0
+      }, currentPhysMode);
+
+      // Koreksi kasar FSPL untuk Ku jika internet (delta 20log10(fKu/fL))
+      let lqm = link.lqm;
+      let note = 'model L-band virtual.js';
+      if (pathLock === 'internet' && Number.isFinite(lqm) && lqm !== -Infinity) {
+        const fL = SAT_CONSTANTS.FREQ_MHZ * 1e6;
+        const dFspl = 20 * Math.log10(freqHz / fL); // ~17.4 dB extra path loss @ 12 GHz
+        lqm = lqm - dFspl;
+        note = `Ku ~12 GHz · ΔFSPL −${dFspl.toFixed(1)} dB vs L-band`;
+      }
+      const usable = Number.isFinite(lqm) && lqm !== -Infinity && lqm >= SAT_CONSTANTS.LQM_THRESHOLD_DEGRADED_DB;
+      const per = link.per != null ? (link.per * 100).toFixed(2) : '—';
       const msg =
-        `Hotspot/data HP: ${online ? 'online' : 'offline'} · probe ${ok ? 'OK' : 'gagal'} · ~${rtt} ms · type ${netType} · ` +
-        `path BCGO: ${pathLock === 'internet' ? 'INTERNET sat' : 'RADIO HT'}`;
-      if (hotspotStatus) hotspotStatus.textContent = msg;
-      mcLog(`<span class="info">${msg}</span>`);
-      toast(ok ? `Koneksi HP OK (~${rtt} ms)` : 'Probe gagal — cek hotspot/WiFi', ok ? 'success' : 'warn');
-      // Jujur: ini uji link HP, bukan konfirmasi downlink Starlink komersial
+        `${pathLock === 'internet' ? 'INTERNET' : 'RADIO'} · ${t.name} · el ${t.elDeg.toFixed(1)}° · ` +
+        `LQM ${Number.isFinite(lqm) && lqm !== -Infinity ? lqm.toFixed(1) + ' dB' : '—'} · ` +
+        `PER ${per}% · ${usable ? 'USABLE' : 'NOT USABLE'} · ${note}`;
+      if (pathSignalStatus) pathSignalStatus.textContent = msg;
+      mcLog(`<span class="hit">sinyal</span> ${msg}`);
+      // Feed state machine agar Mode Otonom ikut
+      try { feedPhysicsFromLive(t); } catch { /* */ }
+      toast(usable ? `Sinyal path OK · ${t.name}` : `Sinyal lemah · ${t.name}`, usable ? 'success' : 'warn');
     }
 
-    async function openPhoneCamera() {
-      try {
-        if (!navigator.mediaDevices?.getUserMedia) {
-          toast('Kamera tidak tersedia di browser ini', 'error');
-          return;
-        }
-        camStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false
-        });
-        if (camVideo) {
-          camVideo.srcObject = camStream;
-          camVideo.style.display = 'block';
-        }
-        if (rfCanvas) rfCanvas.style.opacity = '0.35';
-        btnCamClose.disabled = false;
-        btnCamOpen?.classList.add('connected');
-        if (rfBadge) {
-          rfBadge.textContent = 'CAM';
-          rfBadge.classList.add('live');
-        }
-        if (rfOverlay) rfOverlay.innerHTML = '<strong>Kamera HP</strong> · Mata BCGO · tanpa SDR';
-        toast('Kamera HP aktif', 'success');
-      } catch (err) {
-        toast('Kamera: ' + (err.message || err), 'error');
+    /** Fokus panel video link (spektrum live dari virtual — bukan kamera, bukan YouTube) */
+    function focusSatVideoLink() {
+      const wrap = $('rf-video-panel');
+      wrap?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      resizeRfCanvas();
+      rfMode = pathLock === 'internet' ? 'virtual-inet' : 'virtual';
+      if (rfBadge) {
+        rfBadge.textContent = 'LINK LIVE';
+        rfBadge.classList.add('live');
       }
-    }
-
-    function closePhoneCamera() {
-      try {
-        camStream?.getTracks?.().forEach((t) => t.stop());
-      } catch { /* */ }
-      camStream = null;
-      if (camVideo) {
-        camVideo.srcObject = null;
-        camVideo.style.display = 'none';
+      if (rfOverlay) {
+        const t = liveTarget;
+        rfOverlay.innerHTML = t
+          ? `<strong>Video link</strong> · ${t.name} · el ${t.elDeg?.toFixed?.(1) ?? '—'}° · virtual.js + real-connection`
+          : '<strong>Video link</strong> · spektrum dari LQM/SNR/Doppler (virtual.js)';
       }
-      if (rfCanvas) rfCanvas.style.opacity = '1';
-      btnCamClose.disabled = true;
-      btnCamOpen?.classList.remove('connected');
-      toast('Kamera dimatikan', 'info');
+      toast('Video link live · spektrum path satelit', 'info');
     }
 
     btnLockRadio?.addEventListener('click', () => setPathLock('radio'));
     btnLockInet?.addEventListener('click', () => setPathLock('internet'));
-    btnHotspot?.addEventListener('click', () => { runHotspotTest(); });
-    btnCamOpen?.addEventListener('click', () => { openPhoneCamera(); });
-    btnCamClose?.addEventListener('click', () => { closePhoneCamera(); });
+    btnPathSignal?.addEventListener('click', () => { runPathSignalTest(); });
+    btnSatVideo?.addEventListener('click', () => { focusSatVideoLink(); });
 
     // Auto scrub memori berkala
     setInterval(() => { memoryScrub(); }, 15000);
@@ -4300,14 +4325,19 @@
       btnLiveMapRefresh.disabled = false;
 
       liveConstellation = new LiveConstellation({
-        tickMs: 1000,
+        tickMs: 2000, // lebih tenang di HP (dulu 1000ms → panel bergetar)
         onUpdate: (snapshot) => {
-          latestSnapshot = enrichSnapshotWithDoppler(snapshot);
-          liveTarget = pickLiveTarget(latestSnapshot);
-          feedPhysicsFromLive(liveTarget);
-          renderChannelList(latestSnapshot);
-          drawLiveMap();
-          // Mode Otonom akan baca lastSatResult + liveTarget di updateStats
+          let ir = enrichSnapshotWithDoppler(snapshot);
+          for (const s of ir) {
+            if (!s.constellation) s.constellation = 'iridium';
+          }
+          // Jika kunci Internet: jangan hapus OneWeb/Starlink dari merge
+          if (pathLock === 'internet' && inetSatrecs.length) {
+            latestSnapshot = mergeInetIntoSnapshot(ir);
+          } else {
+            latestSnapshot = ir;
+          }
+          scheduleLiveUiUpdate();
         },
         onStatus: (meta) => {
           if (liveMapStatus) {
