@@ -1284,6 +1284,10 @@
             <span class="state-pill" data-state="LOSING_LOCK">LOSS</span>
             <span class="state-pill" data-state="RE_ACQUIRING">RE-ACQ</span>
           </div>
+          <div class="val-status no-lock" id="unified-val-status" title="Unified Validation Status">
+            <span class="dot"></span>
+            <span id="val-status-text">🔴 NO LOCK — Geometri belum terpenuhi</span>
+          </div>
 
           <!-- Metrics -->
           <div class="sat-metrics">
@@ -1668,20 +1672,34 @@
       evaluateLinkFromGeo,
       PHYSICS_MODE,
       SAT_STATE,
-      SAT_CONSTANTS
+      SAT_CONSTANTS,
+      generatePhysicalSpectrum,
+      WAVEFORM_PROFILES,
+      MIN_ELEV_BY_CONSTELL,
+      dopplerFromGeometry
     } from './cgo-satellite-virtual.js';
     import {
       LiveConstellation,
       DEFAULT_OBSERVER,
       buildSatRecs,
-      propagateSnapshot
+      propagateSnapshot,
+      PRIMARY_GROUPS,
+      computeDataAgePenaltyDb
     } from './cgo-satellite-live-tle.js';
+    import {
+      computeLinkBudget,
+      CONSTELLATION_THRESHOLDS,
+      filterUsableSats
+    } from './cgo-satellite-physical.js';
     import { Manifold } from './cgo-verify-all.js';
     import {
       initPhysicalConnection,
       startRawIQStream,
       calculateDopplerHz,
-      DEFAULTS as RF_DEFAULTS
+      DEFAULTS as RF_DEFAULTS,
+      evaluateLock,
+      onLockAcquired,
+      CONNECTION_TYPE
     } from './cgo-satellite.real-connection.js';
     import {
       CONSTELLATION_REGISTRY,
@@ -1695,6 +1713,7 @@
       isRelevantForHT,
       runSelfTest as runMcSelfTest
     } from './cgo-multi-constellation.js';
+
 
     // ---------------------------------------------------
     // GLOBAL STATE
@@ -1718,6 +1737,93 @@
       satellite: {},
       satelliteUpdates: new EventTarget()
     };
+
+    // ── Unified Validation Status (NO LOCK / ACQUIRING / VALIDATED) ──
+    let _lastLockValidated = false;
+    let _lockValidationDetail = null;
+
+    function updateUnifiedValStatus(result) {
+      const el = document.getElementById('unified-val-status');
+      const txt = document.getElementById('val-status-text');
+      if (!el || !txt) return;
+
+      const m = result?.metrics || {};
+      const state = result?.state;
+      const elev = Number.isFinite(m.elevationDeg) ? m.elevationDeg : null;
+      const snr = Number.isFinite(m.snrDb) ? m.snrDb : null;
+      const per = Number.isFinite(result?.per) ? result.per : null;
+      const constellId = liveConstellation?.constellId || liveTarget?.constellId || 'iridium';
+      const minEl = (CONSTELLATION_THRESHOLDS[constellId]?.minElevationDeg)
+        ?? (MIN_ELEV_BY_CONSTELL[constellId]) ?? 10;
+
+      // Corrupt TLE?
+      if (liveConstellation?.meta?.corrupt) {
+        el.className = 'val-status no-lock';
+        txt.textContent = '🔴 NO LOCK — ORBIT DATA CORRUPT - REFETCHING';
+        _lastLockValidated = false;
+        return;
+      }
+
+      const lock = evaluateLock({
+        constellId,
+        snrDb: snr,
+        elevationDeg: elev,
+        per
+      });
+
+      if (!lock.locked || elev == null || elev < minEl) {
+        el.className = 'val-status no-lock';
+        const reason = elev == null ? 'Geometri belum terpenuhi'
+          : elev < minEl ? `Below Horizon (el ${elev.toFixed(1)}° < ${minEl}°)`
+          : 'SNR/PER di bawah threshold';
+        txt.textContent = `🔴 NO LOCK — ${reason}`;
+        _lastLockValidated = false;
+        return;
+      }
+
+      if (state === SAT_STATE.ACQUIRING || state === SAT_STATE.RE_ACQUIRING || state === SAT_STATE.SCANNING) {
+        el.className = 'val-status acquiring';
+        txt.textContent = '🟡 ACQUIRING — Calculating link budget / Waiting SNR';
+        _lastLockValidated = false;
+        return;
+      }
+
+      // TRACKING / DEGRADED with lock conditions met
+      if (state === SAT_STATE.TRACKING || state === SAT_STATE.DEGRADED) {
+        el.className = 'val-status validated';
+        const type = lock.type;
+        let detail = `SNR ${snr?.toFixed?.(1) ?? '—'} dB`;
+        if (_lockValidationDetail?.INTERNET_VALIDATED) {
+          detail += ` · Hotspot ${_lockValidationDetail.ssid || 'OK'} · ${_lockValidationDetail.downlinkMbps ?? '—'} Mbps`;
+        } else if (_lockValidationDetail?.SIGNAL_VALIDATED) {
+          detail += ` · Fix ${_lockValidationDetail.fixQuality ?? 'OK'}`;
+        } else if (_lockValidationDetail?.ssid) {
+          detail += ` · SSID ${_lockValidationDetail.ssid}`;
+        }
+        txt.textContent = `🟢 VALIDATED — ${detail}`;
+
+        // Fire hardware validation once per lock acquisition
+        if (!_lastLockValidated) {
+          _lastLockValidated = true;
+          onLockAcquired({
+            constellId,
+            snrDb: snr,
+            elevationDeg: elev,
+            per
+          }).then(v => {
+            _lockValidationDetail = v;
+            // Refresh display with hardware result
+            updateUnifiedValStatus(result);
+          }).catch(() => {});
+        }
+        return;
+      }
+
+      el.className = 'val-status acquiring';
+      txt.textContent = '🟡 ACQUIRING — Stabilizing';
+    }
+
+
     globalThis.BCGO_STATE.satellite = globalThis.BCGO_STATE.satellite ?? {};
     globalThis.BCGO_STATE.satelliteUpdates =
       globalThis.BCGO_STATE.satelliteUpdates ?? new EventTarget();
@@ -2705,6 +2811,8 @@
         }
       }
 
+      try { updateUnifiedValStatus(result); } catch (e) { /* non-fatal */ }
+
       // Metrics
       if (satElev) {
         satElev.textContent = elev != null && Number.isFinite(elev) ? elev.toFixed(1) + '°' : '--°';
@@ -3243,31 +3351,51 @@
         : loadSrc === 'empty' ? 'registry (TLE kosong/offline)'
         : loadSrc);
 
-      // ── virtual.js: LQM/PER dari geometri live bila ada ──
+      // ── virtual.js + physical.js: LQM/PER dari geometri live atau model tipikal ──
       let linkEval = null;
       const liveGeo = mcMatchLiveGeo(tle?.name, meta);
+      const constellId = meta?.id || 'iridium';
+      const minEl = (CONSTELLATION_THRESHOLDS[constellId]?.minElevationDeg)
+        ?? (MIN_ELEV_BY_CONSTELL[constellId]) ?? 10;
+
       if (liveGeo && Number.isFinite(liveGeo.elDeg) && Number.isFinite(liveGeo.rangeKm)) {
+        const lb = computeLinkBudget({
+          constellId,
+          elevationDeg: liveGeo.elDeg,
+          rangeKm: liveGeo.rangeKm,
+          agePenaltyDb: liveConstellation?.meta?.agePenaltyDb ?? 0
+        });
         linkEval = evaluateLinkFromGeo({
           elevationDeg: liveGeo.elDeg,
           distanceKm: liveGeo.rangeKm,
           dopplerRateHzPerSec: liveGeo.dopplerRateHzPerSec ?? 0
         }, currentPhysMode);
-      } else if (meta.id === 'iridium' || meta.frequency === SAT_CONSTANTS.FREQ_MHZ * 1e6) {
-        // Offline / belum ada SGP4: evaluasi di elevasi tipikal mid-pass (presisi model, bukan posisi live)
-        const tipikalElev = 45;
-        const tipikalDist = 1200; // km, LEO slant mid
+        if (linkEval && lb) {
+          linkEval.aboveThreshold = lb.aboveThreshold;
+          linkEval.minElevationDeg = lb.minElevationDeg;
+          linkEval.physicalSnrDb = lb.snrDb;
+        }
+      } else {
+        // Model tipikal mid-pass — jangan tampilkan "butuh geometri"
+        const tipikalElev = Math.max(minEl + 5, 30);
+        const tipikalDist = (constellId === 'gps' || constellId === 'galileo') ? 20000 : 1200;
         linkEval = evaluateLinkFromGeo({
           elevationDeg: tipikalElev,
           distanceKm: tipikalDist,
           dopplerRateHzPerSec: 0
         }, currentPhysMode);
+        if (linkEval) {
+          linkEval.modelOnly = true;
+          linkEval.minElevationDeg = minEl;
+        }
       }
 
       if (linkEval && Number.isFinite(linkEval.lqm) && linkEval.lqm !== -Infinity) {
-        set('mc-touch-lqm', `${linkEval.lqm.toFixed(1)} dB / PER ${(linkEval.per * 100).toFixed(2)}%`);
-        set('mc-touch-usable', linkEval.usable ? 'YA · virtual.js' : 'TIDAK (LQM rendah)');
+        const note = linkEval.modelOnly ? ' (model tipikal)' : '';
+        set('mc-touch-lqm', `${linkEval.lqm.toFixed(1)} dB / PER ${(linkEval.per * 100).toFixed(2)}%${note}`);
+        set('mc-touch-usable', linkEval.usable ? 'YA · virtual.js' : `TIDAK (el < ${minEl}° atau LQM rendah)`);
       } else {
-        set('mc-touch-lqm', '— (butuh geometri / el≥10°)');
+        set('mc-touch-lqm', `— (di bawah horizon / el < ${minEl}°)`);
         set('mc-touch-usable', '—');
       }
 
@@ -3823,16 +3951,25 @@
       }
       if (!Number.isFinite(dopShift)) dopShift = 0;
 
-      // USB mode: spektrum sudah diisi IQ meter; virtual mode: bangun dari LQM
+      // USB mode: spektrum dari IQ; virtual: Protocol-Specific Waveform Bank
+      const activeConstell = (liveTarget?.constellId || liveConstellation?.constellId || 'iridium');
       if (rfMode !== 'usb' || !rfIqChunks) {
-        const center = 32 + Math.max(-24, Math.min(24, dopShift / 2000));
-        const peak = inPass ? Math.max(0.15, quality) : 0.05;
-        for (let i = 0; i < 64; i++) {
-          const dist = Math.abs(i - center);
-          const lobe = Math.exp(-dist * dist / 40) * peak;
-          const noise = 0.02 + Math.random() * 0.04 * (inPass ? 1 : 0.5);
-          rfSpectrum[i] = rfSpectrum[i] * 0.75 + (lobe + noise) * 0.25;
+        const spec = generatePhysicalSpectrum(activeConstell, {
+          elevationDeg: elev,
+          dopplerHz: dopShift,
+          snrDb: snr ?? (quality * 20 - 5),
+          bins: 64,
+          phase: (rfFrame % 120) / 120
+        });
+        if (spec.muted) {
+          for (let i = 0; i < 64; i++) rfSpectrum[i] = rfSpectrum[i] * 0.85; // decay to silence
+        } else {
+          for (let i = 0; i < 64; i++) {
+            rfSpectrum[i] = rfSpectrum[i] * 0.55 + (spec.bins[i] || 0) * 0.45;
+          }
         }
+        // Store profile label for HUD
+        window.__rfWaveformLabel = spec.profile?.label || activeConstell;
       }
       const center = 32 + Math.max(-24, Math.min(24, dopShift / 2000));
       const dop = dopRate;
@@ -4295,34 +4432,46 @@
       liveMapCtx.arc(obs.x, obs.y, 7, 0, Math.PI * 2);
       liveMapCtx.stroke();
 
-      // Satelit
+      // Satelit — highlight + pulse saat masuk zona usable
+      const t = performance.now() / 1000;
+      const activeConstell = liveConstellation?.constellId || 'iridium';
+      const minElMap = (CONSTELLATION_THRESHOLDS[activeConstell]?.minElevationDeg)
+        ?? (MIN_ELEV_BY_CONSTELL[activeConstell]) ?? 10;
+
       for (const sat of latestSnapshot) {
         const p = geoToXY(sat.latDeg, sat.lonDeg, w, h);
         const isHover = sat.name === liveMapHoverName;
         const isTarget = liveTarget && sat.name === liveTarget.name;
-        const isVisible = sat.aboveHorizon && sat.elDeg >= SAT_CONSTANTS.MIN_ELEVATION_DEG;
+        const isUsable = sat.aboveHorizon && Number.isFinite(sat.elDeg) && sat.elDeg >= minElMap;
 
-        if (isTarget) {
-          liveMapCtx.strokeStyle = 'rgba(34,197,94,0.7)';
+        if (isTarget || isUsable) {
+          // Pulse ring for usable / target nodes
+          const pulse = 0.5 + 0.5 * Math.sin(t * 4 + (sat.elDeg || 0));
+          const ringR = (isTarget ? 8 : 5) + pulse * 3;
+          liveMapCtx.strokeStyle = isTarget
+            ? `rgba(34,197,94,${0.4 + pulse * 0.4})`
+            : `rgba(74,222,128,${0.25 + pulse * 0.35})`;
           liveMapCtx.lineWidth = 1.5;
           liveMapCtx.beginPath();
-          liveMapCtx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+          liveMapCtx.arc(p.x, p.y, ringR, 0, Math.PI * 2);
           liveMapCtx.stroke();
-          // line to observer
-          liveMapCtx.beginPath();
-          liveMapCtx.moveTo(obs.x, obs.y);
-          liveMapCtx.lineTo(p.x, p.y);
-          liveMapCtx.strokeStyle = 'rgba(34,197,94,0.35)';
-          liveMapCtx.lineWidth = 1;
-          liveMapCtx.stroke();
+
+          if (isTarget) {
+            liveMapCtx.beginPath();
+            liveMapCtx.moveTo(obs.x, obs.y);
+            liveMapCtx.lineTo(p.x, p.y);
+            liveMapCtx.strokeStyle = 'rgba(34,197,94,0.35)';
+            liveMapCtx.lineWidth = 1;
+            liveMapCtx.stroke();
+          }
         }
 
         liveMapCtx.fillStyle = isTarget ? '#22c55e'
-          : isVisible ? '#4ade80'
+          : isUsable ? '#4ade80'
           : sat.aboveHorizon ? '#eab308'
           : (isHover ? '#e5e7eb' : 'rgba(100,116,139,0.75)');
         liveMapCtx.beginPath();
-        liveMapCtx.arc(p.x, p.y, isTarget || isHover ? 3.4 : 1.7, 0, Math.PI * 2);
+        liveMapCtx.arc(p.x, p.y, isTarget || isHover || isUsable ? 3.4 : 1.7, 0, Math.PI * 2);
         liveMapCtx.fill();
       }
     }
@@ -4398,11 +4547,19 @@
       btnLiveMapRefresh.disabled = false;
 
       liveConstellation = new LiveConstellation({
-        tickMs: 2000, // lebih tenang di HP (dulu 1000ms → panel bergetar)
-        onUpdate: (snapshot) => {
+        constellId: 'iridium',
+        tickMs: 1000, // ≥1Hz update untuk kriteria presisi
+        onUpdate: (snapshot, extra = {}) => {
+          if (extra.corrupt) {
+            latestSnapshot = [];
+            if (liveMapStatus) liveMapStatus.textContent = extra.statusMsg || 'ORBIT DATA CORRUPT - REFETCHING';
+            scheduleLiveUiUpdate();
+            return;
+          }
           let ir = enrichSnapshotWithDoppler(snapshot);
           for (const s of ir) {
-            if (!s.constellation) s.constellation = 'iridium';
+            if (!s.constellation) s.constellation = liveConstellation?.constellId || 'iridium';
+            if (extra.agePenaltyDb) s.agePenaltyDb = extra.agePenaltyDb;
           }
           // Jika kunci Internet: jangan hapus OneWeb/Starlink dari merge
           if (pathLock === 'internet' && inetSatrecs.length) {
@@ -4414,13 +4571,20 @@
         },
         onStatus: (meta) => {
           if (liveMapStatus) {
-            const vis = latestSnapshot.filter((s) => s.aboveHorizon && s.elDeg >= 10).length;
-            liveMapStatus.textContent = formatLiveMapStatus(meta) +
-              (meta.satCount ? ` · ${vis} di atas horizon` : '');
+            if (meta.corrupt) {
+              liveMapStatus.textContent = meta.statusMsg || 'ORBIT DATA CORRUPT - REFETCHING';
+            } else {
+              const minEl = (CONSTELLATION_THRESHOLDS[meta.constellId]?.minElevationDeg) ?? 10;
+              const vis = latestSnapshot.filter((s) => s.aboveHorizon && s.elDeg >= minEl).length;
+              liveMapStatus.textContent = formatLiveMapStatus(meta) +
+                (meta.satCount ? ` · ${vis} usable (el≥${minEl}°)` : '');
+            }
           }
-          liveMapBadge.textContent = meta.satCount ? 'LIVE' : (meta.lastError ? 'ERROR' : 'LOADING');
-          liveMapBadge.classList.toggle('live', !!meta.satCount);
-          liveMapBadge.classList.toggle('lost', !meta.satCount && !!meta.lastError);
+          liveMapBadge.textContent = meta.corrupt ? 'CORRUPT'
+            : meta.satCount ? 'LIVE'
+            : (meta.lastError ? 'ERROR' : 'LOADING');
+          liveMapBadge.classList.toggle('live', !!meta.satCount && !meta.corrupt);
+          liveMapBadge.classList.toggle('lost', (!meta.satCount || meta.corrupt) && !!meta.lastError);
         }
       });
 

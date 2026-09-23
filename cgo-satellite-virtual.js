@@ -992,8 +992,146 @@ function runSelfTest() {
 }
 
 // ============================================================================
-// EXPORTS
+// PROTOCOL-SPECIFIC RF WAVEFORM BANK
+// Hapus generator generik/Gaussian. Bentuk spektrum fisik per konstelasi.
+// Sinkronisasi Doppler dengan d(el)/dt dari Physical Engine.
+// Jika elevasi < threshold → MUTE TOTAL (bukan noise negatif).
 // ============================================================================
+
+const WAVEFORM_PROFILES = Object.freeze({
+  starlink: {
+    type: 'OFDM',
+    subcarrierHz: 30_000,
+    fftSize: 4096,
+    mask: 'rectangular',
+    label: 'OFDM 30kHz / FFT4096',
+  },
+  oneweb: {
+    type: 'OFDM',
+    subcarrierHz: 30_000,
+    fftSize: 4096,
+    mask: 'rectangular',
+    label: 'OFDM 30kHz / FFT4096',
+  },
+  iridium: {
+    type: 'TDMA_QPSK',
+    slotSamples: 512,
+    pulse: 'raised_cosine',
+    label: 'TDMA Bursty QPSK',
+  },
+  gps: {
+    type: 'CDMA_BPSK',
+    prnChips: 1023,
+    navBpsk: true,
+    label: 'CDMA PRN + BPSK',
+  },
+  galileo: {
+    type: 'CDMA_BPSK',
+    prnChips: 4092,
+    navBpsk: true,
+    label: 'CDMA PRN + BPSK',
+  },
+});
+
+const MIN_ELEV_BY_CONSTELL = Object.freeze({
+  starlink: 10,
+  oneweb: 10,
+  iridium: 5,
+  gps: 7,
+  galileo: 7,
+});
+
+/**
+ * Generate physical spectrum magnitude array (0..1) for canvas.
+ * @param {string} constellId
+ * @param {object} opts
+ * @param {number} opts.elevationDeg
+ * @param {number} opts.dopplerHz      - real-time Doppler from d(el)/dt
+ * @param {number} opts.snrDb
+ * @param {number} [opts.bins=64]
+ * @param {number} [opts.phase=0]     - time phase for animation
+ * @returns {{ bins: Float32Array, muted: boolean, profile: object }}
+ */
+function generatePhysicalSpectrum(constellId, {
+  elevationDeg = 0,
+  dopplerHz = 0,
+  snrDb = 0,
+  bins = 64,
+  phase = 0
+} = {}) {
+  const id = (constellId || 'iridium').toLowerCase();
+  const profile = WAVEFORM_PROFILES[id] || WAVEFORM_PROFILES.iridium;
+  const minEl = MIN_ELEV_BY_CONSTELL[id] ?? 10;
+  const out = new Float32Array(bins);
+
+  // MUTE TOTAL jika di bawah threshold — bukan noise negatif
+  if (!Number.isFinite(elevationDeg) || elevationDeg < minEl) {
+    return { bins: out, muted: true, profile };
+  }
+
+  const center = bins / 2;
+  // Doppler shift in bin units (rough: ± maxDoppler maps to ± bins/4)
+  const maxDoppler = id === 'iridium' ? 40530 : (id === 'gps' || id === 'galileo' ? 5000 : 200000);
+  const dopplerBins = Number.isFinite(dopplerHz)
+    ? (dopplerHz / maxDoppler) * (bins / 4)
+    : 0;
+  const peak = Math.max(0.05, Math.min(1, (snrDb + 5) / 30));
+
+  if (profile.type === 'OFDM') {
+    // Rectangular OFDM mask: flat top with sharp shoulders + subcarrier ripple
+    const halfWidth = bins * 0.28;
+    const c = center + dopplerBins;
+    for (let i = 0; i < bins; i++) {
+      const d = Math.abs(i - c);
+      if (d < halfWidth) {
+        // subcarrier ripple
+        const sc = Math.cos((i + phase * 0.3) * Math.PI * 0.35) * 0.08;
+        out[i] = peak * (0.85 + sc);
+      } else if (d < halfWidth + 3) {
+        out[i] = peak * Math.max(0, 1 - (d - halfWidth) / 3) * 0.4;
+      } else {
+        out[i] = peak * 0.02 * Math.random(); // floor noise
+      }
+    }
+  } else if (profile.type === 'TDMA_QPSK') {
+    // Bursty TDMA: narrow lobes that pulse with slot phase
+    const slotPhase = (phase % 1);
+    const burstOn = slotPhase < 0.35;
+    const c = center + dopplerBins;
+    const halfWidth = bins * 0.08;
+    for (let i = 0; i < bins; i++) {
+      const d = Math.abs(i - c);
+      const envelope = Math.exp(-(d * d) / (2 * halfWidth * halfWidth));
+      // Raised-cosine-ish side lobes
+      const lobe = Math.abs(Math.sinc ? Math.sinc(d / halfWidth) : Math.sin(d) / (d || 1));
+      const base = burstOn ? peak * (0.7 * envelope + 0.25 * Math.abs(lobe)) : peak * 0.03;
+      out[i] = Math.min(1, base + peak * 0.015 * Math.random());
+    }
+  } else if (profile.type === 'CDMA_BPSK') {
+    // Spread spectrum: wide noise-like floor with slight center peak (correlation)
+    const c = center + dopplerBins * 0.3;
+    for (let i = 0; i < bins; i++) {
+      const d = Math.abs(i - c);
+      const spread = peak * 0.35 * (0.6 + 0.4 * Math.random());
+      const corrPeak = d < 2 ? peak * 0.55 : 0;
+      out[i] = Math.min(1, spread + corrPeak);
+    }
+  } else {
+    // fallback flat
+    for (let i = 0; i < bins; i++) out[i] = peak * 0.1;
+  }
+
+  return { bins: out, muted: false, profile };
+}
+
+/**
+ * Doppler Hz dari d(elevation)/dt (approx) + range-rate.
+ * rangeRateMs positif = satelit menjauh.
+ */
+function dopplerFromGeometry(rangeRateMs, carrierHz) {
+  if (!Number.isFinite(rangeRateMs) || !Number.isFinite(carrierHz) || carrierHz <= 0) return 0;
+  return -(rangeRateMs / 299792458) * carrierHz;
+}
 
 export {
   SAT_CONSTANTS,
@@ -1015,5 +1153,11 @@ export {
   calculateLQM,
   getBER,
   getPER,
-  runSelfTest
+  runSelfTest,
+  // Waveform bank
+  WAVEFORM_PROFILES,
+  MIN_ELEV_BY_CONSTELL,
+  generatePhysicalSpectrum,
+  dopplerFromGeometry
 };
+
