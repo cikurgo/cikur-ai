@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#050508">
+<title>BCGO NTN · Physics Console + Counter-Jam</title>
+<style>
+:root{
+  --bg:#050508;
+  --grid:rgba(0,243,255,0.05);
+  --cyan:#00f3ff;
+  --amber:#ffaa00;
+  --red:#ff0055;
+  --green:#22c55e;
+  --violet:#a855f7;
+  --dim:#4a5a6a;
+  --mono:'Courier New',ui-monospace,monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{
+  margin:0;height:100%;background:var(--bg);color:var(--cyan);
+  font-family:var(--mono);overflow:hidden;font-size:12px;
+}
+.holo-grid{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:40px 40px;
+}
+
+/* ─── LAYOUT ───────────────────────────────────── */
+#app{
+  position:relative;z-index:10;
+  height:100%;height:100dvh;
+  display:grid;gap:6px;padding:6px;
+  grid-template-columns:1fr;
+  grid-template-rows:auto auto 1fr auto auto;
+  grid-template-areas:
+    "selector"
+    "diag"
+    "scope"
+    "trace"
+    "logs";
+  overflow-y:auto;
+}
+@media(min-width:900px){
+  #app{
+    grid-template-columns:280px 1fr 320px;
+    grid-template-rows:auto 1fr 180px;
+    grid-template-areas:
+      "selector selector selector"
+      "diag scope trace"
+      "diag scope logs";
+    overflow:hidden;
+  }
+}
+
+.panel{
+  border:1px solid rgba(0,243,255,0.2);
+  background:rgba(5,5,8,0.85);
+  backdrop-filter:blur(6px);
+  padding:8px 10px;
+  display:flex;flex-direction:column;gap:5px;
+  overflow-y:auto;min-height:0;
+}
+#panel-selector{grid-area:selector;flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 10px}
+#panel-diag{grid-area:diag}
+#panel-scope{grid-area:scope;padding:0;gap:0}
+#panel-trace{grid-area:trace}
+#panel-logs{grid-area:logs}
+
+.panel h2{
+  margin:0 0 4px 0;font-size:10px;letter-spacing:1.5px;
+  text-transform:uppercase;border-bottom:1px solid var(--dim);
+  padding-bottom:3px;color:#fff;font-weight:600;
+  display:flex;align-items:center;gap:6px;
+}
+.panel h2 + h2{margin-top:10px}
+
+.metric{
+  display:flex;justify-content:space-between;gap:8px;
+  font-size:11px;line-height:1.5;
+}
+.metric .label{color:var(--dim)}
+.metric .value{
+  color:#fff;text-shadow:0 0 5px var(--cyan);
+  font-weight:bold;font-variant-numeric:tabular-nums;text-align:right;
+}
+.metric .value.warn{color:var(--amber);text-shadow:0 0 5px var(--amber)}
+.metric .value.danger{color:var(--red);text-shadow:0 0 5px var(--red)}
+.metric .value.good{color:var(--green);text-shadow:0 0 5px var(--green)}
+.metric .value.violet{color:var(--violet);text-shadow:0 0 5px var(--violet)}
+
+/* ─── SELECTOR (konstelasi) ───────────────────────────── */
+.sel-chip{
+  background:rgba(0,243,255,0.08);
+  border:1px solid rgba(0,243,255,0.3);
+  color:var(--cyan);
+  padding:5px 10px;
+  font-family:inherit;font-size:10px;
+  letter-spacing:1px;text-transform:uppercase;
+  cursor:pointer;border-radius:2px;
+  transition:all .12s;
+  font-weight:600;
+}
+.sel-chip:hover{background:rgba(0,243,255,0.2)}
+.sel-chip.active{
+  background:var(--cyan);color:#04130a;
+  box-shadow:0 0 12px var(--cyan);
+  border-color:var(--cyan);
+}
+.sel-chip .cnt{
+  opacity:.65;font-weight:400;
+  margin-left:4px;
+}
+.sel-info{
+  font-size:10px;color:var(--dim);
+  flex:1;min-width:120px;
+  text-align:right;
+}
+
+/* ─── SCOPE ─────────────────────────────────────────── */
+#scope-wrap{
+  position:relative;height:100%;width:100%;
+  display:grid;grid-template-rows:1fr 1fr;
+  background:rgba(0,0,0,0.3);overflow:hidden;
+}
+#scope-wrap canvas{width:100%;height:100%;display:block}
+.scope-label{
+  position:absolute;top:6px;left:8px;
+  font-size:9px;color:var(--dim);letter-spacing:1px;
+  text-transform:uppercase;pointer-events:none;z-index:5;
+}
+.scope-label.bottom{top:auto;bottom:34px}
+
+#modem-status{
+  position:absolute;bottom:6px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,0.9);
+  border:1px solid var(--cyan);
+  padding:4px 14px;
+  font-size:10px;letter-spacing:1px;
+  white-space:nowrap;max-width:95%;
+  overflow:hidden;text-overflow:ellipsis;z-index:50;
+}
+
+/* ─── VOID PULSE (counter-jam) ───────────────────────── */
+.void-wave{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:0;height:0;border-radius:50%;
+  background:radial-gradient(circle,#00f3ff 0%,transparent 70%);
+  border:2px solid #fff;
+  pointer-events:none;z-index:100;
+  opacity:0;box-shadow:0 0 100px #00f3ff;
+  transition:opacity .3s;
+}
+.jam-marker{
+  position:absolute;
+  width:20px;height:20px;
+  border-radius:50%;
+  background:radial-gradient(circle,var(--red) 0%,transparent 70%);
+  border:1px solid var(--red);
+  pointer-events:none;z-index:40;
+  animation:pulse 1.5s infinite;
+  transform:translate(-50%,-50%);
+}
+.jam-marker.killed{
+  animation:none;
+  opacity:0;
+  transition:opacity .8s;
+}
+@keyframes pulse{
+  0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.9}
+  50%{transform:translate(-50%,-50%) scale(1.4);opacity:.5}
+}
+
+/* ─── LOG ───────────────────────────────────────────── */
+#debug-log{
+  font-size:10px;line-height:1.5;
+  color:var(--cyan);
+  overflow-y:auto;flex:1;min-height:80px;
+  white-space:pre-wrap;word-break:break-word;
+  font-variant-numeric:tabular-nums;
+}
+#debug-log .t{color:var(--dim)}
+#debug-log .ok{color:var(--green)}
+#debug-log .warn{color:var(--amber)}
+#debug-log .err{color:var(--red)}
+#debug-log .violet{color:var(--violet)}
+
+/* ─── BUTTON ────────────────────────────────────────── */
+button.act{
+  background:rgba(255,0,85,0.1);
+  border:1px solid var(--red);
+  color:var(--red);
+  padding:10px 12px;
+  font-family:inherit;font-size:11px;
+  font-weight:bold;letter-spacing:1.5px;
+  text-transform:uppercase;
+  cursor:pointer;transition:all .15s;
+  margin-top:6px;
+}
+button.act:hover:not(:disabled){background:var(--red);color:#fff;box-shadow:0 0 20px var(--red)}
+button.act:disabled{opacity:.4;cursor:not-allowed}
+button.act.void-active{
+  background:var(--cyan);color:#04130a;border-color:var(--cyan);
+  box-shadow:0 0 30px var(--cyan);
+}
+
+@media(max-width:899px){
+  body{font-size:11px}
+  .panel{padding:8px}
+  #scope-wrap{min-height:220px}
+  #panel-trace,#panel-logs{max-height:40vh}
+  #panel-selector{padding:5px 8px}
+  .sel-chip{font-size:9px;padding:4px 8px}
+  .metric{font-size:10.5px}
+  #debug-log{font-size:9.5px;min-height:100px}
+}
+</style>
+</head>
+<body>
+
+<div class="holo-grid"></div>
+
+<div id="app">
+
+  <!-- ═══ SELECTOR: Konstelasi ═══ -->
+  <div class="panel" id="panel-selector">
+    <span style="font-size:10px;color:var(--dim);letter-spacing:1px">CONSTELLATION:</span>
+    <div id="constell-chips" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+    <span class="sel-info" id="sel-info">--</span>
+  </div>
+
+  <!-- ═══ KIRI: FISIKA ═══ -->
+  <div class="panel" id="panel-diag">
+    <h2>◈ Orbital Physics</h2>
+    <div class="metric"><span class="label">Sat</span><span class="value" id="val-sat">--</span></div>
+    <div class="metric"><span class="label">Constellation</span><span class="value violet" id="val-constell">--</span></div>
+    <div class="metric"><span class="label">Orbit</span><span class="value" id="val-orbit">--</span></div>
+    <div class="metric"><span class="label">Band</span><span class="value" id="val-band">--</span></div>
+    <div class="metric"><span class="label">Elevation</span><span class="value" id="val-el">0.0°</span></div>
+    <div class="metric"><span class="label">Slant Range</span><span class="value" id="val-range">0 km</span></div>
+    <div class="metric"><span class="label">Doppler</span><span class="value" id="val-doppler">0.0 kHz</span></div>
+    <div class="metric"><span class="label">FSPL</span><span class="value" id="val-fspl">0 dB</span></div>
+    <div class="metric"><span class="label">Atm. Loss</span><span class="value" id="val-atm">0 dB</span></div>
+
+    <h2>◈ Link Budget</h2>
+    <div class="metric"><span class="label">EIRP</span><span class="value" id="val-eirp">--</span></div>
+    <div class="metric"><span class="label">Pr (Rx)</span><span class="value" id="val-pr">-- dBm</span></div>
+    <div class="metric"><span class="label">Noise Floor</span><span class="value" id="val-noise">-- dBm</span></div>
+    <div class="metric"><span class="label">Jam (I)</span><span class="value warn" id="val-jam">-- dBm</span></div>
+  </div>
+
+  <!-- ═══ TENGAH: SCOPE ═══ -->
+  <div class="panel" id="panel-scope">
+    <div id="scope-wrap">
+      <div>
+        <span class="scope-label">IQ CONSTELLATION</span>
+        <canvas id="iq-canvas"></canvas>
+      </div>
+      <div style="position:relative;border-top:1px solid rgba(0,243,255,0.1)">
+        <span class="scope-label bottom">SPECTRUM</span>
+        <canvas id="spectrum-canvas"></canvas>
+      </div>
+      <div id="modem-status">INITIALIZING...</div>
+      <div id="void-effect" class="void-wave"></div>
+    </div>
+  </div>
+
+  <!-- ═══ KANAN: MODEM ═══ -->
+  <div class="panel" id="panel-trace">
+    <h2>◈ 5G NTN Virtual Modem</h2>
+    <div class="metric"><span class="label">SINR</span><span class="value" id="val-sinr">-- dB</span></div>
+    <div class="metric"><span class="label">Shannon Cap</span><span class="value" id="val-cap">0 Mbps</span></div>
+    <div class="metric"><span class="label">Modulation</span><span class="value" id="val-mod">--</span></div>
+    <div class="metric"><span class="label">Coding Rate</span><span class="value" id="val-code">--</span></div>
+    <div class="metric"><span class="label">Throughput</span><span class="value good" id="val-thru">0 Mbps</span></div>
+    <div class="metric"><span class="label">Latency</span><span class="value" id="val-lat">-- ms</span></div>
+    <div class="metric"><span class="label">Pkt Loss</span><span class="value" id="val-loss">0.00%</span></div>
+    <div class="metric"><span class="label">Bits Extracted</span><span class="value" id="val-bits">0</span></div>
+
+    <h2>◈ Threat Board</h2>
+    <div class="metric"><span class="label">Active Jammers</span><span class="value danger" id="val-jamcount">0</span></div>
+    <div class="metric"><span class="label">Killed</span><span class="value good" id="val-jamkilled">0</span></div>
+    <div class="metric"><span class="label">Void Pulses</span><span class="value violet" id="val-voidused">0</span></div>
+  </div>
+
+  <!-- ═══ LOG + BUTTON ═══ -->
+  <div class="panel" id="panel-logs">
+    <h2>◈ Protocol Debugger</h2>
+    <div id="debug-log"></div>
+    <button id="void-btn" class="act" type="button">⚡ ACTIVATE VOID PULSE</button>
+  </div>
+
+</div>
+
+<script>
+/**
+ * ═══════════════════════════════════════════════════════════
+ *  BCGO NTN — Physics Console + Counter-Jam
+ *  Single file. HP + Desktop. Zero dependency.
+ *
+ *  VOID PULSE = counter-jam mechanic. Membersihkan sinyal musuh
+ *  yang menyenggol BCGO NTN. Musuh respawn setelah cooldown.
+ * ═══════════════════════════════════════════════════════════
+ */
+
+// ─── KONSTANTA FISIKA ────────────────────────────────────
+const PHYSICS = Object.freeze({
+  C: 299792458,
+  K_B: 1.380649e-23,
+  FREQ_HZ: 12.5e9,
+  BW_HZ: 250e6,
+  T_SYS: 290,
+  NF_DB: 3,
+  G_RX_DB: 30,
+  PROTO_EFF: 0.825,
+  R_EARTH_KM: 6371,
+  ALT_KM: 550,
+});
+
+const NOISE_FLOOR_DBM =
+  10 * Math.log10(PHYSICS.K_B * PHYSICS.T_SYS * PHYSICS.BW_HZ * 1000)
+  + PHYSICS.NF_DB;
+
+// ─── REGISTRY KONSTELASI (suntikan dari cgo-multi-constellation) ───
+const CONSTELLATIONS = Object.freeze({
+  iridium: {
+    id: 'iridium', name: 'Iridium', function: 'communication',
+    orbit: 'leo', count: 80, band: 'L', freqHz: 1621.25e6,
+    eirpDbw: 37, gainDbi: 3, protocol: 'Iridium SBD',
+  },
+  globalstar: {
+    id: 'globalstar', name: 'Globalstar', function: 'communication',
+    orbit: 'leo', count: 48, band: 'L', freqHz: 1615e6,
+    eirpDbw: 33, gainDbi: 2, protocol: 'Globalstar',
+  },
+  starlink: {
+    id: 'starlink', name: 'Starlink', function: 'communication',
+    orbit: 'leo', count: 10000, band: 'Ku', freqHz: 12.5e9,
+    eirpDbw: 33, gainDbi: 30, protocol: 'Starlink',
+  },
+  oneweb: {
+    id: 'oneweb', name: 'OneWeb', function: 'communication',
+    orbit: 'leo', count: 600, band: 'Ku', freqHz: 12.5e9,
+    eirpDbw: 32, gainDbi: 28, protocol: 'OneWeb',
+  },
+  gps: {
+    id: 'gps', name: 'GPS', function: 'navigation',
+    orbit: 'meo', count: 31, band: 'L1', freqHz: 1575.42e6,
+    eirpDbw: 20, gainDbi: 3, protocol: 'GPS L1',
+  },
+  amateur: {
+    id: 'amateur', name: 'Amateur', function: 'amateur',
+    orbit: 'leo', count: 100, band: 'VHF', freqHz: 145.8e6,
+    eirpDbw: 10, gainDbi: 2, protocol: 'APRS',
+  },
+});
+
+// ─── STATE ───────────────────────────────────────────────
+const System = {
+  t: 0,
+  constellId: 'starlink',
+  constell: CONSTELLATIONS.starlink,
+  satIndex: 1008,
+
+  // Fisika dinamis
+  elevation: 0,
+  slantRange: 0,
+  fspl: 0,
+  atmLoss: 0,
+  prDbm: -90,
+  dopplerHz: 0,
+
+  // Jammer / musuh
+  jammers: [],           // {id, x, y, powerDbm, killed}
+  jammersKilled: 0,
+  voidPulsesUsed: 0,
+  voidActive: false,
+  voidRadius: 0,
+
+  // Modem
+  sinrDb: 0,
+  capacityBps: 0,
+  modemLocked: false,
+  throughput: 0,
+  modulation: '--',
+  codingRate: '--',
+  latency: 0,
+  packetLoss: 0,
+
+  // Buffer
+  iqBuffer: new Float32Array(2048),
+  bufferPtr: 0,
+  totalBitsExtracted: 0,
+};
+
+// ─── SPAWN JAMMERS ────────────────────────────────────────
+function spawnJammer() {
+  const maxJammers = 3;
+  if (System.jammers.filter(j => !j.killed).length >= maxJammers) return;
+
+  const angle = Math.random() * Math.PI * 2;
+  const dist = 0.15 + Math.random() * 0.3;
+  System.jammers.push({
+    id: `J-${Date.now() % 10000}`,
+    x: 0.5 + Math.cos(angle) * dist,
+    y: 0.5 + Math.sin(angle) * dist,
+    powerDbm: -60 - Math.random() * 10,
+    killed: false,
+    spawnT: System.t,
+  });
+  logLine('THREAT', `Hostile jammer detected. I=${(System.jammers[System.jammers.length-1].powerDbm).toFixed(0)} dBm`, 'err');
+}
+
+// ─── REGENERATE JAMMERS ───────────────────────────────────
+function jammerTick() {
+  // Spawn kalau jumlah sedikit
+  if (System.jammers.filter(j => !j.killed).length === 0 && Math.random() < 0.008) {
+    spawnJammer();
+  } else if (System.jammers.filter(j => !j.killed).length < 3 && Math.random() < 0.004) {
+    spawnJammer();
+  }
+  // Respawn jammer killed setelah 15 detik
+  for (const j of System.jammers) {
+    if (j.killed && System.t - j.spawnT > 15000) {
+      j.killed = false;
+      j.spawnT = System.t;
+      j.powerDbm = -60 - Math.random() * 10;
+      logLine('THREAT', `Jammer ${j.id} re-engaging.`, 'warn');
+    }
+  }
+}
+
+// ─── FISIKA ORBITAL ───────────────────────────────────────
+function calculatePhysics(t) {
+  const T = 600;
+  const phase = (t % T) / T;
+  System.elevation = 85 * (1 - Math.cos(2 * Math.PI * phase)) / 2;
+
+  const elRad = System.elevation * Math.PI / 180;
+  const R = PHYSICS.R_EARTH_KM;
+  const h = PHYSICS.ALT_KM;
+
+  if (System.elevation > 1) {
+    const a = (R + h) ** 2;
+    const b = (R * Math.cos(elRad)) ** 2;
+    System.slantRange = Math.sqrt(Math.max(0, a - b)) - R * Math.sin(elRad);
+  } else {
+    System.slantRange = 2000;
+  }
+
+  const fMHz = System.constell.freqHz / 1e6;
+  System.fspl = 20 * Math.log10(System.slantRange)
+              + 20 * Math.log10(fMHz) + 32.44;
+
+  // Atmosfer tergantung band
+  const atmCoef = System.constell.band === 'Ku' ? 0.5
+                 : System.constell.band === 'L' ? 0.15
+                 : 0.05;
+  System.atmLoss = atmCoef / Math.max(Math.sin(elRad), 0.05);
+
+  // Pr dinamis dari EIRP + G_rx - FSPL - atm
+  System.prDbm = System.constell.eirpDbw + 30
+               - System.fspl - System.atmLoss
+               + System.constell.gainDbi;
+
+  const vSat = 7500;
+  const sign = phase < 0.5 ? +1 : -1;
+  System.dopplerHz = sign * (vSat / PHYSICS.C) * System.constell.freqHz * Math.cos(elRad);
+}
+
+// ─── MODEM + JAMMING ──────────────────────────────────────
+function processModem() {
+  const pThermal = Math.pow(10, NOISE_FLOOR_DBM / 10);
+
+  let pJam = 0;
+  for (const j of System.jammers) {
+    if (!j.killed) pJam += Math.pow(10, j.powerDbm / 10);
+  }
+
+  const pNoiseTotal = pThermal + pJam;
+  const pSignal = Math.pow(10, System.prDbm / 10);
+  const sinrLinear = pSignal / pNoiseTotal;
+  System.sinrDb = 10 * Math.log10(sinrLinear);
+
+  System.capacityBps = sinrLinear > 0
+    ? PHYSICS.BW_HZ * Math.log2(1 + sinrLinear) * PHYSICS.PROTO_EFF : 0;
+
+  // Ekstraksi bit (safe)
+  if (sinrLinear > 0.1) {
+    const noiseStd = 1 / Math.sqrt(2 * sinrLinear);
+    for (let i = 0; i < 4; i++) {
+      const i0 = System.bufferPtr;
+      const i1 = (i0 + 1) % System.iqBuffer.length;
+      System.iqBuffer[i0] = (Math.random() - 0.5) * noiseStd;
+      System.iqBuffer[i1] = (Math.random() - 0.5) * noiseStd;
+      if (System.iqBuffer[i0] > 0) System.totalBitsExtracted++;
+      if (System.iqBuffer[i1] > 0) System.totalBitsExtracted++;
+      System.bufferPtr = (i0 + 2) % System.iqBuffer.length;
+    }
+  }
+
+  // Modem lock/unlock
+  if (System.sinrDb > 8) {
+    if (!System.modemLocked) {
+      System.modemLocked = true;
+      logLine('RRC', 'Link established.', 'ok');
+    }
+    if (System.sinrDb > 22) {
+      System.modulation = '256QAM';
+      System.codingRate = '5/6';
+      System.throughput = System.capacityBps / 1e6 * 0.95;
+    } else if (System.sinrDb > 15) {
+      System.modulation = '64QAM';
+      System.codingRate = '3/4';
+      System.throughput = System.capacityBps / 1e6 * 0.85;
+    } else {
+      System.modulation = 'QPSK';
+      System.codingRate = '1/2';
+      System.throughput = System.capacityBps / 1e6 * 0.60;
+    }
+    System.latency = 28 + Math.random() * 5;
+    System.packetLoss = 0.01;
+  } else {
+    if (System.modemLocked) {
+      System.modemLocked = false;
+      logLine('PHY', 'Radio link failure. Jammed?', 'err');
+    }
+    System.throughput = 0;
+    System.modulation = '--';
+    System.codingRate = '--';
+    System.latency = 0;
+    System.packetLoss = 100;
+  }
+}
+
+// ─── LOG ─────────────────────────────────────────────────
+const logEl = document.getElementById('debug-log');
+const MAX_LINES = 60;
+
+function logLine(tag, msg, cls) {
+  const now = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  const line = document.createElement('div');
+  const spanCls = cls || '';
+  line.innerHTML =
+    `<span class="t">[${now}]</span> ` +
+    `<span class="${spanCls}">${tag}: ${msg}</span>`;
+  logEl.appendChild(line);
+  while (logEl.childNodes.length > MAX_LINES) {
+    logEl.removeChild(logEl.firstChild);
+  }
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// ─── VOID PULSE (Counter-Jam) ─────────────────────────────
+function triggerVoidPulse() {
+  if (System.voidActive) return;
+  System.voidActive = true;
+  System.voidRadius = 0;
+  System.voidPulsesUsed++;
+
+  const effect = document.getElementById('void-effect');
+  const btn = document.getElementById('void-btn');
+
+  btn.disabled = true;
+  btn.classList.add('void-active');
+  btn.textContent = '⚡ VOID PULSE ACTIVE';
+
+  effect.style.width = '0px';
+  effect.style.height = '0px';
+  effect.style.opacity = '1';
+
+  logLine('SYS', `Void Pulse #${System.voidPulsesUsed} fired.`, 'violet');
+
+  const maxR = Math.max(window.innerWidth, window.innerHeight);
+
+  const expand = () => {
+    if (!System.voidActive) return;
+    System.voidRadius += 35;
+    effect.style.width = `${System.voidRadius * 2}px`;
+    effect.style.height = `${System.voidRadius * 2}px`;
+
+    // Kill jammer dalam radius
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    const killR = System.voidRadius * 1.2;
+
+    for (const j of System.jammers) {
+      if (j.killed) continue;
+      const jx = j.x * window.innerWidth;
+      const jy = j.y * window.innerHeight;
+      const d = Math.hypot(jx - cx, jy - cy);
+      if (d < killR) {
+        j.killed = true;
+        j.spawnT = System.t;
+        System.jammersKilled++;
+        logLine('SYS', `Jammer ${j.id} neutralized.`, 'ok');
+        updateJamMarkers();
+      }
+    }
+
+    if (System.voidRadius < maxR) {
+      requestAnimationFrame(expand);
+    } else {
+      finishPulse();
+    }
+  };
+  expand();
+}
+
+function finishPulse() {
+  const effect = document.getElementById('void-effect');
+  const btn = document.getElementById('void-btn');
+
+  effect.style.opacity = '0';
+
+  setTimeout(() => {
+    System.voidActive = false;
+    btn.disabled = false;
+    btn.classList.remove('void-active');
+    btn.textContent = '⚡ ACTIVATE VOID PULSE';
+    logLine('SYS', 'Void Pulse cycle complete.', 'violet');
+  }, 500);
+}
+
+// ─── JAMMER MARKERS (DOM) ─────────────────────────────────
+function updateJamMarkers() {
+  const wrap = document.getElementById('scope-wrap');
+
+  // Hapus yang lama
+  wrap.querySelectorAll('.jam-marker').forEach(el => el.remove());
+
+  // Tambah yang baru
+  for (const j of System.jammers) {
+    if (j.killed) continue;
+    const el = document.createElement('div');
+    el.className = 'jam-marker';
+    el.style.left = (j.x * 100) + '%';
+    el.style.top = (j.y * 100) + '%';
+    el.dataset.id = j.id;
+    el.title = `${j.id} · ${j.powerDbm.toFixed(0)} dBm`;
+    wrap.appendChild(el);
+  }
+}
+
+// ─── RENDER ENGINE ────────────────────────────────────────
+const Engine = {
+  iqCanvas: document.getElementById('iq-canvas'),
+  specCanvas: document.getElementById('spectrum-canvas'),
+  iqCtx: null, specCtx: null,
+
+  init() {
+    this.iqCtx = this.iqCanvas.getContext('2d');
+    this.specCtx = this.specCanvas.getContext('2d');
+    this.resize();
+    window.addEventListener('resize', () => this.resize());
+    document.getElementById('void-btn')
+      .addEventListener('click', triggerVoidPulse);
+    this.buildSelector();
+    requestAnimationFrame((t) => this.loop(t));
+  },
+
+  buildSelector() {
+    const wrap = document.getElementById('constell-chips');
+    wrap.innerHTML = '';
+    for (const id in CONSTELLATIONS) {
+      const c = CONSTELLATIONS[id];
+      const btn = document.createElement('button');
+      btn.className = 'sel-chip' + (id === System.constellId ? ' active' : '');
+      btn.dataset.id = id;
+      btn.innerHTML = `${c.name}<span class="cnt">${c.count}</span>`;
+      btn.addEventListener('click', () => {
+        System.constellId = id;
+        System.constell = CONSTELLATIONS[id];
+        System.totalBitsExtracted = 0;
+        System.modemLocked = false;
+        document.querySelectorAll('.sel-chip').forEach(b =>
+          b.classList.toggle('active', b.dataset.id === id));
+        updateSelInfo();
+        logLine('SYS', `Locked to ${c.name}. ${c.count} satellites.`, 'violet');
+      });
+      wrap.appendChild(btn);
+    }
+    updateSelInfo();
+  },
+
+  resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    for (const [canvas, ctx] of [
+      [this.iqCanvas, this.iqCtx],
+      [this.specCanvas, this.specCtx],
+    ]) {
+      const parent = canvas.parentElement;
+      const w = parent.clientWidth;
+      const h = parent.clientHeight;
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+  },
+
+  updateDOM() {
+    const setT = (id, txt, cls) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = txt;
+      if (cls !== undefined) el.className = 'value' + (cls ? ' ' + cls : '');
+    };
+
+    const c = System.constell;
+
+    setT('val-sat', `SAT-${String(System.satIndex).padStart(4, '0')}`);
+    setT('val-constell', c.name, 'violet');
+    setT('val-orbit', c.orbit.toUpperCase());
+    setT('val-band', c.band);
+
+    setT('val-el', System.elevation.toFixed(1) + '°');
+    setT('val-range', System.slantRange.toFixed(0) + ' km');
+    const dop = System.dopplerHz / 1000;
+    setT('val-doppler', (dop >= 0 ? '+' : '') + dop.toFixed(2) + ' kHz');
+    setT('val-fspl', System.fspl.toFixed(1) + ' dB');
+    setT('val-atm', System.atmLoss.toFixed(2) + ' dB');
+
+    setT('val-eirp', c.eirpDbw.toFixed(1) + ' dBW');
+    setT('val-pr', System.prDbm.toFixed(1) + ' dBm');
+    setT('val-noise', NOISE_FLOOR_DBM.toFixed(1) + ' dBm');
+
+    let totalJamDbm = -Infinity;
+    let jamLin = 0;
+    for (const j of System.jammers) {
+      if (!j.killed) jamLin += Math.pow(10, j.powerDbm / 10);
+    }
+    totalJamDbm = jamLin > 0 ? 10 * Math.log10(jamLin) : -Infinity;
+    setT('val-jam',
+      Number.isFinite(totalJamDbm) ? totalJamDbm.toFixed(1) + ' dBm' : 'CLEAR',
+      Number.isFinite(totalJamDbm) ? 'warn' : 'good');
+
+    setT('val-sinr', System.sinrDb.toFixed(1) + ' dB',
+      System.sinrDb > 15 ? 'good' : System.sinrDb > 5 ? 'warn' : 'danger');
+    setT('val-cap', (System.capacityBps / 1e6).toFixed(1) + ' Mbps');
+    setT('val-mod', System.modulation);
+    setT('val-code', System.codingRate);
+    setT('val-thru', System.throughput.toFixed(1) + ' Mbps',
+      System.throughput > 0 ? 'good' : 'danger');
+    setT('val-lat', System.latency > 0 ? System.latency.toFixed(0) + ' ms' : '--');
+    setT('val-loss', System.packetLoss.toFixed(2) + '%',
+      System.packetLoss > 50 ? 'danger' : System.packetLoss > 0 ? 'warn' : 'good');
+    setT('val-bits', System.totalBitsExtracted.toLocaleString());
+
+    setT('val-jamcount', System.jammers.filter(j => !j.killed).length,
+      System.jammers.filter(j => !j.killed).length > 0 ? 'danger' : 'good');
+    setT('val-jamkilled', System.jammersKilled, 'good');
+    setT('val-voidused', System.voidPulsesUsed, 'violet');
+
+    const status = document.getElementById('modem-status');
+    if (System.modemLocked) {
+      status.textContent = '◆ BCGO NTN DOMINANT · LINK CLEAR';
+      status.style.borderColor = 'var(--cyan)';
+      status.style.color = 'var(--cyan)';
+    } else {
+      status.textContent = '◆ LINK JAMMED · VOID PULSE REQUIRED';
+      status.style.borderColor = 'var(--red)';
+      status.style.color = 'var(--red)';
+    }
+  },
+
+  drawIQ() {
+    const ctx = this.iqCtx;
+    const w = this.iqCanvas.clientWidth;
+    const h = this.iqCanvas.clientHeight;
+    const cx = w / 2, cy = h / 2;
+
+    ctx.clearRect(0, 0, w, h);
+
+    ctx.strokeStyle = 'rgba(0,243,255,0.15)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx, 0); ctx.lineTo(cx, h);
+    ctx.moveTo(0, cy); ctx.lineTo(w, cy);
+    ctx.stroke();
+
+    if (System.modemLocked) {
+      const is16 = System.modulation.includes('QAM');
+      const pts = is16 ? 4 : 2;
+      const noiseLvl = Math.max(1, 20 / Math.max(1, System.sinrDb + 1));
+      ctx.fillStyle = '#00f3ff';
+      const baseR = Math.min(w, h) * 0.15;
+      for (let i = 0; i < 120; i++) {
+        const cluster = Math.floor(Math.random() * pts);
+        const angle = (cluster / pts) * Math.PI * 2 + Math.PI / 4;
+        const r = baseR * (is16 ? 1 : 2);
+        const x = cx + Math.cos(angle) * r + (Math.random() - 0.5) * noiseLvl;
+        const y = cy + Math.sin(angle) * r + (Math.random() - 0.5) * noiseLvl;
+        ctx.fillRect(x - 1, y - 1, 2, 2);
+      }
+    } else {
+      ctx.fillStyle = '#ffaa00';
+      for (let i = 0; i < 200; i++) {
+        const x = cx + (Math.random() - 0.5) * w * 0.7;
+        const y = cy + (Math.random() - 0.5) * h * 0.7;
+        ctx.fillRect(x, y, 2, 2);
+      }
+    }
+  },
+
+  drawSpectrum() {
+    const ctx = this.specCtx;
+    const w = this.specCanvas.clientWidth;
+    const h = this.specCanvas.clientHeight;
+    const midH = h / 2;
+
+    ctx.clearRect(0, 0, w, h);
+
+    ctx.strokeStyle = 'rgba(0,243,255,0.08)';
+    for (let i = 0; i < w; i += 40) {
+      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, h); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(0,243,255,0.2)';
+    ctx.beginPath();
+    ctx.moveTo(0, midH); ctx.lineTo(w, midH);
+    ctx.stroke();
+
+    // Jam bands
+    let jamLin = 0;
+    for (const j of System.jammers) {
+      if (!j.killed) jamLin += Math.pow(10, j.powerDbm / 10);
+    }
+    if (jamLin > 0) {
+      const jDbm = 10 * Math.log10(jamLin);
+      const intensity = Math.max(0, Math.min(1, (jDbm + 90) / 50));
+      const bandH = intensity * (midH * 0.9);
+      ctx.fillStyle = 'rgba(255,0,85,0.35)';
+      ctx.fillRect(0, midH - bandH / 2, w, bandH);
+    }
+
+    // Signal peak
+    if (System.sinrDb > -10) {
+      const peakH = Math.min(midH * 0.95, (System.sinrDb + 10) * 4);
+      const grad = ctx.createLinearGradient(0, midH - peakH, 0, midH);
+      grad.addColorStop(0, 'rgba(0,243,255,0.9)');
+      grad.addColorStop(1, 'rgba(0,243,255,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      const bw = w * 0.15;
+      ctx.moveTo(w / 2 - bw, midH);
+      ctx.quadraticCurveTo(w / 2, midH - peakH * 4, w / 2 + bw, midH);
+      ctx.fill();
+    }
+  },
+
+  loop(t) {
+    System.t = t;
+    calculatePhysics(t / 1000);
+    jammerTick();
+    processModem();
+    this.updateDOM();
+    this.drawIQ();
+    this.drawSpectrum();
+
+    // Update jam markers sesekali
+    if (Math.floor(t / 500) !== this._lastMarkerTick) {
+      this._lastMarkerTick = Math.floor(t / 500);
+      updateJamMarkers();
+    }
+
+    requestAnimationFrame((t) => this.loop(t));
+  },
+};
+
+function updateSelInfo() {
+  const c = System.constell;
+  const info = document.getElementById('sel-info');
+  info.textContent = `${c.count.toLocaleString()} sats · ${c.band} · ${c.freqHz/1e9 < 1 ? (c.freqHz/1e6).toFixed(0)+' MHz' : (c.freqHz/1e9).toFixed(2)+' GHz'}`;
+}
+
+window.addEventListener('load', () => {
+  Engine.init();
+  logLine('SYS', 'BCGO NTN console online.', 'ok');
+  logLine('PHY', `Noise floor: ${NOISE_FLOOR_DBM.toFixed(1)} dBm`, 'ok');
+  logLine('THREAT', 'Scanning for hostiles...', 'warn');
+
+  // Spawn initial jammer setelah 5 detik
+  setTimeout(() => spawnJammer(), 5000);
+});
+</script>
+</body>
+</html>
