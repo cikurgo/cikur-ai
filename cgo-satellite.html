@@ -801,6 +801,12 @@
     .section-divider.ht { color: var(--accent); }
 
     /* RF / Video live (SDR WebUSB + virtual link view) */
+    
+    .ar-sky-wrap { background: #000; }
+    .ar-sky-wrap video { z-index: 0; }
+    .ar-sky-wrap #rf-video-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+    .ar-sky-wrap .rf-video-overlay { z-index: 2; }
+
     .rf-video-wrap {
       position: relative;
       width: 100%;
@@ -1491,42 +1497,60 @@
           </div>
         </div>
 
-        <!-- RF / VIDEO LIVE — WebUSB SDR + view dari virtual.js -->
+        <!-- LANGIT AR LIVE — kamera nyata + overlay posisi satelit TLE/SGP4 -->
         <div class="panel-section" id="rf-video-panel">
           <h3 class="panel-title">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/>
+              <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>
             </svg>
-            RF / Video Live
+            Langit AR Live
             <span class="otonom-badge" id="rf-badge" style="margin-left:auto;">OFF</span>
           </h3>
           <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;">
-            <button class="btn btn-full" id="btn-sat-video" type="button" title="Live link video dari fisika virtual + path real-connection">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              Video Link Live
+            <button class="btn btn-full" id="btn-ar-sky" type="button" title="Kamera langit nyata + tanda posisi satelit dari TLE">
+              ▶ Buka Langit AR
             </button>
-            <button class="btn" id="btn-rf-open" type="button" title="WebUSB RTL-SDR → IQ (real-connection.js)">
-              RF SDR
+            <button class="btn" id="btn-ar-calib" type="button" title="Kalibrasi kompas / offset arah">
+              ◎ Kalibrasi
             </button>
-            <button class="btn" id="btn-rf-close" type="button" disabled title="Tutup USB">
-              ×
+            <button class="btn" id="btn-ar-stop" type="button" disabled title="Tutup kamera">
+              Stop
             </button>
+            <button class="btn" id="btn-rf-open" type="button" title="Opsional: WebUSB RTL-SDR">RF SDR</button>
+            <button class="btn" id="btn-rf-close" type="button" disabled>×</button>
           </div>
-          <div class="rf-video-wrap">
+          <div id="ar-calib-box" style="display:none;margin-bottom:8px;padding:8px;border:1px solid rgba(0,243,255,0.3);border-radius:6px;font-family:var(--mono);font-size:10px;line-height:1.5;color:var(--text-dim);">
+            <strong style="color:var(--accent-2)">MODE KALIBRASI AR</strong><br>
+            1) Izinkan GPS + Motion<br>
+            2) Putar HP pelan 360° (kalibrasi kompas sistem)<br>
+            3) Arahkan HP ke <strong>Utara</strong> (atau jalan lurus yang kamu tahu arahnya)<br>
+            4) Tekan <strong>Set offset sekarang</strong> — tanda satelit akan lebih presisi<br>
+            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+              <button class="btn" id="btn-ar-set-north" type="button">Set offset sekarang</button>
+              <button class="btn" id="btn-ar-reset-off" type="button">Reset offset</button>
+            </div>
+            <div id="ar-calib-status" style="margin-top:4px;color:var(--accent-2)">Offset az: 0°</div>
+          </div>
+          <div class="rf-video-wrap ar-sky-wrap" id="ar-sky-wrap">
+            <video id="ar-sky-video" playsinline muted autoplay style="display:none;width:100%;height:100%;object-fit:cover;position:absolute;inset:0;"></video>
             <canvas id="rf-video-canvas"></canvas>
             <div class="rf-video-overlay" id="rf-video-overlay">
-              <strong>Sat video link</strong> · virtual.js spektrum + real-connection pipeline
+              <strong>Langit AR</strong> · kamera langit nyata · tanda = posisi satelit TLE/SGP4 (bukan YouTube)
             </div>
           </div>
           <div class="rf-status-row" id="rf-status-row">
-            <span id="rf-st-usb">WebUSB: —</span>
-            <span id="rf-st-dev">Device: —</span>
-            <span id="rf-st-iq">IQ: —</span>
-            <span id="rf-st-dop">Doppler: —</span>
+            <span id="ar-st-cam">Kamera: —</span>
+            <span id="ar-st-orient">Orientasi: —</span>
+            <span id="ar-st-sat">Sat: —</span>
+            <span id="ar-st-delta">Δ: —</span>
           </div>
           <div id="rf-hint" style="margin-top:6px;font-family:var(--mono);font-size:9px;color:var(--text-dim);line-height:1.45;">
-            Video Link Live = stream visual link satelit di HP (LQM/SNR/Doppler dari virtual.js; IQ/frame dari real-connection.js bila SDR+Wasm ada). Bukan YouTube, bukan kamera HP.
+            <strong>Bukti visual tanpa YouTube:</strong> kamera memotret langit di depanmu.
+            Tanda cyan = arah satelit aktif dari TLE+SGP4 (NORAD = N2YO).
+            Kalibrasi kompas agar Δ az/el mendekati 0 saat HP mengarah ke satelit.
+            Bukan siaran YouTube, bukan CGI.
           </div>
+          <button class="btn" id="btn-sat-video" type="button" style="display:none">Video Link Live</button>
         </div>
 
         <!-- ════════ HT RADIO ════════ -->
@@ -3751,7 +3775,303 @@
     }
 
     /** Fokus panel video link (spektrum live dari virtual — bukan kamera, bukan YouTube) */
+
+    // ═══ LANGIT AR LIVE — kamera nyata + overlay az/el satelit TLE ═══
+    let arStream = null;
+    let arRaf = 0;
+    let arDeviceAz = null;   // compass heading 0=N
+    let arDeviceEl = null;   // phone pitch toward sky (approx)
+    let arOrientOk = false;
+    let arAzOffset = 0; // kalibrasi kompas (derajat)
+    try { arAzOffset = Number(localStorage.getItem('bcgo_ar_az_offset') || 0) || 0; } catch { arAzOffset = 0; }
+
+
+    function arNormAz(a) {
+      let x = a % 360;
+      if (x < 0) x += 360;
+      return x;
+    }
+    function arDeltaAz(a, b) {
+      let d = arNormAz(a) - arNormAz(b);
+      if (d > 180) d -= 360;
+      if (d < -180) d += 360;
+      return d;
+    }
+
+    function onArOrientation(e) {
+      // iOS: webkitCompassHeading; Android: alpha (0=N when absolute)
+      let heading = null;
+      if (typeof e.webkitCompassHeading === 'number') {
+        heading = e.webkitCompassHeading;
+      } else if (typeof e.alpha === 'number') {
+        // absolute orientation if available
+        heading = e.absolute ? (360 - e.alpha) : (360 - e.alpha);
+      }
+      if (heading != null && Number.isFinite(heading)) {
+        arDeviceAz = arNormAz(heading);
+        arOrientOk = true;
+      }
+      // beta: front-back tilt; ~0 flat, ~90 upright toward horizon, higher toward zenith varies by device
+      if (typeof e.beta === 'number') {
+        // rough elevation of phone "look" direction when held in portrait
+        const beta = e.beta;
+        arDeviceEl = Math.max(-10, Math.min(90, beta)); // crude but usable for guidance
+      }
+      const st = $('ar-st-orient');
+      if (st) {
+        st.textContent = arOrientOk
+          ? `Orientasi: az ${arDeviceAz?.toFixed?.(0) ?? '—'}° el~${arDeviceEl?.toFixed?.(0) ?? '—'}°`
+          : 'Orientasi: izinkan motion/compass';
+      }
+    }
+
+    async function requestArOrientation() {
+      try {
+        if (typeof DeviceOrientationEvent !== 'undefined'
+            && typeof DeviceOrientationEvent.requestPermission === 'function') {
+          const p = await DeviceOrientationEvent.requestPermission();
+          if (p !== 'granted') {
+            toast('Izin orientasi ditolak — overlay tetap pakai az satelit di UI', 'warn');
+            return false;
+          }
+        }
+        window.addEventListener('deviceorientation', onArOrientation, true);
+        return true;
+      } catch (err) {
+        toast('Orientasi tidak tersedia: ' + (err.message || err), 'warn');
+        return false;
+      }
+    }
+
+    function drawArOverlay() {
+      const video = $('ar-sky-video');
+      const canvas = $('rf-video-canvas');
+      if (!canvas) return;
+      const wrap = $('ar-sky-wrap');
+      const w = wrap?.clientWidth || 320;
+      const h = wrap?.clientHeight || 200;
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      if (canvas.width !== (w * dpr | 0) || canvas.height !== (h * dpr | 0)) {
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+      }
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+
+      const t = liveTarget || pickLiveTarget?.(latestSnapshot);
+      const satAz = t?.azDeg;
+      const satEl = t?.elDeg;
+      const name = t?.name || '—';
+      const nid = t?.noradId;
+
+      const stSat = $('ar-st-sat');
+      if (stSat) {
+        stSat.textContent = t
+          ? `Sat: ${name}${nid ? ' ·' + nid : ''} el ${satEl?.toFixed?.(0) ?? '—'}° az ${satAz?.toFixed?.(0) ?? '—'}°`
+          : 'Sat: aktifkan Peta Live + Connect';
+      }
+
+      // Crosshair center = arah HP
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(w/2 - 18, h/2); ctx.lineTo(w/2 + 18, h/2);
+      ctx.moveTo(w/2, h/2 - 18); ctx.lineTo(w/2, h/2 + 18);
+      ctx.stroke();
+
+      if (t && Number.isFinite(satAz) && Number.isFinite(satEl) && satEl > 0) {
+        // Map delta az/el to screen offset from center
+        const dAz = arDeviceAz != null ? arDeltaAz(satAz, arNormAz(arDeviceAz + arAzOffset)) : 0;
+        const dEl = arDeviceEl != null ? (satEl - arDeviceEl) : 0;
+        // FOV approx 50° horizontal on phone
+        const fovH = 55, fovV = 40;
+        const sx = w/2 + (dAz / (fovH/2)) * (w/2);
+        const sy = h/2 - (dEl / (fovV/2)) * (h/2);
+        const onScreen = sx > 8 && sx < w - 8 && sy > 8 && sy < h - 8;
+
+        const stD = $('ar-st-delta');
+        const locked = arDeviceAz != null && Math.abs(dAz) < 8 && Math.abs(dEl) < 12;
+        if (stD) {
+          stD.textContent = arDeviceAz != null
+            ? (locked
+                ? `LOCK · Δaz ${dAz.toFixed(0)}° Δel ${dEl.toFixed(0)}°`
+                : `Δ az ${dAz.toFixed(0)}° · Δ el ${dEl.toFixed(0)}°`)
+            : 'Δ: putar HP / izinkan kompas';
+        }
+        if (locked) {
+          ctx.strokeStyle = '#22c55e';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(6, 6, w - 12, h - 12);
+          ctx.font = 'bold 12px ui-monospace, monospace';
+          ctx.fillStyle = '#22c55e';
+          ctx.fillText('AR LOCK · arah = satelit TLE', 10, 28);
+        }
+
+        if (onScreen) {
+          // Satellite marker
+          ctx.strokeStyle = '#00f3ff';
+          ctx.fillStyle = 'rgba(0,243,255,0.25)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 14, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+          ctx.fillStyle = '#00f3ff';
+          ctx.fill();
+          ctx.font = '11px ui-monospace, monospace';
+          ctx.fillStyle = '#00f3ff';
+          ctx.fillText(name, sx + 16, sy - 8);
+          if (nid) ctx.fillText('NORAD ' + nid, sx + 16, sy + 6);
+          ctx.fillText(`el ${satEl.toFixed(0)}°`, sx + 16, sy + 18);
+        } else {
+          // Arrow toward satellite off-screen
+          const ang = Math.atan2(-(dEl), dAz);
+          const cx = w/2, cy = h/2;
+          const edge = Math.min(w, h) * 0.38;
+          const ax = cx + Math.cos(ang) * edge;
+          const ay = cy + Math.sin(ang) * edge;
+          ctx.strokeStyle = '#ffaa00';
+          ctx.fillStyle = '#ffaa00';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(ax, ay);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(ax, ay, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.font = '10px ui-monospace, monospace';
+          ctx.fillText('Arahkan ke ' + name, 8, h - 12);
+        }
+      } else {
+        ctx.font = '12px ui-monospace, monospace';
+        ctx.fillStyle = 'rgba(255,200,80,0.9)';
+        ctx.fillText('Tidak ada satelit di atas horizon — Connect + Peta Live', 10, h/2);
+      }
+
+      // HUD top
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.fillText('LANGIT NYATA + TLE/SGP4', 8, 14);
+
+      if (arStream) arRaf = requestAnimationFrame(drawArOverlay);
+    }
+
+    async function startArSky() {
+      const video = $('ar-sky-video');
+      const badge = $('rf-badge');
+      const stCam = $('ar-st-cam');
+      if (!navigator.mediaDevices?.getUserMedia) {
+        toast('Kamera tidak tersedia di browser ini', 'error');
+        return;
+      }
+      try {
+        arStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+        if (video) {
+          video.srcObject = arStream;
+          video.style.display = 'block';
+          await video.play().catch(() => {});
+        }
+        if (stCam) stCam.textContent = 'Kamera: ON · langit nyata';
+        if (badge) {
+          badge.textContent = 'AR LIVE';
+          badge.classList.add('live');
+        }
+        $('btn-ar-sky') && ($('btn-ar-sky').disabled = true);
+        $('btn-ar-stop') && ($('btn-ar-stop').disabled = false);
+        await requestArOrientation();
+        if (arRaf) cancelAnimationFrame(arRaf);
+        arRaf = requestAnimationFrame(drawArOverlay);
+        toast('Langit AR ON — arahkan HP mengikuti tanda satelit', 'success');
+        // Scroll to panel
+        $('rf-video-panel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } catch (err) {
+        if (stCam) stCam.textContent = 'Kamera: ditolak / gagal';
+        toast('Kamera: ' + (err.message || err), 'error');
+      }
+    }
+
+    function stopArSky() {
+      if (arRaf) cancelAnimationFrame(arRaf);
+      arRaf = 0;
+      try { window.removeEventListener('deviceorientation', onArOrientation, true); } catch { /* */ }
+      if (arStream) {
+        arStream.getTracks().forEach((tr) => tr.stop());
+        arStream = null;
+      }
+      const video = $('ar-sky-video');
+      if (video) {
+        video.srcObject = null;
+        video.style.display = 'none';
+      }
+      const canvas = $('rf-video-canvas');
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx && ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      const badge = $('rf-badge');
+      if (badge) {
+        badge.textContent = 'OFF';
+        badge.classList.remove('live');
+      }
+      const stCam = $('ar-st-cam');
+      if (stCam) stCam.textContent = 'Kamera: —';
+      $('btn-ar-sky') && ($('btn-ar-sky').disabled = false);
+      $('btn-ar-stop') && ($('btn-ar-stop').disabled = true);
+      toast('Langit AR OFF', 'info');
+    }
+
+
+    function toggleArCalib() {
+      const box = $('ar-calib-box');
+      if (!box) return;
+      const on = box.style.display === 'none' || !box.style.display;
+      box.style.display = on ? 'block' : 'none';
+      if (on) {
+        requestArOrientation();
+        applyObserverFromGeo?.(liveConstellation);
+        const st = $('ar-calib-status');
+        if (st) st.textContent = `Offset az: ${arAzOffset.toFixed(1)}°`;
+      }
+    }
+
+    function setArOffsetNow() {
+      // Anggap user mengarahkan HP ke Utara geografis → deviceAz harus jadi 0 setelah offset
+      if (arDeviceAz == null || !Number.isFinite(arDeviceAz)) {
+        toast('Nyalakan orientasi dulu (Buka Langit AR / izinkan motion)', 'warn');
+        return;
+      }
+      // Jika HP menghadap utara, arDeviceAz ≈ 0; offset = -arDeviceAz
+      arAzOffset = arNormAz(-arDeviceAz);
+      if (arAzOffset > 180) arAzOffset -= 360;
+      try { localStorage.setItem('bcgo_ar_az_offset', String(arAzOffset)); } catch { /* */ }
+      const st = $('ar-calib-status');
+      if (st) st.textContent = `Offset az: ${arAzOffset.toFixed(1)}° · tersimpan`;
+      toast(`Kalibrasi OK · offset ${arAzOffset.toFixed(1)}°`, 'success');
+    }
+
+    function resetArOffset() {
+      arAzOffset = 0;
+      try { localStorage.removeItem('bcgo_ar_az_offset'); } catch { /* */ }
+      const st = $('ar-calib-status');
+      if (st) st.textContent = 'Offset az: 0°';
+      toast('Offset di-reset', 'info');
+    }
+
+
     function focusSatVideoLink() {
+      startArSky();
+      return;
       const wrap = $('rf-video-panel');
       wrap?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       resizeRfCanvas();
@@ -3773,6 +4093,12 @@
     btnLockInet?.addEventListener('click', () => setPathLock('internet'));
     btnPathSignal?.addEventListener('click', () => { runPathSignalTest(); });
     btnSatVideo?.addEventListener('click', () => { focusSatVideoLink(); });
+    $('btn-ar-sky')?.addEventListener('click', () => { startArSky(); });
+    $('btn-ar-stop')?.addEventListener('click', () => { stopArSky(); });
+    $('btn-ar-calib')?.addEventListener('click', () => { toggleArCalib(); });
+    $('btn-ar-set-north')?.addEventListener('click', () => { setArOffsetNow(); });
+    $('btn-ar-reset-off')?.addEventListener('click', () => { resetArOffset(); });
+
 
     // Auto scrub memori berkala
     setInterval(() => { memoryScrub(); }, 15000);
