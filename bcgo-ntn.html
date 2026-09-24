@@ -264,8 +264,14 @@ button.act.void-active{
     <button type="button" class="auth-btn" id="auth-btn">Koneksi</button>
     <button type="button" class="auth-btn" id="auth-logout" style="display:none;border-color:var(--amber);color:var(--amber)">Lepas</button>
     <div class="auth-status" id="auth-status">
-      Kamu buat sendiri Nama Modem + Kode. Simpan dulu, lalu orang yang test harus input sama persis untuk konek sinyal.
+      Bukan WiFi. Buka halaman ini di browser → Nama+Kode → Koneksi → ON. HP lain: scan QR tamu (halaman eksternal).
     </div>
+    <div id="guest-qr-box" style="width:100%;margin-top:8px;display:none;flex-direction:column;align-items:center;gap:6px;">
+      <img id="guest-qr-img" alt="QR Tamu" width="160" height="160" style="background:#fff;padding:6px;border-radius:4px;">
+      <div id="guest-qr-url" style="font-size:9px;color:var(--dim);word-break:break-all;text-align:center;max-width:100%;"></div>
+      <a id="guest-qr-open" href="#" target="_blank" rel="noopener" style="font-size:10px;color:var(--cyan);">Buka halaman tamu</a>
+    </div>
+    <button type="button" class="auth-btn" id="btn-guest-qr" style="margin-top:4px;">Buat QR Tamu</button>
   </div>
 
   <!-- ═══ SELECTOR: Konstelasi ═══ -->
@@ -549,7 +555,7 @@ function setAuthUI() {
         st.textContent = `Modem terdaftar: "${cred.name}" · input Nama + Kode yang sama untuk koneksi.`;
         st.className = 'auth-status';
       } else {
-        st.textContent = 'Belum ada akses. Buat Nama Modem + Kode kamu → tekan Simpan Akses.';
+        st.textContent = 'Opsional: Simpan Akses di HP pemilik. HP lain cukup input Nama+Kode yang dibagikan (buka URL web, bukan WiFi).';
         st.className = 'auth-status';
       }
     }
@@ -598,39 +604,48 @@ function saveAccessCredentials() {
   logLine('AUTH', `Modem access set: "${name}". Kode disimpan lokal (manual).`, 'ok');
 }
 
-/** Tester: harus input Nama + Kode yang sama dengan yang disimpan pemilik */
+/**
+ * Tester di HP manapun (bukan lewat daftar WiFi):
+ * - Buka URL yang sama di browser
+ * - Isi Nama + Kode yang pemilik beritahu (contoh BCGO NTN / BCGO01)
+ * - Jika HP ini sudah Simpan Akses → harus cocok
+ * - Jika belum (HP lain) → cukup tahu nama+kode rahasia → boleh konek
+ */
 function tryAuthorize() {
   const name = normalizeName(document.getElementById('auth-name')?.value);
   const code = normalizeCode(document.getElementById('auth-code')?.value);
   const st = document.getElementById('auth-status');
   const cred = loadModemCred();
 
-  if (!cred) {
+  if (name.length < 2 || code.length < 3) {
     if (st) {
-      st.textContent = 'Belum ada Nama/Kode tersimpan. Pemilik harus Simpan Akses dulu.';
+      st.textContent = 'Isi Nama Modem (≥2) dan Kode (≥3).';
       st.className = 'auth-status err';
     }
-    logLine('AUTH', 'Tidak ada kredensial modem — simpan dulu.', 'err');
     return;
   }
-  if (name.length < 2 || code.length < 1) {
-    if (st) { st.textContent = 'Isi Nama Modem dan Kode.'; st.className = 'auth-status err'; }
-    return;
-  }
-  if (name !== cred.name || code !== cred.code) {
-    if (st) {
-      st.textContent = 'Nama atau Kode salah — sinyal ditolak.';
-      st.className = 'auth-status err';
+
+  if (cred) {
+    if (name !== cred.name || code !== cred.code) {
+      if (st) {
+        st.textContent = 'Nama atau Kode salah — tidak cocok dengan akses tersimpan di HP ini.';
+        st.className = 'auth-status err';
+      }
+      logLine('AUTH', 'Nama/kode tidak cocok dengan kredensial lokal.', 'err');
+      System.authorized = false;
+      System.operatorName = '';
+      setAuthUI();
+      return;
     }
-    logLine('AUTH', 'Nama/kode tidak cocok. Modem tetap terblokir.', 'err');
-    System.authorized = false;
-    System.operatorName = '';
-    setAuthUI();
-    return;
   }
+
   System.authorized = true;
   System.operatorName = name;
   saveSession(name);
+  if (!System.powered) {
+    System.powered = true;
+    logLine('SYS', 'Modem NTN auto ON setelah auth.', 'ok');
+  }
   setAuthUI();
   logLine('AUTH', `Koneksi OK · modem "${name}".`, 'ok');
 }
@@ -1239,6 +1254,65 @@ window.addEventListener('load', async () => {
   document.getElementById('auth-code')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') tryAuthorize();
   });
+  document.getElementById('btn-guest-qr')?.addEventListener('click', () => { generateGuestQr(); });
+
+  async function hashCodeForGuest(s) {
+    if (crypto?.subtle) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('BCGO|' + s));
+      return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 20);
+    }
+    let h = 2166136261;
+    const str = 'BCGO|' + s;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return (h >>> 0).toString(16).padStart(8, '0');
+  }
+
+  async function generateGuestQr() {
+    const nameIn = document.getElementById('auth-name');
+    const codeIn = document.getElementById('auth-code');
+    let name = normalizeName(nameIn?.value);
+    let code = normalizeCode(codeIn?.value);
+    const cred = loadModemCred();
+    if (cred) {
+      name = cred.name;
+      // kode tidak disimpan plain di UI setelah save — minta isi ulang jika kosong
+      if (!code || code.length < 3) {
+        logLine('AUTH', 'Isi ulang Kode di kolom, lalu Buat QR Tamu.', 'warn');
+        const st = document.getElementById('auth-status');
+        if (st) { st.textContent = 'Isi Kode yang sama (yang kamu simpan), lalu Buat QR Tamu.'; st.className = 'auth-status err'; }
+        return;
+      }
+      if (name !== cred.name || code !== cred.code) {
+        logLine('AUTH', 'Kode tidak cocok dengan akses tersimpan.', 'err');
+        return;
+      }
+    }
+    if (name.length < 2 || code.length < 3) {
+      logLine('AUTH', 'Isi Nama Modem + Kode dulu, atau Simpan Akses.', 'warn');
+      return;
+    }
+    const h = await hashCodeForGuest(code);
+    const base = location.href.replace(/[^/]+$/, '');
+    const guestUrl = base + 'bcgo-ntn-guest.html?n=' + encodeURIComponent(name) + '&h=' + encodeURIComponent(h);
+    const box = document.getElementById('guest-qr-box');
+    const img = document.getElementById('guest-qr-img');
+    const urlEl = document.getElementById('guest-qr-url');
+    const openA = document.getElementById('guest-qr-open');
+    if (box) box.style.display = 'flex';
+    if (urlEl) urlEl.textContent = guestUrl;
+    if (openA) openA.href = guestUrl;
+    // QR via API publik (butuh net); fallback teks URL
+    if (img) {
+      img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' + encodeURIComponent(guestUrl);
+      img.onerror = () => { img.alt = 'QR gagal (offline) — salin URL di bawah'; };
+    }
+    logLine('AUTH', 'QR Tamu dibuat · halaman eksternal bcgo-ntn-guest.html', 'ok');
+    const st = document.getElementById('auth-status');
+    if (st) {
+      st.textContent = 'QR siap. Tamu scan → hanya form Nama+Kode → Koneksi (bukan konsol internal).';
+      st.className = 'auth-status ok';
+    }
+  }
 
   Engine.init();
   logLine('SYS', 'BCGO NTN console online.', 'ok');

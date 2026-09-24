@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#050508">
+<title>BCGO NTN · Akses Tamu</title>
+<style>
+:root{--bg:#050508;--cyan:#00f3ff;--green:#22c55e;--red:#ff0055;--amber:#ffaa00;--dim:#4a5a6a;--mono:'Courier New',ui-monospace,monospace}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;min-height:100dvh;background:var(--bg);color:var(--cyan);font-family:var(--mono);font-size:14px;display:flex;align-items:center;justify-content:center;padding:16px}
+.card{width:100%;max-width:400px;border:1px solid rgba(0,243,255,0.35);background:rgba(5,5,8,0.92);padding:20px 18px;border-radius:4px;box-shadow:0 0 40px rgba(0,243,255,0.08)}
+h1{margin:0 0 6px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#fff}
+.sub{font-size:11px;color:var(--dim);margin-bottom:18px;line-height:1.45}
+label{display:block;font-size:10px;color:var(--dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
+input{width:100%;margin-bottom:12px;padding:12px;background:rgba(0,0,0,0.55);border:1px solid rgba(0,243,255,0.35);color:#fff;font-family:inherit;font-size:15px;border-radius:2px}
+input:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 10px rgba(0,243,255,0.25)}
+button{width:100%;padding:14px;margin-top:4px;background:rgba(0,243,255,0.12);border:1px solid var(--cyan);color:var(--cyan);font-family:inherit;font-size:13px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;border-radius:2px}
+button.ok{background:var(--green);border-color:var(--green);color:#04130a}
+button:disabled{opacity:0.45;cursor:not-allowed}
+.status{margin-top:14px;font-size:12px;line-height:1.5;color:var(--dim);min-height:2.8em}
+.status.ok{color:var(--green)}.status.err{color:var(--red)}
+.meter{margin-top:14px;padding:12px;border:1px solid rgba(0,243,255,0.2);display:none;font-size:11px;line-height:1.65}
+.meter.show{display:block}
+.meter .row{display:flex;justify-content:space-between;gap:8px}
+.meter .v{color:#fff;font-weight:bold;text-align:right}
+.meter .v.good{color:var(--green)}.meter .v.warn{color:var(--amber)}.meter .v.bad{color:var(--red)}
+.note{margin-top:14px;font-size:10px;color:var(--dim);line-height:1.45}
+#iq-mini{width:100%;height:72px;margin-top:10px;background:rgba(0,0,0,0.4);border:1px solid rgba(0,243,255,0.15);display:none}
+#iq-mini.show{display:block}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>BCGO NTN · Tamu</h1>
+  <p class="sub">Halaman eksternal. Modem virtual sama dengan bcgo-ntn.html — setelah Nama+Kode benar, proses fisika → SINR → lock → throughput berjalan.</p>
+  <label for="g-name">Nama Modem</label>
+  <input id="g-name" type="text" autocomplete="off" placeholder="contoh: BCGO NTN" maxlength="40">
+  <label for="g-code">Kode / Password</label>
+  <input id="g-code" type="password" autocomplete="off" placeholder="Kode dari pemilik" maxlength="32">
+  <button type="button" id="g-btn">Koneksi Modem</button>
+  <button type="button" id="g-off" style="display:none;margin-top:8px;border-color:var(--amber);color:var(--amber)">Putus / OFF</button>
+  <div class="status" id="g-status">Menunggu Nama + Kode…</div>
+  <div class="meter" id="g-meter">
+    <div class="row"><span>Modem</span><span class="v" id="m-lock">—</span></div>
+    <div class="row"><span>Konstelasi</span><span class="v">Starlink NTN</span></div>
+    <div class="row"><span>Elevasi</span><span class="v" id="m-el">—</span></div>
+    <div class="row"><span>SINR</span><span class="v" id="m-sinr">—</span></div>
+    <div class="row"><span>Shannon</span><span class="v" id="m-cap">—</span></div>
+    <div class="row"><span>Throughput</span><span class="v" id="m-thru">—</span></div>
+    <div class="row"><span>Modulasi</span><span class="v" id="m-mod">—</span></div>
+    <div class="row"><span>Bits</span><span class="v" id="m-bits">0</span></div>
+    <canvas id="iq-mini"></canvas>
+  </div>
+  <p class="note">Proses sama bcgo-ntn.html: orbit → Pr → SINR → Shannon → lock. Bukan daftar WiFi.</p>
+</div>
+<script>
+const PHYSICS=Object.freeze({C:299792458,K_B:1.380649e-23,FREQ_HZ:12.5e9,BW_HZ:250e6,T_SYS:290,NF_DB:3,PROTO_EFF:0.825,R_EARTH_KM:6371,ALT_KM:550});
+const NOISE_FLOOR_DBM=10*Math.log10(PHYSICS.K_B*PHYSICS.T_SYS*PHYSICS.BW_HZ*1000)+PHYSICS.NF_DB;
+const CONSTELL=Object.freeze({name:'Starlink',freqHz:12.5e9,eirpDbw:33,gainDbi:30,altKm:550});
+const SESSION_KEY='bcgo_ntn_guest_session_v1';
+const Modem={powered:false,authorized:false,operatorName:'',elevation:0,slantRange:0,fspl:0,atmLoss:0,prDbm:-90,sinrDb:0,capacityBps:0,modemLocked:false,throughput:0,modulation:'--',codingRate:'--',totalBits:0,iq:new Float32Array(512),iqPtr:0,raf:0};
+function normalizeName(s){return String(s||'').trim().replace(/\s+/g,' ')}
+function normalizeCode(s){return String(s||'').trim()}
+async function hashCode(s){if(crypto&&crypto.subtle){const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('BCGO|'+s));return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('').slice(0,20)}let h=2166136261;const str='BCGO|'+s;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619)}return(h>>>0).toString(16).padStart(8,'0')}
+function readInvite(){const q=new URLSearchParams(location.search);return{n:normalizeName(q.get('n')||''),h:(q.get('h')||'').toLowerCase(),k:q.get('k')!=null?normalizeCode(q.get('k')):null}}
+function setStatus(msg,cls){const el=document.getElementById('g-status');el.textContent=msg;el.className='status'+(cls?' '+cls:'')}
+function calculatePhysics(tSec){const T=600,phase=(tSec%T)/T;Modem.elevation=85*(1-Math.cos(2*Math.PI*phase))/2;const elRad=Modem.elevation*Math.PI/180,R=PHYSICS.R_EARTH_KM,h=CONSTELL.altKm;if(Modem.elevation>1){const a=(R+h)**2,b=(R*Math.cos(elRad))**2;Modem.slantRange=Math.sqrt(Math.max(0,a-b))-R*Math.sin(elRad)}else Modem.slantRange=2000;const fMHz=CONSTELL.freqHz/1e6;Modem.fspl=20*Math.log10(Math.max(1,Modem.slantRange))+20*Math.log10(Math.max(1,fMHz))+32.45;Modem.atmLoss=0.5/Math.max(Math.sin(elRad),0.05);Modem.prDbm=CONSTELL.eirpDbw+30-Modem.fspl-Modem.atmLoss+CONSTELL.gainDbi}
+function processModem(){const pThermal=Math.pow(10,NOISE_FLOOR_DBM/10),pSignal=Math.pow(10,Modem.prDbm/10),sinrLinear=pSignal/Math.max(pThermal,1e-30);Modem.sinrDb=10*Math.log10(sinrLinear);Modem.capacityBps=sinrLinear>0?PHYSICS.BW_HZ*Math.log2(1+sinrLinear)*PHYSICS.PROTO_EFF:0;if(!Modem.powered||!Modem.authorized){Modem.modemLocked=false;Modem.throughput=0;Modem.modulation='--';return}if(sinrLinear>0.1){const noiseStd=1/Math.sqrt(2*sinrLinear);for(let i=0;i<4;i++){const i0=Modem.iqPtr;Modem.iq[i0]=(Math.random()-0.5)*noiseStd;Modem.iq[(i0+1)%Modem.iq.length]=(Math.random()-0.5)*noiseStd;if(Modem.iq[i0]>0)Modem.totalBits++;Modem.iqPtr=(i0+2)%Modem.iq.length}}if(Modem.sinrDb>8){Modem.modemLocked=true;if(Modem.sinrDb>22){Modem.modulation='256QAM';Modem.codingRate='5/6';Modem.throughput=Modem.capacityBps/1e6*0.95}else if(Modem.sinrDb>15){Modem.modulation='64QAM';Modem.codingRate='3/4';Modem.throughput=Modem.capacityBps/1e6*0.85}else{Modem.modulation='QPSK';Modem.codingRate='1/2';Modem.throughput=Modem.capacityBps/1e6*0.60}}else{Modem.modemLocked=false;Modem.throughput=0;Modem.modulation='--'}}
+function paintIQ(){const c=document.getElementById('iq-mini');if(!c||!c.classList.contains('show'))return;const ctx=c.getContext('2d'),dpr=Math.min(devicePixelRatio||1,2),w=c.clientWidth,h=c.clientHeight;if(c.width!==(w*dpr|0)){c.width=w*dpr;c.height=h*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}ctx.clearRect(0,0,w,h);ctx.strokeStyle='rgba(0,243,255,0.2)';ctx.beginPath();ctx.moveTo(w/2,0);ctx.lineTo(w/2,h);ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();const sc=Math.min(w,h)*0.35;ctx.fillStyle=Modem.modemLocked?'#00f3ff':'#ffaa00';for(let i=0;i<Modem.iq.length;i+=2){const x=w/2+Math.max(-1,Math.min(1,Modem.iq[i]||0))*sc,y=h/2-Math.max(-1,Math.min(1,Modem.iq[i+1]||0))*sc;ctx.fillRect(x,y,1.5,1.5)}}
+function updateMeterUI(){const lock=document.getElementById('m-lock');lock.textContent=Modem.modemLocked?'LINK CLEAR':(Modem.powered?'SCANNING':'OFF');lock.className='v '+(Modem.modemLocked?'good':'warn');document.getElementById('m-el').textContent=Modem.elevation.toFixed(1)+'°';const sinr=document.getElementById('m-sinr');sinr.textContent=Modem.sinrDb.toFixed(1)+' dB';sinr.className='v '+(Modem.sinrDb>15?'good':Modem.sinrDb>8?'warn':'bad');document.getElementById('m-cap').textContent=(Modem.capacityBps/1e6).toFixed(1)+' Mbps';const thru=document.getElementById('m-thru');thru.textContent=Modem.throughput.toFixed(1)+' Mbps';thru.className='v '+(Modem.throughput>0?'good':'bad');document.getElementById('m-mod').textContent=Modem.modulation+(Modem.codingRate!=='--'?' · '+Modem.codingRate:'');document.getElementById('m-bits').textContent=Modem.totalBits.toLocaleString();paintIQ()}
+function loop(t){if(!Modem.powered||!Modem.authorized){Modem.raf=0;return}calculatePhysics(t/1000);processModem();updateMeterUI();Modem.raf=requestAnimationFrame(loop)}
+function startModem(){Modem.powered=true;Modem.authorized=true;if(!Modem.raf)Modem.raf=requestAnimationFrame(loop)}
+function stopModem(){Modem.powered=false;Modem.authorized=false;Modem.modemLocked=false;Modem.throughput=0;if(Modem.raf)cancelAnimationFrame(Modem.raf);Modem.raf=0;updateMeterUI()}
+function showConnected(name){Modem.operatorName=name;document.getElementById('g-btn').textContent='Modem Aktif';document.getElementById('g-btn').classList.add('ok');document.getElementById('g-btn').disabled=true;document.getElementById('g-off').style.display='';document.getElementById('g-name').disabled=true;document.getElementById('g-code').disabled=true;document.getElementById('g-meter').classList.add('show');document.getElementById('iq-mini').classList.add('show');setStatus('Modem virtual ON · fisika→SINR→lock berjalan.', 'ok');startModem()}
+function showIdle(){stopModem();document.getElementById('g-btn').textContent='Koneksi Modem';document.getElementById('g-btn').classList.remove('ok');document.getElementById('g-btn').disabled=false;document.getElementById('g-off').style.display='none';document.getElementById('g-name').disabled=false;document.getElementById('g-code').disabled=false;document.getElementById('g-meter').classList.remove('show');document.getElementById('iq-mini').classList.remove('show')}
+async function tryConnect(){const name=normalizeName(document.getElementById('g-name').value),code=normalizeCode(document.getElementById('g-code').value),inv=readInvite();if(name.length<2||code.length<3){setStatus('Isi Nama Modem dan Kode (min. 3).','err');return}if(inv.n&&name!==inv.n){setStatus('Nama tidak cocok dengan undangan QR.','err');return}if(inv.h){if((await hashCode(code))!==inv.h){setStatus('Kode salah — modem tidak ON.','err');return}}else if(inv.k!=null&&code!==inv.k){setStatus('Kode salah — modem tidak ON.','err');return}try{localStorage.setItem(SESSION_KEY,JSON.stringify({name,until:Date.now()+12*3600*1000}))}catch(e){}showConnected(name)}
+function disconnect(){try{localStorage.removeItem(SESSION_KEY)}catch(e){}document.getElementById('g-code').value='';showIdle();setStatus('Modem OFF. Input lagi untuk koneksi.','')}
+(function init(){const inv=readInvite();if(inv.n)document.getElementById('g-name').value=inv.n;try{const o=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');if(o&&o.name&&o.until>Date.now()){document.getElementById('g-name').value=o.name;showConnected(o.name);return}}catch(e){}if(inv.n&&(inv.h||inv.k!=null))setStatus('Undangan QR siap. Masukkan kode → Koneksi Modem.','')})();
+document.getElementById('g-btn').addEventListener('click',function(){tryConnect()});
+document.getElementById('g-off').addEventListener('click',disconnect);
+document.getElementById('g-code').addEventListener('keydown',function(e){if(e.key==='Enter')tryConnect()});
+</script>
+</body>
+</html>
