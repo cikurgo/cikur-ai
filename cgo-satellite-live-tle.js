@@ -142,7 +142,10 @@ function buildSatRecs(tleList) {
         skipped.push({ name, reason: `satrec error code ${satrec?.error ?? '?'}` });
         continue;
       }
-      satrecs.push({ name, satrec });
+      const noradId = (satrec.satnum != null && String(satrec.satnum).trim())
+        ? String(satrec.satnum).replace(/^0+/, '') || String(satrec.satnum)
+        : (String(line1).length >= 7 ? String(line1).slice(2, 7).trim().replace(/^0+/, '') : null);
+      satrecs.push({ name, satrec, noradId });
     } catch (err) {
       skipped.push({ name, reason: err.message });
     }
@@ -178,8 +181,11 @@ function propagateOne(entry, date, observer) {
     ? Math.hypot(pv.velocity.x, pv.velocity.y, pv.velocity.z)
     : null;
 
+  const noradId = entry.noradId
+    || (entry.satrec?.satnum != null ? String(entry.satrec.satnum).replace(/^0+/, '') : null);
   return {
     name: entry.name,
+    noradId: noradId || null,
     latDeg: sat.degreesLat(geo.latitude),
     lonDeg: sat.degreesLong(geo.longitude),
     altKm: geo.height,

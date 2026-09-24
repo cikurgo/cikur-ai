@@ -1235,6 +1235,26 @@
             </h3>
             <span class="otonom-badge" id="otonom-badge">STANDBY</span>
           </div>
+          <div class="truth-banner" id="truth-banner" style="font-family:var(--mono);font-size:9.5px;line-height:1.45;color:var(--accent-2);margin:6px 0 8px;padding:6px 8px;border:1px solid rgba(0,200,255,0.25);border-radius:4px;background:rgba(0,40,60,0.35);">
+            SATELIT NYATA · TLE CelesTrak + SGP4 · prediksi posisi di langit (bukan animasi dummy)
+          </div>
+          <div class="oi-row" style="margin-bottom:4px;">
+            <span class="oi-k">Pengamat</span>
+            <span class="oi-v" id="oi-observer">—</span>
+          </div>
+          <div class="oi-row" style="margin-bottom:4px;">
+            <span class="oi-k">TLE age</span>
+            <span class="oi-v" id="oi-tle-age">—</span>
+          </div>
+          <div class="oi-row" style="margin-bottom:4px;">
+            <span class="oi-k">NORAD</span>
+            <span class="oi-v accent" id="oi-norad">—</span>
+          </div>
+          <div style="margin-bottom:8px;">
+            <a class="btn btn-full" id="btn-n2yo" href="https://www.n2yo.com/" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:11px;">
+              Cek satelit ini di N2YO (bukti independen)
+            </a>
+          </div>
 
           <!-- Mata: sky tools + large dome -->
           <div class="sky-toolbar">
@@ -1453,13 +1473,8 @@
               Uji Sinyal Path Satelit
             </button>
           </div>
-          <div style="margin-bottom:8px;">
-            <a class="btn btn-full" id="btn-open-ntn" href="bcgo-ntn.html?constell=starlink" style="display:flex;align-items:center;justify-content:center;text-decoration:none;">
-              Buka NTN Modem (Internet Satelit)
-            </a>
-          </div>
           <div id="path-signal-status" style="font-family:var(--mono);font-size:9.5px;color:var(--text-dim);margin-bottom:8px;line-height:1.45;">
-            Sinyal path: belum diuji · kunci: —
+            Path langit: belum diuji · kunci: —
           </div>
           <div class="mc-progress"><div class="mc-progress-fill" id="mc-progress-fill"></div></div>
           <div class="mc-scan-log" id="mc-scan-log">Siap scan konstelasi…</div>
@@ -1817,6 +1832,10 @@
     const oiPhase     = $('oi-phase');
     const oiNarrative = $('oi-narrative');
     const oiPassLog   = $('oi-pass-log');
+    const oiObserver  = $('oi-observer');
+    const oiTleAge    = $('oi-tle-age');
+    const oiNorad     = $('oi-norad');
+    const btnN2yo     = $('btn-n2yo');
     const skyWrap     = $('sky-wrap');
     const skyHudLeft  = $('sky-hud-left');
     const skyHudRight = $('sky-hud-right');
@@ -2823,6 +2842,39 @@
         || m.name
         || (currentSatId > 0 ? `IRIDIUM-${String(currentSatId).padStart(2, '0')}` : '—');
       if (oiSat) oiSat.textContent = satLabel;
+      // Bukti langit: NORAD + umur TLE + pengamat + tautan N2YO
+      try {
+        const obs = (liveConstellation && liveConstellation.observer) || DEFAULT_OBSERVER;
+        if (oiObserver && obs) {
+          oiObserver.textContent =
+            `${Number(obs.latitudeDeg).toFixed(4)}°, ${Number(obs.longitudeDeg).toFixed(4)}°`;
+        }
+        const meta = liveConstellation?.meta;
+        if (oiTleAge) {
+          if (meta?.fetchedAt) {
+            const agoMin = Math.max(0, Math.round((Date.now() - meta.fetchedAt) / 60000));
+            const src = meta.source || 'tle';
+            oiTleAge.textContent = `${agoMin} mnt · ${src} · ${meta.satCount || '—'} sat`;
+          } else {
+            oiTleAge.textContent = liveConstellation ? 'menunggu TLE…' : 'Peta Live off';
+          }
+        }
+        const nid = liveTarget?.noradId || null;
+        if (oiNorad) {
+          oiNorad.textContent = nid
+            ? `${nid} · ${liveTarget?.name || satLabel}`
+            : (liveConstellation ? '— (belum lock satelit)' : '—');
+        }
+        if (btnN2yo) {
+          if (nid) {
+            btnN2yo.href = `https://www.n2yo.com/satellite/?s=${encodeURIComponent(nid)}`;
+            btnN2yo.textContent = `Cek ${liveTarget?.name || 'satelit'} (NORAD ${nid}) di N2YO`;
+          } else {
+            btnN2yo.href = 'https://www.n2yo.com/';
+            btnN2yo.textContent = 'Cek satelit di N2YO (bukti independen)';
+          }
+        }
+      } catch { /* */ }
       if (oiPlane) {
         const alt = liveTarget?.altKm != null
           ? `${liveTarget.altKm.toFixed(0)} km`
@@ -2845,9 +2897,11 @@
           const elevStr = elev != null ? Number(elev).toFixed(0) : '--';
           const rng = liveTarget.rangeKm != null ? `${Math.round(liveTarget.rangeKm)} km` : '';
           const spd = liveTarget.speedKmS != null ? `${liveTarget.speedKmS.toFixed(2)} km/s` : '';
-          let story = `<strong>${satLabel}</strong> el ${elevStr}° · ${card}`;
+          const noradBit = liveTarget?.noradId ? ` · NORAD ${liveTarget.noradId}` : '';
+          let story = `<strong>${satLabel}</strong>${noradBit} · el ${elevStr}° · ${card}`;
           if (rng) story += ` · slant ${rng}`;
           if (spd) story += ` · ${spd}`;
+          story += ' · data TLE/SGP4 nyata.';
           if (elev >= 55) story += '. Dekat zenith — link optimal.';
           else if (elev >= 30) story += '. Elevasi baik untuk SBD.';
           else story += '. Elevasi rendah — margin tipis.';
@@ -3533,7 +3587,8 @@
       if (!inetSatrecs.length) return iridiumSnap || [];
       let inetSnap = [];
       try {
-        inetSnap = propagateSnapshot(inetSatrecs, new Date(), DEFAULT_OBSERVER);
+        const obs = (liveConstellation && liveConstellation.observer) || DEFAULT_OBSERVER;
+        inetSnap = propagateSnapshot(inetSatrecs, new Date(), obs);
       } catch { inetSnap = []; }
       inetSnap = enrichSnapshotWithDoppler(inetSnap);
       // Tag sumber
@@ -3634,12 +3689,6 @@
       btnLockInet?.classList.toggle('active', pathLock === 'internet');
       if (pathSignalStatus) {
         pathSignalStatus.textContent = `Kunci path: ${pathLock === 'internet' ? 'INTERNET (Starlink/OneWeb)' : 'RADIO HT (Iridium)'} · sinyal: belum diuji`;
-      }
-      // Sinkron link NTN modem
-      const ntn = document.getElementById('btn-open-ntn');
-      if (ntn) {
-        const cid = pathLock === 'internet' ? 'starlink' : 'iridium';
-        ntn.href = 'bcgo-ntn.html?constell=' + cid;
       }
       if (pathLock === 'internet') {
         const n = buildInetSatrecsFromManager();
@@ -4321,6 +4370,32 @@
       return `${meta.satCount} satelit Iridium · TLE ${sourceLabel}${ago !== null ? ` (${ago} menit lalu)` : ''}${skippedNote}`;
     }
 
+
+    /** Pakai GPS HP jika diizinkan — prediksi az/el lebih sesuai lokasi nyata kamu */
+    function applyObserverFromGeo(live) {
+      if (!navigator.geolocation || !live) return;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+          const altKm = (pos.coords.altitude != null ? pos.coords.altitude : 20) / 1000;
+          live.observer = {
+            latitudeDeg: lat,
+            longitudeDeg: lon,
+            heightKm: Number.isFinite(altKm) ? altKm : 0.02
+          };
+          if (oiObserver) {
+            oiObserver.textContent = `${lat.toFixed(4)}°, ${lon.toFixed(4)}° · GPS`;
+          }
+          toast(`Pengamat GPS · ${lat.toFixed(3)}°, ${lon.toFixed(3)}°`, 'success');
+        },
+        () => {
+          /* tetap DEFAULT_OBSERVER (Jakarta) */
+        },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 300000 }
+      );
+    }
+
     async function startLiveMap() {
       if (typeof globalThis.satellite === 'undefined') {
         toast('satellite.js gagal dimuat (cek koneksi/CDN)', 'error');
@@ -4352,9 +4427,10 @@
         },
         onStatus: (meta) => {
           if (liveMapStatus) {
-            const vis = latestSnapshot.filter((s) => s.aboveHorizon && s.elDeg >= 10).length;
+            const above = latestSnapshot.filter((s) => s.aboveHorizon).length;
+            const trackable = latestSnapshot.filter((s) => s.aboveHorizon && s.elDeg >= 10).length;
             liveMapStatus.textContent = formatLiveMapStatus(meta) +
-              (meta.satCount ? ` · ${vis} di atas horizon` : '');
+              (meta.satCount ? ` · ${above} di atas horizon · ${trackable} el≥10°` : '');
           }
           liveMapBadge.textContent = meta.satCount ? 'LIVE' : (meta.lastError ? 'ERROR' : 'LOADING');
           liveMapBadge.classList.toggle('live', !!meta.satCount);
@@ -4363,7 +4439,16 @@
       });
 
       await liveConstellation.start();
-      toast('Peta live + channel real-time aktif', 'success');
+      applyObserverFromGeo(liveConstellation);
+      // Default pengamat (sebelum GPS) — Jakarta di live-tle.js; GPS menimpa jika diizinkan
+      try {
+        const obs = liveConstellation.observer || DEFAULT_OBSERVER;
+        if (oiObserver && obs) {
+          oiObserver.textContent =
+            `${Number(obs.latitudeDeg).toFixed(4)}°, ${Number(obs.longitudeDeg).toFixed(4)}°`;
+        }
+      } catch { /* */ }
+      toast('Peta live TLE+SGP4 aktif · satelit nyata', 'success');
     }
 
     function stopLiveMap() {
