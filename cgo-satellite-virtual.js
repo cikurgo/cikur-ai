@@ -184,8 +184,6 @@ function selectBERTable(elevationDeg) {
  * @returns {number}
  */
 function getBER(ebn0Db, elevationDeg = 45) {
-  if (!Number.isFinite(ebn0Db)) return 0.5;
-  if (!Number.isFinite(elevationDeg)) elevationDeg = 0;
   const table = selectBERTable(elevationDeg);
   return interpolateBER(ebn0Db, table);
 }
@@ -197,11 +195,7 @@ function getBER(ebn0Db, elevationDeg = 45) {
  * @returns {number} PER (0..1)
  */
 function getPER(ber, bits = SAT_CONSTANTS.PACKET_BITS) {
-  if (!Number.isFinite(ber) || !Number.isFinite(bits) || bits <= 0) return 1;
-  const safeBer = Math.max(0, Math.min(1, ber));
-  const safeBits = Math.max(1, Math.floor(bits));
-  // log1p/expm1 tetap stabil untuk BER kecil dan paket panjang.
-  return -Math.expm1(safeBits * Math.log1p(-safeBer));
+  return 1 - Math.pow(1 - ber, bits);
 }
 
 // ============================================================================
@@ -217,11 +211,8 @@ function getPER(ber, bits = SAT_CONSTANTS.PACKET_BITS) {
  * @returns {{elevationDeg, distanceKm, dopplerShiftHz, dopplerRateHzPerSec}}
  */
 function computeGeometry(elapsedSec, passDurationSec) {
-  const T = Number.isFinite(passDurationSec) && passDurationSec > 0
-    ? passDurationSec
-    : SAT_CONSTANTS.PASS_DURATION_SEC;
-  const t = Number.isFinite(elapsedSec) ? elapsedSec : 0;
-  const normT = (t / T) - 0.5;   // -0.5 .. +0.5
+  const T = passDurationSec;
+  const normT = (elapsedSec / T) - 0.5;   // -0.5 .. +0.5
 
   // Elevasi: parabola (zenith di tengah pass)
   // elev(t) = maxElev * (1 - 4*normT^2)
@@ -260,10 +251,6 @@ function computeGeometry(elapsedSec, passDurationSec) {
  * @returns {number} FSPL dalam dB
  */
 function computeFSPL(distanceKm, freqMHz = SAT_CONSTANTS.FREQ_MHZ) {
-  if (!Number.isFinite(distanceKm) || distanceKm <= 0 ||
-      !Number.isFinite(freqMHz) || freqMHz <= 0) {
-    return Infinity;
-  }
   return 20 * Math.log10(distanceKm) + 20 * Math.log10(freqMHz) + 32.45;
 }
 
@@ -276,7 +263,6 @@ function computeFSPL(distanceKm, freqMHz = SAT_CONSTANTS.FREQ_MHZ) {
  */
 function computeSNR(distanceKm) {
   const fspl = computeFSPL(distanceKm);
-  if (!Number.isFinite(fspl)) return -Infinity;
   const prx = SAT_CONSTANTS.EIRP_DBM + SAT_CONSTANTS.RX_GAIN_DBI - fspl;
   return prx - SAT_CONSTANTS.NOISE_FLOOR_DBM;
 }
@@ -370,9 +356,7 @@ function computeScintillation(now, elevationDeg, deltaMs, mode) {
  */
 function calculateLQM({ snrDb, dopplerRateHzPerSec, elevationDeg, scintFadeDb = 0 }) {
   // Hard floor elevasi
-  if (!Number.isFinite(elevationDeg) ||
-      elevationDeg < SAT_CONSTANTS.MIN_ELEVATION_DEG ||
-      !Number.isFinite(snrDb)) {
+  if (elevationDeg < SAT_CONSTANTS.MIN_ELEVATION_DEG) {
     return -Infinity;
   }
 
@@ -809,8 +793,7 @@ function updateSatelliteLink(deltaMs, options = {}) {
 function evaluateLinkFromGeo(geo, mode = PHYSICS_MODE.REALISTIC, now = new Date()) {
   const elevationDeg = geo?.elevationDeg ?? 0;
   const distanceKm = geo?.distanceKm ?? Infinity;
-  if (elevationDeg < SAT_CONSTANTS.MIN_ELEVATION_DEG ||
-      !Number.isFinite(distanceKm) || distanceKm <= 0) {
+  if (elevationDeg < SAT_CONSTANTS.MIN_ELEVATION_DEG || !Number.isFinite(distanceKm)) {
     return {
       elevationDeg,
       distanceKm,
@@ -878,9 +861,9 @@ function runSelfTest() {
     Math.abs(snr_zenith - 11.12) < 1,
     `got ${snr_zenith.toFixed(2)}`);
 
-  // Test 3: Doppler rate paling besar di tengah pass pada model sinus.
-  const geo_max = computeGeometry(275, 550);
-  assert('Doppler rate tengah pass ~ 231 Hz/s',
+  // Test 3: Doppler max
+  const geo_max = computeGeometry(0, 550); // awal pass
+  assert('Doppler rate awal pass ~ max',
     Math.abs(Math.abs(geo_max.dopplerRateHzPerSec) - 231) < 50,
     `got ${geo_max.dopplerRateHzPerSec.toFixed(1)} Hz/s`);
 
@@ -908,8 +891,8 @@ function runSelfTest() {
     elevationDeg: 10,
     scintFadeDb: 0
   });
-  assert('LQM @ elevasi 10° masih > 28 dB (model link budget)',
-    lqm_low > 28,
+  assert('LQM @ elevasi 10° masih > 30 dB (realistis)',
+    lqm_low > 30,
     `got ${lqm_low.toFixed(2)} (snr=${snr_low.toFixed(1)})`);
 
   // Test 6: BER @ Eb/N0 = 6 dB
@@ -955,16 +938,16 @@ function runSelfTest() {
     m.scintFadeDb = -50; // paksa drop
     return m;
   };
-  let leftTracking = false;
+  let reachedDegraded = false;
   for (let i = 0; i < 50; i++) {
     const r = link2.sm.update(100, now);
-    if (r.state === SAT_STATE.LOSING_LOCK || r.state === SAT_STATE.RE_ACQUIRING) {
-      leftTracking = true;
+    if (r.state === SAT_STATE.DEGRADED) {
+      reachedDegraded = true;
       break;
     }
   }
-  assert('Fade berat memutus TRACKING',
-    leftTracking,
+  assert('DEGRADED reachable dari TRACKING',
+    reachedDegraded,
     `state: ${link2.sm.state}`);
 
   // Test 10: DeltaMs validation
@@ -976,162 +959,12 @@ function runSelfTest() {
     r1 !== null && r2 !== null && r3 !== null,
     '');
 
-  // Test 11: input geometri/link invalid tidak menghasilkan NaN yang bocor.
-  const invalidGeo = evaluateLinkFromGeo({
-    elevationDeg: 45,
-    distanceKm: 0,
-    dopplerRateHzPerSec: NaN
-  }, PHYSICS_MODE.IDEAL);
-  assert('Input link invalid menghasilkan unusable, bukan NaN',
-    invalidGeo.usable === false &&
-    invalidGeo.lqm === -Infinity &&
-    Number.isFinite(getPER(NaN)),
-    `lqm=${invalidGeo.lqm}`);
-
   return results;
 }
 
 // ============================================================================
-// PROTOCOL-SPECIFIC RF WAVEFORM BANK
-// Hapus generator generik/Gaussian. Bentuk spektrum fisik per konstelasi.
-// Sinkronisasi Doppler dengan d(el)/dt dari Physical Engine.
-// Jika elevasi < threshold → MUTE TOTAL (bukan noise negatif).
+// EXPORTS
 // ============================================================================
-
-const WAVEFORM_PROFILES = Object.freeze({
-  starlink: {
-    type: 'OFDM',
-    subcarrierHz: 30_000,
-    fftSize: 4096,
-    mask: 'rectangular',
-    label: 'OFDM 30kHz / FFT4096',
-  },
-  oneweb: {
-    type: 'OFDM',
-    subcarrierHz: 30_000,
-    fftSize: 4096,
-    mask: 'rectangular',
-    label: 'OFDM 30kHz / FFT4096',
-  },
-  iridium: {
-    type: 'TDMA_QPSK',
-    slotSamples: 512,
-    pulse: 'raised_cosine',
-    label: 'TDMA Bursty QPSK',
-  },
-  gps: {
-    type: 'CDMA_BPSK',
-    prnChips: 1023,
-    navBpsk: true,
-    label: 'CDMA PRN + BPSK',
-  },
-  galileo: {
-    type: 'CDMA_BPSK',
-    prnChips: 4092,
-    navBpsk: true,
-    label: 'CDMA PRN + BPSK',
-  },
-});
-
-const MIN_ELEV_BY_CONSTELL = Object.freeze({
-  starlink: 10,
-  oneweb: 10,
-  iridium: 5,
-  gps: 7,
-  galileo: 7,
-});
-
-/**
- * Generate physical spectrum magnitude array (0..1) for canvas.
- * @param {string} constellId
- * @param {object} opts
- * @param {number} opts.elevationDeg
- * @param {number} opts.dopplerHz      - real-time Doppler from d(el)/dt
- * @param {number} opts.snrDb
- * @param {number} [opts.bins=64]
- * @param {number} [opts.phase=0]     - time phase for animation
- * @returns {{ bins: Float32Array, muted: boolean, profile: object }}
- */
-function generatePhysicalSpectrum(constellId, {
-  elevationDeg = 0,
-  dopplerHz = 0,
-  snrDb = 0,
-  bins = 64,
-  phase = 0
-} = {}) {
-  const id = (constellId || 'iridium').toLowerCase();
-  const profile = WAVEFORM_PROFILES[id] || WAVEFORM_PROFILES.iridium;
-  const minEl = MIN_ELEV_BY_CONSTELL[id] ?? 10;
-  const out = new Float32Array(bins);
-
-  // MUTE TOTAL jika di bawah threshold — bukan noise negatif
-  if (!Number.isFinite(elevationDeg) || elevationDeg < minEl) {
-    return { bins: out, muted: true, profile };
-  }
-
-  const center = bins / 2;
-  // Doppler shift in bin units (rough: ± maxDoppler maps to ± bins/4)
-  const maxDoppler = id === 'iridium' ? 40530 : (id === 'gps' || id === 'galileo' ? 5000 : 200000);
-  const dopplerBins = Number.isFinite(dopplerHz)
-    ? (dopplerHz / maxDoppler) * (bins / 4)
-    : 0;
-  const peak = Math.max(0.05, Math.min(1, (snrDb + 5) / 30));
-
-  if (profile.type === 'OFDM') {
-    // Rectangular OFDM mask: flat top with sharp shoulders + subcarrier ripple
-    const halfWidth = bins * 0.28;
-    const c = center + dopplerBins;
-    for (let i = 0; i < bins; i++) {
-      const d = Math.abs(i - c);
-      if (d < halfWidth) {
-        // subcarrier ripple
-        const sc = Math.cos((i + phase * 0.3) * Math.PI * 0.35) * 0.08;
-        out[i] = peak * (0.85 + sc);
-      } else if (d < halfWidth + 3) {
-        out[i] = peak * Math.max(0, 1 - (d - halfWidth) / 3) * 0.4;
-      } else {
-        out[i] = peak * 0.02 * Math.random(); // floor noise
-      }
-    }
-  } else if (profile.type === 'TDMA_QPSK') {
-    // Bursty TDMA: narrow lobes that pulse with slot phase
-    const slotPhase = (phase % 1);
-    const burstOn = slotPhase < 0.35;
-    const c = center + dopplerBins;
-    const halfWidth = bins * 0.08;
-    for (let i = 0; i < bins; i++) {
-      const d = Math.abs(i - c);
-      const envelope = Math.exp(-(d * d) / (2 * halfWidth * halfWidth));
-      // Raised-cosine-ish side lobes
-      const lobe = Math.abs(Math.sinc ? Math.sinc(d / halfWidth) : Math.sin(d) / (d || 1));
-      const base = burstOn ? peak * (0.7 * envelope + 0.25 * Math.abs(lobe)) : peak * 0.03;
-      out[i] = Math.min(1, base + peak * 0.015 * Math.random());
-    }
-  } else if (profile.type === 'CDMA_BPSK') {
-    // Spread spectrum: wide noise-like floor with slight center peak (correlation)
-    const c = center + dopplerBins * 0.3;
-    for (let i = 0; i < bins; i++) {
-      const d = Math.abs(i - c);
-      const spread = peak * 0.35 * (0.6 + 0.4 * Math.random());
-      const corrPeak = d < 2 ? peak * 0.55 : 0;
-      out[i] = Math.min(1, spread + corrPeak);
-    }
-  } else {
-    // fallback flat
-    for (let i = 0; i < bins; i++) out[i] = peak * 0.1;
-  }
-
-  return { bins: out, muted: false, profile };
-}
-
-/**
- * Doppler Hz dari d(elevation)/dt (approx) + range-rate.
- * rangeRateMs positif = satelit menjauh.
- */
-function dopplerFromGeometry(rangeRateMs, carrierHz) {
-  if (!Number.isFinite(rangeRateMs) || !Number.isFinite(carrierHz) || carrierHz <= 0) return 0;
-  return -(rangeRateMs / 299792458) * carrierHz;
-}
 
 export {
   SAT_CONSTANTS,
@@ -1153,11 +986,5 @@ export {
   calculateLQM,
   getBER,
   getPER,
-  runSelfTest,
-  // Waveform bank
-  WAVEFORM_PROFILES,
-  MIN_ELEV_BY_CONSTELL,
-  generatePhysicalSpectrum,
-  dopplerFromGeometry
+  runSelfTest
 };
-

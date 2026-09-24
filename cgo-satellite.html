@@ -1453,6 +1453,11 @@
               Uji Sinyal Path Satelit
             </button>
           </div>
+          <div style="margin-bottom:8px;">
+            <a class="btn btn-full" id="btn-open-ntn" href="bcgo-ntn.html?constell=starlink" style="display:flex;align-items:center;justify-content:center;text-decoration:none;">
+              Buka NTN Modem (Internet Satelit)
+            </a>
+          </div>
           <div id="path-signal-status" style="font-family:var(--mono);font-size:9.5px;color:var(--text-dim);margin-bottom:8px;line-height:1.45;">
             Sinyal path: belum diuji · kunci: —
           </div>
@@ -3629,6 +3634,12 @@
       btnLockInet?.classList.toggle('active', pathLock === 'internet');
       if (pathSignalStatus) {
         pathSignalStatus.textContent = `Kunci path: ${pathLock === 'internet' ? 'INTERNET (Starlink/OneWeb)' : 'RADIO HT (Iridium)'} · sinyal: belum diuji`;
+      }
+      // Sinkron link NTN modem
+      const ntn = document.getElementById('btn-open-ntn');
+      if (ntn) {
+        const cid = pathLock === 'internet' ? 'starlink' : 'iridium';
+        ntn.href = 'bcgo-ntn.html?constell=' + cid;
       }
       if (pathLock === 'internet') {
         const n = buildInetSatrecsFromManager();

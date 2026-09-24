@@ -38,6 +38,7 @@ html,body{
   grid-template-columns:1fr;
   grid-template-rows:auto auto 1fr auto auto;
   grid-template-areas:
+    "auth"
     "selector"
     "diag"
     "scope"
@@ -48,14 +49,35 @@ html,body{
 @media(min-width:900px){
   #app{
     grid-template-columns:280px 1fr 320px;
-    grid-template-rows:auto 1fr 180px;
+    grid-template-rows:auto auto 1fr 180px;
     grid-template-areas:
+      "auth auth auth"
       "selector selector selector"
       "diag scope trace"
       "diag scope logs";
     overflow:hidden;
   }
 }
+#panel-auth{grid-area:auth;flex-direction:row;flex-wrap:wrap;align-items:flex-end;gap:8px}
+.auth-field{display:flex;flex-direction:column;gap:3px;min-width:120px;flex:1}
+.auth-field label{font-size:9px;color:var(--dim);letter-spacing:1px;text-transform:uppercase}
+.auth-field input{
+  background:rgba(0,0,0,0.5);border:1px solid rgba(0,243,255,0.35);
+  color:#fff;padding:8px 10px;font-family:inherit;font-size:12px;border-radius:2px;
+}
+.auth-field input:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 8px rgba(0,243,255,0.3)}
+.pwr-btn,.auth-btn{
+  background:rgba(0,243,255,0.1);border:1px solid var(--cyan);color:var(--cyan);
+  padding:8px 14px;font-family:inherit;font-size:11px;font-weight:bold;letter-spacing:1px;
+  text-transform:uppercase;cursor:pointer;border-radius:2px;white-space:nowrap;
+}
+.pwr-btn.off{border-color:var(--dim);color:var(--dim)}
+.pwr-btn.on{background:var(--green);border-color:var(--green);color:#04130a;box-shadow:0 0 12px var(--green)}
+.auth-btn.ok{background:var(--green);border-color:var(--green);color:#04130a}
+.auth-btn.locked{opacity:.5;cursor:not-allowed}
+.auth-status{font-size:10px;color:var(--dim);width:100%;margin-top:2px}
+.auth-status.ok{color:var(--green)}
+.auth-status.err{color:var(--red)}
 
 .panel{
   border:1px solid rgba(0,243,255,0.2);
@@ -227,6 +249,25 @@ button.act.void-active{
 
 <div id="app">
 
+  <!-- ═══ AUTH + POWER ═══ -->
+  <div class="panel" id="panel-auth">
+    <button type="button" class="pwr-btn off" id="pwr-btn" title="On/Off modem NTN">⏻ OFF</button>
+    <div class="auth-field">
+      <label for="auth-name">Nama Modem</label>
+      <input id="auth-name" type="text" autocomplete="off" placeholder="contoh: BCGO NTN" maxlength="40">
+    </div>
+    <div class="auth-field">
+      <label for="auth-code">Kode / Password</label>
+      <input id="auth-code" type="password" autocomplete="off" placeholder="contoh: BCGO01" maxlength="32">
+    </div>
+    <button type="button" class="auth-btn" id="auth-save" title="Simpan nama+kode yang kamu buat (pemilik modem)">Simpan Akses</button>
+    <button type="button" class="auth-btn" id="auth-btn">Koneksi</button>
+    <button type="button" class="auth-btn" id="auth-logout" style="display:none;border-color:var(--amber);color:var(--amber)">Lepas</button>
+    <div class="auth-status" id="auth-status">
+      Kamu buat sendiri Nama Modem + Kode. Simpan dulu, lalu orang yang test harus input sama persis untuk konek sinyal.
+    </div>
+  </div>
+
   <!-- ═══ SELECTOR: Konstelasi ═══ -->
   <div class="panel" id="panel-selector">
     <span style="font-size:10px;color:var(--dim);letter-spacing:1px">CONSTELLATION:</span>
@@ -331,41 +372,49 @@ const CONSTELLATIONS = Object.freeze({
   iridium: {
     id: 'iridium', name: 'Iridium', function: 'communication',
     orbit: 'leo', count: 80, band: 'L', freqHz: 1621.25e6,
-    eirpDbw: 37, gainDbi: 3, protocol: 'Iridium SBD',
+    eirpDbw: 37, gainDbi: 3, protocol: 'Iridium SBD', altKm: 780,
   },
   globalstar: {
     id: 'globalstar', name: 'Globalstar', function: 'communication',
     orbit: 'leo', count: 48, band: 'L', freqHz: 1615e6,
-    eirpDbw: 33, gainDbi: 2, protocol: 'Globalstar',
+    eirpDbw: 33, gainDbi: 2, protocol: 'Globalstar', altKm: 1414,
   },
   starlink: {
     id: 'starlink', name: 'Starlink', function: 'communication',
     orbit: 'leo', count: 10000, band: 'Ku', freqHz: 12.5e9,
-    eirpDbw: 33, gainDbi: 30, protocol: 'Starlink',
+    eirpDbw: 33, gainDbi: 30, protocol: 'Starlink NTN', altKm: 550,
   },
   oneweb: {
     id: 'oneweb', name: 'OneWeb', function: 'communication',
     orbit: 'leo', count: 600, band: 'Ku', freqHz: 12.5e9,
-    eirpDbw: 32, gainDbi: 28, protocol: 'OneWeb',
+    eirpDbw: 32, gainDbi: 28, protocol: 'OneWeb NTN', altKm: 1200,
   },
   gps: {
     id: 'gps', name: 'GPS', function: 'navigation',
     orbit: 'meo', count: 31, band: 'L1', freqHz: 1575.42e6,
-    eirpDbw: 20, gainDbi: 3, protocol: 'GPS L1',
+    eirpDbw: 20, gainDbi: 3, protocol: 'GPS L1', altKm: 20200,
   },
   amateur: {
     id: 'amateur', name: 'Amateur', function: 'amateur',
     orbit: 'leo', count: 100, band: 'VHF', freqHz: 145.8e6,
-    eirpDbw: 10, gainDbi: 2, protocol: 'APRS',
+    eirpDbw: 10, gainDbi: 2, protocol: 'APRS', altKm: 400,
   },
 });
+
+/** Bridge opsional ke cgo-satellite-virtual.js */
+let VirtualBridge = null;
 
 // ─── STATE ───────────────────────────────────────────────
 const System = {
   t: 0,
   constellId: 'starlink',
   constell: CONSTELLATIONS.starlink,
-  satIndex: 1008,
+  satIndex: 1,
+
+  // Power + akses (wajib sebelum sinyal internet)
+  powered: false,
+  authorized: false,
+  operatorName: '',
 
   // Fisika dinamis
   elevation: 0,
@@ -376,7 +425,7 @@ const System = {
   dopplerHz: 0,
 
   // Jammer / musuh
-  jammers: [],           // {id, x, y, powerDbm, killed}
+  jammers: [],
   jammersKilled: 0,
   voidPulsesUsed: 0,
   voidActive: false,
@@ -397,6 +446,220 @@ const System = {
   bufferPtr: 0,
   totalBitsExtracted: 0,
 };
+
+/**
+ * Akses modem = manual milik kamu.
+ * 1) Pemilik: isi Nama Modem + Kode → Simpan Akses (tersimpan di HP/browser ini)
+ * 2) Yang test: input Nama + Kode yang sama → Koneksi
+ * Bukan daftar kode tetap dari BCGO.
+ */
+const CRED_KEY = 'bcgo_ntn_modem_cred_v1';   // nama+kode yang kamu buat
+const SESSION_KEY = 'bcgo_ntn_session_v1';    // sesi yang sudah berhasil konek
+
+function normalizeName(s) {
+  return String(s || '').trim().replace(/\s+/g, ' ');
+}
+function normalizeCode(s) {
+  return String(s || '').trim(); // case-sensitive password yang kamu buat
+}
+
+function loadModemCred() {
+  try {
+    const o = JSON.parse(localStorage.getItem(CRED_KEY) || 'null');
+    if (!o?.name || o.code == null || o.code === '') return null;
+    return { name: normalizeName(o.name), code: String(o.code) };
+  } catch {
+    return null;
+  }
+}
+
+function saveModemCred(name, code) {
+  localStorage.setItem(CRED_KEY, JSON.stringify({
+    name: normalizeName(name),
+    code: String(code)
+  }));
+}
+
+function clearModemCred() {
+  try { localStorage.removeItem(CRED_KEY); } catch { /* */ }
+}
+
+function loadSession() {
+  try {
+    const o = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    if (!o?.name || !o?.until) return null;
+    if (Date.now() > o.until) {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    const cred = loadModemCred();
+    if (!cred || normalizeName(o.name) !== cred.name) return null;
+    return o;
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(name) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({
+    name: normalizeName(name),
+    until: Date.now() + 12 * 3600 * 1000
+  }));
+}
+
+function clearSession() {
+  try { localStorage.removeItem(SESSION_KEY); } catch { /* */ }
+}
+
+function setAuthUI() {
+  const st = document.getElementById('auth-status');
+  const btn = document.getElementById('auth-btn');
+  const saveBtn = document.getElementById('auth-save');
+  const logout = document.getElementById('auth-logout');
+  const nameIn = document.getElementById('auth-name');
+  const codeIn = document.getElementById('auth-code');
+  const cred = loadModemCred();
+
+  if (System.authorized) {
+    if (st) {
+      st.textContent = `Terkoneksi · modem "${System.operatorName}" · sinyal boleh lock`;
+      st.className = 'auth-status ok';
+    }
+    if (btn) {
+      btn.textContent = 'Terkoneksi';
+      btn.classList.add('ok', 'locked');
+      btn.disabled = true;
+    }
+    if (saveBtn) saveBtn.style.display = 'none';
+    if (logout) logout.style.display = '';
+    if (nameIn) nameIn.disabled = true;
+    if (codeIn) codeIn.disabled = true;
+  } else {
+    if (btn) {
+      btn.textContent = 'Koneksi';
+      btn.classList.remove('ok', 'locked');
+      btn.disabled = false;
+    }
+    if (saveBtn) saveBtn.style.display = '';
+    if (logout) logout.style.display = 'none';
+    if (nameIn) nameIn.disabled = false;
+    if (codeIn) codeIn.disabled = false;
+    if (st) {
+      if (cred) {
+        st.textContent = `Modem terdaftar: "${cred.name}" · input Nama + Kode yang sama untuk koneksi.`;
+        st.className = 'auth-status';
+      } else {
+        st.textContent = 'Belum ada akses. Buat Nama Modem + Kode kamu → tekan Simpan Akses.';
+        st.className = 'auth-status';
+      }
+    }
+  }
+  updatePowerUI();
+}
+
+function updatePowerUI() {
+  const pwr = document.getElementById('pwr-btn');
+  if (!pwr) return;
+  if (System.powered) {
+    pwr.textContent = '⏻ ON';
+    pwr.classList.add('on');
+    pwr.classList.remove('off');
+  } else {
+    pwr.textContent = '⏻ OFF';
+    pwr.classList.add('off');
+    pwr.classList.remove('on');
+  }
+}
+
+/** Pemilik: simpan Nama Modem + Kode yang kamu tentukan sendiri */
+function saveAccessCredentials() {
+  const name = normalizeName(document.getElementById('auth-name')?.value);
+  const code = normalizeCode(document.getElementById('auth-code')?.value);
+  const st = document.getElementById('auth-status');
+  if (name.length < 2) {
+    if (st) { st.textContent = 'Nama modem minimal 2 karakter.'; st.className = 'auth-status err'; }
+    return;
+  }
+  if (code.length < 3) {
+    if (st) { st.textContent = 'Kode/password minimal 3 karakter.'; st.className = 'auth-status err'; }
+    return;
+  }
+  saveModemCred(name, code);
+  clearSession();
+  System.authorized = false;
+  System.operatorName = '';
+  System.modemLocked = false;
+  System.throughput = 0;
+  setAuthUI();
+  if (st) {
+    st.textContent = `Akses disimpan · Nama "${name}" · Kode yang kamu buat. Bagikan ke yang boleh test.`;
+    st.className = 'auth-status ok';
+  }
+  logLine('AUTH', `Modem access set: "${name}". Kode disimpan lokal (manual).`, 'ok');
+}
+
+/** Tester: harus input Nama + Kode yang sama dengan yang disimpan pemilik */
+function tryAuthorize() {
+  const name = normalizeName(document.getElementById('auth-name')?.value);
+  const code = normalizeCode(document.getElementById('auth-code')?.value);
+  const st = document.getElementById('auth-status');
+  const cred = loadModemCred();
+
+  if (!cred) {
+    if (st) {
+      st.textContent = 'Belum ada Nama/Kode tersimpan. Pemilik harus Simpan Akses dulu.';
+      st.className = 'auth-status err';
+    }
+    logLine('AUTH', 'Tidak ada kredensial modem — simpan dulu.', 'err');
+    return;
+  }
+  if (name.length < 2 || code.length < 1) {
+    if (st) { st.textContent = 'Isi Nama Modem dan Kode.'; st.className = 'auth-status err'; }
+    return;
+  }
+  if (name !== cred.name || code !== cred.code) {
+    if (st) {
+      st.textContent = 'Nama atau Kode salah — sinyal ditolak.';
+      st.className = 'auth-status err';
+    }
+    logLine('AUTH', 'Nama/kode tidak cocok. Modem tetap terblokir.', 'err');
+    System.authorized = false;
+    System.operatorName = '';
+    setAuthUI();
+    return;
+  }
+  System.authorized = true;
+  System.operatorName = name;
+  saveSession(name);
+  setAuthUI();
+  logLine('AUTH', `Koneksi OK · modem "${name}".`, 'ok');
+}
+
+function revokeAuth() {
+  System.authorized = false;
+  System.operatorName = '';
+  System.modemLocked = false;
+  System.throughput = 0;
+  clearSession();
+  const codeIn = document.getElementById('auth-code');
+  if (codeIn) codeIn.value = '';
+  setAuthUI();
+  logLine('AUTH', 'Sesi dilepas. Input ulang Nama + Kode untuk konek.', 'warn');
+}
+
+function togglePower() {
+  System.powered = !System.powered;
+  if (!System.powered) {
+    System.modemLocked = false;
+    System.throughput = 0;
+    System.modulation = '--';
+    System.codingRate = '--';
+    logLine('SYS', 'Modem NTN powered OFF.', 'warn');
+  } else {
+    logLine('SYS', 'Modem NTN powered ON.' + (System.authorized ? '' : ' (menunggu Nama+Kode)'), 'ok');
+  }
+  updatePowerUI();
+}
 
 // ─── SPAWN JAMMERS ────────────────────────────────────────
 function spawnJammer() {
@@ -437,13 +700,18 @@ function jammerTick() {
 
 // ─── FISIKA ORBITAL ───────────────────────────────────────
 function calculatePhysics(t) {
+  // Keep the displayed satellite identity valid for the selected constellation.
+  if (!Number.isInteger(System.satIndex) || System.satIndex < 1 || System.satIndex > System.constell.count) {
+    System.satIndex = 1;
+  }
+
   const T = 600;
   const phase = (t % T) / T;
   System.elevation = 85 * (1 - Math.cos(2 * Math.PI * phase)) / 2;
 
   const elRad = System.elevation * Math.PI / 180;
   const R = PHYSICS.R_EARTH_KM;
-  const h = PHYSICS.ALT_KM;
+  const h = System.constell.altKm || PHYSICS.ALT_KM;
 
   if (System.elevation > 1) {
     const a = (R + h) ** 2;
@@ -454,16 +722,18 @@ function calculatePhysics(t) {
   }
 
   const fMHz = System.constell.freqHz / 1e6;
-  System.fspl = 20 * Math.log10(System.slantRange)
-              + 20 * Math.log10(fMHz) + 32.44;
+  if (VirtualBridge && typeof VirtualBridge.computeFSPL === 'function') {
+    System.fspl = VirtualBridge.computeFSPL(System.slantRange, fMHz);
+  } else {
+    System.fspl = 20 * Math.log10(Math.max(1, System.slantRange))
+                + 20 * Math.log10(Math.max(1, fMHz)) + 32.45;
+  }
 
-  // Atmosfer tergantung band
   const atmCoef = System.constell.band === 'Ku' ? 0.5
-                 : System.constell.band === 'L' ? 0.15
+                 : (System.constell.band === 'L' || System.constell.band === 'L1') ? 0.15
                  : 0.05;
   System.atmLoss = atmCoef / Math.max(Math.sin(elRad), 0.05);
 
-  // Pr dinamis dari EIRP + G_rx - FSPL - atm
   System.prDbm = System.constell.eirpDbw + 30
                - System.fspl - System.atmLoss
                + System.constell.gainDbi;
@@ -473,7 +743,7 @@ function calculatePhysics(t) {
   System.dopplerHz = sign * (vSat / PHYSICS.C) * System.constell.freqHz * Math.cos(elRad);
 }
 
-// ─── MODEM + JAMMING ──────────────────────────────────────
+// ─── MODEM + JAMMING (hanya jika ON + auth kode BCGO NTN) ───
 function processModem() {
   const pThermal = Math.pow(10, NOISE_FLOOR_DBM / 10);
 
@@ -484,13 +754,33 @@ function processModem() {
 
   const pNoiseTotal = pThermal + pJam;
   const pSignal = Math.pow(10, System.prDbm / 10);
-  const sinrLinear = pSignal / pNoiseTotal;
+  const sinrLinear = pSignal / Math.max(pNoiseTotal, 1e-30);
   System.sinrDb = 10 * Math.log10(sinrLinear);
 
   System.capacityBps = sinrLinear > 0
     ? PHYSICS.BW_HZ * Math.log2(1 + sinrLinear) * PHYSICS.PROTO_EFF : 0;
 
-  // Ekstraksi bit (safe)
+  // Gate: power OFF atau belum auth → tidak boleh lock / throughput
+  if (!System.powered || !System.authorized) {
+    if (System.modemLocked) {
+      System.modemLocked = false;
+      logLine('RRC', !System.powered ? 'Modem OFF — link dropped.' : 'Auth required — link blocked.', 'warn');
+    }
+    System.throughput = 0;
+    System.modulation = '--';
+    System.codingRate = '--';
+    System.latency = 0;
+    System.packetLoss = 100;
+    // IQ noise only (no clean bits)
+    for (let i = 0; i < 2; i++) {
+      const i0 = System.bufferPtr;
+      System.iqBuffer[i0] = (Math.random() - 0.5);
+      System.iqBuffer[(i0 + 1) % System.iqBuffer.length] = (Math.random() - 0.5);
+      System.bufferPtr = (i0 + 2) % System.iqBuffer.length;
+    }
+    return;
+  }
+
   if (sinrLinear > 0.1) {
     const noiseStd = 1 / Math.sqrt(2 * sinrLinear);
     for (let i = 0; i < 4; i++) {
@@ -504,11 +794,10 @@ function processModem() {
     }
   }
 
-  // Modem lock/unlock
   if (System.sinrDb > 8) {
     if (!System.modemLocked) {
       System.modemLocked = true;
-      logLine('RRC', 'Link established.', 'ok');
+      logLine('RRC', `Link established · ${System.operatorName} · ${System.constell.name}`, 'ok');
     }
     if (System.sinrDb > 22) {
       System.modulation = '256QAM';
@@ -528,7 +817,7 @@ function processModem() {
   } else {
     if (System.modemLocked) {
       System.modemLocked = false;
-      logLine('PHY', 'Radio link failure. Jammed?', 'err');
+      logLine('PHY', 'Radio link failure. Jammed / low SINR?', 'err');
     }
     System.throughput = 0;
     System.modulation = '--';
@@ -548,7 +837,7 @@ function logLine(tag, msg, cls) {
   const spanCls = cls || '';
   line.innerHTML =
     `<span class="t">[${now}]</span> ` +
-    `<span class="${spanCls}">${tag}: ${msg}</span>`;
+    `<span class="${spanCls}">${tag}: ${String(msg).replace(/[&<>\"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[ch]))}</span>`;
   logEl.appendChild(line);
   while (logEl.childNodes.length > MAX_LINES) {
     logEl.removeChild(logEl.firstChild);
@@ -558,6 +847,14 @@ function logLine(tag, msg, cls) {
 
 // ─── VOID PULSE (Counter-Jam) ─────────────────────────────
 function triggerVoidPulse() {
+  if (!System.powered) {
+    logLine('SYS', 'Void Pulse ditolak — modem OFF.', 'warn');
+    return;
+  }
+  if (!System.authorized) {
+    logLine('SYS', 'Void Pulse ditolak — butuh kode BCGO NTN.', 'warn');
+    return;
+  }
   if (System.voidActive) return;
   System.voidActive = true;
   System.voidRadius = 0;
@@ -576,7 +873,8 @@ function triggerVoidPulse() {
 
   logLine('SYS', `Void Pulse #${System.voidPulsesUsed} fired.`, 'violet');
 
-  const maxR = Math.max(window.innerWidth, window.innerHeight);
+  const scope = document.getElementById('scope-wrap');
+  const getScopeRect = () => scope.getBoundingClientRect();
 
   const expand = () => {
     if (!System.voidActive) return;
@@ -584,15 +882,17 @@ function triggerVoidPulse() {
     effect.style.width = `${System.voidRadius * 2}px`;
     effect.style.height = `${System.voidRadius * 2}px`;
 
-    // Kill jammer dalam radius
-    const cx = window.innerWidth / 2;
-    const cy = window.innerHeight / 2;
+    // Kill jammer dalam radius; coordinates are normalized to #scope-wrap.
+    const scopeRect = getScopeRect();
+    const cx = scopeRect.width / 2;
+    const cy = scopeRect.height / 2;
+    const maxR = Math.max(scopeRect.width, scopeRect.height);
     const killR = System.voidRadius * 1.2;
 
     for (const j of System.jammers) {
       if (j.killed) continue;
-      const jx = j.x * window.innerWidth;
-      const jy = j.y * window.innerHeight;
+      const jx = j.x * scopeRect.width;
+      const jy = j.y * scopeRect.height;
       const d = Math.hypot(jx - cx, jy - cy);
       if (d < killR) {
         j.killed = true;
@@ -676,7 +976,11 @@ const Engine = {
       btn.addEventListener('click', () => {
         System.constellId = id;
         System.constell = CONSTELLATIONS[id];
+        // Keep the displayed satellite ID valid for the selected constellation.
+        System.satIndex = Math.max(1, Math.min(System.satIndex || 1, System.constell.count));
         System.totalBitsExtracted = 0;
+        System.bufferPtr = 0;
+        System.iqBuffer.fill(0);
         System.modemLocked = false;
         document.querySelectorAll('.sel-chip').forEach(b =>
           b.classList.toggle('active', b.dataset.id === id));
@@ -759,12 +1063,20 @@ const Engine = {
     setT('val-voidused', System.voidPulsesUsed, 'violet');
 
     const status = document.getElementById('modem-status');
-    if (System.modemLocked) {
-      status.textContent = '◆ BCGO NTN DOMINANT · LINK CLEAR';
+    if (!System.powered) {
+      status.textContent = '◆ MODEM OFF · tekan ON';
+      status.style.borderColor = 'var(--dim)';
+      status.style.color = 'var(--dim)';
+    } else if (!System.authorized) {
+      status.textContent = '◆ AUTH REQUIRED · Nama + Kode BCGO NTN';
+      status.style.borderColor = 'var(--amber)';
+      status.style.color = 'var(--amber)';
+    } else if (System.modemLocked) {
+      status.textContent = `◆ LINK CLEAR · ${System.operatorName} · ${System.constell.name}`;
       status.style.borderColor = 'var(--cyan)';
       status.style.color = 'var(--cyan)';
     } else {
-      status.textContent = '◆ LINK JAMMED · VOID PULSE REQUIRED';
+      status.textContent = '◆ LINK DOWN · jam / SINR rendah · VOID PULSE';
       status.style.borderColor = 'var(--red)';
       status.style.color = 'var(--red)';
     }
@@ -785,26 +1097,31 @@ const Engine = {
     ctx.moveTo(0, cy); ctx.lineTo(w, cy);
     ctx.stroke();
 
+    const buf = System.iqBuffer;
+    const pairCount = Math.floor(buf.length / 2);
+    const scale = Math.min(w, h) * 0.34;
+
     if (System.modemLocked) {
-      const is16 = System.modulation.includes('QAM');
-      const pts = is16 ? 4 : 2;
-      const noiseLvl = Math.max(1, 20 / Math.max(1, System.sinrDb + 1));
       ctx.fillStyle = '#00f3ff';
-      const baseR = Math.min(w, h) * 0.15;
-      for (let i = 0; i < 120; i++) {
-        const cluster = Math.floor(Math.random() * pts);
-        const angle = (cluster / pts) * Math.PI * 2 + Math.PI / 4;
-        const r = baseR * (is16 ? 1 : 2);
-        const x = cx + Math.cos(angle) * r + (Math.random() - 0.5) * noiseLvl;
-        const y = cy + Math.sin(angle) * r + (Math.random() - 0.5) * noiseLvl;
+      const startPair = Math.max(0, System.bufferPtr / 2 | 0);
+      const count = Math.min(512, pairCount);
+      for (let n = 0; n < count; n++) {
+        const pair = (startPair + n) % pairCount;
+        const iVal = buf[pair * 2];
+        const qVal = buf[pair * 2 + 1];
+        if (!Number.isFinite(iVal) || !Number.isFinite(qVal)) continue;
+        const x = cx + Math.max(-1, Math.min(1, iVal)) * scale;
+        const y = cy - Math.max(-1, Math.min(1, qVal)) * scale;
         ctx.fillRect(x - 1, y - 1, 2, 2);
       }
     } else {
       ctx.fillStyle = '#ffaa00';
-      for (let i = 0; i < 200; i++) {
-        const x = cx + (Math.random() - 0.5) * w * 0.7;
-        const y = cy + (Math.random() - 0.5) * h * 0.7;
-        ctx.fillRect(x, y, 2, 2);
+      for (let i = 0; i < pairCount; i += 4) {
+        const iVal = buf[i * 2] || 0;
+        const qVal = buf[i * 2 + 1] || 0;
+        const x = cx + Math.max(-1, Math.min(1, iVal)) * scale;
+        const y = cy - Math.max(-1, Math.min(1, qVal)) * scale;
+        ctx.fillRect(x, y, 1, 1);
       }
     }
   },
@@ -879,13 +1196,56 @@ function updateSelInfo() {
   info.textContent = `${c.count.toLocaleString()} sats · ${c.band} · ${c.freqHz/1e9 < 1 ? (c.freqHz/1e6).toFixed(0)+' MHz' : (c.freqHz/1e9).toFixed(2)+' GHz'}`;
 }
 
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
+  // Bridge ke sumber fisika BCGO (opsional — offline tetap jalan)
+  try {
+    VirtualBridge = await import('./cgo-satellite-virtual.js');
+    logLine('SYS', 'Bridge virtual.js OK · FSPL/LQM sourced.', 'ok');
+  } catch (e) {
+    VirtualBridge = null;
+    logLine('SYS', 'virtual.js tidak termuat — fisika NTN lokal aktif.', 'warn');
+  }
+
+  // Query dari cgo-satellite.html ?constell=starlink
+  try {
+    const q = new URLSearchParams(location.search);
+    const cid = q.get('constell');
+    if (cid && CONSTELLATIONS[cid]) {
+      System.constellId = cid;
+      System.constell = CONSTELLATIONS[cid];
+    }
+  } catch { /* */ }
+
+  // Restore sesi jika masih valid & cocok kredensial manual
+  const ses = loadSession();
+  if (ses) {
+    System.authorized = true;
+    System.operatorName = ses.name;
+    const nameIn = document.getElementById('auth-name');
+    if (nameIn) nameIn.value = ses.name;
+  } else {
+    const cred = loadModemCred();
+    if (cred) {
+      const nameIn = document.getElementById('auth-name');
+      if (nameIn && !nameIn.value) nameIn.value = cred.name;
+    }
+  }
+  setAuthUI();
+
+  document.getElementById('pwr-btn')?.addEventListener('click', togglePower);
+  document.getElementById('auth-save')?.addEventListener('click', saveAccessCredentials);
+  document.getElementById('auth-btn')?.addEventListener('click', tryAuthorize);
+  document.getElementById('auth-logout')?.addEventListener('click', revokeAuth);
+  document.getElementById('auth-code')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') tryAuthorize();
+  });
+
   Engine.init();
   logLine('SYS', 'BCGO NTN console online.', 'ok');
-  logLine('PHY', `Noise floor: ${NOISE_FLOOR_DBM.toFixed(1)} dBm`, 'ok');
+  logLine('PHY', `Noise floor: ${NOISE_FLOOR_DBM.toFixed(1)} dBm · BW ${PHYSICS.BW_HZ / 1e6} MHz`, 'ok');
+  logLine('AUTH', 'Nama Modem + Kode dibuat manual oleh pemilik → Simpan Akses → Koneksi.', 'warn');
   logLine('THREAT', 'Scanning for hostiles...', 'warn');
 
-  // Spawn initial jammer setelah 5 detik
   setTimeout(() => spawnJammer(), 5000);
 });
 </script>
