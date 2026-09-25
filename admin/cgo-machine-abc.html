@@ -251,7 +251,8 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   const WARN = new Set(["PARTIAL", "DEGRADED"]);
 
   let total = 0, cycleCount = 0, confSum = 0, rejected = 0, pulseTimer = null;
-  let soundEnabled = false, hapticEnabled = true, audioCtx = null, masterGain = null, lastSoundAt = 0, telemetryBus = null;
+  let soundEnabled = false, hapticEnabled = true, audioCtx = null, masterGain = null, audioReady = false, soundQueueUntil = 0, telemetryBus = null;
+  const AUDIO_GAIN = 0.16;
   try { telemetryBus = new BroadcastChannel("CGO_MACHINE_ABC_TELEMETRY"); } catch (_) { telemetryBus = null; }
   const phaseLampIds = {A:"lampA",B:"lampB",C:"lampC",D:"lampD"};
   const phaseTimeIds = {A:"lampATime",B:"lampBTime",C:"lampCTime",D:"lampDTime"};
@@ -279,29 +280,26 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   }
   function clearNotice() { $("#notice").hidden = true; }
 
-  function ensureAudio(){
-    if(!soundEnabled) return null;
-    try{
-      const AC=window.AudioContext||window.webkitAudioContext;
-      if(!AC) return null;
-      if(!audioCtx){audioCtx=new AC();masterGain=audioCtx.createGain();masterGain.gain.value=.055;masterGain.connect(audioCtx.destination);}
-      if(audioCtx.state==='suspended') audioCtx.resume();
-      return audioCtx;
-    }catch(_){return null}
+  async function ensureAudio(){
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(!AC) throw new Error("Web Audio API tidak tersedia");
+    if(!audioCtx){audioCtx=new AC({latencyHint:"interactive"});masterGain=audioCtx.createGain();masterGain.gain.value=AUDIO_GAIN;masterGain.connect(audioCtx.destination);}
+    if(audioCtx.state!=="running") await audioCtx.resume();
+    if(audioCtx.state!=="running") throw new Error("AudioContext belum running");
+    audioReady=true; return audioCtx;
   }
-  function systemSound(kind='tick'){
-    const now=Date.now(); if(now-lastSoundAt<45) return; lastSoundAt=now;
-    const ctx=ensureAudio(); if(!ctx||!masterGain) return;
-    const map={start:[220,.045,'sine'],A:[310,.055,'sine'],B:[420,.055,'triangle'],C:[520,.06,'sine'],D:[660,.07,'triangle'],ok:[780,.10,'sine'],warn:[180,.10,'sawtooth'],bad:[120,.16,'square'],done:[880,.12,'sine']};
-    const [freq,dur,type]=map[kind]||map.tick||[300,.04,'sine'];
-    const o=ctx.createOscillator(),g=ctx.createGain(),f=ctx.createBiquadFilter(); o.type=type; o.frequency.value=freq; f.type='lowpass'; f.frequency.value=2400;
-    g.gain.setValueAtTime(.0001,ctx.currentTime);g.gain.exponentialRampToValueAtTime(1,ctx.currentTime+.008);g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+dur);
-    o.connect(f);f.connect(g);g.connect(masterGain);o.start();o.stop(ctx.currentTime+dur+.02);
+  function voice(ctx,when,f,d,type="sine",level=.25,glide=null){
+    const o=ctx.createOscillator(),g=ctx.createGain(),filt=ctx.createBiquadFilter();o.type=type;o.frequency.setValueAtTime(f,when);if(glide)o.frequency.exponentialRampToValueAtTime(glide,when+d*.72);filt.type="lowpass";filt.frequency.setValueAtTime(Math.max(900,f*4),when);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.012);g.gain.exponentialRampToValueAtTime(level*.35,when+d*.62);g.gain.exponentialRampToValueAtTime(.0001,when+d);o.connect(filt);filt.connect(g);g.connect(masterGain);o.start(when);o.stop(when+d+.025);
   }
-  function haptic(kind='tick'){
-    if(!hapticEnabled||typeof navigator.vibrate!=='function') return;
-    try{navigator.vibrate(kind==='bad'?[30,20,40]:kind==='done'?[12,18,12]:10)}catch(_){}
+  function systemSound(kind='tick',force=false){
+    if(!soundEnabled||!audioReady||!audioCtx||audioCtx.state!=="running"||!masterGain)return false;
+    try{const q={start:[128,.14,"sine",.30,196],A:[180,.12,"sine",.28,260],B:[260,.13,"triangle",.26,360],C:[370,.13,"triangle",.25,520],D:[520,.15,"sine",.26,720],ok:[440,.24,"sine",.25,880],warn:[150,.24,"sawtooth",.22,105],bad:[95,.34,"square",.28,62],done:[660,.20,"sine",.30,990],tick:[220,.08,"sine",.18,280]}[kind]||[220,.08,"sine",.18,280];const now=audioCtx.currentTime+.006,when=Math.max(now,soundQueueUntil);voice(audioCtx,when,q[0],q[1],q[2],q[3],q[4]);if(kind!=="bad")voice(audioCtx,when,q[0]*2,q[1]*.72,"sine",q[3]*.20,q[4]*1.8);soundQueueUntil=when+q[1]+(kind==='bad'||kind==='done'?.08:.045);return true}catch(_){return false}
   }
+  async function armSound(){
+    try{await ensureAudio();soundEnabled=true;soundQueueUntil=0;systemSound('start',true);const b=$("#soundToggle");if(b){b.textContent="🔊 Suara sistem: READY";b.classList.add("active")}showNotice("Sound engine lokal aktif · urutan A→B→C→D siap terdengar.","ok");return true}catch(e){soundEnabled=false;showNotice("Sound tidak tersedia: "+String(e.message||e),"error");return false}
+  }
+  function disarmSound(){soundEnabled=false;audioReady=false;soundQueueUntil=0;try{audioCtx?.suspend?.()}catch(_){}const b=$("#soundToggle");if(b){b.textContent="🔇 Suara sistem: OFF";b.classList.remove("active")}}
+  function haptic(kind='tick'){if(!hapticEnabled||typeof navigator.vibrate!=="function")return;try{navigator.vibrate(kind==='bad'?[30,20,40]:kind==='done'?[12,18,12]:10)}catch(_){} }
   function markLamp(stage,status,duration){
     const id=phaseLampIds[stage]; if(!id)return; const n=$('#'+id); if(!n)return; n.className='lamp '+(status==='START'?'active':status==='COMPLETED'?'done':status==='FAILED'?'bad':'');
     const t=$('#'+phaseTimeIds[stage]); if(t&&duration!=null)t.textContent=duration+'ms';
@@ -423,7 +421,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
       setStages("A");
       ['A','B','C','D'].forEach(k=>{const n=$('#'+phaseLampIds[k]);if(n)n.className='lamp'});
       $('#activityState').textContent='⚡ INPUT DITERIMA · memulai jalur A→B→C→D';
-      systemSound('start');
+      if(soundEnabled) systemSound('start', true);
       haptic('tick');
       setTimeout(() => setStages("B"), 40);
       const out = E.process(input, options || {});
@@ -497,7 +495,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     setLive(st.verified ? "SELF-TEST OK" : "SELF-TEST FAIL", st.verified ? "ok" : "bad");
   };
   $("#btnPulse").onclick = () => { refresh(); showNotice("Metrics di-refresh · totalProcessed=" + (E.getMetrics().totalProcessed || 0), "ok"); };
-  $("#soundToggle").onclick = () => { soundEnabled=!soundEnabled; const b=$("#soundToggle"); b.textContent=soundEnabled?"🔊 Suara sistem: ON":"🔇 Suara sistem: OFF"; b.classList.toggle("active",soundEnabled); if(soundEnabled){systemSound('start');showNotice('Sound engine lokal aktif · feedback A→B→C→D siap.', 'ok');} };
+  $("#soundToggle").onclick = async () => { if(soundEnabled){disarmSound();return;} await armSound(); };
   $("#hapticToggle").onclick = () => { hapticEnabled=!hapticEnabled; const b=$("#hapticToggle"); b.textContent=hapticEnabled?"📳 Haptic: AUTO":"📴 Haptic: OFF"; b.classList.toggle("active",hapticEnabled); };
   $("#devRun").onclick = () => {
     const raw = $("#devInput").value;

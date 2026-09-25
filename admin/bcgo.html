@@ -1059,18 +1059,27 @@ function renderConnection(state) {
     stateIntegrityEl.textContent = Number.isFinite(aiCycle) && aiCycle === Number(state.cycle) ? 'SYNC' : 'UPDATING';
 }
 
-let abcSoundEnabled=false,abcAudioCtx=null,abcMaster=null,abcLastSound=0;
-function abcEnsureAudio(){try{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return null;if(!abcAudioCtx){abcAudioCtx=new AC();abcMaster=abcAudioCtx.createGain();abcMaster.gain.value=.04;abcMaster.connect(abcAudioCtx.destination);}if(abcAudioCtx.state==='suspended')abcAudioCtx.resume();return abcAudioCtx}catch(_){return null}}
-function abcSound(stage,end){if(!abcSoundEnabled)return;const now=Date.now();if(now-abcLastSound<50)return;abcLastSound=now;const ctx=abcEnsureAudio();if(!ctx||!abcMaster)return;const freq={A:300,B:420,C:540,D:680}[stage]||240;const o=ctx.createOscillator(),g=ctx.createGain();o.type=end?'sine':'triangle';o.frequency.value=freq;g.gain.setValueAtTime(.0001,ctx.currentTime);g.gain.exponentialRampToValueAtTime(1,ctx.currentTime+.008);g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+.07);o.connect(g);g.connect(abcMaster);o.start();o.stop(ctx.currentTime+.09)}
+let abcSoundEnabled=false,abcAudioCtx=null,abcMaster=null,abcAudioReady=false,abcSoundQueueUntil=0;
+async function abcEnsureAudio(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error('Web Audio API tidak tersedia');if(!abcAudioCtx){abcAudioCtx=new AC({latencyHint:'interactive'});abcMaster=abcAudioCtx.createGain();abcMaster.gain.value=.16;abcMaster.connect(abcAudioCtx.destination);}if(abcAudioCtx.state!=='running')await abcAudioCtx.resume();if(abcAudioCtx.state!=='running')throw new Error('AudioContext belum running');abcAudioReady=true;return abcAudioCtx}
+function abcVoice(ctx,when,f,d,type='sine',level=.25,glide=null){const o=ctx.createOscillator(),g=ctx.createGain(),filt=ctx.createBiquadFilter();o.type=type;o.frequency.setValueAtTime(f,when);if(glide)o.frequency.exponentialRampToValueAtTime(glide,when+d*.72);filt.type='lowpass';filt.frequency.setValueAtTime(Math.max(900,f*4),when);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.012);g.gain.exponentialRampToValueAtTime(level*.35,when+d*.62);g.gain.exponentialRampToValueAtTime(.0001,when+d);o.connect(filt);filt.connect(g);g.connect(abcMaster);o.start(when);o.stop(when+d+.025)}
+function abcSound(kind='tick',force=false){if(!abcSoundEnabled||!abcAudioReady||!abcAudioCtx||abcAudioCtx.state!=='running'||!abcMaster)return false;try{const q={start:[128,.14,'sine',.30,196],A:[180,.12,'sine',.28,260],B:[260,.13,'triangle',.26,360],C:[370,.13,'triangle',.25,520],D:[520,.15,'sine',.26,720],ok:[440,.24,'sine',.25,880],warn:[150,.24,'sawtooth',.22,105],bad:[95,.34,'square',.28,62],done:[660,.20,'sine',.30,990],tick:[220,.08,'sine',.18,280]}[kind]||[220,.08,'sine',.18,280];const when=Math.max(abcAudioCtx.currentTime+.006,abcSoundQueueUntil);abcVoice(abcAudioCtx,when,q[0],q[1],q[2],q[3],q[4]);if(kind!=='bad')abcVoice(abcAudioCtx,when,q[0]*2,q[1]*.72,'sine',q[3]*.20,q[4]*1.8);abcSoundQueueUntil=when+q[1]+(kind==='bad'||kind==='done'?.08:.045);return true}catch(_){return false}}
+async function abcArmSound(){try{await abcEnsureAudio();abcSoundEnabled=true;abcSoundQueueUntil=0;abcSound('start',true);const b=document.getElementById('abc-sound-toggle');if(b){b.textContent='🔊 SOUND READY';b.classList.add('text-emerald-300')}return true}catch(e){abcSoundEnabled=false;const b=document.getElementById('abc-sound-toggle');if(b)b.textContent='🔇 SOUND UNAVAILABLE';console.warn('[BCGO AUDIO]',e);return false}}
+function abcDisarmSound(){abcSoundEnabled=false;abcAudioReady=false;abcSoundQueueUntil=0;try{abcAudioCtx?.suspend?.()}catch(_){}const b=document.getElementById('abc-sound-toggle');if(b){b.textContent='🔇 SOUND OFF';b.classList.remove('text-emerald-300')}}
+
 function renderAbcTelemetry(ev){
   if(!ev || ev.type !== 'ABC_TELEMETRY') return;
   const stage=ev.stage, start=ev.event==='PHASE_START';
   ['A','B','C','D'].forEach(k=>{const l=document.getElementById('abcLamp'+k),n=document.getElementById('abcNode'+k);if(l)l.className='abc-lamp';if(n)n.className='abc-node';});
-  if(stage && ['A','B','C','D'].includes(stage)){const l=document.getElementById('abcLamp'+stage),n=document.getElementById('abcNode'+stage);if(l)l.className='abc-lamp '+(start?'active':ev.status==='FAILED'?'bad':'ok');if(n)n.className='abc-node '+(start?'active':'ok');abcSound(stage,!start);}
+  if(stage && ['A','B','C','D'].includes(stage)){const l=document.getElementById('abcLamp'+stage),n=document.getElementById('abcNode'+stage);if(l)l.className='abc-lamp '+(start?'active':ev.status==='FAILED'?'bad':'ok');if(n)n.className='abc-node '+(start?'active':'ok');if(start)abcSound(stage,true);else if(ev.status==='FAILED')abcSound('bad',true);else if(stage==='D')abcSound(ev.audit==='VALID'?'done':'warn',true);}
   const state=document.getElementById('abc-telemetry-state'); if(state) state.textContent=start?`RUNNING · ${stage}`:`${stage} · ${ev.status||'DONE'}${ev.durationMs!=null?' · '+ev.durationMs+'ms':''}`;
   const event=document.getElementById('abc-telemetry-event'); if(event) event.textContent=`${ev.event} · ${stage||'SYS'}`;
 }
-document.getElementById('abc-sound-toggle')?.addEventListener('click',()=>{abcSoundEnabled=!abcSoundEnabled;const b=document.getElementById('abc-sound-toggle');if(b){b.textContent=abcSoundEnabled?'🔊 SOUND ON':'🔇 SOUND OFF';b.classList.toggle('text-emerald-300',abcSoundEnabled);}if(abcSoundEnabled)abcSound('A',false)});
+document.getElementById('abc-sound-toggle')?.addEventListener('click',async()=>{if(abcSoundEnabled){abcDisarmSound();return;}await abcArmSound();});
+try{
+  if(window.CGOMachineABC && typeof window.CGOMachineABC.observeTelemetry==='function'){
+    window.__BCGO_ABC_TELEMETRY_OFF__=window.CGOMachineABC.observeTelemetry(renderAbcTelemetry);
+  }
+}catch(_){}
 try{
   const abcBus=new BroadcastChannel('CGO_MACHINE_ABC_TELEMETRY');
   abcBus.onmessage=e=>renderAbcTelemetry(e.data);
