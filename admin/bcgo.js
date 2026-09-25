@@ -164,10 +164,13 @@ export function runAutonomousEngine(onCycleUpdate) {
   let latestSystemLogs = [];
   let previousTopSignature = "";
   let realtimeBusy = false;
-  let pendingTelemetry = null;
   let interruptTimerProcess = null;
   let interruptTimerReview = null;
   let interruptGeneration = 0;
+  let pendingTelemetry = null;
+  let realtimeInterruptStreak = 0;
+  const MAX_REALTIME_INTERRUPT_STREAK = 3;
+  let adminVerifyRetryTimer = null;
 
   const firestore = { connected: false, count: 0, error: null, lastServerAt: 0 };
   const state = {
@@ -573,23 +576,22 @@ export function runAutonomousEngine(onCycleUpdate) {
   function interruptForTelemetry(fileName, message, log) {
     if (stopped || !authorized) return;
     if (isNoiseTelemetry(log) || isNoiseTelemetry(message)) return;
-
     const file = normalizeFile(fileName);
     const text = String(message || "Sinyal telemetry baru diterima.").slice(0, 900);
     const at = timestamp(log?.reportedAt) || Date.now();
     const signature = `${file}|${text}|${at}`;
 
-    // Jangan membatalkan pemeriksaan yang sedang berjalan. Simpan hanya bukti
-    // telemetry terbaru; setelah interrupt selesai, bukti ini akan diproses.
-    if (signature === previousTopSignature && !pendingTelemetry) return;
-    previousTopSignature = signature;
-
+    if (signature === previousTopSignature) return;
     if (realtimeBusy) {
-      pendingTelemetry = { file, text, at, log };
+      // Jangan membatalkan PROCESS/REVIEW yang sedang berjalan. Simpan hanya
+      // impuls terbaru agar telemetry beruntun tidak membuat scheduler starvation.
+      pendingTelemetry = { file, text, at, log, signature };
       return;
     }
 
+    previousTopSignature = signature;
     realtimeBusy = true;
+    realtimeInterruptStreak += 1;
     const generation = ++interruptGeneration;
 
     clearTimeout(cycleTimer);
@@ -607,11 +609,9 @@ export function runAutonomousEngine(onCycleUpdate) {
     interruptTimerProcess = setTimeout(() => {
       interruptTimerProcess = null;
       if (stopped || !authorized || generation !== interruptGeneration) return;
-
       const organs = buildOrgans();
       const info = organs[file];
       const active = Object.entries(organs).filter(([, v]) => v.state === "ACTIVE");
-
       if (info?.state === "ACTIVE") {
         emit("REVIEW", `Bukti ${file} masih aktif. Saya mempertahankan kasus ini sebagai kandidat diagnosis berbasis telemetry dan mempertahankan bukti yang tersedia.`, file, info.message, {
           cycleMode: "INTERRUPTED",
@@ -626,26 +626,24 @@ export function runAutonomousEngine(onCycleUpdate) {
       interruptTimerReview = setTimeout(() => {
         interruptTimerReview = null;
         if (stopped || !authorized || generation !== interruptGeneration) return;
-
         const activeNow = Object.entries(buildOrgans()).filter(([, v]) => v.state === "ACTIVE");
         emit("OUT", activeNow.length
           ? `Saya selesai menilai impuls ${file}. ${activeNow.length} kasus tetap berada dalam pengawasan.`
           : `Saya selesai menilai impuls ${file}. Pemantauan normal dilanjutkan.`, activeNow[0]?.[0] || file, activeNow[0]?.[1]?.message || null, { cycleMode: "NORMAL" });
-
         realtimeBusy = false;
         phaseIndex = 3;
 
-        const pending = pendingTelemetry;
+        // Beri scheduler kesempatan kembali ke cycle normal. Bila telemetry
+        // terus berdatangan, proses maksimal beberapa impuls lalu wajib keluar
+        // ke OUT agar cycle tidak pernah mati karena starvation.
+        const queued = pendingTelemetry;
         pendingTelemetry = null;
-        if (pending) {
-          // Tandai ulang sebagai event baru agar guard duplicate tidak
-          // membuang telemetry yang memang menunggu diproses.
-          previousTopSignature = "";
-          interruptForTelemetry(pending.file, pending.text, pending.log);
-          return;
+        if (queued && realtimeInterruptStreak < MAX_REALTIME_INTERRUPT_STREAK) {
+          interruptForTelemetry(queued.file, queued.text, queued.log);
+        } else {
+          realtimeInterruptStreak = 0;
+          scheduleNext(CYCLE.OUT);
         }
-
-        scheduleNext(CYCLE.OUT);
       }, CYCLE.REVIEW);
     }, CYCLE.PROCESS);
   }
@@ -773,13 +771,15 @@ export function runAutonomousEngine(onCycleUpdate) {
   function cleanupRealtime() {
     ++interruptGeneration;
     previousTopSignature = "";
+    pendingTelemetry = null;
+    realtimeInterruptStreak = 0;
+    if (adminVerifyRetryTimer) { clearTimeout(adminVerifyRetryTimer); adminVerifyRetryTimer = null; }
     if (sourceScanController) { try { sourceScanController.abort(); } catch (_) {} sourceScanController = null; }
     clearTimeout(cycleTimer);
     clearTimeout(interruptTimerProcess);
     clearTimeout(interruptTimerReview);
     clearInterval(refreshTimer);
-    clearInterval(sourceScanTimer);
-    sourceScanTimer = null;
+    if (sourceScanTimer) { clearInterval(sourceScanTimer); sourceScanTimer = null; }
     cycleTimer = null;
     interruptTimerProcess = null;
     interruptTimerReview = null;
@@ -900,6 +900,13 @@ export function runAutonomousEngine(onCycleUpdate) {
     state.sourceScan = scan;
     publishToUI(safeClone(state));
 
+    // App root: naik dari /admin/*.html ke folder repo. Didefinisikan
+    // sebelum loop karena dipakai langsung oleh fetch source di bawah.
+    let rootUrl = new URL(".", location.href);
+    if (/\/admin\/[^/]+$/.test(location.pathname)) {
+      rootUrl = new URL("../", location.href);
+    }
+
     const contents = new Map();
     for (let i = 0; i < INTERNAL_SOURCE_SCAN.length; i++) {
       if (stopped || !authorized) { sourceScanInFlight = false; return; }
@@ -909,7 +916,8 @@ export function runAutonomousEngine(onCycleUpdate) {
       scan.fileStates[item.file] = { status: "READING", message: "Membaca source live dari origin aplikasi." };
       publishToUI(safeClone(state));
       try {
-        const response = await fetch(new URL(item.path, location.href).href, { cache: "no-store", signal: scanSignal });
+        const sourceUrl = new URL(item.file, rootUrl).href;
+        const response = await fetch(sourceUrl, { cache: "no-store", signal: scanSignal });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const text = await response.text();
         if (!text.trim()) throw new Error("SOURCE_EMPTY");
@@ -974,13 +982,6 @@ export function runAutonomousEngine(onCycleUpdate) {
 
     scan.phase = "ANALYZING";
     const relations = [];
-    // App root: naik dari /admin/*.html ke folder repo
-    let rootUrl = location.href;
-    if (/\/admin\/[^/]+$/.test(rootUrl)) {
-      rootUrl = rootUrl.replace(/\/admin\/[^/]+$/, "/");
-    } else {
-      rootUrl = rootUrl.replace(/\/[^/]+$/, "/");
-    }
     for (const item of INTERNAL_SOURCE_SCAN) {
       const text = contents.get(item.file);
       if (!text) continue;
@@ -991,7 +992,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       for (const ref of refs) {
         if (!ref || /^(https?:|data:|#|javascript:)/i.test(ref)) continue;
         let target;
-        try { target = new URL(ref, new URL(item.path, rootUrl)).pathname.replace(/^\//, ""); } catch { continue; }
+        try { target = new URL(ref, new URL(item.file, rootUrl)).pathname.replace(/^\//, ""); } catch { continue; }
         if (target.startsWith("cikur-ai/")) target = target.slice("cikur-ai/".length);
         const base = target.split("/").pop();
         const matched = INTERNAL_SOURCE_SCAN.find(x => x.path === target || x.file === target || x.file.endsWith("/" + base) || x.file === base || x.path.endsWith("/" + base));
@@ -1189,12 +1190,24 @@ export function runAutonomousEngine(onCycleUpdate) {
     if (stopped || epoch !== authEpoch || adminAuth.currentUser?.uid !== user.uid) return;
 
     if (lastError && !snap) {
-      // Sesi Auth tetap ada; sensor ditunda sampai verifikasi berhasil di cycle berikutnya.
-      emit("OUT", "Verifikasi Super Admin tertunda (koneksi). Sesi Auth tetap dijaga — coba refresh sebentar lagi.", "SYS_AUTH_CHECK_FAILED", lastError?.message, { cycleMode: "ERROR" });
+      // Jangan berhenti permanen karena transient Firestore/Auth. Jadwalkan
+      // verifikasi ulang pada epoch yang sama selama sesi masih valid.
+      emit("OUT", "Verifikasi Super Admin tertunda (koneksi). Sesi Auth tetap dijaga — saya mencoba lagi otomatis.", "SYS_AUTH_CHECK_FAILED", lastError?.message, { cycleMode: "ERROR" });
+      if (!stopped && epoch === authEpoch && adminAuth.currentUser?.uid === user.uid) {
+        clearTimeout(adminVerifyRetryTimer);
+        adminVerifyRetryTimer = setTimeout(() => {
+          adminVerifyRetryTimer = null;
+          verifyAdmin(user, epoch).catch(error => {
+            if (stopped || epoch !== authEpoch) return;
+            emit("OUT", "Verifikasi Admin otomatis gagal lagi; sesi tetap dipertahankan untuk percobaan berikutnya.", "SYS_AUTH_CHECK_FAILED", error?.message, { cycleMode: "ERROR" });
+          });
+        }, 5000);
+      }
       return;
     }
 
     const data = snap && snap.exists() ? snap.data() : null;
+    if (adminVerifyRetryTimer) { clearTimeout(adminVerifyRetryTimer); adminVerifyRetryTimer = null; }
     if (data?.active !== true || data?.role !== "super_admin") {
       authorized = false;
       authorizedUid = null;
