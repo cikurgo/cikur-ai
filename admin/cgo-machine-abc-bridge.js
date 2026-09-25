@@ -70,8 +70,8 @@
         ? { ...options }
         : {};
 
-      // Default bridge: satu siklus dan audit D dilewati hanya untuk jalur cepat.
-      const fast = opts.fast !== false && !opts.fullAudit && !opts.autoReflect;
+      // Default bridge: jalur penuh dengan audit Machine D. Fast mode hanya bila diminta eksplisit.
+      const fast = opts.fast === true && !opts.fullAudit && !opts.autoReflect;
 
       if (opts.maxCycles == null) opts.maxCycles = 1;
       if (opts.autoReflect == null) opts.autoReflect = false;
@@ -90,6 +90,7 @@
         version: E.version,
         status: result?.status ?? null,
         confidence: result?.decision?.confidence ?? null,
+        result,
         summary: result?.summary ?? null,
         findings: Array.isArray(result?.findings) ? result.findings : [],
         audit: out?.audit || lastCycle?.audit || null,

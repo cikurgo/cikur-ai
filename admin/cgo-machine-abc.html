@@ -180,9 +180,9 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   </section>
 </div>
 
-<script src="./cgo-machine-abc.js"></script>
-<script src="./cgo-machine-abc-bridge.js"></script>
-<script src="./cgo-abc-cognition.js"></script>
+<script src="cgo-machine-abc.js"></script>
+<script src="cgo-machine-abc-bridge.js"></script>
+<script src="cgo-abc-cognition.js"></script>
 <script>
 (() => {
   "use strict";
@@ -329,8 +329,11 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
         onPayload({ result: out.result, cycles: [out], stopReason: out.stopReason || null });
       } else if (out && out.result) {
         // pastikan stages & detail tetap update (observe mungkin sudah jalan)
-        // Monitor ABC tidak membutuhkan BroadcastChannel; observer engine sudah cukup.
-
+        try {
+          const ch = new BroadcastChannel('CGO_MACHINE_ABC_BUS');
+          ch.postMessage({ type: 'abc-result', status: out.result.status, source: 'monitor-demo', at: Date.now() });
+          ch.close();
+        } catch (_) {}
       }
       return out;
     } catch (e) {
@@ -416,7 +419,18 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   const st = health();
   // observer (untuk event eksternal)
   E.observe(onPayload);
-  // Sinkronisasi komponen dilakukan melalui CGOMachineABC.observe() dan event lokal.
+  // Sinkron dengan BCGO / tab lain
+  try {
+    const bus = new BroadcastChannel('CGO_MACHINE_ABC_BUS');
+    bus.onmessage = (ev) => {
+      const d = ev?.data;
+      if (!d || d.source === 'monitor-demo') return;
+      if (d.type === 'abc-result' && d.status) {
+        showNotice('Sinyal dari ' + (d.source || 'bus') + ': ' + d.status, 'ok');
+        setLive('BUS · ' + d.status, 'ok');
+      }
+    };
+  } catch (_) {}
   refresh();
   setLive("SIAP", "ok");
   if (bootBanner) {

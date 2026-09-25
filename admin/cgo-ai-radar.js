@@ -191,10 +191,7 @@ export function createRadarEngine(options = {}) {
     const radius = Math.min(R.ringsKm[R.ringsKm.length - 1], Math.max(0, Number(radiusKm) || 0));
     const wanted = Array.isArray(types) ? types.map(v => String(v).toLowerCase()) : [];
     const items = [];
-    // Gunakan snapshot terhitung saat ini agar agent yang sudah stale/offline
-    // tidak tetap lolos hanya karena presenceVerified saat ingest sebelumnya.
-    const current = getSnapshot().agents;
-    for (const item of current) {
+    for (const item of agents.values()) {
       if (!item.location || !item.presenceVerified || item.active !== true) continue;
       if (wanted.length && !wanted.includes(item.type)) continue;
       const d = distanceKm(origin, item.location);
