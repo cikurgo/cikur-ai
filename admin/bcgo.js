@@ -10,7 +10,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { adminDb, adminAuth } from "../cikur-config.js";
-import { createRadarEngine } from "./cgo-ai-radar.js";
+import { createRadarEngine } from "../cgo-ai-radar.js";
 
 /*
  * BCGO MASTER NERVE SYSTEM v4.3.0-INTERNAL-SOURCE-SCAN
@@ -50,10 +50,10 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "admin/data-cgo.html", path: "data-cgo.html", role: "Data Console" },
   { file: "cikur-config.js", path: "../cikur-config.js", role: "Auth / Config" },
   { file: "bcgo-engine.js", path: "../bcgo-engine.js", role: "Shared Engine" },
-  { file: "cgo-machine-abc.js", path: "./cgo-machine-abc.js", role: "Mesin ABC Core" },
-  { file: "cgo-machine-abc-bridge.js", path: "./cgo-machine-abc-bridge.js", role: "Mesin ABC Bridge" },
+  { file: "cgo-machine-abc.js", path: "../cgo-machine-abc.js", role: "Mesin ABC Core" },
+  { file: "cgo-machine-abc-bridge.js", path: "../cgo-machine-abc-bridge.js", role: "Mesin ABC Bridge" },
   { file: "admin/cgo-machine-abc.html", path: "cgo-machine-abc.html", role: "Mesin ABC Monitor" },
-  { file: "cgo-ai-radar.js", path: "./cgo-ai-radar.js", role: "Radar Engine" },
+  { file: "cgo-ai-radar.js", path: "../cgo-ai-radar.js", role: "Radar Engine" },
   { file: "cgo-app-bootstrap.js", path: "../cgo-app-bootstrap.js", role: "Customer Bootstrap" },
   { file: "index.html", path: "../index.html", role: "Customer Home" },
   { file: "customer/food.html", path: "../customer/food.html", role: "Customer Food" },

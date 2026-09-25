@@ -303,8 +303,8 @@ body{font-family:'Inter',sans-serif}
 </section>
 </div>
 
-<script src="./cgo-machine-abc.js"></script>
-<script src="./cgo-machine-abc-bridge.js"></script>
+<script src="../cgo-machine-abc.js"></script>
+<script src="../cgo-machine-abc-bridge.js"></script>
 <script type="module">
 import { runAutonomousEngine } from './bcgo.js?v=4.3.0-INTERNAL-SOURCE-SCAN-20260917';
 
@@ -346,6 +346,17 @@ const pulse = $('pulse-dot');
 const cycleNumber = $('cycle-number');
 const eventState = $('event-state');
 const cycleMode = $('cycle-mode');
+
+// Sinkronisasi evidence BCGO -> MESIN ABC. Tidak membuat temuan baru; hanya meneruskan
+// snapshot BCGO yang benar-benar sedang hidup ke kontrak evidence netral ABC.
+let abcSyncTimer = null;
+function syncBCGOEvidenceToABC(state) {
+    if (!window.CGOMachineABCBridge || typeof window.CGOMachineABCBridge.ingestBCGOState !== 'function') return;
+    clearTimeout(abcSyncTimer);
+    abcSyncTimer = setTimeout(() => {
+        try { window.CGOMachineABCBridge.ingestBCGOState(state); } catch (e) { console.warn('[BCGO] ABC evidence sync:', e); }
+    }, 120);
+}
 
 const bagans = {
     IN: $('bagan-in'),
@@ -779,7 +790,7 @@ async function sendQuestion(question) {
         if (window.CGOMachineABCBridge && /analisis|struktur|audit|verifikasi|bukti|mesin abc|pipeline|self-?test/i.test(text)) {
             try {
                 setChatLiveStatus('Mesin ABC memproses A→B→C→D…', 'working');
-                const abc = window.CGOMachineABCBridge.analyze(text, { maxCycles: 1 });
+                const abc = window.CGOMachineABCBridge.analyze(text, { maxCycles: 1, bcgoState: authoritativeBCGOState() });
                 if (abc.ok) {
                     const conf = abc.confidence != null ? Math.round(Number(abc.confidence) * 100) + '%' : '–';
                     const nFind = (abc.findings || []).length;
@@ -1039,6 +1050,7 @@ setTimeout(() => {
 try {
 runAutonomousEngine(state => {
     liveState = state;
+    syncBCGOEvidenceToABC(state);
     window.BCGO_STATE = state;
     try {
       if (internalBrain && typeof internalBrain.ingestBCGOState === 'function') {

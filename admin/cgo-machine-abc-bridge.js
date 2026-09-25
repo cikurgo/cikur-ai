@@ -56,6 +56,39 @@
    * Payload diteruskan ke E.process() tanpa fetch/XHR/WebSocket,
    * tanpa BroadcastChannel dan tanpa localStorage.
    */
+  function fingerprintEvidence(packet) {
+    try {
+      const text = JSON.stringify(packet, Object.keys(packet || {}).sort());
+      let h = 2166136261;
+      for (let i=0;i<text.length;i++){ h^=text.charCodeAt(i); h=Math.imul(h,16777619); }
+      return (h>>>0).toString(16).padStart(8,"0");
+    } catch (_) { return null; }
+  }
+
+  // Adapter BCGO -> kontrak evidence netral. ABC tidak mengetahui domain BCGO.
+  function buildBCGOEvidence(state) {
+    if (!state || typeof state !== "object") return null;
+    const claims=[];
+    const organs=state.systemOrgans && typeof state.systemOrgans==="object" ? state.systemOrgans : {};
+    for (const [target,info] of Object.entries(organs)) {
+      const status=String(info?.status||info?.state||"UNKNOWN").toUpperCase();
+      if (["ANOMALY","ERROR","DEGRADED","REVIEW","RECOVERED","UNREADABLE","UNKNOWN","STALE"].includes(status)) {
+        claims.push({source:"BCGO.systemOrgans",target,status,severity:info?.severity||((status==="ANOMALY"||status==="ERROR")?"HIGH":"MEDIUM"),message:info?.message||null,evidence:{reportedAt:info?.reportedAt??null,line:info?.line??null,column:info?.column??null}});
+      }
+    }
+    for (const c of (Array.isArray(state.activeCases)?state.activeCases:[])) {
+      claims.push({source:"BCGO.activeCases",target:c?.target||null,status:String(c?.status||"UNKNOWN").toUpperCase(),severity:c?.severity||"MEDIUM",message:c?.evidence?.message||null,evidence:c?.evidence||null});
+    }
+    const scan=state.sourceScan&&typeof state.sourceScan==="object"?state.sourceScan:null;
+    if(scan){
+      if(String(scan.status||"").toUpperCase()!=="CLEAN") claims.push({source:"BCGO.sourceScan",target:"sourceScan",status:String(scan.status||"UNKNOWN").toUpperCase(),severity:"HIGH",message:scan.message||null,evidence:{filesReadable:scan.filesReadable??null,totalFiles:scan.totalFiles??null,filesFailed:scan.filesFailed??null,relationSummary:scan.relationSummary||null}});
+      for(const x of (Array.isArray(scan.crossFileFindings)?scan.crossFileFindings:[])) claims.push({source:"BCGO.sourceScan.crossFileFindings",target:x?.sourceFile||x?.targetFile||null,status:String(x?.status||"MISMATCH").toUpperCase(),severity:"HIGH",message:x?.key||null,evidence:x});
+    }
+    const nerves=state.fileNerves&&typeof state.fileNerves==="object"?state.fileNerves:{};
+    for(const [target,n] of Object.entries(nerves)){const st=String(n?.health?.overall||"UNKNOWN").toUpperCase();if(st!=="HEALTHY")claims.push({source:"BCGO.fileNerves",target,status:st,severity:st==="ANOMALY"?"HIGH":"MEDIUM",message:n?.source?.message||null,evidence:{health:n?.health||null,evidenceSummary:n?.evidenceSummary||null,changed:!!n?.changed,contentHash:n?.contentHash||null}});}
+    return {schema:"CGO_EXTERNAL_EVIDENCE_V1",source:"BCGO",capturedAt:Date.now(),claims,fingerprint:fingerprintEvidence({claims})};
+  }
+
   function analyze(input, options = {}) {
     if (typeof E.process !== "function") {
       return { ok: false, error: "CGOMachineABC.process tidak tersedia." };
@@ -77,6 +110,10 @@
       if (opts.fast == null) opts.fast = false;
       if (opts.skipAudit == null) opts.skipAudit = false;
 
+      if (opts.bcgoState) {
+        opts.externalEvidence = buildBCGOEvidence(opts.bcgoState);
+        delete opts.bcgoState;
+      }
       const out = E.process(input, opts);
       const result = out?.result || out?.finalResult || null;
       const lastCycle = Array.isArray(out?.cycles) && out.cycles.length
@@ -92,6 +129,7 @@
         summary: result?.summary ?? null,
         findings: Array.isArray(result?.findings) ? result.findings : [],
         audit: out?.audit || lastCycle?.audit || null,
+        externalEvidence: opts.externalEvidence || null,
         packet: out
       };
     } catch (err) {
@@ -100,6 +138,19 @@
         error: String(err?.message || err),
         name: err?.name || "Error"
       };
+    }
+  }
+
+  function ingestBCGOState(state) {
+    const evidence = buildBCGOEvidence(state);
+    if (!evidence) return {ok:false,error:"BCGO_STATE_REQUIRED"};
+    try {
+      const packet = E.process({type:"external-evidence-snapshot",source:"BCGO",capturedAt:Date.now()}, {source:"BCGO_STATE_SYNC",externalEvidence:evidence});
+      lastPacket = packet;
+      emit("cgo:machine-abc-bcgo-sync", {result:packet.result||null,audit:packet.audit||null,evidence});
+      return {ok:true,status:packet.result?.status||null,audit:packet.audit?.status||null,packet};
+    } catch(err) {
+      return {ok:false,error:String(err?.message||err)};
     }
   }
 
@@ -160,6 +211,8 @@
     engineVersion: E.version,
     engine: E,
     analyze,
+    buildBCGOEvidence,
+    ingestBCGOState,
     healthSnapshot,
     process: (input, opt) => E.process(input, opt || {}),
     observe: (fn) => {
