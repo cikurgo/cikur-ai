@@ -1,157 +1,242 @@
-/*
- * CGO Semantic Bridge — LOCAL / ZERO DEPENDENCY
+/**
+ * CGO Semantic Bridge — embedding gratis di browser (Transformers.js)
+ * Membantu MESIN ABC + Knowledge matching berdasarkan MAKNA, bukan hanya keyword.
  *
- * Purpose:
- * - membantu matching berdasarkan token, prefix, dan character n-gram;
- * - tidak mengunduh model;
- * - tidak memakai API, CDN, fetch, storage, atau library pihak ketiga;
- * - gagal/hasil rendah tetap aman: caller dapat fallback ke keyword biasa.
+ * - Zero API key / zero berlangganan
+ * - Model diunduh sekali, lalu cache browser
+ * - Gagal load → fallback diam ke keyword (otak tetap jalan)
  *
  * API: window.CGOSemantic
  */
 (function (global) {
   "use strict";
 
-  const VERSION = "1.1.0-local-semantic";
-  const DEFAULT_TOP_K = 5;
-  const DEFAULT_MIN_SCORE = 0.18;
-  const docCache = Object.create(null);
+  const VERSION = "1.0.0-semantic-bridge";
+  /** Model kecil, cocok browser. Bisa diganti model multilingual bila perlu. */
+  const DEFAULT_MODEL = "Xenova/all-MiniLM-L6-v2";
+  const CACHE_KEY = "CGO_SEMANTIC_DOC_V1";
+
+  let extractor = null;
+  let loadPromise = null;
+  let status = "idle"; // idle | loading | ready | error
   let lastError = null;
-  let status = "ready";
+  const docCache = Object.create(null); // id → Float32Array / number[]
 
-  function normalize(text) {
-    return String(text == null ? "" : text)
-      .toLowerCase()
-      .normalize("NFKC")
-      .replace(/[^\p{L}\p{N}_]+/gu, " ")
-      .trim();
-  }
-
-  function tokens(text) {
-    const s = normalize(text);
-    return s ? s.split(/\s+/).filter(Boolean) : [];
-  }
-
-  function grams(text, n = 3) {
-    const s = ` ${normalize(text)} `;
-    const out = new Set();
-    if (!s.trim()) return out;
-    if (s.length <= n) { out.add(s); return out; }
-    for (let i = 0; i <= s.length - n; i++) out.add(s.slice(i, i + n));
-    return out;
-  }
-
-  function vector(text) {
-    const ts = tokens(text);
-    const tf = Object.create(null);
-    for (const t of ts) tf[t] = (tf[t] || 0) + 1;
-    const g = grams(text);
-    return { tokens: tf, grams: g, size: ts.length };
-  }
-
-  function jaccard(a, b) {
-    if (!a.size && !b.size) return 1;
-    if (!a.size || !b.size) return 0;
-    let common = 0;
-    for (const x of a) if (b.has(x)) common++;
-    return common / (a.size + b.size - common);
-  }
-
-  function tokenScore(a, b) {
-    const ak = Object.keys(a.tokens);
-    const bk = Object.keys(b.tokens);
-    if (!ak.length || !bk.length) return 0;
-    const aset = new Set(ak);
-    const bset = new Set(bk);
-    let common = 0;
-    let weighted = 0;
-    for (const k of aset) {
-      if (!bset.has(k)) continue;
-      common++;
-      weighted += Math.min(a.tokens[k], b.tokens[k]);
+  function cosine(a, b) {
+    if (!a || !b || a.length !== b.length) return 0;
+    let dot = 0;
+    let na = 0;
+    let nb = 0;
+    for (let i = 0; i < a.length; i++) {
+      const x = a[i];
+      const y = b[i];
+      dot += x * y;
+      na += x * x;
+      nb += y * y;
     }
-    const denom = Math.max(1, Math.max(a.size, b.size));
-    return Math.min(1, (common / Math.max(ak.length, bk.length)) * 0.65 + (weighted / denom) * 0.35);
+    if (na <= 0 || nb <= 0) return 0;
+    return dot / (Math.sqrt(na) * Math.sqrt(nb));
   }
 
-  function prefixScore(a, b) {
-    const x = normalize(a), y = normalize(b);
-    if (!x || !y) return 0;
-    if (x === y) return 1;
-    if (x.startsWith(y) || y.startsWith(x)) return 0.35;
-    return 0;
+  function toArray(tensorOrArr) {
+    if (!tensorOrArr) return null;
+    if (Array.isArray(tensorOrArr)) return tensorOrArr;
+    if (tensorOrArr.data) {
+      return Array.from(tensorOrArr.data);
+    }
+    if (typeof tensorOrArr === "object" && typeof tensorOrArr.length === "number") {
+      return Array.from(tensorOrArr);
+    }
+    return null;
   }
 
-  function similarity(aText, bText) {
-    const a = vector(aText), b = vector(bText);
-    const token = tokenScore(a, b);
-    const gram = jaccard(a.grams, b.grams);
-    const prefix = prefixScore(aText, bText);
-    return Math.max(0, Math.min(1, token * 0.55 + gram * 0.35 + prefix * 0.10));
-  }
+  /**
+   * Lazy-load Transformers.js + model. Aman dipanggil berkali-kali.
+   */
+  async function ensureReady(options) {
+    options = options || {};
+    if (status === "ready" && extractor) return true;
+    if (status === "error" && !options.retry) return false;
+    if (loadPromise) return loadPromise;
 
-  function ensureReady() { return Promise.resolve(true); }
+    status = "loading";
+    loadPromise = (async function () {
+      try {
+        // Dynamic import CDN — tidak perlu build step
+        const mod = await import(
+          "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1"
+        );
+        const pipeline = mod.pipeline || (mod.default && mod.default.pipeline);
+        if (typeof pipeline !== "function") {
+          throw new Error("pipeline() tidak tersedia di Transformers.js");
+        }
+
+        // env: cache di browser
+        try {
+          if (mod.env) {
+            mod.env.allowLocalModels = false;
+            mod.env.useBrowserCache = true;
+          }
+        } catch (_) {}
+
+        const modelId = options.model || DEFAULT_MODEL;
+        extractor = await pipeline("feature-extraction", modelId, {
+          // quantized default di banyak build
+          progress_callback: options.onProgress || null
+        });
+
+        status = "ready";
+        lastError = null;
+        try {
+          console.log(
+            "[CGO-SEMANTIC] Siap ·",
+            VERSION,
+            "· model",
+            modelId
+          );
+        } catch (_) {}
+        return true;
+      } catch (err) {
+        status = "error";
+        lastError = String(err && err.message ? err.message : err);
+        extractor = null;
+        loadPromise = null;
+        try {
+          console.warn("[CGO-SEMANTIC] Gagal load (fallback keyword):", lastError);
+        } catch (_) {}
+        return false;
+      }
+    })();
+
+    return loadPromise;
+  }
 
   async function embed(text) {
-    const s = normalize(text);
-    if (!s) return null;
-    // Deterministic local feature representation, bukan embedding model eksternal.
-    return vector(s);
+    const t = String(text || "").trim();
+    if (!t) return null;
+    const ok = await ensureReady();
+    if (!ok || !extractor) return null;
+    try {
+      const out = await extractor(t, {
+        pooling: "mean",
+        normalize: true
+      });
+      return toArray(out);
+    } catch (err) {
+      lastError = String(err && err.message ? err.message : err);
+      return null;
+    }
   }
 
+  /**
+   * Index dokumen knowledge: [{ id, text }]
+   * Disimpan di memori (dan opsional localStorage ringkas).
+   */
   async function indexDocuments(docs, options) {
     options = options || {};
-    if (!Array.isArray(docs) || !docs.length) return { ok: false, indexed: 0 };
+    if (!Array.isArray(docs) || !docs.length) {
+      return { ok: false, indexed: 0 };
+    }
+    const ok = await ensureReady(options);
+    if (!ok) return { ok: false, indexed: 0, error: lastError };
+
     let n = 0;
-    for (const d of docs) {
-      if (!d || d.id == null) continue;
-      const id = String(d.id);
+    for (let i = 0; i < docs.length; i++) {
+      const d = docs[i];
+      if (!d || !d.id) continue;
       const text = String(d.text || "").trim();
       if (!text) continue;
-      if (docCache[id] && !options.force) { n++; continue; }
-      docCache[id] = { id, text, vector: vector(text) };
-      n++;
+      if (docCache[d.id] && !options.force) {
+        n++;
+        continue;
+      }
+      const vec = await embed(text);
+      if (vec) {
+        docCache[d.id] = vec;
+        n++;
+      }
     }
     return { ok: true, indexed: n, total: docs.length };
   }
 
+  /**
+   * Cari dokumen paling mirip secara semantik.
+   * @returns [{ id, score, text? }]
+   */
   async function match(query, options) {
     options = options || {};
+    const topK = options.topK || 5;
+    const minScore = options.minScore != null ? options.minScore : 0.28;
     const q = String(query || "").trim();
     if (!q) return [];
-    const docs = Array.isArray(options.documents) ? options.documents : Object.values(docCache);
-    if (options.documents) await indexDocuments(options.documents, { force: false });
-    const topK = Math.max(1, Math.min(50, Number(options.topK) || DEFAULT_TOP_K));
-    const minScore = options.minScore != null ? Number(options.minScore) : DEFAULT_MIN_SCORE;
-    const scored = [];
-    for (const d of docs) {
-      if (!d || d.id == null) continue;
-      const text = String(d.text || "");
-      if (!text) continue;
-      const score = similarity(q, text);
-      if (score >= minScore) scored.push({ id: String(d.id), score: Number(score.toFixed(6)) });
+
+    const qVec = await embed(q);
+    if (!qVec) return [];
+
+    // Docs dari cache atau dari options.documents
+    const ids = options.documents
+      ? options.documents.map(function (d) {
+          return d.id;
+        })
+      : Object.keys(docCache);
+
+    if (options.documents && options.documents.length) {
+      await indexDocuments(options.documents, { force: false });
     }
-    scored.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+
+    const scored = [];
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      const v = docCache[id];
+      if (!v) continue;
+      const score = cosine(qVec, v);
+      if (score >= minScore) {
+        scored.push({ id: id, score: score });
+      }
+    }
+    scored.sort(function (a, b) {
+      return b.score - a.score;
+    });
     return scored.slice(0, topK);
   }
 
-  function isReady() { return status === "ready"; }
-  function getStatus() {
-    return { version: VERSION, status, ready: isReady(), error: lastError, model: null, cachedDocs: Object.keys(docCache).length, mode: "LOCAL_TOKEN_NGRAM" };
+  function isReady() {
+    return status === "ready" && !!extractor;
   }
-  function clearCache() { for (const k of Object.keys(docCache)) delete docCache[k]; }
+
+  function getStatus() {
+    return {
+      version: VERSION,
+      status: status,
+      ready: isReady(),
+      error: lastError,
+      model: DEFAULT_MODEL,
+      cachedDocs: Object.keys(docCache).length
+    };
+  }
+
+  function clearCache() {
+    Object.keys(docCache).forEach(function (k) {
+      delete docCache[k];
+    });
+  }
 
   const API = Object.freeze({
     version: VERSION,
-    ensureReady,
-    embed,
-    indexDocuments,
-    match,
-    similarity,
-    isReady,
-    getStatus,
-    clearCache
+    ensureReady: ensureReady,
+    embed: embed,
+    indexDocuments: indexDocuments,
+    match: match,
+    isReady: isReady,
+    getStatus: getStatus,
+    clearCache: clearCache,
+    cosine: cosine
   });
 
   global.CGOSemantic = API;
+  if (!global.CGO_SEMANTIC) global.CGO_SEMANTIC = API;
+
+  try {
+    console.log("[CGO-SEMANTIC] Modul terpasang ·", VERSION, "· panggil ensureReady() saat perlu");
+  } catch (_) {}
 })(typeof globalThis !== "undefined" ? globalThis : window);

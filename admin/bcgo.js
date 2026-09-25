@@ -10,7 +10,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { adminDb, adminAuth } from "../cikur-config.js";
-import { createRadarEngine } from "../cgo-ai-radar.js";
+import { createRadarEngine } from "./cgo-ai-radar.js";
 
 /*
  * BCGO MASTER NERVE SYSTEM v4.3.0-INTERNAL-SOURCE-SCAN
@@ -50,10 +50,24 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "admin/data-cgo.html", path: "data-cgo.html", role: "Data Console" },
   { file: "cikur-config.js", path: "../cikur-config.js", role: "Auth / Config" },
   { file: "bcgo-engine.js", path: "../bcgo-engine.js", role: "Shared Engine" },
-  { file: "cgo-machine-abc.js", path: "../cgo-machine-abc.js", role: "Mesin ABC Core" },
-  { file: "cgo-machine-abc-bridge.js", path: "../cgo-machine-abc-bridge.js", role: "Mesin ABC Bridge" },
+  { file: "cgo-machine-abc.js", path: "cgo-machine-abc.js", role: "Mesin ABC Core" },
+  { file: "cgo-machine-abc-bridge.js", path: "cgo-machine-abc-bridge.js", role: "Mesin ABC Bridge" },
   { file: "admin/cgo-machine-abc.html", path: "cgo-machine-abc.html", role: "Mesin ABC Monitor" },
-  { file: "cgo-ai-radar.js", path: "../cgo-ai-radar.js", role: "Radar Engine" },
+  { file: "admin/cgo-machine-abc.js", path: "cgo-machine-abc.js", role: "Mesin ABC Core" },
+  { file: "admin/cgo-machine-abc-bridge.js", path: "cgo-machine-abc-bridge.js", role: "Mesin ABC Bridge" },
+  { file: "admin/cgo-abc-cognition.js", path: "cgo-abc-cognition.js", role: "ABC Cognition" },
+  { file: "admin/cgo-ai-browser-adapter.js", path: "cgo-ai-browser-adapter.js", role: "CGO Browser Adapter" },
+  { file: "admin/cgo-ai-core.js", path: "cgo-ai-core.js", role: "CGO Core" },
+  { file: "admin/cgo-ai-cognition.js", path: "cgo-ai-cognition.js", role: "CGO Cognition" },
+  { file: "admin/cgo-ai-guardian.js", path: "cgo-ai-guardian.js", role: "CGO Guardian" },
+  { file: "admin/cgo-ai-investigation-engine.js", path: "cgo-ai-investigation-engine.js", role: "CGO Investigation" },
+  { file: "admin/cgo-ai-investigator.js", path: "cgo-ai-investigator.js", role: "CGO Investigator" },
+  { file: "admin/cgo-ai-knowledge.js", path: "cgo-ai-knowledge.js", role: "CGO Knowledge" },
+  { file: "admin/cgo-ai-logic.js", path: "cgo-ai-logic.js", role: "CGO Logic" },
+  { file: "admin/cgo-ai-memory.js", path: "cgo-ai-memory.js", role: "CGO Memory" },
+  { file: "admin/cgo-ai-runtime-adapter.js", path: "cgo-ai-runtime-adapter.js", role: "CGO Runtime" },
+  { file: "admin/cgo-ai-sovereignty.js", path: "cgo-ai-sovereignty.js", role: "CGO Sovereignty" },
+  { file: "cgo-ai-radar.js", path: "cgo-ai-radar.js", role: "Radar Engine" },
   { file: "cgo-app-bootstrap.js", path: "../cgo-app-bootstrap.js", role: "Customer Bootstrap" },
   { file: "index.html", path: "../index.html", role: "Customer Home" },
   { file: "customer/food.html", path: "../customer/food.html", role: "Customer Food" },
@@ -164,13 +178,12 @@ export function runAutonomousEngine(onCycleUpdate) {
   let latestSystemLogs = [];
   let previousTopSignature = "";
   let realtimeBusy = false;
+  let pendingTelemetry = null;
+  let interruptStreak = 0;
+  const MAX_CONSECUTIVE_INTERRUPTS = 3;
   let interruptTimerProcess = null;
   let interruptTimerReview = null;
   let interruptGeneration = 0;
-  let pendingTelemetry = null;
-  let realtimeInterruptStreak = 0;
-  const MAX_REALTIME_INTERRUPT_STREAK = 3;
-  let adminVerifyRetryTimer = null;
 
   const firestore = { connected: false, count: 0, error: null, lastServerAt: 0 };
   const state = {
@@ -576,22 +589,24 @@ export function runAutonomousEngine(onCycleUpdate) {
   function interruptForTelemetry(fileName, message, log) {
     if (stopped || !authorized) return;
     if (isNoiseTelemetry(log) || isNoiseTelemetry(message)) return;
+
     const file = normalizeFile(fileName);
     const text = String(message || "Sinyal telemetry baru diterima.").slice(0, 900);
     const at = timestamp(log?.reportedAt) || Date.now();
     const signature = `${file}|${text}|${at}`;
 
-    if (signature === previousTopSignature) return;
+    // Jangan membatalkan pemeriksaan yang sedang berjalan. Simpan hanya bukti
+    // telemetry terbaru; setelah interrupt selesai, bukti ini akan diproses.
+    if (signature === previousTopSignature && !pendingTelemetry) return;
+    previousTopSignature = signature;
+
     if (realtimeBusy) {
-      // Jangan membatalkan PROCESS/REVIEW yang sedang berjalan. Simpan hanya
-      // impuls terbaru agar telemetry beruntun tidak membuat scheduler starvation.
-      pendingTelemetry = { file, text, at, log, signature };
+      pendingTelemetry = { file, text, at, log };
       return;
     }
 
-    previousTopSignature = signature;
     realtimeBusy = true;
-    realtimeInterruptStreak += 1;
+    interruptStreak++;
     const generation = ++interruptGeneration;
 
     clearTimeout(cycleTimer);
@@ -609,9 +624,11 @@ export function runAutonomousEngine(onCycleUpdate) {
     interruptTimerProcess = setTimeout(() => {
       interruptTimerProcess = null;
       if (stopped || !authorized || generation !== interruptGeneration) return;
+
       const organs = buildOrgans();
       const info = organs[file];
       const active = Object.entries(organs).filter(([, v]) => v.state === "ACTIVE");
+
       if (info?.state === "ACTIVE") {
         emit("REVIEW", `Bukti ${file} masih aktif. Saya mempertahankan kasus ini sebagai kandidat diagnosis berbasis telemetry dan mempertahankan bukti yang tersedia.`, file, info.message, {
           cycleMode: "INTERRUPTED",
@@ -626,24 +643,30 @@ export function runAutonomousEngine(onCycleUpdate) {
       interruptTimerReview = setTimeout(() => {
         interruptTimerReview = null;
         if (stopped || !authorized || generation !== interruptGeneration) return;
+
         const activeNow = Object.entries(buildOrgans()).filter(([, v]) => v.state === "ACTIVE");
         emit("OUT", activeNow.length
           ? `Saya selesai menilai impuls ${file}. ${activeNow.length} kasus tetap berada dalam pengawasan.`
           : `Saya selesai menilai impuls ${file}. Pemantauan normal dilanjutkan.`, activeNow[0]?.[0] || file, activeNow[0]?.[1]?.message || null, { cycleMode: "NORMAL" });
-        realtimeBusy = false;
+
         phaseIndex = 3;
 
-        // Beri scheduler kesempatan kembali ke cycle normal. Bila telemetry
-        // terus berdatangan, proses maksimal beberapa impuls lalu wajib keluar
-        // ke OUT agar cycle tidak pernah mati karena starvation.
-        const queued = pendingTelemetry;
+        const pending = pendingTelemetry;
         pendingTelemetry = null;
-        if (queued && realtimeInterruptStreak < MAX_REALTIME_INTERRUPT_STREAK) {
-          interruptForTelemetry(queued.file, queued.text, queued.log);
-        } else {
-          realtimeInterruptStreak = 0;
-          scheduleNext(CYCLE.OUT);
+        if (pending && interruptStreak < MAX_CONSECUTIVE_INTERRUPTS) {
+          // Coalesce telemetry terbaru, tetapi beri batas agar telemetry tidak
+          // dapat menguasai scheduler selamanya.
+          realtimeBusy = false;
+          interruptForTelemetry(pending.file, pending.text, pending.log);
+          return;
         }
+
+        // Fairness boundary: setelah N interrupt beruntun, wajib kembali ke
+        // OUT/cycle normal. Bukti terbaru tidak hilang dari state telemetry;
+        // ia akan menjadi kandidat interrupt berikutnya setelah scheduler normal.
+        realtimeBusy = false;
+        interruptStreak = 0;
+        scheduleNext(CYCLE.OUT);
       }, CYCLE.REVIEW);
     }, CYCLE.PROCESS);
   }
@@ -772,14 +795,14 @@ export function runAutonomousEngine(onCycleUpdate) {
     ++interruptGeneration;
     previousTopSignature = "";
     pendingTelemetry = null;
-    realtimeInterruptStreak = 0;
-    if (adminVerifyRetryTimer) { clearTimeout(adminVerifyRetryTimer); adminVerifyRetryTimer = null; }
+    interruptStreak = 0;
     if (sourceScanController) { try { sourceScanController.abort(); } catch (_) {} sourceScanController = null; }
     clearTimeout(cycleTimer);
     clearTimeout(interruptTimerProcess);
     clearTimeout(interruptTimerReview);
     clearInterval(refreshTimer);
-    if (sourceScanTimer) { clearInterval(sourceScanTimer); sourceScanTimer = null; }
+    clearInterval(sourceScanTimer);
+    sourceScanTimer = null;
     cycleTimer = null;
     interruptTimerProcess = null;
     interruptTimerReview = null;
@@ -900,13 +923,6 @@ export function runAutonomousEngine(onCycleUpdate) {
     state.sourceScan = scan;
     publishToUI(safeClone(state));
 
-    // App root: naik dari /admin/*.html ke folder repo. Didefinisikan
-    // sebelum loop karena dipakai langsung oleh fetch source di bawah.
-    let rootUrl = new URL(".", location.href);
-    if (/\/admin\/[^/]+$/.test(location.pathname)) {
-      rootUrl = new URL("../", location.href);
-    }
-
     const contents = new Map();
     for (let i = 0; i < INTERNAL_SOURCE_SCAN.length; i++) {
       if (stopped || !authorized) { sourceScanInFlight = false; return; }
@@ -916,8 +932,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       scan.fileStates[item.file] = { status: "READING", message: "Membaca source live dari origin aplikasi." };
       publishToUI(safeClone(state));
       try {
-        const sourceUrl = new URL(item.file, rootUrl).href;
-        const response = await fetch(sourceUrl, { cache: "no-store", signal: scanSignal });
+        const response = await fetch(new URL(item.path, location.href).href, { cache: "no-store", signal: scanSignal });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const text = await response.text();
         if (!text.trim()) throw new Error("SOURCE_EMPTY");
@@ -982,6 +997,10 @@ export function runAutonomousEngine(onCycleUpdate) {
 
     scan.phase = "ANALYZING";
     const relations = [];
+    // Semua source internal pada registry dibaca relatif terhadap halaman
+    // BCGO yang hidup di /admin/. Dengan begitu `cgo-*.js` tetap /admin/*,
+    // sedangkan referensi `../cikur-config.js` tetap naik ke root.
+    const rootUrl = new URL("./", location.href).href;
     for (const item of INTERNAL_SOURCE_SCAN) {
       const text = contents.get(item.file);
       if (!text) continue;
@@ -992,7 +1011,7 @@ export function runAutonomousEngine(onCycleUpdate) {
       for (const ref of refs) {
         if (!ref || /^(https?:|data:|#|javascript:)/i.test(ref)) continue;
         let target;
-        try { target = new URL(ref, new URL(item.file, rootUrl)).pathname.replace(/^\//, ""); } catch { continue; }
+        try { target = new URL(ref, new URL(item.path, rootUrl)).pathname.replace(/^\//, ""); } catch { continue; }
         if (target.startsWith("cikur-ai/")) target = target.slice("cikur-ai/".length);
         const base = target.split("/").pop();
         const matched = INTERNAL_SOURCE_SCAN.find(x => x.path === target || x.file === target || x.file.endsWith("/" + base) || x.file === base || x.path.endsWith("/" + base));
@@ -1190,24 +1209,12 @@ export function runAutonomousEngine(onCycleUpdate) {
     if (stopped || epoch !== authEpoch || adminAuth.currentUser?.uid !== user.uid) return;
 
     if (lastError && !snap) {
-      // Jangan berhenti permanen karena transient Firestore/Auth. Jadwalkan
-      // verifikasi ulang pada epoch yang sama selama sesi masih valid.
-      emit("OUT", "Verifikasi Super Admin tertunda (koneksi). Sesi Auth tetap dijaga — saya mencoba lagi otomatis.", "SYS_AUTH_CHECK_FAILED", lastError?.message, { cycleMode: "ERROR" });
-      if (!stopped && epoch === authEpoch && adminAuth.currentUser?.uid === user.uid) {
-        clearTimeout(adminVerifyRetryTimer);
-        adminVerifyRetryTimer = setTimeout(() => {
-          adminVerifyRetryTimer = null;
-          verifyAdmin(user, epoch).catch(error => {
-            if (stopped || epoch !== authEpoch) return;
-            emit("OUT", "Verifikasi Admin otomatis gagal lagi; sesi tetap dipertahankan untuk percobaan berikutnya.", "SYS_AUTH_CHECK_FAILED", error?.message, { cycleMode: "ERROR" });
-          });
-        }, 5000);
-      }
+      // Sesi Auth tetap ada; sensor ditunda sampai verifikasi berhasil di cycle berikutnya.
+      emit("OUT", "Verifikasi Super Admin tertunda (koneksi). Sesi Auth tetap dijaga — coba refresh sebentar lagi.", "SYS_AUTH_CHECK_FAILED", lastError?.message, { cycleMode: "ERROR" });
       return;
     }
 
     const data = snap && snap.exists() ? snap.data() : null;
-    if (adminVerifyRetryTimer) { clearTimeout(adminVerifyRetryTimer); adminVerifyRetryTimer = null; }
     if (data?.active !== true || data?.role !== "super_admin") {
       authorized = false;
       authorizedUid = null;
