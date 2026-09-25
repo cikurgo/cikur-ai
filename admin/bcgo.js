@@ -164,6 +164,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   let latestSystemLogs = [];
   let previousTopSignature = "";
   let realtimeBusy = false;
+  let pendingTelemetry = null;
   let interruptTimerProcess = null;
   let interruptTimerReview = null;
   let interruptGeneration = 0;
@@ -572,13 +573,22 @@ export function runAutonomousEngine(onCycleUpdate) {
   function interruptForTelemetry(fileName, message, log) {
     if (stopped || !authorized) return;
     if (isNoiseTelemetry(log) || isNoiseTelemetry(message)) return;
+
     const file = normalizeFile(fileName);
     const text = String(message || "Sinyal telemetry baru diterima.").slice(0, 900);
     const at = timestamp(log?.reportedAt) || Date.now();
     const signature = `${file}|${text}|${at}`;
 
-    if (signature === previousTopSignature) return;
+    // Jangan membatalkan pemeriksaan yang sedang berjalan. Simpan hanya bukti
+    // telemetry terbaru; setelah interrupt selesai, bukti ini akan diproses.
+    if (signature === previousTopSignature && !pendingTelemetry) return;
     previousTopSignature = signature;
+
+    if (realtimeBusy) {
+      pendingTelemetry = { file, text, at, log };
+      return;
+    }
+
     realtimeBusy = true;
     const generation = ++interruptGeneration;
 
@@ -597,9 +607,11 @@ export function runAutonomousEngine(onCycleUpdate) {
     interruptTimerProcess = setTimeout(() => {
       interruptTimerProcess = null;
       if (stopped || !authorized || generation !== interruptGeneration) return;
+
       const organs = buildOrgans();
       const info = organs[file];
       const active = Object.entries(organs).filter(([, v]) => v.state === "ACTIVE");
+
       if (info?.state === "ACTIVE") {
         emit("REVIEW", `Bukti ${file} masih aktif. Saya mempertahankan kasus ini sebagai kandidat diagnosis berbasis telemetry dan mempertahankan bukti yang tersedia.`, file, info.message, {
           cycleMode: "INTERRUPTED",
@@ -614,12 +626,25 @@ export function runAutonomousEngine(onCycleUpdate) {
       interruptTimerReview = setTimeout(() => {
         interruptTimerReview = null;
         if (stopped || !authorized || generation !== interruptGeneration) return;
+
         const activeNow = Object.entries(buildOrgans()).filter(([, v]) => v.state === "ACTIVE");
         emit("OUT", activeNow.length
           ? `Saya selesai menilai impuls ${file}. ${activeNow.length} kasus tetap berada dalam pengawasan.`
           : `Saya selesai menilai impuls ${file}. Pemantauan normal dilanjutkan.`, activeNow[0]?.[0] || file, activeNow[0]?.[1]?.message || null, { cycleMode: "NORMAL" });
+
         realtimeBusy = false;
         phaseIndex = 3;
+
+        const pending = pendingTelemetry;
+        pendingTelemetry = null;
+        if (pending) {
+          // Tandai ulang sebagai event baru agar guard duplicate tidak
+          // membuang telemetry yang memang menunggu diproses.
+          previousTopSignature = "";
+          interruptForTelemetry(pending.file, pending.text, pending.log);
+          return;
+        }
+
         scheduleNext(CYCLE.OUT);
       }, CYCLE.REVIEW);
     }, CYCLE.PROCESS);
@@ -753,6 +778,8 @@ export function runAutonomousEngine(onCycleUpdate) {
     clearTimeout(interruptTimerProcess);
     clearTimeout(interruptTimerReview);
     clearInterval(refreshTimer);
+    clearInterval(sourceScanTimer);
+    sourceScanTimer = null;
     cycleTimer = null;
     interruptTimerProcess = null;
     interruptTimerReview = null;
