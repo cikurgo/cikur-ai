@@ -332,22 +332,92 @@
     let sound = false;
     let haptic = true;
     let audio = null;
-    let gain = null;
-    let lastTone = 0;
-    const node = stage => hud.querySelector(`[data-stage="${stage}"]`);
-    const setStage = (stage, state) => { const n=node(stage); if(n) n.dataset.state=state; };
-    const tone = (stage, final=false) => {
-      if(!sound || Date.now()-lastTone<55) return;
-      lastTone=Date.now();
-      try{
-        const AC=window.AudioContext||window.webkitAudioContext; if(!AC)return;
-        if(!audio){audio=new AC();gain=audio.createGain();gain.gain.value=.035;gain.connect(audio.destination)}
-        if(audio.state==='suspended')audio.resume();
-        const f={A:330,B:440,C:554,D:659}[stage]||240;
-        const o=audio.createOscillator(),g=audio.createGain();o.type=final?'sine':'triangle';o.frequency.value=f;
-        g.gain.setValueAtTime(.0001,audio.currentTime);g.gain.exponentialRampToValueAtTime(1,audio.currentTime+.008);g.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+(final?.13:.065));
-        o.connect(g);g.connect(gain);o.start();o.stop(audio.currentTime+(final?.15:.08));
-      }catch(_){ }
+    let master = null;
+    let audioReady = false;
+    let soundQueueUntil = 0;
+    let lastSoundKind = "";
+    const AUDIO_GAIN = 0.16;
+    const ensureAudio = async () => {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) throw new Error("Web Audio API tidak tersedia di browser ini");
+      if (!audio) {
+        audio = new AC({ latencyHint: "interactive" });
+        master = audio.createGain();
+        master.gain.value = AUDIO_GAIN;
+        master.connect(audio.destination);
+      }
+      if (audio.state !== "running") await audio.resume();
+      if (audio.state !== "running") throw new Error("AudioContext belum running");
+      audioReady = true;
+      return audio;
+    };
+    const scheduleVoice = (ctx, when, freq, duration, type="sine", level=0.22, glide=null) => {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, when);
+      if (glide) osc.frequency.exponentialRampToValueAtTime(glide, when + duration * .72);
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(Math.max(900, freq * 4), when);
+      g.gain.setValueAtTime(.0001, when);
+      g.gain.exponentialRampToValueAtTime(level, when + .012);
+      g.gain.exponentialRampToValueAtTime(Math.max(.0001, level * .35), when + duration * .62);
+      g.gain.exponentialRampToValueAtTime(.0001, when + duration);
+      osc.connect(filter); filter.connect(g); g.connect(master);
+      osc.start(when); osc.stop(when + duration + .025);
+    };
+    const playNeuralSound = (kind="tick", force=false) => {
+      if (!sound || !audioReady || !audio || !master || audio.state !== "running") return false;
+      try {
+        const now = audio.currentTime + .006;
+        const start = Math.max(now, soundQueueUntil);
+        const profiles = {
+          start: { f: 128, d: .14, t: "sine", l: .30, g: 196 },
+          A: { f: 180, d: .12, t: "sine", l: .28, g: 260 },
+          B: { f: 260, d: .13, t: "triangle", l: .26, g: 360 },
+          C: { f: 370, d: .13, t: "triangle", l: .25, g: 520 },
+          D: { f: 520, d: .15, t: "sine", l: .26, g: 720 },
+          done: { f: 660, d: .20, t: "sine", l: .30, g: 990 },
+          ok: { f: 440, d: .24, t: "sine", l: .25, g: 880 },
+          warn: { f: 150, d: .24, t: "sawtooth", l: .22, g: 105 },
+          bad: { f: 95, d: .34, t: "square", l: .28, g: 62 },
+          tick: { f: 220, d: .08, t: "sine", l: .18, g: 280 }
+        };
+        const q = profiles[kind] || profiles.tick;
+        const gap = kind === "bad" || kind === "done" ? .08 : .045;
+        if (!force && lastSoundKind === kind && start < soundQueueUntil + .02) return true;
+        scheduleVoice(audio, start, q.f, q.d, q.t, q.l, q.g);
+        // A quiet harmonic gives the pulse a richer, less synthetic "instrument-panel" character.
+        if (kind !== "bad") scheduleVoice(audio, start, q.f * 2, q.d * .72, "sine", q.l * .20, q.g * 1.8);
+        soundQueueUntil = start + q.d + gap;
+        lastSoundKind = kind;
+        return true;
+      } catch (_) { return false; }
+    };
+    const armSound = async () => {
+      try {
+        await ensureAudio();
+        sound = true;
+        lastSoundKind = "";
+        soundQueueUntil = 0;
+        playNeuralSound("start", true);
+        const b = hud.querySelector("#cgoAbcHudSound");
+        if (b) { b.dataset.on = "1"; b.textContent = "🔊 SOUND READY"; }
+        return true;
+      } catch (e) {
+        sound = false;
+        const b = hud.querySelector("#cgoAbcHudSound");
+        if (b) { b.dataset.on = "0"; b.textContent = "🔇 SOUND UNAVAILABLE"; }
+        console.warn("[CGO ABC AUDIO]", e);
+        return false;
+      }
+    };
+    const disarmSound = () => {
+      sound = false; audioReady = false; lastSoundKind = ""; soundQueueUntil = 0;
+      try { audio?.suspend?.(); } catch (_) {}
+      const b = hud.querySelector("#cgoAbcHudSound");
+      if (b) { b.dataset.on = "0"; b.textContent = "🔇 SOUND OFF"; }
     };
     const buzz = kind => { if(!haptic || typeof navigator.vibrate!=="function")return; try{navigator.vibrate(kind==='done'?[10,18,10]:kind==='bad'?[28,16,35]:9)}catch(_){ } };
     const render = ev => {
@@ -363,7 +433,9 @@
       if(stage && node(stage)){
         ["A","B","C","D"].forEach(k=>{if(k!==stage && ev.event==="PHASE_START")setStage(k,"done")});
         setStage(stage,ev.event==="PHASE_START"?"active":ev.status==="FAILED"?"bad":"done");
-        tone(stage,stage==="D"&&ev.event!=="PHASE_START");
+        if(ev.event==="PHASE_START") playNeuralSound(stage||"tick");
+        else if(ev.event==="PHASE_END" && ev.status==="FAILED") playNeuralSound("bad", true);
+        else if(stage==="D" && ev.event==="PHASE_END") playNeuralSound(ev.audit==="VALID"?"done":"warn", true);
         buzz(ev.status==="FAILED"?"bad":stage==="D"?"done":"tick");
       }
       try{window.dispatchEvent(new CustomEvent("cgo:abc-neural-telemetry",{detail:ev}))}catch(_){ }
@@ -371,7 +443,7 @@
     const off=engine.observeTelemetry(render);
     window.addEventListener("beforeunload",()=>{try{off()}catch(_){ }try{audio?.close?.()}catch(_){ }} ,{once:true});
     hud.querySelector("#cgoAbcHudHead").addEventListener("click",()=>{hud.dataset.state=hud.dataset.state==="hidden"?"visible":"hidden"});
-    hud.querySelector("#cgoAbcHudSound").addEventListener("click",()=>{sound=!sound;const b=hud.querySelector("#cgoAbcHudSound");b.dataset.on=sound?"1":"0";b.textContent=sound?"🔊 SOUND ON":"🔇 SOUND OFF";if(sound)tone("A",false)});
+    hud.querySelector("#cgoAbcHudSound").addEventListener("click",async()=>{if(sound){disarmSound();return;}await armSound();});
     hud.querySelector("#cgoAbcHudHaptic").addEventListener("click",()=>{haptic=!haptic;const b=hud.querySelector("#cgoAbcHudHaptic");b.dataset.on=haptic?"1":"0";b.textContent=haptic?"📳 HAPTIC AUTO":"📴 HAPTIC OFF"});
 
     try{
