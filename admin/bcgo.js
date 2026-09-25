@@ -50,8 +50,6 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "admin/data-cgo.html", path: "data-cgo.html", role: "Data Console" },
   { file: "cikur-config.js", path: "../cikur-config.js", role: "Auth / Config" },
   { file: "bcgo-engine.js", path: "../bcgo-engine.js", role: "Shared Engine" },
-  { file: "cgo-machine-abc.js", path: "cgo-machine-abc.js", role: "Mesin ABC Core" },
-  { file: "cgo-machine-abc-bridge.js", path: "cgo-machine-abc-bridge.js", role: "Mesin ABC Bridge" },
   { file: "admin/cgo-machine-abc.html", path: "cgo-machine-abc.html", role: "Mesin ABC Monitor" },
   { file: "admin/cgo-machine-abc.js", path: "cgo-machine-abc.js", role: "Mesin ABC Core" },
   { file: "admin/cgo-machine-abc-bridge.js", path: "cgo-machine-abc-bridge.js", role: "Mesin ABC Bridge" },
@@ -67,7 +65,9 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "admin/cgo-ai-memory.js", path: "cgo-ai-memory.js", role: "CGO Memory" },
   { file: "admin/cgo-ai-runtime-adapter.js", path: "cgo-ai-runtime-adapter.js", role: "CGO Runtime" },
   { file: "admin/cgo-ai-sovereignty.js", path: "cgo-ai-sovereignty.js", role: "CGO Sovereignty" },
-  { file: "cgo-ai-radar.js", path: "cgo-ai-radar.js", role: "Radar Engine" },
+  { file: "admin/cgo-ai-radar.js", path: "cgo-ai-radar.js", role: "Radar Engine" },
+  { file: "admin/cgo-ai-radar-visual.js", path: "cgo-ai-radar-visual.js", role: "Radar Visual" },
+  { file: "admin/cgo-instruction.js", path: "cgo-instruction.js", role: "CGO Constitution" },
   { file: "cgo-app-bootstrap.js", path: "../cgo-app-bootstrap.js", role: "Customer Bootstrap" },
   { file: "index.html", path: "../index.html", role: "Customer Home" },
   { file: "customer/food.html", path: "../customer/food.html", role: "Customer Food" },
@@ -90,6 +90,14 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "mitra/driver.html", path: "../mitra/driver.html", role: "Mitra Driver" }
 ];
 
+const CORE_SOURCE_FILES = new Set([
+  "admin/bcgo.html","admin/bcgo.js","admin/cgo-machine-abc.html","admin/cgo-machine-abc.js",
+  "admin/cgo-machine-abc-bridge.js","admin/cgo-abc-cognition.js","admin/cgo-ai-browser-adapter.js",
+  "admin/cgo-ai-core.js","admin/cgo-ai-cognition.js","admin/cgo-ai-guardian.js","admin/cgo-ai-investigation-engine.js",
+  "admin/cgo-ai-investigator.js","admin/cgo-ai-knowledge.js","admin/cgo-ai-logic.js","admin/cgo-ai-memory.js",
+  "admin/cgo-ai-runtime-adapter.js","admin/cgo-ai-sovereignty.js","admin/cgo-ai-radar.js","admin/cgo-ai-radar-visual.js","admin/cgo-instruction.js"
+]);
+
 function makeInitialSourceScan() {
   const fileStates = {};
   for (const item of INTERNAL_SOURCE_SCAN) fileStates[item.file] = { status: "QUEUED", message: "Menunggu pembacaan source." };
@@ -97,6 +105,7 @@ function makeInitialSourceScan() {
     status: "WAITING", phase: "BOOT", totalFiles: INTERNAL_SOURCE_SCAN.length, filesScanned: 0,
     filesReadable: 0, filesFailed: 0, currentFile: null, findings: [], crossFileFindings: [],
     relations: [], relationSummary: { synchronized: 0, mismatch: 0, variant: 0, unknown: 0, linked: 0 },
+    coreSummary: { total: CORE_SOURCE_FILES.size, readable: 0, failed: 0, mismatches: 0, status: "WAITING" },
     fileStates, nerveSummary: { healthy: 0, standby: 0, observed: 0, review: 0, anomaly: 0, unresolved: 0 },
     message: "Scanner source internal belum dimulai."
   };
@@ -1068,6 +1077,11 @@ export function runAutonomousEngine(onCycleUpdate) {
       return related.some(r => r.status === "LINKED");
     }).length;
     scan.crossFileFindings = relations.filter(r=>r.status === "MISMATCH");
+    const coreItems = INTERNAL_SOURCE_SCAN.filter(item => CORE_SOURCE_FILES.has(item.file));
+    const coreReadable = coreItems.filter(item => scan.fileStates[item.file]?.status && scan.fileStates[item.file].status !== "FAILED").length;
+    const coreFailed = coreItems.filter(item => scan.fileStates[item.file]?.status === "FAILED").length;
+    const coreMismatch = relations.filter(r => (CORE_SOURCE_FILES.has(r.sourceFile) || CORE_SOURCE_FILES.has(r.targetFile)) && r.status === "MISMATCH").length;
+    scan.coreSummary = { total: coreItems.length, readable: coreReadable, failed: coreFailed, mismatches: coreMismatch, status: coreFailed || coreMismatch ? "ATTENTION" : (coreReadable === coreItems.length ? "HEALTHY" : "PARTIAL") };
     const allFetchFailed = scan.filesReadable === 0 && scan.filesFailed === scan.totalFiles;
     scan.status = allFetchFailed ? "SCANNER_UNAVAILABLE" : (scan.filesFailed || scan.relationSummary.mismatch ? "DEGRADED" : "CLEAN");
     scan.phase = "COMPLETE";

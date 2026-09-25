@@ -85,6 +85,28 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
 .stage{padding:4px 10px;border-radius:999px;border:1px solid var(--line);font-size:11px;font-weight:700;color:var(--muted)}
 .stage.on{color:var(--ok-text);border-color:#176a50;background:#062a1c}
 .stage.run{color:var(--warn-text);border-color:#765f1b;background:#2a2308;animation:pulse 1s infinite}
+
+.activity-panel{margin-top:12px;border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(180deg,#061426,#031120);padding:12px 14px}
+.activity-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.activity-title{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#9fd7ff}
+.activity-state{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted)}
+.lamps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.lamp{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:8px;background:#020a14;min-width:0}
+.lamp-dot{width:10px;height:10px;border-radius:50%;background:#334155;flex:none;box-shadow:none}
+.lamp.active .lamp-dot{background:var(--warn);box-shadow:0 0 10px #ffd34d;animation:lampPulse .55s ease-in-out infinite alternate}
+.lamp.done .lamp-dot{background:var(--ok);box-shadow:0 0 8px #16d98b}
+.lamp.bad .lamp-dot{background:var(--bad);box-shadow:0 0 10px #ff667d}
+.lamp-name{font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lamp-time{margin-left:auto;font:10px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint)}
+@keyframes lampPulse{from{transform:scale(.75);opacity:.55}to{transform:scale(1.25);opacity:1}}
+.route-line{margin-top:10px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;font:10px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint)}
+.route-node{border:1px solid var(--line);border-radius:999px;padding:3px 7px}.route-node.live{color:var(--warn-text);border-color:#765f1b;background:#2a2308}.route-node.ok{color:var(--ok-text);border-color:#176a50;background:#062a1c}.route-arrow{color:#41627d}
+.activity-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.activity-actions button{border:1px solid var(--line);background:#0a2038;border-radius:9px;padding:6px 10px;font-size:11px;font-weight:700}
+.activity-actions button.active{border-color:#176a50;background:#062a1c;color:var(--ok-text)}
+.telemetry-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}
+.telemetry-mini{border:1px solid var(--line-soft);border-radius:9px;padding:7px;background:#020a14}.telemetry-mini .k{font-size:9px;color:var(--faint);text-transform:uppercase}.telemetry-mini .v{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:#d8edff;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:560px){.lamps{grid-template-columns:repeat(2,1fr)}.telemetry-grid{grid-template-columns:1fr 1fr}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -119,6 +141,29 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     <button type="button" id="pause">Jeda</button>
     <button type="button" id="reset">Reset log</button>
   </div>
+
+  <section class="activity-panel" aria-label="Aktivitas mesin real-time">
+    <div class="activity-head">
+      <div><div class="activity-title">NEURAL ACTIVITY · LIVE TELEMETRY</div><div class="activity-state" id="activityState">SIAP · menunggu input</div></div>
+      <div class="activity-state" id="telemetryClock">–</div>
+    </div>
+    <div class="lamps" id="phaseLamps">
+      <div class="lamp" id="lampA"><span class="lamp-dot"></span><span class="lamp-name">A · REPRESENTASI</span><span class="lamp-time" id="lampATime">–</span></div>
+      <div class="lamp" id="lampB"><span class="lamp-dot"></span><span class="lamp-name">B · PROSES</span><span class="lamp-time" id="lampBTime">–</span></div>
+      <div class="lamp" id="lampC"><span class="lamp-dot"></span><span class="lamp-name">C · HASIL</span><span class="lamp-time" id="lampCTime">–</span></div>
+      <div class="lamp" id="lampD"><span class="lamp-dot"></span><span class="lamp-name">D · AUDIT</span><span class="lamp-time" id="lampDTime">–</span></div>
+    </div>
+    <div class="route-line" id="routeLine"><span class="route-node" id="routeA">A</span><span class="route-arrow">›</span><span class="route-node" id="routeB">B</span><span class="route-arrow">›</span><span class="route-node" id="routeC">C</span><span class="route-arrow">›</span><span class="route-node" id="routeD">D</span><span class="route-arrow">·</span><span id="routeStatus">ROUTE IDLE</span></div>
+    <div class="telemetry-grid">
+      <div class="telemetry-mini"><div class="k">Route fingerprint</div><div class="v" id="routeFingerprint">–</div></div>
+      <div class="telemetry-mini"><div class="k">Cycle duration</div><div class="v" id="routeDuration">–</div></div>
+      <div class="telemetry-mini"><div class="k">Last event</div><div class="v" id="lastTelemetryEvent">–</div></div>
+    </div>
+    <div class="activity-actions">
+      <button type="button" id="soundToggle">🔇 Suara sistem: OFF</button>
+      <button type="button" id="hapticToggle">📳 Haptic: AUTO</button>
+    </div>
+  </section>
 
   <div class="pipeline" id="pipelineBar" aria-label="Pipeline">
     <span class="stage" id="stA">A Representasi</span>
@@ -194,7 +239,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   if (!E) {
     const f = $("#fatal");
     f.hidden = false;
-    f.textContent = "Engine belum termuat. Pastikan file cgo-machine-abc.js ada di ROOT repo (sejajar index.html). Path script halaman ini: cgo-machine-abc.js — case-sensitive di GitHub Pages.";
+    f.textContent = "Engine belum termuat. Pastikan file cgo-machine-abc.js ada di folder admin/ dan halaman ini juga berada di admin/. Path script halaman ini: cgo-machine-abc.js — case-sensitive di GitHub Pages.";
     if (bootBanner) bootBanner.hidden = true;
     return;
   }
@@ -206,6 +251,11 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   const WARN = new Set(["PARTIAL", "DEGRADED"]);
 
   let total = 0, cycleCount = 0, confSum = 0, rejected = 0, pulseTimer = null;
+  let soundEnabled = false, hapticEnabled = true, audioCtx = null, masterGain = null, lastSoundAt = 0, telemetryBus = null;
+  try { telemetryBus = new BroadcastChannel("CGO_MACHINE_ABC_TELEMETRY"); } catch (_) { telemetryBus = null; }
+  const phaseLampIds = {A:"lampA",B:"lampB",C:"lampC",D:"lampD"};
+  const phaseTimeIds = {A:"lampATime",B:"lampBTime",C:"lampCTime",D:"lampDTime"};
+  const phaseNames = {A:"REPRESENTASI",B:"PROSES",C:"HASIL",D:"AUDIT"};
 
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
   const chip = (node, text, tone) => { if (!node) return; node.textContent = text; node.className = "chip " + (tone || ""); };
@@ -228,6 +278,58 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     n.hidden = false;
   }
   function clearNotice() { $("#notice").hidden = true; }
+
+  function ensureAudio(){
+    if(!soundEnabled) return null;
+    try{
+      const AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC) return null;
+      if(!audioCtx){audioCtx=new AC();masterGain=audioCtx.createGain();masterGain.gain.value=.055;masterGain.connect(audioCtx.destination);}
+      if(audioCtx.state==='suspended') audioCtx.resume();
+      return audioCtx;
+    }catch(_){return null}
+  }
+  function systemSound(kind='tick'){
+    const now=Date.now(); if(now-lastSoundAt<45) return; lastSoundAt=now;
+    const ctx=ensureAudio(); if(!ctx||!masterGain) return;
+    const map={start:[220,.045,'sine'],A:[310,.055,'sine'],B:[420,.055,'triangle'],C:[520,.06,'sine'],D:[660,.07,'triangle'],ok:[780,.10,'sine'],warn:[180,.10,'sawtooth'],bad:[120,.16,'square'],done:[880,.12,'sine']};
+    const [freq,dur,type]=map[kind]||map.tick||[300,.04,'sine'];
+    const o=ctx.createOscillator(),g=ctx.createGain(),f=ctx.createBiquadFilter(); o.type=type; o.frequency.value=freq; f.type='lowpass'; f.frequency.value=2400;
+    g.gain.setValueAtTime(.0001,ctx.currentTime);g.gain.exponentialRampToValueAtTime(1,ctx.currentTime+.008);g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+dur);
+    o.connect(f);f.connect(g);g.connect(masterGain);o.start();o.stop(ctx.currentTime+dur+.02);
+  }
+  function haptic(kind='tick'){
+    if(!hapticEnabled||typeof navigator.vibrate!=='function') return;
+    try{navigator.vibrate(kind==='bad'?[30,20,40]:kind==='done'?[12,18,12]:10)}catch(_){}
+  }
+  function markLamp(stage,status,duration){
+    const id=phaseLampIds[stage]; if(!id)return; const n=$('#'+id); if(!n)return; n.className='lamp '+(status==='START'?'active':status==='COMPLETED'?'done':status==='FAILED'?'bad':'');
+    const t=$('#'+phaseTimeIds[stage]); if(t&&duration!=null)t.textContent=duration+'ms';
+  }
+  function markRoute(stage,status){
+    ['A','B','C','D'].forEach(k=>{const n=$('#route'+k);if(n)n.className='route-node'});
+    const order=['A','B','C','D'], idx=order.indexOf(stage); if(idx>=0){for(let i=0;i<idx;i++){const n=$('#route'+order[i]);if(n)n.className='route-node ok'}const cur=$('#route'+stage);if(cur)cur.className='route-node '+(status==='FAILED'?'bad':'live')}}
+  function renderTelemetry(ev){
+    if(!ev||ev.type!=='ABC_TELEMETRY')return;
+    try{telemetryBus?.postMessage(ev)}catch(_){}
+    try{window.dispatchEvent(new CustomEvent('cgo:abc-telemetry',{detail:ev}))}catch(_){}
+    const stage=ev.stage;
+    if(stage&&phaseLampIds[stage]){markLamp(stage,ev.event==='PHASE_START'?'START':ev.status||'COMPLETED',ev.durationMs);markRoute(stage,ev.event==='PHASE_START'?'START':ev.status||'COMPLETED');}
+    const state=$('#activityState'); if(state)state.textContent=ev.event==='PHASE_START'?`⚡ ${stage} · ${phaseNames[stage]||stage} sedang bekerja`:`${stage} · ${phaseNames[stage]||stage} selesai · ${ev.durationMs??0}ms`;
+    const clock=$('#telemetryClock'); if(clock)clock.textContent=new Date(ev.at||Date.now()).toLocaleTimeString();
+    const last=$('#lastTelemetryEvent'); if(last)last.textContent=`${ev.event} · ${stage||'SYS'}`;
+    if(ev.event==='PHASE_START'){systemSound(stage||'start');haptic('tick')}
+    else if(ev.event==='PHASE_END'&&ev.status==='FAILED'){systemSound('bad');haptic('bad')}
+    else if(ev.stage==='D'&&ev.event==='PHASE_END'){systemSound(ev.audit==='VALID'?'done':'warn');haptic(ev.audit==='VALID'?'done':'tick')}
+  }
+  function renderFinalTelemetry(out){
+    const t=out?.telemetry; if(!t)return;
+    const fp=$('#routeFingerprint');if(fp)fp.textContent=String(t.fingerprint||'–').slice(0,28);
+    const dur=$('#routeDuration');if(dur)dur.textContent=(t.durationMs??0)+'ms';
+    const rs=$('#routeStatus');if(rs)rs.textContent=t.routeStatus==='COMPLETE'?'ROUTE A>B>C>D · VERIFIED':'ROUTE ATTENTION';
+    ['A','B','C','D'].forEach(k=>{const n=$('#route'+k);if(n)n.className='route-node ok';});
+    if(soundEnabled)systemSound(t.routeStatus==='COMPLETE'?'ok':'warn');
+  }
 
   function health() {
     const st = E.selfTest();
@@ -319,9 +421,11 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     try {
       setLive("MEMPROSES…", "warn");
       setStages("A");
-      // Proses engine bersifat sinkron: jangan menjadwalkan B setelah process(),
-      // karena callback tertunda dapat menimpa status C/D yang sudah selesai.
-      setStages("B");
+      ['A','B','C','D'].forEach(k=>{const n=$('#'+phaseLampIds[k]);if(n)n.className='lamp'});
+      $('#activityState').textContent='⚡ INPUT DITERIMA · memulai jalur A→B→C→D';
+      systemSound('start');
+      haptic('tick');
+      setTimeout(() => setStages("B"), 40);
       const out = E.process(input, options || {});
       if (out && out.skipped) showNotice("Mesin sedang dijeda — input diabaikan. Tekan Lanjutkan.", "error");
       else clearNotice();
@@ -393,6 +497,8 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     setLive(st.verified ? "SELF-TEST OK" : "SELF-TEST FAIL", st.verified ? "ok" : "bad");
   };
   $("#btnPulse").onclick = () => { refresh(); showNotice("Metrics di-refresh · totalProcessed=" + (E.getMetrics().totalProcessed || 0), "ok"); };
+  $("#soundToggle").onclick = () => { soundEnabled=!soundEnabled; const b=$("#soundToggle"); b.textContent=soundEnabled?"🔊 Suara sistem: ON":"🔇 Suara sistem: OFF"; b.classList.toggle("active",soundEnabled); if(soundEnabled){systemSound('start');showNotice('Sound engine lokal aktif · feedback A→B→C→D siap.', 'ok');} };
+  $("#hapticToggle").onclick = () => { hapticEnabled=!hapticEnabled; const b=$("#hapticToggle"); b.textContent=hapticEnabled?"📳 Haptic: AUTO":"📴 Haptic: OFF"; b.classList.toggle("active",hapticEnabled); };
   $("#devRun").onclick = () => {
     const raw = $("#devInput").value;
     let input = raw;
@@ -419,6 +525,8 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
 
   chip($("#ver"), "Engine " + E.version, "ok");
   const st = health();
+  // observer telemetry nyata: lampu/suara mengikuti event A→B→C→D dari engine, bukan animasi palsu.
+  if (typeof E.observeTelemetry === "function") E.observeTelemetry(renderTelemetry);
   // observer (untuk event eksternal)
   E.observe(onPayload);
   // Sinkron dengan BCGO / tab lain

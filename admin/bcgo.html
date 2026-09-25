@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO Universal Neural Monitor · <a href="cgo-machine-abc.html" style="color:#7dd3fc;font-size:12px;font-weight:600;">Mesin ABC ↗</a> v4.0.0 — Clean System Monitor</title>
+<title>BCGO Universal Neural Monitor · Mesin ABC ↗ v4.0.0 — Clean System Monitor</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -37,6 +37,8 @@ body{font-family:'Inter',sans-serif}
 .scan-lamp.orange{background:#f59e0b;box-shadow:0 0 8px #f59e0b;animation:breathe 1.2s ease-in-out infinite}
 .scan-lamp.red{background:#ef4444;box-shadow:0 0 10px #ef4444}
 .scan-lamp.gray{background:#475569}
+
+.abc-telemetry-bar{border:1px solid #123b63;background:#031120;border-radius:12px;padding:10px 12px}.abc-route{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.abc-lamp{width:9px;height:9px;border-radius:50%;background:#334155;display:inline-block;box-shadow:none}.abc-lamp.active{background:#ffd34d;box-shadow:0 0 10px #ffd34d;animation:breathe .55s ease-in-out infinite}.abc-lamp.ok{background:#16d98b;box-shadow:0 0 8px #16d98b}.abc-lamp.bad{background:#ff667d;box-shadow:0 0 10px #ff667d}.abc-node{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;color:#9bb8d0;border:1px solid #173e5e;border-radius:999px;padding:3px 7px}.abc-node.active{color:#ffe07b;border-color:#765f1b;background:#2a2308}.abc-node.ok{color:#7cf0c0;border-color:#176a50;background:#062a1c}
 </style>
 </head>
 
@@ -93,6 +95,20 @@ body{font-family:'Inter',sans-serif}
         <div>Integrity: <span id="state-integrity" class="text-emerald-400">SYNC</span></div>
             </div>
 </div>
+
+<section class="abc-telemetry-bar" aria-label="Mesin ABC telemetry live">
+  <div class="flex justify-between items-center gap-2 text-[10px]">
+    <span class="text-cyan-300 font-semibold uppercase tracking-wider">MESIN ABC · jalur nyata A→B→C→D</span>
+    <span id="abc-telemetry-state" class="code-font text-slate-400">STANDBY</span>
+  </div>
+  <div class="abc-route mt-2">
+    <span id="abcLampA" class="abc-lamp"></span><span id="abcNodeA" class="abc-node">A</span><span class="text-slate-700">›</span>
+    <span id="abcLampB" class="abc-lamp"></span><span id="abcNodeB" class="abc-node">B</span><span class="text-slate-700">›</span>
+    <span id="abcLampC" class="abc-lamp"></span><span id="abcNodeC" class="abc-node">C</span><span class="text-slate-700">›</span>
+    <span id="abcLampD" class="abc-lamp"></span><span id="abcNodeD" class="abc-node">D</span>
+    <span id="abc-telemetry-event" class="ml-auto code-font text-slate-500">—</span><button id="abc-sound-toggle" type="button" class="ml-2 text-[9px] px-2 py-1 rounded-md border border-slate-700 text-slate-400">🔇 SOUND OFF</button>
+  </div>
+</section>
 
 <section class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-2xl space-y-3">
     <div class="flex justify-between items-center gap-3">
@@ -217,6 +233,13 @@ body{font-family:'Inter',sans-serif}
         <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">GAGAL <span id="source-scan-failed" class="font-bold text-rose-400">0</span></div>
         <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">TEMUAN <span id="source-scan-findings" class="font-bold text-amber-400">0</span></div>
         <div class="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">RELASI <span id="source-scan-relations" class="font-bold text-cyan-400">0</span></div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-[9px] mt-2">
+        <div class="rounded-lg border border-cyan-900/70 bg-cyan-950/10 px-3 py-2">CORE ROUTE <span id="source-core-status" class="font-bold text-cyan-300">WAITING</span></div>
+        <div class="rounded-lg border border-cyan-900/70 bg-cyan-950/10 px-3 py-2">CORE TERBACA <span id="source-core-readable" class="font-bold text-cyan-300">0/0</span></div>
+        <div class="rounded-lg border border-rose-900/70 bg-rose-950/10 px-3 py-2">CORE GAGAL <span id="source-core-failed" class="font-bold text-rose-300">0</span></div>
+        <div class="rounded-lg border border-rose-900/70 bg-rose-950/10 px-3 py-2">CORE MISMATCH <span id="source-core-mismatch" class="font-bold text-rose-300">0</span></div>
+        <div class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2">REPO DEPENDENCY <span id="source-repo-status" class="font-bold text-slate-300">WAITING</span></div>
     </div>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-[9px]">
         <div class="rounded-lg border border-emerald-900/70 bg-emerald-950/10 px-3 py-2">SYNCHRONIZED <span id="source-scan-sync" class="font-bold text-emerald-300">0</span></div>
@@ -392,6 +415,11 @@ const sourceScanMismatchEl = $('source-scan-mismatch');
 const sourceScanVariantEl = $('source-scan-variant');
 const sourceScanUnknownEl = $('source-scan-unknown');
 const sourceScanLinkedEl = $('source-scan-linked');
+const sourceCoreStatusEl = $('source-core-status');
+const sourceCoreReadableEl = $('source-core-readable');
+const sourceCoreFailedEl = $('source-core-failed');
+const sourceCoreMismatchEl = $('source-core-mismatch');
+const sourceRepoStatusEl = $('source-repo-status');
 const sourceScanMessageEl = $('source-scan-message');
 const sourceScanCurrentEl = $('source-scan-current');
 const sourceScanProgressLabelEl = $('source-scan-progress-label');
@@ -508,6 +536,12 @@ function renderSourceScan(scan) {
     if (sourceScanVariantEl) sourceScanVariantEl.textContent = Number(summary.variant || 0);
     if (sourceScanUnknownEl) sourceScanUnknownEl.textContent = Number(summary.unknown || 0);
     if (sourceScanLinkedEl) sourceScanLinkedEl.textContent = Number(summary.linked || 0);
+    const core = scan.coreSummary || {};
+    if (sourceCoreStatusEl) { sourceCoreStatusEl.textContent = core.status || 'WAITING'; sourceCoreStatusEl.className = `font-bold ${core.status === 'HEALTHY' ? 'text-emerald-300' : core.status === 'ATTENTION' ? 'text-rose-300' : 'text-cyan-300'}`; }
+    if (sourceCoreReadableEl) sourceCoreReadableEl.textContent = `${Number(core.readable||0)}/${Number(core.total||0)}`;
+    if (sourceCoreFailedEl) sourceCoreFailedEl.textContent = Number(core.failed||0);
+    if (sourceCoreMismatchEl) sourceCoreMismatchEl.textContent = Number(core.mismatches||0);
+    if (sourceRepoStatusEl) sourceRepoStatusEl.textContent = scan.status || 'WAITING';
     if (sourceScanMessageEl) sourceScanMessageEl.textContent = scan.message || 'Belum ada hasil scanner.';
     if (nerveSummaryEl) {
         const n = scan.nerveSummary || {};
@@ -1024,6 +1058,24 @@ function renderConnection(state) {
     const aiCycle = Number(window.BCGOBrain?.getBCGOState?.()?.cycle);
     stateIntegrityEl.textContent = Number.isFinite(aiCycle) && aiCycle === Number(state.cycle) ? 'SYNC' : 'UPDATING';
 }
+
+let abcSoundEnabled=false,abcAudioCtx=null,abcMaster=null,abcLastSound=0;
+function abcEnsureAudio(){try{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return null;if(!abcAudioCtx){abcAudioCtx=new AC();abcMaster=abcAudioCtx.createGain();abcMaster.gain.value=.04;abcMaster.connect(abcAudioCtx.destination);}if(abcAudioCtx.state==='suspended')abcAudioCtx.resume();return abcAudioCtx}catch(_){return null}}
+function abcSound(stage,end){if(!abcSoundEnabled)return;const now=Date.now();if(now-abcLastSound<50)return;abcLastSound=now;const ctx=abcEnsureAudio();if(!ctx||!abcMaster)return;const freq={A:300,B:420,C:540,D:680}[stage]||240;const o=ctx.createOscillator(),g=ctx.createGain();o.type=end?'sine':'triangle';o.frequency.value=freq;g.gain.setValueAtTime(.0001,ctx.currentTime);g.gain.exponentialRampToValueAtTime(1,ctx.currentTime+.008);g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+.07);o.connect(g);g.connect(abcMaster);o.start();o.stop(ctx.currentTime+.09)}
+function renderAbcTelemetry(ev){
+  if(!ev || ev.type !== 'ABC_TELEMETRY') return;
+  const stage=ev.stage, start=ev.event==='PHASE_START';
+  ['A','B','C','D'].forEach(k=>{const l=document.getElementById('abcLamp'+k),n=document.getElementById('abcNode'+k);if(l)l.className='abc-lamp';if(n)n.className='abc-node';});
+  if(stage && ['A','B','C','D'].includes(stage)){const l=document.getElementById('abcLamp'+stage),n=document.getElementById('abcNode'+stage);if(l)l.className='abc-lamp '+(start?'active':ev.status==='FAILED'?'bad':'ok');if(n)n.className='abc-node '+(start?'active':'ok');abcSound(stage,!start);}
+  const state=document.getElementById('abc-telemetry-state'); if(state) state.textContent=start?`RUNNING · ${stage}`:`${stage} · ${ev.status||'DONE'}${ev.durationMs!=null?' · '+ev.durationMs+'ms':''}`;
+  const event=document.getElementById('abc-telemetry-event'); if(event) event.textContent=`${ev.event} · ${stage||'SYS'}`;
+}
+document.getElementById('abc-sound-toggle')?.addEventListener('click',()=>{abcSoundEnabled=!abcSoundEnabled;const b=document.getElementById('abc-sound-toggle');if(b){b.textContent=abcSoundEnabled?'🔊 SOUND ON':'🔇 SOUND OFF';b.classList.toggle('text-emerald-300',abcSoundEnabled);}if(abcSoundEnabled)abcSound('A',false)});
+try{
+  const abcBus=new BroadcastChannel('CGO_MACHINE_ABC_TELEMETRY');
+  abcBus.onmessage=e=>renderAbcTelemetry(e.data);
+  window.addEventListener('cgo:abc-telemetry',e=>renderAbcTelemetry(e.detail));
+}catch(_){window.addEventListener('cgo:abc-telemetry',e=>renderAbcTelemetry(e.detail));}
 
 // Boot watchdog: a failed module graph must never look like a silent blank/idle monitor.
 setTimeout(() => {
