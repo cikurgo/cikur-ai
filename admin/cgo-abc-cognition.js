@@ -178,8 +178,10 @@
         return b.analyze(input, {
           maxCycles: options.maxCycles ?? 1,
           autoReflect: !!options.autoReflect,
-          fast: options.fast !== false,
-          skipAudit: options.skipAudit !== false && options.fast !== false
+          // Formal cognition memakai pipeline penuh A→B→C→D secara default.
+          // fast/skipAudit hanya bila caller meminta eksplisit.
+          fast: options.fast === true,
+          skipAudit: options.skipAudit === true
         });
       } catch (err) {
         return { ok: false, error: String(err && err.message || err) };

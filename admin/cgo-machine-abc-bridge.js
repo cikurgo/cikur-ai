@@ -15,7 +15,7 @@
     return;
   }
 
-  const VERSION = "1.2.0-ABC-BRIDGE";
+  const VERSION = "1.3.0-ABC-BRIDGE";
   const listeners = new Set();
   let lastPacket = null;
 
@@ -70,13 +70,12 @@
         ? { ...options }
         : {};
 
-      // Default bridge: jalur penuh dengan audit Machine D. Fast mode hanya bila diminta eksplisit.
-      const fast = opts.fast === true && !opts.fullAudit && !opts.autoReflect;
-
+      // Default bridge sekarang FULL PIPELINE: A→B→C→D.
+      // Jalur cepat hanya aktif bila caller meminta fast:true / skipAudit:true secara eksplisit.
       if (opts.maxCycles == null) opts.maxCycles = 1;
       if (opts.autoReflect == null) opts.autoReflect = false;
-      if (opts.fast == null) opts.fast = fast;
-      if (opts.skipAudit == null) opts.skipAudit = fast;
+      if (opts.fast == null) opts.fast = false;
+      if (opts.skipAudit == null) opts.skipAudit = false;
 
       const out = E.process(input, opts);
       const result = out?.result || out?.finalResult || null;
@@ -90,7 +89,6 @@
         version: E.version,
         status: result?.status ?? null,
         confidence: result?.decision?.confidence ?? null,
-        result,
         summary: result?.summary ?? null,
         findings: Array.isArray(result?.findings) ? result.findings : [],
         audit: out?.audit || lastCycle?.audit || null,
