@@ -91,12 +91,23 @@
     }
     const nerves=state.fileNerves&&typeof state.fileNerves==="object"?state.fileNerves:{};
     for(const [target,n] of Object.entries(nerves)){const st=String(n?.health?.overall||"UNKNOWN").toUpperCase();if(st!=="HEALTHY")claims.push({source:"BCGO.fileNerves",target,status:st,severity:st==="ANOMALY"?"HIGH":"MEDIUM",message:n?.source?.message||null,evidence:{health:n?.health||null,evidenceSummary:n?.evidenceSummary||null,changed:!!n?.changed,contentHash:n?.contentHash||null}});}
-    const capturedAt = Number(state.firestore?.lastServerAt || state.lastTelemetryAt || Date.now());
-    const ageMs = Math.max(0, Date.now() - capturedAt);
-    const serverLive = state.firestore?.connected === true && ageMs <= 120000;
-    const telemetryLive = Number.isFinite(Number(state.lastTelemetryAt)) && (Date.now() - Number(state.lastTelemetryAt)) <= 900000;
+    const connectionStatus = String(state.connection?.status || "").toUpperCase();
+    const serverStamp = Number(state.firestore?.lastServerAt || 0);
+    const telemetryStamp = Number(state.lastTelemetryAt || 0);
+    const eventStamp = Number(state.lastEventAt || 0);
+    const nowMs = Date.now();
+    const capturedAt = serverStamp || telemetryStamp || eventStamp || nowMs;
+    const ageMs = Math.max(0, nowMs - capturedAt);
+    // BCGO can be genuinely LIVE while lastServerAt is still 0 (for example
+    // immediately after Admin Auth/Firestore becomes connected). Do not turn
+    // that real connection into STANDBY merely because the first server stamp
+    // has not arrived yet.
+    const serverLive = state.firestore?.connected === true && (serverStamp === 0 || (nowMs - serverStamp) <= 120000);
+    const connectionLive = connectionStatus === "LIVE";
+    const telemetryLive = telemetryStamp > 0 && (nowMs - telemetryStamp) <= 900000;
+    const eventLive = eventStamp > 0 && (nowMs - eventStamp) <= 120000 && connectionLive;
     const explicitMode = String(state.operationMode || state.sourceMode || "").toUpperCase();
-    const mode = explicitMode === "TEST" ? "TEST" : (serverLive || telemetryLive ? "LIVE" : "STANDBY");
+    const mode = explicitMode === "TEST" ? "TEST" : (connectionLive || serverLive || telemetryLive || eventLive ? "LIVE" : "STANDBY");
     const observations = {
       connection: state.connection?.status || (serverLive ? "LIVE" : "UNKNOWN"),
       firestoreConnected: !!state.firestore?.connected,
