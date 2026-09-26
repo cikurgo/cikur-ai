@@ -15,7 +15,7 @@
     return;
   }
 
-  const VERSION = "1.3.0-ABC-BRIDGE";
+  const VERSION = "1.4.0-LIVE-HANDSHAKE";
   const listeners = new Set();
   let lastPacket = null;
   let lastLiveFingerprint = null;
@@ -173,7 +173,11 @@
     // Jangan memproses snapshot yang identik berulang-ulang. Ini menjaga jalur live stabil.
     const dedupeKey = fingerprintEvidence({mode:evidence.mode,observations:evidence.observations,claims:evidence.claims});
     if (dedupeKey && dedupeKey === lastLiveFingerprint) {
-      return {ok:true,duplicate:true,mode:evidence.mode,status:lastPacket?.result?.status||null,audit:lastPacket?.audit?.status||null,evidence};
+      // Late subscriber support: ABC may have opened after BCGO already processed
+      // this snapshot. Re-emit the last verified link so the new page can hydrate.
+      const cachedLink = global.CGO_ABC_LIVE_LINK || null;
+      try { if (cachedLink) liveBus?.postMessage(cachedLink); } catch (_) {}
+      return {ok:true,duplicate:true,mode:evidence.mode,status:cachedLink?.status||lastPacket?.result?.status||null,audit:cachedLink?.audit||lastPacket?.audit?.status||null,evidence,link:cachedLink,packet:lastPacket};
     }
     lastLiveFingerprint = dedupeKey;
     try {

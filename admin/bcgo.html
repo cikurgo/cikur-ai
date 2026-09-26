@@ -326,8 +326,8 @@ body{font-family:'Inter',sans-serif}
 </section>
 </div>
 
-<script src="cgo-machine-abc.js"></script>
-<script src="cgo-machine-abc-bridge.js"></script>
+<script src="cgo-machine-abc.js?v=0.9.5-LIVE-HANDSHAKE-20260926"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.4.0-LIVE-HANDSHAKE-20260926"></script>
 <script type="module">
 import { runAutonomousEngine } from './bcgo.js?v=4.3.0-INTERNAL-SOURCE-SCAN-20260917';
 
@@ -1063,13 +1063,14 @@ let abcSoundEnabled=false,abcHapticEnabled=true,abcAudioCtx=null,abcMasterGain=n
 const ABC_AUDIO_GAIN=.46;
 async function abcEnsureAudio(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error('Web Audio API tidak tersedia');if(!abcAudioCtx){abcAudioCtx=new AC({latencyHint:'interactive'});abcMasterGain=abcAudioCtx.createGain();abcMasterGain.gain.value=ABC_AUDIO_GAIN;const comp=abcAudioCtx.createDynamicsCompressor();comp.threshold.value=-18;comp.knee.value=12;comp.ratio.value=8;comp.attack.value=.003;comp.release.value=.12;abcMasterGain.connect(comp);comp.connect(abcAudioCtx.destination);abcAudioCtx.onstatechange=()=>{if(abcSoundEnabled&&abcAudioCtx.state==='running'){abcAudioReady=true;abcStartAmbient()}}}if(abcAudioCtx.state!=='running')await abcAudioCtx.resume();if(abcAudioCtx.state!=='running')throw new Error('AudioContext belum running');abcAudioReady=true;return abcAudioCtx}
 function abcAmbientProfile(s){return s==='error'?{sub:110,mid:220,hi:440,p:.62,g:.12,hg:.034}:s==='warn'?{sub:132,mid:264,hi:528,p:1.25,g:.095,hg:.027}:s==='processing'?{sub:148,mid:296,hi:592,p:2.4,g:.072,hg:.022}:{sub:120,mid:240,hi:480,p:.88,g:.055,hg:.018}}
-function abcApplyAmbientState(s){abcAmbientState=['error','warn','processing'].includes(s)?s:'normal';const sb=document.getElementById('abc-sound-toggle');if(sb&&abcSoundEnabled)sb.textContent=abcAmbientState==='error'?'🔊 SYSTEM AUDIO · ERROR':abcAmbientState==='warn'?'🔊 SYSTEM AUDIO · WARNING':abcAmbientState==='processing'?'🔊 SYSTEM AUDIO · PROCESSING':'🔊 SYSTEM AUDIO · STANDBY';if(!abcAudioReady||!abcAudioCtx||abcAudioCtx.state!=='running'||!abcAmbientNodes.length)return;const q=abcAmbientProfile(abcAmbientState),now=abcAudioCtx.currentTime;try{const [sub,mid,hi,lfo]=abcAmbientNodes;sub.osc.frequency.setTargetAtTime(q.sub,now,.12);mid.osc.frequency.setTargetAtTime(q.mid,now,.12);hi.osc.frequency.setTargetAtTime(q.hi,now,.12);lfo.osc.frequency.setTargetAtTime(q.p,now,.18);sub.gain.gain.setTargetAtTime(q.g,now,.14);mid.gain.gain.setTargetAtTime(q.hg,now,.14);hi.gain.gain.setTargetAtTime(q.hg*.5,now,.14)}catch(_){} }
+function abcApplyAmbientState(s){abcAmbientState=['error','warn','processing'].includes(s)?s:'normal';if(abcAmbientState==='normal'){abcStopAmbient();}const sb=document.getElementById('abc-sound-toggle');if(sb&&abcSoundEnabled)sb.textContent=abcAmbientState==='error'?'🔊 SYSTEM AUDIO · ERROR':abcAmbientState==='warn'?'🔊 SYSTEM AUDIO · WARNING':abcAmbientState==='processing'?'🔊 SYSTEM AUDIO · PROCESSING':'🔊 SYSTEM AUDIO · STANDBY';if(!abcAudioReady||!abcAudioCtx||abcAudioCtx.state!=='running'||!abcAmbientNodes.length)return;const q=abcAmbientProfile(abcAmbientState),now=abcAudioCtx.currentTime;try{const [sub,mid,hi,lfo]=abcAmbientNodes;sub.osc.frequency.setTargetAtTime(q.sub,now,.12);mid.osc.frequency.setTargetAtTime(q.mid,now,.12);hi.osc.frequency.setTargetAtTime(q.hi,now,.12);lfo.osc.frequency.setTargetAtTime(q.p,now,.18);sub.gain.gain.setTargetAtTime(q.g,now,.14);mid.gain.gain.setTargetAtTime(q.hg,now,.14);hi.gain.gain.setTargetAtTime(q.hg*.5,now,.14)}catch(_){} }
 function abcStartAmbient(){if(!abcAudioReady||!abcAudioCtx||abcAudioCtx.state!=='running'||abcAmbientNodes.length)return;const c=abcAudioCtx,q=abcAmbientProfile(abcAmbientState),bus=c.createBiquadFilter();bus.type='lowpass';bus.frequency.value=1250;bus.Q.value=.45;bus.connect(abcMasterGain);const mk=(f,g,t)=>{const o=c.createOscillator(),gn=c.createGain();o.type=t;o.frequency.value=f;gn.gain.value=g;o.connect(gn);gn.connect(bus);o.start();return{osc:o,gain:gn}};const x=mk(q.sub,q.g,'sine'),y=mk(q.mid,q.hg,'triangle'),z=mk(q.hi,q.hg*.5,'sine'),l=c.createOscillator(),lg=c.createGain();l.frequency.value=q.p;lg.gain.value=q.g*.55;l.connect(lg);lg.connect(x.gain.gain);l.start();abcAmbientNodes=[x,y,z,{osc:l,gain:lg}]}
 function abcStopAmbient(){for(const n of abcAmbientNodes){try{n.osc.stop()}catch(_){}}abcAmbientNodes=[]}
-function abcNoise(ctx,when,duration,level,center=1900){try{if(!abcNoiseBuffer){const len=Math.floor(ctx.sampleRate*.18);abcNoiseBuffer=ctx.createBuffer(1,len,ctx.sampleRate);const d=abcNoiseBuffer.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*.85}const src=ctx.createBufferSource(),bp=ctx.createBiquadFilter(),g=ctx.createGain();src.buffer=abcNoiseBuffer;bp.type='bandpass';bp.frequency.value=center;bp.Q.value=2.2;g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.004);g.gain.exponentialRampToValueAtTime(.0001,when+duration);src.connect(bp);bp.connect(g);g.connect(abcMasterGain);src.start(when);src.stop(when+duration+.01)}catch(_){} }
 function abcVoice(ctx,when,f,d,type='sine',level=.20,glide=null,pan=0){const o=ctx.createOscillator(),g=ctx.createGain(),fl=ctx.createBiquadFilter(),p=ctx.createStereoPanner?ctx.createStereoPanner():null;o.type=type;o.frequency.setValueAtTime(f,when);if(glide)o.frequency.exponentialRampToValueAtTime(glide,when+d*.72);fl.type='lowpass';fl.frequency.value=Math.max(1200,f*4.5);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.008);g.gain.exponentialRampToValueAtTime(Math.max(.0001,level*.34),when+d*.60);g.gain.exponentialRampToValueAtTime(.0001,when+d);o.connect(fl);fl.connect(g);if(p){p.pan.value=pan;g.connect(p);p.connect(abcMasterGain)}else g.connect(abcMasterGain);o.start(when);o.stop(when+d+.025)}
-function abcSound(kind='tick',force=false){if(!abcSoundEnabled||!abcAudioReady||!abcAudioCtx||abcAudioCtx.state!=='running'||!abcMasterGain)return false;try{const q={start:[110,.52,.26,'sine',220],A:[180,.30,.20,'sine',270],B:[240,.34,.20,'triangle',360],C:[320,.38,.20,'triangle',480],D:[430,.44,.22,'sine',650],done:[520,.68,.24,'sine',1040],ok:[300,.58,.21,'sine',900],warn:[180,.50,.21,'triangle',132],bad:[108,.72,.26,'sawtooth',68],tick:[210,.18,.12,'sine',315]}[kind]||[210,.18,.12,'sine',315];const when=Math.max(abcAudioCtx.currentTime+.012,abcSoundQueueUntil);abcVoice(abcAudioCtx,when,q[0],q[1],q[3],q[2],q[4],-.10);abcVoice(abcAudioCtx,when+.022,q[0]*2,q[1]*.76,'sine',q[2]*.42,q[4]*1.28,.12);if(kind!=='bad')abcNoise(abcAudioCtx,when,.055,.026,kind==='warn'?1200:kind==='done'?3000:1900);if(kind==='bad')abcNoise(abcAudioCtx,when,.13,.055,650);abcSoundQueueUntil=when+q[1]+(kind==='bad'||kind==='done'?.14:.06);return true}catch(_){return false}}
-async function abcArmSound(){try{await abcEnsureAudio();abcSoundEnabled=true;abcSoundQueueUntil=0;abcStartAmbient();abcApplyAmbientState('normal');abcSound('start',true);const b=document.getElementById('abc-sound-toggle');if(b){b.textContent='🔊 SYSTEM AUDIO · STANDBY';b.classList.add('text-emerald-300')}return true}catch(e){abcSoundEnabled=false;const b=document.getElementById('abc-sound-toggle');if(b)b.textContent='🔇 AUDIO UNAVAILABLE';console.warn('[BCGO AUDIO]',e);return false}}
+function abcSound(kind='tick',force=false){if(!abcSoundEnabled||!abcAudioReady||!abcAudioCtx||abcAudioCtx.state!=='running'||!abcMasterGain)return false;try{
+  const q={start:[220,.24,.16,'sine',330],A:[196,.18,.14,'sine',294],B:[247,.19,.14,'sine',370],C:[294,.20,.15,'sine',440],D:[330,.22,.16,'triangle',494],done:[523,.30,.20,'sine',659],ok:[392,.24,.17,'sine',523],warn:[277,.25,.18,'sine',220],bad:[196,.28,.20,'triangle',147],tick:[330,.10,.10,'sine',440]}[kind]||[330,.10,.10,'sine',440];
+  const when=Math.max(abcAudioCtx.currentTime+.012,abcSoundQueueUntil);abcVoice(abcAudioCtx,when,q[0],q[1],q[3],q[2],q[4],-.08);abcVoice(abcAudioCtx,when+.045,q[4],q[2]*.62,'sine',q[2]*.52,null,.10);abcSoundQueueUntil=when+q[1]+.045;return true}catch(_){return false}}
+async function abcArmSound(){try{await abcEnsureAudio();abcSoundEnabled=true;abcSoundQueueUntil=0;abcApplyAmbientState('normal');abcSound('start',true);const b=document.getElementById('abc-sound-toggle');if(b){b.textContent='🔊 SYSTEM AUDIO · STANDBY';b.classList.add('text-emerald-300')}return true}catch(e){abcSoundEnabled=false;const b=document.getElementById('abc-sound-toggle');if(b)b.textContent='🔇 AUDIO UNAVAILABLE';console.warn('[BCGO AUDIO]',e);return false}}
 function abcDisarmSound(){abcSoundEnabled=false;abcAudioReady=false;abcSoundQueueUntil=0;abcStopAmbient();try{abcAudioCtx?.suspend?.()}catch(_){}const b=document.getElementById('abc-sound-toggle');if(b){b.textContent='🔇 SOUND OFF';b.classList.remove('text-emerald-300')}}
 async function abcRecoverAudio(){if(!abcSoundEnabled||!abcAudioCtx)return false;try{if(abcAudioCtx.state!=='running')await abcAudioCtx.resume();if(abcAudioCtx.state==='running'){abcAudioReady=true;abcStartAmbient();abcApplyAmbientState(abcAmbientState);return true}}catch(_){}return false}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)abcRecoverAudio()});window.addEventListener('pageshow',()=>abcRecoverAudio());
@@ -1106,8 +1107,37 @@ setTimeout(() => {
   }
 }, 5000);
 
+// LIVE LINK CONTROL BUS: ABC dapat meminta snapshot terakhir walau dibuka setelah BCGO.
+let latestBCGOLiveState = null;
+let abcLiveControlBus = null;
+try {
+  abcLiveControlBus = new BroadcastChannel('CGO_MACHINE_ABC_LIVE_CONTROL');
+  abcLiveControlBus.onmessage = ev => {
+    const d = ev?.data;
+    if (!d || d.type !== 'CGO_ABC_REQUEST_LIVE') return;
+    if (!latestBCGOLiveState) {
+      try { abcLiveControlBus.postMessage({type:'CGO_BCGO_LIVE_STATUS', mode:'STANDBY', reason:'NO_LIVE_SNAPSHOT'}); } catch (_) {}
+      return;
+    }
+    try {
+      const bridge = window.CGOMachineABCBridge;
+      if (!bridge || typeof bridge.ingestBCGOState !== 'function') {
+        abcLiveControlBus.postMessage({type:'CGO_BCGO_LIVE_STATUS', mode:'ERROR', reason:'ABC_BRIDGE_UNAVAILABLE'});
+        return;
+      }
+      const link = bridge.ingestBCGOState(latestBCGOLiveState);
+      if (link?.link) abcLiveControlBus.postMessage(link.link);
+      else if (window.CGO_ABC_LIVE_LINK) abcLiveControlBus.postMessage(window.CGO_ABC_LIVE_LINK);
+    } catch (err) {
+      try { abcLiveControlBus.postMessage({type:'CGO_BCGO_LIVE_STATUS', mode:'ERROR', reason:String(err?.message||err)}); } catch (_) {}
+    }
+  };
+  window.addEventListener('beforeunload',()=>{try{abcLiveControlBus.close()}catch(_){}},{once:true});
+} catch (_) {}
+
 try {
 runAutonomousEngine(state => {
+    latestBCGOLiveState = state;
     liveState = state;
     window.BCGO_STATE = state;
     // Jalur LIVE resmi: BCGO_STATE → ABC Bridge → Mesin ABC.
@@ -1123,6 +1153,7 @@ runAutonomousEngine(state => {
             claimCount: link.evidence?.claims?.length || 0,
             capturedAt: link.evidence?.capturedAt || null
           };
+          try { if (abcLiveControlBus && window.CGO_ABC_LIVE_LINK) abcLiveControlBus.postMessage(window.CGO_ABC_LIVE_LINK); } catch (_) {}
         }
       }
     } catch (abcBridgeErr) {

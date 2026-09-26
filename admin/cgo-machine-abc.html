@@ -227,8 +227,8 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   </section>
 </div>
 
-<script src="cgo-machine-abc.js"></script>
-<script src="cgo-machine-abc-bridge.js"></script>
+<script src="cgo-machine-abc.js?v=0.9.5-LIVE-HANDSHAKE-20260926"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.4.0-LIVE-HANDSHAKE-20260926"></script>
 <script src="cgo-abc-cognition.js"></script>
 <script>
 (() => {
@@ -258,13 +258,12 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   try{telemetryBus=new BroadcastChannel("CGO_MACHINE_ABC_TELEMETRY")}catch(_){telemetryBus=null}
   async function ensureAudio(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error("Web Audio API tidak tersedia");if(!audioCtx){audioCtx=new AC({latencyHint:"interactive"});masterGain=audioCtx.createGain();masterGain.gain.value=AUDIO_GAIN;const comp=audioCtx.createDynamicsCompressor();comp.threshold.value=-18;comp.knee.value=12;comp.ratio.value=8;comp.attack.value=.003;comp.release.value=.12;masterGain.connect(comp);comp.connect(audioCtx.destination);audioCtx.onstatechange=()=>{if(soundEnabled&&audioCtx.state==='running'){audioReady=true;startAmbient()}}}if(audioCtx.state!=="running")await audioCtx.resume();if(audioCtx.state!=="running")throw new Error("AudioContext belum running");audioReady=true;return audioCtx}
   function ambientProfile(s){return s==='error'?{a:110,b:220,c:440,p:.62,g:.12,h:.034}:s==='warn'?{a:132,b:264,c:528,p:1.25,g:.095,h:.027}:s==='processing'?{a:148,b:296,c:592,p:2.4,g:.072,h:.022}:{a:120,b:240,c:480,p:.88,g:.055,h:.018}}
-  function applyAmbientState(s){ambientState=['error','warn','processing'].includes(s)?s:'normal';if(!audioReady||!audioCtx||audioCtx.state!=="running"||!ambientNodes.length)return;const q=ambientProfile(ambientState),now=audioCtx.currentTime;try{ambientNodes[0].osc.frequency.setTargetAtTime(q.a,now,.12);ambientNodes[1].osc.frequency.setTargetAtTime(q.b,now,.12);ambientNodes[2].osc.frequency.setTargetAtTime(q.c,now,.12);ambientNodes[3].osc.frequency.setTargetAtTime(q.p,now,.18);ambientNodes[0].gain.gain.setTargetAtTime(q.g,now,.14);ambientNodes[1].gain.gain.setTargetAtTime(q.h,now,.14);ambientNodes[2].gain.gain.setTargetAtTime(q.h*.5,now,.14)}catch(_){} }
+  function applyAmbientState(s){ambientState=['error','warn','processing'].includes(s)?s:'normal';if(ambientState==='normal')stopAmbient();if(!audioReady||!audioCtx||audioCtx.state!=="running"||!ambientNodes.length)return;const q=ambientProfile(ambientState),now=audioCtx.currentTime;try{ambientNodes[0].osc.frequency.setTargetAtTime(q.a,now,.12);ambientNodes[1].osc.frequency.setTargetAtTime(q.b,now,.12);ambientNodes[2].osc.frequency.setTargetAtTime(q.c,now,.12);ambientNodes[3].osc.frequency.setTargetAtTime(q.p,now,.18);ambientNodes[0].gain.gain.setTargetAtTime(q.g,now,.14);ambientNodes[1].gain.gain.setTargetAtTime(q.h,now,.14);ambientNodes[2].gain.gain.setTargetAtTime(q.h*.5,now,.14)}catch(_){} }
   function startAmbient(){if(!audioReady||!audioCtx||audioCtx.state!=="running"||ambientNodes.length)return;const c=audioCtx,q=ambientProfile(ambientState),bus=c.createBiquadFilter();bus.type="lowpass";bus.frequency.value=1250;bus.Q.value=.45;bus.connect(masterGain);const mk=(f,g,t)=>{const o=c.createOscillator(),gn=c.createGain();o.type=t;o.frequency.value=f;gn.gain.value=g;o.connect(gn);gn.connect(bus);o.start();return{osc:o,gain:gn}};const x=mk(q.a,q.g,"sine"),y=mk(q.b,q.h,"triangle"),z=mk(q.c,q.h*.5,"sine"),l=c.createOscillator(),lg=c.createGain();l.frequency.value=q.p;lg.gain.value=q.g*.55;l.connect(lg);lg.connect(x.gain.gain);l.start();ambientNodes=[x,y,z,{osc:l,gain:lg}]}
   function stopAmbient(){for(const n of ambientNodes){try{n.osc.stop()}catch(_){}}ambientNodes=[]}
-  function noise(ctx,when,duration,level,center=1800){try{if(!noiseBuffer){const len=Math.floor(ctx.sampleRate*.18);noiseBuffer=ctx.createBuffer(1,len,ctx.sampleRate);const d=noiseBuffer.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*.85}const src=ctx.createBufferSource(),bp=ctx.createBiquadFilter(),g=ctx.createGain();src.buffer=noiseBuffer;bp.type='bandpass';bp.frequency.value=center;bp.Q.value=2.2;g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.004);g.gain.exponentialRampToValueAtTime(.0001,when+duration);src.connect(bp);bp.connect(g);g.connect(masterGain);src.start(when);src.stop(when+duration+.01)}catch(_){} }
   function voice(ctx,when,f,d,type='sine',level=.20,glide=null,pan=0){const o=ctx.createOscillator(),g=ctx.createGain(),fl=ctx.createBiquadFilter(),p=ctx.createStereoPanner?ctx.createStereoPanner():null;o.type=type;o.frequency.setValueAtTime(f,when);if(glide)o.frequency.exponentialRampToValueAtTime(glide,when+d*.72);fl.type='lowpass';fl.frequency.value=Math.max(1200,f*4.5);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.008);g.gain.exponentialRampToValueAtTime(Math.max(.0001,level*.34),when+d*.60);g.gain.exponentialRampToValueAtTime(.0001,when+d);o.connect(fl);fl.connect(g);if(p){p.pan.value=pan;g.connect(p);p.connect(masterGain)}else g.connect(masterGain);o.start(when);o.stop(when+d+.025)}
-  function systemSound(kind='tick',force=false){if(!soundEnabled||!audioReady||!audioCtx||audioCtx.state!=="running"||!masterGain)return false;try{const q={start:[110,.52,.26,'sine',220],A:[180,.30,.20,'sine',270],B:[240,.34,.20,'triangle',360],C:[320,.38,.20,'triangle',480],D:[430,.44,.22,'sine',650],done:[520,.68,.24,'sine',1040],ok:[300,.58,.21,'sine',900],warn:[180,.50,.21,'triangle',132],bad:[108,.72,.26,'sawtooth',68],tick:[210,.18,.12,'sine',315]}[kind]||[210,.18,.12,'sine',315];const when=Math.max(audioCtx.currentTime+.012,soundQueueUntil);voice(audioCtx,when,q[0],q[1],q[3],q[2],q[4],-.10);voice(audioCtx,when+.022,q[0]*2,q[1]*.76,'sine',q[2]*.42,q[4]*1.28,.12);if(kind!=='bad')noise(audioCtx,when,.055,.026,kind==='warn'?1200:kind==='done'?3000:1900);if(kind==='bad')noise(audioCtx,when,.13,.055,650);soundQueueUntil=when+q[1]+(kind==='bad'||kind==='done'?.14:.06);return true}catch(_){return false}}
-  async function armSound(){try{await ensureAudio();soundEnabled=true;soundQueueUntil=0;startAmbient();applyAmbientState('normal');systemSound('start',true);const b=$("#soundToggle");if(b){b.textContent="🔊 SYSTEM AUDIO · STANDBY";b.classList.add("active")}showNotice("System sonification lokal aktif · pulse + event signature A→B→C→D.","ok");return true}catch(e){soundEnabled=false;showNotice("Audio tidak tersedia: "+String(e.message||e),"error");return false}}
+  function systemSound(kind='tick',force=false){if(!soundEnabled||!audioReady||!audioCtx||audioCtx.state!=="running"||!masterGain)return false;try{const q={start:[220,.24,.16,'sine',330],A:[196,.18,.14,'sine',294],B:[247,.19,.14,'sine',370],C:[294,.20,.15,'sine',440],D:[330,.22,.16,'triangle',494],done:[523,.30,.20,'sine',659],ok:[392,.24,.17,'sine',523],warn:[277,.25,.18,'sine',220],bad:[196,.28,.20,'triangle',147],tick:[330,.10,.10,'sine',440]}[kind]||[330,.10,.10,'sine',440];const when=Math.max(audioCtx.currentTime+.012,soundQueueUntil);voice(audioCtx,when,q[0],q[1],q[3],q[2],q[4],-.08);voice(audioCtx,when+.045,q[4],q[2]*.62,'sine',q[2]*.52,null,.10);soundQueueUntil=when+q[1]+.045;return true}catch(_){return false}}
+  async function armSound(){try{await ensureAudio();soundEnabled=true;soundQueueUntil=0;applyAmbientState('normal');systemSound('start',true);const b=$("#soundToggle");if(b){b.textContent="🔊 SYSTEM AUDIO · STANDBY";b.classList.add("active")}showNotice("System sonification lokal aktif · pulse + event signature A→B→C→D.","ok");return true}catch(e){soundEnabled=false;showNotice("Audio tidak tersedia: "+String(e.message||e),"error");return false}}
   function disarmSound(){soundEnabled=false;audioReady=false;soundQueueUntil=0;stopAmbient();try{audioCtx?.suspend?.()}catch(_){}const b=$("#soundToggle");if(b){b.textContent="🔇 Suara sistem: OFF";b.classList.remove("active")}}
   async function recoverAudio(){if(!soundEnabled||!audioCtx)return false;try{if(audioCtx.state!=="running")await audioCtx.resume();if(audioCtx.state==='running'){audioReady=true;startAmbient();applyAmbientState(ambientState);return true}}catch(_){}return false}
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)recoverAudio()});window.addEventListener('pageshow',()=>recoverAudio());
@@ -509,20 +508,34 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   // Sinkron LIVE BCGO → ABC. Ini jalur operasi; tidak menjalankan input sintetis.
   try {
     const liveBus = new BroadcastChannel('CGO_MACHINE_ABC_LIVE_LINK');
-    liveBus.onmessage = (ev) => {
-      const d = ev?.data;
+    const controlBus = new BroadcastChannel('CGO_MACHINE_ABC_LIVE_CONTROL');
+    let lastAppliedLiveKey = null;
+    const applyLiveLink = (d) => {
       if (!d || d.type !== 'CGO_ABC_LIVE_LINK') return;
       const mode = d.mode || 'STANDBY';
+      const liveKey = String(d.fingerprint || d.revision || '');
+      const duplicateLiveLink = !!liveKey && liveKey === lastAppliedLiveKey;
+      if (liveKey) lastAppliedLiveKey = liveKey;
       const lm = $('#liveLinkMode'), ls = $('#liveLinkStatus'), la = $('#liveLinkAudit');
       if (lm) lm.textContent = mode;
       if (ls) ls.textContent = `BCGO → ABC · ${d.status || '–'} · rev ${d.revision || '–'} · claims ${d.claimCount ?? 0}`;
       if (la) la.textContent = `Audit ${d.audit || '–'}`;
-      if (mode === 'LIVE') setLive(`LIVE · ${d.status || 'READY'}`, d.audit === 'VALID' ? 'ok' : 'warn');
+      if (d.packet) {
+        if (!duplicateLiveLink) onPayload(d.packet);
+        const m = d.packet?.result?.status || d.status || '–';
+        setLive(`${mode} · ${m}`, d.audit === 'VALID' ? 'ok' : 'warn');
+      } else if (mode === 'LIVE') setLive(`LIVE · ${d.status || 'READY'}`, d.audit === 'VALID' ? 'ok' : 'warn');
       else if (mode === 'STANDBY') setLive('STANDBY · tidak ada input LIVE', 'warn');
       else setLive(mode, 'bad');
       showNotice(`Jalur LIVE BCGO → ABC: ${mode} · ${d.status || '–'} · Audit ${d.audit || '–'}`, d.audit === 'VALID' ? 'ok' : 'warn');
     };
-    window.addEventListener('beforeunload',()=>liveBus.close(),{once:true});
+    liveBus.onmessage = (ev) => applyLiveLink(ev?.data);
+    controlBus.onmessage = (ev) => applyLiveLink(ev?.data);
+    const requestLiveSnapshot = () => { try { controlBus.postMessage({type:'CGO_ABC_REQUEST_LIVE',at:Date.now(),page:'cgo-machine-abc'}); } catch (_) {} };
+    requestLiveSnapshot();
+    const liveRequestTimer = setInterval(requestLiveSnapshot, 5000);
+    window.addEventListener('beforeunload',()=>{clearInterval(liveRequestTimer);try{liveBus.close()}catch(_){}try{controlBus.close()}catch(_){}},{once:true});
+
   } catch (_) {}
   try {
     const bus = new BroadcastChannel('CGO_MACHINE_ABC_BUS');
