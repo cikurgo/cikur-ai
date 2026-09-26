@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#020914">
 <meta name="color-scheme" content="dark">
-<title>CGO MACHINE ABC — Monitor Live</title>
+<title>CGO MACHINE ABC — Live Workbench · Future Core</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🧠%3C/text%3E%3C/svg%3E">
 <style>
 :root{
@@ -18,117 +18,160 @@
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{
-  margin:0;background:radial-gradient(circle at 50% -10%,#0b2744 0,#020914 45%,#01050b 100%) fixed;
+  margin:0;
+  background:radial-gradient(ellipse 120% 80% at 50% -20%,#0c2a4a 0%,#020914 42%,#01050b 100%) fixed;
   color:var(--text);font:14px/1.5 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0);
+  min-height:100vh;
 }
-.app{width:min(1200px,100%);margin:auto;padding:14px}
+.app{width:min(1180px,100%);margin:auto;padding:14px 14px 40px}
 [hidden]{display:none!important}
 h1,h2{margin:0}
-button{font:inherit;color:inherit;cursor:pointer}
+button{font:inherit;color:inherit;cursor:pointer;border:none;background:none}
 button:focus-visible,textarea:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 
-.top{display:flex;justify-content:space-between;gap:14px;align-items:center;border:1px solid var(--line);background:#041426ee;border-radius:var(--radius);padding:16px;flex-wrap:wrap}
-.brand{display:flex;gap:12px;align-items:center;min-width:0}
-.logo{flex:none;width:46px;height:46px;border:2px solid var(--blue);border-radius:50%;display:grid;place-items:center;font-size:23px;transition:box-shadow .3s,border-color .3s}
-.logo.live{border-color:var(--ok);box-shadow:0 0 18px #16d98b55;animation:pulse 1.6s ease-in-out infinite}
-@keyframes pulse{0%,100%{box-shadow:0 0 8px #16d98b33}50%{box-shadow:0 0 22px #16d98b88}}
-.title{font-size:20px;font-weight:800;letter-spacing:.2px}
-.sub{font-size:12px;color:var(--muted);margin-top:2px}
-.sub a{color:#7dd3fc;text-decoration:none}
-.chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-.chip{border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:12px;color:var(--muted);white-space:nowrap}
-.chip.ok{color:var(--ok-text);border-color:#176a50}
-.chip.warn{color:var(--warn-text);border-color:#765f1b}
-.chip.bad{color:var(--bad-text);border-color:#76263a}
+.btn{
+  display:inline-flex;align-items:center;gap:7px;
+  border:1px solid var(--line);background:linear-gradient(180deg,#0c2848,#0a2038);
+  border-radius:10px;padding:9px 13px;font-weight:600;font-size:12px;
+  transition:border-color .15s,box-shadow .15s,transform .1s;
+}
+.btn:hover{border-color:#1a6fcc;box-shadow:0 0 16px rgba(22,136,255,.15)}
+.btn:active{transform:scale(.98)}
+.btn.primary{background:linear-gradient(180deg,#0d4a94,#0b3d7a);border-color:#1a6fcc;color:#dff0ff}
+.btn.active{border-color:#176a50;background:#062a1c;color:var(--ok-text)}
+.btn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
 
-.banner{margin-top:12px;padding:12px 14px;border-radius:12px;border:1px solid #765f1b;background:#2a2308;color:var(--warn-text);font-size:13px}
+.top{
+  display:flex;justify-content:space-between;gap:14px;align-items:center;
+  border:1px solid var(--line);background:linear-gradient(180deg,#041426f2,#03101cee);
+  border-radius:var(--radius);padding:14px 16px;flex-wrap:wrap;
+  box-shadow:0 8px 32px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.04);
+}
+.brand{display:flex;gap:12px;align-items:center;min-width:0}
+.brand-logo{
+  flex:none;width:46px;height:46px;object-fit:contain;border-radius:12px;
+  background:#fff;padding:3px;
+  box-shadow:0 0 0 1px rgba(255,255,255,.08),0 6px 18px rgba(0,0,0,.28);
+}
+.title{font-size:17px;font-weight:800;letter-spacing:.3px}
+.sub{font-size:11px;color:var(--muted);margin-top:2px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.chip{
+  border:1px solid var(--line);border-radius:999px;padding:4px 10px;
+  font-size:11px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums;
+}
+.chip.ok{color:var(--ok-text);border-color:#176a50;background:#062a1c55}
+.chip.warn{color:var(--warn-text);border-color:#765f1b;background:#2a230855}
+.chip.bad{color:var(--bad-text);border-color:#76263a;background:#2a0d1555}
+
+.banner{margin-top:12px;padding:11px 14px;border-radius:12px;border:1px solid #765f1b;background:#2a2308;color:var(--warn-text);font-size:13px}
 .banner.error{border-color:#76263a;background:#2a0d15;color:var(--bad-text)}
 .banner.ok{border-color:#176a50;background:#062a1c;color:var(--ok-text)}
-
 .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.actions button,.ph button,#devRun{
-  border:1px solid var(--line);background:#0a2038;border-radius:10px;padding:8px 14px;font-weight:600
+
+.activity-panel{
+  margin-top:12px;border:1px solid var(--line);border-radius:var(--radius);
+  background:linear-gradient(180deg,#061426,#031120);padding:12px 14px;
+  box-shadow:0 12px 40px rgba(0,0,0,.3);
 }
-.actions button.primary{background:#0b3d7a;border-color:#1a6fcc;color:#dff0ff}
-.actions button.primary:hover{background:#0d4a94}
-.actions button:active{transform:scale(.98)}
+.activity-panel.live-glow{border-color:#1a6fcc;box-shadow:0 0 24px rgba(22,136,255,.18)}
+.activity-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.activity-title{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#9fd7ff}
+.activity-state{font:11px ui-monospace,Menlo,monospace;color:var(--muted)}
+
+.lamps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+@media(max-width:560px){.lamps{grid-template-columns:repeat(2,1fr)}}
+.lamp{
+  display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;
+  padding:10px;background:#020a14;min-width:0;transition:border-color .2s,background .2s;
+}
+.lamp-dot{width:11px;height:11px;border-radius:50%;background:#334155;flex:none}
+.lamp.active{border-color:#765f1b;background:#2a2308}
+.lamp.active .lamp-dot{background:var(--warn);box-shadow:0 0 12px #ffd34d;animation:lampPulse .55s ease-in-out infinite alternate}
+.lamp.done{border-color:#176a50;background:#062a1c}
+.lamp.done .lamp-dot{background:var(--ok);box-shadow:0 0 8px #16d98b}
+.lamp.bad{border-color:#76263a;background:#2a0d15}
+.lamp.bad .lamp-dot{background:var(--bad);box-shadow:0 0 10px #ff667d}
+.lamp-name{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.03em}
+.lamp-time{margin-left:auto;font:10px ui-monospace,Menlo,monospace;color:var(--faint)}
+@keyframes lampPulse{from{transform:scale(.92);opacity:.85}to{transform:scale(1.08);opacity:1}}
+
+.route-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px;font:10px ui-monospace,Menlo,monospace;color:var(--faint)}
+.route-node{border:1px solid var(--line);border-radius:999px;padding:3px 8px;min-width:26px;text-align:center}
+.route-node.live{color:var(--warn-text);border-color:#765f1b;background:#2a2308}
+.route-node.ok{color:var(--ok-text);border-color:#176a50;background:#062a1c}
+.route-arrow{color:#41627d}
+
+.telemetry-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}
+.telemetry-mini{border:1px solid var(--line-soft);border-radius:9px;padding:8px;background:#020a14}
+.telemetry-mini .k{font-size:9px;color:var(--faint);text-transform:uppercase}
+.telemetry-mini .v{font:11px ui-monospace,Menlo,monospace;color:#d8edff;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:560px){.telemetry-grid{grid-template-columns:1fr 1fr}}
+.activity-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+
+.result-grid{display:grid;grid-template-columns:1.15fr 1fr;gap:12px;margin-top:12px}
+@media(max-width:800px){.result-grid{grid-template-columns:1fr}}
+.result-card,.evidence-card{
+  border:1px solid var(--line);border-radius:12px;background:var(--panel-2);padding:14px;
+}
+.result-card h3,.evidence-card h3{
+  margin:0 0 10px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#9fd7ff;
+}
+.result-status{font-size:22px;font-weight:800;margin-bottom:6px}
+.result-status.ok{color:var(--ok-text)}
+.result-status.warn{color:var(--warn-text)}
+.result-status.bad{color:var(--bad-text)}
+.fact-line{font-size:12px;color:var(--muted);line-height:1.55;border-left:2px solid var(--line);padding-left:10px;margin-top:6px}
+.result-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.result-meta .k{font-size:9px;color:var(--faint);text-transform:uppercase}
+.result-meta .v{font:12px ui-monospace,Menlo,monospace;color:#d8edff;margin-top:2px;word-break:break-all}
+.evidence-list{display:grid;gap:6px;max-height:180px;overflow:auto}
+.ev-item{
+  display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:7px 9px;
+  border-radius:8px;border:1px solid var(--line-soft);background:#020a14;
+}
+.ev-item .tag{font-size:10px;font-weight:700;padding:2px 6px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
 
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
 @media(max-width:720px){.grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr!important}}
 .stat{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:12px}
-.stat .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.stat .k{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .stat .v{font-size:22px;font-weight:800;margin-top:4px;font-variant-numeric:tabular-nums}
 
 .panel{margin-top:12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
-.ph{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line-soft);font-size:14px;font-weight:700}
+.ph{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line-soft);font-size:13px;font-weight:700}
 .ph .muted{font-weight:400;color:var(--muted);font-size:12px}
 .body{padding:12px 14px}
-.log{height:min(60vh,420px);overflow:auto;display:grid;gap:8px;align-content:start;-webkit-overflow-scrolling:touch}
+.log{height:min(42vh,300px);overflow:auto;display:grid;gap:8px;align-content:start}
 .cycle{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel-2);font-size:13px}
-.cycle.ok{border-color:#176a50}
-.cycle.warn{border-color:#765f1b}
-.cycle.bad{border-color:#76263a}
+.cycle.ok{border-color:#176a50}.cycle.warn{border-color:#765f1b}.cycle.bad{border-color:#76263a}
 .cycle-head{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-weight:700}
 .cycle-head .time{margin-left:auto;color:var(--muted);font-weight:400;font-size:12px}
 .cycle .meta{color:var(--muted);font-size:12px;margin-top:4px}
 .empty{color:var(--faint);font-size:13px;padding:8px 0}
 .row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line-soft);font-size:13px}
 .row:last-child{border-bottom:0}
-.row strong.pass{color:var(--ok-text)}
-.row strong.fail{color:var(--bad-text)}
-.audit,.detail{max-height:300px;overflow:auto}
-.detail{margin:0;white-space:pre-wrap;word-break:break-word;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#cfe6ff}
-textarea{width:100%;min-height:100px;border:1px solid var(--line);background:#020a14;color:var(--text);border-radius:10px;padding:10px;resize:vertical}
+.row strong.pass{color:var(--ok-text)}.row strong.fail{color:var(--bad-text)}
+.detail{margin:0;white-space:pre-wrap;word-break:break-word;font:12px/1.45 ui-monospace,Menlo,monospace;color:#cfe6ff;max-height:260px;overflow:auto}
+textarea{width:100%;min-height:90px;border:1px solid var(--line);background:#020a14;color:var(--text);border-radius:10px;padding:10px;resize:vertical;font:13px/1.45 ui-monospace,Menlo,monospace}
 label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color:var(--muted)}
-.pipeline{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.stage{padding:4px 10px;border-radius:999px;border:1px solid var(--line);font-size:11px;font-weight:700;color:var(--muted)}
-.stage.on{color:var(--ok-text);border-color:#176a50;background:#062a1c}
-.stage.run{color:var(--warn-text);border-color:#765f1b;background:#2a2308;animation:pulse 1s infinite}
-
-.activity-panel{margin-top:12px;border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(180deg,#061426,#031120);padding:12px 14px}
-.activity-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
-.activity-title{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#9fd7ff}
-.activity-state{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted)}
-.lamps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
-.lamp{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:8px;background:#020a14;min-width:0}
-.lamp-dot{width:10px;height:10px;border-radius:50%;background:#334155;flex:none;box-shadow:none}
-.lamp.active .lamp-dot{background:var(--warn);box-shadow:0 0 10px #ffd34d;animation:lampPulse .55s ease-in-out infinite alternate}
-.lamp.done .lamp-dot{background:var(--ok);box-shadow:0 0 8px #16d98b}
-.lamp.bad .lamp-dot{background:var(--bad);box-shadow:0 0 10px #ff667d}
-.lamp-name{font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lamp-time{margin-left:auto;font:10px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint)}
-@keyframes lampPulse{from{transform:scale(.75);opacity:.55}to{transform:scale(1.25);opacity:1}}
-.route-line{margin-top:10px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;font:10px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--faint)}
-.route-node{border:1px solid var(--line);border-radius:999px;padding:3px 7px}.route-node.live{color:var(--warn-text);border-color:#765f1b;background:#2a2308}.route-node.ok{color:var(--ok-text);border-color:#176a50;background:#062a1c}.route-arrow{color:#41627d}
-.activity-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
-.activity-actions button{border:1px solid var(--line);background:#0a2038;border-radius:9px;padding:6px 10px;font-size:11px;font-weight:700}
-.activity-actions button.active{border-color:#176a50;background:#062a1c;color:var(--ok-text)}
-.telemetry-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}
-.telemetry-mini{border:1px solid var(--line-soft);border-radius:9px;padding:7px;background:#020a14}.telemetry-mini .k{font-size:9px;color:var(--faint);text-transform:uppercase}.telemetry-mini .v{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:#d8edff;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-@media(max-width:560px){.lamps{grid-template-columns:repeat(2,1fr)}.telemetry-grid{grid-template-columns:1fr 1fr}}
-@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
-
-.activity-panel{box-shadow:0 0 0 1px rgba(22,136,255,.12),0 12px 40px rgba(0,0,0,.35)}
-.activity-panel.live-glow{border-color:#1a6fcc;box-shadow:0 0 24px rgba(22,136,255,.18)}
-.lamp{transition:border-color .2s,background .2s,box-shadow .2s}
-.lamp.active{border-color:#765f1b;background:#2a2308}
-.lamp.done{border-color:#176a50;background:#062a1c}
-.lamp.bad{border-color:#76263a;background:#2a0d15}
-.lamp-dot{width:12px;height:12px}
-.route-node.live{color:var(--warn-text);border-color:#765f1b;background:#2a2308;box-shadow:0 0 10px #ffd34d44}
-.route-node.ok{color:var(--ok-text);border-color:#176a50;background:#062a1c}
-
+.pipeline{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.stage{border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:11px;color:var(--muted)}
+.stage.active{color:var(--warn-text);border-color:#765f1b;background:#2a2308}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
 <div class="app">
   <header class="top">
     <div class="brand">
-      <div class="logo" id="logo" aria-hidden="true">🧠</div>
+      <img class="brand-logo" id="logo" src="../cikurgoicon.png" alt="CIKUR GO" width="46" height="46" decoding="async"
+           onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.style.display='grid')">
+      <div class="brand-logo" style="display:none;place-items:center;font-size:22px;background:#041426;color:#7dd3fc">🧠</div>
       <div>
         <h1 class="title">CGO MACHINE ABC</h1>
-        <div class="sub">Monitor mesin inti · A → B → C → D · <strong>live</strong></div>
+        <div class="sub">Live Workbench · A → B → C → D · Future Core · Zero External AI</div>
       </div>
     </div>
     <div class="chips" aria-label="Status mesin">
@@ -137,48 +180,93 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
       <span class="chip" id="ind">Independensi –</span>
       <span class="chip" id="audit">Audit D –</span>
       <span class="chip" id="degraded">Degraded 0</span>
-      <span class="chip" id="liveChip">STANDBY · menunggu input</span><span class="chip" id="buildChip">BUILD –</span>
+      <span class="chip" id="liveChip">STANDBY · menunggu input</span>
+      <span class="chip" id="buildChip">BUILD –</span>
     </div>
   </header>
 
   <div id="fatal" class="banner error" hidden></div>
   <div id="notice" class="banner" hidden></div>
   <div id="bootBanner" class="banner ok">Mesin ABC siap · self-test berjalan · menunggu input LIVE.</div>
-
   <section class="banner" id="liveLinkPanel"><b>OPERASI:</b> <span id="liveLinkMode">STANDBY</span> · <span id="liveLinkStatus">Belum ada input BCGO LIVE.</span> · <span id="liveLinkAudit">Audit –</span> · <span id="liveLinkAck">ACK –</span></section>
 
   <div class="actions">
-    <button type="button" class="primary" id="btnDemo">▶ UJI PIPELINE A→B→C→D</button>
-    <button type="button" id="btnSelfTest">Self-test ulang</button>
-    <button type="button" id="btnPulse">Pulse metrics</button>
-    <button type="button" id="pause">Jeda</button>
-    <button type="button" id="reset">Reset log</button>
+    <button type="button" class="btn primary" id="btnDemo">
+      <svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+      Uji Pipeline A→B→C→D
+    </button>
+    <button type="button" class="btn" id="btnSelfTest">
+      <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      Self-test
+    </button>
+    <button type="button" class="btn" id="btnPulse">
+      <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Pulse metrics
+    </button>
+    <button type="button" class="btn" id="pause">
+      <svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
+      <span id="pauseLabel">Jeda</span>
+    </button>
+    <button type="button" class="btn" id="reset">
+      <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+      Reset log
+    </button>
   </div>
 
-  <section class="activity-panel" aria-label="Aktivitas mesin real-time">
+  <section class="activity-panel" aria-label="Neural activity">
     <div class="activity-head">
-      <div><div class="activity-title">NEURAL ACTIVITY · LIVE TELEMETRY</div><div class="activity-state" id="activityState">SIAP · menunggu input</div></div>
+      <div>
+        <div class="activity-title">NEURAL ACTIVITY · LIVE TELEMETRY</div>
+        <div class="activity-state" id="activityState">SIAP · menunggu input</div>
+      </div>
       <div class="activity-state" id="telemetryClock">–</div>
     </div>
-    <div class="lamps" id="phaseLamps">
+    <div class="lamps">
       <div class="lamp" id="lampA"><span class="lamp-dot"></span><span class="lamp-name">A · REPRESENTASI</span><span class="lamp-time" id="lampATime">–</span></div>
       <div class="lamp" id="lampB"><span class="lamp-dot"></span><span class="lamp-name">B · PROSES</span><span class="lamp-time" id="lampBTime">–</span></div>
       <div class="lamp" id="lampC"><span class="lamp-dot"></span><span class="lamp-name">C · HASIL</span><span class="lamp-time" id="lampCTime">–</span></div>
       <div class="lamp" id="lampD"><span class="lamp-dot"></span><span class="lamp-name">D · AUDIT</span><span class="lamp-time" id="lampDTime">–</span></div>
     </div>
-    <div class="route-line" id="routeLine"><span class="route-node" id="routeA">A</span><span class="route-arrow">›</span><span class="route-node" id="routeB">B</span><span class="route-arrow">›</span><span class="route-node" id="routeC">C</span><span class="route-arrow">›</span><span class="route-node" id="routeD">D</span><span class="route-arrow">·</span><span id="routeStatus">ROUTE IDLE</span></div>
+    <div class="route-line" id="routeLine">
+      <span class="route-node" id="routeA">A</span><span class="route-arrow">›</span>
+      <span class="route-node" id="routeB">B</span><span class="route-arrow">›</span>
+      <span class="route-node" id="routeC">C</span><span class="route-arrow">›</span>
+      <span class="route-node" id="routeD">D</span>
+      <span class="route-arrow">·</span>
+      <span id="routeStatus">ROUTE IDLE</span>
+    </div>
     <div class="telemetry-grid">
       <div class="telemetry-mini"><div class="k">Route fingerprint</div><div class="v" id="routeFingerprint">–</div></div>
       <div class="telemetry-mini"><div class="k">Cycle duration</div><div class="v" id="routeDuration">–</div></div>
       <div class="telemetry-mini"><div class="k">Last event</div><div class="v" id="lastTelemetryEvent">–</div></div>
     </div>
     <div class="activity-actions">
-      <button type="button" id="soundToggle">🔇 Suara sistem: OFF</button>
-      <button type="button" id="hapticToggle">📳 Haptic: AUTO</button>
+      <button type="button" class="btn" id="soundToggle">🔇 Suara sistem: OFF</button>
+      <button type="button" class="btn" id="hapticToggle">📳 Haptic: AUTO</button>
     </div>
   </section>
 
-  <div class="pipeline" id="pipelineBar" aria-label="Pipeline">
+  <div class="result-grid">
+    <div class="result-card">
+      <h3>◎ HASIL NYATA · SIKLUS TERAKHIR <span id="resultStamp" style="float:right;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">menunggu…</span></h3>
+      <div class="result-status" id="resultStatus">IDLE</div>
+      <div class="fact-line" id="resultSummary">Belum ada proses. Jalankan uji pipeline atau terima input LIVE dari BCGO.</div>
+      <div class="result-meta">
+        <div><div class="k">Confidence</div><div class="v" id="resultConf">–</div></div>
+        <div><div class="k">Audit D</div><div class="v" id="resultAudit">–</div></div>
+        <div><div class="k">Temuan</div><div class="v" id="resultFindings">0</div></div>
+        <div><div class="k">Relasi</div><div class="v" id="resultRelations">0</div></div>
+        <div><div class="k">Durasi</div><div class="v" id="resultDuration">–</div></div>
+        <div><div class="k">Fingerprint</div><div class="v" id="resultFp">–</div></div>
+      </div>
+    </div>
+    <div class="evidence-card">
+      <h3>Bukti &amp; temuan</h3>
+      <div class="evidence-list" id="evidenceList"><div class="empty">Belum ada evidence.</div></div>
+    </div>
+  </div>
+
+  <div class="pipeline" id="pipelineBar">
     <span class="stage" id="stA">A Representasi</span>
     <span class="stage" id="stB">B Proses</span>
     <span class="stage" id="stC">C Hasil</span>
@@ -196,20 +284,18 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     <div class="stat"><div class="k">Degraded count</div><div class="v" id="degradedCount">0</div></div>
   </div>
 
-  <section class="panel" aria-labelledby="h-log">
-    <div class="ph"><h2 id="h-log">Log siklus langsung</h2>
-      <span class="muted" id="logHint">menunggu aktivitas…</span>
-    </div>
+  <section class="panel">
+    <div class="ph"><h2>Log siklus langsung</h2><span class="muted" id="logHint">menunggu aktivitas…</span></div>
     <div class="body"><div id="log" class="log" role="log" aria-live="polite"><div class="empty">BOOT — menyiapkan observer…</div></div></div>
   </section>
 
   <div style="display:grid;gap:12px;grid-template-columns:1fr 1fr" class="two">
-    <section class="panel" aria-labelledby="h-audit">
-      <h2 class="ph" id="h-audit">Jejak audit terakhir</h2>
+    <section class="panel">
+      <h2 class="ph">Jejak audit terakhir</h2>
       <div class="body"><div id="auditView" class="audit"><div class="empty">Belum ada proses.</div></div></div>
     </section>
-    <section class="panel" aria-labelledby="h-health">
-      <h2 class="ph" id="h-health">Kesehatan runtime</h2>
+    <section class="panel">
+      <h2 class="ph">Kesehatan runtime</h2>
       <div class="body">
         <div class="row"><span>Self-test</span><strong id="selfDetail">-</strong></div>
         <div class="row"><span>Independensi</span><strong id="indDetail">-</strong></div>
@@ -223,26 +309,30 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     </section>
   </div>
 
-  <section class="panel" aria-labelledby="h-detail">
-    <h2 class="ph" id="h-detail">Hasil terakhir (JSON)</h2>
+  <section class="panel">
+    <h2 class="ph">Hasil terakhir (JSON)</h2>
     <div class="body"><pre id="detail" class="detail">Belum ada hasil.</pre></div>
   </section>
 
-  <section class="panel" id="dev" aria-labelledby="h-dev">
-    <h2 class="ph" id="h-dev">Input uji — proses manual</h2>
+  <section class="panel">
+    <h2 class="ph">Input uji — proses manual</h2>
     <div class="body">
       <textarea id="devInput" placeholder="Tempel teks atau JSON…">analisis struktur pipeline Mesin ABC — uji monitor live</textarea>
-      <label><input type="checkbox" id="devReflect"> Auto-reflect (proses ulang hasilnya sendiri)</label>
-      <button id="devRun" type="button">Proses input</button>
+      <label><input type="checkbox" id="devReflect"> Auto-reflect</label>
+      <button type="button" class="btn primary" id="devRun">
+        <svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+        Proses input
+      </button>
     </div>
   </section>
 </div>
 
-<script src="cgo-ai-voice-operator.js?v=3.0.0-STRUCTURED-QUIET-20260926"></script>
+<script src="cgo-ai-voice-operator.js?v=3.0.1-STRUCTURED-QUIET-20260926"></script>
 <script src="cgo-machine-abc.js?v=0.9.8-STABLE-20260926"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.6.0-BCGO-SYNC-20260926"></script>
 <script src="cgo-abc-cognition.js"></script>
 <script>
+
 (() => {
   "use strict";
   const $ = s => document.querySelector(s);
@@ -362,8 +452,8 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   async function ensureAudio(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error("Web Audio API tidak tersedia");if(!audioCtx){audioCtx=new AC({latencyHint:"interactive"});masterGain=audioCtx.createGain();masterGain.gain.value=AUDIO_GAIN;const comp=audioCtx.createDynamicsCompressor();comp.threshold.value=-20;comp.knee.value=18;comp.ratio.value=4;comp.attack.value=.008;comp.release.value=.18;masterGain.connect(comp);comp.connect(audioCtx.destination);audioCtx.onstatechange=()=>{if(soundEnabled&&audioCtx.state==='running')audioReady=true}}if(audioCtx.state!=="running")await audioCtx.resume();if(audioCtx.state!=="running")throw new Error("AudioContext belum running");audioReady=true;return audioCtx}
   function voice(ctx,when,f,d,type='sine',level=.08,glide=null,pan=0){const o=ctx.createOscillator(),g=ctx.createGain(),p=ctx.createStereoPanner?ctx.createStereoPanner():null;o.type=type;o.frequency.setValueAtTime(f,when);if(glide)o.frequency.exponentialRampToValueAtTime(glide,when+d*.8);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.012);g.gain.exponentialRampToValueAtTime(level*.42,when+d*.55);g.gain.exponentialRampToValueAtTime(.0001,when+d);o.connect(g);if(p){p.pan.value=pan;g.connect(p);p.connect(masterGain)}else g.connect(masterGain);o.start(when);o.stop(when+d+.03)}
   function systemSound(kind='tick',force=false){if(!soundEnabled||!audioReady||!audioCtx||audioCtx.state!=="running"||!masterGain)return false;try{const q={start:[392,523,.13,'sine',.075],A:[392,523,.11,'sine',.060],B:[440,587,.11,'sine',.060],C:[494,659,.12,'sine',.065],D:[523,698,.13,'triangle',.070],done:[523,659,.18,'sine',.080],ok:[440,587,.14,'sine',.070],warn:[330,247,.16,'sine',.065],bad:[247,196,.18,'triangle',.070],tick:[440,0,.07,'sine',.045]}[kind]||[440,0,.07,'sine',.045];const when=Math.max(audioCtx.currentTime+.01,soundQueueUntil);voice(audioCtx,when,q[0],q[2],q[3],q[4],q[1]||null,-.05);if(q[1])voice(audioCtx,when+.035,q[1],q[2]*.82,'sine',q[4]*.62,null,.06);soundQueueUntil=when+q[2]+.045;return true}catch(_){return false}}
-  async function armSound(){try{await ensureAudio();soundEnabled=true;soundQueueUntil=0;systemSound('start',true);const b=$("#soundToggle");if(b){b.textContent="🔊 SYSTEM AUDIO · READY";b.classList.add("active")}showNotice("System sonification lokal aktif · cue singkat A→B→C→D.","ok");return true}catch(e){soundEnabled=false;showNotice("Audio tidak tersedia: "+String(e.message||e),"error");return false}}
-  function disarmSound(){soundEnabled=false;audioReady=false;soundQueueUntil=0;try{audioCtx?.suspend?.()}catch(_){}const b=$("#soundToggle");if(b){b.textContent="🔇 Suara sistem: OFF";b.classList.remove("active")}}
+  async function armSound(){try{try{if(window.CGOOperatorVoice){window.CGOOperatorVoice.unlock();window.CGOOperatorVoice.setEnabled(true);window.CGOOperatorVoice.state("SYSTEM_READY",{force:true});}}catch(_e){}await ensureAudio();soundEnabled=true;soundQueueUntil=0;systemSound("start",true);const b=$("#soundToggle");if(b){b.textContent="OPERATOR ON";b.classList.add("active")}showNotice("Operator suara aktif · struktur CGO v3 · gaya bandara.","ok");return true}catch(e){soundEnabled=false;showNotice("Audio tidak tersedia: "+String(e.message||e),"error");return false}}
+  function disarmSound(){soundEnabled=false;audioReady=false;soundQueueUntil=0;try{if(audioCtx&&audioCtx.suspend)audioCtx.suspend()}catch(_e){}try{if(window.CGOOperatorVoice&&window.CGOOperatorVoice.setEnabled)window.CGOOperatorVoice.setEnabled(false)}catch(_e){}const b=$("#soundToggle");if(b){b.textContent="Suara: OFF";b.classList.remove("active")}}
   async function recoverAudio(){if(!soundEnabled||!audioCtx)return false;try{if(audioCtx.state!=="running")await audioCtx.resume();if(audioCtx.state==='running'){audioReady=true;return true}}catch(_){}return false}
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)recoverAudio()});window.addEventListener('pageshow',()=>recoverAudio());
   function haptic(kind='tick'){if(!hapticEnabled||typeof navigator.vibrate!=="function")return;try{navigator.vibrate(kind==='bad'?[30,20,40]:kind==='done'?[12,18,12]:10)}catch(_){} }
@@ -421,6 +511,53 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     $("#pause").textContent = E.isPaused() ? "Lanjutkan" : "Jeda";
     $("#total").textContent = total;
     $("#rejectDetail").textContent = rejected;
+  }
+
+  
+  function renderResultCard(c) {
+    const r = c && (c.result || c) || {};
+    const status = r.status || "IDLE";
+    const conf = Number(r.decision && r.decision.confidence || 0);
+    const findings = Array.isArray(r.findings) ? r.findings : [];
+    const relations = Array.isArray(r.relations) ? r.relations : [];
+    const audit = (c && c.audit && c.audit.status) || (r.validation && r.validation.status) || "–";
+    const dur = r.durationMs || (c && c.durationMs) || 0;
+    const fp = String((c && c.telemetry && c.telemetry.fingerprint) || "").slice(0, 18) || "–";
+    const tone = OK.has(status) ? "ok" : WARN.has(status) ? "warn" : status === "IDLE" ? "" : "bad";
+    const st = document.getElementById("resultStatus");
+    if (st) { st.textContent = status; st.className = "result-status " + tone; }
+    const sum = document.getElementById("resultSummary");
+    if (sum) {
+      let t = r.summary ? String(r.summary).slice(0, 280) : ("Siklus selesai · status " + status + ".");
+      if (findings.length) t += " Temuan: " + findings.slice(0, 2).map(f => f.type || f.message || "item").join(", ") + ".";
+      sum.textContent = t;
+    }
+    const set = (id, v) => { const n = document.getElementById(id); if (n) n.textContent = v; };
+    set("resultConf", Math.round(conf * 100) + "%");
+    set("resultAudit", audit);
+    set("resultFindings", String(findings.length));
+    set("resultRelations", String(relations.length));
+    set("resultDuration", dur + "ms");
+    set("resultFp", fp);
+    set("resultStamp", new Date().toLocaleTimeString());
+    const list = document.getElementById("evidenceList");
+    if (list) {
+      list.innerHTML = "";
+      if (!findings.length) {
+        const e = document.createElement("div"); e.className = "empty"; e.textContent = "Tidak ada temuan terstruktur."; list.appendChild(e);
+      } else {
+        findings.slice(0, 10).forEach(f => {
+          const row = document.createElement("div");
+          row.className = "ev-item";
+          const left = document.createElement("span");
+          left.textContent = String(f.type || f.message || "finding").slice(0, 100);
+          const tag = document.createElement("span");
+          tag.className = "tag";
+          tag.textContent = String(f.severity || f.status || "INFO").toUpperCase();
+          row.appendChild(left); row.appendChild(tag); list.appendChild(row);
+        });
+      }
+    }
   }
 
   function renderCycle(c, stopReason) {
@@ -570,7 +707,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     setLive(st.verified ? "SELF-TEST OK" : "SELF-TEST FAIL", st.verified ? "ok" : "bad");
   };
   $("#btnPulse").onclick = () => { refresh(); showNotice("Metrics di-refresh · totalProcessed=" + (E.getMetrics().totalProcessed || 0), "ok"); };
-  $("#soundToggle").onclick = async () => { if(soundEnabled){disarmSound();return;} await armSound(); };
+  $("#soundToggle").onclick = async () => { try { if(soundEnabled){disarmSound();showNotice("Operator suara dimatikan.","ok");return;} await armSound(); } catch(err){ showNotice("Gagal suara: "+String(err.message||err),"error"); } };
   $("#hapticToggle").onclick = () => { hapticEnabled=!hapticEnabled; const b=$("#hapticToggle"); b.textContent=hapticEnabled?"📳 Haptic: AUTO":"📴 Haptic: OFF"; b.classList.toggle("active",hapticEnabled); };
   $("#devRun").onclick = () => {
     const raw = $("#devInput").value;
@@ -597,6 +734,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   } catch (_) {}
 
   chip($("#ver"), "Engine " + E.version, "ok");
+    if ($("#buildChip")) { $("#buildChip").textContent = "BUILD " + E.version; $("#buildChip").className = "chip ok"; }
   if($("#buildChip")) $("#buildChip").textContent = "BUILD LIVE-ACK";
   const st = health();
   // observer telemetry nyata: lampu/suara mengikuti event A→B→C→D dari engine, bukan animasi palsu.
@@ -664,6 +802,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     if (logo && !logo.classList.contains("live") && (m.totalProcessed || 0) > 0) logo.classList.add("live");
   }, 3000);
 })();
+
 </script>
 </body>
 </html>

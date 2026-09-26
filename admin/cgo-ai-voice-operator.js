@@ -1,11 +1,14 @@
 /*
- * CGO OPERATOR VOICE v3.0 — structured · quiet live · airport PA style
- * No stage spam on live cycles. Status-change only for VALID/WARNING/ERROR.
+ * CGO OPERATOR VOICE v3.0.1 — structured · quiet live · airport PA
+ * Event taxonomy (user-defined):
+ * SYSTEM_BOOT, SYSTEM_READY, COMMAND_ACCEPTED, COMMAND_DUPLICATE,
+ * PROCESSING, PROCESSING_WAIT, ABC_STAGE_A..D, LIVE_INPUT, STANDBY,
+ * VALID, WARNING, ERROR, RECOVERY, RESET, ABORT, SYSTEM_IDLE
  */
 (function () {
   'use strict';
-  const VERSION = '3.0.0-STRUCTURED-QUIET';
-  const BUILD = 'CIKUR-GO-OPERATOR-3.0.0';
+  const VERSION = '3.0.1-STRUCTURED-QUIET';
+  const BUILD = 'CIKUR-GO-OPERATOR-3.0.1';
   const ROOTS = ['./audio/cgo-operator/', './'];
   const EVENTS = Object.freeze({
     SYSTEM_BOOT:'SYSTEM_BOOT', SYSTEM_READY:'SYSTEM_READY',
@@ -61,12 +64,16 @@
     PROCESSING_WAIT:25, ABC_STAGE_D:20, ABC_STAGE_C:18, ABC_STAGE_B:16,
     ABC_STAGE_A:14, COMMAND_DUPLICATE:10, RESET:10, STANDBY:8, SYSTEM_IDLE:5
   });
+
   let unlocked=false, busy=false, enabled=true, quietLive=true, selectedVoice=null;
   let lastEvent='', lastSpokenAt=0, lastStatusSpoken='';
   const lastPlayed=new Map(), queue=[], audioCache=new Map();
   const MIN_GAP_MS=4500;
 
-  function isIdVoice(v){const l=String(v.lang||'').toLowerCase();return l.startsWith('id')||l.includes('indonesia');}
+  function isIdVoice(v){
+    const l=String(v.lang||'').toLowerCase();
+    return l.startsWith('id')||l.includes('indonesia');
+  }
   function rankVoice(v){
     const n=(v.name+' '+(v.voiceURI||'')).toLowerCase(); let s=0;
     if(/female|woman|girl|zira|samantha|ava|aria|jenny|susan|linda|karen/i.test(n)) s+=40;
@@ -79,19 +86,20 @@
     if(!('speechSynthesis' in window)) return false;
     const voices=window.speechSynthesis.getVoices()||[];
     if(!voices.length) return false;
-    const id=voices.filter(isIdVoice).sort((a,b)=>rankVoice(b)-rankVoice(a));
-    selectedVoice=id[0]||null;
+    selectedVoice=voices.filter(isIdVoice).sort((a,b)=>rankVoice(b)-rankVoice(a))[0]||null;
     return !!selectedVoice;
   }
-  if('speechSynthesis' in window){refreshVoices();window.speechSynthesis.onvoiceschanged=refreshVoices;}
+  if('speechSynthesis' in window){
+    refreshVoices();
+    window.speechSynthesis.onvoiceschanged=refreshVoices;
+  }
 
   function canPlay(key, force){
     if(!enabled||!TEXT[key]) return false;
     if(force) return true;
     const now=Date.now();
     if(now-lastSpokenAt<MIN_GAP_MS) return false;
-    const cd=COOLDOWN[key]??10000;
-    return now-(lastPlayed.get(key)||0)>=cd;
+    return now-(lastPlayed.get(key)||0)>=(COOLDOWN[key]??10000);
   }
   function loadAudio(key){
     const file=MP3[key]; if(!file) return null;
@@ -109,9 +117,8 @@
       const u=new SpeechSynthesisUtterance(TEXT[key]);
       u.lang=(selectedVoice&&selectedVoice.lang)||'id-ID';
       if(selectedVoice) u.voice=selectedVoice;
-      u.rate=0.84; u.pitch=1.02; u.volume=1.0;
-      let done=false;
-      const fin=ok=>{if(!done){done=true;resolve(!!ok);}};
+      u.rate=0.84; u.pitch=1.02; u.volume=1;
+      let done=false; const fin=ok=>{if(!done){done=true;resolve(!!ok);}};
       u.onend=()=>fin(true); u.onerror=()=>fin(false);
       try{
         window.speechSynthesis.speak(u);
@@ -142,36 +149,41 @@
     const key=queue.shift();
     while(queue.length>3) queue.pop();
     try{
-      if(canPlay(key,false)||key!==lastEvent){
-        if(canPlay(key,true)||canPlay(key,false)){
-          lastPlayed.set(key,Date.now()); lastSpokenAt=Date.now(); lastEvent=key;
-          let ok=await speakTts(key); if(!ok) await playMp3(key);
-        }
+      if(canPlay(key,true)){
+        lastPlayed.set(key,Date.now()); lastSpokenAt=Date.now(); lastEvent=key;
+        let ok=await speakTts(key);
+        if(!ok) await playMp3(key);
       }
     }catch(_){}
     finally{busy=false; if(queue.length) setTimeout(drain,80);}
   }
+
   function unlock(){
-    if(unlocked) return; unlocked=true;
+    if(unlocked) return;
+    unlocked=true;
     try{
       if('speechSynthesis' in window){
-        const w=new SpeechSynthesisUtterance(' '); w.volume=0;
-        window.speechSynthesis.speak(w); window.speechSynthesis.cancel();
+        const w=new SpeechSynthesisUtterance(' ');
+        w.volume=0;
+        window.speechSynthesis.speak(w);
+        window.speechSynthesis.cancel();
       }
     }catch(_){}
+    Object.keys(MP3).forEach(k=>{try{loadAudio(k);}catch(_){}});
     drain();
   }
-  ['pointerdown','touchstart','keydown','click'].forEach(t=>window.addEventListener(t,unlock,{passive:true}));
 
   function emit(key, options){
     options=options||{};
-    const force=!!options.force;
     if(!TEXT[key]) return false;
-    if(!canPlay(key,force)) return false;
+    if(!enabled) return false;
+    if(!canPlay(key, !!options.force)) return false;
     if(queue[queue.length-1]===key) return false;
+    if(!unlocked) unlock();
     queue.push(key);
     if(queue.length>6){queue.sort((a,b)=>(PRIORITY[b]||0)-(PRIORITY[a]||0)); queue.length=6;}
-    drain(); return true;
+    drain();
+    return true;
   }
 
   function state(name, detail){
@@ -182,26 +194,26 @@
       if(s===lastStatusSpoken&&['VALID','WELL_FORMED','PROCESSED','PARTIAL','WARNING','DEGRADED','ERROR','FAILED','LIVE','STANDBY'].includes(s))
         return false;
     }
-    if(s==='BOOT'||s==='SYSTEM_BOOT') return emit(EVENTS.SYSTEM_BOOT, detail);
-    if(s==='READY'||s==='SYSTEM_READY') return emit(EVENTS.SYSTEM_READY, detail);
-    if(s==='COMMAND_ACCEPTED'||s==='ACCEPTED') return emit(EVENTS.COMMAND_ACCEPTED, detail);
-    if(s==='COMMAND_DUPLICATE'||s==='DUPLICATE'||s==='DEDUP') return emit(EVENTS.COMMAND_DUPLICATE, detail);
-    if(s==='PROCESSING'||s==='RUNNING') return emit(EVENTS.PROCESSING, detail);
-    if(s==='PROCESSING_WAIT'||s==='WAIT') return emit(EVENTS.PROCESSING_WAIT, detail);
-    if(s==='LIVE'||s==='LIVE_INPUT'){lastStatusSpoken=s; return emit(EVENTS.LIVE_INPUT, detail);}
-    if(s==='STANDBY'||s==='IDLE'){lastStatusSpoken=s; return emit(EVENTS.STANDBY, detail);}
-    if(s==='VALID'||s==='COMPLETE'||s==='DONE'||s==='WELL_FORMED'||s==='PROCESSED'){lastStatusSpoken='VALID'; return emit(EVENTS.VALID, detail);}
-    if(s==='WARNING'||s==='DEGRADED'||s==='PARTIAL'){
-      if(s==='PARTIAL'&&quietLive&&lastStatusSpoken==='PARTIAL'&&!detail.force) return false;
-      lastStatusSpoken=s==='PARTIAL'?'PARTIAL':'WARNING';
-      return emit(EVENTS.WARNING, detail);
-    }
-    if(s==='ERROR'||s==='FAILED'){lastStatusSpoken='ERROR'; return emit(EVENTS.ERROR, detail);}
-    if(s==='RECOVERY') return emit(EVENTS.RECOVERY, detail);
-    if(s==='RESET') return emit(EVENTS.RESET, detail);
-    if(s==='ABORT') return emit(EVENTS.ABORT, detail);
-    if(s==='SYSTEM_IDLE') return emit(EVENTS.SYSTEM_IDLE, detail);
-    return false;
+    const map={
+      BOOT:EVENTS.SYSTEM_BOOT, SYSTEM_BOOT:EVENTS.SYSTEM_BOOT,
+      READY:EVENTS.SYSTEM_READY, SYSTEM_READY:EVENTS.SYSTEM_READY,
+      COMMAND_ACCEPTED:EVENTS.COMMAND_ACCEPTED, ACCEPTED:EVENTS.COMMAND_ACCEPTED,
+      COMMAND_DUPLICATE:EVENTS.COMMAND_DUPLICATE, DUPLICATE:EVENTS.COMMAND_DUPLICATE, DEDUP:EVENTS.COMMAND_DUPLICATE,
+      PROCESSING:EVENTS.PROCESSING, RUNNING:EVENTS.PROCESSING,
+      PROCESSING_WAIT:EVENTS.PROCESSING_WAIT, WAIT:EVENTS.PROCESSING_WAIT,
+      LIVE:EVENTS.LIVE_INPUT, LIVE_INPUT:EVENTS.LIVE_INPUT,
+      STANDBY:EVENTS.STANDBY, IDLE:EVENTS.STANDBY,
+      VALID:EVENTS.VALID, COMPLETE:EVENTS.VALID, DONE:EVENTS.VALID, WELL_FORMED:EVENTS.VALID, PROCESSED:EVENTS.VALID,
+      WARNING:EVENTS.WARNING, DEGRADED:EVENTS.WARNING, PARTIAL:EVENTS.WARNING,
+      ERROR:EVENTS.ERROR, FAILED:EVENTS.ERROR,
+      RECOVERY:EVENTS.RECOVERY, RESET:EVENTS.RESET, ABORT:EVENTS.ABORT, SYSTEM_IDLE:EVENTS.SYSTEM_IDLE
+    };
+    const key=map[s];
+    if(!key) return false;
+    if(key===EVENTS.VALID||key===EVENTS.WARNING||key===EVENTS.ERROR||key===EVENTS.LIVE_INPUT||key===EVENTS.STANDBY)
+      lastStatusSpoken = key===EVENTS.VALID?'VALID':s;
+    if(s==='PARTIAL'&&quietLive&&lastStatusSpoken==='PARTIAL'&&!detail.force) return false;
+    return emit(key, detail);
   }
 
   function announcePipelineStage(stage, started, result, options){
@@ -210,7 +222,7 @@
     if(!started){
       if(String(stage).toUpperCase()==='D'){
         const audit=String(result&&result.audit||'').toUpperCase();
-        return audit==='VALID'?emit(EVENTS.VALID,{force:true}):emit(EVENTS.WARNING,{force:true});
+        return emit(audit==='VALID'?EVENTS.VALID:EVENTS.WARNING,{force:true});
       }
       return false;
     }
@@ -222,21 +234,23 @@
     return emit(EVENTS.PROCESSING, options);
   }
 
-  function welcome(){
-    emit(EVENTS.SYSTEM_BOOT,{force:true});
-    setTimeout(()=>emit(EVENTS.SYSTEM_READY),1600);
-    return true;
+  function welcome(){ return emit(EVENTS.SYSTEM_READY,{force:true}); }
+
+  function setEnabled(v){
+    enabled=!!v;
+    if(!enabled){
+      queue.length=0;
+      try{window.speechSynthesis&&window.speechSynthesis.cancel();}catch(_){}
+    }
   }
 
   window.CGOOperatorVoice=Object.freeze({
-    version:VERSION, build:BUILD, EVENTS, emit,
-    play:(key,opt)=>emit(String(key).toUpperCase().replace(/-/g,'_'), opt),
-    welcome, state, announcePipelineStage, unlock,
-    setQuietLive(v){quietLive=!!v;}, setEnabled(v){enabled=!!v; if(!enabled) queue.length=0;},
+    version:VERSION, build:BUILD, EVENTS, emit, play:(k,o)=>emit(String(k).toUpperCase().replace(/-/g,'_'),o),
+    welcome, state, announcePipelineStage, unlock, setEnabled,
+    setQuietLive(v){quietLive=!!v;},
     get unlocked(){return unlocked;}, get enabled(){return enabled;}, get quietLive(){return quietLive;},
     get voice(){return selectedVoice&&selectedVoice.name||null;},
     get voiceLanguage(){return selectedVoice&&selectedVoice.lang||null;},
     get femaleVoiceReady(){return !!selectedVoice;}
   });
-  document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>{if(unlocked) welcome();},900);},{once:true});
 })();
