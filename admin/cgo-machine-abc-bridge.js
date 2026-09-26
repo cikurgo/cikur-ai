@@ -18,6 +18,10 @@
   const VERSION = "1.3.0-ABC-BRIDGE";
   const listeners = new Set();
   let lastPacket = null;
+  let lastLiveFingerprint = null;
+  let liveRevision = 0;
+  let liveBus = null;
+  try { liveBus = new BroadcastChannel("CGO_MACHINE_ABC_LIVE_LINK"); } catch (_) {}
 
   function emit(name, detail) {
     try {
@@ -86,7 +90,26 @@
     }
     const nerves=state.fileNerves&&typeof state.fileNerves==="object"?state.fileNerves:{};
     for(const [target,n] of Object.entries(nerves)){const st=String(n?.health?.overall||"UNKNOWN").toUpperCase();if(st!=="HEALTHY")claims.push({source:"BCGO.fileNerves",target,status:st,severity:st==="ANOMALY"?"HIGH":"MEDIUM",message:n?.source?.message||null,evidence:{health:n?.health||null,evidenceSummary:n?.evidenceSummary||null,changed:!!n?.changed,contentHash:n?.contentHash||null}});}
-    return {schema:"CGO_EXTERNAL_EVIDENCE_V1",source:"BCGO",capturedAt:Date.now(),claims,fingerprint:fingerprintEvidence({claims})};
+    const capturedAt = Number(state.firestore?.lastServerAt || state.lastTelemetryAt || Date.now());
+    const ageMs = Math.max(0, Date.now() - capturedAt);
+    const serverLive = state.firestore?.connected === true && ageMs <= 120000;
+    const telemetryLive = Number.isFinite(Number(state.lastTelemetryAt)) && (Date.now() - Number(state.lastTelemetryAt)) <= 900000;
+    const explicitMode = String(state.operationMode || state.sourceMode || "").toUpperCase();
+    const mode = explicitMode === "TEST" ? "TEST" : (serverLive || telemetryLive ? "LIVE" : "STANDBY");
+    const observations = {
+      connection: state.connection?.status || (serverLive ? "LIVE" : "UNKNOWN"),
+      firestoreConnected: !!state.firestore?.connected,
+      firestoreCount: Number(state.firestore?.count || 0),
+      lastServerAt: Number(state.firestore?.lastServerAt || 0) || null,
+      lastTelemetryAt: Number(state.lastTelemetryAt || 0) || null,
+      telemetryAgeMs: Number.isFinite(Number(state.lastTelemetryAt)) ? Math.max(0, Date.now() - Number(state.lastTelemetryAt)) : null,
+      cycle: Number(state.cycle || 0),
+      cycleMode: state.cycleMode || null,
+      activeCases: Array.isArray(state.activeCases) ? state.activeCases.length : 0,
+      sourceScanStatus: state.sourceScan?.status || null
+    };
+    const fingerprint = fingerprintEvidence({claims,observations,mode});
+    return {schema:"CGO_EXTERNAL_EVIDENCE_V1",source:"BCGO",capturedAt,revision:++liveRevision,mode,ageMs,serverLive,telemetryLive,observations,claims,fingerprint};
   }
 
   function analyze(input, options = {}) {
@@ -144,13 +167,45 @@
   function ingestBCGOState(state) {
     const evidence = buildBCGOEvidence(state);
     if (!evidence) return {ok:false,error:"BCGO_STATE_REQUIRED"};
+    if (evidence.mode === "TEST") {
+      return {ok:false,mode:"TEST",status:"TEST_INPUT_REQUIRES_EXPLICIT_TEST_PATH",evidence};
+    }
+    // Jangan memproses snapshot yang identik berulang-ulang. Ini menjaga jalur live stabil.
+    const dedupeKey = fingerprintEvidence({mode:evidence.mode,observations:evidence.observations,claims:evidence.claims});
+    if (dedupeKey && dedupeKey === lastLiveFingerprint) {
+      return {ok:true,duplicate:true,mode:evidence.mode,status:lastPacket?.result?.status||null,audit:lastPacket?.audit?.status||null,evidence};
+    }
+    lastLiveFingerprint = dedupeKey;
     try {
-      const packet = E.process({type:"external-evidence-snapshot",source:"BCGO",capturedAt:Date.now()}, {source:"BCGO_STATE_SYNC",externalEvidence:evidence});
+      const packet = E.process(
+        {type:"external-evidence-snapshot",source:"BCGO",capturedAt:evidence.capturedAt,mode:evidence.mode,observations:evidence.observations},
+        {source:"BCGO_STATE_SYNC",externalEvidence:evidence}
+      );
       lastPacket = packet;
-      emit("cgo:machine-abc-bcgo-sync", {result:packet.result||null,audit:packet.audit||null,evidence});
-      return {ok:true,status:packet.result?.status||null,audit:packet.audit?.status||null,packet};
+      const link = {
+        type:"CGO_ABC_LIVE_LINK",
+        source:"BCGO",
+        mode:evidence.mode,
+        revision:evidence.revision,
+        capturedAt:evidence.capturedAt,
+        ageMs:evidence.ageMs,
+        serverLive:evidence.serverLive,
+        telemetryLive:evidence.telemetryLive,
+        status:packet.result?.status||null,
+        audit:packet.audit?.status||null,
+        fingerprint:evidence.fingerprint,
+        claimCount:evidence.claims.length,
+        packet
+      };
+      try { global.CGO_ABC_LIVE_LINK = Object.freeze({...link}); } catch (_) {}
+      try { liveBus?.postMessage(link); } catch (_) {}
+      emit("cgo:machine-abc-bcgo-sync", link);
+      return {ok:true,mode:evidence.mode,status:packet.result?.status||null,audit:packet.audit?.status||null,evidence,packet};
     } catch(err) {
-      return {ok:false,error:String(err?.message||err)};
+      const error=String(err?.message||err);
+      const link={type:"CGO_ABC_LIVE_LINK",source:"BCGO",mode:evidence.mode,status:"ERROR",audit:"ATTENTION",error,revision:evidence.revision};
+      try { liveBus?.postMessage(link); } catch (_) {}
+      return {ok:false,mode:evidence.mode,error,link};
     }
   }
 
