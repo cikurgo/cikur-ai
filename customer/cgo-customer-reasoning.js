@@ -33,93 +33,8 @@
   }
   function has(v, list) {
     const s = lower(v);
-    return list.some((x) => s.includes(x) || fuzzyPhraseMatch(s, x));
+    return list.some((x) => s.includes(x));
   }
-
-  /* ----------------------------------------------------------
-   * Fuzzy / typo-tolerant matching (tanpa AI eksternal)
-   * ------------------------------------------------------------
-   * Dipakai sebagai jaring pengaman KEDUA setelah exact-match gagal,
-   * supaya salah ketik ringan (mis. "pesn makanan", "kmau siapa")
-   * tetap kena ke pola yang sama seperti versi yang benar.
-   * Kata pendek (<4 huruf) sengaja TIDAK di-fuzzy-kan supaya tidak
-   * salah cocok (mis. "ok", "di", "ke", "u", "r").
-   * ---------------------------------------------------------- */
-  function levenshtein(a, b) {
-    if (a === b) return 0;
-    const al = a.length, bl = b.length;
-    if (al === 0) return bl;
-    if (bl === 0) return al;
-    if (Math.abs(al - bl) > 3) return 99; // beda panjang jauh, pasti bukan typo ringan
-
-    // Damerau-Levenshtein (optimal string alignment): substitusi, sisip, hapus,
-    // DAN transposisi dua huruf bersebelahan dihitung 1 langkah saja.
-    // Ini penting karena typo paling umum saat mengetik cepat di HP adalah
-    // dua huruf yang ketuker posisi (mis. "kmau" vs "kamu", "bsia" vs "bisa").
-    const d = [];
-    for (let i = 0; i <= al; i++) d[i] = [i];
-    for (let j = 0; j <= bl; j++) d[0][j] = j;
-
-    for (let i = 1; i <= al; i++) {
-      for (let j = 1; j <= bl; j++) {
-        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-        let val = Math.min(
-          d[i - 1][j] + 1,
-          d[i][j - 1] + 1,
-          d[i - 1][j - 1] + cost
-        );
-        if (
-          i > 1 && j > 1 &&
-          a[i - 1] === b[j - 2] &&
-          a[i - 2] === b[j - 1]
-        ) {
-          val = Math.min(val, d[i - 2][j - 2] + 1);
-        }
-        d[i][j] = val;
-      }
-    }
-    return d[al][bl];
-  }
-
-  function wordFuzzyThreshold(word) {
-    if (word.length <= 2) return 0; // kata sangat pendek (ai, ok, u, r): harus persis
-    if (word.length <= 6) return 1;
-    return 2;
-  }
-
-  function tokenize(s) {
-    return s.split(/[^a-z0-9]+/i).filter(Boolean);
-  }
-
-  function fuzzyPhraseMatch(inputLower, phrase) {
-    const phraseWords = tokenize(phrase.toLowerCase());
-    if (!phraseWords.length) return false;
-
-    const inputWords = tokenize(inputLower);
-    if (!inputWords.length) return false;
-
-    // Fuzzy hanya layak dicoba kalau frasanya punya minimal satu kata "berat"
-    // (>=4 huruf) — frasa yang isinya cuma kata pendek (mis. "ok", "iya")
-    // tidak usah difuzzy-kan sama sekali, biar tidak jadi kelewat longgar.
-    const hasSignificantWord = phraseWords.some((w) => w.length >= 4);
-    if (!hasSignificantWord) return false;
-
-    // SEMUA kata dalam frasa wajib ketemu di input — kata panjang boleh typo
-    // ringan (threshold dari wordFuzzyThreshold), kata pendek (<4 huruf,
-    // mis. "ai", "bot", "kok") WAJIB persis, tidak boleh ditebak-tebak.
-    // Ini penting supaya frasa seperti "kamu ai" / "kamu bot" tidak collapse
-    // jadi cuma mensyaratkan "kamu" saja (yang terlalu umum & bahaya salah tangkap).
-    return phraseWords.every((pw) => {
-      const threshold = wordFuzzyThreshold(pw);
-      return inputWords.some((iw) => {
-        if (iw === pw) return true;
-        if (threshold === 0) return false;
-        if (Math.abs(iw.length - pw.length) > threshold) return false;
-        return levenshtein(iw, pw) <= threshold;
-      });
-    });
-  }
-
   function hasWord(v, list) {
     const s = lower(v);
     return list.some((x) => {
@@ -880,8 +795,8 @@
       if (constraintNote) foodText += constraintNote;
       foodText +=
         lang === "en"
-          ? " I'll only show options once real data is there — no made-up lists."
-          : " Nanti kalau datanya sudah ada, aku tampilin opsinya — nggak bikin-bikin daftar kosong 😊";
+          ? " I still won't invent live listings — only use verified data when available."
+          : " Aku tetap nggak mengarang daftar live — hanya pakai data terverifikasi kalau sudah ada.";
       return {
         handled: true,
         text: foodText,
@@ -1085,8 +1000,8 @@
         handled: true,
         text:
           lang === "en"
-            ? `Got it 😊 I'll remember your preference (${label}) for ${topic}. When real options show up, we can filter with that.`
-            : `Oke 😊 Aku catat preferensimu (${label}) untuk ${topic}. Nanti pas opsi beneran ada, bisa kita filter sesuai itu.`,
+            ? `Got it 😊 I'll keep your preference (${label}) for ${topic}. When verified options are available, we can filter with that in mind — I still won't invent live listings.`
+            : `Oke 😊 Aku catat preferensimu (${label}) untuk ${topic}. Nanti kalau opsi terverifikasi ada, bisa difilter sesuai itu — aku tetap nggak mengarang daftar live.`,
         mode: "natural_preference",
         shouldOfferService: true,
         stateUpdate: {
@@ -1135,129 +1050,11 @@
       };
     }
 
-    // --- "Tadi kita bahas apa?" / previous discussion recall (natural) ---
-    if (
-      has(input, [
-        "tadi kita bahas", "kita bahas apa", "bahas apa tadi", "topik terakhir",
-        "apa yang kita bahas", "apa yang kita bicarakan", "yang tadi apa",
-        "what did we talk", "what did we discuss", "previous topic",
-        "tadi bahas apa", "kita ngomongin apa", "sebelumnya kita bahas"
-      ]) ||
-      (has(input, ["tadi", "sebelumnya", "barusan"]) && has(input, ["bahas", "bicarakan", "ngomongin", "topik"]))
-    ) {
-      const topicLabels = {
-        cikur_go: { id: "CIKUR GO", en: "CIKUR GO" },
-        cikurgo2in1: { id: "layanan 2in1", en: "2in1" },
-        food: { id: "Food / pesan makanan", en: "Food" },
-        ride: { id: "Ride / perjalanan", en: "Ride" },
-        assistant: { id: "Assistant / sewa asisten", en: "Assistant" },
-        pricing: { id: "harga / tarif", en: "pricing" },
-        service: { id: "layanan CIKUR GO", en: "CIKUR GO services" },
-        conversation: { id: "obrolan santai", en: "casual chat" }
-      };
-
-      // Prioritas: ABC history → state topic → recentMessages scan
-      // classification sudah dari ctx.classification (bukan options — bug fix)
-      let topics = [];
-      if (classification && classification.abcHistory && Array.isArray(classification.abcHistory.topics)) {
-        topics = classification.abcHistory.topics.slice();
-      }
-      if (!topics.length && classification && classification.machineAbc && classification.machineAbc.summary) {
-        const sum = String(classification.machineAbc.summary).toLowerCase();
-        ["food", "ride", "assistant", "cikurgo2in1", "cikur_go", "pricing"].forEach(function (k) {
-          if (sum.indexOf(k.replace("_", " ")) >= 0 || sum.indexOf(k) >= 0) topics.push(k);
-        });
-      }
-      const cand = reasoningState.lastTopic || state.topic || state.context?.unresolvedTopic || state.context?.serviceCandidate;
-      if (cand && cand !== "conversation" && topics.indexOf(cand) === -1) {
-        topics.unshift(cand);
-      }
-
-      // Fallback: scan recentMessages for service keywords
-      if (!topics.length && state.context && Array.isArray(state.context.recentMessages)) {
-        const raw = state.context.recentMessages.map(function (m) {
-          return String((m && m.text) || "").toLowerCase();
-        }).join(" ");
-        if (/\b(food|makanan|pesan\s*makanan)\b/.test(raw)) topics.push("food");
-        if (/\b(ride|perjalanan|ojek|driver)\b/.test(raw)) topics.push("ride");
-        if (/\b(assistant|asisten|sewa)\b/.test(raw)) topics.push("assistant");
-        if (/\b(2in1|dua\s*in)\b/.test(raw)) topics.push("cikurgo2in1");
-        if (/\b(cikur\s*go|cikurgo|platform)\b/.test(raw)) topics.push("cikur_go");
-      }
-
-      if (topics.length) {
-        const labels = topics.slice(0, 3).map(function (t) {
-          const L = topicLabels[t];
-          return (L && (lang === "en" ? L.en : L.id)) || t;
-        });
-        const joined = labels.join(lang === "en" ? " and " : " dan ");
-        return {
-          handled: true,
-          text:
-            lang === "en"
-              ? `We were talking about ${joined}. Want to continue from there, or switch to something else?`
-              : `Tadi kita bahas soal ${joined}. Mau lanjut dari situ, atau pindah topik lain?`,
-          mode: "reasoning_recall",
-          shouldOfferService: false
-        };
-      }
-
-      // Tidak ada topik spesifik → jujur natural
-      return {
-        handled: true,
-        text:
-          lang === "en"
-            ? "We were just chatting casually. Is there something specific you'd like to pick up, or a service you need?"
-            : "Tadi kita masih ngobrol santai. Ada yang mau dilanjut, atau ada layanan yang kamu butuhkan?",
-        mode: "reasoning_recall",
-        shouldOfferService: false
-      };
-    }
-
-    // --- Bare "lanjut" / continue (buddy, not generic filler) ---
+    // --- Continue previous topic ---
     if (
       has(input, [
         "lanjut", "lanjutkan", "terus", "continue", "go on", "cerita lanjut",
-        "lalu bagaimana", "lalu gimana", "terus gimana", "next"
-      ]) &&
-      input.split(/\s+/).length <= 4
-    ) {
-      const t = reasoningState.lastTopic || state.topic;
-      const topicLabels = {
-        cikur_go: { id: "CIKUR GO", en: "CIKUR GO" },
-        cikurgo2in1: { id: "2in1", en: "2in1" },
-        food: { id: "Food", en: "Food" },
-        ride: { id: "Ride", en: "Ride" },
-        assistant: { id: "Assistant", en: "Assistant" },
-        service: { id: "layanan CIKUR GO", en: "CIKUR GO services" }
-      };
-      if (t && t !== "conversation" && topicLabels[t]) {
-        const label = topicLabels[t][lang === "en" ? "en" : "id"];
-        return {
-          handled: true,
-          text:
-            lang === "en"
-              ? `Sure — back to ${label}. What do you want to know next?`
-              : `Oke, lanjut soal ${label} 😊 Mau tahu bagian mana?`,
-          mode: "natural_continue",
-          shouldOfferService: false
-        };
-      }
-      // Tidak ada topik layanan — anggap lanjut ngobrol
-      return {
-        handled: true,
-        text:
-          lang === "en"
-            ? "Alright, go ahead 😄 I'm listening."
-            : "Oke, lanjut aja 😄 Aku dengerin. Mau bahas apa?",
-        mode: "natural_continue_chat",
-        shouldOfferService: false
-      };
-    }
-
-    // --- Explain request with topic ---
-    if (
-      has(input, [
+        "lalu bagaimana", "lalu gimana", "terus gimana", "next",
         "jelasin", "jelaskan", "explain", "coba jelasin", "coba jelaskan",
         "tolong jelasin", "tolong jelaskan"
       ]) &&
@@ -1278,8 +1075,8 @@
         handled: true,
         text:
           lang === "en"
-            ? `Sure — about ${label}. Which part should I explain?`
-            : `Siap, soal ${label} 😊 Bagian mana yang mau dijelasin?`,
+            ? `Sure — we can continue on ${label}. What would you like to know next?`
+            : `Siap — kita lanjut soal ${label}. Bagian mana yang mau dilanjutkan?`,
         mode: "natural_continue",
         shouldOfferService: false
       };
@@ -1378,26 +1175,7 @@
       };
     }
 
-    // --- What are you doing / sedang apa (buddy small-talk) ---
-    if (
-      has(input, [
-        "sedang apa", "lagi apa", "lagi ngapain", "ngapain", "lagi sibuk",
-        "lagi ngapain cgo", "sedang apa cgo", "lagi apa cgo",
-        "what are you doing", "what r u doing", "whatcha doing"
-      ])
-    ) {
-      return {
-        handled: true,
-        text:
-          lang === "en"
-            ? "Just here with you 😄 What's up on your side?"
-            : "Lagi nemenin kamu di sini 😄 Kamu sendiri lagi apa?",
-        mode: "natural_whatdoing",
-        shouldOfferService: false
-      };
-    }
-
-    // --- Help / capability (natural, not brochure) ---
+    // --- Help / capability ---
     if (
       has(input, [
         "what can you do", "bisa bantu apa", "kamu bisa apa", "fitur apa aja",
@@ -1410,34 +1188,33 @@
         handled: true,
         text:
           lang === "en"
-            ? "Pretty much the usual CIKUR GO stuff — Food, Ride, Assistant, or 2in1 if you need both. Or we can just chat. What do you need?"
-            : "Bisa bantu yang biasa di CIKUR GO — pesan makanan, ride, sewa assistant, atau 2in1 kalau butuh dua sekaligus. Atau ngobrol aja juga boleh. Kamu lagi butuh apa?",
+            ? "I can help with CIKUR GO customer needs: Food, Ride, Assistant, and the 2in1 combination. I can also do simple calculations and explain services — without inventing live availability."
+            : "Aku bisa bantu kebutuhan Customer CIKUR GO: Food, Ride, Assistant, dan kombinasi 2in1. Aku juga bisa hitung sederhana dan jelaskan layanan — tanpa mengarang ketersediaan live.",
         mode: "natural_capability",
         shouldOfferService: false
       };
     }
 
-    // --- Who are you (buddy, not system card) ---
+    // --- Who are you ---
     if (
       has(input, [
         "siapa kamu", "kamu siapa", "who are you", "what are you",
         "kamu ai", "kamu bot", "are you ai", "are you a bot",
-        "who are u", "who r u", "what r u", "who is u",
-        "nama kamu", "namamu siapa", "kamu namanya"
+        "who are u", "who r u", "what r u", "who is u"
       ])
     ) {
       return {
         handled: true,
         text:
           lang === "en"
-            ? "I'm CGO — your buddy on CIKUR GO. I help with food, rides, assistant, or just hanging out in chat. What's up?"
-            : "Aku CGO 😊 Temennya kamu di CIKUR GO. Bisa bantu soal makanan, perjalanan, assistant, atau sekadar ngobrol. Ada yang mau ditanyain?",
+            ? "I'm CGO, the customer-facing assistant for CIKUR GO. I help explain services and guide needs — without inventing live data."
+            : "Aku CGO, asisten customer untuk CIKUR GO. Aku bantu jelaskan layanan dan arahkan kebutuhan — tanpa mengarang data live.",
         mode: "natural_identity",
         shouldOfferService: false
       };
     }
 
-    // --- Location (honest but natural) ---
+    // --- Location without inventing ---
     if (
       has(input, [
         "di mana", "dimana", "where is", "lokasi", "alamat", "dekat mana",
@@ -1449,14 +1226,14 @@
         handled: true,
         text:
           lang === "en"
-            ? "I don't guess locations. If you tell me where you are, I can use that when real data is available."
-            : "Aku nggak nebak-nebak lokasi 😊 Kalau kamu kasih tahu posisimu, itu bisa kepakai pas datanya memang sudah ada.",
+            ? "I don't invent locations. If you share where you are, I can use that context when verified runtime data is available."
+            : "Aku nggak mengarang lokasi. Kalau kamu bilang posisimu, itu bisa dipakai sebagai konteks saat data runtime yang terverifikasi tersedia.",
         mode: "natural_location_unknown",
         shouldOfferService: false
       };
     }
 
-    // --- Time / ETA (honest, natural) ---
+    // --- Time / ETA without inventing ---
     if (
       has(input, [
         "berapa lama", "berapa menit", "eta", "how long", "kapan sampai",
@@ -1467,8 +1244,8 @@
         handled: true,
         text:
           lang === "en"
-            ? "I don't want to guess the time. Once real data is in, I can help read it."
-            : "Aku nggak mau nebak-nebak waktunya 😊 Nanti kalau datanya sudah ada, aku bantu bacain.",
+            ? "I won't guess time or ETA. That needs verified runtime data first."
+            : "Aku nggak mau menebak waktu atau ETA. Itu butuh data runtime yang terverifikasi dulu.",
         mode: "natural_time_unknown",
         shouldOfferService: false
       };
@@ -1646,26 +1423,26 @@
       };
     }
 
-    // --- Explain specific services (buddy tone) ---
-    if (has(input, ["apa itu food", "food itu apa", "layanan food", "what is food service", "pesan makanan"])) {
+    // --- Explain specific services ---
+    if (has(input, ["apa itu food", "food itu apa", "layanan food", "what is food service"])) {
       return {
         handled: true,
         text:
           lang === "en"
-            ? "Food is for ordering meals. If you also want someone with you, that's the 2in1 idea. Hungry?"
-            : "Food itu buat pesan makanan 😊 Kalau sekalian mau ada yang nemenin, itu konsep 2in1. Lagi laper?",
+            ? "Food is the CIKUR GO service for meal needs. If you also want companionship at the same time, that becomes 2in1."
+            : "Food adalah layanan CIKUR GO untuk kebutuhan makan. Kalau sekalian butuh pendampingan, itu masuk konsep 2in1.",
         mode: "natural_knowledge",
         shouldOfferService: true,
         stateUpdate: { lastTopic: "food" }
       };
     }
-    if (has(input, ["apa itu assistant", "assistant itu apa", "layanan assistant", "what is assistant", "sewa assistant"])) {
+    if (has(input, ["apa itu assistant", "assistant itu apa", "layanan assistant", "what is assistant"])) {
       return {
         handled: true,
         text:
           lang === "en"
-            ? "Assistant is for help or company — errands, companionship, that kind of thing. Want me to explain more?"
-            : "Assistant buat bantuan atau temenan — urusan, dampingan, gitu 😊 Mau aku ceritain lebih dalam?",
+            ? "Assistant is for help or companionship needs. Combined with Food, it becomes the 2in1 concept."
+            : "Assistant untuk kebutuhan bantuan atau pendampingan. Digabung dengan Food, itu jadi konsep 2in1.",
         mode: "natural_knowledge",
         shouldOfferService: true,
         stateUpdate: { lastTopic: "assistant" }
@@ -1676,8 +1453,8 @@
         handled: true,
         text:
           lang === "en"
-            ? "Ride is for getting around — pickup once a driver is actually available. Want me to walk you through it?"
-            : "Ride itu buat perjalanan — jemputnya pas driver-nya memang ada. Mau aku jelasin alurnya?",
+            ? "Ride is the mobility service. Live pickup only after availability is verified — I won't invent it."
+            : "Ride adalah layanan mobilitas. Jemput live hanya setelah ketersediaan terverifikasi — aku nggak mengarang.",
         mode: "natural_knowledge",
         shouldOfferService: true,
         stateUpdate: { lastTopic: "ride" }
@@ -1688,8 +1465,8 @@
         handled: true,
         text:
           lang === "en"
-            ? "2in1 is Food plus Assistant together — meal and company in one go. Handy if you want both."
-            : "2in1 itu Food plus Assistant bareng — makan sambil ada yang nemenin. Praktis kalau butuh dua-duanya.",
+            ? "2in1 combines Food and Assistant: you get a meal together with help or companionship."
+            : "2in1 menggabungkan Food dan Assistant: kamu dapat makanan sekaligus bantuan atau pendampingan.",
         mode: "natural_knowledge",
         shouldOfferService: true,
         stateUpdate: { lastTopic: "cikurgo2in1" }

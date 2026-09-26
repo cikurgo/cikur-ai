@@ -34,7 +34,7 @@
 
   const ROOT = window.CGO_CUSTOMER || (window.CGO_CUSTOMER = {});
 
-  const VERSION = "1.2.0-emotional-continuity";
+  const VERSION = "1.0.0-conversation";
 
   /* ==========================================================
    * INTERNAL CONSTANTS
@@ -49,11 +49,7 @@
     "excited",
     "worried",
     "casual",
-    "joking",
-    "tired",
-    "stressed",
-    "hurried",
-    "lonely"
+    "joking"
   ]);
 
   const STYLES = Object.freeze([
@@ -173,12 +169,6 @@
         unresolvedTopic: null
       },
 
-      reasoning: {
-        preferredLanguage: null,
-        lastMath: null,
-        lastTopic: null
-      },
-
       flags: {
         isGreeting: false,
         isFarewell: false,
@@ -249,7 +239,6 @@
   function detectMood(text) {
     const value = lower(text);
 
-    // Strong negative first (higher priority)
     if (
       includesAny(value, [
         "sedih",
@@ -258,11 +247,7 @@
         "galau",
         "kecewa banget",
         "lagi down",
-        "lagi sedih",
-        "heartbroken",
-        "broken heart",
-        "patah hati",
-        "mau nangis"
+        "lagi sedih"
       ])
     ) {
       return "sad";
@@ -275,82 +260,10 @@
         "kok begini",
         "kok gini",
         "parah",
-        "gak sesuai",
-        "nggak sesuai",
-        "kecewa berat"
+        "gak sesuai"
       ])
     ) {
       return "disappointed";
-    }
-
-    if (
-      includesAny(value, [
-        "capek banget",
-        "lelah banget",
-        "kecapean",
-        "kelelahan",
-        "exhausted",
-        "burnout",
-        "udah lelah",
-        "udah capek",
-        "capek berat",
-        "lelah berat",
-        "capek sekali",
-        "lelah sekali"
-      ])
-    ) {
-      return "tired";
-    }
-
-    if (
-      includesAny(value, [
-        "stress",
-        "stres",
-        "stres banget",
-        "stress banget",
-        "tertekan",
-        "overwhelmed",
-        "kepala pusing banget",
-        "beban berat",
-        "mentally tired"
-      ])
-    ) {
-      return "stressed";
-    }
-
-    if (
-      includesAny(value, [
-        "buru-buru",
-        "buru buru",
-        "terburu-buru",
-        "terburu buru",
-        "kejar-kejaran",
-        "deadline",
-        "harus cepet",
-        "harus cepat",
-        "asap banget",
-        "mendesak",
-        "urgent",
-        "lagi terburu"
-      ])
-    ) {
-      return "hurried";
-    }
-
-    if (
-      includesAny(value, [
-        "sepi",
-        "kesepian",
-        "lonely",
-        "sendiri terus",
-        "sendirian",
-        "nggak ada yang nemenin",
-        "ga ada yang nemenin",
-        "merasa sendiri",
-        "alone"
-      ])
-    ) {
-      return "lonely";
     }
 
     if (
@@ -361,8 +274,7 @@
         "ga ngerti",
         "enggak ngerti",
         "pusing",
-        "buntu",
-        "bingung banget"
+        "buntu"
       ])
     ) {
       return "confused";
@@ -374,28 +286,10 @@
         "takut",
         "cemas",
         "was-was",
-        "ragu",
-        "cemas banget",
-        "khawatir banget"
+        "ragu"
       ])
     ) {
       return "worried";
-    }
-
-    // Mild tired (after strong ones)
-    if (
-      includesAny(value, [
-        "capek",
-        "lelah",
-        "tired",
-        "ngantuk",
-        "mengantuk",
-        "udah cape",
-        "cape",
-        "lemas"
-      ])
-    ) {
-      return "tired";
     }
 
     if (
@@ -408,8 +302,7 @@
         "mantap",
         "yey",
         "hehe",
-        "seneng",
-        "seneng banget"
+        "wkwk"
       ])
     ) {
       return "happy";
@@ -423,8 +316,7 @@
         "nggak sabar",
         "gas",
         "ayok",
-        "ayo",
-        "antusias"
+        "ayo"
       ])
     ) {
       return "excited";
@@ -438,8 +330,7 @@
         "lol",
         "ngakak",
         "becanda",
-        "bercanda",
-        "wkwkwk"
+        "bercanda"
       ])
     ) {
       return "joking";
@@ -467,61 +358,6 @@
 
   function detectTopic(text) {
     const value = lower(text);
-
-    /*
-     * Specific conversation intents must win over generic service words.
-     * Contoh: "berapa harga Assistant?" adalah pricing, bukan assistant;
-     * "ada Agent dekat aku?" adalah availability, bukan assistant.
-     */
-    if (
-      includesAny(value, [
-        "2in1",
-        "2 in 1",
-        "sekalian makanan",
-        "sekalian makan",
-        "makanan sekaligus",
-        "food dan assistant"
-      ])
-    ) {
-      return "cikurgo2in1";
-    }
-
-    if (
-      includesAny(value, [
-        "harga",
-        "biaya",
-        "tarif",
-        "berapa",
-        "bayar"
-      ])
-    ) {
-      return "pricing";
-    }
-
-    if (
-      includesAny(value, [
-        "ada gak",
-        "ada nggak",
-        "ada ga",
-        "ada enggak",
-        "tersedia",
-        "tersedia gak",
-        "tersedia nggak",
-        "available",
-        "availability",
-        "siapa yang tersedia",
-        "bisa cek",
-        "cek dulu",
-        "agent",
-        "mitra",
-        "sekitar sini",
-        "di sekitar",
-        "dekat aku",
-        "dekat saya"
-      ])
-    ) {
-      return "availability";
-    }
 
     if (
       includesAny(value, [
@@ -569,6 +405,49 @@
 
     if (
       includesAny(value, [
+        "2in1",
+        "2 in 1",
+        "sekalian makanan",
+        "sekalian makan",
+        "makanan sekaligus",
+        "food dan assistant"
+      ])
+    ) {
+      return "cikurgo2in1";
+    }
+
+    if (
+      includesAny(value, [
+        "harga",
+        "biaya",
+        "tarif",
+        "berapa",
+        "bayar"
+      ])
+    ) {
+      return "pricing";
+    }
+
+    if (
+      includesAny(value, [
+        "ada gak",
+        "ada nggak",
+        "tersedia",
+        "tersedia gak",
+        "tersedia nggak",
+        "available",
+        "availability",
+        "agent",
+        "mitra",
+        "sekitar sini",
+        "di sekitar"
+      ])
+    ) {
+      return "availability";
+    }
+
+    if (
+      includesAny(value, [
         "pesan",
         "order",
         "booking",
@@ -601,89 +480,110 @@
 
   function detectIntent(text) {
     const value = lower(text);
-    const scores = Object.create(null);
 
-    function bump(intent, weight) {
-      scores[intent] = (scores[intent] || 0) + weight;
+    if (
+      includesAny(value, [
+        "hai",
+        "halo",
+        "hello",
+        "hei",
+        "heii",
+        "hii",
+        "hallo"
+      ])
+    ) {
+      return "greeting";
     }
 
-    // Weighted phrase scoring (higher = stronger signal)
-    const rules = [
-      { intent: "greeting", weight: 6, phrases: ["hai", "halo", "hello", "hei", "heii", "hii", "hallo", "hi cgo", "hai cgo", "pagi", "siang", "sore", "malam", "cgo??", "cgo?", "halo cgo", "haii", "haiii"] },
-      { intent: "small_talk", weight: 5, phrases: ["lagi apa", "apa kabar", "gimana kabar", "ngapain", "how are you", "sedang apa", "lagi ngapain", "lagi sibuk", "lagi apa cgo", "sedang apa cgo"] },
-      { intent: "farewell", weight: 6, phrases: ["dadah", "bye", "sampai nanti", "sampai jumpa", "aku pergi dulu", "see you", "goodbye"] },
-      { intent: "need_discovery", weight: 5, phrases: ["aku butuh", "saya butuh", "aku mau", "saya mau", "pengen", "pengin", "ingin", "lagi cari", "butuh bantuan", "i need", "i want"] },
-      { intent: "availability", weight: 7, phrases: [
-        "ada agent", "ada mitra", "ada driver", "ada yang bisa", "ada yang tersedia",
-        "siapa yang bisa", "bisa jemput", "bisa antar", "tersedia", "available",
-        "bisa cek", "cek dulu", "di sekitar", "dekat aku", "dekat saya", "sekitar sini",
-        "available now", "ada slot", "masih ada yang free"
-      ] },
-      { intent: "pricing_question", weight: 5, phrases: ["berapa harga", "berapa biaya", "berapa tarif", "how much", "ongkos", "tarifnya"] },
-      { intent: "pricing_question", weight: 3, phrases: ["berapa", "harga", "biaya", "tarif"] },
-      { intent: "service_information", weight: 5, phrases: ["apa itu", "maksudnya apa", "buat apa", "gunanya apa", "jelasin", "jelaskan", "what is", "explain"] },
-      { intent: "question", weight: 2, phrases: ["bisa gak", "bisa nggak", "bisa tidak", "apakah", "can you", "could you"] }
-    ];
-
-    rules.forEach(function (rule) {
-      rule.phrases.forEach(function (phrase) {
-        if (value.indexOf(phrase) !== -1) {
-          bump(rule.intent, rule.weight);
-        }
-      });
-    });
-
-    if (value.endsWith("?")) {
-      bump("question", 1.5);
+    if (
+      includesAny(value, [
+        "lagi apa",
+        "apa kabar",
+        "gimana kabar",
+        "ngapain"
+      ])
+    ) {
+      return "small_talk";
     }
 
-    // Pure short call-out to CGO → greeting (hindari jawaban ngaco)
-    const pureCall = value.replace(/[?!.,\s]+/g, "");
-    if (pureCall === "cgo" || pureCall === "cikurgo" || pureCall === "haicgo" || pureCall === "halocgo") {
-      bump("greeting", 8);
+    if (
+      includesAny(value, [
+        "dadah",
+        "bye",
+        "sampai nanti",
+        "sampai jumpa",
+        "aku pergi dulu"
+      ])
+    ) {
+      return "farewell";
     }
 
-    // Pure arithmetic / sisa uang → treat as light question, not pricing service
-    if (/(?:\d+\s*[+\-×÷*/]\s*)+\d+/.test(value) || includesAny(value, ["sisa", "tersisa", "hasil"])) {
-      bump("question", 4);
+    if (
+      includesAny(value, [
+        "aku butuh",
+        "saya butuh",
+        "aku mau",
+        "saya mau",
+        "pengen",
+        "ingin",
+        "lagi cari",
+        "butuh bantuan"
+      ])
+    ) {
+      return "need_discovery";
     }
 
-    let best = "conversation";
-    let bestScore = 0;
-    Object.keys(scores).forEach(function (intent) {
-      if (scores[intent] > bestScore) {
-        bestScore = scores[intent];
-        best = intent;
-      }
-    });
-
-    // Require minimum confidence for non-default intents
-    if (best !== "conversation" && bestScore < 2) {
-      return "conversation";
+    if (
+      includesAny(value, [
+        "ada agent",
+        "ada mitra",
+        "tersedia",
+        "available",
+        "bisa cek",
+        "cek dulu",
+        "di sekitar"
+      ])
+    ) {
+      return "availability";
     }
-    return best;
-  }
 
-  function scoreIntents(text) {
-    // Exposed for debugging / tests — mirrors detectIntent weights
-    const value = lower(text);
-    const scores = Object.create(null);
-    function bump(intent, weight) {
-      scores[intent] = (scores[intent] || 0) + weight;
+    if (
+      includesAny(value, [
+        "berapa",
+        "harga",
+        "biaya",
+        "tarif"
+      ])
+    ) {
+      return "pricing_question";
     }
-    const rules = [
-      { intent: "greeting", weight: 6, phrases: ["hai", "halo", "hello", "hei", "heii", "hii", "hallo"] },
-      { intent: "availability", weight: 7, phrases: ["ada yang bisa", "tersedia", "available", "ada driver"] },
-      { intent: "need_discovery", weight: 5, phrases: ["aku butuh", "pengen", "pengin", "i need"] },
-      { intent: "pricing_question", weight: 5, phrases: ["berapa harga", "how much", "tarif"] },
-      { intent: "service_information", weight: 5, phrases: ["apa itu", "what is", "jelaskan"] }
-    ];
-    rules.forEach(function (rule) {
-      rule.phrases.forEach(function (phrase) {
-        if (value.indexOf(phrase) !== -1) bump(rule.intent, rule.weight);
-      });
-    });
-    return scores;
+
+    if (
+      includesAny(value, [
+        "apa itu",
+        "maksudnya apa",
+        "buat apa",
+        "gunanya apa",
+        "jelasin",
+        "jelaskan"
+      ])
+    ) {
+      return "service_information";
+    }
+
+    if (
+      value.endsWith("?") ||
+      includesAny(value, [
+        "bisa gak",
+        "bisa nggak",
+        "bisa tidak",
+        "apakah"
+      ])
+    ) {
+      return "question";
+    }
+
+    return "conversation";
   }
 
   /* ==========================================================
@@ -702,9 +602,11 @@
 
     if (
       includesAny(value, [
-        "lapar", "makan", "makanan", "pesan makanan", "kuliner",
-        "order makanan", "mau nasi", "snack", "hungry", "food",
-        "beli makanan", "pesan food"
+        "lapar",
+        "makan",
+        "makanan",
+        "pesan makanan",
+        "kuliner"
       ])
     ) {
       add("food");
@@ -712,10 +614,11 @@
 
     if (
       includesAny(value, [
-        "antar", "jemput", "naik", "kendaraan", "perjalanan",
-        "ride", "ojek", "pick me up", "diantar", "dijemput",
-        "ke stasiun", "ke bandara", "antar jemput", "butuh ojek",
-        "mau dijemput", "mau diantar"
+        "antar",
+        "jemput",
+        "naik",
+        "kendaraan",
+        "perjalanan"
       ])
     ) {
       add("ride");
@@ -723,10 +626,15 @@
 
     if (
       includesAny(value, [
-        "ditemani", "nemenin", "temenin", "pendamping", "sendirian",
-        "butuh teman", "bantu belanja", "mau belanja", "belanja",
-        "bantu acara", "acara keluarga", "liburan", "butuh bantuan",
-        "dibantu", "assistant", "companionship"
+        "ditemani",
+        "nemenin",
+        "temenin",
+        "pendamping",
+        "sendirian",
+        "butuh teman",
+        "bantu belanja",
+        "bantu acara",
+        "liburan"
       ])
     ) {
       add("assistant");
@@ -734,19 +642,11 @@
 
     if (
       includesAny(value, [
-        "sekalian", "sekaligus", "dan juga", "plus", "sama",
-        "sambil", "bareng", "2in1", "dua sekaligus"
+        "sekalian",
+        "sekaligus",
+        "dan juga"
       ])
     ) {
-      add("combined_need");
-    }
-
-    // food + assistant → 2in1
-    if (needs.includes("food") && needs.includes("assistant")) {
-      add("combined_need");
-    }
-    // food + ride also counts as combined (multi-service)
-    if (needs.includes("food") && needs.includes("ride")) {
       add("combined_need");
     }
 
@@ -786,11 +686,8 @@
       includesAny(value, [
         "sekalian",
         "sambil",
-        "juga",
-        "plus",
-        "sama"
-      ]) ||
-      /^(dan|terus|lalu)\b/i.test(value)
+        "juga"
+      ])
     ) {
       references.push("addition");
     }
@@ -852,28 +749,10 @@
     const message = cleanText(text);
 
     const mood = detectMood(message);
-    let topic = detectTopic(message);
+    const topic = detectTopic(message);
     const intent = detectIntent(message);
     const needs = detectNeeds(message);
     const references = detectReferences(message);
-
-    /*
-     * Implicit need is still a real topic.
-     * Contoh: "mau liburan tapi sendirian" tidak menyebut
-     * kata Assistant, tetapi kebutuhan yang terdeteksi adalah Assistant.
-     * Hal yang sama berlaku untuk "mau belanja".
-     */
-    if (topic === "conversation") {
-      if (needs.includes("food") && needs.includes("assistant")) {
-        topic = "cikurgo2in1";
-      } else if (needs.includes("assistant")) {
-        topic = "assistant";
-      } else if (needs.includes("food")) {
-        topic = "food";
-      } else if (needs.includes("ride")) {
-        topic = "ride";
-      }
-    }
 
     const isGreeting =
       intent === "greeting";
@@ -959,52 +838,6 @@
     }
   }
 
-  function resolveReferenceFromState(text) {
-    const value = lower(text);
-
-    if (
-      !includesAny(value, [
-        "yang tadi",
-        "tadi",
-        "itu",
-        "yang itu",
-        "hal itu",
-        "sebelumnya",
-        "barusan",
-        "kalau begitu",
-        "kalau gitu",
-        "berarti",
-        "soal tadi",
-        "tentang tadi",
-        "lanjut yang tadi",
-        "about that",
-        "about earlier",
-        "the previous one",
-        "yang barusan"
-      ])
-    ) {
-      return null;
-    }
-
-    if (state.context.serviceCandidate) {
-      return state.context.serviceCandidate;
-    }
-
-    if (state.context.unresolvedTopic) {
-      return state.context.unresolvedTopic;
-    }
-
-    if (state.topic && state.topic !== "conversation") {
-      return state.topic;
-    }
-
-    if (state.previousTopic && state.previousTopic !== "conversation") {
-      return state.previousTopic;
-    }
-
-    return null;
-  }
-
   function updateContext(classification) {
     state.previousUserMessage = state.lastUserMessage;
     state.lastUserMessage = classification.text;
@@ -1023,34 +856,12 @@
 
     state.intent = classification.intent;
 
-    /*
-     * Keep the last concrete subject alive even when the customer
-     * uses a short follow-up such as "yang tadi", "itu", or "berarti".
-     * The subject is deliberately resolved from existing state only;
-     * CGO never invents a missing subject.
-     */
-    const referencedSubject = resolveReferenceFromState(classification.text);
-    if (referencedSubject) {
-      state.context.unresolvedTopic = referencedSubject;
-    } else if (classification.topic !== "conversation") {
-      state.context.unresolvedTopic = classification.topic;
-    }
-
     classification.needs.forEach(function (need) {
       rememberUnique(
         state.context.detectedNeeds,
         need
       );
     });
-
-    // Mirror accumulated needs into reasoning state for multi-turn continuity
-    state.reasoning = state.reasoning || {
-      preferredLanguage: null,
-      lastMath: null,
-      lastTopic: null,
-      activeNeeds: []
-    };
-    state.reasoning.activeNeeds = state.context.detectedNeeds.slice();
 
     classification.references.forEach(function (reference) {
       rememberUnique(
@@ -1097,41 +908,7 @@
       classification.mood === "sad" ||
       classification.mood === "confused" ||
       classification.mood === "worried" ||
-      classification.mood === "tired" ||
-      classification.mood === "stressed" ||
-      classification.mood === "lonely" ||
       classification.intent === "conversation";
-
-    // Emotional trajectory for multi-turn continuity (soft memory)
-    const negativeMoods = [
-      "sad",
-      "disappointed",
-      "tired",
-      "stressed",
-      "hurried",
-      "lonely",
-      "confused",
-      "worried"
-    ];
-    if (negativeMoods.indexOf(classification.mood) !== -1) {
-      state.reasoning = state.reasoning || {};
-      state.reasoning.lastEmotion = classification.mood;
-      state.reasoning.emotionTurn = state.turn;
-      state.reasoning.emotionStrength =
-        classification.mood === "sad" ||
-        classification.mood === "stressed" ||
-        classification.mood === "lonely"
-          ? "strong"
-          : "soft";
-    } else if (
-      classification.mood === "happy" ||
-      classification.mood === "excited"
-    ) {
-      state.reasoning = state.reasoning || {};
-      state.reasoning.lastEmotion = classification.mood;
-      state.reasoning.emotionTurn = state.turn;
-      state.reasoning.emotionStrength = "positive";
-    }
 
     rememberMessage(
       "customer",
@@ -1352,39 +1129,18 @@
    * ========================================================== */
 
   function greetingResponse() {
-    // Natural & konteks: bedakan sapaan pertama vs kembali, dan panggilan "CGO"
-    const turn = state.turn || 0;
-    const lastTopic = state.topic && state.topic !== "conversation" ? state.topic : null;
-    const topicHint = {
-      food: "makanan",
-      ride: "perjalanan",
-      assistant: "asisten",
-      cikurgo2in1: "2in1",
-      cikur_go: "CIKUR GO"
-    };
-
-    let greetings;
-    if (turn <= 1) {
-      greetings = [
-        "Hai! Aku CGO 😊 Mau dibantu apa hari ini?",
-        "Haiii 👋 Aku CGO, siap bantu Food, Ride, Assistant, atau sekadar ngobrol.",
-        "Halo! Senang ketemu 😄 Ada yang bisa aku bantu?"
-      ];
-    } else if (lastTopic && topicHint[lastTopic]) {
-      greetings = [
-        "Hai lagi 😊 Tadi kita sempat bahas " + topicHint[lastTopic] + ". Mau lanjut atau ganti topik?",
-        "Haiii 😄 Masih soal " + topicHint[lastTopic] + " atau ada kebutuhan lain?"
-      ];
-    } else {
-      greetings = [
-        "Hai lagi 😊 Ada yang mau dilanjut?",
-        "Haiii! Senang ketemu kamu lagi ❤️",
-        "Halo kamu 👋 Aku masih di sini."
-      ];
-    }
+    const greetings = [
+      "Haiii 😊❤️",
+      "Haiii, akhirnya muncul juga 😄",
+      "Halo kamu 👋😊",
+      "Haaaiii 😄 Aku di sini.",
+      "Haiii! Senang ketemu kamu lagi ❤️"
+    ];
 
     const response = randomItem(greetings);
+
     clearPendingQuestion();
+
     return response;
   }
 
@@ -1398,18 +1154,16 @@
     if (
       includesAny(value, [
         "lagi apa",
-        "ngapain",
-        "sedang apa",
-        "lagi ngapain",
-        "lagi sibuk"
+        "ngapain"
       ])
     ) {
       clearPendingQuestion();
 
       return randomItem([
-        "Lagi nemenin kamu di sini 😄 Kamu sendiri lagi apa?",
-        "Aku di sini aja, standby 😊 Ada yang mau dibahas?",
-        "Lagi santai nemenin kamu 😆 Kamu gimana?"
+        "Aku? Lagi standby nemenin kamu 😄",
+        "Lagi di sini dong, nemenin kamu ngobrol 😊",
+        "Aku lagi standby. Belum ke mana-mana kok 😆",
+        "Lagi santai sambil nunggu kamu cerita. Hehe 😄"
       ]);
     }
 
@@ -1422,18 +1176,18 @@
       clearPendingQuestion();
 
       return randomItem([
-        "Baik 😊 Apalagi kalau diajak ngobrol. Kamu sendiri gimana?",
-        "Aman dong 😄 Kamu hari ini oke?",
-        "Baik-baik aja ❤️ Kamu gimana kabarnya?"
+        "Aku baik 😊 Apalagi kalau diajak ngobrol begini.",
+        "Baik donggg 😄 Kamu sendiri gimana?",
+        "Aku aman dan standby ❤️ Kalau kamu gimana hari ini?"
       ]);
     }
 
     clearPendingQuestion();
 
     return randomItem([
-      "Hehe 😄 cerita aja, aku dengerin.",
-      "Aku masih di sini 😊 Mau ngobrol apa?",
-      "Siap 😄 Ada yang lagi di pikiranmu?"
+      "Hehe 😄 lanjut cerita aja, aku dengerin.",
+      "Aku masih di sini kok 😊 Ceritain aja.",
+      "Hmmmm 😄 aku penasaran, terus gimana?"
     ]);
   }
 
@@ -1459,42 +1213,6 @@
           "Yah... aku ngerti kenapa kamu kecewa 😔 Ceritain dulu apa yang terjadi.",
           "Hmm, pasti nggak enak kalau hasilnya nggak sesuai harapan 😔 Aku dengerin dulu ya.",
           "Aku paham. Jangan dipendam sendiri, cerita aja pelan-pelan."
-        ]);
-
-      case "tired":
-        clearPendingQuestion();
-
-        return randomItem([
-          "Wah, kedengarannya kamu lagi capek banget 😔 Santai dulu ya, aku di sini.",
-          "Istirahat sejenak boleh kok 😊 Nggak perlu dipaksain. Aku dengerin aja.",
-          "Capek ya... 🥺 Nggak usah buru-buru. Cerita atau diam dulu juga boleh."
-        ]);
-
-      case "stressed":
-        clearPendingQuestion();
-
-        return randomItem([
-          "Aku ngerti, kalau lagi stress memang kepala penuh 😔 Pelan-pelan aja ya.",
-          "Tarik napas dulu 😊 Kita urai satu-satu, nggak perlu langsung selesai semua.",
-          "Stress emang bikin berat. Aku di sini, ceritain aja yang paling menekan."
-        ]);
-
-      case "hurried":
-        clearPendingQuestion();
-
-        return randomItem([
-          "Oke, aku tangkap kamu lagi buru-buru 😊 Langsung aja bilang yang paling urgent.",
-          "Siap, mode cepat ⚡ Kasih tau aja prioritasnya, aku bantu secepat yang bisa.",
-          "Nggak usah panjang-panjang kalau lagi kejar waktu. Langsung ke intinya aja 😊"
-        ]);
-
-      case "lonely":
-        clearPendingQuestion();
-
-        return randomItem([
-          "Hmm... kedengarannya kamu lagi merasa sendiri 🥺 Aku di sini kok, ngobrol aja.",
-          "Nggak apa-apa kalau lagi sepi. Aku standby, cerita atau sekadar nemenin juga boleh ❤️",
-          "Aku dengerin 😊 Kalau mau ditemani ngobrol, aku di sini."
         ]);
 
       case "confused":
@@ -1648,41 +1366,20 @@
     const reference =
       resolveReference(classification.text);
 
-    const serviceName = {
-      assistant: "Assistant",
-      food: "makanan",
-      ride: "perjalanan",
-      cikurgo2in1: "CIKUR GO 2in1"
-    }[reference];
+    if (reference === "assistant") {
+      return "Yang tadi soal Assistant ya 😊 Kamu mau lanjut dari situ?";
+    }
 
-    if (serviceName) {
-      if (classification.intent === "pricing_question") {
-        return "Okeee 😊 kita lanjut yang tadi soal " + serviceName + ". Kalau yang kamu tanyakan harganya, aku bantu lihat informasi yang memang tersedia dulu ya.";
-      }
+    if (reference === "food") {
+      return "Yang tadi soal makanan yaa 😄 Kamu mau lanjut cari makanan atau ada kebutuhan lain juga?";
+    }
 
-      if (classification.intent === "service_information") {
-        return "Iyaa 😊 kita lanjut yang tadi soal " + serviceName + ". Kamu mau tahu bagian mana dari layanan itu?";
-      }
+    if (reference === "ride") {
+      return "Yang tadi soal perjalanan ya 😊 Kamu mau lanjut dari situ?";
+    }
 
-      if (classification.intent === "question") {
-        return "Okeee 😊 aku masih ngikutin konteks " + serviceName + " yang tadi. Kita bahas pertanyaanmu dari situ ya.";
-      }
-
-      if (reference === "assistant") {
-        return "Yang tadi soal Assistant ya 😊 Kamu mau lanjut dari situ?";
-      }
-
-      if (reference === "food") {
-        return "Yang tadi soal makanan yaa 😄 Kamu mau lanjut cari makanan atau ada kebutuhan lain juga?";
-      }
-
-      if (reference === "ride") {
-        return "Yang tadi soal perjalanan ya 😊 Kamu mau lanjut dari situ?";
-      }
-
-      if (reference === "cikurgo2in1") {
-        return "Yang tadi soal 2in1 yaa 😊 Kamu mau lanjut bahas kebutuhannya?";
-      }
+    if (reference === "cikurgo2in1") {
+      return "Yang tadi soal 2in1 yaa 😊 Kamu mau lanjut bahas kebutuhannya?";
     }
 
     return null;
@@ -1695,45 +1392,19 @@
   function genericConversationResponse() {
     clearPendingQuestion();
 
-    // Hindari jawaban generik berulang — manfaatkan topik / kebutuhan yang ada
-    const topic = state.topic && state.topic !== "conversation" ? state.topic : null;
-    const needs = (state.context && state.context.detectedNeeds) || [];
-    const topicLabels = {
-      food: "makanan",
-      ride: "perjalanan",
-      assistant: "asisten",
-      cikurgo2in1: "layanan 2in1",
-      cikur_go: "CIKUR GO",
-      pricing: "harga"
-    };
-
-    if (topic && topicLabels[topic]) {
-      return randomItem([
-        "Oke, soal " + topicLabels[topic] + " ya 😊 Bagian mana yang mau kita dalami?",
-        "Masih di jalur " + topicLabels[topic] + ". Kamu mau tahu apa lagi, atau pindah topik?",
-        "Siap 😊 Mau lanjut detail " + topicLabels[topic] + " atau ada kebutuhan lain?"
-      ]);
-    }
-
-    if (needs.length) {
-      const n = needs.slice(0, 2).join(" & ");
-      return randomItem([
-        "Tadi sempat muncul kebutuhan seputar " + n + " 😊 Mau dilanjut dari situ?",
-        "Oke, aku catat ada sinyal " + n + ". Mau kita fokus ke situ?"
-      ]);
-    }
-
     if (state.turn <= 1) {
       return randomItem([
-        "Hehe 😊 aku dengerin. Cerita aja, atau bilang aja layanan yang kamu butuh.",
-        "Aku di sini 😄 Mau ngobrol santai, atau langsung pesan Food / Ride / Assistant?"
+        "Hehe 😊 aku dengerin kok. Cerita aja.",
+        "Iyaaa 😄 lanjut aja ceritanya.",
+        "Hmm, aku di sini. Ceritain aja pelan-pelan."
       ]);
     }
 
     return randomItem([
-      "Oke, aku ikut 😊 Mau lanjut cerita, atau ada layanan CIKUR GO yang bisa aku bantu?",
-      "Siap 😄 Kamu mau bahas apa — makanan, perjalanan, asisten, atau yang lain?",
-      "Hmm, arahnya masih terbuka. Bilang aja yang kamu butuhkan, aku bantu."
+      "Hmm, aku ngerti 😊 lanjut ceritain aja.",
+      "Okeee, aku nangkep arahnya 😄 Terus gimana?",
+      "Aku masih ngikutin ceritamu kok. Lanjut aja 😊",
+      "Hmmmm... menarik 😄 Cerita lebih lanjut boleh."
     ]);
   }
 
@@ -1741,66 +1412,23 @@
    * RESPONSE PRIORITY
    * ========================================================== */
 
-  function generateResponse(classification, options) {
-    /*
-     * Natural reasoning gets first opportunity to interpret the turn.
-     * It is deterministic/internal: no external model, API, or answer table.
-     */
-    try {
-      const reasoning = ROOT.reasoning;
-      if (reasoning && typeof reasoning.respond === "function") {
-        const natural = reasoning.respond(classification.text, {
-          classification,
-          state: clone(state),
-          knowledge: options?.knowledge || null,
-          discovery: options?.discovery || null
-        });
-        if (natural && natural.handled && natural.text) {
-          // Persist reasoning state (math continuity, language preference, topic)
-          if (natural.stateUpdate && typeof natural.stateUpdate === "object") {
-            state.reasoning = state.reasoning || {
-              preferredLanguage: null,
-              lastMath: null,
-              lastTopic: null
-            };
-            Object.keys(natural.stateUpdate).forEach(function (k) {
-              state.reasoning[k] = natural.stateUpdate[k];
-            });
-          }
-          return natural;
-        }
-      }
-    } catch (error) {
-      emit("reasoning:error", { message: error?.message || String(error) });
-    }
-
+  function generateResponse(classification) {
     /*
      * Priority is intentional.
      *
-     * 1. Pure emotional expression (no clear service need)
+     * 1. Emotional state
      * 2. Greeting / farewell / small talk
      * 3. Contextual reference
-     * 4. Service need (may be softened by prior emotion in reasoning)
+     * 4. Service need
      * 5. Generic conversation
      *
      * This prevents CGO from immediately selling a service
      * when the customer is actually expressing an emotion.
-     * But if the same turn has both emotion + clear need
-     * (e.g. "lagi capek, mau makanan yang simpel"), we let
-     * reasoning handle the blend instead of pure short-circuit.
      */
-
-    const hasClearServiceNeed =
-      (classification.needs && classification.needs.length > 0) ||
-      classification.topic === "food" ||
-      classification.topic === "ride" ||
-      classification.topic === "assistant" ||
-      classification.topic === "cikurgo2in1";
 
     if (
       classification.mood !== "neutral" &&
-      classification.mood !== "casual" &&
-      !hasClearServiceNeed
+      classification.mood !== "casual"
     ) {
       const emotional =
         emotionalResponse(classification.mood);
@@ -1809,17 +1437,7 @@
         return {
           text: emotional,
           mode: "emotional",
-          shouldOfferService: false,
-          stateUpdate: {
-            lastEmotion: classification.mood,
-            emotionTurn: state.turn,
-            emotionStrength:
-              classification.mood === "sad" ||
-              classification.mood === "stressed" ||
-              classification.mood === "lonely"
-                ? "strong"
-                : "soft"
-          }
+          shouldOfferService: false
         };
       }
     }
@@ -1918,7 +1536,7 @@
     );
 
     const response =
-      generateResponse(classification, options || {});
+      generateResponse(classification);
 
     state.lastCGOMessage =
       response.text;

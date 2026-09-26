@@ -35,7 +35,7 @@
 
     window.CGO_CUSTOMER = window.CGO_CUSTOMER || {};
 
-    const VERSION = "1.3.0-customer-knowledge-first";
+    const VERSION = "1.1.0-customer-gateway";
 
     const EVENTS = Object.freeze({
         READY: "ready",
@@ -165,70 +165,25 @@
             return "";
         }
 
-        let text;
         if (typeof input === "string") {
-            text = input.trim();
-        } else if (typeof input === "object") {
-            if (typeof input.text === "string") {
-                text = input.text.trim();
-            } else if (typeof input.message === "string") {
-                text = input.message.trim();
-            } else if (typeof input.input === "string") {
-                text = input.input.trim();
-            } else {
-                text = String(input).trim();
-            }
-        } else {
-            text = String(input).trim();
+            return input.trim();
         }
 
-        return expandInformalEnglish(text);
-    }
-
-    /*
-     * Memperluas singkatan/gaya chat santai Bahasa Inggris (mis. "who are u",
-     * "can u help me") menjadi bentuk baku ("who are you", "can you help me")
-     * SEBELUM masuk ke pencocokan pola di modul lain. Ini supaya pola yang
-     * sudah terdaftar (mis. "who are you") tetap kena walau user menulis
-     * versi singkatnya. Tidak mengubah teks yang tampil ke user di UI —
-     * hanya memengaruhi teks yang dipakai untuk analisis internal.
-     */
-    function expandInformalEnglish(text) {
-        if (!text) return text;
-
-        const replacements = [
-            [/\bu r\b/gi, "you are"],
-            [/\bur\b/gi, "your"],
-            [/\by['’]?a\b/gi, "you"],
-            [/\bu\b/gi, "you"],
-            [/\br\b/gi, "are"],
-            [/\bpls\b/gi, "please"],
-            [/\bplz\b/gi, "please"],
-            [/\bthx\b/gi, "thanks"],
-            [/\bty\b/gi, "thank you"],
-            [/\bwanna\b/gi, "want to"],
-            [/\bgonna\b/gi, "going to"],
-            [/\bgimme\b/gi, "give me"],
-            [/\bidk\b/gi, "i don't know"],
-            [/\bhelp me\b/gi, "help me"]
-        ];
-
-        let result = text;
-
-        // Hanya jalankan penggantian "r" -> "are" dan "u" -> "you" kalau kalimatnya
-        // sudah kelihatan Bahasa Inggris (ada kata Inggris umum lain), supaya tidak
-        // salah mengubah kalimat Bahasa Indonesia yang kebetulan punya huruf "u"/"r" tunggal.
-        const looksEnglish =
-            /\b(who|what|can|are|is|you|help|the|how|why|when|where)\b/i.test(result);
-
-        replacements.forEach(([pattern, replacement]) => {
-            if ((pattern.source === "\\bu\\b" || pattern.source === "\\br\\b") && !looksEnglish) {
-                return;
+        if (typeof input === "object") {
+            if (typeof input.text === "string") {
+                return input.text.trim();
             }
-            result = result.replace(pattern, replacement);
-        });
 
-        return result;
+            if (typeof input.message === "string") {
+                return input.message.trim();
+            }
+
+            if (typeof input.input === "string") {
+                return input.input.trim();
+            }
+        }
+
+        return String(input).trim();
     }
 
     function getConversationModule() {
@@ -247,26 +202,6 @@
         return window.CGO_CUSTOMER.guardian || null;
     }
 
-    function getMemoryModule() {
-        return window.CGO_CUSTOMER.memory || null;
-    }
-
-    function getPlannerModule() {
-        return window.CGO_CUSTOMER.planner || null;
-    }
-
-    function getMetaModule() {
-        return window.CGO_CUSTOMER.meta || null;
-    }
-
-    function getBoundaryModule() {
-        return window.CGO_CUSTOMER.boundary || null;
-    }
-
-    function getComposerModule() {
-        return window.CGO_CUSTOMER.composer || null;
-    }
-
     /* =========================================================
      * MODULE STATUS
      * ========================================================= */
@@ -276,12 +211,7 @@
             conversation: !!getConversationModule(),
             knowledge: !!getKnowledgeModule(),
             discovery: !!getDiscoveryModule(),
-            guardian: !!getGuardianModule(),
-            memory: !!getMemoryModule(),
-            planner: !!getPlannerModule(),
-            meta: !!getMetaModule(),
-            boundary: !!getBoundaryModule(),
-            composer: !!getComposerModule()
+            guardian: !!getGuardianModule()
         };
     }
 
@@ -371,23 +301,6 @@
             throw new Error(
                 "Conversation module tidak memiliki process() atau classify()."
             );
-        }
-
-        /*
-         * Conversation.process() returns an envelope. The actual turn
-         * interpretation lives in result.classification. Normalize it
-         * here so Knowledge/Discovery/Guardian reason over the same
-         * semantic object instead of accidentally receiving the envelope.
-         */
-        if (result && result.classification && typeof result.classification === "object") {
-            const envelope = result;
-            result = {
-                ...clone(result.classification),
-                conversationResult: clone(envelope),
-                conversationState: clone(envelope.state || null),
-                transition: clone(envelope.transition || null),
-                meta: clone(envelope.meta || null)
-            };
         }
 
         if (!result || typeof result !== "object") {
@@ -526,42 +439,6 @@
         return result;
     }
 
-    /**
-     * Knowledge + semantic (async). Dipakai di chatAsync.
-     * Bila CGOSemantic siap → matching makna; else sama dengan queryKnowledge.
-     */
-    async function queryKnowledgeAsync(input, analysis, options) {
-        const knowledge = getKnowledgeModule();
-        if (!knowledge) {
-            return {
-                status: "unknown",
-                known: false,
-                reason: "Knowledge module tidak tersedia."
-            };
-        }
-
-        let result = null;
-        try {
-            if (typeof knowledge.interpretAsync === "function") {
-                result = await knowledge.interpretAsync(input, {
-                    analysis: analysis,
-                    state: clone(state),
-                    options: options || {}
-                });
-            }
-        } catch (_e) {
-            result = null;
-        }
-
-        if (!result || typeof result !== "object") {
-            result = queryKnowledge(input, analysis, options);
-        } else {
-            state.lastKnowledge = clone(result);
-            emit(EVENTS.KNOWLEDGE, clone(result));
-        }
-        return result;
-    }
-
     /* =========================================================
      * DISCOVERY DECISION
      * ========================================================= */
@@ -595,13 +472,6 @@
 
         if (
             analysis &&
-            analysis.shouldCheckAvailability === true
-        ) {
-            return true;
-        }
-
-        if (
-            analysis &&
             analysis.intent === "order"
         ) {
             return true;
@@ -622,44 +492,7 @@
         }
 
         /*
-         * Explicit live-availability phrases should trigger
-         * discovery even before a concrete service candidate
-         * is resolved from knowledge.
-         */
-        const text = String(input || "").toLowerCase();
-        const runtimeWords = [
-            "sekarang",
-            "saat ini",
-            "ada nggak",
-            "ada gak",
-            "ada ga",
-            "ada yang bisa",
-            "ada yang tersedia",
-            "tersedia",
-            "dekat aku",
-            "dekat saya",
-            "sekitar sini",
-            "sekitar aku",
-            "sekitar saya",
-            "bisa datang",
-            "bisa antar",
-            "bisa jemput",
-            "siapa yang tersedia",
-            "siapa yang bisa jemput",
-            "available now"
-        ];
-
-        if (
-            runtimeWords.some(function (word) {
-                return text.indexOf(word) !== -1;
-            })
-        ) {
-            return true;
-        }
-
-        /*
-         * Knowledge can still declare discovery is required
-         * for the matched service.
+         * Knowledge dapat menyatakan discovery diperlukan.
          */
         if (
             knowledge &&
@@ -667,7 +500,37 @@
             knowledge.service.discovery &&
             knowledge.service.discovery.required === true
         ) {
-            return true;
+            /*
+             * Tetapi hanya ketika customer benar-benar meminta
+             * kondisi sekarang atau tindakan nyata.
+             */
+            const text = input.toLowerCase();
+
+            const runtimeWords = [
+                "sekarang",
+                "saat ini",
+                "ada nggak",
+                "ada gak",
+                "ada ga",
+                "tersedia",
+                "dekat aku",
+                "dekat saya",
+                "sekitar sini",
+                "sekitar aku",
+                "sekitar saya",
+                "bisa datang",
+                "bisa antar",
+                "bisa jemput",
+                "siapa yang tersedia"
+            ];
+
+            if (
+                runtimeWords.some(function (word) {
+                    return text.indexOf(word) !== -1;
+                })
+            ) {
+                return true;
+            }
         }
 
         return false;
@@ -955,47 +818,24 @@
         let response = null;
 
         /*
-         * Prefer the response already produced by conversation.process()
-         * during analyzeConversation. That path already ran natural
-         * reasoning with the correct conversation state (lastMath,
-         * preferredLanguage, etc). Re-generating without that state
-         * would break multi-turn math and language continuity.
+         * Response generator milik Conversation tetap menjadi
+         * sumber personality dan natural conversation.
          */
         if (
-            analysis &&
-            analysis.conversationResult &&
-            analysis.conversationResult.text
+            typeof conversation.generateResponse ===
+            "function"
         ) {
-            response = analysis.conversationResult.text;
-        }
-
-        /*
-         * If process() did not yield a usable text, generate once more
-         * but pass conversation state (not gateway state) so reasoning
-         * continuity is preserved.
-         */
-        if (
-            (typeof response !== "string" || !response.trim()) &&
-            conversation &&
-            typeof conversation.generateResponse === "function"
-        ) {
-            const conversationState =
-                typeof conversation.getState === "function"
-                    ? conversation.getState()
-                    : analysis && analysis.conversationState
-                      ? analysis.conversationState
-                      : {};
-
-            response = conversation.generateResponse(
-                analysis,
-                {
-                    analysis: analysis,
-                    knowledge: knowledge,
-                    discovery: discovery,
-                    state: conversationState,
-                    options: options || {}
-                }
-            );
+            response =
+                conversation.generateResponse(
+                    input,
+                    {
+                        analysis: analysis,
+                        knowledge: knowledge,
+                        discovery: discovery,
+                        state: clone(state),
+                        options: options || {}
+                    }
+                );
         }
 
         /*
@@ -1016,44 +856,6 @@
                 typeof response.message === "string"
             ) {
                 response = response.message;
-            }
-        }
-
-        /*
-         * Otak knowledge-first: jika registry punya jawaban solid,
-         * dan respons percakapan masih generik/lemah → pakai knowledge.
-         * Ini jalur "ABC mengunyah + knowledge menjawab", bukan settingan frase.
-         */
-        const knowledgeText =
-            knowledge &&
-            (knowledge.answer || knowledge.text) &&
-            (knowledge.known === true ||
-                knowledge.status === "complete" ||
-                (knowledge.status === "partial" &&
-                    (knowledge.confidence || 0) >= 0.5))
-                ? String(knowledge.answer || knowledge.text).trim()
-                : "";
-
-        const weakGeneric =
-            typeof response === "string" &&
-            (/lanjut cerit|cerita lebih lanjut|ceritain aja|aku dengerin kok|menarik|nangkep arahnya|mau bahas apa — makanan/i.test(
-                response
-            ) ||
-                response.length < 12);
-
-        if (knowledgeText) {
-            const mode =
-                (analysis &&
-                    analysis.conversationResult &&
-                    analysis.conversationResult.mode) ||
-                "";
-            // Jangan timpa greeting / identity / math / capability yang sudah natural
-            const protect =
-                /greeting|identity|natural_identity|natural_capability|natural_whatdoing|math|farewell|thanks|reasoning_recall/i.test(
-                    String(mode)
-                );
-            if (!protect && (weakGeneric || !response || !String(response).trim())) {
-                response = knowledgeText;
             }
         }
 
@@ -1149,10 +951,6 @@
             );
         }
 
-        if (knowledge && (knowledge.answer || knowledge.text)) {
-            return String(knowledge.answer || knowledge.text);
-        }
-
         if (
             knowledge &&
             knowledge.service
@@ -1161,24 +959,17 @@
                 knowledge.service;
 
             return (
-                (service.shortName || service.name) +
-                " — " +
+                service.name +
+                " bisa membantu " +
                 (
                     service.description ||
-                    "bisa bantu sesuai kebutuhanmu."
-                ) +
-                " Mau lanjut dari situ?"
+                    "sesuai kebutuhanmu."
+                )
             );
         }
 
-        // Jujur soal domain — bukan filler "cerita lebih lanjut"
-        if (knowledge && knowledge.domainHint) {
-            return knowledge.domainHint;
-        }
-
-        return (
-            "Hmm, aku belum nemu jawaban pas di knowledge-ku 😊 " +
-            "Soal Food, Ride, Assistant, atau 2in1 di CIKUR GO — aku bisa bantu. Mau coba dari situ?"
+        return fallbackResponse(
+            "insufficient_response"
         );
     }
 
@@ -1316,129 +1107,9 @@
         candidate,
         options
     ) {
-        // --- New brain layers: Boundary → Planner → Meta → Composer ---
-        let enrichedCandidate = candidate;
-        try {
-            const boundary = getBoundaryModule();
-            const planner = getPlannerModule();
-            const meta = getMetaModule();
-            const composer = getComposerModule();
-            const memory = getMemoryModule();
-            const lang =
-                (analysis && analysis.lang) ||
-                (options && options.lang) ||
-                "id";
-
-            // Boundary first
-            let boundaryResult = null;
-            if (boundary && typeof boundary.check === "function") {
-                boundaryResult = boundary.check(
-                    typeof input === "string" ? input : (input && input.text) || "",
-                    lang
-                );
-            }
-
-            // Build plan from analysis + reasoning state
-            let planResult = null;
-            if (planner && typeof planner.plan === "function") {
-                const conv = getConversationModule();
-                let reasoningState = {};
-                try {
-                    if (conv && typeof conv.getState === "function") {
-                        const st = conv.getState();
-                        reasoningState = (st && st.reasoning) || {};
-                    }
-                } catch (e) {}
-                const memSuggest =
-                    memory && typeof memory.suggestFor === "function"
-                        ? memory.suggestFor(
-                              state.currentTopic ||
-                                  reasoningState.lastTopic ||
-                                  "general"
-                          )
-                        : null;
-                planResult = planner.plan({
-                    needs:
-                        state.detectedNeeds ||
-                        (analysis && analysis.needs) ||
-                        reasoningState.activeNeeds ||
-                        [],
-                    constraints: reasoningState.constraints || null,
-                    emotion:
-                        reasoningState.lastEmotion ||
-                        state.currentMood ||
-                        (analysis && analysis.mood) ||
-                        null,
-                    emotionStrength: reasoningState.emotionStrength || null,
-                    preferences: reasoningState.preferences || [],
-                    topic: state.currentTopic || (analysis && analysis.topic) || null,
-                    memorySuggest: memSuggest,
-                    lang: lang
-                });
-            }
-
-            // Meta decision
-            let metaResult = null;
-            if (meta && typeof meta.evaluate === "function") {
-                const hasVerified =
-                    discovery &&
-                    (discovery.status === "verified" ||
-                        discovery.verified === true);
-                metaResult = meta.evaluate({
-                    plan: planResult,
-                    knowledge: knowledge,
-                    discovery: discovery,
-                    hasVerifiedRuntime: !!hasVerified,
-                    lang: lang
-                });
-            }
-
-            // Composer: assemble / enrich text
-            if (composer && typeof composer.compose === "function") {
-                const baseText =
-                    (candidate &&
-                        (candidate.text ||
-                            candidate.response ||
-                            (typeof candidate === "string" ? candidate : ""))) ||
-                    "";
-                const composed = composer.compose({
-                    plan: planResult,
-                    meta: metaResult,
-                    boundary: boundaryResult,
-                    baseText: baseText,
-                    lang: lang
-                });
-                if (composed && composed.text) {
-                    if (typeof enrichedCandidate === "string") {
-                        enrichedCandidate = composed.text;
-                    } else if (enrichedCandidate && typeof enrichedCandidate === "object") {
-                        enrichedCandidate = clone(enrichedCandidate);
-                        enrichedCandidate.text = composed.text;
-                        enrichedCandidate.response = composed.text;
-                        enrichedCandidate.mode =
-                            composed.mode || enrichedCandidate.mode;
-                    } else {
-                        enrichedCandidate = {
-                            text: composed.text,
-                            response: composed.text,
-                            mode: composed.mode
-                        };
-                    }
-                }
-            } else if (boundaryResult && boundaryResult.allowed === false) {
-                enrichedCandidate = {
-                    text: boundaryResult.softRedirect,
-                    response: boundaryResult.softRedirect,
-                    mode: "boundary_redirect"
-                };
-            }
-        } catch (layerErr) {
-            // New layers must never break the core path
-        }
-
         const guardResult =
             guardResponse(
-                enrichedCandidate,
+                candidate,
                 analysis,
                 knowledge,
                 discovery,
@@ -1478,41 +1149,6 @@
                     clone(discovery)
             }
         );
-
-        // Soft durable memory: ingest meaningful session signals
-        try {
-            const memory = getMemoryModule();
-            if (memory && typeof memory.ingestSession === "function") {
-                const conv = getConversationModule();
-                const reasoningState =
-                    (conv &&
-                        typeof conv.getState === "function" &&
-                        conv.getState() &&
-                        conv.getState().reasoning) ||
-                    state.lastAnalysis?.reasoning ||
-                    {};
-                memory.ingestSession({
-                    lastTopic:
-                        state.currentTopic ||
-                        reasoningState.lastTopic ||
-                        null,
-                    topic: state.currentTopic || null,
-                    preferences: reasoningState.preferences || [],
-                    lastEmotion:
-                        reasoningState.lastEmotion ||
-                        state.currentMood ||
-                        null,
-                    emotionStrength: reasoningState.emotionStrength || null,
-                    activeNeeds:
-                        state.detectedNeeds ||
-                        reasoningState.activeNeeds ||
-                        [],
-                    constraints: reasoningState.constraints || null
-                });
-            }
-        } catch (memErr) {
-            // Memory must never break the response path
-        }
 
         emit(EVENTS.RESPONSE, {
             conversationId:
@@ -1589,52 +1225,6 @@
                 );
 
             /*
-             * STEP 1b — MESIN ABC (sync, ringan)
-             */
-            try {
-                if (shouldUseMachineAbc(text, options) || isContextRecallQuery(text)) {
-                    const abcResult = runMachineAbc(text, options);
-                    if (abcResult && analysis && typeof analysis === "object") {
-                        analysis.machineAbc = {
-                            ok: !!abcResult.ok,
-                            status: abcResult.status || null,
-                            confidence: abcResult.confidence ?? null,
-                            summary: abcResult.summary || null,
-                            findingsCount: (abcResult.findings || []).length,
-                            error: abcResult.error || null
-                        };
-                    }
-                }
-                if (isContextRecallQuery(text) && window.CGOAbcCognition &&
-                    typeof window.CGOAbcCognition.analyzeConversationHistory === "function") {
-                    try {
-                        const convState = (window.CGO_CUSTOMER && window.CGO_CUSTOMER.conversation &&
-                            typeof window.CGO_CUSTOMER.conversation.getState === "function")
-                            ? window.CGO_CUSTOMER.conversation.getState()
-                            : null;
-                        const recent = (convState && convState.context && Array.isArray(convState.context.recentMessages))
-                            ? convState.context.recentMessages
-                            : [];
-                        if (recent.length) {
-                            const abcHistory = window.CGOAbcCognition.analyzeConversationHistory(recent, { force: true });
-                            if (abcHistory && abcHistory.ok && analysis) {
-                                analysis.abcHistory = {
-                                    ok: true,
-                                    topics: abcHistory.topics || [],
-                                    summary: abcHistory.summary || null,
-                                    confidence: abcHistory.confidence ?? null
-                                };
-                                if (abcHistory.topics && abcHistory.topics.length &&
-                                    (!analysis.topic || analysis.topic === "conversation")) {
-                                    analysis.topic = abcHistory.topics[0];
-                                }
-                            }
-                        }
-                    } catch (_h) {}
-                }
-            } catch (_abcSync) {}
-
-            /*
              * STEP 2 — KNOWLEDGE
              */
             const knowledge =
@@ -1675,7 +1265,7 @@
             /*
              * STEP 4 — RESPONSE CANDIDATE
              */
-            let candidate =
+            const candidate =
                 generateResponseCandidate(
                     text,
                     analysis,
@@ -1683,44 +1273,6 @@
                     discovery,
                     options
                 );
-
-            /*
-             * STEP 4b — ABC / context-recall override (natural)
-             * Jika user tanya "tadi kita bahas apa" dan ABC/history
-             * menemukan topik, ganti jawaban generik dengan recall natural.
-             */
-            try {
-                if (isContextRecallQuery(text)) {
-                    const topics = (analysis.abcHistory && analysis.abcHistory.topics) || [];
-                    const topicLabels = {
-                        food: "Food / pesan makanan",
-                        ride: "Ride / perjalanan",
-                        assistant: "Assistant / sewa asisten",
-                        cikurgo2in1: "layanan 2in1",
-                        cikur_go: "CIKUR GO",
-                        pricing: "harga / tarif"
-                    };
-                    let labels = topics.slice(0, 3).map(function (t) {
-                        return topicLabels[t] || t;
-                    });
-                    if (!labels.length && analysis.topic && analysis.topic !== "conversation") {
-                        labels = [topicLabels[analysis.topic] || analysis.topic];
-                    }
-                    if (labels.length) {
-                        const joined = labels.join(" dan ");
-                        const recallText = "Tadi kita bahas soal " + joined + ". Mau lanjut dari situ, atau pindah topik lain?";
-                        if (typeof candidate === "string") {
-                            candidate = recallText;
-                        } else if (candidate && typeof candidate === "object") {
-                            if (typeof candidate.text === "string") candidate.text = recallText;
-                            else if (typeof candidate.response === "string") candidate.response = recallText;
-                            else candidate = { text: recallText, mode: "reasoning_recall" };
-                        } else {
-                            candidate = { text: recallText, mode: "reasoning_recall" };
-                        }
-                    }
-                }
-            } catch (_ovr) {}
 
             /*
              * STEP 5 — GUARDIAN
@@ -1734,32 +1286,6 @@
                     candidate,
                     options
                 );
-
-            /* Lampirkan jejak ABC ke metadata (tidak mengubah jawaban alami kecuali diminta formal) */
-            if (result && typeof result === "object" && abcResult) {
-                result.machineAbc = {
-                    ok: !!abcResult.ok,
-                    status: abcResult.status || null,
-                    confidence: abcResult.confidence ?? null,
-                    audit: abcResult.audit?.status || null,
-                    engine: abcResult.version || abcResult.engine || null
-                };
-                if (
-                    abcResult.ok &&
-                    options &&
-                    (options.includeAbcHint === true ||
-                        /mesin abc|hasil audit|laporan formal/i.test(text))
-                ) {
-                    const hint = formatAbcHint(abcResult);
-                    if (hint) {
-                        if (typeof result.response === "string") {
-                            result.response = result.response + hint;
-                        } else if (typeof result.text === "string") {
-                            result.text = result.text + hint;
-                        }
-                    }
-                }
-            }
 
             return result;
         } catch (error) {
@@ -1809,126 +1335,6 @@
      * MAIN ASYNC PIPELINE
      * ========================================================= */
 
-
-    /* =========================================================
-     * MESIN ABC — formal + cognitive assist (opsional, non-blocking)
-     * Versi 1.1: membantu otak CGO lebih pintar (struktur, konteks,
-     * penjelasan layanan). Tidak mengganti kepribadian natural.
-     * ========================================================= */
-    function shouldUseMachineAbc(text, options) {
-        options = options || {};
-        // Prefer lapisan kognisi terpusat (sistem + customer)
-        try {
-            if (window.CGOAbcCognition && typeof window.CGOAbcCognition.shouldEnrich === "function") {
-                // light mode default agar lebih sering membantu otak
-                return window.CGOAbcCognition.shouldEnrich(text, Object.assign({ light: true }, options));
-            }
-        } catch (_e) {}
-        if (options.forceAbc === true) return true;
-        if (options.skipAbc === true) return false;
-        const s = String(text || "");
-        if (s.length < 4) return false;
-        if (/\b(verifikasi|audit|mesin\s*abc|self-?test|cek struktur|format json|periksa html|analisis (kode|struktur|sistem)|bcgo|telemetry|kontrak|jelaskan|jelasin|apa\s+itu|tadi|sebelumnya|bahas\s+apa|cikur\s*go|layanan)\b/i.test(s)) return true;
-        const trimmed = s.trim();
-        if (trimmed.length >= 18 && ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]")))) return true;
-        if (trimmed.length >= 50 && /<\s*(html|div|script|style)\b/i.test(s)) return true;
-        if (trimmed.length >= 28 && (/\?$/.test(trimmed) || /^(apa|bagaimana|gimana|siapa|kenapa|mau|bisa|tolong)\b/i.test(trimmed))) return true;
-        return false;
-    }
-
-    function isContextRecallQuery(text) {
-        const s = String(text || "").toLowerCase();
-        return /\b(tadi\s+kita\s+bahas|kita\s+bahas\s+apa|bahas\s+apa\s+tadi|topik\s+terakhir|apa\s+yang\s+kita\s+(bahas|bicarakan)|what\s+did\s+we\s+(talk|discuss)|previous\s+topic|yang\s+tadi\s+apa)\b/i.test(s)
-            || (/\b(tadi|sebelumnya|barusan)\b/.test(s) && /\b(bahas|bicarakan|ngomongin|topik|cerita)\b/.test(s));
-    }
-
-    function runMachineAbc(text, options) {
-        options = options || {};
-        try {
-            if (window.CGOAbcCognition && typeof window.CGOAbcCognition.analyze === "function") {
-                return window.CGOAbcCognition.analyze(text, options);
-            }
-            const bridge = window.CGOMachineABCBridge;
-            if (bridge && typeof bridge.analyze === "function") {
-                return bridge.analyze(text, {
-                    maxCycles: 1,
-                    autoReflect: false,
-                    fast: true,
-                    skipAudit: true
-                });
-            }
-            const eng = window.CGOMachineABC || window.CGO_MACHINE_ABC || window.CGOCoreMachine;
-            if (eng && typeof eng.process === "function" && !eng.isPaused()) {
-                const out = eng.process(text, { maxCycles: 1, fast: true, skipAudit: true });
-                return {
-                    ok: true,
-                    engine: "CGO_MACHINE_ABC",
-                    version: eng.version,
-                    status: out?.result?.status || null,
-                    confidence: out?.result?.decision?.confidence ?? null,
-                    summary: out?.result?.summary || null,
-                    findings: out?.result?.findings || [],
-                    audit: out?.audit || null,
-                    packet: out
-                };
-            }
-        } catch (err) {
-            return { ok: false, error: String(err && err.message || err) };
-        }
-        return null;
-    }
-
-    function runMachineAbcWithTimeout(text, options, ms) {
-        ms = typeof ms === "number" ? ms : 90;
-        return new Promise(function (resolve) {
-            var done = false;
-            var timer = setTimeout(function () {
-                if (done) return;
-                done = true;
-                resolve({ ok: false, timeout: true, error: "abc_timeout" });
-            }, ms);
-            try {
-                var result = runMachineAbc(text, options);
-                if (!done) {
-                    done = true;
-                    clearTimeout(timer);
-                    resolve(result);
-                }
-            } catch (e) {
-                if (!done) {
-                    done = true;
-                    clearTimeout(timer);
-                    resolve({ ok: false, error: String(e && e.message || e) });
-                }
-            }
-        });
-    }
-
-    function formatAbcHint(abc) {
-        if (!abc || !abc.ok) return "";
-        try {
-            if (window.CGOAbcCognition && typeof window.CGOAbcCognition.formatHint === "function") {
-                return window.CGOAbcCognition.formatHint(abc, "customer");
-            }
-        } catch (_f) {}
-        const conf = abc.confidence != null
-            ? Math.round(Number(abc.confidence) * 100) + "%"
-            : "–";
-        const n = (abc.findings && abc.findings.length) || 0;
-        const audit = (abc.audit && abc.audit.status) || "–";
-        return (
-            "\n\n〔Mesin ABC〕 status " +
-            (abc.status || "–") +
-            " · keyakinan " +
-            conf +
-            " · temuan " +
-            n +
-            " · audit " +
-            audit
-        );
-    }
-
-
     async function chatAsync(
         input,
         options
@@ -1970,95 +1376,10 @@
                 );
 
             /*
-             * STEP 1b — MESIN ABC (opsional, cognitive assist)
-             * Membantu struktur, penjelasan, dan recall konteks.
-             * Gagal / absen → chat tetap jalan natural.
-             */
-            let abcResult = null;
-            let abcHistory = null;
-            try {
-                const needAbc = shouldUseMachineAbc(text, options) || isContextRecallQuery(text);
-                if (needAbc) {
-                    abcResult = await runMachineAbcWithTimeout(text, options, 120);
-                    if (abcResult && abcResult.timeout) {
-                        abcResult = { ok: false, timeout: true };
-                    }
-                }
-
-                // Khusus pertanyaan "tadi kita bahas apa?" → analisa history via ABC
-                if (isContextRecallQuery(text) && window.CGOAbcCognition &&
-                    typeof window.CGOAbcCognition.analyzeConversationHistory === "function") {
-                    try {
-                        const convState = (window.CGO_CUSTOMER && window.CGO_CUSTOMER.conversation &&
-                            typeof window.CGO_CUSTOMER.conversation.getState === "function")
-                            ? window.CGO_CUSTOMER.conversation.getState()
-                            : null;
-                        const recent = (convState && convState.context && Array.isArray(convState.context.recentMessages))
-                            ? convState.context.recentMessages
-                            : (state && state.history) || [];
-                        if (recent && recent.length) {
-                            abcHistory = window.CGOAbcCognition.analyzeConversationHistory(recent, { force: true });
-                        }
-                    } catch (_histErr) {
-                        abcHistory = null;
-                    }
-                }
-
-                if (analysis && typeof analysis === "object") {
-                    if (abcResult) {
-                        analysis.machineAbc = {
-                            ok: !!abcResult.ok,
-                            status: abcResult.status || null,
-                            confidence: abcResult.confidence ?? null,
-                            summary: abcResult.summary || null,
-                            audit: abcResult.audit?.status || (abcResult.audit || null),
-                            findingsCount: (abcResult.findings || []).length,
-                            findings: Array.isArray(abcResult.findings) ? abcResult.findings.slice(0, 8) : [],
-                            error: abcResult.error || null,
-                            timeout: !!abcResult.timeout
-                        };
-                        // Soft boost topic/intent jika ABC menemukan sinyal layanan
-                        if (abcResult.ok && abcResult.summary) {
-                            const sum = String(abcResult.summary).toLowerCase();
-                            if (!analysis.topic || analysis.topic === "conversation") {
-                                if (/\b(food|makanan)\b/.test(sum)) analysis.topic = "food";
-                                else if (/\b(ride|perjalanan|driver)\b/.test(sum)) analysis.topic = "ride";
-                                else if (/\b(assistant|asisten)\b/.test(sum)) analysis.topic = "assistant";
-                                else if (/\b(2in1|gabungan)\b/.test(sum)) analysis.topic = "cikurgo2in1";
-                                else if (/\b(cikur\s*go|platform|layanan)\b/.test(sum)) analysis.topic = "cikur_go";
-                            }
-                        }
-                    }
-                    if (abcHistory && abcHistory.ok) {
-                        analysis.abcHistory = {
-                            ok: true,
-                            topics: abcHistory.topics || [],
-                            summary: abcHistory.summary || null,
-                            confidence: abcHistory.confidence ?? null
-                        };
-                        // Isi unresolvedTopic / serviceCandidate dari history jika kosong
-                        if (abcHistory.topics && abcHistory.topics.length) {
-                            if (!analysis.topic || analysis.topic === "conversation") {
-                                analysis.topic = abcHistory.topics[0];
-                            }
-                            if (analysis.context) {
-                                if (!analysis.context.unresolvedTopic) {
-                                    analysis.context.unresolvedTopic = abcHistory.topics[0];
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (_abcErr) {
-                abcResult = null;
-                abcHistory = null;
-            }
-
-            /*
-             * STEP 2 — KNOWLEDGE (+ semantic bila CGOSemantic siap)
+             * STEP 2 — KNOWLEDGE
              */
             const knowledge =
-                await queryKnowledgeAsync(
+                queryKnowledge(
                     text,
                     analysis,
                     options
@@ -2095,7 +1416,7 @@
             /*
              * STEP 4 — RESPONSE CANDIDATE
              */
-            let candidate =
+            const candidate =
                 generateResponseCandidate(
                     text,
                     analysis,
@@ -2103,44 +1424,6 @@
                     discovery,
                     options
                 );
-
-            /*
-             * STEP 4b — ABC / context-recall override (natural)
-             * Jika user tanya "tadi kita bahas apa" dan ABC/history
-             * menemukan topik, ganti jawaban generik dengan recall natural.
-             */
-            try {
-                if (isContextRecallQuery(text)) {
-                    const topics = (analysis.abcHistory && analysis.abcHistory.topics) || [];
-                    const topicLabels = {
-                        food: "Food / pesan makanan",
-                        ride: "Ride / perjalanan",
-                        assistant: "Assistant / sewa asisten",
-                        cikurgo2in1: "layanan 2in1",
-                        cikur_go: "CIKUR GO",
-                        pricing: "harga / tarif"
-                    };
-                    let labels = topics.slice(0, 3).map(function (t) {
-                        return topicLabels[t] || t;
-                    });
-                    if (!labels.length && analysis.topic && analysis.topic !== "conversation") {
-                        labels = [topicLabels[analysis.topic] || analysis.topic];
-                    }
-                    if (labels.length) {
-                        const joined = labels.join(" dan ");
-                        const recallText = "Tadi kita bahas soal " + joined + ". Mau lanjut dari situ, atau pindah topik lain?";
-                        if (typeof candidate === "string") {
-                            candidate = recallText;
-                        } else if (candidate && typeof candidate === "object") {
-                            if (typeof candidate.text === "string") candidate.text = recallText;
-                            else if (typeof candidate.response === "string") candidate.response = recallText;
-                            else candidate = { text: recallText, mode: "reasoning_recall" };
-                        } else {
-                            candidate = { text: recallText, mode: "reasoning_recall" };
-                        }
-                    }
-                }
-            } catch (_ovr) {}
 
             /*
              * STEP 5 — GUARDIAN

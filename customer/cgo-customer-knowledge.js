@@ -25,7 +25,7 @@
     (window.CGO_CUSTOMER = {});
 
   const VERSION =
-    "1.1.0-knowledge-interpret";
+    "1.0.0-knowledge";
 
   /* ==========================================================
    * CONSTANTS
@@ -966,46 +966,26 @@
       return {
         ok: false,
         text:
-          "Aku belum punya info yang cukup soal itu 😊 Soal Food, Ride, Assistant, atau 2in1, aku bisa bantu."
+          "Aku belum punya informasi yang cukup tentang layanan itu."
       };
     }
 
     const service =
       result.service;
 
-    // Susun jawaban natural dari knowledge (bukan brosur kaku)
-    const parts = [];
-    if (service.shortName || service.name) {
-      parts.push(
-        (service.shortName || service.name) +
-          (service.description
-            ? " — " + service.description.replace(/\.\s*$/, "")
-            : "")
-      );
-    }
-    if (service.purpose) {
-      parts.push(service.purpose.replace(/\.\s*$/, ""));
-    }
-    if (service.helpsWith && service.helpsWith.length) {
-      parts.push(
-        "Biasanya kepakai buat: " +
-          service.helpsWith.slice(0, 4).join(", ")
-      );
+    let text =
+      service.name;
+
+    if (service.description) {
+      text +=
+        " " +
+        service.description;
     }
 
-    let text = cleanText(parts.join(". "));
-    if (text && !/[.!?]$/.test(text)) text += ".";
-    // Ajakan ringan
-    if (service.id === "food") {
-      text += " Lagi pengin makan apa?";
-    } else if (service.id === "ride") {
-      text += " Mau aku bantu alur pesan ride-nya?";
-    } else if (service.id === "assistant") {
-      text += " Butuh dampingan untuk apa?";
-    } else if (service.id === "cikurgo2in1") {
-      text += " Mau coba gabungan dua layanan itu?";
-    } else if (service.id === "cikur_go") {
-      text += " Mau bahas layanan yang mana dulu?";
+    if (service.purpose) {
+      text +=
+        " " +
+        service.purpose;
     }
 
     return {
@@ -1015,325 +995,11 @@
     };
   }
 
-  /**
-   * interpret / query — pintu utama knowledge untuk otak CGO.
-   * Bukan "frase X → teks Y", tapi: cocokkan ke registry → susun jawaban dari data.
-   * Opsional: analysis.machineAbc / abcHistory dipakai untuk boost topik.
-   */
-  function interpret(input, options) {
-    options = options || {};
-    const text = cleanText(
-      typeof input === "string"
-        ? input
-        : (input && (input.text || input.message)) || ""
-    );
-    const analysis = options.analysis || {};
-
-    // Boost dari ABC bila ada topik layanan
-    let boostQuery = text;
-    if (analysis.abcHistory && Array.isArray(analysis.abcHistory.topics)) {
-      boostQuery =
-        text + " " + analysis.abcHistory.topics.join(" ");
-    } else if (analysis.topic && analysis.topic !== "conversation") {
-      boostQuery = text + " " + analysis.topic;
-    } else if (analysis.machineAbc && analysis.machineAbc.summary) {
-      boostQuery = text + " " + String(analysis.machineAbc.summary);
-    }
-
-    const understood = understand(boostQuery || text);
-    const bestId = understood.bestService;
-    const confidence = understood.confidence || 0;
-
-    // Platform / CIKUR GO umum
-    const lowerText = lower(text);
-    const asksPlatform =
-      /\b(cikur\s*go|cikurgo|platform\s*ini|aplikasi\s*ini)\b/.test(lowerText) &&
-      /\b(apa|itu|sih|jelas|cerita|tentang|about)\b/.test(lowerText);
-
-    if (asksPlatform || bestId === "cikur_go") {
-      const expl = buildExplanation("cikur_go");
-      if (expl.ok) {
-        return {
-          status: "complete",
-          known: true,
-          service: expl.service,
-          answer: expl.text,
-          text: expl.text,
-          source: "service_registry",
-          confidence: Math.max(confidence, 0.8),
-          understood: understood
-        };
-      }
-    }
-
-    if (bestId && confidence >= 0.5) {
-      const expl = buildExplanation(bestId);
-      if (expl.ok) {
-        return {
-          status: "complete",
-          known: true,
-          service: expl.service,
-          answer: expl.text,
-          text: expl.text,
-          source: "service_registry",
-          confidence: confidence,
-          understood: understood,
-          combination: understood.combination || null
-        };
-      }
-    }
-
-    // Partial: ada sinyal layanan tapi lemah
-    if (bestId && confidence > 0) {
-      const expl = buildExplanation(bestId);
-      return {
-        status: "partial",
-        known: !!expl.ok,
-        service: expl.ok ? expl.service : null,
-        answer: expl.ok ? expl.text : null,
-        text: expl.ok ? expl.text : null,
-        source: "service_registry",
-        confidence: confidence,
-        understood: understood
-      };
-    }
-
-    return {
-      status: "unknown",
-      known: false,
-      service: null,
-      answer: null,
-      text: null,
-      source: null,
-      confidence: 0,
-      understood: understood,
-      domainHint:
-        "Aku lebih paham soal layanan CIKUR GO — Food, Ride, Assistant, sama 2in1. Kalau itu yang kamu maksud, bilang aja 😊"
-    };
-  }
-
-  function query(input, options) {
-    return interpret(input, options);
-  }
-
-  /**
-   * Siapkan index semantik dari semua layanan (sekali saja).
-   * Memakai window.CGOSemantic bila tersedia.
-   */
-  async function ensureSemanticIndex() {
-    const sem =
-      typeof window !== "undefined" ? window.CGOSemantic : null;
-    if (!sem || typeof sem.indexDocuments !== "function") {
-      return { ok: false, reason: "SEMANTIC_NOT_LOADED" };
-    }
-    const services = getServices();
-    const docs = services.map(function (s) {
-      const parts = [
-        s.name,
-        s.shortName,
-        s.description,
-        s.purpose,
-        (s.aliases || []).join(" "),
-        (s.keywords || []).join(" "),
-        (s.helpsWith || []).join(" "),
-        (s.examples || []).join(" ")
-      ];
-      return {
-        id: s.id,
-        text: cleanText(parts.filter(Boolean).join(". "))
-      };
-    });
-    return sem.indexDocuments(docs);
-  }
-
-  /**
-   * interpretAsync — keyword + semantik (jika CGOSemantic siap).
-   * Ini jalur yang benar-benar dibantu embedding gratis.
-   */
-  async function interpretAsync(input, options) {
-    options = options || {};
-    const base = interpret(input, options);
-    const text = cleanText(
-      typeof input === "string"
-        ? input
-        : (input && (input.text || input.message)) || ""
-    );
-
-    const sem =
-      typeof window !== "undefined" ? window.CGOSemantic : null;
-    if (!sem || typeof sem.match !== "function") {
-      return Object.assign({}, base, { semantic: false });
-    }
-
-    // Jangan blokir chat saat model belum siap (first load 10–40s).
-    // Bootstrap pre-warm di background; chat pakai semantic hanya jika ready.
-    if (typeof sem.isReady === "function" && !sem.isReady()) {
-      return Object.assign({}, base, {
-        semantic: false,
-        semanticPending: true
-      });
-    }
-
-    try {
-      const semTimeoutMs =
-        options.semanticTimeoutMs != null ? options.semanticTimeoutMs : 1200;
-      const semWork = (async function () {
-        await ensureSemanticIndex();
-        return sem.match(text, {
-          topK: 4,
-          minScore:
-            options.semanticMinScore != null ? options.semanticMinScore : 0.32
-        });
-      })();
-      const hits = await Promise.race([
-        semWork,
-        new Promise(function (resolve) {
-          setTimeout(function () {
-            resolve(null);
-          }, semTimeoutMs);
-        })
-      ]);
-      if (!hits) {
-        return Object.assign({}, base, {
-          semantic: false,
-          semanticTimeout: true
-        });
-      }
-      if (!hits.length) {
-        return Object.assign({}, base, { semantic: true, semanticHits: [] });
-      }
-
-      const top = hits[0];
-      const semanticConfidence = Math.max(
-        0,
-        Math.min(1, (top.score - 0.25) / 0.55)
-      );
-
-      // Gabungkan: semantik menang jika jauh lebih yakin, atau keyword lemah
-      const keywordConf = base.confidence || 0;
-      const preferSemantic =
-        semanticConfidence >= 0.55 &&
-        (semanticConfidence >= keywordConf + 0.12 || keywordConf < 0.5);
-
-      if (preferSemantic && top.id) {
-        const expl = buildExplanation(top.id);
-        if (expl.ok) {
-          return {
-            status: "complete",
-            known: true,
-            service: expl.service,
-            answer: expl.text,
-            text: expl.text,
-            source: "semantic+registry",
-            confidence: Math.max(semanticConfidence, keywordConf),
-            understood: base.understood,
-            semantic: true,
-            semanticHits: hits,
-            matchMode: "semantic"
-          };
-        }
-      }
-
-      // Boost keyword result confidence sedikit bila semantik setuju
-      if (
-        base.known &&
-        base.service &&
-        hits.some(function (h) {
-          return h.id === base.service.id && h.score >= 0.35;
-        })
-      ) {
-        return Object.assign({}, base, {
-          confidence: Math.min(1, (base.confidence || 0.5) + 0.15),
-          semantic: true,
-          semanticHits: hits,
-          matchMode: "keyword+semantic"
-        });
-      }
-
-      return Object.assign({}, base, {
-        semantic: true,
-        semanticHits: hits,
-        matchMode: base.known ? "keyword" : "none"
-      });
-    } catch (_e) {
-      return Object.assign({}, base, { semantic: false, semanticError: true });
-    }
-  }
-
   /* ==========================================================
    * DEFAULT OFFICIAL KNOWLEDGE
    * ========================================================== */
 
   registerServices([
-
-    {
-      id: "cikur_go",
-
-      name: "CIKUR GO",
-
-      shortName: "CIKUR GO",
-
-      category: "platform",
-
-      aliases: [
-        "cikur go",
-        "cikurgo",
-        "platform",
-        "aplikasi"
-      ],
-
-      keywords: [
-        "cikur",
-        "platform",
-        "layanan",
-        "aplikasi"
-      ],
-
-      description:
-        "Platform layanan customer dengan Food, Ride, Assistant, dan konsep 2in1.",
-
-      purpose:
-        "Satu tempat buat kebutuhan makan, perjalanan, dampingan, atau gabungan dua layanan.",
-
-      helpsWith: [
-        "pesan makanan",
-        "perjalanan",
-        "sewa assistant",
-        "layanan gabungan"
-      ],
-
-      examples: [
-        "cikur go itu apa",
-        "apa itu cikurgo",
-        "layanan apa aja"
-      ],
-
-      suitableFor: [
-        "mengenal platform"
-      ],
-
-      discovery: {
-        required: false,
-        types: ["none"],
-        reason: ""
-      },
-
-      combinations: [
-        "food",
-        "ride",
-        "assistant",
-        "cikurgo2in1"
-      ],
-
-      questions: [
-        "Mau bahas Food, Ride, Assistant, atau 2in1?"
-      ],
-
-      handoff: {
-        enabled: false,
-        target: ""
-      }
-    },
 
     {
       id: "food",
@@ -1701,15 +1367,7 @@
 
     calculateConfidence,
 
-    buildExplanation,
-
-    interpret,
-
-    query,
-
-    interpretAsync,
-
-    ensureSemanticIndex
+    buildExplanation
   };
 
   /* ==========================================================
