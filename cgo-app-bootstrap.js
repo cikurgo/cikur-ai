@@ -337,7 +337,7 @@
     let soundQueueUntil = 0;
     let lastSoundKind = "";
     let ambientOsc = null, ambientHarmonic = null, ambientGain = null, ambientHarmonicGain = null, ambientLfo = null, ambientLfoGain = null, ambientState = "normal";
-    const AUDIO_GAIN = 0.24;
+    const AUDIO_GAIN = 0.16;
     const ensureAudio = async () => {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) throw new Error("Web Audio API tidak tersedia di browser ini");
@@ -352,7 +352,7 @@
       audioReady = true;
       return audio;
     };
-    const ambientProfile = state => state === "error" ? {f:52,h:104,p:2.35,g:.095,hg:.030} : state === "warn" ? {f:92,h:184,p:1.75,g:.075,hg:.022} : {f:68,h:136,p:1.15,g:.055,hg:.018};
+    const ambientProfile = state => state === "error" ? {f:52,h:104,p:2.35,g:.030,hg:.010} : state === "warn" ? {f:92,h:184,p:1.75,g:.022,hg:.007} : {f:68,h:136,p:1.15,g:.014,hg:.0045};
     const setAmbientState = state => {
       ambientState = state === "error" ? "error" : state === "warn" ? "warn" : "normal";
       if (!audioReady || !audio || audio.state !== "running" || !ambientOsc) return;
@@ -437,17 +437,6 @@
       const b = hud.querySelector("#cgoAbcHudSound");
       if (b) { b.dataset.on = "0"; b.textContent = "🔇 SOUND OFF"; }
     };
-    const recoverAudio = async () => {
-      if (!sound || !audio) return false;
-      try {
-        if (audio.state !== "running") await audio.resume();
-        if (audio.state === "running") { audioReady = true; startAmbient(); setAmbientState(ambientState); return true; }
-      } catch (_) {}
-      return false;
-    };
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) recoverAudio(); });
-    window.addEventListener("pageshow", () => { recoverAudio(); });
-    if (audio) audio.onstatechange = () => { if (sound && audio.state === "running") { audioReady = true; startAmbient(); } };
     const buzz = kind => { if(!haptic || typeof navigator.vibrate!=="function")return; try{navigator.vibrate(kind==='done'?[10,18,10]:kind==='bad'?[28,16,35]:9)}catch(_){ } };
     const render = ev => {
       if(!ev || ev.type!=="ABC_TELEMETRY")return;
