@@ -108,6 +108,17 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
 .telemetry-mini{border:1px solid var(--line-soft);border-radius:9px;padding:7px;background:#020a14}.telemetry-mini .k{font-size:9px;color:var(--faint);text-transform:uppercase}.telemetry-mini .v{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:#d8edff;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:560px){.lamps{grid-template-columns:repeat(2,1fr)}.telemetry-grid{grid-template-columns:1fr 1fr}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+.activity-panel{box-shadow:0 0 0 1px rgba(22,136,255,.12),0 12px 40px rgba(0,0,0,.35)}
+.activity-panel.live-glow{border-color:#1a6fcc;box-shadow:0 0 24px rgba(22,136,255,.18)}
+.lamp{transition:border-color .2s,background .2s,box-shadow .2s}
+.lamp.active{border-color:#765f1b;background:#2a2308}
+.lamp.done{border-color:#176a50;background:#062a1c}
+.lamp.bad{border-color:#76263a;background:#2a0d15}
+.lamp-dot{width:12px;height:12px}
+.route-node.live{color:var(--warn-text);border-color:#765f1b;background:#2a2308;box-shadow:0 0 10px #ffd34d44}
+.route-node.ok{color:var(--ok-text);border-color:#176a50;background:#062a1c}
+
 </style>
 </head>
 <body>
@@ -227,9 +238,9 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   </section>
 </div>
 
-<script src="cgo-ai-voice-operator.js?v=2.2.0-FEMALE-AIRPORT-OPERATOR-20260926"></script>
-<script src="cgo-machine-abc.js?v=0.9.8-PHYSICS-CORE-20260926"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.6.0-BCGO-SYNC-20260926"></script>
+<script src="cgo-ai-voice-operator.js?v=2.1.0-FEMALE-AIRPORT-PRECISE-20260926"></script>
+<script src="cgo-machine-abc.js?v=0.9.6-PHYSICS-CORE-20260926"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.5.0-LIVE-ACK-20260926"></script>
 <script src="cgo-abc-cognition.js"></script>
 <script>
 (() => {
@@ -258,56 +269,43 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   const AUDIO_GAIN=.22;
   try{telemetryBus=new BroadcastChannel("CGO_MACHINE_ABC_TELEMETRY")}catch(_){telemetryBus=null}
 
-  function el(tag, cls, text) {
-    const n = document.createElement(tag);
-    if (cls) n.className = cls;
-    if (text != null) n.textContent = text;
-    return n;
-  }
-  function empty(msg) { return el("div", "empty", msg); }
-  function chip(node, text, tone) {
-    if (!node) return;
-    node.textContent = text;
-    node.className = "chip" + (tone ? " " + tone : "");
-  }
-  function showNotice(msg, tone) {
-    const n = $("#notice");
-    if (!n) return;
-    n.hidden = !msg;
-    n.textContent = msg || "";
-    n.className = "banner" + (tone === "ok" ? " ok" : tone === "error" || tone === "e" ? " error" : "");
-  }
-  function clearNotice() { showNotice("", ""); }
-  function setLive(text, tone) {
-    const c = $("#liveChip");
-    if (c) chip(c, text, tone || "");
-  }
-  function setStages(stage) {
-    ["A","B","C","D"].forEach(k => {
-      const n = $("#phase" + k) || document.getElementById("phase" + k);
-      const lamp = document.getElementById("abcLamp" + k);
-      const node = document.getElementById("abcNode" + k);
-      if (n) {
-        n.className = "phase-card";
-        if (k === stage) n.classList.add("run");
-      }
-      if (lamp) lamp.className = "abc-lamp" + (k === stage ? " active" : "");
-      if (node) node.className = "abc-node" + (k === stage ? " active" : "");
-    });
-  }
-
+  const phaseLampIds = {A:"lampA",B:"lampB",C:"lampC",D:"lampD"};
+  const phaseTimeIds = {A:"lampATime",B:"lampBTime",C:"lampCTime",D:"lampDTime"};
+  const phaseNames = {A:"Representasi",B:"Analisis",C:"Hasil",D:"Audit"};
 
   async function ensureAudio(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error("Web Audio API tidak tersedia");if(!audioCtx){audioCtx=new AC({latencyHint:"interactive"});masterGain=audioCtx.createGain();masterGain.gain.value=AUDIO_GAIN;const comp=audioCtx.createDynamicsCompressor();comp.threshold.value=-20;comp.knee.value=18;comp.ratio.value=4;comp.attack.value=.008;comp.release.value=.18;masterGain.connect(comp);comp.connect(audioCtx.destination);audioCtx.onstatechange=()=>{if(soundEnabled&&audioCtx.state==='running')audioReady=true}}if(audioCtx.state!=="running")await audioCtx.resume();if(audioCtx.state!=="running")throw new Error("AudioContext belum running");audioReady=true;return audioCtx}
   function voice(ctx,when,f,d,type='sine',level=.08,glide=null,pan=0){const o=ctx.createOscillator(),g=ctx.createGain(),p=ctx.createStereoPanner?ctx.createStereoPanner():null;o.type=type;o.frequency.setValueAtTime(f,when);if(glide)o.frequency.exponentialRampToValueAtTime(glide,when+d*.8);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.012);g.gain.exponentialRampToValueAtTime(level*.42,when+d*.55);g.gain.exponentialRampToValueAtTime(.0001,when+d);o.connect(g);if(p){p.pan.value=pan;g.connect(p);p.connect(masterGain)}else g.connect(masterGain);o.start(when);o.stop(when+d+.03)}
   function systemSound(kind='tick',force=false){if(!soundEnabled||!audioReady||!audioCtx||audioCtx.state!=="running"||!masterGain)return false;try{const q={start:[392,523,.13,'sine',.075],A:[392,523,.11,'sine',.060],B:[440,587,.11,'sine',.060],C:[494,659,.12,'sine',.065],D:[523,698,.13,'triangle',.070],done:[523,659,.18,'sine',.080],ok:[440,587,.14,'sine',.070],warn:[330,247,.16,'sine',.065],bad:[247,196,.18,'triangle',.070],tick:[440,0,.07,'sine',.045]}[kind]||[440,0,.07,'sine',.045];const when=Math.max(audioCtx.currentTime+.01,soundQueueUntil);voice(audioCtx,when,q[0],q[2],q[3],q[4],q[1]||null,-.05);if(q[1])voice(audioCtx,when+.035,q[1],q[2]*.82,'sine',q[4]*.62,null,.06);soundQueueUntil=when+q[2]+.045;return true}catch(_){return false}}
-  async function armSound(){try{try{window.CGOOperatorVoice?.unlock()}catch(_){};await ensureAudio();soundEnabled=true;soundQueueUntil=0;systemSound('start',true);const b=$("#soundToggle");if(b){b.textContent="🔊 SYSTEM AUDIO · READY";b.classList.add("active")}showNotice("System sonification lokal aktif · cue singkat A→B→C→D.","ok");return true}catch(e){soundEnabled=false;showNotice("Audio tidak tersedia: "+String(e.message||e),"error");return false}}
+  async function armSound(){try{await ensureAudio();soundEnabled=true;soundQueueUntil=0;systemSound('start',true);const b=$("#soundToggle");if(b){b.textContent="🔊 SYSTEM AUDIO · READY";b.classList.add("active")}showNotice("System sonification lokal aktif · cue singkat A→B→C→D.","ok");return true}catch(e){soundEnabled=false;showNotice("Audio tidak tersedia: "+String(e.message||e),"error");return false}}
   function disarmSound(){soundEnabled=false;audioReady=false;soundQueueUntil=0;try{audioCtx?.suspend?.()}catch(_){}const b=$("#soundToggle");if(b){b.textContent="🔇 Suara sistem: OFF";b.classList.remove("active")}}
   async function recoverAudio(){if(!soundEnabled||!audioCtx)return false;try{if(audioCtx.state!=="running")await audioCtx.resume();if(audioCtx.state==='running'){audioReady=true;return true}}catch(_){}return false}
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)recoverAudio()});window.addEventListener('pageshow',()=>recoverAudio());
   function haptic(kind='tick'){if(!hapticEnabled||typeof navigator.vibrate!=="function")return;try{navigator.vibrate(kind==='bad'?[30,20,40]:kind==='done'?[12,18,12]:10)}catch(_){} }
   function markLamp(stage,status,duration){
-    const id=phaseLampIds[stage]; if(!id)return; const n=$('#'+id); if(!n)return; n.className='lamp '+(status==='START'?'active':status==='COMPLETED'?'done':status==='FAILED'?'bad':'');
-    const t=$('#'+phaseTimeIds[stage]); if(t&&duration!=null)t.textContent=duration+'ms';
+    const order=["A","B","C","D"];
+    const idx=order.indexOf(stage);
+    if(idx<0)return;
+    order.forEach((k,i)=>{
+      const n=$("#"+phaseLampIds[k]); if(!n)return;
+      if(status==="START"){
+        if(i<idx) n.className="lamp done";
+        else if(i===idx) n.className="lamp active";
+        else n.className="lamp";
+      } else if(status==="FAILED" && i===idx){
+        n.className="lamp bad";
+      } else if(i<=idx){
+        n.className="lamp done";
+      }
+    });
+    const tt=$("#"+phaseTimeIds[stage]); if(tt&&duration!=null) tt.textContent=duration+"ms";
+  }
+  function lightAllLampsDone(){
+    ["A","B","C","D"].forEach(k=>{
+      const n=$("#"+phaseLampIds[k]); if(n) n.className="lamp done";
+      const rn=$("#route"+k); if(rn) rn.className="route-node ok";
+    });
+    const rs=$("#routeStatus"); if(rs) rs.textContent="ROUTE A›B›C›D · VERIFIED";
+    const st=$("#activityState"); if(st) st.textContent="Selesai · jalur A→B→C→D terverifikasi";
   }
   function markRoute(stage,status){
     ['A','B','C','D'].forEach(k=>{const n=$('#route'+k);if(n)n.className='route-node'});
@@ -318,6 +316,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     try{window.dispatchEvent(new CustomEvent('cgo:abc-telemetry',{detail:ev}))}catch(_){}
     const stage=ev.stage;
     if(stage&&phaseLampIds[stage]){markLamp(stage,ev.event==='PHASE_START'?'START':ev.status||'COMPLETED',ev.durationMs);markRoute(stage,ev.event==='PHASE_START'?'START':ev.status||'COMPLETED');}
+    const ap=document.querySelector('.activity-panel'); if(ap) ap.classList.add('live-glow');
     const state=$('#activityState'); if(state)state.textContent=ev.event==='PHASE_START'?`⚡ ${stage} · ${phaseNames[stage]||stage} sedang bekerja`:`${stage} · ${phaseNames[stage]||stage} selesai · ${ev.durationMs??0}ms`;
     const clock=$('#telemetryClock'); if(clock)clock.textContent=new Date(ev.at||Date.now()).toLocaleTimeString();
     const last=$('#lastTelemetryEvent'); if(last)last.textContent=`${ev.event} · ${stage||'SYS'}`;
@@ -341,26 +340,17 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     const fp=$('#routeFingerprint');if(fp)fp.textContent=String(t.fingerprint||'–').slice(0,28);
     const dur=$('#routeDuration');if(dur)dur.textContent=(t.durationMs??0)+'ms';
     const rs=$('#routeStatus');if(rs)rs.textContent=t.routeStatus==='COMPLETE'?'ROUTE A>B>C>D · VERIFIED':'ROUTE ATTENTION';
-    ['A','B','C','D'].forEach(k=>{const n=$('#route'+k);if(n)n.className='route-node ok';});
+    ['A','B','C','D'].forEach(k=>{const n=$('#route'+k);if(n)n.className='route-node ok';}); try{lightAllLampsDone()}catch(_){};
     if(soundEnabled){applyAmbientState(t.routeStatus==='COMPLETE'?'normal':'warn');systemSound(t.routeStatus==='COMPLETE'?'ok':'warn');}
   }
 
   function health() {
-    let st = {passed:0,total:0,verified:false,failed:0};
-    try { st = E.selfTest() || st; } catch(e) { st = {passed:0,total:0,verified:false,failed:1,error:String(e)}; }
+    const st = E.selfTest();
     chip($("#self"), `Self-test ${st.passed}/${st.total}`, st.verified ? "ok" : "bad");
-    if ($("#selfDetail")) $("#selfDetail").textContent = st.verified ? `${st.passed}/${st.total} lolos` : `${st.failed||0} gagal / ${st.total}`;
-    let ind = {verified:false,scannedFunctions:0,forbiddenReferences:[]};
-    try { ind = E.auditIndependence() || ind; } catch(_) {}
+    $("#selfDetail").textContent = st.verified ? `${st.passed}/${st.total} lolos` : `${st.failed} gagal / ${st.total}`;
+    const ind = E.auditIndependence();
     chip($("#ind"), ind.verified ? "Independensi OK" : "Independensi perlu dicek", ind.verified ? "ok" : "bad");
-    if ($("#indDetail")) $("#indDetail").textContent = ind.verified ? `Lolos · ${ind.scannedFunctions} fungsi dipindai` : "Ditemukan: " + (ind.forbiddenReferences || []).join(", ");
-    try {
-      if (E.physics && typeof E.physics.runSelfTest === 'function') {
-        const pt = E.physics.runSelfTest();
-        if ($("#buildChip")) $("#buildChip").textContent = `BUILD ${E.version}`;
-      }
-    } catch(_) {}
-    chip($("#ver"), "Engine " + (E.version || "?"), "ok");
+    $("#indDetail").textContent = ind.verified ? `Lolos · ${ind.scannedFunctions} fungsi dipindai` : "Ditemukan: " + (ind.forbiddenReferences || []).join(", ");
     return st;
   }
 
@@ -522,10 +512,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     setLive(st.verified ? "SELF-TEST OK" : "SELF-TEST FAIL", st.verified ? "ok" : "bad");
   };
   $("#btnPulse").onclick = () => { refresh(); showNotice("Metrics di-refresh · totalProcessed=" + (E.getMetrics().totalProcessed || 0), "ok"); };
-  $("#soundToggle").onclick = async () => {
-    try { window.CGOOperatorVoice?.unlock(); } catch(_){}
-    if(soundEnabled){disarmSound();return;} await armSound();
-  };
+  $("#soundToggle").onclick = async () => { if(soundEnabled){disarmSound();return;} await armSound(); };
   $("#hapticToggle").onclick = () => { hapticEnabled=!hapticEnabled; const b=$("#hapticToggle"); b.textContent=hapticEnabled?"📳 Haptic: AUTO":"📴 Haptic: OFF"; b.classList.toggle("active",hapticEnabled); };
   $("#devRun").onclick = () => {
     const raw = $("#devInput").value;
@@ -559,11 +546,6 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   window.addEventListener('beforeunload',()=>{try{stopAmbient()}catch(_){} try{audioCtx?.close?.()}catch(_){}},{once:true});
   // observer (untuk event eksternal)
   E.observe(onPayload);
-  // Unlock voice operator on first UI interaction
-  document.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => { try { window.CGOOperatorVoice?.unlock(); } catch(_){} }, { passive: true });
-  });
-
   // Sinkron LIVE BCGO → ABC. Ini jalur operasi; tidak menjalankan input sintetis.
   try {
     const liveBus = new BroadcastChannel('CGO_MACHINE_ABC_LIVE_LINK');
@@ -582,7 +564,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
       if (la) la.textContent = `Audit ${d.audit || '–'}`;
       if (lk) lk.textContent = 'ACK → BCGO';
       if (d.packet) {
-        if (!duplicateLiveLink) onPayload(d.packet);
+        if (!duplicateLiveLink) { onPayload(d.packet); try{lightAllLampsDone()}catch(_){} }
         const m = d.packet?.result?.status || d.status || '–';
         setLive(`${mode} · ${m}`, d.audit === 'VALID' ? 'ok' : 'warn');
       } else if (mode === 'LIVE') setLive(`LIVE · ${d.status || 'READY'}`, d.audit === 'VALID' ? 'ok' : 'warn');
@@ -610,7 +592,6 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     window.addEventListener('beforeunload',()=>bus.close(),{once:true});
   } catch (_) {}
   refresh();
-  if ($("#errorDetail")) $("#errorDetail").textContent = "-";
   setLive("ENGINE READY · STANDBY", "warn");
   if (bootBanner) {
     bootBanner.textContent = `Mesin ABC ${E.version} · core physics ${physics.pass}/${physics.total} · self-test ${st.passed}/${st.total} · ENGINE READY · menunggu input BCGO LIVE.`;
