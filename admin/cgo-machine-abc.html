@@ -126,18 +126,16 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
       <span class="chip" id="ind">Independensi –</span>
       <span class="chip" id="audit">Audit D –</span>
       <span class="chip" id="degraded">Degraded 0</span>
-      <span class="chip" id="liveChip">STANDBY · menunggu input</span>
+      <span class="chip" id="liveChip">Status BOOT</span>
     </div>
   </header>
 
   <div id="fatal" class="banner error" hidden></div>
   <div id="notice" class="banner" hidden></div>
-  <div id="bootBanner" class="banner ok">Mesin ABC siap · self-test berjalan · menunggu input LIVE.</div>
-
-  <section class="banner" id="liveLinkPanel"><b>OPERASI:</b> <span id="liveLinkMode">STANDBY</span> · <span id="liveLinkStatus">Belum ada input BCGO LIVE.</span> · <span id="liveLinkAudit">Audit –</span></section>
+  <div id="bootBanner" class="banner ok">Menyalakan Mesin ABC… memuat engine & menjalankan self-test…</div>
 
   <div class="actions">
-    <button type="button" class="primary" id="btnDemo">▶ UJI PIPELINE A→B→C→D</button>
+    <button type="button" class="primary" id="btnDemo">▶ Jalankan Demo A→B→C→D</button>
     <button type="button" id="btnSelfTest">Self-test ulang</button>
     <button type="button" id="btnPulse">Pulse metrics</button>
     <button type="button" id="pause">Jeda</button>
@@ -508,7 +506,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
       items: ["order#1001", "driver:D12", "status:pending"],
       ts: new Date().toISOString()
     };
-    showNotice("UJI PIPELINE: input sintetis lokal A→B→C→D…", "ok");
+    showNotice("Menjalankan demo pipeline A→B→C→D…", "ok");
     submit(sample, { maxCycles: 1 });
   }
 
@@ -579,41 +577,33 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   window.addEventListener('beforeunload',()=>{try{stopAmbient()}catch(_){} try{audioCtx?.close?.()}catch(_){}},{once:true});
   // observer (untuk event eksternal)
   E.observe(onPayload);
-  // Sinkron LIVE BCGO → ABC. Ini jalur operasi; tidak menjalankan input sintetis.
-  try {
-    const liveBus = new BroadcastChannel('CGO_MACHINE_ABC_LIVE_LINK');
-    liveBus.onmessage = (ev) => {
-      const d = ev?.data;
-      if (!d || d.type !== 'CGO_ABC_LIVE_LINK') return;
-      const mode = d.mode || 'STANDBY';
-      const lm = $('#liveLinkMode'), ls = $('#liveLinkStatus'), la = $('#liveLinkAudit');
-      if (lm) lm.textContent = mode;
-      if (ls) ls.textContent = `BCGO → ABC · ${d.status || '–'} · rev ${d.revision || '–'} · claims ${d.claimCount ?? 0}`;
-      if (la) la.textContent = `Audit ${d.audit || '–'}`;
-      if (mode === 'LIVE') setLive(`LIVE · ${d.status || 'READY'}`, d.audit === 'VALID' ? 'ok' : 'warn');
-      else if (mode === 'STANDBY') setLive('STANDBY · tidak ada input LIVE', 'warn');
-      else setLive(mode, 'bad');
-      showNotice(`Jalur LIVE BCGO → ABC: ${mode} · ${d.status || '–'} · Audit ${d.audit || '–'}`, d.audit === 'VALID' ? 'ok' : 'warn');
-    };
-    window.addEventListener('beforeunload',()=>liveBus.close(),{once:true});
-  } catch (_) {}
+  // Sinkron dengan BCGO / tab lain
   try {
     const bus = new BroadcastChannel('CGO_MACHINE_ABC_BUS');
     bus.onmessage = (ev) => {
       const d = ev?.data;
       if (!d || d.source === 'monitor-demo') return;
       if (d.type === 'abc-result' && d.status) {
-        showNotice('Sinyal uji dari ' + (d.source || 'bus') + ': ' + d.status, 'ok');
+        showNotice('Sinyal dari ' + (d.source || 'bus') + ': ' + d.status, 'ok');
+        setLive('BUS · ' + d.status, 'ok');
       }
     };
-    window.addEventListener('beforeunload',()=>bus.close(),{once:true});
   } catch (_) {}
   refresh();
   setLive("SIAP", "ok");
   if (bootBanner) {
-    bootBanner.textContent = `Mesin ABC ${E.version} siap · self-test ${st.passed}/${st.total} · STANDBY menunggu input LIVE.`;
+    bootBanner.textContent = `Mesin ABC ${E.version} siap · self-test ${st.passed}/${st.total} · menjalankan demo otomatis…`;
     bootBanner.className = "banner ok";
   }
+
+  // AUTO-DEMO — monitor tidak boleh diam saat dibuka
+  setTimeout(() => {
+    try { runDemo(); }
+    catch (err) {
+      showNotice("Auto-demo gagal: " + (err && err.message || err), "error");
+      setLive("ERROR", "bad");
+    }
+  }, 300);
 
   // heartbeat pelan
   pulseTimer = setInterval(() => {

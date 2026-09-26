@@ -1060,8 +1060,8 @@ function renderConnection(state) {
 }
 
 let abcSoundEnabled=false,abcAudioCtx=null,abcMaster=null,abcAudioReady=false,abcSoundQueueUntil=0,abcAmbientOsc=null,abcAmbientHarmonic=null,abcAmbientGain=null,abcAmbientHarmonicGain=null,abcAmbientLfo=null,abcAmbientLfoGain=null,abcAmbientState='normal';
-async function abcEnsureAudio(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error('Web Audio API tidak tersedia');if(!abcAudioCtx){abcAudioCtx=new AC({latencyHint:'interactive'});abcMaster=abcAudioCtx.createGain();abcMaster.gain.value=.24;abcMaster.connect(abcAudioCtx.destination);}if(abcAudioCtx.state!=='running')await abcAudioCtx.resume();if(abcAudioCtx.state!=='running')throw new Error('AudioContext belum running');abcAudioReady=true;return abcAudioCtx}
-function abcAmbientProfile(state){if(state==='error')return {f:52,h:104,p:2.35,g:.095,hg:.030};if(state==='warn')return {f:92,h:184,p:1.75,g:.075,hg:.022};return {f:68,h:136,p:1.15,g:.055,hg:.018}}
+async function abcEnsureAudio(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error('Web Audio API tidak tersedia');if(!abcAudioCtx){abcAudioCtx=new AC({latencyHint:'interactive'});abcMaster=abcAudioCtx.createGain();abcMaster.gain.value=.16;abcMaster.connect(abcAudioCtx.destination);}if(abcAudioCtx.state!=='running')await abcAudioCtx.resume();if(abcAudioCtx.state!=='running')throw new Error('AudioContext belum running');abcAudioReady=true;return abcAudioCtx}
+function abcAmbientProfile(state){if(state==='error')return {f:52,h:104,p:2.35,g:.030,hg:.010};if(state==='warn')return {f:92,h:184,p:1.75,g:.022,hg:.007};return {f:68,h:136,p:1.15,g:.014,hg:.0045}}
 function abcApplyAmbientState(state){abcAmbientState=state==='error'?'error':state==='warn'?'warn':'normal';const sb=document.getElementById('abc-sound-toggle');if(sb&&abcSoundEnabled)sb.textContent=abcAmbientState==='error'?'🔊 SOUND LIVE · ERROR':abcAmbientState==='warn'?'🔊 SOUND LIVE · WARNING':'🔊 SOUND LIVE · NORMAL';if(!abcAudioReady||!abcAudioCtx||abcAudioCtx.state!=='running'||!abcAmbientOsc)return;const q=abcAmbientProfile(abcAmbientState),now=abcAudioCtx.currentTime;try{abcAmbientOsc.frequency.setTargetAtTime(q.f,now,.08);abcAmbientHarmonic.frequency.setTargetAtTime(q.h,now,.08);abcAmbientLfo.frequency.setTargetAtTime(q.p,now,.12);abcAmbientGain.gain.setTargetAtTime(q.g,now,.12);abcAmbientHarmonicGain.gain.setTargetAtTime(q.hg,now,.12)}catch(_){} }
 function abcStartAmbient(){if(!abcAudioReady||!abcAudioCtx||abcAudioCtx.state!=='running'||abcAmbientOsc)return;const c=abcAudioCtx,q=abcAmbientProfile(abcAmbientState);abcAmbientOsc=c.createOscillator();abcAmbientHarmonic=c.createOscillator();abcAmbientGain=c.createGain();abcAmbientHarmonicGain=c.createGain();abcAmbientLfo=c.createOscillator();abcAmbientLfoGain=c.createGain();const f=c.createBiquadFilter();f.type='lowpass';f.frequency.value=420;f.Q.value=.35;abcAmbientOsc.type='sine';abcAmbientHarmonic.type='sine';abcAmbientLfo.type='sine';abcAmbientOsc.frequency.value=q.f;abcAmbientHarmonic.frequency.value=q.h;abcAmbientLfo.frequency.value=q.p;abcAmbientGain.gain.value=q.g;abcAmbientHarmonicGain.gain.value=q.hg;abcAmbientLfoGain.gain.value=q.g*.62;abcAmbientLfo.connect(abcAmbientLfoGain);abcAmbientLfoGain.connect(abcAmbientGain.gain);abcAmbientOsc.connect(abcAmbientGain);abcAmbientHarmonic.connect(abcAmbientHarmonicGain);abcAmbientGain.connect(f);abcAmbientHarmonicGain.connect(f);f.connect(abcMaster);abcAmbientOsc.start();abcAmbientHarmonic.start();abcAmbientLfo.start()}
 function abcStopAmbient(){for(const n of [abcAmbientOsc,abcAmbientHarmonic,abcAmbientLfo]){try{n?.stop?.()}catch(_){}}abcAmbientOsc=abcAmbientHarmonic=abcAmbientLfo=null;abcAmbientGain=abcAmbientHarmonicGain=abcAmbientLfoGain=null}
@@ -1069,8 +1069,6 @@ function abcVoice(ctx,when,f,d,type='sine',level=.25,glide=null){const o=ctx.cre
 function abcSound(kind='tick',force=false){if(!abcSoundEnabled||!abcAudioReady||!abcAudioCtx||abcAudioCtx.state!=='running'||!abcMaster)return false;try{const q={start:[128,.14,'sine',.30,196],A:[180,.12,'sine',.28,260],B:[260,.13,'triangle',.26,360],C:[370,.13,'triangle',.25,520],D:[520,.15,'sine',.26,720],ok:[440,.24,'sine',.25,880],warn:[150,.24,'sawtooth',.22,105],bad:[95,.34,'square',.28,62],done:[660,.20,'sine',.30,990],tick:[220,.08,'sine',.18,280]}[kind]||[220,.08,'sine',.18,280];const when=Math.max(abcAudioCtx.currentTime+.006,abcSoundQueueUntil);abcVoice(abcAudioCtx,when,q[0],q[1],q[2],q[3],q[4]);if(kind!=='bad')abcVoice(abcAudioCtx,when,q[0]*2,q[1]*.72,'sine',q[3]*.20,q[4]*1.8);abcSoundQueueUntil=when+q[1]+(kind==='bad'||kind==='done'?.08:.045);return true}catch(_){return false}}
 async function abcArmSound(){try{await abcEnsureAudio();abcSoundEnabled=true;abcStartAmbient();abcSoundQueueUntil=0;abcApplyAmbientState('normal');abcSound('start',true);const b=document.getElementById('abc-sound-toggle');if(b){b.textContent='🔊 SOUND LIVE · NORMAL';b.classList.add('text-emerald-300')}return true}catch(e){abcSoundEnabled=false;const b=document.getElementById('abc-sound-toggle');if(b)b.textContent='🔇 SOUND UNAVAILABLE';console.warn('[BCGO AUDIO]',e);return false}}
 function abcDisarmSound(){abcSoundEnabled=false;abcAudioReady=false;abcSoundQueueUntil=0;abcStopAmbient();try{abcAudioCtx?.suspend?.()}catch(_){}const b=document.getElementById('abc-sound-toggle');if(b){b.textContent='🔇 SOUND OFF';b.classList.remove('text-emerald-300')}}
-async function abcRecoverAudio(){if(!abcSoundEnabled||!abcAudioCtx)return false;try{if(abcAudioCtx.state!=='running')await abcAudioCtx.resume();if(abcAudioCtx.state==='running'){abcAudioReady=true;abcStartAmbient();abcApplyAmbientState(abcAmbientState);return true}}catch(_){}return false}
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)abcRecoverAudio()});window.addEventListener('pageshow',()=>{abcRecoverAudio()});
 
 function renderAbcTelemetry(ev){
   if(!ev || ev.type !== 'ABC_TELEMETRY') return;
@@ -1082,7 +1080,6 @@ function renderAbcTelemetry(ev){
 }
 document.getElementById('abc-sound-toggle')?.addEventListener('click',async()=>{if(abcSoundEnabled){abcDisarmSound();return;}await abcArmSound();});
 window.addEventListener('beforeunload',()=>{try{abcStopAmbient()}catch(_){}try{abcAudioCtx?.close?.()}catch(_){}},{once:true});
-window.addEventListener('cgo:machine-abc-bcgo-sync',e=>{const d=e.detail||{};const state=document.getElementById('abc-telemetry-state');if(state)state.textContent=`${d.mode||'STANDBY'} · ${d.status||'–'} · Audit ${d.audit||'–'}`});
 try{
   if(window.CGOMachineABC && typeof window.CGOMachineABC.observeTelemetry==='function'){
     window.__BCGO_ABC_TELEMETRY_OFF__=window.CGOMachineABC.observeTelemetry(renderAbcTelemetry);
@@ -1109,25 +1106,6 @@ try {
 runAutonomousEngine(state => {
     liveState = state;
     window.BCGO_STATE = state;
-    // Jalur LIVE resmi: BCGO_STATE → ABC Bridge → Mesin ABC.
-    // TEST/Demo tidak memakai jalur ini. Snapshot identik didedupe oleh bridge.
-    try {
-      if (window.CGOMachineABCBridge && typeof window.CGOMachineABCBridge.ingestBCGOState === 'function') {
-        const link = window.CGOMachineABCBridge.ingestBCGOState(state);
-        if (link && link.ok) {
-          state.abcLiveLink = {
-            mode: link.mode, status: link.status, audit: link.audit,
-            revision: link.evidence?.revision || null,
-            fingerprint: link.evidence?.fingerprint || null,
-            claimCount: link.evidence?.claims?.length || 0,
-            capturedAt: link.evidence?.capturedAt || null
-          };
-        }
-      }
-    } catch (abcBridgeErr) {
-      console.warn('[BCGO] ABC live-link error:', abcBridgeErr);
-      state.abcLiveLink = { mode: 'ERROR', status: 'ERROR', audit: 'ATTENTION' };
-    }
     try {
       if (internalBrain && typeof internalBrain.ingestBCGOState === 'function') {
         internalBrain.ingestBCGOState(state);
