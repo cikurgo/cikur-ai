@@ -10,7 +10,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "0.9.6";
+  const VERSION = "0.9.8";
   const MAX_TEXT_SAMPLE = 6000;
   const MAX_ITEMS = 1000;
   const MAX_TOKENS = 5000;

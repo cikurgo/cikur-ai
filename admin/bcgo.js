@@ -67,6 +67,7 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "admin/cgo-ai-sovereignty.js", path: "cgo-ai-sovereignty.js", role: "CGO Sovereignty" },
   { file: "admin/cgo-ai-radar.js", path: "cgo-ai-radar.js", role: "Radar Engine" },
   { file: "admin/cgo-ai-radar-visual.js", path: "cgo-ai-radar-visual.js", role: "Radar Visual" },
+  { file: "admin/cgo-ai-voice-operator.js", path: "cgo-ai-voice-operator.js", role: "Voice Operator" },
   { file: "admin/cgo-instruction.js", path: "cgo-instruction.js", role: "CGO Constitution" },
   { file: "cgo-app-bootstrap.js", path: "../cgo-app-bootstrap.js", role: "Customer Bootstrap" },
   { file: "index.html", path: "../index.html", role: "Customer Home" },
@@ -1019,8 +1020,9 @@ export function runAutonomousEngine(onCycleUpdate) {
       while ((m = re.exec(text))) refs.push(m[1] || m[2]);
       for (const ref of refs) {
         if (!ref || /^(https?:|data:|#|javascript:)/i.test(ref)) continue;
+        const cleanRef = String(ref).split("#")[0].split("?")[0];
         let target;
-        try { target = new URL(ref, new URL(item.path, rootUrl)).pathname.replace(/^\//, ""); } catch { continue; }
+        try { target = new URL(cleanRef, new URL(item.path, rootUrl)).pathname.replace(/^\//, ""); } catch { continue; }
         if (target.startsWith("cikur-ai/")) target = target.slice("cikur-ai/".length);
         const base = target.split("/").pop();
         const matched = INTERNAL_SOURCE_SCAN.find(x => x.path === target || x.file === target || x.file.endsWith("/" + base) || x.file === base || x.path.endsWith("/" + base));

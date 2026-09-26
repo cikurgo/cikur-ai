@@ -238,9 +238,9 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   </section>
 </div>
 
-<script src="cgo-ai-voice-operator.js?v=2.1.0-FEMALE-AIRPORT-PRECISE-20260926"></script>
-<script src="cgo-machine-abc.js?v=0.9.6-PHYSICS-CORE-20260926"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.5.0-LIVE-ACK-20260926"></script>
+<script src="cgo-ai-voice-operator.js?v=3.0.0-STRUCTURED-QUIET-20260926"></script>
+<script src="cgo-machine-abc.js?v=0.9.8-STABLE-20260926"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.6.0-BCGO-SYNC-20260926"></script>
 <script src="cgo-abc-cognition.js"></script>
 <script>
 (() => {
@@ -265,13 +265,99 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   const WARN = new Set(["PARTIAL", "DEGRADED"]);
 
   let total = 0, cycleCount = 0, confSum = 0, rejected = 0, pulseTimer = null;
-  let soundEnabled=false,hapticEnabled=true,audioCtx=null,masterGain=null,audioReady=false,soundQueueUntil=0,telemetryBus=null;
-  const AUDIO_GAIN=.22;
-  try{telemetryBus=new BroadcastChannel("CGO_MACHINE_ABC_TELEMETRY")}catch(_){telemetryBus=null}
 
   const phaseLampIds = {A:"lampA",B:"lampB",C:"lampC",D:"lampD"};
   const phaseTimeIds = {A:"lampATime",B:"lampBTime",C:"lampCTime",D:"lampDTime"};
   const phaseNames = {A:"Representasi",B:"Analisis",C:"Hasil",D:"Audit"};
+
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function empty(msg) { return el("div", "empty", msg); }
+  function chip(node, text, tone) {
+    if (!node) return;
+    node.textContent = text;
+    node.className = "chip" + (tone ? " " + tone : "");
+  }
+  function showNotice(msg, tone) {
+    const n = $("#notice");
+    if (!n) return;
+    n.hidden = !msg;
+    n.textContent = msg || "";
+    n.className = "banner" + (tone === "ok" ? " ok" : (tone === "error" || tone === "e") ? " error" : "");
+  }
+  function clearNotice() { showNotice("", ""); }
+  function setLive(text, tone) {
+    const c = $("#liveChip");
+    if (c) chip(c, text, tone || "");
+  }
+  function setStages(stage) {
+    ["A","B","C","D"].forEach(k => {
+      const lamp = document.getElementById(phaseLampIds[k]);
+      const node = document.getElementById("st" + k);
+      if (lamp) {
+        if (k === stage) lamp.className = "lamp active";
+        else lamp.className = "lamp";
+      }
+      if (node) node.classList.toggle("active", k === stage);
+    });
+  }
+  function markLamp(stage, status, duration) {
+    const order = ["A","B","C","D"];
+    const idx = order.indexOf(stage);
+    if (idx < 0) return;
+    order.forEach((k, i) => {
+      const n = document.getElementById(phaseLampIds[k]);
+      if (!n) return;
+      if (status === "START") {
+        n.className = i < idx ? "lamp done" : (i === idx ? "lamp active" : "lamp");
+      } else if (status === "FAILED" && i === idx) {
+        n.className = "lamp bad";
+      } else if (i <= idx) {
+        n.className = "lamp done";
+      }
+    });
+    const tt = document.getElementById(phaseTimeIds[stage]);
+    if (tt && duration != null) tt.textContent = duration + "ms";
+  }
+  function lightAllLampsDone() {
+    ["A","B","C","D"].forEach(k => {
+      const n = document.getElementById(phaseLampIds[k]);
+      if (n) n.className = "lamp done";
+      const rn = document.getElementById("route" + k);
+      if (rn) rn.className = "route-node ok";
+    });
+    const rs = document.getElementById("routeStatus");
+    if (rs) rs.textContent = "ROUTE A›B›C›D · VERIFIED";
+    const st = document.getElementById("activityState");
+    if (st) st.textContent = "Selesai · jalur A→B→C→D terverifikasi";
+    const ap = document.querySelector(".activity-panel");
+    if (ap) ap.classList.add("live-glow");
+  }
+  function markRoute(stage, status) {
+    ["A","B","C","D"].forEach(k => {
+      const n = document.getElementById("route" + k);
+      if (n) n.className = "route-node";
+    });
+    const order = ["A","B","C","D"];
+    const idx = order.indexOf(stage);
+    if (idx >= 0) {
+      for (let i = 0; i < idx; i++) {
+        const n = document.getElementById("route" + order[i]);
+        if (n) n.className = "route-node ok";
+      }
+      const cur = document.getElementById("route" + stage);
+      if (cur) cur.className = "route-node " + (status === "FAILED" ? "bad" : "live");
+    }
+  }
+
+
+  let soundEnabled=false,hapticEnabled=true,audioCtx=null,masterGain=null,audioReady=false,soundQueueUntil=0,telemetryBus=null;
+  const AUDIO_GAIN=.22;
+  try{telemetryBus=new BroadcastChannel("CGO_MACHINE_ABC_TELEMETRY")}catch(_){telemetryBus=null}
 
   async function ensureAudio(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error("Web Audio API tidak tersedia");if(!audioCtx){audioCtx=new AC({latencyHint:"interactive"});masterGain=audioCtx.createGain();masterGain.gain.value=AUDIO_GAIN;const comp=audioCtx.createDynamicsCompressor();comp.threshold.value=-20;comp.knee.value=18;comp.ratio.value=4;comp.attack.value=.008;comp.release.value=.18;masterGain.connect(comp);comp.connect(audioCtx.destination);audioCtx.onstatechange=()=>{if(soundEnabled&&audioCtx.state==='running')audioReady=true}}if(audioCtx.state!=="running")await audioCtx.resume();if(audioCtx.state!=="running")throw new Error("AudioContext belum running");audioReady=true;return audioCtx}
   function voice(ctx,when,f,d,type='sine',level=.08,glide=null,pan=0){const o=ctx.createOscillator(),g=ctx.createGain(),p=ctx.createStereoPanner?ctx.createStereoPanner():null;o.type=type;o.frequency.setValueAtTime(f,when);if(glide)o.frequency.exponentialRampToValueAtTime(glide,when+d*.8);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.012);g.gain.exponentialRampToValueAtTime(level*.42,when+d*.55);g.gain.exponentialRampToValueAtTime(.0001,when+d);o.connect(g);if(p){p.pan.value=pan;g.connect(p);p.connect(masterGain)}else g.connect(masterGain);o.start(when);o.stop(when+d+.03)}
@@ -281,35 +367,6 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   async function recoverAudio(){if(!soundEnabled||!audioCtx)return false;try{if(audioCtx.state!=="running")await audioCtx.resume();if(audioCtx.state==='running'){audioReady=true;return true}}catch(_){}return false}
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)recoverAudio()});window.addEventListener('pageshow',()=>recoverAudio());
   function haptic(kind='tick'){if(!hapticEnabled||typeof navigator.vibrate!=="function")return;try{navigator.vibrate(kind==='bad'?[30,20,40]:kind==='done'?[12,18,12]:10)}catch(_){} }
-  function markLamp(stage,status,duration){
-    const order=["A","B","C","D"];
-    const idx=order.indexOf(stage);
-    if(idx<0)return;
-    order.forEach((k,i)=>{
-      const n=$("#"+phaseLampIds[k]); if(!n)return;
-      if(status==="START"){
-        if(i<idx) n.className="lamp done";
-        else if(i===idx) n.className="lamp active";
-        else n.className="lamp";
-      } else if(status==="FAILED" && i===idx){
-        n.className="lamp bad";
-      } else if(i<=idx){
-        n.className="lamp done";
-      }
-    });
-    const tt=$("#"+phaseTimeIds[stage]); if(tt&&duration!=null) tt.textContent=duration+"ms";
-  }
-  function lightAllLampsDone(){
-    ["A","B","C","D"].forEach(k=>{
-      const n=$("#"+phaseLampIds[k]); if(n) n.className="lamp done";
-      const rn=$("#route"+k); if(rn) rn.className="route-node ok";
-    });
-    const rs=$("#routeStatus"); if(rs) rs.textContent="ROUTE A›B›C›D · VERIFIED";
-    const st=$("#activityState"); if(st) st.textContent="Selesai · jalur A→B→C→D terverifikasi";
-  }
-  function markRoute(stage,status){
-    ['A','B','C','D'].forEach(k=>{const n=$('#route'+k);if(n)n.className='route-node'});
-    const order=['A','B','C','D'], idx=order.indexOf(stage); if(idx>=0){for(let i=0;i<idx;i++){const n=$('#route'+order[i]);if(n)n.className='route-node ok'}const cur=$('#route'+stage);if(cur)cur.className='route-node '+(status==='FAILED'?'bad':'live')}}
   function renderTelemetry(ev){
     if(!ev||ev.type!=='ABC_TELEMETRY')return;
     try{telemetryBus?.postMessage(ev)}catch(_){}
@@ -414,6 +471,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     if (json.length > DETAIL_LIMIT) json = json.slice(0, DETAIL_LIMIT) + "\n… (dipotong)";
     $("#detail").textContent = json;
     setLive("HIDUP · " + status, OK.has(status) ? "ok" : WARN.has(status) ? "warn" : "bad");
+    try { lightAllLampsDone(); } catch (_) {}
     $("#logHint").textContent = "update " + new Date().toLocaleTimeString();
   }
 

@@ -15,7 +15,7 @@
     return;
   }
 
-  const VERSION = "1.5.0-LIVE-ACK";
+  const VERSION = "1.6.0-BCGO-SYNC";
   const BUILD_ID = "CIKUR-GO-LIVE-ACK-2026-09-26";
   const listeners = new Set();
   let lastPacket = null;
