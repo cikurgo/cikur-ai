@@ -15,7 +15,8 @@
     return;
   }
 
-  const VERSION = "1.4.0-LIVE-HANDSHAKE";
+  const VERSION = "1.5.0-LIVE-ACK";
+  const BUILD_ID = "CIKUR-GO-LIVE-ACK-2026-09-26";
   const listeners = new Set();
   let lastPacket = null;
   let lastLiveFingerprint = null;
@@ -267,6 +268,7 @@
 
   const API = Object.freeze({
     version: VERSION,
+    build: BUILD_ID,
     engineVersion: E.version,
     engine: E,
     analyze,
@@ -291,8 +293,8 @@
   // Alias singkat untuk Otak CGO.
   if (!global.CGOCoreMachine) global.CGOCoreMachine = E;
 
-  emit("cgo-machine-abc-ready", { version: VERSION, engine: E.version });
-  emit("cgo:machine-abc-ready", { version: VERSION, engine: E.version });
+  emit("cgo-machine-abc-ready", { version: VERSION, engine: E.version, build: BUILD_ID });
+  emit("cgo:machine-abc-ready", { version: VERSION, engine: E.version, build: BUILD_ID });
 
   console.log("[CGO-ABC-BRIDGE] Siap · engine", E.version, "· bridge", VERSION);
 })(typeof globalThis !== "undefined" ? globalThis : window);

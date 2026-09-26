@@ -126,7 +126,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
       <span class="chip" id="ind">Independensi –</span>
       <span class="chip" id="audit">Audit D –</span>
       <span class="chip" id="degraded">Degraded 0</span>
-      <span class="chip" id="liveChip">STANDBY · menunggu input</span>
+      <span class="chip" id="liveChip">STANDBY · menunggu input</span><span class="chip" id="buildChip">BUILD –</span>
     </div>
   </header>
 
@@ -134,7 +134,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   <div id="notice" class="banner" hidden></div>
   <div id="bootBanner" class="banner ok">Mesin ABC siap · self-test berjalan · menunggu input LIVE.</div>
 
-  <section class="banner" id="liveLinkPanel"><b>OPERASI:</b> <span id="liveLinkMode">STANDBY</span> · <span id="liveLinkStatus">Belum ada input BCGO LIVE.</span> · <span id="liveLinkAudit">Audit –</span></section>
+  <section class="banner" id="liveLinkPanel"><b>OPERASI:</b> <span id="liveLinkMode">STANDBY</span> · <span id="liveLinkStatus">Belum ada input BCGO LIVE.</span> · <span id="liveLinkAudit">Audit –</span> · <span id="liveLinkAck">ACK –</span></section>
 
   <div class="actions">
     <button type="button" class="primary" id="btnDemo">▶ UJI PIPELINE A→B→C→D</button>
@@ -227,8 +227,9 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   </section>
 </div>
 
+<script src="cgo-ai-voice-operator.js?v=1.0.0-LOCAL-OPERATOR-20260926"></script>
 <script src="cgo-machine-abc.js?v=0.9.5-LIVE-HANDSHAKE-20260926"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.4.0-LIVE-HANDSHAKE-20260926"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.5.0-LIVE-ACK-20260926"></script>
 <script src="cgo-abc-cognition.js"></script>
 <script>
 (() => {
@@ -253,19 +254,15 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   const WARN = new Set(["PARTIAL", "DEGRADED"]);
 
   let total = 0, cycleCount = 0, confSum = 0, rejected = 0, pulseTimer = null;
-  let soundEnabled=false,hapticEnabled=true,audioCtx=null,masterGain=null,audioReady=false,soundQueueUntil=0,ambientNodes=[],ambientState='normal',noiseBuffer=null,telemetryBus=null;
-  const AUDIO_GAIN=.46;
+  let soundEnabled=false,hapticEnabled=true,audioCtx=null,masterGain=null,audioReady=false,soundQueueUntil=0,telemetryBus=null;
+  const AUDIO_GAIN=.22;
   try{telemetryBus=new BroadcastChannel("CGO_MACHINE_ABC_TELEMETRY")}catch(_){telemetryBus=null}
-  async function ensureAudio(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error("Web Audio API tidak tersedia");if(!audioCtx){audioCtx=new AC({latencyHint:"interactive"});masterGain=audioCtx.createGain();masterGain.gain.value=AUDIO_GAIN;const comp=audioCtx.createDynamicsCompressor();comp.threshold.value=-18;comp.knee.value=12;comp.ratio.value=8;comp.attack.value=.003;comp.release.value=.12;masterGain.connect(comp);comp.connect(audioCtx.destination);audioCtx.onstatechange=()=>{if(soundEnabled&&audioCtx.state==='running'){audioReady=true;startAmbient()}}}if(audioCtx.state!=="running")await audioCtx.resume();if(audioCtx.state!=="running")throw new Error("AudioContext belum running");audioReady=true;return audioCtx}
-  function ambientProfile(s){return s==='error'?{a:110,b:220,c:440,p:.62,g:.12,h:.034}:s==='warn'?{a:132,b:264,c:528,p:1.25,g:.095,h:.027}:s==='processing'?{a:148,b:296,c:592,p:2.4,g:.072,h:.022}:{a:120,b:240,c:480,p:.88,g:.055,h:.018}}
-  function applyAmbientState(s){ambientState=['error','warn','processing'].includes(s)?s:'normal';if(ambientState==='normal')stopAmbient();if(!audioReady||!audioCtx||audioCtx.state!=="running"||!ambientNodes.length)return;const q=ambientProfile(ambientState),now=audioCtx.currentTime;try{ambientNodes[0].osc.frequency.setTargetAtTime(q.a,now,.12);ambientNodes[1].osc.frequency.setTargetAtTime(q.b,now,.12);ambientNodes[2].osc.frequency.setTargetAtTime(q.c,now,.12);ambientNodes[3].osc.frequency.setTargetAtTime(q.p,now,.18);ambientNodes[0].gain.gain.setTargetAtTime(q.g,now,.14);ambientNodes[1].gain.gain.setTargetAtTime(q.h,now,.14);ambientNodes[2].gain.gain.setTargetAtTime(q.h*.5,now,.14)}catch(_){} }
-  function startAmbient(){if(!audioReady||!audioCtx||audioCtx.state!=="running"||ambientNodes.length)return;const c=audioCtx,q=ambientProfile(ambientState),bus=c.createBiquadFilter();bus.type="lowpass";bus.frequency.value=1250;bus.Q.value=.45;bus.connect(masterGain);const mk=(f,g,t)=>{const o=c.createOscillator(),gn=c.createGain();o.type=t;o.frequency.value=f;gn.gain.value=g;o.connect(gn);gn.connect(bus);o.start();return{osc:o,gain:gn}};const x=mk(q.a,q.g,"sine"),y=mk(q.b,q.h,"triangle"),z=mk(q.c,q.h*.5,"sine"),l=c.createOscillator(),lg=c.createGain();l.frequency.value=q.p;lg.gain.value=q.g*.55;l.connect(lg);lg.connect(x.gain.gain);l.start();ambientNodes=[x,y,z,{osc:l,gain:lg}]}
-  function stopAmbient(){for(const n of ambientNodes){try{n.osc.stop()}catch(_){}}ambientNodes=[]}
-  function voice(ctx,when,f,d,type='sine',level=.20,glide=null,pan=0){const o=ctx.createOscillator(),g=ctx.createGain(),fl=ctx.createBiquadFilter(),p=ctx.createStereoPanner?ctx.createStereoPanner():null;o.type=type;o.frequency.setValueAtTime(f,when);if(glide)o.frequency.exponentialRampToValueAtTime(glide,when+d*.72);fl.type='lowpass';fl.frequency.value=Math.max(1200,f*4.5);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.008);g.gain.exponentialRampToValueAtTime(Math.max(.0001,level*.34),when+d*.60);g.gain.exponentialRampToValueAtTime(.0001,when+d);o.connect(fl);fl.connect(g);if(p){p.pan.value=pan;g.connect(p);p.connect(masterGain)}else g.connect(masterGain);o.start(when);o.stop(when+d+.025)}
-  function systemSound(kind='tick',force=false){if(!soundEnabled||!audioReady||!audioCtx||audioCtx.state!=="running"||!masterGain)return false;try{const q={start:[220,.24,.16,'sine',330],A:[196,.18,.14,'sine',294],B:[247,.19,.14,'sine',370],C:[294,.20,.15,'sine',440],D:[330,.22,.16,'triangle',494],done:[523,.30,.20,'sine',659],ok:[392,.24,.17,'sine',523],warn:[277,.25,.18,'sine',220],bad:[196,.28,.20,'triangle',147],tick:[330,.10,.10,'sine',440]}[kind]||[330,.10,.10,'sine',440];const when=Math.max(audioCtx.currentTime+.012,soundQueueUntil);voice(audioCtx,when,q[0],q[1],q[3],q[2],q[4],-.08);voice(audioCtx,when+.045,q[4],q[2]*.62,'sine',q[2]*.52,null,.10);soundQueueUntil=when+q[1]+.045;return true}catch(_){return false}}
-  async function armSound(){try{await ensureAudio();soundEnabled=true;soundQueueUntil=0;applyAmbientState('normal');systemSound('start',true);const b=$("#soundToggle");if(b){b.textContent="🔊 SYSTEM AUDIO · STANDBY";b.classList.add("active")}showNotice("System sonification lokal aktif · pulse + event signature A→B→C→D.","ok");return true}catch(e){soundEnabled=false;showNotice("Audio tidak tersedia: "+String(e.message||e),"error");return false}}
-  function disarmSound(){soundEnabled=false;audioReady=false;soundQueueUntil=0;stopAmbient();try{audioCtx?.suspend?.()}catch(_){}const b=$("#soundToggle");if(b){b.textContent="🔇 Suara sistem: OFF";b.classList.remove("active")}}
-  async function recoverAudio(){if(!soundEnabled||!audioCtx)return false;try{if(audioCtx.state!=="running")await audioCtx.resume();if(audioCtx.state==='running'){audioReady=true;startAmbient();applyAmbientState(ambientState);return true}}catch(_){}return false}
+  async function ensureAudio(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error("Web Audio API tidak tersedia");if(!audioCtx){audioCtx=new AC({latencyHint:"interactive"});masterGain=audioCtx.createGain();masterGain.gain.value=AUDIO_GAIN;const comp=audioCtx.createDynamicsCompressor();comp.threshold.value=-20;comp.knee.value=18;comp.ratio.value=4;comp.attack.value=.008;comp.release.value=.18;masterGain.connect(comp);comp.connect(audioCtx.destination);audioCtx.onstatechange=()=>{if(soundEnabled&&audioCtx.state==='running')audioReady=true}}if(audioCtx.state!=="running")await audioCtx.resume();if(audioCtx.state!=="running")throw new Error("AudioContext belum running");audioReady=true;return audioCtx}
+  function voice(ctx,when,f,d,type='sine',level=.08,glide=null,pan=0){const o=ctx.createOscillator(),g=ctx.createGain(),p=ctx.createStereoPanner?ctx.createStereoPanner():null;o.type=type;o.frequency.setValueAtTime(f,when);if(glide)o.frequency.exponentialRampToValueAtTime(glide,when+d*.8);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.012);g.gain.exponentialRampToValueAtTime(level*.42,when+d*.55);g.gain.exponentialRampToValueAtTime(.0001,when+d);o.connect(g);if(p){p.pan.value=pan;g.connect(p);p.connect(masterGain)}else g.connect(masterGain);o.start(when);o.stop(when+d+.03)}
+  function systemSound(kind='tick',force=false){if(!soundEnabled||!audioReady||!audioCtx||audioCtx.state!=="running"||!masterGain)return false;try{const q={start:[392,523,.13,'sine',.075],A:[392,523,.11,'sine',.060],B:[440,587,.11,'sine',.060],C:[494,659,.12,'sine',.065],D:[523,698,.13,'triangle',.070],done:[523,659,.18,'sine',.080],ok:[440,587,.14,'sine',.070],warn:[330,247,.16,'sine',.065],bad:[247,196,.18,'triangle',.070],tick:[440,0,.07,'sine',.045]}[kind]||[440,0,.07,'sine',.045];const when=Math.max(audioCtx.currentTime+.01,soundQueueUntil);voice(audioCtx,when,q[0],q[2],q[3],q[4],q[1]||null,-.05);if(q[1])voice(audioCtx,when+.035,q[1],q[2]*.82,'sine',q[4]*.62,null,.06);soundQueueUntil=when+q[2]+.045;return true}catch(_){return false}}
+  async function armSound(){try{await ensureAudio();soundEnabled=true;soundQueueUntil=0;systemSound('start',true);const b=$("#soundToggle");if(b){b.textContent="🔊 SYSTEM AUDIO · READY";b.classList.add("active")}showNotice("System sonification lokal aktif · cue singkat A→B→C→D.","ok");return true}catch(e){soundEnabled=false;showNotice("Audio tidak tersedia: "+String(e.message||e),"error");return false}}
+  function disarmSound(){soundEnabled=false;audioReady=false;soundQueueUntil=0;try{audioCtx?.suspend?.()}catch(_){}const b=$("#soundToggle");if(b){b.textContent="🔇 Suara sistem: OFF";b.classList.remove("active")}}
+  async function recoverAudio(){if(!soundEnabled||!audioCtx)return false;try{if(audioCtx.state!=="running")await audioCtx.resume();if(audioCtx.state==='running'){audioReady=true;return true}}catch(_){}return false}
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)recoverAudio()});window.addEventListener('pageshow',()=>recoverAudio());
   function haptic(kind='tick'){if(!hapticEnabled||typeof navigator.vibrate!=="function")return;try{navigator.vibrate(kind==='bad'?[30,20,40]:kind==='done'?[12,18,12]:10)}catch(_){} }
   function markLamp(stage,status,duration){
@@ -286,13 +283,17 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     const last=$('#lastTelemetryEvent'); if(last)last.textContent=`${ev.event} · ${stage||'SYS'}`;
     if(ev.event==='PHASE_START'){
       applyAmbientState('processing'); systemSound(stage||'start'); haptic('tick');
+      window.CGOOperatorVoice?.announcePipelineStage(stage,true,ev);
     } else if(ev.event==='PHASE_END'&&ev.status==='FAILED'){
       applyAmbientState('error'); systemSound('bad'); haptic('bad');
+      window.CGOOperatorVoice?.state('ERROR',{force:true});
     } else if(ev.stage==='D'&&ev.event==='PHASE_END'){
       const healthy=ev.audit==='VALID'; applyAmbientState(healthy?'normal':'warn'); systemSound(healthy?'done':'warn'); haptic(healthy?'done':'tick');
+      window.CGOOperatorVoice?.announcePipelineStage('D',false,ev);
       const rs=$('#routeStatus'); if(rs)rs.textContent=healthy?'ROUTE A>B>C>D · VERIFIED':'ROUTE ATTENTION';
     } else if(ev.status==='DEGRADED'||ev.status==='PARTIAL'){
       applyAmbientState('warn'); systemSound('warn');
+      window.CGOOperatorVoice?.state('WARNING');
     }
   }
   function renderFinalTelemetry(out){
@@ -499,6 +500,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   } catch (_) {}
 
   chip($("#ver"), "Engine " + E.version, "ok");
+  if($("#buildChip")) $("#buildChip").textContent = "BUILD LIVE-ACK";
   const st = health();
   // observer telemetry nyata: lampu/suara mengikuti event A→B→C→D dari engine, bukan animasi palsu.
   if (typeof E.observeTelemetry === "function") E.observeTelemetry(renderTelemetry);
@@ -513,13 +515,15 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     const applyLiveLink = (d) => {
       if (!d || d.type !== 'CGO_ABC_LIVE_LINK') return;
       const mode = d.mode || 'STANDBY';
+      try { controlBus.postMessage({type:'CGO_ABC_ACK_LIVE',at:Date.now(),page:'cgo-machine-abc',build:'CIKUR-GO-LIVE-ACK-2026-09-26',engine:E.version,bridge:window.CGOMachineABCBridge?.version||null,fingerprint:d.fingerprint||null,revision:d.revision||null,status:d.status||null,audit:d.audit||null}); } catch (_) {}
       const liveKey = String(d.fingerprint || d.revision || '');
       const duplicateLiveLink = !!liveKey && liveKey === lastAppliedLiveKey;
       if (liveKey) lastAppliedLiveKey = liveKey;
-      const lm = $('#liveLinkMode'), ls = $('#liveLinkStatus'), la = $('#liveLinkAudit');
+      const lm = $('#liveLinkMode'), ls = $('#liveLinkStatus'), la = $('#liveLinkAudit'), lk = $('#liveLinkAck');
       if (lm) lm.textContent = mode;
       if (ls) ls.textContent = `BCGO → ABC · ${d.status || '–'} · rev ${d.revision || '–'} · claims ${d.claimCount ?? 0}`;
       if (la) la.textContent = `Audit ${d.audit || '–'}`;
+      if (lk) lk.textContent = 'ACK → BCGO';
       if (d.packet) {
         if (!duplicateLiveLink) onPayload(d.packet);
         const m = d.packet?.result?.status || d.status || '–';
@@ -531,7 +535,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     };
     liveBus.onmessage = (ev) => applyLiveLink(ev?.data);
     controlBus.onmessage = (ev) => applyLiveLink(ev?.data);
-    const requestLiveSnapshot = () => { try { controlBus.postMessage({type:'CGO_ABC_REQUEST_LIVE',at:Date.now(),page:'cgo-machine-abc'}); } catch (_) {} };
+    const requestLiveSnapshot = () => { try { controlBus.postMessage({type:'CGO_ABC_REQUEST_LIVE',at:Date.now(),page:'cgo-machine-abc',build:'CIKUR-GO-LIVE-ACK-2026-09-26',engine:E.version}); } catch (_) {} };
     requestLiveSnapshot();
     const liveRequestTimer = setInterval(requestLiveSnapshot, 5000);
     window.addEventListener('beforeunload',()=>{clearInterval(liveRequestTimer);try{liveBus.close()}catch(_){}try{controlBus.close()}catch(_){}},{once:true});
