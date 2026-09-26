@@ -326,7 +326,8 @@ body{font-family:'Inter',sans-serif}
 </section>
 </div>
 
-<script src="cgo-ai-voice-operator.js?v=3.1.0-NEURAL-SARA-20260926"></script>
+<script src="cikur-go.browser.js?v=3.0.0-OTAK-JENIUS"></script>
+<script src="cgo-ai-voice-operator.js?v=3.3.0-NEURAL-CHAT-OTAK"></script>
 <script src="cgo-machine-abc.js?v=0.9.8-STABLE-20260926"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.6.0-BCGO-SYNC-20260926"></script>
 <script type="module">
@@ -826,6 +827,68 @@ async function sendQuestion(question) {
                 console.warn('[BCGO] ABC analyze:', abcErr);
             }
         }
+
+        // 1c) Otak Jenius CIKUR GO v3 — nalar + angka terbilang (offline, pintar)
+        if (window.CIKURGO) {
+            try {
+                setChatLiveStatus('Otak Jenius menalar konteks sistem…', 'working');
+                const st = authoritativeBCGOState() || liveState || window.BCGO_STATE || {};
+                const metrics = st.metrics || {};
+                const conn = st.connection || {};
+                const fs = st.firestore || {};
+                const active = metrics.active ?? metrics.activeAnomalies ?? 0;
+                const recovered = metrics.recovered ?? 0;
+                const cycle = st.cycle ?? 0;
+                const conf = st.confidence ?? st.lastConfidence;
+                const num = (n) => {
+                    try { return window.CIKURGO.angkaKeKata(Number(n)||0, 'id'); } catch { return String(n); }
+                };
+                // Enrich existing answer numbers to words where helpful
+                if (answer && typeof answer === 'string') {
+                    answer = answer.replace(/\b(\d{1,3})\s*%/g, (_, d) => num(d) + ' persen')
+                                   .replace(/\b(\d+)\s+anomali\b/gi, (_, d) => num(d) + ' anomali')
+                                   .replace(/\b(\d+)\s+siklus\b/gi, (_, d) => num(d) + ' siklus');
+                }
+                // If weak/empty → compose from live evidence + nalar
+                const weak = !answer || /belum punya bukti|belum bisa|BCGO_BRAIN_NOT_READY/i.test(String(answer));
+                if (weak || /status|bagaimana|apa kabar|sehat|ringkas|rangkum|jelaskan sistem/i.test(text)) {
+                    const evidence = [
+                        `Siklus ke-${cycle}`,
+                        `anomali aktif ${active}`,
+                        `recovered ${recovered}`,
+                        `Firestore ${fs.connected ? 'LIVE' : 'offline'}`,
+                        `koneksi ${conn.status || conn.mode || 'UNKNOWN'}`,
+                        conf != null ? `keyakinan ${Math.round(Number(conf)*100)} persen` : null
+                    ].filter(Boolean).join(', ');
+                    const prompt = `Pertanyaan user: ${text}. Bukti live BCGO: ${evidence}.`;
+                    if (typeof window.CIKURGO.nalar === 'function') {
+                        const r = window.CIKURGO.nalar(prompt, { bahasa: 'id' });
+                        const kesimpulan = (r && (r.kesimpulan || r.hasil)) ? String(r.kesimpulan || r.hasil) : '';
+                        const alasan = Array.isArray(r?.alasan) ? r.alasan.slice(0, 2).join('; ') : '';
+                        const otakLine = [kesimpulan, alasan].filter(Boolean).join(' — ').slice(0, 420);
+                        if (otakLine) {
+                            answer = answer ? (String(answer) + '\n\n[Otak Jenius] ' + otakLine) : otakLine;
+                        }
+                    }
+                    // Decision help
+                    if (/pilih|putuskan|mana yang|rekomendasi/i.test(text) && typeof window.CIKURGO.putuskan === 'function') {
+                        const opts = ['lanjut monitor', 'audit Mesin ABC', 'periksa scanner', 'tunggu stabil'];
+                        const d = window.CIKURGO.putuskan(text, opts, { preferensi: 'internal_cikur' });
+                        const pilih = d?.pilihan || d?.hasil;
+                        if (pilih) answer = (answer ? answer + '\n\n' : '') + `Rekomendasi Otak: ${pilih}.`;
+                    }
+                }
+                // Speak short ack (no spam)
+                try {
+                    if (window.CGOOperatorVoice && typeof window.CGOOperatorVoice.emit === 'function') {
+                        window.CGOOperatorVoice.emit('COMMAND_ACCEPTED');
+                    }
+                } catch (_) {}
+            } catch (otakErr) {
+                console.warn('[BCGO] Otak Jenius:', otakErr);
+            }
+        }
+
         // 2) Internal CGO brain (investigation) jika jawaban generik / kosong
         const internal = window.CGOInternalBrain || internalBrain;
         const needsDeep = !answer || /belum punya bukti|belum bisa/i.test(String(answer));
@@ -841,6 +904,12 @@ async function sendQuestion(question) {
         }
         if (!answer) throw new Error('BCGO_BRAIN_NOT_READY');
         addChat('bcgo', answer);
+        // Natural voice reply (Otak-enriched, airport-style, no spam)
+        try {
+            if (window.CGOOperatorVoice && typeof window.CGOOperatorVoice.speakAnswer === 'function') {
+                void window.CGOOperatorVoice.speakAnswer(answer);
+            }
+        } catch (voiceErr) { console.warn('[BCGO] speakAnswer', voiceErr); }
     } catch (error) {
         addChat('bcgo', `Saya belum bisa menjawab dengan aman karena BCGO belum siap: ${String(error?.message || error).slice(0, 220)}`);
     } finally {
@@ -1258,6 +1327,23 @@ runAutonomousEngine(state => {
 
 
 
+
+
+<script>
+(function(){
+  function bootOperator(){
+    try {
+      if (window.CGOOperatorVoice) {
+        if (typeof window.CGOOperatorVoice.unlock === 'function') window.CGOOperatorVoice.unlock();
+        if (typeof window.CGOOperatorVoice.welcome === 'function') window.CGOOperatorVoice.welcome();
+        else if (typeof window.CGOOperatorVoice.emit === 'function') window.CGOOperatorVoice.emit('SYSTEM_READY');
+      }
+    } catch(e) { console.warn('operator boot', e); }
+  }
+  if (document.readyState === 'complete') setTimeout(bootOperator, 600);
+  else window.addEventListener('load', function(){ setTimeout(bootOperator, 600); });
+})();
+</script>
 
 </body>
 </html>

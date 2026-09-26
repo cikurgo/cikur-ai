@@ -327,8 +327,9 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   </section>
 </div>
 
-<script src="cgo-ai-voice-operator.js?v=3.1.0-NEURAL-SARA-20260926"></script>
-<script src="cgo-machine-abc.js?v=0.9.8-STABLE-20260926"></script>
+<script src="cikur-go.browser.js?v=3.0.0-OTAK-JENIUS"></script>
+<script src="cgo-ai-voice-operator.js?v=3.3.0-NEURAL-CHAT-OTAK"></script>
+<script src="cgo-machine-abc.js?v=0.9.9-OTAK-CORE-20260927"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.6.0-BCGO-SYNC-20260926"></script>
 <script src="cgo-abc-cognition.js"></script>
 <script>
@@ -343,12 +344,39 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   if (!E) {
     const f = $("#fatal");
     f.hidden = false;
-    f.textContent = "Engine belum termuat. Pastikan file cgo-machine-abc.js ada di folder admin/ dan halaman ini juga berada di admin/. Path script halaman ini: cgo-machine-abc.js — case-sensitive di GitHub Pages.";
+    f.textContent = "Engine belum termuat. Pastikan file cgo-machine-abc.js?v=0.9.9-OTAK-CORE-20260927";
     if (bootBanner) bootBanner.hidden = true;
     return;
   }
 
   const LOG_LIMIT = 80;
+
+  function otakSpeakNumber(n) {
+    try {
+      if (window.CIKURGO && typeof window.CIKURGO.angkaKeKata === "function") {
+        return window.CIKURGO.angkaKeKata(Number(n) || 0, "id");
+      }
+    } catch (_) {}
+    return String(n);
+  }
+  function otakRingkasHasil(status, conf, findings) {
+    try {
+      if (!window.CIKURGO) return null;
+      const confPct = Math.round((Number(conf) || 0) * 100);
+      const confKata = otakSpeakNumber(confPct);
+      let base = "Status " + String(status || "IDLE") + ". Keyakinan " + confKata + " persen.";
+      if (findings && findings.length) {
+        base += " Ditemukan " + otakSpeakNumber(findings.length) + " temuan.";
+      }
+      if (typeof window.CIKURGO.nalar === "function") {
+        const r = window.CIKURGO.nalar(base, { bahasa: "id" });
+        const k = (r && (r.kesimpulan || r.hasil)) || base;
+        return String(k).slice(0, 220);
+      }
+      return base;
+    } catch (_) { return null; }
+  }
+
   const DETAIL_LIMIT = 20000;
   const allowedOrigins = new Set([location.origin, ...(Array.isArray(window.CGO_ALLOWED_ORIGINS) ? window.CGO_ALLOWED_ORIGINS : [])]);
   const OK = new Set(["PROCESSED", "WELL_FORMED", "VERIFIED"]);
@@ -530,6 +558,8 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     if (sum) {
       let t = r.summary ? String(r.summary).slice(0, 280) : ("Siklus selesai · status " + status + ".");
       if (findings.length) t += " Temuan: " + findings.slice(0, 2).map(f => f.type || f.message || "item").join(", ") + ".";
+      const otak = otakRingkasHasil(status, conf, findings);
+      if (otak) t = otak;
       sum.textContent = t;
     }
     const set = (id, v) => { const n = document.getElementById(id); if (n) n.textContent = v; };
@@ -610,6 +640,16 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     setLive("HIDUP · " + status, OK.has(status) ? "ok" : WARN.has(status) ? "warn" : "bad");
     try { lightAllLampsDone(); } catch (_) {}
     try { renderResultCard(c); } catch (_) {}
+    try {
+      if (c && c.result && window.CGOOperatorVoice && window.CGOOperatorVoice.speakAnswer) {
+        const st = c.result.status || c.status || '';
+        if (st === 'WELL_FORMED' || st === 'VALID') {
+          const conf = c.result.decision?.confidence ?? c.confidence;
+          const ringkas = typeof otakRingkasHasil === 'function' ? otakRingkasHasil(st, conf, c.result.findings || c.findings) : null;
+          if (ringkas) void window.CGOOperatorVoice.speakAnswer(ringkas);
+        }
+      }
+    } catch (_) {}
     try { if(window.CGOOperatorVoice){ window.CGOOperatorVoice.state(OK.has(status)?"VALID":WARN.has(status)?"WARNING":"ERROR"); } } catch(_){}
     $("#logHint").textContent = "update " + new Date().toLocaleTimeString();
   }

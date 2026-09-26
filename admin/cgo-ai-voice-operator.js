@@ -1,292 +1,351 @@
 /*
- * CGO OPERATOR VOICE v3.1.0 — neural sara · conversational · quiet live
- * Speaks like a living nervous-system operator, not a stage ticker.
+ * CGO OPERATOR VOICE v3.3.0 — NEURAL SARA · OTAK-AWARE · NATURAL CHAT
+ * Female airport-style operator. Event-driven (no spam on LIVE).
+ * speakAnswer() = natural spoken reply to user chat (Otak-backed).
+ * Offline only — SpeechSynthesis + local MP3 fallback. No external API.
  */
-(function () {
-  'use strict';
-  const VERSION = '3.1.0-NEURAL-SARA';
-  const BUILD = 'CIKUR-GO-OPERATOR-3.1.0';
-  const ROOTS = ['./audio/cgo-operator/', './'];
+(function (global) {
+  "use strict";
+
+  const VERSION = "3.3.0-NEURAL-CHAT-OTAK";
+  const BUILD = "CIKUR-GO-OPERATOR-3.3.0";
+  const ROOT = "./audio/cgo-operator/";
+
   const EVENTS = Object.freeze({
-    SYSTEM_BOOT:'SYSTEM_BOOT', SYSTEM_READY:'SYSTEM_READY',
-    COMMAND_ACCEPTED:'COMMAND_ACCEPTED', COMMAND_DUPLICATE:'COMMAND_DUPLICATE',
-    PROCESSING:'PROCESSING', PROCESSING_WAIT:'PROCESSING_WAIT',
-    ABC_STAGE_A:'ABC_STAGE_A', ABC_STAGE_B:'ABC_STAGE_B',
-    ABC_STAGE_C:'ABC_STAGE_C', ABC_STAGE_D:'ABC_STAGE_D',
-    LIVE_INPUT:'LIVE_INPUT', STANDBY:'STANDBY', VALID:'VALID',
-    WARNING:'WARNING', ERROR:'ERROR', RECOVERY:'RECOVERY',
-    RESET:'RESET', ABORT:'ABORT', SYSTEM_IDLE:'SYSTEM_IDLE',
-    REFRESH_READY:'REFRESH_READY'
+    SYSTEM_BOOT: "SYSTEM_BOOT",
+    SYSTEM_READY: "SYSTEM_READY",
+    REFRESH_READY: "REFRESH_READY",
+    COMMAND_ACCEPTED: "COMMAND_ACCEPTED",
+    COMMAND_DUPLICATE: "COMMAND_DUPLICATE",
+    PROCESSING: "PROCESSING",
+    PROCESSING_WAIT: "PROCESSING_WAIT",
+    ABC_STAGE_A: "ABC_STAGE_A",
+    ABC_STAGE_B: "ABC_STAGE_B",
+    ABC_STAGE_C: "ABC_STAGE_C",
+    ABC_STAGE_D: "ABC_STAGE_D",
+    LIVE_INPUT: "LIVE_INPUT",
+    STANDBY: "STANDBY",
+    VALID: "VALID",
+    WARNING: "WARNING",
+    ERROR: "ERROR",
+    RECOVERY: "RECOVERY",
+    RESET: "RESET",
+    ABORT: "ABORT",
+    SYSTEM_IDLE: "SYSTEM_IDLE",
+    CHAT_REPLY: "CHAT_REPLY"
   });
-  // Conversational neural phrases (airport/PA clarity)
+
   const TEXT = Object.freeze({
-    SYSTEM_BOOT:'Selamat datang di sistem internal CIKUR GO. Operator siap.',
-    SYSTEM_READY:'Sistem internal aktif. Operator siap mendampingi.',
-    REFRESH_READY:'Wah, segar kembali. Sistem sudah siap kembali.',
-    COMMAND_ACCEPTED:'Perintah diterima. Memulai proses.',
-    COMMAND_DUPLICATE:'Sistem sedang berjalan. Mohon menunggu.',
-    PROCESSING:'Sedang diproses. Mohon tunggu sebentar.',
-    PROCESSING_WAIT:'Masih memproses. Mohon tidak mengulang perintah.',
-    ABC_STAGE_A:'Tahap representasi.',
-    ABC_STAGE_B:'Tahap analisis.',
-    ABC_STAGE_C:'Tahap hasil.',
-    ABC_STAGE_D:'Tahap audit.',
-    LIVE_INPUT:'Jalur langsung aktif. Memantau sirkuit saraf.',
-    STANDBY:'Sistem dalam mode siaga.',
-    VALID:'Pemeriksaan selesai. Hasil valid.',
-    WARNING:'Perhatian. Ada yang perlu diperiksa.',
-    ERROR:'Kesalahan terdeteksi pada sistem.',
-    RECOVERY:'Pemulihan berjalan. Mohon tunggu.',
-    RESET:'Sistem direset. Menyiapkan ulang.',
-    ABORT:'Proses dibatalkan.',
-    SYSTEM_IDLE:'Sistem menganggur. Siap menerima perintah.'
+    SYSTEM_BOOT: "Selamat datang di Sistem Internal CIKUR GO. Operator siap.",
+    SYSTEM_READY: "Sistem internal aktif. Operator siap mendampingi.",
+    REFRESH_READY: "Wah, segar kembali. Sistem sudah siap kembali.",
+    COMMAND_ACCEPTED: "Perintah diterima. Sedang diproses.",
+    COMMAND_DUPLICATE: "Sistem sedang berjalan. Mohon menunggu.",
+    PROCESSING: "Pemrosesan berlangsung.",
+    PROCESSING_WAIT: "Masih diproses. Mohon tunggu sebentar.",
+    ABC_STAGE_A: "Tahap A. Representasi input.",
+    ABC_STAGE_B: "Tahap B. Proses analisis.",
+    ABC_STAGE_C: "Tahap C. Hasil disusun.",
+    ABC_STAGE_D: "Tahap D. Audit akhir.",
+    LIVE_INPUT: "Input langsung diterima.",
+    STANDBY: "Sistem siaga.",
+    VALID: "Hasil tervalidasi.",
+    WARNING: "Perhatian. Diperlukan pemeriksaan.",
+    ERROR: "Terjadi gangguan pada jalur sistem.",
+    RECOVERY: "Pemulihan berjalan. Sistem menstabilkan diri.",
+    RESET: "Sistem direset. Siap menerima perintah baru.",
+    ABORT: "Proses dibatalkan.",
+    SYSTEM_IDLE: "Sistem menganggur. Menunggu instruksi."
   });
+
   const MP3 = Object.freeze({
-    SYSTEM_BOOT:'welcome.mp3', SYSTEM_READY:'welcome.mp3', REFRESH_READY:'welcome.mp3',
-    COMMAND_ACCEPTED:'live.mp3', COMMAND_DUPLICATE:'standby.mp3',
-    PROCESSING:'processing.mp3', PROCESSING_WAIT:'processing.mp3',
-    ABC_STAGE_A:'stageA.mp3', ABC_STAGE_B:'stageB.mp3',
-    ABC_STAGE_C:'stageC.mp3', ABC_STAGE_D:'stageD.mp3',
-    LIVE_INPUT:'live.mp3', STANDBY:'standby.mp3', VALID:'valid.mp3',
-    WARNING:'warning.mp3', ERROR:'error.mp3', RECOVERY:'valid.mp3',
-    RESET:'standby.mp3', ABORT:'error.mp3', SYSTEM_IDLE:'standby.mp3'
+    SYSTEM_BOOT: "welcome.mp3",
+    SYSTEM_READY: "welcome.mp3",
+    REFRESH_READY: "welcome.mp3",
+    COMMAND_ACCEPTED: "processing.mp3",
+    COMMAND_DUPLICATE: "processing.mp3",
+    PROCESSING: "processing.mp3",
+    PROCESSING_WAIT: "processing.mp3",
+    ABC_STAGE_A: "stageA.mp3",
+    ABC_STAGE_B: "stageB.mp3",
+    ABC_STAGE_C: "stageC.mp3",
+    ABC_STAGE_D: "stageD.mp3",
+    LIVE_INPUT: "live.mp3",
+    STANDBY: "standby.mp3",
+    VALID: "valid.mp3",
+    WARNING: "warning.mp3",
+    ERROR: "error.mp3",
+    RECOVERY: "standby.mp3",
+    RESET: "welcome.mp3",
+    ABORT: "error.mp3",
+    SYSTEM_IDLE: "standby.mp3",
+    CHAT_REPLY: null
   });
+
   const COOLDOWN = Object.freeze({
-    SYSTEM_BOOT:90000, SYSTEM_READY:60000, REFRESH_READY:90000,
-    COMMAND_ACCEPTED:6000, COMMAND_DUPLICATE:8000,
-    PROCESSING:15000, PROCESSING_WAIT:18000,
-    ABC_STAGE_A:60000, ABC_STAGE_B:60000, ABC_STAGE_C:60000, ABC_STAGE_D:60000,
-    LIVE_INPUT:45000, STANDBY:30000, VALID:12000, WARNING:10000, ERROR:7000,
-    RECOVERY:20000, RESET:12000, ABORT:8000, SYSTEM_IDLE:40000
-  });
-  const PRIORITY = Object.freeze({
-    ERROR:100, ABORT:95, WARNING:80, VALID:70, RECOVERY:65,
-    COMMAND_DUPLICATE:62, PROCESSING_WAIT:58, LIVE_INPUT:55,
-    SYSTEM_READY:54, REFRESH_READY:53, SYSTEM_BOOT:50, COMMAND_ACCEPTED:45,
-    PROCESSING:30, ABC_STAGE_D:18, ABC_STAGE_C:16, ABC_STAGE_B:14, ABC_STAGE_A:12,
-    RESET:10, STANDBY:8, SYSTEM_IDLE:5
+    SYSTEM_BOOT: 90000, SYSTEM_READY: 60000, REFRESH_READY: 90000,
+    COMMAND_ACCEPTED: 2500, COMMAND_DUPLICATE: 4000,
+    PROCESSING: 8000, PROCESSING_WAIT: 10000,
+    ABC_STAGE_A: 0, ABC_STAGE_B: 0, ABC_STAGE_C: 0, ABC_STAGE_D: 0,
+    LIVE_INPUT: 12000, STANDBY: 15000, VALID: 6000, WARNING: 5000,
+    ERROR: 4000, RECOVERY: 8000, RESET: 5000, ABORT: 4000,
+    SYSTEM_IDLE: 20000, CHAT_REPLY: 0
   });
 
-  let unlocked=false, busy=false, enabled=true, quietLive=true, selectedVoice=null;
-  let lastEvent='', lastSpokenAt=0, lastStatusSpoken='', processingOpen=false;
-  let sessionBooted=false;
-  const lastPlayed=new Map(), queue=[], audioCache=new Map();
-  const MIN_GAP_MS=4000;
+  let enabled = true;
+  let unlocked = false;
+  let quietLive = true;
+  let selectedVoice = null;
+  let speaking = false;
+  const lastPlayed = new Map();
+  const audioCache = new Map();
+  let chatSpeakEnabled = true;
+  let lastChatHash = "";
+  let lastChatAt = 0;
 
-  function isIdVoice(v){const l=String(v.lang||'').toLowerCase();return l.startsWith('id')||l.includes('indonesia');}
-  function rankVoice(v){
-    const n=(v.name+' '+(v.voiceURI||'')).toLowerCase(); let s=0;
-    if(/female|woman|girl|zira|samantha|ava|aria|jenny|susan|linda|karen/i.test(n)) s+=40;
-    if(/google|microsoft|natural|neural|premium|enhanced/i.test(n)) s+=30;
-    if(/id-id|indonesia/i.test(n)) s+=15;
-    if(/male|man|boy|david|mark/i.test(n)&&!/female/i.test(n)) s-=50;
-    return s;
+  function otakNum(n) {
+    try {
+      if (global.CIKURGO && typeof global.CIKURGO.angkaKeKata === "function") {
+        return global.CIKURGO.angkaKeKata(Number(n) || 0, "id");
+      }
+    } catch (_) {}
+    return String(n);
   }
-  function refreshVoices(){
-    if(!('speechSynthesis' in window)) return false;
-    const voices=window.speechSynthesis.getVoices()||[];
-    if(!voices.length) return false;
-    selectedVoice=voices.filter(isIdVoice).sort((a,b)=>rankVoice(b)-rankVoice(a))[0]||null;
+
+  function otakEnrich(text) {
+    try {
+      return String(text)
+        .replace(/\b(\d{1,3})\s*%/g, function (_, d) { return otakNum(d) + " persen"; })
+        .replace(/\b(\d+)\s+siklus\b/gi, function (_, d) { return otakNum(d) + " siklus"; })
+        .replace(/\b(\d+)\s+temuan\b/gi, function (_, d) { return otakNum(d) + " temuan"; })
+        .replace(/\b(\d+)\s+anomali\b/gi, function (_, d) { return otakNum(d) + " anomali"; });
+    } catch (_) {
+      return String(text);
+    }
+  }
+
+  function toSpeechText(raw) {
+    var t = String(raw || "")
+      .replace(/\[Otak Jenius\]\s*/gi, "")
+      .replace(/\[Mesin ABC[^\]]*\]\s*/gi, "")
+      .replace(/```[\s\S]*?```/g, " ")
+      .replace(/`[^`]+`/g, " ")
+      .replace(/\*\*?/g, "")
+      .replace(/\n{2,}/g, ". ")
+      .replace(/\n/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (t.length > 320) {
+      var cut = t.slice(0, 300);
+      var lastDot = Math.max(cut.lastIndexOf("."), cut.lastIndexOf(","));
+      t = (lastDot > 120 ? cut.slice(0, lastDot) : cut) + ".";
+    }
+    return otakEnrich(t);
+  }
+
+  function isFemaleId(v) {
+    var n = (v.name + " " + v.voiceURI).toLowerCase();
+    var l = (v.lang || "").toLowerCase();
+    if (l.startsWith("id")) return true;
+    if (!l.startsWith("en")) return false;
+    return /(female|woman|zira|samantha|ava|aria|jenny|susan)/i.test(n);
+  }
+
+  function refreshVoices() {
+    if (!("speechSynthesis" in global)) return false;
+    var voices = global.speechSynthesis.getVoices() || [];
+    if (!voices.length) return false;
+    var idFemale = voices.filter(function (v) {
+      return (v.lang || "").toLowerCase().startsWith("id") && isFemaleId(v);
+    });
+    var idAny = voices.filter(function (v) {
+      return (v.lang || "").toLowerCase().startsWith("id");
+    });
+    var enFemale = voices.filter(isFemaleId);
+    selectedVoice =
+      idFemale.find(function (v) { return /google|microsoft|natural|premium/i.test(v.name); }) ||
+      idFemale[0] || idAny[0] || enFemale[0] || null;
     return !!selectedVoice;
   }
-  if('speechSynthesis' in window){refreshVoices();window.speechSynthesis.onvoiceschanged=refreshVoices;}
 
-  function canPlay(key, force){
-    if(!enabled||!TEXT[key]) return false;
-    if(force) return true;
-    const now=Date.now();
-    if(now-lastSpokenAt<MIN_GAP_MS) return false;
-    return now-(lastPlayed.get(key)||0)>=(COOLDOWN[key]??10000);
+  if ("speechSynthesis" in global) {
+    refreshVoices();
+    global.speechSynthesis.onvoiceschanged = refreshVoices;
   }
-  function loadAudio(key){
-    const file=MP3[key]; if(!file) return null;
-    if(audioCache.has(key)) return audioCache.get(key);
-    const a=new Audio(); a.preload='auto';
-    const urls=ROOTS.map(r=>r+file); a.src=urls[0]; let i=0;
-    a.addEventListener('error',()=>{i+=1;if(i<urls.length){a.src=urls[i];a.load();}});
-    audioCache.set(key,a); return a;
+
+  function getAudio(file) {
+    if (!file) return null;
+    var a = audioCache.get(file);
+    if (!a) {
+      a = new Audio(ROOT + file);
+      a.preload = "auto";
+      audioCache.set(file, a);
+      a.addEventListener("error", function () {
+        try { a.src = "./" + file; } catch (_) {}
+      });
+    }
+    return a;
   }
-  function speakTts(key){
-    return new Promise(resolve=>{
-      if(!('speechSynthesis' in window)||!TEXT[key]) return resolve(false);
+
+  function playMp3(key) {
+    return new Promise(function (resolve) {
+      var file = MP3[key];
+      if (!file) return resolve(false);
+      var a = getAudio(file);
+      if (!a) return resolve(false);
+      try {
+        a.pause();
+        a.currentTime = 0;
+        var done = function () {
+          a.removeEventListener("ended", done);
+          a.removeEventListener("error", done);
+          resolve(true);
+        };
+        a.addEventListener("ended", done);
+        a.addEventListener("error", done);
+        var p = a.play();
+        if (p && p.catch) p.catch(function () { resolve(false); });
+      } catch (_) {
+        resolve(false);
+      }
+    });
+  }
+
+  function speakTTS(text, opts) {
+    return new Promise(function (resolve) {
+      if (!("speechSynthesis" in global) || !text) return resolve(false);
+      try { global.speechSynthesis.cancel(); } catch (_) {}
       refreshVoices();
-      try{window.speechSynthesis.cancel();}catch(_){}
-      const u=new SpeechSynthesisUtterance(TEXT[key]);
-      u.lang=(selectedVoice&&selectedVoice.lang)||'id-ID';
-      if(selectedVoice) u.voice=selectedVoice;
-      u.rate=0.86; u.pitch=1.05; u.volume=1;
-      let done=false; const fin=ok=>{if(!done){done=true;resolve(!!ok);}};
-      u.onend=()=>fin(true); u.onerror=()=>fin(false);
-      try{
-        window.speechSynthesis.speak(u);
-        setTimeout(()=>fin(true), Math.min(12000, 700+TEXT[key].length*75));
-      }catch(_){fin(false);}
+      var u = new SpeechSynthesisUtterance(text);
+      u.lang = (selectedVoice && selectedVoice.lang) || "id-ID";
+      if (selectedVoice) u.voice = selectedVoice;
+      u.rate = (opts && opts.rate) || 0.92;
+      u.pitch = (opts && opts.pitch) || 1.05;
+      u.volume = 1;
+      var finished = false;
+      var fin = function (ok) {
+        if (finished) return;
+        finished = true;
+        speaking = false;
+        resolve(!!ok);
+      };
+      u.onend = function () { fin(true); };
+      u.onerror = function () { fin(false); };
+      speaking = true;
+      try {
+        global.speechSynthesis.speak(u);
+        setTimeout(function () { fin(true); }, Math.min(20000, 800 + text.length * 80));
+      } catch (_) {
+        fin(false);
+      }
     });
   }
-  function playMp3(key){
-    return new Promise(resolve=>{
-      const a=loadAudio(key); if(!a) return resolve(false);
-      try{
-        a.pause(); a.currentTime=0;
-        const p=a.play();
-        if(p&&p.then){
-          p.then(()=>{
-            a.addEventListener('ended',()=>resolve(true),{once:true});
-            a.addEventListener('error',()=>resolve(false),{once:true});
-            setTimeout(()=>resolve(true),7000);
-          }).catch(()=>resolve(false));
-        } else resolve(true);
-      }catch(_){resolve(false);}
+
+  function canEmit(key, force) {
+    if (!enabled && !force) return false;
+    if (quietLive && /^ABC_STAGE_/.test(key) && !force) return false;
+    var cd = COOLDOWN[key] || 0;
+    var last = lastPlayed.get(key) || 0;
+    if (!force && cd > 0 && Date.now() - last < cd) return false;
+    return true;
+  }
+
+  function emit(key, detail) {
+    var force = !!(detail && detail.force);
+    if (!TEXT[key] && key !== "CHAT_REPLY") return Promise.resolve(false);
+    if (!canEmit(key, force)) return Promise.resolve(false);
+    lastPlayed.set(key, Date.now());
+    var phrase = TEXT[key];
+    if (phrase) {
+      return speakTTS(otakEnrich(phrase)).then(function (ok) {
+        if (ok) return true;
+        return playMp3(key);
+      });
+    }
+    return playMp3(key);
+  }
+
+  function speakAnswer(rawText, options) {
+    if (!chatSpeakEnabled && !(options && options.force)) return Promise.resolve(false);
+    var text = toSpeechText(rawText);
+    if (!text || text.length < 3) return Promise.resolve(false);
+    var hash = text.slice(0, 80);
+    if (!(options && options.force) && hash === lastChatHash && Date.now() - lastChatAt < 8000) {
+      return Promise.resolve(false);
+    }
+    lastChatHash = hash;
+    lastChatAt = Date.now();
+    var start = unlocked ? Promise.resolve(true) : unlock();
+    return start.then(function () {
+      return speakTTS(text, { rate: 0.94, pitch: 1.06 }).then(function (ok) {
+        if (ok) return true;
+        return playMp3("VALID");
+      });
     });
   }
-  async function drain(){
-    if(busy||!unlocked||!queue.length) return;
-    busy=true;
-    queue.sort((a,b)=>(PRIORITY[b]||0)-(PRIORITY[a]||0));
-    const key=queue.shift();
-    while(queue.length>3) queue.pop();
-    try{
-      if(canPlay(key,true)){
-        lastPlayed.set(key,Date.now()); lastSpokenAt=Date.now(); lastEvent=key;
-        let ok=await speakTts(key);
-        if(!ok) await playMp3(key);
-      }
-    }catch(_){}
-    finally{busy=false; if(queue.length) setTimeout(drain,80);}
-  }
-  function unlock(){
-    if(unlocked) return;
-    unlocked=true;
-    try{
-      if('speechSynthesis' in window){
-        const w=new SpeechSynthesisUtterance(' '); w.volume=0;
-        window.speechSynthesis.speak(w); window.speechSynthesis.cancel();
-      }
-    }catch(_){}
-    Object.keys(MP3).forEach(k=>{try{loadAudio(k);}catch(_){}});
-    drain();
-  }
-  function emit(key, options){
-    options=options||{};
-    if(!TEXT[key]||!enabled) return false;
-    if(!canPlay(key, !!options.force)) return false;
-    if(queue[queue.length-1]===key) return false;
-    if(!unlocked) unlock();
-    queue.push(key);
-    if(queue.length>6){queue.sort((a,b)=>(PRIORITY[b]||0)-(PRIORITY[a]||0)); queue.length=6;}
-    drain(); return true;
+
+  function unlock() {
+    unlocked = true;
+    refreshVoices();
+    if ("speechSynthesis" in global) {
+      try {
+        var u = new SpeechSynthesisUtterance("");
+        u.volume = 0;
+        global.speechSynthesis.speak(u);
+      } catch (_) {}
+    }
+    return Promise.resolve(true);
   }
 
-  function state(name, detail){
-    detail=detail||{};
-    const s=String(name||'').toUpperCase();
-    if(!s) return false;
-
-    // Processing lock: first PROCESSING speaks once; further clicks => COMMAND_DUPLICATE / WAIT
-    if(s==='PROCESSING'||s==='RUNNING'||s==='COMMAND_ACCEPTED'){
-      if(processingOpen && !detail.force){
-        return emit(EVENTS.COMMAND_DUPLICATE, detail);
-      }
-      processingOpen=true;
-      if(s==='COMMAND_ACCEPTED') return emit(EVENTS.COMMAND_ACCEPTED, detail);
-      return emit(EVENTS.PROCESSING, detail);
-    }
-    if(s==='PROCESSING_WAIT'||s==='WAIT'){
-      return emit(EVENTS.PROCESSING_WAIT, detail);
-    }
-    if(s==='COMMAND_DUPLICATE'||s==='DUPLICATE'||s==='DEDUP'){
-      return emit(EVENTS.COMMAND_DUPLICATE, detail);
-    }
-    if(s==='VALID'||s==='COMPLETE'||s==='DONE'||s==='WELL_FORMED'||s==='PROCESSED'){
-      processingOpen=false;
-      if(quietLive && lastStatusSpoken==='VALID' && !detail.force) return false;
-      lastStatusSpoken='VALID';
-      return emit(EVENTS.VALID, detail);
-    }
-    if(s==='WARNING'||s==='DEGRADED'||s==='PARTIAL'){
-      processingOpen=false;
-      if(s==='PARTIAL'&&quietLive&&lastStatusSpoken==='PARTIAL'&&!detail.force) return false;
-      lastStatusSpoken=s==='PARTIAL'?'PARTIAL':'WARNING';
-      return emit(EVENTS.WARNING, detail);
-    }
-    if(s==='ERROR'||s==='FAILED'){
-      processingOpen=false;
-      lastStatusSpoken='ERROR';
-      return emit(EVENTS.ERROR, detail);
-    }
-    if(s==='BOOT'||s==='SYSTEM_BOOT'){
-      sessionBooted=true;
-      return emit(EVENTS.SYSTEM_BOOT, {force:true});
-    }
-    if(s==='READY'||s==='SYSTEM_READY'){
-      // Refresh / re-open: warmer line once per unlock window
-      if(sessionBooted && !detail.force){
-        return emit(EVENTS.REFRESH_READY, detail);
-      }
-      sessionBooted=true;
-      return emit(EVENTS.SYSTEM_READY, {force:!!detail.force});
-    }
-    if(s==='REFRESH'||s==='REFRESH_READY') return emit(EVENTS.REFRESH_READY, {force:true});
-    if(s==='LIVE'||s==='LIVE_INPUT'){
-      if(quietLive && lastStatusSpoken==='LIVE' && !detail.force) return false;
-      lastStatusSpoken='LIVE';
-      return emit(EVENTS.LIVE_INPUT, detail);
-    }
-    if(s==='STANDBY'||s==='IDLE'){ lastStatusSpoken='STANDBY'; return emit(EVENTS.STANDBY, detail); }
-    if(s==='RECOVERY') return emit(EVENTS.RECOVERY, detail);
-    if(s==='RESET'){ processingOpen=false; return emit(EVENTS.RESET, detail); }
-    if(s==='ABORT'){ processingOpen=false; return emit(EVENTS.ABORT, detail); }
-    if(s==='SYSTEM_IDLE') return emit(EVENTS.SYSTEM_IDLE, detail);
-    return false;
+  function welcome() {
+    return emit(EVENTS.SYSTEM_BOOT, { force: true });
   }
 
-  function announcePipelineStage(stage, started, result, options){
-    options=options||{};
-    // Default: no stage spam. Only when explicitly requested.
-    if(!(options.announceStages===true||options.force===true)) return false;
-    if(!started){
-      if(String(stage).toUpperCase()==='D'){
-        const audit=String(result&&result.audit||'').toUpperCase();
-        processingOpen=false;
-        return emit(audit==='VALID'?EVENTS.VALID:EVENTS.WARNING,{force:true});
-      }
-      return false;
-    }
-    const st=String(stage||'').toUpperCase();
-    if(st==='A') return emit(EVENTS.ABC_STAGE_A, options);
-    if(st==='B') return emit(EVENTS.ABC_STAGE_B, options);
-    if(st==='C') return emit(EVENTS.ABC_STAGE_C, options);
-    if(st==='D') return emit(EVENTS.ABC_STAGE_D, options);
-    return emit(EVENTS.PROCESSING, options);
+  function state(s, detail) {
+    var map = {
+      READY: EVENTS.SYSTEM_READY, SYSTEM_READY: EVENTS.SYSTEM_READY,
+      BOOT: EVENTS.SYSTEM_BOOT, PROCESSING: EVENTS.PROCESSING,
+      VALID: EVENTS.VALID, ERROR: EVENTS.ERROR, WARNING: EVENTS.WARNING,
+      STANDBY: EVENTS.STANDBY, IDLE: EVENTS.SYSTEM_IDLE, LIVE: EVENTS.LIVE_INPUT,
+      RESET: EVENTS.RESET, ABORT: EVENTS.ABORT, RECOVERY: EVENTS.RECOVERY
+    };
+    var key = map[String(s || "").toUpperCase()] || String(s || "").toUpperCase();
+    return emit(key, detail);
   }
 
-  function welcome(){
-    // First open of session
-    if(!sessionBooted){
-      sessionBooted=true;
-      return emit(EVENTS.SYSTEM_BOOT, {force:true});
-    }
-    return emit(EVENTS.REFRESH_READY, {force:true});
+  function announcePipelineStage(stage, detail) {
+    var s = String(stage || "").toUpperCase();
+    var key =
+      s === "A" || s === "STAGE_A" ? EVENTS.ABC_STAGE_A :
+      s === "B" || s === "STAGE_B" ? EVENTS.ABC_STAGE_B :
+      s === "C" || s === "STAGE_C" ? EVENTS.ABC_STAGE_C :
+      s === "D" || s === "STAGE_D" ? EVENTS.ABC_STAGE_D : null;
+    if (!key) return Promise.resolve(false);
+    if (quietLive && !(detail && detail.force)) return Promise.resolve(false);
+    return emit(key, detail);
   }
 
-  function setEnabled(v){
-    enabled=!!v;
-    if(!enabled){
-      queue.length=0;
-      try{window.speechSynthesis&&window.speechSynthesis.cancel();}catch(_){}
-    }
-  }
+  var api = {
+    version: VERSION,
+    build: BUILD,
+    EVENTS: EVENTS,
+    emit: emit,
+    speakAnswer: speakAnswer,
+    speak: speakAnswer,
+    unlock: unlock,
+    welcome: welcome,
+    state: state,
+    announcePipelineStage: announcePipelineStage,
+    setEnabled: function (v) { enabled = !!v; },
+    setChatSpeak: function (v) { chatSpeakEnabled = !!v; },
+    setQuietLive: function (v) { quietLive = !!v; },
+    otakEnrich: otakEnrich,
+    toSpeechText: toSpeechText,
+    isUnlocked: function () { return unlocked; },
+    isEnabled: function () { return enabled; }
+  };
 
-  window.CGOOperatorVoice=Object.freeze({
-    version:VERSION, build:BUILD, EVENTS, emit,
-    play:(k,o)=>emit(String(k).toUpperCase().replace(/-/g,'_'),o),
-    welcome, state, announcePipelineStage, unlock, setEnabled,
-    setQuietLive(v){quietLive=!!v;},
-    markProcessing(){processingOpen=true;},
-    clearProcessing(){processingOpen=false;},
-    get unlocked(){return unlocked;}, get enabled(){return enabled;}, get quietLive(){return quietLive;},
-    get voice(){return selectedVoice&&selectedVoice.name||null;},
-    get voiceLanguage(){return selectedVoice&&selectedVoice.lang||null;},
-    get femaleVoiceReady(){return !!selectedVoice;}
-  });
-})();
+  global.CGOOperatorVoice = api;
+  global.CGO_OPERATOR_VOICE = api;
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+})(typeof window !== "undefined" ? window : typeof globalThis !== "undefined" ? globalThis : this);

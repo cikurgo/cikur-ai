@@ -10,7 +10,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "0.9.8";
+  const VERSION = "0.9.9";
   const MAX_TEXT_SAMPLE = 6000;
   const MAX_ITEMS = 1000;
   const MAX_TOKENS = 5000;
@@ -1189,3 +1189,31 @@
   function notify(result,cycles){const payload={result:result?.result??result,cycles:Array.isArray(cycles)?cycles:cycles?[cycles]:[],stopReason:result?.stopReason??null,timestamp:now()};for(const fn of [...observers]){try{fn(payload)}catch(_){}}}
   [MachineA,MachineB,MachineC,MachineD].forEach(m=>Object.freeze(m));Object.freeze(CGOMachineABC);if(typeof module!=="undefined"&&module.exports)module.exports=CGOMachineABC;global.CGOMachineABC=CGOMachineABC;global.CGO=CGOMachineABC;
 })(typeof globalThis!=="undefined"?globalThis:window);
+
+
+  // Otak Jenius bridge — expose helpers for ABC UI / voice
+  try {
+    if (typeof window !== "undefined") {
+      window.CGO_OTAK_BRIDGE = {
+        version: "3.0.0",
+        ready: function(){ return !!(window.CIKURGO && window.CIKURGO.nalar); },
+        ringkas: function(status, conf, findings){
+          try {
+            if (!window.CIKURGO) return null;
+            var pct = Math.round((Number(conf)||0)*100);
+            var num = function(n){ try { return window.CIKURGO.angkaKeKata(Number(n)||0,"id"); } catch(e){ return String(n); } };
+            var base = "Status "+String(status||"IDLE")+". Keyakinan "+num(pct)+" persen.";
+            if (findings && findings.length) base += " Ditemukan "+num(findings.length)+" temuan.";
+            if (window.CIKURGO.nalar) {
+              var r = window.CIKURGO.nalar(base,{bahasa:"id"});
+              return String((r && (r.kesimpulan||r.hasil)) || base).slice(0,220);
+            }
+            return base;
+          } catch(e){ return null; }
+        },
+        urai: function(teks){
+          try { return window.CIKURGO && window.CIKURGO.urai ? window.CIKURGO.urai(String(teks||""),"auto","id") : null; } catch(e){ return null; }
+        }
+      };
+    }
+  } catch (_) {}
