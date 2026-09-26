@@ -126,16 +126,18 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
       <span class="chip" id="ind">Independensi –</span>
       <span class="chip" id="audit">Audit D –</span>
       <span class="chip" id="degraded">Degraded 0</span>
-      <span class="chip" id="liveChip">Status BOOT</span>
+      <span class="chip" id="liveChip">STANDBY · menunggu input</span>
     </div>
   </header>
 
   <div id="fatal" class="banner error" hidden></div>
   <div id="notice" class="banner" hidden></div>
-  <div id="bootBanner" class="banner ok">Menyalakan Mesin ABC… memuat engine & menjalankan self-test…</div>
+  <div id="bootBanner" class="banner ok">Mesin ABC siap · self-test berjalan · menunggu input LIVE.</div>
+
+  <section class="banner" id="liveLinkPanel"><b>OPERASI:</b> <span id="liveLinkMode">STANDBY</span> · <span id="liveLinkStatus">Belum ada input BCGO LIVE.</span> · <span id="liveLinkAudit">Audit –</span></section>
 
   <div class="actions">
-    <button type="button" class="primary" id="btnDemo">▶ Jalankan Demo A→B→C→D</button>
+    <button type="button" class="primary" id="btnDemo">▶ UJI PIPELINE A→B→C→D</button>
     <button type="button" id="btnSelfTest">Self-test ulang</button>
     <button type="button" id="btnPulse">Pulse metrics</button>
     <button type="button" id="pause">Jeda</button>
@@ -252,6 +254,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
 
   let total = 0, cycleCount = 0, confSum = 0, rejected = 0, pulseTimer = null;
   let soundEnabled = false, hapticEnabled = true, audioCtx = null, masterGain = null, audioReady = false, soundQueueUntil = 0, telemetryBus = null;
+  let ambientOsc = null, ambientHarmonic = null, ambientGain = null, ambientHarmonicGain = null, ambientLfo = null, ambientLfoGain = null, ambientState = 'normal';
   const AUDIO_GAIN = 0.16;
   try { telemetryBus = new BroadcastChannel("CGO_MACHINE_ABC_TELEMETRY"); } catch (_) { telemetryBus = null; }
   const phaseLampIds = {A:"lampA",B:"lampB",C:"lampC",D:"lampD"};
@@ -286,7 +289,46 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     if(!audioCtx){audioCtx=new AC({latencyHint:"interactive"});masterGain=audioCtx.createGain();masterGain.gain.value=AUDIO_GAIN;masterGain.connect(audioCtx.destination);}
     if(audioCtx.state!=="running") await audioCtx.resume();
     if(audioCtx.state!=="running") throw new Error("AudioContext belum running");
-    audioReady=true; return audioCtx;
+    audioReady=true;
+    startAmbient();
+    return audioCtx;
+  }
+  function ambientProfile(state){
+    if(state==='error') return {f:52,h:104,pulse:2.35,g:.030,hg:.010};
+    if(state==='warn') return {f:92,h:184,pulse:1.75,g:.022,hg:.007};
+    return {f:68,h:136,pulse:1.15,g:.014,hg:.0045};
+  }
+  function applyAmbientState(state){
+    ambientState=state==='error'?'error':state==='warn'?'warn':'normal';
+    const sb=$("#soundToggle"); if(sb && soundEnabled) sb.textContent=ambientState==='error'?"🔊 Suara LIVE · ERROR":ambientState==='warn'?"🔊 Suara LIVE · WARNING":"🔊 Suara LIVE · NORMAL";
+    if(!audioReady||!audioCtx||audioCtx.state!=="running"||!ambientOsc)return;
+    const q=ambientProfile(ambientState),now=audioCtx.currentTime;
+    try{
+      ambientOsc.frequency.setTargetAtTime(q.f,now,.08);
+      ambientHarmonic.frequency.setTargetAtTime(q.h,now,.08);
+      ambientLfo.frequency.setTargetAtTime(q.pulse,now,.12);
+      ambientGain.gain.setTargetAtTime(q.g,now,.12);
+      ambientHarmonicGain.gain.setTargetAtTime(q.hg,now,.12);
+    }catch(_){}
+  }
+  function startAmbient(){
+    if(!audioReady||!audioCtx||audioCtx.state!=="running"||ambientOsc)return;
+    const ctx=audioCtx,q=ambientProfile(ambientState);
+    ambientOsc=ctx.createOscillator(); ambientHarmonic=ctx.createOscillator();
+    ambientGain=ctx.createGain(); ambientHarmonicGain=ctx.createGain();
+    ambientLfo=ctx.createOscillator(); ambientLfoGain=ctx.createGain();
+    const filt=ctx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=420; filt.Q.value=.35;
+    ambientOsc.type='sine'; ambientHarmonic.type='sine'; ambientLfo.type='sine';
+    ambientOsc.frequency.value=q.f; ambientHarmonic.frequency.value=q.h; ambientLfo.frequency.value=q.pulse;
+    ambientGain.gain.value=q.g; ambientHarmonicGain.gain.value=q.hg; ambientLfoGain.gain.value=q.g*.62;
+    ambientLfo.connect(ambientLfoGain); ambientLfoGain.connect(ambientGain.gain);
+    ambientOsc.connect(ambientGain); ambientHarmonic.connect(ambientHarmonicGain);
+    ambientGain.connect(filt); ambientHarmonicGain.connect(filt); filt.connect(masterGain);
+    ambientOsc.start(); ambientHarmonic.start(); ambientLfo.start();
+  }
+  function stopAmbient(){
+    for(const n of [ambientOsc,ambientHarmonic,ambientLfo]){try{n?.stop?.();}catch(_){}}
+    ambientOsc=ambientHarmonic=ambientLfo=null; ambientGain=ambientHarmonicGain=ambientLfoGain=null;
   }
   function voice(ctx,when,f,d,type="sine",level=.25,glide=null){
     const o=ctx.createOscillator(),g=ctx.createGain(),filt=ctx.createBiquadFilter();o.type=type;o.frequency.setValueAtTime(f,when);if(glide)o.frequency.exponentialRampToValueAtTime(glide,when+d*.72);filt.type="lowpass";filt.frequency.setValueAtTime(Math.max(900,f*4),when);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.012);g.gain.exponentialRampToValueAtTime(level*.35,when+d*.62);g.gain.exponentialRampToValueAtTime(.0001,when+d);o.connect(filt);filt.connect(g);g.connect(masterGain);o.start(when);o.stop(when+d+.025);
@@ -296,9 +338,9 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     try{const q={start:[128,.14,"sine",.30,196],A:[180,.12,"sine",.28,260],B:[260,.13,"triangle",.26,360],C:[370,.13,"triangle",.25,520],D:[520,.15,"sine",.26,720],ok:[440,.24,"sine",.25,880],warn:[150,.24,"sawtooth",.22,105],bad:[95,.34,"square",.28,62],done:[660,.20,"sine",.30,990],tick:[220,.08,"sine",.18,280]}[kind]||[220,.08,"sine",.18,280];const now=audioCtx.currentTime+.006,when=Math.max(now,soundQueueUntil);voice(audioCtx,when,q[0],q[1],q[2],q[3],q[4]);if(kind!=="bad")voice(audioCtx,when,q[0]*2,q[1]*.72,"sine",q[3]*.20,q[4]*1.8);soundQueueUntil=when+q[1]+(kind==='bad'||kind==='done'?.08:.045);return true}catch(_){return false}
   }
   async function armSound(){
-    try{await ensureAudio();soundEnabled=true;soundQueueUntil=0;systemSound('start',true);const b=$("#soundToggle");if(b){b.textContent="🔊 Suara sistem: READY";b.classList.add("active")}showNotice("Sound engine lokal aktif · urutan A→B→C→D siap terdengar.","ok");return true}catch(e){soundEnabled=false;showNotice("Sound tidak tersedia: "+String(e.message||e),"error");return false}
+    try{await ensureAudio();soundEnabled=true;startAmbient();soundQueueUntil=0;applyAmbientState('normal');systemSound('start',true);const b=$("#soundToggle");if(b){b.textContent="🔊 Suara sistem: LIVE · NORMAL";b.classList.add("active")}showNotice("Sound engine lokal LIVE · denyut sistem normal + A→B→C→D.","ok");return true}catch(e){soundEnabled=false;showNotice("Sound tidak tersedia: "+String(e.message||e),"error");return false}
   }
-  function disarmSound(){soundEnabled=false;audioReady=false;soundQueueUntil=0;try{audioCtx?.suspend?.()}catch(_){}const b=$("#soundToggle");if(b){b.textContent="🔇 Suara sistem: OFF";b.classList.remove("active")}}
+  function disarmSound(){soundEnabled=false;audioReady=false;soundQueueUntil=0;stopAmbient();try{audioCtx?.suspend?.()}catch(_){}const b=$("#soundToggle");if(b){b.textContent="🔇 Suara sistem: OFF";b.classList.remove("active")}}
   function haptic(kind='tick'){if(!hapticEnabled||typeof navigator.vibrate!=="function")return;try{navigator.vibrate(kind==='bad'?[30,20,40]:kind==='done'?[12,18,12]:10)}catch(_){} }
   function markLamp(stage,status,duration){
     const id=phaseLampIds[stage]; if(!id)return; const n=$('#'+id); if(!n)return; n.className='lamp '+(status==='START'?'active':status==='COMPLETED'?'done':status==='FAILED'?'bad':'');
@@ -316,9 +358,16 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     const state=$('#activityState'); if(state)state.textContent=ev.event==='PHASE_START'?`⚡ ${stage} · ${phaseNames[stage]||stage} sedang bekerja`:`${stage} · ${phaseNames[stage]||stage} selesai · ${ev.durationMs??0}ms`;
     const clock=$('#telemetryClock'); if(clock)clock.textContent=new Date(ev.at||Date.now()).toLocaleTimeString();
     const last=$('#lastTelemetryEvent'); if(last)last.textContent=`${ev.event} · ${stage||'SYS'}`;
-    if(ev.event==='PHASE_START'){systemSound(stage||'start');haptic('tick')}
-    else if(ev.event==='PHASE_END'&&ev.status==='FAILED'){systemSound('bad');haptic('bad')}
-    else if(ev.stage==='D'&&ev.event==='PHASE_END'){systemSound(ev.audit==='VALID'?'done':'warn');haptic(ev.audit==='VALID'?'done':'tick')}
+    if(ev.event==='PHASE_START'){
+      applyAmbientState('normal'); systemSound(stage||'start'); haptic('tick');
+    } else if(ev.event==='PHASE_END'&&ev.status==='FAILED'){
+      applyAmbientState('error'); systemSound('bad'); haptic('bad');
+    } else if(ev.stage==='D'&&ev.event==='PHASE_END'){
+      const healthy=ev.audit==='VALID'; applyAmbientState(healthy?'normal':'warn'); systemSound(healthy?'done':'warn'); haptic(healthy?'done':'tick');
+      const rs=$('#routeStatus'); if(rs)rs.textContent=healthy?'ROUTE A>B>C>D · VERIFIED':'ROUTE ATTENTION';
+    } else if(ev.status==='DEGRADED'||ev.status==='PARTIAL'){
+      applyAmbientState('warn'); systemSound('warn');
+    }
   }
   function renderFinalTelemetry(out){
     const t=out?.telemetry; if(!t)return;
@@ -326,7 +375,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     const dur=$('#routeDuration');if(dur)dur.textContent=(t.durationMs??0)+'ms';
     const rs=$('#routeStatus');if(rs)rs.textContent=t.routeStatus==='COMPLETE'?'ROUTE A>B>C>D · VERIFIED':'ROUTE ATTENTION';
     ['A','B','C','D'].forEach(k=>{const n=$('#route'+k);if(n)n.className='route-node ok';});
-    if(soundEnabled)systemSound(t.routeStatus==='COMPLETE'?'ok':'warn');
+    if(soundEnabled){applyAmbientState(t.routeStatus==='COMPLETE'?'normal':'warn');systemSound(t.routeStatus==='COMPLETE'?'ok':'warn');}
   }
 
   function health() {
@@ -411,6 +460,8 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
       log.prepend(el("div", "cycle", "Paket diterima · " + new Date().toLocaleTimeString()));
     } else {
       list.forEach((c, i) => renderCycle(c, i === list.length - 1 ? p.stopReason : null));
+      const last = list[list.length - 1];
+      if (last && last.telemetry) renderFinalTelemetry(last);
     }
     refresh();
   }
@@ -457,7 +508,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
       items: ["order#1001", "driver:D12", "status:pending"],
       ts: new Date().toISOString()
     };
-    showNotice("Menjalankan demo pipeline A→B→C→D…", "ok");
+    showNotice("UJI PIPELINE: input sintetis lokal A→B→C→D…", "ok");
     submit(sample, { maxCycles: 1 });
   }
 
@@ -525,35 +576,44 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   const st = health();
   // observer telemetry nyata: lampu/suara mengikuti event A→B→C→D dari engine, bukan animasi palsu.
   if (typeof E.observeTelemetry === "function") E.observeTelemetry(renderTelemetry);
+  window.addEventListener('beforeunload',()=>{try{stopAmbient()}catch(_){} try{audioCtx?.close?.()}catch(_){}},{once:true});
   // observer (untuk event eksternal)
   E.observe(onPayload);
-  // Sinkron dengan BCGO / tab lain
+  // Sinkron LIVE BCGO → ABC. Ini jalur operasi; tidak menjalankan input sintetis.
+  try {
+    const liveBus = new BroadcastChannel('CGO_MACHINE_ABC_LIVE_LINK');
+    liveBus.onmessage = (ev) => {
+      const d = ev?.data;
+      if (!d || d.type !== 'CGO_ABC_LIVE_LINK') return;
+      const mode = d.mode || 'STANDBY';
+      const lm = $('#liveLinkMode'), ls = $('#liveLinkStatus'), la = $('#liveLinkAudit');
+      if (lm) lm.textContent = mode;
+      if (ls) ls.textContent = `BCGO → ABC · ${d.status || '–'} · rev ${d.revision || '–'} · claims ${d.claimCount ?? 0}`;
+      if (la) la.textContent = `Audit ${d.audit || '–'}`;
+      if (mode === 'LIVE') setLive(`LIVE · ${d.status || 'READY'}`, d.audit === 'VALID' ? 'ok' : 'warn');
+      else if (mode === 'STANDBY') setLive('STANDBY · tidak ada input LIVE', 'warn');
+      else setLive(mode, 'bad');
+      showNotice(`Jalur LIVE BCGO → ABC: ${mode} · ${d.status || '–'} · Audit ${d.audit || '–'}`, d.audit === 'VALID' ? 'ok' : 'warn');
+    };
+    window.addEventListener('beforeunload',()=>liveBus.close(),{once:true});
+  } catch (_) {}
   try {
     const bus = new BroadcastChannel('CGO_MACHINE_ABC_BUS');
     bus.onmessage = (ev) => {
       const d = ev?.data;
       if (!d || d.source === 'monitor-demo') return;
       if (d.type === 'abc-result' && d.status) {
-        showNotice('Sinyal dari ' + (d.source || 'bus') + ': ' + d.status, 'ok');
-        setLive('BUS · ' + d.status, 'ok');
+        showNotice('Sinyal uji dari ' + (d.source || 'bus') + ': ' + d.status, 'ok');
       }
     };
+    window.addEventListener('beforeunload',()=>bus.close(),{once:true});
   } catch (_) {}
   refresh();
   setLive("SIAP", "ok");
   if (bootBanner) {
-    bootBanner.textContent = `Mesin ABC ${E.version} siap · self-test ${st.passed}/${st.total} · menjalankan demo otomatis…`;
+    bootBanner.textContent = `Mesin ABC ${E.version} siap · self-test ${st.passed}/${st.total} · STANDBY menunggu input LIVE.`;
     bootBanner.className = "banner ok";
   }
-
-  // AUTO-DEMO — monitor tidak boleh diam saat dibuka
-  setTimeout(() => {
-    try { runDemo(); }
-    catch (err) {
-      showNotice("Auto-demo gagal: " + (err && err.message || err), "error");
-      setLive("ERROR", "bad");
-    }
-  }, 300);
 
   // heartbeat pelan
   pulseTimer = setInterval(() => {

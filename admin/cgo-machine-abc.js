@@ -1,6 +1,6 @@
 /*
  * CGO MACHINE ABC — UNIVERSAL CORE ENGINE
- * Version 0.9.1
+ * Version 0.9.4
  * Zero External · Zero API · Zero Network · Domain Neutral
  * A = INGEST / PARSE / REPRESENT
  * B = ANALYZE / RELATE / VERIFY / REASON
