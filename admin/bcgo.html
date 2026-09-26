@@ -1073,7 +1073,16 @@ function renderAbcTelemetry(ev){
   if(!ev || ev.type !== 'ABC_TELEMETRY') return;
   const stage=ev.stage, start=ev.event==='PHASE_START';
   ['A','B','C','D'].forEach(k=>{const l=document.getElementById('abcLamp'+k),n=document.getElementById('abcNode'+k);if(l)l.className='abc-lamp';if(n)n.className='abc-node';});
-  if(stage && ['A','B','C','D'].includes(stage)){const l=document.getElementById('abcLamp'+stage),n=document.getElementById('abcNode'+stage);if(l)l.className='abc-lamp '+(start?'active':ev.status==='FAILED'?'bad':'ok');if(n)n.className='abc-node '+(start?'active':'ok');if(start){abcApplyAmbientState('processing');abcSound(stage,true)}else if(ev.status==='FAILED'){abcApplyAmbientState('error');abcSound('bad',true)}else if(stage==='D'){const healthy=ev.audit==='VALID';abcApplyAmbientState(healthy?'normal':'warn');abcSound(healthy?'done':'warn',true)}else if(ev.status==='DEGRADED'||ev.status==='PARTIAL'){abcApplyAmbientState('warn');abcSound('warn',true)}}
+  if(stage && ['A','B','C','D'].includes(stage)){
+    const l=document.getElementById('abcLamp'+stage),n=document.getElementById('abcNode'+stage);
+    if(l)l.className='abc-lamp '+(start?'active':ev.status==='FAILED'?'bad':'ok');
+    if(n)n.className='abc-node '+(start?'active':'ok');
+    try { window.CGOOperatorVoice?.announcePipelineStage(stage, !!start, ev); } catch(_){}
+    if(start){abcApplyAmbientState('processing');abcSound(stage,true)}
+    else if(ev.status==='FAILED'){abcApplyAmbientState('error');abcSound('bad',true); try{window.CGOOperatorVoice?.state('ERROR',{force:true})}catch(_){}}
+    else if(stage==='D'){const healthy=ev.audit==='VALID';abcApplyAmbientState(healthy?'normal':'warn');abcSound(healthy?'done':'warn',true); try{window.CGOOperatorVoice?.state(healthy?'VALID':'WARNING',{force:true})}catch(_){}}
+    else if(ev.status==='DEGRADED'||ev.status==='PARTIAL'){abcApplyAmbientState('warn');abcSound('warn',true); try{window.CGOOperatorVoice?.state('WARNING')}catch(_){}}
+  }
   const state=document.getElementById('abc-telemetry-state'); if(state) state.textContent=start?`RUNNING · ${stage}`:`${stage} · ${ev.status||'DONE'}${ev.durationMs!=null?' · '+ev.durationMs+'ms':''}`;
   const event=document.getElementById('abc-telemetry-event'); if(event) event.textContent=`${ev.event} · ${stage||'SYS'}`;
 }
