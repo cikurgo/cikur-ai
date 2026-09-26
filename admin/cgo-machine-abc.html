@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#020914">
 <meta name="color-scheme" content="dark">
-<title>CGO MACHINE ABC — Live Workbench · Future Core</title>
+<title>CGO MACHINE ABC — Monitor Live</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🧠%3C/text%3E%3C/svg%3E">
 <style>
 :root{
@@ -114,10 +114,10 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
 <div class="app">
   <header class="top">
     <div class="brand">
-      <img class="brand-logo" id="logo" src="../cikurgoicon.png" alt="CIKUR GO" width="48" height="48" decoding="async" style="flex:none;width:48px;height:48px;object-fit:contain;border-radius:12px;background:#fff;padding:3px;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 6px 18px rgba(0,0,0,.28)">
+      <div class="logo" id="logo" aria-hidden="true">🧠</div>
       <div>
         <h1 class="title">CGO MACHINE ABC</h1>
-        <div class="sub">Live Workbench · A → B → C → D · Future Core · Zero External AI</div>
+        <div class="sub">Monitor mesin inti · A → B → C → D · <strong>live</strong></div>
       </div>
     </div>
     <div class="chips" aria-label="Status mesin">
@@ -137,26 +137,11 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   <section class="banner" id="liveLinkPanel"><b>OPERASI:</b> <span id="liveLinkMode">STANDBY</span> · <span id="liveLinkStatus">Belum ada input BCGO LIVE.</span> · <span id="liveLinkAudit">Audit –</span> · <span id="liveLinkAck">ACK –</span></section>
 
   <div class="actions">
-    <button type="button" class="primary" id="btnDemo" style="display:inline-flex;align-items:center;gap:8px">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>
-      Uji Pipeline A→B→C→D
-    </button>
-    <button type="button" id="btnSelfTest" style="display:inline-flex;align-items:center;gap:8px">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-      Self-test
-    </button>
-    <button type="button" id="btnPulse" style="display:inline-flex;align-items:center;gap:8px">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      Pulse metrics
-    </button>
-    <button type="button" id="pause" style="display:inline-flex;align-items:center;gap:8px">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
-      <span id="pauseLabel">Jeda</span>
-    </button>
-    <button type="button" id="reset" style="display:inline-flex;align-items:center;gap:8px">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
-      Reset log
-    </button>
+    <button type="button" class="primary" id="btnDemo">▶ UJI PIPELINE A→B→C→D</button>
+    <button type="button" id="btnSelfTest">Self-test ulang</button>
+    <button type="button" id="btnPulse">Pulse metrics</button>
+    <button type="button" id="pause">Jeda</button>
+    <button type="button" id="reset">Reset log</button>
   </div>
 
   <section class="activity-panel" aria-label="Aktivitas mesin real-time">
@@ -179,38 +164,6 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     <div class="activity-actions">
       <button type="button" id="soundToggle">🔇 Suara sistem: OFF</button>
       <button type="button" id="hapticToggle">📳 Haptic: AUTO</button>
-    </div>
-  </section>
-
-
-  <!-- HASIL NYATA WORKBENCH -->
-  <section class="panel" style="margin-top:12px;border-color:#1a6fcc55" aria-label="Hasil nyata siklus">
-    <div class="ph" style="background:linear-gradient(90deg,#0a203844,#031120)">
-      <h2 style="margin:0;font-size:13px">◎ HASIL NYATA · SIKLUS TERAKHIR</h2>
-      <span class="muted" id="resultStamp">menunggu…</span>
-    </div>
-    <div class="body">
-      <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:12px">
-        <div style="border:1px solid var(--line);border-radius:12px;background:var(--panel-2);padding:12px">
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Status akhir</div>
-          <div id="resultStatus" style="font-size:22px;font-weight:800;color:var(--muted)">IDLE</div>
-          <div id="resultSummary" style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5;border-left:2px solid var(--line);padding-left:10px">Belum ada proses. Jalankan uji pipeline atau terima input LIVE dari BCGO.</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;font-size:12px">
-            <div><div style="font-size:9px;color:var(--faint);text-transform:uppercase">Confidence</div><div id="resultConf" style="font-family:ui-monospace,monospace">–</div></div>
-            <div><div style="font-size:9px;color:var(--faint);text-transform:uppercase">Audit D</div><div id="resultAudit" style="font-family:ui-monospace,monospace">–</div></div>
-            <div><div style="font-size:9px;color:var(--faint);text-transform:uppercase">Temuan</div><div id="resultFindings" style="font-family:ui-monospace,monospace">0</div></div>
-            <div><div style="font-size:9px;color:var(--faint);text-transform:uppercase">Relasi</div><div id="resultRelations" style="font-family:ui-monospace,monospace">0</div></div>
-            <div><div style="font-size:9px;color:var(--faint);text-transform:uppercase">Durasi</div><div id="resultDuration" style="font-family:ui-monospace,monospace">–</div></div>
-            <div><div style="font-size:9px;color:var(--faint);text-transform:uppercase">Fingerprint</div><div id="resultFp" style="font-family:ui-monospace,monospace;word-break:break-all">–</div></div>
-          </div>
-        </div>
-        <div style="border:1px solid var(--line);border-radius:12px;background:var(--panel-2);padding:12px">
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Bukti &amp; temuan</div>
-          <div id="evidenceList" style="display:grid;gap:6px;max-height:200px;overflow:auto">
-            <div class="empty">Belum ada evidence.</div>
-          </div>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -276,7 +229,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
 
 <script src="cgo-ai-voice-operator.js?v=2.1.0-FEMALE-AIRPORT-PRECISE-20260926"></script>
 <script src="cgo-machine-abc.js?v=0.9.8-PHYSICS-CORE-20260926"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.5.0-LIVE-ACK-20260926"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.6.0-BCGO-SYNC-20260926"></script>
 <script src="cgo-abc-cognition.js"></script>
 <script>
 (() => {
@@ -369,56 +322,9 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     $("#degradedDetail").textContent = `${m.degradedCount || 0} / ${m.errorCount || 0}`;
     $("#skipDetail").textContent = m.skippedWhilePaused || 0;
     $("#pauseDetail").textContent = E.isPaused() ? "YA" : "TIDAK";
-    const pl=document.getElementById("pauseLabel"); if(pl) pl.textContent = E.isPaused() ? "Lanjutkan" : "Jeda"; else $("#pause").textContent = E.isPaused() ? "Lanjutkan" : "Jeda";
+    $("#pause").textContent = E.isPaused() ? "Lanjutkan" : "Jeda";
     $("#total").textContent = total;
     $("#rejectDetail").textContent = rejected;
-  }
-
-
-  function renderResultCard(c) {
-    const r = c?.result || c || {};
-    const status = r.status || "IDLE";
-    const OK = new Set(["PROCESSED", "WELL_FORMED", "VERIFIED"]);
-    const WARN = new Set(["PARTIAL", "DEGRADED"]);
-    const tone = OK.has(status) ? "var(--ok-text)" : WARN.has(status) ? "var(--warn-text)" : status === "IDLE" ? "var(--muted)" : "var(--bad-text)";
-    const conf = Number(r?.decision?.confidence ?? 0);
-    const findings = Array.isArray(r?.findings) ? r.findings : [];
-    const relations = Array.isArray(r?.relations) ? r.relations : [];
-    const audit = c?.audit?.status || r?.validation?.status || "–";
-    const dur = r?.durationMs || c?.durationMs || 0;
-    const fp = (c?.telemetry?.fingerprint || "").toString().slice(0, 18) || "–";
-    const st = document.getElementById("resultStatus");
-    if (st) { st.textContent = status; st.style.color = tone; }
-    const sum = document.getElementById("resultSummary");
-    if (sum) {
-      let t = r?.summary ? String(r.summary).slice(0, 280) : ("Siklus selesai dengan status " + status + ".");
-      if (findings.length) t += " Temuan: " + findings.slice(0,2).map(f => f.type || f.message || "item").join(", ") + ".";
-      sum.textContent = t;
-    }
-    const set = (id, v) => { const n = document.getElementById(id); if (n) n.textContent = v; };
-    set("resultConf", Math.round(conf * 100) + "%");
-    set("resultAudit", audit);
-    set("resultFindings", String(findings.length));
-    set("resultRelations", String(relations.length));
-    set("resultDuration", dur + "ms");
-    set("resultFp", fp);
-    set("resultStamp", new Date().toLocaleTimeString());
-    const list = document.getElementById("evidenceList");
-    if (list) {
-      list.innerHTML = "";
-      if (!findings.length) {
-        const e = document.createElement("div"); e.className = "empty"; e.textContent = "Tidak ada temuan terstruktur."; list.appendChild(e);
-      } else {
-        findings.slice(0, 12).forEach(f => {
-          const row = document.createElement("div");
-          row.style.cssText = "display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:6px 8px;border-radius:8px;border:1px solid var(--line-soft);background:#020a14";
-          const left = document.createElement("span"); left.textContent = String(f.type || f.message || f.claim || "finding").slice(0, 100);
-          const tag = document.createElement("span"); tag.textContent = String(f.severity || f.status || "INFO").toUpperCase();
-          tag.style.cssText = "font-size:10px;font-weight:700;padding:2px 6px;border-radius:999px;border:1px solid var(--line);color:var(--muted)";
-          row.appendChild(left); row.appendChild(tag); list.appendChild(row);
-        });
-      }
-    }
   }
 
   function renderCycle(c, stopReason) {
@@ -470,7 +376,6 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     $("#detail").textContent = json;
     setLive("HIDUP · " + status, OK.has(status) ? "ok" : WARN.has(status) ? "warn" : "bad");
     $("#logHint").textContent = "update " + new Date().toLocaleTimeString();
-    try { renderResultCard(c); } catch(_){}
   }
 
   function onPayload(p) {
@@ -595,7 +500,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   } catch (_) {}
 
   chip($("#ver"), "Engine " + E.version, "ok");
-  if($("#buildChip")) $("#buildChip").textContent = "BUILD 0.9.8";
+  if($("#buildChip")) $("#buildChip").textContent = "BUILD LIVE-ACK";
   const st = health();
   // observer telemetry nyata: lampu/suara mengikuti event A→B→C→D dari engine, bukan animasi palsu.
   if (typeof E.observeTelemetry === "function") E.observeTelemetry(renderTelemetry);
@@ -659,7 +564,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     if (E.isPaused()) return;
     const m = E.getMetrics();
     $("#degradedCount").textContent = m.degradedCount || 0;
-    if (logo && (m.totalProcessed || 0) > 0) { logo.style.boxShadow = "0 0 0 2px #16d98b,0 0 18px #16d98b55"; }
+    if (logo && !logo.classList.contains("live") && (m.totalProcessed || 0) > 0) logo.classList.add("live");
   }, 3000);
 })();
 </script>

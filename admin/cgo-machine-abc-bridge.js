@@ -15,8 +15,8 @@
     return;
   }
 
-  const VERSION = "1.5.0-LIVE-ACK";
-  const BUILD_ID = "CIKUR-GO-LIVE-ACK-2026-09-26";
+  const VERSION = "1.6.0-BCGO-SYNC";
+  const BUILD_ID = "CIKUR-GO-BCGO-SYNC-2026-09-26";
   const listeners = new Set();
   let lastPacket = null;
   let lastLiveFingerprint = null;
@@ -182,46 +182,81 @@
     if (evidence.mode === "TEST") {
       return {ok:false,mode:"TEST",status:"TEST_INPUT_REQUIRES_EXPLICIT_TEST_PATH",evidence};
     }
-    // Jangan memproses snapshot yang identik berulang-ulang. Ini menjaga jalur live stabil.
-    const dedupeKey = fingerprintEvidence({mode:evidence.mode,observations:evidence.observations,claims:evidence.claims});
+    // Dedupe: mode + cycle + claims fingerprint (setiap neural cycle baru wajib proses ulang)
+    const cycle = Number(evidence.observations?.cycle || state?.cycle || 0);
+    const dedupeKey = fingerprintEvidence({
+      mode: evidence.mode,
+      cycle,
+      claims: evidence.claims,
+      connection: evidence.observations?.connection,
+      sourceScanStatus: evidence.observations?.sourceScanStatus
+    });
     if (dedupeKey && dedupeKey === lastLiveFingerprint) {
-      // Late subscriber support: ABC may have opened after BCGO already processed
-      // this snapshot. Re-emit the last verified link so the new page can hydrate.
       const cachedLink = global.CGO_ABC_LIVE_LINK || null;
       try { if (cachedLink) liveBus?.postMessage(cachedLink); } catch (_) {}
-      return {ok:true,duplicate:true,mode:evidence.mode,status:cachedLink?.status||lastPacket?.result?.status||null,audit:cachedLink?.audit||lastPacket?.audit?.status||null,evidence,link:cachedLink,packet:lastPacket};
+      return {
+        ok: true, duplicate: true, mode: evidence.mode,
+        status: cachedLink?.status || lastPacket?.result?.status || null,
+        audit: cachedLink?.audit || lastPacket?.audit?.status || null,
+        evidence, link: cachedLink, packet: lastPacket
+      };
     }
     lastLiveFingerprint = dedupeKey;
     try {
+      // FULL pipeline A→B→C→D wajib untuk jalur LIVE BCGO
       const packet = E.process(
-        {type:"external-evidence-snapshot",source:"BCGO",capturedAt:evidence.capturedAt,mode:evidence.mode,observations:evidence.observations},
-        {source:"BCGO_STATE_SYNC",externalEvidence:evidence}
+        {
+          type: "external-evidence-snapshot",
+          source: "BCGO",
+          capturedAt: evidence.capturedAt,
+          mode: evidence.mode,
+          cycle,
+          observations: evidence.observations,
+          claims: evidence.claims
+        },
+        {
+          source: "BCGO_STATE_SYNC",
+          externalEvidence: evidence,
+          fast: false,
+          skipAudit: false,
+          maxCycles: 1,
+          autoReflect: false
+        }
       );
       lastPacket = packet;
+      const status = packet.result?.status || null;
+      const audit = packet.audit?.status || null;
       const link = {
-        type:"CGO_ABC_LIVE_LINK",
-        source:"BCGO",
-        mode:evidence.mode,
-        revision:evidence.revision,
-        capturedAt:evidence.capturedAt,
-        ageMs:evidence.ageMs,
-        serverLive:evidence.serverLive,
-        telemetryLive:evidence.telemetryLive,
-        status:packet.result?.status||null,
-        audit:packet.audit?.status||null,
-        fingerprint:evidence.fingerprint,
-        claimCount:evidence.claims.length,
+        type: "CGO_ABC_LIVE_LINK",
+        source: "BCGO",
+        mode: evidence.mode,
+        revision: evidence.revision,
+        capturedAt: evidence.capturedAt,
+        ageMs: evidence.ageMs,
+        serverLive: evidence.serverLive,
+        telemetryLive: evidence.telemetryLive,
+        status,
+        audit,
+        fingerprint: evidence.fingerprint,
+        claimCount: evidence.claims.length,
+        cycle,
+        engineVersion: E.version,
+        bridgeVersion: VERSION,
         packet
       };
-      try { global.CGO_ABC_LIVE_LINK = Object.freeze({...link}); } catch (_) {}
+      try { global.CGO_ABC_LIVE_LINK = Object.freeze({ ...link }); } catch (_) {}
       try { liveBus?.postMessage(link); } catch (_) {}
       emit("cgo:machine-abc-bcgo-sync", link);
-      return {ok:true,mode:evidence.mode,status:packet.result?.status||null,audit:packet.audit?.status||null,evidence,packet};
-    } catch(err) {
-      const error=String(err?.message||err);
-      const link={type:"CGO_ABC_LIVE_LINK",source:"BCGO",mode:evidence.mode,status:"ERROR",audit:"ATTENTION",error,revision:evidence.revision};
+      emit("cgo:machine-abc", packet);
+      return { ok: true, mode: evidence.mode, status, audit, evidence, link, packet };
+    } catch (err) {
+      const error = String(err?.message || err);
+      const link = {
+        type: "CGO_ABC_LIVE_LINK", source: "BCGO", mode: evidence.mode,
+        status: "ERROR", audit: "ATTENTION", error, revision: evidence.revision, cycle
+      };
       try { liveBus?.postMessage(link); } catch (_) {}
-      return {ok:false,mode:evidence.mode,error,link};
+      return { ok: false, mode: evidence.mode, error, link };
     }
   }
 

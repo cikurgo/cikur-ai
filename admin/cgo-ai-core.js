@@ -158,7 +158,7 @@ export function reason(caseData, hypotheses=[]) {
   c.hypotheses = hs;
   c.selectedHypothesis = hs[0] || null;
   const nextState=contradictions.length ? "CONTRADICTORY_EVIDENCE" :
-    hs.length ? "HYPOTHESIS_FORMED" : "INVESTIGATING";
+    hs.length ? "HYPOHESIS_FORMED" : "INVESTIGATING";
   transition(c,nextState);
   c.updatedAt = now(); c.revision++;
   return {caseData:c, contradictions};

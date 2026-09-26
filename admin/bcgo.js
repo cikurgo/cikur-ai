@@ -67,6 +67,7 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "admin/cgo-ai-sovereignty.js", path: "cgo-ai-sovereignty.js", role: "CGO Sovereignty" },
   { file: "admin/cgo-ai-radar.js", path: "cgo-ai-radar.js", role: "Radar Engine" },
   { file: "admin/cgo-ai-radar-visual.js", path: "cgo-ai-radar-visual.js", role: "Radar Visual" },
+  { file: "admin/cgo-ai-voice-operator.js", path: "cgo-ai-voice-operator.js", role: "Voice Operator" },
   { file: "admin/cgo-instruction.js", path: "cgo-instruction.js", role: "CGO Constitution" },
   { file: "cgo-app-bootstrap.js", path: "../cgo-app-bootstrap.js", role: "Customer Bootstrap" },
   { file: "index.html", path: "../index.html", role: "Customer Home" },
@@ -1019,8 +1020,10 @@ export function runAutonomousEngine(onCycleUpdate) {
       while ((m = re.exec(text))) refs.push(m[1] || m[2]);
       for (const ref of refs) {
         if (!ref || /^(https?:|data:|#|javascript:)/i.test(ref)) continue;
+        // Hapus query/hash agar ?v=... tidak memicu SURFACE UNKNOWN palsu
+        const cleanRef = String(ref).split('#')[0].split('?')[0];
         let target;
-        try { target = new URL(ref, new URL(item.path, rootUrl)).pathname.replace(/^\//, ""); } catch { continue; }
+        try { target = new URL(cleanRef, new URL(item.path, rootUrl)).pathname.replace(/^\//, ""); } catch { continue; }
         if (target.startsWith("cikur-ai/")) target = target.slice("cikur-ai/".length);
         const base = target.split("/").pop();
         const matched = INTERNAL_SOURCE_SCAN.find(x => x.path === target || x.file === target || x.file.endsWith("/" + base) || x.file === base || x.path.endsWith("/" + base));
@@ -1046,6 +1049,11 @@ export function runAutonomousEngine(onCycleUpdate) {
       ["admin/bcgo-admin.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
       ["admin/data-cgo.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
       ["admin/bcgo.js", "cgo-ai-radar.js", "RADAR_ENGINE"],
+      ["admin/bcgo.html", "admin/cgo-machine-abc.js", "ABC_ENGINE"],
+      ["admin/bcgo.html", "admin/cgo-machine-abc-bridge.js", "ABC_BRIDGE"],
+      ["admin/bcgo.html", "admin/cgo-ai-voice-operator.js", "VOICE_OPERATOR"],
+      ["admin/cgo-machine-abc.html", "admin/cgo-machine-abc.js", "ABC_ENGINE"],
+      ["admin/cgo-machine-abc.html", "admin/cgo-machine-abc-bridge.js", "ABC_BRIDGE"],
       ["index.html", "customer/cgo-customer.js", "CUSTOMER_GATEWAY"],
       ["index.html", "cgo-app-bootstrap.js", "CUSTOMER_BOOTSTRAP"],
       ["index.html", "cikur-config.js", "CUSTOMER_CONFIG"],
