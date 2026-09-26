@@ -329,114 +329,20 @@
       </div>`;
     document.body.appendChild(hud);
 
-    let sound = false;
-    let haptic = true;
-    let audio = null;
-    let master = null;
-    let audioReady = false;
-    let soundQueueUntil = 0;
-    let lastSoundKind = "";
-    let ambientOsc = null, ambientHarmonic = null, ambientGain = null, ambientHarmonicGain = null, ambientLfo = null, ambientLfoGain = null, ambientState = "normal";
-    const AUDIO_GAIN = 0.16;
-    const ensureAudio = async () => {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) throw new Error("Web Audio API tidak tersedia di browser ini");
-      if (!audio) {
-        audio = new AC({ latencyHint: "interactive" });
-        master = audio.createGain();
-        master.gain.value = AUDIO_GAIN;
-        master.connect(audio.destination);
-      }
-      if (audio.state !== "running") await audio.resume();
-      if (audio.state !== "running") throw new Error("AudioContext belum running");
-      audioReady = true;
-      return audio;
-    };
-    const ambientProfile = state => state === "error" ? {f:52,h:104,p:2.35,g:.030,hg:.010} : state === "warn" ? {f:92,h:184,p:1.75,g:.022,hg:.007} : {f:68,h:136,p:1.15,g:.014,hg:.0045};
-    const setAmbientState = state => {
-      ambientState = state === "error" ? "error" : state === "warn" ? "warn" : "normal";
-      if (!audioReady || !audio || audio.state !== "running" || !ambientOsc) return;
-      const q=ambientProfile(ambientState), now=audio.currentTime;
-      try { ambientOsc.frequency.setTargetAtTime(q.f,now,.08); ambientHarmonic.frequency.setTargetAtTime(q.h,now,.08); ambientLfo.frequency.setTargetAtTime(q.p,now,.12); ambientGain.gain.setTargetAtTime(q.g,now,.12); ambientHarmonicGain.gain.setTargetAtTime(q.hg,now,.12); } catch (_) {}
-    };
-    const startAmbient = () => {
-      if (!audioReady || !audio || audio.state !== "running" || ambientOsc) return;
-      const q=ambientProfile(ambientState), f=audio.createBiquadFilter();
-      ambientOsc=audio.createOscillator(); ambientHarmonic=audio.createOscillator(); ambientGain=audio.createGain(); ambientHarmonicGain=audio.createGain(); ambientLfo=audio.createOscillator(); ambientLfoGain=audio.createGain();
-      f.type="lowpass"; f.frequency.value=420; f.Q.value=.35; ambientOsc.type="sine"; ambientHarmonic.type="sine"; ambientLfo.type="sine"; ambientOsc.frequency.value=q.f; ambientHarmonic.frequency.value=q.h; ambientLfo.frequency.value=q.p; ambientGain.gain.value=q.g; ambientHarmonicGain.gain.value=q.hg; ambientLfoGain.gain.value=q.g*.62;
-      ambientLfo.connect(ambientLfoGain); ambientLfoGain.connect(ambientGain.gain); ambientOsc.connect(ambientGain); ambientHarmonic.connect(ambientHarmonicGain); ambientGain.connect(f); ambientHarmonicGain.connect(f); f.connect(master); ambientOsc.start(); ambientHarmonic.start(); ambientLfo.start();
-    };
-    const stopAmbient = () => { for (const n of [ambientOsc,ambientHarmonic,ambientLfo]) { try { n?.stop?.(); } catch (_) {} } ambientOsc=ambientHarmonic=ambientLfo=null; ambientGain=ambientHarmonicGain=ambientLfoGain=null; };
-    const scheduleVoice = (ctx, when, freq, duration, type="sine", level=0.22, glide=null) => {
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      const filter = ctx.createBiquadFilter();
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, when);
-      if (glide) osc.frequency.exponentialRampToValueAtTime(glide, when + duration * .72);
-      filter.type = "lowpass";
-      filter.frequency.setValueAtTime(Math.max(900, freq * 4), when);
-      g.gain.setValueAtTime(.0001, when);
-      g.gain.exponentialRampToValueAtTime(level, when + .012);
-      g.gain.exponentialRampToValueAtTime(Math.max(.0001, level * .35), when + duration * .62);
-      g.gain.exponentialRampToValueAtTime(.0001, when + duration);
-      osc.connect(filter); filter.connect(g); g.connect(master);
-      osc.start(when); osc.stop(when + duration + .025);
-    };
-    const playNeuralSound = (kind="tick", force=false) => {
-      if (!sound || !audioReady || !audio || !master || audio.state !== "running") return false;
-      try {
-        const now = audio.currentTime + .006;
-        const start = Math.max(now, soundQueueUntil);
-        const profiles = {
-          start: { f: 128, d: .14, t: "sine", l: .30, g: 196 },
-          A: { f: 180, d: .12, t: "sine", l: .28, g: 260 },
-          B: { f: 260, d: .13, t: "triangle", l: .26, g: 360 },
-          C: { f: 370, d: .13, t: "triangle", l: .25, g: 520 },
-          D: { f: 520, d: .15, t: "sine", l: .26, g: 720 },
-          done: { f: 660, d: .20, t: "sine", l: .30, g: 990 },
-          ok: { f: 440, d: .24, t: "sine", l: .25, g: 880 },
-          warn: { f: 150, d: .24, t: "sawtooth", l: .22, g: 105 },
-          bad: { f: 95, d: .34, t: "square", l: .28, g: 62 },
-          tick: { f: 220, d: .08, t: "sine", l: .18, g: 280 }
-        };
-        const q = profiles[kind] || profiles.tick;
-        const gap = kind === "bad" || kind === "done" ? .08 : .045;
-        if (!force && lastSoundKind === kind && start < soundQueueUntil + .02) return true;
-        scheduleVoice(audio, start, q.f, q.d, q.t, q.l, q.g);
-        // A quiet harmonic gives the pulse a richer, less synthetic "instrument-panel" character.
-        if (kind !== "bad") scheduleVoice(audio, start, q.f * 2, q.d * .72, "sine", q.l * .20, q.g * 1.8);
-        soundQueueUntil = start + q.d + gap;
-        lastSoundKind = kind;
-        return true;
-      } catch (_) { return false; }
-    };
-    const armSound = async () => {
-      try {
-        await ensureAudio();
-        sound = true;
-        startAmbient();
-        lastSoundKind = "";
-        soundQueueUntil = 0;
-        setAmbientState("normal");
-        playNeuralSound("start", true);
-        const b = hud.querySelector("#cgoAbcHudSound");
-        if (b) { b.dataset.on = "1"; b.textContent = "🔊 SOUND LIVE · NORMAL"; }
-        return true;
-      } catch (e) {
-        sound = false;
-        const b = hud.querySelector("#cgoAbcHudSound");
-        if (b) { b.dataset.on = "0"; b.textContent = "🔇 SOUND UNAVAILABLE"; }
-        console.warn("[CGO ABC AUDIO]", e);
-        return false;
-      }
-    };
-    const disarmSound = () => {
-      sound = false; audioReady = false; lastSoundKind = ""; soundQueueUntil = 0; stopAmbient();
-      try { audio?.suspend?.(); } catch (_) {}
-      const b = hud.querySelector("#cgoAbcHudSound");
-      if (b) { b.dataset.on = "0"; b.textContent = "🔇 SOUND OFF"; }
-    };
+    let sound=false,haptic=true,audio=null,master=null,audioReady=false,soundQueueUntil=0,ambientNodes=[],ambientState="normal",noiseBuffer=null;
+    const AUDIO_GAIN=.46;
+    const ensureAudio=async()=>{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error("Web Audio API tidak tersedia di browser ini");if(!audio){audio=new AC({latencyHint:"interactive"});master=audio.createGain();master.gain.value=AUDIO_GAIN;const comp=audio.createDynamicsCompressor();comp.threshold.value=-18;comp.knee.value=12;comp.ratio.value=8;comp.attack.value=.003;comp.release.value=.12;master.connect(comp);comp.connect(audio.destination);audio.onstatechange=()=>{if(sound&&audio.state==='running'){audioReady=true;startAmbient()}}}if(audio.state!=="running")await audio.resume();if(audio.state!=="running")throw new Error("AudioContext belum running");audioReady=true;return audio};
+    const ambientProfile=s=>s==="error"?{a:110,b:220,c:440,p:.62,g:.12,h:.034}:s==="warn"?{a:132,b:264,c:528,p:1.25,g:.095,h:.027}:s==="processing"?{a:148,b:296,c:592,p:2.4,g:.072,h:.022}:{a:120,b:240,c:480,p:.88,g:.055,h:.018};
+    const setAmbientState=s=>{ambientState=["error","warn","processing"].includes(s)?s:"normal";if(!audioReady||!audio||audio.state!=="running"||!ambientNodes.length)return;const q=ambientProfile(ambientState),now=audio.currentTime;try{ambientNodes[0].osc.frequency.setTargetAtTime(q.a,now,.12);ambientNodes[1].osc.frequency.setTargetAtTime(q.b,now,.12);ambientNodes[2].osc.frequency.setTargetAtTime(q.c,now,.12);ambientNodes[3].osc.frequency.setTargetAtTime(q.p,now,.18);ambientNodes[0].gain.gain.setTargetAtTime(q.g,now,.14);ambientNodes[1].gain.gain.setTargetAtTime(q.h,now,.14);ambientNodes[2].gain.gain.setTargetAtTime(q.h*.5,now,.14)}catch(_){} };
+    const startAmbient=()=>{if(!audioReady||!audio||audio.state!=="running"||ambientNodes.length)return;const c=audio,q=ambientProfile(ambientState),bus=c.createBiquadFilter();bus.type="lowpass";bus.frequency.value=1250;bus.Q.value=.45;bus.connect(master);const mk=(f,g,t)=>{const o=c.createOscillator(),gn=c.createGain();o.type=t;o.frequency.value=f;gn.gain.value=g;o.connect(gn);gn.connect(bus);o.start();return{osc:o,gain:gn}};const x=mk(q.a,q.g,"sine"),y=mk(q.b,q.h,"triangle"),z=mk(q.c,q.h*.5,"sine"),l=c.createOscillator(),lg=c.createGain();l.frequency.value=q.p;lg.gain.value=q.g*.55;l.connect(lg);lg.connect(x.gain.gain);l.start();ambientNodes=[x,y,z,{osc:l,gain:lg}]};
+    const stopAmbient=()=>{for(const n of ambientNodes){try{n.osc.stop()}catch(_){}}ambientNodes=[]};
+    const noise=(ctx,when,duration,level,center=1900)=>{try{if(!noiseBuffer){const len=Math.floor(ctx.sampleRate*.18);noiseBuffer=ctx.createBuffer(1,len,ctx.sampleRate);const d=noiseBuffer.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*.85}const src=ctx.createBufferSource(),bp=ctx.createBiquadFilter(),g=ctx.createGain();src.buffer=noiseBuffer;bp.type='bandpass';bp.frequency.value=center;bp.Q.value=2.2;g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.004);g.gain.exponentialRampToValueAtTime(.0001,when+duration);src.connect(bp);bp.connect(g);g.connect(master);src.start(when);src.stop(when+duration+.01)}catch(_){} };
+    const scheduleVoice=(ctx,when,f,d,type="sine",level=.20,glide=null,pan=0)=>{const o=ctx.createOscillator(),g=ctx.createGain(),fl=ctx.createBiquadFilter(),p=ctx.createStereoPanner?ctx.createStereoPanner():null;o.type=type;o.frequency.setValueAtTime(f,when);if(glide)o.frequency.exponentialRampToValueAtTime(glide,when+d*.72);fl.type="lowpass";fl.frequency.value=Math.max(1200,f*4.5);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.008);g.gain.exponentialRampToValueAtTime(Math.max(.0001,level*.34),when+d*.60);g.gain.exponentialRampToValueAtTime(.0001,when+d);o.connect(fl);fl.connect(g);if(p){p.pan.value=pan;g.connect(p);p.connect(master)}else g.connect(master);o.start(when);o.stop(when+d+.025)};
+    const playNeuralSound=(kind="tick",force=false)=>{if(!sound||!audioReady||!audio||!master||audio.state!=="running")return false;try{const q={start:[110,.52,.26,"sine",220],A:[180,.30,.20,"sine",270],B:[240,.34,.20,"triangle",360],C:[320,.38,.20,"triangle",480],D:[430,.44,.22,"sine",650],done:[520,.68,.24,"sine",1040],ok:[300,.58,.21,"sine",900],warn:[180,.50,.21,"triangle",132],bad:[108,.72,.26,"sawtooth",68],tick:[210,.18,.12,"sine",315]}[kind]||[210,.18,.12,"sine",315];const when=Math.max(audio.currentTime+.012,soundQueueUntil);scheduleVoice(audio,when,q[0],q[1],q[3],q[2],q[4],-.10);scheduleVoice(audio,when+.022,q[0]*2,q[1]*.76,"sine",q[2]*.42,q[4]*1.28,.12);if(kind!=="bad")noise(audio,when,.055,.026,kind==="warn"?1200:kind==="done"?3000:1900);if(kind==="bad")noise(audio,when,.13,.055,650);soundQueueUntil=when+q[1]+(kind==="bad"||kind==="done"?.14:.06);return true}catch(_){return false}};
+    const armSound=async()=>{try{await ensureAudio();sound=true;soundQueueUntil=0;startAmbient();setAmbientState("normal");playNeuralSound("start",true);const b=hud.querySelector("#cgoAbcHudSound");if(b){b.dataset.on="1";b.textContent="🔊 SYSTEM AUDIO · STANDBY"}return true}catch(e){sound=false;const b=hud.querySelector("#cgoAbcHudSound");if(b){b.dataset.on="0";b.textContent="🔇 AUDIO UNAVAILABLE"}console.warn("[CGO ABC AUDIO]",e);return false}};
+    const disarmSound=()=>{sound=false;audioReady=false;soundQueueUntil=0;stopAmbient();try{audio?.suspend?.()}catch(_){}const b=hud.querySelector("#cgoAbcHudSound");if(b){b.dataset.on="0";b.textContent="🔇 SOUND OFF"}};
+    const recoverAudio=async()=>{if(!sound||!audio)return false;try{if(audio.state!=="running")await audio.resume();if(audio.state==="running"){audioReady=true;startAmbient();setAmbientState(ambientState);return true}}catch(_){}return false};
+    document.addEventListener("visibilitychange",()=>{if(!document.hidden)recoverAudio()});window.addEventListener("pageshow",()=>recoverAudio());
     const buzz = kind => { if(!haptic || typeof navigator.vibrate!=="function")return; try{navigator.vibrate(kind==='done'?[10,18,10]:kind==='bad'?[28,16,35]:9)}catch(_){ } };
     const render = ev => {
       if(!ev || ev.type!=="ABC_TELEMETRY")return;
