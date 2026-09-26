@@ -336,7 +336,8 @@
     let audioReady = false;
     let soundQueueUntil = 0;
     let lastSoundKind = "";
-    const AUDIO_GAIN = 0.16;
+    let ambientOsc = null, ambientHarmonic = null, ambientGain = null, ambientHarmonicGain = null, ambientLfo = null, ambientLfoGain = null, ambientState = "normal";
+    const AUDIO_GAIN = 0.24;
     const ensureAudio = async () => {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) throw new Error("Web Audio API tidak tersedia di browser ini");
@@ -351,6 +352,21 @@
       audioReady = true;
       return audio;
     };
+    const ambientProfile = state => state === "error" ? {f:52,h:104,p:2.35,g:.095,hg:.030} : state === "warn" ? {f:92,h:184,p:1.75,g:.075,hg:.022} : {f:68,h:136,p:1.15,g:.055,hg:.018};
+    const setAmbientState = state => {
+      ambientState = state === "error" ? "error" : state === "warn" ? "warn" : "normal";
+      if (!audioReady || !audio || audio.state !== "running" || !ambientOsc) return;
+      const q=ambientProfile(ambientState), now=audio.currentTime;
+      try { ambientOsc.frequency.setTargetAtTime(q.f,now,.08); ambientHarmonic.frequency.setTargetAtTime(q.h,now,.08); ambientLfo.frequency.setTargetAtTime(q.p,now,.12); ambientGain.gain.setTargetAtTime(q.g,now,.12); ambientHarmonicGain.gain.setTargetAtTime(q.hg,now,.12); } catch (_) {}
+    };
+    const startAmbient = () => {
+      if (!audioReady || !audio || audio.state !== "running" || ambientOsc) return;
+      const q=ambientProfile(ambientState), f=audio.createBiquadFilter();
+      ambientOsc=audio.createOscillator(); ambientHarmonic=audio.createOscillator(); ambientGain=audio.createGain(); ambientHarmonicGain=audio.createGain(); ambientLfo=audio.createOscillator(); ambientLfoGain=audio.createGain();
+      f.type="lowpass"; f.frequency.value=420; f.Q.value=.35; ambientOsc.type="sine"; ambientHarmonic.type="sine"; ambientLfo.type="sine"; ambientOsc.frequency.value=q.f; ambientHarmonic.frequency.value=q.h; ambientLfo.frequency.value=q.p; ambientGain.gain.value=q.g; ambientHarmonicGain.gain.value=q.hg; ambientLfoGain.gain.value=q.g*.62;
+      ambientLfo.connect(ambientLfoGain); ambientLfoGain.connect(ambientGain.gain); ambientOsc.connect(ambientGain); ambientHarmonic.connect(ambientHarmonicGain); ambientGain.connect(f); ambientHarmonicGain.connect(f); f.connect(master); ambientOsc.start(); ambientHarmonic.start(); ambientLfo.start();
+    };
+    const stopAmbient = () => { for (const n of [ambientOsc,ambientHarmonic,ambientLfo]) { try { n?.stop?.(); } catch (_) {} } ambientOsc=ambientHarmonic=ambientLfo=null; ambientGain=ambientHarmonicGain=ambientLfoGain=null; };
     const scheduleVoice = (ctx, when, freq, duration, type="sine", level=0.22, glide=null) => {
       const osc = ctx.createOscillator();
       const g = ctx.createGain();
@@ -399,11 +415,13 @@
       try {
         await ensureAudio();
         sound = true;
+        startAmbient();
         lastSoundKind = "";
         soundQueueUntil = 0;
+        setAmbientState("normal");
         playNeuralSound("start", true);
         const b = hud.querySelector("#cgoAbcHudSound");
-        if (b) { b.dataset.on = "1"; b.textContent = "🔊 SOUND READY"; }
+        if (b) { b.dataset.on = "1"; b.textContent = "🔊 SOUND LIVE · NORMAL"; }
         return true;
       } catch (e) {
         sound = false;
@@ -414,11 +432,22 @@
       }
     };
     const disarmSound = () => {
-      sound = false; audioReady = false; lastSoundKind = ""; soundQueueUntil = 0;
+      sound = false; audioReady = false; lastSoundKind = ""; soundQueueUntil = 0; stopAmbient();
       try { audio?.suspend?.(); } catch (_) {}
       const b = hud.querySelector("#cgoAbcHudSound");
       if (b) { b.dataset.on = "0"; b.textContent = "🔇 SOUND OFF"; }
     };
+    const recoverAudio = async () => {
+      if (!sound || !audio) return false;
+      try {
+        if (audio.state !== "running") await audio.resume();
+        if (audio.state === "running") { audioReady = true; startAmbient(); setAmbientState(ambientState); return true; }
+      } catch (_) {}
+      return false;
+    };
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) recoverAudio(); });
+    window.addEventListener("pageshow", () => { recoverAudio(); });
+    if (audio) audio.onstatechange = () => { if (sound && audio.state === "running") { audioReady = true; startAmbient(); } };
     const buzz = kind => { if(!haptic || typeof navigator.vibrate!=="function")return; try{navigator.vibrate(kind==='done'?[10,18,10]:kind==='bad'?[28,16,35]:9)}catch(_){ } };
     const render = ev => {
       if(!ev || ev.type!=="ABC_TELEMETRY")return;
@@ -433,15 +462,16 @@
       if(stage && node(stage)){
         ["A","B","C","D"].forEach(k=>{if(k!==stage && ev.event==="PHASE_START")setStage(k,"done")});
         setStage(stage,ev.event==="PHASE_START"?"active":ev.status==="FAILED"?"bad":"done");
-        if(ev.event==="PHASE_START") playNeuralSound(stage||"tick");
-        else if(ev.event==="PHASE_END" && ev.status==="FAILED") playNeuralSound("bad", true);
-        else if(stage==="D" && ev.event==="PHASE_END") playNeuralSound(ev.audit==="VALID"?"done":"warn", true);
+        if(ev.event==="PHASE_START") { setAmbientState("normal"); playNeuralSound(stage||"tick"); }
+        else if(ev.event==="PHASE_END" && ev.status==="FAILED") { setAmbientState("error"); playNeuralSound("bad", true); }
+        else if(stage==="D" && ev.event==="PHASE_END") { const healthy=ev.audit==="VALID"; setAmbientState(healthy?"normal":"warn"); playNeuralSound(healthy?"done":"warn", true); }
+        else if(ev.status==="DEGRADED" || ev.status==="PARTIAL") { setAmbientState("warn"); playNeuralSound("warn", true); }
         buzz(ev.status==="FAILED"?"bad":stage==="D"?"done":"tick");
       }
       try{window.dispatchEvent(new CustomEvent("cgo:abc-neural-telemetry",{detail:ev}))}catch(_){ }
     };
     const off=engine.observeTelemetry(render);
-    window.addEventListener("beforeunload",()=>{try{off()}catch(_){ }try{audio?.close?.()}catch(_){ }} ,{once:true});
+    window.addEventListener("beforeunload",()=>{try{off()}catch(_){ }try{stopAmbient()}catch(_){ }try{audio?.close?.()}catch(_){ }} ,{once:true});
     hud.querySelector("#cgoAbcHudHead").addEventListener("click",()=>{hud.dataset.state=hud.dataset.state==="hidden"?"visible":"hidden"});
     hud.querySelector("#cgoAbcHudSound").addEventListener("click",async()=>{if(sound){disarmSound();return;}await armSound();});
     hud.querySelector("#cgoAbcHudHaptic").addEventListener("click",()=>{haptic=!haptic;const b=hud.querySelector("#cgoAbcHudHaptic");b.dataset.on=haptic?"1":"0";b.textContent=haptic?"📳 HAPTIC AUTO":"📴 HAPTIC OFF"});
