@@ -326,9 +326,9 @@ body{font-family:'Inter',sans-serif}
 </section>
 </div>
 
-<script src="cgo-ai-voice-operator.js?v=2.1.0-FEMALE-AIRPORT-PRECISE-20260926"></script>
-<script src="cgo-machine-abc.js?v=0.9.8-PHYSICS-CORE-20260926"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.6.0-BCGO-SYNC-20260926"></script>
+<script src="cgo-ai-voice-operator.js?v=2.2.0-FEMALE-AIRPORT-OPERATOR-20260926"></script>
+<script src="cgo-machine-abc.js?v=0.9.5-LIVE-HANDSHAKE-20260926"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.5.0-LIVE-ACK-20260926"></script>
 <script type="module">
 import { runAutonomousEngine } from './bcgo.js?v=4.3.0-INTERNAL-SOURCE-SCAN-20260917';
 
@@ -350,7 +350,7 @@ try {
         }
       } catch (_) {}
     });
-    console.log('[BCGO] Mesin ABC terhubung:', window.CGOMachineABCBridge.engineVersion, 'bridge', window.CGOMachineABCBridge.version);
+    console.log('[BCGO] Mesin ABC terhubung:', window.CGOMachineABCBridge.engineVersion);
   } else {
     console.warn('[BCGO] Mesin ABC belum termuat (cgo-machine-abc.js)');
   }
@@ -1072,33 +1072,10 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)abcRecover
 function renderAbcTelemetry(ev){
   if(!ev || ev.type !== 'ABC_TELEMETRY') return;
   const stage=ev.stage, start=ev.event==='PHASE_START';
-  const order=['A','B','C','D'];
-  const idx=order.indexOf(stage);
-  // Reset then mark completed stages + active
-  order.forEach((k,i)=>{
-    const l=document.getElementById('abcLamp'+k), n=document.getElementById('abcNode'+k);
-    if(!l||!n) return;
-    if(start){
-      if(i<idx){ l.className='abc-lamp ok'; n.className='abc-node ok'; }
-      else if(i===idx){ l.className='abc-lamp active'; n.className='abc-node active'; }
-      else { l.className='abc-lamp'; n.className='abc-node'; }
-    } else {
-      if(i<=idx){ l.className='abc-lamp '+(ev.status==='FAILED'&&i===idx?'bad':'ok'); n.className='abc-node '+(ev.status==='FAILED'&&i===idx?'bad':'ok'); }
-    }
-  });
-  // When pipeline completes (D PHASE_END), light all
-  if(!start && stage==='D' && ev.status!=='FAILED'){
-    order.forEach(k=>{const l=document.getElementById('abcLamp'+k),n=document.getElementById('abcNode'+k);if(l)l.className='abc-lamp ok';if(n)n.className='abc-node ok';});
-  }
-  try { window.CGOOperatorVoice?.announcePipelineStage(stage, !!start, ev); } catch(_){}
-  if(start){abcApplyAmbientState('processing');abcSound(stage,true)}
-  else if(ev.status==='FAILED'){abcApplyAmbientState('error');abcSound('bad',true); try{window.CGOOperatorVoice?.state('ERROR',{force:true})}catch(_){}}
-  else if(stage==='D'){const healthy=ev.audit==='VALID';abcApplyAmbientState(healthy?'normal':'warn');abcSound(healthy?'done':'warn',true); try{window.CGOOperatorVoice?.state(healthy?'VALID':'WARNING',{force:true})}catch(_){}}
-  else if(ev.status==='DEGRADED'||ev.status==='PARTIAL'){abcApplyAmbientState('warn');abcSound('warn',true)}
-  const state=document.getElementById('abc-telemetry-state');
-  if(state) state.textContent=start?`RUNNING · ${stage}`:`${stage} · ${ev.status||'DONE'}${ev.durationMs!=null?' · '+ev.durationMs+'ms':''}`;
-  const event=document.getElementById('abc-telemetry-event');
-  if(event) event.textContent=`${ev.event} · ${stage||'SYS'}`;
+  ['A','B','C','D'].forEach(k=>{const l=document.getElementById('abcLamp'+k),n=document.getElementById('abcNode'+k);if(l)l.className='abc-lamp';if(n)n.className='abc-node';});
+  if(stage && ['A','B','C','D'].includes(stage)){const l=document.getElementById('abcLamp'+stage),n=document.getElementById('abcNode'+stage);if(l)l.className='abc-lamp '+(start?'active':ev.status==='FAILED'?'bad':'ok');if(n)n.className='abc-node '+(start?'active':'ok');if(start){abcApplyAmbientState('processing');abcSound(stage,true)}else if(ev.status==='FAILED'){abcApplyAmbientState('error');abcSound('bad',true)}else if(stage==='D'){const healthy=ev.audit==='VALID';abcApplyAmbientState(healthy?'normal':'warn');abcSound(healthy?'done':'warn',true)}else if(ev.status==='DEGRADED'||ev.status==='PARTIAL'){abcApplyAmbientState('warn');abcSound('warn',true)}}
+  const state=document.getElementById('abc-telemetry-state'); if(state) state.textContent=start?`RUNNING · ${stage}`:`${stage} · ${ev.status||'DONE'}${ev.durationMs!=null?' · '+ev.durationMs+'ms':''}`;
+  const event=document.getElementById('abc-telemetry-event'); if(event) event.textContent=`${ev.event} · ${stage||'SYS'}`;
 }
 document.getElementById('abc-sound-toggle')?.addEventListener('click',async()=>{if(abcSoundEnabled){abcDisarmSound();return;}await abcArmSound();});
 window.addEventListener('beforeunload',()=>{try{abcStopAmbient()}catch(_){}try{abcAudioCtx?.close?.()}catch(_){}},{once:true});
@@ -1106,6 +1083,8 @@ window.addEventListener('cgo:machine-abc-bcgo-sync',e=>{const d=e.detail||{};con
 try{
   if(window.CGOMachineABC && typeof window.CGOMachineABC.observeTelemetry==='function'){
     window.__BCGO_ABC_TELEMETRY_OFF__=window.CGOMachineABC.observeTelemetry(renderAbcTelemetry);
+  try{document.addEventListener('pointerdown',()=>{try{window.CGOOperatorVoice?.unlock()}catch(_){}},{passive:true});}catch(_){}
+
   }
 }catch(_){}
 try{
@@ -1178,30 +1157,13 @@ runAutonomousEngine(state => {
         if (link && link.ok) {
           try { window.CGOOperatorVoice?.state(link.audit === 'VALID' ? 'VALID' : (link.status || link.mode || 'LIVE')); } catch (_) {}
           state.abcLiveLink = {
-            build: 'CIKUR-GO-BCGO-SYNC-2026-09-26',
+            build: 'CIKUR-GO-LIVE-ACK-2026-09-26',
             mode: link.mode, status: link.status, audit: link.audit,
-            revision: link.evidence?.revision || link.revision || null,
-            fingerprint: link.evidence?.fingerprint || link.fingerprint || null,
-            claimCount: link.evidence?.claims?.length || link.claimCount || 0,
-            capturedAt: link.evidence?.capturedAt || null,
-            cycle: link.cycle || state.cycle || 0,
-            duplicate: !!link.duplicate
+            revision: link.evidence?.revision || null,
+            fingerprint: link.evidence?.fingerprint || null,
+            claimCount: link.evidence?.claims?.length || 0,
+            capturedAt: link.evidence?.capturedAt || null
           };
-          // Update MESIN ABC bar immediately (jangan tunggu hanya telemetry)
-          try {
-            const stEl = document.getElementById('abc-telemetry-state');
-            const evEl = document.getElementById('abc-telemetry-event');
-            if (stEl) stEl.textContent = `${link.mode||'LIVE'} · ${link.status||'–'} · Audit ${link.audit||'–'}`;
-            if (evEl) evEl.textContent = link.duplicate ? `DEDUP · cycle ${link.cycle||state.cycle||0}` : `SYNC · cycle ${link.cycle||state.cycle||0}`;
-            // Jika paket lengkap, nyalakan A-D hijau
-            if (link.packet && !link.duplicate) {
-              ['A','B','C','D'].forEach(k=>{
-                const l=document.getElementById('abcLamp'+k), n=document.getElementById('abcNode'+k);
-                if(l) l.className='abc-lamp ok';
-                if(n) n.className='abc-node ok';
-              });
-            }
-          } catch(_){}
           try { if (abcLiveControlBus && window.CGO_ABC_LIVE_LINK) abcLiveControlBus.postMessage(window.CGO_ABC_LIVE_LINK); } catch (_) {}
         }
       }

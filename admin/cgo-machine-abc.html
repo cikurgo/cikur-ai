@@ -227,7 +227,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   </section>
 </div>
 
-<script src="cgo-ai-voice-operator.js?v=2.1.0-FEMALE-AIRPORT-PRECISE-20260926"></script>
+<script src="cgo-ai-voice-operator.js?v=2.2.0-FEMALE-AIRPORT-OPERATOR-20260926"></script>
 <script src="cgo-machine-abc.js?v=0.9.8-PHYSICS-CORE-20260926"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.6.0-BCGO-SYNC-20260926"></script>
 <script src="cgo-abc-cognition.js"></script>
@@ -257,10 +257,50 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   let soundEnabled=false,hapticEnabled=true,audioCtx=null,masterGain=null,audioReady=false,soundQueueUntil=0,telemetryBus=null;
   const AUDIO_GAIN=.22;
   try{telemetryBus=new BroadcastChannel("CGO_MACHINE_ABC_TELEMETRY")}catch(_){telemetryBus=null}
+
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function empty(msg) { return el("div", "empty", msg); }
+  function chip(node, text, tone) {
+    if (!node) return;
+    node.textContent = text;
+    node.className = "chip" + (tone ? " " + tone : "");
+  }
+  function showNotice(msg, tone) {
+    const n = $("#notice");
+    if (!n) return;
+    n.hidden = !msg;
+    n.textContent = msg || "";
+    n.className = "banner" + (tone === "ok" ? " ok" : tone === "error" || tone === "e" ? " error" : "");
+  }
+  function clearNotice() { showNotice("", ""); }
+  function setLive(text, tone) {
+    const c = $("#liveChip");
+    if (c) chip(c, text, tone || "");
+  }
+  function setStages(stage) {
+    ["A","B","C","D"].forEach(k => {
+      const n = $("#phase" + k) || document.getElementById("phase" + k);
+      const lamp = document.getElementById("abcLamp" + k);
+      const node = document.getElementById("abcNode" + k);
+      if (n) {
+        n.className = "phase-card";
+        if (k === stage) n.classList.add("run");
+      }
+      if (lamp) lamp.className = "abc-lamp" + (k === stage ? " active" : "");
+      if (node) node.className = "abc-node" + (k === stage ? " active" : "");
+    });
+  }
+
+
   async function ensureAudio(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error("Web Audio API tidak tersedia");if(!audioCtx){audioCtx=new AC({latencyHint:"interactive"});masterGain=audioCtx.createGain();masterGain.gain.value=AUDIO_GAIN;const comp=audioCtx.createDynamicsCompressor();comp.threshold.value=-20;comp.knee.value=18;comp.ratio.value=4;comp.attack.value=.008;comp.release.value=.18;masterGain.connect(comp);comp.connect(audioCtx.destination);audioCtx.onstatechange=()=>{if(soundEnabled&&audioCtx.state==='running')audioReady=true}}if(audioCtx.state!=="running")await audioCtx.resume();if(audioCtx.state!=="running")throw new Error("AudioContext belum running");audioReady=true;return audioCtx}
   function voice(ctx,when,f,d,type='sine',level=.08,glide=null,pan=0){const o=ctx.createOscillator(),g=ctx.createGain(),p=ctx.createStereoPanner?ctx.createStereoPanner():null;o.type=type;o.frequency.setValueAtTime(f,when);if(glide)o.frequency.exponentialRampToValueAtTime(glide,when+d*.8);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.012);g.gain.exponentialRampToValueAtTime(level*.42,when+d*.55);g.gain.exponentialRampToValueAtTime(.0001,when+d);o.connect(g);if(p){p.pan.value=pan;g.connect(p);p.connect(masterGain)}else g.connect(masterGain);o.start(when);o.stop(when+d+.03)}
   function systemSound(kind='tick',force=false){if(!soundEnabled||!audioReady||!audioCtx||audioCtx.state!=="running"||!masterGain)return false;try{const q={start:[392,523,.13,'sine',.075],A:[392,523,.11,'sine',.060],B:[440,587,.11,'sine',.060],C:[494,659,.12,'sine',.065],D:[523,698,.13,'triangle',.070],done:[523,659,.18,'sine',.080],ok:[440,587,.14,'sine',.070],warn:[330,247,.16,'sine',.065],bad:[247,196,.18,'triangle',.070],tick:[440,0,.07,'sine',.045]}[kind]||[440,0,.07,'sine',.045];const when=Math.max(audioCtx.currentTime+.01,soundQueueUntil);voice(audioCtx,when,q[0],q[2],q[3],q[4],q[1]||null,-.05);if(q[1])voice(audioCtx,when+.035,q[1],q[2]*.82,'sine',q[4]*.62,null,.06);soundQueueUntil=when+q[2]+.045;return true}catch(_){return false}}
-  async function armSound(){try{await ensureAudio();soundEnabled=true;soundQueueUntil=0;systemSound('start',true);const b=$("#soundToggle");if(b){b.textContent="🔊 SYSTEM AUDIO · READY";b.classList.add("active")}showNotice("System sonification lokal aktif · cue singkat A→B→C→D.","ok");return true}catch(e){soundEnabled=false;showNotice("Audio tidak tersedia: "+String(e.message||e),"error");return false}}
+  async function armSound(){try{try{window.CGOOperatorVoice?.unlock()}catch(_){};await ensureAudio();soundEnabled=true;soundQueueUntil=0;systemSound('start',true);const b=$("#soundToggle");if(b){b.textContent="🔊 SYSTEM AUDIO · READY";b.classList.add("active")}showNotice("System sonification lokal aktif · cue singkat A→B→C→D.","ok");return true}catch(e){soundEnabled=false;showNotice("Audio tidak tersedia: "+String(e.message||e),"error");return false}}
   function disarmSound(){soundEnabled=false;audioReady=false;soundQueueUntil=0;try{audioCtx?.suspend?.()}catch(_){}const b=$("#soundToggle");if(b){b.textContent="🔇 Suara sistem: OFF";b.classList.remove("active")}}
   async function recoverAudio(){if(!soundEnabled||!audioCtx)return false;try{if(audioCtx.state!=="running")await audioCtx.resume();if(audioCtx.state==='running'){audioReady=true;return true}}catch(_){}return false}
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)recoverAudio()});window.addEventListener('pageshow',()=>recoverAudio());
@@ -306,12 +346,21 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   }
 
   function health() {
-    const st = E.selfTest();
+    let st = {passed:0,total:0,verified:false,failed:0};
+    try { st = E.selfTest() || st; } catch(e) { st = {passed:0,total:0,verified:false,failed:1,error:String(e)}; }
     chip($("#self"), `Self-test ${st.passed}/${st.total}`, st.verified ? "ok" : "bad");
-    $("#selfDetail").textContent = st.verified ? `${st.passed}/${st.total} lolos` : `${st.failed} gagal / ${st.total}`;
-    const ind = E.auditIndependence();
+    if ($("#selfDetail")) $("#selfDetail").textContent = st.verified ? `${st.passed}/${st.total} lolos` : `${st.failed||0} gagal / ${st.total}`;
+    let ind = {verified:false,scannedFunctions:0,forbiddenReferences:[]};
+    try { ind = E.auditIndependence() || ind; } catch(_) {}
     chip($("#ind"), ind.verified ? "Independensi OK" : "Independensi perlu dicek", ind.verified ? "ok" : "bad");
-    $("#indDetail").textContent = ind.verified ? `Lolos · ${ind.scannedFunctions} fungsi dipindai` : "Ditemukan: " + (ind.forbiddenReferences || []).join(", ");
+    if ($("#indDetail")) $("#indDetail").textContent = ind.verified ? `Lolos · ${ind.scannedFunctions} fungsi dipindai` : "Ditemukan: " + (ind.forbiddenReferences || []).join(", ");
+    try {
+      if (E.physics && typeof E.physics.runSelfTest === 'function') {
+        const pt = E.physics.runSelfTest();
+        if ($("#buildChip")) $("#buildChip").textContent = `BUILD ${E.version}`;
+      }
+    } catch(_) {}
+    chip($("#ver"), "Engine " + (E.version || "?"), "ok");
     return st;
   }
 
@@ -473,7 +522,10 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     setLive(st.verified ? "SELF-TEST OK" : "SELF-TEST FAIL", st.verified ? "ok" : "bad");
   };
   $("#btnPulse").onclick = () => { refresh(); showNotice("Metrics di-refresh · totalProcessed=" + (E.getMetrics().totalProcessed || 0), "ok"); };
-  $("#soundToggle").onclick = async () => { if(soundEnabled){disarmSound();return;} await armSound(); };
+  $("#soundToggle").onclick = async () => {
+    try { window.CGOOperatorVoice?.unlock(); } catch(_){}
+    if(soundEnabled){disarmSound();return;} await armSound();
+  };
   $("#hapticToggle").onclick = () => { hapticEnabled=!hapticEnabled; const b=$("#hapticToggle"); b.textContent=hapticEnabled?"📳 Haptic: AUTO":"📴 Haptic: OFF"; b.classList.toggle("active",hapticEnabled); };
   $("#devRun").onclick = () => {
     const raw = $("#devInput").value;
@@ -507,6 +559,11 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   window.addEventListener('beforeunload',()=>{try{stopAmbient()}catch(_){} try{audioCtx?.close?.()}catch(_){}},{once:true});
   // observer (untuk event eksternal)
   E.observe(onPayload);
+  // Unlock voice operator on first UI interaction
+  document.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => { try { window.CGOOperatorVoice?.unlock(); } catch(_){} }, { passive: true });
+  });
+
   // Sinkron LIVE BCGO → ABC. Ini jalur operasi; tidak menjalankan input sintetis.
   try {
     const liveBus = new BroadcastChannel('CGO_MACHINE_ABC_LIVE_LINK');
@@ -553,6 +610,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     window.addEventListener('beforeunload',()=>bus.close(),{once:true});
   } catch (_) {}
   refresh();
+  if ($("#errorDetail")) $("#errorDetail").textContent = "-";
   setLive("ENGINE READY · STANDBY", "warn");
   if (bootBanner) {
     bootBanner.textContent = `Mesin ABC ${E.version} · core physics ${physics.pass}/${physics.total} · self-test ${st.passed}/${st.total} · ENGINE READY · menunggu input BCGO LIVE.`;
