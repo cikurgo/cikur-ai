@@ -326,7 +326,7 @@ body{font-family:'Inter',sans-serif}
 </section>
 </div>
 
-<script src="cgo-ai-voice-operator.js?v=3.0.1-STRUCTURED-QUIET-20260926"></script>
+<script src="cgo-ai-voice-operator.js?v=3.1.0-NEURAL-SARA-20260926"></script>
 <script src="cgo-machine-abc.js?v=0.9.8-STABLE-20260926"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.6.0-BCGO-SYNC-20260926"></script>
 <script type="module">
@@ -1065,6 +1065,38 @@ const ABC_AUDIO_GAIN=.22;
 async function abcEnsureAudio(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error('Web Audio API tidak tersedia');if(!abcAudioCtx){abcAudioCtx=new AC({latencyHint:'interactive'});abcMasterGain=abcAudioCtx.createGain();abcMasterGain.gain.value=ABC_AUDIO_GAIN;const comp=abcAudioCtx.createDynamicsCompressor();comp.threshold.value=-20;comp.knee.value=18;comp.ratio.value=4;comp.attack.value=.008;comp.release.value=.18;abcMasterGain.connect(comp);comp.connect(abcAudioCtx.destination);abcAudioCtx.onstatechange=()=>{if(abcSoundEnabled&&abcAudioCtx.state==='running')abcAudioReady=true}}if(abcAudioCtx.state!=='running')await abcAudioCtx.resume();if(abcAudioCtx.state!=='running')throw new Error('AudioContext belum running');abcAudioReady=true;return abcAudioCtx}
 function abcVoice(ctx,when,f,d,type='sine',level=.08,glide=null,pan=0){const o=ctx.createOscillator(),g=ctx.createGain(),p=ctx.createStereoPanner?ctx.createStereoPanner():null;o.type=type;o.frequency.setValueAtTime(f,when);if(glide)o.frequency.exponentialRampToValueAtTime(glide,when+d*.8);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.012);g.gain.exponentialRampToValueAtTime(level*.42,when+d*.55);g.gain.exponentialRampToValueAtTime(.0001,when+d);o.connect(g);if(p){p.pan.value=pan;g.connect(p);p.connect(abcMasterGain)}else g.connect(abcMasterGain);o.start(when);o.stop(when+d+.03)}
 function abcSound(kind='tick',force=false){if(!abcSoundEnabled||!abcAudioReady||!abcAudioCtx||abcAudioCtx.state!=='running'||!abcMasterGain)return false;try{const q={start:[392,523,.13,'sine',.075],A:[392,523,.11,'sine',.060],B:[440,587,.11,'sine',.060],C:[494,659,.12,'sine',.065],D:[523,698,.13,'triangle',.070],done:[523,659,.18,'sine',.080],ok:[440,587,.14,'sine',.070],warn:[330,247,.16,'sine',.065],bad:[247,196,.18,'triangle',.070],tick:[440,0,.07,'sine',.045]}[kind]||[440,0,.07,'sine',.045];const when=Math.max(abcAudioCtx.currentTime+.01,abcSoundQueueUntil);abcVoice(abcAudioCtx,when,q[0],q[2],q[3],q[4],q[1]||null,-.05);if(q[1])abcVoice(abcAudioCtx,when+.035,q[1],q[2]*.82,'sine',q[4]*.62,null,.06);abcSoundQueueUntil=when+q[2]+.045;return true}catch(_){return false}}
+
+// Ambient bed + visual state (safe no-op if audio not armed)
+let abcAmbientMode = 'idle';
+let abcAmbientNodes = null;
+function abcStopAmbient(){
+  try{
+    if(abcAmbientNodes){
+      try{ abcAmbientNodes.gain && (abcAmbientNodes.gain.gain.value = 0); }catch(_){}
+      try{ abcAmbientNodes.osc && abcAmbientNodes.osc.stop(); }catch(_){}
+      abcAmbientNodes = null;
+    }
+  }catch(_){}
+  abcAmbientMode = 'idle';
+}
+function abcApplyAmbientState(mode){
+  abcAmbientMode = String(mode||'idle');
+  // Soft visual cue only if panel exists; audio bed only when armed
+  try{
+    const panel = document.getElementById('abc-telemetry-panel') || document.querySelector('[data-abc-panel]');
+    if(panel){
+      panel.dataset.ambient = abcAmbientMode;
+    }
+  }catch(_){}
+  if(!abcSoundEnabled || !abcAudioReady || !abcAudioCtx) return;
+  try{
+    // Lightweight bed: brief tone color by mode, no continuous drone
+    if(mode === 'processing' || mode === 'warn' || mode === 'error' || mode === 'normal'){
+      // one-shot handled by abcSound already; ambient just tracks mode
+    }
+  }catch(_){}
+}
+
 async function abcArmSound(){try{try{window.CGOOperatorVoice&&(window.CGOOperatorVoice.unlock(),window.CGOOperatorVoice.setEnabled(true),window.CGOOperatorVoice.state("SYSTEM_READY",{force:true}))}catch(_e){}await abcEnsureAudio();abcSoundEnabled=true;abcSoundQueueUntil=0;abcSound('start',true);const b=document.getElementById('abc-sound-toggle');if(b){b.textContent='🔊 SYSTEM AUDIO · READY';b.classList.add('text-emerald-300')}return true}catch(e){abcSoundEnabled=false;const b=document.getElementById('abc-sound-toggle');if(b)b.textContent='🔇 AUDIO UNAVAILABLE';console.warn('[BCGO AUDIO]',e);return false}}
 function abcDisarmSound(){try{window.CGOOperatorVoice&&window.CGOOperatorVoice.setEnabled(false)}catch(_e){}abcSoundEnabled=false;abcAudioReady=false;abcSoundQueueUntil=0;try{abcAudioCtx?.suspend?.()}catch(_){}const b=document.getElementById('abc-sound-toggle');if(b){b.textContent='🔇 SOUND OFF';b.classList.remove('text-emerald-300')}}
 async function abcRecoverAudio(){if(!abcSoundEnabled||!abcAudioCtx)return false;try{if(abcAudioCtx.state!=='running')await abcAudioCtx.resume();if(abcAudioCtx.state==='running'){abcAudioReady=true;return true}}catch(_){}return false}
@@ -1073,7 +1105,7 @@ function renderAbcTelemetry(ev){
   if(!ev || ev.type !== 'ABC_TELEMETRY') return;
   const stage=ev.stage, start=ev.event==='PHASE_START';
   ['A','B','C','D'].forEach(k=>{const l=document.getElementById('abcLamp'+k),n=document.getElementById('abcNode'+k);if(l)l.className='abc-lamp';if(n)n.className='abc-node';});
-  if(stage && ['A','B','C','D'].includes(stage)){const l=document.getElementById('abcLamp'+stage),n=document.getElementById('abcNode'+stage);if(l)l.className='abc-lamp '+(start?'active':ev.status==='FAILED'?'bad':'ok');if(n)n.className='abc-node '+(start?'active':'ok');if(start){abcApplyAmbientState('processing');abcSound(stage,true)}else if(ev.status==='FAILED'){abcApplyAmbientState('error');abcSound('bad',true)}else if(stage==='D'){const healthy=ev.audit==='VALID';abcApplyAmbientState(healthy?'normal':'warn');abcSound(healthy?'done':'warn',true)}else if(ev.status==='DEGRADED'||ev.status==='PARTIAL'){abcApplyAmbientState('warn');abcSound('warn',true)}}
+  if(stage && ['A','B','C','D'].includes(stage)){const l=document.getElementById('abcLamp'+stage),n=document.getElementById('abcNode'+stage);if(l)l.className='abc-lamp '+(start?'active':ev.status==='FAILED'?'bad':'ok');if(n)n.className='abc-node '+(start?'active':'ok');if(start){abcApplyAmbientState('processing')}else if(ev.status==='FAILED'){abcApplyAmbientState('error');abcSound('bad',true);try{window.CGOOperatorVoice&&window.CGOOperatorVoice.state('ERROR')}catch(_e){}}else if(stage==='D'){const healthy=ev.audit==='VALID';abcApplyAmbientState(healthy?'normal':'warn');if(healthy){try{window.CGOOperatorVoice&&window.CGOOperatorVoice.state('VALID')}catch(_e){}}else{abcSound('warn',true);try{window.CGOOperatorVoice&&window.CGOOperatorVoice.state('WARNING')}catch(_e){}}}else if(ev.status==='DEGRADED'||ev.status==='PARTIAL'){abcApplyAmbientState('warn')}}
   const state=document.getElementById('abc-telemetry-state'); if(state) state.textContent=start?`RUNNING · ${stage}`:`${stage} · ${ev.status||'DONE'}${ev.durationMs!=null?' · '+ev.durationMs+'ms':''}`;
   const event=document.getElementById('abc-telemetry-event'); if(event) event.textContent=`${ev.event} · ${stage||'SYS'}`;
 }

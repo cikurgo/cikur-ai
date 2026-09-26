@@ -327,7 +327,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   </section>
 </div>
 
-<script src="cgo-ai-voice-operator.js?v=3.0.1-STRUCTURED-QUIET-20260926"></script>
+<script src="cgo-ai-voice-operator.js?v=3.1.0-NEURAL-SARA-20260926"></script>
 <script src="cgo-machine-abc.js?v=0.9.8-STABLE-20260926"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.6.0-BCGO-SYNC-20260926"></script>
 <script src="cgo-abc-cognition.js"></script>
@@ -452,7 +452,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   async function ensureAudio(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error("Web Audio API tidak tersedia");if(!audioCtx){audioCtx=new AC({latencyHint:"interactive"});masterGain=audioCtx.createGain();masterGain.gain.value=AUDIO_GAIN;const comp=audioCtx.createDynamicsCompressor();comp.threshold.value=-20;comp.knee.value=18;comp.ratio.value=4;comp.attack.value=.008;comp.release.value=.18;masterGain.connect(comp);comp.connect(audioCtx.destination);audioCtx.onstatechange=()=>{if(soundEnabled&&audioCtx.state==='running')audioReady=true}}if(audioCtx.state!=="running")await audioCtx.resume();if(audioCtx.state!=="running")throw new Error("AudioContext belum running");audioReady=true;return audioCtx}
   function voice(ctx,when,f,d,type='sine',level=.08,glide=null,pan=0){const o=ctx.createOscillator(),g=ctx.createGain(),p=ctx.createStereoPanner?ctx.createStereoPanner():null;o.type=type;o.frequency.setValueAtTime(f,when);if(glide)o.frequency.exponentialRampToValueAtTime(glide,when+d*.8);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.012);g.gain.exponentialRampToValueAtTime(level*.42,when+d*.55);g.gain.exponentialRampToValueAtTime(.0001,when+d);o.connect(g);if(p){p.pan.value=pan;g.connect(p);p.connect(masterGain)}else g.connect(masterGain);o.start(when);o.stop(when+d+.03)}
   function systemSound(kind='tick',force=false){if(!soundEnabled||!audioReady||!audioCtx||audioCtx.state!=="running"||!masterGain)return false;try{const q={start:[392,523,.13,'sine',.075],A:[392,523,.11,'sine',.060],B:[440,587,.11,'sine',.060],C:[494,659,.12,'sine',.065],D:[523,698,.13,'triangle',.070],done:[523,659,.18,'sine',.080],ok:[440,587,.14,'sine',.070],warn:[330,247,.16,'sine',.065],bad:[247,196,.18,'triangle',.070],tick:[440,0,.07,'sine',.045]}[kind]||[440,0,.07,'sine',.045];const when=Math.max(audioCtx.currentTime+.01,soundQueueUntil);voice(audioCtx,when,q[0],q[2],q[3],q[4],q[1]||null,-.05);if(q[1])voice(audioCtx,when+.035,q[1],q[2]*.82,'sine',q[4]*.62,null,.06);soundQueueUntil=when+q[2]+.045;return true}catch(_){return false}}
-  async function armSound(){try{try{if(window.CGOOperatorVoice){window.CGOOperatorVoice.unlock();window.CGOOperatorVoice.setEnabled(true);window.CGOOperatorVoice.state("SYSTEM_READY",{force:true});}}catch(_e){}await ensureAudio();soundEnabled=true;soundQueueUntil=0;systemSound("start",true);const b=$("#soundToggle");if(b){b.textContent="OPERATOR ON";b.classList.add("active")}showNotice("Operator suara aktif · struktur CGO v3 · gaya bandara.","ok");return true}catch(e){soundEnabled=false;showNotice("Audio tidak tersedia: "+String(e.message||e),"error");return false}}
+  async function armSound(){try{try{if(window.CGOOperatorVoice){window.CGOOperatorVoice.unlock();window.CGOOperatorVoice.setEnabled(true);window.CGOOperatorVoice.welcome();}}catch(_e){}await ensureAudio();soundEnabled=true;soundQueueUntil=0;systemSound("start",true);const b=$("#soundToggle");if(b){b.textContent="OPERATOR ON";b.classList.add("active")}showNotice("Operator saraf aktif · selamat datang CIKUR GO.","ok");return true}catch(e){soundEnabled=false;showNotice("Audio tidak tersedia: "+String(e.message||e),"error");return false}}
   function disarmSound(){soundEnabled=false;audioReady=false;soundQueueUntil=0;try{if(audioCtx&&audioCtx.suspend)audioCtx.suspend()}catch(_e){}try{if(window.CGOOperatorVoice&&window.CGOOperatorVoice.setEnabled)window.CGOOperatorVoice.setEnabled(false)}catch(_e){}const b=$("#soundToggle");if(b){b.textContent="Suara: OFF";b.classList.remove("active")}}
   async function recoverAudio(){if(!soundEnabled||!audioCtx)return false;try{if(audioCtx.state!=="running")await audioCtx.resume();if(audioCtx.state==='running'){audioReady=true;return true}}catch(_){}return false}
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)recoverAudio()});window.addEventListener('pageshow',()=>recoverAudio());
@@ -609,6 +609,8 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     $("#detail").textContent = json;
     setLive("HIDUP · " + status, OK.has(status) ? "ok" : WARN.has(status) ? "warn" : "bad");
     try { lightAllLampsDone(); } catch (_) {}
+    try { renderResultCard(c); } catch (_) {}
+    try { if(window.CGOOperatorVoice){ window.CGOOperatorVoice.state(OK.has(status)?"VALID":WARN.has(status)?"WARNING":"ERROR"); } } catch(_){}
     $("#logHint").textContent = "update " + new Date().toLocaleTimeString();
   }
 
@@ -700,7 +702,10 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     setLive("IDLE", "");
   };
 
-  $("#btnDemo").onclick = () => runTestPipeline();
+  $("#btnDemo").onclick = () => {
+    try { if (window.CGOOperatorVoice) window.CGOOperatorVoice.state("PROCESSING"); } catch (_e) {}
+    runTestPipeline();
+  };
   $("#btnSelfTest").onclick = () => {
     const st = health();
     showNotice(st.verified ? `Self-test lolos ${st.passed}/${st.total}` : `Self-test gagal ${st.failed}/${st.total}`, st.verified ? "ok" : "error");
