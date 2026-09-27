@@ -15,7 +15,7 @@
     return;
   }
 
-  const VERSION = "1.6.0-BCGO-SYNC";
+  const VERSION = "1.7.0-BCGO-SYNC-OTAK";
   const BUILD_ID = "CIKUR-GO-LIVE-ACK-2026-09-26";
   const listeners = new Set();
   let lastPacket = null;
@@ -91,6 +91,10 @@
     }
     const nerves=state.fileNerves&&typeof state.fileNerves==="object"?state.fileNerves:{};
     for(const [target,n] of Object.entries(nerves)){const st=String(n?.health?.overall||"UNKNOWN").toUpperCase();if(st!=="HEALTHY")claims.push({source:"BCGO.fileNerves",target,status:st,severity:st==="ANOMALY"?"HIGH":"MEDIUM",message:n?.source?.message||null,evidence:{health:n?.health||null,evidenceSummary:n?.evidenceSummary||null,changed:!!n?.changed,contentHash:n?.contentHash||null}});}
+    // OTAK HUB → ABC: klaim dari Otak Internal (hanya kasus aktif, status REVIEW) ikut diaudit Mesin ABC.
+    // Kosong pada kondisi bersih, jadi jalur lama tidak berubah.
+    const otakClaims = state.otak && Array.isArray(state.otak.claims) ? state.otak.claims : [];
+    for (const oc of otakClaims) { if (oc && typeof oc === "object") claims.push(oc); }
     const connectionStatus = String(state.connection?.status || "").toUpperCase();
     const serverStamp = Number(state.firestore?.lastServerAt || 0);
     const telemetryStamp = Number(state.lastTelemetryAt || 0);
@@ -118,7 +122,8 @@
       cycle: Number(state.cycle || 0),
       cycleMode: state.cycleMode || null,
       activeCases: Array.isArray(state.activeCases) ? state.activeCases.length : 0,
-      sourceScanStatus: state.sourceScan?.status || null
+      sourceScanStatus: state.sourceScan?.status || null,
+      otakModulesReady: Number(state.otak?.modulesReady || 0)
     };
     const fingerprint = fingerprintEvidence({claims,observations,mode});
     return {schema:"CGO_EXTERNAL_EVIDENCE_V1",source:"BCGO",capturedAt,revision:++liveRevision,mode,ageMs,serverLive,telemetryLive,observations,claims,fingerprint};

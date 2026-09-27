@@ -23,6 +23,7 @@ const activeRuns = new Map();
 let knowledge = Knowledge.createKnowledgeStore();
 let latest = null;
 let latestBCGOState = null;
+let latestAbc = null; // ringkasan hasil Mesin ABC terbaru (disuplai OTAK HUB) — otak internal ikut membaca hasil formal ABC
 let presenceQueryResolver = null;
 let customerLocationResolver = null;
 let lastChatCaseId = null;
@@ -642,6 +643,13 @@ function reasonChat(question = {}, options = {}) {
       }
     }
   } catch (_abc) {}
+  try {
+    if (latestAbc && /mesin\s*abc|hasil audit|laporan formal|self-?test|audit/i.test(raw) && !/Mesin ABC/i.test(String(answer))) {
+      const conf = latestAbc.confidence != null ? Math.round(Number(latestAbc.confidence) * 100) + "%" : "–";
+      answer = String(answer).trim() + "\n\n[Mesin ABC] status " + (latestAbc.status || "–") + " · keyakinan " + conf + " · temuan " + (latestAbc.findingsCount ?? 0) + " · audit " + (latestAbc.audit || "–");
+      if (analysis && typeof analysis === "object") analysis.machineAbc = { ok:true, status:latestAbc.status, confidence:latestAbc.confidence, audit:latestAbc.audit || null };
+    }
+  } catch (_abc2) {}
   return { handled:true, text:String(answer).trim(), response:String(answer).trim(), engine:"CGO_INTERNAL_BRAIN", evidenceBound:true, version:VERSION, machineAbc: analysis?.machineAbc || null };
 }
 
@@ -967,6 +975,24 @@ export function install() {
      * latest BCGO snapshot/evidence already ingested by this bridge.
      */
     reasonChat,
+    // Diperbaiki: bcgo.html memanggil internal.chatAnswer(text) tetapi method ini tidak pernah diekspos.
+    chatAnswer(question) {
+      try { return chatAnswer(question); } catch { return null; }
+    },
+    // Otak internal menerima hasil formal Mesin ABC (satu otak, bukan dua silo).
+    ingestMachineAbc(summary = {}) {
+      if (!summary || typeof summary !== "object") return { ok:false, error:"ABC_SUMMARY_REQUIRED" };
+      latestAbc = clone({
+        status: summary.status ?? null,
+        confidence: summary.confidence ?? null,
+        audit: summary.audit ?? null,
+        findingsCount: Number(summary.findingsCount || 0),
+        mode: summary.mode ?? null,
+        at: summary.at ?? now()
+      });
+      return { ok:true };
+    },
+    getMachineAbc() { return latestAbc ? clone(latestAbc) : null; },
     ask(question, options = {}) {
       try {
         const result = reasonChat(question, options);
@@ -982,7 +1008,7 @@ export function install() {
     findNearbyAgents,
     getPresenceContract,
     capabilities() {
-      return Object.freeze({ chatReasoning:true, systemReasoning:true, radar:true, evidenceBound:true, machineAbc: !!(typeof window !== "undefined" && (window.CGOAbcCognition?.isReady?.() || window.CGOMachineABC || window.CGOMachineABCBridge)), externalAI:false, automaticSourceMutation:false });
+      return Object.freeze({ chatReasoning:true, systemReasoning:true, radar:true, evidenceBound:true, machineAbcIngest:true, machineAbc: !!(typeof window !== "undefined" && (window.CGOAbcCognition?.isReady?.() || window.CGOMachineABC || window.CGOMachineABCBridge)), externalAI:false, automaticSourceMutation:false });
     },
     liveChat,
     async openCodeWorkbench(file, context = {}) { return openCodeWorkbench(file, context); },

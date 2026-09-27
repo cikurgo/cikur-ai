@@ -131,6 +131,29 @@ body{font-family:'Inter',sans-serif}
   </div>
 </section>
 
+<section id="otak-hub-panel" class="bg-slate-900 border border-emerald-900/60 rounded-xl p-5 space-y-3" aria-label="Otak Jenius satu kesatuan">
+  <div class="flex items-center justify-between gap-3">
+    <div class="text-xs font-semibold text-emerald-300 uppercase tracking-wider">Otak Jenius · satu otak</div>
+    <span id="otak-hub-count" class="code-font text-[11px] text-slate-400">memeriksa…</span>
+  </div>
+  <div id="otak-hub-modules" class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]"></div>
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+    <div class="rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-2">
+      <div class="text-slate-500 uppercase tracking-wide text-[9px]">Mesin ABC · terbaru</div>
+      <div id="otak-hub-abc" class="text-cyan-300 font-semibold mt-0.5">—</div>
+    </div>
+    <div class="rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-2">
+      <div class="text-slate-500 uppercase tracking-wide text-[9px]">Otak Internal</div>
+      <div id="otak-hub-internal" class="text-violet-300 font-semibold mt-0.5">—</div>
+    </div>
+    <div class="rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-2">
+      <div class="text-slate-500 uppercase tracking-wide text-[9px]">Memori bersama</div>
+      <div id="otak-hub-memory" class="text-emerald-300 font-semibold mt-0.5">0 percakapan</div>
+    </div>
+  </div>
+  <div class="text-[10px] text-slate-500">Jejak jawaban terakhir: <span id="otak-hub-trace" class="code-font text-slate-300">—</span></div>
+</section>
+
 <section class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-2xl space-y-3">
     <div class="flex justify-between items-center gap-3">
         <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Layar Dialog Saraf</div>
@@ -352,8 +375,10 @@ body{font-family:'Inter',sans-serif}
 
 <script src="cikur-go.browser.js?v=3.0.0-OTAK-JENIUS"></script>
 <script src="cgo-ai-voice-operator.js?v=3.3.0-NEURAL-CHAT-OTAK"></script>
-<script src="cgo-machine-abc.js?v=0.9.8-STABLE-20260926"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.6.0-BCGO-SYNC-20260926"></script>
+<script src="cgo-machine-abc.js?v=0.9.9-OTAK-CORE-20260927"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.7.0-BCGO-SYNC-OTAK-20260928"></script>
+<script src="cgo-abc-cognition.js?v=1.1.0-CGO-ABC-COGNITION"></script>
+<script src="cgo-otak-hub.js?v=1.0.0-OTAK-HUB-20260928"></script>
 
 <script>
 window.CGO_SVG = {
@@ -371,7 +396,7 @@ import { runAutonomousEngine } from './bcgo.js?v=4.5.1-COGNITIVE-UI-20260927';
 // Bridge internal CGO brain ke BCGO_STATE (tanpa AI eksternal)
 let internalBrain = null;
 try {
-  const adapter = await import('./cgo-ai-browser-adapter.js');
+  const adapter = await import('./cgo-ai-browser-adapter.js?v=5.4.1-OTAK-HUB-20260928');
   if (typeof adapter.install === 'function') {
     internalBrain = adapter.install();
     window.CGOInternalBrain = internalBrain;
@@ -841,6 +866,15 @@ async function sendQuestion(question, opts) {
     setChatLiveStatus('Memahami permintaan dan membaca state BCGO yang sedang hidup…', 'working');
     try {
         let answer = null;
+        // SATU OTAK: BCGO → Mesin ABC → Otak Internal → memori bersama lewat CGO_OTAK.ask
+        if (window.CGO_OTAK && typeof window.CGO_OTAK.ask === 'function') {
+            try {
+                setChatLiveStatus('Satu Otak memproses: BCGO → Mesin ABC → Otak Internal…', 'working');
+                const hubRes = await window.CGO_OTAK.ask(text, { liveState });
+                if (hubRes && hubRes.answer) answer = hubRes.answer;
+            } catch (hubErr) { console.warn('[BCGO] CGO_OTAK.ask gagal, pakai jalur cadangan:', hubErr); }
+        }
+        if (!answer) { // jalur cadangan (perilaku lama) bila hub belum termuat / tidak menghasilkan jawaban
         // 1) BCGO engine (telemetry + scanner + radar)
         const brain = window.BCGOBrain;
         if (brain?.ask) {
@@ -886,6 +920,7 @@ async function sendQuestion(question, opts) {
         if (internal && typeof internal.ingestBCGOState === 'function' && liveState) {
             try { internal.ingestBCGOState(liveState); } catch (_) {}
         }
+        } // akhir jalur cadangan
         if (!answer) throw new Error('BCGO_BRAIN_NOT_READY');
         addChat('bcgo', answer);
         // Natural voice — SATU jalur: batalkan TTS event lain, baca jawaban utuh
@@ -1280,8 +1315,14 @@ await runAutonomousEngine(state => {
       }
       if (otakEl) {
         const ok = !!(window.CIKURGO && (window.CIKURGO.nalar || window.CIKURGO.angkaKeKata));
-        otakEl.textContent = ok ? 'AKTIF · v3' : 'tidak termuat';
-        otakEl.className = 'font-semibold mt-0.5 ' + (ok ? 'text-emerald-300' : 'text-rose-300');
+        const hubSt = (window.CGO_OTAK && window.CGO_OTAK.status) ? window.CGO_OTAK.status() : null;
+        if (hubSt) {
+          otakEl.textContent = (hubSt.unified ? 'SATU OTAK · ' : 'SEBAGIAN · ') + hubSt.ready + '/' + hubSt.total + ' modul';
+          otakEl.className = 'font-semibold mt-0.5 ' + (hubSt.unified ? 'text-emerald-300' : 'text-amber-300');
+        } else {
+          otakEl.textContent = ok ? 'AKTIF · v3' : 'tidak termuat';
+          otakEl.className = 'font-semibold mt-0.5 ' + (ok ? 'text-emerald-300' : 'text-rose-300');
+        }
       }
       if (cycleEl) {
         const sc = state.sourceScan?.status || '—';
@@ -1456,5 +1497,49 @@ await runAutonomousEngine(state => {
 })();
 </script>
 
+<script>
+/* Panel OTAK JENIUS · SATU OTAK — membaca CGO_OTAK (state bersama). Hanya textContent. */
+(function () {
+  function el(id) { return document.getElementById(id); }
+  function paint() {
+    var hub = window.CGO_OTAK;
+    var box = el('otak-hub-modules');
+    if (!hub || !box) return;
+    var st = hub.status(), sn = hub.snapshot();
+    var cnt = el('otak-hub-count');
+    if (cnt) {
+      cnt.textContent = (st.unified ? 'MENYATU' : 'SEBAGIAN') + ' · ' + st.ready + '/' + st.total + ' modul';
+      cnt.className = 'code-font text-[11px] ' + (st.unified ? 'text-emerald-300' : 'text-amber-300');
+    }
+    box.textContent = '';
+    st.modules.forEach(function (m) {
+      var d = document.createElement('div');
+      d.className = 'rounded-lg border px-3 py-2 ' + (m.ready ? 'border-emerald-900/70 bg-emerald-950/30' : (m.required ? 'border-rose-900/70 bg-rose-950/30' : 'border-slate-800 bg-slate-950/80'));
+      var t = document.createElement('div');
+      t.className = 'font-semibold ' + (m.ready ? 'text-emerald-300' : (m.required ? 'text-rose-300' : 'text-slate-400'));
+      t.textContent = (m.ready ? '● ' : '○ ') + m.label;
+      var r = document.createElement('div');
+      r.className = 'text-slate-500 text-[9px] mt-0.5';
+      r.textContent = m.role + (m.version ? ' · v' + m.version : '') + (!m.loaded ? (m.required ? ' · belum termuat' : ' · opsional') : '');
+      d.appendChild(t); d.appendChild(r); box.appendChild(d);
+    });
+    var abc = el('otak-hub-abc');
+    if (abc) abc.textContent = sn.abc ? (sn.abc.status || '—') + (sn.abc.confidence != null ? ' · ' + Math.round(sn.abc.confidence * 100) + '%' : '') + (sn.abc.audit ? ' · audit ' + sn.abc.audit : '') : 'menunggu paket';
+    var it = el('otak-hub-internal');
+    if (it) it.textContent = sn.internal ? (sn.internal.signal || '—') + ' · ' + (sn.internal.classification || '—') + (sn.internal.blockers ? ' · ' + sn.internal.blockers + ' blocker' : '') : 'menunggu state';
+    var mem = el('otak-hub-memory');
+    if (mem) mem.textContent = sn.memoryTurns + ' percakapan';
+    var tr = el('otak-hub-trace');
+    if (tr) tr.textContent = sn.lastTrace || '—';
+  }
+  function boot() {
+    paint();
+    if (window.CGO_OTAK && window.CGO_OTAK.subscribe) window.CGO_OTAK.subscribe(paint);
+    window.addEventListener('cgo:otak-state', paint);
+    setInterval(paint, 3000); // modul yang dimuat belakangan (mis. Otak Internal) ikut tampil
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+})();
+</script>
 </body>
 </html>
