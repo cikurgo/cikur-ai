@@ -897,7 +897,7 @@ window.CikurCloud = {
 
         await addDoc(collection(db, "walletTransactions"), {
             userId,
-            type: "TOPUP",
+            type: /^REFUND/i.test(String(method)) ? "REFUND" : "TOPUP",
             amount,
             method,
             balanceAfter: newBalance,
@@ -920,6 +920,7 @@ window.CikurCloud = {
         }
 
         const userRef = doc(db, "users", userId);
+        const payOrderRef = orderId ? doc(db, "orders", orderId) : null;
         const newBalance = await runTransaction(db, async (tx) => {
             const snap = await tx.get(userRef);
             const currentSaldo = Number(snap.data()?.saldo || 0);
@@ -928,6 +929,8 @@ window.CikurCloud = {
             }
             const updated = currentSaldo - amount;
             tx.set(userRef, { saldo: updated }, { merge: true });
+            // Saldo terpotong dan order berstatus PAID dalam SATU transaksi: keduanya berhasil atau keduanya batal.
+            if (payOrderRef) tx.update(payOrderRef, { paymentStatus: "PAID", paidWithSaldo: true });
             return updated;
         });
 
@@ -940,13 +943,6 @@ window.CikurCloud = {
             balanceAfter: newBalance,
             timestamp: serverTimestamp()
         });
-
-        if (orderId) {
-            await updateDoc(doc(db, "orders", orderId), {
-                paymentStatus: "PAID",
-                paidWithSaldo: true
-            }).catch(() => {});
-        }
 
         return newBalance;
     },
@@ -1143,7 +1139,7 @@ window.CikurCloud = {
             orderData
         );
 
-        const orderTypeLabelMap = { FOOD: "CIKUR Food", RIDE: "CIKUR Ride", ASSISTANT: "CIKUR Assistant" };
+        const orderTypeLabelMap = { FOOD: "CIKUR Food", RIDE: "CIKUR GO RIDE", ASSISTANT: "CIKUR Assistant" };
         this.createNotification(
             firebaseUser.uid,
             "Pesanan Dibuat",
@@ -1165,23 +1161,9 @@ window.CikurCloud = {
 
     async create2in1Bundle(bundleDetails) {
         const {
-            customerName,
-            customerPhone,
-            restoId,
-            restoName,
-            items,
-            foodSubtotal,
-            foodTotal,
-            foodNotes,
-            assistantFee,
-            serviceFee,
-            grandTotal,
-            paymentMethod,
-            packageKey,
-            packageName,
-            schedule,
-            location,
-            assistantNotes
+            customerName, customerPhone, restoId, restoName, items,
+            foodSubtotal, foodTotal, foodNotes, assistantFee, serviceFee, grandTotal,
+            paymentMethod, packageKey, packageName, schedule, location, assistantNotes
         } = bundleDetails || {};
 
         if (!Array.isArray(items) || !items.length) {
@@ -1193,23 +1175,39 @@ window.CikurCloud = {
             throw new Error("Sesi Customer tidak ditemukan. Silakan login kembali.");
         }
 
+        // Seragamkan bentuk data: food memakai {text, latitude, longitude}, assistant memakai {address, latitude, longitude}
+        const loc = location || null;
+        const locText = loc ? String(loc.text || loc.address || "") : "";
+        const locLat = loc ? Number(loc.latitude ?? loc.lat) : NaN;
+        const locLng = loc ? Number(loc.longitude ?? loc.lng ?? loc.lon) : NaN;
+        const foodAddress = loc ? { text: locText, latitude: Number.isFinite(locLat) ? locLat : null, longitude: Number.isFinite(locLng) ? locLng : null } : null;
+        const assistantLocation = loc ? { address: locText, latitude: foodAddress.latitude, longitude: foodAddress.longitude } : null;
+        const normItems = items.map((i) => ({
+            id: i.id ?? i.name,
+            name: i.name || i.nama || "Menu",
+            quantity: Number(i.quantity ?? i.qty ?? 1) || 1,
+            price: Number(i.price) || 0
+        }));
+        const method = paymentMethod || "CikurPay Saldo Digital";
+
         // 1. Buat order FOOD
         const foodOrder = await this.createOrder("FOOD", {
             restoId: restoId || "",
             restoName: restoName || "Mitra Resto Cikur",
             customerName,
             customerPhone,
-            items,
+            items: normItems,
             subtotal: Number(foodSubtotal) || 0,
             deliveryFee: 0,
             total: Number(foodTotal) || 0,
-            paymentMethod,
+            paymentMethod: method,
+            paymentStatus: "PENDING",
             notes: foodNotes || "",
-            address: location || null,
+            address: foodAddress,
             mode: "2IN1"
         });
 
-        // 2. Buat order ASSISTANT (dine-in), ditautkan ke order FOOD di atas
+        // 2. Buat order ASSISTANT (dine-in), ditautkan ke order FOOD
         const assistantOrder = await this.createOrder("ASSISTANT", {
             service: "ASSISTANT",
             packageKey: packageKey || "dine",
@@ -1217,8 +1215,10 @@ window.CikurCloud = {
             source: "CIKURGO_2IN1",
             customer: { name: customerName, phone: customerPhone },
             schedule: schedule || {},
-            location: location || null,
+            location: assistantLocation,
             notes: assistantNotes || "",
+            paymentMethod: method,
+            paymentStatus: "PENDING",
             pricing: {
                 basePrice: Number(assistantFee) || 0,
                 serviceFee: Number(serviceFee) || 0,
@@ -1227,7 +1227,7 @@ window.CikurCloud = {
             linkedFoodOrderId: foodOrder.id
         });
 
-        // 3. Simpan dokumen bundle penghubung
+        // 3. Dokumen bundle penghubung
         const bundleRef = await addDoc(collection(db, "bundles"), {
             type: "2IN1",
             userId: firebaseUser.uid,
@@ -1236,26 +1236,73 @@ window.CikurCloud = {
             foodOrderId: foodOrder.id,
             assistantOrderId: assistantOrder.id,
             grandTotal: Number(grandTotal) || 0,
-            paymentMethod,
+            paymentMethod: method,
+            paymentStatus: "PENDING",
             status: "PENDING",
             timestamp: new Date()
         });
 
-        // 4. Tautkan balik bundleId ke masing-masing order
-        await updateDoc(doc(db, "orders", foodOrder.id), {
-            bundleId: bundleRef.id,
-            linkedAssistantOrderId: assistantOrder.id
-        });
-        await updateDoc(doc(db, "orders", assistantOrder.id), {
-            bundleId: bundleRef.id,
-            linkedFoodOrderId: foodOrder.id
+        // 4. Tautkan balik bundleId
+        await updateDoc(doc(db, "orders", foodOrder.id), { bundleId: bundleRef.id, linkedAssistantOrderId: assistantOrder.id });
+        await updateDoc(doc(db, "orders", assistantOrder.id), { bundleId: bundleRef.id, linkedFoodOrderId: foodOrder.id });
+
+        return { bundleId: bundleRef.id, foodOrder, assistantOrder };
+    },
+
+    // Bayar paket 2IN1 dengan saldo CikurPay: satu transaksi atomik.
+    // Saldo terpotong sekali (food + assistant) dan kedua order + bundle ditandai PAID bersamaan.
+    async pay2in1Bundle(bundleId, userId) {
+        if (!bundleId) throw new Error("Bundle tidak ditemukan.");
+        if (!userId) {
+            const u = await this.ensureAuth();
+            userId = u.uid;
+        }
+
+        const bundleRef = doc(db, "bundles", bundleId);
+        const userRef = doc(db, "users", userId);
+
+        const result = await runTransaction(db, async (tx) => {
+            const bs = await tx.get(bundleRef);
+            if (!bs.exists()) throw new Error("Bundle tidak ditemukan.");
+            const b = bs.data();
+            if (b.userId !== userId) throw new Error("Bundle ini bukan milik akun kamu.");
+            if (b.paymentStatus === "PAID") throw new Error("Bundle ini sudah dibayar.");
+
+            const foodRef = doc(db, "orders", b.foodOrderId);
+            const asstRef = doc(db, "orders", b.assistantOrderId);
+            const fs = await tx.get(foodRef);
+            const as = await tx.get(asstRef);
+            const us = await tx.get(userRef);
+            if (!fs.exists() || !as.exists()) throw new Error("Order 2IN1 tidak lengkap.");
+
+            const foodAmt = Number(fs.data().total) || 0;
+            const asstAmt = Number(as.data().pricing && as.data().pricing.total) || 0;
+            const total = foodAmt + asstAmt;
+            if (total <= 0) throw new Error("Total pembayaran tidak valid.");
+
+            const saldo = Number(us.data()?.saldo || 0);
+            if (saldo < total) throw new Error("Saldo CikurPay tidak cukup. Silakan top up terlebih dahulu.");
+
+            const newSaldo = saldo - total;
+            tx.set(userRef, { saldo: newSaldo }, { merge: true });
+            const paid = { paymentStatus: "PAID", paidWithSaldo: true, paymentMethod: "CikurPay Saldo Digital" };
+            tx.update(foodRef, paid);
+            tx.update(asstRef, paid);
+            tx.update(bundleRef, { paymentStatus: "PAID", paidAt: new Date() });
+            return { total, newSaldo };
         });
 
-        return {
-            bundleId: bundleRef.id,
-            foodOrder,
-            assistantOrder
-        };
+        await addDoc(collection(db, "walletTransactions"), {
+            userId,
+            type: "PAYMENT",
+            amount: -result.total,
+            orderId: bundleId,
+            description: "Bayar CIKUR 2IN1 #" + String(bundleId).slice(-6),
+            balanceAfter: result.newSaldo,
+            timestamp: serverTimestamp()
+        }).catch(() => {});
+
+        return result.newSaldo;
     },
 
     // ======================================
@@ -1364,7 +1411,7 @@ window.CikurCloud = {
                 const orderSnap = await getDoc(doc(db, "orders", orderId));
                 if (orderSnap.exists()) {
                     const orderData = orderSnap.data();
-                    const orderTypeLabelMap = { FOOD: "CIKUR Food", RIDE: "CIKUR Ride", ASSISTANT: "CIKUR Assistant" };
+                    const orderTypeLabelMap = { FOOD: "CIKUR Food", RIDE: "CIKUR GO RIDE", ASSISTANT: "CIKUR Assistant" };
                     const statusTextMap = {
                         DIAMBIL_DRIVER: "driver sudah menuju lokasi kamu",
                         DIMASAK: "sedang disiapkan resto",
@@ -1375,6 +1422,9 @@ window.CikurCloud = {
                         DIBATALKAN_CUSTOMER: "dibatalkan oleh customer",
                         DIBATALKAN: "dibatalkan"
                     };
+                    if (orderData.type === "FOOD" && updateData.status === "DIAMBIL_DRIVER") {
+                        statusTextMap.DIAMBIL_DRIVER = "sudah diambil driver, driver menuju resto";
+                    }
                     const statusText = statusTextMap[updateData.status] || updateData.status;
                     this.createNotification(
                         orderData.userId,
@@ -1401,38 +1451,43 @@ window.CikurCloud = {
         if (!orderId || !userId) throw new Error("Data pembatalan tidak lengkap.");
 
         const orderRef = doc(db, "orders", orderId);
-        const snap = await getDoc(orderRef);
-        if (!snap.exists()) throw new Error("Pesanan tidak ditemukan.");
 
-        const data = snap.data() || {};
-        if (data.userId !== userId) throw new Error("Pesanan ini bukan milik akun kamu.");
+        // Cek status + ubah jadi dibatalkan dalam SATU transaksi, supaya tidak bisa
+        // dibatalkan (dan direfund) dua kali, dan tidak bentrok dengan driver yang baru mengambil order.
+        const data = await runTransaction(db, async (tx) => {
+            const snap = await tx.get(orderRef);
+            if (!snap.exists()) throw new Error("Pesanan tidak ditemukan.");
 
-        const status = data.status;
-        const type = data.type;
-        const allowedFood = ["PENDING", "DIMASAK"];
-        const allowedRide = ["PENDING"];
-        const allowed = type === "FOOD" ? allowedFood : type === "RIDE" ? allowedRide : ["PENDING"];
+            const d = snap.data() || {};
+            if (d.userId !== userId) throw new Error("Pesanan ini bukan milik akun kamu.");
 
-        if (!allowed.includes(status)) {
-            throw new Error(
-                type === "RIDE"
-                    ? "Ride hanya bisa dibatalkan sebelum driver menerima order."
-                    : "Pesanan food hanya bisa dibatalkan sebelum siap diambil driver."
-            );
-        }
+            const allowedFood = ["PENDING", "DIMASAK"];
+            const allowedRide = ["PENDING"];
+            const allowed = d.type === "FOOD" ? allowedFood : d.type === "RIDE" ? allowedRide : ["PENDING"];
 
-        await updateDoc(orderRef, {
-            status: "DIBATALKAN_CUSTOMER",
-            cancelledAt: serverTimestamp(),
-            cancelReason: String(reason || "").slice(0, 200),
-            updatedAt: serverTimestamp()
+            if (!allowed.includes(d.status)) {
+                throw new Error(
+                    d.type === "RIDE"
+                        ? "Ride hanya bisa dibatalkan sebelum driver menerima order."
+                        : "Pesanan food hanya bisa dibatalkan sebelum siap diambil driver."
+                );
+            }
+
+            tx.update(orderRef, {
+                status: "DIBATALKAN_CUSTOMER",
+                cancelledAt: serverTimestamp(),
+                cancelReason: String(reason || "").slice(0, 200),
+                updatedAt: serverTimestamp()
+            });
+            return d;
         });
+        const type = data.type;
 
         let refunded = false;
         let refundAmount = 0;
-        const pay = String(data.paymentMethod || "");
-        const alreadyPaid = data.paymentStatus === "PAID" || /cikurpay|saldo/i.test(pay);
-        const amount = Number(data.fare || data.total || 0);
+        // Refund HANYA jika order benar-benar sudah dibayar (bukan sekadar memilih metode CikurPay).
+        const alreadyPaid = data.paymentStatus === "PAID" || data.paidWithSaldo === true;
+        const amount = Number(data.fare || data.total || (data.pricing && data.pricing.total) || 0);
 
         if (alreadyPaid && amount > 0 && data.userId) {
             try {
@@ -1484,13 +1539,11 @@ window.CikurCloud = {
     async getActiveOrderForCustomer(userId, type) {
         if (!userId || !type) return null;
 
+        // Hanya 2 filter "==" supaya tidak butuh index gabungan di Firestore; status disaring di sisi klien.
         const q = query(
             collection(db, "orders"),
             where("userId", "==", userId),
-            where("type", "==", type),
-            where("status", "not-in", ["SELESAI", "DITOLAK_RESTO", "DIBATALKAN_CUSTOMER", "DIBATALKAN"]),
-            orderBy("timestamp", "desc"),
-            limit(1)
+            where("type", "==", type)
         );
 
         const snapshot = await new Promise((resolve, reject) => {
@@ -1501,10 +1554,14 @@ window.CikurCloud = {
             );
         });
 
-        if (snapshot.empty) return null;
+        const done = ["SELESAI", "DITOLAK_RESTO", "DIBATALKAN_CUSTOMER", "DIBATALKAN"];
+        const ms = (o) => (o.timestamp && o.timestamp.toMillis ? o.timestamp.toMillis() : (o.timestamp instanceof Date ? o.timestamp.getTime() : 0));
+        const active = snapshot.docs
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .filter((o) => !done.includes(o.status))
+            .sort((a, b) => ms(b) - ms(a));
 
-        const firstDoc = snapshot.docs[0];
-        return { id: firstDoc.id, ...firstDoc.data() };
+        return active[0] || null;
     },
 
     // ======================================
@@ -1832,47 +1889,73 @@ window.CikurCloud = {
     // DRIVER KLAIM RIDE SECARA ATOMIK
     // ======================================
 
-    async claimRideOrder(orderId, driverId, driverName) {
+    async claimRideOrder(orderId, driverId, driverName, driverInfo) {
         if (!orderId || !driverId) throw new Error("Data klaim Ride tidak lengkap.");
 
         const orderRef = doc(db, "orders", orderId);
-        const current = await getDoc(orderRef);
-        if (!current.exists()) throw new Error("Order Ride tidak ditemukan.");
+        const info = {};
+        ["driverPhoto", "driverPlate", "driverVehicleType", "driverVehicleModel", "driverPhone"].forEach((k) => { if (driverInfo && driverInfo[k] != null) info[k] = String(driverInfo[k]).slice(0, 20000); });
 
-        const data = current.data() || {};
-        if (data.type !== "RIDE") throw new Error("Order ini bukan order Ride.");
-        if (data.status !== "PENDING" || data.driverId) {
-            throw new Error("Order Ride sudah diambil driver lain atau tidak lagi tersedia.");
-        }
+        // Transaksi: hanya satu driver yang bisa menang saat dua driver menekan "Terima" bersamaan.
+        await runTransaction(db, async (tx) => {
+            const snap = await tx.get(orderRef);
+            if (!snap.exists()) throw new Error("Order Ride tidak ditemukan.");
+            const data = snap.data() || {};
+            if (data.type !== "RIDE") throw new Error("Order ini bukan order Ride.");
+            if (data.status !== "PENDING" || data.driverId) {
+                throw new Error("Order Ride sudah diambil driver lain atau tidak lagi tersedia.");
+            }
+            tx.update(orderRef, {
+                driverId,
+                driverName: driverName || "",
+                ...info,
+                status: "DIAMBIL_DRIVER",
+                updatedAt: serverTimestamp()
+            });
+        });
 
-        await updateDoc(orderRef, {
-            driverId,
-            driverName: driverName || "",
-            status: "DIAMBIL_DRIVER",
-            updatedAt: serverTimestamp()
+        return true;
+    },
+    async claimFoodOrder(orderId, driverId, driverName, driverInfo) {
+        if (!orderId || !driverId) throw new Error("Data klaim tidak lengkap.");
+
+        const orderRef = doc(db, "orders", orderId);
+        const info = {};
+        ["driverPhoto", "driverPlate", "driverVehicleType", "driverVehicleModel", "driverPhone"].forEach((k) => { if (driverInfo && driverInfo[k] != null) info[k] = String(driverInfo[k]).slice(0, 20000); });
+
+        await runTransaction(db, async (tx) => {
+            const snap = await tx.get(orderRef);
+            if (!snap.exists()) throw new Error("Order Food tidak ditemukan.");
+            const data = snap.data() || {};
+            if (data.type !== "FOOD") throw new Error("Order ini bukan order Food.");
+            if (data.status !== "SIAP_DIAMBIL" || data.driverId) {
+                throw new Error("Order sudah diambil driver lain atau belum siap diambil.");
+            }
+            tx.update(orderRef, {
+                driverId,
+                driverName: driverName || "",
+                ...info,
+                status: "DIAMBIL_DRIVER",
+                updatedAt: serverTimestamp()
+            });
         });
 
         return true;
     },
 
-    // ======================================
-    // DRIVER KLAIM ORDER (ambil pesanan siap diantar)
-    // ======================================
-
-    async claimFoodOrder(orderId, driverId, driverName) {
-        if (!orderId || !driverId) throw new Error("Data klaim tidak lengkap.");
-
-        await updateDoc(
-            doc(db, "orders", orderId),
-            {
-                driverId,
-                driverName: driverName || "",
-                status: "DIAMBIL_DRIVER",
-                updatedAt: serverTimestamp()
-            }
+    // Pesanan Food milik SATU resto saja (sebelumnya resto mengunduh semua order Food lalu menyaring di klien).
+    listenRestoFoodOrders(restoId, callback) {
+        if (!restoId) { if (typeof callback === "function") callback([]); return () => {}; }
+        const q = query(
+            collection(db, "orders"),
+            where("type", "==", "FOOD"),
+            where("restoId", "==", restoId)
         );
-
-        return true;
+        return onSnapshot(q, (snapshot) => {
+            const orders = [];
+            snapshot.forEach((d) => orders.push({ id: d.id, ...d.data() }));
+            if (typeof callback === "function") callback(orders);
+        });
     }
 
 };
