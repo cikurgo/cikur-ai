@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script src="../bcgo-engine.js"></script>
 <script type="module" src="../cikur-config.js"></script>
+<script src="../cgo-shared.js"></script>
 <style>
 :root {
     --primary-red: #e60000;
@@ -149,7 +150,7 @@ footer { text-align: center; margin-top: auto; padding: 10px 0 4px; color: var(-
     <div style="margin-top: 10px;">
         <!-- Banner Info dengan Link Langsung ke food.html -->
         <div class="resto-card" style="background: linear-gradient(135deg, var(--dark-bg), var(--dark-card)); color: #fff;">
-            <h2 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">🍜 CIKUR Food & Resto Partner</h2>
+            <h2 style="font-size: 15px; font-weight: 800; margin-bottom: 6px;">CIKUR Food & Resto Partner</h2>
             <p style="font-size: 11px; color: #94a3b8; line-height: 1.4;">Kelola profil restoran, jam operasional, dan upload menu makanan Anda agar tampil di <a href="../customer/food.html" style="color: var(--accent-yellow); text-decoration: underline; font-weight: 700;">Halaman Menu Pembeli</a>.</p>
         </div>
 
@@ -1002,14 +1003,14 @@ function renderMitraStatusBanner(application) {
     if (application && application._error) {
         banner.style.background = "#fee2e2";
         banner.style.color = "var(--primary-red)";
-        banner.innerHTML = `⚠️ Gagal memuat status pendaftaran. <a href="#" onclick="window.location.reload(); return false;" style="color:var(--primary-red); text-decoration:underline;">Coba lagi</a>`;
+        banner.innerHTML = `<svg class="ic"><use href="#i-warn"/></svg> Gagal memuat status pendaftaran. <a href="#" onclick="window.location.reload(); return false;" style="color:var(--primary-red); text-decoration:underline;">Coba lagi</a>`;
         return;
     }
 
     if (!application) {
         banner.style.background = "#f1f5f9";
         banner.style.color = "var(--text-muted)";
-        banner.innerHTML = "📋 Anda belum terdaftar sebagai Mitra Resto. Lengkapi & simpan <strong>Data & Profil Restoran</strong> di bawah untuk mengajukan pendaftaran.";
+        banner.innerHTML = '<svg class="ic"><use href="#i-doc"/></svg> Anda belum terdaftar sebagai Mitra Resto. Lengkapi &amp; simpan <strong>Data &amp; Profil Restoran</strong> di bawah untuk mengajukan pendaftaran.';
         if (ordersContainer) ordersContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Selesaikan pendaftaran Mitra terlebih dahulu untuk menerima pesanan.</p>`;
         return;
     }
@@ -1043,7 +1044,7 @@ function renderMitraStatusBanner(application) {
     if (application.status === "rejected") {
         banner.style.background = "#fee2e2";
         banner.style.color = "var(--primary-red)";
-        banner.innerHTML = `✕ Pendaftaran ditolak: ${application.catatanAdmin || 'Silakan lengkapi ulang data dan simpan kembali.'}`;
+        banner.innerHTML = `<svg class="ic"><use href="#i-close"/></svg> Pendaftaran ditolak: ${application.catatanAdmin || 'Silakan lengkapi ulang data dan simpan kembali.'}`;
         if (ordersContainer) ordersContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); font-style: italic;">Perbaiki data profil dan simpan ulang untuk mengajukan kembali.</p>`;
         publishRestoProfileToCloud();
         return;
@@ -1052,7 +1053,7 @@ function renderMitraStatusBanner(application) {
     // approved
     banner.style.background = "#dcfce7";
     banner.style.color = "#16a34a";
-    banner.innerHTML = "✓ Mitra Resto <strong>Aktif</strong> - Siap menerima pesanan.";
+    banner.innerHTML = '<svg class="ic"><use href="#i-check"/></svg> Mitra Resto <strong>Aktif</strong> - Siap menerima pesanan.';
     publishRestoProfileToCloud();
     startListeningFoodOrders();
 }
@@ -1201,7 +1202,7 @@ document.getElementById("closeTimeInput").addEventListener("change", (e) => {
     updateStatusUI();
 });
 
-document.getElementById("formRestoProfile")?.addEventListener("submit", function(e) {
+document.getElementById("formRestoProfile")?.addEventListener("submit", async function(e) {
     e.preventDefault();
 
     if (!userProfile || !userProfile.uid) {
@@ -1690,123 +1691,34 @@ document.getElementById("formRestoProfile")?.addEventListener("submit", function
     }
 
     /* =========================================================
-       17. FOTO DEPAN RESTORAN
+       17-19. FOTO DEPAN, INDOOR, KTP
+       Dikompres dulu (CikurCloud.fileToCompressedDataUrl) sebelum disimpan,
+       supaya total dokumen mitra_applications tidak melebihi batas 1MB Firestore.
     ========================================================= */
-
-    if (
-        photoFrontInput &&
-        photoFrontInput.files &&
-        photoFrontInput.files[0]
-    ) {
-
-        if (
-            photoFrontInput.files[0].size >
-            2 * 1024 * 1024
-        ) {
-
-            alert(
-                "Ukuran Foto Tampak Depan terlalu besar! " +
-                "Maksimal 2MB."
-            );
-
-            return;
+    async function loadPhoto(input, label, target) {
+        if (!(input && input.files && input.files[0])) return true;
+        if (input.files[0].size > 8 * 1024 * 1024) {
+            alert(`Ukuran ${label} terlalu besar! Maksimal 8MB.`);
+            return false;
         }
-
-        const reader = new FileReader();
-
-        reader.onload = function(event) {
-
-            currentResto.photoFront =
-                event.target.result;
-
-            checkFinish();
-        };
-
-        reader.readAsDataURL(
-            photoFrontInput.files[0]
-        );
+        try {
+            currentResto[target] = await window.CikurCloud.fileToCompressedDataUrl(input.files[0], 1000, 0.7);
+        } catch (err) {
+            alert(`Gagal memproses ${label}: ` + (err?.message || err));
+            return false;
+        }
+        checkFinish();
+        return true;
     }
 
-    /* =========================================================
-       18. FOTO AREA INDOOR
-    ========================================================= */
-
-    if (
-        photoIndoorInput &&
-        photoIndoorInput.files &&
-        photoIndoorInput.files[0]
-    ) {
-
-        if (
-            photoIndoorInput.files[0].size >
-            2 * 1024 * 1024
-        ) {
-
-            alert(
-                "Ukuran Foto Area Indoor terlalu besar! " +
-                "Maksimal 2MB."
-            );
-
-            return;
-        }
-
-        const reader = new FileReader();
-
-        reader.onload = function(event) {
-
-            currentResto.photoIndoor =
-                event.target.result;
-
-            checkFinish();
-        };
-
-        reader.readAsDataURL(
-            photoIndoorInput.files[0]
-        );
-    }
-
-    /* =========================================================
-       19. FOTO KTP
-    ========================================================= */
-
-    if (
-        fotoKtpInput &&
-        fotoKtpInput.files &&
-        fotoKtpInput.files[0]
-    ) {
-
-        if (
-            fotoKtpInput.files[0].size >
-            2 * 1024 * 1024
-        ) {
-
-            alert(
-                "Ukuran Foto KTP terlalu besar! " +
-                "Maksimal 2MB."
-            );
-
-            return;
-        }
-
-        const reader = new FileReader();
-
-        reader.onload = function(event) {
-
-            currentResto.fotoKtp =
-                event.target.result;
-
-            checkFinish();
-        };
-
-        reader.readAsDataURL(
-            fotoKtpInput.files[0]
-        );
-    }
+    if (!(await loadPhoto(photoFrontInput, "Foto Tampak Depan", "photoFront"))) return;
+    if (!(await loadPhoto(photoIndoorInput, "Foto Area Indoor", "photoIndoor"))) return;
+    if (!(await loadPhoto(fotoKtpInput, "Foto KTP", "fotoKtp"))) return;
 
 });
     
 let editingMenuIndex = null;
-document.getElementById("formAddMenu").addEventListener("submit", function(e) {
+document.getElementById("formAddMenu").addEventListener("submit", async function(e) {
     e.preventDefault();
     let name = document.getElementById("menuNameInput").value;
     let category = document.getElementById("menuCategoryInput").value;
@@ -1817,19 +1729,17 @@ document.getElementById("formAddMenu").addEventListener("submit", function(e) {
     let status = document.getElementById("menuStatusInput").value;
     let photoInput = document.getElementById("menuPhotoInput");
 
-    if(photoInput && photoInput.files && photoInput.files[0]) {
-        if(photoInput.files[0].size > 2 * 1024 * 1024) {
-            alert("Ukuran foto terlalu besar! Maksimal ukuran file adalah 2MB.");
+    if (photoInput && photoInput.files && photoInput.files[0]) {
+        if (photoInput.files[0].size > 8 * 1024 * 1024) {
+            alert("Ukuran foto terlalu besar! Maksimal 8MB.");
             return;
         }
-        let reader = new FileReader();
-        reader.onload = function(event) {
-            saveOrUpdateMenu(event.target.result);
-        };
-        reader.readAsDataURL(photoInput.files[0]);
+        window.CikurCloud.fileToCompressedDataUrl(photoInput.files[0], 500, 0.6)
+            .then((compressed) => saveOrUpdateMenu(compressed))
+            .catch((err) => alert("Gagal memproses foto menu: " + (err?.message || err)));
     } else {
         let existingPhoto = "";
-        if(editingMenuIndex !== null && currentResto.menuList[editingMenuIndex]) {
+        if (editingMenuIndex !== null && currentResto.menuList[editingMenuIndex]) {
             existingPhoto = currentResto.menuList[editingMenuIndex].photo;
         }
         saveOrUpdateMenu(existingPhoto);
@@ -1897,7 +1807,7 @@ function renderMenuList() {
             <div class="menu-item-card" style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px; padding: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;">
                 ${photoTag}
                 <div class="menu-info" style="flex: 1;">
-                    <h4 style="font-size: 12px; margin: 0 0 2px 0;">${item.name}</h4>
+                    <h4 style="font-size: 12px; margin: 0 0 2px 0;">${CGO.esc(item.name)}</h4>
                     ${priceDisplay}
                     <div style="display: flex; gap: 6px; margin-top: 4px; align-items: center;">
                         <span style="font-size: 9px; font-weight: 700; padding: 2px 6px; background: ${statusBadgeColor}; color: ${statusBadgeText}; border-radius: 4px;">${statusText}</span>
@@ -1941,9 +1851,8 @@ let latestFoodOrdersCache = [];
 function startListeningFoodOrders() {
     if (typeof unsubscribeFoodOrders === "function") unsubscribeFoodOrders();
 
-    unsubscribeFoodOrders = window.CikurCloud.listenOrders("FOOD", (orders) => {
+    unsubscribeFoodOrders = window.CikurCloud.listenRestoFoodOrders(currentRestoId, (orders) => {
         latestFoodOrdersCache = orders.filter(o =>
-            o.restoId === currentRestoId &&
             ["PENDING", "DIMASAK", "SIAP_DIAMBIL", "DIAMBIL_DRIVER", "DIANTAR", "DIBATALKAN_CUSTOMER"].includes(o.status)
         );
         renderIncomingOrders(latestFoodOrdersCache);
@@ -1964,21 +1873,21 @@ function renderIncomingOrders(orders) {
         DIMASAK: "Sedang Dimasak",
         SIAP_DIAMBIL: "Menunggu Driver",
         DIAMBIL_DRIVER: "Diambil Driver",
-        DIANTAR: "Dalam Pengantaran",
+        DIANTAR: "Dalam Pengantaran ke Customer",
         DIBATALKAN_CUSTOMER: "Dibatalkan Customer"
     };
 
     let html = "";
     orders.forEach((order) => {
         let itemsListHtml = (order.items || []).map(i =>
-            `<div style="font-size: 11px; color: var(--text-main); margin-bottom: 4px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 2px;">- <b>${i.name}</b> (${i.quantity}x) <span style="color:#64748b;">(Rp ${(i.price * i.quantity).toLocaleString('id-ID')})</span></div>`
+            `<div style="font-size: 11px; color: var(--text-main); margin-bottom: 4px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 2px;">- <b>${CGO.esc(i.name)}</b> (${i.quantity}x) <span style="color:#64748b;">(Rp ${(i.price * i.quantity).toLocaleString('id-ID')})</span></div>`
         ).join('') || '<div style="font-size: 11px; color: var(--text-muted);">Detail menu tidak tersedia.</div>';
 
         let messages = latestFoodOrderMessages[order.id] || [];
         let chatHtml = messages.map(m => {
             let align = m.sender === 'resto' ? 'text-align:right;' : '';
             let bg = m.sender === 'resto' ? 'background:#e2e8f0;' : 'background:#fff; border:1px solid #e2e8f0;';
-            return `<div style="${bg} ${align} padding: 4px 8px; border-radius: 6px; margin: 2px 0; max-width: 90%; ${m.sender === 'resto' ? 'align-self:flex-end;' : ''}"><b>${m.sender === 'resto' ? 'Anda' : (m.sender === 'customer' ? 'Customer' : 'Driver')}:</b> ${m.text}</div>`;
+            return `<div style="${bg} ${align} padding: 4px 8px; border-radius: 6px; margin: 2px 0; max-width: 90%; ${m.sender === 'resto' ? 'align-self:flex-end;' : ''}"><b>${m.sender === 'resto' ? 'Anda' : (m.sender === 'customer' ? 'Customer' : 'Driver')}:</b> ${CGO.esc(m.text)}</div>`;
         }).join('') || '<i style="color: #94a3b8; font-size: 10px;">Belum ada pesan chat.</i>';
 
         let actionButtons = "";
@@ -1991,6 +1900,8 @@ function renderIncomingOrders(orders) {
             `;
         } else if (order.status === "DIMASAK") {
             actionButtons = `<button type="button" onclick="updateFoodOrderStatus('${order.id}', 'SIAP_DIAMBIL')" class="btn-action">Menu Siap, Panggil Driver</button>`;
+        } else if (order.driverName) {
+            actionButtons = `<span style="font-size: 10px; color: var(--text-muted); font-style: italic;">Diambil oleh ${CGO.esc(order.driverName)}${order.driverPlate ? " (" + CGO.esc(order.driverPlate) + ")" : ""}.</span>`;
         } else {
             actionButtons = `<span style="font-size: 10px; color: var(--text-muted); font-style: italic;">Menunggu driver mengambil/mengantar.</span>`;
         }
@@ -2001,14 +1912,14 @@ function renderIncomingOrders(orders) {
                 <span style="font-size: 11px; font-weight: 800; color: #0f172a;">Order #${order.id.slice(-6).toUpperCase()}</span>
                 <span style="font-size: 10px; font-weight: 700; color: #16a34a;">${statusLabelMap[order.status] || order.status}</span>
             </div>
-            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Pemesan: ${order.customerName || 'Pelanggan'} (${order.customerPhone || '-'})</p>
+            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Pemesan: ${CGO.esc(order.customerName || 'Pelanggan')} (${CGO.esc(order.customerPhone || '-')})</p>
 
             <div style="margin-bottom: 8px; background: rgba(255,255,255,0.8); padding: 8px; border-radius: 6px;">
                 <span style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Detail Menu Pesanan:</span>
                 ${itemsListHtml}
                 <div style="margin-top: 6px; font-size: 11px; border-top: 1px solid #cbd5e1; padding-top: 6px;">
-                    <div style="margin-bottom: 2px;"><span style="color: #475569;"><b>Catatan:</b> ${order.notes || '-'}</span></div>
-                    <div><span style="color: #475569;"><b>Pembayaran:</b> <span style="color: #2563eb; font-weight: 700; text-transform: uppercase;">${order.paymentMethod || '-'}</span></span></div>
+                    <div style="margin-bottom: 2px;"><span style="color: #475569;"><b>Catatan:</b> ${CGO.esc(order.notes || '-')}</span></div>
+                    <div><span style="color: #475569;"><b>Pembayaran:</b> <span style="color: #2563eb; font-weight: 700; text-transform: uppercase;">${CGO.esc(order.paymentMethod || '-')}</span></span></div>
                 </div>
 
                 <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px; margin-top: 8px;">
@@ -2088,12 +1999,12 @@ document.addEventListener("click", () => headerDropdownMenu.classList.remove('sh
 
 <div id="cgoModernToast" class="cgo-modern-toast" aria-hidden="true">
  <div class="cgo-modern-toast-card">
-  <div id="cgoModernToastIcon" class="cgo-modern-toast-icon">✓</div>
+  <div id="cgoModernToastIcon" class="cgo-modern-toast-icon"><svg class="ic"><use href="#i-check"/></svg></div>
   <div style="min-width:0;">
    <div id="cgoModernToastTitle" class="cgo-modern-toast-title">CIKUR GO</div>
    <div id="cgoModernToastMessage" class="cgo-modern-toast-message"></div>
   </div>
-  <button id="cgoModernToastClose" class="cgo-modern-toast-close" type="button" aria-label="Tutup">×</button>
+  <button id="cgoModernToastClose" class="cgo-modern-toast-close" type="button" aria-label="Tutup"><svg class="ic"><use href="#i-close"/></svg></button>
  </div>
 </div>
 <script>
@@ -2102,7 +2013,7 @@ document.addEventListener("click", () => headerDropdownMenu.classList.remove('sh
  if(!box||!icon||!title||!msg) return;
  let timer=null;
  function hide(){clearTimeout(timer);box.classList.remove('show');box.setAttribute('aria-hidden','true');}
- window.showCGOModernNotification=function(type='success',t='CIKUR GO',m=''){clearTimeout(timer);box.classList.remove('success','warning','error');box.classList.add(type);icon.textContent=type==='error'?'×':type==='warning'?'!':'✓';title.textContent=t;msg.textContent=String(m||'');box.classList.add('show');box.setAttribute('aria-hidden','false');timer=setTimeout(hide,3600);};
+ window.showCGOModernNotification=function(type='success',t='CIKUR GO',m=''){clearTimeout(timer);box.classList.remove('success','warning','error');box.classList.add(type);icon.innerHTML='<svg class="ic"><use href="#i-'+(type==='error'?'close':type==='warning'?'warn':'check')+'"/></svg>';title.textContent=t;msg.textContent=String(m||'');box.classList.add('show');box.setAttribute('aria-hidden','false');timer=setTimeout(hide,3600);};
  window.closeCGOModernNotification=hide;
  if(close) close.addEventListener('click',hide);
  window.alert=function(text){const s=String(text||'');let type='success',t='Berhasil';if(/gagal|error|salah|ditolak|tidak berhasil/i.test(s)){type='error';t='Terjadi Kesalahan';}else if(/harus|belum|tidak cocok|wajib|silakan|perhatian/i.test(s)){type='warning';t='Perhatian';}showCGOModernNotification(type,t,s);};

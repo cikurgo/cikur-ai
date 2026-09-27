@@ -264,60 +264,8 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
+<script src="../cgo-shared.js"></script>
 <script>
-// ===== Ikon 3D: Microsoft Fluent Emoji (lisensi MIT), dimuat dari GitHub =====
-// Supaya lebih stabil: unduh PNG-nya ke folder assets/3d/ (nama file = kunci + ".png", mis. motor.png)
-// lalu isi ICON3D_LOCAL = "../assets/3d/". Kalau gambar gagal dimuat, otomatis diganti ikon garis.
-const ICON3D_BASE = "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/";
-const ICON3D_LOCAL = "";
-const ICON3D = { motor: "Motor scooter/3D/motor_scooter_3d.png", pin: "Round pushpin/3D/round_pushpin_3d.png", flag: "Chequered flag/3D/chequered_flag_3d.png", chat: "Speech balloon/3D/speech_balloon_3d.png", cart: "Shopping cart/3D/shopping_cart_3d.png", food: "Pot of food/3D/pot_of_food_3d.png", memo: "Memo/3D/memo_3d.png", gear: "Gear/3D/gear_3d.png", compass: "Compass/3D/compass_3d.png", worldmap: "World map/3D/world_map_3d.png", warning: "Warning/3D/warning_3d.png", coin: "Coin/3D/coin_3d.png", card: "Credit card/3D/credit_card_3d.png", star: "Star/3D/star_3d.png", receipt: "Receipt/3D/receipt_3d.png", party: "Party popper/3D/party_popper_3d.png" };
-const ICON3D_FB = { motor: "bike", pin: "pin", flag: "flag", chat: "chat", cart: "cart", food: "food", memo: "doc", gear: "gear", compass: "nav", worldmap: "map", warning: "warn", coin: "cash", card: "wallet", star: "star", receipt: "receipt", party: "check" };
-function icon3dSrc(k) { return ICON3D_LOCAL ? ICON3D_LOCAL + k + ".png" : ICON3D_BASE + encodeURI(ICON3D[k]); }
-function ic3Fail(img) {
-  const s = document.createElement("span");
-  s.className = "i3d-fb";
-  s.innerHTML = '<svg class="ic"><use href="#i-' + (img.dataset.fb || "pin") + '"/></svg>';
-  img.replaceWith(s);
-}
-function ic3(k, cls) {
-  return '<img class="i3d ' + (cls || "") + '" alt="" decoding="async" src="' + icon3dSrc(k) + '" data-fb="' + (ICON3D_FB[k] || "pin") + '" onerror="ic3Fail(this)">';
-}
-function hydrate3d(root) {
-  (root || document).querySelectorAll("img[data-3d]").forEach((img) => {
-    const k = img.dataset["3d"];
-    if (!ICON3D[k]) return;
-    img.dataset.fb = ICON3D_FB[k] || "pin";
-    img.onerror = () => ic3Fail(img);
-    img.src = icon3dSrc(k);
-    img.removeAttribute("data-3d");
-  });
-}
-if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => hydrate3d()); else hydrate3d();
-
-// ===== Peta dasar gratis tanpa API key: OpenFreeMap (Positron) lewat MapLibre; cadangan: OpenStreetMap =====
-function addBaseMap(map) {
-  try { map.setMaxZoom(19); map.setMinZoom(3); } catch (_) {}
-  let gl = null, ok = false, fell = false;
-  const fallback = () => {
-    if (fell || ok) return;
-    fell = true;
-    try { if (gl) map.removeLayer(gl); } catch (_) {}
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap contributors" }).addTo(map);
-  };
-  try {
-    if (window.maplibregl && L.maplibreGL) {
-      gl = L.maplibreGL({
-        style: "https://tiles.openfreemap.org/styles/positron",
-        attribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
-      }).addTo(map);
-      const m = gl.getMaplibreMap && gl.getMaplibreMap();
-      if (m) { m.on("load", () => { ok = true; }); m.on("error", () => { if (!ok) fallback(); }); }
-      setTimeout(fallback, 9000);
-      return;
-    }
-  } catch (e) { console.warn("[CIKUR] MapLibre gagal, pakai OSM:", e && e.message); }
-  fallback();
-}
 
 let isOnline = false;
 let currentTab = 'food';
@@ -762,61 +710,75 @@ function renderFoodOrderList() {
     container.innerHTML = html;
 }
 
+function foodMoneyHtml(ord) {
+    const rp = (n) => "Rp " + Number(n || 0).toLocaleString("id-ID");
+    const cash = /tunai|cod/i.test(String(ord.paymentMethod || "")) && ord.paymentStatus !== "PAID";
+    const sub = Number(ord.subtotal || 0), fee = Number(ord.deliveryFee || 0);
+    return `<div class="split-box">
+      <div class="split-row"><span>Harga makanan</span><b>${rp(sub)}</b></div>
+      <div class="split-row"><span>Ongkir</span><b>${rp(fee)}</b></div>
+      <div class="split-row split-me"><span>Total pesanan</span><b>${rp(ord.total)}</b></div>
+      <div class="split-note">${cash ? "Bayar tunai: tagih " + rp(ord.total) + " ke customer. Harga makanan (" + rp(sub) + ") dibayarkan ke resto." : "Sudah dibayar lewat " + escText(ord.paymentMethod || "-") + " — tidak perlu menagih customer."}</div>
+    </div>`;
+}
+
 function renderAvailableFoodOrderCard(ord) {
-    let itemsText = (ord.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ') || 'Menu tidak tersedia';
+    const itemsText = escText((ord.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ') || 'Menu tidak tersedia');
     return `
         <div class="order-card">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span class="badge-type badge-food">CIKUR FOOD - Resto: ${ord.restoName || 'Mitra Resto'}</span>
+                <span class="badge-type badge-food">CIKUR FOOD - Resto: ${escText(ord.restoName || 'Mitra Resto')}</span>
                 <span style="font-size: 10px; color: #d97706; font-weight:700;">Menunggu Diambil</span>
             </div>
-            <div style="font-size: 11px; font-weight: 700;">${ic3('pin')} Tujuan Customer: ${ord.address?.text || '-'}</div>
+            <div style="font-size: 11px; font-weight: 700;">${ic3('pin')} Tujuan Customer: ${escText(ord.address?.text || '-')}</div>
             <div style="font-size: 11px; color: var(--text-muted); background: var(--background); padding: 8px; border-radius: 8px;">
                 ${ic3('cart')} <b>Menu:</b> ${itemsText}
             </div>
-            <div style="font-size: 12px; font-weight: 800; color: var(--primary);">
-                Total Pesanan: Rp ${Number(ord.total || 0).toLocaleString('id-ID')} (${ord.paymentMethod || '-'})
-            </div>
-            <button type="button" class="btn-primary" onclick="claimThisFoodOrder('${ord.id}')">Ambil Pesanan Ini <svg class='ic'><use href='#i-check'/></svg> </button>
+            ${foodMoneyHtml(ord)}
+            <button type="button" class="btn-primary" onclick="claimThisFoodOrder('${ord.id}')">Ambil Pesanan Ini</button>
         </div>
     `;
 }
 
 function renderMyActiveFoodOrderCard(ord) {
-    let itemsText = (ord.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ') || 'Menu tidak tersedia';
-    let messages = driverFoodMessagesCache[ord.id] || [];
-    let chatHtml = messages.map(m =>
-        `<div class="chat-msg ${m.sender === 'driver' ? 'driver' : 'other'}">${m.sender === 'driver' ? 'Anda' : (m.sender === 'customer' ? 'Customer' : (m.sender === 'resto' ? 'Resto' : 'Sistem'))}: "${m.text}"</div>`
+    const itemsText = escText((ord.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ') || 'Menu tidak tersedia');
+    const messages = driverFoodMessagesCache[ord.id] || [];
+    const chatHtml = messages.map(m =>
+        `<div class="chat-msg ${m.sender === 'driver' ? 'driver' : (m.sender === 'system' ? 'sys' : 'other')}">${escText(m.text)}</div>`
     ).join('') || '<div class="chat-msg other">Belum ada pesan.</div>';
 
-    let statusLabel = ord.status === "DIAMBIL_DRIVER" ? "Menuju Resto/Customer" : "Sedang Diantar";
+    const toResto = ord.status === "DIAMBIL_DRIVER";
+    const statusLabel = toResto ? "Menuju resto, ambil pesanan" : "Sedang mengantar ke customer";
+    const mapQuery = toResto ? [ord.restoName, ord.restoAddress].filter(Boolean).join(' ') : (ord.address?.text || '');
+    const actionBtn = toResto
+        ? `<button type="button" class="btn-primary" style="flex:1;background:#7c3aed;" onclick="startFoodDelivery('${ord.id}')">Sudah Ambil dari Resto</button>`
+        : `<button type="button" class="btn-primary" style="flex:1;background:#16a34a;" onclick="completeFoodOrder('${ord.id}')">Selesaikan Antaran</button>`;
 
     return `
         <div class="order-card" style="border-color: #16a34a;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span class="badge-type badge-food">CIKUR FOOD - Resto: ${ord.restoName || 'Mitra Resto'}</span>
-                <span style="font-size: 10px; color: #16a34a; font-weight:700;"><svg class='ic'><use href='#i-check'/></svg> ${statusLabel}</span>
+                <span class="badge-type badge-food">CIKUR FOOD - Resto: ${escText(ord.restoName || 'Mitra Resto')}</span>
+                <span style="font-size: 10px; color: #16a34a; font-weight:700;">${statusLabel}</span>
             </div>
-            <div style="font-size: 11px; font-weight: 700;">${ic3('pin')} Tujuan Customer: ${ord.address?.text || '-'}</div>
+            ${toResto && ord.restoAddress ? `<div style="font-size: 11px; font-weight: 700;">${ic3('shop')} Ambil di: ${escText(ord.restoAddress)}</div>` : ''}
+            <div style="font-size: 11px; font-weight: 700;">${ic3('pin')} Tujuan Customer: ${escText(ord.address?.text || '-')}</div>
             <div style="font-size: 11px; color: var(--text-muted); background: var(--background); padding: 8px; border-radius: 8px;">
                 ${ic3('cart')} <b>Menu:</b> ${itemsText}
             </div>
-            <div style="font-size: 12px; font-weight: 800; color: var(--primary);">
-                Total Pembayaran: Rp ${Number(ord.total || 0).toLocaleString('id-ID')} (${ord.paymentMethod || '-'})
-            </div>
+            ${foodMoneyHtml(ord)}
 
             <div style="font-size: 11px; font-weight: 700; margin-top: 4px;">${ic3('chat')} Chat Koordinasi:</div>
             <div class="chat-container">
                 <div class="chat-box" id="chatFoodBox_${ord.id}">${chatHtml}</div>
                 <div class="chat-input-group">
-                    <input type="text" id="inputFoodChat_${ord.id}" class="form-input" style="flex:1;" placeholder="Balas chat...">
+                    <input type="text" id="inputFoodChat_${ord.id}" class="form-input" style="flex:1;" placeholder="Balas chat..." onkeydown="if(event.key==='Enter'){sendFoodChat('${ord.id}')}">
                     <button type="button" class="btn-primary" style="padding: 6px 12px; font-size: 10px;" onclick="sendFoodChat('${ord.id}')">Kirim</button>
                 </div>
             </div>
 
             <div style="display: flex; gap: 8px; margin-top: 4px;">
-                <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ord.address?.text || '')}" target="_blank" class="form-input" style="background:#0284c7; color:#fff; text-align:center; text-decoration:none; font-weight:700; display:flex; align-items:center; justify-content:center;">${ic3('worldmap')} Peta Navigasi</a>
-                <button type="button" class="btn-primary" style="flex:1;" onclick="completeFoodOrder('${ord.id}')">Selesaikan Antaran <svg class='ic'><use href='#i-check'/></svg> </button>
+                <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}" target="_blank" rel="noopener" class="form-input" style="background:#0284c7; color:#fff; text-align:center; text-decoration:none; font-weight:700; display:flex;align-items:center;justify-content:center;gap:6px;flex:1;">${ic3('worldmap')} Buka Maps</a>
+                ${actionBtn}
             </div>
         </div>
     `;
@@ -824,10 +786,19 @@ function renderMyActiveFoodOrderCard(ord) {
 
 async function claimThisFoodOrder(orderId) {
     try {
-        await window.CikurCloud.claimFoodOrder(orderId, userProfile.uid, userProfile.name);
-        await window.CikurCloud.sendOrderMessage(orderId, "system", "Driver telah mengambil pesanan Anda dan sedang menuju lokasi.");
+        await window.CikurCloud.claimFoodOrder(orderId, userProfile.uid, userProfile.name || "Driver CIKUR", await buildDriverInfo());
+        await window.CikurCloud.sendOrderMessage(orderId, "system", "Driver telah mengambil pesanan dan sedang menuju resto.");
     } catch (error) {
         alert("Gagal mengambil pesanan (mungkin sudah diambil driver lain): " + (error?.message || error));
+    }
+}
+
+async function startFoodDelivery(orderId) {
+    try {
+        await window.CikurCloud.updateOrderStatus(orderId, { status: "DIANTAR" });
+        await window.CikurCloud.sendOrderMessage(orderId, "system", "Pesanan sudah diambil dari resto dan sedang diantar ke lokasi kamu.");
+    } catch (error) {
+        alert("Gagal memperbarui status: " + (error?.message || error));
     }
 }
 
@@ -1014,6 +985,17 @@ function makeDriverThumb(dataUrl, size) {
     });
 }
 
+async function buildDriverInfo() {
+    const app = currentMitraApplication || {};
+    return {
+        driverPhoto: await makeDriverThumb(app.photo, 160),
+        driverPlate: app.vehicle || "",
+        driverVehicleType: app.vehicleType || "Motor",
+        driverVehicleModel: app.vehicleModel || "",
+        driverPhone: app.phone || userProfile.phone || ""
+    };
+}
+
 async function claimThisRideOrder(orderId) {
     try {
         const target = availableRideOrdersCache.find((x) => x.id === orderId) || {};
@@ -1025,16 +1007,9 @@ async function claimThisRideOrder(orderId) {
                 return;
             }
         }
-        await window.CikurCloud.claimRideOrder(orderId, userProfile.uid, userProfile.name || "Driver CIKUR");
+        // Info driver ikut tersimpan dalam transaksi klaim yang sama (atomik).
+        await window.CikurCloud.claimRideOrder(orderId, userProfile.uid, userProfile.name || "Driver CIKUR", await buildDriverInfo());
         await window.CikurCloud.sendOrderMessage(orderId, "system", "Driver menerima order dan sedang menuju titik jemput.");
-        const app = currentMitraApplication || {};
-        window.CikurCloud.updateOrderStatus(orderId, {
-            driverPhoto: await makeDriverThumb(app.photo, 160),
-            driverPlate: app.vehicle || "",
-            driverVehicleType: app.vehicleType || "",
-            driverVehicleModel: app.vehicleModel || "",
-            driverPhone: app.phone || userProfile.phone || ""
-        }).catch((e) => console.error("[CIKUR DRIVER] Gagal simpan info driver:", e));
         // Push lokasi segera agar marker customer bergerak
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition((pos) => {

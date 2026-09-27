@@ -8,11 +8,15 @@
     <!-- EXTERNAL FONTS & STYLESHEETS -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" rel="stylesheet" />
 
     <!-- EXTERNAL SCRIPTS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
     <script src="../bcgo-engine.js"></script>
     <script type="module" src="../cikur-config.js"></script>
+<script src="../cgo-shared.js"></script>
 
     <!-- CSS STYLING -->
     <style>
@@ -564,6 +568,89 @@
             }
         }
 
+        async function agentRegistrationSubmit() {
+            if (!document.getElementById("agentAgreeTerms")?.checked ||
+                !document.getElementById("agentAgreePrivacy")?.checked ||
+                !document.getElementById("agentConfirmData")?.checked) {
+                alert("Mohon centang semua persetujuan sebelum mengirim pendaftaran.");
+                return;
+            }
+            if (!window.CikurCloud || !userProfile || !userProfile.uid) {
+                alert("Sesi Anda belum siap. Silakan refresh halaman.");
+                return;
+            }
+
+            const ktpFile = document.getElementById("agentKtpFile")?.files?.[0];
+            const selfieFile = document.getElementById("agentSelfieFile")?.files?.[0];
+            if (!ktpFile || !selfieFile) {
+                alert("Mohon lengkapi foto KTP dan selfie terlebih dahulu.");
+                return;
+            }
+
+            const btn = document.getElementById("agentSubmitBtn");
+            btn.disabled = true;
+            btn.textContent = "Mengirim Pendaftaran...";
+
+            try {
+                // Dikompres dulu supaya dokumen mitra_applications tidak melebihi batas 1MB Firestore.
+                const [fotoKtp, fotoSelfie] = await Promise.all([
+                    window.CikurCloud.fileToCompressedDataUrl(ktpFile, 1000, 0.7),
+                    window.CikurCloud.fileToCompressedDataUrl(selfieFile, 800, 0.7)
+                ]);
+
+                let bcgoResult = null;
+                if (window.BCGO) {
+                    try {
+                        bcgoResult = window.BCGO.evaluatePartner({
+                            partnerType: "assistant",
+                            name: agentValue("agentName"),
+                            phone: agentValue("agentPhone"),
+                            address: agentValue("mitraAlamat"),
+                            serviceType: "Assistant CGO"
+                        });
+                    } catch (bcgoError) {
+                        console.error("[BCGO] Gagal menjalankan evaluasi:", bcgoError);
+                    }
+                }
+
+                await window.CikurCloud.submitMitraApplication(userProfile.uid, "agent", {
+                    name: agentValue("agentName"),
+                    phone: agentValue("agentPhone"),
+                    email: agentValue("agentEmail"),
+                    socialMedia: agentValue("agentSocialMedia"),
+                    birthPlace: agentValue("agentBirthPlace"),
+                    birthDate: agentValue("agentBirthDate"),
+                    gender: agentValue("agentGender"),
+                    ktp: agentValue("mitraKtp"),
+                    fotoKtp,
+                    fotoSelfie,
+                    alamat: agentValue("mitraAlamat"),
+                    kecamatan: agentValue("agentKecamatan"),
+                    kabupaten: agentValue("agentKabupaten"),
+                    provinsi: agentValue("agentProvinsi"),
+                    kodePos: agentValue("agentKodePos"),
+                    area: agentValue("mitraArea"),
+                    radius: agentValue("agentRadius"),
+                    availability: agentValue("agentAvailability"),
+                    serviceSchedule: agentValue("agentServiceSchedule"),
+                    experience: agentValue("agentExperience"),
+                    skills: agentValue("agentSkills"),
+                    languages: agentValue("agentLanguages"),
+                    bio: agentValue("agentBio"),
+                    bcgoScore: bcgoResult?.score ?? null,
+                    bcgoRisk: bcgoResult?.risk ?? null,
+                    bcgoRecommendation: bcgoResult?.status ?? null
+                });
+
+                alert("Pendaftaran Mitra Agent CGO berhasil dikirim! Menunggu verifikasi Admin.");
+                window.location.href = "../index.html";
+            } catch (error) {
+                alert("Gagal mengirim pendaftaran: " + (error?.message || error));
+                btn.disabled = false;
+                btn.textContent = "Kirim Pendaftaran";
+            }
+        }
+
         window.agentKtpReady = false;
         window.agentSelfieReady = false;
 
@@ -1093,7 +1180,7 @@
                         const lat = order.location?.latitude || -6.3153;
                         const lng = order.location?.longitude || 106.1556;
                         const map = L.map(mapElId, { zoomControl: false }).setView([lat, lng], 15);
-                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+                        addBaseMap(map);
                         L.marker([lat, lng]).addTo(map).bindPopup(order.location?.address || "Lokasi Customer").openPopup();
                     }
                 }, 300);
