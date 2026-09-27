@@ -7,6 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" rel="stylesheet" />
     <script type="module" src="../cikur-config.js"></script>
     <style>
         :root {
@@ -258,7 +259,31 @@
         .btn-main { flex: 1; padding: 14px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 800; border: none; cursor: pointer; transition: var(--transition); }
         .btn-checkout { background: var(--primary-gradient); color: #fff; box-shadow: 0 8px 25px rgba(255,71,87,0.3); }
         .btn-main:active { transform: scale(0.97); }
-    </style>
+    
+/* ===== Sinkron tampilan (cgo-shared) ===== */
+:root{--primary:#E50914;--primary-gradient:linear-gradient(135deg,#E50914 0%,#ff2b38 100%);--background:#f5f7fa;--shadow-hover:0 20px 40px -10px rgba(229,9,20,.15)}
+.app-title{letter-spacing:.3px}
+.back-btn svg,.back-btn .ic{width:20px;height:20px}
+.mode-tab .i3d{width:18px;height:18px;vertical-align:-4px;margin-right:2px}
+.assistant-banner{border-radius:22px}
+.btn-2in1{background:#fff!important;color:#0f172a!important;border:1.5px solid #e2e8f0!important;flex:0 0 auto;padding:14px 16px!important;display:flex;align-items:center;gap:6px}
+.btn-2in1 .i3d{width:20px;height:20px;vertical-align:0}
+.cart-badge{display:inline-block;margin-left:6px;background:rgba(255,255,255,.22);border-radius:999px;padding:2px 8px;font-size:10px}
+.food-track-back{display:flex;align-items:center;justify-content:center;color:#0f172a}
+.food-track-back .ic{width:22px;height:22px}
+.food-driver-avatar{overflow:hidden;background:#f1f5f9;display:flex;align-items:center;justify-content:center;border-radius:50%}
+.food-driver-avatar img{width:100%;height:100%;object-fit:cover}
+.food-driver-avatar .i3d{width:32px;height:32px;vertical-align:0}
+.food-driver-vehicle{font-size:12px;font-weight:700;color:#64748b;margin-top:1px}
+.food-driver-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.food-plate{font-weight:800;font-size:13px;letter-spacing:.8px;background:#fff;color:#0f172a;border:2px solid #0f172a;border-radius:8px;padding:3px 8px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.food-call-btn{width:36px;height:36px;border-radius:50%;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;text-decoration:none}
+.food-call-btn .ic{width:18px;height:18px}
+.mk{background:none;border:0}
+.mk-driver{width:44px;height:44px;border-radius:50%;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.3);display:flex;align-items:center;justify-content:center}
+.mk-driver .i3d{width:32px;height:32px;vertical-align:0}
+.food-chat-title .i3d{width:18px;height:18px}
+</style>
 
 <style id="cgo-modern-toast-style">
 .cgo-modern-toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,18px);width:min(390px,calc(100% - 24px));z-index:2147483646;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .22s ease,transform .3s cubic-bezier(.16,1,.3,1),visibility .22s ease;font-family:inherit;}
@@ -289,7 +314,7 @@
         <!-- BANNER UTAMA -->
         <div class="assistant-banner" onclick="openAssistantModal()">
             <h3>CIKUR GO ASSISTANT 
-                <span style="font-size: 10px; background: rgba(255,255,255,0.2); padding: 3px 8px; border-radius: 8px;">Panduan ➔</span>
+                <span style="font-size: 10px; background: rgba(255,255,255,0.2); padding: 3px 8px; border-radius: 8px;">Panduan <svg class="ic" style="transform:scaleX(-1);width:14px;height:14px"><use href="#i-back"/></svg></span>
             </h3>
             <p>Pencarian alamat otomatis, deteksi GPS presisi, dan rincian lengkap untuk driver.</p>
         </div>
@@ -379,8 +404,8 @@
         </div>
 
         <div class="mode-switcher">
-            <button class="mode-tab active" id="btnInstant" onclick="switchMode('instant')">⚡ Pesan Sekarang</button>
-            <button class="mode-tab" id="btnRes" onclick="switchMode('reservasi')">📅 Atur Reservasi</button>
+            <button class="mode-tab active" id="btnInstant" onclick="switchMode('instant')"><img class="i3d" data-3d="bag" alt=""> Pesan Sekarang</button>
+            <button class="mode-tab" id="btnRes" onclick="switchMode('reservasi')"><img class="i3d" data-3d="calendar" alt=""> Atur Reservasi</button>
         </div>
 
         <div id="panelReservasi" style="display: none; background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius-md); padding: 14px;">
@@ -399,7 +424,8 @@
     </div>
 
     <div class="footer-action">
-        <button class="btn-main btn-checkout" onclick="openPaymentSummary()">Lanjut Pembayaran</button>
+        <button class="btn-main btn-2in1" type="button" onclick="openBundle2in1()"><img class="i3d" data-3d="fork" alt=""> Pesan 2IN1</button>
+        <button class="btn-main btn-checkout" onclick="openPaymentSummary()">Lanjut Pembayaran <span id="cartBadge" class="cart-badge" style="display:none;"></span></button>
     </div>
 
     <!-- VIEW TRACKING PESANAN AKTIF (map + sheet, ala Ride) -->
@@ -409,7 +435,7 @@
             <div class="food-track-fabs">
                 <button type="button" class="food-track-fab" id="trackingStatusBadge">Memuat status…</button>
             </div>
-            <button type="button" class="food-track-back" onclick="hideFoodTrackingView()" aria-label="Kembali">←</button>
+            <button type="button" class="food-track-back" onclick="hideFoodTrackingView()" aria-label="Kembali"><svg class="ic"><use href="#i-back"/></svg></button>
         </div>
 
         <div class="food-track-sheet">
@@ -421,12 +447,13 @@
             </div>
 
             <div id="trackingDriverBox" class="food-driver-card" style="display:none;">
-                <div class="food-driver-avatar">🛵</div>
+                <div class="food-driver-avatar"><img id="trackingDriverPhoto" alt="" style="display:none;"><span id="trackingDriverEmoji"><img class="i3d" data-3d="motor" alt=""></span></div>
                 <div class="food-driver-info">
                     <div class="food-driver-name" id="trackingDriverName">Driver CIKUR GO</div>
+                    <div class="food-driver-vehicle" id="trackingDriverVehicle"></div>
                     <div class="food-driver-sub" id="trackingDriverSub">Menuju lokasi pengantaran</div>
                 </div>
-                <span class="food-driver-live">LIVE</span>
+                <div class="food-driver-side"><div class="food-plate" id="trackingDriverPlate" style="display:none;"></div><a id="trackingDriverCall" class="food-call-btn" href="#" style="display:none;" aria-label="Telepon driver"><svg class="ic"><use href="#i-phone"/></svg></a></div>
             </div>
 
             <div class="food-trip-card">
@@ -460,8 +487,8 @@
 <div id="assistantModal">
     <div style="width: 100%; max-width: 440px; background: #fff; border-radius: 24px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
         <div style="padding: 16px; background: #1e293b; color: #fff; display: flex; justify-content: space-between; align-items: center;">
-            <h3 style="font-size: 13px; font-weight: 800;">🤖 Panduan Cikur Go Assistant</h3>
-            <button onclick="closeAssistantModal()" style="background: none; border: none; font-size: 16px; font-weight: 800; cursor: pointer; color: #fff;">✕</button>
+            <h3 style="font-size: 13px; font-weight: 800;"><img class="i3d" data-3d="robot" alt=""> Panduan Cikur Go Assistant</h3>
+            <button onclick="closeAssistantModal()" style="background: none; border: none; font-size: 16px; font-weight: 800; cursor: pointer; color: #fff;"><svg class="ic"><use href="#i-close"/></svg></button>
         </div>
         <div style="padding: 20px; font-size: 12px; color: var(--text-main); display: flex; flex-direction: column; gap: 12px; line-height: 1.5;">
             <div><b>1. Isi Alamat Tujuan:</b> Ketik nama jalan atau gunakan tombol <b>"Pilih Peta"</b> agar titik koordinat GPS terdeteksi otomatis.</div>
@@ -469,7 +496,7 @@
             <div><b>3. Checkout & Selesaikan:</b> Klik <b>"Lanjut Pembayaran"</b> di bagian bawah untuk melihat ringkasan total biaya.</div>
         </div>
         <div style="padding: 16px; background: #fff; border-top: 1px solid var(--border);">
-            <button type="button" onclick="closeAssistantModal()" style="width: 100%; padding: 12px; background: var(--primary-gradient); color: #fff; border: none; border-radius: var(--radius-sm); font-weight: 800; font-size: 12px; cursor: pointer;">Mengerti, Mulai Pesan ✓</button>
+            <button type="button" onclick="closeAssistantModal()" style="width: 100%; padding: 12px; background: var(--primary-gradient); color: #fff; border: none; border-radius: var(--radius-sm); font-weight: 800; font-size: 12px; cursor: pointer;">Mengerti, Mulai Pesan</button>
         </div>
     </div>
 </div>
@@ -479,7 +506,7 @@
     <div style="width: 100%; max-width: 440px; background: #fff; border-radius: 24px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
         <div style="padding: 16px; background: #fff; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
             <h3 style="font-size: 13px; font-weight: 800; color: var(--text-main);">Pilih Titik Lokasi via Peta</h3>
-            <button onclick="closeMapModal()" style="background: none; border: none; font-size: 16px; font-weight: 800; cursor: pointer; color: var(--text-muted);">✕</button>
+            <button onclick="closeMapModal()" style="background: none; border: none; font-size: 16px; font-weight: 800; cursor: pointer; color: var(--text-muted);"><svg class="ic"><use href="#i-close"/></svg></button>
         </div>
         <div style="position: relative; width: 100%; height: 340px;">
             <div id="leafletMapContainer" style="width: 100%; height: 100%;"></div>
@@ -489,7 +516,7 @@
         </div>
         <div style="padding: 16px; background: #fff; border-top: 1px solid var(--border); display: flex; gap: 10px;">
             <button type="button" onclick="closeMapModal()" style="flex: 1; padding: 12px; background: #fff; color: var(--primary); border: 1.5px solid var(--primary); border-radius: var(--radius-sm); font-weight: 800; font-size: 12px; cursor: pointer;">Batal</button>
-            <button type="button" onclick="confirmMapLocation()" style="flex: 1; padding: 12px; background: var(--primary-gradient); color: #fff; border: none; border-radius: var(--radius-sm); font-weight: 800; font-size: 12px; cursor: pointer;">Gunakan Titik Ini ✓</button>
+            <button type="button" onclick="confirmMapLocation()" style="flex: 1; padding: 12px; background: var(--primary-gradient); color: #fff; border: none; border-radius: var(--radius-sm); font-weight: 800; font-size: 12px; cursor: pointer;">Gunakan Titik Ini</button>
         </div>
     </div>
 </div>
@@ -499,7 +526,7 @@
     <div class="modal-content">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
             <h2 style="font-size: 15px; font-weight: 800; color: var(--text-main);">Ringkasan & Pembayaran</h2>
-            <button onclick="closePaymentModal()" style="background: none; border: none; font-size: 18px; font-weight: 800; cursor: pointer; color: var(--text-muted);">✕</button>
+            <button onclick="closePaymentModal()" style="background: none; border: none; font-size: 18px; font-weight: 800; cursor: pointer; color: var(--text-muted);"><svg class="ic"><use href="#i-close"/></svg></button>
         </div>
 
         <div style="background: var(--background); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 14px;">
@@ -515,15 +542,15 @@
         <div style="background: var(--background); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 14px;">
             <div style="font-size: 10px; font-weight: 800; color: var(--text-muted); margin-bottom: 8px;">PILIH METODE PEMBAYARAN</div>
             <select id="paymentMethodSelect" class="input-field">
-                <option value="Tunai / COD (Bayar di Tempat)">💵 Tunai / COD (Bayar di Tempat)</option>
-                <option value="CikurPay Saldo Digital">💳 CikurPay Saldo Digital</option>
-                <option value="QRIS / Transfer Bank">📱 QRIS / Transfer Bank</option>
+                <option value="Tunai / COD (Bayar di Tempat)">Tunai / COD (Bayar di Tempat)</option>
+                <option value="CikurPay Saldo Digital">CikurPay Saldo Digital</option>
+                <option value="QRIS / Transfer Bank">QRIS / Transfer Bank</option>
             </select>
         </div>
 
         <!-- KOLOM CHAT / CATATAN KOORDINASI TERINTEGRASI -->
         <div style="background: var(--background); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 14px;">
-            <div style="font-size: 10px; font-weight: 800; color: var(--text-muted); margin-bottom: 6px;">💬 CHAT / CATATAN UNTUK RESTO & DRIVER</div>
+            <div style="font-size: 10px; font-weight: 800; color: var(--text-muted); margin-bottom: 6px;"><img class="i3d" data-3d="chat" alt=""> CHAT / CATATAN UNTUK RESTO & DRIVER</div>
             <div id="customerChatBox" style="background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 8px; max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; font-size: 11px; margin-bottom: 8px;">
                 <div style="background: #f1f5f9; padding: 6px 10px; border-radius: 8px; color: var(--text-muted);">Sistem: "Tuliskan catatan khusus atau pesan untuk resto/driver di sini."</div>
             </div>
@@ -554,12 +581,17 @@
 
 <!-- Leaflet JS untuk Peta -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
+<script src="../cgo-shared.js"></script>
 <script>
 let cartQuantities = {};
 let databaseResto = [];
 let currentModeSelected = 'instant';
 let searchTimeout = null;
-let customerCoords = { lat: -6.3245, lon: 106.1524 };
+let customerCoords = { lat: -6.3245, lon: 106.1524 }; // titik awal PETA saja
+let customerCoordsSet = false;
+let activeChatMessages = [];   // catatan/chat untuk resto & driver yang ditulis sebelum checkout      // true jika user benar-benar memilih titik (saran alamat / peta / GPS)
 let leafletMap = null;
 let mapMarker = null;
 let userProfile = { uid: null, name: "", phone: "", isLoggedIn: false };
@@ -682,13 +714,7 @@ function renderRestoList(restos) {
                     let itemName = item.name || item.nama || 'Menu Resto';
                     let itemImg = item.photo || item.img || item.image || '';
                     
-                    let isAvailable = true;
-                    if (item.status !== undefined) {
-                        let st = String(item.status).toLowerCase();
-                        isAvailable = !(st.includes('habis') || st.includes('kosong') || st === 'false' || st === '0');
-                    } else if (item.isAvailable !== undefined) {
-                        isAvailable = Boolean(item.isAvailable);
-                    }
+                    let isAvailable = isItemAvailable(item);
 
                     let itemStatusLabel = isAvailable ? 
                         `<span style="font-size: 9px; font-weight: 700; padding: 2px 6px; background: #f0fdf4; color: #16a34a; border-radius: 4px;">Tersedia</span>` : 
@@ -707,17 +733,17 @@ function renderRestoList(restos) {
 
                     let actionControlHTML = isAvailable ? `
                         <div class="counter-control">
-                            <button type="button" class="counter-btn" onclick="updateQty('${resto.id}', '${itemId}', -1)">-</button>
-                            <span style="font-size: 11px; font-weight: 700; min-width: 18px; text-align: center;" id="q_${key}">${qty}</span>
-                            <button type="button" class="counter-btn plus" onclick="updateQty('${resto.id}', '${itemId}', 1)">+</button>
+                            <button type="button" class="counter-btn" onclick="updateQty(${jsArg(resto.id)}, ${jsArg(itemId)}, -1)">-</button>
+                            <span style="font-size: 11px; font-weight: 700; min-width: 18px; text-align: center;" id="q_${CGO.esc(key)}">${qty}</span>
+                            <button type="button" class="counter-btn plus" onclick="updateQty(${jsArg(resto.id)}, ${jsArg(itemId)}, 1)">+</button>
                         </div>` : `<span style="font-size: 11px; font-weight: 700; color: #dc2626; background: #fee2e2; padding: 4px 8px; border-radius: 6px;">Habis</span>`;
 
                     catItemsHTML += `
                         <div class="menu-item-row">
                             <div class="menu-item-info">
-                                ${itemImg ? `<img src="${itemImg}" class="menu-thumb">` : `<div style="width: 64px; height: 64px; border-radius: 12px; background: #e2e8f0; display:flex; align-items:center; justify-content:center; font-size:10px; color:#64748b; flex-shrink:0;">No Foto</div>`}
+                                ${itemImg ? `<img src="${CGO.esc(itemImg)}" class="menu-thumb" alt="">` : `<div style="width: 64px; height: 64px; border-radius: 12px; background: #e2e8f0; display:flex; align-items:center; justify-content:center; font-size:10px; color:#64748b; flex-shrink:0;">No Foto</div>`}
                                 <div style="display: flex; flex-direction: column; justify-content: center; gap: 3px; min-width: 0;">
-                                    <h4 style="font-size: 12px; font-weight: 700; margin: 0; color: var(--text-main); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${itemName}</h4>
+                                    <h4 style="font-size: 12px; font-weight: 700; margin: 0; color: var(--text-main); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${CGO.esc(itemName)}</h4>
                                     <div>${priceDisplay}</div>
                                     <div>${itemStatusLabel}</div>
                                 </div>
@@ -730,8 +756,8 @@ function renderRestoList(restos) {
                 menusHTML += `
                     <div class="menu-category-section">
                         <button type="button" class="menu-category-header" onclick="toggleMenuCategory('${dropdownId}', this)">
-                            <span>${cat}</span>
-                            <span style="font-size: 10px; font-weight: 700; color: var(--text-muted);">▼ Buka/Tutup</span>
+                            <span>${CGO.esc(cat)}</span>
+                            <span style="font-size: 10px; font-weight: 700; color: var(--text-muted);">Tutup</span>
                         </button>
                         <div id="${dropdownId}" class="menu-category-content">
                             ${catItemsHTML}
@@ -743,10 +769,10 @@ function renderRestoList(restos) {
 
         card.innerHTML = `
             <div class="resto-header-info">
-                ${restoPhoto ? `<img src="${restoPhoto}" class="resto-avatar">` : `<div style="width: 50px; height: 50px; border-radius: 50%; background: #e2e8f0; display:flex; align-items:center; justify-content:center; font-size:10px; color:#64748b;">Resto</div>`}
+                ${restoPhoto ? `<img src="${CGO.esc(restoPhoto)}" class="resto-avatar" alt="">` : `<div style="width: 50px; height: 50px; border-radius: 50%; background: #e2e8f0; display:flex; align-items:center; justify-content:center; font-size:10px; color:#64748b;">Resto</div>`}
                 <div style="flex: 1; min-width: 0;">
-                    <h3 style="font-size: 14px; font-weight: 800; margin: 0; color: #0f172a;">${restoName}</h3>
-                    <p style="font-size: 11px; color: #64748b; margin: 2px 0 0 0;">${restoAddress}</p>
+                    <h3 style="font-size: 14px; font-weight: 800; margin: 0; color: #0f172a;">${CGO.esc(restoName)}</h3>
+                    <p style="font-size: 11px; color: #64748b; margin: 2px 0 0 0;">${CGO.esc(restoAddress)}</p>
                 </div>
                 <span style="font-size: 11px; font-weight: 700; padding: 4px 10px; background: ${statusBadgeColor}; color: ${statusBadgeText}; border-radius: 6px;">${statusText}</span>
             </div>
@@ -761,21 +787,31 @@ function toggleMenuCategory(contentId, btnEl) {
     if (!contentDiv) return;
     if (contentDiv.style.display === "none") {
         contentDiv.style.display = "flex";
-        btnEl.querySelector("span:last-child").innerText = "▼ Buka/Tutup";
+        btnEl.querySelector("span:last-child").innerText = "Tutup";
     } else {
         contentDiv.style.display = "none";
-        btnEl.querySelector("span:last-child").innerText = "▶ Buka/Tutup";
+        btnEl.querySelector("span:last-child").innerText = "Buka";
     }
 }
 
 function updateQty(restoId, itemId, change) {
+    const rr = databaseResto.find(r => r.id === restoId);
+    if (change > 0 && rr && rr.isOpen === false) { alert("Maaf, " + (rr.restoName || "resto ini") + " sedang tutup."); return; }
     let key = `${restoId}_${itemId}`;
     let curr = cartQuantities[key] || 0;
     let next = curr + change;
     if(next < 0) next = 0;
     cartQuantities[key] = next;
     let el = document.getElementById(`q_${key}`);
+    updateCartBar();
     if(el) el.innerText = next;
+}
+
+function updateCartBar() {
+    const cart = collectCart();
+    const n = cart.items.reduce((s, i) => s + i.quantity, 0);
+    const badge = document.getElementById("cartBadge");
+    if (badge) { badge.textContent = n ? n + " item · Rp " + cart.subtotal.toLocaleString("id-ID") : ""; badge.style.display = n ? "inline-block" : "none"; }
 }
 
 function filterRestoList() {
@@ -817,7 +853,7 @@ function handleAddressCheckbox(cb) {
     noteInput.disabled = cb.checked;
 
     if (cb.checked) {
-        badge.innerText = "Sip, Mantappp ✓";
+        badge.innerText = "Alamat tersimpan";
         badge.style.background = "#f0fdf4";
         badge.style.color = "#16a34a";
     } else {
@@ -832,7 +868,7 @@ function openMapModal() {
     setTimeout(() => {
         if (!leafletMap) {
             leafletMap = L.map('leafletMapContainer').setView([customerCoords.lat, customerCoords.lon], 15);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(leafletMap);
+            addBaseMap(leafletMap);
             mapMarker = L.marker([customerCoords.lat, customerCoords.lon], { draggable: true }).addTo(leafletMap);
             mapMarker.on('dragend', () => { let pos = mapMarker.getLatLng(); customerCoords.lat = pos.lat; customerCoords.lon = pos.lng; });
             leafletMap.on('click', (e) => { mapMarker.setLatLng(e.latlng); customerCoords.lat = e.latlng.lat; customerCoords.lon = e.latlng.lng; });
@@ -855,11 +891,13 @@ function detectUserLocationViaMap() {
             leafletMap.setView([customerCoords.lat, customerCoords.lon], 16);
             mapMarker.setLatLng([customerCoords.lat, customerCoords.lon]);
         }
+        customerCoordsSet = true;
         alert("GPS berhasil mendeteksi posisi Anda!");
     }, () => alert("Gagal mendeteksi GPS."));
 }
 
 function confirmMapLocation() {
+    customerCoordsSet = true;
     let addressInput = document.getElementById("globalCustomerAddress");
     addressInput.value = "Mengambil nama lokasi...";
     closeMapModal();
@@ -877,6 +915,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let list = document.getElementById("addressSuggestionsList");
 
     searchInput.addEventListener("input", function() {
+        customerCoordsSet = false;
         let query = this.value.trim();
         clearTimeout(searchTimeout);
         if(query.length < 3) { list.style.display = "none"; return; }
@@ -886,8 +925,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 .then(data => {
                     if(data && data.length > 0) {
                         list.innerHTML = data.map(item => `
-                            <div style="padding: 10px; font-size: 11px; border-bottom: 1px solid var(--border); cursor: pointer;" onclick="selectAutoAddress('${item.display_name.replace(/'/g, "")}', ${item.lat}, ${item.lon})">
-                                <b>${item.display_name}</b>
+                            <div style="padding: 10px; font-size: 11px; border-bottom: 1px solid var(--border); cursor: pointer;" onclick="selectAutoAddress(this.dataset.n, this.dataset.lat, this.dataset.lon)" data-n="${CGO.esc(item.display_name)}" data-lat="${CGO.esc(item.lat)}" data-lon="${CGO.esc(item.lon)}">
+                                <b>${CGO.esc(item.display_name)}</b>
                             </div>`).join('');
                         list.style.display = 'block';
                     } else { list.style.display = 'none'; }
@@ -904,7 +943,56 @@ function selectAutoAddress(displayName, lat, lon) {
     document.getElementById("globalCustomerAddress").value = displayName;
     customerCoords.lat = parseFloat(lat);
     customerCoords.lon = parseFloat(lon);
+    customerCoordsSet = true;
     document.getElementById("addressSuggestionsList").style.display = 'none';
+}
+
+const DELIVERY_FEE = 10000;
+const jsArg = (v) => CGO.esc(JSON.stringify(String(v)));
+
+function isItemAvailable(item) {
+    if (item.status !== undefined) {
+        const st = String(item.status).toLowerCase();
+        return !(st.includes('habis') || st.includes('kosong') || st === 'false' || st === '0');
+    }
+    if (item.isAvailable !== undefined) return Boolean(item.isAvailable);
+    return true;
+}
+
+function collectCart() {
+    let subtotal = 0, items = [], restoIds = [], restoMap = {}, unavailable = [];
+    databaseResto.forEach(resto => {
+        (resto.items || []).forEach(item => {
+            const itemId = item.id || item.name;
+            const qty = cartQuantities[`${resto.id}_${itemId}`] || 0;
+            if (qty > 0) {
+                const price = item.discountPrice ? Number(item.discountPrice) : Number(item.price) || 0;
+                if (!isItemAvailable(item)) unavailable.push(item.name || item.nama);
+                subtotal += price * qty;
+                items.push({ id: itemId, name: item.name || item.nama, quantity: qty, price: price });
+                if (!restoMap[resto.id]) { restoMap[resto.id] = resto; restoIds.push(resto.id); }
+            }
+        });
+    });
+    return { subtotal, items, restoIds, resto: restoMap[restoIds[0]] || null, unavailable };
+}
+
+function validateCart(cart) {
+    if (!cart.items.length) { alert("Keranjang belanja masih kosong!"); return false; }
+    if (cart.restoIds.length > 1) { alert("Pesanan hanya bisa dari satu resto. Silakan kosongkan menu dari resto lain terlebih dahulu."); return false; }
+    if (cart.resto && cart.resto.isOpen === false) { alert("Maaf, " + (cart.resto.restoName || "resto ini") + " sedang tutup. Silakan pilih resto lain."); return false; }
+    if (cart.unavailable.length) { alert("Menu berikut sedang habis: " + cart.unavailable.join(", ") + ". Silakan hapus dari keranjang."); return false; }
+    return true;
+}
+
+function readReservation() {
+    if (currentModeSelected !== 'reservasi') return { ok: true, data: null };
+    const date = (document.getElementById("resTanggal") || {}).value || "";
+    const time = (document.getElementById("resJam") || {}).value || "";
+    const method = (document.getElementById("resMetode") || {}).value || "";
+    if (!date || !time) return { ok: false, message: "Silakan isi tanggal dan jam reservasi terlebih dahulu." };
+    if (new Date(date + "T" + time) < new Date()) return { ok: false, message: "Waktu reservasi harus lebih dari waktu sekarang." };
+    return { ok: true, data: { date, time, method } };
 }
 
 function openPaymentSummary() {
@@ -913,29 +1001,21 @@ function openPaymentSummary() {
     let addressNote = document.getElementById("customerNoteAddress").value.trim();
     if(!addressBase) { alert("Tentukan alamat tujuan pengiriman terlebih dahulu!"); return; }
 
+    const cart = collectCart();
+    if (!validateCart(cart)) return;
+    const rsv = readReservation();
+    if (!rsv.ok) { alert(rsv.message); return; }
+
     let detailsPart = [];
     if(houseNo) detailsPart.push(`No. ${houseNo}`);
     if(addressNote) detailsPart.push(`Patokan: ${addressNote}`);
     document.getElementById("summaryAddressText").innerText = addressBase + (detailsPart.length > 0 ? ` (${detailsPart.join(', ')})` : '');
 
-    let subtotal = 0, summaryHTML = "";
-    databaseResto.forEach(resto => {
-        (resto.items || []).forEach(item => {
-            let itemId = item.id || item.name;
-            let key = `${resto.id}_${itemId}`;
-            let qty = cartQuantities[key] || 0;
-            if(qty > 0) {
-                let price = item.discountPrice ? Number(item.discountPrice) : Number(item.price) || 0;
-                subtotal += price * qty;
-                summaryHTML += `<div style="display: flex; justify-content: space-between;"><span>${qty}x ${item.name || item.nama}</span><span style="font-weight: 700;">Rp ${(price * qty).toLocaleString('id-ID')}</span></div>`;
-            }
-        });
-    });
-
-    if(subtotal === 0) { alert("Keranjang belanja masih kosong!"); return; }
+    const summaryHTML = cart.items.map(i => `<div style="display: flex; justify-content: space-between;"><span>${i.quantity}x ${CGO.esc(i.name)}</span><span style="font-weight: 700;">Rp ${(i.price * i.quantity).toLocaleString('id-ID')}</span></div>`).join('') +
+        `<div style="display:flex;justify-content:space-between;color:var(--text-muted);"><span>Ongkir</span><span>Rp ${DELIVERY_FEE.toLocaleString('id-ID')}</span></div>`;
     document.getElementById("summaryItemsList").innerHTML = summaryHTML;
-    document.getElementById("summarySubtotal").innerText = `Rp ${subtotal.toLocaleString('id-ID')}`;
-    document.getElementById("summaryGrandTotal").innerText = `Rp ${(subtotal + 10000).toLocaleString('id-ID')}`;
+    document.getElementById("summarySubtotal").innerText = `Rp ${cart.subtotal.toLocaleString('id-ID')}`;
+    document.getElementById("summaryGrandTotal").innerText = `Rp ${(cart.subtotal + DELIVERY_FEE).toLocaleString('id-ID')}`;
     document.getElementById("paymentModal").style.display = "flex";
 }
 
@@ -952,6 +1032,21 @@ function sendCheckoutChat() {
     chatBox.scrollTop = chatBox.scrollHeight;
 }
 
+// Koordinat tujuan: pakai titik yang dipilih user (saran alamat / peta / GPS). Kalau alamat hanya diketik manual,
+// coba cari koordinatnya; kalau gagal kirim null (driver tetap memakai teks alamat). Tidak lagi memakai titik default.
+async function resolveCustomerCoords(addressText) {
+    if (customerCoordsSet) return { lat: customerCoords.lat, lon: customerCoords.lon };
+    try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 5000);
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=id&q=${encodeURIComponent(addressText)}`, { signal: ctrl.signal });
+        clearTimeout(t);
+        const data = await res.json();
+        if (Array.isArray(data) && data[0]) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    } catch (_) {}
+    return null;
+}
+
 async function finalizeAndExecuteOrder() {
     if (!userProfile.uid) {
         alert("Sesi Anda belum siap. Silakan refresh halaman.");
@@ -961,64 +1056,55 @@ async function finalizeAndExecuteOrder() {
     let addressBase = document.getElementById("globalCustomerAddress").value.trim();
     let houseNo = document.getElementById("customerHouseNo").value.trim();
     let addressNote = document.getElementById("customerNoteAddress").value.trim();
+    if (!addressBase) { alert("Tentukan alamat tujuan pengiriman terlebih dahulu!"); return; }
     let detailsPart = [];
     if(houseNo) detailsPart.push(`No. ${houseNo}`);
     if(addressNote) detailsPart.push(`Patokan: ${addressNote}`);
     let finalAddress = addressBase + (detailsPart.length > 0 ? ` (${detailsPart.join(', ')})` : '');
 
-    let subtotal = 0, structuredItems = [], targetRestoName = 'Mitra Resto Cikur', targetRestoId = '';
-    databaseResto.forEach(resto => {
-        (resto.items || []).forEach(item => {
-            let itemId = item.id || item.name;
-            let key = `${resto.id}_${itemId}`;
-            let qty = cartQuantities[key] || 0;
-            if(qty > 0) {
-                targetRestoId = resto.id;
-                targetRestoName = resto.restoName || 'Mitra Resto Cikur';
-                let price = item.discountPrice ? Number(item.discountPrice) : Number(item.price) || 0;
-                subtotal += price * qty;
-                structuredItems.push({ id: itemId, name: item.name || item.nama, quantity: qty, price: price });
-            }
-        });
-    });
+    const cart = collectCart();
+    if (!validateCart(cart)) return;
+    const rsv = readReservation();
+    if (!rsv.ok) { alert(rsv.message); return; }
 
-    if (!targetRestoId || structuredItems.length === 0) {
-        alert("Keranjang belanja masih kosong!");
-        return;
-    }
-
-    let deliveryFee = 10000;
-    let notesText = activeChatMessages.map(m => m.text).join(' | ') || '';
-    let chosenPaymentMethod = document.getElementById("paymentMethodSelect").value;
-    let grandTotalFood = subtotal + deliveryFee;
+    const deliveryFee = DELIVERY_FEE;
+    const grandTotalFood = cart.subtotal + deliveryFee;
+    const notesText = activeChatMessages.map(m => m.text).join(' | ') || '';
+    const chosenPaymentMethod = document.getElementById("paymentMethodSelect").value;
 
     if (chosenPaymentMethod === "CikurPay Saldo Digital" && Number(userProfile.saldo || 0) < grandTotalFood) {
         alert("Saldo CikurPay kamu tidak cukup (Rp " + Number(userProfile.saldo || 0).toLocaleString("id-ID") + "). Silakan top up dulu di menu Profil, atau pilih metode bayar lain.");
         return;
     }
 
-    let orderPayload = {
-        restoId: targetRestoId,
-        restoName: targetRestoName,
-        customerName: userProfile.name,
-        customerPhone: userProfile.phone,
-        items: structuredItems,
-        subtotal: subtotal,
-        deliveryFee: deliveryFee,
-        total: grandTotalFood,
-        paymentMethod: chosenPaymentMethod,
-        notes: notesText,
-        address: {
-            text: finalAddress,
-            latitude: customerCoords.lat,
-            longitude: customerCoords.lon
-        },
-        mode: currentModeSelected
-    };
-
-    let btnFinalize = document.querySelector('#paymentModal button[onclick="finalizeAndExecuteOrder()"]');
+    const btnFinalize = document.querySelector('#paymentModal button[onclick="finalizeAndExecuteOrder()"]');
+    if (btnFinalize) { btnFinalize.disabled = true; btnFinalize.dataset.label = btnFinalize.textContent; btnFinalize.textContent = "Mengirim pesanan..."; }
+    const restoreBtn = () => { if (btnFinalize) { btnFinalize.disabled = false; btnFinalize.textContent = btnFinalize.dataset.label || "Pesan Sekarang"; } };
 
     try {
+        const coords = await resolveCustomerCoords(addressBase);
+        const orderPayload = {
+            restoId: cart.restoIds[0],
+            restoName: (cart.resto && cart.resto.restoName) || 'Mitra Resto Cikur',
+            restoAddress: (cart.resto && cart.resto.restoAddress) || '',
+            customerName: userProfile.name,
+            customerPhone: userProfile.phone,
+            items: cart.items,
+            subtotal: cart.subtotal,
+            deliveryFee: deliveryFee,
+            total: grandTotalFood,
+            paymentMethod: chosenPaymentMethod,
+            paymentStatus: "PENDING",
+            notes: notesText,
+            address: {
+                text: finalAddress,
+                latitude: coords ? coords.lat : null,
+                longitude: coords ? coords.lon : null
+            },
+            mode: currentModeSelected,
+            reservation: rsv.data
+        };
+
         const order = await window.CikurCloud.createOrder("FOOD", orderPayload);
         if (!order?.id) throw new Error("Pesanan gagal dibuat.");
 
@@ -1027,15 +1113,50 @@ async function finalizeAndExecuteOrder() {
                 const newBalance = await window.CikurCloud.payWithSaldo(userProfile.uid, grandTotalFood, order.id, "Bayar CIKUR Food #" + order.id.slice(-6));
                 userProfile.saldo = newBalance;
             } catch (payError) {
-                alert("Pembayaran saldo gagal: " + (payError?.message || payError) + "\n\nPesanan tetap dibuat, silakan bayar Tunai/QRIS ke driver.");
+                // Pembayaran gagal: ubah metode jadi Tunai supaya tidak tercatat sebagai CikurPay yang belum dibayar.
+                try { await window.CikurCloud.updateOrderStatus(order.id, { paymentMethod: "Tunai / COD (Bayar di Tempat)", paymentStatus: "PENDING" }); } catch (_) {}
+                alert("Pembayaran saldo gagal: " + (payError?.message || payError) + "\n\nPesanan tetap dibuat, silakan bayar Tunai ke driver.");
             }
         }
 
+        cartQuantities = {};
+        activeChatMessages = [];
         closePaymentModal();
+        renderRestoList(databaseResto);
         showOrderTrackingView(order.id);
     } catch (error) {
         alert("Pesanan gagal dikirim: " + (error?.message || error));
+    } finally {
+        restoreBtn();
     }
+}
+
+// Kirim keranjang ke halaman CIKUR GO 2IN1 (makan di resto + didampingi Agent CGO)
+function openBundle2in1() {
+    const addressBase = document.getElementById("globalCustomerAddress").value.trim();
+    if (!addressBase) { alert("Tentukan alamat/lokasi terlebih dahulu!"); return; }
+    const cart = collectCart();
+    if (!validateCart(cart)) return;
+    const houseNo = document.getElementById("customerHouseNo").value.trim();
+    const note = document.getElementById("customerNoteAddress").value.trim();
+    const parts = [];
+    if (houseNo) parts.push(`No. ${houseNo}`);
+    if (note) parts.push(`Patokan: ${note}`);
+    const bundle = {
+        restoId: cart.restoIds[0],
+        restoName: (cart.resto && cart.resto.restoName) || "Mitra Resto Cikur",
+        items: cart.items.map(i => ({ id: i.id, name: i.name, qty: i.quantity, quantity: i.quantity, price: i.price, restoName: (cart.resto && cart.resto.restoName) || "" })),
+        totalFoodPrice: cart.subtotal,
+        address: {
+            text: addressBase + (parts.length ? ` (${parts.join(', ')})` : ''),
+            latitude: customerCoordsSet ? customerCoords.lat : null,
+            longitude: customerCoordsSet ? customerCoords.lon : null
+        },
+        savedAt: Date.now()
+    };
+    try { localStorage.setItem('cikur_bundle_cart', JSON.stringify(bundle)); }
+    catch (e) { alert("Gagal menyimpan keranjang 2IN1: " + (e && e.message || e)); return; }
+    window.location.href = "cikurgo2in1.html";
 }
 
 /* =========================================================
@@ -1067,7 +1188,7 @@ function showOrderTrackingView(orderId) {
         PENDING: "Menunggu Konfirmasi Resto",
         DIMASAK: "Resto Sedang Memasak",
         SIAP_DIAMBIL: "Menunggu Driver Mengambil",
-        DIAMBIL_DRIVER: "Driver Menuju Lokasi Anda",
+        DIAMBIL_DRIVER: "Driver Menuju Resto",
         DIANTAR: "Pesanan Sedang Diantar",
         SELESAI: "Pesanan Selesai",
         DITOLAK_RESTO: "Pesanan Ditolak Resto",
@@ -1084,7 +1205,7 @@ function showOrderTrackingView(orderId) {
         const stEl = document.getElementById('trackingStatusText');
         if (stEl) stEl.innerText = st;
         const badge = document.getElementById('trackingStatusBadge');
-        if (badge) badge.textContent = '📍 ' + st;
+        if (badge) badge.textContent = st;
         const rn = document.getElementById('trackingRestoName');
         if (rn) rn.innerText = order.restoName || '-';
         const tot = document.getElementById('trackingTotal');
@@ -1101,9 +1222,10 @@ function showOrderTrackingView(orderId) {
             if (driverBox) driverBox.style.display = 'flex';
             const dn = document.getElementById('trackingDriverName');
             if (dn) dn.innerText = order.driverName || 'Driver CIKUR GO';
+            fillFoodDriverCard(order);
             const sub = document.getElementById('trackingDriverSub');
             if (sub) {
-                sub.innerText = order.status === 'DIANTAR' ? 'Sedang mengantar pesanan' : 'Menuju lokasi pengantaran';
+                sub.innerText = order.status === 'DIANTAR' ? 'Sedang mengantar pesanan ke lokasimu' : 'Menuju resto untuk mengambil pesananmu';
             }
             startFoodDriverLocationTracking(order.driverId);
         } else if (driverBox) {
@@ -1150,12 +1272,32 @@ function showOrderTrackingView(orderId) {
     });
 }
 
+const FOOD_MK_DEST = (typeof L === 'undefined') ? null : L.divIcon({ className: 'mk', html: '<svg width="30" height="38" viewBox="0 0 30 38"><path d="M15 37S27 24 27 14a12 12 0 1 0-24 0c0 10 12 23 12 23z" fill="#E50914" stroke="#fff" stroke-width="2.5"/><circle cx="15" cy="14" r="4.5" fill="#fff"/></svg>', iconSize: [30, 38], iconAnchor: [15, 37] });
 let foodTrackingMap = null;
 let foodDriverMarker = null;
 let foodDestMarker = null;
 let foodRestoMarker = null;
 let unsubscribeFoodDriverLocation = null;
 let currentTrackedFoodDriverId = null;
+
+function fillFoodDriverCard(order) {
+    const img = document.getElementById("trackingDriverPhoto");
+    const fb = document.getElementById("trackingDriverEmoji");
+    if (img && fb) {
+        if (order.driverPhoto) { img.src = order.driverPhoto; img.style.display = "block"; fb.style.display = "none"; }
+        else { img.style.display = "none"; fb.style.display = "inline"; }
+    }
+    const veh = document.getElementById("trackingDriverVehicle");
+    if (veh) veh.innerText = [order.driverVehicleType, order.driverVehicleModel].filter(Boolean).join(" · ");
+    const plate = document.getElementById("trackingDriverPlate");
+    if (plate) { plate.innerText = order.driverPlate || ""; plate.style.display = order.driverPlate ? "block" : "none"; }
+    const call = document.getElementById("trackingDriverCall");
+    if (call) {
+        const digits = String(order.driverPhone || "").replace(/\D/g, "");
+        if (digits.length >= 8) { call.href = "tel:" + (digits.startsWith("0") ? "+62" + digits.slice(1) : "+" + digits); call.style.display = "flex"; }
+        else call.style.display = "none";
+    }
+}
 
 function hideFoodTrackingView() {
     if (typeof unsubscribeActiveOrder === 'function') unsubscribeActiveOrder();
@@ -1175,7 +1317,7 @@ function ensureFoodTrackingMap(lat, lng) {
         return;
     }
     foodTrackingMap = L.map('foodTrackingMap').setView([lat, lng], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(foodTrackingMap);
+    addBaseMap(foodTrackingMap);
     setTimeout(() => { try { foodTrackingMap.invalidateSize(); } catch (_) {} }, 300);
 }
 
@@ -1191,7 +1333,7 @@ function setFoodTrackingRouteMarkers(order) {
     ensureFoodTrackingMap(dlat, dlng);
     if (!foodTrackingMap) return;
     if (foodDestMarker) foodDestMarker.setLatLng([dlat, dlng]);
-    else foodDestMarker = L.circleMarker([dlat, dlng], { radius: 9, color: '#e50914', fillColor: '#ef4444', fillOpacity: 0.95 }).addTo(foodTrackingMap).bindPopup('Tujuan pengiriman');
+    else foodDestMarker = L.marker([dlat, dlng], { icon: FOOD_MK_DEST }).addTo(foodTrackingMap);
     try {
         const pts = [[dlat, dlng]];
         if (foodDriverMarker) pts.push(foodDriverMarker.getLatLng());
@@ -1216,7 +1358,7 @@ function startFoodDriverLocationTracking(driverId) {
         if (!foodDriverMarker) {
             const icon = L.divIcon({
                 className: 'food-driver-live-icon',
-                html: '<div style="width:36px;height:36px;border-radius:50%;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 4px 12px rgba(0,0,0,.3);border:2px solid #fff;">🛵</div>',
+                html: '<div class="mk-driver">' + ic3('motor') + '</div>',
                 iconSize: [36, 36],
                 iconAnchor: [18, 18]
             });
@@ -1268,12 +1410,12 @@ async function sendTrackingChat() {
 
 <div id="cgoModernToast" class="cgo-modern-toast" aria-hidden="true">
  <div class="cgo-modern-toast-card">
-  <div id="cgoModernToastIcon" class="cgo-modern-toast-icon">✓</div>
+  <div id="cgoModernToastIcon" class="cgo-modern-toast-icon"><svg class="ic"><use href="#i-check"/></svg></div>
   <div style="min-width:0;">
    <div id="cgoModernToastTitle" class="cgo-modern-toast-title">CIKUR GO</div>
    <div id="cgoModernToastMessage" class="cgo-modern-toast-message"></div>
   </div>
-  <button id="cgoModernToastClose" class="cgo-modern-toast-close" type="button" aria-label="Tutup">×</button>
+  <button id="cgoModernToastClose" class="cgo-modern-toast-close" type="button" aria-label="Tutup"><svg class="ic"><use href="#i-close"/></svg></button>
  </div>
 </div>
 <script>
@@ -1282,7 +1424,7 @@ async function sendTrackingChat() {
  if(!box||!icon||!title||!msg) return;
  let timer=null;
  function hide(){clearTimeout(timer);box.classList.remove('show');box.setAttribute('aria-hidden','true');}
- window.showCGOModernNotification=function(type='success',t='CIKUR GO',m=''){clearTimeout(timer);box.classList.remove('success','warning','error');box.classList.add(type);icon.textContent=type==='error'?'×':type==='warning'?'!':'✓';title.textContent=t;msg.textContent=String(m||'');box.classList.add('show');box.setAttribute('aria-hidden','false');timer=setTimeout(hide,3600);};
+ window.showCGOModernNotification=function(type='success',t='CIKUR GO',m=''){clearTimeout(timer);box.classList.remove('success','warning','error');box.classList.add(type);icon.innerHTML='<svg class="ic"><use href="#i-'+(type==='error'?'close':type==='warning'?'warn':'check')+'"/></svg>';title.textContent=t;msg.textContent=String(m||'');box.classList.add('show');box.setAttribute('aria-hidden','false');timer=setTimeout(hide,3600);};
  window.closeCGOModernNotification=hide;
  if(close) close.addEventListener('click',hide);
  window.alert=function(text){const s=String(text||'');let type='success',t='Berhasil';if(/gagal|error|salah|ditolak|tidak berhasil/i.test(s)){type='error';t='Terjadi Kesalahan';}else if(/harus|belum|tidak cocok|wajib|silakan|perhatian/i.test(s)){type='warning';t='Perhatian';}showCGOModernNotification(type,t,s);};

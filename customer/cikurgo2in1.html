@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script type="module" src="../cikur-config.js"></script>
+<script src="../cgo-shared.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
     </style>
@@ -274,6 +275,21 @@
                 return;
             }
 
+            // Halaman ini hanya menerima CikurPay, jadi saldo dicek dulu supaya tidak membuat
+            // pesanan yang tidak pernah bisa dibayar.
+            try {
+                const fu = await window.CikurCloud.ensureAuth();
+                const prof = await window.CikurCloud.getProfile(fu.uid);
+                const need = currentFoodTotal + currentAssistantFee + serviceFee;
+                if (Number(prof?.saldo || 0) < need) {
+                    alert("Saldo CikurPay kamu (Rp " + Number(prof?.saldo || 0).toLocaleString("id-ID") + ") tidak cukup untuk paket 2IN1 ini (Rp " + need.toLocaleString("id-ID") + "). Silakan top up dulu di menu Profil.");
+                    return;
+                }
+            } catch (e) {
+                alert("Gagal memeriksa saldo CikurPay: " + (e?.message || e));
+                return;
+            }
+
             const savedBundle = localStorage.getItem('cikur_bundle_cart');
             let bundleData = null;
             try { bundleData = savedBundle ? JSON.parse(savedBundle) : null; } catch (e) { bundleData = null; }
@@ -307,7 +323,7 @@
                     assistantFee: currentAssistantFee,
                     serviceFee,
                     grandTotal,
-                    paymentMethod: "CIKURPAY",
+                    paymentMethod: "CikurPay Saldo Digital",
                     packageKey: "dine",
                     packageName: "DINE-IN ASSISTANT",
                     schedule: { date: new Date().toISOString().slice(0, 10), time: arrivalTime, durationMinutes: duration },
@@ -319,11 +335,20 @@
                     throw new Error("CIKUR Cloud tidak mengembalikan pasangan order 2IN1 yang lengkap.");
                 }
 
+                // Bayar dengan saldo CikurPay: memotong saldo dan menandai kedua order PAID sekaligus (atomik).
+                try {
+                    await window.CikurCloud.pay2in1Bundle(result.bundleId, firebaseUser.uid);
+                } catch (payError) {
+                    localStorage.removeItem('cikur_bundle_cart');
+                    alert("Pesanan sudah tercatat, tapi pembayaran CikurPay gagal: " + (payError?.message || payError) + "\n\nSilakan hubungi CS CIKUR GO dengan menyebutkan kode " + result.bundleId.slice(-6).toUpperCase() + " untuk menyelesaikan pembayaran.");
+                    window.location.href = `../index.html`;
+                    return;
+                }
+
                 localStorage.removeItem('cikur_bundle_cart');
-                alert(`[TERKIRIM] Paket CIKUR GO 2IN1 sudah masuk ke CIKUR Cloud.
+                alert(`Paket CIKUR GO 2IN1 berhasil dipesan dan dibayar lunas via CikurPay.
 Food: ${result.foodOrder.id}
-Assistant: ${result.assistantOrder.id}
-Pembayaran masih berstatus PENDING dan tidak dipalsukan sebagai berhasil.`);
+Assistant: ${result.assistantOrder.id}`);
                 window.location.href = `../index.html?bundleId=${encodeURIComponent(result.bundleId)}`;
             } catch (error) {
                 console.error("[CIKUR 2IN1] Gagal membuat bundle:", error);

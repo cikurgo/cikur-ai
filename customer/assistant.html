@@ -6,6 +6,7 @@
     <script type="module" src="../cikur-config.js"></script>
     <title>Cikurgo Assistant</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" rel="stylesheet" />
     
     <style>
         /* ==========================================================================
@@ -1430,10 +1431,7 @@
             setTimeout(() => {
                 if (!assistantMap) {
                     assistantMap = L.map("assistantLeafletMap").setView([assistantCoords.lat || -6.32, assistantCoords.lon || 106.15], 15);
-                    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-                        maxZoom: 19,
-                        attribution: "&copy; OpenStreetMap"
-                    }).addTo(assistantMap);
+                    addBaseMap(assistantMap);
 
                     assistantMapMarker = L.marker([assistantCoords.lat || -6.32, assistantCoords.lon || 106.15], { draggable: true }).addTo(assistantMap);
 
@@ -1593,7 +1591,7 @@
                     let lat = order.location?.latitude || assistantCoords.lat || -6.32;
                     let lng = order.location?.longitude || assistantCoords.lon || 106.15;
                     let map = L.map("customerLiveMap", { zoomControl: false }).setView([lat, lng], 15);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+                    addBaseMap(map);
                     L.marker([lat, lng]).addTo(map).bindPopup(order.location?.address || "Lokasi Anda").openPopup();
                 }
             }, 200);
@@ -1879,5 +1877,8 @@
         });
     </script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
+<script src="../cgo-shared.js"></script>
 </body>
 </html>
