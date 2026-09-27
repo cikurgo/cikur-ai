@@ -179,9 +179,21 @@
     if (!a) {
       a = new Audio(ROOT + file);
       a.preload = "auto";
+      a.dataset.cgoTried = "0";
       audioCache.set(file, a);
-      a.addEventListener("error", function () {
-        try { a.src = "./" + file; } catch (_) {}
+      // Satu kali fallback path — jangan loop error→src→error
+      a.addEventListener("error", function onAudioErr() {
+        try {
+          if (a.dataset.cgoTried === "0") {
+            a.dataset.cgoTried = "1";
+            a.src = "./" + file;
+          } else {
+            a.removeEventListener("error", onAudioErr);
+            audioCache.delete(file); // jangan cache file yang gagal
+          }
+        } catch (_) {
+          try { a.removeEventListener("error", onAudioErr); } catch (_) {}
+        }
       });
     }
     return a;

@@ -905,23 +905,7 @@ function jelajahi_alternatif(hasil_urai) {
  * EXPORTS
  * ============================================================ */
 
-module.exports = {
-  // Core
-  BAHASA_DIDUKUNG, MODE_DIDUKUNG, daftarBahasa, tambahBahasa,
-  angkaKeKata, angkaKeKataLengkap, romawiKeAngka, romawiKeKata,
-  tanggalKeKata, hurufKeKata, ejaKarakter, ejaKode,
-  lafalWarna, lafalEmoji, normalisasiInput,
-  uraiAudit, urai, uraiToken, uraiPerToken, uraiPerKata,
-  CIKURGO, cikur, TokenHasil, HasilUrai,
-  REG_BHS, WARNA, EMOJI_REG, WARNA_PREFIX, KATA_DAN,
-  CikurGoError, VERSION: "3.0.0", version: "3.0.0",
-  // Lapis 2
-  nalar, putuskan, deteksi_pola,
-  ingat, lupakan, konteks_sekarang, sarankan_lanjutan,
-  jelaskan, nilai_kualitas,
-  // Lapis 3
-  cipta_ide, usul_tindakan, susun_rencana, silangkan_ide, jelajahi_alternatif
-};
+/* browser build: no module.exports — gunakan window.CIKURGO */
 
 
 const __cikurExports = {
