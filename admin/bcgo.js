@@ -857,8 +857,8 @@ export async function runAutonomousEngine(onCycleUpdate) {
     };
   }
 
-  function startAgentPresence()
-    if (!adminDb || !__cgoCloudReady) return; {
+  function startAgentPresence() {
+    if (!adminDb || !__cgoCloudReady) return;
     const listenerEpoch = authEpoch;
     if (typeof unsubscribeAgentPresence === "function") unsubscribeAgentPresence();
     state.agentPresence = { ...state.agentPresence, status: "CONNECTING", connected: false };
@@ -951,8 +951,8 @@ export async function runAutonomousEngine(onCycleUpdate) {
     realtimeBusy = false;
   }
 
-  function startSystemLogs()
-    if (!adminDb || !__cgoCloudReady) return; {
+  function startSystemLogs() {
+    if (!adminDb || !__cgoCloudReady) return;
     const listenerEpoch = authEpoch;
     // PENTING: pakai adminDb + adminAuth, bukan CikurCloud.listenSystemLogs
     // (yang memakai customerDb tanpa token Super Admin → permission denied / sensor mati).
@@ -1007,8 +1007,8 @@ export async function runAutonomousEngine(onCycleUpdate) {
     }
   }
 
-  function startFirestoreProbe()
-    if (!adminDb || !__cgoCloudReady) return; {
+  function startFirestoreProbe() {
+    if (!adminDb || !__cgoCloudReady) return;
     const listenerEpoch = authEpoch;
     if (typeof unsubscribeFirestore === "function") unsubscribeFirestore();
     try {
