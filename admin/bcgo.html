@@ -828,65 +828,13 @@ async function sendQuestion(question) {
             }
         }
 
-        // 1c) Otak Jenius CIKUR GO v3 — nalar + angka terbilang (offline, pintar)
-        if (window.CIKURGO) {
+        // === SATU OTAK: bukti BCGO sudah di `answer` via BCGOBrain.ask (yang sudah naturalizeWithOtak) ===
+        // Di sini hanya pastikan suara 1x + polish ringan tanpa otak kedua yang menempel label
+        if (answer && window.CIKURGO) {
             try {
-                setChatLiveStatus('Otak Jenius menalar konteks sistem…', 'working');
-                const st = authoritativeBCGOState() || liveState || window.BCGO_STATE || {};
-                const metrics = st.metrics || {};
-                const conn = st.connection || {};
-                const fs = st.firestore || {};
-                const active = metrics.active ?? metrics.activeAnomalies ?? 0;
-                const recovered = metrics.recovered ?? 0;
-                const cycle = st.cycle ?? 0;
-                const conf = st.confidence ?? st.lastConfidence;
-                const num = (n) => {
-                    try { return window.CIKURGO.angkaKeKata(Number(n)||0, 'id'); } catch { return String(n); }
-                };
-                // Enrich existing answer numbers to words where helpful
-                if (answer && typeof answer === 'string') {
-                    answer = answer.replace(/\b(\d{1,3})\s*%/g, (_, d) => num(d) + ' persen')
-                                   .replace(/\b(\d+)\s+anomali\b/gi, (_, d) => num(d) + ' anomali')
-                                   .replace(/\b(\d+)\s+siklus\b/gi, (_, d) => num(d) + ' siklus');
-                }
-                // If weak/empty → compose from live evidence + nalar
-                const weak = !answer || /belum punya bukti|belum bisa|BCGO_BRAIN_NOT_READY/i.test(String(answer));
-                if (weak || /status|bagaimana|apa kabar|sehat|ringkas|rangkum|jelaskan sistem/i.test(text)) {
-                    const evidence = [
-                        `Siklus ke-${cycle}`,
-                        `anomali aktif ${active}`,
-                        `recovered ${recovered}`,
-                        `Firestore ${fs.connected ? 'LIVE' : 'offline'}`,
-                        `koneksi ${conn.status || conn.mode || 'UNKNOWN'}`,
-                        conf != null ? `keyakinan ${Math.round(Number(conf)*100)} persen` : null
-                    ].filter(Boolean).join(', ');
-                    const prompt = `Pertanyaan user: ${text}. Bukti live BCGO: ${evidence}.`;
-                    if (typeof window.CIKURGO.nalar === 'function') {
-                        const r = window.CIKURGO.nalar(prompt, { bahasa: 'id' });
-                        const kesimpulan = (r && (r.kesimpulan || r.hasil)) ? String(r.kesimpulan || r.hasil) : '';
-                        const alasan = Array.isArray(r?.alasan) ? r.alasan.slice(0, 2).join('; ') : '';
-                        const otakLine = [kesimpulan, alasan].filter(Boolean).join(' — ').slice(0, 420);
-                        if (otakLine) {
-                            answer = answer ? (String(answer) + '\n\n[Otak Jenius] ' + otakLine) : otakLine;
-                        }
-                    }
-                    // Decision help
-                    if (/pilih|putuskan|mana yang|rekomendasi/i.test(text) && typeof window.CIKURGO.putuskan === 'function') {
-                        const opts = ['lanjut monitor', 'audit Mesin ABC', 'periksa scanner', 'tunggu stabil'];
-                        const d = window.CIKURGO.putuskan(text, opts, { preferensi: 'internal_cikur' });
-                        const pilih = d?.pilihan || d?.hasil;
-                        if (pilih) answer = (answer ? answer + '\n\n' : '') + `Rekomendasi Otak: ${pilih}.`;
-                    }
-                }
-                // Speak short ack (no spam)
-                try {
-                    if (window.CGOOperatorVoice && typeof window.CGOOperatorVoice.emit === 'function') {
-                        window.CGOOperatorVoice.emit('COMMAND_ACCEPTED');
-                    }
-                } catch (_) {}
-            } catch (otakErr) {
-                console.warn('[BCGO] Otak Jenius:', otakErr);
-            }
+                // Bersihkan label dual-brain lama
+                answer = String(answer).replace(/\n\n\[Otak Jenius\]\s*/g, "\n\n").replace(/Rekomendasi Otak:\s*/g, "Rekomendasi: ");
+            } catch (_) {}
         }
 
         // 2) Internal CGO brain (investigation) jika jawaban generik / kosong
@@ -904,8 +852,9 @@ async function sendQuestion(question) {
         }
         if (!answer) throw new Error('BCGO_BRAIN_NOT_READY');
         addChat('bcgo', answer);
-        // Natural voice reply (Otak-enriched, airport-style, no spam)
+        // Natural voice — SATU jalur: batalkan TTS event lain, baca jawaban utuh
         try {
+            if (window.speechSynthesis) try { window.speechSynthesis.cancel(); } catch (_) {}
             if (window.CGOOperatorVoice && typeof window.CGOOperatorVoice.speakAnswer === 'function') {
                 void window.CGOOperatorVoice.speakAnswer(answer);
             }

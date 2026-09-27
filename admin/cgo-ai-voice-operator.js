@@ -275,6 +275,7 @@
     }
     lastChatHash = hash;
     lastChatAt = Date.now();
+    try { if (global.speechSynthesis) global.speechSynthesis.cancel(); } catch (_) {}
     var start = unlocked ? Promise.resolve(true) : unlock();
     return start.then(function () {
       return speakTTS(text, { rate: 0.94, pitch: 1.06 }).then(function (ok) {

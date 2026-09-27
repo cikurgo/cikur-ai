@@ -68,7 +68,10 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "admin/cgo-ai-radar.js", path: "cgo-ai-radar.js", role: "Radar Engine" },
   { file: "admin/cgo-ai-radar-visual.js", path: "cgo-ai-radar-visual.js", role: "Radar Visual" },
   { file: "admin/cgo-ai-voice-operator.js", path: "cgo-ai-voice-operator.js", role: "Voice Operator" },
-  { file: "admin/cgo-instruction.js", path: "cgo-instruction.js", role: "CGO Constitution" },
+  { file: "admin/cikur-go.browser.js", path: "cikur-go.browser.js", role: "Otak Jenius Browser" },
+  { file: "admin/cikur-go.js", path: "cikur-go.js", role: "Otak Jenius Core" },
+  { file: "admin/cikur-v3-extension.js", path: "cikur-v3-extension.js", role: "Otak Jenius v3" },
+  { file: "admin/cgo-instruction.js","admin/cikur-go.browser.js","admin/cikur-go.js","admin/cikur-v3-extension.js","admin/cgo-ai-voice-operator.js", path: "cgo-instruction.js", role: "CGO Constitution" },
   { file: "cgo-app-bootstrap.js", path: "../cgo-app-bootstrap.js", role: "Customer Bootstrap" },
   { file: "index.html", path: "../index.html", role: "Customer Home" },
   { file: "customer/food.html", path: "../customer/food.html", role: "Customer Food" },
@@ -470,6 +473,58 @@ export function runAutonomousEngine(onCycleUpdate) {
   function findFile(question) {
     const q = String(question || "").toLowerCase();
     return Object.keys(ORGAN_REGISTRY).find(file => q.includes(file.toLowerCase())) || null;
+  }
+
+
+  /** Satu otak: bukti BCGO + Otak Jenius → jawaban natural (bukan dua otak terpisah). */
+  function naturalizeWithOtak(question, evidenceAnswer) {
+    try {
+      const CG = (typeof window !== "undefined" && window.CIKURGO) ? window.CIKURGO : null;
+      const st = state || {};
+      const metrics = st.metrics || {};
+      const q = String(question || "").toLowerCase();
+      let text = String(evidenceAnswer || "").trim();
+
+      const num = (n) => {
+        if (CG && typeof CG.angkaKeKata === "function") {
+          try { return CG.angkaKeKata(Number(n) || 0, "id"); } catch (_) {}
+        }
+        return String(n);
+      };
+
+      // Angka → kata di seluruh jawaban bukti
+      text = text
+        .replace(/\b(\d{1,3})\s*%/g, (_, d) => num(d) + " persen")
+        .replace(/\bcycle\s*#?\s*(\d+)\b/gi, (_, d) => "siklus ke-" + num(d))
+        .replace(/\b(\d+)\s+anomali\b/gi, (_, d) => num(d) + " anomali")
+        .replace(/\b(\d+)\s+organ\b/gi, (_, d) => num(d) + " organ");
+
+      // Sapaan / identitas → natural singkat
+      if (/^(halo|hai|hello|pagi|siang|sore|malam)\b/.test(q) || /siapa kamu|kamu siapa/.test(q)) {
+        return "Halo, saya CGO Operator. Saya membaca keadaan sistem dari telemetry yang sedang hidup. " + text;
+      }
+
+      // Status / kabar
+      if (/status|apa kabar|sehat|bagaimana sistem|kondisi/.test(q)) {
+        const active = metrics.active ?? 0;
+        const total = metrics.total ?? 0;
+        const step = st.step || "—";
+        const open = active === 0
+          ? "Sistem dalam kondisi stabil, tidak ada anomali aktif."
+          : "Ada " + num(active) + " anomali aktif dari " + num(total) + " organ yang dipantau.";
+        return open + " Saat ini tahap " + step + ". " + text;
+      }
+
+      // Terima kasih
+      if (/terima kasih|makasih|thanks/.test(q)) {
+        return "Sama-sama. Saya tetap memantau saraf sistem. Jika perlu, tanyakan status, scanner, radar, atau file tertentu.";
+      }
+
+      // Default: bukti teknis yang sudah dipoles — satu suara, satu otak
+      return text;
+    } catch (_) {
+      return evidenceAnswer;
+    }
   }
 
   function answerQuestion(question) {
@@ -1029,7 +1084,7 @@ export function runAutonomousEngine(onCycleUpdate) {
         if (matched) relations.push({ type: "CROSS_FILE_SURFACE", status: "LINKED", confidence: "VERIFIED", sourceFile: item.file, targetFile: matched.file, key: ref });
         else if (/\.(?:html|js)$/i.test(target) && !/tailwind|leaflet|firebase|googleapis|cdn\./i.test(target)) {
           // Modul customer AI opsional — UNKNOWN informatif, bukan mismatch organ
-          const optional = /cgo-customer|cgo-app-bootstrap/i.test(target);
+          const optional = /cgo-customer|cgo-app-bootstrap|cikur-go|cgo-ai-voice/i.test(target);
           relations.push({
             type: "CROSS_FILE_SURFACE",
             status: optional ? "VARIANT" : "UNKNOWN",
@@ -1300,7 +1355,10 @@ export function runAutonomousEngine(onCycleUpdate) {
   });
 
   const brain = {
-    ask: answerQuestion,
+    ask: function(q) {
+      const raw = answerQuestion(q);
+      return naturalizeWithOtak(q, raw);
+    },
     getState: () => {
       const organs = buildOrgans();
       state.systemOrgans = organs;
