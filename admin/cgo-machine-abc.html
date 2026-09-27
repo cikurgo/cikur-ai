@@ -190,6 +190,15 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
   <div id="bootBanner" class="banner ok">Mesin ABC siap · self-test berjalan · menunggu input LIVE.</div>
   <section class="banner" id="liveLinkPanel"><b>OPERASI:</b> <span id="liveLinkMode">STANDBY</span> · <span id="liveLinkStatus">Belum ada input BCGO LIVE.</span> · <span id="liveLinkAudit">Audit –</span> · <span id="liveLinkAck">ACK –</span></section>
 
+  <section id="abc-cognitive-strip" class="banner" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+    <span><b>KOGNITIF:</b></span>
+    <span>Otak <b id="abc-cog-otak">—</b></span>
+    <span>· Mode <b id="abc-cog-mode">STANDBY</b></span>
+    <span>· Kepercayaan rata <b id="abc-cog-conf">—</b></span>
+    <span>· Voice <b id="abc-cog-voice">OFF</b></span>
+  </section>
+
+
   <div class="actions">
     <button type="button" class="btn primary" id="btnDemo">
       <svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>
@@ -849,5 +858,38 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
 })();
 
 </script>
+
+<script>
+(function(){
+  function refreshAbcCog(){
+    try {
+      var otak = document.getElementById('abc-cog-otak');
+      var voice = document.getElementById('abc-cog-voice');
+      var mode = document.getElementById('abc-cog-mode');
+      var conf = document.getElementById('abc-cog-conf');
+      if (otak) {
+        var ok = !!(window.CIKURGO && (window.CIKURGO.nalar || window.CIKURGO.angkaKeKata));
+        otak.textContent = ok ? 'JENIUS v3' : 'offline';
+        otak.style.color = ok ? '#34d399' : '#f87171';
+      }
+      if (voice) {
+        var on = !!(window.CGOOperatorVoice && window.CGOOperatorVoice.isEnabled && window.CGOOperatorVoice.isEnabled());
+        voice.textContent = on ? 'ON' : 'OFF';
+      }
+      if (mode && window.CGO_ABC_LIVE_LINK) {
+        mode.textContent = window.CGO_ABC_LIVE_LINK.mode || 'STANDBY';
+      }
+      if (conf) {
+        var el = document.getElementById('statAvgConf') || document.querySelector('[data-avg-conf]');
+        // leave if existing metrics code updates
+      }
+    } catch(_){}
+  }
+  setInterval(refreshAbcCog, 2000);
+  if (document.readyState === 'complete') refreshAbcCog();
+  else window.addEventListener('load', refreshAbcCog);
+})();
+</script>
+
 </body>
 </html>

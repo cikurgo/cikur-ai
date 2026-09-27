@@ -1,16 +1,65 @@
-import {
-  collection,
-  onSnapshot,
-  query,
-  orderBy,
-  limit,
-  doc,
-  getDoc,
-  where
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { adminDb, adminAuth } from "../cikur-config.js";
-import { createRadarEngine } from "./cgo-ai-radar.js";
+/* BCGO offline-first: cloud modules di-load dinamis agar boot tidak mati jika Firebase/config gagal. */
+let collection, onSnapshot, query, orderBy, limit, doc, getDoc, where;
+let onAuthStateChanged;
+let adminDb = null;
+let adminAuth = null;
+let createRadarEngine = null;
+let __cgoCloudReady = false;
+let __cgoCloudError = null;
+
+async function __loadCgoCloud() {
+  if (__cgoCloudReady) return true;
+  try {
+    const fsMod = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+    collection = fsMod.collection;
+    onSnapshot = fsMod.onSnapshot;
+    query = fsMod.query;
+    orderBy = fsMod.orderBy;
+    limit = fsMod.limit;
+    doc = fsMod.doc;
+    getDoc = fsMod.getDoc;
+    where = fsMod.where;
+
+    const authMod = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js");
+    onAuthStateChanged = authMod.onAuthStateChanged;
+
+    // Path config: admin/ → ../cikur-config.js (root). Fallback beberapa path.
+    let cfg = null;
+    const cfgPaths = ["../cikur-config.js", "./cikur-config.js", "/cikur-config.js"];
+    let lastCfgErr = null;
+    for (const path of cfgPaths) {
+      try {
+        cfg = await import(path);
+        if (cfg && (cfg.adminDb || cfg.adminAuth)) break;
+      } catch (e) {
+        lastCfgErr = e;
+        cfg = null;
+      }
+    }
+    if (!cfg) throw lastCfgErr || new Error("cikur-config.js tidak ditemukan dari admin/");
+    adminDb = cfg.adminDb;
+    adminAuth = cfg.adminAuth;
+
+    try {
+      const radarMod = await import("./cgo-ai-radar.js");
+      createRadarEngine = radarMod.createRadarEngine || null;
+    } catch (_) {
+      createRadarEngine = null;
+    }
+
+    __cgoCloudReady = true;
+    __cgoCloudError = null;
+    if (typeof createRadarEngine === "function") {
+      try { radar = createRadarEngine({ maxAgents: AGENT_PRESENCE_LIMIT }); } catch (_) {}
+    }
+    return true;
+  } catch (e) {
+    __cgoCloudError = e;
+    console.warn("[BCGO] Cloud/config gagal dimuat — mode otonomi lokal saja.", e);
+    return false;
+  }
+}
+
 
 /*
  * BCGO MASTER NERVE SYSTEM v4.3.0-INTERNAL-SOURCE-SCAN
@@ -71,7 +120,7 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "admin/cikur-go.browser.js", path: "cikur-go.browser.js", role: "Otak Jenius Browser" },
   { file: "admin/cikur-go.js", path: "cikur-go.js", role: "Otak Jenius Core" },
   { file: "admin/cikur-v3-extension.js", path: "cikur-v3-extension.js", role: "Otak Jenius v3" },
-  { file: "admin/cgo-instruction.js","admin/cikur-go.browser.js","admin/cikur-go.js","admin/cikur-v3-extension.js","admin/cgo-ai-voice-operator.js", path: "cgo-instruction.js", role: "CGO Constitution" },
+  { file: "admin/cgo-instruction.js", path: "cgo-instruction.js", role: "CGO Constitution" },
   { file: "cgo-app-bootstrap.js", path: "../cgo-app-bootstrap.js", role: "Customer Bootstrap" },
   { file: "index.html", path: "../index.html", role: "Customer Home" },
   { file: "customer/food.html", path: "../customer/food.html", role: "Customer Food" },
@@ -99,7 +148,8 @@ const CORE_SOURCE_FILES = new Set([
   "admin/cgo-machine-abc-bridge.js","admin/cgo-abc-cognition.js","admin/cgo-ai-browser-adapter.js",
   "admin/cgo-ai-core.js","admin/cgo-ai-cognition.js","admin/cgo-ai-guardian.js","admin/cgo-ai-investigation-engine.js",
   "admin/cgo-ai-investigator.js","admin/cgo-ai-knowledge.js","admin/cgo-ai-logic.js","admin/cgo-ai-memory.js",
-  "admin/cgo-ai-runtime-adapter.js","admin/cgo-ai-sovereignty.js","admin/cgo-ai-radar.js","admin/cgo-ai-radar-visual.js","admin/cgo-instruction.js"
+  "admin/cgo-ai-runtime-adapter.js","admin/cgo-ai-sovereignty.js","admin/cgo-ai-radar.js","admin/cgo-ai-radar-visual.js",
+  "admin/cgo-instruction.js","admin/cikur-go.browser.js","admin/cikur-go.js","admin/cikur-v3-extension.js","admin/cgo-ai-voice-operator.js"
 ]);
 
 function makeInitialSourceScan() {
@@ -124,7 +174,18 @@ const EVENT_LIMIT = 24;
 const AGENT_PRESENCE_MAX_AGE_MS = 180000;
 const AGENT_PRESENCE_LIMIT = 500;
 const AGENT_PRESENCE_MAX_ACCURACY_M = 500;
-const radar = createRadarEngine({ maxAgents: AGENT_PRESENCE_LIMIT });
+function __makeStubRadar() {
+  return {
+    setOrigin() {},
+    setRadiusKm() {},
+    ingest() { return { count: 0, freshCount: 0, staleCount: 0, items: [], events: [] }; },
+    snapshot() { return { count: 0, freshCount: 0, staleCount: 0, items: [], events: [], status: "STANDBY" }; }
+  };
+}
+let radar = (typeof createRadarEngine === "function")
+  ? createRadarEngine({ maxAgents: AGENT_PRESENCE_LIMIT })
+  : __makeStubRadar();
+
 
 const INTERNAL_TELEMETRY_SOURCES = new Set([
   "bcgo.html", "bcgo.js", "bcgo-admin.html", "data-cgo.html",
@@ -171,10 +232,17 @@ function isActionableTelemetry(log) {
 }
 
 
-export function runAutonomousEngine(onCycleUpdate) {
+export async function runAutonomousEngine(onCycleUpdate) {
   if (typeof onCycleUpdate !== "function") {
     throw new TypeError("BCGO membutuhkan callback UI.");
   }
+
+  // Coba cloud; gagal → tetap boot offline (jangan biarkan UI stuck CONNECTING)
+  const cloudOk = await __loadCgoCloud();
+  if (!cloudOk) {
+    console.warn("[BCGO] Menjalankan tanpa Firebase:", __cgoCloudError?.message || __cgoCloudError);
+  }
+
 
   let stopped = false;
   let authorized = false;
@@ -789,7 +857,8 @@ export function runAutonomousEngine(onCycleUpdate) {
     };
   }
 
-  function startAgentPresence() {
+  function startAgentPresence()
+    if (!adminDb || !__cgoCloudReady) return; {
     const listenerEpoch = authEpoch;
     if (typeof unsubscribeAgentPresence === "function") unsubscribeAgentPresence();
     state.agentPresence = { ...state.agentPresence, status: "CONNECTING", connected: false };
@@ -882,7 +951,8 @@ export function runAutonomousEngine(onCycleUpdate) {
     realtimeBusy = false;
   }
 
-  function startSystemLogs() {
+  function startSystemLogs()
+    if (!adminDb || !__cgoCloudReady) return; {
     const listenerEpoch = authEpoch;
     // PENTING: pakai adminDb + adminAuth, bukan CikurCloud.listenSystemLogs
     // (yang memakai customerDb tanpa token Super Admin → permission denied / sensor mati).
@@ -937,7 +1007,8 @@ export function runAutonomousEngine(onCycleUpdate) {
     }
   }
 
-  function startFirestoreProbe() {
+  function startFirestoreProbe()
+    if (!adminDb || !__cgoCloudReady) return; {
     const listenerEpoch = authEpoch;
     if (typeof unsubscribeFirestore === "function") unsubscribeFirestore();
     try {
@@ -1424,30 +1495,36 @@ export function runAutonomousEngine(onCycleUpdate) {
   // connection remains CONNECTING until the real auth/Firestore checks pass.
   publishToUI(safeClone(state));
 
-  unsubscribeAuth = onAuthStateChanged(adminAuth, user => {
-    const epoch = ++authEpoch;
-    if (!user) {
-      // Tidak ada sesi — jangan stuck CONNECTING selamanya; aktifkan otonomi lokal
-      authorized = false;
-      authorizedUid = null;
-      cleanupRealtime();
-      setTimeout(() => {
-        if (stopped || epoch !== authEpoch || authorized) return;
-        startLocalAutonomy("Sesi Admin belum ada");
-      }, 1200);
-      return;
-    }
-    verifyAdmin(user, epoch).catch(error => {
-      if (stopped || epoch !== authEpoch) return;
-      authorized = false;
-      authorizedUid = null;
-      cleanupRealtime();
-      emit("OUT", "Saya gagal memverifikasi status Admin.", "SYS_AUTH_CHECK_FAILED", error?.message, { cycleMode: "ERROR" });
-      setTimeout(() => {
-        if (stopped || epoch !== authEpoch || authorized) return;
-        startLocalAutonomy("Verifikasi Admin gagal");
-      }, 1500);
+  if (cloudOk && adminAuth && typeof onAuthStateChanged === "function") {
+    unsubscribeAuth = onAuthStateChanged(adminAuth, user => {
+      const epoch = ++authEpoch;
+      if (!user) {
+        authorized = false;
+        authorizedUid = null;
+        cleanupRealtime();
+        setTimeout(() => {
+          if (stopped || epoch !== authEpoch || authorized) return;
+          startLocalAutonomy("Sesi Admin belum ada");
+        }, 800);
+        return;
+      }
+      verifyAdmin(user, epoch).catch(error => {
+        if (stopped || epoch !== authEpoch) return;
+        authorized = false;
+        authorizedUid = null;
+        cleanupRealtime();
+        emit("OUT", "Saya gagal memverifikasi status Admin.", "SYS_AUTH_CHECK_FAILED", error?.message, { cycleMode: "ERROR" });
+        setTimeout(() => {
+          if (stopped || epoch !== authEpoch || authorized) return;
+          startLocalAutonomy("Verifikasi Admin gagal");
+        }, 1000);
+      });
     });
-  });
+  } else {
+    // Tanpa cloud: langsung otonomi lokal
+    setTimeout(() => {
+      if (!stopped && !authorized) startLocalAutonomy(__cgoCloudError ? String(__cgoCloudError.message || __cgoCloudError) : "Cloud tidak tersedia");
+    }, 300);
+  }
   return brain;
 }

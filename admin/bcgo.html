@@ -84,6 +84,27 @@ body{font-family:'Inter',sans-serif}
     Semua panel membaca <span class="code-font">BCGO_STATE</span> yang sama sehingga cycle, stage, telemetry, dan chat tidak boleh berbeda.
 </div>
 
+  <!-- Cognitive Status · transparansi kognitif (upgrade multimodal) -->
+  <section id="cognitive-status-panel" class="mt-3 mb-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+    <div class="rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-2">
+      <div class="text-slate-500 uppercase tracking-wide text-[9px]">Mode Kognitif</div>
+      <div id="cog-mode" class="text-cyan-300 font-semibold mt-0.5">BOOT</div>
+    </div>
+    <div class="rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-2">
+      <div class="text-slate-500 uppercase tracking-wide text-[9px]">Otak Jenius</div>
+      <div id="cog-otak" class="text-slate-400 font-semibold mt-0.5">cek…</div>
+    </div>
+    <div class="rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-2">
+      <div class="text-slate-500 uppercase tracking-wide text-[9px]">Siklus · Scan</div>
+      <div id="cog-cycle" class="text-emerald-300 font-semibold mt-0.5">#0 · —</div>
+    </div>
+    <div class="rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-2">
+      <div class="text-slate-500 uppercase tracking-wide text-[9px]">Voice · Mic</div>
+      <div id="cog-voice" class="text-slate-400 font-semibold mt-0.5">siaga</div>
+    </div>
+  </section>
+
+
 <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-xs">
     <div class="flex flex-wrap items-center justify-between gap-2">
         <div class="text-slate-400">SUMBER KEBENARAN SARAF: <span class="code-font text-indigo-300">BCGO_STATE</span></div>
@@ -312,7 +333,7 @@ body{font-family:'Inter',sans-serif}
         <form id="chat-form" class="flex gap-2 items-center">
             <button type="button" id="chat-mic" title="Bicara ke CGO" aria-label="Mikrofon"
                 class="shrink-0 w-10 h-10 rounded-lg border border-slate-700 bg-slate-900 text-cyan-300 hover:border-cyan-600 hover:text-cyan-200 flex items-center justify-center text-lg"
-                >🎤</button>
+                 style="min-width:2.5rem"></button>
             <input id="chat-input" autocomplete="off"
                 class="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
                 placeholder="Tanya BCGO: apa yang sedang kamu kerjakan?">
@@ -333,8 +354,19 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-ai-voice-operator.js?v=3.3.0-NEURAL-CHAT-OTAK"></script>
 <script src="cgo-machine-abc.js?v=0.9.8-STABLE-20260926"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.6.0-BCGO-SYNC-20260926"></script>
+
+<script>
+window.CGO_SVG = {
+  mic: '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>',
+  send: '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+  stop: '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>',
+  sound: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>',
+  chat: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
+};
+</script>
+
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=4.4.0-LOCAL-AUTONOMY-MULTIMODAL-20260927';
+import { runAutonomousEngine } from './bcgo.js?v=4.5.1-COGNITIVE-UI-20260927';
 
 // Bridge internal CGO brain ke BCGO_STATE (tanpa AI eksternal)
 let internalBrain = null;
@@ -1194,7 +1226,7 @@ try {
 } catch (_) {}
 
 try {
-runAutonomousEngine(state => {
+await runAutonomousEngine(state => {
     latestBCGOLiveState = state;
     liveState = state;
     try {
@@ -1231,6 +1263,37 @@ runAutonomousEngine(state => {
     } catch (bridgeErr) {
       console.warn('[BCGO] brain ingest error:', bridgeErr);
     }
+    
+    try {
+      const modeEl = document.getElementById('cog-mode');
+      const otakEl = document.getElementById('cog-otak');
+      const cycleEl = document.getElementById('cog-cycle');
+      const voiceEl = document.getElementById('cog-voice');
+      if (modeEl) {
+        const mode = state.cycleMode || state.connection?.status || '—';
+        modeEl.textContent = mode;
+        modeEl.className = 'font-semibold mt-0.5 ' + (
+          mode === 'NORMAL' || mode === 'LIVE' ? 'text-emerald-300' :
+          mode === 'LOCAL' || mode === 'OFFLINE_LOCAL' ? 'text-amber-300' :
+          'text-cyan-300'
+        );
+      }
+      if (otakEl) {
+        const ok = !!(window.CIKURGO && (window.CIKURGO.nalar || window.CIKURGO.angkaKeKata));
+        otakEl.textContent = ok ? 'AKTIF · v3' : 'tidak termuat';
+        otakEl.className = 'font-semibold mt-0.5 ' + (ok ? 'text-emerald-300' : 'text-rose-300');
+      }
+      if (cycleEl) {
+        const sc = state.sourceScan?.status || '—';
+        cycleEl.textContent = '#' + (state.cycle ?? 0) + ' · ' + sc;
+      }
+      if (voiceEl) {
+        const vOn = !!(window.CGOOperatorVoice && window.CGOOperatorVoice.isEnabled && window.CGOOperatorVoice.isEnabled());
+        const mic = document.getElementById('chat-mic');
+        voiceEl.textContent = (vOn ? 'suara ON' : 'suara OFF') + ' · mic ' + (mic && !mic.disabled ? 'OK' : '—');
+      }
+    } catch (_) {}
+
     renderConnection(state);
     renderAgentPresence(state);
     renderNeuralEvents(state.recentEvents);
@@ -1291,6 +1354,7 @@ runAutonomousEngine(state => {
   const input = document.getElementById('chat-input');
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!micBtn) return;
+  if (window.CGO_SVG) micBtn.innerHTML = window.CGO_SVG.mic;
   if (!SR) {
     micBtn.title = 'Speech Recognition tidak didukung browser ini';
     micBtn.classList.add('opacity-40');
@@ -1304,7 +1368,7 @@ runAutonomousEngine(state => {
     micBtn.classList.toggle('border-rose-500', listening);
     micBtn.classList.toggle('text-rose-300', listening);
     micBtn.classList.toggle('animate-pulse', listening);
-    micBtn.textContent = listening ? '⏹' : '🎤';
+    if (window.CGO_SVG) micBtn.innerHTML = listening ? window.CGO_SVG.stop : window.CGO_SVG.mic; else micBtn.textContent = listening ? '⏹' : '🎤';
   }
   micBtn.addEventListener('click', () => {
     try {
@@ -1354,6 +1418,41 @@ runAutonomousEngine(state => {
   }
   if (document.readyState === 'complete') setTimeout(bootOperator, 600);
   else window.addEventListener('load', function(){ setTimeout(bootOperator, 600); });
+})();
+</script>
+
+
+<script>
+(function bcgoBootWatchdog(){
+  let n = 0;
+  const t = setInterval(function(){
+    n++;
+    const speech = document.getElementById('live-speech');
+    const conn = document.getElementById('connection-state');
+    const cycle = document.getElementById('cycle-number');
+    const cycleVal = cycle ? String(cycle.textContent||'').trim() : '0';
+    const stuck = (!window.BCGO_STATE || window.BCGO_STATE.cycleMode === 'BOOT' || Number(cycleVal) === 0) && n >= 2;
+    if (window.BCGO_STATE && (window.BCGO_STATE.cycleMode === 'LOCAL' || window.BCGO_STATE.cycleMode === 'NORMAL' || Number(window.BCGO_STATE.cycle||0) > 0)) {
+      clearInterval(t); return;
+    }
+    if (n >= 3 && stuck) {
+      clearInterval(t);
+      if (speech && /Membangunkan|Menunggu/.test(speech.textContent||'')) {
+        speech.textContent = '> [LOCAL] Otonomi lokal — sensor cloud menunggu. Chat & scan tetap aktif.';
+      }
+      if (conn && /CONNECTING/.test(conn.textContent||'')) {
+        conn.innerHTML = '<span class="connection-dot bg-amber-500"></span>OFFLINE · LOCAL';
+        conn.className = 'font-semibold text-amber-300';
+      }
+      // Coba paksa chat siap
+      const feed = document.getElementById('chat-feed');
+      if (feed && !feed.dataset.ready) {
+        feed.dataset.ready = '1';
+        const ph = feed.querySelector(':scope > .text-xs.text-slate-500');
+        if (ph) ph.textContent = 'CGO siap (mode lokal). Tanya status, scanner, atau organ.';
+      }
+    }
+  }, 1200);
 })();
 </script>
 
