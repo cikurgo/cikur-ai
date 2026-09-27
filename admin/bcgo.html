@@ -309,7 +309,10 @@ body{font-family:'Inter',sans-serif}
             <div class="text-xs text-slate-500">BCGO sedang menyiapkan kanal komunikasi...</div>
         </div>
 
-        <form id="chat-form" class="flex gap-2">
+        <form id="chat-form" class="flex gap-2 items-center">
+            <button type="button" id="chat-mic" title="Bicara ke CGO" aria-label="Mikrofon"
+                class="shrink-0 w-10 h-10 rounded-lg border border-slate-700 bg-slate-900 text-cyan-300 hover:border-cyan-600 hover:text-cyan-200 flex items-center justify-center text-lg"
+                >🎤</button>
             <input id="chat-input" autocomplete="off"
                 class="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
                 placeholder="Tanya BCGO: apa yang sedang kamu kerjakan?">
@@ -331,7 +334,7 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-machine-abc.js?v=0.9.8-STABLE-20260926"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.6.0-BCGO-SYNC-20260926"></script>
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=4.3.0-INTERNAL-SOURCE-SCAN-20260917';
+import { runAutonomousEngine } from './bcgo.js?v=4.4.0-LOCAL-AUTONOMY-MULTIMODAL-20260927';
 
 // Bridge internal CGO brain ke BCGO_STATE (tanpa AI eksternal)
 let internalBrain = null;
@@ -708,7 +711,7 @@ function renderLogs(logs) {
     errorFeed.scrollTop = 0;
 }
 
-function addChat(role, text) {
+function addChat(role, text, meta) {
     if (!chatFeed) return;
     // A real conversational turn supersedes the transient work indicator.
     // Progress events themselves never call addChat(), so they cannot become history.
@@ -725,7 +728,7 @@ function addChat(role, text) {
         ? 'max-w-[90%] rounded-lg bg-indigo-950 border border-indigo-800 px-3 py-2 text-xs text-indigo-100'
         : 'max-w-[90%] rounded-lg bg-emerald-950/40 border border-emerald-900 px-3 py-2 text-xs text-emerald-100';
 
-    bubble.innerHTML = `<div class="text-[9px] uppercase opacity-60 mb-1">${role === 'user' ? 'Anda' : 'CGO'}</div>${esc(text)}`;
+    bubble.innerHTML = `<div class="text-[9px] uppercase opacity-60 mb-1">${role === 'user' ? (meta && meta.modality === 'voice' ? 'Anda · suara' : 'Anda') : 'CGO'}</div>${esc(text)}`;
     row.appendChild(bubble);
     chatFeed.appendChild(row);
     chatFeed.scrollTop = chatFeed.scrollHeight;
@@ -797,11 +800,12 @@ function authoritativeBCGOState() {
     return liveState || null;
 }
 
-async function sendQuestion(question) {
+async function sendQuestion(question, opts) {
     const text = String(question || '').trim();
+    const modality = (opts && opts.modality) || 'text';
     if (!text || chatRequestBusy) return;
     setChatBusy(true);
-    addChat('user', text);
+    addChat('user', text, modality === 'voice' ? { modality: 'voice' } : null);
     setChatLiveStatus('Memahami permintaan dan membaca state BCGO yang sedang hidup…', 'working');
     try {
         let answer = null;
@@ -1067,7 +1071,8 @@ function renderConnection(state) {
         LIVE: ['bg-emerald-500','text-emerald-400','LIVE — SERVER'],
         CACHE: ['bg-amber-500','text-amber-400','CACHE — DATA LOKAL'],
         OFFLINE: ['bg-rose-500','text-rose-400','OFFLINE — STATE TERAKHIR'],
-        CONNECTING: ['bg-slate-500','text-slate-400','CONNECTING']
+        CONNECTING: ['bg-slate-500','text-slate-400','CONNECTING'],
+        OFFLINE_LOCAL: ['bg-amber-500','text-amber-300','OFFLINE · LOCAL']
     };
     const [dot, text, label] = map[status] || map.CONNECTING;
     connectionStateEl.className = `font-semibold ${text}`;
@@ -1279,6 +1284,64 @@ runAutonomousEngine(state => {
 
 
 <script>
+
+// --- Multimodal: Web Speech API (mic → teks → chat natural + suara) ---
+(function setupChatMic(){
+  const micBtn = document.getElementById('chat-mic');
+  const input = document.getElementById('chat-input');
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!micBtn) return;
+  if (!SR) {
+    micBtn.title = 'Speech Recognition tidak didukung browser ini';
+    micBtn.classList.add('opacity-40');
+    micBtn.disabled = true;
+    return;
+  }
+  let rec = null;
+  let listening = false;
+  function setListening(on){
+    listening = !!on;
+    micBtn.classList.toggle('border-rose-500', listening);
+    micBtn.classList.toggle('text-rose-300', listening);
+    micBtn.classList.toggle('animate-pulse', listening);
+    micBtn.textContent = listening ? '⏹' : '🎤';
+  }
+  micBtn.addEventListener('click', () => {
+    try {
+      if (listening && rec) { rec.stop(); setListening(false); return; }
+      rec = new SR();
+      rec.lang = 'id-ID';
+      rec.interimResults = true;
+      rec.continuous = false;
+      rec.onstart = () => setListening(true);
+      rec.onerror = () => setListening(false);
+      rec.onend = () => setListening(false);
+      rec.onresult = (ev) => {
+        let interim = '', final = '';
+        for (let i = ev.resultIndex; i < ev.results.length; i++) {
+          const t = ev.results[i][0].transcript;
+          if (ev.results[i].isFinal) final += t;
+          else interim += t;
+        }
+        if (input) {
+          if (final) input.value = (input.value ? input.value + ' ' : '') + final.trim();
+          else if (interim) input.placeholder = interim;
+        }
+        if (final && final.trim()) {
+          // auto-send natural chat after final utterance
+          const text = final.trim();
+          if (input) { input.value = ''; input.placeholder = 'Tanya BCGO…'; }
+          if (typeof sendQuestion === 'function') void sendQuestion(text, { modality: 'voice' });
+        }
+      };
+      rec.start();
+    } catch (e) {
+      console.warn('[BCGO mic]', e);
+      setListening(false);
+    }
+  });
+})();
+
 (function(){
   function bootOperator(){
     try {

@@ -178,6 +178,7 @@ export function runAutonomousEngine(onCycleUpdate) {
 
   let stopped = false;
   let authorized = false;
+  let localMode = false; // offline autonomy when Super Admin session belum ada
   let authorizedUid = null;
   let authEpoch = 0;
   let cycleNo = 0;
@@ -972,7 +973,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   let sourceScanController = null;
 
   async function runInternalSourceScan() {
-    if (stopped || !authorized || sourceScanInFlight) return;
+    if (!canRun() || sourceScanInFlight) return;
     sourceScanInFlight = true;
     if (sourceScanController) { try { sourceScanController.abort(); } catch (_) {} }
     sourceScanController = new AbortController();
@@ -990,7 +991,7 @@ export function runAutonomousEngine(onCycleUpdate) {
 
     const contents = new Map();
     for (let i = 0; i < INTERNAL_SOURCE_SCAN.length; i++) {
-      if (stopped || !authorized) { sourceScanInFlight = false; return; }
+      if (!canRun()) { sourceScanInFlight = false; return; }
       const item = INTERNAL_SOURCE_SCAN[i];
       scan.currentFile = item.file;
       scan.phase = "READING";
@@ -1198,7 +1199,7 @@ export function runAutonomousEngine(onCycleUpdate) {
   }
 
   function refreshState() {
-    if (stopped || !authorized) return;
+    if (!canRun()) return;
     const organs = buildOrgans();
     state.systemOrgans = organs;
     state.metrics = makeMetrics(organs);
@@ -1210,13 +1211,15 @@ export function runAutonomousEngine(onCycleUpdate) {
     publishToUI(safeClone(state));
   }
 
+  function canRun() { return !stopped && (authorized || localMode); }
+
   function scheduleNext(delay) {
     clearTimeout(cycleTimer);
     cycleTimer = setTimeout(nextPhase, delay);
   }
 
   function nextPhase() {
-    if (stopped || !authorized || realtimeBusy) return;
+    if (!canRun() || realtimeBusy) return;
     phaseIndex = (phaseIndex + 1) % 4;
 
     if (phaseIndex === 0) {
@@ -1250,6 +1253,36 @@ export function runAutonomousEngine(onCycleUpdate) {
       ? `Cycle #${cycleNo} selesai. ${active.length} anomali tetap aktif dan terus diawasi.`
       : `Cycle #${cycleNo} selesai. Pemantauan kembali normal dan telemetry tetap didengarkan.`, active[0]?.[0] || "SYS_NEURAL_SYNC", active[0]?.[1]?.message || null, { cycleMode: active.length ? "ALERT" : "NORMAL" });
     scheduleNext(CYCLE.OUT);
+  }
+
+
+  function startLocalAutonomy(reason) {
+    if (stopped || authorized || localMode) return;
+    localMode = true;
+    recordEvent("LOCAL", "Mode otonomi lokal aktif — sensor Firestore menunggu sesi Super Admin.", "SYS_LOCAL_AUTONOMY");
+    emit("IN",
+      "Mode otonomi lokal aktif. Saya memindai organ & source tanpa Firestore. " + (reason || "Login Super Admin di bcgo-admin.html untuk telemetry LIVE."),
+      "SYS_LOCAL_AUTONOMY",
+      null,
+      { cycleMode: "LOCAL" }
+    );
+    // connection stays honest
+    state.connection = { status: "OFFLINE_LOCAL", lastServerAt: 0, reason: reason || "no_admin_session" };
+    state.agentPresence = { ...(state.agentPresence || {}), status: "STANDBY", connected: false };
+    // Start local sensors
+    const kickSourceScan = () => {
+      runInternalSourceScan().catch(error => {
+        sourceScanInFlight = false;
+        state.sourceScan = { ...makeInitialSourceScan(), status: "DEGRADED", phase: "COMPLETE", message: String(error?.message || error) };
+        publishToUI(safeClone(state));
+      });
+    };
+    kickSourceScan();
+    sourceScanTimer = setInterval(kickSourceScan, 120000);
+    refreshTimer = setInterval(refreshState, 15000);
+    phaseIndex = -1;
+    scheduleNext(800);
+    publishToUI(safeClone(state));
   }
 
   async function verifyAdmin(user, epoch) {
@@ -1290,7 +1323,8 @@ export function runAutonomousEngine(onCycleUpdate) {
       authorized = false;
       authorizedUid = null;
       cleanupRealtime();
-      emit("OUT", "Akun ini bukan Super Admin aktif. Akses Pusat Saraf ditolak.", "SYS_AUTH_NOT_ADMIN");
+      emit("OUT", "Akun ini bukan Super Admin aktif. Mode otonomi lokal diaktifkan (tanpa telemetry Firestore).", "SYS_AUTH_NOT_ADMIN");
+      setTimeout(() => { if (!stopped && !authorized) startLocalAutonomy("Bukan Super Admin"); }, 800);
       return;
     }
 
@@ -1304,6 +1338,7 @@ export function runAutonomousEngine(onCycleUpdate) {
     }
 
     authorized = true;
+    localMode = false;
     authorizedUid = user.uid;
     recordEvent("AUTH", "Admin terverifikasi. Sensor real-time dibuka.", "SYS_AUTH_VERIFIED");
     emit("IN", "Admin terverifikasi. Saya membuka sensor telemetry dan Firestore real-time.", "SYS_AUTH_VERIFIED", null, { cycleMode: "BOOT" });
@@ -1391,12 +1426,27 @@ export function runAutonomousEngine(onCycleUpdate) {
 
   unsubscribeAuth = onAuthStateChanged(adminAuth, user => {
     const epoch = ++authEpoch;
+    if (!user) {
+      // Tidak ada sesi — jangan stuck CONNECTING selamanya; aktifkan otonomi lokal
+      authorized = false;
+      authorizedUid = null;
+      cleanupRealtime();
+      setTimeout(() => {
+        if (stopped || epoch !== authEpoch || authorized) return;
+        startLocalAutonomy("Sesi Admin belum ada");
+      }, 1200);
+      return;
+    }
     verifyAdmin(user, epoch).catch(error => {
       if (stopped || epoch !== authEpoch) return;
       authorized = false;
       authorizedUid = null;
       cleanupRealtime();
       emit("OUT", "Saya gagal memverifikasi status Admin.", "SYS_AUTH_CHECK_FAILED", error?.message, { cycleMode: "ERROR" });
+      setTimeout(() => {
+        if (stopped || epoch !== authEpoch || authorized) return;
+        startLocalAutonomy("Verifikasi Admin gagal");
+      }, 1500);
     });
   });
   return brain;
