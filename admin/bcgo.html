@@ -4,6 +4,47 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BCGO Universal Neural Monitor · Mesin ABC ↗ v4.0.0 — Clean System Monitor</title>
+<script>
+/* === CGO DEBUG CATCHER (sementara, untuk cari akar masalah boot macet) === */
+(function () {
+  function box() {
+    var b = document.getElementById('cgo-debug-box');
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'cgo-debug-box';
+      b.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;background:#7f1d1d;color:#fff;font:11px/1.4 monospace;padding:10px;max-height:45vh;overflow:auto;white-space:pre-wrap;box-shadow:0 -4px 20px rgba(0,0,0,.5)';
+      var title = document.createElement('div');
+      title.textContent = '🔴 CGO DEBUG — error JS ditangkap:';
+      title.style.cssText = 'font-weight:bold;margin-bottom:6px;font-size:12px';
+      b.appendChild(title);
+      (document.body || document.documentElement).appendChild(b);
+    }
+    return b;
+  }
+  function log(msg) {
+    try {
+      var line = document.createElement('div');
+      line.style.cssText = 'border-top:1px solid rgba(255,255,255,.25);padding-top:6px;margin-top:6px';
+      line.textContent = msg;
+      box().appendChild(line);
+    } catch (_) { alert(msg); }
+  }
+  window.addEventListener('error', function (e) {
+    log('JS ERROR: ' + e.message + '\n  di file: ' + (e.filename || '?') + ':' + (e.lineno || '?') + ':' + (e.colno || '?'));
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e.reason;
+    log('PROMISE GAGAL (unhandled): ' + (r && (r.stack || r.message) || String(r)));
+  });
+  window.addEventListener('DOMContentLoaded', function () {
+    setTimeout(function () {
+      if (!document.getElementById('cgo-debug-box')) {
+        log('(30 detik berlalu, tidak ada error tertangkap — berarti hang-nya diam-diam / dari dalam Promise yang tidak pernah selesai, bukan error)');
+      }
+    }, 30000);
+  });
+})();
+</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
