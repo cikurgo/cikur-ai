@@ -465,40 +465,32 @@
             .replace(/\s{2,}/g, " ")
             .trim();
 
-          // Nalar singkat hanya jika jawaban masih terlalu teknis / pendek bukti
-          if (typeof CG.nalar === "function" && answer.length > 20 && answer.length < 500) {
-            try {
-              const n = CG.nalar(
-                "Ubah menjadi jawaban operator wanita yang natural, sopan, singkat dalam bahasa Indonesia. Jangan menambah fakta baru. Pertanyaan: " + t + ". Bukti: " + answer.slice(0, 360),
-                { bahasa: "id" }
-              );
-              const hint = n && (n.ringkas || n.kesimpulan || n.hasil || n.alasan || (typeof n === "string" ? n : null));
-              if (hint && String(hint).trim().length > 15) {
-                const h = String(hint).trim().slice(0, 280);
-                // Pakai nalar sebagai pembuka natural bila bukti masih kaku
-                if (/\b(status|anomaly|telemetry|organ|scanner|firestore)\b/i.test(answer) && h.length > 20) {
-                  answer = h;
-                } else if (answer.indexOf(h.slice(0, 30)) < 0 && h.length < answer.length) {
-                  // jangan timpa bukti panjang; sisipkan hanya jika membantu
-                }
-              }
-              step("OTAK_CIKURGO", true, "naturalisasi");
-            } catch (_) {}
+          // PENTING: nalar.kesimpulan = label klasifikasi (mis. "Teks campuran: angka,romawi"),
+          // BUKAN jawaban percakapan. Jangan pernah menampilkan label itu ke user.
+          if (/^teks\s+(campuran|biasa)/i.test(String(answer)) || /^teks campuran:/i.test(String(answer))) {
+            answer = "Saya memahami pertanyaanmu. Coba ulangi lebih spesifik, misalnya status sistem atau nama file saraf.";
           }
 
-          // Putuskan jika diminta saran
+          // Putuskan hanya dengan opsi array (API CIKURGO mewajibkan array)
           if (typeof CG.putuskan === "function" && /rekomendasi|saran|apa yang (harus|perlu)|putusan|keputusan/.test(t.toLowerCase())) {
             try {
-              const p = CG.putuskan("Dari bukti sistem: " + String(answer).slice(0, 280) + " — beri rekomendasi singkat aman untuk operator.", { bahasa: "id" });
-              const put = p && (p.putusan || p.keputusan || p.hasil || p.rekomendasi || (typeof p === "string" ? p : null));
-              if (put && String(put).trim()) {
-                answer = String(answer).trim() + " Rekomendasi: " + String(put).trim().slice(0, 180);
+              const opsi = ["Pantau saja", "Periksa scanner", "Cek file anomali", "Tunggu siklus berikutnya"];
+              const p = CG.putuskan("Dari bukti: " + String(answer).slice(0, 200), opsi, { bahasa: "id" });
+              const put = p && (p.putusan || p.pilihan || p.hasil || p.rekomendasi || (typeof p === "string" ? p : null));
+              if (put && String(put).trim() && !/^teks\s+/i.test(String(put))) {
+                answer = String(answer).trim() + " Rekomendasi: " + String(put).trim().slice(0, 120);
                 step("OTAK_CIKURGO", true, "putuskan");
               }
             } catch (_) {}
           }
+          step("OTAK_CIKURGO", true, "naturalisasi-aman");
         }
       } catch (_) {}
+    }
+
+    // 4c) Guard terakhir: never leak classification labels to user
+    if (answer && /^teks\s+(campuran|biasa|kosong)/i.test(String(answer).trim())) {
+      answer = "Saya siap membantu. Tanya status sistem, scanner, radar, atau sebut nama file saraf.";
     }
 
     // 5) Memori bersama + CIKURGO.ingat

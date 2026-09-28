@@ -277,6 +277,14 @@
     return playMp3(key);
   }
 
+
+  function stop() {
+    try { if (global.speechSynthesis) global.speechSynthesis.cancel(); } catch (_) {}
+    try {
+      var audios = document.querySelectorAll("audio[data-cgo-operator]");
+      audios.forEach(function(a){ try { a.pause(); a.currentTime = 0; } catch(_){} });
+    } catch (_) {}
+  }
   function speakAnswer(rawText, options) {
     if (!chatSpeakEnabled && !(options && options.force)) return Promise.resolve(false);
     var text = toSpeechText(rawText);
@@ -314,6 +322,12 @@
     return emit(EVENTS.SYSTEM_BOOT, { force: true });
   }
 
+  // Debounce state announcements — prevent collision when BCGO cycles fire every few seconds
+  var _lastStateKey = "";
+  var _lastStateAt = 0;
+  var STATE_COOLDOWN_MS = 12000; // min 12s between identical/adjacent state sounds
+  var STATE_SILENT = { PROCESSING: 1, LIVE_INPUT: 1, SYSTEM_IDLE: 1, STANDBY: 1 }; // too noisy if every cycle
+
   function state(s, detail) {
     var map = {
       READY: EVENTS.SYSTEM_READY, SYSTEM_READY: EVENTS.SYSTEM_READY,
@@ -323,6 +337,13 @@
       RESET: EVENTS.RESET, ABORT: EVENTS.ABORT, RECOVERY: EVENTS.RECOVERY
     };
     var key = map[String(s || "").toUpperCase()] || String(s || "").toUpperCase();
+    // Silent for high-frequency operational states (UI still updates; no MP3 spam)
+    if (STATE_SILENT[key]) return false;
+    var now = Date.now();
+    if (key === _lastStateKey && (now - _lastStateAt) < STATE_COOLDOWN_MS) return false;
+    if ((now - _lastStateAt) < 4000 && key !== EVENTS.ERROR && key !== EVENTS.WARNING) return false;
+    _lastStateKey = key;
+    _lastStateAt = now;
     return emit(key, detail);
   }
 
@@ -344,6 +365,7 @@
     EVENTS: EVENTS,
     emit: emit,
     speakAnswer: speakAnswer,
+    stop: stop,
     speak: speakAnswer,
     unlock: unlock,
     welcome: welcome,

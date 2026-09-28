@@ -39,6 +39,30 @@ body{font-family:'Inter',sans-serif}
 .scan-lamp.gray{background:#475569}
 
 .abc-telemetry-bar{border:1px solid #123b63;background:#031120;border-radius:12px;padding:10px 12px}.abc-route{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.abc-lamp{width:9px;height:9px;border-radius:50%;background:#334155;display:inline-block;box-shadow:none}.abc-lamp.active{background:#ffd34d;box-shadow:0 0 10px #ffd34d;animation:breathe .55s ease-in-out infinite}.abc-lamp.ok{background:#16d98b;box-shadow:0 0 8px #16d98b}.abc-lamp.bad{background:#ff667d;box-shadow:0 0 10px #ff667d}.abc-node{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;color:#9bb8d0;border:1px solid #173e5e;border-radius:999px;padding:3px 7px}.abc-node.active{color:#ffe07b;border-color:#765f1b;background:#2a2308}.abc-node.ok{color:#7cf0c0;border-color:#176a50;background:#062a1c}
+
+/* CGO Chat · Future Operator */
+.cgo-chat-shell{position:relative;border:1px solid rgba(99,102,241,.35);background:linear-gradient(180deg,#0b1224 0%,#070b16 100%);border-radius:16px;overflow:hidden;box-shadow:0 0 40px rgba(99,102,241,.12),inset 0 1px 0 rgba(255,255,255,.04)}
+.cgo-chat-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(51,65,85,.7);background:rgba(2,6,23,.55)}
+.cgo-wave{display:flex;align-items:flex-end;gap:3px;height:28px;padding:0 4px}
+.cgo-wave span{display:block;width:3px;border-radius:2px;background:linear-gradient(180deg,#67e8f9,#6366f1);opacity:.35;transform-origin:bottom;transition:height .15s}
+.cgo-wave.live span{opacity:1;animation:cgoWave 0.9s ease-in-out infinite alternate}
+.cgo-wave.live span:nth-child(1){animation-delay:0s;height:8px}
+.cgo-wave.live span:nth-child(2){animation-delay:.08s;height:16px}
+.cgo-wave.live span:nth-child(3){animation-delay:.16s;height:22px}
+.cgo-wave.live span:nth-child(4){animation-delay:.24s;height:14px}
+.cgo-wave.live span:nth-child(5){animation-delay:.32s;height:20px}
+.cgo-wave.live span:nth-child(6){animation-delay:.4s;height:10px}
+.cgo-wave.live span:nth-child(7){animation-delay:.48s;height:18px}
+@keyframes cgoWave{from{transform:scaleY(.45)}to{transform:scaleY(1)}}
+.cgo-think{display:none;align-items:center;gap:8px;padding:8px 14px;font-size:11px;color:#a5b4fc;border-bottom:1px solid rgba(51,65,85,.5);background:rgba(49,46,129,.15)}
+.cgo-think.on{display:flex}
+.cgo-think-dot{width:7px;height:7px;border-radius:50%;background:#818cf8;box-shadow:0 0 10px #818cf8;animation:cgoPulse 1s ease-in-out infinite}
+@keyframes cgoPulse{0%,100%{opacity:.4}50%{opacity:1}}
+.cgo-think-timer{font-variant-numeric:tabular-nums;color:#c7d2fe;font-family:ui-monospace,Menlo,monospace}
+.chat-bubble-user{margin-left:auto;max-width:85%;background:#1e1b4b;border:1px solid #3730a3;color:#e0e7ff;border-radius:14px 14px 4px 14px;padding:8px 12px;font-size:13px}
+.chat-bubble-cgo{margin-right:auto;max-width:90%;background:#0f172a;border:1px solid #1e293b;color:#bbf7d0;border-radius:14px 14px 14px 4px;padding:8px 12px;font-size:13px;line-height:1.45}
+.chat-bubble-meta{font-size:9px;color:#64748b;margin-top:4px;font-family:ui-monospace,Menlo,monospace}
+
 </style>
 </head>
 
@@ -349,19 +373,37 @@ body{font-family:'Inter',sans-serif}
             </div>
             <span class="text-[10px] code-font text-indigo-400">CGO::CHAT • BCGO</span>
         </div>
-        <div id="chat-feed" class="chat-scroll bg-slate-950 border border-slate-800 rounded-lg p-3 h-72 overflow-y-auto space-y-3">
+        <div class="cgo-chat-shell">
+          <div class="cgo-chat-head">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="cgo-wave" id="cgo-voice-wave" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+              </div>
+              <div class="min-w-0">
+                <div class="text-[11px] font-semibold text-indigo-200 tracking-wide">CGO OPERATOR · LIVE</div>
+                <div class="text-[10px] text-slate-500 truncate" id="cgo-chat-live-status">Kanal siap · tunggu pertanyaan</div>
+              </div>
+            </div>
+            <span class="text-[10px] code-font text-indigo-400/80">SATU OTAK</span>
+          </div>
+          <div class="cgo-think" id="cgo-think-bar">
+            <span class="cgo-think-dot"></span>
+            <span id="cgo-think-label">Mengurai percakapan…</span>
+            <span class="cgo-think-timer" id="cgo-think-timer">0.0s</span>
+          </div>
+          <div id="chat-feed" class="chat-scroll p-3 h-72 overflow-y-auto space-y-3 bg-slate-950/80">
             <div class="text-xs text-slate-500">BCGO sedang menyiapkan kanal komunikasi...</div>
-        </div>
-
-        <form id="chat-form" class="flex gap-2 items-center">
+          </div>
+          <form id="chat-form" class="flex gap-2 items-center p-3 border-t border-slate-800/80">
             <button type="button" id="chat-mic" title="Bicara ke CGO" aria-label="Mikrofon"
                 class="shrink-0 w-10 h-10 rounded-lg border border-slate-700 bg-slate-900 text-cyan-300 hover:border-cyan-600 hover:text-cyan-200 flex items-center justify-center text-lg"
                  style="min-width:2.5rem"></button>
             <input id="chat-input" autocomplete="off"
                 class="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
-                placeholder="Tanya BCGO: apa yang sedang kamu kerjakan?">
+                placeholder="Tanya operator: status, scanner, hitung, eja…">
             <button class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold">Kirim</button>
-        </form>
+          </form>
+        </div>
 
         <div class="flex flex-wrap gap-2">
             <button class="quick-q text-[10px] px-2 py-1 rounded-md border border-slate-700 text-slate-400" data-q="Hai BCGO, apa yang sedang kamu kerjakan?">Apa yang kamu kerjakan?</button>
@@ -374,11 +416,11 @@ body{font-family:'Inter',sans-serif}
 </div>
 
 <script src="cikur-go.browser.js?v=3.0.0-OTAK-JENIUS"></script>
-<script src="cgo-ai-voice-operator.js?v=3.3.0-NEURAL-CHAT-OTAK"></script>
+<script src="cgo-ai-voice-operator.js?v=3.4.0-DEBOUNCE-WAVE-20260928"></script>
 <script src="cgo-machine-abc.js?v=0.9.9-OTAK-CORE-20260927"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.7.0-BCGO-SYNC-OTAK-20260928"></script>
 <script src="cgo-abc-cognition.js?v=1.1.0-CGO-ABC-COGNITION"></script>
-<script src="cgo-otak-hub.js?v=1.1.0-NATURAL-CIKURGO-20260928"></script>
+<script src="cgo-otak-hub.js?v=1.2.0-CHAT-FIX-20260928"></script>
 
 <script>
 window.CGO_SVG = {
@@ -391,7 +433,7 @@ window.CGO_SVG = {
 </script>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=4.5.1-COGNITIVE-UI-20260927';
+import { runAutonomousEngine } from './bcgo.js?v=4.7.0-NATURAL-SAFE-20260928';
 
 // Bridge internal CGO brain ke BCGO_STATE (tanpa AI eksternal)
 let internalBrain = null;
@@ -863,6 +905,30 @@ async function sendQuestion(question, opts) {
     if (!text || chatRequestBusy) return;
     setChatBusy(true);
     addChat('user', text, modality === 'voice' ? { modality: 'voice' } : null);
+    // Timer berpikir real-time
+    const thinkBar = document.getElementById('cgo-think-bar');
+    const thinkTimer = document.getElementById('cgo-think-timer');
+    const thinkLabel = document.getElementById('cgo-think-label');
+    const liveStatus = document.getElementById('cgo-chat-live-status');
+    const t0 = performance.now();
+    let thinkIv = null;
+    try {
+      if (thinkBar) thinkBar.classList.add('on');
+      if (thinkLabel) thinkLabel.textContent = 'Mengurai percakapan dengan Satu Otak…';
+      if (liveStatus) liveStatus.textContent = 'Berpikir · membaca BCGO + Otak Jenius';
+      thinkIv = setInterval(() => {
+        const s = ((performance.now() - t0) / 1000).toFixed(1);
+        if (thinkTimer) thinkTimer.textContent = s + 's';
+      }, 100);
+    } catch (_) {}
+    const stopThink = () => {
+      try { if (thinkIv) clearInterval(thinkIv); } catch(_){}
+      try { if (thinkBar) thinkBar.classList.remove('on'); } catch(_){}
+      try {
+        const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+        if (liveStatus) liveStatus.textContent = 'Selesai · ' + elapsed + 's';
+      } catch(_){}
+    };
     setChatLiveStatus('Memahami permintaan dan membaca state BCGO yang sedang hidup…', 'working');
     try {
         let answer = null;
@@ -926,8 +992,16 @@ async function sendQuestion(question, opts) {
         // Natural voice — SATU jalur: batalkan TTS event lain, baca jawaban utuh
         try {
             if (window.speechSynthesis) try { window.speechSynthesis.cancel(); } catch (_) {}
+            // Satu suara: batalkan ucapan sebelumnya agar tidak bertabrakan
+            try {
+              if (window.speechSynthesis) window.speechSynthesis.cancel();
+              if (window.CGOOperatorVoice && typeof window.CGOOperatorVoice.stop === 'function') window.CGOOperatorVoice.stop();
+            } catch (_) {}
             if (window.CGOOperatorVoice && typeof window.CGOOperatorVoice.speakAnswer === 'function') {
-                void window.CGOOperatorVoice.speakAnswer(answer);
+                const wave = document.getElementById('cgo-voice-wave');
+                if (wave) wave.classList.add('live');
+                const p = window.CGOOperatorVoice.speakAnswer(answer);
+                Promise.resolve(p).finally(() => { try { if (wave) wave.classList.remove('live'); } catch(_){} });
             }
         } catch (voiceErr) { console.warn('[BCGO] speakAnswer', voiceErr); }
     } catch (error) {

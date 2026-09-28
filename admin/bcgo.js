@@ -555,114 +555,86 @@ export async function runAutonomousEngine(onCycleUpdate) {
       const q = qRaw.toLowerCase();
       let text = String(evidenceAnswer || "").trim();
 
+      // Angka → kata (satu-satunya fungsi CIKURGO yang aman untuk mempercantik jawaban bukti)
       const num = (n) => {
         if (CG && typeof CG.angkaKeKata === "function") {
-          try { return CG.angkaKeKata(Number(n) || 0, "id"); } catch (_) {}
+          try {
+            const k = CG.angkaKeKata(Number(n) || 0, "id");
+            if (k && String(k).trim()) return String(k).trim();
+          } catch (_) {}
         }
         return String(n);
       };
 
-      // Lapis 1: angka teknis → kata natural
-      text = text
+      const polish = (s) => String(s || "")
         .replace(/\b(\d{1,3})\s*%/g, (_, d) => num(d) + " persen")
         .replace(/\bcycle\s*#?\s*(\d+)\b/gi, (_, d) => "siklus ke-" + num(d))
+        .replace(/\bsiklus\s*#?\s*(\d+)\b/gi, (_, d) => "siklus ke-" + num(d))
         .replace(/\b(\d+)\s+anomali\b/gi, (_, d) => num(d) + " anomali")
-        .replace(/\b(\d+)\s+organ\b/gi, (_, d) => num(d) + " organ");
+        .replace(/\b(\d+)\s+organ\b/gi, (_, d) => num(d) + " organ")
+        .replace(/\bUNKNOWN\b/g, "belum diketahui")
+        .replace(/\bNULL\b/g, "kosong")
+        .replace(/\btrue\b/gi, "ya")
+        .replace(/\bfalse\b/gi, "tidak")
+        .replace(/\s{2,}/g, " ")
+        .trim();
 
-      // Konteks sistem untuk nalar/putuskan
-      const ctx = {
-        mode: st.localMode ? "OFFLINE_LOCAL" : (st.connection || "BOOT"),
-        step: st.step || "—",
-        cycle: st.cycle || 0,
-        active: metrics.active ?? 0,
-        total: metrics.total ?? 0,
-        healthy: metrics.healthy ?? 0,
-        sourceScan: (st.sourceScan && st.sourceScan.status) || "—",
-        evidence: text.slice(0, 400)
+      // TOLAK label klasifikasi nalar (bukan jawaban percakapan)
+      const isClassLabel = (s) => {
+        const t = String(s || "").trim();
+        if (!t) return true;
+        if (/^teks\s+(campuran|biasa|kosong)/i.test(t)) return true;
+        if (/^(input kosong|empty)/i.test(t)) return true;
+        if (/^(angka|romawi|emoji|warna|kode|script_)(\s|,|$)/i.test(t) && t.length < 80) return true;
+        if (/^teks campuran:/i.test(t)) return true;
+        return false;
       };
 
-      // Lapis 2 CERDAS: urai + nalar + putuskan (satu otak, bukan template semata)
-      let uraiHint = "";
-      let nalarHint = "";
-      let putusanHint = "";
-      if (CG) {
-        try {
-          if (typeof CG.urai === "function" && qRaw) {
-            const u = CG.urai(qRaw, "auto", "id");
-            if (u && (u.ringkas || u.teks || u.hasil)) {
-              uraiHint = String(u.ringkas || u.teks || u.hasil || "").slice(0, 180);
-            } else if (typeof u === "string") {
-              uraiHint = u.slice(0, 180);
-            }
-          }
-        } catch (_) {}
-        try {
-          if (typeof CG.nalar === "function") {
-            const promptNalar =
-              "Pertanyaan operator: " + qRaw +
-              ". Mode sistem " + ctx.mode +
-              ", tahap " + ctx.step +
-              ", siklus " + ctx.cycle +
-              ", organ sehat " + ctx.healthy + " dari " + ctx.total +
-              ", anomali aktif " + ctx.active +
-              ", scanner " + ctx.sourceScan +
-              ". Bukti: " + ctx.evidence;
-            const n = CG.nalar(promptNalar, { bahasa: "id" });
-            if (n) {
-              nalarHint = String(n.ringkas || n.kesimpulan || n.hasil || n.alasan || n.text || n).slice(0, 220);
-            }
-          }
-        } catch (_) {}
-        try {
-          if (typeof CG.putuskan === "function" && /apa\s+yang\s+(harus|perlu)|rekomendasi|putusan|keputusan|saran/.test(q)) {
-            const p = CG.putuskan(
-              "Dari bukti sistem: " + ctx.evidence + " — putuskan tindakan operator yang paling aman.",
-              { bahasa: "id" }
-            );
-            if (p) {
-              putusanHint = String(p.putusan || p.keputusan || p.hasil || p.rekomendasi || p).slice(0, 180);
-            }
-          }
-        } catch (_) {}
-      }
-
-      // Sapaan / identitas
-      if (/^(halo|hai|hello|pagi|siang|sore|malam)\b/.test(q) || /siapa kamu|kamu siapa/.test(q)) {
-        return "Halo, saya CGO Operator. Otak Jenius CIKUR GO membaca telemetry yang sedang hidup. " +
-          (text || "Silakan tanya status, scanner, radar, atau file saraf.");
-      }
-
-      // Status / kabar
-      if (/status|apa kabar|sehat|bagaimana sistem|kondisi/.test(q)) {
-        const open = ctx.active === 0
-          ? "Sistem dalam kondisi stabil, tidak ada anomali aktif."
-          : "Ada " + num(ctx.active) + " anomali aktif dari " + num(ctx.total) + " organ yang dipantau.";
-        let out = open + " Saat ini tahap " + ctx.step + ", mode " + ctx.mode + ".";
-        if (nalarHint) out += " " + nalarHint;
-        else if (text) out += " " + text;
-        return out;
+      // Sapaan
+      if (/^(halo|hai|hello|hi|pagi|siang|sore|malam)\b/.test(q) || /siapa\s+kamu|kamu\s+siapa/.test(q)) {
+        return "Halo, saya CGO Operator. Saya membaca saraf sistem yang sedang hidup — tahap " +
+          (st.step || "siaga") + ", siklus ke-" + num(st.cycle || cycleNo || 0) +
+          ". Silakan tanya status, scanner, radar, file saraf, atau minta saya hitung dan eja sesuatu.";
       }
 
       if (/terima kasih|makasih|thanks/.test(q)) {
-        return "Sama-sama. Saya tetap memantau saraf sistem. Jika perlu, tanyakan status, scanner, radar, atau file tertentu.";
+        return "Sama-sama. Saya tetap memantau saraf sistem. Silakan tanya kapan saja.";
       }
 
-      // Gabungan satu otak: bukti teknis + nalar/putusan (tanpa label dual-brain)
-      const parts = [];
-      if (text) parts.push(text);
-      if (nalarHint && (!text || nalarHint.toLowerCase() !== text.toLowerCase().slice(0, nalarHint.length))) {
-        parts.push(nalarHint);
+      // Status
+      if (/status|apa kabar|sehatkah|bagaimana sistem|kondisi sistem|sistem aman/.test(q)) {
+        const active = metrics.active ?? 0;
+        const total = metrics.total ?? 0;
+        const healthy = metrics.healthy ?? 0;
+        const open = active === 0
+          ? "Sistem stabil, tidak ada anomali aktif."
+          : "Ada " + num(active) + " anomali aktif dari " + num(total) + " organ.";
+        return open + " Tahap " + (st.step || "—") + ", " + num(healthy) + " organ sehat, scanner " +
+          ((st.sourceScan && st.sourceScan.status) || "—") + ".";
       }
-      if (putusanHint) parts.push("Rekomendasi: " + putusanHint);
-      if (!parts.length && uraiHint) parts.push(uraiHint);
-      if (!parts.length) {
-        return "Saya sudah membaca permintaan itu, tetapi bukti live belum cukup untuk jawaban pasti. Coba tanya status, scanner, atau nama file saraf.";
+
+      // Sedang apa
+      if (/sedang apa|lagi apa|ngapain|kerja apa|apa yang (sedang )?kamu (kerjakan|lakukan)/.test(q)) {
+        return "Saya sedang di tahap " + (st.step || "siaga") + ", siklus ke-" + num(st.cycle || 0) +
+          ". " + (st.message ? String(st.message).slice(0, 160) : "Memantau telemetry dan source scan.");
       }
-      return parts.join(" ").replace(/\s+/g, " ").trim();
+
+      // Jika evidence kosong
+      if (!text) {
+        return "Saya sudah baca permintaanmu, tetapi bukti live belum cukup. Coba tanya status, scanner, atau nama file saraf.";
+      }
+
+      // Buang bila evidence sendiri adalah label klasifikasi (regresi lama)
+      if (isClassLabel(text)) {
+        return "Saya memahami pertanyaanmu. Coba ulangi dengan kata yang lebih spesifik, misalnya status sistem, scanner, atau nama file.";
+      }
+
+      return polish(text);
     } catch (_) {
       return evidenceAnswer;
     }
   }
+
 
 function answerQuestion(question) {
     const raw = String(question || "").trim();
