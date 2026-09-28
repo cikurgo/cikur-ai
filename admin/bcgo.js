@@ -1572,3 +1572,63 @@ function answerQuestion(question) {
   }
   return brain;
 }
+
+
+  // ─── Semantic Bridge auto-init (modul ke-9) ───
+  function syncSemanticState(ok, extra) {
+    try {
+      const payload = {
+        ready: !!ok,
+        status: ok ? "ready" : "error",
+        version: (window.CGOSemantic && window.CGOSemantic.version) || null,
+        ts: Date.now()
+      };
+      if (extra && typeof extra === "object") {
+        if (extra.error) payload.error = String(extra.error);
+        if (extra.status) payload.status = extra.status;
+      }
+      if (window.BCGO_STATE && typeof window.BCGO_STATE === "object") {
+        window.BCGO_STATE.semantic = payload;
+      } else {
+        window.BCGO_STATE = window.BCGO_STATE || {};
+        window.BCGO_STATE.semantic = payload;
+      }
+      try {
+        window.dispatchEvent(new CustomEvent("cgo:semantic-state", { detail: payload }));
+      } catch (_) {}
+    } catch (_) {}
+  }
+
+  function bootSemanticBridge() {
+    if (!window.CGOSemantic || typeof window.CGOSemantic.ensureReady !== "function") {
+      syncSemanticState(false, { status: "missing" });
+      return;
+    }
+    syncSemanticState(false, { status: "loading" });
+    window.CGOSemantic.ensureReady()
+      .then(function (ok) {
+        syncSemanticState(!!ok, ok ? { status: "ready" } : { status: "error", error: (window.CGOSemantic.getStatus && window.CGOSemantic.getStatus().error) || null });
+      })
+      .catch(function (e) {
+        syncSemanticState(false, { status: "error", error: String((e && e.message) || e) });
+      });
+  }
+
+  // Poll status setiap 5 detik agar panel Otak & BCGO_STATE sinkron
+  function pollSemanticStatus() {
+    try {
+      if (!window.CGOSemantic) return;
+      const st = window.CGOSemantic.getStatus ? window.CGOSemantic.getStatus() : null;
+      if (st) syncSemanticState(!!st.ready, { status: st.status || (st.ready ? "ready" : "error"), error: st.error });
+    } catch (_) {}
+  }
+
+  try {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", function () { setTimeout(bootSemanticBridge, 200); });
+    } else {
+      setTimeout(bootSemanticBridge, 200);
+    }
+    setInterval(pollSemanticStatus, 5000);
+  } catch (_) {}
+

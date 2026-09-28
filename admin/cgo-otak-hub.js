@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.0.0-OTAK-HUB";
+  const VERSION = "1.2.0-MULTI-OTAK";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -81,7 +81,13 @@
     },
     {
       id: "SEMANTIC", label: "Semantic Bridge", role: "Makna (embedding)", required: false,
-      probe() { const s = global.CGOSemantic; return s ? { ready: true, version: s.version || null } : null; }
+      probe() {
+        const s = global.CGOSemantic;
+        if (!s) return null;
+        const st = typeof s.getStatus === "function" ? s.getStatus() : null;
+        const ready = st ? !!st.ready : (typeof s.isReady === "function" ? !!s.isReady() : false);
+        return { ready: ready, version: (st && st.version) || s.version || null, note: st && st.status ? st.status : null };
+      }
     },
     {
       id: "INSTRUCTION", label: "Konstitusi CGO", role: "Intent · dialog · kontrak jawaban", required: false,
@@ -303,35 +309,51 @@
       step("INSTRUCTION", false, String((e && e.message) || e));
     }
 
-    // ─── B. Otak Jenius: urai penuh (audit) ───
+    
+    // ─── B. Otak Jenius: multi-bahasa · multi-hitung · multi-emoji · multi-fungsi ───
     let audit = null;
     let spoken = null;
     let tokens = [];
+
+    // Deteksi bahasa target dari pesan (default id)
+    let lang = "id";
+    try {
+      const lm = t.match(/\b(?:bahasa|in|in\s+language|lang(?:uage)?)\s*[:=]?\s*(id|en|es|fr|de|pt|ar|ja)\b/i)
+        || t.match(/\b(in\s+english|dalam\s+bahasa\s+inggris)\b/i)
+        || t.match(/\b(dalam\s+bahasa\s+)?(indonesia|inggris|spanyol|perancis|jerman|portugis|arab|jepang)\b/i);
+      if (lm) {
+        const raw = (lm[1] || lm[2] || "").toLowerCase();
+        const map = { indonesia: "id", inggris: "en", english: "en", spanyol: "es", perancis: "fr", jerman: "de", portugis: "pt", arab: "ar", jepang: "ja" };
+        lang = map[raw] || (["id","en","es","fr","de","pt","ar","ja"].indexOf(raw) >= 0 ? raw : "id");
+      }
+    } catch (_) {}
+
     try {
       if (CG && typeof CG.urai === "function") {
-        const u = CG.urai(t, "auto", true);
+        // Signature: urai(teks, mode, bahasa, audit)
+        const u = CG.urai(t, "auto", lang, true);
         if (u && typeof u === "object") {
           audit = u;
-          spoken = u.teks_hasil || null;
+          spoken = u.teks_hasil || u.teks || null;
           tokens = u.token || u.tokens || [];
-        } else if (typeof u === "string") spoken = u;
-        step("OTAK_CIKURGO", true, "urai");
+        } else if (typeof u === "string") {
+          spoken = u;
+        }
+        step("OTAK_CIKURGO", true, "urai:" + lang);
       }
     } catch (e) {
       step("OTAK_CIKURGO", false, String((e && e.message) || e));
     }
 
-    // Nalar → pakai ALASAN (bukan label kesimpulan sebagai jawaban)
     let nalarAlasan = [];
     try {
       if (CG && typeof CG.nalar === "function") {
-        const n = CG.nalar(t, { bahasa: "id" });
+        const n = CG.nalar(t, { bahasa: lang });
         if (n && Array.isArray(n.alasan)) nalarAlasan = n.alasan.filter(Boolean);
-        step("OTAK_CIKURGO", true, "nalar-alasan");
+        step("OTAK_CIKURGO", true, "nalar");
       }
     } catch (_) {}
 
-    // Deteksi pola aneh
     let polaNote = null;
     try {
       if (CG && typeof CG.deteksi_pola === "function") {
@@ -343,67 +365,199 @@
       }
     } catch (_) {}
 
-    // ─── C. Cabang natural berdasarkan intent (bukan template kaku) ───
-    const topic = (intent && intent.topic) || null;
-    const mode = (intent && intent.mode) || null;
-    const convOnly = !!(intent && intent.conversationOnly);
-
-    // C1. Linguistik murni — angka/emoji/warna/eja (Otak wajib menjawab)
     const jenis = {};
     for (const tok of tokens) {
       const j = tok && tok.jenis;
       if (j && j !== "spasi" && j !== "kata") jenis[j] = (jenis[j] || 0) + 1;
     }
-    const linguistic = jenis.angka || jenis.desimal || jenis.romawi || jenis.emoji || jenis.hex_warna || jenis.rgb_warna ||
-      /\b(eja|ejaan|spell|bacakan|ucapkan|jadi\s*kata)\b/i.test(t);
+
+    // Deteksi multi-fungsi lewat regex (tidak bergantung token urai saja)
+    const emojiRe = /\p{Extended_Pictographic}/u;
+    const hasEmoji = emojiRe.test(t) || !!jenis.emoji;
+    const hasNumInText = /\d/.test(t);
+    const hasWarna = /#(?:[0-9a-fA-F]{3,8})\b|\brgb\s*\([^)]+\)/i.test(t) || !!jenis.hex_warna || !!jenis.rgb_warna;
+    const hasRomawi = /\b[IVXLCDMivxlcdm]{2,}\b/.test(t) || !!jenis.romawi;
+    const wantHitung = /\b(hitung|jumlah|berapa|tambah|kurang|kali|bagi|plus|minus)\b/i.test(t)
+      || /^\s*[\d\s+\-*/().,]+(=|\s*=\s*)?\s*$/.test(t);
+    const wantEja = /\b(eja|ejaan|spell|spelling)\b/i.test(t);
+    const wantUang = /\b(rupiah|dollar|euro|yen|rp\.?|usd|eur|idr)\b/i.test(t);
+    const wantWaktu = /\b(jam|pukul|waktu|durasi|menit|detik|jam\s*\d)/i.test(t);
+    const wantTanggal = /\b(tanggal|tgl|hari\s+ini)\b/i.test(t) || /\b\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\b/.test(t);
+    const wantBaca = /\b(baca|bacakan|ucapkan|lafal|jadi\s*kata|ke\s*kata|dibaca)\b/i.test(t);
+    const wantBahasaList = /\b(daftar\s*bahasa|bahasa\s*apa|multi\s*bahasa|language\s*list)\b/i.test(t);
+
+    const linguistic = hasNumInText || hasEmoji || hasWarna || hasRomawi || wantHitung || wantEja
+      || wantUang || wantWaktu || wantTanggal || wantBaca || wantBahasaList
+      || jenis.angka || jenis.desimal || jenis.emoji;
+
+    function pickLafal(val) {
+      if (val == null) return null;
+      if (Array.isArray(val)) return val[0] != null ? String(val[0]) : null;
+      if (typeof val === "object" && val.lafal) return String(val.lafal);
+      return String(val);
+    }
 
     if (linguistic && CG) {
       const parts = [];
+
+      // 1) Hasil urai penuh (multi-token natural)
       if (spoken && String(spoken).trim() && String(spoken).trim() !== t) {
         parts.push(String(spoken).trim());
       }
-      if ((jenis.angka || jenis.desimal) && typeof CG.angkaKeKata === "function") {
+
+      // 2) Multi-hitung / angka → kata (multi-bahasa)
+      if ((hasNumInText || wantHitung || jenis.angka || jenis.desimal) && typeof CG.angkaKeKata === "function") {
         const nums = t.match(/\d+(?:[.,]\d+)?/g) || [];
-        for (const n of nums.slice(0, 5)) {
+        for (const n of nums.slice(0, 6)) {
           try {
-            const k = CG.angkaKeKata(String(n).replace(",", "."), "id");
-            if (k) parts.push(n + " = " + k);
+            const k = CG.angkaKeKata(String(n).replace(",", "."), lang);
+            if (k) parts.push(n + " → " + k + (lang !== "id" ? " (" + lang + ")" : ""));
+          } catch (_) {}
+        }
+        // ekspresi sederhana a+b / a-b
+        const expr = t.match(/(\d+(?:[.,]\d+)?)\s*([+\-*/x×])\s*(\d+(?:[.,]\d+)?)/);
+        if (expr) {
+          try {
+            const a = parseFloat(expr[1].replace(",", "."));
+            const b = parseFloat(expr[3].replace(",", "."));
+            const op = expr[2];
+            let r = null;
+            if (op === "+") r = a + b;
+            else if (op === "-") r = a - b;
+            else if (op === "*" || op === "x" || op === "×") r = a * b;
+            else if (op === "/" && b !== 0) r = a / b;
+            if (r != null && !isNaN(r)) {
+              const rk = CG.angkaKeKata(String(Math.round(r * 1000) / 1000), lang);
+              parts.push("Hasil hitung: " + r + (rk ? " (" + rk + ")" : ""));
+            }
           } catch (_) {}
         }
       }
-      if (jenis.emoji && typeof CG.lafalEmoji === "function") {
+
+      // 3) Multi-emoji
+      if (hasEmoji && typeof CG.lafalEmoji === "function") {
         const em = t.match(/\p{Extended_Pictographic}+/gu) || [];
-        for (const e of em.slice(0, 6)) {
-          try { const L = CG.lafalEmoji(e, "id"); if (L) parts.push(e + " → " + L); } catch (_) {}
-        }
-      }
-      if ((jenis.hex_warna || jenis.rgb_warna) && typeof CG.lafalWarna === "function") {
-        const wm = t.match(/#(?:[0-9a-fA-F]{3,8})\b|\brgb\s*\([^)]+\)/g) || [];
-        for (const w of wm.slice(0, 3)) {
+        for (const e of em.slice(0, 8)) {
           try {
-            const L = CG.lafalWarna(w, "id");
-            if (L) parts.push(w + " → " + (Array.isArray(L) ? L[0] : L));
+            const L = pickLafal(CG.lafalEmoji(e, lang));
+            if (L) parts.push(e + " → " + L);
           } catch (_) {}
         }
       }
-      if (/\b(eja|ejaan|spell)\b/i.test(t) && typeof CG.ejaKarakter === "function") {
-        const m = t.match(/\b(?:eja|ejaan|spell)\s+(.+)/i);
+
+      // 4) Multi-warna
+      if (hasWarna && typeof CG.lafalWarna === "function") {
+        const wm = t.match(/#(?:[0-9a-fA-F]{3,8})\b|\brgb\s*\([^)]+\)/gi) || [];
+        for (const w of wm.slice(0, 4)) {
+          try {
+            const L = pickLafal(CG.lafalWarna(w, lang));
+            if (L) parts.push(w + " → " + L);
+          } catch (_) {}
+        }
+      }
+
+      // 5) Romawi
+      if (hasRomawi && typeof CG.romawiKeKata === "function") {
+        const rms = t.match(/\b[IVXLCDMivxlcdm]{2,}\b/g) || [];
+        for (const r of rms.slice(0, 4)) {
+          try {
+            const L = CG.romawiKeKata(r, lang) || (CG.romawiKeAngka && CG.angkaKeKata(String(CG.romawiKeAngka(r)), lang));
+            if (L) parts.push(r + " → " + L);
+          } catch (_) {}
+        }
+      }
+
+      // 6) Ejaan
+      if (wantEja) {
+        const m = t.match(/\b(?:eja|ejaan|spell|spelling)\s+(.+)/i);
         const target = m ? m[1].trim() : "";
         if (target) {
           try {
-            const L = CG.ejaKarakter(target, "id") || (CG.ejaKode && CG.ejaKode(target));
-            if (L) parts.push("Ejaan: " + L);
+            if (typeof CG.ejaKode === "function") {
+              const L = CG.ejaKode(target, lang);
+              if (L) parts.push("Ejaan: " + L);
+            } else if (typeof CG.ejaKarakter === "function") {
+              const chars = [...target].map(function (c) {
+                try { return CG.ejaKarakter(c, lang); } catch (_) { return c; }
+              });
+              parts.push("Ejaan: " + chars.join(" "));
+            }
           } catch (_) {}
         }
       }
+
+      // 7) Uang
+      if (wantUang && typeof CG.uangKeKata === "function") {
+        const um = t.match(/(\d+(?:[.,]\d+)?)/);
+        if (um) {
+          try {
+            const cur = /usd|dollar/i.test(t) ? "USD" : (/eur|euro/i.test(t) ? "EUR" : "IDR");
+            const L = CG.uangKeKata(um[1].replace(",", "."), cur, lang);
+            if (L) parts.push(L);
+          } catch (_) {}
+        }
+      }
+
+      // 8) Waktu / durasi
+      if (wantWaktu) {
+        try {
+          if (typeof CG.waktuKeKata === "function") {
+            const jm = t.match(/\b(\d{1,2})[:.](\d{2})\b/);
+            if (jm) {
+              const L = CG.waktuKeKata(jm[1] + ":" + jm[2], lang);
+              if (L) parts.push(L);
+            }
+          }
+          if (typeof CG.durasiKeKata === "function") {
+            const dm = t.match(/\b(\d+)\s*(detik|menit|jam|hari)\b/i);
+            if (dm) {
+              const L = CG.durasiKeKata(dm[0], lang);
+              if (L) parts.push(L);
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 9) Tanggal
+      if (wantTanggal && typeof CG.tanggalKeKata === "function") {
+        try {
+          const tm = t.match(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/);
+          if (tm) {
+            const L = CG.tanggalKeKata(tm[0], lang);
+            if (L) parts.push(L);
+          }
+        } catch (_) {}
+      }
+
+      // 10) Daftar multi-bahasa
+      if (wantBahasaList && typeof CG.daftarBahasa === "function") {
+        try {
+          const list = CG.daftarBahasa();
+          if (Array.isArray(list) && list.length) {
+            parts.push("Bahasa didukung Otak: " + list.join(", "));
+          }
+        } catch (_) {}
+      }
+
       if (polaNote) parts.push(polaNote);
-      if (parts.length) {
-        answer = parts.join(". ") + (parts[parts.length - 1].endsWith(".") ? "" : ".");
-        step("OTAK_CIKURGO", true, "linguistik");
+
+      // Dedup & compose
+      const seen = {};
+      const uniq = [];
+      for (const p of parts) {
+        const k = String(p).trim();
+        if (!k || seen[k]) continue;
+        seen[k] = 1;
+        uniq.push(k);
+      }
+      if (uniq.length) {
+        answer = uniq.join(". ");
+        if (!answer.endsWith(".")) answer += ".";
+        step("OTAK_CIKURGO", true, "multi:" + lang);
       }
     }
 
-    // C2. Percakapan / sapaan / identitas / kapabilitas — susun dari konstitusi + state live
+// C2. Percakapan / sapaan / identitas / kapabilitas — susun dari konstitusi + state live
     if (!answer && convOnly && intent) {
       const stepName = live.step || "siaga";
       const cycle = live.cycle != null ? live.cycle : "—";
