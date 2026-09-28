@@ -43,7 +43,7 @@
     "usul_tindakan", "susun_rencana", "silangkan_ide", "jelajahi_alternatif"
   ];
   // Yang benar-benar terhubung ke alur jawaban bersama (sisanya tersedia, output generik):
-  const CIKURGO_WIRED = ["nalar", "ingat", "konteks_sekarang", "angkaKeKata", "urai"];
+  const CIKURGO_WIRED = ["nalar", "ingat", "konteks_sekarang", "angkaKeKata", "urai", "putuskan", "jelaskan", "nilai_kualitas", "deteksi_pola", "sarankan_lanjutan", "daftarBahasa"];
 
   const MODULES = [
     {
@@ -273,6 +273,110 @@
 
     if (!t) return { ok: false, answer: null, trace, error: "EMPTY_QUESTION" };
 
+    // 0a) CIKURGO langsung — hitungan, ejaan, emoji, warna, tanggal, uang, multi-bahasa
+    // (bukan status sistem; Otak Jenius menjawab natural tanpa jargon BCGO)
+    try {
+      const CG = global.CIKURGO;
+      if (CG) {
+        const ql = t.toLowerCase();
+        let direct = null;
+
+        // Normalisasi input bila ada
+        let norm = t;
+        try { if (typeof CG.normalisasiInput === "function") norm = CG.normalisasiInput(t) || t; } catch (_) {}
+
+        // Angka → kata / sebutkan angka
+        const numMatch = t.match(/(?:berapa|sebutkan|ucapkan|bilang|ubah|jadiin|jadikan)?\s*(?:angka\s*)?(\d+(?:[.,]\d+)?)\s*(?:dalam\s+kata|dibaca|ke\s*kata|jadi\s*kata|huruf)?/i)
+          || t.match(/^\s*(\d{1,18}(?:[.,]\d+)?)\s*$/);
+        if (!direct && numMatch && typeof CG.angkaKeKata === "function") {
+          try {
+            const n = String(numMatch[1]).replace(/,/g, ".");
+            const kata = CG.angkaKeKata(n, "id");
+            if (kata) direct = "Angka " + n + " dibaca: " + kata + ".";
+          } catch (_) {}
+        }
+
+        // Uang
+        if (!direct && /rupiah|rp\.?\s*\d|uang\s*\d/i.test(t) && typeof CG.uangKeKata === "function") {
+          try {
+            const um = t.match(/(\d[\d.,]*)/);
+            if (um) {
+              const uk = CG.uangKeKata(um[1], "id");
+              if (uk) direct = uk;
+            }
+          } catch (_) {}
+        }
+
+        // Eja huruf / kode
+        if (!direct && /\b(eja|ejaan|spell)\b/i.test(t)) {
+          try {
+            const em = t.match(/\b(?:eja|ejaan|spell)\s+(.+)/i);
+            const target = em ? em[1].trim() : "";
+            if (target && typeof CG.ejaKarakter === "function") {
+              direct = CG.ejaKarakter(target, "id") || (typeof CG.ejaKode === "function" ? CG.ejaKode(target) : null);
+            }
+          } catch (_) {}
+        }
+
+        // Emoji
+        if (!direct && (/emoji|arti\s*😊|😊|😂|🔥|💡|🙏/.test(t) || /\p{Extended_Pictographic}/u.test(t)) && typeof CG.lafalEmoji === "function") {
+          try {
+            const em = t.match(/(\p{Extended_Pictographic}+)/u);
+            if (em) direct = CG.lafalEmoji(em[1], "id") || ("Emoji itu saya baca sebagai isyarat visual: " + em[1]);
+            else if (/arti\s+emoji|emoji\s+apa/i.test(t)) direct = "Kirim emoji-nya, nanti saya bacakan artinya dalam kata.";
+          } catch (_) {}
+        }
+
+        // Warna
+        if (!direct && /\b(warna|color)\b/i.test(t) && typeof CG.lafalWarna === "function") {
+          try {
+            const wm = t.match(/#?[0-9a-fA-F]{3,8}|\brgb\b|\b(merah|biru|hijau|kuning|hitam|putih|ungu|oranye)\b/i);
+            if (wm) direct = CG.lafalWarna(wm[0], "id");
+          } catch (_) {}
+        }
+
+        // Tanggal / waktu
+        if (!direct && /\b(tanggal|hari\s+ini|jam\s*\d)/i.test(t)) {
+          try {
+            if (typeof CG.tanggalKeKata === "function" && /tanggal|hari\s+ini/i.test(t)) {
+              direct = CG.tanggalKeKata(new Date(), "id");
+            } else if (typeof CG.waktuKeKata === "function") {
+              const jm = t.match(/(\d{1,2}[:.]\d{2})/);
+              if (jm) direct = CG.waktuKeKata(jm[1], "id");
+            }
+          } catch (_) {}
+        }
+
+        // Bahasa didukung
+        if (!direct && /bahasa\s*(apa|yang\s*didukung|tersedia)|multi\s*bahasa|daftar\s*bahasa/i.test(t) && typeof CG.daftarBahasa === "function") {
+          try {
+            const list = CG.daftarBahasa();
+            const arr = Array.isArray(list) ? list : (list && list.bahasa) || [];
+            direct = arr.length
+              ? ("Otak Jenius mendukung " + arr.length + " pola bahasa. Contoh: " + arr.slice(0, 8).join(", ") + ".")
+              : "Otak Jenius mendukung multi-bahasa untuk angka, tanggal, dan ejaan. Mode utama: Indonesia.";
+          } catch (_) {}
+        }
+
+        // Urai bebas (kalimat umum yang bukan status sistem)
+        if (!direct && typeof CG.urai === "function" && !/status|sistem|scanner|radar|anomali|organ|bcgo|firestore|file\s+\w+\.\w+/i.test(t) && t.length < 120) {
+          try {
+            const u = CG.urai(norm, "auto", "id");
+            const ringkas = u && (u.ringkas || u.teks || u.hasil || (typeof u === "string" ? u : null));
+            // Hanya pakai urai jika hasilnya bermakna (bukan echo)
+            if (ringkas && String(ringkas).trim().length > 8 && String(ringkas).toLowerCase() !== ql) {
+              // skip — biar jalur sistem/chat bukti yang handle; urai terlalu generik bisa "ngaco"
+            }
+          } catch (_) {}
+        }
+
+        if (direct && String(direct).trim()) {
+          answer = String(direct).trim();
+          step("OTAK_CIKURGO", true, "jawaban langsung");
+        }
+      }
+    } catch (_) {}
+
     // 0) Memori bersama: rujukan ke percakapan sebelumnya
     if (RECALL_TRIGGER.test(t) && state.memory.length) {
       const last = state.memory.slice(-3).map(x => "“" + x.q + "”").join(", ");
@@ -322,9 +426,79 @@
       } catch (e) { step("INTERNAL_BRAIN", false, String((e && e.message) || e)); }
     } else step("INTERNAL_BRAIN", false, "belum termuat");
 
-    // 4) Bersihkan label dual-brain lama (satu suara)
+    // 4) Satu suara operator — natural, bersih, pakai Otak Jenius
     if (answer) {
-      try { answer = String(answer).replace(/\n\n\[Otak Jenius\]\s*/g, "\n\n").replace(/Rekomendasi Otak:\s*/g, "Rekomendasi: "); } catch (_) {}
+      try {
+        answer = String(answer)
+          .replace(/\n\n\[Otak Jenius\]\s*/g, "\n\n")
+          .replace(/Rekomendasi Otak:\s*/g, "Rekomendasi: ")
+          .replace(/\[CGO Internal\]\s*/gi, "")
+          .replace(/\[Mesin ABC[^\]]*\]/g, function (s) { return s.replace(/\[/g, "").replace(/\]/g, ""); });
+      } catch (_) {}
+
+      try {
+        const CG = global.CIKURGO;
+        if (CG) {
+          // Angka teknis → kata (termasuk di bukti BCGO)
+          if (typeof CG.angkaKeKata === "function") {
+            answer = String(answer)
+              .replace(/\b(\d{1,3})\s*%/g, function (_, d) {
+                try { return CG.angkaKeKata(Number(d), "id") + " persen"; } catch (_) { return d + " persen"; }
+              })
+              .replace(/\bcycle\s*#?\s*(\d+)\b/gi, function (_, d) {
+                try { return "siklus ke-" + CG.angkaKeKata(Number(d), "id"); } catch (_) { return "siklus ke-" + d; }
+              })
+              .replace(/\b(\d+)\s+anomali\b/gi, function (_, d) {
+                try { return CG.angkaKeKata(Number(d), "id") + " anomali"; } catch (_) { return d + " anomali"; }
+              })
+              .replace(/\b(\d+)\s+organ\b/gi, function (_, d) {
+                try { return CG.angkaKeKata(Number(d), "id") + " organ"; } catch (_) { return d + " organ"; }
+              });
+          }
+
+          // Rapikan gaya bicara operator (hindari robotik)
+          answer = String(answer)
+            .replace(/\bUNKNOWN\b/g, "belum diketahui")
+            .replace(/\bNULL\b/g, "kosong")
+            .replace(/\btrue\b/gi, "ya")
+            .replace(/\bfalse\b/gi, "tidak")
+            .replace(/\s{2,}/g, " ")
+            .trim();
+
+          // Nalar singkat hanya jika jawaban masih terlalu teknis / pendek bukti
+          if (typeof CG.nalar === "function" && answer.length > 20 && answer.length < 500) {
+            try {
+              const n = CG.nalar(
+                "Ubah menjadi jawaban operator wanita yang natural, sopan, singkat dalam bahasa Indonesia. Jangan menambah fakta baru. Pertanyaan: " + t + ". Bukti: " + answer.slice(0, 360),
+                { bahasa: "id" }
+              );
+              const hint = n && (n.ringkas || n.kesimpulan || n.hasil || n.alasan || (typeof n === "string" ? n : null));
+              if (hint && String(hint).trim().length > 15) {
+                const h = String(hint).trim().slice(0, 280);
+                // Pakai nalar sebagai pembuka natural bila bukti masih kaku
+                if (/\b(status|anomaly|telemetry|organ|scanner|firestore)\b/i.test(answer) && h.length > 20) {
+                  answer = h;
+                } else if (answer.indexOf(h.slice(0, 30)) < 0 && h.length < answer.length) {
+                  // jangan timpa bukti panjang; sisipkan hanya jika membantu
+                }
+              }
+              step("OTAK_CIKURGO", true, "naturalisasi");
+            } catch (_) {}
+          }
+
+          // Putuskan jika diminta saran
+          if (typeof CG.putuskan === "function" && /rekomendasi|saran|apa yang (harus|perlu)|putusan|keputusan/.test(t.toLowerCase())) {
+            try {
+              const p = CG.putuskan("Dari bukti sistem: " + String(answer).slice(0, 280) + " — beri rekomendasi singkat aman untuk operator.", { bahasa: "id" });
+              const put = p && (p.putusan || p.keputusan || p.hasil || p.rekomendasi || (typeof p === "string" ? p : null));
+              if (put && String(put).trim()) {
+                answer = String(answer).trim() + " Rekomendasi: " + String(put).trim().slice(0, 180);
+                step("OTAK_CIKURGO", true, "putuskan");
+              }
+            } catch (_) {}
+          }
+        }
+      } catch (_) {}
     }
 
     // 5) Memori bersama + CIKURGO.ingat

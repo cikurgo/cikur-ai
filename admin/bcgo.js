@@ -551,7 +551,8 @@ export async function runAutonomousEngine(onCycleUpdate) {
       const CG = (typeof window !== "undefined" && window.CIKURGO) ? window.CIKURGO : null;
       const st = state || {};
       const metrics = st.metrics || {};
-      const q = String(question || "").toLowerCase();
+      const qRaw = String(question || "").trim();
+      const q = qRaw.toLowerCase();
       let text = String(evidenceAnswer || "").trim();
 
       const num = (n) => {
@@ -561,42 +562,109 @@ export async function runAutonomousEngine(onCycleUpdate) {
         return String(n);
       };
 
-      // Angka → kata di seluruh jawaban bukti
+      // Lapis 1: angka teknis → kata natural
       text = text
         .replace(/\b(\d{1,3})\s*%/g, (_, d) => num(d) + " persen")
         .replace(/\bcycle\s*#?\s*(\d+)\b/gi, (_, d) => "siklus ke-" + num(d))
         .replace(/\b(\d+)\s+anomali\b/gi, (_, d) => num(d) + " anomali")
         .replace(/\b(\d+)\s+organ\b/gi, (_, d) => num(d) + " organ");
 
-      // Sapaan / identitas → natural singkat
+      // Konteks sistem untuk nalar/putuskan
+      const ctx = {
+        mode: st.localMode ? "OFFLINE_LOCAL" : (st.connection || "BOOT"),
+        step: st.step || "—",
+        cycle: st.cycle || 0,
+        active: metrics.active ?? 0,
+        total: metrics.total ?? 0,
+        healthy: metrics.healthy ?? 0,
+        sourceScan: (st.sourceScan && st.sourceScan.status) || "—",
+        evidence: text.slice(0, 400)
+      };
+
+      // Lapis 2 CERDAS: urai + nalar + putuskan (satu otak, bukan template semata)
+      let uraiHint = "";
+      let nalarHint = "";
+      let putusanHint = "";
+      if (CG) {
+        try {
+          if (typeof CG.urai === "function" && qRaw) {
+            const u = CG.urai(qRaw, "auto", "id");
+            if (u && (u.ringkas || u.teks || u.hasil)) {
+              uraiHint = String(u.ringkas || u.teks || u.hasil || "").slice(0, 180);
+            } else if (typeof u === "string") {
+              uraiHint = u.slice(0, 180);
+            }
+          }
+        } catch (_) {}
+        try {
+          if (typeof CG.nalar === "function") {
+            const promptNalar =
+              "Pertanyaan operator: " + qRaw +
+              ". Mode sistem " + ctx.mode +
+              ", tahap " + ctx.step +
+              ", siklus " + ctx.cycle +
+              ", organ sehat " + ctx.healthy + " dari " + ctx.total +
+              ", anomali aktif " + ctx.active +
+              ", scanner " + ctx.sourceScan +
+              ". Bukti: " + ctx.evidence;
+            const n = CG.nalar(promptNalar, { bahasa: "id" });
+            if (n) {
+              nalarHint = String(n.ringkas || n.kesimpulan || n.hasil || n.alasan || n.text || n).slice(0, 220);
+            }
+          }
+        } catch (_) {}
+        try {
+          if (typeof CG.putuskan === "function" && /apa\s+yang\s+(harus|perlu)|rekomendasi|putusan|keputusan|saran/.test(q)) {
+            const p = CG.putuskan(
+              "Dari bukti sistem: " + ctx.evidence + " — putuskan tindakan operator yang paling aman.",
+              { bahasa: "id" }
+            );
+            if (p) {
+              putusanHint = String(p.putusan || p.keputusan || p.hasil || p.rekomendasi || p).slice(0, 180);
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Sapaan / identitas
       if (/^(halo|hai|hello|pagi|siang|sore|malam)\b/.test(q) || /siapa kamu|kamu siapa/.test(q)) {
-        return "Halo, saya CGO Operator. Saya membaca keadaan sistem dari telemetry yang sedang hidup. " + text;
+        return "Halo, saya CGO Operator. Otak Jenius CIKUR GO membaca telemetry yang sedang hidup. " +
+          (text || "Silakan tanya status, scanner, radar, atau file saraf.");
       }
 
       // Status / kabar
       if (/status|apa kabar|sehat|bagaimana sistem|kondisi/.test(q)) {
-        const active = metrics.active ?? 0;
-        const total = metrics.total ?? 0;
-        const step = st.step || "—";
-        const open = active === 0
+        const open = ctx.active === 0
           ? "Sistem dalam kondisi stabil, tidak ada anomali aktif."
-          : "Ada " + num(active) + " anomali aktif dari " + num(total) + " organ yang dipantau.";
-        return open + " Saat ini tahap " + step + ". " + text;
+          : "Ada " + num(ctx.active) + " anomali aktif dari " + num(ctx.total) + " organ yang dipantau.";
+        let out = open + " Saat ini tahap " + ctx.step + ", mode " + ctx.mode + ".";
+        if (nalarHint) out += " " + nalarHint;
+        else if (text) out += " " + text;
+        return out;
       }
 
-      // Terima kasih
       if (/terima kasih|makasih|thanks/.test(q)) {
         return "Sama-sama. Saya tetap memantau saraf sistem. Jika perlu, tanyakan status, scanner, radar, atau file tertentu.";
       }
 
-      // Default: bukti teknis yang sudah dipoles — satu suara, satu otak
-      return text;
+      // Gabungan satu otak: bukti teknis + nalar/putusan (tanpa label dual-brain)
+      const parts = [];
+      if (text) parts.push(text);
+      if (nalarHint && (!text || nalarHint.toLowerCase() !== text.toLowerCase().slice(0, nalarHint.length))) {
+        parts.push(nalarHint);
+      }
+      if (putusanHint) parts.push("Rekomendasi: " + putusanHint);
+      if (!parts.length && uraiHint) parts.push(uraiHint);
+      if (!parts.length) {
+        return "Saya sudah membaca permintaan itu, tetapi bukti live belum cukup untuk jawaban pasti. Coba tanya status, scanner, atau nama file saraf.";
+      }
+      return parts.join(" ").replace(/\s+/g, " ").trim();
     } catch (_) {
       return evidenceAnswer;
     }
   }
 
-  function answerQuestion(question) {
+function answerQuestion(question) {
     const raw = String(question || "").trim();
     const q = raw.toLowerCase();
     const organs = buildOrgans();
@@ -608,7 +676,7 @@ export async function runAutonomousEngine(onCycleUpdate) {
     if (!q) return "Saya siap. Tanyakan kondisi sistem, error, file tertentu, telemetry terakhir, siklus saya, atau bukti yang sedang saya lihat.";
 
     if (/^(halo|hai|hello|pagi|siang|sore|malam)\b/.test(q) || /siapa kamu/.test(q)) {
-      return `Halo. Saya BCGO. Saya bekerja dari telemetry dan state sistem yang sedang hidup, bukan dari tebakan. Sekarang cycle #${cycleNo}, tahap ${state.step}. ${situation()}`;
+      return `Halo, saya CGO Operator. Saya membaca saraf sistem yang sedang hidup — sekarang di tahap ${state.step}, siklus ke-${cycleNo}. ${situation()} Silakan tanya status, file, scanner, atau minta saya hitung/eja sesuatu.`;
     }
 
     if (/scan ulang|rescan|pindai ulang|periksa ulang/.test(q)) {
