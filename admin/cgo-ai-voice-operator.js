@@ -7,7 +7,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "3.3.0-NEURAL-CHAT-OTAK";
+  const VERSION = "3.4.0-QUEUE-EMOSI";
   const BUILD = "CIKUR-GO-OPERATOR-3.3.0";
   const ROOT = "./audio/cgo-operator/";
 
@@ -264,19 +264,45 @@
     return true;
   }
 
+  function filePriority(key) {
+    var file = MP3[key];
+    var map = (global.CGOAudioQueue && global.CGOAudioQueue.FILE_PRIORITY) || {};
+    if (file && map[file] != null) return map[file];
+    if (key === "ERROR") return 0;
+    if (key === "WARNING" || key === "PROCESSING" || key === "PROCESSING_WAIT") return 1;
+    if (key === "STANDBY" || key === "SYSTEM_BOOT" || key === "SYSTEM_READY" || key === "REFRESH_READY" || key === "SYSTEM_IDLE") return 3;
+    return 2;
+  }
+
   function emit(key, detail) {
     var force = !!(detail && detail.force);
     if (!TEXT[key] && key !== "CHAT_REPLY") return Promise.resolve(false);
+    if (!enabled) return Promise.resolve(false);
     if (!canEmit(key, force)) return Promise.resolve(false);
     lastPlayed.set(key, Date.now());
     var phrase = TEXT[key];
-    if (phrase) {
-      return speakTTS(otakEnrich(phrase)).then(function (ok) {
-        if (ok) return true;
-        return playMp3(key);
+    var pri = filePriority(key);
+    var file = MP3[key];
+
+    function doPlay() {
+      if (phrase) {
+        return speakTTS(otakEnrich(phrase)).then(function (ok) {
+          if (ok) return true;
+          return playMp3(key);
+        });
+      }
+      return playMp3(key);
+    }
+
+    if (global.CGOAudioQueue && typeof global.CGOAudioQueue.enqueue === "function") {
+      return global.CGOAudioQueue.enqueue({
+        jenis: "mp3",
+        file: file || null,
+        priority: pri,
+        play: function () { return doPlay(); }
       });
     }
-    return playMp3(key);
+    return doPlay();
   }
 
 
@@ -290,6 +316,9 @@
   }
   function speakAnswer(rawText, options) {
     if (!chatSpeakEnabled && !(options && options.force)) return Promise.resolve(false);
+    if (global.CGOAudioQueue && typeof global.CGOAudioQueue.isEnabled === "function" && !global.CGOAudioQueue.isEnabled()) {
+      return Promise.resolve(false);
+    }
     var text = toSpeechText(rawText);
     if (!text || text.length < 3) return Promise.resolve(false);
     var hash = text.slice(0, 80);
@@ -298,22 +327,40 @@
     }
     lastChatHash = hash;
     lastChatAt = Date.now();
-    _chatSpeaking = true;
-    try { if (global.speechSynthesis) global.speechSynthesis.cancel(); } catch (_) {}
+
+    var emosi = (options && options.emosi) || null;
+    var voiceOpts = { rate: 0.94, pitch: 1.06 };
     try {
-      var nodes = document.querySelectorAll("audio[data-cgo-operator]");
-      for (var i = 0; i < nodes.length; i++) { try { nodes[i].pause(); nodes[i].currentTime = 0; } catch (_) {} }
+      if (emosi && global.CGOEmosi && typeof global.CGOEmosi.voiceFor === "function") {
+        voiceOpts = global.CGOEmosi.voiceFor(emosi) || voiceOpts;
+      }
     } catch (_) {}
-    var start = unlocked ? Promise.resolve(true) : unlock();
-    return start.then(function () {
-      return speakTTS(text, { rate: 0.94, pitch: 1.06 }).then(function (ok) {
-        // Jangan fallback MP3 VALID — itu sumber tabrakan saat chat
-        return ok;
+    if (options && options.rate != null) voiceOpts.rate = options.rate;
+    if (options && options.pitch != null) voiceOpts.pitch = options.pitch;
+
+    function doSpeak() {
+      _chatSpeaking = true;
+      try { if (global.speechSynthesis) global.speechSynthesis.cancel(); } catch (_) {}
+      try {
+        var nodes = document.querySelectorAll("audio[data-cgo-operator]");
+        for (var i = 0; i < nodes.length; i++) { try { nodes[i].pause(); nodes[i].currentTime = 0; } catch (_) {} }
+      } catch (_) {}
+      var start = unlocked ? Promise.resolve(true) : unlock();
+      return start.then(function () {
+        return speakTTS(text, voiceOpts).then(function (ok) { return ok; });
+      }).finally(function () {
+        setTimeout(function () { _chatSpeaking = false; }, 200);
       });
-    }).finally(function () {
-      // Lepas kunci setelah TTS selesai (plus buffer singkat)
-      setTimeout(function () { _chatSpeaking = false; }, 400);
-    });
+    }
+
+    if (global.CGOAudioQueue && typeof global.CGOAudioQueue.enqueue === "function") {
+      return global.CGOAudioQueue.enqueue({
+        jenis: "tts",
+        priority: 2,
+        play: function () { return doSpeak(); }
+      });
+    }
+    return doSpeak();
   }
 
   function unlock() {

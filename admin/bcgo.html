@@ -71,6 +71,40 @@ body{font-family:'Inter',sans-serif}
 .chat-bubble-cgo{margin-right:auto;max-width:90%;background:#0f172a;border:1px solid #1e293b;color:#bbf7d0;border-radius:14px 14px 14px 4px;padding:8px 12px;font-size:13px;line-height:1.45}
 .chat-bubble-meta{font-size:9px;color:#64748b;margin-top:4px;font-family:ui-monospace,Menlo,monospace}
 
+
+/* CGO UI 6 lapis — append only */
+.cgo-wave-wrap{height:28px;margin:0 12px 4px;display:none}
+.cgo-wave-wrap.on{display:block}
+#cgo-mic-wave{width:100%;height:28px;border-radius:6px;background:rgba(15,23,42,.6)}
+.mic-pulse-ring{position:relative}
+.mic-pulse-ring.listening::after{content:"";position:absolute;inset:-4px;border-radius:10px;border:2px solid rgba(244,63,94,.5);animation:micRing 1.2s ease-out infinite}
+@keyframes micRing{0%{transform:scale(.92);opacity:.8}100%{transform:scale(1.25);opacity:0}}
+.chat-bubble-cgo{background:linear-gradient(145deg,rgba(6,78,59,.35),rgba(15,23,42,.95));border:1px solid #1e293b}
+.chat-bubble-user{background:linear-gradient(145deg,#1e1b4b,rgba(30,41,59,.95))}
+.chat-bubble-cgo.cgo-emo-senang{border-color:#34d399;box-shadow:0 0 12px rgba(52,211,153,.15)}
+.chat-bubble-cgo.cgo-emo-khawatir{border-color:#fbbf24;box-shadow:0 0 12px rgba(251,191,36,.12)}
+.chat-bubble-cgo.cgo-emo-tegas{border-color:#f87171;box-shadow:0 0 12px rgba(248,113,113,.12)}
+.chat-bubble-cgo.cgo-emo-tenang{border-color:#38bdf8;box-shadow:0 0 12px rgba(56,189,248,.12)}
+.chat-bubble-cgo.cgo-emo-prihatin{border-color:#c084fc}
+.chat-bubble-cgo.last-glow{box-shadow:0 0 0 1px rgba(129,140,248,.35),0 0 20px rgba(99,102,241,.12)}
+.cgo-bubble-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;font-size:10px;color:#64748b}
+.cgo-conf-bar{height:3px;border-radius:2px;background:#1e293b;overflow:hidden;flex:1;min-width:60px}
+.cgo-conf-bar>i{display:block;height:100%;background:linear-gradient(90deg,#34d399,#38bdf8);border-radius:2px}
+.cgo-bubble-actions{display:flex;gap:4px;margin-top:4px}
+.cgo-bubble-actions button{font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid #334155;background:#0f172a;color:#94a3b8;cursor:pointer}
+.cgo-bubble-actions button:hover{border-color:#6366f1;color:#c7d2fe}
+.cgo-avatar{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#0f172a;border:1px solid #334155;font-size:14px}
+.cgo-row{display:flex;gap:8px;align-items:flex-start}
+.cgo-timing{font-size:10px;color:#6366f1;font-family:ui-monospace,Menlo,monospace;margin-top:4px}
+.chat-audio-ctrl{display:flex;gap:4px;align-items:center}
+.chat-audio-ctrl button{width:28px;height:28px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#94a3b8;font-size:12px;cursor:pointer}
+.chat-audio-ctrl button:hover{border-color:#6366f1;color:#e0e7ff}
+.chat-audio-ctrl button.on{border-color:#34d399;color:#34d399}
+.cgo-interim{font-size:11px;color:#94a3b8;padding:4px 12px;display:none}
+.cgo-interim.on{display:block}
+.cgo-ambient-line{position:fixed;left:0;right:0;bottom:0;height:2px;pointer-events:none;background:linear-gradient(90deg,transparent,#6366f1,transparent);opacity:.25;animation:cgoAmbient 75s linear infinite}
+@keyframes cgoAmbient{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+
 </style>
 </head>
 
@@ -402,15 +436,23 @@ body{font-family:'Inter',sans-serif}
           <div id="chat-feed" class="chat-scroll p-3 h-72 overflow-y-auto space-y-3 bg-slate-950/80">
             <div class="text-xs text-slate-500">BCGO sedang menyiapkan kanal komunikasi...</div>
           </div>
+          <div class="cgo-wave-wrap" id="cgo-wave-wrap"><canvas id="cgo-mic-wave" width="600" height="28"></canvas></div>
+          <div class="cgo-interim" id="cgo-interim"></div>
           <form id="chat-form" class="flex gap-2 items-center p-3 border-t border-slate-800/80">
             <button type="button" id="chat-mic" title="Bicara ke CGO" aria-label="Mikrofon"
-                class="shrink-0 w-10 h-10 rounded-lg border border-slate-700 bg-slate-900 text-cyan-300 hover:border-cyan-600 hover:text-cyan-200 flex items-center justify-center text-lg"
+                class="shrink-0 w-10 h-10 rounded-lg border border-slate-700 bg-slate-900 text-cyan-300 hover:border-cyan-600 hover:text-cyan-200 flex items-center justify-center text-lg mic-pulse-ring"
                  style="min-width:2.5rem"></button>
             <input id="chat-input" autocomplete="off"
                 class="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
                 placeholder="Tanya operator: status, scanner, hitung, eja…">
+            <div class="chat-audio-ctrl" title="Kontrol audio">
+              <button type="button" id="chat-audio-on" title="Aktifkan audio">🔊</button>
+              <button type="button" id="chat-audio-off" title="Matikan audio">🔇</button>
+              <button type="button" id="chat-audio-pause" title="Jeda audio">⏸</button>
+            </div>
             <button class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold">Kirim</button>
           </form>
+          <div class="cgo-ambient-line" aria-hidden="true"></div>
         </div>
 
         <div class="flex flex-wrap gap-2">
@@ -425,7 +467,11 @@ body{font-family:'Inter',sans-serif}
 
 <script src="cgo-semantic-bridge.js?v=1.1.0-semantic-bridge"></script>
 <script src="cikur-go.browser.js?v=3.0.0-OTAK-JENIUS"></script>
-<script src="cgo-ai-voice-operator.js?v=3.5.0-LOCK-SILENT-20260928"></script>
+<script src="cgo-audio-bus.js?v=1.0.0-AUDIO-BUS"></script>
+<script src="cgo-audio-queue.js?v=1.0.0-AUDIO-QUEUE"></script>
+<script src="cgo-emosi.js?v=1.0.0-EMOSI"></script>
+<script src="cgo-narasi.js?v=1.0.0-NARASI"></script>
+<script src="cgo-ai-voice-operator.js?v=3.4.0-QUEUE-EMOSI-20260928"></script>
 <script src="cgo-machine-abc.js?v=0.9.9-OTAK-CORE-20260927"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.7.0-BCGO-SYNC-OTAK-20260928"></script>
 <script src="cgo-abc-cognition.js?v=1.1.0-CGO-ABC-COGNITION"></script>
@@ -451,7 +497,7 @@ window.CGO_SVG = {
 </script>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=5.0.0-SEMANTIC-INIT-20260928';
+import { runAutonomousEngine } from './bcgo.js?v=5.1.0-LIVE-UI-20260928';
 
 // Bridge internal CGO brain ke BCGO_STATE (tanpa AI eksternal)
 let internalBrain = null;
@@ -830,25 +876,158 @@ function renderLogs(logs) {
 
 function addChat(role, text, meta) {
     if (!chatFeed) return;
-    // A real conversational turn supersedes the transient work indicator.
-    // Progress events themselves never call addChat(), so they cannot become history.
+    meta = meta || {};
     const liveStatus = chatFeed.querySelector('[data-chat-live-status="1"]');
-    if (liveStatus && (role === 'bcgo' || role === 'user')) liveStatus.remove();
+    if (liveStatus && (role === 'user' || role === 'bcgo')) liveStatus.remove();
+
+    // clear last-glow
+    try { chatFeed.querySelectorAll('.last-glow').forEach(function(el){ el.classList.remove('last-glow'); }); } catch(_){}
 
     const row = document.createElement('div');
-    row.className = role === 'user'
-        ? 'flex justify-end'
-        : 'flex justify-start';
+    row.className = role === 'user' ? 'flex justify-end' : 'flex justify-start cgo-row';
+
+    if (role !== 'user') {
+      const av = document.createElement('div');
+      av.className = 'cgo-avatar';
+      const emo = (meta.emosi && meta.emosi.emosi) || 'netral';
+      const faces = { netral:'◉', senang:'☺', khawatir:'⚠', tegas:'◆', tenang:'○', prihatin:'◐', berpikir:'◎' };
+      av.textContent = faces[emo] || '◉';
+      av.title = emo;
+      row.appendChild(av);
+    }
 
     const bubble = document.createElement('div');
-    bubble.className = role === 'user'
-        ? 'max-w-[90%] rounded-lg bg-indigo-950 border border-indigo-800 px-3 py-2 text-xs text-indigo-100'
-        : 'max-w-[90%] rounded-lg bg-emerald-950/40 border border-emerald-900 px-3 py-2 text-xs text-emerald-100';
+    const emoClass = (role !== 'user' && meta.emosi && meta.emosi.emosi) ? (' cgo-emo-' + meta.emosi.emosi) : '';
+    bubble.className = (role === 'user'
+        ? 'chat-bubble-user max-w-[90%] rounded-lg px-3 py-2 text-xs'
+        : 'chat-bubble-cgo last-glow max-w-[90%] rounded-lg px-3 py-2 text-xs') + emoClass;
 
-    bubble.innerHTML = `<div class="text-[9px] uppercase opacity-60 mb-1">${role === 'user' ? (meta && meta.modality === 'voice' ? 'Anda · suara' : 'Anda') : 'CGO'}</div>${esc(text)}`;
+    const who = role === 'user'
+        ? (meta.modality === 'voice' ? 'Anda · suara' : 'Anda')
+        : 'CGO';
+    const ts = new Date();
+    const tsStr = ts.toTimeString().slice(0,8) + '.' + String(ts.getMilliseconds()).padStart(3,'0');
+
+    let conf = meta.confidence;
+    if (conf == null && window.BCGO_STATE && window.BCGO_STATE.semantic && window.BCGO_STATE.semantic.ready) conf = 0.82;
+    if (conf == null) conf = 0.7;
+    const confPct = Math.round(Math.max(0, Math.min(1, Number(conf))) * 100);
+
+    const body = document.createElement('div');
+    body.innerHTML = '<div class="text-[9px] uppercase opacity-60 mb-1">' + who + '</div>';
+    const content = document.createElement('div');
+    content.className = 'cgo-bubble-text';
+    const fullText = String(text || '');
+    // Streaming: T_RENDER = sekarang (timer sudah dihitung di sendQuestion sebelum addChat)
+    // JANGAN ubah timer saat stream selesai
+    const streamPref = (function(){
+      try {
+        if (localStorage.getItem('CGO_STREAM_OFF') === '1') return false;
+      } catch(_){}
+      return true;
+    })();
+    const canStream = role !== 'user' && streamPref && fullText.length >= 20 && !meta.noStream;
+    if (!canStream) {
+      content.textContent = fullText;
+    } else {
+      content.textContent = '';
+      const cursor = document.createElement('span');
+      cursor.className = 'cgo-stream-cursor';
+      cursor.textContent = '▍
+      content.appendChild(cursor);
+      let idx = 0;
+      let stopped = false;
+      const tick = function(){
+        if (stopped) return;
+        if (idx >= fullText.length) {
+          try { cursor.remove(); } catch(_){}
+          return;
+        }
+        // append one char
+        content.insertBefore(document.createTextNode(fullText.charAt(idx)), cursor);
+        idx++;
+        setTimeout(tick, 20);
+      };
+      setTimeout(tick, 20);
+      // skip control on bubble later via meta
+      meta._streamStop = function(){
+        stopped = true;
+        content.textContent = fullText;
+      };
+    }
+    body.appendChild(content);
+
+    if (role !== 'user') {
+      const metaRow = document.createElement('div');
+      metaRow.className = 'cgo-bubble-meta';
+      metaRow.innerHTML = '<span class="cgo-conf-bar"><i style="width:' + confPct + '%"></i></span><span>yakin ' + confPct + '%</span><span>' + tsStr + '</span>';
+      body.appendChild(metaRow);
+      if (meta.timing) {
+        const tm = document.createElement('div');
+        tm.className = 'cgo-timing';
+        tm.textContent = meta.timing;
+        body.appendChild(tm);
+      }
+      const actions = document.createElement('div');
+      actions.className = 'cgo-bubble-actions';
+      const bReason = document.createElement('button');
+      bReason.type = 'button';
+      bReason.textContent = '🧠 alasan';
+      bReason.onclick = function() {
+        const alasan = (meta.emosi && meta.emosi.alasan) || (meta.trace && meta.trace.join(' → ')) || 'Tidak ada jejak alasan tersimpan.';
+        alert(alasan);
+      };
+      const bCopy = document.createElement('button');
+      bCopy.type = 'button';
+      bCopy.textContent = '📋 salin';
+      bCopy.onclick = function() {
+        try { navigator.clipboard.writeText(String(text || '')); } catch(_){}
+      };
+      const bSpeak = document.createElement('button');
+      bSpeak.type = 'button';
+      bSpeak.textContent = '🔊 ulang';
+      bSpeak.onclick = function() {
+        try {
+          if (window.CGOOperatorVoice && window.CGOOperatorVoice.speakAnswer) {
+            window.CGOOperatorVoice.speakAnswer(text, { force: true, emosi: meta.emosi && meta.emosi.emosi });
+          }
+        } catch(_){}
+      };
+      const bSkip = document.createElement('button');
+      bSkip.type = 'button';
+      bSkip.textContent = '⏭ skip';
+      bSkip.title = 'Tampilkan teks penuh';
+      bSkip.onclick = function() {
+        try { if (meta._streamStop) meta._streamStop(); } catch(_){}
+      };
+      const bStreamPref = document.createElement('button');
+      bStreamPref.type = 'button';
+      bStreamPref.textContent = 'stream';
+      bStreamPref.title = 'Toggle streaming (disimpan)';
+      bStreamPref.onclick = function() {
+        try {
+          const off = localStorage.getItem('CGO_STREAM_OFF') === '1';
+          localStorage.setItem('CGO_STREAM_OFF', off ? '0' : '1');
+          bStreamPref.textContent = off ? 'stream:on' : 'stream:off';
+        } catch(_){}
+      };
+      try {
+        if (localStorage.getItem('CGO_STREAM_OFF') === '1') bStreamPref.textContent = 'stream:off';
+        else bStreamPref.textContent = 'stream:on';
+      } catch(_){}
+      actions.appendChild(bReason);
+      actions.appendChild(bCopy);
+      actions.appendChild(bSpeak);
+      actions.appendChild(bSkip);
+      actions.appendChild(bStreamPref);
+      body.appendChild(actions);
+    }
+
+    bubble.appendChild(body);
     row.appendChild(bubble);
     chatFeed.appendChild(row);
     chatFeed.scrollTop = chatFeed.scrollHeight;
+    return bubble;
 }
 
 function setChatLiveStatus(text, kind = 'working') {
@@ -936,16 +1115,19 @@ async function sendQuestion(question, opts) {
       if (liveStatus) liveStatus.textContent = 'Berpikir · membaca BCGO + Otak Jenius';
       thinkIv = setInterval(() => {
         const s = ((performance.now() - t0) / 1000).toFixed(1);
-        if (thinkTimer) thinkTimer.textContent = s + 's';
+        if (thinkTimer) thinkTimer.textContent = Math.round(performance.now() - t0) + ' ms';
       }, 100);
     } catch (_) {}
     const stopThink = () => {
       try { if (thinkIv) clearInterval(thinkIv); } catch(_){}
       try { if (thinkBar) thinkBar.classList.remove('on'); } catch(_){}
       try {
-        const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
-        if (liveStatus) liveStatus.textContent = 'Selesai · ' + elapsed + 's';
-      } catch(_){}
+        const ms = Math.max(0, Math.round(performance.now() - t0));
+        if (thinkTimer) thinkTimer.textContent = ms + ' ms';
+        if (liveStatus) liveStatus.textContent = 'Selesai · ' + ms + ' ms';
+      } catch(_){
+        try { if (thinkTimer) thinkTimer.textContent = '-- ms'; } catch(__){}
+      }
     };
     setChatLiveStatus('Memahami permintaan dan membaca state BCGO yang sedang hidup…', 'working');
     try {
@@ -1024,22 +1206,46 @@ async function sendQuestion(question, opts) {
             }
           }
         }
-        addChat('bcgo', answer);
-        // Natural voice — SATU jalur: batalkan TTS event lain, baca jawaban utuh
+        // Multi-narasi + multi-emosi (tanpa mengubah fakta Otak)
+        let emosi = null;
         try {
-            if (window.speechSynthesis) try { window.speechSynthesis.cancel(); } catch (_) {}
-            // Satu suara: batalkan ucapan sebelumnya agar tidak bertabrakan
-            try {
-              if (window.speechSynthesis) window.speechSynthesis.cancel();
-              if (window.CGOOperatorVoice && typeof window.CGOOperatorVoice.stop === 'function') window.CGOOperatorVoice.stop();
-            } catch (_) {}
+          if (window.CGONarasi && typeof window.CGONarasi.narrate === 'function') {
+            answer = window.CGONarasi.narrate(answer, { question: text, liveState: liveState });
+          }
+        } catch (_) {}
+        try {
+          if (window.CGOEmosi && typeof window.CGOEmosi.tentukanEmosi === 'function') {
+            emosi = window.CGOEmosi.tentukanEmosi({ text: text, answer: answer, liveState: liveState });
+            if (emosi && window.CGOEmosi.prefiksEmosi) {
+              const pref = window.CGOEmosi.prefiksEmosi(emosi.emosi, emosi.intensitas);
+              if (pref && answer && !String(answer).startsWith(pref)) answer = pref + answer;
+            }
+          }
+        } catch (_) {}
+        const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        const totalMs = Math.max(0, Math.round(t1 - t0));
+        const timingStr = totalMs ? ('⚡ ' + totalMs + ' ms') : '-- ms';
+        try {
+          const elapsedSec = (totalMs / 1000).toFixed(1);
+          if (liveStatus) liveStatus.textContent = 'Selesai · ' + totalMs + ' ms';
+        } catch (_) {}
+        addChat('bcgo', answer, {
+          emosi: emosi,
+          timing: timingStr,
+          confidence: (emosi && emosi.intensitas != null) ? emosi.intensitas : 0.72,
+          trace: (window.CGO_OTAK && window.CGO_OTAK.status && window.CGO_OTAK.status().modules)
+            ? window.CGO_OTAK.status().modules.filter(function(m){return m.ready;}).map(function(m){return m.id;})
+            : null
+        });
+        // TTS via antrian (tidak tabrakan)
+        try {
             if (window.CGOOperatorVoice && typeof window.CGOOperatorVoice.speakAnswer === 'function') {
                 const wave = document.getElementById('cgo-voice-wave');
                 if (wave) wave.classList.add('live');
-                const p = window.CGOOperatorVoice.speakAnswer(answer);
+                const p = window.CGOOperatorVoice.speakAnswer(answer, { emosi: emosi && emosi.emosi });
                 Promise.resolve(p).finally(() => { try { if (wave) wave.classList.remove('live'); } catch(_){} });
             }
-        } catch (voiceErr) { console.warn('[BCGO] speakAnswer', voiceErr); }
+        } catch (voiceErr) { /* silent */ }
     } catch (error) {
         try { stopThink(); } catch (_) {}
         addChat('bcgo', `Saya belum bisa menjawab dengan aman karena BCGO belum siap: ${String(error?.message || error).slice(0, 220)}`);
@@ -1533,11 +1739,28 @@ await runAutonomousEngine(state => {
       rec = new SR();
       rec.lang = 'id-ID';
       rec.interimResults = true;
-      rec.continuous = false;
-      rec.onstart = () => setListening(true);
-      rec.onerror = () => setListening(false);
-      rec.onend = () => setListening(false);
+      rec.continuous = true;
+      var silenceMs = 2000;
+      var silenceT = null;
+      function armSilence() {
+        try { if (silenceT) clearTimeout(silenceT); } catch(_){}
+        silenceT = setTimeout(function(){
+          try { if (rec && listening) rec.stop(); } catch(_){}
+        }, silenceMs);
+      }
+      rec.onstart = () => { setListening(true); armSilence(); try { if (window.CGOMicUI) window.CGOMicUI.startWave(); } catch(_){} };
+      rec.onerror = () => { setListening(false); try { if (window.CGOMicUI) window.CGOMicUI.stopWave(); } catch(_){} };
+      rec.onend = () => { setListening(false); try { if (silenceT) clearTimeout(silenceT); } catch(_){} try { if (window.CGOMicUI) window.CGOMicUI.stopWave(); } catch(_){} };
+      try {
+        // speechend / soundend bila browser support (Chrome kadang ada)
+        rec.onspeechend = function(){ armSilence(); };
+        rec.onsoundend = function(){ armSilence(); };
+        rec.onspeechstart = function(){ try { if (silenceT) clearTimeout(silenceT); } catch(_){} };
+        rec.onsoundstart = function(){ try { if (silenceT) clearTimeout(silenceT); } catch(_){} };
+      } catch(_){}
       rec.onresult = (ev) => {
+        try { armSilence(); } catch(_){}
+
         let interim = '', final = '';
         for (let i = ev.resultIndex; i < ev.results.length; i++) {
           const t = ev.results[i][0].transcript;
@@ -1657,5 +1880,122 @@ await runAutonomousEngine(state => {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
 </script>
+
+<script>
+/* CGO Pilar 2/1 — audio controls + mic waveform/VAD (append, non-breaking) */
+(function () {
+  function $(id) { return document.getElementById(id); }
+  var onBtn = $('chat-audio-on');
+  var offBtn = $('chat-audio-off');
+  var pauseBtn = $('chat-audio-pause');
+  function mark(btn, on) {
+    try {
+      [onBtn, offBtn, pauseBtn].forEach(function (b) { if (b) b.classList.remove('on'); });
+      if (btn && on) btn.classList.add('on');
+    } catch (_) {}
+  }
+  if (onBtn) onBtn.addEventListener('click', function () {
+    try {
+      if (window.CGOAudioQueue) window.CGOAudioQueue.setEnabled(true);
+      if (window.CGOOperatorVoice && window.CGOOperatorVoice.setEnabled) window.CGOOperatorVoice.setEnabled(true);
+      mark(onBtn, true);
+    } catch (_) {}
+  });
+  if (offBtn) offBtn.addEventListener('click', function () {
+    try {
+      if (window.CGOAudioQueue) window.CGOAudioQueue.setEnabled(false);
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      mark(offBtn, true);
+    } catch (_) {}
+  });
+  if (pauseBtn) pauseBtn.addEventListener('click', function () {
+    try {
+      if (window.CGOAudioQueue) window.CGOAudioQueue.pause();
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      mark(pauseBtn, true);
+    } catch (_) {}
+  });
+  mark(onBtn, true);
+
+  /* Waveform + VAD helpers for mic */
+  var waveWrap = $('cgo-wave-wrap');
+  var canvas = $('cgo-mic-wave');
+  var interimEl = $('cgo-interim');
+  var micBtn = $('chat-mic');
+  var audioCtx = null, analyser = null, micStream = null, raf = null, silenceTimer = null;
+  var SILENCE_MS = 2000;
+
+  function drawWave() {
+    if (!canvas || !analyser) return;
+    var ctx = canvas.getContext('2d');
+    var w = canvas.width, h = canvas.height;
+    var data = new Uint8Array(analyser.frequencyBinCount);
+    function frame() {
+      raf = requestAnimationFrame(frame);
+      analyser.getByteTimeDomainData(data);
+      ctx.clearRect(0, 0, w, h);
+      ctx.beginPath();
+      var mid = h / 2;
+      for (var i = 0; i < data.length; i++) {
+        var x = (i / data.length) * w;
+        var v = (data[i] - 128) / 128;
+        var y = mid + v * mid * 0.9;
+        var level = Math.abs(v);
+        ctx.strokeStyle = level > 0.4 ? '#f87171' : level > 0.15 ? '#fbbf24' : '#34d399';
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    frame();
+  }
+
+  async function startWave() {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      var src = audioCtx.createMediaStreamSource(micStream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      src.connect(analyser);
+      if (waveWrap) waveWrap.classList.add('on');
+      if (micBtn) micBtn.classList.add('listening');
+      drawWave();
+    } catch (_) {}
+  }
+  function stopWave() {
+    try { if (raf) cancelAnimationFrame(raf); } catch (_) {}
+    raf = null;
+    try { if (micStream) micStream.getTracks().forEach(function (t) { t.stop(); }); } catch (_) {}
+    micStream = null;
+    try { if (audioCtx) audioCtx.close(); } catch (_) {}
+    audioCtx = null; analyser = null;
+    if (waveWrap) waveWrap.classList.remove('on');
+    if (micBtn) micBtn.classList.remove('listening');
+  }
+
+  // Hook into existing mic: observe class changes
+  if (micBtn) {
+    var obs = new MutationObserver(function () {
+      var listening = micBtn.classList.contains('border-rose-500') || micBtn.classList.contains('animate-pulse');
+      if (listening) startWave(); else stopWave();
+    });
+    try { obs.observe(micBtn, { attributes: true, attributeFilter: ['class'] }); } catch (_) {}
+  }
+
+  // continuous mode soft-upgrade: patch SpeechRecognition instances when created is hard;
+  // expose helper for silence display
+  window.CGOMicUI = {
+    showInterim: function (t) {
+      if (!interimEl) return;
+      if (t) { interimEl.textContent = t; interimEl.classList.add('on'); }
+      else { interimEl.textContent = ''; interimEl.classList.remove('on'); }
+    },
+    startWave: startWave,
+    stopWave: stopWave
+  };
+})();
+</script>
+
 </body>
 </html>
