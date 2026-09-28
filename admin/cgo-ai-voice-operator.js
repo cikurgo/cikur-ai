@@ -253,8 +253,10 @@
     });
   }
 
+  var _chatSpeaking = false;
   function canEmit(key, force) {
     if (!enabled && !force) return false;
+    if (_chatSpeaking && key !== "CHAT_REPLY" && !force) return false;
     if (quietLive && /^ABC_STAGE_/.test(key) && !force) return false;
     var cd = COOLDOWN[key] || 0;
     var last = lastPlayed.get(key) || 0;
@@ -279,6 +281,7 @@
 
 
   function stop() {
+    _chatSpeaking = false;
     try { if (global.speechSynthesis) global.speechSynthesis.cancel(); } catch (_) {}
     try {
       var audios = document.querySelectorAll("audio[data-cgo-operator]");
@@ -295,13 +298,21 @@
     }
     lastChatHash = hash;
     lastChatAt = Date.now();
+    _chatSpeaking = true;
     try { if (global.speechSynthesis) global.speechSynthesis.cancel(); } catch (_) {}
+    try {
+      var nodes = document.querySelectorAll("audio[data-cgo-operator]");
+      for (var i = 0; i < nodes.length; i++) { try { nodes[i].pause(); nodes[i].currentTime = 0; } catch (_) {} }
+    } catch (_) {}
     var start = unlocked ? Promise.resolve(true) : unlock();
     return start.then(function () {
       return speakTTS(text, { rate: 0.94, pitch: 1.06 }).then(function (ok) {
-        if (ok) return true;
-        return playMp3("VALID");
+        // Jangan fallback MP3 VALID — itu sumber tabrakan saat chat
+        return ok;
       });
+    }).finally(function () {
+      // Lepas kunci setelah TTS selesai (plus buffer singkat)
+      setTimeout(function () { _chatSpeaking = false; }, 400);
     });
   }
 
@@ -326,7 +337,7 @@
   var _lastStateKey = "";
   var _lastStateAt = 0;
   var STATE_COOLDOWN_MS = 12000; // min 12s between identical/adjacent state sounds
-  var STATE_SILENT = { PROCESSING: 1, LIVE_INPUT: 1, SYSTEM_IDLE: 1, STANDBY: 1 }; // too noisy if every cycle
+  var STATE_SILENT = { PROCESSING: 1, PROCESSING_WAIT: 1, LIVE_INPUT: 1, SYSTEM_IDLE: 1, STANDBY: 1, VALID: 1, SYSTEM_READY: 1, ABC_STAGE_A: 1, ABC_STAGE_B: 1, ABC_STAGE_C: 1, ABC_STAGE_D: 1 }; // too noisy if every cycle
 
   function state(s, detail) {
     var map = {

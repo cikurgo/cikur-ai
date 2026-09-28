@@ -84,6 +84,13 @@
       probe() { const s = global.CGOSemantic; return s ? { ready: true, version: s.version || null } : null; }
     },
     {
+      id: "INSTRUCTION", label: "Konstitusi CGO", role: "Intent · dialog · kontrak jawaban", required: false,
+      probe() {
+        const i = global.CGOInstruction;
+        return i ? { ready: typeof i.classifyIntent === "function", version: (i.VERSION || (i.getInstructionVersion && i.getInstructionVersion().VERSION) || null) } : null;
+      }
+    },
+    {
       id: "OPERATOR_VOICE", label: "CGO Operator", role: "Suara & persona", required: false,
       probe() { const v = global.CGOOperatorVoice; return v ? { ready: typeof v.speakAnswer === "function", version: v.version || null } : null; }
     }
@@ -263,138 +270,239 @@
   const RECALL_TRIGGER = /^(tadi|sebelumnya|barusan)\b|kita bahas apa|topik terakhir|apa yang tadi/i;
   const WEAK_ANSWER = /belum punya bukti|belum bisa/i;
 
+  
+  
+  // Sesi percakapan bersama (instruction + memori)
+  let convSession = { topic: null, turn: 0, mood: null, style: null, files: [], primaryFile: null };
+
   async function ask(text, ctx) {
     ctx = ctx || {};
     const t = String(text || "").trim();
     const trace = [];
-    const step = (module, ok, note) => trace.push({ module, ok: !!ok, note: note || null });
+    const step = (module, ok, note) => trace.push({ module: module, ok: !!ok, note: note || null });
     let answer = null;
     let abc = null;
 
-    if (!t) return { ok: false, answer: null, trace, error: "EMPTY_QUESTION" };
+    if (!t) return { ok: false, answer: null, trace: trace, error: "EMPTY_QUESTION" };
 
-    // 0a) CIKURGO langsung — hitungan, ejaan, emoji, warna, tanggal, uang, multi-bahasa
-    // (bukan status sistem; Otak Jenius menjawab natural tanpa jargon BCGO)
+    const CG = global.CIKURGO;
+    const Inst = global.CGOInstruction;
+    const live = ctx.liveState || global.BCGO_STATE || {};
+
+    // ─── A. Konstitusi percakapan (cgo-instruction) ───
+    let intent = null;
     try {
-      const CG = global.CIKURGO;
-      if (CG) {
-        const ql = t.toLowerCase();
-        let direct = null;
-
-        // Normalisasi input bila ada
-        let norm = t;
-        try { if (typeof CG.normalisasiInput === "function") norm = CG.normalisasiInput(t) || t; } catch (_) {}
-
-        // Angka → kata / sebutkan angka
-        const numMatch = t.match(/(?:berapa|sebutkan|ucapkan|bilang|ubah|jadiin|jadikan)?\s*(?:angka\s*)?(\d+(?:[.,]\d+)?)\s*(?:dalam\s+kata|dibaca|ke\s*kata|jadi\s*kata|huruf)?/i)
-          || t.match(/^\s*(\d{1,18}(?:[.,]\d+)?)\s*$/);
-        if (!direct && numMatch && typeof CG.angkaKeKata === "function") {
-          try {
-            const n = String(numMatch[1]).replace(/,/g, ".");
-            const kata = CG.angkaKeKata(n, "id");
-            if (kata) direct = "Angka " + n + " dibaca: " + kata + ".";
-          } catch (_) {}
+      if (Inst && typeof Inst.classifyIntent === "function") {
+        intent = Inst.classifyIntent(t, convSession);
+        if (typeof Inst.updateConversationState === "function") {
+          convSession = Inst.updateConversationState(convSession, t, intent, {});
         }
+        step("INSTRUCTION", true, (intent && (intent.topic || intent.mode)) || "classified");
+      } else step("INSTRUCTION", false, "belum termuat");
+    } catch (e) {
+      step("INSTRUCTION", false, String((e && e.message) || e));
+    }
 
-        // Uang
-        if (!direct && /rupiah|rp\.?\s*\d|uang\s*\d/i.test(t) && typeof CG.uangKeKata === "function") {
-          try {
-            const um = t.match(/(\d[\d.,]*)/);
-            if (um) {
-              const uk = CG.uangKeKata(um[1], "id");
-              if (uk) direct = uk;
-            }
-          } catch (_) {}
-        }
+    // ─── B. Otak Jenius: urai penuh (audit) ───
+    let audit = null;
+    let spoken = null;
+    let tokens = [];
+    try {
+      if (CG && typeof CG.urai === "function") {
+        const u = CG.urai(t, "auto", true);
+        if (u && typeof u === "object") {
+          audit = u;
+          spoken = u.teks_hasil || null;
+          tokens = u.token || u.tokens || [];
+        } else if (typeof u === "string") spoken = u;
+        step("OTAK_CIKURGO", true, "urai");
+      }
+    } catch (e) {
+      step("OTAK_CIKURGO", false, String((e && e.message) || e));
+    }
 
-        // Eja huruf / kode
-        if (!direct && /\b(eja|ejaan|spell)\b/i.test(t)) {
-          try {
-            const em = t.match(/\b(?:eja|ejaan|spell)\s+(.+)/i);
-            const target = em ? em[1].trim() : "";
-            if (target && typeof CG.ejaKarakter === "function") {
-              direct = CG.ejaKarakter(target, "id") || (typeof CG.ejaKode === "function" ? CG.ejaKode(target) : null);
-            }
-          } catch (_) {}
-        }
-
-        // Emoji
-        if (!direct && (/emoji|arti\s*😊|😊|😂|🔥|💡|🙏/.test(t) || /\p{Extended_Pictographic}/u.test(t)) && typeof CG.lafalEmoji === "function") {
-          try {
-            const em = t.match(/(\p{Extended_Pictographic}+)/u);
-            if (em) direct = CG.lafalEmoji(em[1], "id") || ("Emoji itu saya baca sebagai isyarat visual: " + em[1]);
-            else if (/arti\s+emoji|emoji\s+apa/i.test(t)) direct = "Kirim emoji-nya, nanti saya bacakan artinya dalam kata.";
-          } catch (_) {}
-        }
-
-        // Warna
-        if (!direct && /\b(warna|color)\b/i.test(t) && typeof CG.lafalWarna === "function") {
-          try {
-            const wm = t.match(/#?[0-9a-fA-F]{3,8}|\brgb\b|\b(merah|biru|hijau|kuning|hitam|putih|ungu|oranye)\b/i);
-            if (wm) direct = CG.lafalWarna(wm[0], "id");
-          } catch (_) {}
-        }
-
-        // Tanggal / waktu
-        if (!direct && /\b(tanggal|hari\s+ini|jam\s*\d)/i.test(t)) {
-          try {
-            if (typeof CG.tanggalKeKata === "function" && /tanggal|hari\s+ini/i.test(t)) {
-              direct = CG.tanggalKeKata(new Date(), "id");
-            } else if (typeof CG.waktuKeKata === "function") {
-              const jm = t.match(/(\d{1,2}[:.]\d{2})/);
-              if (jm) direct = CG.waktuKeKata(jm[1], "id");
-            }
-          } catch (_) {}
-        }
-
-        // Bahasa didukung
-        if (!direct && /bahasa\s*(apa|yang\s*didukung|tersedia)|multi\s*bahasa|daftar\s*bahasa/i.test(t) && typeof CG.daftarBahasa === "function") {
-          try {
-            const list = CG.daftarBahasa();
-            const arr = Array.isArray(list) ? list : (list && list.bahasa) || [];
-            direct = arr.length
-              ? ("Otak Jenius mendukung " + arr.length + " pola bahasa. Contoh: " + arr.slice(0, 8).join(", ") + ".")
-              : "Otak Jenius mendukung multi-bahasa untuk angka, tanggal, dan ejaan. Mode utama: Indonesia.";
-          } catch (_) {}
-        }
-
-        // Urai bebas (kalimat umum yang bukan status sistem)
-        if (!direct && typeof CG.urai === "function" && !/status|sistem|scanner|radar|anomali|organ|bcgo|firestore|file\s+\w+\.\w+/i.test(t) && t.length < 120) {
-          try {
-            const u = CG.urai(norm, "auto", "id");
-            const ringkas = u && (u.ringkas || u.teks || u.hasil || (typeof u === "string" ? u : null));
-            // Hanya pakai urai jika hasilnya bermakna (bukan echo)
-            if (ringkas && String(ringkas).trim().length > 8 && String(ringkas).toLowerCase() !== ql) {
-              // skip — biar jalur sistem/chat bukti yang handle; urai terlalu generik bisa "ngaco"
-            }
-          } catch (_) {}
-        }
-
-        if (direct && String(direct).trim()) {
-          answer = String(direct).trim();
-          step("OTAK_CIKURGO", true, "jawaban langsung");
-        }
+    // Nalar → pakai ALASAN (bukan label kesimpulan sebagai jawaban)
+    let nalarAlasan = [];
+    try {
+      if (CG && typeof CG.nalar === "function") {
+        const n = CG.nalar(t, { bahasa: "id" });
+        if (n && Array.isArray(n.alasan)) nalarAlasan = n.alasan.filter(Boolean);
+        step("OTAK_CIKURGO", true, "nalar-alasan");
       }
     } catch (_) {}
 
-    // 0) Memori bersama: rujukan ke percakapan sebelumnya
-    if (RECALL_TRIGGER.test(t) && state.memory.length) {
-      const last = state.memory.slice(-3).map(x => "“" + x.q + "”").join(", ");
-      answer = "Yang terakhir kita bahas: " + last + ".";
-      step("MEMORI_BERSAMA", true, state.memory.length + " percakapan");
+    // Deteksi pola aneh
+    let polaNote = null;
+    try {
+      if (CG && typeof CG.deteksi_pola === "function") {
+        const p = CG.deteksi_pola(t);
+        if (p && Array.isArray(p.rekomendasi) && p.rekomendasi.length) {
+          polaNote = p.rekomendasi.slice(0, 2).join("; ");
+        }
+        step("OTAK_CIKURGO", true, "deteksi_pola");
+      }
+    } catch (_) {}
+
+    // ─── C. Cabang natural berdasarkan intent (bukan template kaku) ───
+    const topic = (intent && intent.topic) || null;
+    const mode = (intent && intent.mode) || null;
+    const convOnly = !!(intent && intent.conversationOnly);
+
+    // C1. Linguistik murni — angka/emoji/warna/eja (Otak wajib menjawab)
+    const jenis = {};
+    for (const tok of tokens) {
+      const j = tok && tok.jenis;
+      if (j && j !== "spasi" && j !== "kata") jenis[j] = (jenis[j] || 0) + 1;
+    }
+    const linguistic = jenis.angka || jenis.desimal || jenis.romawi || jenis.emoji || jenis.hex_warna || jenis.rgb_warna ||
+      /\b(eja|ejaan|spell|bacakan|ucapkan|jadi\s*kata)\b/i.test(t);
+
+    if (linguistic && CG) {
+      const parts = [];
+      if (spoken && String(spoken).trim() && String(spoken).trim() !== t) {
+        parts.push(String(spoken).trim());
+      }
+      if ((jenis.angka || jenis.desimal) && typeof CG.angkaKeKata === "function") {
+        const nums = t.match(/\d+(?:[.,]\d+)?/g) || [];
+        for (const n of nums.slice(0, 5)) {
+          try {
+            const k = CG.angkaKeKata(String(n).replace(",", "."), "id");
+            if (k) parts.push(n + " = " + k);
+          } catch (_) {}
+        }
+      }
+      if (jenis.emoji && typeof CG.lafalEmoji === "function") {
+        const em = t.match(/\p{Extended_Pictographic}+/gu) || [];
+        for (const e of em.slice(0, 6)) {
+          try { const L = CG.lafalEmoji(e, "id"); if (L) parts.push(e + " → " + L); } catch (_) {}
+        }
+      }
+      if ((jenis.hex_warna || jenis.rgb_warna) && typeof CG.lafalWarna === "function") {
+        const wm = t.match(/#(?:[0-9a-fA-F]{3,8})\b|\brgb\s*\([^)]+\)/g) || [];
+        for (const w of wm.slice(0, 3)) {
+          try {
+            const L = CG.lafalWarna(w, "id");
+            if (L) parts.push(w + " → " + (Array.isArray(L) ? L[0] : L));
+          } catch (_) {}
+        }
+      }
+      if (/\b(eja|ejaan|spell)\b/i.test(t) && typeof CG.ejaKarakter === "function") {
+        const m = t.match(/\b(?:eja|ejaan|spell)\s+(.+)/i);
+        const target = m ? m[1].trim() : "";
+        if (target) {
+          try {
+            const L = CG.ejaKarakter(target, "id") || (CG.ejaKode && CG.ejaKode(target));
+            if (L) parts.push("Ejaan: " + L);
+          } catch (_) {}
+        }
+      }
+      if (polaNote) parts.push(polaNote);
+      if (parts.length) {
+        answer = parts.join(". ") + (parts[parts.length - 1].endsWith(".") ? "" : ".");
+        step("OTAK_CIKURGO", true, "linguistik");
+      }
     }
 
-    // 1) BCGO Engine — jawaban berbasis telemetry/scanner/radar
-    if (!answer) {
+    // C2. Percakapan / sapaan / identitas / kapabilitas — susun dari konstitusi + state live
+    if (!answer && convOnly && intent) {
+      const stepName = live.step || "siaga";
+      const cycle = live.cycle != null ? live.cycle : "—";
+      const active = (live.metrics && live.metrics.active) || 0;
+      if (intent.greeting || topic === "GREETING") {
+        answer = "Halo. Saya CGO, lapisan kecerdasan internal CIKUR GO. Sekarang saya di tahap " +
+          stepName + ", siklus " + cycle + (active ? (", memantau " + active + " anomali") : ", tanpa anomali aktif") +
+          ". Silakan ngobrol atau minta saya mengurai angka, emoji, file, maupun status sistem.";
+      } else if (intent.identity || topic === "IDENTITY") {
+        answer = "Saya CGO — kecerdasan internal CIKUR GO. BCGO adalah lingkungan operasi live; saya menafsirkan, menalar, dan menjawab dari bukti di sana. Satu identitas, mode bisa berganti.";
+      } else if (intent.capability || topic === "CAPABILITY") {
+        answer = "Saya bisa mengurai teks campuran (angka, emoji, warna, multi-bahasa), menalar pola, menyusun ide/rencana, mengingat percakapan, membaca status/scanner/radar BCGO, dan meminta Mesin ABC mengaudit bukti. Tanya saja apa yang dibutuhkan.";
+      } else if (intent.gratitude || topic === "THANKS") {
+        answer = "Sama-sama. Saya tetap di sini memantau saraf sistem.";
+      } else if (intent.farewell || topic === "FAREWELL") {
+        answer = "Sampai jumpa. Panggil saya kapan saja.";
+      } else if (intent.currentActivity || topic === "CURRENT_ACTIVITY") {
+        answer = "Saya sedang di tahap " + stepName + ", siklus " + cycle + ". " +
+          (live.message ? String(live.message).slice(0, 160) : "Memantau telemetry dan source scan.");
+      } else if (intent.justChatting || topic === "CASUAL_CHAT") {
+        answer = "Boleh. Saya siap ngobrol. Kalau nanti butuh cek sistem atau mengurai angka/emoji, langsung saja.";
+      } else if (intent.systemRole || topic === "CGO_BCGO_ROLE") {
+        answer = "BCGO = pusat saraf dan state live. CGO = kecerdasan yang membaca state itu, menalar, dan menjawab. Keduanya satu sistem, peran berbeda.";
+      } else if (intent.emotionalBoundary || topic === "EMOTION_BOUNDARY") {
+        answer = "Saya tidak punya perasaan seperti manusia. Saya bisa mengenali nada bicara Anda dan menyesuaikan jawaban agar lebih nyaman, tanpa mengarang emosi.";
+      } else if (intent.contextualFollowUp || intent.contextualWhy) {
+        // biarkan jatuh ke BCGO / memori
+      } else {
+        // percakapan umum: pakai cipta_ide / sarankan bila cocok
+        try {
+          if (CG && typeof CG.cipta_ide === "function" && /\b(ide|gagasan|usul)\b/i.test(t)) {
+            const ideas = CG.cipta_ide(t, 3, {});
+            const list = ideas && (ideas.ide || ideas.hasil || ideas.ideas);
+            if (Array.isArray(list) && list.length) {
+              answer = "Beberapa arah ide: " + list.slice(0, 3).map(function (x) {
+                return typeof x === "string" ? x : (x.teks || x.ide || JSON.stringify(x));
+              }).join("; ") + ".";
+              step("OTAK_CIKURGO", true, "cipta_ide");
+            }
+          }
+        } catch (_) {}
+      }
+      if (answer) step("INSTRUCTION", true, topic || mode || "conversation");
+    }
+
+    // C3. Memori / referensi "yang tadi"
+    if (!answer && RECALL_TRIGGER.test(t) && state.memory.length) {
+      const last = state.memory.slice(-3).map(function (x) { return "“" + x.q + "”"; }).join(", ");
+      answer = "Yang terakhir kita bahas: " + last + ".";
+      step("MEMORI_BERSAMA", true, String(state.memory.length));
+    }
+
+    // C4. Rencana / putusan (Otak kognitif)
+    if (!answer && CG && /\b(rencana|susun\s*langkah|buat\s*rencana)\b/i.test(t) && typeof CG.susun_rencana === "function") {
+      try {
+        const r = CG.susun_rencana(t, {});
+        const langkah = r && (r.langkah || r.steps);
+        if (Array.isArray(langkah) && langkah.length) {
+          answer = "Rencana: " + langkah.slice(0, 5).map(function (L, i) {
+            return (L.urutan || (i + 1)) + ") " + (L.aksi || L.step || L);
+          }).join(" ");
+          step("OTAK_CIKURGO", true, "susun_rencana");
+        }
+      } catch (_) {}
+    }
+
+    if (!answer && CG && /\b(rekomendasi|putusan|pilih|keputusan|saran\s*terbaik)\b/i.test(t) && typeof CG.putuskan === "function") {
+      try {
+        const opsi = ["Pantau telemetri", "Periksa scanner source", "Fokus file anomali", "Tunggu siklus berikutnya"];
+        const p = CG.putuskan(t, opsi, { live: live });
+        const put = p && (p.putusan || p.pilihan || p.hasil || p.rekomendasi);
+        if (put) {
+          answer = "Putusan Otak: " + put + (p.alasan && p.alasan[0] ? " — " + p.alasan[0] : "");
+          step("OTAK_CIKURGO", true, "putuskan");
+        }
+      } catch (_) {}
+    }
+
+    // ─── D. BCGO Engine (fakta sistem) ───
+    if (!answer || (intent && (intent.technicalSignal || intent.statusQuestion || intent.explicitAction))) {
       const brain = global.BCGOBrain;
       if (brain && typeof brain.ask === "function") {
-        try { answer = await Promise.resolve(brain.ask(t)); step("BCGO_ENGINE", !!answer); }
-        catch (e) { step("BCGO_ENGINE", false, String((e && e.message) || e)); }
+        try {
+          const r = await Promise.resolve(brain.ask(t));
+          if (r && String(r).trim()) {
+            // Jika sudah ada jawaban percakapan, jangan timpa kecuali teknis
+            if (!answer || (intent && (intent.technicalSignal || intent.statusQuestion || intent.explicitAction))) {
+              answer = String(r).trim();
+            }
+            step("BCGO_ENGINE", true);
+          } else step("BCGO_ENGINE", false, "kosong");
+        } catch (e) {
+          step("BCGO_ENGINE", false, String((e && e.message) || e));
+        }
       } else step("BCGO_ENGINE", false, "belum termuat");
     }
 
-    // 2) Mesin ABC — bukti formal (hanya untuk permintaan analisis/audit, sama seperti perilaku lama)
-    if (ABC_TRIGGER.test(t)) {
+    // ─── E. Mesin ABC ───
+    if (ABC_TRIGGER.test(t) || (intent && intent.mode === "TECHNICAL" && /\b(audit|bukti|pipeline|abc)\b/i.test(t))) {
       try {
         const bridge = global.CGOMachineABCBridge;
         if (bridge && typeof bridge.analyze === "function") {
@@ -402,104 +510,114 @@
           if (r && r.ok) {
             abc = r;
             const conf = r.confidence != null ? Math.round(Number(r.confidence) * 100) + "%" : "–";
-            const line = "[Mesin ABC " + r.version + "] status " + (r.status || "–") + " · keyakinan " + conf +
-              " · temuan " + (r.findings || []).length + " · audit " + ((r.audit && r.audit.status) || "–");
-            answer = answer ? String(answer) + "\n\n" + line : line;
+            const line = "Mesin ABC: status " + (r.status || "–") + ", keyakinan " + conf +
+              ", temuan " + ((r.findings || []).length) + ", audit " + ((r.audit && r.audit.status) || "–") + ".";
+            answer = answer ? (String(answer) + " " + line) : line;
             step("MESIN_ABC", true, r.status || null);
           } else step("MESIN_ABC", false, (r && (r.error || r.message)) || "tidak ok");
         } else step("MESIN_ABC", false, "bridge belum termuat");
-      } catch (e) { step("MESIN_ABC", false, String((e && e.message) || e)); }
+      } catch (e) {
+        step("MESIN_ABC", false, String((e && e.message) || e));
+      }
     }
 
-    // 3) Otak Internal — pendalaman bila jawaban kosong/lemah; selalu diberi state live terbaru
+    // ─── F. Otak Internal (bukti), tolak template generik ───
     const internal = global.CGOInternalBrain;
-    if (internal) {
+    if (internal && (!answer || /belum punya bukti|belum bisa/i.test(String(answer)))) {
       try {
         if (ctx.liveState && typeof internal.ingestBCGOState === "function") internal.ingestBCGOState(ctx.liveState);
-        if (!answer || WEAK_ANSWER.test(String(answer))) {
-          let deep = null;
-          if (typeof internal.chatAnswer === "function") deep = await Promise.resolve(internal.chatAnswer(t));
-          if (!deep && typeof internal.reasonChat === "function") { const r = internal.reasonChat({ text: t }, {}); if (r && r.handled) deep = r.text; }
-          if (deep && String(deep).trim()) { answer = String(deep).trim(); step("INTERNAL_BRAIN", true, "pendalaman bukti"); }
-          else step("INTERNAL_BRAIN", false, "tidak ada bukti internal");
-        } else step("INTERNAL_BRAIN", true, "disinkron");
-      } catch (e) { step("INTERNAL_BRAIN", false, String((e && e.message) || e)); }
-    } else step("INTERNAL_BRAIN", false, "belum termuat");
+        let deep = null;
+        if (typeof internal.chatAnswer === "function") deep = await Promise.resolve(internal.chatAnswer(t));
+        if (!deep && typeof internal.reasonChat === "function") {
+          const r = internal.reasonChat({ text: t }, {});
+          if (r && r.handled) deep = r.text;
+        }
+        if (deep && String(deep).trim() && !/^Saya paham\.\s*Untuk\s+/i.test(String(deep))) {
+          answer = String(deep).trim();
+          step("INTERNAL_BRAIN", true, "bukti");
+        } else step("INTERNAL_BRAIN", false, "ditolak/kosong");
+      } catch (e) {
+        step("INTERNAL_BRAIN", false, String((e && e.message) || e));
+      }
+    }
 
-    // 4) Satu suara operator — natural, bersih, pakai Otak Jenius
-    if (answer) {
+    // ─── G. Jelaskan audit urai bila diminta ───
+    if (CG && audit && /\b(jelaskan|uraikan|kenapa\s+bisa)\b/i.test(t) && typeof CG.jelaskan === "function") {
       try {
-        answer = String(answer)
-          .replace(/\n\n\[Otak Jenius\]\s*/g, "\n\n")
-          .replace(/Rekomendasi Otak:\s*/g, "Rekomendasi: ")
-          .replace(/\[CGO Internal\]\s*/gi, "")
-          .replace(/\[Mesin ABC[^\]]*\]/g, function (s) { return s.replace(/\[/g, "").replace(/\]/g, ""); });
-      } catch (_) {}
-
-      try {
-        const CG = global.CIKURGO;
-        if (CG) {
-          // Angka teknis → kata (termasuk di bukti BCGO)
-          if (typeof CG.angkaKeKata === "function") {
-            answer = String(answer)
-              .replace(/\b(\d{1,3})\s*%/g, function (_, d) {
-                try { return CG.angkaKeKata(Number(d), "id") + " persen"; } catch (_) { return d + " persen"; }
-              })
-              .replace(/\bcycle\s*#?\s*(\d+)\b/gi, function (_, d) {
-                try { return "siklus ke-" + CG.angkaKeKata(Number(d), "id"); } catch (_) { return "siklus ke-" + d; }
-              })
-              .replace(/\b(\d+)\s+anomali\b/gi, function (_, d) {
-                try { return CG.angkaKeKata(Number(d), "id") + " anomali"; } catch (_) { return d + " anomali"; }
-              })
-              .replace(/\b(\d+)\s+organ\b/gi, function (_, d) {
-                try { return CG.angkaKeKata(Number(d), "id") + " organ"; } catch (_) { return d + " organ"; }
-              });
-          }
-
-          // Rapikan gaya bicara operator (hindari robotik)
-          answer = String(answer)
-            .replace(/\bUNKNOWN\b/g, "belum diketahui")
-            .replace(/\bNULL\b/g, "kosong")
-            .replace(/\btrue\b/gi, "ya")
-            .replace(/\bfalse\b/gi, "tidak")
-            .replace(/\s{2,}/g, " ")
-            .trim();
-
-          // PENTING: nalar.kesimpulan = label klasifikasi (mis. "Teks campuran: angka,romawi"),
-          // BUKAN jawaban percakapan. Jangan pernah menampilkan label itu ke user.
-          if (/^teks\s+(campuran|biasa)/i.test(String(answer)) || /^teks campuran:/i.test(String(answer))) {
-            answer = "Saya memahami pertanyaanmu. Coba ulangi lebih spesifik, misalnya status sistem atau nama file saraf.";
-          }
-
-          // Putuskan hanya dengan opsi array (API CIKURGO mewajibkan array)
-          if (typeof CG.putuskan === "function" && /rekomendasi|saran|apa yang (harus|perlu)|putusan|keputusan/.test(t.toLowerCase())) {
-            try {
-              const opsi = ["Pantau saja", "Periksa scanner", "Cek file anomali", "Tunggu siklus berikutnya"];
-              const p = CG.putuskan("Dari bukti: " + String(answer).slice(0, 200), opsi, { bahasa: "id" });
-              const put = p && (p.putusan || p.pilihan || p.hasil || p.rekomendasi || (typeof p === "string" ? p : null));
-              if (put && String(put).trim() && !/^teks\s+/i.test(String(put))) {
-                answer = String(answer).trim() + " Rekomendasi: " + String(put).trim().slice(0, 120);
-                step("OTAK_CIKURGO", true, "putuskan");
-              }
-            } catch (_) {}
-          }
-          step("OTAK_CIKURGO", true, "naturalisasi-aman");
+        const j = CG.jelaskan(audit);
+        const langkah = j && (j.langkah || j.steps);
+        if (Array.isArray(langkah) && langkah.length) {
+          const extra = langkah.slice(0, 4).join(" · ");
+          answer = (answer ? answer + " " : "") + "Rincian urai: " + extra;
+          step("OTAK_CIKURGO", true, "jelaskan");
         }
       } catch (_) {}
     }
 
-    // 4c) Guard terakhir: never leak classification labels to user
-    if (answer && /^teks\s+(campuran|biasa|kosong)/i.test(String(answer).trim())) {
-      answer = "Saya siap membantu. Tanya status sistem, scanner, radar, atau sebut nama file saraf.";
+    // ─── H. Polish + larangan label klasifikasi ───
+    if (answer) {
+      answer = String(answer)
+        .replace(/\n\n\[Otak Jenius\]\s*/g, "\n\n")
+        .replace(/Rekomendasi Otak:\s*/g, "Rekomendasi: ")
+        .replace(/\[CGO Internal\]\s*/gi, "")
+        .replace(/\bUNKNOWN\b/g, "belum diketahui")
+        .replace(/\bNULL\b/g, "kosong")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+      if (/^teks\s+(campuran|biasa)/i.test(answer) || /^teks campuran:/i.test(answer)) {
+        answer = spoken && spoken !== t
+          ? ("Hasil urai Otak: " + spoken + ".")
+          : "Saya sudah menalar input itu, tetapi butuh pertanyaan yang lebih spesifik agar jawaban lebih berguna.";
+      }
+      if (CG && typeof CG.angkaKeKata === "function") {
+        answer = String(answer)
+          .replace(/\b(\d{1,3})\s*%/g, function (_, d) {
+            try { return CG.angkaKeKata(Number(d), "id") + " persen"; } catch (_) { return d + " persen"; }
+          })
+          .replace(/\bcycle\s*#?\s*(\d+)\b/gi, function (_, d) {
+            try { return "siklus ke-" + CG.angkaKeKata(Number(d), "id"); } catch (_) { return "siklus ke-" + d; }
+          })
+          .replace(/\b(\d+)\s+anomali\b/gi, function (_, d) {
+            try { return CG.angkaKeKata(Number(d), "id") + " anomali"; } catch (_) { return d + " anomali"; }
+          });
+      }
     }
 
-    // 5) Memori bersama + CIKURGO.ingat
-    if (answer) { remember(t, answer, trace.filter(x => x.ok).map(x => x.module)); step("OTAK_CIKURGO", true, "memori tercatat"); }
+    // ─── I. Fallback terbuka + saran lanjutan Otak ───
+    if (!answer) {
+      if (spoken && String(spoken).trim() && String(spoken).trim() !== t) {
+        answer = "Hasil pengurai Otak: " + String(spoken).trim() + ".";
+      } else {
+        answer = "Saya menerima pesan Anda. Saya bisa mengurai angka/emoji/warna, membaca status BCGO, atau menalar pola — sampaikan saja kebutuhan Anda.";
+      }
+      try {
+        if (CG && typeof CG.sarankan_lanjutan === "function") {
+          const s = CG.sarankan_lanjutan();
+          const ide = s && (s.ide || s.saran);
+          if (Array.isArray(ide) && ide[0]) answer += " Saran: " + ide[0] + ".";
+        }
+      } catch (_) {}
+      step("OTAK_CIKURGO", true, "fallback");
+    }
 
-    state.lastTrace = trace.filter(x => x.ok).map(x => x.module).join(" → ") || "—";
+    // Ingat
+    if (answer) {
+      remember(t, answer, trace.filter(function (x) { return x.ok; }).map(function (x) { return x.module; }));
+      try { if (CG && typeof CG.ingat === "function") CG.ingat(t, answer); } catch (_) {}
+    }
+
+    state.lastTrace = trace.filter(function (x) { return x.ok; }).map(function (x) { return x.module; }).join(" → ") || "—";
     notify();
-    return { ok: !!answer, answer: answer || null, trace, abc, sources: trace.filter(x => x.ok).map(x => x.module) };
+    return {
+      ok: !!answer,
+      answer: answer || null,
+      trace: trace,
+      abc: abc,
+      intent: intent ? { topic: intent.topic, mode: intent.mode, behavior: intent.behavior } : null,
+      sources: trace.filter(function (x) { return x.ok; }).map(function (x) { return x.module; })
+    };
   }
+
 
   const API = Object.freeze({
     version: VERSION,

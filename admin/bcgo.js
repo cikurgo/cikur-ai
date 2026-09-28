@@ -591,10 +591,14 @@ export async function runAutonomousEngine(onCycleUpdate) {
       };
 
       // Sapaan
-      if (/^(halo|hai|hello|hi|pagi|siang|sore|malam)\b/.test(q) || /siapa\s+kamu|kamu\s+siapa/.test(q)) {
+      if (/^(halo|hai|hallo|helo|hello|hi|hey|pagi|siang|sore|malam)\b/.test(q) || /siapa\s+kamu|kamu\s+siapa/.test(q)) {
         return "Halo, saya CGO Operator. Saya membaca saraf sistem yang sedang hidup — tahap " +
           (st.step || "siaga") + ", siklus ke-" + num(st.cycle || cycleNo || 0) +
           ". Silakan tanya status, scanner, radar, file saraf, atau minta saya hitung dan eja sesuatu.";
+      }
+
+      if (/bisa\s*apa|kamu\s*bisa|fitur|kemampuan|bisa\s*bantu/.test(q)) {
+        return "Saya bisa membantu status sistem, scanner source, radar agent, hitung angka ke kata, ejaan, dan ringkasan organ. Sebut saja yang ingin dicek.";
       }
 
       if (/terima kasih|makasih|thanks/.test(q)) {
@@ -647,8 +651,8 @@ function answerQuestion(question) {
 
     if (!q) return "Saya siap. Tanyakan kondisi sistem, error, file tertentu, telemetry terakhir, siklus saya, atau bukti yang sedang saya lihat.";
 
-    if (/^(halo|hai|hello|pagi|siang|sore|malam)\b/.test(q) || /siapa kamu/.test(q)) {
-      return `Halo, saya CGO Operator. Saya membaca saraf sistem yang sedang hidup — sekarang di tahap ${state.step}, siklus ke-${cycleNo}. ${situation()} Silakan tanya status, file, scanner, atau minta saya hitung/eja sesuatu.`;
+    if (/^(halo|hai|hallo|helo|hello|hi|hey|pagi|siang|sore|malam)\b/.test(q) || /siapa kamu|kamu siapa/.test(q)) {
+      return `Halo. Saya CGO di tahap ${state.step}, siklus ${cycleNo}. ${situation()} Tanya bebas: status, file, hitung, eja, emoji.`;
     }
 
     if (/scan ulang|rescan|pindai ulang|periksa ulang/.test(q)) {
