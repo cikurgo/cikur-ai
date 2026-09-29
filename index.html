@@ -32,7 +32,34 @@
 <script src="./customer/cgo-customer-guardian.js"></script>
 <script src="./customer/cgo-customer-composer.js"></script>
 <script src="./customer/cgo-customer.js"></script>
-<script src="./cgo-app-bootstrap.js?v=20260929-ABC-HUD-HIDDEN"></script>
+
+<!-- UNIFIED CGO BRAIN GATEWAY — Customer Home now enters the same internal brain path. -->
+<script src="./admin/cikur-go.browser.js?v=4.0.0-UNIFIED-CUSTOMER-BRAIN"></script>
+<script type="module">
+  import * as CGOInstruction from "./admin/cgo-instruction.js?v=4.0.0-UNIFIED-CUSTOMER-BRAIN";
+  window.CGOInstruction = CGOInstruction;
+  window.CGO_INSTRUCTION = CGOInstruction.CGO_INSTRUCTION || CGOInstruction.getInstruction?.();
+</script>
+<script src="./admin/cgo-otak-hub.js?v=1.6.0-ANALYSIS-ORDER-MULTIFUNCTION-20260930"></script>
+<script type="module">
+  import { install as installCGOInternalBrain } from "./admin/cgo-ai-browser-adapter.js?v=5.5.0-UNIFIED-CUSTOMER-BRAIN";
+  try {
+    window.CGOInternalBrain = installCGOInternalBrain();
+    window.__CGO_INTERNAL_BRAIN_READY__ = Promise.resolve(window.CGOInternalBrain);
+    window.dispatchEvent(new CustomEvent("cgo-internal-brain-ready", { detail: { version: window.CGOInternalBrain?.version || null } }));
+  } catch (error) {
+    window.__CGO_INTERNAL_BRAIN_READY__ = Promise.reject(error);
+    console.error("[CIKUR GO] Internal Brain install gagal:", error);
+  }
+</script>
+
+<!-- Female Operator: fixed event MP3 + strict female-only dynamic chat voice. -->
+<script src="./admin/cgo-audio-bus.js?v=1.0.1-VOICE-NO-GLOBAL-CANCEL"></script>
+<script src="./admin/cgo-audio-queue.js?v=1.0.0-AUDIO-QUEUE"></script>
+<script src="./admin/cgo-emosi.js?v=1.1.0-EMOSI-AIRPORT"></script>
+<script src="./admin/cgo-ai-voice-operator.js?v=4.0.0-FEMALE-ID-AIRPORT-TTS-RESTORED"></script>
+
+<script src="./cgo-app-bootstrap.js?v=20260930-UNIFIED-CGO-GATEWAY-HUD-HIDDEN"></script>
 
     
 <style>
@@ -4035,27 +4062,42 @@ async function kirimPesanCGO() {
     log.innerHTML += `<div id="${typingId}" style="align-self:flex-start; background:#f1f5f9; color:#64748b; padding:6px 10px; border-radius:8px; font-size:11px; max-width:85%;">CGO sedang berpikir… 🤍</div>`;
     log.scrollTop = log.scrollHeight;
 
-    if (window.CGO && typeof window.CGO.chatAsync === "function") {
-        // Jalur aplikasi utama: pipeline async Conversation → Knowledge → Discovery → Guardian.
+    if (window.CGO_OTAK && typeof window.CGO_OTAK.ask === "function") {
         try {
-            // 18s: pipeline normal. Model semantic tidak boleh blokir (lihat interpretAsync).
             const timeout = new Promise(resolve => setTimeout(() => resolve({
-                response: "Aku masih memeriksa bagian dalam sebentar yaaa 😊 Aku belum mau asal jawab.",
-                status: "ui_timeout"
+                ok: false, answer: null, status: "ui_timeout"
             }), 18000));
             const result = await Promise.race([
-                window.CGO.chatAsync(text, { source: "CIKUR_GO_APP" }),
+                window.CGO_OTAK.ask(text, { source: "CIKUR_GO_INDEX" }),
                 timeout
             ]);
-            reply = (result && (result.response || result.text || result.message)) || "Aku catat ya! Coba pilih tombol layanan di atas kalau perlu bantuan cepat.";
+            reply = result && result.answer ? result.answer : null;
+            if (reply && window.CGOOperatorVoice && typeof window.CGOOperatorVoice.speakAnswer === "function") {
+                try {
+                    void window.CGOOperatorVoice.speakAnswer(reply, { emosi: "tenang" });
+                } catch (voiceErr) {
+                    console.warn("[CIKUR GO] Operator voice skipped:", voiceErr);
+                }
+            }
+            if (!reply) {
+                reply = kirimPesanCGOFallback(text);
+            }
         } catch (err) {
-            console.error("[CIKUR GO] Mesin CGO gagal memproses pesan:", err);
-            reply = kirimPesanCGOFallback(text);
+            console.error("[CIKUR GO] Unified CGO gateway gagal memproses pesan:", err);
+            // Compatibility fallback: keep the original Customer Engine intact.
+            try {
+                if (window.CGO && typeof window.CGO.chatAsync === "function") {
+                    const result = await window.CGO.chatAsync(text, { source: "CIKUR_GO_APP_COMPAT" });
+                    reply = (result && (result.response || result.text || result.message)) || null;
+                }
+            } catch (_) {}
+            reply = reply || kirimPesanCGOFallback(text);
         }
-    } else if (window.CGO && typeof window.CGO.chat === "function") {
+    } else if (window.CGO && typeof window.CGO.chatAsync === "function") {
+        // Compatibility path while the unified modules are still loading.
         try {
-            const result = window.CGO.chat(text);
-            reply = (result && result.response) || "Aku catat ya! Coba pilih tombol layanan di atas kalau perlu bantuan cepat.";
+            const result = await window.CGO.chatAsync(text, { source: "CIKUR_GO_APP_COMPAT" });
+            reply = (result && (result.response || result.text || result.message)) || kirimPesanCGOFallback(text);
         } catch (err) {
             console.error("[CIKUR GO] Mesin CGO gagal memproses pesan:", err);
             reply = kirimPesanCGOFallback(text);
@@ -4063,7 +4105,6 @@ async function kirimPesanCGO() {
     } else {
         reply = kirimPesanCGOFallback(text);
     }
-
     const typingNode = document.getElementById(typingId);
     if (typingNode) typingNode.remove();
     const safeReply = String(reply).replace(/</g, "&lt;").replace(/>/g, "&gt;");
