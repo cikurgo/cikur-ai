@@ -7,7 +7,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "3.4.0-QUEUE-EMOSI";
+  const VERSION = "3.6.0-FEMALE-MP3-ONLY";
   const BUILD = "CIKUR-GO-OPERATOR-3.3.0";
   const ROOT = "./audio/cgo-operator/";
 
@@ -99,7 +99,7 @@
   let speaking = false;
   const lastPlayed = new Map();
   const audioCache = new Map();
-  let chatSpeakEnabled = true;
+  let chatSpeakEnabled = false; // Hanya MP3 wanita jernih untuk event sistem; chat = teks (tanpa TTS robot)
   let lastChatHash = "";
   let lastChatAt = 0;
 
@@ -179,7 +179,9 @@
     if (!a) {
       a = new Audio(ROOT + file);
       a.preload = "auto";
+      a.dataset.cgoOperator = "1";
       a.dataset.cgoTried = "0";
+      try { a.setAttribute("data-cgo-operator", "1"); } catch (_) {}
       audioCache.set(file, a);
       // Satu kali fallback path — jangan loop error→src→error
       a.addEventListener("error", function onAudioErr() {
@@ -256,8 +258,11 @@
   var _chatSpeaking = false;
   function canEmit(key, force) {
     if (!enabled && !force) return false;
-    if (_chatSpeaking && key !== "CHAT_REPLY" && !force) return false;
+    // Saat chat TTS/operator bicara — jangan emit event (cegah double suara)
+    if (_chatSpeaking && !force) return false;
     if (quietLive && /^ABC_STAGE_/.test(key) && !force) return false;
+    // Diamkan stage/valid/live yang berisik
+    if (!force && (key === "VALID" || key === "LIVE_INPUT" || key === "SYSTEM_IDLE")) return false;
     var cd = COOLDOWN[key] || 0;
     var last = lastPlayed.get(key) || 0;
     if (!force && cd > 0 && Date.now() - last < cd) return false;
@@ -285,12 +290,7 @@
     var file = MP3[key];
 
     function doPlay() {
-      if (phrase) {
-        return speakTTS(otakEnrich(phrase)).then(function (ok) {
-          if (ok) return true;
-          return playMp3(key);
-        });
-      }
+      // HANYA MP3 operator wanita jernih — tanpa TTS browser sama sekali
       return playMp3(key);
     }
 
@@ -315,6 +315,9 @@
     } catch (_) {}
   }
   function speakAnswer(rawText, options) {
+    // Kebijakan CGO: tidak ada TTS browser (suara robot). Hanya MP3 operator wanita.
+    // force+allowTts hanya untuk debug eksplisit.
+    if (!(options && options.force && options.allowTts)) return Promise.resolve(false);
     if (!chatSpeakEnabled && !(options && options.force)) return Promise.resolve(false);
     if (global.CGOAudioQueue && typeof global.CGOAudioQueue.isEnabled === "function" && !global.CGOAudioQueue.isEnabled()) {
       return Promise.resolve(false);
@@ -338,25 +341,41 @@
     if (options && options.rate != null) voiceOpts.rate = options.rate;
     if (options && options.pitch != null) voiceOpts.pitch = options.pitch;
 
-    function doSpeak() {
-      _chatSpeaking = true;
+    function stopAllOperatorAudio() {
       try { if (global.speechSynthesis) global.speechSynthesis.cancel(); } catch (_) {}
       try {
-        var nodes = document.querySelectorAll("audio[data-cgo-operator]");
-        for (var i = 0; i < nodes.length; i++) { try { nodes[i].pause(); nodes[i].currentTime = 0; } catch (_) {} }
+        var nodes = document.querySelectorAll("audio[data-cgo-operator], audio");
+        for (var i = 0; i < nodes.length; i++) {
+          try {
+            var a = nodes[i];
+            if (a && a.src && /cgo-operator|welcome|stage|processing|warning|error|standby|valid|live/i.test(a.src || "")) {
+              a.pause(); a.currentTime = 0;
+            }
+          } catch (_) {}
+        }
       } catch (_) {}
+      try {
+        // stop cached mp3
+        audioCache.forEach(function (a) { try { a.pause(); a.currentTime = 0; } catch (_) {} });
+      } catch (_) {}
+    }
+
+    function doSpeak() {
+      _chatSpeaking = true;
+      stopAllOperatorAudio();
       var start = unlocked ? Promise.resolve(true) : unlock();
       return start.then(function () {
+        // Chat jawaban dinamis: satu jalur TTS wanita (bukan double dengan MP3 event)
         return speakTTS(text, voiceOpts).then(function (ok) { return ok; });
       }).finally(function () {
-        setTimeout(function () { _chatSpeaking = false; }, 200);
+        setTimeout(function () { _chatSpeaking = false; }, 300);
       });
     }
 
     if (global.CGOAudioQueue && typeof global.CGOAudioQueue.enqueue === "function") {
       return global.CGOAudioQueue.enqueue({
         jenis: "tts",
-        priority: 2,
+        priority: 1,
         play: function () { return doSpeak(); }
       });
     }

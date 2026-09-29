@@ -105,6 +105,10 @@ body{font-family:'Inter',sans-serif}
 .cgo-ambient-line{position:fixed;left:0;right:0;bottom:0;height:2px;pointer-events:none;background:linear-gradient(90deg,transparent,#6366f1,transparent);opacity:.25;animation:cgoAmbient 75s linear infinite}
 @keyframes cgoAmbient{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
 
+
+.cgo-think-stages span.on{color:#a5b4fc;text-shadow:0 0 8px rgba(129,140,248,.5)}
+.cgo-think-stages span.done{color:#34d399}
+#cgo-voice-mode-badge{letter-spacing:.03em}
 </style>
 </head>
 
@@ -426,15 +430,25 @@ body{font-family:'Inter',sans-serif}
                 <div class="text-[10px] text-slate-500 truncate" id="cgo-chat-live-status">Kanal siap · tunggu pertanyaan</div>
               </div>
             </div>
-            <span class="text-[10px] code-font text-indigo-400/80">SATU OTAK</span>
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] code-font text-indigo-400/80">SATU OTAK</span>
+              <span class="text-[9px] px-1.5 py-0.5 rounded border border-emerald-800/60 text-emerald-400/90" id="cgo-voice-mode-badge">MP3 · wanita</span>
+            </div>
           </div>
           <div class="cgo-think" id="cgo-think-bar">
             <span class="cgo-think-dot"></span>
+            <span id="cgo-think-stage" class="text-[10px] text-indigo-300/80 code-font">IDLE</span>
             <span id="cgo-think-label">Mengurai percakapan…</span>
-            <span class="cgo-think-timer" id="cgo-think-timer">0.0s</span>
+            <span class="cgo-think-timer" id="cgo-think-timer">-- ms</span>
           </div>
-          <div id="chat-feed" class="chat-scroll p-3 h-72 overflow-y-auto space-y-3 bg-slate-950/80">
-            <div class="text-xs text-slate-500">BCGO sedang menyiapkan kanal komunikasi...</div>
+          <div class="cgo-think-stages px-3 py-1.5 border-b border-slate-800/50 flex gap-2 text-[9px] code-font text-slate-500" id="cgo-think-stages">
+            <span data-stage="recv">① Terima</span>
+            <span data-stage="think">② Pikir</span>
+            <span data-stage="compose">③ Susun</span>
+            <span data-stage="done">④ Selesai</span>
+          </div>
+          <div id="chat-feed" class="chat-scroll p-3 h-80 overflow-y-auto space-y-3 bg-slate-950/80">
+            <div class="text-xs text-slate-500">Kanal CGO siap · ketik atau bicara · suara event = operator wanita (MP3)</div>
           </div>
           <div class="cgo-wave-wrap" id="cgo-wave-wrap"><canvas id="cgo-mic-wave" width="600" height="28"></canvas></div>
           <div class="cgo-interim" id="cgo-interim"></div>
@@ -471,7 +485,7 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-audio-queue.js?v=1.0.0-AUDIO-QUEUE"></script>
 <script src="cgo-emosi.js?v=1.0.0-EMOSI"></script>
 <script src="cgo-narasi.js?v=1.0.0-NARASI"></script>
-<script src="cgo-ai-voice-operator.js?v=3.4.0-QUEUE-EMOSI-20260928"></script>
+<script src="cgo-ai-voice-operator.js?v=3.6.0-FEMALE-MP3-ONLY-20260929"></script>
 <script src="cgo-machine-abc.js?v=0.9.9-OTAK-CORE-20260927"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.7.0-BCGO-SYNC-OTAK-20260928"></script>
 <script src="cgo-abc-cognition.js?v=1.1.0-CGO-ABC-COGNITION"></script>
@@ -989,7 +1003,10 @@ function addChat(role, text, meta) {
       bSpeak.onclick = function() {
         try {
           if (window.CGOOperatorVoice && window.CGOOperatorVoice.speakAnswer) {
-            window.CGOOperatorVoice.speakAnswer(text, { force: true, emosi: meta.emosi && meta.emosi.emosi });
+            /* TTS robot dimatikan — hanya MP3 event sistem */
+            if (window.CGOOperatorVoice && window.CGOOperatorVoice.emit) {
+              /* tidak memutar ulang teks chat sebagai TTS */
+            }
           }
         } catch(_){}
       };
@@ -1113,6 +1130,16 @@ async function sendQuestion(question, opts) {
       if (thinkBar) thinkBar.classList.add('on');
       if (thinkLabel) thinkLabel.textContent = 'Mengurai percakapan dengan Satu Otak…';
       if (liveStatus) liveStatus.textContent = 'Berpikir · membaca BCGO + Otak Jenius';
+      try {
+        var st = document.getElementById('cgo-think-stage');
+        if (st) st.textContent = 'PIKIR';
+        var stages = document.getElementById('cgo-think-stages');
+        if (stages) {
+          stages.querySelectorAll('span').forEach(function(s){ s.classList.remove('on','done'); });
+          var r = stages.querySelector('[data-stage="recv"]'); if (r) r.classList.add('done');
+          var t = stages.querySelector('[data-stage="think"]'); if (t) t.classList.add('on');
+        }
+      } catch(_){}
       thinkIv = setInterval(() => {
         const s = ((performance.now() - t0) / 1000).toFixed(1);
         if (thinkTimer) thinkTimer.textContent = Math.round(performance.now() - t0) + ' ms';
@@ -1125,6 +1152,12 @@ async function sendQuestion(question, opts) {
         const ms = Math.max(0, Math.round(performance.now() - t0));
         if (thinkTimer) thinkTimer.textContent = ms + ' ms';
         if (liveStatus) liveStatus.textContent = 'Selesai · ' + ms + ' ms';
+        var st = document.getElementById('cgo-think-stage');
+        if (st) st.textContent = 'OK';
+        var stages = document.getElementById('cgo-think-stages');
+        if (stages) {
+          stages.querySelectorAll('span').forEach(function(s){ s.classList.remove('on'); s.classList.add('done'); });
+        }
       } catch(_){
         try { if (thinkTimer) thinkTimer.textContent = '-- ms'; } catch(__){}
       }
