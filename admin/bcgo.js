@@ -1624,10 +1624,20 @@ function answerQuestion(question) {
   }
 
   try {
+    // Jangan load model Semantic di detik pertama — di HP bisa bikin layar "hitam"/freeze
+    // saat WASM ~20MB diunduh. UI harus tampil dulu.
+    function scheduleSemanticBoot() {
+      var start = function () { try { bootSemanticBridge(); } catch (_) {} };
+      if (typeof requestIdleCallback === "function") {
+        requestIdleCallback(function () { setTimeout(start, 500); }, { timeout: 8000 });
+      } else {
+        setTimeout(start, 4000);
+      }
+    }
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", function () { setTimeout(bootSemanticBridge, 200); });
+      document.addEventListener("DOMContentLoaded", scheduleSemanticBoot);
     } else {
-      setTimeout(bootSemanticBridge, 200);
+      scheduleSemanticBoot();
     }
     setInterval(pollSemanticStatus, 5000);
   } catch (_) {}
