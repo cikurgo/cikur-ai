@@ -394,7 +394,7 @@
           modules.machineAbc = abcOk;
           modules.abcCognition = !!(window.CGOAbcCognition);
         }
-        if (abcOk) { console.log("[CGO BOOT] Mesin ABC + kognisi formal siap untuk Chat CGO"); installAbcObservability(); }
+        if (abcOk) { console.log("[CGO BOOT] Mesin ABC + kognisi formal siap untuk Chat CGO"); if (window.CGO_ENABLE_ABC_HUD === true) installAbcObservability(); }
         else console.warn("[CGO BOOT] Mesin ABC tidak terdeteksi (chat tetap normal)");
       } catch (_abc) {}
       // Pre-warm semantic embedding (gratis, non-blocking) — bantu knowledge matching
