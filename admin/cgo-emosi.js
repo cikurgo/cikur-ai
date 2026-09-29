@@ -3,7 +3,7 @@
  */
 (function (global) {
   "use strict";
-  const VERSION = "1.0.0-EMOSI";
+  const VERSION = "1.1.0-EMOSI-AIRPORT";
 
   function tentukanEmosi(konteks) {
     konteks = konteks || {};
@@ -56,12 +56,12 @@
   /** TTS voice params */
   function voiceFor(emosi) {
     switch (emosi) {
-      case "senang": return { rate: 1.0, pitch: 1.12 };
-      case "khawatir": return { rate: 0.9, pitch: 0.95 };
-      case "tegas": return { rate: 0.95, pitch: 1.0 };
-      case "tenang": return { rate: 0.92, pitch: 1.02 };
-      case "prihatin": return { rate: 0.9, pitch: 0.98 };
-      default: return { rate: 0.94, pitch: 1.06 };
+      case "senang": return { rate: 0.96, pitch: 1.08 };
+      case "khawatir": return { rate: 0.89, pitch: 1.00 };
+      case "tegas": return { rate: 0.91, pitch: 1.02 };
+      case "tenang": return { rate: 0.90, pitch: 1.04 };
+      case "prihatin": return { rate: 0.89, pitch: 1.01 };
+      default: return { rate: 0.92, pitch: 1.05 };
     }
   }
 

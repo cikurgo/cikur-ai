@@ -290,6 +290,37 @@
     if(claims.length) s.inferences.push({type:"EXTERNAL_EVIDENCE_CONSIDERED",count:claims.length,basis:["caller_supplied_structured_evidence"]});
     if(claims.length && !packet.fingerprint) s.uncertainty.push({type:"EXTERNAL_EVIDENCE_UNFINGERPRINTED",severity:"MEDIUM",source:packet.source??null});
   }
+  // Physics Kernel dipanggil hanya bila caller menyediakan physicalEvidence.
+  // Default path ABC tetap domain-neutral dan tidak menjalankan fisika untuk input biasa.
+  function ingestPhysicsEvidenceB(s, packet, options={}){
+    if(!packet || typeof packet!=="object") return;
+    const geo=packet.geo&&typeof packet.geo==="object"?packet.geo:packet;
+    if(!Number.isFinite(geo.elevationDeg)||!Number.isFinite(geo.distanceKm)){
+      s.operations.push("PHYSICS_EVIDENCE_REVIEW");
+      s.uncertainty.push({type:"PHYSICS_INPUT_INCOMPLETE",severity:"HIGH",required:["elevationDeg","distanceKm"]});
+      s.verification.push({type:"PHYSICS_EVIDENCE",status:"UNKNOWN",reason:"geometry_incomplete"});
+      return;
+    }
+    const mode=packet.mode??options.physicsMode??CGOPhysics.PHYSICS_MODE.REALISTIC;
+    const when=packet.now instanceof Date?packet.now:(packet.now?new Date(packet.now):new Date());
+    const link=CGOPhysics.evaluateLinkFromGeo(geo,mode,when);
+    const validThreshold=CGOPhysics.SAT_CONSTANTS.LQM_THRESHOLD_VALID_DB;
+    const degradedThreshold=CGOPhysics.SAT_CONSTANTS.LQM_THRESHOLD_DEGRADED_DB;
+    s.operations.push("PHYSICS_EVALUATION");
+    s.findings.push({type:"PHYSICS_LINK_EVALUATION",source:packet.source??"CGO_PHYSICS",mode,elevationDeg:link.elevationDeg,distanceKm:link.distanceKm,lqm:link.lqm,snrDb:link.snrDb,atmPenalty:link.atmPenalty,dopplerRateHzPerSec:link.dopplerRateHzPerSec,scintFadeDb:link.scintFadeDb,ber:link.ber,per:link.per,usable:link.usable});
+    s.evidence.push({type:"PHYSICS_LINK_METRICS",source:packet.source??"CGO_PHYSICS",mode,metrics:clone(link)});
+    if(!link.usable){
+      const critical=link.elevationDeg<CGOPhysics.SAT_CONSTANTS.MIN_ELEVATION_DEG;
+      s.contradictions.push({type:"PHYSICS_LINK_UNUSABLE",severity:critical?"CRITICAL":"HIGH",reason:critical?"below_minimum_elevation":"lqm_below_degraded_threshold",metrics:clone(link)});
+      s.verification.push({type:"PHYSICS_EVIDENCE",status:"FAIL",reason:"link_unusable",lqm:link.lqm});
+    }else if(link.lqm<validThreshold){
+      s.uncertainty.push({type:"PHYSICS_LINK_DEGRADED",severity:"MEDIUM",lqm:link.lqm,threshold:validThreshold,per:link.per});
+      s.verification.push({type:"PHYSICS_EVIDENCE",status:"UNKNOWN",reason:"link_degraded",lqm:link.lqm});
+    }else{
+      s.verification.push({type:"PHYSICS_EVIDENCE",status:"PASS",reason:"link_quality_valid",lqm:link.lqm,per:link.per});
+    }
+    s.inferences.push({type:"PHYSICS_EVIDENCE_CONSIDERED",basis:["link_budget","propagation_penalties","effective_ebn0","ber_per"],usable:link.usable,lqm:link.lqm});
+  }
   function selectedSteps(options,format){if(Array.isArray(options.steps)&&options.steps.length)return options.steps;const all=["structure","content","syntax","relation","constraint","hypothesis","verify","infer","reasoning","decision"];if(format==="text"||format==="markdown")return all.filter(x=>x!=="syntax");return all}
   function timed(s,name,fn,options={}){const t=Date.now();const attempts=toBool(options.retryFailedSteps,false)&&name!=="structure"?Math.min(toInt(options.maxRetries,DEFAULT_MAX_RETRIES),DEFAULT_MAX_RETRIES)+1:1;let ok=false;for(let i=0;i<attempts&&!ok;i++){try{if(options.__deadline&&Date.now()>options.__deadline)throw new Error("TIMEOUT");fn();ok=true;}catch(e){s.errors.push({step:name,error:String(e.message||e),timestamp:now(),retry:i<attempts-1});if(i<attempts-1)s.retries.push({step:name,attempt:i+1,timestamp:now()});else s.degraded=true;}}s.timing[name]=elapsed(t);}
   function inspectStructureB(r,s){s.operations.push("STRUCTURE_INSPECTION");const x=r.structure;s.findings.push({type:"STRUCTURE_PROFILE",kind:x.kind,details:clone(x)});if(x.kind==="record")s.evidence.push({type:"RECORD_KEYS",keys:clone(x.keys)});if(x.kind==="collection")s.evidence.push({type:"COLLECTION_SIZE",count:x.length})}
@@ -321,7 +352,7 @@
   function emitTelemetry(event){const packet={engine:"CGO_MACHINE_ABC",version:VERSION,type:"ABC_TELEMETRY",at:now(),...event};runtimeState.lastTelemetry=clone(packet);for(const fn of [...telemetryObservers]){try{fn(packet)}catch(_){}}return packet}
   function runCycle(input,options={},cycleIndex=0){const cycleStarted=Date.now();const deadline=options.__deadline||(toInt(options.maxDurationMs,DEFAULT_MAX_DURATION_MS)>0?Date.now()+toInt(options.maxDurationMs,DEFAULT_MAX_DURATION_MS):0);let a,b,c;const phaseTelemetry=[];const phase=(stage,fn)=>{const started=Date.now();emitTelemetry({event:"PHASE_START",stage,cycleIndex,elapsedMs:started-cycleStarted});try{const value=fn();const ended=Date.now();const item={stage,status:"COMPLETED",startedAt:started,endedAt:ended,durationMs:ended-started};phaseTelemetry.push(item);emitTelemetry({event:"PHASE_END",stage,cycleIndex,status:"COMPLETED",durationMs:item.durationMs,elapsedMs:ended-cycleStarted});return value}catch(e){const ended=Date.now();const item={stage,status:"FAILED",startedAt:started,endedAt:ended,durationMs:ended-started,error:String(e.message||e)};phaseTelemetry.push(item);emitTelemetry({event:"PHASE_END",stage,cycleIndex,status:"FAILED",durationMs:item.durationMs,elapsedMs:ended-cycleStarted,error:item.error});throw e;}};
     try{a=phase("A",()=>MachineA.process(input,{...options,__deadline:deadline,cycleIndex}));}catch(e){a={machine:"A",stage:"representation",version:VERSION,input:{type:"error",fingerprint:fingerprint(String(e)),size:0},structure:{kind:"error"},content:{mode:"scalar",value:null,format:"error"},unknowns:[{type:"A_ERROR",severity:"CRITICAL",reason:String(e.message||e)}],errors:[{stage:"A",error:String(e.message||e),timestamp:now()}]};}
-    try{b=phase("B",()=>{const value=MachineB.process(a,{...options,__deadline:deadline,cycleIndex});if(options.externalEvidence){ingestExternalEvidenceB(value,options.externalEvidence,options);if(value.reasoning?.length)reasonB(value);value.decision=decideB(value,options);}return value;});}catch(e){b=blankB(a);b.degraded=true;b.errors.push({stage:"B",error:String(e.message||e),timestamp:now()});b.fallbacks.push({from:"B",to:"A",timestamp:now()});b.decision={status:"DEGRADED",confidence:0,reason:"fallback_B_to_A"};}
+    try{b=phase("B",()=>{const value=MachineB.process(a,{...options,__deadline:deadline,cycleIndex});if(options.externalEvidence){ingestExternalEvidenceB(value,options.externalEvidence,options);}if(options.physicsEvidence){ingestPhysicsEvidenceB(value,options.physicsEvidence,options);}if((options.externalEvidence||options.physicsEvidence)&&value.reasoning?.length)reasonB(value);if(options.externalEvidence||options.physicsEvidence)value.decision=decideB(value,options);return value;});}catch(e){b=blankB(a);b.degraded=true;b.errors.push({stage:"B",error:String(e.message||e),timestamp:now()});b.fallbacks.push({from:"B",to:"A",timestamp:now()});b.decision={status:"DEGRADED",confidence:0,reason:"fallback_B_to_A"};}
     try{c=phase("C",()=>MachineC.process(a,b,{...options,cycleIndex}));}catch(e){c=fallbackResult("C",String(e.message||e),a);c.fallbacks.push({from:"C",to:"B",timestamp:now()});}
     if(b.degraded){c.status="DEGRADED";c.decision={...c.decision,status:"DEGRADED",reason:"b_degraded"};c.errors=[...(c.errors||[]),...(b.errors||[])];c.fallbacks=[...(c.fallbacks||[]),...(b.fallbacks||[])];}
     const out={engine:"CGO_MACHINE_ABC",version:VERSION,cycleIndex,pipeline:{A:a,B:b,C:c},result:c};
@@ -692,400 +723,6 @@
       return ebn0 - atmPenalty - dopplerPenalty + scintFadeDb;
     }
 
-    // ============================================================================
-    // LAYER 3: CHANNEL SIMULATOR
-    // ============================================================================
-
-    class SatelliteChannelSimulator {
-      /**
-       * @param {object} [options]
-       * @param {number} [options.passDurationSec=550]
-       * @param {string} [options.mode='realistic']
-       */
-      constructor(options = {}) {
-        this.passDuration = options.passDurationSec ?? SAT_CONSTANTS.PASS_DURATION_SEC;
-        this.mode = options.mode ?? PHYSICS_MODE.REALISTIC;
-
-        this.elapsed = 0;
-        this.inPass = true;
-        this.interPassRemaining = 0;
-
-        this.tickCount = 0;
-        this.lastScintFade = 0;
-      }
-
-      /**
-       * Tick channel simulator.
-       * @param {number} deltaMs
-       * @param {Date} [now]
-       * @param {object|null} [externalGeo] - geometri dari TLE/SGP4 (opsional)
-       *   { elevationDeg, distanceKm, dopplerShiftHz?, dopplerRateHzPerSec?, name? }
-       * @returns {object} metrics
-       */
-      tick(deltaMs, now = new Date(), externalGeo = null) {
-        this.tickCount++;
-
-        // ── Jalur LIVE: geometri dari TLE (bukan parabola internal) ──
-        if (externalGeo && Number.isFinite(externalGeo.elevationDeg)) {
-          const elevationDeg = externalGeo.elevationDeg;
-          const distanceKm = Number.isFinite(externalGeo.distanceKm)
-            ? externalGeo.distanceKm
-            : Infinity;
-          const inPass = elevationDeg >= SAT_CONSTANTS.MIN_ELEVATION_DEG
-            && Number.isFinite(distanceKm)
-            && distanceKm < 1e6;
-
-          if (!inPass) {
-            this.lastScintFade = 0;
-            return {
-              elevationDeg: Math.max(0, elevationDeg),
-              distanceKm,
-              snrDb: -Infinity,
-              dopplerShiftHz: externalGeo.dopplerShiftHz ?? 0,
-              dopplerRateHzPerSec: externalGeo.dopplerRateHzPerSec ?? 0,
-              atmPenalty: 99,
-              scintFadeDb: 0,
-              inPass: false,
-              source: 'tle',
-              name: externalGeo.name ?? null
-            };
-          }
-
-          const snrDb = computeSNR(distanceKm);
-          const atmPenalty = computeAtmPenalty(elevationDeg);
-          const scintFadeDb = computeScintillation(now, elevationDeg, deltaMs, this.mode);
-          this.lastScintFade = scintFadeDb;
-
-          return {
-            elevationDeg,
-            distanceKm,
-            snrDb,
-            dopplerShiftHz: externalGeo.dopplerShiftHz ?? 0,
-            dopplerRateHzPerSec: externalGeo.dopplerRateHzPerSec ?? 0,
-            atmPenalty,
-            scintFadeDb,
-            inPass: true,
-            source: 'tle',
-            name: externalGeo.name ?? null
-          };
-        }
-
-        // ── Jalur SIM: parabola internal (fallback offline) ──
-        if (!this.inPass) {
-          this.interPassRemaining -= deltaMs;
-          if (this.interPassRemaining <= 0) {
-            this.inPass = true;
-            this.elapsed = 0;
-            this.interPassRemaining = 0;
-          } else {
-            return {
-              elevationDeg: 0,
-              distanceKm: Infinity,
-              snrDb: -Infinity,
-              dopplerShiftHz: 0,
-              dopplerRateHzPerSec: 0,
-              atmPenalty: 99,
-              scintFadeDb: 0,
-              inPass: false,
-              source: 'sim'
-            };
-          }
-        }
-
-        this.elapsed += deltaMs / 1000;
-
-        if (this.elapsed > this.passDuration) {
-          this.inPass = false;
-          this.interPassRemaining =
-            SAT_CONSTANTS.INTER_PASS_MIN_MS +
-            Math.random() * (SAT_CONSTANTS.INTER_PASS_MAX_MS - SAT_CONSTANTS.INTER_PASS_MIN_MS);
-
-          this.elapsed = 0;
-          return {
-            elevationDeg: 0,
-            distanceKm: Infinity,
-            snrDb: -Infinity,
-            dopplerShiftHz: 0,
-            dopplerRateHzPerSec: 0,
-            atmPenalty: 99,
-            scintFadeDb: 0,
-            inPass: false,
-            source: 'sim'
-          };
-        }
-
-        const geo = computeGeometry(this.elapsed, this.passDuration);
-        const snrDb = computeSNR(geo.distanceKm);
-        const atmPenalty = computeAtmPenalty(geo.elevationDeg);
-        const scintFadeDb = computeScintillation(now, geo.elevationDeg, deltaMs, this.mode);
-        this.lastScintFade = scintFadeDb;
-
-        return {
-          elevationDeg: geo.elevationDeg,
-          distanceKm: geo.distanceKm,
-          snrDb,
-          dopplerShiftHz: geo.dopplerShiftHz,
-          dopplerRateHzPerSec: geo.dopplerRateHzPerSec,
-          atmPenalty,
-          scintFadeDb,
-          inPass: true,
-          source: 'sim'
-        };
-      }
-
-      reset() {
-        this.elapsed = 0;
-        this.inPass = true;
-        this.interPassRemaining = 0;
-        this.tickCount = 0;
-        this.lastScintFade = 0;
-      }
-    }
-
-    // ============================================================================
-    // LAYER 3: STATE MACHINE
-    // ============================================================================
-
-    const SAT_STATE = Object.freeze({
-      COLD_START: 'COLD_START',
-      SCANNING: 'SCANNING',
-      ACQUIRING: 'ACQUIRING',
-      TRACKING: 'TRACKING',
-      DEGRADED: 'DEGRADED',
-      LOSING_LOCK: 'LOSING_LOCK',
-      RE_ACQUIRING: 'RE_ACQUIRING'
-    });
-
-    class SatelliteStateMachine {
-      /**
-       * @param {SatelliteChannelSimulator} channel
-       */
-      constructor(channel) {
-        this.channel = channel;
-        this.state = SAT_STATE.COLD_START;
-        this.stateTimer = 0;
-        this.lqmHistory = [];
-        this.lastResult = null;
-
-        this.coldStartDuration = this._randomColdStart();
-        this.lastLQM = null;
-      }
-
-      _randomColdStart() {
-        return SAT_CONSTANTS.COLD_START_MIN_MS +
-               Math.random() * (SAT_CONSTANTS.COLD_START_MAX_MS - SAT_CONSTANTS.COLD_START_MIN_MS);
-      }
-
-      /**
-       * Update state machine.
-       * @param {number} deltaMs
-       * @param {Date} [now]
-       * @param {object|null} [externalGeo] - geometri TLE opsional
-       * @returns {object} result
-       */
-      update(deltaMs, now = new Date(), externalGeo = null) {
-        // Validate deltaMs
-        if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
-          return this.lastResult ?? {
-            state: this.state, metrics: null, lqm: null, packetValid: false
-          };
-        }
-        const dt = Math.min(deltaMs, SAT_CONSTANTS.MAX_DELTA_MS);
-
-        this.stateTimer += dt;
-        const metrics = this.channel.tick(dt, now, externalGeo);
-
-        // Hitung LQM
-        let lqm;
-        if (!metrics.inPass || metrics.elevationDeg < SAT_CONSTANTS.MIN_ELEVATION_DEG) {
-          lqm = -Infinity;
-        } else {
-          lqm = calculateLQM({
-            snrDb: metrics.snrDb,
-            dopplerRateHzPerSec: metrics.dopplerRateHzPerSec,
-            elevationDeg: metrics.elevationDeg,
-            scintFadeDb: metrics.scintFadeDb
-          });
-        }
-        this.lastLQM = lqm;
-
-        // Update history — hanya di state yang relevan
-        const trackedStates = [
-          SAT_STATE.ACQUIRING,
-          SAT_STATE.TRACKING,
-          SAT_STATE.DEGRADED,
-          SAT_STATE.RE_ACQUIRING
-        ];
-        if (trackedStates.includes(this.state)) {
-          this.lqmHistory.push(lqm);
-          if (this.lqmHistory.length > SAT_CONSTANTS.HISTORY_SIZE) {
-            this.lqmHistory.shift();
-          }
-        }
-
-        // Transisi state
-        switch (this.state) {
-          case SAT_STATE.COLD_START:
-            if (this.stateTimer >= this.coldStartDuration) {
-              this._transitionTo(SAT_STATE.SCANNING);
-            }
-            break;
-
-          case SAT_STATE.SCANNING:
-            // Beacon deteksi: elevasi valid + LQM > DEGRADED - 3 dB
-            if (metrics.elevationDeg >= SAT_CONSTANTS.MIN_ELEVATION_DEG && lqm > -6) {
-              this._transitionTo(SAT_STATE.ACQUIRING, true);
-            } else if (this.stateTimer >= SAT_CONSTANTS.SCAN_TIMEOUT_MS) {
-              this._transitionTo(SAT_STATE.COLD_START);
-              this.coldStartDuration = this._randomColdStart();
-            }
-            break;
-
-          case SAT_STATE.ACQUIRING: {
-            // Butuh sustained valid
-            const recent = this.lqmHistory.slice(-SAT_CONSTANTS.SUSTAINED_SAMPLES);
-            const sustainedValid = recent.length >= SAT_CONSTANTS.SUSTAINED_SAMPLES &&
-              recent.every(v => v >= SAT_CONSTANTS.LQM_THRESHOLD_VALID_DB);
-
-            if (sustainedValid) {
-              this._transitionTo(SAT_STATE.TRACKING);
-            } else if (lqm < SAT_CONSTANTS.LQM_THRESHOLD_DEGRADED_DB || this.stateTimer >= 30000) {
-              this._transitionTo(SAT_STATE.SCANNING, true);
-            }
-            break;
-          }
-
-          case SAT_STATE.TRACKING: {
-            if (lqm >= SAT_CONSTANTS.LQM_THRESHOLD_VALID_DB) {
-              // Paket bisa dikirim
-              const ber = getBER(
-                metrics.snrDb + SAT_CONSTANTS.PROCESSING_GAIN_DB,
-                metrics.elevationDeg
-              );
-              const per = getPER(ber);
-              const packetValid = Math.random() >= per;
-
-              this.lastResult = {
-                state: SAT_STATE.TRACKING,
-                metrics,
-                lqm,
-                ber,
-                per,
-                packetValid
-              };
-              return this.lastResult;
-            } else if (lqm >= SAT_CONSTANTS.LQM_THRESHOLD_DEGRADED_DB) {
-              this._transitionTo(SAT_STATE.DEGRADED);
-            } else {
-              this._transitionTo(SAT_STATE.LOSING_LOCK);
-            }
-            break;
-          }
-
-          case SAT_STATE.DEGRADED: {
-            if (lqm >= SAT_CONSTANTS.LQM_THRESHOLD_VALID_DB) {
-              this._transitionTo(SAT_STATE.TRACKING);
-            } else if (lqm < SAT_CONSTANTS.LQM_THRESHOLD_DEGRADED_DB && this.stateTimer >= 5000) {
-              this._transitionTo(SAT_STATE.LOSING_LOCK);
-            }
-            break;
-          }
-
-          case SAT_STATE.LOSING_LOCK:
-            this._transitionTo(SAT_STATE.RE_ACQUIRING);
-            break;
-
-          case SAT_STATE.RE_ACQUIRING: {
-            const recent = this.lqmHistory.slice(-5);
-            const sustainedValid = recent.length >= 5 &&
-              recent.every(v => v >= SAT_CONSTANTS.LQM_THRESHOLD_VALID_DB);
-
-            if (sustainedValid) {
-              this._transitionTo(SAT_STATE.TRACKING);
-            } else if (this.stateTimer >= SAT_CONSTANTS.RE_ACQ_WINDOW_MS) {
-              this._transitionTo(SAT_STATE.SCANNING, true);
-            }
-            break;
-          }
-        }
-
-        this.lastResult = {
-          state: this.state,
-          metrics,
-          lqm: lqm === -Infinity ? -Infinity : lqm,
-          packetValid: false
-        };
-        return this.lastResult;
-      }
-
-      _transitionTo(newState, clearHistory = false) {
-        this.state = newState;
-        this.stateTimer = 0;
-        if (clearHistory) this.lqmHistory = [];
-      }
-
-      reset() {
-        this.state = SAT_STATE.COLD_START;
-        this.stateTimer = 0;
-        this.lqmHistory = [];
-        this.coldStartDuration = this._randomColdStart();
-        this.lastResult = null;
-        this.lastLQM = null;
-        this.channel.reset();
-      }
-    }
-
-
-
-    let _instance = null;
-
-    function createSatelliteLink(options = {}) {
-      const channel = new SatelliteChannelSimulator(options);
-      const sm = new SatelliteStateMachine(channel);
-      return { channel, sm, options };
-    }
-
-    function getSatelliteLink(options) {
-      if (options !== undefined || _instance === null) {
-        _instance = createSatelliteLink(options ?? {});
-      }
-      return _instance;
-    }
-
-    function resetSatelliteLink(options) {
-      _instance = createSatelliteLink(options ?? {});
-      return _instance;
-    }
-
-    // ============================================================================
-    // PUBLIC API — updateSatelliteLink
-    // ============================================================================
-
-    /**
-     * Update satellite link state.
-     * @param {number} deltaMs
-     * @param {object} [options] { now, externalGeo }
-     *   externalGeo: { elevationDeg, distanceKm, dopplerShiftHz?, dopplerRateHzPerSec?, name? }
-     * @returns {object} result
-     */
-    function updateSatelliteLink(deltaMs, options = {}) {
-      const { sm } = getSatelliteLink();
-      const result = sm.update(
-        deltaMs,
-        options.now ?? new Date(),
-        options.externalGeo ?? null
-      );
-
-      return result;
-    }
-
-    /**
-     * Evaluasi link budget murni dari geometri eksternal (TLE), tanpa state machine.
-     * Berguna untuk ranking multi-satelit / channel list.
-     * @param {object} geo { elevationDeg, distanceKm, dopplerRateHzPerSec?, scintFadeDb? }
-     * @param {string} [mode]
-     * @param {Date} [now]
-     */
     function evaluateLinkFromGeo(geo, mode = PHYSICS_MODE.REALISTIC, now = new Date()) {
       const elevationDeg = geo?.elevationDeg ?? 0;
       const distanceKm = geo?.distanceKm ?? Infinity;
@@ -1114,8 +751,8 @@
         elevationDeg,
         scintFadeDb
       });
-      const ebn0 = snrDb + SAT_CONSTANTS.PROCESSING_GAIN_DB;
-      const ber = getBER(ebn0, elevationDeg);
+      const effectiveEbn0 = lqm;
+      const ber = getBER(effectiveEbn0, elevationDeg);
       const per = getPER(ber);
       return {
         elevationDeg,
@@ -1148,31 +785,22 @@
         assert('BER @ 6 dB within Rician K7 range', ber > 1e-7 && ber < 1e-4, `got ${ber.toExponential(2)}`);
         const per = getPER(1e-5,256);
         assert('PER @ BER 1e-5 / 256 bit', Math.abs(per - 0.00256) < 0.001, `got ${(per*100).toFixed(3)}%`);
-        const link = createSatelliteLink({passDurationSec:550,mode:PHYSICS_MODE.IDEAL});
-        link.sm.coldStartDuration = 100;
         const nowDate = new Date(2025,5,15,12,0,0);
-        let tracking = false;
-        for(let i=0;i<500;i++){ const r=link.sm.update(100,nowDate); if(r.state===SAT_STATE.TRACKING){tracking=true;break;} }
-        assert('State machine reaches TRACKING', tracking, `final ${link.sm.state}`);
-        const link2=createSatelliteLink({passDurationSec:550,mode:PHYSICS_MODE.IDEAL});
-        link2.sm.state=SAT_STATE.TRACKING; link2.sm.stateTimer=0; link2.channel.elapsed=275;
-        const orig=link2.channel.tick.bind(link2.channel);
-        link2.channel.tick=(dt,n)=>{const m=orig(dt,n);m.scintFadeDb=-35;return m;};
-        let degraded=false;
-        for(let i=0;i<50;i++){const r=link2.sm.update(100,nowDate);if(r.state===SAT_STATE.DEGRADED){degraded=true;break;}}
-        assert('State machine reaches DEGRADED', degraded, `final ${link2.sm.state}`);
-        const link3=createSatelliteLink();
-        assert('Invalid delta does not crash', link3.sm.update(NaN)!==null && link3.sm.update(0)!==null && link3.sm.update(999999)!==null);
+        const clear= evaluateLinkFromGeo({elevationDeg:75,distanceKm:780,dopplerRateHzPerSec:0,scintFadeDb:0},PHYSICS_MODE.IDEAL,nowDate);
+        const faded= evaluateLinkFromGeo({elevationDeg:75,distanceKm:780,dopplerRateHzPerSec:0,scintFadeDb:-30},PHYSICS_MODE.IDEAL,nowDate);
+        assert('Effective Eb/N0 drives BER/PER', faded.ber>clear.ber && faded.per>clear.per, `clear ${clear.per} faded ${faded.per}`);
+        assert('Physics usable threshold', clear.usable===true && evaluateLinkFromGeo({elevationDeg:5,distanceKm:780},PHYSICS_MODE.IDEAL,nowDate).usable===false);
+        assert('Invalid geometry does not crash', evaluateLinkFromGeo({elevationDeg:75,distanceKm:Infinity},PHYSICS_MODE.IDEAL,nowDate).usable===false);
       } catch(e) { results.push({name:'physics-self-test-exception',status:'FAIL',pass:false,info:String(e.message||e)}); }
       const pass=results.filter(x=>x.pass).length;
       const fail=results.length-pass;
       return {pass,fail,total:results.length,results,verified:fail===0};
     }
 
-    return Object.freeze({SAT_CONSTANTS,PHYSICS_MODE,SAT_STATE,SatelliteChannelSimulator,SatelliteStateMachine,createSatelliteLink,getSatelliteLink,resetSatelliteLink,updateSatelliteLink,evaluateLinkFromGeo,computeGeometry,computeFSPL,computeSNR,computeAtmPenalty,computeScintillation,calculateLQM,getBER,getPER,runSelfTest});
+    return Object.freeze({SAT_CONSTANTS,PHYSICS_MODE,evaluateLinkFromGeo,computeGeometry,computeFSPL,computeSNR,computeAtmPenalty,computeScintillation,calculateLQM,getBER,getPER,runSelfTest});
   })();
 
-  function selfTestInner(){const results=[];const test=(name,fn)=>{try{fn();results.push({name,status:"PASS"})}catch(e){results.push({name,status:"FAIL",error:String(e.message||e)})}};const pt=CGOPhysics.runSelfTest();if(!pt.verified)throw Error("physics kernel self-test failed: "+pt.results.filter(x=>!x.pass).map(x=>x.name).join(","));results.push({name:"physics-kernel",status:"PASS"});test("fingerprint",()=>{if(fingerprint("a")!==fingerprint("a"))throw Error("unstable")});test("delimiter-comment-regex",()=>{if(!balancedDelimiters("const x=/\\{/; // }\n{a:1}").balanced)throw Error("false negative")});test("auto-format",()=>{if(classifyText('{"a":1}').format!=="json")throw Error("json")});test("html-relations-duplicates",()=>{const h=extractHtml('<div id="x"></div><span id="x"><a href="/a"></a>');if(!h.duplicateIds.includes("x")||!h.references.includes("/a"))throw Error("html regression")});test("envelope-validator",()=>{const r=assertEnvelope({__cgoMachineInjection:true,contentMode:"bad",payload:{}});if(r.valid)throw Error("invalid envelope accepted")});test("pipeline",()=>{const o=runCycle("hello world");if(!o.result||!o.audit)throw Error("pipeline")});test("external-evidence-propagation",()=>{const o=runCycle("hello",{externalEvidence:{schema:"CGO_EXTERNAL_EVIDENCE_V1",source:"TEST_REAL_INPUT",capturedAt:now(),claims:[{source:"TEST_REAL_INPUT",target:"observed-target",status:"ANOMALY",severity:"HIGH",message:"observed failure"}],fingerprint:"evidence-test"}});if(o.pipeline.B.findings.filter(x=>x.type==="EXTERNAL_EVIDENCE").length!==1||o.pipeline.C.status!=="PARTIAL"||o.audit.status!=="ATTENTION")throw Error("external evidence not propagated")});test("batch",()=>{const o=CGOMachineABC.processMany(["a","b"]);if(o.pipeline.B.items?.length!==2)throw Error("batch")});test("batch-unknowns-aggregate",()=>{let nested={__cgoBatchInjection:true,version:VERSION,items:[]};for(let i=0;i<MAX_BATCH_DEPTH;i++)nested={__cgoBatchInjection:true,version:VERSION,items:[nested]};const rep=MachineA.process(nested);if(!rep.unknowns.some(x=>x.type==="BATCH_DEPTH_LIMIT"&&x.itemIndex===0))throw Error("batch unknown not aggregated")});test("c-injection",()=>{const o=runCycle("x");const inj=MachineC.inject(o.result);const q=runCycle(inj);if(!q.result)throw Error("injection")});test("auto-step",()=>{const o=runCycle("plain text",{});if(o.pipeline.B.operations.includes("SYNTAX_ANALYSIS"))throw Error("text syntax should be skipped");if(!o.pipeline.B.operations.includes("CONTENT_INSPECTION"))throw Error("content step missing")});test("custom-step-selection",()=>{const o=runCycle("hello",{steps:["structure"]});if(!o.pipeline.B.operations.includes("STRUCTURE_INSPECTION")||o.pipeline.B.operations.includes("CONTENT_INSPECTION")||o.pipeline.B.decision!==null)throw Error("custom steps")});test("auto-reflect",()=>{const o=reflect("hello",{maxCycles:3,stopOnStatus:"__NEVER__"});if(!Array.isArray(o.cycles)||o.cycles.length<2||!o.finalResult)throw Error("reflect")});test("reflect-actually-reflects",()=>{const o=reflect("hello",{maxCycles:2,stopOnStatus:"__NEVER__"});const first=o.cycles[0].result;if(o.cycles.length<2||fingerprint(o.cycles[1].pipeline.A.content.value)!==fingerprint(first))throw Error("reflection payload not processed")});test("stream",()=>{let n=0;CGOMachineABC.stream("hello",{onCycle:()=>n++});if(n<1)throw Error("stream")});test("stream-real-time",()=>{const seen=[];CGOMachineABC.stream("hello",{autoReflect:true,maxCycles:3,stopOnStatus:"__NEVER__",minConfidenceDelta:0,onCycle:c=>seen.push(c.cycleIndex)});if(seen.length!==3||seen[0]!==0||seen[1]!==1||seen[2]!==2)throw Error("buffered stream")});test("observe",()=>{let n=0;const off=CGOMachineABC.observe(()=>n++);CGOMachineABC.process("observe");off();if(n!==1)throw Error("observe")});test("stream-observe",()=>{let n=0;const off=CGOMachineABC.observe(()=>n++);CGOMachineABC.stream("observe-stream",{autoReflect:true,maxCycles:2,stopOnStatus:"__NEVER__"});off();if(n!==2)throw Error("stream observe")});test("independence",()=>{const a=auditIndependence();if(!a.verified||a.scannedFunctions<8)throw Error("independence")});test("machine-D",()=>{const o=CGOMachineABC.process("audit");if(o.audit?.status!=="VALID")throw Error("audit failed")});test("audit-tamper-C-payload",()=>{const o=CGOMachineABC.process("tamper");o.pipeline.C.findings.push({fake:true});const d=MachineD.audit(o,"tamper");if(d.status!=="ATTENTION"||!d.checks.some(x=>x.type==="C_PAYLOAD_HASH"&&x.status==="FAIL"))throw Error("tamper undetected")});test("b-batch-depth-guard",()=>{const rep=MachineA.process({__cgoBatchInjection:true,items:[],version:VERSION},{batchDepth:MAX_BATCH_DEPTH});const b=MachineB.process({...rep,structure:{kind:"batch",count:0},content:{mode:"batch",value:[]}}, {batchDepth:MAX_BATCH_DEPTH});if(b.decision?.reason!=="batch_depth_limit")throw Error("guard")});test("record-verification",()=>{const o=runCycle({name:"cgo",value:1});const checks=o.pipeline.B.verification;if(!checks.some(x=>x.type==="RECORD_PRESENT"&&x.status==="PASS"))throw Error("record check missing")});test("collection-verification",()=>{const o=runCycle([{id:1}]);if(!o.pipeline.B.verification.some(x=>x.type==="COLLECTION_PRESENT"&&x.status==="PASS"))throw Error("collection check missing")});test("nan-infinity",()=>{if(CGOMachineABC.process(Infinity).pipeline.A.content.value!=="Infinity")throw Error("infinity")});test("max-input-override",()=>{const o=CGOMachineABC.process("abc",{maxInputSize:10});if(!o.result)throw Error("override")});test("skipped-steps",()=>{const o=CGOMachineABC.process("abc",{steps:["structure"]});if(!o.pipeline.B.skippedSteps.includes("content"))throw Error("skipped")});test("degraded-field",()=>{if(typeof CGOMachineABC.process("abc").pipeline.B.degraded!=="boolean")throw Error("degraded")});test("errors-array",()=>{if(!Array.isArray(CGOMachineABC.process("abc").pipeline.B.errors))throw Error("errors")});test("fallback-array",()=>{if(!Array.isArray(CGOMachineABC.process("abc").pipeline.C.fallbacks))throw Error("fallback")});test("weighted-check",()=>{const o=CGOMachineABC.process("abc");if(!o.pipeline.B.verification[0].status)throw Error("check")});test("contradiction-severity",()=>{const o=CGOMachineABC.process('<!doctype html><html><div id="x"></div><span id="x"></span></html>');if(!o.pipeline.B.contradictions.some(x=>x.severity))throw Error("severity")});test("decision-hierarchy",()=>{const o=CGOMachineABC.process({x:1});if(!["PROCESSED","WELL_FORMED","PARTIAL","DEGRADED","CONTRADICTION","UNRESOLVED"].includes(o.result.status))throw Error("status")});test("machineD-fallback-check",()=>{const o=CGOMachineABC.process("abc");if(!o.audit.checks.some(x=>x.type==="FALLBACK_CHAIN"))throw Error("fallback audit")});test("replay-shape",()=>{const o=CGOMachineABC.process("abc"),r=CGOMachineABC.replay(o);if(!Array.isArray(r.steps))throw Error("replay")});test("verify-replay",()=>{const o=CGOMachineABC.process("abc"),r=CGOMachineABC.replay(o);if(CGOMachineABC.verifyReplay(o,r).status!=="MATCH")throw Error("verify replay")});test("metrics-reset",()=>{const before=CGOMachineABC.getMetrics().totalProcessed;CGOMachineABC.resetMetrics();if(CGOMachineABC.getMetrics().totalProcessed!==0||before<0)throw Error("reset")});test("state-cycle-index",()=>{const o=CGOMachineABC.process("state");if(CGOMachineABC.getState().lastCycleIndex!==0)throw Error("state cycle")});test("pause-reflect",()=>{CGOMachineABC.pause();const r=CGOMachineABC.reflect("pause",{maxCycles:2});CGOMachineABC.resume();if(r.stopReason!=="paused")throw Error("pause reflect")});test("reflect-direct-C",()=>{const r=CGOMachineABC.reflect("abc",{maxCycles:2,stopOnStatus:"__NEVER__",minConfidenceDelta:0});if(r.cycles.length!==2||r.cycles[1].pipeline.A.content.mode!=="record")throw Error("direct C")});test("stream-complete",()=>{let done=false;CGOMachineABC.stream("abc",{onComplete:()=>done=true});if(!done)throw Error("complete")});test("stream-batch-summary",()=>{const o=CGOMachineABC.processMany(["a","b"],{streamBatch:true});if(o.pipeline.C.batch.items.some(x=>x.analysis===undefined))throw Error("summary")});test("date-input",()=>{if(CGOMachineABC.process(new Date()).pipeline.A.input.type!=="date")throw Error("date")});test("object-freeze",()=>{if(!Object.isFrozen(CGOMachineABC))throw Error("freeze")});test("fingerprint-undefined",()=>{const o=CGOMachineABC.process(undefined);if(!o.result||!o.audit)throw Error("undefined crash")});test("digest-sha256-vectors",()=>{if(sha256Hex("abc")!=="ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"||sha256Hex("")!=="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"||sha256Hex("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")!=="248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1")throw Error("sha256")});test("utf8-fallback-availability",()=>{if(typeof utf8Encode!=="function"||utf8Encode("Cikur 🚀").length<8)throw Error("utf8 encoder")});test("digest-key-order",()=>{if(digest({a:1,b:2})!==digest({b:2,a:1}))throw Error("order")});test("prose-not-delimiter-checked",()=>{const o=CGOMachineABC.process("Halo :) tolong 1) cek saldo (dulu");if(o.pipeline.A.content.syntax.delimiters||o.result.status==="PARTIAL")throw Error("prose flagged")});test("let-me-know-is-text",()=>{if(classifyText("let me know if you can help").format!=="text")throw Error("prose as code")});test("regex-after-return",()=>{if(!balancedDelimiters("function f(s){ return /[)]/.test(s) }").balanced)throw Error("regex heuristic")});test("pause-blocks-process",()=>{CGOMachineABC.pause();const o=CGOMachineABC.process("x");const st=CGOMachineABC.stream("x");CGOMachineABC.resume();if(!o.skipped||st.status!=="PAUSED")throw Error("pause ignored")});test("stop-reason-to-observer",()=>{let got=null;const off=CGOMachineABC.observe(p=>{got=p});CGOMachineABC.process("abc",{autoReflect:true,maxCycles:3,stopOnStatus:"__NEVER__",minConfidenceDelta:0});off();if(!got||got.stopReason!=="maxCycles")throw Error("stopReason lost")});test("map-set-preserved",()=>{const o=CGOMachineABC.process({m:new Map([[1,2]]),s:new Set([7])});const v=o.pipeline.A.content.value;if(v.m.__cgoType!=="Map"||v.s.values[0]!==7)throw Error("map/set lost")});test("required-fields",()=>{const o=CGOMachineABC.process({nama:"",hp:"1"},{requiredFields:["nama","email"]});const t=o.pipeline.B.contradictions.map(x=>x.type);if(!t.includes("REQUIRED_FIELD_EMPTY")||!t.includes("REQUIRED_FIELD_MISSING")||o.result.status!=="PARTIAL")throw Error("required")});test("json-string-structure",()=>{const o=CGOMachineABC.process('{"nama":"","hp":null}');if(o.pipeline.B.constraints.filter(x=>x.type==="EMPTY_FIELD").length!==2)throw Error("json string not analysed")});test("dup-id-single-contradiction",()=>{const o=CGOMachineABC.process('<!doctype html><html><div id="x"></div><span id="x"></span></html>');if(o.pipeline.B.contradictions.filter(x=>x.type==="DUPLICATE_IDENTIFIER").length!==1)throw Error("double count")});test("reflect-default-stop",()=>{const o=CGOMachineABC.reflect("hello",{maxCycles:5});if(o.stopReason!=="status")throw Error("default stop never fires")});
+  function selfTestInner(){const results=[];const test=(name,fn)=>{try{fn();results.push({name,status:"PASS"})}catch(e){results.push({name,status:"FAIL",error:String(e.message||e)})}};const pt=CGOPhysics.runSelfTest();if(!pt.verified)throw Error("physics kernel self-test failed: "+pt.results.filter(x=>!x.pass).map(x=>x.name).join(","));results.push({name:"physics-kernel",status:"PASS"});test("fingerprint",()=>{if(fingerprint("a")!==fingerprint("a"))throw Error("unstable")});test("delimiter-comment-regex",()=>{if(!balancedDelimiters("const x=/\\{/; // }\n{a:1}").balanced)throw Error("false negative")});test("auto-format",()=>{if(classifyText('{"a":1}').format!=="json")throw Error("json")});test("html-relations-duplicates",()=>{const h=extractHtml('<div id="x"></div><span id="x"><a href="/a"></a>');if(!h.duplicateIds.includes("x")||!h.references.includes("/a"))throw Error("html regression")});test("envelope-validator",()=>{const r=assertEnvelope({__cgoMachineInjection:true,contentMode:"bad",payload:{}});if(r.valid)throw Error("invalid envelope accepted")});test("pipeline",()=>{const o=runCycle("hello world");if(!o.result||!o.audit)throw Error("pipeline")});test("external-evidence-propagation",()=>{const o=runCycle("hello",{externalEvidence:{schema:"CGO_EXTERNAL_EVIDENCE_V1",source:"TEST_REAL_INPUT",capturedAt:now(),claims:[{source:"TEST_REAL_INPUT",target:"observed-target",status:"ANOMALY",severity:"HIGH",message:"observed failure"}],fingerprint:"evidence-test"}});if(o.pipeline.B.findings.filter(x=>x.type==="EXTERNAL_EVIDENCE").length!==1||o.pipeline.C.status!=="PARTIAL"||o.audit.status!=="ATTENTION")throw Error("external evidence not propagated")});test("physics-evidence-propagation",()=>{const o=runCycle("physics",{physicsEvidence:{source:"TEST_PHYSICS",geo:{elevationDeg:5,distanceKm:780,dopplerRateHzPerSec:0,scintFadeDb:0},mode:CGOPhysics.PHYSICS_MODE.IDEAL}});if(!o.pipeline.B.findings.some(x=>x.type==="PHYSICS_LINK_EVALUATION")||o.pipeline.B.decision?.status!=="CONTRADICTION"||o.result?.status!=="CONTRADICTION")throw Error("physics evidence not propagated")});test("physics-evidence-valid",()=>{const o=runCycle("physics-valid",{physicsEvidence:{source:"TEST_PHYSICS",geo:{elevationDeg:75,distanceKm:780,dopplerRateHzPerSec:0,scintFadeDb:0},mode:CGOPhysics.PHYSICS_MODE.IDEAL}});if(o.pipeline.B.decision?.status!=="PROCESSED"||!o.pipeline.B.verification.some(x=>x.type==="PHYSICS_EVIDENCE"&&x.status==="PASS"))throw Error("valid physics evidence rejected")});test("batch",()=>{const o=CGOMachineABC.processMany(["a","b"]);if(o.pipeline.B.items?.length!==2)throw Error("batch")});test("batch-unknowns-aggregate",()=>{let nested={__cgoBatchInjection:true,version:VERSION,items:[]};for(let i=0;i<MAX_BATCH_DEPTH;i++)nested={__cgoBatchInjection:true,version:VERSION,items:[nested]};const rep=MachineA.process(nested);if(!rep.unknowns.some(x=>x.type==="BATCH_DEPTH_LIMIT"&&x.itemIndex===0))throw Error("batch unknown not aggregated")});test("c-injection",()=>{const o=runCycle("x");const inj=MachineC.inject(o.result);const q=runCycle(inj);if(!q.result)throw Error("injection")});test("auto-step",()=>{const o=runCycle("plain text",{});if(o.pipeline.B.operations.includes("SYNTAX_ANALYSIS"))throw Error("text syntax should be skipped");if(!o.pipeline.B.operations.includes("CONTENT_INSPECTION"))throw Error("content step missing")});test("custom-step-selection",()=>{const o=runCycle("hello",{steps:["structure"]});if(!o.pipeline.B.operations.includes("STRUCTURE_INSPECTION")||o.pipeline.B.operations.includes("CONTENT_INSPECTION")||o.pipeline.B.decision!==null)throw Error("custom steps")});test("auto-reflect",()=>{const o=reflect("hello",{maxCycles:3,stopOnStatus:"__NEVER__"});if(!Array.isArray(o.cycles)||o.cycles.length<2||!o.finalResult)throw Error("reflect")});test("reflect-actually-reflects",()=>{const o=reflect("hello",{maxCycles:2,stopOnStatus:"__NEVER__"});const first=o.cycles[0].result;if(o.cycles.length<2||fingerprint(o.cycles[1].pipeline.A.content.value)!==fingerprint(first))throw Error("reflection payload not processed")});test("stream",()=>{let n=0;CGOMachineABC.stream("hello",{onCycle:()=>n++});if(n<1)throw Error("stream")});test("stream-real-time",()=>{const seen=[];CGOMachineABC.stream("hello",{autoReflect:true,maxCycles:3,stopOnStatus:"__NEVER__",minConfidenceDelta:0,onCycle:c=>seen.push(c.cycleIndex)});if(seen.length!==3||seen[0]!==0||seen[1]!==1||seen[2]!==2)throw Error("buffered stream")});test("observe",()=>{let n=0;const off=CGOMachineABC.observe(()=>n++);CGOMachineABC.process("observe");off();if(n!==1)throw Error("observe")});test("stream-observe",()=>{let n=0;const off=CGOMachineABC.observe(()=>n++);CGOMachineABC.stream("observe-stream",{autoReflect:true,maxCycles:2,stopOnStatus:"__NEVER__"});off();if(n!==2)throw Error("stream observe")});test("independence",()=>{const a=auditIndependence();if(!a.verified||a.scannedFunctions<8)throw Error("independence")});test("machine-D",()=>{const o=CGOMachineABC.process("audit");if(o.audit?.status!=="VALID")throw Error("audit failed")});test("audit-tamper-C-payload",()=>{const o=CGOMachineABC.process("tamper");o.pipeline.C.findings.push({fake:true});const d=MachineD.audit(o,"tamper");if(d.status!=="ATTENTION"||!d.checks.some(x=>x.type==="C_PAYLOAD_HASH"&&x.status==="FAIL"))throw Error("tamper undetected")});test("b-batch-depth-guard",()=>{const rep=MachineA.process({__cgoBatchInjection:true,items:[],version:VERSION},{batchDepth:MAX_BATCH_DEPTH});const b=MachineB.process({...rep,structure:{kind:"batch",count:0},content:{mode:"batch",value:[]}}, {batchDepth:MAX_BATCH_DEPTH});if(b.decision?.reason!=="batch_depth_limit")throw Error("guard")});test("record-verification",()=>{const o=runCycle({name:"cgo",value:1});const checks=o.pipeline.B.verification;if(!checks.some(x=>x.type==="RECORD_PRESENT"&&x.status==="PASS"))throw Error("record check missing")});test("collection-verification",()=>{const o=runCycle([{id:1}]);if(!o.pipeline.B.verification.some(x=>x.type==="COLLECTION_PRESENT"&&x.status==="PASS"))throw Error("collection check missing")});test("nan-infinity",()=>{if(CGOMachineABC.process(Infinity).pipeline.A.content.value!=="Infinity")throw Error("infinity")});test("max-input-override",()=>{const o=CGOMachineABC.process("abc",{maxInputSize:10});if(!o.result)throw Error("override")});test("skipped-steps",()=>{const o=CGOMachineABC.process("abc",{steps:["structure"]});if(!o.pipeline.B.skippedSteps.includes("content"))throw Error("skipped")});test("degraded-field",()=>{if(typeof CGOMachineABC.process("abc").pipeline.B.degraded!=="boolean")throw Error("degraded")});test("errors-array",()=>{if(!Array.isArray(CGOMachineABC.process("abc").pipeline.B.errors))throw Error("errors")});test("fallback-array",()=>{if(!Array.isArray(CGOMachineABC.process("abc").pipeline.C.fallbacks))throw Error("fallback")});test("weighted-check",()=>{const o=CGOMachineABC.process("abc");if(!o.pipeline.B.verification[0].status)throw Error("check")});test("contradiction-severity",()=>{const o=CGOMachineABC.process('<!doctype html><html><div id="x"></div><span id="x"></span></html>');if(!o.pipeline.B.contradictions.some(x=>x.severity))throw Error("severity")});test("decision-hierarchy",()=>{const o=CGOMachineABC.process({x:1});if(!["PROCESSED","WELL_FORMED","PARTIAL","DEGRADED","CONTRADICTION","UNRESOLVED"].includes(o.result.status))throw Error("status")});test("machineD-fallback-check",()=>{const o=CGOMachineABC.process("abc");if(!o.audit.checks.some(x=>x.type==="FALLBACK_CHAIN"))throw Error("fallback audit")});test("replay-shape",()=>{const o=CGOMachineABC.process("abc"),r=CGOMachineABC.replay(o);if(!Array.isArray(r.steps))throw Error("replay")});test("verify-replay",()=>{const o=CGOMachineABC.process("abc"),r=CGOMachineABC.replay(o);if(CGOMachineABC.verifyReplay(o,r).status!=="MATCH")throw Error("verify replay")});test("metrics-reset",()=>{const before=CGOMachineABC.getMetrics().totalProcessed;CGOMachineABC.resetMetrics();if(CGOMachineABC.getMetrics().totalProcessed!==0||before<0)throw Error("reset")});test("state-cycle-index",()=>{const o=CGOMachineABC.process("state");if(CGOMachineABC.getState().lastCycleIndex!==0)throw Error("state cycle")});test("pause-reflect",()=>{CGOMachineABC.pause();const r=CGOMachineABC.reflect("pause",{maxCycles:2});CGOMachineABC.resume();if(r.stopReason!=="paused")throw Error("pause reflect")});test("reflect-direct-C",()=>{const r=CGOMachineABC.reflect("abc",{maxCycles:2,stopOnStatus:"__NEVER__",minConfidenceDelta:0});if(r.cycles.length!==2||r.cycles[1].pipeline.A.content.mode!=="record")throw Error("direct C")});test("stream-complete",()=>{let done=false;CGOMachineABC.stream("abc",{onComplete:()=>done=true});if(!done)throw Error("complete")});test("stream-batch-summary",()=>{const o=CGOMachineABC.processMany(["a","b"],{streamBatch:true});if(o.pipeline.C.batch.items.some(x=>x.analysis===undefined))throw Error("summary")});test("date-input",()=>{if(CGOMachineABC.process(new Date()).pipeline.A.input.type!=="date")throw Error("date")});test("object-freeze",()=>{if(!Object.isFrozen(CGOMachineABC))throw Error("freeze")});test("fingerprint-undefined",()=>{const o=CGOMachineABC.process(undefined);if(!o.result||!o.audit)throw Error("undefined crash")});test("digest-sha256-vectors",()=>{if(sha256Hex("abc")!=="ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"||sha256Hex("")!=="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"||sha256Hex("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")!=="248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1")throw Error("sha256")});test("utf8-fallback-availability",()=>{if(typeof utf8Encode!=="function"||utf8Encode("Cikur 🚀").length<8)throw Error("utf8 encoder")});test("digest-key-order",()=>{if(digest({a:1,b:2})!==digest({b:2,a:1}))throw Error("order")});test("prose-not-delimiter-checked",()=>{const o=CGOMachineABC.process("Halo :) tolong 1) cek saldo (dulu");if(o.pipeline.A.content.syntax.delimiters||o.result.status==="PARTIAL")throw Error("prose flagged")});test("let-me-know-is-text",()=>{if(classifyText("let me know if you can help").format!=="text")throw Error("prose as code")});test("regex-after-return",()=>{if(!balancedDelimiters("function f(s){ return /[)]/.test(s) }").balanced)throw Error("regex heuristic")});test("pause-blocks-process",()=>{CGOMachineABC.pause();const o=CGOMachineABC.process("x");const st=CGOMachineABC.stream("x");CGOMachineABC.resume();if(!o.skipped||st.status!=="PAUSED")throw Error("pause ignored")});test("stop-reason-to-observer",()=>{let got=null;const off=CGOMachineABC.observe(p=>{got=p});CGOMachineABC.process("abc",{autoReflect:true,maxCycles:3,stopOnStatus:"__NEVER__",minConfidenceDelta:0});off();if(!got||got.stopReason!=="maxCycles")throw Error("stopReason lost")});test("map-set-preserved",()=>{const o=CGOMachineABC.process({m:new Map([[1,2]]),s:new Set([7])});const v=o.pipeline.A.content.value;if(v.m.__cgoType!=="Map"||v.s.values[0]!==7)throw Error("map/set lost")});test("required-fields",()=>{const o=CGOMachineABC.process({nama:"",hp:"1"},{requiredFields:["nama","email"]});const t=o.pipeline.B.contradictions.map(x=>x.type);if(!t.includes("REQUIRED_FIELD_EMPTY")||!t.includes("REQUIRED_FIELD_MISSING")||o.result.status!=="PARTIAL")throw Error("required")});test("json-string-structure",()=>{const o=CGOMachineABC.process('{"nama":"","hp":null}');if(o.pipeline.B.constraints.filter(x=>x.type==="EMPTY_FIELD").length!==2)throw Error("json string not analysed")});test("dup-id-single-contradiction",()=>{const o=CGOMachineABC.process('<!doctype html><html><div id="x"></div><span id="x"></span></html>');if(o.pipeline.B.contradictions.filter(x=>x.type==="DUPLICATE_IDENTIFIER").length!==1)throw Error("double count")});test("reflect-default-stop",()=>{const o=CGOMachineABC.reflect("hello",{maxCycles:5});if(o.stopReason!=="status")throw Error("default stop never fires")});
     test("full-pipeline-trace",()=>{const o=CGOMachineABC.process("full-trace",{fast:false,skipAudit:false});if(!o.pipelineTrace||o.pipelineTrace.length!==4)throw Error("pipeline trace missing");if(o.pipelineTrace[2].status!=="COMPLETED")throw Error("C not completed");if(o.pipelineTrace[3].status!=="COMPLETED"||o.audit?.status!=="VALID")throw Error("D not completed")});
     test("phase-telemetry-route",()=>{const o=CGOMachineABC.process("telemetry-route",{fast:false,skipAudit:false});if(o.version!==VERSION||o.telemetry?.route!=="A>B>C>D"||o.telemetry?.routeStatus!=="COMPLETE"||!o.telemetry?.fingerprint||o.telemetry.phases.length!==4)throw Error("phase telemetry missing")});
     test("telemetry-observer",()=>{let n=0;const off=CGOMachineABC.observeTelemetry(e=>{if(e.type==="ABC_TELEMETRY")n++});CGOMachineABC.process("telemetry-observer");off();if(n<8)throw Error("telemetry events missing")});    return{passed:results.filter(x=>x.status==="PASS").length,failed:results.filter(x=>x.status==="FAIL").length,total:results.length,results,verified:results.every(x=>x.status==="PASS")}}

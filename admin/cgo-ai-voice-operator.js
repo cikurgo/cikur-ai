@@ -1,14 +1,16 @@
 /*
- * CGO OPERATOR VOICE v3.3.0 — NEURAL SARA · OTAK-AWARE · NATURAL CHAT
- * Female airport-style operator. Event-driven (no spam on LIVE).
- * speakAnswer() = natural spoken reply to user chat (Otak-backed).
- * Offline only — SpeechSynthesis + local MP3 fallback. No external API.
+ * CGO OPERATOR VOICE v3.7.0 — NEURAL SARA · NATURAL CHAT + ATTENTION
+ * Operator wanita:
+ *   - speakAnswer()  → TTS wanita untuk jawaban chat (teks dinamis)
+ *   - announceAttention() → info natural bila ada error/warning + lokasi file/jalur
+ *   - emit()         → MP3 event sistem (boot/error clip), di-jeda saat chat bicara
+ * Anti-double: _chatSpeaking memblokir emit MP3 event & stage ABC.
  */
 (function (global) {
   "use strict";
 
-  const VERSION = "3.6.0-FEMALE-MP3-ONLY";
-  const BUILD = "CIKUR-GO-OPERATOR-3.3.0";
+  const VERSION = "3.8.0-FEMALE-ONLY-AIRPORT";
+  const BUILD = "CIKUR-GO-OPERATOR-3.8.0";
   const ROOT = "./audio/cgo-operator/";
 
   const EVENTS = Object.freeze({
@@ -99,7 +101,7 @@
   let speaking = false;
   const lastPlayed = new Map();
   const audioCache = new Map();
-  let chatSpeakEnabled = false; // Hanya MP3 wanita jernih untuk event sistem; chat = teks (tanpa TTS robot)
+  let chatSpeakEnabled = true; // Chat TTS wanita aktif; MP3 event tetap untuk sistem (dijeda saat chat bicara)
   let lastChatHash = "";
   let lastChatAt = 0;
 
@@ -143,28 +145,27 @@
     return otakEnrich(t);
   }
 
-  function isFemaleId(v) {
-    var n = (v.name + " " + v.voiceURI).toLowerCase();
-    var l = (v.lang || "").toLowerCase();
-    if (l.startsWith("id")) return true;
-    if (!l.startsWith("en")) return false;
-    return /(female|woman|zira|samantha|ava|aria|jenny|susan)/i.test(n);
+  // STRICT FEMALE-ONLY POLICY.
+  // Browser voice metadata is not guaranteed to expose gender. Therefore we NEVER
+  // fall back to an unclassified Indonesian voice: an unknown voice may be male/robotic.
+  // If the browser cannot positively identify a female voice, dynamic speech stays silent
+  // rather than violating the Operator voice contract.
+  function isConfirmedFemale(v) {
+    var n = String((v && v.name) || "") + " " + String((v && v.voiceURI) || "");
+    n = n.toLowerCase();
+    var l = String((v && v.lang) || "").toLowerCase();
+    if (!l.startsWith("id")) return false;
+    return /(female|woman|zira|samantha|ava|aria|jenny|susan|gadis|perempuan)/i.test(n);
   }
 
   function refreshVoices() {
-    if (!("speechSynthesis" in global)) return false;
+    if (!("speechSynthesis" in global)) { selectedVoice = null; return false; }
     var voices = global.speechSynthesis.getVoices() || [];
-    if (!voices.length) return false;
-    var idFemale = voices.filter(function (v) {
-      return (v.lang || "").toLowerCase().startsWith("id") && isFemaleId(v);
-    });
-    var idAny = voices.filter(function (v) {
-      return (v.lang || "").toLowerCase().startsWith("id");
-    });
-    var enFemale = voices.filter(isFemaleId);
+    if (!voices.length) { selectedVoice = null; return false; }
+    var idFemale = voices.filter(isConfirmedFemale);
     selectedVoice =
-      idFemale.find(function (v) { return /google|microsoft|natural|premium/i.test(v.name); }) ||
-      idFemale[0] || idAny[0] || enFemale[0] || null;
+      idFemale.find(function (v) { return /google|microsoft|natural|premium/i.test(String(v.name || "")); }) ||
+      idFemale[0] || null;
     return !!selectedVoice;
   }
 
@@ -229,12 +230,13 @@
     return new Promise(function (resolve) {
       if (!("speechSynthesis" in global) || !text) return resolve(false);
       try { global.speechSynthesis.cancel(); } catch (_) {}
-      refreshVoices();
+      if (!refreshVoices() || !selectedVoice) return resolve(false);
       var u = new SpeechSynthesisUtterance(text);
-      u.lang = (selectedVoice && selectedVoice.lang) || "id-ID";
-      if (selectedVoice) u.voice = selectedVoice;
-      u.rate = (opts && opts.rate) || 0.92;
-      u.pitch = (opts && opts.pitch) || 1.05;
+      u.lang = selectedVoice.lang || "id-ID";
+      u.voice = selectedVoice;
+      // Airport-style delivery: calm, clear, slightly deliberate, never rushed.
+      u.rate = (opts && opts.rate != null) ? opts.rate : 0.92;
+      u.pitch = (opts && opts.pitch != null) ? opts.pitch : 1.05;
       u.volume = 1;
       var finished = false;
       var fin = function (ok) {
@@ -248,7 +250,14 @@
       speaking = true;
       try {
         global.speechSynthesis.speak(u);
-        setTimeout(function () { fin(true); }, Math.min(20000, 800 + text.length * 80));
+        // Do not declare speech finished on a guessed timer: browser TTS may still be speaking.
+      // Watchdog only prevents a permanently stuck queue; normal completion is onend.
+      setTimeout(function () {
+        if (!finished) {
+          try { global.speechSynthesis.cancel(); } catch (_) {}
+          fin(false);
+        }
+      }, Math.min(60000, Math.max(12000, 2500 + text.length * 140)));
       } catch (_) {
         fin(false);
       }
@@ -315,72 +324,158 @@
     } catch (_) {}
   }
   function speakAnswer(rawText, options) {
-    // Kebijakan CGO: tidak ada TTS browser (suara robot). Hanya MP3 operator wanita.
-    // force+allowTts hanya untuk debug eksplisit.
-    if (!(options && options.force && options.allowTts)) return Promise.resolve(false);
-    if (!chatSpeakEnabled && !(options && options.force)) return Promise.resolve(false);
+    options = options || {};
+    // Jawaban chat dinamis → TTS operator wanita (bukan MP3 frasa tetap).
+    // Gate force+allowTts dihapus agar suara muncul saat chat dijawab.
+    if (!enabled && !options.force) return Promise.resolve(false);
+    if (!chatSpeakEnabled && !options.force) return Promise.resolve(false);
     if (global.CGOAudioQueue && typeof global.CGOAudioQueue.isEnabled === "function" && !global.CGOAudioQueue.isEnabled()) {
       return Promise.resolve(false);
     }
     var text = toSpeechText(rawText);
     if (!text || text.length < 3) return Promise.resolve(false);
     var hash = text.slice(0, 80);
-    if (!(options && options.force) && hash === lastChatHash && Date.now() - lastChatAt < 8000) {
+    if (!options.force && hash === lastChatHash && Date.now() - lastChatAt < 6000) {
       return Promise.resolve(false);
     }
     lastChatHash = hash;
     lastChatAt = Date.now();
 
-    var emosi = (options && options.emosi) || null;
-    var voiceOpts = { rate: 0.94, pitch: 1.06 };
+    var emosi = options.emosi || null;
+    var voiceOpts = { rate: 0.92, pitch: 1.05 };
     try {
       if (emosi && global.CGOEmosi && typeof global.CGOEmosi.voiceFor === "function") {
         voiceOpts = global.CGOEmosi.voiceFor(emosi) || voiceOpts;
       }
     } catch (_) {}
-    if (options && options.rate != null) voiceOpts.rate = options.rate;
-    if (options && options.pitch != null) voiceOpts.pitch = options.pitch;
+    if (options.rate != null) voiceOpts.rate = options.rate;
+    if (options.pitch != null) voiceOpts.pitch = options.pitch;
 
     function stopAllOperatorAudio() {
       try { if (global.speechSynthesis) global.speechSynthesis.cancel(); } catch (_) {}
       try {
-        var nodes = document.querySelectorAll("audio[data-cgo-operator], audio");
+        var nodes = document.querySelectorAll("audio[data-cgo-operator]");
         for (var i = 0; i < nodes.length; i++) {
-          try {
-            var a = nodes[i];
-            if (a && a.src && /cgo-operator|welcome|stage|processing|warning|error|standby|valid|live/i.test(a.src || "")) {
-              a.pause(); a.currentTime = 0;
-            }
-          } catch (_) {}
+          try { var a = nodes[i]; a.pause(); a.currentTime = 0; } catch (_) {}
         }
       } catch (_) {}
       try {
-        // stop cached mp3
         audioCache.forEach(function (a) { try { a.pause(); a.currentTime = 0; } catch (_) {} });
+      } catch (_) {}
+      // Batalkan antrean MP3 event agar tidak double dengan TTS chat
+      try {
+        if (global.CGOAudioQueue && typeof global.CGOAudioQueue.clear === "function") {
+          /* clear hanya jika API mendukung jenis; fallback: pause */
+        }
       } catch (_) {}
     }
 
     function doSpeak() {
       _chatSpeaking = true;
       stopAllOperatorAudio();
-      var start = unlocked ? Promise.resolve(true) : unlock();
-      return start.then(function () {
-        // Chat jawaban dinamis: satu jalur TTS wanita (bukan double dengan MP3 event)
+      var startP = unlocked ? Promise.resolve(true) : unlock();
+      return startP.then(function () {
+        chatSpeakEnabled = true;
         return speakTTS(text, voiceOpts).then(function (ok) { return ok; });
       }).finally(function () {
-        setTimeout(function () { _chatSpeaking = false; }, 300);
+        setTimeout(function () { _chatSpeaking = false; }, 400);
       });
     }
 
     if (global.CGOAudioQueue && typeof global.CGOAudioQueue.enqueue === "function") {
       return global.CGOAudioQueue.enqueue({
         jenis: "tts",
-        priority: 1,
+        priority: 0,
         play: function () { return doSpeak(); }
       });
     }
     return doSpeak();
   }
+
+  /**
+   * Pengumuman natural operator bila ada masalah.
+   * detail: { file, path, message, kind: "error"|"warning", jalur }
+   * Contoh: "Perhatian. Perlu pengecekan pada file bcgo.js di jalur admin."
+   */
+  function buildAttentionPhrase(detail) {
+    detail = detail || {};
+    var kind = String(detail.kind || detail.severity || "warning").toLowerCase();
+    var file = String(detail.file || detail.fileName || detail.sourceFile || "").trim();
+    var path = String(detail.path || detail.jalur || detail.route || "").trim();
+    var msg = String(detail.message || detail.reason || "").trim();
+    // Rapikan nama file dari path
+    if (!file && path) {
+      var parts = path.replace(/\\\\/g, "/").split("/");
+      file = parts[parts.length - 1] || path;
+    }
+    var tempat = "";
+    if (file && path && path !== file && path.indexOf(file) !== -1) {
+      // path mengandung nama file → sebut file + folder
+      var folder = path.replace(/\\/g, "/");
+      var idx = folder.lastIndexOf("/");
+      var dir = idx > 0 ? folder.slice(0, idx) : "";
+      tempat = dir
+        ? ("pada file " + file + " di folder " + dir)
+        : ("pada file " + file);
+    } else if (file && path && path.indexOf(file) === -1) {
+      tempat = "pada file " + file + " di jalur " + path;
+    } else if (file) {
+      tempat = "pada file " + file;
+    } else if (path) {
+      tempat = "pada jalur " + path;
+    }
+
+    var open =
+      kind === "error" || kind === "high" || kind === "critical"
+        ? "Perhatian. Terdeteksi gangguan"
+        : "Perhatian. Diperlukan pemeriksaan";
+
+    var body = tempat ? (open + " " + tempat + ".") : (open + ".");
+    if (msg) {
+      // Ringkas pesan teknis jadi natural
+      var short = msg
+        .replace(/^Error:\s*/i, "")
+        .replace(/\bError\b/gi, "kesalahan")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 120);
+      if (short) {
+        body += " Ringkasan: " + short;
+        if (body.slice(-1) !== ".") body += ".";
+      }
+    }
+    if (tempat) {
+      body += " Mohon tinjau " + (file ? "file tersebut" : "jalur tersebut") + " sebelum melanjutkan.";
+    } else {
+      body += " Mohon periksa status sistem.";
+    }
+    return body;
+  }
+
+  function announceAttention(detail, options) {
+    options = options || {};
+    var phrase = buildAttentionPhrase(detail);
+    // Putar clip WARNING/ERROR singkat dulu (opsional), lalu TTS natural
+    var kind = String((detail && (detail.kind || detail.severity)) || "warning").toLowerCase();
+    var clipKey = (kind === "error" || kind === "high" || kind === "critical") ? "ERROR" : "WARNING";
+    var clipP = Promise.resolve(false);
+    if (!options.skipClip && enabled) {
+      try {
+        // force clip sekali, tapi canEmit akan hormati _chatSpeaking
+        clipP = emit(clipKey, { force: !!options.forceClip });
+      } catch (_) {}
+    }
+    return clipP.then(function () {
+      return speakAnswer(phrase, {
+        force: true,
+        emosi: kind === "error" ? "tegas" : "khawatir",
+        rate: 0.92
+      });
+    }).then(function (ok) {
+      return { ok: !!ok, phrase: phrase };
+    });
+  }
+
 
   function unlock() {
     unlocked = true;
@@ -442,6 +537,8 @@
     EVENTS: EVENTS,
     emit: emit,
     speakAnswer: speakAnswer,
+    announceAttention: announceAttention,
+    buildAttentionPhrase: buildAttentionPhrase,
     stop: stop,
     speak: speakAnswer,
     unlock: unlock,
@@ -451,6 +548,7 @@
     setEnabled: function (v) { enabled = !!v; },
     setChatSpeak: function (v) { chatSpeakEnabled = !!v; },
     setQuietLive: function (v) { quietLive = !!v; },
+    isChatSpeaking: function () { return !!_chatSpeaking; },
     otakEnrich: otakEnrich,
     toSpeechText: toSpeechText,
     isUnlocked: function () { return unlocked; },

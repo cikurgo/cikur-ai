@@ -491,7 +491,7 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-audio-queue.js?v=1.0.0-AUDIO-QUEUE"></script>
 <script src="cgo-emosi.js?v=1.0.0-EMOSI"></script>
 <script src="cgo-narasi.js?v=1.0.0-NARASI"></script>
-<script src="cgo-ai-voice-operator.js?v=3.6.0-FEMALE-MP3-ONLY-20260929"></script>
+<script src="cgo-ai-voice-operator.js?v=3.7.0-FEMALE-CHAT-ATTENTION"></script>
 <script src="cgo-machine-abc.js?v=0.9.9-OTAK-CORE-20260927"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.7.0-BCGO-SYNC-OTAK-20260928"></script>
 <script src="cgo-abc-cognition.js?v=1.1.0-CGO-ABC-COGNITION"></script>
@@ -1006,11 +1006,10 @@ function addChat(role, text, meta) {
       bSpeak.textContent = '🔊 ulang';
       bSpeak.onclick = function() {
         try {
-          if (window.CGOOperatorVoice && window.CGOOperatorVoice.speakAnswer) {
-            /* TTS robot dimatikan — hanya MP3 event sistem */
-            if (window.CGOOperatorVoice && window.CGOOperatorVoice.emit) {
-              /* tidak memutar ulang teks chat sebagai TTS */
-            }
+          if (window.CGOOperatorVoice && typeof window.CGOOperatorVoice.speakAnswer === 'function') {
+            window.CGOOperatorVoice.unlock && window.CGOOperatorVoice.unlock();
+            window.CGOOperatorVoice.setChatSpeak && window.CGOOperatorVoice.setChatSpeak(true);
+            window.CGOOperatorVoice.speakAnswer(text, { force: true, emosi: meta && meta.emosi && meta.emosi.emosi });
           }
         } catch(_){}
       };
@@ -1174,91 +1173,84 @@ async function sendQuestion(question, opts) {
         const parseMs = Math.max(0, Math.round(tParse0 - t0));
         let pikirMs = 0;
         let formatMs = 0;
-        // SATU OTAK: BCGO → Mesin ABC → Otak Internal → memori bersama lewat CGO_OTAK.ask
+        // ============================================================
+        // SATU PINTU OTAK (100%) — hanya CGO_OTAK.ask sebagai gerbang
+        // Fallback berlapis HANYA jika hub belum siap (anti-regresi).
+        // Mesin ABC hanya jika user eksplisit minta audit/pipeline.
+        // ============================================================
+        let answer = null;
+        let brainSource = 'none';
+
         if (window.CGO_OTAK && typeof window.CGO_OTAK.ask === 'function') {
             try {
-                setChatLiveStatus('Satu Otak memproses: BCGO → Mesin ABC → Otak Internal…', 'working');
-                const tThink0 = performance.now();
-                const hubRes = await window.CGO_OTAK.ask(text, { liveState });
-                pikirMs = Math.max(0, Math.round(performance.now() - tThink0));
-                if (hubRes && hubRes.answer) answer = hubRes.answer;
-                try {
-                  var stages = document.getElementById('cgo-think-stages');
-                  if (stages) {
-                    var th = stages.querySelector('[data-stage="think"]'); if (th) { th.classList.remove('on'); th.classList.add('done'); }
-                    var co = stages.querySelector('[data-stage="compose"]'); if (co) co.classList.add('on');
-                  }
-                  var stEl = document.getElementById('cgo-think-stage');
-                  if (stEl) stEl.textContent = 'SUSUN';
-                } catch(_){}
-            } catch (hubErr) { /* silent fallback */ }
+                setChatLiveStatus('Satu Otak memproses…', 'working');
+                const hubRes = await window.CGO_OTAK.ask(text, { liveState: liveState });
+                if (hubRes && hubRes.answer) {
+                    answer = hubRes.answer;
+                    brainSource = 'CGO_OTAK';
+                } else if (typeof hubRes === 'string' && hubRes.trim()) {
+                    answer = hubRes;
+                    brainSource = 'CGO_OTAK';
+                }
+            } catch (hubErr) {
+                console.warn('[BCGO] CGO_OTAK.ask:', hubErr);
+            }
         }
-        if (!answer) { // jalur cadangan (perilaku lama) bila hub belum termuat / tidak menghasilkan jawaban
-        // 1) BCGO engine (telemetry + scanner + radar)
-        const brain = window.BCGOBrain;
-        if (brain?.ask) {
-            setChatLiveStatus('BCGO sedang memeriksa telemetry, scanner, dan state live…', 'working');
-            answer = await Promise.resolve(brain.ask(text));
+
+        // Fallback cadangan (hanya jika hub kosong) — BCGOBrain saja
+        if (!answer && window.BCGOBrain && typeof window.BCGOBrain.ask === 'function') {
+            try {
+                setChatLiveStatus('BCGOBrain (cadangan)…', 'working');
+                answer = await Promise.resolve(window.BCGOBrain.ask(text));
+                brainSource = 'BCGOBrain_fallback';
+            } catch (brainErr) {
+                console.warn('[BCGO] BCGOBrain.ask:', brainErr);
+            }
         }
-        // 1b) Mesin ABC — analisis struktur / bukti formal (tanpa AI eksternal)
+
+        // Mesin ABC — HANYA jika user eksplisit minta (bukan setiap chat)
         if (window.CGOMachineABCBridge && /analisis|struktur|audit|verifikasi|bukti|mesin abc|pipeline|self-?test/i.test(text)) {
             try {
-                setChatLiveStatus('Mesin ABC memproses A→B→C→D…', 'working');
+                setChatLiveStatus('Mesin ABC A→B→C→D…', 'working');
                 const abc = window.CGOMachineABCBridge.analyze(text, { maxCycles: 1 });
-                if (abc.ok) {
+                if (abc && abc.ok) {
                     const conf = abc.confidence != null ? Math.round(Number(abc.confidence) * 100) + '%' : '–';
                     const nFind = (abc.findings || []).length;
-                    const auditSt = abc.audit?.status || '–';
-                    const abcLine = `[Mesin ABC ${abc.version}] status ${abc.status || '–'} · keyakinan ${conf} · temuan ${nFind} · audit ${auditSt}`;
+                    const auditSt = (abc.audit && abc.audit.status) || '–';
+                    const abcLine = '[Mesin ABC] status ' + (abc.status || '–') + ' · keyakinan ' + conf + ' · temuan ' + nFind + ' · audit ' + auditSt;
                     answer = answer ? (String(answer) + '\n\n' + abcLine) : abcLine;
+                    brainSource = (brainSource || 'none') + '+ABC';
                 }
             } catch (abcErr) {
                 console.warn('[BCGO] ABC analyze:', abcErr);
             }
         }
 
-        // === SATU OTAK: bukti BCGO sudah di `answer` via BCGOBrain.ask (yang sudah naturalizeWithOtak) ===
-        // Di sini hanya pastikan suara 1x + polish ringan tanpa otak kedua yang menempel label
-        if (answer && window.CIKURGO) {
+        // Bersihkan label dual-brain lama jika ada
+        if (answer) {
             try {
-                // Bersihkan label dual-brain lama
-                answer = String(answer).replace(/\n\n\[Otak Jenius\]\s*/g, "\n\n").replace(/Rekomendasi Otak:\s*/g, "Rekomendasi: ");
+                answer = String(answer)
+                    .replace(/\n\n\[Otak Jenius\]\s*/g, '\n\n')
+                    .replace(/Rekomendasi Otak:\s*/g, 'Rekomendasi: ');
             } catch (_) {}
         }
 
-        // 2) Internal CGO brain (investigation) jika jawaban generik / kosong
-        const internal = window.CGOInternalBrain || internalBrain;
-        const needsDeep = !answer || /belum punya bukti|belum bisa/i.test(String(answer));
-        if (needsDeep) setChatLiveStatus('Memeriksa konteks internal CGO tanpa membuat bukti baru…', 'working');
-        if (needsDeep && internal && typeof internal.chatAnswer === 'function') {
-            try {
-                const deep = await Promise.resolve(internal.chatAnswer(text));
-                if (deep && String(deep).trim()) answer = deep;
-            } catch (_) {}
+        // Tolak template generik — urai lewat CIKURGO bila perlu
+        if (!answer || /Saya paham\.\s*Untuk\s+/i.test(String(answer))) {
+            if (window.CIKURGO && typeof window.CIKURGO.urai === 'function') {
+                try {
+                    const u = window.CIKURGO.urai(text, 'auto', false);
+                    if (u && String(u).trim() && String(u).trim() !== text) {
+                        answer = 'Dari pengurai Otak: ' + String(u).trim() + '.';
+                        brainSource = 'CIKURGO.urai';
+                    }
+                } catch (_) {}
+            }
         }
-        if (internal && typeof internal.ingestBCGOState === 'function' && liveState) {
-            try { internal.ingestBCGOState(liveState); } catch (_) {}
-        }
-        } // akhir jalur cadangan
+
         if (!answer) throw new Error('BCGO_BRAIN_NOT_READY');
-        // Tolak template generik Internal Brain — arahkan ke Otak urai (natural, bukan settingan)
-        if (/Saya paham\.\s*Untuk\s+/i.test(String(answer))) {
-          try {
-            if (window.BCGOBrain && typeof window.BCGOBrain.ask === 'function') {
-              const alt = await Promise.resolve(window.BCGOBrain.ask(text));
-              if (alt && String(alt).trim() && !/Saya paham\.\s*Untuk\s+/i.test(String(alt))) answer = String(alt).trim();
-            }
-          } catch (_) {}
-          if (/Saya paham\.\s*Untuk\s+/i.test(String(answer)) && window.CIKURGO && typeof window.CIKURGO.urai === 'function') {
-            try {
-              const u = window.CIKURGO.urai(text, 'auto', false);
-              if (u && String(u).trim() && String(u).trim() !== text) answer = 'Dari pengurai Otak: ' + String(u).trim() + '.';
-              else answer = 'Siap. Kirim angka, emoji, status, atau nama file — Otak mengurai dari bukti yang ada.';
-            } catch (_) {
-              answer = 'Siap menerima pertanyaan bebas untuk diurai Otak Jenius.';
-            }
-          }
-        }
+        try { window.__CGO_LAST_BRAIN_SOURCE = brainSource; } catch (_) {}
+
         // Multi-narasi + multi-emosi (tanpa mengubah fakta Otak)
         let emosi = null;
         try {
@@ -1280,7 +1272,7 @@ async function sendQuestion(question, opts) {
         try { formatMs = Math.max(0, Math.round(tFmt0 - (t0 + parseMs + pikirMs))); } catch(_){ formatMs = 0; }
         const t1 = tFmt0;
         const totalMs = Math.max(0, Math.round(t1 - t0));
-        // TTS = 0 (kebijakan MP3-only, chat tanpa TTS browser)
+        // Dynamic chat speech = CGO Operator female-only TTS; system events remain Operator MP3
         const ttsMs = 0;
         const timingStr = totalMs
           ? ('⚡ ' + totalMs + ' ms · parse ' + parseMs + ' · pikir ' + pikirMs + ' · format ' + formatMs + (ttsMs ? (' · tts ' + ttsMs) : ''))
@@ -1302,6 +1294,11 @@ async function sendQuestion(question, opts) {
             if (window.CGOOperatorVoice && typeof window.CGOOperatorVoice.speakAnswer === 'function') {
                 const wave = document.getElementById('cgo-voice-wave');
                 if (wave) wave.classList.add('live');
+                try {
+                  window.CGOOperatorVoice.unlock && window.CGOOperatorVoice.unlock();
+                  window.CGOOperatorVoice.setChatSpeak && window.CGOOperatorVoice.setChatSpeak(true);
+                  window.CGOOperatorVoice.setQuietLive && window.CGOOperatorVoice.setQuietLive(true);
+                } catch (_) {}
                 const p = window.CGOOperatorVoice.speakAnswer(answer, { emosi: emosi && emosi.emosi });
                 Promise.resolve(p).finally(() => { try { if (wave) wave.classList.remove('live'); } catch(_){} });
             }
@@ -1314,6 +1311,23 @@ async function sendQuestion(question, opts) {
         setChatBusy(false);
         chatInput?.focus();
     }
+}
+
+
+/** Operator wanita: umumkan error/warning dengan lokasi file/jalur (natural). */
+function cgoAnnounceSystemAttention(info) {
+  try {
+    if (!window.CGOOperatorVoice || typeof window.CGOOperatorVoice.announceAttention !== 'function') return;
+    const detail = {
+      kind: (info && (info.kind || info.severity)) || 'warning',
+      file: (info && (info.file || info.fileName || info.sourceFile)) || '',
+      path: (info && (info.path || info.jalur)) || '',
+      message: (info && (info.message || info.error || info.reason)) || ''
+    };
+    if (!detail.file && !detail.path && !detail.message) return;
+    try { window.CGOOperatorVoice.unlock && window.CGOOperatorVoice.unlock(); } catch (_) {}
+    window.CGOOperatorVoice.announceAttention(detail, { skipClip: false });
+  } catch (_) {}
 }
 
 chatForm?.addEventListener('submit', event => {

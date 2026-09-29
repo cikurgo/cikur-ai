@@ -469,7 +469,37 @@ export async function runAutonomousEngine(onCycleUpdate) {
     return { status: "CONNECTING", lastServerAt: firestore.lastServerAt || 0 };
   }
 
-  function emit(step, message, target, error = null, options = {}) {
+  
+  /** Soft: operator wanita umumkan error ber-lokasi (anti-spam 20s). */
+  let _lastAttentionAt = 0;
+  let _lastAttentionKey = "";
+  function cgoAnnounceFromEmit(level, message, code, detail, meta) {
+    try {
+      if (typeof window === "undefined" || !window.CGOOperatorVoice) return;
+      if (typeof window.CGOOperatorVoice.announceAttention !== "function") return;
+      const mode = (meta && meta.cycleMode) || level || "";
+      if (mode !== "ERROR" && mode !== "WARNING" && level !== "ERROR" && level !== "WARN") return;
+      const msg = String(message || detail || "").slice(0, 160);
+      const key = String(code || "") + "|" + msg.slice(0, 40);
+      const now = Date.now();
+      if (key === _lastAttentionKey && now - _lastAttentionAt < 20000) return;
+      _lastAttentionKey = key;
+      _lastAttentionAt = now;
+      // Coba ekstrak nama file dari pesan
+      let file = "";
+      const m = msg.match(/([\w.\-]+\.(?:js|html|css|json|wasm|onnx))/i);
+      if (m) file = m[1];
+      window.CGOOperatorVoice.announceAttention({
+        kind: (mode === "ERROR" || level === "ERROR") ? "error" : "warning",
+        file: file,
+        message: msg || String(code || "gangguan sistem")
+      }, { skipClip: true });
+    } catch (_) {}
+  }
+
+function emit(step, message, target, error = null, options = {}) {
+    try { cgoAnnounceFromEmit(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]); } catch (_att) {}
+
     if (stopped) return;
     const organs = buildOrgans();
     const metrics = makeMetrics(organs);

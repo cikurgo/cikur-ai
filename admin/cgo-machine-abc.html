@@ -339,7 +339,7 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
 <script src="cikur-go.browser.js?v=3.0.0-OTAK-JENIUS"></script>
 <script src="cgo-audio-bus.js?v=1.0.0-AUDIO-BUS"></script>
 <script src="cgo-audio-queue.js?v=1.0.0-AUDIO-QUEUE"></script>
-<script src="cgo-ai-voice-operator.js?v=3.6.0-FEMALE-MP3-ONLY-20260929"></script>
+<script src="cgo-ai-voice-operator.js?v=3.7.0-FEMALE-CHAT-ATTENTION"></script>
 <script src="cgo-machine-abc.js?v=0.9.9-OTAK-CORE-20260927"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.7.0-BCGO-SYNC-OTAK-20260928"></script>
 <script src="cgo-abc-cognition.js"></script>
@@ -654,12 +654,13 @@ label{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;color
     try { renderResultCard(c); } catch (_) {}
     try {
       if (c && c.result && window.CGOOperatorVoice && window.CGOOperatorVoice.speakAnswer) {
-        const st = c.result.status || c.status || '';
-        if (st === 'WELL_FORMED' || st === 'VALID') {
-          const conf = c.result.decision?.confidence ?? c.confidence;
-          const ringkas = typeof otakRingkasHasil === 'function' ? otakRingkasHasil(st, conf, c.result.findings || c.findings) : null;
-          if (ringkas) void window.CGOOperatorVoice.speakAnswer(ringkas);
-        }
+        try {
+          window.CGOOperatorVoice.unlock && window.CGOOperatorVoice.unlock();
+          window.CGOOperatorVoice.setChatSpeak && window.CGOOperatorVoice.setChatSpeak(true);
+          const ringkas = String(c.result).slice(0, 280);
+          if (ringkas) void window.CGOOperatorVoice.speakAnswer(ringkas, { force: true });
+        } catch (_) {}
+      }
       }
     } catch (_) {}
     try { if(window.CGOOperatorVoice){ window.CGOOperatorVoice.state(OK.has(status)?"VALID":WARN.has(status)?"WARNING":"ERROR"); } } catch(_){}

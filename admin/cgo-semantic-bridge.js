@@ -12,12 +12,12 @@
  *   ensureReady, embed, indexDocuments, match, isReady, getStatus, clearCache, cosine
  *
  * window.CGOSemantic
- * Version 1.1.0-semantic-bridge
+ * Version 1.1.1-semantic-bridge-graceful
  */
 (function (global) {
   "use strict";
 
-  const VERSION = "1.1.0-semantic-bridge";
+  const VERSION = "1.1.1-semantic-bridge-graceful";
   /** Model lokal (folder di assets/models/). */
   const DEFAULT_MODEL = "all-MiniLM-L6-v2";
   const CACHE_KEY = "CGO_SEMANTIC_DOC_V1";

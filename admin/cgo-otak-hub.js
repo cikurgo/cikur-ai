@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.2.0-MULTI-OTAK";
+  const VERSION = "1.3.0-UNIFIED-BRAIN-PIPELINE";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -273,6 +273,7 @@
 
   /* ---------------- Satu jalur tanya-jawab ---------------- */
   const ABC_TRIGGER = /analisis|struktur|audit|verifikasi|bukti|mesin abc|pipeline|self-?test/i;
+  const SYSTEM_TRIGGER = /cgo|bcgo|cikur go|sistem|file|berkas|kode|source|dependency|dependensi|relasi|hubungan|telemetry|anomaly|anomali|investigasi|root cause|error|bug|status sistem|perbaiki|perbaikan|patch|radar|machine abc|mesin abc/i;
   const RECALL_TRIGGER = /^(tadi|sebelumnya|barusan)\b|kita bahas apa|topik terakhir|apa yang tadi/i;
   const WEAK_ANSWER = /belum punya bukti|belum bisa/i;
 
@@ -308,6 +309,11 @@
     } catch (e) {
       step("INSTRUCTION", false, String((e && e.message) || e));
     }
+
+    const topic = intent && intent.topic ? intent.topic : null;
+    const mode = intent && intent.mode ? intent.mode : null;
+    const systemRequest = SYSTEM_TRIGGER.test(t) || !!(intent && (intent.technicalSignal || intent.statusQuestion || intent.explicitAction));
+    const convOnly = !systemRequest;
 
     
     // ─── B. Otak Jenius: multi-bahasa · multi-hitung · multi-emoji · multi-fungsi ───
@@ -397,7 +403,7 @@
       return String(val);
     }
 
-    if (linguistic && CG) {
+    if (linguistic && CG && !systemRequest) {
       const parts = [];
 
       // 1) Hasil urai penuh (multi-token natural)
@@ -636,62 +642,137 @@
       } catch (_) {}
     }
 
-    // ─── D. BCGO Engine (fakta sistem) ───
-    if (!answer || (intent && (intent.technicalSignal || intent.statusQuestion || intent.explicitAction))) {
+    // ─── D–F. SATU PIPELINE OTAK SISTEM ───
+    // Urutan kontrak: LIVE STATE → ABC → INTERNAL REASONING → BCGO FACTS → MEMORY.
+    // Tidak ada modul yang menjadi fallback diam-diam. Masing-masing menyumbang
+    // data/penalaran ke trace yang sama dan hasil yang sudah ada tidak ditimpa.
+    if (systemRequest) {
       const brain = global.BCGOBrain;
-      if (brain && typeof brain.ask === "function") {
+      const internal = global.CGOInternalBrain;
+      let bcgoAnswer = null;
+      let internalAnswer = null;
+
+      // 1) Sinkronkan snapshot hidup ke Otak Internal sebelum penalaran.
+      try {
+        if (internal && typeof internal.ingestBCGOState === "function") {
+          internal.ingestBCGOState(live);
+          step("STATE_SYNC", true, "BCGO_STATE→INTERNAL_BRAIN");
+        } else if (internal) {
+          step("STATE_SYNC", false, "liveState belum tersedia");
+        }
+      } catch (e) {
+        step("STATE_SYNC", false, String((e && e.message) || e));
+      }
+
+      // 2) Mesin ABC menjadi validator formal untuk permintaan sistem.
+      // Hanya jalur sistem yang masuk ABC; chat biasa tetap ringan.
+      if (ABC_TRIGGER.test(t) || systemRequest) {
         try {
+          const bridge = global.CGOMachineABCBridge;
+          if (bridge && typeof bridge.analyze === "function") {
+            const r = bridge.analyze(t, { maxCycles: 1 });
+            if (r && r.ok) {
+              abc = r;
+              const conf = r.confidence != null ? Math.round(Number(r.confidence) * 100) + "%" : "–";
+              const line = "Mesin ABC: status " + (r.status || "–") + ", keyakinan " + conf +
+                ", temuan " + ((r.findings || []).length) + ", audit " + ((r.audit && r.audit.status) || "–") + ".";
+              step("MESIN_ABC", true, r.status || null);
+              if (internal && typeof internal.ingestMachineAbc === "function") {
+                try {
+                  internal.ingestMachineAbc({
+                    status: r.status ?? null,
+                    confidence: r.confidence ?? null,
+                    audit: r.audit?.status || r.audit || null,
+                    findingsCount: Array.isArray(r.findings) ? r.findings.length : 0,
+                    mode: r.mode || "CHAT_SYSTEM",
+                    at: Date.now()
+                  });
+                  step("ABC_TO_INTERNAL", true, "formal-summary");
+                } catch (e) {
+                  step("ABC_TO_INTERNAL", false, String((e && e.message) || e));
+                }
+              }
+            } else {
+              step("MESIN_ABC", false, (r && (r.error || r.message)) || "tidak ok");
+            }
+          } else {
+            step("MESIN_ABC", false, "bridge belum termuat");
+          }
+        } catch (e) {
+          step("MESIN_ABC", false, String((e && e.message) || e));
+        }
+      }
+
+      // 3) Internal Brain menjadi pengolah utama bukti, bukan fallback.
+      try {
+        if (internal && typeof internal.reasonChat === "function") {
+          const r = internal.reasonChat({ text: t, analysis: { systemRequest, machineAbc: abc ? {
+            ok: true, status: abc.status, confidence: abc.confidence,
+            audit: abc.audit?.status || abc.audit || null
+          } : null } }, { liveState: live, machineAbc: abc });
+          if (r && r.handled && r.text) internalAnswer = String(r.text).trim();
+          if (internalAnswer) step("INTERNAL_BRAIN", true, "evidence+reasoning");
+          else step("INTERNAL_BRAIN", false, "tidak menghasilkan jawaban");
+        } else {
+          step("INTERNAL_BRAIN", false, "belum termuat");
+        }
+      } catch (e) {
+        step("INTERNAL_BRAIN", false, String((e && e.message) || e));
+      }
+
+      // 4) BCGO tetap sumber fakta live. Ambil sebagai evidence provider,
+      // bukan sebagai pengganti hasil penalaran Internal Brain.
+      try {
+        if (brain && typeof brain.ask === "function") {
           const r = await Promise.resolve(brain.ask(t));
           if (r && String(r).trim()) {
-            // Jika sudah ada jawaban percakapan, jangan timpa kecuali teknis
-            if (!answer || (intent && (intent.technicalSignal || intent.statusQuestion || intent.explicitAction))) {
-              answer = String(r).trim();
-            }
-            step("BCGO_ENGINE", true);
-          } else step("BCGO_ENGINE", false, "kosong");
-        } catch (e) {
-          step("BCGO_ENGINE", false, String((e && e.message) || e));
+            bcgoAnswer = String(r).trim();
+            step("BCGO_ENGINE", true, "live-facts");
+          } else {
+            step("BCGO_ENGINE", false, "kosong");
+          }
+        } else {
+          step("BCGO_ENGINE", false, "belum termuat");
         }
-      } else step("BCGO_ENGINE", false, "belum termuat");
-    }
-
-    // ─── E. Mesin ABC ───
-    if (ABC_TRIGGER.test(t) || (intent && intent.mode === "TECHNICAL" && /\b(audit|bukti|pipeline|abc)\b/i.test(t))) {
-      try {
-        const bridge = global.CGOMachineABCBridge;
-        if (bridge && typeof bridge.analyze === "function") {
-          const r = bridge.analyze(t, { maxCycles: 1 });
-          if (r && r.ok) {
-            abc = r;
-            const conf = r.confidence != null ? Math.round(Number(r.confidence) * 100) + "%" : "–";
-            const line = "Mesin ABC: status " + (r.status || "–") + ", keyakinan " + conf +
-              ", temuan " + ((r.findings || []).length) + ", audit " + ((r.audit && r.audit.status) || "–") + ".";
-            answer = answer ? (String(answer) + " " + line) : line;
-            step("MESIN_ABC", true, r.status || null);
-          } else step("MESIN_ABC", false, (r && (r.error || r.message)) || "tidak ok");
-        } else step("MESIN_ABC", false, "bridge belum termuat");
       } catch (e) {
-        step("MESIN_ABC", false, String((e && e.message) || e));
+        step("BCGO_ENGINE", false, String((e && e.message) || e));
+      }
+
+      // 5) Compose sekali. Internal reasoning tetap utama; fakta BCGO ditambahkan
+      // hanya bila berbeda agar tidak menggandakan jawaban.
+      const pieces = [];
+      if (internalAnswer) pieces.push(internalAnswer);
+      if (bcgoAnswer && bcgoAnswer !== internalAnswer &&
+          !String(internalAnswer || "").includes(bcgoAnswer) &&
+          !bcgoAnswer.includes(String(internalAnswer || ""))) {
+        pieces.push("Fakta BCGO: " + bcgoAnswer);
+      }
+      if (pieces.length) answer = pieces.join("\n\n");
+      else if (abc) {
+        const conf = abc.confidence != null ? Math.round(Number(abc.confidence) * 100) + "%" : "–";
+        answer = "Mesin ABC: status " + (abc.status || "–") + ", keyakinan " + conf +
+          ", temuan " + ((abc.findings || []).length) + ", audit " + ((abc.audit && abc.audit.status) || "–") + ".";
       }
     }
 
-    // ─── F. Otak Internal (bukti), tolak template generik ───
-    const internal = global.CGOInternalBrain;
-    if (internal && (!answer || /belum punya bukti|belum bisa/i.test(String(answer)))) {
+    // 6) Satu memori bersama: simpan hasil akhir juga ke Memory internal bila tersedia.
+    if (answer && systemRequest) {
       try {
-        if (ctx.liveState && typeof internal.ingestBCGOState === "function") internal.ingestBCGOState(ctx.liveState);
-        let deep = null;
-        if (typeof internal.chatAnswer === "function") deep = await Promise.resolve(internal.chatAnswer(t));
-        if (!deep && typeof internal.reasonChat === "function") {
-          const r = internal.reasonChat({ text: t }, {});
-          if (r && r.handled) deep = r.text;
+        const internal = global.CGOInternalBrain;
+        const rt = internal && typeof internal.getRuntime === "function" ? internal.getRuntime() : null;
+        if (rt && typeof rt.remember === "function") {
+          rt.remember({
+            type: "CHAT_TURN",
+            question: t.slice(0, 500),
+            answer: String(answer).slice(0, 1200),
+            modules: trace.filter(x => x.ok).map(x => x.module),
+            abc: abc ? { status: abc.status ?? null, confidence: abc.confidence ?? null } : null,
+            at: new Date().toISOString()
+          });
+          step("INTERNAL_MEMORY", true, "CHAT_TURN");
         }
-        if (deep && String(deep).trim() && !/^Saya paham\.\s*Untuk\s+/i.test(String(deep))) {
-          answer = String(deep).trim();
-          step("INTERNAL_BRAIN", true, "bukti");
-        } else step("INTERNAL_BRAIN", false, "ditolak/kosong");
       } catch (e) {
-        step("INTERNAL_BRAIN", false, String((e && e.message) || e));
+        step("INTERNAL_MEMORY", false, String((e && e.message) || e));
       }
     }
 
