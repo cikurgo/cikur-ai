@@ -485,17 +485,25 @@ body{font-family:'Inter',sans-serif}
 </section>
 </div>
 
-<script src="cgo-semantic-bridge.js?v=1.1.0-semantic-bridge"></script>
+<script src="cgo-semantic-bridge.js?v=1.1.1-semantic-bridge-graceful-20260929"></script>
+<script>
+// Semantic Bridge boot is deliberately non-blocking: UI controls must never wait for embeddings.
+(function(){ try {
+  if (window.CGOSemantic && typeof window.CGOSemantic.ensureReady === 'function') {
+    window.CGOSemantic.ensureReady().catch(function(){});
+  }
+} catch(_){} })();
+</script>
 <script src="cikur-go.browser.js?v=3.0.0-OTAK-JENIUS"></script>
 <script src="cgo-audio-bus.js?v=1.0.0-AUDIO-BUS"></script>
 <script src="cgo-audio-queue.js?v=1.0.0-AUDIO-QUEUE"></script>
-<script src="cgo-emosi.js?v=1.0.0-EMOSI"></script>
+<script src="cgo-emosi.js?v=1.1.0-EMOSI-AIRPORT"></script>
 <script src="cgo-narasi.js?v=1.0.0-NARASI"></script>
-<script src="cgo-ai-voice-operator.js?v=3.7.0-FEMALE-CHAT-ATTENTION"></script>
+<script src="cgo-ai-voice-operator.js?v=3.8.0-FEMALE-ONLY-AIRPORT"></script>
 <script src="cgo-machine-abc.js?v=0.9.9-OTAK-CORE-20260927"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.7.0-BCGO-SYNC-OTAK-20260928"></script>
 <script src="cgo-abc-cognition.js?v=1.1.0-CGO-ABC-COGNITION"></script>
-<script src="cgo-otak-hub.js?v=1.2.0-MULTI-OTAK-20260928"></script>
+<script src="cgo-otak-hub.js?v=1.3.0-UNIFIED-BRAIN-PIPELINE-20260929"></script>
 
 <script type="module">
 import * as CGOInstruction from "./cgo-instruction.js?v=1.3.0-CONSTITUTION";
@@ -521,30 +529,36 @@ import { runAutonomousEngine } from './bcgo.js?v=5.1.0-LIVE-UI-20260928';
 
 // Bridge internal CGO brain ke BCGO_STATE (tanpa AI eksternal)
 let internalBrain = null;
-try {
-  const adapter = await import('./cgo-ai-browser-adapter.js?v=5.4.1-OTAK-HUB-20260928');
-  if (typeof adapter.install === 'function') {
-    internalBrain = adapter.install();
-    window.CGOInternalBrain = internalBrain;
-    console.log('[BCGO] Internal CGO brain terpasang:', internalBrain?.version);
-  if (window.CGOMachineABCBridge) {
-    window.CGOMachineABCBridge.observe((packet) => {
-      try {
-        const st = packet?.result?.status || packet?.finalResult?.status;
-        if (st && window.BCGO_STATE) {
-          window.BCGO_STATE.lastAbcStatus = st;
-          window.BCGO_STATE.lastAbcAt = Date.now();
-        }
-      } catch (_) {}
-    });
-    console.log('[BCGO] Mesin ABC terhubung:', window.CGOMachineABCBridge.engineVersion);
-  } else {
-    console.warn('[BCGO] Mesin ABC belum termuat (cgo-machine-abc.js)');
+// UI BOOT MUST NOT WAIT for the optional/internal brain graph.
+// The brain loads asynchronously; chat/controls remain responsive while it boots.
+const internalBrainReady = (async () => {
+  try {
+    const adapter = await import('./cgo-ai-browser-adapter.js?v=5.4.0-ASYNC-BRAIN-BOOT-20260929');
+    if (typeof adapter.install === 'function') {
+      internalBrain = adapter.install();
+      window.CGOInternalBrain = internalBrain;
+      console.log('[BCGO] Internal CGO brain terpasang:', internalBrain?.version);
+    }
+    if (window.CGOMachineABCBridge) {
+      window.CGOMachineABCBridge.observe((packet) => {
+        try {
+          const st = packet?.result?.status || packet?.finalResult?.status;
+          if (st && window.BCGO_STATE) {
+            window.BCGO_STATE.lastAbcStatus = st;
+            window.BCGO_STATE.lastAbcAt = Date.now();
+          }
+        } catch (_) {}
+      });
+      console.log('[BCGO] Mesin ABC terhubung:', window.CGOMachineABCBridge.engineVersion);
+    } else {
+      console.warn('[BCGO] Mesin ABC belum termuat (cgo-machine-abc.js)');
+    }
+    return internalBrain;
+  } catch (err) {
+    console.warn('[BCGO] Internal brain tidak tersedia; BCGO monitor tetap berjalan:', err);
+    return null;
   }
-  }
-} catch (err) {
-  console.warn('[BCGO] Internal brain tidak tersedia; BCGO monitor tetap berjalan:', err);
-}
+})();
 
 
 const $ = id => document.getElementById(id);
@@ -1653,6 +1667,7 @@ try {
 } catch (_) {}
 
 try {
+await internalBrainReady;
 await runAutonomousEngine(state => {
     latestBCGOLiveState = state;
     liveState = state;
