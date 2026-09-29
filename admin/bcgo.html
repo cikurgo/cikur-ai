@@ -451,7 +451,13 @@ body{font-family:'Inter',sans-serif}
             <div class="text-xs text-slate-500">Kanal CGO siap · ketik atau bicara · suara event = operator wanita (MP3)</div>
           </div>
           <div class="cgo-wave-wrap" id="cgo-wave-wrap"><canvas id="cgo-mic-wave" width="600" height="28"></canvas></div>
-          <div class="cgo-interim" id="cgo-interim"></div>
+          <div class="cgo-interim" id="cgo-interim">
+            <span id="cgo-interim-text"></span>
+            <span class="cgo-interim-actions">
+              <button type="button" id="cgo-interim-send" title="Kirim">Kirim</button>
+              <button type="button" id="cgo-interim-cancel" title="Batal">Batal</button>
+            </span>
+          </div>
           <form id="chat-form" class="flex gap-2 items-center p-3 border-t border-slate-800/80">
             <button type="button" id="chat-mic" title="Bicara ke CGO" aria-label="Mikrofon"
                 class="shrink-0 w-10 h-10 rounded-lg border border-slate-700 bg-slate-900 text-cyan-300 hover:border-cyan-600 hover:text-cyan-200 flex items-center justify-center text-lg mic-pulse-ring"
@@ -947,7 +953,7 @@ function addChat(role, text, meta) {
       content.textContent = '';
       const cursor = document.createElement('span');
       cursor.className = 'cgo-stream-cursor';
-      cursor.textContent = '▍
+      cursor.textContent = '|';
       content.appendChild(cursor);
       let idx = 0;
       let stopped = false;
@@ -957,13 +963,11 @@ function addChat(role, text, meta) {
           try { cursor.remove(); } catch(_){}
           return;
         }
-        // append one char
         content.insertBefore(document.createTextNode(fullText.charAt(idx)), cursor);
         idx++;
         setTimeout(tick, 20);
       };
       setTimeout(tick, 20);
-      // skip control on bubble later via meta
       meta._streamStop = function(){
         stopped = true;
         content.textContent = fullText;
@@ -1165,13 +1169,29 @@ async function sendQuestion(question, opts) {
     setChatLiveStatus('Memahami permintaan dan membaca state BCGO yang sedang hidup…', 'working');
     try {
         let answer = null;
+        const tParse0 = performance.now();
+        // parse = waktu sampai mulai pikir (validasi teks sudah di atas)
+        const parseMs = Math.max(0, Math.round(tParse0 - t0));
+        let pikirMs = 0;
+        let formatMs = 0;
         // SATU OTAK: BCGO → Mesin ABC → Otak Internal → memori bersama lewat CGO_OTAK.ask
         if (window.CGO_OTAK && typeof window.CGO_OTAK.ask === 'function') {
             try {
                 setChatLiveStatus('Satu Otak memproses: BCGO → Mesin ABC → Otak Internal…', 'working');
+                const tThink0 = performance.now();
                 const hubRes = await window.CGO_OTAK.ask(text, { liveState });
+                pikirMs = Math.max(0, Math.round(performance.now() - tThink0));
                 if (hubRes && hubRes.answer) answer = hubRes.answer;
-            } catch (hubErr) { console.warn('[BCGO] CGO_OTAK.ask gagal, pakai jalur cadangan:', hubErr); }
+                try {
+                  var stages = document.getElementById('cgo-think-stages');
+                  if (stages) {
+                    var th = stages.querySelector('[data-stage="think"]'); if (th) { th.classList.remove('on'); th.classList.add('done'); }
+                    var co = stages.querySelector('[data-stage="compose"]'); if (co) co.classList.add('on');
+                  }
+                  var stEl = document.getElementById('cgo-think-stage');
+                  if (stEl) stEl.textContent = 'SUSUN';
+                } catch(_){}
+            } catch (hubErr) { /* silent fallback */ }
         }
         if (!answer) { // jalur cadangan (perilaku lama) bila hub belum termuat / tidak menghasilkan jawaban
         // 1) BCGO engine (telemetry + scanner + radar)
@@ -1255,12 +1275,19 @@ async function sendQuestion(question, opts) {
             }
           }
         } catch (_) {}
-        const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        const tFmt0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        // format = narasi + emosi di atas (sudah jalan); ukur sisa sampai render
+        try { formatMs = Math.max(0, Math.round(tFmt0 - (t0 + parseMs + pikirMs))); } catch(_){ formatMs = 0; }
+        const t1 = tFmt0;
         const totalMs = Math.max(0, Math.round(t1 - t0));
-        const timingStr = totalMs ? ('⚡ ' + totalMs + ' ms') : '-- ms';
+        // TTS = 0 (kebijakan MP3-only, chat tanpa TTS browser)
+        const ttsMs = 0;
+        const timingStr = totalMs
+          ? ('⚡ ' + totalMs + ' ms · parse ' + parseMs + ' · pikir ' + pikirMs + ' · format ' + formatMs + (ttsMs ? (' · tts ' + ttsMs) : ''))
+          : '-- ms';
         try {
-          const elapsedSec = (totalMs / 1000).toFixed(1);
           if (liveStatus) liveStatus.textContent = 'Selesai · ' + totalMs + ' ms';
+          if (thinkTimer) thinkTimer.textContent = totalMs + ' ms';
         } catch (_) {}
         addChat('bcgo', answer, {
           emosi: emosi,
@@ -1793,22 +1820,37 @@ await runAutonomousEngine(state => {
       } catch(_){}
       rec.onresult = (ev) => {
         try { armSilence(); } catch(_){}
-
         let interim = '', final = '';
         for (let i = ev.resultIndex; i < ev.results.length; i++) {
           const t = ev.results[i][0].transcript;
           if (ev.results[i].isFinal) final += t;
           else interim += t;
         }
-        if (input) {
-          if (final) input.value = (input.value ? input.value + ' ' : '') + final.trim();
-          else if (interim) input.placeholder = interim;
+        const draft = (final || interim || '').trim();
+        const interimEl = document.getElementById('cgo-interim');
+        const interimText = document.getElementById('cgo-interim-text');
+        if (draft) {
+          if (interimText) interimText.textContent = draft;
+          if (interimEl) interimEl.classList.add('on');
+          if (input && interim && !final) input.placeholder = interim;
+          if (input && final) input.value = final.trim();
         }
         if (final && final.trim()) {
-          // auto-send natural chat after final utterance
+          // Final: isi input, user bisa Kirim/Batal; auto-kirim setelah jeda singkat jika tidak batal
           const text = final.trim();
-          if (input) { input.value = ''; input.placeholder = 'Tanya BCGO…'; }
-          if (typeof sendQuestion === 'function') void sendQuestion(text, { modality: 'voice' });
+          if (input) input.value = text;
+          try {
+            if (window.__cgoVoiceSendTimer) clearTimeout(window.__cgoVoiceSendTimer);
+            window.__cgoVoiceSendTimer = setTimeout(function(){
+              const cur = (input && input.value || '').trim();
+              if (cur && typeof sendQuestion === 'function') {
+                if (input) { input.value = ''; input.placeholder = 'Tanya operator: status, scanner, hitung, eja…'; }
+                const ie = document.getElementById('cgo-interim');
+                if (ie) ie.classList.remove('on');
+                void sendQuestion(cur, { modality: 'voice' });
+              }
+            }, 900);
+          } catch(_){}
         }
       };
       rec.start();
@@ -2027,6 +2069,35 @@ await runAutonomousEngine(state => {
     startWave: startWave,
     stopWave: stopWave
   };
+})();
+</script>
+
+
+<script>
+/* CGO interim voice: Kirim / Batal — append */
+(function(){
+  var sendBtn = document.getElementById('cgo-interim-send');
+  var cancelBtn = document.getElementById('cgo-interim-cancel');
+  var input = document.getElementById('chat-input');
+  var interimEl = document.getElementById('cgo-interim');
+  var interimText = document.getElementById('cgo-interim-text');
+  function clearInterim(){
+    try { if (window.__cgoVoiceSendTimer) clearTimeout(window.__cgoVoiceSendTimer); } catch(_){}
+    if (interimEl) interimEl.classList.remove('on');
+    if (interimText) interimText.textContent = '';
+  }
+  if (sendBtn) sendBtn.addEventListener('click', function(){
+    var text = ((input && input.value) || (interimText && interimText.textContent) || '').trim();
+    clearInterim();
+    if (!text) return;
+    if (input) { input.value = ''; }
+    if (typeof sendQuestion === 'function') void sendQuestion(text, { modality: 'voice' });
+  });
+  if (cancelBtn) cancelBtn.addEventListener('click', function(){
+    clearInterim();
+    if (input) { input.value = ''; input.placeholder = 'Tanya operator: status, scanner, hitung, eja…'; }
+  });
+  window.CGO_INTERIM_WIRED = true;
 })();
 </script>
 
