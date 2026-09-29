@@ -238,14 +238,7 @@ export async function runAutonomousEngine(onCycleUpdate) {
   }
 
   // Coba cloud; gagal → tetap boot offline (jangan biarkan UI stuck CONNECTING)
-  // Batas waktu 8 dtk: jika Firebase/config tertahan, jangan biarkan boot menggantung selamanya.
-  const cloudOk = await Promise.race([
-    __loadCgoCloud(),
-    new Promise(resolve => setTimeout(() => {
-      if (!__cgoCloudReady) __cgoCloudError = __cgoCloudError || new Error("Pemuatan Firebase/config melewati 8 detik");
-      resolve(false);
-    }, 8000))
-  ]);
+  const cloudOk = await __loadCgoCloud();
   if (!cloudOk) {
     console.warn("[BCGO] Menjalankan tanpa Firebase:", __cgoCloudError?.message || __cgoCloudError);
   }
@@ -1407,18 +1400,6 @@ function answerQuestion(question) {
     publishToUI(safeClone(state));
   }
 
-  // Verifikasi admin gagal karena koneksi/rules: jalan dulu di mode lokal, lalu coba lagi berkala.
-  let adminRecheckTimer = null;
-  function scheduleAdminRecheck(user) {
-    clearTimeout(adminRecheckTimer);
-    adminRecheckTimer = setTimeout(() => {
-      if (stopped || authorized) return;
-      const current = adminAuth && adminAuth.currentUser;
-      if (!current || current.uid !== user.uid) return;
-      verifyAdmin(current, authEpoch).catch(() => scheduleAdminRecheck(user));
-    }, 15000);
-  }
-
   async function verifyAdmin(user, epoch) {
     if (stopped || epoch !== authEpoch) return;
     if (!user) {
@@ -1449,8 +1430,6 @@ function answerQuestion(question) {
     if (lastError && !snap) {
       // Sesi Auth tetap ada; sensor ditunda sampai verifikasi berhasil di cycle berikutnya.
       emit("OUT", "Verifikasi Super Admin tertunda (koneksi). Sesi Auth tetap dijaga — coba refresh sebentar lagi.", "SYS_AUTH_CHECK_FAILED", lastError?.message, { cycleMode: "ERROR" });
-      if (!authorized) startLocalAutonomy("Verifikasi Super Admin tertunda (koneksi/izin) — mencoba lagi otomatis.");
-      scheduleAdminRecheck(user);
       return;
     }
 
@@ -1489,9 +1468,6 @@ function answerQuestion(question) {
       });
     };
     kickSourceScan();
-    // Bersihkan timer sisa mode lokal agar tidak ada siklus ganda
-    clearTimeout(cycleTimer);
-    clearInterval(refreshTimer);
     // Rescan berkala agar pembacaan file tetap presisi (bukan sekali saja)
     if (sourceScanTimer) clearInterval(sourceScanTimer);
     sourceScanTimer = setInterval(() => {

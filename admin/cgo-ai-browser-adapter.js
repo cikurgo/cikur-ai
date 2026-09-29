@@ -35,25 +35,12 @@ async function ensureCustomerChatEngine() {
   if (window.CGO?.chatAsync) return window.CGO;
   if (!customerChatBootPromise) {
     customerChatBootPromise = (async () => {
-      const failed = [];
-      const tryLoad = async (name, loader) => {
-        try { await loader(); }
-        catch (e) { failed.push(name); console.warn("[CGO] Modul customer gagal dimuat:", name, e); }
-      };
-      // Urutan penting: 5 modul pendukung dulu, lalu inti, lalu gateway.
-      await tryLoad("boundary", () => import("../customer/cgo-customer-boundary.js"));
-      await tryLoad("memory", () => import("../customer/cgo-customer-memory.js"));
-      await tryLoad("meta", () => import("../customer/cgo-customer-meta.js"));
-      await tryLoad("planner", () => import("../customer/cgo-customer-planner.js"));
-      await tryLoad("composer", () => import("../customer/cgo-customer-composer.js"));
-      await tryLoad("reasoning", () => import("../customer/cgo-customer-reasoning.js"));
-      await tryLoad("knowledge", () => import("../customer/cgo-customer-knowledge.js"));
-      await tryLoad("conversation", () => import("../customer/cgo-customer-conversation.js"));
-      await tryLoad("discovery", () => import("../customer/cgo-customer-discovery.js"));
-      await tryLoad("guardian", () => import("../customer/cgo-customer-guardian.js"));
-      await tryLoad("gateway", () => import("../customer/cgo-customer.js"));
-      window.CGO_CUSTOMER_LOAD_STATUS = { failed, at: Date.now() };
-      if (!window.CGO?.chatAsync) customerChatBootPromise = null; // izinkan coba ulang
+      await import("../customer/cgo-customer-reasoning.js");
+      await import("../customer/cgo-customer-knowledge.js");
+      await import("../customer/cgo-customer-conversation.js");
+      await import("../customer/cgo-customer-discovery.js");
+      await import("../customer/cgo-customer-guardian.js");
+      await import("../customer/cgo-customer.js");
       return window.CGO;
     })();
   }
