@@ -105,9 +105,6 @@
           try {
             if (handle && typeof handle.stop === "function") handle.stop();
           } catch (_) {}
-          try {
-            if (global.speechSynthesis) global.speechSynthesis.cancel();
-          } catch (_) {}
         };
         Promise.resolve(handle && handle.done ? handle.done : handle)
           .catch(function () {})
@@ -169,7 +166,6 @@
             return {
               done: result.then(function (v) { resolve(v); return v; }, function (e) { resolve(false); throw e; }),
               stop: function () {
-                try { if (global.speechSynthesis) global.speechSynthesis.cancel(); } catch (_) {}
                 try {
                   document.querySelectorAll("audio[data-cgo-operator]").forEach(function (a) {
                     try { a.pause(); a.currentTime = 0; } catch (_) {}
@@ -192,7 +188,6 @@
     if (!enabled) {
       stopCurrent("mute");
       queue.length = 0;
-      try { if (global.speechSynthesis) global.speechSynthesis.cancel(); } catch (_) {}
     } else {
       pump();
     }

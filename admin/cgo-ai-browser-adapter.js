@@ -7,11 +7,12 @@ import * as Knowledge from "./cgo-ai-knowledge.js";
 import * as Investigator from "./cgo-ai-investigator.js";
 import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js";
 import * as Cognition from "./cgo-ai-cognition.js";
+import * as Guardian from "./cgo-ai-guardian.js";
 import * as Logic from "./cgo-ai-logic.js";
 import * as Memory from "./cgo-ai-memory.js";
 import { createRuntime } from "./cgo-ai-runtime-adapter.js";
 
-const VERSION = "V5.4-BROWSER-BRIDGE-2.0.0-BRAIN-PRIMARY-RADAR";
+const VERSION = "V5.5-BROWSER-BRIDGE-BRAIN-SOURCE-PATH-FIX";
 const INTERNAL_CGO_POLICY = Object.freeze({ version:"CGO-INTERNAL-APPLICATION-1", allowAutomaticExecution:false });
 
 const runtime = createRuntime({});
@@ -66,8 +67,27 @@ function now() { return new Date().toISOString(); }
 function normalizeFile(v) {
   const raw = String(v || "").trim();
   if (!raw) return null;
-  const clean = raw.split("?")[0].split("#")[0];
+  const clean = raw.split("?")[0].split("#")[0].replace(/\\/g, "/");
   return clean.substring(clean.lastIndexOf("/") + 1) || raw;
+}
+
+function normalizeSourcePath(v) {
+  const raw = String(v || "").trim();
+  if (!raw) return null;
+  let clean = raw.split("?")[0].split("#")[0].replace(/\\/g, "/");
+  clean = clean.replace(/^\.\//, "").replace(/^\.\.\//, "");
+  return clean || null;
+}
+
+function resolveInternalSourceURL(file) {
+  const raw = String(file || "").trim();
+  if (!raw) throw new Error("SOURCE_FILE_REQUIRED");
+  const clean = raw.split("?")[0].split("#")[0].replace(/\\/g, "/");
+  // BCGO lives under /admin/. Source-scan keys are repository paths; resolve them
+  // from the admin page without collapsing customer/mitra/root paths to a basename.
+  if (/^(admin|customer|mitra)\//i.test(clean)) return new URL("../" + clean, window.location.href).href;
+  if (/^(https?:|data:|blob:)/i.test(clean)) return clean;
+  return new URL(clean, window.location.href).href;
 }
 
 function token(v) {
@@ -77,13 +97,16 @@ function token(v) {
 function ensureKnowledge(state) {
   let next = knowledge;
   const files = state?.sourceScan?.sources || state?.sourceScan?.fileStates || {};
-  for (const file of Object.keys(files)) {
+  for (const rawFile of Object.keys(files)) {
+    const file = normalizeSourcePath(rawFile);
+    if (!file) continue;
     const id = `file:${file}`;
     try {
       next = Knowledge.upsertNode(next, {
         id,
         type: "FILE",
         name: file,
+        basename: normalizeFile(file),
         status: "OBSERVED",
         provenance: { source: "BCGO_SOURCE_SCAN", observedAt: now() }
       });
@@ -91,8 +114,8 @@ function ensureKnowledge(state) {
   }
   const relations = Array.isArray(state?.sourceScan?.relations) ? state.sourceScan.relations : [];
   for (const rel of relations) {
-    const from = `file:${normalizeFile(rel.from || rel.sourceFile || rel.file) || ""}`;
-    const to = `file:${normalizeFile(rel.to || rel.targetFile || rel.relatedFile) || ""}`;
+    const from = `file:${normalizeSourcePath(rel.from || rel.sourceFile || rel.file) || ""}`;
+    const to = `file:${normalizeSourcePath(rel.to || rel.targetFile || rel.relatedFile) || ""}`;
     if (!from.endsWith(":") && !to.endsWith(":") &&
         next.nodes.some(n => n.id === from) && next.nodes.some(n => n.id === to)) {
       try {
@@ -109,7 +132,7 @@ function ensureKnowledge(state) {
 }
 
 function mapEvidence(raw, sourceKind = "BCGO") {
-  const file = normalizeFile(raw?.fileName || raw?.sourceFile || raw?.file || raw?.target || raw?.source);
+  const file = normalizeSourcePath(raw?.fileName || raw?.sourceFile || raw?.file || raw?.target) || normalizeFile(raw?.fileName || raw?.sourceFile || raw?.file || raw?.target || raw?.source);
   const claim = String(raw?.claim || raw?.message || raw?.error || raw?.detail || "").trim();
   const exact = Number.isFinite(raw?.line) || Number.isFinite(raw?.lineNumber) || !!raw?.exactLineHit;
   const strength = raw?.evidenceStrength === "HIGH" ? 1 :
@@ -190,8 +213,8 @@ function buildNerveEvidence(state, target) {
     });
   }
   for (const f of (nerve.findings?.items || []).slice(0,20)) {
-    const fFile=normalizeFile(f.file || f.sourceFile || target);
-    if (fFile !== target && normalizeFile(f.targetFile) !== target) continue;
+    const fFile=normalizeSourcePath(f.file || f.sourceFile || target) || normalizeFile(f.file || f.sourceFile || target);
+    if (fFile !== target && (normalizeSourcePath(f.targetFile) || normalizeFile(f.targetFile)) !== target) continue;
     out.push({
       ...base,
       id:`NERVE:${target}:FINDING:${f.kind || f.type || "UNKNOWN"}:${f.line ?? "NA"}:${String(f.detail || f.message || "").slice(0,80)}`,
@@ -207,7 +230,7 @@ function buildNerveEvidence(state, target) {
 
 function buildNerveRelations(state, target) {
   return (state?.sourceScan?.relations || []).filter(r =>
-    normalizeFile(r.sourceFile || r.from || r.file) === target || normalizeFile(r.targetFile || r.to || r.relatedFile) === target
+    (normalizeSourcePath(r.sourceFile || r.from || r.file) || normalizeFile(r.sourceFile || r.from || r.file)) === target || (normalizeSourcePath(r.targetFile || r.to || r.relatedFile) || normalizeFile(r.targetFile || r.to || r.relatedFile)) === target
   ).slice(0,24).map((r,i) => ({
     id:`NERVE:${target}:REL:${i}:${r.sourceFile || r.from || ""}:${r.targetFile || r.to || ""}:${r.type || ""}`,
     type:"NERVE_DEPENDENCY_RELATION",
@@ -219,7 +242,7 @@ function buildNerveRelations(state, target) {
 }
 
 function upsertBCGOCase(item, state) {
-  const source = normalizeFile(item?.target || item?.source || state?.lastTelemetryFile) || "UNKNOWN";
+  const source = normalizeSourcePath(item?.target || item?.source || state?.lastTelemetryFile) || normalizeFile(item?.target || item?.source || state?.lastTelemetryFile) || "UNKNOWN";
   const caseId = String(item?.id || `BCGO-${source}`);
   let c = runtime.getCase(caseId);
 
@@ -274,9 +297,9 @@ function upsertBCGOCase(item, state) {
 
 function investigationFiles(state) {
   const sources = state?.sourceScan?.sources;
-  if (sources && typeof sources === "object") return Object.keys(sources).map(normalizeFile).filter(Boolean);
+  if (sources && typeof sources === "object") return Object.keys(sources).map(normalizeSourcePath).filter(Boolean);
   const states = state?.sourceScan?.fileStates;
-  if (states && typeof states === "object") return Object.keys(states).map(normalizeFile).filter(Boolean);
+  if (states && typeof states === "object") return Object.keys(states).map(normalizeSourcePath).filter(Boolean);
   return [];
 }
 
@@ -286,14 +309,14 @@ function createInternalProbeProvider(state) {
     sourceSurfaceComplete: state?.sourceScan?.status === "CLEAN" || state?.sourceScan?.status === "FINDINGS",
     async listFiles() { return files.slice(); },
     async readSource(file) {
-      const normalized = normalizeFile(file);
-      if (!normalized) throw new Error("SOURCE_FILE_REQUIRED");
-      const url = new URL(normalized, window.location.href).href;
+      const sourcePath = normalizeSourcePath(file);
+      if (!sourcePath) throw new Error("SOURCE_FILE_REQUIRED");
+      const url = resolveInternalSourceURL(sourcePath);
       const response = await fetch(url, {method:"GET", cache:"no-store", credentials:"same-origin"});
-      if (!response.ok) throw new Error(`SOURCE_READ_HTTP_${response.status}:${normalized}`);
+      if (!response.ok) throw new Error(`SOURCE_READ_HTTP_${response.status}:${sourcePath}`);
       const source = await response.text();
-      if (!source.trim()) throw new Error(`SOURCE_EMPTY:${normalized}`);
-      return {file:normalized, source, fingerprint:Core.contentFingerprint(source)};
+      if (!source.trim()) throw new Error(`SOURCE_EMPTY:${sourcePath}`);
+      return {file:sourcePath, source, fingerprint:Core.contentFingerprint(source)};
     }
   };
 }
@@ -419,14 +442,19 @@ function chatSourceFiles(state = {}) {
   const files = new Set(Object.keys(state?.systemOrgans || {}));
   const sources = state?.sourceScan?.sources;
   const fileStates = state?.sourceScan?.fileStates;
-  if (sources && typeof sources === "object") Object.keys(sources).forEach(f => files.add(normalizeFile(f)));
-  if (fileStates && typeof fileStates === "object") Object.keys(fileStates).forEach(f => files.add(normalizeFile(f)));
+  if (sources && typeof sources === "object") Object.keys(sources).forEach(f => files.add(normalizeSourcePath(f) || normalizeFile(f)));
+  if (fileStates && typeof fileStates === "object") Object.keys(fileStates).forEach(f => files.add(normalizeSourcePath(f) || normalizeFile(f)));
   return [...files].filter(Boolean);
 }
 
 function requestedChatFiles(q, state) {
   const files = chatSourceFiles(state);
-  return [...new Set(files.filter(file => q.includes(String(file).toLowerCase())))];
+  const raw = String(q || "").toLowerCase();
+  return [...new Set(files.filter(file => {
+    const full = String(file || "").toLowerCase();
+    const base = normalizeFile(file).toLowerCase();
+    return raw.includes(full) || raw.includes(base);
+  }))];
 }
 
 function requestedChatFile(q, state) {
@@ -460,9 +488,9 @@ function sourceRangeForText(source, needle) {
 }
 
 async function readExactSourceForWorkbench(file) {
-  const target = normalizeFile(file);
+  const target = normalizeSourcePath(file) || normalizeFile(file);
   if (!target) throw new Error("TARGET_FILE_REQUIRED");
-  const url = String(target);
+  const url = resolveInternalSourceURL(target);
   const response = await fetch(url, { method:"GET", cache:"no-store", credentials:"same-origin" });
   if (!response.ok) throw new Error(`SOURCE_HTTP_${response.status}`);
   const source = await response.text();
@@ -485,7 +513,7 @@ function emitCodeWorkbench(payload) {
 }
 
 async function openCodeWorkbench(file, context = {}) {
-  const target = normalizeFile(file);
+  const target = normalizeSourcePath(file) || normalizeFile(file);
   if (!target) return null;
   try {
     const original = await readExactSourceForWorkbench(target);
@@ -533,13 +561,13 @@ async function openCodeWorkbench(file, context = {}) {
 }
 
 function findCaseForFile(file) {
-  const normalized = normalizeFile(file);
-  const caseId = normalized ? caseIds.get(normalized) : null;
+  const normalized = normalizeSourcePath(file) || normalizeFile(file);
+  const caseId = normalized ? (caseIds.get(normalized) || caseIds.get(normalizeFile(normalized))) : null;
   return caseId ? runtime.getCase(caseId) : null;
 }
 
 function createChatCase(file, state, rawQuestion, chatContext = lastChatContext) {
-  const targetFile = normalizeFile(file);
+  const targetFile = normalizeSourcePath(file) || normalizeFile(file);
   if (!targetFile) return null;
   const existing = findCaseForFile(targetFile);
   if (existing) {
@@ -597,7 +625,7 @@ function scheduleChatInvestigation(file, state, rawQuestion, chatContext = lastC
 
 function contractGapSummary(state, file = null) {
   const gaps = Array.isArray(state?.sourceScan?.exploration?.gaps) ? state.sourceScan.exploration.gaps : [];
-  const scoped = file ? gaps.filter(g => normalizeFile(g.file || g.targetFile) === normalizeFile(file)) : gaps;
+  const scoped = file ? gaps.filter(g => { const a = normalizeSourcePath(g.file || g.targetFile) || normalizeFile(g.file || g.targetFile); const b = normalizeSourcePath(file) || normalizeFile(file); return a === b || normalizeFile(a) === normalizeFile(b); }) : gaps;
   return {all:gaps, scoped, high:scoped.filter(g=>g.severity==='HIGH'), medium:scoped.filter(g=>g.severity==='MEDIUM'), low:scoped.filter(g=>g.severity==='LOW')};
 }
 
@@ -610,7 +638,7 @@ function isSystemChatRequest(raw, analysis = {}) {
 
 function repairChatCase(targetFile, state, rawQuestion = "") {
   // Conservative: do not mutate source from chat. Open investigation + explain gates.
-  const file = normalizeFile(targetFile);
+  const file = normalizeSourcePath(targetFile) || normalizeFile(targetFile);
   if (!file) return { text: "Target perbaikan belum jelas. Sebutkan file yang dimaksud." };
   const c = scheduleChatInvestigation(file, state, rawQuestion, lastChatContext);
   const caseId = c?.caseId || lastChatCaseId;
@@ -750,19 +778,22 @@ function chatAnswer(question = {}) {
     return result;
   }
 
-  const relationFor = file => relations
+  const relationFor = file => {
+    const wanted = normalizeSourcePath(file) || normalizeFile(file);
+    return relations
     .filter(r => {
-      const a = String(r?.sourceFile || r?.from || r?.file || "").split("?")[0].split("#")[0].split("/").pop();
-      const b = String(r?.targetFile || r?.to || r?.relatedFile || "").split("?")[0].split("#")[0].split("/").pop();
-      return a === file || b === file;
+      const a = normalizeSourcePath(r?.sourceFile || r?.from || r?.file);
+      const b = normalizeSourcePath(r?.targetFile || r?.to || r?.relatedFile);
+      return a === wanted || b === wanted;
     })
     .map(r => {
-      const a = String(r?.sourceFile || r?.from || r?.file || "").split("?")[0].split("#")[0].split("/").pop();
-      const b = String(r?.targetFile || r?.to || r?.relatedFile || "").split("?")[0].split("#")[0].split("/").pop();
+      const a = normalizeSourcePath(r?.sourceFile || r?.from || r?.file);
+      const b = normalizeSourcePath(r?.targetFile || r?.to || r?.relatedFile);
       return { pair: a && b ? `${a} × ${b}` : null, status: r?.status || "OBSERVED" };
     })
     .filter(x => x.pair)
     .filter((x,i,arr) => arr.findIndex(y => y.pair === x.pair) === i);
+  };
 
   const sayStatus = () => {
     if (state?.connection?.status === "OFFLINE" || state?.firestore?.error) {
@@ -927,11 +958,48 @@ function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = nu
   };
 }
 
+function selfTest() {
+  const checks = [];
+  const check = (name, fn) => {
+    try { fn(); checks.push({name, ok:true}); }
+    catch (error) { checks.push({name, ok:false, error:String(error?.message || error)}); }
+  };
+  check("CORE_CREATE_CASE", () => { const c=Core.createCase({target:"admin/bcgo.js",source:"SELF_TEST"}); if(!c?.caseId) throw new Error("CASE_NOT_CREATED"); });
+  check("KNOWLEDGE_STORE", () => { let k=Knowledge.createKnowledgeStore(); k=Knowledge.upsertNode(k,{id:"file:admin/bcgo.js",type:"FILE"}); if(Knowledge.getStatus(k).nodes!==1) throw new Error("KNOWLEDGE_NODE_FAILED"); });
+  check("MEMORY_STORE", () => { let m=Memory.createMemory(); m=Memory.remember(m,{type:"SELF_TEST"}); if(Memory.recall(m,null,1).length!==1) throw new Error("MEMORY_FAILED"); });
+  check("INVESTIGATOR", () => { const c=Core.createCase({target:"admin/bcgo.js"}); const inv=Investigator.createInvestigation(c,Knowledge.createKnowledgeStore()); if(!inv) throw new Error("INVESTIGATION_NOT_CREATED"); });
+  check("COGNITION", () => { const r=Cognition.deliberate({evidence:[]}); if(!r?.conclusion) throw new Error("COGNITION_FAILED"); });
+  check("LOGIC", () => { const c=Core.createCase({target:"admin/bcgo.js"}); const r=Logic.evaluate(c,INTERNAL_CGO_POLICY,Knowledge.createKnowledgeStore()); if(!r?.decision) throw new Error("LOGIC_FAILED"); });
+  check("GUARDIAN", () => { const r=Guardian.authorizeAction({allowAutomaticExecution:false,rootCauseVerified:false,sourceVerified:false,contradictoryEvidence:false,unresolvedEvidence:true}); if(!r?.decision) throw new Error("GUARDIAN_FAILED"); });
+  check("RUNTIME", () => { const r=createRuntime({}); if(typeof r.detect!=="function" || typeof r.remember!=="function") throw new Error("RUNTIME_API_INCOMPLETE"); });
+  check("SOURCE_PATH_PRESERVATION", () => {
+    if(normalizeSourcePath("customer/cgo-customer.js") !== "customer/cgo-customer.js") throw new Error("CUSTOMER_PATH_COLLAPSED");
+    if(normalizeSourcePath("mitra/driver.html") !== "mitra/driver.html") throw new Error("MITRA_PATH_COLLAPSED");
+  });
+  return {version:VERSION,ok:checks.every(x=>x.ok),passed:checks.filter(x=>x.ok).length,total:checks.length,checks};
+}
+
 export function install() {
   return {
     version: VERSION,
+    selfTest,
     ingestBCGOState(state = {}) {
       latestBCGOState = clone(state);
+      // Wire supported presence/location data into the brain gateway. The resolver
+      // is deliberately state-backed: it never fabricates a location or presence.
+      setPresenceQueryResolver(async (request = {}) => {
+        const ap = latestBCGOState?.agentPresence || {};
+        const items = Array.isArray(ap.items) ? ap.items.slice() : [];
+        const verified = ap.connected === true && (ap.status === "LIVE" || ap.status === "CONNECTED" || ap.status === "READY");
+        return { ok:true, status:ap.status || "UNKNOWN", verified, items, count:items.length, source:"BCGO_STATE.agentPresence", request:clone(request) };
+      });
+      setCustomerLocationResolver((options = {}) => {
+        const loc = latestBCGOState?.customerLocation || latestBCGOState?.location || null;
+        if (!loc || !Number.isFinite(Number(loc.lat)) || !Number.isFinite(Number(loc.lng))) {
+          return { ok:false, status:"UNKNOWN", verified:false, location:null, reason:"CUSTOMER_LOCATION_NOT_AVAILABLE" };
+        }
+        return { ok:true, status:"AVAILABLE", verified:true, location:{ lat:Number(loc.lat), lng:Number(loc.lng) }, source:"BCGO_STATE", options:clone(options) };
+      });
       ensureKnowledge(state);
       const active = Array.isArray(state.activeCases) ? state.activeCases : [];
       let primary = null;

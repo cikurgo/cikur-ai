@@ -42,7 +42,9 @@
             if (global.CGOAudioQueue && typeof global.CGOAudioQueue.pause === "function") {
               global.CGOAudioQueue.pause();
             }
-            if (global.speechSynthesis) global.speechSynthesis.cancel();
+            // Do not cancel SpeechSynthesis globally here. The operator voice owns
+            // its dynamic speech lifecycle; cancelling it from the bus can cut off
+            // a valid female chat answer.
           } catch (_) {}
         }
       });

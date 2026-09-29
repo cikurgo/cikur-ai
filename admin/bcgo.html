@@ -499,11 +499,11 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-audio-queue.js?v=1.0.0-AUDIO-QUEUE"></script>
 <script src="cgo-emosi.js?v=1.1.0-EMOSI-AIRPORT"></script>
 <script src="cgo-narasi.js?v=1.0.0-NARASI"></script>
-<script src="cgo-ai-voice-operator.js?v=3.8.0-FEMALE-ONLY-AIRPORT"></script>
-<script src="cgo-machine-abc.js?v=0.9.9-OTAK-CORE-20260927"></script>
+<script src="cgo-ai-voice-operator.js?v=4.0.0-FEMALE-ID-AIRPORT-TTS-RESTORED"></script>
+<script src="cgo-machine-abc.js?v=0.9.10-PHYSICS-CORE-DOMAIN-NEUTRAL-20260930"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.7.0-BCGO-SYNC-OTAK-20260928"></script>
 <script src="cgo-abc-cognition.js?v=1.1.0-CGO-ABC-COGNITION"></script>
-<script src="cgo-otak-hub.js?v=1.3.0-UNIFIED-BRAIN-PIPELINE-20260929"></script>
+<script src="cgo-otak-hub.js?v=1.6.0-ANALYSIS-ORDER-MULTIFUNCTION-20260930"></script>
 
 <script type="module">
 import * as CGOInstruction from "./cgo-instruction.js?v=1.3.0-CONSTITUTION";
@@ -525,7 +525,7 @@ window.CGO_SVG = {
 </script>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=5.1.0-LIVE-UI-20260928';
+import { runAutonomousEngine } from './bcgo.js?v=5.2.0-NONBLOCKING-BOOT-20260930';
 
 // Bridge internal CGO brain ke BCGO_STATE (tanpa AI eksternal)
 let internalBrain = null;
@@ -533,7 +533,7 @@ let internalBrain = null;
 // The brain loads asynchronously; chat/controls remain responsive while it boots.
 const internalBrainReady = (async () => {
   try {
-    const adapter = await import('./cgo-ai-browser-adapter.js?v=5.4.0-ASYNC-BRAIN-BOOT-20260929');
+    const adapter = await import('./cgo-ai-browser-adapter.js?v=5.5.0-PATH-PRESERVE-20260930');
     if (typeof adapter.install === 'function') {
       internalBrain = adapter.install();
       window.CGOInternalBrain = internalBrain;
@@ -559,6 +559,7 @@ const internalBrainReady = (async () => {
     return null;
   }
 })();
+window.__CGO_INTERNAL_BRAIN_READY__ = internalBrainReady;
 
 
 const $ = id => document.getElementById(id);
@@ -1181,7 +1182,6 @@ async function sendQuestion(question, opts) {
     };
     setChatLiveStatus('Memahami permintaan dan membaca state BCGO yang sedang hidup…', 'working');
     try {
-        let answer = null;
         const tParse0 = performance.now();
         // parse = waktu sampai mulai pikir (validasi teks sudah di atas)
         const parseMs = Math.max(0, Math.round(tParse0 - t0));
@@ -1327,6 +1327,10 @@ async function sendQuestion(question, opts) {
     }
 }
 
+
+// Expose the module-scoped chat gateway for legacy/inline voice controls.
+// The main form remains module-scoped; only these explicit UI bridges use the global alias.
+window.CGO_BCGO_SEND_QUESTION = sendQuestion;
 
 /** Operator wanita: umumkan error/warning dengan lokasi file/jalur (natural). */
 function cgoAnnounceSystemAttention(info) {
@@ -1667,7 +1671,7 @@ try {
 } catch (_) {}
 
 try {
-await internalBrainReady;
+// Do not block BCGO LIVE on Internal Brain boot.
 await runAutonomousEngine(state => {
     latestBCGOLiveState = state;
     liveState = state;
@@ -1795,6 +1799,23 @@ await runAutonomousEngine(state => {
 
 
 <script>
+// Internal Brain attaches after BCGO LIVE has started; it never blocks UI/telemetry boot.
+(function(){
+  try {
+    if (window.__CGO_INTERNAL_BRAIN_ATTACH__) return;
+    window.__CGO_INTERNAL_BRAIN_ATTACH__ = true;
+    Promise.resolve(window.__CGO_INTERNAL_BRAIN_READY__ || null).then(function(brain){
+      if (!brain) return;
+      try {
+        if (window.BCGO_STATE && typeof brain.ingestBCGOState === 'function') brain.ingestBCGOState(window.BCGO_STATE);
+      } catch (_) {}
+      try { window.dispatchEvent(new CustomEvent('cgo-internal-brain-ready', {detail:{version:brain.version||null}})); } catch (_) {}
+    }).catch(function(){});
+  } catch (_) {}
+})();
+</script>
+
+<script>
 
 // --- Multimodal: Web Speech API (mic → teks → chat natural + suara) ---
 (function setupChatMic(){
@@ -1872,11 +1893,11 @@ await runAutonomousEngine(state => {
             if (window.__cgoVoiceSendTimer) clearTimeout(window.__cgoVoiceSendTimer);
             window.__cgoVoiceSendTimer = setTimeout(function(){
               const cur = (input && input.value || '').trim();
-              if (cur && typeof sendQuestion === 'function') {
+              if (cur && typeof window.CGO_BCGO_SEND_QUESTION === 'function') {
                 if (input) { input.value = ''; input.placeholder = 'Tanya operator: status, scanner, hitung, eja…'; }
                 const ie = document.getElementById('cgo-interim');
                 if (ie) ie.classList.remove('on');
-                void sendQuestion(cur, { modality: 'voice' });
+                void window.CGO_BCGO_SEND_QUESTION(cur, { modality: 'voice' });
               }
             }, 900);
           } catch(_){}
@@ -2008,14 +2029,12 @@ await runAutonomousEngine(state => {
   if (offBtn) offBtn.addEventListener('click', function () {
     try {
       if (window.CGOAudioQueue) window.CGOAudioQueue.setEnabled(false);
-      if (window.speechSynthesis) window.speechSynthesis.cancel();
       mark(offBtn, true);
     } catch (_) {}
   });
   if (pauseBtn) pauseBtn.addEventListener('click', function () {
     try {
       if (window.CGOAudioQueue) window.CGOAudioQueue.pause();
-      if (window.speechSynthesis) window.speechSynthesis.cancel();
       mark(pauseBtn, true);
     } catch (_) {}
   });
@@ -2120,7 +2139,7 @@ await runAutonomousEngine(state => {
     clearInterim();
     if (!text) return;
     if (input) { input.value = ''; }
-    if (typeof sendQuestion === 'function') void sendQuestion(text, { modality: 'voice' });
+    if (typeof window.CGO_BCGO_SEND_QUESTION === 'function') void window.CGO_BCGO_SEND_QUESTION(text, { modality: 'voice' });
   });
   if (cancelBtn) cancelBtn.addEventListener('click', function(){
     clearInterim();
