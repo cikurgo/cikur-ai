@@ -334,11 +334,13 @@
     const ensureAudio=async()=>{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error("Web Audio API tidak tersedia di browser ini");if(!audio){audio=new AC({latencyHint:"interactive"});master=audio.createGain();master.gain.value=AUDIO_GAIN;const comp=audio.createDynamicsCompressor();comp.threshold.value=-18;comp.knee.value=12;comp.ratio.value=8;comp.attack.value=.003;comp.release.value=.12;master.connect(comp);comp.connect(audio.destination);audio.onstatechange=()=>{if(sound&&audio.state==='running'){audioReady=true;startAmbient()}}}if(audio.state!=="running")await audio.resume();if(audio.state!=="running")throw new Error("AudioContext belum running");audioReady=true;return audio};
     const ambientProfile=s=>s==="error"?{a:110,b:220,c:440,p:.62,g:.12,h:.034}:s==="warn"?{a:132,b:264,c:528,p:1.25,g:.095,h:.027}:s==="processing"?{a:148,b:296,c:592,p:2.4,g:.072,h:.022}:{a:120,b:240,c:480,p:.88,g:.055,h:.018};
     const setAmbientState=s=>{ambientState=["error","warn","processing"].includes(s)?s:"normal";if(!audioReady||!audio||audio.state!=="running"||!ambientNodes.length)return;const q=ambientProfile(ambientState),now=audio.currentTime;try{ambientNodes[0].osc.frequency.setTargetAtTime(q.a,now,.12);ambientNodes[1].osc.frequency.setTargetAtTime(q.b,now,.12);ambientNodes[2].osc.frequency.setTargetAtTime(q.c,now,.12);ambientNodes[3].osc.frequency.setTargetAtTime(q.p,now,.18);ambientNodes[0].gain.gain.setTargetAtTime(q.g,now,.14);ambientNodes[1].gain.gain.setTargetAtTime(q.h,now,.14);ambientNodes[2].gain.gain.setTargetAtTime(q.h*.5,now,.14)}catch(_){} };
-    const startAmbient=()=>{if(!audioReady||!audio||audio.state!=="running"||ambientNodes.length)return;const c=audio,q=ambientProfile(ambientState),bus=c.createBiquadFilter();bus.type="lowpass";bus.frequency.value=1250;bus.Q.value=.45;bus.connect(master);const mk=(f,g,t)=>{const o=c.createOscillator(),gn=c.createGain();o.type=t;o.frequency.value=f;gn.gain.value=g;o.connect(gn);gn.connect(bus);o.start();return{osc:o,gain:gn}};const x=mk(q.a,q.g,"sine"),y=mk(q.b,q.h,"triangle"),z=mk(q.c,q.h*.5,"sine"),l=c.createOscillator(),lg=c.createGain();l.frequency.value=q.p;lg.gain.value=q.g*.55;l.connect(lg);lg.connect(x.gain.gain);l.start();ambientNodes=[x,y,z,{osc:l,gain:lg}]};
+    // Ambient drone / robot hum DIMATIKAN PERMANEN
+    const startAmbient=()=>{ /* no-op: hanya suara wanita operator */ };
     const stopAmbient=()=>{for(const n of ambientNodes){try{n.osc.stop()}catch(_){}}ambientNodes=[]};
     const noise=(ctx,when,duration,level,center=1900)=>{try{if(!noiseBuffer){const len=Math.floor(ctx.sampleRate*.18);noiseBuffer=ctx.createBuffer(1,len,ctx.sampleRate);const d=noiseBuffer.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*.85}const src=ctx.createBufferSource(),bp=ctx.createBiquadFilter(),g=ctx.createGain();src.buffer=noiseBuffer;bp.type='bandpass';bp.frequency.value=center;bp.Q.value=2.2;g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.004);g.gain.exponentialRampToValueAtTime(.0001,when+duration);src.connect(bp);bp.connect(g);g.connect(master);src.start(when);src.stop(when+duration+.01)}catch(_){} };
     const scheduleVoice=(ctx,when,f,d,type="sine",level=.20,glide=null,pan=0)=>{const o=ctx.createOscillator(),g=ctx.createGain(),fl=ctx.createBiquadFilter(),p=ctx.createStereoPanner?ctx.createStereoPanner():null;o.type=type;o.frequency.setValueAtTime(f,when);if(glide)o.frequency.exponentialRampToValueAtTime(glide,when+d*.72);fl.type="lowpass";fl.frequency.value=Math.max(1200,f*4.5);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.008);g.gain.exponentialRampToValueAtTime(Math.max(.0001,level*.34),when+d*.60);g.gain.exponentialRampToValueAtTime(.0001,when+d);o.connect(fl);fl.connect(g);if(p){p.pan.value=pan;g.connect(p);p.connect(master)}else g.connect(master);o.start(when);o.stop(when+d+.025)};
-    const playNeuralSound=(kind="tick",force=false)=>{try{if(window.CGOOperatorVoice&&typeof window.CGOOperatorVoice.isChatSpeaking==="function"&&window.CGOOperatorVoice.isChatSpeaking())return false;}catch(_){}if(!sound||!audioReady||!audio||!master||audio.state!=="running")return false;try{const q={start:[110,.52,.26,"sine",220],A:[180,.30,.20,"sine",270],B:[240,.34,.20,"triangle",360],C:[320,.38,.20,"triangle",480],D:[430,.44,.22,"sine",650],done:[520,.68,.24,"sine",1040],ok:[300,.58,.21,"sine",900],warn:[180,.50,.21,"triangle",132],bad:[108,.72,.26,"sawtooth",68],tick:[210,.18,.12,"sine",315]}[kind]||[210,.18,.12,"sine",315];const when=Math.max(audio.currentTime+.012,soundQueueUntil);scheduleVoice(audio,when,q[0],q[1],q[3],q[2],q[4],-.10);scheduleVoice(audio,when+.022,q[0]*2,q[1]*.76,"sine",q[2]*.42,q[4]*1.28,.12);if(kind!=="bad")noise(audio,when,.055,.026,kind==="warn"?1200:kind==="done"?3000:1900);if(kind==="bad")noise(audio,when,.13,.055,650);soundQueueUntil=when+q[1]+(kind==="bad"||kind==="done"?.14:.06);return true}catch(_){return false}};
+    // ROBOT / NEURAL BEEP DIMATIKAN PERMANEN — hanya suara wanita operator yang diizinkan
+    const playNeuralSound=(kind="tick",force=false)=>{ return false; };
     const armSound=async()=>{try{await ensureAudio();sound=true;soundQueueUntil=0;startAmbient();setAmbientState("normal");playNeuralSound("start",true);const b=hud.querySelector("#cgoAbcHudSound");if(b){b.dataset.on="1";b.textContent="🔊 SYSTEM AUDIO · STANDBY"}return true}catch(e){sound=false;const b=hud.querySelector("#cgoAbcHudSound");if(b){b.dataset.on="0";b.textContent="🔇 AUDIO UNAVAILABLE"}console.warn("[CGO ABC AUDIO]",e);return false}};
     const disarmSound=()=>{sound=false;audioReady=false;soundQueueUntil=0;stopAmbient();try{audio?.suspend?.()}catch(_){}const b=hud.querySelector("#cgoAbcHudSound");if(b){b.dataset.on="0";b.textContent="🔇 SOUND OFF"}};
     const recoverAudio=async()=>{if(!sound||!audio)return false;try{if(audio.state!=="running")await audio.resume();if(audio.state==="running"){audioReady=true;startAmbient();setAmbientState(ambientState);return true}}catch(_){}return false};
@@ -394,20 +396,20 @@
           modules.machineAbc = abcOk;
           modules.abcCognition = !!(window.CGOAbcCognition);
         }
-        if (abcOk) { console.log("[CGO BOOT] Mesin ABC + kognisi formal siap untuk Chat CGO"); if (window.CGO_ENABLE_ABC_HUD === true) installAbcObservability(); }
+        if (abcOk) {
+          console.log("[CGO BOOT] Mesin ABC + kognisi formal siap untuk Chat CGO");
+          // HUD neural + suara robot/beep DIMATIKAN PERMANEN — hanya suara wanita operator yang diizinkan
+          // (window.CGO_ENABLE_ABC_HUD === true) → tidak pernah di-install lagi
+        }
         else console.warn("[CGO BOOT] Mesin ABC tidak terdeteksi (chat tetap normal)");
       } catch (_abc) {}
       // Pre-warm semantic embedding (gratis, non-blocking) — bantu knowledge matching
+      // ensureSemanticIndex sengaja dihapus (fungsi tidak ada di knowledge) → anti error
       try {
         if (window.CGOSemantic && typeof window.CGOSemantic.ensureReady === "function") {
           window.CGOSemantic.ensureReady().then(function (ok) {
-            if (ok && window.CGO_CUSTOMER && window.CGO_CUSTOMER.knowledge &&
-                typeof window.CGO_CUSTOMER.knowledge.ensureSemanticIndex === "function") {
-              return window.CGO_CUSTOMER.knowledge.ensureSemanticIndex();
-            }
-          }).then(function (idx) {
-            if (idx && idx.ok) console.log("[CGO BOOT] Semantic index siap · docs", idx.indexed);
-            else if (window.CGOSemantic && window.CGOSemantic.isReady()) console.log("[CGO BOOT] Semantic engine siap (index menyusul)");
+            if (ok) console.log("[CGO BOOT] Semantic engine siap (fallback keyword bila model belum)");
+            else console.log("[CGO BOOT] Semantic fallback keyword (model belum siap)");
           }).catch(function () {});
         }
       } catch (_sem) {}

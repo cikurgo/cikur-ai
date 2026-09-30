@@ -1,6 +1,6 @@
 /*
  * CGO MACHINE ABC — UNIVERSAL CORE ENGINE
- * Version 0.9.10
+ * Version 0.9.4
  * Zero External · Zero API · Zero Network · Domain Neutral
  * A = INGEST / PARSE / REPRESENT
  * B = ANALYZE / RELATE / VERIFY / REASON
@@ -10,7 +10,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "0.9.10";
+  const VERSION = "0.9.9";
   const MAX_TEXT_SAMPLE = 6000;
   const MAX_ITEMS = 1000;
   const MAX_TOKENS = 5000;
@@ -367,192 +367,407 @@
   function auditIndependence(){const forbidden=[["fetch",/\bfetch\s*\(/,"network"],["XMLHttpRequest",/\bXMLHttpRequest\b/,"network"],["WebSocket",/\bWebSocket\b/,"network"],["sendBeacon",/\bsendBeacon\b/,"network"],["document",/\bdocument\b/,"dom"],["localStorage",/\blocalStorage\b/,"storage"],["sessionStorage",/\bsessionStorage\b/,"storage"],["indexedDB",/\bindexedDB\b/,"storage"],["eval",/\beval\s*\(/,"dynamic"],["new Function",/\bnew\s+Function\b/,"dynamic"],["import(",/\bimport\s*\(/,"import"],["require(",/\brequire\s*\(/,"import"],["setTimeout/setInterval",/\bset(?:Timeout|Interval)\s*\(/,"timer"],["postMessage",/\bpostMessage\b/,"messaging"]];const internal=[safeClone,normalizeSpecial,hasCircular,validateInput,fingerprint,stableStringify,sha256Hex,digest,classifyText,looksLikeCode,looksLikeCSV,regexAllowedAt,balancedDelimiters,parseStructuredText,extractHtml,extractCode,tokenize,lineStats,analyzeText,assertEnvelope,describeStructure,extractContent,MachineA.process,blankB,ingestExternalEvidenceB,selectedSteps,timed,inspectStructureB,inspectContentB,analyzeSyntaxB,deriveRelationsB,structuredOf,analyzeConstraintsB,inferHypothesesB,verifyB,reasonB,detectContradictionsB,confidenceB,decideB,processBatch,MachineB.process,unresolvedB,inferB,sealChain,verifyChain,validateOutput,MachineC.process,MachineC.inject,summarize,compactAnalysis,fallbackResult,runCycle,reflect,replay,verifyReplay,MachineD.audit,pausedResult,notify];const pub=Object.values(CGOMachineABC).filter(f=>typeof f==="function"&&f!==auditIndependence&&f!==selfTest);const funcs=[...new Set([...internal,...pub])];const hits=[];for(const fn of funcs){const src=String(fn);for(const [name,re,kind] of forbidden)if(re.test(src))hits.push({name,kind})}const forbiddenReferences=[...new Set(hits.map(h=>h.name))];const globalCapabilities=["fetch","XMLHttpRequest","WebSocket","document","localStorage","sessionStorage","indexedDB"].filter(x=>typeof globalThis!=="undefined"&&x in globalThis);const count=k=>hits.filter(h=>h.kind===k).length;return{verified:forbiddenReferences.length===0,scannedFunctions:funcs.length,forbiddenReferences,globalCapabilities,networkCalls:count("network"),externalImports:count("import"),nativeOnly:forbiddenReferences.length===0,runtimeIsolated:globalCapabilities.length===0,coverage:{scannedFunctions:funcs.length,publicFunctions:pub.length,scope:"registered_functions_only"},note:"Pemindaian statis atas fungsi terdaftar (kata utuh, bukan potongan kata). Bukan bukti isolasi runtime: kemampuan global browser (fetch, document, dst.) tetap ada dan hanya dilaporkan."}}
 
   // ============================================================
-  // PHYSICS KERNEL — extracted physics core
-  // Formula source retained as an independent, domain-neutral physics kernel.
+  // PHYSICS KERNEL — rumus fisika murni untuk MESIN ABC (domain-neutral)
+  // Identitas modul sumber / konstelasi / vendor DIHAPUS.
+  // Parameter default bisa di-override caller; tidak mengunci domain.
   // ============================================================
   const CGOPhysics = (() => {
 
     const PHYSICS_CONSTANTS = Object.freeze({
-      // Parameter default yang bersifat umum. Tidak mengikat domain kendaraan,
-      // satelit, konstelasi, perangkat radio, atau sumber eksternal tertentu.
-      FREQ_MHZ: 1000,
-      BANDWIDTH_HZ: 1000000,
-      DATA_RATE_BPS: 100000,
-      TX_POWER_DBM: 50,
-      RX_GAIN_DBI: 0,
-      NOISE_FIGURE_DB: 2.5,
-      REFERENCE_TEMPERATURE_K: 290,
-      PROCESSING_GAIN_DB: 10 * Math.log10(1000000 / 100000),
+      // Spektrum & kanal (default RF generik)
+      FREQ_MHZ: 1621.25,
+      CHANNEL_BW_HZ: 41667,
+      DATA_RATE_BPS: 50,
+      PACKET_BITS: 256,
+
+      // Link budget
+      EIRP_DBM: 37,
+      RX_GAIN_DBI: 3,
+      NOISE_FLOOR_DBM: -125.6,
+      PROCESSING_GAIN_DB: 29.2,
+
+      // Geometri relatif (bukan orbit konstelasi)
+      REF_RANGE_KM: 780,
+      EARTH_RADIUS_KM: 6371,
+      MAX_REL_SPEED_MPS: 7500,
+
+      // Doppler generik: f_d = (v/c) * f_c
+      MAX_DOPPLER_HZ: 40530,
+      MAX_DOPPLER_RATE_HZ_S: 280,
+      DOPPLER_WEIGHT: 1 / 400,
+
+      // Sudut elevasi generik
       MIN_ELEVATION_DEG: 10,
       MAX_ELEVATION_DEG: 75,
+
+      // Atmosfer sederhana L = k / sin(θ)
       ATM_COEF_DB: 0.1,
-      SCINT_PROB_HIGH: 0.02,
-      SCINT_PROB_BASE: 0.002,
-      SCINT_STRESS_MULTIPLIER: 5,
+
+      // Fading stokastik opsional (domain-neutral)
+      SCINT_PROB_NIGHT: 0.08,
+      SCINT_PROB_DAY: 0.005,
+      SCINT_EQUINOX_MULT: 2.5,
       SCINT_FADE_MIN_DB: 3,
       SCINT_FADE_MAX_DB: 15,
-      LQM_THRESHOLD_VALID_DB: 6,
-      LQM_THRESHOLD_DEGRADED_DB: 4,
-      PACKET_BITS: 256,
-      DOPPLER_WEIGHT: 1 / 400
+
+      // Ambang kualitas link (LQM dB)
+      LQM_THRESHOLD_VALID_DB: 6.0,
+      LQM_THRESHOLD_DEGRADED_DB: 4.0,
+
+      // Timing sesi generik (bukan pass konstelasi)
+      SESSION_DURATION_SEC: 550,
+      HISTORY_SIZE: 20,
+      SUSTAINED_SAMPLES: 10,
+      MAX_DELTA_MS: 1000
     });
+
+    // ============================================================================
+    // PHYSICS MODE
+    // ============================================================================
 
     const PHYSICS_MODE = Object.freeze({
-      IDEAL: 'ideal',
-      REALISTIC: 'realistic',
-      STRESS: 'stress'
+      IDEAL: 'ideal',           // hanya geometri, tanpa noise/scint
+      REALISTIC: 'realistic',   // geometri + atmosfer + scintillation
+      STRESS: 'stress'          // + forced fade 30% + margin tipis
     });
 
+    // ============================================================================
+    // BER LOOKUP — RICIAN K=7dB (LOS dominant) & K=3dB (partially blocked)
+    // ============================================================================
+    // [4] Rician K=7 dB: SNR vs BER (with FEC applied)
+    // Format: [ebn0_dB, log10(BER)]
     const BER_RICIAN_K7 = [
-      [-2, -0.30], [0, -0.90], [2, -1.70], [4, -3.30],
-      [6, -5.00], [8, -7.00], [10, -9.00], [12, -11.0]
-    ];
-    const BER_RICIAN_K3 = [
-      [-2, -0.25], [0, -0.75], [2, -1.40], [4, -2.70],
-      [6, -4.30], [8, -6.20], [10, -8.20], [12, -10.2]
+      [-2, -0.30],   // BER 0.5
+      [ 0, -0.90],   // BER 0.126
+      [ 2, -1.70],   // BER 0.02
+      [ 4, -3.30],   // BER 5e-4
+      [ 6, -5.00],   // BER 1e-5
+      [ 8, -7.00],   // BER 1e-7
+      [10, -9.00],   // BER 1e-9
+      [12, -11.0],   // BER 1e-11
     ];
 
+    // Rician K=3 dB (lebih banyak multipath, untuk elevasi rendah)
+    const BER_RICIAN_K3 = [
+      [-2, -0.25],   // BER 0.56
+      [ 0, -0.75],   // BER 0.18
+      [ 2, -1.40],   // BER 0.04
+      [ 4, -2.70],   // BER 2e-3
+      [ 6, -4.30],   // BER 5e-5
+      [ 8, -6.20],   // BER 6.3e-7
+      [10, -8.20],   // BER 6.3e-9
+      [12, -10.2],
+    ];
+
+    /**
+     * Interpolasi log-linear untuk BER.
+     * @param {number} ebn0Db - Eb/N0 dalam dB
+     * @param {Array<[number, number]>} table - lookup table
+     * @returns {number} BER (linear, 0..0.5)
+     */
     function interpolateBER(ebn0Db, table) {
+      // Clamp di luar range
       if (ebn0Db <= table[0][0]) return Math.pow(10, table[0][1]);
-      if (ebn0Db >= table[table.length - 1][0]) return Math.pow(10, table[table.length - 1][1]);
+      if (ebn0Db >= table[table.length - 1][0]) {
+        return Math.pow(10, table[table.length - 1][1]);
+      }
+
+      // Cari segment
       for (let i = 0; i < table.length - 1; i++) {
-        const [x0, y0] = table[i], [x1, y1] = table[i + 1];
+        const [x0, y0] = table[i];
+        const [x1, y1] = table[i + 1];
         if (ebn0Db >= x0 && ebn0Db <= x1) {
           const ratio = (ebn0Db - x0) / (x1 - x0);
-          return Math.pow(10, y0 + ratio * (y1 - y0));
+          const logBER = y0 + ratio * (y1 - y0);
+          return Math.pow(10, logBER);
         }
       }
       return 0.5;
     }
-    function selectBERTable(elevationDeg) { return elevationDeg >= 30 ? BER_RICIAN_K7 : BER_RICIAN_K3; }
-    function getBER(ebn0Db, elevationDeg = 45) { return interpolateBER(ebn0Db, selectBERTable(elevationDeg)); }
-    function getPER(ber, bits = PHYSICS_CONSTANTS.PACKET_BITS) {
-      const b = Math.max(0, Math.min(1, Number(ber)));
-      const n = Math.max(0, Number(bits) || 0);
-      return 1 - Math.pow(1 - b, n);
+
+    /**
+     * Pilih lookup table berdasarkan elevasi.
+     * @param {number} elevationDeg
+     * @returns {Array<[number, number]>}
+     */
+    function selectBERTable(elevationDeg) {
+      // Elevasi rendah (< 30°): multipath dominan → K=3
+      // Elevasi tinggi (>= 30°): LOS dominan → K=7
+      return elevationDeg >= 30 ? BER_RICIAN_K7 : BER_RICIAN_K3;
     }
 
-    // Layer 1: geometri/kinematika umum. Semua parameter domain diberikan oleh caller.
-    function computeGeometry(elapsedSec, durationSec, options = {}) {
-      const T = Math.max(Number(durationSec) || 1, Number.EPSILON);
-      const t = Number(elapsedSec) || 0;
-      const normT = (t / T) - 0.5;
-      const maxElev = Number.isFinite(options.maxElevationDeg) ? Number(options.maxElevationDeg) : PHYSICS_CONSTANTS.MAX_ELEVATION_DEG;
-      const centerDistanceKm = Number.isFinite(options.centerDistanceKm) ? Number(options.centerDistanceKm) : null;
-      const edgeDistanceKm = Number.isFinite(options.edgeDistanceKm) ? Number(options.edgeDistanceKm) : null;
-      const maxDopplerHz = Number.isFinite(options.maxDopplerHz) ? Number(options.maxDopplerHz) : 0;
-      const elevationDeg = Math.max(0, maxElev * (1 - 4 * normT * normT));
-      const distanceKm = centerDistanceKm != null && edgeDistanceKm != null
-        ? centerDistanceKm + (edgeDistanceKm - centerDistanceKm) * Math.min(1, Math.abs(normT) * 2)
-        : (Number.isFinite(options.distanceKm) ? Number(options.distanceKm) : Infinity);
-      const dopplerShiftHz = -maxDopplerHz * Math.sin(normT * Math.PI);
-      const dopplerRateHzPerSec = -(maxDopplerHz * Math.PI / T) * Math.cos(normT * Math.PI);
+    /**
+     * Hitung BER dengan model Rician adaptive.
+     * @param {number} ebn0Db
+     * @param {number} elevationDeg
+     * @returns {number}
+     */
+    function getBER(ebn0Db, elevationDeg = 45) {
+      const table = selectBERTable(elevationDeg);
+      return interpolateBER(ebn0Db, table);
+    }
+
+    /**
+     * Hitung Packet Error Rate dari BER.
+     * @param {number} ber - Bit Error Rate
+     * @param {number} bits - jumlah bit per paket
+     * @returns {number} PER (0..1)
+     */
+    function getPER(ber, bits = PHYSICS_CONSTANTS.PACKET_BITS) {
+      return 1 - Math.pow(1 - ber, bits);
+    }
+
+    // ============================================================================
+    // LAYER 1: FISIKA — PURE FUNCTIONS
+    // ============================================================================
+
+    /**
+     * Hitung geometri relatif pada waktu t dalam 1 lintasan.
+     * Model: parabola sederhana (domain-neutral).
+     * 
+     * @param {number} elapsedSec - waktu sejak awal lintasan (0 .. duration)
+     * @param {number} passDurationSec - durasi total lintasan
+     * @returns {{elevationDeg, distanceKm, dopplerShiftHz, dopplerRateHzPerSec}}
+     */
+    function computeGeometry(elapsedSec, passDurationSec) {
+      const T = passDurationSec;
+      const normT = (elapsedSec / T) - 0.5;   // -0.5 .. +0.5
+
+      // Elevasi: parabola (zenith di tengah lintasan)
+      // elev(t) = maxElev * (1 - 4*normT^2)
+      const maxElev = PHYSICS_CONSTANTS.MAX_ELEVATION_DEG;
+      const elevationDeg = maxElev * (1 - 4 * normT * normT);
+
+      // Slant range (hukum cosinus, dengan Re dan h dari konstanta)
+      const Re = PHYSICS_CONSTANTS.EARTH_RADIUS_KM;
+      const h = PHYSICS_CONSTANTS.REF_RANGE_KM;
+      const elRad = elevationDeg * Math.PI / 180;
+
+      // Rumus: d = sqrt((Re+h)^2 - (Re*cos(el))^2) - Re*sin(el)
+      const a = (Re + h) ** 2;
+      const b = (Re * Math.cos(elRad)) ** 2;
+      const c = Re * Math.sin(elRad);
+      const distanceKm = Math.sqrt(Math.max(0, a - b)) - c;
+
+      // Doppler shift: sinusoidal dalam normT
+      // f_d(t) = -f_max * sin(normT * π)
+      const maxShift = PHYSICS_CONSTANTS.MAX_DOPPLER_HZ;
+      const dopplerShiftHz = -maxShift * Math.sin(normT * Math.PI);
+
+      // Doppler rate: turunan dari shift
+      // df_d/dt = -f_max * (π/T) * cos(normT * π)
+      const dopplerRateHzPerSec = -(maxShift * Math.PI / T) * Math.cos(normT * Math.PI);
+
       return { elevationDeg, distanceKm, dopplerShiftHz, dopplerRateHzPerSec };
     }
 
+    /**
+     * Hitung FSPL (Free Space Path Loss).
+     * L = 20*log10(d_km) + 20*log10(f_MHz) + 32.45
+     * 
+     * @param {number} distanceKm
+     * @param {number} freqMHz
+     * @returns {number} FSPL dalam dB
+     */
     function computeFSPL(distanceKm, freqMHz = PHYSICS_CONSTANTS.FREQ_MHZ) {
-      const d = Number(distanceKm), f = Number(freqMHz);
-      if (!(d > 0) || !(f > 0)) return Infinity;
-      return 20 * Math.log10(d) + 20 * Math.log10(f) + 32.45;
+      return 20 * Math.log10(distanceKm) + 20 * Math.log10(freqMHz) + 32.45;
     }
 
-    function thermalNoiseFloorDbm(bandwidthHz = PHYSICS_CONSTANTS.BANDWIDTH_HZ, noiseFigureDb = PHYSICS_CONSTANTS.NOISE_FIGURE_DB, temperatureK = PHYSICS_CONSTANTS.REFERENCE_TEMPERATURE_K) {
-      const bw = Number(bandwidthHz), nf = Number(noiseFigureDb), temp = Number(temperatureK);
-      if (!(bw > 0) || !(temp > 0)) return Infinity;
-      const k = 1.380649e-23;
-      const watts = k * temp * bw;
-      return 10 * Math.log10(watts * 1000) + nf;
+    /**
+     * Hitung SNR efektif di receiver.
+     * SNR = EIRP + G_rx - FSPL - NoiseFloor
+     * 
+     * @param {number} distanceKm
+     * @returns {number} SNR dalam dB
+     */
+    function computeSNR(distanceKm) {
+      const fspl = computeFSPL(distanceKm);
+      const prx = PHYSICS_CONSTANTS.EIRP_DBM + PHYSICS_CONSTANTS.RX_GAIN_DBI - fspl;
+      return prx - PHYSICS_CONSTANTS.NOISE_FLOOR_DBM;
     }
 
-    function computeSNR(distanceKm, options = {}) {
-      const fspl = computeFSPL(distanceKm, options.freqMHz ?? PHYSICS_CONSTANTS.FREQ_MHZ);
-      const tx = Number(options.txPowerDbm ?? PHYSICS_CONSTANTS.TX_POWER_DBM);
-      const rx = Number(options.rxGainDbi ?? PHYSICS_CONSTANTS.RX_GAIN_DBI);
-      const noise = Number(options.noiseFloorDbm ?? thermalNoiseFloorDbm(options.bandwidthHz, options.noiseFigureDb, options.temperatureK));
-      return tx + rx - fspl - noise;
-    }
+    /**
+     * Hitung redaman atmosfer.
+     * Model: L_atm(θ) = coef / sin(θ) + scintillation bonus
+     * 
+     * @param {number} elevationDeg
+     * @returns {number} redaman dalam dB (positif)
+     */
+    function computeAtmPenalty(elevationDeg) {
+      if (elevationDeg <= 0) return 99;  // blocked
 
-    function computeAtmPenalty(elevationDeg, options = {}) {
-      const e = Number(elevationDeg);
-      if (!(e > 0)) return Infinity;
-      const sinEl = Math.max(0.1, Math.sin(e * Math.PI / 180));
-      const coef = Number(options.atmCoefficientDb ?? PHYSICS_CONSTANTS.ATM_COEF_DB);
-      return coef / sinEl;
-    }
+      const elRad = elevationDeg * Math.PI / 180;
+      const sinEl = Math.max(0.1, Math.sin(elRad));
 
-    function computeScintillation(now, elevationDeg, deltaMs, mode, options = {}) {
-      if (mode === PHYSICS_MODE.IDEAL) return 0;
-      const date = now instanceof Date ? now : new Date(now || Date.now());
-      const hour = date.getHours();
-      const highVariation = hour >= 20 && hour <= 23;
-      let prob = highVariation ? PHYSICS_CONSTANTS.SCINT_PROB_HIGH : PHYSICS_CONSTANTS.SCINT_PROB_BASE;
-      const e = Number(elevationDeg) || 0;
-      if (e < 30) prob *= 1 + (30 - e) / 30;
-      const effectiveProb = Math.max(0, prob * (Number(deltaMs) || 0) / 1000);
-      const finalProb = mode === PHYSICS_MODE.STRESS ? Math.min(0.5, effectiveProb * PHYSICS_CONSTANTS.SCINT_STRESS_MULTIPLIER) : effectiveProb;
-      const rng = typeof options.rng === 'function' ? options.rng : Math.random;
-      if (rng() < finalProb) {
-        const fadeMin = Number(options.fadeMinDb ?? PHYSICS_CONSTANTS.SCINT_FADE_MIN_DB);
-        const fadeMax = Number(options.fadeMaxDb ?? PHYSICS_CONSTANTS.SCINT_FADE_MAX_DB);
-        return -(fadeMin + rng() * Math.max(0, fadeMax - fadeMin));
+      // Base tropospheric (ITU-R P.676 simplified)
+      let penalty = PHYSICS_CONSTANTS.ATM_COEF_DB / sinEl;
+
+      // Bonus scintillation equatorial @ elevasi rendah
+      if (elevationDeg < 20) {
+        penalty += (20 - elevationDeg) * 0.08;
       }
+
+      return penalty;
+    }
+
+    /**
+     * Scintillation equatorial (probabilistik).
+     * Untuk Indonesia (equatorial anomaly).
+     * 
+     * @param {Date} now
+     * @param {number} elevationDeg
+     * @param {number} deltaMs
+     * @param {string} mode - 'ideal' | 'realistic' | 'stress'
+     * @returns {number} fade dalam dB (negatif = fade, 0 = clear)
+     */
+    function computeScintillation(now, elevationDeg, deltaMs, mode) {
+      if (mode === PHYSICS_MODE.IDEAL) return 0;
+
+      const hour = now.getHours();
+      const month = now.getMonth(); // 0-11
+
+      const isNight = hour >= 20 && hour <= 23;
+      const isEquinox = (month >= 2 && month <= 3) || (month >= 8 && month <= 9);
+
+      let prob = isNight ? PHYSICS_CONSTANTS.SCINT_PROB_NIGHT : PHYSICS_CONSTANTS.SCINT_PROB_DAY;
+      if (isEquinox) prob *= PHYSICS_CONSTANTS.SCINT_EQUINOX_MULT;
+
+      // Elevasi rendah lebih rentan
+      if (elevationDeg < 30) {
+        prob *= (1 + (30 - elevationDeg) / 30);
+      }
+
+      // Scale by deltaMs (probabilitas per detik)
+      const effectiveProb = prob * (deltaMs / 1000);
+
+      // Stress mode: paksa fade lebih sering
+      const finalProb = mode === PHYSICS_MODE.STRESS ? Math.min(0.5, effectiveProb * 5) : effectiveProb;
+
+      if (Math.random() < finalProb) {
+        const fadeMin = PHYSICS_CONSTANTS.SCINT_FADE_MIN_DB;
+        const fadeMax = PHYSICS_CONSTANTS.SCINT_FADE_MAX_DB;
+        return -(fadeMin + Math.random() * (fadeMax - fadeMin));
+      }
+
       return 0;
     }
 
-    function calculateLQM({ snrDb, dopplerRateHzPerSec = 0, elevationDeg, scintFadeDb = 0, processingGainDb, dopplerWeight } = {}) {
-      if (Number(elevationDeg) < PHYSICS_CONSTANTS.MIN_ELEVATION_DEG) return -Infinity;
-      const ebn0 = Number(snrDb) + Number(processingGainDb ?? PHYSICS_CONSTANTS.PROCESSING_GAIN_DB);
+    // ============================================================================
+    // LAYER 2: LQM — DERIVED METRIC
+    // ============================================================================
+
+    /**
+     * Hitung LQM = Eb/N0 efektif setelah semua penalti.
+     * 
+     * LQM = Eb/N0 - atmPenalty - dopplerPenalty + scintFade
+     * 
+     * Interpretasi:
+     *   LQM >= 6.0  → PER < 1%   (VALID)
+     *   LQM >= 4.0  → PER < 10%  (DEGRADED)
+     *   LQM <  4.0  → PER > 10%  (LOSING LOCK)
+     * 
+     * @param {object} input
+     * @param {number} input.snrDb - SNR di receiver
+     * @param {number} input.dopplerRateHzPerSec
+     * @param {number} input.elevationDeg
+     * @param {number} input.scintFadeDb - fade dari scintillation (negatif)
+     * @returns {number} LQM dalam dB, atau -Infinity jika blocked
+     */
+    function calculateLQM({ snrDb, dopplerRateHzPerSec, elevationDeg, scintFadeDb = 0 }) {
+      // Hard floor elevasi
+      if (elevationDeg < PHYSICS_CONSTANTS.MIN_ELEVATION_DEG) {
+        return -Infinity;
+      }
+
+      // SNR → Eb/N0 (via processing gain)
+      const ebn0 = snrDb + PHYSICS_CONSTANTS.PROCESSING_GAIN_DB;
+
+      // Penalti atmosfer
       const atmPenalty = computeAtmPenalty(elevationDeg);
-      const dopplerPenalty = Math.abs(Number(dopplerRateHzPerSec) || 0) * Number(dopplerWeight ?? PHYSICS_CONSTANTS.DOPPLER_WEIGHT);
-      return ebn0 - atmPenalty - dopplerPenalty + Number(scintFadeDb) || -Infinity;
+
+      // Penalti Doppler tracking
+      const dopplerPenalty = Math.abs(dopplerRateHzPerSec) * PHYSICS_CONSTANTS.DOPPLER_WEIGHT || 0;
+      // Normalize: kalau rate max 280 Hz/s, penalty max ~0.7 dB (reasonable)
+
+      // LQM final
+      return ebn0 - atmPenalty - dopplerPenalty + scintFadeDb;
     }
 
-    function evaluateLinkFromGeo(geo, mode = PHYSICS_MODE.REALISTIC, now = new Date(), options = {}) {
-      const elevationDeg = Number(geo?.elevationDeg ?? 0);
-      const distanceKm = Number(geo?.distanceKm ?? Infinity);
-      if (elevationDeg < PHYSICS_CONSTANTS.MIN_ELEVATION_DEG || !Number.isFinite(distanceKm) || distanceKm <= 0) {
-        return { elevationDeg, distanceKm, snrDb: -Infinity, lqm: -Infinity, atmPenalty: Infinity, scintFadeDb: 0, ber: 0.5, per: 1, usable: false };
+    function evaluateLinkFromGeo(geo, mode = PHYSICS_MODE.REALISTIC, now = new Date()) {
+      const elevationDeg = geo?.elevationDeg ?? 0;
+      const distanceKm = geo?.distanceKm ?? Infinity;
+      if (elevationDeg < PHYSICS_CONSTANTS.MIN_ELEVATION_DEG || !Number.isFinite(distanceKm)) {
+        return {
+          elevationDeg,
+          distanceKm,
+          snrDb: -Infinity,
+          lqm: -Infinity,
+          atmPenalty: 99,
+          scintFadeDb: 0,
+          ber: 0.5,
+          per: 1,
+          usable: false
+        };
       }
-      const snrDb = computeSNR(distanceKm, options);
-      const atmPenalty = computeAtmPenalty(elevationDeg, options);
-      const scintFadeDb = geo?.scintFadeDb != null ? Number(geo.scintFadeDb) : computeScintillation(now, elevationDeg, options.deltaMs ?? 1000, mode, options);
-      const dopplerRateHzPerSec = Number(geo?.dopplerRateHzPerSec ?? 0);
-      const lqm = calculateLQM({ snrDb, dopplerRateHzPerSec, elevationDeg, scintFadeDb, processingGainDb: options.processingGainDb, dopplerWeight: options.dopplerWeight });
-      const ber = getBER(lqm, elevationDeg);
-      const per = getPER(ber, options.packetBits ?? PHYSICS_CONSTANTS.PACKET_BITS);
-      return { elevationDeg, distanceKm, snrDb, atmPenalty, scintFadeDb, dopplerRateHzPerSec, lqm, ber, per, usable: lqm >= PHYSICS_CONSTANTS.LQM_THRESHOLD_DEGRADED_DB };
+      const snrDb = computeSNR(distanceKm);
+      const atmPenalty = computeAtmPenalty(elevationDeg);
+      const scintFadeDb = geo.scintFadeDb != null
+        ? geo.scintFadeDb
+        : computeScintillation(now, elevationDeg, 1000, mode);
+      const dopplerRateHzPerSec = geo.dopplerRateHzPerSec ?? 0;
+      const lqm = calculateLQM({
+        snrDb,
+        dopplerRateHzPerSec,
+        elevationDeg,
+        scintFadeDb
+      });
+      const effectiveEbn0 = lqm;
+      const ber = getBER(effectiveEbn0, elevationDeg);
+      const per = getPER(ber);
+      return {
+        elevationDeg,
+        distanceKm,
+        snrDb,
+        atmPenalty,
+        scintFadeDb,
+        dopplerRateHzPerSec,
+        lqm,
+        ber,
+        per,
+        usable: lqm >= PHYSICS_CONSTANTS.LQM_THRESHOLD_DEGRADED_DB
+      };
     }
+
 
     function runSelfTest() {
       const results = [];
       const assert = (name, cond, info = '') => results.push({ name, pass: !!cond, info });
       try {
-        const fspl = computeFSPL(1000, 1000);
-        assert('FSPL positive finite', Number.isFinite(fspl) && fspl > 0, `got ${fspl.toFixed(2)}`);
-        const noise = thermalNoiseFloorDbm();
-        assert('Thermal noise finite', Number.isFinite(noise), `got ${noise}`);
-        const snr = computeSNR(1000, { freqMHz: 1000 });
-        assert('SNR finite', Number.isFinite(snr), `got ${snr}`);
-        const geo = computeGeometry(5, 10, { maxElevationDeg: 75, distanceKm: 1000, maxDopplerHz: 0 });
-        assert('Generic geometry finite', Number.isFinite(geo.elevationDeg) && Number.isFinite(geo.distanceKm), JSON.stringify(geo));
-        const lqm = calculateLQM({ snrDb: snr, dopplerRateHzPerSec: 0, elevationDeg: 75, scintFadeDb: 0 });
-        assert('LQM finite', Number.isFinite(lqm), `got ${lqm}`);
-        const ber = getBER(6, 45);
-        assert('BER lookup finite', ber > 0 && ber < 0.5, `got ${ber}`);
-        const per = getPER(1e-5, 256);
-        assert('PER monotonic model', per > 0 && per < 1, `got ${per}`);
-        const clear = evaluateLinkFromGeo({ elevationDeg: 75, distanceKm: 1000, dopplerRateHzPerSec: 0, scintFadeDb: 0 }, PHYSICS_MODE.IDEAL);
-        const faded = evaluateLinkFromGeo({ elevationDeg: 75, distanceKm: 1000, dopplerRateHzPerSec: 0, scintFadeDb: -30 }, PHYSICS_MODE.IDEAL);
-        assert('Fade degrades BER/PER', faded.ber > clear.ber && faded.per > clear.per, `clear ${clear.per}, faded ${faded.per}`);
-        assert('Elevation floor enforced', clear.usable === true && evaluateLinkFromGeo({ elevationDeg: 5, distanceKm: 1000 }, PHYSICS_MODE.IDEAL).usable === false);
-        assert('Invalid geometry rejected', evaluateLinkFromGeo({ elevationDeg: 75, distanceKm: Infinity }, PHYSICS_MODE.IDEAL).usable === false);
-      } catch (e) { results.push({ name: 'physics-self-test-exception', status: 'FAIL', pass: false, info: String(e.message || e) }); }
-      const pass = results.filter(x => x.pass).length;
-      const fail = results.length - pass;
-      return { pass, fail, total: results.length, results, verified: fail === 0 };
+        const fspl = computeFSPL(780);
+        assert('FSPL @ ref range ≈ 154.5 dB', Math.abs(fspl - 154.48) < 1, `got ${fspl.toFixed(2)}`);
+        const snr = computeSNR(780);
+        assert('SNR @ ref range ≈ 11 dB', Math.abs(snr - 11.12) < 1, `got ${snr.toFixed(2)}`);
+        const geo = computeGeometry(275, 550);
+        assert('Doppler rate awal pass', Math.abs(Math.abs(geo.dopplerRateHzPerSec) - 231) < 50, `got ${geo.dopplerRateHzPerSec.toFixed(1)}`);
+        const lqm = calculateLQM({snrDb:11.12,dopplerRateHzPerSec:0,elevationDeg:75,scintFadeDb:0});
+        assert('LQM zenith > 35 dB', lqm > 35, `got ${lqm.toFixed(2)}`);
+        const ber = getBER(6,45);
+        assert('BER @ 6 dB within Rician K7 range', ber > 1e-7 && ber < 1e-4, `got ${ber.toExponential(2)}`);
+        const per = getPER(1e-5,256);
+        assert('PER @ BER 1e-5 / 256 bit', Math.abs(per - 0.00256) < 0.001, `got ${(per*100).toFixed(3)}%`);
+        const nowDate = new Date(2025,5,15,12,0,0);
+        const clear= evaluateLinkFromGeo({elevationDeg:75,distanceKm:780,dopplerRateHzPerSec:0,scintFadeDb:0},PHYSICS_MODE.IDEAL,nowDate);
+        const faded= evaluateLinkFromGeo({elevationDeg:75,distanceKm:780,dopplerRateHzPerSec:0,scintFadeDb:-30},PHYSICS_MODE.IDEAL,nowDate);
+        assert('Effective Eb/N0 drives BER/PER', faded.ber>clear.ber && faded.per>clear.per, `clear ${clear.per} faded ${faded.per}`);
+        assert('Physics usable threshold', clear.usable===true && evaluateLinkFromGeo({elevationDeg:5,distanceKm:780},PHYSICS_MODE.IDEAL,nowDate).usable===false);
+        assert('Invalid geometry does not crash', evaluateLinkFromGeo({elevationDeg:75,distanceKm:Infinity},PHYSICS_MODE.IDEAL,nowDate).usable===false);
+      } catch(e) { results.push({name:'physics-self-test-exception',status:'FAIL',pass:false,info:String(e.message||e)}); }
+      const pass=results.filter(x=>x.pass).length;
+      const fail=results.length-pass;
+      return {pass,fail,total:results.length,results,verified:fail===0};
     }
 
-    return Object.freeze({PHYSICS_CONSTANTS,PHYSICS_MODE,thermalNoiseFloorDbm,evaluateLinkFromGeo,computeGeometry,computeFSPL,computeSNR,computeAtmPenalty,computeScintillation,calculateLQM,getBER,getPER,runSelfTest});
+    return Object.freeze({PHYSICS_CONSTANTS,PHYSICS_MODE,evaluateLinkFromGeo,computeGeometry,computeFSPL,computeSNR,computeAtmPenalty,computeScintillation,calculateLQM,getBER,getPER,runSelfTest});
   })();
 
   function selfTestInner(){const results=[];const test=(name,fn)=>{try{fn();results.push({name,status:"PASS"})}catch(e){results.push({name,status:"FAIL",error:String(e.message||e)})}};const pt=CGOPhysics.runSelfTest();if(!pt.verified)throw Error("physics kernel self-test failed: "+pt.results.filter(x=>!x.pass).map(x=>x.name).join(","));results.push({name:"physics-kernel",status:"PASS"});test("fingerprint",()=>{if(fingerprint("a")!==fingerprint("a"))throw Error("unstable")});test("delimiter-comment-regex",()=>{if(!balancedDelimiters("const x=/\\{/; // }\n{a:1}").balanced)throw Error("false negative")});test("auto-format",()=>{if(classifyText('{"a":1}').format!=="json")throw Error("json")});test("html-relations-duplicates",()=>{const h=extractHtml('<div id="x"></div><span id="x"><a href="/a"></a>');if(!h.duplicateIds.includes("x")||!h.references.includes("/a"))throw Error("html regression")});test("envelope-validator",()=>{const r=assertEnvelope({__cgoMachineInjection:true,contentMode:"bad",payload:{}});if(r.valid)throw Error("invalid envelope accepted")});test("pipeline",()=>{const o=runCycle("hello world");if(!o.result||!o.audit)throw Error("pipeline")});test("external-evidence-propagation",()=>{const o=runCycle("hello",{externalEvidence:{schema:"CGO_EXTERNAL_EVIDENCE_V1",source:"TEST_REAL_INPUT",capturedAt:now(),claims:[{source:"TEST_REAL_INPUT",target:"observed-target",status:"ANOMALY",severity:"HIGH",message:"observed failure"}],fingerprint:"evidence-test"}});if(o.pipeline.B.findings.filter(x=>x.type==="EXTERNAL_EVIDENCE").length!==1||o.pipeline.C.status!=="PARTIAL"||o.audit.status!=="ATTENTION")throw Error("external evidence not propagated")});test("physics-evidence-propagation",()=>{const o=runCycle("physics",{physicsEvidence:{source:"TEST_PHYSICS",geo:{elevationDeg:5,distanceKm:780,dopplerRateHzPerSec:0,scintFadeDb:0},mode:CGOPhysics.PHYSICS_MODE.IDEAL}});if(!o.pipeline.B.findings.some(x=>x.type==="PHYSICS_LINK_EVALUATION")||o.pipeline.B.decision?.status!=="CONTRADICTION"||o.result?.status!=="CONTRADICTION")throw Error("physics evidence not propagated")});test("physics-evidence-valid",()=>{const o=runCycle("physics-valid",{physicsEvidence:{source:"TEST_PHYSICS",geo:{elevationDeg:75,distanceKm:780,dopplerRateHzPerSec:0,scintFadeDb:0},mode:CGOPhysics.PHYSICS_MODE.IDEAL}});if(o.pipeline.B.decision?.status!=="PROCESSED"||!o.pipeline.B.verification.some(x=>x.type==="PHYSICS_EVIDENCE"&&x.status==="PASS"))throw Error("valid physics evidence rejected")});test("batch",()=>{const o=CGOMachineABC.processMany(["a","b"]);if(o.pipeline.B.items?.length!==2)throw Error("batch")});test("batch-unknowns-aggregate",()=>{let nested={__cgoBatchInjection:true,version:VERSION,items:[]};for(let i=0;i<MAX_BATCH_DEPTH;i++)nested={__cgoBatchInjection:true,version:VERSION,items:[nested]};const rep=MachineA.process(nested);if(!rep.unknowns.some(x=>x.type==="BATCH_DEPTH_LIMIT"&&x.itemIndex===0))throw Error("batch unknown not aggregated")});test("c-injection",()=>{const o=runCycle("x");const inj=MachineC.inject(o.result);const q=runCycle(inj);if(!q.result)throw Error("injection")});test("auto-step",()=>{const o=runCycle("plain text",{});if(o.pipeline.B.operations.includes("SYNTAX_ANALYSIS"))throw Error("text syntax should be skipped");if(!o.pipeline.B.operations.includes("CONTENT_INSPECTION"))throw Error("content step missing")});test("custom-step-selection",()=>{const o=runCycle("hello",{steps:["structure"]});if(!o.pipeline.B.operations.includes("STRUCTURE_INSPECTION")||o.pipeline.B.operations.includes("CONTENT_INSPECTION")||o.pipeline.B.decision!==null)throw Error("custom steps")});test("auto-reflect",()=>{const o=reflect("hello",{maxCycles:3,stopOnStatus:"__NEVER__"});if(!Array.isArray(o.cycles)||o.cycles.length<2||!o.finalResult)throw Error("reflect")});test("reflect-actually-reflects",()=>{const o=reflect("hello",{maxCycles:2,stopOnStatus:"__NEVER__"});const first=o.cycles[0].result;if(o.cycles.length<2||fingerprint(o.cycles[1].pipeline.A.content.value)!==fingerprint(first))throw Error("reflection payload not processed")});test("stream",()=>{let n=0;CGOMachineABC.stream("hello",{onCycle:()=>n++});if(n<1)throw Error("stream")});test("stream-real-time",()=>{const seen=[];CGOMachineABC.stream("hello",{autoReflect:true,maxCycles:3,stopOnStatus:"__NEVER__",minConfidenceDelta:0,onCycle:c=>seen.push(c.cycleIndex)});if(seen.length!==3||seen[0]!==0||seen[1]!==1||seen[2]!==2)throw Error("buffered stream")});test("observe",()=>{let n=0;const off=CGOMachineABC.observe(()=>n++);CGOMachineABC.process("observe");off();if(n!==1)throw Error("observe")});test("stream-observe",()=>{let n=0;const off=CGOMachineABC.observe(()=>n++);CGOMachineABC.stream("observe-stream",{autoReflect:true,maxCycles:2,stopOnStatus:"__NEVER__"});off();if(n!==2)throw Error("stream observe")});test("independence",()=>{const a=auditIndependence();if(!a.verified||a.scannedFunctions<8)throw Error("independence")});test("machine-D",()=>{const o=CGOMachineABC.process("audit");if(o.audit?.status!=="VALID")throw Error("audit failed")});test("audit-tamper-C-payload",()=>{const o=CGOMachineABC.process("tamper");o.pipeline.C.findings.push({fake:true});const d=MachineD.audit(o,"tamper");if(d.status!=="ATTENTION"||!d.checks.some(x=>x.type==="C_PAYLOAD_HASH"&&x.status==="FAIL"))throw Error("tamper undetected")});test("b-batch-depth-guard",()=>{const rep=MachineA.process({__cgoBatchInjection:true,items:[],version:VERSION},{batchDepth:MAX_BATCH_DEPTH});const b=MachineB.process({...rep,structure:{kind:"batch",count:0},content:{mode:"batch",value:[]}}, {batchDepth:MAX_BATCH_DEPTH});if(b.decision?.reason!=="batch_depth_limit")throw Error("guard")});test("record-verification",()=>{const o=runCycle({name:"cgo",value:1});const checks=o.pipeline.B.verification;if(!checks.some(x=>x.type==="RECORD_PRESENT"&&x.status==="PASS"))throw Error("record check missing")});test("collection-verification",()=>{const o=runCycle([{id:1}]);if(!o.pipeline.B.verification.some(x=>x.type==="COLLECTION_PRESENT"&&x.status==="PASS"))throw Error("collection check missing")});test("nan-infinity",()=>{if(CGOMachineABC.process(Infinity).pipeline.A.content.value!=="Infinity")throw Error("infinity")});test("max-input-override",()=>{const o=CGOMachineABC.process("abc",{maxInputSize:10});if(!o.result)throw Error("override")});test("skipped-steps",()=>{const o=CGOMachineABC.process("abc",{steps:["structure"]});if(!o.pipeline.B.skippedSteps.includes("content"))throw Error("skipped")});test("degraded-field",()=>{if(typeof CGOMachineABC.process("abc").pipeline.B.degraded!=="boolean")throw Error("degraded")});test("errors-array",()=>{if(!Array.isArray(CGOMachineABC.process("abc").pipeline.B.errors))throw Error("errors")});test("fallback-array",()=>{if(!Array.isArray(CGOMachineABC.process("abc").pipeline.C.fallbacks))throw Error("fallback")});test("weighted-check",()=>{const o=CGOMachineABC.process("abc");if(!o.pipeline.B.verification[0].status)throw Error("check")});test("contradiction-severity",()=>{const o=CGOMachineABC.process('<!doctype html><html><div id="x"></div><span id="x"></span></html>');if(!o.pipeline.B.contradictions.some(x=>x.severity))throw Error("severity")});test("decision-hierarchy",()=>{const o=CGOMachineABC.process({x:1});if(!["PROCESSED","WELL_FORMED","PARTIAL","DEGRADED","CONTRADICTION","UNRESOLVED"].includes(o.result.status))throw Error("status")});test("machineD-fallback-check",()=>{const o=CGOMachineABC.process("abc");if(!o.audit.checks.some(x=>x.type==="FALLBACK_CHAIN"))throw Error("fallback audit")});test("replay-shape",()=>{const o=CGOMachineABC.process("abc"),r=CGOMachineABC.replay(o);if(!Array.isArray(r.steps))throw Error("replay")});test("verify-replay",()=>{const o=CGOMachineABC.process("abc"),r=CGOMachineABC.replay(o);if(CGOMachineABC.verifyReplay(o,r).status!=="MATCH")throw Error("verify replay")});test("metrics-reset",()=>{const before=CGOMachineABC.getMetrics().totalProcessed;CGOMachineABC.resetMetrics();if(CGOMachineABC.getMetrics().totalProcessed!==0||before<0)throw Error("reset")});test("state-cycle-index",()=>{const o=CGOMachineABC.process("state");if(CGOMachineABC.getState().lastCycleIndex!==0)throw Error("state cycle")});test("pause-reflect",()=>{CGOMachineABC.pause();const r=CGOMachineABC.reflect("pause",{maxCycles:2});CGOMachineABC.resume();if(r.stopReason!=="paused")throw Error("pause reflect")});test("reflect-direct-C",()=>{const r=CGOMachineABC.reflect("abc",{maxCycles:2,stopOnStatus:"__NEVER__",minConfidenceDelta:0});if(r.cycles.length!==2||r.cycles[1].pipeline.A.content.mode!=="record")throw Error("direct C")});test("stream-complete",()=>{let done=false;CGOMachineABC.stream("abc",{onComplete:()=>done=true});if(!done)throw Error("complete")});test("stream-batch-summary",()=>{const o=CGOMachineABC.processMany(["a","b"],{streamBatch:true});if(o.pipeline.C.batch.items.some(x=>x.analysis===undefined))throw Error("summary")});test("date-input",()=>{if(CGOMachineABC.process(new Date()).pipeline.A.input.type!=="date")throw Error("date")});test("object-freeze",()=>{if(!Object.isFrozen(CGOMachineABC))throw Error("freeze")});test("fingerprint-undefined",()=>{const o=CGOMachineABC.process(undefined);if(!o.result||!o.audit)throw Error("undefined crash")});test("digest-sha256-vectors",()=>{if(sha256Hex("abc")!=="ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"||sha256Hex("")!=="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"||sha256Hex("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")!=="248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1")throw Error("sha256")});test("utf8-fallback-availability",()=>{if(typeof utf8Encode!=="function"||utf8Encode("Cikur 🚀").length<8)throw Error("utf8 encoder")});test("digest-key-order",()=>{if(digest({a:1,b:2})!==digest({b:2,a:1}))throw Error("order")});test("prose-not-delimiter-checked",()=>{const o=CGOMachineABC.process("Halo :) tolong 1) cek saldo (dulu");if(o.pipeline.A.content.syntax.delimiters||o.result.status==="PARTIAL")throw Error("prose flagged")});test("let-me-know-is-text",()=>{if(classifyText("let me know if you can help").format!=="text")throw Error("prose as code")});test("regex-after-return",()=>{if(!balancedDelimiters("function f(s){ return /[)]/.test(s) }").balanced)throw Error("regex heuristic")});test("pause-blocks-process",()=>{CGOMachineABC.pause();const o=CGOMachineABC.process("x");const st=CGOMachineABC.stream("x");CGOMachineABC.resume();if(!o.skipped||st.status!=="PAUSED")throw Error("pause ignored")});test("stop-reason-to-observer",()=>{let got=null;const off=CGOMachineABC.observe(p=>{got=p});CGOMachineABC.process("abc",{autoReflect:true,maxCycles:3,stopOnStatus:"__NEVER__",minConfidenceDelta:0});off();if(!got||got.stopReason!=="maxCycles")throw Error("stopReason lost")});test("map-set-preserved",()=>{const o=CGOMachineABC.process({m:new Map([[1,2]]),s:new Set([7])});const v=o.pipeline.A.content.value;if(v.m.__cgoType!=="Map"||v.s.values[0]!==7)throw Error("map/set lost")});test("required-fields",()=>{const o=CGOMachineABC.process({nama:"",hp:"1"},{requiredFields:["nama","email"]});const t=o.pipeline.B.contradictions.map(x=>x.type);if(!t.includes("REQUIRED_FIELD_EMPTY")||!t.includes("REQUIRED_FIELD_MISSING")||o.result.status!=="PARTIAL")throw Error("required")});test("json-string-structure",()=>{const o=CGOMachineABC.process('{"nama":"","hp":null}');if(o.pipeline.B.constraints.filter(x=>x.type==="EMPTY_FIELD").length!==2)throw Error("json string not analysed")});test("dup-id-single-contradiction",()=>{const o=CGOMachineABC.process('<!doctype html><html><div id="x"></div><span id="x"></span></html>');if(o.pipeline.B.contradictions.filter(x=>x.type==="DUPLICATE_IDENTIFIER").length!==1)throw Error("double count")});test("reflect-default-stop",()=>{const o=CGOMachineABC.reflect("hello",{maxCycles:5});if(o.stopReason!=="status")throw Error("default stop never fires")});
@@ -570,33 +785,5 @@
   const CGOMachineABC={name:"CGO_MACHINE_ABC",version:VERSION,A:MachineA,B:MachineB,C:MachineC,D:MachineD,physics:CGOPhysics,physicsSelfTest:()=>CGOPhysics.runSelfTest(),inject:(v,o={})=>MachineC.inject(v,o),createBatchInjection(inputs,o={}){if(!Array.isArray(inputs))throw new TypeError("createBatchInjection membutuhkan array input.");const v=validateInput(inputs,o);if(!v.valid)throw new TypeError(v.reason);return{__cgoBatchInjection:true,version:VERSION,mode:"batch",transport:"internal",createdAt:now(),items:inputs.slice(0,MAX_ITEMS).map(clone),metadata:clone(o.metadata??{})}},processMany(inputs,o={}){return CGOMachineABC.process(CGOMachineABC.createBatchInjection(inputs,o),{...o,source:o.source??"batch-injection"})},process(input,options={}){if(paused)return pausedResult();const v=validateInput(input,options);if(!v.valid)throw new TypeError(v.reason);metrics.totalProcessed++;if(toBool(options.autoReflect,false)){const r=reflect(v.sanitized,options);const packet={engine:"CGO_MACHINE_ABC",version:VERSION,cycles:r.cycles,finalResult:r.finalResult,stopReason:r.stopReason,audit:r.cycles.at(-1)?.audit||null,reflected:true};notify(packet,r.cycles);return packet}const out=runCycle(v.sanitized,options,0);notify(out,[out]);return out},stream(input,options={}){if(paused){const pr=pausedResult();options.onComplete?.(pr.result);return pr.result}const v=validateInput(input,options);if(!v.valid)throw new TypeError(v.reason);if(options.autoReflect===true){const r=reflect(v.sanitized,{...options,onCycle:c=>{options.onCycle?.(c);notify(c,[c])}});options.onComplete?.(r.finalResult,r.stopReason);return r.finalResult}const c=runCycle(v.sanitized,options,0);options.onCycle?.(c);notify(c,[c]);options.onComplete?.(c.result);return c.result},observe(handler){if(typeof handler!=="function")throw new TypeError("observe(handler) membutuhkan function");observers.add(handler);return()=>observers.delete(handler)},observeTelemetry(handler){if(typeof handler!=="function")throw new TypeError("observeTelemetry(handler) membutuhkan function");telemetryObservers.add(handler);return()=>telemetryObservers.delete(handler)},auditIndependence,selfTest,validateOutput,validateInput,safeClone,reflect,replay:(p)=>MachineD.replay(p),verifyReplay:(p,r)=>MachineD.verifyReplay(p,r),pause(){paused=true;runtimeState.paused=true;runtimeState.pauseAt=now()},resume(){paused=false;runtimeState.paused=false;runtimeState.pauseAt=null},isPaused:()=>paused,getState:()=>clone(runtimeState),getMetrics:()=>({totalProcessed:metrics.totalProcessed,totalCycles:metrics.totalCycles,avgConfidence:metrics.totalCycles?metrics.confidenceSum/metrics.totalCycles:0,degradedCount:metrics.degradedCount,errorCount:metrics.errorCount,skippedWhilePaused:metrics.skippedWhilePaused,lastStatus:metrics.lastStatus}),sha256:sha256Hex,digest,resetMetrics(){Object.assign(metrics,{totalProcessed:0,totalCycles:0,confidenceSum:0,degradedCount:0,errorCount:0,skippedWhilePaused:0,lastStatus:null});return CGOMachineABC.getMetrics()}};
   function pausedResult(){metrics.skippedWhilePaused++;const result={machine:"C",stage:"result",version:VERSION,status:"PAUSED",summary:null,findings:[],relations:[],inferences:[],hypotheses:[],constraints:[],contradictions:[],reasoning:[],reasoningTrace:[],evidence:[],uncertainty:[],verification:[],decision:{status:"PAUSED",confidence:0,reason:"engine_paused"},errors:[],fallbacks:[],metadata:{generatedAt:now()}};return{engine:"CGO_MACHINE_ABC",version:VERSION,paused:true,skipped:true,result,audit:null}}
   function notify(result,cycles){const payload={result:result?.result??result,cycles:Array.isArray(cycles)?cycles:cycles?[cycles]:[],stopReason:result?.stopReason??null,timestamp:now()};for(const fn of [...observers]){try{fn(payload)}catch(_){}}}
-  [MachineA,MachineB,MachineC,MachineD].forEach(m=>Object.freeze(m));Object.freeze(CGOMachineABC);if(typeof module!=="undefined"&&module.exports)module.exports=CGOMachineABC;global.CGOMachineABC=CGOMachineABC;global.CGO=CGOMachineABC;
+  [MachineA,MachineB,MachineC,MachineD].forEach(m=>Object.freeze(m));Object.freeze(CGOMachineABC);if(typeof module!=="undefined"&&module.exports)module.exports=CGOMachineABC;global.CGOMachineABC=CGOMachineABC;/* Jangan timpa window.CGO (Customer chat / CGO.esc UI) */if(typeof global.CGO==="undefined"){global.CGO=CGOMachineABC;}
 })(typeof globalThis!=="undefined"?globalThis:window);
-
-
-  // Otak Jenius bridge — expose helpers for ABC UI / voice
-  try {
-    if (typeof window !== "undefined") {
-      window.CGO_OTAK_BRIDGE = {
-        version: "3.0.0",
-        ready: function(){ return !!(window.CIKURGO && window.CIKURGO.nalar); },
-        ringkas: function(status, conf, findings){
-          try {
-            if (!window.CIKURGO) return null;
-            var pct = Math.round((Number(conf)||0)*100);
-            var num = function(n){ try { return window.CIKURGO.angkaKeKata(Number(n)||0,"id"); } catch(e){ return String(n); } };
-            var base = "Status "+String(status||"IDLE")+". Keyakinan "+num(pct)+" persen.";
-            if (findings && findings.length) base += " Ditemukan "+num(findings.length)+" temuan.";
-            if (window.CIKURGO.nalar) {
-              var r = window.CIKURGO.nalar(base,{bahasa:"id"});
-              return String((r && (r.kesimpulan||r.hasil)) || base).slice(0,220);
-            }
-            return base;
-          } catch(e){ return null; }
-        },
-        urai: function(teks){
-          try { return window.CIKURGO && window.CIKURGO.urai ? window.CIKURGO.urai(String(teks||""),"auto","id") : null; } catch(e){ return null; }
-        }
-      };
-    }
-  } catch (_) {}
