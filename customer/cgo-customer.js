@@ -2,25 +2,36 @@
  * CIKUR GO — CUSTOMER CGO MAIN GATEWAY
  * ------------------------------------------------------------
  * File    : cgo-customer.js
- * Version : 1.1.0-customer-gateway
+ * Version : 1.2.1-pipeline-cikur-bridge
  *
  * Peran:
  *   Gerbang utama Customer CGO.
  *
- * Pipeline:
+ * Pipeline (v1.2 — wired, additive, anti-regresi):
  *   Customer Message
  *        ↓
- *   Conversation
+ *   Boundary (soft topic gate)
+ *        ↓
+ *   Conversation (mood / topic / personality)
+ *        ↓
+ *   Reasoning (natural language + constraints)
+ *        ↓
+ *   Memory suggest → Planner → Meta
  *        ↓
  *   Knowledge
  *        ↓
  *   Discovery (jika diperlukan)
  *        ↓
- *   Response Candidate
+ *   Composer (susun teks akhir)
  *        ↓
- *   Guardian
+ *   Guardian (truth filter)
+ *        ↓
+ *   Memory ingest
  *        ↓
  *   Customer Response
+ *
+ * Layer opsional: jika modul belum load, langkah itu di-skip
+ * dan alur lama tetap jalan (tidak ada regresi keras).
  *
  * Prinsip:
  *   - Internal JavaScript gateway.
@@ -35,7 +46,7 @@
 
     window.CGO_CUSTOMER = window.CGO_CUSTOMER || {};
 
-    const VERSION = "1.1.0-customer-gateway";
+    const VERSION = "1.2.1-pipeline-cikur-bridge";
 
     const EVENTS = Object.freeze({
         READY: "ready",
@@ -78,6 +89,12 @@
         lastDiscovery: null,
 
         lastGuard: null,
+
+        lastBoundary: null,
+        lastReasoning: null,
+        lastPlan: null,
+        lastMeta: null,
+        lastComposer: null,
 
         pendingDiscovery: null,
 
@@ -202,6 +219,42 @@
         return window.CGO_CUSTOMER.guardian || null;
     }
 
+    function getBoundaryModule() {
+        return window.CGO_CUSTOMER.boundary || null;
+    }
+
+    function getReasoningModule() {
+        return window.CGO_CUSTOMER.reasoning || null;
+    }
+
+    function getPlannerModule() {
+        return window.CGO_CUSTOMER.planner || null;
+    }
+
+    function getMetaModule() {
+        return window.CGO_CUSTOMER.meta || null;
+    }
+
+    function getComposerModule() {
+        return window.CGO_CUSTOMER.composer || null;
+    }
+
+    function getMemoryModule() {
+        return window.CGO_CUSTOMER.memory || null;
+    }
+
+    /*
+     * MESIN ABC — formal cognition bridge untuk jalur Chat CGO.
+     * Bersifat aditif: jika ABC tidak tersedia/gagal, pipeline lama tetap berjalan.
+     */
+    function getAbcCognition() {
+        return window.CGOAbcCognition || window.CGO_ABC || null;
+    }
+
+    function getCikurBridge() {
+        return window.CGO_CUSTOMER.cikurBridge || null;
+    }
+
     /* =========================================================
      * MODULE STATUS
      * ========================================================= */
@@ -211,7 +264,15 @@
             conversation: !!getConversationModule(),
             knowledge: !!getKnowledgeModule(),
             discovery: !!getDiscoveryModule(),
-            guardian: !!getGuardianModule()
+            guardian: !!getGuardianModule(),
+            boundary: !!getBoundaryModule(),
+            reasoning: !!getReasoningModule(),
+            planner: !!getPlannerModule(),
+            meta: !!getMetaModule(),
+            composer: !!getComposerModule(),
+            memory: !!getMemoryModule(),
+            cikurBridge: !!getCikurBridge(),
+            cikurBrain: !!(getCikurBridge() && getCikurBridge().isAvailable && getCikurBridge().isAvailable())
         };
     }
 
@@ -313,6 +374,27 @@
                 candidateService: null,
                 combinedServiceCandidate: null
             };
+        }
+
+        /*
+         * conversation.process() mengembalikan:
+         *   { ok, text, mode, classification, state, ... }
+         * Samakan ke bentuk analisis datar agar langkah berikutnya stabil.
+         * (Aditif — field lama tetap dipertahankan.)
+         */
+        if (result.classification && typeof result.classification === "object") {
+            const c = result.classification;
+            result = Object.assign({}, c, {
+                conversationText: result.text || "",
+                conversationMode: result.mode || null,
+                classification: c,
+                conversationState: result.state || null,
+                intent: c.intent || result.intent || "conversation",
+                topic: c.topic || result.topic || "conversation",
+                mood: c.mood || result.mood || "neutral",
+                needs: Array.isArray(c.needs) ? c.needs : (result.needs || []),
+                text: result.text || c.text || ""
+            });
         }
 
         state.lastAnalysis = clone(result);
@@ -804,84 +886,370 @@
         analysis,
         knowledge,
         discovery,
-        options
+        options,
+        pipeline
     ) {
-        const conversation =
-            getConversationModule();
+        options = options || {};
+        pipeline = pipeline || {};
 
-        if (!conversation) {
-            return fallbackResponse(
-                "conversation_module_missing"
-            );
-        }
+        const conversation = getConversationModule();
+        const reasoning = getReasoningModule();
+        const planner = getPlannerModule();
+        const meta = getMetaModule();
+        const composer = getComposerModule();
+        const memory = getMemoryModule();
 
-        let response = null;
+        let baseText = "";
+        let responseMode = "conversation";
+        let reasoningResult = null;
+        let plan = null;
+        let metaResult = null;
+        let composed = null;
 
-        /*
-         * Response generator milik Conversation tetap menjadi
-         * sumber personality dan natural conversation.
-         */
-        if (
-            typeof conversation.generateResponse ===
-            "function"
-        ) {
-            response =
-                conversation.generateResponse(
-                    input,
-                    {
-                        analysis: analysis,
-                        knowledge: knowledge,
-                        discovery: discovery,
-                        state: clone(state),
-                        options: options || {}
-                    }
-                );
-        }
+        const lang =
+            (options.lang === "en" ? "en" : null) ||
+            (analysis && analysis.lang) ||
+            "id";
 
         /*
-         * Beberapa versi conversation module mungkin mengembalikan
-         * object, bukan string.
+         * 0b) CIKURGO BRIDGE (opsional) — nalar admin untuk pemahaman teks.
+         *     Tidak mengklaim runtime. Gagal → diabaikan (anti-regresi).
          */
+        /*
+         * 0a) MESIN ABC — formal A→B→C→D enrichment.
+         * Tidak mengganti personality/customer reasoning; hanya memberi
+         * hasil formal sebagai evidence/context tambahan.
+         */
+        let abcInsight = null;
+        const abcCognition = getAbcCognition();
         if (
-            response &&
-            typeof response === "object"
+            abcCognition &&
+            typeof abcCognition.enrich === "function" &&
+            options.skipAbc !== true
         ) {
-            if (typeof response.text === "string") {
-                response = response.text;
-            } else if (
-                typeof response.response === "string"
-            ) {
-                response = response.response;
-            } else if (
-                typeof response.message === "string"
-            ) {
-                response = response.message;
+            try {
+                abcInsight = abcCognition.enrich(input, {
+                    light: true,
+                    maxCycles: 1,
+                    autoReflect: false,
+                    userText: input
+                });
+                if (abcInsight && abcInsight.used === true) {
+                    pipeline.abc = clone(abcInsight);
+                }
+            } catch (err) {
+                console.warn("[CGO CUSTOMER] ABC enrichment error:", err);
+                abcInsight = null;
             }
         }
 
+        let cikurInsight = null;
+        const cikurBridge = getCikurBridge();
         if (
-            typeof response !== "string" ||
-            !response.trim()
+            cikurBridge &&
+            typeof cikurBridge.enrich === "function" &&
+            options.skipCikurBrain !== true
         ) {
-            response = generateGatewayFallback(
+            try {
+                cikurInsight = cikurBridge.enrich(input, { lang: lang });
+                if (cikurInsight) {
+                    pipeline.cikurInsight = clone(cikurInsight);
+                }
+            } catch (err) {
+                console.warn("[CGO CUSTOMER] cikurBridge.enrich error:", err);
+                cikurInsight = null;
+            }
+        }
+
+        /*
+         * 1) REASONING — jika ada dan handled, pakai sebagai dasar alami.
+         *    Gagal / tidak handled → lanjut conversation (alur lama).
+         */
+        if (
+            reasoning &&
+            typeof reasoning.respond === "function" &&
+            options.skipReasoning !== true
+        ) {
+            try {
+                reasoningResult = reasoning.respond(input, {
+                    classification: analysis,
+                    knowledge: knowledge,
+                    discovery: discovery,
+                    state: analysis && analysis.conversationState
+                        ? analysis.conversationState
+                        : (conversation && typeof conversation.getState === "function"
+                            ? conversation.getState()
+                            : null),
+                    lang: lang,
+                    abc: abcInsight && abcInsight.abc ? clone(abcInsight.abc) : null,
+                    abcEvidence: abcInsight ? clone(abcInsight) : null
+                });
+                state.lastReasoning = clone(reasoningResult);
+                pipeline.reasoning = clone(reasoningResult);
+                if (abcInsight && abcInsight.used === true) {
+                    pipeline.abcFormalGate = reasoningResult && reasoningResult.formalGate
+                        ? reasoningResult.formalGate
+                        : "CLEAR";
+                }
+
+                if (
+                    reasoningResult &&
+                    reasoningResult.handled === true &&
+                    typeof reasoningResult.text === "string" &&
+                    reasoningResult.text.trim()
+                ) {
+                    baseText = reasoningResult.text.trim();
+                    responseMode = reasoningResult.mode || "natural_reasoning";
+
+                    /* Terapkan stateUpdate dari reasoning jika ada */
+                    if (
+                        reasoningResult.stateUpdate &&
+                        analysis &&
+                        analysis.conversationState
+                    ) {
+                        /* no-op pada state gateway; memory akan ingest nanti */
+                    }
+                }
+            } catch (err) {
+                console.warn(
+                    "[CGO CUSTOMER] reasoning.respond error (fallback conversation):",
+                    err
+                );
+                reasoningResult = null;
+            }
+        }
+
+        /*
+         * 2) CONVERSATION personality — jika reasoning tidak handled.
+         *    Prioritas: teks dari process() (sudah lewat priority mood/greeting),
+         *    baru generateResponse(classification) sebagai cadangan.
+         */
+        if (!baseText && conversation) {
+            let response = null;
+
+            /* process() sudah jalan di analyzeConversation → conversationText */
+            if (analysis && analysis.conversationText) {
+                response = analysis.conversationText;
+                responseMode =
+                    (analysis && analysis.conversationMode) || "conversation";
+            }
+
+            if (
+                (!response || !String(response).trim()) &&
+                typeof conversation.generateResponse === "function"
+            ) {
+                try {
+                    const classification =
+                        (analysis && analysis.classification) || analysis || {};
+                    response = conversation.generateResponse(classification);
+                } catch (err) {
+                    console.warn(
+                        "[CGO CUSTOMER] generateResponse error:",
+                        err
+                    );
+                    response = null;
+                }
+            }
+
+            if (response && typeof response === "object") {
+                if (typeof response.text === "string") {
+                    response = response.text;
+                } else if (typeof response.response === "string") {
+                    response = response.response;
+                } else if (typeof response.message === "string") {
+                    response = response.message;
+                }
+            }
+
+            if (typeof response === "string" && response.trim()) {
+                baseText = response.trim();
+                if (!responseMode || responseMode === "conversation") {
+                    responseMode =
+                        (analysis && analysis.conversationMode) || "conversation";
+                }
+            }
+        }
+
+        if (!baseText) {
+            baseText = generateGatewayFallback(
                 input,
                 analysis,
                 knowledge,
                 discovery
             );
+            responseMode = "gateway_fallback";
         }
 
-        response = response.trim();
+        /*
+         * 2b) Soft hint dari CIKURGO nalar — hanya jika keyakinan tinggi
+         *     dan belum ada jawaban reasoning yang handled kuat.
+         *     Tidak menimpa greeting / boundary / math yang sudah jelas.
+         */
+        if (
+            cikurInsight &&
+            cikurBridge &&
+            typeof cikurBridge.insightToHint === "function" &&
+            responseMode !== "boundary_redirect" &&
+            !(reasoningResult && reasoningResult.handled === true)
+        ) {
+            try {
+                const hint = cikurBridge.insightToHint(cikurInsight, lang);
+                if (hint && baseText && baseText.indexOf(hint) === -1) {
+                    /* Jangan tempel hint pada sapaan pendek */
+                    const isShortGreeting =
+                        baseText.length < 40 &&
+                        /hai|halo|hello|hi/i.test(baseText);
+                    if (!isShortGreeting && cikurInsight.keyakinan >= 0.7) {
+                        baseText = (baseText + " " + hint).trim();
+                        responseMode = responseMode + "+cikur";
+                    }
+                }
+            } catch (_) {}
+        }
+
+        /*
+         * 3) PLANNER + META + COMPOSER — perkaya teks, jangan mengganti paksa
+         *    jika composer gagal (anti-regresi).
+         */
+        const needs =
+            (analysis && Array.isArray(analysis.needs) && analysis.needs) ||
+            (reasoningResult && Array.isArray(reasoningResult.needs) && reasoningResult.needs) ||
+            state.detectedNeeds ||
+            [];
+
+        const topic =
+            (analysis && analysis.topic) ||
+            state.currentTopic ||
+            "conversation";
+
+        const emotion =
+            (analysis && analysis.mood) ||
+            state.currentMood ||
+            "neutral";
+
+        let memorySuggest = null;
+        if (memory && typeof memory.suggestFor === "function") {
+            try {
+                memorySuggest = memory.suggestFor(topic);
+            } catch (_) {
+                memorySuggest = null;
+            }
+        }
+
+        if (planner && typeof planner.plan === "function") {
+            try {
+                plan = planner.plan({
+                    needs: needs,
+                    constraints:
+                        (reasoningResult && reasoningResult.constraints) ||
+                        (analysis && analysis.constraints) ||
+                        null,
+                    emotion: emotion,
+                    emotionStrength:
+                        (reasoningResult &&
+                            reasoningResult.stateUpdate &&
+                            reasoningResult.stateUpdate.emotionStrength) ||
+                        "soft",
+                    preferences:
+                        (reasoningResult &&
+                            reasoningResult.stateUpdate &&
+                            reasoningResult.stateUpdate.preferences) ||
+                        [],
+                    topic: topic,
+                    memorySuggest: memorySuggest,
+                    lang: lang
+                });
+                state.lastPlan = clone(plan);
+                pipeline.plan = clone(plan);
+            } catch (err) {
+                console.warn("[CGO CUSTOMER] planner.plan error:", err);
+                plan = null;
+            }
+        }
+
+        const hasVerifiedRuntime =
+            !!(
+                discovery &&
+                discovery.verified === true &&
+                (discovery.status === "available" ||
+                    discovery.status === "AVAILABLE" ||
+                    discovery.status === "unavailable" ||
+                    discovery.status === "UNAVAILABLE")
+            );
+
+        if (meta && typeof meta.evaluate === "function") {
+            try {
+                metaResult = meta.evaluate({
+                    plan: plan,
+                    knowledge: knowledge,
+                    discovery: discovery,
+                    hasVerifiedRuntime: hasVerifiedRuntime,
+                    lang: lang
+                });
+                state.lastMeta = clone(metaResult);
+                pipeline.meta = clone(metaResult);
+            } catch (err) {
+                console.warn("[CGO CUSTOMER] meta.evaluate error:", err);
+                metaResult = null;
+            }
+        }
+
+        if (composer && typeof composer.compose === "function") {
+            try {
+                composed = composer.compose({
+                    plan: plan,
+                    meta: metaResult,
+                    boundary: pipeline.boundary || null,
+                    baseText: baseText,
+                    lang: lang
+                });
+                state.lastComposer = clone(composed);
+                pipeline.composer = clone(composed);
+
+                if (
+                    composed &&
+                    composed.composed === true &&
+                    typeof composed.text === "string" &&
+                    composed.text.trim()
+                ) {
+                    /*
+                     * Boundary redirect / companion dari composer menang.
+                     * Untuk mode enriched, hanya ganti jika berbeda & non-kosong.
+                     */
+                    if (
+                        composed.mode === "boundary_redirect" ||
+                        composed.mode === "composed_companion" ||
+                        composed.mode === "composed_from_plan"
+                    ) {
+                        baseText = composed.text.trim();
+                        responseMode = composed.mode;
+                    } else if (
+                        composed.mode === "composed_enriched" &&
+                        composed.text.trim().length >= baseText.length * 0.5
+                    ) {
+                        baseText = composed.text.trim();
+                        responseMode = composed.mode;
+                    }
+                }
+            } catch (err) {
+                console.warn(
+                    "[CGO CUSTOMER] composer.compose error (keep baseText):",
+                    err
+                );
+            }
+        }
 
         emit(EVENTS.RESPONSE_CANDIDATE, {
             input: input,
-            response: response,
+            response: baseText,
+            mode: responseMode,
             analysis: clone(analysis),
             knowledge: clone(knowledge),
-            discovery: clone(discovery)
+            discovery: clone(discovery),
+            pipeline: clone(pipeline)
         });
 
-        return response;
+        return baseText;
     }
 
     /* =========================================================
@@ -1215,6 +1583,56 @@
         );
 
         try {
+            const pipeline = {};
+
+            /*
+             * STEP 0 — BOUNDARY (soft topic gate)
+             * Jika ditolak, langsung jawab aman + guardian (skip nalar layanan).
+             */
+            const boundaryMod = getBoundaryModule();
+            let boundaryResult = null;
+            if (
+                boundaryMod &&
+                typeof boundaryMod.check === "function" &&
+                options.skipBoundary !== true
+            ) {
+                try {
+                    boundaryResult = boundaryMod.check(
+                        text,
+                        options.lang === "en" ? "en" : "id"
+                    );
+                    state.lastBoundary = clone(boundaryResult);
+                    pipeline.boundary = clone(boundaryResult);
+                } catch (err) {
+                    console.warn("[CGO CUSTOMER] boundary.check error:", err);
+                    boundaryResult = null;
+                }
+            }
+
+            if (
+                boundaryResult &&
+                boundaryResult.allowed === false &&
+                boundaryResult.softRedirect
+            ) {
+                const candidate = String(boundaryResult.softRedirect);
+                const result = finalizeResponse(
+                    text,
+                    {
+                        intent: "boundary",
+                        topic: boundaryResult.category || "boundary",
+                        mood: "neutral",
+                        needs: []
+                    },
+                    { known: false, status: "boundary" },
+                    { status: "not_required", verified: false },
+                    candidate,
+                    options
+                );
+                result.pipeline = pipeline;
+                result.mode = "boundary_redirect";
+                return result;
+            }
+
             /*
              * STEP 1 — CONVERSATION
              */
@@ -1264,6 +1682,7 @@
 
             /*
              * STEP 4 — RESPONSE CANDIDATE
+             * (reasoning → planner → meta → composer → conversation fallback)
              */
             const candidate =
                 generateResponseCandidate(
@@ -1271,7 +1690,8 @@
                     analysis,
                     knowledge,
                     discovery,
-                    options
+                    options,
+                    pipeline
                 );
 
             /*
@@ -1287,6 +1707,32 @@
                     options
                 );
 
+            /*
+             * STEP 6 — MEMORY INGEST (soft, gagal diabaikan)
+             */
+            try {
+                const memory = getMemoryModule();
+                if (memory && typeof memory.ingestSession === "function") {
+                    memory.ingestSession({
+                        lastTopic: state.currentTopic,
+                        topic: state.currentTopic,
+                        lastEmotion: state.currentMood,
+                        activeNeeds: state.detectedNeeds,
+                        preferences:
+                            (state.lastReasoning &&
+                                state.lastReasoning.stateUpdate &&
+                                state.lastReasoning.stateUpdate.preferences) ||
+                            [],
+                        constraints:
+                            (state.lastPlan && state.lastPlan.constraints) ||
+                            null
+                    });
+                }
+            } catch (memErr) {
+                console.warn("[CGO CUSTOMER] memory.ingestSession error:", memErr);
+            }
+
+            result.pipeline = pipeline;
             return result;
         } catch (error) {
             state.lastError = {
@@ -1366,6 +1812,55 @@
         );
 
         try {
+            const pipeline = {};
+
+            /*
+             * STEP 0 — BOUNDARY
+             */
+            const boundaryMod = getBoundaryModule();
+            let boundaryResult = null;
+            if (
+                boundaryMod &&
+                typeof boundaryMod.check === "function" &&
+                options.skipBoundary !== true
+            ) {
+                try {
+                    boundaryResult = boundaryMod.check(
+                        text,
+                        options.lang === "en" ? "en" : "id"
+                    );
+                    state.lastBoundary = clone(boundaryResult);
+                    pipeline.boundary = clone(boundaryResult);
+                } catch (err) {
+                    console.warn("[CGO CUSTOMER] boundary.check error:", err);
+                    boundaryResult = null;
+                }
+            }
+
+            if (
+                boundaryResult &&
+                boundaryResult.allowed === false &&
+                boundaryResult.softRedirect
+            ) {
+                const candidate = String(boundaryResult.softRedirect);
+                const result = finalizeResponse(
+                    text,
+                    {
+                        intent: "boundary",
+                        topic: boundaryResult.category || "boundary",
+                        mood: "neutral",
+                        needs: []
+                    },
+                    { known: false, status: "boundary" },
+                    { status: "not_required", verified: false },
+                    candidate,
+                    options
+                );
+                result.pipeline = pipeline;
+                result.mode = "boundary_redirect";
+                return result;
+            }
+
             /*
              * STEP 1 — CONVERSATION
              */
@@ -1414,7 +1909,7 @@
             }
 
             /*
-             * STEP 4 — RESPONSE CANDIDATE
+             * STEP 4 — RESPONSE CANDIDATE (enriched)
              */
             const candidate =
                 generateResponseCandidate(
@@ -1422,7 +1917,8 @@
                     analysis,
                     knowledge,
                     discovery,
-                    options
+                    options,
+                    pipeline
                 );
 
             /*
@@ -1438,6 +1934,32 @@
                     options
                 );
 
+            /*
+             * STEP 6 — MEMORY INGEST
+             */
+            try {
+                const memory = getMemoryModule();
+                if (memory && typeof memory.ingestSession === "function") {
+                    memory.ingestSession({
+                        lastTopic: state.currentTopic,
+                        topic: state.currentTopic,
+                        lastEmotion: state.currentMood,
+                        activeNeeds: state.detectedNeeds,
+                        preferences:
+                            (state.lastReasoning &&
+                                state.lastReasoning.stateUpdate &&
+                                state.lastReasoning.stateUpdate.preferences) ||
+                            [],
+                        constraints:
+                            (state.lastPlan && state.lastPlan.constraints) ||
+                            null
+                    });
+                }
+            } catch (memErr) {
+                console.warn("[CGO CUSTOMER] memory.ingestSession error:", memErr);
+            }
+
+            result.pipeline = pipeline;
             return result;
         } catch (error) {
             state.lastError = {
@@ -1831,6 +2353,18 @@
             lastGuard:
                 state.lastGuard,
 
+            lastBoundary:
+                state.lastBoundary,
+
+            lastReasoning:
+                state.lastReasoning,
+
+            lastPlan:
+                state.lastPlan,
+
+            lastMeta:
+                state.lastMeta,
+
             discoveryConnected:
                 discoveryConnected,
 
@@ -1934,8 +2468,13 @@
 
     /*
      * PUBLIC GLOBAL GATEWAY
+     * Merge dengan CGO.esc / icon helpers dari cgo-shared (anti-regresi UI).
      */
-    window.CGO = CGO;
+    try {
+        window.CGO = Object.assign(window.CGO || {}, CGO);
+    } catch (_) {
+        window.CGO = Object.assign({}, window.CGO || {}, CGO);
+    }
 
     /*
      * Pastikan state readiness dihitung setelah semua object

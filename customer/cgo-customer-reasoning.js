@@ -2,7 +2,7 @@
  * CIKUR GO — CUSTOMER NATURAL REASONING LAYER
  * ------------------------------------------------------------
  * File    : cgo-customer-reasoning.js
- * Version : 1.1.0-natural-reasoning
+ * Version : 1.7.1-multi-constraint-memory-aware
  *
  * Internal deterministic language/reasoning layer.
  * No external AI/API. No answer-script database.
@@ -874,7 +874,7 @@
   /* ----------------------------------------------------------
    * Core respond
    * ---------------------------------------------------------- */
-  function respond(text, ctx = {}) {
+  function respondCore(text, ctx = {}) {
     const input = clean(text);
     if (!input) return null;
 
@@ -1539,6 +1539,43 @@
 
     // Nothing handled → conversation layer continues
     return null;
+  }
+
+  /* ----------------------------------------------------------
+   * Formal ABC evidence gate
+   * ---------------------------------------------------------- */
+  function respond(text, ctx = {}) {
+    const result = respondCore(text, ctx);
+    const evidence = ctx && ctx.abcEvidence;
+    if (!result || !evidence || evidence.used !== true || !evidence.abc) return result;
+
+    const abc = evidence.abc || {};
+    const status = String(abc.status || "").toUpperCase();
+    const auditStatus = String(abc.audit && abc.audit.status || "").toUpperCase();
+    const reviewStatuses = new Set(["DEGRADED", "CONTRADICTION", "UNRESOLVED", "INVALID"]);
+    const auditAttention = auditStatus && !["VALID", "PASS"].includes(auditStatus);
+    const reviewRequired = reviewStatuses.has(status) || auditAttention;
+
+    const formalEvidence = {
+      engine: "CGO_MACHINE_ABC",
+      status: abc.status || null,
+      confidence: abc.confidence ?? null,
+      audit: auditStatus || null,
+      reviewRequired,
+      findingsCount: Array.isArray(abc.findings) ? abc.findings.length : 0
+    };
+
+    result.formalEvidence = formalEvidence;
+
+    // Normal/valid ABC output is completely non-invasive.
+    // Only a formal failure/attention state changes the reasoning contract.
+    if (reviewRequired) {
+      result.formalGate = "REVIEW_REQUIRED";
+      result.shouldOfferService = false;
+    } else {
+      result.formalGate = "CLEAR";
+    }
+    return result;
   }
 
   /* ----------------------------------------------------------
