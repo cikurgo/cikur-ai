@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.3.1-CHAT-SAFE-NO-HANG";
+  const VERSION = "1.4.0-CUSTOMER-OTAK-INJECT";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -109,6 +109,23 @@
     {
       id: "OPERATOR_VOICE", label: "CGO Operator", role: "Suara & persona", required: false,
       probe() { const v = global.CGOOperatorVoice; return v ? { ready: typeof v.speakAnswer === "function", version: v.version || null } : null; }
+    },
+    {
+      id: "CUSTOMER_CGO", label: "Otak Customer", role: "Pipeline nalar customer", required: false,
+      probe() {
+        const c = global.CGO;
+        if (!c) return null;
+        const ready = typeof c.chatAsync === "function" || typeof c.chat === "function" || typeof c.reason === "function";
+        return {
+          ready: !!ready,
+          version: c.version || c.VERSION || null,
+          detail: {
+            chatAsync: typeof c.chatAsync === "function",
+            chat: typeof c.chat === "function",
+            reason: typeof c.reason === "function"
+          }
+        };
+      }
     }
   ];
 
@@ -827,6 +844,29 @@
           .replace(/\b(\d+)\s+anomali\b/gi, function (_, d) {
             try { return CG.angkaKeKata(Number(d), "id") + " anomali"; } catch (_) { return d + " anomali"; }
           });
+      }
+    }
+
+    // ─── H2. Otak Customer (pipeline customer/) — nalar natural, aditif ───
+    if (!answer && global.CGO) {
+      try {
+        if (typeof global.CGO.chat === "function") {
+          const r = global.CGO.chat(t);
+          const text = typeof r === "string" ? r : (r && (r.text || r.response || r.message));
+          if (text && String(text).trim()) {
+            answer = String(text).trim();
+            step("CUSTOMER_CGO", true, "chat");
+          } else {
+            step("CUSTOMER_CGO", false, "kosong");
+          }
+        } else if (typeof global.CGO.chatAsync === "function") {
+          // sinkron preferensi: jangan await di jalur yang harus cepat bila tidak perlu
+          step("CUSTOMER_CGO", false, "chatAsync-only");
+        } else {
+          step("CUSTOMER_CGO", false, "API belum siap");
+        }
+      } catch (e) {
+        step("CUSTOMER_CGO", false, String((e && e.message) || e));
       }
     }
 

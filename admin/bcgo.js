@@ -232,6 +232,19 @@ function isActionableTelemetry(log) {
 }
 
 
+// BCGO early boot stub (module scope) — tersedia segera saat modul ter-import
+try {
+  if (typeof globalThis !== "undefined" && !globalThis.BCGOBrain) {
+    globalThis.BCGOBrain = {
+      version: "module-stub",
+      ask: function () { return "BCGO engine sedang diinisialisasi…"; },
+      getState: function () { return globalThis.BCGO_STATE || null; },
+      getSituation: function () { return "BOOT"; },
+      stop: function () {}
+    };
+  }
+} catch (_) {}
+
 export async function runAutonomousEngine(onCycleUpdate) {
   if (typeof onCycleUpdate !== "function") {
     throw new TypeError("BCGO membutuhkan callback UI.");

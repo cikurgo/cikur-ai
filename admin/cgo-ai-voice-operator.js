@@ -9,8 +9,8 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "3.8.2-FEMALE-ONLY-NO-ROBOT";
-  const BUILD = "CIKUR-GO-OPERATOR-3.8.2";
+  const VERSION = "3.9.1-FEMALE-TTS-ONLY-MP3-DEAD";
+  const BUILD = "CIKUR-GO-OPERATOR-3.9.1-MP3-DEAD";
   /** Path audio cerdas: dukung load dari root portal maupun dari admin/ */
   function detectAudioRoot() {
     try {
@@ -73,27 +73,29 @@
     SYSTEM_IDLE: "Sistem menganggur. Menunggu instruksi."
   });
 
+  // MUTLAK: tidak ada klip MP3 sistem (stage/beep terdengar seperti robot).
+  // Semua pengumuman lewat TTS suara wanita (speakAnswer / TEXT).
   const MP3 = Object.freeze({
-    SYSTEM_BOOT: "welcome.mp3",
-    SYSTEM_READY: "welcome.mp3",
-    REFRESH_READY: "welcome.mp3",
-    COMMAND_ACCEPTED: "processing.mp3",
-    COMMAND_DUPLICATE: "processing.mp3",
-    PROCESSING: "processing.mp3",
-    PROCESSING_WAIT: "processing.mp3",
-    ABC_STAGE_A: "stageA.mp3",
-    ABC_STAGE_B: "stageB.mp3",
-    ABC_STAGE_C: "stageC.mp3",
-    ABC_STAGE_D: "stageD.mp3",
-    LIVE_INPUT: "live.mp3",
-    STANDBY: "standby.mp3",
-    VALID: "valid.mp3",
-    WARNING: "warning.mp3",
-    ERROR: "error.mp3",
-    RECOVERY: "standby.mp3",
-    RESET: "welcome.mp3",
-    ABORT: "error.mp3",
-    SYSTEM_IDLE: "standby.mp3",
+    SYSTEM_BOOT: null,
+    SYSTEM_READY: null,
+    REFRESH_READY: null,
+    COMMAND_ACCEPTED: null,
+    COMMAND_DUPLICATE: null,
+    PROCESSING: null,
+    PROCESSING_WAIT: null,
+    ABC_STAGE_A: null,
+    ABC_STAGE_B: null,
+    ABC_STAGE_C: null,
+    ABC_STAGE_D: null,
+    LIVE_INPUT: null,
+    STANDBY: null,
+    VALID: null,
+    WARNING: null,
+    ERROR: null,
+    RECOVERY: null,
+    RESET: null,
+    ABORT: null,
+    SYSTEM_IDLE: null,
     CHAT_REPLY: null
   });
 
@@ -236,29 +238,11 @@
   }
 
   function playMp3(key) {
-    return new Promise(function (resolve) {
-      var file = MP3[key];
-      if (!file) return resolve(false);
-      var a = getAudio(file);
-      if (!a) return resolve(false);
-      try {
-        a.pause();
-        a.currentTime = 0;
-        var done = function () {
-          a.removeEventListener("ended", done);
-          a.removeEventListener("error", done);
-          resolve(true);
-        };
-        a.addEventListener("ended", done);
-        a.addEventListener("error", done);
-        var p = a.play();
-        if (p && p.catch) p.catch(function () { resolve(false); });
-      } catch (_) {
-        resolve(false);
-      }
-    });
+    // MUTLAK: klip MP3 stage/beep = suara robot. Tidak pernah diputar.
+    return Promise.resolve(false);
   }
 
+  
   function speakTTS(text, opts) {
     return new Promise(function (resolve) {
       if (!("speechSynthesis" in global) || !text) return resolve(false);
@@ -335,23 +319,9 @@
     if (!canEmit(key, force)) return Promise.resolve(false);
     lastPlayed.set(key, Date.now());
     var phrase = TEXT[key];
-    var pri = filePriority(key);
-    var file = MP3[key];
-
-    function doPlay() {
-      // HANYA MP3 operator wanita jernih — tanpa TTS browser sama sekali
-      return playMp3(key);
-    }
-
-    if (global.CGOAudioQueue && typeof global.CGOAudioQueue.enqueue === "function") {
-      return global.CGOAudioQueue.enqueue({
-        jenis: "mp3",
-        file: file || null,
-        priority: pri,
-        play: function () { return doPlay(); }
-      });
-    }
-    return doPlay();
+    // MUTLAK: tidak ada MP3/beep robot. Hanya TTS suara wanita (speakAnswer).
+    if (!phrase) return Promise.resolve(false);
+    return speakAnswer(phrase, { force: force, source: "emit:" + key });
   }
 
 

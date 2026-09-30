@@ -498,15 +498,28 @@ body{font-family:'Inter',sans-serif}
 } catch(_){} })();
 </script>
 <script src="cikur-go.browser.js?v=3.0.0-OTAK-JENIUS"></script>
+<!-- Otak Customer pipeline (folder customer/) — bagian SATU OTAK, path dari admin/ -->
+<script src="../customer/cgo-customer-memory.js?v=1.0-OTAK-INJECT"></script>
+<script src="../customer/cgo-customer-conversation.js?v=1.0-OTAK-INJECT"></script>
+<script src="../customer/cgo-customer-reasoning.js?v=1.0-OTAK-INJECT"></script>
+<script src="../customer/cgo-customer-planner.js?v=1.0-OTAK-INJECT"></script>
+<script src="../customer/cgo-customer-knowledge.js?v=1.0-OTAK-INJECT"></script>
+<script src="../customer/cgo-customer-discovery.js?v=1.0-OTAK-INJECT"></script>
+<script src="../customer/cgo-customer-meta.js?v=1.0-OTAK-INJECT"></script>
+<script src="../customer/cgo-customer-boundary.js?v=1.0-OTAK-INJECT"></script>
+<script src="../customer/cgo-customer-guardian.js?v=1.0-OTAK-INJECT"></script>
+<script src="../customer/cgo-customer-composer.js?v=1.0-OTAK-INJECT"></script>
+<script src="../customer/cgo-customer-cikur-bridge.js?v=1.0-OTAK-INJECT"></script>
+<script src="../customer/cgo-customer.js?v=1.0-OTAK-INJECT"></script>
 <script src="cgo-audio-bus.js?v=1.0.0-AUDIO-BUS"></script>
 <script src="cgo-audio-queue.js?v=1.0.0-AUDIO-QUEUE"></script>
 <script src="cgo-emosi.js?v=1.1.0-EMOSI-AIRPORT"></script>
 <script src="cgo-narasi.js?v=1.0.0-NARASI"></script>
-<script src="cgo-ai-voice-operator.js?v=3.8.2-FEMALE-ONLY-NO-ROBOT"></script>
+<script src="cgo-ai-voice-operator.js?v=3.9.1-FEMALE-TTS-ONLY-MP3-DEAD"></script>
 <script src="cgo-machine-abc.js?v=0.9.9-OTAK-CORE-20260927"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.7.0-BCGO-SYNC-OTAK-20260928"></script>
 <script src="cgo-abc-cognition.js?v=1.1.0-CGO-ABC-COGNITION"></script>
-<script src="cgo-otak-hub.js?v=1.3.2-INTERNAL-PROBE-20260930"></script>
+<script src="cgo-otak-hub.js?v=1.4.0-CUSTOMER-OTAK-INJECT"></script>
 
 <script type="module">
 import * as CGOInstruction from "./cgo-instruction.js?v=1.3.0-CONSTITUTION";
@@ -529,7 +542,7 @@ window.CGO_SVG = {
 </script>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=5.1.1-BOOT-NO-HANG-20260930';
+import { runAutonomousEngine } from './bcgo.js?v=5.1.2-FIX-ANSWER-DUP-20260930';
 
 // Bridge internal CGO brain ke BCGO_STATE (tanpa AI eksternal)
 let internalBrain = null;
@@ -1152,8 +1165,22 @@ async function sendQuestion(question, opts) {
     const modality = (opts && opts.modality) || 'text';
     if (!text || chatRequestBusy) return;
     setChatBusy(true);
+
+    // WATCHDOG MUTLAK: apapun yang terjadi, unlock chat max 10 detik
+    let unlocked = false;
+    const forceUnlock = function () {
+      if (unlocked) return;
+      unlocked = true;
+      try { setChatBusy(false); } catch (_) {}
+      try { if (chatInput) chatInput.disabled = false; } catch (_) {}
+    };
+    const watchdog = setTimeout(function () {
+      console.warn('[BCGO] chat watchdog 10s — paksa unlock');
+      forceUnlock();
+      try { setChatLiveStatus('Waktu proses habis. Silakan kirim ulang pertanyaan lebih singkat.', 'blocked'); } catch (_) {}
+    }, 10000);
+
     addChat('user', text, modality === 'voice' ? { modality: 'voice' } : null);
-    // Timer berpikir real-time
     const thinkBar = document.getElementById('cgo-think-bar');
     const thinkTimer = document.getElementById('cgo-think-timer');
     const thinkLabel = document.getElementById('cgo-think-label');
@@ -1171,55 +1198,58 @@ async function sendQuestion(question, opts) {
         if (stages) {
           stages.querySelectorAll('span').forEach(function(s){ s.classList.remove('on','done'); });
           var r = stages.querySelector('[data-stage="recv"]'); if (r) r.classList.add('done');
-          var t = stages.querySelector('[data-stage="think"]'); if (t) t.classList.add('on');
+          var tEl = stages.querySelector('[data-stage="think"]'); if (tEl) tEl.classList.add('on');
         }
       } catch(_){}
-      thinkIv = setInterval(() => {
-        const s = ((performance.now() - t0) / 1000).toFixed(1);
-        if (thinkTimer) thinkTimer.textContent = Math.round(performance.now() - t0) + ' ms';
+      thinkIv = setInterval(function () {
+        try {
+          if (thinkTimer) thinkTimer.textContent = Math.round(performance.now() - t0) + ' ms';
+        } catch (_) {}
       }, 100);
     } catch (_) {}
-    const stopThink = () => {
+
+    const stopThink = function () {
       try { if (thinkIv) clearInterval(thinkIv); } catch(_){}
       try { if (thinkBar) thinkBar.classList.remove('on'); } catch(_){}
       try {
         const ms = Math.max(0, Math.round(performance.now() - t0));
         if (thinkTimer) thinkTimer.textContent = ms + ' ms';
         if (liveStatus) liveStatus.textContent = 'Selesai · ' + ms + ' ms';
-        var st = document.getElementById('cgo-think-stage');
-        if (st) st.textContent = 'OK';
-        var stages = document.getElementById('cgo-think-stages');
-        if (stages) {
-          stages.querySelectorAll('span').forEach(function(s){ s.classList.remove('on'); s.classList.add('done'); });
+        var st2 = document.getElementById('cgo-think-stage');
+        if (st2) st2.textContent = 'OK';
+        var stages2 = document.getElementById('cgo-think-stages');
+        if (stages2) {
+          stages2.querySelectorAll('span').forEach(function(s){ s.classList.remove('on'); s.classList.add('done'); });
         }
       } catch(_){
         try { if (thinkTimer) thinkTimer.textContent = '-- ms'; } catch(__){}
       }
     };
+
     setChatLiveStatus('Memahami permintaan dan membaca state BCGO yang sedang hidup…', 'working');
     try {
         let answer = null;
         const tParse0 = performance.now();
-        // parse = waktu sampai mulai pikir (validasi teks sudah di atas)
         const parseMs = Math.max(0, Math.round(tParse0 - t0));
         let pikirMs = 0;
         let formatMs = 0;
-        // ============================================================
-        // SATU PINTU OTAK (100%) — hanya CGO_OTAK.ask sebagai gerbang
-        // Fallback berlapis HANYA jika hub belum siap (anti-regresi).
-        // Mesin ABC hanya jika user eksplisit minta audit/pipeline.
-        // ============================================================
-        let answer = null;
         let brainSource = 'none';
+        const liveSnap = authoritativeBCGOState();
 
-        if (window.CGO_OTAK && typeof window.CGO_OTAK.ask === 'function') {
+        // Jalur cepat: jika Otak belum ada sama sekali, jawab lokal tanpa menunggu
+        const otakReady = !!(window.CGO_OTAK && typeof window.CGO_OTAK.ask === 'function');
+        const brainReady = !!(window.BCGOBrain && typeof window.BCGOBrain.ask === 'function');
+
+        if (otakReady) {
             try {
                 setChatLiveStatus('Satu Otak memproses…', 'working');
-                const ASK_MS = 12000;
+                const ASK_MS = 8000;
                 const hubRes = await Promise.race([
-                  Promise.resolve(window.CGO_OTAK.ask(text, { liveState: liveState })),
+                  Promise.resolve(window.CGO_OTAK.ask(text, { liveState: liveSnap })),
                   new Promise(function (resolve) {
-                    setTimeout(function () { resolve({ ok: false, answer: null, timeout: true, error: 'ASK_TIMEOUT' }); }, ASK_MS);
+                    setTimeout(function () {
+                      resolve({ ok: false, answer: null, timeout: true, error: 'ASK_TIMEOUT' });
+                    }, ASK_MS);
                   })
                 ]);
                 if (hubRes && hubRes.timeout) {
@@ -1238,22 +1268,27 @@ async function sendQuestion(question, opts) {
             }
         }
 
-        // Fallback cadangan (hanya jika hub kosong) — BCGOBrain saja
-        if (!answer && window.BCGOBrain && typeof window.BCGOBrain.ask === 'function') {
+        // Fallback BCGOBrain (sync/async aman)
+        if (!answer && brainReady) {
             try {
                 setChatLiveStatus('BCGOBrain (cadangan)…', 'working');
-                answer = await Promise.resolve(window.BCGOBrain.ask(text));
-                brainSource = 'BCGOBrain_fallback';
+                answer = await Promise.race([
+                  Promise.resolve(window.BCGOBrain.ask(text)),
+                  new Promise(function (resolve) {
+                    setTimeout(function () { resolve(null); }, 3000);
+                  })
+                ]);
+                if (answer) brainSource = 'BCGOBrain_fallback';
             } catch (brainErr) {
                 console.warn('[BCGO] BCGOBrain.ask:', brainErr);
             }
         }
 
-        // Mesin ABC — HANYA jika user eksplisit minta (bukan setiap chat)
+        // Mesin ABC — HANYA jika user eksplisit minta
         if (window.CGOMachineABCBridge && /analisis|struktur|audit|verifikasi|bukti|mesin abc|pipeline|self-?test/i.test(text)) {
             try {
                 setChatLiveStatus('Mesin ABC A→B→C→D…', 'working');
-                const abc = window.CGOMachineABCBridge.analyze(text, { maxCycles: 1 });
+                const abc = window.CGOMachineABCBridge.analyze(text, { maxCycles: 1, fast: true });
                 if (abc && abc.ok) {
                     const conf = abc.confidence != null ? Math.round(Number(abc.confidence) * 100) + '%' : '–';
                     const nFind = (abc.findings || []).length;
@@ -1267,7 +1302,6 @@ async function sendQuestion(question, opts) {
             }
         }
 
-        // Bersihkan label dual-brain lama jika ada
         if (answer) {
             try {
                 answer = String(answer)
@@ -1276,7 +1310,6 @@ async function sendQuestion(question, opts) {
             } catch (_) {}
         }
 
-        // Tolak template generik — urai lewat CIKURGO bila perlu
         if (!answer || /Saya paham\.\s*Untuk\s+/i.test(String(answer))) {
             if (window.CIKURGO && typeof window.CIKURGO.urai === 'function') {
                 try {
@@ -1289,39 +1322,46 @@ async function sendQuestion(question, opts) {
             }
         }
 
-        if (!answer) throw new Error('BCGO_BRAIN_NOT_READY');
-        try { window.__CGO_LAST_BRAIN_SOURCE = brainSource; } catch (_) {}
+        // Jawaban aman jika Otak/engine belum siap (jangan lempar error yang membuat UI terasa stuck)
+        if (!answer) {
+            const mode = (liveSnap && liveSnap.cycleMode) || (window.BCGO_STATE && window.BCGO_STATE.cycleMode) || 'BOOT';
+            answer = 'CGO menerima pertanyaan Anda. Saat ini mode ' + mode +
+              (otakReady ? '' : ' · Satu Otak belum penuh') +
+              (brainReady ? '' : ' · BCGO Engine masih inisialisasi') +
+              '. Coba lagi: status sistem, scanner, atau organ.';
+            brainSource = 'SAFE_LOCAL';
+        }
 
-        // Multi-narasi + multi-emosi (tanpa mengubah fakta Otak)
+        try { window.__CGO_LAST_BRAIN_SOURCE = brainSource; } catch (_) {}
+        try { pikirMs = Math.max(0, Math.round(performance.now() - tParse0)); } catch (_) {}
+
         let emosi = null;
         try {
           if (window.CGONarasi && typeof window.CGONarasi.narrate === 'function') {
-            answer = window.CGONarasi.narrate(answer, { question: text, liveState: liveState });
+            answer = window.CGONarasi.narrate(answer, { question: text, liveState: liveSnap });
           }
         } catch (_) {}
         try {
           if (window.CGOEmosi && typeof window.CGOEmosi.tentukanEmosi === 'function') {
-            emosi = window.CGOEmosi.tentukanEmosi({ text: text, answer: answer, liveState: liveState });
+            emosi = window.CGOEmosi.tentukanEmosi({ text: text, answer: answer, liveState: liveSnap });
             if (emosi && window.CGOEmosi.prefiksEmosi) {
               const pref = window.CGOEmosi.prefiksEmosi(emosi.emosi, emosi.intensitas);
               if (pref && answer && !String(answer).startsWith(pref)) answer = pref + answer;
             }
           }
         } catch (_) {}
+
         const tFmt0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-        // format = narasi + emosi di atas (sudah jalan); ukur sisa sampai render
         try { formatMs = Math.max(0, Math.round(tFmt0 - (t0 + parseMs + pikirMs))); } catch(_){ formatMs = 0; }
-        const t1 = tFmt0;
-        const totalMs = Math.max(0, Math.round(t1 - t0));
-        // Dynamic chat speech = CGO Operator female-only TTS; system events remain Operator MP3
-        const ttsMs = 0;
+        const totalMs = Math.max(0, Math.round(tFmt0 - t0));
         const timingStr = totalMs
-          ? ('⚡ ' + totalMs + ' ms · parse ' + parseMs + ' · pikir ' + pikirMs + ' · format ' + formatMs + (ttsMs ? (' · tts ' + ttsMs) : ''))
+          ? ('⚡ ' + totalMs + ' ms · parse ' + parseMs + ' · pikir ' + pikirMs + ' · format ' + formatMs)
           : '-- ms';
         try {
           if (liveStatus) liveStatus.textContent = 'Selesai · ' + totalMs + ' ms';
           if (thinkTimer) thinkTimer.textContent = totalMs + ' ms';
         } catch (_) {}
+
         addChat('bcgo', answer, {
           emosi: emosi,
           timing: timingStr,
@@ -1330,7 +1370,8 @@ async function sendQuestion(question, opts) {
             ? window.CGO_OTAK.status().modules.filter(function(m){return m.ready;}).map(function(m){return m.id;})
             : null
         });
-        // TTS via antrian (tidak tabrakan)
+
+        // TTS wanita — jangan tunggu selesai untuk unlock chat
         try {
             if (window.CGOOperatorVoice && typeof window.CGOOperatorVoice.speakAnswer === 'function') {
                 const wave = document.getElementById('cgo-voice-wave');
@@ -1341,16 +1382,19 @@ async function sendQuestion(question, opts) {
                   window.CGOOperatorVoice.setQuietLive && window.CGOOperatorVoice.setQuietLive(true);
                 } catch (_) {}
                 const p = window.CGOOperatorVoice.speakAnswer(answer, { emosi: emosi && emosi.emosi });
-                Promise.resolve(p).finally(() => { try { if (wave) wave.classList.remove('live'); } catch(_){} });
+                Promise.resolve(p).finally(function () {
+                  try { if (wave) wave.classList.remove('live'); } catch(_){}
+                });
             }
         } catch (voiceErr) { /* silent */ }
     } catch (error) {
         try { stopThink(); } catch (_) {}
-        addChat('bcgo', `Saya belum bisa menjawab dengan aman karena BCGO belum siap: ${String(error?.message || error).slice(0, 220)}`);
+        addChat('bcgo', 'Saya belum bisa menjawab dengan aman: ' + String(error && error.message || error).slice(0, 220));
     } finally {
+        try { clearTimeout(watchdog); } catch (_) {}
         try { stopThink(); } catch (_) {}
-        setChatBusy(false);
-        chatInput?.focus();
+        forceUnlock();
+        try { chatInput && chatInput.focus(); } catch (_) {}
     }
 }
 
