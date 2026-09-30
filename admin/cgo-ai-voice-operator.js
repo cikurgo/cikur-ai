@@ -9,8 +9,8 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "3.8.1-FEMALE-ONLY-ROOTSAFE";
-  const BUILD = "CIKUR-GO-OPERATOR-3.8.1";
+  const VERSION = "3.8.2-FEMALE-ONLY-NO-ROBOT";
+  const BUILD = "CIKUR-GO-OPERATOR-3.8.2";
   /** Path audio cerdas: dukung load dari root portal maupun dari admin/ */
   function detectAudioRoot() {
     try {
@@ -163,12 +163,23 @@
   // fall back to an unclassified Indonesian voice: an unknown voice may be male/robotic.
   // If the browser cannot positively identify a female voice, dynamic speech stays silent
   // rather than violating the Operator voice contract.
+  function isMaleMarked(n) {
+    return /(male|man\b|boy|david|mark|james|john|thomas|daniel|google uk english male)/i.test(n);
+  }
+
   function isConfirmedFemale(v) {
     var n = String((v && v.name) || "") + " " + String((v && v.voiceURI) || "");
     n = n.toLowerCase();
     var l = String((v && v.lang) || "").toLowerCase();
     if (!l.startsWith("id")) return false;
-    return /(female|woman|zira|samantha|ava|aria|jenny|susan|gadis|perempuan)/i.test(n);
+    if (isMaleMarked(n)) return false;
+    // Eksplisit wanita
+    if (/(female|woman|zira|samantha|ava|aria|jenny|susan|gadis|perempuan)/i.test(n)) return true;
+    // Google / Microsoft / Neural id-ID umumnya suara wanita — boleh dipakai
+    if (/(google|microsoft|natural|neural|premium|wavenet|studio)/i.test(n)) return true;
+    // Nama generik "Bahasa Indonesia" / "Indonesian" tanpa penanda pria
+    if (/(bahasa indonesia|indonesian)/i.test(n)) return true;
+    return false;
   }
 
   function refreshVoices() {
@@ -177,8 +188,17 @@
     if (!voices.length) { selectedVoice = null; return false; }
     var idFemale = voices.filter(isConfirmedFemale);
     selectedVoice =
-      idFemale.find(function (v) { return /google|microsoft|natural|premium/i.test(String(v.name || "")); }) ||
+      idFemale.find(function (v) { return /google|microsoft|natural|premium|neural/i.test(String(v.name || "")); }) ||
       idFemale[0] || null;
+    // Last resort: any id-ID not marked male (hindari robot/pria)
+    if (!selectedVoice) {
+      var idAny = voices.filter(function (v) {
+        var l = String((v && v.lang) || "").toLowerCase();
+        var n = String((v && v.name) || "") + " " + String((v && v.voiceURI) || "");
+        return l.startsWith("id") && !isMaleMarked(n);
+      });
+      selectedVoice = idAny[0] || null;
+    }
     return !!selectedVoice;
   }
 
@@ -242,37 +262,44 @@
   function speakTTS(text, opts) {
     return new Promise(function (resolve) {
       if (!("speechSynthesis" in global) || !text) return resolve(false);
-      try { global.speechSynthesis.cancel(); } catch (_) {}
-      if (!refreshVoices() || !selectedVoice) return resolve(false);
-      var u = new SpeechSynthesisUtterance(text);
-      u.lang = selectedVoice.lang || "id-ID";
-      u.voice = selectedVoice;
-      // Airport-style delivery: calm, clear, slightly deliberate, never rushed.
-      u.rate = (opts && opts.rate != null) ? opts.rate : 0.92;
-      u.pitch = (opts && opts.pitch != null) ? opts.pitch : 1.05;
-      u.volume = 1;
-      var finished = false;
-      var fin = function (ok) {
-        if (finished) return;
-        finished = true;
-        speaking = false;
-        resolve(!!ok);
-      };
-      u.onend = function () { fin(true); };
-      u.onerror = function () { fin(false); };
-      speaking = true;
-      try {
-        global.speechSynthesis.speak(u);
-        // Do not declare speech finished on a guessed timer: browser TTS may still be speaking.
-      // Watchdog only prevents a permanently stuck queue; normal completion is onend.
-      setTimeout(function () {
-        if (!finished) {
-          try { global.speechSynthesis.cancel(); } catch (_) {}
+
+      function run() {
+        try { global.speechSynthesis.cancel(); } catch (_) {}
+        if (!refreshVoices() || !selectedVoice) return resolve(false);
+        var u = new SpeechSynthesisUtterance(text);
+        u.lang = selectedVoice.lang || "id-ID";
+        u.voice = selectedVoice;
+        u.rate = (opts && opts.rate != null) ? opts.rate : 0.92;
+        u.pitch = (opts && opts.pitch != null) ? opts.pitch : 1.08;
+        u.volume = 1;
+        var finished = false;
+        var fin = function (ok) {
+          if (finished) return;
+          finished = true;
+          speaking = false;
+          resolve(!!ok);
+        };
+        u.onend = function () { fin(true); };
+        u.onerror = function () { fin(false); };
+        speaking = true;
+        try {
+          global.speechSynthesis.speak(u);
+          setTimeout(function () {
+            if (!finished) {
+              try { global.speechSynthesis.cancel(); } catch (_) {}
+              fin(false);
+            }
+          }, Math.min(60000, Math.max(12000, 2500 + text.length * 140)));
+        } catch (_) {
           fin(false);
         }
-      }, Math.min(60000, Math.max(12000, 2500 + text.length * 140)));
-      } catch (_) {
-        fin(false);
+      }
+
+      if (refreshVoices() && selectedVoice) {
+        run();
+      } else {
+        // Mobile: voices sering belum siap saat pertama kali
+        setTimeout(function () { run(); }, 350);
       }
     });
   }

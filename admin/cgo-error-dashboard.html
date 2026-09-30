@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>CIKUR GO · Dashboard Error Pintar</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { color-scheme: dark; }
+    body { background: #020617; color: #e2e8f0; font-family: ui-sans-serif, system-ui, sans-serif; }
+    .code-font { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .sev-CRITICAL { border-color: #fb7185; background: rgba(136,19,55,.25); }
+    .sev-HIGH { border-color: #fb923c; background: rgba(154,52,18,.2); }
+    .sev-MEDIUM { border-color: #fbbf24; background: rgba(120,53,15,.18); }
+    .sev-LOW { border-color: #64748b; background: rgba(15,23,42,.6); }
+    .chain-step { position: relative; padding-left: 1.1rem; }
+    .chain-step::before {
+      content: ""; position: absolute; left: 0; top: .45rem; width: .45rem; height: .45rem;
+      border-radius: 999px; background: #34d399;
+    }
+    .chain-step + .chain-step::after {
+      content: ""; position: absolute; left: .18rem; top: -0.75rem; width: 2px; height: .9rem;
+      background: #334155;
+    }
+    .pulse-dot { width: 8px; height: 8px; border-radius: 999px; background: #34d399; box-shadow: 0 0 0 0 rgba(52,211,153,.6); animation: pulse 1.6s infinite; }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(52,211,153,.55); }
+      70% { box-shadow: 0 0 0 10px rgba(52,211,153,0); }
+      100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); }
+    }
+    .scroll-panel { max-height: min(58vh, 560px); overflow: auto; }
+  </style>
+</head>
+<body class="min-h-screen">
+  <header class="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 backdrop-blur px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <div class="pulse-dot" id="live-dot"></div>
+      <div>
+        <div class="text-sm font-bold text-white tracking-wide">Dashboard Error Pintar</div>
+        <div class="text-[10px] text-slate-400 code-font" id="hdr-sub">Real-time · gejala → file → baris → relasi → akar · diterjemahkan Mesin ABC</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 text-[11px]">
+      <a href="bcgo.html" class="px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">← BCGO</a>
+      <a href="cgo-machine-abc.html" class="px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">Mesin ABC</a>
+      <button id="btn-clear" type="button" class="px-3 py-1.5 rounded-lg border border-rose-900/60 text-rose-300 hover:bg-rose-950/40">Bersihkan</button>
+      <button id="btn-refresh" type="button" class="px-3 py-1.5 rounded-lg bg-emerald-700/80 text-white hover:bg-emerald-600">Refresh</button>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto p-4 space-y-4">
+    <!-- KPI -->
+    <section class="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <div class="rounded-xl border border-slate-800 bg-slate-900/80 p-3">
+        <div class="text-[9px] uppercase text-slate-500 tracking-wider">Total error</div>
+        <div class="text-2xl font-bold text-white code-font" id="kpi-total">0</div>
+      </div>
+      <div class="rounded-xl border border-rose-900/50 bg-rose-950/20 p-3">
+        <div class="text-[9px] uppercase text-rose-400/80 tracking-wider">Kritis / Tinggi</div>
+        <div class="text-2xl font-bold text-rose-300 code-font" id="kpi-active">0</div>
+      </div>
+      <div class="rounded-xl border border-amber-900/40 bg-amber-950/20 p-3">
+        <div class="text-[9px] uppercase text-amber-400/80 tracking-wider">Relasi putus</div>
+        <div class="text-2xl font-bold text-amber-300 code-font" id="kpi-rel">0</div>
+      </div>
+      <div class="rounded-xl border border-cyan-900/40 bg-cyan-950/20 p-3">
+        <div class="text-[9px] uppercase text-cyan-400/80 tracking-wider">Runtime</div>
+        <div class="text-2xl font-bold text-cyan-300 code-font" id="kpi-rt">0</div>
+      </div>
+      <div class="rounded-xl border border-slate-800 bg-slate-900/80 p-3">
+        <div class="text-[9px] uppercase text-slate-500 tracking-wider">BCGO cycle</div>
+        <div class="text-lg font-bold text-slate-200 code-font" id="kpi-cycle">—</div>
+        <div class="text-[10px] text-slate-500" id="kpi-mode">menunggu state</div>
+      </div>
+    </section>
+
+    <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-[11px] text-slate-400 flex flex-wrap gap-3 items-center">
+      <span class="text-emerald-400 font-semibold">LIVE</span>
+      <span id="scan-status">Source scan: —</span>
+      <span class="text-slate-600">|</span>
+      <span id="tick-at">Tick: —</span>
+      <span class="text-slate-600">|</span>
+      <span id="engine-ver">Engine: —</span>
+      <span class="text-slate-600">|</span>
+      <span id="abc-ready">ABC: —</span>
+    </section>
+
+    <div class="grid lg:grid-cols-2 gap-4">
+      <!-- Chains -->
+      <section class="rounded-xl border border-emerald-900/40 bg-slate-900/80 overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
+          <div>
+            <div class="text-xs font-bold text-emerald-300 uppercase tracking-wider">Rantai Akar Masalah</div>
+            <div class="text-[10px] text-slate-500">Gejala → file → baris → relasi → akar</div>
+          </div>
+          <span class="text-[10px] code-font text-slate-500" id="chain-count">0 rantai</span>
+        </div>
+        <div id="chain-list" class="scroll-panel p-3 space-y-3">
+          <div class="text-sm text-slate-500 p-4 text-center">Belum ada error aktif. Monitor menunggu sinyal runtime / BCGO / scanner.</div>
+        </div>
+      </section>
+
+      <!-- Raw list -->
+      <section class="rounded-xl border border-slate-800 bg-slate-900/80 overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
+          <div>
+            <div class="text-xs font-bold text-slate-300 uppercase tracking-wider">Aliran Error Live</div>
+            <div class="text-[10px] text-slate-500">Runtime · rejection · organ · neural · scanner</div>
+          </div>
+          <span class="text-[10px] code-font text-slate-500" id="err-count">0 entri</span>
+        </div>
+        <div id="error-list" class="scroll-panel p-3 space-y-2">
+          <div class="text-sm text-slate-500 p-4 text-center">Kosong</div>
+        </div>
+      </section>
+    </div>
+
+    <section class="rounded-xl border border-slate-800 bg-slate-950/80 p-4 text-[11px] text-slate-500 space-y-1">
+      <div class="text-slate-400 font-semibold">Cara baca dashboard ini</div>
+      <p>1. <b class="text-slate-300">Gejala</b> — pesan error yang muncul (runtime, organ, scanner).</p>
+      <p>2. <b class="text-slate-300">Lokasi</b> — file + baris + kolom bila browser/stack memberikannya.</p>
+      <p>3. <b class="text-slate-300">Relasi</b> — dari source scan: file A tidak terhubung ke file B (UNKNOWN/MISMATCH).</p>
+      <p>4. <b class="text-slate-300">Akar</b> — hipotesis ringkas: relasi putus, referensi runtime, atau cross-origin.</p>
+      <p>5. <b class="text-violet-300">Mesin ABC</b> — pipeline A→B→C→D menilai kasus lalu ditulis ulang dalam bahasa yang mudah dipahami (status, keyakinan, saran).</p>
+      <p class="text-slate-600 pt-1">Buka berdampingan dengan <span class="text-cyan-400">bcgo.html</span> agar BCGO_STATE mengalir ke dashboard ini (BroadcastChannel + poll).</p>
+    </section>
+  </main>
+
+  <!-- Mesin ABC membantu menerjemahkan error → teks manusia -->
+  <script src="cgo-machine-abc.js?v=0.9.9-OTAK-CORE"></script>
+  <script src="cgo-machine-abc-bridge.js?v=1.7.0-BCGO-SYNC-OTAK"></script>
+  <script src="cgo-error-dashboard.js?v=1.1.0-ABC-HUMAN-READABLE"></script>
+  <script>
+  (function () {
+    function esc(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+    function sevClass(s) {
+      return "sev-" + (s || "LOW");
+    }
+    function timeStr(t) {
+      try { return new Date(t).toLocaleTimeString("id-ID"); } catch (_) { return "—"; }
+    }
+
+    function renderChain(c) {
+      const root = c.root || {};
+      const loc = c.file
+        ? (c.file + (c.line != null ? ":" + c.line : "") + (c.column != null ? ":" + c.column : ""))
+        : "lokasi tidak diketahui";
+      const frames = (c.frames || []).slice(0, 4).map(function (f) {
+        return '<div class="text-[10px] text-slate-500 code-font">' +
+          esc((f.fn ? f.fn + " @ " : "") + (f.file || "?") + (f.line != null ? ":" + f.line : "")) +
+          "</div>";
+      }).join("");
+      const rels = (c.relationHits || []).map(function (r) {
+        return '<div class="text-[10px] text-amber-300/90 code-font">↔ ' +
+          esc((r.from || "").split("/").pop()) + " → " + esc((r.to || "").split("/").pop()) +
+          " · " + esc(r.status) + "</div>";
+      }).join("");
+      var abc = c.abcHuman || null;
+      var abcBlock = abc
+        ? ('<div class="chain-step"><span class="text-slate-500 text-[10px] uppercase">Mesin ABC · bahasa manusia</span>' +
+           '<div class="text-violet-300 font-semibold text-[11px]">' + esc(abc.headline || "ABC") + '</div>' +
+           '<div class="text-slate-100 leading-relaxed mt-0.5">' + esc(abc.body || "") + '</div></div>')
+        : '<div class="chain-step"><span class="text-slate-500 text-[10px] uppercase">Mesin ABC</span><div class="text-slate-500 text-[11px]">Belum ada terjemahan ABC untuk rantai ini.</div></div>';
+      return (
+        '<article class="rounded-xl border p-3 ' + sevClass(c.severity) + '">' +
+          '<div class="flex justify-between gap-2 mb-2">' +
+            '<span class="text-[10px] font-bold uppercase tracking-wide text-slate-200">' + esc(c.severity) +
+            ' · ' + esc(c.source) + '</span>' +
+            '<span class="text-[10px] text-slate-500 code-font">×' + (c.count || 1) + ' · ' + esc(timeStr(c.at)) + '</span>' +
+          '</div>' +
+          '<div class="space-y-2 text-[12px]">' +
+            '<div class="chain-step"><span class="text-slate-500 text-[10px] uppercase">Gejala</span><div class="text-slate-100">' + esc(c.symptom) + '</div></div>' +
+            '<div class="chain-step"><span class="text-slate-500 text-[10px] uppercase">Lokasi</span><div class="code-font text-cyan-300">' + esc(loc) + '</div>' + frames + '</div>' +
+            (rels ? '<div class="chain-step"><span class="text-slate-500 text-[10px] uppercase">Relasi</span>' + rels + '</div>' : '') +
+            '<div class="chain-step"><span class="text-slate-500 text-[10px] uppercase">Akar</span>' +
+              '<div class="text-emerald-300 font-semibold">' + esc(root.kind || "GEJALA") + '</div>' +
+              '<div class="text-slate-200">' + esc(root.summary || "—") + '</div>' +
+              (root.detail ? '<div class="text-[10px] text-slate-400 mt-0.5">' + esc(root.detail) + '</div>' : '') +
+            '</div>' +
+            abcBlock +
+          '</div>' +
+        '</article>'
+      );
+    }
+
+    function renderError(e) {
+      const loc = e.file
+        ? (e.file + (e.line != null ? ":" + e.line : "") + (e.column != null ? ":" + e.column : ""))
+        : "—";
+      return (
+        '<div class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2">' +
+          '<div class="flex justify-between gap-2">' +
+            '<span class="text-[10px] font-bold ' +
+              (e.severity === "CRITICAL" ? "text-rose-400" : e.severity === "HIGH" ? "text-orange-400" : "text-slate-400") +
+            '">' + esc(e.severity) + ' · ' + esc(e.source) + '</span>' +
+            '<span class="text-[9px] text-slate-600 code-font">×' + (e.count || 1) + ' · ' + esc(timeStr(e.at)) + '</span>' +
+          '</div>' +
+          '<div class="text-[12px] text-slate-200 mt-1">' + esc(e.message) + '</div>' +
+          '<div class="text-[10px] code-font text-cyan-500/90 mt-1">' + esc(loc) + '</div>' +
+        '</div>'
+      );
+    }
+
+    function paint(snap) {
+      if (!snap) return;
+      const s = snap.summary || {};
+      document.getElementById("kpi-total").textContent = s.total ?? 0;
+      document.getElementById("kpi-active").textContent = s.active ?? 0;
+      document.getElementById("kpi-rel").textContent = s.relationBreaks ?? 0;
+      document.getElementById("kpi-rt").textContent = s.runtime ?? 0;
+      document.getElementById("kpi-cycle").textContent = snap.bcgoCycle != null ? "#" + snap.bcgoCycle : "—";
+      document.getElementById("kpi-mode").textContent = snap.bcgoMode || "menunggu BCGO_STATE";
+      document.getElementById("engine-ver").textContent = "Engine: " + (snap.version || "—");
+      var ar = document.getElementById("abc-ready");
+      if (ar) { ar.textContent = snap.abcReady ? "ABC: SIAP · menerjemahkan" : "ABC: offline"; ar.className = snap.abcReady ? "text-violet-300" : "text-slate-500"; }
+      document.getElementById("tick-at").textContent = "Tick: " + timeStr(snap.at);
+      const sc = snap.sourceScan;
+      document.getElementById("scan-status").textContent = sc
+        ? ("Source scan: " + (sc.status || "—") + (sc.filesScanned != null ? " · " + sc.filesScanned + "/" + (sc.totalFiles || "?") : ""))
+        : "Source scan: belum ada (buka BCGO)";
+
+      const chains = snap.chains || [];
+      document.getElementById("chain-count").textContent = chains.length + " rantai";
+      document.getElementById("chain-list").innerHTML = chains.length
+        ? chains.map(renderChain).join("")
+        : '<div class="text-sm text-slate-500 p-4 text-center">Belum ada rantai error. Sistem tampak tenang — atau BCGO belum mengirim state.</div>';
+
+      const errs = snap.errors || [];
+      document.getElementById("err-count").textContent = errs.length + " entri";
+      document.getElementById("error-list").innerHTML = errs.length
+        ? errs.map(renderError).join("")
+        : '<div class="text-sm text-slate-500 p-4 text-center">Kosong</div>';
+    }
+
+    const eng = window.CGOErrorDashboard;
+    if (!eng) {
+      document.getElementById("chain-list").innerHTML = '<div class="text-rose-400 p-4">Engine gagal dimuat.</div>';
+      return;
+    }
+    eng.start(1200);
+    eng.subscribe(paint);
+    paint(eng.snapshot());
+
+    document.getElementById("btn-refresh").addEventListener("click", function () {
+      eng.tick();
+      paint(eng.snapshot());
+    });
+    document.getElementById("btn-clear").addEventListener("click", function () {
+      eng.clear();
+      paint(eng.snapshot());
+    });
+
+    // Demo self-check: jangan throw ke production — hanya log
+    try { console.log("[ErrorDashboard UI] terhubung ·", eng.version); } catch (_) {}
+  })();
+  </script>
+</body>
+</html>

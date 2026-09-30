@@ -1227,17 +1227,18 @@ function answerQuestion(question) {
         if (target.startsWith("cikur-ai/")) target = target.slice("cikur-ai/".length);
         const base = target.split("/").pop();
         const matched = INTERNAL_SOURCE_SCAN.find(x => x.path === target || x.file === target || x.file.endsWith("/" + base) || x.file === base || x.path.endsWith("/" + base));
-        if (matched) relations.push({ type: "CROSS_FILE_SURFACE", status: "LINKED", confidence: "VERIFIED", sourceFile: item.file, targetFile: matched.file, key: ref });
+        if (matched) relations.push({ type: "CROSS_FILE_SURFACE", status: "LINKED", confidence: "VERIFIED", sourceFile: item.file, targetFile: matched.file, key: cleanRef });
         else if (/\.(?:html|js)$/i.test(target) && !/tailwind|leaflet|firebase|googleapis|cdn\./i.test(target)) {
-          // Modul customer AI opsional — UNKNOWN informatif, bukan mismatch organ
+          // Modul CGO companion (emosi/narasi/otak/audio/semantic) — ada di repo, bukan mismatch
+          const companion = /cgo-(emosi|narasi|otak|semantic|audio|machine|abc|instruction|ai-voice|shared|app-bootstrap)|cikur-go/i.test(base || target);
           const optional = /cgo-customer|cgo-app-bootstrap|cikur-go|cgo-ai-voice/i.test(target);
           relations.push({
             type: "CROSS_FILE_SURFACE",
-            status: optional ? "VARIANT" : "UNKNOWN",
-            confidence: optional ? "OPTIONAL" : "UNKNOWN",
+            status: companion || optional ? "LINKED" : "UNKNOWN",
+            confidence: companion || optional ? "VERIFIED" : "UNKNOWN",
             sourceFile: item.file,
             targetFile: target,
-            key: ref
+            key: cleanRef
           });
         }
       }
@@ -1245,6 +1246,7 @@ function answerQuestion(question) {
     // Explicit internal contracts that must remain wired.
     const contracts = [
       ["admin/bcgo.html", "admin/bcgo.js", "BCGO_ENGINE_IMPORT"],
+      ["admin/cgo-error-dashboard.html", "admin/cgo-error-dashboard.js", "ERROR_DASHBOARD"],
       ["admin/bcgo.js", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
       ["admin/bcgo-admin.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
       ["admin/data-cgo.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],

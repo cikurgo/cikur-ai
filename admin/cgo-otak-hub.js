@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.3.0-UNIFIED-BRAIN-PIPELINE";
+  const VERSION = "1.3.1-CHAT-SAFE-NO-HANG";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -273,7 +273,7 @@
 
   /* ---------------- Satu jalur tanya-jawab ---------------- */
   const ABC_TRIGGER = /analisis|struktur|audit|verifikasi|bukti|mesin abc|pipeline|self-?test/i;
-  const SYSTEM_TRIGGER = /cgo|bcgo|cikur go|sistem|file|berkas|kode|source|dependency|dependensi|relasi|hubungan|telemetry|anomaly|anomali|investigasi|root cause|error|bug|status sistem|perbaiki|perbaikan|patch|radar|machine abc|mesin abc/i;
+  const SYSTEM_TRIGGER = /\b(status sistem|status bcgo|status cgo|telemetry|anomali aktif|investigasi|root cause|source scan|scanner|dependency|mesin abc|machine abc|pipeline abc|perbaiki sistem|patch organ)\b/i;
   const RECALL_TRIGGER = /^(tadi|sebelumnya|barusan)\b|kita bahas apa|topik terakhir|apa yang tadi/i;
   const WEAK_ANSWER = /belum punya bukti|belum bisa/i;
 
@@ -312,7 +312,9 @@
 
     const topic = intent && intent.topic ? intent.topic : null;
     const mode = intent && intent.mode ? intent.mode : null;
-    const systemRequest = SYSTEM_TRIGGER.test(t) || !!(intent && (intent.technicalSignal || intent.statusQuestion || intent.explicitAction));
+    // Jangan anggap setiap kata teknis (status/masalah/cek) sebagai jalur sistem penuh —
+    // itu yang bikin chat berat/hang. Jalur sistem hanya trigger eksplisit.
+    const systemRequest = SYSTEM_TRIGGER.test(t) || !!(intent && intent.explicitAction && (intent.topic === "SYSTEM_WORK" || intent.topic === "REPAIR"));
     const convOnly = !systemRequest;
 
     
@@ -666,7 +668,7 @@
 
       // 2) Mesin ABC menjadi validator formal untuk permintaan sistem.
       // Hanya jalur sistem yang masuk ABC; chat biasa tetap ringan.
-      if (ABC_TRIGGER.test(t) || systemRequest) {
+      if (ABC_TRIGGER.test(t)) { /* ABC hanya bila diminta eksplisit — cegah hang chat */
         try {
           const bridge = global.CGOMachineABCBridge;
           if (bridge && typeof bridge.analyze === "function") {

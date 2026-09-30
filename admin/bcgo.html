@@ -144,8 +144,11 @@ body{font-family:'Inter',sans-serif}
             <p class="text-xs text-slate-400 mt-1">Pusat Saraf Master & Pemetaan Saraf Lintas File Cikur Go</p>
         </div>
     </div>
-    <div id="system-status-badge" class="px-3 py-1 rounded-md text-xs font-semibold bg-slate-900 text-slate-400 border border-slate-700">
+    <div class="flex items-center gap-2 shrink-0">
+      <a href="cgo-error-dashboard.html" class="px-3 py-1 rounded-md text-[10px] font-semibold bg-rose-950/50 text-rose-300 border border-rose-900/50 hover:bg-rose-900/40" title="Dashboard Error Pintar real-time">Error Monitor</a>
+      <div id="system-status-badge" class="px-3 py-1 rounded-md text-xs font-semibold bg-slate-900 text-slate-400 border border-slate-700">
         Membangunkan Saraf
+      </div>
     </div>
 </header>
 
@@ -499,11 +502,11 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-audio-queue.js?v=1.0.0-AUDIO-QUEUE"></script>
 <script src="cgo-emosi.js?v=1.1.0-EMOSI-AIRPORT"></script>
 <script src="cgo-narasi.js?v=1.0.0-NARASI"></script>
-<script src="cgo-ai-voice-operator.js?v=3.8.1-FEMALE-ONLY-ROOTSAFE"></script>
+<script src="cgo-ai-voice-operator.js?v=3.8.2-FEMALE-ONLY-NO-ROBOT"></script>
 <script src="cgo-machine-abc.js?v=0.9.9-OTAK-CORE-20260927"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.7.0-BCGO-SYNC-OTAK-20260928"></script>
 <script src="cgo-abc-cognition.js?v=1.1.0-CGO-ABC-COGNITION"></script>
-<script src="cgo-otak-hub.js?v=1.3.0-UNIFIED-BRAIN-PIPELINE-20260929"></script>
+<script src="cgo-otak-hub.js?v=1.3.1-CHAT-SAFE-NO-HANG"></script>
 
 <script type="module">
 import * as CGOInstruction from "./cgo-instruction.js?v=1.3.0-CONSTITUTION";
@@ -1201,8 +1204,18 @@ async function sendQuestion(question, opts) {
         if (window.CGO_OTAK && typeof window.CGO_OTAK.ask === 'function') {
             try {
                 setChatLiveStatus('Satu Otak memproses…', 'working');
-                const hubRes = await window.CGO_OTAK.ask(text, { liveState: liveState });
-                if (hubRes && hubRes.answer) {
+                const ASK_MS = 12000;
+                const hubRes = await Promise.race([
+                  Promise.resolve(window.CGO_OTAK.ask(text, { liveState: liveState })),
+                  new Promise(function (resolve) {
+                    setTimeout(function () { resolve({ ok: false, answer: null, timeout: true, error: 'ASK_TIMEOUT' }); }, ASK_MS);
+                  })
+                ]);
+                if (hubRes && hubRes.timeout) {
+                  console.warn('[BCGO] CGO_OTAK.ask timeout', ASK_MS, 'ms');
+                  answer = 'Otak masih memproses terlalu lama. Coba pertanyaan lebih singkat, atau ketik status sistem.';
+                  brainSource = 'CGO_OTAK_TIMEOUT';
+                } else if (hubRes && hubRes.answer) {
                     answer = hubRes.answer;
                     brainSource = 'CGO_OTAK';
                 } else if (typeof hubRes === 'string' && hubRes.trim()) {
@@ -1566,7 +1579,7 @@ function renderConnection(state) {
 let abcSoundEnabled=false,abcHapticEnabled=true,abcAudioCtx=null,abcMasterGain=null,abcAudioReady=false,abcSoundQueueUntil=0;
 const ABC_AUDIO_GAIN=.22;
 async function abcEnsureAudio(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error('Web Audio API tidak tersedia');if(!abcAudioCtx){abcAudioCtx=new AC({latencyHint:'interactive'});abcMasterGain=abcAudioCtx.createGain();abcMasterGain.gain.value=ABC_AUDIO_GAIN;const comp=abcAudioCtx.createDynamicsCompressor();comp.threshold.value=-20;comp.knee.value=18;comp.ratio.value=4;comp.attack.value=.008;comp.release.value=.18;abcMasterGain.connect(comp);comp.connect(abcAudioCtx.destination);abcAudioCtx.onstatechange=()=>{if(abcSoundEnabled&&abcAudioCtx.state==='running')abcAudioReady=true}}if(abcAudioCtx.state!=='running')await abcAudioCtx.resume();if(abcAudioCtx.state!=='running')throw new Error('AudioContext belum running');abcAudioReady=true;return abcAudioCtx}
-function abcVoice(ctx,when,f,d,type='sine',level=.08,glide=null,pan=0){const o=ctx.createOscillator(),g=ctx.createGain(),p=ctx.createStereoPanner?ctx.createStereoPanner():null;o.type=type;o.frequency.setValueAtTime(f,when);if(glide)o.frequency.exponentialRampToValueAtTime(glide,when+d*.8);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.012);g.gain.exponentialRampToValueAtTime(level*.42,when+d*.55);g.gain.exponentialRampToValueAtTime(.0001,when+d);o.connect(g);if(p){p.pan.value=pan;g.connect(p);p.connect(abcMasterGain)}else g.connect(abcMasterGain);o.start(when);o.stop(when+d+.03)}
+function abcVoice(ctx,when,f,d,type='sine',level=.08,glide=null,pan=0){ /* ROBOT OSCILLATOR DIMATIKAN */ return null; const o=ctx.createOscillator(),g=ctx.createGain(),p=ctx.createStereoPanner?ctx.createStereoPanner():null;o.type=type;o.frequency.setValueAtTime(f,when);if(glide)o.frequency.exponentialRampToValueAtTime(glide,when+d*.8);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(level,when+.012);g.gain.exponentialRampToValueAtTime(level*.42,when+d*.55);g.gain.exponentialRampToValueAtTime(.0001,when+d);o.connect(g);if(p){p.pan.value=pan;g.connect(p);p.connect(abcMasterGain)}else g.connect(abcMasterGain);o.start(when);o.stop(when+d+.03)}
 function abcSound(kind='tick',force=false){ /* ROBOT BEEP DIMATIKAN — hanya suara wanita Operator */ return false; }
 
 // Ambient bed + visual state (safe no-op if audio not armed)
@@ -1600,7 +1613,7 @@ function abcApplyAmbientState(mode){
   }catch(_){}
 }
 
-async function abcArmSound(){try{try{window.CGOOperatorVoice&&(window.CGOOperatorVoice.unlock(),window.CGOOperatorVoice.setEnabled(true),window.CGOOperatorVoice.state("SYSTEM_READY",{force:true}))}catch(_e){}await abcEnsureAudio();abcSoundEnabled=true;abcSoundQueueUntil=0;abcSound('start',true);const b=document.getElementById('abc-sound-toggle');if(b){b.textContent='🔊 SYSTEM AUDIO · READY';b.classList.add('text-emerald-300')}return true}catch(e){abcSoundEnabled=false;const b=document.getElementById('abc-sound-toggle');if(b)b.textContent='🔇 AUDIO UNAVAILABLE';console.warn('[BCGO AUDIO]',e);return false}}
+async function abcArmSound(){try{/* HANYA Operator wanita — tidak arm oscillator robot */try{if(window.CGOOperatorVoice){window.CGOOperatorVoice.unlock();window.CGOOperatorVoice.setEnabled(true);window.CGOOperatorVoice.setChatSpeak&&window.CGOOperatorVoice.setChatSpeak(true);window.CGOOperatorVoice.setQuietLive&&window.CGOOperatorVoice.setQuietLive(true);if(window.CGOOperatorVoice.welcome)window.CGOOperatorVoice.welcome();}}catch(_e){}abcSoundEnabled=false;abcAudioReady=false;abcSoundQueueUntil=0;const b=document.getElementById('abc-sound-toggle');if(b){b.textContent='OPERATOR WANITA · ON';b.classList.add('text-emerald-300')}return true}catch(e){abcSoundEnabled=false;const b=document.getElementById('abc-sound-toggle');if(b)b.textContent='🔇 AUDIO UNAVAILABLE';console.warn('[BCGO AUDIO]',e);return false}}
 function abcDisarmSound(){try{window.CGOOperatorVoice&&window.CGOOperatorVoice.setEnabled(false)}catch(_e){}abcSoundEnabled=false;abcAudioReady=false;abcSoundQueueUntil=0;try{abcAudioCtx?.suspend?.()}catch(_){}const b=document.getElementById('abc-sound-toggle');if(b){b.textContent='🔇 SOUND OFF';b.classList.remove('text-emerald-300')}}
 async function abcRecoverAudio(){if(!abcSoundEnabled||!abcAudioCtx)return false;try{if(abcAudioCtx.state!=='running')await abcAudioCtx.resume();if(abcAudioCtx.state==='running'){abcAudioReady=true;return true}}catch(_){}return false}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)abcRecoverAudio()});window.addEventListener('pageshow',()=>abcRecoverAudio());
@@ -1922,13 +1935,7 @@ await runAutonomousEngine(state => {
 })();
 
 (function(){
-  function bootOperator(){
-    try {
-      if (window.CGOOperatorVoice) {
-        if (typeof window.CGOOperatorVoice.unlock === 'function') window.CGOOperatorVoice.unlock();
-        if (typeof window.CGOOperatorVoice.welcome === 'function') window.CGOOperatorVoice.welcome();
-        else if (typeof window.CGOOperatorVoice.emit === 'function') window.CGOOperatorVoice.emit('SYSTEM_READY');
-      }
+  function bootOperator(){try{if(window.CGOOperatorVoice){window.CGOOperatorVoice.unlock();window.CGOOperatorVoice.setEnabled(true);window.CGOOperatorVoice.setChatSpeak&&window.CGOOperatorVoice.setChatSpeak(true);window.CGOOperatorVoice.setQuietLive&&window.CGOOperatorVoice.setQuietLive(true);}}catch(_){}}
     } catch(e) { console.warn('operator boot', e); }
   }
   if (document.readyState === 'complete') setTimeout(bootOperator, 600);
