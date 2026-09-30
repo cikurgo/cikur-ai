@@ -62,7 +62,7 @@ async function __loadCgoCloud() {
 
 
 /*
- * BCGO MASTER NERVE SYSTEM v4.3.0-INTERNAL-SOURCE-SCAN
+ * BCGO MASTER NERVE SYSTEM v4.3.1-BOOT-NO-HANG
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -237,10 +237,38 @@ export async function runAutonomousEngine(onCycleUpdate) {
     throw new TypeError("BCGO membutuhkan callback UI.");
   }
 
-  // Coba cloud; gagal → tetap boot offline (jangan biarkan UI stuck CONNECTING)
-  const cloudOk = await __loadCgoCloud();
+  // Stub brain SEGERA agar Otak Hub / chat / dashboard tidak menunggu cloud
+  if (typeof globalThis !== "undefined" && !globalThis.BCGOBrain) {
+    globalThis.BCGOBrain = {
+      version: "boot-stub",
+      ask: function () { return "BCGO sedang bangun (mode lokal). Tunggu sebentar lalu tanya lagi."; },
+      getState: function () { return globalThis.BCGO_STATE || null; },
+      getSituation: function () { return "BOOT"; },
+      stop: function () {}
+    };
+    try {
+      globalThis.dispatchEvent && globalThis.dispatchEvent(new CustomEvent("cgo:otak-state", { detail: { module: "BCGO_ENGINE", version: "boot-stub" } }));
+    } catch (_) {}
+  }
+
+  // Coba cloud dengan TIMEOUT — jangan gantung boot selamanya
+  let cloudOk = false;
+  try {
+    cloudOk = await Promise.race([
+      __loadCgoCloud(),
+      new Promise(function (resolve) {
+        setTimeout(function () {
+          console.warn("[BCGO] Cloud load timeout 4s — lanjut offline");
+          resolve(false);
+        }, 4000);
+      })
+    ]);
+  } catch (e) {
+    console.warn("[BCGO] Cloud load error:", e);
+    cloudOk = false;
+  }
   if (!cloudOk) {
-    console.warn("[BCGO] Menjalankan tanpa Firebase:", __cgoCloudError?.message || __cgoCloudError);
+    console.warn("[BCGO] Menjalankan tanpa Firebase:", __cgoCloudError?.message || __cgoCloudError || "timeout/offline");
   }
 
 
@@ -1406,6 +1434,9 @@ function answerQuestion(question) {
   function startLocalAutonomy(reason) {
     if (stopped || authorized || localMode) return;
     localMode = true;
+    state.cycleMode = "LOCAL";
+    state.message = "[LOCAL] Otonomi lokal aktif — scan & chat jalan tanpa cloud. " + (reason || "");
+    state.step = "IN";
     recordEvent("LOCAL", "Mode otonomi lokal aktif — sensor Firestore menunggu sesi Super Admin.", "SYS_LOCAL_AUTONOMY");
     emit("IN",
       "Mode otonomi lokal aktif. Saya memindai organ & source tanpa Firestore. " + (reason || "Login Super Admin di bcgo-admin.html untuk telemetry LIVE."),
@@ -1566,15 +1597,18 @@ function answerQuestion(question) {
   window.BCGO_STATE = safeClone(state);
   try {
     if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("cgo:otak-state", { detail: { module: "BCGO_ENGINE", version: brain?.version || null } }));
+      window.dispatchEvent(new CustomEvent("cgo:otak-state", { detail: { module: "BCGO_ENGINE", version: brain?.version || "4.3.0" } }));
     }
   } catch (_) {}
 
   // Publish the boot state immediately. The monitor must visibly report its
   // actual lifecycle even while Firebase is still restoring the Admin session.
-  // This is not a fabricated "online" state: cycleMode remains BOOT and
-  // connection remains CONNECTING until the real auth/Firestore checks pass.
   publishToUI(safeClone(state));
+
+  // Tanpa cloud: langsung otonomi lokal (jangan stuck BOOT)
+  if (!cloudOk) {
+    try { startLocalAutonomy(__cgoCloudError ? String(__cgoCloudError.message || __cgoCloudError) : "Cloud tidak tersedia"); } catch (_) {}
+  }
 
   if (cloudOk && adminAuth && typeof onAuthStateChanged === "function") {
     unsubscribeAuth = onAuthStateChanged(adminAuth, user => {

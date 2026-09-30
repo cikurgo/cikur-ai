@@ -506,7 +506,7 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-machine-abc.js?v=0.9.9-OTAK-CORE-20260927"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.7.0-BCGO-SYNC-OTAK-20260928"></script>
 <script src="cgo-abc-cognition.js?v=1.1.0-CGO-ABC-COGNITION"></script>
-<script src="cgo-otak-hub.js?v=1.3.1-CHAT-SAFE-NO-HANG"></script>
+<script src="cgo-otak-hub.js?v=1.3.2-INTERNAL-PROBE-20260930"></script>
 
 <script type="module">
 import * as CGOInstruction from "./cgo-instruction.js?v=1.3.0-CONSTITUTION";
@@ -529,7 +529,7 @@ window.CGO_SVG = {
 </script>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=5.1.0-LIVE-UI-20260928';
+import { runAutonomousEngine } from './bcgo.js?v=5.1.1-BOOT-NO-HANG-20260930';
 
 // Bridge internal CGO brain ke BCGO_STATE (tanpa AI eksternal)
 let internalBrain = null;
@@ -537,7 +537,7 @@ let internalBrain = null;
 // The brain loads asynchronously; chat/controls remain responsive while it boots.
 const internalBrainReady = (async () => {
   try {
-    const adapter = await import('./cgo-ai-browser-adapter.js?v=5.4.0-ASYNC-BRAIN-BOOT-20260929');
+    const adapter = await import('./cgo-ai-browser-adapter.js?v=5.4.1-OTAK-INTERNAL-READY-20260930');
     if (typeof adapter.install === 'function') {
       internalBrain = adapter.install();
       window.CGOInternalBrain = internalBrain;
@@ -561,10 +561,21 @@ const internalBrainReady = (async () => {
     return internalBrain;
   } catch (err) {
     console.warn('[BCGO] Internal brain tidak tersedia; BCGO monitor tetap berjalan:', err);
+    try {
+      window.__CGO_INTERNAL_BRAIN_ERROR__ = String(err && (err.message || err) || 'import_failed');
+      window.dispatchEvent(new CustomEvent('cgo:otak-state', { detail: { module: 'INTERNAL_BRAIN', error: window.__CGO_INTERNAL_BRAIN_ERROR__ } }));
+    } catch (_) {}
     return null;
   }
 })();
 window.__CGO_INTERNAL_BRAIN_READY__ = internalBrainReady;
+// Setelah brain siap, paksa refresh panel Otak (hindari status tertahan 'belum termuat')
+internalBrainReady.then(function (b) {
+  if (!b) return;
+  try {
+    window.dispatchEvent(new CustomEvent('cgo:otak-state', { detail: { module: 'INTERNAL_BRAIN', version: b.version, ready: true } }));
+  } catch (_) {}
+}).catch(function () {});
 
 
 const $ = id => document.getElementById(id);
@@ -1617,13 +1628,101 @@ async function abcArmSound(){try{/* HANYA Operator wanita — tidak arm oscillat
 function abcDisarmSound(){try{window.CGOOperatorVoice&&window.CGOOperatorVoice.setEnabled(false)}catch(_e){}abcSoundEnabled=false;abcAudioReady=false;abcSoundQueueUntil=0;try{abcAudioCtx?.suspend?.()}catch(_){}const b=document.getElementById('abc-sound-toggle');if(b){b.textContent='🔇 SOUND OFF';b.classList.remove('text-emerald-300')}}
 async function abcRecoverAudio(){if(!abcSoundEnabled||!abcAudioCtx)return false;try{if(abcAudioCtx.state!=='running')await abcAudioCtx.resume();if(abcAudioCtx.state==='running'){abcAudioReady=true;return true}}catch(_){}return false}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)abcRecoverAudio()});window.addEventListener('pageshow',()=>abcRecoverAudio());
+// Jalur lampu A→B→C→D: progres kumulatif + antrean visual (pipeline cepat tetap terlihat)
+window.__abcLampProg = window.__abcLampProg || { cycle: -1, done: {}, active: null };
+window.__abcLampQueue = window.__abcLampQueue || [];
+window.__abcLampBusy = window.__abcLampBusy || false;
+function __abcPaintLamps(){
+  const prog = window.__abcLampProg;
+  const order = ['A','B','C','D'];
+  order.forEach(function(k){
+    const l = document.getElementById('abcLamp'+k);
+    const n = document.getElementById('abcNode'+k);
+    if (!l || !n) return;
+    if (prog.active === k) {
+      l.className = 'abc-lamp active';
+      n.className = 'abc-node active';
+    } else if (prog.done[k] === 'bad') {
+      l.className = 'abc-lamp bad';
+      n.className = 'abc-node';
+    } else if (prog.done[k] === 'ok') {
+      l.className = 'abc-lamp ok';
+      n.className = 'abc-node ok';
+    } else {
+      l.className = 'abc-lamp';
+      n.className = 'abc-node';
+    }
+  });
+}
+function __abcApplyTelemetryFrame(ev){
+  if (!ev || ev.type !== 'ABC_TELEMETRY') return;
+  const stage = ev.stage;
+  const start = ev.event === 'PHASE_START';
+  const order = ['A','B','C','D'];
+  const prog = window.__abcLampProg;
+  const cycleIdx = (ev.cycleIndex != null) ? ev.cycleIndex : prog.cycle;
+  if (cycleIdx !== prog.cycle && (start || prog.cycle < 0)) {
+    window.__abcLampProg = { cycle: cycleIdx, done: {}, active: null };
+  }
+  const P = window.__abcLampProg;
+  if (stage && order.indexOf(stage) >= 0) {
+    if (start) {
+      // tahap sebelumnya dianggap selesai
+      for (let i = 0; i < order.length; i++) {
+        if (order[i] === stage) break;
+        if (!P.done[order[i]]) P.done[order[i]] = 'ok';
+      }
+      P.active = stage;
+      try { abcApplyAmbientState('processing'); } catch (_) {}
+    } else {
+      P.active = null;
+      P.done[stage] = (ev.status === 'FAILED') ? 'bad' : 'ok';
+      // isi tahap sebelum stage juga
+      for (let i = 0; i < order.length; i++) {
+        if (order[i] === stage) break;
+        if (!P.done[order[i]]) P.done[order[i]] = 'ok';
+      }
+      if (ev.status === 'FAILED') {
+        try { abcApplyAmbientState('error'); } catch (_) {}
+        try { abcSound('bad', true); } catch (_) {}
+        try { window.CGOOperatorVoice && window.CGOOperatorVoice.state('ERROR'); } catch (_e) {}
+      } else if (stage === 'D') {
+        const healthy = ev.audit === 'VALID';
+        try { abcApplyAmbientState(healthy ? 'normal' : 'warn'); } catch (_) {}
+        if (healthy) {
+          try { window.CGOOperatorVoice && window.CGOOperatorVoice.state('VALID'); } catch (_e) {}
+        } else {
+          try { abcSound('warn', true); } catch (_) {}
+          try { window.CGOOperatorVoice && window.CGOOperatorVoice.state('WARNING'); } catch (_e) {}
+        }
+      } else if (ev.status === 'DEGRADED' || ev.status === 'PARTIAL') {
+        try { abcApplyAmbientState('warn'); } catch (_) {}
+      }
+    }
+  }
+  __abcPaintLamps();
+  const stateEl = document.getElementById('abc-telemetry-state');
+  if (stateEl) stateEl.textContent = start ? ('RUNNING · ' + stage) : ((stage || '') + ' · ' + (ev.status || 'DONE') + (ev.durationMs != null ? (' · ' + ev.durationMs + 'ms') : ''));
+  const eventEl = document.getElementById('abc-telemetry-event');
+  if (eventEl) eventEl.textContent = (ev.event || '') + ' · ' + (stage || 'SYS');
+}
+function __abcDrainLampQueue(){
+  if (window.__abcLampBusy) return;
+  const q = window.__abcLampQueue;
+  if (!q.length) return;
+  window.__abcLampBusy = true;
+  const ev = q.shift();
+  try { __abcApplyTelemetryFrame(ev); } catch (_) {}
+  setTimeout(function(){
+    window.__abcLampBusy = false;
+    __abcDrainLampQueue();
+  }, 150);
+}
 function renderAbcTelemetry(ev){
-  if(!ev || ev.type !== 'ABC_TELEMETRY') return;
-  const stage=ev.stage, start=ev.event==='PHASE_START';
-  ['A','B','C','D'].forEach(k=>{const l=document.getElementById('abcLamp'+k),n=document.getElementById('abcNode'+k);if(l)l.className='abc-lamp';if(n)n.className='abc-node';});
-  if(stage && ['A','B','C','D'].includes(stage)){const l=document.getElementById('abcLamp'+stage),n=document.getElementById('abcNode'+stage);if(l)l.className='abc-lamp '+(start?'active':ev.status==='FAILED'?'bad':'ok');if(n)n.className='abc-node '+(start?'active':'ok');if(start){abcApplyAmbientState('processing')}else if(ev.status==='FAILED'){abcApplyAmbientState('error');abcSound('bad',true);try{window.CGOOperatorVoice&&window.CGOOperatorVoice.state('ERROR')}catch(_e){}}else if(stage==='D'){const healthy=ev.audit==='VALID';abcApplyAmbientState(healthy?'normal':'warn');if(healthy){try{window.CGOOperatorVoice&&window.CGOOperatorVoice.state('VALID')}catch(_e){}}else{abcSound('warn',true);try{window.CGOOperatorVoice&&window.CGOOperatorVoice.state('WARNING')}catch(_e){}}}else if(ev.status==='DEGRADED'||ev.status==='PARTIAL'){abcApplyAmbientState('warn')}}
-  const state=document.getElementById('abc-telemetry-state'); if(state) state.textContent=start?`RUNNING · ${stage}`:`${stage} · ${ev.status||'DONE'}${ev.durationMs!=null?' · '+ev.durationMs+'ms':''}`;
-  const event=document.getElementById('abc-telemetry-event'); if(event) event.textContent=`${ev.event} · ${stage||'SYS'}`;
+  if (!ev || ev.type !== 'ABC_TELEMETRY') return;
+  // Antre agar PHASE_START/END sinkron tetap terlihat sebagai A→B→C→D
+  window.__abcLampQueue.push(ev);
+  __abcDrainLampQueue();
 }
 document.getElementById('abc-sound-toggle')?.addEventListener('click',async()=>{if(abcSoundEnabled){abcDisarmSound();return;}await abcArmSound();});
 window.addEventListener('beforeunload',()=>{try{abcStopAmbient()}catch(_){}try{abcAudioCtx?.close?.()}catch(_){}},{once:true});
@@ -1935,8 +2034,15 @@ await runAutonomousEngine(state => {
 })();
 
 (function(){
-  function bootOperator(){try{if(window.CGOOperatorVoice){window.CGOOperatorVoice.unlock();window.CGOOperatorVoice.setEnabled(true);window.CGOOperatorVoice.setChatSpeak&&window.CGOOperatorVoice.setChatSpeak(true);window.CGOOperatorVoice.setQuietLive&&window.CGOOperatorVoice.setQuietLive(true);}}catch(_){}}
-    } catch(e) { console.warn('operator boot', e); }
+  function bootOperator(){
+    try {
+      if (window.CGOOperatorVoice) {
+        window.CGOOperatorVoice.unlock();
+        window.CGOOperatorVoice.setEnabled(true);
+        window.CGOOperatorVoice.setChatSpeak && window.CGOOperatorVoice.setChatSpeak(true);
+        window.CGOOperatorVoice.setQuietLive && window.CGOOperatorVoice.setQuietLive(true);
+      }
+    } catch (e) { console.warn('operator boot', e); }
   }
   if (document.readyState === 'complete') setTimeout(bootOperator, 600);
   else window.addEventListener('load', function(){ setTimeout(bootOperator, 600); });
@@ -1952,28 +2058,37 @@ await runAutonomousEngine(state => {
     const speech = document.getElementById('live-speech');
     const conn = document.getElementById('connection-state');
     const cycle = document.getElementById('cycle-number');
+    const badge = document.getElementById('system-status-badge');
+    const modeEl = document.getElementById('cog-mode');
     const cycleVal = cycle ? String(cycle.textContent||'').trim() : '0';
-    const stuck = (!window.BCGO_STATE || window.BCGO_STATE.cycleMode === 'BOOT' || Number(cycleVal) === 0) && n >= 2;
-    if (window.BCGO_STATE && (window.BCGO_STATE.cycleMode === 'LOCAL' || window.BCGO_STATE.cycleMode === 'NORMAL' || Number(window.BCGO_STATE.cycle||0) > 0)) {
+    const mode = window.BCGO_STATE && window.BCGO_STATE.cycleMode;
+    if (mode === 'LOCAL' || mode === 'NORMAL' || mode === 'ALERT' || Number(window.BCGO_STATE && window.BCGO_STATE.cycle || 0) > 0) {
       clearInterval(t); return;
     }
-    if (n >= 3 && stuck) {
-      clearInterval(t);
-      if (speech && /Membangunkan|Menunggu/.test(speech.textContent||'')) {
-        speech.textContent = '> [LOCAL] Otonomi lokal — sensor cloud menunggu. Chat & scan tetap aktif.';
-      }
-      if (conn && /CONNECTING/.test(conn.textContent||'')) {
+    // Setelah 2.4s masih BOOT: paksa state lokal di UI + minta engine lanjut
+    if (n >= 2) {
+      if (speech) speech.textContent = '> [LOCAL] Otonomi lokal — sensor cloud menunggu. Chat & scan tetap aktif.';
+      if (conn) {
         conn.innerHTML = '<span class="connection-dot bg-amber-500"></span>OFFLINE · LOCAL';
         conn.className = 'font-semibold text-amber-300';
       }
-      // Coba paksa chat siap
+      if (modeEl) { modeEl.textContent = 'LOCAL'; modeEl.className = 'font-semibold mt-0.5 text-amber-300'; }
+      if (badge) badge.textContent = 'OTONOMI LOKAL';
+      if (window.BCGO_STATE) {
+        try {
+          window.BCGO_STATE.cycleMode = 'LOCAL';
+          window.BCGO_STATE.connection = Object.assign({}, window.BCGO_STATE.connection || {}, { status: 'OFFLINE_LOCAL' });
+        } catch (_) {}
+      }
       const feed = document.getElementById('chat-feed');
       if (feed && !feed.dataset.ready) {
         feed.dataset.ready = '1';
         const ph = feed.querySelector(':scope > .text-xs.text-slate-500');
         if (ph) ph.textContent = 'CGO siap (mode lokal). Tanya status, scanner, atau organ.';
       }
+      try { window.dispatchEvent(new CustomEvent('cgo:otak-state', { detail: { module: 'BCGO_ENGINE', forcedLocal: true } })); } catch (_) {}
     }
+    if (n >= 8) clearInterval(t);
   }, 1200);
 })();
 </script>

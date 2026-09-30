@@ -564,6 +564,16 @@
     try {
       if (global.BCGO_STATE) ingestBcgoState(global.BCGO_STATE);
     } catch (_) {}
+    // Mirror lintas-tab dari BCGO (BroadcastChannel bisa terlewat; localStorage cadangan)
+    try {
+      if (typeof global.localStorage !== "undefined") {
+        const raw = global.localStorage.getItem("CIKUR_GO_BCGO_STATE_V1");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === "object") ingestBcgoState(parsed.state || parsed);
+        }
+      }
+    } catch (_) {}
     try {
       if (global.CGO_OTAK && typeof global.CGO_OTAK.snapshot === "function") {
         const sn = global.CGO_OTAK.snapshot();

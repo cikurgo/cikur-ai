@@ -54,8 +54,18 @@
       id: "INTERNAL_BRAIN", label: "Otak Internal", role: "Investigasi & bukti", required: true,
       probe() {
         const b = global.CGOInternalBrain;
-        return b ? { ready: typeof b.reasonChat === "function", version: b.version || null,
-          detail: { menerimaABC: typeof b.ingestMachineAbc === "function", chatAnswer: typeof b.chatAnswer === "function" } } : null;
+        if (!b) return null;
+        const ready = typeof b.reasonChat === "function" || typeof b.ask === "function" || typeof b.chatAnswer === "function";
+        return {
+          ready: !!ready,
+          version: b.version || null,
+          detail: {
+            menerimaABC: typeof b.ingestMachineAbc === "function",
+            chatAnswer: typeof b.chatAnswer === "function",
+            reasonChat: typeof b.reasonChat === "function",
+            ask: typeof b.ask === "function"
+          }
+        };
       }
     },
     {
