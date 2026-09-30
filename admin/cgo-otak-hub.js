@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.6.0-ANALYSIS-ORDER-MULTIFUNCTION-20260930";
+  const VERSION = "1.3.0-UNIFIED-BRAIN-PIPELINE";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -315,51 +315,22 @@
     const systemRequest = SYSTEM_TRIGGER.test(t) || !!(intent && (intent.technicalSignal || intent.statusQuestion || intent.explicitAction));
     const convOnly = !systemRequest;
 
-    // IMPORTANT: do not call the Customer Conversation specialist yet.
-    // The old order returned its answer before the language/number/emoji/
-    // expression/story analysis below could run. That was the concrete reason
-    // mixed-language and multi-function messages looked under-analysed.
-    // Conversation is invoked only after the complete input analysis exists.
-
+    
     // ─── B. Otak Jenius: multi-bahasa · multi-hitung · multi-emoji · multi-fungsi ───
     let audit = null;
     let spoken = null;
     let tokens = [];
 
-    // Deteksi bahasa target SEBELUM urai/nalar supaya modul berikutnya benar-benar
-    // memakai bahasa yang sudah dipilih. Ini tetap hanya detection offline; bukan
-    // klaim bahwa hub memiliki mesin terjemahan umum untuk semua bahasa.
+    // Deteksi bahasa target dari pesan (default id)
     let lang = "id";
-    let explicitLanguage = false;
     try {
-      const lower = t.toLowerCase();
-      const map = {
-        id:"id", en:"en", es:"es", fr:"fr", de:"de", pt:"pt", ar:"ar", ja:"ja",
-        indonesia:"id", indonesian:"id", inggris:"en", english:"en",
-        spanyol:"es", spanish:"es", español:"es", perancis:"fr", french:"fr", français:"fr", jerman:"de", german:"de", deutsch:"de",
-        portugis:"pt", portuguese:"pt", arab:"ar", arabic:"ar", jepang:"ja", japanese:"ja"
-      };
-      const explicit = lower.match(/\b(?:bahasa|language|lang|in|dalam\s+bahasa)\s*[:=]?\s*(id|en|es|fr|de|pt|ar|ja)\b/i);
-      const named = lower.match(/\b(?:dalam\s+bahasa\s+)?(indonesia|indonesian|inggris|english|spanyol|spanish|perancis|french|jerman|german|portugis|portuguese|arab|arabic|jepang|japanese)\b/i);
-      const phrase = lower.match(/\b(?:in|en)\s+(english|spanish|french|german|portuguese|arabic|japanese|indonesian)\b/i)
-        || lower.match(/\b(?:en|en\s+español|en\s+français|auf|in)\s+(español|français|deutsch)\b/i);
-      const raw = explicit?.[1] || named?.[1] || phrase?.[1] || null;
-      if (raw && map[raw]) { lang = map[raw]; explicitLanguage = true; }
-      if (!explicitLanguage) {
-        const score = { id:0, en:0, es:0, fr:0, de:0, pt:0, ar:0, ja:0 };
-        const cues = {
-          id:/\b(aku|kamu|saya|yang|dan|ini|itu|tidak|nggak|bisa|tolong|bagaimana|kenapa|berapa|hitung)\b/gi,
-          en:/\b(i|you|the|and|this|that|not|can|please|how|why|what|count|calculate|story|happy|sad)\b/gi,
-          es:/\b(yo|tú|usted|el|la|los|las|y|no|puede|por|qué|cómo|cuánto|historia)\b/gi,
-          fr:/\b(je|tu|vous|le|la|les|et|pas|peut|pourquoi|comment|combien|histoire)\b/gi,
-          de:/\b(ich|du|sie|der|die|das|und|nicht|kann|warum|wie|geschichte)\b/gi,
-          pt:/\b(eu|você|voce|o|a|os|as|e|não|nao|pode|porquê|como|quanto|história)\b/gi,
-          ar:/[\u0600-\u06ff]/g,
-          ja:/[\u3040-\u30ff\u3400-\u9fff]/g
-        };
-        for (const [k,re] of Object.entries(cues)) score[k] = (lower.match(re) || []).length;
-        const best = Object.entries(score).sort((a,b)=>b[1]-a[1])[0];
-        if (best && best[1] > 0) lang = best[0];
+      const lm = t.match(/\b(?:bahasa|in|in\s+language|lang(?:uage)?)\s*[:=]?\s*(id|en|es|fr|de|pt|ar|ja)\b/i)
+        || t.match(/\b(in\s+english|dalam\s+bahasa\s+inggris)\b/i)
+        || t.match(/\b(dalam\s+bahasa\s+)?(indonesia|inggris|spanyol|perancis|jerman|portugis|arab|jepang)\b/i);
+      if (lm) {
+        const raw = (lm[1] || lm[2] || "").toLowerCase();
+        const map = { indonesia: "id", inggris: "en", english: "en", spanyol: "es", perancis: "fr", jerman: "de", portugis: "pt", arab: "ar", jepang: "ja" };
+        lang = map[raw] || (["id","en","es","fr","de","pt","ar","ja"].indexOf(raw) >= 0 ? raw : "id");
       }
     } catch (_) {}
 
@@ -421,87 +392,15 @@
     const wantBaca = /\b(baca|bacakan|ucapkan|lafal|jadi\s*kata|ke\s*kata|dibaca)\b/i.test(t);
     const wantBahasaList = /\b(daftar\s*bahasa|bahasa\s*apa|multi\s*bahasa|language\s*list)\b/i.test(t);
 
-    const numericMatches = t.match(/[-+]?\d+(?:[.,]\d+)?/g) || [];
-    const emojiMatches = t.match(/\p{Extended_Pictographic}/gu) || [];
-    const storyCues = {
-      sequence: /\b(pertama|kedua|ketiga|lalu|kemudian|setelah|sebelum|akhirnya|first|then|after|before|finally|next)\b/i.test(t),
-      narrative: /\b(cerita|kisah|alur|ceritakan|lanjutkan cerita|story|plot|narrative|tell me a story)\b/i.test(t),
-      characters: /\b(tokoh|karakter|character|characters|protagonist|antagonist)\b/i.test(t),
-      temporal: /\b(kemarin|hari ini|besok|tadi|sekarang|nanti|yesterday|today|tomorrow|now|later)\b/i.test(t)
-    };
-    const emotionCues = {
-      happy: /[😄😁😂🤣😊🙂😍🥳🎉]|\b(senang|gembira|bahagia|happy|excited|lucu|funny)\b/iu.test(t),
-      sad: /[😢😭😞😔💔]|\b(sedih|kecewa|menangis|sad|disappointed|hurt)\b/iu.test(t),
-      angry: /[😠😡🤬]|\b(marah|kesal|sebel|angry|mad|furious)\b/iu.test(t),
-      worried: /[😟😥😰😨]|\b(cemas|khawatir|takut|bingung|worried|anxious|afraid|confused)\b/iu.test(t),
-      calm: /[😌🫶]|\b(tenang|santai|calm|relaxed)\b/iu.test(t)
-    };
     const linguistic = hasNumInText || hasEmoji || hasWarna || hasRomawi || wantHitung || wantEja
       || wantUang || wantWaktu || wantTanggal || wantBaca || wantBahasaList
-      || storyCues.sequence || storyCues.narrative || storyCues.characters || storyCues.temporal
-      || Object.values(emotionCues).some(Boolean)
       || jenis.angka || jenis.desimal || jenis.emoji;
-    const sentenceParts = t.split(/(?<=[.!?。！？])\s+|\n+/).map(x => x.trim()).filter(Boolean);
-    const sequenceSteps = sentenceParts.map((sentence, index) => ({
-      index: index + 1,
-      text: sentence,
-      orderCue: (sentence.match(/\b(pertama|kedua|ketiga|lalu|kemudian|setelah|sebelum|akhirnya|first|then|after|before|finally|next)\b/i) || [])[1] || null,
-      timeCue: (sentence.match(/\b(kemarin|hari ini|besok|tadi|sekarang|nanti|yesterday|today|tomorrow|now|later)\b/i) || [])[1] || null
-    }));
-    const characterCandidates = [];
-    const characterRe = /\b(?:tokoh|karakter|character|protagonist|antagonist)\s*[:=-]?\s*([A-Za-zÀ-ÿ\u00C0-\u024F][A-Za-zÀ-ÿ\u00C0-\u024F0-9_-]*)/gi;
-    let cm; while ((cm = characterRe.exec(t)) && characterCandidates.length < 16) characterCandidates.push(cm[1]);
-    const emotionHits = Object.entries(emotionCues).filter(([,v]) => v).map(([k]) => k);
-    const emotionIntensity = emotionHits.length ? Math.min(1, 0.35 + emotionHits.length * 0.2 + Math.min(0.3, emojiMatches.length * 0.05)) : 0;
-    const expression = emotionHits.length ? { labels: emotionHits, intensity: Number(emotionIntensity.toFixed(2)), source: emojiMatches.length ? "text+emoji" : "text" } : { labels: [], intensity: 0, source: "none" };
-    const analysis = {
-      language: lang,
-      languageSupported: !!(CG && typeof CG.daftarBahasa === "function" && (()=>{ try{return CG.daftarBahasa().includes(lang);}catch(_){return false;} })()),
-      counts: { characters:[...t].length, words:t.split(/\s+/).filter(Boolean).length, numbers:numericMatches.length, emoji:emojiMatches.length, tokens:tokens.filter(x=>x && x.jenis!=="spasi").length },
-      numbers: numericMatches.slice(0,32),
-      emoji: emojiMatches.slice(0,32),
-      tokenTypes: {...jenis},
-      story: {...storyCues, sentenceCount: sentenceParts.length, sequence: sequenceSteps, characters: characterCandidates},
-      emotion: {...emotionCues, expression},
-      linguistic,
-      systemRequest,
-      intent: intent ? { topic:intent.topic||null, mode:intent.mode||null, behavior:intent.behavior||null } : null
-    };
-    trace.push({ module:"INPUT_ANALYSIS", ok:true, note:`lang=${lang}; numbers=${analysis.counts.numbers}; emoji=${analysis.counts.emoji}; words=${analysis.counts.words}` });
 
     function pickLafal(val) {
       if (val == null) return null;
       if (Array.isArray(val)) return val[0] != null ? String(val[0]) : null;
       if (typeof val === "object" && val.lafal) return String(val.lafal);
       return String(val);
-    }
-
-    function evaluateArithmeticExpression(expr) {
-      const src = String(expr || "").replace(/,/g, ".").replace(/[×x]/gi, "*").replace(/÷/g, "/").replace(/\s+/g, "");
-      if (!/^[0-9.+*/()\-]+$/.test(src) || !/[+*/\-]/.test(src)) return null;
-      const tokens = src.match(/(?:\d+(?:\.\d+)?|[()+*/-])/g) || [];
-      if (tokens.join("") !== src) return null;
-      const values = [], ops = [];
-      const prec = op => (op === "+" || op === "-") ? 1 : 2;
-      const apply = () => {
-        const op = ops.pop(); if (!op || values.length < 2) throw new Error("bad_expression");
-        const b = values.pop(), a = values.pop();
-        if (op === "/" && b === 0) throw new Error("division_by_zero");
-        values.push(op === "+" ? a + b : op === "-" ? a - b : op === "*" ? a * b : a / b);
-      };
-      for (let i=0;i<tokens.length;i++) {
-        const tok=tokens[i];
-        if (/^\d/.test(tok)) values.push(Number(tok));
-        else if (tok === "(") ops.push(tok);
-        else if (tok === ")") { while (ops.length && ops.at(-1) !== "(") apply(); if (ops.pop() !== "(") throw new Error("unbalanced"); }
-        else {
-          if (tok === "-" && (i === 0 || tokens[i-1] === "(" || /[+*/-]/.test(tokens[i-1]))) { values.push(0); }
-          while (ops.length && ops.at(-1) !== "(" && prec(ops.at(-1)) >= prec(tok)) apply();
-          ops.push(tok);
-        }
-      }
-      while (ops.length) { if (ops.at(-1) === "(") throw new Error("unbalanced"); apply(); }
-      return values.length === 1 && Number.isFinite(values[0]) ? values[0] : null;
     }
 
     if (linguistic && CG && !systemRequest) {
@@ -521,34 +420,24 @@
             if (k) parts.push(n + " → " + k + (lang !== "id" ? " (" + lang + ")" : ""));
           } catch (_) {}
         }
-        // Ekspresi aritmetika berantai + prioritas operator, tanpa eval/Function.
-        const expr = t.match(/(?:^|\b(?:hitung|berapa|jumlah|calculate|count)\b\s*)([0-9\s+*/().,\-x×÷]+)(?:\s*=)?\s*$/i)
-          || t.match(/([0-9\s+*/().,\-x×÷]{3,})/);
+        // ekspresi sederhana a+b / a-b
+        const expr = t.match(/(\d+(?:[.,]\d+)?)\s*([+\-*/x×])\s*(\d+(?:[.,]\d+)?)/);
         if (expr) {
           try {
-            const rawExpr = (expr[1] || expr[0]).trim();
-            const r = evaluateArithmeticExpression(rawExpr);
-            if (r != null) {
-              const rounded = Math.round(r * 1000000) / 1000000;
-              const rk = CG.angkaKeKata(String(rounded), lang);
-              parts.push("Hasil hitung: " + rounded + (rk ? " (" + rk + ")" : ""));
+            const a = parseFloat(expr[1].replace(",", "."));
+            const b = parseFloat(expr[3].replace(",", "."));
+            const op = expr[2];
+            let r = null;
+            if (op === "+") r = a + b;
+            else if (op === "-") r = a - b;
+            else if (op === "*" || op === "x" || op === "×") r = a * b;
+            else if (op === "/" && b !== 0) r = a / b;
+            if (r != null && !isNaN(r)) {
+              const rk = CG.angkaKeKata(String(Math.round(r * 1000) / 1000), lang);
+              parts.push("Hasil hitung: " + r + (rk ? " (" + rk + ")" : ""));
             }
           } catch (_) {}
         }
-      }
-
-      // 2b) Struktur alur cerita / urutan peristiwa.
-      if ((storyCues.narrative || storyCues.sequence || storyCues.temporal) && sequenceSteps.length) {
-        parts.push("Alur terurai: " + sequenceSteps.map(x => {
-          const cue = [x.orderCue, x.timeCue].filter(Boolean).join(" / ");
-          return (cue ? cue + ": " : "") + x.text;
-        }).join(" → "));
-        if (characterCandidates.length) parts.push("Tokoh yang terdeteksi: " + [...new Set(characterCandidates)].join(", ") + ".");
-      }
-
-      // 2c) Ekspresi/emotion: label + intensitas, bukan sekadar mencetak emoji.
-      if (expression.labels.length) {
-        parts.push("Ekspresi terdeteksi: " + expression.labels.join(", ") + " · intensitas " + Math.round(expression.intensity * 100) + " persen.");
       }
 
       // 3) Multi-emoji
@@ -675,37 +564,6 @@
     }
 
 // C2. Percakapan / sapaan / identitas / kapabilitas — susun dari konstitusi + state live
-    // Customer Conversation is a specialist, not the gateway itself. It now
-    // receives the complete analysis so it can preserve language, mood, story
-    // continuity and mixed-function context instead of answering too early.
-    if (!answer && convOnly && global.CGO && typeof global.CGO.chatAsync === "function") {
-      try {
-        const customer = await global.CGO.chatAsync(t, {
-          ...(ctx.customerOptions || {}),
-          source: "CGO_OTAK_HUB",
-          cgoAnalysis: analysis,
-          conversationState: convSession
-        });
-        const customerAnswer = String(customer && (customer.response || customer.text || customer.message) || "").trim();
-        if (customerAnswer) {
-          answer = customerAnswer;
-          step("CUSTOMER_CONVERSATION", true, "post-analysis specialist");
-          try {
-            const internal = global.CGOInternalBrain;
-            const rt = internal && typeof internal.getRuntime === "function" ? internal.getRuntime() : null;
-            if (rt && typeof rt.remember === "function") {
-              rt.remember({ type:"CHAT_TURN", question:t.slice(0,500), answer:customerAnswer.slice(0,1200), analysis, modules:["INPUT_ANALYSIS","CUSTOMER_CONVERSATION"], at:new Date().toISOString() });
-              step("INTERNAL_MEMORY", true, "CHAT_TURN+ANALYSIS");
-            }
-          } catch (_) {}
-        } else {
-          step("CUSTOMER_CONVERSATION", false, "jawaban kosong");
-        }
-      } catch (e) {
-        step("CUSTOMER_CONVERSATION", false, String((e && e.message) || e));
-      }
-    }
-
     if (!answer && convOnly && intent) {
       const stepName = live.step || "siaga";
       const cycle = live.cycle != null ? live.cycle : "—";
@@ -790,17 +648,6 @@
     // data/penalaran ke trace yang sama dan hasil yang sudah ada tidak ditimpa.
     if (systemRequest) {
       const brain = global.BCGOBrain;
-      // Page boot remains non-blocking, but a user query must not silently bypass
-      // the Internal Brain merely because its dynamic module import is still loading.
-      if (!global.CGOInternalBrain && global.__CGO_INTERNAL_BRAIN_READY__ &&
-          typeof global.__CGO_INTERNAL_BRAIN_READY__.then === "function") {
-        try {
-          await Promise.race([
-            global.__CGO_INTERNAL_BRAIN_READY__,
-            new Promise(function(resolve){ setTimeout(resolve, 4000); })
-          ]);
-        } catch (_) {}
-      }
       const internal = global.CGOInternalBrain;
       let bcgoAnswer = null;
       let internalAnswer = null;
@@ -1002,8 +849,7 @@
       trace: trace,
       abc: abc,
       intent: intent ? { topic: intent.topic, mode: intent.mode, behavior: intent.behavior } : null,
-      sources: trace.filter(function (x) { return x.ok; }).map(function (x) { return x.module; }),
-      analysis: analysis || null
+      sources: trace.filter(function (x) { return x.ok; }).map(function (x) { return x.module; })
     };
   }
 
@@ -1016,6 +862,14 @@
   });
 
   global.CGO_OTAK = API;
+  // Modul yang load async (instruction, internal brain, BCGO engine) → refresh subscriber
+  try {
+    if (typeof window !== "undefined") {
+      window.addEventListener("cgo-instruction-ready", function () { try { API.refresh && API.refresh(); } catch (_) {} });
+      window.addEventListener("cgo:otak-state", function () { try { API.refresh && API.refresh(); } catch (_) {} });
+    }
+  } catch (_) {}
+
   notify();
   try { console.log("[CGO-OTAK-HUB] Siap ·", VERSION, "·", status().ready + "/" + status().total, "modul"); } catch (_) {}
 })(typeof globalThis !== "undefined" ? globalThis : window);

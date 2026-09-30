@@ -237,14 +237,11 @@ export async function runAutonomousEngine(onCycleUpdate) {
     throw new TypeError("BCGO membutuhkan callback UI.");
   }
 
-  // IMPORTANT: cloud loading is auxiliary and MUST NOT block the BCGO monitor boot.
-  // Start the Firebase/config load in parallel; the local engine is initialized first.
-  // This prevents a slow/blocked CDN or config import from leaving the UI at CYCLE #0.
-  const cloudLoad = __loadCgoCloud().catch(error => {
-    __cgoCloudError = error;
-    return false;
-  });
-  let cloudOk = false;
+  // Coba cloud; gagal → tetap boot offline (jangan biarkan UI stuck CONNECTING)
+  const cloudOk = await __loadCgoCloud();
+  if (!cloudOk) {
+    console.warn("[BCGO] Menjalankan tanpa Firebase:", __cgoCloudError?.message || __cgoCloudError);
+  }
 
 
   let stopped = false;
@@ -1565,6 +1562,11 @@ function answerQuestion(question) {
 
   window.BCGOBrain = brain;
   window.BCGO_STATE = safeClone(state);
+  try {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("cgo:otak-state", { detail: { module: "BCGO_ENGINE", version: brain?.version || null } }));
+    }
+  } catch (_) {}
 
   // Publish the boot state immediately. The monitor must visibly report its
   // actual lifecycle even while Firebase is still restoring the Admin session.
@@ -1572,56 +1574,37 @@ function answerQuestion(question) {
   // connection remains CONNECTING until the real auth/Firestore checks pass.
   publishToUI(safeClone(state));
 
-  // Start local monitoring immediately. Cloud/auth is attached asynchronously.
-  // The monitor therefore remains useful even when Firebase/CDN is slow or unavailable.
-  startLocalAutonomy("Cloud/auth sedang disiapkan");
-
-  cloudLoad.then(ok => {
-    if (stopped) return;
-    cloudOk = !!ok;
-    if (!cloudOk) {
-      console.warn("[BCGO] Menjalankan tanpa Firebase:", __cgoCloudError?.message || __cgoCloudError);
-      return;
-    }
-    if (!adminAuth || typeof onAuthStateChanged !== "function") {
-      console.warn("[BCGO] Firebase termuat tetapi kanal Auth tidak tersedia.");
-      return;
-    }
-    try {
-      unsubscribeAuth = onAuthStateChanged(adminAuth, user => {
-        const epoch = ++authEpoch;
-        if (!user) {
-          authorized = false;
-          authorizedUid = null;
-          cleanupRealtime();
-          setTimeout(() => {
-            if (stopped || epoch !== authEpoch || authorized) return;
-            startLocalAutonomy("Sesi Admin belum ada");
-          }, 800);
-          return;
-        }
-        verifyAdmin(user, epoch).catch(error => {
-          if (stopped || epoch !== authEpoch) return;
-          authorized = false;
-          authorizedUid = null;
-          cleanupRealtime();
-          emit("OUT", "Saya gagal memverifikasi status Admin.", "SYS_AUTH_CHECK_FAILED", error?.message, { cycleMode: "ERROR" });
-          setTimeout(() => {
-            if (stopped || epoch !== authEpoch || authorized) return;
-            startLocalAutonomy("Verifikasi Admin gagal");
-          }, 1000);
-        });
+  if (cloudOk && adminAuth && typeof onAuthStateChanged === "function") {
+    unsubscribeAuth = onAuthStateChanged(adminAuth, user => {
+      const epoch = ++authEpoch;
+      if (!user) {
+        authorized = false;
+        authorizedUid = null;
+        cleanupRealtime();
+        setTimeout(() => {
+          if (stopped || epoch !== authEpoch || authorized) return;
+          startLocalAutonomy("Sesi Admin belum ada");
+        }, 800);
+        return;
+      }
+      verifyAdmin(user, epoch).catch(error => {
+        if (stopped || epoch !== authEpoch) return;
+        authorized = false;
+        authorizedUid = null;
+        cleanupRealtime();
+        emit("OUT", "Saya gagal memverifikasi status Admin.", "SYS_AUTH_CHECK_FAILED", error?.message, { cycleMode: "ERROR" });
+        setTimeout(() => {
+          if (stopped || epoch !== authEpoch || authorized) return;
+          startLocalAutonomy("Verifikasi Admin gagal");
+        }, 1000);
       });
-    } catch (error) {
-      console.warn("[BCGO] Gagal memasang listener Auth:", error);
-      startLocalAutonomy("Listener Auth gagal dipasang");
-    }
-  }).catch(error => {
-    if (stopped) return;
-    __cgoCloudError = error;
-    console.warn("[BCGO] Cloud bootstrap gagal; monitor lokal tetap aktif:", error);
-  });
-
+    });
+  } else {
+    // Tanpa cloud: langsung otonomi lokal
+    setTimeout(() => {
+      if (!stopped && !authorized) startLocalAutonomy(__cgoCloudError ? String(__cgoCloudError.message || __cgoCloudError) : "Cloud tidak tersedia");
+    }, 300);
+  }
   return brain;
 }
 

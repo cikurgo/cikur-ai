@@ -17,7 +17,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "1.1.1-semantic-bridge-graceful";
+  const VERSION = "1.1.2-semantic-bridge-rootsafe";
   /** Model lokal (folder di assets/models/). */
   const DEFAULT_MODEL = "all-MiniLM-L6-v2";
   const CACHE_KEY = "CGO_SEMANTIC_DOC_V1";
@@ -25,7 +25,7 @@
   const TIMEOUT_MS = 15000;
   const MAX_RETRY = 3;
 
-  /** Path relatif ke halaman admin (aman di GitHub Pages /cikur-ai/admin/). */
+  /** Path relatif — cerdas: dukung root portal DAN admin/ (struktur ZIP asli). */
   function resolveUrl(rel) {
     try {
       const base = (typeof document !== "undefined" && document.baseURI) ||
@@ -37,8 +37,24 @@
     }
   }
 
-  const LIB_URL = resolveUrl("./assets/lib/transformers.min.js");
-  const LOCAL_MODEL_PATH = resolveUrl("./assets/models/");
+  /** Deteksi base path assets: coba admin/ dulu (struktur asli ZIP), fallback ke ./assets */
+  function detectAssetsBase() {
+    try {
+      const path = (typeof location !== "undefined" && location.pathname) || "";
+      // Jika sudah di dalam /admin/ → pakai relatif lokal
+      if (/\/admin\/?/i.test(path)) {
+        return "./assets/";
+      }
+      // Dari root portal → arahkan ke admin/assets/
+      return "./admin/assets/";
+    } catch (_) {
+      return "./admin/assets/";
+    }
+  }
+
+  const ASSETS_BASE = detectAssetsBase();
+  const LIB_URL = resolveUrl(ASSETS_BASE + "lib/transformers.min.js");
+  const LOCAL_MODEL_PATH = resolveUrl(ASSETS_BASE + "models/");
 
   let extractor = null;
   let loadPromise = null;

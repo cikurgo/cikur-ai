@@ -195,8 +195,10 @@
         }
         const out = e.process(input, {
           maxCycles: options.maxCycles ?? 1,
-          fast: options.fast !== false,
-          skipAudit: options.skipAudit !== false
+          // Fallback langsung ke engine harus mempertahankan kontrak bridge:
+          // pipeline penuh A→B→C→D secara default. Jalur cepat hanya eksplisit.
+          fast: options.fast === true,
+          skipAudit: options.skipAudit === true
         });
         return {
           ok: true,

@@ -1,7 +1,7 @@
 /*
- * CGO OPERATOR VOICE v4.0.0 — FEMALE INDONESIAN · AIRPORT NATURAL CHAT + ATTENTION
+ * CGO OPERATOR VOICE v3.7.0 — NEURAL SARA · NATURAL CHAT + ATTENTION
  * Operator wanita:
- *   - speakAnswer()  → jawaban dinamis dibacakan TTS browser dengan voice wanita Indonesia terverifikasi
+ *   - speakAnswer()  → TTS wanita untuk jawaban chat (teks dinamis)
  *   - announceAttention() → info natural bila ada error/warning + lokasi file/jalur
  *   - emit()         → MP3 event sistem (boot/error clip), di-jeda saat chat bicara
  * Anti-double: _chatSpeaking memblokir emit MP3 event & stage ABC.
@@ -9,10 +9,22 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "4.0.0-FEMALE-ID-AIRPORT-TTS-RESTORED";
-  const BUILD = "CIKUR-GO-OPERATOR-4.0.0";
-  const SCRIPT_URL = (typeof document !== "undefined" && document.currentScript && document.currentScript.src) ? document.currentScript.src : null;
-  const ROOT = SCRIPT_URL ? new URL("./audio/cgo-operator/", SCRIPT_URL).href : "./audio/cgo-operator/";
+  const VERSION = "3.8.1-FEMALE-ONLY-ROOTSAFE";
+  const BUILD = "CIKUR-GO-OPERATOR-3.8.1";
+  /** Path audio cerdas: dukung load dari root portal maupun dari admin/ */
+  function detectAudioRoot() {
+    try {
+      const path = (typeof location !== "undefined" && location.pathname) || "";
+      if (/\/admin\/?/i.test(path)) {
+        return "./audio/cgo-operator/";
+      }
+      // Dari root index.html → arahkan ke admin/
+      return "./admin/audio/cgo-operator/";
+    } catch (_) {
+      return "./admin/audio/cgo-operator/";
+    }
+  }
+  const ROOT = detectAudioRoot();
 
   const EVENTS = Object.freeze({
     SYSTEM_BOOT: "SYSTEM_BOOT",
@@ -151,17 +163,12 @@
   // fall back to an unclassified Indonesian voice: an unknown voice may be male/robotic.
   // If the browser cannot positively identify a female voice, dynamic speech stays silent
   // rather than violating the Operator voice contract.
-  // Browser SpeechSynthesis does not expose a standard gender field.
-  // Use explicit Indonesian female voice IDs/names where the platform exposes them,
-  // and reject known Indonesian male IDs. Never silently fall back to an unknown voice.
   function isConfirmedFemale(v) {
-    var n = (String((v && v.name) || "") + " " + String((v && v.voiceURI) || "")).toLowerCase();
+    var n = String((v && v.name) || "") + " " + String((v && v.voiceURI) || "");
+    n = n.toLowerCase();
     var l = String((v && v.lang) || "").toLowerCase();
     if (!l.startsWith("id")) return false;
-    if (/(ardi|cahya|jajang|dimas|male|man|pria|laki-laki|laki laki)/i.test(n)) return false;
-    // Explicit female identifiers commonly exposed by Android/Chrome TTS.
-    // We still reject every unclassified voice rather than guessing its gender.
-    return /(gadis|sari|siti|female|woman|perempuan|id-id-gadis|id-id-sari|id-id-x-idf|id-id-x-idf#female|bahasa indonesia female|indonesia female)/i.test(n);
+    return /(female|woman|zira|samantha|ava|aria|jenny|susan|gadis|perempuan)/i.test(n);
   }
 
   function refreshVoices() {
@@ -170,37 +177,9 @@
     if (!voices.length) { selectedVoice = null; return false; }
     var idFemale = voices.filter(isConfirmedFemale);
     selectedVoice =
-      idFemale.find(function (v) { return /gadis|sari|neural|natural|premium/i.test(String(v.name || "") + " " + String(v.voiceURI || "")); }) ||
+      idFemale.find(function (v) { return /google|microsoft|natural|premium/i.test(String(v.name || "")); }) ||
       idFemale[0] || null;
     return !!selectedVoice;
-  }
-
-  function waitForFemaleVoice(timeoutMs) {
-    timeoutMs = Math.max(300, Number(timeoutMs) || 2500);
-    if (refreshVoices()) return Promise.resolve(selectedVoice);
-    if (!("speechSynthesis" in global)) return Promise.resolve(null);
-    return new Promise(function(resolve) {
-      var done = false;
-      var started = Date.now();
-      var timer = null;
-      var finish = function(v) {
-        if (done) return;
-        done = true;
-        if (timer) clearInterval(timer);
-        resolve(v || null);
-      };
-      var handler = function() {
-        if (refreshVoices()) finish(selectedVoice);
-      };
-      try { global.speechSynthesis.addEventListener("voiceschanged", handler); } catch (_) {}
-      timer = setInterval(function() {
-        if (refreshVoices()) return finish(selectedVoice);
-        if (Date.now() - started >= timeoutMs) finish(null);
-      }, 100);
-      setTimeout(function() {
-        try { global.speechSynthesis.removeEventListener("voiceschanged", handler); } catch (_) {}
-      }, timeoutMs + 100);
-    });
   }
 
   if ("speechSynthesis" in global) {
@@ -260,61 +239,42 @@
     });
   }
 
-  async function speakTTS(text, opts) {
-    opts = opts || {};
-    var spoken = toSpeechText(text);
-    if (!spoken || !("speechSynthesis" in global)) return false;
-
-    // Dynamic chat answers MUST remain female + Indonesian. There is deliberately
-    // no unknown-voice fallback: if the browser cannot expose a positively
-    // identified female Indonesian voice, the operator stays silent rather than
-    // switching to a male/robotic/system-default voice.
-    var voice = await waitForFemaleVoice(Number(opts.voiceTimeoutMs) || 3500);
-    if (!voice || !isConfirmedFemale(voice)) return false;
-
-    try {
-      global.speechSynthesis.cancel();
-      var Utterance = global.SpeechSynthesisUtterance || (typeof SpeechSynthesisUtterance !== "undefined" ? SpeechSynthesisUtterance : null);
-      if (!Utterance) return false;
-      var u = new Utterance(spoken);
-      u.voice = voice;
-      u.lang = String(voice.lang || "id-ID");
-      u.rate = Math.max(0.78, Math.min(1.02, Number(opts.rate != null ? opts.rate : 0.92)));
-      u.pitch = Math.max(0.95, Math.min(1.12, Number(opts.pitch != null ? opts.pitch : 1.05)));
-      u.volume = Math.max(0, Math.min(1, Number(opts.volume != null ? opts.volume : 1)));
-
-      return await new Promise(function(resolve) {
-        var settled = false;
-        var timer = setTimeout(function() {
-          if (settled) return;
-          settled = true;
+  function speakTTS(text, opts) {
+    return new Promise(function (resolve) {
+      if (!("speechSynthesis" in global) || !text) return resolve(false);
+      try { global.speechSynthesis.cancel(); } catch (_) {}
+      if (!refreshVoices() || !selectedVoice) return resolve(false);
+      var u = new SpeechSynthesisUtterance(text);
+      u.lang = selectedVoice.lang || "id-ID";
+      u.voice = selectedVoice;
+      // Airport-style delivery: calm, clear, slightly deliberate, never rushed.
+      u.rate = (opts && opts.rate != null) ? opts.rate : 0.92;
+      u.pitch = (opts && opts.pitch != null) ? opts.pitch : 1.05;
+      u.volume = 1;
+      var finished = false;
+      var fin = function (ok) {
+        if (finished) return;
+        finished = true;
+        speaking = false;
+        resolve(!!ok);
+      };
+      u.onend = function () { fin(true); };
+      u.onerror = function () { fin(false); };
+      speaking = true;
+      try {
+        global.speechSynthesis.speak(u);
+        // Do not declare speech finished on a guessed timer: browser TTS may still be speaking.
+      // Watchdog only prevents a permanently stuck queue; normal completion is onend.
+      setTimeout(function () {
+        if (!finished) {
           try { global.speechSynthesis.cancel(); } catch (_) {}
-          resolve(false);
-        }, Math.max(12000, Math.min(60000, spoken.length * 120 + 8000)));
-        u.onend = function() {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          resolve(true);
-        };
-        u.onerror = function() {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          resolve(false);
-        };
-        try {
-          global.speechSynthesis.speak(u);
-          setTimeout(function() {
-            try { if (global.speechSynthesis.paused) global.speechSynthesis.resume(); } catch (_) {}
-          }, 50);
-        } catch (_) {
-          if (!settled) { settled = true; clearTimeout(timer); resolve(false); }
+          fin(false);
         }
-      });
-    } catch (_) {
-      return false;
-    }
+      }, Math.min(60000, Math.max(12000, 2500 + text.length * 140)));
+      } catch (_) {
+        fin(false);
+      }
+    });
   }
 
   var _chatSpeaking = false;
@@ -352,7 +312,7 @@
     var file = MP3[key];
 
     function doPlay() {
-      // Event sistem memakai asset MP3; jawaban chat dinamis memakai speakTTS().
+      // HANYA MP3 operator wanita jernih — tanpa TTS browser sama sekali
       return playMp3(key);
     }
 
@@ -370,7 +330,7 @@
 
   function stop() {
     _chatSpeaking = false;
-    
+    try { if (global.speechSynthesis) global.speechSynthesis.cancel(); } catch (_) {}
     try {
       var audios = document.querySelectorAll("audio[data-cgo-operator]");
       audios.forEach(function(a){ try { a.pause(); a.currentTime = 0; } catch(_){} });
@@ -405,7 +365,7 @@
     if (options.pitch != null) voiceOpts.pitch = options.pitch;
 
     function stopAllOperatorAudio() {
-      
+      try { if (global.speechSynthesis) global.speechSynthesis.cancel(); } catch (_) {}
       try {
         var nodes = document.querySelectorAll("audio[data-cgo-operator]");
         for (var i = 0; i < nodes.length; i++) {
@@ -533,6 +493,13 @@
   function unlock() {
     unlocked = true;
     refreshVoices();
+    if ("speechSynthesis" in global) {
+      try {
+        var u = new SpeechSynthesisUtterance("");
+        u.volume = 0;
+        global.speechSynthesis.speak(u);
+      } catch (_) {}
+    }
     return Promise.resolve(true);
   }
 
@@ -588,15 +555,6 @@
     stop: stop,
     speak: speakAnswer,
     unlock: unlock,
-    getVoiceStatus: function () {
-      var voices = ("speechSynthesis" in global) ? (global.speechSynthesis.getVoices() || []) : [];
-      return {
-        speechSynthesis: !!("speechSynthesis" in global),
-        selected: selectedVoice ? { name: selectedVoice.name || null, lang: selectedVoice.lang || null, voiceURI: selectedVoice.voiceURI || null } : null,
-        femaleCandidates: voices.filter(isConfirmedFemale).map(function(v){ return {name:v.name||null,lang:v.lang||null,voiceURI:v.voiceURI||null}; }),
-        contract: "ID-FEMALE-ONLY"
-      };
-    },
     welcome: welcome,
     state: state,
     announcePipelineStage: announcePipelineStage,

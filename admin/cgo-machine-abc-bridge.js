@@ -218,10 +218,10 @@
         claimCount:evidence.claims.length,
         packet
       };
-      try { global.CGO_ABC_LIVE_LINK = Object.freeze({...link}); } catch (_) {}
+      try { global.CGO_ABC_LIVE_LINK = Object.freeze({...link}); } catch (_) { try { global.CGO_ABC_LIVE_LINK = link; } catch (__) {} }
       try { liveBus?.postMessage(link); } catch (_) {}
       emit("cgo:machine-abc-bcgo-sync", link);
-      return {ok:true,mode:evidence.mode,status:packet.result?.status||null,audit:packet.audit?.status||null,evidence,packet};
+      return {ok:true,mode:evidence.mode,status:packet.result?.status||null,audit:packet.audit?.status||null,evidence,packet,link};
     } catch(err) {
       const error=String(err?.message||err);
       const link={type:"CGO_ABC_LIVE_LINK",source:"BCGO",mode:evidence.mode,status:"ERROR",audit:"ATTENTION",error,revision:evidence.revision};
