@@ -117,6 +117,9 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "admin/cgo-ai-radar.js", path: "cgo-ai-radar.js", role: "Radar Engine" },
   { file: "admin/cgo-ai-radar-visual.js", path: "cgo-ai-radar-visual.js", role: "Radar Visual" },
   { file: "admin/cgo-ai-voice-operator.js", path: "cgo-ai-voice-operator.js", role: "Voice Operator" },
+  { file: "admin/cgo-error-dashboard.html", path: "cgo-error-dashboard.html", role: "Error Dashboard UI" },
+  { file: "admin/cgo-error-dashboard.js", path: "cgo-error-dashboard.js", role: "Error Dashboard Engine" },
+  { file: "admin/cgo-otak-hub.js", path: "cgo-otak-hub.js", role: "Otak Hub" },
   { file: "admin/cikur-go.browser.js", path: "cikur-go.browser.js", role: "Otak Jenius Browser" },
   { file: "admin/cikur-go.js", path: "cikur-go.js", role: "Otak Jenius Core" },
   { file: "admin/cikur-v3-extension.js", path: "cikur-v3-extension.js", role: "Otak Jenius v3" },
@@ -661,10 +664,16 @@ function emit(step, message, target, error = null, options = {}) {
         return false;
       };
 
-      // Sapaan
-      if (/^(halo|hai|hallo|helo|hello|hi|hey|pagi|siang|sore|malam)\b/.test(q) || /siapa\s+kamu|kamu\s+siapa/.test(q)) {
+      // Sapaan multi-bahasa
+      const isJa = /[\u3040-\u30ff\u3400-\u9faf]/.test(qRaw);
+      const isEn = !isJa && ((q.match(/\b(the|and|what|how|hello|thanks|please|status|system)\b/g) || []).length >= 2);
+      if (/^(halo|hai|hallo|helo|hello|hi|hey|pagi|siang|sore|malam|こんにちは)\b/i.test(qRaw) || /siapa\s+kamu|kamu\s+siapa|who\s+are\s+you/i.test(q)) {
+        const cyc = num(st.cycle || cycleNo || 0);
+        const step = st.step || "siaga";
+        if (isJa) return "こんにちは。CGOオペレーターです。段階 " + step + "、サイクル " + cyc + " を監視中です。";
+        if (isEn) return "Hello, I am CGO Operator. Live nerves at stage " + step + ", cycle " + cyc + ". Ask status, scanner, radar, or number spelling.";
         return "Halo, saya CGO Operator. Saya membaca saraf sistem yang sedang hidup — tahap " +
-          (st.step || "siaga") + ", siklus ke-" + num(st.cycle || cycleNo || 0) +
+          step + ", siklus ke-" + cyc +
           ". Silakan tanya status, scanner, radar, file saraf, atau minta saya hitung dan eja sesuatu.";
       }
 
@@ -701,7 +710,7 @@ function emit(step, message, target, error = null, options = {}) {
 
       // Buang bila evidence sendiri adalah label klasifikasi (regresi lama)
       if (isClassLabel(text)) {
-        return "Saya memahami pertanyaanmu. Coba ulangi dengan kata yang lebih spesifik, misalnya status sistem, scanner, atau nama file.";
+        return "Pertanyaanmu sudah masuk. Agar saya jawab dari bukti yang ada, sebutkan sedikit lebih spesifik — misalnya status sistem, scanner, nama file, atau radar agent.";
       }
 
       return polish(text);
@@ -832,7 +841,24 @@ function answerQuestion(question) {
       return `Peta saraf (basename organ):\n${lines.join("\n")}\nAnomali aktif dari telemetry: ${Object.values(organs).filter(o=>o.state==="ACTIVE").length}.`;
     }
 
-    return `Saya menangkap pertanyaanmu: “${raw}”. Saya belum punya bukti spesifik. Tanyakan: status sistem, error, file tertentu, scanner, radar/agent terdekat, saraf/organ, telemetry terakhir, atau cycle.`;
+    // Natural free-form: pakai state hidup, bukan daftar menu kaku
+    {
+      const mode = (st.cycleMode || "siaga");
+      const step = (st.step || "—");
+      const cyc = st.cycle || cycleNo || 0;
+      const nAct = (metrics.active != null) ? metrics.active : 0;
+      const nOrg = (metrics.total != null) ? metrics.total : 0;
+      if (/^(ok|oke|sip|makasih|terima kasih|thanks|thx)\b/i.test(qRaw)) {
+        return "Sama-sama. Saya tetap memantau saraf sistem di sini.";
+      }
+      if (nAct > 0) {
+        return "Untuk “" + qRaw + "”: ada " + num(nAct) + " anomali aktif di siklus ke-" + num(cyc) +
+          " (mode " + mode + "). Tanya status sistem atau sebut nama file agar saya uraikan buktinya.";
+      }
+      return "Saya membaca “" + qRaw + "” di siklus ke-" + num(cyc) + " (mode " + mode + ", tahap " + step +
+        "). " + (nOrg ? (num(nOrg) + " organ terpantau, ") : "") +
+        "tidak ada anomali aktif. Bisa dilanjut: status, scanner, radar, hitung angka, atau sebut file yang ingin dicek.";
+    }
   }
 
   function interruptForTelemetry(fileName, message, log) {
@@ -1288,6 +1314,7 @@ function answerQuestion(question) {
     const contracts = [
       ["admin/bcgo.html", "admin/bcgo.js", "BCGO_ENGINE_IMPORT"],
       ["admin/cgo-error-dashboard.html", "admin/cgo-error-dashboard.js", "ERROR_DASHBOARD"],
+      ["admin/bcgo.html", "admin/cgo-error-dashboard.html", "ERROR_MONITOR_LINK"],
       ["admin/bcgo.js", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
       ["admin/bcgo-admin.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
       ["admin/data-cgo.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
@@ -1303,7 +1330,12 @@ function answerQuestion(question) {
     ];
     for (const [a,b,key] of contracts) {
       const text=contents.get(a)||"";
-      const ok = text.includes(b.split('/').pop()) || (b === "cikur-config.js" && (text.includes("../cikur-config.js") || text.includes("cikur-config.js"))) || (b === "admin/bcgo.js" && text.includes("./bcgo.js"));
+      const baseB = b.split("/").pop();
+      const ok = text.includes(baseB) || text.includes(b) ||
+        (b === "cikur-config.js" && (text.includes("../cikur-config.js") || text.includes("cikur-config.js"))) ||
+        (b === "admin/bcgo.js" && (text.includes("./bcgo.js") || text.includes("bcgo.js"))) ||
+        (b === "admin/cgo-error-dashboard.js" && text.includes("cgo-error-dashboard.js")) ||
+        (b === "admin/cgo-error-dashboard.html" && (text.includes("cgo-error-dashboard.html") || text.includes("Error Monitor")));
       relations.push({ type:"CROSS_FILE_CONTRACT", status: ok ? "LINKED" : "MISMATCH", confidence: ok ? "VERIFIED" : "HIGH", sourceFile:a, targetFile:b, key, evidence:{ missingSemantic: ok ? [] : [key] } });
     }
     scan.relations = relations;

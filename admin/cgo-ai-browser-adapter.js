@@ -845,7 +845,15 @@ function chatAnswer(question = {}) {
     return `Bisa. Saya sedang menjaga source scanner tetap berjalan. Permintaanmu saya perlakukan sebagai permintaan pemeriksaan ulang, tetapi saya tidak akan mengubah source hanya karena diminta lewat chat.`;
   }
 
-  return `Saya paham. Untuk “${raw}”, saya bisa bantu, tapi saya ingin jawab dengan fakta yang memang tersedia di BCGO. Sekarang fokus saya ${target}, cycle #${state.cycle ?? "-"}, dengan ${metrics.active ?? active.length} anomaly aktif dan ${relations.length} relasi source yang sudah terdeteksi. Kalau kamu sebut file atau data yang ingin dilihat, saya akan uraikan dari evidence yang ada.`;
+  // Jawaban natural berbasis state — bukan template kaku "Saya paham. Untuk…"
+  const mode = state.cycleMode || "siaga";
+  const step = state.step || "—";
+  const nActive = metrics.active ?? (active && active.length) || 0;
+  const nRel = relations.length;
+  if (nActive > 0) {
+    return `Saya lihat ${nActive} anomali aktif di siklus #${state.cycle ?? "-"} (mode ${mode}, tahap ${step}). Fokus saat ini: ${target}. Ada ${nRel} relasi source terdeteksi. Sebut file atau organ yang ingin dicek, nanti saya uraikan dari bukti yang ada.`;
+  }
+  return `Sistem terlihat tenang di siklus #${state.cycle ?? "-"} (mode ${mode}, tahap ${step}). Tidak ada anomali aktif; ${nRel} relasi source sudah terpetakan. Untuk “${raw}”, sebut saja status, scanner, radar, atau nama file — saya jawab dari bukti BCGO yang sedang hidup.`;
 }
 
 function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = null) {
