@@ -17,7 +17,8 @@
     summary: { total: 0, active: 0, recovered: 0, relationBreaks: 0, runtime: 0 },
     lastTick: 0,
     bcgo: null,
-    sourceScan: null
+    sourceScan: null,
+    lastRepair: null
   };
   const listeners = new Set();
   let channel = null;
@@ -509,6 +510,12 @@
   function installTraps() {
     if (trapsInstalled) return;
     trapsInstalled = true;
+    global.addEventListener("cgo:repair-result", function (event) {
+      const d = event && event.detail;
+      if (!d || typeof d !== "object") return;
+      state.lastRepair = { file: String(d.file || "unknown"), status: String(d.status || "UNKNOWN"), verified: d.verified === true, verificationLevel: d.verificationLevel || null, applied: d.applied === true, findingCount: Number(d.findingCount) || 0, at: Number(d.at) || now() };
+      notify();
+    });
 
     const prevOnError = global.onerror;
     if (typeof global.addEventListener !== "function") return;
@@ -610,6 +617,7 @@
       summary: { ...state.summary },
       errors: state.errors.slice(0, MAX_ERRORS),
       chains: state.chains.slice(0, MAX_CHAIN),
+      lastRepair: state.lastRepair,
       sourceScan: state.sourceScan
         ? {
             status: state.sourceScan.status,

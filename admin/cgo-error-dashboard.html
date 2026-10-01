@@ -115,6 +115,25 @@
       </section>
     </div>
 
+    <section class="rounded-xl border border-violet-800/60 bg-slate-900/90 p-4 space-y-3" aria-labelledby="repair-title">
+      <div class="flex flex-wrap items-start justify-between gap-2">
+        <div><h2 id="repair-title" class="text-sm font-bold text-violet-200">Mesin Repair Source · uji kode nyata</h2>
+        <p class="text-[11px] text-slate-400 mt-1">Tempel source yang ingin diperiksa. Patch hanya diterapkan pada salinan di panel ini; file proyek asli tidak diubah otomatis.</p></div>
+        <span id="repair-engine-status" class="text-[10px] text-slate-500 code-font">Menunggu input</span>
+      </div>
+      <label for="repair-filename" class="block text-[10px] text-slate-400">Nama file (label kasus)</label>
+      <input id="repair-filename" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs code-font outline-none focus:border-violet-500" value="source-input.js" maxlength="180" />
+      <label for="repair-source" class="block text-[10px] text-slate-400">Source code asli</label>
+      <textarea id="repair-source" spellcheck="false" class="w-full min-h-40 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs code-font outline-none focus:border-violet-500" placeholder="Tempel kode atau JSON di sini…"></textarea>
+      <div class="flex flex-wrap gap-2"><button id="repair-analyze" type="button" class="rounded-lg bg-violet-700 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-600">Diagnosis + patch aman</button>
+      <button id="repair-reset" type="button" class="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800">Reset</button>
+      <button id="repair-copy" type="button" class="rounded-lg border border-emerald-800 px-3 py-2 text-xs text-emerald-300 hover:bg-emerald-950/40" disabled>Salin hasil</button></div>
+      <div id="repair-result" role="status" aria-live="polite" class="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300">Belum ada proses repair.</div>
+      <label for="repair-output" class="block text-[10px] text-slate-400">Source hasil / kandidat patch</label>
+      <textarea id="repair-output" spellcheck="false" readonly class="w-full min-h-32 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs code-font" placeholder="Hasil diagnosis dan patch akan tampil di sini…"></textarea>
+      <p class="text-[10px] text-amber-300/80">JSON diverifikasi dengan parser JSON. Untuk JavaScript/CSS, pemeriksaan delimiter bukan pengganti parser atau runtime test; status tersebut tidak akan dilabeli REPAIRED.</p>
+    </section>
+
     <section class="rounded-xl border border-slate-800 bg-slate-950/80 p-4 text-[11px] text-slate-500 space-y-1">
       <div class="text-slate-400 font-semibold">Cara baca dashboard ini</div>
       <p>1. <b class="text-slate-300">Gejala</b> — pesan error yang muncul (runtime, organ, scanner).</p>
@@ -127,8 +146,9 @@
   </main>
 
   <!-- Mesin ABC membantu menerjemahkan error → teks manusia -->
-  <script src="cgo-machine-abc.js?v=0.9.9-OTAK-CORE"></script>
+  <script src="cgo-machine-abc.js?v=0.9.9-REPAIR-GATE-20261001"></script>
   <script src="cgo-machine-abc-bridge.js?v=1.7.0-BCGO-SYNC-OTAK"></script>
+  <script src="cgo-otak-hub.js?v=1.6.1-INTERNAL-RESTORE"></script>
   <script src="cgo-error-dashboard.js?v=1.1.1-NO-STUCK"></script>
   <script>
   (function () {
@@ -253,6 +273,35 @@
       eng.clear();
       paint(eng.snapshot());
     });
+
+    // Repair source lokal; tidak menulis/menimpa file proyek secara otomatis.
+    const repairInput = document.getElementById("repair-source");
+    const repairOutput = document.getElementById("repair-output");
+    const repairResult = document.getElementById("repair-result");
+    const repairStatus = document.getElementById("repair-engine-status");
+    const repairCopy = document.getElementById("repair-copy");
+    document.getElementById("repair-analyze").addEventListener("click", function () {
+      const source = repairInput.value;
+      const fileLabel = (document.getElementById("repair-filename").value || "source-input.js").trim();
+      if (!source.trim()) { repairResult.textContent = "Masukkan source code terlebih dahulu."; repairStatus.textContent = "Input kosong"; repairOutput.value = ""; repairCopy.disabled = true; return; }
+      const engine = window.CGOMachineABC;
+      if (!engine || typeof engine.repair !== "function") { repairResult.textContent = "Mesin ABC/API repair tidak tersedia. Periksa urutan script."; repairStatus.textContent = "Engine offline"; repairCopy.disabled = true; return; }
+      try {
+        repairStatus.textContent = "Memproses A → B → C → D…";
+        const outcome = engine.repair(source, { source: "DASHBOARD_REPAIR:" + fileLabel, fast: false, skipAudit: false, autoApply: true });
+        const patchText = outcome.candidate && outcome.candidate.patch && outcome.candidate.patch.after;
+        repairOutput.value = typeof patchText === "string" ? patchText : source;
+        repairCopy.disabled = typeof patchText !== "string" || patchText === source;
+        const b = outcome.baseline && outcome.baseline.pipeline && outcome.baseline.pipeline.B;
+        const findingCount = b && Array.isArray(b.findings) ? b.findings.length : 0;
+        const verification = outcome.verificationLevel || "NOT_APPLICABLE";
+        repairResult.textContent = ["Status: " + outcome.status, "File label: " + fileLabel, "Temuan baseline: " + findingCount, "Patch pada salinan: " + (outcome.applied ? "YA" : "TIDAK"), "Verifikasi: " + verification + " · verified=" + Boolean(outcome.verified), outcome.candidate ? "Aturan: " + outcome.candidate.id + " — " + outcome.candidate.reason : "Tidak ada aturan patch otomatis yang cocok.", outcome.reason || "", "File asli tidak diubah. Tinjau hasil dan jalankan test proyek sebelum mengganti file."].filter(Boolean).join("\n");
+        repairStatus.textContent = outcome.status + (outcome.verified ? " · VERIFIED" : " · REVIEW");
+        try { window.dispatchEvent(new CustomEvent("cgo:repair-result", { detail: { file: fileLabel, status: outcome.status, verified: Boolean(outcome.verified), verificationLevel: verification, applied: Boolean(outcome.applied), findingCount, at: Date.now() } })); } catch (_) {}
+      } catch (error) { repairStatus.textContent = "Repair error"; repairResult.textContent = "Repair gagal: " + String(error && error.message || error); repairOutput.value = source; repairCopy.disabled = true; }
+    });
+    document.getElementById("repair-reset").addEventListener("click", function () { repairInput.value = ""; repairOutput.value = ""; repairResult.textContent = "Belum ada proses repair."; repairStatus.textContent = "Menunggu input"; repairCopy.disabled = true; });
+    repairCopy.addEventListener("click", async function () { if (!repairOutput.value) return; try { await navigator.clipboard.writeText(repairOutput.value); repairStatus.textContent = "Hasil disalin"; } catch (_) { repairOutput.focus(); repairOutput.select(); repairStatus.textContent = "Pilih teks lalu salin manual"; } });
 
     // Demo self-check: jangan throw ke production — hanya log
     try { console.log("[ErrorDashboard UI] terhubung ·", eng.version); } catch (_) {}

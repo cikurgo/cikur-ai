@@ -102,6 +102,9 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "admin/cgo-machine-abc.html", path: "cgo-machine-abc.html", role: "Mesin ABC Monitor" },
   { file: "admin/cgo-machine-abc.js", path: "cgo-machine-abc.js", role: "Mesin ABC Core" },
   { file: "admin/cgo-machine-abc-bridge.js", path: "cgo-machine-abc-bridge.js", role: "Mesin ABC Bridge" },
+  { file: "admin/cgo-otak-hub.js", path: "cgo-otak-hub.js", role: "CGO Otak Hub" },
+  { file: "admin/cgo-error-dashboard.html", path: "cgo-error-dashboard.html", role: "Error Dashboard" },
+  { file: "admin/cgo-error-dashboard.js", path: "cgo-error-dashboard.js", role: "Error Dashboard Engine" },
   { file: "admin/cgo-abc-cognition.js", path: "cgo-abc-cognition.js", role: "ABC Cognition" },
   { file: "admin/cgo-ai-browser-adapter.js", path: "cgo-ai-browser-adapter.js", role: "CGO Browser Adapter" },
   { file: "admin/cgo-ai-core.js", path: "cgo-ai-core.js", role: "CGO Core" },
@@ -145,7 +148,7 @@ const INTERNAL_SOURCE_SCAN = [
 
 const CORE_SOURCE_FILES = new Set([
   "admin/bcgo.html","admin/bcgo.js","admin/cgo-machine-abc.html","admin/cgo-machine-abc.js",
-  "admin/cgo-machine-abc-bridge.js","admin/cgo-abc-cognition.js","admin/cgo-ai-browser-adapter.js",
+  "admin/cgo-machine-abc-bridge.js","admin/cgo-otak-hub.js","admin/cgo-abc-cognition.js","admin/cgo-ai-browser-adapter.js",
   "admin/cgo-ai-core.js","admin/cgo-ai-cognition.js","admin/cgo-ai-guardian.js","admin/cgo-ai-investigation-engine.js",
   "admin/cgo-ai-investigator.js","admin/cgo-ai-knowledge.js","admin/cgo-ai-logic.js","admin/cgo-ai-memory.js",
   "admin/cgo-ai-runtime-adapter.js","admin/cgo-ai-sovereignty.js","admin/cgo-ai-radar.js","admin/cgo-ai-radar-visual.js",
@@ -1287,6 +1290,11 @@ function answerQuestion(question) {
     const contracts = [
       ["admin/bcgo.html", "admin/bcgo.js", "BCGO_ENGINE_IMPORT"],
       ["admin/cgo-error-dashboard.html", "admin/cgo-error-dashboard.js", "ERROR_DASHBOARD"],
+      ["admin/cgo-error-dashboard.html", "admin/cgo-machine-abc.js", "ERROR_DASHBOARD_ABC_CORE"],
+      ["admin/cgo-error-dashboard.html", "admin/cgo-machine-abc-bridge.js", "ERROR_DASHBOARD_ABC_BRIDGE"],
+      ["admin/cgo-error-dashboard.html", "admin/cgo-otak-hub.js", "ERROR_DASHBOARD_OTAK_HUB"],
+      ["admin/cgo-otak-hub.js", "admin/cgo-machine-abc.js", "OTAK_HUB_ABC_CORE"],
+      ["admin/cgo-otak-hub.js", "admin/cgo-machine-abc-bridge.js", "OTAK_HUB_ABC_BRIDGE"],
       ["admin/bcgo.js", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
       ["admin/bcgo-admin.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
       ["admin/data-cgo.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
