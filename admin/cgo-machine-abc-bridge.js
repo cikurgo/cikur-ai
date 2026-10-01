@@ -14,7 +14,7 @@
     return;
   }
 
-  const VERSION = "1.1.0-ABC-BRIDGE-BUS";
+  const VERSION = "1.1.1-REPAIR-SOURCE";
   const BUS_NAME = "cgo-machine-abc-bus";
   const listeners = new Set();
   let lastPacket = null;
@@ -131,6 +131,41 @@
     }
   }
 
+  /** Repair full source lalu kembalikan hasil patch + verifikasi A→B→C→D. */
+  function repairSource(input, options = {}) {
+    if (E.isPaused()) return { ok: false, status: "PAUSED", verified: false, message: "Mesin ABC sedang dijeda." };
+    try {
+      const out = E.repair(String(input), {
+        source: options.source || "unknown",
+        autoApply: options.autoApply !== false,
+        maxRepairSteps: options.maxRepairSteps ?? 3,
+        maxCycles: options.maxCycles ?? 5,
+        fast: false,
+        skipAudit: false
+      });
+      const patchedText = typeof out?.repaired?.pipeline?.A?.content?.value === "string"
+        ? out.repaired.pipeline.A.content.value
+        : null;
+      const cycle = out?.repaired || out?.postRepair || null;
+      return {
+        ok: true,
+        engine: "CGO_MACHINE_ABC",
+        version: E.version,
+        status: out?.status || null,
+        verified: out?.verified === true,
+        candidate: out?.candidate || null,
+        patchedText,
+        beforeFingerprint: out?.comparison?.before?.fingerprint || null,
+        afterFingerprint: out?.comparison?.after?.fingerprint || null,
+        audit: out?.verification?.postRepairAudit || cycle?.audit?.status || null,
+        route: out?.verification?.postRepairRoute || cycle?.telemetry?.route || null,
+        packet: out
+      };
+    } catch (err) {
+      return { ok: false, status: "REPAIR_ERROR", verified: false, error: String(err?.message || err) };
+    }
+  }
+
   /** Ringkas status engine untuk panel kesehatan BCGO */
   let _healthCache = null;
   let _healthCacheAt = 0;
@@ -164,6 +199,7 @@
     engineVersion: E.version,
     engine: E,
     analyze,
+    repairSource,
     healthSnapshot,
     process: (input, opt) => E.process(input, opt || {}),
     observe: (fn) => {

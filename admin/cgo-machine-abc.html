@@ -262,10 +262,14 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
 <section class="panel" aria-labelledby="h-repair">
   <h2 class="ph" id="h-repair">Mesin Repair — hasil perbaikan nyata</h2>
   <div class="body">
+    <p class="muted" style="margin:0 0 10px">Patch diterapkan pada source input dan hasilnya dikembalikan di memori. Verifikasi memakai aturan patch terdaftar + pipeline A→B→C→D; eksekusi runtime dan penulisan ke repository tidak dilakukan otomatis.</p>
     <div class="row"><span>Status repair</span><strong id="repairStatus">STANDBY</strong></div>
     <div class="row"><span>Patch</span><strong id="repairPatch">-</strong></div>
     <div class="row"><span>Verifikasi pasca-patch</span><strong id="repairVerify">-</strong></div>
     <div class="row"><span>Perubahan temuan</span><strong id="repairDelta">-</strong></div>
+    <div class="row"><span>Solution / repair plan</span><strong id="repairPlanCount">-</strong></div>
+    <div class="row"><span>BCGO evidence</span><strong id="repairEvidenceCount">-</strong></div>
+    <div class="row"><span>Post-repair A → B → C → D</span><strong id="repairPostRoute">-</strong></div>
     <pre id="repairDetail" class="detail" style="margin-top:10px">Belum ada proses repair.</pre>
   </div>
 </section>
@@ -286,12 +290,14 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
 </section>
 </div>
 
-<script src="cgo-machine-abc.js?v=0.9.9-REPAIR-GATE-20261001"></script>
+<script src="cgo-machine-abc.js?v=1.0.1-FULL-RECOVERY-20261001"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.1.1-REPAIR-SOURCE-20261002"></script>
 <script>
 (() => {
   "use strict";
   const $ = s => document.querySelector(s);
   const E = window.CGOMachineABC;
+  const Bridge = window.CGOMachineABCBridge || null;
 
   if (!E) {
     const f = $("#fatal");
@@ -495,7 +501,7 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
     $("#iConfidence").textContent="0%"; $("#reasoningView").replaceChildren(empty("Belum ada jejak penalaran."));
     $("#execTotal").textContent="0"; $("#execPass").textContent="0"; $("#execSkipped").textContent="0"; $("#execFail").textContent="0"; $("#executionView").replaceChildren(empty("Belum ada eksekusi yang dipantau."));
     $("#integrityInput").textContent="-"; $("#integrityPayload").textContent="-"; $("#integrityEvidence").textContent="-"; $("#integrityValidation").textContent="-"; $("#stageTiming").textContent="-";
-    $("#repairStatus").textContent="STANDBY"; $("#repairPatch").textContent="-"; $("#repairVerify").textContent="-"; $("#repairDelta").textContent="-"; $("#repairDetail").textContent="Belum ada proses repair.";
+    $("#repairStatus").textContent="STANDBY"; $("#repairPatch").textContent="-"; $("#repairVerify").textContent="-"; $("#repairDelta").textContent="-"; $("#repairPlanCount").textContent="-"; $("#repairEvidenceCount").textContent="-"; $("#repairPostRoute").textContent="-"; $("#repairDetail").textContent="Belum ada proses repair.";
     chip($("#audit"), "Audit D –", "");
     clearNotice(); refresh();
   };
@@ -509,11 +515,14 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
     if (!raw.trim()) { showNotice("Tempel source/code terlebih dahulu."); return; }
     let input = raw; try { input = JSON.parse(raw); } catch (_) {}
     try {
-      const r = E.repair(input, { autoApply: true, fast: false, skipAudit: false });
+      const r = (Bridge && typeof Bridge.repair === "function" ? Bridge.repair : E.repair)(input, { autoApply: true, fast: false, skipAudit: false });
       $("#repairStatus").textContent = r.status || "-";
       $("#repairPatch").textContent = r.candidate?.id || (r.plan?.count ? "REVIEW" : "TIDAK ADA");
-      $("#repairVerify").textContent = r.verified ? "PASS" : "BELUM TERBUKTI";
+      $("#repairVerify").textContent = r.verified ? "PASS · INTERNAL" : "BELUM TERBUKTI";
       const d = r.comparison?.findingDelta; $("#repairDelta").textContent = d == null ? "-" : String(d);
+      const plan = r.finalPlan || r.plan || {}; $("#repairPlanCount").textContent = String(plan.count ?? 0) + " · auto " + String(plan.automaticCandidates?.length ?? 0) + " · manual " + String(plan.manualCandidates?.length ?? 0);
+      $("#repairEvidenceCount").textContent = String(r.baseline?.pipeline?.B?.externalEvidence?.claimCount ?? r.baseline?.pipeline?.C?.metadata?.bcgoEvidence?.claimCount ?? 0);
+      $("#repairPostRoute").textContent = (r.verification?.postRepairRoute || "-") + " · D " + (r.verification?.postRepairAudit || "-");
       showDeep(r);
       const patch = r.candidate?.patch;
       if (patch?.after != null) $("#repairDetail").textContent = patch.after;

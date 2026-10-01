@@ -102,9 +102,6 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "admin/cgo-machine-abc.html", path: "cgo-machine-abc.html", role: "Mesin ABC Monitor" },
   { file: "admin/cgo-machine-abc.js", path: "cgo-machine-abc.js", role: "Mesin ABC Core" },
   { file: "admin/cgo-machine-abc-bridge.js", path: "cgo-machine-abc-bridge.js", role: "Mesin ABC Bridge" },
-  { file: "admin/cgo-otak-hub.js", path: "cgo-otak-hub.js", role: "CGO Otak Hub" },
-  { file: "admin/cgo-error-dashboard.html", path: "cgo-error-dashboard.html", role: "Error Dashboard" },
-  { file: "admin/cgo-error-dashboard.js", path: "cgo-error-dashboard.js", role: "Error Dashboard Engine" },
   { file: "admin/cgo-abc-cognition.js", path: "cgo-abc-cognition.js", role: "ABC Cognition" },
   { file: "admin/cgo-ai-browser-adapter.js", path: "cgo-ai-browser-adapter.js", role: "CGO Browser Adapter" },
   { file: "admin/cgo-ai-core.js", path: "cgo-ai-core.js", role: "CGO Core" },
@@ -148,7 +145,7 @@ const INTERNAL_SOURCE_SCAN = [
 
 const CORE_SOURCE_FILES = new Set([
   "admin/bcgo.html","admin/bcgo.js","admin/cgo-machine-abc.html","admin/cgo-machine-abc.js",
-  "admin/cgo-machine-abc-bridge.js","admin/cgo-otak-hub.js","admin/cgo-abc-cognition.js","admin/cgo-ai-browser-adapter.js",
+  "admin/cgo-machine-abc-bridge.js","admin/cgo-abc-cognition.js","admin/cgo-ai-browser-adapter.js",
   "admin/cgo-ai-core.js","admin/cgo-ai-cognition.js","admin/cgo-ai-guardian.js","admin/cgo-ai-investigation-engine.js",
   "admin/cgo-ai-investigator.js","admin/cgo-ai-knowledge.js","admin/cgo-ai-logic.js","admin/cgo-ai-memory.js",
   "admin/cgo-ai-runtime-adapter.js","admin/cgo-ai-sovereignty.js","admin/cgo-ai-radar.js","admin/cgo-ai-radar-visual.js",
@@ -1156,9 +1153,67 @@ function answerQuestion(question) {
     }
   }
 
+  // BCGO-owned source absorption cache.
+  // Repaired source stays in the active BCGO runtime path for the next scan cycle.
+  // No OPFS/localStorage/service/external persistence is introduced.
+  const sourceRepairCache = new Map();
+
   let sourceScanInFlight = false;
   let sourceScanTimer = null;
   let sourceScanController = null;
+
+  function getRepairBridge() {
+    try { return globalThis.CGOMachineABCBridge || null; } catch (_) { return null; }
+  }
+
+  function fingerprintSource(value) {
+    const text = String(value ?? "");
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(16).padStart(8, "0");
+  }
+
+  function recordRepairRuntime(file, result, sourceText, postRepair) {
+    const patched = result?.patchedText;
+    if (!result || result.status !== "REPAIRED" || result.verified !== true || typeof patched !== "string" || !patched.trim()) return null;
+    const entry = {
+      file,
+      status: "REPAIRED",
+      candidate: result.candidate?.id || null,
+      verified: true,
+      beforeFingerprint: result.beforeFingerprint || null,
+      afterFingerprint: result.afterFingerprint || null,
+      sourceLength: String(sourceText || "").length,
+      patchedLength: patched.length,
+      postRepairStatus: postRepair?.status || null,
+      postRepairAudit: postRepair?.audit || null,
+      postRepairRoute: postRepair?.route || null,
+      appliedAt: new Date().toISOString()
+    };
+    sourceRepairCache.set(file, {
+      verified: true,
+      candidate: entry.candidate,
+      originFingerprint: fingerprintSource(sourceText),
+      afterFingerprint: entry.afterFingerprint,
+      patchedText: patched,
+      postRepairVerified: !!entry.postRepairVerified,
+      postRepairAudit: entry.postRepairAudit || null,
+      updatedAt: entry.appliedAt
+    });
+
+    state.repairRuntime = {
+      ...(state.repairRuntime || {}),
+      status: "REPAIRED",
+      cycle: Number(state.cycle || 0),
+      repaired: Number(state.repairRuntime?.repaired || 0) + 1,
+      verified: Number(state.repairRuntime?.verified || 0) + 1,
+      targets: { ...(state.repairRuntime?.targets || {}), [file]: entry }
+    };
+    return entry;
+  }
 
   async function runInternalSourceScan() {
     if (!canRun() || sourceScanInFlight) return;
@@ -1188,8 +1243,38 @@ function answerQuestion(question) {
       try {
         const response = await fetch(new URL(item.path, location.href).href, { cache: "no-store", signal: scanSignal });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const text = await response.text();
-        if (!text.trim()) throw new Error("SOURCE_EMPTY");
+        const fetchedText = await response.text();
+        if (!fetchedText.trim()) throw new Error("SOURCE_EMPTY");
+
+        // If the live origin still matches the source fingerprint that produced
+        // a verified repair, BCGO re-absorbs the already repaired FULL SOURCE
+        // before analysis. This keeps the repair inside the BCGO source path
+        // without introducing OPFS/localStorage or a parallel executor.
+        const cachedRepair = sourceRepairCache.get(item.file);
+        let text = fetchedText;
+        if (
+          cachedRepair &&
+          cachedRepair.verified === true &&
+          cachedRepair.originFingerprint === fingerprintSource(fetchedText) &&
+          typeof cachedRepair.patchedText === "string" &&
+          cachedRepair.patchedText.trim()
+        ) {
+          text = cachedRepair.patchedText;
+          scan.fileStates[item.file] = {
+            status: "REPAIRED_ABSORBED",
+            message: `${text.length.toLocaleString("id-ID")} karakter · FULL PATCH terserap kembali ke jalur BCGO.`,
+            contentHash: cachedRepair.afterFingerprint || null,
+            changed: true,
+            repair: {
+              candidate: cachedRepair.candidate || null,
+              verified: true,
+              postRepairVerified: cachedRepair.postRepairVerified === true,
+              audit: cachedRepair.postRepairAudit || null,
+              absorbed: true
+            }
+          };
+        }
+
         contents.set(item.file, text);
         scan.filesReadable++;
         scan.filesScanned++;
@@ -1213,7 +1298,71 @@ function answerQuestion(question) {
         if (changed) {
           recordEvent("SOURCE_CHANGED", `Source ${item.file} berubah — saraf disesuaikan ulang.`, item.file.split("/").pop());
         }
-        if (issues.length) {
+        let repairResult = null;
+        let postRepair = null;
+        if (
+          /\.(?:js|html)$/i.test(item.file)
+        ) {
+          const bridge = getRepairBridge();
+          if (bridge && typeof bridge.repairSource === "function") {
+            try {
+              repairResult = bridge.repairSource(text, { source: item.file, autoApply: true, fullAudit: true });
+              if (repairResult?.status === "REPAIRED" && repairResult.verified === true && typeof repairResult.patchedText === "string") {
+                // PATCH FULL SOURCE kembali ke alur BCGO saat ini — tanpa OPFS/runtime storage paralel.
+                const originalText = text;
+                text = repairResult.patchedText;
+                contents.set(item.file, text);
+                postRepair = typeof bridge.analyze === "function"
+                  ? bridge.analyze(text, { source: item.file, fullAudit: true, autoReflect: false, maxCycles: 1 })
+                  : null;
+                const entry = recordRepairRuntime(item.file, repairResult, originalText, postRepair);
+                const verifiedPost = !!(postRepair && postRepair.ok && postRepair.audit?.status === "VALID");
+                if (entry) {
+                  entry.postRepairVerified = verifiedPost;
+                  entry.postRepairStatus = postRepair?.status || null;
+                  entry.postRepairAudit = postRepair?.audit?.status || postRepair?.audit || null;
+                  entry.postRepairRoute = postRepair?.packet?.cycles?.[0]?.pipeline
+                    ? Object.entries(postRepair.packet.cycles[0].pipeline).filter(([k,v]) => ["A","B","C","D"].includes(k) && v).map(([k]) => k).join(">")
+                    : null;
+                  const cached = sourceRepairCache.get(item.file);
+                  if (cached) {
+                    cached.postRepairVerified = verifiedPost;
+                    cached.postRepairAudit = entry.postRepairAudit;
+                    cached.postRepairRoute = entry.postRepairRoute;
+                    cached.patchedText = text;
+                    cached.afterFingerprint = repairResult.afterFingerprint || cached.afterFingerprint;
+                  }
+                }
+                scan.fileStates[item.file] = {
+                  status: verifiedPost ? "REPAIRED_VERIFIED" : "REPAIRED_REVIEW",
+                  message: `${text.length.toLocaleString("id-ID")} karakter · ${repairResult.candidate?.id || "REPAIR"} · FULL PATCH → SERAP ULANG → POST-REPAIR ${verifiedPost ? "VERIFIED" : "REVIEW"}`,
+                  issues,
+                  contentHash: repairResult.afterFingerprint || contentHash,
+                  changed: true,
+                  repair: {
+                    candidate: repairResult.candidate?.id || null,
+                    verified: repairResult.verified === true,
+                    postRepairVerified: verifiedPost,
+                    audit: postRepair?.audit?.status || postRepair?.audit || null
+                  }
+                };
+                scan.findings.push({
+                  type: "SOURCE_REPAIRED",
+                  severity: verifiedPost ? "INFO" : "MEDIUM",
+                  sourceFile: item.file,
+                  message: `Full patch ${repairResult.candidate?.id || "REPAIR"} dikembalikan ke source aktif BCGO dan diserap ulang.`,
+                  repair: scan.fileStates[item.file].repair
+                });
+              }
+            } catch (repairError) {
+              repairResult = { status: "REPAIR_ERROR", error: String(repairError?.message || repairError).slice(0, 240) };
+            }
+          }
+        }
+
+        if (repairResult?.status === "REPAIRED" && repairResult.verified === true) {
+          // Jangan timpa hasil repair dengan CLEAN/REVIEW pada cabang scanner biasa.
+        } else if (issues.length) {
           scan.fileStates[item.file] = {
             status: "REVIEW",
             message: `${text.length.toLocaleString("id-ID")} karakter · pantau: ${issues.join(", ")}${changed ? " · DIROMBAK" : ""}`,
@@ -1290,11 +1439,6 @@ function answerQuestion(question) {
     const contracts = [
       ["admin/bcgo.html", "admin/bcgo.js", "BCGO_ENGINE_IMPORT"],
       ["admin/cgo-error-dashboard.html", "admin/cgo-error-dashboard.js", "ERROR_DASHBOARD"],
-      ["admin/cgo-error-dashboard.html", "admin/cgo-machine-abc.js", "ERROR_DASHBOARD_ABC_CORE"],
-      ["admin/cgo-error-dashboard.html", "admin/cgo-machine-abc-bridge.js", "ERROR_DASHBOARD_ABC_BRIDGE"],
-      ["admin/cgo-error-dashboard.html", "admin/cgo-otak-hub.js", "ERROR_DASHBOARD_OTAK_HUB"],
-      ["admin/cgo-otak-hub.js", "admin/cgo-machine-abc.js", "OTAK_HUB_ABC_CORE"],
-      ["admin/cgo-otak-hub.js", "admin/cgo-machine-abc-bridge.js", "OTAK_HUB_ABC_BRIDGE"],
       ["admin/bcgo.js", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
       ["admin/bcgo-admin.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
       ["admin/data-cgo.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
@@ -1392,6 +1536,31 @@ function answerQuestion(question) {
     sourceScanInFlight = false;
     sourceScanController = null;
   }
+
+  let dashboardControlChannel = null;
+  let lastDashboardCycleCommand = null;
+  try {
+    if (typeof BroadcastChannel === "function") {
+      dashboardControlChannel = new BroadcastChannel("CGO_DASHBOARD_CONTROL");
+      dashboardControlChannel.onmessage = (ev) => {
+        const command = ev && ev.data;
+        if (!command || command.type !== "CGO_DASHBOARD_NEXT_CYCLE") return;
+        if (lastDashboardCycleCommand === command.cycle) return;
+        if (!canRun()) return;
+        lastDashboardCycleCommand = command.cycle;
+        recordEvent("DASHBOARD_LOOP", `Dashboard meminta siklus berikutnya: ${command.action || "RESCAN_AND_REPROCESS"}.`, "SYS_DASHBOARD_NEXT_CYCLE");
+        try {
+          runInternalSourceScan().catch(error => {
+            sourceScanInFlight = false;
+            state.sourceScan = { ...makeInitialSourceScan(), status: "DEGRADED", phase: "COMPLETE", message: String(error?.message || error) };
+            publishToUI(safeClone(state));
+          });
+        } catch (error) {
+          recordEvent("DASHBOARD_LOOP_ERROR", String(error?.message || error), "SYS_DASHBOARD_NEXT_CYCLE");
+        }
+      };
+    }
+  } catch (_) {}
 
   function refreshState() {
     if (!canRun()) return;
@@ -1608,6 +1777,8 @@ function answerQuestion(question) {
       clearInterval(refreshTimer);
       if (sourceScanTimer) { clearInterval(sourceScanTimer); sourceScanTimer = null; }
       if (sourceScanController) { try { sourceScanController.abort(); } catch (_) {} sourceScanController = null; }
+      try { if (dashboardControlChannel) dashboardControlChannel.close(); } catch (_) {}
+      dashboardControlChannel = null;
       if (typeof unsubscribeAuth === "function") unsubscribeAuth();
       cleanupRealtime();
     }

@@ -7,7 +7,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "1.1.1-NO-STUCK";
+  const VERSION = "1.2.0-CLOSED-LOOP";
   const MAX_ERRORS = 80;
   const MAX_CHAIN = 12;
 
@@ -18,7 +18,16 @@
     lastTick: 0,
     bcgo: null,
     sourceScan: null,
-    lastRepair: null
+    abcLive: null,
+    loop: {
+      state: "STANDBY",
+      decision: "WAITING_FOR_D",
+      cycle: 0,
+      lastRequestedCycle: null,
+      lastRequestedAt: 0,
+      reason: null,
+      nextAt: null
+    }
   };
   const listeners = new Set();
   let channel = null;
@@ -510,12 +519,6 @@
   function installTraps() {
     if (trapsInstalled) return;
     trapsInstalled = true;
-    global.addEventListener("cgo:repair-result", function (event) {
-      const d = event && event.detail;
-      if (!d || typeof d !== "object") return;
-      state.lastRepair = { file: String(d.file || "unknown"), status: String(d.status || "UNKNOWN"), verified: d.verified === true, verificationLevel: d.verificationLevel || null, applied: d.applied === true, findingCount: Number(d.findingCount) || 0, at: Number(d.at) || now() };
-      notify();
-    });
 
     const prevOnError = global.onerror;
     if (typeof global.addEventListener !== "function") return;
@@ -565,6 +568,86 @@
       };
     } catch (_) {}
   }
+
+  function ingestAbcTelemetry(packet) {
+    if (!packet || packet.type !== "ABC_TELEMETRY") return;
+    const stage = String(packet.stage || "").toUpperCase();
+    if (!["A","B","C","D"].includes(stage)) return;
+    state.abcLive = { source: "MESIN_ABC_TELEMETRY", event: packet.event || null, stage, status: packet.status || (packet.event === "PHASE_START" ? "RUNNING" : null), audit: packet.audit || null, cycleIndex: packet.cycleIndex != null ? packet.cycleIndex : null, durationMs: packet.durationMs != null ? packet.durationMs : null, at: packet.at || now(), elapsedMs: packet.elapsedMs != null ? packet.elapsedMs : null, error: packet.error || null };
+    decideNextCycle(packet);
+    notify();
+  }
+
+  function ingestAbcLiveLink(link) {
+    if (!link || typeof link !== "object" || link.type !== "CGO_ABC_LIVE_LINK") return;
+    state.abcLive = { ...(state.abcLive || {}), source: "BCGO_ABC_LIVE_LINK", event: "LIVE_LINK", mode: link.mode || null, status: link.status || null, audit: link.audit || null, revision: link.revision || null, fingerprint: link.fingerprint || null, claimCount: link.claimCount != null ? link.claimCount : null, at: link.capturedAt || now() };
+    notify();
+  }
+
+  // Closed-loop controller: Dashboard is the decision point after Machine D.
+  // It never mutates source directly; it emits a bounded, deduplicated command
+  // back to BCGO, which owns the next source/evidence cycle.
+  let loopTimer = null;
+  let loopChannel = null;
+  const LOOP_DELAY_MS = 1200;
+  const LOOP_COOLDOWN_MS = 2500;
+
+  function decideNextCycle(packet) {
+    if (!packet || packet.type !== "ABC_TELEMETRY" || String(packet.stage || "").toUpperCase() !== "D") return;
+    if (String(packet.event || "").toUpperCase() !== "PHASE_END") return;
+    const audit = String(packet.audit || "").toUpperCase();
+    const status = String(packet.status || "").toUpperCase();
+    const cycle = packet.cycleIndex != null ? Number(packet.cycleIndex) : null;
+    const blocked = /ERROR|ABORT|PATCH_REJECTED|FAILED/.test(status) || /ERROR|INVALID/.test(audit);
+    if (blocked) {
+      state.loop = { ...state.loop, state: "STANDBY", decision: "HOLD", cycle, reason: `D:${status || "UNKNOWN"} · AUDIT:${audit || "UNKNOWN"}`, nextAt: null };
+      notify();
+      return;
+    }
+    const nowMs = now();
+    if (cycle != null && state.loop.lastRequestedCycle === cycle) return;
+    if (nowMs - Number(state.loop.lastRequestedAt || 0) < LOOP_COOLDOWN_MS) return;
+    state.loop = { ...state.loop, state: "DECIDING", decision: "NEXT_CYCLE", cycle, reason: `D verified · ${status || "COMPLETED"} · audit ${audit || "VALID"}`, nextAt: nowMs + LOOP_DELAY_MS };
+    notify();
+    if (loopTimer) clearTimeout(loopTimer);
+    loopTimer = setTimeout(() => {
+      const command = {
+        type: "CGO_DASHBOARD_NEXT_CYCLE",
+        source: "DASHBOARD_PINTAR",
+        action: "RESCAN_AND_REPROCESS",
+        cycle,
+        requestedAt: now(),
+        reason: state.loop.reason
+      };
+      state.loop = { ...state.loop, state: "REQUESTED", decision: "RESCAN_AND_REPROCESS", lastRequestedCycle: cycle, lastRequestedAt: command.requestedAt, nextAt: null };
+      try {
+        if (loopChannel) loopChannel.postMessage(command);
+      } catch (_) {}
+      try {
+        if (typeof global.dispatchEvent === "function") global.dispatchEvent(new CustomEvent("cgo:dashboard-next-cycle", { detail: command }));
+      } catch (_) {}
+      notify();
+    }, LOOP_DELAY_MS);
+  }
+
+  try {
+    if (typeof global.BroadcastChannel === "function") {
+      loopChannel = new global.BroadcastChannel("CGO_DASHBOARD_CONTROL");
+      state._loopChannel = loopChannel;
+    }
+  } catch (_) {}
+
+  try {
+    if (typeof global.addEventListener === "function") {
+      global.addEventListener("cgo:abc-telemetry", function (ev) { try { ingestAbcTelemetry(ev && ev.detail); } catch (_) {} });
+      global.addEventListener("cgo:machine-abc-bcgo-sync", function (ev) { try { ingestAbcLiveLink(ev && ev.detail); } catch (_) {} });
+    }
+    if (typeof global.BroadcastChannel === "function") {
+      const abcTelemetryChannel = new global.BroadcastChannel("CGO_MACHINE_ABC_TELEMETRY");
+      abcTelemetryChannel.onmessage = function (ev) { try { ingestAbcTelemetry(ev && ev.data); } catch (_) {} };
+      state._abcTelemetryChannel = abcTelemetryChannel;
+    }
+  } catch (_) {}
 
   function tick() {
     state.lastTick = now();
@@ -617,7 +700,6 @@
       summary: { ...state.summary },
       errors: state.errors.slice(0, MAX_ERRORS),
       chains: state.chains.slice(0, MAX_CHAIN),
-      lastRepair: state.lastRepair,
       sourceScan: state.sourceScan
         ? {
             status: state.sourceScan.status,
@@ -629,7 +711,9 @@
         : null,
       bcgoCycle: state.bcgo ? (state.bcgo.cycle != null ? state.bcgo.cycle : (state.bcgo.cycleNo != null ? state.bcgo.cycleNo : null)) : null,
       bcgoMode: state.bcgo && state.bcgo.cycleMode || null,
-      abcReady: !!(global.CGOMachineABCBridge || global.CGOMachineABC)
+      abcLive: state.abcLive ? { ...state.abcLive } : null,
+      abcReady: !!(global.CGOMachineABCBridge || global.CGOMachineABC),
+      loop: { ...state.loop }
     };
   }
 
@@ -645,6 +729,9 @@
   function stop() {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     try { if (channel) channel.close(); } catch (_) {}
+    try { if (state._abcTelemetryChannel) state._abcTelemetryChannel.close(); } catch (_) {}
+    if (loopTimer) { clearTimeout(loopTimer); loopTimer = null; }
+    try { if (loopChannel) loopChannel.close(); } catch (_) {}
     return API;
   }
 

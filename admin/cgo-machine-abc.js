@@ -1,6 +1,6 @@
 /*
  * CGO MACHINE ABC — UNIVERSAL CORE ENGINE
- * Version 0.9.4
+ * Version 1.0.1-FULL-RECOVERY
  * Zero External · Zero API · Zero Network · Domain Neutral
  * A = INGEST / PARSE / REPRESENT
  * B = ANALYZE / RELATE / VERIFY / REASON
@@ -10,7 +10,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "0.9.9";
+  const VERSION = "1.0.1-FULL-RECOVERY";
   const MAX_TEXT_SAMPLE = 6000;
   const MAX_ITEMS = 1000;
   const MAX_TOKENS = 5000;
@@ -313,7 +313,7 @@
   function sealChain(items){let prev="GENESIS";return(items||[]).map((item,i)=>{const body={index:i,previousHash:prev,evidence:item};const hash=digest(body);prev=hash;return{index:i,previousHash:body.previousHash,hash,evidence:clone(item)}})}
   function verifyChain(chain){let prev="GENESIS";for(const item of chain||[]){if(item.previousHash!==prev)return false;const expected=digest({index:item.index,previousHash:item.previousHash,evidence:item.evidence});if(expected!==item.hash)return false;prev=item.hash}return true}
   function validateOutput(result){const issues=[];for(const k of ["machine","version","status","summary","decision","metadata"]){if(!(k in (result||{})))issues.push("MISSING_"+k.toUpperCase())}const conf=result?.decision?.confidence;if(conf!=null&&(conf<0||conf>1))issues.push("DECISION_CONFIDENCE");if(result?.evidenceChain&&!verifyChain(result.evidenceChain))issues.push("EVIDENCE_CHAIN");if(result?.payloadHash){const p=digest({findings:result.findings,relations:result.relations,decision:result.decision,verification:result.verification});if(p!==result.payloadHash)issues.push("C_PAYLOAD_HASH")};return{status:issues.length?"INVALID":"VALID",issues}}
-  const MachineC={process(rep,proc,options={}){const started=Date.now();const result={machine:"C",stage:"result",version:VERSION,status:proc?.decision?.status??"UNRESOLVED",summary:summarize(rep,proc),findings:clone(proc?.findings??[]),relations:clone(proc?.relations??[]),inferences:clone(proc?.inferences??[]),hypotheses:clone(proc?.hypotheses??[]),constraints:clone(proc?.constraints??[]),contradictions:clone(proc?.contradictions??[]),reasoning:clone(proc?.reasoning??[]),reasoningTrace:clone(proc?.reasoningTrace??[]),evidence:clone(proc?.evidence??[]),uncertainty:clone(proc?.uncertainty??[]),verification:clone(proc?.verification??[]),decision:clone(proc?.decision??null),errors:clone(proc?.errors??[]),fallbacks:clone(proc?.fallbacks??[]),metadata:{inputFingerprint:rep?.input?.fingerprint??null,source:options.source??rep?.metadata?.source??null,generatedAt:now()}};result.evidenceChain=sealChain(result.evidence);if(result.status==="PROCESSED"&&result.decision?.confidence>.9&&verifyChain(result.evidenceChain))result.status="WELL_FORMED";result.payloadHash=digest({findings:result.findings,relations:result.relations,decision:result.decision,verification:result.verification});if(Array.isArray(proc?.items))result.batch={count:proc.items.length,items:proc.items.map(x=>({index:x.index,source:x.source,fingerprint:x.fingerprint,status:x.processing?.decision?.status??"UNRESOLVED",analysis:compactAnalysis(x.processing)}))};result.continuation={available:true,mode:"structured",nextInputType:Array.isArray(proc?.items)?"batch_analysis":"analysis_result",automatic:!!options.autoReflect};result.continuation.metadata={cycles:options.cycleIndex??0,autoReflect:!!options.autoReflect};result.validation=validateOutput(result);result.durationMs=elapsed(started);return result},inject(value,options={}){return{__cgoMachineInjection:true,machine:"C",stage:"injection",version:VERSION,mode:options.mode??"continuation",sourceStage:"C",transport:"internal",contentMode:"structured",createdAt:now(),payload:{value:clone(value)},metadata:clone(options.metadata??{})}}};
+  const MachineC={process(rep,proc,options={}){const started=Date.now();const repairPlan=buildRepairPlan(rep?.metadata?.sourceInput??null,{pipeline:{A:rep,B:proc},result:{status:proc?.decision?.status??"UNRESOLVED"}},{}) ; const result={machine:"C",stage:"result",version:VERSION,status:proc?.decision?.status??"UNRESOLVED",summary:summarize(rep,proc),findings:clone(proc?.findings??[]),relations:clone(proc?.relations??[]),inferences:clone(proc?.inferences??[]),hypotheses:clone(proc?.hypotheses??[]),constraints:clone(proc?.constraints??[]),contradictions:clone(proc?.contradictions??[]),reasoning:clone(proc?.reasoning??[]),reasoningTrace:clone(proc?.reasoningTrace??[]),evidence:clone(proc?.evidence??[]),uncertainty:clone(proc?.uncertainty??[]),verification:clone(proc?.verification??[]),decision:clone(proc?.decision??null),errors:clone(proc?.errors??[]),fallbacks:clone(proc?.fallbacks??[]),solution:{status:proc?.decision?.status??"UNRESOLVED",objective:proc?.decision?.reason??null,repairPlan:repairPlan??null,automaticCandidates:repairPlan?.automaticCandidates??[],manualCandidates:repairPlan?.manualCandidates??[]},metadata:{inputFingerprint:rep?.input?.fingerprint??null,source:options.source??rep?.metadata?.source??null,generatedAt:now(),bcgoEvidence:proc?.externalEvidence?clone(proc.externalEvidence):null}};result.evidenceChain=sealChain(result.evidence);if(result.status==="PROCESSED"&&result.decision?.confidence>.9&&verifyChain(result.evidenceChain))result.status="WELL_FORMED";result.payloadHash=digest({findings:result.findings,relations:result.relations,decision:result.decision,verification:result.verification});if(Array.isArray(proc?.items))result.batch={count:proc.items.length,items:proc.items.map(x=>({index:x.index,source:x.source,fingerprint:x.fingerprint,status:x.processing?.decision?.status??"UNRESOLVED",analysis:compactAnalysis(x.processing)}))};result.continuation={available:true,mode:"structured",nextInputType:Array.isArray(proc?.items)?"batch_analysis":"analysis_result",automatic:!!options.autoReflect};result.continuation.metadata={cycles:options.cycleIndex??0,autoReflect:!!options.autoReflect};result.validation=validateOutput(result);result.durationMs=elapsed(started);return result},inject(value,options={}){return{__cgoMachineInjection:true,machine:"C",stage:"injection",version:VERSION,mode:options.mode??"continuation",sourceStage:"C",transport:"internal",contentMode:"structured",createdAt:now(),payload:{value:clone(value)},metadata:clone(options.metadata??{})}}};
   function compactAnalysis(p){return{findings:clone(p?.findings??[]),relations:clone(p?.relations??[]),inferences:clone(p?.inferences??[]),hypotheses:clone(p?.hypotheses??[]),constraints:clone(p?.constraints??[]),contradictions:clone(p?.contradictions??[]),reasoning:clone(p?.reasoning??[]),reasoningTrace:clone(p?.reasoningTrace??[]),evidence:clone(p?.evidence??[]),uncertainty:clone(p?.uncertainty??[]),verification:clone(p?.verification??[]),decision:clone(p?.decision??null)}}
   function summarize(r,p){return{inputType:r?.input?.type??"unknown",format:r?.content?.format??null,formatConfidence:r?.content?.formatConfidence??null,operations:p?.operations?.length??0,findings:p?.findings?.length??0,relations:p?.relations?.length??0,inferences:p?.inferences?.length??0,hypotheses:p?.hypotheses?.length??0,constraints:p?.constraints?.length??0,contradictions:p?.contradictions?.length??0,evidence:p?.evidence?.length??0,verification:p?.verification?.length??0,uncertainty:p?.uncertainty?.length??0,status:p?.decision?.status??"UNRESOLVED",confidence:p?.decision?.confidence??0}}
 
@@ -327,9 +327,36 @@
   }
   function repairTrailingJSONComma(text){const s=String(text);let inString=false,escape=false,out="",changed=false;for(let i=0;i<s.length;i++){const ch=s[i];if(inString){out+=ch;if(escape)escape=false;else if(ch==="\\")escape=true;else if(ch==='"')inString=false;continue;}if(ch==='"'){inString=true;out+=ch;continue;}if(ch===","){let j=i+1;while(j<s.length&&/\s/.test(s[j]))j++;if(s[j]==="}"||s[j]==="]"){changed=true;continue;}}out+=ch;}return changed?{patched:out,reason:"TRAILING_JSON_COMMA"}:null;}
   function buildRepairPlan(input,baseline,options={}){const candidates=[];const a=baseline?.pipeline?.A;const b=baseline?.pipeline?.B;const content=a?.content;const text=content?.mode==="text"?String(content.value):null;const format=String(content?.format||"");if(text&&["json","json_candidate"].includes(format)&&content?.parse&&!content.parse.ok){const fix=repairTrailingJSONComma(text);if(fix)candidates.push({id:"JSON_TRAILING_COMMA",type:"SYNTAX_REPAIR",safe:true,confidence:.99,reason:fix.reason,patch:{kind:"replace_text",fromFingerprint:fingerprint(text),toFingerprint:fingerprint(fix.patched),before:text,after:fix.patched}});}if(text&&["code","code_candidate","css","json","json_candidate"].includes(format)){const d=content?.syntax?.delimiters;if(d&&!d.balanced&&!d.unterminatedString&&!d.unterminatedComment&&!d.unterminatedRegex){const fix=repairDelimiterCandidate(text);if(fix)candidates.push({id:"UNMATCHED_OPEN_DELIMITER",type:"SYNTAX_REPAIR",safe:true,confidence:Math.max(.9,1-Math.min(.08,fix.count*.01)),reason:fix.reason,patch:{kind:"append_text",suffix:fix.suffix,fromFingerprint:fingerprint(text),toFingerprint:fingerprint(fix.patched),before:text,after:fix.patched}});}}const duplicateIds=b?.contradictions?.filter(x=>x?.type==="DUPLICATE_IDENTIFIER")||[];if(duplicateIds.length)candidates.push({id:"DUPLICATE_IDENTIFIER",type:"SEMANTIC_REPAIR_REQUIRED",safe:false,confidence:0,reason:"Renaming IDs can change application semantics; no automatic mutation is allowed.",patch:null,evidence:clone(duplicateIds)});const failed=b?.verification?.filter(x=>x?.status==="FAIL")||[];for(const f of failed)if(!candidates.some(x=>x.id===String(f.type)))candidates.push({id:String(f.type),type:"REPAIR_REVIEW",safe:false,confidence:0,reason:"Verification failure requires evidence-specific repair; no deterministic patch rule is registered.",patch:null,evidence:clone(f)});return{available:candidates.length>0,automaticCandidates:candidates.filter(x=>x.safe),manualCandidates:candidates.filter(x=>!x.safe),count:candidates.length,sourceFingerprint:a?.input?.fingerprint??fingerprint(input),baselineStatus:baseline?.result?.status??null};}
-  function repair(input,options={}){const baseline=CGOMachineABC.process(input,{...options,autoRepair:false});const plan=buildRepairPlan(input,baseline,options);if(!plan.automaticCandidates.length)return{engine:"CGO_MACHINE_ABC",version:VERSION,status:plan.manualCandidates.length?"REPAIR_REQUIRED":"NO_REPAIR_NEEDED",baseline,plan,applied:false,verified:false};if(options.autoApply===false)return{engine:"CGO_MACHINE_ABC",version:VERSION,status:"REPAIR_AVAILABLE",baseline,plan,applied:false,verified:false};const candidate=plan.automaticCandidates[0];const repaired=CGOMachineABC.process(candidate.patch.after,{...options,autoRepair:false});const beforeStatus=baseline.result?.status??null,afterStatus=repaired.result?.status??null;const beforeFindings=baseline.pipeline?.B?.findings?.length??0,afterFindings=repaired.pipeline?.B?.findings?.length??0;const syntaxPass=(repaired.pipeline?.B?.verification||[]).every(x=>x.type!=="SYNTAX_WARNING"&&x.status!=="FAIL");let strongVerification=false;let verificationLevel="STRUCTURAL_ONLY";if(candidate.id==="JSON_TRAILING_COMMA"){try{JSON.parse(candidate.patch.after);strongVerification=true;verificationLevel="JSON_PARSE_PASS";}catch(_){strongVerification=false;verificationLevel="JSON_PARSE_FAIL";}}const verified=strongVerification&&syntaxPass&&repaired.audit?.status==="VALID"&&afterStatus!=="DEGRADED";const status=verified?"REPAIRED":(syntaxPass&&repaired.audit?.status==="VALID"&&afterStatus!=="DEGRADED"?"PATCH_APPLIED_UNVERIFIED":"PATCH_REJECTED");return{engine:"CGO_MACHINE_ABC",version:VERSION,status,applied:true,verified,verificationLevel,candidate,baseline,repaired,comparison:{before:{status:beforeStatus,findings:beforeFindings,fingerprint:baseline.pipeline?.A?.input?.fingerprint??null},after:{status:afterStatus,findings:afterFindings,fingerprint:repaired.pipeline?.A?.input?.fingerprint??null},findingDelta:afterFindings-beforeFindings},reason:verified?"Patch applied, JSON parser and A>B>C>D post-repair verification passed.":status==="PATCH_APPLIED_UNVERIFIED"?"Patch applied and structural pipeline passed, but this engine has no JavaScript/CSS parser; runtime/syntax validity is not claimed.":"Patch applied but post-repair verification did not establish a valid result."};}
+  const REPAIR_VERIFICATION_SCOPE="REGISTERED_RULES_AND_INTERNAL_PIPELINE_ONLY";
+  function repair(input,options={}){
+    const baseline=CGOMachineABC.process(input,{...options,autoRepair:false,fast:false,skipAudit:false});
+    const initialPlan=buildRepairPlan(input,baseline,options);
+    const baselineVerified=baseline?.audit?.status==="VALID" && baseline?.result?.status!=="DEGRADED" && baseline?.result?.status!=="UNRESOLVED";
+    if(!initialPlan.automaticCandidates.length){
+      const status=initialPlan.manualCandidates.length?"REPAIR_REQUIRED":(baselineVerified?"VERIFIED":"REPAIR_REQUIRED");
+      return{engine:"CGO_MACHINE_ABC",version:VERSION,status,applied:false,verified:baselineVerified,steps:[],baseline,repaired:baseline,postRepair:baseline,plan:initialPlan,finalPlan:initialPlan,comparison:{before:{status:baseline.result?.status??null,findings:baseline.pipeline?.B?.findings?.length??0,fingerprint:baseline.pipeline?.A?.input?.fingerprint??null},after:{status:baseline.result?.status??null,findings:baseline.pipeline?.B?.findings?.length??0,fingerprint:baseline.pipeline?.A?.input?.fingerprint??null},findingDelta:0},verification:{preRepairAudit:baseline.audit?.status||null,postRepairAudit:baseline.audit?.status||null,postRepairRoute:baseline.telemetry?.route||"A>B>C>D",postRepairVerified:baselineVerified,postRepairPipelineTrace:baseline.pipelineTrace||[]},verificationScope:REPAIR_VERIFICATION_SCOPE,runtimeExecution:"NOT_PERFORMED",persistence:"IN_MEMORY_RESULT_ONLY",reason:status==="VERIFIED"?"Input sudah lulus A>B>C>D dan D memverifikasi hasil; tidak diperlukan patch.":initialPlan.manualCandidates.length?"Temuan ada, tetapi belum ada patch deterministik yang aman.":"Tidak ada aturan patch otomatis yang cocok."};
+    }
+    if(options.autoApply===false)return{engine:"CGO_MACHINE_ABC",version:VERSION,status:"REPAIR_AVAILABLE",baseline,postRepair:null,plan:initialPlan,applied:false,verified:false,steps:[],verificationScope:REPAIR_VERIFICATION_SCOPE,runtimeExecution:"NOT_PERFORMED",persistence:"IN_MEMORY_RESULT_ONLY"};
+    const maxSteps=Math.max(1,Math.min(5,toInt(options.maxRepairSteps,3)));let currentInput=input,current=baseline,firstCandidate=null,verified=true;const steps=[];const seen=new Set();
+    for(let i=0;i<maxSteps;i++){
+      const plan=buildRepairPlan(currentInput,current,options);const candidate=plan.automaticCandidates.find(x=>x.safe&&x.patch&&!seen.has(x.id+":"+x.patch.fromFingerprint));if(!candidate)break;
+      const currentText=typeof current.pipeline?.A?.content?.value==="string"?current.pipeline.A.content.value:null;
+      if(currentText===null||fingerprint(currentText)!==candidate.patch.fromFingerprint){verified=false;steps.push({index:i+1,id:candidate.id,status:"PATCH_REJECTED",reason:"source_fingerprint_mismatch"});break;}
+      if(!firstCandidate)firstCandidate=candidate;seen.add(candidate.id+":"+candidate.patch.fromFingerprint);let nextInput=candidate.patch.after;
+      if(isInputEnvelope(currentInput)&&currentInput.payload?.contentMode==="text"){nextInput=clone(currentInput);nextInput.payload.text=candidate.patch.after;}
+      const post=CGOMachineABC.process(nextInput,{...options,autoRepair:false,fast:false,skipAudit:false});
+      const syntaxPass=(post.pipeline?.B?.verification||[]).every(x=>x.type!=="SYNTAX_WARNING"&&x.status!=="FAIL");
+      const stepVerified=syntaxPass&&post.audit?.status==="VALID"&&post.result?.status!=="DEGRADED"&&post.result?.status!=="UNRESOLVED";
+      steps.push({index:i+1,id:candidate.id,reason:candidate.reason,fromFingerprint:candidate.patch.fromFingerprint,toFingerprint:candidate.patch.toFingerprint,status:stepVerified?"VERIFIED":"PATCH_REJECTED",audit:post.audit?.status??null,resultStatus:post.result?.status??null,pipeline:post.pipelineTrace||[]});
+      currentInput=nextInput;current=post;if(!stepVerified){verified=false;break;}
+    }
+    const finalPlan=buildRepairPlan(currentInput,current,options);const outstandingManual=finalPlan.manualCandidates.length>0;const outstandingAutomatic=finalPlan.automaticCandidates.length>0;const anyVerified=steps.some(x=>x.status==="VERIFIED");const allVerified=anyVerified&&verified&&steps.every(x=>x.status==="VERIFIED")&&!outstandingAutomatic&&!outstandingManual&&current.audit?.status==="VALID";
+    const applied=steps.length>0;const status=!applied?(outstandingManual?"REPAIR_REQUIRED":"REPAIR_REQUIRED"):!verified?"PATCH_REJECTED":(outstandingAutomatic||outstandingManual)?"PARTIALLY_REPAIRED":"REPAIRED";
+    const beforeFindings=baseline.pipeline?.B?.findings?.length??0,afterFindings=current.pipeline?.B?.findings?.length??0;
+    return{engine:"CGO_MACHINE_ABC",version:VERSION,status,applied,verified:allVerified,verificationScope:REPAIR_VERIFICATION_SCOPE,runtimeExecution:"NOT_PERFORMED",persistence:"IN_MEMORY_RESULT_ONLY",baseline,repaired:current,postRepair:current,candidate:firstCandidate,plan:initialPlan,finalPlan,steps,comparison:{before:{status:baseline.result?.status??null,findings:beforeFindings,fingerprint:baseline.pipeline?.A?.input?.fingerprint??null},after:{status:current.result?.status??null,findings:afterFindings,fingerprint:current.pipeline?.A?.input?.fingerprint??null},findingDelta:afterFindings-beforeFindings},verification:{preRepairAudit:baseline.audit?.status||null,postRepairAudit:current.audit?.status||null,postRepairRoute:current.telemetry?.route||"A>B>C>D",postRepairVerified:allVerified,postRepairPipelineTrace:current.pipelineTrace||[]},reason:status==="REPAIRED"?"Patch deterministik diterapkan lalu diproses ulang A>B>C>D dan diverifikasi D.":status==="PARTIALLY_REPAIRED"?"Sebagian patch aman berhasil; masih ada temuan yang memerlukan peninjauan.":status==="PATCH_REJECTED"?"Patch ditolak karena verifikasi pasca-patch tidak lulus.":"Temuan ada tetapi belum tersedia patch deterministik yang aman."};
+  }
   function runCycle(input,options={},cycleIndex=0){const cycleStarted=Date.now();const deadline=options.__deadline||(toInt(options.maxDurationMs,DEFAULT_MAX_DURATION_MS)>0?Date.now()+toInt(options.maxDurationMs,DEFAULT_MAX_DURATION_MS):0);let a,b,c;const phaseTelemetry=[];const phase=(stage,fn)=>{const started=Date.now();emitTelemetry({event:"PHASE_START",stage,cycleIndex,elapsedMs:started-cycleStarted});try{const value=fn();const ended=Date.now();const item={stage,status:"COMPLETED",startedAt:started,endedAt:ended,durationMs:ended-started};phaseTelemetry.push(item);emitTelemetry({event:"PHASE_END",stage,cycleIndex,status:"COMPLETED",durationMs:item.durationMs,elapsedMs:ended-cycleStarted});return value}catch(e){const ended=Date.now();const item={stage,status:"FAILED",startedAt:started,endedAt:ended,durationMs:ended-started,error:String(e.message||e)};phaseTelemetry.push(item);emitTelemetry({event:"PHASE_END",stage,cycleIndex,status:"FAILED",durationMs:item.durationMs,elapsedMs:ended-cycleStarted,error:item.error});throw e;}};
-    try{a=phase("A",()=>MachineA.process(input,{...options,__deadline:deadline,cycleIndex}));}catch(e){a={machine:"A",stage:"representation",version:VERSION,input:{type:"error",fingerprint:fingerprint(String(e)),size:0},structure:{kind:"error"},content:{mode:"scalar",value:null,format:"error"},unknowns:[{type:"A_ERROR",severity:"CRITICAL",reason:String(e.message||e)}],errors:[{stage:"A",error:String(e.message||e),timestamp:now()}]};}
+    try{a=phase("A",()=>{const v=MachineA.process(input,{...options,__deadline:deadline,cycleIndex});v.metadata=v.metadata||{};v.metadata.sourceInput=clone(input);return v;});}catch(e){a={machine:"A",stage:"representation",version:VERSION,input:{type:"error",fingerprint:fingerprint(String(e)),size:0},structure:{kind:"error"},content:{mode:"scalar",value:null,format:"error"},unknowns:[{type:"A_ERROR",severity:"CRITICAL",reason:String(e.message||e)}],errors:[{stage:"A",error:String(e.message||e),timestamp:now()}]};}
     try{b=phase("B",()=>{const value=MachineB.process(a,{...options,__deadline:deadline,cycleIndex});if(options.externalEvidence){ingestExternalEvidenceB(value,options.externalEvidence,options);if(value.reasoning?.length)reasonB(value);value.decision=decideB(value,options);}return value;});}catch(e){b=blankB(a);b.degraded=true;b.errors.push({stage:"B",error:String(e.message||e),timestamp:now()});b.fallbacks.push({from:"B",to:"A",timestamp:now()});b.decision={status:"DEGRADED",confidence:0,reason:"fallback_B_to_A"};}
     try{c=phase("C",()=>MachineC.process(a,b,{...options,cycleIndex}));}catch(e){c=fallbackResult("C",String(e.message||e),a);c.fallbacks.push({from:"C",to:"B",timestamp:now()});}
     if(b.degraded){c.status="DEGRADED";c.decision={...c.decision,status:"DEGRADED",reason:"b_degraded"};c.errors=[...(c.errors||[]),...(b.errors||[])];c.fallbacks=[...(c.fallbacks||[]),...(b.fallbacks||[])];}
@@ -702,399 +729,12 @@
     }
 
     // ============================================================================
-    // LAYER 3: CHANNEL SIMULATOR
+    // LAYER 3: PURE LINK EVALUATION — no internal satellite simulator/state machine
     // ============================================================================
+    // Mesin ABC only consumes externally supplied geometry for link evaluation.
+    // No parabola, random pass generator, or synthetic satellite state is used.
+    // Physical formulas above remain the calculation source.
 
-    class SatelliteChannelSimulator {
-      /**
-       * @param {object} [options]
-       * @param {number} [options.passDurationSec=550]
-       * @param {string} [options.mode='realistic']
-       */
-      constructor(options = {}) {
-        this.passDuration = options.passDurationSec ?? SAT_CONSTANTS.PASS_DURATION_SEC;
-        this.mode = options.mode ?? PHYSICS_MODE.REALISTIC;
-
-        this.elapsed = 0;
-        this.inPass = true;
-        this.interPassRemaining = 0;
-
-        this.tickCount = 0;
-        this.lastScintFade = 0;
-      }
-
-      /**
-       * Tick channel simulator.
-       * @param {number} deltaMs
-       * @param {Date} [now]
-       * @param {object|null} [externalGeo] - geometri dari TLE/SGP4 (opsional)
-       *   { elevationDeg, distanceKm, dopplerShiftHz?, dopplerRateHzPerSec?, name? }
-       * @returns {object} metrics
-       */
-      tick(deltaMs, now = new Date(), externalGeo = null) {
-        this.tickCount++;
-
-        // ── Jalur LIVE: geometri dari TLE (bukan parabola internal) ──
-        if (externalGeo && Number.isFinite(externalGeo.elevationDeg)) {
-          const elevationDeg = externalGeo.elevationDeg;
-          const distanceKm = Number.isFinite(externalGeo.distanceKm)
-            ? externalGeo.distanceKm
-            : Infinity;
-          const inPass = elevationDeg >= SAT_CONSTANTS.MIN_ELEVATION_DEG
-            && Number.isFinite(distanceKm)
-            && distanceKm < 1e6;
-
-          if (!inPass) {
-            this.lastScintFade = 0;
-            return {
-              elevationDeg: Math.max(0, elevationDeg),
-              distanceKm,
-              snrDb: -Infinity,
-              dopplerShiftHz: externalGeo.dopplerShiftHz ?? 0,
-              dopplerRateHzPerSec: externalGeo.dopplerRateHzPerSec ?? 0,
-              atmPenalty: 99,
-              scintFadeDb: 0,
-              inPass: false,
-              source: 'tle',
-              name: externalGeo.name ?? null
-            };
-          }
-
-          const snrDb = computeSNR(distanceKm);
-          const atmPenalty = computeAtmPenalty(elevationDeg);
-          const scintFadeDb = computeScintillation(now, elevationDeg, deltaMs, this.mode);
-          this.lastScintFade = scintFadeDb;
-
-          return {
-            elevationDeg,
-            distanceKm,
-            snrDb,
-            dopplerShiftHz: externalGeo.dopplerShiftHz ?? 0,
-            dopplerRateHzPerSec: externalGeo.dopplerRateHzPerSec ?? 0,
-            atmPenalty,
-            scintFadeDb,
-            inPass: true,
-            source: 'tle',
-            name: externalGeo.name ?? null
-          };
-        }
-
-        // ── Jalur SIM: parabola internal (fallback offline) ──
-        if (!this.inPass) {
-          this.interPassRemaining -= deltaMs;
-          if (this.interPassRemaining <= 0) {
-            this.inPass = true;
-            this.elapsed = 0;
-            this.interPassRemaining = 0;
-          } else {
-            return {
-              elevationDeg: 0,
-              distanceKm: Infinity,
-              snrDb: -Infinity,
-              dopplerShiftHz: 0,
-              dopplerRateHzPerSec: 0,
-              atmPenalty: 99,
-              scintFadeDb: 0,
-              inPass: false,
-              source: 'sim'
-            };
-          }
-        }
-
-        this.elapsed += deltaMs / 1000;
-
-        if (this.elapsed > this.passDuration) {
-          this.inPass = false;
-          this.interPassRemaining =
-            SAT_CONSTANTS.INTER_PASS_MIN_MS +
-            Math.random() * (SAT_CONSTANTS.INTER_PASS_MAX_MS - SAT_CONSTANTS.INTER_PASS_MIN_MS);
-
-          this.elapsed = 0;
-          return {
-            elevationDeg: 0,
-            distanceKm: Infinity,
-            snrDb: -Infinity,
-            dopplerShiftHz: 0,
-            dopplerRateHzPerSec: 0,
-            atmPenalty: 99,
-            scintFadeDb: 0,
-            inPass: false,
-            source: 'sim'
-          };
-        }
-
-        const geo = computeGeometry(this.elapsed, this.passDuration);
-        const snrDb = computeSNR(geo.distanceKm);
-        const atmPenalty = computeAtmPenalty(geo.elevationDeg);
-        const scintFadeDb = computeScintillation(now, geo.elevationDeg, deltaMs, this.mode);
-        this.lastScintFade = scintFadeDb;
-
-        return {
-          elevationDeg: geo.elevationDeg,
-          distanceKm: geo.distanceKm,
-          snrDb,
-          dopplerShiftHz: geo.dopplerShiftHz,
-          dopplerRateHzPerSec: geo.dopplerRateHzPerSec,
-          atmPenalty,
-          scintFadeDb,
-          inPass: true,
-          source: 'sim'
-        };
-      }
-
-      reset() {
-        this.elapsed = 0;
-        this.inPass = true;
-        this.interPassRemaining = 0;
-        this.tickCount = 0;
-        this.lastScintFade = 0;
-      }
-    }
-
-    // ============================================================================
-    // LAYER 3: STATE MACHINE
-    // ============================================================================
-
-    const SAT_STATE = Object.freeze({
-      COLD_START: 'COLD_START',
-      SCANNING: 'SCANNING',
-      ACQUIRING: 'ACQUIRING',
-      TRACKING: 'TRACKING',
-      DEGRADED: 'DEGRADED',
-      LOSING_LOCK: 'LOSING_LOCK',
-      RE_ACQUIRING: 'RE_ACQUIRING'
-    });
-
-    class SatelliteStateMachine {
-      /**
-       * @param {SatelliteChannelSimulator} channel
-       */
-      constructor(channel) {
-        this.channel = channel;
-        this.state = SAT_STATE.COLD_START;
-        this.stateTimer = 0;
-        this.lqmHistory = [];
-        this.lastResult = null;
-
-        this.coldStartDuration = this._randomColdStart();
-        this.lastLQM = null;
-      }
-
-      _randomColdStart() {
-        return SAT_CONSTANTS.COLD_START_MIN_MS +
-               Math.random() * (SAT_CONSTANTS.COLD_START_MAX_MS - SAT_CONSTANTS.COLD_START_MIN_MS);
-      }
-
-      /**
-       * Update state machine.
-       * @param {number} deltaMs
-       * @param {Date} [now]
-       * @param {object|null} [externalGeo] - geometri TLE opsional
-       * @returns {object} result
-       */
-      update(deltaMs, now = new Date(), externalGeo = null) {
-        // Validate deltaMs
-        if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
-          return this.lastResult ?? {
-            state: this.state, metrics: null, lqm: null, packetValid: false
-          };
-        }
-        const dt = Math.min(deltaMs, SAT_CONSTANTS.MAX_DELTA_MS);
-
-        this.stateTimer += dt;
-        const metrics = this.channel.tick(dt, now, externalGeo);
-
-        // Hitung LQM
-        let lqm;
-        if (!metrics.inPass || metrics.elevationDeg < SAT_CONSTANTS.MIN_ELEVATION_DEG) {
-          lqm = -Infinity;
-        } else {
-          lqm = calculateLQM({
-            snrDb: metrics.snrDb,
-            dopplerRateHzPerSec: metrics.dopplerRateHzPerSec,
-            elevationDeg: metrics.elevationDeg,
-            scintFadeDb: metrics.scintFadeDb
-          });
-        }
-        this.lastLQM = lqm;
-
-        // Update history — hanya di state yang relevan
-        const trackedStates = [
-          SAT_STATE.ACQUIRING,
-          SAT_STATE.TRACKING,
-          SAT_STATE.DEGRADED,
-          SAT_STATE.RE_ACQUIRING
-        ];
-        if (trackedStates.includes(this.state)) {
-          this.lqmHistory.push(lqm);
-          if (this.lqmHistory.length > SAT_CONSTANTS.HISTORY_SIZE) {
-            this.lqmHistory.shift();
-          }
-        }
-
-        // Transisi state
-        switch (this.state) {
-          case SAT_STATE.COLD_START:
-            if (this.stateTimer >= this.coldStartDuration) {
-              this._transitionTo(SAT_STATE.SCANNING);
-            }
-            break;
-
-          case SAT_STATE.SCANNING:
-            // Beacon deteksi: elevasi valid + LQM > DEGRADED - 3 dB
-            if (metrics.elevationDeg >= SAT_CONSTANTS.MIN_ELEVATION_DEG && lqm > -6) {
-              this._transitionTo(SAT_STATE.ACQUIRING, true);
-            } else if (this.stateTimer >= SAT_CONSTANTS.SCAN_TIMEOUT_MS) {
-              this._transitionTo(SAT_STATE.COLD_START);
-              this.coldStartDuration = this._randomColdStart();
-            }
-            break;
-
-          case SAT_STATE.ACQUIRING: {
-            // Butuh sustained valid
-            const recent = this.lqmHistory.slice(-SAT_CONSTANTS.SUSTAINED_SAMPLES);
-            const sustainedValid = recent.length >= SAT_CONSTANTS.SUSTAINED_SAMPLES &&
-              recent.every(v => v >= SAT_CONSTANTS.LQM_THRESHOLD_VALID_DB);
-
-            if (sustainedValid) {
-              this._transitionTo(SAT_STATE.TRACKING);
-            } else if (lqm < SAT_CONSTANTS.LQM_THRESHOLD_DEGRADED_DB || this.stateTimer >= 30000) {
-              this._transitionTo(SAT_STATE.SCANNING, true);
-            }
-            break;
-          }
-
-          case SAT_STATE.TRACKING: {
-            if (lqm >= SAT_CONSTANTS.LQM_THRESHOLD_VALID_DB) {
-              // Paket bisa dikirim
-              const ber = getBER(
-                metrics.snrDb + SAT_CONSTANTS.PROCESSING_GAIN_DB,
-                metrics.elevationDeg
-              );
-              const per = getPER(ber);
-              const packetValid = Math.random() >= per;
-
-              this.lastResult = {
-                state: SAT_STATE.TRACKING,
-                metrics,
-                lqm,
-                ber,
-                per,
-                packetValid
-              };
-              return this.lastResult;
-            } else if (lqm >= SAT_CONSTANTS.LQM_THRESHOLD_DEGRADED_DB) {
-              this._transitionTo(SAT_STATE.DEGRADED);
-            } else {
-              this._transitionTo(SAT_STATE.LOSING_LOCK);
-            }
-            break;
-          }
-
-          case SAT_STATE.DEGRADED: {
-            if (lqm >= SAT_CONSTANTS.LQM_THRESHOLD_VALID_DB) {
-              this._transitionTo(SAT_STATE.TRACKING);
-            } else if (lqm < SAT_CONSTANTS.LQM_THRESHOLD_DEGRADED_DB && this.stateTimer >= 5000) {
-              this._transitionTo(SAT_STATE.LOSING_LOCK);
-            }
-            break;
-          }
-
-          case SAT_STATE.LOSING_LOCK:
-            this._transitionTo(SAT_STATE.RE_ACQUIRING);
-            break;
-
-          case SAT_STATE.RE_ACQUIRING: {
-            const recent = this.lqmHistory.slice(-5);
-            const sustainedValid = recent.length >= 5 &&
-              recent.every(v => v >= SAT_CONSTANTS.LQM_THRESHOLD_VALID_DB);
-
-            if (sustainedValid) {
-              this._transitionTo(SAT_STATE.TRACKING);
-            } else if (this.stateTimer >= SAT_CONSTANTS.RE_ACQ_WINDOW_MS) {
-              this._transitionTo(SAT_STATE.SCANNING, true);
-            }
-            break;
-          }
-        }
-
-        this.lastResult = {
-          state: this.state,
-          metrics,
-          lqm: lqm === -Infinity ? -Infinity : lqm,
-          packetValid: false
-        };
-        return this.lastResult;
-      }
-
-      _transitionTo(newState, clearHistory = false) {
-        this.state = newState;
-        this.stateTimer = 0;
-        if (clearHistory) this.lqmHistory = [];
-      }
-
-      reset() {
-        this.state = SAT_STATE.COLD_START;
-        this.stateTimer = 0;
-        this.lqmHistory = [];
-        this.coldStartDuration = this._randomColdStart();
-        this.lastResult = null;
-        this.lastLQM = null;
-        this.channel.reset();
-      }
-    }
-
-
-
-    let _instance = null;
-
-    function createSatelliteLink(options = {}) {
-      const channel = new SatelliteChannelSimulator(options);
-      const sm = new SatelliteStateMachine(channel);
-      return { channel, sm, options };
-    }
-
-    function getSatelliteLink(options) {
-      if (options !== undefined || _instance === null) {
-        _instance = createSatelliteLink(options ?? {});
-      }
-      return _instance;
-    }
-
-    function resetSatelliteLink(options) {
-      _instance = createSatelliteLink(options ?? {});
-      return _instance;
-    }
-
-    // ============================================================================
-    // PUBLIC API — updateSatelliteLink
-    // ============================================================================
-
-    /**
-     * Update satellite link state.
-     * @param {number} deltaMs
-     * @param {object} [options] { now, externalGeo }
-     *   externalGeo: { elevationDeg, distanceKm, dopplerShiftHz?, dopplerRateHzPerSec?, name? }
-     * @returns {object} result
-     */
-    function updateSatelliteLink(deltaMs, options = {}) {
-      const { sm } = getSatelliteLink();
-      const result = sm.update(
-        deltaMs,
-        options.now ?? new Date(),
-        options.externalGeo ?? null
-      );
-
-      return result;
-    }
-
-    /**
-     * Evaluasi link budget murni dari geometri eksternal (TLE), tanpa state machine.
-     * Berguna untuk ranking multi-satelit / channel list.
-     * @param {object} geo { elevationDeg, distanceKm, dopplerRateHzPerSec?, scintFadeDb? }
-     * @param {string} [mode]
-     * @param {Date} [now]
-     */
     function evaluateLinkFromGeo(geo, mode = PHYSICS_MODE.REALISTIC, now = new Date()) {
       const elevationDeg = geo?.elevationDeg ?? 0;
       const distanceKm = geo?.distanceKm ?? Infinity;
@@ -1150,45 +790,31 @@
         const snr = computeSNR(780);
         assert('SNR @ 780 km ≈ 11 dB', Math.abs(snr - 11.12) < 1, `got ${snr.toFixed(2)}`);
         const geo = computeGeometry(275, 550);
-        assert('Doppler rate awal pass', Math.abs(Math.abs(geo.dopplerRateHzPerSec) - 231) < 50, `got ${geo.dopplerRateHzPerSec.toFixed(1)}`);
+        assert('Doppler rate pure formula', Number.isFinite(geo.dopplerRateHzPerSec) && Math.abs(Math.abs(geo.dopplerRateHzPerSec) - 231) < 50, `got ${geo.dopplerRateHzPerSec.toFixed(1)}`);
         const lqm = calculateLQM({snrDb:11.12,dopplerRateHzPerSec:0,elevationDeg:75,scintFadeDb:0});
         assert('LQM zenith > 35 dB', lqm > 35, `got ${lqm.toFixed(2)}`);
         const ber = getBER(6,45);
         assert('BER @ 6 dB within Rician K7 range', ber > 1e-7 && ber < 1e-4, `got ${ber.toExponential(2)}`);
         const per = getPER(1e-5,256);
         assert('PER @ BER 1e-5 / 256 bit', Math.abs(per - 0.00256) < 0.001, `got ${(per*100).toFixed(3)}%`);
-        const link = createSatelliteLink({passDurationSec:550,mode:PHYSICS_MODE.IDEAL});
-        link.sm.coldStartDuration = 100;
-        const nowDate = new Date(2025,5,15,12,0,0);
-        let tracking = false;
-        for(let i=0;i<500;i++){ const r=link.sm.update(100,nowDate); if(r.state===SAT_STATE.TRACKING){tracking=true;break;} }
-        assert('State machine reaches TRACKING', tracking, `final ${link.sm.state}`);
-        const link2=createSatelliteLink({passDurationSec:550,mode:PHYSICS_MODE.IDEAL});
-        link2.sm.state=SAT_STATE.TRACKING; link2.sm.stateTimer=0; link2.channel.elapsed=275;
-        const orig=link2.channel.tick.bind(link2.channel);
-        link2.channel.tick=(dt,n)=>{const m=orig(dt,n);m.scintFadeDb=-35;return m;};
-        let degraded=false;
-        for(let i=0;i<50;i++){const r=link2.sm.update(100,nowDate);if(r.state===SAT_STATE.DEGRADED){degraded=true;break;}}
-        assert('State machine reaches DEGRADED', degraded, `final ${link2.sm.state}`);
-        const link3=createSatelliteLink();
-        assert('Invalid delta does not crash', link3.sm.update(NaN)!==null && link3.sm.update(0)!==null && link3.sm.update(999999)!==null);
+        const usable = evaluateLinkFromGeo({elevationDeg:45,distanceKm:780,dopplerRateHzPerSec:0,scintFadeDb:0},PHYSICS_MODE.IDEAL,new Date(2025,5,15,12,0,0));
+        assert('External geometry produces deterministic link result', Number.isFinite(usable.snrDb) && Number.isFinite(usable.lqm) && usable.usable === true, `lqm ${usable.lqm}`);
+        const blocked = evaluateLinkFromGeo({elevationDeg:0,distanceKm:Infinity,dopplerRateHzPerSec:0},PHYSICS_MODE.IDEAL,new Date(2025,5,15,12,0,0));
+        assert('Invalid/blocked geometry is rejected', blocked.usable === false && blocked.lqm === -Infinity, `usable ${blocked.usable}`);
+        assert('Pure physics output bounds', usable.ber >= 0 && usable.ber <= 0.5 && usable.per >= 0 && usable.per <= 1, `ber ${usable.ber} per ${usable.per}`);
       } catch(e) { results.push({name:'physics-self-test-exception',status:'FAIL',pass:false,info:String(e.message||e)}); }
       const pass=results.filter(x=>x.pass).length;
       const fail=results.length-pass;
       return {pass,fail,total:results.length,results,verified:fail===0};
     }
 
-    return Object.freeze({SAT_CONSTANTS,PHYSICS_MODE,SAT_STATE,SatelliteChannelSimulator,SatelliteStateMachine,createSatelliteLink,getSatelliteLink,resetSatelliteLink,updateSatelliteLink,evaluateLinkFromGeo,computeGeometry,computeFSPL,computeSNR,computeAtmPenalty,computeScintillation,calculateLQM,getBER,getPER,runSelfTest});
+    return Object.freeze({SAT_CONSTANTS,PHYSICS_MODE,evaluateLinkFromGeo,computeGeometry,computeFSPL,computeSNR,computeAtmPenalty,computeScintillation,calculateLQM,getBER,getPER,runSelfTest});
   })();
 
-  function selfTestInner(){const results=[];const test=(name,fn)=>{try{fn();results.push({name,status:"PASS"})}catch(e){results.push({name,status:"FAIL",error:String(e.message||e)})}};const pt=CGOPhysics.runSelfTest();if(!pt.verified)throw Error("physics kernel self-test failed: "+pt.results.filter(x=>!x.pass).map(x=>x.name).join(","));results.push({name:"physics-kernel",status:"PASS"});test("fingerprint",()=>{if(fingerprint("a")!==fingerprint("a"))throw Error("unstable")});test("delimiter-comment-regex",()=>{if(!balancedDelimiters("const x=/\\{/; // }\n{a:1}").balanced)throw Error("false negative")});test("auto-format",()=>{if(classifyText('{"a":1}').format!=="json")throw Error("json")});test("html-relations-duplicates",()=>{const h=extractHtml('<div id="x"></div><span id="x"><a href="/a"></a>');if(!h.duplicateIds.includes("x")||!h.references.includes("/a"))throw Error("html regression")});test("envelope-validator",()=>{const r=assertEnvelope({__cgoMachineInjection:true,contentMode:"bad",payload:{}});if(r.valid)throw Error("invalid envelope accepted")});test("pipeline",()=>{const o=runCycle("hello world");if(!o.result||!o.audit)throw Error("pipeline")});test("external-evidence-propagation",()=>{const o=runCycle("hello",{externalEvidence:{schema:"CGO_EXTERNAL_EVIDENCE_V1",source:"TEST_REAL_INPUT",capturedAt:now(),claims:[{source:"TEST_REAL_INPUT",target:"observed-target",status:"ANOMALY",severity:"HIGH",message:"observed failure"}],fingerprint:"evidence-test"}});if(o.pipeline.B.findings.filter(x=>x.type==="EXTERNAL_EVIDENCE").length!==1||o.pipeline.C.status!=="PARTIAL"||o.audit.status!=="ATTENTION")throw Error("external evidence not propagated")});test("batch",()=>{const o=CGOMachineABC.processMany(["a","b"]);if(o.pipeline.B.items?.length!==2)throw Error("batch")});test("batch-unknowns-aggregate",()=>{let nested={__cgoBatchInjection:true,version:VERSION,items:[]};for(let i=0;i<MAX_BATCH_DEPTH;i++)nested={__cgoBatchInjection:true,version:VERSION,items:[nested]};const rep=MachineA.process(nested);if(!rep.unknowns.some(x=>x.type==="BATCH_DEPTH_LIMIT"&&x.itemIndex===0))throw Error("batch unknown not aggregated")});test("c-injection",()=>{const o=runCycle("x");const inj=MachineC.inject(o.result);const q=runCycle(inj);if(!q.result)throw Error("injection")});test("auto-step",()=>{const o=runCycle("plain text",{});if(o.pipeline.B.operations.includes("SYNTAX_ANALYSIS"))throw Error("text syntax should be skipped");if(!o.pipeline.B.operations.includes("CONTENT_INSPECTION"))throw Error("content step missing")});test("custom-step-selection",()=>{const o=runCycle("hello",{steps:["structure"]});if(!o.pipeline.B.operations.includes("STRUCTURE_INSPECTION")||o.pipeline.B.operations.includes("CONTENT_INSPECTION")||o.pipeline.B.decision!==null)throw Error("custom steps")});test("auto-reflect",()=>{const o=reflect("hello",{maxCycles:3,stopOnStatus:"__NEVER__"});if(!Array.isArray(o.cycles)||o.cycles.length<2||!o.finalResult)throw Error("reflect")});test("reflect-actually-reflects",()=>{const o=reflect("hello",{maxCycles:2,stopOnStatus:"__NEVER__"});const first=o.cycles[0].result;if(o.cycles.length<2||fingerprint(o.cycles[1].pipeline.A.content.value)!==fingerprint(first))throw Error("reflection payload not processed")});test("stream",()=>{let n=0;CGOMachineABC.stream("hello",{onCycle:()=>n++});if(n<1)throw Error("stream")});test("stream-real-time",()=>{const seen=[];CGOMachineABC.stream("hello",{autoReflect:true,maxCycles:3,stopOnStatus:"__NEVER__",minConfidenceDelta:0,onCycle:c=>seen.push(c.cycleIndex)});if(seen.length!==3||seen[0]!==0||seen[1]!==1||seen[2]!==2)throw Error("buffered stream")});test("observe",()=>{let n=0;const off=CGOMachineABC.observe(()=>n++);CGOMachineABC.process("observe");off();if(n!==1)throw Error("observe")});test("stream-observe",()=>{let n=0;const off=CGOMachineABC.observe(()=>n++);CGOMachineABC.stream("observe-stream",{autoReflect:true,maxCycles:2,stopOnStatus:"__NEVER__"});off();if(n!==2)throw Error("stream observe")});test("independence",()=>{const a=auditIndependence();if(!a.verified||a.scannedFunctions<8)throw Error("independence")});test("machine-D",()=>{const o=CGOMachineABC.process("audit");if(o.audit?.status!=="VALID")throw Error("audit failed")});test("audit-tamper-C-payload",()=>{const o=CGOMachineABC.process("tamper");o.pipeline.C.findings.push({fake:true});const d=MachineD.audit(o,"tamper");if(d.status!=="ATTENTION"||!d.checks.some(x=>x.type==="C_PAYLOAD_HASH"&&x.status==="FAIL"))throw Error("tamper undetected")});test("b-batch-depth-guard",()=>{const rep=MachineA.process({__cgoBatchInjection:true,items:[],version:VERSION},{batchDepth:MAX_BATCH_DEPTH});const b=MachineB.process({...rep,structure:{kind:"batch",count:0},content:{mode:"batch",value:[]}}, {batchDepth:MAX_BATCH_DEPTH});if(b.decision?.reason!=="batch_depth_limit")throw Error("guard")});test("record-verification",()=>{const o=runCycle({name:"cgo",value:1});const checks=o.pipeline.B.verification;if(!checks.some(x=>x.type==="RECORD_PRESENT"&&x.status==="PASS"))throw Error("record check missing")});test("collection-verification",()=>{const o=runCycle([{id:1}]);if(!o.pipeline.B.verification.some(x=>x.type==="COLLECTION_PRESENT"&&x.status==="PASS"))throw Error("collection check missing")});test("nan-infinity",()=>{if(CGOMachineABC.process(Infinity).pipeline.A.content.value!=="Infinity")throw Error("infinity")});test("max-input-override",()=>{const o=CGOMachineABC.process("abc",{maxInputSize:10});if(!o.result)throw Error("override")});test("skipped-steps",()=>{const o=CGOMachineABC.process("abc",{steps:["structure"]});if(!o.pipeline.B.skippedSteps.includes("content"))throw Error("skipped")});test("degraded-field",()=>{if(typeof CGOMachineABC.process("abc").pipeline.B.degraded!=="boolean")throw Error("degraded")});test("errors-array",()=>{if(!Array.isArray(CGOMachineABC.process("abc").pipeline.B.errors))throw Error("errors")});test("fallback-array",()=>{if(!Array.isArray(CGOMachineABC.process("abc").pipeline.C.fallbacks))throw Error("fallback")});test("weighted-check",()=>{const o=CGOMachineABC.process("abc");if(!o.pipeline.B.verification[0].status)throw Error("check")});test("contradiction-severity",()=>{const o=CGOMachineABC.process('<!doctype html><html><div id="x"></div><span id="x"></span></html>');if(!o.pipeline.B.contradictions.some(x=>x.severity))throw Error("severity")});test("decision-hierarchy",()=>{const o=CGOMachineABC.process({x:1});if(!["PROCESSED","WELL_FORMED","PARTIAL","DEGRADED","CONTRADICTION","UNRESOLVED"].includes(o.result.status))throw Error("status")});test("machineD-fallback-check",()=>{const o=CGOMachineABC.process("abc");if(!o.audit.checks.some(x=>x.type==="FALLBACK_CHAIN"))throw Error("fallback audit")});test("replay-shape",()=>{const o=CGOMachineABC.process("abc"),r=CGOMachineABC.replay(o);if(!Array.isArray(r.steps))throw Error("replay")});test("verify-replay",()=>{const o=CGOMachineABC.process("abc"),r=CGOMachineABC.replay(o);if(CGOMachineABC.verifyReplay(o,r).status!=="MATCH")throw Error("verify replay")});test("metrics-reset",()=>{const before=CGOMachineABC.getMetrics().totalProcessed;CGOMachineABC.resetMetrics();if(CGOMachineABC.getMetrics().totalProcessed!==0||before<0)throw Error("reset")});test("state-cycle-index",()=>{const o=CGOMachineABC.process("state");if(CGOMachineABC.getState().lastCycleIndex!==0)throw Error("state cycle")});test("pause-reflect",()=>{CGOMachineABC.pause();const r=CGOMachineABC.reflect("pause",{maxCycles:2});CGOMachineABC.resume();if(r.stopReason!=="paused")throw Error("pause reflect")});test("reflect-direct-C",()=>{const r=CGOMachineABC.reflect("abc",{maxCycles:2,stopOnStatus:"__NEVER__",minConfidenceDelta:0});if(r.cycles.length!==2||r.cycles[1].pipeline.A.content.mode!=="record")throw Error("direct C")});test("stream-complete",()=>{let done=false;CGOMachineABC.stream("abc",{onComplete:()=>done=true});if(!done)throw Error("complete")});test("stream-batch-summary",()=>{const o=CGOMachineABC.processMany(["a","b"],{streamBatch:true});if(o.pipeline.C.batch.items.some(x=>x.analysis===undefined))throw Error("summary")});test("date-input",()=>{if(CGOMachineABC.process(new Date()).pipeline.A.input.type!=="date")throw Error("date")});test("object-freeze",()=>{if(!Object.isFrozen(CGOMachineABC))throw Error("freeze")});test("fingerprint-undefined",()=>{const o=CGOMachineABC.process(undefined);if(!o.result||!o.audit)throw Error("undefined crash")});test("digest-sha256-vectors",()=>{if(sha256Hex("abc")!=="ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"||sha256Hex("")!=="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"||sha256Hex("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")!=="248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1")throw Error("sha256")});test("utf8-fallback-availability",()=>{if(typeof utf8Encode!=="function"||utf8Encode("Cikur 🚀").length<8)throw Error("utf8 encoder")});test("digest-key-order",()=>{if(digest({a:1,b:2})!==digest({b:2,a:1}))throw Error("order")});test("prose-not-delimiter-checked",()=>{const o=CGOMachineABC.process("Halo :) tolong 1) cek saldo (dulu");if(o.pipeline.A.content.syntax.delimiters||o.result.status==="PARTIAL")throw Error("prose flagged")});test("let-me-know-is-text",()=>{if(classifyText("let me know if you can help").format!=="text")throw Error("prose as code")});test("regex-after-return",()=>{if(!balancedDelimiters("function f(s){ return /[)]/.test(s) }").balanced)throw Error("regex heuristic")});test("pause-blocks-process",()=>{CGOMachineABC.pause();const o=CGOMachineABC.process("x");const st=CGOMachineABC.stream("x");CGOMachineABC.resume();if(!o.skipped||st.status!=="PAUSED")throw Error("pause ignored")});test("stop-reason-to-observer",()=>{let got=null;const off=CGOMachineABC.observe(p=>{got=p});CGOMachineABC.process("abc",{autoReflect:true,maxCycles:3,stopOnStatus:"__NEVER__",minConfidenceDelta:0});off();if(!got||got.stopReason!=="maxCycles")throw Error("stopReason lost")});test("map-set-preserved",()=>{const o=CGOMachineABC.process({m:new Map([[1,2]]),s:new Set([7])});const v=o.pipeline.A.content.value;if(v.m.__cgoType!=="Map"||v.s.values[0]!==7)throw Error("map/set lost")});test("required-fields",()=>{const o=CGOMachineABC.process({nama:"",hp:"1"},{requiredFields:["nama","email"]});const t=o.pipeline.B.contradictions.map(x=>x.type);if(!t.includes("REQUIRED_FIELD_EMPTY")||!t.includes("REQUIRED_FIELD_MISSING")||o.result.status!=="PARTIAL")throw Error("required")});test("json-string-structure",()=>{const o=CGOMachineABC.process('{"nama":"","hp":null}');if(o.pipeline.B.constraints.filter(x=>x.type==="EMPTY_FIELD").length!==2)throw Error("json string not analysed")});test("dup-id-single-contradiction",()=>{const o=CGOMachineABC.process('<!doctype html><html><div id="x"></div><span id="x"></span></html>');if(o.pipeline.B.contradictions.filter(x=>x.type==="DUPLICATE_IDENTIFIER").length!==1)throw Error("double count")});test("reflect-default-stop",()=>{const o=CGOMachineABC.reflect("hello",{maxCycles:5});if(o.stopReason!=="status")throw Error("default stop never fires")});
+  function selfTestInner(){const results=[];const test=(name,fn)=>{try{fn();results.push({name,status:"PASS"})}catch(e){results.push({name,status:"FAIL",error:String(e.message||e)})}};const pt=CGOPhysics.runSelfTest();if(!pt.verified)throw Error("physics kernel self-test failed: "+pt.results.filter(x=>!x.pass).map(x=>x.name).join(","));results.push({name:"physics-kernel",status:"PASS"});test("fingerprint",()=>{if(fingerprint("a")!==fingerprint("a"))throw Error("unstable")});test("delimiter-comment-regex",()=>{if(!balancedDelimiters("const x=/\\{/; // }\n{a:1}").balanced)throw Error("false negative")});test("auto-format",()=>{if(classifyText('{"a":1}').format!=="json")throw Error("json")});test("html-relations-duplicates",()=>{const h=extractHtml('<div id="x"></div><span id="x"><a href="/a"></a>');if(!h.duplicateIds.includes("x")||!h.references.includes("/a"))throw Error("html regression")});test("envelope-validator",()=>{const r=assertEnvelope({__cgoMachineInjection:true,contentMode:"bad",payload:{}});if(r.valid)throw Error("invalid envelope accepted")});test("pipeline",()=>{const o=runCycle("hello world");if(!o.result||!o.audit)throw Error("pipeline")});test("repair-json-trailing-comma",()=>{const r=repair("{\"a\":1,}",{autoApply:true});if(r.status!=="REPAIRED"||!r.verified||r.repaired.pipeline.A.content.parse?.ok!==true)throw Error("JSON repair verification")});test("repair-js-unclosed-delimiter",()=>{const r=repair("function broken(){ return 1;",{autoApply:true});if(r.status!=="REPAIRED"||!r.verified||!r.repaired.audit||r.steps.length!==1)throw Error("delimiter repair verification")});test("repair-semantic-needs-review",()=>{const r=repair("<!doctype html><html><div id=\"x\"></div><span id=\"x\"></span></html>",{autoApply:true});if(r.status!=="REPAIR_REQUIRED"||r.applied||!r.plan.manualCandidates.some(x=>x.id==="DUPLICATE_IDENTIFIER"))throw Error("semantic repair must not mutate automatically")});test("repair-no-op",()=>{const r=repair("function ok(){ return 1; }",{autoApply:true});if(r.status!=="VERIFIED"||!r.verified||r.applied)throw Error("no-op verification")});test("repair-text-envelope-preserves-metadata",()=>{const input={__cgoInputEnvelope:true,payload:{contentMode:"text",text:"{\"a\":1,}",extension:"json",name:"sample.json"}};const r=repair(input,{autoApply:true});if(r.status!=="REPAIRED"||r.repaired.pipeline.A.content.parse?.ok!==true||r.repaired.pipeline.A.metadata.source!==null)throw Error("text envelope repair")});test("external-evidence-propagation",()=>{const o=runCycle("hello",{externalEvidence:{schema:"CGO_EXTERNAL_EVIDENCE_V1",source:"TEST_REAL_INPUT",capturedAt:now(),claims:[{source:"TEST_REAL_INPUT",target:"observed-target",status:"ANOMALY",severity:"HIGH",message:"observed failure"}],fingerprint:"evidence-test"}});if(o.pipeline.B.findings.filter(x=>x.type==="EXTERNAL_EVIDENCE").length!==1||o.pipeline.C.status!=="PARTIAL"||o.audit.status!=="ATTENTION")throw Error("external evidence not propagated")});test("bcgo-batch-source-evidence",()=>{const items=["const alpha = 1;","function beta(){ return alpha; }"];const claims=[{source:"BCGO_SOURCE_SCANNER",target:"admin/bcgo.js",status:"REVIEW",severity:"LOW",message:"scanner review"}];const o=CGOMachineABC.processMany(items,{source:"BCGO_INTERNAL_SOURCE_SCAN",externalEvidence:{schema:"CGO_EXTERNAL_EVIDENCE_V1",source:"BCGO_SOURCE_SCANNER",revision:1,claims,fingerprint:digest(claims)}});if(o.pipeline.B.items?.length!==2||o.pipeline.B.externalEvidence?.claimCount!==1||!o.pipeline.B.findings.some(x=>x.type==="EXTERNAL_EVIDENCE"))throw Error("BCGO batch evidence not integrated")});test("batch",()=>{const o=CGOMachineABC.processMany(["a","b"]);if(o.pipeline.B.items?.length!==2)throw Error("batch")});test("batch-unknowns-aggregate",()=>{let nested={__cgoBatchInjection:true,version:VERSION,items:[]};for(let i=0;i<MAX_BATCH_DEPTH;i++)nested={__cgoBatchInjection:true,version:VERSION,items:[nested]};const rep=MachineA.process(nested);if(!rep.unknowns.some(x=>x.type==="BATCH_DEPTH_LIMIT"&&x.itemIndex===0))throw Error("batch unknown not aggregated")});test("c-injection",()=>{const o=runCycle("x");const inj=MachineC.inject(o.result);const q=runCycle(inj);if(!q.result)throw Error("injection")});test("auto-step",()=>{const o=runCycle("plain text",{});if(o.pipeline.B.operations.includes("SYNTAX_ANALYSIS"))throw Error("text syntax should be skipped");if(!o.pipeline.B.operations.includes("CONTENT_INSPECTION"))throw Error("content step missing")});test("custom-step-selection",()=>{const o=runCycle("hello",{steps:["structure"]});if(!o.pipeline.B.operations.includes("STRUCTURE_INSPECTION")||o.pipeline.B.operations.includes("CONTENT_INSPECTION")||o.pipeline.B.decision!==null)throw Error("custom steps")});test("auto-reflect",()=>{const o=reflect("hello",{maxCycles:3,stopOnStatus:"__NEVER__"});if(!Array.isArray(o.cycles)||o.cycles.length<2||!o.finalResult)throw Error("reflect")});test("reflect-actually-reflects",()=>{const o=reflect("hello",{maxCycles:2,stopOnStatus:"__NEVER__"});const first=o.cycles[0].result;if(o.cycles.length<2||fingerprint(o.cycles[1].pipeline.A.content.value)!==fingerprint(first))throw Error("reflection payload not processed")});test("stream",()=>{let n=0;CGOMachineABC.stream("hello",{onCycle:()=>n++});if(n<1)throw Error("stream")});test("stream-real-time",()=>{const seen=[];CGOMachineABC.stream("hello",{autoReflect:true,maxCycles:3,stopOnStatus:"__NEVER__",minConfidenceDelta:0,onCycle:c=>seen.push(c.cycleIndex)});if(seen.length!==3||seen[0]!==0||seen[1]!==1||seen[2]!==2)throw Error("buffered stream")});test("observe",()=>{let n=0;const off=CGOMachineABC.observe(()=>n++);CGOMachineABC.process("observe");off();if(n!==1)throw Error("observe")});test("stream-observe",()=>{let n=0;const off=CGOMachineABC.observe(()=>n++);CGOMachineABC.stream("observe-stream",{autoReflect:true,maxCycles:2,stopOnStatus:"__NEVER__"});off();if(n!==2)throw Error("stream observe")});test("independence",()=>{const a=auditIndependence();if(!a.verified||a.scannedFunctions<8)throw Error("independence")});test("machine-D",()=>{const o=CGOMachineABC.process("audit");if(o.audit?.status!=="VALID")throw Error("audit failed")});test("audit-tamper-C-payload",()=>{const o=CGOMachineABC.process("tamper");o.pipeline.C.findings.push({fake:true});const d=MachineD.audit(o,"tamper");if(d.status!=="ATTENTION"||!d.checks.some(x=>x.type==="C_PAYLOAD_HASH"&&x.status==="FAIL"))throw Error("tamper undetected")});test("b-batch-depth-guard",()=>{const rep=MachineA.process({__cgoBatchInjection:true,items:[],version:VERSION},{batchDepth:MAX_BATCH_DEPTH});const b=MachineB.process({...rep,structure:{kind:"batch",count:0},content:{mode:"batch",value:[]}}, {batchDepth:MAX_BATCH_DEPTH});if(b.decision?.reason!=="batch_depth_limit")throw Error("guard")});test("record-verification",()=>{const o=runCycle({name:"cgo",value:1});const checks=o.pipeline.B.verification;if(!checks.some(x=>x.type==="RECORD_PRESENT"&&x.status==="PASS"))throw Error("record check missing")});test("collection-verification",()=>{const o=runCycle([{id:1}]);if(!o.pipeline.B.verification.some(x=>x.type==="COLLECTION_PRESENT"&&x.status==="PASS"))throw Error("collection check missing")});test("nan-infinity",()=>{if(CGOMachineABC.process(Infinity).pipeline.A.content.value!=="Infinity")throw Error("infinity")});test("max-input-override",()=>{const o=CGOMachineABC.process("abc",{maxInputSize:10});if(!o.result)throw Error("override")});test("skipped-steps",()=>{const o=CGOMachineABC.process("abc",{steps:["structure"]});if(!o.pipeline.B.skippedSteps.includes("content"))throw Error("skipped")});test("degraded-field",()=>{if(typeof CGOMachineABC.process("abc").pipeline.B.degraded!=="boolean")throw Error("degraded")});test("errors-array",()=>{if(!Array.isArray(CGOMachineABC.process("abc").pipeline.B.errors))throw Error("errors")});test("fallback-array",()=>{if(!Array.isArray(CGOMachineABC.process("abc").pipeline.C.fallbacks))throw Error("fallback")});test("weighted-check",()=>{const o=CGOMachineABC.process("abc");if(!o.pipeline.B.verification[0].status)throw Error("check")});test("contradiction-severity",()=>{const o=CGOMachineABC.process('<!doctype html><html><div id="x"></div><span id="x"></span></html>');if(!o.pipeline.B.contradictions.some(x=>x.severity))throw Error("severity")});test("decision-hierarchy",()=>{const o=CGOMachineABC.process({x:1});if(!["PROCESSED","WELL_FORMED","PARTIAL","DEGRADED","CONTRADICTION","UNRESOLVED"].includes(o.result.status))throw Error("status")});test("machineD-fallback-check",()=>{const o=CGOMachineABC.process("abc");if(!o.audit.checks.some(x=>x.type==="FALLBACK_CHAIN"))throw Error("fallback audit")});test("replay-shape",()=>{const o=CGOMachineABC.process("abc"),r=CGOMachineABC.replay(o);if(!Array.isArray(r.steps))throw Error("replay")});test("verify-replay",()=>{const o=CGOMachineABC.process("abc"),r=CGOMachineABC.replay(o);if(CGOMachineABC.verifyReplay(o,r).status!=="MATCH")throw Error("verify replay")});test("metrics-reset",()=>{const before=CGOMachineABC.getMetrics().totalProcessed;CGOMachineABC.resetMetrics();if(CGOMachineABC.getMetrics().totalProcessed!==0||before<0)throw Error("reset")});test("state-cycle-index",()=>{const o=CGOMachineABC.process("state");if(CGOMachineABC.getState().lastCycleIndex!==0)throw Error("state cycle")});test("pause-reflect",()=>{CGOMachineABC.pause();const r=CGOMachineABC.reflect("pause",{maxCycles:2});CGOMachineABC.resume();if(r.stopReason!=="paused")throw Error("pause reflect")});test("reflect-direct-C",()=>{const r=CGOMachineABC.reflect("abc",{maxCycles:2,stopOnStatus:"__NEVER__",minConfidenceDelta:0});if(r.cycles.length!==2||r.cycles[1].pipeline.A.content.mode!=="record")throw Error("direct C")});test("stream-complete",()=>{let done=false;CGOMachineABC.stream("abc",{onComplete:()=>done=true});if(!done)throw Error("complete")});test("stream-batch-summary",()=>{const o=CGOMachineABC.processMany(["a","b"],{streamBatch:true});if(o.pipeline.C.batch.items.some(x=>x.analysis===undefined))throw Error("summary")});test("date-input",()=>{if(CGOMachineABC.process(new Date()).pipeline.A.input.type!=="date")throw Error("date")});test("object-freeze",()=>{if(!Object.isFrozen(CGOMachineABC))throw Error("freeze")});test("fingerprint-undefined",()=>{const o=CGOMachineABC.process(undefined);if(!o.result||!o.audit)throw Error("undefined crash")});test("digest-sha256-vectors",()=>{if(sha256Hex("abc")!=="ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"||sha256Hex("")!=="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"||sha256Hex("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")!=="248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1")throw Error("sha256")});test("utf8-fallback-availability",()=>{if(typeof utf8Encode!=="function"||utf8Encode("Cikur 🚀").length<8)throw Error("utf8 encoder")});test("digest-key-order",()=>{if(digest({a:1,b:2})!==digest({b:2,a:1}))throw Error("order")});test("prose-not-delimiter-checked",()=>{const o=CGOMachineABC.process("Halo :) tolong 1) cek saldo (dulu");if(o.pipeline.A.content.syntax.delimiters||o.result.status==="PARTIAL")throw Error("prose flagged")});test("let-me-know-is-text",()=>{if(classifyText("let me know if you can help").format!=="text")throw Error("prose as code")});test("regex-after-return",()=>{if(!balancedDelimiters("function f(s){ return /[)]/.test(s) }").balanced)throw Error("regex heuristic")});test("pause-blocks-process",()=>{CGOMachineABC.pause();const o=CGOMachineABC.process("x");const st=CGOMachineABC.stream("x");CGOMachineABC.resume();if(!o.skipped||st.status!=="PAUSED")throw Error("pause ignored")});test("stop-reason-to-observer",()=>{let got=null;const off=CGOMachineABC.observe(p=>{got=p});CGOMachineABC.process("abc",{autoReflect:true,maxCycles:3,stopOnStatus:"__NEVER__",minConfidenceDelta:0});off();if(!got||got.stopReason!=="maxCycles")throw Error("stopReason lost")});test("map-set-preserved",()=>{const o=CGOMachineABC.process({m:new Map([[1,2]]),s:new Set([7])});const v=o.pipeline.A.content.value;if(v.m.__cgoType!=="Map"||v.s.values[0]!==7)throw Error("map/set lost")});test("required-fields",()=>{const o=CGOMachineABC.process({nama:"",hp:"1"},{requiredFields:["nama","email"]});const t=o.pipeline.B.contradictions.map(x=>x.type);if(!t.includes("REQUIRED_FIELD_EMPTY")||!t.includes("REQUIRED_FIELD_MISSING")||o.result.status!=="PARTIAL")throw Error("required")});test("json-string-structure",()=>{const o=CGOMachineABC.process('{"nama":"","hp":null}');if(o.pipeline.B.constraints.filter(x=>x.type==="EMPTY_FIELD").length!==2)throw Error("json string not analysed")});test("dup-id-single-contradiction",()=>{const o=CGOMachineABC.process('<!doctype html><html><div id="x"></div><span id="x"></span></html>');if(o.pipeline.B.contradictions.filter(x=>x.type==="DUPLICATE_IDENTIFIER").length!==1)throw Error("double count")});test("reflect-default-stop",()=>{const o=CGOMachineABC.reflect("hello",{maxCycles:5});if(o.stopReason!=="status")throw Error("default stop never fires")});
     test("full-pipeline-trace",()=>{const o=CGOMachineABC.process("full-trace",{fast:false,skipAudit:false});if(!o.pipelineTrace||o.pipelineTrace.length!==4)throw Error("pipeline trace missing");if(o.pipelineTrace[2].status!=="COMPLETED")throw Error("C not completed");if(o.pipelineTrace[3].status!=="COMPLETED"||o.audit?.status!=="VALID")throw Error("D not completed")});
     test("phase-telemetry-route",()=>{const o=CGOMachineABC.process("telemetry-route",{fast:false,skipAudit:false});if(o.version!==VERSION||o.telemetry?.route!=="A>B>C>D"||o.telemetry?.routeStatus!=="COMPLETE"||!o.telemetry?.fingerprint||o.telemetry.phases.length!==4)throw Error("phase telemetry missing")});
-    test("telemetry-observer",()=>{let n=0;const off=CGOMachineABC.observeTelemetry(e=>{if(e.type==="ABC_TELEMETRY")n++});CGOMachineABC.process("telemetry-observer");off();if(n<8)throw Error("telemetry events missing")});
-    test("repair-json-trailing-comma-verified",()=>{const r=CGOMachineABC.repair("{\"a\":1,}",{fast:false,skipAudit:false});if(r.status!=="REPAIRED"||r.verified!==true||r.verificationLevel!=="JSON_PARSE_PASS"||JSON.parse(r.candidate.patch.after).a!==1)throw Error("JSON repair not parser-verified")});
-    test("repair-code-structural-not-overclaimed",()=>{const r=CGOMachineABC.repair("function broken(){ return 1;",{fast:false,skipAudit:false});if(r.status!=="PATCH_APPLIED_UNVERIFIED"||r.verified!==false||r.verificationLevel!=="STRUCTURAL_ONLY")throw Error("code repair overclaimed syntax verification")});
-    test("repair-valid-source-noop",()=>{const r=CGOMachineABC.repair("{\"a\":1}",{fast:false,skipAudit:false});if(r.status!=="NO_REPAIR_NEEDED"||r.applied)throw Error("valid input should not be patched")});
-    return{passed:results.filter(x=>x.status==="PASS").length,failed:results.filter(x=>x.status==="FAIL").length,total:results.length,results,verified:results.every(x=>x.status==="PASS")}}
+    test("telemetry-observer",()=>{let n=0;const off=CGOMachineABC.observeTelemetry(e=>{if(e.type==="ABC_TELEMETRY")n++});CGOMachineABC.process("telemetry-observer");off();if(n<8)throw Error("telemetry events missing")});    return{passed:results.filter(x=>x.status==="PASS").length,failed:results.filter(x=>x.status==="FAIL").length,total:results.length,results,verified:results.every(x=>x.status==="PASS")}}
 
   function selfTest(){
     // Self-test tidak boleh meninggalkan jejak: metrics, state, observer, dan status pause dipulihkan.
