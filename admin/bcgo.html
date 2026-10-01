@@ -2370,8 +2370,13 @@ await runAutonomousEngine(state => {
 
   // Hook into existing mic: observe class changes
   if (micBtn) {
+    // FIX: stopWave()/startWave() sendiri mengubah class tombol mic -> memicu observer ini lagi
+    // -> loop tak berujung yang membekukan halaman. Hanya bereaksi saat status BENAR-BENAR berubah.
+    var wasListening = false;
     var obs = new MutationObserver(function () {
       var listening = micBtn.classList.contains('border-rose-500') || micBtn.classList.contains('animate-pulse');
+      if (listening === wasListening) return;
+      wasListening = listening;
       if (listening) startWave(); else stopWave();
     });
     try { obs.observe(micBtn, { attributes: true, attributeFilter: ['class'] }); } catch (_) {}
