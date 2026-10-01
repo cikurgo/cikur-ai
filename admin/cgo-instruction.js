@@ -1,13 +1,13 @@
 /* CIKUR GO — CGO CONSTITUTION / BEHAVIORAL & INTELLIGENCE CONTRACT
- * Version 1.3 — Conversation state and intent hardening.
+ * Version 1.4 — Conversation state, intent and evidence-boundary hardening.
  *
  * This module defines how CGO should understand, communicate, reason and
  * hand work to deterministic system gates. It is NOT a proof engine and it
  * never authorizes, mutates source, executes patches or replaces evidence.
  */
 
-export const VERSION = "1.3.0-CGO-CONSTITUTION";
-export const CONSTITUTION_VERSION = "CGO-CONSTITUTION-1.3";
+export const VERSION = "1.4.0-CGO-CONSTITUTION";
+export const CONSTITUTION_VERSION = "CGO-CONSTITUTION-1.4";
 export const COMMUNICATION_STANDARD = "CGO_003_COMMUNICATION_ENGINE-1.0";
 
 const deepFreeze = value => {
@@ -240,11 +240,13 @@ export function createConversationState(previous = {}) {
     lastIntent: previous.lastIntent || null,
     lastReference: previous.lastReference || null,
     workContext: previous.workContext || null,
+    pendingWork: previous.pendingWork || null,
     primaryFile: previous.primaryFile || null,
     files: Array.isArray(previous.files) ? [...previous.files] : [],
     caseId: previous.caseId || null,
     pendingAction: previous.pendingAction || null,
     clarificationNeeded: !!previous.clarificationNeeded,
+    lastClassified: previous.lastClassified || null,
     updatedAt: Number.isFinite(previous.updatedAt) ? previous.updatedAt : 0
   };
 }
@@ -314,7 +316,7 @@ export function classifyIntent(text, session = {}) {
 
   const contextualWhy = /^(kenapa|mengapa|kok\s+begitu|kok\s+gitu)[?!.,\s]*$/i.test(q) && !!(session?.topic || hasWork);
   const contextualFollowUp = !!reference && reference.compatibleContext;
-  const conversationalCue = greeting || identity || systemRole || capability || gratitude || apology || farewell || emotionalBoundary || currentActivity || justChatting || behavior === "JOKING" || behavior === "PRAISE" || behavior === "SAD" || behavior === "CONFUSED" || behavior === "HAPPY";
+  const conversationalCue = greeting || identity || systemRole || capability || gratitude || apology || farewell || emotionalBoundary || currentActivity || justChatting || behavior === "JOKING" || behavior === "PRAISE" || behavior === "SAD" || behavior === "CONFUSED" || behavior === "HAPPY" || behavior === "GRATEFUL";
   const contextualConversation = contextualWhy || contextualFollowUp;
   const pureConversation = (conversationalCue || contextualConversation) && !technicalSignal && !explicitAction && !statusQuestion && !solutionQuestion && !causeQuestion;
 
@@ -338,6 +340,13 @@ export function classifyIntent(text, session = {}) {
     ? (hasWork ? "CONVERSATION_WITH_WORK_CONTEXT" : "CONVERSATION")
     : (solutionQuestion || explicitAction || causeQuestion ? "TECHNICAL" : (technicalSignal || statusQuestion ? "INFORMATIONAL" : null));
 
+  const unresolvedReference = !!reference && !reference.compatibleContext;
+  const mixedIntent = technicalSignal && (greeting || justChatting || gratitude || apology || farewell);
+  const shouldClarify = !q || unresolvedReference || (
+    !topic && !pureConversation && !technicalSignal && !statusQuestion &&
+    !solutionQuestion && !causeQuestion && !explicitAction
+  );
+
   return {
     q, behavior, style, greeting, identity, systemRole, capability, gratitude, apology, farewell,
     emotionalBoundary, currentActivity, justChatting, continuation:!!reference && /^(lanjut|lanjutkan|terus|nah\s+terus|gimana|bagaimana|hasilnya|progressnya|progresnya|selanjutnya)\b/i.test(q),
@@ -345,7 +354,7 @@ export function classifyIntent(text, session = {}) {
     conversationFirst:pureConversation && !hasWork,
     inheritedTopic: (contextualWhy || contextualFollowUp) ? (session?.topic || null) : null,
     reference, technicalSignal, explicitAction, statusQuestion, solutionQuestion, causeQuestion,
-    shouldClarify: !q
+    unresolvedReference, mixedIntent, shouldClarify
   };
 }
 
@@ -378,11 +387,13 @@ export function updateConversationState(previous, text, classified = null, patch
     lastIntent: patch.lastIntent || c.mode || (c.conversationOnly ? "CONVERSATION" : "SYSTEM_WORK"),
     lastReference: patch.lastReference !== undefined ? patch.lastReference : (c.contextualFollowUp || c.contextualWhy ? clean(text) : state.lastReference),
     workContext: patch.workContext !== undefined ? patch.workContext : state.workContext,
+    pendingWork: patch.pendingWork !== undefined ? patch.pendingWork : state.pendingWork,
     primaryFile: patch.primaryFile !== undefined ? patch.primaryFile : state.primaryFile,
     files: patch.files !== undefined ? [...patch.files] : [...state.files],
     caseId: patch.caseId !== undefined ? patch.caseId : state.caseId,
     pendingAction: patch.pendingAction !== undefined ? patch.pendingAction : state.pendingAction,
-    clarificationNeeded: patch.clarificationNeeded !== undefined ? !!patch.clarificationNeeded : state.clarificationNeeded,
+    clarificationNeeded: patch.clarificationNeeded !== undefined ? !!patch.clarificationNeeded : !!c.shouldClarify,
+    lastClassified: c,
     updatedAt: Date.now()
   };
 }
@@ -413,7 +424,8 @@ export function evaluateResponseContract(response, context = {}) {
   const contract = buildResponseContract(context);
   const checks = {
     nonEmpty: !!text,
-    noFakeProof: !re("\\b(proof lengkap|sudah pasti|sudah diperbaiki|sudah tervalidasi)\\b", text) || !!context.proof,
+    noFakeProof: !re("\\b(proof lengkap|sudah pasti|sudah diperbaiki|sudah tervalidasi|sudah tervalid|berhasil diperbaiki)\\b", text) || !!context.proof,
+    evidenceForCompletion: !contract.technical || !context.complete || !!context.evidence || !!context.proof || !!context.validation,
     hasNextStep: !contract.technical || !!context.complete || re("\\b(lanjut|berikutnya|selanjutnya|tunggu|butuh|perlu|silakan|saya akan)\\b", text),
     conciseForSimple: context.simple !== true || text.split(/\s+/).length <= 120
   };

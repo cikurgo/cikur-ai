@@ -4,7 +4,7 @@
  */
 (function (global) {
   "use strict";
-  const VERSION = "1.0.0-NARASI";
+  const VERSION = "1.1.0-NARASI";
 
   function isReportStyle(text) {
     const t = String(text || "");
@@ -27,15 +27,17 @@
 
     // Ganti frasa laporan → narasi
     const reps = [
-      [/Scanner:\s*status\s*CLEAN[^.]*\./i, "Saya cek scanner — semuanya bersih."],
+      // Semua transformasi di bawah hanya mengubah bentuk kalimat,
+      // bukan status, angka, sumber, atau tingkat kepastian.
+      [/Scanner:\s*status\s*(CLEAN|DEGRADED|FAIL|ERROR)\b/ig, "Scanner: status $1"],
       [/terbaca\s+(\d+)\/(\d+)/i, "terbaca $1 dari $2 file"],
-      [/gagal\s+0/i, "tanpa kegagalan"],
+      [/gagal\s+(\d+)/i, "gagal $1"],
       [/Relasi\s*linked\s*(\d+)/i, "$1 relasi saling terhubung"],
       [/Sistem stabil,?\s*tidak ada anomali aktif\.?/i, "Sistem sedang stabil, tidak ada anomali aktif."],
       [/Tahap\s+(\w+)/i, "di tahap $1"],
-      [/scanner\s+DEGRADED/i, "scanner masih perlu perhatian (DEGRADED)"],
-      [/Integrity:\s*PASS/i, "integritas aman"],
-      [/Integrity:\s*FAIL/i, "integritas bermasalah"]
+      [/scanner\s+DEGRADED/ig, "scanner masih berstatus DEGRADED"],
+      [/Integrity:\s*PASS/ig, "Integrity: PASS"],
+      [/Integrity:\s*FAIL/ig, "Integrity: FAIL"]
     ];
     for (let i = 0; i < reps.length; i++) {
       try { t = t.replace(reps[i][0], reps[i][1]); } catch (_) {}
@@ -43,7 +45,8 @@
 
     // Metafora ringan bila masih sangat teknis
     if (/\bembedding\b/i.test(t)) {
-      t = t.replace(/\bembedding\b/gi, "koordinat makna");
+      // Istilah teknis dipertahankan; narasi tidak boleh mengubah makna teknis.
+      t = t.replace(/\bembedding\b/gi, "embedding");
     }
     if (/\bcycle\b/i.test(t) && !/siklus/.test(t)) {
       t = t.replace(/\bcycle\b/gi, "siklus");
