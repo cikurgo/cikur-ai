@@ -104,6 +104,35 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
 @media(min-width:900px){.stats{grid-template-columns:repeat(6,1fr)}.grid{grid-template-columns:1.3fr 1fr}}
 @media(max-width:700px){.top{flex-direction:column;align-items:flex-start}.chips{justify-content:flex-start}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+/* UI UPGRADE 2026-10-02 — control-room visual layer; runtime IDs preserved */
+:root{
+  --glow-blue:rgba(22,136,255,.24);--glow-ok:rgba(22,217,139,.20);--glow-violet:rgba(139,92,246,.18);
+}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;background:linear-gradient(rgba(23,62,94,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(23,62,94,.045) 1px,transparent 1px);background-size:32px 32px;mask-image:linear-gradient(to bottom,black,transparent 88%);z-index:-1}
+.top{box-shadow:0 0 0 1px rgba(22,136,255,.05),0 18px 60px rgba(0,0,0,.28)}
+.logo{box-shadow:0 0 28px var(--glow-blue),inset 0 0 18px rgba(22,136,255,.08)}
+.panel{box-shadow:0 12px 40px rgba(0,0,0,.18)}
+.ph{background:linear-gradient(90deg,rgba(7,25,43,.9),rgba(4,20,38,.7));text-transform:uppercase;letter-spacing:.08em}
+.control-hero{margin-top:12px;border:1px solid #16466e;border-radius:16px;background:radial-gradient(circle at 78% 15%,rgba(22,136,255,.16),transparent 32%),linear-gradient(135deg,#06182b,#03101d);padding:14px;box-shadow:0 0 35px rgba(22,136,255,.08)}
+.control-hero-grid{display:grid;grid-template-columns:1fr;gap:12px}
+.loop-title{font-size:10px;letter-spacing:.16em;color:#70b8ef;text-transform:uppercase;font-weight:800}
+.loop-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-end}
+.loop-head h2{font-size:19px;font-weight:850;letter-spacing:.02em}
+.loop-state{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:#7cf0c0;border:1px solid #176a50;background:#062116;padding:5px 9px;border-radius:999px;white-space:nowrap}
+.loop-rail{display:grid;grid-template-columns:1fr 18px 1fr 18px 1fr 18px 1fr 28px 1.35fr;align-items:center;gap:6px;margin-top:12px}
+.rail-node{min-height:66px;border:1px solid #17466a;border-radius:12px;background:#031321;padding:9px;display:flex;flex-direction:column;justify-content:center;box-shadow:inset 0 0 18px rgba(22,136,255,.035)}
+.rail-node strong{font-size:12px}.rail-node span{font-size:10px;color:#7d9db6;margin-top:3px}.rail-node.live{border-color:#176a50;box-shadow:0 0 20px var(--glow-ok)}
+.rail-node.dashboard{border-color:#5b3aa8;background:#0b0920;box-shadow:0 0 22px var(--glow-violet)}
+.rail-arrow{text-align:center;color:#4e7798;font-size:15px}.rail-arrow.loop{color:#7cf0c0;font-size:18px}
+.telemetry-strip{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:10px}.telemetry-box{border:1px solid #123b63;background:#020b15;border-radius:9px;padding:7px 9px}.telemetry-box span{display:block;color:#6989a3;font-size:9px;text-transform:uppercase;letter-spacing:.08em}.telemetry-box b{display:block;color:#d7edff;font:11px ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:2px;overflow-wrap:anywhere}
+.stage-grid{position:relative}.stage-card{transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}.stage-card:hover{transform:translateY(-2px);border-color:#26648d;box-shadow:0 10px 25px rgba(0,0,0,.2)}
+.stage-card .stage-name{display:flex;align-items:center;gap:6px}.stage-card .stage-name:before{content:"";width:7px;height:7px;border-radius:50%;background:#365a74;box-shadow:0 0 0 3px rgba(54,90,116,.12)}
+.intel-card{box-shadow:inset 0 0 16px rgba(22,136,255,.025)}
+.repair-hero{border:1px solid #5a3c89;border-radius:12px;background:linear-gradient(135deg,#0d0a1e,#061426);padding:10px;margin-bottom:10px}.repair-hero b{color:#d8c7ff}.repair-hero span{display:block;color:#8fa4bb;font-size:11px;margin-top:3px}
+@media(min-width:760px){.control-hero-grid{grid-template-columns:1.4fr 1fr}.telemetry-strip{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:680px){.loop-rail{grid-template-columns:1fr;gap:4px}.rail-arrow{transform:rotate(90deg);height:12px}.rail-arrow.loop{transform:none}.loop-head{align-items:flex-start;flex-direction:column}.control-hero{padding:12px}}
+
 </style>
 </head>
 <body>
@@ -125,6 +154,37 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
     <span id="bus" class="chip">Bus …</span>
   </div>
 </header>
+
+
+<section class="control-hero" aria-label="Mesin ABC control room">
+  <div class="control-hero-grid">
+    <div>
+      <div class="loop-head"><div><div class="loop-title">Internal Control Room · Mesin Penalaran</div><h2>A → B → C → D · LIVE PIPELINE</h2></div><div class="loop-state" id="ui-loop-state">STANDBY</div></div>
+      <div class="loop-rail">
+        <div class="rail-node live"><strong>MESIN A</strong><span>Struktur · input · fingerprint</span></div><div class="rail-arrow">›</div>
+        <div class="rail-node"><strong>MESIN B</strong><span>Diagnosis · reasoning · inference</span></div><div class="rail-arrow">›</div>
+        <div class="rail-node"><strong>MESIN C</strong><span>Solution · evidence · repair plan</span></div><div class="rail-arrow">›</div>
+        <div class="rail-node"><strong>MESIN D</strong><span>Verification · audit · integrity</span></div><div class="rail-arrow loop">↺</div>
+        <div class="rail-node dashboard"><strong>DASHBOARD / CONTROL</strong><span>Hasil D menentukan apakah siklus berikutnya boleh diminta</span></div>
+      </div>
+      <div class="telemetry-strip">
+        <div class="telemetry-box"><span>Stage</span><b id="hero-stage">STANDBY</b></div>
+        <div class="telemetry-box"><span>Event</span><b id="hero-event">—</b></div>
+        <div class="telemetry-box"><span>Route</span><b>A → B → C → D</b></div>
+        <div class="telemetry-box"><span>Mode</span><b>INTERNAL · EVIDENCE-FIRST</b></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:0;border-color:#173e5e;background:#020b15">
+      <div class="ph"><span>LIVE ENGINE SNAPSHOT</span><span id="hero-status-chip" class="chip">STANDBY</span></div>
+      <div class="body">
+        <div class="row"><span>Machine D</span><strong id="hero-audit">—</strong></div>
+        <div class="row"><span>Independensi</span><strong id="hero-independence">—</strong></div>
+        <div class="row"><span>Self-test</span><strong id="hero-selftest">—</strong></div>
+        <div class="row"><span>Degraded</span><strong id="hero-degraded">0</strong></div>
+      </div>
+    </div>
+  </div>
+</section>
 
 <div id="fatal" class="banner error" role="alert" hidden></div>
 <div id="notice" class="banner" role="status" hidden></div>
@@ -262,6 +322,7 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
 <section class="panel" aria-labelledby="h-repair">
   <h2 class="ph" id="h-repair">Mesin Repair — hasil perbaikan nyata</h2>
   <div class="body">
+    <div class="repair-hero"><b>REPAIR → REPROCESS → VERIFY</b><span>Perbaikan tetap melewati validasi dan pipeline A → B → C → D sebelum hasil dianggap sah.</span></div>
     <p class="muted" style="margin:0 0 10px">Patch diterapkan pada source input dan hasilnya dikembalikan di memori. Verifikasi memakai aturan patch terdaftar + pipeline A→B→C→D; eksekusi runtime dan penulisan ke repository tidak dilakukan otomatis.</p>
     <div class="row"><span>Status repair</span><strong id="repairStatus">STANDBY</strong></div>
     <div class="row"><span>Patch</span><strong id="repairPatch">-</strong></div>
@@ -290,8 +351,8 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
 </section>
 </div>
 
-<script src="cgo-machine-abc.js?v=1.0.1-FULL-RECOVERY-20261001"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.1.1-REPAIR-SOURCE-20261002"></script>
+<script src="cgo-machine-abc.js?v=1.0.1-FULL-RECOVERY-20261002"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.4.0-ABC-BCGO-CLOSED-LOOP-LIVE-20261002"></script>
 <script>
 (() => {
   "use strict";
@@ -325,6 +386,20 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
   function showNotice(msg) { const n = $("#notice"); n.textContent = msg; n.hidden = false; }
   function clearNotice() { $("#notice").hidden = true; }
 
+  function syncHero() {
+    const stage = $("#stageD")?.textContent || "STANDBY";
+    const evt = $("#lastStatus")?.textContent || "—";
+    $("#hero-stage") && ($("#hero-stage").textContent = stage);
+    $("#hero-event") && ($("#hero-event").textContent = evt);
+    $("#ui-loop-state") && ($("#ui-loop-state").textContent = stage === "STANDBY" ? "STANDBY" : "A → B → C → D · " + stage);
+    const tone = stage === "VERIFIED" || stage === "VALID" ? "ok" : stage === "STANDBY" ? "" : "warn";
+    if ($("#hero-status-chip")) chip($("#hero-status-chip"), stage, tone);
+    if ($("#hero-audit")) $("#hero-audit").textContent = $("#auditDetail")?.textContent || "—";
+    if ($("#hero-independence")) $("#hero-independence").textContent = $("#indDetail")?.textContent || "—";
+    if ($("#hero-selftest")) $("#hero-selftest").textContent = $("#selfDetail")?.textContent || "—";
+    if ($("#hero-degraded")) $("#hero-degraded").textContent = $("#degradedCount")?.textContent || "0";
+  }
+
   function health() {
     const st = E.selfTest();
     chip($("#self"), `Self-test ${st.passed}/${st.total}`, st.verified ? "ok" : "bad");
@@ -346,6 +421,7 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
     const p = $("#pause");
     p.textContent = E.isPaused() ? "Lanjutkan" : "Jeda";
     p.setAttribute("aria-pressed", String(E.isPaused()));
+    syncHero();
   }
 
   function setStage(id, status, meta, tone) {
@@ -385,6 +461,7 @@ code{font:12px ui-monospace,monospace;color:#bcd8ea}
     $("#integrityValidation").textContent = validation;
     const t = [a.durationMs, b.durationMs, c.durationMs, audit?.checkedAt && c.metadata?.generatedAt ? Math.max(0, audit.checkedAt - c.metadata.generatedAt) : null];
     $("#stageTiming").textContent = t.map(x => x == null ? "-" : x + "ms").join(" / ");
+    syncHero();
   }
 
   function renderExecution(telemetry) {

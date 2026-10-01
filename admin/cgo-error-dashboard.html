@@ -29,7 +29,21 @@
       100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); }
     }
     .scroll-panel { max-height: min(58vh, 560px); overflow: auto; }
-  </style>
+  
+/* UI UPGRADE 2026-10-02 — smart dashboard command-center layer */
+:root{--ui-cyan:#22d3ee;--ui-violet:#8b5cf6;--ui-green:#34d399}
+body{background:radial-gradient(circle at 50% -15%,rgba(30,64,175,.22),transparent 38%),radial-gradient(circle at 95% 20%,rgba(124,58,237,.10),transparent 30%),#020617}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;background:linear-gradient(rgba(51,65,85,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(51,65,85,.045) 1px,transparent 1px);background-size:32px 32px;mask-image:linear-gradient(to bottom,black,transparent 90%);z-index:-1}
+.command-hero{border:1px solid rgba(34,211,238,.22);border-radius:16px;background:radial-gradient(circle at 85% 20%,rgba(34,211,238,.12),transparent 30%),linear-gradient(135deg,rgba(15,23,42,.98),rgba(5,12,28,.96));box-shadow:0 20px 70px rgba(0,0,0,.28),0 0 45px rgba(34,211,238,.05);padding:14px}
+.command-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}.eyebrow{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:#67e8f9;font-weight:800}.command-title{font-size:20px;font-weight:900;letter-spacing:.01em;color:#f8fafc}.command-sub{font-size:10px;color:#64748b;margin-top:3px}.loop-pill{font:10px ui-monospace,monospace;border:1px solid rgba(52,211,153,.35);color:#86efac;background:rgba(6,78,59,.18);border-radius:999px;padding:6px 10px;white-space:nowrap}
+.smart-rail{display:grid;grid-template-columns:1fr 16px 1fr 16px 1fr 16px 1fr 22px 1.25fr;align-items:center;gap:5px;margin-top:13px}.smart-node{min-height:62px;border:1px solid #1e3a5f;border-radius:11px;background:#020b15;padding:8px}.smart-node strong{display:block;font-size:11px}.smart-node span{display:block;font-size:9px;color:#64748b;margin-top:3px}.smart-node.abc{border-color:rgba(139,92,246,.45);background:rgba(76,29,149,.08)}.smart-node.control{border-color:rgba(34,211,238,.38);background:rgba(8,47,73,.16)}.smart-arrow{text-align:center;color:#475569}.smart-arrow.loop{color:#34d399;font-size:18px}
+.hero-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:10px}.hero-kpi{border:1px solid #1e293b;background:#020817;border-radius:9px;padding:7px 9px}.hero-kpi span{display:block;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:#64748b}.hero-kpi b{display:block;font:11px ui-monospace,monospace;color:#dbeafe;margin-top:2px;overflow-wrap:anywhere}
+.abc-console{border:1px solid rgba(139,92,246,.32)!important;background:linear-gradient(135deg,rgba(46,16,101,.16),rgba(2,6,23,.9))!important;box-shadow:inset 0 0 35px rgba(139,92,246,.035)}
+.abc-console-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.abc-stage-chip{font:9px ui-monospace,monospace;color:#c4b5fd;border:1px solid rgba(139,92,246,.35);border-radius:999px;padding:4px 8px}
+@media(min-width:760px){.hero-kpis{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:650px){.command-head{align-items:flex-start;flex-direction:column}.smart-rail{grid-template-columns:1fr;gap:4px}.smart-arrow{transform:rotate(90deg);height:10px}.smart-arrow.loop{transform:none}.command-title{font-size:18px}}
+
+</style>
 </head>
 <body class="min-h-screen">
   <header class="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 backdrop-blur px-4 py-3 flex flex-wrap items-center justify-between gap-3">
@@ -49,6 +63,27 @@
   </header>
 
   <main class="max-w-6xl mx-auto p-4 space-y-4">
+
+<section class="command-hero" aria-label="Smart dashboard command center">
+  <div class="command-head">
+    <div><div class="eyebrow">CIKUR GO · INTERNAL CONTROL CENTER</div><div class="command-title">DASHBOARD PINTAR · CLOSED-LOOP CONTROL</div><div class="command-sub">Bukan terminal pasif — Dashboard membaca hasil D dan mengendalikan permintaan siklus berikutnya.</div></div>
+    <div class="loop-pill" id="hero-loop-pill">LOOP · STANDBY</div>
+  </div>
+  <div class="smart-rail">
+    <div class="smart-node"><strong>BCGO</strong><span>source scan · evidence · state</span></div><div class="smart-arrow">›</div>
+    <div class="smart-node abc"><strong>MESIN ABC</strong><span>A → B → C → D · diagnosis & verification</span></div><div class="smart-arrow">›</div>
+    <div class="smart-node control"><strong>DASHBOARD</strong><span>observe · decide · control</span></div><div class="smart-arrow">›</div>
+    <div class="smart-node"><strong>NEXT CYCLE</strong><span>RESCAN_AND_REPROCESS bila gate lolos</span></div><div class="smart-arrow loop">↺</div>
+    <div class="smart-node control"><strong>KEMBALI KE BCGO</strong><span>command → source scan berikutnya</span></div>
+  </div>
+  <div class="hero-kpis">
+    <div class="hero-kpi"><span>ABC stage</span><b id="hero-abc-stage">STANDBY</b></div>
+    <div class="hero-kpi"><span>ABC event</span><b id="hero-abc-event">—</b></div>
+    <div class="hero-kpi"><span>Cycle</span><b id="hero-cycle">—</b></div>
+    <div class="hero-kpi"><span>Decision</span><b id="hero-decision">WAITING_FOR_D</b></div>
+  </div>
+</section>
+
     <!-- KPI -->
     <section class="grid grid-cols-2 md:grid-cols-5 gap-2">
       <div class="rounded-xl border border-slate-800 bg-slate-900/80 p-3">
@@ -95,9 +130,10 @@
             <div class="text-xs font-bold text-emerald-300 uppercase tracking-wider">Rantai Akar Masalah</div>
             <div class="text-[10px] text-slate-500">Gejala → file → baris → relasi → akar</div>
           </div>
-          <div id="abc-live-panel" class="mb-3 rounded-xl border border-violet-500/20 bg-violet-950/10 px-3 py-2">
-            <div class="flex items-center justify-between gap-2">
+          <div id="abc-live-panel" class="abc-console mb-3 rounded-xl px-3 py-2">
+            <div class="abc-console-head">
               <div class="text-[10px] uppercase tracking-widest text-violet-300">MESIN ABC · LIVE PIPELINE</div>
+              <div class="abc-stage-chip" id="abc-stage-chip">STANDBY</div>
               <div id="abc-live-cycle" class="text-[9px] code-font text-slate-500">cycle —</div>
             </div>
             <div id="abc-live-route" class="mt-1 text-[11px] font-semibold text-slate-200">A → B → C → D · STANDBY</div>
@@ -138,8 +174,8 @@
   </main>
 
   <!-- Mesin ABC membantu menerjemahkan error → teks manusia -->
-  <script src="cgo-machine-abc.js?v=0.9.9-OTAK-CORE"></script>
-  <script src="cgo-machine-abc-bridge.js?v=1.7.0-BCGO-SYNC-OTAK"></script>
+  <script src="cgo-machine-abc.js?v=1.0.1-FULL-RECOVERY-20261002"></script>
+  <script src="cgo-machine-abc-bridge.js?v=1.4.0-ABC-BCGO-CLOSED-LOOP-LIVE-20261002"></script>
   <script src="cgo-error-dashboard.js?v=1.2.0-CLOSED-LOOP"></script>
   <script>
   (function () {
@@ -254,6 +290,12 @@
       }
 
       const loop = snap.loop || null;
+      document.getElementById("hero-abc-stage") && (document.getElementById("hero-abc-stage").textContent = live ? (live.stage || "STANDBY") : "STANDBY");
+      document.getElementById("hero-abc-event") && (document.getElementById("hero-abc-event").textContent = live ? (live.event || "—") : "—");
+      document.getElementById("hero-cycle") && (document.getElementById("hero-cycle").textContent = snap.bcgoCycle != null ? "#" + snap.bcgoCycle : (live && live.cycleIndex != null ? "#" + live.cycleIndex : "—"));
+      document.getElementById("hero-decision") && (document.getElementById("hero-decision").textContent = loop?.decision || "WAITING_FOR_D");
+      document.getElementById("hero-loop-pill") && (document.getElementById("hero-loop-pill").textContent = "LOOP · " + (loop?.state || "STANDBY"));
+      document.getElementById("abc-stage-chip") && (document.getElementById("abc-stage-chip").textContent = live ? (live.stage || "STANDBY") : "STANDBY");
       const loopEl = document.getElementById("dashboard-loop-state");
       if (loopEl) loopEl.textContent = "LOOP · " + (loop?.state || "STANDBY") + " · " + (loop?.decision || "WAITING_FOR_D") + (loop?.cycle != null ? " · cycle " + loop.cycle : "");
 

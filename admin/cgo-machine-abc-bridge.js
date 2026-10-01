@@ -14,11 +14,33 @@
     return;
   }
 
-  const VERSION = "1.1.1-REPAIR-SOURCE";
+  const VERSION = "1.4.0-ABC-BCGO-CLOSED-LOOP-LIVE";
   const BUS_NAME = "cgo-machine-abc-bus";
   const listeners = new Set();
   let lastPacket = null;
   let bus = null;
+  let telemetryBus = null;
+  let telemetryContext = { context: "UNSCOPED", loopEligible: false, bcgoCycle: null };
+  try {
+    if (typeof BroadcastChannel !== "undefined") telemetryBus = new BroadcastChannel("CGO_MACHINE_ABC_TELEMETRY");
+  } catch (_) { telemetryBus = null; }
+
+  function withTelemetryContext(context, loopEligible, bcgoCycle, fn) {
+    const prev = telemetryContext;
+    telemetryContext = { context: context || "UNSCOPED", loopEligible: loopEligible === true, bcgoCycle: bcgoCycle != null ? Number(bcgoCycle) : null };
+    try { return fn(); } finally { telemetryContext = prev; }
+  }
+
+  function publishTelemetry(packet) {
+    if (!packet || packet.type !== "ABC_TELEMETRY") return;
+    const enriched = { ...packet, context: telemetryContext.context, loopEligible: telemetryContext.loopEligible, bcgoCycle: telemetryContext.bcgoCycle, bridgeVersion: VERSION };
+    try { global.dispatchEvent(new CustomEvent("cgo:abc-telemetry", { detail: enriched })); } catch (_) {}
+    try { if (telemetryBus) telemetryBus.postMessage(enriched); } catch (_) {}
+    try { publishBus("telemetry", enriched); } catch (_) {}
+    lastTelemetry = enriched;
+    return enriched;
+  }
+  let lastTelemetry = null;
   try {
     if (typeof BroadcastChannel !== "undefined") bus = new BroadcastChannel(BUS_NAME);
   } catch (_) { bus = null; }
@@ -97,6 +119,13 @@
     E.observe(onPacket);
   }
 
+  if (!global.__CGO_ABC_BRIDGE_TELEMETRY_OBSERVER__) {
+    global.__CGO_ABC_BRIDGE_TELEMETRY_OBSERVER__ = true;
+    E.observeTelemetry(function (packet) {
+      publishTelemetry(packet);
+    });
+  }
+
   /**
    * Analisis payload (teks / objek / HTML / JSON) lewat pipeline A→B→C→D.
    * Aman dipanggil dari BCGO chat / scanner.
@@ -108,13 +137,13 @@
     try {
       // Default cepat: 1 siklus, skip audit D (kecuali options.fullAudit)
       const fast = options.fast !== false && !options.fullAudit && !options.autoReflect;
-      const out = E.process(input, {
+      const out = withTelemetryContext(options.context || "ANALYZE", false, options.bcgoCycle, () => E.process(input, {
         maxCycles: options.maxCycles ?? 1,
         autoReflect: !!options.autoReflect,
         fast: fast,
         skipAudit: fast,
         ...options
-      });
+      }));
       return {
         ok: true,
         engine: "CGO_MACHINE_ABC",
@@ -131,45 +160,186 @@
     }
   }
 
-  /** Repair full source lalu kembalikan hasil patch + verifikasi A→B→C→D. */
+  /** Ringkas status engine untuk panel kesehatan BCGO */
+  let _healthCache = null;
+  let _healthCacheAt = 0;
+  const HEALTH_TTL_MS = 120000;
+
   function repairSource(input, options = {}) {
     if (E.isPaused()) return { ok: false, status: "PAUSED", verified: false, message: "Mesin ABC sedang dijeda." };
     try {
-      const out = E.repair(String(input), {
+      const out = withTelemetryContext(options.context || "SOURCE_REPAIR", false, options.bcgoCycle, () => E.repair(String(input), {
         source: options.source || "unknown",
         autoApply: options.autoApply !== false,
         maxRepairSteps: options.maxRepairSteps ?? 3,
         maxCycles: options.maxCycles ?? 5,
         fast: false,
         skipAudit: false
-      });
-      const patchedText = typeof out?.repaired?.pipeline?.A?.content?.value === "string"
-        ? out.repaired.pipeline.A.content.value
-        : null;
+      }));
+      const patchedText = typeof out?.repaired?.pipeline?.A?.input?.content?.value === "string"
+        ? out.repaired.pipeline.A.input.content.value
+        : (typeof out?.repaired?.pipeline?.A?.content?.value === "string" ? out.repaired.pipeline.A.content.value : null);
       const cycle = out?.repaired || out?.postRepair || null;
       return {
-        ok: true,
-        engine: "CGO_MACHINE_ABC",
-        version: E.version,
-        status: out?.status || null,
-        verified: out?.verified === true,
-        candidate: out?.candidate || null,
-        patchedText,
-        beforeFingerprint: out?.comparison?.before?.fingerprint || null,
-        afterFingerprint: out?.comparison?.after?.fingerprint || null,
-        audit: out?.verification?.postRepairAudit || cycle?.audit?.status || null,
-        route: out?.verification?.postRepairRoute || cycle?.telemetry?.route || null,
-        packet: out
+        ok: true, engine: "CGO_MACHINE_ABC", version: E.version, status: out?.status || null, verified: out?.verified === true,
+        candidate: out?.candidate || null, patchedText, beforeFingerprint: out?.comparison?.before?.fingerprint || null,
+        afterFingerprint: out?.comparison?.after?.fingerprint || null, audit: out?.verification?.postRepairAudit || cycle?.audit?.status || null,
+        route: out?.verification?.postRepairRoute || cycle?.telemetry?.route || null, packet: out
       };
-    } catch (err) {
-      return { ok: false, status: "REPAIR_ERROR", verified: false, error: String(err?.message || err) };
-    }
+    } catch (err) { return { ok: false, status: "REPAIR_ERROR", verified: false, error: String(err?.message || err) }; }
   }
 
-  /** Ringkas status engine untuk panel kesehatan BCGO */
-  let _healthCache = null;
-  let _healthCacheAt = 0;
-  const HEALTH_TTL_MS = 120000;
+  function repair(input, options = {}) {
+    if (E.isPaused()) return { engine: "CGO_MACHINE_ABC", version: E.version, status: "PAUSED", applied: false, verified: false };
+    const result = withTelemetryContext(options.context || "REPAIR", false, options.bcgoCycle, () => E.repair(input, options));
+    const summary = {
+      status: result.status,
+      applied: !!result.applied,
+      verified: !!result.verified,
+      candidateId: result.candidate?.id || null,
+      steps: (result.steps || []).map(x => ({ index: x.index, id: x.id, status: x.status, audit: x.audit || null })),
+      comparison: result.comparison || null,
+      reason: result.reason || null,
+      verificationScope: result.verificationScope || "UNKNOWN",
+      runtimeExecution: result.runtimeExecution || "UNKNOWN",
+      persistence: result.persistence || "UNKNOWN",
+      at: new Date().toISOString()
+    };
+    emit("cgo:machine-abc-repair", result);
+    publishBus("repair", summary);
+    return result;
+  }
+
+
+  function stableFingerprint(value) {
+    const text = JSON.stringify(value);
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(16).padStart(8, "0");
+  }
+
+  function buildBCGOEvidence(state) {
+    const sourceScan = state?.sourceScan || {};
+    const activeCases = Array.isArray(state?.activeCases) ? state.activeCases : [];
+    const claims = [
+      { key: "cycle", value: state?.cycleNo ?? null },
+      { key: "phase", value: state?.phase ?? null },
+      { key: "sourceScanStatus", value: sourceScan.status ?? null },
+      { key: "filesReadable", value: sourceScan.filesReadable ?? null },
+      { key: "filesFailed", value: sourceScan.filesFailed ?? null },
+      { key: "relationMismatch", value: sourceScan.relationSummary?.mismatch ?? null },
+      { key: "activeCases", value: activeCases.length }
+    ];
+    const repairTargets = Array.isArray(sourceScan.repairTargets)
+      ? sourceScan.repairTargets.filter(x => x && typeof x.file === "string" && typeof x.text === "string").slice(0, 4)
+      : [];
+    const repairMeta = repairTargets.map(x => ({ file: x.file, contentHash: x.contentHash || null, reason: x.reason || "SOURCE_CHANGED", size: x.text.length }));
+    const scanFingerprint = {
+      status: sourceScan.status ?? null,
+      filesReadable: sourceScan.filesReadable ?? null,
+      filesFailed: sourceScan.filesFailed ?? null,
+      relationSummary: sourceScan.relationSummary || null,
+      repairMeta
+    };
+    return {
+      source: "BCGO",
+      capturedAt: new Date().toISOString(),
+      revision: state?.cycle ?? state?.cycleNo ?? 0,
+      fingerprint: stableFingerprint({ cycle: state?.cycleNo ?? null, scan: scanFingerprint, cases: activeCases.length }),
+      claims,
+      repairTargets: repairTargets.map(x => ({
+        file: x.file,
+        contentHash: x.contentHash || null,
+        reason: x.reason || "SOURCE_CHANGED",
+        text: x.text.slice(0, 1024 * 1024)
+      }))
+    };
+  }
+
+  let lastBCGOFingerprint = null;
+  function ingestBCGOState(state, options = {}) {
+    if (E.isPaused()) {
+      return { ok: false, mode: "PAUSED", status: "PAUSED", audit: "ATTENTION", repairs: [] };
+    }
+    const evidence = buildBCGOEvidence(state);
+    const fingerprint = evidence.fingerprint;
+    if (!options.force && fingerprint === lastBCGOFingerprint) {
+      return {
+        ok: true,
+        deduped: true,
+        mode: "LIVE",
+        status: "STANDBY",
+        audit: "VALID",
+        evidence,
+        repairs: [],
+        packet: null,
+        link: { type: "CGO_ABC_LIVE_LINK", source: "BCGO", mode: "LIVE", status: "STANDBY", audit: "VALID", evidence }
+      };
+    }
+    lastBCGOFingerprint = fingerprint;
+    const processState = state && typeof state === "object"
+      ? { ...state, sourceScan: { ...(state.sourceScan || {}) } }
+      : state;
+    if (processState?.sourceScan) delete processState.sourceScan.repairTargets;
+    const cycleNumber = state?.cycle ?? state?.cycleNo ?? evidence.revision ?? 0;
+    const packet = withTelemetryContext("BCGO_NEURAL_CYCLE", true, cycleNumber, () => E.process(processState, {
+      source: "BCGO_STATE",
+      externalEvidence: evidence,
+      fast: false,
+      skipAudit: false,
+      maxCycles: options.maxCycles ?? 1
+    }));
+    const targets = evidence.repairTargets;
+    const repairs = [];
+    if (options.autoRepair !== false && targets.length) {
+      for (const target of targets) {
+        try {
+          const result = withTelemetryContext("BCGO_SOURCE_REPAIR", false, cycleNumber, () => E.repair(target.text, {
+            autoApply: true,
+            source: `BCGO_SOURCE:${target.file}`,
+            maxRepairSteps: options.maxRepairSteps ?? 3
+          }));
+          repairs.push({
+            file: target.file,
+            contentHash: target.contentHash,
+            status: result.status,
+            applied: !!result.applied,
+            verified: !!result.verified,
+            candidate: result.candidate?.id || null,
+            persistence: result.persistence || "IN_MEMORY_RESULT_ONLY",
+            runtimeExecution: result.runtimeExecution || "NOT_PERFORMED",
+            postStatus: result.repaired?.result?.status || null,
+            audit: result.repaired?.audit?.status || null
+          });
+        } catch (err) {
+          repairs.push({ file: target.file, contentHash: target.contentHash, status: "ERROR", applied: false, verified: false, error: String(err?.message || err) });
+        }
+      }
+    }
+    const finalCycle = packet?.cycles?.at?.(-1) || null;
+    const status = finalCycle?.result?.status || packet?.result?.status || packet?.finalResult?.status || "UNKNOWN";
+    const audit = finalCycle?.audit?.status || packet?.audit?.status || "ATTENTION";
+    const link = {
+      type: "CGO_ABC_LIVE_LINK",
+      source: "BCGO",
+      mode: "LIVE",
+      status,
+      audit,
+      evidence,
+      repairs,
+      packet,
+      claimCount: evidence.claims.length,
+      capturedAt: evidence.capturedAt
+    };
+    global.CGO_ABC_LIVE_LINK = link;
+    emit("cgo:machine-abc-bcgo-evidence", { evidence, packet, repairs });
+    emit("cgo:machine-abc-bcgo-sync", link);
+    publishBus("bcgo-evidence", { status, audit, fingerprint, repairs, revision: evidence.revision });
+    return { ok: true, deduped: false, mode: "LIVE", status, audit, evidence, repairs, packet, link };
+  }
 
   function healthSnapshot(force) {
     const nowMs = Date.now();
@@ -199,7 +369,10 @@
     engineVersion: E.version,
     engine: E,
     analyze,
+    repair,
     repairSource,
+    ingestBCGOState,
+    getLastTelemetry: () => lastTelemetry ? { ...lastTelemetry } : null,
     healthSnapshot,
     process: (input, opt) => E.process(input, opt || {}),
     observe: (fn) => {
@@ -218,6 +391,10 @@
   global.CGO_MACHINE_ABC = E;
   // Alias singkat untuk Otak CGO
   if (!global.CGOCoreMachine) global.CGOCoreMachine = E;
+
+  try {
+    if (typeof global.addEventListener === "function") global.addEventListener("beforeunload", () => { try { telemetryBus?.close?.(); } catch (_) {} try { bus?.close?.(); } catch (_) {} }, { once: true });
+  } catch (_) {}
 
   emit("cgo-machine-abc-ready", { version: VERSION, engine: E.version });
   emit("cgo:machine-abc-ready", { version: VERSION, engine: E.version });

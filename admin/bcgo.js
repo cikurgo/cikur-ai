@@ -1533,6 +1533,36 @@ function answerQuestion(question) {
     state.fileNerves = nerves;
     state.sourceScan = scan;
     publishToUI(safeClone(state));
+
+    // CLOSED LOOP: setelah BCGO selesai menyerap source/evidence, jalankan
+    // satu siklus Mesin ABC terhadap snapshot BCGO terbaru. Dashboard menerima
+    // telemetry A→B→C→D dari bridge dan dapat meminta scan berikutnya.
+    try {
+      const abcBridge = getRepairBridge();
+      if (abcBridge && typeof abcBridge.ingestBCGOState === "function") {
+        const link = abcBridge.ingestBCGOState(safeClone(state), {
+          force: true,
+          autoRepair: false,
+          maxCycles: 1
+        });
+        if (link && link.ok) {
+          state.abcLiveLink = {
+            mode: link.mode || "LIVE",
+            status: link.status || null,
+            audit: link.audit || null,
+            revision: link.evidence?.revision ?? state.cycle ?? null,
+            fingerprint: link.evidence?.fingerprint || null,
+            claimCount: link.claimCount ?? link.evidence?.claims?.length ?? 0,
+            capturedAt: link.capturedAt || new Date().toISOString(),
+            source: "BCGO_SOURCE_SCAN_CLOSED_LOOP"
+          };
+          publishToUI(safeClone(state));
+        }
+      }
+    } catch (abcError) {
+      recordEvent("ABC_CLOSED_LOOP_ERROR", `Mesin ABC gagal memproses snapshot source scan: ${String(abcError?.message || abcError).slice(0, 220)}`, "SYS_ABC_CLOSED_LOOP");
+    }
+
     sourceScanInFlight = false;
     sourceScanController = null;
   }

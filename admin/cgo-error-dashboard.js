@@ -573,14 +573,16 @@
     if (!packet || packet.type !== "ABC_TELEMETRY") return;
     const stage = String(packet.stage || "").toUpperCase();
     if (!["A","B","C","D"].includes(stage)) return;
-    state.abcLive = { source: "MESIN_ABC_TELEMETRY", event: packet.event || null, stage, status: packet.status || (packet.event === "PHASE_START" ? "RUNNING" : null), audit: packet.audit || null, cycleIndex: packet.cycleIndex != null ? packet.cycleIndex : null, durationMs: packet.durationMs != null ? packet.durationMs : null, at: packet.at || now(), elapsedMs: packet.elapsedMs != null ? packet.elapsedMs : null, error: packet.error || null };
+    const row = { source: "MESIN_ABC_TELEMETRY", event: packet.event || null, stage, status: packet.status || (packet.event === "PHASE_START" ? "RUNNING" : null), audit: packet.audit || null, cycleIndex: packet.bcgoCycle != null ? packet.bcgoCycle : (packet.cycleIndex != null ? packet.cycleIndex : null), durationMs: packet.durationMs != null ? packet.durationMs : null, at: packet.at || now(), elapsedMs: packet.elapsedMs != null ? packet.elapsedMs : null, error: packet.error || null, context: packet.context || "UNSCOPED", loopEligible: packet.loopEligible === true, bcgoCycle: packet.bcgoCycle != null ? packet.bcgoCycle : null };
+    if (packet.loopEligible === true) state.abcLive = row;
+    else state.abcAux = row;
     decideNextCycle(packet);
     notify();
   }
 
   function ingestAbcLiveLink(link) {
     if (!link || typeof link !== "object" || link.type !== "CGO_ABC_LIVE_LINK") return;
-    state.abcLive = { ...(state.abcLive || {}), source: "BCGO_ABC_LIVE_LINK", event: "LIVE_LINK", mode: link.mode || null, status: link.status || null, audit: link.audit || null, revision: link.revision || null, fingerprint: link.fingerprint || null, claimCount: link.claimCount != null ? link.claimCount : null, at: link.capturedAt || now() };
+    state.abcLink = { source: "BCGO_ABC_LIVE_LINK", event: "LIVE_LINK", mode: link.mode || null, status: link.status || null, audit: link.audit || null, revision: link.revision ?? link.evidence?.revision ?? null, fingerprint: link.fingerprint || link.evidence?.fingerprint || null, claimCount: link.claimCount != null ? link.claimCount : (link.evidence?.claims?.length ?? null), at: link.capturedAt || now() };
     notify();
   }
 
@@ -593,11 +595,11 @@
   const LOOP_COOLDOWN_MS = 2500;
 
   function decideNextCycle(packet) {
-    if (!packet || packet.type !== "ABC_TELEMETRY" || String(packet.stage || "").toUpperCase() !== "D") return;
+    if (!packet || packet.type !== "ABC_TELEMETRY" || packet.loopEligible !== true || String(packet.stage || "").toUpperCase() !== "D") return;
     if (String(packet.event || "").toUpperCase() !== "PHASE_END") return;
     const audit = String(packet.audit || "").toUpperCase();
     const status = String(packet.status || "").toUpperCase();
-    const cycle = packet.cycleIndex != null ? Number(packet.cycleIndex) : null;
+    const cycle = packet.bcgoCycle != null ? Number(packet.bcgoCycle) : (packet.cycleIndex != null ? Number(packet.cycleIndex) : null);
     const blocked = /ERROR|ABORT|PATCH_REJECTED|FAILED/.test(status) || /ERROR|INVALID/.test(audit);
     if (blocked) {
       state.loop = { ...state.loop, state: "STANDBY", decision: "HOLD", cycle, reason: `D:${status || "UNKNOWN"} · AUDIT:${audit || "UNKNOWN"}`, nextAt: null };
@@ -712,6 +714,8 @@
       bcgoCycle: state.bcgo ? (state.bcgo.cycle != null ? state.bcgo.cycle : (state.bcgo.cycleNo != null ? state.bcgo.cycleNo : null)) : null,
       bcgoMode: state.bcgo && state.bcgo.cycleMode || null,
       abcLive: state.abcLive ? { ...state.abcLive } : null,
+      abcAux: state.abcAux ? { ...state.abcAux } : null,
+      abcLink: state.abcLink ? { ...state.abcLink } : null,
       abcReady: !!(global.CGOMachineABCBridge || global.CGOMachineABC),
       loop: { ...state.loop }
     };
