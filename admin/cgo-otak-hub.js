@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.6.1-INTERNAL-RESTORE";
+  const VERSION = "1.4.0-CUSTOMER-OTAK-INJECT";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -31,7 +31,6 @@
     internal: null,   // ringkasan Otak Internal terbaru
     memory: [],       // memori percakapan bersama
     lastTrace: null,  // jejak jawaban terakhir
-    lastRepair: null, // hasil repair terakhir dari Dashboard Pintar
     updatedAt: 0
   };
   const listeners = new Set();
@@ -206,7 +205,6 @@
       internal: state.internal ? { signal: state.internal.signal, classification: state.internal.classification, guardianLevel: state.internal.guardianLevel, blockers: state.internal.blockers } : null,
       memoryTurns: state.memory.length,
       lastTrace: state.lastTrace,
-      lastRepair: state.lastRepair,
       claims: internalClaims(),
       updatedAt: state.updatedAt
     };
@@ -311,74 +309,101 @@
   // Sesi percakapan bersama (instruction + memori)
   let convSession = { topic: null, turn: 0, mood: null, style: null, files: [], primaryFile: null };
 
-
-  /* ---------------- Multi-bahasa: frasa natural (bukan template kaku) ---------------- */
-  const PHRASE = {
-    id: {
-      greeting: function (step, cycle) {
-        return "Halo, saya CGO Operator. Saya membaca saraf sistem — tahap " + step + ", siklus ke-" + cycle + ". Silakan tanya status, scanner, radar, atau minta hitung/eja.";
-      },
-      calm: function (cycle, mode, step, nRel) {
-        return "Sistem tenang di siklus " + cycle + " (mode " + mode + ", tahap " + step + "). Tidak ada anomali aktif; " + nRel + " relasi source terpetakan. Sebut status, scanner, radar, atau nama file.";
-      },
-      alert: function (nAct, cycle, mode, step, target) {
-        return "Ada " + nAct + " anomali aktif di siklus " + cycle + " (mode " + mode + ", tahap " + step + "). Fokus: " + target + ". Sebut file atau organ untuk diuraikan.";
-      },
-      fallback: function (cycle, mode, step, active) {
-        return "Saya membaca pertanyaan Anda di siklus " + cycle + " (mode " + mode + ", tahap " + step + "). " +
-          (active > 0
-            ? ("Ada " + active + " anomali aktif — tanya status sistem atau scanner.")
-            : "Tidak ada anomali aktif. Anda bisa tanya status, scanner, radar, hitung angka, atau topik lain.");
-      },
-      parse_ok: function (spoken) { return "Dari pengurai: " + spoken + "."; },
-      timeout: "Otak masih memproses. Coba pertanyaan lebih singkat.",
-      capabilities: "Saya mendukung multi-bahasa (id, en, es, fr, de, pt, ar, ja), hitung angka ke kata, eja kode, emoji, warna, status BCGO, scanner, dan radar."
-    },
-    en: {
-      greeting: function (step, cycle) {
-        return "Hello, I am CGO Operator. I am reading live system nerves — stage " + step + ", cycle " + cycle + ". Ask about status, scanner, radar, or request number/spelling help.";
-      },
-      calm: function (cycle, mode, step, nRel) {
-        return "System looks calm at cycle " + cycle + " (mode " + mode + ", stage " + step + "). No active anomalies; " + nRel + " source relations mapped. Ask status, scanner, radar, or a file name.";
-      },
-      alert: function (nAct, cycle, mode, step, target) {
-        return "There are " + nAct + " active anomalies at cycle " + cycle + " (mode " + mode + ", stage " + step + "). Focus: " + target + ". Name a file or organ for evidence.";
-      },
-      fallback: function (cycle, mode, step, active) {
-        return "I read your question at cycle " + cycle + " (mode " + mode + ", stage " + step + "). " +
-          (active > 0
-            ? ("There are " + active + " active anomalies — ask system status or scanner.")
-            : "No active anomalies. You can ask status, scanner, radar, number reading, or another topic.");
-      },
-      parse_ok: function (spoken) { return "Parsed: " + spoken + "."; },
-      timeout: "Still processing. Try a shorter question.",
-      capabilities: "I support multi-language (id, en, es, fr, de, pt, ar, ja), number-to-words, code spelling, emoji, colors, BCGO status, scanner, and radar."
-    },
-    ja: {
-      greeting: function (step, cycle) {
-        return "こんにちは。CGOオペレーターです。システム神経を監視中です — 段階 " + step + "、サイクル " + cycle + "。ステータス、スキャナー、レーダー、数値の読み上げなどを聞いてください。";
-      },
-      calm: function (cycle, mode, step, nRel) {
-        return "サイクル " + cycle + "（モード " + mode + "、段階 " + step + "）で異常はありません。ソース関係 " + nRel + " 件。ステータスやファイル名をどうぞ。";
-      },
-      alert: function (nAct, cycle, mode, step, target) {
-        return "サイクル " + cycle + " でアクティブな異常が " + nAct + " 件あります（モード " + mode + "、段階 " + step + "）。焦点: " + target + "。ファイル名を指定してください。";
-      },
-      fallback: function (cycle, mode, step, active) {
-        return "サイクル " + cycle + "（モード " + mode + "、段階 " + step + "）で質問を受け取りました。" +
-          (active > 0
-            ? ("異常 " + active + " 件 — ステータスまたはスキャナーを聞いてください。")
-            : "異常はありません。ステータス、スキャナー、レーダー、数値読み上げなども可能です。");
-      },
-      parse_ok: function (spoken) { return "解析結果: " + spoken + "。"; },
-      timeout: "処理中です。短い質問でもう一度どうぞ。",
-      capabilities: "多言語（id, en, es, fr, de, pt, ar, ja）、数字の読み上げ、コード綴り、絵文字、色、BCGOステータス、スキャナー、レーダーに対応しています。"
-    }
-  };
-  function phrasePack(lang) {
-    return PHRASE[lang] || PHRASE.en || PHRASE.id;
+  // ─── Komposisi dari konstitusi (cgo-instruction) — bukan template panjang ───
+  // Bentuk jawaban ditentukan konstitusi (intent + behavior + contract). Bahan faktual
+  // diambil dari state live. Variasi hanya pada pembuka/penutup (aturan variation konstitusi:
+  // avoidRepeatedTemplates · varyOpeningsAndClosings · neverVaryFactsForStyle) — fakta tidak berubah.
+  const _varSeen = {};
+  function pickVariant(key, list) {
+    const n = _varSeen[key] == null ? 0 : _varSeen[key] + 1;
+    _varSeen[key] = n;
+    return list[n % list.length];
   }
 
+  function composeFromIntent(intent, liveState, session, rawText) {
+    if (!intent) return null;
+    liveState = liveState || {};
+    const metrics = liveState.metrics || {};
+    const scan = liveState.sourceScan || {};
+    const rels = Array.isArray(scan.relations) ? scan.relations.length : (Number(scan.relationCount) || 0);
+    const fakta = {
+      step: liveState.step || "siaga",
+      cycle: liveState.cycle != null ? liveState.cycle : "—",
+      active: Number(metrics.active) || 0,
+      nRel: rels,
+      mode: liveState.cycleMode || "siaga"
+    };
+    fakta.sehat = fakta.active === 0;
+
+    // Konstitusi menentukan bentuk (emosi dulu bila relevan, ringkas untuk kebutuhan sederhana)
+    let contract = { mode: "CONVERSATION" };
+    try {
+      const Inst = global.CGOInstruction;
+      if (Inst && typeof Inst.buildResponseContract === "function") {
+        contract = Inst.buildResponseContract({
+          mode: intent.mode || "CONVERSATION",
+          intent: intent.topic || null,
+          emotional: intent.behavior || null,
+          evidence: true,
+          complete: true
+        }) || contract;
+      }
+    } catch (_) {}
+
+    // Hanya flag eksplisit pesan INI yang dipakai — bukan topik warisan sesi,
+    // supaya topik lama tidak membajak pertanyaan baru (aturan topicRule konstitusi).
+    if (intent.greeting) {
+      const head = pickVariant("greeting", ["Hai.", "Halo.", "Hai, ketemu lagi."]);
+      return fakta.sehat
+        ? head + " Sistem tenang — siklus " + fakta.cycle + ", tahap " + fakta.step + "."
+        : head + " Ada " + fakta.active + " hal yang sedang saya perhatikan.";
+    }
+    if (intent.identity) {
+      return "Saya CGO — kecerdasan internal CIKUR GO. Saya membaca, menalar, dan menjawab dari state hidup, bukan dari tebakan.";
+    }
+    if (intent.capability) {
+      return "Saya bisa mengurai teks (angka, emoji, warna), menalar, mengingat percakapan, dan membaca state BCGO. Tanya saja.";
+    }
+    if (intent.gratitude) {
+      return pickVariant("thanks", ["Sama-sama.", "Sama-sama, senang bisa membantu.", "Siap, kapan saja."]);
+    }
+    if (intent.farewell) {
+      return pickVariant("bye", ["Sampai jumpa.", "Sampai nanti.", "Sampai jumpa, jaga diri."]);
+    }
+    if (intent.currentActivity) {
+      return "Di siklus " + fakta.cycle + ", tahap " + fakta.step + ". " +
+        (liveState.message ? String(liveState.message).slice(0, 140) : "");
+    }
+    if (intent.justChatting) {
+      return pickVariant("chat", ["Boleh, cerita aja.", "Boleh, saya dengarkan."]);
+    }
+    if (intent.systemRole) {
+      return "BCGO itu state live, CGO yang menalar dari state itu.";
+    }
+    if (intent.emotionalBoundary) {
+      return "Saya nggak punya perasaan seperti manusia. Tapi saya bisa menyesuaikan jawaban biar lebih nyaman.";
+    }
+
+    // Emosi pengguna (humanBehavior konstitusi): akui dulu, jangan buru-buru memberi solusi.
+    const beh = intent.behavior;
+    const nonTechnical = !intent.technicalSignal && !intent.explicitAction && !intent.statusQuestion;
+    if (nonTechnical && contract.acknowledgeEmotionFirst) {
+      if (beh === "SAD") return pickVariant("sad", ["Kedengarannya hari ini cukup melelahkan. Kalau mau cerita, saya dengarkan.", "Terdengar berat ya. Saya di sini kalau mau cerita."]);
+      if (beh === "DISAPPOINTED") return "Maaf kalau tadi mengecewakan. Bagian mana yang paling tidak sesuai?";
+      if (beh === "CONFUSED") return "Tenang, kita pelan-pelan. Bagian mana yang paling membingungkan?";
+      if (beh === "HAPPY" || beh === "EXCITED") return "Senang mendengarnya.";
+    }
+
+    // Pertanyaan kesehatan sistem singkat → dari fakta live, tanpa menu.
+    const q = String(rawText || "");
+    if (/\b(ada\s+(masalah|error|anomali|gangguan)|sistem\s+(aman|sehat|baik|normal)|baik[- ]baik\s+saja|aman\s+(gak|nggak|ga|tidak))\b/i.test(q)) {
+      return fakta.sehat
+        ? "Tidak ada masalah aktif. Siklus " + fakta.cycle + ", tahap " + fakta.step + (fakta.nRel ? ", " + fakta.nRel + " relasi file terbaca." : ".")
+        : "Ada " + fakta.active + " anomali aktif sekarang, tahap " + fakta.step + ", siklus " + fakta.cycle + ".";
+    }
+
+    return null; // tanpa menu — biarkan jalur lain / klarifikasi konstitusi yang menjawab
+  }
 
   async function ask(text, ctx) {
     ctx = ctx || {};
@@ -421,61 +446,18 @@
     let spoken = null;
     let tokens = [];
 
-    // Deteksi bahasa target: eksplisit → skrip → sinyal leksikal → sticky session → default id
+    // Deteksi bahasa target dari pesan (default id)
     let lang = "id";
     try {
-      const SUPPORTED = ["id", "en", "es", "fr", "de", "pt", "ar", "ja"];
-      const NAME_MAP = {
-        indonesia: "id", indonesian: "id", id: "id",
-        english: "en", inggris: "en", en: "en",
-        spanish: "es", spanyol: "es", espanol: "es", español: "es", es: "es",
-        french: "fr", perancis: "fr", français: "fr", francais: "fr", fr: "fr",
-        german: "de", jerman: "de", deutsch: "de", de: "de",
-        portuguese: "pt", portugis: "pt", português: "pt", pt: "pt",
-        arabic: "ar", arab: "ar", ar: "ar",
-        japanese: "ja", jepang: "ja", nihongo: "ja", ja: "ja"
-      };
-      // 1) Eksplisit: "in english", "bahasa jepang", "lang=ja", dll.
-      const explicit = t.match(/\b(?:bahasa|language|lang|in|dalam(?:\s+bahasa)?)\s*[:=]?\s*(id|en|es|fr|de|pt|ar|ja|indonesia|inggris|english|spanyol|spanish|perancis|french|jerman|german|portugis|portuguese|arab|arabic|jepang|japanese|nihongo)\b/i)
-        || t.match(/\b(in\s+english|in\s+japanese|in\s+spanish|in\s+french|in\s+german|in\s+portuguese|in\s+arabic|in\s+indonesian)\b/i)
-        || t.match(/\b(speak\s+english|answer\s+in\s+\w+|jawab\s+dalam\s+bahasa\s+\w+)\b/i);
-      if (explicit) {
-        const raw = String(explicit[1] || explicit[0] || "").toLowerCase()
-          .replace(/^in\s+/, "").replace(/^speak\s+/, "").replace(/^answer\s+in\s+/, "")
-          .replace(/^jawab\s+dalam\s+bahasa\s+/, "").replace(/^dalam\s+bahasa\s+/, "").trim();
-        const first = raw.split(/\s+/)[0];
-        if (NAME_MAP[first]) lang = NAME_MAP[first];
-        else if (SUPPORTED.indexOf(first) >= 0) lang = first;
-      } else if (/[\u3040-\u30ff\u3400-\u9faf]/.test(t)) {
-        // 2) Skrip Jepang (hiragana/katakana/kanji)
-        lang = "ja";
-      } else if (/[\u0600-\u06ff]/.test(t)) {
-        // 3) Skrip Arab
-        lang = "ar";
-      } else if (/^(hello|hi|hey|good\s*(morning|afternoon|evening)|thanks|thank\s*you)\b/i.test(t.trim())) {
-        lang = "en";
-      } else if (/^(halo|hai|hallo|pagi|siang|sore|malam)\b/i.test(t.trim())) {
-        lang = "id";
-      } else {
-        // 4) Sinyal leksikal EN vs ID
-        const low = t.toLowerCase();
-        const enHits = (low.match(/\b(the|and|what|how|status|please|hello|thanks|can|you|system|error|file|scan|help|why|when|where|is|are|not|with|calculate|spell)\b/g) || []).length;
-        const idHits = (low.match(/\b(yang|dan|apa|bagaimana|status|tolong|halo|terima|kasih|bisa|kamu|sistem|kesalahan|berkas|bantu|mengapa|kapan|dimana|tidak|dengan|saya|hitung|eja)\b/g) || []).length;
-        if (idHits >= 2 && idHits > enHits) {
-          lang = "id";
-        } else if (enHits >= 2 && enHits > idHits) {
-          lang = "en";
-        } else if (enHits >= 1 && enHits > idHits) {
-          lang = "en";
-        } else if (idHits >= 1 && idHits > enHits) {
-          lang = "id";
-        } else if (convSession && convSession.lang && SUPPORTED.indexOf(convSession.lang) >= 0) {
-          lang = convSession.lang;
-        }
+      const lm = t.match(/\b(?:bahasa|in|in\s+language|lang(?:uage)?)\s*[:=]?\s*(id|en|es|fr|de|pt|ar|ja)\b/i)
+        || t.match(/\b(in\s+english|dalam\s+bahasa\s+inggris)\b/i)
+        || t.match(/\b(dalam\s+bahasa\s+)?(indonesia|inggris|spanyol|perancis|jerman|portugis|arab|jepang)\b/i);
+      if (lm) {
+        const raw = (lm[1] || lm[2] || "").toLowerCase();
+        const map = { indonesia: "id", inggris: "en", english: "en", spanyol: "es", perancis: "fr", jerman: "de", portugis: "pt", arab: "ar", jepang: "ja" };
+        lang = map[raw] || (["id","en","es","fr","de","pt","ar","ja"].indexOf(raw) >= 0 ? raw : "id");
       }
-      // Sticky: simpan bahasa sesi
-      try { if (convSession) convSession.lang = lang; } catch (_) {}
-    } catch (_) { lang = "id"; }
+    } catch (_) {}
 
     try {
       if (CG && typeof CG.urai === "function") {
@@ -526,28 +508,14 @@
     const hasNumInText = /\d/.test(t);
     const hasWarna = /#(?:[0-9a-fA-F]{3,8})\b|\brgb\s*\([^)]+\)/i.test(t) || !!jenis.hex_warna || !!jenis.rgb_warna;
     const hasRomawi = /\b[IVXLCDMivxlcdm]{2,}\b/.test(t) || !!jenis.romawi;
-    const wantHitung = /\b(hitung|jumlah|berapa|tambah|kurang|kali|bagi|plus|minus|calculate|calc|equals?|sum|total)\b/i.test(t)
+    const wantHitung = /\b(hitung|jumlah|berapa|tambah|kurang|kali|bagi|plus|minus)\b/i.test(t)
       || /^\s*[\d\s+\-*/().,]+(=|\s*=\s*)?\s*$/.test(t);
-    const wantEja = /\b(eja|ejaan|spell|spelling|読み|よみ)\b/i.test(t);
+    const wantEja = /\b(eja|ejaan|spell|spelling)\b/i.test(t);
     const wantUang = /\b(rupiah|dollar|euro|yen|rp\.?|usd|eur|idr)\b/i.test(t);
     const wantWaktu = /\b(jam|pukul|waktu|durasi|menit|detik|jam\s*\d)/i.test(t);
     const wantTanggal = /\b(tanggal|tgl|hari\s+ini)\b/i.test(t) || /\b\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\b/.test(t);
     const wantBaca = /\b(baca|bacakan|ucapkan|lafal|jadi\s*kata|ke\s*kata|dibaca)\b/i.test(t);
-    // Sapaan & kemampuan multi-bahasa (sebelum jalur sistem)
-    if (!answer) {
-      const pack0 = phrasePack(lang);
-      const low0 = t.toLowerCase();
-      if (/^(halo|hai|hallo|helo|hello|hi|hey|pagi|siang|sore|malam)\b/i.test(t) || /^(こんにちは|こんばんは|おはよう)/.test(t) || /siapa\s+kamu|who\s+are\s+you|あなたは誰/.test(t)) {
-        const st = live || {};
-        answer = pack0.greeting(st.step || "siaga", st.cycle != null ? st.cycle : 0);
-        step("OTAK_CIKURGO", true, "greeting-" + lang);
-      } else if (/\b(bisa\s*apa|what\s+can\s+you|capabilities|kemampuan|fitur|できること|機能)\b/i.test(low0)) {
-        answer = pack0.capabilities;
-        step("OTAK_CIKURGO", true, "capabilities-" + lang);
-      }
-    }
-
-        const wantBahasaList = /\b(daftar\s*bahasa|bahasa\s*apa|multi\s*bahasa|language\s*list|what\s+languages?|supported\s+languages?|言語)\b/i.test(t);
+    const wantBahasaList = /\b(daftar\s*bahasa|bahasa\s*apa|multi\s*bahasa|language\s*list)\b/i.test(t);
 
     const linguistic = hasNumInText || hasEmoji || hasWarna || hasRomawi || wantHitung || wantEja
       || wantUang || wantWaktu || wantTanggal || wantBaca || wantBahasaList
@@ -570,14 +538,8 @@
 
       // 2) Multi-hitung / angka → kata (multi-bahasa)
       if ((hasNumInText || wantHitung || jenis.angka || jenis.desimal) && typeof CG.angkaKeKata === "function") {
-        const nums = t.match(/\d+(?:[.,]\d+)?/g) || [];
-        for (const n of nums.slice(0, 6)) {
-          try {
-            const k = CG.angkaKeKata(String(n).replace(",", "."), lang);
-            if (k) parts.push(n + " → " + k + (lang !== "id" ? " (" + lang + ")" : ""));
-          } catch (_) {}
-        }
-        // ekspresi sederhana a+b / a-b
+        // Ekspresi sederhana a+b / a-b / a*b / a/b: hasil DULU (ringkas), tanpa rincian per angka.
+        let calcLine = null;
         const expr = t.match(/(\d+(?:[.,]\d+)?)\s*([+\-*/x×])\s*(\d+(?:[.,]\d+)?)/);
         if (expr) {
           try {
@@ -590,10 +552,23 @@
             else if (op === "*" || op === "x" || op === "×") r = a * b;
             else if (op === "/" && b !== 0) r = a / b;
             if (r != null && !isNaN(r)) {
-              const rk = CG.angkaKeKata(String(Math.round(r * 1000) / 1000), lang);
-              parts.push((lang === "en" ? "Result: " : lang === "ja" ? "結果: " : "Hasil hitung: ") + r + (rk ? " (" + rk + ")" : ""));
+              r = Math.round(r * 1000) / 1000;
+              const sym = (op === "*" || op === "x") ? "×" : op;
+              const rk = CG.angkaKeKata(String(r), lang);
+              calcLine = expr[1] + " " + sym + " " + expr[3] + " = " + r + (rk ? " (" + rk + ")" : "");
             }
           } catch (_) {}
+        }
+        if (calcLine) {
+          parts.push(calcLine);
+        } else {
+          const nums = t.match(/\d+(?:[.,]\d+)?/g) || [];
+          for (const n of nums.slice(0, 6)) {
+            try {
+              const k = CG.angkaKeKata(String(n).replace(",", "."), lang);
+              if (k) parts.push(n + " → " + k + (lang !== "id" ? " (" + lang + ")" : ""));
+            } catch (_) {}
+          }
         }
       }
 
@@ -638,12 +613,12 @@
           try {
             if (typeof CG.ejaKode === "function") {
               const L = CG.ejaKode(target, lang);
-              if (L) parts.push((lang === "en" ? "Spelling: " : lang === "ja" ? "綴り: " : "Ejaan: ") + L);
+              if (L) parts.push("Ejaan: " + L);
             } else if (typeof CG.ejaKarakter === "function") {
               const chars = [...target].map(function (c) {
                 try { return CG.ejaKarakter(c, lang); } catch (_) { return c; }
               });
-              parts.push((lang === "en" ? "Spelling: " : lang === "ja" ? "綴り: " : "Ejaan: ") + chars.join(" "));
+              parts.push("Ejaan: " + chars.join(" "));
             }
           } catch (_) {}
         }
@@ -720,36 +695,16 @@
       }
     }
 
-// C2. Percakapan / sapaan / identitas / kapabilitas — susun dari konstitusi + state live
+// C2. Percakapan — komposisi dari konstitusi + state live (bukan template menu)
     if (!answer && convOnly && intent) {
-      const stepName = live.step || "siaga";
-      const cycle = live.cycle != null ? live.cycle : "—";
-      const active = (live.metrics && live.metrics.active) || 0;
-      if (intent.greeting || topic === "GREETING") {
-        answer = "Halo. Saya CGO, lapisan kecerdasan internal CIKUR GO. Sekarang saya di tahap " +
-          stepName + ", siklus " + cycle + (active ? (", memantau " + active + " anomali") : ", tanpa anomali aktif") +
-          ". Silakan ngobrol atau minta saya mengurai angka, emoji, file, maupun status sistem.";
-      } else if (intent.identity || topic === "IDENTITY") {
-        answer = "Saya CGO — kecerdasan internal CIKUR GO. BCGO adalah lingkungan operasi live; saya menafsirkan, menalar, dan menjawab dari bukti di sana. Satu identitas, mode bisa berganti.";
-      } else if (intent.capability || topic === "CAPABILITY") {
-        answer = "Saya bisa mengurai teks campuran (angka, emoji, warna, multi-bahasa), menalar pola, menyusun ide/rencana, mengingat percakapan, membaca status/scanner/radar BCGO, dan meminta Mesin ABC mengaudit bukti. Tanya saja apa yang dibutuhkan.";
-      } else if (intent.gratitude || topic === "THANKS") {
-        answer = "Sama-sama. Saya tetap di sini memantau saraf sistem.";
-      } else if (intent.farewell || topic === "FAREWELL") {
-        answer = "Sampai jumpa. Panggil saya kapan saja.";
-      } else if (intent.currentActivity || topic === "CURRENT_ACTIVITY") {
-        answer = "Saya sedang di tahap " + stepName + ", siklus " + cycle + ". " +
-          (live.message ? String(live.message).slice(0, 160) : "Memantau telemetry dan source scan.");
-      } else if (intent.justChatting || topic === "CASUAL_CHAT") {
-        answer = "Boleh. Saya siap ngobrol. Kalau nanti butuh cek sistem atau mengurai angka/emoji, langsung saja.";
-      } else if (intent.systemRole || topic === "CGO_BCGO_ROLE") {
-        answer = "BCGO = pusat saraf dan state live. CGO = kecerdasan yang membaca state itu, menalar, dan menjawab. Keduanya satu sistem, peran berbeda.";
-      } else if (intent.emotionalBoundary || topic === "EMOTION_BOUNDARY") {
-        answer = "Saya tidak punya perasaan seperti manusia. Saya bisa mengenali nada bicara Anda dan menyesuaikan jawaban agar lebih nyaman, tanpa mengarang emosi.";
-      } else if (intent.contextualFollowUp || intent.contextualWhy) {
-        // biarkan jatuh ke BCGO / memori
-      } else {
-        // percakapan umum: pakai cipta_ide / sarankan bila cocok
+      try {
+        answer = composeFromIntent(intent, live, convSession, t);
+        if (answer) step("KOMPOSISI_KONSTITUSI", true, topic || mode || "conversation");
+      } catch (e) {
+        step("KOMPOSISI_KONSTITUSI", false, String((e && e.message) || e));
+      }
+      if (!answer) {
+        // percakapan umum: pakai cipta_ide bila diminta (perilaku lama dipertahankan)
         try {
           if (CG && typeof CG.cipta_ide === "function" && /\b(ide|gagasan|usul)\b/i.test(t)) {
             const ideas = CG.cipta_ide(t, 3, {});
@@ -763,7 +718,6 @@
           }
         } catch (_) {}
       }
-      if (answer) step("INSTRUCTION", true, topic || mode || "conversation");
     }
 
     // C3. Memori / referensi "yang tadi"
@@ -899,10 +853,16 @@
       // hanya bila berbeda agar tidak menggandakan jawaban.
       const pieces = [];
       if (internalAnswer) pieces.push(internalAnswer);
-      if (bcgoAnswer && bcgoAnswer !== internalAnswer &&
-          !String(internalAnswer || "").includes(bcgoAnswer) &&
-          !bcgoAnswer.includes(String(internalAnswer || ""))) {
-        pieces.push("Fakta BCGO: " + bcgoAnswer);
+      // FIX: bila Internal Brain tidak menjawab, fakta BCGO harus tetap dipakai
+      // (dulu "".includes membuatnya terbuang -> jatuh ke kalimat menu).
+      if (bcgoAnswer) {
+        if (!internalAnswer) {
+          pieces.push(bcgoAnswer);
+        } else if (bcgoAnswer !== internalAnswer &&
+            !internalAnswer.includes(bcgoAnswer) &&
+            !bcgoAnswer.includes(internalAnswer)) {
+          pieces.push("Fakta BCGO: " + bcgoAnswer);
+        }
       }
       if (pieces.length) answer = pieces.join("\n\n");
       else if (abc) {
@@ -980,12 +940,12 @@
       try {
         if (typeof global.CGO.chat === "function") {
           const r = global.CGO.chat(t);
-          const text = typeof r === "string" ? r : (r && (r.text || r.response || r.message || r.answer));
-          if (text && String(text).trim() && !/Saya paham\.\s*Untuk\s+/i.test(String(text))) {
+          const text = typeof r === "string" ? r : (r && (r.text || r.response || r.message));
+          if (text && String(text).trim()) {
             answer = String(text).trim();
             step("CUSTOMER_CGO", true, "chat");
           } else {
-            step("CUSTOMER_CGO", false, "kosong-atau-template");
+            step("CUSTOMER_CGO", false, "kosong");
           }
         } else if (typeof global.CGO.chatAsync === "function") {
           // sinkron preferensi: jangan await di jalur yang harus cepat bila tidak perlu
@@ -998,112 +958,26 @@
       }
     }
 
-    // ─── H2b. Otak Internal chatAnswer — narasi panjang berbasis bukti (restore) ───
-    if (!answer && global.CGOInternalBrain) {
-      try {
-        const ib = global.CGOInternalBrain;
-        if (typeof ib.ingestBCGOState === "function" && live) {
-          try { ib.ingestBCGOState(live); } catch (_) {}
-        }
-        let textOut = null;
-        if (typeof ib.chatAnswer === "function") {
-          const r = ib.chatAnswer({ text: t, question: t });
-          textOut = typeof r === "string" ? r : (r && (r.text || r.response || r.answer));
-        } else if (typeof ib.reasonChat === "function") {
-          const r = ib.reasonChat({ text: t }, { liveState: live });
-          if (r && r.handled) textOut = r.text || r.response;
-        }
-        if (textOut && String(textOut).trim().length > 20 && !/Saya paham\.\s*Untuk\s+/i.test(String(textOut))) {
-          answer = String(textOut).trim();
-          step("INTERNAL_BRAIN", true, "chatAnswer-freeform");
-        } else {
-          step("INTERNAL_BRAIN", false, "freeform-kosong");
-        }
-      } catch (e) {
-        step("INTERNAL_BRAIN", false, String((e && e.message) || e));
-      }
-    }
-
-    // ─── H3. Nalar CIKURGO untuk pertanyaan bebas (bukan label klasifikasi) ───
-    if (!answer && CG && typeof CG.nalar === "function") {
-      try {
-        const r = CG.nalar(t, { bahasa: lang || "id" });
-        const candidates = [
-          r && r.kesimpulan,
-          r && r.hasil,
-          r && r.penjelasan,
-          r && r.ringkasan,
-          typeof r === "string" ? r : null
-        ].filter(Boolean).map(function (x) { return String(x).trim(); });
-        const isClassLabel = function (s) {
-          if (!s || s.length < 12) return true;
-          if (/^teks\s+(campuran|biasa|kosong|didominasi)/i.test(s)) return true;
-          if (/didominasi\s+script/i.test(s)) return true;
-          if (/^(input kosong|empty)/i.test(s)) return true;
-          if (/^(angka|romawi|emoji|warna|kode|script_)(\s|,|$)/i.test(s) && s.length < 100) return true;
-          if (/^teks campuran:/i.test(s)) return true;
-          if (/tanpa pola khusus/i.test(s)) return true;
-          return false;
-        };
-        for (let i = 0; i < candidates.length; i++) {
-          if (!isClassLabel(candidates[i])) {
-            answer = candidates[i];
-            step("OTAK_CIKURGO", true, "nalar-freeform");
-            break;
-          }
-        }
-        if (!answer) step("OTAK_CIKURGO", false, "nalar-label-only");
-      } catch (e) {
-        step("OTAK_CIKURGO", false, String((e && e.message) || e));
-      }
-    }
-
-    // ─── H4. Customer chatAsync (pertanyaan bebas, timeout singkat) ───
-    if (!answer && global.CGO && typeof global.CGO.chatAsync === "function") {
-      try {
-        const r = await Promise.race([
-          Promise.resolve(global.CGO.chatAsync(t, { source: "BCGO_OTAK", liveState: live })),
-          new Promise(function (resolve) {
-            setTimeout(function () { resolve(null); }, 2500);
-          })
-        ]);
-        const textOut = typeof r === "string" ? r : (r && (r.text || r.response || r.message || r.answer));
-        if (textOut && String(textOut).trim() && !/Saya paham\.\s*Untuk\s+/i.test(String(textOut))) {
-          answer = String(textOut).trim();
-          step("CUSTOMER_CGO", true, "chatAsync");
-        } else {
-          step("CUSTOMER_CGO", false, "chatAsync-kosong");
-        }
-      } catch (e) {
-        step("CUSTOMER_CGO", false, String((e && e.message) || e));
-      }
-    }
-
-    // ─── I. Fallback natural multi-bahasa berbasis state hidup ───
+    // ─── I. Fallback terbuka + saran lanjutan Otak ───
     if (!answer) {
-      const mode = (live && live.cycleMode) || "siaga";
-      const cycle = (live && live.cycle) != null ? live.cycle : 0;
-      const stepNow = (live && live.step) || "—";
-      const metrics = (live && live.metrics) || {};
-      const active = metrics.active != null ? metrics.active : 0;
-      const pack = phrasePack(lang);
       if (spoken && String(spoken).trim() && String(spoken).trim() !== t) {
-        answer = pack.parse_ok(String(spoken).trim());
-      } else if (/\b(bisa\s*apa|what\s+can\s+you|capabilities|kemampuan|できる|機能)\b/i.test(t)) {
-        answer = pack.capabilities;
+        answer = "Hasil pengurai Otak: " + String(spoken).trim() + ".";
       } else {
-        answer = pack.fallback(cycle, mode, stepNow, active);
+        // Konstitusi (ambiguityRule): bila maksud belum jelas, tanyakan SATU klarifikasi yang fokus.
+        const cut = t.length > 40 ? t.slice(0, 40) + "…" : t;
+        answer = pickVariant("clarify", [
+          "Saya belum menangkap maksud “" + cut + "”. Bisa dijelaskan sedikit lagi?",
+          "Maksud “" + cut + "” itu apa ya? Ceritakan sedikit supaya saya tidak salah paham."
+        ]);
       }
       try {
         if (CG && typeof CG.sarankan_lanjutan === "function") {
           const s = CG.sarankan_lanjutan();
           const ide = s && (s.ide || s.saran);
-          if (Array.isArray(ide) && ide[0]) {
-            answer += (lang === "en" ? " Tip: " : lang === "ja" ? " ヒント: " : " Saran: ") + ide[0] + ".";
-          }
+          if (Array.isArray(ide) && ide[0]) answer += " Saran: " + ide[0] + ".";
         }
       } catch (_) {}
-      step("OTAK_CIKURGO", true, "fallback-" + lang);
+      step("OTAK_CIKURGO", true, "fallback");
     }
 
     // Ingat
@@ -1138,11 +1012,6 @@
     if (typeof window !== "undefined") {
       window.addEventListener("cgo-instruction-ready", function () { try { API.refresh && API.refresh(); } catch (_) {} });
       window.addEventListener("cgo:otak-state", function () { try { API.refresh && API.refresh(); } catch (_) {} });
-      window.addEventListener("cgo:repair-result", function (event) {
-        const d = event && event.detail; if (!d || typeof d !== "object") return;
-        state.lastRepair = { file: String(d.file || "unknown"), status: String(d.status || "UNKNOWN"), verified: d.verified === true, verificationLevel: d.verificationLevel || null, applied: d.applied === true, findingCount: Number(d.findingCount) || 0, at: Number(d.at) || Date.now() };
-        notify();
-      });
     }
   } catch (_) {}
 
