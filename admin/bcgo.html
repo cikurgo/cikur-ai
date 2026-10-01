@@ -517,12 +517,12 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-audio-bus.js?v=1.0.0-AUDIO-BUS"></script>
 <script src="cgo-audio-queue.js?v=1.0.0-AUDIO-QUEUE"></script>
 <script src="cgo-emosi.js?v=1.1.0-EMOSI-AIRPORT"></script>
-<script src="cgo-narasi.js?v=1.0.0-NARASI"></script>
-<script src="cgo-ai-voice-operator.js?v=3.9.1-FEMALE-TTS-ONLY-MP3-DEAD"></script>
+<script src="cgo-narasi.js?v=1.0.0-NARASI-r20261001"></script>
+<script src="cgo-ai-voice-operator.js?v=3.9.1-FEMALE-TTS-ONLY-MP3-DEAD-r20261001"></script>
 <script src="cgo-machine-abc.js?v=0.9.9-OTAK-CORE-20260927"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.7.0-BCGO-SYNC-OTAK-20260928"></script>
 <script src="cgo-abc-cognition.js?v=1.1.0-CGO-ABC-COGNITION"></script>
-<script src="cgo-otak-hub.js?v=1.6.1-INTERNAL-RESTORE"></script>
+<script src="cgo-otak-hub.js?v=1.4.0-CUSTOMER-OTAK-INJECT-r20261001"></script>
 
 <script type="module">
 import * as CGOInstruction from "./cgo-instruction.js?v=1.3.0-CONSTITUTION";
@@ -545,7 +545,7 @@ window.CGO_SVG = {
 </script>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=5.3.0-MULTI-LANG-20261001';
+import { runAutonomousEngine } from './bcgo.js?v=5.1.2-FIX-ANSWER-DUP-20260930-r20261001';
 
 // Bridge internal CGO brain ke BCGO_STATE (tanpa AI eksternal)
 let internalBrain = null;
@@ -553,7 +553,7 @@ let internalBrain = null;
 // The brain loads asynchronously; chat/controls remain responsive while it boots.
 const internalBrainReady = (async () => {
   try {
-    const adapter = await import('./cgo-ai-browser-adapter.js?v=5.5.1-FIX-NULLISH-20261001');
+    const adapter = await import('./cgo-ai-browser-adapter.js?v=5.4.1-OTAK-INTERNAL-READY-20260930-r20261001');
     if (typeof adapter.install === 'function') {
       internalBrain = adapter.install();
       window.CGOInternalBrain = internalBrain;
@@ -2180,7 +2180,44 @@ await runAutonomousEngine(state => {
         window.CGOOperatorVoice.setQuietLive && window.CGOOperatorVoice.setQuietLive(true);
       }
     } catch (e) { console.warn('operator boot', e); }
+    scheduleWelcome();
   }
+
+  // Sambutan operator wanita (TTS) — throttle 60 detik antar-refresh. Browser memblokir suara
+  // sebelum ada interaksi, jadi bila belum ada tap/klik, sambutan ditunda sampai interaksi pertama.
+  function tryWelcome() {
+    try {
+      var v = window.CGOOperatorVoice;
+      if (!v || typeof v.welcome !== 'function') return;
+      var KEY = 'cgo-operator-welcome-at', now = Date.now(), last = 0;
+      try { last = Number(localStorage.getItem(KEY)) || 0; } catch (_) {}
+      if (now - last < 60000) return;
+      try { localStorage.setItem(KEY, String(now)); } catch (_) {}
+      try { v.unlock && v.unlock(); } catch (_) {}
+      v.welcome();
+    } catch (e) { console.warn('operator welcome', e); }
+  }
+  function scheduleWelcome() {
+    var activated = false;
+    try { activated = !!(navigator.userActivation && navigator.userActivation.hasBeenActive); } catch (_) {}
+    if (activated) { tryWelcome(); return; }
+    var evs = ['pointerdown', 'touchstart', 'keydown'];
+    var once = function () {
+      evs.forEach(function (n) { try { window.removeEventListener(n, once, true); } catch (_) {} });
+      setTimeout(tryWelcome, 50);
+    };
+    evs.forEach(function (n) { try { window.addEventListener(n, once, true); } catch (_) {} });
+  }
+
+  // Tab disembunyikan lalu dibuka lagi: antrean audio dilanjutkan (kecuali user menekan ⏸ sendiri).
+  document.addEventListener('visibilitychange', function () {
+    try {
+      if (!document.hidden && window.CGOAudioQueue && !window.__cgoUserPausedAudio) {
+        var st = window.CGOAudioQueue.getStatus && window.CGOAudioQueue.getStatus();
+        if (st && st.paused) window.CGOAudioQueue.resume();
+      }
+    } catch (_) {}
+  });
   if (document.readyState === 'complete') setTimeout(bootOperator, 600);
   else window.addEventListener('load', function(){ setTimeout(bootOperator, 600); });
 })();
@@ -2290,7 +2327,8 @@ await runAutonomousEngine(state => {
   }
   if (onBtn) onBtn.addEventListener('click', function () {
     try {
-      if (window.CGOAudioQueue) window.CGOAudioQueue.setEnabled(true);
+      window.__cgoUserPausedAudio = false;
+      if (window.CGOAudioQueue) { window.CGOAudioQueue.setEnabled(true); window.CGOAudioQueue.resume && window.CGOAudioQueue.resume(); }
       if (window.CGOOperatorVoice && window.CGOOperatorVoice.setEnabled) window.CGOOperatorVoice.setEnabled(true);
       mark(onBtn, true);
     } catch (_) {}
@@ -2304,6 +2342,7 @@ await runAutonomousEngine(state => {
   });
   if (pauseBtn) pauseBtn.addEventListener('click', function () {
     try {
+      window.__cgoUserPausedAudio = true;
       if (window.CGOAudioQueue) window.CGOAudioQueue.pause();
       if (window.speechSynthesis) window.speechSynthesis.cancel();
       mark(pauseBtn, true);

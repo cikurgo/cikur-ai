@@ -248,7 +248,18 @@
       if (!("speechSynthesis" in global) || !text) return resolve(false);
 
       function run() {
-        try { global.speechSynthesis.cancel(); } catch (_) {}
+        // Chrome bisa menjatuhkan speak() yang dipanggil tepat setelah cancel(), dan engine bisa
+        // tersangkut 'paused' setelah beberapa kali refresh -> cancel + resume + jeda singkat.
+        try { global.speechSynthesis.cancel(); global.speechSynthesis.resume(); } catch (_) {}
+        setTimeout(runNow, 80);
+      }
+
+      function runNow() {
+        try { runNowInner(); } catch (_) { speaking = false; resolve(false); }
+      }
+
+      function runNowInner() {
+        try { global.speechSynthesis.resume(); } catch (_) {}
         if (!refreshVoices() || !selectedVoice) return resolve(false);
         var u = new SpeechSynthesisUtterance(text);
         u.lang = selectedVoice.lang || "id-ID";
@@ -282,13 +293,22 @@
       if (refreshVoices() && selectedVoice) {
         run();
       } else {
-        // Mobile: voices sering belum siap saat pertama kali
-        setTimeout(function () { run(); }, 350);
+        // Mobile/refresh: daftar suara sering baru siap beberapa detik. Tunggu (maks ~4 dtk).
+        // KEBIJAKAN TETAP: bila suara wanita tetap tidak ditemukan -> diam, tidak pernah
+        // jatuh ke suara tak dikenal/robot.
+        var tries = 0;
+        (function waitVoices() {
+          tries++;
+          if (refreshVoices() && selectedVoice) return run();
+          if (tries >= 27) return resolve(false);
+          setTimeout(waitVoices, 150);
+        })();
       }
     });
   }
 
   var _chatSpeaking = false;
+  var _speakToken = 0;
   function canEmit(key, force) {
     if (!enabled && !force) return false;
     // Saat chat TTS/operator bicara — jangan emit event (cegah double suara)
@@ -382,14 +402,31 @@
 
     function doSpeak() {
       _chatSpeaking = true;
+      var myToken = ++_speakToken;
+      // Pengaman: apa pun yang terjadi (TTS tak pernah selesai, antrean macet), flag _chatSpeaking
+      // WAJIB dilepas. Minimal 20 detik; ucapan panjang diberi waktu setara durasi TTS-nya.
+      var safetyMs = Math.max(20000, Math.min(60000, 3000 + text.length * 140));
+      var safetyTimer = null;
+      var safety = new Promise(function (resolve) {
+        safetyTimer = setTimeout(function () {
+          if (myToken === _speakToken) {
+            _chatSpeaking = false;
+            try { if (global.speechSynthesis) global.speechSynthesis.cancel(); } catch (_) {}
+          }
+          resolve(false); // bebaskan juga antrean audio yang menunggu promise ini
+        }, safetyMs);
+      });
       stopAllOperatorAudio();
       var startP = unlocked ? Promise.resolve(true) : unlock();
-      return startP.then(function () {
+      var chain = startP.then(function () {
         chatSpeakEnabled = true;
         return speakTTS(text, voiceOpts).then(function (ok) { return ok; });
       }).finally(function () {
-        setTimeout(function () { _chatSpeaking = false; }, 400);
+        try { clearTimeout(safetyTimer); } catch (_) {}
+        // Hanya ucapan TERBARU yang boleh melepas flag (ucapan lama tidak memotong yang baru).
+        setTimeout(function () { if (myToken === _speakToken) _chatSpeaking = false; }, 400);
       });
+      return Promise.race([chain, safety]);
     }
 
     if (global.CGOAudioQueue && typeof global.CGOAudioQueue.enqueue === "function") {
