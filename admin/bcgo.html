@@ -518,7 +518,7 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-audio-queue.js?v=1.0.0-AUDIO-QUEUE"></script>
 <script src="cgo-emosi.js?v=1.1.0-EMOSI-AIRPORT"></script>
 <script src="cgo-narasi.js?v=1.0.0-NARASI-r20261001"></script>
-<script src="cgo-ai-voice-operator.js?v=3.9.1-FEMALE-TTS-ONLY-MP3-DEAD-r20261001"></script>
+<script src="cgo-ai-voice-operator.js?v=3.9.3-FEMALE-TTS-SOUND-ROUTE-REPAIR-r20261001"></script>
 <script src="cgo-machine-abc.js?v=0.9.9-OTAK-CORE-20260927"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.7.0-BCGO-SYNC-OTAK-20260928"></script>
 <script src="cgo-abc-cognition.js?v=1.1.0-CGO-ABC-COGNITION"></script>
@@ -1761,8 +1761,42 @@ function abcApplyAmbientState(mode){
   }catch(_){}
 }
 
-async function abcArmSound(){try{/* HANYA Operator wanita — tidak arm oscillator robot */try{if(window.CGOOperatorVoice){window.CGOOperatorVoice.unlock();window.CGOOperatorVoice.setEnabled(true);window.CGOOperatorVoice.setChatSpeak&&window.CGOOperatorVoice.setChatSpeak(true);window.CGOOperatorVoice.setQuietLive&&window.CGOOperatorVoice.setQuietLive(true);if(window.CGOOperatorVoice.welcome)window.CGOOperatorVoice.welcome();}}catch(_e){}abcSoundEnabled=false;abcAudioReady=false;abcSoundQueueUntil=0;const b=document.getElementById('abc-sound-toggle');if(b){b.textContent='OPERATOR WANITA · ON';b.classList.add('text-emerald-300')}return true}catch(e){abcSoundEnabled=false;const b=document.getElementById('abc-sound-toggle');if(b)b.textContent='🔇 AUDIO UNAVAILABLE';console.warn('[BCGO AUDIO]',e);return false}}
-function abcDisarmSound(){try{window.CGOOperatorVoice&&window.CGOOperatorVoice.setEnabled(false)}catch(_e){}abcSoundEnabled=false;abcAudioReady=false;abcSoundQueueUntil=0;try{abcAudioCtx?.suspend?.()}catch(_){}const b=document.getElementById('abc-sound-toggle');if(b){b.textContent='🔇 SOUND OFF';b.classList.remove('text-emerald-300')}}
+let abcOperatorSoundEnabled = false;
+async function abcArmSound(){
+  try {
+    if (!window.CGOOperatorVoice) throw new Error('CGOOperatorVoice belum termuat');
+    window.CGOOperatorVoice.unlock && window.CGOOperatorVoice.unlock();
+    window.CGOOperatorVoice.setEnabled && window.CGOOperatorVoice.setEnabled(true);
+    window.CGOOperatorVoice.setChatSpeak && window.CGOOperatorVoice.setChatSpeak(true);
+    window.CGOOperatorVoice.setQuietLive && window.CGOOperatorVoice.setQuietLive(true);
+    const ok = window.CGOOperatorVoice.welcome ? await window.CGOOperatorVoice.welcome() : false;
+    if (!ok) throw new Error('Welcome TTS tidak berhasil diputar');
+    // abcSoundEnabled tetap khusus WebAudio oscillator (yang memang dimatikan).
+    // Status Operator wanita memakai flag terpisah agar tombol ON/OFF tidak salah.
+    abcOperatorSoundEnabled = true;
+    abcSoundEnabled = false;
+    abcAudioReady = false;
+    abcSoundQueueUntil = 0;
+    const b=document.getElementById('abc-sound-toggle');
+    if(b){b.textContent='OPERATOR WANITA · ON';b.classList.add('text-emerald-300');b.classList.remove('text-rose-300')}
+    return true;
+  } catch(e) {
+    abcOperatorSoundEnabled = false;
+    try{window.CGOOperatorVoice&&window.CGOOperatorVoice.setEnabled(false)}catch(_){}
+    const b=document.getElementById('abc-sound-toggle');
+    if(b){b.textContent='🔇 AUDIO UNAVAILABLE';b.classList.remove('text-emerald-300')}
+    console.warn('[BCGO AUDIO]',e);
+    return false;
+  }
+}
+function abcDisarmSound(){
+  abcOperatorSoundEnabled=false;
+  try{window.CGOOperatorVoice&&window.CGOOperatorVoice.setEnabled(false)}catch(_e){}
+  abcSoundEnabled=false;abcAudioReady=false;abcSoundQueueUntil=0;
+  try{abcAudioCtx?.suspend?.()}catch(_){}
+  const b=document.getElementById('abc-sound-toggle');
+  if(b){b.textContent='🔇 SOUND OFF';b.classList.remove('text-emerald-300')}
+}
 async function abcRecoverAudio(){if(!abcSoundEnabled||!abcAudioCtx)return false;try{if(abcAudioCtx.state!=='running')await abcAudioCtx.resume();if(abcAudioCtx.state==='running'){abcAudioReady=true;return true}}catch(_){}return false}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)abcRecoverAudio()});window.addEventListener('pageshow',()=>abcRecoverAudio());
 // Jalur lampu A→B→C→D: progres kumulatif + antrean visual (pipeline cepat tetap terlihat)
@@ -1861,7 +1895,7 @@ function renderAbcTelemetry(ev){
   window.__abcLampQueue.push(ev);
   __abcDrainLampQueue();
 }
-document.getElementById('abc-sound-toggle')?.addEventListener('click',async()=>{if(abcSoundEnabled){abcDisarmSound();return;}await abcArmSound();});
+document.getElementById('abc-sound-toggle')?.addEventListener('click',async()=>{if(abcOperatorSoundEnabled){abcDisarmSound();return;}await abcArmSound();});
 window.addEventListener('beforeunload',()=>{try{abcStopAmbient()}catch(_){}try{abcAudioCtx?.close?.()}catch(_){}},{once:true});
 window.addEventListener('cgo:machine-abc-bcgo-sync',e=>{const d=e.detail||{};const state=document.getElementById('abc-telemetry-state');if(state)state.textContent=`${d.mode||'STANDBY'} · ${d.status||'–'} · Audit ${d.audit||'–'}`});
 try{
@@ -2085,87 +2119,161 @@ await runAutonomousEngine(state => {
   if (window.CGO_SVG && window.CGO_SVG.mic) micBtn.innerHTML = window.CGO_SVG.mic;
   else micBtn.textContent = '🎤';
   if (!SR) {
-    micBtn.title = 'Speech Recognition tidak didukung browser ini (pakai Chrome/Edge)';
+    micBtn.title = 'Speech Recognition tidak didukung browser ini';
     micBtn.classList.add('opacity-40');
-    // Jangan disable total — tetap tampil; klik akan no-op aman
     micBtn.addEventListener('click', function () {
-      try { alert('Mikrofon/Speech Recognition tidak tersedia di browser ini. Gunakan Chrome atau Edge, atau ketik pertanyaan.'); } catch (_) {}
+      try { alert('Mikrofon/Speech Recognition tidak tersedia di browser ini. Gunakan Chrome/Edge atau ketik pertanyaan.'); } catch (_) {}
     });
     return;
   }
+
   let rec = null;
+  let micStream = null;
   let listening = false;
+  let finalText = '';
+  let submitted = false;
+  let silenceT = null;
+  let resultTimer = null;
+
+  function clearTimers(){
+    try { if (silenceT) clearTimeout(silenceT); } catch(_){}
+    try { if (resultTimer) clearTimeout(resultTimer); } catch(_){}
+    silenceT = null; resultTimer = null;
+  }
+  function releaseMic(){
+    try {
+      if (micStream) micStream.getTracks().forEach(function(t){ try { t.stop(); } catch(_){} });
+    } catch(_){}
+    micStream = null;
+  }
+  function clearVoiceUI(){
+    try { if (window.CGOMicUI) window.CGOMicUI.stopWave(); } catch(_){}
+    const ie = document.getElementById('cgo-interim');
+    const it = document.getElementById('cgo-interim-text');
+    if (ie) ie.classList.remove('on');
+    if (it) it.textContent = '';
+  }
   function setListening(on){
     listening = !!on;
     micBtn.classList.toggle('border-rose-500', listening);
     micBtn.classList.toggle('text-rose-300', listening);
     micBtn.classList.toggle('animate-pulse', listening);
-    if (window.CGO_SVG) micBtn.innerHTML = listening ? window.CGO_SVG.stop : window.CGO_SVG.mic; else micBtn.textContent = listening ? '⏹' : '🎤';
+    micBtn.setAttribute('aria-pressed', listening ? 'true' : 'false');
+    if (window.CGO_SVG) micBtn.innerHTML = listening ? window.CGO_SVG.stop : window.CGO_SVG.mic;
+    else micBtn.textContent = listening ? '⏹' : '🎤';
   }
-  micBtn.addEventListener('click', () => {
+  function finish(finalValue){
+    if (submitted) return;
+    const text = String(finalValue || finalText || '').trim();
+    if (!text) return;
+    submitted = true;
+    finalText = text;
+    clearTimers();
+    try { if (rec) rec.stop(); } catch(_){}
+    setListening(false);
+    releaseMic();
+    const ie = document.getElementById('cgo-interim');
+    if (input) input.value = text;
     try {
-      if (listening && rec) { rec.stop(); setListening(false); return; }
+      if (resultTimer) clearTimeout(resultTimer);
+      resultTimer = setTimeout(function(){
+        if (!submitted || !input) return;
+        const value = (input.value || '').trim();
+        if (!value) return;
+        input.value = '';
+        input.placeholder = 'Tanya operator: status, scanner, hitung, eja…';
+        if (ie) ie.classList.remove('on');
+        if (typeof window.CGO_BCGO_SEND_QUESTION === 'function') {
+          void window.CGO_BCGO_SEND_QUESTION(value, { modality: 'voice' });
+        }
+      }, 300);
+    } catch(_){}
+  }
+  function abortMic(){
+    clearTimers();
+    try { if (rec) rec.abort(); } catch(_){}
+    rec = null;
+    releaseMic();
+    setListening(false);
+    clearVoiceUI();
+  }
+
+  micBtn.addEventListener('click', async function(){
+    if (listening) { abortMic(); return; }
+    if (window.CGO_BCGO_CHAT_BUSY) {
+      try { window.CGOOperatorVoice?.emit?.('PROCESSING_WAIT'); } catch(_){}
+      return;
+    }
+    finalText = '';
+    submitted = false;
+    clearTimers();
+    clearVoiceUI();
+
+    try {
+      // Permission check only; release the stream BEFORE SpeechRecognition starts.
+      // This avoids competing microphone owners on Android/Chrome.
+      if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        releaseMic();
+      }
+    } catch (e) {
+      console.warn('[BCGO mic permission]', e);
+      setListening(false);
+      try { alert('Akses mikrofon ditolak atau tidak tersedia. Izinkan mikrofon untuk situs ini lalu coba lagi.'); } catch(_){}
+      return;
+    }
+
+    try {
       rec = new SR();
       rec.lang = 'id-ID';
       rec.interimResults = true;
-      rec.continuous = true;
-      var silenceMs = 2000;
-      var silenceT = null;
-      function armSilence() {
+      rec.continuous = false;
+      rec.maxAlternatives = 1;
+      rec.onstart = function(){
+        setListening(true);
+        try { window.CGOOperatorVoice?.state?.('LIVE_INPUT'); } catch(_){}
+        try { if (window.CGOMicUI) window.CGOMicUI.startWave(); } catch(_){}
+        silenceT = setTimeout(function(){ try { if (rec && listening) rec.stop(); } catch(_){} }, 2500);
+      };
+      rec.onspeechstart = function(){ try { if (silenceT) clearTimeout(silenceT); } catch(_){} };
+      rec.onsoundstart = function(){ try { if (silenceT) clearTimeout(silenceT); } catch(_){} };
+      rec.onspeechend = function(){
         try { if (silenceT) clearTimeout(silenceT); } catch(_){}
-        silenceT = setTimeout(function(){
-          try { if (rec && listening) rec.stop(); } catch(_){}
-        }, silenceMs);
-      }
-      rec.onstart = () => { setListening(true); armSilence(); try { if (window.CGOMicUI) window.CGOMicUI.startWave(); } catch(_){} };
-      rec.onerror = () => { setListening(false); try { if (window.CGOMicUI) window.CGOMicUI.stopWave(); } catch(_){} };
-      rec.onend = () => { setListening(false); try { if (silenceT) clearTimeout(silenceT); } catch(_){} try { if (window.CGOMicUI) window.CGOMicUI.stopWave(); } catch(_){} };
-      try {
-        // speechend / soundend bila browser support (Chrome kadang ada)
-        rec.onspeechend = function(){ armSilence(); };
-        rec.onsoundend = function(){ armSilence(); };
-        rec.onspeechstart = function(){ try { if (silenceT) clearTimeout(silenceT); } catch(_){} };
-        rec.onsoundstart = function(){ try { if (silenceT) clearTimeout(silenceT); } catch(_){} };
-      } catch(_){}
-      rec.onresult = (ev) => {
-        try { armSilence(); } catch(_){}
-        let interim = '', final = '';
+        silenceT = setTimeout(function(){ try { if (rec && listening) rec.stop(); } catch(_){} }, 900);
+      };
+      rec.onresult = function(ev){
+        let interim = '';
         for (let i = ev.resultIndex; i < ev.results.length; i++) {
-          const t = ev.results[i][0].transcript;
-          if (ev.results[i].isFinal) final += t;
+          const t = ev.results[i][0].transcript || '';
+          if (ev.results[i].isFinal) finalText += t + ' ';
           else interim += t;
         }
-        const draft = (final || interim || '').trim();
-        const interimEl = document.getElementById('cgo-interim');
-        const interimText = document.getElementById('cgo-interim-text');
-        if (draft) {
-          if (interimText) interimText.textContent = draft;
-          if (interimEl) interimEl.classList.add('on');
-          if (input && interim && !final) input.placeholder = interim;
-          if (input && final) input.value = final.trim();
+        const draft = (finalText || interim).trim();
+        const ie = document.getElementById('cgo-interim');
+        const it = document.getElementById('cgo-interim-text');
+        if (draft) { if (it) it.textContent = draft; if (ie) ie.classList.add('on'); }
+        if (finalText.trim()) finish(finalText);
+      };
+      rec.onerror = function(ev){
+        const code = String(ev && ev.error || 'unknown');
+        console.warn('[BCGO mic]', code);
+        if (code === 'not-allowed' || code === 'service-not-allowed') {
+          try { alert('Speech Recognition tidak mendapat izin. Izinkan mikrofon dan Speech Recognition untuk situs ini.'); } catch(_){}
         }
-        if (final && final.trim()) {
-          // Final: isi input, user bisa Kirim/Batal; auto-kirim setelah jeda singkat jika tidak batal
-          const text = final.trim();
-          if (input) input.value = text;
-          try {
-            if (window.__cgoVoiceSendTimer) clearTimeout(window.__cgoVoiceSendTimer);
-            window.__cgoVoiceSendTimer = setTimeout(function(){
-              const cur = (input && input.value || '').trim();
-              if (cur && typeof window.CGO_BCGO_SEND_QUESTION === 'function') {
-                if (input) { input.value = ''; input.placeholder = 'Tanya operator: status, scanner, hitung, eja…'; }
-                const ie = document.getElementById('cgo-interim');
-                if (ie) ie.classList.remove('on');
-                void window.CGO_BCGO_SEND_QUESTION(cur, { modality: 'voice' });
-              }
-            }, 900);
-          } catch(_){}
-        }
+        abortMic();
+      };
+      rec.onend = function(){
+        clearTimers();
+        setListening(false);
+        releaseMic();
+        try { if (window.CGOMicUI) window.CGOMicUI.stopWave(); } catch(_){}
+        if (!submitted && finalText.trim()) finish(finalText);
+        rec = null;
       };
       rec.start();
     } catch (e) {
-      console.warn('[BCGO mic]', e);
-      setListening(false);
+      console.warn('[BCGO mic start]', e);
+      abortMic();
     }
   });
 })();

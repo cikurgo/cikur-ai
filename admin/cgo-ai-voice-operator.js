@@ -9,8 +9,8 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "3.9.1-FEMALE-TTS-ONLY-MP3-DEAD";
-  const BUILD = "CIKUR-GO-OPERATOR-3.9.1-MP3-DEAD";
+  const VERSION = "3.9.3-FEMALE-TTS-SOUND-ROUTE-REPAIR";
+  const BUILD = "CIKUR-GO-OPERATOR-3.9.3-SOUND-ROUTE-REPAIR";
   /** Path audio cerdas: dukung load dari root portal maupun dari admin/ */
   function detectAudioRoot() {
     try {
@@ -538,19 +538,31 @@
   }
 
   function welcome() {
-    return emit(EVENTS.SYSTEM_BOOT, { force: true });
+    // Welcome adalah jalur suara resmi setelah user mengaktifkan audio.
+    // Pastikan engine sudah di-unlock sebelum utterance utama dikirim.
+    return Promise.resolve(unlocked ? true : unlock()).then(function () {
+      return new Promise(function (resolve) {
+        setTimeout(function () {
+          Promise.resolve(emit(EVENTS.SYSTEM_BOOT, { force: true }))
+            .then(resolve, function () { resolve(false); });
+        }, 90);
+      });
+    });
   }
 
   // Debounce state announcements — prevent collision when BCGO cycles fire every few seconds
   var _lastStateKey = "";
   var _lastStateAt = 0;
   var STATE_COOLDOWN_MS = 12000; // min 12s between identical/adjacent state sounds
-  var STATE_SILENT = { PROCESSING: 1, PROCESSING_WAIT: 1, LIVE_INPUT: 1, SYSTEM_IDLE: 1, STANDBY: 1, VALID: 1, SYSTEM_READY: 1, ABC_STAGE_A: 1, ABC_STAGE_B: 1, ABC_STAGE_C: 1, ABC_STAGE_D: 1 }; // too noisy if every cycle
+  var STATE_SILENT = { PROCESSING_WAIT: 1, LIVE_INPUT: 1, SYSTEM_IDLE: 1, STANDBY: 1, VALID: 1, ABC_STAGE_A: 1, ABC_STAGE_B: 1, ABC_STAGE_C: 1, ABC_STAGE_D: 1 }; // high-frequency states remain quiet
 
   function state(s, detail) {
     var map = {
       READY: EVENTS.SYSTEM_READY, SYSTEM_READY: EVENTS.SYSTEM_READY,
-      BOOT: EVENTS.SYSTEM_BOOT, PROCESSING: EVENTS.PROCESSING,
+      BOOT: EVENTS.SYSTEM_BOOT,
+      COMMAND_ACCEPTED: EVENTS.COMMAND_ACCEPTED, ACCEPTED: EVENTS.COMMAND_ACCEPTED,
+      COMMAND_DUPLICATE: EVENTS.COMMAND_DUPLICATE, DUPLICATE: EVENTS.COMMAND_DUPLICATE,
+      PROCESSING: EVENTS.PROCESSING,
       VALID: EVENTS.VALID, ERROR: EVENTS.ERROR, WARNING: EVENTS.WARNING,
       STANDBY: EVENTS.STANDBY, IDLE: EVENTS.SYSTEM_IDLE, LIVE: EVENTS.LIVE_INPUT,
       RESET: EVENTS.RESET, ABORT: EVENTS.ABORT, RECOVERY: EVENTS.RECOVERY
