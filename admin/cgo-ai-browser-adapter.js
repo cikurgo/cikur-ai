@@ -848,7 +848,7 @@ function chatAnswer(question = {}) {
   // Jawaban natural berbasis state — bukan template kaku "Saya paham. Untuk…"
   const mode = state.cycleMode || "siaga";
   const step = state.step || "—";
-  const nActive = metrics.active ?? (active && active.length) || 0;
+  const nActive = (metrics.active != null) ? Number(metrics.active) : ((active && active.length) || 0);
   const nRel = relations.length;
   if (nActive > 0) {
     return `Saya lihat ${nActive} anomali aktif di siklus #${state.cycle ?? "-"} (mode ${mode}, tahap ${step}). Fokus saat ini: ${target}. Ada ${nRel} relasi source terdeteksi. Sebut file atau organ yang ingin dicek, nanti saya uraikan dari bukti yang ada.`;

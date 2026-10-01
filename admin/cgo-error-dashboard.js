@@ -7,7 +7,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "1.1.0-ABC-HUMAN-READABLE";
+  const VERSION = "1.1.1-NO-STUCK";
   const MAX_ERRORS = 80;
   const MAX_CHAIN = 12;
 
@@ -619,7 +619,7 @@
             totalFiles: state.sourceScan.totalFiles
           }
         : null,
-      bcgoCycle: state.bcgo && (state.bcgo.cycle ?? state.bcgo.cycleNo) || null,
+      bcgoCycle: state.bcgo ? (state.bcgo.cycle != null ? state.bcgo.cycle : (state.bcgo.cycleNo != null ? state.bcgo.cycleNo : null)) : null,
       bcgoMode: state.bcgo && state.bcgo.cycleMode || null,
       abcReady: !!(global.CGOMachineABCBridge || global.CGOMachineABC)
     };
@@ -629,6 +629,7 @@
     installTraps();
     tick();
     if (pollTimer) clearInterval(pollTimer);
+    try { if (pollTimer) clearInterval(pollTimer); } catch (_e) {}
     pollTimer = setInterval(tick, Math.max(800, intervalMs || 1500));
     return API;
   }

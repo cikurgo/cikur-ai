@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.6.0-MULTI-LANG-FULL";
+  const VERSION = "1.6.1-INTERNAL-RESTORE";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -993,6 +993,32 @@
         }
       } catch (e) {
         step("CUSTOMER_CGO", false, String((e && e.message) || e));
+      }
+    }
+
+    // ─── H2b. Otak Internal chatAnswer — narasi panjang berbasis bukti (restore) ───
+    if (!answer && global.CGOInternalBrain) {
+      try {
+        const ib = global.CGOInternalBrain;
+        if (typeof ib.ingestBCGOState === "function" && live) {
+          try { ib.ingestBCGOState(live); } catch (_) {}
+        }
+        let textOut = null;
+        if (typeof ib.chatAnswer === "function") {
+          const r = ib.chatAnswer({ text: t, question: t });
+          textOut = typeof r === "string" ? r : (r && (r.text || r.response || r.answer));
+        } else if (typeof ib.reasonChat === "function") {
+          const r = ib.reasonChat({ text: t }, { liveState: live });
+          if (r && r.handled) textOut = r.text || r.response;
+        }
+        if (textOut && String(textOut).trim().length > 20 && !/Saya paham\.\s*Untuk\s+/i.test(String(textOut))) {
+          answer = String(textOut).trim();
+          step("INTERNAL_BRAIN", true, "chatAnswer-freeform");
+        } else {
+          step("INTERNAL_BRAIN", false, "freeform-kosong");
+        }
+      } catch (e) {
+        step("INTERNAL_BRAIN", false, String((e && e.message) || e));
       }
     }
 
