@@ -9,8 +9,8 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "3.9.2-FEMALE-TTS-ONLY-MP3-DEAD-SELFHEAL";
-  const BUILD = "CIKUR-GO-OPERATOR-3.9.2-SELFHEAL";
+  const VERSION = "3.9.3-FEMALE-TTS-ONLY-MP3-DEAD-SELFHEAL";
+  const BUILD = "CIKUR-GO-OPERATOR-3.9.3-SELFHEAL";
   /** Path audio cerdas: dukung load dari root portal maupun dari admin/ */
   function detectAudioRoot() {
     try {
@@ -171,11 +171,18 @@
     return /(\bmale\b|\bman\b|\bboy\b|\bpria\b|\blaki|david|\bmark\b|james|john|thomas|daniel|\bardi\b|andika|rizki)/i.test(t);
   }
 
+  // Android/Java lama memakai kode "in" (in-ID / in_ID) untuk Indonesia, bukan "id".
+  function isIdLang(l, n) {
+    l = String(l || "").toLowerCase();
+    if (/^(id|in)([-_]|$)/.test(l)) return true;
+    return /indonesia/.test(String(n || "").toLowerCase());
+  }
+
   function isConfirmedFemale(v) {
     var n = String((v && v.name) || "") + " " + String((v && v.voiceURI) || "");
     n = n.toLowerCase();
     var l = String((v && v.lang) || "").toLowerCase();
-    if (!l.startsWith("id")) return false;
+    if (!isIdLang(l, n)) return false;
     if (isMaleMarked(n)) return false;
     // Eksplisit wanita
     if (/(female|woman|zira|samantha|ava|aria|jenny|susan|gadis|perempuan)/i.test(n)) return true;
@@ -200,7 +207,7 @@
       var idAny = voices.filter(function (v) {
         var l = String((v && v.lang) || "").toLowerCase();
         var n = String((v && v.name) || "") + " " + String((v && v.voiceURI) || "");
-        return l.startsWith("id") && !isMaleMarked(n);
+        return isIdLang(l, n) && !isMaleMarked(n);
       });
       selectedVoice = idAny[0] || null;
     }
@@ -215,6 +222,15 @@
     try {
       global.addEventListener("pagehide", function () {
         try { global.speechSynthesis.cancel(); } catch (_) {}
+      });
+      ["pointerdown", "touchend", "keydown"].forEach(function (n) {
+        global.addEventListener(n, function () {
+          // Ucapan terakhir ditolak browser karena belum ada interaksi: ulangi sekali begitu pengguna menyentuh layar.
+          if (_pendingText && Date.now() - _pendingAt < 60000 && enabled) {
+            var t = _pendingText; _pendingText = null;
+            try { speakTTS(t, {}); } catch (_) {}
+          }
+        }, { capture: true, passive: true });
       });
     } catch (_) {}
   }
@@ -302,12 +318,17 @@
     setTimeout(cb, 120);
   }
 
-  function speakChunk(chunk, opts) {
+  var _pendingText = null, _pendingAt = 0;
+  function speakChunk(chunk, opts, useVoice) {
     return new Promise(function (resolve) {
       var ss = global.speechSynthesis;
       var u = new SpeechSynthesisUtterance(chunk);
-      u.lang = selectedVoice.lang || "id-ID";
-      u.voice = selectedVoice;
+      if (useVoice && selectedVoice) {
+        u.lang = selectedVoice.lang || "id-ID";
+        u.voice = selectedVoice;
+      } else {
+        u.lang = "id-ID";
+      }
       u.rate = (opts && opts.rate != null) ? opts.rate : 0.92;
       u.pitch = (opts && opts.pitch != null) ? opts.pitch : 1.08;
       u.volume = 1;
@@ -346,22 +367,27 @@
     return new Promise(function (resolve) {
       if (!("speechSynthesis" in global) || !text) return resolve(false);
       var session = ++_ttsSession;
-      waitForVoices(3000).then(function (ok) {
+      waitForVoices(1500).then(function (ok) {
         _diag.voiceCount = ((global.speechSynthesis.getVoices && global.speechSynthesis.getVoices()) || []).length;
         _diag.voiceName = selectedVoice ? String(selectedVoice.name || "") : "";
         _diag.at = Date.now();
-        if (!ok || !selectedVoice) { _diag.lastResult = "no-female-voice"; return resolve(false); }
+        // Tidak ada suara id terdeteksi: tetap bicara dengan lang "id-ID" (mesin bawaan perangkat memilih
+        // suara Indonesia sendiri — umumnya wanita). Diam total jauh lebih buruk daripada suara bawaan.
+        if (!selectedVoice) { _diag.voiceName = "(bawaan id-ID)"; }
         if (session !== _ttsSession) { _diag.lastResult = "superseded"; return resolve(false); }
-        var chunks = splitSpeech(text), idx = 0, retried = false;
+        var chunks = splitSpeech(text), idx = 0, retried = false, useVoice = !!selectedVoice;
         speaking = true;
         function end(r, why) { speaking = false; _diag.lastResult = why; resolve(r); }
         function next() {
           if (session !== _ttsSession) return end(false, "superseded");
           if (idx >= chunks.length) return end(true, "ok");
-          speakChunk(chunks[idx], opts).then(function (r) {
+          speakChunk(chunks[idx], opts, useVoice).then(function (r) {
             if (session !== _ttsSession) return end(false, "superseded");
             if (r === "ok") { idx++; return next(); }
             if (r === "nostart" && !retried) { retried = true; return hardReset(next); }
+            // suara terpilih ditolak mesin (synthesis-failed dsb): coba sekali tanpa memilih suara
+            if (r === "fail" && useVoice) { useVoice = false; _diag.voiceName = "(bawaan id-ID)"; return hardReset(next); }
+            if (r === "fail" && /not-allowed/.test(String(_diag.lastError))) { _pendingText = String(text); _pendingAt = Date.now(); }
             end(idx > 0, r);
           });
         }

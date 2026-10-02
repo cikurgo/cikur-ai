@@ -555,7 +555,7 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-audio-queue.js?v=1.0.1-AUDIO-QUEUE-WATCHDOG"></script>
 <script src="cgo-emosi.js?v=1.1.0-EMOSI-AIRPORT"></script>
 <script src="cgo-narasi.js?v=1.0.0-NARASI-r20261001"></script>
-<script src="cgo-ai-voice-operator.js?v=3.9.2-FEMALE-TTS-ONLY-MP3-DEAD-SELFHEAL"></script>
+<script src="cgo-ai-voice-operator.js?v=3.9.3-FEMALE-TTS-ONLY-MP3-DEAD-SELFHEAL"></script>
 <script src="cgo-machine-abc.js?v=1.0.1-FULL-RECOVERY-20261002"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.4.1-ABC-BCGO-CLOSED-LOOP-LIVE-FIX"></script>
 <script src="cgo-abc-cognition.js?v=1.1.0-CGO-ABC-COGNITION"></script>
@@ -1900,7 +1900,18 @@ function renderAbcTelemetry(ev){
   window.__abcLampQueue.push(ev);
   __abcDrainLampQueue();
 }
-document.getElementById('abc-sound-toggle')?.addEventListener('click',async()=>{if(abcSoundEnabled){abcDisarmSound();return;}await abcArmSound();});
+window.__abcOperatorOn=false;
+document.getElementById('abc-sound-toggle')?.addEventListener('click',async()=>{
+  if(window.__abcOperatorOn){window.__abcOperatorOn=false;window.__cgoUserMutedAudio=true;abcDisarmSound();try{window.CGOAudioQueue&&window.CGOAudioQueue.setEnabled&&window.CGOAudioQueue.setEnabled(false)}catch(_){}return;}
+  window.__cgoUserMutedAudio=false;window.__cgoUserPausedAudio=false;
+  try{window.CGOAudioQueue&&window.CGOAudioQueue.setEnabled&&window.CGOAudioQueue.setEnabled(true)}catch(_){}
+  const ok=await abcArmSound();window.__abcOperatorOn=!!ok;
+  /* uji bunyi langsung dari sentuhan ini (izin autoplay browser) */
+  try{if(ok&&window.CGOOperatorVoice&&window.CGOOperatorVoice.speakAnswer)window.CGOOperatorVoice.speakAnswer('Operator wanita aktif. Suara siap.',{force:true})}catch(_){}
+});
+/* Status suara terlihat di layar: nama suara terpilih / hasil terakhir / galat browser */
+(function(){const b=document.getElementById('abc-sound-toggle');if(!b)return;let sp=document.getElementById('abc-voice-diag');if(!sp){sp=document.createElement('span');sp.id='abc-voice-diag';sp.className='code-font text-[9px] text-slate-500 ml-1';b.insertAdjacentElement('afterend',sp);}
+  setInterval(function(){try{const V=window.CGOOperatorVoice;if(!V||!V.diag)return;const d=V.diag();sp.textContent=(d.voiceName?d.voiceName:'suara: belum dipilih')+(d.lastResult?' · '+d.lastResult:'')+(d.lastError?' · '+d.lastError:'');}catch(_){}},2000);})();
 window.addEventListener('beforeunload',()=>{try{abcStopAmbient()}catch(_){}try{abcAudioCtx?.close?.()}catch(_){}},{once:true});
 window.addEventListener('cgo:machine-abc-bcgo-sync',e=>{const d=e.detail||{};const state=document.getElementById('abc-telemetry-state');if(state)state.textContent=`${d.mode||'STANDBY'} · ${d.status||'–'} · Audit ${d.audit||'–'}`});
 try{
@@ -2543,7 +2554,16 @@ await runAutonomousEngine(state => {
   function paintClass(el,v){if(!el)return;el.classList.remove('good','warn','bad');const x=String(v||'').toUpperCase();if(/VALID|VERIFIED|RUNNING|REQUESTED|SYNC|COMPLETED/.test(x))el.classList.add('good');else if(/WARN|DEGRADED|PARTIAL|WAIT|STANDBY/.test(x))el.classList.add('warn');else if(/ERROR|FAILED|INVALID|ABORT|REJECTED/.test(x))el.classList.add('bad');}
   function render(e){if(!e)return;const st=String(e.stage||'STANDBY'), ev=String(e.event||'—'), au=String(e.audit||'—'), status=String(e.status||'—');if(stage)stage.textContent=st;if(audit)audit.textContent=au;if(cycle)cycle.textContent=e.bcgoCycle!=null?'#'+e.bcgoCycle:(e.cycleIndex!=null?'#'+e.cycleIndex:'—');if(decision)decision.textContent=(st==='D'&&au==='VALID'&&e.loopEligible!==false)?'NEXT_CYCLE_READY':(status||'WAITING_FOR_D');if(loop)loop.textContent=(st==='D'&&au==='VALID'&&e.loopEligible!==false)?'REQUESTED':(status==='FAILED'?'HOLD':'RUNNING');[stage,audit,decision,loop].forEach(x=>paintClass(x,x&&x.textContent));if(badge){const ok=st==='D'&&au==='VALID'&&e.loopEligible!==false;badge.textContent=ok?'LOOP · NEXT CYCLE READY':('ABC · '+st+' · '+status);badge.classList.toggle('live',ok||st!=='STANDBY');badge.classList.toggle('warn',status==='DEGRADED'||status==='PARTIAL');badge.classList.toggle('bad',status==='FAILED'||au==='INVALID');}const n=$('cgo-node-abc-meta');if(n)n.textContent=st+' · '+ev;const d=$('cgo-node-dashboard-meta');if(d)d.textContent='telemetry · '+ev;const nx=$('cgo-node-next-meta');if(nx)nx.textContent=(st==='D'&&au==='VALID'&&e.loopEligible!==false)?'RESCAN_AND_REPROCESS':'menunggu D valid';}
   function renderState(s){if(!s)return;if(cycle)cycle.textContent=s.cycle!=null?'#'+s.cycle:'—';const scan=s.sourceScan||s.scan||{};const meta=$('cgo-node-bcgo-meta');if(meta)meta.textContent='cycle #'+(s.cycle??'—')+' · '+(scan.status||s.connection?.status||'LIVE');}
-  addEventListener('cgo:abc-telemetry',e=>render(e.detail));addEventListener('cgo:machine-abc-bcgo-sync',e=>{const d=e.detail||{};render({stage:d.stage||'SYNC',event:d.event||'SYNC',status:d.status||'SYNC',audit:d.audit||'—',bcgoCycle:d.bcgoCycle,loopEligible:d.loopEligible});});addEventListener('cgo:bcgo-state',e=>renderState(e.detail));setInterval(()=>{try{renderState(window.BCGO_STATE)}catch(_){}} ,1000);})();
+  /* Hanya telemetry siklus BCGO (loopEligible) yang menggerakkan kendali siklus; telemetry perbaikan/analisis tambahan tidak menimpa. */
+  let lastLoopTel=null;
+  addEventListener('cgo:abc-telemetry',e=>{const d=e.detail;if(!d||d.loopEligible===false)return;lastLoopTel=d;render(d);});
+  /* Event sync = tanda "bukti BCGO sudah dikirim ke ABC". Ia TIDAK boleh menimpa tahap/keputusan dari telemetry
+     (dulu menimpa jadi stage SYNC, decision PARTIAL, cycle —, sehingga NEXT CYCLE tak pernah terlihat siap). */
+  addEventListener('cgo:machine-abc-bcgo-sync',e=>{const d=e.detail||{};const rev=d.bcgoCycle!=null?d.bcgoCycle:(d.evidence&&d.evidence.revision!=null?d.evidence.revision:null);
+    const nd=$('cgo-node-dashboard-meta');if(nd)nd.textContent='sync · '+(d.status||'OK')+(d.audit?' · audit '+d.audit:'');
+    if(!lastLoopTel){render({stage:'STANDBY',event:'SYNC',status:d.status||'SYNC',audit:d.audit||'—',bcgoCycle:rev,loopEligible:false});}
+    else if(cycle&&rev!=null&&lastLoopTel.bcgoCycle==null){cycle.textContent='#'+rev;}});
+  addEventListener('cgo:bcgo-state',e=>renderState(e.detail));setInterval(()=>{try{renderState(window.BCGO_STATE)}catch(_){}} ,1000);})();
 </script>
 </body>
 </html>

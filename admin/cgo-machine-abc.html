@@ -465,7 +465,10 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
   }
 
   function renderExecution(telemetry) {
-    const rows = Array.isArray(telemetry?.execution) ? telemetry.execution : [];
+    // Engine mengirim telemetry.phases (A/B/C/D); "execution" hanya ada bila disuplai pihak lain.
+    const rows = Array.isArray(telemetry?.execution) && telemetry.execution.length
+      ? telemetry.execution
+      : (Array.isArray(telemetry?.phases) ? telemetry.phases.map(x => ({ function: "Mesin " + x.stage, stage: x.stage, status: x.status, durationMs: x.durationMs })) : []);
     const view = $("#executionView");
     if (!view) return;
     $("#execTotal").textContent = rows.length;

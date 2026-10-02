@@ -116,6 +116,7 @@
           telemetry: c?.telemetry ? {
             route: c.telemetry.route || null,
             routeStatus: c.telemetry.routeStatus || null,
+            phases: cap(c.telemetry.phases, 8).map(x => ({ stage: x.stage, status: x.status, durationMs: x.durationMs })),
             execution: cap(c.telemetry.execution, 40).map(x => ({ function: x.function, status: x.status, stage: x.stage, durationMs: x.durationMs, attempts: x.attempts, error: x.error ? String(x.error).slice(0, 120) : undefined }))
           } : null,
           // Monitor membaca daftar temuan/relasi/dst. dari pipeline.C dan jejak penalaran dari pipeline.B
