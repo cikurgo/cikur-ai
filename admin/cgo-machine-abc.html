@@ -352,7 +352,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 </div>
 
 <script src="cgo-machine-abc.js?v=1.0.1-FULL-RECOVERY-20261002"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.4.0-ABC-BCGO-CLOSED-LOOP-LIVE-20261002"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.4.1-ABC-BCGO-CLOSED-LOOP-LIVE-FIX"></script>
 <script>
 (() => {
   "use strict";
@@ -580,6 +580,9 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
     $("#integrityInput").textContent="-"; $("#integrityPayload").textContent="-"; $("#integrityEvidence").textContent="-"; $("#integrityValidation").textContent="-"; $("#stageTiming").textContent="-";
     $("#repairStatus").textContent="STANDBY"; $("#repairPatch").textContent="-"; $("#repairVerify").textContent="-"; $("#repairDelta").textContent="-"; $("#repairPlanCount").textContent="-"; $("#repairEvidenceCount").textContent="-"; $("#repairPostRoute").textContent="-"; $("#repairDetail").textContent="Belum ada proses repair.";
     chip($("#audit"), "Audit D –", "");
+    try { $("#deepDetail").textContent = "Belum ada inspeksi mendalam."; } catch (_) {}
+    try { $("#repairDetail").textContent = "Belum ada proses repair."; } catch (_) {}
+    try { $("#physicsState").textContent = "–"; $("#telemetryState").textContent = "STANDBY"; } catch (_) {}
     clearNotice(); refresh();
   };
 
@@ -648,6 +651,9 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
       markBus(true, "siap");
       return;
     }
+    // Pesan dari halaman ini sendiri (BroadcastChannel memantul ke instance lain di tab yang sama) sudah
+    // dihitung lewat observer lokal — abaikan agar siklus tidak terhitung dua kali.
+    if (msg.pageId && Bridge && msg.pageId === Bridge.pageId) return;
     if (msg.kind !== "cycle" || !msg.data) return;
     markBus(true, "live");
     // Bentuk paket seperti hasil observe lokal

@@ -5,7 +5,8 @@
  */
 (function (global) {
   "use strict";
-  const VERSION = "1.0.0-AUDIO-QUEUE";
+  const VERSION = "1.0.1-AUDIO-QUEUE-WATCHDOG";
+  const WATCHDOG_MS = 75000; // job yang tidak pernah selesai dilepas paksa agar antrean tidak macet
 
   // File priority map (nama file saja — path dari operator)
   const FILE_PRIORITY = Object.freeze({
@@ -41,6 +42,7 @@
 
   function stopCurrent(reason) {
     if (!current) return;
+    try { clearTimeout(current.wd); } catch (_) {}
     try {
       if (typeof current.stop === "function") current.stop(reason || "preempt");
     } catch (_) {}
@@ -91,12 +93,21 @@
     };
 
     const finish = function () {
+      try { clearTimeout(wd); } catch (_) {}
       try {
         if (global.CGOAudioBus && claimId) global.CGOAudioBus.lepas(claimId);
       } catch (_) {}
       if (current && current.id === next.id) current = null;
       setTimeout(pump, 30);
     };
+
+    const wd = setTimeout(function () {
+      if (current && current.id === next.id) {
+        stopCurrent("watchdog");
+        setTimeout(pump, 30);
+      }
+    }, WATCHDOG_MS);
+    current.wd = wd;
 
     try {
       if (typeof next.play === "function") {
@@ -148,11 +159,14 @@
     }
 
     // Chat TTS: if new chat while old TTS playing, stop old TTS
-    if ((item.jenis === "tts" || item.jenis === "chat") && current && (current.jenis === "tts" || current.jenis === "chat")) {
-      stopCurrent("new-chat");
-      // remove queued chat/tts
+    if (item.jenis === "tts" || item.jenis === "chat") {
+      if (current && (current.jenis === "tts" || current.jenis === "chat" || current.jenis === "sys")) {
+        stopCurrent("new-chat");
+      }
+      // jawaban chat baru: buang antrean jawaban/pengumuman lama yang belum sempat bunyi
       for (let i = queue.length - 1; i >= 0; i--) {
-        if (queue[i].jenis === "tts" || queue[i].jenis === "chat") queue.splice(i, 1);
+        const j = queue[i].jenis;
+        if (j === "tts" || j === "chat" || j === "sys") queue.splice(i, 1);
       }
     }
 

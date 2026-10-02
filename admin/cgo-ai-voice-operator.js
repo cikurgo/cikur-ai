@@ -9,8 +9,8 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "3.9.3-FEMALE-TTS-SOUND-ROUTE-REPAIR";
-  const BUILD = "CIKUR-GO-OPERATOR-3.9.3-SOUND-ROUTE-REPAIR";
+  const VERSION = "3.9.2-FEMALE-TTS-ONLY-MP3-DEAD-SELFHEAL";
+  const BUILD = "CIKUR-GO-OPERATOR-3.9.2-SELFHEAL";
   /** Path audio cerdas: dukung load dari root portal maupun dari admin/ */
   function detectAudioRoot() {
     try {
@@ -166,7 +166,9 @@
   // If the browser cannot positively identify a female voice, dynamic speech stays silent
   // rather than violating the Operator voice contract.
   function isMaleMarked(n) {
-    return /(male|man\b|boy|david|mark|james|john|thomas|daniel|google uk english male)/i.test(n);
+    // "female" mengandung "male" dan "woman" berakhiran "man": netralkan dulu sebelum cek penanda pria.
+    var t = String(n || "").toLowerCase().replace(/female|woman|women|wanita|perempuan|gadis/g, " f ");
+    return /(\bmale\b|\bman\b|\bboy\b|\bpria\b|\blaki|david|\bmark\b|james|john|thomas|daniel|\bardi\b|andika|rizki)/i.test(t);
   }
 
   function isConfirmedFemale(v) {
@@ -190,6 +192,7 @@
     if (!voices.length) { selectedVoice = null; return false; }
     var idFemale = voices.filter(isConfirmedFemale);
     selectedVoice =
+      idFemale.find(function (v) { return /gadis|female|wanita|perempuan/i.test(String(v.name || "")); }) ||
       idFemale.find(function (v) { return /google|microsoft|natural|premium|neural/i.test(String(v.name || "")); }) ||
       idFemale[0] || null;
     // Last resort: any id-ID not marked male (hindari robot/pria)
@@ -205,8 +208,15 @@
   }
 
   if ("speechSynthesis" in global) {
+    // Refresh halaman bisa meninggalkan mesin suara dalam keadaan macet/paused: bersihkan.
+    try { global.speechSynthesis.cancel(); global.speechSynthesis.resume(); } catch (_) {}
     refreshVoices();
     global.speechSynthesis.onvoiceschanged = refreshVoices;
+    try {
+      global.addEventListener("pagehide", function () {
+        try { global.speechSynthesis.cancel(); } catch (_) {}
+      });
+    } catch (_) {}
   }
 
   function getAudio(file) {
@@ -242,73 +252,125 @@
     return Promise.resolve(false);
   }
 
-  
+
+  // ---- TTS tangguh: tunggu suara siap, pecah per kalimat, deteksi "tidak mulai", coba ulang sekali ----
+  var _ttsSession = 0;
+  var _diag = { lastResult: "", lastError: "", voiceCount: 0, voiceName: "", at: 0 };
+
+  function waitForVoices(maxMs) {
+    return new Promise(function (resolve) {
+      if (refreshVoices() && selectedVoice) return resolve(true);
+      var t0 = Date.now();
+      var iv = setInterval(function () {
+        if ((refreshVoices() && selectedVoice) || Date.now() - t0 > maxMs) {
+          clearInterval(iv);
+          resolve(!!selectedVoice);
+        }
+      }, 150);
+    });
+  }
+
+  function splitSpeech(text) {
+    // Chrome sering memotong/membisukan ucapan panjang (>~15 detik): ucapkan per potongan pendek.
+    var parts = String(text).match(/[^.!?;:]+[.!?;:]?\s*/g) || [String(text)];
+    var out = [], buf = "";
+    parts.forEach(function (p) {
+      p = p.trim();
+      if (!p) return;
+      if (buf && (buf + " " + p).length > 140) { out.push(buf); buf = p; }
+      else buf = buf ? buf + " " + p : p;
+    });
+    if (buf) out.push(buf);
+    var fin = [];
+    out.forEach(function (c) {
+      while (c.length > 180) {
+        var cut = c.lastIndexOf(" ", 170);
+        if (cut < 60) cut = 170;
+        fin.push(c.slice(0, cut));
+        c = c.slice(cut).trim();
+      }
+      if (c) fin.push(c);
+    });
+    return fin;
+  }
+
+  function hardReset(cb) {
+    var ss = global.speechSynthesis;
+    try { if (ss.speaking || ss.pending || ss.paused) ss.cancel(); } catch (_) {}
+    try { ss.resume(); } catch (_) {}
+    // cancel() lalu speak() seketika sering membuat ucapan berikutnya dibuang: beri jeda singkat.
+    setTimeout(cb, 120);
+  }
+
+  function speakChunk(chunk, opts) {
+    return new Promise(function (resolve) {
+      var ss = global.speechSynthesis;
+      var u = new SpeechSynthesisUtterance(chunk);
+      u.lang = selectedVoice.lang || "id-ID";
+      u.voice = selectedVoice;
+      u.rate = (opts && opts.rate != null) ? opts.rate : 0.92;
+      u.pitch = (opts && opts.pitch != null) ? opts.pitch : 1.08;
+      u.volume = 1;
+      var started = false, done = false, startTimer = null, maxTimer = null;
+      function fin(r) {
+        if (done) return;
+        done = true;
+        clearTimeout(startTimer);
+        clearTimeout(maxTimer);
+        resolve(r);
+      }
+      u.onstart = function () { started = true; clearTimeout(startTimer); };
+      u.onend = function () { fin("ok"); };
+      u.onerror = function (e) {
+        var er = e && e.error ? String(e.error) : "";
+        _diag.lastError = er;
+        fin(er === "interrupted" || er === "canceled" ? "cancel" : "fail");
+      };
+      startTimer = setTimeout(function () {
+        var live = false;
+        try { live = !!ss.speaking; } catch (_) {}
+        if (!started && !live) { try { ss.cancel(); } catch (_) {} fin("nostart"); }
+      }, 3500);
+      maxTimer = setTimeout(function () {
+        try { ss.cancel(); } catch (_) {}
+        fin(started ? "ok" : "fail");
+      }, Math.min(30000, 4000 + chunk.length * 160));
+      try {
+        if (ss.paused) ss.resume();
+        ss.speak(u);
+      } catch (_) { fin("fail"); }
+    });
+  }
+
   function speakTTS(text, opts) {
     return new Promise(function (resolve) {
       if (!("speechSynthesis" in global) || !text) return resolve(false);
-
-      function run() {
-        // Chrome bisa menjatuhkan speak() yang dipanggil tepat setelah cancel(), dan engine bisa
-        // tersangkut 'paused' setelah beberapa kali refresh -> cancel + resume + jeda singkat.
-        try { global.speechSynthesis.cancel(); global.speechSynthesis.resume(); } catch (_) {}
-        setTimeout(runNow, 80);
-      }
-
-      function runNow() {
-        try { runNowInner(); } catch (_) { speaking = false; resolve(false); }
-      }
-
-      function runNowInner() {
-        try { global.speechSynthesis.resume(); } catch (_) {}
-        if (!refreshVoices() || !selectedVoice) return resolve(false);
-        var u = new SpeechSynthesisUtterance(text);
-        u.lang = selectedVoice.lang || "id-ID";
-        u.voice = selectedVoice;
-        u.rate = (opts && opts.rate != null) ? opts.rate : 0.92;
-        u.pitch = (opts && opts.pitch != null) ? opts.pitch : 1.08;
-        u.volume = 1;
-        var finished = false;
-        var fin = function (ok) {
-          if (finished) return;
-          finished = true;
-          speaking = false;
-          resolve(!!ok);
-        };
-        u.onend = function () { fin(true); };
-        u.onerror = function () { fin(false); };
+      var session = ++_ttsSession;
+      waitForVoices(3000).then(function (ok) {
+        _diag.voiceCount = ((global.speechSynthesis.getVoices && global.speechSynthesis.getVoices()) || []).length;
+        _diag.voiceName = selectedVoice ? String(selectedVoice.name || "") : "";
+        _diag.at = Date.now();
+        if (!ok || !selectedVoice) { _diag.lastResult = "no-female-voice"; return resolve(false); }
+        if (session !== _ttsSession) { _diag.lastResult = "superseded"; return resolve(false); }
+        var chunks = splitSpeech(text), idx = 0, retried = false;
         speaking = true;
-        try {
-          global.speechSynthesis.speak(u);
-          setTimeout(function () {
-            if (!finished) {
-              try { global.speechSynthesis.cancel(); } catch (_) {}
-              fin(false);
-            }
-          }, Math.min(60000, Math.max(12000, 2500 + text.length * 140)));
-        } catch (_) {
-          fin(false);
+        function end(r, why) { speaking = false; _diag.lastResult = why; resolve(r); }
+        function next() {
+          if (session !== _ttsSession) return end(false, "superseded");
+          if (idx >= chunks.length) return end(true, "ok");
+          speakChunk(chunks[idx], opts).then(function (r) {
+            if (session !== _ttsSession) return end(false, "superseded");
+            if (r === "ok") { idx++; return next(); }
+            if (r === "nostart" && !retried) { retried = true; return hardReset(next); }
+            end(idx > 0, r);
+          });
         }
-      }
-
-      if (refreshVoices() && selectedVoice) {
-        run();
-      } else {
-        // Mobile/refresh: daftar suara sering baru siap beberapa detik. Tunggu (maks ~4 dtk).
-        // KEBIJAKAN TETAP: bila suara wanita tetap tidak ditemukan -> diam, tidak pernah
-        // jatuh ke suara tak dikenal/robot.
-        var tries = 0;
-        (function waitVoices() {
-          tries++;
-          if (refreshVoices() && selectedVoice) return run();
-          if (tries >= 27) return resolve(false);
-          setTimeout(waitVoices, 150);
-        })();
-      }
+        hardReset(next);
+      });
     });
   }
 
   var _chatSpeaking = false;
-  var _speakToken = 0;
   function canEmit(key, force) {
     if (!enabled && !force) return false;
     // Saat chat TTS/operator bicara — jangan emit event (cegah double suara)
@@ -341,12 +403,13 @@
     var phrase = TEXT[key];
     // MUTLAK: tidak ada MP3/beep robot. Hanya TTS suara wanita (speakAnswer).
     if (!phrase) return Promise.resolve(false);
-    return speakAnswer(phrase, { force: force, source: "emit:" + key });
+    return speakAnswer(phrase, { force: force, source: "emit:" + key, system: true });
   }
 
 
   function stop() {
     _chatSpeaking = false;
+    _ttsSession++;
     try { if (global.speechSynthesis) global.speechSynthesis.cancel(); } catch (_) {}
     try {
       var audios = document.querySelectorAll("audio[data-cgo-operator]");
@@ -402,37 +465,20 @@
 
     function doSpeak() {
       _chatSpeaking = true;
-      var myToken = ++_speakToken;
-      // Pengaman: apa pun yang terjadi (TTS tak pernah selesai, antrean macet), flag _chatSpeaking
-      // WAJIB dilepas. Minimal 20 detik; ucapan panjang diberi waktu setara durasi TTS-nya.
-      var safetyMs = Math.max(20000, Math.min(60000, 3000 + text.length * 140));
-      var safetyTimer = null;
-      var safety = new Promise(function (resolve) {
-        safetyTimer = setTimeout(function () {
-          if (myToken === _speakToken) {
-            _chatSpeaking = false;
-            try { if (global.speechSynthesis) global.speechSynthesis.cancel(); } catch (_) {}
-          }
-          resolve(false); // bebaskan juga antrean audio yang menunggu promise ini
-        }, safetyMs);
-      });
       stopAllOperatorAudio();
       var startP = unlocked ? Promise.resolve(true) : unlock();
-      var chain = startP.then(function () {
+      return startP.then(function () {
         chatSpeakEnabled = true;
         return speakTTS(text, voiceOpts).then(function (ok) { return ok; });
       }).finally(function () {
-        try { clearTimeout(safetyTimer); } catch (_) {}
-        // Hanya ucapan TERBARU yang boleh melepas flag (ucapan lama tidak memotong yang baru).
-        setTimeout(function () { if (myToken === _speakToken) _chatSpeaking = false; }, 400);
+        setTimeout(function () { _chatSpeaking = false; }, 400);
       });
-      return Promise.race([chain, safety]);
     }
 
     if (global.CGOAudioQueue && typeof global.CGOAudioQueue.enqueue === "function") {
       return global.CGOAudioQueue.enqueue({
-        jenis: "tts",
-        priority: 0,
+        jenis: options.system ? "sys" : "tts",
+        priority: options.system ? 1 : 0,
         play: function () { return doSpeak(); }
       });
     }
@@ -516,7 +562,8 @@
       return speakAnswer(phrase, {
         force: true,
         emosi: kind === "error" ? "tegas" : "khawatir",
-        rate: 0.92
+        rate: 0.92,
+        system: true
       });
     }).then(function (ok) {
       return { ok: !!ok, phrase: phrase };
@@ -524,45 +571,44 @@
   }
 
 
+  var _primed = false;
   function unlock() {
     unlocked = true;
     refreshVoices();
     if ("speechSynthesis" in global) {
-      try {
-        var u = new SpeechSynthesisUtterance("");
-        u.volume = 0;
-        global.speechSynthesis.speak(u);
-      } catch (_) {}
+      var ss = global.speechSynthesis;
+      try { if (ss.paused) ss.resume(); } catch (_) {}
+      // "Priming" cukup sekali, hanya setelah ada interaksi pengguna, dan tidak saat sedang bicara.
+      var act = true;
+      try { if (navigator.userActivation) act = !!navigator.userActivation.hasBeenActive; } catch (_) {}
+      if (!_primed && act) {
+        _primed = true;
+        try {
+          if (!ss.speaking && !ss.pending) {
+            var u = new SpeechSynthesisUtterance(" ");
+            u.volume = 0;
+            ss.speak(u);
+          }
+        } catch (_) {}
+      }
     }
     return Promise.resolve(true);
   }
 
   function welcome() {
-    // Welcome adalah jalur suara resmi setelah user mengaktifkan audio.
-    // Pastikan engine sudah di-unlock sebelum utterance utama dikirim.
-    return Promise.resolve(unlocked ? true : unlock()).then(function () {
-      return new Promise(function (resolve) {
-        setTimeout(function () {
-          Promise.resolve(emit(EVENTS.SYSTEM_BOOT, { force: true }))
-            .then(resolve, function () { resolve(false); });
-        }, 90);
-      });
-    });
+    return emit(EVENTS.SYSTEM_BOOT, { force: true });
   }
 
   // Debounce state announcements — prevent collision when BCGO cycles fire every few seconds
   var _lastStateKey = "";
   var _lastStateAt = 0;
   var STATE_COOLDOWN_MS = 12000; // min 12s between identical/adjacent state sounds
-  var STATE_SILENT = { PROCESSING_WAIT: 1, LIVE_INPUT: 1, SYSTEM_IDLE: 1, STANDBY: 1, VALID: 1, ABC_STAGE_A: 1, ABC_STAGE_B: 1, ABC_STAGE_C: 1, ABC_STAGE_D: 1 }; // high-frequency states remain quiet
+  var STATE_SILENT = { PROCESSING: 1, PROCESSING_WAIT: 1, LIVE_INPUT: 1, SYSTEM_IDLE: 1, STANDBY: 1, VALID: 1, SYSTEM_READY: 1, ABC_STAGE_A: 1, ABC_STAGE_B: 1, ABC_STAGE_C: 1, ABC_STAGE_D: 1 }; // too noisy if every cycle
 
   function state(s, detail) {
     var map = {
       READY: EVENTS.SYSTEM_READY, SYSTEM_READY: EVENTS.SYSTEM_READY,
-      BOOT: EVENTS.SYSTEM_BOOT,
-      COMMAND_ACCEPTED: EVENTS.COMMAND_ACCEPTED, ACCEPTED: EVENTS.COMMAND_ACCEPTED,
-      COMMAND_DUPLICATE: EVENTS.COMMAND_DUPLICATE, DUPLICATE: EVENTS.COMMAND_DUPLICATE,
-      PROCESSING: EVENTS.PROCESSING,
+      BOOT: EVENTS.SYSTEM_BOOT, PROCESSING: EVENTS.PROCESSING,
       VALID: EVENTS.VALID, ERROR: EVENTS.ERROR, WARNING: EVENTS.WARNING,
       STANDBY: EVENTS.STANDBY, IDLE: EVENTS.SYSTEM_IDLE, LIVE: EVENTS.LIVE_INPUT,
       RESET: EVENTS.RESET, ABORT: EVENTS.ABORT, RECOVERY: EVENTS.RECOVERY
@@ -611,6 +657,12 @@
     otakEnrich: otakEnrich,
     toSpeechText: toSpeechText,
     isUnlocked: function () { return unlocked; },
+    diag: function () {
+      var d = {}; for (var k in _diag) d[k] = _diag[k];
+      d.enabled = enabled; d.unlocked = unlocked; d.chatSpeak = chatSpeakEnabled;
+      try { d.engineSpeaking = !!global.speechSynthesis.speaking; d.enginePaused = !!global.speechSynthesis.paused; } catch (_) {}
+      return d;
+    },
     isEnabled: function () { return enabled; }
   };
 

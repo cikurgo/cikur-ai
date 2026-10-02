@@ -5,7 +5,8 @@
  */
 (function (global) {
   "use strict";
-  const VERSION = "1.0.0-AUDIO-BUS";
+  const VERSION = "1.0.1-AUDIO-BUS-SELFHEAL";
+  const CLAIM_TTL_MS = 30000; // klaim tab lain yang tidak pernah dilepas (tab ditutup) kedaluwarsa
   const CHANNEL = "cgo-audio";
   const PAGE_ID = "cgo-" + Math.random().toString(36).slice(2, 10);
 
@@ -14,6 +15,13 @@
 
   let mutedByVisibility = false;
   let remoteClaim = null; // { id, priority, ts }
+
+  function activeRemote() {
+    if (remoteClaim && Date.now() - remoteClaim.ts > CLAIM_TTL_MS) remoteClaim = null;
+    return remoteClaim;
+  }
+
+  let pausedByBus = false;
 
   function isHidden() {
     try { return !!(typeof document !== "undefined" && document.hidden); } catch (_) { return false; }
@@ -39,10 +47,21 @@
         mutedByVisibility = isHidden();
         if (mutedByVisibility) {
           try {
-            if (global.CGOAudioQueue && typeof global.CGOAudioQueue.pause === "function") {
-              global.CGOAudioQueue.pause();
+            const q = global.CGOAudioQueue;
+            if (q && typeof q.pause === "function") {
+              const st = q.getStatus && q.getStatus();
+              pausedByBus = !(st && st.paused);
+              q.pause();
             }
             if (global.speechSynthesis) global.speechSynthesis.cancel();
+          } catch (_) {}
+        } else if (pausedByBus) {
+          // kembali ke tab: lanjutkan antrean yang dijeda oleh bus (bukan oleh tombol Pause pengguna)
+          pausedByBus = false;
+          try {
+            const q = global.CGOAudioQueue;
+            if (q && typeof q.resume === "function" && !global.__cgoUserPausedAudio) q.resume();
+            if (global.speechSynthesis && global.speechSynthesis.paused) global.speechSynthesis.resume();
           } catch (_) {}
         }
       });
@@ -56,9 +75,10 @@
     if (mutedByVisibility || isHidden()) {
       return { ok: false, reason: "hidden", id: claimId };
     }
-    if (remoteClaim && remoteClaim.priority < pri) {
+    const rc = activeRemote();
+    if (rc && rc.priority < pri) {
       // remote has higher priority (lower number)
-      return { ok: false, reason: "remote-higher", id: claimId, remote: remoteClaim };
+      return { ok: false, reason: "remote-higher", id: claimId, remote: rc };
     }
     try {
       if (bc) bc.postMessage({ aksi: "klaim", prioritas: pri, id: claimId, from: PAGE_ID });
@@ -76,7 +96,8 @@
     if (mutedByVisibility || isHidden()) return false;
     const p = Number(prioritas);
     const pri = isNaN(p) ? 2 : p;
-    if (remoteClaim && remoteClaim.priority < pri) return false;
+    const rc = activeRemote();
+    if (rc && rc.priority < pri) return false;
     return true;
   }
 

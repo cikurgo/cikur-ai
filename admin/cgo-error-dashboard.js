@@ -7,7 +7,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "1.2.0-CLOSED-LOOP";
+  const VERSION = "1.2.1-CLOSED-LOOP-FIX";
   const MAX_ERRORS = 80;
   const MAX_CHAIN = 12;
 
@@ -445,8 +445,29 @@
     };
   }
 
+  // Snapshot BCGO yang sama dibaca ulang tiap tick (global + localStorage). Tanpa dedupe, setiap tick
+  // menambah hitungan error (×1 → ×50 …) dan memicu analisis ABC ulang. Tandai snapshot lewat tanda tangan isi.
+  const seenSigs = [];
+  function snapshotSig(snap) {
+    try {
+      const organs = Object.entries(snap.systemOrgans || {})
+        .filter(([, i]) => i && (i.state === "ACTIVE" || i.status === "ANOMALY"))
+        .map(([f, i]) => [f, i.message || "", i.line ?? i.lineno ?? ""]);
+      const ev = (Array.isArray(snap.recentEvents) ? snap.recentEvents : []).slice(0, 12)
+        .map((e) => e ? [e.type, e.message, e.target, e.source, e.at] : null);
+      const sc = snap.sourceScan || {};
+      const rel = (sc.relations || []).filter((r) => r && (r.status === "UNKNOWN" || r.status === "MISMATCH")).slice(0, 20)
+        .map((r) => [r.status, r.sourceFile || r.source, r.targetFile || r.target, r.key]);
+      return JSON.stringify([snap.cycle ?? snap.cycleNo ?? null, snap.cycleMode || null, snap.uiError || null, organs, ev, sc.status || null, sc.message || null, sc.filesScanned ?? null, rel]);
+    } catch (_) { return String(Math.random()); }
+  }
+
   function ingestBcgoState(snap) {
     if (!snap || typeof snap !== "object") return;
+    const sig = snapshotSig(snap);
+    if (seenSigs.indexOf(sig) !== -1) return;   // snapshot identik sudah diproses
+    seenSigs.push(sig);
+    if (seenSigs.length > 8) seenSigs.shift();
     state.bcgo = snap;
     state.sourceScan = snap.sourceScan || state.sourceScan;
 
@@ -569,8 +590,14 @@
     } catch (_) {}
   }
 
+  let _lastTelKey = "", _lastTelAt = 0;
   function ingestAbcTelemetry(packet) {
     if (!packet || packet.type !== "ABC_TELEMETRY") return;
+    // Paket yang sama datang dua kali di tab ini (CustomEvent + BroadcastChannel): proses sekali saja.
+    const k = [packet.stage, packet.event, packet.status, packet.audit, packet.bcgoCycle, packet.cycleIndex, packet.context, packet.at].join("|");
+    const t = now();
+    if (k === _lastTelKey && t - _lastTelAt < 1500) return;
+    _lastTelKey = k; _lastTelAt = t;
     const stage = String(packet.stage || "").toUpperCase();
     if (!["A","B","C","D"].includes(stage)) return;
     const row = { source: "MESIN_ABC_TELEMETRY", event: packet.event || null, stage, status: packet.status || (packet.event === "PHASE_START" ? "RUNNING" : null), audit: packet.audit || null, cycleIndex: packet.bcgoCycle != null ? packet.bcgoCycle : (packet.cycleIndex != null ? packet.cycleIndex : null), durationMs: packet.durationMs != null ? packet.durationMs : null, at: packet.at || now(), elapsedMs: packet.elapsedMs != null ? packet.elapsedMs : null, error: packet.error || null, context: packet.context || "UNSCOPED", loopEligible: packet.loopEligible === true, bcgoCycle: packet.bcgoCycle != null ? packet.bcgoCycle : null };
@@ -754,8 +781,11 @@
       return () => listeners.delete(fn);
     },
     clear() {
+      // Snapshot lama tetap tercatat di seenSigs, jadi tidak otomatis muncul lagi di tick berikutnya.
+      // Relasi dari scan lama juga dikosongkan; akan terisi lagi hanya bila BCGO mengirim snapshot baru.
       state.errors = [];
       state.chains = [];
+      state.sourceScan = null;
       rebuildChains();
       notify();
     }

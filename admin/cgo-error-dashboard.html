@@ -175,8 +175,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 
   <!-- Mesin ABC membantu menerjemahkan error → teks manusia -->
   <script src="cgo-machine-abc.js?v=1.0.1-FULL-RECOVERY-20261002"></script>
-  <script src="cgo-machine-abc-bridge.js?v=1.4.0-ABC-BCGO-CLOSED-LOOP-LIVE-20261002"></script>
-  <script src="cgo-error-dashboard.js?v=1.2.0-CLOSED-LOOP"></script>
+  <script src="cgo-machine-abc-bridge.js?v=1.4.1-ABC-BCGO-CLOSED-LOOP-LIVE-FIX"></script>
+  <script src="cgo-error-dashboard.js?v=1.2.1-CLOSED-LOOP-FIX"></script>
   <script>
   (function () {
     function esc(s) {
@@ -301,15 +301,20 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 
       const chains = snap.chains || [];
       document.getElementById("chain-count").textContent = chains.length + " rantai";
-      document.getElementById("chain-list").innerHTML = chains.length
+      // Render ulang hanya bila isi berubah (hindari kedip & lompat posisi gulir tiap tick)
+      var chainHtml = chains.length
         ? chains.map(renderChain).join("")
         : '<div class="text-sm text-slate-500 p-4 text-center">Belum ada rantai error. Sistem tampak tenang — atau BCGO belum mengirim state.</div>';
+      var chainEl = document.getElementById("chain-list");
+      if (chainEl.__html !== chainHtml) { chainEl.innerHTML = chainHtml; chainEl.__html = chainHtml; }
 
       const errs = snap.errors || [];
       document.getElementById("err-count").textContent = errs.length + " entri";
-      document.getElementById("error-list").innerHTML = errs.length
+      var errHtml = errs.length
         ? errs.map(renderError).join("")
         : '<div class="text-sm text-slate-500 p-4 text-center">Kosong</div>';
+      var errEl = document.getElementById("error-list");
+      if (errEl.__html !== errHtml) { errEl.innerHTML = errHtml; errEl.__html = errHtml; }
     }
 
     const eng = window.CGOErrorDashboard;

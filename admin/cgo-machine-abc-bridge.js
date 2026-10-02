@@ -14,7 +14,8 @@
     return;
   }
 
-  const VERSION = "1.4.0-ABC-BCGO-CLOSED-LOOP-LIVE";
+  const VERSION = "1.4.1-ABC-BCGO-CLOSED-LOOP-LIVE-FIX";
+  const PAGE_ID = "abc-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   const BUS_NAME = "cgo-machine-abc-bus";
   const listeners = new Set();
   let lastPacket = null;
@@ -45,18 +46,24 @@
     if (typeof BroadcastChannel !== "undefined") bus = new BroadcastChannel(BUS_NAME);
   } catch (_) { bus = null; }
 
+  let _lastPingAt = 0;
   function publishBus(kind, data) {
     const msg = {
       type: "CGO_ABC_BUS",
       kind: kind,
       source: (typeof location !== "undefined" && location.pathname) || "unknown",
+      pageId: PAGE_ID,
       at: new Date().toISOString(),
       data: data
     };
     try { if (bus) bus.postMessage(msg); } catch (_) {}
     try {
-      // fallback lintas-tab untuk browser tanpa BroadcastChannel
-      localStorage.setItem("cgo-abc-bus-ping", JSON.stringify({ t: Date.now(), kind: kind }));
+      // fallback lintas-tab untuk browser tanpa BroadcastChannel (dibatasi: telemetry bisa puluhan paket/siklus)
+      const t = Date.now();
+      if (kind !== "telemetry" || t - _lastPingAt > 400) {
+        _lastPingAt = t;
+        localStorage.setItem("cgo-abc-bus-ping", JSON.stringify({ t: t, kind: kind }));
+      }
     } catch (_) {}
     return msg;
   }
@@ -82,23 +89,41 @@
     // Siaran lintas-tab → monitor ABC / tab BCGO lain bisa melihat siklus
     try {
       const cycles = packet?.cycles || [];
+      const cap = (a, n) => (Array.isArray(a) ? a.slice(0, n) : []);
       const compact = (Array.isArray(cycles) ? cycles : []).map((c, i) => {
         const r = c && (c.result || c);
+        const P = c?.pipeline || {};
+        const res = r ? {
+          status: r.status,
+          durationMs: r.durationMs || P.C?.durationMs || 0,
+          decision: r.decision || null,
+          findings: cap(r.findings, 60),
+          relations: cap(r.relations, 60),
+          evidence: cap(r.evidence, 60),
+          uncertainty: cap(r.uncertainty, 60),
+          reasoning: cap(r.reasoning, 60),
+          constraints: cap(r.constraints, 60),
+          hypotheses: cap(r.hypotheses, 60),
+          inferences: cap(r.inferences, 60),
+          verification: cap(r.verification, 60),
+          contradictions: cap(r.contradictions, 60),
+          summary: r.summary || null
+        } : null;
         return {
           cycleIndex: c?.cycleIndex ?? i,
-          result: r ? {
-            status: r.status,
-            durationMs: r.durationMs || c?.pipeline?.C?.durationMs || 0,
-            decision: r.decision || null,
-            findings: r.findings || [],
-            relations: r.relations || [],
-            evidence: r.evidence || [],
-            uncertainty: r.uncertainty || [],
-            reasoning: r.reasoning || [],
-            summary: r.summary || null
-          } : null,
+          result: res,
           audit: c?.audit || null,
-          pipeline: c?.pipeline ? { A: !!c.pipeline.A, B: !!c.pipeline.B, C: !!c.pipeline.C } : null
+          telemetry: c?.telemetry ? {
+            route: c.telemetry.route || null,
+            routeStatus: c.telemetry.routeStatus || null,
+            execution: cap(c.telemetry.execution, 40).map(x => ({ function: x.function, status: x.status, stage: x.stage, durationMs: x.durationMs, attempts: x.attempts, error: x.error ? String(x.error).slice(0, 120) : undefined }))
+          } : null,
+          // Monitor membaca daftar temuan/relasi/dst. dari pipeline.C dan jejak penalaran dari pipeline.B
+          pipeline: c?.pipeline ? {
+            A: { stage: P.A?.stage || "READY", durationMs: P.A?.durationMs, input: { type: P.A?.input?.type, fingerprint: P.A?.input?.fingerprint } },
+            B: { stage: P.B?.stage || "processing", durationMs: P.B?.durationMs, degraded: !!P.B?.degraded, operations: cap(P.B?.operations, 40), reasoning: cap(P.B?.reasoning, 60), reasoningTrace: cap(P.B?.reasoningTrace, 20), decision: P.B?.decision || null },
+            C: Object.assign({}, res || {}, { status: P.C?.status || res?.status, durationMs: P.C?.durationMs, payloadHash: P.C?.payloadHash, validation: P.C?.validation ? { status: P.C.validation.status } : null, evidenceChain: cap(P.C?.evidenceChain, 40).map(x => ({ hash: x && x.hash })), metadata: { inputFingerprint: P.C?.metadata?.inputFingerprint, generatedAt: P.C?.metadata?.generatedAt } })
+          } : null
         };
       });
       publishBus("cycle", {
@@ -381,6 +406,7 @@
     },
     getLastPacket: () => lastPacket,
     publishBus,
+    pageId: PAGE_ID,
     BUS_NAME,
     pause: () => E.pause(),
     resume: () => E.resume(),
