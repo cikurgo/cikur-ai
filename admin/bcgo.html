@@ -125,6 +125,16 @@ body{font-family:'Inter',sans-serif}
 .cgo-command-arrow{color:#334155;text-align:center;font-size:18px}
 .cgo-command-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;padding:0 14px 14px}.cgo-command-kpi{border:1px solid #132b45;border-radius:10px;padding:8px 9px;background:#020817}.cgo-command-kpi span{display:block;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:#64748b}.cgo-command-kpi b{display:block;margin-top:3px;font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:#cbd5e1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cgo-command-kpi b.good{color:#86efac}.cgo-command-kpi b.warn{color:#fde68a}.cgo-command-kpi b.bad{color:#fda4af}
 @media(max-width:800px){.cgo-command-rail{grid-template-columns:1fr 1fr}.cgo-command-arrow{display:none}.cgo-command-kpis{grid-template-columns:repeat(2,1fr)}}
+
+.abc-live-result-card{margin-top:8px;border:1px solid #1a4a72;border-radius:12px;background:linear-gradient(135deg,rgba(6,24,42,.95),rgba(2,10,20,.98));padding:10px 12px}
+.abc-live-result-card .alr-title{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#67e8f9;font-weight:800}
+.abc-live-result-card .alr-body{margin-top:5px;font-size:12px;line-height:1.4;color:#e2e8f0}
+.abc-live-result-card .alr-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.abc-live-result-card .alr-tag{font:9px ui-monospace,monospace;border:1px solid #234e70;border-radius:999px;padding:2px 7px;color:#9ec5e8}
+.abc-live-result-card .alr-tag.ok{border-color:#176a50;color:#7cf0c0}
+.abc-live-result-card .alr-tag.warn{border-color:#765f1b;color:#ffe07b}
+.abc-live-result-card .alr-tag.bad{border-color:#76263a;color:#ff98a6}
+
 </style>
 </head>
 
@@ -220,6 +230,11 @@ body{font-family:'Inter',sans-serif}
   </div>
 </section>
 
+<section class="abc-live-result-card" id="abc-live-result-card" aria-label="Hasil nyata Mesin ABC">
+  <div class="alr-title">Hasil nyata · live</div>
+  <div class="alr-body" id="abc-live-result-body">Menunggu siklus ABC (temuan · relasi · fisika · audit)…</div>
+  <div class="alr-tags" id="abc-live-result-tags"></div>
+</section>
 
 <section id="cgo-command-center" class="cgo-command-center" aria-label="BCGO Mesin ABC Dashboard control center">
   <div class="cgo-command-head">
@@ -551,15 +566,15 @@ body{font-family:'Inter',sans-serif}
 <script src="../customer/cgo-customer-composer.js?v=1.0-OTAK-INJECT"></script>
 <script src="../customer/cgo-customer-cikur-bridge.js?v=1.0-OTAK-INJECT"></script>
 <script src="../customer/cgo-customer.js?v=1.0-OTAK-INJECT"></script>
-<script src="cgo-audio-bus.js?v=1.0.1-AUDIO-BUS-SELFHEAL"></script>
+<script src="cgo-audio-bus.js?v=1.0.2-CLAIM-CLEANUP"></script>
 <script src="cgo-audio-queue.js?v=1.0.1-AUDIO-QUEUE-WATCHDOG"></script>
 <script src="cgo-emosi.js?v=1.1.0-EMOSI-AIRPORT"></script>
 <script src="cgo-narasi.js?v=1.0.0-NARASI-r20261001"></script>
-<script src="cgo-ai-voice-operator.js?v=3.9.3-FEMALE-TTS-ONLY-MP3-DEAD-SELFHEAL"></script>
-<script src="cgo-machine-abc.js?v=1.0.1-FULL-RECOVERY-20261002"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.4.1-ABC-BCGO-CLOSED-LOOP-LIVE-FIX"></script>
-<script src="cgo-abc-cognition.js?v=1.1.0-CGO-ABC-COGNITION"></script>
-<script src="cgo-otak-hub.js?v=1.6.1-INTERNAL-RESTORE"></script>
+<script src="cgo-ai-voice-operator.js?v=3.9.4-WELCOME-FORCE-BYPASS"></script>
+<script src="cgo-machine-abc.js?v=0.9.11-REPAIR-UI-DOMAIN"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.5.1-DOMAIN-UI"></script>
+<script src="cgo-abc-cognition.js?v=1.2.0-HUMAN-RESULT"></script>
+<script src="cgo-otak-hub.js?v=1.6.2-ABC-HUMAN-HINT"></script>
 
 <script type="module">
 import * as CGOInstruction from "./cgo-instruction.js?v=1.3.0-CONSTITUTION";
@@ -2235,28 +2250,36 @@ await runAutonomousEngine(state => {
 
   // Sambutan operator wanita (TTS) — throttle 60 detik antar-refresh. Browser memblokir suara
   // sebelum ada interaksi, jadi bila belum ada tap/klik, sambutan ditunda sampai interaksi pertama.
+  // Welcome keluar setiap kali halaman dibuka.
+  // Throttle hanya 2 detik (anti-spam), memakai sessionStorage — BUKAN localStorage.
   function tryWelcome() {
     try {
       var v = window.CGOOperatorVoice;
       if (!v || typeof v.welcome !== 'function') return;
-      var KEY = 'cgo-operator-welcome-at', now = Date.now(), last = 0;
-      try { last = Number(localStorage.getItem(KEY)) || 0; } catch (_) {}
-      if (now - last < 60000) return;
-      try { localStorage.setItem(KEY, String(now)); } catch (_) {}
+      var KEY = 'cgo-operator-welcome-at';
+      var now = Date.now();
+      var last = 0;
+      try { last = Number(sessionStorage.getItem(KEY)) || 0; } catch (_) {}
+      if (now - last < 2000) return;
+      try { sessionStorage.setItem(KEY, String(now)); } catch (_) {}
       try { v.unlock && v.unlock(); } catch (_) {}
       v.welcome();
     } catch (e) { console.warn('operator welcome', e); }
   }
+
+  // Coba langsung + ulang saat interaksi pertama (browser autoplay policy).
   function scheduleWelcome() {
-    var activated = false;
-    try { activated = !!(navigator.userActivation && navigator.userActivation.hasBeenActive); } catch (_) {}
-    if (activated) { tryWelcome(); return; }
-    var evs = ['pointerdown', 'touchstart', 'keydown'];
+    tryWelcome();
+    var evs = ['pointerdown', 'touchstart', 'keydown', 'click'];
     var once = function () {
-      evs.forEach(function (n) { try { window.removeEventListener(n, once, true); } catch (_) {} });
+      evs.forEach(function (n) {
+        try { window.removeEventListener(n, once, true); } catch (_) {}
+      });
       setTimeout(tryWelcome, 50);
     };
-    evs.forEach(function (n) { try { window.addEventListener(n, once, true); } catch (_) {} });
+    evs.forEach(function (n) {
+      try { window.addEventListener(n, once, true); } catch (_) {}
+    });
   }
 
   // Tab disembunyikan lalu dibuka lagi: antrean audio dilanjutkan (kecuali user menekan ⏸ sendiri).
@@ -2604,6 +2627,137 @@ await runAutonomousEngine(state => {
       };
     }
   } catch (_) {}
+})();
+</script>
+
+
+<script>
+/* BCGO · kartu hasil ABC live (temuan / relasi / fisika / audit) — non-breaking */
+(function () {
+  function $(id) { return document.getElementById(id); }
+  function tag(parent, label, cls) {
+    if (!parent) return;
+    var s = document.createElement("span");
+    s.className = "alr-tag" + (cls ? " " + cls : "");
+    s.textContent = label;
+    parent.appendChild(s);
+  }
+  function tone(st) {
+    st = String(st || "").toUpperCase();
+    if (/WELL_FORMED|PROCESSED|VALID|OK|CLEAN|REPAIRED/.test(st)) return "ok";
+    if (/PARTIAL|DEGRADED|ATTENTION|UNKNOWN|STANDBY/.test(st)) return "warn";
+    if (/ERROR|FAIL|CRITICAL|INVALID|ABORT/.test(st)) return "bad";
+    return "";
+  }
+  function paintLiveResult(info) {
+    info = info || {};
+    var body = $("abc-live-result-body");
+    var tags = $("abc-live-result-tags");
+    if (!body) return;
+    var bits = [];
+    if (info.humanBody) bits.push(String(info.humanBody));
+    else {
+      if (info.status) bits.push("Status " + info.status + (info.confidence != null ? " (" + Math.round(Number(info.confidence) * 100) + "%)" : "") + ".");
+      if (info.audit) bits.push("Audit " + info.audit + ".");
+      if (info.stage) bits.push("Tahap " + info.stage + (info.event ? " · " + info.event : "") + ".");
+      if (info.lqm != null) bits.push("Fisika LQM " + Number(info.lqm).toFixed(1) + " dB" + (info.snr != null ? ", SNR " + Number(info.snr).toFixed(1) + " dB" : "") + (info.usable === true ? ", usable=ya" : info.usable === false ? ", usable=tidak" : "") + ".");
+      if (info.relationBreaks && info.relationBreaks.length) {
+        bits.push("Relasi putus: " + info.relationBreaks.slice(0, 3).map(function (r) {
+          return (String(r.from || "?").split("/").pop()) + "→" + (String(r.to || "?").split("/").pop()) + "(" + (r.status || "?") + ")";
+        }).join("; ") + ".");
+      }
+      if (info.findingsCount != null) bits.push("Temuan " + info.findingsCount + ".");
+    }
+    if (!bits.length) bits.push("Menunggu siklus ABC (temuan · relasi · fisika · audit)…");
+    body.textContent = bits.join(" ");
+    if (tags) {
+      tags.replaceChildren();
+      if (info.status) tag(tags, info.status, tone(info.status));
+      if (info.audit) tag(tags, "Audit " + info.audit, tone(info.audit));
+      if (info.stage) tag(tags, "Stage " + info.stage, "");
+      if (info.lqm != null) tag(tags, "LQM " + Number(info.lqm).toFixed(1), info.usable ? "ok" : "warn");
+      if (info.relationBreaks && info.relationBreaks.length) tag(tags, "Relasi " + info.relationBreaks.length, "warn");
+      if (info.findingsCount != null) tag(tags, "Temuan " + info.findingsCount, info.findingsCount ? "warn" : "ok");
+    }
+  }
+  window.__BCGO_PAINT_ABC_LIVE__ = paintLiveResult;
+
+  window.addEventListener("cgo:machine-abc-bcgo-sync", function (e) {
+    try {
+      var d = e && e.detail || {};
+      var r = (d.packet && (d.packet.result || d.packet.finalResult)) || null;
+      var findings = (r && r.findings) || [];
+      var phys = findings.filter(function (f) { return f && /PHYSICS/.test(String(f.type || "")); })[0];
+      var breaks = [];
+      try {
+        var sc = (window.BCGO_STATE && window.BCGO_STATE.sourceScan) || {};
+        var rels = sc.relations || [];
+        for (var i = 0; i < rels.length; i++) {
+          var x = rels[i];
+          if (!x) continue;
+          var st = String(x.status || "").toUpperCase();
+          if (st === "UNKNOWN" || st === "MISMATCH") {
+            breaks.push({ from: x.sourceFile || x.from, to: x.targetFile || x.to, status: st });
+          }
+        }
+      } catch (_) {}
+      paintLiveResult({
+        status: d.status || (r && r.status) || null,
+        audit: d.audit || null,
+        confidence: r && r.decision && r.decision.confidence,
+        findingsCount: findings.length,
+        lqm: phys && phys.lqm,
+        snr: phys && phys.snrDb,
+        usable: phys && phys.usable,
+        relationBreaks: breaks
+      });
+    } catch (_) {}
+  });
+
+  window.addEventListener("cgo:abc-telemetry", function (e) {
+    try {
+      var d = e && e.detail || {};
+      if (!d) return;
+      // Jangan menimpa hasil kaya dengan telemetry tahap kosong
+      var body = $("abc-live-result-body");
+      var cur = body ? body.textContent : "";
+      if (d.stage && d.event) {
+        var prefix = "Tahap " + d.stage + " · " + d.event;
+        if (d.status) prefix += " · " + d.status;
+        if (d.audit) prefix += " · audit " + d.audit;
+        if (!cur || /Menunggu siklus/.test(cur) || /^Tahap /.test(cur)) {
+          paintLiveResult({ stage: d.stage, event: d.event, status: d.status, audit: d.audit });
+        }
+      }
+    } catch (_) {}
+  });
+
+  // Periodic refresh from last bridge analyze if available
+  setInterval(function () {
+    try {
+      if (!window.CGOMachineABCBridge || !window.BCGO_STATE) return;
+      var st = window.BCGO_STATE;
+      if (!st || !st.sourceScan) return;
+      // light: only update relation tags from live state without full re-analyze
+      var breaks = [];
+      var rels = (st.sourceScan.relations || []);
+      for (var i = 0; i < rels.length; i++) {
+        var x = rels[i];
+        if (!x) continue;
+        var s = String(x.status || "").toUpperCase();
+        if (s === "UNKNOWN" || s === "MISMATCH") breaks.push({ from: x.sourceFile || x.from, to: x.targetFile || x.to, status: s });
+      }
+      var tags = $("abc-live-result-tags");
+      if (tags && breaks.length) {
+        // ensure a relation tag exists
+        var has = false;
+        for (var j = 0; j < tags.children.length; j++) {
+          if (/^Relasi /.test(tags.children[j].textContent || "")) has = true;
+        }
+        if (!has) tag(tags, "Relasi " + breaks.length, "warn");
+      }
+    } catch (_) {}
+  }, 8000);
 })();
 </script>
 

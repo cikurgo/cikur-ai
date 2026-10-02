@@ -14,7 +14,7 @@
     return;
   }
 
-  const VERSION = "1.4.1-ABC-BCGO-CLOSED-LOOP-LIVE-FIX";
+  const VERSION = "1.5.1-DOMAIN-UI";
   const PAGE_ID = "abc-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   const BUS_NAME = "cgo-machine-abc-bus";
   const listeners = new Set();
@@ -156,29 +156,143 @@
    * Analisis payload (teks / objek / HTML / JSON) lewat pipeline A→B→C→D.
    * Aman dipanggil dari BCGO chat / scanner.
    */
+  function buildHumanSummary(result, audit, extras) {
+    extras = extras || {};
+    const st = String((result && result.status) || "UNKNOWN");
+    const conf = result && result.decision && result.decision.confidence != null
+      ? Math.round(Number(result.decision.confidence) * 100) : null;
+    const findings = (result && result.findings) || [];
+    const phys = findings.filter(f => f && /PHYSICS/.test(String(f.type || "")));
+    const relBreaks = extras.relationBreaks || [];
+    const lines = [];
+    if (phys.length) {
+      const p = phys[0];
+      lines.push("Fisika tautan: LQM " + (p.lqm != null ? Number(p.lqm).toFixed(1) + " dB" : "—") +
+        ", SNR " + (p.snrDb != null ? Number(p.snrDb).toFixed(1) + " dB" : "—") +
+        ", usable=" + (p.usable === true ? "ya" : p.usable === false ? "tidak" : "—") + ".");
+    }
+    if (relBreaks.length) {
+      lines.push("Relasi bermasalah: " + relBreaks.slice(0, 3).map(r =>
+        (String(r.from || "?").split("/").pop()) + " → " + (String(r.to || "?").split("/").pop()) + " (" + (r.status || "?") + ")"
+      ).join("; ") + ".");
+    }
+    if (extras.symptom) lines.push("Gejala: " + String(extras.symptom).slice(0, 160));
+    if (extras.scanStatus) lines.push("Source scan: " + extras.scanStatus +
+      (extras.filesFailed != null ? " · gagal " + extras.filesFailed : "") + ".");
+    if (extras.activeCases && extras.activeCases.length) {
+      lines.push("Kasus aktif: " + extras.activeCases.slice(0, 3).map(function (c) {
+        return (c.message || c.type || c.id || "kasus");
+      }).join("; ") + ".");
+    }
+    if (!lines.length) {
+      lines.push("Status formal " + st + (conf != null ? " · keyakinan " + conf + "%" : "") +
+        (audit ? " · audit " + (audit.status || audit) : "") + ".");
+    } else {
+      lines.unshift("Status " + st + (conf != null ? " (" + conf + "%)" : "") + ".");
+    }
+    const tips = [];
+    if (relBreaks.length) tips.push("Periksa path script/import yang berstatus UNKNOWN atau MISMATCH.");
+    if (phys.length && phys[0].usable === false) tips.push("Tautan fisika di bawah ambang — cek elevasi/jarak/fade.");
+    if (extras.repaired) tips.push("Patch aman diterapkan di memori; verifikasi ulang sebelum persist.");
+    if (tips.length) lines.push("Saran: " + tips.join(" "));
+    return { headline: "ABC · " + st + (conf != null ? " · " + conf + "%" : ""), body: lines.join(" "), status: st, confidence: conf };
+  }
+
+  function extractDomainHints(input) {
+    const hints = { relationBreaks: [], symptom: null, physicsEvidence: null, claims: [] };
+    if (!input || typeof input !== "object") return hints;
+    if (input.symptom) hints.symptom = String(input.symptom);
+    if (input.message && !hints.symptom) hints.symptom = String(input.message);
+    if (input.sourceScan && input.sourceScan.status) hints.scanStatus = String(input.sourceScan.status);
+    if (input.sourceScan && input.sourceScan.filesFailed != null) hints.filesFailed = input.sourceScan.filesFailed;
+    if (Array.isArray(input.activeCases)) {
+      hints.activeCases = input.activeCases.slice(0, 5);
+      for (const c of hints.activeCases) {
+        if (!c) continue;
+        hints.claims.push({
+          source: "ACTIVE_CASE",
+          target: c.target || c.file || "runtime",
+          status: "ANOMALY",
+          severity: String(c.severity || "HIGH").toUpperCase(),
+          message: String(c.message || c.type || "kasus aktif").slice(0, 200)
+        });
+      }
+    }
+    const rels = input.relations || (input.sourceScan && input.sourceScan.relations) || [];
+    for (const r of rels) {
+      if (!r) continue;
+      const st = String(r.status || "").toUpperCase();
+      if (st === "UNKNOWN" || st === "MISMATCH") {
+        const row = { from: r.sourceFile || r.from || r.source, to: r.targetFile || r.to || r.target, status: st, key: r.key };
+        hints.relationBreaks.push(row);
+        hints.claims.push({
+          source: "DOMAIN_SCAN", target: row.to || row.from || "unknown",
+          status: "ANOMALY", severity: st === "MISMATCH" ? "HIGH" : "MEDIUM",
+          message: "Relasi " + st + ": " + (row.from || "?") + " → " + (row.to || "?")
+        });
+      }
+    }
+    const geo = input.geo || input.physics || input;
+    if (Number.isFinite(Number(geo.elevationDeg)) && Number.isFinite(Number(geo.distanceKm))) {
+      hints.physicsEvidence = {
+        source: "CALLER_PHYSICS",
+        elevationDeg: Number(geo.elevationDeg),
+        distanceKm: Number(geo.distanceKm),
+        dopplerRateHzPerSec: geo.dopplerRateHzPerSec != null ? Number(geo.dopplerRateHzPerSec) : 0,
+        scintFadeDb: geo.scintFadeDb != null ? Number(geo.scintFadeDb) : 0,
+        mode: geo.mode || input.physicsMode || undefined
+      };
+    }
+    return hints;
+  }
+
   function analyze(input, options = {}) {
     if (E.isPaused()) {
       return { ok: false, paused: true, message: "Mesin ABC sedang dijeda." };
     }
     try {
-      // Default cepat: 1 siklus, skip audit D (kecuali options.fullAudit)
       const fast = options.fast !== false && !options.fullAudit && !options.autoReflect;
+      const hints = extractDomainHints(input);
+      const ext = options.externalEvidence || (hints.claims.length ? {
+        schema: "CGO_EXTERNAL_EVIDENCE_V1",
+        source: "ANALYZE_DOMAIN",
+        capturedAt: new Date().toISOString(),
+        claims: hints.claims,
+        fingerprint: stableFingerprint(hints.claims)
+      } : undefined);
+      const phys = options.physicsEvidence || hints.physicsEvidence || undefined;
       const out = withTelemetryContext(options.context || "ANALYZE", false, options.bcgoCycle, () => E.process(input, {
         maxCycles: options.maxCycles ?? 1,
         autoReflect: !!options.autoReflect,
         fast: fast,
         skipAudit: fast,
-        ...options
+        externalEvidence: ext,
+        physicsEvidence: phys,
+        ...options,
+        externalEvidence: ext,
+        physicsEvidence: phys
       }));
+      const result = out?.result || out?.finalResult || null;
+      const audit = out?.audit || out?.cycles?.at?.(-1)?.audit || null;
+      const human = buildHumanSummary(result, audit, {
+        relationBreaks: hints.relationBreaks,
+        symptom: hints.symptom,
+        scanStatus: hints.scanStatus,
+        filesFailed: hints.filesFailed,
+        activeCases: hints.activeCases
+      });
       return {
         ok: true,
         engine: "CGO_MACHINE_ABC",
         version: E.version,
-        status: out?.result?.status || out?.finalResult?.status || null,
-        confidence: out?.result?.decision?.confidence ?? out?.finalResult?.decision?.confidence ?? null,
-        summary: out?.result?.summary || null,
-        findings: out?.result?.findings || [],
-        audit: out?.audit || out?.cycles?.at?.(-1)?.audit || null,
+        status: result?.status || null,
+        confidence: result?.decision?.confidence ?? null,
+        summary: result?.summary || null,
+        findings: result?.findings || [],
+        audit: audit,
+        human: human,
+        relationBreaks: hints.relationBreaks,
+        physics: phys || null,
         packet: out
       };
     } catch (err) {

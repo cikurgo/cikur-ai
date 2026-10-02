@@ -10,7 +10,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "0.9.9";
+  const VERSION = "0.9.11-REPAIR-UI-DOMAIN";
   const MAX_TEXT_SAMPLE = 6000;
   const MAX_ITEMS = 1000;
   const MAX_TOKENS = 5000;
@@ -785,5 +785,121 @@
   const CGOMachineABC={name:"CGO_MACHINE_ABC",version:VERSION,A:MachineA,B:MachineB,C:MachineC,D:MachineD,physics:CGOPhysics,physicsSelfTest:()=>CGOPhysics.runSelfTest(),inject:(v,o={})=>MachineC.inject(v,o),createBatchInjection(inputs,o={}){if(!Array.isArray(inputs))throw new TypeError("createBatchInjection membutuhkan array input.");const v=validateInput(inputs,o);if(!v.valid)throw new TypeError(v.reason);return{__cgoBatchInjection:true,version:VERSION,mode:"batch",transport:"internal",createdAt:now(),items:inputs.slice(0,MAX_ITEMS).map(clone),metadata:clone(o.metadata??{})}},processMany(inputs,o={}){return CGOMachineABC.process(CGOMachineABC.createBatchInjection(inputs,o),{...o,source:o.source??"batch-injection"})},process(input,options={}){if(paused)return pausedResult();const v=validateInput(input,options);if(!v.valid)throw new TypeError(v.reason);metrics.totalProcessed++;if(toBool(options.autoReflect,false)){const r=reflect(v.sanitized,options);const packet={engine:"CGO_MACHINE_ABC",version:VERSION,cycles:r.cycles,finalResult:r.finalResult,stopReason:r.stopReason,audit:r.cycles.at(-1)?.audit||null,reflected:true};notify(packet,r.cycles);return packet}const out=runCycle(v.sanitized,options,0);notify(out,[out]);return out},stream(input,options={}){if(paused){const pr=pausedResult();options.onComplete?.(pr.result);return pr.result}const v=validateInput(input,options);if(!v.valid)throw new TypeError(v.reason);if(options.autoReflect===true){const r=reflect(v.sanitized,{...options,onCycle:c=>{options.onCycle?.(c);notify(c,[c])}});options.onComplete?.(r.finalResult,r.stopReason);return r.finalResult}const c=runCycle(v.sanitized,options,0);options.onCycle?.(c);notify(c,[c]);options.onComplete?.(c.result);return c.result},observe(handler){if(typeof handler!=="function")throw new TypeError("observe(handler) membutuhkan function");observers.add(handler);return()=>observers.delete(handler)},observeTelemetry(handler){if(typeof handler!=="function")throw new TypeError("observeTelemetry(handler) membutuhkan function");telemetryObservers.add(handler);return()=>telemetryObservers.delete(handler)},auditIndependence,selfTest,validateOutput,validateInput,safeClone,reflect,replay:(p)=>MachineD.replay(p),verifyReplay:(p,r)=>MachineD.verifyReplay(p,r),pause(){paused=true;runtimeState.paused=true;runtimeState.pauseAt=now()},resume(){paused=false;runtimeState.paused=false;runtimeState.pauseAt=null},isPaused:()=>paused,getState:()=>clone(runtimeState),getMetrics:()=>({totalProcessed:metrics.totalProcessed,totalCycles:metrics.totalCycles,avgConfidence:metrics.totalCycles?metrics.confidenceSum/metrics.totalCycles:0,degradedCount:metrics.degradedCount,errorCount:metrics.errorCount,skippedWhilePaused:metrics.skippedWhilePaused,lastStatus:metrics.lastStatus}),sha256:sha256Hex,digest,resetMetrics(){Object.assign(metrics,{totalProcessed:0,totalCycles:0,confidenceSum:0,degradedCount:0,errorCount:0,skippedWhilePaused:0,lastStatus:null});return CGOMachineABC.getMetrics()}};
   function pausedResult(){metrics.skippedWhilePaused++;const result={machine:"C",stage:"result",version:VERSION,status:"PAUSED",summary:null,findings:[],relations:[],inferences:[],hypotheses:[],constraints:[],contradictions:[],reasoning:[],reasoningTrace:[],evidence:[],uncertainty:[],verification:[],decision:{status:"PAUSED",confidence:0,reason:"engine_paused"},errors:[],fallbacks:[],metadata:{generatedAt:now()}};return{engine:"CGO_MACHINE_ABC",version:VERSION,paused:true,skipped:true,result,audit:null}}
   function notify(result,cycles){const payload={result:result?.result??result,cycles:Array.isArray(cycles)?cycles:cycles?[cycles]:[],stopReason:result?.stopReason??null,timestamp:now()};for(const fn of [...observers]){try{fn(payload)}catch(_){}}}
-  [MachineA,MachineB,MachineC,MachineD].forEach(m=>Object.freeze(m));Object.freeze(CGOMachineABC);if(typeof module!=="undefined"&&module.exports)module.exports=CGOMachineABC;global.CGOMachineABC=CGOMachineABC;/* Jangan timpa window.CGO (Customer chat / CGO.esc UI) */if(typeof global.CGO==="undefined"){global.CGO=CGOMachineABC;}
+  
+  /** Safe in-memory repair: baseline process → heuristic patches → re-process → verify */
+  function buildRepairPlan(input, baseline) {
+    const text = typeof input === "string" ? input : (input && (input.text || input.content || input.source) != null ? String(input.text || input.content || input.source) : JSON.stringify(input));
+    const steps = [];
+    let after = text;
+    // Common safe JS/JSON/text fixes (no network, no eval)
+    const rules = [
+      { id: "TRAILING_PLUS", re: /(\+|\-|\*|\/|\%|\||\&)\s*;/g, to: ";", why: "operator menggantung sebelum ;" },
+      { id: "EMPTY_RETURN_PLUS", re: /return\s*\+\s*;/g, to: "return;", why: "return + ; tidak valid" },
+      { id: "DOUBLE_SEMICOLON", re: /;;+/g, to: ";", why: "semicolon ganda" },
+      { id: "COMMA_BEFORE_BRACE", re: /,\s*([}\]])/g, to: "$1", why: "trailing comma sebelum penutup" },
+      { id: "STRAY_PLUS_EOL", re: /\+\s*$/gm, to: "", why: "plus di akhir baris" },
+      { id: "EMPTY_RETURN_OP", re: /return\s*[\+\-\*\/]\s*;/g, to: "return;", why: "return diikuti operator kosong" },
+      { id: "TRIPLE_EQ_TYPO", re: /====+/g, to: "===", why: "operator sama-dengan berlebih" },
+      { id: "DOUBLE_PLUS_SPACE", re: /\+\s*\+/g, to: "+", why: "plus ganda tidak disengaja" },
+      { id: "MISSING_CATCH_BODY", re: /catch\s*\([^)]*\)\s*;/g, to: "catch (_) {}", why: "catch tanpa body" },
+      { id: "STRAGGLE_COMMA_NL", re: /,\s*\n\s*([}\]])/g, to: "\n$1", why: "trailing comma multiline" }
+    ];
+    for (const r of rules) {
+      if (r.re.test(after)) {
+        r.re.lastIndex = 0;
+        const next = after.replace(r.re, r.to);
+        if (next !== after) {
+          steps.push({ id: r.id, status: "CANDIDATE", reason: r.why, beforeLen: after.length, afterLen: next.length });
+          after = next;
+        }
+      }
+    }
+    // If baseline reported physics incomplete — cannot auto-patch geometry; manual
+    const findings = (baseline && baseline.result && baseline.result.findings) || [];
+    for (const f of findings) {
+      if (f && f.type === "PHYSICS_INPUT_INCOMPLETE") {
+        steps.push({ id: "PHYSICS_INPUT", status: "MANUAL", reason: "lengkapi elevationDeg & distanceKm" });
+      }
+    }
+    return {
+      count: steps.length,
+      automaticCandidates: steps.filter(s => s.status === "CANDIDATE"),
+      manualCandidates: steps.filter(s => s.status === "MANUAL"),
+      steps,
+      afterText: after,
+      changed: after !== text
+    };
+  }
+
+  function repair(input, options = {}) {
+    if (paused) {
+      return { engine: "CGO_MACHINE_ABC", version: VERSION, status: "PAUSED", applied: false, verified: false, reason: "engine_paused" };
+    }
+    const text = typeof input === "string" ? input : (input && (input.text || input.content || input.source) != null ? String(input.text || input.content || input.source) : null);
+    const baseline = CGOMachineABC.process(input, { maxCycles: 1, fast: false, skipAudit: false, source: options.source || "REPAIR_BASELINE" });
+    const plan = buildRepairPlan(text != null ? text : input, baseline);
+    const autoApply = options.autoApply !== false;
+    let applied = false;
+    let candidate = null;
+    let repaired = null;
+    let comparison = null;
+    if (autoApply && plan.changed && text != null) {
+      candidate = {
+        id: "PATCH-" + digest(plan.afterText).slice(0, 12),
+        patch: { before: text, after: plan.afterText },
+        steps: plan.steps
+      };
+      repaired = CGOMachineABC.process(plan.afterText, { maxCycles: options.maxCycles ?? 1, fast: false, skipAudit: false, source: options.source || "REPAIR_POST" });
+      applied = true;
+      const bf = baseline.result && baseline.result.summary ? baseline.result.summary.findings : (baseline.result && baseline.result.findings ? baseline.result.findings.length : 0);
+      const af = repaired.result && repaired.result.summary ? repaired.result.summary.findings : (repaired.result && repaired.result.findings ? repaired.result.findings.length : 0);
+      comparison = {
+        before: { fingerprint: digest(text), findings: bf, status: baseline.result && baseline.result.status },
+        after: { fingerprint: digest(plan.afterText), findings: af, status: repaired.result && repaired.result.status },
+        findingDelta: (typeof af === "number" && typeof bf === "number") ? (af - bf) : null
+      };
+    } else if (plan.count === 0) {
+      return {
+        engine: "CGO_MACHINE_ABC", version: VERSION, status: "NO_PATCH", applied: false, verified: false,
+        baseline, plan, finalPlan: plan, candidate: null, repaired: null, comparison: null,
+        reason: "no_safe_automatic_patch",
+        verification: { postRepairAudit: baseline.audit && baseline.audit.status, postRepairRoute: "A-B-C-D" },
+        persistence: "IN_MEMORY_RESULT_ONLY", runtimeExecution: "NOT_PERFORMED",
+        steps: []
+      };
+    }
+    const postStatus = repaired && repaired.result && repaired.result.status;
+    const postAudit = repaired && repaired.audit && repaired.audit.status;
+    const verified = !!(applied && postAudit === "VALID" && postStatus && !/ERROR|FAIL/i.test(String(postStatus)));
+    return {
+      engine: "CGO_MACHINE_ABC",
+      version: VERSION,
+      status: applied ? (verified ? "REPAIRED_VERIFIED" : "REPAIRED") : "REVIEW",
+      applied,
+      verified,
+      baseline,
+      plan,
+      finalPlan: plan,
+      candidate,
+      repaired,
+      postRepair: repaired,
+      comparison,
+      steps: (plan.steps || []).map((s, i) => ({ index: i, id: s.id, status: applied ? "APPLIED" : s.status, audit: postAudit || null })),
+      verification: {
+        postRepairAudit: postAudit || null,
+        postRepairRoute: "A-B-C-D",
+        postStatus: postStatus || null
+      },
+      verificationScope: "INTERNAL_PROCESS",
+      runtimeExecution: applied ? "REPROCESS_ONLY" : "NOT_PERFORMED",
+      persistence: "IN_MEMORY_RESULT_ONLY",
+      reason: applied ? "safe_heuristic_patch" : "awaiting_apply"
+    };
+  }
+
+  // Attach repair API before freeze
+  CGOMachineABC.repair = repair;
+  CGOMachineABC.buildRepairPlan = buildRepairPlan;
+
+[MachineA,MachineB,MachineC,MachineD].forEach(m=>Object.freeze(m));Object.freeze(CGOMachineABC);if(typeof module!=="undefined"&&module.exports)module.exports=CGOMachineABC;global.CGOMachineABC=CGOMachineABC;/* Jangan timpa window.CGO (Customer chat / CGO.esc UI) */if(typeof global.CGO==="undefined"){global.CGO=CGOMachineABC;}
 })(typeof globalThis!=="undefined"?globalThis:window);

@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.6.1-INTERNAL-RESTORE";
+  const VERSION = "1.6.2-ABC-HUMAN-HINT";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -825,12 +825,18 @@
         try {
           const bridge = global.CGOMachineABCBridge;
           if (bridge && typeof bridge.analyze === "function") {
-            const r = bridge.analyze(t, { maxCycles: 1 });
+            // Sertakan snapshot live agar domain/fisika/relasi ikut dinilai, bukan teks chat saja
+            const payload = (live && typeof live === "object")
+              ? Object.assign({ question: t, symptom: t }, live)
+              : t;
+            const r = bridge.analyze(payload, { maxCycles: 1, fast: false, skipAudit: false });
             if (r && r.ok) {
               abc = r;
               const conf = r.confidence != null ? Math.round(Number(r.confidence) * 100) + "%" : "–";
-              const line = "Mesin ABC: status " + (r.status || "–") + ", keyakinan " + conf +
-                ", temuan " + ((r.findings || []).length) + ", audit " + ((r.audit && r.audit.status) || "–") + ".";
+              const line = (r.human && r.human.body)
+                ? String(r.human.body).slice(0, 240)
+                : ("Mesin ABC: status " + (r.status || "–") + ", keyakinan " + conf +
+                  ", temuan " + ((r.findings || []).length) + ", audit " + ((r.audit && r.audit.status) || "–") + ".");
               step("MESIN_ABC", true, r.status || null);
               if (internal && typeof internal.ingestMachineAbc === "function") {
                 try {
@@ -904,10 +910,25 @@
       }
       if (pieces.length) answer = pieces.join("\n\n");
       else if (abc) {
-        const conf = abc.confidence != null ? Math.round(Number(abc.confidence) * 100) + "%" : "–";
-        answer = "Mesin ABC: status " + (abc.status || "–") + ", keyakinan " + conf +
-          ", temuan " + ((abc.findings || []).length) + ", audit " + ((abc.audit && abc.audit.status) || "–") + ".";
+        if (abc.human && abc.human.body) {
+          answer = String(abc.human.body);
+        } else {
+          const conf = abc.confidence != null ? Math.round(Number(abc.confidence) * 100) + "%" : "–";
+          answer = "Mesin ABC: status " + (abc.status || "–") + ", keyakinan " + conf +
+            ", temuan " + ((abc.findings || []).length) + ", audit " + ((abc.audit && abc.audit.status) || "–") + ".";
+        }
       }
+      // Jejak formal manusiawi (satu kali) — hindari duplikat jika jawaban sudah dari human.body
+      try {
+        const hb = abc && abc.human && abc.human.body ? String(abc.human.body) : "";
+        if (answer && hb && String(answer).indexOf(hb.slice(0, 48)) !== -1) {
+          /* sudah memuat ringkasan manusia */ 
+        } else if (answer && abc && global.CGOAbcCognition && typeof global.CGOAbcCognition.appendHint === "function") {
+          answer = global.CGOAbcCognition.appendHint(answer, abc, { userText: t, style: "compact" });
+        } else if (answer && hb && systemRequest && /mesin\s*abc|status sistem|relasi|source scan|fisika|lqm/i.test(t)) {
+          answer = String(answer).trim() + "\n\n" + hb.slice(0, 280);
+        }
+      } catch (_) {}
     }
 
     // 6) Satu memori bersama: simpan hasil akhir juga ke Memory internal bila tersedia.

@@ -5,7 +5,7 @@
  */
 (function (global) {
   "use strict";
-  const VERSION = "1.0.1-AUDIO-BUS-SELFHEAL";
+  const VERSION = "1.0.2-CLAIM-CLEANUP";
   const CLAIM_TTL_MS = 30000; // klaim tab lain yang tidak pernah dilepas (tab ditutup) kedaluwarsa
   const CHANNEL = "cgo-audio";
   const PAGE_ID = "cgo-" + Math.random().toString(36).slice(2, 10);
@@ -100,6 +100,30 @@
     if (rc && rc.priority < pri) return false;
     return true;
   }
+
+  // Lepas semua claim saat tab ditutup / refresh.
+  var _myClaims = [];
+  var _origKlaim = klaim;
+  klaim = function (prioritas, id) {
+    var r = _origKlaim(prioritas, id);
+    if (r && r.ok) _myClaims.push(r.id);
+    return r;
+  };
+  var _origLepas = lepas;
+  lepas = function (id) {
+    _myClaims = _myClaims.filter(function (x) { return x !== id; });
+    return _origLepas(id);
+  };
+  function releaseAllClaims() {
+    _myClaims.forEach(function (id) { try { _origLepas(id); } catch (_) {} });
+    _myClaims = [];
+  }
+  try {
+    if (typeof window !== "undefined") {
+      window.addEventListener("beforeunload", releaseAllClaims, { once: true });
+      window.addEventListener("pagehide", releaseAllClaims, { once: true });
+    }
+  } catch (_) {}
 
   global.CGOAudioBus = Object.freeze({
     version: VERSION,

@@ -9,8 +9,8 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "3.9.3-FEMALE-TTS-ONLY-MP3-DEAD-SELFHEAL";
-  const BUILD = "CIKUR-GO-OPERATOR-3.9.3-SELFHEAL";
+  const VERSION = "3.9.4-WELCOME-FORCE-BYPASS";
+  const BUILD = "CIKUR-GO-OPERATOR-3.9.4-WELCOME";
   /** Path audio cerdas: dukung load dari root portal maupun dari admin/ */
   function detectAudioRoot() {
     try {
@@ -448,7 +448,8 @@
     // Gate force+allowTts dihapus agar suara muncul saat chat dijawab.
     if (!enabled && !options.force) return Promise.resolve(false);
     if (!chatSpeakEnabled && !options.force) return Promise.resolve(false);
-    if (global.CGOAudioQueue && typeof global.CGOAudioQueue.isEnabled === "function" && !global.CGOAudioQueue.isEnabled()) {
+    // Force request (welcome, error, warning) boleh bypass queue-disabled.
+    if (!options.force && global.CGOAudioQueue && typeof global.CGOAudioQueue.isEnabled === "function" && !global.CGOAudioQueue.isEnabled()) {
       return Promise.resolve(false);
     }
     var text = toSpeechText(rawText);

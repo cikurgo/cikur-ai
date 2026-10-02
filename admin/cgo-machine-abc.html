@@ -133,6 +133,24 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 @media(min-width:760px){.control-hero-grid{grid-template-columns:1.4fr 1fr}.telemetry-strip{grid-template-columns:repeat(4,1fr)}}
 @media(max-width:680px){.loop-rail{grid-template-columns:1fr;gap:4px}.rail-arrow{transform:rotate(90deg);height:12px}.rail-arrow.loop{transform:none}.loop-head{align-items:flex-start;flex-direction:column}.control-hero{padding:12px}}
 
+
+/* FUTURE-UI-20261003 — control room depth without breaking IDs */
+.future-glass{backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.stage-card.live-a{border-color:#1688ff;box-shadow:0 0 22px rgba(22,136,255,.25)}
+.stage-card.live-b{border-color:#a78bfa;box-shadow:0 0 22px rgba(167,139,250,.25)}
+.stage-card.live-c{border-color:#34d399;box-shadow:0 0 22px rgba(52,211,153,.22)}
+.stage-card.live-d{border-color:#fbbf24;box-shadow:0 0 22px rgba(251,191,36,.22)}
+.human-panel{margin-top:12px;border:1px solid #1a4a72;border-radius:14px;background:linear-gradient(135deg,rgba(8,28,48,.95),rgba(3,12,24,.98));padding:12px 14px;box-shadow:0 0 40px rgba(22,136,255,.08)}
+.human-panel .hp-title{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#67e8f9;font-weight:800}
+.human-panel .hp-body{margin-top:6px;font-size:13px;line-height:1.45;color:#e2e8f0}
+.human-panel .hp-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.human-panel .hp-tag{font:10px ui-monospace,monospace;border:1px solid #234e70;border-radius:999px;padding:3px 8px;color:#9ec5e8}
+.human-panel .hp-tag.ok{border-color:#176a50;color:#7cf0c0}
+.human-panel .hp-tag.warn{border-color:#765f1b;color:#ffe07b}
+.human-panel .hp-tag.bad{border-color:#76263a;color:#ff98a6}
+.pipeline-pulse{position:relative}
+.pipeline-pulse:after{content:"";position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;box-shadow:0 0 0 1px rgba(34,211,238,.15)}
+
 </style>
 </head>
 <body>
@@ -172,6 +190,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
         <div class="telemetry-box"><span>Event</span><b id="hero-event">—</b></div>
         <div class="telemetry-box"><span>Route</span><b>A → B → C → D</b></div>
         <div class="telemetry-box"><span>Mode</span><b>INTERNAL · EVIDENCE-FIRST</b></div>
+        <div class="telemetry-box" style="grid-column:1/-1"><span>Hasil manusia</span><b id="human-result" style="white-space:normal;line-height:1.35">Menunggu siklus yang menghasilkan temuan / fisika / perbaikan…</b></div>
       </div>
     </div>
     <div class="panel" style="margin-top:0;border-color:#173e5e;background:#020b15">
@@ -184,6 +203,13 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
       </div>
     </div>
   </div>
+</section>
+
+
+<section class="human-panel future-glass pipeline-pulse" id="human-panel" aria-label="Hasil manusia MESIN ABC">
+  <div class="hp-title">Hasil nyata · bahasa manusia</div>
+  <div class="hp-body" id="human-result">Menunggu siklus yang menghasilkan temuan, fisika, atau perbaikan…</div>
+  <div class="hp-tags" id="human-tags"></div>
 </section>
 
 <div id="fatal" class="banner error" role="alert" hidden></div>
@@ -351,8 +377,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 </section>
 </div>
 
-<script src="cgo-machine-abc.js?v=1.0.1-FULL-RECOVERY-20261002"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.4.1-ABC-BCGO-CLOSED-LOOP-LIVE-FIX"></script>
+<script src="cgo-machine-abc.js?v=0.9.11-REPAIR-UI-DOMAIN"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.5.1-DOMAIN-UI"></script>
 <script>
 (() => {
   "use strict";
@@ -543,6 +569,43 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
     let json = JSON.stringify(r, null, 2);
     if (json.length > DETAIL_LIMIT) json = json.slice(0, DETAIL_LIMIT) + `\n… (dipotong, total ${json.length} karakter)`;
     $("#detail").textContent = json;
+    try {
+      const hr = document.getElementById("human-result");
+      const tags = document.getElementById("human-tags");
+      const phys = (r.findings || []).filter(f => f && /PHYSICS/.test(String(f.type || "")));
+      const bits = [];
+      bits.push("Status " + (status || "—") + " · keyakinan " + Math.round(conf * 100) + "% · audit " + (d?.status || "—") + ".");
+      if (phys[0]) {
+        const p = phys[0];
+        bits.push("Fisika tautan: LQM " + (p.lqm != null ? Number(p.lqm).toFixed(1) + " dB" : "—") +
+          ", SNR " + (p.snrDb != null ? Number(p.snrDb).toFixed(1) + " dB" : "—") +
+          ", usable=" + (p.usable === true ? "ya" : p.usable === false ? "tidak" : "—") + ".");
+      }
+      const ext = (r.findings || []).filter(f => f && /EXTERNAL_EVIDENCE/.test(String(f.type || "")));
+      if (ext.length) bits.push("Bukti eksternal: " + ext.length + " klaim diproses.");
+      const nFind = (r.findings || []).length, nRel = (r.relations || []).length, nUn = (r.uncertainty || []).length;
+      bits.push("Temuan " + nFind + " · relasi " + nRel + " · ketidakpastian " + nUn + " · penalaran " + ((r.reasoning || []).length) + " langkah.");
+      if (hr) hr.textContent = bits.join(" ");
+      if (tags) {
+        tags.replaceChildren();
+        const add = (label, cls) => { const s = document.createElement("span"); s.className = "hp-tag" + (cls ? " " + cls : ""); s.textContent = label; tags.append(s); };
+        add(status || "—", OK.has(status) ? "ok" : WARN.has(status) ? "warn" : "bad");
+        add("Audit " + (d?.status || "—"), d?.status === "VALID" ? "ok" : "warn");
+        if (phys[0]) add("LQM " + (phys[0].lqm != null ? Number(phys[0].lqm).toFixed(1) : "—"), phys[0].usable ? "ok" : "bad");
+        add("Temuan " + nFind, nFind ? "warn" : "ok");
+        add("Relasi " + nRel);
+      }
+      // stage glow
+      try {
+        ["#stageA","#stageB","#stageC","#stageD"].forEach((sel,i)=>{
+          const n=document.querySelector(sel); if(!n) return;
+          const card=n.closest(".stage-card"); if(!card) return;
+          card.classList.remove("live-a","live-b","live-c","live-d");
+          const map=["live-a","live-b","live-c","live-d"];
+          if (status && status !== "IDLE") card.classList.add(map[i]);
+        });
+      } catch(_){}
+    } catch (_) {}
   }
 
   function onPayload(p) {

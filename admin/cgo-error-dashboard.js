@@ -7,9 +7,14 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "1.2.1-CLOSED-LOOP-FIX";
+  const VERSION = "1.2.3-ABC-HUMAN";
   const MAX_ERRORS = 80;
   const MAX_CHAIN = 12;
+  const MAX_LOOP_PER_MINUTE = 6;
+  const LOOP_HISTORY = [];
+  const LOOP_DISABLE_AFTER = 20;
+  let loopDisabledUntil = 0;
+  let consecutiveLoops = 0;
 
   const state = {
     errors: [],
@@ -213,6 +218,18 @@
         ok: false,
         headline: "Mesin ABC tidak memproses",
         body: String(abc.error || abc.message || "gagal")
+      };
+    }
+    // Bridge 1.5+ sudah menyiapkan bahasa manusia (fisika / relasi / saran)
+    if (abc.human && abc.human.body) {
+      return {
+        ok: true,
+        headline: abc.human.headline || ("ABC · " + (abc.status || "—")),
+        body: String(abc.human.body),
+        status: abc.status || abc.human.status || null,
+        confidence: abc.confidence != null ? Math.round(Number(abc.confidence) * 100) : (abc.human.confidence || null),
+        audit: (abc.audit && (abc.audit.status || abc.audit)) || null,
+        findingsCount: Array.isArray(abc.findings) ? abc.findings.length : 0
       };
     }
     const st = String(abc.status || "UNKNOWN");
@@ -603,6 +620,9 @@
     const row = { source: "MESIN_ABC_TELEMETRY", event: packet.event || null, stage, status: packet.status || (packet.event === "PHASE_START" ? "RUNNING" : null), audit: packet.audit || null, cycleIndex: packet.bcgoCycle != null ? packet.bcgoCycle : (packet.cycleIndex != null ? packet.cycleIndex : null), durationMs: packet.durationMs != null ? packet.durationMs : null, at: packet.at || now(), elapsedMs: packet.elapsedMs != null ? packet.elapsedMs : null, error: packet.error || null, context: packet.context || "UNSCOPED", loopEligible: packet.loopEligible === true, bcgoCycle: packet.bcgoCycle != null ? packet.bcgoCycle : null };
     if (packet.loopEligible === true) state.abcLive = row;
     else state.abcAux = row;
+    if (String(packet.status || "").toUpperCase() !== "PARTIAL") {
+      consecutiveLoops = 0;
+    }
     decideNextCycle(packet);
     notify();
   }
@@ -636,6 +656,29 @@
     const nowMs = now();
     if (cycle != null && state.loop.lastRequestedCycle === cycle) return;
     if (nowMs - Number(state.loop.lastRequestedAt || 0) < LOOP_COOLDOWN_MS) return;
+
+    // Rate limit: maksimal 6 siklus per menit
+    const nowMs2 = now();
+    while (LOOP_HISTORY.length && nowMs2 - LOOP_HISTORY[0] > 60000) LOOP_HISTORY.shift();
+    if (LOOP_HISTORY.length >= MAX_LOOP_PER_MINUTE) {
+      state.loop = { ...state.loop, state: "THROTTLED", decision: "RATE_LIMITED", reason: "terlalu banyak siklus per menit", nextAt: null };
+      notify();
+      return;
+    }
+    if (loopDisabledUntil && nowMs2 < loopDisabledUntil) {
+      state.loop = { ...state.loop, state: "DISABLED", decision: "LOOP_OFF", reason: "auto-disable sementara", nextAt: loopDisabledUntil };
+      notify();
+      return;
+    }
+    consecutiveLoops++;
+    if (consecutiveLoops >= LOOP_DISABLE_AFTER) {
+      loopDisabledUntil = nowMs2 + 60000;
+      consecutiveLoops = 0;
+      state.loop = { ...state.loop, state: "DISABLED", decision: "LOOP_OFF", reason: "20 siklus berturut · auto-off 60 detik", nextAt: loopDisabledUntil };
+      notify();
+      return;
+    }
+    LOOP_HISTORY.push(nowMs2);
     state.loop = { ...state.loop, state: "DECIDING", decision: "NEXT_CYCLE", cycle, reason: `D verified · ${status || "COMPLETED"} · audit ${audit || "VALID"}`, nextAt: nowMs + LOOP_DELAY_MS };
     notify();
     if (loopTimer) clearTimeout(loopTimer);

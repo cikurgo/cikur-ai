@@ -8,7 +8,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "1.1.0-CGO-ABC-COGNITION";
+  const VERSION = "1.2.0-HUMAN-RESULT";
 
   function engine() {
     return global.CGOMachineABC || global.CGO_MACHINE_ABC || global.CGOCoreMachine || null;
@@ -246,10 +246,29 @@
   function formatHint(abc, style) {
     if (!abc || !abc.ok) return "";
     style = style || "compact";
+    // Prefer human summary from bridge (physics / relasi / saran)
+    if (abc.human && abc.human.body) {
+      const head = abc.human.headline || ("ABC · " + (abc.status || "–"));
+      if (style === "customer") {
+        return "\n\n〔Mesin ABC〕 " + String(abc.human.body).slice(0, 320);
+      }
+      if (style === "full") {
+        return "[Mesin ABC] " + head + " — " + String(abc.human.body).slice(0, 420);
+      }
+      return "[Mesin ABC] " + String(abc.human.body).slice(0, 280);
+    }
     const conf = abc.confidence != null ? Math.round(Number(abc.confidence) * 100) + "%" : "–";
     const nFind = (abc.findings || []).length;
     const audit = abc.audit?.status || abc.audit || "–";
     const ver = abc.version || abc.engine || "";
+    const phys = (abc.findings || []).filter(function (f) { return f && /PHYSICS/.test(String(f.type || "")); });
+    let extra = "";
+    if (phys[0] && phys[0].lqm != null) {
+      extra = " · LQM " + Number(phys[0].lqm).toFixed(1) + " dB";
+    }
+    if (Array.isArray(abc.relationBreaks) && abc.relationBreaks.length) {
+      extra += " · relasi putus " + abc.relationBreaks.length;
+    }
     if (style === "customer") {
       return (
         "\n\n〔Mesin ABC〕 status " +
@@ -257,10 +276,11 @@
         " · keyakinan " +
         conf +
         (nFind ? " · temuan " + nFind : "") +
+        extra +
         (audit && audit !== "–" ? " · audit " + audit : "")
       );
     }
-    return `[Mesin ABC ${ver}] status ${abc.status || "–"} · keyakinan ${conf} · temuan ${nFind} · audit ${audit}`;
+    return "[Mesin ABC " + ver + "] status " + (abc.status || "–") + " · keyakinan " + conf + " · temuan " + nFind + extra + " · audit " + audit;
   }
 
   /**
@@ -272,7 +292,7 @@
     const show =
       options.includeAbcHint === true ||
       options.forceHint === true ||
-      (options.userText && /mesin\s*abc|hasil audit|laporan formal|self-?test/i.test(String(options.userText)));
+      (options.userText && /mesin\s*abc|hasil audit|laporan formal|self-?test|status sistem|source scan|relasi|fisika|lqm|perbaiki|repair/i.test(String(options.userText)));
     if (!show) return answerText;
     const hint = formatHint(abc, options.style || "compact");
     if (!hint) return answerText;
