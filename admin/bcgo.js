@@ -117,6 +117,9 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "admin/cgo-ai-radar.js", path: "cgo-ai-radar.js", role: "Radar Engine" },
   { file: "admin/cgo-ai-radar-visual.js", path: "cgo-ai-radar-visual.js", role: "Radar Visual" },
   { file: "admin/cgo-ai-voice-operator.js", path: "cgo-ai-voice-operator.js", role: "Voice Operator" },
+  { file: "admin/cgo-error-dashboard.html", path: "cgo-error-dashboard.html", role: "Error Dashboard UI" },
+  { file: "admin/cgo-error-dashboard.js", path: "cgo-error-dashboard.js", role: "Error Dashboard Engine" },
+  { file: "admin/cgo-otak-hub.js", path: "cgo-otak-hub.js", role: "Otak Hub" },
   { file: "admin/cikur-go.browser.js", path: "cikur-go.browser.js", role: "Otak Jenius Browser" },
   { file: "admin/cikur-go.js", path: "cikur-go.js", role: "Otak Jenius Core" },
   { file: "admin/cikur-v3-extension.js", path: "cikur-v3-extension.js", role: "Otak Jenius v3" },
@@ -661,18 +664,25 @@ function emit(step, message, target, error = null, options = {}) {
         return false;
       };
 
-      // Sapaan
-      if (/^(halo|hai|hallo|helo|hello|hi|hey|pagi|siang|sore|malam)\b/.test(q) || /siapa\s+kamu|kamu\s+siapa/.test(q)) {
+      // Sapaan multi-bahasa
+      const isJa = /[\u3040-\u30ff\u3400-\u9faf]/.test(qRaw);
+      const isEn = !isJa && ((q.match(/\b(the|and|what|how|hello|thanks|please|status|system)\b/g) || []).length >= 2);
+      if (/^(halo|hai|hallo|helo|hello|hi|hey|pagi|siang|sore|malam|こんにちは)\b/i.test(qRaw) || /siapa\s+kamu|kamu\s+siapa|who\s+are\s+you/i.test(q)) {
+        const cyc = num(st.cycle || cycleNo || 0);
+        const step = st.step || "siaga";
+        if (isJa) return "こんにちは。CGOオペレーターです。段階 " + step + "、サイクル " + cyc + " を監視中です。";
+        if (isEn) return "Hello, I am CGO Operator. Live nerves at stage " + step + ", cycle " + cyc + ". Ask status, scanner, radar, or number spelling.";
         return "Halo, saya CGO Operator. Saya membaca saraf sistem yang sedang hidup — tahap " +
-          (st.step || "siaga") + ", siklus ke-" + num(st.cycle || cycleNo || 0) + ".";
+          step + ", siklus ke-" + cyc +
+          ". Silakan tanya status, scanner, radar, file saraf, atau minta saya hitung dan eja sesuatu.";
       }
 
       if (/bisa\s*apa|kamu\s*bisa|fitur|kemampuan|bisa\s*bantu/.test(q)) {
-        return "Saya bisa membantu status sistem, scanner source, radar agent, hitung angka ke kata, ejaan, dan ringkasan organ.";
+        return "Saya bisa membantu status sistem, scanner source, radar agent, hitung angka ke kata, ejaan, dan ringkasan organ. Sebut saja yang ingin dicek.";
       }
 
       if (/terima kasih|makasih|thanks/.test(q)) {
-        return "Sama-sama.";
+        return "Sama-sama. Saya tetap memantau saraf sistem. Silakan tanya kapan saja.";
       }
 
       // Status
@@ -695,12 +705,12 @@ function emit(step, message, target, error = null, options = {}) {
 
       // Jika evidence kosong
       if (!text) {
-        return "Saya sudah baca permintaanmu, tetapi bukti live belum cukup untuk menjawab itu.";
+        return "Saya sudah baca permintaanmu, tetapi bukti live belum cukup. Coba tanya status, scanner, atau nama file saraf.";
       }
 
       // Buang bila evidence sendiri adalah label klasifikasi (regresi lama)
       if (isClassLabel(text)) {
-        return "Saya memahami arah pertanyaanmu, tapi belum bisa menjawabnya dengan pasti. Bisa dijelaskan sedikit lagi?";
+        return "Pertanyaanmu sudah masuk. Agar saya jawab dari bukti yang ada, sebutkan sedikit lebih spesifik — misalnya status sistem, scanner, nama file, atau radar agent.";
       }
 
       return polish(text);
@@ -722,7 +732,7 @@ function answerQuestion(question) {
     if (!q) return "Saya siap. Tanyakan kondisi sistem, error, file tertentu, telemetry terakhir, siklus saya, atau bukti yang sedang saya lihat.";
 
     if (/^(halo|hai|hallo|helo|hello|hi|hey|pagi|siang|sore|malam)\b/.test(q) || /siapa kamu|kamu siapa/.test(q)) {
-      return `Halo. Saya CGO di tahap ${state.step}, siklus ${cycleNo}. ${situation()}`;
+      return `Halo. Saya CGO di tahap ${state.step}, siklus ${cycleNo}. ${situation()} Tanya bebas: status, file, hitung, eja, emoji.`;
     }
 
     if (/scan ulang|rescan|pindai ulang|periksa ulang/.test(q)) {
@@ -831,7 +841,24 @@ function answerQuestion(question) {
       return `Peta saraf (basename organ):\n${lines.join("\n")}\nAnomali aktif dari telemetry: ${Object.values(organs).filter(o=>o.state==="ACTIVE").length}.`;
     }
 
-    return `Saya menangkap pertanyaanmu: “${raw}”. Saya belum punya bukti spesifik. Tanyakan: status sistem, error, file tertentu, scanner, radar/agent terdekat, saraf/organ, telemetry terakhir, atau cycle.`;
+    // Natural free-form: pakai state hidup, bukan daftar menu kaku
+    {
+      const mode = (st.cycleMode || "siaga");
+      const step = (st.step || "—");
+      const cyc = st.cycle || cycleNo || 0;
+      const nAct = (metrics.active != null) ? metrics.active : 0;
+      const nOrg = (metrics.total != null) ? metrics.total : 0;
+      if (/^(ok|oke|sip|makasih|terima kasih|thanks|thx)\b/i.test(qRaw)) {
+        return "Sama-sama. Saya tetap memantau saraf sistem di sini.";
+      }
+      if (nAct > 0) {
+        return "Untuk “" + qRaw + "”: ada " + num(nAct) + " anomali aktif di siklus ke-" + num(cyc) +
+          " (mode " + mode + "). Tanya status sistem atau sebut nama file agar saya uraikan buktinya.";
+      }
+      return "Saya membaca “" + qRaw + "” di siklus ke-" + num(cyc) + " (mode " + mode + ", tahap " + step +
+        "). " + (nOrg ? (num(nOrg) + " organ terpantau, ") : "") +
+        "tidak ada anomali aktif. Bisa dilanjut: status, scanner, radar, hitung angka, atau sebut file yang ingin dicek.";
+    }
   }
 
   function interruptForTelemetry(fileName, message, log) {
@@ -1153,67 +1180,9 @@ function answerQuestion(question) {
     }
   }
 
-  // BCGO-owned source absorption cache.
-  // Repaired source stays in the active BCGO runtime path for the next scan cycle.
-  // No OPFS/localStorage/service/external persistence is introduced.
-  const sourceRepairCache = new Map();
-
   let sourceScanInFlight = false;
   let sourceScanTimer = null;
   let sourceScanController = null;
-
-  function getRepairBridge() {
-    try { return globalThis.CGOMachineABCBridge || null; } catch (_) { return null; }
-  }
-
-  function fingerprintSource(value) {
-    const text = String(value ?? "");
-    let h = 2166136261;
-    for (let i = 0; i < text.length; i++) {
-      h ^= text.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return (h >>> 0).toString(16).padStart(8, "0");
-  }
-
-  function recordRepairRuntime(file, result, sourceText, postRepair) {
-    const patched = result?.patchedText;
-    if (!result || result.status !== "REPAIRED" || result.verified !== true || typeof patched !== "string" || !patched.trim()) return null;
-    const entry = {
-      file,
-      status: "REPAIRED",
-      candidate: result.candidate?.id || null,
-      verified: true,
-      beforeFingerprint: result.beforeFingerprint || null,
-      afterFingerprint: result.afterFingerprint || null,
-      sourceLength: String(sourceText || "").length,
-      patchedLength: patched.length,
-      postRepairStatus: postRepair?.status || null,
-      postRepairAudit: postRepair?.audit || null,
-      postRepairRoute: postRepair?.route || null,
-      appliedAt: new Date().toISOString()
-    };
-    sourceRepairCache.set(file, {
-      verified: true,
-      candidate: entry.candidate,
-      originFingerprint: fingerprintSource(sourceText),
-      afterFingerprint: entry.afterFingerprint,
-      patchedText: patched,
-      postRepairVerified: !!entry.postRepairVerified,
-      postRepairAudit: entry.postRepairAudit || null,
-      updatedAt: entry.appliedAt
-    });
-
-    state.repairRuntime = {
-      ...(state.repairRuntime || {}),
-      status: "REPAIRED",
-      cycle: Number(state.cycle || 0),
-      repaired: Number(state.repairRuntime?.repaired || 0) + 1,
-      verified: Number(state.repairRuntime?.verified || 0) + 1,
-      targets: { ...(state.repairRuntime?.targets || {}), [file]: entry }
-    };
-    return entry;
-  }
 
   async function runInternalSourceScan() {
     if (!canRun() || sourceScanInFlight) return;
@@ -1243,38 +1212,8 @@ function answerQuestion(question) {
       try {
         const response = await fetch(new URL(item.path, location.href).href, { cache: "no-store", signal: scanSignal });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const fetchedText = await response.text();
-        if (!fetchedText.trim()) throw new Error("SOURCE_EMPTY");
-
-        // If the live origin still matches the source fingerprint that produced
-        // a verified repair, BCGO re-absorbs the already repaired FULL SOURCE
-        // before analysis. This keeps the repair inside the BCGO source path
-        // without introducing OPFS/localStorage or a parallel executor.
-        const cachedRepair = sourceRepairCache.get(item.file);
-        let text = fetchedText;
-        if (
-          cachedRepair &&
-          cachedRepair.verified === true &&
-          cachedRepair.originFingerprint === fingerprintSource(fetchedText) &&
-          typeof cachedRepair.patchedText === "string" &&
-          cachedRepair.patchedText.trim()
-        ) {
-          text = cachedRepair.patchedText;
-          scan.fileStates[item.file] = {
-            status: "REPAIRED_ABSORBED",
-            message: `${text.length.toLocaleString("id-ID")} karakter · FULL PATCH terserap kembali ke jalur BCGO.`,
-            contentHash: cachedRepair.afterFingerprint || null,
-            changed: true,
-            repair: {
-              candidate: cachedRepair.candidate || null,
-              verified: true,
-              postRepairVerified: cachedRepair.postRepairVerified === true,
-              audit: cachedRepair.postRepairAudit || null,
-              absorbed: true
-            }
-          };
-        }
-
+        const text = await response.text();
+        if (!text.trim()) throw new Error("SOURCE_EMPTY");
         contents.set(item.file, text);
         scan.filesReadable++;
         scan.filesScanned++;
@@ -1298,71 +1237,7 @@ function answerQuestion(question) {
         if (changed) {
           recordEvent("SOURCE_CHANGED", `Source ${item.file} berubah — saraf disesuaikan ulang.`, item.file.split("/").pop());
         }
-        let repairResult = null;
-        let postRepair = null;
-        if (
-          /\.(?:js|html)$/i.test(item.file)
-        ) {
-          const bridge = getRepairBridge();
-          if (bridge && typeof bridge.repairSource === "function") {
-            try {
-              repairResult = bridge.repairSource(text, { source: item.file, autoApply: true, fullAudit: true });
-              if (repairResult?.status === "REPAIRED" && repairResult.verified === true && typeof repairResult.patchedText === "string") {
-                // PATCH FULL SOURCE kembali ke alur BCGO saat ini — tanpa OPFS/runtime storage paralel.
-                const originalText = text;
-                text = repairResult.patchedText;
-                contents.set(item.file, text);
-                postRepair = typeof bridge.analyze === "function"
-                  ? bridge.analyze(text, { source: item.file, fullAudit: true, autoReflect: false, maxCycles: 1 })
-                  : null;
-                const entry = recordRepairRuntime(item.file, repairResult, originalText, postRepair);
-                const verifiedPost = !!(postRepair && postRepair.ok && postRepair.audit?.status === "VALID");
-                if (entry) {
-                  entry.postRepairVerified = verifiedPost;
-                  entry.postRepairStatus = postRepair?.status || null;
-                  entry.postRepairAudit = postRepair?.audit?.status || postRepair?.audit || null;
-                  entry.postRepairRoute = postRepair?.packet?.cycles?.[0]?.pipeline
-                    ? Object.entries(postRepair.packet.cycles[0].pipeline).filter(([k,v]) => ["A","B","C","D"].includes(k) && v).map(([k]) => k).join(">")
-                    : null;
-                  const cached = sourceRepairCache.get(item.file);
-                  if (cached) {
-                    cached.postRepairVerified = verifiedPost;
-                    cached.postRepairAudit = entry.postRepairAudit;
-                    cached.postRepairRoute = entry.postRepairRoute;
-                    cached.patchedText = text;
-                    cached.afterFingerprint = repairResult.afterFingerprint || cached.afterFingerprint;
-                  }
-                }
-                scan.fileStates[item.file] = {
-                  status: verifiedPost ? "REPAIRED_VERIFIED" : "REPAIRED_REVIEW",
-                  message: `${text.length.toLocaleString("id-ID")} karakter · ${repairResult.candidate?.id || "REPAIR"} · FULL PATCH → SERAP ULANG → POST-REPAIR ${verifiedPost ? "VERIFIED" : "REVIEW"}`,
-                  issues,
-                  contentHash: repairResult.afterFingerprint || contentHash,
-                  changed: true,
-                  repair: {
-                    candidate: repairResult.candidate?.id || null,
-                    verified: repairResult.verified === true,
-                    postRepairVerified: verifiedPost,
-                    audit: postRepair?.audit?.status || postRepair?.audit || null
-                  }
-                };
-                scan.findings.push({
-                  type: "SOURCE_REPAIRED",
-                  severity: verifiedPost ? "INFO" : "MEDIUM",
-                  sourceFile: item.file,
-                  message: `Full patch ${repairResult.candidate?.id || "REPAIR"} dikembalikan ke source aktif BCGO dan diserap ulang.`,
-                  repair: scan.fileStates[item.file].repair
-                });
-              }
-            } catch (repairError) {
-              repairResult = { status: "REPAIR_ERROR", error: String(repairError?.message || repairError).slice(0, 240) };
-            }
-          }
-        }
-
-        if (repairResult?.status === "REPAIRED" && repairResult.verified === true) {
-          // Jangan timpa hasil repair dengan CLEAN/REVIEW pada cabang scanner biasa.
-        } else if (issues.length) {
+        if (issues.length) {
           scan.fileStates[item.file] = {
             status: "REVIEW",
             message: `${text.length.toLocaleString("id-ID")} karakter · pantau: ${issues.join(", ")}${changed ? " · DIROMBAK" : ""}`,
@@ -1439,6 +1314,7 @@ function answerQuestion(question) {
     const contracts = [
       ["admin/bcgo.html", "admin/bcgo.js", "BCGO_ENGINE_IMPORT"],
       ["admin/cgo-error-dashboard.html", "admin/cgo-error-dashboard.js", "ERROR_DASHBOARD"],
+      ["admin/bcgo.html", "admin/cgo-error-dashboard.html", "ERROR_MONITOR_LINK"],
       ["admin/bcgo.js", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
       ["admin/bcgo-admin.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
       ["admin/data-cgo.html", "cikur-config.js", "ADMIN_AUTH_CONFIG"],
@@ -1454,7 +1330,12 @@ function answerQuestion(question) {
     ];
     for (const [a,b,key] of contracts) {
       const text=contents.get(a)||"";
-      const ok = text.includes(b.split('/').pop()) || (b === "cikur-config.js" && (text.includes("../cikur-config.js") || text.includes("cikur-config.js"))) || (b === "admin/bcgo.js" && text.includes("./bcgo.js"));
+      const baseB = b.split("/").pop();
+      const ok = text.includes(baseB) || text.includes(b) ||
+        (b === "cikur-config.js" && (text.includes("../cikur-config.js") || text.includes("cikur-config.js"))) ||
+        (b === "admin/bcgo.js" && (text.includes("./bcgo.js") || text.includes("bcgo.js"))) ||
+        (b === "admin/cgo-error-dashboard.js" && text.includes("cgo-error-dashboard.js")) ||
+        (b === "admin/cgo-error-dashboard.html" && (text.includes("cgo-error-dashboard.html") || text.includes("Error Monitor")));
       relations.push({ type:"CROSS_FILE_CONTRACT", status: ok ? "LINKED" : "MISMATCH", confidence: ok ? "VERIFIED" : "HIGH", sourceFile:a, targetFile:b, key, evidence:{ missingSemantic: ok ? [] : [key] } });
     }
     scan.relations = relations;
@@ -1533,64 +1414,9 @@ function answerQuestion(question) {
     state.fileNerves = nerves;
     state.sourceScan = scan;
     publishToUI(safeClone(state));
-
-    // CLOSED LOOP: setelah BCGO selesai menyerap source/evidence, jalankan
-    // satu siklus Mesin ABC terhadap snapshot BCGO terbaru. Dashboard menerima
-    // telemetry A→B→C→D dari bridge dan dapat meminta scan berikutnya.
-    try {
-      const abcBridge = getRepairBridge();
-      if (abcBridge && typeof abcBridge.ingestBCGOState === "function") {
-        const link = abcBridge.ingestBCGOState(safeClone(state), {
-          force: true,
-          autoRepair: false,
-          maxCycles: 1
-        });
-        if (link && link.ok) {
-          state.abcLiveLink = {
-            mode: link.mode || "LIVE",
-            status: link.status || null,
-            audit: link.audit || null,
-            revision: link.evidence?.revision ?? state.cycle ?? null,
-            fingerprint: link.evidence?.fingerprint || null,
-            claimCount: link.claimCount ?? link.evidence?.claims?.length ?? 0,
-            capturedAt: link.capturedAt || new Date().toISOString(),
-            source: "BCGO_SOURCE_SCAN_CLOSED_LOOP"
-          };
-          publishToUI(safeClone(state));
-        }
-      }
-    } catch (abcError) {
-      recordEvent("ABC_CLOSED_LOOP_ERROR", `Mesin ABC gagal memproses snapshot source scan: ${String(abcError?.message || abcError).slice(0, 220)}`, "SYS_ABC_CLOSED_LOOP");
-    }
-
     sourceScanInFlight = false;
     sourceScanController = null;
   }
-
-  let dashboardControlChannel = null;
-  let lastDashboardCycleCommand = null;
-  try {
-    if (typeof BroadcastChannel === "function") {
-      dashboardControlChannel = new BroadcastChannel("CGO_DASHBOARD_CONTROL");
-      dashboardControlChannel.onmessage = (ev) => {
-        const command = ev && ev.data;
-        if (!command || command.type !== "CGO_DASHBOARD_NEXT_CYCLE") return;
-        if (lastDashboardCycleCommand === command.cycle) return;
-        if (!canRun()) return;
-        lastDashboardCycleCommand = command.cycle;
-        recordEvent("DASHBOARD_LOOP", `Dashboard meminta siklus berikutnya: ${command.action || "RESCAN_AND_REPROCESS"}.`, "SYS_DASHBOARD_NEXT_CYCLE");
-        try {
-          runInternalSourceScan().catch(error => {
-            sourceScanInFlight = false;
-            state.sourceScan = { ...makeInitialSourceScan(), status: "DEGRADED", phase: "COMPLETE", message: String(error?.message || error) };
-            publishToUI(safeClone(state));
-          });
-        } catch (error) {
-          recordEvent("DASHBOARD_LOOP_ERROR", String(error?.message || error), "SYS_DASHBOARD_NEXT_CYCLE");
-        }
-      };
-    }
-  } catch (_) {}
 
   function refreshState() {
     if (!canRun()) return;
@@ -1807,8 +1633,6 @@ function answerQuestion(question) {
       clearInterval(refreshTimer);
       if (sourceScanTimer) { clearInterval(sourceScanTimer); sourceScanTimer = null; }
       if (sourceScanController) { try { sourceScanController.abort(); } catch (_) {} sourceScanController = null; }
-      try { if (dashboardControlChannel) dashboardControlChannel.close(); } catch (_) {}
-      dashboardControlChannel = null;
       if (typeof unsubscribeAuth === "function") unsubscribeAuth();
       cleanupRealtime();
     }

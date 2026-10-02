@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.7.0-INSTRUCTION-NARASI";
+  const VERSION = "1.6.1-INTERNAL-RESTORE";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -307,7 +307,7 @@
   
   
   // Sesi percakapan bersama (instruction + memori)
-  let convSession = { topic: null, turn: 0, mood: null, style: null, lang: "id", files: [], primaryFile: null, lastReference: null, clarificationNeeded: false };
+  let convSession = { topic: null, turn: 0, mood: null, style: null, files: [], primaryFile: null };
 
 
   /* ---------------- Multi-bahasa: frasa natural (bukan template kaku) ---------------- */
@@ -378,20 +378,6 @@
   }
 
 
-  function applyNarration(text, intent, lang) {
-    const n = global.CGONarasi;
-    if (!n || typeof n.narrate !== "function" || !text) return text;
-    try {
-      return n.narrate(text, {
-        language: lang || "id",
-        topic: intent && intent.topic,
-        mode: intent && intent.mode,
-        short: String(text).length < 50,
-        preserveFacts: true
-      });
-    } catch (_) { return text; }
-  }
-
   async function ask(text, ctx) {
     ctx = ctx || {};
     const t = String(text || "").trim();
@@ -426,21 +412,6 @@
     // itu yang bikin chat berat/hang. Jalur sistem hanya trigger eksplisit.
     const systemRequest = SYSTEM_TRIGGER.test(t) || !!(intent && intent.explicitAction && (intent.topic === "SYSTEM_WORK" || intent.topic === "REPAIR"));
     const convOnly = !systemRequest;
-
-    // Klarifikasi lebih dulu bila Konstitusi mendeteksi referensi/follow-up tanpa konteks yang cukup.
-    // Jangan meneruskan pertanyaan ambigu ke pipeline sistem karena dapat memicu jalur berat atau jawaban yang salah sasaran.
-    if (intent && intent.shouldClarify) {
-      const prompt = intent.contextualWhy
-        ? "Yang Anda maksud dengan itu terkait bagian atau topik yang mana?"
-        : (intent.contextualFollowUp
-          ? "Saya siap lanjut. Bagian atau hasil yang mana yang ingin dilanjutkan?"
-          : null);
-      if (prompt && (!intent.inheritedTopic || !intent.hasWork)) {
-        answer = prompt;
-        convSession.clarificationNeeded = true;
-        step("INSTRUCTION", true, "clarification-needed");
-      }
-    }
 
     
     // ─── B. Otak Jenius: multi-bahasa · multi-hitung · multi-emoji · multi-fungsi ───
@@ -1133,20 +1104,10 @@
       step("OTAK_CIKURGO", true, "fallback-" + lang);
     }
 
-    // Narasi adalah lapisan presentasi terakhir: tidak boleh mengubah evidence, status, angka, atau tingkat kepastian.
-    if (answer) {
-      const beforeNarration = String(answer);
-      const narrated = applyNarration(beforeNarration, intent, lang);
-      if (narrated && String(narrated).trim()) {
-        answer = String(narrated).trim();
-        if (answer !== beforeNarration) step("NARASI", true, "presentation-only");
-      }
-    }
-
     // Ingat
     if (answer) {
       remember(t, answer, trace.filter(function (x) { return x.ok; }).map(function (x) { return x.module; }));
-      // remember() sudah meneruskan turn ke CIKURGO. Jangan panggil ingat() kedua kali.
+      try { if (CG && typeof CG.ingat === "function") CG.ingat(t, answer); } catch (_) {}
     }
 
     state.lastTrace = trace.filter(function (x) { return x.ok; }).map(function (x) { return x.module; }).join(" → ") || "—";
@@ -1165,7 +1126,6 @@
   const API = Object.freeze({
     version: VERSION,
     status, snapshot, ask, recall,
-    conversationState() { return { ...convSession, files: Array.isArray(convSession.files) ? convSession.files.slice() : [] }; },
     subscribe(fn) { if (typeof fn !== "function") return () => {}; listeners.add(fn); return () => listeners.delete(fn); },
     refresh: notify
   });

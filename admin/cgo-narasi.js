@@ -15,15 +15,6 @@
     return colons >= 2 && tech;
   }
 
-  // Ganti dengan teks tetap, tapi huruf pertama dikapitalkan bila jatuh di awal kalimat.
-  function sentenceAware(txt) {
-    return function (m, offset, str) {
-      var before = String(str).slice(0, offset);
-      var atStart = /(^|[.!?]\s+)$/.test(before);
-      return atStart ? txt.charAt(0).toUpperCase() + txt.slice(1) : txt;
-    };
-  }
-
   function narrate(text, konteks) {
     let t = String(text || "").trim();
     if (!t) return t;
@@ -41,17 +32,10 @@
       [/gagal\s+0/i, "tanpa kegagalan"],
       [/Relasi\s*linked\s*(\d+)/i, "$1 relasi saling terhubung"],
       [/Sistem stabil,?\s*tidak ada anomali aktif\.?/i, "Sistem sedang stabil, tidak ada anomali aktif."],
-      // "Tahap X" di AWAL kalimat tetap kapital ("Di tahap X"); di tengah kalimat jadi "di tahap X".
-      // "tahap X": awal kalimat -> "Di tahap X"; tengah kalimat -> "di tahap X"; sudah didahului "di" -> biarkan.
-      [/(^|[.!?]\s+|\bdi\s+)?tahap\s+(\w+)/gi, function (m, pre, name, offset) {
-        pre = pre == null ? null : pre;
-        if (pre && /^\s*di\s+$/i.test(pre)) return m;
-        if (pre !== null && (pre === "" || /[.!?]\s+$/.test(pre))) return pre + "Di tahap " + name;
-        return "di tahap " + name;
-      }],
+      [/Tahap\s+(\w+)/i, "di tahap $1"],
       [/scanner\s+DEGRADED/i, "scanner masih perlu perhatian (DEGRADED)"],
-      [/Integrity:\s*PASS/i, sentenceAware("integritas aman")],
-      [/Integrity:\s*FAIL/i, sentenceAware("integritas bermasalah")]
+      [/Integrity:\s*PASS/i, "integritas aman"],
+      [/Integrity:\s*FAIL/i, "integritas bermasalah"]
     ];
     for (let i = 0; i < reps.length; i++) {
       try { t = t.replace(reps[i][0], reps[i][1]); } catch (_) {}
@@ -68,7 +52,10 @@
     // Struktur: jangan memanjangkan jawaban singkat
     if (konteks.short || t.split(/\s+/).length < 18) return t;
 
-    // (Prefix pembuka laporan dihapus — jawaban langsung ke inti.)
+    // Hook ringan hanya untuk laporan panjang
+    if (isReportStyle(text) && !/^(Tadi|Saya|Alhamdulillah|Aduh)/i.test(t)) {
+      t = "Tadi saya lihat: " + t.charAt(0).toLowerCase() + t.slice(1);
+    }
 
     return t.replace(/\s{2,}/g, " ").trim();
   }

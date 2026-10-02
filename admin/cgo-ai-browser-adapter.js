@@ -634,7 +634,8 @@ function reasonChat(question = {}, options = {}) {
     if (cog && typeof cog.enrich === "function" && cog.shouldEnrich(raw, options)) {
       const en = cog.enrich(raw, { ...options, style: "compact" });
       if (en.used && en.abc && en.abc.ok && en.hint) {
-        // Label teknis TIDAK ditampilkan ke user; hasil formal hanya disimpan di analysis (debug/UI lain).
+        const base = String(answer).trim();
+        if (!/Mesin ABC/i.test(base)) answer = base + "\n\n" + en.hint;
         if (analysis && typeof analysis === "object") analysis.machineAbc = {
           ok: true, status: en.abc.status, confidence: en.abc.confidence,
           audit: en.abc.audit?.status || en.abc.audit || null
@@ -645,7 +646,7 @@ function reasonChat(question = {}, options = {}) {
   try {
     if (latestAbc && /mesin\s*abc|hasil audit|laporan formal|self-?test|audit/i.test(raw) && !/Mesin ABC/i.test(String(answer))) {
       const conf = latestAbc.confidence != null ? Math.round(Number(latestAbc.confidence) * 100) + "%" : "–";
-      answer = String(answer).trim() + " Hasil audit terakhir: status " + (latestAbc.status || "–") + ", keyakinan " + conf + ", " + (latestAbc.findingsCount ?? 0) + " temuan, audit " + (latestAbc.audit || "–") + ".";
+      answer = String(answer).trim() + "\n\n[Mesin ABC] status " + (latestAbc.status || "–") + " · keyakinan " + conf + " · temuan " + (latestAbc.findingsCount ?? 0) + " · audit " + (latestAbc.audit || "–");
       if (analysis && typeof analysis === "object") analysis.machineAbc = { ok:true, status:latestAbc.status, confidence:latestAbc.confidence, audit:latestAbc.audit || null };
     }
   } catch (_abc2) {}
@@ -777,11 +778,11 @@ function chatAnswer(question = {}) {
   if (!q) return "Siap. Ceritakan saja apa yang ingin kamu cek. Saya akan jawab dari keadaan BCGO yang sedang hidup, bukan dari tebakan.";
 
   if (/^(halo|hai|hello|pagi|siang|sore|malam)\b/.test(q)) {
-    return `Hai.`;
+    return `Hehe, iya 😊 Saya di sini. Sekarang saya sedang berada di cycle #${state.cycle ?? "-"}, tahap ${state.step || "-"} dan terus membaca telemetry BCGO. Kalau mau, langsung tanya sistem, file, hubungan antar-file, atau kasus yang sedang saya selidiki.`;
   }
 
   if (/aman|sehat|normal|kondisi sistem|status sistem|sistem aman/.test(q)) {
-    return sayStatus();
+    return `Baik, saya cek dulu kondisi yang benar-benar saya punya sekarang. ${sayStatus()} Jadi saya tidak sekadar melihat lampu hijau; saya cocokkan koneksi, telemetry, anomaly, dan hasil scanner.`;
   }
 
   if (/sedang apa|lagi apa|sedang mengerjakan|ngapain|kerja apa/.test(q)) {
@@ -796,7 +797,7 @@ function chatAnswer(question = {}) {
       if (!rel.length) return `Saya sudah mencari relasi untuk ${file}, tetapi pada snapshot scanner saat ini belum ada pasangan source yang bisa saya tampilkan sebagai hubungan terdeteksi. Saya tidak akan mengarang relasi.`;
       return `Untuk ${file}, saya menemukan ${rel.length} hubungan source yang tercatat. Yang terlihat sekarang: ${rel.slice(0,6).map(x => `${x.pair} (${x.status})`).join("; ")}. Jadi pasangan yang muncul di kartu memang berasal dari hasil scanner, bukan dekorasi UI.`;
     }
-    return `Saat ini scanner mencatat ${relations.length} relasi antar-file.`;
+    return `Saat ini scanner mencatat ${relations.length} relasi antar-file. Sebutkan nama file, misalnya “hubungan agentcgo.html”, dan saya bisa uraikan pasangan yang terdeteksi.`;
   }
 
   const codeInspectionIntent = /\b(cek|periksa|baca|lihat|tampilkan|petakan|telusuri|jelajahi|source|kode|code|file asli|full code|utuh)\b/.test(q);
@@ -844,10 +845,15 @@ function chatAnswer(question = {}) {
     return `Bisa. Saya sedang menjaga source scanner tetap berjalan. Permintaanmu saya perlakukan sebagai permintaan pemeriksaan ulang, tetapi saya tidak akan mengubah source hanya karena diminta lewat chat.`;
   }
 
-  const aktifN = Number(metrics.active ?? active.length) || 0;
-  return aktifN === 0
-    ? `Sistem tenang di siklus #${state.cycle ?? "-"}. Tidak ada anomali aktif.`
-    : `Ada ${aktifN} anomali aktif di siklus #${state.cycle ?? "-"}${active[0] ? `; yang pertama ${active[0][0]}` : ""}.`;
+  // Jawaban natural berbasis state — bukan template kaku "Saya paham. Untuk…"
+  const mode = state.cycleMode || "siaga";
+  const step = state.step || "—";
+  const nActive = (metrics.active != null) ? Number(metrics.active) : ((active && active.length) || 0);
+  const nRel = relations.length;
+  if (nActive > 0) {
+    return `Saya lihat ${nActive} anomali aktif di siklus #${state.cycle ?? "-"} (mode ${mode}, tahap ${step}). Fokus saat ini: ${target}. Ada ${nRel} relasi source terdeteksi. Sebut file atau organ yang ingin dicek, nanti saya uraikan dari bukti yang ada.`;
+  }
+  return `Sistem terlihat tenang di siklus #${state.cycle ?? "-"} (mode ${mode}, tahap ${step}). Tidak ada anomali aktif; ${nRel} relasi source sudah terpetakan. Untuk “${raw}”, sebut saja status, scanner, radar, atau nama file — saya jawab dari bukti BCGO yang sedang hidup.`;
 }
 
 function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = null) {
