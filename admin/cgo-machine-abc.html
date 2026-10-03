@@ -378,7 +378,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 </div>
 
 <script src="cgo-machine-abc.js?v=0.9.13-UI-CONSISTENCY"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.5.4-UI-CONSISTENCY"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.5.5-SYNC-MIRROR"></script>
 <script>
 (() => {
   "use strict";
@@ -843,14 +843,27 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
     // Pesan dari halaman ini sendiri (BroadcastChannel memantul ke instance lain di tab yang sama) sudah
     // dihitung lewat observer lokal — abaikan agar siklus tidak terhitung dua kali.
     if (msg.pageId && Bridge && msg.pageId === Bridge.pageId) return;
+    if (msg.kind === "bcgo-sync" && msg.data) {
+      markBus(true, "bcgo-sync");
+      const d = msg.data;
+      if (d.human && d.human.body) {
+        paintHumanResult({
+          result: { status: d.status, decision: { confidence: d.confidence }, findings: [] },
+          audit: d.audit,
+          cycleIndex: d.revision
+        }, null);
+      }
+      return;
+    }
     if (msg.kind !== "cycle" || !msg.data) return;
     markBus(true, "live");
     // Bentuk paket seperti hasil observe lokal
     const data = msg.data;
     const packet = {
       result: data.result,
-      cycles: data.cycles || (data.result ? [data.result] : []),
+      cycles: data.cycles || (data.result ? [{ result: data.result, audit: data.audit, cycleIndex: data.cycleIndex }] : []),
       stopReason: data.stopReason || null,
+      cycleIndex: data.cycleIndex,
       remote: true,
       source: msg.source
     };
@@ -864,8 +877,20 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
       markBus(true, "listen");
     } else {
       window.addEventListener("storage", (ev) => {
-        if (ev.key !== "cgo-abc-bus-ping") return;
-        markBus(true, "storage");
+        if (ev.key === "cgo-abc-bus-ping") { markBus(true, "storage"); return; }
+        if (ev.key === "CGO_ABC_LIVE_LINK_V1" && ev.newValue) {
+          try {
+            const d = JSON.parse(ev.newValue);
+            markBus(true, "live-link");
+            if (d && d.human && d.human.body) {
+              paintHumanResult({
+                result: { status: d.status, decision: { confidence: d.confidence }, findings: [] },
+                audit: d.audit,
+                cycleIndex: d.revision
+              }, null);
+            }
+          } catch (_) {}
+        }
       });
     }
   } catch (err) {

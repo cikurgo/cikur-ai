@@ -7,7 +7,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "1.2.4-INTEGRATION";
+  const VERSION = "1.2.5-SYNC-MIRROR";
   const MAX_ERRORS = 80;
   const MAX_CHAIN = 12;
   const MAX_LOOP_PER_MINUTE = 6;
@@ -738,6 +738,31 @@
       const abcTelemetryChannel = new global.BroadcastChannel("CGO_MACHINE_ABC_TELEMETRY");
       abcTelemetryChannel.onmessage = function (ev) { try { ingestAbcTelemetry(ev && ev.data); } catch (_) {} };
       state._abcTelemetryChannel = abcTelemetryChannel;
+      // Live link / human dari Mesin ABC (lintas-tab)
+      const abcBus = new global.BroadcastChannel("cgo-machine-abc-bus");
+      abcBus.onmessage = function (ev) {
+        try {
+          const msg = ev && ev.data;
+          if (!msg || msg.type !== "CGO_ABC_BUS") return;
+          if (msg.kind === "bcgo-sync" && msg.data) ingestAbcLiveLink(Object.assign({ type: "CGO_ABC_LIVE_LINK" }, msg.data));
+          if (msg.kind === "bcgo-evidence" && msg.data) {
+            state.abcAux = { event: "BCGO_EVIDENCE", status: msg.data.status, audit: msg.data.audit, at: now() };
+            notify();
+          }
+        } catch (_) {}
+      };
+      state._abcBus = abcBus;
+    }
+    // Cadangan localStorage (tab dashboard dibuka belakangan)
+    if (typeof global.addEventListener === "function") {
+      global.addEventListener("storage", function (ev) {
+        try {
+          if (ev.key === "CGO_ABC_LIVE_LINK_V1" && ev.newValue) {
+            const parsed = JSON.parse(ev.newValue);
+            if (parsed) ingestAbcLiveLink(Object.assign({ type: "CGO_ABC_LIVE_LINK" }, parsed));
+          }
+        } catch (_) {}
+      });
     }
   } catch (_) {}
 
@@ -753,6 +778,11 @@
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed && typeof parsed === "object") ingestBcgoState(parsed.state || parsed);
+        }
+        const liveRaw = global.localStorage.getItem("CGO_ABC_LIVE_LINK_V1");
+        if (liveRaw) {
+          const live = JSON.parse(liveRaw);
+          if (live && typeof live === "object") ingestAbcLiveLink(Object.assign({ type: "CGO_ABC_LIVE_LINK" }, live));
         }
       }
     } catch (_) {}

@@ -14,7 +14,7 @@
     return;
   }
 
-  const VERSION = "1.5.4-UI-CONSISTENCY";
+  const VERSION = "1.5.5-SYNC-MIRROR";
   const PAGE_ID = "abc-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   const BUS_NAME = "cgo-machine-abc-bus";
   const listeners = new Set();
@@ -69,6 +69,31 @@
   }
 
 
+
+  const LIVE_LINK_KEY = "CGO_ABC_LIVE_LINK_V1";
+  function mirrorLiveLink(link) {
+    if (!link || typeof link !== "object") return;
+    try {
+      const compact = {
+        type: "CGO_ABC_LIVE_LINK",
+        source: link.source || "BCGO",
+        mode: link.mode || "LIVE",
+        status: link.status || null,
+        audit: link.audit || null,
+        confidence: link.confidence != null ? link.confidence : null,
+        findingsCount: link.findingsCount != null ? link.findingsCount : null,
+        human: link.human || null,
+        revision: link.evidence && link.evidence.revision != null ? link.evidence.revision : (link.revision != null ? link.revision : null),
+        capturedAt: link.capturedAt || new Date().toISOString(),
+        bridgeVersion: VERSION,
+        engineVersion: E.version
+      };
+      // Jangan simpan packet penuh (besar) — cukup human + status untuk UI
+      localStorage.setItem(LIVE_LINK_KEY, JSON.stringify(compact));
+      publishBus("bcgo-sync", compact);
+    } catch (_) {}
+  }
+
   function emit(name, detail) {
     try {
       global.dispatchEvent(new CustomEvent(name, { detail }));
@@ -78,6 +103,23 @@
   function onPacket(packet) {
     lastPacket = packet;
     emit("cgo:machine-abc", packet);
+    try {
+      const res = packet && (packet.result || (packet.cycles && packet.cycles[0] && packet.cycles[0].result));
+      const aud = packet && (packet.audit || (packet.cycles && packet.cycles[0] && packet.cycles[0].audit));
+      if (res && res.status) {
+        mirrorLiveLink({
+          type: "CGO_ABC_LIVE_LINK",
+          source: "ENGINE",
+          mode: "LIVE",
+          status: res.status,
+          audit: (aud && aud.status) || aud || null,
+          confidence: res.decision && res.decision.confidence,
+          findingsCount: Array.isArray(res.findings) ? res.findings.length : 0,
+          human: null,
+          capturedAt: new Date().toISOString()
+        });
+      }
+    } catch (_) {}
     emit("cikur-internal-ai-state", {
       source: "CGO_MACHINE_ABC",
       version: E.version,
@@ -518,6 +560,7 @@
     emit("cgo:machine-abc-bcgo-evidence", { evidence, packet, repairs });
     emit("cgo:machine-abc-bcgo-sync", link);
     publishBus("bcgo-evidence", { status, audit, fingerprint, repairs, revision: evidence.revision });
+    try { mirrorLiveLink(link); } catch (_) {}
     return { ok: true, deduped: false, mode: "LIVE", status, audit, evidence, repairs, packet, link };
   }
 

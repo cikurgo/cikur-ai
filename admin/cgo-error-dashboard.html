@@ -133,6 +133,9 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
           <div id="abc-live-panel" class="abc-console mb-3 rounded-xl px-3 py-2">
             <div class="abc-console-head">
               <div class="text-[10px] uppercase tracking-widest text-violet-300">MESIN ABC · LIVE PIPELINE</div>
+              <div class="text-[10px] text-cyan-300/90 mt-1" id="dash-abc-status">Menunggu tautan BCGO…</div>
+              <div class="text-[11px] text-slate-300 mt-1 leading-snug" id="dash-abc-human">Belum ada hasil manusia dari Mesin ABC. Buka BCGO agar state mengalir, atau tunggu siklus live.</div>
+              <div class="text-[10px] uppercase tracking-widest text-violet-300 hidden">MESIN ABC · LIVE PIPELINE</div>
               <div class="abc-stage-chip" id="abc-stage-chip">STANDBY</div>
               <div id="abc-live-cycle" class="text-[9px] code-font text-slate-500">cycle —</div>
             </div>
@@ -175,8 +178,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 
   <!-- Mesin ABC membantu menerjemahkan error → teks manusia -->
   <script src="cgo-machine-abc.js?v=0.9.13-UI-CONSISTENCY"></script>
-  <script src="cgo-machine-abc-bridge.js?v=1.5.4-UI-CONSISTENCY"></script>
-  <script src="cgo-error-dashboard.js?v=1.2.4-INTEGRATION"></script>
+  <script src="cgo-machine-abc-bridge.js?v=1.5.5-SYNC-MIRROR"></script>
+  <script src="cgo-error-dashboard.js?v=1.2.5-SYNC-MIRROR"></script>
   <script>
   (function () {
     function esc(s) {
@@ -296,6 +299,16 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
       document.getElementById("hero-decision") && (document.getElementById("hero-decision").textContent = loop?.decision || "WAITING_FOR_D");
       document.getElementById("hero-loop-pill") && (document.getElementById("hero-loop-pill").textContent = "LOOP · " + (loop?.state || "STANDBY"));
       document.getElementById("abc-stage-chip") && (document.getElementById("abc-stage-chip").textContent = live ? (live.stage || "STANDBY") : "STANDBY");
+      // Hasil nyata dari tautan BCGO→ABC
+      try {
+        const link = snap.abcLink;
+        const hum = document.getElementById("dash-abc-human");
+        const stEl = document.getElementById("dash-abc-status");
+        if (link) {
+          if (stEl) stEl.textContent = (link.status || "—") + " · Audit " + (link.audit || "—") + (link.confidence != null ? " · " + Math.round(Number(link.confidence) * 100) + "%" : "");
+          if (hum) hum.textContent = (link.human && link.human.body) ? String(link.human.body).slice(0, 280) : ("Tautan ABC aktif · " + (link.status || "—") + " · audit " + (link.audit || "—"));
+        }
+      } catch (_) {}
       const loopEl = document.getElementById("dashboard-loop-state");
       if (loopEl) loopEl.textContent = "LOOP · " + (loop?.state || "STANDBY") + " · " + (loop?.decision || "WAITING_FOR_D") + (loop?.cycle != null ? " · cycle " + loop.cycle : "");
 
