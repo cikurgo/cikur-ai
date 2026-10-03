@@ -10,7 +10,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "0.9.14-SYNTAX-GATE-REPAIR";
+  const VERSION = "0.9.16-DETERMINISTIC-ANTI-AMBIGUITY";
   const MAX_TEXT_SAMPLE = 6000;
   const MAX_ITEMS = 1000;
   const MAX_TOKENS = 5000;
@@ -770,7 +770,7 @@
     return Object.freeze({PHYSICS_CONSTANTS,PHYSICS_MODE,evaluateLinkFromGeo,computeGeometry,computeFSPL,computeSNR,computeAtmPenalty,computeScintillation,calculateLQM,getBER,getPER,runSelfTest});
   })();
 
-  function selfTestInner(){const results=[];const test=(name,fn)=>{try{fn();results.push({name,status:"PASS"})}catch(e){results.push({name,status:"FAIL",error:String(e.message||e)})}};const pt=CGOPhysics.runSelfTest();if(!pt.verified)throw Error("physics kernel self-test failed: "+pt.results.filter(x=>!x.pass).map(x=>x.name).join(","));results.push({name:"physics-kernel",status:"PASS"});test("fingerprint",()=>{if(fingerprint("a")!==fingerprint("a"))throw Error("unstable")});test("delimiter-comment-regex",()=>{if(!balancedDelimiters("const x=/\\{/; // }\n{a:1}").balanced)throw Error("false negative")});test("auto-format",()=>{if(classifyText('{"a":1}').format!=="json")throw Error("json")});test("html-relations-duplicates",()=>{const h=extractHtml('<div id="x"></div><span id="x"><a href="/a"></a>');if(!h.duplicateIds.includes("x")||!h.references.includes("/a"))throw Error("html regression")});test("envelope-validator",()=>{const r=assertEnvelope({__cgoMachineInjection:true,contentMode:"bad",payload:{}});if(r.valid)throw Error("invalid envelope accepted")});test("pipeline",()=>{const o=runCycle("hello world");if(!o.result||!o.audit)throw Error("pipeline")});test("external-evidence-propagation",()=>{const o=runCycle("hello",{externalEvidence:{schema:"CGO_EXTERNAL_EVIDENCE_V1",source:"TEST_REAL_INPUT",capturedAt:now(),claims:[{source:"TEST_REAL_INPUT",target:"observed-target",status:"ANOMALY",severity:"HIGH",message:"observed failure"}],fingerprint:"evidence-test"}});if(o.pipeline.B.findings.filter(x=>x.type==="EXTERNAL_EVIDENCE").length!==1||o.pipeline.C.status!=="PARTIAL"||o.audit.status!=="ATTENTION")throw Error("external evidence not propagated")});test("physics-evidence-propagation",()=>{const o=runCycle("physics",{physicsEvidence:{source:"TEST_PHYSICS",geo:{elevationDeg:5,distanceKm:780,dopplerRateHzPerSec:0,scintFadeDb:0},mode:CGOPhysics.PHYSICS_MODE.IDEAL}});if(!o.pipeline.B.findings.some(x=>x.type==="PHYSICS_LINK_EVALUATION")||o.pipeline.B.decision?.status!=="CONTRADICTION"||o.result?.status!=="CONTRADICTION")throw Error("physics evidence not propagated")});test("physics-evidence-valid",()=>{const o=runCycle("physics-valid",{physicsEvidence:{source:"TEST_PHYSICS",geo:{elevationDeg:75,distanceKm:780,dopplerRateHzPerSec:0,scintFadeDb:0},mode:CGOPhysics.PHYSICS_MODE.IDEAL}});if(o.pipeline.B.decision?.status!=="PROCESSED"||!o.pipeline.B.verification.some(x=>x.type==="PHYSICS_EVIDENCE"&&x.status==="PASS"))throw Error("valid physics evidence rejected")});test("batch",()=>{const o=CGOMachineABC.processMany(["a","b"]);if(o.pipeline.B.items?.length!==2)throw Error("batch")});test("batch-unknowns-aggregate",()=>{let nested={__cgoBatchInjection:true,version:VERSION,items:[]};for(let i=0;i<MAX_BATCH_DEPTH;i++)nested={__cgoBatchInjection:true,version:VERSION,items:[nested]};const rep=MachineA.process(nested);if(!rep.unknowns.some(x=>x.type==="BATCH_DEPTH_LIMIT"&&x.itemIndex===0))throw Error("batch unknown not aggregated")});test("c-injection",()=>{const o=runCycle("x");const inj=MachineC.inject(o.result);const q=runCycle(inj);if(!q.result)throw Error("injection")});test("auto-step",()=>{const o=runCycle("plain text",{});if(o.pipeline.B.operations.includes("SYNTAX_ANALYSIS"))throw Error("text syntax should be skipped");if(!o.pipeline.B.operations.includes("CONTENT_INSPECTION"))throw Error("content step missing")});test("custom-step-selection",()=>{const o=runCycle("hello",{steps:["structure"]});if(!o.pipeline.B.operations.includes("STRUCTURE_INSPECTION")||o.pipeline.B.operations.includes("CONTENT_INSPECTION")||o.pipeline.B.decision!==null)throw Error("custom steps")});test("auto-reflect",()=>{const o=reflect("hello",{maxCycles:3,stopOnStatus:"__NEVER__"});if(!Array.isArray(o.cycles)||o.cycles.length<2||!o.finalResult)throw Error("reflect")});test("reflect-actually-reflects",()=>{const o=reflect("hello",{maxCycles:2,stopOnStatus:"__NEVER__"});const first=o.cycles[0].result;if(o.cycles.length<2||fingerprint(o.cycles[1].pipeline.A.content.value)!==fingerprint(first))throw Error("reflection payload not processed")});test("stream",()=>{let n=0;CGOMachineABC.stream("hello",{onCycle:()=>n++});if(n<1)throw Error("stream")});test("stream-real-time",()=>{const seen=[];CGOMachineABC.stream("hello",{autoReflect:true,maxCycles:3,stopOnStatus:"__NEVER__",minConfidenceDelta:0,onCycle:c=>seen.push(c.cycleIndex)});if(seen.length!==3||seen[0]!==0||seen[1]!==1||seen[2]!==2)throw Error("buffered stream")});test("observe",()=>{let n=0;const off=CGOMachineABC.observe(()=>n++);CGOMachineABC.process("observe");off();if(n!==1)throw Error("observe")});test("stream-observe",()=>{let n=0;const off=CGOMachineABC.observe(()=>n++);CGOMachineABC.stream("observe-stream",{autoReflect:true,maxCycles:2,stopOnStatus:"__NEVER__"});off();if(n!==2)throw Error("stream observe")});test("independence",()=>{const a=auditIndependence();if(!a.verified||a.scannedFunctions<8)throw Error("independence")});test("machine-D",()=>{const o=CGOMachineABC.process("audit");if(o.audit?.status!=="VALID")throw Error("audit failed")});test("audit-tamper-C-payload",()=>{const o=CGOMachineABC.process("tamper");o.pipeline.C.findings.push({fake:true});const d=MachineD.audit(o,"tamper");if(d.status!=="ATTENTION"||!d.checks.some(x=>x.type==="C_PAYLOAD_HASH"&&x.status==="FAIL"))throw Error("tamper undetected")});test("b-batch-depth-guard",()=>{const rep=MachineA.process({__cgoBatchInjection:true,items:[],version:VERSION},{batchDepth:MAX_BATCH_DEPTH});const b=MachineB.process({...rep,structure:{kind:"batch",count:0},content:{mode:"batch",value:[]}}, {batchDepth:MAX_BATCH_DEPTH});if(b.decision?.reason!=="batch_depth_limit")throw Error("guard")});test("record-verification",()=>{const o=runCycle({name:"cgo",value:1});const checks=o.pipeline.B.verification;if(!checks.some(x=>x.type==="RECORD_PRESENT"&&x.status==="PASS"))throw Error("record check missing")});test("collection-verification",()=>{const o=runCycle([{id:1}]);if(!o.pipeline.B.verification.some(x=>x.type==="COLLECTION_PRESENT"&&x.status==="PASS"))throw Error("collection check missing")});test("nan-infinity",()=>{if(CGOMachineABC.process(Infinity).pipeline.A.content.value!=="Infinity")throw Error("infinity")});test("max-input-override",()=>{const o=CGOMachineABC.process("abc",{maxInputSize:10});if(!o.result)throw Error("override")});test("skipped-steps",()=>{const o=CGOMachineABC.process("abc",{steps:["structure"]});if(!o.pipeline.B.skippedSteps.includes("content"))throw Error("skipped")});test("degraded-field",()=>{if(typeof CGOMachineABC.process("abc").pipeline.B.degraded!=="boolean")throw Error("degraded")});test("errors-array",()=>{if(!Array.isArray(CGOMachineABC.process("abc").pipeline.B.errors))throw Error("errors")});test("fallback-array",()=>{if(!Array.isArray(CGOMachineABC.process("abc").pipeline.C.fallbacks))throw Error("fallback")});test("weighted-check",()=>{const o=CGOMachineABC.process("abc");if(!o.pipeline.B.verification[0].status)throw Error("check")});test("contradiction-severity",()=>{const o=CGOMachineABC.process('<!doctype html><html><div id="x"></div><span id="x"></span></html>');if(!o.pipeline.B.contradictions.some(x=>x.severity))throw Error("severity")});test("decision-hierarchy",()=>{const o=CGOMachineABC.process({x:1});if(!["PROCESSED","WELL_FORMED","PARTIAL","DEGRADED","CONTRADICTION","UNRESOLVED"].includes(o.result.status))throw Error("status")});test("machineD-fallback-check",()=>{const o=CGOMachineABC.process("abc");if(!o.audit.checks.some(x=>x.type==="FALLBACK_CHAIN"))throw Error("fallback audit")});test("replay-shape",()=>{const o=CGOMachineABC.process("abc"),r=CGOMachineABC.replay(o);if(!Array.isArray(r.steps))throw Error("replay")});test("verify-replay",()=>{const o=CGOMachineABC.process("abc"),r=CGOMachineABC.replay(o);if(CGOMachineABC.verifyReplay(o,r).status!=="MATCH")throw Error("verify replay")});test("metrics-reset",()=>{const before=CGOMachineABC.getMetrics().totalProcessed;CGOMachineABC.resetMetrics();if(CGOMachineABC.getMetrics().totalProcessed!==0||before<0)throw Error("reset")});test("state-cycle-index",()=>{const o=CGOMachineABC.process("state");if(CGOMachineABC.getState().lastCycleIndex!==0)throw Error("state cycle")});test("pause-reflect",()=>{CGOMachineABC.pause();const r=CGOMachineABC.reflect("pause",{maxCycles:2});CGOMachineABC.resume();if(r.stopReason!=="paused")throw Error("pause reflect")});test("reflect-direct-C",()=>{const r=CGOMachineABC.reflect("abc",{maxCycles:2,stopOnStatus:"__NEVER__",minConfidenceDelta:0});if(r.cycles.length!==2||r.cycles[1].pipeline.A.content.mode!=="record")throw Error("direct C")});test("stream-complete",()=>{let done=false;CGOMachineABC.stream("abc",{onComplete:()=>done=true});if(!done)throw Error("complete")});test("stream-batch-summary",()=>{const o=CGOMachineABC.processMany(["a","b"],{streamBatch:true});if(o.pipeline.C.batch.items.some(x=>x.analysis===undefined))throw Error("summary")});test("date-input",()=>{if(CGOMachineABC.process(new Date()).pipeline.A.input.type!=="date")throw Error("date")});test("object-freeze",()=>{if(!Object.isFrozen(CGOMachineABC))throw Error("freeze")});test("fingerprint-undefined",()=>{const o=CGOMachineABC.process(undefined);if(!o.result||!o.audit)throw Error("undefined crash")});test("digest-sha256-vectors",()=>{if(sha256Hex("abc")!=="ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"||sha256Hex("")!=="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"||sha256Hex("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")!=="248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1")throw Error("sha256")});test("utf8-fallback-availability",()=>{if(typeof utf8Encode!=="function"||utf8Encode("Cikur 🚀").length<8)throw Error("utf8 encoder")});test("digest-key-order",()=>{if(digest({a:1,b:2})!==digest({b:2,a:1}))throw Error("order")});test("prose-not-delimiter-checked",()=>{const o=CGOMachineABC.process("Halo :) tolong 1) cek saldo (dulu");if(o.pipeline.A.content.syntax.delimiters||o.result.status==="PARTIAL")throw Error("prose flagged")});test("let-me-know-is-text",()=>{if(classifyText("let me know if you can help").format!=="text")throw Error("prose as code")});test("regex-after-return",()=>{if(!balancedDelimiters("function f(s){ return /[)]/.test(s) }").balanced)throw Error("regex heuristic")});test("pause-blocks-process",()=>{CGOMachineABC.pause();const o=CGOMachineABC.process("x");const st=CGOMachineABC.stream("x");CGOMachineABC.resume();if(!o.skipped||st.status!=="PAUSED")throw Error("pause ignored")});test("stop-reason-to-observer",()=>{let got=null;const off=CGOMachineABC.observe(p=>{got=p});CGOMachineABC.process("abc",{autoReflect:true,maxCycles:3,stopOnStatus:"__NEVER__",minConfidenceDelta:0});off();if(!got||got.stopReason!=="maxCycles")throw Error("stopReason lost")});test("map-set-preserved",()=>{const o=CGOMachineABC.process({m:new Map([[1,2]]),s:new Set([7])});const v=o.pipeline.A.content.value;if(v.m.__cgoType!=="Map"||v.s.values[0]!==7)throw Error("map/set lost")});test("required-fields",()=>{const o=CGOMachineABC.process({nama:"",hp:"1"},{requiredFields:["nama","email"]});const t=o.pipeline.B.contradictions.map(x=>x.type);if(!t.includes("REQUIRED_FIELD_EMPTY")||!t.includes("REQUIRED_FIELD_MISSING")||o.result.status!=="PARTIAL")throw Error("required")});test("json-string-structure",()=>{const o=CGOMachineABC.process('{"nama":"","hp":null}');if(o.pipeline.B.constraints.filter(x=>x.type==="EMPTY_FIELD").length!==2)throw Error("json string not analysed")});test("dup-id-single-contradiction",()=>{const o=CGOMachineABC.process('<!doctype html><html><div id="x"></div><span id="x"></span></html>');if(o.pipeline.B.contradictions.filter(x=>x.type==="DUPLICATE_IDENTIFIER").length!==1)throw Error("double count")});test("reflect-default-stop",()=>{const o=CGOMachineABC.reflect("hello",{maxCycles:5});if(o.stopReason!=="status")throw Error("default stop never fires")});
+  function selfTestInner(){const results=[];const test=(name,fn)=>{try{fn();results.push({name,status:"PASS"})}catch(e){results.push({name,status:"FAIL",error:String(e.message||e)})}};const pt=CGOPhysics.runSelfTest();if(!pt.verified)throw Error("physics kernel self-test failed: "+pt.results.filter(x=>!x.pass).map(x=>x.name).join(","));results.push({name:"physics-kernel",status:"PASS"});test("fingerprint",()=>{if(fingerprint("a")!==fingerprint("a"))throw Error("unstable")});test("delimiter-comment-regex",()=>{if(!balancedDelimiters("const x=/\\{/; // }\n{a:1}").balanced)throw Error("false negative")});test("auto-format",()=>{if(classifyText('{"a":1}').format!=="json")throw Error("json")});test("html-relations-duplicates",()=>{const h=extractHtml('<div id="x"></div><span id="x"><a href="/a"></a>');if(!h.duplicateIds.includes("x")||!h.references.includes("/a"))throw Error("html regression")});test("envelope-validator",()=>{const r=assertEnvelope({__cgoMachineInjection:true,contentMode:"bad",payload:{}});if(r.valid)throw Error("invalid envelope accepted")});test("pipeline",()=>{const o=runCycle("hello world");if(!o.result||!o.audit)throw Error("pipeline")});test("external-evidence-propagation",()=>{const o=runCycle("hello",{externalEvidence:{schema:"CGO_EXTERNAL_EVIDENCE_V1",source:"TEST_REAL_INPUT",capturedAt:now(),claims:[{source:"TEST_REAL_INPUT",target:"observed-target",status:"ANOMALY",severity:"HIGH",message:"observed failure"}],fingerprint:"evidence-test"}});if(o.pipeline.B.findings.filter(x=>x.type==="EXTERNAL_EVIDENCE").length!==1||o.pipeline.C.status!=="PARTIAL"||o.audit.status!=="ATTENTION")throw Error("external evidence not propagated")});test("physics-evidence-propagation",()=>{const o=runCycle("physics",{physicsEvidence:{source:"TEST_PHYSICS",geo:{elevationDeg:5,distanceKm:780,dopplerRateHzPerSec:0,scintFadeDb:0},mode:CGOPhysics.PHYSICS_MODE.IDEAL}});if(!o.pipeline.B.findings.some(x=>x.type==="PHYSICS_LINK_EVALUATION")||o.pipeline.B.decision?.status!=="CONTRADICTION"||o.result?.status!=="CONTRADICTION")throw Error("physics evidence not propagated")});test("physics-evidence-valid",()=>{const o=runCycle("physics-valid",{physicsEvidence:{source:"TEST_PHYSICS",geo:{elevationDeg:75,distanceKm:780,dopplerRateHzPerSec:0,scintFadeDb:0},mode:CGOPhysics.PHYSICS_MODE.IDEAL}});if(o.pipeline.B.decision?.status!=="PROCESSED"||!o.pipeline.B.verification.some(x=>x.type==="PHYSICS_EVIDENCE"&&x.status==="PASS"))throw Error("valid physics evidence rejected")});test("batch",()=>{const o=CGOMachineABC.processMany(["a","b"]);if(o.pipeline.B.items?.length!==2)throw Error("batch")});test("batch-unknowns-aggregate",()=>{let nested={__cgoBatchInjection:true,version:VERSION,items:[]};for(let i=0;i<MAX_BATCH_DEPTH;i++)nested={__cgoBatchInjection:true,version:VERSION,items:[nested]};const rep=MachineA.process(nested);if(!rep.unknowns.some(x=>x.type==="BATCH_DEPTH_LIMIT"&&x.itemIndex===0))throw Error("batch unknown not aggregated")});test("c-injection",()=>{const o=runCycle("x");const inj=MachineC.inject(o.result);const q=runCycle(inj);if(!q.result)throw Error("injection")});test("auto-step",()=>{const o=runCycle("plain text",{});if(o.pipeline.B.operations.includes("SYNTAX_ANALYSIS"))throw Error("text syntax should be skipped");if(!o.pipeline.B.operations.includes("CONTENT_INSPECTION"))throw Error("content step missing")});test("custom-step-selection",()=>{const o=runCycle("hello",{steps:["structure"]});if(!o.pipeline.B.operations.includes("STRUCTURE_INSPECTION")||o.pipeline.B.operations.includes("CONTENT_INSPECTION")||o.pipeline.B.decision!==null)throw Error("custom steps")});test("auto-reflect",()=>{const o=reflect("hello",{maxCycles:3,stopOnStatus:"__NEVER__"});if(!Array.isArray(o.cycles)||o.cycles.length<2||!o.finalResult)throw Error("reflect")});test("reflect-actually-reflects",()=>{const o=reflect("hello",{maxCycles:2,stopOnStatus:"__NEVER__"});const first=o.cycles[0].result;if(o.cycles.length<2||fingerprint(o.cycles[1].pipeline.A.content.value)!==fingerprint(first))throw Error("reflection payload not processed")});test("stream",()=>{let n=0;CGOMachineABC.stream("hello",{onCycle:()=>n++});if(n<1)throw Error("stream")});test("stream-real-time",()=>{const seen=[];CGOMachineABC.stream("hello",{autoReflect:true,maxCycles:3,stopOnStatus:"__NEVER__",minConfidenceDelta:0,onCycle:c=>seen.push(c.cycleIndex)});if(seen.length!==3||seen[0]!==0||seen[1]!==1||seen[2]!==2)throw Error("buffered stream")});test("observe",()=>{let n=0;const off=CGOMachineABC.observe(()=>n++);CGOMachineABC.process("observe");off();if(n!==1)throw Error("observe")});test("stream-observe",()=>{let n=0;const off=CGOMachineABC.observe(()=>n++);CGOMachineABC.stream("observe-stream",{autoReflect:true,maxCycles:2,stopOnStatus:"__NEVER__"});off();if(n!==2)throw Error("stream observe")});test("independence",()=>{const a=auditIndependence();if(!a.verified||a.scannedFunctions<8)throw Error("independence")});test("machine-D",()=>{const o=CGOMachineABC.process("audit");if(o.audit?.status!=="VALID")throw Error("audit failed")});test("audit-tamper-C-payload",()=>{const o=CGOMachineABC.process("tamper");o.pipeline.C.findings.push({fake:true});const d=MachineD.audit(o,"tamper");if(d.status!=="ATTENTION"||!d.checks.some(x=>x.type==="C_PAYLOAD_HASH"&&x.status==="FAIL"))throw Error("tamper undetected")});test("b-batch-depth-guard",()=>{const rep=MachineA.process({__cgoBatchInjection:true,items:[],version:VERSION},{batchDepth:MAX_BATCH_DEPTH});const b=MachineB.process({...rep,structure:{kind:"batch",count:0},content:{mode:"batch",value:[]}}, {batchDepth:MAX_BATCH_DEPTH});if(b.decision?.reason!=="batch_depth_limit")throw Error("guard")});test("record-verification",()=>{const o=runCycle({name:"cgo",value:1});const checks=o.pipeline.B.verification;if(!checks.some(x=>x.type==="RECORD_PRESENT"&&x.status==="PASS"))throw Error("record check missing")});test("collection-verification",()=>{const o=runCycle([{id:1}]);if(!o.pipeline.B.verification.some(x=>x.type==="COLLECTION_PRESENT"&&x.status==="PASS"))throw Error("collection check missing")});test("nan-infinity",()=>{if(CGOMachineABC.process(Infinity).pipeline.A.content.value!=="Infinity")throw Error("infinity")});test("max-input-override",()=>{const o=CGOMachineABC.process("abc",{maxInputSize:10});if(!o.result)throw Error("override")});test("skipped-steps",()=>{const o=CGOMachineABC.process("abc",{steps:["structure"]});if(!o.pipeline.B.skippedSteps.includes("content"))throw Error("skipped")});test("degraded-field",()=>{if(typeof CGOMachineABC.process("abc").pipeline.B.degraded!=="boolean")throw Error("degraded")});test("errors-array",()=>{if(!Array.isArray(CGOMachineABC.process("abc").pipeline.B.errors))throw Error("errors")});test("fallback-array",()=>{if(!Array.isArray(CGOMachineABC.process("abc").pipeline.C.fallbacks))throw Error("fallback")});test("weighted-check",()=>{const o=CGOMachineABC.process("abc");if(!o.pipeline.B.verification[0].status)throw Error("check")});test("contradiction-severity",()=>{const o=CGOMachineABC.process('<!doctype html><html><div id="x"></div><span id="x"></span></html>');if(!o.pipeline.B.contradictions.some(x=>x.severity))throw Error("severity")});test("decision-hierarchy",()=>{const o=CGOMachineABC.process({x:1});if(!["PROCESSED","WELL_FORMED","PARTIAL","DEGRADED","CONTRADICTION","UNRESOLVED"].includes(o.result.status))throw Error("status")});test("machineD-fallback-check",()=>{const o=CGOMachineABC.process("abc");if(!o.audit.checks.some(x=>x.type==="FALLBACK_CHAIN"))throw Error("fallback audit")});test("replay-shape",()=>{const o=CGOMachineABC.process("abc"),r=CGOMachineABC.replay(o);if(!Array.isArray(r.steps))throw Error("replay")});test("verify-replay",()=>{const o=CGOMachineABC.process("abc"),r=CGOMachineABC.replay(o);if(CGOMachineABC.verifyReplay(o,r).status!=="MATCH")throw Error("verify replay")});test("metrics-reset",()=>{const before=CGOMachineABC.getMetrics().totalProcessed;CGOMachineABC.resetMetrics();if(CGOMachineABC.getMetrics().totalProcessed!==0||before<0)throw Error("reset")});test("state-cycle-index",()=>{const o=CGOMachineABC.process("state");if(CGOMachineABC.getState().lastCycleIndex!==0)throw Error("state cycle")});test("pause-reflect",()=>{CGOMachineABC.pause();const r=CGOMachineABC.reflect("pause",{maxCycles:2});CGOMachineABC.resume();if(r.stopReason!=="paused")throw Error("pause reflect")});test("reflect-direct-C",()=>{const r=CGOMachineABC.reflect("abc",{maxCycles:2,stopOnStatus:"__NEVER__",minConfidenceDelta:0});if(r.cycles.length!==2||r.cycles[1].pipeline.A.content.mode!=="record")throw Error("direct C")});test("stream-complete",()=>{let done=false;CGOMachineABC.stream("abc",{onComplete:()=>done=true});if(!done)throw Error("complete")});test("stream-batch-summary",()=>{const o=CGOMachineABC.processMany(["a","b"],{streamBatch:true});if(o.pipeline.C.batch.items.some(x=>x.analysis===undefined))throw Error("summary")});test("date-input",()=>{if(CGOMachineABC.process(new Date()).pipeline.A.input.type!=="date")throw Error("date")});test("valid-plus-plus-not-repaired",()=>{const src='const a = + +b;\nconst c = a++;';const r=CGOMachineABC.repair(src,{autoApply:true});if(r.status!=="NO_PATCH"||r.applied||r.verified||r.sourceSyntax?.pass!==true||r.candidate)throw Error("valid plus-plus was altered");});test("valid-plus-line-continuation-not-repaired",()=>{const src='const total = first +\n  second;';const r=CGOMachineABC.repair(src,{autoApply:true});if(r.applied||r.verified||r.sourceSyntax?.pass!==true||r.candidate)throw Error("valid multiline plus was altered");});test("repair-audit-ledger-present",()=>{const r=CGOMachineABC.repair('const x = {\n  id: "A"\n  status: "ACTIVE"\n};',{autoApply:true});if(!Array.isArray(r.auditLedger)||!r.auditLedger.some(x=>x.id==="AMBIGUOUS_LOGIC"&&x.status==="BLOCKED"))throw Error("audit ledger missing");});test("repair-object-comma-deterministic",()=>{const src='const x = {\n  id: "A"\n  status: "ACTIVE"\n};';const r=CGOMachineABC.repair(src,{autoApply:true});if(!r.applied||!r.candidate||!r.candidate.patch.after.includes('id: "A",\n  status')||r.sourceSyntax?.pass!==true)throw Error("deterministic object comma repair")});test("repair-does-not-claim-invalid-source",()=>{const src='const x = {\n  id: "A"\n  status: "ACTIVE"\n};';const r=CGOMachineABC.repair(src,{autoApply:false});if(r.verified||r.status!=="REVIEW")throw Error("ambiguous verification")});test("invalid-source-without-rule-is-review",()=>{const r=CGOMachineABC.repair("function x(){ const a = ; return a; }",{autoApply:true});if(r.verified||r.status!=="REVIEW"||r.sourceSyntax?.status!=="FAIL")throw Error("invalid source was not gated")});test("object-freeze",()=>{if(!Object.isFrozen(CGOMachineABC))throw Error("freeze")});test("fingerprint-undefined",()=>{const o=CGOMachineABC.process(undefined);if(!o.result||!o.audit)throw Error("undefined crash")});test("digest-sha256-vectors",()=>{if(sha256Hex("abc")!=="ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"||sha256Hex("")!=="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"||sha256Hex("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")!=="248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1")throw Error("sha256")});test("utf8-fallback-availability",()=>{if(typeof utf8Encode!=="function"||utf8Encode("Cikur 🚀").length<8)throw Error("utf8 encoder")});test("digest-key-order",()=>{if(digest({a:1,b:2})!==digest({b:2,a:1}))throw Error("order")});test("prose-not-delimiter-checked",()=>{const o=CGOMachineABC.process("Halo :) tolong 1) cek saldo (dulu");if(o.pipeline.A.content.syntax.delimiters||o.result.status==="PARTIAL")throw Error("prose flagged")});test("let-me-know-is-text",()=>{if(classifyText("let me know if you can help").format!=="text")throw Error("prose as code")});test("regex-after-return",()=>{if(!balancedDelimiters("function f(s){ return /[)]/.test(s) }").balanced)throw Error("regex heuristic")});test("pause-blocks-process",()=>{CGOMachineABC.pause();const o=CGOMachineABC.process("x");const st=CGOMachineABC.stream("x");CGOMachineABC.resume();if(!o.skipped||st.status!=="PAUSED")throw Error("pause ignored")});test("stop-reason-to-observer",()=>{let got=null;const off=CGOMachineABC.observe(p=>{got=p});CGOMachineABC.process("abc",{autoReflect:true,maxCycles:3,stopOnStatus:"__NEVER__",minConfidenceDelta:0});off();if(!got||got.stopReason!=="maxCycles")throw Error("stopReason lost")});test("map-set-preserved",()=>{const o=CGOMachineABC.process({m:new Map([[1,2]]),s:new Set([7])});const v=o.pipeline.A.content.value;if(v.m.__cgoType!=="Map"||v.s.values[0]!==7)throw Error("map/set lost")});test("required-fields",()=>{const o=CGOMachineABC.process({nama:"",hp:"1"},{requiredFields:["nama","email"]});const t=o.pipeline.B.contradictions.map(x=>x.type);if(!t.includes("REQUIRED_FIELD_EMPTY")||!t.includes("REQUIRED_FIELD_MISSING")||o.result.status!=="PARTIAL")throw Error("required")});test("json-string-structure",()=>{const o=CGOMachineABC.process('{"nama":"","hp":null}');if(o.pipeline.B.constraints.filter(x=>x.type==="EMPTY_FIELD").length!==2)throw Error("json string not analysed")});test("dup-id-single-contradiction",()=>{const o=CGOMachineABC.process('<!doctype html><html><div id="x"></div><span id="x"></span></html>');if(o.pipeline.B.contradictions.filter(x=>x.type==="DUPLICATE_IDENTIFIER").length!==1)throw Error("double count")});test("reflect-default-stop",()=>{const o=CGOMachineABC.reflect("hello",{maxCycles:5});if(o.stopReason!=="status")throw Error("default stop never fires")});
     test("full-pipeline-trace",()=>{const o=CGOMachineABC.process("full-trace",{fast:false,skipAudit:false});if(!o.pipelineTrace||o.pipelineTrace.length!==4)throw Error("pipeline trace missing");if(o.pipelineTrace[2].status!=="COMPLETED")throw Error("C not completed");if(o.pipelineTrace[3].status!=="COMPLETED"||o.audit?.status!=="VALID")throw Error("D not completed")});
     test("phase-telemetry-route",()=>{const o=CGOMachineABC.process("telemetry-route",{fast:false,skipAudit:false});if(o.version!==VERSION||o.telemetry?.route!=="A>B>C>D"||o.telemetry?.routeStatus!=="COMPLETE"||!o.telemetry?.fingerprint||o.telemetry.phases.length!==4)throw Error("phase telemetry missing")});
     test("telemetry-observer",()=>{let n=0;const off=CGOMachineABC.observeTelemetry(e=>{if(e.type==="ABC_TELEMETRY")n++});CGOMachineABC.process("telemetry-observer");off();if(n<8)throw Error("telemetry events missing")});    return{passed:results.filter(x=>x.status==="PASS").length,failed:results.filter(x=>x.status==="FAIL").length,total:results.length,results,verified:results.every(x=>x.status==="PASS")}}
@@ -786,95 +786,156 @@
   function pausedResult(){metrics.skippedWhilePaused++;const result={machine:"C",stage:"result",version:VERSION,status:"PAUSED",summary:null,findings:[],relations:[],inferences:[],hypotheses:[],constraints:[],contradictions:[],reasoning:[],reasoningTrace:[],evidence:[],uncertainty:[],verification:[],decision:{status:"PAUSED",confidence:0,reason:"engine_paused"},errors:[],fallbacks:[],metadata:{generatedAt:now()}};return{engine:"CGO_MACHINE_ABC",version:VERSION,paused:true,skipped:true,result,audit:null}}
   function notify(result,cycles){const payload={result:result?.result??result,cycles:Array.isArray(cycles)?cycles:cycles?[cycles]:[],stopReason:result?.stopReason??null,timestamp:now()};for(const fn of [...observers]){try{fn(payload)}catch(_){}}}
   
-  /** Safe in-memory repair: baseline process → heuristic patches → re-process → verify */
+  /*
+   * Deterministic source gate.
+   * IMPORTANT: this is intentionally conservative. It never claims a full JS
+   * grammar parse. It only returns PASS when every registered structural check
+   * passes; otherwise it returns FAIL/REVIEW. No eval(), Function(), network,
+   * DOM, storage, or external parser is used.
+   */
   function sourceSyntaxGate(text) {
-    const s = String(text ?? "");
-    const d = balancedDelimiters(s, { regex: true });
-    const issues = [];
-    if (!d.balanced || d.unterminatedString || d.unterminatedComment || d.unterminatedRegex) {
-      issues.push(d.reason || "delimiter_or_string_unbalanced");
-    }
-    // Konservatif: validasi pola expression multiline yang umum pada code generator.
-    // Tidak memakai eval/Function; gate hanya menolak pola yang jelas rusak.
-    const pushRe = /lines\.push\s*\(([\s\S]*?)\);/g;
-    let m;
-    while ((m = pushRe.exec(s))) {
-      const lines = m[1].split(/\r?\n/).map(x => x.trim()).filter(Boolean);
-      for (let i = 0; i < lines.length - 1; i++) {
-        const a = lines[i], b = lines[i + 1];
-        if (/[,+\-*/%|&?:]$/.test(a)) continue;
-        if (/^(?:\)|\]|\}|;|,)/.test(b)) continue;
-        if (/^(?:["'`]|[A-Za-z_$][\w$]*|\(|\[|\d)/.test(b) && /(?:["'`]|[A-Za-z_$\d_$\)\]\}])$/.test(a)) {
-          issues.push("likely_missing_concat_operator");
-          break;
-        }
-      }
-    }
-    return { valid: issues.length === 0, issues: [...new Set(issues)] };
+    const source = String(text ?? "");
+    const detection = classifyText(source, { extension: "js", mimeType: "application/javascript" });
+    const checks = [];
+    const d = balancedDelimiters(source);
+    checks.push({ id: "DELIMITERS", status: d.balanced ? "PASS" : "FAIL", detail: d });
+    const obvious = [
+      { id: "UNTERMINATED_STRING", fail: d.unterminatedString },
+      { id: "UNTERMINATED_COMMENT", fail: d.unterminatedComment },
+      { id: "UNTERMINATED_REGEX", fail: d.unterminatedRegex },
+      { id: "EMPTY_RETURN_OPERATOR", fail: /\breturn\s*[+\-*\/%]\s*;/.test(source) },
+      { id: "EMPTY_ASSIGNMENT", fail: /\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*;/.test(source) },
+      { id: "DANGLING_OPERATOR_BEFORE_SEMICOLON", fail: /(?:\b[A-Za-z_$][\w$]*|\d+|\)|\]|\})\s*(?:\+|-|\*|\/|%|\||&)\s*;/.test(source) },
+      { id: "MISSING_OBJECT_COMMA", fail: hasDeterministicMissingObjectComma(source) },
+      { id: "MISSING_CONCAT_LINES_PUSH", fail: hasDeterministicLinesPushConcat(source) }
+    ];
+    for (const x of obvious) checks.push({ id: x.id, status: x.fail ? "FAIL" : "PASS" });
+    const failed = checks.filter(x => x.status === "FAIL");
+    return {
+      status: failed.length ? "FAIL" : "PASS",
+      pass: failed.length === 0,
+      scope: "DETERMINISTIC_STRUCTURAL",
+      parser: "INTERNAL_NO_DYNAMIC_EXECUTION",
+      format: detection.format,
+      confidence: detection.confidence,
+      checks,
+      failed: failed.map(x => x.id)
+    };
   }
 
-  function repairLinesPushConcat(text) {
-    const s = String(text);
-    const re = /lines\.push\s*\(([\s\S]*?)\);/g;
+  /*
+   * Only match an unambiguous two-property object-literal pattern:
+   *   const x = {
+   *     key: literal
+   *     next: literal
+   *   }
+   * The rule requires the opening object brace to be immediately before the
+   * first property block, so it will not guess across arbitrary statements.
+   */
+  function repairDeterministicLinesPushConcat(source) {
+    const blockRe = /lines\.push\(\n([\s\S]*?)\n([ \t]*)\);/g;
     let changed = false;
-    let additions = 0;
-    const out = s.replace(re, (whole, body) => {
-      const lines = body.split(/(\r?\n)/);
-      let previousExpr = null;
-      for (let i = 0; i < lines.length; i++) {
-        if (/^\r?\n$/.test(lines[i])) continue;
-        const raw = lines[i];
-        const t = raw.trim();
-        if (!t) continue;
-        if (previousExpr) {
-          const prev = previousExpr.trim();
-          const startsExpr = /^(?:["'`]|[A-Za-z_$][\w$]*|\(|\[|\d)/.test(t);
-          const prevCanConcat = !/[,+\-*/%|&?:]$/.test(prev) && /(?:["'`]|[A-Za-z_$\d_\)\]\}])$/.test(prev);
-          if (startsExpr && prevCanConcat && !/^[\)\]\},;]/.test(t)) {
-            const idx = lines.indexOf(raw, i);
-            lines[i] = raw.replace(/^(\s*)/, '$1+ ');
-            changed = true;
-            additions++;
-          }
-        }
-        previousExpr = lines[i];
-      }
-      return whole.replace(body, lines.join(''));
+    const steps = [];
+    const termRe = /^(?:\([^\n]*\)|["'](?:\\.|[^"'\\])*["']|[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)$/;
+    const after = String(source).replace(blockRe, (whole, body, closeIndent) => {
+      const lines = body.split(/\r?\n/);
+      const meaningful = lines.map((line, i) => ({ line, i, value: line.trim() })).filter(x => x.value);
+      if (meaningful.length < 2) return whole;
+      if (!meaningful.every(x => termRe.test(x.value))) return whole;
+      // Every term is a standalone expression and there are no existing separators/operators.
+      changed = true;
+      steps.push({ id: "MISSING_CONCAT_LINES_PUSH", status: "CANDIDATE", reason: "standalone lines.push terms tanpa operator concatenation" });
+      const rebuiltLines = meaningful.map((x, i) => {
+        const indent = x.line.match(/^\s*/)?.[0] ?? "    ";
+        return indent + (i === 0 ? x.value : "+ " + x.value);
+      });
+      return "lines.push(\n" + rebuiltLines.join("\n") + "\n" + closeIndent + ");";
     });
-    return { text: out, changed, additions };
+    return { text: after, changed, steps };
   }
 
+  function hasDeterministicLinesPushConcat(source) {
+    return repairDeterministicLinesPushConcat(source).changed;
+  }
+
+  function repairDeterministicMissingObjectComma(source) {
+    const propRe = /^(?:[A-Za-z_$][\w$]*|["'][^"'\r\n]+["'])\s*:\s*(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|-?(?:\d+(?:\.\d+)?|\.\d+)|true|false|null)\s*,?$/;
+    const blockRe = /((?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*\{)([\s\S]*?)(\n[ \t]*\})/g;
+    let changed = false;
+    const steps = [];
+    const after = String(source).replace(blockRe, (whole, open, body, close) => {
+      const lines = body.split(/\r?\n/);
+      for (let i = 0; i < lines.length - 1; i++) {
+        const a = lines[i];
+        const b = lines[i + 1];
+        if (!propRe.test(a.trim()) || !propRe.test(b.trim())) continue;
+        if (/,[ \t]*$/.test(a)) continue;
+        lines[i] = a.replace(/[ \t]*$/, ',');
+        changed = true;
+        steps.push({ id: "MISSING_OBJECT_COMMA", status: "CANDIDATE", reason: "dua property literal berurutan di dalam object literal tanpa koma" });
+      }
+      return open + lines.join("\n") + close;
+    });
+    return { text: after, changed, steps };
+  }
+
+  function hasDeterministicMissingObjectComma(source) {
+    return repairDeterministicMissingObjectComma(source).changed;
+  }
+
+  function applyDeterministicSourceRules(text) {
+    const result = repairDeterministicMissingObjectComma(String(text ?? ""));
+    return result;
+  }
+
+  const REPAIR_RULE_REGISTRY = Object.freeze([
+    "MISSING_CONCAT_LINES_PUSH", "MISSING_OBJECT_COMMA",
+    "TRAILING_PLUS", "EMPTY_RETURN_PLUS", "DOUBLE_SEMICOLON",
+    "COMMA_BEFORE_BRACE", "EMPTY_RETURN_OP", "TRIPLE_EQ_TYPO",
+    "MISSING_CATCH_BODY", "STRAGGLE_COMMA_NL", "PHYSICS_INPUT",
+    "STRAY_PLUS_EOL", "DOUBLE_PLUS_SPACE"
+  ]);
+  const BLOCKED_AMBIGUOUS_RULES = Object.freeze({
+    STRAY_PLUS_EOL: "Diblokir: bisa merupakan operator + yang sengaja diteruskan ke baris berikutnya.",
+    DOUBLE_PLUS_SPACE: "Diblokir: bisa merupakan unary plus / increment yang valid."
+  });
+  const MANUAL_REVIEW_RULES = Object.freeze({
+    TRAILING_PLUS: "Manual review: operator context is required.",
+    EMPTY_RETURN_PLUS: "Manual review: return expression context is required.",
+    DOUBLE_SEMICOLON: "Manual review: duplicate semicolons can be intentional.",
+    COMMA_BEFORE_BRACE: "Manual review: trailing comma compatibility/context required.",
+    EMPTY_RETURN_OP: "Manual review: return expression context is required.",
+    TRIPLE_EQ_TYPO: "Manual review: operator intent is not proven by text alone.",
+    MISSING_CATCH_BODY: "Manual review: catch recovery behavior must be explicit.",
+    STRAGGLE_COMMA_NL: "Manual review: trailing comma may be intentional."
+  });
+
+  /** Safe in-memory repair: baseline process → heuristic patches → re-process → verify */
   function buildRepairPlan(input, baseline) {
     const text = typeof input === "string" ? input : (input && (input.text || input.content || input.source) != null ? String(input.text || input.content || input.source) : JSON.stringify(input));
     const steps = [];
     let after = text;
-    // Common safe JS/JSON/text fixes (no network, no eval)
-    const rules = [
-      { id: "TRAILING_PLUS", re: /(\+|\-|\*|\/|\%|\||\&)\s*;/g, to: ";", why: "operator menggantung sebelum ;" },
-      { id: "EMPTY_RETURN_PLUS", re: /return\s*\+\s*;/g, to: "return;", why: "return + ; tidak valid" },
-      { id: "DOUBLE_SEMICOLON", re: /;;+/g, to: ";", why: "semicolon ganda" },
-      { id: "COMMA_BEFORE_BRACE", re: /,\s*([}\]])/g, to: "$1", why: "trailing comma sebelum penutup" },
-      { id: "STRAY_PLUS_EOL", re: /\+\s*$/gm, to: "", why: "plus di akhir baris" },
-      { id: "EMPTY_RETURN_OP", re: /return\s*[\+\-\*\/]\s*;/g, to: "return;", why: "return diikuti operator kosong" },
-      { id: "TRIPLE_EQ_TYPO", re: /====+/g, to: "===", why: "operator sama-dengan berlebih" },
-      { id: "DOUBLE_PLUS_SPACE", re: /\+\s*\+/g, to: "+", why: "plus ganda tidak disengaja" },
-      { id: "MISSING_CATCH_BODY", re: /catch\s*\([^)]*\)\s*;/g, to: "catch (_) {}", why: "catch tanpa body" },
-      { id: "STRAGGLE_COMMA_NL", re: /,\s*\n\s*([}\]])/g, to: "\n$1", why: "trailing comma multiline" }
-    ];
-    for (const r of rules) {
-      if (r.re.test(after)) {
-        r.re.lastIndex = 0;
-        const next = after.replace(r.re, r.to);
-        if (next !== after) {
-          steps.push({ id: r.id, status: "CANDIDATE", reason: r.why, beforeLen: after.length, afterLen: next.length });
-          after = next;
-        }
+    // First apply only explicitly deterministic source rules.
+    if (typeof after === "string") {
+      const concat = repairDeterministicLinesPushConcat(after);
+      if (concat.changed) {
+        steps.push(...concat.steps.map(x => ({ ...x, beforeLen: after.length, afterLen: concat.text.length })));
+        after = concat.text;
+      }
+      const structural = applyDeterministicSourceRules(after);
+      if (structural.changed) {
+        steps.push(...structural.steps.map(x => ({ ...x, beforeLen: after.length, afterLen: structural.text.length })));
+        after = structural.text;
       }
     }
-    const concatFix = repairLinesPushConcat(after);
-    if (concatFix.changed) {
-      steps.push({ id: "MISSING_CONCAT_LINES_PUSH", status: "CANDIDATE", reason: "expression multiline tanpa operator + di dalam lines.push", beforeLen: after.length, afterLen: concatFix.text.length, additions: concatFix.additions });
-      after = concatFix.text;
+    // Legacy heuristic rules are audit-only in deterministic mode. They are
+    // intentionally NOT allowed to mutate source automatically because their
+    // intent cannot be proven from text alone. This prevents a valid source
+    // from being rewritten merely because a regex happens to match.
+    for (const [id, reason] of Object.entries(MANUAL_REVIEW_RULES)) {
+      if (REPAIR_RULE_REGISTRY.includes(id)) {
+        steps.push({ id, status: "MANUAL", reason });
+      }
     }
     // If baseline reported physics incomplete — cannot auto-patch geometry; manual
     const findings = (baseline && baseline.result && baseline.result.findings) || [];
@@ -883,11 +944,26 @@
         steps.push({ id: "PHYSICS_INPUT", status: "MANUAL", reason: "lengkapi elevationDeg & distanceKm" });
       }
     }
+    const appliedIds = new Set(steps.filter(s => s.status === "CANDIDATE").map(s => s.id));
+    const manualIds = new Set(steps.filter(s => s.status === "MANUAL").map(s => s.id));
+    const ruleAudit = REPAIR_RULE_REGISTRY.map(id => ({
+      id,
+      status: BLOCKED_AMBIGUOUS_RULES[id] ? "BLOCKED" : (manualIds.has(id) || MANUAL_REVIEW_RULES[id] ? "MANUAL" : (appliedIds.has(id) ? "APPLIED" : "NOT_TRIGGERED")),
+      reason: BLOCKED_AMBIGUOUS_RULES[id] || MANUAL_REVIEW_RULES[id] || (appliedIds.has(id) ? "Rule menghasilkan candidate patch." : "Tidak terpenuhi oleh source." )
+    }));
+    const auditLedger = [
+      ...ruleAudit,
+      ...steps.map(s => ({ id: s.id, class: s.status === "MANUAL" ? "MANUAL" : "REPAIR_CANDIDATE", status: s.status, reason: s.reason })),
+      { id: "UNAPPLIED_RULES", class: "TRANSPARENCY", status: "NOT_APPLIED", reason: "Rule yang tidak cocok tidak dieksekusi." },
+      { id: "AMBIGUOUS_LOGIC", class: "SAFETY", status: "BLOCKED", reason: "Tidak ada tebakan nilai/niat pengguna." }
+    ];
     return {
       count: steps.length,
       automaticCandidates: steps.filter(s => s.status === "CANDIDATE"),
       manualCandidates: steps.filter(s => s.status === "MANUAL"),
       steps,
+      auditLedger,
+      ruleAudit,
       afterText: after,
       changed: after !== text
     };
@@ -899,28 +975,29 @@
     }
     const text = typeof input === "string" ? input : (input && (input.text || input.content || input.source) != null ? String(input.text || input.content || input.source) : null);
     const baseline = CGOMachineABC.process(input, { maxCycles: 1, fast: false, skipAudit: false, source: options.source || "REPAIR_BASELINE" });
-    const plan = buildRepairPlan(text != null ? text : input, baseline);
+    const preSourceSyntax = text != null ? sourceSyntaxGate(text) : null;
+    // Zero-ambiguity rule: a source that already passes the deterministic gate is
+    // never normalized/re-written just because a legacy rule happens to match it.
+    // Repair is entered only when a deterministic gate reports a concrete failure.
+    const plan = (preSourceSyntax && preSourceSyntax.pass)
+      ? { count: 0, automaticCandidates: [], manualCandidates: [], steps: [], auditLedger: [
+          { id: "PRE_SOURCE_SYNTAX", class: "GATE", status: "PASS", reason: "Source sudah lolos; tidak ada patch yang diizinkan." },
+          ...REPAIR_RULE_REGISTRY.map(id => ({ id, class: BLOCKED_AMBIGUOUS_RULES[id] ? "SAFETY" : "REPAIR_RULE", status: BLOCKED_AMBIGUOUS_RULES[id] ? "BLOCKED" : "NOT_APPLIED", reason: BLOCKED_AMBIGUOUS_RULES[id] || "Tidak dipicu; source sudah lolos gate." })),
+          { id: "AMBIGUOUS_LOGIC", class: "SAFETY", status: "BLOCKED", reason: "Tidak menulis ulang source yang sudah valid hanya berdasarkan heuristik." }
+        ],
+        ruleAudit: REPAIR_RULE_REGISTRY.map(id => ({ id, status: BLOCKED_AMBIGUOUS_RULES[id] ? "BLOCKED" : "NOT_APPLIED", reason: BLOCKED_AMBIGUOUS_RULES[id] || "Source sudah lolos gate." })),
+        afterText: text, changed: false }
+      : buildRepairPlan(text != null ? text : input, baseline);
     const autoApply = options.autoApply !== false;
     let applied = false;
     let candidate = null;
     let repaired = null;
     let comparison = null;
     if (autoApply && plan.changed && text != null) {
-      const sourceGate = sourceSyntaxGate(plan.afterText);
-      if (!sourceGate.valid) {
-        return {
-          engine: "CGO_MACHINE_ABC", version: VERSION, status: "REVIEW", applied: false, verified: false,
-          baseline, plan, finalPlan: plan, candidate: null, repaired: null, comparison: null,
-          sourceValidation: { before: sourceSyntaxGate(text), after: sourceGate },
-          verification: { postRepairAudit: null, postRepairRoute: "A-B-C-D", postStatus: "SOURCE_SYNTAX_INVALID" },
-          persistence: "IN_MEMORY_RESULT_ONLY", runtimeExecution: "NOT_PERFORMED",
-          reason: "patched_source_failed_syntax_gate", steps: plan.steps || []
-        };
-      }
       candidate = {
         id: "PATCH-" + digest(plan.afterText).slice(0, 12),
         patch: { before: text, after: plan.afterText },
-        steps: plan.steps
+        steps: plan.steps.filter(s => s.status === "CANDIDATE")
       };
       repaired = CGOMachineABC.process(plan.afterText, { maxCycles: options.maxCycles ?? 1, fast: false, skipAudit: false, source: options.source || "REPAIR_POST" });
       applied = true;
@@ -931,20 +1008,24 @@
         after: { fingerprint: digest(plan.afterText), findings: af, status: repaired.result && repaired.result.status },
         findingDelta: (typeof af === "number" && typeof bf === "number") ? (af - bf) : null
       };
-    } else if (plan.count === 0) {
+    } else if (!plan.changed) {
+      const sourceGate = text != null ? sourceSyntaxGate(text) : { status: "UNKNOWN", pass: false, scope: "DETERMINISTIC_STRUCTURAL", failed: ["NO_TEXT_SOURCE"] };
+      const review = sourceGate.pass === false && sourceGate.status === "FAIL";
       return {
-        engine: "CGO_MACHINE_ABC", version: VERSION, status: "NO_PATCH", applied: false, verified: false,
+        engine: "CGO_MACHINE_ABC", version: VERSION, status: review ? "REVIEW" : "NO_PATCH", applied: false, verified: false,
         baseline, plan, finalPlan: plan, candidate: null, repaired: null, comparison: null,
-        reason: "no_safe_automatic_patch",
-        verification: { postRepairAudit: baseline.audit && baseline.audit.status, postRepairRoute: "A-B-C-D" },
+        reason: review ? "source_syntax_invalid_and_no_safe_patch" : "no_safe_automatic_patch",
+        sourceSyntax: sourceGate,
+        verification: { postRepairAudit: baseline.audit && baseline.audit.status, postRepairRoute: "A-B-C-D", sourceSyntax: sourceGate },
+        verificationScope: "INTERNAL_PROCESS_AND_DETERMINISTIC_SOURCE_GATE",
         persistence: "IN_MEMORY_RESULT_ONLY", runtimeExecution: "NOT_PERFORMED",
         steps: []
       };
     }
     const postStatus = repaired && repaired.result && repaired.result.status;
     const postAudit = repaired && repaired.audit && repaired.audit.status;
-    const sourceValidation = applied ? sourceSyntaxGate(plan.afterText) : { valid: false, issues: ["not_applied"] };
-    const verified = !!(applied && sourceValidation.valid && postAudit === "VALID" && postStatus && !/ERROR|FAIL/i.test(String(postStatus)));
+    const sourceGate = applied ? sourceSyntaxGate(plan.afterText) : sourceSyntaxGate(text);
+    const verified = !!(applied && sourceGate.pass && postAudit === "VALID" && postStatus && !/ERROR|FAIL/i.test(String(postStatus)));
     return {
       engine: "CGO_MACHINE_ABC",
       version: VERSION,
@@ -953,30 +1034,32 @@
       verified,
       baseline,
       plan,
+      auditLedger: plan.auditLedger || [],
+      ruleAudit: plan.ruleAudit || [],
       finalPlan: plan,
       candidate,
       repaired,
       postRepair: repaired,
       comparison,
-      steps: (plan.steps || []).map((s, i) => ({ index: i, id: s.id, status: applied ? "APPLIED" : s.status, audit: postAudit || null })),
+      steps: (plan.steps || []).map((s, i) => ({ index: i, id: s.id, status: s.status === "CANDIDATE" && applied ? "APPLIED" : s.status, audit: postAudit || null })),
       verification: {
         postRepairAudit: postAudit || null,
         postRepairRoute: "A-B-C-D",
         postStatus: postStatus || null,
-        sourceSyntax: sourceValidation.valid ? "PASS" : "FAIL",
-        sourceSyntaxIssues: sourceValidation.issues || []
+        sourceSyntax: sourceGate
       },
-      sourceValidation: { before: sourceSyntaxGate(text), after: sourceValidation },
-      verificationScope: "INTERNAL_PROCESS",
+      sourceSyntax: sourceGate,
+      verificationScope: "INTERNAL_PROCESS_AND_DETERMINISTIC_SOURCE_GATE",
       runtimeExecution: applied ? "REPROCESS_ONLY" : "NOT_PERFORMED",
       persistence: "IN_MEMORY_RESULT_ONLY",
-      reason: applied ? "safe_heuristic_patch" : "awaiting_apply"
+      reason: applied ? "deterministic_safe_patch" : "awaiting_apply"
     };
   }
 
   // Attach repair API before freeze
   CGOMachineABC.repair = repair;
   CGOMachineABC.buildRepairPlan = buildRepairPlan;
+  CGOMachineABC.sourceSyntaxGate = sourceSyntaxGate;
 
 [MachineA,MachineB,MachineC,MachineD].forEach(m=>Object.freeze(m));Object.freeze(CGOMachineABC);if(typeof module!=="undefined"&&module.exports)module.exports=CGOMachineABC;global.CGOMachineABC=CGOMachineABC;/* Jangan timpa window.CGO (Customer chat / CGO.esc UI) */if(typeof global.CGO==="undefined"){global.CGO=CGOMachineABC;}
 })(typeof globalThis!=="undefined"?globalThis:window);

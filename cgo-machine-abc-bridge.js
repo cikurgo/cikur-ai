@@ -14,7 +14,7 @@
     return;
   }
 
-  const VERSION = "1.5.5-SYNC-MIRROR";
+  const VERSION = "1.5.8-ANTI-AMBIGUITY-REPAIR-MIRROR";
   const PAGE_ID = "abc-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   const BUS_NAME = "cgo-machine-abc-bus";
   const listeners = new Set();
@@ -368,14 +368,8 @@
       return {
         ok: true, engine: "CGO_MACHINE_ABC", version: E.version, status: out?.status || null, verified: out?.verified === true,
         candidate: out?.candidate || null, patchedText, beforeFingerprint: out?.comparison?.before?.fingerprint || null,
-        afterFingerprint: out?.comparison?.after?.fingerprint || null,
-        sourceSyntax: out?.verification?.sourceSyntax || null,
-        sourceSyntaxIssues: out?.verification?.sourceSyntaxIssues || [],
-        sourceValidation: out?.sourceValidation || null,
-        patchedLength: typeof patchedText === "string" ? patchedText.length : 0,
-        patchedLineCount: typeof patchedText === "string" ? patchedText.split(/\r?\n/).length : 0,
-        audit: out?.verification?.postRepairAudit || cycle?.audit?.status || null,
-        route: out?.verification?.postRepairRoute || cycle?.telemetry?.route || null, packet: out
+        afterFingerprint: out?.comparison?.after?.fingerprint || null, audit: out?.verification?.postRepairAudit || cycle?.audit?.status || null,
+        route: out?.verification?.postRepairRoute || cycle?.telemetry?.route || null, sourceSyntax: out?.sourceSyntax || out?.verification?.sourceSyntax || null, packet: out
       };
     } catch (err) { return { ok: false, status: "REPAIR_ERROR", verified: false, error: String(err?.message || err) }; }
   }
@@ -392,8 +386,6 @@
       comparison: result.comparison || null,
       reason: result.reason || null,
       verificationScope: result.verificationScope || "UNKNOWN",
-      sourceSyntax: result.verification?.sourceSyntax || null,
-      sourceSyntaxIssues: result.verification?.sourceSyntaxIssues || [],
       runtimeExecution: result.runtimeExecution || "UNKNOWN",
       persistence: result.persistence || "UNKNOWN",
       at: new Date().toISOString()
