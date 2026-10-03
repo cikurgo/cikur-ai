@@ -14,7 +14,7 @@
     return;
   }
 
-  const VERSION = "1.5.3-INTEGRATION";
+  const VERSION = "1.5.4-UI-CONSISTENCY";
   const PAGE_ID = "abc-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   const BUS_NAME = "cgo-machine-abc-bus";
   const listeners = new Set();
@@ -110,7 +110,7 @@
           summary: r.summary || null
         } : null;
         return {
-          cycleIndex: c?.cycleIndex ?? i,
+          cycleIndex: c?.cycleIndex ?? packet?.bcgoCycle ?? packet?.cycleNumber ?? i,
           result: res,
           audit: c?.audit || null,
           telemetry: c?.telemetry ? {
@@ -469,6 +469,19 @@
         }
       }
     }
+    // Nomor siklus log = cycle BCGO (bukan selalu 0)
+    try {
+      const cn = Number(cycleNumber) || 0;
+      if (packet) {
+        packet.bcgoCycle = cn;
+        if (packet.cycleIndex == null || packet.cycleIndex === 0) packet.cycleIndex = cn;
+        if (Array.isArray(packet.cycles)) {
+          packet.cycles.forEach((c, i) => {
+            if (c && (c.cycleIndex == null || c.cycleIndex === 0)) c.cycleIndex = cn || i;
+          });
+        }
+      }
+    } catch (_) {}
     const finalCycle = packet?.cycles?.at?.(-1) || null;
     const status = finalCycle?.result?.status || packet?.result?.status || packet?.finalResult?.status || "UNKNOWN";
     const audit = finalCycle?.audit?.status || packet?.audit?.status || "ATTENTION";

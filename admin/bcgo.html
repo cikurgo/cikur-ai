@@ -571,8 +571,8 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-emosi.js?v=1.1.0-EMOSI-AIRPORT"></script>
 <script src="cgo-narasi.js?v=1.0.0-NARASI-r20261001"></script>
 <script src="cgo-ai-voice-operator.js?v=3.9.5-SYNTHESIS-RECOVER"></script>
-<script src="cgo-machine-abc.js?v=0.9.12-REAL-RESULT-r2"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.5.3-INTEGRATION"></script>
+<script src="cgo-machine-abc.js?v=0.9.13-UI-CONSISTENCY"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.5.4-UI-CONSISTENCY"></script>
 <script src="cgo-abc-cognition.js?v=1.2.0-HUMAN-RESULT"></script>
 <script src="cgo-otak-hub.js?v=1.6.2-ABC-HUMAN-HINT"></script>
 
@@ -1878,14 +1878,18 @@ function __abcApplyTelemetryFrame(ev){
         try { abcSound('bad', true); } catch (_) {}
         try { window.CGOOperatorVoice && window.CGOOperatorVoice.state('ERROR'); } catch (_e) {}
       } else if (stage === 'D') {
-        const healthy = ev.audit === 'VALID';
-        try { abcApplyAmbientState(healthy ? 'normal' : 'warn'); } catch (_) {}
-        if (healthy) {
+        const aud = String(ev.audit || '').toUpperCase();
+        const st = String(ev.status || '').toUpperCase();
+        const healthy = aud === 'VALID' || aud === 'PASS';
+        const critical = /ERROR|FAIL|ABORT|INVALID|CONTRADICTION/.test(st) || /INVALID|ERROR/.test(aud);
+        try { abcApplyAmbientState(critical ? 'error' : healthy ? 'normal' : 'warn'); } catch (_) {}
+        if (critical) {
+          try { abcSound('bad', true); } catch (_) {}
+          try { window.CGOOperatorVoice && window.CGOOperatorVoice.state('ERROR'); } catch (_e) {}
+        } else if (healthy) {
           try { window.CGOOperatorVoice && window.CGOOperatorVoice.state('VALID'); } catch (_e) {}
-        } else {
-          try { abcSound('warn', true); } catch (_) {}
-          try { window.CGOOperatorVoice && window.CGOOperatorVoice.state('WARNING'); } catch (_e) {}
         }
+        // ATTENTION/PARTIAL lunak: jangan ucapkan "Diperlukan pemeriksaan" berulang
       } else if (ev.status === 'DEGRADED' || ev.status === 'PARTIAL') {
         try { abcApplyAmbientState('warn'); } catch (_) {}
       }
@@ -1997,8 +2001,12 @@ await runAutonomousEngine(state => {
     latestBCGOLiveState = state;
     liveState = state;
     try {
-      const voiceStatus = String(state?.status || state?.mode || (state?.error ? 'ERROR' : 'LIVE')).toUpperCase();
-      window.CGOOperatorVoice?.state(voiceStatus);
+      // Jangan map status siklus sembarangan ke WARNING; hanya status suara yang dikenal
+      const rawSt = String(state?.status || state?.mode || (state?.error ? 'ERROR' : 'LIVE')).toUpperCase();
+      const voiceMap = { ERROR:'ERROR', FAILED:'ERROR', WARNING:'WARNING', VALID:'VALID', LIVE:'LIVE', READY:'READY', BOOT:'BOOT', STANDBY:'STANDBY', IDLE:'IDLE', PROCESSING:'PROCESSING' };
+      if (voiceMap[rawSt]) {
+        try { window.CGOOperatorVoice?.state(voiceMap[rawSt]); } catch (_) {}
+      }
     } catch (_) {}
     window.BCGO_STATE = state;
     // Jalur LIVE resmi: BCGO_STATE → ABC Bridge → Mesin ABC.
@@ -2007,7 +2015,13 @@ await runAutonomousEngine(state => {
       if (window.CGOMachineABCBridge && typeof window.CGOMachineABCBridge.ingestBCGOState === 'function') {
         const link = window.CGOMachineABCBridge.ingestBCGOState(state);
         if (link && link.ok) {
-          try { window.CGOOperatorVoice?.state(link.audit === 'VALID' ? 'VALID' : (link.status || link.mode || 'LIVE')); } catch (_) {}
+          try {
+            const au = String(link.audit || '').toUpperCase();
+            const ls = String(link.status || '').toUpperCase();
+            if (au === 'VALID' || /WELL_FORMED|PROCESSED/.test(ls)) window.CGOOperatorVoice?.state('VALID');
+            else if (/ERROR|FAIL|CONTRADICTION/.test(ls) || /INVALID|ERROR/.test(au)) window.CGOOperatorVoice?.state('ERROR');
+            // selain itu diam — hindari "Diperlukan pemeriksaan" pada PARTIAL lunak
+          } catch (_) {}
           state.abcLiveLink = {
             build: 'CIKUR-GO-LIVE-ACK-2026-09-26',
             mode: link.mode, status: link.status, audit: link.audit,

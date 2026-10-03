@@ -377,8 +377,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 </section>
 </div>
 
-<script src="cgo-machine-abc.js?v=0.9.12-REAL-RESULT-r2"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.5.3-INTEGRATION"></script>
+<script src="cgo-machine-abc.js?v=0.9.13-UI-CONSISTENCY"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.5.4-UI-CONSISTENCY"></script>
 <script>
 (() => {
   "use strict";
@@ -485,8 +485,12 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
     $("#integrityEvidence").textContent = chain.length ? `${chain.length} node · ${chainOk ? "TERSEGEL" : "PERLU CEK"}` : "0 node";
     const validation = c.validation?.status || "-";
     $("#integrityValidation").textContent = validation;
-    const t = [a.durationMs, b.durationMs, c.durationMs, audit?.checkedAt && c.metadata?.generatedAt ? Math.max(0, audit.checkedAt - c.metadata.generatedAt) : null];
-    $("#stageTiming").textContent = t.map(x => x == null ? "-" : x + "ms").join(" / ");
+    const dMs = (pipe.D && pipe.D.durationMs != null) ? pipe.D.durationMs
+      : (audit && audit.durationMs != null) ? audit.durationMs
+      : (audit?.checkedAt && c.metadata?.generatedAt) ? Math.max(0, Number(audit.checkedAt) - Number(c.metadata.generatedAt))
+      : null;
+    const t = [a.durationMs, b.durationMs, c.durationMs, dMs];
+    $("#stageTiming").textContent = t.map(x => (x == null || Number.isNaN(Number(x))) ? "—" : (Number(x) + "ms")).join(" / ");
     syncHero();
   }
 
@@ -552,6 +556,9 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
       // Kalimat utama yang terasa nyata
       if (status === "WELL_FORMED" || status === "PROCESSED") {
         bits.push("Mesin selesai menilai input: status " + status + " dengan keyakinan " + confPct + "%.");
+        if (/VALID|PASS/i.test(dSt) && confPct >= 90) {
+          bits.push("Tidak ada anomali domain yang perlu tindakan — sistem formal sehat.");
+        }
       } else if (status === "PARTIAL") {
         bits.push("Penilaian sebagian (PARTIAL) · keyakinan " + confPct + "% — ada ketidakpastian yang perlu ditinjau.");
       } else {
@@ -663,12 +670,32 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 
   function onPayload(p) {
     total++;
-    const list = Array.isArray(p.cycles) && p.cycles.length ? p.cycles : (p.result ? [p.result] : []);
+    let list = Array.isArray(p.cycles) && p.cycles.length ? p.cycles : null;
+    if (!list) {
+      // Engine sering mengembalikan satu objek siklus (bukan { cycles: [] })
+      if (p && (p.result || p.pipeline || p.audit)) {
+        list = [{
+          cycleIndex: p.cycleIndex ?? p.bcgoCycle ?? 0,
+          result: p.result || p,
+          audit: p.audit || null,
+          pipeline: p.pipeline || null,
+          telemetry: p.telemetry || null
+        }];
+      } else if (p && p.result) {
+        list = [p.result];
+      } else {
+        list = [];
+      }
+    }
     if (!list.length && p) {
-      // paket minimal — tetap isi panel manusia
-      paintHumanResult({ result: p.result || p, audit: p.audit || null }, p.stopReason || null);
+      paintHumanResult({ result: p.result || p, audit: p.audit || null, cycleIndex: p.cycleIndex ?? p.bcgoCycle }, p.stopReason || null);
     } else {
-      list.forEach((c, i) => renderCycle(c, i === list.length - 1 ? p.stopReason : null));
+      list.forEach((c, i) => {
+        if (c && (c.cycleIndex == null || c.cycleIndex === 0) && (p.cycleIndex || p.bcgoCycle)) {
+          c.cycleIndex = p.cycleIndex ?? p.bcgoCycle;
+        }
+        renderCycle(c, i === list.length - 1 ? p.stopReason : null);
+      });
     }
     refresh();
   }
