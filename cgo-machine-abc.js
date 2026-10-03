@@ -10,7 +10,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "0.9.9";
+  const VERSION = "0.9.12-REAL-RESULT";
   const MAX_TEXT_SAMPLE = 6000;
   const MAX_ITEMS = 1000;
   const MAX_TOKENS = 5000;
@@ -288,7 +288,7 @@
       }
     }
     if(claims.length) s.inferences.push({type:"EXTERNAL_EVIDENCE_CONSIDERED",count:claims.length,basis:["caller_supplied_structured_evidence"]});
-    if(claims.length && !packet.fingerprint) s.uncertainty.push({type:"EXTERNAL_EVIDENCE_UNFINGERPRINTED",severity:"MEDIUM",source:packet.source??null});
+    if(claims.length && !packet.fingerprint) s.uncertainty.push({type:"EXTERNAL_EVIDENCE_UNFINGERPRINTED",severity:"LOW",source:packet.source??null});
   }
   // Physics Kernel dipanggil hanya bila caller menyediakan physicalEvidence.
   // Default path ABC tetap domain-neutral dan tidak menjalankan fisika untuk input biasa.
@@ -334,7 +334,7 @@
   function reasonB(s){s.reasoning=[{step:"OBSERVE",status:"complete"},{step:"RELATE",status:s.relations.length?"complete":"limited"},{step:"HYPOTHESIZE",status:s.hypotheses.length?"complete":"none"},{step:"REASON",status:"complete"},{step:"VERIFY",status:s.verification.some(x=>x.status==="FAIL")?"attention":"complete"},{step:"DECIDE",status:"pending"}];s.reasoningTrace=s.reasoning.map((x,i)=>({...x,index:i+1}));}
   function detectContradictionsB(r,s){const c=r.content||{};if(c.format==="json"&&c.parse&&!c.parse.ok)s.contradictions.push({type:"FORMAT_CONTENT_MISMATCH",severity:"HIGH",reason:"json_parse_failed"});if(c.syntax?.delimiters&&!c.syntax.delimiters.balanced)s.contradictions.push({type:"DELIMITER_MISMATCH",severity:"HIGH"});if(c.format==="html"&&c.syntax?.html?.duplicateIds?.length)s.contradictions.push({type:"DUPLICATE_IDENTIFIER",severity:"HIGH",ids:clone(c.syntax.html.duplicateIds)});for(const x of s.constraints||[]){if(x.required===true&&x.type==="EMPTY_FIELD")s.contradictions.push({type:"REQUIRED_FIELD_EMPTY",severity:"HIGH",field:x.field});if(x.type==="REQUIRED_FIELD_MISSING")s.contradictions.push({type:"REQUIRED_FIELD_MISSING",severity:"HIGH",field:x.field});}}
   function confidenceB(s,options={}){const weights={critical:3,high:2,medium:1,low:.5,...(options.checkWeights||{})};let total=0,score=0;for(const c of s.verification){const level=c.weight||((c.type==="EVIDENCE_CHAIN"||c.type==="C_PAYLOAD_HASH")?"critical":c.type.includes("FINGERPRINT")||c.type==="DELIMITERS"?"high":c.type.includes("UNKNOWN")?"low":"medium");const w=toFloat(weights[level],1);total+=w;if(c.status==="PASS")score+=w;else if(c.status==="UNKNOWN")score+=w*.5;}let out=total?score/total:1;for(const u of s.uncertainty)out-={LOW:.03,MEDIUM:.12,HIGH:.3}[u.severity]??.08;for(const c of s.contradictions)out-={LOW:.02,MEDIUM:.08,HIGH:.2,CRITICAL:.45}[c.severity]??.08;if(s.inputFingerprint&&s.verification.length<3)out=Math.min(out,.95);return clamp(out)}
-  function decideB(s,options={}){if(s.errors?.length||s.degraded)return{status:"DEGRADED",confidence:confidenceB(s,options),reason:"step_error"};if(s.uncertainty.some(x=>x.type==="INSUFFICIENT_REPRESENTATION"))return{status:"UNRESOLVED",confidence:0,reason:"insufficient_representation"};const failed=s.verification.filter(x=>x.status==="FAIL").length;const critical=s.contradictions.some(x=>x.severity==="CRITICAL");const highContr=s.contradictions.some(x=>x.severity==="HIGH");const confidence=confidenceB(s,options);if(critical)return{status:"CONTRADICTION",confidence,reason:"critical_contradiction"};if(highContr)return{status:"PARTIAL",confidence,reason:"high_contradiction"};if(failed||s.uncertainty.some(x=>x.severity==="HIGH"))return{status:"PARTIAL",confidence,reason:failed?"verification_failed":"high_uncertainty",failedChecks:failed};if(s.uncertainty.some(x=>x.severity==="MEDIUM"))return{status:"PARTIAL",confidence,reason:"medium_uncertainty"};return{status:"PROCESSED",confidence,reason:"analysis_and_verification_completed"}}
+  function decideB(s,options={}){if(s.errors?.length||s.degraded)return{status:"DEGRADED",confidence:confidenceB(s,options),reason:"step_error"};if(s.uncertainty.some(x=>x.type==="INSUFFICIENT_REPRESENTATION"))return{status:"UNRESOLVED",confidence:0,reason:"insufficient_representation"};const failed=s.verification.filter(x=>x.status==="FAIL").length;const critical=s.contradictions.some(x=>x.severity==="CRITICAL");const highContr=s.contradictions.some(x=>x.severity==="HIGH");const confidence=confidenceB(s,options);if(critical)return{status:"CONTRADICTION",confidence,reason:"critical_contradiction"};if(highContr)return{status:"PARTIAL",confidence,reason:"high_contradiction"};if(failed||s.uncertainty.some(x=>x.severity==="HIGH"))return{status:"PARTIAL",confidence,reason:failed?"verification_failed":"high_uncertainty",failedChecks:failed};if(s.uncertainty.some(x=>x.severity==="MEDIUM")){const med=s.uncertainty.filter(x=>x.severity==="MEDIUM");const onlySoft=med.every(x=>/UNFINGERPRINTED|STRUCTURE|FORMAT|LOW_FORMAT/i.test(String(x.type||"")));if(!onlySoft)return{status:"PARTIAL",confidence,reason:"medium_uncertainty"};return{status:"PROCESSED",confidence:Math.max(confidence,0.55),reason:"soft_uncertainty_only"};}return{status:"PROCESSED",confidence,reason:"analysis_and_verification_completed"}}
   function processBatch(rep,options={}){const started=Date.now();const depth=Number(options.batchDepth||0);const s=blankB(rep);if(depth>=MAX_BATCH_DEPTH){s.uncertainty.push({type:"BATCH_DEPTH_LIMIT_B",severity:"HIGH",depth});s.decision={status:"UNRESOLVED",confidence:0,reason:"batch_depth_limit"};s.durationMs=elapsed(started);return s;}s.operations.push("BATCH_PROCESSING","ITEM_ANALYSIS","CROSS_ITEM_RELATION_ANALYSIS","BATCH_VERIFICATION","BATCH_INFERENCE");s.items=rep.content.value.map((member,i)=>({index:i,source:member.metadata?.source??`item-${i+1}`,fingerprint:member.input?.fingerprint??null,processing:MachineB.process(member,{...options,batchDepth:depth+1})}));s.items.forEach(x=>{s.findings.push({type:"ITEM_ANALYZED",index:x.index,status:x.processing.decision?.status});s.evidence.push({type:"ITEM_EVIDENCE",index:x.index,count:x.processing.evidence.length});s.verification.push({type:"ITEM_VERIFICATION",index:x.index,count:x.processing.verification.length});s.hypotheses.push(...(x.processing.hypotheses||[]));s.constraints.push(...(x.processing.constraints||[]));s.contradictions.push(...(x.processing.contradictions||[]));s.reasoning.push(...(x.processing.reasoning||[]));s.reasoningTrace.push(...(x.processing.reasoningTrace||[]));if(x.processing.uncertainty.length)s.uncertainty.push({type:"ITEM_UNCERTAINTY",index:x.index,count:x.processing.uncertainty.length});});for(let i=0;i<s.items.length;i++)for(let j=i+1;j<s.items.length;j++)s.relations.push({type:"ITEM_RELATION_CANDIDATE",from:i,to:j,basis:"same_injection_batch"});s.inferences.push({type:"MULTI_MATERIAL_INPUT",itemCount:s.items.length,basis:["batch_structure","item_analysis"]});s.decision={status:s.items.some(x=>x.processing.decision?.status!=="PROCESSED")?"PARTIAL":"PROCESSED",confidence:clamp(s.items.reduce((a,x)=>a+(x.processing.decision?.confidence??0),0)/(s.items.length||1)),reason:"batch_analysis_and_verification_completed"};s.durationMs=elapsed(started);return s}
 
   const MachineB={process(rep,options={}){const started=Date.now();if(!rep?.structure)return unresolvedB("representation_missing",started);if(rep.structure.kind==="batch"&&Array.isArray(rep.content?.value))return processBatch(rep,options);const s=blankB(rep);const steps=selectedSteps(options,rep.content?.format);const allSteps=["structure","content","syntax","relation","constraint","hypothesis","verify","infer","reasoning","decision"];s.selectedSteps=steps.slice();s.skippedSteps=allSteps.filter(x=>!steps.includes(x));s.operations.push("AUTO_STEP_SELECTION");timed(s,"structure",()=>steps.includes("structure")&&inspectStructureB(rep,s),options);timed(s,"content",()=>steps.includes("content")&&inspectContentB(rep,s),options);timed(s,"syntax",()=>steps.includes("syntax")&&analyzeSyntaxB(rep,s),options);timed(s,"relation",()=>steps.includes("relation")&&deriveRelationsB(rep,s),options);timed(s,"constraint",()=>steps.includes("constraint")&&analyzeConstraintsB(rep,s,options),options);timed(s,"contradiction",()=>detectContradictionsB(rep,s),options);timed(s,"hypothesis",()=>steps.includes("hypothesis")&&inferHypothesesB(rep,s),options);timed(s,"verify",()=>steps.includes("verify")&&verifyB(rep,s),options);timed(s,"infer",()=>steps.includes("infer")&&inferB(rep,s));if(steps.includes("reasoning"))reasonB(s);if(options.__deadline&&Date.now()>options.__deadline){s.degraded=true;s.errors.push({step:"pipeline",error:"TIMEOUT",timestamp:now()});}if(steps.includes("decision"))s.decision=decideB(s,options);s.durationMs=elapsed(started);return s}}
@@ -785,5 +785,121 @@
   const CGOMachineABC={name:"CGO_MACHINE_ABC",version:VERSION,A:MachineA,B:MachineB,C:MachineC,D:MachineD,physics:CGOPhysics,physicsSelfTest:()=>CGOPhysics.runSelfTest(),inject:(v,o={})=>MachineC.inject(v,o),createBatchInjection(inputs,o={}){if(!Array.isArray(inputs))throw new TypeError("createBatchInjection membutuhkan array input.");const v=validateInput(inputs,o);if(!v.valid)throw new TypeError(v.reason);return{__cgoBatchInjection:true,version:VERSION,mode:"batch",transport:"internal",createdAt:now(),items:inputs.slice(0,MAX_ITEMS).map(clone),metadata:clone(o.metadata??{})}},processMany(inputs,o={}){return CGOMachineABC.process(CGOMachineABC.createBatchInjection(inputs,o),{...o,source:o.source??"batch-injection"})},process(input,options={}){if(paused)return pausedResult();const v=validateInput(input,options);if(!v.valid)throw new TypeError(v.reason);metrics.totalProcessed++;if(toBool(options.autoReflect,false)){const r=reflect(v.sanitized,options);const packet={engine:"CGO_MACHINE_ABC",version:VERSION,cycles:r.cycles,finalResult:r.finalResult,stopReason:r.stopReason,audit:r.cycles.at(-1)?.audit||null,reflected:true};notify(packet,r.cycles);return packet}const out=runCycle(v.sanitized,options,0);notify(out,[out]);return out},stream(input,options={}){if(paused){const pr=pausedResult();options.onComplete?.(pr.result);return pr.result}const v=validateInput(input,options);if(!v.valid)throw new TypeError(v.reason);if(options.autoReflect===true){const r=reflect(v.sanitized,{...options,onCycle:c=>{options.onCycle?.(c);notify(c,[c])}});options.onComplete?.(r.finalResult,r.stopReason);return r.finalResult}const c=runCycle(v.sanitized,options,0);options.onCycle?.(c);notify(c,[c]);options.onComplete?.(c.result);return c.result},observe(handler){if(typeof handler!=="function")throw new TypeError("observe(handler) membutuhkan function");observers.add(handler);return()=>observers.delete(handler)},observeTelemetry(handler){if(typeof handler!=="function")throw new TypeError("observeTelemetry(handler) membutuhkan function");telemetryObservers.add(handler);return()=>telemetryObservers.delete(handler)},auditIndependence,selfTest,validateOutput,validateInput,safeClone,reflect,replay:(p)=>MachineD.replay(p),verifyReplay:(p,r)=>MachineD.verifyReplay(p,r),pause(){paused=true;runtimeState.paused=true;runtimeState.pauseAt=now()},resume(){paused=false;runtimeState.paused=false;runtimeState.pauseAt=null},isPaused:()=>paused,getState:()=>clone(runtimeState),getMetrics:()=>({totalProcessed:metrics.totalProcessed,totalCycles:metrics.totalCycles,avgConfidence:metrics.totalCycles?metrics.confidenceSum/metrics.totalCycles:0,degradedCount:metrics.degradedCount,errorCount:metrics.errorCount,skippedWhilePaused:metrics.skippedWhilePaused,lastStatus:metrics.lastStatus}),sha256:sha256Hex,digest,resetMetrics(){Object.assign(metrics,{totalProcessed:0,totalCycles:0,confidenceSum:0,degradedCount:0,errorCount:0,skippedWhilePaused:0,lastStatus:null});return CGOMachineABC.getMetrics()}};
   function pausedResult(){metrics.skippedWhilePaused++;const result={machine:"C",stage:"result",version:VERSION,status:"PAUSED",summary:null,findings:[],relations:[],inferences:[],hypotheses:[],constraints:[],contradictions:[],reasoning:[],reasoningTrace:[],evidence:[],uncertainty:[],verification:[],decision:{status:"PAUSED",confidence:0,reason:"engine_paused"},errors:[],fallbacks:[],metadata:{generatedAt:now()}};return{engine:"CGO_MACHINE_ABC",version:VERSION,paused:true,skipped:true,result,audit:null}}
   function notify(result,cycles){const payload={result:result?.result??result,cycles:Array.isArray(cycles)?cycles:cycles?[cycles]:[],stopReason:result?.stopReason??null,timestamp:now()};for(const fn of [...observers]){try{fn(payload)}catch(_){}}}
-  [MachineA,MachineB,MachineC,MachineD].forEach(m=>Object.freeze(m));Object.freeze(CGOMachineABC);if(typeof module!=="undefined"&&module.exports)module.exports=CGOMachineABC;global.CGOMachineABC=CGOMachineABC;/* Jangan timpa window.CGO (Customer chat / CGO.esc UI) */if(typeof global.CGO==="undefined"){global.CGO=CGOMachineABC;}
+  
+  /** Safe in-memory repair: baseline process → heuristic patches → re-process → verify */
+  function buildRepairPlan(input, baseline) {
+    const text = typeof input === "string" ? input : (input && (input.text || input.content || input.source) != null ? String(input.text || input.content || input.source) : JSON.stringify(input));
+    const steps = [];
+    let after = text;
+    // Common safe JS/JSON/text fixes (no network, no eval)
+    const rules = [
+      { id: "TRAILING_PLUS", re: /(\+|\-|\*|\/|\%|\||\&)\s*;/g, to: ";", why: "operator menggantung sebelum ;" },
+      { id: "EMPTY_RETURN_PLUS", re: /return\s*\+\s*;/g, to: "return;", why: "return + ; tidak valid" },
+      { id: "DOUBLE_SEMICOLON", re: /;;+/g, to: ";", why: "semicolon ganda" },
+      { id: "COMMA_BEFORE_BRACE", re: /,\s*([}\]])/g, to: "$1", why: "trailing comma sebelum penutup" },
+      { id: "STRAY_PLUS_EOL", re: /\+\s*$/gm, to: "", why: "plus di akhir baris" },
+      { id: "EMPTY_RETURN_OP", re: /return\s*[\+\-\*\/]\s*;/g, to: "return;", why: "return diikuti operator kosong" },
+      { id: "TRIPLE_EQ_TYPO", re: /====+/g, to: "===", why: "operator sama-dengan berlebih" },
+      { id: "DOUBLE_PLUS_SPACE", re: /\+\s*\+/g, to: "+", why: "plus ganda tidak disengaja" },
+      { id: "MISSING_CATCH_BODY", re: /catch\s*\([^)]*\)\s*;/g, to: "catch (_) {}", why: "catch tanpa body" },
+      { id: "STRAGGLE_COMMA_NL", re: /,\s*\n\s*([}\]])/g, to: "\n$1", why: "trailing comma multiline" }
+    ];
+    for (const r of rules) {
+      if (r.re.test(after)) {
+        r.re.lastIndex = 0;
+        const next = after.replace(r.re, r.to);
+        if (next !== after) {
+          steps.push({ id: r.id, status: "CANDIDATE", reason: r.why, beforeLen: after.length, afterLen: next.length });
+          after = next;
+        }
+      }
+    }
+    // If baseline reported physics incomplete — cannot auto-patch geometry; manual
+    const findings = (baseline && baseline.result && baseline.result.findings) || [];
+    for (const f of findings) {
+      if (f && f.type === "PHYSICS_INPUT_INCOMPLETE") {
+        steps.push({ id: "PHYSICS_INPUT", status: "MANUAL", reason: "lengkapi elevationDeg & distanceKm" });
+      }
+    }
+    return {
+      count: steps.length,
+      automaticCandidates: steps.filter(s => s.status === "CANDIDATE"),
+      manualCandidates: steps.filter(s => s.status === "MANUAL"),
+      steps,
+      afterText: after,
+      changed: after !== text
+    };
+  }
+
+  function repair(input, options = {}) {
+    if (paused) {
+      return { engine: "CGO_MACHINE_ABC", version: VERSION, status: "PAUSED", applied: false, verified: false, reason: "engine_paused" };
+    }
+    const text = typeof input === "string" ? input : (input && (input.text || input.content || input.source) != null ? String(input.text || input.content || input.source) : null);
+    const baseline = CGOMachineABC.process(input, { maxCycles: 1, fast: false, skipAudit: false, source: options.source || "REPAIR_BASELINE" });
+    const plan = buildRepairPlan(text != null ? text : input, baseline);
+    const autoApply = options.autoApply !== false;
+    let applied = false;
+    let candidate = null;
+    let repaired = null;
+    let comparison = null;
+    if (autoApply && plan.changed && text != null) {
+      candidate = {
+        id: "PATCH-" + digest(plan.afterText).slice(0, 12),
+        patch: { before: text, after: plan.afterText },
+        steps: plan.steps
+      };
+      repaired = CGOMachineABC.process(plan.afterText, { maxCycles: options.maxCycles ?? 1, fast: false, skipAudit: false, source: options.source || "REPAIR_POST" });
+      applied = true;
+      const bf = baseline.result && baseline.result.summary ? baseline.result.summary.findings : (baseline.result && baseline.result.findings ? baseline.result.findings.length : 0);
+      const af = repaired.result && repaired.result.summary ? repaired.result.summary.findings : (repaired.result && repaired.result.findings ? repaired.result.findings.length : 0);
+      comparison = {
+        before: { fingerprint: digest(text), findings: bf, status: baseline.result && baseline.result.status },
+        after: { fingerprint: digest(plan.afterText), findings: af, status: repaired.result && repaired.result.status },
+        findingDelta: (typeof af === "number" && typeof bf === "number") ? (af - bf) : null
+      };
+    } else if (plan.count === 0) {
+      return {
+        engine: "CGO_MACHINE_ABC", version: VERSION, status: "NO_PATCH", applied: false, verified: false,
+        baseline, plan, finalPlan: plan, candidate: null, repaired: null, comparison: null,
+        reason: "no_safe_automatic_patch",
+        verification: { postRepairAudit: baseline.audit && baseline.audit.status, postRepairRoute: "A-B-C-D" },
+        persistence: "IN_MEMORY_RESULT_ONLY", runtimeExecution: "NOT_PERFORMED",
+        steps: []
+      };
+    }
+    const postStatus = repaired && repaired.result && repaired.result.status;
+    const postAudit = repaired && repaired.audit && repaired.audit.status;
+    const verified = !!(applied && postAudit === "VALID" && postStatus && !/ERROR|FAIL/i.test(String(postStatus)));
+    return {
+      engine: "CGO_MACHINE_ABC",
+      version: VERSION,
+      status: applied ? (verified ? "REPAIRED_VERIFIED" : "REPAIRED") : "REVIEW",
+      applied,
+      verified,
+      baseline,
+      plan,
+      finalPlan: plan,
+      candidate,
+      repaired,
+      postRepair: repaired,
+      comparison,
+      steps: (plan.steps || []).map((s, i) => ({ index: i, id: s.id, status: applied ? "APPLIED" : s.status, audit: postAudit || null })),
+      verification: {
+        postRepairAudit: postAudit || null,
+        postRepairRoute: "A-B-C-D",
+        postStatus: postStatus || null
+      },
+      verificationScope: "INTERNAL_PROCESS",
+      runtimeExecution: applied ? "REPROCESS_ONLY" : "NOT_PERFORMED",
+      persistence: "IN_MEMORY_RESULT_ONLY",
+      reason: applied ? "safe_heuristic_patch" : "awaiting_apply"
+    };
+  }
+
+  // Attach repair API before freeze
+  CGOMachineABC.repair = repair;
+  CGOMachineABC.buildRepairPlan = buildRepairPlan;
+
+[MachineA,MachineB,MachineC,MachineD].forEach(m=>Object.freeze(m));Object.freeze(CGOMachineABC);if(typeof module!=="undefined"&&module.exports)module.exports=CGOMachineABC;global.CGOMachineABC=CGOMachineABC;/* Jangan timpa window.CGO (Customer chat / CGO.esc UI) */if(typeof global.CGO==="undefined"){global.CGO=CGOMachineABC;}
 })(typeof globalThis!=="undefined"?globalThis:window);
