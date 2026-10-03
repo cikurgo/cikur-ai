@@ -14,7 +14,7 @@
     return;
   }
 
-  const VERSION = "1.5.5-SYNC-MIRROR";
+  const VERSION = "1.6.0-REPAIR-OUTPUT";
   const PAGE_ID = "abc-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   const BUS_NAME = "cgo-machine-abc-bus";
   const listeners = new Set();
@@ -377,6 +377,11 @@
   function repair(input, options = {}) {
     if (E.isPaused()) return { engine: "CGO_MACHINE_ABC", version: E.version, status: "PAUSED", applied: false, verified: false };
     const result = withTelemetryContext(options.context || "REPAIR", false, options.bcgoCycle, () => E.repair(input, options));
+    const patchedText = typeof result?.candidate?.patch?.after === "string" ? result.candidate.patch.after : null;
+    const repairSource = options.source || "SOURCE INPUT";
+    // Metadata tambahan bersifat additive: API lama tetap sama, monitor mendapat sumber + full code.
+    result.repairSource = repairSource;
+    result.patchedText = patchedText;
     const summary = {
       status: result.status,
       applied: !!result.applied,
@@ -388,6 +393,12 @@
       verificationScope: result.verificationScope || "UNKNOWN",
       runtimeExecution: result.runtimeExecution || "UNKNOWN",
       persistence: result.persistence || "UNKNOWN",
+      repairSource,
+      patchedText,
+      beforeFingerprint: result.comparison?.before?.fingerprint || null,
+      afterFingerprint: result.comparison?.after?.fingerprint || null,
+      route: result.verification?.postRepairRoute || null,
+      audit: result.verification?.postRepairAudit || null,
       at: new Date().toISOString()
     };
     emit("cgo:machine-abc-repair", result);
@@ -494,6 +505,7 @@
             source: `BCGO_SOURCE:${target.file}`,
             maxRepairSteps: options.maxRepairSteps ?? 3
           }));
+          const patchedText = typeof result?.candidate?.patch?.after === "string" ? result.candidate.patch.after : null;
           repairs.push({
             file: target.file,
             contentHash: target.contentHash,
@@ -504,7 +516,13 @@
             persistence: result.persistence || "IN_MEMORY_RESULT_ONLY",
             runtimeExecution: result.runtimeExecution || "NOT_PERFORMED",
             postStatus: result.repaired?.result?.status || null,
-            audit: result.repaired?.audit?.status || null
+            audit: result.repaired?.audit?.status || null,
+            patchedText,
+            beforeFingerprint: result.comparison?.before?.fingerprint || null,
+            afterFingerprint: result.comparison?.after?.fingerprint || null,
+            route: result.verification?.postRepairRoute || "A-B-C-D",
+            repairSource: target.file,
+            stepCount: Array.isArray(result.steps) ? result.steps.length : 0
           });
         } catch (err) {
           repairs.push({ file: target.file, contentHash: target.contentHash, status: "ERROR", applied: false, verified: false, error: String(err?.message || err) });
@@ -558,6 +576,11 @@
     try { if (packet && !lastPacket) lastPacket = packet; } catch (_) {}
     global.CGO_ABC_LIVE_LINK = link;
     emit("cgo:machine-abc-bcgo-evidence", { evidence, packet, repairs });
+    for (const repair of repairs) {
+      if (repair && typeof repair.patchedText === "string" && repair.patchedText.length) {
+        try { publishBus("bcgo-repair-output", repair); } catch (_) {}
+      }
+    }
     emit("cgo:machine-abc-bcgo-sync", link);
     publishBus("bcgo-evidence", { status, audit, fingerprint, repairs, revision: evidence.revision });
     try { mirrorLiveLink(link); } catch (_) {}
