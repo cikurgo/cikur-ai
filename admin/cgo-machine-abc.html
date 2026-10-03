@@ -95,6 +95,18 @@ pre{white-space:pre-wrap;word-break:break-word;font:12px/1.55 ui-monospace,SFMon
 .trace-item b{font-size:12px}
 .trace-item small{display:block;color:var(--faint);margin-top:2px}
 .hashline{font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;color:#9fc3dd;word-break:break-all}
+
+.repair-output{border:1px solid #31527a;border-radius:12px;background:#020b15;overflow:hidden;margin-top:10px}
+.repair-output-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #173e5e;background:#061426}
+.repair-output-title{font-weight:800;font-size:13px;letter-spacing:.04em}
+.repair-output-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px;padding:0 12px}
+.repair-output-code{display:block;width:100%;min-height:320px;max-height:70vh;resize:vertical;background:#01070d;color:#d5edff;border:0;border-top:1px solid #173e5e;border-radius:0;padding:12px;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;overflow:auto;tab-size:2}
+.repair-output-actions{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;border-top:1px solid #173e5e}
+.repair-output-actions button{min-height:42px;border:1px solid #255070;background:#06182a;color:#d6efff;border-radius:10px;padding:0 14px;font-weight:800;cursor:pointer}
+.repair-output-actions button.primary{border-color:#167d5b;background:#06251c;color:#8af2c8}
+.repair-output-actions button:disabled{opacity:.45;cursor:not-allowed}
+.repair-output-note{padding:0 12px 10px;color:var(--faint);font-size:11px}
+@media(max-width:599px){.repair-output-meta{grid-template-columns:1fr}}
 @media(min-width:600px){.stage-grid{grid-template-columns:repeat(4,1fr)}.intel-grid{grid-template-columns:repeat(4,1fr)}}
 
 .footer{color:var(--faint);font-size:12px;line-height:1.6;margin:10px 0 0}
@@ -254,6 +266,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 <section class="panel dev" id="dev" hidden aria-labelledby="h-dev">
   <h2 class="ph" id="h-dev">Input DEV — hanya untuk pengujian</h2>
   <div class="body">
+    <input id="devFileName" type="text" placeholder="Nama file (opsional), mis. cgo-ai-logic.js" aria-label="Nama file sumber repair" style="width:100%;min-height:44px;background:#020b15;color:#cdeaff;border:1px solid var(--line-soft);border-radius:10px;padding:10px;margin-bottom:8px;font:13px/1.5 ui-monospace,monospace">
     <textarea id="devInput" placeholder="Tempel teks atau JSON di sini…" aria-label="Input DEV"></textarea>
     <label><input type="checkbox" id="devReflect"> Auto-reflect (proses ulang hasilnya sendiri)</label>
     <button id="devRun" type="button">Proses</button>
@@ -361,6 +374,32 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
   </div>
 </section>
 
+<section class="panel" aria-labelledby="h-repair-output">
+  <h2 class="ph" id="h-repair-output">Output Repair — FULL CODE hasil verifikasi</h2>
+  <div class="body">
+    <div class="repair-output">
+      <div class="repair-output-head">
+        <div><div class="repair-output-title" id="repairOutputStatus">STANDBY · belum ada hasil repair</div><div class="repair-output-note" style="padding:3px 0 0" id="repairOutputFile">Sumber: —</div></div>
+        <span class="chip" id="repairOutputBadge">NO OUTPUT</span>
+      </div>
+      <div class="repair-output-meta">
+        <div class="row"><span>Patch</span><strong id="repairOutputPatch">-</strong></div>
+        <div class="row"><span>Verifikasi</span><strong id="repairOutputVerify">-</strong></div>
+        <div class="row"><span>Before fingerprint</span><strong id="repairOutputBefore">-</strong></div>
+        <div class="row"><span>After fingerprint</span><strong id="repairOutputAfter">-</strong></div>
+        <div class="row"><span>Perubahan</span><strong id="repairOutputSteps">-</strong></div>
+        <div class="row"><span>Pipeline</span><strong id="repairOutputRoute">-</strong></div>
+      </div>
+      <textarea id="repairOutputCode" class="repair-output-code" readonly spellcheck="false" wrap="off" aria-label="Full code hasil perbaikan" placeholder="Hasil full code akan muncul di sini setelah MESIN ABC benar-benar menghasilkan patch."></textarea>
+      <div class="repair-output-actions">
+        <button id="repairCopy" class="primary" type="button" disabled>📋 Copy Full Code</button>
+        <button id="repairClear" type="button">Bersihkan Output</button>
+      </div>
+      <div class="repair-output-note">Code di atas berasal dari hasil patch runtime yang benar-benar dikembalikan engine. Monitor tidak menulis file atau repository secara otomatis; manusia tetap melakukan paste ke file tujuan.</div>
+    </div>
+  </div>
+</section>
+
 <section class="panel" aria-labelledby="h-health">
   <h2 class="ph" id="h-health">Kesehatan engine</h2>
   <div class="body">
@@ -378,7 +417,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 </div>
 
 <script src="cgo-machine-abc.js?v=0.9.13-UI-CONSISTENCY"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.5.5-SYNC-MIRROR"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.6.0-REPAIR-OUTPUT"></script>
 <script>
 (() => {
   "use strict";
@@ -733,6 +772,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
     chip($("#audit"), "Audit D –", "");
     try { $("#deepDetail").textContent = "Belum ada inspeksi mendalam."; } catch (_) {}
     try { $("#repairDetail").textContent = "Belum ada proses repair."; } catch (_) {}
+    clearRepairOutput();
     try { $("#physicsState").textContent = "–"; $("#telemetryState").textContent = "STANDBY"; } catch (_) {}
     clearNotice(); refresh();
   };
@@ -741,12 +781,80 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
     const dev = $("#dev"); dev.hidden = !dev.hidden;
     $("#devBtn").setAttribute("aria-expanded", String(!dev.hidden));
   };
+  function normalizeRepairOutput(result, sourceName) {
+    if (!result) return null;
+    const candidate = result.candidate || result.packet?.candidate || null;
+    const patch = candidate?.patch || result.patch || null;
+    const code = typeof result.patchedText === "string" ? result.patchedText
+      : typeof result.repairOutput?.patchedText === "string" ? result.repairOutput.patchedText
+      : typeof patch?.after === "string" ? patch.after : null;
+    if (typeof code !== "string" || !code.length) return null;
+    const steps = Array.isArray(result.steps) ? result.steps : (Array.isArray(candidate?.steps) ? candidate.steps : []);
+    return {
+      source: sourceName || result.repairSource || result.source || result.packet?.repairSource || "SOURCE INPUT",
+      status: result.status || "REPAIRED",
+      patchId: candidate?.id || result.candidateId || "-",
+      verified: result.verified === true,
+      beforeFingerprint: result.beforeFingerprint || result.comparison?.before?.fingerprint || "-",
+      afterFingerprint: result.afterFingerprint || result.comparison?.after?.fingerprint || "-",
+      findingDelta: result.comparison?.findingDelta,
+      stepCount: steps.length,
+      route: result.route || result.verification?.postRepairRoute || "A-B-C-D",
+      audit: result.audit || result.verification?.postRepairAudit || "-",
+      code,
+      at: result.at || new Date().toISOString()
+    };
+  }
+
+  function renderRepairOutput(result, sourceName) {
+    const out = normalizeRepairOutput(result, sourceName);
+    if (!out) return false;
+    $("#repairOutputStatus").textContent = out.status + (out.verified ? " · VERIFIED" : "");
+    $("#repairOutputFile").textContent = "Sumber: " + out.source;
+    $("#repairOutputPatch").textContent = out.patchId;
+    $("#repairOutputVerify").textContent = out.verified ? "PASS · INTERNAL" : (out.audit || "BELUM TERBUKTI");
+    $("#repairOutputBefore").textContent = out.beforeFingerprint;
+    $("#repairOutputAfter").textContent = out.afterFingerprint;
+    $("#repairOutputSteps").textContent = String(out.stepCount) + " patch" + (out.findingDelta != null ? " · Δtemuan " + out.findingDelta : "");
+    $("#repairOutputRoute").textContent = out.route + " · D " + out.audit;
+    $("#repairOutputCode").value = out.code;
+    $("#repairCopy").disabled = false;
+    chip($("#repairOutputBadge"), out.verified ? "VERIFIED" : out.status, out.verified ? "ok" : /ERROR|FAIL/i.test(out.status) ? "bad" : "warn");
+    try { document.getElementById("h-repair-output")?.scrollIntoView({behavior:"smooth",block:"start"}); } catch (_) {}
+    return true;
+  }
+
+  function clearRepairOutput() {
+    const ids = ["repairOutputPatch","repairOutputVerify","repairOutputBefore","repairOutputAfter","repairOutputSteps","repairOutputRoute"];
+    ids.forEach(id => { const n = document.getElementById(id); if (n) n.textContent = "-"; });
+    const st = document.getElementById("repairOutputStatus"); if (st) st.textContent = "STANDBY · belum ada hasil repair";
+    const f = document.getElementById("repairOutputFile"); if (f) f.textContent = "Sumber: —";
+    const code = document.getElementById("repairOutputCode"); if (code) code.value = "";
+    const copy = document.getElementById("repairCopy"); if (copy) copy.disabled = true;
+    try { chip($("#repairOutputBadge"), "NO OUTPUT", ""); } catch (_) {}
+  }
+
+  async function copyRepairOutput() {
+    const code = document.getElementById("repairOutputCode")?.value || "";
+    if (!code) { showNotice("Belum ada full code hasil repair untuk disalin."); return; }
+    try {
+      if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(code);
+      else {
+        const ta = document.getElementById("repairOutputCode"); ta.focus(); ta.select(); ta.setSelectionRange(0, code.length);
+        const ok = document.execCommand("copy"); if (!ok) throw new Error("copy command ditolak browser");
+        ta.setSelectionRange(0, 0);
+      }
+      showNotice("FULL CODE hasil repair berhasil disalin ke clipboard.");
+    } catch (e) { showNotice("Copy gagal: " + (e?.message || e) + ". Silakan pilih seluruh code lalu salin manual."); }
+  }
+
   function runRepairFromDev() {
     const raw = $("#devInput").value;
     if (!raw.trim()) { showNotice("Tempel source/code terlebih dahulu."); return; }
     let input = raw; try { input = JSON.parse(raw); } catch (_) {}
+    const sourceName = $("#devFileName")?.value.trim() || "DEV INPUT";
     try {
-      const r = (Bridge && typeof Bridge.repair === "function" ? Bridge.repair : E.repair)(input, { autoApply: true, fast: false, skipAudit: false });
+      const r = (Bridge && typeof Bridge.repair === "function" ? Bridge.repair : E.repair)(input, { autoApply: true, fast: false, skipAudit: false, source: sourceName });
       $("#repairStatus").textContent = r.status || "-";
       $("#repairPatch").textContent = r.candidate?.id || (r.plan?.count ? "REVIEW" : "TIDAK ADA");
       $("#repairVerify").textContent = r.verified ? "PASS · INTERNAL" : "BELUM TERBUKTI";
@@ -758,10 +866,15 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
       const patch = r.candidate?.patch;
       if (patch?.after != null) $("#repairDetail").textContent = patch.after;
       else $("#repairDetail").textContent = JSON.stringify(r, null, 2).slice(0, DETAIL_LIMIT);
+      renderRepairOutput(r, sourceName);
     } catch (e) {
       $("#repairStatus").textContent = "ERROR"; $("#repairVerify").textContent = "FAIL"; $("#repairDetail").textContent = String(e.message || e);
+      showNotice("Repair gagal: " + (e.message || e));
     }
   }
+  $("#repairCopy").onclick = copyRepairOutput;
+  $("#repairClear").onclick = clearRepairOutput;
+
   $("#devRun").onclick = () => {
     const raw = $("#devInput").value;
     let input = raw; try { input = JSON.parse(raw); } catch (_) {}
@@ -796,24 +909,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
       Bridge.observe(function (packet) { try { onPayload(packet); } catch (_) {} });
     }
   } catch (_) {}
-  // Jika panel masih kosong setelah 1.5s, proses sample nyata agar user melihat hasil
-  setTimeout(function () {
-    try {
-      const hr = document.getElementById("human-result");
-      const empty = !hr || /Menunggu siklus/i.test(hr.textContent || "");
-      if (empty && E && typeof E.process === "function") {
-        const out = E.process({
-          source: "MONITOR_BOOT_SAMPLE",
-          note: "contoh hasil nyata saat monitor dibuka",
-          ts: new Date().toISOString()
-        }, { fast: false, skipAudit: false });
-        // process sudah memicu observe → onPayload; jaga-jaga panggil manual
-        if (out) onPayload(out);
-      }
-    } catch (e) {
-      console.warn("[ABC monitor] boot sample", e);
-    }
-  }, 1500);
+  // Tidak ada boot sample/dummy. Monitor hanya menampilkan siklus yang benar-benar datang dari engine/BCGO.
   // Poll paket terakhir dari bridge (tab BCGO mengisi mesin)
   setInterval(function () {
     try {
@@ -824,6 +920,19 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
     } catch (_) {}
   }, 3000);
   refresh();
+
+  // Repair output: tampilkan FULL CODE hanya jika engine benar-benar mengirim hasil patch.
+  window.addEventListener("cgo:machine-abc-repair", function (ev) {
+    try { renderRepairOutput(ev.detail, ev.detail?.repairSource || ev.detail?.source || "ENGINE INPUT"); } catch (_) {}
+  });
+  window.addEventListener("cgo:machine-abc-bcgo-evidence", function (ev) {
+    try {
+      const repairs = Array.isArray(ev.detail?.repairs) ? ev.detail.repairs : [];
+      for (let i = repairs.length - 1; i >= 0; i--) {
+        if (repairs[i]?.patchedText) { renderRepairOutput(repairs[i], repairs[i].file || "BCGO SOURCE"); break; }
+      }
+    } catch (_) {}
+  });
 
   /* ===== Bus lintas-tab: terima siklus dari index.html / BCGO / Chat CGO ===== */
   const BUS_NAME = "cgo-machine-abc-bus";
@@ -843,6 +952,16 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
     // Pesan dari halaman ini sendiri (BroadcastChannel memantul ke instance lain di tab yang sama) sudah
     // dihitung lewat observer lokal — abaikan agar siklus tidak terhitung dua kali.
     if (msg.pageId && Bridge && msg.pageId === Bridge.pageId) return;
+    if (msg.kind === "repair" && msg.data) {
+      markBus(true, "repair-output");
+      if (msg.data?.patchedText) renderRepairOutput(msg.data, msg.data.file || msg.data.repairSource || "REMOTE SOURCE");
+      return;
+    }
+    if (msg.kind === "bcgo-repair-output" && msg.data) {
+      markBus(true, "repair-output");
+      if (msg.data?.patchedText) renderRepairOutput(msg.data, msg.data.file || msg.data.repairSource || "REMOTE SOURCE");
+      return;
+    }
     if (msg.kind === "bcgo-sync" && msg.data) {
       markBus(true, "bcgo-sync");
       const d = msg.data;
