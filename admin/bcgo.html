@@ -567,11 +567,11 @@ body{font-family:'Inter',sans-serif}
 <script src="../customer/cgo-customer-composer.js?v=1.0-OTAK-INJECT"></script>
 <script src="../customer/cgo-customer-cikur-bridge.js?v=1.0-OTAK-INJECT"></script>
 <script src="../customer/cgo-customer.js?v=1.0-OTAK-INJECT"></script>
-<script src="cgo-audio-bus.js?v=1.0.2-CLAIM-CLEANUP"></script>
-<script src="cgo-audio-queue.js?v=1.0.1-AUDIO-QUEUE-WATCHDOG"></script>
+<script src="cgo-audio-bus.js?v=1.1.0-MIC-LOCK-ZERO-REGRESI"></script>
+<script src="cgo-audio-queue.js?v=1.1.0-MIC-AWARE-WATCHDOG"></script>
 <script src="cgo-emosi.js?v=1.1.0-EMOSI-AIRPORT"></script>
 <script src="cgo-narasi.js?v=1.0.0-NARASI-r20261001"></script>
-<script src="cgo-ai-voice-operator.js?v=3.9.5-SYNTHESIS-RECOVER"></script>
+<script src="cgo-ai-voice-operator.js?v=3.10.0-MIC-AWARE-ZERO-REGRESI"></script>
 <script src="cgo-machine-abc.js?v=0.9.13-UI-CONSISTENCY"></script>
 <script src="cgo-machine-abc-bridge.js?v=1.5.5-SYNC-MIRROR"></script>
 <script src="cgo-abc-cognition.js?v=1.2.0-HUMAN-RESULT"></script>
@@ -2156,7 +2156,9 @@ await runAutonomousEngine(state => {
 
 <script>
 
-// --- Multimodal: Web Speech API (mic → teks → chat natural + suara) ---
+// --- Multimodal: Web Speech API (MIC → teks → Chat CGO) ---
+// ZERO-REGRESI: SpeechRecognition adalah satu-satunya pemilik capture MIC.
+// Tidak ada getUserMedia/WebAudio paralel yang merebut microphone.
 (function setupChatMic(){
   const micBtn = document.getElementById('chat-mic');
   const input = document.getElementById('chat-input');
@@ -2171,7 +2173,12 @@ await runAutonomousEngine(state => {
   let starting = false;
   let finalText = '';
   let silenceT = null;
+  let sessionT = null;
+  let heardSpeech = false;
+  let micClaimId = null;
+  let finishing = false;
   const silenceMs = 2200;
+  const sessionMaxMs = 15000;
 
   function status(text, tone){
     if (!statusEl) return;
@@ -2188,92 +2195,147 @@ await runAutonomousEngine(state => {
     if (window.CGO_SVG) micBtn.innerHTML = listening ? window.CGO_SVG.stop : window.CGO_SVG.mic;
     else micBtn.textContent = listening ? '⏹' : '🎤';
   }
-  function clearSilence(){ try { if (silenceT) clearTimeout(silenceT); } catch(_){} silenceT = null; }
+  function clearTimers(){
+    try { if (silenceT) clearTimeout(silenceT); } catch(_){}
+    try { if (sessionT) clearTimeout(sessionT); } catch(_){}
+    silenceT = null; sessionT = null;
+  }
+  function releaseMic(){
+    if (!micClaimId) return;
+    try { if (window.CGOAudioBus && typeof window.CGOAudioBus.lepasMic === 'function') window.CGOAudioBus.lepasMic(micClaimId); } catch(_){}
+    micClaimId = null;
+  }
   function armSilence(){
-    clearSilence();
+    try { if (silenceT) clearTimeout(silenceT); } catch(_){}
     silenceT = setTimeout(function(){
-      try { if (rec && listening) rec.stop(); } catch(_){}
+      if (!rec || !listening) return;
+      try { rec.stop(); } catch(_){}
     }, silenceMs);
   }
-  function stopRecognition(){
-    clearSilence();
-    try { if (rec) rec.stop(); } catch(_){}
+  function armSessionWatchdog(){
+    try { if (sessionT) clearTimeout(sessionT); } catch(_){}
+    sessionT = setTimeout(function(){
+      if (!rec || !listening) return;
+      try { rec.abort(); } catch(_) { try { rec.stop(); } catch(__){} }
+      status(heardSpeech ? 'MICROFON SELESAI · waktu dengar habis' : 'TIDAK ADA SUARA · coba lagi', heardSpeech ? 'idle' : 'warn');
+    }, sessionMaxMs);
+  }
+  function clearInterim(){
+    try { window.CGOMicUI?.showInterim(''); } catch(_){}
+  }
+  function stopRecognition(reason){
+    clearTimers();
+    finishing = true;
+    try { if (rec) rec.abort(); } catch(_) { try { if (rec) rec.stop(); } catch(__){} }
     setListening(false);
     starting = false;
-    try { if (window.CGOMicUI) window.CGOMicUI.stopWave(); } catch(_){}
+    releaseMic();
+    try { window.CGOMicUI?.stopWave(); } catch(_){}
+    if (reason === 'manual') status('MIKROFON SIAGA', 'idle');
   }
   function sendVoiceText(text){
     const value = String(text || '').trim();
-    if (!value) return;
+    if (!value) return false;
     if (input) { input.value = ''; input.placeholder = 'Tanya operator: status, scanner, hitung, eja…'; }
-    try { window.CGOMicUI?.showInterim(''); } catch(_){}
+    clearInterim();
     if (typeof window.CGO_BCGO_SEND_QUESTION === 'function') {
       status('MENGIRIM · suara → teks', 'live');
       void window.CGO_BCGO_SEND_QUESTION(value, { modality: 'voice' });
-    } else {
-      if (input) input.value = value;
-      status('CHAT BELUM SIAP · teks dipertahankan', 'warn');
+      try { window.dispatchEvent(new CustomEvent('cgo:mic-transcript', { detail:{ text:value, modality:'voice' } })); } catch(_){}
+      return true;
     }
+    if (input) input.value = value;
+    status('CHAT BELUM SIAP · teks dipertahankan', 'warn');
+    return false;
   }
 
   if (!SR) {
-    micBtn.title = 'Speech Recognition tidak didukung browser ini (gunakan Chrome/Edge pada HTTPS/localhost)';
+    micBtn.title = 'Speech Recognition tidak didukung browser ini (gunakan Chrome/Edge)';
     micBtn.classList.add('opacity-60');
-    status('MIC TIDAK DIDUKUNG · Chrome/Edge + HTTPS/localhost', 'warn');
+    status('MIC TIDAK DIDUKUNG · gunakan Chrome/Edge', 'warn');
     micBtn.addEventListener('click', function(){
-      try { alert('Mikrofon membutuhkan Speech Recognition. Gunakan Chrome/Edge dan buka BCGO melalui HTTPS atau localhost.'); } catch(_){}
+      try { alert('Speech Recognition tidak tersedia di browser ini. Gunakan Chrome/Edge.'); } catch(_){}
     });
     return;
   }
 
-  micBtn.addEventListener('click', async function(){
+  micBtn.addEventListener('click', function(){
     if (starting) return;
-    if (listening) { stopRecognition(); status('MIKROFON SIAGA', 'idle'); return; }
-    starting = true;
+    if (listening) { stopRecognition('manual'); return; }
+    if (rec) { try { rec.abort(); } catch(_){} rec = null; }
     finalText = '';
-    status('MEMINTA AKSES MIKROFON…', 'live');
+    heardSpeech = false;
+    finishing = false;
+    starting = true;
 
     try {
       if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
         throw new Error('MIC_REQUIRES_SECURE_CONTEXT');
       }
-      if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
-        throw new Error('GET_USER_MEDIA_UNAVAILABLE');
+      // Mic lock: hentikan TTS/queue hanya selama sesi recognition.
+      if (window.CGOAudioBus && typeof window.CGOAudioBus.klaimMic === 'function') {
+        const claim = window.CGOAudioBus.klaimMic();
+        if (!claim || !claim.ok) {
+          starting = false;
+          status(claim && claim.reason === 'remote-mic-busy' ? 'MIC SEDANG DIGUNAKAN TAB LAIN' : 'MIC SIBUK · coba lagi', 'warn');
+          return;
+        }
+        micClaimId = claim.id;
       }
-      // Satu izin mic dipakai untuk waveform + SpeechRecognition. Tidak ada dua getUserMedia.
-      await window.CGOMicUI?.startWave();
-      status('MIC AKTIF · BICARA SEKARANG', 'live');
+      try { if (window.CGOOperatorVoice && typeof window.CGOOperatorVoice.stop === 'function') window.CGOOperatorVoice.stop(); } catch(_){}
+      status('MEMULAI PENGENALAN SUARA…', 'live');
 
       rec = new SR();
       rec.lang = 'id-ID';
       rec.interimResults = true;
       rec.continuous = false;
       rec.maxAlternatives = 1;
-      rec.onstart = function(){ setListening(true); starting = false; armSilence(); status('MENDENGARKAN…', 'live'); };
-      rec.onspeechstart = function(){ clearSilence(); status('MENDENGARKAN…', 'live'); };
+
+      rec.onstart = function(){
+        setListening(true);
+        starting = false;
+        status('MENDENGARKAN…', 'live');
+        armSilence();
+        armSessionWatchdog();
+        try { window.CGOMicUI?.startWave(); } catch(_){}
+        try { window.dispatchEvent(new CustomEvent('cgo:mic-status', {detail:{state:'LISTENING'}})); } catch(_){}
+      };
+      rec.onspeechstart = function(){
+        heardSpeech = true;
+        try { if (silenceT) clearTimeout(silenceT); } catch(_){}
+        status('SUARA TERDETEKSI…', 'live');
+      };
       rec.onspeechend = function(){ armSilence(); };
-      rec.onsoundstart = function(){ clearSilence(); };
+      rec.onsoundstart = function(){ try { if (silenceT) clearTimeout(silenceT); } catch(_){} };
       rec.onsoundend = function(){ armSilence(); };
       rec.onerror = function(ev){
         const code = String(ev?.error || 'unknown');
-        clearSilence(); setListening(false); starting = false;
+        clearTimers(); setListening(false); starting = false;
         try { window.CGOMicUI?.stopWave(); } catch(_){}
+        releaseMic();
         const msg = code === 'not-allowed' || code === 'service-not-allowed'
           ? 'AKSES MIC DITOLAK · izinkan mikrofon di browser'
-          : code === 'no-speech' ? 'TIDAK ADA SUARA · coba bicara lagi' : 'MIC ERROR · ' + code;
+          : code === 'no-speech' ? 'TIDAK ADA SUARA · coba bicara lagi'
+          : code === 'audio-capture' ? 'CAPTURE MIC GAGAL · periksa mikrofon/perangkat'
+          : code === 'network' ? 'LAYANAN PENGENALAN SUARA TIDAK TERSEDIA'
+          : 'MIC ERROR · ' + code;
         status(msg, 'error');
         try { window.dispatchEvent(new CustomEvent('cgo:mic-error', {detail:{code:code,message:msg}})); } catch(_){}
       };
       rec.onend = function(){
-        clearSilence(); setListening(false); starting = false;
+        clearTimers(); setListening(false); starting = false;
         try { window.CGOMicUI?.stopWave(); } catch(_){}
+        releaseMic();
         const text = finalText.trim();
-        if (text) {
+        rec = null;
+        if (text && !finishing) {
           status('TEKS TERDETEKSI · mengirim…', 'live');
           sendVoiceText(text);
-        } else if (statusEl && !/ERROR|DITOLAK|TIDAK ADA/.test(statusEl.textContent)) {
+        } else if (!text && statusEl && !/ERROR|DITOLAK|TIDAK ADA|TIDAK TERSEDIA|SIBUK/.test(statusEl.textContent)) {
           status('MIKROFON SIAGA', 'idle');
         }
+        finishing = false;
+        try { window.dispatchEvent(new CustomEvent('cgo:mic-status', {detail:{state:text?'TRANSCRIPT':'IDLE',text:text}})); } catch(_){}
       };
       rec.onresult = function(ev){
         let interim = '';
@@ -2292,19 +2354,20 @@ await runAutonomousEngine(state => {
           if (interimEl) interimEl.classList.add('on');
           if (input) input.placeholder = draft;
         }
+        if (final.trim()) heardSpeech = true;
         armSilence();
+        try { if (sessionT) clearTimeout(sessionT); } catch(_){}
       };
       rec.start();
     } catch (e) {
       console.warn('[BCGO mic]', e);
-      starting = false; setListening(false); clearSilence();
+      clearTimers();
+      starting = false; setListening(false); releaseMic();
       try { window.CGOMicUI?.stopWave(); } catch(_){}
       const code = String(e?.message || e || 'MIC_START_FAILED');
       const msg = code === 'MIC_REQUIRES_SECURE_CONTEXT'
         ? 'MIC TIDAK AKTIF · buka BCGO via HTTPS atau localhost'
-        : code === 'GET_USER_MEDIA_UNAVAILABLE'
-          ? 'MIC TIDAK TERSEDIA · browser/perangkat tidak menyediakan input audio'
-          : 'MIC GAGAL AKTIF · ' + code.slice(0, 90);
+        : 'MIC GAGAL AKTIF · ' + code.slice(0, 90);
       status(msg, 'error');
       try { window.dispatchEvent(new CustomEvent('cgo:mic-error', {detail:{code:code,message:msg}})); } catch(_){}
     }
@@ -2564,32 +2627,16 @@ await runAutonomousEngine(state => {
     frame();
   }
 
-  async function startWave() {
-    if (micStream) return true;
-    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
-      throw new Error('GET_USER_MEDIA_UNAVAILABLE');
-    }
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-    var AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) throw new Error('WEB_AUDIO_UNAVAILABLE');
-    audioCtx = new AC({ latencyHint: 'interactive' });
-    if (audioCtx.state === 'suspended') { try { await audioCtx.resume(); } catch (_) {} }
-    var src = audioCtx.createMediaStreamSource(micStream);
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.72;
-    src.connect(analyser);
+  function startWave() {
+    // Visualization-only hook. SpeechRecognition owns the microphone; this function
+    // MUST NOT call getUserMedia or create a second audio capture path.
     if (waveWrap) waveWrap.classList.add('on');
-    drawWave();
-    return true;
+    if (micBtn) micBtn.classList.add('listening');
+    return Promise.resolve(true);
   }
   function stopWave() {
     try { if (raf) cancelAnimationFrame(raf); } catch (_) {}
     raf = null;
-    try { if (micStream) micStream.getTracks().forEach(function (t) { t.stop(); }); } catch (_) {}
-    micStream = null;
-    try { if (audioCtx) audioCtx.close(); } catch (_) {}
-    audioCtx = null; analyser = null;
     if (waveWrap) waveWrap.classList.remove('on');
     if (micBtn) micBtn.classList.remove('listening');
   }
