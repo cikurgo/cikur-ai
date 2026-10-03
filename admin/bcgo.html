@@ -570,9 +570,9 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-audio-queue.js?v=1.0.1-AUDIO-QUEUE-WATCHDOG"></script>
 <script src="cgo-emosi.js?v=1.1.0-EMOSI-AIRPORT"></script>
 <script src="cgo-narasi.js?v=1.0.0-NARASI-r20261001"></script>
-<script src="cgo-ai-voice-operator.js?v=3.9.4-WELCOME-FORCE-BYPASS"></script>
-<script src="cgo-machine-abc.js?v=0.9.11-REPAIR-UI-DOMAIN"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.5.1-DOMAIN-UI"></script>
+<script src="cgo-ai-voice-operator.js?v=3.9.5-SYNTHESIS-RECOVER"></script>
+<script src="cgo-machine-abc.js?v=0.9.12-REAL-RESULT-r2"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.5.3-INTEGRATION"></script>
 <script src="cgo-abc-cognition.js?v=1.2.0-HUMAN-RESULT"></script>
 <script src="cgo-otak-hub.js?v=1.6.2-ABC-HUMAN-HINT"></script>
 
@@ -605,7 +605,7 @@ let internalBrain = null;
 // The brain loads asynchronously; chat/controls remain responsive while it boots.
 const internalBrainReady = (async () => {
   try {
-    const adapter = await import('./cgo-ai-browser-adapter.js?v=5.5.1-FIX-NULLISH-20261001');
+    const adapter = await import('./cgo-ai-browser-adapter.js?v=5.5.2-SYSTEM-IDLE');
     if (typeof adapter.install === 'function') {
       internalBrain = adapter.install();
       window.CGOInternalBrain = internalBrain;
@@ -2701,16 +2701,26 @@ await runAutonomousEngine(state => {
           }
         }
       } catch (_) {}
+      // Prefer bahasa manusia dari bridge (integrasi penuh)
+      var humanBody = d.human && d.human.body ? String(d.human.body) : null;
       paintLiveResult({
         status: d.status || (r && r.status) || null,
         audit: d.audit || null,
-        confidence: r && r.decision && r.decision.confidence,
-        findingsCount: findings.length,
+        confidence: d.confidence != null ? d.confidence : (r && r.decision && r.decision.confidence),
+        findingsCount: d.findingsCount != null ? d.findingsCount : findings.length,
         lqm: phys && phys.lqm,
         snr: phys && phys.snrDb,
         usable: phys && phys.usable,
-        relationBreaks: breaks
+        relationBreaks: breaks,
+        humanBody: humanBody
       });
+      // KPI bar ikut
+      try {
+        var kSt = document.getElementById("cgo-kpi-stage");
+        var kAu = document.getElementById("cgo-kpi-audit");
+        if (kSt && d.status) kSt.textContent = String(d.status);
+        if (kAu && d.audit) kAu.textContent = String(d.audit);
+      } catch (_) {}
     } catch (_) {}
   });
 

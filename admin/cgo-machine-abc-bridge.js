@@ -14,7 +14,7 @@
     return;
   }
 
-  const VERSION = "1.5.1-DOMAIN-UI";
+  const VERSION = "1.5.3-INTEGRATION";
   const PAGE_ID = "abc-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   const BUS_NAME = "cgo-machine-abc-bus";
   const listeners = new Set();
@@ -190,6 +190,9 @@
     } else {
       lines.unshift("Status " + st + (conf != null ? " (" + conf + "%)" : "") + ".");
     }
+    if (conf === 0 && /VALID|PASS/i.test(String(audit && (audit.status || audit) || ""))) {
+      lines.push("Catatan: audit D VALID meski keyakinan penalaran 0% — biasanya karena ketidakpastian struktural, bukan kegagalan sistem.");
+    }
     const tips = [];
     if (relBreaks.length) tips.push("Periksa path script/import yang berstatus UNKNOWN atau MISMATCH.");
     if (phys.length && phys[0].usable === false) tips.push("Tautan fisika di bawah ambang — cek elevasi/jarak/fade.");
@@ -364,14 +367,21 @@
   function buildBCGOEvidence(state) {
     const sourceScan = state?.sourceScan || {};
     const activeCases = Array.isArray(state?.activeCases) ? state.activeCases : [];
+    const scanSt = String(sourceScan.status || "").toUpperCase();
+    const filesFailed = Number(sourceScan.filesFailed || 0);
+    const mismatch = Number(sourceScan.relationSummary?.mismatch || 0);
+    const unknownRel = Number(sourceScan.relationSummary?.unknown || 0);
+    const healthyScan = /CLEAN|OK|VALID|COMPLETE/.test(scanSt) && filesFailed === 0 && mismatch === 0;
+    const claimStatus = healthyScan && activeCases.length === 0 ? "OK" : (filesFailed > 0 || mismatch > 0 || activeCases.length ? "ANOMALY" : "OK");
+    const claimSeverity = claimStatus === "ANOMALY" ? "HIGH" : "LOW";
     const claims = [
-      { key: "cycle", value: state?.cycleNo ?? null },
-      { key: "phase", value: state?.phase ?? null },
-      { key: "sourceScanStatus", value: sourceScan.status ?? null },
-      { key: "filesReadable", value: sourceScan.filesReadable ?? null },
-      { key: "filesFailed", value: sourceScan.filesFailed ?? null },
-      { key: "relationMismatch", value: sourceScan.relationSummary?.mismatch ?? null },
-      { key: "activeCases", value: activeCases.length }
+      { key: "cycle", value: state?.cycleNo ?? state?.cycle ?? null, status: "OK", severity: "LOW", source: "BCGO", message: "cycle snapshot" },
+      { key: "phase", value: state?.phase ?? null, status: "OK", severity: "LOW", source: "BCGO", message: "phase snapshot" },
+      { key: "sourceScanStatus", value: sourceScan.status ?? null, status: healthyScan ? "OK" : "ANOMALY", severity: healthyScan ? "LOW" : "HIGH", source: "BCGO", message: "source scan " + (sourceScan.status || "?") },
+      { key: "filesReadable", value: sourceScan.filesReadable ?? null, status: "OK", severity: "LOW", source: "BCGO", message: "files readable" },
+      { key: "filesFailed", value: filesFailed, status: filesFailed > 0 ? "ANOMALY" : "OK", severity: filesFailed > 0 ? "HIGH" : "LOW", source: "BCGO", message: "files failed " + filesFailed },
+      { key: "relationMismatch", value: mismatch, status: mismatch > 0 ? "ANOMALY" : "OK", severity: mismatch > 0 ? "HIGH" : "LOW", source: "BCGO", message: "relation mismatch " + mismatch },
+      { key: "activeCases", value: activeCases.length, status: activeCases.length ? "ANOMALY" : "OK", severity: activeCases.length ? "HIGH" : "LOW", source: "BCGO", message: "active cases " + activeCases.length }
     ];
     const repairTargets = Array.isArray(sourceScan.repairTargets)
       ? sourceScan.repairTargets.filter(x => x && typeof x.file === "string" && typeof x.text === "string").slice(0, 4)
@@ -474,6 +484,23 @@
       claimCount: evidence.claims.length,
       capturedAt: evidence.capturedAt
     };
+    // Bahasa manusia untuk BCGO + Dashboard (satu sumber)
+    try {
+      const res = finalCycle?.result || packet?.result || packet?.finalResult || null;
+      const aud = finalCycle?.audit || packet?.audit || null;
+      const hints = extractDomainHints(state || {});
+      link.human = buildHumanSummary(res, aud, {
+        relationBreaks: hints.relationBreaks,
+        symptom: hints.symptom,
+        scanStatus: hints.scanStatus,
+        filesFailed: hints.filesFailed,
+        activeCases: hints.activeCases
+      });
+      link.confidence = res && res.decision ? res.decision.confidence : null;
+      link.findingsCount = Array.isArray(res && res.findings) ? res.findings.length : 0;
+    } catch (_) {}
+    // Jaga lastPacket bila observer belum sempat jalan
+    try { if (packet && !lastPacket) lastPacket = packet; } catch (_) {}
     global.CGO_ABC_LIVE_LINK = link;
     emit("cgo:machine-abc-bcgo-evidence", { evidence, packet, repairs });
     emit("cgo:machine-abc-bcgo-sync", link);
@@ -520,6 +547,18 @@
       return () => listeners.delete(fn);
     },
     getLastPacket: () => lastPacket,
+    integrationProbe: () => ({
+      bridge: VERSION,
+      engine: E.version,
+      hasLastPacket: !!lastPacket,
+      lastStatus: lastPacket?.result?.status || null,
+      liveLink: global.CGO_ABC_LIVE_LINK ? {
+        status: global.CGO_ABC_LIVE_LINK.status,
+        audit: global.CGO_ABC_LIVE_LINK.audit,
+        human: !!(global.CGO_ABC_LIVE_LINK.human && global.CGO_ABC_LIVE_LINK.human.body)
+      } : null,
+      channels: { telemetry: "CGO_MACHINE_ABC_TELEMETRY", bus: BUS_NAME || "CGO_MACHINE_ABC_BUS" }
+    }),
     publishBus,
     pageId: PAGE_ID,
     BUS_NAME,

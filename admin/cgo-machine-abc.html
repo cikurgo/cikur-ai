@@ -190,7 +190,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
         <div class="telemetry-box"><span>Event</span><b id="hero-event">—</b></div>
         <div class="telemetry-box"><span>Route</span><b>A → B → C → D</b></div>
         <div class="telemetry-box"><span>Mode</span><b>INTERNAL · EVIDENCE-FIRST</b></div>
-        <div class="telemetry-box" style="grid-column:1/-1"><span>Hasil manusia</span><b id="human-result" style="white-space:normal;line-height:1.35">Menunggu siklus yang menghasilkan temuan / fisika / perbaikan…</b></div>
+        <div class="telemetry-box" style="grid-column:1/-1"><span>Ringkas</span><b id="hero-human-brief" style="white-space:normal;line-height:1.35">—</b></div>
       </div>
     </div>
     <div class="panel" style="margin-top:0;border-color:#173e5e;background:#020b15">
@@ -377,8 +377,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 </section>
 </div>
 
-<script src="cgo-machine-abc.js?v=0.9.11-REPAIR-UI-DOMAIN"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.5.1-DOMAIN-UI"></script>
+<script src="cgo-machine-abc.js?v=0.9.12-REAL-RESULT-r2"></script>
+<script src="cgo-machine-abc-bridge.js?v=1.5.3-INTEGRATION"></script>
 <script>
 (() => {
   "use strict";
@@ -525,7 +525,95 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
     renderIntelligence(c, pipe, d);
   }
 
+  
+  function auditStatus(d) {
+    if (d == null) return "—";
+    if (typeof d === "string") return d;
+    return d.status || d.audit || "—";
+  }
+
+  /** Isi panel hasil manusia — selalu dipanggil setelah siklus (lokal/bus/telemetry). */
+  function paintHumanResult(c, stopReason) {
+    try {
+      const r = (c && (c.result || c)) || {};
+      const status = r.status || "UNRESOLVED";
+      const conf = Number(r.decision?.confidence ?? r.confidence ?? 0);
+      const confPct = Math.round(conf * 100);
+      const dSt = auditStatus(c && c.audit);
+      const findings = Array.isArray(r.findings) ? r.findings : (Array.isArray(c?.pipeline?.C?.findings) ? c.pipeline.C.findings : []);
+      const relations = Array.isArray(r.relations) ? r.relations : (Array.isArray(c?.pipeline?.C?.relations) ? c.pipeline.C.relations : []);
+      const uncertainty = Array.isArray(r.uncertainty) ? r.uncertainty : [];
+      const reasoning = Array.isArray(r.reasoning) ? r.reasoning : (Array.isArray(c?.pipeline?.B?.reasoning) ? c.pipeline.B.reasoning : []);
+      const phys = findings.filter(f => f && /PHYSICS/.test(String(f.type || "")));
+      const ext = findings.filter(f => f && /EXTERNAL_EVIDENCE/.test(String(f.type || "")));
+      const anomalies = findings.filter(f => f && /ANOMALY|MISSING|CONFLICT|FAIL/i.test(String(f.type || f.status || "")));
+      const bits = [];
+
+      // Kalimat utama yang terasa nyata
+      if (status === "WELL_FORMED" || status === "PROCESSED") {
+        bits.push("Mesin selesai menilai input: status " + status + " dengan keyakinan " + confPct + "%.");
+      } else if (status === "PARTIAL") {
+        bits.push("Penilaian sebagian (PARTIAL) · keyakinan " + confPct + "% — ada ketidakpastian yang perlu ditinjau.");
+      } else {
+        bits.push("Status " + status + " · keyakinan " + confPct + "%.");
+      }
+      bits.push("Audit tahap D: " + dSt + ".");
+
+      if (phys[0]) {
+        const p0 = phys[0];
+        bits.push("Hasil fisika nyata: LQM " + (p0.lqm != null ? Number(p0.lqm).toFixed(1) + " dB" : "—") +
+          ", SNR " + (p0.snrDb != null ? Number(p0.snrDb).toFixed(1) + " dB" : "—") +
+          ", tautan " + (p0.usable === true ? "LAYAK pakai" : p0.usable === false ? "TIDAK layak" : "—") + ".");
+      }
+      if (ext.length) {
+        const okN = ext.filter(f => /OK|PASS|VALID/i.test(String(f.status || ""))).length;
+        const badN = ext.filter(f => /ANOMALY|FAIL|UNKNOWN/i.test(String(f.status || ""))).length;
+        bits.push("Bukti eksternal: " + ext.length + " klaim (ok " + okN + ", bermasalah " + badN + ").");
+      }
+      if (anomalies.length) {
+        bits.push("Anomali terdeteksi: " + anomalies.slice(0, 2).map(a => a.type || a.message || "anomali").join("; ") + ".");
+      }
+      bits.push("Ringkas angka: temuan " + findings.length + ", relasi " + relations.length +
+        ", ketidakpastian " + uncertainty.length + ", langkah penalaran " + reasoning.length + ".");
+      if (stopReason) bits.push("Siklus berhenti: " + (STOP_LABEL[stopReason] || stopReason) + ".");
+
+      // Saran praktis
+      if (/VALID|PASS/i.test(dSt) && (status === "WELL_FORMED" || status === "PROCESSED")) {
+        bits.push("Saran: sistem formal sehat — lanjut pantau BCGO / source scan.");
+      } else if (status === "PARTIAL" || anomalies.length) {
+        bits.push("Saran: tinjau relasi putus atau klaim ANOMALY di Dashboard Error / BCGO.");
+      }
+
+      const text = bits.join(" ");
+      const hr = document.getElementById("human-result");
+      const brief = document.getElementById("hero-human-brief");
+      const tags = document.getElementById("human-tags");
+      if (hr) hr.textContent = text;
+      if (brief) brief.textContent = status + " · " + confPct + "% · D " + dSt +
+        (phys[0] && phys[0].lqm != null ? " · LQM " + Number(phys[0].lqm).toFixed(1) : "");
+      if (tags) {
+        tags.replaceChildren();
+        const add = (label, cls) => { const s = document.createElement("span"); s.className = "hp-tag" + (cls ? " " + cls : ""); s.textContent = label; tags.appendChild(s); };
+        add(status, OK.has(status) ? "ok" : WARN.has(status) ? "warn" : "bad");
+        add("Audit " + dSt, /VALID|PASS/i.test(dSt) ? "ok" : "warn");
+        add("Keyakinan " + confPct + "%", confPct >= 70 ? "ok" : confPct >= 40 ? "warn" : "bad");
+        add("Temuan " + findings.length, findings.length ? "warn" : "ok");
+        add("Relasi " + relations.length);
+        if (phys[0]) add("LQM " + (phys[0].lqm != null ? Number(phys[0].lqm).toFixed(1) : "—"), phys[0].usable ? "ok" : "bad");
+      }
+      try {
+        document.getElementById("human-panel")?.classList.add("pipeline-pulse");
+      } catch (_) {}
+    } catch (err) {
+      try {
+        const hr = document.getElementById("human-result");
+        if (hr) hr.textContent = "Gagal menyusun hasil manusia: " + (err && err.message || err);
+      } catch (_) {}
+    }
+  }
+
   function renderCycle(c, stopReason) {
+
     const r = c.result || c;
     const status = r.status || "UNRESOLVED";
     const tone = OK.has(status) ? "ok" : WARN.has(status) ? "warn" : "bad";
@@ -567,51 +655,21 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
     }
 
     let json = JSON.stringify(r, null, 2);
-    if (json.length > DETAIL_LIMIT) json = json.slice(0, DETAIL_LIMIT) + `\n… (dipotong, total ${json.length} karakter)`;
+    if (json.length > DETAIL_LIMIT) json = json.slice(0, DETAIL_LIMIT) + `
+… (dipotong, total ${json.length} karakter)`;
     $("#detail").textContent = json;
-    try {
-      const hr = document.getElementById("human-result");
-      const tags = document.getElementById("human-tags");
-      const phys = (r.findings || []).filter(f => f && /PHYSICS/.test(String(f.type || "")));
-      const bits = [];
-      bits.push("Status " + (status || "—") + " · keyakinan " + Math.round(conf * 100) + "% · audit " + (d?.status || "—") + ".");
-      if (phys[0]) {
-        const p = phys[0];
-        bits.push("Fisika tautan: LQM " + (p.lqm != null ? Number(p.lqm).toFixed(1) + " dB" : "—") +
-          ", SNR " + (p.snrDb != null ? Number(p.snrDb).toFixed(1) + " dB" : "—") +
-          ", usable=" + (p.usable === true ? "ya" : p.usable === false ? "tidak" : "—") + ".");
-      }
-      const ext = (r.findings || []).filter(f => f && /EXTERNAL_EVIDENCE/.test(String(f.type || "")));
-      if (ext.length) bits.push("Bukti eksternal: " + ext.length + " klaim diproses.");
-      const nFind = (r.findings || []).length, nRel = (r.relations || []).length, nUn = (r.uncertainty || []).length;
-      bits.push("Temuan " + nFind + " · relasi " + nRel + " · ketidakpastian " + nUn + " · penalaran " + ((r.reasoning || []).length) + " langkah.");
-      if (hr) hr.textContent = bits.join(" ");
-      if (tags) {
-        tags.replaceChildren();
-        const add = (label, cls) => { const s = document.createElement("span"); s.className = "hp-tag" + (cls ? " " + cls : ""); s.textContent = label; tags.append(s); };
-        add(status || "—", OK.has(status) ? "ok" : WARN.has(status) ? "warn" : "bad");
-        add("Audit " + (d?.status || "—"), d?.status === "VALID" ? "ok" : "warn");
-        if (phys[0]) add("LQM " + (phys[0].lqm != null ? Number(phys[0].lqm).toFixed(1) : "—"), phys[0].usable ? "ok" : "bad");
-        add("Temuan " + nFind, nFind ? "warn" : "ok");
-        add("Relasi " + nRel);
-      }
-      // stage glow
-      try {
-        ["#stageA","#stageB","#stageC","#stageD"].forEach((sel,i)=>{
-          const n=document.querySelector(sel); if(!n) return;
-          const card=n.closest(".stage-card"); if(!card) return;
-          card.classList.remove("live-a","live-b","live-c","live-d");
-          const map=["live-a","live-b","live-c","live-d"];
-          if (status && status !== "IDLE") card.classList.add(map[i]);
-        });
-      } catch(_){}
-    } catch (_) {}
+    paintHumanResult(c, stopReason);
   }
 
   function onPayload(p) {
     total++;
     const list = Array.isArray(p.cycles) && p.cycles.length ? p.cycles : (p.result ? [p.result] : []);
-    list.forEach((c, i) => renderCycle(c, i === list.length - 1 ? p.stopReason : null));
+    if (!list.length && p) {
+      // paket minimal — tetap isi panel manusia
+      paintHumanResult({ result: p.result || p, audit: p.audit || null }, p.stopReason || null);
+    } else {
+      list.forEach((c, i) => renderCycle(c, i === list.length - 1 ? p.stopReason : null));
+    }
     refresh();
   }
 
@@ -700,6 +758,44 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
   chip($("#ver"), "Engine " + E.version, "");
   health();            // self-test berjalan sebelum observer dipasang dan tidak meninggalkan jejak
   E.observe(onPayload);
+  // Bridge / event window → panel manusia ikut terisi
+  try {
+    window.addEventListener("cgo:machine-abc", function (ev) {
+      try { if (ev && ev.detail) onPayload(ev.detail); } catch (_) {}
+    });
+  } catch (_) {}
+  try {
+    if (Bridge && typeof Bridge.observe === "function") {
+      Bridge.observe(function (packet) { try { onPayload(packet); } catch (_) {} });
+    }
+  } catch (_) {}
+  // Jika panel masih kosong setelah 1.5s, proses sample nyata agar user melihat hasil
+  setTimeout(function () {
+    try {
+      const hr = document.getElementById("human-result");
+      const empty = !hr || /Menunggu siklus/i.test(hr.textContent || "");
+      if (empty && E && typeof E.process === "function") {
+        const out = E.process({
+          source: "MONITOR_BOOT_SAMPLE",
+          note: "contoh hasil nyata saat monitor dibuka",
+          ts: new Date().toISOString()
+        }, { fast: false, skipAudit: false });
+        // process sudah memicu observe → onPayload; jaga-jaga panggil manual
+        if (out) onPayload(out);
+      }
+    } catch (e) {
+      console.warn("[ABC monitor] boot sample", e);
+    }
+  }, 1500);
+  // Poll paket terakhir dari bridge (tab BCGO mengisi mesin)
+  setInterval(function () {
+    try {
+      if (!Bridge || typeof Bridge.getLastPacket !== "function") return;
+      const hr = document.getElementById("human-result");
+      const pkt = Bridge.getLastPacket();
+      if (pkt && hr && /Menunggu siklus/i.test(hr.textContent || "")) onPayload(pkt);
+    } catch (_) {}
+  }, 3000);
   refresh();
 
   /* ===== Bus lintas-tab: terima siklus dari index.html / BCGO / Chat CGO ===== */

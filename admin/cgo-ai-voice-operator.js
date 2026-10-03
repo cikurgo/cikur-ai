@@ -9,8 +9,8 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "3.9.4-WELCOME-FORCE-BYPASS";
-  const BUILD = "CIKUR-GO-OPERATOR-3.9.4-WELCOME";
+  const VERSION = "3.9.5-SYNTHESIS-RECOVER";
+  const BUILD = "CIKUR-GO-OPERATOR-3.9.5-RECOVER";
   /** Path audio cerdas: dukung load dari root portal maupun dari admin/ */
   function detectAudioRoot() {
     try {
@@ -387,6 +387,11 @@
             if (r === "nostart" && !retried) { retried = true; return hardReset(next); }
             // suara terpilih ditolak mesin (synthesis-failed dsb): coba sekali tanpa memilih suara
             if (r === "fail" && useVoice) { useVoice = false; _diag.voiceName = "(bawaan id-ID)"; return hardReset(next); }
+            // synthesis-failed / network: batalkan, resume, coba ulang sekali tanpa voice terpilih
+            if (r === "fail" && /synthesis-failed|network|error/i.test(String(_diag.lastError)) && !retried) {
+              retried = true; useVoice = false; _diag.voiceName = "(bawaan id-ID recovery)";
+              return hardReset(next);
+            }
             if (r === "fail" && /not-allowed/.test(String(_diag.lastError))) { _pendingText = String(text); _pendingAt = Date.now(); }
             end(idx > 0, r);
           });

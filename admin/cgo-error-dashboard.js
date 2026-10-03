@@ -7,7 +7,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "1.2.3-ABC-HUMAN";
+  const VERSION = "1.2.4-INTEGRATION";
   const MAX_ERRORS = 80;
   const MAX_CHAIN = 12;
   const MAX_LOOP_PER_MINUTE = 6;
@@ -629,7 +629,27 @@
 
   function ingestAbcLiveLink(link) {
     if (!link || typeof link !== "object" || link.type !== "CGO_ABC_LIVE_LINK") return;
-    state.abcLink = { source: "BCGO_ABC_LIVE_LINK", event: "LIVE_LINK", mode: link.mode || null, status: link.status || null, audit: link.audit || null, revision: link.revision ?? link.evidence?.revision ?? null, fingerprint: link.fingerprint || link.evidence?.fingerprint || null, claimCount: link.claimCount != null ? link.claimCount : (link.evidence?.claims?.length ?? null), at: link.capturedAt || now() };
+    state.abcLink = {
+      source: "BCGO_ABC_LIVE_LINK",
+      event: "LIVE_LINK",
+      mode: link.mode || null,
+      status: link.status || null,
+      audit: link.audit || null,
+      revision: link.revision ?? link.evidence?.revision ?? null,
+      fingerprint: link.fingerprint || link.evidence?.fingerprint || null,
+      claimCount: link.claimCount != null ? link.claimCount : (link.evidence?.claims?.length ?? null),
+      confidence: link.confidence != null ? link.confidence : null,
+      human: link.human || null,
+      findingsCount: link.findingsCount != null ? link.findingsCount : null,
+      at: link.capturedAt || now()
+    };
+    // Strip LIVE di header dashboard
+    try {
+      const el = global.document && global.document.getElementById("live-abc-human");
+      if (el && link.human && link.human.body) el.textContent = String(link.human.body).slice(0, 220);
+      const st = global.document && global.document.getElementById("live-abc-status");
+      if (st) st.textContent = "ABC: " + (link.status || "—") + " · Audit " + (link.audit || "—");
+    } catch (_) {}
     notify();
   }
 

@@ -859,17 +859,18 @@ function chatAnswer(question = {}) {
 function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = null) {
   const c = caseOverride || runtime.getCase(caseId);
   if (!c) {
+    // Tidak ada kasus aktif = sistem tenang, BUKAN blocker bukti.
     return {
       version: VERSION, signal, at: Date.now(),
       reasoning: {
-        classification: "INSUFFICIENT_EVIDENCE",
+        classification: "SYSTEM_IDLE",
         evidence: [], hypotheses: [], selectedHypothesisId: null,
-        precisionGate: { pass: false, blockers: ["NO_ACTIVE_CASE"] },
-        investigation: { status: "BLOCKED", nextEvidence: null },
-        operationalInvestigation: { status: "BLOCKED", evidenceRequests: [] },
+        precisionGate: { pass: true, blockers: [] },
+        investigation: { status: "IDLE", nextEvidence: null },
+        operationalInvestigation: { status: "IDLE", evidenceRequests: [] },
         causalLinks: []
       },
-      guardian: { healthy: false, level: "BLOCKED", issues: ["NO_ACTIVE_CASE"] }
+      guardian: { healthy: true, level: "OK", issues: [] }
     };
   }
 
