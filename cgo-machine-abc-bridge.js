@@ -14,7 +14,7 @@
     return;
   }
 
-  const VERSION = "1.5.8-ANTI-AMBIGUITY-REPAIR-MIRROR";
+  const VERSION = "1.5.12-PRECISION-MULTI-REPAIR-MIRROR";
   const PAGE_ID = "abc-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   const BUS_NAME = "cgo-machine-abc-bus";
   const listeners = new Set();
@@ -367,11 +367,23 @@
       const cycle = out?.repaired || out?.postRepair || null;
       return {
         ok: true, engine: "CGO_MACHINE_ABC", version: E.version, status: out?.status || null, verified: out?.verified === true,
-        candidate: out?.candidate || null, patchedText, beforeFingerprint: out?.comparison?.before?.fingerprint || null,
+        candidate: out?.candidate || null, patchedText, fullRepairedCode: out?.fullRepairedCode || patchedText || null,
+        appliedRules: Array.isArray(out?.appliedRules) ? out.appliedRules.slice() : [],
+        beforeFingerprint: out?.comparison?.before?.fingerprint || null,
         afterFingerprint: out?.comparison?.after?.fingerprint || null, audit: out?.verification?.postRepairAudit || cycle?.audit?.status || null,
         route: out?.verification?.postRepairRoute || cycle?.telemetry?.route || null, sourceSyntax: out?.sourceSyntax || out?.verification?.sourceSyntax || null, packet: out
       };
     } catch (err) { return { ok: false, status: "REPAIR_ERROR", verified: false, error: String(err?.message || err) }; }
+  }
+
+  function auditRepairCapabilities() {
+    try {
+      if (typeof E.auditRepairCapabilities !== "function") return { ok:false, status:"UNAVAILABLE", verified:false };
+      const report = E.auditRepairCapabilities();
+      return { ok:true, ...report };
+    } catch (err) {
+      return { ok:false, status:"AUDIT_ERROR", verified:false, error:String(err?.message || err) };
+    }
   }
 
   function repair(input, options = {}) {
@@ -382,6 +394,9 @@
       applied: !!result.applied,
       verified: !!result.verified,
       candidateId: result.candidate?.id || null,
+      appliedRules: Array.isArray(result.appliedRules) ? result.appliedRules.slice() : [],
+      fullRepairedCode: result.fullRepairedCode || null,
+      output: result.output || null,
       steps: (result.steps || []).map(x => ({ index: x.index, id: x.id, status: x.status, audit: x.audit || null })),
       comparison: result.comparison || null,
       reason: result.reason || null,
@@ -456,7 +471,11 @@
     if (E.isPaused()) {
       return { ok: false, mode: "PAUSED", status: "PAUSED", audit: "ATTENTION", repairs: [] };
     }
-    const evidence = buildBCGOEvidence(state);
+    let evidence;
+    try { evidence = buildBCGOEvidence(state); }
+    catch (err) {
+      return { ok: false, mode: "ERROR", status: "ERROR", audit: "ATTENTION", error: String(err?.message || err), repairs: [] };
+    }
     const fingerprint = evidence.fingerprint;
     if (!options.force && fingerprint === lastBCGOFingerprint) {
       return {
@@ -471,19 +490,27 @@
         link: { type: "CGO_ABC_LIVE_LINK", source: "BCGO", mode: "LIVE", status: "STANDBY", audit: "VALID", evidence }
       };
     }
+    const prevBCGOFingerprint = lastBCGOFingerprint;
     lastBCGOFingerprint = fingerprint;
     const processState = state && typeof state === "object"
       ? { ...state, sourceScan: { ...(state.sourceScan || {}) } }
       : state;
     if (processState?.sourceScan) delete processState.sourceScan.repairTargets;
     const cycleNumber = state?.cycle ?? state?.cycleNo ?? evidence.revision ?? 0;
-    const packet = withTelemetryContext("BCGO_NEURAL_CYCLE", true, cycleNumber, () => E.process(processState, {
-      source: "BCGO_STATE",
-      externalEvidence: evidence,
-      fast: false,
-      skipAudit: false,
-      maxCycles: options.maxCycles ?? 1
-    }));
+    let packet;
+    try {
+      packet = withTelemetryContext("BCGO_NEURAL_CYCLE", true, cycleNumber, () => E.process(processState, {
+        source: "BCGO_STATE",
+        externalEvidence: evidence,
+        fast: false,
+        skipAudit: false,
+        maxCycles: options.maxCycles ?? 1
+      }));
+    } catch (err) {
+      // Input ditolak engine (mis. circular/function/BigInt): kembalikan error terstruktur dan JANGAN tandai fingerprint ini sudah diproses.
+      lastBCGOFingerprint = prevBCGOFingerprint;
+      return { ok: false, mode: "ERROR", status: "ERROR", audit: "ATTENTION", error: String(err?.message || err), evidence, repairs: [] };
+    }
     const targets = evidence.repairTargets;
     const repairs = [];
     if (options.autoRepair !== false && targets.length) {
@@ -576,7 +603,7 @@
       engine: "CGO_MACHINE_ABC",
       version: E.version,
       bridge: VERSION,
-      selfTest: { passed: st.passed, total: st.total, verified: st.verified },
+      selfTest: { passed: (st.passed != null ? st.passed : st.pass), failed: st.failed != null ? st.failed : null, total: st.total, verified: st.verified },
       independence: { verified: ind.verified, scanned: ind.scannedFunctions },
       metrics: m,
       paused: E.isPaused(),
@@ -594,10 +621,21 @@
     analyze,
     repair,
     repairSource,
+    auditRepairCapabilities,
     ingestBCGOState,
     getLastTelemetry: () => lastTelemetry ? { ...lastTelemetry } : null,
     healthSnapshot,
     process: (input, opt) => E.process(input, opt || {}),
+    processMany: (inputs, opt) => E.processMany(inputs, opt || {}),
+    stream: (input, opt) => E.stream(input, opt || {}),
+    reflect: (input, opt) => E.reflect(input, opt || {}),
+    replay: (packet) => E.replay(packet),
+    verifyReplay: (packet, replayPacket) => E.verifyReplay(packet, replayPacket),
+    physicsSelfTest: () => E.physicsSelfTest(),
+    observeTelemetry: (fn) => {
+      if (typeof E.observeTelemetry !== "function" || typeof fn !== "function") return () => {};
+      return E.observeTelemetry(fn);
+    },
     observe: (fn) => {
       if (typeof fn === "function") listeners.add(fn);
       return () => listeners.delete(fn);
