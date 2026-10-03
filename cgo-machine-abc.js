@@ -10,7 +10,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "0.9.13-UI-CONSISTENCY";
+  const VERSION = "0.9.14-SYNTAX-GATE-REPAIR";
   const MAX_TEXT_SAMPLE = 6000;
   const MAX_ITEMS = 1000;
   const MAX_TOKENS = 5000;
@@ -787,6 +787,63 @@
   function notify(result,cycles){const payload={result:result?.result??result,cycles:Array.isArray(cycles)?cycles:cycles?[cycles]:[],stopReason:result?.stopReason??null,timestamp:now()};for(const fn of [...observers]){try{fn(payload)}catch(_){}}}
   
   /** Safe in-memory repair: baseline process → heuristic patches → re-process → verify */
+  function sourceSyntaxGate(text) {
+    const s = String(text ?? "");
+    const d = balancedDelimiters(s, { regex: true });
+    const issues = [];
+    if (!d.balanced || d.unterminatedString || d.unterminatedComment || d.unterminatedRegex) {
+      issues.push(d.reason || "delimiter_or_string_unbalanced");
+    }
+    // Konservatif: validasi pola expression multiline yang umum pada code generator.
+    // Tidak memakai eval/Function; gate hanya menolak pola yang jelas rusak.
+    const pushRe = /lines\.push\s*\(([\s\S]*?)\);/g;
+    let m;
+    while ((m = pushRe.exec(s))) {
+      const lines = m[1].split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+      for (let i = 0; i < lines.length - 1; i++) {
+        const a = lines[i], b = lines[i + 1];
+        if (/[,+\-*/%|&?:]$/.test(a)) continue;
+        if (/^(?:\)|\]|\}|;|,)/.test(b)) continue;
+        if (/^(?:["'`]|[A-Za-z_$][\w$]*|\(|\[|\d)/.test(b) && /(?:["'`]|[A-Za-z_$\d_$\)\]\}])$/.test(a)) {
+          issues.push("likely_missing_concat_operator");
+          break;
+        }
+      }
+    }
+    return { valid: issues.length === 0, issues: [...new Set(issues)] };
+  }
+
+  function repairLinesPushConcat(text) {
+    const s = String(text);
+    const re = /lines\.push\s*\(([\s\S]*?)\);/g;
+    let changed = false;
+    let additions = 0;
+    const out = s.replace(re, (whole, body) => {
+      const lines = body.split(/(\r?\n)/);
+      let previousExpr = null;
+      for (let i = 0; i < lines.length; i++) {
+        if (/^\r?\n$/.test(lines[i])) continue;
+        const raw = lines[i];
+        const t = raw.trim();
+        if (!t) continue;
+        if (previousExpr) {
+          const prev = previousExpr.trim();
+          const startsExpr = /^(?:["'`]|[A-Za-z_$][\w$]*|\(|\[|\d)/.test(t);
+          const prevCanConcat = !/[,+\-*/%|&?:]$/.test(prev) && /(?:["'`]|[A-Za-z_$\d_\)\]\}])$/.test(prev);
+          if (startsExpr && prevCanConcat && !/^[\)\]\},;]/.test(t)) {
+            const idx = lines.indexOf(raw, i);
+            lines[i] = raw.replace(/^(\s*)/, '$1+ ');
+            changed = true;
+            additions++;
+          }
+        }
+        previousExpr = lines[i];
+      }
+      return whole.replace(body, lines.join(''));
+    });
+    return { text: out, changed, additions };
+  }
+
   function buildRepairPlan(input, baseline) {
     const text = typeof input === "string" ? input : (input && (input.text || input.content || input.source) != null ? String(input.text || input.content || input.source) : JSON.stringify(input));
     const steps = [];
@@ -813,6 +870,11 @@
           after = next;
         }
       }
+    }
+    const concatFix = repairLinesPushConcat(after);
+    if (concatFix.changed) {
+      steps.push({ id: "MISSING_CONCAT_LINES_PUSH", status: "CANDIDATE", reason: "expression multiline tanpa operator + di dalam lines.push", beforeLen: after.length, afterLen: concatFix.text.length, additions: concatFix.additions });
+      after = concatFix.text;
     }
     // If baseline reported physics incomplete — cannot auto-patch geometry; manual
     const findings = (baseline && baseline.result && baseline.result.findings) || [];
@@ -844,6 +906,17 @@
     let repaired = null;
     let comparison = null;
     if (autoApply && plan.changed && text != null) {
+      const sourceGate = sourceSyntaxGate(plan.afterText);
+      if (!sourceGate.valid) {
+        return {
+          engine: "CGO_MACHINE_ABC", version: VERSION, status: "REVIEW", applied: false, verified: false,
+          baseline, plan, finalPlan: plan, candidate: null, repaired: null, comparison: null,
+          sourceValidation: { before: sourceSyntaxGate(text), after: sourceGate },
+          verification: { postRepairAudit: null, postRepairRoute: "A-B-C-D", postStatus: "SOURCE_SYNTAX_INVALID" },
+          persistence: "IN_MEMORY_RESULT_ONLY", runtimeExecution: "NOT_PERFORMED",
+          reason: "patched_source_failed_syntax_gate", steps: plan.steps || []
+        };
+      }
       candidate = {
         id: "PATCH-" + digest(plan.afterText).slice(0, 12),
         patch: { before: text, after: plan.afterText },
@@ -870,7 +943,8 @@
     }
     const postStatus = repaired && repaired.result && repaired.result.status;
     const postAudit = repaired && repaired.audit && repaired.audit.status;
-    const verified = !!(applied && postAudit === "VALID" && postStatus && !/ERROR|FAIL/i.test(String(postStatus)));
+    const sourceValidation = applied ? sourceSyntaxGate(plan.afterText) : { valid: false, issues: ["not_applied"] };
+    const verified = !!(applied && sourceValidation.valid && postAudit === "VALID" && postStatus && !/ERROR|FAIL/i.test(String(postStatus)));
     return {
       engine: "CGO_MACHINE_ABC",
       version: VERSION,
@@ -888,8 +962,11 @@
       verification: {
         postRepairAudit: postAudit || null,
         postRepairRoute: "A-B-C-D",
-        postStatus: postStatus || null
+        postStatus: postStatus || null,
+        sourceSyntax: sourceValidation.valid ? "PASS" : "FAIL",
+        sourceSyntaxIssues: sourceValidation.issues || []
       },
+      sourceValidation: { before: sourceSyntaxGate(text), after: sourceValidation },
       verificationScope: "INTERNAL_PROCESS",
       runtimeExecution: applied ? "REPROCESS_ONLY" : "NOT_PERFORMED",
       persistence: "IN_MEMORY_RESULT_ONLY",
