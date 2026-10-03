@@ -75,6 +75,7 @@ body{font-family:'Inter',sans-serif}
 /* CGO UI 6 lapis — append only */
 .cgo-wave-wrap{height:28px;margin:0 12px 4px;display:none}
 .cgo-wave-wrap.on{display:block}
+.cgo-mic-status{font:9px ui-monospace,SFMono-Regular,Menlo,monospace;color:#64748b;margin-top:3px;text-align:center;letter-spacing:.04em}.cgo-mic-status[data-tone="live"]{color:#67e8f9}.cgo-mic-status[data-tone="error"]{color:#fda4af}.cgo-mic-status[data-tone="warn"]{color:#fde68a}.cgo-mic-status[data-tone="idle"]{color:#64748b}.mic-listening{box-shadow:0 0 0 2px rgba(244,63,94,.16),0 0 18px rgba(244,63,94,.18)}
 #cgo-mic-wave{width:100%;height:28px;border-radius:6px;background:rgba(15,23,42,.6)}
 .mic-pulse-ring{position:relative}
 .mic-pulse-ring.listening::after{content:"";position:absolute;inset:-4px;border-radius:10px;border:2px solid rgba(244,63,94,.5);animation:micRing 1.2s ease-out infinite}
@@ -508,7 +509,7 @@ body{font-family:'Inter',sans-serif}
           <div id="chat-feed" class="chat-scroll p-3 h-80 overflow-y-auto space-y-3 bg-slate-950/80">
             <div class="text-xs text-slate-500">Kanal CGO siap · ketik atau bicara · suara event = operator wanita (MP3)</div>
           </div>
-          <div class="cgo-wave-wrap" id="cgo-wave-wrap"><canvas id="cgo-mic-wave" width="600" height="28"></canvas></div>
+          <div class="cgo-wave-wrap" id="cgo-wave-wrap"><canvas id="cgo-mic-wave" width="600" height="28"></canvas><div id="cgo-mic-status" class="cgo-mic-status" aria-live="polite">MIKROFON SIAGA</div></div>
           <div class="cgo-interim" id="cgo-interim">
             <span id="cgo-interim-text"></span>
             <span class="cgo-interim-actions">
@@ -597,7 +598,7 @@ window.CGO_SVG = {
 </script>
 
 <script type="module">
-import { runAutonomousEngine } from './bcgo.js?v=5.3.0-MULTI-LANG-20261001';
+import { runAutonomousEngine } from './bcgo.js?v=5.3.2-MIC-DASHBOARD-ZERO-REGRESI';
 
 // Bridge internal CGO brain ke BCGO_STATE (tanpa AI eksternal)
 let internalBrain = null;
@@ -2159,94 +2160,157 @@ await runAutonomousEngine(state => {
 (function setupChatMic(){
   const micBtn = document.getElementById('chat-mic');
   const input = document.getElementById('chat-input');
+  const statusEl = document.getElementById('cgo-mic-status');
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!micBtn) return;
   if (window.CGO_SVG && window.CGO_SVG.mic) micBtn.innerHTML = window.CGO_SVG.mic;
   else micBtn.textContent = '🎤';
-  if (!SR) {
-    micBtn.title = 'Speech Recognition tidak didukung browser ini (pakai Chrome/Edge)';
-    micBtn.classList.add('opacity-40');
-    // Jangan disable total — tetap tampil; klik akan no-op aman
-    micBtn.addEventListener('click', function () {
-      try { alert('Mikrofon/Speech Recognition tidak tersedia di browser ini. Gunakan Chrome atau Edge, atau ketik pertanyaan.'); } catch (_) {}
-    });
-    return;
-  }
+
   let rec = null;
   let listening = false;
+  let starting = false;
+  let finalText = '';
+  let silenceT = null;
+  const silenceMs = 2200;
+
+  function status(text, tone){
+    if (!statusEl) return;
+    statusEl.textContent = text || '';
+    statusEl.dataset.tone = tone || 'idle';
+  }
   function setListening(on){
     listening = !!on;
     micBtn.classList.toggle('border-rose-500', listening);
     micBtn.classList.toggle('text-rose-300', listening);
     micBtn.classList.toggle('animate-pulse', listening);
-    if (window.CGO_SVG) micBtn.innerHTML = listening ? window.CGO_SVG.stop : window.CGO_SVG.mic; else micBtn.textContent = listening ? '⏹' : '🎤';
+    micBtn.classList.toggle('mic-listening', listening);
+    micBtn.setAttribute('aria-pressed', listening ? 'true' : 'false');
+    if (window.CGO_SVG) micBtn.innerHTML = listening ? window.CGO_SVG.stop : window.CGO_SVG.mic;
+    else micBtn.textContent = listening ? '⏹' : '🎤';
   }
-  micBtn.addEventListener('click', () => {
+  function clearSilence(){ try { if (silenceT) clearTimeout(silenceT); } catch(_){} silenceT = null; }
+  function armSilence(){
+    clearSilence();
+    silenceT = setTimeout(function(){
+      try { if (rec && listening) rec.stop(); } catch(_){}
+    }, silenceMs);
+  }
+  function stopRecognition(){
+    clearSilence();
+    try { if (rec) rec.stop(); } catch(_){}
+    setListening(false);
+    starting = false;
+    try { if (window.CGOMicUI) window.CGOMicUI.stopWave(); } catch(_){}
+  }
+  function sendVoiceText(text){
+    const value = String(text || '').trim();
+    if (!value) return;
+    if (input) { input.value = ''; input.placeholder = 'Tanya operator: status, scanner, hitung, eja…'; }
+    try { window.CGOMicUI?.showInterim(''); } catch(_){}
+    if (typeof window.CGO_BCGO_SEND_QUESTION === 'function') {
+      status('MENGIRIM · suara → teks', 'live');
+      void window.CGO_BCGO_SEND_QUESTION(value, { modality: 'voice' });
+    } else {
+      if (input) input.value = value;
+      status('CHAT BELUM SIAP · teks dipertahankan', 'warn');
+    }
+  }
+
+  if (!SR) {
+    micBtn.title = 'Speech Recognition tidak didukung browser ini (gunakan Chrome/Edge pada HTTPS/localhost)';
+    micBtn.classList.add('opacity-60');
+    status('MIC TIDAK DIDUKUNG · Chrome/Edge + HTTPS/localhost', 'warn');
+    micBtn.addEventListener('click', function(){
+      try { alert('Mikrofon membutuhkan Speech Recognition. Gunakan Chrome/Edge dan buka BCGO melalui HTTPS atau localhost.'); } catch(_){}
+    });
+    return;
+  }
+
+  micBtn.addEventListener('click', async function(){
+    if (starting) return;
+    if (listening) { stopRecognition(); status('MIKROFON SIAGA', 'idle'); return; }
+    starting = true;
+    finalText = '';
+    status('MEMINTA AKSES MIKROFON…', 'live');
+
     try {
-      if (listening && rec) { rec.stop(); setListening(false); return; }
+      if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        throw new Error('MIC_REQUIRES_SECURE_CONTEXT');
+      }
+      if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+        throw new Error('GET_USER_MEDIA_UNAVAILABLE');
+      }
+      // Satu izin mic dipakai untuk waveform + SpeechRecognition. Tidak ada dua getUserMedia.
+      await window.CGOMicUI?.startWave();
+      status('MIC AKTIF · BICARA SEKARANG', 'live');
+
       rec = new SR();
       rec.lang = 'id-ID';
       rec.interimResults = true;
-      rec.continuous = true;
-      var silenceMs = 2000;
-      var silenceT = null;
-      function armSilence() {
-        try { if (silenceT) clearTimeout(silenceT); } catch(_){}
-        silenceT = setTimeout(function(){
-          try { if (rec && listening) rec.stop(); } catch(_){}
-        }, silenceMs);
-      }
-      rec.onstart = () => { setListening(true); armSilence(); try { if (window.CGOMicUI) window.CGOMicUI.startWave(); } catch(_){} };
-      rec.onerror = () => { setListening(false); try { if (window.CGOMicUI) window.CGOMicUI.stopWave(); } catch(_){} };
-      rec.onend = () => { setListening(false); try { if (silenceT) clearTimeout(silenceT); } catch(_){} try { if (window.CGOMicUI) window.CGOMicUI.stopWave(); } catch(_){} };
-      try {
-        // speechend / soundend bila browser support (Chrome kadang ada)
-        rec.onspeechend = function(){ armSilence(); };
-        rec.onsoundend = function(){ armSilence(); };
-        rec.onspeechstart = function(){ try { if (silenceT) clearTimeout(silenceT); } catch(_){} };
-        rec.onsoundstart = function(){ try { if (silenceT) clearTimeout(silenceT); } catch(_){} };
-      } catch(_){}
-      rec.onresult = (ev) => {
-        try { armSilence(); } catch(_){}
-        let interim = '', final = '';
+      rec.continuous = false;
+      rec.maxAlternatives = 1;
+      rec.onstart = function(){ setListening(true); starting = false; armSilence(); status('MENDENGARKAN…', 'live'); };
+      rec.onspeechstart = function(){ clearSilence(); status('MENDENGARKAN…', 'live'); };
+      rec.onspeechend = function(){ armSilence(); };
+      rec.onsoundstart = function(){ clearSilence(); };
+      rec.onsoundend = function(){ armSilence(); };
+      rec.onerror = function(ev){
+        const code = String(ev?.error || 'unknown');
+        clearSilence(); setListening(false); starting = false;
+        try { window.CGOMicUI?.stopWave(); } catch(_){}
+        const msg = code === 'not-allowed' || code === 'service-not-allowed'
+          ? 'AKSES MIC DITOLAK · izinkan mikrofon di browser'
+          : code === 'no-speech' ? 'TIDAK ADA SUARA · coba bicara lagi' : 'MIC ERROR · ' + code;
+        status(msg, 'error');
+        try { window.dispatchEvent(new CustomEvent('cgo:mic-error', {detail:{code:code,message:msg}})); } catch(_){}
+      };
+      rec.onend = function(){
+        clearSilence(); setListening(false); starting = false;
+        try { window.CGOMicUI?.stopWave(); } catch(_){}
+        const text = finalText.trim();
+        if (text) {
+          status('TEKS TERDETEKSI · mengirim…', 'live');
+          sendVoiceText(text);
+        } else if (statusEl && !/ERROR|DITOLAK|TIDAK ADA/.test(statusEl.textContent)) {
+          status('MIKROFON SIAGA', 'idle');
+        }
+      };
+      rec.onresult = function(ev){
+        let interim = '';
+        let final = '';
         for (let i = ev.resultIndex; i < ev.results.length; i++) {
-          const t = ev.results[i][0].transcript;
+          const t = String(ev.results[i][0]?.transcript || '');
           if (ev.results[i].isFinal) final += t;
           else interim += t;
         }
-        const draft = (final || interim || '').trim();
-        const interimEl = document.getElementById('cgo-interim');
-        const interimText = document.getElementById('cgo-interim-text');
+        if (final.trim()) finalText += ' ' + final.trim();
+        const draft = (finalText + ' ' + interim).trim();
         if (draft) {
+          const interimText = document.getElementById('cgo-interim-text');
+          const interimEl = document.getElementById('cgo-interim');
           if (interimText) interimText.textContent = draft;
           if (interimEl) interimEl.classList.add('on');
-          if (input && interim && !final) input.placeholder = interim;
-          if (input && final) input.value = final.trim();
+          if (input) input.placeholder = draft;
         }
-        if (final && final.trim()) {
-          // Final: isi input, user bisa Kirim/Batal; auto-kirim setelah jeda singkat jika tidak batal
-          const text = final.trim();
-          if (input) input.value = text;
-          try {
-            if (window.__cgoVoiceSendTimer) clearTimeout(window.__cgoVoiceSendTimer);
-            window.__cgoVoiceSendTimer = setTimeout(function(){
-              const cur = (input && input.value || '').trim();
-              if (cur && typeof window.CGO_BCGO_SEND_QUESTION === 'function') {
-                if (input) { input.value = ''; input.placeholder = 'Tanya operator: status, scanner, hitung, eja…'; }
-                const ie = document.getElementById('cgo-interim');
-                if (ie) ie.classList.remove('on');
-                void window.CGO_BCGO_SEND_QUESTION(cur, { modality: 'voice' });
-              }
-            }, 900);
-          } catch(_){}
-        }
+        armSilence();
       };
       rec.start();
     } catch (e) {
       console.warn('[BCGO mic]', e);
-      setListening(false);
+      starting = false; setListening(false); clearSilence();
+      try { window.CGOMicUI?.stopWave(); } catch(_){}
+      const code = String(e?.message || e || 'MIC_START_FAILED');
+      const msg = code === 'MIC_REQUIRES_SECURE_CONTEXT'
+        ? 'MIC TIDAK AKTIF · buka BCGO via HTTPS atau localhost'
+        : code === 'GET_USER_MEDIA_UNAVAILABLE'
+          ? 'MIC TIDAK TERSEDIA · browser/perangkat tidak menyediakan input audio'
+          : 'MIC GAGAL AKTIF · ' + code.slice(0, 90);
+      status(msg, 'error');
+      try { window.dispatchEvent(new CustomEvent('cgo:mic-error', {detail:{code:code,message:msg}})); } catch(_){}
     }
   });
+
+  status('MIKROFON SIAGA', 'idle');
 })();
 
 (function(){
@@ -2501,18 +2565,23 @@ await runAutonomousEngine(state => {
   }
 
   async function startWave() {
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      var src = audioCtx.createMediaStreamSource(micStream);
-      analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 256;
-      src.connect(analyser);
-      if (waveWrap) waveWrap.classList.add('on');
-      if (micBtn) micBtn.classList.add('listening');
-      drawWave();
-    } catch (_) {}
+    if (micStream) return true;
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+      throw new Error('GET_USER_MEDIA_UNAVAILABLE');
+    }
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) throw new Error('WEB_AUDIO_UNAVAILABLE');
+    audioCtx = new AC({ latencyHint: 'interactive' });
+    if (audioCtx.state === 'suspended') { try { await audioCtx.resume(); } catch (_) {} }
+    var src = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.72;
+    src.connect(analyser);
+    if (waveWrap) waveWrap.classList.add('on');
+    drawWave();
+    return true;
   }
   function stopWave() {
     try { if (raf) cancelAnimationFrame(raf); } catch (_) {}
@@ -2525,19 +2594,6 @@ await runAutonomousEngine(state => {
     if (micBtn) micBtn.classList.remove('listening');
   }
 
-  // Hook into existing mic: observe class changes
-  if (micBtn) {
-    // FIX: stopWave()/startWave() sendiri mengubah class tombol mic -> memicu observer ini lagi
-    // -> loop tak berujung yang membekukan halaman. Hanya bereaksi saat status BENAR-BENAR berubah.
-    var wasListening = false;
-    var obs = new MutationObserver(function () {
-      var listening = micBtn.classList.contains('border-rose-500') || micBtn.classList.contains('animate-pulse');
-      if (listening === wasListening) return;
-      wasListening = listening;
-      if (listening) startWave(); else stopWave();
-    });
-    try { obs.observe(micBtn, { attributes: true, attributeFilter: ['class'] }); } catch (_) {}
-  }
 
   // continuous mode soft-upgrade: patch SpeechRecognition instances when created is hard;
   // expose helper for silence display
@@ -2606,23 +2662,31 @@ await runAutonomousEngine(state => {
 <script>
 /* Closed-loop: Dashboard Pintar → BCGO (RESCAN_AND_REPROCESS) */
 (function () {
-  function handleNextCycle(cmd) {
+  async function handleNextCycle(cmd) {
     try {
       if (!cmd || cmd.action !== "RESCAN_AND_REPROCESS") return;
       var st = window.BCGO_STATE;
-      if (st && window.CGOMachineABCBridge && typeof window.CGOMachineABCBridge.ingestBCGOState === "function") {
+      var fresh = st;
+      if (window.BCGOBrain && typeof window.BCGOBrain.rescan === "function") {
         try {
-          window.CGOMachineABCBridge.ingestBCGOState(st, { force: true, maxCycles: 1 });
+          fresh = await window.BCGOBrain.rescan();
+        } catch (rescanError) {
+          console.warn("[BCGO] Closed-loop rescan gagal; memakai snapshot terakhir", rescanError);
+        }
+      }
+      if (fresh && window.CGOMachineABCBridge && typeof window.CGOMachineABCBridge.ingestBCGOState === "function") {
+        try {
+          window.CGOMachineABCBridge.ingestBCGOState(fresh, { force: true, maxCycles: 1 });
         } catch (_) {}
       }
       try {
-        window.dispatchEvent(new CustomEvent("cgo:bcgo-rescan-requested", { detail: cmd }));
+        window.dispatchEvent(new CustomEvent("cgo:bcgo-rescan-requested", { detail: { ...cmd, completed: true, sourceScanStatus: fresh?.sourceScan?.status || null } }));
       } catch (_) {}
       var badge = document.getElementById("system-status-badge");
       if (badge) {
-        badge.textContent = "LOOP · RESCAN #" + (cmd.cycle != null ? cmd.cycle : "?");
+        badge.textContent = "LOOP · RESCAN #" + (cmd.cycle != null ? cmd.cycle : "?") + " · " + (fresh?.sourceScan?.status || "SYNC");
       }
-      console.log("[BCGO] Closed-loop: RESCAN_AND_REPROCESS diterima dari Dashboard", cmd.cycle);
+      console.log("[BCGO] Closed-loop: RESCAN_AND_REPROCESS selesai", cmd.cycle, fresh?.sourceScan?.status || "SYNC");
     } catch (e) {
       console.warn("[BCGO] closed-loop handler", e);
     }

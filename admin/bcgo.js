@@ -1626,6 +1626,23 @@ function answerQuestion(question) {
     },
     getSituation: situation,
     getRegistry: () => ({ ...ORGAN_REGISTRY }),
+    /* Closed-loop hook: Dashboard meminta source scan nyata terbaru. */
+    rescan: async function() {
+      if (!canRun()) return safeClone(state);
+      try {
+        await runInternalSourceScan();
+      } catch (error) {
+        sourceScanInFlight = false;
+        state.sourceScan = {
+          ...makeInitialSourceScan(),
+          status: "DEGRADED",
+          phase: "COMPLETE",
+          message: String(error?.message || error)
+        };
+        publishToUI(safeClone(state));
+      }
+      return safeClone(state);
+    },
     stop() {
       stopped = true;
       ++authEpoch;
