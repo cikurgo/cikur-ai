@@ -421,8 +421,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 </section>
 </div>
 
-<script src="cgo-machine-abc.js?v=0.9.24-PROJECT-CONTEXT-PRECISION"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.6.1-PROJECT-CONTEXT-PRECISION"></script>
+<script src="cgo-machine-abc.js?v=0.13.0-ADVANCED-REPAIR"></script>
+<script src="cgo-machine-abc-bridge.js?v=2.2.0-ADVANCED-REPAIR"></script>
 <script>
 (() => {
   "use strict";
@@ -791,6 +791,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
     const candidate = result.candidate || result.packet?.candidate || null;
     const patch = candidate?.patch || result.patch || null;
     const code = typeof result.patchedText === "string" ? result.patchedText
+      : typeof result.fullRepairedCode === "string" ? result.fullRepairedCode
+      : typeof result.output?.code === "string" ? result.output.code
       : typeof result.repairOutput?.patchedText === "string" ? result.repairOutput.patchedText
       : typeof patch?.after === "string" ? patch.after : null;
     if (typeof code !== "string" || !code.length) return null;
@@ -903,7 +905,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
       const r = projectInput && Bridge && typeof Bridge.repairProject === "function"
         ? Bridge.repairProject(projectInput, { autoApply: true, fast: false, skipAudit: false, source: sourceName })
         : (Bridge && typeof Bridge.repair === "function" ? Bridge.repair : E.repair)(input, { autoApply: true, fast: false, skipAudit: false, source: sourceName });
-      if (r.status === "PROJECT_REPAIRED_VERIFIED" || r.status === "PROJECT_REPAIRED" || r.status === "PROJECT_NO_PATCH") {
+      if (Array.isArray(r.files)) {
         const bundle = JSON.stringify({files:(r.files || []).map(f => ({path:f.path,content:f.content}))}, null, 2);
         r.fullRepairedCode = bundle;
         r.output = { ...(r.output || {}), type:"PROJECT_REPAIRED_BUNDLE", available:true, code:bundle, lineCount:bundle.split(/\r?\n/).length, charCount:bundle.length };

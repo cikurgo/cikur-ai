@@ -572,8 +572,8 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-emosi.js?v=1.1.0-EMOSI-AIRPORT"></script>
 <script src="cgo-narasi.js?v=1.0.0-NARASI-r20261001"></script>
 <script src="cgo-ai-voice-operator.js?v=3.10.0-MIC-AWARE-ZERO-REGRESI"></script>
-<script src="cgo-machine-abc.js?v=0.9.13-UI-CONSISTENCY"></script>
-<script src="cgo-machine-abc-bridge.js?v=1.5.5-SYNC-MIRROR"></script>
+<script src="cgo-machine-abc.js?v=0.13.0-ADVANCED-REPAIR"></script>
+<script src="cgo-machine-abc-bridge.js?v=2.2.0-ADVANCED-REPAIR"></script>
 <script src="cgo-abc-cognition.js?v=1.2.0-HUMAN-RESULT"></script>
 <script src="cgo-otak-hub.js?v=1.6.2-ABC-HUMAN-HINT"></script>
 
@@ -1244,6 +1244,118 @@ function authoritativeBCGOState() {
     return liveState || null;
 }
 
+/*
+ * BCGO → MESIN ABC COMMAND ROUTER
+ * Deterministic intent translation only. No external brain/API.
+ * Ordinary conversation stays on the normal BCGO/Otak path.
+ */
+function cgoABCExtractCode(text) {
+  const m = String(text || '').match(/```(?:javascript|js|html|css|json|text)?\s*([\s\S]*?)```/i);
+  return m ? m[1].trim() : '';
+}
+
+function cgoABCExtractJson(text) {
+  const raw = String(text || '').trim();
+  const candidates = [];
+  const fence = raw.match(/```json\s*([\s\S]*?)```/i);
+  if (fence) candidates.push(fence[1].trim());
+  if (/^\s*\{[\s\S]*\}\s*$/.test(raw)) candidates.push(raw);
+  for (const candidate of candidates) {
+    try { return JSON.parse(candidate); } catch (_) {}
+  }
+  return null;
+}
+
+function cgoABCNaturalCreateSpec(text) {
+  const raw = String(text || '').trim();
+  const fn = raw.match(/(?:function|fungsi)\s+([A-Za-z_$][\w$]*)\s*(?:dengan\s+parameter|with\s+parameters?)?\s*([^;\n]*)?(?:\s+body\s+|\s+isi\s+)([\s\S]+)$/i);
+  if (!fn) return null;
+  const name = fn[1];
+  const paramsText = String(fn[2] || '').replace(/^(?:dengan\s+parameter|with\s+parameters?)\s*/i, '').trim();
+  const body = String(fn[3] || '').trim();
+  const params = paramsText
+    .replace(/[()]/g, '')
+    .split(/\s*(?:,|dan|and)\s*/i)
+    .map(x => x.trim())
+    .filter(x => /^[A-Za-z_$][\w$]*$/.test(x));
+  if (!body) return null;
+  return { language:'javascript', moduleName:name, functions:[{name, params, body}] };
+}
+
+function cgoBCGOABCCommandFromText(text) {
+  const raw = String(text || '').trim();
+  const low = raw.toLowerCase();
+  if (!raw) return null;
+  const json = cgoABCExtractJson(raw);
+  const code = cgoABCExtractCode(raw);
+
+  // Explicit project bundle: { files:[{path,content}, ...] }
+  if (json && Array.isArray(json.files)) {
+    const op = /(?:reason|relasi|hubungan|struktur|analisis)/i.test(raw) ? 'project_reason' : 'project_repair';
+    return {operation:op, payload:json, source:'BCGO_CHAT_PROJECT'};
+  }
+  // Explicit structured create spec.
+  if (json && (Array.isArray(json.functions) || json.operation === 'create')) {
+    const payload = {...(json.payload || json)};
+    if (typeof payload.moduleName === 'string') payload.moduleName = payload.moduleName.replace(/\.(?:js|javascript)$/i, '');
+    if (!payload.moduleName && typeof payload.name === 'string') payload.moduleName = payload.name.replace(/\.(?:js|javascript)$/i, '');
+    return {operation:'create', payload, source:'BCGO_CHAT_CREATE'};
+  }
+  // Explicit runtime verification with fenced source or structured payload.
+  if (/(runtime|jalankan|eksekusi|execute)\b/i.test(raw) && (code || (json && (json.source || json.code)))) {
+    const payload = json && (json.source || json.code) ? json : {source:code};
+    return {operation:'runtime_verify', payload, source:'BCGO_CHAT_RUNTIME'};
+  }
+  // Repair must have an actual source payload. Never send ordinary prose to repair.
+  if (/(perbaiki|repair|fix|patch|betulkan|benahi)\b/i.test(raw) && code) {
+    return {operation:'repair', payload:code, source:'BCGO_CHAT_REPAIR'};
+  }
+  // Project repair can also use FILE: path blocks without requiring JSON.
+  if (/(project|proyek|semua\s+file|antar\s+file|lintas\s+file)/i.test(raw) && /(?:^|\n)FILE\s*:/i.test(raw)) {
+    const files = [];
+    const re = /(?:^|\n)FILE\s*:\s*([^\n]+)\n([\s\S]*?)(?=\nFILE\s*:|$)/gi;
+    let m;
+    while ((m = re.exec(raw))) files.push({path:m[1].trim(), content:m[2].trimEnd()});
+    if (files.length) return {operation:'project_repair', payload:{files}, source:'BCGO_CHAT_PROJECT_FILE_BLOCK'};
+  }
+  // Simple deterministic natural-language creator supported by the core creator contract.
+  if (/(?:buat|bikin|create|generate)\b/i.test(raw) && /(?:function|fungsi)\b/i.test(raw)) {
+    const spec = cgoABCNaturalCreateSpec(raw);
+    if (spec) return {operation:'create', payload:spec, source:'BCGO_CHAT_CREATE_NL'};
+    return {unsupported:true, status:'NEEDS_CREATE_SPEC', reason:'Permintaan create belum cukup terstruktur untuk dibuat tanpa menebak.'};
+  }
+  // Explicit ABC analysis remains supported, but no longer hijacks normal chat.
+  if (/(?:analisis|analyse|audit|struktur|verifikasi|bukti|mesin\s+abc|pipeline|self-?test)\b/i.test(raw)) {
+    return {operation:'analyze', payload:code || raw, source:'BCGO_CHAT_ANALYZE'};
+  }
+  return null;
+}
+
+function cgoBCGOFormatABCResult(command, response) {
+  const result = response && response.result ? response.result : response;
+  if (!result) return '[Mesin ABC] Tidak ada hasil.';
+  const op = command && command.operation ? command.operation : 'unknown';
+  const status = result.status || response.status || 'UNKNOWN';
+  const verified = result.verified === true ? 'YA' : 'TIDAK';
+  const lines = ['[Mesin ABC]', 'operasi: ' + op, 'status: ' + status, 'verified: ' + verified];
+  if (result.reason) lines.push('reason: ' + result.reason);
+  if (result.applied != null) lines.push('applied: ' + (result.applied ? 'YA' : 'TIDAK'));
+  if (result.changedFiles != null) lines.push('changedFiles: ' + result.changedFiles);
+  if (result.projectProof) {
+    const p = result.projectProof;
+    lines.push('projectProof: syntaxOk=' + !!p.syntaxOk + ' · relationSafe=' + !!p.relationSafe + ' · idempotent=' + !!p.idempotent);
+  }
+  if (result.fullRepairedCode) {
+    lines.push('', '--- FULL REPAIRED CODE ---', String(result.fullRepairedCode));
+  } else if (result.output && Array.isArray(result.output.files)) {
+    lines.push('', '--- PROJECT OUTPUT ---');
+    for (const f of result.output.files) lines.push('\n// FILE: ' + f.path + '\n' + String(f.content || ''));
+  } else if (result.output && result.output.code) {
+    lines.push('', '--- FULL CREATED CODE ---', String(result.output.code));
+  }
+  return lines.join('\n');
+}
+
 async function sendQuestion(question, opts) {
     const text = String(question || '').trim();
     const modality = (opts && opts.modality) || 'text';
@@ -1359,11 +1471,17 @@ async function sendQuestion(question, opts) {
         let brainSource = 'none';
         const liveSnap = authoritativeBCGOState();
 
+        // Command ABC eksplisit menjadi jalur utama. Chat biasa tetap memakai Otak BCGO.
+        // Ini mencegah repair/create/project/runtime menunggu jawaban Otak terlebih dahulu
+        // atau menghasilkan dua jawaban yang saling tumpang tindih.
+        const abcCommand = cgoBCGOABCCommandFromText(text);
+        const abcCommandRequested = !!abcCommand;
+
         // Jalur cepat: jika Otak belum ada sama sekali, jawab lokal tanpa menunggu
         const otakReady = !!(window.CGO_OTAK && typeof window.CGO_OTAK.ask === 'function');
         const brainReady = !!(window.BCGOBrain && typeof window.BCGOBrain.ask === 'function');
 
-        if (otakReady) {
+        if (!abcCommandRequested && otakReady) {
             try {
                 setChatLiveStatus('Satu Otak memproses…', 'working');
                 const ASK_MS = 8000;
@@ -1403,7 +1521,7 @@ async function sendQuestion(question, opts) {
         }
 
         // Fallback BCGOBrain (sync/async aman)
-        if (!answer && brainReady) {
+        if (!abcCommandRequested && !answer && brainReady) {
             try {
                 setChatLiveStatus('BCGOBrain (cadangan)…', 'working');
                 answer = await Promise.race([
@@ -1428,22 +1546,34 @@ async function sendQuestion(question, opts) {
             }
         }
 
-        // Mesin ABC — HANYA jika user eksplisit minta
-        if (window.CGOMachineABCBridge && /analisis|struktur|audit|verifikasi|bukti|mesin abc|pipeline|self-?test/i.test(text)) {
+        // Mesin ABC — deterministic command contract. Normal chat is untouched.
+        if (abcCommand && window.CGOMachineABCBridge) {
             try {
-                setChatLiveStatus('Mesin ABC A→B→C→D…', 'working');
-                const abc = window.CGOMachineABCBridge.analyze(text, { maxCycles: 1, fast: true });
-                if (abc && abc.ok) {
-                    const conf = abc.confidence != null ? Math.round(Number(abc.confidence) * 100) + '%' : '–';
-                    const nFind = (abc.findings || []).length;
-                    const auditSt = (abc.audit && abc.audit.status) || '–';
-                    const abcLine = '[Mesin ABC] status ' + (abc.status || '–') + ' · keyakinan ' + conf + ' · temuan ' + nFind + ' · audit ' + auditSt;
-                    answer = answer ? (String(answer) + '\n\n' + abcLine) : abcLine;
-                    brainSource = (brainSource || 'none') + '+ABC';
+                setChatLiveStatus('Mesin ABC ' + String(abcCommand.operation || '').toUpperCase() + ' · A→B→C→D…', 'working');
+                let abcResponse;
+                if (abcCommand.unsupported) {
+                    abcResponse = abcCommand;
+                } else if (abcCommand.operation === 'runtime_verify' && typeof window.CGOMachineABCBridge.commandAsync === 'function') {
+                    abcResponse = await window.CGOMachineABCBridge.commandAsync(abcCommand);
+                } else if (typeof window.CGOMachineABCBridge.command === 'function') {
+                    abcResponse = window.CGOMachineABCBridge.command(abcCommand);
+                } else {
+                    abcResponse = {ok:false,status:'COMMAND_UNAVAILABLE',reason:'ABC command bridge tidak tersedia'};
                 }
+                const abcLine = abcResponse && abcResponse.unsupported
+                  ? '[Mesin ABC] ' + abcResponse.status + ' · ' + abcResponse.reason
+                  : cgoBCGOFormatABCResult(abcCommand, abcResponse);
+                answer = answer ? (String(answer) + '\n\n' + abcLine) : abcLine;
+                brainSource = (brainSource || 'none') + '+ABC_COMMAND';
             } catch (abcErr) {
-                console.warn('[BCGO] ABC analyze:', abcErr);
+                console.warn('[BCGO] ABC command:', abcErr);
+                const abcLine = '[Mesin ABC] COMMAND_ERROR · ' + String(abcErr && abcErr.message || abcErr);
+                answer = answer ? (String(answer) + '\n\n' + abcLine) : abcLine;
+                brainSource = (brainSource || 'none') + '+ABC_ERROR';
             }
+        } else if (abcCommand && abcCommand.unsupported) {
+            answer = answer ? (String(answer) + '\n\n[Mesin ABC] ' + abcCommand.status + ' · ' + abcCommand.reason) : ('[Mesin ABC] ' + abcCommand.status + ' · ' + abcCommand.reason);
+            brainSource = (brainSource || 'none') + '+ABC_REVIEW';
         }
 
         if (answer) {
