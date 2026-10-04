@@ -135,6 +135,20 @@ body{font-family:'Inter',sans-serif}
 .abc-live-result-card .alr-tag.ok{border-color:#176a50;color:#7cf0c0}
 .abc-live-result-card .alr-tag.warn{border-color:#765f1b;color:#ffe07b}
 .abc-live-result-card .alr-tag.bad{border-color:#76263a;color:#ff98a6}
+.abc-command-result-card{margin-top:8px;border:1px solid #234e70;border-radius:12px;background:rgba(3,12,25,.96);padding:10px 12px}
+.abc-command-result-card .acr-title{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#a5f3fc;font-weight:800}
+.abc-command-result-card .acr-sub{margin-top:3px;font-size:10px;color:#64748b}
+.abc-command-route{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:8px}
+.abc-command-route span{border:1px solid #1e3348;border-radius:7px;padding:5px 4px;text-align:center;font:10px ui-monospace,monospace;color:#64748b}
+.abc-command-route span.ok{border-color:#176a50;color:#7cf0c0;background:rgba(16,185,129,.06)}
+.abc-command-route span.warn{border-color:#765f1b;color:#ffe07b;background:rgba(234,179,8,.05)}
+.abc-command-route span.bad{border-color:#76263a;color:#ff98a6;background:rgba(239,68,68,.05)}
+.abc-command-details{margin-top:7px;font-size:10px;line-height:1.45;color:#94a3b8;white-space:pre-wrap}
+.abc-command-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.abc-command-tags span{font:9px ui-monospace,monospace;border:1px solid #234e70;border-radius:999px;padding:2px 7px;color:#9ec5e8}
+.abc-command-tags span.ok{border-color:#176a50;color:#7cf0c0}
+.abc-command-tags span.warn{border-color:#765f1b;color:#ffe07b}
+.abc-command-tags span.bad{border-color:#76263a;color:#ff98a6}
 
 </style>
 </head>
@@ -235,6 +249,19 @@ body{font-family:'Inter',sans-serif}
   <div class="alr-title">Hasil nyata · live</div>
   <div class="alr-body" id="abc-live-result-body">Menunggu siklus ABC (temuan · relasi · fisika · audit)…</div>
   <div class="alr-tags" id="abc-live-result-tags"></div>
+</section>
+
+<section class="abc-command-result-card" id="abc-command-result-card" aria-label="Hasil perintah chat Mesin ABC">
+  <div class="acr-title">Perintah Chat · Mesin ABC</div>
+  <div class="acr-sub" id="abc-command-result-sub">Belum ada perintah ABC dari chat.</div>
+  <div class="abc-command-route" aria-label="Status A B C D">
+    <span id="abc-command-stage-a">A · —</span>
+    <span id="abc-command-stage-b">B · —</span>
+    <span id="abc-command-stage-c">C · —</span>
+    <span id="abc-command-stage-d">D · —</span>
+  </div>
+  <div class="abc-command-tags" id="abc-command-result-tags"></div>
+  <div class="abc-command-details" id="abc-command-result-details">Menunggu command contract.</div>
 </section>
 
 <section id="cgo-command-center" class="cgo-command-center" aria-label="BCGO Mesin ABC Dashboard control center">
@@ -1336,8 +1363,12 @@ function cgoBCGOFormatABCResult(command, response) {
   if (!result) return '[Mesin ABC] Tidak ada hasil.';
   const op = command && command.operation ? command.operation : 'unknown';
   const status = result.status || response.status || 'UNKNOWN';
-  const verified = result.verified === true ? 'YA' : 'TIDAK';
-  const lines = ['[Mesin ABC]', 'operasi: ' + op, 'status: ' + status, 'verified: ' + verified];
+  const route = String(result.verification?.postRepairRoute || result.telemetry?.route || result.pipeline?.telemetry?.route || result.pipeline?.C?.metadata?.route || result.pipeline?.route || '').toUpperCase().replace(/-/g, '>');
+  const audit = String(result.verification?.postRepairAudit || result.audit?.status || result.pipeline?.audit?.status || result.pipeline?.C?.validation?.status || '').toUpperCase();
+  const verified = result.verified === true || (op === 'analyze' && audit === 'VALID' && /A>B>C>D/.test(route));
+  const lines = ['[Mesin ABC]', 'operasi: ' + op, 'status: ' + status, 'verified: ' + (verified ? 'YA' : 'TIDAK')];
+  if (route) lines.push('route: ' + route);
+  if (audit) lines.push('audit: ' + audit);
   if (result.reason) lines.push('reason: ' + result.reason);
   if (result.applied != null) lines.push('applied: ' + (result.applied ? 'YA' : 'TIDAK'));
   if (result.changedFiles != null) lines.push('changedFiles: ' + result.changedFiles);
@@ -1564,6 +1595,10 @@ async function sendQuestion(question, opts) {
                   ? '[Mesin ABC] ' + abcResponse.status + ' · ' + abcResponse.reason
                   : cgoBCGOFormatABCResult(abcCommand, abcResponse);
                 answer = answer ? (String(answer) + '\n\n' + abcLine) : abcLine;
+                try {
+                  window.dispatchEvent(new CustomEvent('cgo:abc-command-result', { detail: { command: abcCommand, response: abcResponse, at: new Date().toISOString() } }));
+                  if (typeof window.__BCGO_PAINT_ABC_COMMAND__ === 'function') window.__BCGO_PAINT_ABC_COMMAND__(abcCommand, abcResponse);
+                } catch (_) {}
                 brainSource = (brainSource || 'none') + '+ABC_COMMAND';
             } catch (abcErr) {
                 console.warn('[BCGO] ABC command:', abcErr);
@@ -2887,6 +2922,63 @@ await runAutonomousEngine(state => {
 
 
 <script>
+/* BCGO · hasil command chat → satu sumber hasil nyata untuk UI */
+(function () {
+  function $(id) { return document.getElementById(id); }
+  function stage(el, label, state) {
+    if (!el) return;
+    el.textContent = label + ' · ' + state;
+    el.className = 'abc-command-route ' + el.className.split(' ').filter(function (x) { return !/^(ok|warn|bad)$/.test(x); }).join(' ');
+    el.classList.add(state === 'PASS' ? 'ok' : state === 'REVIEW' ? 'warn' : state === 'FAIL' ? 'bad' : '');
+  }
+  function addTag(parent, label, tone) {
+    if (!parent || !label) return;
+    var s = document.createElement('span'); s.textContent = label; if (tone) s.className = tone; parent.appendChild(s);
+  }
+  function paint(command, response) {
+    var result = response && response.result ? response.result : response;
+    if (!result) return;
+    var op = String(command && command.operation || 'unknown').toUpperCase();
+    var route = String(result.verification && result.verification.postRepairRoute || result.telemetry && result.telemetry.route || result.pipeline && result.pipeline.telemetry && result.pipeline.telemetry.route || result.pipeline && result.pipeline.route || '').toUpperCase().replace(/-/g, '>');
+    var audit = String(result.verification && result.verification.postRepairAudit || result.audit && result.audit.status || result.pipeline && result.pipeline.audit && result.pipeline.audit.status || result.pipeline && result.pipeline.C && result.pipeline.C.validation && result.pipeline.C.validation.status || '').toUpperCase();
+    var verified = result.verified === true || (op === 'ANALYZE' && audit === 'VALID' && /A>B>C>D/.test(route));
+    var pipe = result.pipeline || {};
+    var detailResult = result.result || result;
+    var changed = result.repairProof && result.repairProof.sourceChanged === true;
+    var syntax = result.sourceSyntax && (result.sourceSyntax.pass === true || result.sourceSyntax.status === 'PASS');
+    var aState = pipe.A ? 'PASS' : (op === 'UNKNOWN' ? 'REVIEW' : 'PASS');
+    var bState = pipe.B ? 'PASS' : (op === 'UNKNOWN' ? 'REVIEW' : 'PASS');
+    var cState = pipe.C || result.created ? 'PASS' : (result.applied ? 'PASS' : 'REVIEW');
+    var dState = verified ? 'PASS' : (audit === 'INVALID' ? 'FAIL' : 'REVIEW');
+    stage($('abc-command-stage-a'), 'A', aState); stage($('abc-command-stage-b'), 'B', bState); stage($('abc-command-stage-c'), 'C', cState); stage($('abc-command-stage-d'), 'D', dState);
+    var sub = $('abc-command-result-sub');
+    if (sub) sub.textContent = op + ' · ' + String(result.status || response.status || 'UNKNOWN') + ' · route ' + (route || 'A→B→C→D');
+    var tags = $('abc-command-result-tags');
+    if (tags) {
+      tags.replaceChildren();
+      addTag(tags, 'STATUS ' + String(result.status || response.status || 'UNKNOWN'), verified ? 'ok' : 'warn');
+      if (route) addTag(tags, 'ROUTE ' + route, /A>B>C>D/.test(route) ? 'ok' : 'warn');
+      if (audit) addTag(tags, 'AUDIT ' + audit, audit === 'VALID' ? 'ok' : 'warn');
+      addTag(tags, 'VERIFIED ' + (verified ? 'YA' : 'REVIEW'), verified ? 'ok' : 'warn');
+      if (result.applied != null) addTag(tags, 'PATCH ' + (result.applied ? 'APPLIED' : 'NO_PATCH'), result.applied ? 'ok' : 'warn');
+      if (changed) addTag(tags, 'SOURCE CHANGED', 'ok');
+      if (syntax) addTag(tags, 'SYNTAX PASS', 'ok');
+    }
+    var details = [];
+    if (Array.isArray(detailResult.findings)) details.push('Temuan: ' + detailResult.findings.length);
+    if (Array.isArray(detailResult.constraints)) details.push('Constraint: ' + detailResult.constraints.length);
+    if (Array.isArray(detailResult.reasoning)) details.push('Reasoning: ' + detailResult.reasoning.length + ' langkah');
+    if (Array.isArray(result.appliedRules) && result.appliedRules.length) details.push('Patch rule: ' + result.appliedRules.join(', '));
+    if (result.repairProof) details.push('Repair proof: before=' + (result.repairProof.sourceBeforeFailed ? 'FAIL' : 'PASS') + ' · after=' + (result.repairProof.sourceAfterPassed ? 'PASS' : 'FAIL') + ' · changed=' + (changed ? 'YA' : 'TIDAK'));
+    if (result.comparison && result.comparison.before && result.comparison.after) details.push('Fingerprint: ' + String(result.comparison.before.fingerprint).slice(0, 12) + ' → ' + String(result.comparison.after.fingerprint).slice(0, 12));
+    if (result.projectProof) details.push('Project proof: syntax=' + !!result.projectProof.syntaxOk + ' · relation=' + !!result.projectProof.relationSafe + ' · idempotent=' + !!result.projectProof.idempotent);
+    if (result.reason) details.push('Reason: ' + result.reason);
+    var det = $('abc-command-result-details'); if (det) det.textContent = details.length ? details.join('\n') : 'A→B→C→D selesai; detail kontrak tidak menyediakan rincian tambahan.';
+  }
+  window.__BCGO_PAINT_ABC_COMMAND__ = paint;
+  window.addEventListener('cgo:abc-command-result', function (e) { try { paint(e.detail && e.detail.command, e.detail && e.detail.response); } catch (_) {} });
+})();
+
 /* BCGO · kartu hasil ABC live (temuan / relasi / fisika / audit) — non-breaking */
 (function () {
   function $(id) { return document.getElementById(id); }

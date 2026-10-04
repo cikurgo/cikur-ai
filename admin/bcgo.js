@@ -1283,9 +1283,26 @@ function answerQuestion(question) {
       const text = contents.get(item.file);
       if (!text) continue;
       const refs = [];
-      const re = /(?:\b(?:src|href)\s*=\s*["']([^"']+)["'])|(?:\b(?:from|import)\s*["']([^"']+)["'])/g;
-      let m;
-      while ((m = re.exec(text))) refs.push(m[1] || m[2]);
+      // HTML attributes are real resource edges. For JS, only declaration-shaped
+      // import/export lines are accepted; this deliberately ignores fixture/test
+      // strings such as `import { calc } from "./math.js"` embedded inside a JS string.
+      if (/\.html?$/i.test(item.file)) {
+        const reHtml = /\b(?:src|href)\s*=\s*["']([^"']+)["']/g;
+        let mHtml;
+        while ((mHtml = reHtml.exec(text))) refs.push(mHtml[1]);
+      } else if (/\.js$/i.test(item.file)) {
+        const reJsImport = /^\s*import\s+(?:(?:[^;\n]*?)\s+from\s+)?["']([^"']+)["']\s*;?/gm;
+        const reJsExport = /^\s*export\s+[^;\n]*?\s+from\s+["']([^"']+)["']\s*;?/gm;
+        const reJsDynamic = /^\s*(?:const|let|var)\s+[^=]+?=\s*import\(\s*["']([^"']+)["']\s*\)/gm;
+        let mJs;
+        while ((mJs = reJsImport.exec(text))) refs.push(mJs[1]);
+        while ((mJs = reJsExport.exec(text))) refs.push(mJs[1]);
+        while ((mJs = reJsDynamic.exec(text))) refs.push(mJs[1]);
+      } else if (/\.css$/i.test(item.file)) {
+        const reCss = /^\s*@import\s+["']([^"']+)["']/gm;
+        let mCss;
+        while ((mCss = reCss.exec(text))) refs.push(mCss[1]);
+      }
       for (const ref of refs) {
         if (!ref || /^(https?:|data:|#|javascript:)/i.test(ref)) continue;
         const cleanRef = String(ref).split("#")[0].split("?")[0];
