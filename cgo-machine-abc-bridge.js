@@ -14,7 +14,7 @@
     return;
   }
 
-  const VERSION = "1.6.1-PROJECT-CONTEXT-PRECISION";
+  const VERSION = "2.2.0-ADVANCED-REPAIR";
   const PAGE_ID = "abc-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   const BUS_NAME = "cgo-machine-abc-bus";
   const listeners = new Set();
@@ -387,10 +387,24 @@
     }
   }
 
+  function deepProjectReasoning(input, options = {}) {
+    try { return withTelemetryContext("PROJECT_REASONING", false, options.bcgoCycle, () => typeof E.deepProjectReasoning === "function" ? E.deepProjectReasoning(input) : { ok:false, status:"PROJECT_REASONING_UNAVAILABLE", verified:false }); }
+    catch (e) { return { ok:false, status:"PROJECT_REASONING_ERROR", verified:false, error:String(e && e.message || e) }; }
+  }
   function repairProject(input, options = {}) {
     if (E.isPaused()) return { ok:false, status:"PAUSED", verified:false };
     try { return withTelemetryContext(options.context || "PROJECT_REPAIR", false, options.bcgoCycle, () => E.repairProject(input, options)); }
     catch (err) { return { ok:false, status:"PROJECT_REPAIR_ERROR", verified:false, error:String(err?.message || err) }; }
+  }
+
+  function command(commandInput) {
+    if (E.isPaused()) return { ok:false, status:"PAUSED", verified:false, message:"Mesin ABC sedang dijeda." };
+    try {
+      if (typeof E.executeCommand !== "function") return { ok:false, status:"COMMAND_UNAVAILABLE", verified:false };
+      const c = E.normalizeCommand(commandInput || {});
+      if (!c.ok) return c;
+      return withTelemetryContext(c.operation === "project_repair" ? "COMMAND_PROJECT_REPAIR" : "COMMAND_" + c.operation.toUpperCase(), false, commandInput?.bcgoCycle, () => E.executeCommand(commandInput));
+    } catch (err) { return { ok:false, status:"COMMAND_ERROR", verified:false, error:String(err?.message || err) }; }
   }
 
   function repair(input, options = {}) {
@@ -630,6 +644,14 @@
     analyze,
     repair,
     repairProject,
+    deepProjectReasoning,
+    command,
+    runtimeVerify: (payload, options) => typeof E.verifyRuntime === "function" ? E.verifyRuntime(payload, options || {}) : Promise.resolve({ ok:false, status:"RUNTIME_UNAVAILABLE" }),
+    commandAsync: (command) => typeof E.executeCommandAsync === "function" ? E.executeCommandAsync(command) : Promise.resolve({ok:false,status:"COMMAND_ASYNC_UNAVAILABLE"}),
+    repairWithRuntime: (source, options) => typeof E.repairWithRuntime === "function" ? E.repairWithRuntime(source, options || {}) : Promise.resolve({ ok:false, status:"RUNTIME_UNAVAILABLE" }),
+    advancedRepair: (source, options) => typeof E.advancedRepair === "function" ? E.advancedRepair(source, options || {}) : Promise.resolve({ ok:false, status:"ADVANCED_REPAIR_UNAVAILABLE" }),
+    createCodeWithRuntime: (spec, options) => typeof E.createCodeWithRuntime === "function" ? E.createCodeWithRuntime(spec, options || {}) : Promise.resolve({ ok:false, status:"CREATE_RUNTIME_UNAVAILABLE" }),
+    createCommandEnvelope: (operation, payload, options) => typeof E.createCommandEnvelope === "function" ? E.createCommandEnvelope(operation, payload, options || {}) : { ok:false, status:"COMMAND_UNAVAILABLE" },
     repairSource,
     auditRepairCapabilities,
     ingestBCGOState,
