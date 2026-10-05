@@ -421,8 +421,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 </section>
 </div>
 
-<script src="cgo-machine-abc.js?v=0.13.0-ADVANCED-REPAIR"></script>
-<script src="cgo-machine-abc-bridge.js?v=2.2.0-ADVANCED-REPAIR"></script>
+<script src="cgo-machine-abc.js?v=0.13.1-REPAIR-AUTO"></script>
+<script src="cgo-machine-abc-bridge.js?v=2.3.0-REPAIR-AUTO"></script>
 <script>
 (() => {
   "use strict";
@@ -811,7 +811,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
       stepCount: steps.length,
       route: result.route || result.verification?.postRepairRoute || "A-B-C-D",
       audit: result.audit || result.verification?.postRepairAudit || "-",
-      sourceSyntax: syntax,
+      sourceSyntax: syntax && typeof syntax === "object" ? ((syntax.status || "-") + (Array.isArray(syntax.failed) && syntax.failed.length ? " (" + syntax.failed.join(", ") + ")" : "")) : syntax,
+      diagnostics: Array.isArray(result.diagnostics) ? result.diagnostics : [],
       outputIntegrity: { chars, lines },
       code,
       at: result.at || new Date().toISOString()
@@ -822,9 +823,9 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
     const out = normalizeRepairOutput(result, sourceName);
     if (!out) return false;
     $("#repairOutputStatus").textContent = out.status + (out.verified ? " · VERIFIED" : "");
-    $("#repairOutputFile").textContent = "Sumber: " + out.source;
+    $("#repairOutputFile").textContent = "Sumber: " + out.source + (out.diagnostics.length ? " · " + out.diagnostics.length + " masalah: " + formatDiagnostics(out.diagnostics, 3).replace(/\n\s+/g, " → ").replace(/\n/g, " | ") : "");
     $("#repairOutputPatch").textContent = out.patchId;
-    $("#repairOutputVerify").textContent = out.verified ? "PASS · INTERNAL" : (out.audit || "BELUM TERBUKTI");
+    $("#repairOutputVerify").textContent = out.verified ? "PASS · INTERNAL" : (out.status === "NO_PATCH" && /^PASS/.test(String(out.sourceSyntax)) ? "VALID · TIDAK PERLU PATCH" : out.status === "REVIEW" ? "REVIEW · PERLU DICEK MANUAL" : (out.audit || "BELUM TERBUKTI"));
     $("#repairOutputBefore").textContent = out.beforeFingerprint;
     $("#repairOutputAfter").textContent = out.afterFingerprint;
     $("#repairOutputSteps").textContent = String(out.stepCount) + " patch" + (out.findingDelta != null ? " · Δtemuan " + out.findingDelta : "");
@@ -891,6 +892,17 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
     }
   }
 
+  function formatDiagnostics(list, max) {
+    const a = Array.isArray(list) ? list.slice(0, max || 12) : [];
+    return a.map(d => "Baris " + (d.line ?? "?") + (d.column ? ", kolom " + d.column : "") + " · " + d.id + (d.detail ? " — " + d.detail : "") + (d.snippet ? "\n    " + String(d.snippet).trim().slice(0, 140) : "")).join("\n");
+  }
+  function verifyLabel(r) {
+    if (r.verified) return "PASS · INTERNAL";
+    if (r.status === "NO_PATCH" && r.sourceSyntax && r.sourceSyntax.pass === true) return "VALID · TIDAK PERLU PATCH";
+    if (r.status === "REVIEW") return "REVIEW · PERLU DICEK MANUAL";
+    return "BELUM TERBUKTI";
+  }
+
   async function runRepairFromDev(options = {}) {
     const raw = $("#devInput").value;
     if (!raw.trim()) { if (options.autoNotice !== false) showNotice("Tempel source/code atau pilih file terlebih dahulu."); return false; }
@@ -904,7 +916,9 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
       })();
       const r = projectInput && Bridge && typeof Bridge.repairProject === "function"
         ? Bridge.repairProject(projectInput, { autoApply: true, fast: false, skipAudit: false, source: sourceName })
-        : (Bridge && typeof Bridge.repair === "function" ? Bridge.repair : E.repair)(input, { autoApply: true, fast: false, skipAudit: false, source: sourceName });
+        : (Bridge && typeof Bridge.repairAuto === "function" ? Bridge.repairAuto
+            : (typeof E.repairAuto === "function" ? E.repairAuto
+              : (Bridge && typeof Bridge.repair === "function" ? Bridge.repair : E.repair)))(input, { autoApply: true, fast: false, skipAudit: false, source: sourceName });
       if (Array.isArray(r.files)) {
         const bundle = JSON.stringify({files:(r.files || []).map(f => ({path:f.path,content:f.content}))}, null, 2);
         r.fullRepairedCode = bundle;
@@ -915,7 +929,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
       }
       $("#repairStatus").textContent = r.status || "-";
       $("#repairPatch").textContent = r.candidate?.id || (r.plan?.count ? "REVIEW" : "TIDAK ADA");
-      $("#repairVerify").textContent = r.verified ? "PASS · INTERNAL" : "BELUM TERBUKTI";
+      $("#repairVerify").textContent = verifyLabel(r);
       const d = r.comparison?.findingDelta; $("#repairDelta").textContent = d == null ? "-" : String(d);
       const plan = r.finalPlan || r.plan || {}; $("#repairPlanCount").textContent = String(plan.count ?? 0) + " · auto " + String(plan.automaticCandidates?.length ?? 0) + " · manual " + String(plan.manualCandidates?.length ?? 0);
       $("#repairEvidenceCount").textContent = String(r.baseline?.pipeline?.B?.externalEvidence?.claimCount ?? r.baseline?.pipeline?.C?.metadata?.bcgoEvidence?.claimCount ?? 0);
@@ -923,8 +937,11 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
       showDeep(r);
       const patch = r.candidate?.patch;
       if (patch?.after != null) $("#repairDetail").textContent = patch.after;
+      else if (Array.isArray(r.diagnostics) && r.diagnostics.length) $("#repairDetail").textContent = "Lokasi masalah (tidak ditebak, perlu keputusan manual):\n" + formatDiagnostics(r.diagnostics, 30);
       else $("#repairDetail").textContent = JSON.stringify(r, null, 2).slice(0, DETAIL_LIMIT);
       renderRepairOutput(r, sourceName);
+      if (r.status === "REVIEW") showNotice("REVIEW: kode tidak diubah karena perbaikannya tidak bisa dibuktikan aman." + (r.diagnostics && r.diagnostics.length ? " Lokasi: " + formatDiagnostics(r.diagnostics, 3).replace(/\n\s+/g, " → ") : ""));
+      else if (r.status === "NO_PATCH" && r.sourceSyntax && r.sourceSyntax.pass === true) showNotice("Kode sudah valid pada pemeriksaan struktur. Tidak ada patch yang perlu diterapkan.");
     } catch (e) {
       $("#repairStatus").textContent = "ERROR"; $("#repairVerify").textContent = "FAIL"; $("#repairDetail").textContent = String(e.message || e);
       showNotice("Repair gagal: " + (e.message || e));

@@ -14,7 +14,7 @@
     return;
   }
 
-  const VERSION = "2.2.0-ADVANCED-REPAIR";
+  const VERSION = "2.3.0-REPAIR-AUTO";
   const PAGE_ID = "abc-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   const BUS_NAME = "cgo-machine-abc-bus";
   const listeners = new Set();
@@ -407,6 +407,23 @@
     } catch (err) { return { ok:false, status:"COMMAND_ERROR", verified:false, error:String(err?.message || err) }; }
   }
 
+  /* Pintu masuk paste DEV: HTML/CSS/JSON/JS/multi-file dikenali otomatis (tidak lagi dibaca sebagai JavaScript). */
+  function repairAuto(input, options = {}) {
+    if (E.isPaused()) return { engine: "CGO_MACHINE_ABC", version: E.version, status: "PAUSED", applied: false, verified: false };
+    if (typeof E.repairAuto !== "function") return repair(input, options);
+    const result = withTelemetryContext(options.context || "REPAIR_AUTO", false, options.bcgoCycle, () => E.repairAuto(input, options));
+    try {
+      emit("cgo:machine-abc-repair", result);
+      publishBus("repair", {
+        status: result.status, applied: !!result.applied, verified: !!result.verified,
+        appliedRules: Array.isArray(result.appliedRules) ? result.appliedRules.slice() : [],
+        reason: result.reason || null, language: result.detectedLanguage || result.language || null,
+        at: new Date().toISOString()
+      });
+    } catch (_) {}
+    return result;
+  }
+
   function repair(input, options = {}) {
     if (E.isPaused()) return { engine: "CGO_MACHINE_ABC", version: E.version, status: "PAUSED", applied: false, verified: false };
     const result = withTelemetryContext(options.context || "REPAIR", false, options.bcgoCycle, () => E.repair(input, options));
@@ -643,6 +660,7 @@
     engine: E,
     analyze,
     repair,
+    repairAuto,
     repairProject,
     deepProjectReasoning,
     command,

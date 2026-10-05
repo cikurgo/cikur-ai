@@ -1,6 +1,6 @@
 /*
  * CGO MACHINE ABC — UNIVERSAL CORE ENGINE
- * Version 0.13.0-ADVANCED-REPAIR (lihat konstanta VERSION)
+ * Version 0.13.1-REPAIR-AUTO (lihat konstanta VERSION)
  * Zero External · Zero API · Zero Network · Domain Neutral
  * A = INGEST / PARSE / REPRESENT
  * B = ANALYZE / RELATE / VERIFY / REASON
@@ -10,7 +10,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "0.13.0-ADVANCED-REPAIR";
+  const VERSION = "0.13.1-REPAIR-AUTO";
   const MAX_TEXT_SAMPLE = 6000;
   const MAX_ITEMS = 1000;
   const MAX_TOKENS = 5000;
@@ -918,7 +918,8 @@
     const jsonModeEarly = jsonModeOf(source);
     const tokEv = jsonModeEarly ? null : tokenRuleAnalysis(source, gateOpts);
     const tokUsable = !!tokEv && !tokEv.toks.some(t => t.t === "tpl" && source.slice(t.s, t.e).indexOf("${") >= 0);
-    const tokBalanced = tokUsable && !tokEv.mismatch && !tokEv.stray.length && !tokEv.unclosed.length;
+    const tokBalanceUsable = !!tokEv; // lexer penuh juga menganalisis isi ${...} (token.subs), jadi bukti keseimbangan tetap sah
+    const tokBalanced = tokBalanceUsable && !tokEv.mismatch && !tokEv.stray.length && !tokEv.unclosed.length;
     const tokDangling = tokUsable && tokEv.toks.some((t, k) => t.t === "p" && /^[+\-*\/%|&]$/.test(t.v) && tokEv.toks[k + 1] && tokEv.toks[k + 1].t === "p" && tokEv.toks[k + 1].v === ";");
     const delimOk = d.balanced || tokBalanced;
     checks.push({ id: "DELIMITERS", status: delimOk ? "PASS" : "FAIL", detail: d, ...(tokBalanced && !d.balanced ? { tokenProof: "BALANCED" } : {}) });
@@ -1485,6 +1486,25 @@
   }
 
   /** Koherensi indentasi: setiap penutup di awal baris harus sejajar dengan baris pembukanya. */
+  function indentViolations(s, a) {
+    const toks = a.toks, T = jsLineTables(s), CLOSE = { "{": "}", "[": "]", "(": ")" };
+    const stack = []; let v = 0;
+    for (let k = 0; k < toks.length; k++) {
+      const tk = toks[k];
+      if (tk.t !== "p") continue;
+      if (tk.v === "{" || tk.v === "(" || tk.v === "[") { const li = T.lineOfPos(tk.s); stack.push({ ch: tk.v, li, w: T.indentOfLine(li).width }); continue; }
+      if (tk.v === "}" || tk.v === ")" || tk.v === "]") {
+        const top = stack.pop();
+        if (!top || CLOSE[top.ch] !== tk.v) { v += 3; continue; }
+        if (k === 0 || tk.nl) { const li = T.lineOfPos(tk.s); if (li !== top.li && T.indentOfLine(li).width !== top.w) v++; }
+      }
+    }
+    return v + stack.length * 3;
+  }
+  /* Koheren mutlak, atau (untuk file nyata yang indentasinya tidak sempurna) membaik secara nyata dibanding teks sebelum patch. */
+  function indentCoherentOrImproved(text, t1, before, a0) {
+    return indentCoherent(text, t1) || indentViolations(text, t1) < indentViolations(before, a0);
+  }
   function indentCoherent(s, a) {
     const toks = a.toks, T = jsLineTables(s), CLOSE = { "{": "}", "[": "]", "(": ")" };
     const stack = [];
@@ -1526,20 +1546,20 @@
     // Header repair is deliberately line-bounded but allows an inline block body:
     //   if (x > 1 { return x; }  ->  if (x > 1) { return x; }
     // It must never jump across a newline, string/template, or another block opener.
+    const parenDepth = t => { let d = 0; for (const ch of t) { if (ch === "(") d++; else if (ch === ")") { d--; if (d <= 0) return -1; } } return d; };
+    const valueEndBeforeBrace = (pos) => /[\w$)\]'"`]/.test(s[pos - 1] || "") || /(?:\+\+|--)$/.test(s.slice(Math.max(0, pos - 2), pos));
     const control = /(^|[\n;}])([ \t]*)(if|while|switch|catch)\s*\(([^\n{};]*?)\s*\{/g;
     const forControl = /(^|[\n;}])([ \t]*)for\s*\(([^\n{}]*?)\s*\{/g;
     let m;
     while ((m = control.exec(scan))) {
       const brace = m.index + m[0].length - 1;
       let insertPos = brace; while (insertPos > m.index && /\s/.test(s[insertPos - 1])) insertPos--;
-      const before = s.slice(m.index, insertPos);
-      if (!/\)\s*$/.test(before) && !/\)/.test(m[4]||"")) edits.push({pos:insertPos,del:0,ins:")",id:"MISSING_PAREN_HEADER",reason:"control header membuka block sebelum ')'"});
+      if (parenDepth("(" + (m[4] || "")) === 1 && valueEndBeforeBrace(insertPos)) edits.push({pos:insertPos,del:0,ins:")",id:"MISSING_PAREN_HEADER",reason:"control header membuka block sebelum ')'"});
     }
     while ((m = forControl.exec(scan))) {
       const brace = m.index + m[0].length - 1;
       let insertPos = brace; while (insertPos > m.index && /\s/.test(s[insertPos - 1])) insertPos--;
-      const before = s.slice(m.index, insertPos);
-      if (!/\)\s*$/.test(before) && !/\)/.test(m[3]||"")) edits.push({pos:insertPos,del:0,ins:")",id:"MISSING_PAREN_HEADER",reason:"for header membuka block sebelum ')'"});
+      if (parenDepth("(" + (m[3] || "")) === 1 && valueEndBeforeBrace(insertPos)) edits.push({pos:insertPos,del:0,ins:")",id:"MISSING_PAREN_HEADER",reason:"for header membuka block sebelum ')'"});
     }
     const fn = /(^|[\n;}])([ \t]*)(?:export\s+(?:default\s+)?)?(?:async\s+)?function(?:\s+[*]?[A-Za-z_$][\w$]*)?\s*\(([^\n{}]*?)\s*\{/g;
     while ((m = fn.exec(scan))) {
@@ -1547,8 +1567,8 @@
       const brace = s.lastIndexOf("{", lineEnd < 0 ? s.length : lineEnd);
       if (brace < m.index) continue;
       let insertPos = brace; while (insertPos > m.index && /\s/.test(s[insertPos - 1])) insertPos--;
-      const before = s.slice(m.index, insertPos);
-      if (!/\)\s*$/.test(before)) edits.push({pos:insertPos,del:0,ins:")",id:"MISSING_PAREN_FUNCTION_DECL",reason:"function declaration membuka block sebelum ')'"});
+      const hdr = scan.slice(m.index, insertPos); const open = hdr.indexOf("(");
+      if (open >= 0 && parenDepth(hdr.slice(open)) === 1 && valueEndBeforeBrace(insertPos)) edits.push({pos:insertPos,del:0,ins:")",id:"MISSING_PAREN_FUNCTION_DECL",reason:"function declaration membuka block sebelum ')'"});
     }
     if (!edits.length) return {text:s,changed:false,steps:[]};
     const text=edits.slice().sort((a,b)=>b.pos-a.pos).reduce((o,e)=>o.slice(0,e.pos)+e.ins+o.slice(e.pos+e.del),s);
@@ -1586,12 +1606,42 @@
     const text=lines.join(''); return {text,changed:text!==s,steps};
   }
 
+  /* ')' hilang sebelum ';' pada pernyataan satu baris:  foo(a, b;  ->  foo(a, b);
+     Hanya bila: ';' berada langsung di dalam '(' (bukan header for), semua '(' terbuka berasal dari baris yang sama,
+     token sebelum ';' adalah akhir nilai, dan ';' menutup baris. Hasil wajib lolos analisis token. */
+  function repairDeterministicCallParenEol(source, opts) {
+    const s = String(source), none = { text: s, changed: false, steps: [] };
+    const a = tokenRuleAnalysis(s, opts); if (!a || !a.semis.length) return none;
+    const toks = a.toks, edits = [], stack = [];
+    for (let k = 0; k < toks.length; k++) {
+      const tk = toks[k]; if (tk.t !== "p") continue;
+      if (tk.v === "(" || tk.v === "[" || tk.v === "{") { const p1 = toks[k - 1], p2 = toks[k - 2]; stack.push({ ch: tk.v, k, forParen: tk.v === "(" && !!(p1 && p1.t === "id" && (p1.v === "for" || (p1.v === "await" && p2 && p2.t === "id" && p2.v === "for"))) }); continue; }
+      if (tk.v === ")" || tk.v === "]" || tk.v === "}") { stack.pop(); continue; }
+      if (tk.v !== ";" || !stack.length) continue;
+      const top = stack[stack.length - 1]; if (top.ch !== "(" || top.forParen) continue;
+      let n = 0; for (let j = stack.length - 1; j >= 0 && stack[j].ch === "(" && !stack[j].forParen && !s.slice(toks[stack[j].k].s, tk.s).includes("\n"); j--) n++;
+      if (!n) continue;
+      const prev = toks[k - 1]; if (!prev) continue;
+      const valueEnd = prev.t === "str" || prev.t === "num" || prev.t === "tpl" || (prev.t === "id" && !/^(?:return|typeof|void|delete|new|in|of|instanceof|await|yield|throw|case|else)$/.test(prev.v)) || (prev.t === "p" && (prev.v === ")" || prev.v === "]" || prev.v === "}" || (prev.v === "(" && prev === toks[top.k])));
+      if (!valueEnd) continue;
+      const next = toks[k + 1]; if (next && !s.slice(tk.e, next.s).includes("\n")) continue;
+      edits.push({ pos: prev.e, ins: ")".repeat(n), id: "MISSING_CALL_PAREN_EOL", reason: "')' hilang sebelum ';' (baris " + (s.slice(0, tk.s).split("\n").length) + ")" });
+      for (let i = 0; i < n; i++) stack.pop();
+    }
+    if (!edits.length) return none;
+    const text = edits.slice().sort((x, y) => y.pos - x.pos).reduce((o, e) => o.slice(0, e.pos) + e.ins + o.slice(e.pos), s);
+    const g = tokenRuleAnalysis(text, opts); if (!g || g.mismatch || g.stray.length || g.unclosed.length || g.semis.length) return none;
+    return { text, changed: text !== s, steps: edits.map(e => ({ id: e.id, status: "CANDIDATE", reason: e.reason })) };
+  }
+
   function planJsTokenRepairs(source, opts, depth) {
     const original=String(source), prefix=[];
     let s=original;
     const none=()=>({text:s,changed:false,steps:prefix.slice()});
     const header=repairDeterministicMissingHeaderParen(s);
     if(header.changed){ prefix.push(...header.steps); const g=tokenRuleAnalysis(header.text,opts); s=header.text; if(g&&!g.mismatch&&!g.stray.length&&!g.unclosed.length)return{text:s,changed:true,steps:prefix}; }
+    const callp=repairDeterministicCallParenEol(s,opts);
+    if(callp.changed){ prefix.push(...callp.steps); const g=tokenRuleAnalysis(callp.text,opts); s=callp.text; if(g&&!g.mismatch&&!g.stray.length&&!g.unclosed.length&&!g.semis.length&&!g.adjacent.length)return{text:s,changed:true,steps:prefix}; }
     const plus=repairDeterministicMultilinePlus(s);
     if(plus.changed){ prefix.push(...plus.steps); const g=tokenRuleAnalysis(plus.text,opts); s=plus.text; if(g&&!g.mismatch&&!g.stray.length&&!g.unclosed.length&&!g.adjacent.length)return{text:s,changed:true,steps:prefix}; }
     const a=tokenRuleAnalysis(s,opts); if(!a||(a.mismatch&&a.mismatch.inTemplate))return none();
@@ -1613,11 +1663,17 @@
     if(a.stray.length&&!a.unclosed.length&&!a.mismatch){
       const n=toks.length,st=a.stray,tailOk=st.every((k,i)=>k===n-st.length+i);
       if(tailOk){const lineStartOf=pos=>s.lastIndexOf("\n",pos-1)+1;let alone=true;for(const k of st){const ls=lineStartOf(toks[k].s),le=s.indexOf("\n",toks[k].e),rowEnd=le<0?s.length:le;if(s.slice(ls,toks[k].s).trim()||s.slice(toks[k].e,rowEnd).trim()){alone=false;break;}}if(alone){const ls=lineStartOf(toks[st[0]].s);if(!s.slice(ls).replace(/[}\])\s]/g,""))closeEdits=[{pos:ls,del:s.length-ls,ins:"",id:"STRAY_CLOSER_EOF",reason:"penutup berlebih di akhir file"}];}}
-    }else if(!a.stray.length){const plan=planClosersByIndent(s,a,eol);if(plan)closeEdits=plan;}
+    }else if(!a.stray.length){let plan=planClosersByIndent(s,a,eol);
+      if(plan&&plan.length>1&&plan.length<=10&&!a.mismatch){
+        const scoreEdits=es=>{const t=apply(es);if(!balancedDelimiters(t).balanced)return null;const t1=tokenRuleAnalysis(t,opts);if(!t1||t1.mismatch||t1.stray.length||t1.unclosed.length)return null;if(!indentCoherentOrImproved(t,t1,s,a))return null;return indentViolations(t,t1);};
+        if(scoreEdits(plan)===null){const good=[];for(let mask=1;mask<(1<<plan.length)-1;mask++){const sub=plan.filter((_,i)=>mask&(1<<i));const sc=scoreEdits(sub);if(sc!==null)good.push({sub,sc});}
+          good.sort((x,y)=>x.sc-y.sc);plan=(good.length===1||(good.length>1&&good[0].sc<good[1].sc))?good[0].sub:null;}
+      }
+      if(plan)closeEdits=plan;}
     if(!closeEdits.length)return none();
     const text1=apply(closeEdits); if(!balancedDelimiters(text1).balanced)return none();
     const t1=tokenRuleAnalysis(text1,opts); if(!t1||t1.mismatch||t1.stray.length||t1.unclosed.length)return none();
-    if(closeEdits[0].id==="MISSING_CLOSER_INDENT"&&!indentCoherent(text1,t1))return none();
+    if(closeEdits[0].id==="MISSING_CLOSER_INDENT"&&!indentCoherentOrImproved(text1,t1,s,a))return none();
     const steps=stepsOf(closeEdits),second=planJsTokenRepairs(text1,opts,1);
     if(second.changed)return{text:second.text,changed:true,steps:prefix.concat(steps,second.steps)};
     if(t1.adjacent.length)return none();
@@ -1677,8 +1733,19 @@
   }
   function htmlStructureGate(source) {
     const s=String(source??""); const tags=[]; const voids=new Set(["area","base","br","col","embed","hr","img","input","link","meta","param","source","track","wbr"]);
-    const re=/<\s*(\/?)\s*([A-Za-z][\w:-]*)\b[^>]*>/g; let m; let mismatch=null; let scriptDepth=0;
-    while((m=re.exec(s))){const closing=!!m[1], tag=m[2].toLowerCase(); if(tag==="script"||tag==="style"){if(!closing)scriptDepth++;else scriptDepth=Math.max(0,scriptDepth-1);} if(scriptDepth>0&&tag!=="script"&&tag!=="style") continue; if(voids.has(tag)||tag.startsWith("!")) continue; if(closing){const last=tags.pop(); if(last!==tag){mismatch={expected:last||null,found:tag,index:m.index};break;}} else tags.push(tag);}
+    const re=/<!--[\s\S]*?-->|<\s*(\/?)\s*([A-Za-z][\w:-]*)\b[^>]*>/g; let m; let mismatch=null;
+    while((m=re.exec(s))){
+      if(m[0].startsWith("<!--")) continue;
+      const closing=!!m[1], tag=m[2].toLowerCase();
+      if(!closing&&(tag==="script"||tag==="style"||tag==="textarea"||tag==="title")){
+        // isi elemen raw-text berakhir di penutup pertamanya; tag di dalam string JS/CSS bukan struktur HTML
+        const endRe=new RegExp("<\\/\\s*"+tag+"\\s*>","ig"); endRe.lastIndex=re.lastIndex; const e=endRe.exec(s);
+        if(!e){mismatch={expected:"/"+tag,found:null,index:m.index};break;}
+        re.lastIndex=e.index+e[0].length; continue;
+      }
+      if(voids.has(tag)||tag.startsWith("!")||/\/\s*>$/.test(m[0])) continue;
+      if(closing){const last=tags.pop(); if(last!==tag){mismatch={expected:last||null,found:tag,index:m.index};break;}} else tags.push(tag);
+    }
     const checks=[{id:"HTML_TAG_STRUCTURE",status:!mismatch&&tags.length===0?"PASS":"FAIL",detail:{openTags:tags,mismatch}}];
     const failed=checks.filter(x=>x.status==="FAIL"); return {status:failed.length?"FAIL":"PASS",pass:!failed.length,scope:"HTML_STRUCTURAL",parser:"INTERNAL_HTML_STRUCTURE",format:"html",checks,failed:failed.map(x=>x.id)};
   }
@@ -1691,9 +1758,10 @@
     const post=htmlStructureGate(output); const scriptsPost=[...output.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)]; let inlineSyntax=true;
     for(const x of scriptsPost){const attrs=x[1]||""; if(/\bsrc\s*=\s*["'][^"']+["']/i.test(attrs)) continue; const sg=sourceSyntaxGate(x[2],{source:(file.path||"HTML")+"#script-inline"}); if(!sg.pass) inlineSyntax=false;}
     const verified=changed&&post.pass&&inlineSyntax&&output!==source;
-    const status=verified?"REPAIRED_VERIFIED":(!changed?(pre.pass?"NO_PATCH":"REPAIR_FAILED"):"REPAIRED");
+    const status=verified?"REPAIRED_VERIFIED":(!changed?((pre.pass&&inlineSyntax)?"NO_PATCH":(pre.pass?"REVIEW":"REPAIR_FAILED")):"REPAIRED");
     const fpBefore=digest(source), fpAfter=digest(output);
-    return {status,applied:changed,verified,sourceSyntax:post,htmlProof:{before:pre,after:post,inlineScripts:inline.length,externalScripts:scripts.filter(x=>x.src).length,styles:styles.length,inlineSyntax},fullRepairedCode:output,output:{type:changed?"FULL_REPAIRED_SOURCE":"FULL_SOURCE",available:true,code:output,charCount:output.length,lineCount:output.split(/\r?\n/).length},patchLedger:ledger,appliedRules:ledger.map(x=>x.rule),beforeFingerprint:fpBefore,afterFingerprint:fpAfter,reason:verified?"html_inline_js_repaired_and_reverified":pre.pass?"valid_html_no_patch":"html_not_safely_repairable"};
+    const diagnostics=[]; if(!verified){ if(!post.pass) diagnostics.push({id:"HTML_TAG_STRUCTURE",detail:JSON.stringify(post.checks[0].detail).slice(0,200)}); for(const x of scriptsPost){const attrs=x[1]||""; if(/\bsrc\s*=\s*["'][^"']+["']/i.test(attrs)) continue; const body=x[2]||""; const sg=sourceSyntaxGate(body,{source:(file.path||"HTML")+"#script-inline"}); if(sg.pass) continue; const bodyStart=x.index+x[0].indexOf(">")+1; const off=output.slice(0,bodyStart).split("\n").length-1; for(const d of describeSourceProblems(body,{source:(file.path||"HTML")+"#script-inline"})) diagnostics.push({...d,line:(d.line||1)+off,region:"HTML_SCRIPT_INLINE"}); } }
+    return {status,applied:changed,verified,diagnostics,sourceSyntax:inlineSyntax?post:{...post,status:"FAIL",pass:false,failed:[...post.failed,"INLINE_SCRIPT_SYNTAX"]},htmlProof:{before:pre,after:post,inlineScripts:inline.length,externalScripts:scripts.filter(x=>x.src).length,styles:styles.length,inlineSyntax},fullRepairedCode:output,output:{type:changed?"FULL_REPAIRED_SOURCE":"FULL_SOURCE",available:true,code:output,charCount:output.length,lineCount:output.split(/\r?\n/).length},patchLedger:ledger,appliedRules:ledger.map(x=>x.rule),beforeFingerprint:fpBefore,afterFingerprint:fpAfter,reason:verified?"html_inline_js_repaired_and_reverified":(pre.pass&&inlineSyntax)?"valid_html_no_patch":pre.pass?"html_inline_script_invalid_and_no_safe_patch":"html_not_safely_repairable"};
   }
   function repairTypedFile(file, options={}) {
     const f={path:String(file.path||file.name||"DEV INPUT"),content:String(file.content??""),mimeType:file.mimeType||file.type||""}; const d=detectFileType(f);
@@ -1765,8 +1833,8 @@
     };
     for(const f of files){
       const path=normalizePath(f.path);
-      const addRef=(spec,clause=null)=>{
-        if(!spec)return; const r=resolveProjectTarget(path,spec,paths); relations.push({sourceFile:path,targetFile:r.target,status:r.status,spec});
+      const addRef=(spec,clause=null,kind=null)=>{
+        if(!spec)return; const r=resolveProjectTarget(path,spec,paths); relations.push({sourceFile:path,targetFile:r.target,status:r.status,spec,...(kind?{kind}:{})});
         if(r.status!=="MATCH"||!clause)return;
         const names=[]; const named=(clause.match(/\{([\s\S]*?)\}/)||[])[1];
         if(named) for(const part of named.split(',')){ const bits=part.trim().split(/\s+as\s+/i); const n=bits[0]?.trim(); if(n) names.push(n); }
@@ -1779,7 +1847,7 @@
       let im; importFrom.lastIndex=0; while((im=importFrom.exec(f.content))) addRef(im[2],im[1]);
       importSide.lastIndex=0; while((im=importSide.exec(f.content))) addRef(im[1]);
       requireRef.lastIndex=0; while((im=requireRef.exec(f.content))) addRef(im[2],im[1]);
-      scriptRef.lastIndex=0; while((im=scriptRef.exec(f.content))) addRef(im[1]);
+      scriptRef.lastIndex=0; while((im=scriptRef.exec(f.content))) addRef(im[1],null,"script-src");
     }
     const summary={match:relations.filter(r=>r.status==="MATCH").length,missing:relations.filter(r=>r.status==="MISSING").length,external:relations.filter(r=>r.status==="EXTERNAL").length,duplicateSymbol:relations.filter(r=>r.status==="DUPLICATE_SYMBOL").length,missingSymbol:relations.filter(r=>r.status==="MISSING_SYMBOL").length,symbolReference:relations.filter(r=>r.status==="SYMBOL_REFERENCE").length,total:relations.length};
     return {relations,symbols:[...defsByFile.entries()].flatMap(([path,names])=>names.map(name=>({name,owners:[path],exports:(exportsByFile.get(path)||[]).filter(x=>x.name===name||x.as===name).map(x=>x.as)}))),summary,healthy:summary.missing===0&&summary.missingSymbol===0};
@@ -1808,12 +1876,30 @@
     }
     const patchedFiles=results.map(x=>({path:x.path,content:x.content})); const afterGraph=extractProjectRelations(patchedFiles);
     const allValid=results.every(x=>x.result?.sourceSyntax?.pass===true || (x.status==="NO_PATCH"&&x.result?.sourceSyntax?.pass===true));
-    const changed=results.filter(x=>x.changed).length; const verifiedFiles=results.every(x=>x.verified||x.status==="NO_PATCH"); const relationSafe=afterGraph.healthy;
+    const changed=results.filter(x=>x.changed).length; const verifiedFiles=results.every(x=>x.verified||x.status==="NO_PATCH"); const singleHtml=files.length===1&&results[0]&&results[0].language==="html"; const unprovided=singleHtml?afterGraph.relations.filter(r=>r.status==="MISSING"):[]; const relationSafe=singleHtml?afterGraph.summary.missingSymbol===0:afterGraph.healthy;
     const allIdempotent=results.every(x=>{if(!x.changed)return x.status==="NO_PATCH"; const again=repairTypedFile({path:x.path,content:x.content},{autoApply:true}); return again.status==="NO_PATCH"&&again.fullRepairedCode===x.content;});
     const beforeFp=digest(files.map(x=>({path:x.path,content:x.content}))), afterFp=digest(patchedFiles); const ledger=results.flatMap(x=>x.patchLedger);
     const verified=changed>0 ? (verifiedFiles&&allValid&&relationSafe&&allIdempotent&&beforeFp!==afterFp) : (allValid&&relationSafe&&allIdempotent&&beforeFp===afterFp);
     const status=changed>0 ? (verified?"REPAIRED_VERIFIED":"REPAIRED") : (verified?"NO_PATCH":"REPAIR_FAILED");
-    return {ok:true,engine:"CGO_MACHINE_ABC",version:VERSION,status,verified,files:results.map(x=>({path:x.path,language:x.language,status:x.status,applied:x.applied,verified:x.verified,rules:x.rules,beforeHash:x.beforeHash,afterHash:x.afterHash,changed:x.changed,content:x.content,patchLedger:x.patchLedger})),relations:{before:beforeGraph,after:afterGraph},patchLedger:ledger,projectProof:{changedFiles:changed,verifiedFiles,syntaxOk:allValid,relationSafe,idempotent:allIdempotent,beforeFingerprint:beforeFp,afterFingerprint:afterFp},output:{type:"PROJECT_REPAIRED_BUNDLE",available:true,files:patchedFiles},reason:verified?(changed?"all_file_repairs_and_project_verification_complete":"all_files_valid_unchanged"):"project_verification_contract_failed"};
+    return {ok:true,engine:"CGO_MACHINE_ABC",version:VERSION,status,verified,files:results.map(x=>({path:x.path,language:x.language,status:x.status,applied:x.applied,verified:x.verified,rules:x.rules,beforeHash:x.beforeHash,afterHash:x.afterHash,changed:x.changed,content:x.content,patchLedger:x.patchLedger})),relations:{before:beforeGraph,after:afterGraph},patchLedger:ledger,projectProof:{changedFiles:changed,verifiedFiles,syntaxOk:allValid,relationSafe,unprovidedReferences:unprovided.map(r=>r.spec),idempotent:allIdempotent,beforeFingerprint:beforeFp,afterFingerprint:afterFp},output:{type:"PROJECT_REPAIRED_BUNDLE",available:true,files:patchedFiles},reason:verified?(changed?"all_file_repairs_and_project_verification_complete":"all_files_valid_unchanged"):"project_verification_contract_failed"};
+  }
+
+  /* Pintu masuk universal untuk paste DEV: HTML/CSS/JSON/JS/proyek multi-file dikenali otomatis.
+     Source HTML tidak lagi dibaca sebagai JavaScript (penyebab REVIEW palsu). */
+  function repairAuto(input, options={}) {
+    if (input && typeof input === "object" && Array.isArray(input.files)) return repairProject(input, options);
+    if (typeof input !== "string") return repair(input, options);
+    const multi = normalizeProjectInput(input);
+    if (multi && multi.length >= 2) return repairProject(input, options);
+    const name = String(options.source || "");
+    const d = detectFileType({ path: name, content: input });
+    if (d.language === "html" || d.language === "css") {
+      const path = extensionOf(name) ? name : (d.language === "html" ? "pasted.html" : "pasted.css");
+      const r = repairTypedFile({ path, content: input }, { ...options, source: path, autoApply: true });
+      return { engine: "CGO_MACHINE_ABC", version: VERSION, route: "REPAIR_AUTO:" + d.language.toUpperCase(), detectedLanguage: d.language, ...r };
+    }
+    const r = repair(input, options);
+    return r && typeof r === "object" ? { detectedLanguage: d.language, ...r } : r;
   }
 
   const REPAIR_RULE_REGISTRY = Object.freeze([
@@ -2248,6 +2334,7 @@
 
   // Attach repair API before freeze
   CGOMachineABC.repair = repair;
+  CGOMachineABC.repairAuto = repairAuto;
   CGOMachineABC.repairProject = repairProject;
   CGOMachineABC.analyzeProjectRelations = (input) => { const f=normalizeProjectInput(input); return f ? extractProjectRelations(f) : {status:"PROJECT_INPUT_REQUIRED"}; };
   CGOMachineABC.deepProjectReasoning = deepProjectReasoning;
