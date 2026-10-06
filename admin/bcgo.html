@@ -150,6 +150,32 @@ body{font-family:'Inter',sans-serif}
 .abc-command-tags span.warn{border-color:#765f1b;color:#ffe07b}
 .abc-command-tags span.bad{border-color:#76263a;color:#ff98a6}
 
+
+/* CIKUR GO FUTURE CHAT · 2026-10-06 · additive / zero-regression layer */
+.cgo-future-shell{position:relative;margin-bottom:10px;padding:14px;border:1px solid rgba(56,189,248,.20);border-radius:18px;background:radial-gradient(circle at 12% 0%,rgba(34,211,238,.10),transparent 34%),radial-gradient(circle at 88% 100%,rgba(99,102,241,.12),transparent 36%),rgba(2,6,23,.62);box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 18px 45px rgba(0,0,0,.20);overflow:hidden}
+.cgo-future-grid{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center}
+.cgo-presence{display:flex;align-items:center;gap:11px;min-width:0}
+.cgo-orb{position:relative;width:48px;height:48px;border-radius:50%;flex:0 0 48px;background:radial-gradient(circle at 38% 32%,#d9fbff 0 4%,#67e8f9 9%,#2563eb 28%,#111827 65%,#020617 100%);box-shadow:0 0 18px rgba(34,211,238,.45),inset 0 0 14px rgba(255,255,255,.28);animation:cgoOrbBreathe 2.8s ease-in-out infinite}
+.cgo-orb:before,.cgo-orb:after{content:"";position:absolute;inset:-6px;border:1px solid rgba(103,232,249,.22);border-radius:50%;animation:cgoOrbRing 3s linear infinite}
+.cgo-orb:after{inset:-11px;border-color:rgba(129,140,248,.14);animation-duration:5s;animation-direction:reverse}
+@keyframes cgoOrbBreathe{0%,100%{transform:scale(.96);filter:saturate(.9)}50%{transform:scale(1.04);filter:saturate(1.25)}}
+@keyframes cgoOrbRing{to{transform:rotate(360deg)}}
+.cgo-presence-title{font-size:12px;font-weight:800;letter-spacing:.13em;color:#e0f2fe;text-transform:uppercase}
+.cgo-presence-state{display:flex;align-items:center;gap:6px;margin-top:4px;font:10px ui-monospace,SFMono-Regular,Menlo,monospace;color:#67e8f9}
+.cgo-standby-dot{width:7px;height:7px;border-radius:50%;background:#34d399;box-shadow:0 0 10px #34d399;animation:breathe 1.7s ease-in-out infinite}
+.cgo-future-wave{display:flex;align-items:center;gap:3px;height:34px;padding:0 4px}
+.cgo-future-wave i{width:3px;height:7px;border-radius:4px;background:linear-gradient(180deg,#67e8f9,#818cf8);opacity:.72;animation:cgoFutureWave 1.6s ease-in-out infinite}
+.cgo-future-wave i:nth-child(2){animation-delay:.12s;height:14px}.cgo-future-wave i:nth-child(3){animation-delay:.24s;height:20px}.cgo-future-wave i:nth-child(4){animation-delay:.36s;height:12px}.cgo-future-wave i:nth-child(5){animation-delay:.48s;height:17px}.cgo-future-wave i:nth-child(6){animation-delay:.60s;height:9px}.cgo-future-wave i:nth-child(7){animation-delay:.72s;height:15px}
+@keyframes cgoFutureWave{0%,100%{transform:scaleY(.55);opacity:.45}50%{transform:scaleY(1.15);opacity:1}}
+.cgo-future-rail{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.cgo-future-chip{font:9px ui-monospace,SFMono-Regular,Menlo,monospace;color:#64748b;border:1px solid #1e3348;border-radius:999px;padding:4px 8px;background:rgba(2,8,23,.7)}
+.cgo-future-chip.live{color:#86efac;border-color:#166534;background:rgba(5,46,22,.32)}
+.cgo-future-chip strong{color:inherit}
+.cgo-future-voicehint{margin-top:9px;font-size:10px;color:#94a3b8}.cgo-future-voicehint b{color:#c7d2fe}
+.cgo-chat-shell.future-focus{border-color:rgba(56,189,248,.34);box-shadow:0 0 55px rgba(34,211,238,.08),inset 0 1px 0 rgba(255,255,255,.05)}
+.cgo-chat-shell.future-focus .cgo-chat-head{background:linear-gradient(90deg,rgba(8,47,73,.28),rgba(49,46,129,.18));}
+@media(max-width:640px){.cgo-future-grid{grid-template-columns:1fr}.cgo-future-wave{justify-content:flex-start}.cgo-future-shell{padding:12px}.cgo-presence-title{font-size:11px}}
+
 </style>
 </head>
 
@@ -505,7 +531,26 @@ body{font-family:'Inter',sans-serif}
             </div>
             <span class="text-[10px] code-font text-indigo-400">CGO::CHAT • BCGO</span>
         </div>
-        <div class="cgo-chat-shell">
+        <div class="cgo-future-shell" id="cgo-future-presence" aria-live="polite">
+          <div class="cgo-future-grid">
+            <div class="cgo-presence">
+              <div class="cgo-orb" aria-hidden="true"></div>
+              <div class="min-w-0">
+                <div class="cgo-presence-title">CGO OPERATOR · SIAGA</div>
+                <div class="cgo-presence-state"><span class="cgo-standby-dot"></span><span id="cgo-future-state">STANDBY · SIAP MENDENGAR</span></div>
+              </div>
+            </div>
+            <div class="cgo-future-wave" id="cgo-future-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          </div>
+          <div class="cgo-future-rail" aria-label="Status CGO">
+            <span class="cgo-future-chip live" id="cgo-future-listen-chip">● LISTENING READY</span>
+            <span class="cgo-future-chip">CHAT · ONLINE</span>
+            <span class="cgo-future-chip">ABC · A → B → C → D</span>
+            <span class="cgo-future-chip">VOICE · OPERATOR WANITA</span>
+          </div>
+          <div class="cgo-future-voicehint">Bicara langsung saat siap — <b>tidak perlu mencari tombol mic terlebih dahulu.</b> Jika browser menolak akses otomatis, tombol mic lama tetap tersedia sebagai fallback.</div>
+        </div>
+        <div class="cgo-chat-shell future-focus">
           <div class="cgo-chat-head">
             <div class="flex items-center gap-3 min-w-0">
               <div class="cgo-wave" id="cgo-voice-wave" aria-hidden="true">
@@ -513,7 +558,7 @@ body{font-family:'Inter',sans-serif}
               </div>
               <div class="min-w-0">
                 <div class="text-[11px] font-semibold text-indigo-200 tracking-wide">CGO OPERATOR · LIVE</div>
-                <div class="text-[10px] text-slate-500 truncate" id="cgo-chat-live-status">Kanal siap · tunggu pertanyaan</div>
+                <div class="text-[10px] text-slate-500 truncate" id="cgo-chat-live-status">STANDBY · siap mendengar</div>
               </div>
             </div>
             <div class="flex items-center gap-2">
@@ -534,7 +579,7 @@ body{font-family:'Inter',sans-serif}
             <span data-stage="done">④ Selesai</span>
           </div>
           <div id="chat-feed" class="chat-scroll p-3 h-80 overflow-y-auto space-y-3 bg-slate-950/80">
-            <div class="text-xs text-slate-500">Kanal CGO siap · ketik atau bicara · suara event = operator wanita (MP3)</div>
+            <div class="text-xs text-slate-500">CGO standby · ketik atau bicara langsung · operator wanita (MP3)</div>
           </div>
           <div class="cgo-wave-wrap" id="cgo-wave-wrap"><canvas id="cgo-mic-wave" width="600" height="28"></canvas><div id="cgo-mic-status" class="cgo-mic-status" aria-live="polite">MIKROFON SIAGA</div></div>
           <div class="cgo-interim" id="cgo-interim">
@@ -571,6 +616,73 @@ body{font-family:'Inter',sans-serif}
 </section>
 </div>
 
+<script>
+/* CGO FUTURE STANDBY · additive only. Does not replace the existing mic engine. */
+(function(){
+  try {
+    var stateEl=document.getElementById('cgo-future-state');
+    var chip=document.getElementById('cgo-future-listen-chip');
+    var shell=document.querySelector('.cgo-chat-shell.future-focus');
+    function setState(label, live){
+      if(stateEl) stateEl.textContent=label;
+      if(chip){ chip.textContent=live?'● LISTENING · LIVE':'● LISTENING READY'; chip.classList.toggle('live',!!live); }
+      if(shell) shell.classList.toggle('future-focus',true);
+    }
+    window.addEventListener('cgo:mic-error',function(){setState('STANDBY · MIC MENUNGGU IZIN BROWSER',false)});
+    window.addEventListener('cgo:mic-transcript',function(){setState('PROCESSING · SUARA DITERIMA',false)});
+    window.addEventListener('cgo:voice-state',function(e){
+      var v=String(e&&e.detail&&e.detail.state||'').toUpperCase();
+      if(v==='LISTENING') setState('LISTENING · SIAP MENERIMA SUARA',true);
+      else if(v==='PROCESSING') setState('PROCESSING · CGO MENGOLAH',false);
+      else if(v==='RESPONDING') setState('RESPONDING · OPERATOR BERBICARA',false);
+    });
+    function setReadyReason(label){
+      if(stateEl) stateEl.textContent=label;
+      if(chip){ chip.textContent='● LISTENING READY'; chip.classList.remove('live'); }
+    }
+    function autoArmIfAlreadyGranted(){
+      var btn=document.getElementById('chat-mic');
+      if(!btn || (!window.SpeechRecognition && !window.webkitSpeechRecognition)) return;
+      if(location.protocol==='file:') { setReadyReason('STANDBY · SIAP MENDENGAR'); return; }
+      // Never request microphone permission merely because the page loaded.
+      // Auto-arm is allowed only when the browser already reports microphone access as granted.
+      if(!navigator.permissions || typeof navigator.permissions.query!=='function'){
+        setReadyReason('STANDBY · MIC SIAP · TOMBOL MIC TERSEDIA');
+        return;
+      }
+      navigator.permissions.query({name:'microphone'}).then(function(permission){
+        var state=String(permission && permission.state || '').toLowerCase();
+        if(state==='granted'){
+          setTimeout(function(){
+            try {
+              if(btn.getAttribute('aria-pressed')!=='true' && !window.__cgoFutureAutoArmed){
+                window.__cgoFutureAutoArmed=true;
+                btn.click();
+              }
+            } catch(_){}
+          },700);
+        } else if(state==='denied'){
+          setReadyReason('STANDBY · IZIN MIC DITOLAK BROWSER');
+        } else {
+          setReadyReason('STANDBY · SIAP MENDENGAR · IZIN MIC SAAT DIBUTUHKAN');
+        }
+        try { permission.onchange=function(){
+          var next=String(permission.state||'').toLowerCase();
+          if(next==='granted' && !window.__cgoFutureAutoArmed) autoArmIfAlreadyGranted();
+          else if(next==='denied') setReadyReason('STANDBY · IZIN MIC DITOLAK BROWSER');
+        }; } catch(_){}
+      }).catch(function(){
+        setReadyReason('STANDBY · SIAP MENDENGAR · TOMBOL MIC TERSEDIA');
+      });
+    }
+    function arm(){
+      setState('STANDBY · SIAP MENDENGAR',false);
+      autoArmIfAlreadyGranted();
+    }
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',arm,{once:true}); else arm();
+  } catch(_){}
+})();
+</script>
 <script src="cgo-semantic-bridge.js?v=1.1.2-semantic-bridge-rootsafe"></script>
 <script>
 // Semantic Bridge boot is deliberately non-blocking: UI controls must never wait for embeddings.
