@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.7.4-BRIEFING";
+  const VERSION = "1.7.6-CEO-POLISH";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -307,8 +307,8 @@
   /* ---- Akses internal: CGO 0021 | CGO 0006 | CGO 0095 (ejaan: si ji ou …) ---- */
   const VALID_ACCESS_CODES = Object.freeze(["0021", "0006", "0095"]);
   const ACCESS_SESSION_MS = 20 * 60 * 1000; // 20 menit setelah kode sah
-  const ACCESS_CODE_RE = /^\s*c\s*\.?\s*g\s*\.?\s*o\s*[-:]?\s*(0021|0006|0095)\b/i;
-  const WAKE_ONLY_RE = /^\s*((c\s*\.?\s*g\s*\.?\s*o)|(halo\s+cgo)|(hi\s+cgo)|(hey\s+cgo))\s*[!?.]*\s*$/i;
+  const ACCESS_CODE_RE = /^\s*c\s*\.?\s*g\s*\.?\s*o\s*[,\s:-]*\s*(0021|0006|0095)\b/i;
+  const WAKE_ONLY_RE = /^\s*((c\s*\.?\s*g\s*\.?\s*o)|(halo\s+cgo)|(hi\s+cgo)|(hey\s+cgo))\s*[,!?.]*\s*$/i;
   function hasValidAccess() {
     return !!(state.accessCode && state.accessUntil && Date.now() < state.accessUntil);
   }
@@ -324,6 +324,59 @@
     const rest = String(text || "").slice(m[0].length).replace(/^[\s,.:;!\-]+/, "").trim();
     return { code: code, rest: rest };
   }
+
+  /* Persona: CGO — CEO Virtual AI (santai, fokus prioritas, satu suara) */
+  const CEO_WAKE = [
+    "Hadir. Mau lihat yang penting aja atau detail?",
+    "Iya, saya dengar. Mau cek apa?",
+    "Siap. Briefing, data, atau status sistem?",
+    "Hadir — mau ringkas hari ini?"
+  ];
+  const CEO_GRANT = [
+    "Akses oke. Mau ringkas hari ini atau data spesifik?",
+    "Terverifikasi. Saya siap bantu baca angka operasional.",
+    "Akses oke. Briefing, tarik data, atau status?"
+  ];
+  function pickLine(arr) {
+    try { return arr[Math.floor(Math.random() * arr.length)] || arr[0]; } catch (_) { return arr[0]; }
+  }
+  function ceoWakeReply() { return pickLine(CEO_WAKE); }
+  function ceoGrantReply() { return pickLine(CEO_GRANT); }
+  function requestCsvExport(dataset) {
+    const ds = String(dataset || "mitra");
+    let ok = false;
+    try {
+      if (typeof global.CGO_RUN_EXPORT === "function") {
+        global.CGO_RUN_EXPORT(ds);
+        ok = true;
+      }
+    } catch (_) {}
+    try {
+      if (typeof global.dispatchEvent === "function" && typeof global.CustomEvent === "function") {
+        global.dispatchEvent(new global.CustomEvent("cgo-export-request", { detail: { dataset: ds } }));
+        ok = true;
+      }
+    } catch (_) {}
+    try {
+      if (typeof global.BroadcastChannel === "function") {
+        const ch = new global.BroadcastChannel("cgo-ops-export-bus");
+        ch.postMessage({ type: "CGO_EXPORT_CMD", dataset: ds, at: Date.now() });
+        try { ch.close(); } catch (_) {}
+        ok = true;
+      }
+    } catch (_) {}
+    try { global.localStorage.setItem("CGO_EXPORT_CMD_V1", JSON.stringify({ dataset: ds, at: Date.now() })); } catch (_) {}
+    return ok;
+  }
+  function parseTarikData(text) {
+    const s = String(text || "");
+    if (!/\b(tarik\s*data|tarik\s*csv|unduh\s*(data|csv)?|export\s*(data|csv)?|download\s*(data|csv)?)\b/i.test(s)) return null;
+    if (/\b(mitra|partner)\b/i.test(s)) return "mitra";
+    if (/\b(customer|pelanggan|customers)\b/i.test(s)) return "customers";
+    if (/\b(pesanan|order|orders|transaksi)\b/i.test(s)) return "orders";
+    return "ask";
+  }
+
   function needsInternalAccess(text) {
     // Data ops / saraf detail / radar angka — butuh kode (atau sesi aktif)
     return /\b(customer|pelanggan|mitra|partner|online|offline|transaksi|pesanan|order|omzet|pending|jumlah|berapa|grafik|chart|source\s*scan|status\s*sistem|telemetry|anomali|siklus|cycle|radar|agent\s*cgo|per\s*km|data\s*operasional)\b/i.test(text)
@@ -343,7 +396,7 @@
   const PHRASE = {
     id: {
       greeting: function (step, cycle) {
-        return "Halo, saya CGO Operator. Saya membaca saraf sistem — tahap " + step + ", siklus ke-" + cycle + ". Silakan tanya status, scanner, radar, atau minta hitung/eja.";
+        return "Halo, saya CGO — asisten internal CIKUR GO. Sistem lagi di tahap " + step + ", putaran ke-" + cycle + ". Mau briefing, data, atau status?";
       },
       calm: function (cycle, mode, step, nRel) {
         return "Sistem tenang di siklus " + cycle + " (mode " + mode + ", tahap " + step + "). Tidak ada anomali aktif; " + nRel + " relasi source terpetakan. Sebut status, scanner, radar, atau nama file.";
@@ -422,7 +475,7 @@
     let accessJustGranted = null;
     try {
       if (WAKE_ONLY_RE.test(t)) {
-        answer = "Iya, ada yang bisa dibantu?";
+        answer = ceoWakeReply();
         step("ACCESS", true, "wake-only");
         state.lastTrace = "ACCESS:wake";
         notify();
@@ -438,7 +491,7 @@
         accessJustGranted = acc.code;
         step("ACCESS", true, "code:" + acc.code);
         if (!acc.rest) {
-          answer = "Baik, akses terkonfirmasi. Ada yang bisa dibantu?";
+          answer = ceoGrantReply();
           state.lastTrace = "ACCESS:" + acc.code;
           notify();
           return {
@@ -449,7 +502,7 @@
         }
         t = acc.rest; // lanjut proses pertanyaan setelah kode
       } else if (/^\s*c\s*\.?\s*g\s*\.?\s*o\s*[-:]?\s*\d{3,6}\b/i.test(String(text || t))) {
-        answer = "Nomor akses tidak dikenali.";
+        answer = "Kode itu tidak dikenali. Coba CGO 0021, 0006, atau 0095.";
         step("ACCESS", false, "invalid-code");
         notify();
         return {
@@ -963,8 +1016,8 @@
         lines.push(active ? ("Active anomalies/cases: " + active + ".") : "No active anomaly cases.");
         if (msg) lines.push("Note: " + msg);
       } else {
-        lines.push("Data live CIKUR GO: tahap " + stepName + ", mode " + mode + (cycle != null ? ", siklus " + cycle : "") + ".");
-        lines.push("Source scan: " + scanSt + (readable != null ? ", file terbaca " + readable : "") + (failed != null ? ", gagal " + failed : "") + (mismatch != null ? ", mismatch relasi " + mismatch : "") + ".");
+        lines.push("Status sistem sekarang: tahap " + stepName + ", mode " + mode + (cycle != null ? ", putaran ke-" + cycle : "") + ".");
+        lines.push("Pemindaian sumber: " + scanSt + (readable != null ? " · file terbaca " + readable : "") + (failed != null ? " · gagal " + failed : "") + (mismatch != null ? " · mismatch " + mismatch : "") + ".");
         lines.push(active ? ("Kasus/anomali aktif: " + active + ".") : "Tidak ada kasus anomali aktif.");
         if (msg) lines.push("Catatan: " + msg);
       }
@@ -975,14 +1028,14 @@
       || /\\b(berapa\\s*(cycle|siklus)|files?\\s*gagal|file\\s*terbaca)\\b/i.test(t);
     if (!answer && wantsCikurData && live && typeof live === "object") {
       if (!hasValidAccess()) {
-        answer = "Data itu memerlukan kode akses. Contoh: CGO 0021, lalu pertanyaan Anda.";
+        answer = "Itu data internal. Pakai kode dulu ya — contoh: CGO 0021, terus pertanyaanmu.";
         step("ACCESS", false, "live-need-code");
       } else {
         try {
           const hasLive = (live.cycle != null || live.step || live.sourceScan || live.cycleMode || live.metrics);
           if (hasLive) {
             let body = summarizeCikurLive(live, lang);
-            if (accessJustGranted) body = "Baik, akses terkonfirmasi. Berikut statusnya: " + body;
+            if (accessJustGranted) body = "Akses oke. " + body;
             answer = body;
             step("CIKUR_LIVE_DATA", true, (live.sourceScan && live.sourceScan.status) || live.step || "live");
           } else {
@@ -1018,37 +1071,25 @@
       const en = langCode === "en";
       const lines = [];
       if (en) {
-        lines.push("Operations snapshot (" + (snap.source || "ops") + "):");
-        lines.push("Customers: total " + (c.total ?? "—") + ", online " + (c.online ?? "—") + ", offline " + (c.offline ?? "—") + ".");
-        lines.push("Partners: total " + (m.total ?? "—") + ", pending " + (m.pending ?? "—") + ", approved " + (m.approved ?? "—") + ", rejected " + (m.rejected ?? "—") + ".");
-        lines.push("Orders today: " + (o.todayCount ?? "—") + ", paid revenue " + formatOmzet(o.todayOmzet) + ".");
-        if (r.attentionCount != null) lines.push("Radar attention (actionable, ~10m): " + r.attentionCount + ".");
-        if (Array.isArray(o.trend7d) && o.trend7d.length) {
-          lines.push("7-day order trend: " + o.trend7d.map(function (x) { return x.day + "=" + x.count; }).join(", ") + ".");
-        }
-        if (r.agentsByKm && r.agentsByKm.withLocation != null) {
-          lines.push("Partners with location fields: " + r.agentsByKm.withLocation + "/" + (r.agentsByKm.total || "—") + " (exact KM bands need GPS feed).");
-        } else {
-          lines.push("Agent distance-by-KM bands: not available in snapshot yet.");
-        }
-        lines.push("Charts: open data-cgo.html#overview for full graphs.");
+        lines.push("Here's the ops picture (" + (snap.source || "ops") + "):");
+        lines.push("• Customers " + (c.total ?? "—") + " — online " + (c.online ?? "—") + ", offline " + (c.offline ?? "—"));
+        lines.push("• Partners " + (m.total ?? "—") + " — pending " + (m.pending ?? "—") + ", approved " + (m.approved ?? "—"));
+        if (o.todayCount != null) lines.push("• Orders today " + o.todayCount + ", paid " + formatOmzet(o.todayOmzet));
+        if (r.bcgoRisk) lines.push("• Risk mix — high " + (r.bcgoRisk.high ?? 0) + ", review " + (r.bcgoRisk.review ?? 0));
+        if ((m.pending || 0) > 0) lines.push("Focus: " + m.pending + " pending partners.");
+        lines.push("Need CSV? Say: tarik data mitra / customer / pesanan.");
       } else {
-        lines.push("Snapshot operasional (" + (snap.source || "ops") + "):");
-        lines.push("Customer: total " + (c.total ?? "—") + ", online " + (c.online ?? "—") + ", offline " + (c.offline ?? "—") + ".");
-        lines.push("Mitra: total " + (m.total ?? "—") + ", pending " + (m.pending ?? "—") + ", disetujui " + (m.approved ?? "—") + ", ditolak " + (m.rejected ?? "—") + ".");
-        lines.push("Transaksi hari ini: " + (o.todayCount ?? "—") + ", estimasi omzet lunas " + formatOmzet(o.todayOmzet) + ".");
-        if (r.attentionCount != null) lines.push("Perhatian radar (actionable, ~10 mnt): " + r.attentionCount + ".");
-        if (Array.isArray(o.trend7d) && o.trend7d.length) {
-          lines.push("Tren pesanan 7 hari: " + o.trend7d.map(function (x) { return x.day + "=" + x.count; }).join(", ") + ".");
-        }
-        if (r.agentsByKm && r.agentsByKm.withLocation != null) {
-          lines.push("Mitra berdata lokasi: " + r.agentsByKm.withLocation + "/" + (r.agentsByKm.total || "—") + " (pita KM akurat butuh feed GPS agent).");
-        } else {
-          lines.push("Sebaran Agent per KM: belum tersedia di snapshot.");
-        }
-        lines.push("Grafik lengkap: buka data-cgo.html#overview.");
+        lines.push("Ini angkanya (" + (snap.source || "ops") + "):");
+        lines.push("• Customer " + (c.total ?? "—") + " — online " + (c.online ?? "—") + ", offline " + (c.offline ?? "—"));
+        lines.push("• Mitra " + (m.total ?? "—") + " — pending " + (m.pending ?? "—") + ", disetujui " + (m.approved ?? "—") + ", ditolak " + (m.rejected ?? "—"));
+        if (o.todayCount != null) lines.push("• Transaksi hari ini " + o.todayCount + ", omzet lunas " + formatOmzet(o.todayOmzet));
+        else lines.push("• Transaksi: cek data-cgo buat angka pesanan lengkap");
+        if (r.bcgoRisk) lines.push("• Risiko BCGO — tinggi " + (r.bcgoRisk.high ?? 0) + ", review " + (r.bcgoRisk.review ?? 0) + ", rendah " + (r.bcgoRisk.low ?? 0));
+        if ((m.pending || 0) > 0) lines.push("Yang aku soroti: " + m.pending + " mitra masih pending.");
+        if (r.bcgoRisk && (r.bcgoRisk.high || 0) > 0) lines.push("Prioritas: " + r.bcgoRisk.high + " risiko tinggi — jangan approve massal dulu.");
+        lines.push("Mau tarik CSV? Bilang: tarik data mitra / customer / pesanan.");
       }
-      return lines.join(" ");
+      return lines.join("\n");
     }
 
     function buildDailyBriefing(snap, liveObj, langCode) {
@@ -1062,7 +1103,7 @@
       const today = new Date();
       const tgl = today.toLocaleDateString(en ? "en-GB" : "id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
       if (en) {
-        lines.push("Daily briefing — " + tgl + ".");
+        lines.push("Quick brief for today (" + tgl + "):");
         if (snap) {
           lines.push("Customers: " + (c.total ?? "—") + " total (" + (c.online ?? "—") + " online / " + (c.offline ?? "—") + " offline).");
           lines.push("Partners: " + (m.total ?? "—") + " total · pending " + (m.pending ?? "—") + " · approved " + (m.approved ?? "—") + " · rejected " + (m.rejected ?? "—") + ".");
@@ -1081,7 +1122,7 @@
         }
         lines.push("Source: " + ((snap && snap.source) || "—") + ". Charts: data-cgo.html#overview.");
       } else {
-        lines.push("Briefing harian — " + tgl + ".");
+        lines.push("Ringkas hari ini (" + tgl + "):");
         if (snap) {
           lines.push("Customer: " + (c.total ?? "—") + " total (" + (c.online ?? "—") + " online / " + (c.offline ?? "—") + " offline).");
           lines.push("Mitra: " + (m.total ?? "—") + " total · pending " + (m.pending ?? "—") + " · disetujui " + (m.approved ?? "—") + " · ditolak " + (m.rejected ?? "—") + ".");
@@ -1089,32 +1130,54 @@
           else lines.push("Transaksi hari ini: buka data-cgo untuk KPI pesanan lengkap.");
           if (r.bcgoRisk) lines.push("Campuran risiko BCGO: rendah " + (r.bcgoRisk.low ?? 0) + ", review " + (r.bcgoRisk.review ?? 0) + ", tinggi " + (r.bcgoRisk.high ?? 0) + ".");
           if (r.attentionCount != null) lines.push("Item perhatian: " + r.attentionCount + ".");
-          if ((m.pending || 0) > 0) lines.push("Fokus: " + m.pending + " pendaftaran mitra menunggu verifikasi.");
+          if ((m.pending || 0) > 0) lines.push("Yang aku soroti: " + m.pending + " mitra masih pending — itu yang nahan antrean.");
           if ((c.online || 0) === 0 && (c.total || 0) > 0) lines.push("Catatan: tidak ada customer online dalam 5 menit terakhir.");
-          if (r.bcgoRisk && (r.bcgoRisk.high || 0) > 0) lines.push("Prioritas: " + r.bcgoRisk.high + " evaluasi BCGO berisiko tinggi.");
+          if (r.bcgoRisk && (r.bcgoRisk.high || 0) > 0) lines.push("Prioritas: " + r.bcgoRisk.high + " yang risiko tinggi — jangan approve massal dulu.");
         } else {
           lines.push("Snapshot operasional belum termuat — buka data-cgo.html atau bcgo-admin.html saat login admin.");
         }
         if (L && (L.step || L.cycle != null)) {
           lines.push("Saraf live: tahap " + (L.step || "—") + ", siklus " + (L.cycle != null ? L.cycle : "—") + ", scan " + ((L.sourceScan && L.sourceScan.status) || "—") + ".");
         }
-        lines.push("Sumber: " + ((snap && snap.source) || "—") + ". Grafik: data-cgo.html#overview.");
+        lines.push("Sumber data: " + ((snap && snap.source) || "—") + ". Mau tarik CSV atau detail salah satu poin?");
       }
-      return lines.join(" ");
+      return lines.join("\n");
     }
     const briefingAsk = /\b(briefing|ringkasan\s*harian|laporan\s*harian|briefing\s*harian|daily\s*brief|rekap\s*hari\s*ini|kabar\s*hari\s*ini)\b/i.test(t);
 
     const opsAsk = /\b(customer|pelanggan|mitra|partner|online|offline|transaksi|pesanan|order|omzet|pendaftar|pending|berapa\s*(banyak|jumlah)|jumlah\s*(customer|mitra|transaksi)|grafik|chart|radar\s*agent|per\s*km|agent\s*cgo)\b/i.test(t)
       || /\b(c\s*g\s*o|cek\s*data|data\s*operasional)\b/i.test(t);
+    // CGO tarik data → auto CSV (data-cgo export)
+    const tarikKind = parseTarikData(t);
+    if (!answer && tarikKind) {
+      if (!hasValidAccess()) {
+        answer = "Tarik data itu internal. Contoh: CGO 0021 tarik data mitra.";
+        step("ACCESS", false, "export-need-code");
+      } else if (tarikKind === "ask") {
+        answer = (accessJustGranted ? "Akses oke. " : "") + "Data yang mana — mitra, customer, atau pesanan? Contoh: tarik data mitra.";
+        step("TARIK_DATA", true, "clarify");
+      } else {
+        const fired = requestCsvExport(tarikKind);
+        const label = tarikKind === "customers" ? "customer" : (tarikKind === "orders" ? "pesanan" : "mitra");
+        if (fired) {
+          answer = (accessJustGranted ? "Akses oke. " : "") + "Oke, saya unduh CSV " + label + " sekarang. Kalau file belum muncul, pastikan tab data-cgo.html terbuka (login admin).";
+          step("TARIK_DATA", true, "export:" + tarikKind);
+        } else {
+          answer = (accessJustGranted ? "Akses oke. " : "") + "Siap tarik " + label + ". Buka data-cgo.html#pull (login), dataset sudah diarahkan — atau bilang lagi setelah tab itu terbuka.";
+          step("TARIK_DATA", false, "bridge-missing");
+        }
+      }
+    }
+
     if (!answer && briefingAsk) {
       if (!hasValidAccess()) {
-        answer = "Briefing harian memerlukan kode akses. Contoh: CGO 0021 briefing harian.";
+        answer = "Briefing ini internal. Contoh: CGO 0021 briefing harian.";
         step("ACCESS", false, "briefing-need-code");
       } else {
         try {
           const snap = readOpsSnapshot();
           let body = buildDailyBriefing(snap, live, lang);
-          if (accessJustGranted) body = "Baik, akses terkonfirmasi. " + body;
+          if (accessJustGranted) body = "Akses oke. " + body;
           answer = body;
           step("DAILY_BRIEFING", true, (snap && snap.source) || "no-snap");
         } catch (e) {
@@ -1125,21 +1188,21 @@
 
     if (!answer && opsAsk) {
       if (!hasValidAccess()) {
-        answer = "Data itu memerlukan kode akses. Contoh: CGO 0021, lalu pertanyaan Anda.";
+        answer = "Itu data internal. Pakai kode dulu ya — contoh: CGO 0021, terus pertanyaanmu.";
         step("ACCESS", false, "ops-need-code");
       } else {
         try {
           const snap = readOpsSnapshot();
           if (snap && (snap.customers || snap.mitra || snap.orders)) {
             let body = summarizeOps(snap, lang);
-            if (accessJustGranted) body = "Baik, akses terkonfirmasi. Berikut datanya: " + body;
+            if (accessJustGranted) body = "Akses oke. " + body;
             answer = body;
             step("OPS_SNAPSHOT", true, snap.source || "ops");
           } else {
             answer = (lang === "en")
               ? "Operations data is not in memory yet. Open data-cgo.html while logged in as Super Admin so KPIs can sync, then ask again."
               : "Data operasional belum ada di memori. Buka data-cgo.html (login Super Admin) agar KPI tersinkron, lalu tanya lagi.";
-            if (accessJustGranted) answer = "Baik, akses terkonfirmasi. " + answer;
+            if (accessJustGranted) answer = "Akses oke. " + answer;
             step("OPS_SNAPSHOT", false, "snapshot-kosong");
           }
         } catch (e) {

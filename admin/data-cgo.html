@@ -688,6 +688,63 @@ document.getElementById('dataCgoLogout')?.addEventListener('click', async () => 
     }
 });
 
+
+/* =========================================================
+   CGO → tarik data (auto export CSV) — zero regresi UI
+========================================================= */
+(function setupCgoExportBridge() {
+    function runExport(dataset) {
+        try {
+            const name = String(dataset || "mitra").toLowerCase();
+            const map = { mitra: "mitra", partner: "mitra", partners: "mitra",
+                customer: "customers", customers: "customers", pelanggan: "customers",
+                order: "orders", orders: "orders", pesanan: "orders", transaksi: "orders" };
+            const key = map[name] || name;
+            if (typeof window.setDataset === "function") window.setDataset(key);
+            setTimeout(function () {
+                if (typeof window.exportCurrentDataset === "function") {
+                    window.exportCurrentDataset();
+                    try { window.CGO_LAST_EXPORT = { dataset: key, at: Date.now(), ok: true }; } catch (_) {}
+                }
+            }, 120);
+            return key;
+        } catch (e) {
+            console.warn("[DATA-CGO] runExport:", e);
+            return null;
+        }
+    }
+    try { window.CGO_RUN_EXPORT = runExport; } catch (_) {}
+    // Poll perintah dari tab CGO lain
+    let __lastExportAt = 0;
+    setInterval(function () {
+        try {
+            const raw = localStorage.getItem("CGO_EXPORT_CMD_V1");
+            if (!raw) return;
+            const d = JSON.parse(raw);
+            if (!d || !d.at || d.at <= __lastExportAt) return;
+            __lastExportAt = d.at;
+            runExport(d.dataset);
+        } catch (_) {}
+    }, 800);
+    try {
+        window.addEventListener("cgo-export-request", function (ev) {
+            const ds = ev && ev.detail && ev.detail.dataset;
+            runExport(ds);
+        });
+    } catch (_) {}
+    try {
+        if (typeof BroadcastChannel === "function") {
+            const ch = new BroadcastChannel("cgo-ops-export-bus");
+            ch.onmessage = function (ev) {
+                const d = ev && ev.data;
+                if (!d || d.type !== "CGO_EXPORT_CMD") return;
+                runExport(d.dataset);
+            };
+        }
+    } catch (_) {}
+})();
+
+
 window.exportCurrentDataset = function() {
     const config = TABLE_CONFIGS[currentDataset];
     const rows = cache[currentDataset] || [];
