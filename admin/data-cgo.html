@@ -332,6 +332,7 @@ function resetDataView() {
     renderRadarFeed();
     renderTable();
     try { publishOpsSnapshot(); } catch (_) {}
+        try { publishCsvCache(); } catch (_) {}
 }
 
 function startAllListeners() {
@@ -342,6 +343,7 @@ function startAllListeners() {
         renderFunnel();
         if (currentDataset === 'mitra') renderTable();
         try { publishOpsSnapshot(); } catch (_) {}
+        try { publishCsvCache(); } catch (_) {}
     }, (err) => console.error("[DATA-CGO] mitra_applications:", err)));
 
     listenerUnsubscribers.push(onSnapshot(collection(adminDb, "customers"), (snap) => {
@@ -349,6 +351,7 @@ function startAllListeners() {
         renderKpiOnline();
         if (currentDataset === 'customers') renderTable();
         try { publishOpsSnapshot(); } catch (_) {}
+        try { publishCsvCache(); } catch (_) {}
     }, (err) => console.error("[DATA-CGO] customers:", err)));
 
     listenerUnsubscribers.push(onSnapshot(query(collection(adminDb, "orders"), orderBy("timestamp", "desc"), limit(500)), (snap) => {
@@ -357,6 +360,7 @@ function startAllListeners() {
         renderTrendChart();
         if (currentDataset === 'orders') renderTable();
         try { publishOpsSnapshot(); } catch (_) {}
+        try { publishCsvCache(); } catch (_) {}
     }, (err) => console.error("[DATA-CGO] orders:", err)));
 
     listenerUnsubscribers.push(onSnapshot(query(collection(adminDb, "system_logs"), orderBy("reportedAt", "desc"), limit(30)), (snap) => {
@@ -364,6 +368,7 @@ function startAllListeners() {
         renderKpiAttention();
         renderRadarFeed();
         try { publishOpsSnapshot(); } catch (_) {}
+        try { publishCsvCache(); } catch (_) {}
     }, (err) => console.error("[DATA-CGO] system_logs:", err)));
 
     renderTable();
@@ -433,6 +438,36 @@ function buildOpsSnapshot() {
         radar: { attentionCount: attention, agentsByKm },
         links: { dataCgo: "data-cgo.html#overview", admin: "bcgo-admin.html" }
     };
+}
+
+
+function buildCsvForDataset(name) {
+    try {
+        const config = TABLE_CONFIGS[name];
+        const rows = cache[name] || [];
+        if (!config || !rows.length) return null;
+        const header = config.columns.map(c => '"' + c.label + '"').join(',');
+        const body = rows.map(row =>
+            config.columns.map(c => '"' + String(c.get(row)).replace(/"/g, '""') + '"').join(',')
+        ).join('\n');
+        return "\uFEFF" + header + '\n' + body;
+    } catch (e) {
+        console.warn('[DATA-CGO] buildCsvForDataset', e);
+        return null;
+    }
+}
+function publishCsvCache() {
+    try {
+        const payload = { at: Date.now(), datasets: {} };
+        ['mitra', 'customers', 'orders'].forEach(function (name) {
+            const csv = buildCsvForDataset(name);
+            if (csv) payload.datasets[name] = { csv: csv, rows: (cache[name] || []).length };
+        });
+        localStorage.setItem('CGO_CSV_CACHE_V1', JSON.stringify(payload));
+        try { window.CGO_CSV_CACHE = payload; } catch (_) {}
+    } catch (e) {
+        console.warn('[DATA-CGO] publishCsvCache', e);
+    }
 }
 
 function publishOpsSnapshot() {
@@ -646,6 +681,7 @@ const TABLE_CONFIGS = {
 };
 
 function renderTable() {
+    try { publishCsvCache(); } catch (_) {}
     const config = TABLE_CONFIGS[currentDataset];
     const rows = cache[currentDataset] || [];
 
@@ -693,51 +729,133 @@ document.getElementById('dataCgoLogout')?.addEventListener('click', async () => 
    CGO → tarik data (auto export CSV) — zero regresi UI
 ========================================================= */
 (function setupCgoExportBridge() {
+    const LABEL = { mitra: "Mitra", customers: "Customer", orders: "Pesanan" };
+    let __lastExportAt = 0;
+    let __pendingKey = null;
+
+    function normalizeKey(dataset) {
+        const name = String(dataset || "mitra").toLowerCase();
+        const map = {
+            mitra: "mitra", partner: "mitra", partners: "mitra",
+            customer: "customers", customers: "customers", pelanggan: "customers",
+            order: "orders", orders: "orders", pesanan: "orders", transaksi: "orders"
+        };
+        return map[name] || name;
+    }
+
+    function ensureBanner() {
+        let el = document.getElementById("cgoExportBanner");
+        if (el) return el;
+        el = document.createElement("div");
+        el.id = "cgoExportBanner";
+        el.setAttribute("style",
+            "display:none;position:fixed;right:16px;bottom:16px;z-index:99999;" +
+            "max-width:340px;background:#0f172a;color:#f8fafc;border-radius:14px;" +
+            "padding:14px 16px;box-shadow:0 12px 40px rgba(0,0,0,.35);" +
+            "font-family:Inter,system-ui,sans-serif;border:1px solid #334155;");
+        el.innerHTML =
+            '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">CGO · Siap unduh data</div>' +
+            '<div id="cgoExportBannerMsg" style="font-size:11px;color:#cbd5e1;line-height:1.45;margin-bottom:10px;"></div>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+            '<button type="button" id="cgoExportBannerBtn" style="border:0;border-radius:9px;background:#4f46e5;color:#fff;font-size:11px;font-weight:700;padding:8px 12px;cursor:pointer;">⬇ Unduh CSV sekarang</button>' +
+            '<button type="button" id="cgoExportBannerClose" style="border:1px solid #475569;border-radius:9px;background:transparent;color:#e2e8f0;font-size:11px;font-weight:600;padding:8px 10px;cursor:pointer;">Tutup</button>' +
+            "</div>";
+        document.body.appendChild(el);
+        document.getElementById("cgoExportBannerBtn").addEventListener("click", function () {
+            const key = __pendingKey || "mitra";
+            try {
+                if (typeof window.setDataset === "function") window.setDataset(key);
+            } catch (_) {}
+            // klik user = gesture sah → unduhan tidak diblok browser
+            setTimeout(function () {
+                try {
+                    if (typeof window.exportCurrentDataset === "function") {
+                        window.exportCurrentDataset();
+                        window.CGO_LAST_EXPORT = { dataset: key, at: Date.now(), ok: true, via: "banner-click" };
+                    }
+                } catch (e) {
+                    console.warn("[DATA-CGO] banner export:", e);
+                }
+            }, 50);
+            el.style.display = "none";
+        });
+        document.getElementById("cgoExportBannerClose").addEventListener("click", function () {
+            el.style.display = "none";
+        });
+        return el;
+    }
+
+    function showExportReady(key) {
+        __pendingKey = key;
+        const el = ensureBanner();
+        const msg = document.getElementById("cgoExportBannerMsg");
+        const label = LABEL[key] || key;
+        if (msg) {
+            msg.textContent = "Perintah dari CGO: unduh data " + label +
+                ". Browser memblokir unduh otomatis dari tab lain — klik tombol di bawah (sekali saja).";
+        }
+        el.style.display = "block";
+        try {
+            // coba auto (kadang lolos); banner tetap ada sebagai cadangan
+            if (typeof window.setDataset === "function") window.setDataset(key);
+            if (typeof window.exportCurrentDataset === "function") {
+                window.exportCurrentDataset();
+                window.CGO_LAST_EXPORT = { dataset: key, at: Date.now(), ok: true, via: "auto-try" };
+            }
+        } catch (_) {}
+    }
+
     function runExport(dataset) {
         try {
-            const name = String(dataset || "mitra").toLowerCase();
-            const map = { mitra: "mitra", partner: "mitra", partners: "mitra",
-                customer: "customers", customers: "customers", pelanggan: "customers",
-                order: "orders", orders: "orders", pesanan: "orders", transaksi: "orders" };
-            const key = map[name] || name;
-            if (typeof window.setDataset === "function") window.setDataset(key);
-            setTimeout(function () {
-                if (typeof window.exportCurrentDataset === "function") {
-                    window.exportCurrentDataset();
-                    try { window.CGO_LAST_EXPORT = { dataset: key, at: Date.now(), ok: true }; } catch (_) {}
-                }
-            }, 120);
+            const key = normalizeKey(dataset);
+            showExportReady(key);
             return key;
         } catch (e) {
             console.warn("[DATA-CGO] runExport:", e);
             return null;
         }
     }
-    try { window.CGO_RUN_EXPORT = runExport; } catch (_) {}
-    // Poll perintah dari tab CGO lain
-    let __lastExportAt = 0;
-    setInterval(function () {
+
+    function handleCmdPayload(rawOrObj) {
         try {
-            const raw = localStorage.getItem("CGO_EXPORT_CMD_V1");
-            if (!raw) return;
-            const d = JSON.parse(raw);
+            const d = typeof rawOrObj === "string" ? JSON.parse(rawOrObj) : rawOrObj;
             if (!d || !d.at || d.at <= __lastExportAt) return;
             __lastExportAt = d.at;
             runExport(d.dataset);
         } catch (_) {}
-    }, 800);
+    }
+
+    try { window.CGO_RUN_EXPORT = runExport; } catch (_) {}
+
+    // Tab lain menulis localStorage → event storage (hanya di tab selain penulis)
+    window.addEventListener("storage", function (ev) {
+        if (ev.key !== "CGO_EXPORT_CMD_V1" || !ev.newValue) return;
+        handleCmdPayload(ev.newValue);
+    });
+
+    // Poll cadangan (beberapa browser / iframe)
+    setInterval(function () {
+        try {
+            const raw = localStorage.getItem("CGO_EXPORT_CMD_V1");
+            if (raw) handleCmdPayload(raw);
+        } catch (_) {}
+    }, 600);
+
     try {
         window.addEventListener("cgo-export-request", function (ev) {
             const ds = ev && ev.detail && ev.detail.dataset;
-            runExport(ds);
+            if (ds) runExport(ds);
         });
     } catch (_) {}
+
     try {
         if (typeof BroadcastChannel === "function") {
             const ch = new BroadcastChannel("cgo-ops-export-bus");
             ch.onmessage = function (ev) {
                 const d = ev && ev.data;
                 if (!d || d.type !== "CGO_EXPORT_CMD") return;
+                if (d.at && d.at <= __lastExportAt) return;
+                if (d.at) __lastExportAt = d.at;
                 runExport(d.dataset);
             };
         }
@@ -771,5 +889,38 @@ window.exportCurrentDataset = function() {
     URL.revokeObjectURL(url);
 };
 </script>
+
+<script>
+/* Auto-unduh dari query ?export=mitra&auto=1 (dipanggil dari BCGO setelah «lanjut») */
+(function CGO_URL_EXPORT_BOOT() {
+  try {
+    var q = new URLSearchParams(location.search || "");
+    var ds = q.get("export") || q.get("dataset");
+    var auto = q.get("auto") === "1" || q.get("auto") === "true";
+    if (!ds || !auto) return;
+    var tries = 0;
+    var timer = setInterval(function () {
+      tries++;
+      try {
+        if (typeof window.CGO_RUN_EXPORT === "function") {
+          window.CGO_RUN_EXPORT(ds);
+          clearInterval(timer);
+          return;
+        }
+        if (typeof window.setDataset === "function" && typeof window.exportCurrentDataset === "function") {
+          var map = { mitra: "mitra", customers: "customers", customer: "customers", orders: "orders", pesanan: "orders" };
+          var key = map[String(ds).toLowerCase()] || ds;
+          window.setDataset(key);
+          setTimeout(function () { try { window.exportCurrentDataset(); } catch (_) {} }, 200);
+          clearInterval(timer);
+          return;
+        }
+      } catch (_) {}
+      if (tries > 40) clearInterval(timer);
+    }, 250);
+  } catch (_) {}
+})();
+</script>
+
 </body>
 </html>

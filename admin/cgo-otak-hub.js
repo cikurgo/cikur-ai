@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.7.6-CEO-POLISH";
+  const VERSION = "1.8.1-HALLO-GOOGLE";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -33,7 +33,9 @@
     lastTrace: null,  // jejak jawaban terakhir
     updatedAt: 0,
     accessCode: null, // kode akses internal aktif (0021|0006|0095)
-    accessUntil: 0    // epoch ms; sesi internal
+    accessUntil: 0,   // epoch ms; sesi internal
+    accessFailCount: 0,
+    accessLockedUntil: 0
   };
   const listeners = new Set();
   let lastSignature = "";
@@ -309,13 +311,35 @@
   const ACCESS_SESSION_MS = 20 * 60 * 1000; // 20 menit setelah kode sah
   const ACCESS_CODE_RE = /^\s*c\s*\.?\s*g\s*\.?\s*o\s*[,\s:-]*\s*(0021|0006|0095)\b/i;
   const WAKE_ONLY_RE = /^\s*((c\s*\.?\s*g\s*\.?\s*o)|(halo\s+cgo)|(hi\s+cgo)|(hey\s+cgo))\s*[,!?.]*\s*$/i;
+  const MSG_ACCESS_NEED = "Itu Data Internal, untuk melanjutkan silahkan gunakan Kode Akses Data";
+  const MSG_ACCESS_WRONG = "Maaf, kode akses data kamu SALAH, silahkan di ulangi kembali, pastikan BENAR";
+  const MSG_ACCESS_LOCK = "Maaf, untuk sementara ini proses pengecekan Data Internal tidak dapat dilanjutkan, silahkan dicoba kembali nanti, jika darurat, silahkan Konfirmasi Kode Akses dengan Nama Tunggal Rahasia.";
+  const ACCESS_LOCK_MS = 15 * 60 * 1000;
+  const ACCESS_MAX_FAIL = 3;
+  function isAccessLocked() {
+    return !!(state.accessLockedUntil && Date.now() < state.accessLockedUntil);
+  }
   function hasValidAccess() {
+    if (isAccessLocked()) return false;
     return !!(state.accessCode && state.accessUntil && Date.now() < state.accessUntil);
   }
   function grantAccess(code) {
     state.accessCode = String(code);
     state.accessUntil = Date.now() + ACCESS_SESSION_MS;
+    state.accessFailCount = 0;
+    state.accessLockedUntil = 0;
     state.updatedAt = Date.now();
+  }
+  function registerAccessFail() {
+    state.accessFailCount = (state.accessFailCount || 0) + 1;
+    state.updatedAt = Date.now();
+    if (state.accessFailCount >= ACCESS_MAX_FAIL) {
+      state.accessLockedUntil = Date.now() + ACCESS_LOCK_MS;
+      state.accessCode = null;
+      state.accessUntil = 0;
+      return true; // locked now
+    }
+    return false;
   }
   function parseAccessPrefix(text) {
     const m = String(text || "").match(ACCESS_CODE_RE);
@@ -370,11 +394,39 @@
   }
   function parseTarikData(text) {
     const s = String(text || "");
-    if (!/\b(tarik\s*data|tarik\s*csv|unduh\s*(data|csv)?|export\s*(data|csv)?|download\s*(data|csv)?)\b/i.test(s)) return null;
+    const isPull = /\b(tarik\s*data|tarik\s*csv|ambil\s*data|ambilkan\s*data|minta\s*data|tampilkan\s*data|tampilkan\s*datanya|buka\s*data|lihat\s*data|cek\s*data|cari\s*data|berikan\s*data|unduh\s*(data|csv)?|export\s*(data|csv)?|download\s*(data|csv)?)\b/i.test(s)
+      || /\b(ambil\s*informasi|tampilkan\s*informasi|berikan\s*informasi)\b/i.test(s);
+    // Lanjutan klarifikasi: user hanya menjawab target setelah CGO minta
+    if (!isPull && state.pendingTarik && /^(mitra|partner|customer|pelanggan|customers|pesanan|order|orders|transaksi)\b/i.test(s.trim())) {
+      if (/\b(mitra|partner)\b/i.test(s)) return "mitra";
+      if (/\b(customer|pelanggan|customers)\b/i.test(s)) return "customers";
+      if (/\b(pesanan|order|orders|transaksi)\b/i.test(s)) return "orders";
+    }
+    if (!isPull) return null;
     if (/\b(mitra|partner)\b/i.test(s)) return "mitra";
-    if (/\b(customer|pelanggan|customers)\b/i.test(s)) return "customers";
+    if (/\b(customer|pelanggan|customers|pengguna)\b/i.test(s)) return "customers";
     if (/\b(pesanan|order|orders|transaksi)\b/i.test(s)) return "orders";
     return "ask";
+  }
+  function describeTargetSnapshot(kind, snap) {
+    if (!snap) return null;
+    const c = snap.customers || {};
+    const m = snap.mitra || {};
+    const o = snap.orders || {};
+    function rp(n) {
+      try { return "Rp " + Number(n || 0).toLocaleString("id-ID"); } catch (_) { return "Rp " + String(n || 0); }
+    }
+    if (kind === "customers") {
+      return "Customer: total " + (c.total ?? "—") + ", online " + (c.online ?? "—") + ", offline " + (c.offline ?? "—") + ".";
+    }
+    if (kind === "mitra") {
+      return "Mitra: total " + (m.total ?? "—") + ", pending " + (m.pending ?? "—") + ", disetujui " + (m.approved ?? "—") + ", ditolak " + (m.rejected ?? "—") + ".";
+    }
+    if (kind === "orders") {
+      if (o.todayCount == null && o.todayOmzet == null) return "Angka pesanan lengkap belum ada di snapshot — biasanya dari data-cgo.";
+      return "Transaksi hari ini: " + (o.todayCount ?? "—") + ", omzet lunas " + rp(o.todayOmzet) + ".";
+    }
+    return null;
   }
 
   function needsInternalAccess(text) {
@@ -487,6 +539,16 @@
       }
       const acc = parseAccessPrefix(t);
       if (acc.code && VALID_ACCESS_CODES.indexOf(acc.code) >= 0) {
+        if (isAccessLocked()) {
+          answer = MSG_ACCESS_LOCK;
+          step("ACCESS", false, "locked-on-grant");
+          notify();
+          return {
+            ok: true, answer: answer, lang: "id", trace: trace, abc: null,
+            intent: { topic: "ACCESS_LOCK", mode: "ACCESS" },
+            sources: ["ACCESS"], modulesUsed: ["ACCESS:locked"]
+          };
+        }
         grantAccess(acc.code);
         accessJustGranted = acc.code;
         step("ACCESS", true, "code:" + acc.code);
@@ -501,9 +563,16 @@
           };
         }
         t = acc.rest; // lanjut proses pertanyaan setelah kode
-      } else if (/^\s*c\s*\.?\s*g\s*\.?\s*o\s*[-:]?\s*\d{3,6}\b/i.test(String(text || t))) {
-        answer = "Kode itu tidak dikenali. Coba CGO 0021, 0006, atau 0095.";
-        step("ACCESS", false, "invalid-code");
+      } else if (/^\s*c\s*\.?\s*g\s*\.?\s*o\s*[,\s:-]*\s*\d{3,6}\b/i.test(t)) {
+        if (isAccessLocked()) {
+          answer = MSG_ACCESS_LOCK;
+          step("ACCESS", false, "locked");
+        } else {
+          const lockedNow = registerAccessFail();
+          answer = lockedNow ? MSG_ACCESS_LOCK : MSG_ACCESS_WRONG;
+          step("ACCESS", false, lockedNow ? "locked-after-fail" : "invalid-code");
+        }
+
         notify();
         return {
           ok: true, answer: answer, lang: "id", trace: trace, abc: null,
@@ -1028,7 +1097,7 @@
       || /\\b(berapa\\s*(cycle|siklus)|files?\\s*gagal|file\\s*terbaca)\\b/i.test(t);
     if (!answer && wantsCikurData && live && typeof live === "object") {
       if (!hasValidAccess()) {
-        answer = "Itu data internal. Pakai kode dulu ya — contoh: CGO 0021, terus pertanyaanmu.";
+        answer = isAccessLocked() ? MSG_ACCESS_LOCK : MSG_ACCESS_NEED;
         step("ACCESS", false, "live-need-code");
       } else {
         try {
@@ -1147,31 +1216,73 @@
 
     const opsAsk = /\b(customer|pelanggan|mitra|partner|online|offline|transaksi|pesanan|order|omzet|pendaftar|pending|berapa\s*(banyak|jumlah)|jumlah\s*(customer|mitra|transaksi)|grafik|chart|radar\s*agent|per\s*km|agent\s*cgo)\b/i.test(t)
       || /\b(c\s*g\s*o|cek\s*data|data\s*operasional)\b/i.test(t);
-    // CGO tarik data → auto CSV (data-cgo export)
+    // Lanjut / batal penarikan data
+    if (!answer && state.pendingTarikConfirm) {
+      if (/\b(batal|batalkan|cancel|jangan\s+lanjutkan|jangan\s+jalankan|stop|berhenti)\b/i.test(t)) {
+        state.pendingTarikConfirm = null;
+        state.pendingTarik = false;
+        answer = "Baik, penarikan data dibatalkan. CGO kembali standby.";
+        step("TARIK_DATA", true, "cancelled");
+      } else if (/\b(lanjut|lanjutkan|ya|ok|oke|yes|unduh|tarik|jalankan|execute|mulai)\b/i.test(t)) {
+        const kind = state.pendingTarikConfirm.dataset;
+        state.pendingTarikConfirm = null;
+        state.pendingTarik = false;
+        const label = kind === "customers" ? "customer" : (kind === "orders" ? "pesanan" : "mitra");
+        const snap = readOpsSnapshot();
+        const fact = describeTargetSnapshot(kind, snap);
+        requestCsvExport(kind);
+        const lines = [];
+        lines.push("Siap. Proses unduh data " + label + " dimulai.");
+        if (fact) lines.push(fact);
+        lines.push("Timer proses jalan di panel chat — file akan diunduh dari tab ini.");
+        answer = lines.join(" ");
+        step("TARIK_DATA", true, "confirm-download:" + kind);
+        // tandai untuk UI BCGO
+        try { global.__CGO_LAST_EXPORT_META__ = { dataset: kind, at: Date.now(), auto: true }; } catch (_) {}
+      }
+    }
+
+    if (!answer && (state.pendingTarikConfirm || state.pendingTarik) && /\b(batal|batalkan|cancel|jangan\s+lanjutkan|stop|berhenti)\b/i.test(t) && !state.pendingTarikConfirm) {
+      state.pendingTarik = false;
+      answer = "Baik, dibatalkan. CGO kembali standby.";
+      step("TARIK_DATA", true, "cancelled-clarify");
+    }
+
+    // CGO tarik / ambil data → angka nyata + sinyal unduh CSV
     const tarikKind = parseTarikData(t);
     if (!answer && tarikKind) {
       if (!hasValidAccess()) {
-        answer = "Tarik data itu internal. Contoh: CGO 0021 tarik data mitra.";
+        state.pendingTarik = false;
+        answer = isAccessLocked() ? MSG_ACCESS_LOCK : MSG_ACCESS_NEED;
         step("ACCESS", false, "export-need-code");
       } else if (tarikKind === "ask") {
-        answer = (accessJustGranted ? "Akses oke. " : "") + "Data yang mana — mitra, customer, atau pesanan? Contoh: tarik data mitra.";
+        state.pendingTarik = true;
+        answer = (accessJustGranted ? "Akses oke. " : "") + "Data apa yang ingin ditarik — mitra, customer, atau pesanan?";
         step("TARIK_DATA", true, "clarify");
       } else {
-        const fired = requestCsvExport(tarikKind);
+        state.pendingTarik = false;
         const label = tarikKind === "customers" ? "customer" : (tarikKind === "orders" ? "pesanan" : "mitra");
-        if (fired) {
-          answer = (accessJustGranted ? "Akses oke. " : "") + "Oke, saya unduh CSV " + label + " sekarang. Kalau file belum muncul, pastikan tab data-cgo.html terbuka (login admin).";
-          step("TARIK_DATA", true, "export:" + tarikKind);
+        const snap = readOpsSnapshot();
+        const fact = describeTargetSnapshot(tarikKind, snap);
+        state.pendingTarikConfirm = { dataset: tarikKind, at: Date.now() };
+        const lines = [];
+        if (accessJustGranted) lines.push("Akses oke.");
+        if (fact) {
+          lines.push("Ringkasan " + label + ":");
+          lines.push(fact);
         } else {
-          answer = (accessJustGranted ? "Akses oke. " : "") + "Siap tarik " + label + ". Buka data-cgo.html#pull (login), dataset sudah diarahkan — atau bilang lagi setelah tab itu terbuka.";
-          step("TARIK_DATA", false, "bridge-missing");
+          lines.push("Ringkasan " + label + " di memori masih kosong — pastikan data-cgo sudah login agar cache terisi.");
         }
+        lines.push("Mau dilanjutkan unduh file CSV " + label + "? Ketik «lanjut» atau «batal».");
+        answer = lines.join(" ");
+        step("TARIK_DATA", true, "await-confirm:" + tarikKind);
+        try { global.__CGO_LAST_EXPORT_META__ = { dataset: tarikKind, at: Date.now(), auto: false, awaitConfirm: true }; } catch (_) {}
       }
     }
 
     if (!answer && briefingAsk) {
       if (!hasValidAccess()) {
-        answer = "Briefing ini internal. Contoh: CGO 0021 briefing harian.";
+        answer = isAccessLocked() ? MSG_ACCESS_LOCK : MSG_ACCESS_NEED;
         step("ACCESS", false, "briefing-need-code");
       } else {
         try {
@@ -1188,7 +1299,7 @@
 
     if (!answer && opsAsk) {
       if (!hasValidAccess()) {
-        answer = "Itu data internal. Pakai kode dulu ya — contoh: CGO 0021, terus pertanyaanmu.";
+        answer = isAccessLocked() ? MSG_ACCESS_LOCK : MSG_ACCESS_NEED;
         step("ACCESS", false, "ops-need-code");
       } else {
         try {
