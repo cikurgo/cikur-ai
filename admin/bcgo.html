@@ -40,6 +40,8 @@ body{font-family:'Inter',sans-serif}
 
 .abc-telemetry-bar{border:1px solid #123b63;background:#031120;border-radius:12px;padding:10px 12px}.abc-route{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.abc-lamp{width:9px;height:9px;border-radius:50%;background:#334155;display:inline-block;box-shadow:none}.abc-lamp.active{background:#ffd34d;box-shadow:0 0 10px #ffd34d;animation:breathe .55s ease-in-out infinite}.abc-lamp.ok{background:#16d98b;box-shadow:0 0 8px #16d98b}.abc-lamp.bad{background:#ff667d;box-shadow:0 0 10px #ff667d}.abc-node{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;color:#9bb8d0;border:1px solid #173e5e;border-radius:999px;padding:3px 7px}.abc-node.active{color:#ffe07b;border-color:#765f1b;background:#2a2308}.abc-node.ok{color:#7cf0c0;border-color:#176a50;background:#062a1c}
 
+/* CGO Chat · Future Core */
+.cgo-chat-feed-future{position:relative;min-height:20rem}.cgo-chat-core-stage{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;pointer-events:none;opacity:.9;z-index:0}.cgo-chat-core-orb{position:relative;width:116px;height:116px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(103,232,249,.75);background:radial-gradient(circle at 35% 30%,rgba(103,232,249,.34),rgba(99,102,241,.18) 38%,rgba(7,11,22,.94) 72%);box-shadow:0 0 25px rgba(34,211,238,.35),0 0 75px rgba(99,102,241,.2),inset 0 0 30px rgba(129,140,248,.22);animation:cgoChatCoreBreathe 2.8s ease-in-out infinite}.cgo-chat-core-orb:before,.cgo-chat-core-orb:after{content:"";position:absolute;border-radius:50%;border:1px solid rgba(34,211,238,.25);width:142px;height:142px;animation:cgoChatCoreRing 3.8s linear infinite}.cgo-chat-core-orb:after{width:164px;height:164px;border-color:rgba(139,92,246,.18);animation-duration:5.2s;animation-direction:reverse}.cgo-chat-core-orb span{font:700 17px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.16em;color:#e0f2fe;text-shadow:0 0 14px rgba(34,211,238,.9)}.cgo-chat-core-wave{height:24px;display:flex;align-items:center;gap:4px}.cgo-chat-core-wave i{width:3px;height:6px;border-radius:4px;background:linear-gradient(#67e8f9,#818cf8);animation:cgoChatCoreWave .9s ease-in-out infinite alternate}.cgo-chat-core-wave i:nth-child(2){height:11px}.cgo-chat-core-wave i:nth-child(3){height:18px}.cgo-chat-core-wave i:nth-child(4){height:12px}.cgo-chat-core-wave i:nth-child(5){height:22px}.cgo-chat-core-wave i:nth-child(6){height:14px}.cgo-chat-core-wave i:nth-child(7){height:19px}.cgo-chat-core-wave i:nth-child(8){height:10px}.cgo-chat-core-caption{font:600 9px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;color:#67e8f9;text-shadow:0 0 10px rgba(34,211,238,.45)}.cgo-chat-ready-note{position:relative;z-index:2;margin-top:18rem;text-align:center;background:rgba(2,6,23,.62);border:1px solid rgba(51,65,85,.35);border-radius:999px;padding:5px 9px;width:max-content;max-width:100%;margin-left:auto;margin-right:auto}@keyframes cgoChatCoreBreathe{0%,100%{transform:scale(.98);filter:brightness(.92)}50%{transform:scale(1.04);filter:brightness(1.18)}}@keyframes cgoChatCoreRing{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}@keyframes cgoChatCoreWave{from{transform:scaleY(.55);opacity:.45}to{transform:scaleY(1.15);opacity:1}}
 /* CGO Chat · Future Operator */
 .cgo-chat-shell{position:relative;border:1px solid rgba(99,102,241,.35);background:linear-gradient(180deg,#0b1224 0%,#070b16 100%);border-radius:16px;overflow:hidden;box-shadow:0 0 40px rgba(99,102,241,.12),inset 0 1px 0 rgba(255,255,255,.04)}
 .cgo-chat-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(51,65,85,.7);background:rgba(2,6,23,.55)}
@@ -578,8 +580,9 @@ body{font-family:'Inter',sans-serif}
             <span data-stage="compose">③ Susun</span>
             <span data-stage="done">④ Selesai</span>
           </div>
-          <div id="chat-feed" class="chat-scroll p-3 h-80 overflow-y-auto space-y-3 bg-slate-950/80">
-            <div class="text-xs text-slate-500">CGO standby · ketik atau bicara langsung · operator wanita (MP3)</div>
+          <div id="chat-feed" class="chat-scroll p-3 h-80 overflow-y-auto space-y-3 bg-slate-950/80 cgo-chat-feed-future">
+            <div class="cgo-chat-core-stage" aria-hidden="true"><div class="cgo-chat-core-orb"><span>CGO</span></div><div class="cgo-chat-core-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="cgo-chat-core-caption">CGO CORE · STANDBY · SIAP MENDENGAR</div></div>
+            <div class="text-xs text-slate-500 cgo-chat-ready-note">CGO standby · ketik atau panggil "CGO" · operator wanita</div>
           </div>
           <div class="cgo-wave-wrap" id="cgo-wave-wrap"><canvas id="cgo-mic-wave" width="600" height="28"></canvas><div id="cgo-mic-status" class="cgo-mic-status" aria-live="polite">MIKROFON SIAGA</div></div>
           <div class="cgo-interim" id="cgo-interim">
@@ -655,10 +658,7 @@ body{font-family:'Inter',sans-serif}
         if(state==='granted'){
           setTimeout(function(){
             try {
-              if(btn.getAttribute('aria-pressed')!=='true' && !window.__cgoFutureAutoArmed){
-                window.__cgoFutureAutoArmed=true;
-                btn.click();
-              }
+              if(!window.__cgoFutureAutoArmed&&typeof window.CGO_START_STANDBY_LISTENING==='function'){window.__cgoFutureAutoArmed=true;window.CGO_START_STANDBY_LISTENING();setReadyReason('STANDBY · MENUNGGU PANGGILAN \"CGO\"');}
             } catch(_){}
           },700);
         } else if(state==='denied'){
@@ -680,6 +680,7 @@ body{font-family:'Inter',sans-serif}
       autoArmIfAlreadyGranted();
     }
     if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',arm,{once:true}); else arm();
+    setTimeout(function(){try{if(navigator.permissions&&navigator.permissions.query)navigator.permissions.query({name:'microphone'}).then(function(p){if(String(p.state).toLowerCase()==='granted'&&typeof window.CGO_START_STANDBY_LISTENING==='function'&&!window.__cgoFutureAutoArmed){window.__cgoFutureAutoArmed=true;window.CGO_START_STANDBY_LISTENING();setReadyReason('STANDBY · MENUNGGU PANGGILAN \"CGO\"');}}).catch(function(){});}catch(_){}},1200);
   } catch(_){}
 })();
 </script>
@@ -2454,8 +2455,10 @@ await runAutonomousEngine(state => {
   let heardSpeech = false;
   let micClaimId = null;
   let finishing = false;
+  let standbyMode=false, standbyWakeText='', standbyRestartTimer=null;
   const silenceMs = 2200;
   const sessionMaxMs = 15000;
+  const standbySessionMaxMs=60000;
 
   function status(text, tone){
     if (!statusEl) return;
@@ -2536,13 +2539,24 @@ await runAutonomousEngine(state => {
     return;
   }
 
-  micBtn.addEventListener('click', function(){
-    if (starting) return;
+  function waitUntilVoiceIdleAndRestart(){
+    try{if(standbyRestartTimer)clearTimeout(standbyRestartTimer);}catch(_){ }
+    var started=Date.now();
+    function poll(){
+      var speaking=false;try{speaking=!!(window.CGOOperatorVoice&&window.CGOOperatorVoice.isChatSpeaking&&window.CGOOperatorVoice.isChatSpeaking());}catch(_){ }
+      if(!speaking||Date.now()-started>20000){standbyRestartTimer=setTimeout(function(){if(window.__cgoStandbyRequested&&!document.hidden&&typeof window.CGO_START_STANDBY_LISTENING==='function')window.CGO_START_STANDBY_LISTENING();},700);return;}
+      standbyRestartTimer=setTimeout(poll,350);
+    }poll();
+  }
+  function beginRecognition(options){
+    options=options||{};
+    if(starting)return;
     if (listening) { stopRecognition('manual'); return; }
     if (rec) { try { rec.abort(); } catch(_){} rec = null; }
     finalText = '';
     heardSpeech = false;
     finishing = false;
+    standbyMode=!!options.standby;standbyWakeText='';
     starting = true;
 
     try {
@@ -2565,7 +2579,7 @@ await runAutonomousEngine(state => {
       rec = new SR();
       rec.lang = 'id-ID';
       rec.interimResults = true;
-      rec.continuous = false;
+      rec.continuous=standbyMode;
       rec.maxAlternatives = 1;
 
       rec.onstart = function(){
@@ -2597,22 +2611,17 @@ await runAutonomousEngine(state => {
           : code === 'network' ? 'LAYANAN PENGENALAN SUARA TIDAK TERSEDIA'
           : 'MIC ERROR · ' + code;
         status(msg, 'error');
+        if (code === 'not-allowed' || code === 'service-not-allowed') window.__cgoStandbyRequested = false;
         try { window.dispatchEvent(new CustomEvent('cgo:mic-error', {detail:{code:code,message:msg}})); } catch(_){}
       };
-      rec.onend = function(){
-        clearTimers(); setListening(false); starting = false;
-        try { window.CGOMicUI?.stopWave(); } catch(_){}
-        releaseMic();
-        const text = finalText.trim();
-        rec = null;
-        if (text && !finishing) {
-          status('TEKS TERDETEKSI · mengirim…', 'live');
-          sendVoiceText(text);
-        } else if (!text && statusEl && !/ERROR|DITOLAK|TIDAK ADA|TIDAK TERSEDIA|SIBUK/.test(statusEl.textContent)) {
-          status('MIKROFON SIAGA', 'idle');
-        }
-        finishing = false;
-        try { window.dispatchEvent(new CustomEvent('cgo:mic-status', {detail:{state:text?'TRANSCRIPT':'IDLE',text:text}})); } catch(_){}
+      rec.onend=function(){
+        clearTimers();setListening(false);starting=false;try{window.CGOMicUI?.stopWave();}catch(_){ }releaseMic();
+        const text=finalText.trim(),wasStandby=standbyMode,wakeText=standbyWakeText.trim();rec=null;standbyMode=false;standbyWakeText='';
+        if(wasStandby&&wakeText&&!finishing){status('CGO TERDETEKSI · memproses…','live');var command=wakeText.replace(/^(hai|hei|hey)?\s*cgo\b[\s,:-]*/i,'').trim()||'CGO';setTimeout(function(){var p=sendVoiceText(command);if(p!==false)waitUntilVoiceIdleAndRestart();},80);}
+        else if(text&&!finishing){status('TEKS TERDETEKSI · mengirim…','live');sendVoiceText(text);}
+        else if(!text&&statusEl&&!/ERROR|DITOLAK|TIDAK ADA|TIDAK TERSEDIA|SIBUK/.test(statusEl.textContent))status(wasStandby?'STANDBY · MENUNGGU "CGO"':'MIKROFON SIAGA','idle');
+        finishing=false;try{window.dispatchEvent(new CustomEvent('cgo:mic-status',{detail:{state:(wasStandby&&wakeText)?'WAKE':'IDLE',text:text}}));}catch(_){ }
+        if(wasStandby&&!wakeText&&window.__cgoStandbyRequested)waitUntilVoiceIdleAndRestart();
       };
       rec.onresult = function(ev){
         let interim = '';
@@ -2622,18 +2631,14 @@ await runAutonomousEngine(state => {
           if (ev.results[i].isFinal) final += t;
           else interim += t;
         }
-        if (final.trim()) finalText += ' ' + final.trim();
-        const draft = (finalText + ' ' + interim).trim();
-        if (draft) {
-          const interimText = document.getElementById('cgo-interim-text');
-          const interimEl = document.getElementById('cgo-interim');
-          if (interimText) interimText.textContent = draft;
-          if (interimEl) interimEl.classList.add('on');
-          if (input) input.placeholder = draft;
-        }
-        if (final.trim()) heardSpeech = true;
-        armSilence();
-        try { if (sessionT) clearTimeout(sessionT); } catch(_){}
+        if(final.trim())finalText+=' '+final.trim();
+        const draft=(finalText+' '+interim).trim();
+        if(standbyMode&&final.trim()){
+          const normalized=draft.replace(/[.,!?;:]/g,' ').replace(/\s+/g,' ').trim();
+          if(/(?:^|\s)(?:hai\s+|hei\s+|hey\s+)?cgo(?:\s|$)/i.test(normalized)){standbyWakeText=normalized;try{if(rec)rec.stop();}catch(_){ }status('CGO TERDETEKSI · SIAP MERESPON','live');return;}
+          finalText='';status('STANDBY · MENUNGGU "CGO"','live');
+        }else if(draft){const interimText=document.getElementById('cgo-interim-text'),interimEl=document.getElementById('cgo-interim');if(interimText)interimText.textContent=draft;if(interimEl)interimEl.classList.add('on');if(input)input.placeholder=draft;}
+        if(final.trim())heardSpeech=true;armSilence();try{if(sessionT&&!standbyMode)clearTimeout(sessionT);}catch(_){ }
       };
       rec.start();
     } catch (e) {
@@ -2648,7 +2653,10 @@ await runAutonomousEngine(state => {
       status(msg, 'error');
       try { window.dispatchEvent(new CustomEvent('cgo:mic-error', {detail:{code:code,message:msg}})); } catch(_){}
     }
-  });
+  }
+  micBtn.addEventListener('click',function(){if(listening){stopRecognition('manual');return;}beginRecognition({standby:false});});
+  window.CGO_START_STANDBY_LISTENING=function(){if(!SR||starting||listening||document.hidden)return false;window.__cgoStandbyRequested=true;beginRecognition({standby:true});return true;};
+  window.CGO_STOP_STANDBY_LISTENING=function(){window.__cgoStandbyRequested=false;try{if(standbyRestartTimer)clearTimeout(standbyRestartTimer);}catch(_){ }if(standbyMode||listening)stopRecognition('standby-stop');};
 
   status('MIKROFON SIAGA', 'idle');
 })();
@@ -2666,38 +2674,26 @@ await runAutonomousEngine(state => {
     scheduleWelcome();
   }
 
-  // Sambutan operator wanita (TTS) — throttle 60 detik antar-refresh. Browser memblokir suara
-  // sebelum ada interaksi, jadi bila belum ada tap/klik, sambutan ditunda sampai interaksi pertama.
-  // Welcome keluar setiap kali halaman dibuka.
-  // Throttle hanya 2 detik (anti-spam), memakai sessionStorage — BUKAN localStorage.
-  function tryWelcome() {
+  // Sambutan operator wanita — retry-safe saat daftar voice mobile belum siap.
+  function tryWelcome(forceRetry) {
     try {
-      var v = window.CGOOperatorVoice;
-      if (!v || typeof v.welcome !== 'function') return;
-      var KEY = 'cgo-operator-welcome-at';
-      var now = Date.now();
-      var last = 0;
-      try { last = Number(sessionStorage.getItem(KEY)) || 0; } catch (_) {}
-      if (now - last < 2000) return;
-      try { sessionStorage.setItem(KEY, String(now)); } catch (_) {}
-      try { v.unlock && v.unlock(); } catch (_) {}
-      v.welcome();
-    } catch (e) { console.warn('operator welcome', e); }
+      var v=window.CGOOperatorVoice;
+      if(!v||typeof v.speakAnswer!=='function') return false;
+      var key='cgo-operator-welcome-at', now=Date.now(), last=0;
+      try{last=Number(sessionStorage.getItem(key))||0;}catch(_){ }
+      if(!forceRetry&&now-last<2000)return false;
+      try{v.unlock&&v.unlock();v.setEnabled&&v.setEnabled(true);v.setChatSpeak&&v.setChatSpeak(true);}catch(_){ }
+      var p=v.speakAnswer('Selamat Datang Di Sistem Internal CIKUR GO',{force:true,source:'welcome-boot',rate:.90,pitch:1.06});
+      Promise.resolve(p).then(function(ok){if(ok){try{sessionStorage.setItem(key,String(Date.now()));}catch(_){}}}).catch(function(){});
+      return true;
+    }catch(e){console.warn('operator welcome',e);return false;}
   }
-
-  // Coba langsung + ulang saat interaksi pertama (browser autoplay policy).
-  function scheduleWelcome() {
-    tryWelcome();
-    var evs = ['pointerdown', 'touchstart', 'keydown', 'click'];
-    var once = function () {
-      evs.forEach(function (n) {
-        try { window.removeEventListener(n, once, true); } catch (_) {}
-      });
-      setTimeout(tryWelcome, 50);
-    };
-    evs.forEach(function (n) {
-      try { window.addEventListener(n, once, true); } catch (_) {}
-    });
+  function scheduleWelcome(){
+    tryWelcome(false);
+    [350,900,1800,3000].forEach(function(ms){setTimeout(function(){tryWelcome(true);},ms);});
+    try{if(window.speechSynthesis&&window.speechSynthesis.addEventListener){var onVoices=function(){tryWelcome(true);try{window.speechSynthesis.removeEventListener('voiceschanged',onVoices);}catch(_){} };window.speechSynthesis.addEventListener('voiceschanged',onVoices);}}catch(_){ }
+    var evs=['pointerdown','touchstart','keydown','click'],once=function(){evs.forEach(function(n){try{window.removeEventListener(n,once,true);}catch(_){}});setTimeout(function(){tryWelcome(true);},80);};
+    evs.forEach(function(n){try{window.addEventListener(n,once,true);}catch(_){}});
   }
 
   // Tab disembunyikan lalu dibuka lagi: antrean audio dilanjutkan (kecuali user menekan ⏸ sendiri).
