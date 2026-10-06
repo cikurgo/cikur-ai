@@ -9,8 +9,8 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "3.10.0-MIC-AWARE-ZERO-REGRESI";
-  const BUILD = "CIKUR-GO-OPERATOR-3.10.0-MIC-AWARE";
+  const VERSION = "3.9.5-SYNTHESIS-RECOVER";
+  const BUILD = "CIKUR-GO-OPERATOR-3.9.5-RECOVER";
   /** Path audio cerdas: dukung load dari root portal maupun dari admin/ */
   function detectAudioRoot() {
     try {
@@ -453,11 +453,6 @@
     // Gate force+allowTts dihapus agar suara muncul saat chat dijawab.
     if (!enabled && !options.force) return Promise.resolve(false);
     if (!chatSpeakEnabled && !options.force) return Promise.resolve(false);
-    try {
-      if (!options.force && global.CGOAudioBus && typeof global.CGOAudioBus.isMicLocked === "function" && global.CGOAudioBus.isMicLocked()) {
-        return Promise.resolve(false);
-      }
-    } catch (_) {}
     // Force request (welcome, error, warning) boleh bypass queue-disabled.
     if (!options.force && global.CGOAudioQueue && typeof global.CGOAudioQueue.isEnabled === "function" && !global.CGOAudioQueue.isEnabled()) {
       return Promise.resolve(false);
@@ -700,9 +695,7 @@
       try { d.engineSpeaking = !!global.speechSynthesis.speaking; d.enginePaused = !!global.speechSynthesis.paused; } catch (_) {}
       return d;
     },
-    isEnabled: function () { return enabled; },
-    isSpeaking: function () { return !!speaking; },
-    getVoiceDiagnostics: function () { return this.diag(); }
+    isEnabled: function () { return enabled; }
   };
 
   global.CGOOperatorVoice = api;

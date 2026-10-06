@@ -8,6 +8,7 @@ import * as Guardian from "./cgo-ai-guardian.js?v=20260907-1315-instruction1";
 import * as Cognition from "./cgo-ai-cognition.js?v=20260907-1315-instruction1";
 import * as Instruction from "./cgo-instruction.js";
 
+const VERSION_OTAK = "1.1.0-OTAK-WIRE";
 const VERSION="1.5.0-CONSTITUTION-BOUND";
 
 function clone(v){ return structuredClone(v); }
@@ -130,3 +131,9 @@ export function buildAction(caseData, authorization){
 }
 
 export { VERSION, Instruction };
+
+try {
+  if (typeof globalThis !== "undefined") {
+    globalThis.CGOAiLogic = { VERSION: typeof VERSION !== "undefined" ? VERSION : "1.1.0-OTAK-WIRE" };
+  }
+} catch (_) {}

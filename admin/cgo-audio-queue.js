@@ -5,7 +5,7 @@
  */
 (function (global) {
   "use strict";
-  const VERSION = "1.1.0-MIC-AWARE-WATCHDOG";
+  const VERSION = "1.0.1-AUDIO-QUEUE-WATCHDOG";
   const WATCHDOG_MS = 75000; // job yang tidak pernah selesai dilepas paksa agar antrean tidak macet
 
   // File priority map (nama file saja — path dari operator)
@@ -212,16 +212,13 @@
     }
   }
 
-  function pause(reason) {
+  function pause() {
     paused = true;
-    try { global.__cgoAudioPauseReason = String(reason || "manual"); } catch (_) {}
-    stopCurrent("pause:" + String(reason || "manual"));
+    stopCurrent("pause");
   }
 
-  function resume(reason) {
-    if (reason === "mic" && global.__cgoUserPausedAudio) return;
+  function resume() {
     paused = false;
-    try { global.__cgoAudioPauseReason = ""; } catch (_) {}
     pump();
   }
 

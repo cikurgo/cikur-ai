@@ -331,6 +331,7 @@ function resetDataView() {
     renderFunnel();
     renderRadarFeed();
     renderTable();
+    try { publishOpsSnapshot(); } catch (_) {}
 }
 
 function startAllListeners() {
@@ -340,12 +341,14 @@ function startAllListeners() {
         renderKpisMitra();
         renderFunnel();
         if (currentDataset === 'mitra') renderTable();
+        try { publishOpsSnapshot(); } catch (_) {}
     }, (err) => console.error("[DATA-CGO] mitra_applications:", err)));
 
     listenerUnsubscribers.push(onSnapshot(collection(adminDb, "customers"), (snap) => {
         cache.customers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         renderKpiOnline();
         if (currentDataset === 'customers') renderTable();
+        try { publishOpsSnapshot(); } catch (_) {}
     }, (err) => console.error("[DATA-CGO] customers:", err)));
 
     listenerUnsubscribers.push(onSnapshot(query(collection(adminDb, "orders"), orderBy("timestamp", "desc"), limit(500)), (snap) => {
@@ -353,12 +356,14 @@ function startAllListeners() {
         renderKpisOrders();
         renderTrendChart();
         if (currentDataset === 'orders') renderTable();
+        try { publishOpsSnapshot(); } catch (_) {}
     }, (err) => console.error("[DATA-CGO] orders:", err)));
 
     listenerUnsubscribers.push(onSnapshot(query(collection(adminDb, "system_logs"), orderBy("reportedAt", "desc"), limit(30)), (snap) => {
         cache.logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         renderKpiAttention();
         renderRadarFeed();
+        try { publishOpsSnapshot(); } catch (_) {}
     }, (err) => console.error("[DATA-CGO] system_logs:", err)));
 
     renderTable();
@@ -368,6 +373,86 @@ function startAllListeners() {
 /* =========================================================
    KPI: MITRA
 ========================================================= */
+
+/* =========================================================
+   OPS SNAPSHOT → Otak (read-only, tanpa PII sensitif)
+   localStorage + window + BroadcastChannel
+========================================================= */
+const OPS_SNAPSHOT_KEY = "CGO_OPS_SNAPSHOT_V1";
+const OPS_BUS = "cgo-ops-snapshot-bus";
+
+function buildOpsSnapshot() {
+    const fiveMinAgo = Date.now() - (5 * 60 * 1000);
+    const today = new Date();
+    const mitra = cache.mitra || [];
+    const customers = cache.customers || [];
+    const orders = cache.orders || [];
+    const logs = typeof actionableLogs === "function" ? actionableLogs() : (cache.logs || []);
+
+    const pending = mitra.filter(m => m.status === "pending").length;
+    const approved = mitra.filter(m => m.status === "approved").length;
+    const rejected = mitra.filter(m => m.status === "rejected").length;
+    const online = customers.filter(c => toMillis(c.lastSeen) > fiveMinAgo).length;
+    const offline = Math.max(0, customers.length - online);
+
+    const todayOrders = orders.filter(o => isSameDay(toMillis(o.timestamp), today));
+    const paidStatuses = ["PAID", "SELESAI", "DIANTAR"];
+    const omzet = todayOrders
+        .filter(o => paidStatuses.includes(String(o.status || "").toUpperCase()) || paidStatuses.includes(o.status))
+        .reduce((sum, o) => sum + getOrderTotal(o), 0);
+
+    // tren 7 hari (ringkas untuk Otak, bukan 14 penuh)
+    const trend = [];
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const n = orders.filter(o => isSameDay(toMillis(o.timestamp), d)).length;
+        trend.push({ day: d.getDate() + "/" + (d.getMonth() + 1), count: n });
+    }
+
+    const tenMinAgo = Date.now() - (10 * 60 * 1000);
+    const attention = logs.filter(l => toMillis(l.reportedAt) > tenMinAgo).length;
+
+    // Agent / radar per KM — placeholder jujur bila field lokasi belum standar
+    let agentsByKm = null;
+    try {
+        const withGeo = mitra.filter(m => m.latitude != null || m.restoLatitude != null || m.lng != null || m.longitude != null);
+        if (withGeo.length) {
+            agentsByKm = { note: "lokasi mitra tersedia (agregat kasar)", withLocation: withGeo.length, total: mitra.length };
+        }
+    } catch (_) {}
+
+    return {
+        type: "CGO_OPS_SNAPSHOT",
+        version: "1.0.0",
+        source: "data-cgo",
+        updatedAt: new Date().toISOString(),
+        customers: { total: customers.length, online, offline },
+        mitra: { total: mitra.length, pending, approved, rejected },
+        orders: { todayCount: todayOrders.length, todayOmzet: omzet, trend7d: trend },
+        radar: { attentionCount: attention, agentsByKm },
+        links: { dataCgo: "data-cgo.html#overview", admin: "bcgo-admin.html" }
+    };
+}
+
+function publishOpsSnapshot() {
+    try {
+        const snap = buildOpsSnapshot();
+        try { window.CGO_OPS_SNAPSHOT = snap; } catch (_) {}
+        try { localStorage.setItem(OPS_SNAPSHOT_KEY, JSON.stringify(snap)); } catch (_) {}
+        try {
+            if (typeof BroadcastChannel === "function") {
+                if (!window.__cgoOpsBus) window.__cgoOpsBus = new BroadcastChannel(OPS_BUS);
+                window.__cgoOpsBus.postMessage(snap);
+            }
+        } catch (_) {}
+        return snap;
+    } catch (e) {
+        console.warn("[DATA-CGO] publishOpsSnapshot:", e);
+        return null;
+    }
+}
+
 function renderKpisMitra() {
     const pending = cache.mitra.filter(m => m.status === 'pending').length;
     const active = cache.mitra.filter(m => m.status === 'approved').length;

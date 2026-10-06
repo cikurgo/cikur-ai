@@ -9,7 +9,7 @@ import * as Core from "./cgo-ai-core.js";
 import * as Investigator from "./cgo-ai-investigator.js";
 import * as Sovereignty from "./cgo-ai-sovereignty.js";
 
-const VERSION = "2.4.0-PRECISION-CODE-CONSTRUCTION-SOVEREIGN";
+const VERSION = "2.4.0-PRECISION-CODE-CONSTRUCTION-SOVEREIGN-otak-wire";
 const MAX_STEPS_DEFAULT = 10;
 const MAX_FILES_DEFAULT = 40;
 

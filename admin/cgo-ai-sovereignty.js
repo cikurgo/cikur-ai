@@ -1,7 +1,7 @@
 /* CIKUR GO Internal AI — Sovereignty Guard
  * Local-only source/policy verifier. No network, storage, or third-party dependency.
  */
-const VERSION = "1.0.0-INTERNAL-SOVEREIGNTY";
+const VERSION = "1.0.0-INTERNAL-SOVEREIGNTY-otak-wire";
 const FORBIDDEN = [
   /https?:\/\//i,
   /\bfetch\s*\(/i,

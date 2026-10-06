@@ -5,7 +5,7 @@
  */
 (function (global) {
   "use strict";
-  const VERSION = "1.1.0-MIC-LOCK-ZERO-REGRESI";
+  const VERSION = "1.0.2-CLAIM-CLEANUP";
   const CLAIM_TTL_MS = 30000; // klaim tab lain yang tidak pernah dilepas (tab ditutup) kedaluwarsa
   const CHANNEL = "cgo-audio";
   const PAGE_ID = "cgo-" + Math.random().toString(36).slice(2, 10);
@@ -15,18 +15,10 @@
 
   let mutedByVisibility = false;
   let remoteClaim = null; // { id, priority, ts }
-  let remoteMicClaim = null; // { id, ts }
-  let localMicClaim = null;
-  let pausedByMic = false;
 
   function activeRemote() {
     if (remoteClaim && Date.now() - remoteClaim.ts > CLAIM_TTL_MS) remoteClaim = null;
     return remoteClaim;
-  }
-
-  function activeRemoteMic() {
-    if (remoteMicClaim && Date.now() - remoteMicClaim.ts > CLAIM_TTL_MS) remoteMicClaim = null;
-    return remoteMicClaim;
   }
 
   let pausedByBus = false;
@@ -42,10 +34,6 @@
       remoteClaim = { id: d.id, priority: Number(d.prioritas) || 99, ts: Date.now() };
     } else if (d.aksi === "lepas") {
       if (remoteClaim && remoteClaim.id === d.id) remoteClaim = null;
-    } else if (d.aksi === "mic-klaim") {
-      remoteMicClaim = { id: d.id, ts: Date.now() };
-    } else if (d.aksi === "mic-lepas") {
-      if (remoteMicClaim && remoteMicClaim.id === d.id) remoteMicClaim = null;
     }
   }
 
@@ -104,47 +92,8 @@
     } catch (_) {}
   }
 
-  function klaimMic(id) {
-    const claimId = id || (PAGE_ID + "-mic-" + Date.now());
-    if (mutedByVisibility || isHidden()) return { ok: false, reason: "hidden", id: claimId };
-    const rm = activeRemoteMic();
-    if (rm && rm.id !== claimId) return { ok: false, reason: "remote-mic-busy", id: claimId, remote: rm };
-    if (localMicClaim && localMicClaim !== claimId) return { ok: false, reason: "local-mic-busy", id: claimId };
-    localMicClaim = claimId;
-    try { if (bc) bc.postMessage({ aksi: "mic-klaim", id: claimId, from: PAGE_ID }); } catch (_) {}
-    try {
-      const q = global.CGOAudioQueue;
-      const st = q && q.getStatus ? q.getStatus() : null;
-      if (q && typeof q.pause === "function" && !(st && st.paused)) {
-        pausedByMic = true;
-        q.pause("mic");
-      }
-      if (global.speechSynthesis) global.speechSynthesis.cancel();
-    } catch (_) {}
-    return { ok: true, id: claimId };
-  }
-
-  function lepasMic(id) {
-    const claimId = id || localMicClaim;
-    if (localMicClaim === claimId) localMicClaim = null;
-    try { if (bc && claimId) bc.postMessage({ aksi: "mic-lepas", id: claimId, from: PAGE_ID }); } catch (_) {}
-    if (!localMicClaim && pausedByMic) {
-      pausedByMic = false;
-      try {
-        const q = global.CGOAudioQueue;
-        if (q && typeof q.resume === "function" && !(global.__cgoUserPausedAudio)) q.resume("mic");
-      } catch (_) {}
-    }
-    return true;
-  }
-
-  function isMicLocked() {
-    return !!(localMicClaim || activeRemoteMic());
-  }
-
   function canPlay(prioritas) {
     if (mutedByVisibility || isHidden()) return false;
-    if (localMicClaim || activeRemoteMic()) return false;
     const p = Number(prioritas);
     const pri = isNaN(p) ? 2 : p;
     const rc = activeRemote();
@@ -172,10 +121,7 @@
   try {
     if (typeof window !== "undefined") {
       window.addEventListener("beforeunload", releaseAllClaims, { once: true });
-      window.addEventListener("pagehide", function () {
-        releaseAllClaims();
-        try { lepasMic(); } catch (_) {}
-      }, { once: true });
+      window.addEventListener("pagehide", releaseAllClaims, { once: true });
     }
   } catch (_) {}
 
@@ -185,9 +131,6 @@
     klaim: klaim,
     lepas: lepas,
     canPlay: canPlay,
-    klaimMic: klaimMic,
-    lepasMic: lepasMic,
-    isMicLocked: isMicLocked,
     isHidden: isHidden
   });
 })(typeof globalThis !== "undefined" ? globalThis : window);

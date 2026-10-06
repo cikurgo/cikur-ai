@@ -6,8 +6,8 @@
  * never authorizes, mutates source, executes patches or replaces evidence.
  */
 
-export const VERSION = "1.3.0-CGO-CONSTITUTION";
-export const CONSTITUTION_VERSION = "CGO-CONSTITUTION-1.3";
+export const VERSION = "1.3.1-OTAK-WIRE";
+export const CONSTITUTION_VERSION = "CGO-CONSTITUTION-1.3.1";
 export const COMMUNICATION_STANDARD = "CGO_003_COMMUNICATION_ENGINE-1.0";
 
 const deepFreeze = value => {
@@ -296,9 +296,9 @@ export function classifyIntent(text, session = {}) {
   const hasWork = !!(session?.caseId || session?.primaryFile || session?.pendingWork || session?.workContext);
   const reference = extractConversationReference(q, session);
   const greeting = /^(halo|hai|hello|hi|pagi|siang|sore|malam|assalamualaikum)\b/i.test(q);
-  const identity = re("\\b(siapa kamu|kamu siapa|siapa cgo|apa itu cgo|kamu itu siapa|kamu sebagai apa)\\b", q);
+  const identity = re("\\b(siapa kamu|kamu siapa|siapa cgo|apa itu cgo|kamu itu siapa|kamu sebagai apa|who are you|what are you)\\b", q);
   const systemRole = re("\\b(bcgo itu apa|bcgo apa|cgo dan bcgo|beda cgo dan bcgo|perbedaan cgo dan bcgo)\\b", q);
-  const capability = re("\\b(kamu bisa apa|bisa ngobrol|bisa bantu apa|kemampuanmu|kemampuan kamu|bisa ngapain)\\b", q);
+  const capability = re("\\b(kamu bisa apa|bisa ngobrol|bisa bantu apa|kemampuanmu|kemampuan kamu|bisa ngapain|what can you|capabilities|fitur|bisa apa saja)\\b", q);
   const gratitude = re("\\b(terima kasih|makasih|thanks|thank you)\\b", q);
   const apology = re("\\b(maaf|sorry)\\b", q);
   const farewell = re("\\b(selamat tinggal|dadah|sampai nanti|sampai jumpa|bye)\\b", q);
@@ -426,3 +426,24 @@ export function getInstructionSummary() {
   return { identity:CGO_INSTRUCTION.identity, conversation:CGO_INSTRUCTION.conversation, humanBehavior:CGO_INSTRUCTION.humanBehavior, communicationStyle:CGO_INSTRUCTION.communicationStyle, intelligence:CGO_INSTRUCTION.intelligence, system:CGO_INSTRUCTION.system, repair:CGO_INSTRUCTION.repair, response:CGO_INSTRUCTION.response, boundaries:CGO_INSTRUCTION.boundaries };
 }
 export { re as test };
+
+
+/* Global bind (otak-wire) — halaman non-module tetap bisa pakai CGOInstruction */
+try {
+  if (typeof globalThis !== "undefined") {
+    globalThis.CGOInstruction = {
+      VERSION,
+      CONSTITUTION_VERSION,
+      COMMUNICATION_STANDARD,
+      CGO_INSTRUCTION,
+      classifyIntent,
+      classifyDialogue,
+      updateConversationState,
+      buildResponseContract,
+      evaluateResponseContract,
+      getInstruction,
+      getInstructionVersion,
+      getInstructionSummary
+    };
+  }
+} catch (_) {}

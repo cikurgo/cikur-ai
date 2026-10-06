@@ -3,7 +3,7 @@
  * No external AI/API. No customer-facing coordinate export.
  */
 
-export const RADAR_VERSION = "1.0.0-INTERNAL-GEO-RADAR";
+export const RADAR_VERSION = "1.0.1-otak-wire";
 
 export const RADAR_CONTRACT = Object.freeze({
   version: RADAR_VERSION,

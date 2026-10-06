@@ -1,49 +1,83 @@
-/* CIKUR GO Internal AI Knowledge — REAL INTERNAL STORE
- * Deterministic, local-only, evidence/provenance aware.
- * No external AI/API/network.
+/* CIKUR GO Internal Knowledge — v1.1.0-OTAK-WIRE
+ * Graph pengetahuan lokal ringan. Zero network.
  */
-const VERSION = "1.0.0-INTERNAL";
-function clone(v){ return typeof structuredClone === "function" ? structuredClone(v) : JSON.parse(JSON.stringify(v)); }
-function clean(v){ return String(v ?? "").trim(); }
+const VERSION = "1.1.0-OTAK-WIRE";
+
+function clone(v) {
+  try {
+    return typeof structuredClone === "function" ? structuredClone(v) : JSON.parse(JSON.stringify(v));
+  } catch (_) {
+    return v;
+  }
+}
+function clean(v) { return String(v ?? "").trim(); }
+
 function createKnowledgeStore(seed = {}) {
-  const s = seed && typeof seed === "object" ? seed : {};
   return {
     version: VERSION,
-    nodes: Array.isArray(s.nodes) ? clone(s.nodes) : [],
-    relations: Array.isArray(s.relations) ? clone(s.relations) : [],
-    updatedAt: s.updatedAt || new Date().toISOString()
+    nodes: Array.isArray(seed.nodes) ? clone(seed.nodes) : [],
+    relations: Array.isArray(seed.relations) ? clone(seed.relations) : (Array.isArray(seed.edges) ? clone(seed.edges) : []),
+    updatedAt: seed.updatedAt || new Date().toISOString()
   };
 }
-function validateStore(store){
-  if(!store || typeof store !== "object" || !Array.isArray(store.nodes) || !Array.isArray(store.relations)) throw new Error("INVALID_KNOWLEDGE_STORE");
-  const ids = new Set();
-  for(const n of store.nodes){ if(!n || !clean(n.id)) throw new Error("INVALID_KNOWLEDGE_NODE"); if(ids.has(n.id)) throw new Error("DUPLICATE_KNOWLEDGE_NODE:"+n.id); ids.add(n.id); }
-  for(const r of store.relations){ if(!r || !clean(r.from) || !clean(r.to) || !clean(r.type)) throw new Error("INVALID_KNOWLEDGE_RELATION"); }
-  return true;
+
+function validateStore(store) {
+  if (!store || typeof store !== "object") return { ok: false, issues: ["NO_STORE"] };
+  const issues = [];
+  if (!Array.isArray(store.nodes)) issues.push("NODES_NOT_ARRAY");
+  if (!Array.isArray(store.relations) && !Array.isArray(store.edges)) issues.push("RELATIONS_NOT_ARRAY");
+  return { ok: issues.length === 0, issues: issues };
 }
-function upsertNode(store, node){
-  const next = createKnowledgeStore(store);
-  if(!node || !clean(node.id)) throw new Error("KNOWLEDGE_NODE_ID_REQUIRED");
-  const normalized = {...clone(node), id:clean(node.id), updatedAt:new Date().toISOString()};
-  const i = next.nodes.findIndex(n=>n.id===normalized.id);
-  if(i >= 0) next.nodes[i] = {...next.nodes[i], ...normalized}; else next.nodes.push(normalized);
-  next.updatedAt = normalized.updatedAt;
-  validateStore(next); return next;
+
+function upsertNode(store, node) {
+  if (!store) store = createKnowledgeStore();
+  const id = clean(node?.id || node?.name);
+  if (!id) return store;
+  const idx = store.nodes.findIndex(function (n) { return n.id === id || n.name === id; });
+  const row = Object.assign({}, node, { id: id, name: clean(node?.name || id), updatedAt: new Date().toISOString() });
+  if (idx >= 0) store.nodes[idx] = Object.assign({}, store.nodes[idx], row);
+  else store.nodes.push(row);
+  store.updatedAt = new Date().toISOString();
+  return store;
 }
-function addRelation(store, from, to, type, meta={}){
-  const next = createKnowledgeStore(store);
-  const f=clean(from), t=clean(to), k=clean(type);
-  if(!f || !t || !k) throw new Error("KNOWLEDGE_RELATION_REQUIRED");
-  const relation={from:f,to:t,type:k,...clone(meta),updatedAt:new Date().toISOString()};
-  const i=next.relations.findIndex(r=>r.from===f&&r.to===t&&r.type===k);
-  if(i>=0) next.relations[i]={...next.relations[i],...relation}; else next.relations.push(relation);
-  next.updatedAt=relation.updatedAt; validateStore(next); return next;
+
+function addRelation(store, from, to, type, meta = {}) {
+  if (!store) store = createKnowledgeStore();
+  store.relations.push({
+    from: clean(from), to: clean(to), type: clean(type || "RELATED"),
+    meta: meta || {}, at: new Date().toISOString()
+  });
+  store.updatedAt = new Date().toISOString();
+  return store;
 }
-function query(store, term, options={}){
-  const q=clean(term).toLowerCase(); if(!q) return [];
-  const limit=Math.max(1, Number(options.limit)||10);
-  return store.nodes.filter(n=>JSON.stringify(n).toLowerCase().includes(q)).slice(0,limit).map(clone);
+
+function query(store, term, options = {}) {
+  const q = clean(term).toLowerCase();
+  const limit = Math.max(1, Number(options.limit) || 12);
+  if (!store || !q) return { nodes: [], relations: [] };
+  const nodes = (store.nodes || []).filter(function (n) {
+    const blob = (n.id + " " + (n.name || "") + " " + (n.label || "") + " " + (n.kind || "")).toLowerCase();
+    return blob.indexOf(q) >= 0;
+  }).slice(0, limit);
+  const ids = new Set(nodes.map(function (n) { return n.id; }));
+  const relations = (store.relations || store.edges || []).filter(function (r) {
+    return ids.has(r.from) || ids.has(r.to) || String(r.type || "").toLowerCase().indexOf(q) >= 0;
+  }).slice(0, limit);
+  return { nodes: nodes, relations: relations };
 }
-function search(store, term, options={}){ return query(store,term,options); }
-function getStatus(store){ return {version:VERSION,stub:false,ready:true,nodes:store.nodes.length,relations:store.relations.length}; }
+
+function search(store, term, options = {}) { return query(store, term, options); }
+
+function getStatus(store) {
+  return {
+    version: VERSION,
+    stub: false,
+    ready: true,
+    nodes: store && Array.isArray(store.nodes) ? store.nodes.length : 0,
+    relations: store && (store.relations || store.edges) ? (store.relations || store.edges).length : 0
+  };
+}
+
+const API = { VERSION, createKnowledgeStore, validateStore, upsertNode, addRelation, query, search, getStatus };
+try { if (typeof globalThis !== "undefined") globalThis.CGOAiKnowledge = API; } catch (_) {}
 export { VERSION, createKnowledgeStore, validateStore, upsertNode, addRelation, query, search, getStatus };

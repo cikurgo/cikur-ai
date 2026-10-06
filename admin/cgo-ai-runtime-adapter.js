@@ -11,7 +11,7 @@ import * as Cognition from "./cgo-ai-cognition.js?v=20260907-1315-instruction1";
 import * as Guardian from "./cgo-ai-guardian.js?v=20260907-1315-instruction1";
 import * as Logic from "./cgo-ai-logic.js?v=20260907-1315-instruction1";
 
-const VERSION="1.11.0";
+const VERSION="1.11.1-otak-wire";
 
 export function createDeterministicExecutor(target={}) {
   let bound = target && typeof target.read === "function" && typeof target.write === "function" ? target : null;

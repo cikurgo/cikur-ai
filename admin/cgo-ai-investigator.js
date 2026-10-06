@@ -2,7 +2,7 @@
  * Information-gain oriented internal investigation orchestration.
  * Never invents source; probes are ranked from observed evidence and graph structure.
  */
-const VERSION="1.2.0";
+const VERSION="1.2.1-otak-wire";
 const now=()=>new Date().toISOString();
 
 export function createInvestigation(caseData, knowledge={}) {

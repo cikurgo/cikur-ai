@@ -3,7 +3,7 @@
  * No external map SDK, no external AI/API, no customer coordinate export.
  */
 
-export const RADAR_VISUAL_VERSION = "1.0.0-INTERNAL-RADAR-VISUAL";
+export const RADAR_VISUAL_VERSION = "1.0.0-INTERNAL-RADAR-VISUAL-otak-wire";
 
 export const RADAR_VISUAL_CONTRACT = Object.freeze({
   version: RADAR_VISUAL_VERSION,

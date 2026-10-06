@@ -11,7 +11,7 @@ import * as Logic from "./cgo-ai-logic.js";
 import * as Memory from "./cgo-ai-memory.js";
 import { createRuntime } from "./cgo-ai-runtime-adapter.js";
 
-const VERSION = "V5.4-BROWSER-BRIDGE-2.0.0-BRAIN-PRIMARY-RADAR";
+const VERSION = "V5.4.1-OTAK-WIRE";
 const INTERNAL_CGO_POLICY = Object.freeze({ version:"CGO-INTERNAL-APPLICATION-1", allowAutomaticExecution:false });
 
 const runtime = createRuntime({});
@@ -859,7 +859,7 @@ function chatAnswer(question = {}) {
 function compatibleSnapshot(caseId, signal = "LIVE_TELEMETRY", caseOverride = null) {
   const c = caseOverride || runtime.getCase(caseId);
   if (!c) {
-    // Tidak ada kasus aktif = sistem tenang, BUKAN blocker bukti.
+    // Tidak ada kasus aktif = sistem tenang, BUKAN blocker bukti. (otak-wire: jaga zero false-blocker)
     return {
       version: VERSION, signal, at: Date.now(),
       reasoning: {

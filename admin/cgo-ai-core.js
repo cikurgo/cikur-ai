@@ -1,7 +1,7 @@
 /* CIKUR GO Internal AI Core - Upgraded v1.5.0
  * Added enhanced error telemetry and deterministic fallback validation.
  */
-const VERSION = "1.5.0";
+const VERSION = "1.5.0-otak-wire";
 
 function now(){ return new Date().toISOString(); }
 function id(prefix="case"){ return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`; }

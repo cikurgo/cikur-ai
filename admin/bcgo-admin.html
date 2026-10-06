@@ -1340,6 +1340,7 @@
                 cachedCustomers[documentSnap.id] = documentSnap.data();
             });
             renderCustomerData();
+            try { publishAdminOpsSnapshot(); } catch (_) {}
         }, error => {
             console.warn("Kendala koneksi koleksi customers:", error);
             customerTbody.innerHTML = `
@@ -1517,6 +1518,7 @@
             });
 
             renderPartnerData();
+            try { publishAdminOpsSnapshot(); } catch (_) {}
 
             const now = new Date();
             document.getElementById("lastSyncTime").textContent =
@@ -1985,6 +1987,76 @@
     });
     
     // Error reporting global ditangani satu kali oleh cikur-config.js.
+
+    /* OPS SNAPSHOT dari bcgo-admin → Otak (read-only, tanpa PII) */
+    function publishAdminOpsSnapshot() {
+        try {
+            const apps = Object.values(cachedApplications || {});
+            const custs = Object.values(cachedCustomers || {});
+            const fiveMin = Date.now() - 5 * 60 * 1000;
+            function tsMs(v) {
+                if (!v) return 0;
+                if (typeof v.toMillis === "function") return v.toMillis();
+                if (typeof v.toDate === "function") return v.toDate().getTime();
+                if (typeof v === "number") return v;
+                return 0;
+            }
+            const pending = apps.filter(m => String(m.status || "pending") === "pending").length;
+            const approved = apps.filter(m => String(m.status || "") === "approved").length;
+            const rejected = apps.filter(m => String(m.status || "") === "rejected").length;
+            const online = custs.filter(c => tsMs(c.lastSeen || c.lastActive || c.lastLogin) > fiveMin).length;
+            const offline = Math.max(0, custs.length - online);
+            let low = 0, review = 0, high = 0;
+            apps.forEach(m => {
+                const r = m._bcgoLiveResult;
+                if (!r) return;
+                const s = String(r.status || "").toUpperCase();
+                if (s === "APPROVE") low++;
+                else if (s === "REJECT") high++;
+                else review++;
+            });
+            const snap = {
+                type: "CGO_OPS_SNAPSHOT",
+                version: "1.0.1-admin",
+                source: "bcgo-admin",
+                updatedAt: new Date().toISOString(),
+                customers: { total: custs.length, online: online, offline: offline },
+                mitra: { total: apps.length, pending: pending, approved: approved, rejected: rejected },
+                orders: { todayCount: null, todayOmzet: null, trend7d: [], note: "orders lengkap di data-cgo" },
+                radar: {
+                    attentionCount: high + pending,
+                    bcgoRisk: { low: low, review: review, high: high },
+                    agentsByKm: null
+                },
+                links: { dataCgo: "data-cgo.html#overview", admin: "bcgo-admin.html" }
+            };
+            // Merge dengan snapshot data-cgo jika lebih kaya di orders
+            try {
+                const prev = localStorage.getItem("CGO_OPS_SNAPSHOT_V1");
+                if (prev) {
+                    const p = JSON.parse(prev);
+                    if (p && p.source === "data-cgo" && p.orders && p.orders.todayCount != null) {
+                        snap.orders = p.orders;
+                        snap.mergedFrom = "data-cgo-orders";
+                    }
+                }
+            } catch (_) {}
+            try { window.CGO_OPS_SNAPSHOT = snap; } catch (_) {}
+            try { localStorage.setItem("CGO_OPS_SNAPSHOT_V1", JSON.stringify(snap)); } catch (_) {}
+            try {
+                if (typeof BroadcastChannel === "function") {
+                    if (!window.__cgoOpsBus) window.__cgoOpsBus = new BroadcastChannel("cgo-ops-snapshot-bus");
+                    window.__cgoOpsBus.postMessage(snap);
+                }
+            } catch (_) {}
+            return snap;
+        } catch (e) {
+            console.warn("[BCGO-ADMIN] publishAdminOpsSnapshot:", e);
+            return null;
+        }
+    }
+
+
     window.__BCGO_ADMIN_MODULE_READY__ = true;
 </script>
 <script>
