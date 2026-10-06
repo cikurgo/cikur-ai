@@ -14,7 +14,20 @@
   "use strict";
 
   const ROOT = window.CGO_CUSTOMER || (window.CGO_CUSTOMER = {});
-  const VERSION = "1.0.0-optional-brain-bridge";
+  const VERSION = "1.0.1-otak-wire";
+
+
+  /** otak-wire: ambil nalar singkat bila ada (aditif) */
+  function softNalar(text, lang) {
+    try {
+      const brain = getBrain();
+      if (!brain || typeof brain.nalar !== "function") return null;
+      const r = brain.nalar(String(text || ""), { bahasa: lang || "id" });
+      const c = r && (r.kesimpulan || r.hasil || r.penjelasan);
+      if (c && String(c).length > 16 && !/^teks\s+/i.test(String(c))) return String(c).slice(0, 280);
+    } catch (_) {}
+    return null;
+  }
 
   function getBrain() {
     const b = window.CIKURGO || window.CIKURGO_V3 || null;

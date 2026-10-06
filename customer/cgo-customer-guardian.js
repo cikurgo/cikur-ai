@@ -28,7 +28,7 @@
 
     window.CGO_CUSTOMER = window.CGO_CUSTOMER || {};
 
-    const VERSION = "1.0.0-guardian";
+    const VERSION = "1.0.0-guardian-otak-wire";
 
     const STATUS = Object.freeze({
         SAFE: "safe",

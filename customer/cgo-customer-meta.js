@@ -12,7 +12,7 @@
   "use strict";
 
   const ROOT = window.CGO_CUSTOMER || (window.CGO_CUSTOMER = {});
-  const VERSION = "1.0.0-self-awareness";
+  const VERSION = "1.0.0-self-awareness-otak-wire";
 
   function lower(v) {
     return String(v == null ? "" : v).trim().toLowerCase();

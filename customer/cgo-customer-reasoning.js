@@ -1,3 +1,4 @@
+/* upgraded for otak-wire 1.1.0 — additive, no API break */
 /* ============================================================
  * CIKUR GO — CUSTOMER NATURAL REASONING LAYER
  * ------------------------------------------------------------

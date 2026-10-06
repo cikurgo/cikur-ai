@@ -25,7 +25,7 @@
     (window.CGO_CUSTOMER = {});
 
   const VERSION =
-    "1.0.0-knowledge";
+    "1.0.0-knowledge-otak-wire";
 
   /* ==========================================================
    * CONSTANTS

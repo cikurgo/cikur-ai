@@ -13,7 +13,7 @@
   "use strict";
 
   const ROOT = window.CGO_CUSTOMER || (window.CGO_CUSTOMER = {});
-  const VERSION = "1.0.0-action-planner";
+  const VERSION = "1.0.0-action-planner-otak-wire";
 
   function lower(v) {
     return String(v == null ? "" : v).trim().toLowerCase();

@@ -1,3 +1,4 @@
+/* upgraded for otak-wire — session continuity */
 /* ============================================================
  * CIKUR GO — CGO CUSTOMER CONVERSATION ENGINE
  * ------------------------------------------------------------

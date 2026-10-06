@@ -19,7 +19,7 @@
   "use strict";
 
   const ROOT = window.CGO_CUSTOMER || (window.CGO_CUSTOMER = {});
-  const VERSION = "1.0.0-soft-memory";
+  const VERSION = "1.0.1-otak-wire";
   const STORAGE_KEY = "CGO_CUSTOMER_MEMORY_V1";
   const MAX_PREF_PER_SERVICE = 12;
   const MAX_CONSTRAINT_HISTORY = 20;

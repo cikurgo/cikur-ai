@@ -30,7 +30,7 @@
     (window.CGO_CUSTOMER = {});
 
   const VERSION =
-    "1.0.1-discovery-evidence-aligned";
+    "1.0.1-discovery-evidence-aligned-otak-wire";
 
   /* ==========================================================
    * DISCOVERY STATUS

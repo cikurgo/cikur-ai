@@ -46,7 +46,7 @@
 
     window.CGO_CUSTOMER = window.CGO_CUSTOMER || {};
 
-    const VERSION = "1.2.1-pipeline-cikur-bridge";
+    const VERSION = "1.2.2-otak-wire";
 
     const EVENTS = Object.freeze({
         READY: "ready",
