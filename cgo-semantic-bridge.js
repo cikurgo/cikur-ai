@@ -17,7 +17,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "1.1.2-semantic-bridge-rootsafe";
+  const VERSION = "1.1.3-otak-wire";
   /** Model lokal (folder di assets/models/). */
   const DEFAULT_MODEL = "all-MiniLM-L6-v2";
   const CACHE_KEY = "CGO_SEMANTIC_DOC_V1";
