@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.8.1-HALLO-GOOGLE";
+  const VERSION = "1.8.3-LOCAL-CSV";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 

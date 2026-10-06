@@ -749,12 +749,12 @@ document.getElementById('dataCgoLogout')?.addEventListener('click', async () => 
         el = document.createElement("div");
         el.id = "cgoExportBanner";
         el.setAttribute("style",
-            "display:none;position:fixed;right:16px;bottom:16px;z-index:99999;" +
-            "max-width:340px;background:#0f172a;color:#f8fafc;border-radius:14px;" +
-            "padding:14px 16px;box-shadow:0 12px 40px rgba(0,0,0,.35);" +
-            "font-family:Inter,system-ui,sans-serif;border:1px solid #334155;");
+            "display:none;position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:99999;" +
+            "max-width:min(420px,92vw);background:#fff;color:#0f172a;border-radius:12px;" +
+            "padding:12px 16px;box-shadow:0 8px 30px rgba(15,23,42,.18);" +
+            "font-family:Inter,system-ui,sans-serif;border:1px solid #e2e8f0;");
         el.innerHTML =
-            '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">CGO · Siap unduh data</div>' +
+            '<div style="font-size:12px;font-weight:700;margin-bottom:4px;color:#0f172a;">Unduhan siap</div>' +
             '<div id="cgoExportBannerMsg" style="font-size:11px;color:#cbd5e1;line-height:1.45;margin-bottom:10px;"></div>' +
             '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
             '<button type="button" id="cgoExportBannerBtn" style="border:0;border-radius:9px;background:#4f46e5;color:#fff;font-size:11px;font-weight:700;padding:8px 12px;cursor:pointer;">⬇ Unduh CSV sekarang</button>' +
@@ -787,22 +787,41 @@ document.getElementById('dataCgoLogout')?.addEventListener('click', async () => 
 
     function showExportReady(key) {
         __pendingKey = key;
-        const el = ensureBanner();
-        const msg = document.getElementById("cgoExportBannerMsg");
-        const label = LABEL[key] || key;
-        if (msg) {
-            msg.textContent = "Perintah dari CGO: unduh data " + label +
-                ". Browser memblokir unduh otomatis dari tab lain — klik tombol di bawah (sekali saja).";
-        }
-        el.style.display = "block";
         try {
-            // coba auto (kadang lolos); banner tetap ada sebagai cadangan
             if (typeof window.setDataset === "function") window.setDataset(key);
+        } catch (_) {}
+        // Coba unduh langsung (tanpa popup mengganggu)
+        var autoOk = false;
+        try {
             if (typeof window.exportCurrentDataset === "function") {
                 window.exportCurrentDataset();
-                window.CGO_LAST_EXPORT = { dataset: key, at: Date.now(), ok: true, via: "auto-try" };
+                window.CGO_LAST_EXPORT = { dataset: key, at: Date.now(), ok: true, via: "auto" };
+                autoOk = true;
             }
         } catch (_) {}
+        // Highlight tombol Download CSV yang sudah ada di halaman
+        try {
+            var btn = document.querySelector('button[onclick*="exportCurrentDataset"]');
+            if (btn) {
+                btn.classList.add("ring-2", "ring-indigo-500");
+                btn.textContent = "⬇ Unduh CSV · siap";
+                setTimeout(function () {
+                    try {
+                        btn.classList.remove("ring-2", "ring-indigo-500");
+                        btn.textContent = "⬇ Download CSV";
+                    } catch (_) {}
+                }, 8000);
+            }
+        } catch (_) {}
+        // Banner ringan hanya jika auto gagal / user perlu klik
+        if (!autoOk) {
+            var el = ensureBanner();
+            var msg = document.getElementById("cgoExportBannerMsg");
+            var label = LABEL[key] || key;
+            if (msg) msg.textContent = "Data " + label + " siap. Ketuk Unduh CSV.";
+            el.style.display = "block";
+            setTimeout(function () { try { el.style.display = "none"; } catch (_) {} }, 10000);
+        }
     }
 
     function runExport(dataset) {
