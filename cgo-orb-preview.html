@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CGO Orb Preview · Masa Depan Chat CGO</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#020617;color:#e2e8f0;margin:0;min-height:100vh;padding:16px}
+.code-font{font-family:'Fira Code',ui-monospace,Menlo,monospace}
+
+/* ─── Chat shell ─── */
+.cgo-chat-shell{
+  max-width:760px;margin:0 auto;
+  border:1px solid rgba(99,102,241,.35);
+  background:linear-gradient(180deg,#0b1224 0%,#070b16 100%);
+  border-radius:18px;overflow:hidden;
+  box-shadow:0 0 60px rgba(99,102,241,.14),inset 0 1px 0 rgba(255,255,255,.04);
+}
+.cgo-chat-head{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:12px 14px;border-bottom:1px solid rgba(51,65,85,.7);
+  background:rgba(2,6,23,.55);
+}
+.cgo-brand-mark{
+  width:34px;height:34px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  filter:drop-shadow(0 0 8px rgba(34,211,238,.55));
+  transition:filter .4s;
+}
+.cgo-brand-mark svg{width:100%;height:100%;display:block}
+.cgo-wave{display:flex;align-items:flex-end;gap:3px;height:28px;padding:0 4px}
+.cgo-wave span{display:block;width:3px;border-radius:2px;background:linear-gradient(180deg,#67e8f9,#6366f1);opacity:.55;transform-origin:bottom;height:6px;animation:cgoWaveIdle 1.8s ease-in-out infinite alternate}
+.cgo-wave span:nth-child(1){animation-delay:0s;height:5px}
+.cgo-wave span:nth-child(2){animation-delay:.12s;height:8px}
+.cgo-wave span:nth-child(3){animation-delay:.24s;height:6px}
+.cgo-wave span:nth-child(4){animation-delay:.36s;height:9px}
+.cgo-wave span:nth-child(5){animation-delay:.48s;height:7px}
+.cgo-wave span:nth-child(6){animation-delay:.6s;height:5px}
+.cgo-wave span:nth-child(7){animation-delay:.72s;height:8px}
+@keyframes cgoWaveIdle{from{transform:scaleY(.55);opacity:.4}to{transform:scaleY(1);opacity:.7}}
+
+.cgo-think-stages{padding:6px 14px;border-bottom:1px solid rgba(51,65,85,.4);display:flex;gap:14px;font-size:10px;font-family:'Fira Code',monospace;color:#475569}
+.cgo-think-stages span.on{color:#a5b4fc;text-shadow:0 0 8px rgba(129,140,248,.6)}
+.cgo-think-stages span.done{color:#34d399}
+
+/* ─── ORB STAGE · 3 panel ─── */
+.cgo-orb-stage{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+  gap:14px;
+  align-items:center;
+  padding:22px 18px 18px;
+  border-bottom:1px solid rgba(51,65,85,.5);
+  background:radial-gradient(ellipse at center,rgba(34,211,238,.05) 0%,transparent 65%);
+}
+@media (max-width:640px){
+  .cgo-orb-stage{grid-template-columns:1fr;gap:16px;padding:16px 12px}
+  .cgo-step-list{flex-direction:row;flex-wrap:wrap;justify-content:center;gap:6px 14px}
+  .cgo-step-list .cgo-step{flex:none}
+  .cgo-orb-right{max-width:100%}
+}
+
+/* Kiri · 5 langkah */
+.cgo-step-list{display:flex;flex-direction:column;gap:9px;font-size:11px}
+.cgo-step{display:flex;align-items:center;gap:8px;color:#64748b;transition:color .4s}
+.cgo-step .lamp{width:8px;height:8px;border-radius:50%;background:#334155;flex-shrink:0;transition:all .4s}
+.cgo-step.active{color:#e0f2fe}
+.cgo-step.active .lamp{background:#67e8f9;box-shadow:0 0 10px #67e8f9,0 0 20px rgba(103,232,249,.4)}
+.cgo-step.done{color:#34d399}
+.cgo-step.done .lamp{background:#34d399;box-shadow:0 0 8px #34d399}
+
+/* Tengah · orb */
+.cgo-orb-center{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px}
+.cgo-orb-wrap{
+  position:relative;
+  width:300px;height:300px;
+  display:flex;align-items:center;justify-content:center;
+}
+@media (max-width:640px){.cgo-orb-wrap{width:230px;height:230px}}
+#cgo-orb-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+/* Core orb · SVG brain proper (Lucide) */
+.cgo-orb-core{
+  position:relative;z-index:2;
+  width:58px;height:58px;border-radius:50%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 38% 32%,#cffafe 0%,#22d3ee 45%,#0891b2 75%,#0e7490 100%);
+  box-shadow:
+    0 0 26px rgba(34,211,238,.8),
+    0 0 60px rgba(34,211,238,.4),
+    inset 0 0 14px rgba(255,255,255,.4),
+    inset 0 -6px 12px rgba(8,47,73,.35);
+  animation:orbCoreBreath 3.4s ease-in-out infinite;
+}
+.cgo-orb-core svg{width:24px;height:24px;display:block;stroke:#082f49;stroke-width:1.9;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.cgo-orb-core .cgo-core-label{
+  font-size:8px;font-weight:800;letter-spacing:.14em;
+  color:#082f49;font-family:'Fira Code',monospace;
+  margin-top:1px;
+}
+@keyframes orbCoreBreath{
+  0%,100%{transform:scale(1);
+    box-shadow:0 0 26px rgba(34,211,238,.8),0 0 60px rgba(34,211,238,.4),inset 0 0 14px rgba(255,255,255,.4),inset 0 -6px 12px rgba(8,47,73,.35)}
+  50%{transform:scale(1.05);
+    box-shadow:0 0 36px rgba(34,211,238,.98),0 0 80px rgba(34,211,238,.55),inset 0 0 18px rgba(255,255,255,.55),inset 0 -6px 12px rgba(8,47,73,.35)}
+}
+.cgo-orb-status{
+  font:11px 'Fira Code',monospace;letter-spacing:.22em;text-transform:uppercase;
+  color:#67e8f9;transition:color .4s;
+}
+.cgo-orb-wake-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  font:9px 'Fira Code',monospace;letter-spacing:.16em;
+  color:#94a3b8;border:1px solid #1e3a5f;border-radius:999px;
+  padding:3px 9px;background:rgba(2,6,23,.6);
+}
+.cgo-orb-wake-badge::before{content:"";width:5px;height:5px;border-radius:50%;background:#22d3ee;box-shadow:0 0 6px #22d3ee}
+
+/* Kanan · siap mendengar */
+.cgo-orb-right{
+  border:1px solid rgba(34,211,238,.28);
+  border-radius:14px;
+  background:linear-gradient(180deg,rgba(6,24,42,.7),rgba(2,10,20,.5));
+  padding:14px;max-width:100%;
+}
+.cgo-orb-right .title{font-size:11px;font-weight:700;letter-spacing:.08em;color:#67e8f9;text-transform:uppercase}
+.cgo-orb-right .body{margin-top:6px;font-size:11px;line-height:1.5;color:#cbd5e1}
+.cgo-mini-wave{display:flex;align-items:flex-end;gap:2px;height:22px;margin-top:12px}
+.cgo-mini-wave span{flex:1;background:linear-gradient(180deg,#67e8f9,rgba(99,102,241,.4));border-radius:1px;animation:miniWave 1.4s ease-in-out infinite alternate;min-height:2px}
+.cgo-mini-wave span:nth-child(1){animation-delay:0s}
+.cgo-mini-wave span:nth-child(2){animation-delay:.1s}
+.cgo-mini-wave span:nth-child(3){animation-delay:.2s}
+.cgo-mini-wave span:nth-child(4){animation-delay:.3s}
+.cgo-mini-wave span:nth-child(5){animation-delay:.4s}
+.cgo-mini-wave span:nth-child(6){animation-delay:.5s}
+.cgo-mini-wave span:nth-child(7){animation-delay:.6s}
+.cgo-mini-wave span:nth-child(8){animation-delay:.7s}
+.cgo-mini-wave span:nth-child(9){animation-delay:.8s}
+.cgo-mini-wave span:nth-child(10){animation-delay:.9s}
+@keyframes miniWave{from{height:4px;opacity:.5}to{height:20px;opacity:1}}
+
+/* ─── Chat feed ─── */
+#chat-feed{padding:14px;height:280px;overflow-y:auto;background:rgba(2,6,23,.6);display:flex;flex-direction:column;gap:10px}
+.chat-bubble-cgo{margin-right:auto;max-width:90%;background:linear-gradient(145deg,rgba(6,78,59,.35),rgba(15,23,42,.95));border:1px solid #1e293b;color:#bbf7d0;border-radius:14px 14px 14px 4px;padding:8px 12px;font-size:13px;line-height:1.45}
+.chat-bubble-user{margin-left:auto;max-width:85%;background:linear-gradient(145deg,#1e1b4b,rgba(30,41,59,.95));border:1px solid #3730a3;color:#e0e7ff;border-radius:14px 14px 4px 14px;padding:8px 12px;font-size:13px}
+.chat-bubble-who{font-size:9px;text-transform:uppercase;opacity:.6;margin-bottom:3px}
+.chat-bubble-meta{margin-top:6px;font-size:9px;color:#64748b;display:flex;align-items:center;gap:6px}
+.chat-bubble-meta .bar{height:4px;border-radius:2px;background:#1e293b;flex:1;overflow:hidden;max-width:80px}
+.chat-bubble-meta .bar>i{display:block;height:100%;background:linear-gradient(90deg,#34d399,#38bdf8)}
+.cgo-avatar{
+  width:28px;height:28px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 35% 30%,#0e7490,#082f49);
+  border:1px solid rgba(103,232,249,.4);
+  box-shadow:0 0 8px rgba(34,211,238,.35);
+}
+.cgo-avatar svg{width:16px;height:16px;stroke:#67e8f9;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.cgo-row{display:flex;gap:8px;align-items:flex-start}
+
+/* ─── Form ─── */
+.cgo-form{display:flex;gap:8px;align-items:center;padding:12px;border-top:1px solid rgba(51,65,85,.7);background:rgba(2,6,23,.4)}
+.cgo-form input{flex:1;min-width:0;background:#020617;border:1px solid #334155;border-radius:10px;padding:9px 12px;color:#e2e8f0;font-size:13px;outline:none;transition:border-color .2s}
+.cgo-form input:focus{border-color:#6366f1}
+.cgo-mic{
+  width:40px;height:40px;border-radius:10px;border:1px solid #334155;background:#0f172a;
+  color:#67e8f9;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;
+}
+.cgo-mic svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.cgo-mic:hover{border-color:#0891b2;color:#22d3ee}
+.cgo-aud{display:flex;gap:4px}
+.cgo-aud button{
+  width:28px;height:28px;border-radius:6px;border:1px solid #334155;background:#0f172a;
+  color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;
+}
+.cgo-aud button svg{width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.cgo-aud button:hover{border-color:#6366f1;color:#e0e7ff}
+.cgo-send{padding:8px 18px;border-radius:10px;background:#4f46e5;color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer;transition:background .2s}
+.cgo-send:hover{background:#6366f1}
+.quick-q{font-size:10px;padding:4px 10px;border-radius:999px;border:1px solid #334155;background:transparent;color:#94a3b8;cursor:pointer}
+.quick-q:hover{border-color:#6366f1;color:#c7d2fe}
+
+/* Preview toolbar */
+.preview-bar{max-width:760px;margin:0 auto 14px;padding:10px 14px;border:1px solid #1e3a5f;border-radius:12px;background:rgba(6,17,31,.6);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.preview-bar .ptitle{font-size:11px;font-weight:700;letter-spacing:.12em;color:#67e8f9;text-transform:uppercase}
+.preview-bar .psub{font-size:10px;color:#64748b;margin-top:2px}
+.preview-bar .states{display:flex;gap:6px;flex-wrap:wrap}
+.preview-bar .states button{font-size:10px;padding:4px 10px;border-radius:999px;border:1px solid #334155;background:#020617;color:#94a3b8;cursor:pointer;font-family:'Fira Code',monospace}
+.preview-bar .states button:hover{border-color:#0891b2;color:#67e8f9}
+.preview-bar .states button.on{border-color:#0891b2;color:#22d3ee;background:rgba(8,145,178,.12)}
+</style>
+</head>
+<body>
+
+<!-- Preview toolbar · hanya untuk demo, tidak akan masuk ke bcgo.html -->
+<div class="preview-bar">
+  <div>
+    <div class="ptitle">CGO ORB · PREVIEW</div>
+    <div class="psub">Standalone · zero regresi · semua ikon SVG proper · tanpa PNG</div>
+  </div>
+  <div class="states" id="preview-states">
+    <button data-state="tenang" class="on">tenang</button>
+    <button data-state="waspada">waspada</button>
+    <button data-state="menjaga">menjaga</button>
+    <button data-state="membuka">membuka</button>
+    <button data-state="transenden">transenden</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     CHAT SHELL · struktur sama seperti mockup
+     ═══════════════════════════════════════════ -->
+<div class="cgo-chat-shell">
+
+  <!-- Head · brand mark SVG proper (pengganti cikurgoicon.png) -->
+  <div class="cgo-chat-head">
+    <div style="display:flex;align-items:center;gap:10px;min-width:0">
+
+      <!-- ═══ BRAND MARK SVG · CGO ═══ -->
+      <div class="cgo-brand-mark" aria-label="CGO">
+        <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <linearGradient id="cgoHex" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#67e8f9"/>
+              <stop offset="0.55" stop-color="#22d3ee"/>
+              <stop offset="1" stop-color="#0891b2"/>
+            </linearGradient>
+            <radialGradient id="cgoCore" cx="0.4" cy="0.35" r="0.75">
+              <stop offset="0" stop-color="#cffafe"/>
+              <stop offset="0.5" stop-color="#22d3ee"/>
+              <stop offset="1" stop-color="#0e7490"/>
+            </radialGradient>
+          </defs>
+          <polygon points="20,3 34,11 34,29 20,37 6,29 6,11"
+                   fill="none" stroke="url(#cgoHex)" stroke-width="1.6" stroke-linejoin="round"/>
+          <polygon points="20,8 29.5,13.5 29.5,26.5 20,32 10.5,26.5 10.5,13.5"
+                   fill="rgba(8,145,178,.15)" stroke="url(#cgoHex)" stroke-width="0.8" stroke-linejoin="round"/>
+          <circle cx="20" cy="20" r="5" fill="url(#cgoCore)"/>
+          <circle cx="20" cy="20" r="5" fill="none" stroke="#a5f3fc" stroke-width="0.6" opacity="0.7"/>
+          <line x1="20" y1="15" x2="20" y2="9" stroke="#67e8f9" stroke-width="0.8" opacity="0.6"/>
+          <line x1="24.3" y1="22.5" x2="29.5" y2="26.5" stroke="#67e8f9" stroke-width="0.8" opacity="0.6"/>
+          <line x1="15.7" y1="22.5" x2="10.5" y2="26.5" stroke="#67e8f9" stroke-width="0.8" opacity="0.6"/>
+        </svg>
+      </div>
+
+      <div style="min-width:0">
+        <div style="font-size:11px;font-weight:600;color:#c7d2fe;letter-spacing:.04em">CGO OPERATOR · LIVE</div>
+        <div style="font-size:10px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Kanal siap · tunggu pertanyaan</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:10px;font-family:'Fira Code',monospace;color:rgba(129,140,248,.8)">SATU OTAK</span>
+      <span style="font-size:9px;padding:2px 7px;border-radius:4px;border:1px solid rgba(16,185,129,.4);color:rgba(52,211,153,.9)">MP3 · wanita</span>
+    </div>
+  </div>
+
+  <!-- Thinking stages -->
+  <div class="cgo-think-stages" id="think-stages">
+    <span data-stage="recv">① Terima</span>
+    <span data-stage="think">② Pikir</span>
+    <span data-stage="compose">③ Susun</span>
+    <span data-stage="done">④ Selesai</span>
+  </div>
+
+  <!-- ═══ ORB STAGE · 3 panel ═══ -->
+  <div class="cgo-orb-stage">
+
+    <!-- Kiri · 5 langkah -->
+    <div class="cgo-step-list" id="step-list">
+      <div class="cgo-step" data-step="mendengar"><span class="lamp"></span><span>Mendengar</span></div>
+      <div class="cgo-step" data-step="memahami"><span class="lamp"></span><span>Memahami</span></div>
+      <div class="cgo-step" data-step="menalar"><span class="lamp"></span><span>Menalar</span></div>
+      <div class="cgo-step" data-step="memproses"><span class="lamp"></span><span>Memproses</span></div>
+      <div class="cgo-step" data-step="memberi"><span class="lamp"></span><span>Memberi Hasil</span></div>
+    </div>
+
+    <!-- Tengah · orb -->
+    <div class="cgo-orb-center">
+      <div class="cgo-orb-wrap" id="orb-wrap" data-state="tenang">
+        <canvas id="cgo-orb-canvas"></canvas>
+        <div class="cgo-orb-core">
+          <!-- ═══ BRAIN SVG · Lucide standard, proper ═══ -->
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/>
+            <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/>
+            <path d="M9.5 13.5c.5-1 1.5-1.5 2.5-1.5"/>
+            <path d="M14.5 13.5c-.5-1-1.5-1.5-2.5-1.5"/>
+          </svg>
+          <div class="cgo-core-label">CGO</div>
+        </div>
+      </div>
+      <div class="cgo-orb-status" id="orb-status">Tenang</div>
+      <div class="cgo-orb-wake-badge">WAKE · CGO</div>
+    </div>
+
+    <!-- Kanan · siap mendengar -->
+    <div class="cgo-orb-right">
+      <div class="title" id="right-title">CGO SIAP MENDENGAR</div>
+      <div class="body" id="right-body">Saya selalu standby, siap membantu kapan saja.</div>
+      <div class="cgo-mini-wave" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Chat feed -->
+  <div id="chat-feed">
+    <div class="cgo-row">
+      <div class="cgo-avatar" aria-label="CGO">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/>
+          <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/>
+        </svg>
+      </div>
+      <div class="chat-bubble-cgo">
+        <div class="chat-bubble-who">CGO (Standby)</div>
+        <div>Selamat Datang Di Sistem Internal CIKUR GO. Saya CGO, Otak CIKUR GO. Apa yang bisa saya bantu hari ini?</div>
+        <div class="chat-bubble-meta"><span class="bar"><i style="width:82%"></i></span><span>yakin 82%</span><span>15:42</span></div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end">
+      <div class="chat-bubble-user">
+        <div class="chat-bubble-who">Anda</div>
+        <div>Cek apakah ada error di sistem dan perbaiki jika ada.</div>
+      </div>
+    </div>
+    <div class="cgo-row">
+      <div class="cgo-avatar" aria-label="CGO">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/>
+          <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/>
+        </svg>
+      </div>
+      <div class="chat-bubble-cgo">
+        <div class="chat-bubble-who">CGO (Menganalisis…)</div>
+        <div>Baik, saya akan memeriksa seluruh komponen sistem: Mesin ABC, Log aktivitas, Koneksi internal, Integritas data. Mohon tunggu sebentar, saya sedang bekerja.</div>
+        <div class="chat-bubble-meta"><span class="bar"><i style="width:76%"></i></span><span>yakin 76%</span><span>15:43</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Form -->
+  <form class="cgo-form" id="demo-form" onsubmit="return false">
+    <button type="button" class="cgo-mic" title="Bicara ke CGO" aria-label="Mikrofon">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+    </button>
+    <input type="text" placeholder="Tanya operator: status, scanner, hitung, eja…" id="demo-input">
+    <div class="cgo-aud">
+      <button type="button" title="Aktifkan audio" aria-label="Audio on">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+        </svg>
+      </button>
+      <button type="button" title="Matikan audio" aria-label="Audio off">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <line x1="23" y1="9" x2="17" y2="15"/>
+          <line x1="17" y1="9" x2="23" y2="15"/>
+        </svg>
+      </button>
+      <button type="button" title="Jeda audio" aria-label="Pause">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="6" y="4" width="4" height="16" rx="1"/>
+          <rect x="14" y="4" width="4" height="16" rx="1"/>
+        </svg>
+      </button>
+    </div>
+    <button type="submit" class="cgo-send">Kirim</button>
+  </form>
+
+</div>
+
+<!-- ═══════════════════════════════════════════
+     ORB ENGINE
+     Canvas 2D · 3 ring orbit · star field · breather
+     ═══════════════════════════════════════════ -->
+<script>
+(function(){
+  'use strict';
+
+  const wrap = document.getElementById('orb-wrap');
+  const canvas = document.getElementById('cgo-orb-canvas');
+  const statusEl = document.getElementById('orb-status');
+  const rightTitle = document.getElementById('right-title');
+  const rightBody = document.getElementById('right-body');
+  const stepList = document.getElementById('step-list');
+  if (!wrap || !canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  // ── Resolusi retina ──
+  let W = 0, H = 0;
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+  function resize(){
+    const r = wrap.getBoundingClientRect();
+    W = r.width; H = r.height;
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  resize();
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(wrap);
+  else window.addEventListener('resize', resize);
+
+  // ── State definitions ──
+  // Warna SELALU biru-cyan (identitas). Yang berubah: intensitas, denyut, kecepatan ring.
+  const STATES = {
+    tenang:     { pulse: 0.9, spin: 0.6, intensity: 0.75, starSpeed: 0.4, status:'Tenang',
+                  right:'CGO SIAP MENDENGAR', body:'Saya selalu standby, siap membantu kapan saja.' },
+    waspada:    { pulse: 1.5, spin: 1.1, intensity: 1.0,  starSpeed: 0.8, status:'Waspada',
+                  right:'CGO WASPADA', body:'Ada sinyal yang perlu diperhatikan. Saya pantau terus.' },
+    menjaga:    { pulse: 0.5, spin: 0.25,intensity: 0.55, starSpeed: 0.15, status:'Menjaga',
+                  right:'AKSES TERKUNCI', body:'Menunggu kode akses. Sistem dalam mode terjaga.' },
+    membuka:    { pulse: 1.4, spin: 1.6, intensity: 1.15, starSpeed: 1.2, status:'Membuka',
+                  right:'KODE TERKONFIRMASI', body:'Akses diterima. Silakan tentukan data yang dibutuhkan.' },
+    transenden: { pulse: 1.9, spin: 2.2, intensity: 1.4,  starSpeed: 1.6, status:'Transenden',
+                  right:'MASTER AKSES', body:'Seluruh gerbang terbuka. Kode Nama Tunggal Rahasia valid.' }
+  };
+  let current = 'tenang';
+  let target = STATES.tenang;
+  let live = { pulse:0.9, spin:0.6, intensity:0.75, starSpeed:0.4 };
+  let stateEnteredAt = performance.now();
+
+  // ── Star field ──
+  const STARS = [];
+  function buildStars(){
+    STARS.length = 0;
+    const n = 42;
+    for (let i = 0; i < n; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const radius = 0.35 + Math.random() * 0.6;
+      STARS.push({
+        ang,
+        radius,
+        size: 0.5 + Math.random() * 1.1,
+        phase: Math.random() * Math.PI * 2,
+        twinkle: 1.2 + Math.random() * 1.8
+      });
+    }
+  }
+  buildStars();
+
+  let traveler = { ang: 0 };
+
+  function setState(name, opts){
+    if (!STATES[name]) return;
+    if (current === name && !(opts && opts.force)) return;
+    current = name;
+    target = STATES[name];
+    stateEnteredAt = performance.now();
+    wrap.dataset.state = name;
+    if (statusEl) statusEl.textContent = STATES[name].status;
+    if (rightTitle) rightTitle.textContent = STATES[name].right;
+    if (rightBody) rightBody.textContent = STATES[name].body;
+
+    if (stepList) {
+      const steps = [...stepList.querySelectorAll('.cgo-step')];
+      steps.forEach(s => s.classList.remove('active','done'));
+      if (name === 'tenang') { /* diam */ }
+      else if (name === 'waspada') {
+        steps[0].classList.add('active');
+      }
+      else if (name === 'menjaga') {
+        steps[0].classList.add('done');
+        steps[1].classList.add('active');
+      }
+      else if (name === 'membuka') {
+        steps[0].classList.add('done');
+        steps[1].classList.add('done');
+        steps[2].classList.add('done');
+        steps[3].classList.add('active');
+      }
+      else if (name === 'transenden') {
+        steps.forEach(s => s.classList.add('done'));
+        steps[4].classList.add('active');
+      }
+    }
+
+    document.querySelectorAll('#preview-states button').forEach(b => {
+      b.classList.toggle('on', b.dataset.state === name);
+    });
+  }
+
+  let t0 = performance.now();
+  function loop(now){
+    const dt = Math.min(50, now - t0); t0 = now;
+    const k = 1 - Math.pow(0.001, dt / 1000);
+
+    live.pulse     += (target.pulse     - live.pulse)     * k;
+    live.spin      += (target.spin      - live.spin)      * k;
+    live.intensity += (target.intensity - live.intensity) * k;
+    live.starSpeed += (target.starSpeed - live.starSpeed) * k;
+
+    draw(now);
+    requestAnimationFrame(loop);
+  }
+
+  let lastDrawT = performance.now();
+
+  function draw(now){
+    const dt = Math.min(50, now - lastDrawT); lastDrawT = now;
+    ctx.clearRect(0, 0, W, H);
+    const cx = W / 2, cy = H / 2;
+    const R = Math.min(W, H) * 0.42;
+    const time = now / 1000;
+
+    // L0 · halo pusat
+    const breath = 1 + Math.sin(time * 1.4 * live.pulse) * 0.05;
+    const coreR = R * 0.34 * breath;
+    const gCore = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 2.2);
+    gCore.addColorStop(0, `rgba(165,243,252,${0.85 * live.intensity})`);
+    gCore.addColorStop(0.3, `rgba(34,211,238,${0.45 * live.intensity})`);
+    gCore.addColorStop(0.7, `rgba(8,145,178,${0.15 * live.intensity})`);
+    gCore.addColorStop(1, 'rgba(8,145,178,0)');
+    ctx.fillStyle = gCore;
+    ctx.beginPath(); ctx.arc(cx, cy, coreR * 2.2, 0, Math.PI * 2); ctx.fill();
+
+    // L1 · bintang
+    for (const s of STARS) {
+      s.ang += 0.0006 * live.starSpeed * (dt / 16);
+      const twk = 0.5 + 0.5 * Math.sin(time * s.twinkle + s.phase);
+      const a = (0.25 + 0.55 * twk) * live.intensity;
+      const px = cx + Math.cos(s.ang) * R * s.radius;
+      const py = cy + Math.sin(s.ang) * R * s.radius;
+      ctx.fillStyle = `rgba(165,243,252,${a})`;
+      ctx.beginPath(); ctx.arc(px, py, s.size, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // L2 · 3 ring orbit
+    drawOrbit(cx, cy, R, time, -0.35, 0.62, 0.20, live.intensity * 0.65, live.spin * 0.6);
+    drawOrbit(cx, cy, R, time,  0.55, 0.78, 0.24, live.intensity * 0.7,  live.spin * 0.85);
+    drawOrbit(cx, cy, R, time, -0.08, 0.95, 0.30, live.intensity * 0.55, live.spin * 1.0);
+
+    // L3 · traveler di ring terluar
+    traveler.ang += 0.004 * live.spin;
+    const tRx = R * 0.95;
+    const tRy = R * 0.30;
+    const cosR = Math.cos(-0.08), sinR = Math.sin(-0.08);
+    const ex = Math.cos(traveler.ang) * tRx;
+    const ey = Math.sin(traveler.ang) * tRy;
+    const px2 = cx + ex * cosR - ey * sinR;
+    const py2 = cy + ex * sinR + ey * cosR;
+    const tGlow = ctx.createRadialGradient(px2, py2, 0, px2, py2, 8);
+    tGlow.addColorStop(0, `rgba(165,243,252,${0.95 * live.intensity})`);
+    tGlow.addColorStop(1, 'rgba(165,243,252,0)');
+    ctx.fillStyle = tGlow;
+    ctx.beginPath(); ctx.arc(px2, py2, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `rgba(224,242,254,${0.95})`;
+    ctx.beginPath(); ctx.arc(px2, py2, 2, 0, Math.PI * 2); ctx.fill();
+
+    // L4 · pulse rings
+    if (current === 'waspada' || current === 'membuka' || current === 'transenden') {
+      const elapsed = (now - stateEnteredAt) / 1000;
+      const pcycle = (elapsed % 1.6) / 1.6;
+      const pR = R * (0.5 + pcycle * 0.55);
+      const pA = (1 - pcycle) * 0.5 * live.intensity;
+      ctx.strokeStyle = `rgba(103,232,249,${pA})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(cx, cy, pR, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    // L5 · ring batas gerbang
+    if (current === 'menjaga') {
+      const tighten = 0.5 + Math.sin(time * 2.2) * 0.5;
+      ctx.strokeStyle = `rgba(103,232,249,${0.35 + 0.35 * tighten})`;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(cx, cy, R * 1.02, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+
+  function drawOrbit(cx, cy, R, time, rot, rxRatio, ryRatio, alpha, spinSpeed){
+    const rx = R * rxRatio;
+    const ry = R * ryRatio;
+    const rotAngle = rot + time * spinSpeed * 0.08;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rotAngle);
+    ctx.strokeStyle = `rgba(103,232,249,${alpha * 0.55})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    const tipAng = time * spinSpeed * 0.6;
+    const tipX = Math.cos(tipAng) * rx;
+    const tipY = Math.sin(tipAng) * ry;
+    ctx.fillStyle = `rgba(165,243,252,${alpha * 0.9})`;
+    ctx.beginPath(); ctx.arc(tipX, tipY, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  requestAnimationFrame(loop);
+
+  window.CGOOrbPreview = {
+    setState,
+    state: () => current,
+    pulse: (name) => setState(name, { force: true })
+  };
+
+  document.getElementById('preview-states')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-state]');
+    if (!btn) return;
+    setState(btn.dataset.state, { force: true });
+  });
+
+  const CYCLE = ['tenang','tenang','waspada','tenang','membuka','tenang','menjaga','tenang','transenden','tenang'];
+  let cycleIdx = 0;
+  setInterval(() => {
+    cycleIdx = (cycleIdx + 1) % CYCLE.length;
+    setState(CYCLE[cycleIdx]);
+  }, 7000);
+
+  setState('tenang', { force: true });
+  console.log('[CGO-ORB-PREVIEW] aktif · 5 state · canvas 2D · star field + 3 orbit ring · semua ikon SVG proper');
+})();
+</script>
+
+</body>
+</html>
