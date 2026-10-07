@@ -71,7 +71,6 @@ body{font-family:'Inter',sans-serif}
 .chat-bubble-cgo{margin-right:auto;max-width:90%;background:#0f172a;border:1px solid #1e293b;color:#bbf7d0;border-radius:14px 14px 14px 4px;padding:8px 12px;font-size:13px;line-height:1.45}
 .chat-bubble-meta{font-size:9px;color:#64748b;margin-top:4px;font-family:ui-monospace,Menlo,monospace}
 
-
 /* CGO UI 6 lapis — append only */
 .cgo-wave-wrap{height:28px;margin:0 12px 4px;display:none}
 .cgo-wave-wrap.on{display:block}
@@ -108,7 +107,6 @@ body{font-family:'Inter',sans-serif}
 .cgo-interim.on{display:block}
 .cgo-ambient-line{position:absolute;left:0;right:0;bottom:0;height:2px;pointer-events:none;background:linear-gradient(90deg,transparent,#6366f1,transparent);opacity:.25;animation:cgoAmbient 75s linear infinite}
 @keyframes cgoAmbient{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
-
 
 .cgo-think-stages span.on{color:#a5b4fc;text-shadow:0 0 8px rgba(129,140,248,.5)}
 .cgo-think-stages span.done{color:#34d399}
@@ -150,6 +148,53 @@ body{font-family:'Inter',sans-serif}
 .abc-command-tags span.warn{border-color:#765f1b;color:#ffe07b}
 .abc-command-tags span.bad{border-color:#76263a;color:#ff98a6}
 
+/* ═══════════════════════════════════════════════════════════
+   CGO ORB · URAT SARAF
+   ═══════════════════════════════════════════════════════════ */
+#cgo-orb-zone{
+  display:flex; justify-content:center; align-items:center;
+  padding:18px 0 6px;
+  position:relative;
+}
+#cgo-orb-wrap{
+  position:relative;
+  width:min(38vw, 360px);
+  height:min(38vw, 360px);
+  display:flex; align-items:center; justify-content:center;
+}
+@media (max-width:1024px){
+  #cgo-orb-wrap{ width:min(56vw, 320px); height:min(56vw, 320px); }
+}
+@media (max-width:640px){
+  #cgo-orb-wrap{ width:min(72vw, 260px); height:min(72vw, 260px); }
+  #cgo-orb-zone{ padding:12px 0 4px; }
+}
+#cgo-orb-canvas{
+  width:100%; height:100%; display:block;
+  filter:drop-shadow(0 0 28px rgba(99,102,241,.30));
+  transition:filter .8s ease;
+}
+#cgo-orb-status{
+  position:absolute; bottom:-2px; left:50%; transform:translateX(-50%);
+  font:10px 'Fira Code', ui-monospace, monospace;
+  letter-spacing:.22em; text-transform:uppercase;
+  color:#475569; white-space:nowrap;
+  transition:color .5s ease, opacity .5s ease;
+  opacity:.85;
+}
+#cgo-orb-wrap[data-state="tenang"]     #cgo-orb-status{ color:#67e8f9; }
+#cgo-orb-wrap[data-state="waspada"]    #cgo-orb-status{ color:#fbbf24; }
+#cgo-orb-wrap[data-state="menjaga"]    #cgo-orb-status{ color:#a5b4fc; }
+#cgo-orb-wrap[data-state="membuka"]    #cgo-orb-status{ color:#34d399; }
+#cgo-orb-wrap[data-state="transenden"] #cgo-orb-status{ color:#f0abfc; }
+#cgo-orb-wrap[data-state="tenang"]     #cgo-orb-canvas{ filter:drop-shadow(0 0 30px rgba(103,232,249,.30)); }
+#cgo-orb-wrap[data-state="waspada"]    #cgo-orb-canvas{ filter:drop-shadow(0 0 32px rgba(251,191,36,.38)); }
+#cgo-orb-wrap[data-state="menjaga"]    #cgo-orb-canvas{ filter:drop-shadow(0 0 28px rgba(99,102,241,.40)); }
+#cgo-orb-wrap[data-state="membuka"]    #cgo-orb-canvas{ filter:drop-shadow(0 0 36px rgba(52,211,153,.48)); }
+#cgo-orb-wrap[data-state="transenden"] #cgo-orb-canvas{ filter:drop-shadow(0 0 46px rgba(240,171,252,.55)); }
+@media (prefers-reduced-motion: reduce){
+  #cgo-orb-canvas{ filter:drop-shadow(0 0 14px rgba(99,102,241,.22)) !important; }
+}
 </style>
 </head>
 
@@ -193,6 +238,16 @@ body{font-family:'Inter',sans-serif}
     </div>
 </header>
 
+<!-- ═══════════════════════════════════════════════════════════
+     CGO ORB · URAT SARAF — pusat kesadaran CGO
+     ═══════════════════════════════════════════════════════════ -->
+<section id="cgo-orb-zone" aria-label="Urat saraf CGO">
+  <div id="cgo-orb-wrap" data-state="tenang">
+    <canvas id="cgo-orb-canvas" aria-hidden="true"></canvas>
+    <div id="cgo-orb-status" aria-live="polite">tenang</div>
+  </div>
+</section>
+
 <div class="bg-blue-950/40 border border-blue-800 rounded-xl px-4 py-3 text-xs text-blue-300 leading-relaxed">
     🧠 <b>Neural Heartbeat aktif.</b> BCGO melakukan siklus IN → PROCESS → REVIEW → OUT secara terus-menerus.
     Semua panel membaca <span class="code-font">BCGO_STATE</span> yang sama sehingga cycle, stage, telemetry, dan chat tidak boleh berbeda.
@@ -217,7 +272,6 @@ body{font-family:'Inter',sans-serif}
       <div id="cog-voice" class="text-slate-400 font-semibold mt-0.5">siaga</div>
     </div>
   </section>
-
 
 <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-xs">
     <div class="flex flex-wrap items-center justify-between gap-2">
@@ -2296,12 +2350,6 @@ await runAutonomousEngine(state => {
 }
 </script>
 
-
-
-
-
-
-
 <script>
 // Internal Brain attaches after BCGO LIVE has started; it never blocks UI/telemetry boot.
 (function(){
@@ -2320,7 +2368,6 @@ await runAutonomousEngine(state => {
 </script>
 
 <script>
-
 // --- Multimodal: Web Speech API (MIC → teks → Chat CGO) ---
 // ZERO-REGRESI: SpeechRecognition adalah satu-satunya pemilik capture MIC.
 // Tidak ada getUserMedia/WebAudio paralel yang merebut microphone.
@@ -2570,6 +2617,7 @@ await runAutonomousEngine(state => {
       try { sessionStorage.setItem(KEY, String(now)); } catch (_) {}
       try { v.unlock && v.unlock(); } catch (_) {}
       v.welcome();
+      try { window.dispatchEvent(new Event('cgo-operator-voice-welcome')); } catch (_) {}
     } catch (e) { console.warn('operator welcome', e); }
   }
 
@@ -2601,7 +2649,6 @@ await runAutonomousEngine(state => {
   else window.addEventListener('load', function(){ setTimeout(bootOperator, 600); });
 })();
 </script>
-
 
 <script>
 (function bcgoBootWatchdog(){
@@ -2821,7 +2868,6 @@ await runAutonomousEngine(state => {
 })();
 </script>
 
-
 <script>
 /* CGO interim voice: Kirim / Batal — append */
 (function(){
@@ -2849,7 +2895,6 @@ await runAutonomousEngine(state => {
   window.CGO_INTERIM_WIRED = true;
 })();
 </script>
-
 
 <script>
 (function(){
@@ -2919,7 +2964,6 @@ await runAutonomousEngine(state => {
   } catch (_) {}
 })();
 </script>
-
 
 <script>
 /* BCGO · hasil command chat → satu sumber hasil nyata untuk UI */
@@ -3115,6 +3159,211 @@ await runAutonomousEngine(state => {
       }
     } catch (_) {}
   }, 8000);
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     CGO ORB · URAT SARAF ENGINE
+     Satu orb, lima state, hook ke event CGO yang sudah ada.
+     Tidak menambah state baru — hanya mencerminkan yang sudah ada.
+     ═══════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  'use strict';
+  const wrap = document.getElementById('cgo-orb-wrap');
+  const canvas = document.getElementById('cgo-orb-canvas');
+  const label = document.getElementById('cgo-orb-status');
+  if (!wrap || !canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+  function resize(){
+    const r = wrap.getBoundingClientRect();
+    W = r.width; H = r.height;
+    canvas.width = W * DPR; canvas.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  resize();
+  try { new ResizeObserver(resize).observe(wrap); } catch(_) { window.addEventListener('resize', resize); }
+
+  const STATES = {
+    tenang:     { hue: 195, pulse: 0.9, ringOpen: 1.0, particles: 0.4, label: 'tenang' },
+    waspada:    { hue: 42,  pulse: 1.6, ringOpen: 0.9, particles: 0.7, label: 'waspada' },
+    menjaga:    { hue: 235, pulse: 0.6, ringOpen: 0.5, particles: 0.2, label: 'menjaga' },
+    membuka:    { hue: 155, pulse: 1.3, ringOpen: 1.3, particles: 1.0, label: 'membuka' },
+    transenden: { hue: 285, pulse: 1.8, ringOpen: 1.6, particles: 1.4, label: 'transenden' }
+  };
+  let current = 'tenang';
+  let target  = STATES.tenang;
+  let live    = { hue:195, pulse:0.9, ringOpen:1.0, particles:0.4 };
+  let t0 = performance.now();
+  const abcNodes = { A:0, B:0, C:0, D:0 };
+  const particles = [];
+  let cycleProgress = 0;
+
+  function setState(name, opts){
+    if (!STATES[name]) return;
+    if (current === name && !(opts && opts.force)) return;
+    current = name;
+    target = STATES[name];
+    wrap.dataset.state = name;
+    if (label) label.textContent = STATES[name].label;
+  }
+
+  function loop(now){
+    const dt = Math.min(50, now - t0); t0 = now;
+    const k = 1 - Math.pow(0.001, dt / 1000);
+    live.hue        += (target.hue       - live.hue)        * k;
+    live.pulse      += (target.pulse     - live.pulse)      * k;
+    live.ringOpen   += (target.ringOpen  - live.ringOpen)   * k;
+    live.particles  += (target.particles - live.particles)  * k;
+
+    ctx.clearRect(0, 0, W, H);
+    const cx = W/2, cy = H/2, R = Math.min(W, H) * 0.42;
+    const time = now / 1000;
+
+    // L0 · INTI
+    const breath = 1 + Math.sin(time * 1.2 * live.pulse) * 0.04;
+    const innerR = R * 0.28 * breath;
+    const g0 = ctx.createRadialGradient(cx, cy, 0, cx, cy, innerR * 1.6);
+    g0.addColorStop(0, `hsla(${live.hue}, 90%, 78%, 0.95)`);
+    g0.addColorStop(0.5, `hsla(${live.hue}, 85%, 58%, 0.55)`);
+    g0.addColorStop(1, `hsla(${live.hue}, 80%, 40%, 0)`);
+    ctx.fillStyle = g0;
+    ctx.beginPath(); ctx.arc(cx, cy, innerR * 1.6, 0, Math.PI*2); ctx.fill();
+
+    // L1 · AURA
+    const g1 = ctx.createRadialGradient(cx, cy, innerR, cx, cy, R * 0.9);
+    g1.addColorStop(0, `hsla(${live.hue}, 80%, 60%, 0.18)`);
+    g1.addColorStop(1, `hsla(${live.hue}, 80%, 50%, 0)`);
+    ctx.fillStyle = g1;
+    ctx.beginPath(); ctx.arc(cx, cy, R * 0.9, 0, Math.PI*2); ctx.fill();
+
+    // L2 · NODE MESIN ABC
+    const nodeR = R * 0.68;
+    ['A','B','C','D'].forEach((k2, i) => {
+      const ang = -Math.PI/2 + (i / 4) * Math.PI * 2;
+      const nx = cx + Math.cos(ang) * nodeR;
+      const ny = cy + Math.sin(ang) * nodeR;
+      const lit = abcNodes[k2];
+      const baseA = lit > 0 ? 0.95 : 0.22;
+      const rr = lit > 0 ? 7 : 4.5;
+      ctx.fillStyle = `hsla(${live.hue}, 85%, ${lit > 0 ? 75 : 55}%, ${baseA})`;
+      ctx.beginPath(); ctx.arc(nx, ny, rr, 0, Math.PI*2); ctx.fill();
+      if (lit > 0) {
+        ctx.strokeStyle = `hsla(${live.hue}, 90%, 70%, ${lit * 0.6})`;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.arc(nx, ny, rr + 5, 0, Math.PI*2); ctx.stroke();
+      }
+      if (abcNodes[k2] > 0) abcNodes[k2] = Math.max(0, abcNodes[k2] - dt/900);
+    });
+
+    // L3 · RING GERBANG
+    const ringR = R * (0.62 + live.ringOpen * 0.36);
+    ctx.strokeStyle = `hsla(${live.hue}, 85%, 70%, ${0.28 * live.ringOpen})`;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(cx, cy, ringR, 0, Math.PI*2); ctx.stroke();
+
+    if (current === 'menjaga') {
+      const tighten = 0.5 + Math.sin(time * 2) * 0.5;
+      ctx.strokeStyle = `hsla(${live.hue}, 85%, 70%, ${0.5 * tighten})`;
+      ctx.beginPath(); ctx.arc(cx, cy, ringR * 0.88, 0, Math.PI*2); ctx.stroke();
+    }
+
+    // L3b · CYCLE PROGRESS
+    if (cycleProgress > 0) {
+      ctx.strokeStyle = `hsla(${live.hue}, 90%, 75%, 0.55)`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, ringR * 1.04, -Math.PI/2, -Math.PI/2 + Math.PI*2*cycleProgress);
+      ctx.stroke();
+    }
+
+    // L4 · PARTIKEL
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.r += (p.spd || 1.6) * dt / 16;
+      p.a -= dt / 900;
+      if (p.a <= 0 || p.r > R * 1.15) { particles.splice(i, 1); continue; }
+      ctx.fillStyle = `hsla(${live.hue}, 90%, 78%, ${p.a})`;
+      ctx.beginPath(); ctx.arc(cx + Math.cos(p.ang) * p.r, cy + Math.sin(p.ang) * p.r, 1.8, 0, Math.PI*2); ctx.fill();
+    }
+    if (Math.random() < live.particles * 0.4) {
+      particles.push({ ang: Math.random()*Math.PI*2, r: R*0.3, a: 0.7, spd: 1.2 + Math.random()*0.8 });
+    }
+    if (particles.length > 60) particles.splice(0, particles.length - 60);
+
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  window.CGOOrb = {
+    setState: setState,
+    state: () => current,
+    pulseNode: (name) => { if (name in abcNodes) abcNodes[name] = 1; },
+    cycle: (n) => { cycleProgress = ((n || 0) % 100) / 100; },
+    burst: (count) => {
+      for (let i = 0; i < (count||8); i++) {
+        particles.push({ ang: Math.random()*Math.PI*2, r: R*0.3, a: 0.85, spd: 2.0 + Math.random()*1.2 });
+      }
+    }
+  };
+
+  // HOOK — welcome
+  window.addEventListener('cgo-operator-voice-welcome', () => {
+    setState('tenang', { force:true });
+    try { window.CGOOrb.burst(10); } catch(_){}
+  });
+
+  // HOOK — MESIN ABC phase
+  window.addEventListener('cgo:abc-telemetry', (e) => {
+    const d = e.detail || {};
+    if (d.stage && d.event === 'PHASE_START') window.CGOOrb.pulseNode(d.stage);
+    if (d.stage === 'D' && d.event === 'PHASE_END' && d.audit === 'VALID') {
+      window.CGOOrb.cycle(d.cycleIndex || 0);
+      if (current !== 'menjaga') setState('tenang');
+    }
+    if (d.status === 'FAILED' || d.status === 'DEGRADED') setState('waspada');
+  });
+
+  // HOOK — siklus BCGO sync
+  window.addEventListener('cgo:machine-abc-bcgo-sync', (e) => {
+    const d = e.detail || {};
+    if (d.bcgoCycle != null) window.CGOOrb.cycle(d.bcgoCycle);
+    if (d.audit === 'ATTENTION' || d.status === 'DEGRADED') setState('waspada');
+  });
+
+  // HOOK — gerbang akses (dikirim oleh Hub Otak)
+  window.addEventListener('cgo:access-locked',  () => setState('menjaga'));
+  window.addEventListener('cgo:access-granted', () => {
+    setState('membuka');
+    try { window.CGOOrb.burst(20); } catch(_){}
+    setTimeout(() => setState('tenang'), 1400);
+  });
+  window.addEventListener('cgo:access-master', () => {
+    setState('transenden');
+    try { window.CGOOrb.burst(40); } catch(_){}
+    setTimeout(() => setState('tenang'), 2400);
+  });
+
+  // HOOK — mikrofon
+  window.addEventListener('cgo:mic-status', (e) => {
+    const s = (e.detail || {}).state;
+    if (s === 'LISTENING' && current === 'tenang') { try { window.CGOOrb.burst(4); } catch(_){} }
+  });
+
+  // HOOK — pantau sourceScan (fallback)
+  setInterval(() => {
+    const st = window.BCGO_STATE;
+    if (!st || !st.sourceScan) return;
+    if (current === 'menjaga' || current === 'membuka' || current === 'transenden') return;
+    const status = st.sourceScan.status;
+    if (status === 'FINDINGS' || status === 'DEGRADED') setState('waspada');
+    else if (status === 'CLEAN' || status === 'SCANNING') setState('tenang');
+  }, 4000);
+
+  setState('tenang', { force:true });
+  console.log('[CGO-ORB] urat saraf aktif · 5 state · hook siap');
 })();
 </script>
 
