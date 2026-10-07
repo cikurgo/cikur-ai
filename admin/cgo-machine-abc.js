@@ -10,7 +10,7 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "0.14.1-ACTUAL-D";
+  const VERSION = "0.14.3-MORE-RULES";
   const MAX_TEXT_SAMPLE = 6000;
   const MAX_ITEMS = 1000;
   const MAX_TOKENS = 5000;
@@ -949,7 +949,7 @@
     test("reg-N-full-file-output", () => { for (const b of BROKEN) { const r = fix(b, null); if (r.output.type !== "FULL_REPAIRED_SOURCE" || r.output.code !== r.fullRepairedCode || r.output.lineCount !== r.fullRepairedCode.split(/\r?\n/).length) throw Error("output tidak penuh"); } });
     test("reg-O-output-integrity", () => { for (const b of BROKEN.concat(['const a = ;', 'const o = { "a", "b" };'])) { const r = repair(b, { autoApply: true, source: "REG.js" }); if (r.fullRepairedCode == null || r.output.code !== r.fullRepairedCode || r.output.charCount !== r.fullRepairedCode.length) throw Error("integritas output: " + r.status); } });
     test("reg-P-false-verified-hard-gate", () => {
-      const UNFIXABLE = ['const a = ;', 'const o = { "a", "b" };', 'foo(a (b) => b);', 'const s = "abc;\nconst y = 3;', 'function f( { return 1 }'];
+      const UNFIXABLE = ['const a = ;', 'const o = { "a", "b" };', 'foo(a (b) => b);', 'const = 5;', 'function f( { return 1 }'];
       for (const b of BROKEN.concat(UNFIXABLE)) {
         const r = repair(b, { autoApply: true, source: "REG.js" });
         if (r.verified !== (r.status === "REPAIRED_VERIFIED")) throw Error("verified tidak sinkron dengan status: " + r.status);
@@ -982,6 +982,89 @@
       const h = '<!doctype html>\n<html><body>\n<script type="application/json">{"a": 1,}</script>\n<script type="text/template"><div>{{ x }} </div></script>\n<script>const a = 1;</script>\n</body></html>\n';
       const r = repairAuto(h, { autoApply: true, source: "DEV INPUT" });
       if (r.status !== "NO_PATCH" || r.fullRepairedCode !== h) throw Error("script non-JS diperlakukan sebagai JS: " + r.status);
+    });
+    test("reg-V-plus-needs-grammar-proof", () => {
+      // shorthand property (identifier polos, sejajar dengan key) => KOMA, bukan plus
+      const r1 = fix('const n = 1;\nconst o = {\n  title: "A"\n  n,\n  k: 2\n};\n', 'const n = 1;\nconst o = {\n  title: "A",\n  n,\n  k: 2\n};\n', "MISSING_LIST_COMMA");
+      if (/\+/.test(r1.fullRepairedCode)) throw Error("plus dipakai sebagai fallback koma");
+      // literal polos tidak mungkin menjadi properti baru => plus
+      fix('const o = {\n  title: "A"\n  "B",\n  k: 2\n};\n', 'const o = {\n  title: "A"\n  + "B",\n  k: 2\n};\n', "MISSING_CONCAT_OBJECT_PROPERTY");
+      // elemen array => koma
+      const r2 = fix('const a = [\n  "X"\n  "Y"\n];\n', 'const a = [\n  "X",\n  "Y"\n];\n'); if (/\+/.test(r2.fullRepairedCode)) throw Error("array jadi concat");
+    });
+    test("reg-W-patch-postcondition-verifier", () => {
+      const V = (b, a, o) => verifyPatchTrace(b, a, o);
+      const goodArr = V('const a = [\n  "X"\n  "Y"\n];\n', 'const a = [\n  "X",\n  "Y"\n];\n');
+      if (!goodArr.pass || goodArr.postConditions.passed !== 1 || !goodArr.structure.checked || !goodArr.structure.pass) throw Error("patch benar ditolak: " + JSON.stringify(goodArr.reasons));
+      const badPlus = V('const a = [\n  "X"\n  "Y"\n];\n', 'const a = [\n  "X"\n  + "Y"\n];\n');
+      if (badPlus.pass || !badPlus.reasons.some(x => /POSTCONDITION_FAIL '\+'/.test(x))) throw Error("plus salah pada array lolos");
+      const stray = V('function f(a, b {\n  return a;\n}\n', 'function f(a, b {\n  return a;\n}\n)\n');
+      if (stray.pass) throw Error("stray ) lolos");
+      const nonTarget = V('const a = [\n  "X"\n  "Y"\n];\n', 'const a = [\n  "X",\n  "Z"\n];\n');
+      if (nonTarget.pass || nonTarget.nonTargetChanges < 1) throw Error("perubahan non-target lolos");
+      const wrongPlace = V('const a = [1, 2];\nfoo(a);\n', 'const a = [1, 2];\nfoo(a,);\n');
+      if (wrongPlace.pass) throw Error("koma di tempat salah lolos");
+    });
+    test("reg-X-trace-evidence-minimum", () => {
+      const r = fix('function a(x, y {\n  return x + y;\n}\nconst o = { p: 1\n  q: 2 };\n', null);
+      if (!r.trace || !r.trace.checked || !r.trace.pass || r.trace.sourceBefore.fingerprint === r.trace.sourceAfter.fingerprint) throw Error("trace tidak lengkap");
+      if (!Array.isArray(r.repairEvidence) || r.repairEvidence.length < 2 || !r.repairEvidence.every(e => e.postCondition === "PASS" && e.line > 0 && e.afterLine)) throw Error("evidence tidak memenuhi kontrak minimum");
+      if (r.ledger.correct !== r.ledger.applied) throw Error("Applied != Correct tanpa alasan");
+      if (!r.semanticDiff || r.semanticDiff.nonTargetChanges !== 0) throw Error("semantic diff hilang");
+    });
+    test("reg-Y-mesinD-composite-and-decide", () => {
+      const r = fix('function a(x, y {\n  return x + y;\n}\n', null);
+      const D = r.mesinD;
+      if (!D || D.verdict !== "VALID" || !D.syntax || !D.structure || !D.patchCorrectness || !D.semantic || !D.regression || !D.finalOutput || !D.decideComplete) throw Error("MESIN D komposit tidak lengkap: " + JSON.stringify(D));
+      if (!r.decide || !r.decide.complete || r.repairProof.decideComplete !== true) throw Error("DECIDE tidak konsisten dengan status");
+      const f = repair("const a = ;\n", { autoApply: true, source: "REG.js" });
+      if (f.verified || (f.mesinD && f.mesinD.verdict === "VALID")) throw Error("MESIN D VALID pada source gagal");
+    });
+    test("reg-Z-patch-rejected-when-trace-fails", () => {
+      const src = 'function a(x, y {\n  return x + y;\n}\n';
+      const forced = verifyPatchTrace(src, 'function a(x, y) {\n  return x - y;\n}\n');
+      if (forced.pass || forced.nonTargetChanges < 1) throw Error("operator berubah tidak terdeteksi");
+      const ok = verifyPatchTrace(src, 'function a(x, y) {\n  return x + y;\n}\n');
+      if (!ok.pass || ok.postConditions.failed !== 0) throw Error("header paren benar ditolak: " + JSON.stringify(ok.reasons));
+    });
+    test("reg-AA-partial-block-repair-honest", () => {
+      const good1 = 'function a(x, y) {\n  return x + y;\n}\n', good3 = 'const o = {\n  p: 1,\n  q: 2\n};\n';
+      const src = 'function a(x, y {\n  return x + y;\n}\nconst z = ;\nconst o = {\n  p: 1\n  q: 2\n};\n';
+      const r = repair(src, { autoApply: true, source: "REG.js" });
+      if (r.verified || r.status === "REPAIRED_VERIFIED") throw Error("partial diklaim verified");
+      if (r.status !== "REPAIR_FAILED" || !r.partial || r.partial.fixedChunks !== 2 || r.partial.unresolvedChunks !== 1) throw Error("partial tidak sesuai: " + r.status + " " + JSON.stringify(r.partial));
+      if (r.fullRepairedCode !== good1 + 'const z = ;\n' + good3) throw Error("blok yang bisa diperbaiki tidak diterapkan persis: " + JSON.stringify(r.fullRepairedCode));
+      if (r.output.type !== "PARTIAL_REPAIRED_SOURCE" || r.ledger.applied !== 2 || r.ledger.remainingErrors < 1 || r.mesinD.verdict !== "INVALID") throw Error("ledger/D tidak jujur pada partial");
+      const r2 = repair(r.fullRepairedCode, { autoApply: true, source: "REG.js" });
+      if (r2.fullRepairedCode !== r.fullRepairedCode || r2.verified) throw Error("partial tidak idempoten");
+    });
+    test("reg-AB-stray-closer-line", () => { fix('const a = foo(1, 2));\nuse(a);\n', 'const a = foo(1, 2);\nuse(a);\n', "STRAY_CLOSER_LINE"); });
+    test("reg-AC-double-comma-not-array-hole", () => {
+      fix('const o = {\n  a: 1,,\n  b: 2\n};\nfoo(1,, 2);\n', 'const o = {\n  a: 1,\n  b: 2\n};\nfoo(1, 2);\n', "DOUBLE_COMMA");
+      const h = 'const a = [1,,2];\n'; const r = repair(h, { autoApply: true, source: "REG.js" });
+      if (r.status !== "NO_PATCH" || r.fullRepairedCode !== h) throw Error("lubang array yang sah disentuh");
+    });
+    test("reg-AD-eol-closer-bracket-brace", () => {
+      fix('const a = [1, 2;\nuse(a);\n', 'const a = [1, 2];\nuse(a);\n', "MISSING_EOL_CLOSER");
+      fix('const o = { a: 1, b: 2;\nuse(o);\n', 'const o = { a: 1, b: 2 };\nuse(o);\n', "MISSING_EOL_CLOSER");
+      fix('foo([1, 2;\n', 'foo([1, 2]);\n');
+    });
+    test("reg-AE-unterminated-string", () => {
+      fix('const a = "abc;\nuse(a);\n', 'const a = "abc";\nuse(a);\n', "UNTERMINATED_STRING_EOL");
+      fix("const t = 'ok';\nconst u = 'halo dunia;\nuse(t, u);\n", "const t = 'ok';\nconst u = 'halo dunia';\nuse(t, u);\n");
+      const tpl = 'const t = `a "b\n c`;\nuse(t);\n'; const r = repair(tpl, { autoApply: true, source: "REG.js" });
+      if (r.status !== "NO_PATCH" || r.fullRepairedCode !== tpl) throw Error("template literal valid disentuh");
+    });
+    test("reg-AF-missing-brace-open", () => {
+      fix('function f(x) {\n  if (x > 1)\n    run();\n  }\n  return x;\n}\n', 'function f(x) {\n  if (x > 1) {\n    run();\n  }\n  return x;\n}\n', "MISSING_BRACE_OPEN");
+      fix('function g(x)\n  return x;\n}\n', 'function g(x) {\n  return x;\n}\n');
+      const ok = 'if (a)\n  run();\nelse\n  stop();\n'; const r = repair(ok, { autoApply: true, source: "REG.js" });
+      if (r.status !== "NO_PATCH" || r.fullRepairedCode !== ok) throw Error("if tanpa kurung kurawal yang sah disentuh");
+    });
+    test("reg-AG-object-literal-bare-value-internal-gate", () => {
+      const g = sourceSyntaxGate('const o = { "a", "b" };\n', { source: "REG.js" });
+      if (g.pass || !g.failed.includes("OBJECT_LITERAL_ENTRY")) throw Error("literal polos di objek lolos gate internal");
+      if (!sourceSyntaxGate('const o = { a: "x", "b": 2, c, ...d, [k]: 1, m() { return "z"; } };\n', { source: "REG.js" }).pass) throw Error("objek valid ditolak");
     });
     test("reg-U-output-integrity-fingerprint", () => {
       const r = fix('function a(x, y {\n  return x + y;\n}\n', null);
@@ -1077,6 +1160,149 @@
     return { findings, candidates, accepted: applied, applied, rejected: Math.max(0, candidates - applied), verificationFailures: (o.attempted && o.afterGate && !o.afterGate.pass) ? 1 : 0, remainingErrors: remaining };
   }
 
+  /* ---------- VERIFIKASI PATCH: post-condition per token sisipan, ekuivalensi bagian non-target, struktur elemen ---------- */
+  const PT_INSERTABLE = new Set([",", "+", ")", "]", "}", ";"]);
+  const PT_REMOVABLE = new Set([";", ")", "]", "}", ","]);
+  const PT_KEYWORD = /^(?:return|typeof|void|delete|new|in|of|instanceof|await|yield|throw|case|else|do|if|for|while|switch|catch|function|class|const|let|var|import|export|default|try|finally|extends|async)$/;
+  function ptContainers(toks, src) {
+    const enc = new Array(toks.length).fill(null), match = new Array(toks.length).fill(-1), stack = [], all = [];
+    for (let k = 0; k < toks.length; k++) {
+      const t = toks[k];
+      if (t.t === "p" && (t.v === "(" || t.v === "[" || t.v === "{")) {
+        const prev = toks[k - 1]; let obj = false, call = false;
+        if (t.v === "{" && prev) obj = (prev.t === "p" && /^(?:=|:|\(|,|\[|\?|\?\?|\|\||&&|\.\.\.|\+)$/.test(prev.v)) || (prev.t === "id" && /^(?:return|throw|typeof|await|yield|in|of|case)$/.test(prev.v));
+        if (t.v === "(" && prev) call = (prev.t === "id" && !PT_KEYWORD.test(prev.v)) || (prev.t === "p" && (prev.v === ")" || prev.v === "]"));
+        enc[k] = stack[stack.length - 1] || null;
+        const c = { ch: t.v, k, obj, call, commas: 0, content: false, last: null, kind: t.v === "[" ? "array" : (t.v === "{" ? (obj ? "object" : "block") : (call ? "call" : "group")), ck: t.v === "[" ? "array" : (t.v === "{" ? "brace" : "paren") };
+        stack.push(c); all.push(c); continue;
+      }
+      if (t.t === "p" && (t.v === ")" || t.v === "]" || t.v === "}")) { const top = stack.pop() || null; enc[k] = top; match[k] = top ? top.k : -1; continue; }
+      const top = stack[stack.length - 1] || null; enc[k] = top;
+      if (top) { if (t.t === "p" && t.v === ",") top.commas++; top.content = true; top.last = t; }
+    }
+    for (const c of all) { const trailing = c.last && c.last.t === "p" && c.last.v === ","; c.elements = c.content ? c.commas + (trailing ? 0 : 1) : 0; }
+    return { enc, match, all };
+  }
+  function ptSegmentPlus(at, k, insSet) {
+    let depth = 0, found = false;
+    for (let i = k - 1; i >= 0; i--) { const t = at[i]; if (t.t !== "p") continue;
+      if (t.v === ")" || t.v === "]" || t.v === "}") { depth++; continue; }
+      if (t.v === "(" || t.v === "[" || t.v === "{") { if (depth === 0) break; depth--; continue; }
+      if (depth === 0 && (t.v === "," || t.v === ";")) break;
+      if (depth === 0 && t.v === "+" && !insSet.has(i)) found = true; }
+    depth = 0;
+    for (let i = k + 1; i < at.length; i++) { const t = at[i]; if (t.t !== "p") continue;
+      if (t.v === "(" || t.v === "[" || t.v === "{") { depth++; continue; }
+      if (t.v === ")" || t.v === "]" || t.v === "}") { if (depth === 0) break; depth--; continue; }
+      if (depth === 0 && (t.v === "," || t.v === ";")) break;
+      if (depth === 0 && t.v === "+" && !insSet.has(i)) found = true; }
+    return found;
+  }
+  function ptSegmentIsProperty(at, k) {
+    let depth = 0, first = k;
+    for (let i = k - 1; i >= 0; i--) { const t = at[i];
+      if (t.t === "p") {
+        if (t.v === ")" || t.v === "]" || t.v === "}") { depth++; continue; }
+        if (t.v === "(" || t.v === "[" || t.v === "{") { if (depth === 0) break; depth--; continue; }
+        if (depth === 0 && t.v === ",") break; }
+      if (depth === 0) first = i; }
+    const a = at[first], b = at[first + 1];
+    return !!(a && b && (a.t === "id" || a.t === "str" || a.t === "num") && b.t === "p" && b.v === ":");
+  }
+  function verifyPatchTrace(before, after, opts) {
+    const out = { checked: false, pass: true, reasons: [], patches: [], inserted: {}, removed: {}, nonTargetChanges: 0, postConditions: { checked: 0, passed: 0, failed: 0 }, structure: { checked: false, pass: true } };
+    const bs = String(before == null ? "" : before), as_ = String(after == null ? "" : after);
+    const lb = lexJsTokens(bs), la = lexJsTokens(as_);
+    if (!lb || !la || !lb.toks || !la.toks) return out;
+    out.checked = true;
+    const bt = lb.toks, at = la.toks;
+    const bv = bt.map(t => bs.slice(t.s, t.e)), av = at.map(t => as_.slice(t.s, t.e));
+    const allowRemove = !!(opts && opts.allowRemoval);
+    const INS = (opts && opts.allowBraceOpen) ? new Set([...PT_INSERTABLE, "{"]) : PT_INSERTABLE;
+    const MAXK = 12; let i = 0, j = 0; const insIdx = [], remIdx = [], quoteFix = [];
+    while (i < bv.length || j < av.length) {
+      if (i < bv.length && j < av.length && bv[i] === av[j]) { i++; j++; continue; }
+      let done = false;
+      for (let k = 1; k <= MAXK && j + k <= av.length && !done; k++) {
+        if (!INS.has(av[j + k - 1])) break;
+        if ((i >= bv.length && j + k === av.length) || (i < bv.length && j + k < av.length && av[j + k] === bv[i])) { for (let q = 0; q < k; q++) insIdx.push(j + q); j += k; done = true; }
+      }
+      if (done) continue;
+      if (allowRemove) {
+        for (let k = 1; k <= MAXK && i + k <= bv.length && !done; k++) {
+          if (!PT_REMOVABLE.has(bv[i + k - 1])) break;
+          if ((j >= av.length && i + k === bv.length) || (j < av.length && i + k < bv.length && bv[i + k] === av[j])) { for (let q = 0; q < k; q++) remIdx.push(i + q); i += k; done = true; }
+        }
+        if (done) continue;
+      }
+      out.nonTargetChanges++; out.pass = false;
+      out.reasons.push("NON_TARGET_CHANGE: token '" + String(bv[i] == null ? "EOF" : bv[i]).slice(0, 24) + "' (indeks " + i + ") berubah/hilang di luar target patch");
+      break;
+    }
+    for (const k of insIdx) out.inserted[av[k]] = (out.inserted[av[k]] || 0) + 1;
+    for (const k of quoteFix) out.inserted[av[k].slice(-1)] = (out.inserted[av[k].slice(-1)] || 0) + 1;
+    for (const k of remIdx) out.removed[bv[k]] = (out.removed[bv[k]] || 0) + 1;
+    if (!out.pass) return out;
+    const C = ptContainers(at, as_), insSet = new Set(insIdx);
+    const lineOfPos = p0 => { let n = 1; for (let q = 0; q < p0; q++) if (as_.charCodeAt(q) === 10) n++; return n; };
+    const lineStart = p0 => as_.lastIndexOf("\n", p0 - 1) + 1;
+    const indentOf = p0 => { const q = lineStart(p0); let w = 0; while (as_[q + w] === " " || as_[q + w] === "\t") w++; return w; };
+    const operandEnd = t => !!t && (t.t === "str" || t.t === "num" || t.t === "tpl" || (t.t === "id" && !PT_KEYWORD.test(String(as_.slice(t.s, t.e)))) || (t.t === "p" && (t.v === ")" || t.v === "]" || t.v === "}")));
+    const operandStart = t => !!t && (t.t === "str" || t.t === "num" || t.t === "tpl" || (t.t === "id" && (!PT_KEYWORD.test(String(as_.slice(t.s, t.e))) || /^(?:new|function|async|await|typeof|void)$/.test(as_.slice(t.s, t.e)))) || (t.t === "p" && /^(?:\(|\[|\{|-|!|\.\.\.)$/.test(t.v)));
+    for (const k of insIdx) {
+      const t = at[k], tok = av[k], prev = at[k - 1], next = at[k + 1], top = C.enc[k], line = lineOfPos(t.s);
+      let ok = true, why = "";
+      if (tok === ",") {
+        const kindOk = top && (top.ch === "[" || top.ch === "(" || (top.ch === "{" && top.obj));
+        if (!kindOk) { ok = false; why = "koma di luar daftar/argumen/objek literal"; }
+        else if (!operandEnd(prev) || !operandStart(next)) { ok = false; why = "koma tidak berada di antara dua operand"; }
+      } else if (tok === "+") {
+        if (!operandEnd(prev) || !operandStart(next)) { ok = false; why = "tanda tambah tidak berada di antara dua operand"; }
+        else {
+          const strSide = (prev.t === "str" || prev.t === "tpl" || next.t === "str" || next.t === "tpl");
+          if (top && top.ch === "{" && top.obj) { if (!ptSegmentIsProperty(at, k)) { ok = false; why = "plus di objek literal tanpa pasangan key:value"; } }
+          else if (top && (top.ch === "[" || (top.ch === "(" && top.call))) { if (!ptSegmentPlus(at, k, insSet) && !(opts && opts.allowPlusInCall && top.ch === "(")) { ok = false; why = "plus di dalam array/argumen tanpa bukti segmen yang memakai plus (seharusnya koma)"; } }
+          else if (!strSide && !ptSegmentPlus(at, k, insSet)) { ok = false; why = "plus tanpa operand string dan tanpa bukti ekspresi gabungan"; }
+        }
+      } else if (tok === ")" || tok === "]" || tok === "}") {
+        const m = C.match[k], op = m >= 0 ? at[m] : null;
+        if (!op) { ok = false; why = "penutup tanpa pembuka (stray)"; }
+        else if (prev && prev.t === "p" && prev.v === "}" && t.nl && tok === ")") { ok = false; why = "stray ')' setelah body fungsi"; }
+        else if (lineOfPos(op.s) !== line) { if (!(t.nl && indentOf(t.s) === indentOf(op.s))) { ok = false; why = "penutup multi-baris tidak sejajar dengan pembukanya"; } }
+      } else if (tok === ";") {
+        if (!operandEnd(prev)) { ok = false; why = "titik koma tidak mengikuti operand"; }
+      } else if (tok === "{") {
+        let cl = -1; for (let q = k + 1; q < at.length; q++) if (C.match[q] === k) { cl = q; break; }
+        if (!(prev && ((prev.t === "p" && prev.v === ")") || (prev.t === "id" && /^(?:else|do|try|finally)$/.test(av[k - 1])))) || !(next && next.nl) || cl < 0 || !at[cl].nl || indentOf(at[cl].s) !== indentOf(t.s)) { ok = false; why = "'{' bukan pembuka body header yang penutupnya sejajar"; }
+      }
+      out.postConditions.checked++;
+      const aLineStart = lineStart(t.s), aLineEnd = (as_.indexOf("\n", t.s) < 0 ? as_.length : as_.indexOf("\n", t.s));
+      const afterLine = as_.slice(aLineStart, aLineEnd), beforeLine = afterLine.slice(0, t.s - aLineStart) + afterLine.slice(t.e - aLineStart);
+      if (ok) out.postConditions.passed++; else { out.postConditions.failed++; out.pass = false; out.reasons.push("POSTCONDITION_FAIL '" + tok + "' baris " + line + ": " + why); }
+      out.patches.push({ token: tok, line, container: top ? top.kind : "statement", beforeLine: beforeLine.trim().slice(0, 140), afterLine: afterLine.trim().slice(0, 140), postCondition: ok ? "PASS" : "FAIL", ...(ok ? {} : { detail: why }) });
+    }
+    for (const k of quoteFix) {
+      const t = at[k], line = lineOfPos(t.s), ls = lineStart(t.s), le = as_.indexOf("\n", t.s) < 0 ? as_.length : as_.indexOf("\n", t.s);
+      out.postConditions.checked++; out.postConditions.passed++;
+      out.patches.push({ token: av[k].slice(-1), line, container: "string", beforeLine: as_.slice(ls, le).replace(av[k], av[k].slice(0, -1)).trim().slice(0, 140), afterLine: as_.slice(ls, le).trim().slice(0, 140), postCondition: "PASS" });
+    }
+    // verifikasi struktur: jumlah elemen array/objek/argumen sebelum vs sesudah harus berubah persis sebesar koma yang disisipkan
+    const closersChanged = ["}", "]", ")", "{", "\"", "'"].some(x => out.inserted[x] || out.removed[x]) || out.removed[","] || out.removed[";"] || quoteFix.length > 0;
+    if (!closersChanged && out.pass) {
+      const sumBy = (CC, kind) => CC.all.filter(c => c.ck === kind).reduce((a, c) => a + c.elements, 0);
+      const CB = ptContainers(bt, bs), expected = { array: 0, brace: 0, paren: 0 };
+      for (const k of insIdx) if (av[k] === ",") { const e = C.enc[k]; if (e && expected[e.ck] != null) expected[e.ck]++; }
+      const st = { checked: true, pass: true, kinds: {} };
+      for (const kind of ["array", "brace", "paren"]) {
+        const b = sumBy(CB, kind), a = sumBy(C, kind), want = b + expected[kind];
+        st.kinds[kind] = { before: b, after: a, expected: want, containersBefore: CB.all.filter(c => c.ck === kind).length, containersAfter: C.all.filter(c => c.ck === kind).length };
+        if (a !== want || st.kinds[kind].containersBefore !== st.kinds[kind].containersAfter) { st.pass = false; out.pass = false; out.reasons.push("STRUCTURE_DELTA " + kind + ": sebelum " + b + ", sesudah " + a + ", seharusnya " + want); }
+      }
+      out.structure = st;
+    } else out.structure = { checked: false, pass: true, skipped: out.pass ? "penutup/hapus token ikut berubah; struktur dibuktikan lewat parser + indentasi" : "patch ditolak lebih dulu" };
+    return out;
+  }
+
   function sealIntegrity(r) {
     if (!r || typeof r !== "object" || Array.isArray(r.files)) return r;
     const code = typeof r.fullRepairedCode === "string" ? r.fullRepairedCode : null;
@@ -1086,6 +1312,10 @@
     const match = fpReturned === fpShown && (!r.verified || claimed === fpReturned);
     r.integrity = { verifiedFingerprint: r.verified ? claimed : null, returnedFingerprint: fpReturned, displayedFingerprint: fpShown, match };
     if (!match && r.verified) { r.verified = false; r.status = "REPAIR_FAILED"; r.reason = "output_integrity_mismatch"; }
+    if (r.mesinD && typeof r.mesinD === "object") {
+      r.mesinD.finalOutput = match;
+      r.mesinD.verdict = (r.mesinD.syntax && r.mesinD.structure && r.mesinD.patchCorrectness && r.mesinD.semantic && r.mesinD.regression && r.mesinD.finalOutput && r.mesinD.decideComplete) ? "VALID" : "INVALID";
+    }
     return r;
   }
 
@@ -1131,6 +1361,12 @@
         checks.push({ id: "MISSING_LIST_COMMA", status: ta.adjacent.length ? "FAIL" : "PASS" });
         checks.push({ id: "SEMICOLON_IN_PAREN", status: ta.semis.length ? "FAIL" : "PASS" });
       }
+    }
+    if (!jsonMode && (looksLikeCode(source) || jsDeclarationLike(source))) {
+      const olp = objectLiteralEntryProblems(source);
+      checks.push({ id: "OBJECT_LITERAL_ENTRY", status: olp.length ? "FAIL" : "PASS", ...(olp.length ? { detail: { lines: olp.slice(0, 20) } } : {}) });
+      const dcp = doubleCommaProblems(source);
+      checks.push({ id: "DOUBLE_COMMA", status: dcp.length ? "FAIL" : "PASS", ...(dcp.length ? { detail: { lines: dcp.slice(0, 20) } } : {}) });
     }
     let hostParse = { available: false, ok: null, message: null };
     if (!jsonMode && (looksLikeCode(source) || jsDeclarationLike(source) || /(?:\.(?:m|c)?js|#script-inline)$/i.test(String((gateOpts && gateOpts.source) || "")))) {
@@ -1886,18 +2122,196 @@
     if (!hasKey || newProp || !strSide || !rStarts) return comma;
     if (R.t === "id" && /^(?:in|of|instanceof|as|from)$/.test(R.v)) return comma;
     for (let i = c.seg; i <= c.k; i++) if (toks[i].t === "p" && toks[i].v === "?") return comma;
+    const indentAt = p0 => { let q = s.lastIndexOf("\n", p0 - 1) + 1, w = 0; while (s[q + w] === " " || s[q + w] === "\t") w++; return w; };
+    const bare = R.t === "str" || R.t === "tpl" || R.t === "num"; // literal polos tidak bisa menjadi awal properti baru
+    const exprStart = R.t === "id" && !!r2 && r2.t === "p" && /^(?:\.|\(|\[|\?\.|\+|-|\*|\/|%|\|\||&&|\?\?|===?|!==?|<=?|>=?)$/.test(r2.v); // member/call/operator bukan shorthand
+    let proven = bare || exprStart;
+    if (!proven && R.t === "id") proven = !!R.nl && indentAt(R.s) > indentAt(f.s); // identifier polos: hanya bila menjorok lebih dalam dari baris key
+    if (!proven) return comma;
     const reason = "nilai property berlanjut ke literal tanpa operator (baris " + lineOf(pos) + ")";
     return R.nl ? { pos: R.s, del: 0, ins: "+ ", id: "MISSING_CONCAT_OBJECT_PROPERTY", reason } : { pos, del: 0, ins: " +", id: "MISSING_CONCAT_OBJECT_PROPERTY", reason };
+  }
+
+  /* ---------- ATURAN DETERMINISTIK TAMBAHAN (tiap hasil tetap wajib lolos gate + verifikasi patch) ---------- */
+  function unterminatedQuoteAt(line) {
+    const ln = line.replace(/\r$/, ""); let i = 0;
+    if (/\\$/.test(ln)) return null;
+    while (i < ln.length) {
+      const ch = ln[i];
+      if (ch === "/" && ln[i + 1] === "/") return null;
+      if (ch === "`") return null;
+      if (ch === '"' || ch === "'") {
+        let j = i + 1;
+        while (j < ln.length && ln[j] !== ch) j += (ln[j] === "\\" ? 2 : 1);
+        if (j >= ln.length) return { start: i, quote: ch };
+        i = j + 1; continue;
+      }
+      i++;
+    }
+    return null;
+  }
+  /* R1: string satu-baris tidak tertutup -> tutup sebelum ekor ; , ) ] } di akhir baris.
+     Hanya bila TEPAT satu kandidat memperbaiki lexer (atau semua kandidat bersama-sama bila tidak ada yang cukup sendirian). */
+  function repairUnterminatedStrings(source) {
+    const s0 = String(source), none = { text: s0, changed: false, steps: [], patches: [] };
+    const lx = lexJsTokens(s0);
+    if (!(lx && lx.err && lx.err.unterminatedString)) return none;
+    const lines = s0.split("\n"), cands = []; let off = 0;
+    for (let li = 0; li < lines.length; li++) {
+      const ln = lines[li], f = unterminatedQuoteAt(ln);
+      if (f) { const body = ln.replace(/\r$/, ""), tail = (/[\s;,)\]}]*$/.exec(body) || [""])[0], at = off + body.length - tail.length; if (at >= off + f.start + 1) cands.push({ at, quote: f.quote, line: li + 1, body }); }
+      off += ln.length + 1;
+    }
+    const insertAll = list => list.slice().sort((a, b) => b.at - a.at).reduce((t, c) => t.slice(0, c.at) + c.quote + t.slice(c.at), s0);
+    const clears = t => { const r = lexJsTokens(t); return !!r && !(r.err && r.err.unterminatedString); };
+    let pick = null;
+    const singles = cands.filter(c => clears(insertAll([c])));
+    if (singles.length === 1) pick = [singles[0]];
+    else if (!singles.length && cands.length > 1 && cands.length <= 12 && clears(insertAll(cands))) pick = cands;
+    if (!pick) return none;
+    const text = insertAll(pick);
+    return {
+      text, changed: true,
+      steps: pick.map(c => ({ id: "UNTERMINATED_STRING_EOL", status: "CANDIDATE", reason: "string tidak tertutup di akhir baris " + c.line })),
+      patches: pick.map(c => ({ token: c.quote, line: c.line, container: "string", beforeLine: c.body.trim().slice(0, 140), afterLine: (c.body.slice(0, c.at - (s0.split("\n").slice(0, c.line - 1).join("\n").length + (c.line > 1 ? 1 : 0))) + c.quote + c.body.slice(c.at - (s0.split("\n").slice(0, c.line - 1).join("\n").length + (c.line > 1 ? 1 : 0)))).trim().slice(0, 140), postCondition: "PASS" }))
+    };
+  }
+  function repairDeterministicMisc(source, opts) {
+    let s = String(source); const steps = []; let changed = false;
+    {
+      const us = repairUnterminatedStrings(s);
+      if (us.changed) { s = us.text; changed = true; steps.push(...us.steps); }
+    }
+    const a = tokenRuleAnalysis(s, opts);
+    if (!a) return { text: s, changed, steps };
+    const toks = a.toks, edits = [];
+    // R2: koma ganda di argumen/parameter/literal objek (di array ',,' adalah lubang yang sah, tidak disentuh)
+    {
+      const C = ptContainers(toks, s), dc = [];
+      for (let k = 1; k < toks.length; k++) {
+        const t = toks[k], pv = toks[k - 1];
+        if (t.t === "p" && t.v === "," && pv.t === "p" && pv.v === ",") { const c = C.enc[k]; if (c && (c.ch === "(" || (c.ch === "{" && c.obj))) dc.push({ pos: t.s, del: 1, ins: "", id: "DOUBLE_COMMA", reason: "koma ganda (baris " + s.slice(0, t.s).split("\n").length + ")" }); }
+      }
+      edits.push(...dc);
+    }
+    // R4 + R5: penutup berlebih di akhir pernyataan, atau '{' hilang pada header (dipasangkan lewat indentasi)
+    const imb = (a.mismatch ? 1 : 0) + a.unclosed.length + a.stray.length;
+    const e45 = [];
+    for (const k of a.stray) {
+      const t = toks[k], nx = toks[k + 1];
+      if ((t.v === ")" || t.v === "]") && (!nx || nx.nl || (nx.t === "p" && /^[;,)\]}]$/.test(nx.v)))) e45.push({ pos: t.s, del: 1, ins: "", id: "STRAY_CLOSER_LINE", reason: "penutup '" + t.v + "' berlebih (baris " + s.slice(0, t.s).split("\n").length + ")" });
+    }
+    if (a.mismatch && toks[a.mismatch.index]) {
+      const k = a.mismatch.index, t = toks[k], pv = toks[k - 1], nx = toks[k + 1];
+      if ((t.v === ")" || t.v === "]") && String(a.mismatch.expected || "") !== t.v && pv && pv.t === "p" && pv.v === t.v && (!nx || nx.nl || (nx.t === "p" && /^[;,)\]}]$/.test(nx.v)))) e45.push({ pos: t.s, del: 1, ins: "", id: "STRAY_CLOSER_LINE", reason: "penutup '" + t.v + "' berlebih setelah penutup yang sama (baris " + s.slice(0, t.s).split("\n").length + ")" });
+    }
+    {
+      const C = ptContainers(toks, s), lines = s.split("\n"), starts = []; let off = 0;
+      for (const ln of lines) { starts.push(off); off += ln.length + 1; }
+      const lineIdx = pos => { let lo = 0, hi = starts.length - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (starts[m] <= pos) lo = m; else hi = m - 1; } return lo; };
+      const ind = ln => { let w = 0; while (ln[w] === " " || ln[w] === "\t") w++; return w; };
+      const used = new Set();
+      for (let k = 0; k < toks.length; k++) {
+        const t = toks[k]; if (!(t.t === "p" && t.v === "}" && t.nl)) continue;
+        const li = lineIdx(t.s), w = ind(lines[li]), op = C.match[k] >= 0 ? toks[C.match[k]] : null;
+        if (op && ind(lines[lineIdx(op.s)]) === w) continue; // pasangan sudah sejajar
+        for (let q = li - 1; q >= 0; q--) {
+          const ln = lines[q].replace(/\r$/, ""); if (!ln.trim()) continue;
+          const iw = ind(ln); if (iw > w) continue; if (iw < w) break;
+          if (/\/\//.test(ln) || /[{;,(]\s*$/.test(ln)) break;
+          if (/^\s*(?:\}\s*)?(?:else\s+)?(?:if|for|while|switch|catch)\b.*\)\s*$/.test(ln) || /^\s*(?:async\s+)?function\b[^{]*\)\s*$/.test(ln) || /^\s*(?:else|do|try|finally)\s*$/.test(ln)) {
+            if (!used.has(q)) { used.add(q); e45.push({ pos: starts[q] + ln.length, del: 0, ins: " {", id: "MISSING_BRACE_OPEN", reason: "'{' hilang pada header baris " + (q + 1) + " (penutup baris " + (li + 1) + " sejajar)" }); }
+          }
+          break;
+        }
+      }
+    }
+    const applyE = (t, es) => es.slice().sort((x, y) => y.pos - x.pos).reduce((o, e) => o.slice(0, e.pos) + e.ins + o.slice(e.pos + e.del), t);
+    let text = s;
+    if (edits.length) { text = applyE(text, edits); steps.push(...edits.map(e => ({ id: e.id, status: "CANDIDATE", reason: e.reason }))); changed = true; }
+    if (e45.length) {
+      const base = edits.length ? tokenRuleAnalysis(text, opts) : a;
+      const baseImb = base ? (base.mismatch ? 1 : 0) + base.unclosed.length + base.stray.length : imb;
+      // posisi e45 dihitung pada s; bila R2 menggeser teks, hitung ulang dengan menerapkan e45 lebih dulu
+      const t45 = applyE(s, e45), g = tokenRuleAnalysis(t45, opts);
+      if (g && ((g.mismatch ? 1 : 0) + g.unclosed.length + g.stray.length) < imb) {
+        text = edits.length ? applyE(t45, edits.map(e => ({ ...e, pos: e.pos + e45.filter(x => x.pos <= e.pos).reduce((n, x) => n + x.ins.length - x.del, 0) }))) : t45;
+        steps.push(...e45.map(e => ({ id: e.id, status: "CANDIDATE", reason: e.reason }))); changed = true;
+      }
+    }
+    return { text, changed, steps };
+  }
+  /* ']' / '}' (literal objek) hilang sebelum ';' di akhir baris yang sama dengan pembukanya, mis. const a = [1, 2;  */
+  function repairDeterministicEolCloser(source, opts) {
+    const s = String(source), none = { text: s, changed: false, steps: [] };
+    const a = tokenRuleAnalysis(s, opts); if (!a) return none;
+    const toks = a.toks, edits = [], stack = [];
+    for (let k = 0; k < toks.length; k++) {
+      const tk = toks[k]; if (tk.t !== "p") continue;
+      if (tk.v === "(" || tk.v === "[" || tk.v === "{") {
+        const pv = toks[k - 1]; let obj = false;
+        if (tk.v === "{" && pv) obj = (pv.t === "p" && /^(?:=|:|\(|,|\[|\?|\?\?|\|\||&&|\.\.\.|\+)$/.test(pv.v)) || (pv.t === "id" && /^(?:return|throw|typeof|await|yield)$/.test(pv.v));
+        stack.push({ ch: tk.v, k, obj, forParen: tk.v === "(" && !!(pv && pv.t === "id" && pv.v === "for") }); continue;
+      }
+      if (tk.v === ")" || tk.v === "]" || tk.v === "}") { stack.pop(); continue; }
+      if (tk.v !== ";" || !stack.length) continue;
+      let closers = "", n = 0;
+      for (let j = stack.length - 1; j >= 0; j--) {
+        const o = stack[j]; if (o.forParen || (o.ch === "{" && !o.obj) || s.slice(toks[o.k].s, tk.s).includes("\n")) break;
+        closers += o.ch === "(" ? ")" : (o.ch === "[" ? "]" : (/\s/.test(s[toks[o.k].e] || "") ? " }" : "}")); n++;
+      }
+      if (!n || !/[\]}]/.test(closers)) continue; // kasus ')' murni sudah ditangani aturan lama
+      const prev = toks[k - 1]; if (!prev) continue;
+      const topO = stack[stack.length - 1], emptyOpen = !!(topO && prev === toks[topO.k] && (prev.v === "[" || (prev.v === "{" && topO.obj)));
+      const valueEnd = emptyOpen || prev.t === "str" || prev.t === "num" || prev.t === "tpl" || (prev.t === "id" && !/^(?:return|typeof|void|delete|new|in|of|instanceof|await|yield|throw|case|else)$/.test(prev.v)) || (prev.t === "p" && /^[)\]}]$/.test(prev.v));
+      if (!valueEnd) continue;
+      const next = toks[k + 1]; if (next && !s.slice(tk.e, next.s).includes("\n")) continue;
+      edits.push({ pos: prev.e, ins: closers, id: "MISSING_EOL_CLOSER", reason: "penutup '" + closers + "' hilang sebelum ';' (baris " + s.slice(0, tk.s).split("\n").length + ")" });
+      for (let i = 0; i < n; i++) stack.pop();
+    }
+    if (!edits.length) return none;
+    const text = edits.slice().sort((x, y) => y.pos - x.pos).reduce((o, e) => o.slice(0, e.pos) + e.ins + o.slice(e.pos), s);
+    const g = tokenRuleAnalysis(text, opts); if (!g || g.mismatch || g.stray.length || g.unclosed.length || g.semis.length) return none;
+    return { text, changed: true, steps: edits.map(e => ({ id: e.id, status: "CANDIDATE", reason: e.reason })) };
+  }
+  function doubleCommaProblems(src) {
+    const lx = lexJsTokens(String(src)); if (!lx || !lx.toks) return [];
+    const toks = lx.toks, C = ptContainers(toks, String(src)), bad = [];
+    for (let k = 1; k < toks.length; k++) { const t = toks[k], pv = toks[k - 1]; if (t.t === "p" && t.v === "," && pv.t === "p" && pv.v === ",") { const c = C.enc[k]; if (c && (c.ch === "(" || (c.ch === "{" && c.obj))) bad.push(String(src).slice(0, t.s).split("\n").length); } }
+    return bad;
+  }
+  /* Literal objek tidak boleh berisi elemen literal polos tanpa key (mis. { "a", "b" }) -- pemeriksaan internal bila parser host tidak tersedia. */
+  function objectLiteralEntryProblems(src) {
+    const lx = lexJsTokens(String(src)); if (!lx || !lx.toks) return [];
+    const toks = lx.toks, stack = [], bad = [];
+    const fin = c => { if (c.obj && c.seg.length === 1 && (c.seg[0].t === "str" || c.seg[0].t === "num" || c.seg[0].t === "tpl")) bad.push(String(src).slice(0, c.seg[0].s).split("\n").length); c.seg = []; };
+    for (let k = 0; k < toks.length; k++) {
+      const t = toks[k], top = stack[stack.length - 1];
+      if (t.t === "p" && (t.v === "(" || t.v === "[" || t.v === "{")) {
+        const pv = toks[k - 1]; let obj = false;
+        if (t.v === "{" && pv) obj = (pv.t === "p" && /^(?:=|:|\(|,|\[|\?|\?\?|\|\||&&|\.\.\.|\+)$/.test(pv.v)) || (pv.t === "id" && /^(?:return|throw|typeof|await|yield)$/.test(pv.v));
+        stack.push({ ch: t.v, obj, seg: [] }); continue;
+      }
+      if (t.t === "p" && (t.v === ")" || t.v === "]" || t.v === "}")) { const c = stack.pop(); if (c) { fin(c); const par = stack[stack.length - 1]; if (par) par.seg.push({ t: "grp", s: t.s }); } continue; }
+      if (!top) continue;
+      if (t.t === "p" && t.v === ",") { fin(top); continue; }
+      top.seg.push(t);
+    }
+    return bad;
   }
 
   function planJsTokenRepairs(source, opts, depth) {
     const original=String(source), prefix=[];
     let s=original;
     const none=()=>({text:s,changed:false,steps:prefix.slice()});
+    const misc=repairDeterministicMisc(s,opts);
+    if(misc.changed){ prefix.push(...misc.steps); s=misc.text; const g0=tokenRuleAnalysis(s,opts); if(g0&&!g0.mismatch&&!g0.stray.length&&!g0.unclosed.length&&!g0.semis.length&&!g0.adjacent.length)return{text:s,changed:true,steps:prefix}; }
     const header=repairDeterministicMissingHeaderParen(s);
     if(header.changed){ prefix.push(...header.steps); const g=tokenRuleAnalysis(header.text,opts); s=header.text; if(g&&!g.mismatch&&!g.stray.length&&!g.unclosed.length)return{text:s,changed:true,steps:prefix}; }
     const callp=repairDeterministicCallParenEol(s,opts);
     if(callp.changed){ prefix.push(...callp.steps); const g=tokenRuleAnalysis(callp.text,opts); s=callp.text; if(g&&!g.mismatch&&!g.stray.length&&!g.unclosed.length&&!g.semis.length&&!g.adjacent.length)return{text:s,changed:true,steps:prefix}; }
+    const eolc=repairDeterministicEolCloser(s,opts);
+    if(eolc.changed){ prefix.push(...eolc.steps); const g=tokenRuleAnalysis(eolc.text,opts); s=eolc.text; if(g&&!g.mismatch&&!g.stray.length&&!g.unclosed.length&&!g.semis.length&&!g.adjacent.length)return{text:s,changed:true,steps:prefix}; }
     const plus=repairDeterministicMultilinePlus(s);
     if(plus.changed){ prefix.push(...plus.steps); const g=tokenRuleAnalysis(plus.text,opts); s=plus.text; if(g&&!g.mismatch&&!g.stray.length&&!g.unclosed.length&&!g.adjacent.length)return{text:s,changed:true,steps:prefix}; }
     const a=tokenRuleAnalysis(s,opts); if(!a||(a.mismatch&&a.mismatch.inTemplate))return none();
@@ -2009,16 +2423,19 @@
     const source=String(file.content??""); const pre=htmlStructureGate(source); const scripts=[]; const scriptRe=/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi; let m;
     while((m=scriptRe.exec(source))) { const attrs=m[1]||""; const body=m[2]||""; const src=(attrs.match(/\bsrc\s*=\s*["']([^"']+)["']/i)||[])[1]||null; scripts.push({attrs,start:m.index,openEnd:m.index+m[0].indexOf(">")+1,bodyStart:m.index+m[0].indexOf(">")+1,bodyEnd:m.index+m[0].lastIndexOf("</"),src,body}); }
     const styles=[]; const styleRe=/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi; while((m=styleRe.exec(source))) styles.push({body:m[1]||"",start:m.index});
-    const inline=scripts.filter(x=>!x.src&&isJsScriptAttrs(x.attrs)); let output=source; const ledger=[]; const inlineLedgers=[]; let changed=false;
-    for(let i=inline.length-1;i>=0;i--){const sc=inline[i]; const r=repair(sc.body,{...options,source:(file.path||"HTML")+"#script-inline",autoApply:true}); inlineLedgers.push(r.ledger||null); if(r.applied){const before=output; output=output.slice(0,sc.bodyStart)+r.fullRepairedCode+output.slice(sc.bodyEnd); changed=true; ledger.push(...(r.patchLedger||[]).map(p=>({...p,file:file.path||null,language:"JavaScript",region:"HTML_SCRIPT_INLINE",cycle:p.cycle||1})));} else if(r.status==="REVIEW"||r.status==="REPAIR_FAILED") ledger.push(...(r.patchLedger||[]));}
+    const inline=scripts.filter(x=>!x.src&&isJsScriptAttrs(x.attrs)); let output=source; const ledger=[]; const inlineLedgers=[]; const inlineMesin=[]; let changed=false;
+    for(let i=inline.length-1;i>=0;i--){const sc=inline[i]; const r=repair(sc.body,{...options,source:(file.path||"HTML")+"#script-inline",autoApply:true}); inlineLedgers.push(r.ledger||null); inlineMesin.push(r.mesinD||null); if(r.applied){const before=output; output=output.slice(0,sc.bodyStart)+r.fullRepairedCode+output.slice(sc.bodyEnd); changed=true; ledger.push(...(r.patchLedger||[]).map(p=>({...p,file:file.path||null,language:"JavaScript",region:"HTML_SCRIPT_INLINE",cycle:p.cycle||1})));} else if(r.status==="REVIEW"||r.status==="REPAIR_FAILED") ledger.push(...(r.patchLedger||[]));}
     const post=htmlStructureGate(output); const scriptsPost=[...output.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)]; let inlineSyntax=true;
     for(const x of scriptsPost){const attrs=x[1]||""; if(/\bsrc\s*=\s*["'][^"']+["']/i.test(attrs)||!isJsScriptAttrs(attrs)) continue; const sg=sourceSyntaxGate(x[2],{source:(file.path||"HTML")+"#script-inline"}); if(!sg.pass) inlineSyntax=false;}
     const verified=changed&&post.pass&&inlineSyntax&&output!==source;
     const status=verified?"REPAIRED_VERIFIED":(!changed?((pre.pass&&inlineSyntax)?"NO_PATCH":"REPAIR_FAILED"):((post.pass&&inlineSyntax)?"REPAIRED":"REPAIR_FAILED"));
-    const honest=inlineLedgers.filter(Boolean).reduce((a,l)=>({findings:a.findings+l.findings,candidates:a.candidates+l.candidates,accepted:a.accepted+l.accepted,applied:a.applied+l.applied,rejected:a.rejected+l.rejected,verificationFailures:a.verificationFailures+l.verificationFailures,remainingErrors:a.remainingErrors+l.remainingErrors}),{findings:0,candidates:0,accepted:0,applied:0,rejected:0,verificationFailures:0,remainingErrors:0}); if(!pre.pass){honest.findings+=1;} if(!post.pass){honest.remainingErrors+=1;}
+    const honest=inlineLedgers.filter(Boolean).reduce((a,l)=>({findings:a.findings+l.findings,candidates:a.candidates+l.candidates,accepted:a.accepted+l.accepted,applied:a.applied+l.applied,correct:a.correct+(l.correct||0),rejected:a.rejected+l.rejected,verificationFailures:a.verificationFailures+l.verificationFailures,remainingErrors:a.remainingErrors+l.remainingErrors}),{findings:0,candidates:0,accepted:0,applied:0,correct:0,rejected:0,verificationFailures:0,remainingErrors:0}); if(!pre.pass){honest.findings+=1;} if(!post.pass){honest.remainingErrors+=1;}
     const fpBefore=digest(source), fpAfter=digest(output);
     const diagnostics=[]; if(!verified){ if(!post.pass) diagnostics.push({id:"HTML_TAG_STRUCTURE",detail:JSON.stringify(post.checks[0].detail).slice(0,200)}); for(const x of scriptsPost){const attrs=x[1]||""; if(/\bsrc\s*=\s*["'][^"']+["']/i.test(attrs)||!isJsScriptAttrs(attrs)) continue; const body=x[2]||""; const sg=sourceSyntaxGate(body,{source:(file.path||"HTML")+"#script-inline"}); if(sg.pass) continue; const bodyStart=x.index+x[0].indexOf(">")+1; const off=output.slice(0,bodyStart).split("\n").length-1; for(const d of withHostDiag(describeSourceProblems(body,{source:(file.path||"HTML")+"#script-inline"}),sg)) diagnostics.push({...d,line:(d.line||1)+off,region:"HTML_SCRIPT_INLINE"}); } }
-    return {status,applied:changed,verified,diagnostics,ledger:honest,sourceSyntax:inlineSyntax?post:{...post,status:"FAIL",pass:false,failed:[...post.failed,"INLINE_SCRIPT_SYNTAX"]},htmlProof:{before:pre,after:post,inlineScripts:inline.length,externalScripts:scripts.filter(x=>x.src).length,styles:styles.length,inlineSyntax},fullRepairedCode:output,output:{type:changed?"FULL_REPAIRED_SOURCE":"FULL_SOURCE",available:true,code:output,charCount:output.length,lineCount:output.split(/\r?\n/).length},patchLedger:ledger,appliedRules:ledger.map(x=>x.rule),beforeFingerprint:fpBefore,afterFingerprint:fpAfter,reason:verified?"html_inline_js_repaired_and_reverified":(pre.pass&&inlineSyntax)?"valid_html_no_patch":pre.pass?"html_inline_script_invalid_and_no_safe_patch":"html_not_safely_repairable"};
+    const dm=inlineMesin.filter(Boolean); const allOk=k=>dm.every(x=>x[k]!==false); const htmlOk=!!(post.pass&&inlineSyntax);
+    const mesinD={syntax:htmlOk,structure:post.pass&&allOk("structure"),patchCorrectness:allOk("patchCorrectness"),semantic:allOk("semantic"),regression:allOk("regression"),finalOutput:true,decideComplete:allOk("decideComplete"),decide:{status:allOk("decideComplete")?"PROCESSED":null,complete:allOk("decideComplete")},verdict:null};
+    mesinD.verdict=(htmlOk&&mesinD.structure&&mesinD.patchCorrectness&&mesinD.semantic&&mesinD.regression&&mesinD.decideComplete)?"VALID":"INVALID";
+    return {status,applied:changed,verified,diagnostics,ledger:honest,mesinD,decide:mesinD.decide,sourceSyntax:inlineSyntax?post:{...post,status:"FAIL",pass:false,failed:[...post.failed,"INLINE_SCRIPT_SYNTAX"]},htmlProof:{before:pre,after:post,inlineScripts:inline.length,externalScripts:scripts.filter(x=>x.src).length,styles:styles.length,inlineSyntax},fullRepairedCode:output,output:{type:changed?"FULL_REPAIRED_SOURCE":"FULL_SOURCE",available:true,code:output,charCount:output.length,lineCount:output.split(/\r?\n/).length},patchLedger:ledger,appliedRules:ledger.map(x=>x.rule),beforeFingerprint:fpBefore,afterFingerprint:fpAfter,reason:verified?"html_inline_js_repaired_and_reverified":(pre.pass&&inlineSyntax)?"valid_html_no_patch":pre.pass?"html_inline_script_invalid_and_no_safe_patch":"html_not_safely_repairable"};
   }
   function repairTypedFile(file, options={}) {
     const f={path:String(file.path||file.name||"DEV INPUT"),content:String(file.content??""),mimeType:file.mimeType||file.type||""}; const d=detectFileType(f);
@@ -2165,7 +2582,7 @@
     "COMMA_BEFORE_BRACE", "EMPTY_RETURN_OP", "TRIPLE_EQ_TYPO",
     "MISSING_CATCH_BODY", "STRAGGLE_COMMA_NL", "PHYSICS_INPUT",
     "STRAY_PLUS_EOL", "DOUBLE_PLUS_SPACE",
-    "MISSING_LIST_COMMA", "MISSING_CLOSER_INDENT", "STRAY_CLOSER_EOF",
+    "MISSING_LIST_COMMA", "MISSING_CLOSER_INDENT", "STRAY_CLOSER_EOF", "UNTERMINATED_STRING_EOL", "DOUBLE_COMMA", "STRAY_CLOSER_LINE", "MISSING_BRACE_OPEN", "MISSING_EOL_CLOSER",
     "JSON_TRAILING_COMMA", "JSON_MISSING_COMMA", "JSON_TRUNCATED_CLOSE"
   ]);
   const BLOCKED_AMBIGUOUS_RULES = Object.freeze({
@@ -2248,6 +2665,34 @@
     };
   }
 
+  /* ---------- PERBAIKAN SEBAGIAN PER BLOK TOP-LEVEL ----------
+     Dipakai hanya saat repair penuh tidak punya rencana aman. Tiap blok top-level diperbaiki SENDIRI-SENDIRI dan
+     hanya diterima bila blok itu lolos gate + verifikasi patch penuh. Blok yang tidak bisa dibuktikan tetap apa adanya. */
+  function splitTopLevelChunks(text) {
+    const s = String(text), re = /^(?=(?:export[ \t]+(?:default[ \t]+)?)?(?:async[ \t]+)?(?:function\b|class\b|const\b|let\b|var\b|if\b|for\b|while\b|switch\b|try\b|do\b|import\b|return\b|throw\b|[A-Za-z_$][\w$]*[ \t]*(?:=(?!=)|\(|\.|\[)))(?!(?:else|catch|finally|case|default)\b)/gm;
+    const starts = [0]; let m;
+    while ((m = re.exec(s))) { if (m.index > 0) starts.push(m.index); if (m.index === re.lastIndex) re.lastIndex++; }
+    const uniq = [...new Set(starts)].sort((a, b) => a - b), out = [];
+    for (let i = 0; i < uniq.length; i++) out.push({ index: i, start: uniq[i], end: i + 1 < uniq.length ? uniq[i + 1] : s.length, text: s.slice(uniq[i], i + 1 < uniq.length ? uniq[i + 1] : s.length) });
+    return out;
+  }
+  function repairChunked(text, options, gateOpts) {
+    const chunks = splitTopLevelChunks(text);
+    if (chunks.length < 2 || chunks.length > 4000) return null;
+    const pieces = [], steps = []; const L = { candidates: 0, applied: 0, correct: 0 }; let fixed = 0, failed = 0, rules = [];
+    for (const c of chunks) {
+      if (!c.text.trim() || sourceSyntaxGate(c.text, gateOpts).pass) { pieces.push(c.text); continue; }
+      const r = repair(c.text, { ...options, autoApply: true, __noChunk: true });
+      if (r && r.status === "REPAIRED_VERIFIED" && r.verified === true && typeof r.fullRepairedCode === "string") {
+        pieces.push(r.fullRepairedCode); fixed++;
+        L.candidates += r.ledger.candidates; L.applied += r.ledger.applied; L.correct += (r.ledger.correct == null ? r.ledger.applied : r.ledger.correct);
+        rules.push(...(r.appliedRules || [])); for (const x of (r.steps || [])) steps.push({ ...x, chunk: c.index, chunkStartLine: String(text).slice(0, c.start).split("\n").length });
+      } else { pieces.push(c.text); failed++; }
+    }
+    if (!fixed) return null;
+    return { text: pieces.join(""), fixed, failed, chunks: chunks.length, ledger: L, steps, rules: [...new Set(rules)] };
+  }
+
   function repair(input, options = {}) {
     if (paused) {
       return { engine: "CGO_MACHINE_ABC", version: VERSION, status: "PAUSED", applied: false, verified: false, reason: "engine_paused" };
@@ -2296,6 +2741,32 @@
     } else if (!plan.changed) {
       const sourceGate = text != null ? sourceSyntaxGate(text, gateOpts) : { status: "UNKNOWN", pass: false, scope: "DETERMINISTIC_STRUCTURAL", failed: ["NO_TEXT_SOURCE"] };
       const review = sourceGate.pass === false && sourceGate.status === "FAIL";
+      if (review && text != null && !options.__noChunk) {
+        const part = repairChunked(text, options, gateOpts);
+        if (part) {
+          const gP = sourceSyntaxGate(part.text, gateOpts), fpB = digest(text), fpA = digest(part.text);
+          const ledgerP = buildRepairLedger({ before: text, after: part.text, beforeGate: sourceGate, afterGate: gP, candidates: part.ledger.candidates, applied: part.ledger.applied, attempted: true, gateOpts });
+          ledgerP.correct = part.ledger.correct;
+          return sealIntegrity({
+            engine: "CGO_MACHINE_ABC", version: VERSION, status: gP.pass ? "REPAIRED" : "REPAIR_FAILED", applied: true, verified: false,
+            partial: { chunks: part.chunks, fixedChunks: part.fixed, unresolvedChunks: part.failed },
+            baseline, plan, finalPlan: plan, candidate: null, repaired: null, comparison: null,
+            reason: gP.pass ? "partial_blocks_repaired_whole_source_not_proven" : "partial_repair_remaining_errors",
+            sourceSyntax: gP, ledger: ledgerP,
+            diagnostics: gP.pass ? [] : withHostDiag(describeSourceProblems(part.text, gateOpts), gP),
+            verification: { postRepairAudit: null, postRepairRoute: "A-B-C-D", sourceSyntax: gP, scope: "PER_BLOCK_VERIFIED" },
+            verificationScope: "PER_BLOCK_VERIFIED_WHOLE_SOURCE_NOT_PROVEN", runtimeExecution: "NOT_PERFORMED", persistence: "FULL_SOURCE_RETURNED_TO_CALLER",
+            fullRepairedCode: part.text,
+            output: { type: "PARTIAL_REPAIRED_SOURCE", available: true, code: part.text, lineCount: part.text.split(/\r?\n/).length, charCount: part.text.length },
+            beforeFingerprint: fpB, afterFingerprint: fpA,
+            patchLedger: [], appliedRules: part.rules, retryCycles: 1,
+            steps: part.steps.map((x, i) => ({ index: i, id: x.id, status: x.status || "APPLIED", chunk: x.chunk, line: x.chunkStartLine })),
+            trace: { checked: false, partial: true, note: "tiap blok diverifikasi sendiri (gate + post-condition); source utuh belum lolos" },
+            repairEvidence: [], semanticDiff: null,
+            mesinD: { syntax: gP.pass === true, structure: true, patchCorrectness: true, semantic: true, regression: true, finalOutput: true, decideComplete: false, decide: { status: null, complete: false }, verdict: "INVALID" }
+          });
+        }
+      }
       return {
         engine: "CGO_MACHINE_ABC", version: VERSION, status: review ? "REPAIR_FAILED" : "NO_PATCH", applied: false, verified: false,
         baseline, plan, finalPlan: plan, candidate: null, repaired: null, comparison: null,
@@ -2326,6 +2797,19 @@
       repaired.pipelineTrace[2]?.machine === "C" && repaired.pipelineTrace[3]?.machine === "D" &&
       repaired.pipelineTrace.every(x => x && x.status === "COMPLETED"));
     const dVerified = postAudit === "VALID";
+    const mutatingRules = (plan.steps || []).some(x => /^(?:STRAY_CLOSER_EOF|SEMICOLON_IN_PAREN|DOUBLE_COMMA|STRAY_CLOSER_LINE)$/.test(String(x.id)));
+    const stringFix = (applied && text != null && !jsonModeOf(text) && (plan.steps || []).some(x => x.id === "UNTERMINATED_STRING_EOL")) ? repairUnterminatedStrings(text) : null;
+    const traceBase = stringFix && stringFix.changed ? stringFix.text : text;
+    const trace = (applied && text != null && !jsonModeOf(text)) ? verifyPatchTrace(traceBase, plan.afterText, { allowRemoval: mutatingRules, allowPlusInCall: (plan.steps || []).some(x => x.id === "MISSING_CONCAT_LINES_PUSH"), allowBraceOpen: (plan.steps || []).some(x => x.id === "MISSING_BRACE_OPEN"), allowStringClose: (plan.steps || []).some(x => x.id === "UNTERMINATED_STRING_EOL") }) : null;
+    if (trace && stringFix && stringFix.changed) {
+      const n = stringFix.patches.length; trace.patches = stringFix.patches.concat(trace.patches);
+      trace.postConditions.checked += n; trace.postConditions.passed += n;
+      for (const pt of stringFix.patches) trace.inserted[pt.token] = (trace.inserted[pt.token] || 0) + 1;
+      trace.structure = { checked: false, pass: true, skipped: "string ditutup; keutuhan dibuktikan lewat lexer + parser" };
+      trace.checked = true;
+    }
+    const decisionStatus = repaired && repaired.result && repaired.result.decision ? String(repaired.result.decision.status || "") : "";
+    const decideComplete = !!repaired && /^(?:PROCESSED|COMPLETE|COMPLETED|DECIDED)$/i.test(decisionStatus);
     const repairProof = {
       sourceBeforeFailed: beforeGate.pass === false,
       sourceAfterPassed: sourceGate.pass === true,
@@ -2333,18 +2817,40 @@
       candidateCount,
       routeComplete,
       dVerified,
-      statusAcceptable: !!postStatus && !/ERROR|FAIL|DEGRADED/i.test(String(postStatus))
+      statusAcceptable: !!postStatus && !/ERROR|FAIL|DEGRADED/i.test(String(postStatus)),
+      patchPostConditions: !trace || !trace.checked || (trace.pass && trace.postConditions.failed === 0),
+      nonTargetPreserved: !trace || !trace.checked || trace.nonTargetChanges === 0,
+      structureVerified: !trace || !trace.checked || trace.structure.pass !== false,
+      decideComplete,
+      minimumEvidence: !applied || !trace || !trace.checked || trace.patches.length > 0 || Object.keys(trace.removed).length > 0
     };
     const verified = !!(applied && repairProof.sourceBeforeFailed && repairProof.sourceAfterPassed &&
       repairProof.sourceChanged && repairProof.candidateCount > 0 && repairProof.routeComplete &&
-      repairProof.dVerified && repairProof.statusAcceptable);
+      repairProof.dVerified && repairProof.statusAcceptable && repairProof.patchPostConditions && repairProof.nonTargetPreserved &&
+      repairProof.structureVerified && repairProof.decideComplete && repairProof.minimumEvidence);
     const gateFail = !!(applied && sourceGate.pass === false);
     const sealed = true;
     const improved = gateFail && (sourceGate.failed || []).length < ((beforeGate && beforeGate.failed) || []).length;
-    const finalStatus = applied ? (verified ? "REPAIRED_VERIFIED" : (gateFail ? (improved ? "REPAIR_FAILED" : "PATCH_REJECTED") : "REPAIRED")) : "REVIEW";
-    const shownCode = gateFail ? (finalStatus === "REPAIR_FAILED" ? String(plan.afterText) : String(text)) : (applied ? String(plan.afterText) : null);
-    const acceptedPatch = applied && !gateFail;
+    const traceFail = !!(applied && !gateFail && trace && trace.checked && !trace.pass);
+    const finalStatus = applied ? (verified ? "REPAIRED_VERIFIED" : (traceFail ? "PATCH_REJECTED" : (gateFail ? (improved ? "REPAIR_FAILED" : "PATCH_REJECTED") : "REPAIRED"))) : "REVIEW";
+    const shownCode = traceFail ? String(text) : (gateFail ? (finalStatus === "REPAIR_FAILED" ? String(plan.afterText) : String(text)) : (applied ? String(plan.afterText) : null));
+    const acceptedPatch = applied && !gateFail && !traceFail;
+    const traceOut = trace && trace.checked ? {
+      checked: true, pass: trace.pass,
+      sourceBefore: { fingerprint: beforeFingerprint, chars: String(text).length, lines: String(text).split(/\r?\n/).length },
+      sourceAfter: { fingerprint: afterFingerprint, chars: String(plan.afterText).length, lines: String(plan.afterText).split(/\r?\n/).length },
+      reasons: (plan.steps || []).filter(x => x.status === "CANDIDATE").slice(0, 200).map(x => ({ rule: x.id, why: x.reason || null })),
+      patches: trace.patches.slice(0, 400), postConditions: trace.postConditions, nonTargetChanges: trace.nonTargetChanges, structure: trace.structure, failures: trace.reasons,
+      verification: { sourceSyntax: sourceGate.status, dAudit: postAudit || null, decide: decisionStatus || null }
+    } : { checked: false };
+    const mesinD = {
+      syntax: sourceGate.pass === true, structure: repairProof.structureVerified, patchCorrectness: repairProof.patchPostConditions,
+      semantic: repairProof.nonTargetPreserved, regression: repairProof.nonTargetPreserved, finalOutput: true,
+      decideComplete, decide: { status: decisionStatus || null, complete: decideComplete }, verdict: null
+    };
     const ledger = buildRepairLedger({ before: text, after: applied ? plan.afterText : text, beforeGate, afterGate: sourceGate, candidates: candidateCount, applied: acceptedPatch ? candidateCount : 0, attempted: applied, gateOpts });
+    ledger.correct = acceptedPatch ? (trace && trace.checked ? Math.min(ledger.applied, trace.postConditions.passed || ledger.applied) : ledger.applied) : 0;
+    if (traceFail) ledger.verificationFailures = Math.max(1, ledger.verificationFailures);
     return sealIntegrity({
       engine: "CGO_MACHINE_ABC",
       version: VERSION,
@@ -2353,7 +2859,12 @@
       afterFingerprint: shownCode != null ? digest(shownCode) : beforeFingerprint,
       applied: acceptedPatch,
       ledger,
-      diagnostics: gateFail ? withHostDiag(describeSourceProblems(plan.afterText, gateOpts), sourceGate) : [],
+      trace: traceOut,
+      repairEvidence: traceOut.checked ? traceOut.patches.map((x, n) => ({ n: n + 1, type: "INSERTED_TOKEN", token: x.token, line: x.line, container: x.container, beforeLine: x.beforeLine, afterLine: x.afterLine, postCondition: x.postCondition })) : [],
+      semanticDiff: trace && trace.checked ? { inserted: trace.inserted, removed: trace.removed, nonTargetChanges: trace.nonTargetChanges, structure: trace.structure } : null,
+      mesinD,
+      decide: { status: decisionStatus || null, complete: decideComplete },
+      diagnostics: traceFail ? trace.reasons.map(x => ({ id: "PATCH_POSTCONDITION", detail: x })) : (gateFail ? withHostDiag(describeSourceProblems(plan.afterText, gateOpts), sourceGate) : []),
       verified,
       baseline,
       plan,
@@ -2364,7 +2875,7 @@
       repaired,
       postRepair: repaired,
       comparison,
-      steps: (plan.steps || []).map((s, i) => ({ index: i, id: s.id, status: s.status === "CANDIDATE" ? (acceptedPatch ? "APPLIED" : (gateFail ? "REJECTED" : s.status)) : s.status, audit: postAudit || null })),
+      steps: (plan.steps || []).map((s, i) => ({ index: i, id: s.id, status: s.status === "CANDIDATE" ? (acceptedPatch ? "APPLIED" : ((gateFail || traceFail) ? "REJECTED" : s.status)) : s.status, audit: postAudit || null })),
       verification: {
         postRepairAudit: postAudit || null,
         postRepairRoute: "A-B-C-D",
@@ -2375,7 +2886,7 @@
       sourceSyntax: sourceGate,
       repairProof,
       retryCycles: repairCycles,
-      patchLedger: (plan.steps || []).filter(s=>s.status==="CANDIDATE").map((s,i,a)=>({id:"PATCH-"+String(i+1).padStart(3,"0"),file:options.source||"REPAIR_INPUT",language:"JavaScript",region:"DETERMINISTIC_SOURCE",rule:s.id,rootCause:s.reason||"deterministic finding",before:i===0?text:null,after:i===a.length-1?String(plan.afterText):null,reason:s.reason||"candidate generated",cycle:s.cycle||repairCycles||1,status:acceptedPatch?"APPLIED":(gateFail?"REJECTED":"CANDIDATE")})),
+      patchLedger: (plan.steps || []).filter(s=>s.status==="CANDIDATE").map((s,i,a)=>({id:"PATCH-"+String(i+1).padStart(3,"0"),file:options.source||"REPAIR_INPUT",language:"JavaScript",region:"DETERMINISTIC_SOURCE",rule:s.id,rootCause:s.reason||"deterministic finding",before:i===0?text:null,after:i===a.length-1?String(plan.afterText):null,reason:s.reason||"candidate generated",cycle:s.cycle||repairCycles||1,status:acceptedPatch?"APPLIED":((gateFail||traceFail)?"REJECTED":"CANDIDATE")})),
       appliedRules: (plan.steps || []).filter(s => s.status === "CANDIDATE").map(s => s.id),
       fullRepairedCode: shownCode,
       output: {
@@ -2388,7 +2899,7 @@
       verificationScope: "INTERNAL_PROCESS_AND_DETERMINISTIC_SOURCE_GATE",
       runtimeExecution: applied ? "DETERMINISTIC_POST_REPAIR_VERIFICATION" : "NOT_APPLICABLE",
       persistence: "FULL_SOURCE_RETURNED_TO_CALLER",
-      reason: applied ? (verified ? "deterministic_safe_patch_verified" : (gateFail ? (improved ? "partial_repair_still_invalid" : "patch_rejected_not_better_than_source") : "patch_applied_but_verification_contract_failed")) : "awaiting_safe_patch"
+      reason: applied ? (verified ? "deterministic_safe_patch_verified" : (traceFail ? "patch_postcondition_failed" : (gateFail ? (improved ? "partial_repair_still_invalid" : "patch_rejected_not_better_than_source") : "patch_applied_but_verification_contract_failed"))) : "awaiting_safe_patch"
     });
   }
 
@@ -2606,6 +3117,7 @@
   CGOMachineABC.repairAuto = repairAuto;
   CGOMachineABC.sourceFingerprint = digest;
   CGOMachineABC.verifySource = actualSourceVerdict;
+  CGOMachineABC.verifyPatch = verifyPatchTrace;
   CGOMachineABC.repairProject = repairProject;
   CGOMachineABC.analyzeProjectRelations = (input) => { const f=normalizeProjectInput(input); return f ? extractProjectRelations(f) : {status:"PROJECT_INPUT_REQUIRED"}; };
   CGOMachineABC.deepProjectReasoning = deepProjectReasoning;

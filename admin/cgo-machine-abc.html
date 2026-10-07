@@ -177,7 +177,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
   </div>
   <div class="chips" aria-label="Status mesin">
     <span id="ver" class="chip">Engine …</span>
-    <span id="self" class="chip">Self-test …</span>
+    <span id="self" class="chip">Engine self-test …</span>
     <span id="audit" class="chip">Audit D –</span>
     <span id="ind" class="chip">Independensi …</span>
     <span id="degraded" class="chip">Degraded 0</span>
@@ -210,7 +210,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
       <div class="body">
         <div class="row"><span>Machine D</span><strong id="hero-audit">—</strong></div>
         <div class="row"><span>Independensi</span><strong id="hero-independence">—</strong></div>
-        <div class="row"><span>Self-test</span><strong id="hero-selftest">—</strong></div>
+        <div class="row"><span>Kesehatan ENGINE (self-test)</span><strong id="hero-selftest">—</strong></div>
         <div class="row"><span>Degraded</span><strong id="hero-degraded">0</strong></div>
       </div>
     </div>
@@ -370,7 +370,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
     <p class="muted" style="margin:0 0 10px">Patch diterapkan pada source input dan hasilnya dikembalikan di memori. Verifikasi memakai aturan patch terdaftar + pipeline A→B→C→D; eksekusi runtime dan penulisan ke repository tidak dilakukan otomatis.</p>
     <div class="row"><span>Status repair</span><strong id="repairStatus">STANDBY</strong></div>
     <div class="row"><span>Patch</span><strong id="repairPatch">-</strong></div>
-    <div class="row"><span>Verifikasi pasca-patch</span><strong id="repairVerify">-</strong></div>
+    <div class="row"><span>Status SOURCE hasil repair</span><strong id="repairVerify">-</strong></div>
     <div class="row"><span>Perubahan temuan</span><strong id="repairDelta">-</strong></div>
     <div class="row"><span>Solution / repair plan</span><strong id="repairPlanCount">-</strong></div>
     <div class="row"><span>BCGO evidence</span><strong id="repairEvidenceCount">-</strong></div>
@@ -408,7 +408,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 <section class="panel" aria-labelledby="h-health">
   <h2 class="ph" id="h-health">Kesehatan engine</h2>
   <div class="body">
-    <div class="row"><span>Self-test</span><strong id="selfDetail">-</strong></div>
+    <div class="row"><span>Kesehatan ENGINE (self-test)</span><strong id="selfDetail">-</strong></div>
     <div class="row"><span>Independensi</span><strong id="indDetail">-</strong></div>
     <div class="row"><span>Machine D (audit)</span><strong id="auditDetail">-</strong></div>
     <div class="row"><span>Degraded / error</span><strong id="degradedDetail">0 / 0</strong></div>
@@ -421,7 +421,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 </section>
 </div>
 
-<script src="cgo-machine-abc.js?v=0.14.1-ACTUAL-D"></script>
+<script src="cgo-machine-abc.js?v=0.14.3-MORE-RULES"></script>
 <script src="cgo-machine-abc-bridge.js?v=2.3.0-REPAIR-AUTO"></script>
 <script>
 (() => {
@@ -472,7 +472,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
 
   function health() {
     const st = E.selfTest();
-    chip($("#self"), `Self-test ${st.passed}/${st.total}`, st.verified ? "ok" : "bad");
+    chip($("#self"), `Engine self-test ${st.passed}/${st.total}`, st.verified ? "ok" : "bad");
     $("#selfDetail").textContent = st.verified ? `${st.passed}/${st.total} lolos` : `${st.failed} gagal`;
     const ind = E.auditIndependence();
     chip($("#ind"), ind.verified ? "Independensi OK (pindai statis)" : "Independensi perlu dicek", ind.verified ? "ok" : "bad");
@@ -827,7 +827,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
     $("#repairOutputStatus").textContent = out.status + (out.verified ? " · VERIFIED" : "") + (out.outputType === "PARTIAL_REPAIRED_SOURCE" ? " · SOURCE PARSIAL (BELUM VALID)" : out.outputType === "FULL_INPUT_SOURCE" ? " · SOURCE ASLI (TIDAK DIUBAH)" : "");
     $("#repairOutputFile").textContent = "Sumber: " + out.source + (out.diagnostics.length ? " · " + out.diagnostics.length + " masalah: " + formatDiagnostics(out.diagnostics, 3).replace(/\n\s+/g, " → ").replace(/\n/g, " | ") : "");
     $("#repairOutputPatch").textContent = out.patchId;
-    $("#repairOutputVerify").textContent = out.verified ? "PASS · INTERNAL" : (out.status === "NO_PATCH" && /^PASS/.test(String(out.sourceSyntax)) ? "VALID · TIDAK PERLU PATCH" : out.status === "REPAIR_FAILED" ? "GAGAL · SOURCE MASIH INVALID" : out.status === "PATCH_REJECTED" ? "PATCH DITOLAK · TIDAK AMAN" : out.status === "REVIEW" ? "MENUNGGU PERSETUJUAN PATCH" : (out.audit || "BELUM TERBUKTI"));
+    $("#repairOutputVerify").textContent = out.verified ? "SOURCE TERVERIFIKASI · parser+struktur+regresi" : (out.status === "NO_PATCH" && /^PASS/.test(String(out.sourceSyntax)) ? "VALID · TIDAK PERLU PATCH" : out.status === "REPAIR_FAILED" ? "GAGAL · SOURCE MASIH INVALID" : out.status === "PATCH_REJECTED" ? "PATCH DITOLAK · TIDAK AMAN" : out.status === "REVIEW" ? "MENUNGGU PERSETUJUAN PATCH" : (out.audit || "BELUM TERBUKTI"));
     $("#repairOutputBefore").textContent = out.beforeFingerprint;
     $("#repairOutputAfter").textContent = out.afterFingerprint;
     $("#repairOutputSteps").textContent = out.ledger ? ledgerText(out.ledger) : (String(out.stepCount) + " patch" + (out.findingDelta != null ? " · Δtemuan " + out.findingDelta : ""));
@@ -906,9 +906,9 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
     }
     return null;
   }
-  function ledgerText(L) { return L ? ("Findings " + L.findings + " · Candidates " + L.candidates + " · Applied " + L.applied + " · Rejected " + L.rejected + " · Sisa error " + L.remainingErrors) : "-"; }
+  function ledgerText(L) { return L ? ("Findings " + L.findings + " · Candidates " + L.candidates + " · Applied " + L.applied + " · Benar " + (L.correct == null ? L.applied : L.correct) + " · Rejected " + L.rejected + " · Sisa error " + L.remainingErrors) : "-"; }
   function verifyLabel(r) {
-    if (r.verified) return "PASS · INTERNAL";
+    if (r.verified) return "SOURCE TERVERIFIKASI · parser+struktur+regresi";
     if (r.status === "NO_PATCH" && r.sourceSyntax && r.sourceSyntax.pass === true) return "VALID · TIDAK PERLU PATCH";
     if (r.status === "REPAIR_FAILED") return "GAGAL · SOURCE MASIH INVALID";
     if (r.status === "PATCH_REJECTED") return "PATCH DITOLAK · TIDAK AMAN";
@@ -949,7 +949,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:lin
       const d = r.comparison?.findingDelta; $("#repairDelta").textContent = d == null ? "-" : String(d);
       $("#repairPlanCount").textContent = ledgerText(ledgerOf(r));
       $("#repairEvidenceCount").textContent = String(r.baseline?.pipeline?.B?.externalEvidence?.claimCount ?? r.baseline?.pipeline?.C?.metadata?.bcgoEvidence?.claimCount ?? 0);
-      $("#repairPostRoute").textContent = (r.verification?.postRepairRoute || "-") + " · D " + (r.verification?.postRepairAudit || "-");
+      $("#repairPostRoute").textContent = (r.verification?.postRepairRoute || "-") + " · D " + (r.mesinD ? r.mesinD.verdict : (r.verification?.postRepairAudit || "-")) + " · DECIDE " + (r.decide ? (r.decide.complete ? "COMPLETE" : "TIDAK LENGKAP") : "-");
       showDeep(r);
       const patch = r.candidate?.patch;
       if (patch?.after != null) $("#repairDetail").textContent = patch.after;
