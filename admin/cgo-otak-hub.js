@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.9.8-WAKE-READY";
+  const VERSION = "1.9.9-WAKE-ON";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -40,7 +40,7 @@
     focus: null,      // { topic, metrics, priority, at }
     lastOps: null,    // ringkasan angka terakhir yang disebut
     lastPriority: null,
-    wakeEnabled: false,
+    wakeEnabled: true, /* default ON · standby CGO */
     wakeBuffer: [],
     wakeBufferMaxMs: 800
   };
@@ -2303,6 +2303,13 @@
   });
 
   global.CGO_OTAK = API;
+  try {
+    /* boot-wake-emit: UI badge segera ON */
+    if (state.wakeEnabled) {
+      emitWake("cgo:wake-enabled", { enabled: true, boot: true });
+    }
+  } catch (_) {}
+
   // Modul yang load async (instruction, internal brain, BCGO engine) → refresh subscriber
   try {
     if (typeof window !== "undefined") {
