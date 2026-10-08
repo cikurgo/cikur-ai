@@ -444,15 +444,19 @@ function buildOpsSnapshot() {
 function buildCsvForDataset(name) {
     try {
         const config = TABLE_CONFIGS[name];
-        const rows = cache[name] || [];
+        const rows = (cache[name] || []).slice(0, 500);
         if (!config || !rows.length) return null;
         const header = config.columns.map(c => '"' + c.label + '"').join(',');
-        const body = rows.map(row =>
-            config.columns.map(c => '"' + String(c.get(row)).replace(/"/g, '""') + '"').join(',')
-        ).join('\n');
+        const body = rows.map(function (row) {
+            return config.columns.map(function (c) {
+                var cell = '';
+                try { cell = String(c.get(row) ?? ''); } catch (_) { cell = ''; }
+                return '"' + cell.replace(/"/g, '""') + '"';
+            }).join(',');
+        }).join('\n');
         return "\uFEFF" + header + '\n' + body;
     } catch (e) {
-        console.warn('[DATA-CGO] buildCsvForDataset', e);
+        console.warn('[DATA-CGO] buildCsvForDataset', name, e);
         return null;
     }
 }
@@ -460,10 +464,29 @@ function publishCsvCache() {
     try {
         const payload = { at: Date.now(), datasets: {} };
         ['mitra', 'customers', 'orders'].forEach(function (name) {
-            const csv = buildCsvForDataset(name);
-            if (csv) payload.datasets[name] = { csv: csv, rows: (cache[name] || []).length };
+            try {
+                const csv = buildCsvForDataset(name);
+                if (csv) payload.datasets[name] = { csv: csv, rows: Math.min(500, (cache[name] || []).length) };
+            } catch (e1) {
+                console.warn('[DATA-CGO] csv skip', name, e1);
+            }
         });
-        localStorage.setItem('CGO_CSV_CACHE_V1', JSON.stringify(payload));
+        var json = JSON.stringify(payload);
+        try {
+            localStorage.setItem('CGO_CSV_CACHE_V1', json);
+        } catch (quota) {
+            // kuota penuh: simpan satu dataset saja (yang terbesar barisnya)
+            try {
+                var best = null, bestN = -1;
+                Object.keys(payload.datasets).forEach(function (k) {
+                    var n = payload.datasets[k].rows || 0;
+                    if (n > bestN) { bestN = n; best = k; }
+                });
+                var slim = { at: Date.now(), datasets: {} };
+                if (best) slim.datasets[best] = payload.datasets[best];
+                localStorage.setItem('CGO_CSV_CACHE_V1', JSON.stringify(slim));
+            } catch (_) {}
+        }
         try { window.CGO_CSV_CACHE = payload; } catch (_) {}
     } catch (e) {
         console.warn('[DATA-CGO] publishCsvCache', e);
@@ -670,7 +693,7 @@ const TABLE_CONFIGS = {
     },
     orders: {
         columns: [
-            { label: 'ID Pesanan', get: d => d.id.slice(-8).toUpperCase() },
+            { label: 'ID Pesanan', get: d => String(d.id || d.orderId || '-').slice(-8).toUpperCase() },
             { label: 'Jenis', get: d => d.type || '-' },
             { label: 'Customer', get: getOrderCustomerName },
             { label: 'Total', get: d => 'Rp ' + getOrderTotal(d).toLocaleString('id-ID') },

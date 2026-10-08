@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.8.3-LOCAL-CSV";
+  const VERSION = "1.9.5-WAKE-SYNC";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -35,7 +35,14 @@
     accessCode: null, // kode akses internal aktif (0021|0006|0095)
     accessUntil: 0,   // epoch ms; sesi internal
     accessFailCount: 0,
-    accessLockedUntil: 0
+    accessLockedUntil: 0,
+    // Memori kerja operasional (fokus sesi — bukan template)
+    focus: null,      // { topic, metrics, priority, at }
+    lastOps: null,    // ringkasan angka terakhir yang disebut
+    lastPriority: null,
+    wakeEnabled: false,
+    wakeBuffer: [],
+    wakeBufferMaxMs: 800
   };
   const listeners = new Set();
   let lastSignature = "";
@@ -208,6 +215,8 @@
       abcLive: state.abcLive,
       internal: state.internal ? { signal: state.internal.signal, classification: state.internal.classification, guardianLevel: state.internal.guardianLevel, blockers: state.internal.blockers } : null,
       memoryTurns: state.memory.length,
+      focus: state.focus,
+      lastPriority: state.lastPriority,
       lastTrace: state.lastTrace,
       claims: internalClaims(),
       updatedAt: state.updatedAt
@@ -293,14 +302,118 @@
   if (timer && typeof timer.unref === "function") timer.unref();
 
   /* ---------------- Memori percakapan bersama ---------------- */
+  function detectFocusTopic(q, a) {
+    const s = String(q || "") + " " + String(a || "");
+    if (/\b(mitra|partner|pending)\b/i.test(s)) return "mitra";
+    if (/\b(customer|pelanggan|online|offline)\b/i.test(s)) return "customer";
+    if (/\b(pesanan|order|transaksi|omzet)\b/i.test(s)) return "pesanan";
+    if (/\b(status|saraf|siklus|scan|telemetry|anomali)\b/i.test(s)) return "sistem";
+    if (/\b(briefing|ringkas|prioritas)\b/i.test(s)) return "briefing";
+    if (/\b(tarik|unduh|csv|export)\b/i.test(s)) return "export";
+    return "umum";
+  }
   function remember(q, a, sources) {
-    const turn = { q: String(q).slice(0, 200), a: String(a || "").slice(0, 240), sources: sources || [], at: Date.now() };
+    const topic = detectFocusTopic(q, a);
+    const turn = {
+      q: String(q).slice(0, 200),
+      a: String(a || "").slice(0, 320),
+      sources: sources || [],
+      topic: topic,
+      at: Date.now()
+    };
     state.memory.push(turn);
     if (state.memory.length > MEM_MAX) state.memory.shift();
+    state.focus = { topic: topic, at: Date.now(), q: turn.q };
     try { const c = global.CIKURGO; if (c && typeof c.ingat === "function") c.ingat(turn.q, turn.a); } catch (_) {}
     return turn;
   }
   function recall(n) { return state.memory.slice(-(Number(n) || 5)); }
+  function recallByTopic(topic, n) {
+    const t = String(topic || "").toLowerCase();
+    return state.memory.filter(function (m) { return m.topic === t; }).slice(-(Number(n) || 3));
+  }
+  /** Lanjutan kontekstual: kenapa / dalami / yang tadi / terus */
+  function isFollowUpQuery(text) {
+    const s = String(text || "").trim();
+    if (!s) return false;
+    // Jangan anggap perintah tarik/unduh sebagai follow-up
+    if (/^(lanjut|lanjutkan|batal|batalkan|cancel|ya|tidak|ok|oke)\s*[.!]?$/i.test(s)) return false;
+    if (state.pendingTarikConfirm) return false;
+    if (/\b(kenapa|mengapa|why|terus|dalami|bedah|lebih\s*dalam|yang\s*(tadi|itu|pending|online)|jelaskan\s*(lagi|lebih)|detail\s*(nya|lagi)|lalu\s*bagaimana|terus\s*gimana)\b/i.test(s)) return true;
+    if (s.length < 28 && state.focus && state.focus.topic && state.focus.topic !== "umum") {
+      if (/\b(tarik|unduh|csv|export|status|briefing|berapa|customer|mitra|pesanan)\b/i.test(s)) return false;
+      return true;
+    }
+    return false;
+  }
+  function buildFollowUpAnswer(text, lang) {
+    const en = lang === "en";
+    const focus = state.focus || {};
+    const topic = focus.topic || "umum";
+    const snap = (function () {
+      try {
+        if (global.CGO_OPS_SNAPSHOT) return global.CGO_OPS_SNAPSHOT;
+        const raw = global.localStorage && global.localStorage.getItem("CGO_OPS_SNAPSHOT_V1");
+        return raw ? JSON.parse(raw) : null;
+      } catch (_) { return null; }
+    })();
+    const live = global.BCGO_STATE || {};
+    const c = (snap && snap.customers) || {};
+    const m = (snap && snap.mitra) || {};
+    const o = (snap && snap.orders) || {};
+    const lines = [];
+    const last = state.memory.length ? state.memory[state.memory.length - 1] : null;
+
+    if (en) lines.push("Following up on " + topic + (last && last.q ? ' ("' + last.q.slice(0, 60) + '")' : "") + ":");
+    else lines.push("Melanjutkan fokus " + topic + (last && last.q ? ' («' + last.q.slice(0, 60) + '»)' : "") + ":");
+
+    if (topic === "mitra") {
+      if (en) {
+        lines.push("Pending partners: " + (m.pending ?? "—") + " of " + (m.total ?? "—") + " total.");
+        lines.push("Why it matters: pending blocks expansion capacity before order volume can scale cleanly.");
+        lines.push("Suggested: review scores before mass-approve; export CSV if you need the list.");
+      } else {
+        lines.push("Mitra pending: " + (m.pending ?? "—") + " dari total " + (m.total ?? "—") + ".");
+        lines.push("Mengapa penting: antrean pending menahan kapasitas ekspansi — volume transaksi sulit sehat jika inlet mitra macet.");
+        lines.push("Saran: bedah skor BCGO per aplikasi sebelum approve massal; atau tarik CSV mitra untuk evaluasi.");
+      }
+    } else if (topic === "customer") {
+      if (en) {
+        lines.push("Customers " + (c.total ?? "—") + " · online " + (c.online ?? "—") + " / offline " + (c.offline ?? "—") + ".");
+        lines.push("Why: online share signals live demand in the last minutes; thin online means quiet traffic.");
+      } else {
+        lines.push("Customer " + (c.total ?? "—") + " · online " + (c.online ?? "—") + " / offline " + (c.offline ?? "—") + ".");
+        lines.push("Mengapa: porsi online mencerminkan permintaan hidup menit terakhir — online tipis berarti trafik sepi.");
+        lines.push("Saran explor: bandingkan online dengan omzet hari ini, atau cek agent radar per KM.");
+      }
+    } else if (topic === "pesanan") {
+      if (en) {
+        lines.push("Orders today: " + (o.todayCount ?? "—") + ", paid " + (o.todayOmzet != null ? o.todayOmzet : "—") + ".");
+      } else {
+        lines.push("Transaksi hari ini: " + (o.todayCount ?? "—") + ", omzet lunas " + (o.todayOmzet != null ? ("Rp " + Number(o.todayOmzet).toLocaleString("id-ID")) : "—") + ".");
+        lines.push("Mengapa: angka ini mengukur arus kas harian; cocokkan dengan customer online agar tidak salah baca momentum.");
+      }
+    } else if (topic === "sistem") {
+      const scan = (live.sourceScan && live.sourceScan.status) || "—";
+      if (en) {
+        lines.push("Neural stage " + (live.step || "—") + ", cycle " + (live.cycle != null ? live.cycle : "—") + ", scan " + scan + ".");
+      } else {
+        lines.push("Saraf: tahap " + (live.step || "—") + ", siklus " + (live.cycle != null ? live.cycle : "—") + ", scan " + scan + ".");
+        lines.push("Mengapa: scan CLEAN + siklus stabil = fondasi aman untuk keputusan bisnis; bila DEGRADED, prioritaskan sistem dulu.");
+      }
+    } else {
+      if (last && last.a) {
+        lines.push(en ? "Last point was: " + last.a.slice(0, 180) : "Poin terakhir: " + last.a.slice(0, 180));
+      } else {
+        lines.push(en ? "No strong focus yet — ask about customers, partners, orders, or system status." : "Belum ada fokus kuat — tanya customer, mitra, pesanan, atau status sistem.");
+      }
+    }
+    if (state.lastPriority) {
+      lines.push((en ? "Priority still on my radar: " : "Prioritas yang masih di radar saya: ") + state.lastPriority);
+    }
+    lines.push(en ? "Want to switch focus or pull CSV?" : "Mau pindah fokus, atau tarik CSV?");
+    return lines.join("\n");
+  }
 
   /* ---------------- Satu jalur tanya-jawab ---------------- */
   const ABC_TRIGGER = /analisis|struktur|audit|verifikasi|bukti|mesin abc|pipeline|self-?test/i;
@@ -316,6 +429,27 @@
   const MSG_ACCESS_LOCK = "Maaf, untuk sementara ini proses pengecekan Data Internal tidak dapat dilanjutkan, silahkan dicoba kembali nanti, jika darurat, silahkan Konfirmasi Kode Akses dengan Nama Tunggal Rahasia.";
   const ACCESS_LOCK_MS = 15 * 60 * 1000;
   const ACCESS_MAX_FAIL = 3;
+  /** Nama Tunggal Rahasia — buka kunci setelah gagal 3× (jangan ditampilkan di chat). */
+  const SECRET_ACCESS_NAME = "CIKUR GO INDONESIA";
+  function normalizeSecretText(s) {
+    return String(s || "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+  function isSecretAccessName(text) {
+    const n = normalizeSecretText(text);
+    const secret = normalizeSecretText(SECRET_ACCESS_NAME);
+    if (n === secret) return true;
+    // izinkan dengan awalan CGO: "CGO CIKUR GO INDONESIA"
+    if (n.replace(/^C\s*G\s*O\s+/, "") === secret) return true;
+    return false;
+  }
+  function unlockAccessBySecret() {
+    state.accessFailCount = 0;
+    state.accessLockedUntil = 0;
+    state.accessCode = "SECRET";
+    state.accessUntil = Date.now() + ACCESS_SESSION_MS;
+    state.updatedAt = Date.now();
+  }
+
   function isAccessLocked() {
     return !!(state.accessLockedUntil && Date.now() < state.accessLockedUntil);
   }
@@ -354,12 +488,16 @@
     "Hadir. Mau lihat yang penting aja atau detail?",
     "Iya, saya dengar. Mau cek apa?",
     "Siap. Briefing, data, atau status sistem?",
-    "Hadir — mau ringkas hari ini?"
+    "Hadir — mau ringkas hari ini?",
+    "CGO di sini. Langsung ke angka atau status dulu?",
+    "Siap mendampingi. Mau prioritas hari ini?"
   ];
   const CEO_GRANT = [
     "Akses oke. Mau ringkas hari ini atau data spesifik?",
     "Terverifikasi. Saya siap bantu baca angka operasional.",
-    "Akses oke. Briefing, tarik data, atau status?"
+    "Akses oke. Briefing, tarik data, atau status?",
+    "Akses diterima. Saya jaga ringkas dan presisi — mau mulai dari mana?",
+    "Oke, pintu data terbuka. Briefing atau tarik CSV?"
   ];
   function pickLine(arr) {
     try { return arr[Math.floor(Math.random() * arr.length)] || arr[0]; } catch (_) { return arr[0]; }
@@ -427,6 +565,214 @@
       return "Transaksi hari ini: " + (o.todayCount ?? "—") + ", omzet lunas " + rp(o.todayOmzet) + ".";
     }
     return null;
+  }
+
+
+  /**
+   * Orkestrasi Lapis 2–3 Otak Jenius: perdalam jawaban natural + proaktif.
+   * Tidak dipakai untuk pesan akses / kunci / tarik-confirm kaku.
+   */
+
+  function buildFreeFormAnswer(text, lang, live, CG, nalarAlasan) {
+    const t = String(text || "").trim();
+    if (!t) return null;
+    const en = lang === "en";
+    const low = t.toLowerCase();
+    // Identitas / peran
+    if (/\b(beda|perbedaan|difference|apa\s+itu\s+cgo|what\s+is\s+cgo|cgo\s+dan\s+bcgo|bcgo\s+dan\s+cgo)\b/i.test(t)
+        || /\b(siapa\s+kamu|who\s+are\s+you)\b/i.test(t)) {
+      return en
+        ? "BCGO is the live neural/ops console (cycles, scan, organs). CGO is the reasoning layer that reads that live state, explains it, and helps you decide — one system, two roles."
+        : "BCGO itu konsol saraf & operasional live (siklus, scan, organ). CGO adalah lapisan penalaran yang membaca state itu, menjelaskan, dan membantu memutuskan — satu sistem, dua peran.";
+    }
+    // Bingung mulai dari mana / prioritas hari ini
+    if (/\b(bingung|mulai\s+dari\s+mana|prioritas|hari\s+ini\s+mau|what\s+should\s+i|where\s+to\s+start)\b/i.test(t)) {
+      const snap = (function () {
+        try { return global.CGO_OPS_SNAPSHOT || null; } catch (_) { return null; }
+      })();
+      const m = (snap && snap.mitra) || {};
+      const c = (snap && snap.customers) || {};
+      const lines = [];
+      if (en) {
+        lines.push("Start from the bottleneck, not from vanity metrics.");
+        if ((m.pending || 0) > 0) lines.push("I'd open with " + m.pending + " pending partners — that blocks capacity.");
+        else if ((c.online || 0) === 0 && (c.total || 0) > 0) lines.push("Traffic looks quiet (no customers online in the last window) — check demand first.");
+        else lines.push("Ops look stable — pick either daily brief or system status to confirm.");
+        lines.push("Or say: briefing harian / status sistem / tarik data mitra.");
+      } else {
+        lines.push("Mulai dari bottleneck, bukan dari angka yang sekadar terlihat sibuk.");
+        if ((m.pending || 0) > 0) lines.push("Saya mulai dari " + m.pending + " mitra pending — itu yang menahan kapasitas.");
+        else if ((c.online || 0) === 0 && (c.total || 0) > 0) lines.push("Trafik terasa sepi (tidak ada customer online di jendela terakhir) — cek permintaan dulu.");
+        else lines.push("Ops relatif stabil — briefing harian atau status sistem bisa jadi pintu masuk.");
+        lines.push("Bilang saja: briefing harian / status sistem / tarik data mitra.");
+      }
+      return lines.join(" ");
+    }
+    // Lambat / performa sistem
+    if (/\b(lambat|lemot|slow|performa|performance|hang|stuck|macet)\b/i.test(t)) {
+      const scan = (live && live.sourceScan && live.sourceScan.status) || "—";
+      const cycle = live && live.cycle != null ? live.cycle : "—";
+      const step = (live && live.step) || "—";
+      if (en) {
+        return "From live neural state: stage " + step + ", cycle " + cycle + ", source scan " + scan + ". If scan is CLEAN and cycles advance, the bottleneck is often data/UI load rather than a dead brain. Check Risk Radar for actionable errors and whether data-cgo listeners are healthy.";
+      }
+      return "Dari saraf live: tahap " + step + ", siklus " + cycle + ", scan sumber " + scan + ". Jika scan CLEAN dan siklus jalan, bottleneck sering di beban data/UI — bukan otak mati. Cek Risk Radar untuk error actionable dan kesehatan listener data-cgo.";
+    }
+    // Ide perbaikan
+    if (/\b(ide|gagasan|usul|perbaiki|perbaikan|improve|suggestion|saran\s+perbaikan)\b/i.test(t)) {
+      const snap = (function () {
+        try { return global.CGO_OPS_SNAPSHOT || null; } catch (_) { return null; }
+      })();
+      const m = (snap && snap.mitra) || {};
+      const lines = [];
+      if (en) {
+        lines.push("Practical ideas:");
+        if ((m.pending || 0) > 0) lines.push("1) Clear the pending partner queue with score thresholds before mass-approve.");
+        lines.push("2) Pull CSV for the bottleneck dataset and review offline.");
+        lines.push("3) Keep daily brief + system status as a two-minute morning ritual.");
+      } else {
+        lines.push("Ide praktis:");
+        if ((m.pending || 0) > 0) lines.push("1) Kerjakan antrean mitra pending dengan ambang skor sebelum approve massal.");
+        lines.push("2) Tarik CSV dataset bottleneck lalu review di luar chat.");
+        lines.push("3) Jadikan briefing harian + status sistem ritual dua menit setiap pagi.");
+      }
+      try {
+        if (CG && typeof CG.cipta_ide === "function") {
+          const ideas = CG.cipta_ide(t, 2, {});
+          const list = ideas && (ideas.ide || ideas.hasil);
+          if (Array.isArray(list) && list[0]) {
+            const tip = typeof list[0] === "string" ? list[0] : (list[0].teks || list[0].ide);
+            if (tip) lines.push((en ? "Extra spark: " : "Tambahan: ") + tip);
+          }
+        }
+      } catch (_) {}
+      return lines.join(" ");
+    }
+    // English capability / help
+    if (en && /\b(help|what can you|capabilities)\b/i.test(t)) {
+      return "I can brief ops numbers, system status, export CSV, calculate, spell/parse mixed text, and reason about priorities — from live evidence, not invention.";
+    }
+    // Generic free question with access: use nalar + live + soft guidance (not raw template labels)
+    if (t.length >= 8) {
+      const lines = [];
+      if (en) {
+        lines.push("I read that as an open question, not a pure KPI pull.");
+      } else {
+        lines.push("Saya baca ini sebagai pertanyaan terbuka — bukan sekadar tarik KPI.");
+      }
+      const scan = (live && live.sourceScan && live.sourceScan.status) || null;
+      if (scan) {
+        lines.push(en
+          ? ("Neural scan is " + scan + ", cycle " + (live.cycle != null ? live.cycle : "—") + ".")
+          : ("Scan saraf " + scan + ", siklus " + (live.cycle != null ? live.cycle : "—") + "."));
+      }
+      const cleanN = (nalarAlasan || []).filter(function (a) {
+        const s = String(a || "");
+        return s.length > 20 && !/mempertimbangkan bukti|keputusan yang tepat|bersifat bebas/i.test(s);
+      }).slice(0, 1);
+      if (cleanN[0]) lines.push(cleanN[0]);
+      try {
+        if (CG && typeof CG.jelaskan === "function") {
+          const j = CG.jelaskan(t, { bahasa: lang || "id" });
+          const txt = j && (j.penjelasan || j.teks);
+          if (txt && String(txt).trim().length > 24) lines.push(String(txt).trim().slice(0, 220));
+        }
+      } catch (_) {}
+      lines.push(en
+        ? "If you want numbers: ask how many customers/partners, daily brief, or system status. For files: tarik data mitra/customer/pesanan."
+        : "Kalau butuh angka: tanya berapa customer/mitra, briefing harian, atau status sistem. Untuk file: tarik data mitra/customer/pesanan.");
+      return lines.join(" ");
+    }
+    return null;
+  }
+
+  function isProtectedAnswer(text) {
+    const s = String(text || "");
+    if (/Data Internal|kode akses data kamu SALAH|Nama Tunggal Rahasia|Akses darurat terverifikasi/i.test(s)) return true;
+    if (/Mau dilanjutkan unduh file CSV|Data apa yang ingin ditarik|Baik, penarikan data dibatalkan|Baik, dibatalkan/i.test(s)) return true;
+    return false;
+  }
+  function enrichAnswerWithJenius(base, query, lang, CG, opts) {
+    opts = opts || {};
+    let answer = String(base || "").trim();
+    if (!answer || isProtectedAnswer(answer)) return answer;
+    const parts = [answer];
+    const en = lang === "en";
+    try {
+      // 1) Nalar — tambah alasan bermakna (bukan label teknis)
+      if (CG && typeof CG.nalar === "function" && !opts.skipNalar) {
+        const n = CG.nalar(query || answer, { bahasa: lang || "id" });
+        const alasan = n && Array.isArray(n.alasan) ? n.alasan.filter(Boolean) : [];
+        const clean = alasan.filter(function (a) {
+          return a && !/^(input|teks|mode|bahasa)\b/i.test(String(a)) && String(a).length > 12;
+        }).slice(0, 2);
+        if (clean.length && answer.length < 900) {
+          parts.push(en ? ("Reasoning: " + clean.join(" ")) : ("Penalaran: " + clean.join(" ")));
+        }
+      }
+    } catch (_) {}
+    try {
+      // 2) Jelaskan — parafrase lebih manusiawi bila tersedia
+      if (CG && typeof CG.jelaskan === "function" && opts.wantExplain) {
+        const j = CG.jelaskan(answer, { bahasa: lang || "id" });
+        const txt = j && (j.penjelasan || j.teks || j.hasil || j.explanation);
+        if (txt && String(txt).trim().length > 20 && String(txt).trim() !== answer) {
+          // ganti hanya jika lebih natural
+          const cand = String(txt).trim();
+          if (cand.length >= answer.length * 0.5) {
+            parts[0] = cand;
+          }
+        }
+      }
+    } catch (_) {}
+    try {
+      // 3) Usul tindakan / saran lanjutan — proaktif explor
+      if (CG && typeof CG.usul_tindakan === "function" && opts.wantAction) {
+        const u = CG.usul_tindakan(query || answer, { bahasa: lang || "id" });
+        const list = (u && (u.usulan || u.tindakan || u.hasil)) || [];
+        const arr = Array.isArray(list) ? list : [];
+        const tip = arr.map(function (x) {
+          return typeof x === "string" ? x : (x && (x.nama || x.teks || x.aksi || x.label));
+        }).filter(Boolean).slice(0, 2);
+        if (tip.length) {
+          const tipClean = tip.filter(function (x) {
+            return x && !/cek antrean pending|validasi skor/i.test(String(x));
+          });
+          const use = tipClean.length ? tipClean : tip;
+          if (use.length && answer.length < 1000) {
+            parts.push(en ? ("Next, we could: " + use.join("; ")) : ("Kalau mau lanjut, kita bisa: " + use.join("; ") + "."));
+          }
+        }
+      }
+    } catch (_) {}
+    try {
+      if (CG && typeof CG.sarankan_lanjutan === "function" && opts.wantExplore !== false) {
+        const s = CG.sarankan_lanjutan(query || answer);
+        const ide = s && (s.ide || s.saran || s.hasil);
+        const arr = Array.isArray(ide) ? ide : (ide ? [ide] : []);
+        const tip = arr.map(function (x) {
+          return typeof x === "string" ? x : (x && (x.teks || x.nama || x.label));
+        }).filter(Boolean)[0];
+        if (tip && String(tip).length > 8 && parts.join(" ").indexOf(String(tip).slice(0, 20)) < 0) {
+          parts.push(en ? ("We could also explore: " + tip) : ("Kita bisa explor: " + tip + "."));
+        }
+      }
+    } catch (_) {}
+    try {
+      if (CG && typeof CG.nilai_kualitas === "function" && opts.wantQuality) {
+        const q = CG.nilai_kualitas(answer);
+        const skor = q && (q.skor != null ? q.skor : q.score);
+        if (typeof skor === "number" && skor < 0.45 && answer.length < 400) {
+          parts.push(en
+            ? "Note: confidence is modest — more live evidence would sharpen this."
+            : "Catatan: keyakinan masih sedang — bukti live tambahan akan mempertajam ini.");
+        }
+      }
+    } catch (_) {}
+    // Batasi panjang total
+    let out = parts.filter(Boolean).join("\n");
+    if (out.length > 1800) out = out.slice(0, 1790) + "…";
+    return out;
   }
 
   function needsInternalAccess(text) {
@@ -526,10 +872,29 @@
     // Ucapan: si ji ou + zero zero twenty-one / zero zero zero six / zero zero ninety-five
     let accessJustGranted = null;
     try {
+      // Nama Tunggal Rahasia (darurat setelah kunci 3× salah)
+      if (isSecretAccessName(t) || isSecretAccessName(String(text || ""))) {
+        unlockAccessBySecret();
+        accessJustGranted = "SECRET";
+        answer = "Akses darurat terverifikasi. Sesi internal dibuka kembali.";
+        step("ACCESS", true, "secret-unlock");
+        state.lastTrace = "ACCESS:secret";
+        notify();
+        return {
+          ok: true, answer: answer, lang: "id", access: "SECRET", trace: trace, abc: null,
+          intent: { topic: "ACCESS_SECRET", mode: "ACCESS" },
+          sources: ["ACCESS"], modulesUsed: ["ACCESS:secret"]
+        };
+      }
       if (WAKE_ONLY_RE.test(t)) {
         answer = ceoWakeReply();
         step("ACCESS", true, "wake-only");
         state.lastTrace = "ACCESS:wake";
+        try {
+          emitWake("cgo:wake-heard", { text: t.slice(0, 40) });
+          emitWake("cgo:wake-awake", { text: t.slice(0, 40) });
+          setTimeout(function () { try { emitWake("cgo:wake-processing", {}); } catch (_) {} }, 30);
+        } catch (_) {}
         notify();
         return {
           ok: true, answer: answer, lang: "id", trace: trace, abc: null,
@@ -554,6 +919,15 @@
         step("ACCESS", true, "code:" + acc.code);
         if (!acc.rest) {
           answer = ceoGrantReply();
+          // Proaktif ringan dari bukti live (bila ada)
+          try {
+            const snapG = global.CGO_OPS_SNAPSHOT;
+            if (snapG && snapG.mitra && (snapG.mitra.pending || 0) > 0) {
+              answer += " Sekilas: " + snapG.mitra.pending + " mitra masih pending — itu bisa jadi prioritas pertama.";
+            } else if (snapG && snapG.customers) {
+              answer += " Sekilas: customer online " + (snapG.customers.online ?? "—") + "/" + (snapG.customers.total ?? "—") + ".";
+            }
+          } catch (_) {}
           state.lastTrace = "ACCESS:" + acc.code;
           notify();
           return {
@@ -587,6 +961,18 @@
     const CG = global.CIKURGO;
     const Inst = global.CGOInstruction;
     const live = ctx.liveState || global.BCGO_STATE || {};
+
+    // ─── Memori kerja: lanjutan kontekstual (kenapa / dalami / yang tadi) ───
+    let followUpHandled = false;
+    try {
+      if (!answer && hasValidAccess() && !state.pendingTarikConfirm && !state.pendingTarik && isFollowUpQuery(t) && state.focus && state.memory.length) {
+        answer = buildFollowUpAnswer(t, "id");
+        followUpHandled = true;
+        step("MEMORI_KERJA", true, (state.focus && state.focus.topic) || "focus");
+      }
+    } catch (e) {
+      step("MEMORI_KERJA", false, String((e && e.message) || e));
+    }
 
     // ─── A. Konstitusi percakapan (cgo-instruction) ───
     let intent = null;
@@ -896,9 +1282,9 @@
         } catch (_) {}
       }
 
-      if (polaNote) parts.push(polaNote);
+      // polaNote hanya menempel jika sudah ada hasil pengurai nyata (bukan sendirian)
+      if (polaNote && parts.length > 0) parts.push(polaNote);
 
-      // Dedup & compose
       const seen = {};
       const uniq = [];
       for (const p of parts) {
@@ -907,10 +1293,14 @@
         seen[k] = 1;
         uniq.push(k);
       }
-      if (uniq.length) {
+      // Substansi = hasil urai/hitung/emoji/warna nyata — bukan sekadar kata "berapa"
+      const hasSubstance = uniq.length > 0 && !(uniq.length === 1 && polaNote && uniq[0] === String(polaNote).trim());
+      if (hasSubstance) {
         answer = uniq.join(". ");
         if (!answer.endsWith(".")) answer += ".";
         step("OTAK_CIKURGO", true, "multi:" + lang);
+      } else if (polaNote) {
+        step("OTAK_CIKURGO", true, "pola-deferred");
       }
     }
 
@@ -1148,15 +1538,24 @@
         if ((m.pending || 0) > 0) lines.push("Focus: " + m.pending + " pending partners.");
         lines.push("Need CSV? Say: tarik data mitra / customer / pesanan.");
       } else {
-        lines.push("Ini angkanya (" + (snap.source || "ops") + "):");
-        lines.push("• Customer " + (c.total ?? "—") + " — online " + (c.online ?? "—") + ", offline " + (c.offline ?? "—"));
-        lines.push("• Mitra " + (m.total ?? "—") + " — pending " + (m.pending ?? "—") + ", disetujui " + (m.approved ?? "—") + ", ditolak " + (m.rejected ?? "—"));
-        if (o.todayCount != null) lines.push("• Transaksi hari ini " + o.todayCount + ", omzet lunas " + formatOmzet(o.todayOmzet));
-        else lines.push("• Transaksi: cek data-cgo buat angka pesanan lengkap");
-        if (r.bcgoRisk) lines.push("• Risiko BCGO — tinggi " + (r.bcgoRisk.high ?? 0) + ", review " + (r.bcgoRisk.review ?? 0) + ", rendah " + (r.bcgoRisk.low ?? 0));
-        if ((m.pending || 0) > 0) lines.push("Yang aku soroti: " + m.pending + " mitra masih pending.");
-        if (r.bcgoRisk && (r.bcgoRisk.high || 0) > 0) lines.push("Prioritas: " + r.bcgoRisk.high + " risiko tinggi — jangan approve massal dulu.");
-        lines.push("Mau tarik CSV? Bilang: tarik data mitra / customer / pesanan.");
+        lines.push("Ini potret operasional dari " + (snap.source || "ops") + ":");
+        lines.push("Customer " + (c.total ?? "—") + " — " + (c.online ?? "—") + " online, " + (c.offline ?? "—") + " offline.");
+        lines.push("Mitra " + (m.total ?? "—") + " — pending " + (m.pending ?? "—") + ", disetujui " + (m.approved ?? "—") + ", ditolak " + (m.rejected ?? "—") + ".");
+        if (o.todayCount != null) lines.push("Transaksi hari ini " + o.todayCount + ", omzet lunas " + formatOmzet(o.todayOmzet) + ".");
+        else lines.push("Angka pesanan lengkap masih di data-cgo bila kamu butuh detail baris.");
+        if (r.bcgoRisk) lines.push("Campuran risiko BCGO: tinggi " + (r.bcgoRisk.high ?? 0) + ", review " + (r.bcgoRisk.review ?? 0) + ", rendah " + (r.bcgoRisk.low ?? 0) + ".");
+        // Arti + prioritas (CEO natural)
+        if ((m.pending || 0) > 0) {
+          lines.push("Yang paling saya soroti: " + m.pending + " mitra masih pending — itu yang menahan inlet kapasitas sebelum volume bisa naik bersih.");
+        } else if ((c.online || 0) === 0 && (c.total || 0) > 0) {
+          lines.push("Catatan: tidak ada customer online di jendela 5 menit — trafik terasa sepi.");
+        } else {
+          lines.push("Secara umum kondisi antrean relatif stabil; cocokkan online dengan omzet bila mau baca momentum.");
+        }
+        if (r.bcgoRisk && (r.bcgoRisk.high || 0) > 0) {
+          lines.push("Prioritas: " + r.bcgoRisk.high + " risiko tinggi — jangan approve massal dulu.");
+        }
+        lines.push("Mau saya bedah pending mitra, omzet hari ini, atau status saraf sistem? Bisa juga tarik CSV.");
       }
       return lines.join("\n");
     }
@@ -1208,14 +1607,19 @@
         if (L && (L.step || L.cycle != null)) {
           lines.push("Saraf live: tahap " + (L.step || "—") + ", siklus " + (L.cycle != null ? L.cycle : "—") + ", scan " + ((L.sourceScan && L.sourceScan.status) || "—") + ".");
         }
-        lines.push("Sumber data: " + ((snap && snap.source) || "—") + ". Mau tarik CSV atau detail salah satu poin?");
+        lines.push("Sumber: " + ((snap && snap.source) || "—") + ".");
+        lines.push("Arti singkat: angka ini gambaran hidup operasional hari ini — pending & risiko yang perlu diprioritaskan sebelum kejar volume.");
+        lines.push("Mau saya bedah mitra pending, omzet hari ini, atau status saraf sistem?");
       }
       return lines.join("\n");
     }
     const briefingAsk = /\b(briefing|ringkasan\s*harian|laporan\s*harian|briefing\s*harian|daily\s*brief|rekap\s*hari\s*ini|kabar\s*hari\s*ini)\b/i.test(t);
 
-    const opsAsk = /\b(customer|pelanggan|mitra|partner|online|offline|transaksi|pesanan|order|omzet|pendaftar|pending|berapa\s*(banyak|jumlah)|jumlah\s*(customer|mitra|transaksi)|grafik|chart|radar\s*agent|per\s*km|agent\s*cgo)\b/i.test(t)
-      || /\b(c\s*g\s*o|cek\s*data|data\s*operasional)\b/i.test(t);
+    // Ops hanya jika niat kuantitatif/cek data — bukan sekadar menyebut kata mitra/customer
+    const opsAsk = /\b(berapa|jumlah|total|hitung\s*jumlah|cek\s*(data|angka|ops|operasional)|data\s*operasional|grafik|chart|kpi|rekap\s*(customer|mitra|pesanan)|radar\s*agent|per\s*km|agent\s*cgo)\b/i.test(t)
+      || /\b(berapa\s+)?(customer|pelanggan|mitra|partner|transaksi|pesanan|order|omzet)\s+(online|offline|pending|hari\s*ini|aktif|total)?/i.test(t)
+      || /\b(online|offline)\s+(customer|pelanggan|mitra)?\b/i.test(t)
+      || /\b(customer|mitra|pesanan|transaksi)\s+(berapa|jumlah|total)\b/i.test(t);
     // Lanjut / batal penarikan data
     if (!answer && state.pendingTarikConfirm) {
       if (/\b(batal|batalkan|cancel|jangan\s+lanjutkan|jangan\s+jalankan|stop|berhenti)\b/i.test(t)) {
@@ -1515,6 +1919,20 @@
       }
     }
 
+
+    // ─── H1b. Pertanyaan bebas (bukan ops/tarik/template kaku) ───
+    if (!answer && hasValidAccess()) {
+      try {
+        const free = buildFreeFormAnswer(t, lang, live, CG, nalarAlasan);
+        if (free) {
+          answer = (accessJustGranted ? "Akses oke. " : "") + free;
+          step("OTAK_CIKURGO", true, "freeform");
+        }
+      } catch (e) {
+        step("OTAK_CIKURGO", false, "freeform:" + String((e && e.message) || e));
+      }
+    }
+
     // ─── H2. Otak Customer (pipeline customer/) — nalar natural, aditif ───
     if (!answer) {
       // H2a. Reasoning modul customer langsung (bila ada)
@@ -1673,6 +2091,47 @@
       step("OTAK_CIKURGO", true, "fallback-" + lang);
     }
 
+    // ─── Otak Jenius FULL: perdalam jawaban (kecuali akses/tarik terlindungi) ───
+    if (answer && CG && !isProtectedAnswer(answer)) {
+      try {
+        var wantDeep = !!(opsAsk || briefingAsk || systemRequest || spoken || nalarAlasan.length);
+        var pureCalc = /Hasil hitung|Result:/i.test(answer) && answer.length < 280;
+        answer = enrichAnswerWithJenius(answer, t, lang, CG, {
+          wantExplain: wantDeep && !pureCalc,
+          wantAction: !!(systemRequest || briefingAsk) && !pureCalc,
+          wantExplore: !pureCalc,
+          wantQuality: !!systemRequest && !pureCalc,
+          skipNalar: nalarAlasan.length > 0 || pureCalc
+        });
+        if (nalarAlasan.length && answer.length < 1200 && !pureCalc) {
+          var GENERIC_N = /mempertimbangkan bukti|keputusan yang tepat|konteks operasional yang relevan|menyusun prioritas dari bukti|bersifat bebas dan perlu dibaca/i;
+          var cleanN = nalarAlasan.filter(function (a) {
+            var s = String(a || "");
+            return s.length > 16 && !/^(input|teks|mode)\b/i.test(s) && !GENERIC_N.test(s);
+          }).slice(0, 2);
+          if (cleanN.length && answer.indexOf(cleanN[0]) < 0) {
+            answer = answer + (lang === "en" ? "\nReasoning: " : "\nPenalaran: ") + cleanN.join(" ");
+          }
+        }
+        step("OTAK_CIKURGO", true, "enrich-jenius");
+      } catch (e) {
+        step("OTAK_CIKURGO", false, "enrich:" + String((e && e.message) || e));
+      }
+    }
+
+    // Simpan prioritas operasional ke memori kerja
+    try {
+      if (answer && hasValidAccess()) {
+        const snap2 = global.CGO_OPS_SNAPSHOT;
+        if (snap2 && snap2.mitra && (snap2.mitra.pending || 0) > 0) {
+          state.lastPriority = (snap2.mitra.pending) + " mitra pending";
+        } else if (snap2 && snap2.customers && (snap2.customers.online || 0) === 0 && (snap2.customers.total || 0) > 0) {
+          state.lastPriority = "tidak ada customer online (5 menit)";
+        }
+        if (snap2) state.lastOps = { at: Date.now(), customers: snap2.customers, mitra: snap2.mitra, orders: snap2.orders };
+      }
+    } catch (_) {}
+
     // Ingat
     if (answer) {
       remember(t, answer, trace.filter(function (x) { return x.ok; }).map(function (x) { return x.module; }));
@@ -1694,11 +2153,102 @@
   }
 
 
+  /* ---------------- Wake word API (sumber kebenaran untuk BCGO FASE 5) ---------------- */
+  const WAKE_WORDS = Object.freeze({
+    primary: "CGO",
+    variants: [
+      "cgo", "c g o", "ce ge o", "si ji ou", "siji ou", "sijiou", "sijiow",
+      "halo cgo", "hey cgo", "hi cgo", "ok cgo", "oke cgo"
+    ],
+    secondary: ["si ji o", "c.g.o"],
+    lang: ["id-ID", "en-US"]
+  });
+
+  function emitWake(name, detail) {
+    try {
+      if (typeof global.dispatchEvent === "function" && typeof CustomEvent === "function") {
+        global.dispatchEvent(new CustomEvent(name, { detail: detail || {} }));
+      }
+    } catch (_) {}
+  }
+
+  function setWakeEnabled(on) {
+    state.wakeEnabled = !!on;
+    emitWake(on ? "cgo:wake-enabled" : "cgo:wake-disabled", { enabled: !!on });
+    notify();
+    return state.wakeEnabled;
+  }
+
+  function isWakeEnabled() { return !!state.wakeEnabled; }
+
+  /** Ringkas audio/teks pra-wake (untuk pre-roll UI). */
+  function getPreRoll(ms) {
+    const maxMs = Number(ms) || state.wakeBufferMaxMs || 800;
+    const now = Date.now();
+    const buf = (state.wakeBuffer || []).filter(function (x) {
+      return x && (now - (x.at || 0)) <= maxMs;
+    });
+    return buf.length ? buf.map(function (x) { return x.text; }).join(" ").trim() : null;
+  }
+
+  function pushPreRoll(text) {
+    try {
+      const t = String(text || "").trim();
+      if (!t) return;
+      state.wakeBuffer.push({ text: t.slice(0, 120), at: Date.now() });
+      if (state.wakeBuffer.length > 12) state.wakeBuffer.shift();
+    } catch (_) {}
+  }
+
+  function normalizeWakeText(text) {
+    return String(text || "")
+      .toLowerCase()
+      .replace(/[-_.]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function detectWakeInText(text) {
+    const t = normalizeWakeText(text);
+    if (!t) return false;
+    const vars = [].concat([WAKE_WORDS.primary], WAKE_WORDS.variants || [], WAKE_WORDS.secondary || [])
+      .map(function (s) { return normalizeWakeText(s); })
+      .filter(Boolean);
+    for (let i = 0; i < vars.length; i++) {
+      const v = vars[i];
+      if (t === v || t.indexOf(" " + v + " ") >= 0 || t.indexOf(v + " ") === 0 || t.endsWith(" " + v)) return true;
+    }
+    return false;
+  }
+
+  /** Dipanggil UI/mic: teks partial recognition. */
+  function onWakeTranscript(text, opts) {
+    opts = opts || {};
+    pushPreRoll(text);
+    if (!state.wakeEnabled && !opts.force) return { heard: false };
+    if (detectWakeInText(text)) {
+      emitWake("cgo:wake-heard", { text: String(text || "").slice(0, 80) });
+      emitWake("cgo:wake-awake", { text: String(text || "").slice(0, 80) });
+      return { heard: true };
+    }
+    return { heard: false };
+  }
+
+  // Saat ask() deteksi wake-only, siarkan event agar ORB sinkron
+  const _askOriginalRef = null; // placeholder — hook di dalam ask sudah ada WAKE_ONLY_RE
+
   const API = Object.freeze({
     version: VERSION,
     status, snapshot, ask, recall,
     subscribe(fn) { if (typeof fn !== "function") return () => {}; listeners.add(fn); return () => listeners.delete(fn); },
-    refresh: notify
+    refresh: notify,
+    // Wake word — BCGO FASE 5 membaca ini
+    wakeWords: WAKE_WORDS,
+    setWakeEnabled: setWakeEnabled,
+    isWakeEnabled: isWakeEnabled,
+    getPreRoll: getPreRoll,
+    onWakeTranscript: onWakeTranscript,
+    detectWake: detectWakeInText
   });
 
   global.CGO_OTAK = API;

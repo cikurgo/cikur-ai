@@ -8,8 +8,8 @@ import * as Guardian from "./cgo-ai-guardian.js?v=20260907-1315-instruction1";
 import * as Cognition from "./cgo-ai-cognition.js?v=20260907-1315-instruction1";
 import * as Instruction from "./cgo-instruction.js";
 
-const VERSION_OTAK = "1.1.0-OTAK-WIRE";
-const VERSION="1.5.0-CONSTITUTION-BOUND";
+const VERSION_OTAK = "1.2.0-VOCAB-PARSE";
+const VERSION="1.6.0-VOCAB-PARSE";
 
 function clone(v){ return structuredClone(v); }
 function verifiedEvidence(caseData){ return (caseData?.evidence||[]).filter(e=>e?.status==="VERIFIED"); }
@@ -134,6 +134,160 @@ export { VERSION, Instruction };
 
 try {
   if (typeof globalThis !== "undefined") {
-    globalThis.CGOAiLogic = { VERSION: typeof VERSION !== "undefined" ? VERSION : "1.1.0-OTAK-WIRE" };
+    globalThis.CGOAiLogic = { VERSION: typeof VERSION !== "undefined" ? VERSION : "1.6.0-VOCAB-PARSE", parseCommandVocabulary, getVocabularyVersion, evaluate };
   }
 } catch (_) {}
+
+
+/* ============================================================
+ * VOCABULARY / COMMAND UNDERSTANDING (local, additive)
+ * Tidak mengganti evaluate() — hanya memperkaya pemahaman perintah bahasa.
+ * Alur: normalisasi → wake → intent → target → action → ambiguitas
+ * ============================================================ */
+const VOCAB_VERSION = "1.0.0-LOCAL";
+
+const WAKE_PATTERNS = [
+  /^\s*c\s*\.?\s*g\s*\.?\s*o\b/i,
+  /^\s*ce\s*ge\s*o\b/i,
+  /^\s*si\s*ji\s*o\b/i,
+  /^\s*si\s*ji\s*ou\b/i,
+  /^\s*si\s*jio\b/i,
+  /^\s*siji\s*o\b/i,
+  /^\s*siji\s*ou\b/i,
+  /^\s*sijiou\b/i,
+  /^\s*sijiow\b/i
+];
+
+const INTENT_VOCAB = {
+  GREETING: [/\b(hai|halo|hello|hei|selamat\s+pagi|selamat\s+siang|selamat\s+sore|selamat\s+malam)\b/i],
+  HELP: [/\b(bantu|tolong\s+bantu|bisa\s+bantu|minta\s+bantuan|help|kamu\s+bisa\s+apa|apa\s+yang\s+bisa\s+kamu\s+lakukan)\b/i],
+  INSPECT: [/\b(cek|periksa|check|lihat|tinjau|analisis|cek\s+kondisi|cek\s+status|status)\b/i],
+  DATA_RETRIEVE: [/\b(tarik\s+data|ambil\s+data|ambilkan\s+data|minta\s+data|tampilkan\s+data|tampilkan\s+datanya|buka\s+data|lihat\s+data|cek\s+data|cari\s+data|ambil\s+informasi|tampilkan\s+informasi|berikan\s+data|berikan\s+informasi|unduh\s+(data|csv)|export\s+(data|csv))\b/i],
+  REPAIR: [/\b(perbaiki|perbaiki\s+error|fix\b|fix\s+error|repair|benahi|betulkan|koreksi|upgrade|tingkatkan)\b/i],
+  EXECUTE: [/\b(jalankan|execute|eksekusi|mulai|start|terapkan|apply|laksanakan)\b/i],
+  STOP: [/\b(stop|berhenti|hentikan|batalkan|batal|cancel|jangan\s+lanjutkan|jangan\s+jalankan)\b/i],
+  RETRY: [/\b(ulang|ulangi|coba\s+lagi|ulang\s+lagi|retry|jalankan\s+ulang|proses\s+ulang)\b/i],
+  EXPLAIN: [/\b(jelaskan|jelaskan\s+ini|terangkan|apa\s+maksudnya|kenapa|mengapa|bagaimana|jelaskan\s+hasilnya|jelaskan\s+datanya)\b/i],
+  SHOW: [/\b(tampilkan|perlihatkan|tunjukkan|lihatkan|show)\b/i],
+  BRIEFING: [/\b(briefing|ringkasan\s+harian|laporan\s+harian|rekap\s+hari\s+ini)\b/i]
+};
+
+const TARGET_VOCAB = {
+  CUSTOMER: [/\b(customer|pelanggan|pengguna|\buser\b)\b/i],
+  MITRA: [/\b(mitra|partner|merchant)\b/i],
+  DRIVER: [/\b(driver|pengemudi)\b/i],
+  RESTO: [/\b(resto|restoran|restaurant)\b/i],
+  TRANSAKSI: [/\b(transaksi|pesanan|order|orders|booking|pembayaran)\b/i],
+  CHAT: [/\b(chat|percakapan|komunikasi|riwayat\s+chat)\b/i],
+  FILE: [/\b(file|berkas|dokumen|source|kode|\bcode\b)\b/i],
+  SYSTEM: [/\b(sistem|system|status\s+sistem|kondisi\s+sistem)\b/i]
+};
+
+const ACTION_MAP = {
+  GREETING: "GREET",
+  HELP: "HELP",
+  INSPECT: "CHECK",
+  DATA_RETRIEVE: "RETRIEVE",
+  REPAIR: "REPAIR",
+  EXECUTE: "EXECUTE",
+  STOP: "STOP",
+  RETRY: "RETRY",
+  EXPLAIN: "EXPLAIN",
+  SHOW: "SHOW",
+  BRIEFING: "BRIEF"
+};
+
+function normalizeCommandText(input) {
+  return String(input || "")
+    .replace(/[“”]/g, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function detectWake(text) {
+  const s = String(text || "");
+  for (const re of WAKE_PATTERNS) {
+    const m = s.match(re);
+    if (m) {
+      return {
+        wake: true,
+        wakeWord: String(m[0]).trim().toUpperCase().replace(/\s+/g, " "),
+        rest: s.slice(m[0].length).replace(/^[\s,.:;!\-]+/, "").trim()
+      };
+    }
+  }
+  return { wake: false, wakeWord: null, rest: s.trim() };
+}
+
+function matchFirstLabel(text, table) {
+  for (const [label, regs] of Object.entries(table)) {
+    for (const re of regs) {
+      if (re.test(text)) return label;
+    }
+  }
+  return null;
+}
+
+/**
+ * Parse perintah bahasa alami → struktur pemahaman (tanpa eksekusi).
+ * @returns {{wake,wakeWord,intent,target,action,confidence,requiresTarget,rest,vocabVersion}}
+ */
+export function parseCommandVocabulary(input) {
+  const raw = normalizeCommandText(input);
+  const w = detectWake(raw);
+  const body = w.rest || (!w.wake ? raw : "");
+  let intent = matchFirstLabel(body, INTENT_VOCAB);
+  // Jika hanya wake tanpa body
+  if (w.wake && !body) {
+    return {
+      wake: true,
+      wakeWord: w.wakeWord,
+      intent: "WAKE",
+      target: "NONE",
+      action: "ACTIVATE",
+      confidence: "HIGH",
+      requiresTarget: false,
+      rest: "",
+      vocabVersion: VOCAB_VERSION
+    };
+  }
+  // Prioritas DATA_RETRIEVE jika frasa tarik/ambil data jelas
+  if (/\b(tarik|ambil|unduh|export)\b/i.test(body) && /\b(data|csv|informasi)\b/i.test(body)) {
+    intent = "DATA_RETRIEVE";
+  }
+  if (/\b(briefing|ringkasan\s+harian)\b/i.test(body)) intent = "BRIEFING";
+  if (!intent && /\b(status\s+sistem|kondisi\s+sistem)\b/i.test(body)) intent = "INSPECT";
+
+  let target = matchFirstLabel(body, TARGET_VOCAB);
+  if (!target && intent === "INSPECT" && /\b(sistem|system)\b/i.test(body)) target = "SYSTEM";
+  if (!target && intent === "REPAIR") target = "CURRENT_CONTEXT";
+
+  const requiresTarget = (intent === "DATA_RETRIEVE" || intent === "SHOW") && (!target || target === "UNSPECIFIED");
+  if ((intent === "DATA_RETRIEVE" || intent === "SHOW") && !target) target = "UNSPECIFIED";
+
+  let confidence = "LOW";
+  if (intent && target && target !== "UNSPECIFIED") confidence = "HIGH";
+  else if (intent && !requiresTarget) confidence = "MEDIUM";
+  else if (intent && requiresTarget) confidence = "MEDIUM";
+  else if (w.wake) confidence = "MEDIUM";
+
+  const action = intent ? (ACTION_MAP[intent] || "UNKNOWN") : "UNKNOWN";
+
+  return {
+    wake: w.wake,
+    wakeWord: w.wakeWord,
+    intent: intent || "UNKNOWN",
+    target: target || "NONE",
+    action,
+    confidence,
+    requiresTarget: !!requiresTarget,
+    rest: body,
+    vocabVersion: VOCAB_VERSION,
+    raw
+  };
+}
+
+export function getVocabularyVersion() {
+  return { VERSION: VOCAB_VERSION, logicVersion: VERSION, otakTag: VERSION_OTAK };
+}
+
