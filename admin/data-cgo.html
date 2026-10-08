@@ -143,7 +143,6 @@
                                 <option value="mitra">Pendaftaran Mitra</option>
                                 <option value="customers">Customer</option>
                                 <option value="orders">Pesanan (Orders)</option>
-                                <option value="logs">Log Sistem / Error</option>
                             </select>
                             <button onclick="exportCurrentDataset()" class="text-xs font-semibold bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">⬇ Download CSV</button>
                         </div>
@@ -464,7 +463,7 @@ function buildCsvForDataset(name) {
 function publishCsvCache() {
     try {
         const payload = { at: Date.now(), datasets: {} };
-        ['mitra', 'customers', 'orders', 'logs'].forEach(function (name) {
+        ['mitra', 'customers', 'orders'].forEach(function (name) {
             try {
                 const csv = buildCsvForDataset(name);
                 if (csv) payload.datasets[name] = { csv: csv, rows: Math.min(500, (cache[name] || []).length) };
@@ -701,14 +700,6 @@ const TABLE_CONFIGS = {
             { label: 'Status', get: d => d.status || '-' },
             { label: 'Waktu', get: d => toDateLabel(d.timestamp) }
         ]
-    },
-    logs: {
-        columns: [
-            { label: 'File / Sumber', get: d => d.fileName || d.sourceFile || '-' },
-            { label: 'Pesan', get: d => d.message || '-' },
-            { label: 'Level', get: d => d.level || d.severity || '-' },
-            { label: 'Waktu', get: d => toDateLabel(d.reportedAt) }
-        ]
     }
 };
 
@@ -761,7 +752,7 @@ document.getElementById('dataCgoLogout')?.addEventListener('click', async () => 
    CGO → tarik data (auto export CSV) — zero regresi UI
 ========================================================= */
 (function setupCgoExportBridge() {
-    const LABEL = { mitra: "Mitra", customers: "Customer", orders: "Pesanan", logs: "Log Sistem / Error" };
+    const LABEL = { mitra: "Mitra", customers: "Customer", orders: "Pesanan" };
     let __lastExportAt = 0;
     let __pendingKey = null;
 
@@ -770,8 +761,7 @@ document.getElementById('dataCgoLogout')?.addEventListener('click', async () => 
         const map = {
             mitra: "mitra", partner: "mitra", partners: "mitra",
             customer: "customers", customers: "customers", pelanggan: "customers",
-            order: "orders", orders: "orders", pesanan: "orders", transaksi: "orders",
-            log: "logs", logs: "logs", error: "logs", errors: "logs", system_logs: "logs"
+            order: "orders", orders: "orders", pesanan: "orders", transaksi: "orders"
         };
         return map[name] || name;
     }

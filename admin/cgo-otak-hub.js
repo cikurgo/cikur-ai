@@ -47,42 +47,6 @@
   const listeners = new Set();
   let lastSignature = "";
 
-  /* ---------------- Sinkronisasi snapshot operasional ----------------
-     data-cgo.html adalah publisher. Hub membaca snapshot terakhir saat boot
-     dan menerima perubahan lintas-tab tanpa menunggu user bertanya dulu.
-     Jalur ini read-only dan tidak mengubah listener Firestore.
-  -------------------------------------------------------------------- */
-  const OPS_SNAPSHOT_KEY = "CGO_OPS_SNAPSHOT_V1";
-  const OPS_BUS = "cgo-ops-snapshot-bus";
-  let opsSnapshotBus = null;
-  function acceptOpsSnapshot(raw) {
-    try {
-      const snap = typeof raw === "string" ? JSON.parse(raw) : raw;
-      if (!snap || typeof snap !== "object") return false;
-      const at = Number(snap.at || 0);
-      const current = global.CGO_OPS_SNAPSHOT;
-      if (current && Number(current.at || 0) > at) return false;
-      global.CGO_OPS_SNAPSHOT = snap;
-      return true;
-    } catch (_) { return false; }
-  }
-  try {
-    if (global.localStorage) acceptOpsSnapshot(global.localStorage.getItem(OPS_SNAPSHOT_KEY));
-  } catch (_) {}
-  try {
-    if (typeof global.addEventListener === "function") {
-      global.addEventListener("storage", function (ev) {
-        if (ev && ev.key === OPS_SNAPSHOT_KEY && ev.newValue) acceptOpsSnapshot(ev.newValue);
-      });
-    }
-  } catch (_) {}
-  try {
-    if (typeof global.BroadcastChannel === "function") {
-      opsSnapshotBus = new global.BroadcastChannel(OPS_BUS);
-      opsSnapshotBus.onmessage = function (ev) { acceptOpsSnapshot(ev && ev.data); };
-    }
-  } catch (_) {}
-
   /* ---------------- Registri modul Otak ---------------- */
   const CIKURGO_REASONING = [
     "nalar", "putuskan", "deteksi_pola", "ingat", "lupakan", "konteks_sekarang",
@@ -547,23 +511,8 @@
   }
   function ceoWakeReply() { return pickLine(CEO_WAKE); }
   function ceoGrantReply() { return pickLine(CEO_GRANT); }
-
-  /* Dataset export — mempertahankan jalur lama, hanya memperluas target data. */
-  const EXPORT_DATASETS = Object.freeze(["mitra", "customers", "orders", "logs"]);
-  function normalizeExportDataset(dataset) {
-    const raw = String(dataset || "mitra").toLowerCase().trim();
-    const map = {
-      mitra: "mitra", partner: "mitra", partners: "mitra",
-      customer: "customers", customers: "customers", pelanggan: "customers",
-      order: "orders", orders: "orders", pesanan: "orders", transaksi: "orders",
-      log: "logs", logs: "logs", systemlog: "logs", system_logs: "logs", error: "logs", errors: "logs"
-    };
-    const ds = map[raw] || raw;
-    return EXPORT_DATASETS.indexOf(ds) >= 0 ? ds : null;
-  }
   function requestCsvExport(dataset) {
-    const ds = normalizeExportDataset(dataset);
-    if (!ds) return false;
+    const ds = String(dataset || "mitra");
     let ok = false;
     try {
       if (typeof global.CGO_RUN_EXPORT === "function") {
@@ -593,17 +542,15 @@
     const isPull = /\b(tarik\s*data|tarik\s*csv|ambil\s*data|ambilkan\s*data|minta\s*data|tampilkan\s*data|tampilkan\s*datanya|buka\s*data|lihat\s*data|cek\s*data|cari\s*data|berikan\s*data|unduh\s*(data|csv)?|export\s*(data|csv)?|download\s*(data|csv)?)\b/i.test(s)
       || /\b(ambil\s*informasi|tampilkan\s*informasi|berikan\s*informasi)\b/i.test(s);
     // Lanjutan klarifikasi: user hanya menjawab target setelah CGO minta
-    if (!isPull && state.pendingTarik && /^(mitra|partner|customer|pelanggan|customers|pesanan|order|orders|transaksi|log|logs|error|errors|system_logs)\b/i.test(s.trim())) {
+    if (!isPull && state.pendingTarik && /^(mitra|partner|customer|pelanggan|customers|pesanan|order|orders|transaksi)\b/i.test(s.trim())) {
       if (/\b(mitra|partner)\b/i.test(s)) return "mitra";
       if (/\b(customer|pelanggan|customers)\b/i.test(s)) return "customers";
       if (/\b(pesanan|order|orders|transaksi)\b/i.test(s)) return "orders";
-      if (/\b(log|logs|error|errors|system_logs)\b/i.test(s)) return "logs";
     }
     if (!isPull) return null;
     if (/\b(mitra|partner)\b/i.test(s)) return "mitra";
     if (/\b(customer|pelanggan|customers|pengguna)\b/i.test(s)) return "customers";
     if (/\b(pesanan|order|orders|transaksi)\b/i.test(s)) return "orders";
-    if (/\b(log|logs|error|errors|system_logs)\b/i.test(s)) return "logs";
     return "ask";
   }
   function describeTargetSnapshot(kind, snap) {
@@ -623,10 +570,6 @@
     if (kind === "orders") {
       if (o.todayCount == null && o.todayOmzet == null) return "Angka pesanan lengkap belum ada di snapshot — biasanya dari data-cgo.";
       return "Transaksi hari ini: " + (o.todayCount ?? "—") + ", omzet lunas " + rp(o.todayOmzet) + ".";
-    }
-    if (kind === "logs") {
-      const r = snap.radar || {};
-      return "Log sistem actionable terbaru: " + (r.attentionCount ?? "—") + " dalam jendela pemantauan.";
     }
     return null;
   }
@@ -1710,21 +1653,17 @@
       || /\b(online|offline)\s+(customer|pelanggan|mitra)?\b/i.test(t)
       || /\b(customer|mitra|pesanan|transaksi)\s+(berapa|jumlah|total)\b/i.test(t);
     // Lanjut / batal penarikan data
-    // Jika user langsung meminta dataset lain (mis. "tarik data pesanan")
-    // jangan salah dianggap sebagai konfirmasi hanya karena ada kata "tarik".
-    const pendingDirectDataset = state.pendingTarikConfirm ? parseTarikData(t) : null;
-    const pendingIsNewDataset = pendingDirectDataset && pendingDirectDataset !== "ask";
-    if (!answer && state.pendingTarikConfirm && !pendingIsNewDataset) {
+    if (!answer && state.pendingTarikConfirm) {
       if (/\b(batal|batalkan|cancel|jangan\s+lanjutkan|jangan\s+jalankan|stop|berhenti)\b/i.test(t)) {
         state.pendingTarikConfirm = null;
         state.pendingTarik = false;
         answer = "Baik, penarikan data dibatalkan. CGO kembali standby.";
         step("TARIK_DATA", true, "cancelled");
       } else if (/\b(lanjut|lanjutkan|ya|ok|oke|yes|unduh|tarik|jalankan|execute|mulai)\b/i.test(t)) {
-        const kind = state.pendingTarikConfirm && state.pendingTarikConfirm.dataset;
+        const kind = state.pendingTarikConfirm.dataset;
         state.pendingTarikConfirm = null;
         state.pendingTarik = false;
-        const label = kind === "customers" ? "customer" : (kind === "orders" ? "pesanan" : (kind === "logs" ? "log sistem" : "mitra"));
+        const label = kind === "customers" ? "customer" : (kind === "orders" ? "pesanan" : "mitra");
         const snap = readOpsSnapshot();
         const fact = describeTargetSnapshot(kind, snap);
         requestCsvExport(kind);
@@ -1758,7 +1697,7 @@
         step("TARIK_DATA", true, "clarify");
       } else {
         state.pendingTarik = false;
-        const label = tarikKind === "customers" ? "customer" : (tarikKind === "orders" ? "pesanan" : (tarikKind === "logs" ? "log sistem" : "mitra"));
+        const label = tarikKind === "customers" ? "customer" : (tarikKind === "orders" ? "pesanan" : "mitra");
         const snap = readOpsSnapshot();
         const fact = describeTargetSnapshot(tarikKind, snap);
         state.pendingTarikConfirm = { dataset: tarikKind, at: Date.now() };
