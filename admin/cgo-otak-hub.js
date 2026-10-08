@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.9.5-WAKE-SYNC";
+  const VERSION = "1.9.7-OTAK-NETWORK";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -125,15 +125,22 @@
       id: "CUSTOMER_CGO", label: "Otak Customer", role: "Pipeline nalar customer", required: false,
       probe() {
         const c = global.CGO;
-        if (!c) return null;
-        const ready = typeof c.chatAsync === "function" || typeof c.chat === "function" || typeof c.reason === "function";
+        const bag = global.CGO_CUSTOMER || {};
+        const ready = !!(c && (typeof c.chatAsync === "function" || typeof c.chat === "function" || typeof c.reason === "function"))
+          || !!(bag.reasoning && (typeof bag.reasoning.reason === "function" || typeof bag.reasoning.respond === "function"))
+          || !!(bag.composer && typeof bag.composer.compose === "function");
+        if (!c && !bag.reasoning && !bag.composer) return null;
         return {
           ready: !!ready,
-          version: c.version || c.VERSION || null,
+          version: (c && (c.version || c.VERSION)) || (bag.reasoning && bag.reasoning.version) || null,
           detail: {
-            chatAsync: typeof c.chatAsync === "function",
-            chat: typeof c.chat === "function",
-            reason: typeof c.reason === "function"
+            chatAsync: !!(c && typeof c.chatAsync === "function"),
+            chat: !!(c && typeof c.chat === "function"),
+            reason: !!(c && typeof c.reason === "function"),
+            reasoning: !!(bag.reasoning && (typeof bag.reasoning.reason === "function" || typeof bag.reasoning.respond === "function")),
+            composer: !!(bag.composer && typeof bag.composer.compose === "function"),
+            cikurBridge: !!(bag.cikurBridge && typeof bag.cikurBridge.isAvailable === "function" && bag.cikurBridge.isAvailable()),
+            modules: Object.keys(bag).filter(Boolean).join(",")
           }
         };
       }
@@ -656,9 +663,9 @@
     if (t.length >= 8) {
       const lines = [];
       if (en) {
-        lines.push("I read that as an open question, not a pure KPI pull.");
+        lines.push("Got it — I'm listening.");
       } else {
-        lines.push("Saya baca ini sebagai pertanyaan terbuka — bukan sekadar tarik KPI.");
+        lines.push("Siap — saya dengarkan.");
       }
       const scan = (live && live.sourceScan && live.sourceScan.status) || null;
       if (scan) {
@@ -692,6 +699,31 @@
     if (/Mau dilanjutkan unduh file CSV|Data apa yang ingin ditarik|Baik, penarikan data dibatalkan|Baik, dibatalkan/i.test(s)) return true;
     return false;
   }
+
+  /** Rapikan jawaban untuk manusia — hilangkan jejak teknis / nalar generik / bocor modul. */
+  function sanitizeHumanAnswer(text) {
+    var s = String(text || "");
+    if (!s) return s;
+    // potong baris teknis
+    s = s.replace(/\n?Penalaran:\s*[^\n]*/gi, "");
+    s = s.replace(/\n?Reasoning:\s*[^\n]*/gi, "");
+    s = s.replace(/\n?Kita bisa explor:\s*[^\n]*/gi, "");
+    s = s.replace(/\n?We could also explore:\s*[^\n]*/gi, "");
+    s = s.replace(/\n?Usul lanjut:\s*[^\n]*/gi, "");
+    s = s.replace(/\n?Kalau mau lanjut, kita bisa:\s*[^\n]*/gi, "");
+    s = s.replace(/\n?Next, we could:\s*[^\n]*/gi, "");
+    s = s.replace(/\n?Suggested next:\s*[^\n]*/gi, "");
+    s = s.replace(/\n?Catatan: keyakinan[^\n]*/gi, "");
+    s = s.replace(/\n?Note: confidence[^\n]*/gi, "");
+    s = s.replace(/\bOTAK_CIKURGO\b/g, "");
+    s = s.replace(/\bCGO_OTAK\b/g, "CGO");
+    s = s.replace(/\bUNKNOWN\b/g, "belum diketahui");
+    s = s.replace(/\bNULL\b/g, "kosong");
+    s = s.replace(/\s{2,}/g, " ");
+    s = s.replace(/\n{3,}/g, "\n\n");
+    return s.trim();
+  }
+
   function enrichAnswerWithJenius(base, query, lang, CG, opts) {
     opts = opts || {};
     let answer = String(base || "").trim();
@@ -1940,8 +1972,9 @@
         const cust = global.CGO_CUSTOMER || {};
         const reasoning = cust.reasoning || global.CGOCustomerReasoning;
         const composer = cust.composer || global.CGOCustomerComposer;
-        if (reasoning && typeof reasoning.reason === "function") {
-          const rr = reasoning.reason(t, { lang: lang, liveState: live, memory: state.memory.slice(-5) });
+        if (reasoning && (typeof reasoning.reason === "function" || typeof reasoning.respond === "function")) {
+          const _rn = typeof reasoning.reason === "function" ? reasoning.reason : reasoning.respond;
+          const rr = _rn.call(reasoning, t, { lang: lang, liveState: live, memory: state.memory.slice(-5) });
           let text = rr && (rr.text || rr.response || rr.answer || rr.penjelasan);
           if (!text && composer && typeof composer.compose === "function") {
             const cc = composer.compose(rr || { input: t }, { lang: lang });
@@ -2096,13 +2129,15 @@
       try {
         var wantDeep = !!(opsAsk || briefingAsk || systemRequest || spoken || nalarAlasan.length);
         var pureCalc = /Hasil hitung|Result:/i.test(answer) && answer.length < 280;
+        // Enrich diam: jangan tempel explor/nalar generik ke chat
         answer = enrichAnswerWithJenius(answer, t, lang, CG, {
-          wantExplain: wantDeep && !pureCalc,
-          wantAction: !!(systemRequest || briefingAsk) && !pureCalc,
-          wantExplore: !pureCalc,
-          wantQuality: !!systemRequest && !pureCalc,
-          skipNalar: nalarAlasan.length > 0 || pureCalc
+          wantExplain: false,
+          wantAction: false,
+          wantExplore: false,
+          wantQuality: false,
+          skipNalar: true
         });
+        answer = sanitizeHumanAnswer(answer);
         if (nalarAlasan.length && answer.length < 1200 && !pureCalc) {
           var GENERIC_N = /mempertimbangkan bukti|keputusan yang tepat|konteks operasional yang relevan|menyusun prioritas dari bukti|bersifat bebas dan perlu dibaca/i;
           var cleanN = nalarAlasan.filter(function (a) {
@@ -2138,6 +2173,7 @@
       try { if (CG && typeof CG.ingat === "function") CG.ingat(t, answer); } catch (_) {}
     }
 
+    if (answer) answer = sanitizeHumanAnswer(answer);
     state.lastTrace = trace.filter(function (x) { return x.ok; }).map(function (x) { return x.module; }).join(" → ") || "—";
     notify();
     return {
