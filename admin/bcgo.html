@@ -3792,5 +3792,436 @@ await runAutonomousEngine(state => {
 }catch(e){console.warn('[CGO-ORB] Wake engine skip:',e&&e.message);}})();
 </script>
 
+<!-- ═══════════════════════════════════════════════════════════════════════
+     BCGO UPGRADE 2026 · APPEND-ONLY · diletakkan sebelum </body>
+     prefix: bcgo-up- / bcgoUp / #bcgo-listening-banner / #bcgo-wake-indicator
+     Prinsip: satu sumber kebenaran (Hub Otak). UI hanya pembaca.
+     Semua dibungkus try/catch. Tidak mengubah struktur/namespace yang ada.
+     ═══════════════════════════════════════════════════════════════════════ -->
+
+<!-- POIN 1,2,3,4 — CSS append-only (aurora orb, palet orb, banner, wake badge) -->
+<style>
+/* POIN 1 — Aurora multi-layer orb stage host */
+.cgo-orb-stage-host{
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  background:
+    radial-gradient(ellipse 60% 45% at 22% 18%, rgba(103,232,249,.16) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 42% at 78% 22%, rgba(167,139,250,.15) 0%, transparent 62%),
+    radial-gradient(ellipse 58% 48% at 30% 82%, rgba(244,114,182,.11) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 45% at 72% 78%, rgba(59,130,246,.14) 0%, transparent 60%),
+    linear-gradient(180deg,#030814 0%,#02040d 100%);
+}
+.cgo-orb-stage-host::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background-image:
+    linear-gradient(rgba(103,232,249,.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(103,232,249,.06) 1px, transparent 1px);
+  background-size:34px 34px, 34px 34px;
+  background-position:0 0, 0 0;
+  animation:bcgoUpGridDrift 24s linear infinite;
+  -webkit-mask-image:radial-gradient(ellipse at center, #000 0%, #000 40%, transparent 78%);
+  mask-image:radial-gradient(ellipse at center, #000 0%, #000 40%, transparent 78%);
+  z-index:0;
+}
+.cgo-orb-stage-host::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background:radial-gradient(ellipse at center, transparent 42%, rgba(0,0,0,.45) 100%);
+  z-index:1;
+}
+.cgo-orb-stage{position:relative; z-index:2;}
+@keyframes bcgoUpGridDrift{
+  from{background-position:0 0, 0 0;}
+  to{background-position:34px 34px, 34px 34px;}
+}
+
+/* POIN 2 — Orb touchable + palettes (default cyan tanpa filter) */
+#cgo-orb-wrap{
+  cursor:pointer;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+  position:relative;
+}
+#cgo-orb-wrap[data-palette="violet"] #cgo-orb-canvas{filter:hue-rotate(45deg) saturate(1.15) brightness(1.02);}
+#cgo-orb-wrap[data-palette="violet"] .cgo-orb-core{filter:hue-rotate(45deg) saturate(1.2) drop-shadow(0 0 18px rgba(167,139,250,.55)) drop-shadow(0 0 40px rgba(167,139,250,.25));}
+#cgo-orb-wrap[data-palette="amber"] #cgo-orb-canvas{filter:hue-rotate(-45deg) saturate(1.2) brightness(1.04);}
+#cgo-orb-wrap[data-palette="amber"] .cgo-orb-core{filter:hue-rotate(-45deg) saturate(1.25) drop-shadow(0 0 18px rgba(251,191,36,.55)) drop-shadow(0 0 40px rgba(251,191,36,.25));}
+#cgo-orb-wrap[data-palette="emerald"] #cgo-orb-canvas{filter:hue-rotate(85deg) saturate(1.2) brightness(1.02);}
+#cgo-orb-wrap[data-palette="emerald"] .cgo-orb-core{filter:hue-rotate(85deg) saturate(1.25) drop-shadow(0 0 18px rgba(52,211,153,.55)) drop-shadow(0 0 40px rgba(52,211,153,.25));}
+#cgo-orb-wrap[data-palette="rose"] #cgo-orb-canvas{filter:hue-rotate(140deg) saturate(1.2) brightness(1.02);}
+#cgo-orb-wrap[data-palette="rose"] .cgo-orb-core{filter:hue-rotate(140deg) saturate(1.25) drop-shadow(0 0 18px rgba(244,114,182,.55)) drop-shadow(0 0 40px rgba(244,114,182,.25));}
+#cgo-orb-wrap[data-palette="ice"] #cgo-orb-canvas{filter:hue-rotate(-20deg) saturate(1.05) brightness(1.1);}
+#cgo-orb-wrap[data-palette="ice"] .cgo-orb-core{filter:hue-rotate(-20deg) saturate(1.05) brightness(1.15) drop-shadow(0 0 18px rgba(224,242,254,.65)) drop-shadow(0 0 40px rgba(165,243,252,.3));}
+
+.bcgo-orb-ripple{
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:22px;
+  height:22px;
+  margin:-11px 0 0 -11px;
+  border-radius:50%;
+  border:2px solid rgba(165,243,252,.75);
+  pointer-events:none;
+  z-index:5;
+  animation:bcgoUpOrbRipple .9s cubic-bezier(.16,1,.3,1) forwards;
+}
+@keyframes bcgoUpOrbRipple{
+  from{transform:scale(1);opacity:.9;}
+  to{transform:scale(14);opacity:0;}
+}
+
+/* POIN 3 — Listening banner */
+#bcgo-listening-banner{
+  display:none;
+  position:relative;
+  overflow:hidden;
+  border-top:1px solid rgba(34,211,238,.30);
+  border-bottom:1px solid rgba(34,211,238,.30);
+  background:linear-gradient(90deg, rgba(34,211,238,.12) 0%, rgba(99,102,241,.18) 50%, rgba(34,211,238,.12) 100%);
+  padding:9px 14px;
+  text-align:center;
+  font-family:'Fira Code',monospace;
+}
+#bcgo-listening-banner.on{display:block;}
+#bcgo-listening-banner::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background:linear-gradient(90deg, transparent 0%, rgba(103,232,249,.22) 50%, transparent 100%);
+  transform:translateX(-100%);
+  animation:bcgoUpBannerScan 1.8s linear infinite;
+}
+@keyframes bcgoUpBannerScan{
+  from{transform:translateX(-100%);}
+  to{transform:translateX(100%);}
+}
+.bcgo-listening-text{
+  position:relative;
+  z-index:1;
+  font-size:11px;
+  letter-spacing:.22em;
+  color:#67e8f9;
+  text-shadow:0 0 10px rgba(103,232,249,.5);
+}
+.bcgo-listening-dots{
+  display:inline-flex;
+  gap:4px;
+  margin-left:8px;
+  vertical-align:middle;
+}
+.bcgo-listening-dots span{
+  display:inline-block;
+  width:4px;
+  height:6px;
+  background:#67e8f9;
+  border-radius:1px;
+  animation:bcgoUpDotWave 1s ease-in-out infinite;
+  box-shadow:0 0 6px rgba(103,232,249,.6);
+}
+.bcgo-listening-dots span:nth-child(2){animation-delay:.15s;}
+.bcgo-listening-dots span:nth-child(3){animation-delay:.30s;}
+.bcgo-listening-dots span:nth-child(4){animation-delay:.45s;}
+@keyframes bcgoUpDotWave{
+  0%,100%{transform:scaleY(.5);opacity:.5;}
+  50%{transform:scaleY(1.4);opacity:1;}
+}
+
+#cgo-orb-wrap.bcgo-listening::after{
+  content:"";
+  position:absolute;
+  inset:-6%;
+  border-radius:50%;
+  border:2px solid rgba(244,63,94,.45);
+  box-shadow:0 0 24px rgba(244,63,94,.28), inset 0 0 24px rgba(244,63,94,.18);
+  pointer-events:none;
+  animation:bcgoUpListeningRing 1.2s ease-out infinite;
+  z-index:3;
+}
+@keyframes bcgoUpListeningRing{
+  0%{transform:scale(.94);opacity:.9;}
+  100%{transform:scale(1.18);opacity:0;}
+}
+
+/* POIN 4 — Wake indicator (pembaca Hub Otak) */
+#bcgo-wake-indicator{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  font-family:'Fira Code',monospace;
+  font-size:9px;
+  letter-spacing:.12em;
+  color:#64748b;
+  border:1px solid #1e3a5f;
+  border-radius:999px;
+  padding:3px 8px;
+  background:rgba(2,6,23,.6);
+  cursor:pointer;
+  user-select:none;
+  transition:color .3s ease, border-color .3s ease, background .3s ease;
+  margin-left:6px;
+}
+#bcgo-wake-indicator::before{
+  content:"";
+  display:inline-block;
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:#475569;
+  transition:background .3s ease, box-shadow .3s ease;
+}
+#bcgo-wake-indicator.on{
+  color:#67e8f9;
+  border-color:#166534;
+  background:rgba(2,6,23,.75);
+}
+#bcgo-wake-indicator.on::before{
+  background:#22c55e;
+  box-shadow:0 0 8px #22c55e;
+  animation:breathe 1.6s ease-in-out infinite;
+}
+</style>
+
+<!-- POIN 2 — Orb bisa disentuh: siklus palet + ripple + state pulse -->
+<script>
+(function(){try{
+  var wrap = document.getElementById('cgo-orb-wrap');
+  if (!wrap) return;
+  var palettes = ['cyan','violet','amber','emerald','rose','ice'];
+  var states = ['tenang','waspada','membuka','transenden'];
+  var idx = 0, stateIdx = 0;
+  if (!wrap.getAttribute('data-palette')) wrap.setAttribute('data-palette','cyan');
+  wrap.addEventListener('pointerdown', function(ev){
+    try{
+      var t = ev.target;
+      while (t && t !== wrap) {
+        var tag = t.tagName ? t.tagName.toLowerCase() : '';
+        if (tag === 'a' || tag === 'button') return;
+        t = t.parentNode;
+      }
+      // ripple append-only
+      var rip = document.createElement('span');
+      rip.className = 'bcgo-orb-ripple';
+      wrap.appendChild(rip);
+      setTimeout(function(){ try{ rip.remove(); }catch(_){} }, 950);
+      // palet cycle
+      idx = (idx + 1) % palettes.length;
+      wrap.setAttribute('data-palette', palettes[idx]);
+      // state orb via API yang sudah ada (CGOOrb.setState) — bukan state baru
+      if (window.CGOOrb && typeof window.CGOOrb.setState === 'function') {
+        stateIdx = (stateIdx + 1) % states.length;
+        window.CGOOrb.setState(states[stateIdx], { force:true });
+        setTimeout(function(){
+          try { window.CGOOrb.setState('tenang', { force:true }); } catch(_){}
+        }, 1800);
+      }
+      // vibrate opsional
+      try { if (navigator.vibrate) navigator.vibrate(12); } catch(_){}
+    }catch(_){}
+  }, { passive:true });
+}catch(_){}})();
+</script>
+
+<!-- POIN 3 — Listening banner (digerakkan HANYA oleh event mic/wake yang sudah ada) -->
+<script>
+(function(){try{
+  var chatFeed = document.getElementById('chat-feed');
+  if (!chatFeed || !chatFeed.parentNode) return;
+  var banner = document.getElementById('bcgo-listening-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'bcgo-listening-banner';
+    banner.setAttribute('aria-live','polite');
+    banner.innerHTML = '<span class="bcgo-listening-text" id="bcgo-listening-text">CGO SEDANG MENDENGAR…</span><span class="bcgo-listening-dots" aria-hidden="true"><span></span><span></span><span></span><span></span></span>';
+    chatFeed.parentNode.insertBefore(banner, chatFeed);
+  }
+  var textEl = document.getElementById('bcgo-listening-text');
+  var orbWrap = document.getElementById('cgo-orb-wrap');
+  var hideTimer = null;
+  function show(text, autoHideMs){
+    if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+    if (textEl && text) textEl.textContent = text;
+    banner.classList.add('on');
+    if (orbWrap) orbWrap.classList.add('bcgo-listening');
+    if (autoHideMs) {
+      hideTimer = setTimeout(function(){ hide(); }, autoHideMs);
+    }
+  }
+  function hide(){
+    if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+    banner.classList.remove('on');
+    if (orbWrap) orbWrap.classList.remove('bcgo-listening');
+  }
+  window.addEventListener('cgo:mic-status', function(e){
+    try{
+      var d = e.detail || {};
+      var st = String(d.state || '').toUpperCase();
+      if (st === 'LISTENING') {
+        show('CGO SEDANG MENDENGAR…');
+      } else if (st === 'TRANSCRIPT') {
+        show('SUARA TERTANGKAP · MENGIRIM…', 900);
+      } else if (st === 'IDLE') {
+        setTimeout(hide, 300);
+      }
+    }catch(_){}
+  });
+  window.addEventListener('cgo:mic-error', function(){
+    try{ show('MIC ERROR · CEK IZIN BROWSER', 2500); }catch(_){}
+  });
+  window.addEventListener('cgo:wake-heard', function(e){
+    try{
+      var d = e.detail || {};
+      var t = String(d.text || '').slice(0, 60);
+      show('CGO TERBANGUN · ' + (t || '…'), 2200);
+    }catch(_){}
+  });
+  window.addEventListener('cgo:wake-awake', function(){
+    try{
+      if (!orbWrap) return;
+      var prevPalette = orbWrap.getAttribute('data-palette') || 'cyan';
+      orbWrap.setAttribute('data-palette','ice');
+      var prevTransition = orbWrap.style.transition;
+      orbWrap.style.transition = 'transform .35s ease';
+      orbWrap.style.transform = 'scale(1.08)';
+      setTimeout(function(){
+        try{
+          orbWrap.style.transform = '';
+          orbWrap.style.transition = prevTransition || '';
+          orbWrap.setAttribute('data-palette', prevPalette);
+        }catch(_){}
+      }, 900);
+    }catch(_){}
+  });
+}catch(_){}})();
+</script>
+
+<!-- POIN 4 — WAKE badge: pembaca Hub Otak (tidak menyimpan state apapun) -->
+<script>
+(function(){try{
+  var headRight = document.querySelector('.cgo-chat-head > div:last-child');
+  if (!headRight) return;
+  var indicator = document.getElementById('bcgo-wake-indicator');
+  if (!indicator) {
+    indicator = document.createElement('span');
+    indicator.id = 'bcgo-wake-indicator';
+    indicator.textContent = 'WAKE · OFF';
+    indicator.setAttribute('role','button');
+    indicator.setAttribute('tabindex','0');
+    headRight.appendChild(indicator);
+  }
+  function readWake(){
+    try{
+      var otak = window.CGO_OTAK;
+      if (!otak) return { available:false, reason:'Hub Otak belum tersedia' };
+      if (typeof otak.wakeStatus === 'function') {
+        try{
+          var s = otak.wakeStatus();
+          if (s && typeof s === 'object') {
+            var words = s.words || null;
+            var primary = s.primary || (Array.isArray(words) && words[0]) || '';
+            return {
+              available:true,
+              enabled: !!s.enabled,
+              state: s.state || 'idle',
+              primary: String(primary || ''),
+              words: words
+            };
+          }
+        }catch(_){}
+      }
+      if (otak.wakeWords && typeof otak.wakeWords === 'object') {
+        var w = otak.wakeWords;
+        return {
+          available:true,
+          enabled: !!w.enabled,
+          state: w.state || 'idle',
+          primary: String(w.primary || '').trim(),
+          words: w.variants || null
+        };
+      }
+      return { available:false, reason:'Hub Otak belum mengekspos wakeWords' };
+    }catch(_){
+      return { available:false, reason:'Hub Otak error saat membaca wake' };
+    }
+  }
+  function paint(){
+    try{
+      var info = readWake();
+      if (!info.available) {
+        indicator.textContent = 'WAKE · OFF';
+        indicator.classList.remove('on');
+        indicator.title = info.reason || 'Hub Otak belum mengekspos wakeWords';
+        return;
+      }
+      if (info.enabled) {
+        var label = info.primary ? ('WAKE · ' + info.primary) : 'WAKE · ON';
+        indicator.textContent = label;
+        indicator.classList.add('on');
+        indicator.title = 'Wake enabled · state: ' + (info.state || 'idle');
+      } else {
+        indicator.textContent = 'WAKE · OFF';
+        indicator.classList.remove('on');
+        indicator.title = 'Wake disabled · state: ' + (info.state || 'idle');
+      }
+    }catch(_){}
+  }
+  function toggle(){
+    try{
+      var otak = window.CGO_OTAK;
+      if (!otak || typeof otak.setWakeEnabled !== 'function') {
+        indicator.title = 'Hub Otak belum mengekspos setWakeEnabled()';
+        return;
+      }
+      var info = readWake();
+      var next = !(info && info.enabled);
+      try { otak.setWakeEnabled(next); } catch(_){}
+      // refresh akan terjadi dari polling / event
+    }catch(_){}
+  }
+  indicator.addEventListener('click', toggle);
+  indicator.addEventListener('keydown', function(ev){
+    try{ if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); } }catch(_){}
+  });
+  paint();
+  setInterval(paint, 2500);
+  window.addEventListener('cgo:otak-state', paint);
+  window.addEventListener('cgo:wake-enabled', paint);
+  window.addEventListener('cgo:wake-heard', paint);
+  window.addEventListener('cgo:wake-awake', paint);
+}catch(_){}})();
+</script>
+
+<!-- POIN 5 — Hapus MIC KEDUA (#cgo-future-wake-toggle) yang dibuat oleh FASE 5 bagian 5.9 -->
+<script>
+(function(){try{
+  var head = document.querySelector('.cgo-chat-head');
+  if (!head) return;
+  function kill(){
+    try{
+      var el = document.getElementById('cgo-future-wake-toggle');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    }catch(_){}
+  }
+  // kill segera (element mungkin sudah dibuat oleh FASE 5 skrip di atas)
+  kill();
+  // guard: kalau ada yang coba menambahkan lagi, langsung bunuh
+  new MutationObserver(function(muts){
+    muts.forEach(function(m){
+      m.addedNodes.forEach(function(n){
+        if (n.nodeType === 1 && n.id === 'cgo-future-wake-toggle') kill();
+      });
+    });
+  }).observe(head, { childList:true, subtree:true });
+}catch(_){}})();
+</script>
+
 </body>
    </html>
