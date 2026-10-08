@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.9.7-OTAK-NETWORK";
+  const VERSION = "1.9.8-WAKE-READY";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -2273,6 +2273,20 @@
   // Saat ask() deteksi wake-only, siarkan event agar ORB sinkron
   const _askOriginalRef = null; // placeholder — hook di dalam ask sudah ada WAKE_ONLY_RE
 
+
+  /** Status wake untuk UI BCGO (badge · indicator). Tidak mengubah state. */
+  function wakeStatus() {
+    return {
+      enabled: !!state.wakeEnabled,
+      state: state.wakeEnabled ? "listening" : "idle",
+      primary: WAKE_WORDS.primary,
+      words: [].concat([WAKE_WORDS.primary], WAKE_WORDS.variants || [], WAKE_WORDS.secondary || []),
+      lang: WAKE_WORDS.lang || ["id-ID", "en-US"],
+      variants: WAKE_WORDS.variants || [],
+      version: VERSION
+    };
+  }
+
   const API = Object.freeze({
     version: VERSION,
     status, snapshot, ask, recall,
@@ -2284,7 +2298,8 @@
     isWakeEnabled: isWakeEnabled,
     getPreRoll: getPreRoll,
     onWakeTranscript: onWakeTranscript,
-    detectWake: detectWakeInText
+    detectWake: detectWakeInText,
+    wakeStatus: wakeStatus
   });
 
   global.CGO_OTAK = API;
