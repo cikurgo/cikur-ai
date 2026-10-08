@@ -4269,5 +4269,444 @@ await runAutonomousEngine(state => {
 }catch(_){}})();
 </script>
 
+<!-- ═══════════════════════════════════════════════════════════════
+     BCGO FIX · OPERATOR WANITA + WAKE WORD STANDBY · ZERO-REGRESI
+     Append-only · tidak mengubah jalur mic SpeechRecognition utama
+     · polyfill CGOOperatorVoice (TTS native, prefer suara wanita id-ID)
+     · polyfill CGO_OTAK wake minimal (continuous ringan, yield ke mic utama)
+     ═══════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  'use strict';
+  try {
+    /* ─── 1. CGOOperatorVoice polyfill (suara operator wanita) ─── */
+    if (!window.CGOOperatorVoice || typeof window.CGOOperatorVoice.speakAnswer !== 'function') {
+      var ss = window.speechSynthesis;
+      var enabled = true;
+      var chatSpeak = true;
+      var quietLive = false;
+      var unlocked = false;
+      var currentUtter = null;
+      var femaleVoice = null;
+      var voicesReady = false;
+
+      function pickFemaleIdVoice() {
+        if (!ss || !ss.getVoices) return null;
+        var list = ss.getVoices() || [];
+        if (!list.length) return null;
+        // Prioritas: id-ID / Indonesian female-ish
+        var prefer = [
+          /id[-_]?id.*female|female.*id[-_]?id/i,
+          /indonesia.*female|female.*indonesia/i,
+          /google.*(bahasa )?indonesia/i,
+          /id[-_]?id/i,
+          /indonesia/i,
+          /female|wanita|woman|siti|damayanti|gadis/i
+        ];
+        for (var p = 0; p < prefer.length; p++) {
+          for (var i = 0; i < list.length; i++) {
+            var v = list[i];
+            var name = (v.name || '') + ' ' + (v.lang || '');
+            if (prefer[p].test(name) || prefer[p].test(v.lang || '')) {
+              return v;
+            }
+          }
+        }
+        // fallback any id
+        for (var j = 0; j < list.length; j++) {
+          if (/^id/i.test(list[j].lang || '')) return list[j];
+        }
+        return list[0] || null;
+      }
+
+      function refreshVoices() {
+        femaleVoice = pickFemaleIdVoice();
+        voicesReady = !!(ss && ss.getVoices && ss.getVoices().length);
+      }
+      refreshVoices();
+      if (ss) {
+        try { ss.addEventListener('voiceschanged', refreshVoices); } catch (_) {}
+        // some browsers need getVoices() call
+        try { ss.getVoices(); } catch (_) {}
+      }
+
+      function unlock() {
+        unlocked = true;
+        try {
+          if (ss && ss.paused) ss.resume();
+        } catch (_) {}
+        // silent warm-up utterance (browser autoplay policy)
+        try {
+          if (ss && !window.__cgoVoiceWarmed) {
+            var u = new SpeechSynthesisUtterance(' ');
+            u.volume = 0.01;
+            u.rate = 2;
+            u.onend = u.onerror = function () {};
+            ss.speak(u);
+            window.__cgoVoiceWarmed = true;
+          }
+        } catch (_) {}
+      }
+
+      function stop() {
+        try {
+          if (ss) ss.cancel();
+        } catch (_) {}
+        currentUtter = null;
+      }
+
+      function speakRaw(text, opts) {
+        opts = opts || {};
+        if (!enabled && !opts.force) return Promise.resolve();
+        if (!ss) return Promise.resolve();
+        if (!unlocked) unlock();
+        stop();
+        var t = String(text || '').replace(/\s+/g, ' ').trim();
+        if (!t) return Promise.resolve();
+        // batasi panjang agar tidak macet
+        if (t.length > 800) t = t.slice(0, 780) + '…';
+        return new Promise(function (resolve) {
+          try {
+            refreshVoices();
+            var u = new SpeechSynthesisUtterance(t);
+            u.lang = 'id-ID';
+            u.rate = opts.rate != null ? opts.rate : 1.02;
+            u.pitch = opts.pitch != null ? opts.pitch : 1.05; // sedikit lebih tinggi = lebih "wanita"
+            u.volume = opts.volume != null ? opts.volume : 1;
+            if (femaleVoice) u.voice = femaleVoice;
+            currentUtter = u;
+            u.onend = function () { currentUtter = null; resolve(); };
+            u.onerror = function () { currentUtter = null; resolve(); };
+            // resume jika paused
+            try { if (ss.paused) ss.resume(); } catch (_) {}
+            ss.speak(u);
+          } catch (e) {
+            currentUtter = null;
+            resolve();
+          }
+        });
+      }
+
+      window.CGOOperatorVoice = {
+        version: 'polyfill-3.11.0-WANITA-ZERO-REGRESI',
+        unlock: unlock,
+        setEnabled: function (v) { enabled = !!v; if (!enabled) stop(); },
+        isEnabled: function () { return !!enabled; },
+        setChatSpeak: function (v) { chatSpeak = !!v; },
+        setQuietLive: function (v) { quietLive = !!v; },
+        stop: stop,
+        state: function (/* s */) {},
+        welcome: function () {
+          unlock();
+          if (!enabled) return Promise.resolve();
+          var msg = 'Halo, saya operator CGO. Sistem siap. Silakan tanya status, scanner, atau apa saja.';
+          return speakRaw(msg, { force: true, rate: 1.05 });
+        },
+        speakAnswer: function (text, opts) {
+          opts = opts || {};
+          if (!chatSpeak && !opts.force) return Promise.resolve();
+          unlock();
+          return speakRaw(text, opts);
+        },
+        speak: function (text, opts) { return speakRaw(text, opts); },
+        getVoiceName: function () {
+          return femaleVoice ? (femaleVoice.name + ' · ' + femaleVoice.lang) : 'default-id';
+        }
+      };
+      console.log('[BCGO-FIX] CGOOperatorVoice polyfill aktif · wanita id-ID ·', window.CGOOperatorVoice.version);
+      // update badge
+      try {
+        var badge = document.getElementById('cgo-voice-mode-badge');
+        if (badge) badge.textContent = 'TTS · wanita';
+      } catch (_) {}
+    } else {
+      console.log('[BCGO-FIX] CGOOperatorVoice sudah ada, polyfill dilewati (zero-regresi)');
+    }
+
+    /* ─── 2. Pastikan jawaban chat selalu bisa di-TTS ─── */
+    // Hook ringan: jika addChat CGO dipanggil dan ada answer, pastikan speak
+    // (tidak mengganti fungsi existing; hanya backup lewat event)
+    window.addEventListener('cgo:abc-command-result', function () {
+      /* biarkan jalur asli; polyfill sudah menyediakan speakAnswer */
+    });
+
+    /* ─── 3. Minimal CGO_OTAK wake polyfill (jika hub belum ada) ─── */
+    if (!window.CGO_OTAK) {
+      window.CGO_OTAK = { version: 'polyfill-wake-1.0.0', modules: [] };
+    }
+    var otak = window.CGO_OTAK;
+    if (!otak.wakeWords) {
+      otak.wakeWords = {
+        primary: 'CGO',
+        variants: ['cgo', 'si go', 'sigo', 'halo cgo', 'hey cgo', 'ok cgo', 'oke cgo', 'hai cgo', 'cg o'],
+        lang: ['id-ID'],
+        enabled: true
+      };
+    }
+    if (typeof otak.isWakeEnabled !== 'function') {
+      otak.isWakeEnabled = function () { return !!(otak.wakeWords && otak.wakeWords.enabled); };
+    }
+    if (typeof otak.setWakeEnabled !== 'function') {
+      otak.setWakeEnabled = function (on) {
+        if (!otak.wakeWords) otak.wakeWords = {};
+        otak.wakeWords.enabled = !!on;
+        try { window.dispatchEvent(new CustomEvent('cgo:wake-enabled', { detail: { enabled: !!on } })); } catch (_) {}
+        if (on) startWakeListen();
+        else stopWakeListen();
+      };
+    }
+    if (typeof otak.wakeStatus !== 'function') {
+      otak.wakeStatus = function () {
+        return {
+          enabled: otak.isWakeEnabled(),
+          state: wakeRuntime.state || 'idle',
+          primary: (otak.wakeWords && otak.wakeWords.primary) || 'CGO',
+          words: (otak.wakeWords && otak.wakeWords.variants) || []
+        };
+      };
+    }
+    if (typeof otak.onWakeTranscript !== 'function') {
+      otak.onWakeTranscript = function (text, opts) {
+        opts = opts || {};
+        if (!otak.isWakeEnabled()) return false;
+        var t = String(text || '').toLowerCase().replace(/[-_.]/g, ' ').replace(/\s+/g, ' ').trim();
+        var vars = [].concat(
+          [(otak.wakeWords && otak.wakeWords.primary) || 'cgo'],
+          (otak.wakeWords && otak.wakeWords.variants) || []
+        ).map(function (s) { return String(s).toLowerCase(); });
+        var hit = false;
+        for (var i = 0; i < vars.length; i++) {
+          var v = vars[i];
+          if (!v) continue;
+          if (t === v || t.indexOf(' ' + v + ' ') >= 0 || t.indexOf(v + ' ') === 0 || t.endsWith(' ' + v) || t.indexOf(v) >= 0) {
+            hit = true; break;
+          }
+        }
+        if (hit) {
+          try { window.dispatchEvent(new CustomEvent('cgo:wake-heard', { detail: { text: text } })); } catch (_) {}
+          try { window.dispatchEvent(new CustomEvent('cgo:wake-awake', { detail: { text: text } })); } catch (_) {}
+          // jika ada sisa perintah setelah wake word, kirim ke chat
+          var rest = t;
+          for (var j = 0; j < vars.length; j++) {
+            rest = rest.replace(new RegExp('\\b' + vars[j].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi'), ' ').trim();
+          }
+          rest = rest.replace(/\s+/g, ' ').trim();
+          if (rest.length > 1 && typeof window.CGO_BCGO_SEND_QUESTION === 'function') {
+            setTimeout(function () {
+              try { window.CGO_BCGO_SEND_QUESTION(rest, { modality: 'voice', fromWake: true }); } catch (_) {}
+            }, 350);
+          }
+          return true;
+        }
+        return false;
+      };
+    }
+
+    /* ─── 4. Continuous wake listener (ringan, ZERO-REGRESI terhadap mic utama) ─── */
+    var wakeRuntime = {
+      state: 'idle',
+      rec: null,
+      starting: false,
+      claimId: null,
+      lastRestart: 0
+    };
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    function mainMicBusy() {
+      try {
+        var btn = document.getElementById('chat-mic');
+        if (btn && (btn.classList.contains('mic-listening') || btn.getAttribute('aria-pressed') === 'true')) return true;
+      } catch (_) {}
+      return false;
+    }
+
+    function stopWakeListen() {
+      try {
+        if (wakeRuntime.rec) {
+          try { wakeRuntime.rec.onend = null; wakeRuntime.rec.onerror = null; wakeRuntime.rec.onresult = null; } catch (_) {}
+          try { wakeRuntime.rec.abort(); } catch (_) { try { wakeRuntime.rec.stop(); } catch (__) {} }
+        }
+      } catch (_) {}
+      wakeRuntime.rec = null;
+      wakeRuntime.starting = false;
+      wakeRuntime.state = 'idle';
+      if (wakeRuntime.claimId && window.CGOAudioBus && typeof window.CGOAudioBus.lepasMic === 'function') {
+        try { window.CGOAudioBus.lepasMic(wakeRuntime.claimId); } catch (_) {}
+      }
+      wakeRuntime.claimId = null;
+    }
+
+    function startWakeListen() {
+      if (!SR) return;
+      if (!otak.isWakeEnabled()) return;
+      if (mainMicBusy()) return; // jangan merebut mic utama
+      if (wakeRuntime.starting || wakeRuntime.rec) return;
+      if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
+
+      var now = Date.now();
+      if (now - wakeRuntime.lastRestart < 1200) return; // throttle
+      wakeRuntime.lastRestart = now;
+      wakeRuntime.starting = true;
+
+      try {
+        // klaim mic hanya jika AudioBus ada; jika gagal (main mic), batal
+        if (window.CGOAudioBus && typeof window.CGOAudioBus.klaimMic === 'function') {
+          var claim = window.CGOAudioBus.klaimMic();
+          if (!claim || !claim.ok) {
+            wakeRuntime.starting = false;
+            return;
+          }
+          wakeRuntime.claimId = claim.id;
+        }
+
+        var rec = new SR();
+        rec.lang = 'id-ID';
+        rec.interimResults = true;
+        rec.continuous = true;
+        rec.maxAlternatives = 1;
+
+        rec.onstart = function () {
+          wakeRuntime.state = 'listening';
+          wakeRuntime.starting = false;
+        };
+        rec.onresult = function (ev) {
+          if (mainMicBusy()) { stopWakeListen(); return; }
+          var draft = '';
+          for (var i = ev.resultIndex; i < ev.results.length; i++) {
+            draft += String(ev.results[i][0] && ev.results[i][0].transcript || '');
+          }
+          draft = draft.trim();
+          if (draft && otak.onWakeTranscript) {
+            otak.onWakeTranscript(draft, { source: 'wake-continuous' });
+          }
+        };
+        rec.onerror = function (ev) {
+          var code = String(ev && ev.error || '');
+          wakeRuntime.starting = false;
+          // no-speech / aborted = normal; network/not-allowed = stop
+          if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'audio-capture') {
+            stopWakeListen();
+            return;
+          }
+          // biarkan onend restart
+        };
+        rec.onend = function () {
+          wakeRuntime.rec = null;
+          wakeRuntime.starting = false;
+          wakeRuntime.state = 'idle';
+          if (wakeRuntime.claimId && window.CGOAudioBus && typeof window.CGOAudioBus.lepasMic === 'function') {
+            try { window.CGOAudioBus.lepasMic(wakeRuntime.claimId); } catch (_) {}
+            wakeRuntime.claimId = null;
+          }
+          // auto-restart jika masih enabled & mic utama tidak sibuk
+          if (otak.isWakeEnabled() && !mainMicBusy()) {
+            setTimeout(function () {
+              if (otak.isWakeEnabled() && !mainMicBusy()) startWakeListen();
+            }, 900);
+          }
+        };
+
+        wakeRuntime.rec = rec;
+        rec.start();
+      } catch (e) {
+        wakeRuntime.starting = false;
+        stopWakeListen();
+        console.warn('[BCGO-FIX] wake listen start gagal:', e && e.message);
+      }
+    }
+
+    // Yield: saat mic utama mulai listening, matikan wake sementara
+    window.addEventListener('cgo:mic-status', function (e) {
+      try {
+        var st = String((e.detail && e.detail.state) || '').toUpperCase();
+        if (st === 'LISTENING') {
+          stopWakeListen();
+        } else if (st === 'IDLE' || st === 'TRANSCRIPT') {
+          if (otak.isWakeEnabled()) {
+            setTimeout(function () {
+              if (!mainMicBusy() && otak.isWakeEnabled()) startWakeListen();
+            }, 700);
+          }
+        }
+      } catch (_) {}
+    });
+
+    // Juga dari transcript mic utama (push-to-talk) → cek wake
+    window.addEventListener('cgo:mic-transcript', function (e) {
+      try {
+        var t = e.detail && e.detail.text;
+        if (t && otak.onWakeTranscript) otak.onWakeTranscript(t, { source: 'mic-main' });
+      } catch (_) {}
+    });
+
+    // Auto enable wake setelah load (standby otomatis)
+    function bootWake() {
+      try {
+        if (typeof otak.setWakeEnabled === 'function') {
+          otak.setWakeEnabled(true);
+        }
+        // tunda sedikit agar AudioBus & mic utama siap
+        setTimeout(function () {
+          if (otak.isWakeEnabled() && !mainMicBusy()) startWakeListen();
+        }, 1800);
+      } catch (_) {}
+    }
+    if (document.readyState === 'complete') setTimeout(bootWake, 800);
+    else window.addEventListener('load', function () { setTimeout(bootWake, 800); });
+
+    // Interaksi pertama → unlock voice + pastikan wake
+    var onceInteract = function () {
+      try {
+        if (window.CGOOperatorVoice && window.CGOOperatorVoice.unlock) window.CGOOperatorVoice.unlock();
+        if (otak.isWakeEnabled() && !mainMicBusy()) startWakeListen();
+      } catch (_) {}
+      ['pointerdown', 'touchstart', 'keydown', 'click'].forEach(function (n) {
+        try { window.removeEventListener(n, onceInteract, true); } catch (_) {}
+      });
+    };
+    ['pointerdown', 'touchstart', 'keydown', 'click'].forEach(function (n) {
+      try { window.addEventListener(n, onceInteract, true); } catch (_) {}
+    });
+
+    // Update badge wake
+    try {
+      var ind = document.getElementById('bcgo-wake-indicator');
+      if (ind) {
+        ind.textContent = 'WAKE · CGO';
+        ind.classList.add('on');
+      }
+    } catch (_) {}
+
+    console.log('[BCGO-FIX] Wake Word standby otomatis aktif · zero-regresi mic utama · variants:', (otak.wakeWords.variants || []).length);
+  } catch (err) {
+    console.warn('[BCGO-FIX] polyfill gagal (tidak merusak halaman):', err);
+  }
+})();
+</script>
+
+<!-- ─── Force re-boot operator voice setelah polyfill ─── -->
+<script>
+(function(){
+  try {
+    function reboot() {
+      try {
+        if (!window.CGOOperatorVoice) return;
+        window.CGOOperatorVoice.unlock && window.CGOOperatorVoice.unlock();
+        window.CGOOperatorVoice.setEnabled && window.CGOOperatorVoice.setEnabled(true);
+        window.CGOOperatorVoice.setChatSpeak && window.CGOOperatorVoice.setChatSpeak(true);
+        window.CGOOperatorVoice.setQuietLive && window.CGOOperatorVoice.setQuietLive(true);
+      } catch (_) {}
+    }
+    if (document.readyState === 'complete') setTimeout(reboot, 400);
+    else window.addEventListener('load', function(){ setTimeout(reboot, 400); });
+    // juga setelah user gesture
+    window.addEventListener('pointerdown', function once(){
+      reboot();
+      try { window.removeEventListener('pointerdown', once, true); } catch(_){}
+    }, true);
+  } catch(_){}
+})();
+</script>
+
 </body>
-   </html>
+</html>
