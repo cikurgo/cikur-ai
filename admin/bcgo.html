@@ -1263,6 +1263,16 @@ function addChat(role, text, meta) {
     const content = document.createElement('div');
     content.className = 'cgo-bubble-text';
     const fullText = String(text || '');
+    // Kode akses adalah rahasia sesi. Simpan nilai asli hanya di jalur internal;
+    // tampilan chat tidak boleh membeberkan digit kode yang baru dimasukkan.
+    const displayText = (function(value){
+      try {
+        let out = String(value || '').replace(/\b(c\s*\.?\s*g\s*\.?\s*o\s*[,\s:-]*)(0021|0006|0095)\b/gi, '$1••••');
+        out = out.replace(/\b(CIKUR\s+GO\s+INDONESIA)\b/gi, '••••••••••••••••••');
+        return out;
+      } catch (_) { return String(value || ''); }
+    })(fullText);
+    const renderedText = role === 'user' ? displayText : fullText;
     // Streaming: T_RENDER = sekarang (timer sudah dihitung di sendQuestion sebelum addChat)
     // JANGAN ubah timer saat stream selesai
     const streamPref = (function(){
@@ -1273,7 +1283,7 @@ function addChat(role, text, meta) {
     })();
     const canStream = role !== 'user' && streamPref && fullText.length >= 20 && !meta.noStream;
     if (!canStream) {
-      content.textContent = fullText;
+      content.textContent = renderedText;
     } else {
       content.textContent = '';
       const cursor = document.createElement('span');
@@ -1282,20 +1292,21 @@ function addChat(role, text, meta) {
       content.appendChild(cursor);
       let idx = 0;
       let stopped = false;
+      const streamText = renderedText;
       const tick = function(){
         if (stopped) return;
-        if (idx >= fullText.length) {
+        if (idx >= streamText.length) {
           try { cursor.remove(); } catch(_){}
           return;
         }
-        content.insertBefore(document.createTextNode(fullText.charAt(idx)), cursor);
+        content.insertBefore(document.createTextNode(streamText.charAt(idx)), cursor);
         idx++;
         setTimeout(tick, 20);
       };
       setTimeout(tick, 20);
       meta._streamStop = function(){
         stopped = true;
-        content.textContent = fullText;
+        content.textContent = streamText;
       };
     }
     body.appendChild(content);
@@ -2739,6 +2750,8 @@ await runAutonomousEngine(state => {
     if (!SR) return;
 
     let rec = null, active = false, starting = false, stopRequested = false;
+    // Session token mencegah callback SpeechRecognition lama merusak sesi baru.
+    let sessionId = 0;
     let armed = false, wakeHeard = false, awakeUntil = 0;
     let restartTimer = null, awakeTimer = null;
     let lastWakeAt = 0;
@@ -2776,9 +2789,10 @@ await runAutonomousEngine(state => {
       try { if (awakeTimer) clearTimeout(awakeTimer); } catch(_) {}
       restartTimer = awakeTimer = null;
     }
-    function stopWake(){
+    function stopWake(preserveArm){
+      sessionId++;
       clearTimers(); stopRequested = true; active = false; starting = false;
-      wakeHeard = false; awakeUntil = 0; armed = false;
+      wakeHeard = false; awakeUntil = 0; if (!preserveArm) armed = false;
       try { if (rec) rec.abort(); } catch(_) {}
       rec = null;
     }
@@ -2823,15 +2837,24 @@ await runAutonomousEngine(state => {
     function startWake(){
       if (!armed || starting || active || !wakeEnabled() || window.__CGO_MANUAL_MIC_ACTIVE__) return;
       starting = true; stopRequested = false;
+      const mySession = ++sessionId;
       try {
-        rec = new SR(); rec.lang='id-ID'; rec.interimResults=true; rec.continuous=true; rec.maxAlternatives=3;
-        rec.onstart=()=>{ starting=false; active=true; setWakeStatus('WAKE AKTIF · SIAP MENDENGAR'); window.dispatchEvent(new CustomEvent('cgo:wake-listening',{detail:{active:true}})); };
-        rec.onresult=(ev)=>{
+        const localRec = new SR();
+        rec = localRec;
+        localRec.lang='id-ID'; localRec.interimResults=true; localRec.continuous=true; localRec.maxAlternatives=3;
+        localRec.onstart=()=>{
+          if (mySession !== sessionId || rec !== localRec) return;
+          starting=false; active=true; setWakeStatus('WAKE AKTIF · SIAP MENDENGAR');
+          window.dispatchEvent(new CustomEvent('cgo:wake-listening',{detail:{active:true}}));
+        };
+        localRec.onresult=(ev)=>{
+          if (mySession !== sessionId || rec !== localRec) return;
           let combined='';
           try { for(let i=ev.resultIndex;i<ev.results.length;i++) combined += ' ' + String(ev.results[i][0]?.transcript || ''); } catch(_) {}
           combined=combined.trim(); if(combined) heard(combined);
         };
-        rec.onerror=(ev)=>{
+        localRec.onerror=(ev)=>{
+          if (mySession !== sessionId || rec !== localRec) return;
           const code=String(ev?.error||''); active=false; starting=false;
           if(code==='not-allowed'||code==='service-not-allowed'){
             armed=false; setWakeStatus('WAKE · IZIN MIC DIPERLUKAN');
@@ -2839,42 +2862,47 @@ await runAutonomousEngine(state => {
           }
           if(code!=='aborted') scheduleRestart();
         };
-        rec.onend=()=>{ active=false; starting=false; rec=null; if(!stopRequested) scheduleRestart(); };
-        rec.start();
+        localRec.onend=()=>{
+          if (mySession !== sessionId || rec !== localRec) return;
+          active=false; starting=false; rec=null;
+          if(!stopRequested) scheduleRestart();
+        };
+        localRec.start();
       } catch(e){
+        if (mySession !== sessionId) return;
         active=false; starting=false; rec=null;
         if(String(e?.name||'').toLowerCase()==='notallowederror'){ armed=false; setWakeStatus('WAKE · IZIN MIC DIPERLUKAN'); }
         else scheduleRestart();
       }
     }
+
     function armWake(){
       if(!wakeEnabled() || window.__CGO_MANUAL_MIC_ACTIVE__) return;
       armed=true; stopRequested=false; setWakeStatus('WAKE · MENGAKTIFKAN…');
-      setTimeout(startWake,60);
+      // IMPORTANT: start SpeechRecognition synchronously from the user's WAKE tap.
+      // A delayed start can lose the browser's user-activation permission.
+      startWake();
     }
 
     window.CGO_WAKEWORD = Object.freeze({arm:armWake, stop:stopWake, isActive:()=>!!active, isArmed:()=>!!armed});
 
     window.addEventListener('cgo:mic-status',ev=>{
       const st=String(ev?.detail?.state||'').toUpperCase();
-      if(st==='LISTENING'){ window.__CGO_MANUAL_MIC_ACTIVE__=true; stopWake(); }
-      else if(st==='IDLE'||st==='TRANSCRIPT'){
+      if(st==='LISTENING'){ window.__CGO_MANUAL_MIC_ACTIVE__=true; stopWake(true); }
+      else if(st==='IDLE'){
         window.__CGO_MANUAL_MIC_ACTIVE__=false;
         if(armed && wakeEnabled()) setTimeout(startWake,120);
+      } else if(st==='TRANSCRIPT'){
+        /* TRANSCRIPT bukan tanda bahwa mic manual sudah bebas. Tunggu IDLE. */
       }
     });
     // Jangan auto-start dari event Hub. Browser memerlukan user gesture dan
     // auto-start di sini dapat memicu MIC hidup/error sendiri saat boot.
     window.addEventListener('cgo:wake-disabled',stopWake);
 
-    /* Browser SpeechRecognition biasanya membutuhkan user gesture.
-       Jangan meminta microphone saat boot halaman. */
-    const gesture=(ev)=>{
-      // Klik tombol MIC manual hanya untuk MIC manual; jangan menyalakan dua recognition sekaligus.
-      if (ev && ev.target && (ev.target.closest?.('#chat-mic') || ev.target.closest?.('#cgo-future-wake-toggle'))) return;
-      if(wakeEnabled() && !armed && !window.__CGO_MANUAL_MIC_ACTIVE__) armWake();
-    };
-    ['pointerdown','touchstart','keydown'].forEach(name=>window.addEventListener(name,gesture,{capture:true,passive:true}));
+    /* ZERO-REGRESI: WakeWord TIDAK auto-start dari pointer/keyboard umum.
+       SpeechRecognition wajib dimulai dari gesture yang memang dimaksudkan pengguna.
+       Tombol WAKE (#bcgo-wake-indicator) adalah satu-satunya pintu arm WakeWord. */
   } catch(e) { try { console.warn('[CGO WakeWord Bridge]',e); } catch(_) {} }
 })();
 
@@ -3955,42 +3983,7 @@ await runAutonomousEngine(state => {
 }catch(e){console.warn('[CGO-ORB] Wake engine skip:',e&&e.message);}})();
 </script>
 
-<!-- ═══════════════════════════════════════════════════════════════════════
-     BCGO UPGRADE 2026 · APPEND-ONLY · diletakkan sebelum 
-<script>
-/* CGO · auto-enable Wake Hub saat siap (badge BCGO tetap bisa toggle OFF) */
-(function(){try{
-  function paintBadgeOn(){
-    try{
-      var el=document.getElementById('bcgo-wake-indicator');
-      if(!el)return;
-      var o=window.CGO_OTAK;
-      var primary=(o&&o.wakeWords&&o.wakeWords.primary)||'CGO';
-      el.textContent='WAKE · '+primary;
-      el.classList.add('on');
-      el.title='Wake enabled · standby';
-    }catch(_){}
-  }
-  function tryEnable(){
-    try{
-      var o=window.CGO_OTAK;
-      if(!o||typeof o.setWakeEnabled!=='function')return false;
-      var already=typeof o.isWakeEnabled==='function'&&o.isWakeEnabled();
-      if(!already) o.setWakeEnabled(true);
-      paintBadgeOn();
-      console.log('[CGO] Wake ON · Hub', o.version||'');
-      return true;
-    }catch(_){return false;}
-  }
-  var n=0;
-  var iv=setInterval(function(){
-    n++;
-    if(tryEnable()||n>60) clearInterval(iv);
-  },200);
-  // juga setelah DOM + load penuh
-  window.addEventListener('load', function(){ setTimeout(tryEnable, 300); });
-}catch(_){}})();
-</script>
+<!-- Wake auto-enable removed: Wake is user-gesture controlled to prevent MIC self-start/error. -->
 
 </body>
      prefix: bcgo-up- / bcgoUp / #bcgo-listening-banner / #bcgo-wake-indicator
@@ -4366,10 +4359,15 @@ await runAutonomousEngine(state => {
         return;
       }
       if (info.enabled) {
-        var label = info.primary ? ('WAKE · ' + info.primary) : 'WAKE · ON';
+        var bridgeArmed = !!(window.CGO_WAKEWORD && typeof window.CGO_WAKEWORD.isArmed === 'function' && window.CGO_WAKEWORD.isArmed());
+        var label = bridgeArmed
+          ? (info.primary ? ('WAKE · ' + info.primary) : 'WAKE · ON')
+          : 'WAKE · TAP UNTUK AKTIFKAN';
         indicator.textContent = label;
-        indicator.classList.add('on');
-        indicator.title = 'Wake enabled · state: ' + (info.state || 'idle');
+        indicator.classList.toggle('on', bridgeArmed);
+        indicator.title = bridgeArmed
+          ? ('Wake aktif · state: ' + (info.state || 'idle'))
+          : 'WakeWord siap diaktifkan melalui tap pengguna';
       } else {
         indicator.textContent = 'WAKE · OFF';
         indicator.classList.remove('on');
@@ -4387,6 +4385,7 @@ await runAutonomousEngine(state => {
       var info = readWake();
       var next = !(info && info.enabled);
       try { otak.setWakeEnabled(next); } catch(_){}
+      if (next) { try { window.CGO_WAKEWORD?.arm?.(); } catch(_){} } else { try { window.CGO_WAKEWORD?.stop?.(); } catch(_){} }
       // refresh akan terjadi dari polling / event
     }catch(_){}
   }
@@ -4398,6 +4397,8 @@ await runAutonomousEngine(state => {
   setInterval(paint, 2500);
   window.addEventListener('cgo:otak-state', paint);
   window.addEventListener('cgo:wake-enabled', paint);
+  window.addEventListener('cgo:wake-listening', paint);
+  window.addEventListener('cgo:wake-error', paint);
   window.addEventListener('cgo:wake-heard', paint);
   window.addEventListener('cgo:wake-awake', paint);
 }catch(_){}})();
