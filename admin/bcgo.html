@@ -800,7 +800,7 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-machine-abc.js?v=0.14.3-MORE-RULES"></script>
 <script src="cgo-machine-abc-bridge.js?v=2.3.0-REPAIR-AUTO"></script>
 <script src="cgo-abc-cognition.js?v=1.2.0-HUMAN-RESULT"></script>
-<script src="cgo-otak-hub.js?v=1.6.2-ABC-HUMAN-HINT"></script>
+<script src="cgo-otak-hub.js?v=1.9.9-WAKE-ON"></script>
 
 <script type="module">
 import * as CGOInstruction from "./cgo-instruction.js?v=1.3.0-CONSTITUTION";
@@ -2692,6 +2692,11 @@ await runAutonomousEngine(state => {
           if (interimText) interimText.textContent = draft;
           if (interimEl) interimEl.classList.add('on');
           if (input) input.placeholder = draft;
+          try {
+            if (window.CGO_OTAK && typeof window.CGO_OTAK.onWakeTranscript === 'function') {
+              window.CGO_OTAK.onWakeTranscript(draft, { force: true });
+            }
+          } catch (_) {}
         }
         if (final.trim()) heardSpeech = true;
         armSilence();
@@ -3793,7 +3798,43 @@ await runAutonomousEngine(state => {
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════
-     BCGO UPGRADE 2026 · APPEND-ONLY · diletakkan sebelum </body>
+     BCGO UPGRADE 2026 · APPEND-ONLY · diletakkan sebelum 
+<script>
+/* CGO · auto-enable Wake Hub saat siap (badge BCGO tetap bisa toggle OFF) */
+(function(){try{
+  function paintBadgeOn(){
+    try{
+      var el=document.getElementById('bcgo-wake-indicator');
+      if(!el)return;
+      var o=window.CGO_OTAK;
+      var primary=(o&&o.wakeWords&&o.wakeWords.primary)||'CGO';
+      el.textContent='WAKE · '+primary;
+      el.classList.add('on');
+      el.title='Wake enabled · standby';
+    }catch(_){}
+  }
+  function tryEnable(){
+    try{
+      var o=window.CGO_OTAK;
+      if(!o||typeof o.setWakeEnabled!=='function')return false;
+      var already=typeof o.isWakeEnabled==='function'&&o.isWakeEnabled();
+      if(!already) o.setWakeEnabled(true);
+      paintBadgeOn();
+      console.log('[CGO] Wake ON · Hub', o.version||'');
+      return true;
+    }catch(_){return false;}
+  }
+  var n=0;
+  var iv=setInterval(function(){
+    n++;
+    if(tryEnable()||n>60) clearInterval(iv);
+  },200);
+  // juga setelah DOM + load penuh
+  window.addEventListener('load', function(){ setTimeout(tryEnable, 300); });
+}catch(_){}})();
+</script>
+
+</body>
      prefix: bcgo-up- / bcgoUp / #bcgo-listening-banner / #bcgo-wake-indicator
      Prinsip: satu sumber kebenaran (Hub Otak). UI hanya pembaca.
      Semua dibungkus try/catch. Tidak mengubah struktur/namespace yang ada.
@@ -4139,10 +4180,15 @@ await runAutonomousEngine(state => {
       }
       if (otak.wakeWords && typeof otak.wakeWords === 'object') {
         var w = otak.wakeWords;
+        var en = false;
+        try {
+          if (typeof otak.isWakeEnabled === 'function') en = !!otak.isWakeEnabled();
+          else en = !!w.enabled;
+        } catch (_) { en = !!w.enabled; }
         return {
           available:true,
-          enabled: !!w.enabled,
-          state: w.state || 'idle',
+          enabled: en,
+          state: en ? 'listening' : (w.state || 'idle'),
           primary: String(w.primary || '').trim(),
           words: w.variants || null
         };
@@ -4223,5 +4269,267 @@ await runAutonomousEngine(state => {
 }catch(_){}})();
 </script>
 
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     CGO VOICE + WAKE SUPERVISOR v1.0.0 · APPEND-ONLY · ZERO-REGRESI
+     Tidak mengubah satu baris pun kode lama. Hanya menambah lapisan pengaman:
+     A) Suara operator wanita: bila mesin suara tidak mengeluarkan bunyi, otomatis fallback TTS wanita (id-ID).
+     B) Wake word: dijaga otomatis ON & standby terus (hormati tombol OFF manual dari badge WAKE).
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function cgoVoiceWakeSupervisor(){try{
+  if (window.__cgoVWSup) return;
+  var ss = window.speechSynthesis;
+  var LOG = function(){ try{ console.log.apply(console, ['[CGO-VWS]'].concat([].slice.call(arguments))); }catch(_){} };
+  var lastEvidence = 0, inFallback = false, lastFallbackText = '', lastFallbackAt = 0;
+
+  /* ───────── A. SUARA OPERATOR WANITA ───────── */
+
+  // Stempel pass-through: catat kapan mesin suara benar-benar membunyikan sesuatu (tidak mengubah perilaku).
+  function stamp(){ if (!inFallback) lastEvidence = Date.now(); }
+  try{
+    var SSP = window.SpeechSynthesis && window.SpeechSynthesis.prototype;
+    if (SSP && !SSP.__vws && typeof SSP.speak === 'function'){
+      var os = SSP.speak;
+      SSP.speak = function(){ stamp(); return os.apply(this, arguments); };
+      SSP.__vws = true;
+    }
+  }catch(_){}
+  try{
+    var MP = window.HTMLMediaElement && window.HTMLMediaElement.prototype;
+    if (MP && !MP.__vws && typeof MP.play === 'function'){
+      var op = MP.play;
+      MP.play = function(){ stamp(); return op.apply(this, arguments); };
+      MP.__vws = true;
+    }
+  }catch(_){}
+  try{
+    var BP = window.AudioBufferSourceNode && window.AudioBufferSourceNode.prototype;
+    if (BP && !BP.__vws && typeof BP.start === 'function'){
+      var ob = BP.start;
+      BP.start = function(){ stamp(); return ob.apply(this, arguments); };
+      BP.__vws = true;
+    }
+  }catch(_){}
+
+  function muted(){ return !!(window.__cgoUserMutedAudio || window.__cgoUserPausedAudio); }
+
+  function pickVoice(){
+    var vs = [];
+    try{ vs = (ss && ss.getVoices && ss.getVoices()) || []; }catch(_){}
+    if (!vs.length) return null;
+    var name = '';
+    try{ var d = window.CGOOperatorVoice && window.CGOOperatorVoice.diag && window.CGOOperatorVoice.diag(); name = (d && d.voiceName) || ''; }catch(_){}
+    if (name){ for (var i = 0; i < vs.length; i++){ if (vs[i].name === name) return vs[i]; } }
+    var male = /(andika|ardi|rizwan|\bmale\b|pria|laki)/i;
+    var fem  = /(gadis|damayanti|google bahasa indonesia|female|wanita|perempuan|siti)/i;
+    var idv = vs.filter(function(v){ return /^id([-_]|$)/i.test(v.lang || '') || /indonesia/i.test(v.name || ''); });
+    return idv.filter(function(v){ return fem.test(v.name) && !male.test(v.name); })[0]
+        || idv.filter(function(v){ return !male.test(v.name); })[0]
+        || idv[0] || null;
+  }
+
+  function speakFallback(text){
+    try{
+      if (!ss || typeof SpeechSynthesisUtterance === 'undefined' || muted()) return false;
+      var t = String(text || '').replace(/https?:\/\/\S+/g, ' ').replace(/[`*_#>|~]+/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!t) return false;
+      if (t.length > 900) t = t.slice(0, 900);
+      var now = Date.now();
+      if (t === lastFallbackText && now - lastFallbackAt < 1500) return false;
+      lastFallbackText = t; lastFallbackAt = now;
+      var parts = t.match(/[^.!?;:\n]+[.!?;:]?/g) || [t], chunks = [], cur = '';
+      parts.forEach(function(p){ if ((cur + p).length > 180){ if (cur) chunks.push(cur); cur = p; } else cur += p; });
+      if (cur) chunks.push(cur);
+      try{ if (ss.paused) ss.resume(); }catch(_){}
+      var v = pickVoice();
+      inFallback = true;
+      try{
+        chunks.forEach(function(c){
+          var u = new SpeechSynthesisUtterance(c.trim());
+          u.lang = (v && v.lang) || 'id-ID';
+          if (v) u.voice = v;
+          u.rate = 1; u.pitch = 1.08; u.volume = 1;
+          ss.speak(u);
+        });
+      } finally { inFallback = false; }
+      return true;
+    }catch(_){ return false; }
+  }
+
+  function evidence(t0){
+    if (lastEvidence >= t0) return true;
+    try{ if (ss && (ss.speaking || ss.pending)) return true; }catch(_){}
+    try{ var V = window.CGOOperatorVoice; if (V && typeof V.isSpeaking === 'function' && V.isSpeaking()) return true; }catch(_){}
+    return false;
+  }
+
+  function watch(text, t0, label, failNow){
+    var done = false;
+    function fire(){
+      if (done) return; done = true;
+      if (evidence(t0) && !failNow) return;
+      LOG('suara mesin tidak keluar → fallback wanita (' + label + ')');
+      speakFallback(text);
+    }
+    if (failNow){ fire(); return; }
+    var iv = setInterval(function(){
+      if (done){ clearInterval(iv); return; }
+      if (evidence(t0)){ done = true; clearInterval(iv); return; }
+      if (Date.now() - t0 >= 3000){ clearInterval(iv); fire(); }
+    }, 100);
+  }
+
+  function guard(V, name, textOf){
+    var orig = V[name];
+    if (typeof orig !== 'function' || orig.__vws) return;
+    var w = function(){
+      var args = arguments, t0 = Date.now(), res, err = null;
+      try{ if (typeof window.__cgoVoiceHeal === 'function') window.__cgoVoiceHeal(); }catch(_){}
+      try{ res = orig.apply(this, args); }catch(e){ err = e; }
+      var text = ''; try{ text = textOf.apply(null, args); }catch(_){}
+      if (text){
+        if (err) watch(text, t0, name, true);
+        else {
+          watch(text, t0, name, false);
+          try{ if (res && typeof res.then === 'function') res.then(null, function(){ watch(text, t0, name + ':reject', true); }); }catch(_){}
+        }
+      }
+      if (err) throw err;
+      return res;
+    };
+    w.__vws = true;
+    try{ V[name] = w; }catch(_){}
+  }
+
+  function wrapEngine(){
+    var V = window.CGOOperatorVoice;
+    if (!V) return false;
+    guard(V, 'speakAnswer', function(text){ return text; });
+    guard(V, 'welcome', function(){ return 'Operator CGO siap. Saya selalu standby.'; });
+    guard(V, 'announceAttention', function(d){
+      d = d || {};
+      var s = 'Perhatian. ' + (/err|fail|bad/i.test(String(d.kind || '')) ? 'Ada kesalahan' : 'Ada peringatan');
+      if (d.file) s += ' pada berkas ' + d.file; else if (d.path) s += ' pada jalur ' + d.path;
+      if (d.message) s += '. ' + d.message;
+      return s.slice(0, 260);
+    });
+    return true;
+  }
+
+  // Buka kunci TTS pada interaksi pertama (kebijakan autoplay browser) — senyap, tidak mengganggu mesin lama.
+  var primed = false;
+  function prime(){
+    try{
+      if (ss){
+        try{ ss.getVoices(); }catch(_){}
+        try{ if (ss.paused) ss.resume(); }catch(_){}
+        if (!primed && typeof SpeechSynthesisUtterance !== 'undefined'){
+          primed = true; inFallback = true;
+          try{ var u = new SpeechSynthesisUtterance(' '); u.volume = 0; ss.speak(u); } finally { inFallback = false; }
+        }
+      }
+    }catch(_){}
+    try{ window.CGOOperatorVoice && window.CGOOperatorVoice.unlock && window.CGOOperatorVoice.unlock(); }catch(_){}
+    try{ window.__cgoVoiceHeal && window.__cgoVoiceHeal(); }catch(_){}
+  }
+  ['pointerdown','touchstart','keydown','click'].forEach(function(n){
+    try{ window.addEventListener(n, function(){ prime(); wrapEngine(); ensureWake('gesture'); }, { capture:true, passive:true }); }catch(_){}
+  });
+
+  // Setelah sesi mic selesai, TTS di beberapa browser (Android Chrome) tertahan — pulihkan.
+  window.addEventListener('cgo:mic-status', function(e){
+    try{
+      var st = e && e.detail && e.detail.state;
+      if (st === 'IDLE' || st === 'TRANSCRIPT'){
+        setTimeout(function(){ try{ window.__cgoVoiceHeal && window.__cgoVoiceHeal(); }catch(_){} }, 250);
+        setTimeout(function(){ ensureWake('mic-ended'); }, 700);
+      }
+    }catch(_){}
+  });
+  window.addEventListener('cgo:mic-error', function(){ setTimeout(function(){ ensureWake('mic-error'); }, 1200); });
+
+  /* ───────── B. WAKE WORD · OTOMATIS & SELALU STANDBY ───────── */
+
+  var userOff = false;   // true hanya bila pengguna sendiri menekan badge WAKE untuk OFF
+  var lastKick = 0;
+  var DEAD = /^(error|stopped|ended|failed|aborted|closed)$/i;
+
+  function otak(){ return window.CGO_OTAK; }
+  function wakeEnabled(){
+    var o = otak(); if (!o) return null;
+    try{ if (typeof o.isWakeEnabled === 'function') return !!o.isWakeEnabled(); }catch(_){}
+    try{ if (typeof o.wakeStatus === 'function'){ var s = o.wakeStatus(); if (s && typeof s === 'object') return !!s.enabled; } }catch(_){}
+    try{ if (o.wakeWords && typeof o.wakeWords.enabled !== 'undefined') return !!o.wakeWords.enabled; }catch(_){}
+    return null;
+  }
+  function micBusy(){ var b = document.getElementById('chat-mic'); return !!(b && b.classList.contains('mic-listening')); }
+
+  function staleCheck(o){
+    try{
+      if (typeof o.wakeStatus !== 'function') return;
+      var s = o.wakeStatus(), st = s && s.state;
+      if (!st || !DEAD.test(String(st))) return;
+      if (Date.now() - lastKick < 8000) return;
+      lastKick = Date.now();
+      LOG('wake state "' + st + '" → restart');
+      o.setWakeEnabled(false);
+      setTimeout(function(){ try{ if (!userOff && !micBusy()) o.setWakeEnabled(true); }catch(_){} }, 400);
+    }catch(_){}
+  }
+
+  function ensureWake(reason){
+    try{
+      if (userOff) return;
+      var o = otak();
+      if (!o || typeof o.setWakeEnabled !== 'function') return;
+      if (micBusy()) return;
+      var en = wakeEnabled();
+      if (en === true){ staleCheck(o); return; }
+      o.setWakeEnabled(true);
+      LOG('wake ON · ' + reason);
+    }catch(_){}
+  }
+
+  // Niat pengguna: klik/Enter pada badge WAKE saat sedang ON → pengguna ingin OFF (dihormati); saat OFF → ON kembali.
+  function userIntent(e){
+    try{
+      var t = e.target && e.target.closest && e.target.closest('#bcgo-wake-indicator');
+      if (!t) return;
+      if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+      userOff = (wakeEnabled() === true);
+    }catch(_){}
+  }
+  document.addEventListener('click', userIntent, true);
+  document.addEventListener('keydown', userIntent, true);
+
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden){ ensureWake('visible'); prime(); } });
+  window.addEventListener('focus', function(){ ensureWake('focus'); });
+  window.addEventListener('pageshow', function(){ ensureWake('pageshow'); });
+  window.addEventListener('online', function(){ ensureWake('online'); });
+  window.addEventListener('cgo:wake-sleep', function(){ setTimeout(function(){ ensureWake('wake-sleep'); }, 2300); });
+  window.addEventListener('cgo:otak-state', function(){ ensureWake('otak-state'); });
+  try{
+    if (navigator.permissions && navigator.permissions.query){
+      navigator.permissions.query({ name:'microphone' }).then(function(p){
+        p.onchange = function(){ if (p.state === 'granted') setTimeout(function(){ ensureWake('mic-permission'); }, 300); };
+      }).catch(function(){});
+    }
+  }catch(_){}
+
+  // Pengawas tetap: tidak menyerah (skrip lama berhenti setelah ±12 detik).
+  setInterval(function(){ wrapEngine(); ensureWake('watchdog'); }, 1500);
+  wrapEngine();
+  setTimeout(function(){ ensureWake('boot'); }, 400);
+
+  window.__cgoVWSup = {
+    version: '1.0.0',
+    status: function(){ return { userOff:userOff, wakeEnabled:wakeEnabled(), micBusy:micBusy(), lastEvidenceAgoMs: lastEvidence ? Date.now()-lastEvidence : null, voice: (pickVoice()||{}).name || null }; },
+    speakFallback: speakFallback
+  };
+  LOG('aktif · suara wanita fallback + wake supervisor');
+}catch(e){ try{ console.warn('[CGO-VWS] skip:', e && e.message); }catch(_){} }})();
+</script>
+
 </body>
-                           </html>
+   </html>
