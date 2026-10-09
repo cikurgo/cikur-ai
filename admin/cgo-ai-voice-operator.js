@@ -497,13 +497,29 @@
 
     function doSpeak() {
       _chatSpeaking = true;
+      try {
+        if (typeof global.dispatchEvent === "function" && typeof global.CustomEvent === "function") {
+          global.dispatchEvent(new global.CustomEvent("cgo:operator-voice-start", {
+            detail: { emosi: emosi || "tenang", source: options.source || (options.system ? "system" : "chat") }
+          }));
+        }
+      } catch (_) {}
       stopAllOperatorAudio();
       var startP = unlocked ? Promise.resolve(true) : unlock();
       return startP.then(function () {
         chatSpeakEnabled = true;
         return speakTTS(text, voiceOpts).then(function (ok) { return ok; });
       }).finally(function () {
-        setTimeout(function () { _chatSpeaking = false; }, 400);
+        setTimeout(function () {
+          _chatSpeaking = false;
+          try {
+            if (typeof global.dispatchEvent === "function" && typeof global.CustomEvent === "function") {
+              global.dispatchEvent(new global.CustomEvent("cgo:operator-voice-end", {
+                detail: { emosi: emosi || "tenang", source: options.source || (options.system ? "system" : "chat") }
+              }));
+            }
+          } catch (_) {}
+        }, 400);
       });
     }
 

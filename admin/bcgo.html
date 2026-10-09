@@ -2606,6 +2606,8 @@ await runAutonomousEngine(state => {
     heardSpeech = false;
     finishing = false;
     starting = true;
+    // Hentikan pengenalan WakeWord standby sebelum sesi MIC manual dimulai.
+    try { window.dispatchEvent(new CustomEvent('cgo:mic-requested', {detail:{source:'button'}})); } catch (_) {}
 
     try {
       if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
@@ -2616,7 +2618,11 @@ await runAutonomousEngine(state => {
         const claim = window.CGOAudioBus.klaimMic();
         if (!claim || !claim.ok) {
           starting = false;
-          status(claim && claim.reason === 'remote-mic-busy' ? 'MIC SEDANG DIGUNAKAN TAB LAIN' : 'MIC SIBUK · coba lagi', 'warn');
+          const busyCode = claim && claim.reason === 'remote-mic-busy' ? 'MIC_BUSY_REMOTE' : 'MIC_BUSY';
+          const busyMessage = claim && claim.reason === 'remote-mic-busy' ? 'MIC SEDANG DIGUNAKAN TAB LAIN' : 'MIC SIBUK · coba lagi';
+          status(busyMessage, 'warn');
+          // Pulihkan WakeWord yang sudah dihentikan oleh cgo:mic-requested.
+          try { window.dispatchEvent(new CustomEvent('cgo:mic-error', {detail:{code:busyCode,message:busyMessage}})); } catch (_) {}
           return;
         }
         micClaimId = claim.id;
@@ -4789,6 +4795,14 @@ await runAutonomousEngine(state => {
     }
   }, 2000);
   try{
+    window.addEventListener('cgo:mic-requested', function(){
+      micBusy = true; busySince = Date.now();
+      stopWake();
+    });
+    window.addEventListener('cgo:mic-error', function(){
+      micBusy = false; busySince = 0;
+      if (wakeOn && hubOn()) restartT = setTimeout(standby, 1200);
+    });
     window.addEventListener('cgo:mic-status', function(e){
       var st = e && e.detail && e.detail.state;
       if (st === 'LISTENING') {
@@ -4820,10 +4834,50 @@ await runAutonomousEngine(state => {
     try{ window.addEventListener(n, onG, { capture:true, passive:true }); }catch(_){}
   });
 
-  LOG('bridge v1.1 · orb · voice · wake standby');
+  // Operator TTS menggerakkan Orb dan palet warna secara sinkron dengan emosi jawaban.
+  try {
+    var voiceOrbHost = document.querySelector('.cgo-orb-stage-host');
+    var voiceOrbWrap = document.getElementById('cgo-orb-wrap');
+    var voiceWave = document.getElementById('cgo-voice-wave');
+    var voicePreviousPalette = null;
+    var voicePalettes = {
+      senang: 'emerald', gembira: 'emerald', tegas: 'rose',
+      khawatir: 'amber', prihatin: 'violet', tenang: 'cyan'
+    };
+    window.addEventListener('cgo:operator-voice-start', function(e){
+      var d = e && e.detail || {};
+      var emotion = String(d.emosi || 'tenang').toLowerCase();
+      if (voiceOrbHost) voiceOrbHost.classList.add('cgo-operator-speaking');
+      // CSS palet terpasang pada #cgo-orb-wrap, bukan stage host.
+      if (voiceOrbWrap) {
+        if (voicePreviousPalette === null) voicePreviousPalette = voiceOrbWrap.getAttribute('data-palette');
+        voiceOrbWrap.setAttribute('data-palette', voicePalettes[emotion] || 'ice');
+      }
+      if (voiceWave) voiceWave.classList.add('live');
+      var state = /tegas|khawatir|prihatin/.test(emotion) ? 'menjaga'
+        : /senang|gembira|antusias/.test(emotion) ? 'transenden' : 'membuka';
+      orbState(state, 0);
+    });
+    window.addEventListener('cgo:operator-voice-end', function(){
+      if (voiceOrbHost) voiceOrbHost.classList.remove('cgo-operator-speaking');
+      if (voiceOrbWrap) {
+        if (voicePreviousPalette) voiceOrbWrap.setAttribute('data-palette', voicePreviousPalette);
+        else voiceOrbWrap.removeAttribute('data-palette');
+        voicePreviousPalette = null;
+      }
+      if (voiceWave) voiceWave.classList.remove('live');
+      if (!micBusy) orbState('tenang', 0);
+    });
+  } catch (_) {}
+  LOG('bridge v1.2 · orb · voice · wake standby · mic coordination');
 }catch(e){ try{ console.warn('[CGO-REPAIR]', e && e.message); }catch(_){} }})();
 </script>
 
 
+<style>
+/* Aditif: gerak Orb mengikuti ucapan operator tanpa mengganti animasi inti. */
+.cgo-orb-stage-host.cgo-operator-speaking{animation:cgoOperatorSpeakPulse 1.15s ease-in-out infinite;filter:drop-shadow(0 0 12px rgba(103,232,249,.28))}
+@keyframes cgoOperatorSpeakPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.025)}}
+</style>
 </body>
    </html>

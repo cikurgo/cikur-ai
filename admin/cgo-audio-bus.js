@@ -15,6 +15,9 @@
 
   let mutedByVisibility = false;
   let remoteClaim = null; // { id, priority, ts }
+  let remoteMicClaim = null; // { id, ts }
+  let localMicClaim = null;
+  const MIC_CLAIM_TTL_MS = 20000;
 
   function activeRemote() {
     if (remoteClaim && Date.now() - remoteClaim.ts > CLAIM_TTL_MS) remoteClaim = null;
@@ -34,6 +37,10 @@
       remoteClaim = { id: d.id, priority: Number(d.prioritas) || 99, ts: Date.now() };
     } else if (d.aksi === "lepas") {
       if (remoteClaim && remoteClaim.id === d.id) remoteClaim = null;
+    } else if (d.aksi === "mic-klaim") {
+      remoteMicClaim = { id: d.id, ts: Date.now() };
+    } else if (d.aksi === "mic-lepas") {
+      if (remoteMicClaim && remoteMicClaim.id === d.id) remoteMicClaim = null;
     }
   }
 
@@ -92,6 +99,28 @@
     } catch (_) {}
   }
 
+  function klaimMic() {
+    const now = Date.now();
+    if (localMicClaim && now - localMicClaim.ts < MIC_CLAIM_TTL_MS) {
+      return { ok: false, reason: "local-mic-busy", id: localMicClaim.id };
+    }
+    if (remoteMicClaim && now - remoteMicClaim.ts < MIC_CLAIM_TTL_MS) {
+      return { ok: false, reason: "remote-mic-busy", id: remoteMicClaim.id };
+    }
+    const id = PAGE_ID + "-mic-" + now;
+    localMicClaim = { id: id, ts: now };
+    try { if (bc) bc.postMessage({ aksi: "mic-klaim", id: id, from: PAGE_ID }); } catch (_) {}
+    return { ok: true, id: id };
+  }
+
+  function lepasMic(id) {
+    if (!localMicClaim || (id && localMicClaim.id !== id)) return false;
+    const old = localMicClaim.id;
+    localMicClaim = null;
+    try { if (bc) bc.postMessage({ aksi: "mic-lepas", id: old, from: PAGE_ID }); } catch (_) {}
+    return true;
+  }
+
   function canPlay(prioritas) {
     if (mutedByVisibility || isHidden()) return false;
     const p = Number(prioritas);
@@ -117,6 +146,7 @@
   function releaseAllClaims() {
     _myClaims.forEach(function (id) { try { _origLepas(id); } catch (_) {} });
     _myClaims = [];
+    try { lepasMic(); } catch (_) {}
   }
   try {
     if (typeof window !== "undefined") {
@@ -131,6 +161,8 @@
     klaim: klaim,
     lepas: lepas,
     canPlay: canPlay,
+    klaimMic: klaimMic,
+    lepasMic: lepasMic,
     isHidden: isHidden
   });
 })(typeof globalThis !== "undefined" ? globalThis : window);
