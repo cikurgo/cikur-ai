@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.9.9-WAKE-ON";
+  const VERSION = "1.10.0-WAKE-LISTENER";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -983,6 +983,7 @@
           emitWake("cgo:wake-heard", { text: t.slice(0, 40) });
           emitWake("cgo:wake-awake", { text: t.slice(0, 40) });
           setTimeout(function () { try { emitWake("cgo:wake-processing", {}); } catch (_) {} }, 30);
+          touchWake(8000);
         } catch (_) {}
         notify();
         return {
@@ -2269,10 +2270,250 @@
     } catch (_) {}
   }
 
+  /* ================= WAKE LISTENER · standby otomatis (v1.10.0) =================
+   * Sebelumnya "wake ON" hanya bendera: tidak ada mikrofon yang dibuka sampai tombol mic ditekan.
+   * Kini Hub menjalankan SpeechRecognition kontinu (id-ID) yang:
+   *  - menyala otomatis, restart sendiri (backoff), dan berhenti rapi saat tab tersembunyi/wake OFF
+   *  - mengalah pada mic chat (event cgo:mic-claim dari CGOAudioBus.klaimMic) & saat operator bicara
+   *  - hanya bereaksi pada ucapan berisi kata bangun (CGO / si ji ou / halo cgo …); ucapan lain diabaikan
+   *  - mengirim perintah lewat jalur yang SAMA dengan mic manual (CGO_BCGO_SEND_QUESTION)
+   *  - menyiarkan cgo:wake-sleep agar orb kembali tenang (sebelumnya tidak pernah dikirim)
+   */
+  const WL = {
+    SR: global.SpeechRecognition || global.webkitSpeechRecognition || null,
+    rec: null, gen: 0, running: false, starting: false,
+    status: "idle", lastError: "", backoff: 700, startedAt: 0, restartT: null, watchT: null,
+    denied: false, deniedNotified: false, extMicUntil: 0,
+    awakeUntil: 0, awaitFollow: false, lastHeardAt: 0, lastSentAt: 0,
+    sleepAt: 0, sleepT: null, booted: false
+  };
+  const WL_LOOSE = ["cgo", "sijio", "sijiou", "sijiow", "sijiu", "cegeo", "segeo", "sejio"];
+  const WL_GREET = /^(halo|hai|hi|hey|hei|ok|oke|okay)$/;
+
+  function wlSecure() {
+    try { return !!global.isSecureContext || /^(localhost|127\.0\.0\.1)$/.test(global.location.hostname); } catch (_) { return true; }
+  }
+  function wlHidden() { try { return !!(global.document && global.document.hidden); } catch (_) { return false; } }
+  function wlMicLocked() {
+    try {
+      if (global.CGOAudioBus && typeof global.CGOAudioBus.isMicLocked === "function" && global.CGOAudioBus.isMicLocked()) return true;
+    } catch (_) {}
+    return Date.now() < WL.extMicUntil; // cadangan: status mic dari UI bila bus lama
+  }
+  function wlTtsBusy() {
+    try {
+      const V = global.CGOOperatorVoice;
+      if (V && typeof V.isChatSpeaking === "function" && V.isChatSpeaking()) return true;
+      const ss = global.speechSynthesis;
+      if (ss && (ss.speaking || ss.pending)) return true;
+    } catch (_) {}
+    return false;
+  }
+  function wlSetStatus(s) {
+    if (WL.status === s) return;
+    WL.status = s;
+    emitWake("cgo:wake-state", { state: s, enabled: !!state.wakeEnabled });
+  }
+  function wlWant() {
+    if (!state.wakeEnabled) return "off";
+    if (!WL.SR) return "unsupported";
+    if (!wlSecure()) return "insecure";
+    if (WL.denied) return "denied";
+    if (wlHidden()) return "hidden";
+    if (wlMicLocked()) return "mic";
+    if (wlTtsBusy()) return "tts";
+    return "run";
+  }
+  function wlStopRec() {
+    const r = WL.rec;
+    WL.gen++; // abaikan handler lama
+    WL.rec = null; WL.running = false; WL.starting = false;
+    if (r) { try { r.onresult = r.onerror = r.onend = r.onstart = null; } catch (_) {} try { r.abort(); } catch (_) {} }
+  }
+  function wlReleaseLease() { try { if (global.CGOAudioBus && global.CGOAudioBus.lepasWake) global.CGOAudioBus.lepasWake(); } catch (_) {} }
+
+  function wlSync() {
+    const w = wlWant();
+    if (w === "run") {
+      if (WL.running) { wlSetStatus("listening"); return; }
+      if (!WL.starting && !WL.restartT) WL.restartT = setTimeout(wlStart, 0);
+      return;
+    }
+    wlStopRec();
+    if (WL.restartT) { clearTimeout(WL.restartT); WL.restartT = null; }
+    if (w === "off" || w === "hidden" || w === "denied" || w === "unsupported" || w === "insecure") wlReleaseLease();
+    wlSetStatus(w === "off" ? "idle" : (w === "hidden" ? "paused-hidden" : (w === "mic" ? "paused-mic" : (w === "tts" ? "paused-tts" : w))));
+  }
+  function wlScheduleRestart() {
+    if (WL.restartT) return;
+    if (wlWant() !== "run") { wlSync(); return; }
+    WL.restartT = setTimeout(wlStart, WL.backoff);
+  }
+
+  function wlStart() {
+    WL.restartT = null;
+    if (WL.running || WL.starting) return;
+    if (wlWant() !== "run") { wlSync(); return; }
+    try {
+      const B = global.CGOAudioBus;
+      if (B && typeof B.klaimWake === "function") {
+        const c = B.klaimWake();
+        if (!c.ok) { wlSetStatus("paused-remote"); WL.restartT = setTimeout(wlStart, 5000); return; }
+      }
+    } catch (_) {}
+    let rec;
+    try { rec = new WL.SR(); } catch (e) { WL.lastError = String(e && e.message || e); wlSetStatus("error"); wlScheduleRestart(); return; }
+    try {
+      rec.lang = "id-ID"; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 3;
+    } catch (_) {}
+    const gen = ++WL.gen;
+    WL.rec = rec; WL.starting = true; wlSetStatus("starting");
+    rec.onstart = function () {
+      if (gen !== WL.gen) return;
+      WL.starting = false; WL.running = true; WL.startedAt = Date.now(); wlSetStatus("listening");
+    };
+    rec.onresult = function (ev) { if (gen === WL.gen) { try { wlOnResult(ev); } catch (_) {} } };
+    rec.onerror = function (ev) {
+      if (gen !== WL.gen) return;
+      const c = String((ev && ev.error) || "");
+      WL.lastError = c;
+      if (c === "not-allowed" || c === "service-not-allowed") {
+        WL.denied = true; wlSetStatus("denied");
+        if (!WL.deniedNotified) {
+          WL.deniedNotified = true;
+          emitWake("cgo:mic-error", { code: c, source: "wake", message: "Wake word butuh izin mikrofon" });
+        }
+      } else if (c === "audio-capture") { WL.backoff = Math.max(WL.backoff, 4000); wlSetStatus("error"); }
+      else if (c === "network") { WL.backoff = Math.max(WL.backoff, 5000); wlSetStatus("error"); }
+      // "no-speech" / "aborted": normal, restart lewat onend
+    };
+    rec.onend = function () {
+      if (gen !== WL.gen) return;
+      const ran = WL.startedAt ? Date.now() - WL.startedAt : 0;
+      WL.running = false; WL.starting = false; WL.rec = null;
+      if (ran > 8000) WL.backoff = 700; else WL.backoff = Math.min(Math.round(WL.backoff * 1.8), 8000);
+      WL.startedAt = 0;
+      wlScheduleRestart();
+    };
+    try { rec.start(); }
+    catch (e) { WL.lastError = String(e && e.message || e); WL.starting = false; WL.rec = null; wlSetStatus("error"); WL.backoff = Math.min(Math.round(WL.backoff * 1.8), 8000); wlScheduleRestart(); }
+  }
+
+  /** Cari kata bangun secara longgar: "c g o", "si ji ou", "halo cgo" … → { heard, rest } */
+  function wlParse(text) {
+    const toks = normalizeWakeText(text).split(" ").filter(Boolean);
+    let i = (toks.length && WL_GREET.test(toks[0])) ? 1 : 0;
+    for (let k = 1; k <= 3 && i + k <= toks.length; k++) {
+      if (WL_LOOSE.indexOf(toks.slice(i, i + k).join("")) >= 0) return { heard: true, rest: toks.slice(i + k).join(" ") };
+    }
+    return { heard: false, rest: String(text || "") };
+  }
+
+  function touchWake(ms) {
+    const at = Date.now() + ms;
+    if (at > WL.sleepAt) WL.sleepAt = at;
+    if (!WL.sleepT) WL.sleepT = setInterval(function () {
+      if (Date.now() < WL.sleepAt) return;
+      clearInterval(WL.sleepT); WL.sleepT = null; WL.sleepAt = 0; WL.awakeUntil = 0; WL.awaitFollow = false;
+      emitWake("cgo:wake-sleep", {});
+    }, 500);
+  }
+
+  function wlOnResult(ev) {
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      const r = ev.results[i];
+      const alts = [];
+      for (let k = 0; k < r.length; k++) alts.push(String(r[k].transcript || "").trim());
+      const best = alts[0] || "";
+      if (!best) continue;
+      let hitText = null;
+      for (let k = 0; k < alts.length; k++) { if (alts[k] && (detectWakeInText(alts[k]) || wlParse(alts[k]).heard)) { hitText = alts[k]; break; } }
+      wlHandle(best, hitText, !!r.isFinal);
+    }
+  }
+
+  function wlHandle(best, hitText, isFinal) {
+    const now = Date.now();
+    const awake = now < WL.awakeUntil;
+    if (!isFinal) {
+      if (hitText && now - WL.lastHeardAt > 2500) {
+        WL.lastHeardAt = now;
+        pushPreRoll(best);
+        emitWake("cgo:wake-heard", { text: hitText.slice(0, 80), source: "listener" });
+        emitWake("cgo:wake-awake", { text: hitText.slice(0, 80), source: "listener" });
+        touchWake(8000);
+      }
+      return;
+    }
+    if (!hitText && !awake) return; // standby: abaikan ucapan lain
+    if (now - WL.lastSentAt < 1200) return;
+    WL.lastSentAt = now;
+    const text = hitText || best;
+    const parsed = wlParse(text);
+    const wakeOnly = !!hitText && (WAKE_ONLY_RE.test(text) || (parsed.heard && !parsed.rest));
+    wlSend(wakeOnly ? (WAKE_ONLY_RE.test(text) ? text : "cgo") : text, wakeOnly);
+  }
+
+  function wlSend(payload, wakeOnly) {
+    WL.awaitFollow = !!wakeOnly;
+    WL.awakeUntil = wakeOnly ? Date.now() + 22000 : 0; // wake saja → tunggu perintah berikutnya
+    emitWake("cgo:wake-processing", { text: String(payload).slice(0, 80), source: "listener" });
+    touchWake(wakeOnly ? 24000 : 12000);
+    try {
+      if (typeof global.CGO_BCGO_SEND_QUESTION === "function") { global.CGO_BCGO_SEND_QUESTION(payload, { modality: "voice" }); return true; }
+    } catch (_) {}
+    try { ask(payload, {}); } catch (_) {}
+    return false;
+  }
+
+  function wlRecheckPermission() {
+    try {
+      if (global.navigator && global.navigator.permissions && global.navigator.permissions.query) {
+        global.navigator.permissions.query({ name: "microphone" }).then(function (p) {
+          if (p.state !== "denied") { WL.denied = false; WL.deniedNotified = false; WL.backoff = 700; wlSync(); }
+          p.onchange = function () { if (p.state !== "denied") { WL.denied = false; WL.deniedNotified = false; wlSync(); } };
+        }).catch(function () { WL.denied = false; wlSync(); });
+      } else { WL.denied = false; wlSync(); }
+    } catch (_) {}
+  }
+
+  function wlBoot() {
+    if (WL.booted) return;
+    WL.booted = true;
+    try {
+      global.addEventListener("cgo:mic-claim", function () { wlSync(); });
+      global.addEventListener("cgo:mic-release", function () { setTimeout(wlSync, 900); });
+      global.addEventListener("cgo:mic-status", function (e) {
+        const st = String(e && e.detail && e.detail.state || "").toUpperCase();
+        WL.extMicUntil = st === "LISTENING" ? Date.now() + 20000 : 0;
+        setTimeout(wlSync, st === "LISTENING" ? 0 : 900);
+      });
+      global.addEventListener("cgo:voice-start", function () { touchWake(30000); wlSync(); });
+      global.addEventListener("cgo:voice-end", function () {
+        const now = Date.now();
+        if (WL.awaitFollow) { WL.awaitFollow = false; WL.awakeUntil = now + 10000; WL.sleepAt = now + 10500; if (!WL.sleepT) touchWake(10500); }
+        else if (WL.sleepAt) { WL.sleepAt = Math.min(WL.sleepAt, now + 1500); }
+        setTimeout(wlSync, 700);
+      });
+      global.addEventListener("online", function () { WL.backoff = 700; wlSync(); });
+      if (global.document) global.document.addEventListener("visibilitychange", function () { wlSync(); });
+      ["pointerdown", "keydown", "touchend"].forEach(function (n) {
+        global.addEventListener(n, function () {
+          if (!state.wakeEnabled || WL.running || WL.starting) return;
+          if (WL.denied) wlRecheckPermission(); else wlSync();
+        }, { capture: true, passive: true });
+      });
+    } catch (_) {}
+    WL.watchT = setInterval(wlSync, 1000); // pengawas: lanjutkan setelah jeda, pulihkan bila macet
+    setTimeout(wlSync, 300);
+  }
+
   function setWakeEnabled(on) {
     state.wakeEnabled = !!on;
+    if (on) { WL.denied = false; WL.deniedNotified = false; WL.backoff = 700; }
     emitWake(on ? "cgo:wake-enabled" : "cgo:wake-disabled", { enabled: !!on });
     notify();
+    try { wlSync(); } catch (_) {}
     return state.wakeEnabled;
   }
 
@@ -2326,6 +2567,7 @@
     if (detectWakeInText(text)) {
       emitWake("cgo:wake-heard", { text: String(text || "").slice(0, 80) });
       emitWake("cgo:wake-awake", { text: String(text || "").slice(0, 80) });
+      try { touchWake(6000); } catch (_) {}
       return { heard: true };
     }
     return { heard: false };
@@ -2339,7 +2581,10 @@
   function wakeStatus() {
     return {
       enabled: !!state.wakeEnabled,
-      state: state.wakeEnabled ? "listening" : "idle",
+      state: state.wakeEnabled ? WL.status : "idle",
+      running: !!WL.running,
+      supported: !!WL.SR,
+      lastError: WL.lastError || "",
       primary: WAKE_WORDS.primary,
       words: [].concat([WAKE_WORDS.primary], WAKE_WORDS.variants || [], WAKE_WORDS.secondary || []),
       lang: WAKE_WORDS.lang || ["id-ID", "en-US"],
@@ -2360,7 +2605,8 @@
     getPreRoll: getPreRoll,
     onWakeTranscript: onWakeTranscript,
     detectWake: detectWakeInText,
-    wakeStatus: wakeStatus
+    wakeStatus: wakeStatus,
+    wakeRestart: function () { WL.denied = false; WL.backoff = 700; wlStopRec(); wlSync(); return wakeStatus(); }
   });
 
   global.CGO_OTAK = API;
@@ -2379,6 +2625,7 @@
     }
   } catch (_) {}
 
+  try { wlBoot(); } catch (_) {}
   notify();
   try { console.log("[CGO-OTAK-HUB] Siap ·", VERSION, "·", status().ready + "/" + status().total, "modul"); } catch (_) {}
 })(typeof globalThis !== "undefined" ? globalThis : window);

@@ -9,8 +9,8 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "3.9.5-SYNTHESIS-RECOVER";
-  const BUILD = "CIKUR-GO-OPERATOR-3.9.5-RECOVER";
+  const VERSION = "3.10.0-MIC-AWARE-ZERO-REGRESI";
+  const BUILD = "CIKUR-GO-OPERATOR-3.10.0-MIC-AWARE";
   /** Path audio cerdas: dukung load dari root portal maupun dari admin/ */
   function detectAudioRoot() {
     try {
@@ -402,6 +402,28 @@
   }
 
   var _chatSpeaking = false;
+
+  // v3.10.0 — event sinkron untuk orb/wake & kesadaran mic (aditif)
+  function fire(name, detail) {
+    try {
+      if (typeof global.dispatchEvent === "function" && typeof CustomEvent === "function") {
+        global.dispatchEvent(new CustomEvent(name, { detail: detail || {} }));
+      }
+    } catch (_) {}
+  }
+  function micLocked() {
+    try { return !!(global.CGOAudioBus && typeof global.CGOAudioBus.isMicLocked === "function" && global.CGOAudioBus.isMicLocked()); }
+    catch (_) { return false; }
+  }
+  function waitMicFree(maxMs) {
+    return new Promise(function (resolve) {
+      if (!micLocked()) return resolve(true);
+      var t0 = Date.now();
+      var iv = setInterval(function () {
+        if (!micLocked() || Date.now() - t0 > maxMs) { clearInterval(iv); resolve(!micLocked()); }
+      }, 150);
+    });
+  }
   function canEmit(key, force) {
     if (!enabled && !force) return false;
     // Saat chat TTS/operator bicara — jangan emit event (cegah double suara)
@@ -497,29 +519,19 @@
 
     function doSpeak() {
       _chatSpeaking = true;
-      try {
-        if (typeof global.dispatchEvent === "function" && typeof global.CustomEvent === "function") {
-          global.dispatchEvent(new global.CustomEvent("cgo:operator-voice-start", {
-            detail: { emosi: emosi || "tenang", source: options.source || (options.system ? "system" : "chat") }
-          }));
-        }
-      } catch (_) {}
       stopAllOperatorAudio();
+      fire("cgo:voice-start", { emosi: emosi && (emosi.emosi || emosi) || null, chars: text.length, system: !!options.system });
       var startP = unlocked ? Promise.resolve(true) : unlock();
       return startP.then(function () {
         chatSpeakEnabled = true;
-        return speakTTS(text, voiceOpts).then(function (ok) { return ok; });
+        // mic sedang dipakai merekam → jangan bicara di atas suara pengguna (maks 8 dtk, lalu batal)
+        return waitMicFree(8000).then(function (free) {
+          if (!free) { _diag.lastResult = "mic-busy"; return false; }
+          return speakTTS(text, voiceOpts).then(function (ok) { return ok; });
+        });
       }).finally(function () {
-        setTimeout(function () {
-          _chatSpeaking = false;
-          try {
-            if (typeof global.dispatchEvent === "function" && typeof global.CustomEvent === "function") {
-              global.dispatchEvent(new global.CustomEvent("cgo:operator-voice-end", {
-                detail: { emosi: emosi || "tenang", source: options.source || (options.system ? "system" : "chat") }
-              }));
-            }
-          } catch (_) {}
-        }, 400);
+        setTimeout(function () { _chatSpeaking = false; }, 400);
+        fire("cgo:voice-end", { system: !!options.system });
       });
     }
 
@@ -702,12 +714,13 @@
     setChatSpeak: function (v) { chatSpeakEnabled = !!v; },
     setQuietLive: function (v) { quietLive = !!v; },
     isChatSpeaking: function () { return !!_chatSpeaking; },
+    isSpeaking: function () { var s = false; try { s = !!(global.speechSynthesis && global.speechSynthesis.speaking); } catch (_) {} return !!(_chatSpeaking || speaking || s); },
     otakEnrich: otakEnrich,
     toSpeechText: toSpeechText,
     isUnlocked: function () { return unlocked; },
     diag: function () {
       var d = {}; for (var k in _diag) d[k] = _diag[k];
-      d.enabled = enabled; d.unlocked = unlocked; d.chatSpeak = chatSpeakEnabled;
+      d.enabled = enabled; d.unlocked = unlocked; d.chatSpeak = chatSpeakEnabled; d.micLocked = micLocked();
       try { d.engineSpeaking = !!global.speechSynthesis.speaking; d.enginePaused = !!global.speechSynthesis.paused; } catch (_) {}
       return d;
     },

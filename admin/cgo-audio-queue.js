@@ -2,10 +2,12 @@
  * CGO Audio Queue Manager — satu antrian global MP3 + TTS
  * Prioritas: P0 error < P1 warning/processing < P2 stage/valid/live < P3 standby/welcome
  * Hanya SATU suara aktif. Offline only.
+ * v1.1.0: sadar-mic — selama CGOAudioBus mengunci mikrofon, suara yang sedang jalan dihentikan dan
+ *         antrean DITAHAN (bukan dibuang); lanjut otomatis saat mic dilepas (cgo:mic-release).
  */
 (function (global) {
   "use strict";
-  const VERSION = "1.0.1-AUDIO-QUEUE-WATCHDOG";
+  const VERSION = "1.1.0-MIC-AWARE-WATCHDOG";
   const WATCHDOG_MS = 75000; // job yang tidak pernah selesai dilepas paksa agar antrean tidak macet
 
   // File priority map (nama file saja — path dari operator)
@@ -28,6 +30,13 @@
   let current = null; // { id, priority, jenis, stop }
   const queue = [];
   let seq = 0;
+  let micWaitT = null;
+
+  function micLocked() {
+    try {
+      return !!(global.CGOAudioBus && typeof global.CGOAudioBus.isMicLocked === "function" && global.CGOAudioBus.isMicLocked());
+    } catch (_) { return false; }
+  }
 
   function now() {
     try { return performance.now(); } catch (_) { return Date.now(); }
@@ -56,6 +65,11 @@
     if (paused || !enabled) return;
     if (current) return;
     if (!queue.length) return;
+    // v1.1.0: mikrofon sedang dipakai → tahan antrean, coba lagi sebentar lagi
+    if (micLocked()) {
+      if (!micWaitT) micWaitT = setTimeout(function () { micWaitT = null; pump(); }, 250);
+      return;
+    }
 
     // sort by priority asc, then seq
     queue.sort(function (a, b) {
@@ -232,10 +246,19 @@
       version: VERSION,
       enabled: enabled,
       paused: paused,
+      micLocked: micLocked(),
       current: current ? { id: current.id, priority: current.priority, jenis: current.jenis } : null,
       queued: queue.length
     };
   }
+
+  // v1.1.0: mic diklaim → hentikan suara yang sedang jalan; mic dilepas → lanjutkan antrean
+  try {
+    if (typeof global.addEventListener === "function") {
+      global.addEventListener("cgo:mic-claim", function () { try { stopCurrent("mic"); } catch (_) {} });
+      global.addEventListener("cgo:mic-release", function () { setTimeout(pump, 120); });
+    }
+  } catch (_) {}
 
   global.CGOAudioQueue = Object.freeze({
     version: VERSION,

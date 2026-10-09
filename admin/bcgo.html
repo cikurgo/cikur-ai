@@ -800,7 +800,7 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-machine-abc.js?v=0.14.3-MORE-RULES"></script>
 <script src="cgo-machine-abc-bridge.js?v=2.3.0-REPAIR-AUTO"></script>
 <script src="cgo-abc-cognition.js?v=1.2.0-HUMAN-RESULT"></script>
-<script src="cgo-otak-hub.js?v=1.9.9-WAKE-ON"></script>
+<script src="cgo-otak-hub.js?v=1.10.0-WAKE-LISTENER"></script>
 
 <script type="module">
 import * as CGOInstruction from "./cgo-instruction.js?v=1.3.0-CONSTITUTION";
@@ -2606,8 +2606,6 @@ await runAutonomousEngine(state => {
     heardSpeech = false;
     finishing = false;
     starting = true;
-    // Hentikan pengenalan WakeWord standby sebelum sesi MIC manual dimulai.
-    try { window.dispatchEvent(new CustomEvent('cgo:mic-requested', {detail:{source:'button'}})); } catch (_) {}
 
     try {
       if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
@@ -2618,11 +2616,7 @@ await runAutonomousEngine(state => {
         const claim = window.CGOAudioBus.klaimMic();
         if (!claim || !claim.ok) {
           starting = false;
-          const busyCode = claim && claim.reason === 'remote-mic-busy' ? 'MIC_BUSY_REMOTE' : 'MIC_BUSY';
-          const busyMessage = claim && claim.reason === 'remote-mic-busy' ? 'MIC SEDANG DIGUNAKAN TAB LAIN' : 'MIC SIBUK · coba lagi';
-          status(busyMessage, 'warn');
-          // Pulihkan WakeWord yang sudah dihentikan oleh cgo:mic-requested.
-          try { window.dispatchEvent(new CustomEvent('cgo:mic-error', {detail:{code:busyCode,message:busyMessage}})); } catch (_) {}
+          status(claim && claim.reason === 'remote-mic-busy' ? 'MIC SEDANG DIGUNAKAN TAB LAIN' : 'MIC SIBUK · coba lagi', 'warn');
           return;
         }
         micClaimId = claim.id;
@@ -3840,8 +3834,12 @@ await runAutonomousEngine(state => {
 }catch(_){}})();
 </script>
 
+</body>
+     prefix: bcgo-up- / bcgoUp / #bcgo-listening-banner / #bcgo-wake-indicator
+     Prinsip: satu sumber kebenaran (Hub Otak). UI hanya pembaca.
+     Semua dibungkus try/catch. Tidak mengubah struktur/namespace yang ada.
+     ═══════════════════════════════════════════════════════════════════════ -->
 
-<!-- structure: keep upgrades inside body -->
 <!-- POIN 1,2,3,4 — CSS append-only (aurora orb, palet orb, banner, wake badge) -->
 <style>
 /* POIN 1 — Aurora multi-layer orb stage host */
@@ -4129,7 +4127,10 @@ await runAutonomousEngine(state => {
   window.addEventListener('cgo:wake-awake', function(){
     try{
       if (!orbWrap) return;
-      var prevPalette = orbWrap.getAttribute('data-palette') || 'cyan';
+      /* anti-macet: event wake-awake beruntun tidak boleh menyimpan 'ice' sebagai palet awal */
+      var curPal = orbWrap.getAttribute('data-palette') || 'cyan';
+      if (curPal !== 'ice') window.__bcgoPrevPalette = curPal;
+      var prevPalette = window.__bcgoPrevPalette || 'cyan';
       orbWrap.setAttribute('data-palette','ice');
       var prevTransition = orbWrap.style.transition;
       orbWrap.style.transition = 'transform .35s ease';
@@ -4272,612 +4273,52 @@ await runAutonomousEngine(state => {
 </script>
 
 
-<!-- ═══════════════════════════════════════════════════════════════════════
-     CGO VOICE + WAKE SUPERVISOR v1.0.0 · APPEND-ONLY · ZERO-REGRESI
-     Tidak mengubah satu baris pun kode lama. Hanya menambah lapisan pengaman:
-     A) Suara operator wanita: bila mesin suara tidak mengeluarkan bunyi, otomatis fallback TTS wanita (id-ID).
-     B) Wake word: dijaga otomatis ON & standby terus (hormati tombol OFF manual dari badge WAKE).
-     ═══════════════════════════════════════════════════════════════════════ -->
-<script>
-(function cgoVoiceWakeSupervisor(){try{
-  if (window.__cgoVWSup) return;
-  var ss = window.speechSynthesis;
-  var LOG = function(){ try{ console.log.apply(console, ['[CGO-VWS]'].concat([].slice.call(arguments))); }catch(_){} };
-  var lastEvidence = 0, inFallback = false, lastFallbackText = '', lastFallbackAt = 0;
-
-  /* ───────── A. SUARA OPERATOR WANITA ───────── */
-
-  // Stempel pass-through: catat kapan mesin suara benar-benar membunyikan sesuatu (tidak mengubah perilaku).
-  function stamp(){ if (!inFallback) lastEvidence = Date.now(); }
-  try{
-    var SSP = window.SpeechSynthesis && window.SpeechSynthesis.prototype;
-    if (SSP && !SSP.__vws && typeof SSP.speak === 'function'){
-      var os = SSP.speak;
-      SSP.speak = function(){ stamp(); return os.apply(this, arguments); };
-      SSP.__vws = true;
-    }
-  }catch(_){}
-  try{
-    var MP = window.HTMLMediaElement && window.HTMLMediaElement.prototype;
-    if (MP && !MP.__vws && typeof MP.play === 'function'){
-      var op = MP.play;
-      MP.play = function(){ stamp(); return op.apply(this, arguments); };
-      MP.__vws = true;
-    }
-  }catch(_){}
-  try{
-    var BP = window.AudioBufferSourceNode && window.AudioBufferSourceNode.prototype;
-    if (BP && !BP.__vws && typeof BP.start === 'function'){
-      var ob = BP.start;
-      BP.start = function(){ stamp(); return ob.apply(this, arguments); };
-      BP.__vws = true;
-    }
-  }catch(_){}
-
-  function muted(){ return !!(window.__cgoUserMutedAudio || window.__cgoUserPausedAudio); }
-
-  function pickVoice(){
-    var vs = [];
-    try{ vs = (ss && ss.getVoices && ss.getVoices()) || []; }catch(_){}
-    if (!vs.length) return null;
-    var name = '';
-    try{ var d = window.CGOOperatorVoice && window.CGOOperatorVoice.diag && window.CGOOperatorVoice.diag(); name = (d && d.voiceName) || ''; }catch(_){}
-    if (name){ for (var i = 0; i < vs.length; i++){ if (vs[i].name === name) return vs[i]; } }
-    var male = /(andika|ardi|rizwan|\bmale\b|pria|laki)/i;
-    var fem  = /(gadis|damayanti|google bahasa indonesia|female|wanita|perempuan|siti)/i;
-    var idv = vs.filter(function(v){ return /^id([-_]|$)/i.test(v.lang || '') || /indonesia/i.test(v.name || ''); });
-    return idv.filter(function(v){ return fem.test(v.name) && !male.test(v.name); })[0]
-        || idv.filter(function(v){ return !male.test(v.name); })[0]
-        || idv[0] || null;
-  }
-
-  function speakFallback(text){
-    try{
-      if (!ss || typeof SpeechSynthesisUtterance === 'undefined' || muted()) return false;
-      var t = String(text || '').replace(/https?:\/\/\S+/g, ' ').replace(/[`*_#>|~]+/g, ' ').replace(/\s+/g, ' ').trim();
-      if (!t) return false;
-      if (t.length > 900) t = t.slice(0, 900);
-      var now = Date.now();
-      if (t === lastFallbackText && now - lastFallbackAt < 1500) return false;
-      lastFallbackText = t; lastFallbackAt = now;
-      var parts = t.match(/[^.!?;:\n]+[.!?;:]?/g) || [t], chunks = [], cur = '';
-      parts.forEach(function(p){ if ((cur + p).length > 180){ if (cur) chunks.push(cur); cur = p; } else cur += p; });
-      if (cur) chunks.push(cur);
-      try{ if (ss.paused) ss.resume(); }catch(_){}
-      var v = pickVoice();
-      inFallback = true;
-      try{
-        chunks.forEach(function(c){
-          var u = new SpeechSynthesisUtterance(c.trim());
-          u.lang = (v && v.lang) || 'id-ID';
-          if (v) u.voice = v;
-          u.rate = 1; u.pitch = 1.08; u.volume = 1;
-          ss.speak(u);
-        });
-      } finally { inFallback = false; }
-      return true;
-    }catch(_){ return false; }
-  }
-
-  function evidence(t0){
-    if (lastEvidence >= t0) return true;
-    try{ if (ss && (ss.speaking || ss.pending)) return true; }catch(_){}
-    try{ var V = window.CGOOperatorVoice; if (V && typeof V.isSpeaking === 'function' && V.isSpeaking()) return true; }catch(_){}
-    return false;
-  }
-
-  function watch(text, t0, label, failNow){
-    var done = false;
-    function fire(){
-      if (done) return; done = true;
-      if (evidence(t0) && !failNow) return;
-      LOG('suara mesin tidak keluar → fallback wanita (' + label + ')');
-      speakFallback(text);
-    }
-    if (failNow){ fire(); return; }
-    var iv = setInterval(function(){
-      if (done){ clearInterval(iv); return; }
-      if (evidence(t0)){ done = true; clearInterval(iv); return; }
-      if (Date.now() - t0 >= 3000){ clearInterval(iv); fire(); }
-    }, 100);
-  }
-
-  function guard(V, name, textOf){
-    var orig = V[name];
-    if (typeof orig !== 'function' || orig.__vws) return;
-    var w = function(){
-      var args = arguments, t0 = Date.now(), res, err = null;
-      try{ if (typeof window.__cgoVoiceHeal === 'function') window.__cgoVoiceHeal(); }catch(_){}
-      try{ res = orig.apply(this, args); }catch(e){ err = e; }
-      var text = ''; try{ text = textOf.apply(null, args); }catch(_){}
-      if (text){
-        if (err) watch(text, t0, name, true);
-        else {
-          watch(text, t0, name, false);
-          try{ if (res && typeof res.then === 'function') res.then(null, function(){ watch(text, t0, name + ':reject', true); }); }catch(_){}
-        }
-      }
-      if (err) throw err;
-      return res;
-    };
-    w.__vws = true;
-    try{ V[name] = w; }catch(_){}
-  }
-
-  function wrapEngine(){
-    var V = window.CGOOperatorVoice;
-    if (!V) return false;
-    guard(V, 'speakAnswer', function(text){ return text; });
-    guard(V, 'welcome', function(){ return 'Operator CGO siap. Saya selalu standby.'; });
-    guard(V, 'announceAttention', function(d){
-      d = d || {};
-      var s = 'Perhatian. ' + (/err|fail|bad/i.test(String(d.kind || '')) ? 'Ada kesalahan' : 'Ada peringatan');
-      if (d.file) s += ' pada berkas ' + d.file; else if (d.path) s += ' pada jalur ' + d.path;
-      if (d.message) s += '. ' + d.message;
-      return s.slice(0, 260);
-    });
-    return true;
-  }
-
-  // Buka kunci TTS pada interaksi pertama (kebijakan autoplay browser) — senyap, tidak mengganggu mesin lama.
-  var primed = false;
-  function prime(){
-    try{
-      if (ss){
-        try{ ss.getVoices(); }catch(_){}
-        try{ if (ss.paused) ss.resume(); }catch(_){}
-        if (!primed && typeof SpeechSynthesisUtterance !== 'undefined'){
-          primed = true; inFallback = true;
-          try{ var u = new SpeechSynthesisUtterance(' '); u.volume = 0; ss.speak(u); } finally { inFallback = false; }
-        }
-      }
-    }catch(_){}
-    try{ window.CGOOperatorVoice && window.CGOOperatorVoice.unlock && window.CGOOperatorVoice.unlock(); }catch(_){}
-    try{ window.__cgoVoiceHeal && window.__cgoVoiceHeal(); }catch(_){}
-  }
-  ['pointerdown','touchstart','keydown','click'].forEach(function(n){
-    try{ window.addEventListener(n, function(){ prime(); wrapEngine(); ensureWake('gesture'); }, { capture:true, passive:true }); }catch(_){}
-  });
-
-  // Setelah sesi mic selesai, TTS di beberapa browser (Android Chrome) tertahan — pulihkan.
-  window.addEventListener('cgo:mic-status', function(e){
-    try{
-      var st = e && e.detail && e.detail.state;
-      if (st === 'IDLE' || st === 'TRANSCRIPT'){
-        setTimeout(function(){ try{ window.__cgoVoiceHeal && window.__cgoVoiceHeal(); }catch(_){} }, 250);
-        setTimeout(function(){ ensureWake('mic-ended'); }, 700);
-      }
-    }catch(_){}
-  });
-  window.addEventListener('cgo:mic-error', function(){ setTimeout(function(){ ensureWake('mic-error'); }, 1200); });
-
-  /* ───────── B. WAKE WORD · OTOMATIS & SELALU STANDBY ───────── */
-
-  var userOff = false;   // true hanya bila pengguna sendiri menekan badge WAKE untuk OFF
-  var lastKick = 0;
-  var DEAD = /^(error|stopped|ended|failed|aborted|closed)$/i;
-
-  function otak(){ return window.CGO_OTAK; }
-  function wakeEnabled(){
-    var o = otak(); if (!o) return null;
-    try{ if (typeof o.isWakeEnabled === 'function') return !!o.isWakeEnabled(); }catch(_){}
-    try{ if (typeof o.wakeStatus === 'function'){ var s = o.wakeStatus(); if (s && typeof s === 'object') return !!s.enabled; } }catch(_){}
-    try{ if (o.wakeWords && typeof o.wakeWords.enabled !== 'undefined') return !!o.wakeWords.enabled; }catch(_){}
-    return null;
-  }
-  function micBusy(){ var b = document.getElementById('chat-mic'); return !!(b && b.classList.contains('mic-listening')); }
-
-  function staleCheck(o){
-    try{
-      if (typeof o.wakeStatus !== 'function') return;
-      var s = o.wakeStatus(), st = s && s.state;
-      if (!st || !DEAD.test(String(st))) return;
-      if (Date.now() - lastKick < 8000) return;
-      lastKick = Date.now();
-      LOG('wake state "' + st + '" → restart');
-      o.setWakeEnabled(false);
-      setTimeout(function(){ try{ if (!userOff && !micBusy()) o.setWakeEnabled(true); }catch(_){} }, 400);
-    }catch(_){}
-  }
-
-  function ensureWake(reason){
-    try{
-      if (userOff) return;
-      var o = otak();
-      if (!o || typeof o.setWakeEnabled !== 'function') return;
-      if (micBusy()) return;
-      var en = wakeEnabled();
-      if (en === true){ staleCheck(o); return; }
-      o.setWakeEnabled(true);
-      LOG('wake ON · ' + reason);
-    }catch(_){}
-  }
-
-  // Niat pengguna: klik/Enter pada badge WAKE saat sedang ON → pengguna ingin OFF (dihormati); saat OFF → ON kembali.
-  function userIntent(e){
-    try{
-      var t = e.target && e.target.closest && e.target.closest('#bcgo-wake-indicator');
-      if (!t) return;
-      if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
-      userOff = (wakeEnabled() === true);
-    }catch(_){}
-  }
-  document.addEventListener('click', userIntent, true);
-  document.addEventListener('keydown', userIntent, true);
-
-  document.addEventListener('visibilitychange', function(){ if (!document.hidden){ ensureWake('visible'); prime(); } });
-  window.addEventListener('focus', function(){ ensureWake('focus'); });
-  window.addEventListener('pageshow', function(){ ensureWake('pageshow'); });
-  window.addEventListener('online', function(){ ensureWake('online'); });
-  window.addEventListener('cgo:wake-sleep', function(){ setTimeout(function(){ ensureWake('wake-sleep'); }, 2300); });
-  window.addEventListener('cgo:otak-state', function(){ ensureWake('otak-state'); });
-  try{
-    if (navigator.permissions && navigator.permissions.query){
-      navigator.permissions.query({ name:'microphone' }).then(function(p){
-        p.onchange = function(){ if (p.state === 'granted') setTimeout(function(){ ensureWake('mic-permission'); }, 300); };
-      }).catch(function(){});
-    }
-  }catch(_){}
-
-  // Pengawas tetap: tidak menyerah (skrip lama berhenti setelah ±12 detik).
-  setInterval(function(){ wrapEngine(); ensureWake('watchdog'); }, 1500);
-  wrapEngine();
-  setTimeout(function(){ ensureWake('boot'); }, 400);
-
-  window.__cgoVWSup = {
-    version: '1.0.0',
-    status: function(){ return { userOff:userOff, wakeEnabled:wakeEnabled(), micBusy:micBusy(), lastEvidenceAgoMs: lastEvidence ? Date.now()-lastEvidence : null, voice: (pickVoice()||{}).name || null }; },
-    speakFallback: speakFallback
-  };
-  LOG('aktif · suara wanita fallback + wake supervisor');
-}catch(e){ try{ console.warn('[CGO-VWS] skip:', e && e.message); }catch(_){} }})();
-</script>
-
-
-<!-- CGO REPAIR BRIDGE v1.1 · APPEND-ONLY · zero regresi -->
+<!-- ═══ ORB ↔ SUARA SINKRON · APPEND-ONLY · dibungkus try/catch ═══
+     Digerakkan event dari mesin suara (cgo:voice-start/end). Palet mengikuti emosi jawaban
+     (tenang→cyan · senang→emerald · khawatir→amber · tegas→rose · prihatin→violet), dikembalikan setelah selesai.
+     Plus penjaga: orb tidak boleh tersangkut di state "membuka" setelah wake. -->
+<style>
+@keyframes cgoOrbSpeakPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+#cgo-orb-wrap[data-speaking="1"] #cgo-orb-canvas{animation:cgoOrbSpeakPulse 1.1s ease-in-out infinite;transform-origin:50% 50%}
+</style>
 <script>
 (function(){try{
-  if (window.__CGO_REPAIR_BRIDGE__) return;
-  window.__CGO_REPAIR_BRIDGE__ = true;
-  var LOG = function(){ try{ console.log.apply(console, ['[CGO-REPAIR]'].concat([].slice.call(arguments))); }catch(_){} };
-
-  /* ── A. ORB: langkah saraf + warna ikut alur chat / TTS ── */
-  var STEP_MAP = {
-    recv: 'mendengar',
-    think: 'menalar',
-    compose: 'memproses',
-    done: 'memberi'
-  };
-  var ORB_STATE = {
-    recv: 'waspada',
-    think: 'waspada',
-    compose: 'membuka',
-    done: 'membuka'
-  };
-  function paintOrbSteps(key){
-    try{
-      var list = document.getElementById('cgo-orb-step-list');
-      if (!list) return;
-      var order = ['mendengar','memahami','menalar','memproses','memberi'];
-      var target = STEP_MAP[key] || key;
-      var at = order.indexOf(target);
-      // think: nyalakan memahami sebagai done, menalar active
-      list.querySelectorAll('.cgo-orb-step').forEach(function(el){
-        var s = el.getAttribute('data-step');
-        var i = order.indexOf(s);
-        el.classList.remove('active','done');
-        if (key === 'think') {
-          if (s === 'mendengar' || s === 'memahami') el.classList.add('done');
-          else if (s === 'menalar') el.classList.add('active');
-        } else if (key === 'compose') {
-          if (i < order.indexOf('memproses')) el.classList.add('done');
-          else if (s === 'memproses') el.classList.add('active');
-        } else if (key === 'done') {
-          el.classList.add('done');
-          if (s === 'memberi') { el.classList.remove('done'); el.classList.add('active'); }
-        } else {
-          if (i < at) el.classList.add('done');
-          else if (i === at) el.classList.add('active');
-        }
-      });
-    }catch(_){}
-  }
-  function orbState(name, msBack){
-    try{
-      if (window.CGOOrb && typeof window.CGOOrb.setState === 'function') {
-        window.CGOOrb.setState(name, { force:true });
-        if (msBack) setTimeout(function(){
-          try{ window.CGOOrb.setState('tenang', { force:true }); }catch(_){}
-        }, msBack);
-      }
-    }catch(_){}
-  }
-  try{
-    var stages = document.getElementById('cgo-think-stages');
-    if (stages) {
-      new MutationObserver(function(){
-        try{
-          var on = stages.querySelector('span.on');
-          var key = on && on.getAttribute('data-stage');
-          if (!key) {
-            var nDone = stages.querySelectorAll('span.done').length;
-            if (nDone >= 3) key = 'done';
-          }
-          if (!key) return;
-          paintOrbSteps(key);
-          var st = ORB_STATE[key];
-          if (st) orbState(st, key === 'done' ? 1800 : 0);
-        }catch(_){}
-      }).observe(stages, { attributes:true, subtree:true, attributeFilter:['class'] });
+  var wrap=document.getElementById('cgo-orb-wrap'); if(!wrap) return;
+  var MAP={tenang:'cyan',senang:'emerald',khawatir:'amber',tegas:'rose',prihatin:'violet'};
+  var saved=null, applied=null, restoreT=null, membukaSince=0;
+  window.addEventListener('cgo:voice-start',function(e){try{
+    var emo=String((e.detail&&e.detail.emosi)||'').toLowerCase();
+    if(restoreT){clearTimeout(restoreT);restoreT=null;}
+    wrap.setAttribute('data-speaking','1');
+    var pal=MAP[emo];
+    var curPal=wrap.getAttribute('data-palette')||'cyan';
+    if(pal && curPal!=='ice'){ /* 'ice' = kilatan wake / pilihan pengguna → jangan ditimpa */
+      if(saved===null) saved=curPal;
+      applied=pal; wrap.setAttribute('data-palette',pal);
     }
-  }catch(_){}
-  try{
-    var wasSp = false;
-    setInterval(function(){
-      try{
-        var sp = !!(window.speechSynthesis && window.speechSynthesis.speaking);
-        if (sp && !wasSp) {
-          paintOrbSteps('done');
-          orbState('membuka', 0);
-        }
-        if (!sp && wasSp) {
-          setTimeout(function(){ orbState('tenang', 0); }, 500);
-        }
-        wasSp = sp;
-      }catch(_){}
-    }, 200);
-  }catch(_){}
-
-  /* ── B. SUARA: harden + fallback cepat bila not-allowed ── */
-  function tryFallback(text){
-    try{
-      if (window.__cgoVWSup && typeof window.__cgoVWSup.speakFallback === 'function') {
-        return !!window.__cgoVWSup.speakFallback(text);
-      }
-    }catch(_){}
-    return false;
-  }
-  function hardenVoice(){
-    var V = window.CGOOperatorVoice;
-    if (!V || typeof V.speakAnswer !== 'function' || V.speakAnswer.__repair) return false;
-    var orig = V.speakAnswer.bind(V);
-    V.speakAnswer = function(text, opts){
-      opts = opts || {};
-      try{
-        V.unlock && V.unlock();
-        V.setEnabled && V.setEnabled(true);
-        V.setChatSpeak && V.setChatSpeak(true);
-      }catch(_){}
-      // Jangan memaksa force pada semua panggilan sistem; hanya pastikan chat tidak diblok diam-diam
-      var o2 = opts;
-      if (!opts.force && opts.system) o2 = opts;
-      else if (opts.force == null && !opts.system) o2 = Object.assign({}, opts, { force: true });
-      var t0 = Date.now();
-      var p = orig(text, o2);
-      try{
-        Promise.resolve(p).then(function(ok){
-          if (ok) return;
-          // gagal → cek diag; bila not-allowed / fail, fallback wanita
-          setTimeout(function(){
-            try{
-              var d = V.diag && V.diag();
-              var err = d && String(d.lastError || '');
-              var speaking = false;
-              try{ speaking = !!(window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending)); }catch(_){}
-              if (speaking) return;
-              if (/not-allowed|fail|synthesis|network/i.test(err) || d && d.lastResult === 'fail') {
-                LOG('speakAnswer gagal → fallback', err || d.lastResult);
-                tryFallback(text);
-              }
-            }catch(_){}
-          }, 600);
-        }, function(){ tryFallback(text); });
-      }catch(_){}
-      return p;
-    };
-    V.speakAnswer.__repair = true;
-    V.speakAnswer.__vws = true; // jangan di-wrap ulang oleh VWS
-    LOG('speakAnswer hardened');
-    return true;
-  }
-  hardenVoice();
-  var hv = 0;
-  var hvIv = setInterval(function(){
-    if (hardenVoice() || ++hv > 20) clearInterval(hvIv);
-  }, 500);
-
-  /* ── C. WAKE STANDBY: continuous → event → mic asli ── */
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  var rec = null, mode = 'OFF', starting = false, restartT = null, last = 0, micBusy = false, wakeOn = true, busySince = 0;
-
-  function hubOn(){
-    var o = window.CGO_OTAK;
-    if (!o) return true;
-    try{ if (typeof o.isWakeEnabled === 'function') return !!o.isWakeEnabled(); }catch(_){}
-    return true;
-  }
-  function isWake(text){
-    var o = window.CGO_OTAK;
-    // Prefer detectWake (tidak double-emit); emit kita sendiri di bawah
-    if (o && typeof o.detectWake === 'function') {
-      try{ return !!o.detectWake(text); }catch(_){}
-    }
-    var t = String(text||'').toLowerCase().replace(/[-_.]/g,' ').replace(/\s+/g,' ').trim();
-    return t === 'cgo' || t.indexOf('cgo ') === 0 || /\bcgo\b/.test(t);
-  }
-  function kill(){
-    if (!rec) return;
-    try{ rec.onstart=rec.onresult=rec.onerror=rec.onend=null; }catch(_){}
-    try{ rec.abort(); }catch(_){ try{ rec.stop(); }catch(__){} }
-    rec = null;
-  }
-  function stopWake(){
-    try{ if (restartT) clearTimeout(restartT); }catch(_){}
-    restartT = null; starting = false; kill(); mode = 'OFF';
-  }
-  function standby(){
-    if (!wakeOn || !hubOn() || micBusy || !SR) return;
-    if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
-    try{
-      if (window.speechSynthesis && window.speechSynthesis.speaking) {
-        restartT = setTimeout(standby, 800); return;
-      }
-    }catch(_){}
-    if (starting || mode === 'STANDBY') return;
-    var now = Date.now();
-    if (now - last < 700) return;
-    last = now;
-    kill(); mode = 'STANDBY'; starting = true;
-    try{
-      rec = new SR();
-      rec.lang = 'id-ID';
-      rec.interimResults = true;
-      rec.continuous = true;
-      rec.maxAlternatives = 1;
-      rec.onstart = function(){ starting = false; mode = 'STANDBY'; };
-      rec.onresult = function(ev){
-        if (mode !== 'STANDBY' || micBusy) return;
-        var d = '';
-        for (var i = ev.resultIndex; i < ev.results.length; i++) {
-          d += String(ev.results[i][0] && ev.results[i][0].transcript || '');
-        }
-        d = d.trim();
-        if (!d) return;
-        if (isWake(d)) {
-          try{
-            // Hub onWakeTranscript juga emit — boleh; FASE 5 butuh event
-            if (window.CGO_OTAK && typeof window.CGO_OTAK.onWakeTranscript === 'function') {
-              window.CGO_OTAK.onWakeTranscript(d, { force:true });
-            } else {
-              window.dispatchEvent(new CustomEvent('cgo:wake-heard', { detail:{ text:d } }));
-              window.dispatchEvent(new CustomEvent('cgo:wake-awake', { detail:{ text:d } }));
-            }
-          }catch(_){}
-          paintOrbSteps('recv');
-          orbState('waspada', 0);
-          stopWake();
-          micBusy = true;
-          busySince = Date.now();
-          setTimeout(function(){
-            try{
-              var b = document.getElementById('chat-mic');
-              if (b) b.click();
-              else { micBusy = false; standby(); }
-            }catch(_){ micBusy = false; }
-          }, 280);
-        }
-      };
-      rec.onerror = function(ev){
-        starting = false;
-        var c = String(ev && ev.error || '');
-        if (c === 'not-allowed' || c === 'service-not-allowed' || c === 'audio-capture') {
-          wakeOn = false; mode = 'OFF';
-          LOG('mic izin ditolak · wake standby off');
-        }
-      };
-      rec.onend = function(){
-        rec = null; starting = false;
-        if (mode === 'STANDBY' && wakeOn && hubOn() && !micBusy) {
-          restartT = setTimeout(function(){ mode = 'OFF'; standby(); }, 650);
-        }
-      };
-      rec.start();
-    }catch(e){
-      starting = false; mode = 'OFF';
-      LOG('wake start fail', e && e.message);
-    }
-  }
-  // Safety: micBusy macet > 12s → lepaskan
-  setInterval(function(){
-    if (micBusy && busySince && Date.now() - busySince > 12000) {
-      micBusy = false; busySince = 0;
-      if (wakeOn && hubOn()) standby();
-    }
-  }, 2000);
-  try{
-    window.addEventListener('cgo:mic-requested', function(){
-      micBusy = true; busySince = Date.now();
-      stopWake();
-    });
-    window.addEventListener('cgo:mic-error', function(){
-      micBusy = false; busySince = 0;
-      if (wakeOn && hubOn()) restartT = setTimeout(standby, 1200);
-    });
-    window.addEventListener('cgo:mic-status', function(e){
-      var st = e && e.detail && e.detail.state;
-      if (st === 'LISTENING') {
-        micBusy = true; busySince = Date.now();
-        stopWake();
-        paintOrbSteps('recv');
-        orbState('waspada', 0);
-      } else if (st === 'IDLE' || st === 'TRANSCRIPT') {
-        micBusy = false; busySince = 0;
-        if (st === 'TRANSCRIPT') {
-          paintOrbSteps('think');
-          orbState('waspada', 0);
-        }
-        if (wakeOn && hubOn()) restartT = setTimeout(standby, 900);
-      }
-    });
-    window.addEventListener('cgo:wake-enabled', function(){ wakeOn = true; if (!micBusy) standby(); });
-    window.addEventListener('cgo:wake-disabled', function(){ wakeOn = false; stopWake(); });
-  }catch(_){}
-  var gestured = false;
-  function onG(){
-    if (gestured) return;
-    gestured = true;
-    try{ if (window.CGOOperatorVoice && window.CGOOperatorVoice.unlock) window.CGOOperatorVoice.unlock(); }catch(_){}
-    hardenVoice();
-    setTimeout(function(){ if (hubOn()) standby(); }, 500);
-  }
-  ['pointerdown','touchstart','click'].forEach(function(n){
-    try{ window.addEventListener(n, onG, { capture:true, passive:true }); }catch(_){}
-  });
-
-  // Operator TTS menggerakkan Orb dan palet warna secara sinkron dengan emosi jawaban.
-  try {
-    var voiceOrbHost = document.querySelector('.cgo-orb-stage-host');
-    var voiceOrbWrap = document.getElementById('cgo-orb-wrap');
-    var voiceWave = document.getElementById('cgo-voice-wave');
-    var voicePreviousPalette = null;
-    var voicePalettes = {
-      senang: 'emerald', gembira: 'emerald', tegas: 'rose',
-      khawatir: 'amber', prihatin: 'violet', tenang: 'cyan'
-    };
-    window.addEventListener('cgo:operator-voice-start', function(e){
-      var d = e && e.detail || {};
-      var emotion = String(d.emosi || 'tenang').toLowerCase();
-      if (voiceOrbHost) voiceOrbHost.classList.add('cgo-operator-speaking');
-      // CSS palet terpasang pada #cgo-orb-wrap, bukan stage host.
-      if (voiceOrbWrap) {
-        if (voicePreviousPalette === null) voicePreviousPalette = voiceOrbWrap.getAttribute('data-palette');
-        voiceOrbWrap.setAttribute('data-palette', voicePalettes[emotion] || 'ice');
-      }
-      if (voiceWave) voiceWave.classList.add('live');
-      var state = /tegas|khawatir|prihatin/.test(emotion) ? 'menjaga'
-        : /senang|gembira|antusias/.test(emotion) ? 'transenden' : 'membuka';
-      orbState(state, 0);
-    });
-    window.addEventListener('cgo:operator-voice-end', function(){
-      if (voiceOrbHost) voiceOrbHost.classList.remove('cgo-operator-speaking');
-      if (voiceOrbWrap) {
-        if (voicePreviousPalette) voiceOrbWrap.setAttribute('data-palette', voicePreviousPalette);
-        else voiceOrbWrap.removeAttribute('data-palette');
-        voicePreviousPalette = null;
-      }
-      if (voiceWave) voiceWave.classList.remove('live');
-      if (!micBusy) orbState('tenang', 0);
-    });
-  } catch (_) {}
-  LOG('bridge v1.2 · orb · voice · wake standby · mic coordination');
-}catch(e){ try{ console.warn('[CGO-REPAIR]', e && e.message); }catch(_){} }})();
+  }catch(_){}});
+  window.addEventListener('cgo:voice-end',function(){try{
+    wrap.removeAttribute('data-speaking');
+    var tries=0;
+    (function restore(){ restoreT=setTimeout(function(){try{
+      if(saved===null){ restoreT=null; return; }
+      if(wrap.getAttribute('data-palette')===applied){ wrap.setAttribute('data-palette',saved); saved=null; applied=null; restoreT=null; return; }
+      // palet sedang ditimpa efek lain (mis. kilatan wake) → coba lagi sebentar; bila pengguna mengganti sendiri, biarkan
+      if(++tries<4 && wrap.getAttribute('data-palette')==='ice'){ restore(); return; }
+      saved=null; applied=null; restoreT=null;
+    }catch(_){}},tries?1000:700); })();
+  }catch(_){}});
+  setInterval(function(){try{
+    if(!window.CGOOrb) return;
+    if(window.CGOOrb.state()==='membuka'){
+      if(!membukaSince) membukaSince=Date.now();
+      var talking=wrap.getAttribute('data-speaking')==='1';
+      var listening=wrap.classList.contains('bcgo-listening');
+      if(!talking && !listening && Date.now()-membukaSince>12000){ window.CGOOrb.setState('tenang',{force:true}); membukaSince=0; }
+    } else membukaSince=0;
+  }catch(_){}},2000);
+}catch(_){}})();
 </script>
 
-
-<style>
-/* Aditif: gerak Orb mengikuti ucapan operator tanpa mengganti animasi inti. */
-.cgo-orb-stage-host.cgo-operator-speaking{animation:cgoOperatorSpeakPulse 1.15s ease-in-out infinite;filter:drop-shadow(0 0 12px rgba(103,232,249,.28))}
-@keyframes cgoOperatorSpeakPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.025)}}
-</style>
 </body>
    </html>
