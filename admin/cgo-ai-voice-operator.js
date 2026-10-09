@@ -9,8 +9,8 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "3.10.0-MIC-AWARE-ZERO-REGRESI";
-  const BUILD = "CIKUR-GO-OPERATOR-3.10.0-MIC-AWARE";
+  const VERSION = "3.11.0-FX-STABLE";
+  const BUILD = "CIKUR-GO-OPERATOR-3.11.0-FX-STABLE";
   /** Path audio cerdas: dukung load dari root portal maupun dari admin/ */
   function detectAudioRoot() {
     try {

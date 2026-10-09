@@ -3797,49 +3797,6 @@ await runAutonomousEngine(state => {
 }catch(e){console.warn('[CGO-ORB] Wake engine skip:',e&&e.message);}})();
 </script>
 
-<!-- ═══════════════════════════════════════════════════════════════════════
-     BCGO UPGRADE 2026 · APPEND-ONLY · diletakkan sebelum 
-<script>
-/* CGO · auto-enable Wake Hub saat siap (badge BCGO tetap bisa toggle OFF) */
-(function(){try{
-  function paintBadgeOn(){
-    try{
-      var el=document.getElementById('bcgo-wake-indicator');
-      if(!el)return;
-      var o=window.CGO_OTAK;
-      var primary=(o&&o.wakeWords&&o.wakeWords.primary)||'CGO';
-      el.textContent='WAKE · '+primary;
-      el.classList.add('on');
-      el.title='Wake enabled · standby';
-    }catch(_){}
-  }
-  function tryEnable(){
-    try{
-      var o=window.CGO_OTAK;
-      if(!o||typeof o.setWakeEnabled!=='function')return false;
-      var already=typeof o.isWakeEnabled==='function'&&o.isWakeEnabled();
-      if(!already) o.setWakeEnabled(true);
-      paintBadgeOn();
-      console.log('[CGO] Wake ON · Hub', o.version||'');
-      return true;
-    }catch(_){return false;}
-  }
-  var n=0;
-  var iv=setInterval(function(){
-    n++;
-    if(tryEnable()||n>60) clearInterval(iv);
-  },200);
-  // juga setelah DOM + load penuh
-  window.addEventListener('load', function(){ setTimeout(tryEnable, 300); });
-}catch(_){}})();
-</script>
-
-</body>
-     prefix: bcgo-up- / bcgoUp / #bcgo-listening-banner / #bcgo-wake-indicator
-     Prinsip: satu sumber kebenaran (Hub Otak). UI hanya pembaca.
-     Semua dibungkus try/catch. Tidak mengubah struktur/namespace yang ada.
-     ═══════════════════════════════════════════════════════════════════════ -->
-
 <!-- POIN 1,2,3,4 — CSS append-only (aurora orb, palet orb, banner, wake badge) -->
 <style>
 /* POIN 1 — Aurora multi-layer orb stage host */
@@ -4318,6 +4275,284 @@ await runAutonomousEngine(state => {
     } else membukaSince=0;
   }catch(_){}},2000);
 }catch(_){}})();
+</script>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     CGO FUTURE UPGRADE v1.0 · APPEND-ONLY · 2026-10-09 · ZERO REGRESI
+     Chat rapi (kalimat panjang + poin ke bawah) · Orb FX saraf hidup ·
+     Mic stabil (tanpa rebutan dgn wake, auto-retry) · Wake auto-boot + health
+     ═══════════════════════════════════════════════════════════════════════ -->
+<style>
+/* ── 1. TIPOGRAFI JAWABAN: kalimat panjang utuh, poin-poin jadi daftar ── */
+.cgo-bubble-text{white-space:pre-line;line-height:1.6;font-size:12.5px;letter-spacing:.01em;word-break:break-word;overflow-wrap:anywhere}
+.cgo-bubble-text .cgo-line{display:block;min-height:1em}
+.cgo-bubble-text .cgo-list{display:block;margin:2px 0}
+.cgo-bubble-text .cgo-li{display:flex;gap:7px;margin:3px 0}
+.cgo-bubble-text .cgo-li::before{content:"▸";color:#67e8f9;flex:0 0 auto;text-shadow:0 0 8px rgba(103,232,249,.6)}
+.cgo-bubble-text .cgo-li-num::before{content:attr(data-n)".";color:#a5b4fc;font-weight:700;font-family:'Fira Code',monospace;font-size:10px;line-height:1.9}
+.cgo-bubble-text .cgo-li-sub{margin-left:16px}
+.cgo-bubble-text .cgo-li-sub::before{content:"–";color:#64748b}
+.cgo-bubble-text .cgo-strong{color:#e0f2fe;font-weight:700}
+.cgo-bubble-text .cgo-code{font-family:'Fira Code',monospace;font-size:11px;background:rgba(2,6,23,.8);border:1px solid #1e293b;border-radius:5px;padding:1px 5px;color:#7dd3fc}
+.cgo-bubble-text .cgo-tagline{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.1em;color:#67e8f9;border:1px solid rgba(103,232,249,.35);background:rgba(8,47,73,.4);border-radius:6px;padding:2px 7px;margin:4px 0}
+.chat-bubble-user .cgo-bubble-text{text-align:right}
+.chat-bubble-user .cgo-bubble-meta{justify-content:flex-end}
+/* ── 2. CHAT SHELL FUTURISTIK ── */
+@property --cgoA{syntax:"<angle>";initial-value:0deg;inherits:false}
+.cgo-chat-shell{background:linear-gradient(180deg,rgba(11,18,36,.85),rgba(7,11,22,.92)) !important;backdrop-filter:blur(16px) saturate(1.3);-webkit-backdrop-filter:blur(16px) saturate(1.3)}
+.cgo-chat-shell::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;background:conic-gradient(from var(--cgoA),rgba(34,211,238,0),rgba(34,211,238,.55),rgba(167,139,250,.55),rgba(244,114,182,.4),rgba(34,211,238,0));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:.5;animation:cgoFxBorderSpin 9s linear infinite}
+@keyframes cgoFxBorderSpin{to{--cgoA:360deg}}
+#chat-feed::-webkit-scrollbar{width:6px}
+#chat-feed::-webkit-scrollbar-track{background:transparent}
+#chat-feed::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#164e63,#312e81);border-radius:3px}
+#chat-input{background:rgba(2,6,23,.75);transition:border-color .25s,box-shadow .25s}
+#chat-input:focus{border-color:#22d3ee;box-shadow:0 0 0 3px rgba(34,211,238,.12),0 0 18px rgba(34,211,238,.12)}
+#cgo-send-btn{background:linear-gradient(135deg,#4f46e5,#0891b2);border:none;transition:transform .15s,box-shadow .25s}
+#cgo-send-btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 18px rgba(79,70,229,.4)}
+.quick-q{border-radius:999px !important;padding:4px 12px !important;transition:all .2s}
+.quick-q:hover:not(:disabled){border-color:#22d3ee;color:#a5f3fc;transform:translateY(-1px);box-shadow:0 4px 12px rgba(34,211,238,.15)}
+.cgo-bubble-actions button{border-radius:999px !important;padding:3px 10px !important;font-size:9.5px !important}
+.cgo-interim-actions{display:inline-flex;gap:6px;margin-left:8px}
+.cgo-interim-actions button{font-size:10px;padding:2px 10px;border-radius:999px;border:1px solid #334155;background:#0f172a;color:#94a3b8;cursor:pointer}
+.cgo-interim-actions button:hover{border-color:#22d3ee;color:#e0f2fe}
+@keyframes cgoFxMsgIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+#chat-feed>.flex:not(.cgo-row){animation:cgoFxMsgIn .35s cubic-bezier(.16,1,.3,1) both}
+/* ── 3. ORB: halo cincin + kanvas FX ── */
+#cgo-orb-wrap{will-change:transform}
+#cgo-orb-wrap::before{content:"";position:absolute;inset:6%;border-radius:50%;border:1px dashed rgba(103,232,249,.22);animation:cgoFxHalo 26s linear infinite;pointer-events:none;z-index:1}
+#cgo-orb-wrap[data-speaking="1"]::before{border-color:rgba(52,211,153,.5);animation-duration:7s}
+@keyframes cgoFxHalo{to{transform:rotate(360deg)}}
+#cgo-orb-fx{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none}
+</style>
+<script>
+/* ── A. WAKE AUTO-BOOT HIDUP (pengganti blok yang mati) + health ── */
+(function(){try{
+  function boot(){
+    var o=window.CGO_OTAK;
+    if(!o||typeof o.setWakeEnabled!=='function')return false;
+    try{o.setWakeEnabled(true);}catch(_){}
+    var ind=document.getElementById('bcgo-wake-indicator');
+    if(ind){ind.classList.add('on');ind.textContent='WAKE · '+((o.wakeWords&&o.wakeWords.primary)||'CGO');}
+    return true;
+  }
+  var n=0,iv=setInterval(function(){n++;if(boot()||n>50)clearInterval(iv);},200);
+  window.addEventListener('load',function(){setTimeout(boot,300);});
+  window.addEventListener('cgo:wake-state',function(e){
+    try{var st=e.detail||{},ind=document.getElementById('bcgo-wake-indicator');
+      if(!ind)return;ind.title='Wake '+(st.enabled?'ON':'OFF')+' · '+(st.state||'—');
+      if(st.state==='denied'){ind.textContent='WAKE · IZIN MIC';ind.classList.remove('on');ind.style.color='#f87171';}
+      else if(st.enabled){ind.classList.add('on');ind.style.color='';}
+    }catch(_){}
+  });
+  var errSince=0; // health: restart otomatis bila wake macet di 'error' (>25 dtk, bukan 'denied')
+  setInterval(function(){try{
+    var o=window.CGO_OTAK;if(!o||typeof o.wakeStatus!=='function')return;
+    var st=o.wakeStatus();
+    if(st.state==='error'){if(!errSince)errSince=Date.now();else if(Date.now()-errSince>25000&&o.wakeRestart){o.wakeRestart();errSince=0;}}
+    else errSince=0;
+  }catch(_){}},5000);
+  console.log('[CGO-FUTURE] wake auto-boot aktif');
+}catch(e){console.warn('[CGO-FUTURE wake]',e);}})();
+</script>
+<script>
+/* ── B. CHAT FORMATTER: poin-poin berisi ke bawah, kalimat tetap utuh ── */
+(function(){'use strict';try{
+  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function inline(s){s=esc(s);
+    s=s.replace(/\*\*([^*]+)\*\*/g,'<span class="cgo-strong">$1</span>');
+    s=s.replace(/`([^`]+)`/g,'<span class="cgo-code">$1</span>');
+    return s;}
+  function fmt(text){
+    var lines=String(text).replace(/\r/g,'').split('\n'),html='',inList=false,listType=null;
+    function close(){if(inList){html+='</span>';inList=false;listType=null;}}
+    for(var i=0;i<lines.length;i++){
+      var line=lines[i];
+      if(!line.trim()){close();html+='<span class="cgo-line">&nbsp;</span>';continue;}
+      var hr=line.match(/^\s*---\s*([^-]{2,60}?)\s*---\s*$/);
+      var tag=line.match(/^\s*(\[[^\]]{2,40}\])\s*:?\s*(.*)$/);
+      var bullet=line.match(/^\s*[•\-\*·▪▸]\s+(.*)$/);
+      var num=line.match(/^\s*(\d{1,2})[.)]\s+(.*)$/);
+      var sub=line.match(/^\s{2,}[•\-\*·]\s+(.*)$/);
+      var lead=(!/^[a-z]+:\/\//i.test(line))&&line.match(/^([^:]{2,48}:)\s*(.*)$/);
+      if(hr){close();html+='<span class="cgo-line"><span class="cgo-tagline">'+inline(hr[1])+'</span></span>';continue;}
+      if(tag){close();html+='<span class="cgo-line"><span class="cgo-tagline">'+inline(tag[1])+'</span>'+(tag[2]?' '+inline(tag[2]):'')+'</span>';continue;}
+      if(bullet){if(!inList||listType!=='ul'){close();html+='<span class="cgo-list">';inList=true;listType='ul';}html+='<span class="cgo-li">'+inline(bullet[1])+'</span>';continue;}
+      if(num){if(!inList||listType!=='ol'){close();html+='<span class="cgo-list">';inList=true;listType='ol';}html+='<span class="cgo-li cgo-li-num" data-n="'+esc(num[1])+'">'+inline(num[2])+'</span>';continue;}
+      if(sub){html+='<span class="cgo-li cgo-li-sub">'+inline(sub[1])+'</span>';continue;}
+      close();
+      if(lead&&line.length<70){html+='<span class="cgo-line"><span class="cgo-strong">'+inline(lead[1])+'</span>'+(lead[2]?' '+inline(lead[2]):'')+'</span>';continue;}
+      html+='<span class="cgo-line">'+inline(line)+'</span>';
+    }
+    close();return html;
+  }
+  function process(el){
+    if(!el||el.nodeType!==1||!el.classList||!el.classList.contains('cgo-bubble-text'))return;
+    if(el.querySelector('.cgo-stream-cursor'))return; // tunggu streaming selesai
+    var raw=el.textContent;
+    if(el.getAttribute('data-raw')===raw&&el.getAttribute('data-fmt')==='1')return;
+    el.setAttribute('data-raw',raw);el.setAttribute('data-fmt','1');
+    el.innerHTML=fmt(raw);
+  }
+  var feed=document.getElementById('chat-feed');if(!feed)return;
+  var deb=null;
+  var mo=new MutationObserver(function(muts){
+    if(deb)return;deb=setTimeout(function(){deb=null;
+      muts.forEach(function(m){
+        if(m.type==='childList'){m.addedNodes.forEach(function(n){
+          if(n.nodeType!==1)return;
+          var b=n.querySelector&&n.querySelector('.cgo-bubble-text');if(b)process(b);
+          if(n.classList&&n.classList.contains('cgo-bubble-text'))process(n);
+        });}
+        else if(m.type==='characterData'){process(m.target.parentElement);}
+      });
+      var all=feed.querySelectorAll('.cgo-bubble-text');
+      for(var i=0;i<all.length;i++)process(all[i]);
+    },120);
+  });
+  mo.observe(feed,{childList:true,subtree:true,characterData:true});
+  var a0=feed.querySelectorAll('.cgo-bubble-text');
+  for(var j=0;j<a0.length;j++)process(a0[j]);
+  console.log('[CGO-FUTURE] chat formatter aktif');
+}catch(e){console.warn('[CGO-FUTURE fmt]',e);}})();
+</script>
+<script>
+/* ── C. ORB FX OVERLAY: filamen saraf + partikel + shockwave + parallax ── */
+(function(){'use strict';try{
+  var wrap=document.getElementById('cgo-orb-wrap');if(!wrap)return;
+  var core=wrap.querySelector('.cgo-orb-core');
+  var fx=document.createElement('canvas');fx.id='cgo-orb-fx';
+  wrap.insertBefore(fx,core||null);
+  var ctx=fx.getContext('2d');
+  var DPR=Math.min(window.devicePixelRatio||1,2),W=0,H=0;
+  function resize(){var r=wrap.getBoundingClientRect();W=r.width;H=r.height;
+    fx.width=W*DPR;fx.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+  resize();
+  if(window.ResizeObserver)new ResizeObserver(resize).observe(wrap);
+  else window.addEventListener('resize',resize);
+  var STATE_FX={
+    tenang:{fil:2,part:26,spd:.5,amp:.5,hue:190},
+    menjaga:{fil:2,part:20,spd:.3,amp:.35,hue:220},
+    waspada:{fil:3,part:36,spd:1,amp:.8,hue:45},
+    membuka:{fil:4,part:44,spd:1.6,amp:1,hue:190},
+    transenden:{fil:5,part:60,spd:2.2,amp:1.2,hue:280}
+  };
+  var cur={fil:2,part:26,spd:.5,amp:.5,hue:190};
+  var parts=[];for(var i=0;i<70;i++)parts.push({a:Math.random()*6.283,r:.25+Math.random()*.75,s:.3+Math.random()*.9,o:Math.random()*6.283,z:.4+Math.random()*.6});
+  var fils=[];for(var j=0;j<5;j++)fils.push({a:Math.random()*6.283,r1:.2+Math.random()*.25,r2:.55+Math.random()*.35,ph:Math.random()*6.283,dir:j%2?1:-1});
+  var waves=[],speaking=false,speakLvl=0,par={x:0,y:0};
+  window.addEventListener('cgo:voice-start',function(){speaking=true;waves.push({t0:performance.now(),max:1});});
+  window.addEventListener('cgo:voice-end',function(){speaking=false;});
+  window.addEventListener('cgo:wake-heard',function(){waves.push({t0:performance.now(),max:1});});
+  window.addEventListener('cgo:wake-awake',function(){waves.push({t0:performance.now(),max:1});});
+  var form=document.getElementById('chat-form');
+  if(form)form.addEventListener('submit',function(){waves.push({t0:performance.now(),max:.8});});
+  wrap.addEventListener('pointermove',function(e){var r=wrap.getBoundingClientRect();
+    par.x=((e.clientX-r.left)/r.width-.5)*2;par.y=((e.clientY-r.top)/r.height-.5)*2;});
+  wrap.addEventListener('pointerleave',function(){par.x=0;par.y=0;});
+  var last=performance.now();
+  function loop(now){
+    var dt=Math.min(50,now-last);last=now;
+    var st=(window.CGOOrb&&window.CGOOrb.state)?window.CGOOrb.state():'tenang';
+    var tgt=STATE_FX[st]||STATE_FX.tenang;
+    var k=1-Math.pow(.02,dt/1000);
+    for(var key in tgt)cur[key]+=(tgt[key]-cur[key])*k;
+    speakLvl+=(((speaking?.6+.4*Math.sin(now/90)+.2*Math.sin(now/37):0)-speakLvl)*Math.min(1,dt/120));
+    ctx.clearRect(0,0,W,H);
+    var cx=W/2+par.x*6,cy=H/2+par.y*6,R=Math.min(W,H)*.42;
+    ctx.globalCompositeOperation='lighter';
+    for(var f=0;f<Math.round(cur.fil);f++){var L=fils[f];L.a+=.001*cur.spd*L.dir*dt;
+      var x1=cx+Math.cos(L.a)*R*L.r1,y1=cy+Math.sin(L.a)*R*L.r1;
+      var x2=cx+Math.cos(L.a+1.3)*R*L.r2,y2=cy+Math.sin(L.a+1.3)*R*L.r2;
+      var mx=cx+Math.cos(L.a+.6+L.ph)*R*((L.r1+L.r2)/2)*1.15,my=cy+Math.sin(L.a+.6+L.ph)*R*((L.r1+L.r2)/2)*1.15;
+      ctx.strokeStyle='hsla('+cur.hue+',90%,65%,'+(0.10+0.06*cur.amp)+')';
+      ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x1,y1);ctx.quadraticCurveTo(mx,my,x2,y2);ctx.stroke();
+    }
+    for(var p=0;p<Math.round(cur.part);p++){var pt=parts[p];pt.a+=.0012*cur.spd*pt.s*dt;
+      var rr=R*pt.r*(1+speakLvl*.08*Math.sin(now/120+pt.o));
+      var x=cx+Math.cos(pt.a)*rr,y=cy+Math.sin(pt.a)*rr*.96;
+      var al=(0.25+0.45*Math.abs(Math.sin(now/700*pt.s+pt.o)))*(0.5+cur.amp*.5);
+      ctx.fillStyle='hsla('+cur.hue+',95%,70%,'+al+')';
+      ctx.beginPath();ctx.arc(x,y,pt.z*(1+speakLvl*.5),0,6.283);ctx.fill();
+    }
+    for(var w=waves.length-1;w>=0;w--){var wv=waves[w],age=(now-wv.t0)/1400;
+      if(age>=1){waves.splice(w,1);continue;}
+      ctx.strokeStyle='hsla('+cur.hue+',95%,70%,'+((1-age)*.5*wv.max)+')';
+      ctx.lineWidth=2*(1-age)+.5;ctx.beginPath();ctx.arc(cx,cy,R*(.3+age*.85),0,6.283);ctx.stroke();
+    }
+    ctx.globalCompositeOperation='source-over';
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+  console.log('[CGO-FUTURE] orb FX aktif');
+}catch(e){console.warn('[CGO-FUTURE orb]',e);}})();
+</script>
+<script>
+/* ── D. MIC STABIL: waveform simulasi (tanpa getUserMedia), auto-retry, rapi ── */
+(function(){'use strict';try{
+  var canvas=document.getElementById('cgo-mic-wave'),raf=null;
+  function drawSim(){
+    if(!canvas)return;
+    var ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height,bars=48;
+    (function frame(){
+      raf=requestAnimationFrame(frame);
+      ctx.clearRect(0,0,w,h);
+      var t=performance.now()/1000;
+      for(var i=0;i<bars;i++){
+        var v=(Math.sin(t*3+i*.55)*.5+.5)*(Math.sin(t*1.7+i*.21)*.5+.5);
+        var bh=3+v*(h-6),x=(i+.5)*w/bars;
+        ctx.fillStyle=v>.6?'#f87171':v>.35?'#fbbf24':'#34d399';
+        ctx.fillRect(x-1.5,(h-bh)/2,3,bh);
+      }
+    })();
+  }
+  if(window.CGOMicUI){
+    var oS=window.CGOMicUI.startWave;
+    window.CGOMicUI.startWave=function(){var r=oS&&oS();if(!raf)drawSim();return r;};
+    var oP=window.CGOMicUI.stopWave;
+    window.CGOMicUI.stopWave=function(){var r=oP&&oP();
+      if(raf){cancelAnimationFrame(raf);raf=null;}
+      if(canvas){var c=canvas.getContext('2d');c&&c.clearRect(0,0,canvas.width,canvas.height);}
+      return r;};
+  }
+  var autoRetried=false,wasListening=false;
+  window.addEventListener('cgo:mic-status',function(e){
+    var st=String(e.detail&&e.detail.state||'').toUpperCase();
+    if(st==='LISTENING'){wasListening=true;autoRetried=false;}
+    else if(st==='TRANSCRIPT'){wasListening=false;}
+  });
+  window.addEventListener('cgo:mic-error',function(e){
+    var code=String(e.detail&&e.detail.code||'');
+    if(code==='network'){
+      var s=document.getElementById('cgo-mic-status');
+      if(s){s.textContent='MIC OFFLINE · pengenalan suara Chrome butuh jaringan sekali';s.dataset.tone='warn';}
+    }
+    if(code==='no-speech'&&wasListening&&!autoRetried){
+      autoRetried=true;
+      setTimeout(function(){
+        var btn=document.getElementById('chat-mic');
+        if(btn&&!btn.classList.contains('mic-listening'))btn.click();
+      },700);
+    }
+  });
+  var statusEl=document.getElementById('cgo-mic-status');
+  if(statusEl){
+    var t=null;
+    new MutationObserver(function(){
+      if(statusEl.textContent.indexOf('MENGIRIM')===0){
+        clearTimeout(t);t=setTimeout(function(){
+          if(statusEl.dataset.tone==='live'){statusEl.textContent='MIKROFON SIAGA';statusEl.dataset.tone='idle';}
+        },2500);
+      }
+    }).observe(statusEl,{childList:true,characterData:true,subtree:true});
+  }
+  // KUNCI ANTI-KONFLIK: mic manual jeda wake listener dulu (capture phase = jalan duluan)
+  var micBtn=document.getElementById('chat-mic');
+  if(micBtn)micBtn.addEventListener('click',function(){
+    try{var o=window.CGO_OTAK;if(o&&typeof o.wakePause==='function')o.wakePause(45000);}catch(_){}
+  },true);
+  console.log('[CGO-FUTURE] mic patch aktif');
+}catch(e){console.warn('[CGO-FUTURE mic]',e);}})();
 </script>
 
 </body>

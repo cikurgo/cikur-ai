@@ -11,7 +11,7 @@
  */
 (function (global) {
   "use strict";
-  const VERSION = "1.1.0-MIC-LOCK-ZERO-REGRESI";
+  const VERSION = "1.2.0-FX-STABLE";
   const CLAIM_TTL_MS = 30000; // klaim tab lain yang tidak pernah dilepas (tab ditutup) kedaluwarsa
   const CHANNEL = "cgo-audio";
   const PAGE_ID = "cgo-" + Math.random().toString(36).slice(2, 10);
@@ -118,12 +118,15 @@
     if (!d || d.from === PAGE_ID) return;
     if (d.aksi === "klaim") {
       remoteClaim = { id: d.id, priority: Number(d.prioritas) || 99, ts: Date.now() };
+      fire("cgo:audio-remote-claim", { id: d.id, priority: Number(d.prioritas) || 99 });
     } else if (d.aksi === "lepas") {
       if (remoteClaim && remoteClaim.id === d.id) remoteClaim = null;
     } else if (d.aksi === "mic-klaim") {
       remoteMic = { id: d.id, ts: Date.now() };
+      fire("cgo:mic-claim", { id: d.id, remote: true });
     } else if (d.aksi === "mic-lepas") {
       if (remoteMic && remoteMic.id === d.id) remoteMic = null;
+      fire("cgo:mic-release", { id: d.id, remote: true });
     } else if (d.aksi === "wake-klaim") {
       remoteWake = { id: d.id, ts: Date.now() };
       // dua tab mengklaim bersamaan: id yang lebih kecil menang (deterministik)
