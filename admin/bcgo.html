@@ -3834,12 +3834,8 @@ await runAutonomousEngine(state => {
 }catch(_){}})();
 </script>
 
-</body>
-     prefix: bcgo-up- / bcgoUp / #bcgo-listening-banner / #bcgo-wake-indicator
-     Prinsip: satu sumber kebenaran (Hub Otak). UI hanya pembaca.
-     Semua dibungkus try/catch. Tidak mengubah struktur/namespace yang ada.
-     ═══════════════════════════════════════════════════════════════════════ -->
 
+<!-- structure: keep upgrades inside body -->
 <!-- POIN 1,2,3,4 — CSS append-only (aurora orb, palet orb, banner, wake badge) -->
 <style>
 /* POIN 1 — Aurora multi-layer orb stage host */
@@ -4530,6 +4526,304 @@ await runAutonomousEngine(state => {
   LOG('aktif · suara wanita fallback + wake supervisor');
 }catch(e){ try{ console.warn('[CGO-VWS] skip:', e && e.message); }catch(_){} }})();
 </script>
+
+
+<!-- CGO REPAIR BRIDGE v1.1 · APPEND-ONLY · zero regresi -->
+<script>
+(function(){try{
+  if (window.__CGO_REPAIR_BRIDGE__) return;
+  window.__CGO_REPAIR_BRIDGE__ = true;
+  var LOG = function(){ try{ console.log.apply(console, ['[CGO-REPAIR]'].concat([].slice.call(arguments))); }catch(_){} };
+
+  /* ── A. ORB: langkah saraf + warna ikut alur chat / TTS ── */
+  var STEP_MAP = {
+    recv: 'mendengar',
+    think: 'menalar',
+    compose: 'memproses',
+    done: 'memberi'
+  };
+  var ORB_STATE = {
+    recv: 'waspada',
+    think: 'waspada',
+    compose: 'membuka',
+    done: 'membuka'
+  };
+  function paintOrbSteps(key){
+    try{
+      var list = document.getElementById('cgo-orb-step-list');
+      if (!list) return;
+      var order = ['mendengar','memahami','menalar','memproses','memberi'];
+      var target = STEP_MAP[key] || key;
+      var at = order.indexOf(target);
+      // think: nyalakan memahami sebagai done, menalar active
+      list.querySelectorAll('.cgo-orb-step').forEach(function(el){
+        var s = el.getAttribute('data-step');
+        var i = order.indexOf(s);
+        el.classList.remove('active','done');
+        if (key === 'think') {
+          if (s === 'mendengar' || s === 'memahami') el.classList.add('done');
+          else if (s === 'menalar') el.classList.add('active');
+        } else if (key === 'compose') {
+          if (i < order.indexOf('memproses')) el.classList.add('done');
+          else if (s === 'memproses') el.classList.add('active');
+        } else if (key === 'done') {
+          el.classList.add('done');
+          if (s === 'memberi') { el.classList.remove('done'); el.classList.add('active'); }
+        } else {
+          if (i < at) el.classList.add('done');
+          else if (i === at) el.classList.add('active');
+        }
+      });
+    }catch(_){}
+  }
+  function orbState(name, msBack){
+    try{
+      if (window.CGOOrb && typeof window.CGOOrb.setState === 'function') {
+        window.CGOOrb.setState(name, { force:true });
+        if (msBack) setTimeout(function(){
+          try{ window.CGOOrb.setState('tenang', { force:true }); }catch(_){}
+        }, msBack);
+      }
+    }catch(_){}
+  }
+  try{
+    var stages = document.getElementById('cgo-think-stages');
+    if (stages) {
+      new MutationObserver(function(){
+        try{
+          var on = stages.querySelector('span.on');
+          var key = on && on.getAttribute('data-stage');
+          if (!key) {
+            var nDone = stages.querySelectorAll('span.done').length;
+            if (nDone >= 3) key = 'done';
+          }
+          if (!key) return;
+          paintOrbSteps(key);
+          var st = ORB_STATE[key];
+          if (st) orbState(st, key === 'done' ? 1800 : 0);
+        }catch(_){}
+      }).observe(stages, { attributes:true, subtree:true, attributeFilter:['class'] });
+    }
+  }catch(_){}
+  try{
+    var wasSp = false;
+    setInterval(function(){
+      try{
+        var sp = !!(window.speechSynthesis && window.speechSynthesis.speaking);
+        if (sp && !wasSp) {
+          paintOrbSteps('done');
+          orbState('membuka', 0);
+        }
+        if (!sp && wasSp) {
+          setTimeout(function(){ orbState('tenang', 0); }, 500);
+        }
+        wasSp = sp;
+      }catch(_){}
+    }, 200);
+  }catch(_){}
+
+  /* ── B. SUARA: harden + fallback cepat bila not-allowed ── */
+  function tryFallback(text){
+    try{
+      if (window.__cgoVWSup && typeof window.__cgoVWSup.speakFallback === 'function') {
+        return !!window.__cgoVWSup.speakFallback(text);
+      }
+    }catch(_){}
+    return false;
+  }
+  function hardenVoice(){
+    var V = window.CGOOperatorVoice;
+    if (!V || typeof V.speakAnswer !== 'function' || V.speakAnswer.__repair) return false;
+    var orig = V.speakAnswer.bind(V);
+    V.speakAnswer = function(text, opts){
+      opts = opts || {};
+      try{
+        V.unlock && V.unlock();
+        V.setEnabled && V.setEnabled(true);
+        V.setChatSpeak && V.setChatSpeak(true);
+      }catch(_){}
+      // Jangan memaksa force pada semua panggilan sistem; hanya pastikan chat tidak diblok diam-diam
+      var o2 = opts;
+      if (!opts.force && opts.system) o2 = opts;
+      else if (opts.force == null && !opts.system) o2 = Object.assign({}, opts, { force: true });
+      var t0 = Date.now();
+      var p = orig(text, o2);
+      try{
+        Promise.resolve(p).then(function(ok){
+          if (ok) return;
+          // gagal → cek diag; bila not-allowed / fail, fallback wanita
+          setTimeout(function(){
+            try{
+              var d = V.diag && V.diag();
+              var err = d && String(d.lastError || '');
+              var speaking = false;
+              try{ speaking = !!(window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending)); }catch(_){}
+              if (speaking) return;
+              if (/not-allowed|fail|synthesis|network/i.test(err) || d && d.lastResult === 'fail') {
+                LOG('speakAnswer gagal → fallback', err || d.lastResult);
+                tryFallback(text);
+              }
+            }catch(_){}
+          }, 600);
+        }, function(){ tryFallback(text); });
+      }catch(_){}
+      return p;
+    };
+    V.speakAnswer.__repair = true;
+    V.speakAnswer.__vws = true; // jangan di-wrap ulang oleh VWS
+    LOG('speakAnswer hardened');
+    return true;
+  }
+  hardenVoice();
+  var hv = 0;
+  var hvIv = setInterval(function(){
+    if (hardenVoice() || ++hv > 20) clearInterval(hvIv);
+  }, 500);
+
+  /* ── C. WAKE STANDBY: continuous → event → mic asli ── */
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var rec = null, mode = 'OFF', starting = false, restartT = null, last = 0, micBusy = false, wakeOn = true, busySince = 0;
+
+  function hubOn(){
+    var o = window.CGO_OTAK;
+    if (!o) return true;
+    try{ if (typeof o.isWakeEnabled === 'function') return !!o.isWakeEnabled(); }catch(_){}
+    return true;
+  }
+  function isWake(text){
+    var o = window.CGO_OTAK;
+    // Prefer detectWake (tidak double-emit); emit kita sendiri di bawah
+    if (o && typeof o.detectWake === 'function') {
+      try{ return !!o.detectWake(text); }catch(_){}
+    }
+    var t = String(text||'').toLowerCase().replace(/[-_.]/g,' ').replace(/\s+/g,' ').trim();
+    return t === 'cgo' || t.indexOf('cgo ') === 0 || /\bcgo\b/.test(t);
+  }
+  function kill(){
+    if (!rec) return;
+    try{ rec.onstart=rec.onresult=rec.onerror=rec.onend=null; }catch(_){}
+    try{ rec.abort(); }catch(_){ try{ rec.stop(); }catch(__){} }
+    rec = null;
+  }
+  function stopWake(){
+    try{ if (restartT) clearTimeout(restartT); }catch(_){}
+    restartT = null; starting = false; kill(); mode = 'OFF';
+  }
+  function standby(){
+    if (!wakeOn || !hubOn() || micBusy || !SR) return;
+    if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
+    try{
+      if (window.speechSynthesis && window.speechSynthesis.speaking) {
+        restartT = setTimeout(standby, 800); return;
+      }
+    }catch(_){}
+    if (starting || mode === 'STANDBY') return;
+    var now = Date.now();
+    if (now - last < 700) return;
+    last = now;
+    kill(); mode = 'STANDBY'; starting = true;
+    try{
+      rec = new SR();
+      rec.lang = 'id-ID';
+      rec.interimResults = true;
+      rec.continuous = true;
+      rec.maxAlternatives = 1;
+      rec.onstart = function(){ starting = false; mode = 'STANDBY'; };
+      rec.onresult = function(ev){
+        if (mode !== 'STANDBY' || micBusy) return;
+        var d = '';
+        for (var i = ev.resultIndex; i < ev.results.length; i++) {
+          d += String(ev.results[i][0] && ev.results[i][0].transcript || '');
+        }
+        d = d.trim();
+        if (!d) return;
+        if (isWake(d)) {
+          try{
+            // Hub onWakeTranscript juga emit — boleh; FASE 5 butuh event
+            if (window.CGO_OTAK && typeof window.CGO_OTAK.onWakeTranscript === 'function') {
+              window.CGO_OTAK.onWakeTranscript(d, { force:true });
+            } else {
+              window.dispatchEvent(new CustomEvent('cgo:wake-heard', { detail:{ text:d } }));
+              window.dispatchEvent(new CustomEvent('cgo:wake-awake', { detail:{ text:d } }));
+            }
+          }catch(_){}
+          paintOrbSteps('recv');
+          orbState('waspada', 0);
+          stopWake();
+          micBusy = true;
+          busySince = Date.now();
+          setTimeout(function(){
+            try{
+              var b = document.getElementById('chat-mic');
+              if (b) b.click();
+              else { micBusy = false; standby(); }
+            }catch(_){ micBusy = false; }
+          }, 280);
+        }
+      };
+      rec.onerror = function(ev){
+        starting = false;
+        var c = String(ev && ev.error || '');
+        if (c === 'not-allowed' || c === 'service-not-allowed' || c === 'audio-capture') {
+          wakeOn = false; mode = 'OFF';
+          LOG('mic izin ditolak · wake standby off');
+        }
+      };
+      rec.onend = function(){
+        rec = null; starting = false;
+        if (mode === 'STANDBY' && wakeOn && hubOn() && !micBusy) {
+          restartT = setTimeout(function(){ mode = 'OFF'; standby(); }, 650);
+        }
+      };
+      rec.start();
+    }catch(e){
+      starting = false; mode = 'OFF';
+      LOG('wake start fail', e && e.message);
+    }
+  }
+  // Safety: micBusy macet > 12s → lepaskan
+  setInterval(function(){
+    if (micBusy && busySince && Date.now() - busySince > 12000) {
+      micBusy = false; busySince = 0;
+      if (wakeOn && hubOn()) standby();
+    }
+  }, 2000);
+  try{
+    window.addEventListener('cgo:mic-status', function(e){
+      var st = e && e.detail && e.detail.state;
+      if (st === 'LISTENING') {
+        micBusy = true; busySince = Date.now();
+        stopWake();
+        paintOrbSteps('recv');
+        orbState('waspada', 0);
+      } else if (st === 'IDLE' || st === 'TRANSCRIPT') {
+        micBusy = false; busySince = 0;
+        if (st === 'TRANSCRIPT') {
+          paintOrbSteps('think');
+          orbState('waspada', 0);
+        }
+        if (wakeOn && hubOn()) restartT = setTimeout(standby, 900);
+      }
+    });
+    window.addEventListener('cgo:wake-enabled', function(){ wakeOn = true; if (!micBusy) standby(); });
+    window.addEventListener('cgo:wake-disabled', function(){ wakeOn = false; stopWake(); });
+  }catch(_){}
+  var gestured = false;
+  function onG(){
+    if (gestured) return;
+    gestured = true;
+    try{ if (window.CGOOperatorVoice && window.CGOOperatorVoice.unlock) window.CGOOperatorVoice.unlock(); }catch(_){}
+    hardenVoice();
+    setTimeout(function(){ if (hubOn()) standby(); }, 500);
+  }
+  ['pointerdown','touchstart','click'].forEach(function(n){
+    try{ window.addEventListener(n, onG, { capture:true, passive:true }); }catch(_){}
+  });
+
+  LOG('bridge v1.1 · orb · voice · wake standby');
+}catch(e){ try{ console.warn('[CGO-REPAIR]', e && e.message); }catch(_){} }})();
+</script>
+
 
 </body>
    </html>
