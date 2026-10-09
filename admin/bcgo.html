@@ -2494,7 +2494,6 @@ await runAutonomousEngine(state => {
   } catch (_) {}
 })();
 </script>
-<script>window.__CGO_WAKE_CASCADE_OWN__=true;</script>
 <script>
 // --- Multimodal: Web Speech API (MIC → teks → Chat CGO) ---
 // ZERO-REGRESI: SpeechRecognition adalah satu-satunya pemilik capture MIC.
@@ -2507,11 +2506,6 @@ await runAutonomousEngine(state => {
   if (!micBtn) return;
   if (window.CGO_SVG && window.CGO_SVG.mic) micBtn.innerHTML = window.CGO_SVG.mic;
   else micBtn.textContent = '🎤';
-  // ZERO-REGRESI ownership: bila cascade wake aktif, jangan bind SR kedua
-  if (window.__CGO_WAKE_CASCADE_OWN__) {
-    try { console.log('[BCGO mic] yield ke cascade wake (satu pemilik mic)'); } catch(_){}
-    return;
-  }
 
   let rec = null;
   let listening = false;
@@ -3840,12 +3834,8 @@ await runAutonomousEngine(state => {
 }catch(_){}})();
 </script>
 
-</body>
-     prefix: bcgo-up- / bcgoUp / #bcgo-listening-banner / #bcgo-wake-indicator
-     Prinsip: satu sumber kebenaran (Hub Otak). UI hanya pembaca.
-     Semua dibungkus try/catch. Tidak mengubah struktur/namespace yang ada.
-     ═══════════════════════════════════════════════════════════════════════ -->
 
+<!-- BCGO UPGRADE block continues (structure fix: body not closed early) -->
 <!-- POIN 1,2,3,4 — CSS append-only (aurora orb, palet orb, banner, wake badge) -->
 <style>
 /* POIN 1 — Aurora multi-layer orb stage host */
@@ -4276,15 +4266,193 @@ await runAutonomousEngine(state => {
 </script>
 
 
-
-
-
-<!-- BCGO WAKE · sinkron CGO_OTAK (aditif, zero regresi) · audit v4.4 -->
+<!-- ========== FIX MINIMAL: suara · orb tetap · wake standby (zero regresi) ========== -->
 <script>
-/* Ownership flag SEBELUM setupChatMic re-eval; cascade set juga saat boot */
-window.__CGO_WAKE_CASCADE_OWN__ = true;
+/* VOICE FALLBACK — hanya jika cgo-ai-voice-operator.js tidak memuat speakAnswer */
+(function(){
+  if (window.CGOOperatorVoice && typeof window.CGOOperatorVoice.speakAnswer === 'function') {
+    console.log('[FIX] operator suara asli OK');
+    return;
+  }
+  var ss = window.speechSynthesis;
+  var enabled = true, chatSpeak = true, unlocked = false, voice = null, speaking = false;
+  function pick(){
+    if (!ss) return null;
+    var list = ss.getVoices() || [], best = null, sc = -1;
+    for (var i=0;i<list.length;i++){
+      var v=list[i], n=((v.name||'')+' '+(v.lang||'')).toLowerCase(), s=0;
+      if (/^id/i.test(v.lang||'')||/indonesia/.test(n)) s+=50;
+      if (/female|wanita|woman|siti|damayanti|google/.test(n)) s+=25;
+      if (s>sc){sc=s;best=v;}
+    }
+    return best || list[0] || null;
+  }
+  function refresh(){ try{ voice=pick(); }catch(_){} }
+  refresh();
+  try{ if(ss){ ss.addEventListener('voiceschanged', refresh); ss.getVoices(); } }catch(_){}
+  function unlock(){
+    unlocked=true;
+    try{ if(ss&&ss.paused) ss.resume(); }catch(_){}
+  }
+  function speakRaw(text, opts){
+    opts=opts||{};
+    if(!enabled && !opts.force) return Promise.resolve();
+    if(!ss) return Promise.resolve();
+    if(!unlocked) unlock();
+    var t=String(text||'').replace(/\s+/g,' ').trim();
+    if(!t) return Promise.resolve();
+    return new Promise(function(resolve){
+      try{
+        ss.cancel(); speaking=false;
+        setTimeout(function(){
+          var u=new SpeechSynthesisUtterance(t.slice(0,800));
+          u.lang='id-ID'; u.rate=1.02; u.pitch=1.08;
+          if(voice) try{ u.voice=voice; }catch(_){}
+          var done=false;
+          var fin=function(){ if(done)return; done=true; speaking=false; resolve(); };
+          u.onend=fin; u.onerror=fin;
+          speaking=true; ss.speak(u);
+        },40);
+      }catch(_){ speaking=false; resolve(); }
+    });
+  }
+  window.CGOOperatorVoice = {
+    version: 'fallback-minimal-1.0',
+    unlock: unlock,
+    setEnabled: function(v){ enabled=!!v; },
+    isEnabled: function(){ return !!enabled; },
+    setChatSpeak: function(v){ chatSpeak=!!v; },
+    setQuietLive: function(){},
+    stop: function(){ speaking=false; try{ if(ss) ss.cancel(); }catch(_){} },
+    isSpeaking: function(){ return speaking || !!(ss&&ss.speaking); },
+    state: function(name){
+      try{
+        if(window.CGOOrb&&window.CGOOrb.setState){
+          if(name==='ERROR') window.CGOOrb.setState('waspada');
+          else if(name==='VALID') window.CGOOrb.setState('tenang');
+        }
+      }catch(_){}
+    },
+    welcome: function(){ return speakRaw('Halo, saya operator CGO. Silakan tekan mikrofon atau ucapkan CGO.',{force:true}); },
+    speakAnswer: function(text, opts){
+      if(!chatSpeak && !(opts&&opts.force)) return Promise.resolve();
+      return speakRaw(text, opts);
+    },
+    speak: function(text, opts){ return speakRaw(text, opts); },
+    announceAttention: function(d){
+      var m=(d&&(d.message||d.text))||'Perhatian.';
+      return speakRaw(String(m).slice(0,200),{force:true});
+    },
+    diag: function(){
+      return { voiceName: voice&&voice.name, fallback:true, enabled:enabled, speaking:speaking };
+    }
+  };
+  console.log('[FIX] voice fallback aktif (operator asli belum load)');
+})();
 </script>
-<script src="./js/cgo-otak-hub.js"></script>
-<script src="./js/bcgo-cascade-local.js"></script>
+<script>
+/* WAKE STANDBY MINIMAL — tidak menimpa setupChatMic / orb
+   Continuous dengar CGO → event Hub/FASE5 → klik #chat-mic (jalur asli) */
+(function(){
+  if (window.__BCGO_WAKE_MIN__) return;
+  window.__BCGO_WAKE_MIN__ = true;
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var rec=null, mode='OFF', starting=false, restartT=null, last=0, micBusy=false, on=true;
+
+  function hubOn(){
+    var o=window.CGO_OTAK;
+    if(o&&typeof o.isWakeEnabled==='function') return !!o.isWakeEnabled();
+    return true;
+  }
+  function isWake(text){
+    var o=window.CGO_OTAK;
+    if(o&&typeof o.detectWake==='function'){ try{ return !!o.detectWake(text);}catch(_){} }
+    if(o&&typeof o.onWakeTranscript==='function'){
+      try{ var r=o.onWakeTranscript(text,{force:true}); return !!(r&&r.heard);}catch(_){}
+    }
+    var t=String(text||'').toLowerCase();
+    return t==='cgo'||t.indexOf('cgo ')===0||/\bcgo\b/.test(t);
+  }
+  function kill(){
+    if(!rec)return;
+    try{rec.onstart=rec.onresult=rec.onerror=rec.onend=null;}catch(_){}
+    try{rec.abort();}catch(_){try{rec.stop();}catch(__){}}
+    rec=null;
+  }
+  function stop(r){
+    try{if(restartT)clearTimeout(restartT);}catch(_){}
+    restartT=null; starting=false; kill(); mode='OFF';
+  }
+  function standby(){
+    if(!on||!hubOn()||micBusy||!SR) return;
+    if(!window.isSecureContext && location.hostname!=='localhost'&&location.hostname!=='127.0.0.1') return;
+    try{
+      if(window.speechSynthesis&&window.speechSynthesis.speaking){
+        restartT=setTimeout(standby,700); return;
+      }
+    }catch(_){}
+    if(starting||mode==='STANDBY') return;
+    var now=Date.now(); if(now-last<700) return; last=now;
+    kill(); mode='STANDBY'; starting=true;
+    try{
+      rec=new SR();
+      rec.lang='id-ID'; rec.interimResults=true; rec.continuous=true; rec.maxAlternatives=1;
+      rec.onstart=function(){ starting=false; mode='STANDBY'; };
+      rec.onresult=function(ev){
+        if(mode!=='STANDBY'||micBusy) return;
+        var d='';
+        for(var i=ev.resultIndex;i<ev.results.length;i++) d+=String(ev.results[i][0]&&ev.results[i][0].transcript||'');
+        d=d.trim(); if(!d) return;
+        if(isWake(d)){
+          try{
+            window.dispatchEvent(new CustomEvent('cgo:wake-heard',{detail:{text:d}}));
+            window.dispatchEvent(new CustomEvent('cgo:wake-awake',{detail:{text:d}}));
+          }catch(_){}
+          stop('wake');
+          micBusy=true;
+          setTimeout(function(){
+            try{ var b=document.getElementById('chat-mic'); if(b) b.click(); }catch(_){}
+          },250);
+        }
+      };
+      rec.onerror=function(ev){
+        starting=false;
+        var c=String(ev&&ev.error||'');
+        if(c==='not-allowed'||c==='service-not-allowed'||c==='audio-capture'){ on=false; mode='OFF'; }
+      };
+      rec.onend=function(){
+        rec=null; starting=false;
+        if(mode==='STANDBY'&&on&&hubOn()&&!micBusy){
+          restartT=setTimeout(function(){ mode='OFF'; standby(); },650);
+        }
+      };
+      rec.start();
+    }catch(e){ starting=false; mode='OFF'; console.warn('[FIX wake]',e); }
+  }
+  try{
+    window.addEventListener('cgo:mic-status',function(e){
+      var st=e&&e.detail&&e.detail.state;
+      if(st==='LISTENING'){ micBusy=true; stop('mic'); }
+      else if(st==='IDLE'||st==='TRANSCRIPT'){
+        micBusy=false;
+        if(on&&hubOn()) restartT=setTimeout(standby,900);
+      }
+    });
+    window.addEventListener('cgo:wake-enabled',function(){ on=true; if(!micBusy) standby(); });
+    window.addEventListener('cgo:wake-disabled',function(){ on=false; stop('off'); });
+  }catch(_){}
+  var g=false;
+  function gesture(){
+    if(g) return; g=true;
+    try{ if(window.CGOOperatorVoice&&window.CGOOperatorVoice.unlock) window.CGOOperatorVoice.unlock(); }catch(_){}
+    setTimeout(function(){ if(hubOn()) standby(); },500);
+  }
+  ['pointerdown','touchstart','click'].forEach(function(n){
+    try{ window.addEventListener(n,gesture,{capture:true,passive:true}); }catch(_){}
+  });
+  console.log('[FIX] wake standby minimal siap · handoff ke #chat-mic');
+})();
+</script>
+
 </body>
-</html>
+   </html>
