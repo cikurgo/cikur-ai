@@ -214,6 +214,12 @@ body{font-family:'Inter',sans-serif}
 /* beri ruang HUD di bawah orb saat radar */
 .cgo-orb-center:has(.surface-radar-on){padding-bottom:28px;}
 .cgo-orb-wrap.surface-radar-on{margin-bottom:22px;}
+.cgo-orb-wrap.surface-radar-on ~ .cgo-orb-status,
+.cgo-orb-center:has(.surface-radar-on) .cgo-orb-status{opacity:.55;}
+.cgo-orb-wrap.surface-radar-on ~ .cgo-orb-wake-badge{opacity:.4;}
+.cgo-orb-surface-hud .sh-title{font-size:9px;letter-spacing:.12em;color:#6ee7b7;margin-bottom:2px;}
+.cgo-orb-surface-hud .sh-meta span{font-size:9px;padding:3px 7px;}
+
 
 @media (max-width:720px){.cgo-orb-wrap{width:230px;height:230px}}
 @media (max-width:380px){.cgo-orb-wrap{width:200px;height:200px}}
@@ -863,7 +869,7 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-machine-abc.js?v=0.14.3-MORE-RULES"></script>
 <script src="cgo-machine-abc-bridge.js?v=2.3.0-REPAIR-AUTO"></script>
 <script src="cgo-abc-cognition.js?v=1.2.0-HUMAN-RESULT"></script>
-<script src="cgo-otak-hub.js?v=1.12.1-ORB-SURFACE-RADAR"></script>
+<script src="cgo-otak-hub.js?v=1.12.2-RADAR-CHAT-SYNC"></script>
 
 <script type="module">
 import * as CGOInstruction from "./cgo-instruction.js?v=1.3.0-CONSTITUTION";
@@ -1307,6 +1313,12 @@ function cgoStructureAnswerHtml(raw) {
     var rest = [];
     mid.forEach(function(s) {
       if (facts.length >= 4) { rest.push(s); return; }
+      // "Agent: 0." / "Geo: 12"
+      var kv = s.match(/^([A-Za-zÀ-ÿ][\w\s]{1,22})\s*:\s*(.+)$/);
+      if (kv && facts.length < 4) {
+        facts.push({ k: kv[1].trim(), v: kv[2].replace(/\.$/,'').trim() });
+        return;
+      }
       // "Terdata: 0 agent · geo 0 · ready ~0" → several facts
       if (/·/.test(s) && (s.match(/·/g) || []).length >= 1) {
         var segs = s.split(/\s*·\s*/);
@@ -1421,7 +1433,7 @@ function addChat(role, text, meta) {
     const canStream = role !== 'user' && streamPref && fullText.length >= 20 && !meta.noStream;
     if (!canStream) {
       var structured = (role !== 'user') ? cgoStructureAnswerHtml(fullText) : null;
-      if (structured) content.innerHTML = structured;
+      if (structured) { content.innerHTML = structured; content.setAttribute('data-structured','1'); content.setAttribute('data-fmt','1'); }
       else content.textContent = fullText;
     } else {
       content.textContent = '';
@@ -1437,7 +1449,7 @@ function addChat(role, text, meta) {
           try { cursor.remove(); } catch(_){}
           try {
             var s = cgoStructureAnswerHtml(fullText);
-            if (s) content.innerHTML = s;
+            if (s) { content.innerHTML = s; content.setAttribute('data-structured','1'); content.setAttribute('data-fmt','1'); }
           } catch(_){}
           return;
         }
@@ -1448,7 +1460,7 @@ function addChat(role, text, meta) {
       setTimeout(tick, 20);
       meta._streamStop = function(){
         stopped = true;
-        (function(){ var s = (role !== 'user') ? cgoStructureAnswerHtml(fullText) : null; if (s) content.innerHTML = s; else content.textContent = fullText; })();
+        (function(){ var s = (role !== 'user') ? cgoStructureAnswerHtml(fullText) : null; if (s) { content.innerHTML = s; content.setAttribute('data-structured','1'); content.setAttribute('data-fmt','1'); } else content.textContent = fullText; })();
       };
     }
     body.appendChild(content);
@@ -2122,6 +2134,21 @@ function renderNeuralEvents(events) {
 let radarCenter = null;
 let radarCenterSource = 'DEFAULT_UNVERIFIED';
 let radarRadiusKm = 50;
+// expose for orb surface (lintas-script · zero regresi)
+try {
+  window.__CGO_RADAR__ = window.__CGO_RADAR__ || {};
+  Object.defineProperty(window, 'radarRadiusKm', { get: function(){ return radarRadiusKm; }, configurable: true });
+} catch(_){}
+function __cgoPublishRadar(){
+  try {
+    window.__CGO_RADAR__ = {
+      center: radarCenter,
+      source: radarCenterSource,
+      radiusKm: radarRadiusKm
+    };
+  } catch(_){}
+}
+__cgoPublishRadar();
 
 function updateRadarCenterLabel() {
   const el = document.getElementById('radar-center-status');
@@ -2150,10 +2177,12 @@ try {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
     radarCenter = { lat, lng };
     radarCenterSource = 'GPS_VERIFIED';
+  try { if (typeof __cgoPublishRadar === 'function') __cgoPublishRadar(); } catch(_){}
     updateRadarCenterLabel();
     rerenderRadarFromCurrentState();
   }, () => {
     radarCenterSource = 'GPS_UNAVAILABLE';
+  try { if (typeof __cgoPublishRadar === 'function') __cgoPublishRadar(); } catch(_){}
     updateRadarCenterLabel();
     rerenderRadarFromCurrentState();
   }, { maximumAge: 600000, timeout: 8000, enableHighAccuracy: true });
@@ -2164,7 +2193,13 @@ try {
 
 document.getElementById('radar-radius-km')?.addEventListener('change', e => {
   radarRadiusKm = Math.max(5, Number(e.target.value) || 50);
+  try { if (typeof __cgoPublishRadar === 'function') __cgoPublishRadar(); } catch(_){}
   if (liveState) renderAgentPresence(liveState);
+  try {
+    if (window.CGOOrbSurface && window.CGOOrbSurface.getMode && window.CGOOrbSurface.getMode() === 'radar') {
+      /* draw loop reads live radius each frame */
+    }
+  } catch(_){}
 });
 
 function haversineKm(a, b) {
@@ -4512,15 +4547,16 @@ await runAutonomousEngine(state => {
 /* ── 1. TIPOGRAFI JAWABAN: kalimat panjang utuh, poin-poin jadi daftar ── */
 
 /* CGO chat masa depan · struktur vertikal lead/facts/next */
-.cgo-chat-lead{font-weight:700;font-size:12.5px;line-height:1.45;color:#f1f5f9;margin:0 0 8px;}
-.cgo-chat-facts{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:0 0 8px;}
-.cgo-chat-fact{padding:6px 8px;border-radius:8px;font-size:10px;line-height:1.35;color:#c7d2fe;
-  background:rgba(34,211,238,.05);border:1px solid rgba(34,211,238,.12);}
-.cgo-chat-fact em{display:block;font-style:normal;font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin-bottom:2px;}
-.cgo-chat-fact b{color:#67e8f9;font-weight:700;}
-.cgo-chat-next{font-size:11px;color:#99f6e4;padding:7px 9px;border-radius:8px;margin:0 0 4px;
-  background:linear-gradient(90deg,rgba(34,211,238,.07),rgba(167,139,250,.05));
-  border:1px solid rgba(34,211,238,.14);line-height:1.4;}
+.cgo-chat-lead{font-weight:700;font-size:13px;line-height:1.45;color:#f8fafc;margin:0 0 10px;}
+.cgo-chat-facts{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 10px;}
+.cgo-chat-fact{padding:8px 9px;border-radius:10px;font-size:11px;line-height:1.35;color:#e2e8f0;
+  background:rgba(8,47,73,.35);border:1px solid rgba(34,211,238,.18);}
+.cgo-chat-fact em{display:block;font-style:normal;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:#64748b;margin-bottom:3px;}
+.cgo-chat-fact b{color:#67e8f9;font-weight:700;font-size:12px;}
+.cgo-chat-next{font-size:11px;color:#99f6e4;padding:8px 10px;border-radius:10px;margin:0 0 4px;
+  background:linear-gradient(90deg,rgba(34,211,238,.1),rgba(167,139,250,.06));
+  border:1px solid rgba(34,211,238,.18);line-height:1.4;}
+.cgo-bubble-text[data-structured="1"]{white-space:normal;}
 @media(max-width:380px){.cgo-chat-facts{grid-template-columns:1fr;}}
 
 .cgo-bubble-text{white-space:pre-line;line-height:1.6;font-size:12.5px;letter-spacing:.01em;word-break:break-word;overflow-wrap:anywhere}
@@ -4627,6 +4663,9 @@ await runAutonomousEngine(state => {
   function process(el){
     if(!el||el.nodeType!==1||!el.classList||!el.classList.contains('cgo-bubble-text'))return;
     if(el.querySelector('.cgo-stream-cursor'))return; // tunggu streaming selesai
+    // Jangan timpa struktur masa depan (lead/facts/next)
+    if(el.getAttribute('data-structured')==='1')return;
+    if(el.querySelector('.cgo-chat-lead,.cgo-chat-facts,.cgo-chat-next'))return;
     var raw=el.textContent;
     if(el.getAttribute('data-raw')===raw&&el.getAttribute('data-fmt')==='1')return;
     el.setAttribute('data-raw',raw);el.setAttribute('data-fmt','1');
@@ -4899,7 +4938,7 @@ await runAutonomousEngine(state => {
 <script>
 /* CGO ORB SURFACE · RADAR v1.1 · disk bulat, HUD luar, live presence */
 (function(){
-  if (window.CGOOrbSurface && window.CGOOrbSurface.version === '1.1.0-RADAR-LIVE') return;
+  if (window.CGOOrbSurface && window.CGOOrbSurface.version === '1.1.1-RADAR-SYNC') return;
   var wrap = document.getElementById('cgo-orb-wrap');
   var host = document.getElementById('cgo-orb-surface-radar');
   var canvas = document.getElementById('cgo-orb-radar-canvas');
@@ -4923,10 +4962,22 @@ await runAutonomousEngine(state => {
     return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1-h));
   }
   function getRadiusKm() {
+    try {
+      var sel = document.getElementById('radar-radius-km');
+      if (sel && sel.value) return Math.min(200, Math.max(5, Number(sel.value) || 50));
+    } catch(_){}
+    try {
+      if (window.__CGO_RADAR__ && Number(window.__CGO_RADAR__.radiusKm) > 0)
+        return Math.min(200, Math.max(5, Number(window.__CGO_RADAR__.radiusKm)));
+    } catch(_){}
     try { if (typeof radarRadiusKm === 'number' && radarRadiusKm > 0) return Math.min(200, Math.max(5, radarRadiusKm)); } catch(_){}
     return 50;
   }
   function getCenter() {
+    try {
+      var R = window.__CGO_RADAR__;
+      if (R && R.source === 'GPS_VERIFIED' && R.center) return R.center;
+    } catch(_){}
     try {
       if (typeof radarCenter !== 'undefined' && radarCenter && typeof radarCenterSource !== 'undefined' && radarCenterSource === 'GPS_VERIFIED')
         return radarCenter;
@@ -5153,7 +5204,7 @@ await runAutonomousEngine(state => {
     getMode: function(){ return mode; },
     getStats: function(){ return Object.assign({}, lastStats); },
     isRadarIntent: isRadarIntent, isOrbIntent: isOrbIntent,
-    version: '1.1.0-RADAR-LIVE'
+    version: '1.1.1-RADAR-SYNC'
   };
   console.log('[CGO-SURFACE]', window.CGOOrbSurface.version);
 })();

@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.12.1-ORB-SURFACE-RADAR";
+  const VERSION = "1.12.2-RADAR-CHAT-SYNC";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -1731,8 +1731,12 @@
         }
         const lines = [];
         lines.push("Radar agent ditampilkan di permukaan Orb.");
-        lines.push("Terdata: " + n + " agent · geo " + geo + " · ready ~" + ready + " · busy " + busy + " · stale " + stale + ".");
-        lines.push("Radius mengikuti pengaturan radar (hingga 200 km). Bilang «kembali ke orb» untuk mode neural.");
+        lines.push("Agent: " + n + ".");
+        lines.push("Geo: " + geo + ".");
+        lines.push("Ready: " + ready + ".");
+        lines.push("Busy: " + busy + ".");
+        lines.push("Radius mengikuti pengaturan radar BCGO (hingga 200 km).");
+        lines.push("Bilang «kembali ke orb» untuk mode neural?");
         answer = lines.join(" ");
         step("SURFACE_RADAR", true, "orb-surface");
       } catch (e) {
