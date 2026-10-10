@@ -800,7 +800,7 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-machine-abc.js?v=0.14.3-MORE-RULES"></script>
 <script src="cgo-machine-abc-bridge.js?v=2.3.0-REPAIR-AUTO"></script>
 <script src="cgo-abc-cognition.js?v=1.2.0-HUMAN-RESULT"></script>
-<script src="cgo-otak-hub.js?v=1.11.0-WAKE-AUTO-STABLE"></script>
+<script src="cgo-otak-hub.js?v=1.12.0-SILENT-WAKE"></script>
 
 <script type="module">
 import * as CGOInstruction from "./cgo-instruction.js?v=1.3.0-CONSTITUTION";
@@ -1580,7 +1580,6 @@ async function sendQuestion(question, opts) {
       } catch (_) {}
       return;
     }
-    chatRequestBusy = false;
     setChatBusy(true);
 
     // WATCHDOG MUTLAK: apapun yang terjadi, unlock chat max 10 detik
@@ -1606,7 +1605,19 @@ async function sendQuestion(question, opts) {
       } catch (_) {}
     }, 12000);
 
-    addChat('user', text, modality === 'voice' ? { modality: 'voice' } : null);
+    // Mask kode akses di bubble user (tetap kirim teks asli ke Otak)
+    var displayText = (function (raw) {
+      try {
+        var s = String(raw || '');
+        // Mask semua kemunculan kode akses (awal atau tengah kalimat)
+        s = s.replace(/\b(c\s*\.?\s*g\s*\.?\s*o)\s*[,\s:-]*\s*(0021|0006|0095)\b/gi, '$1 ••••');
+        // Bare code hanya jika seluruh pesan = kode saja
+        if (/^(0021|0006|0095)$/i.test(s.trim())) s = '••••';
+        s = s.replace(/\bCIKUR\s*GO\s*INDONESIA\b/gi, '••••••••');
+        return s;
+      } catch (_) { return raw; }
+    })(text);
+    addChat('user', displayText, modality === 'voice' ? { modality: 'voice' } : null);
     const thinkBar = document.getElementById('cgo-think-bar');
     const thinkTimer = document.getElementById('cgo-think-timer');
     const thinkLabel = document.getElementById('cgo-think-label');
@@ -3797,8 +3808,6 @@ await runAutonomousEngine(state => {
 }catch(e){console.warn('[CGO-ORB] Wake engine skip:',e&&e.message);}})();
 </script>
 
-
-
 <!-- POIN 1,2,3,4 — CSS append-only (aurora orb, palet orb, banner, wake badge) -->
 <style>
 /* POIN 1 — Aurora multi-layer orb stage host */
@@ -3946,6 +3955,27 @@ await runAutonomousEngine(state => {
   animation:bcgoUpListeningRing 1.2s ease-out infinite;
   z-index:3;
 }
+/* Wake soft — bukan mic: cyan singkat, tanpa ring merah */
+#cgo-orb-wrap.bcgo-wake-soft::after{
+  content:"";
+  position:absolute;
+  inset:-4%;
+  border-radius:50%;
+  border:1px solid rgba(103,232,249,.35);
+  box-shadow:0 0 18px rgba(34,211,238,.2);
+  pointer-events:none;
+  animation:bcgoUpListeningRing 1s ease-out 1;
+  z-index:3;
+}
+#bcgo-listening-banner.bcgo-wake-toast{
+  background:linear-gradient(90deg, rgba(34,211,238,.08) 0%, rgba(99,102,241,.12) 50%, rgba(34,211,238,.08) 100%);
+  border-color:rgba(34,211,238,.22);
+}
+#bcgo-listening-banner.bcgo-wake-toast .bcgo-listening-text{
+  letter-spacing:.14em;
+  font-size:10px;
+  color:#a5f3fc;
+}
 @keyframes bcgoUpListeningRing{
   0%{transform:scale(.94);opacity:.9;}
   100%{transform:scale(1.18);opacity:0;}
@@ -4058,14 +4088,19 @@ await runAutonomousEngine(state => {
   function hide(){
     if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
     banner.classList.remove('on');
-    if (orbWrap) orbWrap.classList.remove('bcgo-listening');
+    banner.classList.remove('bcgo-wake-toast');
+    if (orbWrap) {
+      orbWrap.classList.remove('bcgo-listening');
+      orbWrap.classList.remove('bcgo-wake-soft');
+    }
   }
+  // Mic chat SAJA → banner penuh + ring orb (bcgo-listening)
   window.addEventListener('cgo:mic-status', function(e){
     try{
       var d = e.detail || {};
       var st = String(d.state || '').toUpperCase();
       if (st === 'LISTENING') {
-        show('CGO SEDANG MENDENGAR…');
+        show('CGO SEDANG MENDENGAR…'); // tanpa autoHide = sampai IDLE
       } else if (st === 'TRANSCRIPT') {
         show('SUARA TERTANGKAP · MENGIRIM…', 900);
       } else if (st === 'IDLE') {
@@ -4073,14 +4108,42 @@ await runAutonomousEngine(state => {
       }
     }catch(_){}
   });
-  window.addEventListener('cgo:mic-error', function(){
-    try{ show('MIC ERROR · CEK IZIN BROWSER', 2500); }catch(_){}
+  window.addEventListener('cgo:mic-error', function(e){
+    try{
+      var d = e.detail || {};
+      if (String(d.source || '') === 'wake') return; // wake tidak boleh ganggu UI mic
+      show('MIC ERROR · CEK IZIN BROWSER', 2500);
+    }catch(_){}
   });
+  // Wake FINAL saja → toast singkat TANPA class bcgo-listening (bukan mic)
   window.addEventListener('cgo:wake-heard', function(e){
     try{
       var d = e.detail || {};
-      var t = String(d.text || '').slice(0, 60);
-      show('CGO TERBANGUN · ' + (t || '…'), 2200);
+      if (d.interim) return;
+      if (d.final === false) return;
+      var t = String(d.text || '').slice(0, 40);
+      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+      if (textEl) textEl.textContent = 'CGO · HADIR' + (t ? ' · ' + t : '');
+      banner.classList.add('on');
+      banner.classList.add('bcgo-wake-toast');
+      if (orbWrap) {
+        orbWrap.classList.remove('bcgo-listening'); // jangan tiru mic
+        orbWrap.classList.add('bcgo-wake-soft');
+      }
+      hideTimer = setTimeout(function(){
+        banner.classList.remove('on');
+        banner.classList.remove('bcgo-wake-toast');
+        if (orbWrap) orbWrap.classList.remove('bcgo-wake-soft');
+      }, 1200);
+    }catch(_){}
+  });
+  // partial/interim: diam total
+  window.addEventListener('cgo:wake-partial', function(){ /* silent standby */ });
+  window.addEventListener('cgo:wake-denied', function(){
+    try{
+      if (textEl) textEl.textContent = 'WAKE · IZIN MIC DIPERLUKAN';
+      banner.classList.add('on');
+      setTimeout(function(){ banner.classList.remove('on'); }, 2800);
     }catch(_){}
   });
   window.addEventListener('cgo:wake-awake', function(){
@@ -4392,11 +4455,9 @@ await runAutonomousEngine(state => {
     if(!el||el.nodeType!==1||!el.classList||!el.classList.contains('cgo-bubble-text'))return;
     if(el.querySelector('.cgo-stream-cursor'))return; // tunggu streaming selesai
     var raw=el.textContent;
-    // sudah diformat & isi tidak berubah → lewati (tanpa ini pass kedua meratakan daftar karena textContent hasil format tanpa \n)
-    if(el.getAttribute('data-fmt')==='1'&&el.getAttribute('data-sig')===raw)return;
-    el.setAttribute('data-raw',raw);
+    if(el.getAttribute('data-raw')===raw&&el.getAttribute('data-fmt')==='1')return;
+    el.setAttribute('data-raw',raw);el.setAttribute('data-fmt','1');
     el.innerHTML=fmt(raw);
-    el.setAttribute('data-fmt','1');el.setAttribute('data-sig',el.textContent);
   }
   var feed=document.getElementById('chat-feed');if(!feed)return;
   var deb=null;
@@ -4522,22 +4583,20 @@ await runAutonomousEngine(state => {
   var autoRetried=false,wasListening=false;
   window.addEventListener('cgo:mic-status',function(e){
     var st=String(e.detail&&e.detail.state||'').toUpperCase();
-    if(st==='LISTENING'){wasListening=true;} /* jangan reset di sini: hening berulang = retry tanpa henti, wake tak pernah standby */
-    else if(st==='TRANSCRIPT'){wasListening=false;autoRetried=false;}
+    if(st==='LISTENING'){wasListening=true;autoRetried=false;}
+    else if(st==='TRANSCRIPT'){wasListening=false;}
   });
   window.addEventListener('cgo:mic-error',function(e){
-    var code=String(e.detail&&e.detail.code||'');
+    var d=e.detail||{};
+    var code=String(d.code||'');
+    // Abaikan error dari wake-listener — jangan sentuh tombol mic chat
+    if(String(d.source||'')==='wake') return;
     if(code==='network'){
       var s=document.getElementById('cgo-mic-status');
       if(s){s.textContent='MIC OFFLINE · pengenalan suara Chrome butuh jaringan sekali';s.dataset.tone='warn';}
     }
-    if(code==='no-speech'&&wasListening&&!autoRetried){
-      autoRetried=true;
-      setTimeout(function(){
-        var btn=document.getElementById('chat-mic');
-        if(btn&&!btn.classList.contains('mic-listening'))btn.click();
-      },700);
-    }
+    // ZERO-REGRESI: JANGAN auto-click #chat-mic pada no-speech.
+    // Auto-click membuat mic "tiba-tiba aktif" tanpa gestur pengguna.
   });
   var statusEl=document.getElementById('cgo-mic-status');
   if(statusEl){
@@ -4557,6 +4616,110 @@ await runAutonomousEngine(state => {
   },true);
   console.log('[CGO-FUTURE] mic patch aktif');
 }catch(e){console.warn('[CGO-FUTURE mic]',e);}})();
+</script>
+
+
+<script>
+/* CGO EXPORT BRIDGE · zero-regresi · snapshot CSV + bus ke data-cgo */
+(function(){try{
+  function rowsFromSnapshot(ds){
+    var snap = window.CGO_OPS_SNAPSHOT || null;
+    var lines = [];
+    var ts = new Date().toISOString();
+    if(!snap){
+      lines.push(["note","snapshot_empty","buka data-cgo.html atau bcgo-admin.html saat login"]);
+      return lines;
+    }
+    if(ds==="mitra"){
+      var m = snap.mitra || {};
+      lines.push(["field","value"]);
+      lines.push(["total", m.total!=null?m.total:""]);
+      lines.push(["pending", m.pending!=null?m.pending:""]);
+      lines.push(["approved", m.approved!=null?m.approved:""]);
+      lines.push(["rejected", m.rejected!=null?m.rejected:""]);
+      lines.push(["exported_at", ts]);
+      lines.push(["source", snap.source||""]);
+    } else if(ds==="customers"){
+      var c = snap.customers || {};
+      lines.push(["field","value"]);
+      lines.push(["total", c.total!=null?c.total:""]);
+      lines.push(["online", c.online!=null?c.online:""]);
+      lines.push(["offline", c.offline!=null?c.offline:""]);
+      lines.push(["exported_at", ts]);
+      lines.push(["source", snap.source||""]);
+    } else if(ds==="orders"){
+      var o = snap.orders || {};
+      lines.push(["field","value"]);
+      lines.push(["todayCount", o.todayCount!=null?o.todayCount:""]);
+      lines.push(["todayOmzet", o.todayOmzet!=null?o.todayOmzet:""]);
+      lines.push(["note", o.note||""]);
+      lines.push(["exported_at", ts]);
+      lines.push(["source", snap.source||""]);
+    } else if(ds==="logs"){
+      var r = snap.radar || {};
+      lines.push(["field","value"]);
+      lines.push(["attentionCount", r.attentionCount!=null?r.attentionCount:""]);
+      lines.push(["exported_at", ts]);
+      lines.push(["source", snap.source||""]);
+    } else {
+      lines.push(["note","unknown_dataset", ds]);
+    }
+    return lines;
+  }
+  function toCsv(rows){
+    return rows.map(function(r){
+      return r.map(function(cell){
+        var s = String(cell==null?"":cell);
+        if(/[",\n]/.test(s)) return '"'+s.replace(/"/g,'""')+'"';
+        return s;
+      }).join(",");
+    }).join("\n");
+  }
+  function downloadCsv(ds){
+    try{
+      var rows = rowsFromSnapshot(ds);
+      var csv = toCsv(rows);
+      var blob = new Blob(["\ufeff"+csv], {type:"text/csv;charset=utf-8"});
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "cgo-"+ds+"-"+new Date().toISOString().slice(0,10)+".csv";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function(){ try{ URL.revokeObjectURL(a.href); a.remove(); }catch(_){} }, 800);
+      return true;
+    }catch(e){ console.warn("[CGO-EXPORT]", e); return false; }
+  }
+  function runExport(ds){
+    ds = String(ds||"mitra").toLowerCase();
+    var map = {partner:"mitra",partners:"mitra",customer:"customers",pelanggan:"customers",pesanan:"orders",order:"orders",transaksi:"orders",log:"logs",error:"logs",errors:"logs"};
+    if(map[ds]) ds = map[ds];
+    // 1) tab data-cgo / admin lewat bus (full row bila ada)
+    try{
+      if(typeof BroadcastChannel==="function"){
+        var ch = new BroadcastChannel("cgo-ops-export-bus");
+        ch.postMessage({type:"CGO_EXPORT_CMD", dataset:ds, at:Date.now(), from:"bcgo"});
+        try{ ch.close(); }catch(_){}
+      }
+    }catch(_){}
+    try{
+      window.dispatchEvent(new CustomEvent("cgo-export-request", {detail:{dataset:ds, from:"runExport", __handled:true}}));
+    }catch(_){}
+    // 2) fallback lokal: unduh ringkasan snapshot
+    return downloadCsv(ds);
+  }
+  window.CGO_RUN_EXPORT = runExport;
+  window.addEventListener("cgo-export-request", function(e){
+    try{
+      var ds = e && e.detail && e.detail.dataset;
+      // Hanya unduh di sini bila pemanggil BUKAN CGO_RUN_EXPORT (hindari double)
+      if(ds && e.detail && e.detail.from !== "runExport" && !e.detail.__handled){
+        e.detail.__handled = true;
+        downloadCsv(ds);
+      }
+    }catch(_){}
+  });
+  console.log("[CGO-EXPORT] bridge siap");
+}catch(e){console.warn("[CGO-EXPORT]",e);}})();
 </script>
 
 </body>
