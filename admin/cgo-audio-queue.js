@@ -192,13 +192,9 @@
         file: item.file || null,
         priority: pri,
         play: function () {
-          var result;
-          try {
-            result = item.play();
-          } catch (_) {
-            resolve(false);
-            return { done: Promise.resolve(false), stop: function () {} };
-          }
+          let result;
+          try { result = item.play(); }
+          catch (_) { resolve(false); return { done: Promise.resolve(false), stop: function () {} }; }
           if (result && typeof result.then === "function") {
             return {
               done: result.then(function (v) { resolve(v); return v; }, function (e) { resolve(false); throw e; }),
@@ -259,16 +255,15 @@
   }
 
   // v1.1.0: mic diklaim → hentikan suara yang sedang jalan; mic dilepas → lanjutkan antrean
-  // v1.2.0: remote claim dari tab lain → hentikan bila prioritas remote lebih tinggi (angka lebih kecil)
   try {
     if (typeof global.addEventListener === "function") {
       global.addEventListener("cgo:mic-claim", function () { try { stopCurrent("mic"); } catch (_) {} });
       global.addEventListener("cgo:mic-release", function () { setTimeout(pump, 120); });
+      // v1.2.0: tab lain mengklaim audio dengan prioritas lebih tinggi → hentikan suara yang kalah
       global.addEventListener("cgo:audio-remote-claim", function (e) {
         try {
-          var p = Number(e && e.detail && e.detail.priority);
-          if (!current || isNaN(p)) return;
-          if (current.priority > p) stopCurrent("remote-claim");
+          const p = Number(e && e.detail && e.detail.priority);
+          if (current && isFinite(p) && current.priority > p) stopCurrent("remote");
         } catch (_) {}
       });
     }

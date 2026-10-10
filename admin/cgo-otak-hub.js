@@ -2286,7 +2286,7 @@
     denied: false, deniedNotified: false, extMicUntil: 0,
     awakeUntil: 0, awaitFollow: false, lastHeardAt: 0, lastSentAt: 0,
     sleepAt: 0, sleepT: null, booted: false,
-    pausedUntil: 0, _pendSince: 0
+    pausedUntil: 0, _pendSince: 0, _pendIgnoreUntil: 0
   };
   const WL_LOOSE = ["cgo", "sijio", "sijiou", "sijiow", "sijiu", "cegeo", "segeo", "sejio"];
   const WL_GREET = /^(halo|hai|hi|hey|hei|ok|oke|okay)$/;
@@ -2306,16 +2306,12 @@
       const V = global.CGOOperatorVoice;
       if (V && typeof V.isChatSpeaking === "function" && V.isChatSpeaking()) return true;
       const ss = global.speechSynthesis;
-      if (!ss) return false;
-      if (ss.speaking) { WL._pendSince = 0; return true; }
-      if (ss.pending) {
+      if (ss && (ss.speaking || ss.pending)) {
+        if (ss.speaking) { WL._pendSince = 0; return true; }
+        // antrean "pending" tanpa suara >6 dtk = macet → bersihkan agar wake tidak terblokir selamanya
+        if (Date.now() < WL._pendIgnoreUntil) return false; // sudah dibersihkan: abaikan "pending" yang bandel
         if (!WL._pendSince) WL._pendSince = Date.now();
-        // anti-stuck: pending >6 dtk tanpa speaking → cancel, jangan blokir wake selamanya
-        if (Date.now() - WL._pendSince > 6000) {
-          try { ss.cancel(); } catch (_) {}
-          WL._pendSince = 0;
-          return false;
-        }
+        if (Date.now() - WL._pendSince > 6000) { WL._pendSince = 0; WL._pendIgnoreUntil = Date.now() + 20000; try { ss.cancel(); } catch (_) {} return false; }
         return true;
       }
       WL._pendSince = 0;
@@ -2332,27 +2328,11 @@
     if (!WL.SR) return "unsupported";
     if (!wlSecure()) return "insecure";
     if (WL.denied) return "denied";
-    if (Date.now() < (WL.pausedUntil || 0)) return "paused-manual";
     if (wlHidden()) return "hidden";
+    if (Date.now() < (WL.pausedUntil || 0)) return "paused-manual";
     if (wlMicLocked()) return "mic";
     if (wlTtsBusy()) return "tts";
     return "run";
-  }
-  function wakePause(ms) {
-    const n = Number(ms);
-    WL.pausedUntil = Date.now() + (Number.isFinite(n) && n > 0 ? n : 30000);
-    try { wlStopRec(); wlSync(); } catch (_) {}
-    return WL.pausedUntil;
-  }
-  function wakeResume() {
-    WL.pausedUntil = 0;
-    try { wlSync(); } catch (_) {}
-    return wakeStatus();
-  }
-  function stripWakePrefix(text) {
-    return String(text || "")
-      .replace(/^\s*((halo|hai|hi|hey|hei|ok|oke|okay)\s+)?((c\s*\.?\s*g\s*\.?\s*o)|(c\s+g\s+o)|(si\s*ji\s*(ou|o|ow)?)|(sijiou|sijiow|sijio|cegeo|segeo))\s*[,!?.]?\s*/i, "")
-      .trim();
   }
   function wlStopRec() {
     const r = WL.rec;
@@ -2484,11 +2464,20 @@
     wlSend(wakeOnly ? (WAKE_ONLY_RE.test(text) ? text : "cgo") : text, wakeOnly);
   }
 
+  /** Buang awalan kata bangun ("halo cgo", "si ji ou", "c.g.o") dari perintah. Kode akses (cgo 0021…) TIDAK disentuh. */
+  function stripWakePrefix(text) {
+    const t = String(text || "").trim();
+    if (!t) return t;
+    try { if (ACCESS_CODE_RE.test(t)) return t; } catch (_) {}
+    const re = /^\s*(?:(?:halo|hai|hi|hey|hei|ok|oke|okay)\s+)?(?:c\s*\.?\s*g\s*\.?\s*o|si\s*ji\s*o[uw]?|se\s*ge\s*o|ce\s*ge\s*o)\b[\s,.:;!?\-]*/i;
+    const out = t.replace(re, "").trim();
+    return out || t; // hanya kata bangun → biarkan, agar sapaan wake tetap berjalan
+  }
+
   function wlSend(payload, wakeOnly) {
+    payload = stripWakePrefix(payload);
     WL.awaitFollow = !!wakeOnly;
     WL.awakeUntil = wakeOnly ? Date.now() + 22000 : 0; // wake saja → tunggu perintah berikutnya
-    payload = stripWakePrefix(payload);
-    if (!payload && wakeOnly) payload = "cgo";
     emitWake("cgo:wake-processing", { text: String(payload).slice(0, 80), source: "listener" });
     touchWake(wakeOnly ? 24000 : 12000);
     try {
@@ -2509,15 +2498,24 @@
     } catch (_) {}
   }
 
+  function wakePause(ms) {
+    WL.pausedUntil = Date.now() + Math.max(0, Number(ms) || 0);
+    wlStopRec();
+    wlSync();
+    return wakeStatus();
+  }
+  function wakeResume() { WL.pausedUntil = 0; wlSync(); return wakeStatus(); }
+
   function wlBoot() {
     if (WL.booted) return;
     WL.booted = true;
     try {
       global.addEventListener("cgo:mic-claim", function () { wlSync(); });
-      global.addEventListener("cgo:mic-release", function () { setTimeout(wlSync, 900); });
+      global.addEventListener("cgo:mic-release", function () { WL.pausedUntil = 0; setTimeout(wlSync, 900); });
       global.addEventListener("cgo:mic-status", function (e) {
         const st = String(e && e.detail && e.detail.state || "").toUpperCase();
         WL.extMicUntil = st === "LISTENING" ? Date.now() + 20000 : 0;
+        if (st === "IDLE" || st === "TRANSCRIPT") WL.pausedUntil = 0; // sesi mic manual selesai → wake lanjut
         setTimeout(wlSync, st === "LISTENING" ? 0 : 900);
       });
       global.addEventListener("cgo:voice-start", function () { touchWake(30000); wlSync(); });
@@ -2639,7 +2637,7 @@
     detectWake: detectWakeInText,
     wakeStatus: wakeStatus,
     wakePause: wakePause,
-    wakeResume: function () { WL.pausedUntil = 0; wlSync(); return wakeStatus(); },
+    wakeResume: wakeResume,
     wakeRestart: function () { WL.denied = false; WL.backoff = 700; wlStopRec(); wlSync(); return wakeStatus(); }
   });
 
