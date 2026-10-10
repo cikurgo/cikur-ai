@@ -167,49 +167,53 @@ body{font-family:'Inter',sans-serif}
 .cgo-orb-center{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px}
 .cgo-orb-wrap{position:relative;width:300px;height:300px;display:flex;align-items:center;justify-content:center}
 
-/* CGO ORB SURFACE · radar overlay · zero-regresi (orb asli tetap) */
+/* CGO ORB SURFACE · radar overlay v2 · disk bulat, HUD di luar clip */
 .cgo-orb-center{position:relative;}
 #cgo-orb-surface-radar{
   position:absolute;inset:0;z-index:6;
-  display:none;align-items:center;justify-content:center;
-  border-radius:50%;overflow:hidden;
-  background:radial-gradient(circle at center,#031510 0%,#020617 72%);
-  border:1px solid rgba(52,211,153,.25);
-  box-shadow:inset 0 0 40px rgba(52,211,153,.08),0 0 24px rgba(52,211,153,.1);
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  pointer-events:none;
 }
 #cgo-orb-surface-radar.on{display:flex;}
-#cgo-orb-surface-radar canvas{position:absolute;inset:0;width:100%;height:100%;}
-.cgo-orb-surface-hud{
-  position:absolute;left:8px;right:8px;top:8px;z-index:2;
-  display:flex;flex-direction:column;gap:4px;pointer-events:none;
+.cgo-orb-radar-disk{
+  position:relative;
+  width:100%;height:100%;
+  border-radius:50%;
+  overflow:hidden;
+  background:radial-gradient(circle at center,#031510 0%,#020617 78%);
+  border:1px solid rgba(52,211,153,.3);
+  box-shadow:inset 0 0 36px rgba(52,211,153,.1),0 0 20px rgba(52,211,153,.12);
 }
+.cgo-orb-radar-disk canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+/* HUD di bawah disk — TIDAK ikut border-radius, tidak terpotong */
+.cgo-orb-surface-hud{
+  position:absolute;left:50%;bottom:-2px;transform:translate(-50%,100%);
+  z-index:7;width:max-content;max-width:140%;
+  display:none;flex-direction:column;align-items:center;gap:3px;
+  pointer-events:none;
+}
+.cgo-orb-wrap.surface-radar-on .cgo-orb-surface-hud{display:flex;}
 .cgo-orb-surface-hud .sh-title{
-  font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:#6ee7b7;
-  text-shadow:0 0 8px rgba(52,211,153,.4);
+  font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:#6ee7b7;
+  white-space:nowrap;
 }
 .cgo-orb-surface-hud .sh-meta{
-  display:flex;flex-wrap:wrap;gap:3px;
+  display:flex;flex-wrap:wrap;gap:3px;justify-content:center;
 }
 .cgo-orb-surface-hud .sh-meta span{
-  font-size:7px;padding:1px 5px;border-radius:4px;
-  border:1px solid rgba(52,211,153,.25);color:#a7f3d0;background:rgba(2,20,14,.55);
+  font-size:8px;padding:2px 6px;border-radius:4px;white-space:nowrap;
+  border:1px solid rgba(52,211,153,.3);color:#a7f3d0;background:rgba(2,20,14,.75);
 }
-.cgo-orb-surface-legend{
-  position:absolute;left:6px;right:6px;bottom:6px;z-index:2;
-  display:flex;flex-wrap:wrap;gap:4px 8px;justify-content:center;
-  font-size:7px;color:#94a3b8;pointer-events:none;
-  background:rgba(0,0,0,.35);border-radius:8px;padding:3px 6px;
-  border:1px solid rgba(52,211,153,.12);
-}
-.cgo-orb-surface-legend i{
-  display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:3px;vertical-align:middle;
-}
+.cgo-orb-surface-legend{display:none;} /* legenda digambar di canvas */
 .cgo-orb-wrap.surface-radar-on #cgo-orb-canvas,
 .cgo-orb-wrap.surface-radar-on .cgo-orb-core{
   opacity:0;pointer-events:none;transition:opacity .35s;
 }
 .cgo-orb-wrap.surface-radar-on #cgo-orb-surface-radar{display:flex;}
 .cgo-orb-stage-host.surface-radar-on .cgo-orb-status{color:#6ee7b7;}
+/* beri ruang HUD di bawah orb saat radar */
+.cgo-orb-center:has(.surface-radar-on){padding-bottom:28px;}
+.cgo-orb-wrap.surface-radar-on{margin-bottom:22px;}
 
 @media (max-width:720px){.cgo-orb-wrap{width:230px;height:230px}}
 @media (max-width:380px){.cgo-orb-wrap{width:200px;height:200px}}
@@ -756,7 +760,9 @@ body{font-family:'Inter',sans-serif}
                   </div>
 
                   <div id="cgo-orb-surface-radar" aria-label="Permukaan radar Orb" hidden>
-                    <canvas id="cgo-orb-radar-canvas" aria-hidden="true"></canvas>
+                    <div class="cgo-orb-radar-disk">
+                      <canvas id="cgo-orb-radar-canvas" aria-hidden="true"></canvas>
+                    </div>
                     <div class="cgo-orb-surface-hud">
                       <div class="sh-title">Agent CGO · Live Radar</div>
                       <div class="sh-meta">
@@ -764,12 +770,6 @@ body{font-family:'Inter',sans-serif}
                         <span id="cgo-orb-radar-count">BLIP 0</span>
                         <span id="cgo-orb-radar-scan">SCAN</span>
                       </div>
-                    </div>
-                    <div class="cgo-orb-surface-legend">
-                      <span><i style="background:#34d399;box-shadow:0 0 4px #34d399"></i>Ready</span>
-                      <span><i style="background:#fbbf24"></i>Busy</span>
-                      <span><i style="background:#94a3b8"></i>Stale</span>
-                      <span><i style="background:#6366f1"></i>Standby</span>
                     </div>
                   </div>
                 </div>
@@ -1282,6 +1282,90 @@ function renderLogs(logs) {
     errorFeed.scrollTop = 0;
 }
 
+
+/** Struktur jawaban CGO: lead + facts grid + saran (mockup vertikal) */
+function cgoStructureAnswerHtml(raw) {
+  try {
+    var text = String(raw || '').replace(/\s+/g, ' ').trim();
+    if (!text || text.length < 40) return null;
+    // pecah kalimat
+    var parts = text.split(/(?<=[.!?…])\s+/).map(function(s){ return s.trim(); }).filter(Boolean);
+    if (parts.length < 2) return null;
+    var lead = parts[0];
+    var next = '';
+    var mid = parts.slice(1);
+    // saran = kalimat tanya / "bilang" / "lanjut" di akhir
+    if (mid.length) {
+      var last = mid[mid.length - 1];
+      if (/\?$/.test(last) || /\b(bilang|lanjut|ketik|atau|mau)\b/i.test(last)) {
+        next = last;
+        mid = mid.slice(0, -1);
+      }
+    }
+    // facts dari potongan berisi angka / · / :
+    var facts = [];
+    var rest = [];
+    mid.forEach(function(s) {
+      if (facts.length >= 4) { rest.push(s); return; }
+      // "Terdata: 0 agent · geo 0 · ready ~0" → several facts
+      if (/·/.test(s) && (s.match(/·/g) || []).length >= 1) {
+        var segs = s.split(/\s*·\s*/);
+        segs.forEach(function(seg) {
+          if (facts.length >= 4) return;
+          seg = seg.replace(/^[^:]*:\s*/, '').trim();
+          var mm = seg.match(/^(~?\d[\d\.\,]*)\s+(.+)$/) || seg.match(/^(.+?)\s+(~?\d[\d\.\,]*\s*.*)$/);
+          if (mm) {
+            var a = mm[1].trim(), b = mm[2].trim();
+            if (/^~?\d/.test(a)) facts.push({ k: b.slice(0, 18), v: a });
+            else facts.push({ k: a.slice(0, 18), v: b.slice(0, 28) });
+          }
+        });
+        if (facts.length) return;
+      }
+      if (/\d/.test(s) || /·/.test(s) || /:\s*\S/.test(s)) {
+        var m = s.match(/^([^·:\-–—]{2,28})\s*[·:\-–—]\s*(.+)$/);
+        if (m) facts.push({ k: m[1].trim(), v: m[2].trim() });
+        else {
+          var m2 = s.match(/(\d[\d\.\,]*)\s*([^\d]{0,24})/);
+          if (m2) facts.push({ k: (m2[2] || 'Info').trim().slice(0, 18) || 'Info', v: m2[1] });
+          else rest.push(s);
+        }
+      } else rest.push(s);
+    });
+    // jika facts kurang, pecah lead-extra dari rest dengan bullet pattern "X · Y"
+    if (!facts.length && rest.length) {
+      rest.forEach(function(s) {
+        if (facts.length >= 4) return;
+        var bits = s.split(/\s*·\s*/);
+        if (bits.length >= 2 && bits.length <= 4) {
+          bits.forEach(function(b) {
+            if (facts.length >= 4) return;
+            var mm = b.trim().match(/^(\d[\d\.\,]*)\s+(.+)$/) || b.trim().match(/^(.+?)\s+(\d[\d\.\,]*.*)$/);
+            if (mm) facts.push({ k: (mm[2]||mm[1]).slice(0,16), v: (mm[1]||mm[2]).slice(0,24) });
+          });
+        }
+      });
+    }
+    if (!facts.length && !next && rest.length === 0) return null;
+    function esc(s) {
+      return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+    var htmlOut = '<div class="cgo-chat-lead">' + esc(lead) + '</div>';
+    if (facts.length) {
+      htmlOut += '<div class="cgo-chat-facts">';
+      facts.slice(0,4).forEach(function(f) {
+        htmlOut += '<div class="cgo-chat-fact"><em>' + esc(f.k) + '</em><b>' + esc(f.v) + '</b></div>';
+      });
+      htmlOut += '</div>';
+    }
+    if (rest.length) {
+      htmlOut += '<div class="cgo-line">' + esc(rest.join(' ')) + '</div>';
+    }
+    if (next) htmlOut += '<div class="cgo-chat-next">' + esc(next) + '</div>';
+    return htmlOut;
+  } catch (_) { return null; }
+}
+
 function addChat(role, text, meta) {
     if (!chatFeed) return;
     meta = meta || {};
@@ -1336,7 +1420,9 @@ function addChat(role, text, meta) {
     })();
     const canStream = role !== 'user' && streamPref && fullText.length >= 20 && !meta.noStream;
     if (!canStream) {
-      content.textContent = fullText;
+      var structured = (role !== 'user') ? cgoStructureAnswerHtml(fullText) : null;
+      if (structured) content.innerHTML = structured;
+      else content.textContent = fullText;
     } else {
       content.textContent = '';
       const cursor = document.createElement('span');
@@ -1349,6 +1435,10 @@ function addChat(role, text, meta) {
         if (stopped) return;
         if (idx >= fullText.length) {
           try { cursor.remove(); } catch(_){}
+          try {
+            var s = cgoStructureAnswerHtml(fullText);
+            if (s) content.innerHTML = s;
+          } catch(_){}
           return;
         }
         content.insertBefore(document.createTextNode(fullText.charAt(idx)), cursor);
@@ -1358,7 +1448,7 @@ function addChat(role, text, meta) {
       setTimeout(tick, 20);
       meta._streamStop = function(){
         stopped = true;
-        content.textContent = fullText;
+        (function(){ var s = (role !== 'user') ? cgoStructureAnswerHtml(fullText) : null; if (s) content.innerHTML = s; else content.textContent = fullText; })();
       };
     }
     body.appendChild(content);
@@ -4420,6 +4510,19 @@ await runAutonomousEngine(state => {
      ═══════════════════════════════════════════════════════════════════════ -->
 <style>
 /* ── 1. TIPOGRAFI JAWABAN: kalimat panjang utuh, poin-poin jadi daftar ── */
+
+/* CGO chat masa depan · struktur vertikal lead/facts/next */
+.cgo-chat-lead{font-weight:700;font-size:12.5px;line-height:1.45;color:#f1f5f9;margin:0 0 8px;}
+.cgo-chat-facts{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:0 0 8px;}
+.cgo-chat-fact{padding:6px 8px;border-radius:8px;font-size:10px;line-height:1.35;color:#c7d2fe;
+  background:rgba(34,211,238,.05);border:1px solid rgba(34,211,238,.12);}
+.cgo-chat-fact em{display:block;font-style:normal;font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin-bottom:2px;}
+.cgo-chat-fact b{color:#67e8f9;font-weight:700;}
+.cgo-chat-next{font-size:11px;color:#99f6e4;padding:7px 9px;border-radius:8px;margin:0 0 4px;
+  background:linear-gradient(90deg,rgba(34,211,238,.07),rgba(167,139,250,.05));
+  border:1px solid rgba(34,211,238,.14);line-height:1.4;}
+@media(max-width:380px){.cgo-chat-facts{grid-template-columns:1fr;}}
+
 .cgo-bubble-text{white-space:pre-line;line-height:1.6;font-size:12.5px;letter-spacing:.01em;word-break:break-word;overflow-wrap:anywhere}
 .cgo-bubble-text .cgo-line{display:block;min-height:1em}
 .cgo-bubble-text .cgo-list{display:block;margin:2px 0}
@@ -4794,69 +4897,56 @@ await runAutonomousEngine(state => {
 
 
 <script>
-/* ═══════════════════════════════════════════════════════════
-   CGO ORB SURFACE · RADAR MODE
-   - Orb ASLI tetap (canvas + core tidak diganti)
-   - Overlay radar di permukaan orb saat intent "tampilan radar"
-   - Canvas blip: cocok ratusan–ribuan titik · radius hingga 200 km
-   - Zero-regresi: radar section bawah + orb engine tidak diubah
-   ═══════════════════════════════════════════════════════════ */
+/* CGO ORB SURFACE · RADAR v1.1 · disk bulat, HUD luar, live presence */
 (function(){
-  if (window.CGOOrbSurface) return;
+  if (window.CGOOrbSurface && window.CGOOrbSurface.version === '1.1.0-RADAR-LIVE') return;
   var wrap = document.getElementById('cgo-orb-wrap');
   var host = document.getElementById('cgo-orb-surface-radar');
   var canvas = document.getElementById('cgo-orb-radar-canvas');
+  var disk = host && host.querySelector('.cgo-orb-radar-disk');
   var stageHost = document.querySelector('.cgo-orb-stage-host');
-  if (!wrap || !host || !canvas) {
-    console.warn('[CGO-SURFACE] orb surface nodes missing');
-    return;
-  }
+  if (!wrap || !host || !canvas) { console.warn('[CGO-SURFACE] nodes missing'); return; }
 
-  var mode = 'orb'; // orb | radar
+  var mode = 'orb';
   var raf = 0;
   var t0 = performance.now();
   var lastItems = [];
   var lastStats = { total: 0, inRange: 0, ready: 0, busy: 0, stale: 0, standby: 0 };
-  var MAX_DRAW = 1200; // hard cap draw calls per frame (cluster sisanya)
+  var MAX_DRAW = 1500;
+  var refreshMs = 0;
 
   function haversineKm(a, b) {
-    if (!a || !b || !Number.isFinite(a.lat) || !Number.isFinite(b.lat)) return null;
-    var R = 6371;
-    var p1 = a.lat * Math.PI / 180, p2 = b.lat * Math.PI / 180;
-    var dlat = (b.lat - a.lat) * Math.PI / 180;
-    var dlng = (b.lng - a.lng) * Math.PI / 180;
+    if (!a || !b || !Number.isFinite(+a.lat) || !Number.isFinite(+b.lat)) return null;
+    var R = 6371, p1 = a.lat * Math.PI / 180, p2 = b.lat * Math.PI / 180;
+    var dlat = (b.lat - a.lat) * Math.PI / 180, dlng = (b.lng - a.lng) * Math.PI / 180;
     var h = Math.sin(dlat/2)*Math.sin(dlat/2) + Math.cos(p1)*Math.cos(p2)*Math.sin(dlng/2)*Math.sin(dlng/2);
     return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1-h));
   }
-
   function getRadiusKm() {
-    try {
-      if (typeof radarRadiusKm === 'number' && radarRadiusKm > 0) return Math.min(200, Math.max(5, radarRadiusKm));
-    } catch (_) {}
+    try { if (typeof radarRadiusKm === 'number' && radarRadiusKm > 0) return Math.min(200, Math.max(5, radarRadiusKm)); } catch(_){}
     return 50;
   }
-
   function getCenter() {
     try {
-      if (typeof radarCenter !== 'undefined' && radarCenter && radarCenterSource === 'GPS_VERIFIED') return radarCenter;
-    } catch (_) {}
+      if (typeof radarCenter !== 'undefined' && radarCenter && typeof radarCenterSource !== 'undefined' && radarCenterSource === 'GPS_VERIFIED')
+        return radarCenter;
+    } catch(_){}
     return null;
   }
-
   function getPresenceItems() {
     try {
-      var st = window.BCGO_STATE || window.liveState || null;
-      // liveState may be local in closure — try BCGO_STATE first
-      var p = (st && st.agentPresence) || (window.__CGO_LAST_AGENT_PRESENCE__) || null;
-      if (p && Array.isArray(p.items)) return p.items;
-    } catch (_) {}
+      if (window.__CGO_AGENT_ITEMS__ && window.__CGO_AGENT_ITEMS__.length) return window.__CGO_AGENT_ITEMS__;
+    } catch(_){}
     try {
-      // mirror from metrics if presence feed was rendered
-      if (window.__CGO_AGENT_ITEMS__ && Array.isArray(window.__CGO_AGENT_ITEMS__)) return window.__CGO_AGENT_ITEMS__;
-    } catch (_) {}
+      var st = window.BCGO_STATE;
+      if (st && st.agentPresence && Array.isArray(st.agentPresence.items)) return st.agentPresence.items;
+    } catch(_){}
+    try {
+      var p = window.__CGO_LAST_AGENT_PRESENCE__;
+      if (p && Array.isArray(p.items)) return p.items;
+    } catch(_){}
     return [];
   }
-
   function collectItems() {
     var items = getPresenceItems();
     var center = getCenter();
@@ -4865,135 +4955,124 @@ await runAutonomousEngine(state => {
     var stats = { total: items.length, inRange: 0, ready: 0, busy: 0, stale: 0, standby: 0, noGeo: 0 };
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
-      if (!it || !it.location || !Number.isFinite(it.location.lat)) { stats.noGeo++; continue; }
-      var d = center ? haversineKm(center, it.location) : null;
-      if (d == null) { stats.noGeo++; continue; }
-      if (d > radius) continue;
+      if (!it || !it.location || !Number.isFinite(+it.location.lat)) { stats.noGeo++; continue; }
+      if (!center) { stats.noGeo++; continue; }
+      var d = haversineKm(center, it.location);
+      if (d == null || d > radius) continue;
       stats.inRange++;
-      var st = String(it.status || '').toUpperCase();
+      var st = String(it.status || 'READY').toUpperCase();
       if (st === 'BUSY') stats.busy++;
       else if (st === 'STALE') stats.stale++;
       else if (st === 'STANDBY') stats.standby++;
       else stats.ready++;
-      out.push({
-        lat: it.location.lat,
-        lng: it.location.lng,
-        d: d,
-        st: st || 'READY',
-        name: it.name || it.agentId || ''
-      });
+      out.push({ lat:+it.location.lat, lng:+it.location.lng, d:d, st:st });
     }
-    // nearest first for draw priority
     out.sort(function(a,b){ return a.d - b.d; });
-    lastItems = out;
-    lastStats = stats;
+    lastItems = out; lastStats = stats;
     return { items: out, stats: stats, radius: radius, center: center };
   }
-
   function updateHud(pack) {
     var rEl = document.getElementById('cgo-orb-radar-range');
     var cEl = document.getElementById('cgo-orb-radar-count');
     var sEl = document.getElementById('cgo-orb-radar-scan');
     if (rEl) rEl.textContent = 'RANGE ' + pack.radius + ' km';
-    if (cEl) cEl.textContent = 'BLIP ' + pack.stats.inRange + (pack.stats.total > pack.stats.inRange ? ' / ' + pack.stats.total : '');
-    if (sEl) sEl.textContent = pack.center ? 'LIVE' : 'NO GPS';
+    if (cEl) cEl.textContent = 'BLIP ' + pack.stats.inRange + (pack.stats.total ? (' · ALL ' + pack.stats.total) : '');
+    if (sEl) sEl.textContent = pack.center ? 'LIVE GPS' : 'NO GPS';
   }
-
   function resize() {
+    var el = disk || host;
     var dpr = window.devicePixelRatio || 1;
-    var rect = host.getBoundingClientRect();
-    var w = Math.max(10, Math.floor(rect.width * dpr));
-    var h = Math.max(10, Math.floor(rect.height * dpr));
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w; canvas.height = h;
-    }
+    var rect = el.getBoundingClientRect();
+    var w = Math.max(20, Math.floor(rect.width * dpr));
+    var h = Math.max(20, Math.floor(rect.height * dpr));
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
   }
-
   function draw(now) {
     if (mode !== 'radar') return;
     resize();
     var ctx = canvas.getContext('2d');
-    var W = canvas.width, H = canvas.height;
-    var dpr = window.devicePixelRatio || 1;
+    var W = canvas.width, H = canvas.height, dpr = window.devicePixelRatio || 1;
     ctx.clearRect(0, 0, W, H);
-    var cx = W / 2, cy = H / 2;
-    var R = Math.min(W, H) * 0.46;
+    var cx = W/2, cy = H/2, R = Math.min(W,H)*0.46;
 
-    // rings
     for (var i = 1; i <= 4; i++) {
-      ctx.beginPath();
-      ctx.arc(cx, cy, R * (i / 4), 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(52,211,153,' + (0.08 + i * 0.04) + ')';
-      ctx.lineWidth = 1 * dpr;
-      ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, R*(i/4), 0, Math.PI*2);
+      ctx.strokeStyle = 'rgba(52,211,153,'+(0.1+i*0.04)+')';
+      ctx.lineWidth = 1*dpr; ctx.stroke();
     }
-    ctx.strokeStyle = 'rgba(52,211,153,0.12)';
-    ctx.beginPath(); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R); ctx.stroke();
+    ctx.strokeStyle = 'rgba(52,211,153,0.14)';
+    ctx.beginPath(); ctx.moveTo(cx-R,cy); ctx.lineTo(cx+R,cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx,cy-R); ctx.lineTo(cx,cy+R); ctx.stroke();
 
-    // sweep
-    var t = (now - t0) / 1000;
-    var sweep = (t * 0.85) % (Math.PI * 2);
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, R, sweep - 0.85, sweep, false);
-    ctx.closePath();
-    var sg = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
-    sg.addColorStop(0, 'rgba(52,211,153,0.18)');
-    sg.addColorStop(1, 'rgba(52,211,153,0)');
-    ctx.fillStyle = sg;
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + Math.cos(sweep) * R, cy + Math.sin(sweep) * R);
-    ctx.strokeStyle = 'rgba(110,231,183,0.75)';
-    ctx.lineWidth = 2 * dpr;
-    ctx.stroke();
-    ctx.restore();
+    var t = (now - t0)/1000;
+    var sweep = (t*0.85) % (Math.PI*2);
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,R,sweep-0.9,sweep,false); ctx.closePath();
+    var sg = ctx.createRadialGradient(cx,cy,0,cx,cy,R);
+    sg.addColorStop(0,'rgba(52,211,153,0.2)'); sg.addColorStop(1,'rgba(52,211,153,0)');
+    ctx.fillStyle = sg; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx,cy);
+    ctx.lineTo(cx+Math.cos(sweep)*R, cy+Math.sin(sweep)*R);
+    ctx.strokeStyle = 'rgba(110,231,183,0.85)'; ctx.lineWidth = 2*dpr; ctx.stroke();
 
-    // blips — draw up to MAX_DRAW nearest; density-safe for thousands
+    // refresh presence periodically from live globals
+    if (now - refreshMs > 800) {
+      refreshMs = now;
+      try {
+        var st = window.BCGO_STATE;
+        if (st && st.agentPresence && Array.isArray(st.agentPresence.items))
+          window.__CGO_AGENT_ITEMS__ = st.agentPresence.items.slice();
+      } catch(_){}
+    }
+
     var pack = collectItems();
     updateHud(pack);
-    var items = pack.items;
-    var n = Math.min(items.length, MAX_DRAW);
-    var centerOk = !!pack.center;
-    for (var j = 0; j < n; j++) {
-      var b = items[j];
-      if (!centerOk) break;
-      var bearing = Math.atan2(
-        (b.lng - pack.center.lng) * Math.cos((b.lat + pack.center.lat) * Math.PI / 360),
-        (b.lat - pack.center.lat)
-      );
-      // rotate so 0 = north, match existing radar
-      var ang = bearing; // atan2(xEast, yNorth) already
-      var rr = (0.12 + Math.min(1, b.d / pack.radius) * 0.82) * R;
-      var x = cx + Math.sin(ang) * rr;
-      var y = cy - Math.cos(ang) * rr;
-      var col = 'rgba(52,211,153,0.9)';
-      if (b.st === 'BUSY') col = 'rgba(251,191,36,0.9)';
-      else if (b.st === 'STALE') col = 'rgba(148,163,184,0.8)';
-      else if (b.st === 'STANDBY') col = 'rgba(99,102,241,0.85)';
-      var diff = Math.abs(((ang - sweep + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
-      var lit = diff < 0.55 ? 1 : 0.5;
-      ctx.beginPath();
-      ctx.arc(x, y, (1.6 + lit) * dpr, 0, Math.PI * 2);
-      ctx.fillStyle = col.replace(/[\d.]+\)$/, (0.35 * lit) + ')');
-      // simpler:
-      ctx.fillStyle = col;
-      ctx.globalAlpha = 0.35 + 0.55 * lit;
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-    if (items.length > MAX_DRAW) {
-      // corner note via hud count already shows total
+    var items = pack.items, n = Math.min(items.length, MAX_DRAW);
+    if (pack.center) {
+      for (var j = 0; j < n; j++) {
+        var b = items[j];
+        var ang = Math.atan2(
+          (b.lng - pack.center.lng) * Math.cos((b.lat + pack.center.lat)*Math.PI/360),
+          (b.lat - pack.center.lat)
+        );
+        var rr = (0.12 + Math.min(1, b.d/pack.radius)*0.82) * R;
+        var x = cx + Math.sin(ang)*rr;
+        var y = cy - Math.cos(ang)*rr;
+        var col = 'rgba(52,211,153,0.95)';
+        if (b.st === 'BUSY') col = 'rgba(251,191,36,0.95)';
+        else if (b.st === 'STALE') col = 'rgba(148,163,184,0.85)';
+        else if (b.st === 'STANDBY') col = 'rgba(99,102,241,0.9)';
+        var diff = Math.abs(((ang - sweep + Math.PI*3)%(Math.PI*2))-Math.PI);
+        var lit = diff < 0.55 ? 1 : 0.45;
+        ctx.beginPath();
+        ctx.arc(x, y, (1.8+lit*1.2)*dpr, 0, Math.PI*2);
+        ctx.fillStyle = col; ctx.globalAlpha = 0.4 + 0.55*lit; ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    } else {
+      ctx.fillStyle = 'rgba(148,163,184,0.7)';
+      ctx.font = (10*dpr)+'px ui-sans-serif,system-ui,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Menunggu GPS admin', cx, cy + R*0.15);
     }
 
     // center
-    ctx.beginPath();
-    ctx.arc(cx, cy, 3.5 * dpr, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(34,211,238,0.95)';
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(cx,cy,3.5*dpr,0,Math.PI*2);
+    ctx.fillStyle = 'rgba(34,211,238,0.95)'; ctx.fill();
+
+    // mini legend inside bottom of disk (won't clip if inset enough)
+    ctx.font = (7.5*dpr)+'px ui-sans-serif,system-ui,sans-serif';
+    ctx.textAlign = 'left';
+    var legs = [
+      {c:'#34d399',t:'Ready'},{c:'#fbbf24',t:'Busy'},{c:'#94a3b8',t:'Stale'},{c:'#6366f1',t:'Standby'}
+    ];
+    var lx = cx - R*0.72, ly = cy + R*0.78;
+    for (var L=0;L<legs.length;L++) {
+      ctx.fillStyle = legs[L].c;
+      ctx.beginPath(); ctx.arc(lx, ly, 2.2*dpr, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = 'rgba(148,163,184,0.85)';
+      ctx.fillText(legs[L].t, lx + 5*dpr, ly + 2.5*dpr);
+      lx += 32*dpr;
+    }
 
     raf = requestAnimationFrame(draw);
   }
@@ -5010,119 +5089,76 @@ await runAutonomousEngine(state => {
       var title = document.getElementById('cgo-orb-right-title');
       if (title) title.textContent = 'AGENT CGO · LIVE RADAR';
       var body = document.getElementById('cgo-orb-right-body');
-      if (body) body.textContent = 'Permukaan orb menampilkan radar agent. Bilang «kembali ke orb» untuk mode neural.';
-    } catch (_) {}
+      if (body) body.textContent = 'Radar agent di permukaan Orb. Bilang «kembali ke orb» untuk mode neural.';
+    } catch(_){}
     cancelAnimationFrame(raf);
     t0 = performance.now();
     raf = requestAnimationFrame(draw);
-    try { window.dispatchEvent(new CustomEvent('cgo:orb-surface', { detail: { mode: 'radar' } })); } catch (_) {}
+    try { window.dispatchEvent(new CustomEvent('cgo:orb-surface',{detail:{mode:'radar'}})); } catch(_){}
   }
-
   function showOrb() {
     mode = 'orb';
     host.classList.remove('on');
     host.hidden = true;
     wrap.classList.remove('surface-radar-on');
     if (stageHost) stageHost.classList.remove('surface-radar-on');
-    cancelAnimationFrame(raf);
-    raf = 0;
+    cancelAnimationFrame(raf); raf = 0;
     try {
       var st = document.getElementById('cgo-orb-status');
       if (st && st.textContent === 'Radar') st.textContent = 'Tenang';
       var title = document.getElementById('cgo-orb-right-title');
-      if (title && /RADAR/i.test(title.textContent)) title.textContent = 'CGO SIAP';
+      if (title && /RADAR/i.test(title.textContent||'')) title.textContent = 'CGO SIAP';
       var body = document.getElementById('cgo-orb-right-body');
-      if (body && /Permukaan orb menampilkan radar/i.test(body.textContent)) {
+      if (body && /Radar agent/i.test(body.textContent||''))
         body.textContent = 'Saya selalu standby, siap membantu kapan saja.';
-      }
-    } catch (_) {}
-    try { window.dispatchEvent(new CustomEvent('cgo:orb-surface', { detail: { mode: 'orb' } })); } catch (_) {}
+    } catch(_){}
+    try { window.dispatchEvent(new CustomEvent('cgo:orb-surface',{detail:{mode:'orb'}})); } catch(_){}
   }
-
-  function toggle() {
-    if (mode === 'radar') showOrb(); else showRadar();
-  }
-
   function isRadarIntent(text) {
-    var t = String(text || '');
-    return /\b(tampilan\s*radar|buka\s*radar|lihat\s*radar|tampilkan\s*radar|radar\s*agent|agent\s*radar|live\s*radar|peta\s*radar)\b/i.test(t);
+    return /\b(tampilan\s*radar|buka\s*radar|lihat\s*radar|tampilkan\s*radar|radar\s*agent|agent\s*radar|live\s*radar|peta\s*radar)\b/i.test(String(text||''));
   }
   function isOrbIntent(text) {
-    var t = String(text || '');
-    return /\b(kembali\s*ke\s*orb|tutup\s*radar|tampilan\s*orb|mode\s*orb|orb\s*neural)\b/i.test(t);
+    return /\b(kembali\s*ke\s*orb|tutup\s*radar|tampilan\s*orb|mode\s*orb|orb\s*neural)\b/i.test(String(text||''));
   }
 
-  // Snapshot presence items whenever bottom radar renders (zero-regresi hook)
+  // hooks presence (zero-regresi)
   try {
-    var _orig = window.renderRadarBlips || renderRadarBlips;
-  } catch (_) {}
-  try {
-    if (typeof renderRadarBlips === 'function') {
+    if (typeof renderRadarBlips === 'function' && !renderRadarBlips._cgoSurf) {
       var _rr = renderRadarBlips;
       renderRadarBlips = function(items) {
-        try {
-          if (Array.isArray(items)) window.__CGO_AGENT_ITEMS__ = items.slice();
-        } catch (_) {}
+        try { if (Array.isArray(items)) window.__CGO_AGENT_ITEMS__ = items.slice(); } catch(_){}
         return _rr.apply(this, arguments);
       };
+      renderRadarBlips._cgoSurf = true;
     }
-  } catch (_) {}
-
+  } catch(_){}
   try {
-    if (typeof renderAgentPresence === 'function') {
+    if (typeof renderAgentPresence === 'function' && !renderAgentPresence._cgoSurf) {
       var _rp = renderAgentPresence;
       renderAgentPresence = function(state) {
         try {
           var p = state && state.agentPresence;
           if (p && Array.isArray(p.items)) window.__CGO_AGENT_ITEMS__ = p.items.slice();
           if (p) window.__CGO_LAST_AGENT_PRESENCE__ = p;
-        } catch (_) {}
-        var ret = _rp.apply(this, arguments);
-        if (mode === 'radar') {
-          try { collectItems(); } catch (_) {}
-        }
-        return ret;
+        } catch(_){}
+        return _rp.apply(this, arguments);
       };
+      renderAgentPresence._cgoSurf = true;
     }
-  } catch (_) {}
-
-  // Hook chat send — surface switch before otak (non-blocking)
-  try {
-    var prevSend = window.CGO_BCGO_SEND_QUESTION;
-    if (typeof prevSend === 'function') {
-      window.CGO_BCGO_SEND_QUESTION = function(q, opts) {
-        try {
-          if (isRadarIntent(q)) showRadar();
-          else if (isOrbIntent(q)) showOrb();
-        } catch (_) {}
-        return prevSend.apply(this, arguments);
-      };
-    }
-  } catch (_) {}
-
-  // Also listen form submit path via chat
-  window.addEventListener('cgo:mic-transcript', function(e) {
-    try {
-      var t = e.detail && e.detail.text;
-      if (isRadarIntent(t)) showRadar();
-      else if (isOrbIntent(t)) showOrb();
-    } catch (_) {}
-  });
+  } catch(_){}
 
   window.CGOOrbSurface = {
-    showRadar: showRadar,
-    showOrb: showOrb,
-    toggle: toggle,
+    showRadar: showRadar, showOrb: showOrb,
+    toggle: function(){ mode==='radar'?showOrb():showRadar(); },
     getMode: function(){ return mode; },
     getStats: function(){ return Object.assign({}, lastStats); },
-    isRadarIntent: isRadarIntent,
-    isOrbIntent: isOrbIntent,
-    version: '1.0.0-ORB-SURFACE-RADAR'
+    isRadarIntent: isRadarIntent, isOrbIntent: isOrbIntent,
+    version: '1.1.0-RADAR-LIVE'
   };
-
-  console.log('[CGO-SURFACE] orb surface radar siap · v' + window.CGOOrbSurface.version);
+  console.log('[CGO-SURFACE]', window.CGOOrbSurface.version);
 })();
 </script>
+
 
 </body>
    </html>
