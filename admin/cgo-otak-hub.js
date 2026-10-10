@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.12.0-SILENT-WAKE";
+  const VERSION = "1.12.1-ORB-SURFACE-RADAR";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -1712,6 +1712,35 @@
       }
       return lines.join("\n");
     }
+    // Surface radar — jawaban ops ringkas (UI orb surface di-handle bcgo.html)
+    const surfaceRadarAsk = /\b(tampilan\s*radar|buka\s*radar|lihat\s*radar|tampilkan\s*radar|radar\s*agent|agent\s*radar|live\s*radar)\b/i.test(t);
+    if (!answer && surfaceRadarAsk) {
+      try {
+        const snap = readOpsSnapshot();
+        const ap = (global.BCGO_STATE && global.BCGO_STATE.agentPresence) || (snap && snap.agentPresence) || null;
+        const items = (ap && Array.isArray(ap.items)) ? ap.items : [];
+        const n = items.length;
+        let ready = 0, busy = 0, stale = 0, geo = 0;
+        for (let i = 0; i < items.length; i++) {
+          const it = items[i];
+          const st = String((it && it.status) || "").toUpperCase();
+          if (it && it.location) geo++;
+          if (st === "BUSY") busy++;
+          else if (st === "STALE") stale++;
+          else if (st === "READY" || !st) ready++;
+        }
+        const lines = [];
+        lines.push("Radar agent ditampilkan di permukaan Orb.");
+        lines.push("Terdata: " + n + " agent · geo " + geo + " · ready ~" + ready + " · busy " + busy + " · stale " + stale + ".");
+        lines.push("Radius mengikuti pengaturan radar (hingga 200 km). Bilang «kembali ke orb» untuk mode neural.");
+        answer = lines.join(" ");
+        step("SURFACE_RADAR", true, "orb-surface");
+      } catch (e) {
+        answer = "Radar agent ditampilkan di permukaan Orb. Bilang «kembali ke orb» bila ingin kembali.";
+        step("SURFACE_RADAR", true, "fallback");
+      }
+    }
+
     const briefingAsk = /\b(briefing|ringkasan\s*harian|laporan\s*harian|briefing\s*harian|daily\s*brief|rekap\s*hari\s*ini|kabar\s*hari\s*ini)\b/i.test(t);
 
     // Ops hanya jika niat kuantitatif/cek data — bukan sekadar menyebut kata mitra/customer
