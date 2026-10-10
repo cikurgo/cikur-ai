@@ -62,6 +62,8 @@ body{font-family:'Inter',sans-serif}
 .cgo-wave.live span:nth-child(5){animation-delay:.32s;height:22px}
 .cgo-wave.live span:nth-child(6){animation-delay:.4s;height:12px}
 .cgo-wave.live span:nth-child(7){animation-delay:.48s;height:20px}
+#cgo-voice-wave{display:none;margin:0 12px 4px}
+#cgo-voice-wave.live{display:flex}
 @keyframes cgoWaveIdle{from{transform:scaleY(.55);opacity:.4}to{transform:scaleY(1);opacity:.7}}
 @keyframes cgoWave{from{transform:scaleY(.4)}to{transform:scaleY(1)}}
 .cgo-think{display:none;align-items:center;gap:8px;padding:8px 14px;font-size:11px;color:#a5b4fc;border-bottom:1px solid rgba(51,65,85,.5);background:rgba(49,46,129,.15)}
@@ -418,7 +420,7 @@ body{font-family:'Inter',sans-serif}
         <div>Integrity: <span id="state-integrity" class="text-emerald-400">SYNC</span></div>
             </div>
 </div>
-<section class="abc-telemetry-bar" aria-label="Mesin ABC telemetry live">
+<section class="abc-telemetry-bar" id="abc-telemetry-panel" aria-label="Mesin ABC telemetry live">
   <div class="flex justify-between items-center gap-2 text-[10px]">
     <span class="text-cyan-300 font-semibold uppercase tracking-wider">MESIN ABC · jalur nyata A→B→C→D</span>
     <span id="abc-telemetry-state" class="code-font text-slate-400">STANDBY</span>
@@ -430,6 +432,7 @@ body{font-family:'Inter',sans-serif}
     <span id="abcLampD" class="abc-lamp"></span><span id="abcNodeD" class="abc-node">D</span>
     <span id="abc-telemetry-event" class="ml-auto code-font text-slate-500">—</span><button id="abc-sound-toggle" type="button" class="ml-2 text-[9px] px-2 py-1 rounded-md border border-slate-700 text-slate-400">🔇 SOUND OFF</button>
   </div>
+  <div id="abcLiveAckStatus" class="text-[9px] uppercase tracking-wide text-slate-500 mt-2">ABC LINK · menunggu ACK</div>
 </section>
 
 <section class="abc-live-result-card" id="abc-live-result-card" aria-label="Hasil nyata Mesin ABC">
@@ -798,6 +801,7 @@ body{font-family:'Inter',sans-serif}
           <div id="chat-feed" class="chat-scroll p-3 h-80 overflow-y-auto space-y-3 bg-slate-950/80">
             <div class="text-xs text-slate-500">Kanal CGO siap · ketik atau bicara · suara event = operator wanita (MP3)</div>
           </div>
+          <div class="cgo-wave" id="cgo-voice-wave" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
           <div class="cgo-wave-wrap" id="cgo-wave-wrap"><canvas id="cgo-mic-wave" width="600" height="28"></canvas><div id="cgo-mic-status" class="cgo-mic-status" aria-live="polite">MIKROFON SIAGA</div></div>
           <div class="cgo-interim" id="cgo-interim">
             <span id="cgo-interim-text"></span>
@@ -869,7 +873,7 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-machine-abc.js?v=0.14.3-MORE-RULES"></script>
 <script src="cgo-machine-abc-bridge.js?v=2.3.0-REPAIR-AUTO"></script>
 <script src="cgo-abc-cognition.js?v=1.2.0-HUMAN-RESULT"></script>
-<script src="cgo-otak-hub.js?v=1.12.2-RADAR-CHAT-SYNC"></script>
+<script src="cgo-otak-hub.js?v=1.12.3-RADAR-CHAT-SYNC-ZR"></script>
 
 <script type="module">
 import * as CGOInstruction from "./cgo-instruction.js?v=1.3.0-CONSTITUTION";
@@ -1111,6 +1115,7 @@ function renderSourceScan(scan) {
     if (sourceScanFailedEl) sourceScanFailedEl.textContent = failed;
     const actionable = [...(Array.isArray(scan.findings) ? scan.findings : []), ...(Array.isArray(scan.crossFileFindings) ? scan.crossFileFindings : [])].filter(f => f && f.severity !== 'INFO');
     if (sourceScanFindingsEl) sourceScanFindingsEl.textContent = actionable.length;
+    try { cgoAttentionFromScan(actionable); } catch (_) {}
     if (sourceScanRelationsEl) sourceScanRelationsEl.textContent = Array.isArray(scan.relations) ? scan.relations.length : 0;
     const summary = scan.relationSummary || {};
     if (sourceScanSyncEl) sourceScanSyncEl.textContent = Number(summary.synchronized || 0);
@@ -2095,6 +2100,33 @@ function cgoAnnounceSystemAttention(info) {
     if (!detail.file && !detail.path && !detail.message) return;
     try { window.CGOOperatorVoice.unlock && window.CGOOperatorVoice.unlock(); } catch (_) {}
     window.CGOOperatorVoice.announceAttention(detail, { skipClip: false });
+  } catch (_) {}
+}
+
+// v1.12.3: jalur pengumuman error sebelumnya tidak punya pemanggil. Kini bisa dipicu:
+//   (1) manual/modul lain  : window.dispatchEvent(new CustomEvent('cgo:attention', {detail:{kind,file,path,message}}))
+//   (2) otomatis oleh scanner untuk temuan severity HIGH (cooldown 60 dtk, temuan sama 10 mnt)
+//   Matikan otomatis: window.CGO_ATTENTION_AUTO = false
+window.CGO_ANNOUNCE_ATTENTION = cgoAnnounceSystemAttention;
+window.addEventListener('cgo:attention', function (e) { cgoAnnounceSystemAttention(e && e.detail); });
+var __cgoAttnSig = '', __cgoAttnAt = 0;
+function cgoAttentionFromScan(actionable) {
+  try {
+    if (window.CGO_ATTENTION_AUTO === false) return;
+    if (!Array.isArray(actionable) || !actionable.length) return;
+    const top = actionable.find(function (f) { return f && f.severity === 'HIGH'; });
+    if (!top) return;
+    const file = top.sourceFile || top.file || '';
+    const sig = [top.type || '', file, top.sourceLine || ''].join('|');
+    const now = Date.now();
+    if (now - __cgoAttnAt < 60000) return;
+    if (sig === __cgoAttnSig && now - __cgoAttnAt < 600000) return;
+    __cgoAttnSig = sig; __cgoAttnAt = now;
+    cgoAnnounceSystemAttention({
+      kind: 'error', file: file,
+      path: (file && top.sourceLine) ? (file + ':' + top.sourceLine) : '',
+      message: top.message || top.type || ''
+    });
   } catch (_) {}
 }
 
@@ -4826,6 +4858,25 @@ await runAutonomousEngine(state => {
   if(micBtn)micBtn.addEventListener('click',function(){
     try{var o=window.CGO_OTAK;if(o&&typeof o.wakePause==='function')o.wakePause(45000);}catch(_){}
   },true);
+  // v1.12.3 ZERO-REGRESI: setelah mic chat selesai/error, wake standby dipulihkan segera
+  // (sebelumnya jeda 45 dtk dari wakePause baru habis sendiri; wakeResume tidak pernah dipanggil).
+  var __wkResumeT=null;
+  function __wkResumeSoon(ms){
+    clearTimeout(__wkResumeT);
+    __wkResumeT=setTimeout(function(){
+      try{var o=window.CGO_OTAK;if(o&&typeof o.wakeResume==='function')o.wakeResume();}catch(_){}
+    },ms);
+  }
+  window.addEventListener('cgo:mic-status',function(e){
+    var st=String(e.detail&&e.detail.state||'').toUpperCase();
+    if(st==='LISTENING'){clearTimeout(__wkResumeT);}
+    else if(st==='IDLE'||st==='TRANSCRIPT'){__wkResumeSoon(1200);}
+  });
+  window.addEventListener('cgo:mic-error',function(e){
+    var d=e.detail||{};
+    if(String(d.source||'')==='wake')return;
+    __wkResumeSoon(1500);
+  });
   console.log('[CGO-FUTURE] mic patch aktif');
 }catch(e){console.warn('[CGO-FUTURE mic]',e);}})();
 </script>

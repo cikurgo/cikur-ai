@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.12.2-RADAR-CHAT-SYNC";
+  const VERSION = "1.12.3-RADAR-CHAT-SYNC-ZR";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -346,14 +346,18 @@
 
   /* ---------------- Memori percakapan bersama ---------------- */
   function detectFocusTopic(q, a) {
-    const s = String(q || "") + " " + String(a || "");
-    if (/\b(mitra|partner|pending)\b/i.test(s)) return "mitra";
-    if (/\b(customer|pelanggan|online|offline)\b/i.test(s)) return "customer";
-    if (/\b(pesanan|order|transaksi|omzet)\b/i.test(s)) return "pesanan";
-    if (/\b(status|saraf|siklus|scan|telemetry|anomali)\b/i.test(s)) return "sistem";
-    if (/\b(briefing|ringkas|prioritas)\b/i.test(s)) return "briefing";
-    if (/\b(tarik|unduh|csv|export)\b/i.test(s)) return "export";
-    return "umum";
+    // v1.12.3: pertanyaan menentukan topik; teks jawaban hanya cadangan
+    // (dulu q+a digabung → jawaban snapshot yang menyebut "Mitra… pending" membajak topik customer).
+    function pick(s) {
+      if (/\b(mitra|partner|pending)\b/i.test(s)) return "mitra";
+      if (/\b(customer|pelanggan|online|offline)\b/i.test(s)) return "customer";
+      if (/\b(pesanan|order|transaksi|omzet)\b/i.test(s)) return "pesanan";
+      if (/\b(status|saraf|siklus|scan|telemetry|anomali)\b/i.test(s)) return "sistem";
+      if (/\b(briefing|ringkas|prioritas)\b/i.test(s)) return "briefing";
+      if (/\b(tarik|unduh|csv|export)\b/i.test(s)) return "export";
+      return null;
+    }
+    return pick(String(q || "")) || pick(String(a || "")) || "umum";
   }
   function remember(q, a, sources) {
     const topic = detectFocusTopic(q, a);
@@ -382,6 +386,8 @@
     // Jangan anggap perintah tarik/unduh sebagai follow-up
     if (/^(lanjut|lanjutkan|batal|batalkan|cancel|ya|tidak|ok|oke)\s*[.!]?$/i.test(s)) return false;
     if (state.pendingTarikConfirm) return false;
+    // v1.12.3: pertanyaan recall ("tadi kita bahas apa") dijawab blok memori (C3), bukan follow-up
+    if (RECALL_TRIGGER.test(s)) return false;
     if (/\b(kenapa|mengapa|why|terus|dalami|bedah|lebih\s*dalam|yang\s*(tadi|itu|pending|online)|jelaskan\s*(lagi|lebih)|detail\s*(nya|lagi)|lalu\s*bagaimana|terus\s*gimana)\b/i.test(s)) return true;
     if (s.length < 28 && state.focus && state.focus.topic && state.focus.topic !== "umum") {
       if (/\b(tarik|unduh|csv|export|status|briefing|berapa|customer|mitra|pesanan)\b/i.test(s)) return false;
@@ -491,6 +497,7 @@
     state.accessCode = "SECRET";
     state.accessUntil = Date.now() + ACCESS_SESSION_MS;
     state.updatedAt = Date.now();
+    emitWake("cgo:access-master", { via: "secret" }); // v1.12.3: orb → transenden
   }
 
   function isAccessLocked() {
@@ -506,6 +513,7 @@
     state.accessFailCount = 0;
     state.accessLockedUntil = 0;
     state.updatedAt = Date.now();
+    emitWake("cgo:access-granted", { code: String(code) }); // v1.12.3: orb → membuka
   }
   function registerAccessFail() {
     state.accessFailCount = (state.accessFailCount || 0) + 1;
@@ -514,6 +522,7 @@
       state.accessLockedUntil = Date.now() + ACCESS_LOCK_MS;
       state.accessCode = null;
       state.accessUntil = 0;
+      emitWake("cgo:access-locked", { failCount: state.accessFailCount }); // v1.12.3: orb → menjaga
       return true; // locked now
     }
     return false;
@@ -1451,7 +1460,13 @@
 
     // C3. Memori / referensi "yang tadi"
     if (!answer && RECALL_TRIGGER.test(t) && state.memory.length) {
-      const last = state.memory.slice(-3).map(function (x) { return "“" + x.q + "”"; }).join(", ");
+      // v1.12.3: bila user menyebut topik ("tadi soal mitra"), ambil memori topik itu dulu
+      const rTopic = detectFocusTopic(t, "");
+      let rPool = rTopic !== "umum"
+        ? recallByTopic(rTopic, 6).filter(function (x) { return !RECALL_TRIGGER.test(x.q); }).slice(-3)
+        : [];
+      if (!rPool.length) rPool = state.memory.slice(-3);
+      const last = rPool.map(function (x) { return "“" + x.q + "”"; }).join(", ");
       answer = "Yang terakhir kita bahas: " + last + ".";
       step("MEMORI_BERSAMA", true, String(state.memory.length));
     }
@@ -1748,10 +1763,12 @@
     const briefingAsk = /\b(briefing|ringkasan\s*harian|laporan\s*harian|briefing\s*harian|daily\s*brief|rekap\s*hari\s*ini|kabar\s*hari\s*ini)\b/i.test(t);
 
     // Ops hanya jika niat kuantitatif/cek data — bukan sekadar menyebut kata mitra/customer
-    const opsAsk = /\b(berapa|jumlah|total|hitung\s*jumlah|cek\s*(data|angka|ops|operasional)|data\s*operasional|grafik|chart|kpi|rekap\s*(customer|mitra|pesanan)|radar\s*agent|per\s*km|agent\s*cgo)\b/i.test(t)
-      || /\b(berapa\s+)?(customer|pelanggan|mitra|partner|transaksi|pesanan|order|omzet)\s+(online|offline|pending|hari\s*ini|aktif|total)?/i.test(t)
-      || /\b(online|offline)\s+(customer|pelanggan|mitra)?\b/i.test(t)
-      || /\b(customer|mitra|pesanan|transaksi)\s+(berapa|jumlah|total)\b/i.test(t);
+    // v1.12.3: kata lepas ("berapa", "mitra", "online") TIDAK lagi memicu gerbang — wajib ada pasangan data.
+    const OPS_NOUN = "customer|pelanggan|mitra|partner|transaksi|pesanan|order|omzet|driver|agen|agent|resto|merchant|cycle|siklus|file";
+    const opsAsk = /\b(cek\s*(data|angka|ops|operasional)|data\s*operasional|grafik|chart|kpi|rekap\s*(customer|mitra|pesanan)|radar\s*agent|per\s*km|agent\s*cgo)\b/i.test(t)
+      || new RegExp("\\b(berapa|jumlah|total|hitung\\s*jumlah)\\s+(banyak\\s+|jumlah\\s+|total\\s+)?(" + OPS_NOUN + ")\\b", "i").test(t)
+      || /\b(customer|pelanggan|mitra|partner|transaksi|pesanan|order|omzet)\s+(online|offline|pending|hari\s*ini|aktif|total|berapa|jumlah)\b/i.test(t)
+      || /\b(online|offline)\s+(customer|pelanggan|mitra|driver)\b/i.test(t);
     // Lanjut / batal penarikan data
     // Jika user langsung meminta dataset lain (mis. "tarik data pesanan")
     // jangan salah dianggap sebagai konfirmasi hanya karena ada kata "tarik".
@@ -2685,7 +2702,7 @@
 
   const API = Object.freeze({
     version: VERSION,
-    status, snapshot, ask, recall,
+    status, snapshot, ask, recall, recallByTopic,
     subscribe(fn) { if (typeof fn !== "function") return () => {}; listeners.add(fn); return () => listeners.delete(fn); },
     refresh: notify,
     // Wake word — BCGO FASE 5 membaca ini
