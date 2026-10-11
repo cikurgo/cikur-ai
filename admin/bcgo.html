@@ -189,23 +189,26 @@ body{font-family:'Inter',sans-serif}
 .cgo-orb-radar-disk canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
 /* HUD di bawah disk — TIDAK ikut border-radius, tidak terpotong */
 .cgo-orb-surface-hud{
-  position:absolute;left:50%;bottom:-2px;transform:translate(-50%,100%);
-  z-index:7;width:max-content;max-width:140%;
-  display:none;flex-direction:column;align-items:center;gap:3px;
+  position:absolute;left:50%;bottom:-6px;transform:translate(-50%,100%);
+  z-index:7;width:max-content;max-width:150%;
+  display:none;flex-direction:column;align-items:center;gap:4px;
   pointer-events:none;
 }
 .cgo-orb-wrap.surface-radar-on .cgo-orb-surface-hud{display:flex;}
 .cgo-orb-surface-hud .sh-title{
-  font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:#6ee7b7;
+  font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#6ee7b7;
   white-space:nowrap;
 }
 .cgo-orb-surface-hud .sh-meta{
   display:flex;flex-wrap:wrap;gap:3px;justify-content:center;
 }
 .cgo-orb-surface-hud .sh-meta span{
-  font-size:8px;padding:2px 6px;border-radius:4px;white-space:nowrap;
+  font-size:9px;padding:2px 7px;border-radius:4px;white-space:nowrap;
   border:1px solid rgba(52,211,153,.3);color:#a7f3d0;background:rgba(2,20,14,.75);
 }
+.cgo-orb-surface-hud .sh-legend{display:flex;flex-wrap:wrap;justify-content:center;gap:2px 10px;font-size:9px;color:#94a3b8;white-space:nowrap}
+.cgo-orb-surface-hud .sh-legend i{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px}
+.cgo-orb-surface-hud .sh-legend b{font-weight:600;color:#cbd5e1}
 .cgo-orb-surface-legend{display:none;} /* legenda digambar di canvas */
 .cgo-orb-wrap.surface-radar-on #cgo-orb-canvas,
 .cgo-orb-wrap.surface-radar-on .cgo-orb-core{
@@ -214,8 +217,8 @@ body{font-family:'Inter',sans-serif}
 .cgo-orb-wrap.surface-radar-on #cgo-orb-surface-radar{display:flex;}
 .cgo-orb-stage-host.surface-radar-on .cgo-orb-status{color:#6ee7b7;}
 /* beri ruang HUD di bawah orb saat radar */
-.cgo-orb-center:has(.surface-radar-on){padding-bottom:28px;}
-.cgo-orb-wrap.surface-radar-on{margin-bottom:22px;}
+.cgo-orb-center:has(.surface-radar-on){padding-bottom:14px;}
+.cgo-orb-wrap.surface-radar-on{margin-bottom:56px;}
 .cgo-orb-wrap.surface-radar-on ~ .cgo-orb-status,
 .cgo-orb-center:has(.surface-radar-on) .cgo-orb-status{opacity:.55;}
 .cgo-orb-wrap.surface-radar-on ~ .cgo-orb-wake-badge{opacity:.4;}
@@ -779,6 +782,7 @@ body{font-family:'Inter',sans-serif}
                         <span id="cgo-orb-radar-count">BLIP 0</span>
                         <span id="cgo-orb-radar-scan">SCAN</span>
                       </div>
+                      <div class="sh-legend" id="cgo-orb-radar-legend" aria-hidden="true"></div>
                     </div>
                   </div>
                 </div>
@@ -873,7 +877,7 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-machine-abc.js?v=0.14.3-MORE-RULES"></script>
 <script src="cgo-machine-abc-bridge.js?v=2.3.0-REPAIR-AUTO"></script>
 <script src="cgo-abc-cognition.js?v=1.2.0-HUMAN-RESULT"></script>
-<script src="cgo-otak-hub.js?v=1.12.3-RADAR-CHAT-SYNC-ZR"></script>
+<script src="cgo-otak-hub.js?v=1.12.4-RADAR-CHAT-SYNC-ZR"></script>
 
 <script type="module">
 import * as CGOInstruction from "./cgo-instruction.js?v=1.3.0-CONSTITUTION";
@@ -2099,7 +2103,7 @@ function cgoAnnounceSystemAttention(info) {
     };
     if (!detail.file && !detail.path && !detail.message) return;
     try { window.CGOOperatorVoice.unlock && window.CGOOperatorVoice.unlock(); } catch (_) {}
-    window.CGOOperatorVoice.announceAttention(detail, { skipClip: false });
+    window.CGOOperatorVoice.announceAttention(detail, { skipClip: !(info && info.clip === true) }); // v1.12.4: tanpa kalimat ERROR/WARNING ganda
   } catch (_) {}
 }
 
@@ -3596,6 +3600,12 @@ await runAutonomousEngine(state => {
       if (statusEl) statusEl.textContent = STATES[name].status;
       if (rightTitle) rightTitle.textContent = STATES[name].right;
       if (rightBody) rightBody.textContent = STATES[name].body;
+      // v1.12.4: saat mode radar aktif, state tenang (mis. dari siklus wake) tidak boleh menimpa label radar
+      if (name === 'tenang' && wrap.classList.contains('surface-radar-on')) {
+        if (statusEl) statusEl.textContent = 'Radar';
+        if (rightTitle) rightTitle.textContent = 'AGENT CGO · LIVE RADAR';
+        if (rightBody) rightBody.textContent = 'Radar agent di permukaan Orb. Bilang «kembali ke orb» untuk mode neural.';
+      }
       if (stepList) {
         const steps = Array.prototype.slice.call(stepList.querySelectorAll('.cgo-orb-step'));
         steps.forEach(function(s){ s.classList.remove('active','done'); });
@@ -5080,6 +5090,18 @@ await runAutonomousEngine(state => {
     if (rEl) rEl.textContent = 'RANGE ' + pack.radius + ' km';
     if (cEl) cEl.textContent = 'BLIP ' + pack.stats.inRange + (pack.stats.total ? (' · ALL ' + pack.stats.total) : '');
     if (sEl) sEl.textContent = pack.center ? 'LIVE GPS' : 'NO GPS';
+    var lg = document.getElementById('cgo-orb-radar-legend');
+    if (lg) {
+      var s = pack.stats, k = [s.ready, s.busy, s.stale, s.standby].join('|');
+      if (lg._k !== k) {
+        lg._k = k;
+        lg.innerHTML =
+          '<span><i style="background:#34d399"></i>Ready <b>' + s.ready + '</b></span>' +
+          '<span><i style="background:#fbbf24"></i>Busy <b>' + s.busy + '</b></span>' +
+          '<span><i style="background:#94a3b8"></i>Stale <b>' + s.stale + '</b></span>' +
+          '<span><i style="background:#6366f1"></i>Standby <b>' + s.standby + '</b></span>';
+      }
+    }
   }
   function resize() {
     var el = disk || host;
@@ -5110,7 +5132,7 @@ await runAutonomousEngine(state => {
     var sweep = (t*0.85) % (Math.PI*2);
     ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,R,sweep-0.9,sweep,false); ctx.closePath();
     var sg = ctx.createRadialGradient(cx,cy,0,cx,cy,R);
-    sg.addColorStop(0,'rgba(52,211,153,0.2)'); sg.addColorStop(1,'rgba(52,211,153,0)');
+    sg.addColorStop(0,'rgba(52,211,153,0.3)'); sg.addColorStop(1,'rgba(52,211,153,0)');
     ctx.fillStyle = sg; ctx.fill();
     ctx.beginPath(); ctx.moveTo(cx,cy);
     ctx.lineTo(cx+Math.cos(sweep)*R, cy+Math.sin(sweep)*R);
@@ -5128,6 +5150,14 @@ await runAutonomousEngine(state => {
 
     var pack = collectItems();
     updateHud(pack);
+    // label jarak tiap ring + penanda utara (U) — membantu membaca skala
+    ctx.font = (8*dpr)+'px ui-sans-serif,system-ui,sans-serif';
+    ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(167,243,208,0.5)';
+    for (var rl = 1; rl <= 4; rl++) {
+      ctx.fillText(Math.round(pack.radius*rl/4) + ' km', cx + 8*dpr, cy - R*(rl/4) - 2*dpr);
+    }
+    ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(110,231,183,0.8)';
+    ctx.fillText('U', cx, cy - R - 4*dpr);
     var items = pack.items, n = Math.min(items.length, MAX_DRAW);
     if (pack.center) {
       for (var j = 0; j < n; j++) {
@@ -5161,20 +5191,7 @@ await runAutonomousEngine(state => {
     ctx.beginPath(); ctx.arc(cx,cy,3.5*dpr,0,Math.PI*2);
     ctx.fillStyle = 'rgba(34,211,238,0.95)'; ctx.fill();
 
-    // mini legend inside bottom of disk (won't clip if inset enough)
-    ctx.font = (7.5*dpr)+'px ui-sans-serif,system-ui,sans-serif';
-    ctx.textAlign = 'left';
-    var legs = [
-      {c:'#34d399',t:'Ready'},{c:'#fbbf24',t:'Busy'},{c:'#94a3b8',t:'Stale'},{c:'#6366f1',t:'Standby'}
-    ];
-    var lx = cx - R*0.72, ly = cy + R*0.78;
-    for (var L=0;L<legs.length;L++) {
-      ctx.fillStyle = legs[L].c;
-      ctx.beginPath(); ctx.arc(lx, ly, 2.2*dpr, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = 'rgba(148,163,184,0.85)';
-      ctx.fillText(legs[L].t, lx + 5*dpr, ly + 2.5*dpr);
-      lx += 32*dpr;
-    }
+    // legenda dipindah ke HUD (HTML) — tidak lagi menimpa blip di dalam disk
 
     raf = requestAnimationFrame(draw);
   }

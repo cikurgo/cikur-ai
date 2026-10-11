@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.12.3-RADAR-CHAT-SYNC-ZR";
+  const VERSION = "1.12.4-RADAR-CHAT-SYNC-ZR";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -2588,6 +2588,13 @@
     if (WL.booted) return;
     WL.booted = true;
     try {
+      // v1.12.4: tab lain memenangkan lease wake (bus memancarkan cgo:wake-yield) → tab ini berhenti
+      // mendengar; sebelumnya recognition tetap jalan sehingga dua tab menjawab "CGO" bersamaan.
+      global.addEventListener("cgo:wake-yield", function () {
+        try { wlStopRec(); } catch (_) {}
+        wlSetStatus("paused-remote");
+        setTimeout(wlSync, 400);
+      });
       global.addEventListener("cgo:mic-claim", function () { wlSync(); });
       global.addEventListener("cgo:mic-release", function () { setTimeout(wlSync, 900); });
       global.addEventListener("cgo:mic-status", function (e) {
