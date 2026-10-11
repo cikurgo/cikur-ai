@@ -873,12 +873,12 @@ body{font-family:'Inter',sans-serif}
 <script src="cgo-audio-queue.js?v=1.2.0-FX-STABLE"></script>
 <script src="cgo-emosi.js?v=1.1.0-EMOSI-AIRPORT"></script>
 <script src="cgo-narasi.js?v=1.0.0-NARASI-r20261001"></script>
-<script src="cgo-ai-voice-operator.js?v=3.11.0-FX-STABLE"></script>
+<script src="cgo-ai-voice-operator.js?v=3.11.1-VOICE-EVENTS"></script>
 <script src="cgo-machine-abc.js?v=0.14.3-MORE-RULES"></script>
 <script src="cgo-machine-abc-bridge.js?v=2.3.0-REPAIR-AUTO"></script>
 <script src="cgo-abc-cognition.js?v=1.2.0-HUMAN-RESULT"></script>
-<script src="cgo-otak-orchestrator.js?v=1.5.2-WARM-ZR"></script>
-<script src="cgo-otak-hub.js?v=1.14.2-PERSONALITY-ZR"></script>
+<script src="cgo-otak-orchestrator.js?v=1.5.3-WARM-ZR-MATH-SAFE"></script>
+<script src="cgo-otak-hub.js?v=1.14.5-SYSTEM-ACCESS-FIX"></script>
 
 <script type="module">
 import * as CGOInstruction from "./cgo-instruction.js?v=1.3.0-CONSTITUTION";
@@ -5406,6 +5406,25 @@ await runAutonomousEngine(state => {
 }catch(e){console.warn('[CGO-ORB flow]',e&&e.message);}})();
 </script>
 
+
+
+<script>
+/* CGO WAKE ONE-DOOR · mic manual saja · zero-regresi */
+(function(){
+  try {
+    function enforceOneDoor(){
+      var o = window.CGO_OTAK;
+      if (!o || typeof o.setWakeEnabled !== 'function') return;
+      if (typeof o.isWakeEnabled === 'function' && o.isWakeEnabled()) return;
+      try { o.setWakeEnabled(false); } catch(_){}
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function(){ setTimeout(enforceOneDoor, 500); });
+    } else setTimeout(enforceOneDoor, 500);
+    console.log('[CGO] wake one-door: mic manual primary');
+  } catch (e) { console.warn('[CGO one-door]', e); }
+})();
+</script>
 
 </body>
    </html>

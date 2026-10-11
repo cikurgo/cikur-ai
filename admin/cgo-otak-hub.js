@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.14.2-PERSONALITY-ZR";
+  const VERSION = "1.14.5-SYSTEM-ACCESS-FIX";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -40,7 +40,7 @@
     focus: null,      // { topic, metrics, priority, at }
     lastOps: null,    // ringkasan angka terakhir yang disebut
     lastPriority: null,
-    wakeEnabled: true, /* default ON · standby CGO */
+    wakeEnabled: false, /* v1.14.4: default OFF — satu pintu mic manual; wake opsional */
     wakeBuffer: [],
     wakeBufferMaxMs: 800,
     /* v1.14.0 personality (opsional, aditif) */
@@ -485,7 +485,7 @@
 
   /* ---------------- Satu jalur tanya-jawab ---------------- */
   const ABC_TRIGGER = /analisis|struktur|audit|verifikasi|bukti|mesin abc|pipeline|self-?test/i;
-  const SYSTEM_TRIGGER = /\b(status sistem|status bcgo|status cgo|status (live|saraf|otak)|telemetry|anomali aktif|investigasi|root cause|source scan|scanner|dependency|mesin abc|machine abc|pipeline abc|perbaiki sistem|patch organ|siklus|cycle\s*(sekarang|ke|\d+)?|berapa\s*cycle|files?\s*gagal|active\s*cases?)\b/i;
+  const SYSTEM_TRIGGER = /\b(status sistem|status bcgo|status cgo|status (live|saraf|otak)|\bstatus\b|kondisi sistem|sehatkah|telemetry|anomali aktif|investigasi|root cause|source scan|scanner|dependency|mesin abc|machine abc|pipeline abc|perbaiki sistem|patch organ|siklus|cycle\s*(sekarang|ke|\d+)?|berapa\s*cycle|files?\s*gagal|active\s*cases?|organ (aktif|stabil)|radar agent|agent online)\b/i;
 
   /* ---- Akses internal: CGO 0021 | CGO 0006 | CGO 0095 (ejaan: si ji ou …) ---- */
   const VALID_ACCESS_CODES = Object.freeze(["0021", "0006", "0095"]);
@@ -1863,11 +1863,29 @@
       }
       return lines.join(" ");
     }
+    const freeSystemAsk = /\b(status|siklus|cycle|scanner|source\s*scan|telemetry|anomali|saraf|radar)\b/i.test(t)
+      && !/\b(customer|pelanggan|mitra|partner|pesanan|order|omzet|tarik|export|csv|unduh)\b/i.test(t);
+    if (!answer && freeSystemAsk) {
+      try {
+        var sc = (live && live.sourceScan) || {};
+        var ap = (live && live.agentPresence) || {};
+        var m = (live && live.metrics) || {};
+        var parts = [];
+        parts.push("Status sistem: tahap " + ((live && live.step) || "—") +
+          ", siklus #" + ((live && (live.cycle != null ? live.cycle : live.cycleNo)) || "—") + ".");
+        if (m.total != null) parts.push("Organ: " + (m.active || 0) + " anomali / " + (m.healthy || 0) + " stabil dari " + m.total + ".");
+        if (sc.totalFiles) parts.push("Scanner: " + (sc.filesReadable || 0) + "/" + sc.totalFiles + " terbaca (" + (sc.status || "-") + ").");
+        else parts.push("Scanner: menunggu pembacaan source.");
+        if (ap.count != null) parts.push("Radar agent: " + (ap.count || 0) + " total, READY " + (ap.freshCount || 0) + ".");
+        answer = parts.join(" ");
+        step("SYSTEM_LOCAL", true, "free-system");
+      } catch (_fs) {}
+    }
     const wantsCikurData = systemRequest
       || /\\b(status|siklus|cycle|source\\s*scan|scanner|telemetry|anomali|saraf|bcgo_state|live\\s*state)\\b/i.test(t)
       || /\\b(berapa\\s*(cycle|siklus)|files?\\s*gagal|file\\s*terbaca)\\b/i.test(t);
     if (!answer && wantsCikurData && live && typeof live === "object") {
-      if (!hasValidAccess()) {
+      if (!hasValidAccess() && !(typeof freeSystemAsk !== "undefined" && freeSystemAsk)) {
         answer = isAccessLocked() ? msgAccessLock() : msgAccessNeed();
         step("ACCESS", false, "live-need-code");
       } else {
@@ -2600,14 +2618,11 @@
     } catch (_) {}
   }
 
-  /* ================= WAKE LISTENER · standby otomatis (v1.10.0) =================
-   * Sebelumnya "wake ON" hanya bendera: tidak ada mikrofon yang dibuka sampai tombol mic ditekan.
-   * Kini Hub menjalankan SpeechRecognition kontinu (id-ID) yang:
-   *  - menyala otomatis, restart sendiri (backoff), dan berhenti rapi saat tab tersembunyi/wake OFF
-   *  - mengalah pada mic chat (event cgo:mic-claim dari CGOAudioBus.klaimMic) & saat operator bicara
-   *  - hanya bereaksi pada ucapan berisi kata bangun (CGO / si ji ou / halo cgo …); ucapan lain diabaikan
-   *  - mengirim perintah lewat jalur yang SAMA dengan mic manual (CGO_BCGO_SEND_QUESTION)
-   *  - menyiarkan cgo:wake-sleep agar orb kembali tenang (sebelumnya tidak pernah dikirim)
+  /* ================= WAKE LISTENER · v1.14.4 ONE-DOOR =================
+   * Default wakeEnabled=false → TIDAK ada SpeechRecognition kontinu (mic tidak muncul-hilang).
+   * Satu pintu: tombol mic manual di chat. Wake word tetap bisa dideteksi di transcript mic
+   * lewat onWakeTranscript / detectWake bila user mengucapkan "CGO" saat mic manual aktif.
+   * setWakeEnabled(true) tetap tersedia bila user ingin standby kontinu (opsional).
    */
   const WL = {
     SR: global.SpeechRecognition || global.webkitSpeechRecognition || null,
@@ -2758,7 +2773,7 @@
       if (gen !== WL.gen) return;
       const ran = WL.startedAt ? Date.now() - WL.startedAt : 0;
       WL.running = false; WL.starting = false; WL.rec = null;
-      if (ran > 8000) WL.backoff = 700; else WL.backoff = Math.min(Math.round(WL.backoff * 1.8), 8000);
+      if (ran > 8000) WL.backoff = 1200; else WL.backoff = Math.min(Math.round(WL.backoff * 2.2), 12000);
       WL.startedAt = 0;
       wlScheduleRestart();
     };
@@ -2998,10 +3013,12 @@
 
   global.CGO_OTAK = API;
   try {
-    /* boot-wake-emit: UI badge segera ON */
-    if (state.wakeEnabled) {
-      emitWake("cgo:wake-enabled", { enabled: true, boot: true });
-    }
+    /* v1.14.4: default wake OFF — jangan nyalakan badge/mic otomatis */
+    emitWake(state.wakeEnabled ? "cgo:wake-enabled" : "cgo:wake-disabled", {
+      enabled: !!state.wakeEnabled,
+      boot: true,
+      oneDoor: true
+    });
   } catch (_) {}
 
   // Modul yang load async (instruction, internal brain, BCGO engine) → refresh subscriber

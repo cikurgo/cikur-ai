@@ -9,8 +9,8 @@
 (function (global) {
   "use strict";
 
-  const VERSION = "3.11.0-FX-STABLE";
-  const BUILD = "CIKUR-GO-OPERATOR-3.11.0-FX-STABLE";
+  const VERSION = "3.11.1-VOICE-EVENTS";
+  const BUILD = "CIKUR-GO-OPERATOR-3.11.1-VOICE-EVENTS";
   /** Path audio cerdas: dukung load dari root portal maupun dari admin/ */
   function detectAudioRoot() {
     try {
@@ -663,7 +663,9 @@
   var _lastStateKey = "";
   var _lastStateAt = 0;
   var STATE_COOLDOWN_MS = 12000; // min 12s between identical/adjacent state sounds
-  var STATE_SILENT = { PROCESSING: 1, PROCESSING_WAIT: 1, LIVE_INPUT: 1, SYSTEM_IDLE: 1, STANDBY: 1, VALID: 1, SYSTEM_READY: 1, ABC_STAGE_A: 1, ABC_STAGE_B: 1, ABC_STAGE_C: 1, ABC_STAGE_D: 1 }; // too noisy if every cycle
+  // Hanya stage ABC + processing cycle yang dibungkam (terlalu sering).
+  // SYSTEM_READY / VALID / WARNING / RECOVERY / COMMAND_* tetap berbunyi (cooldown).
+  var STATE_SILENT = { PROCESSING: 1, PROCESSING_WAIT: 1, LIVE_INPUT: 1, SYSTEM_IDLE: 1, STANDBY: 1, ABC_STAGE_A: 1, ABC_STAGE_B: 1, ABC_STAGE_C: 1, ABC_STAGE_D: 1 };
 
   function state(s, detail) {
     var map = {

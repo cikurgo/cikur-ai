@@ -120,6 +120,11 @@ const INTERNAL_SOURCE_SCAN = [
   { file: "admin/cgo-error-dashboard.html", path: "cgo-error-dashboard.html", role: "Error Dashboard UI" },
   { file: "admin/cgo-error-dashboard.js", path: "cgo-error-dashboard.js", role: "Error Dashboard Engine" },
   { file: "admin/cgo-otak-hub.js", path: "cgo-otak-hub.js", role: "Otak Hub" },
+  { file: "admin/cgo-otak-orchestrator.js", path: "cgo-otak-orchestrator.js", role: "Otak Orchestrator" },
+  { file: "admin/cgo-emosi.js", path: "cgo-emosi.js", role: "CGO Emosi" },
+  { file: "admin/cgo-narasi.js", path: "cgo-narasi.js", role: "CGO Narasi" },
+  { file: "admin/cgo-audio-bus.js", path: "cgo-audio-bus.js", role: "Audio Bus" },
+  { file: "admin/cgo-audio-queue.js", path: "cgo-audio-queue.js", role: "Audio Queue" },
   { file: "admin/cikur-go.browser.js", path: "cikur-go.browser.js", role: "Otak Jenius Browser" },
   { file: "admin/cikur-go.js", path: "cikur-go.js", role: "Otak Jenius Core" },
   { file: "admin/cikur-v3-extension.js", path: "cikur-v3-extension.js", role: "Otak Jenius v3" },
@@ -732,7 +737,7 @@ function answerQuestion(question) {
     if (!q) return "Saya siap. Tanyakan kondisi sistem, error, file tertentu, telemetry terakhir, siklus saya, atau bukti yang sedang saya lihat.";
 
     if (/^(halo|hai|hallo|helo|hello|hi|hey|pagi|siang|sore|malam)\b/.test(q) || /siapa kamu|kamu siapa/.test(q)) {
-      return `Halo. Saya CGO di tahap ${state.step}, siklus ${cycleNo}. ${situation()} Tanya bebas: status, file, hitung, eja, emoji.`;
+      return `Halo. Aku CGO. ${situation()} Mau cek status, scanner, radar, hitung, atau eja?`;
     }
 
     if (/scan ulang|rescan|pindai ulang|periksa ulang/.test(q)) {
@@ -773,9 +778,15 @@ function answerQuestion(question) {
     }
 
 
-    if (/status|kondisi|sehat|aman/.test(q)) {
-      if (firestore.error) return `Belum bisa saya sebut aman. Firestore sedang bermasalah: ${firestore.error}`;
-      return `Status sekarang: ${metrics.active} anomali aktif, ${metrics.recovered} recovered, ${metrics.healthy} stabil dari ${metrics.total} organ. Firestore ${firestore.connected ? "LIVE" : "belum terhubung penuh"} dan probe membaca ${metrics.firestoreCount} data.`;
+    if (/status|kondisi|sehat|aman|ringkas sistem|briefing/.test(q)) {
+      if (firestore.error) return `Belum bisa aku sebut aman. Firestore bermasalah: ${firestore.error}`;
+      const sc = state.sourceScan || {};
+      const ap = state.agentPresence || {};
+      const scanLine = sc.totalFiles
+        ? `Scanner source: ${sc.filesReadable||0}/${sc.totalFiles} terbaca (${sc.status||"-"}).`
+        : "Scanner source belum selesai.";
+      const radarLine = `Radar agent: ${ap.count||0} total, READY ${ap.freshCount||0}.`;
+      return `Status: ${metrics.active} anomali aktif, ${metrics.healthy} organ stabil dari ${metrics.total}. Firestore ${firestore.connected ? "LIVE" : "lokal/offline"}. ${scanLine} ${radarLine} Siklus #${cycleNo}, tahap ${state.step}.`;
     }
 
     if (/error|masalah|anomali|gangguan|rusak/.test(q)) {
@@ -1210,7 +1221,31 @@ function answerQuestion(question) {
       scan.fileStates[item.file] = { status: "READING", message: "Membaca source live dari origin aplikasi." };
       publishToUI(safeClone(state));
       try {
-        const response = await fetch(new URL(item.path, location.href).href, { cache: "no-store", signal: scanSignal });
+        // Coba beberapa path relatif (admin/, root, ./) agar scanner tidak gagal massal
+        let response = null;
+        const tryPaths = [item.path];
+        if (item.path && !item.path.startsWith("../") && !item.path.startsWith("/")) {
+          tryPaths.push("./" + item.path.replace(/^\.\//, ""));
+        }
+        if (item.file && item.file.indexOf("/") >= 0) {
+          const base = item.file.split("/").pop();
+          if (tryPaths.indexOf(base) < 0) tryPaths.push(base);
+        }
+        let lastFetchErr = null;
+        for (const tp of tryPaths) {
+          try {
+            response = await fetch(new URL(tp, location.href).href, { cache: "no-store", signal: scanSignal });
+            if (response && response.ok) break;
+            lastFetchErr = new Error("HTTP " + (response && response.status));
+            response = null;
+          } catch (fe) {
+            lastFetchErr = fe;
+            response = null;
+          }
+        }
+        if (!response || !response.ok) {
+          throw lastFetchErr || new Error("fetch failed");
+        }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const text = await response.text();
         if (!text.trim()) throw new Error("SOURCE_EMPTY");
