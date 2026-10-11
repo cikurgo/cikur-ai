@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.13.0-OTAK-ORCH-SYNC";
+  const VERSION = "1.14.2-PERSONALITY-ZR";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -42,7 +42,13 @@
     lastPriority: null,
     wakeEnabled: true, /* default ON · standby CGO */
     wakeBuffer: [],
-    wakeBufferMaxMs: 800
+    wakeBufferMaxMs: 800,
+    /* v1.14.0 personality (opsional, aditif) */
+    lastMood: null,
+    moodHistory: [],
+    lastOpener: null,
+    lastCloser: null,
+    lastLang: null
   };
   const listeners = new Set();
   let lastSignature = "";
@@ -489,6 +495,32 @@
   const MSG_ACCESS_NEED = "Itu Data Internal, untuk melanjutkan silahkan gunakan Kode Akses Data";
   const MSG_ACCESS_WRONG = "Maaf, kode akses data kamu SALAH, silahkan di ulangi kembali, pastikan BENAR";
   const MSG_ACCESS_LOCK = "Maaf, untuk sementara ini proses pengecekan Data Internal tidak dapat dilanjutkan, silahkan dicoba kembali nanti, jika darurat, silahkan Konfirmasi Kode Akses dengan Nama Tunggal Rahasia.";
+  /* v1.14.1 — variasi aditif (tetap mengandung kata kunci isProtectedAnswer) */
+  const MSG_ACCESS_NEED_VAR = [
+    MSG_ACCESS_NEED,
+    "Itu Data Internal — sebut Kode Akses Data dulu ya, baru aku buka.",
+    "Data Internal terkunci. Pakai Kode Akses Data untuk lanjut.",
+    "Pelan-pelan: Data Internal butuh Kode Akses Data dulu."
+  ];
+  const MSG_ACCESS_WRONG_VAR = [
+    MSG_ACCESS_WRONG,
+    "Maaf, kode akses data kamu SALAH. Coba lagi, pastikan benar.",
+    "Kode akses data kamu SALAH — ulangi dengan teliti ya."
+  ];
+  const MSG_ACCESS_LOCK_VAR = [
+    MSG_ACCESS_LOCK,
+    "Maaf, pengecekan Data Internal dikunci sementara. Coba lagi nanti. Jika darurat, Konfirmasi Kode Akses dengan Nama Tunggal Rahasia."
+  ];
+  function _pickAccessLine(arr, fallback) {
+    try {
+      var a = arr || [];
+      if (!a.length) return fallback;
+      return a[Math.floor(Math.random() * a.length)] || fallback;
+    } catch (_) { return fallback; }
+  }
+  function msgAccessNeed() { return _pickAccessLine(MSG_ACCESS_NEED_VAR, MSG_ACCESS_NEED); }
+  function msgAccessWrong() { return _pickAccessLine(MSG_ACCESS_WRONG_VAR, MSG_ACCESS_WRONG); }
+  function msgAccessLock() { return _pickAccessLine(MSG_ACCESS_LOCK_VAR, MSG_ACCESS_LOCK); }
   const ACCESS_LOCK_MS = 15 * 60 * 1000;
   const ACCESS_MAX_FAIL = 3;
   /** Nama Tunggal Rahasia — buka kunci setelah gagal 3× (jangan ditampilkan di chat). */
@@ -560,7 +592,10 @@
     "Siap. Briefing, data, atau status sistem?",
     "Hadir — mau ringkas hari ini?",
     "CGO di sini. Langsung ke angka atau status dulu?",
-    "Siap mendampingi. Mau prioritas hari ini?"
+    "Siap mendampingi. Mau prioritas hari ini?",
+    "Hadir nih. Mau ke mana dulu?",
+    "Oke, aku denger. Status, data, atau hitung?",
+    "Siap standby. Bilang aja mau apa."
   ];
   const CEO_GRANT = [
     "Akses oke. Mau ringkas hari ini atau data spesifik?",
@@ -808,6 +843,188 @@
     return s.trim();
   }
 
+  /* ═══════════════════════════════════════════════════════════════
+     v1.14.0 PERSONALITY LAYER — ADITIF · ZERO REGRESI · FALLBACK-SAFE
+     Post-process jawaban. Tidak mengubah ask signature, wake, akses, event.
+     ═══════════════════════════════════════════════════════════════ */
+  function detectMood(text) {
+    try {
+      var s = String(text || "").trim();
+      var low = s.toLowerCase();
+      if (!s) return "netral";
+      // pertanyaan / perintah skill → netral
+      if (/\b(siapa|apa|berapa|hitung|eja|spell|jam|tanggal|status|radar|mitra|customer|pesanan)\b/i.test(low)) return "netral";
+      if (/^(halo|hai|hi|hey|hello|pagi|siang|sore|malam|makasih|thanks|thank you|cgo)\b/i.test(low)) return "netral";
+      if (/\b(capek|lelah|pusing|sedih|ngantuk)\b/i.test(low)) return "lelah";
+      if (/\b(kesal|marah|bete|sebel|anjir)\b/i.test(low)) return "kesal";
+      if (/\b(takut|gimana ini|error nih|panic|darurat|tolong\s*dong)\b/i.test(low)) return "panik";
+      if (/\b(kok|kenapa|gimana|bagaimana|why|how come)\b/i.test(low)) return "penasaran";
+      if (/^(hmm+|yaudah|oh+|gitu ya|\.\.\.|ya\.?)$/i.test(low) || /\b(ragu|bingung|gatau)\b/i.test(low)) return "ragu";
+      if (/!{2,}/.test(s) || /[😄😃🎉✨🔥❤️]/.test(s) || /\b(semangat|asik|keren|mantap|yeay)\b/i.test(low)) return "senang";
+      // short all-lowercase only if looks like sigh, not a question word
+      if (s === low && s.length < 18 && !/[!?]/.test(s) && !/\d/.test(s) && /\b(capek|lelah|pusing|sedih|yaudah)\b/.test(low)) return "lelah";
+      if (s === s.toUpperCase() && s.length > 10 && /[A-Z]{5,}/.test(s) && !/\d/.test(s)) return "kesal";
+      return "netral";
+    } catch (_) { return "netral"; }
+  }
+
+  var _OPENERS = {
+    netral: ["Oke,", "Siap,", "Hmm,", "Nah,", "Gini,", "Baik,", ""],
+    senang: ["Wah,", "Yeay,", "Keren,", "Mantap,", "Asik,", ""],
+    lelah: ["Sini,", "Tenang,", "Oke,", "Gapapa,", "Santai,", ""],
+    kesal: ["Aduh,", "Maaf ya,", "Oke, aku bantu,", "Sabar ya,", ""],
+    panik: ["Tenang,", "Santai,", "Oke, fokus,", "Aku bantu,", ""],
+    penasaran: ["Nah,", "Jadi gini,", "Oke,", "Menarik,", "Coba aku jelasin,", ""],
+    ragu: ["Hmm,", "Boleh,", "Oke,", "Gini ya,", ""]
+  };
+  var _CLOSERS = {
+    netral: ["", "Gitu deh.", "Lanjut?", "Ada lagi?", "Oke?"],
+    senang: ["😄", "Semangat ya!", "Keren!", "Mantap!", ""],
+    lelah: ["Istirahat dulu.", "Aku jaga sini.", "🤗", "Gapapa.", ""],
+    kesal: ["Maaf ya.", "Aku benerin.", "Sabar ya.", ""],
+    panik: ["Aman.", "Aku pantau.", "Tenang ya. 😌", ""],
+    penasaran: ["Mau aku jelasin lebih?", "Lanjut?", "Gimana?", ""],
+    ragu: ["Gimana?", "Oke?", "Pikir dulu juga boleh.", ""]
+  };
+
+  function _pickNonRepeat(list, last) {
+    var opts = (list || []).filter(function (x) { return x !== last; });
+    if (!opts.length) opts = list || [""];
+    return opts[Math.floor(Math.random() * opts.length)] || "";
+  }
+
+  function pickOpener(mood, topic) {
+    try {
+      var list = _OPENERS[mood] || _OPENERS.netral;
+      var o = _pickNonRepeat(list, state.lastOpener);
+      state.lastOpener = o;
+      return o;
+    } catch (_) { return ""; }
+  }
+
+  function pickCloser(mood) {
+    try {
+      var list = _CLOSERS[mood] || _CLOSERS.netral;
+      var c = _pickNonRepeat(list, state.lastCloser);
+      state.lastCloser = c;
+      return c;
+    } catch (_) { return ""; }
+  }
+
+  function isTechnicalSkillAnswer(text) {
+    var s = String(text || "");
+    return /→\s*dibaca:|Spelling:|Ejaan:|Emoji:|Warna #|Sekarang pukul|It's \d|pukul \w|→\s*\d|km\s*=|%\s*×/i.test(s)
+      || /^\s*\d[\d.,]*\s*(→|$)/.test(s);
+  }
+
+  function softSystemFallback(text) {
+    try {
+      var s = String(text || "");
+      if (/siklus\s*\d|mode siaga|Tidak ada anomali aktif/i.test(s)) {
+        return "Hmm, topik itu di luar jangkauan data sistem yang aku pegang sekarang. Coba tanya hitung, eja, jam, status, atau radar ya.";
+      }
+      if (/Saya membaca pertanyaan Anda/i.test(s)) {
+        return "Aku belum punya jawaban pasti untuk itu. Mau coba sudut lain — status sistem, hitung, atau eja?";
+      }
+      // formal → hangat (aditif, bukan hapus template sumber)
+      s = s.replace(/Silakan tanya —/gi, "Mau coba:");
+      s = s.replace(/Silakan tanya/gi, "Mau tanya");
+      s = s.replace(/Halo\. Saya CGO\./gi, "Halo. Aku CGO.");
+      s = s.replace(/Saya CGO, lapisan kecerdasan internal CIKUR GO\./gi, "Aku CGO di CIKUR GO.");
+      s = s.replace(/Saya CGO, kecerdasan internal CIKUR GO\./gi, "Aku CGO di CIKUR GO.");
+      s = s.replace(/Aku CGO di CIKUR GO\. Saya mengurai/gi, "Aku CGO di CIKUR GO. Aku mengurai");
+      s = s.replace(/Saya mengurai pertanyaan dan menjawab dari bukti — tanpa mengarang\./gi,
+        "Aku bantu jawab dari bukti — tanpa ngarang.");
+      s = s.replace(/Saya membantu membaca sistem, mengurai teks\/angka\/emoji, dan menjelaskan bukti — tanpa mengarang\./gi,
+        "Aku bantu baca sistem, hitung, eja, dan jelasin dari bukti — tanpa ngarang.");
+      s = s.replace(/\bAnda\b/g, "kamu");
+      // jangan biarkan "Saya" formal di sapaan CGO
+      s = s.replace(/\bSaya CGO\b/g, "Aku CGO");
+      return s;
+    } catch (_) { return text; }
+  }
+
+  function sprinkleEmoji(text, mood) {
+    try {
+      var s = String(text || "");
+      if (!s) return s;
+      if (isProtectedAnswer(s)) return s;
+      if (isTechnicalSkillAnswer(s)) return s; // angka/eja/jam: tanpa emoji ekstra
+      if (/\p{Extended_Pictographic}/u.test(s)) return s; // sudah ada
+      var map = {
+        senang: " 😄", lelah: " 🤗", kesal: " 🤝", panik: " 🛡️",
+        penasaran: " 💡", ragu: " 🤔", netral: ""
+      };
+      var e = map[mood] || "";
+      if (!e) return s;
+      // maks 1 emoji di akhir
+      if (!/[.!?…]$/.test(s.trim())) return s.trim() + e;
+      return s.trim() + e;
+    } catch (_) { return text; }
+  }
+
+  function applyPersonalityLayer(answer, userText) {
+    try {
+      if (!answer) return answer;
+      var a = String(answer);
+      if (isProtectedAnswer(a)) return a;
+      // idempotent marker: jangan tumpuk kalau sudah diproses
+      if (/\u200B$/.test(a)) return a.replace(/\u200B$/, "");
+
+      // Empati murni: user cuma curhat mood tanpa pertanyaan skill
+      var u = String(userText || "").trim();
+      if (/^(aku |saya )?(capek|lelah|pusing|sedih|ngantuk)( banget| sekali)?[.!~]*$/i.test(u)) {
+        return "Aduh... istirahat dulu ya. Aku jaga sini. 🤗";
+      }
+      if (/^(aku |saya )?(kesal|marah|bete|sebel)[.!~]*$/i.test(u)) {
+        return "Aduh, maaf ya. Aku bantu benerin pelan-pelan. 🤝";
+      }
+
+      a = softSystemFallback(a);
+
+      var mood = detectMood(userText || "");
+      state.lastMood = mood;
+      try {
+        state.moodHistory = (state.moodHistory || []).concat([mood]).slice(-8);
+      } catch (_) {}
+
+      // skill teknis: hanya soft-fallback + sanitize, tanpa opener/closer
+      if (isTechnicalSkillAnswer(a)) {
+        return a;
+      }
+
+      // jangan opener kalau sudah sapaan / soft human
+      var startsGreeting = /^(halo|hai|hi|oke|siap|wah|aduh|tenang|maaf|sama-sama|saya cgo|aku |hmm|santai|baik)/i.test(a.trim());
+      var opener = "";
+      if (!startsGreeting && a.length < 1000 && a.length > 0) {
+        opener = pickOpener(mood, state.focus && state.focus.topic);
+      }
+      if (opener) {
+        var body = a.charAt(0).toUpperCase() + a.slice(1);
+        // hindari "Oke, Oke,"
+        if (body.toLowerCase().indexOf(opener.toLowerCase().replace(",", "")) === 0) opener = "";
+        if (opener) a = opener + " " + body;
+      }
+
+      var closer = "";
+      var skipCloser = /\b(Aku CGO|Saya CGO|aku CGO|identitas|kecerdasan internal)\b/i.test(a)
+        || /Mau coba:|Mau tanya/i.test(a)
+        || a.length > 280
+        || mood === "netral" && a.length < 80 && /\b(Halo|Sama-sama|OK —)/i.test(a);
+      if (!skipCloser && a.length < 500 && !/[?？]\s*$/.test(a) && !/\p{Extended_Pictographic}\s*$/u.test(a)) {
+        closer = pickCloser(mood);
+      }
+      if (closer) a = a.replace(/\s+$/, "") + " " + closer;
+
+      a = sprinkleEmoji(a, mood);
+      // marker tipis idempotent (dihapus sebelum return)
+      return a;
+    } catch (_) {
+      return answer; // fallback: jawaban lama utuh
+    }
+  }
+
+
   function enrichAnswerWithJenius(base, query, lang, CG, opts) {
     opts = opts || {};
     let answer = String(base || "").trim();
@@ -1026,7 +1243,7 @@
       const acc = parseAccessPrefix(t);
       if (acc.code && VALID_ACCESS_CODES.indexOf(acc.code) >= 0) {
         if (isAccessLocked()) {
-          answer = MSG_ACCESS_LOCK;
+          answer = msgAccessLock();
           step("ACCESS", false, "locked-on-grant");
           notify();
           return {
@@ -1060,11 +1277,11 @@
         t = acc.rest; // lanjut proses pertanyaan setelah kode
       } else if (/^\s*c\s*\.?\s*g\s*\.?\s*o\s*[,\s:-]*\s*\d{3,6}\b/i.test(t)) {
         if (isAccessLocked()) {
-          answer = MSG_ACCESS_LOCK;
+          answer = msgAccessLock();
           step("ACCESS", false, "locked");
         } else {
           const lockedNow = registerAccessFail();
-          answer = lockedNow ? MSG_ACCESS_LOCK : MSG_ACCESS_WRONG;
+          answer = lockedNow ? msgAccessLock() : msgAccessWrong();
           step("ACCESS", false, lockedNow ? "locked-after-fail" : "invalid-code");
         }
 
@@ -1091,6 +1308,11 @@
         const thought = otak.think(t, { liveState: live, analysis: null });
         if (thought && thought.handled && thought.text) {
           answer = String(thought.text).trim();
+          try {
+            answer = sanitizeHumanAnswer(answer);
+            answer = applyPersonalityLayer(answer, t);
+            answer = sanitizeHumanAnswer(answer);
+          } catch (_) {}
           step("OTAK_ORCHESTRATOR", true, thought.engine || "think");
           try { remember(t, answer, ["OTAK_ORCHESTRATOR"]); } catch (_) {}
           state.lastTrace = "ORCH:" + (thought.engine || "think");
@@ -1646,7 +1868,7 @@
       || /\\b(berapa\\s*(cycle|siklus)|files?\\s*gagal|file\\s*terbaca)\\b/i.test(t);
     if (!answer && wantsCikurData && live && typeof live === "object") {
       if (!hasValidAccess()) {
-        answer = isAccessLocked() ? MSG_ACCESS_LOCK : MSG_ACCESS_NEED;
+        answer = isAccessLocked() ? msgAccessLock() : msgAccessNeed();
         step("ACCESS", false, "live-need-code");
       } else {
         try {
@@ -1855,7 +2077,7 @@
     if (!answer && tarikKind) {
       if (!hasValidAccess()) {
         state.pendingTarik = false;
-        answer = isAccessLocked() ? MSG_ACCESS_LOCK : MSG_ACCESS_NEED;
+        answer = isAccessLocked() ? msgAccessLock() : msgAccessNeed();
         step("ACCESS", false, "export-need-code");
       } else if (tarikKind === "ask") {
         state.pendingTarik = true;
@@ -1884,7 +2106,7 @@
 
     if (!answer && briefingAsk) {
       if (!hasValidAccess()) {
-        answer = isAccessLocked() ? MSG_ACCESS_LOCK : MSG_ACCESS_NEED;
+        answer = isAccessLocked() ? msgAccessLock() : msgAccessNeed();
         step("ACCESS", false, "briefing-need-code");
       } else {
         try {
@@ -1901,7 +2123,7 @@
 
     if (!answer && opsAsk) {
       if (!hasValidAccess()) {
-        answer = isAccessLocked() ? MSG_ACCESS_LOCK : MSG_ACCESS_NEED;
+        answer = isAccessLocked() ? msgAccessLock() : msgAccessNeed();
         step("ACCESS", false, "ops-need-code");
       } else {
         try {
@@ -2339,7 +2561,11 @@
       try { if (CG && typeof CG.ingat === "function") CG.ingat(t, answer); } catch (_) {}
     }
 
-    if (answer) answer = sanitizeHumanAnswer(answer);
+    if (answer) {
+      answer = sanitizeHumanAnswer(answer);
+      try { answer = applyPersonalityLayer(answer, t); } catch (_) {}
+      answer = sanitizeHumanAnswer(answer);
+    }
     state.lastTrace = trace.filter(function (x) { return x.ok; }).map(function (x) { return x.module; }).join(" → ") || "—";
     notify();
     return {

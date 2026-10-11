@@ -6,7 +6,7 @@
  */
 (function (global) {
   "use strict";
-  var VERSION = "1.3.0-SKILLS-EXPAND";
+  var VERSION = "1.5.2-WARM-ZR";
   var memoryStore = null;
 
   function g() {
@@ -307,6 +307,14 @@
     "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
     "5": "five", "6": "six", "7": "seven", "8": "eight", "9": "nine"
   };
+
+  var JA_LETTERS = {a:"あ",b:"びー",c:"しー",d:"でぃー",e:"いー",f:"えふ",g:"じー",h:"えいち",i:"あい",j:"じぇー",k:"けー",l:"える",m:"えむ",n:"えぬ",o:"おー",p:"ぴー",q:"きゅー",r:"あーる",s:"えす",t:"てぃー",u:"ゆー",v:"ぶい",w:"だぶりゅー",x:"えっくす",y:"わい",z:"ぜっと","0":"ぜろ","1":"いち","2":"に","3":"さん","4":"よん","5":"ご","6":"ろく","7":"なな","8":"はち","9":"きゅう"};
+  var ES_LETTERS = {a:"a",b:"be",c:"ce",d:"de",e:"e",f:"efe",g:"ge",h:"hache",i:"i",j:"jota",k:"ka",l:"ele",m:"eme",n:"ene",o:"o",p:"pe",q:"cu",r:"erre",s:"ese",t:"te",u:"u",v:"uve",w:"uve doble",x:"equis",y:"ye",z:"zeta"};
+  var FR_LETTERS = {a:"a",b:"bé",c:"cé",d:"dé",e:"e",f:"effe",g:"gé",h:"ache",i:"i",j:"ji",k:"ka",l:"elle",m:"emme",n:"enne",o:"o",p:"pé",q:"ku",r:"erre",s:"esse",t:"té",u:"u",v:"vé",w:"double vé",x:"ixe",y:"i grec",z:"zède"};
+  var DE_LETTERS = {a:"a",b:"be",c:"ce",d:"de",e:"e",f:"ef",g:"ge",h:"ha",i:"i",j:"jot",k:"ka",l:"el",m:"em",n:"en",o:"o",p:"pe",q:"ku",r:"er",s:"es",t:"te",u:"u",v:"fau",w:"ve",x:"ix",y:"ypsilon",z:"zet"};
+  var AR_LETTERS = {a:"alif",b:"ba",c:"sii",d:"daal",e:"ii",f:"if",g:"jii",h:"eich",i:"aay",j:"jaay",k:"kaay",l:"el",m:"em",n:"en",o:"oo",p:"pii",q:"kyu",r:"aar",s:"es",t:"tii",u:"yuu",v:"vii",w:"dabelyu",x:"eks",y:"waay",z:"zed"};
+  var PT_LETTERS = {a:"a",b:"bê",c:"cê",d:"dê",e:"ê",f:"éfe",g:"gê",h:"agá",i:"i",j:"jota",k:"capa",l:"éle",m:"ême",n:"êne",o:"ó",p:"pê",q:"quê",r:"érre",s:"ésse",t:"tê",u:"u",v:"vê",w:"dáblio",x:"xis",y:"ípsilon",z:"zê"};
+
   var ID_LETTERS = {
     a: "a", b: "bé", c: "cé", d: "dé", e: "é", f: "ef",
     g: "gé", h: "ha", i: "i", j: "jé", k: "ka", l: "èl",
@@ -318,7 +326,14 @@
   };
 
   function spellLetters(text, lang) {
-    var map = (lang === "en") ? EN_LETTERS : ID_LETTERS;
+    var map = (lang === "en") ? EN_LETTERS
+      : (lang === "ja") ? JA_LETTERS
+      : (lang === "es") ? ES_LETTERS
+      : (lang === "fr") ? FR_LETTERS
+      : (lang === "de") ? DE_LETTERS
+      : (lang === "pt") ? PT_LETTERS
+      : (lang === "ar") ? AR_LETTERS
+      : ID_LETTERS;
     var out = [];
     var chars = Array.from(String(text || ""));
     for (var i = 0; i < chars.length; i++) {
@@ -389,18 +404,16 @@
     var dd = d.getDate();
     var mm = d.getMonth();
     var yyyy = d.getFullYear();
-    if (lang === "en") {
-      return {
-        text: HARI_EN[day] + ", " + BULAN_EN[mm] + " " + dd + ", " + yyyy,
-        engine: "CGO_DATE",
-        tags: ["skill", "tanggal"]
-      };
-    }
-    return {
-      text: HARI_ID[day] + ", " + dd + " " + BULAN_ID[mm] + " " + yyyy,
-      engine: "CGO_DATE",
-      tags: ["skill", "tanggal"]
-    };
+    var text;
+    if (lang === "en") text = HARI_EN[day] + ", " + BULAN_EN[mm] + " " + dd + ", " + yyyy;
+    else if (lang === "ja") text = yyyy + "年" + (mm + 1) + "月" + dd + "日";
+    else if (lang === "es") text = HARI_EN[day] + ", " + dd + " de " + BULAN_EN[mm] + " de " + yyyy;
+    else if (lang === "fr") text = dd + " " + BULAN_EN[mm] + " " + yyyy;
+    else if (lang === "de") text = dd + ". " + BULAN_EN[mm] + " " + yyyy;
+    else if (lang === "pt") text = dd + " de " + BULAN_EN[mm] + " de " + yyyy;
+    else if (lang === "ar") text = dd + "/" + (mm + 1) + "/" + yyyy;
+    else text = HARI_ID[day] + ", " + dd + " " + BULAN_ID[mm] + " " + yyyy;
+    return { text: text, engine: "CGO_DATE", tags: ["skill", "tanggal"] };
   }
 
   function percentAnswer(body, lang) {
@@ -486,6 +499,25 @@
     };
   }
 
+
+  var COLOR_NAMES_ML = {
+    red: {id:"merah",en:"red",ja:"赤",es:"rojo",fr:"rouge",de:"rot",pt:"vermelho",ar:"أحمر"},
+    blue: {id:"biru",en:"blue",ja:"青",es:"azul",fr:"bleu",de:"blau",pt:"azul",ar:"أزرق"},
+    green: {id:"hijau",en:"green",ja:"緑",es:"verde",fr:"vert",de:"grün",pt:"verde",ar:"أخضر"},
+    yellow: {id:"kuning",en:"yellow",ja:"黄色",es:"amarillo",fr:"jaune",de:"gelb",pt:"amarelo",ar:"أصفر"},
+    black: {id:"hitam",en:"black",ja:"黒",es:"negro",fr:"noir",de:"schwarz",pt:"preto",ar:"أسود"},
+    white: {id:"putih",en:"white",ja:"白",es:"blanco",fr:"blanc",de:"weiß",pt:"branco",ar:"أبيض"}
+  };
+  function colorNameML(name, lang) {
+    var key = String(name || "").toLowerCase();
+    // map common id/en words to key
+    var alias = {merah:"red",red:"red",biru:"blue",blue:"blue",hijau:"green",green:"green",kuning:"yellow",yellow:"yellow",hitam:"black",black:"black",putih:"white",white:"white"};
+    var k = alias[key] || key;
+    var row = COLOR_NAMES_ML[k];
+    if (!row) return name;
+    return row[lang] || row.id || name;
+  }
+
   function skillAnswer(raw) {
     var body = stripWake(raw);
     if (!body) return null;
@@ -497,6 +529,14 @@
     if (tAns) return tAns;
     var dAns = dateAnswer(body, lang);
     if (dAns) return dAns;
+
+    // ganti bahasa (bukan meta sistem)
+    if (/^(speak\s+english|bicara\s+inggris|pakai\s+bahasa\s+inggris)\b/i.test(body)) {
+      return { text: "OK — I'll reply in English for the next questions. Try: spell hello, what time is it, calculate 12 x 8.", engine: "CGO_LANG", tags: ["skill", "lang"] };
+    }
+    if (/^(speak\s+indonesia|bicara\s+indonesia|bahasa\s+indonesia)\b/i.test(body)) {
+      return { text: "Baik — pertanyaan berikutnya saya jawab dalam bahasa Indonesia.", engine: "CGO_LANG", tags: ["skill", "lang"] };
+    }
 
     // persen / pangkat / akar / konversi satuan
     try {
@@ -548,17 +588,36 @@
       if (spoken) return { text: "Ejaan: " + spoken, engine: "CIKUR_EJA", tags: ["skill", "eja"] };
     }
 
-    // hitung — dukung 1.000.000, 1,000,000, x × ÷ : *
+    // hitung — 1.000x2 / 1.000 x 2 / 1.000x2 itu berapa?
+    function prepMathExpr(s) {
+      s = String(s || "");
+      // buang kata pengisi
+      s = s.replace(/\b(itu|ya|yaitu|hasilnya|hasil|adalah|equals?|berapa|hitung|kalkulasi)\b/gi, " ");
+      s = s.replace(/[?？]+/g, " ");
+      // sisip spasi di operator menempel angka: 1.000x2 → 1.000 x 2
+      s = s.replace(/(\d)\s*[x×✕*]\s*(\d)/gi, "$1 * $2");
+      s = s.replace(/(\d)\s*[÷/:]\s*(\d)/g, "$1 / $2");
+      s = s.replace(/(\d)\s*[+]\s*(\d)/g, "$1 + $2");
+      s = s.replace(/(\d)\s*[-−]\s*(\d)/g, "$1 - $2");
+      // ribuan menempel operator: 1.000x2 already handled; also 1000x2
+      s = s.replace(/(\d[\d.,]*)\s*[x×✕*]\s*(\d[\d.,]*)/gi, "$1 * $2");
+      s = s.replace(/(\d[\d.,]*)\s*[÷/]\s*(\d[\d.,]*)/g, "$1 / $2");
+      return s.replace(/\s+/g, " ").trim();
+    }
     var hitungExpr = null;
     var hm = body.match(/^(?:hitung|kalkulasi|calculate|berapa(?:\s+hasil)?)\s*[:\-]?\s*(.+)$/i);
     if (hm) hitungExpr = hm[1];
     else {
-      var trail = body.match(/^(.+?)\s*berapa\s*[?]?\s*$/i);
-      if (trail && /[\d]/.test(trail[1]) && /[x×✕*÷/:\+\-]/.test(trail[1])) hitungExpr = trail[1];
-      else if (/[\d]/.test(body) && /[x×✕*÷/]/.test(body) && body.length < 80) hitungExpr = body;
+      var trail = body.match(/^(.+?)\s+berapa\s*[?]?\s*$/i);
+      if (trail && /\d/.test(trail[1]) && /[x×✕*÷/:\+\-]|\d\s*[x×✕*]\s*\d/i.test(trail[1])) hitungExpr = trail[1];
+      else if (/\d/.test(body) && /[x×✕*÷/]|\d[x×✕*]\d/i.test(body) && body.length < 100) hitungExpr = body;
+    }
+    // pola: "1.000x2 itu berapa" sudah tertangkap trail; juga pure "1.000x2"
+    if (!hitungExpr && /^[\d.,\s]*\d[\d.,]*\s*[x×✕*÷/+\-]\s*[\d.,]+/i.test(body.replace(/\b(itu|berapa)\b/gi,""))) {
+      hitungExpr = body;
     }
     if (hitungExpr) {
-      var math = evalLocaleMath(hitungExpr);
+      var math = evalLocaleMath(prepMathExpr(hitungExpr));
       if (math) {
         return { text: formatNumberResult(math.value, lang), engine: "CIKUR_HITUNG", tags: ["skill", "hitung"] };
       }
@@ -613,7 +672,10 @@
         try {
           var w = warnaFn(target, lang);
           var spokenW = Array.isArray(w) ? w[0] : w;
-          if (spokenW) return { text: "Warna " + target + " → " + spokenW, engine: "CIKUR_WARNA", tags: ["skill", "warna"] };
+          if (spokenW) {
+            var cn = colorNameML(spokenW, lang);
+            return { text: "Warna " + target + " → " + (cn || spokenW), engine: "CIKUR_WARNA", tags: ["skill", "warna"] };
+          }
         } catch (_) {}
       }
     }
@@ -661,32 +723,36 @@
 
     if (!classified) {
       if (/^(halo|hai|hello|hi|pagi|siang|sore|malam|selamat\s+(pagi|siang|sore|malam))\b/i.test(text))
-        return pack("Halo. Saya CGO. Silakan tanya — hitung, eja, jam, tanggal, emoji, atau status sistem.", "GREETING");
+        return pack("Halo. Aku CGO. Mau coba hitung, eja, jam, tanggal, emoji, atau status sistem?", "GREETING");
       if (/\b(siapa kamu|kamu siapa|who are you)\b/i.test(text))
-        return pack("Saya CGO, kecerdasan internal CIKUR GO. Saya mengurai pertanyaan dan menjawab dari bukti — tanpa mengarang.", "IDENTITY");
+        return pack("Aku CGO di CIKUR GO. Aku bantu jawab dari bukti — tanpa ngarang.", "IDENTITY");
       if (/\b(kamu bisa apa|bisa ngapain|what can you)\b/i.test(text))
-        return pack("Saya bisa hitung & eja multi-bahasa, jam/tanggal, emoji/warna, persen/pangkat, konversi satuan, status sistem, dan cek file berbasis bukti.", "CAPABILITY");
+        return pack("Aku bisa hitung & eja multi-bahasa, jam/tanggal, emoji/warna, persen/pangkat, konversi satuan, status sistem, dan cek file berbasis bukti.", "CAPABILITY");
+      if (/^(speak\s+english|bicara\s+inggris|pakai\s+bahasa\s+inggris|in\s+english\s*please)\b/i.test(text))
+        return pack("OK — I'll answer in English when you ask. Try: spell hello, what time is it, or calculate 12 x 8.", "LANG_EN");
+      if (/^(speak\s+indonesia|bicara\s+indonesia|pakai\s+bahasa\s+indonesia)\b/i.test(text))
+        return pack("Baik — saya jawab dalam bahasa Indonesia. Coba: eja hello, jam berapa, atau hitung 12 x 8.", "LANG_ID");
       if (/^(makasih|terima kasih|thanks|thank you)\b/i.test(text))
         return pack("Sama-sama. Tinggal panggil jika butuh lagi.", "THANKS");
       if (/^(selamat tinggal|dadah|bye|goodbye)\b/i.test(text))
-        return pack("Sampai jumpa. Saya tetap siaga.", "FAREWELL");
+        return pack("Sampai jumpa. Aku tetap siaga.", "FAREWELL");
       return null;
     }
 
     if (classified.greeting || classified.topic === "GREETING")
-      return pack("Halo. Saya CGO. Ada yang ingin dicek atau dihitung?", "GREETING");
+      return pack("Halo. Aku CGO. Ada yang mau dicek atau dihitung?", "GREETING");
     if (classified.identity || classified.topic === "IDENTITY")
-      return pack("Saya CGO, kecerdasan internal CIKUR GO. Saya membaca keadaan BCGO yang hidup dan mengurai pertanyaanmu secara lokal — tanpa API eksternal.", "IDENTITY");
+      return pack("Aku CGO di CIKUR GO. Aku baca keadaan BCGO yang hidup dan mengurai pertanyaanmu secara lokal — tanpa API eksternal.", "IDENTITY");
     if (classified.capability || classified.topic === "CAPABILITY")
       return pack("Kemampuan utama: briefing status, cek file & dependency, hitung/eja/emoji/warna multi-bahasa, radar agent, serta investigasi root cause berbasis evidence.", "CAPABILITY");
     if (classified.gratitude || classified.topic === "THANKS")
       return pack("Sama-sama. Kalau butuh cek lagi, tinggal panggil.", "THANKS");
     if (classified.farewell || classified.topic === "FAREWELL")
-      return pack("Sampai jumpa. Saya tetap siaga di sisi BCGO.", "FAREWELL");
+      return pack("Sampai jumpa. Aku tetap siaga di sisi BCGO.", "FAREWELL");
     if (classified.justChatting || classified.topic === "CASUAL_CHAT")
-      return pack("Boleh. Saya siap ngobrol. Kalau nanti butuh cek sistem atau mengurai angka/emoji, langsung saja.", "CASUAL");
+      return pack("Boleh. Aku siap ngobrol. Kalau nanti butuh cek sistem atau mengurai angka/emoji, langsung saja.", "CASUAL");
     if (classified.emotionalBoundary || classified.topic === "EMOTION_BOUNDARY")
-      return pack("Saya bisa menyesuaikan nada bicara, tetapi saya tidak memiliki perasaan manusia. Saya tetap fokus membantu dengan jelas dan jujur.", "EMOTION");
+      return pack("Aku bisa menyesuaikan nada bicara, tapi aku tidak memiliki perasaan manusia. Aku tetap fokus bantu dengan jelas dan jujur.", "EMOTION");
     return null;
   }
 
@@ -697,6 +763,9 @@
     if (!body || body.length < 6 || body.length > 220) return null;
     // jangan ambil alih pertanyaan sistem teknis
     if (/\b(file|source|telemetry|root cause|patch|dependency|bcgo|scanner|radar agent|anomaly)\b/i.test(body)) return null;
+    // jangan nalar-meta untuk soal hitung/angka ("Teks didominasi angka")
+    if (/\d/.test(body) && /[x×✕*÷/+\-]|berapa|hitung|pangkat|persen|%/i.test(body)) return null;
+    if (/^[\d.,\sx×✕*÷/+\-?]+$/i.test(body)) return null;
 
     var wantsExplain = /^(kenapa|mengapa|jelaskan|terangkan|bagaimana|kok)\b/i.test(body)
       || /\b(artinya apa|maksudnya apa)\b/i.test(body);
