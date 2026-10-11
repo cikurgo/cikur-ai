@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.12.4-RADAR-CHAT-SYNC-ZR";
+  const VERSION = "1.13.0-OTAK-ORCH-SYNC";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -134,6 +134,19 @@
         const have = CIKURGO_REASONING.filter(k => typeof c[k] === "function");
         return { ready: typeof c.nalar === "function", version: c.version || c.VERSION || null,
           detail: { fungsiPenalaran: have.length + "/" + CIKURGO_REASONING.length, terhubung: CIKURGO_WIRED.filter(k => typeof c[k] === "function").join(",") } };
+      }
+    },
+    {
+      id: "OTAK_ORCHESTRATOR", label: "Otak Orchestrator", role: "Skill natural · angka · eja · jam", required: false,
+      probe() {
+        const o = global.CGOOtak;
+        if (!o) return null;
+        const st = typeof o.status === "function" ? o.status() : null;
+        return {
+          ready: typeof o.think === "function",
+          version: (o.VERSION || (st && st.version) || null),
+          detail: st || null
+        };
       }
     },
     {
@@ -1069,6 +1082,38 @@
     const CG = global.CIKURGO;
     const Inst = global.CGOInstruction;
     const live = ctx.liveState || global.BCGO_STATE || {};
+
+    // ─── A0.5 Otak Orchestrator — HASIL skill (angka/eja/jam/persen), bukan meta sistem ───
+    // Dipanggil SEBELUM CIKUR.urai full-text agar 1.000.000 tidak diurai sebagai desimal/typo.
+    try {
+      const otak = global.CGOOtak;
+      if (!answer && otak && typeof otak.think === "function") {
+        const thought = otak.think(t, { liveState: live, analysis: null });
+        if (thought && thought.handled && thought.text) {
+          answer = String(thought.text).trim();
+          step("OTAK_ORCHESTRATOR", true, thought.engine || "think");
+          try { remember(t, answer, ["OTAK_ORCHESTRATOR"]); } catch (_) {}
+          state.lastTrace = "ORCH:" + (thought.engine || "think");
+          notify();
+          return {
+            ok: true,
+            answer: answer,
+            lang: "id",
+            trace: trace,
+            abc: null,
+            intent: { topic: "SKILL", mode: "ORCHESTRATOR", engine: thought.engine || null },
+            sources: ["OTAK_ORCHESTRATOR"],
+            modulesUsed: ["OTAK_ORCHESTRATOR:" + (thought.engine || "think")],
+            otakVersion: thought.version || null
+          };
+        }
+        step("OTAK_ORCHESTRATOR", false, (thought && thought.reason) || "pass");
+      } else if (!global.CGOOtak) {
+        step("OTAK_ORCHESTRATOR", false, "belum termuat");
+      }
+    } catch (e) {
+      step("OTAK_ORCHESTRATOR", false, String((e && e.message) || e));
+    }
 
     // ─── Memori kerja: lanjutan kontekstual (kenapa / dalami / yang tadi) ───
     let followUpHandled = false;

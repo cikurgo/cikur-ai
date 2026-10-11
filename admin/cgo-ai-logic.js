@@ -8,8 +8,8 @@ import * as Guardian from "./cgo-ai-guardian.js?v=20260907-1315-instruction1";
 import * as Cognition from "./cgo-ai-cognition.js?v=20260907-1315-instruction1";
 import * as Instruction from "./cgo-instruction.js";
 
-const VERSION_OTAK = "1.2.0-VOCAB-PARSE";
-const VERSION="1.6.0-VOCAB-PARSE";
+const VERSION_OTAK = "1.2.1-OTAK-VOICE";
+const VERSION="1.6.1-OTAK-VOICE";
 
 function clone(v){ return structuredClone(v); }
 function verifiedEvidence(caseData){ return (caseData?.evidence||[]).filter(e=>e?.status==="VERIFIED"); }
@@ -132,11 +132,7 @@ export function buildAction(caseData, authorization){
 
 export { VERSION, Instruction };
 
-try {
-  if (typeof globalThis !== "undefined") {
-    globalThis.CGOAiLogic = { VERSION: typeof VERSION !== "undefined" ? VERSION : "1.6.0-VOCAB-PARSE", parseCommandVocabulary, getVocabularyVersion, evaluate };
-  }
-} catch (_) {}
+/* global bind moved after vocabulary exports */
 
 
 /* ============================================================
@@ -291,3 +287,18 @@ export function getVocabularyVersion() {
   return { VERSION: VOCAB_VERSION, logicVersion: VERSION, otakTag: VERSION_OTAK };
 }
 
+/* Global bind — setelah vocabulary tersedia */
+try {
+  if (typeof globalThis !== "undefined") {
+    globalThis.CGOAiLogic = {
+      VERSION: typeof VERSION !== "undefined" ? VERSION : "1.6.0-VOCAB-PARSE",
+      VERSION_OTAK: typeof VERSION_OTAK !== "undefined" ? VERSION_OTAK : "1.2.0-VOCAB-PARSE",
+      evaluate,
+      decide,
+      reconcile,
+      buildAction,
+      parseCommandVocabulary,
+      getVocabularyVersion
+    };
+  }
+} catch (_) {}
