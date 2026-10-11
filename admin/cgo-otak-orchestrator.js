@@ -6,7 +6,7 @@
  */
 (function (global) {
   "use strict";
-  var VERSION = "1.5.2-WARM-ZR";
+  var VERSION = "1.5.3-WARM-ZR-MATH-SAFE";
   var memoryStore = null;
 
   function g() {
@@ -67,7 +67,7 @@
     var s = String(text || "");
     if (/\b(english|in english|bahasa inggris)\b/i.test(s)) return "en";
     if (/^(spell)\b/i.test(s)) return "en";
-    if (/\b(what time is it|what's the time|current time|what day is it|what is the date|what's the date)\b/i.test(s)) return "en";
+    if (/\b(what time is it|what is the time|what's the time|current time|what day is it|what is the date|what's the date)\b/i.test(s)) return "en";
     if (/\b(日本語|nihongo|japanese|bahasa jepang)\b/i.test(s)) return "ja";
     if (/\b(español|spanish|bahasa spanyol)\b/i.test(s)) return "es";
     if (/\b(français|french|bahasa perancis)\b/i.test(s)) return "fr";
@@ -374,7 +374,7 @@
 
   function timeAnswer(body, lang) {
     var b = String(body || "").toLowerCase().trim();
-    if (!/^(jam berapa|pukul berapa|sekarang jam berapa|jam berapa sekarang|what time is it|what's the time|whats the time|current time|waktu sekarang|jam sekarang)\b/i.test(b)
+    if (!/^(jam berapa|pukul berapa|sekarang jam berapa|jam berapa sekarang|what time is it|what is the time|what's the time|whats the time|tell me the time|current time|waktu sekarang|jam sekarang)\b/i.test(b)
         && !/^(jam berapa|what time)/i.test(b)) {
       // softer match
       if (!(/\b(jam berapa|pukul berapa|what time is it|current time)\b/i.test(b) && b.length < 48)) return null;
@@ -518,6 +518,30 @@
     return row[lang] || row.id || name;
   }
 
+
+  // v1.5.3 — hitung mandiri: rumus aritmetika tidak butuh CIKUR. Dipakai HANYA bila CIKUR belum termuat,
+  // supaya "hitung 12 x 3" tidak diam. Jalur lama (CIKUR ada) tidak berubah.
+  function mathWordsToOps(s) {
+    return String(s || "")
+      .replace(/(\d)\s+(?:kali|dikali|times|multiplied\s+by)\s+(?=[\d(])/gi, "$1 * ")
+      .replace(/(\d)\s+(?:dibagi|bagi|divided\s+by)\s+(?=[\d(])/gi, "$1 / ")
+      .replace(/(\d)\s+(?:ditambah|tambah|plus)\s+(?=[\d(])/gi, "$1 + ")
+      .replace(/(\d)\s+(?:dikurangi|kurang|minus)\s+(?=[\d(])/gi, "$1 - ");
+  }
+  function mathOnly(body, lang) {
+    var b0 = mathWordsToOps(body);
+    var hm = b0.match(/^(?:hitung|kalkulasi|calculate|what\s+is|what's|how\s+much\s+is|berapa(?:\s+hasil)?|berapakah)\s*[:\-]?\s*(.+)$/i);
+    var expr = hm ? hm[1] : null;
+    if (!expr && /^[\d.,\s()]*\d[\d.,]*\s*[x×✕*÷/+\-]\s*[\d.,(]+/i.test(b0)) expr = b0;
+    if (!expr) return null;
+    expr = String(expr).replace(/[?？=]+/g, " ")
+      .replace(/(\d)\s*[x×✕*]\s*(?=[\d(])/gi, "$1 * ")
+      .replace(/(\d)\s*[÷:]\s*(?=\d)/g, "$1 / ").trim();
+    var math = evalLocaleMath(expr);
+    if (!math) return null;
+    return { text: formatNumberResult(math.value, lang), engine: "CIKUR_HITUNG", tags: ["skill", "hitung"] };
+  }
+
   function skillAnswer(raw) {
     var body = stripWake(raw);
     if (!body) return null;
@@ -565,7 +589,7 @@
     }
 
     var api = getCikur();
-    if (!api) return null;
+    if (!api) return mathOnly(body, lang);
     var angkaFn = typeof api.angkaKeKata === "function" ? api.angkaKeKata : api.angka_ke_kata;
     var warnaFn = typeof api.lafalWarna === "function" ? api.lafalWarna : api.lafal_warna;
     var waktuFn = typeof api.waktuKeKata === "function" ? api.waktuKeKata : api.waktu_ke_kata;
@@ -605,7 +629,8 @@
       return s.replace(/\s+/g, " ").trim();
     }
     var hitungExpr = null;
-    var hm = body.match(/^(?:hitung|kalkulasi|calculate|berapa(?:\s+hasil)?)\s*[:\-]?\s*(.+)$/i);
+    var bodyM = mathWordsToOps(body);
+    var hm = bodyM.match(/^(?:hitung|kalkulasi|calculate|what\s+is|what's|how\s+much\s+is|berapa(?:\s+hasil)?)\s*[:\-]?\s*(.+)$/i);
     if (hm) hitungExpr = hm[1];
     else {
       var trail = body.match(/^(.+?)\s+berapa\s*[?]?\s*$/i);

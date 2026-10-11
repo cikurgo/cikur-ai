@@ -3558,7 +3558,7 @@ await runAutonomousEngine(state => {
     const DPR = Math.min(window.devicePixelRatio || 1, 2);
     function resize() {
       const r = wrap.getBoundingClientRect();
-      W = r.width; H = r.height;
+      W = wrap.offsetWidth || r.width; H = wrap.offsetHeight || r.height; /* v: layout size, bukan ukuran ter-scale */
       canvas.width = W * DPR; canvas.height = H * DPR;
       ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     }
@@ -4745,7 +4745,7 @@ await runAutonomousEngine(state => {
   wrap.insertBefore(fx,core||null);
   var ctx=fx.getContext('2d');
   var DPR=Math.min(window.devicePixelRatio||1,2),W=0,H=0;
-  function resize(){var r=wrap.getBoundingClientRect();W=r.width;H=r.height;
+  function resize(){var r=wrap.getBoundingClientRect();W=wrap.offsetWidth||r.width;H=wrap.offsetHeight||r.height;
     fx.width=W*DPR;fx.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
   resize();
   if(window.ResizeObserver)new ResizeObserver(resize).observe(wrap);
@@ -5277,6 +5277,133 @@ await runAutonomousEngine(state => {
   };
   console.log('[CGO-SURFACE]', window.CGOOrbSurface.version);
 })();
+</script>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     ORB RING FIX + ALUR SINKRON · APPEND-ONLY · 2026-10-11 · ZERO REGRESI
+     (1) cincin sonar jadi lingkaran utuh tepat di pusat orb (tidak lonjong/terpotong)
+     (2) halo orb jadi cincin utuh (bukan putus-putus), tetap berputar
+     (3) garis saraf dekoratif disembunyikan di layar sempit (pecahan strip)
+     (4) langkah Mendengar→Memahami→Menalar→Memproses→Memberi Hasil mengikuti alur nyata
+     ═══════════════════════════════════════════════════════════════════════ -->
+<style>
+#cgo-orb-wrap .cgo-future-sonar{position:absolute;left:50%;top:50%;height:auto !important;aspect-ratio:1/1;z-index:0}
+#cgo-orb-wrap .cgo-future-sonar.s1{width:78% !important}
+#cgo-orb-wrap .cgo-future-sonar.s2{width:94% !important}
+#cgo-orb-wrap .cgo-future-sonar.s3{width:108% !important}
+#cgo-orb-wrap.surface-radar-on .cgo-future-sonar{display:none}
+@media (max-width:720px){#cgo-future-nerve-svg{display:none}}
+#cgo-orb-wrap::before{
+  border:0 !important;
+  background:conic-gradient(from 0deg,rgba(103,232,249,.60),rgba(103,232,249,.14) 28%,rgba(103,232,249,.14) 72%,rgba(103,232,249,.60));
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 1.5px),#000 calc(100% - 1.5px));
+          mask:radial-gradient(farthest-side,transparent calc(100% - 1.5px),#000 calc(100% - 1.5px));
+}
+#cgo-orb-wrap[data-speaking="1"]::before{
+  background:conic-gradient(from 0deg,rgba(52,211,153,.75),rgba(52,211,153,.20) 28%,rgba(52,211,153,.20) 72%,rgba(52,211,153,.75));
+}
+</style>
+<script>
+(function(){'use strict';try{
+  var wrap=document.getElementById('cgo-orb-wrap'); if(!wrap) return;
+  /* (1) pindahkan cincin sonar ke dalam wrap agar berpusat di orb, bukan di tengah panggung */
+  try{
+    var host=document.querySelector('.cgo-orb-stage-host');
+    if(host){ [].slice.call(host.querySelectorAll(':scope > .cgo-future-sonar')).forEach(function(n){ wrap.insertBefore(n, wrap.firstChild); }); }
+  }catch(_){}
+
+  /* (4) alur sinkron */
+  var list=document.getElementById('cgo-orb-step-list');
+  var statusEl=document.getElementById('cgo-orb-status');
+  var rTitle=document.getElementById('cgo-orb-right-title');
+  var rBody=document.getElementById('cgo-orb-right-body');
+  var bar=document.getElementById('cgo-think-bar');
+  var stagesBox=document.getElementById('cgo-think-stages');
+  var FLOW=[
+    {s:'Mendengar', t:'CGO MENDENGAR',  b:'Saya menyimak suaramu.'},
+    {s:'Memahami',  t:'CGO MEMAHAMI',   b:'Membaca maksud pertanyaanmu.'},
+    {s:'Menalar',   t:'CGO MENALAR',    b:'Menimbang jawaban dari data yang ada.'},
+    {s:'Memproses', t:'CGO MEMPROSES',  b:'Menyusun jawaban untukmu.'},
+    {s:'Menjawab',  t:'CGO MENJAWAB',   b:'Jawaban sedang disampaikan.'},
+    {s:'Selesai',   t:'CGO SELESAI',    b:'Jawaban sudah tersampaikan.'}
+  ];
+  var STAGE_IDX={recv:1,think:2,compose:3,done:4};
+  var holdUntil=0, shown=-2, lastWasSpeaking=false, lastWasThinking=false, texted=false;
+
+  function orbState(){ try{ return window.CGOOrb&&window.CGOOrb.state?window.CGOOrb.state():'tenang'; }catch(_){ return 'tenang'; } }
+  function desired(){
+    var now=Date.now();
+    var speaking=wrap.getAttribute('data-speaking')==='1';
+    var thinking=!!(bar&&bar.classList.contains('on'));
+    var listening=wrap.classList.contains('bcgo-listening');
+    if(speaking){ lastWasSpeaking=true; return 4; }
+    if(lastWasSpeaking){ lastWasSpeaking=false; holdUntil=now+1200; }
+    if(thinking){
+      lastWasThinking=true;
+      var idx=2;
+      try{ var on=stagesBox&&stagesBox.querySelector('span.on[data-stage]'); if(on) idx=STAGE_IDX[on.getAttribute('data-stage')]||2; }catch(_){}
+      return idx;
+    }
+    if(lastWasThinking){ lastWasThinking=false; holdUntil=Math.max(holdUntil,now+1400); }
+    if(listening) return 0;
+    if(now<holdUntil) return 5; /* semua selesai, sebentar */
+    return -1;
+  }
+  function paint(idx){
+    if(!list) return;
+    var steps=[].slice.call(list.querySelectorAll('.cgo-orb-step'));
+    steps.forEach(function(el,i){
+      el.classList.remove('active','done');
+      if(idx===5||i<idx) el.classList.add('done');
+      else if(i===idx) el.classList.add('active');
+    });
+  }
+  function recompute(){
+    try{
+      var st=orbState();
+      if(st==='menjaga'||st==='membuka'||st==='transenden') return; /* alur akses punya urusan sendiri */
+      var d=desired();
+      if(d===shown) return;
+      var wasFlow=shown>=0; shown=d;
+      if(d>=0){
+        paint(d);
+        wrap.setAttribute('data-flow', d===5?'selesai':String(d));
+        if(st==='tenang' && !wrap.classList.contains('surface-radar-on')){
+          if(statusEl) statusEl.textContent=FLOW[d].s;
+          if(rTitle) rTitle.textContent=FLOW[d].t;
+          if(rBody) rBody.textContent=FLOW[d].b;
+          texted=true;
+        }
+      } else if(wasFlow){
+        wrap.removeAttribute('data-flow');
+        /* kembalikan tampilan state aslinya lewat API orb yang sudah ada */
+        try{ window.CGOOrb.setState(st,{force:true}); }catch(_){ paint(-1); }
+        texted=false;
+      }
+    }catch(_){}
+  }
+  /* bungkus setState: setelah state berubah, flow dipasang ulang (aditif; panggilan asli tetap jalan) */
+  try{
+    var O=window.CGOOrb;
+    if(O && typeof O.setState==='function' && !O.__flowWrapped){
+      var orig=O.setState;
+      O.setState=function(){ var r=orig.apply(this,arguments); shown=-2; try{recompute();}catch(_){} return r; };
+      O.__flowWrapped=true;
+    }
+  }catch(_){}
+  try{
+    var mo=new MutationObserver(recompute);
+    if(bar) mo.observe(bar,{attributes:true,attributeFilter:['class']});
+    if(stagesBox) mo.observe(stagesBox,{attributes:true,attributeFilter:['class'],subtree:true});
+    mo.observe(wrap,{attributes:true,attributeFilter:['class','data-speaking']});
+  }catch(_){}
+  ['cgo:voice-start','cgo:voice-end','cgo:mic-status','cgo:wake-heard','cgo:wake-awake'].forEach(function(ev){
+    window.addEventListener(ev,function(){ setTimeout(recompute,0); });
+  });
+  setInterval(recompute,500); /* jaring pengaman: tahan hold-timer & state yang berubah lewat jalur internal */
+  console.log('[CGO-ORB] ring fix + alur sinkron aktif');
+}catch(e){console.warn('[CGO-ORB flow]',e&&e.message);}})();
 </script>
 
 
