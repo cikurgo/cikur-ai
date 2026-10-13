@@ -1,1403 +1,1449 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CGO Tampilan Maps — CIKUR GO Internal AI System</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>CGO Tampilan Maps — CIKUR GO Internal AI System</title>
 
-    <!-- Leaflet CSS & JS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <style>
-        /* ============ ROOT VARIABLES ============ */
-        :root {
-            --bg-0: #0a0e1a;
-            --bg-1: #0f1626;
-            --bg-2: #131c2e;
-            --bg-3: #1a2540;
-            --border: #1f2a44;
-            --text-0: #e6edf7;
-            --text-1: #94a3b8;
-            --text-2: #64748b;
-            --accent: #3b82f6;
-            --accent-2: #06b6d4;
-            --ready: #22c55e;
-            --busy: #f59e0b;
-            --stale: #3b82f6;
-            --offline: #ef4444;
-        }
+<!-- MapLibre GL (untuk base map OpenFreeMap Positron, seperti ride.html) -->
+<link href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
 
-        /* ============ RESET & BASE ============ */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
+<style>
+/* ============ ROOT VARIABLES ============ */
+:root {
+    --bg-0: #0a0e1a;
+    --bg-1: #0f1626;
+    --bg-2: #131c2e;
+    --bg-3: #1a2540;
+    --border: #1f2a44;
+    --text-0: #e6edf7;
+    --text-1: #94a3b8;
+    --text-2: #64748b;
+    --accent: #3b82f6;
+    --accent-2: #06b6d4;
+    --ready: #22c55e;
+    --busy: #f59e0b;
+    --stale: #3b82f6;
+    --offline: #ef4444;
+}
 
-        html, body {
-            height: 100%;
-            background: var(--bg-0);
-            color: var(--text-0);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            overflow: hidden;
-            font-size: 13px;
-        }
+/* ============ RESET ============ */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
 
-        svg {
-            display: block;
-            stroke: currentColor;
-            fill: none;
-        }
+html, body {
+    height: 100%;
+    background: var(--bg-0);
+    color: var(--text-0);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+    font-size: 13px;
+}
 
-        svg.fill {
-            fill: currentColor;
-            stroke: none;
-        }
+svg { display: block; stroke: currentColor; fill: none; }
+svg.fill { fill: currentColor; stroke: none; }
 
-        /* ============ APP GRID ============ */
-        .app {
-            display: grid;
-            grid-template-columns: 220px 1fr;
-            grid-template-rows: 56px 1fr;
-            grid-template-areas:
-                "header header"
-                "sidebar main";
-            height: 100vh;
-            width: 100vw;
-        }
+/* ============ APP GRID ============ */
+.app {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    grid-template-rows: 56px 1fr;
+    grid-template-areas:
+        "header header"
+        "sidebar main";
+    height: 100vh;
+    width: 100vw;
+}
 
-        /* ============ HEADER ============ */
-        .header {
-            grid-area: header;
-            display: flex;
-            align-items: center;
-            gap: 18px;
-            padding: 0 18px;
-            background: linear-gradient(90deg, #0a0e1a 0%, #0f1626 100%);
-            border-bottom: 1px solid var(--border);
-            z-index: 100;
-            overflow-x: auto;
-            scrollbar-width: none;
-        }
-        .header::-webkit-scrollbar { display: none; }
+/* ============ HEADER ============ */
+.header {
+    grid-area: header;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 0 18px;
+    background: linear-gradient(90deg, #0a0e1a 0%, #0f1626 100%);
+    border-bottom: 1px solid var(--border);
+    z-index: 100;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.header::-webkit-scrollbar { display: none; }
 
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding-right: 20px;
-            border-right: 1px solid var(--border);
-            height: 100%;
-            flex-shrink: 0;
-        }
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-right: 20px;
+    border-right: 1px solid var(--border);
+    height: 100%;
+    flex-shrink: 0;
+}
 
-        .brand-logo {
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
-            background: radial-gradient(circle at 30% 30%, #38bdf8, #1d4ed8);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            box-shadow: 0 0 12px rgba(59, 130, 246, .5);
-        }
-        .brand-logo svg { width: 18px; height: 18px; }
+.brand-logo {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #38bdf8, #1d4ed8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    box-shadow: 0 0 12px rgba(59, 130, 246, .5);
+}
+.brand-logo svg { width: 18px; height: 18px; }
 
-        .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
-        .brand-title { font-weight: 800; font-size: 14px; letter-spacing: .5px; }
-        .brand-sub { font-size: 10px; color: var(--text-2); letter-spacing: .3px; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.1; }
+.brand-title { font-weight: 800; font-size: 14px; letter-spacing: .5px; }
+.brand-sub { font-size: 10px; color: var(--text-2); letter-spacing: .3px; }
 
-        .header-title {
-            display: flex;
-            flex-direction: column;
-            line-height: 1.2;
-            padding-left: 4px;
-            flex-shrink: 0;
-        }
-        .header-title h1 {
-            font-size: 15px;
-            font-weight: 700;
-            letter-spacing: .5px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: #fff;
-        }
-        .header-title h1 svg { width: 16px; height: 16px; color: var(--accent-2); }
-        .header-title p { font-size: 10.5px; color: var(--text-2); }
+.header-title {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+    padding-left: 4px;
+    flex-shrink: 0;
+}
+.header-title h1 {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #fff;
+}
+.header-title h1 svg { width: 16px; height: 16px; color: var(--accent-2); }
+.header-title p { font-size: 10.5px; color: var(--text-2); }
 
-        .header-spacer { flex: 1; min-width: 8px; }
+.header-spacer { flex: 1; min-width: 8px; }
 
-        .stat-pill {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 6px 12px;
-            height: 38px;
-            flex-shrink: 0;
-        }
-        .stat-pill .icon {
-            width: 26px;
-            height: 26px;
-            border-radius: 50%;
-            background: var(--bg-3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--accent-2);
-        }
-        .stat-pill .icon svg { width: 13px; height: 13px; }
-        .stat-pill .txt { display: flex; flex-direction: column; line-height: 1.15; }
-        .stat-pill .lbl { font-size: 9.5px; color: var(--text-2); text-transform: uppercase; letter-spacing: .5px; }
-        .stat-pill .val { font-size: 13px; font-weight: 700; }
+.stat-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 6px 12px;
+    height: 38px;
+    flex-shrink: 0;
+}
+.stat-pill .icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--bg-3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-2);
+}
+.stat-pill .icon svg { width: 13px; height: 13px; }
+.stat-pill .txt { display: flex; flex-direction: column; line-height: 1.15; }
+.stat-pill .lbl { font-size: 9.5px; color: var(--text-2); text-transform: uppercase; letter-spacing: .5px; }
+.stat-pill .val { font-size: 13px; font-weight: 700; }
 
-        .live-badge {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            background: rgba(34, 197, 94, .1);
-            border: 1px solid rgba(34, 197, 94, .35);
-            border-radius: 10px;
-            padding: 6px 12px;
-            height: 38px;
-            font-size: 11px;
-            color: var(--ready);
-            font-weight: 700;
-            letter-spacing: .5px;
-            flex-shrink: 0;
-        }
-        .live-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--ready);
-            box-shadow: 0 0 0 0 rgba(34, 197, 94, .7);
-            animation: pulse 1.6s infinite;
-        }
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, .7); }
-            70% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
-        }
-        .live-time { font-size: 9.5px; color: var(--text-2); margin-left: 4px; font-weight: 400; }
+.live-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(34, 197, 94, .1);
+    border: 1px solid rgba(34, 197, 94, .35);
+    border-radius: 10px;
+    padding: 6px 12px;
+    height: 38px;
+    font-size: 11px;
+    color: var(--ready);
+    font-weight: 700;
+    letter-spacing: .5px;
+    flex-shrink: 0;
+}
+.live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ready);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, .7);
+    animation: pulse 1.6s infinite;
+}
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, .7); }
+    70% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+.live-time { font-size: 9.5px; color: var(--text-2); margin-left: 4px; font-weight: 400; }
 
-        /* ============ SIDEBAR ============ */
-        .sidebar {
-            grid-area: sidebar;
-            background: var(--bg-1);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            padding: 14px 0 0 0;
-            overflow-y: auto;
-        }
+/* ============ SIDEBAR ============ */
+.sidebar {
+    grid-area: sidebar;
+    background: var(--bg-1);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 14px 0 0 0;
+    overflow-y: auto;
+}
 
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 11px 18px;
-            color: var(--text-1);
-            cursor: pointer;
-            font-size: 12.5px;
-            font-weight: 500;
-            border-left: 3px solid transparent;
-            transition: all .15s;
-            text-decoration: none;
-        }
-        .nav-item:hover { background: var(--bg-2); color: var(--text-0); }
-        .nav-item.active {
-            background: linear-gradient(90deg, rgba(59, 130, 246, .15), transparent);
-            color: #fff;
-            border-left-color: var(--accent);
-        }
-        .nav-item .nav-ico {
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: currentColor;
-        }
-        .nav-item .nav-ico svg { width: 16px; height: 16px; }
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 18px;
+    color: var(--text-1);
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 500;
+    border-left: 3px solid transparent;
+    transition: all .15s;
+    text-decoration: none;
+}
+.nav-item:hover { background: var(--bg-2); color: var(--text-0); }
+.nav-item.active {
+    background: linear-gradient(90deg, rgba(59, 130, 246, .15), transparent);
+    color: #fff;
+    border-left-color: var(--accent);
+}
+.nav-item .nav-ico {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: currentColor;
+}
+.nav-item .nav-ico svg { width: 16px; height: 16px; }
 
-        .sidebar-footer {
-            margin-top: auto;
-            padding: 14px;
-            border-top: 1px solid var(--border);
-        }
-        .op-profile {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px;
-            background: var(--bg-2);
-            border-radius: 12px;
-            border: 1px solid var(--border);
-        }
-        .op-avatar {
-            width: 38px;
-            height: 38px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #3b82f6, #06b6d4);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            flex-shrink: 0;
-        }
-        .op-avatar svg { width: 18px; height: 18px; }
-        .op-info { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
-        .op-name { font-size: 12px; font-weight: 700; }
-        .op-status { font-size: 10px; color: var(--ready); display: flex; align-items: center; gap: 4px; }
-        .op-status::before {
-            content: '';
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: var(--ready);
-        }
-        .mic-btn {
-            width: 100%;
-            margin-top: 8px;
-            padding: 9px;
-            background: var(--bg-3);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            color: var(--text-1);
-            font-size: 11px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            transition: all .15s;
-            font-family: inherit;
-        }
-        .mic-btn svg { width: 14px; height: 14px; }
-        .mic-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.sidebar-footer {
+    margin-top: auto;
+    padding: 14px;
+    border-top: 1px solid var(--border);
+}
+.op-profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background: var(--bg-2);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+}
+.op-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6, #06b6d4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    flex-shrink: 0;
+}
+.op-avatar svg { width: 18px; height: 18px; }
+.op-info { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.op-name { font-size: 12px; font-weight: 700; }
+.op-status { font-size: 10px; color: var(--ready); display: flex; align-items: center; gap: 4px; }
+.op-status::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ready);
+}
+.mic-btn {
+    width: 100%;
+    margin-top: 8px;
+    padding: 9px;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text-1);
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all .15s;
+    font-family: inherit;
+}
+.mic-btn svg { width: 14px; height: 14px; }
+.mic-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-        /* ============ MAIN ============ */
-        .main {
-            grid-area: main;
-            display: grid;
-            grid-template-columns: 1fr 340px;
-            grid-template-rows: 1fr auto;
-            grid-template-areas:
-                "map panel"
-                "cards cards";
-            position: relative;
-            overflow: hidden;
-        }
+/* ============ MAIN ============ */
+.main {
+    grid-area: main;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    grid-template-rows: 1fr auto;
+    grid-template-areas:
+        "map panel"
+        "cards cards";
+    position: relative;
+    overflow: hidden;
+}
 
-        /* ============ MAP ============ */
-        .map-wrap {
-            grid-area: map;
-            position: relative;
-            background: #0a0e1a;
-            overflow: hidden;
-        }
-        #map {
-            position: absolute;
-            inset: 0;
-            background: #0a0e1a;
-        }
-        .leaflet-container { background: #0a0e1a !important; }
+/* ============ MAP ============ */
+.map-wrap {
+    grid-area: map;
+    position: relative;
+    background: #eef2f6;
+    overflow: hidden;
+}
+#map {
+    position: absolute;
+    inset: 0;
+    background: #eef2f6;
+}
+.leaflet-container { background: #eef2f6 !important; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.leaflet-control-attribution {
+    font-size: 9px !important;
+    background: rgba(255, 255, 255, .85) !important;
+    border-radius: 8px 0 0 0;
+    color: #475569 !important;
+}
+.leaflet-control-attribution a { color: #1e40af !important; }
 
-        .map-search {
-            position: absolute;
-            top: 14px;
-            left: 14px;
-            z-index: 400;
-            width: 340px;
-            display: flex;
-            gap: 8px;
-        }
-        .search-wrap { flex: 1; position: relative; }
-        .search-wrap .ico {
-            position: absolute;
-            left: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-2);
-            pointer-events: none;
-        }
-        .search-wrap .ico svg { width: 14px; height: 14px; }
-        .search-input {
-            width: 100%;
-            background: rgba(15, 22, 38, .92);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 9px 14px 9px 36px;
-            color: var(--text-0);
-            font-size: 12px;
-            outline: none;
-            font-family: inherit;
-        }
-        .search-input::placeholder { color: var(--text-2); }
-        .search-input:focus { border-color: var(--accent); }
+/* Search bar */
+.map-search {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    z-index: 400;
+    width: 340px;
+    display: flex;
+    gap: 8px;
+}
+.search-wrap { flex: 1; position: relative; }
+.search-wrap .ico {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-2);
+    pointer-events: none;
+}
+.search-wrap .ico svg { width: 14px; height: 14px; }
+.search-input {
+    width: 100%;
+    background: rgba(15, 22, 38, .92);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 9px 14px 9px 36px;
+    color: var(--text-0);
+    font-size: 12px;
+    outline: none;
+    font-family: inherit;
+}
+.search-input::placeholder { color: var(--text-2); }
+.search-input:focus { border-color: var(--accent); }
 
-        .icon-btn {
-            width: 38px;
-            height: 38px;
-            background: rgba(15, 22, 38, .92);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            color: var(--text-1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all .15s;
-        }
-        .icon-btn svg { width: 16px; height: 16px; }
-        .icon-btn:hover { color: #fff; border-color: var(--accent); }
+.icon-btn {
+    width: 38px;
+    height: 38px;
+    background: rgba(15, 22, 38, .92);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text-1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all .15s;
+}
+.icon-btn svg { width: 16px; height: 16px; }
+.icon-btn:hover { color: #fff; border-color: var(--accent); }
 
-        .radius-box {
-            position: absolute;
-            top: 14px;
-            right: 14px;
-            z-index: 400;
-            background: rgba(15, 22, 38, .92);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 12px;
-            width: 180px;
-        }
-        .radius-box h4 {
-            font-size: 10.5px;
-            color: var(--text-2);
-            text-transform: uppercase;
-            letter-spacing: .6px;
-            margin-bottom: 8px;
-            font-weight: 600;
-        }
-        .radius-opt {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 8px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 12px;
-            color: var(--text-1);
-            transition: all .12s;
-        }
-        .radius-opt:hover { background: var(--bg-3); color: var(--text-0); }
-        .radius-opt.active {
-            background: rgba(59, 130, 246, .2);
-            color: #93c5fd;
-            font-weight: 600;
-        }
-        .radio {
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            border: 1.5px solid var(--text-2);
-            flex-shrink: 0;
-            position: relative;
-        }
-        .radius-opt.active .radio { border-color: var(--accent); }
-        .radius-opt.active .radio::after {
-            content: '';
-            position: absolute;
-            inset: 2.5px;
-            border-radius: 50%;
-            background: var(--accent);
-        }
+/* Radius selector */
+.radius-box {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 400;
+    background: rgba(15, 22, 38, .92);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    width: 180px;
+}
+.radius-box h4 {
+    font-size: 10.5px;
+    color: var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+.radius-opt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-1);
+    transition: all .12s;
+}
+.radius-opt:hover { background: var(--bg-3); color: var(--text-0); }
+.radius-opt.active {
+    background: rgba(59, 130, 246, .2);
+    color: #93c5fd;
+    font-weight: 600;
+}
+.radio {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1.5px solid var(--text-2);
+    flex-shrink: 0;
+    position: relative;
+}
+.radius-opt.active .radio { border-color: var(--accent); }
+.radius-opt.active .radio::after {
+    content: '';
+    position: absolute;
+    inset: 2.5px;
+    border-radius: 50%;
+    background: var(--accent);
+}
 
-        .map-ctrl {
-            position: absolute;
-            right: 14px;
-            bottom: 110px;
-            z-index: 400;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
+.map-ctrl {
+    position: absolute;
+    right: 14px;
+    bottom: 110px;
+    z-index: 400;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
 
-        /* ============ PANEL DETAIL ============ */
-        .panel {
-            grid-area: panel;
-            background: var(--bg-1);
-            border-left: 1px solid var(--border);
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-        }
-        .panel-head {
-            padding: 14px 16px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            position: sticky;
-            top: 0;
-            background: var(--bg-1);
-            z-index: 5;
-        }
-        .panel-head h3 { font-size: 13.5px; font-weight: 700; }
-        .close-btn {
-            width: 26px;
-            height: 26px;
-            border-radius: 6px;
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            color: var(--text-1);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all .15s;
-        }
-        .close-btn svg { width: 12px; height: 12px; }
-        .close-btn:hover { color: #fff; border-color: var(--accent); }
+/* ============ PANEL DETAIL ============ */
+.panel {
+    grid-area: panel;
+    background: var(--bg-1);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+.panel-head {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--bg-1);
+    z-index: 5;
+}
+.panel-head h3 { font-size: 13.5px; font-weight: 700; }
+.close-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--text-1);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .15s;
+}
+.close-btn svg { width: 12px; height: 12px; }
+.close-btn:hover { color: #fff; border-color: var(--accent); }
 
-        .agent-hero {
-            padding: 16px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            border-bottom: 1px solid var(--border);
-        }
-        .agent-hero .avatar {
-            width: 52px;
-            height: 52px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #f472b6, #a855f7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 800;
-            font-size: 16px;
-            color: #fff;
-            flex-shrink: 0;
-            position: relative;
-        }
-        .agent-hero .avatar::after {
-            content: '';
-            position: absolute;
-            bottom: 2px;
-            right: 2px;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: var(--ready);
-            border: 2px solid var(--bg-1);
-        }
-        .agent-hero .meta { min-width: 0; }
-        .agent-hero .name { font-size: 15px; font-weight: 700; margin-bottom: 5px; }
-        .agent-hero .row {
-            display: flex;
-            gap: 6px;
-            font-size: 10px;
-            color: var(--text-2);
-            flex-wrap: wrap;
-        }
+.agent-hero {
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+}
+.agent-hero .avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #f472b6, #a855f7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 16px;
+    color: #fff;
+    flex-shrink: 0;
+    position: relative;
+}
+.agent-hero .avatar::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--ready);
+    border: 2px solid var(--bg-1);
+}
+.agent-hero .meta { min-width: 0; }
+.agent-hero .name { font-size: 15px; font-weight: 700; margin-bottom: 5px; }
+.agent-hero .row {
+    display: flex;
+    gap: 6px;
+    font-size: 10px;
+    color: var(--text-2);
+    flex-wrap: wrap;
+}
 
-        .badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 2px 7px;
-            border-radius: 20px;
-            font-size: 9.5px;
-            font-weight: 700;
-            letter-spacing: .3px;
-            text-transform: uppercase;
-        }
-        .badge svg { width: 9px; height: 9px; }
-        .badge.ready { background: rgba(34, 197, 94, .15); color: var(--ready); }
-        .badge.busy { background: rgba(245, 158, 11, .15); color: var(--busy); }
-        .badge.stale { background: rgba(59, 130, 246, .15); color: var(--stale); }
-        .badge.offline { background: rgba(239, 68, 68, .15); color: var(--offline); }
-        .badge.radar { background: rgba(6, 182, 212, .12); color: var(--accent-2); }
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 20px;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: .3px;
+    text-transform: uppercase;
+}
+.badge svg { width: 9px; height: 9px; }
+.badge.ready { background: rgba(34, 197, 94, .15); color: var(--ready); }
+.badge.busy { background: rgba(245, 158, 11, .15); color: var(--busy); }
+.badge.stale { background: rgba(59, 130, 246, .15); color: var(--stale); }
+.badge.offline { background: rgba(239, 68, 68, .15); color: var(--offline); }
+.badge.radar { background: rgba(6, 182, 212, .12); color: var(--accent-2); }
 
-        .tabs {
-            display: flex;
-            padding: 0 16px;
-            border-bottom: 1px solid var(--border);
-            gap: 4px;
-        }
-        .tab {
-            padding: 10px 10px;
-            font-size: 11.5px;
-            color: var(--text-2);
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-            font-weight: 600;
-            transition: all .15s;
-        }
-        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-        .tab:hover:not(.active) { color: var(--text-1); }
+.tabs {
+    display: flex;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--border);
+    gap: 4px;
+}
+.tab {
+    padding: 10px 10px;
+    font-size: 11.5px;
+    color: var(--text-2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    font-weight: 600;
+    transition: all .15s;
+}
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab:hover:not(.active) { color: var(--text-1); }
 
-        .panel-section {
-            padding: 14px 16px;
-            border-bottom: 1px solid var(--border);
-        }
-        .panel-section h5 {
-            font-size: 10.5px;
-            color: var(--text-2);
-            text-transform: uppercase;
-            letter-spacing: .6px;
-            margin-bottom: 10px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            gap: 10px;
-            padding: 7px 0;
-            font-size: 11.5px;
-            border-bottom: 1px dashed rgba(255, 255, 255, .04);
-        }
-        .info-row:last-child { border-bottom: none; }
-        .info-row .k {
-            color: var(--text-2);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .info-row .k svg { width: 12px; height: 12px; opacity: .7; }
-        .info-row .v { color: var(--text-0); font-weight: 600; text-align: right; }
-        .info-row .v.mono { font-family: ui-monospace, Menlo, monospace; font-size: 11px; }
+.panel-section {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+}
+.panel-section h5 {
+    font-size: 10.5px;
+    color: var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    margin-bottom: 10px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 0;
+    font-size: 11.5px;
+    border-bottom: 1px dashed rgba(255, 255, 255, .04);
+}
+.info-row:last-child { border-bottom: none; }
+.info-row .k {
+    color: var(--text-2);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.info-row .k svg { width: 12px; height: 12px; opacity: .7; }
+.info-row .v { color: var(--text-0); font-weight: 600; text-align: right; }
+.info-row .v.mono { font-family: ui-monospace, Menlo, monospace; font-size: 11px; }
 
-        .checklist { list-style: none; }
-        .checklist li {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 6px 0;
-            font-size: 11.5px;
-            color: var(--text-1);
-        }
-        .checklist li .ok {
-            color: var(--ready);
-            width: 16px;
-            height: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .checklist li .ok svg { width: 14px; height: 14px; }
+.checklist { list-style: none; }
+.checklist li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 11.5px;
+    color: var(--text-1);
+}
+.checklist li .ok {
+    color: var(--ready);
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.checklist li .ok svg { width: 14px; height: 14px; }
 
-        .panel-actions {
-            padding: 14px 16px;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-top: auto;
-        }
-        .btn {
-            padding: 10px;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            background: var(--bg-2);
-            color: var(--text-1);
-            font-size: 11.5px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            transition: all .15s;
-            font-family: inherit;
-        }
-        .btn svg { width: 14px; height: 14px; }
-        .btn:hover { color: #fff; border-color: var(--accent); }
-        .btn.primary {
-            background: linear-gradient(135deg, #3b82f6, #06b6d4);
-            border-color: transparent;
-            color: #fff;
-        }
-        .btn.primary:hover { filter: brightness(1.1); }
+.panel-actions {
+    padding: 14px 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: auto;
+}
+.btn {
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-2);
+    color: var(--text-1);
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all .15s;
+    font-family: inherit;
+}
+.btn svg { width: 14px; height: 14px; }
+.btn:hover { color: #fff; border-color: var(--accent); }
+.btn.primary {
+    background: linear-gradient(135deg, #3b82f6, #06b6d4);
+    border-color: transparent;
+    color: #fff;
+}
+.btn.primary:hover { filter: brightness(1.1); }
 
-        /* ============ CARDS BAR ============ */
-        .cards-bar {
-            grid-area: cards;
-            background: var(--bg-1);
-            border-top: 1px solid var(--border);
-            padding: 10px 14px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
+/* ============ CARDS BAR ============ */
+.cards-bar {
+    grid-area: cards;
+    background: var(--bg-1);
+    border-top: 1px solid var(--border);
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
 
-        .filter-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-        .filter-label {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 11px;
-            color: var(--text-2);
-            font-weight: 600;
-            margin-right: 4px;
-        }
-        .filter-label svg { width: 12px; height: 12px; }
-        .chip {
-            padding: 5px 11px;
-            border-radius: 20px;
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            color: var(--text-1);
-            font-size: 11px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all .12s;
-            font-family: inherit;
-        }
-        .chip:hover { color: #fff; }
-        .chip.active {
-            background: rgba(59, 130, 246, .2);
-            border-color: var(--accent);
-            color: #93c5fd;
-        }
-        .chip.ready.active { background: rgba(34, 197, 94, .2); border-color: var(--ready); color: #86efac; }
-        .chip.busy.active { background: rgba(245, 158, 11, .2); border-color: var(--busy); color: #fcd34d; }
-        .chip.stale.active { background: rgba(59, 130, 246, .2); border-color: var(--stale); color: #93c5fd; }
-        .chip.offline.active { background: rgba(239, 68, 68, .2); border-color: var(--offline); color: #fca5a5; }
+.filter-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.filter-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-2);
+    font-weight: 600;
+    margin-right: 4px;
+}
+.filter-label svg { width: 12px; height: 12px; }
+.chip {
+    padding: 5px 11px;
+    border-radius: 20px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--text-1);
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all .12s;
+    font-family: inherit;
+}
+.chip:hover { color: #fff; }
+.chip.active {
+    background: rgba(59, 130, 246, .2);
+    border-color: var(--accent);
+    color: #93c5fd;
+}
+.chip.ready.active { background: rgba(34, 197, 94, .2); border-color: var(--ready); color: #86efac; }
+.chip.busy.active { background: rgba(245, 158, 11, .2); border-color: var(--busy); color: #fcd34d; }
+.chip.stale.active { background: rgba(59, 130, 246, .2); border-color: var(--stale); color: #93c5fd; }
+.chip.offline.active { background: rgba(239, 68, 68, .2); border-color: var(--offline); color: #fca5a5; }
 
-        .filter-spacer { flex: 1; }
-        .sort-select {
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text-1);
-            padding: 5px 10px;
-            font-size: 11px;
-            outline: none;
-            cursor: pointer;
-            font-family: inherit;
-        }
+.filter-spacer { flex: 1; }
+.sort-select {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-1);
+    padding: 5px 10px;
+    font-size: 11px;
+    outline: none;
+    cursor: pointer;
+    font-family: inherit;
+}
 
-        .summary {
-            display: flex;
-            gap: 14px;
-            font-size: 11px;
-            color: var(--text-2);
-            font-weight: 600;
-        }
-        .summary span { display: flex; align-items: center; gap: 5px; }
-        .summary .dot { width: 7px; height: 7px; border-radius: 50%; }
+.summary {
+    display: flex;
+    gap: 14px;
+    font-size: 11px;
+    color: var(--text-2);
+    font-weight: 600;
+}
+.summary span { display: flex; align-items: center; gap: 5px; }
+.summary .dot { width: 7px; height: 7px; border-radius: 50%; }
 
-        .cards-scroll {
-            display: flex;
-            gap: 10px;
-            overflow-x: auto;
-            padding-bottom: 4px;
-            scrollbar-width: thin;
-        }
-        .cards-scroll::-webkit-scrollbar { height: 5px; }
-        .cards-scroll::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 10px; }
+.cards-scroll {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+}
+.cards-scroll::-webkit-scrollbar { height: 5px; }
+.cards-scroll::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 10px; }
 
-        .agent-card {
-            flex: 0 0 190px;
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 11px;
-            cursor: pointer;
-            transition: all .15s;
-            position: relative;
-            overflow: hidden;
-        }
-        .agent-card::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 3px;
-            background: var(--ready);
-        }
-        .agent-card.busy::before { background: var(--busy); }
-        .agent-card.stale::before { background: var(--stale); }
-        .agent-card.offline::before { background: var(--offline); }
-        .agent-card:hover { transform: translateY(-2px); border-color: var(--accent); }
-        .agent-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-        .agent-card .top {
-            display: flex;
-            gap: 9px;
-            align-items: center;
-            margin-bottom: 9px;
-        }
-        .agent-card .av {
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #818cf8, #a855f7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 800;
-            font-size: 12px;
-            color: #fff;
-            flex-shrink: 0;
-        }
-        .agent-card .n { font-size: 11.5px; font-weight: 700; line-height: 1.2; }
-        .agent-card .t { font-size: 9.5px; color: var(--text-2); }
-        .agent-card .status {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 2px 7px;
-            border-radius: 6px;
-            font-size: 9px;
-            font-weight: 800;
-            letter-spacing: .4px;
-            margin-bottom: 9px;
-            text-transform: uppercase;
-        }
-        .agent-card .status svg { width: 8px; height: 8px; }
-        .agent-card .status.ready { background: rgba(34, 197, 94, .15); color: var(--ready); }
-        .agent-card .status.busy { background: rgba(245, 158, 11, .15); color: var(--busy); }
-        .agent-card .status.stale { background: rgba(59, 130, 246, .15); color: var(--stale); }
-        .agent-card .status.offline { background: rgba(239, 68, 68, .15); color: var(--offline); }
-        .agent-card .foot {
-            display: flex;
-            justify-content: space-between;
-            font-size: 10px;
-            color: var(--text-2);
-        }
-        .agent-card .foot span {
-            display: flex;
-            align-items: center;
-            gap: 3px;
-        }
-        .agent-card .foot svg { width: 10px; height: 10px; }
+.agent-card {
+    flex: 0 0 190px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 11px;
+    cursor: pointer;
+    transition: all .15s;
+    position: relative;
+    overflow: hidden;
+}
+.agent-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--ready);
+}
+.agent-card.busy::before { background: var(--busy); }
+.agent-card.stale::before { background: var(--stale); }
+.agent-card.offline::before { background: var(--offline); }
+.agent-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+.agent-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.agent-card .top {
+    display: flex;
+    gap: 9px;
+    align-items: center;
+    margin-bottom: 9px;
+}
+.agent-card .av {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #818cf8, #a855f7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 12px;
+    color: #fff;
+    flex-shrink: 0;
+}
+.agent-card .n { font-size: 11.5px; font-weight: 700; line-height: 1.2; }
+.agent-card .t { font-size: 9.5px; color: var(--text-2); }
+.agent-card .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .4px;
+    margin-bottom: 9px;
+    text-transform: uppercase;
+}
+.agent-card .status svg { width: 8px; height: 8px; }
+.agent-card .status.ready { background: rgba(34, 197, 94, .15); color: var(--ready); }
+.agent-card .status.busy { background: rgba(245, 158, 11, .15); color: var(--busy); }
+.agent-card .status.stale { background: rgba(59, 130, 246, .15); color: var(--stale); }
+.agent-card .status.offline { background: rgba(239, 68, 68, .15); color: var(--offline); }
+.agent-card .foot {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-2);
+}
+.agent-card .foot span {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+.agent-card .foot svg { width: 10px; height: 10px; }
 
-        /* ============ LEAFLET OVERRIDES ============ */
-        .leaflet-control-attribution { display: none !important; }
-        .leaflet-control-zoom { display: none !important; }
+/* ============ LEAFLET OVERRIDES ============ */
+.leaflet-control-zoom { display: none !important; }
 
-        .agent-marker {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            border: 2px solid #fff;
-            box-shadow: 0 0 0 3px rgba(0, 0, 0, .3), 0 2px 6px rgba(0, 0, 0, .5);
-            cursor: pointer;
-            transition: transform .15s;
-        }
-        .agent-marker svg { width: 14px; height: 14px; }
-        .agent-marker.ready { background: var(--ready); }
-        .agent-marker.busy { background: var(--busy); }
-        .agent-marker.stale { background: var(--stale); }
-        .agent-marker.offline { background: var(--offline); }
-        .agent-marker:hover { transform: scale(1.15); }
-        .agent-marker.center {
-            width: 36px;
-            height: 36px;
-            background: linear-gradient(135deg, #3b82f6, #06b6d4);
-            box-shadow: 0 0 0 4px rgba(59, 130, 246, .3), 0 0 20px rgba(59, 130, 246, .7), 0 2px 8px rgba(0, 0, 0, .5);
-        }
-        .agent-marker.center svg { width: 18px; height: 18px; }
+/* Marker agent */
+.agent-marker {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    border: 2.5px solid #fff;
+    box-shadow: 0 3px 8px rgba(15, 23, 42, .35), 0 0 0 2px rgba(255, 255, 255, .5);
+    cursor: pointer;
+    transition: transform .15s;
+}
+.agent-marker svg { width: 15px; height: 15px; }
+.agent-marker.ready { background: var(--ready); }
+.agent-marker.busy { background: var(--busy); }
+.agent-marker.stale { background: var(--stale); }
+.agent-marker.offline { background: var(--offline); }
+.agent-marker:hover { transform: scale(1.15); }
+.agent-marker.center {
+    width: 38px;
+    height: 38px;
+    background: linear-gradient(135deg, #3b82f6, #06b6d4);
+    box-shadow: 0 4px 10px rgba(59, 130, 246, .5), 0 0 0 4px rgba(59, 130, 246, .25), 0 0 20px rgba(59, 130, 246, .6);
+}
+.agent-marker.center svg { width: 18px; height: 18px; }
 
-        .agent-label {
-            background: rgba(15, 22, 38, .9);
-            color: #fff;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 3px 8px;
-            font-size: 10px;
-            font-weight: 600;
-            white-space: nowrap;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, .5);
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        .agent-label .dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-        }
+.agent-label {
+    background: rgba(255, 255, 255, .96);
+    color: #0f172a;
+    border: 1px solid rgba(15, 23, 42, .08);
+    border-radius: 8px;
+    padding: 3px 9px;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+    box-shadow: 0 3px 8px rgba(15, 23, 42, .18);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.agent-label .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
 
-        /* ============ RESPONSIVE ============ */
-        @media (max-width:1024px) {
-            .main {
-                grid-template-columns: 1fr;
-                grid-template-areas: "map" "cards";
-            }
-            .panel { display: none; }
-            .sidebar { display: none; }
-            .app {
-                grid-template-columns: 1fr;
-                grid-template-areas: "header" "main";
-            }
-            .header-title p { display: none; }
-        }
-        @media (max-width:640px) {
-            .stat-pill { display: none; }
-            .live-badge { display: none; }
-            .map-search { width: calc(100% - 28px); }
-            .radius-box { top: auto; bottom: 170px; right: 14px; width: 150px; }
-        }
-    </style>
+/* Pulse untuk marker center */
+.marker-pulse {
+    animation: markerPulse 2s ease-in-out infinite;
+}
+@keyframes markerPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 1024px) {
+    .main {
+        grid-template-columns: 1fr;
+        grid-template-areas: "map" "cards";
+    }
+    .panel { display: none; }
+    .sidebar { display: none; }
+    .app {
+        grid-template-columns: 1fr;
+        grid-template-areas: "header" "main";
+    }
+    .header-title p { display: none; }
+}
+@media (max-width: 640px) {
+    .stat-pill { display: none; }
+    .live-badge { display: none; }
+    .map-search { width: calc(100% - 28px); }
+    .radius-box { top: auto; bottom: 170px; right: 14px; width: 150px; }
+}
+</style>
 </head>
 <body>
 
-    <!-- ============ SVG SPRITE ============ -->
-    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-        <defs>
-            <!-- Brand / Logo -->
-            <symbol id="i-hex" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2 3 7v10l9 5 9-5V7z"/>
-            </symbol>
-            <!-- Nav -->
-            <symbol id="i-dashboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/>
-                <rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>
-            </symbol>
-            <symbol id="i-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
-                <line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
-            </symbol>
-            <symbol id="i-brain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9.5 2A2.5 2.5 0 0 0 7 4.5v.5a2.5 2.5 0 0 0-2.5 2.5c0 1 .5 1.8 1.2 2.3A3 3 0 0 0 5 12c0 1.3.8 2.3 2 2.8V17a3 3 0 0 0 3 3v-2"/>
-                <path d="M14.5 2A2.5 2.5 0 0 1 17 4.5v.5a2.5 2.5 0 0 1 2.5 2.5c0 1-.5 1.8-1.2 2.3A3 3 0 0 1 19 12c0 1.3-.8 2.3-2 2.8V17a3 3 0 0 1-3 3v-2"/>
-            </symbol>
-            <symbol id="i-radar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
-                <line x1="12" y1="12" x2="20" y2="4"/>
-            </symbol>
-            <symbol id="i-data" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/>
-                <path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/>
-            </symbol>
-            <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
-            </symbol>
-            <!-- Stat icons -->
-            <symbol id="i-user-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/>
-                <polyline points="17 11 19 13 23 9"/>
-            </symbol>
-            <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-            </symbol>
-            <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                <circle cx="12" cy="10" r="3"/>
-            </symbol>
-            <!-- Action icons -->
-            <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </symbol>
-            <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
-            </symbol>
-            <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </symbol>
-            <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="5" y1="12" x2="19" y2="12"/>
-            </symbol>
-            <symbol id="i-compass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
-            </symbol>
-            <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            </symbol>
-            <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                <line x1="12" y1="19" x2="12" y2="23"/>
-            </symbol>
-            <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
-            </symbol>
-            <symbol id="i-route" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/>
-                <path d="M9 19h6a3 3 0 0 0 3-3V8"/>
-            </symbol>
-            <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
-                <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
-                <line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-            </symbol>
-            <symbol id="i-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-            </symbol>
-            <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-            </symbol>
-            <symbol id="i-cog" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
-            </symbol>
-            <symbol id="i-person" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-            </symbol>
-            <symbol id="i-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M5 17h14M5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm18 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/>
-                <path d="M3 17V11l2-6h14l2 6v6M3 11h18M7 11V7m10 4V7"/>
-            </symbol>
-            <symbol id="i-lightning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-            </symbol>
-            <symbol id="i-briefcase" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
-            </symbol>
-        </defs>
-    </svg>
+<!-- ============ SVG SPRITE ============ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+        <symbol id="i-hex" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2 3 7v10l9 5 9-5V7z"/>
+        </symbol>
+        <symbol id="i-dashboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/>
+            <rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>
+        </symbol>
+        <symbol id="i-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+            <line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
+        </symbol>
+        <symbol id="i-brain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9.5 2A2.5 2.5 0 0 0 7 4.5v.5a2.5 2.5 0 0 0-2.5 2.5c0 1 .5 1.8 1.2 2.3A3 3 0 0 0 5 12c0 1.3.8 2.3 2 2.8V17a3 3 0 0 0 3 3v-2"/>
+            <path d="M14.5 2A2.5 2.5 0 0 1 17 4.5v.5a2.5 2.5 0 0 1 2.5 2.5c0 1-.5 1.8-1.2 2.3A3 3 0 0 1 19 12c0 1.3-.8 2.3-2 2.8V17a3 3 0 0 1-3 3v-2"/>
+        </symbol>
+        <symbol id="i-radar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+            <line x1="12" y1="12" x2="20" y2="4"/>
+        </symbol>
+        <symbol id="i-data" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/>
+            <path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/>
+        </symbol>
+        <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+        </symbol>
+        <symbol id="i-user-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/>
+            <polyline points="17 11 19 13 23 9"/>
+        </symbol>
+        <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </symbol>
+        <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+            <circle cx="12" cy="10" r="3"/>
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </symbol>
+        <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+        </symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </symbol>
+        <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"/>
+        </symbol>
+        <symbol id="i-compass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
+        </symbol>
+        <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </symbol>
+        <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+        </symbol>
+        <symbol id="i-route" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/>
+            <path d="M9 19h6a3 3 0 0 0 3-3V8"/>
+        </symbol>
+        <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+            <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
+            <line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+        </symbol>
+        <symbol id="i-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+        </symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </symbol>
+        <symbol id="i-cog" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+        </symbol>
+        <symbol id="i-person" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+        </symbol>
+        <symbol id="i-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 17h14M5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm18 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/>
+            <path d="M3 17V11l2-6h14l2 6v6M3 11h18M7 11V7m10 4V7"/>
+        </symbol>
+        <symbol id="i-lightning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </symbol>
+        <symbol id="i-briefcase" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+        </symbol>
+    </defs>
+</svg>
 
-    <div class="app">
-        <!-- ============ HEADER ============ -->
-        <header class="header">
-            <div class="brand">
-                <div class="brand-logo">
-                    <svg><use href="#i-hex"/></svg>
-                </div>
-                <div class="brand-text">
-                    <div class="brand-title">CIKUR GO</div>
-                    <div class="brand-sub">Internal AI System</div>
-                </div>
-            </div>
-            <div class="header-title">
-                <h1>
-                    <svg><use href="#i-lightning"/></svg>
-                    CGO TAMPILAN MAPS
-                </h1>
-                <p>Peta Lokasi Agent CGO - Real Time | Agent Lulus Scan Radar</p>
-            </div>
-            <div class="header-spacer"></div>
-            <div class="live-badge">
-                <span class="live-dot"></span>
-                LIVE
-                <span class="live-time" id="liveTime">Update: --:--:--</span>
-            </div>
-            <div class="stat-pill">
-                <div class="icon"><svg><use href="#i-user-check"/></svg></div>
-                <div class="txt">
-                    <div class="lbl">Agent Terverifikasi</div>
-                    <div class="val" id="statVerified">12</div>
-                </div>
-            </div>
-            <div class="stat-pill">
-                <div class="icon"><svg><use href="#i-users"/></svg></div>
-                <div class="txt">
-                    <div class="lbl">Total Agent</div>
-                    <div class="val" id="statTotal">18</div>
-                </div>
-            </div>
-            <div class="stat-pill">
-                <div class="icon"><svg><use href="#i-pin"/></svg></div>
-                <div class="txt">
-                    <div class="lbl">Lokasi Pusat</div>
-                    <div class="val">Jakarta Pusat</div>
-                </div>
-            </div>
-            <button class="icon-btn" title="Pengaturan"><svg><use href="#i-cog"/></svg></button>
-        </header>
+<div class="app">
 
-        <!-- ============ SIDEBAR ============ -->
-        <aside class="sidebar">
-            <a class="nav-item"><span class="nav-ico"><svg><use href="#i-dashboard"/></svg></span><span>Dashboard</span></a>
-            <a class="nav-item active"><span class="nav-ico"><svg><use href="#i-map"/></svg></span><span>CGO Tampilan Maps</span></a>
-            <a class="nav-item"><span class="nav-ico"><svg><use href="#i-brain"/></svg></span><span>Mesin ABC</span></a>
-            <a class="nav-item"><span class="nav-ico"><svg><use href="#i-radar"/></svg></span><span>Radar</span></a>
-            <a class="nav-item"><span class="nav-ico"><svg><use href="#i-data"/></svg></span><span>Data CGO</span></a>
-            <a class="nav-item"><span class="nav-ico"><svg><use href="#i-settings"/></svg></span><span>Pengaturan</span></a>
-            <div class="sidebar-footer">
-                <div class="op-profile">
-                    <div class="op-avatar"><svg><use href="#i-person"/></svg></div>
-                    <div class="op-info">
-                        <div class="op-name">CGO Operator</div>
-                        <div class="op-status">Online</div>
+    <!-- ============ HEADER ============ -->
+    <header class="header">
+        <div class="brand">
+            <div class="brand-logo"><svg><use href="#i-hex"/></svg></div>
+            <div class="brand-text">
+                <div class="brand-title">CIKUR GO</div>
+                <div class="brand-sub">Internal AI System</div>
+            </div>
+        </div>
+        <div class="header-title">
+            <h1><svg><use href="#i-lightning"/></svg>CGO TAMPILAN MAPS</h1>
+            <p>Peta Lokasi Agent CGO - Real Time | Agent Lulus Scan Radar</p>
+        </div>
+        <div class="header-spacer"></div>
+        <div class="live-badge">
+            <span class="live-dot"></span>
+            LIVE
+            <span class="live-time" id="liveTime">Update: --:--:--</span>
+        </div>
+        <div class="stat-pill">
+            <div class="icon"><svg><use href="#i-user-check"/></svg></div>
+            <div class="txt">
+                <div class="lbl">Agent Terverifikasi</div>
+                <div class="val" id="statVerified">12</div>
+            </div>
+        </div>
+        <div class="stat-pill">
+            <div class="icon"><svg><use href="#i-users"/></svg></div>
+            <div class="txt">
+                <div class="lbl">Total Agent</div>
+                <div class="val" id="statTotal">18</div>
+            </div>
+        </div>
+        <div class="stat-pill">
+            <div class="icon"><svg><use href="#i-pin"/></svg></div>
+            <div class="txt">
+                <div class="lbl">Lokasi Pusat</div>
+                <div class="val">Jakarta Pusat</div>
+            </div>
+        </div>
+        <button class="icon-btn" title="Pengaturan"><svg><use href="#i-cog"/></svg></button>
+    </header>
+
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="sidebar">
+        <a class="nav-item"><span class="nav-ico"><svg><use href="#i-dashboard"/></svg></span><span>Dashboard</span></a>
+        <a class="nav-item active"><span class="nav-ico"><svg><use href="#i-map"/></svg></span><span>CGO Tampilan Maps</span></a>
+        <a class="nav-item"><span class="nav-ico"><svg><use href="#i-brain"/></svg></span><span>Mesin ABC</span></a>
+        <a class="nav-item"><span class="nav-ico"><svg><use href="#i-radar"/></svg></span><span>Radar</span></a>
+        <a class="nav-item"><span class="nav-ico"><svg><use href="#i-data"/></svg></span><span>Data CGO</span></a>
+        <a class="nav-item"><span class="nav-ico"><svg><use href="#i-settings"/></svg></span><span>Pengaturan</span></a>
+        <div class="sidebar-footer">
+            <div class="op-profile">
+                <div class="op-avatar"><svg><use href="#i-person"/></svg></div>
+                <div class="op-info">
+                    <div class="op-name">CGO Operator</div>
+                    <div class="op-status">Online</div>
+                </div>
+            </div>
+            <button class="mic-btn" onclick="panggilCGO()">
+                <svg><use href="#i-mic"/></svg>
+                Siap membantu Anda...
+            </button>
+        </div>
+    </aside>
+
+    <!-- ============ MAIN ============ -->
+    <main class="main">
+        <div class="map-wrap">
+            <div id="map"></div>
+
+            <div class="map-search">
+                <div class="search-wrap">
+                    <span class="ico"><svg><use href="#i-search"/></svg></span>
+                    <input class="search-input" id="searchInput" placeholder="Cari Agent, lokasi, atau koordinat...">
+                </div>
+                <button class="icon-btn" title="Lokasi saya" onclick="locateMe()"><svg><use href="#i-target"/></svg></button>
+            </div>
+
+            <div class="radius-box">
+                <h4>Radius Jangkauan</h4>
+                <div class="radius-opt" data-r="1"><span class="radio"></span>1 km</div>
+                <div class="radius-opt active" data-r="3"><span class="radio"></span>3 km</div>
+                <div class="radius-opt" data-r="5"><span class="radio"></span>5 km</div>
+                <div class="radius-opt" data-r="10"><span class="radio"></span>10 km</div>
+            </div>
+
+            <div class="map-ctrl">
+                <button class="icon-btn" onclick="zoomIn()"><svg><use href="#i-plus"/></svg></button>
+                <button class="icon-btn" onclick="zoomOut()"><svg><use href="#i-minus"/></svg></button>
+                <button class="icon-btn" onclick="locateMe()"><svg><use href="#i-compass"/></svg></button>
+            </div>
+        </div>
+
+        <aside class="panel">
+            <div class="panel-head">
+                <h3>Detail Agent</h3>
+                <button class="close-btn"><svg><use href="#i-close"/></svg></button>
+            </div>
+            <div class="agent-hero">
+                <div class="avatar" id="heroAvatar">RA</div>
+                <div class="meta">
+                    <div class="name" id="heroName">Rina Aprilia</div>
+                    <div class="row">
+                        <span class="badge ready" id="heroStatus">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="9" height="9"><circle cx="12" cy="12" r="6"/></svg>
+                            READY
+                        </span>
+                        <span class="badge radar">
+                            <svg><use href="#i-check"/></svg>
+                            Lulus Scan Radar
+                        </span>
                     </div>
                 </div>
-                <button class="mic-btn" onclick="panggilCGO()">
-                    <svg><use href="#i-mic"/></svg>
-                    Siap membantu Anda...
-                </button>
+            </div>
+            <div class="tabs">
+                <div class="tab active">Informasi Utama</div>
+                <div class="tab">Riwayat</div>
+                <div class="tab">Log Aktivitas</div>
+            </div>
+            <div class="panel-section">
+                <h5>Detail Agent</h5>
+                <div class="info-row"><span class="k"><svg><use href="#i-briefcase"/></svg>ID Agent</span><span class="v" id="dId">CGO-001</span></div>
+                <div class="info-row"><span class="k"><svg><use href="#i-person"/></svg>Nama</span><span class="v" id="dName">Rina Aprilia</span></div>
+                <div class="info-row"><span class="k"><svg><use href="#i-user-check"/></svg>Jenis Agent</span><span class="v" id="dType">Agent CGO</span></div>
+                <div class="info-row"><span class="k"><svg><use href="#i-target"/></svg>Status</span><span class="v" id="dStatus">READY</span></div>
+                <div class="info-row"><span class="k"><svg><use href="#i-pin"/></svg>Lokasi</span><span class="v" id="dLoc">Jl. Thamrin, Menteng</span></div>
+            </div>
+            <div class="panel-section">
+                <h5>Koordinat & Akurasi</h5>
+                <div class="info-row"><span class="k"><svg><use href="#i-target"/></svg>Latitude</span><span class="v mono" id="dLat">-6.208812</span></div>
+                <div class="info-row"><span class="k"><svg><use href="#i-target"/></svg>Longitude</span><span class="v mono" id="dLng">106.845672</span></div>
+                <div class="info-row"><span class="k"><svg><use href="#i-radar"/></svg>Akurasi GPS</span><span class="v" id="dAcc">± 8 m</span></div>
+                <div class="info-row"><span class="k"><svg><use href="#i-clock"/></svg>Waktu Update</span><span class="v" id="dUpd">1 menit lalu</span></div>
+            </div>
+            <div class="panel-section">
+                <h5>Status Radar <span class="badge ready" style="margin-left:auto;"><svg><use href="#i-check"/></svg>LULUS</span></h5>
+                <ul class="checklist">
+                    <li><span>Validasi Lokasi</span><span class="ok"><svg><use href="#i-check"/></svg></span></li>
+                    <li><span>Validasi Perangkat</span><span class="ok"><svg><use href="#i-check"/></svg></span></li>
+                    <li><span>Validasi Identitas</span><span class="ok"><svg><use href="#i-check"/></svg></span></li>
+                    <li><span>Validasi Jaringan</span><span class="ok"><svg><use href="#i-check"/></svg></span></li>
+                    <li><span>Validasi Keamanan</span><span class="ok"><svg><use href="#i-check"/></svg></span></li>
+                </ul>
+            </div>
+            <div class="panel-section">
+                <h5>Jarak dari Pusat</h5>
+                <div style="font-size:16px; font-weight:800; color:#93c5fd;" id="dDist">2.4 km</div>
+            </div>
+            <div class="panel-actions">
+                <button class="btn primary"><svg><use href="#i-route"/></svg>Lihat Rute</button>
+                <button class="btn"><svg><use href="#i-list"/></svg>Detail Lengkap</button>
             </div>
         </aside>
 
-        <!-- ============ MAIN ============ -->
-        <main class="main">
-            <div class="map-wrap">
-                <div id="map"></div>
-                <div class="map-search">
-                    <div class="search-wrap">
-                        <span class="ico"><svg><use href="#i-search"/></svg></span>
-                        <input class="search-input" id="searchInput" placeholder="Cari Agent, lokasi, atau koordinat...">
-                    </div>
-                    <button class="icon-btn" title="Lokasi saya"><svg><use href="#i-target"/></svg></button>
-                </div>
-                <div class="radius-box">
-                    <h4>Radius Jangkauan</h4>
-                    <div class="radius-opt" data-r="1"><span class="radio"></span>1 km</div>
-                    <div class="radius-opt active" data-r="3"><span class="radio"></span>3 km</div>
-                    <div class="radius-opt" data-r="5"><span class="radio"></span>5 km</div>
-                    <div class="radius-opt" data-r="10"><span class="radio"></span>10 km</div>
-                </div>
-                <div class="map-ctrl">
-                    <button class="icon-btn" onclick="zoomIn()"><svg><use href="#i-plus"/></svg></button>
-                    <button class="icon-btn" onclick="zoomOut()"><svg><use href="#i-minus"/></svg></button>
-                    <button class="icon-btn" onclick="locateMe()"><svg><use href="#i-compass"/></svg></button>
+        <div class="cards-bar">
+            <div class="filter-row">
+                <span class="filter-label"><svg><use href="#i-filter"/></svg>Filter Agent:</span>
+                <button class="chip active" data-filter="all">Semua</button>
+                <button class="chip" data-filter="cgo">Agent CGO</button>
+                <button class="chip" data-filter="driver">Driver</button>
+                <span class="filter-label" style="margin-left:12px;">Status:</span>
+                <button class="chip ready active" data-status="ready">READY</button>
+                <button class="chip busy" data-status="busy">BUSY</button>
+                <button class="chip stale" data-status="stale">STALE</button>
+                <button class="chip offline" data-status="offline">OFFLINE</button>
+                <div class="filter-spacer"></div>
+                <select class="sort-select">
+                    <option>Urutkan: Terbaru</option>
+                    <option>Urutkan: Terdekat</option>
+                    <option>Urutkan: Nama</option>
+                </select>
+                <div class="summary">
+                    <span><span class="dot" style="background:var(--ready);"></span>Ready <b id="cReady">12</b></span>
+                    <span><span class="dot" style="background:var(--busy);"></span>Busy <b id="cBusy">4</b></span>
+                    <span><span class="dot" style="background:var(--stale);"></span>Stale <b id="cStale">1</b></span>
+                    <span><span class="dot" style="background:var(--offline);"></span>Offline <b id="cOffline">2</b></span>
                 </div>
             </div>
+            <div class="cards-scroll" id="cardsScroll"></div>
+        </div>
+    </main>
+</div>
 
-            <aside class="panel">
-                <div class="panel-head">
-                    <h3>Detail Agent</h3>
-                    <button class="close-btn"><svg><use href="#i-close"/></svg></button>
-                </div>
-                <div class="agent-hero">
-                    <div class="avatar" id="heroAvatar">RA</div>
-                    <div class="meta">
-                        <div class="name" id="heroName">Rina Aprilia</div>
-                        <div class="row">
-                            <span class="badge ready" id="heroStatus">
-                                <svg viewBox="0 0 24 24" fill="currentColor" width="9" height="9"><circle cx="12" cy="12" r="6"/></svg>
-                                READY
-                            </span>
-                            <span class="badge radar">
-                                <svg><use href="#i-check"/></svg>
-                                Lulus Scan Radar
-                            </span>
-                        </div>
-                    </div>
-                </div>
-                <div class="tabs">
-                    <div class="tab active">Informasi Utama</div>
-                    <div class="tab">Riwayat</div>
-                    <div class="tab">Log Aktivitas</div>
-                </div>
-                <div class="panel-section">
-                    <h5>Detail Agent</h5>
-                    <div class="info-row"><span class="k"><svg><use href="#i-briefcase"/></svg>ID Agent</span><span class="v" id="dId">CGO-001</span></div>
-                    <div class="info-row"><span class="k"><svg><use href="#i-person"/></svg>Nama</span><span class="v" id="dName">Rina Aprilia</span></div>
-                    <div class="info-row"><span class="k"><svg><use href="#i-user-check"/></svg>Jenis Agent</span><span class="v" id="dType">Agent CGO</span></div>
-                    <div class="info-row"><span class="k"><svg><use href="#i-target"/></svg>Status</span><span class="v" id="dStatus">READY</span></div>
-                    <div class="info-row"><span class="k"><svg><use href="#i-pin"/></svg>Lokasi</span><span class="v" id="dLoc">Jl. Thamrin, Menteng</span></div>
-                </div>
-                <div class="panel-section">
-                    <h5>Koordinat & Akurasi</h5>
-                    <div class="info-row"><span class="k"><svg><use href="#i-target"/></svg>Latitude</span><span class="v mono" id="dLat">-6.208812</span></div>
-                    <div class="info-row"><span class="k"><svg><use href="#i-target"/></svg>Longitude</span><span class="v mono" id="dLng">106.845672</span></div>
-                    <div class="info-row"><span class="k"><svg><use href="#i-radar"/></svg>Akurasi GPS</span><span class="v" id="dAcc">± 8 m</span></div>
-                    <div class="info-row"><span class="k"><svg><use href="#i-clock"/></svg>Waktu Update</span><span class="v" id="dUpd">1 menit lalu</span></div>
-                </div>
-                <div class="panel-section">
-                    <h5>Status Radar <span class="badge ready" style="margin-left:auto;"><svg><use href="#i-check"/></svg>LULUS</span></h5>
-                    <ul class="checklist">
-                        <li><span>Validasi Lokasi</span><span class="ok"><svg><use href="#i-check"/></svg></span></li>
-                        <li><span>Validasi Perangkat</span><span class="ok"><svg><use href="#i-check"/></svg></span></li>
-                        <li><span>Validasi Identitas</span><span class="ok"><svg><use href="#i-check"/></svg></span></li>
-                        <li><span>Validasi Jaringan</span><span class="ok"><svg><use href="#i-check"/></svg></span></li>
-                        <li><span>Validasi Keamanan</span><span class="ok"><svg><use href="#i-check"/></svg></span></li>
-                    </ul>
-                </div>
-                <div class="panel-section">
-                    <h5>Jarak dari Pusat</h5>
-                    <div style="font-size:16px; font-weight:800; color:#93c5fd;" id="dDist">2.4 km</div>
-                </div>
-                <div class="panel-actions">
-                    <button class="btn primary"><svg><use href="#i-route"/></svg>Lihat Rute</button>
-                    <button class="btn"><svg><use href="#i-list"/></svg>Detail Lengkap</button>
-                </div>
-            </aside>
+<script>
+/* ============================================================
+ * CIKUR GO — CGO Tampilan Maps (Mockup v3 - OpenFreeMap Positron)
+ * Base map: OpenFreeMap Positron via MapLibre GL (seperti ride.html)
+ * Fallback: OpenStreetMap standar
+ * ============================================================ */
 
-            <div class="cards-bar">
-                <div class="filter-row">
-                    <span class="filter-label"><svg><use href="#i-filter"/></svg>Filter Agent:</span>
-                    <button class="chip active" data-filter="all">Semua</button>
-                    <button class="chip" data-filter="cgo">Agent CGO</button>
-                    <button class="chip" data-filter="driver">Driver</button>
-                    <span class="filter-label" style="margin-left:12px;">Status:</span>
-                    <button class="chip ready active" data-status="ready">READY</button>
-                    <button class="chip busy" data-status="busy">BUSY</button>
-                    <button class="chip stale" data-status="stale">STALE</button>
-                    <button class="chip offline" data-status="offline">OFFLINE</button>
-                    <div class="filter-spacer"></div>
-                    <select class="sort-select">
-                        <option>Urutkan: Terbaru</option>
-                        <option>Urutkan: Terdekat</option>
-                        <option>Urutkan: Nama</option>
-                    </select>
-                    <div class="summary">
-                        <span><span class="dot" style="background:var(--ready);"></span>Ready <b id="cReady">12</b></span>
-                        <span><span class="dot" style="background:var(--busy);"></span>Busy <b id="cBusy">4</b></span>
-                        <span><span class="dot" style="background:var(--stale);"></span>Stale <b id="cStale">1</b></span>
-                        <span><span class="dot" style="background:var(--offline);"></span>Offline <b id="cOffline">2</b></span>
-                    </div>
-                </div>
-                <div class="cards-scroll" id="cardsScroll"></div>
-            </div>
-        </main>
-    </div>
+const PUSAT = { lat: -6.208812, lng: 106.845672 };
 
-    <script>
-        /* ============================================================
-         * CIKUR GO — CGO Tampilan Maps (Mockup v2)
-         * Base map: Esri World Dark Gray Canvas (gratis, tanpa API key)
-         * ============================================================ */
+const AGENTS = [
+    { id:"CGO-001", name:"Rina Aprilia", type:"Agent CGO", status:"ready", lat:-6.208812, lng:106.845672, dist:2.4, upd:1, loc:"Jl. Thamrin, Menteng" },
+    { id:"CGO-002", name:"Andi Wijaya", type:"Agent CGO", status:"ready", lat:-6.175392, lng:106.827153, dist:3.1, upd:2, loc:"Menteng, Jakarta Pusat" },
+    { id:"CGO-003", name:"Dewi Lestari", type:"Agent CGO", status:"busy",  lat:-6.193847, lng:106.822591, dist:4.7, upd:3, loc:"Tanah Abang" },
+    { id:"CGO-004", name:"Budi Santoso", type:"Agent CGO", status:"ready", lat:-6.224655, lng:106.841019, dist:5.9, upd:4, loc:"Setiabudi" },
+    { id:"DRV-001", name:"Rizky Pratama", type:"Driver",    status:"ready", lat:-6.168752, lng:106.758912, dist:7.3, upd:5, loc:"Cengkareng" },
+    { id:"CGO-005", name:"Larasati Dewi", type:"Agent CGO", status:"ready", lat:-6.264821, lng:106.811750, dist:8.1, upd:6, loc:"Kebayoran" },
+    { id:"DRV-002", name:"Raka Aditya", type:"Driver",      status:"offline", lat:-6.235281, lng:106.790344, dist:9.8, upd:12, loc:"Grogol" },
+    { id:"CGO-006", name:"Putri Anggraini", type:"Agent CGO", status:"ready", lat:-6.290122, lng:106.807611, dist:10.4, upd:14, loc:"Pesanggrahan" },
+    { id:"CGO-007", name:"Fajar Maulana", type:"Agent CGO", status:"ready", lat:-6.179910, lng:106.789223, dist:6.2, upd:3, loc:"Gambir" },
+    { id:"CGO-008", name:"Siti Nurhaliza", type:"Agent CGO", status:"ready", lat:-6.152310, lng:106.833110, dist:7.8, upd:4, loc:"Kemayoran" },
+    { id:"CGO-009", name:"Agus Setiawan", type:"Agent CGO", status:"busy",  lat:-6.242211, lng:106.855002, dist:5.5, upd:2, loc:"Jatinegara" },
+    { id:"CGO-010", name:"Ahmad Fauzi", type:"Agent CGO", status:"stale", lat:-6.281134, lng:106.833020, dist:8.9, upd:22, loc:"Cilandak" }
+];
 
-        const PUSAT = { lat: -6.208812, lng: 106.845672 };
+const STATUS_COLOR = { ready:'#22c55e', busy:'#f59e0b', stale:'#3b82f6', offline:'#ef4444' };
 
-        const AGENTS = [
-            { id:"CGO-001", name:"Rina Aprilia", type:"Agent CGO", status:"ready", lat:-6.208812, lng:106.845672, dist:2.4, upd:1, loc:"Jl. Thamrin, Menteng" },
-            { id:"CGO-002", name:"Andi Wijaya", type:"Agent CGO", status:"ready", lat:-6.175392, lng:106.827153, dist:3.1, upd:2, loc:"Menteng, Jakarta Pusat" },
-            { id:"CGO-003", name:"Dewi Lestari", type:"Agent CGO", status:"busy",  lat:-6.193847, lng:106.822591, dist:4.7, upd:3, loc:"Tanah Abang" },
-            { id:"CGO-004", name:"Budi Santoso", type:"Agent CGO", status:"ready", lat:-6.224655, lng:106.841019, dist:5.9, upd:4, loc:"Setiabudi" },
-            { id:"DRV-001", name:"Rizky Pratama", type:"Driver",    status:"ready", lat:-6.168752, lng:106.758912, dist:7.3, upd:5, loc:"Cengkareng" },
-            { id:"CGO-005", name:"Larasati Dewi", type:"Agent CGO", status:"ready", lat:-6.264821, lng:106.811750, dist:8.1, upd:6, loc:"Kebayoran" },
-            { id:"DRV-002", name:"Raka Aditya", type:"Driver",      status:"offline", lat:-6.235281, lng:106.790344, dist:9.8, upd:12, loc:"Grogol" },
-            { id:"CGO-006", name:"Putri Anggraini", type:"Agent CGO", status:"ready", lat:-6.290122, lng:106.807611, dist:10.4, upd:14, loc:"Pesanggrahan" },
-            { id:"CGO-007", name:"Fajar Maulana", type:"Agent CGO", status:"ready", lat:-6.179910, lng:106.789223, dist:6.2, upd:3, loc:"Gambir" },
-            { id:"CGO-008", name:"Siti Nurhaliza", type:"Agent CGO", status:"ready", lat:-6.152310, lng:106.833110, dist:7.8, upd:4, loc:"Kemayoran" },
-            { id:"CGO-009", name:"Agus Setiawan", type:"Agent CGO", status:"busy",  lat:-6.242211, lng:106.855002, dist:5.5, upd:2, loc:"Jatinegara" },
-            { id:"CGO-010", name:"Ahmad Fauzi", type:"Agent CGO", status:"stale", lat:-6.281134, lng:106.833020, dist:8.9, upd:22, loc:"Cilandak" }
-        ];
+/* ============================================================
+ * INIT MAP + Base map OpenFreeMap Positron (seperti ride.html)
+ * ============================================================ */
+const map = L.map('map', {
+    center: [PUSAT.lat, PUSAT.lng],
+    zoom: 11,
+    zoomControl: false,
+    attributionControl: true
+});
 
-        const STATUS_COLOR = { ready:'#22c55e', busy:'#f59e0b', stale:'#3b82f6', offline:'#ef4444' };
-
-        /* ---------- INIT MAP ---------- */
-        const map = L.map('map', {
-            center: [PUSAT.lat, PUSAT.lng],
-            zoom: 11,
-            zoomControl: false,
-            attributionControl: false
-        });
-
-        // 🔥 Base map: Esri World Dark Gray Canvas (gratis, tanpa API key)
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+/* Base map: OpenFreeMap Positron via MapLibre; fallback OpenStreetMap */
+function addBaseMap(map) {
+    try { map.setMaxZoom(19); map.setMinZoom(3); } catch (_) {}
+    let gl = null, ok = false, fell = false;
+    const fallback = () => {
+        if (fell || ok) return;
+        fell = true;
+        try { if (gl) map.removeLayer(gl); } catch (_) {}
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
             maxZoom: 19,
-            attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'
+            attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors'
         }).addTo(map);
-
-        /* ---------- RADIUS CIRCLES ---------- */
-        let radiusCircles = [];
-        function drawRadius(km) {
-            radiusCircles.forEach(c => map.removeLayer(c));
-            radiusCircles = [];
-            [1, 3, 5, 10].forEach(s => {
-                const active = s === km;
-                const circle = L.circle([PUSAT.lat, PUSAT.lng], {
-                    radius: s * 1000,
-                    color: active ? '#3b82f6' : '#1f2a44',
-                    weight: active ? 2 : 1,
-                    fill: false,
-                    dashArray: active ? null : '4 4',
-                    opacity: active ? 0.9 : 0.4
-                }).addTo(map);
-                radiusCircles.push(circle);
-
-                const lbl = L.marker([PUSAT.lat + (s * 0.009), PUSAT.lng], {
-                    icon: L.divIcon({
-                        className: '',
-                        html: `<div style="background:rgba(15,22,38,.85);border:1px solid #1f2a44;color:#94a3b8;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;white-space:nowrap;">${s} km</div>`,
-                        iconSize: [40, 20],
-                        iconAnchor: [20, 10]
-                    }),
-                    interactive: false
-                }).addTo(map);
-                radiusCircles.push(lbl);
-            });
-        }
-        drawRadius(3);
-
-        /* ---------- MARKER SVG ---------- */
-        const SVG_PERSON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
-        const SVG_CAR = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M5 17h14M5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm18 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/><path d="M3 17V11l2-6h14l2 6v6M3 11h18"/></svg>`;
-
-        const markerRefs = {};
-
-        AGENTS.forEach(a => {
-            const isCenter = a.id === 'CGO-001';
-            const iconHtml = a.type === 'Driver' ? SVG_CAR : SVG_PERSON;
-            const html = `<div class="agent-marker ${a.status} ${isCenter ? 'center' : ''}">${iconHtml}</div>`;
-
-            const marker = L.marker([a.lat, a.lng], {
-                icon: L.divIcon({ className: '', html, iconSize: [36, 36], iconAnchor: [18, 18] })
+    };
+    try {
+        if (window.maplibregl && L.maplibreGL) {
+            gl = L.maplibreGL({
+                style: "https://tiles.openfreemap.org/styles/positron",
+                attribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
             }).addTo(map);
-
-            const dotColor = STATUS_COLOR[a.status];
-            const lblIcon = L.divIcon({
-                className: '',
-                html: `<div class="agent-label"><span class="dot" style="background:${dotColor};box-shadow:0 0 6px ${dotColor};"></span>${a.name.split(' ')[0]}</div>`,
-                iconSize: [90, 20],
-                iconAnchor: [45, -22]
-            });
-            const lbl = L.marker([a.lat, a.lng], { icon: lblIcon, interactive: false }).addTo(map);
-
-            marker.on('click', () => selectAgent(a.id));
-            markerRefs[a.id] = { marker, lbl, data: a };
-        });
-
-        /* ---------- HELPER ---------- */
-        function initials(name) {
-            return name.split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase();
-        }
-        function svgStatusDot() {
-            return `<svg viewBox="0 0 24 24" fill="currentColor" width="8" height="8"><circle cx="12" cy="12" r="6"/></svg>`;
-        }
-
-        /* ---------- RENDER CARDS ---------- */
-        function renderCards(typeFilter = 'all', statusFilter = []) {
-            const wrap = document.getElementById('cardsScroll');
-            wrap.innerHTML = '';
-            let counts = { ready: 0, busy: 0, stale: 0, offline: 0 };
-
-            AGENTS.forEach(a => {
-                counts[a.status]++;
-
-                const typeMatch = typeFilter === 'all'
-                    || (typeFilter === 'cgo' && a.type === 'Agent CGO')
-                    || (typeFilter === 'driver' && a.type === 'Driver');
-                const statusMatch = statusFilter.length === 0 || statusFilter.includes(a.status);
-                if (!typeMatch || !statusMatch) return;
-
-                const card = document.createElement('div');
-                card.className = `agent-card ${a.status}`;
-                card.dataset.id = a.id;
-                card.innerHTML = `
-                    <div class="top">
-                        <div class="av">${initials(a.name)}</div>
-                        <div>
-                            <div class="n">${a.name}</div>
-                            <div class="t">${a.type}</div>
-                        </div>
-                    </div>
-                    <span class="status ${a.status}">${svgStatusDot()}${a.status}</span>
-                    <div class="foot">
-                        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="10" height="10"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${a.dist} km</span>
-                        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="10" height="10"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${a.upd}m</span>
-                    </div>
-                `;
-                card.onclick = () => selectAgent(a.id);
-                wrap.appendChild(card);
-            });
-
-            document.getElementById('cReady').textContent = counts.ready;
-            document.getElementById('cBusy').textContent = counts.busy;
-            document.getElementById('cStale').textContent = counts.stale;
-            document.getElementById('cOffline').textContent = counts.offline;
-            document.getElementById('statVerified').textContent = counts.ready + counts.busy;
-            document.getElementById('statTotal').textContent = AGENTS.length;
-        }
-        renderCards();
-
-        /* ---------- SELECT AGENT ---------- */
-        function selectAgent(id) {
-            const a = AGENTS.find(x => x.id === id);
-            if (!a) return;
-
-            document.getElementById('heroAvatar').textContent = initials(a.name);
-            document.getElementById('heroName').textContent = a.name;
-            document.getElementById('dId').textContent = a.id;
-            document.getElementById('dName').textContent = a.name;
-            document.getElementById('dType').textContent = a.type;
-            document.getElementById('dStatus').textContent = a.status.toUpperCase();
-            document.getElementById('dLoc').textContent = a.loc || '—';
-            document.getElementById('dLat').textContent = a.lat.toFixed(6);
-            document.getElementById('dLng').textContent = a.lng.toFixed(6);
-            document.getElementById('dDist').textContent = a.dist + ' km';
-            document.getElementById('dUpd').textContent = a.upd + ' menit lalu';
-
-            const st = document.getElementById('heroStatus');
-            st.className = 'badge ' + a.status;
-            st.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="9" height="9"><circle cx="12" cy="12" r="6"/></svg>${a.status.toUpperCase()}`;
-
-            document.querySelectorAll('.agent-card').forEach(c => c.classList.remove('active'));
-            const c = document.querySelector(`.agent-card[data-id="${id}"]`);
-            if (c) c.classList.add('active');
-
-            map.flyTo([a.lat, a.lng], 13, { duration: 0.8 });
-        }
-
-        /* ---------- FILTERS ---------- */
-        let activeType = 'all';
-        let activeStatuses = ['ready'];
-        document.querySelectorAll('.chip[data-filter]').forEach(chip => {
-            chip.onclick = () => {
-                document.querySelectorAll('.chip[data-filter]').forEach(c => c.classList.remove('active'));
-                chip.classList.add('active');
-                activeType = chip.dataset.filter;
-                renderCards(activeType, activeStatuses);
-            };
-        });
-        document.querySelectorAll('.chip[data-status]').forEach(chip => {
-            chip.onclick = () => {
-                chip.classList.toggle('active');
-                activeStatuses = [...document.querySelectorAll('.chip[data-status].active')].map(c => c.dataset.status);
-                renderCards(activeType, activeStatuses);
-            };
-        });
-
-        /* ---------- RADIUS SELECTOR ---------- */
-        document.querySelectorAll('.radius-opt').forEach(opt => {
-            opt.onclick = () => {
-                document.querySelectorAll('.radius-opt').forEach(o => o.classList.remove('active'));
-                opt.classList.add('active');
-                drawRadius(parseInt(opt.dataset.r));
-            };
-        });
-
-        /* ---------- MAP CONTROLS ---------- */
-        function zoomIn() { map.zoomIn(); }
-        function zoomOut() { map.zoomOut(); }
-        function locateMe() { map.flyTo([PUSAT.lat, PUSAT.lng], 13, { duration: 0.8 }); }
-
-        /* ---------- LIVE CLOCK ---------- */
-        function tick() {
-            const d = new Date();
-            const t = String(d.getHours()).padStart(2, '0') + ':' +
-                String(d.getMinutes()).padStart(2, '0') + ':' +
-                String(d.getSeconds()).padStart(2, '0');
-            document.getElementById('liveTime').textContent = 'Update: ' + t;
-        }
-        tick();
-        setInterval(tick, 1000);
-
-        /* ---------- CGO HOOK ---------- */
-        function panggilCGO() {
-            if (window.CGO_OTAK && typeof window.CGO_OTAK.ask === 'function') {
-                window.CGO_OTAK.ask('tampilkan maps').then(r => console.log('CGO:', r));
-            } else {
-                alert('CGO dipanggil...\n(window.CGO_OTAK.ask belum tersedia di halaman ini)');
+            const m = gl.getMaplibreMap && gl.getMaplibreMap();
+            if (m) {
+                m.on("load", () => { ok = true; });
+                m.on("error", () => { if (!ok) fallback(); });
             }
+            setTimeout(fallback, 9000);
+            return;
         }
+    } catch (e) {
+        console.warn("[CGO MAPS] MapLibre gagal, pakai OSM:", e && e.message);
+    }
+    fallback();
+}
+addBaseMap(map);
 
-        /* ---------- SEARCH ---------- */
-        document.getElementById('searchInput').addEventListener('input', e => {
-            const q = e.target.value.toLowerCase().trim();
-            if (!q) return;
-            const found = AGENTS.find(a =>
-                a.name.toLowerCase().includes(q) ||
-                a.id.toLowerCase().includes(q) ||
-                (a.loc && a.loc.toLowerCase().includes(q))
-            );
-            if (found) selectAgent(found.id);
-        });
+/* ---------- Radius circles ---------- */
+let radiusCircles = [];
+function drawRadius(km) {
+    radiusCircles.forEach(c => map.removeLayer(c));
+    radiusCircles = [];
+    [1, 3, 5, 10].forEach(s => {
+        const active = s === km;
+        const circle = L.circle([PUSAT.lat, PUSAT.lng], {
+            radius: s * 1000,
+            color: active ? '#2563eb' : '#94a3b8',
+            weight: active ? 2.5 : 1,
+            fill: false,
+            dashArray: active ? null : '5 5',
+            opacity: active ? 0.85 : 0.55
+        }).addTo(map);
+        radiusCircles.push(circle);
 
-        /* ---------- INITIAL ---------- */
-        selectAgent('CGO-001');
-    </script>
+        const lbl = L.marker([PUSAT.lat + (s * 0.009), PUSAT.lng], {
+            icon: L.divIcon({
+                className: '',
+                html: `<div style="background:rgba(255,255,255,.96);border:1px solid rgba(15,23,42,.12);color:#334155;font-size:10px;font-weight:800;padding:3px 9px;border-radius:8px;white-space:nowrap;box-shadow:0 3px 8px rgba(15,23,42,.15);">${s} km</div>`,
+                iconSize: [44, 22],
+                iconAnchor: [22, 11]
+            }),
+            interactive: false
+        }).addTo(map);
+        radiusCircles.push(lbl);
+    });
+}
+drawRadius(3);
+
+/* ---------- Marker SVG ---------- */
+const SVG_PERSON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+const SVG_CAR = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M5 17h14M5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm18 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/><path d="M3 17V11l2-6h14l2 6v6M3 11h18"/></svg>`;
+
+const markerRefs = {};
+
+AGENTS.forEach(a => {
+    const isCenter = a.id === 'CGO-001';
+    const iconHtml = a.type === 'Driver' ? SVG_CAR : SVG_PERSON;
+    const html = `<div class="agent-marker ${a.status} ${isCenter ? 'center marker-pulse' : ''}">${iconHtml}</div>`;
+
+    const marker = L.marker([a.lat, a.lng], {
+        icon: L.divIcon({
+            className: '',
+            html,
+            iconSize: [38, 38],
+            iconAnchor: [19, 19]
+        })
+    }).addTo(map);
+
+    const dotColor = STATUS_COLOR[a.status];
+    const lblIcon = L.divIcon({
+        className: '',
+        html: `<div class="agent-label"><span class="dot" style="background:${dotColor};box-shadow:0 0 5px ${dotColor};"></span>${a.name.split(' ')[0]}</div>`,
+        iconSize: [90, 22],
+        iconAnchor: [45, -24]
+    });
+    const lbl = L.marker([a.lat, a.lng], { icon: lblIcon, interactive: false }).addTo(map);
+
+    marker.on('click', () => selectAgent(a.id));
+    markerRefs[a.id] = { marker, lbl, data: a };
+});
+
+/* ---------- Helpers ---------- */
+function initials(name) {
+    return name.split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase();
+}
+function svgStatusDot() {
+    return `<svg viewBox="0 0 24 24" fill="currentColor" width="8" height="8"><circle cx="12" cy="12" r="6"/></svg>`;
+}
+
+/* ---------- Render cards ---------- */
+function renderCards(typeFilter = 'all', statusFilter = []) {
+    const wrap = document.getElementById('cardsScroll');
+    wrap.innerHTML = '';
+    let counts = { ready: 0, busy: 0, stale: 0, offline: 0 };
+
+    AGENTS.forEach(a => {
+        counts[a.status]++;
+
+        const typeMatch = typeFilter === 'all'
+            || (typeFilter === 'cgo' && a.type === 'Agent CGO')
+            || (typeFilter === 'driver' && a.type === 'Driver');
+        const statusMatch = statusFilter.length === 0 || statusFilter.includes(a.status);
+        if (!typeMatch || !statusMatch) return;
+
+        const card = document.createElement('div');
+        card.className = `agent-card ${a.status}`;
+        card.dataset.id = a.id;
+        card.innerHTML = `
+            <div class="top">
+                <div class="av">${initials(a.name)}</div>
+                <div>
+                    <div class="n">${a.name}</div>
+                    <div class="t">${a.type}</div>
+                </div>
+            </div>
+            <span class="status ${a.status}">${svgStatusDot()}${a.status}</span>
+            <div class="foot">
+                <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="10" height="10"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${a.dist} km</span>
+                <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="10" height="10"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${a.upd}m</span>
+            </div>
+        `;
+        card.onclick = () => selectAgent(a.id);
+        wrap.appendChild(card);
+    });
+
+    document.getElementById('cReady').textContent = counts.ready;
+    document.getElementById('cBusy').textContent = counts.busy;
+    document.getElementById('cStale').textContent = counts.stale;
+    document.getElementById('cOffline').textContent = counts.offline;
+    document.getElementById('statVerified').textContent = counts.ready + counts.busy;
+    document.getElementById('statTotal').textContent = AGENTS.length;
+}
+renderCards();
+
+/* ---------- Select agent ---------- */
+function selectAgent(id) {
+    const a = AGENTS.find(x => x.id === id);
+    if (!a) return;
+
+    document.getElementById('heroAvatar').textContent = initials(a.name);
+    document.getElementById('heroName').textContent = a.name;
+    document.getElementById('dId').textContent = a.id;
+    document.getElementById('dName').textContent = a.name;
+    document.getElementById('dType').textContent = a.type;
+    document.getElementById('dStatus').textContent = a.status.toUpperCase();
+    document.getElementById('dLoc').textContent = a.loc || '—';
+    document.getElementById('dLat').textContent = a.lat.toFixed(6);
+    document.getElementById('dLng').textContent = a.lng.toFixed(6);
+    document.getElementById('dDist').textContent = a.dist + ' km';
+    document.getElementById('dUpd').textContent = a.upd + ' menit lalu';
+
+    const st = document.getElementById('heroStatus');
+    st.className = 'badge ' + a.status;
+    st.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="9" height="9"><circle cx="12" cy="12" r="6"/></svg>${a.status.toUpperCase()}`;
+
+    document.querySelectorAll('.agent-card').forEach(c => c.classList.remove('active'));
+    const c = document.querySelector(`.agent-card[data-id="${id}"]`);
+    if (c) c.classList.add('active');
+
+    map.flyTo([a.lat, a.lng], 13, { duration: 0.8 });
+}
+
+/* ---------- Filters ---------- */
+let activeType = 'all';
+let activeStatuses = ['ready'];
+document.querySelectorAll('.chip[data-filter]').forEach(chip => {
+    chip.onclick = () => {
+        document.querySelectorAll('.chip[data-filter]').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        activeType = chip.dataset.filter;
+        renderCards(activeType, activeStatuses);
+    };
+});
+document.querySelectorAll('.chip[data-status]').forEach(chip => {
+    chip.onclick = () => {
+        chip.classList.toggle('active');
+        activeStatuses = [...document.querySelectorAll('.chip[data-status].active')].map(c => c.dataset.status);
+        renderCards(activeType, activeStatuses);
+    };
+});
+
+/* ---------- Radius selector ---------- */
+document.querySelectorAll('.radius-opt').forEach(opt => {
+    opt.onclick = () => {
+        document.querySelectorAll('.radius-opt').forEach(o => o.classList.remove('active'));
+        opt.classList.add('active');
+        drawRadius(parseInt(opt.dataset.r));
+    };
+});
+
+/* ---------- Map controls ---------- */
+function zoomIn() { map.zoomIn(); }
+function zoomOut() { map.zoomOut(); }
+function locateMe() { map.flyTo([PUSAT.lat, PUSAT.lng], 13, { duration: 0.8 }); }
+
+/* ---------- Live clock ---------- */
+function tick() {
+    const d = new Date();
+    const t = String(d.getHours()).padStart(2, '0') + ':' +
+        String(d.getMinutes()).padStart(2, '0') + ':' +
+        String(d.getSeconds()).padStart(2, '0');
+    document.getElementById('liveTime').textContent = 'Update: ' + t;
+}
+tick();
+setInterval(tick, 1000);
+
+/* ---------- CGO hook ---------- */
+function panggilCGO() {
+    if (window.CGO_OTAK && typeof window.CGO_OTAK.ask === 'function') {
+        window.CGO_OTAK.ask('tampilkan maps').then(r => console.log('CGO:', r));
+    } else {
+        alert('CGO dipanggil...\n(window.CGO_OTAK.ask belum tersedia di halaman ini)');
+    }
+}
+
+/* ---------- Search ---------- */
+document.getElementById('searchInput').addEventListener('input', e => {
+    const q = e.target.value.toLowerCase().trim();
+    if (!q) return;
+    const found = AGENTS.find(a =>
+        a.name.toLowerCase().includes(q) ||
+        a.id.toLowerCase().includes(q) ||
+        (a.loc && a.loc.toLowerCase().includes(q))
+    );
+    if (found) selectAgent(found.id);
+});
+
+/* ---------- Init ---------- */
+selectAgent('CGO-001');
+</script>
 </body>
 </html>
