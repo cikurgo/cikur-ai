@@ -6,7 +6,7 @@
  */
 (function (global) {
   "use strict";
-  var VERSION = "1.6.1-SMALLTALK-REASON-ZR";
+  var VERSION = "1.7.0-TEMPORAL-ZR";
   var memoryStore = null;
 
   function g() {
@@ -68,6 +68,7 @@
     if (/\b(english|in english|bahasa inggris)\b/i.test(s)) return "en";
     if (/^(spell)\b/i.test(s)) return "en";
     if (/\b(what time is it|what is the time|what's the time|current time|what day is it|what is the date|what's the date)\b/i.test(s)) return "en";
+    if (/\b(tomorrow|yesterday|what day|what time|next week|last week|next month|last month|days? ago|days? from now|hours? ago|hours? from now|minutes? ago|minutes? from now)\b/i.test(s)) return "en";
     if (/\b(日本語|nihongo|japanese|bahasa jepang)\b/i.test(s)) return "ja";
     if (/\b(español|spanish|bahasa spanyol)\b/i.test(s)) return "es";
     if (/\b(français|french|bahasa perancis)\b/i.test(s)) return "fr";
@@ -374,6 +375,7 @@
 
   function timeAnswer(body, lang) {
     var b = String(body || "").toLowerCase().trim();
+    if (TALK_RE.test(b)) return null; // "tadi bahas apa jam berapa" = ingatan percakapan, bukan jam sekarang
     if (!/^(jam berapa|pukul berapa|sekarang jam berapa|jam berapa sekarang|what time is it|what is the time|what's the time|whats the time|tell me the time|current time|waktu sekarang|jam sekarang)\b/i.test(b)
         && !/^(jam berapa|what time)/i.test(b)) {
       // softer match
@@ -395,6 +397,7 @@
 
   function dateAnswer(body, lang) {
     var b = String(body || "").toLowerCase().trim();
+    if (TALK_RE.test(b)) return null;
     if (!/\b(tanggal berapa|hari ini tanggal|hari apa|hari apa sekarang|what day is it|what is the date|what's the date|todays date|today's date)\b/i.test(b)) {
       if (!/^(tanggal|hari ini|what day|what date)\b/i.test(b)) return null;
     }
@@ -414,6 +417,249 @@
     else if (lang === "ar") text = dd + "/" + (mm + 1) + "/" + yyyy;
     else text = HARI_ID[day] + ", " + dd + " " + BULAN_ID[mm] + " " + yyyy;
     return { text: text, engine: "CGO_DATE", tags: ["skill", "tanggal"] };
+  }
+
+  /* ═══════════ TEMPORAL v1.7.0 · tanggal relatif · aritmetika jam · zona waktu ═══════════
+   * Aditif: dateAnswer/timeAnswer asli tidak diubah (hari ini / jam sekarang tetap sama).
+   * Hanya berjalan untuk pertanyaan relatif ("kemarin", "besok", "3 hari lagi", "2 jam lagi",
+   * "jam berapa di Tokyo", "sejam sebelum jam 14.30"). Murni lokal, tanpa jaringan. */
+  var TALK_RE = /\b(bahas|membahas|dibahas|bicara|dibicarakan|bicarain|ngobrol|obrol|diobrolin|omong|ngomong|ngomongin|omongin|tanya|nanya|ditanya|menanyakan|topik|cerita|diskusi|percakapan|pertanyaan|chat)\b/i;
+  var UNIT_WORD = { satu: 1, dua: 2, tiga: 3, empat: 4, lima: 5, enam: 6, tujuh: 7, delapan: 8, sembilan: 9 };
+
+  function idNumber(str) {
+    var s = String(str || "").trim().toLowerCase();
+    if (!s) return null;
+    if (/^\d+(?:[.,]\d+)?$/.test(s)) return Number(s.replace(",", "."));
+    if (s === "se" || s === "sebuah") return 1;
+    if (s === "setengah") return 0.5;
+    if (s === "seperempat") return 0.25;
+    if (s === "sepuluh") return 10;
+    if (s === "sebelas") return 11;
+    if (s === "seratus") return 100;
+    var n;
+    var mm = s.match(/^(satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan) belas$/);
+    if (mm) return UNIT_WORD[mm[1]] + 10;
+    mm = s.match(/^(se|satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan) ?puluh(?: (satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan))?$/);
+    if (mm) {
+      n = (mm[1] === "se" ? 1 : UNIT_WORD[mm[1]]) * 10;
+      if (mm[2]) n += UNIT_WORD[mm[2]];
+      return n;
+    }
+    if (UNIT_WORD[s]) return UNIT_WORD[s];
+    return null;
+  }
+
+  var NUM_PAT = "(\\d+(?:[.,]\\d+)?|setengah|seperempat|sepuluh|sebelas|seratus|(?:satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan) belas|(?:se|satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan) ?puluh(?: (?:satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan))?|satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan)";
+
+  function normTemporal(text) {
+    return " " + String(text || "").toLowerCase()
+      .replace(/[?!,;()"“”]/g, " ")
+      .replace(/(?<!\d)[.:]|[.:](?!\d)/g, " ")
+      .replace(/\bkmrn\b|\bkemaren\b/g, "kemarin")
+      .replace(/\bbsk\b/g, "besok")
+      .replace(/\btgl\b/g, "tanggal")
+      .replace(/\bsatu\s+setengah\s+jam\b/g, "90 menit")
+      .replace(/\bsetengah\s+jam\b/g, "30 menit")
+      .replace(/\bseperempat\s+jam\b/g, "15 menit")
+      .replace(/\bsejam\b/g, "1 jam")
+      .replace(/\bsemenit\b/g, "1 menit")
+      .replace(/\bsehari\b/g, "1 hari")
+      .replace(/\bseminggu\b/g, "1 minggu")
+      .replace(/\bsebulan\b/g, "1 bulan")
+      .replace(/\bsetahun\b/g, "1 tahun")
+      .replace(/\s+/g, " ") + " ";
+  }
+
+  function addDays(d, n) { var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
+  function addMonthsSafe(d, n) {
+    var x = new Date(d.getTime()), day = x.getDate();
+    x.setDate(1); x.setMonth(x.getMonth() + n);
+    var last = new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate();
+    x.setDate(Math.min(day, last));
+    return x;
+  }
+
+  function fmtDateFull(d, lang) {
+    var day = d.getDay(), dd = d.getDate(), mm = d.getMonth(), yyyy = d.getFullYear();
+    if (lang === "en") return HARI_EN[day] + ", " + BULAN_EN[mm] + " " + dd + ", " + yyyy;
+    if (lang === "ja") return yyyy + "年" + (mm + 1) + "月" + dd + "日";
+    return HARI_ID[day] + ", " + dd + " " + BULAN_ID[mm] + " " + yyyy;
+  }
+
+  function relDateAnswer(body, lang) {
+    var raw = String(body || "");
+    if (raw.length > 90) return null;
+    var b = normTemporal(raw);
+    if (TALK_RE.test(b)) return null; // pertanyaan memori percakapan, bukan kalender
+    if (!/ (tanggal|hari|date|day|tanggalnya|harinya) /.test(b)) return null;
+    var now = new Date(), target = null, label = null, labelEn = null, m;
+
+    if (/ (kemarin lusa|kemarin dulu|day before yesterday) /.test(b) || / (dua|2) hari (yang )?(lalu|lewat|silam) /.test(b)) {
+      target = addDays(now, -2); label = "Kemarin lusa"; labelEn = "The day before yesterday";
+    } else if (/ (kemarin|semalam|yesterday) /.test(b)) {
+      target = addDays(now, -1); label = "Kemarin"; labelEn = "Yesterday";
+    } else if (/ (lusa|day after tomorrow) /.test(b)) {
+      target = addDays(now, 2); label = "Lusa"; labelEn = "The day after tomorrow";
+    } else if (/ (besok|esok|tomorrow) /.test(b)) {
+      target = addDays(now, 1); label = "Besok"; labelEn = "Tomorrow";
+    } else if (/ (minggu|pekan) (depan|lalu|kemarin) | (next|last) week /.test(b)) {
+      var off = / (minggu|pekan) (lalu|kemarin) | last week /.test(b) ? -7 : 7;
+      target = addDays(now, off);
+      label = off > 0 ? "Minggu depan (7 hari lagi)" : "Minggu lalu (7 hari yang lalu)";
+      labelEn = off > 0 ? "Next week (7 days from now)" : "Last week (7 days ago)";
+    } else if (/ bulan (depan|lalu|kemarin) | (next|last) month /.test(b)) {
+      var mo = / bulan (lalu|kemarin) | last month /.test(b) ? -1 : 1;
+      target = addMonthsSafe(now, mo); label = mo > 0 ? "Bulan depan" : "Bulan lalu"; labelEn = mo > 0 ? "Next month" : "Last month";
+    } else if (/ tahun (depan|lalu|kemarin) | (next|last) year /.test(b)) {
+      var yr = / tahun (lalu|kemarin) | last year /.test(b) ? -1 : 1;
+      target = addMonthsSafe(now, yr * 12); label = yr > 0 ? "Tahun depan" : "Tahun lalu"; labelEn = yr > 0 ? "Next year" : "Last year";
+    } else {
+      var re = new RegExp(" (?:dalam |in )?" + NUM_PAT + " (hari|minggu|pekan|bulan|tahun|days?|weeks?|months?|years?) (lagi|ke depan|kedepan|lalu|yang lalu|yg lalu|lewat|silam|sebelumnya|kemudian|dari sekarang|from now|ago|later) ");
+      m = b.match(re);
+      if (!m) return null;
+      var n = idNumber(m[1]);
+      if (n == null || !(n >= 0) || n > 100000) return null;
+      var unit = m[2].replace(/s$/, ""), dir = /lalu|lewat|silam|sebelumnya|ago/.test(m[3]) ? -1 : 1;
+      var uId = { hari: "hari", day: "hari", minggu: "minggu", pekan: "minggu", week: "minggu", bulan: "bulan", month: "bulan", tahun: "tahun", year: "tahun" }[unit];
+      var uEn = { hari: "day", day: "day", minggu: "week", pekan: "week", week: "week", bulan: "month", month: "month", tahun: "year", year: "year" }[unit];
+      if (!uId) return null;
+      if (uId === "hari") target = addDays(now, dir * n);
+      else if (uId === "minggu") target = addDays(now, dir * n * 7);
+      else if (uId === "bulan") target = addMonthsSafe(now, dir * n);
+      else target = addMonthsSafe(now, dir * n * 12);
+      label = n + " " + uId + (dir > 0 ? " lagi" : " yang lalu");
+      labelEn = dir > 0 ? ("In " + n + " " + uEn + (n === 1 ? "" : "s")) : (n + " " + uEn + (n === 1 ? "" : "s") + " ago");
+    }
+    if (!target) return null;
+    var text = lang === "en"
+      ? labelEn + (/ ago$/.test(labelEn) ? " it was " : " is ") + fmtDateFull(target, "en") + "."
+      : label + ": " + fmtDateFull(target, lang === "ja" ? "ja" : "id") + ".";
+    return { text: text, engine: "CGO_DATE_REL", tags: ["skill", "tanggal", "relatif"] };
+  }
+
+  var TZ_MAP = [
+    [/\b(wib|jakarta|bandung|surabaya|medan)\b/, "Asia/Jakarta", "WIB"],
+    [/\b(wita|makassar|bali|denpasar|balikpapan)\b/, "Asia/Makassar", "WITA"],
+    [/\b(wit|jayapura|papua|ambon|maluku)\b/, "Asia/Jayapura", "WIT"],
+    [/\b(tokyo|jepang|japan)\b/, "Asia/Tokyo", "Tokyo"],
+    [/\b(seoul|korea)\b/, "Asia/Seoul", "Seoul"],
+    [/\b(singapura|singapore)\b/, "Asia/Singapore", "Singapura"],
+    [/\b(kuala lumpur|malaysia)\b/, "Asia/Kuala_Lumpur", "Kuala Lumpur"],
+    [/\b(bangkok|thailand)\b/, "Asia/Bangkok", "Bangkok"],
+    [/\b(beijing|china|cina|shanghai|tiongkok)\b/, "Asia/Shanghai", "Beijing"],
+    [/\b(hong kong)\b/, "Asia/Hong_Kong", "Hong Kong"],
+    [/\b(dubai|uea|emirat)\b/, "Asia/Dubai", "Dubai"],
+    [/\b(mekkah|mekah|makkah|madinah|saudi|riyadh)\b/, "Asia/Riyadh", "Arab Saudi"],
+    [/\b(india|delhi|mumbai)\b/, "Asia/Kolkata", "India"],
+    [/\b(istanbul|turki|turkey)\b/, "Europe/Istanbul", "Istanbul"],
+    [/\b(london|inggris|uk|britania)\b/, "Europe/London", "London"],
+    [/\b(paris|prancis|perancis|france)\b/, "Europe/Paris", "Paris"],
+    [/\b(berlin|jerman|germany|amsterdam|belanda|roma|italia|madrid|spanyol)\b/, "Europe/Berlin", "Eropa Tengah"],
+    [/\b(new york|nyc|washington|miami|toronto)\b/, "America/New_York", "New York"],
+    [/\b(chicago|texas|dallas)\b/, "America/Chicago", "Chicago"],
+    [/\b(los angeles|california|san francisco|seattle|las vegas)\b/, "America/Los_Angeles", "Los Angeles"],
+    [/\b(sydney|australia|melbourne|canberra)\b/, "Australia/Sydney", "Sydney"],
+    [/\b(perth)\b/, "Australia/Perth", "Perth"],
+    [/\b(auckland|selandia baru|new zealand)\b/, "Pacific/Auckland", "Auckland"],
+    [/\b(utc|gmt)\b/, "UTC", "UTC"]
+  ];
+
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function hhmm(d) { return pad2(d.getHours()) + ":" + pad2(d.getMinutes()); }
+
+  function durationMinutes(chunk) {
+    // "2 jam 30 menit" · "90 menit" · "satu jam" · "dua puluh menit"
+    var re = new RegExp(NUM_PAT + " (jam|menit|hours?|hrs?|minutes?|mins?)\\b", "g"), m, tot = 0, ok = false;
+    while ((m = re.exec(chunk))) {
+      var n = idNumber(m[1]);
+      if (n == null) continue;
+      ok = true;
+      tot += /^(jam|hour|hr)/.test(m[2]) ? n * 60 : n;
+    }
+    return ok ? Math.round(tot) : null;
+  }
+
+  function relTimeAnswer(body, lang) {
+    var raw = String(body || "");
+    if (raw.length > 100) return null;
+    var b = normTemporal(raw);
+    if (TALK_RE.test(b)) return null;
+    var now = new Date(), m;
+
+    // (a) zona waktu: "jam berapa di tokyo" · "what time is it in london" · "jam wita sekarang"
+    if ((/ (jam|pukul|waktu|time) /.test(b) && / (berapa|sekarang|now|is it) /.test(b)) || / (jam|pukul) (wib|wita|wit) /.test(b)) {
+      var place = null;
+      m = b.match(/ (?:di|in|untuk|for) (.+?)(?: sekarang| now| ya| dong| nih)* $/);
+      var cand = m ? m[1] : b;
+      for (var i = 0; i < TZ_MAP.length && !place; i++) {
+        if (TZ_MAP[i][0].test(cand)) place = TZ_MAP[i];
+      }
+      if (!place && !m && / (wib|wita|wit|utc|gmt) /.test(b)) {
+        for (var k = 0; k < TZ_MAP.length && !place; k++) { if (TZ_MAP[k][0].test(b)) place = TZ_MAP[k]; }
+      }
+      if (place) {
+        try {
+          var parts = new Intl.DateTimeFormat("en-GB", { timeZone: place[1], hour: "2-digit", minute: "2-digit", hour12: false, weekday: "long" }).formatToParts(now);
+          var pv = {}; parts.forEach(function (x) { pv[x.type] = x.value; });
+          var clock = pv.hour.replace(/^24$/, "00") + ":" + pv.minute;
+          var theirDay = new Intl.DateTimeFormat("en-GB", { timeZone: place[1], day: "numeric" }).format(now);
+          var sameDay = theirDay === String(now.getDate());
+          var txt = lang === "en"
+            ? "It's " + clock + " in " + place[2] + (sameDay ? "." : " (" + pv.weekday + " there).")
+            : "Di " + place[2] + " sekarang pukul " + clock + (sameDay ? "." : " (hari " + pv.weekday + " di sana, tanggalnya beda dengan tempatmu).");
+          return { text: txt, engine: "CGO_TIME_ZONE", tags: ["skill", "waktu", "zona"] };
+        } catch (_) {}
+      }
+    }
+
+    // (b) offset dari sekarang: "2 jam lagi jam berapa" · "jam berapa 30 menit lagi" · "sejam yang lalu jam berapa"
+    if (/ (jam|pukul|time|clock) /.test(b) || / berapa /.test(b) || / what /.test(b)) {
+      m = b.match(new RegExp("((?:" + NUM_PAT + " (?:jam|menit|hours?|hrs?|minutes?|mins?)(?: dan)? ?)+) (lagi|ke depan|kedepan|dari sekarang|from now|later|lalu|yang lalu|yg lalu|lewat|silam|tadi|ago) "));
+      var inForm = false;
+      if (!m) {
+        m = b.match(new RegExp(" (?:in|dalam) ((?:" + NUM_PAT + " (?:jam|menit|hours?|hrs?|minutes?|mins?)(?: dan| and)? ?)+) "));
+        if (m) { m.push("lagi"); inForm = true; }
+      }
+      if (m && !/ (sebelum|sesudah|setelah|before|after) /.test(b)) {
+        var mins = durationMinutes(m[1]);
+        if (mins != null && mins >= 0 && mins <= 60 * 24 * 60) {
+          var past = !inForm && /lalu|yg lalu|lewat|silam|tadi|ago/.test(m[m.length - 1]);
+          var t2 = new Date(now.getTime() + (past ? -1 : 1) * mins * 60000);
+          var dayDiff = Math.round((new Date(t2.getFullYear(), t2.getMonth(), t2.getDate()) - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+          var durTxt = String(m[1]).trim();
+          var dayNote = dayDiff === 0 ? "" : (dayDiff === 1 ? " (besok)" : (dayDiff === -1 ? " (kemarin)" : " (" + fmtDateFull(t2, "id") + ")"));
+          var txt2 = lang === "en"
+            ? (past ? durTxt + " ago it was " : "In " + durTxt + " it will be ") + hhmm(t2) + (dayDiff === 0 ? "." : " (" + fmtDateFull(t2, "en") + ").")
+            : durTxt + (past ? " yang lalu" : " lagi") + " = pukul " + hhmm(t2) + dayNote + ".";
+          return { text: txt2, engine: "CGO_TIME_REL", tags: ["skill", "waktu", "relatif"] };
+        }
+      }
+    }
+
+    // (c) aritmetika jam: "sejam sebelum jam 14.30" · "2 jam setelah jam 8 pagi" · "30 menit sebelum jam 9"
+    m = b.match(new RegExp("((?:" + NUM_PAT + " (?:jam|menit|hours?|hrs?|minutes?|mins?)(?: dan| and)? ?)+) (sebelum|sesudah|setelah|before|after) (?:jam |pukul |at )?(\\d{1,2})(?:[.:](\\d{2}))?(?: (pagi|siang|sore|malam|am|pm))? "));
+    if (m) {
+      var dm = durationMinutes(m[1]);
+      if (dm != null) {
+        var H = Number(m[4]), M = m[5] ? Number(m[5]) : 0, ap = m[6] || "";
+        if (H <= 24 && M < 60) {
+          if (/pm|sore|malam/.test(ap) && H < 12) H += 12;
+          if (/siang/.test(ap) && H < 11) H += 12;
+          var base = new Date(2000, 0, 2, H % 24, M, 0);
+          var sign = /sebelum|before/.test(m[3]) ? -1 : 1;
+          var res = new Date(base.getTime() + sign * dm * 60000);
+          var dd = Math.round((new Date(res.getFullYear(), res.getMonth(), res.getDate()) - new Date(2000, 0, 2)) / 86400000);
+          var note = dd < 0 ? " (hari sebelumnya)" : (dd > 0 ? " (hari berikutnya)" : "");
+          return {
+            text: lang === "en"
+              ? String(m[1]).trim() + " " + (sign < 0 ? "before " : "after ") + pad2(base.getHours()) + ":" + pad2(base.getMinutes()) + " is " + hhmm(res) + (dd ? (dd < 0 ? " (previous day)" : " (next day)") : "") + "."
+              : String(m[1]).trim() + " " + (sign < 0 ? "sebelum" : "sesudah") + " pukul " + pad2(base.getHours()) + ":" + pad2(base.getMinutes()) + " = pukul " + hhmm(res) + note + ".",
+            engine: "CGO_TIME_ARITH", tags: ["skill", "waktu", "aritmetika"]
+          };
+        }
+      }
+    }
+    return null;
   }
 
   function percentAnswer(body, lang) {
@@ -549,6 +795,10 @@
     var b = body.toLowerCase();
 
     // jam / tanggal — tidak wajib CIKUR
+    var rtAns = relTimeAnswer(body, lang);
+    if (rtAns) return rtAns;
+    var rdAns = relDateAnswer(body, lang);
+    if (rdAns) return rdAns;
     var tAns = timeAnswer(body, lang);
     if (tAns) return tAns;
     var dAns = dateAnswer(body, lang);
@@ -1000,6 +1250,8 @@
     think: think,
     status: status,
     skillAnswer: skillAnswer,
+    relDateAnswer: relDateAnswer,
+    relTimeAnswer: relTimeAnswer,
     conversationAnswer: conversationAnswer,
     polish: polish,
     parseVocab: parseVocab

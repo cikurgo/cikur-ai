@@ -3902,8 +3902,10 @@ await runAutonomousEngine(state => {
   f.addEventListener('submit',function(){
     try{
       if(window.CGOOrb&&window.CGOOrb.setState){
+        var prevS='tenang';try{prevS=window.CGOOrb.state()||'tenang';}catch(_){}
+        if(prevS==='menjaga'||prevS==='transenden')return;
         window.CGOOrb.setState('membuka',{force:true});
-        setTimeout(function(){try{window.CGOOrb.setState('tenang',{force:true});}catch(_){}} ,800);
+        setTimeout(function(){try{if(window.CGOOrb.state()==='membuka')window.CGOOrb.setState((prevS==='membuka')?'tenang':prevS,{force:true});}catch(_){}} ,800);
       }
     }catch(_){}
   });
@@ -4042,7 +4044,7 @@ await runAutonomousEngine(state => {
         b.style.cssText='width:26px;height:26px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#94a3b8;display:flex;align-items:center;justify-content:center;cursor:pointer';
         b.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>';
         var on=false;
-        b.addEventListener('click',function(){on=!on;b.style.color=on?'#34d399':'#94a3b8';try{window.CGO_OTAK.setWakeEnabled(on);}catch(_){}});
+        b.addEventListener('click',function(){on=!on;b.style.color=on?'#34d399':'#94a3b8';try{window.__cgoWakeExplicit=!!on;window.CGO_OTAK.setWakeEnabled(on,{explicit:true});}catch(_){}});
         head.appendChild(b);
       }
     }
@@ -4268,7 +4270,7 @@ await runAutonomousEngine(state => {
 (function(){try{
   var wrap = document.getElementById('cgo-orb-wrap');
   if (!wrap) return;
-  var palettes = ['cyan','violet','amber','emerald','rose','ice'];
+  var palettes = ['cyan','violet','amber','emerald','rose']; /* 'ice' dikhususkan untuk kilatan wake; di siklus ketukan ia mengunci warna emosi suara */
   var states = ['tenang','waspada','membuka','transenden'];
   var idx = 0, stateIdx = 0;
   if (!wrap.getAttribute('data-palette')) wrap.setAttribute('data-palette','cyan');
@@ -4291,9 +4293,12 @@ await runAutonomousEngine(state => {
       // state orb via API yang sudah ada (CGOOrb.setState) — bukan state baru
       if (window.CGOOrb && typeof window.CGOOrb.setState === 'function') {
         stateIdx = (stateIdx + 1) % states.length;
-        window.CGOOrb.setState(states[stateIdx], { force:true });
+        var prevSt = 'tenang'; try { prevSt = window.CGOOrb.state() || 'tenang'; } catch(_){}
+        if (prevSt === 'menjaga') return; /* state penjagaan akses tidak boleh ditimpa ketukan */
+        var tapSt = states[stateIdx];
+        window.CGOOrb.setState(tapSt, { force:true });
         setTimeout(function(){
-          try { window.CGOOrb.setState('tenang', { force:true }); } catch(_){}
+          try { if (window.CGOOrb.state() === tapSt) window.CGOOrb.setState((prevSt === 'membuka' || prevSt === 'transenden') ? 'tenang' : prevSt, { force:true }); } catch(_){}
         }, 1800);
       }
       // vibrate opsional
@@ -4481,9 +4486,9 @@ await runAutonomousEngine(state => {
         indicator.classList.add('on');
         indicator.title = 'Wake enabled · state: ' + (info.state || 'idle');
       } else {
-        indicator.textContent = 'WAKE · OFF';
+        indicator.textContent = 'WAKE · VIA MIC';
         indicator.classList.remove('on');
-        indicator.title = 'Wake disabled · state: ' + (info.state || 'idle');
+        indicator.title = 'Ucapkan "CGO" saat tombol mic aktif. Klik untuk standby terus-menerus (opsional; memakai mic terus).';
       }
     }catch(_){}
   }
@@ -4496,7 +4501,7 @@ await runAutonomousEngine(state => {
       }
       var info = readWake();
       var next = !(info && info.enabled);
-      try { otak.setWakeEnabled(next); } catch(_){}
+      try { window.__cgoWakeExplicit = !!next; otak.setWakeEnabled(next, { explicit:true }); } catch(_){}
       // refresh akan terjadi dari polling / event
     }catch(_){}
   }
@@ -4653,9 +4658,9 @@ await runAutonomousEngine(state => {
   function boot(){
     var o=window.CGO_OTAK;
     if(!o||typeof o.setWakeEnabled!=='function')return false;
-    try{o.setWakeEnabled(true);}catch(_){}
-    var ind=document.getElementById('bcgo-wake-indicator');
-    if(ind){ind.classList.add('on');ind.textContent='WAKE · '+((o.wakeWords&&o.wakeWords.primary)||'CGO');}
+    /* ONE-DOOR: TIDAK menyalakan standby otomatis (itu penyebab mic muncul sendiri).
+       Wake word hanya dikenali lewat tombol mic manual. Standby terus-menerus hanya bila pengguna
+       sengaja menekan indikator WAKE. */
     return true;
   }
   var n=0,iv=setInterval(function(){n++;if(boot()||n>50)clearInterval(iv);},200);
@@ -4674,7 +4679,7 @@ await runAutonomousEngine(state => {
     if(st.state==='error'){if(!errSince)errSince=Date.now();else if(Date.now()-errSince>25000&&o.wakeRestart){o.wakeRestart();errSince=0;}}
     else errSince=0;
   }catch(_){}},5000);
-  console.log('[CGO-FUTURE] wake auto-boot aktif');
+  console.log('[CGO-FUTURE] wake one-door aktif (tanpa auto-standby)');
 }catch(e){console.warn('[CGO-FUTURE wake]',e);}})();
 </script>
 <script>
@@ -5420,12 +5425,15 @@ await runAutonomousEngine(state => {
     function enforceOneDoor(){
       var o = window.CGO_OTAK;
       if (!o || typeof o.setWakeEnabled !== 'function') return;
-      if (typeof o.isWakeEnabled === 'function' && o.isWakeEnabled()) return;
+      if (window.__cgoWakeExplicit) return; /* pengguna sengaja menyalakan standby lewat indikator WAKE */
+      if (typeof o.isWakeEnabled === 'function' && !o.isWakeEnabled()) return;
       try { o.setWakeEnabled(false); } catch(_){}
     }
+    function scheduleOneDoor(){ [500, 2000, 5000].forEach(function(ms){ setTimeout(enforceOneDoor, ms); }); }
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function(){ setTimeout(enforceOneDoor, 500); });
-    } else setTimeout(enforceOneDoor, 500);
+      document.addEventListener('DOMContentLoaded', scheduleOneDoor);
+    } else scheduleOneDoor();
+    window.addEventListener('cgo:wake-enabled', function(){ setTimeout(enforceOneDoor, 0); });
     console.log('[CGO] wake one-door: mic manual primary');
   } catch (e) { console.warn('[CGO one-door]', e); }
 })();

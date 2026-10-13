@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.14.7-SYNC-USER-ZR";
+  const VERSION = "1.15.0-TEMPORAL-ONEDOOR-ZR";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -389,6 +389,7 @@
     };
     state.memory.push(turn);
     if (state.memory.length > MEM_MAX) state.memory.shift();
+    try { tlPush(q, a, topic); } catch (_) {}
     state.focus = { topic: topic, at: Date.now(), q: turn.q };
     try { const c = global.CIKURGO; if (c && typeof c.ingat === "function") c.ingat(turn.q, turn.a); } catch (_) {}
     return turn;
@@ -398,6 +399,307 @@
     const t = String(topic || "").toLowerCase();
     return state.memory.filter(function (m) { return m.topic === t; }).slice(-(Number(n) || 3));
   }
+  /* ═══════════ MEMORI WAKTU v1.15.0 · "tadi / kemarin / sebelum / sesudah … bahas apa, jam berapa" ═══════════
+   * Aditif. Log percakapan bertimestamp disimpan di localStorage browser ini saja (maks 300 giliran, 14 hari).
+   * Tidak mengubah state.memory / RECALL_TRIGGER / C3 yang lama (tetap jadi cadangan).
+   * Jujur: bila tidak ada catatan, dijawab "belum ada catatan" — tidak mengarang. */
+  const TL_KEY = "CGO_TURNLOG_V1";
+  const TL_MAX = 300;
+  const TL_TTL = 14 * 24 * 3600 * 1000;
+  let turnLog = [];
+  let tlLoaded = false;
+
+  function tlLoad() {
+    if (tlLoaded) return;
+    tlLoaded = true;
+    try {
+      const raw = global.localStorage && global.localStorage.getItem(TL_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      const now = Date.now();
+      if (Array.isArray(arr)) {
+        turnLog = arr.filter(function (x) { return x && x.at && now - x.at < TL_TTL && typeof x.q === "string"; }).slice(-TL_MAX);
+      }
+    } catch (_) { turnLog = []; }
+  }
+  function tlSave() {
+    try { if (global.localStorage) global.localStorage.setItem(TL_KEY, JSON.stringify(turnLog)); } catch (_) {}
+  }
+  function tlTopic(q, a, focusTopic) {
+    const s = String(q || "").toLowerCase();
+    if (/\b(jam|pukul|tanggal|hari apa|kemarin|besok|lusa|what time|what day|what is the date)\b/.test(s)) return "waktu";
+    if (/\b(hitung|berapa\s+\d|\d+\s*[x×*+\-\/÷^%]\s*\d|pangkat|akar|persen)\b/.test(s)) return "hitungan";
+    if (/\b(eja|spell|lafal|baca)\b/.test(s)) return "ejaan";
+    if (focusTopic && focusTopic !== "umum") return focusTopic;
+    return "umum";
+  }
+  function tlPush(q, a, topic) {
+    try {
+      tlLoad();
+      const qq = String(q || "").trim();
+      if (!qq) return;
+      try { if (typeof isSecretAccessName === "function" && isSecretAccessName(qq)) return; } catch (_) {}
+      if (/\b(0021|0006|0095|kode\s*akses|access\s*code)\b/i.test(qq)) return;
+      turnLog.push({ at: Date.now(), q: qq.slice(0, 160), a: String(a || "").slice(0, 160), topic: tlTopic(qq, a, topic) });
+      if (turnLog.length > TL_MAX) turnLog = turnLog.slice(-TL_MAX);
+      tlSave();
+    } catch (_) {}
+  }
+  function tlRecent(n) { tlLoad(); return turnLog.slice(-(Number(n) || 10)); }
+
+  const TR_TALK = /\b(bahas|membahas|dibahas|bahasan|pembahasan|bicara|dibicarakan|bicarain|ngobrol|obrol|diobrolin|omong|ngomong|ngomongin|omongin|tanya|nanya|ditanya|menanyakan|topik|cerita|diskusi|diskusiin|percakapan|pertanyaan|talk|talked|discuss|discussed|asked|ask|conversation|topic|said)\b/;
+  const TR_TIME = /\b(tadi|barusan|baru saja|sebelum|sebelumnya|sesudah|sesudahnya|setelah|setelahnya|sehabis|habis|abis|selanjutnya|berikutnya|kemarin|kmrn|kemaren|semalam|tempo hari|dari tadi|sejak tadi|hari ini|pertama|terakhir|paling awal|awal|earlier|before|after|yesterday|previous|previously|last|first|today)\b/;
+  const TR_Q = /\b(apa|apa saja|apa aja|siapa|jam berapa|kapan|berapa kali|what|when|which)\b|\?/;
+  const TR_STOP = new Set(("yang dan atau di ke dari untuk dengan kita kamu aku saya gue gw lu lo kami nya itu ini tadi barusan sebelum sebelumnya sesudah sesudahnya setelah setelahnya sehabis habis abis selanjutnya berikutnya kemarin kmrn kemaren semalam hari jam pukul berapa apa saja aja siapa kapan sih dong deh ya yaa lah kok tuh nih ada pernah lagi dulu pagi siang sore malam tanggal tolong coba bisa mau lalu terus kemudian bahas membahas dibahas bahasan pembahasan bicara dibicarakan bicarain ngobrol obrol diobrolin omong ngomong ngomongin omongin tanya nanya ditanya menanyakan topik cerita diskusi diskusiin percakapan pertanyaan pertama terakhir awal paling akhir tempo ngomongin tentang soal mengenai seputar hal what did we talk about discuss earlier before after yesterday today the a an is was were of in on at me you i my your first last previous previously asked ask said conversation").split(/\s+/));
+  const TR_TOPICS = { mitra: ["mitra", "partner", "driver", "resto"], customer: ["customer", "pelanggan", "online", "offline"], pesanan: ["pesanan", "order", "transaksi", "omzet"], sistem: ["status", "saraf", "siklus", "scan", "telemetry", "anomali", "sistem"], briefing: ["briefing", "ringkas", "prioritas"], export: ["tarik", "unduh", "csv", "export"], waktu: ["jam", "tanggal", "waktu"], hitungan: ["hitung", "hitungan", "matematika"], ejaan: ["eja", "ejaan", "lafal"] };
+
+  function trNorm(text) {
+    return " " + String(text || "").toLowerCase()
+      .replace(/\bkmrn\b|\bkemaren\b/g, "kemarin")
+      .replace(/[?!,;()"“”]/g, " ")
+      .replace(/(?<!\d)[.:]|[.:](?!\d)/g, " ")
+      .replace(/\s+/g, " ") + " ";
+  }
+  function isTemporalRecall(text) {
+    const b = trNorm(text);
+    return TR_TALK.test(b) && (TR_TIME.test(b) || / (jam berapa|kapan|what time|when) /.test(b)) && TR_Q.test(String(text || "").toLowerCase());
+  }
+
+  const HARI_NAMA = ["minggu", "senin", "selasa", "rabu", "kamis", "jumat", "sabtu"];
+  const HARI_CAP = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const BLN_CAP = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  function p2(n) { return (n < 10 ? "0" : "") + n; }
+  function clockOf(ts) { const d = new Date(ts); return p2(d.getHours()) + ":" + p2(d.getMinutes()); }
+  function dayStart(ts) { const d = new Date(ts); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+  function dayLabel(ts, nowTs) {
+    const diff = Math.round((dayStart(nowTs) - dayStart(ts)) / 86400000);
+    const d = new Date(ts);
+    const full = HARI_CAP[d.getDay()] + ", " + d.getDate() + " " + BLN_CAP[d.getMonth()] + " " + d.getFullYear();
+    if (diff === 0) return "hari ini";
+    if (diff === 1) return "kemarin (" + full + ")";
+    if (diff === 2) return "kemarin lusa (" + full + ")";
+    return full;
+  }
+  function partOf(ts) {
+    const h = new Date(ts).getHours();
+    if (h >= 4 && h < 11) return "pagi";
+    if (h >= 11 && h < 15) return "siang";
+    if (h >= 15 && h < 18) return "sore";
+    return "malam";
+  }
+
+  function trParse(text, nowTs) {
+    const b = trNorm(text);
+    const q = { before: false, after: false, first: false, last: false, whenQ: false, dayStart: null, dayLabelTxt: null, part: null, clock: null, kw: [], topics: [] };
+    q.before = / (sebelum|sebelumnya|before|previous|previously) /.test(b);
+    q.after = / (sesudah|sesudahnya|setelah|setelahnya|sehabis|habis|abis|selanjutnya|berikutnya|after|next) /.test(b);
+    q.first = / (pertama|paling awal|awal|first|earliest) /.test(b);
+    q.last = / (terakhir|paling akhir|last|latest) /.test(b);
+    q.whenQ = / (jam berapa|kapan|what time|when) /.test(b);
+    const base = dayStart(nowTs);
+    let m;
+    if (/ (kemarin lusa|kemarin dulu) /.test(b)) { q.dayStart = base - 2 * 86400000; }
+    else if (/ (kemarin|yesterday|semalam) /.test(b)) { q.dayStart = base - 86400000; if (/ semalam /.test(b)) q.part = "malam"; }
+    else if (/ (hari ini|today|tadi|barusan|baru saja|dari tadi|sejak tadi) /.test(b)) { q.dayStart = base; }
+    else if ((m = b.match(/ (\d{1,2}) hari (?:yang )?(?:lalu|lewat|silam) /))) { q.dayStart = base - Number(m[1]) * 86400000; }
+    else if ((m = b.match(/ (senin|selasa|rabu|kamis|jumat|sabtu|minggu) (?:lalu|kemarin|kemarin itu|yang lalu) /))) {
+      const want = HARI_NAMA.indexOf(m[1]); const cur = new Date(base).getDay();
+      let back = (cur - want + 7) % 7; if (back === 0) back = 7;
+      q.dayStart = base - back * 86400000;
+    }
+    else if ((m = b.match(/ tanggal (\d{1,2}) /))) {
+      const want = Number(m[1]); const d0 = new Date(base);
+      let cand = new Date(d0.getFullYear(), d0.getMonth(), want);
+      if (cand.getTime() > base) cand = new Date(d0.getFullYear(), d0.getMonth() - 1, want);
+      if (cand.getDate() === want) q.dayStart = cand.getTime();
+    }
+    if (!q.part) {
+      if (/ (pagi|morning) /.test(b)) q.part = "pagi";
+      else if (/ (siang|afternoon) /.test(b)) q.part = "siang";
+      else if (/ sore /.test(b)) q.part = "sore";
+      else if (/ (malam|night|evening) /.test(b)) q.part = "malam";
+    }
+    m = b.match(/ (?:jam|pukul|at) (\d{1,2})(?:[.:](\d{2}))? /);
+    if (m && Number(m[1]) <= 24 && (!m[2] || Number(m[2]) < 60)) {
+      let H = Number(m[1]);
+      if (q.part === "sore" && H < 12) H += 12;
+      if (q.part === "malam" && H < 12 && H >= 5) H += 12;
+      q.clock = (H % 24) * 60 + (m[2] ? Number(m[2]) : 0);
+    }
+    const toks = b.replace(/[^a-z0-9\u00c0-\u024f\s]/g, " ").split(/\s+/).filter(Boolean);
+    toks.forEach(function (w) {
+      if (w.length < 3 || TR_STOP.has(w) || /^\d+$/.test(w) || HARI_NAMA.indexOf(w) >= 0) return;
+      if (/^(sebelum|sesudah|setelah|hari|lalu|lewat|silam)$/.test(w)) return;
+      Object.keys(TR_TOPICS).forEach(function (t) { if (TR_TOPICS[t].indexOf(w) >= 0 && q.topics.indexOf(t) < 0) q.topics.push(t); });
+      q.kw.push(w);
+    });
+    return q;
+  }
+
+  function trMatchScore(turn, kw, topics) {
+    if (!kw.length && !topics.length) return 0;
+    const hay = (turn.q + " " + turn.a + " " + turn.topic).toLowerCase();
+    let sc = 0;
+    kw.forEach(function (w) { if (hay.indexOf(w) >= 0 || (w.length > 4 && hay.indexOf(w.slice(0, w.length - 1)) >= 0)) sc++; });
+    topics.forEach(function (t) { if (turn.topic === t) sc += 2; });
+    return sc;
+  }
+  function trLine(turn, nowTs, withDay) {
+    const t = turn.topic && turn.topic !== "umum" ? " [" + turn.topic + "]" : "";
+    return "• " + (withDay ? dayLabel(turn.at, nowTs) + " " : "") + clockOf(turn.at) + " — “" + turn.q.slice(0, 70) + (turn.q.length > 70 ? "…" : "") + "”" + t;
+  }
+
+  function temporalRecallAnswer(text) {
+    if (!isTemporalRecall(text)) return null;
+    tlLoad();
+    const nowTs = Date.now();
+    const q = trParse(text, nowTs);
+    let pool = turnLog.slice();
+    const noRecord = "Belum ada catatan percakapan";
+    const scope = "Catatanku hanya mencakup percakapan di browser ini sejak mulai dipakai (disimpan maksimal 14 hari).";
+
+    // 1) filter hari / bagian hari
+    let dayTxt = null;
+    if (q.dayStart != null) {
+      pool = pool.filter(function (x) { return dayStart(x.at) === q.dayStart; });
+      dayTxt = dayLabel(q.dayStart + 12 * 3600000, nowTs);
+    }
+    if (q.part) pool = pool.filter(function (x) { return partOf(x.at) === q.part; });
+    const scopeTxt = (dayTxt ? dayTxt : "") + (q.part ? (dayTxt ? " " : "") + q.part : "");
+
+    // 2) anchor kata kunci / topik
+    const hasKw = q.kw.length > 0 || q.topics.length > 0;
+    let matches = [];
+    if (hasKw) {
+      matches = pool.map(function (x) { return { x: x, s: trMatchScore(x, q.kw, q.topics) }; }).filter(function (r) { return r.s > 0; });
+    }
+
+    // A. sebelum / sesudah (anchor: kata kunci → jam → sekarang)
+    if (q.before || q.after) {
+      const wantBefore = q.before || (!q.before && !q.after);
+      const wantAfter = q.after || (!q.before && !q.after);
+      let anchorIdx = -1, anchorDesc = "";
+      const full = turnLog;
+      if (hasKw && matches.length) {
+        const best = matches.reduce(function (a, r) { return (!a || r.x.at >= a.x.at) ? r : a; }, null);
+        anchorIdx = full.indexOf(best.x);
+        anchorDesc = "“" + best.x.q.slice(0, 50) + "” (" + dayLabel(best.x.at, nowTs) + " " + clockOf(best.x.at) + ")";
+      } else if (hasKw && !matches.length && !q.clock) {
+        return { answer: noRecord + " yang menyebut " + q.kw.concat(q.topics).slice(0, 3).join(", ") + (scopeTxt ? " pada " + scopeTxt : "") + ". " + scope, engine: "TL_NOMATCH" };
+      }
+      const lines = [];
+      if (anchorIdx >= 0) {
+        if (wantBefore) {
+          const prev = anchorIdx > 0 ? full[anchorIdx - 1] : null;
+          lines.push(prev ? "Sebelum " + anchorDesc + ", jam " + clockOf(prev.at) + " (" + dayLabel(prev.at, nowTs) + ") kita bahas:" : "Sebelum " + anchorDesc + " belum ada catatan.");
+          if (prev) lines.push(trLine(prev, nowTs, false));
+        }
+        if (wantAfter) {
+          const next = anchorIdx < full.length - 1 ? full[anchorIdx + 1] : null;
+          lines.push(next ? "Sesudahnya, jam " + clockOf(next.at) + " (" + dayLabel(next.at, nowTs) + ") kita bahas:" : "Sesudahnya belum ada — itu pembahasan terbaru.");
+          if (next) lines.push(trLine(next, nowTs, false));
+        }
+        return { answer: lines.join("\n"), engine: "TL_BEFORE_AFTER" };
+      }
+      if (q.clock != null) {
+        const refDay = q.dayStart != null ? q.dayStart : dayStart(nowTs);
+        const refTs = refDay + q.clock * 60000;
+        const refTxt = (q.dayStart != null ? dayLabel(refTs, nowTs) + " " : "") + p2(Math.floor(q.clock / 60)) + ":" + p2(q.clock % 60);
+        const before = full.filter(function (x) { return x.at < refTs; }).slice(-2);
+        const after = full.filter(function (x) { return x.at > refTs; }).slice(0, 2);
+        if (wantBefore) {
+          lines.push(before.length ? "Sebelum jam " + refTxt + " kita bahas:" : "Sebelum jam " + refTxt + " belum ada catatan.");
+          before.forEach(function (x) { lines.push(trLine(x, nowTs, true)); });
+        }
+        if (wantAfter) {
+          lines.push(after.length ? "Sesudah jam " + refTxt + " kita bahas:" : "Sesudah jam " + refTxt + " belum ada catatan.");
+          after.forEach(function (x) { lines.push(trLine(x, nowTs, true)); });
+        }
+        if (!before.length && !after.length) lines.push(scope);
+        return { answer: lines.join("\n"), engine: "TL_CLOCK" };
+      }
+      // anchor = sekarang (pertanyaan ini): sebelum = giliran terakhir, sesudah = belum ada
+      const last = full.length ? full[full.length - 1] : null;
+      const prev2 = full.slice(-2);
+      if (wantBefore) {
+        if (last) {
+          lines.push("Sebelum pertanyaan ini, jam " + clockOf(last.at) + " (" + dayLabel(last.at, nowTs) + ") kita bahas:");
+          prev2.forEach(function (x) { lines.push(trLine(x, nowTs, false)); });
+        } else lines.push("Sebelum ini " + noRecord.toLowerCase() + ". " + scope);
+      }
+      if (wantAfter) lines.push("Sesudahnya belum ada — ini percakapan paling baru. Tanyakan lagi nanti, aku catat jamnya.");
+      return { answer: lines.join("\n"), engine: "TL_NOW_ANCHOR" };
+    }
+
+    // B. pertanyaan "jam berapa/kapan kita bahas X"
+    if (hasKw && (q.whenQ || matches.length)) {
+      if (!matches.length) {
+        return { answer: noRecord + " yang menyebut " + q.kw.concat(q.topics).slice(0, 3).join(", ") + (scopeTxt ? " pada " + scopeTxt : "") + ". " + scope, engine: "TL_NOMATCH" };
+      }
+      const top = matches.sort(function (a, b) { return b.x.at - a.x.at; }).slice(0, 4).map(function (r) { return r.x; }).reverse();
+      const lines = [top.length === 1 ? "Itu kita bahas pada:" : "Soal itu kita bahas pada:"];
+      top.forEach(function (x) { lines.push(trLine(x, nowTs, true)); });
+      return { answer: lines.join("\n"), engine: "TL_WHEN" };
+    }
+
+    // C. pertama / terakhir
+    if (q.first || q.last) {
+      if (!pool.length) return { answer: noRecord + (scopeTxt ? " untuk " + scopeTxt : "") + ". " + scope, engine: "TL_EMPTY" };
+      const x = q.first ? pool[0] : pool[pool.length - 1];
+      return { answer: (q.first ? "Yang paling awal" : "Yang terakhir") + (scopeTxt ? " (" + scopeTxt + ")" : "") + ", jam " + clockOf(x.at) + " (" + dayLabel(x.at, nowTs) + "):\n" + trLine(x, nowTs, false), engine: "TL_FIRST_LAST" };
+    }
+
+    // D. daftar default ("tadi bahas apa", "kemarin bahas apa saja")
+    if (!pool.length) {
+      if (q.dayStart == null && !q.part && turnLog.length === 0) return { answer: noRecord + " sebelumnya. Kita baru mulai ngobrol — tanya apa saja, nanti aku catat jam dan topiknya. " + scope, engine: "TL_EMPTY" };
+      return { answer: noRecord + (scopeTxt ? " untuk " + scopeTxt : "") + ". " + scope, engine: "TL_EMPTY" };
+    }
+    const list = pool.slice(-6);
+    const head = scopeTxt ? (scopeTxt === "hari ini" ? "Hari ini kita bahas:" : "Pada " + scopeTxt + " kita bahas:") : (dayStart(list[list.length - 1].at) === dayStart(nowTs) ? "Tadi kita bahas:" : "Terakhir kita bahas (" + dayLabel(list[list.length - 1].at, nowTs) + "):");
+    const lines = [head];
+    list.forEach(function (x) { lines.push(trLine(x, nowTs, false)); });
+    if (pool.length > list.length) lines.push("(+" + (pool.length - list.length) + " pembahasan lebih awal)");
+    return { answer: lines.join("\n"), engine: "TL_LIST" };
+  }
+
+  /* Pertanyaan majemuk: "tadi bahas apa, kemarin tanggal berapa, besok tanggal berapa" → dijawab satu per satu. */
+  function splitCompound(text) {
+    let s = String(text || "").trim();
+    let parts = s.split(/[?;!]+|,\s+|\s+(?:terus|lalu|kemudian)\s+/i).map(function (x) { return x.trim(); }).filter(Boolean);
+    const out = [];
+    parts.forEach(function (p) {
+      const cut = p.replace(/\b(apa|berapa|siapa|kapan)\s+(?=(?:kemarin|besok|lusa|tadi|sebelum|sesudah|setelah|coba|bahas|pertama|terakhir)\b)/gi, "$1|");
+      cut.split("|").forEach(function (x) { x = x.trim(); if (x) out.push(x); });
+    });
+    return out;
+  }
+  function temporalCompoundAnswer(text) {
+    const parts = splitCompound(text);
+    if (parts.length < 2 || parts.length > 6) return null;
+    const answers = [];
+    let hasRecall = false;
+    const otak = global.CGOOtak;
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      if (p.split(/\s+/).length < 2) return null;
+      let a = null;
+      const rec = temporalRecallAnswer(p);
+      if (rec && rec.answer) { a = rec.answer; hasRecall = true; }
+      else if (otak && typeof otak.think === "function") {
+        const th = otak.think(p, {});
+        if (th && th.handled && th.text && /^(CGO_(DATE|TIME|PERCENT|PANGKAT|AKAR|UNIT|EJA)|CIKUR_(ANGKA|HITUNG|WAKTU|SATUAN|UANG|EJA))/i.test(String(th.engine || ""))) a = String(th.text).replace(/^(Hmm|Oke|Baik|Siap)[,!.]?\s+/i, "").trim();
+      }
+      if (!a) return null;
+      answers.push(a);
+    }
+    const lines = [];
+    answers.forEach(function (a, i) {
+      const ls = a.split("\n");
+      lines.push((i + 1) + ". " + ls[0]);
+      ls.slice(1).forEach(function (l) { lines.push("   " + l); });
+    });
+    return { answer: lines.join("\n"), engine: "TL_COMPOUND", hasRecall: hasRecall };
+  }
+
   /** Lanjutan kontekstual: kenapa / dalami / yang tadi / terus */
   function isFollowUpQuery(text) {
     const s = String(text || "").trim();
@@ -1309,6 +1611,35 @@
     const CG = global.CIKURGO;
     const Inst = global.CGOInstruction;
     const live = ctx.liveState || global.BCGO_STATE || {};
+
+    // ─── A0.4 Memori waktu ("tadi/kemarin/sebelum/sesudah bahas apa, jam berapa") + pertanyaan majemuk ───
+    // Dijalankan SEBELUM skill jam/tanggal agar "sebelum ini bahas apa jam berapa" tidak dijawab jam sekarang.
+    try {
+      if (!answer) {
+        let tm = null, isCompound = false;
+        try { tm = temporalCompoundAnswer(t); isCompound = !!tm; } catch (_) { tm = null; }
+        if (!tm) { try { tm = temporalRecallAnswer(t); } catch (_) { tm = null; } }
+        if (tm && tm.answer) {
+          answer = String(tm.answer);
+          step("MEMORI_WAKTU", true, tm.engine);
+          if (isCompound && !tm.hasRecall) { try { remember(t, answer, ["MEMORI_WAKTU"]); } catch (_) {} }
+          state.lastTrace = "TL:" + tm.engine;
+          notify();
+          return {
+            ok: true,
+            answer: answer,
+            lang: "id",
+            trace: trace,
+            abc: null,
+            intent: { topic: "MEMORI_WAKTU", mode: "TEMPORAL", engine: tm.engine },
+            sources: ["MEMORI_WAKTU"],
+            modulesUsed: ["MEMORI_WAKTU:" + tm.engine]
+          };
+        }
+      }
+    } catch (e) {
+      step("MEMORI_WAKTU", false, String((e && e.message) || e));
+    }
 
     // ─── A0.5 Otak Orchestrator — HASIL skill (angka/eja/jam/persen), bukan meta sistem ───
     // Dipanggil SEBELUM CIKUR.urai full-text agar 1.000.000 tidak diurai sebagai desimal/typo.
@@ -2918,7 +3249,13 @@
     setTimeout(wlSync, 300);
   }
 
-  function setWakeEnabled(on) {
+  function setWakeEnabled(on, opts) {
+    // v1.15.0 ONE-DOOR: standby kontinu (SpeechRecognition terus-menerus) HANYA boleh dinyalakan
+    // oleh toggle eksplisit pengguna (opts.explicit === true). Boot/skrip lain tidak bisa menyalakan mic sendiri.
+    if (on && !(opts && opts.explicit === true)) {
+      emitWake("cgo:wake-blocked", { reason: "one-door", enabled: !!state.wakeEnabled });
+      return !!state.wakeEnabled;
+    }
     state.wakeEnabled = !!on;
     if (on) { WL.denied = false; WL.deniedNotified = false; WL.backoff = 700; }
     emitWake(on ? "cgo:wake-enabled" : "cgo:wake-disabled", { enabled: !!on });
@@ -3008,6 +3345,7 @@
   const API = Object.freeze({
     version: VERSION,
     status, snapshot, ask, recall, recallByTopic,
+    timeline: tlRecent, temporalRecall: temporalRecallAnswer,
     subscribe(fn) { if (typeof fn !== "function") return () => {}; listeners.add(fn); return () => listeners.delete(fn); },
     refresh: notify,
     // Wake word — BCGO FASE 5 membaca ini
