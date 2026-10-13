@@ -9,9 +9,9 @@ import * as ActiveInvestigation from "./cgo-ai-investigation-engine.js";
 import * as Cognition from "./cgo-ai-cognition.js";
 import * as Logic from "./cgo-ai-logic.js";
 import * as Memory from "./cgo-ai-memory.js";
-import { createRuntime } from "./cgo-ai-runtime-adapter.js";
+import { createRuntime } from "./cgo-ai-runtime-adapter.js?v=1.11.2-RUNTIME-STATUS-ZR";
 
-const VERSION = "V5.6.0-MASA-DEPAN";
+const VERSION = "V5.6.1-RUNTIME-STATUS-ZR";
 const INTERNAL_CGO_POLICY = Object.freeze({ version:"CGO-INTERNAL-APPLICATION-1", allowAutomaticExecution:false });
 
 const runtime = createRuntime({});

@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.14.5-SYSTEM-ACCESS-FIX";
+  const VERSION = "1.14.7-SYNC-USER-ZR";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -920,6 +920,16 @@
   function softSystemFallback(text) {
     try {
       var s = String(text || "");
+      if (/teks biasa tanpa pola|tidak ada pola khusus|input kosong|teks campuran/i.test(s)) {
+        return "Aku belum nemu jawaban yang pas. Coba tanya lebih spesifik — status, hitung, eja, apa itu BCGO, atau jam berapa.";
+      }
+      if (/^\s*Parsed:\s*/i.test(s) || /Rincian urai:\s*Token/i.test(s) || /Dari pengurai:/i.test(s)) {
+        return "Pertanyaanmu sudah masuk, tapi aku belum bisa menguraikannya dengan baik. Coba: status sistem, hitung, eja, atau «apa itu BCGO».";
+      }
+      if (/I read your question at cycle|Saya membaca pertanyaan/i.test(s)) {
+        return "Aku belum punya jawaban pasti untuk itu. Mau coba status sistem, hitung, eja, atau tanya tentang BCGO/CIKUR GO?";
+      }
+      
       if (/siklus\s*\d|mode siaga|Tidak ada anomali aktif/i.test(s)) {
         return "Hmm, topik itu di luar jangkauan data sistem yang aku pegang sekarang. Coba tanya hitung, eja, jam, status, atau radar ya.";
       }
@@ -1863,7 +1873,7 @@
       }
       return lines.join(" ");
     }
-    const freeSystemAsk = /\b(status|siklus|cycle|scanner|source\s*scan|telemetry|anomali|saraf|radar)\b/i.test(t)
+    const freeSystemAsk = /\b(status|siklus|cycle|scanner|source\s*scan|telemetry|anomali|saraf|radar|ringkas\s*(kondisi|sistem)|kondisi\s*sistem|berapa\s*organ|is\s*(everything|it)\s*(ok|okay|safe)|apakah\s*(aman|sehat))\b/i.test(t)
       && !/\b(customer|pelanggan|mitra|partner|pesanan|order|omzet|tarik|export|csv|unduh)\b/i.test(t);
     if (!answer && freeSystemAsk) {
       try {
@@ -2941,7 +2951,9 @@
   function normalizeWakeText(text) {
     return String(text || "")
       .toLowerCase()
-      .replace(/[-_.]/g, " ")
+      // Treat transcript punctuation as word boundaries. This keeps "Halo CGO, ..."
+      // detectable while normalizing spoken spellings such as "C.G.O" to "c g o".
+      .replace(/[.,!?;:()[\]{}"'`~@#$%^&*+=|\\/<>…，。！？、；：_-]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
   }

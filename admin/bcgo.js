@@ -1200,7 +1200,9 @@ function answerQuestion(question) {
     sourceScanInFlight = true;
     if (sourceScanController) { try { sourceScanController.abort(); } catch (_) {} }
     sourceScanController = new AbortController();
-    const scanSignal = sourceScanController.signal;
+    const scanController = sourceScanController;
+    const scanSignal = scanController.signal;
+    try {
     // Simpan snapshot scan sebelumnya sebelum state.sourceScan diganti.
     // Ini adalah sumber kebenaran untuk deteksi DIROMBAK pada scan berikutnya.
     const previousScan = state.sourceScan && typeof state.sourceScan === "object"
@@ -1466,8 +1468,25 @@ function answerQuestion(question) {
     state.fileNerves = nerves;
     state.sourceScan = scan;
     publishToUI(safeClone(state));
-    sourceScanInFlight = false;
-    sourceScanController = null;
+    } catch (error) {
+      // Jangan biarkan exception tak terduga mengunci scanner selamanya.
+      // Abort memang jalur pembatalan normal dan tidak boleh ditampilkan sebagai error.
+      if (error?.name !== "AbortError" && canRun()) {
+        const failedScan = state.sourceScan && typeof state.sourceScan === "object"
+          ? state.sourceScan
+          : makeInitialSourceScan();
+        failedScan.status = "DEGRADED";
+        failedScan.phase = "ERROR";
+        failedScan.currentFile = null;
+        failedScan.message = `Source scan berhenti karena error internal: ${String(error?.message || error).slice(0, 180)}`;
+        state.sourceScan = failedScan;
+        try { publishToUI(safeClone(state)); } catch (_) {}
+        try { recordEvent("SOURCE_SCAN_ERROR", failedScan.message, "SYS_SOURCE_SCANNER"); } catch (_) {}
+      }
+    } finally {
+      sourceScanInFlight = false;
+      if (sourceScanController === scanController) sourceScanController = null;
+    }
   }
 
   function refreshState() {

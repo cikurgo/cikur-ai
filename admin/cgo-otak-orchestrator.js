@@ -6,7 +6,7 @@
  */
 (function (global) {
   "use strict";
-  var VERSION = "1.5.3-WARM-ZR-MATH-SAFE";
+  var VERSION = "1.6.1-SMALLTALK-REASON-ZR";
   var memoryStore = null;
 
   function g() {
@@ -753,7 +753,15 @@
         return pack("Aku CGO di CIKUR GO. Aku bantu jawab dari bukti — tanpa ngarang.", "IDENTITY");
       if (/\b(kamu bisa apa|bisa ngapain|what can you)\b/i.test(text))
         return pack("Aku bisa hitung & eja multi-bahasa, jam/tanggal, emoji/warna, persen/pangkat, konversi satuan, status sistem, dan cek file berbasis bukti.", "CAPABILITY");
-      if (/^(speak\s+english|bicara\s+inggris|pakai\s+bahasa\s+inggris|in\s+english\s*please)\b/i.test(text))
+      if (/\b(apa\s*(itu\s*)?bcgo|what\s*is\s*bcgo|jelaskan\s*(apa\s*itu\s*)?bcgo|about\s*bcgo)\b/i.test(text))
+        return pack("BCGO adalah monitor saraf internal CIKUR GO: memantau organ, telemetry, scanner source, radar agent, dan siklus diagnosis berbasis bukti — tanpa AI eksternal.", "ABOUT_BCGO");
+    if (/\b(apa\s*(itu\s*)?cikur(\s*go)?|what\s*is\s*cikur|ceritakan\s*(tentang\s*)?cikur|about\s*cikur|tell\s*me\s*about\s*cikur)\b/i.test(text))
+        return pack("CIKUR GO adalah ekosistem operasional (customer, mitra, driver, resto) dengan otak internal CGO: penalaran lokal, ejaan/angka multi-bahasa, dan monitor BCGO.", "ABOUT_CIKUR");
+    if (/\b(siapa\s*(yang\s*)?(membuat|bikin|ciptakan)\w*|who\s*(made|built|created)\s*(you|this))\b/i.test(text))
+        return pack("Aku bagian dari ekosistem CIKUR GO. Dibangun untuk mendampingi operasional internal — bukan chatbot umum.", "ORIGIN");
+    if (/\b(apakah\s*(aman|sehat|oke)|is\s*(everything|it|all)\s*(ok|okay|safe|fine)|all\s*good)\b/i.test(text))
+        return pack("Dari sisi monitor: aku pantau organ, scanner, dan telemetry. Tanya «status» untuk ringkasan live.", "SAFETY");
+    if (/^(speak\s+english|bicara\s+inggris|pakai\s+bahasa\s+inggris|in\s+english\s*please)\b/i.test(text))
         return pack("OK — I'll answer in English when you ask. Try: spell hello, what time is it, or calculate 12 x 8.", "LANG_EN");
       if (/^(speak\s+indonesia|bicara\s+indonesia|pakai\s+bahasa\s+indonesia)\b/i.test(text))
         return pack("Baik — saya jawab dalam bahasa Indonesia. Coba: eja hello, jam berapa, atau hitung 12 x 8.", "LANG_ID");
@@ -791,6 +799,8 @@
     // jangan nalar-meta untuk soal hitung/angka ("Teks didominasi angka")
     if (/\d/.test(body) && /[x×✕*÷/+\-]|berapa|hitung|pangkat|persen|%/i.test(body)) return null;
     if (/^[\d.,\sx×✕*÷/+\-?]+$/i.test(body)) return null;
+    // jangan nalar untuk sapaan / sosial
+    if (/^(apa\s*kabar|how\s*are\s*you|halo|hai|hello|hi|makasih|thanks|siapa|who\s*are|what\s*can|bisa\s*bantu)/i.test(body)) return null;
 
     var wantsExplain = /^(kenapa|mengapa|jelaskan|terangkan|bagaimana|kok)\b/i.test(body)
       || /\b(artinya apa|maksudnya apa)\b/i.test(body);
@@ -820,7 +830,8 @@
         var n = api.nalar(body, {});
         if (n && (n.kesimpulan || n.hasil)) {
           var kt = String(n.kesimpulan || n.hasil || "").trim();
-          if (kt && kt.length < 320 && !/^Input kosong/i.test(kt) && !/^Teks campuran/i.test(kt)) {
+          var garbage = /teks biasa tanpa pola|tidak ada pola|input kosong|teks campuran|^Teks /i.test(kt);
+          if (kt && kt.length < 320 && !garbage) {
             return { text: kt, engine: "CIKUR_NALAR", tags: ["reason", "nalar"] };
           }
         }
@@ -864,11 +875,76 @@
    * think(question, context?) → { handled, text, response, engine, version, vocab, tags }
    * context.liveState opsional (BCGO) — tidak wajib.
    */
+  // Percakapan dasar harus dikenali sebelum parser skill/klasifikasi teknis.
+  // Normalisasi ini hanya dipakai untuk pencocokan; teks asli tetap diteruskan ke memori.
+  function basicConversationAnswer(raw) {
+    var original = String(raw || "").trim();
+    if (!original) return null;
+    var normalized = original
+      .normalize("NFKC")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .replace(/[!?.,。！？，]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+    var compact = normalized.replace(/(.)\1{2,}/g, "$1");
+    var en = /\b(hello|hi|hey|how are you|how r u|what.s up|good morning|good afternoon|good evening|lol|lmao|haha|hehe|thanks|thank you|where have you been|long time no see|can you code|can you write code)\b/i.test(compact)
+      || /^(hello|hi|hey|how are you|what.s up|lol|lmao|haha|hehe|thanks|thank you|where have you been|long time no see|can you code|can you write code)/i.test(compact);
+    var lang = en ? "en" : "id";
+
+    if (/^(halo|hai|hallo|helo|hello|hi|hey|hei|pagi|siang|sore|malam|selamat (pagi|siang|sore|malam))$/.test(compact)) {
+      return { text: lang === "en"
+        ? "Heyyy! 😊 I’m here. What’s on your mind?"
+        : "Haiiii! 😁 Aku di sini. Ada cerita apa nih?",
+        engine: "CGO_SMALLTALK", tags: ["conversation", "greeting"] };
+    }
+    if (/^(how are you|how r u|how are you doing|what.s up|how have you been)$/.test(compact)) {
+      return { text: "I’m here and ready to help 😊 How are you doing?", engine: "CGO_SMALLTALK", tags: ["conversation", "check-in"] };
+    }
+    if (/^(apa kabar|gimana kabar|bagaimana kabar|kabar kamu|kamu apa kabar)$/.test(compact)) {
+      return { text: "Aku baik-baik saja dan siap nemenin ngobrol 😊 Kamu sendiri gimana kabarnya?", engine: "CGO_SMALLTALK", tags: ["conversation", "check-in"] };
+    }
+    if (/^((?:wk){2,}|(?:ha){2,}h?|(?:he){2,}h?|(?:hi){2,}h?|lol|lmao|ketawa|tertawa|coba ketawa|laugh|make me laugh)(?:\s*[😂🤣]+)?$/.test(compact) || /^[😂🤣]+$/.test(compact)) {
+      return { text: /\b(lol|lmao|laugh|make me laugh)\b/.test(compact)
+        ? "Haha! 😂 There, a little laugh for you. What made you laugh?"
+        : "WKWKWK 😂😂 ikut ketawa aku! Ada apa nih, lucu banget?",
+        engine: "CGO_SMALLTALK", tags: ["conversation", "laughter"] };
+    }
+    if (/^(kemana aja+|ke mana aja+|lama gak ketemu|lama tak jumpa|long time no see)$/.test(compact)) {
+      return { text: lang === "en"
+        ? "I’m here now 😄 Good to see you again! What have you been up to?"
+        : "AKU DI SINIII 😆 Hehehe, senang kamu balik lagi! Gimana kabarmu?",
+        engine: "CGO_SMALLTALK", tags: ["conversation", "reconnection"] };
+    }
+    if (/^(makasih|terima kasih|thanks|thank you|thx)$/.test(compact)) {
+      return { text: lang === "en" ? "You’re welcome! 😊" : "Sama-samaaa! 😊",
+        engine: "CGO_SMALLTALK", tags: ["conversation", "gratitude"] };
+    }
+    if (/^(bye|goodbye|dadah|sampai jumpa|selamat tinggal)$/.test(compact)) {
+      return { text: lang === "en" ? "See you later! Take care 😊" : "Dadahhh! Sampai ngobrol lagi yaa 😊",
+        engine: "CGO_SMALLTALK", tags: ["conversation", "farewell"] };
+    }
+    if (/^(kamu bisa coding gak|kamu bisa coding|bisa coding gak|can you code|can you write code)$/.test(compact)) {
+      return { text: lang === "en"
+        ? "Yes—I can help write, inspect, debug, and test code. Share the original files and I’ll make focused changes, then report what was actually tested."
+        : "Bisa dong 😁 Aku bisa bantu menulis, memeriksa, memperbaiki, dan menguji kode. Kirim file aslinya; aku akan mengubah bagian yang perlu saja dan menjelaskan hasil tes yang benar-benar dijalankan.",
+        engine: "CGO_SMALLTALK", tags: ["conversation", "capability"] };
+    }
+    return null;
+  }
+
   function think(question, context) {
     context = context || {};
     var raw = typeof question === "string" ? question : String(question && (question.text || question.question) || "");
     raw = String(raw || "").trim();
     if (!raw) return { handled: false, text: null, reason: "EMPTY" };
+
+    var basic = basicConversationAnswer(raw);
+    if (basic && basic.text) {
+      var basicText = polish(basic.text, raw);
+      rememberTurn(raw, basicText, basic.tags);
+      return { handled: true, text: basicText, response: basicText, engine: basic.engine, version: VERSION, tags: basic.tags };
+    }
 
     var vocab = parseVocab(raw);
 

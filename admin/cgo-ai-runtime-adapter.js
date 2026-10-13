@@ -11,7 +11,7 @@ import * as Cognition from "./cgo-ai-cognition.js?v=20260907-1315-instruction1";
 import * as Guardian from "./cgo-ai-guardian.js?v=20260907-1315-instruction1";
 import * as Logic from "./cgo-ai-logic.js?v=20260907-1315-instruction1";
 
-const VERSION="1.11.1-otak-wire";
+const VERSION="1.11.2-RUNTIME-STATUS-ZR";
 
 export function createDeterministicExecutor(target={}) {
   let bound = target && typeof target.read === "function" && typeof target.write === "function" ? target : null;
@@ -57,6 +57,7 @@ export function createDeterministicExecutor(target={}) {
   return {
     version:"1.1.0",
     bind,
+    isBound(){ return !!bound && typeof bound.read === "function" && typeof bound.write === "function" && typeof bound.execute === "function"; },
     async verifyCurrent(file, expectedFingerprint){
       if(!bound) throw new Error("EXECUTION_TARGET_NOT_BOUND");
       if(!expectedFingerprint) throw new Error("VALIDATION_EXPECTED_FINGERPRINT_REQUIRED");
@@ -250,7 +251,7 @@ export function createRuntime(options={}) {
       if(!executor || typeof executor.bind!=="function") throw new Error("BUILTIN_EXECUTOR_NOT_AVAILABLE");
       return executor.bind(target);
     },
-    hasExecutionHand(){ return !!executor && typeof executor.execute==="function"; },
+    hasExecutionHand(){ return !!executor && typeof executor.execute==="function" && (typeof executor.isBound!=="function" || executor.isBound()===true); },
 
     detect(input){
       input=input||{};

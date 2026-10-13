@@ -15,6 +15,9 @@
   }
 }(typeof self !== "undefined" ? self : this, function () {
 "use strict";
+// Browser-safe shim: embedded source assigns module.exports inside this factory.
+// Keep this local so it does not replace the outer UMD/CommonJS export.
+var module = { exports: {} };
 /**
  * Custom error class for CIKUR GO with typed codes.
  * @extends Error
