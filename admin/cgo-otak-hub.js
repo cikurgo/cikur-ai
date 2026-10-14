@@ -21,7 +21,7 @@
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.15.0-TEMPORAL-ONEDOOR-ZR";
+  const VERSION = "1.15.1-TEMPORAL-ONEDOOR-ZR";
   const MEM_MAX = 20;
   const STAMP_MS = 1500;
 
@@ -1014,7 +1014,8 @@
         : "BCGO itu konsol saraf & operasional live (siklus, scan, organ). CGO adalah lapisan penalaran yang membaca state itu, menjelaskan, dan membantu memutuskan — satu sistem, dua peran.";
     }
     // Bingung mulai dari mana / prioritas hari ini
-    if (/\b(bingung|mulai\s+dari\s+mana|prioritas|hari\s+ini\s+mau|what\s+should\s+i|where\s+to\s+start)\b/i.test(t)) {
+    if (/\b(bingung|mulai\s+dari\s+mana|prioritas|hari\s+ini\s+mau|what\s+should\s+i|where\s+to\s+start)\b/i.test(t)
+        && (/\b(mulai\s+dari\s+mana|prioritas|hari\s+ini\s+mau|what\s+should\s+i|where\s+to\s+start)\b/i.test(t) || FR_OPS_CTX.test(t))) {
       const snap = (function () {
         try { return global.CGO_OPS_SNAPSHOT || null; } catch (_) { return null; }
       })();
@@ -1037,7 +1038,8 @@
       return lines.join(" ");
     }
     // Lambat / performa sistem
-    if (/\b(lambat|lemot|slow|performa|performance|hang|stuck|macet)\b/i.test(t)) {
+    if (/\b(lambat|lemot|slow|performa|performance|hang|stuck|macet)\b/i.test(t)
+        && (FR_OPS_CTX.test(t) || /\b(aplikasi|halaman|web|situs|otak|chat)\b/i.test(t))) {
       const scan = (live && live.sourceScan && live.sourceScan.status) || "—";
       const cycle = live && live.cycle != null ? live.cycle : "—";
       const step = (live && live.step) || "—";
@@ -1047,7 +1049,8 @@
       return "Dari saraf live: tahap " + step + ", siklus " + cycle + ", scan sumber " + scan + ". Jika scan CLEAN dan siklus jalan, bottleneck sering di beban data/UI — bukan otak mati. Cek Risk Radar untuk error actionable dan kesehatan listener data-cgo.";
     }
     // Ide perbaikan
-    if (/\b(ide|gagasan|usul|perbaiki|perbaikan|improve|suggestion|saran\s+perbaikan)\b/i.test(t)) {
+    if (/\b(ide|gagasan|usul|perbaiki|perbaikan|improve|suggestion|saran\s+perbaikan)\b/i.test(t)
+        && (FR_OPS_CTX.test(t) || /\b(aplikasi|halaman|web|situs|otak|chat|cgo)\b/i.test(t))) {
       const snap = (function () {
         try { return global.CGO_OPS_SNAPSHOT || null; } catch (_) { return null; }
       })();
@@ -1081,7 +1084,7 @@
       return "I can brief ops numbers, system status, export CSV, calculate, spell/parse mixed text, and reason about priorities — from live evidence, not invention.";
     }
     // Generic free question with access: use nalar + live + soft guidance (not raw template labels)
-    if (t.length >= 8) {
+    if (t.length >= 8 && FR_OPS_CTX.test(t)) {
       const lines = [];
       if (en) {
         lines.push("Got it — I'm listening.");
@@ -1112,6 +1115,185 @@
       return lines.join(" ");
     }
     return null;
+  }
+
+  /* ═══════════ NALAR BEBAS v1.15.1 · pengetahuan bawaan + jawaban jujur terarah ═══════════
+   * Aditif. Berjalan setelah semua lapisan spesifik (akses, skill, ops, briefing, tarik data) dan
+   * SEBELUM template umum. Hanya memakai pengetahuan yang tertulis di bawah ini — tanpa jaringan, tanpa AI luar.
+   * Bila tidak punya jawabannya, Otak mengatakan apa yang dipahami dan apa yang kurang (bukan menu generik). */
+  const FR_OPS_CTX = /\b(bcgo|sistem|scan|scanner|siklus|radar|organ|anomali|telemetry|mesin\s*abc|saraf|customer|pelanggan|mitra|pesanan|order|omzet|briefing|tarik|csv|data|laporan|status|file|kode\s*akses|bug|error|log|agent|dashboard)\b/i;
+
+  function frNorm(text) {
+    return " " + String(text || "").toLowerCase()
+      .replace(/[?!,;()"“”]/g, " ")
+      .replace(/(?<!\d)[.:]|[.:](?!\d)/g, " ")
+      .replace(/\bgimana\b|\bgmn\b|\bbgmn\b|\bbagemana\b/g, "bagaimana")
+      .replace(/\bknp\b|\bkok bisa\b/g, "kenapa")
+      .replace(/\bapaan\b|\bapakah\b/g, "apa")
+      .replace(/\bkpn\b/g, "kapan")
+      .replace(/\bdmn\b/g, "dimana")
+      .replace(/\bga\b|\bgak\b|\bnggak\b|\bengga\b|\btdk\b/g, "tidak")
+      .replace(/\byg\b/g, "yang").replace(/\butk\b/g, "untuk").replace(/\bdgn\b/g, "dengan")
+      .replace(/\bbrp\b/g, "berapa").replace(/\bmksd\b/g, "maksud")
+      .replace(/\s+/g, " ") + " ";
+  }
+
+  const FR_CAPITALS = {
+    jepang: "Tokyo", prancis: "Paris", perancis: "Paris", inggris: "London", "korea selatan": "Seoul", korea: "Seoul",
+    malaysia: "Kuala Lumpur", singapura: "Singapura", thailand: "Bangkok", australia: "Canberra", "amerika serikat": "Washington, D.C.",
+    amerika: "Washington, D.C.", jerman: "Berlin", italia: "Roma", china: "Beijing", tiongkok: "Beijing", india: "New Delhi",
+    "arab saudi": "Riyadh", mesir: "Kairo", brasil: "Brasília", kanada: "Ottawa", rusia: "Moskow", spanyol: "Madrid", belanda: "Amsterdam",
+    turki: "Ankara", filipina: "Manila", vietnam: "Hanoi", "selandia baru": "Wellington", argentina: "Buenos Aires", meksiko: "Meksiko City"
+  };
+  const FR_TRANS = {
+    "selamat pagi": "good morning", "selamat siang": "good afternoon", "selamat sore": "good evening", "selamat malam": "good night",
+    "terima kasih": "thank you", "sama sama": "you're welcome", "apa kabar": "how are you", "maaf": "sorry", "tolong": "please",
+    "sampai jumpa": "see you", "selamat tinggal": "goodbye", "selamat datang": "welcome", "selamat ulang tahun": "happy birthday",
+    "permisi": "excuse me", "ya": "yes", "tidak": "no", "saya lapar": "I am hungry", "saya haus": "I am thirsty",
+    "aku cinta indonesia": "I love Indonesia", "nama saya": "my name is", "berapa harganya": "how much is it", "di mana toilet": "where is the toilet"
+  };
+  const FR_JOKES = [
+    "Kenapa komputer nggak pernah lapar? Karena selalu ada byte-nya.",
+    "Kenapa programmer suka gelap? Karena light mode bikin bug kelihatan.",
+    "Ojek yang paling sabar itu yang mana? Yang tetap senyum waktu penumpangnya bilang “lurus aja, Bang” lalu belok.",
+    "Kenapa jam dinding nggak pernah stres? Karena hidupnya selalu berputar, nggak pernah mundur.",
+    "Apa bedanya kamu sama baterai 1%? Baterai 1% masih dicariin charger."
+  ];
+  let frJokeIdx = -1;
+
+  function frAns(id, text) { return { id: id, answer: text }; }
+
+  function frKB(text, lang) {
+    const raw = String(text || "").trim();
+    if (!raw || raw.length > 220) return null;
+    const b = frNorm(raw);
+    let m;
+
+    // ── Domain CIKUR GO (hanya fakta yang sudah diketahui; tanpa angka karangan) ──
+    if (/ (apa itu|apa sih|jelaskan|ceritakan|kenalkan)( tentang)? (aplikasi )?(cikur ?go|cikurgo)( itu)?( apa)? | (cikur ?go|cikurgo) itu apa /.test(b) && !/\b(cgo|bcgo)\b/.test(b)) {
+      return frAns("domain-cikurgo", "CIKUR GO adalah aplikasi multi-layanan: RIDE (ojek motor), FOOD, dan RESTO, ditambah jalur Mitra untuk driver, resto, dan agen, dengan pembayaran lewat CikurPay. Tagline-nya “Pasti Mudah, Pasti Nyaman”, dan tujuannya membuka peluang kerja lewat kemitraan.");
+    }
+    if (/ apa itu (ojek online|ojol|ojek daring|ojek aplikasi) | (ojek online|ojol) itu apa /.test(b)) {
+      return frAns("def-ojol", "Ojek online (ojol) adalah layanan antar-jemput penumpang atau barang dengan sepeda motor yang dipesan lewat aplikasi: pelanggan memesan, aplikasi mencarikan driver terdekat, dan tarif dihitung otomatis. Di CIKUR GO layanan ini bernama CIKUR GO RIDE, khusus motor.");
+    }
+    if (/ (beda|bedanya|perbedaan) (antara )?(driver|pengemudi|mitra).*(mitra|driver|pengemudi) /.test(b)) {
+      return frAns("beda-driver-mitra", "Mitra adalah payung besarnya: orang atau usaha yang bekerja sama dengan CIKUR GO. Driver adalah salah satu jenis mitra (yang mengantar pesanan RIDE/FOOD); jenis lainnya mitra resto dan agen. Jadi semua driver adalah mitra, tapi tidak semua mitra adalah driver.");
+    }
+    if (/ (cara|bagaimana|langkah|syarat).*(daftar|jadi|gabung|menjadi|mendaftar).*(mitra|driver|resto|agen) /.test(b) && !/ (berapa|jumlah) /.test(b)) {
+      return frAns("daftar-mitra", "Umumnya alurnya begini: (1) buat atau masuk ke akun CIKUR GO, (2) buka menu Mitra, (3) pilih jenis kemitraan — driver, resto, atau agen, (4) lengkapi data dan verifikasi (email, HP, identitas, PIN), (5) kirim pengajuan lalu tunggu persetujuan admin (status pending sampai disetujui). Syarat rinci tiap jenis bisa berbeda.");
+    }
+    if (/ (komisi|potongan|bagi hasil).*(apa|bagaimana|berapa|gimana|sistem)| (apa|bagaimana|berapa).*(komisi|bagi hasil) /.test(b)) {
+      return frAns("komisi", "Pelanggan melihat harga penuh saja. Di halaman driver, pembagian komisi aplikator dan pendapatan driver langsung ditampilkan per order. Persentase pastinya ada di konfigurasi harga CIKUR GO, bukan di ingatan Otak. Kalau kamu sebut harganya dan persentasenya, aku hitungkan.");
+    }
+    if ((m = b.match(/ (?:berapa|brp).*(?:ongkos|tarif|biaya).*?(\d+(?:[.,]\d+)?) ?km | (?:ongkos|tarif|biaya).*?(\d+(?:[.,]\d+)?) ?km /))) {
+      const km = m[1] || m[2];
+      return frAns("tarif-ride", "Tarif RIDE dihitung dari konfigurasi harga CIKUR GO (tarif dasar + tarif per km), dan angkanya tidak tersimpan di Otak ini, jadi aku tidak mau menebak. Kalau kamu sebut tarif dasar dan tarif per km, aku hitungkan untuk " + km + " km.");
+    }
+    if (/ (layanan|fitur).*(apa saja|apa aja|ada apa|tersedia) | cikur ?go (bisa|punya) apa /.test(b)) {
+      return frAns("layanan", "CIKUR GO punya: RIDE (ojek motor), FOOD (pesan makanan), RESTO (untuk mitra resto), jalur Mitra (driver, resto, agen), pembayaran CikurPay, dan Chat CGO sebagai asisten.");
+    }
+
+    if (/ (cara|bagaimana|tips|supaya|agar).*(ingkat|naik|nambah|tambah|banyak|besar|maksimal|optimal).*(pendapatan|penghasilan|income|orderan|order).*driver | (tips|cara).*driver.*(pendapatan|penghasilan|orderan) /.test(b)) {
+      return frAns("tips-driver", "Saran umum (bukan angka resmi CIKUR GO): aktif di jam sibuk (berangkat kerja, makan siang, pulang kerja), standby di area ramai seperti kampus, pasar, dan kantor, jaga rating dan tingkat terima order, layani dengan ramah, serta rawat motor dan perlengkapan. Order yang dekat dan berurutan biasanya lebih efisien daripada satu order jauh.");
+    }
+
+    if (/ (beda|bedanya|perbedaan).*(cgo|bcgo).*(cgo|bcgo) /.test(b)) {
+      return frAns("beda-cgo-bcgo", "BCGO itu konsol saraf dan operasional live (siklus, scan, organ). CGO adalah lapisan penalaran yang membaca state itu, menjelaskan, dan membantu memutuskan — satu sistem, dua peran.");
+    }
+
+    // ── Fakta umum yang pasti ──
+    if (/ siapa presiden (indonesia )?(yang )?pertama /.test(b) || / presiden pertama (indonesia|ri) /.test(b)) {
+      return frAns("presiden-1", "Presiden pertama Indonesia adalah Soekarno, dengan Mohammad Hatta sebagai wakil presiden. Proklamasi kemerdekaan dibacakan 17 Agustus 1945.");
+    }
+    if ((m = b.match(/ (?:apa|sebutkan)? ?(?:ibu ?kota|ibukota) (?:dari |negara )?(.+?) /))) {
+      const c = m[1].trim().replace(/^negara /, "");
+      if (/^indonesia$/.test(c)) return frAns("ibukota-id", "Ibu kota Indonesia adalah Jakarta. Pemindahan ke Nusantara (IKN) sedang berjalan bertahap, jadi untuk status resmi terbarunya sebaiknya dicek ke sumber pemerintah.");
+      if (FR_CAPITALS[c]) return frAns("ibukota", "Ibu kota " + c.replace(/\b\w/g, function (x) { return x.toUpperCase(); }) + " adalah " + FR_CAPITALS[c] + ".");
+    }
+    if (/ (kenapa|mengapa) langit (berwarna )?biru /.test(b)) {
+      return frAns("langit-biru", "Karena hamburan Rayleigh: cahaya matahari terdiri dari banyak warna, dan cahaya biru (gelombang pendek) lebih kuat dihamburkan molekul udara ke segala arah, jadi mata kita menangkap langit berwarna biru. Saat senja cahaya menempuh lapisan udara lebih panjang, biru habis terhambur, dan yang tersisa merah-jingga.");
+    }
+    if (/ (kenapa|mengapa) (air )?laut (itu )?asin /.test(b)) {
+      return frAns("laut-asin", "Hujan yang sedikit asam melapukkan batuan di darat dan melarutkan mineral serta garam, lalu sungai membawanya ke laut. Air laut menguap, tetapi garamnya tertinggal, sehingga selama jutaan tahun lautan makin asin.");
+    }
+    if (/ (kenapa|mengapa|bagaimana) (bisa )?(terjadi )?hujan /.test(b)) {
+      return frAns("hujan", "Air laut, sungai, dan tanah menguap karena panas matahari, naik dan mendingin menjadi titik-titik air (kondensasi) yang membentuk awan. Saat titiknya cukup besar dan berat, ia jatuh sebagai hujan.");
+    }
+    if (/ (apa itu|apa yang dimaksud|jelaskan) (proses )?fotosintesis /.test(b)) {
+      return frAns("fotosintesis", "Fotosintesis adalah proses tumbuhan hijau membuat makanan sendiri: dengan klorofil, ia mengubah karbon dioksida dan air menjadi glukosa memakai energi cahaya matahari, sambil melepaskan oksigen.");
+    }
+    if (/ (apa itu|apa yang dimaksud|jelaskan) gravitasi /.test(b)) {
+      return frAns("gravitasi", "Gravitasi adalah gaya tarik-menarik antar benda bermassa. Gravitasi Bumi menarik benda ke arah pusatnya, itulah sebabnya benda jatuh dan kita tidak melayang.");
+    }
+    if (/ planet (yang )?(paling )?terbesar | planet apa.*(terbesar|paling besar) /.test(b)) return frAns("planet-besar", "Planet terbesar di tata surya adalah Jupiter.");
+    if (/ hewan (darat )?(yang )?(paling )?(tercepat|cepat) /.test(b)) return frAns("hewan-cepat", "Hewan darat tercepat adalah cheetah, yang bisa berlari sekitar 100 km/jam dalam jarak pendek.");
+    if (/ (lagu kebangsaan|lagu nasional) indonesia /.test(b)) return frAns("lagu-kebangsaan", "Lagu kebangsaan Indonesia adalah “Indonesia Raya”, ciptaan W.R. Supratman.");
+    if (/ (kapan|tanggal berapa) (hari )?(kemerdekaan|proklamasi) (indonesia|ri)? ?/.test(b)) return frAns("merdeka", "Indonesia memproklamasikan kemerdekaan pada 17 Agustus 1945.");
+    if (/ berapa (hari|jumlah hari) (dalam|di) (satu )?tahun /.test(b)) return frAns("hari-setahun", "Satu tahun ada 365 hari, dan 366 hari pada tahun kabisat.");
+    if (/ air mendidih (pada )?(suhu )?(berapa|berapa derajat) | titik didih air /.test(b)) return frAns("didih", "Air mendidih pada 100 °C di tekanan 1 atmosfer (permukaan laut). Di tempat tinggi suhunya lebih rendah.");
+
+    // ── Obrolan ──
+    if (/ (kamu|anda|cgo) (punya|ada) (perasaan|emosi|hati) | (apa|apakah) kamu (bisa )?(merasa|sedih|senang|bahagia) /.test(b)) {
+      return frAns("perasaan", "Aku tidak punya perasaan seperti manusia, dan aku tidak mau berpura-pura punya. Yang bisa kulakukan: menangkap nada bicaramu dan menyesuaikan jawaban supaya lebih nyaman.");
+    }
+    if (/ (ceritakan|kasih|beri|bikin|buat|tell me) (aku |saya )?(sebuah )?(lelucon|joke|humor|candaan|bercanda) | lawak /.test(b)) {
+      frJokeIdx = (frJokeIdx + 1 + Math.floor(Date.now() / 60000)) % FR_JOKES.length;
+      return frAns("lelucon", FR_JOKES[frJokeIdx]);
+    }
+    if (/ (bingung|mau|enaknya|bagusnya|sebaiknya|pilih) .*(makan|sarapan|makan siang|makan malam|jajan) /.test(b) && !FR_OPS_CTX.test(b)) {
+      return frAns("makan", "Biar cepat putus, pilih satu dulu: berkuah hangat (soto, bakso), gurih-pedas (ayam geprek, nasi goreng), atau ringan (roti, salad)? Kalau malas keluar, tinggal pesan lewat CIKUR GO FOOD.");
+    }
+    if ((m = b.match(/ terjemah(?:kan)? ?["']?(.+?)["']? (?:ke|dalam|ke dalam) (?:bahasa )?(inggris|indonesia) /))) {
+      const src = m[1].trim(), toEn = m[2] === "inggris";
+      if (toEn && FR_TRANS[src]) return frAns("terjemah", "“" + src + "” dalam bahasa Inggris: “" + FR_TRANS[src] + "”.");
+      if (!toEn) {
+        const k = Object.keys(FR_TRANS).filter(function (x) { return FR_TRANS[x].toLowerCase() === src; })[0];
+        if (k) return frAns("terjemah", "“" + src + "” dalam bahasa Indonesia: “" + k + "”.");
+      }
+      return { id: "terjemah-luar", answer: "Kamus terjemahan bawaanku baru berisi ucapan sehari-hari (salam, terima kasih, maaf, dan sejenisnya), dan “" + src + "” belum ada di dalamnya. Kalau frasanya lebih panjang, aku tidak mau menebak dan salah arti." };
+    }
+    return null;
+  }
+
+  /* Jawaban jujur terarah: tampilkan apa yang dipahami, apa yang kurang, dan langkah yang realistis. */
+  function frHonest(text, lang) {
+    const raw = String(text || "").trim();
+    if (!raw || raw.length < 4) return null;
+    const b = frNorm(raw);
+    if (FR_OPS_CTX.test(raw) || /\b(sistem|prioritas|bingung mulai|perbaikan|lambat|lemot|bcgo|cgo)\w*/i.test(raw)) {
+      if (!/ (cuaca|kurs|saham|bitcoin|skor|macet) /.test(b)) return null; /* topik operasional: biarkan jalur lama */
+    }
+    const stop = /^(apa|itu|ini|yang|dan|di|ke|dari|untuk|dengan|kamu|aku|saya|bisa|tolong|coba|dong|ya|sih|deh|kah|adalah|siapa|kapan|dimana|kenapa|mengapa|bagaimana|berapa|jelaskan|ceritakan|tentang|soal|mengenai|cara|ada|sebuah|oleh|pada|dalam|agar|supaya|atau|juga|lagi|sudah|akan|mau|harus|perlu)$/;
+    const subjWords = b.replace(/[^a-z0-9\u00c0-\u024f\s]/g, " ").split(/\s+/).filter(function (w) { return w && !stop.test(w); });
+    if (!subjWords.length) return null;
+    let subject = raw.replace(/[?!.]+$/g, "").trim();
+    for (let i = 0; i < 4; i++) subject = subject.replace(/^(apa itu|apa yang dimaksud dengan|apa|siapa|kenapa|mengapa|bagaimana|gimana|cara|jelaskan|ceritakan|tentang|soal|berapa|kapan|dimana|di mana|tolong|coba)\s+/i, "");
+    subject = subject.slice(0, 60).trim();
+    if (!subject) subject = subjWords.slice(0, 6).join(" ");
+
+    let rt = b.match(/ (cuaca|suhu hari ini|prakiraan|kurs|harga saham|saham|bitcoin|berita terbaru|berita hari ini|skor|hasil pertandingan|macet|lalu lintas|harga emas|presiden sekarang|presiden saat ini|gubernur sekarang|menteri sekarang) /);
+    if (rt) {
+      return "Soal “" + rt[1] + "” — itu butuh data yang berubah setiap saat, dan Otak ini berjalan lokal tanpa sambungan ke sumber data luar, jadi jawabanku bisa salah kalau menebak. Yang bisa kuberi dari sini: jam dan tanggal sekarang, hitungan, status sistem, dan data CIKUR GO.";
+    }
+    let kind = "umum";
+    if (/ (apa itu|apa yang dimaksud|artinya|maksudnya|definisi|pengertian) /.test(b) || /^ apa .{2,40} $/.test(b)) kind = "definisi";
+    else if (/ (kenapa|mengapa) /.test(b)) kind = "alasan";
+    else if (/ (bagaimana|cara|langkah|tips) /.test(b)) kind = "cara";
+    else if (/ (beda|perbedaan|bandingkan|lebih baik|vs) /.test(b)) kind = "banding";
+    else if (/ (sebaiknya|enaknya|rekomendasi|saran|pilih mana|mending) /.test(b)) kind = "saran";
+    else if (/ (siapa|kapan|dimana|berapa) /.test(b)) kind = "fakta";
+
+    const open = "Soal “" + subject + "” — ";
+    const ask = {
+      definisi: "aku belum punya definisi yang pasti di pengetahuan bawaanku, dan aku tidak mau mengarang. Kalau ini istilah di CIKUR GO atau BCGO, sebut konteksnya (misalnya RIDE, mitra, atau radar) dan aku jelaskan dari yang kupegang.",
+      alasan: "aku belum punya penjelasan sebab yang pasti untuk itu. Kalau kamu sebut kejadian atau datanya (misalnya angka atau status yang kamu lihat), aku bisa menalar kemungkinan penyebabnya dari situ.",
+      cara: "aku belum punya langkah baku untuk itu. Kalau ini tentang CIKUR GO, sebut bagian mana (daftar mitra, pesan RIDE, CikurPay, dan sebagainya) dan aku uraikan langkahnya; kalau di luar itu, beri tahu tujuan akhirmu supaya aku susun langkah masuk akalnya.",
+      banding: "aku belum punya data pembanding yang cukup untuk menilainya dengan jujur. Sebut dua hal yang dibandingkan dan kriterianya (harga, kecepatan, risiko), lalu kutimbang bersamamu.",
+      saran: "aku bisa bantu memutuskan kalau tahu pilihan dan prioritasmu. Sebut 2–3 opsinya dan yang paling penting buatmu (cepat, murah, atau aman), lalu kutimbang.",
+      fakta: "aku belum punya fakta pasti untuk itu di pengetahuan bawaanku, jadi lebih baik tidak kujawab ngawur. Kalau ada konteksnya (nama, tempat, atau tanggal), tambahkan dan aku coba telusuri dari yang kupegang.",
+      umum: "aku menangkap topiknya, tapi belum menemukan jawaban yang pasti di pengetahuan bawaanku. Coba perjelas apa yang ingin kamu ketahui atau putuskan, supaya jawabanku nyambung dan tidak asal."
+    };
+    return open + ask[kind];
   }
 
   function isProtectedAnswer(text) {
@@ -1612,6 +1794,7 @@
     const Inst = global.CGOInstruction;
     const live = ctx.liveState || global.BCGO_STATE || {};
 
+    let kbHit = false; /* v1.15.1: penanda jawaban dari pengetahuan bawaan */
     // ─── A0.4 Memori waktu ("tadi/kemarin/sebelum/sesudah bahas apa, jam berapa") + pertanyaan majemuk ───
     // Dijalankan SEBELUM skill jam/tanggal agar "sebelum ini bahas apa jam berapa" tidak dijawab jam sekarang.
     try {
@@ -2010,7 +2193,26 @@
         uniq.push(k);
       }
       // Substansi = hasil urai/hitung/emoji/warna nyata — bukan sekadar kata "berapa"
-      const hasSubstance = uniq.length > 0 && !(uniq.length === 1 && polaNote && uniq[0] === String(polaNote).trim());
+      let hasSubstance = uniq.length > 0 && !(uniq.length === 1 && polaNote && uniq[0] === String(polaNote).trim());
+      // v1.15.1: kalimat tanya biasa yang kebetulan memuat angka ("berapa ongkos ojek 5 km") BUKAN permintaan
+      // eja angka. Bila semua hasil hanya gema/transkripsi angka dari kalimat itu, jangan dijadikan jawaban.
+      if (hasSubstance) {
+        try {
+          const inWords = (String(t).toLowerCase().match(/[a-z\u00c0-\u024f]{2,}/g) || []);
+          const wantsSpell = /\b(eja|ejaan|baca(kan)?|dibaca|terbilang|spell|ucapkan|lafal|kata)\b/i.test(t) || /^[\d.,\s+\-x×*\/÷^%()=]+$/.test(String(t).trim());
+          const hasOp = /\d\s*[x×*÷\/+\-^%]\s*\d/.test(t);
+          if (inWords.length >= 3 && !wantsSpell && !hasOp) {
+            const NUMW = /^(nol|satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh|sebelas|belas|puluh|ratus|ribu|juta|miliar|zero|one|two|three|four|five|six|seven|eight|nine|ten)$/;
+            const set = new Set(inWords);
+            const echoOnly = uniq.every(function (p) {
+              if (/→/.test(p) && String(p).length < 80) return true;
+              const pw = (String(p).toLowerCase().match(/[a-z\u00c0-\u024f]{2,}/g) || []);
+              return pw.length > 0 && pw.every(function (w) { return set.has(w) || NUMW.test(w); });
+            });
+            if (echoOnly) { hasSubstance = false; step("OTAK_CIKURGO", true, "angka-nyasar-diabaikan"); }
+          }
+        } catch (_) {}
+      }
       if (hasSubstance) {
         answer = uniq.join(". ");
         if (!answer.endsWith(".")) answer += ".";
@@ -2657,7 +2859,7 @@
     }
 
     // ─── G. Jelaskan audit urai bila diminta ───
-    if (CG && audit && /\b(jelaskan|uraikan|kenapa\s+bisa)\b/i.test(t) && typeof CG.jelaskan === "function") {
+    if (!kbHit && CG && audit && /\b(jelaskan|uraikan|kenapa\s+bisa)\b/i.test(t) && typeof CG.jelaskan === "function") {
       try {
         const j = CG.jelaskan(audit);
         const langkah = j && (j.langkah || j.steps);
@@ -2698,6 +2900,19 @@
       }
     }
 
+
+    // ─── H1a. Nalar bebas: pengetahuan bawaan (domain CIKUR GO + fakta umum), tanpa template ops ───
+    if ((!answer || /^\s*Parsed:|Rincian urai:\s*Token|Dari pengurai:|^\s*teks\s+(campuran|biasa)|tanpa pola khusus/i.test(String(answer))) && !opsAsk && !briefingAsk && !systemRequest) {
+      try {
+        const kb = frKB(t, lang);
+        if (kb && kb.answer) {
+          answer = kb.answer; kbHit = true;
+          step("OTAK_CIKURGO", true, "kb:" + kb.id);
+        }
+      } catch (e) {
+        step("OTAK_CIKURGO", false, "kb:" + String((e && e.message) || e));
+      }
+    }
 
     // ─── H1b. Pertanyaan bebas (bukan ops/tarik/template kaku) ───
     if (!answer && hasValidAccess()) {
@@ -2857,10 +3072,13 @@
       } else if (/\b(bisa\s*apa|what\s+can\s+you|capabilities|kemampuan|できる|機能)\b/i.test(t)) {
         answer = pack.capabilities;
       } else {
-        answer = pack.fallback(cycle, mode, stepNow, active);
+        let honest = null;
+        try { if (!opsAsk && !briefingAsk && !systemRequest) honest = frHonest(t, lang); } catch (_) { honest = null; }
+        if (honest) { answer = honest; step("OTAK_CIKURGO", true, "jujur-terarah"); }
+        else answer = pack.fallback(cycle, mode, stepNow, active);
       }
       try {
-        if (CG && typeof CG.sarankan_lanjutan === "function") {
+        if (!/^Soal “/.test(answer) && CG && typeof CG.sarankan_lanjutan === "function") {
           const s = CG.sarankan_lanjutan();
           const ide = s && (s.ide || s.saran);
           if (Array.isArray(ide) && ide[0]) {

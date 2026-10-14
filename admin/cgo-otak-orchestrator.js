@@ -6,7 +6,7 @@
  */
 (function (global) {
   "use strict";
-  var VERSION = "1.7.0-TEMPORAL-ZR";
+  var VERSION = "1.7.1-TEMPORAL-ZR";
   var memoryStore = null;
 
   function g() {
@@ -662,6 +662,74 @@
     return null;
   }
 
+  /* ═══ v1.7.1 · hitungan dengan angka berupa kata · konversi dengan nama satuan lengkap ═══ */
+  var NW_UNIT = { nol: 0, satu: 1, dua: 2, tiga: 3, empat: 4, lima: 5, enam: 6, tujuh: 7, delapan: 8, sembilan: 9, sepuluh: 10, sebelas: 11 };
+  var NW_OPS = { ditambah: "+", tambah: "+", plus: "+", dikurangi: "-", kurang: "-", minus: "-", dikali: "*", kali: "*", times: "*", dibagi: "/", bagi: "/" };
+  var NW_FILLER = /^(hitung|berapa|hasil|hasilnya|adalah|sama|dengan|itu|apa|ya|dong|tolong|coba|kalau|jika|bila|sih)$/;
+
+  function wordsToNumberRun(tokens) {
+    // ["dua","ratus","lima","puluh"] -> 250 ; null bila bukan angka-kata valid
+    var total = 0, cur = 0, last = 0, seen = false;
+    for (var i = 0; i < tokens.length; i++) {
+      var w = tokens[i];
+      if (w === "seratus") { cur += 100; last = 0; seen = true; }
+      else if (w === "seribu") { total += 1000; last = 0; seen = true; }
+      else if (w === "sepuluh") { cur += 10; last = 0; seen = true; }
+      else if (w === "sebelas") { cur += 11; last = 0; seen = true; }
+      else if (Object.prototype.hasOwnProperty.call(NW_UNIT, w)) { cur += NW_UNIT[w]; last = NW_UNIT[w]; seen = true; }
+      else if (w === "belas") { cur += 10; last = 0; seen = true; }
+      else if (w === "puluh") { cur = cur - last + (last || 1) * 10; last = 0; seen = true; }
+      else if (w === "ratus") { cur = cur - last + (last || 1) * 100; last = 0; seen = true; }
+      else if (w === "ribu") { total += (cur || 1) * 1000; cur = 0; last = 0; seen = true; }
+      else if (w === "juta") { total += (cur || 1) * 1000000; cur = 0; last = 0; seen = true; }
+      else return null;
+    }
+    return seen ? total + cur : null;
+  }
+
+  function wordMathAnswer(body, lang) {
+    var raw = String(body || "");
+    if (raw.length > 90 || TALK_RE.test(raw)) return null;
+    var toks = raw.toLowerCase().replace(/[?!,=]/g, " ").split(/\s+/).filter(Boolean);
+    if (toks.length < 3) return null;
+    var out = [], run = [], sawWordNum = false, sawOp = false, i;
+    function flush() {
+      if (!run.length) return true;
+      var n = wordsToNumberRun(run);
+      if (n == null) return false;
+      out.push(String(n)); sawWordNum = true; run = [];
+      return true;
+    }
+    for (i = 0; i < toks.length; i++) {
+      var w = toks[i];
+      if (NW_FILLER.test(w)) { if (!flush()) return null; continue; }
+      if (Object.prototype.hasOwnProperty.call(NW_OPS, w)) { if (!flush()) return null; out.push(NW_OPS[w]); sawOp = true; continue; }
+      if (/^\d+(?:[.,]\d+)?$/.test(w)) { if (!flush()) return null; out.push(w.replace(",", ".")); continue; }
+      if (/^[+\-*\/x×÷]$/.test(w)) { if (!flush()) return null; out.push(w === "x" || w === "×" ? "*" : (w === "÷" ? "/" : w)); sawOp = true; continue; }
+      if (wordsToNumberRun([w]) != null) { run.push(w); continue; }
+      return null; // ada kata lain → bukan hitungan murni, biarkan jalur lain
+    }
+    if (!flush() || !sawWordNum || !sawOp) return null;
+    var expr = out.join(" ");
+    if (!/^[\d.\s+\-*\/]+$/.test(expr) || !/\d\s*[+\-*\/]\s*\d/.test(expr)) return null;
+    var math = evalLocaleMath(expr);
+    if (!math) return null;
+    return { text: formatNumberResult(math.value, lang), engine: "CIKUR_HITUNG", tags: ["skill", "hitung", "kata"] };
+  }
+
+  var UNIT_NAMES = [[/\bkilometer\b/g, "km"], [/\bsentimeter\b|\bcentimeter\b/g, "cm"], [/\bmilimeter\b|\bmillimeter\b/g, "mm"], [/\bmeter\b/g, "m"],
+    [/\bkilogram\b|\bkilo\b/g, "kg"], [/\bmiligram\b/g, "mg"], [/\bgram\b/g, "g"], [/\bmililiter\b/g, "ml"], [/\bliter\b/g, "l"]];
+  function unitNameAnswer(body, lang) {
+    var raw = String(body || "").toLowerCase();
+    if (raw.length > 80 || !/\d/.test(raw) || TALK_RE.test(raw)) return null;
+    var nb = raw.replace(/[?!]/g, " ");
+    var changed = false;
+    UNIT_NAMES.forEach(function (u) { var r = nb.replace(u[0], u[1]); if (r !== nb) changed = true; nb = r; });
+    if (!changed) return null;
+    nb = nb.replace(/\b(?:sama\s+dengan\s+berapa|jadi\s+berapa|berapa)\b/, "ke").replace(/\s+/g, " ").trim();
+    return unitConvert(nb, lang);
+  }
+
   function percentAnswer(body, lang) {
     var b = String(body || "").trim();
     // "50% dari 1000000" | "20 persen dari 500" | "hitung 10% dari 200"
@@ -795,6 +863,10 @@
     var b = body.toLowerCase();
 
     // jam / tanggal — tidak wajib CIKUR
+    var wmAns = wordMathAnswer(body, lang);
+    if (wmAns) return wmAns;
+    var ucAns = unitNameAnswer(body, lang);
+    if (ucAns) return ucAns;
     var rtAns = relTimeAnswer(body, lang);
     if (rtAns) return rtAns;
     var rdAns = relDateAnswer(body, lang);
@@ -1070,7 +1142,8 @@
         var j = api.jelaskan(body);
         if (j && (j.hasil || j.penjelasan || j.ringkasan)) {
           var jt = String(j.hasil || j.penjelasan || j.ringkasan || "").trim();
-          if (jt && jt.length < 400) return { text: jt, engine: "CIKUR_JELASKAN", tags: ["reason", "jelaskan"] };
+          /* jelaskan() hanya untuk objek audit; string biasa menghasilkan "Tidak ada hasil" (keyakinan 0) — bukan jawaban */
+          if (jt && !/^tidak ada hasil untuk dijelaskan/i.test(jt) && !(j.keyakinan === 0) && jt.length < 400) return { text: jt, engine: "CIKUR_JELASKAN", tags: ["reason", "jelaskan"] };
         }
       }
     } catch (_) {}
