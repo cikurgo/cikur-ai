@@ -787,7 +787,7 @@
 
   /* ---------------- Satu jalur tanya-jawab ---------------- */
   const ABC_TRIGGER = /analisis|struktur|audit|verifikasi|bukti|mesin abc|pipeline|self-?test/i;
-  const SYSTEM_TRIGGER = /\b(status sistem|status bcgo|status cgo|status (live|saraf|otak)|\bstatus\b|kondisi sistem|sehatkah|telemetry|anomali aktif|investigasi|root cause|source scan|scanner|dependency|mesin abc|machine abc|pipeline abc|perbaiki sistem|patch organ|siklus|cycle\s*(sekarang|ke|\d+)?|berapa\s*cycle|files?\s*gagal|active\s*cases?|organ (aktif|stabil)|radar agent|agent online)\b/i;
+  const SYSTEM_TRIGGER = /\b(ada\s+masalah|masalah\s+(atau|apa)|ada\s+error|error\s+(atau|apa)|ada\s+bug|ada\s+kendala|ada\s+gangguan|yang\s+rusak|bermasalah|ada\s+yang\s+gagal|status sistem|status bcgo|status cgo|status (live|saraf|otak)|\bstatus\b|kondisi sistem|sehatkah|telemetry|anomali aktif|investigasi|root cause|source scan|scanner|dependency|mesin abc|machine abc|pipeline abc|perbaiki sistem|patch organ|siklus|cycle\s*(sekarang|ke|\d+)?|berapa\s*cycle|files?\s*gagal|active\s*cases?|organ (aktif|stabil)|radar agent|agent online)\b/i;
 
   /* ---- Akses internal: CGO 0021 | CGO 0006 | CGO 0095 (ejaan: si ji ou …) ---- */
   const VALID_ACCESS_CODES = Object.freeze(["0021", "0006", "0095"]);
@@ -1401,7 +1401,7 @@
       || /^\s*\d[\d.,]*\s*(→|$)/.test(s);
   }
 
-  function softSystemFallback(text) {
+  function softSystemFallback(text, userText) {
     try {
       var s = String(text || "");
       if (/teks biasa tanpa pola|tidak ada pola khusus|input kosong|teks campuran/i.test(s)) {
@@ -1414,7 +1414,9 @@
         return "Aku belum punya jawaban pasti untuk itu. Mau coba status sistem, hitung, eja, atau tanya tentang BCGO/CIKUR GO?";
       }
       
-      if (/siklus\s*\d|mode siaga|Tidak ada anomali aktif/i.test(s)) {
+      if (/siklus\s*\d|mode siaga|Tidak ada anomali aktif/i.test(s)
+          && !SYSTEM_TRIGGER.test(String(userText || ""))
+          && !/\b(error|masalah|bug|rusak|gagal|radar|agent|scanner|kendala|gangguan|organ|sistem|bcgo)\b/i.test(String(userText || ""))) {
         return "Hmm, topik itu di luar jangkauan data sistem yang aku pegang sekarang. Coba tanya hitung, eja, jam, status, atau radar ya.";
       }
       if (/Saya membaca pertanyaan Anda/i.test(s)) {
@@ -1474,7 +1476,7 @@
         return "Aduh, maaf ya. Aku bantu benerin pelan-pelan. 🤝";
       }
 
-      a = softSystemFallback(a);
+      a = softSystemFallback(a, userText);
 
       var mood = detectMood(userText || "");
       state.lastMood = mood;
@@ -2928,7 +2930,7 @@
     }
 
     // ─── H2. Otak Customer (pipeline customer/) — nalar natural, aditif ───
-    if (!answer) {
+    if (!answer && !systemRequest) {
       // H2a. Reasoning modul customer langsung (bila ada)
       try {
         const cust = global.CGO_CUSTOMER || {};
@@ -2951,7 +2953,7 @@
         step("CUSTOMER_CGO", false, "reasoning:" + String((e && e.message) || e));
       }
     }
-    if (!answer && global.CGO) {
+    if (!answer && !systemRequest && global.CGO) {
       try {
         if (typeof global.CGO.chat === "function") {
           const r = global.CGO.chat(t);
