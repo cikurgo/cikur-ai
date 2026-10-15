@@ -3,13 +3,13 @@
  * No external AI/API. No customer-facing coordinate export.
  */
 
-export const RADAR_VERSION = "1.0.1-otak-wire";
+export const RADAR_VERSION = "1.0.2-otak-wire-5k";
 
 export const RADAR_CONTRACT = Object.freeze({
   version: RADAR_VERSION,
   scope: "BCGO_ADMIN_RADAR",
   ringsKm: Object.freeze([1, 3, 5, 10, 25, 50, 100, 200]),
-  maxAgents: 500,
+  maxAgents: 5000, /* naik dari 500: peta live memakai cluster untuk ribuan agent */
   freshnessMs: 180000,
   staleAfterMs: 180000,
   offlineAfterMs: 360000,

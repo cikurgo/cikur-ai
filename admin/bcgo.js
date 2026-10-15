@@ -180,7 +180,7 @@ const LOG_LIMIT = 50;
 const PROBE_LIMIT = 5;
 const EVENT_LIMIT = 24;
 const AGENT_PRESENCE_MAX_AGE_MS = 180000;
-const AGENT_PRESENCE_LIMIT = 500;
+const AGENT_PRESENCE_LIMIT = 5000; /* naik dari 500 agar radar & peta live bisa memuat ribuan agent */
 const AGENT_PRESENCE_MAX_ACCURACY_M = 500;
 function __makeStubRadar() {
   return {

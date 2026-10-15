@@ -5504,179 +5504,347 @@ await runAutonomousEngine(state => {
 </script>
 
 
-<!-- CGO LIVE MAPS v2 · panel mengambang (bukan fullscreen) · additive · hanya menampilkan entri dengan bukti radar eksplisit -->
+<!-- CGO LIVE MAPS v3 · kartu peta gaya assistant.html (mobile bottom-sheet / desktop dock) · GPS pusat radar · cluster ribuan agent · additive -->
 <style id="cgo-live-maps-style">
-  /* Panel peta: mobile = bottom-sheet (chat & orb tetap terlihat di atasnya); desktop = dock kanan. Tanpa backdrop, halaman tetap bisa dipakai. */
-  #cgo-live-maps-overlay{position:fixed;z-index:1500;display:none;flex-direction:column;background:#070d1b;color:#e2e8f0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;border:1px solid rgba(103,232,249,.30);border-radius:18px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 1px rgba(8,15,30,.8);left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));height:min(44vh,420px);transition:height .22s ease,width .22s ease}
+  #cgo-live-maps-overlay{--m-ink:#0f172a;--m-sub:#64748b;--m-line:#e2e8f0;--m-soft:#f1f5f9;--m-red:#d62c26;--m-cyan:#0891b2;
+    position:fixed;z-index:1500;display:none;flex-direction:column;background:#fff;color:var(--m-ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;border-radius:24px;overflow:hidden;
+    box-shadow:0 24px 64px rgba(2,6,23,.55),0 0 0 1px rgba(255,255,255,.06);left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));height:min(66vh,580px);transition:height .22s ease,width .22s ease}
   #cgo-live-maps-overlay[aria-hidden="false"]{display:flex}
-  #cgo-live-maps-overlay[data-size="large"]{height:min(60vh,600px)}
-  #cgo-live-maps-overlay .cgo-map-top{display:flex;align-items:center;gap:8px;padding:9px 10px 9px 14px;background:rgba(8,15,30,.97);border-bottom:1px solid rgba(103,232,249,.20)}
-  #cgo-live-maps-overlay .cgo-map-title{min-width:0;flex:1}
-  #cgo-live-maps-overlay .cgo-map-title b{display:block;font-size:12.5px;letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #cgo-live-maps-overlay .cgo-map-title small{display:block;color:#94a3b8;font-size:10.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #cgo-live-maps-overlay .cgo-map-btn,#cgo-live-maps-overlay .cgo-map-close{border:1px solid #334155;background:#111c30;color:#e2e8f0;border-radius:11px;min-width:38px;height:38px;padding:0 10px;font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;-webkit-tap-highlight-color:transparent}
-  #cgo-live-maps-overlay .cgo-map-btn:hover,#cgo-live-maps-overlay .cgo-map-close:hover{border-color:#67e8f9}
-  #cgo-live-maps-overlay .cgo-map-btn.orb{color:#67e8f9;border-color:rgba(103,232,249,.45)}
-  #cgo-live-maps-overlay .cgo-map-close{font-size:22px;padding:0}
-  #cgo-live-maps-overlay .cgo-map-summary{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;padding:7px 10px;background:#0b1323;border-bottom:1px solid #1e293b;font-size:10.5px;scrollbar-width:none}
-  #cgo-live-maps-overlay .cgo-map-summary::-webkit-scrollbar{display:none}
-  #cgo-live-maps-overlay .cgo-map-chip{padding:4px 9px;border:1px solid #334155;border-radius:999px;background:#111c30;white-space:nowrap}
-  #cgo-live-maps-overlay .cgo-map-chip strong{color:#67e8f9}
-  #cgo-live-maps-canvas{position:relative;flex:1;min-height:120px;background:#e9edf2}
-  #cgo-live-maps-canvas .maplibregl-ctrl-attrib{font-size:9px}
-  #cgo-live-maps-overlay .cgo-map-foot{padding:7px 12px calc(8px + env(safe-area-inset-bottom,0px));font-size:10px;line-height:1.45;color:#94a3b8;background:#080f1e;border-top:1px solid #1e293b;display:none}
-  #cgo-live-maps-overlay[data-size="large"] .cgo-map-foot{display:block}
-  #cgo-live-maps-overlay .cgo-map-status{color:#fbbf24}
-  .cgo-live-map-marker{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;border:2px solid #e0f2fe;background:#0e7490;color:#fff;box-shadow:0 0 0 5px rgba(34,211,238,.18);font-size:10px;font-weight:900;cursor:pointer}
-  .cgo-live-map-marker.driver{background:#047857;box-shadow:0 0 0 5px rgba(16,185,129,.18)}
-  .cgo-live-map-popup{color:#0f172a;font:12px/1.45 system-ui,sans-serif;min-width:150px}
-  .cgo-live-map-popup b{font-size:13px}
-  .cgo-live-map-popup small{color:#475569}
-  /* Ruang untuk panel: konten halaman (chat + orb) bergeser/diberi ruang, tidak tertutup */
-  body.cgo-map-open{padding-bottom:calc(var(--cgo-map-h,44vh) + 24px)!important}
-  /* Desktop: dock kanan, halaman menyempit di kiri */
-  @media(min-width:900px){
-    #cgo-live-maps-overlay{left:auto;top:12px;right:12px;bottom:12px;height:auto;width:clamp(360px,32vw,500px)}
-    #cgo-live-maps-overlay[data-size="large"]{height:auto;width:clamp(520px,54vw,860px)}
-    #cgo-live-maps-overlay .cgo-map-foot{display:block}
-    #cgo-live-maps-overlay .cgo-map-summary{flex-wrap:wrap;overflow:visible}
-    body.cgo-map-open{padding-bottom:clamp(12px,2.4vw,30px)!important;padding-right:calc(var(--cgo-map-w,420px) + 28px)!important}
+  #cgo-live-maps-overlay[data-size="large"]{height:min(86vh,820px)}
+  #cgo-live-maps-overlay *{box-sizing:border-box}
+  #cgo-live-maps-overlay .m-head{display:flex;align-items:flex-start;gap:10px;padding:14px 14px 10px 18px}
+  #cgo-live-maps-overlay .m-title{min-width:0;flex:1}
+  #cgo-live-maps-overlay .m-title b{display:block;font-size:17px;font-weight:800;line-height:1.2;color:var(--m-ink)}
+  #cgo-live-maps-overlay .m-title small{display:block;color:var(--m-sub);font-size:12px;margin-top:3px;line-height:1.35}
+  #cgo-live-maps-overlay .m-ibtn{width:40px;height:40px;border-radius:13px;border:0;background:var(--m-soft);color:#334155;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent;flex:none}
+  #cgo-live-maps-overlay .m-ibtn:hover{background:#e2e8f0}
+  #cgo-live-maps-overlay .m-ibtn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  #cgo-live-maps-overlay .m-stats{display:flex;gap:6px;padding:0 14px 8px 18px;overflow-x:auto;scrollbar-width:none;flex:none}
+  #cgo-live-maps-overlay .m-stats::-webkit-scrollbar,#cgo-live-maps-overlay .m-chips::-webkit-scrollbar,#cgo-live-maps-overlay .m-list::-webkit-scrollbar{display:none}
+  #cgo-live-maps-overlay .m-stat{flex:none;padding:5px 10px;border-radius:999px;background:var(--m-soft);font-size:11px;color:#475569;white-space:nowrap}
+  #cgo-live-maps-overlay .m-stat strong{color:var(--m-ink);font-weight:800}
+  #cgo-live-maps-overlay .m-stat.ok strong{color:#059669}
+  #cgo-live-maps-overlay .m-search{display:flex;align-items:center;gap:8px;margin:0 14px 8px 18px;padding:0 12px;height:38px;border:1px solid var(--m-line);border-radius:12px;background:#fff;flex:none}
+  #cgo-live-maps-overlay .m-search svg{width:16px;height:16px;stroke:#94a3b8;fill:none;stroke-width:2;flex:none}
+  #cgo-live-maps-overlay .m-search input{flex:1;min-width:0;border:0;outline:0;background:transparent;font-size:13px;color:var(--m-ink)}
+  #cgo-live-maps-canvas{position:relative;flex:1 1 auto;min-height:150px;background:#e9edf2;border-top:1px solid var(--m-line);border-bottom:1px solid var(--m-line)}
+  #cgo-live-maps-canvas .maplibregl-ctrl-attrib,#cgo-live-maps-canvas .leaflet-control-attribution{font-size:9px}
+  #cgo-live-maps-overlay .m-gps{position:absolute;right:12px;bottom:14px;z-index:5;width:46px;height:46px;border-radius:14px;border:0;background:#fff;box-shadow:0 6px 18px rgba(2,6,23,.28);display:flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  #cgo-live-maps-overlay .m-gps svg{width:24px;height:24px}
+  #cgo-live-maps-overlay .m-gps.busy svg{animation:mgps 1s linear infinite}
+  @keyframes mgps{to{transform:rotate(360deg)}}
+  #cgo-live-maps-overlay .m-legend{position:absolute;left:10px;top:10px;z-index:4;display:flex;gap:8px;padding:5px 9px;border-radius:10px;background:rgba(255,255,255,.92);font-size:10px;color:#334155;box-shadow:0 2px 8px rgba(2,6,23,.15)}
+  #cgo-live-maps-overlay .m-legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+  #cgo-live-maps-overlay .m-toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:6;max-width:86%;padding:7px 12px;border-radius:10px;background:rgba(15,23,42,.92);color:#e2e8f0;font-size:11.5px;display:none;text-align:center}
+  #cgo-live-maps-overlay .m-detail{position:absolute;left:10px;right:70px;bottom:12px;z-index:5;max-height:78%;overflow:auto;padding:12px;border-radius:16px;background:rgba(255,255,255,.97);box-shadow:0 10px 28px rgba(2,6,23,.32);display:none;font-size:12px}
+  #cgo-live-maps-overlay .m-detail.on{display:block}
+  #cgo-live-maps-overlay .m-detail h4{margin:0;font-size:14px;font-weight:800;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  #cgo-live-maps-overlay .m-badge{font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;color:#fff}
+  #cgo-live-maps-overlay .m-detail dl{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:8px 0 0}
+  #cgo-live-maps-overlay .m-detail dt{color:var(--m-sub)}
+  #cgo-live-maps-overlay .m-detail dd{margin:0;font-weight:600;text-align:right;word-break:break-all}
+  #cgo-live-maps-overlay .m-detail .m-x{position:absolute;right:8px;top:8px;width:26px;height:26px;border:0;border-radius:8px;background:var(--m-soft);cursor:pointer;font-size:15px;line-height:1}
+  #cgo-live-maps-overlay .m-valid{margin-top:8px;display:grid;gap:3px}
+  #cgo-live-maps-overlay .m-valid span{display:flex;gap:6px;align-items:center;color:#334155}
+  #cgo-live-maps-overlay .m-valid .ok{color:#059669;font-weight:800}
+  #cgo-live-maps-overlay .m-valid .no{color:#dc2626;font-weight:800}
+  #cgo-live-maps-overlay .m-chips{display:flex;gap:6px;padding:9px 14px 4px 18px;overflow-x:auto;scrollbar-width:none;flex:none}
+  #cgo-live-maps-overlay .m-chip{flex:none;border:1px solid var(--m-line);background:#fff;color:#334155;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  #cgo-live-maps-overlay .m-chip.on{background:#0f172a;border-color:#0f172a;color:#fff}
+  #cgo-live-maps-overlay .m-chip.rad.on{background:var(--m-cyan);border-color:var(--m-cyan)}
+  #cgo-live-maps-overlay .m-list{display:flex;gap:8px;padding:6px 14px 8px 18px;overflow-x:auto;scrollbar-width:none;flex:none}
+  #cgo-live-maps-overlay .m-card{flex:none;width:150px;border:1px solid var(--m-line);border-radius:14px;padding:8px 10px;background:#fff;cursor:pointer;font-size:11px;color:#475569;text-align:left}
+  #cgo-live-maps-overlay .m-card.sel{border-color:var(--m-cyan);box-shadow:0 0 0 2px rgba(8,145,178,.22)}
+  #cgo-live-maps-overlay .m-card b{display:block;font-size:12.5px;color:var(--m-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #cgo-live-maps-overlay .m-card .r{display:flex;justify-content:space-between;gap:6px;margin-top:3px}
+  #cgo-live-maps-overlay .m-empty{padding:10px 18px;font-size:12px;color:var(--m-sub)}
+  #cgo-live-maps-overlay .m-foot{display:flex;gap:10px;padding:10px 14px calc(12px + env(safe-area-inset-bottom,0px)) 14px;flex:none}
+  #cgo-live-maps-overlay .m-btn{flex:1;height:48px;border-radius:15px;font-size:14px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;-webkit-tap-highlight-color:transparent}
+  #cgo-live-maps-overlay .m-btn.sec{border:2px solid var(--m-line);background:#fff;color:#475569}
+  #cgo-live-maps-overlay .m-btn.pri{border:0;background:var(--m-red);color:#fff;box-shadow:0 8px 20px rgba(214,44,38,.30)}
+  #cgo-live-maps-overlay .m-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  #cgo-live-maps-overlay .m-note{padding:0 18px 6px;font-size:10.5px;color:#94a3b8;line-height:1.4;flex:none}
+  #cgo-live-maps-overlay .m-note .w{color:#b45309}
+  body.cgo-map-open{padding-bottom:calc(var(--cgo-map-h,62vh) + 24px)!important}
+  @media(max-width:899px){
+    #cgo-live-maps-overlay[data-size="normal"] .m-search,#cgo-live-maps-overlay[data-size="normal"] #cgo-live-maps-chips-radius,#cgo-live-maps-overlay[data-size="normal"] .m-note,#cgo-live-maps-overlay[data-size="normal"] .m-title small{display:none}
+    #cgo-live-maps-overlay .m-head{padding:11px 12px 8px 16px;align-items:center}
+    #cgo-live-maps-overlay .m-title b{font-size:16px}
+    #cgo-live-maps-overlay .m-ibtn{width:36px;height:36px;border-radius:11px}
+    #cgo-live-maps-overlay .m-stats{padding-bottom:6px}
+    #cgo-live-maps-overlay .m-chips{padding-top:7px;padding-bottom:3px}
+    #cgo-live-maps-overlay .m-card{width:136px;padding:6px 9px}
+    #cgo-live-maps-overlay .m-list{padding-top:4px;padding-bottom:6px}
+    #cgo-live-maps-overlay .m-btn{height:44px;border-radius:14px}
+    #cgo-live-maps-overlay .m-foot{padding-top:6px}
+    #cgo-live-maps-canvas{min-height:130px}
   }
-  @media(max-width:480px){#cgo-live-maps-overlay .cgo-map-btn span{display:none}#cgo-live-maps-overlay .cgo-map-btn{min-width:38px;padding:0}}
-  @media(prefers-reduced-motion:reduce){#cgo-live-maps-overlay,#cgo-live-maps-overlay *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+  @media(min-width:900px){
+    #cgo-live-maps-overlay{left:auto;top:12px;right:12px;bottom:12px;height:auto;width:clamp(440px,36vw,600px)}
+    #cgo-live-maps-overlay[data-size="large"]{height:auto;width:clamp(620px,56vw,920px)}
+    #cgo-live-maps-overlay .m-list{flex-wrap:wrap;overflow:auto;max-height:118px}
+    #cgo-live-maps-overlay .m-card{width:calc(50% - 4px)}
+    #cgo-live-maps-overlay[data-size="large"] .m-card{width:calc(33.33% - 6px)}
+    body.cgo-map-open{padding-bottom:clamp(12px,2.4vw,30px)!important;padding-right:calc(var(--cgo-map-w,500px) + 28px)!important}
+  }
+  @media(max-width:480px){#cgo-live-maps-overlay .m-btn span.t{font-size:13px}}
+  @media(prefers-reduced-motion:reduce){#cgo-live-maps-overlay,#cgo-live-maps-overlay *{animation:none!important;transition:none!important}}
 </style>
 <div id="cgo-live-maps-overlay" aria-hidden="true" role="complementary" aria-label="Peta live Agent CGO dan Driver" data-size="normal">
-  <div class="cgo-map-top">
-    <div class="cgo-map-title"><b>CIKUR GO · LIVE MAPS</b><small>Agent CGO &amp; Driver · titik terverifikasi saja</small></div>
-    <button type="button" class="cgo-map-btn orb" id="cgo-live-maps-orb" title="Kembali ke mode Orb" aria-label="Kembali ke mode Orb">◉<span>Orb</span></button>
-    <button type="button" class="cgo-map-btn" id="cgo-live-maps-fit" title="Pusatkan ke semua titik" aria-label="Pusatkan peta">⌖</button>
-    <button type="button" class="cgo-map-btn" id="cgo-live-maps-size" title="Perbesar / perkecil" aria-label="Perbesar peta">⤢</button>
-    <button type="button" class="cgo-map-close" id="cgo-live-maps-close" aria-label="Tutup peta">×</button>
+  <div class="m-head">
+    <div class="m-title"><b>Peta Agent CGO</b><small>Geser peta atau ketuk titik untuk melihat detail agent</small></div>
+    <button type="button" class="m-ibtn" id="cgo-live-maps-size" aria-label="Perbesar peta" title="Perbesar / perkecil"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+    <button type="button" class="m-ibtn" id="cgo-live-maps-close" aria-label="Tutup peta" title="Tutup"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
-  <div class="cgo-map-summary">
-    <span class="cgo-map-chip">Titik tampil <strong id="cgo-live-maps-count">0</strong></span>
-    <span class="cgo-map-chip">Status <strong id="cgo-live-maps-state">MENUNGGU DATA</strong></span>
-    <span class="cgo-map-chip">Pembaruan <strong id="cgo-live-maps-updated">—</strong></span>
+  <div class="m-stats">
+    <span class="m-stat ok">Terverifikasi <strong id="cgo-live-maps-count">0</strong></span>
+    <span class="m-stat">Total agent <strong id="cgo-live-maps-total">0</strong></span>
+    <span class="m-stat">Status <strong id="cgo-live-maps-state">MENUNGGU DATA</strong></span>
+    <span class="m-stat">Pusat <strong id="cgo-live-maps-center">—</strong></span>
+    <span class="m-stat">Update <strong id="cgo-live-maps-updated">—</strong></span>
   </div>
-  <div id="cgo-live-maps-canvas" aria-label="Peta lokasi live"></div>
-  <div class="cgo-map-foot"><span class="cgo-map-status" id="cgo-live-maps-note">Menunggu data radar.</span><br>Lokasi hanya ditampilkan jika data menyatakan verifikasi radar secara eksplisit, koordinat valid, dan usia lokasi ≤ 90 detik. Peta dasar dan ubin jalan memerlukan koneksi internet; tidak ada lokasi contoh/simulasi.</div>
+  <label class="m-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="cgo-live-maps-search" type="search" placeholder="Cari agent, ID, atau koordinat…" autocomplete="off"></label>
+  <div id="cgo-live-maps-canvas" aria-label="Peta lokasi live">
+    <div class="m-legend"><span><i style="background:#22c55e"></i>Ready</span><span><i style="background:#f59e0b"></i>Busy</span><span><i style="background:#94a3b8"></i>Stale</span><span><i style="background:#ef4444"></i>Offline</span></div>
+    <div class="m-toast" id="cgo-live-maps-toast"></div>
+    <div class="m-detail" id="cgo-live-maps-detail"></div>
+    <button type="button" class="m-gps" id="cgo-live-maps-gps" aria-label="Pusatkan ke titik radar (GPS)" title="Pusatkan ke titik radar (GPS)">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 2c-3.9 0-7 3-7 6.9 0 5.2 7 13.1 7 13.1s7-7.9 7-13.1C19 5 15.9 2 12 2z" fill="#e11d48"/><circle cx="12" cy="9" r="2.8" fill="#fff"/></svg>
+    </button>
+  </div>
+  <div class="m-chips" id="cgo-live-maps-chips-status"></div>
+  <div class="m-chips" id="cgo-live-maps-chips-radius" style="padding-top:0"></div>
+  <div class="m-list" id="cgo-live-maps-list"></div>
+  <div class="m-note"><span class="w" id="cgo-live-maps-note">Menunggu data radar.</span> Titik hanya tampil bila radar menyatakan agent terverifikasi (READY/BUSY, GPS valid, lokasi segar). Peta dasar butuh internet; tidak ada titik simulasi.</div>
+  <div class="m-foot">
+    <button type="button" class="m-btn sec" id="cgo-live-maps-orb"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg><span class="t">Kembali ke Orb</span></button>
+    <button type="button" class="m-btn pri" id="cgo-live-maps-gps2"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/></svg><span class="t">Titik Radar (GPS)</span></button>
+  </div>
 </div>
 <script id="cgo-live-maps-module">
 (function(){
   'use strict';
-  var overlay, canvas, countEl, stateEl, updatedEl, noteEl, opened=false, lastFingerprint='', refreshTimer=null;
-  var eng=null, enginePromise=null, lastItems=[];
-  var MAX_AGE_MS=90000;
-  var STYLE_URL='https://tiles.openfreemap.org/styles/positron'; /* gratis, tanpa API key — sama seperti peta ride.html */
-  function byId(id){return document.getElementById(id);}
-  function setText(el,value){if(el)el.textContent=String(value);}
-  function escapeHtml(value){return String(value==null?'':value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+  var overlay, canvas, opened=false, refreshTimer=null, eng=null, enginePromise=null, toastTimer=null;
+  var STYLE_URL='https://tiles.openfreemap.org/styles/positron'; /* gratis tanpa API key — sama dengan peta ride.html */
+  var FRESH_MS=180000, MAX_ACC_M=1000, LIST_MAX=40;
+  var st={status:'VERIFIED',type:'ALL',radius:0,query:'',selected:null,gpsCenter:null,gpsLabel:'',lastKey:'',all:[],view:[],center:null,centerLabel:'—',total:0};
+  var STATUS_CHIPS=[['VERIFIED','Terverifikasi'],['ALL','Semua'],['READY','Ready'],['BUSY','Busy'],['STALE','Stale'],['OFFLINE','Offline']];
+  var TYPE_CHIPS=[['ALL','Semua jenis'],['AGENT CGO','Agent CGO'],['DRIVER','Driver']];
+  var RADIUS_CHIPS=[[0,'Tanpa batas'],[1,'1 km'],[3,'3 km'],[5,'5 km'],[10,'10 km'],[25,'25 km'],[50,'50 km']];
+  var COLORS={READY:'#22c55e',BUSY:'#f59e0b',STALE:'#94a3b8',OFFLINE:'#ef4444',STANDBY:'#94a3b8'};
 
-  /* ───── verifikasi data (TIDAK diubah dari versi sebelumnya) ───── */
-  function getPresenceItems(){
-    var state=window.BCGO_STATE || window.__cgoLatestLiveState || null;
-    var presence=state && state.agentPresence;
-    return presence && Array.isArray(presence.items) ? presence.items : [];
+  function byId(id){return document.getElementById(id);}
+  function setText(id,v){var e=byId(id);if(e)e.textContent=String(v);}
+  function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+  function km(a,b){
+    if(!a||!b)return null;var R=6371,p1=a.lat*Math.PI/180,p2=b.lat*Math.PI/180,dp=(b.lat-a.lat)*Math.PI/180,dl=(b.lng-a.lng)*Math.PI/180;
+    var h=Math.sin(dp/2)*Math.sin(dp/2)+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)*Math.sin(dl/2);return R*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
   }
-  function explicitRadarPass(item){
-    var v=item && item.verification;
-    return item.radarVerified===true || item.radarVerified==='VERIFIED' ||
-      item.verifiedRadar===true || item.radarVerification==='VERIFIED' ||
-      item.verificationStatus==='RADAR_VERIFIED' ||
-      (v && (v.radar===true || v.radar==='VERIFIED' || v.radarStatus==='VERIFIED'));
+  function toast(msg){var t=byId('cgo-live-maps-toast');if(!t)return;t.textContent=msg;t.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.style.display='none';},3600);}
+
+  /* ───── sumber data ─────
+   * Utama: BCGO_STATE.agentPresence.radar.agents (hasil Radar Engine: status READY/BUSY/STALE/OFFLINE, presenceVerified, location).
+   * Cadangan: agentPresence.items dengan flag verifikasi radar eksplisit (perilaku versi sebelumnya dipertahankan). */
+  function roleOf(raw){var s=String(raw||'').toUpperCase();return(/DRIVER|PENGEMUDI/.test(s))?'DRIVER':'AGENT CGO';}
+  function loc(o){
+    var l=o&&(o.location||o.coords||o.position);if(!l)return null;
+    var lat=Number(l.lat!=null?l.lat:l.latitude),lng=Number(l.lng!=null?l.lng:l.longitude);
+    if(!Number.isFinite(lat)||!Number.isFinite(lng)||lat<-90||lat>90||lng<-180||lng>180)return null;
+    var acc=Number(l.accuracy!=null?l.accuracy:o.accuracy);return {lat:lat,lng:lng,acc:Number.isFinite(acc)?acc:null};
   }
-  function normalizeRole(item){
-    var raw=String(item.role||item.type||item.category||item.agentType||item.kind||'').toUpperCase();
-    if(/\bDRIVER\b/.test(raw)||raw==='PENGEMUDI')return 'DRIVER';
-    if(/\bAGENT\b/.test(raw)||raw==='AGENTCGO'||raw==='AGENT_CGO'||raw==='AGENT CGO')return 'AGENT CGO';
-    return '';
-  }
-  function qualifiedItems(){
-    var now=Date.now(), seen=Object.create(null), source=getPresenceItems(), out=[];
-    source.forEach(function(item){
-      if(!item || !explicitRadarPass(item))return;
-      if(item.approved===false || item.approvalStatus==='REJECTED' || item.status==='REJECTED')return;
-      var loc=item.location || item.coords || item.position;
-      if(!loc)return;
-      var lat=Number(loc.lat!=null?loc.lat:loc.latitude), lng=Number(loc.lng!=null?loc.lng:loc.longitude);
-      if(!Number.isFinite(lat)||!Number.isFinite(lng)||lat < -90||lat > 90||lng < -180||lng > 180)return;
-      var age=Number(item.ageMs);
-      if(Number.isFinite(age) && (age<0 || age>MAX_AGE_MS))return;
-      if(!Number.isFinite(age)){
-        var rawTime=item.updatedAt||item.lastSeenAt||item.timestamp;
-        var timestamp=typeof rawTime==='number'?rawTime:Date.parse(rawTime);
-        if(Number.isFinite(timestamp)&&timestamp>0&&now-timestamp>MAX_AGE_MS)return;
-      }
-      var st=String(item.status||'').toUpperCase();
-      if(['STALE','OFFLINE','DISCONNECTED','REJECTED','EXPIRED'].includes(st))return;
-      var role=normalizeRole(item);
-      if(!role)return;
-      var key=String(item.agentId||item.id||role+':'+lat.toFixed(5)+','+lng.toFixed(5));
-      if(seen[key])return;
-      seen[key]=true;
-      out.push({source:item,agentId:item.agentId||item.id||'',name:item.name||item.agentId||item.id||role,
-        status:item.status||'LIVE',ageMs:Number.isFinite(age)?age:null,lat:lat,lng:lng,role:role});
-    });
+  function explicitPass(it){var v=it&&it.verification;return it.radarVerified===true||it.radarVerified==='VERIFIED'||it.verifiedRadar===true||it.radarVerification==='VERIFIED'||it.verificationStatus==='RADAR_VERIFIED'||(v&&(v.radar===true||v.radar==='VERIFIED'||v.radarStatus==='VERIFIED'));}
+  function readAgents(){
+    var s=window.BCGO_STATE||window.__cgoLatestLiveState||null, ap=s&&s.agentPresence, now=Date.now(), out=[], seen=Object.create(null);
+    var radar=ap&&ap.radar&&Array.isArray(ap.radar.agents)?ap.radar:null;
+    var total=0;
+    if(radar){
+      total=(radar.counts&&radar.counts.total)||radar.agents.length;
+      radar.agents.forEach(function(a){
+        if(!a||!a.id||seen[a.id])return;var l=loc(a);if(!l)return;seen[a.id]=1;
+        var age=Number.isFinite(Number(a.ageMs))?Number(a.ageMs):null;
+        var status=String(a.status||'OFFLINE').toUpperCase();
+        var okAcc=l.acc==null||l.acc<=MAX_ACC_M, okFresh=age==null||age<=FRESH_MS;
+        out.push({id:String(a.id),name:String(a.name||a.id),role:roleOf(a.type),status:status,lat:l.lat,lng:l.lng,acc:l.acc,ageMs:age,updatedAt:a.updatedAt||null,
+          verified:a.presenceVerified===true&&(status==='READY'||status==='BUSY')&&okAcc&&okFresh,okAcc:okAcc,okFresh:okFresh});
+      });
+    }else if(ap&&Array.isArray(ap.items)){
+      total=ap.items.length;
+      ap.items.forEach(function(it){
+        if(!it||!explicitPass(it))return;if(it.approved===false||it.approvalStatus==='REJECTED'||it.status==='REJECTED')return;
+        var l=loc(it);if(!l)return;
+        var age=Number(it.ageMs);if(Number.isFinite(age)&&(age<0||age>90000))return;
+        var status=String(it.status||'LIVE').toUpperCase();if(['STALE','OFFLINE','DISCONNECTED','REJECTED','EXPIRED'].indexOf(status)>=0)return;
+        var id=String(it.agentId||it.id||it.name||'');if(!id||seen[id])return;seen[id]=1;
+        out.push({id:id,name:String(it.name||id),role:roleOf(it.role||it.type||it.category||it.agentType||it.kind),status:status==='LIVE'?'READY':status,lat:l.lat,lng:l.lng,acc:l.acc,ageMs:Number.isFinite(age)?age:null,updatedAt:it.updatedAt||null,verified:true,okAcc:true,okFresh:true});
+      });
+    }
+    st.total=Math.max(total,out.length);
     return out;
   }
-  function popupHtml(item){
-    var role=item.role, name=String(item.name||item.agentId||role), status=String(item.status||'LIVE');
-    var age=Number.isFinite(item.ageMs)?Math.max(0,Math.round(item.ageMs/1000))+' dtk lalu':'lokasi terbaru';
-    return '<div class="cgo-live-map-popup"><b>'+escapeHtml(role==='DRIVER'?'Driver':'Agent CGO')+'</b><br>'+escapeHtml(name)+'<br><small>Status: '+escapeHtml(status)+'<br>Lokasi: '+item.lat.toFixed(5)+', '+item.lng.toFixed(5)+'<br>'+escapeHtml(age)+' · Radar terverifikasi</small></div>';
-  }
-  function markerEl(item){
-    var el=document.createElement('div');
-    el.className='cgo-live-map-marker'+(item.role==='DRIVER'?' driver':'');
-    el.textContent=item.role==='DRIVER'?'D':'A';
-    el.setAttribute('title',(item.role==='DRIVER'?'Driver ':'Agent CGO ')+String(item.name||item.agentId||''));
-    return el;
+
+  /* ───── pusat radar (GPS) ───── */
+  function radarCenter(list){
+    var r=window.__CGO_RADAR__||{};
+    if(r.center&&Number.isFinite(r.center.lat)&&Number.isFinite(r.center.lng)&&r.source==='GPS_VERIFIED')return {c:{lat:r.center.lat,lng:r.center.lng},label:'GPS admin'};
+    if(st.gpsCenter)return {c:st.gpsCenter,label:st.gpsLabel||'GPS perangkat'};
+    var pts=list.filter(function(a){return a.verified;});if(!pts.length)pts=list;
+    if(pts.length){
+      var la=pts.map(function(a){return a.lat;}).sort(function(a,b){return a-b;}),ln=pts.map(function(a){return a.lng;}).sort(function(a,b){return a-b;});
+      var mi=Math.floor(la.length/2);return {c:{lat:la[mi],lng:ln[mi]},label:'Pusat sebaran agent'};
+    }
+    return {c:null,label:'—'};
   }
 
-  /* ───── mesin peta: MapLibre + OpenFreeMap (utama), Leaflet + OSM (cadangan) ───── */
+  /* ───── pemfilteran ───── */
+  function recompute(force){
+    var all=readAgents(), rc=radarCenter(all);
+    st.all=all;st.center=rc.c;st.centerLabel=rc.label;
+    var q=st.query.trim().toLowerCase(), view=[];
+    for(var i=0;i<all.length;i++){
+      var a=all[i];
+      a.dist=rc.c?km(rc.c,a):null;
+      if(st.status==='VERIFIED'){if(!a.verified)continue;}
+      else if(st.status!=='ALL'&&a.status!==st.status)continue;
+      if(st.type!=='ALL'&&a.role!==st.type)continue;
+      if(st.radius>0&&a.dist!=null&&a.dist>st.radius)continue;
+      if(q&&!/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(q)&&(a.name+' '+a.id).toLowerCase().indexOf(q)<0)continue;
+      view.push(a);
+    }
+    view.sort(function(x,y){return (x.dist==null?1e9:x.dist)-(y.dist==null?1e9:y.dist);});
+    var key=[all.length,view.length,st.status,st.type,st.radius,q,st.selected,rc.c?rc.c.lat.toFixed(4)+rc.c.lng.toFixed(4):'',
+      view.length?view[0].id+view[0].lat.toFixed(5)+view[view.length-1].id:'',view.reduce(function(s,a){return s+(a.status==='READY'?1:a.status==='BUSY'?2:3);},0)].join('|');
+    if(key===st.lastKey&&force!==true)return false;
+    st.lastKey=key;st.view=view;return true;
+  }
+
+  /* ───── tampilan ───── */
+  function renderChips(){
+    var h='';STATUS_CHIPS.forEach(function(c){h+='<button type="button" class="m-chip'+(st.status===c[0]?' on':'')+'" data-k="status" data-v="'+c[0]+'">'+c[1]+'</button>';});
+    TYPE_CHIPS.forEach(function(c){if(c[0]!=='ALL')h+='<button type="button" class="m-chip'+(st.type===c[0]?' on':'')+'" data-k="type" data-v="'+c[0]+'">'+c[1]+'</button>';});
+    byId('cgo-live-maps-chips-status').innerHTML=h;
+    var r='';RADIUS_CHIPS.forEach(function(c){r+='<button type="button" class="m-chip rad'+(st.radius===c[0]?' on':'')+'" data-k="radius" data-v="'+c[0]+'">'+c[1]+'</button>';});
+    byId('cgo-live-maps-chips-radius').innerHTML=r;
+  }
+  function ageTxt(ms){if(ms==null)return 'terbaru';var s=Math.round(ms/1000);return s<60?s+' dtk lalu':Math.round(s/60)+' mnt lalu';}
+  function renderList(){
+    var host=byId('cgo-live-maps-list'),v=st.view.slice(0,LIST_MAX);
+    if(!v.length){host.innerHTML='<div class="m-empty">Tidak ada agent yang cocok dengan filter ini.</div>';return;}
+    host.innerHTML=v.map(function(a){
+      return '<button type="button" class="m-card'+(st.selected===a.id?' sel':'')+'" data-id="'+esc(a.id)+'"><b>'+esc(a.name)+'</b><div class="r"><span style="color:'+(COLORS[a.status]||'#64748b')+';font-weight:800">'+esc(a.status)+'</span><span>'+(a.dist!=null?a.dist.toFixed(1)+' km':'—')+'</span></div><div class="r"><span>'+esc(a.role)+'</span><span>'+esc(ageTxt(a.ageMs))+'</span></div></button>';
+    }).join('')+(st.view.length>LIST_MAX?'<div class="m-empty">+'+(st.view.length-LIST_MAX)+' agent lain — gunakan pencarian, radius, atau filter.</div>':'');
+  }
+  function renderDetail(){
+    var d=byId('cgo-live-maps-detail'),a=null;
+    if(st.selected)for(var i=0;i<st.all.length;i++){if(st.all[i].id===st.selected){a=st.all[i];break;}}
+    if(!a){d.className='m-detail';d.innerHTML='';return;}
+    function row(k,v){return '<dt>'+k+'</dt><dd>'+v+'</dd>';}
+    function chk(ok,t){return '<span><b class="'+(ok?'ok':'no')+'">'+(ok?'✓':'✕')+'</b>'+t+'</span>';}
+    d.className='m-detail on';
+    d.innerHTML='<button type="button" class="m-x" data-act="x" aria-label="Tutup detail">×</button><h4>'+esc(a.name)+' <span class="m-badge" style="background:'+(COLORS[a.status]||'#64748b')+'">'+esc(a.status)+'</span></h4>'+
+      '<dl>'+row('ID',esc(a.id))+row('Jenis',esc(a.role))+row('Koordinat',a.lat.toFixed(6)+', '+a.lng.toFixed(6))+row('Akurasi GPS',a.acc!=null?'± '+Math.round(a.acc)+' m':'—')+row('Update terakhir',esc(ageTxt(a.ageMs)))+row('Jarak dari pusat',a.dist!=null?a.dist.toFixed(2)+' km':'—')+'</dl>'+
+      '<div class="m-valid">'+chk(a.okAcc,'Akurasi GPS ≤ '+MAX_ACC_M+' m')+chk(a.okFresh,'Lokasi segar (≤ '+Math.round(FRESH_MS/1000)+' dtk)')+chk(a.status==='READY'||a.status==='BUSY','Status radar READY/BUSY')+chk(a.verified,'Terverifikasi radar')+'</div>'+
+      '<div style="margin-top:8px"><button type="button" class="m-chip" data-act="zoom">Zoom ke agent</button></div>';
+  }
+  function renderStats(){
+    var n=0;for(var i=0;i<st.all.length;i++)if(st.all[i].verified)n++;
+    setText('cgo-live-maps-count',n);setText('cgo-live-maps-total',st.total);
+    setText('cgo-live-maps-state',n?'LIVE · RADAR':'TIDAK ADA TITIK TERVERIFIKASI');
+    setText('cgo-live-maps-center',st.centerLabel);
+    setText('cgo-live-maps-updated',new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'}));
+    var note=byId('cgo-live-maps-note');
+    if(note){
+      if(!st.all.length)note.textContent='Belum ada agent dengan koordinat valid dari radar.';
+      else if(st.status==='VERIFIED'&&!n)note.textContent='Ada agent berkoordinat, tetapi belum ada yang terverifikasi radar. Coba filter Semua/Stale/Offline.';
+      else note.textContent='Menampilkan '+st.view.length+' dari '+st.all.length+' agent berkoordinat.'+(eng&&eng.limit&&st.view.length>eng.limit?' (mode cadangan: '+eng.limit+' terdekat)':'');
+    }
+  }
+  function render(force){
+    if(!opened)return;
+    var changed=recompute(force);
+    renderStats();
+    if(!changed)return;
+    renderList();renderDetail();
+    if(eng)eng.set(st.view,st.center,st.radius,st.selected);
+  }
+
+  /* ───── mesin peta ───── */
   function loadCss(id,href){if(byId(id))return;var l=document.createElement('link');l.id=id;l.rel='stylesheet';l.href=href;document.head.appendChild(l);}
   function loadScript(id,src,test){
-    return new Promise(function(resolve,reject){
-      if(test())return resolve();
-      var ex=byId(id);
-      if(ex){ex.addEventListener('load',function(){test()?resolve():reject(new Error('library tidak tersedia'));},{once:true});ex.addEventListener('error',function(){reject(new Error('gagal memuat '+id));},{once:true});return;}
-      var s=document.createElement('script');s.id=id;s.src=src;s.async=true;
-      s.onload=function(){test()?resolve():reject(new Error('library tidak tersedia'));};
-      s.onerror=function(){reject(new Error('gagal memuat '+id));};
-      document.head.appendChild(s);
+    return new Promise(function(res,rej){
+      if(test())return res();var ex=byId(id);
+      if(ex){ex.addEventListener('load',function(){test()?res():rej(new Error('library tidak tersedia'));},{once:true});ex.addEventListener('error',function(){rej(new Error('gagal memuat '+id));},{once:true});return;}
+      var s=document.createElement('script');s.id=id;s.src=src;s.async=true;s.onload=function(){test()?res():rej(new Error('library tidak tersedia'));};s.onerror=function(){rej(new Error('gagal memuat '+id));};document.head.appendChild(s);
     });
   }
-  function createMapLibre(){
+  function circlePoly(c,rkm){var pts=[],n=72;for(var i=0;i<=n;i++){var b=i/n*2*Math.PI,dLat=(rkm/6371)*Math.cos(b)*180/Math.PI,dLng=(rkm/6371)*Math.sin(b)*180/Math.PI/Math.cos(c.lat*Math.PI/180);pts.push([c.lng+dLng,c.lat+dLat]);}return pts;}
+  function ringsFor(radius){return radius>0?[radius]:[];}
+
+  function createMapLibre(onSelect){
     loadCss('cgo-live-maps-ml-css','https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css');
     return loadScript('cgo-live-maps-ml-js','https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js',function(){return window.maplibregl&&window.maplibregl.Map;}).then(function(){
-      var ml=window.maplibregl, markers=[];
+      var ml=window.maplibregl;
       var map=new ml.Map({container:canvas,style:STYLE_URL,center:[118,-2.5],zoom:3.6,attributionControl:{compact:true}});
-      map.addControl(new ml.NavigationControl({showCompass:false}),'top-right');
-      return {name:'MapLibre · OpenFreeMap',
+      map.addControl(new ml.NavigationControl({showCompass:false}),'top-left');
+      var ready=false,pending=null,EMPTY={type:'FeatureCollection',features:[]};
+      function setup(){
+        map.addSource('agents',{type:'geojson',data:EMPTY,cluster:true,clusterRadius:48,clusterMaxZoom:15});
+        map.addSource('rings',{type:'geojson',data:EMPTY});
+        map.addSource('center',{type:'geojson',data:EMPTY});
+        map.addLayer({id:'rings-line',type:'line',source:'rings',paint:{'line-color':'#0891b2','line-width':1.6,'line-dasharray':[2,2]}});
+        map.addLayer({id:'clusters',type:'circle',source:'agents',filter:['has','point_count'],paint:{'circle-color':['step',['get','point_count'],'#0e7490',50,'#0369a1',500,'#4338ca'],'circle-radius':['step',['get','point_count'],17,50,22,500,28],'circle-stroke-width':3,'circle-stroke-color':'rgba(255,255,255,.85)'}});
+        map.addLayer({id:'cluster-count',type:'symbol',source:'agents',filter:['has','point_count'],layout:{'text-field':['get','point_count_abbreviated'],'text-font':['Noto Sans Regular'],'text-size':12},paint:{'text-color':'#fff'}});
+        map.addLayer({id:'points',type:'circle',source:'agents',filter:['!',['has','point_count']],paint:{'circle-radius':['interpolate',['linear'],['zoom'],8,5,15,9],
+          'circle-color':['match',['get','status'],'READY','#22c55e','BUSY','#f59e0b','STALE','#94a3b8','OFFLINE','#ef4444','#94a3b8'],'circle-stroke-width':['case',['==',['get','role'],'DRIVER'],3,2],'circle-stroke-color':['case',['==',['get','role'],'DRIVER'],'#0ea5e9','#ffffff']}});
+        map.addLayer({id:'labels',type:'symbol',source:'agents',minzoom:13,filter:['!',['has','point_count']],layout:{'text-field':['get','name'],'text-font':['Noto Sans Regular'],'text-size':11,'text-offset':[0,1.4],'text-anchor':'top','text-optional':true},paint:{'text-color':'#0f172a','text-halo-color':'#fff','text-halo-width':1.6}});
+        map.addLayer({id:'selected',type:'circle',source:'agents',filter:['==',['get','id'],'__none__'],paint:{'circle-radius':15,'circle-color':'rgba(8,145,178,.12)','circle-stroke-width':3,'circle-stroke-color':'#0891b2'}});
+        map.addLayer({id:'center-dot',type:'circle',source:'center',paint:{'circle-radius':7,'circle-color':'#0ea5e9','circle-stroke-width':3,'circle-stroke-color':'#fff'}});
+        map.on('click','clusters',function(e){var f=e.features&&e.features[0];if(!f)return;var src=map.getSource('agents');var p=src.getClusterExpansionZoom(f.properties.cluster_id);
+          Promise.resolve(p).then(function(z){map.easeTo({center:f.geometry.coordinates,zoom:Math.min(z,17)});}).catch(function(){});});
+        map.on('click','points',function(e){var f=e.features&&e.features[0];if(f)onSelect(f.properties.id);});
+        ['clusters','points'].forEach(function(l){map.on('mouseenter',l,function(){map.getCanvas().style.cursor='pointer';});map.on('mouseleave',l,function(){map.getCanvas().style.cursor='';});});
+        ready=true;if(pending){apply.apply(null,pending);pending=null;}
+      }
+      function apply(list,center,radius,selected){
+        map.getSource('agents').setData({type:'FeatureCollection',features:list.map(function(a){return {type:'Feature',geometry:{type:'Point',coordinates:[a.lng,a.lat]},properties:{id:a.id,name:a.name,role:a.role,status:a.status}};})});
+        map.getSource('rings').setData({type:'FeatureCollection',features:(center?ringsFor(radius):[]).map(function(r){return {type:'Feature',geometry:{type:'LineString',coordinates:circlePoly(center,r)},properties:{}};})});
+        map.getSource('center').setData({type:'FeatureCollection',features:center?[{type:'Feature',geometry:{type:'Point',coordinates:[center.lng,center.lat]},properties:{}}]:[]});
+        map.setFilter('selected',['==',['get','id'],selected||'__none__']);
+      }
+      if(map.loaded&&map.isStyleLoaded&&map.isStyleLoaded())setup();else map.once('load',setup);
+      return {name:'MapLibre · OpenFreeMap',limit:0,
+        set:function(list,center,radius,selected){if(!ready){pending=[list,center,radius,selected];return;}apply(list,center,radius,selected);},
         resize:function(){try{map.resize();}catch(_){}},
-        clear:function(){markers.forEach(function(m){m.remove();});markers=[];},
-        add:function(item){var m=new ml.Marker({element:markerEl(item)}).setLngLat([item.lng,item.lat]).setPopup(new ml.Popup({offset:20,closeButton:false}).setHTML(popupHtml(item))).addTo(map);markers.push(m);},
-        fit:function(list){
-          if(!list.length)return;
-          if(list.length===1){map.easeTo({center:[list[0].lng,list[0].lat],zoom:15,duration:400});return;}
-          var b=new ml.LngLatBounds();list.forEach(function(i){b.extend([i.lng,i.lat]);});
-          map.fitBounds(b,{padding:44,maxZoom:15,duration:400});
+        flyTo:function(lat,lng,z){map.easeTo({center:[lng,lat],zoom:z||15,duration:600});},
+        fit:function(list,center,radius){
+          var b=new ml.LngLatBounds(),n=0;
+          if(center&&radius>0){var cp=circlePoly(center,radius);cp.forEach(function(p){b.extend(p);n++;});}
+          else{list.forEach(function(a){b.extend([a.lng,a.lat]);n++;});if(center){b.extend([center.lng,center.lat]);n++;}}
+          if(!n)return;if(n===1){var c=b.getCenter();map.easeTo({center:c,zoom:15,duration:500});return;}
+          map.fitBounds(b,{padding:48,maxZoom:15,duration:600});
         },
         destroy:function(){try{map.remove();}catch(_){}}};
     });
   }
-  function createLeaflet(){
+  function createLeaflet(onSelect){
     loadCss('cgo-live-maps-leaflet-css','https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
     return loadScript('cgo-live-maps-leaflet-js','https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',function(){return window.L&&typeof window.L.map==='function';}).then(function(){
-      var L=window.L, map=L.map(canvas,{zoomControl:true,preferCanvas:true}).setView([-2.5,118],5), layer=L.layerGroup().addTo(map);
+      var L=window.L,map=L.map(canvas,{zoomControl:true,preferCanvas:true}).setView([-2.5,118],5),grp=L.layerGroup().addTo(map),LIM=400;
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
-      return {name:'Leaflet · OpenStreetMap',
+      return {name:'Leaflet · OpenStreetMap (cadangan)',limit:LIM,
+        set:function(list,center,radius,selected){
+          grp.clearLayers();
+          list.slice(0,LIM).forEach(function(a){
+            var m=L.circleMarker([a.lat,a.lng],{radius:a.id===selected?11:7,color:a.role==='DRIVER'?'#0ea5e9':'#fff',weight:a.id===selected?4:2,fillColor:COLORS[a.status]||'#94a3b8',fillOpacity:1});
+            m.on('click',function(){onSelect(a.id);});m.bindTooltip(a.name).addTo(grp);
+          });
+          if(center){L.circleMarker([center.lat,center.lng],{radius:7,color:'#fff',weight:3,fillColor:'#0ea5e9',fillOpacity:1}).addTo(grp);if(radius>0)L.circle([center.lat,center.lng],{radius:radius*1000,color:'#0891b2',weight:1.5,fill:false,dashArray:'4 4'}).addTo(grp);}
+        },
         resize:function(){try{map.invalidateSize(true);}catch(_){}},
-        clear:function(){layer.clearLayers();},
-        add:function(item){var icon=L.divIcon({className:'',html:'<div class="cgo-live-map-marker '+(item.role==='DRIVER'?'driver':'')+'">'+(item.role==='DRIVER'?'D':'A')+'</div>',iconSize:[34,34],iconAnchor:[17,17]});L.marker([item.lat,item.lng],{icon:icon}).bindPopup(popupHtml(item)).addTo(layer);},
-        fit:function(list){
-          if(!list.length)return;
-          if(list.length===1){map.setView([list[0].lat,list[0].lng],15);return;}
-          map.fitBounds(list.map(function(i){return [i.lat,i.lng];}),{padding:[35,35],maxZoom:15});
+        flyTo:function(lat,lng,z){map.setView([lat,lng],z||15);},
+        fit:function(list,center,radius){
+          if(center&&radius>0){map.fitBounds(L.circle([center.lat,center.lng],{radius:radius*1000}).getBounds(),{padding:[30,30]});return;}
+          var pts=list.slice(0,LIM).map(function(a){return [a.lat,a.lng];});if(center)pts.push([center.lat,center.lng]);
+          if(!pts.length)return;if(pts.length===1){map.setView(pts[0],15);return;}map.fitBounds(pts,{padding:[30,30],maxZoom:15});
         },
         destroy:function(){try{map.remove();}catch(_){}}};
     });
@@ -5684,79 +5852,73 @@ await runAutonomousEngine(state => {
   function ensureEngine(){
     if(eng)return Promise.resolve(eng);
     if(enginePromise)return enginePromise;
-    enginePromise=createMapLibre().catch(function(){
-      try{canvas.innerHTML='';}catch(_){}
-      return createLeaflet();
-    }).then(function(e){eng=e;return e;}).catch(function(err){enginePromise=null;throw err;});
+    var factory=window.__CGO_MAP_ENGINE_FACTORY; /* hook uji; tidak dipakai di produksi */
+    enginePromise=(typeof factory==='function'?Promise.resolve(factory(canvas,selectAgent)):createMapLibre(selectAgent).catch(function(){try{canvas.querySelectorAll('.maplibregl-canvas-container,.maplibregl-control-container').forEach(function(n){n.remove();});}catch(_){}return createLeaflet(selectAgent);}))
+      .then(function(e){eng=e;return e;}).catch(function(err){enginePromise=null;throw err;});
     return enginePromise;
   }
 
-  /* ───── tata letak: beri ruang agar chat/orb tidak tertutup ───── */
-  function applySpace(){
-    try{
-      if(!overlay)return;
-      var r=overlay.getBoundingClientRect();
-      document.documentElement.style.setProperty('--cgo-map-h',Math.round(r.height)+'px');
-      document.documentElement.style.setProperty('--cgo-map-w',Math.round(r.width)+'px');
-    }catch(_){}
-  }
-  function afterLayout(){applySpace();if(eng)eng.resize();}
-
-  function render(force){
-    if(!opened||!eng)return;
-    var items=qualifiedItems();
-    var fp=items.map(function(x){return [x.agentId,x.lat.toFixed(5),x.lng.toFixed(5),x.status,x.ageMs].join(':');}).sort().join('|');
-    setText(countEl,items.length);
-    setText(stateEl,items.length?'LIVE · RADAR VERIFIED':'TIDAK ADA TITIK TERVERIFIKASI');
-    setText(updatedEl,new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'}));
-    if(fp===lastFingerprint && force!==true){return;} lastFingerprint=fp;
-    lastItems=items;
-    eng.clear();
-    if(!items.length){
-      setText(noteEl,'Belum ada data yang memenuhi bukti verifikasi radar eksplisit + GPS valid + lokasi terbaru. Tidak ada titik simulasi yang ditampilkan.');
-      return;
+  /* ───── aksi ───── */
+  function selectAgent(id){st.selected=id;st.lastKey='';render(true);}
+  function zoomSelected(){var a=null;for(var i=0;i<st.all.length;i++)if(st.all[i].id===st.selected){a=st.all[i];break;}if(a&&eng)eng.flyTo(a.lat,a.lng,16);}
+  function gps(){
+    var b1=byId('cgo-live-maps-gps');if(b1)b1.classList.add('busy');
+    function done(){if(b1)b1.classList.remove('busy');}
+    function centerNow(label){
+      st.lastKey='';render(true);
+      var all=st.all;
+      if(!st.center){toast('Titik radar belum diketahui — belum ada agent berkoordinat dan GPS belum tersedia.');done();return;}
+      if(eng){st.radius>0?eng.fit(st.view,st.center,st.radius):eng.flyTo(st.center.lat,st.center.lng,st.view.length>1?13:15);}
+      toast('Pusat radar: '+(label||st.centerLabel));done();
     }
-    items.forEach(function(item){eng.add(item);});
-    eng.fit(items);
-    setText(noteEl,'Menampilkan '+items.length+' titik dengan verifikasi radar eksplisit dan koordinat terbaru.');
+    var r=window.__CGO_RADAR__||{};
+    if(r.center&&r.source==='GPS_VERIFIED'){st.gpsCenter=null;centerNow('GPS admin terverifikasi');return;}
+    if(navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(function(pos){
+        var lat=Number(pos&&pos.coords&&pos.coords.latitude),lng=Number(pos&&pos.coords&&pos.coords.longitude);
+        if(Number.isFinite(lat)&&Number.isFinite(lng)){st.gpsCenter={lat:lat,lng:lng};st.gpsLabel='GPS perangkat ini';centerNow('GPS perangkat ini');}else centerNow();
+      },function(){st.gpsCenter=null;centerNow(st.center?'pusat sebaran agent (GPS tidak tersedia)':'');},{maximumAge:600000,timeout:8000,enableHighAccuracy:true});
+    }else centerNow();
   }
+  function parseCoord(q){var m=String(q||'').trim().match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);if(!m)return null;var lat=Number(m[1]),lng=Number(m[2]);return(lat>=-90&&lat<=90&&lng>=-180&&lng<=180)?{lat:lat,lng:lng}:null;}
+  function onSearch(v){
+    st.query=v||'';var c=parseCoord(st.query);
+    if(c&&eng){eng.flyTo(c.lat,c.lng,15);toast('Menuju '+c.lat.toFixed(5)+', '+c.lng.toFixed(5));}
+    st.lastKey='';render(true);
+  }
+  function applyOpenSpace(){
+    try{var r=overlay.getBoundingClientRect();var de=document.documentElement.style;de.setProperty('--cgo-map-h',Math.round(r.height)+'px');de.setProperty('--cgo-map-w',Math.round(r.width)+'px');}catch(_){}
+  }
+  function afterLayout(){applyOpenSpace();if(eng)eng.resize();}
   function keepChatVisible(){
-    /* gulir agar kolom chat tidak tertutup panel (mobile); desktop: panel di kanan, tidak menutupi */
     try{
-      var ci=byId('chat-input');
-      if(!ci||!overlay||window.innerWidth>=900)return;
-      var r=ci.getBoundingClientRect(), panelTop=overlay.getBoundingClientRect().top;
-      var targetY=Math.max(60,(panelTop-r.height)/2+r.height/2);
-      window.scrollBy({top:r.top+r.height/2-targetY,behavior:'auto'});
+      var ci=byId('chat-input');if(!ci||!overlay||window.innerWidth>=900)return;
+      var r=ci.getBoundingClientRect(),top=overlay.getBoundingClientRect().top;
+      var y=Math.max(60,(top-r.height)/2+r.height/2);window.scrollBy({top:r.top+r.height/2-y,behavior:'auto'});
     }catch(_){}
   }
   function open(){
-    overlay=overlay||byId('cgo-live-maps-overlay');canvas=canvas||byId('cgo-live-maps-canvas');
-    countEl=countEl||byId('cgo-live-maps-count');stateEl=stateEl||byId('cgo-live-maps-state');updatedEl=updatedEl||byId('cgo-live-maps-updated');noteEl=noteEl||byId('cgo-live-maps-note');
-    if(!overlay||!canvas)return;
+    overlay=overlay||byId('cgo-live-maps-overlay');canvas=canvas||byId('cgo-live-maps-canvas');if(!overlay||!canvas)return;
     opened=true;overlay.setAttribute('aria-hidden','false');document.body.classList.add('cgo-map-open');
-    applySpace();setTimeout(keepChatVisible,60);
-    setText(stateEl,'MEMUAT PETA');setText(noteEl,'Memuat peta dasar…');
+    applyOpenSpace();setTimeout(keepChatVisible,60);
+    renderChips();st.lastKey='';render(true);
+    setText('cgo-live-maps-state','MEMUAT PETA');
     ensureEngine().then(function(){
       if(!opened)return;
-      setTimeout(function(){afterLayout();render(true);},60);
-      if(refreshTimer)clearInterval(refreshTimer);
-      refreshTimer=setInterval(function(){render();},3000);
-
-    }).catch(function(err){setText(stateEl,'PETA TIDAK TERSEDIA');setText(noteEl,'Peta gagal dimuat: '+(err&&err.message?err.message:'kesalahan tidak diketahui')+'. Periksa koneksi internet. Data tidak diganti dengan simulasi.');});
+      setTimeout(function(){afterLayout();st.lastKey='';render(true);if(eng&&st.view.length)eng.fit(st.view,st.center,st.radius);},80);
+      if(refreshTimer)clearInterval(refreshTimer);refreshTimer=setInterval(function(){render();},3000);
+    }).catch(function(err){
+      setText('cgo-live-maps-state','PETA TIDAK TERSEDIA');
+      var n=byId('cgo-live-maps-note');if(n)n.textContent='Peta gagal dimuat: '+(err&&err.message?err.message:'kesalahan tidak diketahui')+'. Periksa koneksi internet. Daftar agent di bawah tetap tampil; data tidak diganti simulasi.';
+      if(refreshTimer)clearInterval(refreshTimer);refreshTimer=setInterval(function(){render();},3000);
+    });
   }
   function close(){
-    opened=false;if(overlay)overlay.setAttribute('aria-hidden','true');
-    document.body.classList.remove('cgo-map-open');
+    opened=false;if(overlay)overlay.setAttribute('aria-hidden','true');document.body.classList.remove('cgo-map-open');
     if(refreshTimer){clearInterval(refreshTimer);refreshTimer=null;}
     try{window.dispatchEvent(new CustomEvent('cgo:maps-closed'));}catch(_){}
   }
-  function setSize(size){
-    if(!overlay)return;
-    overlay.setAttribute('data-size',size==='large'?'large':'normal');
-    var b=byId('cgo-live-maps-size');if(b){b.setAttribute('aria-label',size==='large'?'Perkecil peta':'Perbesar peta');b.textContent=size==='large'?'⤡':'⤢';}
-    setTimeout(afterLayout,260);
-  }
+  function setSize(size){if(!overlay)return;overlay.setAttribute('data-size',size==='large'?'large':'normal');var b=byId('cgo-live-maps-size');if(b)b.setAttribute('aria-label',size==='large'?'Perkecil peta':'Perbesar peta');setTimeout(afterLayout,260);}
   function toggleSize(){setSize(overlay&&overlay.getAttribute('data-size')==='large'?'normal':'large');}
   function backToOrb(){
     close();
@@ -5764,22 +5926,30 @@ await runAutonomousEngine(state => {
     try{var w=byId('cgo-orb-wrap');if(w&&w.scrollIntoView)w.scrollIntoView({block:'center',behavior:'smooth'});}catch(_){}
     try{var ci=byId('chat-input');if(ci)ci.focus({preventScroll:true});}catch(_){}
   }
-  function onKey(ev){if(ev.key==='Escape'&&opened)close();}
   function boot(){
-    overlay=byId('cgo-live-maps-overlay');canvas=byId('cgo-live-maps-canvas');
-    countEl=byId('cgo-live-maps-count');stateEl=byId('cgo-live-maps-state');updatedEl=byId('cgo-live-maps-updated');noteEl=byId('cgo-live-maps-note');
-    var closeBtn=byId('cgo-live-maps-close');if(closeBtn)closeBtn.addEventListener('click',close);
-    var orbBtn=byId('cgo-live-maps-orb');if(orbBtn)orbBtn.addEventListener('click',backToOrb);
-    var sizeBtn=byId('cgo-live-maps-size');if(sizeBtn)sizeBtn.addEventListener('click',toggleSize);
-    var fitBtn=byId('cgo-live-maps-fit');if(fitBtn)fitBtn.addEventListener('click',function(){if(eng&&lastItems.length)eng.fit(lastItems);});
-    document.addEventListener('keydown',onKey);
+    overlay=byId('cgo-live-maps-overlay');canvas=byId('cgo-live-maps-canvas');if(!overlay)return;
+    byId('cgo-live-maps-close').addEventListener('click',close);
+    byId('cgo-live-maps-orb').addEventListener('click',backToOrb);
+    byId('cgo-live-maps-size').addEventListener('click',toggleSize);
+    byId('cgo-live-maps-gps').addEventListener('click',gps);
+    byId('cgo-live-maps-gps2').addEventListener('click',gps);
+    byId('cgo-live-maps-search').addEventListener('input',function(e){onSearch(e.target.value);});
+    byId('cgo-live-maps-search').addEventListener('keydown',function(e){if(e.key==='Enter'){var c=parseCoord(e.target.value);if(c&&eng)eng.flyTo(c.lat,c.lng,15);else if(st.view.length&&eng)eng.fit(st.view,st.center,0);}});
+    overlay.addEventListener('click',function(e){
+      var t=e.target.closest&&e.target.closest('[data-k],[data-id],[data-act]');if(!t)return;
+      if(t.hasAttribute('data-k')){var k=t.getAttribute('data-k'),v=t.getAttribute('data-v');if(k==='radius')st.radius=Number(v)||0;else st[k]=v;renderChips();st.lastKey='';render(true);if(eng&&k==='radius'&&st.center)eng.fit(st.view,st.center,st.radius);return;}
+      if(t.hasAttribute('data-id')){selectAgent(t.getAttribute('data-id'));setTimeout(zoomSelected,30);return;}
+      var act=t.getAttribute('data-act');if(act==='x'){st.selected=null;st.lastKey='';render(true);}else if(act==='zoom')zoomSelected();
+    });
+    document.addEventListener('keydown',function(ev){if(ev.key==='Escape'&&opened)close();});
     window.addEventListener('resize',function(){if(opened)afterLayout();});
     window.addEventListener('orientationchange',function(){setTimeout(function(){if(opened)afterLayout();},300);});
     window.addEventListener('cgo:agent-presence',function(){render();});
     window.addEventListener('cgo:radar-update',function(){render();});
     window.addEventListener('cgo:orb-surface',function(ev){try{if(ev&&ev.detail&&ev.detail.mode==='orb'&&opened)close();}catch(_){}});
   }
-  window.CGOFutureLiveMaps={open:open,close:close,refresh:function(){render(true);},setSize:setSize,toggleSize:toggleSize,backToOrb:backToOrb,isOpen:function(){return opened;}};
+  window.CGOFutureLiveMaps={open:open,close:close,refresh:function(){st.lastKey='';render(true);},setSize:setSize,toggleSize:toggleSize,backToOrb:backToOrb,gps:gps,isOpen:function(){return opened;},
+    _state:function(){return {status:st.status,type:st.type,radius:st.radius,view:st.view.length,all:st.all.length,total:st.total,center:st.center,label:st.centerLabel,selected:st.selected};}};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
 </script>
