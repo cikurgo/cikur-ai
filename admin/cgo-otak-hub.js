@@ -14,15 +14,28 @@
  *   ask(text, ctx)      → satu jalur: BCGO → Mesin ABC → Otak Internal → memori bersama
  *   recall(n)           → percakapan terakhir dari memori bersama
  *   subscribe(fn)       → dengarkan perubahan state; mengembalikan fungsi unsubscribe
+ *
+ * v1.17.2 FULL (aditif, zero regresi atas 1.15.1):
+ *  - State: pendingTarik / pendingTarikConfirm / opener-closer history diinisialisasi
+ *  - Kepribadian: anti-repetisi berbasis histori 3–5 terakhir; openers/closers diperkaya
+ *  - Mood detection lebih halus (mumet, gawat, parah, ancur, dll.)
+ *  - KB diperluas: CIKURPAY, RIDE, FOOD, AI, algoritma, Pancasila, agama ID, siapa-CGO
+ *  - Lelucon FR_JOKES diperluas (10 entri)
+ *  - Aritmetika lokal aman (binary +−×÷) bila CIKURGO belum termuat
+ *  - MEM_MAX 40
+ *  - buildFreeFormAnswer, temporal, access, wake, export, ABC, Internal: tetap utuh 1.15.1
+ *  - Zero regresi: seluruh API, event, kode akses, dan trigger lama tetap
  */
+
+
 (function (global) {
   "use strict";
 
   if (global.__CGO_OTAK_HUB__) return; // satu hub saja, aman bila dimuat ulang
   global.__CGO_OTAK_HUB__ = true;
 
-  const VERSION = "1.15.1-TEMPORAL-ONEDOOR-ZR";
-  const MEM_MAX = 20;
+  const VERSION = "1.17.2-TEMPORAL-ONEDOOR-FULL-ZR";
+  const MEM_MAX = 40;
   const STAMP_MS = 1500;
 
   const state = {
@@ -48,7 +61,11 @@
     moodHistory: [],
     lastOpener: null,
     lastCloser: null,
-    lastLang: null
+    lastOpenerHistory: [],
+    lastCloserHistory: [],
+    lastLang: null,
+    pendingTarik: false,
+    pendingTarikConfirm: null
   };
   const listeners = new Set();
   let lastSignature = "";
@@ -1007,8 +1024,12 @@
     const en = lang === "en";
     const low = t.toLowerCase();
     // Identitas / peran
-    if (/\b(beda|perbedaan|difference|apa\s+itu\s+cgo|what\s+is\s+cgo|cgo\s+dan\s+bcgo|bcgo\s+dan\s+cgo)\b/i.test(t)
-        || /\b(siapa\s+kamu|who\s+are\s+you)\b/i.test(t)) {
+    if (/\b(siapa\s+kamu|kamu\s+siapa|who\s+are\s+you)\b/i.test(t) && !/\b(beda|perbedaan|bcgo)\b/i.test(t)) {
+      return en
+        ? "I am CGO — the internal reasoning layer in the CIKUR GO ecosystem. I read system state, reason from evidence, and help with operational decisions. I am a program, not a person."
+        : "Aku CGO — lapisan penalaran dan asisten internal di ekosistem CIKUR GO. Aku membaca state sistem, menalar dari bukti, menjawab pertanyaan, dan membantu keputusan operasional. Aku bukan manusia; aku program.";
+    }
+    if (/\b(beda|perbedaan|difference|apa\s+itu\s+cgo|what\s+is\s+cgo|cgo\s+dan\s+bcgo|bcgo\s+dan\s+cgo)\b/i.test(t)) {
       return en
         ? "BCGO is the live neural/ops console (cycles, scan, organs). CGO is the reasoning layer that reads that live state, explains it, and helps you decide — one system, two roles."
         : "BCGO itu konsol saraf & operasional live (siklus, scan, organ). CGO adalah lapisan penalaran yang membaca state itu, menjelaskan, dan membantu memutuskan — satu sistem, dua peran.";
@@ -1157,7 +1178,10 @@
     "Kenapa programmer suka gelap? Karena light mode bikin bug kelihatan.",
     "Ojek yang paling sabar itu yang mana? Yang tetap senyum waktu penumpangnya bilang “lurus aja, Bang” lalu belok.",
     "Kenapa jam dinding nggak pernah stres? Karena hidupnya selalu berputar, nggak pernah mundur.",
-    "Apa bedanya kamu sama baterai 1%? Baterai 1% masih dicariin charger."
+    "Apa bedanya kamu sama baterai 1%? Baterai 1% masih dicariin charger.",
+    "Kenapa driver ojol nggak pernah kesepian? Karena ada terus yang “deket kok, Bang” padahal 8 km.",
+    "Kenapa air putih lebih tenang dari kopi? Karena dia nggak perlu disaring perasaan.",
+    "Kenapa matematika bikin pusing? Karena masalahnya selalu minta “disederhanakan” tapi hidupmu enggak."
   ];
   let frJokeIdx = -1;
 
@@ -1165,22 +1189,43 @@
 
   function frKB(text, lang) {
     const raw = String(text || "").trim();
-    if (!raw || raw.length > 220) return null;
+    if (!raw || raw.length > 240) return null;
     const b = frNorm(raw);
     let m;
 
-    // ── Domain CIKUR GO (hanya fakta yang sudah diketahui; tanpa angka karangan) ──
+    /* ===== CIKUR GO & domain aplikasi ===== */
+    if (/ (apa itu|apa sih|jelaskan) (cikur go ride|cikurgo ride|layanan ride|fitur ride) | (cikur go ride|cikurgo ride) itu apa /.test(b) && !/\b(cgo|bcgo)\b/.test(b)) {
+      return frAns("ride", "CIKUR GO RIDE adalah layanan ojek motor: penumpang atau barang diantar dari satu titik ke titik lain. Pelanggan memesan, aplikasi mencarikan driver terdekat, tarif dihitung dari konfigurasi harga (tarif dasar + per km).");
+    }
+    if (/ (apa itu|apa sih|jelaskan) (cikur go food|cikurgo food|layanan food|fitur food) | (cikur go food|cikurgo food) itu apa /.test(b) && !/\b(cgo|bcgo)\b/.test(b)) {
+      return frAns("food", "CIKUR GO FOOD adalah layanan pesan-antar makanan: pelanggan memesan dari mitra resto atau pedagang, driver mengambil lalu mengantar. Cocok untuk warung, resto, dan katering yang ingin menambah kanal pesanan.");
+    }
+    if (/ (apa itu|apa sih|jelaskan) (cikur go resto|cikurgo resto|layanan resto|fitur resto) | (cikur go resto|cikurgo resto) itu apa /.test(b) && !/\b(cgo|bcgo)\b/.test(b)) {
+      return frAns("resto", "CIKUR GO RESTO adalah jalur untuk mitra restoran/warung: mereka bisa menerima pesanan dari pelanggan lewat aplikasi, mengatur menu, dan dipasangkan dengan driver FOOD untuk pengantaran.");
+    }
+    if (/ (apa itu|apa sih|jelaskan) (cikurpay|cikur pay|pembayaran cikur) | (cikurpay|cikur pay) itu apa /.test(b)) {
+      return frAns("cikurpay", "CikurPay adalah kanal pembayaran di dalam ekosistem CIKUR GO — dipakai untuk membayar pesanan RIDE/FOOD maupun transaksi mitra. Detail metode (saldo, transfer, atau kanal lain) mengikuti konfigurasi resmi aplikasi.");
+    }
     if (/ (apa itu|apa sih|jelaskan|ceritakan|kenalkan)( tentang)? (aplikasi )?(cikur ?go|cikurgo)( itu)?( apa)? | (cikur ?go|cikurgo) itu apa /.test(b) && !/\b(cgo|bcgo)\b/.test(b)) {
       return frAns("domain-cikurgo", "CIKUR GO adalah aplikasi multi-layanan: RIDE (ojek motor), FOOD, dan RESTO, ditambah jalur Mitra untuk driver, resto, dan agen, dengan pembayaran lewat CikurPay. Tagline-nya “Pasti Mudah, Pasti Nyaman”, dan tujuannya membuka peluang kerja lewat kemitraan.");
     }
+    if (/ (tagline|slogan) (cikur ?go|cikurgo) | (cikur ?go|cikurgo).*(tagline|slogan) /.test(b)) {
+      return frAns("tagline", "Tagline CIKUR GO: “Pasti Mudah, Pasti Nyaman”.");
+    }
     if (/ apa itu (ojek online|ojol|ojek daring|ojek aplikasi) | (ojek online|ojol) itu apa /.test(b)) {
       return frAns("def-ojol", "Ojek online (ojol) adalah layanan antar-jemput penumpang atau barang dengan sepeda motor yang dipesan lewat aplikasi: pelanggan memesan, aplikasi mencarikan driver terdekat, dan tarif dihitung otomatis. Di CIKUR GO layanan ini bernama CIKUR GO RIDE, khusus motor.");
+    }
+    if (/ (apa itu|apa sih|jelaskan) (mitra) | mitra itu apa /.test(b) && !/\b(driver|beda|perbedaan)\b/.test(b)) {
+      return frAns("def-mitra", "Mitra di CIKUR GO adalah orang atau usaha yang bekerja sama dengan platform: driver (RIDE/FOOD), resto/warung, dan agen. Mereka daftar lewat menu Mitra, diverifikasi admin, lalu bisa menerima order sesuai jenis kemitraannya.");
     }
     if (/ (beda|bedanya|perbedaan) (antara )?(driver|pengemudi|mitra).*(mitra|driver|pengemudi) /.test(b)) {
       return frAns("beda-driver-mitra", "Mitra adalah payung besarnya: orang atau usaha yang bekerja sama dengan CIKUR GO. Driver adalah salah satu jenis mitra (yang mengantar pesanan RIDE/FOOD); jenis lainnya mitra resto dan agen. Jadi semua driver adalah mitra, tapi tidak semua mitra adalah driver.");
     }
     if (/ (cara|bagaimana|langkah|syarat).*(daftar|jadi|gabung|menjadi|mendaftar).*(mitra|driver|resto|agen) /.test(b) && !/ (berapa|jumlah) /.test(b)) {
       return frAns("daftar-mitra", "Umumnya alurnya begini: (1) buat atau masuk ke akun CIKUR GO, (2) buka menu Mitra, (3) pilih jenis kemitraan — driver, resto, atau agen, (4) lengkapi data dan verifikasi (email, HP, identitas, PIN), (5) kirim pengajuan lalu tunggu persetujuan admin (status pending sampai disetujui). Syarat rinci tiap jenis bisa berbeda.");
+    }
+    if (/ (cara|bagaimana|langkah).*(pesan|order|memesan).*(ride|ojek|motor|food|makanan) /.test(b)) {
+      return frAns("cara-pesan", "Umumnya: buka aplikasi CIKUR GO → pilih RIDE atau FOOD → isi titik jemput/antar atau pilih resto & menu → cek estimasi tarif → konfirmasi pesanan → tunggu driver. Pembayaran lewat metode yang tersedia (termasuk CikurPay bila aktif).");
     }
     if (/ (komisi|potongan|bagi hasil).*(apa|bagaimana|berapa|gimana|sistem)| (apa|bagaimana|berapa).*(komisi|bagi hasil) /.test(b)) {
       return frAns("komisi", "Pelanggan melihat harga penuh saja. Di halaman driver, pembagian komisi aplikator dan pendapatan driver langsung ditampilkan per order. Persentase pastinya ada di konfigurasi harga CIKUR GO, bukan di ingatan Otak. Kalau kamu sebut harganya dan persentasenya, aku hitungkan.");
@@ -1189,19 +1234,23 @@
       const km = m[1] || m[2];
       return frAns("tarif-ride", "Tarif RIDE dihitung dari konfigurasi harga CIKUR GO (tarif dasar + tarif per km), dan angkanya tidak tersimpan di Otak ini, jadi aku tidak mau menebak. Kalau kamu sebut tarif dasar dan tarif per km, aku hitungkan untuk " + km + " km.");
     }
-    if (/ (layanan|fitur).*(apa saja|apa aja|ada apa|tersedia) | cikur ?go (bisa|punya) apa /.test(b)) {
+    if (/ (layanan|fitur).*(apa saja|apa aja|ada apa|tersedia) | cikur ?go (bisa|punya) apa | (apa saja|apa aja) (layanan|fitur) /.test(b)) {
       return frAns("layanan", "CIKUR GO punya: RIDE (ojek motor), FOOD (pesan makanan), RESTO (untuk mitra resto), jalur Mitra (driver, resto, agen), pembayaran CikurPay, dan Chat CGO sebagai asisten.");
     }
-
     if (/ (cara|bagaimana|tips|supaya|agar).*(ingkat|naik|nambah|tambah|banyak|besar|maksimal|optimal).*(pendapatan|penghasilan|income|orderan|order).*driver | (tips|cara).*driver.*(pendapatan|penghasilan|orderan) /.test(b)) {
       return frAns("tips-driver", "Saran umum (bukan angka resmi CIKUR GO): aktif di jam sibuk (berangkat kerja, makan siang, pulang kerja), standby di area ramai seperti kampus, pasar, dan kantor, jaga rating dan tingkat terima order, layani dengan ramah, serta rawat motor dan perlengkapan. Order yang dekat dan berurutan biasanya lebih efisien daripada satu order jauh.");
     }
-
-    if (/ (beda|bedanya|perbedaan).*(cgo|bcgo).*(cgo|bcgo) /.test(b)) {
+    if (/ (beda|bedanya|perbedaan).*(cgo|bcgo).*(cgo|bcgo) | (apa beda|bedanya) (cgo|bcgo) /.test(b)) {
       return frAns("beda-cgo-bcgo", "BCGO itu konsol saraf dan operasional live (siklus, scan, organ). CGO adalah lapisan penalaran yang membaca state itu, menjelaskan, dan membantu memutuskan — satu sistem, dua peran.");
     }
+    if (/ (apa itu|apa sih|jelaskan) (bcgo) | bcgo itu apa /.test(b)) {
+      return frAns("def-bcgo", "BCGO adalah lingkungan operasi live CIKUR GO: memantau siklus saraf, source scan, organ/modul, telemetry, dan radar agent. Dari situ CGO membaca bukti dan membantu keputusan.");
+    }
+    if (/ (apa itu|apa sih|jelaskan) (cgo)(?! ?\d) | cgo itu apa | (apa|siapa) (itu )?cgo /.test(b) && !/\b(bcgo|kode akses)\b/.test(b)) {
+      return frAns("def-cgo", "CGO adalah lapisan penalaran dan asisten internal di ekosistem CIKUR GO. Ia membaca state sistem (BCGO), menalar dari bukti, menjawab pertanyaan, dan membantu keputusan operasional — bukan manusia, melainkan program.");
+    }
 
-    // ── Fakta umum yang pasti ──
+    /* ===== Pengetahuan umum singkat ===== */
     if (/ siapa presiden (indonesia )?(yang )?pertama /.test(b) || / presiden pertama (indonesia|ri) /.test(b)) {
       return frAns("presiden-1", "Presiden pertama Indonesia adalah Soekarno, dengan Mohammad Hatta sebagai wakil presiden. Proklamasi kemerdekaan dibacakan 17 Agustus 1945.");
     }
@@ -1225,23 +1274,37 @@
     if (/ (apa itu|apa yang dimaksud|jelaskan) gravitasi /.test(b)) {
       return frAns("gravitasi", "Gravitasi adalah gaya tarik-menarik antar benda bermassa. Gravitasi Bumi menarik benda ke arah pusatnya, itulah sebabnya benda jatuh dan kita tidak melayang.");
     }
+    if (/ (apa itu|apa yang dimaksud|jelaskan) (kecerdasan buatan|ai|artificial intelligence) /.test(b)) {
+      return frAns("def-ai", "Kecerdasan buatan (AI) adalah program komputer yang dirancang meniru sebagian kemampuan berpikir manusia — mengenali pola, memahami bahasa, mengambil keputusan, atau belajar dari data. Ada yang berbasis aturan (rule-based) seperti Otak ini, ada yang berbasis model statistik/neural network. Keduanya punya keterbatasan masing-masing.");
+    }
+    if (/ (apa itu|apa yang dimaksud|jelaskan) (algoritma|algoritme) /.test(b)) {
+      return frAns("def-algoritma", "Algoritma adalah urutan langkah yang jelas untuk menyelesaikan satu masalah atau mencapai satu tujuan. Ia tidak tergantung bahasa pemrograman; resep masakan pun sebenarnya algoritma.");
+    }
     if (/ planet (yang )?(paling )?terbesar | planet apa.*(terbesar|paling besar) /.test(b)) return frAns("planet-besar", "Planet terbesar di tata surya adalah Jupiter.");
     if (/ hewan (darat )?(yang )?(paling )?(tercepat|cepat) /.test(b)) return frAns("hewan-cepat", "Hewan darat tercepat adalah cheetah, yang bisa berlari sekitar 100 km/jam dalam jarak pendek.");
     if (/ (lagu kebangsaan|lagu nasional) indonesia /.test(b)) return frAns("lagu-kebangsaan", "Lagu kebangsaan Indonesia adalah “Indonesia Raya”, ciptaan W.R. Supratman.");
     if (/ (kapan|tanggal berapa) (hari )?(kemerdekaan|proklamasi) (indonesia|ri)? ?/.test(b)) return frAns("merdeka", "Indonesia memproklamasikan kemerdekaan pada 17 Agustus 1945.");
     if (/ berapa (hari|jumlah hari) (dalam|di) (satu )?tahun /.test(b)) return frAns("hari-setahun", "Satu tahun ada 365 hari, dan 366 hari pada tahun kabisat.");
     if (/ air mendidih (pada )?(suhu )?(berapa|berapa derajat) | titik didih air /.test(b)) return frAns("didih", "Air mendidih pada 100 °C di tekanan 1 atmosfer (permukaan laut). Di tempat tinggi suhunya lebih rendah.");
+    if (/ (berapa|jumlah|total|ada berapa).*(agama|agama resmi).*(indonesia|ri)? | (agama|agama resmi) (di )?indonesia /.test(b)) return frAns("agama-id", "Ada enam agama yang diakui resmi di Indonesia: Islam, Kristen Protestan, Katolik, Hindu, Buddha, dan Konghucu.");
+    if (/ (apa itu|jelaskan|apa yang dimaksud) (pancasila) /.test(b)) return frAns("pancasila", "Pancasila adalah dasar negara Indonesia, terdiri dari lima sila: (1) Ketuhanan Yang Maha Esa, (2) Kemanusiaan yang adil dan beradab, (3) Persatuan Indonesia, (4) Kerakyatan yang dipimpin oleh hikmat kebijaksanaan dalam permusyawaratan/perwakilan, (5) Keadilan sosial bagi seluruh rakyat Indonesia.");
 
-    // ── Obrolan ──
+    /* ===== Reflektif & sosial ===== */
     if (/ (kamu|anda|cgo) (punya|ada) (perasaan|emosi|hati) | (apa|apakah) kamu (bisa )?(merasa|sedih|senang|bahagia) /.test(b)) {
       return frAns("perasaan", "Aku tidak punya perasaan seperti manusia, dan aku tidak mau berpura-pura punya. Yang bisa kulakukan: menangkap nada bicaramu dan menyesuaikan jawaban supaya lebih nyaman.");
     }
-    if (/ (ceritakan|kasih|beri|bikin|buat|tell me) (aku |saya )?(sebuah )?(lelucon|joke|humor|candaan|bercanda) | lawak /.test(b)) {
+    if (/ (ceritakan|kasih|beri|bikin|buat|tell me) (aku |saya )?(sebuah )?(lelucon|joke|humor|candaan|bercanda) | lawak | (kasih|beri) (candaan|lelucon|joke) /.test(b)) {
       frJokeIdx = (frJokeIdx + 1 + Math.floor(Date.now() / 60000)) % FR_JOKES.length;
       return frAns("lelucon", FR_JOKES[frJokeIdx]);
     }
     if (/ (bingung|mau|enaknya|bagusnya|sebaiknya|pilih) .*(makan|sarapan|makan siang|makan malam|jajan) /.test(b) && !FR_OPS_CTX.test(b)) {
       return frAns("makan", "Biar cepat putus, pilih satu dulu: berkuah hangat (soto, bakso), gurih-pedas (ayam geprek, nasi goreng), atau ringan (roti, salad)? Kalau malas keluar, tinggal pesan lewat CIKUR GO FOOD.");
+    }
+    if (/ who are you | siapa (kamu|anda|cgo)( sebenarnya| ini)? | (kamu|anda) (siapa|itu siapa) | (kamu|anda) ini siapa /.test(b) && !/\b(bcgo)\b/.test(b)) {
+      const en = / who are you /.test(b) || lang === "en";
+      return frAns("siapa-cgo", en
+        ? "I am CGO — the internal reasoning layer in the CIKUR GO ecosystem. I read system state, reason from evidence, answer questions, and help with operational decisions. I am a program, not a person."
+        : "Aku CGO — lapisan penalaran dan asisten internal di ekosistem CIKUR GO. Aku membaca state sistem, menalar dari bukti, menjawab pertanyaan, dan membantu keputusan operasional. Aku bukan manusia; aku program.");
     }
     if ((m = b.match(/ terjemah(?:kan)? ?["']?(.+?)["']? (?:ke|dalam|ke dalam) (?:bahasa )?(inggris|indonesia) /))) {
       const src = m[1].trim(), toEn = m[2] === "inggris";
@@ -1336,16 +1399,16 @@
       var s = String(text || "").trim();
       var low = s.toLowerCase();
       if (!s) return "netral";
-      // pertanyaan / perintah skill → netral
-      if (/\b(siapa|apa|berapa|hitung|eja|spell|jam|tanggal|status|radar|mitra|customer|pesanan)\b/i.test(low)) return "netral";
+      // Pertanyaan teknis cenderung netral, kecuali jelas marah/panik.
+      if (/\b(siapa|apa|berapa|hitung|eja|spell|jam|tanggal|status|radar|mitra|customer|pesanan|siklus|scan)\b/i.test(low)
+          && !/\b(parah|ancur|error\s*terus|kenapa\s*sih|kok\s*begitu)\b/i.test(low)) return "netral";
       if (/^(halo|hai|hi|hey|hello|pagi|siang|sore|malam|makasih|thanks|thank you|cgo)\b/i.test(low)) return "netral";
-      if (/\b(capek|lelah|pusing|sedih|ngantuk)\b/i.test(low)) return "lelah";
-      if (/\b(kesal|marah|bete|sebel|anjir)\b/i.test(low)) return "kesal";
-      if (/\b(takut|gimana ini|error nih|panic|darurat|tolong\s*dong)\b/i.test(low)) return "panik";
-      if (/\b(kok|kenapa|gimana|bagaimana|why|how come)\b/i.test(low)) return "penasaran";
-      if (/^(hmm+|yaudah|oh+|gitu ya|\.\.\.|ya\.?)$/i.test(low) || /\b(ragu|bingung|gatau)\b/i.test(low)) return "ragu";
-      if (/!{2,}/.test(s) || /[😄😃🎉✨🔥❤️]/.test(s) || /\b(semangat|asik|keren|mantap|yeay)\b/i.test(low)) return "senang";
-      // short all-lowercase only if looks like sigh, not a question word
+      if (/\b(capek|lelah|pusing|sedih|ngantuk|nggak kuat|udah mumet|mumet)\b/i.test(low)) return "lelah";
+      if (/\b(kesal|marah|bete|sebel|anjir|parah|ancur|ngeselin|nyebelin)\b/i.test(low)) return "kesal";
+      if (/\b(takut|gimana ini|error nih|panic|darurat|tolong\s*dong|gawat)\b/i.test(low)) return "panik";
+      if (/\b(kok|kenapa|gimana|bagaimana|why|how come|serius\?|masa\?)\b/i.test(low)) return "penasaran";
+      if (/^(hmm+|yaudah|oh+|gitu ya|\.\.\.|ya\.?)$/i.test(low) || /\b(ragu|bingung|gatau|bimbang)\b/i.test(low)) return "ragu";
+      if (/!{2,}/.test(s) || /[😄😃🎉✨🔥❤️🥳]/u.test(s) || /\b(semangat|asik|keren|mantap|yeay|hebat|wow)\b/i.test(low)) return "senang";
       if (s === low && s.length < 18 && !/[!?]/.test(s) && !/\d/.test(s) && /\b(capek|lelah|pusing|sedih|yaudah)\b/.test(low)) return "lelah";
       if (s === s.toUpperCase() && s.length > 10 && /[A-Z]{5,}/.test(s) && !/\d/.test(s)) return "kesal";
       return "netral";
@@ -1353,44 +1416,59 @@
   }
 
   var _OPENERS = {
-    netral: ["Oke,", "Siap,", "Hmm,", "Nah,", "Gini,", "Baik,", ""],
-    senang: ["Wah,", "Yeay,", "Keren,", "Mantap,", "Asik,", ""],
-    lelah: ["Sini,", "Tenang,", "Oke,", "Gapapa,", "Santai,", ""],
-    kesal: ["Aduh,", "Maaf ya,", "Oke, aku bantu,", "Sabar ya,", ""],
-    panik: ["Tenang,", "Santai,", "Oke, fokus,", "Aku bantu,", ""],
-    penasaran: ["Nah,", "Jadi gini,", "Oke,", "Menarik,", "Coba aku jelasin,", ""],
-    ragu: ["Hmm,", "Boleh,", "Oke,", "Gini ya,", ""]
+    netral: ["Oke,", "Siap,", "Hmm,", "Nah,", "Gini,", "Baik,", "Betul,", "Jadi,", ""],
+    senang: ["Wah,", "Yeay,", "Keren,", "Mantap,", "Asik,", "Wih,", "Nice,", ""],
+    lelah: ["Sini,", "Tenang,", "Oke,", "Gapapa,", "Santai,", "Pelan-pelan,", ""],
+    kesal: ["Aduh,", "Maaf ya,", "Oke, aku bantu,", "Sabar ya,", "Tenang, aku temenin,", ""],
+    panik: ["Tenang,", "Santai,", "Oke, fokus,", "Aku bantu,", "Jangan panik,", ""],
+    penasaran: ["Nah,", "Jadi gini,", "Oke,", "Menarik,", "Coba aku jelasin,", "Gini ya,", ""],
+    ragu: ["Hmm,", "Boleh,", "Oke,", "Gini ya,", "Pelan-pelan aja,", ""]
   };
   var _CLOSERS = {
-    netral: ["", "Gitu deh.", "Lanjut?", "Ada lagi?", "Oke?"],
-    senang: ["😄", "Semangat ya!", "Keren!", "Mantap!", ""],
-    lelah: ["Istirahat dulu.", "Aku jaga sini.", "🤗", "Gapapa.", ""],
-    kesal: ["Maaf ya.", "Aku benerin.", "Sabar ya.", ""],
-    panik: ["Aman.", "Aku pantau.", "Tenang ya. 😌", ""],
-    penasaran: ["Mau aku jelasin lebih?", "Lanjut?", "Gimana?", ""],
-    ragu: ["Gimana?", "Oke?", "Pikir dulu juga boleh.", ""]
+    netral: ["", "Gitu deh.", "Lanjut?", "Ada lagi?", "Oke?", "Mau ke mana lagi?", "Kalau perlu, tanya lagi ya."],
+    senang: ["😄", "Semangat ya!", "Keren!", "Mantap!", "Seru!", ""],
+    lelah: ["Istirahat dulu.", "Aku jaga sini.", "🤗", "Gapapa.", "Pelan-pelan aja.", ""],
+    kesal: ["Maaf ya.", "Aku benerin.", "Sabar ya.", "Kita rapikan.", ""],
+    panik: ["Aman.", "Aku pantau.", "Tenang ya. 😌", "Fokus satu-satu.", ""],
+    penasaran: ["Mau aku jelasin lebih?", "Lanjut?", "Gimana?", "Mau lebih dalam?", ""],
+    ragu: ["Gimana?", "Oke?", "Pikir dulu juga boleh.", "Santai aja.", ""]
   };
 
-  function _pickNonRepeat(list, last) {
-    var opts = (list || []).filter(function (x) { return x !== last; });
-    if (!opts.length) opts = list || [""];
+  function _pickNonRepeatSmart(list, history) {
+    var opts = (list || []).slice();
+    var hist = (history || []).slice(-3);
+    var filtered = opts.filter(function (x) { return hist.indexOf(x) < 0; });
+    if (filtered.length) opts = filtered;
+    if (!opts.length) return "";
     return opts[Math.floor(Math.random() * opts.length)] || "";
+  }
+
+  function pushOpenerHistory(x) {
+    try {
+      state.lastOpenerHistory = (state.lastOpenerHistory || []).concat([x]).slice(-5);
+      state.lastOpener = x;
+    } catch (_) {}
+  }
+  function pushCloserHistory(x) {
+    try {
+      state.lastCloserHistory = (state.lastCloserHistory || []).concat([x]).slice(-5);
+      state.lastCloser = x;
+    } catch (_) {}
   }
 
   function pickOpener(mood, topic) {
     try {
       var list = _OPENERS[mood] || _OPENERS.netral;
-      var o = _pickNonRepeat(list, state.lastOpener);
-      state.lastOpener = o;
+      var o = _pickNonRepeatSmart(list, state.lastOpenerHistory);
+      pushOpenerHistory(o);
       return o;
     } catch (_) { return ""; }
   }
-
   function pickCloser(mood) {
     try {
       var list = _CLOSERS[mood] || _CLOSERS.netral;
-      var c = _pickNonRepeat(list, state.lastCloser);
-      state.lastCloser = c;
+      var c = _pickNonRepeatSmart(list, state.lastCloserHistory);
+      pushCloserHistory(c);
       return c;
     } catch (_) { return ""; }
   }
@@ -2018,10 +2096,20 @@
     if (!answer) {
       const pack0 = phrasePack(lang);
       const low0 = t.toLowerCase();
-      if (/^(halo|hai|hallo|helo|hello|hi|hey|pagi|siang|sore|malam)\b/i.test(t) || /^(こんにちは|こんばんは|おはよう)/.test(t) || /siapa\s+kamu|who\s+are\s+you|あなたは誰/.test(t)) {
+      if (/^(halo|hai|hallo|helo|hello|hi|hey|pagi|siang|sore|malam)\b/i.test(t) || /^(こんにちは|こんばんは|おはよう)/.test(t)) {
         const st = live || {};
         answer = pack0.greeting(st.step || "siaga", st.cycle != null ? st.cycle : 0);
         step("OTAK_CIKURGO", true, "greeting-" + lang);
+      } else if (/^(siapa\s+kamu|kamu\s+siapa|who\s+are\s+you|あなたは誰)\s*[.!?]?$/i.test(t.trim())) {
+        const kbId = frKB(t, lang);
+        if (kbId && kbId.answer) {
+          answer = kbId.answer;
+          step("OTAK_CIKURGO", true, "kb:" + kbId.id);
+        } else {
+          const st = live || {};
+          answer = pack0.greeting(st.step || "siaga", st.cycle != null ? st.cycle : 0);
+          step("OTAK_CIKURGO", true, "greeting-" + lang);
+        }
       } else if (/\b(bisa\s*apa|what\s+can\s+you|capabilities|kemampuan|fitur|できること|機能)\b/i.test(low0)) {
         answer = pack0.capabilities;
         step("OTAK_CIKURGO", true, "capabilities-" + lang);
@@ -2222,6 +2310,36 @@
       } else if (polaNote) {
         step("OTAK_CIKURGO", true, "pola-deferred");
       }
+    }
+
+    /* Local safe arithmetic — only when answer still empty & simple binary expr.
+       Additive: does not override CIKURGO / orchestrator results. Zero regression. */
+    if (!answer && wantHitung && !systemRequest) {
+      try {
+        const expr = t.match(/(\d+(?:[.,]\d+)?)\s*([+\-*/x×÷])\s*(\d+(?:[.,]\d+)?)/);
+        if (expr) {
+          const a = parseFloat(String(expr[1]).replace(",", "."));
+          const b = parseFloat(String(expr[3]).replace(",", "."));
+          const op = expr[2];
+          let r = null;
+          if (op === "+") r = a + b;
+          else if (op === "-") r = a - b;
+          else if (op === "*" || op === "x" || op === "×") r = a * b;
+          else if ((op === "/" || op === "÷") && b !== 0) r = a / b;
+          if (r != null && Number.isFinite(r)) {
+            const rounded = Math.round(r * 1000) / 1000;
+            let spokenR = String(rounded);
+            try {
+              if (CG && typeof CG.angkaKeKata === "function") {
+                const k = CG.angkaKeKata(String(rounded), lang);
+                if (k) spokenR = rounded + " (" + k + ")";
+              }
+            } catch (_) {}
+            answer = (lang === "en" ? "Result: " : lang === "ja" ? "結果: " : "Hasil hitung: ") + spokenR + ".";
+            step("OTAK_CIKURGO", true, "local-aritmetika");
+          }
+        }
+      } catch (_) {}
     }
 
 // C2. Percakapan / sapaan / identitas / kapabilitas — susun dari konstitusi + state live
