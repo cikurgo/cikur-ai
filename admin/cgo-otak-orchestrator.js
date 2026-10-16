@@ -1,12 +1,19 @@
 /**
- * CGO Otak Orchestrator — V1.0.0-MASA-DEPAN
- * Satu pintu penalaran natural (skills + instruction + nalar + gaya).
+ * CGO Otak Orchestrator — V1.8.0-HUB-ALIGNED-ZR
+ * Satu pintu penalaran natural (skills + instruction + nalar + gaya + domain).
  * Tidak menyentuh proof chain / investigasi / guardian / mutasi source.
  * Zero network. Aditif untuk Hub & browser-adapter.
+ *
+ * v1.8.0 (selaras Hub 1.17.4):
+ *  - Domain KB aditif: RIDE, FOOD, RESTO, CikurPay, mitra, tagline, CGO/BCGO
+ *  - Percakapan & smalltalk diperkaya (tanpa menimpa skill hitung/eja/jam)
+ *  - detectLang lebih sensitif multi-bahasa
+ *  - Warna tambahan; API domainAnswer diekspos
+ *  - Zero regresi: seluruh skill lama (math, spell, time, unit, percent) tetap
  */
 (function (global) {
   "use strict";
-  var VERSION = "1.7.1-TEMPORAL-ZR";
+  var VERSION = "1.8.1-NATURAL-ZR";
   var memoryStore = null;
 
   function g() {
@@ -65,14 +72,22 @@
 
   function detectLang(text) {
     var s = String(text || "");
-    if (/\b(english|in english|bahasa inggris)\b/i.test(s)) return "en";
+    if (/\b(english|in english|bahasa inggris|answer in english)\b/i.test(s)) return "en";
     if (/^(spell)\b/i.test(s)) return "en";
     if (/\b(what time is it|what is the time|what's the time|current time|what day is it|what is the date|what's the date)\b/i.test(s)) return "en";
     if (/\b(tomorrow|yesterday|what day|what time|next week|last week|next month|last month|days? ago|days? from now|hours? ago|hours? from now|minutes? ago|minutes? from now)\b/i.test(s)) return "en";
-    if (/\b(日本語|nihongo|japanese|bahasa jepang)\b/i.test(s)) return "ja";
+    if (/[\u3040-\u30ff\u3400-\u9faf]/.test(s) || /\b(日本語|nihongo|japanese|bahasa jepang)\b/i.test(s)) return "ja";
     if (/\b(español|spanish|bahasa spanyol)\b/i.test(s)) return "es";
     if (/\b(français|french|bahasa perancis)\b/i.test(s)) return "fr";
     if (/\b(deutsch|german|bahasa jerman)\b/i.test(s)) return "de";
+    if (/\b(portugu[eê]s|portuguese|bahasa portugis)\b/i.test(s)) return "pt";
+    if (/[\u0600-\u06ff]/.test(s) || /\b(arabic|bahasa arab)\b/i.test(s)) return "ar";
+    // heuristic: english function words vs indonesian
+    var low = s.toLowerCase();
+    var enHits = (low.match(/\b(the|and|what|how|please|thanks|can|you|calculate|spell|hello)\b/g) || []).length;
+    var idHits = (low.match(/\b(yang|dan|apa|bagaimana|tolong|terima|kasih|bisa|kamu|hitung|eja|halo)\b/g) || []).length;
+    if (enHits >= 2 && enHits > idHits) return "en";
+    if (idHits >= 2 && idHits > enHits) return "id";
     return "id";
   }
 
@@ -820,12 +835,21 @@
     green: {id:"hijau",en:"green",ja:"緑",es:"verde",fr:"vert",de:"grün",pt:"verde",ar:"أخضر"},
     yellow: {id:"kuning",en:"yellow",ja:"黄色",es:"amarillo",fr:"jaune",de:"gelb",pt:"amarelo",ar:"أصفر"},
     black: {id:"hitam",en:"black",ja:"黒",es:"negro",fr:"noir",de:"schwarz",pt:"preto",ar:"أسود"},
-    white: {id:"putih",en:"white",ja:"白",es:"blanco",fr:"blanc",de:"weiß",pt:"branco",ar:"أبيض"}
+    white: {id:"putih",en:"white",ja:"白",es:"blanco",fr:"blanc",de:"weiß",pt:"branco",ar:"أبيض"},
+    orange: {id:"oranye",en:"orange",ja:"オレンジ",es:"naranja",fr:"orange",de:"orange",pt:"laranja",ar:"برتقالي"},
+    purple: {id:"ungu",en:"purple",ja:"紫",es:"morado",fr:"violet",de:"lila",pt:"roxo",ar:"بنفسجي"},
+    pink: {id:"merah muda",en:"pink",ja:"ピンク",es:"rosa",fr:"rose",de:"rosa",pt:"rosa",ar:"وردي"},
+    gray: {id:"abu-abu",en:"gray",ja:"灰色",es:"gris",fr:"gris",de:"grau",pt:"cinza",ar:"رمادي"},
+    brown: {id:"cokelat",en:"brown",ja:"茶色",es:"marrón",fr:"brun",de:"braun",pt:"marrom",ar:"بني"}
   };
   function colorNameML(name, lang) {
     var key = String(name || "").toLowerCase();
-    // map common id/en words to key
-    var alias = {merah:"red",red:"red",biru:"blue",blue:"blue",hijau:"green",green:"green",kuning:"yellow",yellow:"yellow",hitam:"black",black:"black",putih:"white",white:"white"};
+    var alias = {
+      merah:"red",red:"red",biru:"blue",blue:"blue",hijau:"green",green:"green",
+      kuning:"yellow",yellow:"yellow",hitam:"black",black:"black",putih:"white",white:"white",
+      oranye:"orange",orange:"orange",ungu:"purple",purple:"purple",pink:"pink","merah muda":"pink",
+      "abu-abu":"gray",gray:"gray",grey:"gray",cokelat:"brown",coklat:"brown",brown:"brown"
+    };
     var k = alias[key] || key;
     var row = COLOR_NAMES_ML[k];
     if (!row) return name;
@@ -1054,9 +1078,66 @@
     return null;
   }
 
-  function conversationAnswer(raw) {
+  /**
+   * Domain knowledge selaras Hub KB — aditif, tidak menimpa skill hitung/eja/jam.
+   */
+  function domainAnswer(raw) {
+    var text = String(raw || "").trim();
+    if (!text || text.length > 240) return null;
+    var b = " " + text.toLowerCase()
+      .replace(/[?!,;()"“”']/g, " ")
+      .replace(/\s+/g, " ") + " ";
+
+    function pack(t, topic) {
+      return { text: t, engine: "CGO_DOMAIN", tags: ["domain", topic || "cikur"] };
+    }
+
+    if (/ (apa itu|apa sih|jelaskan) (cikur go ride|cikurgo ride|layanan ride|fitur ride) | (cikur go ride|cikurgo ride) itu apa | (what is|explain) (cikur go )?ride /.test(b)) {
+      var en = /\b(what is|explain)\b/.test(b) && !/\b(apa itu|jelaskan)\b/.test(b);
+      return pack(en
+        ? "CIKUR GO RIDE is motorbike taxi: pickup from A to B. The passenger orders, the app finds a nearby driver, fare uses configured base + per-km rates."
+        : "CIKUR GO RIDE adalah layanan ojek motor: penumpang atau barang diantar dari titik ke titik. Pelanggan memesan, aplikasi mencarikan driver terdekat, tarif dari konfigurasi (dasar + per km).", "RIDE");
+    }
+    if (/ (apa itu|apa sih|jelaskan) (cikur go food|cikurgo food|layanan food|fitur food) | (cikur go food|cikurgo food) itu apa /.test(b)) {
+      return pack("CIKUR GO FOOD adalah layanan pesan-antar makanan: pesan dari mitra resto/pedagang, driver mengambil lalu mengantar.", "FOOD");
+    }
+    if (/ (apa itu|apa sih|jelaskan) (cikur go resto|cikurgo resto|layanan resto) | (cikur go resto|cikurgo resto) itu apa /.test(b)) {
+      return pack("CIKUR GO RESTO adalah jalur mitra restoran/warung: terima pesanan lewat aplikasi, atur menu, dipasangkan driver FOOD.", "RESTO");
+    }
+    if (/ (apa itu|apa sih|jelaskan) (cikurpay|cikur pay) | (cikurpay|cikur pay) itu apa /.test(b)) {
+      return pack("CikurPay adalah kanal pembayaran di ekosistem CIKUR GO untuk pesanan RIDE/FOOD dan transaksi mitra. Metode mengikuti konfigurasi resmi aplikasi.", "CIKURPAY");
+    }
+    if (/ (tagline|slogan) (cikur ?go|cikurgo) | (cikur ?go|cikurgo).*(tagline|slogan) /.test(b)) {
+      return pack("Tagline CIKUR GO: “Pasti Mudah, Pasti Nyaman”.", "TAGLINE");
+    }
+    if (/ (apa itu|apa sih|jelaskan) (mitra) | mitra itu apa /.test(b) && !/\b(driver|beda|perbedaan)\b/.test(b)) {
+      return pack("Mitra di CIKUR GO: driver (RIDE/FOOD), resto/warung, dan agen. Daftar lewat menu Mitra, diverifikasi admin, lalu bisa terima order.", "MITRA");
+    }
+    if (/ (beda|bedanya|perbedaan) (antara )?(driver|pengemudi|mitra).*(mitra|driver|pengemudi) /.test(b)) {
+      return pack("Mitra adalah payung besar kemitraan. Driver adalah salah satu jenis mitra (antar RIDE/FOOD); ada juga mitra resto dan agen. Semua driver mitra, tapi tidak semua mitra adalah driver.", "MITRA_DRIVER");
+    }
+    if (/ (cara|bagaimana|langkah|syarat).*(daftar|jadi|gabung|menjadi|mendaftar).*(mitra|driver|resto|agen) /.test(b)) {
+      return pack("Alur umum: buat/masuk akun CIKUR GO → menu Mitra → pilih jenis (driver/resto/agen) → lengkapi data & verifikasi → kirim pengajuan → tunggu approve admin (pending sampai disetujui).", "DAFTAR_MITRA");
+    }
+    if (/ (cara|bagaimana|langkah).*(pesan|order|memesan).*(ride|ojek|motor|food|makanan) /.test(b)) {
+      return pack("Umumnya: buka CIKUR GO → pilih RIDE atau FOOD → isi jemput/antar atau pilih resto & menu → cek tarif → konfirmasi → tunggu driver. Bayar lewat metode tersedia (termasuk CikurPay bila aktif).", "CARA_PESAN");
+    }
+    if (/ (layanan|fitur).*(apa saja|apa aja|ada apa|tersedia) | cikur ?go (bisa|punya) apa /.test(b)) {
+      return pack("CIKUR GO punya: RIDE (ojek motor), FOOD (pesan makanan), RESTO (mitra resto), jalur Mitra (driver, resto, agen), CikurPay, dan Chat CGO sebagai asisten.", "LAYANAN");
+    }
+    if (/ (apa itu|apa sih|jelaskan|ceritakan|kenalkan)( tentang)? (aplikasi )?(cikur ?go|cikurgo) | (cikur ?go|cikurgo) itu apa /.test(b) && !/\b(cgo|bcgo)\b/.test(b)) {
+      return pack("CIKUR GO adalah aplikasi multi-layanan: RIDE, FOOD, RESTO, jalur Mitra (driver, resto, agen), pembayaran CikurPay, dan Chat CGO. Tagline: “Pasti Mudah, Pasti Nyaman”.", "CIKURGO");
+    }
+    return null;
+  }
+
+    function conversationAnswer(raw) {
     var text = String(raw || "").trim();
     if (!text) return null;
+    try {
+      var dom = domainAnswer(text);
+      if (dom && dom.text) return dom;
+    } catch (_) {}
     var inst = getInstruction();
     var classified = null;
     try {
@@ -1076,7 +1157,7 @@
       if (/\b(kamu bisa apa|bisa ngapain|what can you)\b/i.test(text))
         return pack("Aku bisa hitung & eja multi-bahasa, jam/tanggal, emoji/warna, persen/pangkat, konversi satuan, status sistem, dan cek file berbasis bukti.", "CAPABILITY");
       if (/\b(apa\s*(itu\s*)?bcgo|what\s*is\s*bcgo|jelaskan\s*(apa\s*itu\s*)?bcgo|about\s*bcgo)\b/i.test(text))
-        return pack("BCGO adalah monitor saraf internal CIKUR GO: memantau organ, telemetry, scanner source, radar agent, dan siklus diagnosis berbasis bukti — tanpa AI eksternal.", "ABOUT_BCGO");
+        return pack("BCGO adalah lingkungan operasi live CIKUR GO: memantau siklus saraf, source scan, organ/modul, telemetry, dan radar agent. CGO membaca bukti dari situ untuk membantu keputusan — tanpa AI eksternal.", "ABOUT_BCGO");
     if (/\b(apa\s*(itu\s*)?cikur(\s*go)?|what\s*is\s*cikur|ceritakan\s*(tentang\s*)?cikur|about\s*cikur|tell\s*me\s*about\s*cikur)\b/i.test(text))
         return pack("CIKUR GO adalah ekosistem operasional (customer, mitra, driver, resto) dengan otak internal CGO: penalaran lokal, ejaan/angka multi-bahasa, dan monitor BCGO.", "ABOUT_CIKUR");
     if (/\b(siapa\s*(yang\s*)?(membuat|bikin|ciptakan)\w*|who\s*(made|built|created)\s*(you|this))\b/i.test(text))
@@ -1253,6 +1334,16 @@
         : "Bisa dong 😁 Aku bisa bantu menulis, memeriksa, memperbaiki, dan menguji kode. Kirim file aslinya; aku akan mengubah bagian yang perlu saja dan menjelaskan hasil tes yang benar-benar dijalankan.",
         engine: "CGO_SMALLTALK", tags: ["conversation", "capability"] };
     }
+    // Micro-social cues — natural, not system template
+    if (/^(hmm+|hm+|eh+|oh+|yaudah|ya udah|oke deh|ok deh|serius|beneran|really|yeah|yep|sip|mantap|nah)$/.test(compact)) {
+      if (/serius|beneran|really/.test(compact))
+        return { text: lang === "en" ? "Yes — I’m serious. What should we check?" : "Iya, serius. Mau dicek apa?", engine: "CGO_SMALLTALK", tags: ["conversation", "micro"] };
+      if (/yaudah|ya udah|nah/.test(compact))
+        return { text: lang === "en" ? "Okay. I’m here if you need me." : "Oke. Panggil aja kalau butuh.", engine: "CGO_SMALLTALK", tags: ["conversation", "micro"] };
+      if (/sip|mantap|yeah|yep/.test(compact))
+        return { text: lang === "en" ? "Glad that helps." : "Sip!", engine: "CGO_SMALLTALK", tags: ["conversation", "micro"] };
+      return { text: lang === "en" ? "I’m here — what’s next?" : "Aku di sini — lanjut apa?", engine: "CGO_SMALLTALK", tags: ["conversation", "micro"] };
+    }
     return null;
   }
 
@@ -1314,7 +1405,9 @@
       emosi: !!getEmosi(),
       narasi: !!getNarasi(),
       memory: !!getMemoryApi(),
-      memoryCount: (memoryStore && memoryStore.items && memoryStore.items.length) || 0
+      memoryCount: (memoryStore && memoryStore.items && memoryStore.items.length) || 0,
+      domain: true,
+      alignedHub: "1.17.5"
     };
   }
 
@@ -1326,8 +1419,11 @@
     relDateAnswer: relDateAnswer,
     relTimeAnswer: relTimeAnswer,
     conversationAnswer: conversationAnswer,
+    domainAnswer: domainAnswer,
     polish: polish,
-    parseVocab: parseVocab
+    parseVocab: parseVocab,
+    detectLang: detectLang,
+    evalLocaleMath: evalLocaleMath
   };
 
   try {

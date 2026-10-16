@@ -62,7 +62,9 @@ async function __loadCgoCloud() {
 
 
 /*
- * BCGO MASTER NERVE SYSTEM v4.3.1-BOOT-NO-HANG
+ * BCGO MASTER NERVE SYSTEM v4.3.1-BOOT-NO-HANG-HUB-ALIGNED
+ *  - Soft-bridge: BCGOBrain.ask → CGOOtak.think untuk non-sistem (cadangan UI)
+ *  - brain.version eksplisit agar Hub probe akurat
  *
  * Prinsip:
  * - Firestore = sumber fakta real-time.
@@ -1684,7 +1686,21 @@ function answerQuestion(question) {
   });
 
   const brain = {
+    version: "4.3.1-BOOT-NO-HANG-HUB-ALIGNED",
+    /* Chat UI memprioritaskan CGO_OTAK.ask. BCGOBrain.ask = jalur cadangan evidence.
+       Aditif: pertanyaan non-sistem boleh lewat orchestrator (skill/domain) dulu. */
     ask: function(q) {
+      try {
+        var qstr = String(q || "").trim();
+        var isSystem = /\b(status|scanner|telemetry|anomali|organ|radar|source|firestore|siklus|cycle|nerve|file saraf|kasus aktif)\b/i.test(qstr)
+          || /\b(bcgo|system logs?|agent presence)\b/i.test(qstr);
+        if (!isSystem && typeof window !== "undefined" && window.CGOOtak && typeof window.CGOOtak.think === "function") {
+          var th = window.CGOOtak.think(qstr, { source: "BCGOBrain" });
+          if (th && th.handled && th.text) {
+            return naturalizeWithOtak(qstr, th.text);
+          }
+        }
+      } catch (_) {}
       const raw = answerQuestion(q);
       return naturalizeWithOtak(q, raw);
     },
@@ -1730,7 +1746,7 @@ function answerQuestion(question) {
   window.BCGO_STATE = safeClone(state);
   try {
     if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("cgo:otak-state", { detail: { module: "BCGO_ENGINE", version: brain?.version || "4.3.0" } }));
+      window.dispatchEvent(new CustomEvent("cgo:otak-state", { detail: { module: "BCGO_ENGINE", version: brain.version || "4.3.1-BOOT-NO-HANG-HUB-ALIGNED" } }));
     }
   } catch (_) {}
 
