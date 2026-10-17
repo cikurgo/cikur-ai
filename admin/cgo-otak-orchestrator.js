@@ -13,7 +13,7 @@
  */
 (function (global) {
   "use strict";
-  var VERSION = "1.8.1-NATURAL-ZR";
+  var VERSION = "1.8.3-UNITS-WORDMATH-ZR";
   var memoryStore = null;
 
   function g() {
@@ -679,7 +679,7 @@
 
   /* ═══ v1.7.1 · hitungan dengan angka berupa kata · konversi dengan nama satuan lengkap ═══ */
   var NW_UNIT = { nol: 0, satu: 1, dua: 2, tiga: 3, empat: 4, lima: 5, enam: 6, tujuh: 7, delapan: 8, sembilan: 9, sepuluh: 10, sebelas: 11 };
-  var NW_OPS = { ditambah: "+", tambah: "+", plus: "+", dikurangi: "-", kurang: "-", minus: "-", dikali: "*", kali: "*", times: "*", dibagi: "/", bagi: "/" };
+  var NW_OPS = { pangkat: "^", ditambah: "+", tambah: "+", plus: "+", dikurangi: "-", kurang: "-", minus: "-", dikali: "*", kali: "*", times: "*", dibagi: "/", bagi: "/" };
   var NW_FILLER = /^(hitung|berapa|hasil|hasilnya|adalah|sama|dengan|itu|apa|ya|dong|tolong|coba|kalau|jika|bila|sih)$/;
 
   function wordsToNumberRun(tokens) {
@@ -707,7 +707,7 @@
     if (raw.length > 90 || TALK_RE.test(raw)) return null;
     var toks = raw.toLowerCase().replace(/[?!,=]/g, " ").split(/\s+/).filter(Boolean);
     if (toks.length < 3) return null;
-    var out = [], run = [], sawWordNum = false, sawOp = false, i;
+    var out = [], run = [], sawWordNum = false, sawOp = false, sawWordOp = false, i;
     function flush() {
       if (!run.length) return true;
       var n = wordsToNumberRun(run);
@@ -718,18 +718,56 @@
     for (i = 0; i < toks.length; i++) {
       var w = toks[i];
       if (NW_FILLER.test(w)) { if (!flush()) return null; continue; }
-      if (Object.prototype.hasOwnProperty.call(NW_OPS, w)) { if (!flush()) return null; out.push(NW_OPS[w]); sawOp = true; continue; }
+      if (Object.prototype.hasOwnProperty.call(NW_OPS, w)) { if (!flush()) return null; out.push(NW_OPS[w]); sawOp = true; sawWordOp = true; continue; }
       if (/^\d+(?:[.,]\d+)?$/.test(w)) { if (!flush()) return null; out.push(w.replace(",", ".")); continue; }
       if (/^[+\-*\/x×÷]$/.test(w)) { if (!flush()) return null; out.push(w === "x" || w === "×" ? "*" : (w === "÷" ? "/" : w)); sawOp = true; continue; }
       if (wordsToNumberRun([w]) != null) { run.push(w); continue; }
       return null; // ada kata lain → bukan hitungan murni, biarkan jalur lain
     }
-    if (!flush() || !sawWordNum || !sawOp) return null;
+    if (!flush() || !sawOp || !(sawWordNum || sawWordOp)) return null;
     var expr = out.join(" ");
+    var pw = expr.match(/^(\d+(?:\.\d+)?) \^ (\d+)$/);
+    if (pw) {
+      var base = Number(pw[1]), ex = Number(pw[2]);
+      if (ex > 64) return null;
+      var pv = Math.pow(base, ex);
+      if (!isFinite(pv)) return null;
+      return { text: formatNumberResult(pv, lang), engine: "CIKUR_HITUNG", tags: ["skill", "hitung", "pangkat"] };
+    }
     if (!/^[\d.\s+\-*\/]+$/.test(expr) || !/\d\s*[+\-*\/]\s*\d/.test(expr)) return null;
     var math = evalLocaleMath(expr);
     if (!math) return null;
     return { text: formatNumberResult(math.value, lang), engine: "CIKUR_HITUNG", tags: ["skill", "hitung", "kata"] };
+  }
+
+
+  /* ═══ v1.8.3 · satuan imperial (mil, kaki, inci, pon, ons) dan suhu (celsius/fahrenheit/kelvin) ═══ */
+  var EXT_LEN = { mile: 1609.344, miles: 1609.344, mil: 1609.344, feet: 0.3048, foot: 0.3048, kaki: 0.3048, inch: 0.0254, inches: 0.0254, inci: 0.0254, yard: 0.9144, yards: 0.9144,
+    km: 1000, kilometer: 1000, m: 1, meter: 1, cm: 0.01, sentimeter: 0.01, centimeter: 0.01, mm: 0.001, milimeter: 0.001 };
+  var EXT_MASS = { pound: 453.59237, pounds: 453.59237, pon: 453.59237, lb: 453.59237, lbs: 453.59237, ounce: 28.349523125, ounces: 28.349523125, ons: 28.349523125, oz: 28.349523125,
+    kg: 1000, kilogram: 1000, kilo: 1000, g: 1, gram: 1, mg: 0.001, ton: 1000000 };
+  var EXT_ONLY = /^(mile|miles|mil|feet|foot|kaki|inch|inches|inci|yard|yards|pound|pounds|pon|lb|lbs|ounce|ounces|ons|oz|ton|celsius|fahrenheit|kelvin)$/;
+  var EXT_TEMP = { celsius: "c", fahrenheit: "f", kelvin: "k" };
+  function fmtExt(n) { return String(Math.round(n * 10000) / 10000); }
+  function extUnitAnswer(body, lang) {
+    var raw = String(body || "").toLowerCase().replace(/[?!]/g, " ").replace(/\bderajat\b|°/g, " ").replace(/\s+/g, " ").trim();
+    if (raw.length > 90 || TALK_RE.test(raw)) return null;
+    var m = raw.match(/(?:konversi\s+|convert\s+|berapa\s+)?(-?\d+(?:[.,]\d+)?)\s*([a-z]+)\s+(?:ke|to|in|jadi|dalam|menjadi|sama dengan)\s+(?:berapa\s+)?([a-z]+)\b/);
+    if (!m) return null;
+    var n = Number(m[1].replace(",", ".")), from = m[2], to = m[3];
+    if (!isFinite(n)) return null;
+    if (!EXT_ONLY.test(from) && !EXT_ONLY.test(to)) return null; // satuan biasa → biarkan unitConvert lama
+    var out, label;
+    if (EXT_TEMP[from] && EXT_TEMP[to]) {
+      var c = EXT_TEMP[from] === "c" ? n : EXT_TEMP[from] === "f" ? (n - 32) * 5 / 9 : n - 273.15;
+      out = EXT_TEMP[to] === "c" ? c : EXT_TEMP[to] === "f" ? c * 9 / 5 + 32 : c + 273.15;
+      var sym = { celsius: "°C", fahrenheit: "°F", kelvin: "K" };
+      return { text: fmtExt(n) + " " + sym[from] + " = " + fmtExt(out) + " " + sym[to], engine: "CGO_UNIT", tags: ["skill", "satuan", "suhu"] };
+    }
+    var table = (EXT_LEN[from] != null && EXT_LEN[to] != null) ? EXT_LEN : (EXT_MASS[from] != null && EXT_MASS[to] != null) ? EXT_MASS : null;
+    if (!table) return null;
+    out = n * table[from] / table[to];
+    return { text: fmtExt(n) + " " + from + " = " + fmtExt(out) + " " + to, engine: "CGO_UNIT", tags: ["skill", "satuan"] };
   }
 
   var UNIT_NAMES = [[/\bkilometer\b/g, "km"], [/\bsentimeter\b|\bcentimeter\b/g, "cm"], [/\bmilimeter\b|\bmillimeter\b/g, "mm"], [/\bmeter\b/g, "m"],
@@ -799,7 +837,7 @@
 
   function unitConvert(body, lang) {
     var b = String(body || "").trim();
-    var m = b.match(/(?:konversi\s+)?(\d+([.,]\d+)?)\s*(km|m|cm|mm|kg|g|mg|l|ml)\s*(?:ke|to|jadi|=)\s*(km|m|cm|mm|kg|g|mg|l|ml)/i);
+    var m = b.match(/(?:konversi\s+)?(\d+([.,]\d+)?)\s*(km|m|cm|mm|kg|g|mg|l|ml)(?![a-z])\s*(?:ke|to|jadi|=)\s*(km|m|cm|mm|kg|g|mg|l|ml)(?![a-z])/i);
     if (!m) return null;
     var n = normalizeLocaleNumber(m[1]);
     if (n == null) return null;
@@ -889,6 +927,8 @@
     // jam / tanggal — tidak wajib CIKUR
     var wmAns = wordMathAnswer(body, lang);
     if (wmAns) return wmAns;
+    var euAns = extUnitAnswer(body, lang);
+    if (euAns) return euAns;
     var ucAns = unitNameAnswer(body, lang);
     if (ucAns) return ucAns;
     var rtAns = relTimeAnswer(body, lang);
@@ -1104,8 +1144,11 @@
     if (/ (apa itu|apa sih|jelaskan) (cikur go resto|cikurgo resto|layanan resto) | (cikur go resto|cikurgo resto) itu apa /.test(b)) {
       return pack("CIKUR GO RESTO adalah jalur mitra restoran/warung: terima pesanan lewat aplikasi, atur menu, dipasangkan driver FOOD.", "RESTO");
     }
-    if (/ (apa itu|apa sih|jelaskan) (cikurpay|cikur pay) | (cikurpay|cikur pay) itu apa /.test(b)) {
-      return pack("CikurPay adalah kanal pembayaran di ekosistem CIKUR GO untuk pesanan RIDE/FOOD dan transaksi mitra. Metode mengikuti konfigurasi resmi aplikasi.", "CIKURPAY");
+    if (/ (apa itu|apa sih|jelaskan) (cikurpay|cikur pay) | (cikurpay|cikur pay) itu apa | (what is|explain) (cikurpay|cikur pay) /.test(b)) {
+      var en = /\b(what is|explain)\b/.test(b) && !/\b(apa itu|jelaskan)\b/.test(b);
+      return pack(en
+        ? "CikurPay is the payment channel in CIKUR GO for RIDE/FOOD and partner transactions. Methods follow official app configuration."
+        : "CikurPay adalah kanal pembayaran di ekosistem CIKUR GO untuk pesanan RIDE/FOOD dan transaksi mitra. Metode mengikuti konfigurasi resmi aplikasi.", "CIKURPAY");
     }
     if (/ (tagline|slogan) (cikur ?go|cikurgo) | (cikur ?go|cikurgo).*(tagline|slogan) /.test(b)) {
       return pack("Tagline CIKUR GO: “Pasti Mudah, Pasti Nyaman”.", "TAGLINE");

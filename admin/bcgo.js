@@ -62,7 +62,8 @@ async function __loadCgoCloud() {
 
 
 /*
- * BCGO MASTER NERVE SYSTEM v4.3.1-BOOT-NO-HANG-HUB-ALIGNED
+ * BCGO MASTER NERVE SYSTEM v4.4.0-SCANNER-V2 (di atas 4.3.1-BOOT-NO-HANG-HUB-ALIGNED)
+ *  - Scanner v2: analisis statis (syntax, impor-ekspor, global, urutan muat, versi ?v=), antrean perbaikan untuk Mesin ABC
  *  - Soft-bridge: BCGOBrain.ask → CGOOtak.think untuk non-sistem (cadangan UI)
  *  - brain.version eksplisit agar Hub probe akurat
  *
@@ -162,6 +163,359 @@ const CORE_SOURCE_FILES = new Set([
   "admin/cgo-instruction.js","admin/cikur-go.browser.js","admin/cikur-go.js","admin/cikur-v3-extension.js","admin/cgo-ai-voice-operator.js"
 ]);
 
+/* SCANNER-V2-BEGIN
+ * BCGO Source Scanner v2 — analisis STATIS lokal (kode tidak pernah dijalankan; hanya di-parse).
+ * Menghasilkan temuan nyata antar-file + antrean perbaikan (repairTargets) yang ditarik Mesin ABC.
+ * Aditif: pemeriksaan lama (legacy-path, relasi import/src, kontrak) tidak diubah. */
+const SCANNER_VERSION = "2.0.0-DEEP";
+const SCAN_MAX_PARSE_CHARS = 1500000;
+const SCAN_REPAIR_MAX_CHARS = 450000;
+const SCAN_REPAIR_TOTAL_CHARS = 900000;
+const SCAN_REPAIR_MAX_TARGETS = 4;
+const SCAN_PROBE_LIMIT = 24;
+const SCAN_AsyncFunction = (() => { try { return Object.getPrototypeOf(async function () {}).constructor; } catch (_) { return Function; } })();
+const SCAN_GLOBAL_NS = "(?:CGO|BCGO|__CGO|__BCGO|CIKUR|Cikur)[A-Za-z0-9_$]*";
+const SCAN_SEV_RANK = { HIGH: 3, MEDIUM: 2, LOW: 1 };
+
+function scanLineIndex(text) {
+  const a = [0];
+  for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10) a.push(i + 1);
+  return a;
+}
+function scanLineAt(idx, lines) {
+  let lo = 0, hi = lines.length - 1;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (lines[mid] <= idx) lo = mid; else hi = mid - 1; }
+  return lo + 1;
+}
+function scanSnippet(text, line, lines) {
+  const s = lines[line - 1] ?? 0;
+  const e = text.indexOf("\n", s);
+  return text.slice(s, e < 0 ? undefined : e).trim().slice(0, 160);
+}
+
+// Ubah sintaks modul (import/export) menjadi kode yang hanya perlu di-PARSE. Baris dipertahankan agar nomor baris tetap sama.
+function scanToParsableJs(src) {
+  let s = String(src);
+  if (s.charCodeAt(0) === 0xFEFF) s = s.slice(1);
+  const blank = (m) => m.replace(/[^\n]/g, " ");
+  s = s.replace(/^#!.*/, "");
+  s = s.replace(/^[ \t]*import\s+(?:[\w$*\s{},]+?\s+from\s*)?(["'])[^"'\n]+\1[ \t]*;?/gm, blank);
+  s = s.replace(/^[ \t]*export\s*\*\s*(?:as\s+[\w$]+\s*)?from\s*(["'])[^"'\n]+\1[ \t]*;?/gm, blank);
+  s = s.replace(/^[ \t]*export\s*\{[^}]*\}\s*(?:from\s*(["'])[^"'\n]+\1)?[ \t]*;?/gm, blank);
+  s = s.replace(/^([ \t]*)export\s+default\s+/gm, "$1void ");
+  s = s.replace(/^([ \t]*)export\s+(?=(?:async\s+function|function|class|const|let|var)\b)/gm, "$1");
+  s = s.replace(/\bimport\.meta\b/g, "({})");
+  return s;
+}
+
+function scanCheckJsSyntax(code) {
+  if (String(code).length > SCAN_MAX_PARSE_CHARS) return { ok: true, skipped: true };
+  const parsable = scanToParsableJs(code);
+  try { new SCAN_AsyncFunction(parsable); return { ok: true, parsable }; }
+  catch (e) {
+    if (e && e.name === "SyntaxError") return { ok: false, message: String(e.message || e).slice(0, 200), parsable };
+    return { ok: true, skipped: true };
+  }
+}
+
+// Petunjuk lokasi saja (bukan penentu): kurung/kutip yang tidak seimbang.
+function scanLocateProblem(src) {
+  const n = src.length; let i = 0, line = 1, prev = "";
+  const stack = [];
+  const KW = /^(?:return|typeof|case|in|of|do|else|void|delete|throw|new|yield|await|instanceof)$/;
+  function templateBody() {
+    while (i < n) {
+      const ch = src[i];
+      if (ch === "\\") { i += 2; continue; }
+      if (ch === "\n") line++;
+      if (ch === "`") { i++; return "end"; }
+      if (ch === "$" && src[i + 1] === "{") { stack.push({ ch: "{", line, tpl: true }); i += 2; return "expr"; }
+      i++;
+    }
+    return "eof";
+  }
+  while (i < n) {
+    const c = src[i], d = src[i + 1];
+    if (c === "\n") { line++; i++; continue; }
+    if (c === " " || c === "\t" || c === "\r") { i++; continue; }
+    if (c === "/" && d === "/") { while (i < n && src[i] !== "\n") i++; continue; }
+    if (c === "/" && d === "*") { i += 2; while (i < n && !(src[i] === "*" && src[i + 1] === "/")) { if (src[i] === "\n") line++; i++; } i += 2; continue; }
+    if (c === '"' || c === "'") {
+      const q = c, start = line; i++;
+      while (i < n && src[i] !== q) { if (src[i] === "\\") i++; else if (src[i] === "\n") return { line: start, detail: "string tidak ditutup" }; i++; }
+      i++; prev = "S"; continue;
+    }
+    if (c === "`") { i++; const r = templateBody(); if (r === "eof") return { line, detail: "template literal tidak ditutup" }; prev = r === "end" ? "S" : "{"; continue; }
+    if (c === "/" && (prev === "" || prev === "R" || /[(,=:[!&|?{};+\-*%<>~^]/.test(prev))) {
+      let j = i + 1, inCls = false, ok = false;
+      while (j < n && src[j] !== "\n") { const ch = src[j]; if (ch === "\\") { j += 2; continue; } if (ch === "[") inCls = true; else if (ch === "]") inCls = false; else if (ch === "/" && !inCls) { ok = true; break; } j++; }
+      if (ok) { i = j + 1; while (i < n && /[a-z]/i.test(src[i])) i++; prev = "S"; continue; }
+    }
+    if (/[A-Za-z_$]/.test(c)) { let j = i; while (j < n && /[\w$]/.test(src[j])) j++; prev = KW.test(src.slice(i, j)) ? "R" : "x"; i = j; continue; }
+    if (/[0-9]/.test(c)) { while (i < n && /[\w.]/.test(src[i])) i++; prev = "x"; continue; }
+    if (c === "(" || c === "[" || c === "{") { stack.push({ ch: c, line, tpl: false }); prev = c; i++; continue; }
+    if (c === ")" || c === "]" || c === "}") {
+      const top = stack[stack.length - 1];
+      const want = c === ")" ? "(" : c === "]" ? "[" : "{";
+      if (!top || top.ch !== want) return { line, detail: `"${c}" tidak punya pasangan` };
+      stack.pop();
+      if (top.tpl) { i++; const r = templateBody(); if (r === "eof") return { line, detail: "template literal tidak ditutup" }; prev = r === "end" ? "S" : "{"; continue; }
+      prev = c; i++; continue;
+    }
+    prev = c; i++;
+  }
+  if (stack.length) { const t = stack[stack.length - 1]; return { line: t.line, detail: `"${t.ch}" tidak ditutup` }; }
+  return null;
+}
+
+function scanExtractInlineScripts(html) {
+  const out = []; const re = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi; let m;
+  while ((m = re.exec(html))) {
+    const attrs = m[1] || "";
+    if (/\bsrc\s*=/i.test(attrs)) continue;
+    const type = (attrs.match(/\btype\s*=\s*["']?([^"'\s>]+)/i) || [])[1] || "";
+    if (type && !/^(module|text\/javascript|application\/javascript)$/i.test(type)) continue;
+    out.push({ code: m[2], offset: m.index + m[0].indexOf(">") + 1 });
+  }
+  return out;
+}
+function scanExtractScriptTags(html) {
+  const out = []; const re = /<script\b([^>]*)>/gi; let m, order = 0;
+  while ((m = re.exec(html))) {
+    const attrs = m[1] || "";
+    const src = (attrs.match(/\bsrc\s*=\s*["']([^"']+)["']/i) || [])[1];
+    if (!src) continue;
+    const q = src.split("#")[0].split("?");
+    out.push({ src: q[0], v: q[1] ? ((q[1].match(/(?:^|&)v=([^&]+)/) || [])[1] || null) : null, module: /type\s*=\s*["']?module/i.test(attrs), defer: /\bdefer\b/i.test(attrs), async: /\basync\b/i.test(attrs), order: order++, offset: m.index });
+  }
+  return out;
+}
+
+function scanParseImportClause(clause) {
+  const info = { def: null, ns: null, named: [] };
+  let c = String(clause || "").trim();
+  const nm = c.match(/\{([\s\S]*?)\}/);
+  if (nm) {
+    nm[1].split(",").forEach(part => { const p = part.trim(); if (!p) return; const mm = p.match(/^([\w$]+)(?:\s+as\s+([\w$]+))?$/); if (mm) info.named.push({ imported: mm[1], local: mm[2] || mm[1] }); });
+    c = c.replace(nm[0], "");
+  }
+  const star = c.match(/\*\s*as\s+([\w$]+)/);
+  if (star) { info.ns = star[1]; c = c.replace(star[0], ""); }
+  const d = c.replace(/,/g, " ").trim().match(/^([\w$]+)$/);
+  if (d) info.def = d[1];
+  return info;
+}
+
+function scanAnalyzeFile(item, text) {
+  const issues = [];
+  const facts = { exports: new Set(), starExports: [], imports: [], provides: new Set(), consumes: new Map(), version: null, scripts: [], topReads: [] };
+  const lines = scanLineIndex(text);
+  const isHtml = /\.html?$/i.test(item.file), isJs = /\.m?js$/i.test(item.file);
+  const add = (rule, severity, message, line, extra) => issues.push({ rule, severity, message, line: line || null, snippet: line ? scanSnippet(text, line, lines) : "", ...(extra || {}) });
+
+  // R2 — sisa konflik merge
+  const cm1 = /^<{7}(?: .*)?$/m.exec(text);
+  if (cm1 && /^>{7}(?: .*)?$/m.test(text)) add("CONFLICT_MARKER", "HIGH", "Sisa konflik merge (<<<<<<< / >>>>>>>) masih ada di file.", scanLineAt(cm1.index, lines));
+
+  let inlineCode = "";
+  if (isJs) {
+    const chk = scanCheckJsSyntax(text);
+    if (!chk.ok) {
+      const loc = scanLocateProblem(chk.parsable);
+      add("SYNTAX_ERROR", "HIGH", `Syntax error: ${chk.message}` + (loc ? ` · sekitar baris ${loc.line}: ${loc.detail}` : ""), loc ? loc.line : null, { detail: chk.message });
+    }
+    inlineCode = text;
+  } else if (isHtml) {
+    const scripts = scanExtractInlineScripts(text);
+    scripts.forEach((s, idx) => {
+      const chk = scanCheckJsSyntax(s.code);
+      inlineCode += s.code + "\n";
+      if (!chk.ok) {
+        const loc = scanLocateProblem(chk.parsable);
+        const baseLine = scanLineAt(s.offset, lines);
+        const line = loc ? baseLine + loc.line - 1 : baseLine;
+        add("SYNTAX_ERROR", "HIGH", `Syntax error pada <script> inline #${idx + 1}: ${chk.message}` + (loc ? ` · sekitar baris ${line}: ${loc.detail}` : ""), line, { detail: chk.message });
+      }
+    });
+    if (/^\s*(?:<!doctype html|<html[\s>])/i.test(text) && !/<\/html\s*>/i.test(text)) add("TRUNCATED_HTML", "MEDIUM", "Halaman HTML tidak ditutup </html> — file mungkin terpotong.", lines.length);
+    const stripped = text.replace(/<!--[\s\S]*?-->/g, "").replace(/<script\b[\s\S]*?<\/script\s*>/gi, "").replace(/<style\b[\s\S]*?<\/style\s*>/gi, "");
+    const opens = (stripped.match(/<div\b/gi) || []).length, closes = (stripped.match(/<\/div\s*>/gi) || []).length;
+    if (opens !== closes) add("HTML_UNBALANCED", Math.abs(opens - closes) >= 2 ? "MEDIUM" : "LOW", `Tag <div> tidak seimbang: ${opens} dibuka, ${closes} ditutup.`, null, { opens, closes });
+    facts.scripts = scanExtractScriptTags(text);
+  }
+
+  // ── fakta lintas-file ──
+  const code = inlineCode;
+  if (isJs) {
+    let m;
+    const reExpDecl = /^[ \t]*export\s+(?:async\s+)?(?:function\*?|class|const|let|var)\s+([\w$]+)/gm;
+    while ((m = reExpDecl.exec(text))) facts.exports.add(m[1]);
+    const reExpList = /^[ \t]*export\s*\{([^}]*)\}\s*(?:from\s*["']([^"']+)["'])?/gm;
+    while ((m = reExpList.exec(text))) {
+      m[1].split(",").forEach(p => { const t = p.trim(); if (!t) return; const mm = t.match(/^([\w$]+)(?:\s+as\s+([\w$]+))?$/); if (mm) facts.exports.add(mm[2] || mm[1]); });
+    }
+    if (/^[ \t]*export\s+default\b/m.test(text)) facts.exports.add("default");
+    const reStar = /^[ \t]*export\s*\*\s*(?:as\s+([\w$]+)\s*)?from\s*["']([^"']+)["']/gm;
+    while ((m = reStar.exec(text))) { if (m[1]) facts.exports.add(m[1]); else facts.starExports.push(m[2]); }
+    const reImp = /^[ \t]*import\s+([^;'"]*?)\s+from\s*["']([^"']+)["']/gm;
+    while ((m = reImp.exec(text))) { const info = scanParseImportClause(m[1]); facts.imports.push({ spec: m[2], ...info, line: scanLineAt(m.index, lines) }); }
+  }
+  let m2;
+  const provRes = [
+    new RegExp("\\b(?:window|global|globalThis|self)\\s*\\.\\s*([A-Za-z_$][\\w$]*)\\s*=(?!=)", "g"),
+    new RegExp("\\b(?:window|global|globalThis|self)\\s*\\[\\s*[\"']([\\w$]+)[\"']\\s*\\]\\s*=(?!=)", "g"),
+    new RegExp("Object\\.defineProperty\\(\\s*(?:window|global|globalThis|self)\\s*,\\s*[\"']([\\w$]+)[\"']", "g"),
+    new RegExp("\\b[\\w$]+\\s*\\.\\s*(" + SCAN_GLOBAL_NS + ")\\s*=(?!=)", "g"),
+    /^(?:var|function|async\s+function)\s+([\w$]+)/gm
+  ];
+  provRes.forEach(re => { while ((m2 = re.exec(code))) facts.provides.add(m2[1]); });
+  const reCons = new RegExp("\\b(?:window|global|globalThis|self)\\s*\\.\\s*(" + SCAN_GLOBAL_NS + ")\\b(?!\\s*=(?!=))", "g");
+  while ((m2 = reCons.exec(code))) {
+    const after = code.slice(m2.index + m2[0].length, m2.index + m2[0].length + 6);
+    const direct = /^\s*(?:\.(?!\.)|\(|\[)/.test(after);
+    const rec = facts.consumes.get(m2[1]) || { direct: 0, guarded: 0 };
+    if (direct) rec.direct++; else rec.guarded++;
+    facts.consumes.set(m2[1], rec);
+  }
+  const head = code.split("\n").slice(0, 80).join("\n");
+  const reTop = new RegExp("(?:const|let|var)\\s+[\\w$]+\\s*=\\s*[\\w$]+\\.(" + SCAN_GLOBAL_NS + ")\\b", "g");
+  while ((m2 = reTop.exec(head))) facts.topReads.push(m2[1]);
+  const vm = code.match(/\b(?:const|let|var)\s+(?:[A-Z_]*VERSION|version)\s*=\s*["']([^"']{2,48})["']/);
+  if (vm) facts.version = vm[1];
+  return { issues, facts, size: text.length };
+}
+
+function scanResolveSpec(spec, fromItem, registry) {
+  const clean = String(spec).split("#")[0].split("?")[0];
+  if (!/^\.{1,2}\//.test(clean)) return null;
+  let target;
+  try { target = new URL(clean, new URL(fromItem.path, "http://scan.local/admin/")).pathname.replace(/^\//, ""); } catch (_) { return null; }
+  if (target.startsWith("cikur-ai/")) target = target.slice("cikur-ai/".length);
+  const base = target.split("/").pop();
+  return registry.find(x => x.file === target || x.path === target) || registry.find(x => x.file.endsWith("/" + base) || x.file === base) || null;
+}
+
+// Analisis lintas-file. contents: Map(file→text). deep: Map(file→hasil scanAnalyzeFile). Mengembalikan temuan + relasi tambahan + antrean perbaikan.
+function scanCrossFile(registry, contents, deep, opts) {
+  const findings = [], relations = [], perFile = new Map();
+  const note = (file, rule, severity, message, extra) => {
+    const f = { type: rule, rule, severity, sourceFile: file, message, ...(extra || {}) };
+    findings.push(f);
+    if (!perFile.has(file)) perFile.set(file, []);
+    perFile.get(file).push(f);
+  };
+  const readable = registry.filter(x => contents.has(x.file));
+  const coverage = registry.length ? readable.length / registry.length : 0;
+
+  // 1) simbol impor ↔ ekspor
+  for (const item of readable) {
+    const d = deep.get(item.file); if (!d) continue;
+    for (const imp of d.facts.imports) {
+      const target = scanResolveSpec(imp.spec, item, registry);
+      if (!target || !contents.has(target.file) || !deep.has(target.file) || !/\.m?js$/i.test(target.file)) continue;
+      const tf = deep.get(target.file).facts;
+      const unresolvable = tf.starExports.length > 0;
+      const missing = [];
+      imp.named.forEach(n => { if (!tf.exports.has(n.imported)) missing.push(n.imported); });
+      if (imp.def && !tf.exports.has("default")) missing.push("default");
+      if (missing.length && !unresolvable) {
+        relations.push({ type: "CROSS_FILE_SYMBOL", status: "MISMATCH", confidence: "HIGH", sourceFile: item.file, targetFile: target.file, key: imp.spec, evidence: { missingSemantic: missing, line: imp.line } });
+        note(item.file, "IMPORT_SYMBOL_MISSING", "HIGH", `Mengimpor ${missing.map(x => `"${x}"`).join(", ")} dari ${imp.spec}, tetapi ${target.file} tidak meng-export-nya (baris ${imp.line}).`, { line: imp.line, targetFile: target.file, missing });
+      } else if (imp.named.length || imp.def) {
+        relations.push({ type: "CROSS_FILE_SYMBOL", status: "LINKED", confidence: unresolvable ? "UNKNOWN" : "VERIFIED", sourceFile: item.file, targetFile: target.file, key: imp.spec });
+      }
+    }
+  }
+
+  // 2) kontrak global (window.CGO*): konsumen tanpa penyedia
+  const providers = new Map();
+  for (const item of readable) { const d = deep.get(item.file); if (!d) continue; d.facts.provides.forEach(g => { if (!providers.has(g)) providers.set(g, []); providers.get(g).push(item.file); }); }
+  if (coverage >= 0.9) {
+    for (const item of readable) {
+      const d = deep.get(item.file); if (!d) continue;
+      d.facts.consumes.forEach((rec, g) => {
+        if (providers.has(g)) return;
+        if (rec.guarded > 0 || rec.direct === 0) return; // dipakai dengan penjaga → kontrak opsional
+        note(item.file, "GLOBAL_PROVIDER_MISSING", "MEDIUM", `Memakai window.${g} secara langsung, tetapi tidak ada file terpindai yang menyediakannya.`, { global: g });
+      });
+    }
+  }
+
+  // 3) urutan muat script klasik di HTML & drift versi ?v=
+  const verByScript = new Map();
+  for (const item of readable) {
+    const d = deep.get(item.file); if (!d || !d.facts.scripts.length) continue;
+    const list = d.facts.scripts;
+    const seen = new Map();
+    list.forEach(s => { seen.set(s.src, (seen.get(s.src) || 0) + 1); });
+    seen.forEach((cnt, src) => { if (cnt > 1) note(item.file, "DUPLICATE_SCRIPT_INCLUDE", "LOW", `Script ${src} dimuat ${cnt}× di halaman yang sama.`, { src }); });
+    list.forEach(s => {
+      if (s.module || s.defer || s.async) return;
+      const target = scanResolveSpec(/^\.{0,2}\//.test(s.src) ? s.src : "./" + s.src, item, registry);
+      const td = target && deep.get(target.file);
+      if (!td) return;
+      td.facts.topReads.forEach(g => {
+        const prov = list.filter(p => p !== s && !p.module && !p.defer && !p.async).map(p => ({ p, t: scanResolveSpec(/^\.{0,2}\//.test(p.src) ? p.src : "./" + p.src, item, registry) }))
+          .filter(x => x.t && deep.has(x.t.file) && deep.get(x.t.file).facts.provides.has(g));
+        if (prov.length && prov.every(x => x.p.order > s.order)) note(item.file, "LOAD_ORDER_RISK", "MEDIUM", `${s.src} membaca window.${g} saat dimuat, tetapi penyedianya (${prov[0].p.src}) dimuat SESUDAH-nya.`, { script: s.src, global: g, provider: prov[0].p.src });
+      });
+      if (s.v && target) {
+        if (!verByScript.has(target.file)) verByScript.set(target.file, []);
+        verByScript.get(target.file).push({ page: item.file, v: s.v, src: s.src });
+        const fv = td.facts.version, sem = x => (String(x || "").match(/\d+\.\d+\.\d+/) || [null])[0];
+        if (fv && sem(s.v) && sem(fv) && sem(s.v) !== sem(fv)) note(item.file, "VERSION_MISMATCH", "LOW", `${s.src}?v=${s.v} tidak sama dengan versi di dalam file (${fv}) — cache-bust ketinggalan.`, { src: s.src, tag: s.v, fileVersion: fv });
+      }
+    });
+  }
+  verByScript.forEach((arr, file) => {
+    const vs = Array.from(new Set(arr.map(a => a.v)));
+    if (vs.length > 1) arr.forEach(a => note(a.page, "VERSION_DRIFT", "LOW", `${a.src} dimuat dengan ?v=${a.v}, sedangkan halaman lain memakai ${vs.filter(x => x !== a.v).join(", ")}.`, { src: a.src }));
+  });
+
+  // 4) antrean perbaikan untuk Mesin ABC (hanya cacat nyata; syntax dulu, file inti dulu)
+  const core = (opts && opts.coreFiles) || new Set();
+  const cand = [];
+  for (const item of readable) {
+    const d = deep.get(item.file);
+    const issues = (d ? d.issues : []).map(i => ({ ...i, sourceFile: item.file }));
+    const cross = perFile.get(item.file) || [];
+    const all = issues.concat(cross).filter(x => x.severity === "HIGH" || x.severity === "MEDIUM");
+    const repairable = all.filter(x => ["SYNTAX_ERROR", "CONFLICT_MARKER", "TRUNCATED_HTML", "IMPORT_SYMBOL_MISSING", "LOAD_ORDER_RISK", "HTML_UNBALANCED"].includes(x.rule));
+    if (!repairable.length) continue;
+    const text = contents.get(item.file);
+    const top = repairable.reduce((a, b) => (SCAN_SEV_RANK[b.severity] > SCAN_SEV_RANK[a.severity] ? b : a), repairable[0]);
+    cand.push({ file: item.file, role: item.role || "", reason: "SOURCE_" + top.rule, severity: top.severity, rank: (top.rule === "SYNTAX_ERROR" ? 100 : top.rule === "CONFLICT_MARKER" ? 90 : 50) + (core.has(item.file) ? 10 : 0) + SCAN_SEV_RANK[top.severity],
+      rules: Array.from(new Set(repairable.map(x => x.rule))), findings: repairable.map(x => ({ rule: x.rule, severity: x.severity, message: x.message, line: x.line || null })), size: text.length, text });
+  }
+  cand.sort((a, b) => b.rank - a.rank);
+  const queue = []; let total = 0;
+  for (const c of cand) {
+    if (queue.length >= SCAN_REPAIR_MAX_TARGETS) break;
+    if (c.size > SCAN_REPAIR_MAX_CHARS || total + c.size > SCAN_REPAIR_TOTAL_CHARS) continue;
+    total += c.size; queue.push(c);
+  }
+  return { findings, relations, perFile, queue, skippedLarge: cand.length - queue.length, coverage };
+}
+/* SCANNER-V2-END */
+
+// Antrean perbaikan: disimpan DI LUAR state (teks file besar) dan dapat ditarik Mesin ABC kapan saja.
+let SCAN_LAST_QUEUE = { at: null, scannerVersion: SCANNER_VERSION, targets: [], summary: null };
+function scanPublishQueue(queue, summary) {
+  SCAN_LAST_QUEUE = { at: new Date().toISOString(), scannerVersion: SCANNER_VERSION, targets: queue.map(q => ({ ...q })), summary: summary || null };
+  try {
+    const g = typeof globalThis !== "undefined" ? globalThis : null;
+    if (!g) return;
+    g.BCGOSourceScanner = {
+      version: SCANNER_VERSION,
+      getRepairQueue: () => SCAN_LAST_QUEUE.targets.map(t => ({ ...t })),
+      getReport: () => ({ at: SCAN_LAST_QUEUE.at, version: SCANNER_VERSION, summary: SCAN_LAST_QUEUE.summary, queue: SCAN_LAST_QUEUE.targets.map(t => ({ file: t.file, reason: t.reason, severity: t.severity, rules: t.rules, size: t.size, findings: t.findings })) })
+    };
+    if (typeof g.dispatchEvent === "function" && typeof CustomEvent === "function") {
+      g.dispatchEvent(new CustomEvent("cgo:source-repair-queue", { detail: { at: SCAN_LAST_QUEUE.at, count: queue.length, files: queue.map(q => q.file), summary } }));
+    }
+  } catch (_) {}
+}
+
 function makeInitialSourceScan() {
   const fileStates = {};
   for (const item of INTERNAL_SOURCE_SCAN) fileStates[item.file] = { status: "QUEUED", message: "Menunggu pembacaan source." };
@@ -171,6 +525,7 @@ function makeInitialSourceScan() {
     relations: [], relationSummary: { synchronized: 0, mismatch: 0, variant: 0, unknown: 0, linked: 0 },
     coreSummary: { total: CORE_SOURCE_FILES.size, readable: 0, failed: 0, mismatches: 0, status: "WAITING" },
     fileStates, nerveSummary: { healthy: 0, standby: 0, observed: 0, review: 0, anomaly: 0, unresolved: 0 },
+    deep: { version: SCANNER_VERSION, high: 0, medium: 0, low: 0, byRule: {}, queue: [], coverage: 0, scannedAt: null },
     message: "Scanner source internal belum dimulai."
   };
 }
@@ -1208,7 +1563,7 @@ function answerQuestion(question) {
     // Simpan snapshot scan sebelumnya sebelum state.sourceScan diganti.
     // Ini adalah sumber kebenaran untuk deteksi DIROMBAK pada scan berikutnya.
     const previousScan = state.sourceScan && typeof state.sourceScan === "object"
-      ? safeClone(state.sourceScan)
+      ? safeClone((({ repairTargets, ...rest }) => rest)(state.sourceScan))
       : makeInitialSourceScan();
     const scan = makeInitialSourceScan();
     scan.status = "SCANNING";
@@ -1217,6 +1572,7 @@ function answerQuestion(question) {
     publishToUI(safeClone(state));
 
     const contents = new Map();
+    const deepByFile = new Map();
     for (let i = 0; i < INTERNAL_SOURCE_SCAN.length; i++) {
       if (!canRun()) { sourceScanInFlight = false; return; }
       const item = INTERNAL_SOURCE_SCAN[i];
@@ -1276,20 +1632,37 @@ function answerQuestion(question) {
         if (changed) {
           recordEvent("SOURCE_CHANGED", `Source ${item.file} berubah — saraf disesuaikan ulang.`, item.file.split("/").pop());
         }
+        // Scanner v2: analisis statis (parse saja, kode tidak dijalankan). Gagal analisis tidak boleh mengganggu scan lama.
+        const legacyIssues = issues.slice();
+        let deepIssues = [];
+        try {
+          const deep = scanAnalyzeFile(item, text);
+          deepByFile.set(item.file, deep);
+          deepIssues = deep.issues.filter(x => x.severity === "HIGH" || x.severity === "MEDIUM");
+          for (const di of deepIssues) issues.push(String(di.rule).toLowerCase().replace(/_/g, "-"));
+        } catch (_) {}
+        const deepHigh = deepIssues.some(x => x.severity === "HIGH");
         if (issues.length) {
+          const detailHint = deepIssues.length ? ` · ${deepIssues[0].message.slice(0, 110)}` : "";
           scan.fileStates[item.file] = {
             status: "REVIEW",
-            message: `${text.length.toLocaleString("id-ID")} karakter · pantau: ${issues.join(", ")}${changed ? " · DIROMBAK" : ""}`,
-            issues,
+            message: `${text.length.toLocaleString("id-ID")} karakter · pantau: ${Array.from(new Set(issues)).join(", ")}${detailHint}${changed ? " · DIROMBAK" : ""}`,
+            issues: Array.from(new Set(issues)),
+            severity: deepHigh ? "HIGH" : (deepIssues.length ? "MEDIUM" : "LOW"),
             contentHash,
             changed
           };
-          scan.findings.push({
-            type: "SOURCE_REVIEW",
-            severity: "LOW",
-            sourceFile: item.file,
-            message: `Source terbaca, perlu pantau: ${issues.join(", ")}`
-          });
+          if (legacyIssues.length) {
+            scan.findings.push({
+              type: "SOURCE_REVIEW",
+              severity: "LOW",
+              sourceFile: item.file,
+              message: `Source terbaca, perlu pantau: ${legacyIssues.join(", ")}`
+            });
+          }
+          for (const di of deepIssues) {
+            scan.findings.push({ type: di.rule, rule: di.rule, severity: di.severity, sourceFile: item.file, message: di.message, ...(di.line ? { line: di.line, snippet: di.snippet } : {}) });
+          }
         } else {
           scan.fileStates[item.file] = {
             status: "CLEAN",
@@ -1355,13 +1728,16 @@ function answerQuestion(question) {
           // Modul CGO companion (emosi/narasi/otak/audio/semantic) — ada di repo, bukan mismatch
           const companion = /cgo-(emosi|narasi|otak|semantic|audio|machine|abc|instruction|ai-voice|shared|app-bootstrap)|cikur-go/i.test(base || target);
           const optional = /cgo-customer|cgo-app-bootstrap|cikur-go|cgo-ai-voice/i.test(target);
+          let hrefForProbe = null;
+          try { hrefForProbe = new URL(cleanRef, new URL(item.path, rootUrl)).href; } catch (_) {}
           relations.push({
             type: "CROSS_FILE_SURFACE",
             status: companion || optional ? "LINKED" : "UNKNOWN",
             confidence: companion || optional ? "VERIFIED" : "UNKNOWN",
             sourceFile: item.file,
             targetFile: target,
-            key: cleanRef
+            key: cleanRef,
+            ...(hrefForProbe ? { href: hrefForProbe } : {})
           });
         }
       }
@@ -1394,6 +1770,39 @@ function answerQuestion(question) {
         (b === "admin/cgo-error-dashboard.html" && (text.includes("cgo-error-dashboard.html") || text.includes("Error Monitor")));
       relations.push({ type:"CROSS_FILE_CONTRACT", status: ok ? "LINKED" : "MISMATCH", confidence: ok ? "VERIFIED" : "HIGH", sourceFile:a, targetFile:b, key, evidence:{ missingSemantic: ok ? [] : [key] } });
     }
+    // Scanner v2: referensi lokal yang tidak ada di registry dibuktikan dengan HEAD (ada / 404), bukan ditebak.
+    let probed = 0;
+    const missingAssets = [];
+    for (const r of relations) {
+      if (r.status !== "UNKNOWN" || !r.href || probed >= SCAN_PROBE_LIMIT) continue;
+      if (!canRun()) { sourceScanInFlight = false; return; }
+      probed++;
+      try {
+        const head = await fetch(r.href, { method: "HEAD", cache: "no-store", signal: scanSignal });
+        if (head.ok) { r.status = "LINKED"; r.confidence = "VERIFIED"; r.probed = true; }
+        else if (head.status === 404 || head.status === 410) { r.status = "MISMATCH"; r.confidence = "HIGH"; r.probed = true; r.evidence = { missingSemantic: ["FILE_NOT_FOUND"], httpStatus: head.status }; missingAssets.push(r); }
+      } catch (fe) {
+        if (fe?.name === "AbortError") { sourceScanInFlight = false; sourceScanController = null; return; }
+      }
+    }
+    for (const r of missingAssets) {
+      scan.findings.push({ type: "MISSING_ASSET", rule: "MISSING_ASSET", severity: "HIGH", sourceFile: r.sourceFile, message: `Mereferensikan ${r.key}, tetapi file itu tidak ada di server (HTTP ${r.evidence.httpStatus}).` });
+    }
+    let cross = null;
+    try {
+      cross = scanCrossFile(INTERNAL_SOURCE_SCAN, contents, deepByFile, { coreFiles: CORE_SOURCE_FILES });
+      relations.push(...cross.relations);
+      for (const f of cross.findings) {
+        scan.findings.push({ type: f.rule, rule: f.rule, severity: f.severity, sourceFile: f.sourceFile, message: f.message, ...(f.line ? { line: f.line } : {}) });
+        // temuan lintas-file ikut menandai kartu file (REVIEW / HIGH) agar terlihat di UI, tanpa menimpa status FAILED
+        const cur = scan.fileStates[f.sourceFile];
+        if (cur && cur.status !== "FAILED" && (f.severity === "HIGH" || f.severity === "MEDIUM")) {
+          const rank = { LOW: 1, MEDIUM: 2, HIGH: 3 };
+          const sev = (rank[cur.severity] || 0) >= rank[f.severity] ? cur.severity : f.severity;
+          scan.fileStates[f.sourceFile] = { ...cur, status: "REVIEW", severity: sev, issues: Array.from(new Set([...(cur.issues || []), String(f.rule).toLowerCase().replace(/_/g, "-")])), message: `${cur.message}${/pantau:/.test(cur.message || "") ? "" : " · pantau:"} ${String(f.rule).toLowerCase().replace(/_/g, "-")}` };
+        }
+      }
+    } catch (_) { cross = null; }
     scan.relations = relations;
     scan.relationSummary.linked = relations.filter(r=>r.status === "LINKED").length;
     scan.relationSummary.mismatch = relations.filter(r=>r.status === "MISMATCH").length;
@@ -1417,14 +1826,20 @@ function answerQuestion(question) {
     const coreMismatch = relations.filter(r => (CORE_SOURCE_FILES.has(r.sourceFile) || CORE_SOURCE_FILES.has(r.targetFile)) && r.status === "MISMATCH").length;
     scan.coreSummary = { total: coreItems.length, readable: coreReadable, failed: coreFailed, mismatches: coreMismatch, status: coreFailed || coreMismatch ? "ATTENTION" : (coreReadable === coreItems.length ? "HEALTHY" : "PARTIAL") };
     const allFetchFailed = scan.filesReadable === 0 && scan.filesFailed === scan.totalFiles;
-    scan.status = allFetchFailed ? "SCANNER_UNAVAILABLE" : (scan.filesFailed || scan.relationSummary.mismatch ? "DEGRADED" : "CLEAN");
+    const deepRules = new Set(["SYNTAX_ERROR","CONFLICT_MARKER","TRUNCATED_HTML","HTML_UNBALANCED","IMPORT_SYMBOL_MISSING","GLOBAL_PROVIDER_MISSING","LOAD_ORDER_RISK","MISSING_ASSET","VERSION_MISMATCH","VERSION_DRIFT","DUPLICATE_SCRIPT_INCLUDE"]);
+    const deepFindings = scan.findings.filter(f => deepRules.has(f.type));
+    const deepCount = sev => deepFindings.filter(f => f.severity === sev).length;
+    const deepByRule = {};
+    deepFindings.forEach(f => { deepByRule[f.type] = (deepByRule[f.type] || 0) + 1; });
+    scan.deep = { version: SCANNER_VERSION, high: deepCount("HIGH"), medium: deepCount("MEDIUM"), low: deepCount("LOW"), byRule: deepByRule, queue: [], coverage: cross ? Number(cross.coverage.toFixed(3)) : 0, scannedAt: new Date().toISOString() };
+    scan.status = allFetchFailed ? "SCANNER_UNAVAILABLE" : (scan.filesFailed || scan.relationSummary.mismatch || scan.deep.high ? "DEGRADED" : "CLEAN");
     scan.phase = "COMPLETE";
     scan.currentFile = null;
     scan.message = allFetchFailed
       ? "Scanner source tidak tersedia — BCGO source scanner membutuhkan HTTP(S) server, bukan file://."
       : scan.status === "CLEAN"
         ? `Source internal live selesai dibaca: ${scan.filesReadable}/${scan.totalFiles} file dan ${scan.relationSummary.linked} relasi terverifikasi.`
-        : `Source internal selesai dengan ${scan.filesFailed} file gagal dibaca dan ${scan.relationSummary.mismatch} kontrak mismatch.`;
+        : `Source internal selesai dengan ${scan.filesFailed} file gagal dibaca, ${scan.relationSummary.mismatch} kontrak mismatch, dan ${scan.deep.high} cacat kode serius.`;
     const nerves = {};
     for (const item of INTERNAL_SOURCE_SCAN) {
       const fs = scan.fileStates[item.file];
@@ -1432,7 +1847,7 @@ function answerQuestion(question) {
       const related = relations.filter(r => r.sourceFile === item.file || r.targetFile === item.file);
       const hasMismatch = related.some(r => r.status === "MISMATCH");
       const hasUnknown = related.some(r => r.status === "UNKNOWN");
-      const overall = fs?.status === "FAILED" || hasMismatch ? "ANOMALY" : fs?.status === "REVIEW" || hasUnknown ? "REVIEW" : "HEALTHY";
+      const overall = fs?.status === "FAILED" || hasMismatch || fs?.severity === "HIGH" ? "ANOMALY" : fs?.status === "REVIEW" || hasUnknown ? "REVIEW" : "HEALTHY";
       // DEP/CTR berbasis evidence saja — tidak pernah label "VERIFIED" palsu
       const hasLinked = related.some(r => r.status === "LINKED");
       const dependency = fs?.status === "FAILED" ? "UNREADABLE"
@@ -1468,6 +1883,14 @@ function answerQuestion(question) {
     scan.nerveSummary.review = uniqueNerves.filter(n=>n.health.overall === "REVIEW").length;
     scan.nerveSummary.unresolved = uniqueNerves.filter(n=>Number(n.evidenceSummary?.unresolved) > 0).length;
     state.fileNerves = nerves;
+    // Antrean perbaikan: file dengan cacat nyata, dikirim bersama teksnya agar Mesin ABC dapat menariknya (bridge membaca sourceScan.repairTargets).
+    try {
+      const queue = cross ? cross.queue : [];
+      scan.deep.queue = queue.map(q => ({ file: q.file, reason: q.reason, severity: q.severity, rules: q.rules, size: q.size, findings: q.findings.slice(0, 6) }));
+      scan.repairTargets = queue.map(q => ({ file: q.file, reason: q.reason, severity: q.severity, rules: q.rules, findings: q.findings, contentHash: scan.fileStates[q.file]?.contentHash || null, text: q.text }));
+      scanPublishQueue(queue, { status: scan.status, ...scan.deep, queue: undefined });
+      if (queue.length) recordEvent("SOURCE_REPAIR_QUEUE", `Scanner menemukan ${queue.length} file yang perlu diperbaiki: ${queue.map(q => q.file.split("/").pop()).join(", ")}.`, "SYS_SOURCE_SCANNER");
+    } catch (_) {}
     state.sourceScan = scan;
     publishToUI(safeClone(state));
     } catch (error) {
