@@ -14,7 +14,7 @@
     return;
   }
 
-  const VERSION = "2.3.0-REPAIR-AUTO";
+  const VERSION = "2.4.0-SCAN-PULL";
   const PAGE_ID = "abc-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   const BUS_NAME = "cgo-machine-abc-bus";
   const listeners = new Set();
@@ -451,6 +451,53 @@
   }
 
 
+  /* Satu target perbaikan dari Scanner v2. File markup (html/css/json) memakai repairAuto agar tidak dibaca sebagai JavaScript.
+   * Hasil bersifat IN_MEMORY_RESULT_ONLY: file asli di server TIDAK diubah oleh bridge ini. */
+  function repairOneTarget(target, cycleNumber, options) {
+    const opts = options || {};
+    const isMarkup = /\.(?:html?|css|json)$/i.test(String(target.file || "")) || /^\s*</.test(String(target.text || ""));
+    const callOpts = { autoApply: true, source: `BCGO_SOURCE:${target.file}`, maxRepairSteps: opts.maxRepairSteps ?? 3, hints: Array.isArray(target.findings) ? target.findings.slice(0, 12) : [] };
+    const result = withTelemetryContext("BCGO_SOURCE_REPAIR", false, cycleNumber, () => (
+      isMarkup && typeof E.repairAuto === "function" ? E.repairAuto(target.text, callOpts) : E.repair(target.text, callOpts)
+    ));
+    return {
+      file: target.file,
+      contentHash: target.contentHash || null,
+      reason: target.reason || null,
+      severity: target.severity || null,
+      findings: Array.isArray(target.findings) ? target.findings.length : 0,
+      status: result.status,
+      applied: !!result.applied,
+      verified: !!result.verified,
+      candidate: result.candidate?.id || null,
+      persistence: result.persistence || "IN_MEMORY_RESULT_ONLY",
+      runtimeExecution: result.runtimeExecution || "NOT_PERFORMED",
+      postStatus: result.repaired?.result?.status || null,
+      audit: result.repaired?.audit?.status || null
+    };
+  }
+
+  /* Mesin ABC "menarik" antrean dari scanner (window.BCGOSourceScanner) kapan pun dibutuhkan. */
+  function pullRepairTargets() {
+    try {
+      const sc = global.BCGOSourceScanner;
+      return sc && typeof sc.getRepairQueue === "function" ? sc.getRepairQueue().filter(x => x && typeof x.file === "string" && typeof x.text === "string") : [];
+    } catch (_) { return []; }
+  }
+  function pullAndRepair(options = {}) {
+    if (E.isPaused()) return { ok: false, status: "PAUSED", count: 0, repairs: [] };
+    const targets = pullRepairTargets().slice(0, options.max ?? 4);
+    if (!targets.length) return { ok: true, status: "QUEUE_EMPTY", count: 0, repairs: [] };
+    const repairs = [];
+    for (const target of targets) {
+      try { repairs.push(repairOneTarget(target, options.bcgoCycle ?? null, options)); }
+      catch (err) { repairs.push({ file: target.file, contentHash: target.contentHash || null, status: "ERROR", applied: false, verified: false, error: String(err?.message || err) }); }
+    }
+    const summary = { ok: true, status: "PROCESSED", count: repairs.length, applied: repairs.filter(r => r.applied).length, verified: repairs.filter(r => r.verified).length, repairs, persistence: "IN_MEMORY_RESULT_ONLY", at: new Date().toISOString() };
+    try { emit("cgo:machine-abc-pull-repair", summary); publishBus("pull-repair", { count: summary.count, applied: summary.applied, verified: summary.verified }); } catch (_) {}
+    return summary;
+  }
+
   function stableFingerprint(value) {
     const text = JSON.stringify(value);
     let h = 2166136261;
@@ -468,7 +515,9 @@
     const filesFailed = Number(sourceScan.filesFailed || 0);
     const mismatch = Number(sourceScan.relationSummary?.mismatch || 0);
     const unknownRel = Number(sourceScan.relationSummary?.unknown || 0);
-    const healthyScan = /CLEAN|OK|VALID|COMPLETE/.test(scanSt) && filesFailed === 0 && mismatch === 0;
+    const deepHigh = Number(sourceScan.deep?.high || 0);
+    const queueLen = Array.isArray(sourceScan.repairTargets) ? sourceScan.repairTargets.length : Number(sourceScan.deep?.queue?.length || 0);
+    const healthyScan = /CLEAN|OK|VALID|COMPLETE/.test(scanSt) && filesFailed === 0 && mismatch === 0 && deepHigh === 0;
     const claimStatus = healthyScan && activeCases.length === 0 ? "OK" : (filesFailed > 0 || mismatch > 0 || activeCases.length ? "ANOMALY" : "OK");
     const claimSeverity = claimStatus === "ANOMALY" ? "HIGH" : "LOW";
     const claims = [
@@ -478,6 +527,8 @@
       { key: "filesReadable", value: sourceScan.filesReadable ?? null, status: "OK", severity: "LOW", source: "BCGO", message: "files readable" },
       { key: "filesFailed", value: filesFailed, status: filesFailed > 0 ? "ANOMALY" : "OK", severity: filesFailed > 0 ? "HIGH" : "LOW", source: "BCGO", message: "files failed " + filesFailed },
       { key: "relationMismatch", value: mismatch, status: mismatch > 0 ? "ANOMALY" : "OK", severity: mismatch > 0 ? "HIGH" : "LOW", source: "BCGO", message: "relation mismatch " + mismatch },
+      { key: "sourceDefects", value: deepHigh, status: deepHigh > 0 ? "ANOMALY" : "OK", severity: deepHigh > 0 ? "HIGH" : "LOW", source: "BCGO", message: "cacat kode serius " + deepHigh },
+      { key: "repairQueue", value: queueLen, status: queueLen > 0 ? "ANOMALY" : "OK", severity: queueLen > 0 ? "HIGH" : "LOW", source: "BCGO", message: "antrean perbaikan " + queueLen },
       { key: "activeCases", value: activeCases.length, status: activeCases.length ? "ANOMALY" : "OK", severity: activeCases.length ? "HIGH" : "LOW", source: "BCGO", message: "active cases " + activeCases.length }
     ];
     const repairTargets = Array.isArray(sourceScan.repairTargets)
@@ -489,6 +540,7 @@
       filesReadable: sourceScan.filesReadable ?? null,
       filesFailed: sourceScan.filesFailed ?? null,
       relationSummary: sourceScan.relationSummary || null,
+      deep: sourceScan.deep ? { high: sourceScan.deep.high || 0, medium: sourceScan.deep.medium || 0, low: sourceScan.deep.low || 0 } : null,
       repairMeta
     };
     return {
@@ -501,6 +553,8 @@
         file: x.file,
         contentHash: x.contentHash || null,
         reason: x.reason || "SOURCE_CHANGED",
+        severity: x.severity || null,
+        findings: Array.isArray(x.findings) ? x.findings.slice(0, 12) : [],
         text: x.text.slice(0, 1024 * 1024)
       }))
     };
@@ -556,23 +610,7 @@
     if (options.autoRepair !== false && targets.length) {
       for (const target of targets) {
         try {
-          const result = withTelemetryContext("BCGO_SOURCE_REPAIR", false, cycleNumber, () => E.repair(target.text, {
-            autoApply: true,
-            source: `BCGO_SOURCE:${target.file}`,
-            maxRepairSteps: options.maxRepairSteps ?? 3
-          }));
-          repairs.push({
-            file: target.file,
-            contentHash: target.contentHash,
-            status: result.status,
-            applied: !!result.applied,
-            verified: !!result.verified,
-            candidate: result.candidate?.id || null,
-            persistence: result.persistence || "IN_MEMORY_RESULT_ONLY",
-            runtimeExecution: result.runtimeExecution || "NOT_PERFORMED",
-            postStatus: result.repaired?.result?.status || null,
-            audit: result.repaired?.audit?.status || null
-          });
+          repairs.push(repairOneTarget(target, cycleNumber, options));
         } catch (err) {
           repairs.push({ file: target.file, contentHash: target.contentHash, status: "ERROR", applied: false, verified: false, error: String(err?.message || err) });
         }
@@ -673,6 +711,8 @@
     repairSource,
     auditRepairCapabilities,
     ingestBCGOState,
+    pullRepairTargets,
+    pullAndRepair,
     getLastTelemetry: () => lastTelemetry ? { ...lastTelemetry } : null,
     healthSnapshot,
     process: (input, opt) => E.process(input, opt || {}),
